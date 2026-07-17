@@ -18,11 +18,11 @@
 // resumes as a fresh world (the pre-worldstate behavior) — never a crash.
 //
 // TRANSIENCE RULE: zones minted by world EVENTS (def.eventOwned — demon
-// epicenters, crusade strongholds, incursion landings) persist only if their
-// owning overlay restored a snapshot claiming that run's state; otherwise
-// they are scrubbed on resume and the event re-rolls fresh, exactly as the
-// old completedObjectives prefix filter always encoded. Quest zones are
-// claimed by the persisted quest log instead.
+// epicenters, incursion landings; crusades are field campaigns and mint no
+// overworld ground) persist only if their owning overlay restored a snapshot
+// claiming that run's state; otherwise they are scrubbed on resume and the
+// event re-rolls fresh, exactly as the old completedObjectives prefix filter
+// always encoded. Quest zones are claimed by the persisted quest log instead.
 // ---------------------------------------------------------------------------
 
 import { FACTIONS, MONSTERS } from '../data/monsters';

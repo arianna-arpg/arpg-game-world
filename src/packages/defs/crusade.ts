@@ -1,14 +1,21 @@
 // ---------------------------------------------------------------------------
-// CRUSADES — faction influence as a spreading state machine over the zone graph,
-// with Warbands leading the vanguard (tiered content built ON Warbands).
+// CRUSADES — a faction's holy war as a LIVING WARFRONT on the warfield fabric.
 //
-// A Crusade plants a STRONGHOLD off in unexplored territory (a banner minted
-// beyond the player's vision), then spreads: warbands push into adjacent zones,
-// and every held zone matures by time-held + closeness to the stronghold —
+// A Crusade ignites somewhere in the wilds — often entirely unbeknownst to the
+// player — and grows as a CAMPAIGN: its territory is an analytic field (power ×
+// drifting noise × a well around its HEART), painted on the map as a faction-
+// coloured GRADIENT that deepens as it strengthens… once the player has FOUND
+// it. Real zones under the field raise the faction's works from the local
+// gradient —
 //
 //   touched (an outpost) → occupied (a war camp) → entrenched (a fortress) →
-//   converted (the capital: a faction-city LABYRINTH whose sanctum opens onto
-//   the Crusade Leader's inner realm).
+//   converted (the heartland: a faction-city whose throne gate opens onto the
+//   Leader's arena — a true one-on-one before the stands).
+//
+// Its power OSCILLATES while young — the player, a rival crusade pressing the
+// same ground, or a consuming event can SNUFF it — until it crosses the anchor
+// threshold and plants its THRONE: from then on it can be beaten back but
+// never extinguished, until the Leader falls in his arena.
 //
 // TWO faction modes, both honoured (the user's pick):
 //   • a NET-NEW dedicated faction — the Iron Crusade — grafted here. Its traits
@@ -19,7 +26,8 @@
 //     their own warlord (goblin_chief, lich_marshal, …) becomes the Leader.
 // The ignition pool is DERIVED from factionsInContext('crusade') — never a
 // hardcoded id list (see world/traits.ts). Many crusades, many factions, run
-// in parallel (maxConcurrent > 1).
+// in parallel (maxConcurrent > 1) — and where rival fields overlap, the map
+// becomes a true warfront that fights itself.
 //
 // All escalation is DATA on the surge below; the Vault tunes purely via pressure.
 // ---------------------------------------------------------------------------
@@ -61,38 +69,59 @@ const CRUSADE_FACTION: FactionSpec = {
   ],
 };
 
-/** The spreading + maturation + sanctum config — the whole event as data. */
-const CRUSADE_SURGE: CrusadeSurge = {
-  triggerChance: 0.006,   // per 0.5s step (×pressure) — a crusade ignites now and then
+/** The whole campaign — field, power arc, clash, ladder, throne — as data.
+ *  Distances are MAP UNITS (node pitch 78); rates per second of overlay time.
+ *  (Exported for the balance probe — the shipped dials ARE the tested dials.) */
+export const CRUSADE_SURGE: CrusadeSurge = {
+  triggerChance: 0.006,   // per 0.5s step (×ignition pressure) — now and then, a war kindles
   maxConcurrent: 3,       // several crusades / factions march at once
-  seedSteps: [2, 4],      // strongholds plant 2-4 node-steps off in the UNKNOWN
-  strongholdTileset: 'wasteland',
-  strongholdAccel: 2.6,   // the capital festers ~2.6× faster → converts first
-  networkRange: 320,      // proximity-to-stronghold accel falls off over this
-  minNetFactor: 0.35,
-  maxNetFactor: 1.2,      // the top of the proximity gradient (near-capital zones)
-  frontierDedupDist: 52,  // a pushed frontier lands no closer than this to held ground
-  claimInterval: 22,      // the vanguard pushes a node roughly every 22s (×pressure)
-  maxHeldZones: 7,
-  frontierMintChance: 0.6, // mostly SIMULATE forward into the wilds (floating nodes)…
-  maxMints: 5,             // …up to 5 simulated frontier nodes per crusade
-  accessRadius: 130,       // a floating crusade node wires in (its exit spawns) once
-                           // within ~1.5 node-steps of charted ground — the stopgap
-  nonCapitalMaxTier: 3,   // only the capital reaches Converted (city + sanctum)
-  color: '#d8b040',
-  // The maturation ladder. atSecondsHeld is the zone's OWN held-clock (the capital
-  // crosses these fast via strongholdAccel; far zones crawl via netFactor).
+  seedSteps: [3, 5],      // hearts plant 3-5 node-steps off a RANDOM charted zone — the unknown
+  // THE FIELD: territory = power × drifting noise × heart well × reach falloff.
+  // reachBase + reachPerPower×power is the footprint's e-folding radius — the
+  // territory literally grows and retracts with the campaign's might.
+  field: {
+    noiseScale: 230, noiseBase: 0.55, noiseAmp: 0.5,
+    driftVel: 2.2, driftTurn: [420, 700],
+    wellAmp: 1.5, wellRange: 240,
+    reachBase: 90, reachPerPower: 1.9,
+  },
+  // THE POWER ARC: ember (~22) → anchor (100, ~2-4 min at pressure 1 depending
+  // on vigor) → cap (200, an unchecked holy war consuming a region). Young wars
+  // breathe ±16% (the oscillation the map shows); anchored seats settle to ±5%
+  // and can be beaten back to the floor but never snuffed.
+  power: {
+    start: 22, cap: 200,
+    growth: 0.6, growthFloorMul: 0.3, growthCapMul: 1.5,
+    anchorAt: 100, snuffBelow: 12, anchoredFloor: 55,
+    tideAmp: 0.16, tideAmpAnchored: 0.05, tidePeriod: [70, 110],
+    vigor: [0.75, 1.35],
+    devIgnite: 126,       // devIgnite plants past anchor: city + throne gate, immediately
+  },
+  // CLASH: a rival's control over YOUR heart drains your power — two wars on
+  // the same ground squeeze each other until one is snuffed (or both anchor
+  // and grind forever). Contested real zones field BOTH rosters.
+  clash: { drainPerSec: 0.9, contestNear: 0.62, contestHot: 0.8, injectContested: true },
+  // A LIBERATED hold: the field collapses locally (and heals), the campaign
+  // pays a nick — sustained pressure can gutter an unrooted war entirely.
+  suppress: { radius: 130, mul: 0.25, forSec: 150, powerNick: 8 },
+  // CONTROL: influence 9..200 normalizes to grip 0..1; the city rises only
+  // within 150u of the heart; walking ≥5% ground reveals the war.
+  control: { edge: 9, full: 200, heartland: 150, discoverAt: 0.05, nonHeartMaxTier: 3 },
+  // The ladder over the LOCAL GRADIENT — an anchored war reads city at the
+  // heart, fortresses in the inner ring, camps beyond, outposts at the rim;
+  // beaten-back ground sheds its works on the next entry (generation re-asks
+  // the field every load).
   tiers: [
-    { tier: 1, label: 'Touched', atSecondsHeld: 0, structure: 'crusade_outpost',
+    { tier: 1, label: 'Touched', atControl: 0.06, structure: 'crusade_outpost',
       garrison: [2, 3], leaderRarity: 'none', leaderTag: null,
       suppressNatives: false, countMul: 1.0, amp: 1.4, rewardMul: 1.0 },
-    { tier: 2, label: 'Occupied', atSecondsHeld: 45, structure: 'crusade_camp',
+    { tier: 2, label: 'Occupied', atControl: 0.25, structure: 'crusade_camp',
       garrison: [4, 6], leaderRarity: 'champion', leaderTag: 'crusade_camp',
       suppressNatives: false, countMul: 0.85, amp: 1.6, rewardMul: 1.6 },
-    { tier: 3, label: 'Entrenched', atSecondsHeld: 120, structure: 'crusade_fortress',
+    { tier: 3, label: 'Entrenched', atControl: 0.5, structure: 'crusade_fortress',
       garrison: [6, 9], leaderRarity: 'crowned', leaderTag: 'crusade_fortress',
       suppressNatives: true, countMul: 0.7, amp: 1.8, rewardMul: 2.4 },
-    { tier: 4, label: 'Converted', atSecondsHeld: 230, structure: 'crusade_bastion',
+    { tier: 4, label: 'Converted', atControl: 0.85, structure: 'crusade_bastion',
       garrison: [8, 12], leaderRarity: 'crowned', leaderTag: null,
       suppressNatives: true, countMul: 0.6, amp: 2.0, rewardMul: 3.2,
       // The faction CITY: a street-mix off the shared village kit (real plan
@@ -110,15 +139,20 @@ const CRUSADE_SURGE: CrusadeSurge = {
         square: 'village_square',
       } },
   ],
-  // The capital's sanctum tears open `atSecondsHeld` after it converts; stepping
-  // through it enters the Leader's GRAND ARENA — a gladiatorial colosseum where
-  // the Leader fights before his own people: the crowd answers his champion-
-  // calls (rows vault the rail as an add-phase), and the stands EMPTY when the
-  // crown falls. All data (data/arenas.ts ArenaCrowdSpec).
+  // THE THRONE: once anchored, the gate stands in owned ground within 120u of
+  // the heart (≤ heartland, so the gate zone is always heart ground).
+  throne: { gateRange: 120 },
+  // The Leader's GRAND ARENA — a gladiatorial colosseum where he fights before
+  // his own people, TRULY one-on-one: no ambient packs, no standing court. The
+  // crowd on the stands is his only reinforcement — it answers his champion-
+  // calls (rows vault the rail as the add-phase), and the stands EMPTY when
+  // the crown falls. All data (data/arenas.ts ArenaCrowdSpec).
   sanctum: {
-    atSecondsHeld: 55, tileset: 'grand_arena', rewardMul: 3.5, levelBonus: 4,
-    rewardPerConverted: 0.25, // Leader-kill premium per converted zone held
+    tileset: 'grand_arena', rewardMul: 3.5, levelBonus: 4,
+    rewardPerPower: 0.35,  // Leader-kill premium per anchor-unit of standing power
     bossBump: 2, xpFloor: 140, // the Leader's spawn shaping (spawnArenaBoss)
+    packs: null,               // the Daresso purity: the sand is his alone
+    garrison: { count: [0, 0] },
     arena: {
       crowd: {
         championCalls: [
@@ -130,18 +164,21 @@ const CRUSADE_SURGE: CrusadeSurge = {
       },
     },
   },
-  // CLASH (Crusade vs Crusade): where two different-faction fronts meet, the
-  // stronger side wrests the border zone — a tug-of-war that shifts the warfront on
-  // its own. takeMargin > 1 so a weak vanguard can never overrun a mighty capital
-  // (capital ≈ tier4×3 + (size+4)×1 ≈ 23 vs a fresh vanguard ≈ 1×3 + 3×1 = 6).
-  clash: { interval: 6, chance: 0.5, takeMargin: 1.25, perTier: 3, perMight: 1, holdGuard: 18 },
+  // MAP: the gradient IS the strength readout — wash opacity climbs with local
+  // grip and standing power; ♜/☗ hearts; ⚔ + thrust arrows where wars meet.
+  map: {
+    cellBase: 39, maxCellsPerAxis: 42, pad: 130,
+    washAlpha: 0.12, washPowerAlpha: 0.1, washFloor: 0.3,
+    arrows: 4, extentBase: 0.7, extentPerPower: 0.9,
+  },
+  color: '#d8b040',
 };
 
 export const CRUSADE: ContentPackage = {
   id: 'crusade',
   label: 'Crusades',
   color: '#d8b040',
-  blurb: 'A faction plants a banner in the wilds and CRUSADES — warbands spread its influence zone by zone until a faction-city rises and its leader must be cut down.',
+  blurb: 'A faction kindles a holy war in the wilds — a living warfront that grows, clashes with rivals, and plants a throne — beat it back, or cut down its Leader in his arena.',
   cost: 130,
   // DISCOVERED in play (runs at defaults from level 12); the Vault unlock gates
   // TUNING, surfacing once you've encountered a Crusade in the world.
@@ -151,7 +188,7 @@ export const CRUSADE: ContentPackage = {
     test: (ctx) => (ctx.ledger.crusade_seen ?? 0) >= 1,
   },
   // INVESTMENT LADDER — each owned tier widens a slider so pressure climbs higher,
-  // scaling ignition + spread + maturation harder (no table edits).
+  // scaling ignition + growth harder (no table edits).
   tiers: [
     { id: 'crusade_muster', label: 'Crusade Muster', requirement: 'Liberate 3 crusade zones', cost: 170,
       test: (ctx) => (ctx.ledger.crusade_zones_cleared ?? 0) >= 3,
@@ -181,8 +218,10 @@ export const CRUSADE: ContentPackage = {
   validate: (look) => {
     const out: string[] = [];
     const s = CRUSADE_SURGE;
-    if (!look.tileset(s.strongholdTileset)) out.push(`stronghold tileset '${s.strongholdTileset}' unknown`);
+    let prev = -1;
     for (const t of s.tiers) {
+      if (t.atControl <= prev) out.push(`tier ladder must ascend by atControl (saw ${t.atControl} after ${prev})`);
+      prev = t.atControl;
       if (t.structure && !look.structure(t.structure)) out.push(`tier ${t.tier} structure '${t.structure}' unknown`);
       for (const cs of t.cityFill?.structures ?? []) {
         if (!look.structure(cs.structure)) out.push(`cityFill structure '${cs.structure}' unknown`);
@@ -192,13 +231,23 @@ export const CRUSADE: ContentPackage = {
     if (!look.tileset(s.sanctum.tileset)) out.push(`sanctum tileset '${s.sanctum.tileset}' unknown`);
     if (s.sanctum.arena?.tileset && !look.tileset(s.sanctum.arena.tileset)) out.push(`sanctum arena tileset '${s.sanctum.arena.tileset}' unknown`);
     if (s.sanctum.arena?.layoutType && !look.layout(s.sanctum.arena.layoutType)) out.push(`sanctum arena layout '${s.sanctum.arena.layoutType}' unknown`);
+    // The power arc must be a real arc, and the throne gate must be reachable
+    // heart ground (isStronghold gates the engine's portal — a gateRange past
+    // the heartland would author a gate that can never open).
+    if (!(s.power.snuffBelow < s.power.start)) out.push(`power.snuffBelow ${s.power.snuffBelow} must be < start ${s.power.start}`);
+    if (!(s.power.start < s.power.anchorAt)) out.push(`power.start ${s.power.start} must be < anchorAt ${s.power.anchorAt}`);
+    if (!(s.power.anchorAt <= s.power.cap)) out.push(`power.anchorAt ${s.power.anchorAt} must be ≤ cap ${s.power.cap}`);
+    if (!(s.power.anchoredFloor < s.power.anchorAt)) out.push(`power.anchoredFloor ${s.power.anchoredFloor} must be < anchorAt`);
+    if (!(s.control.edge < s.control.full)) out.push(`control.edge ${s.control.edge} must be < full ${s.control.full}`);
+    if (!(s.throne.gateRange <= s.control.heartland)) out.push(`throne.gateRange ${s.throne.gateRange} must be ≤ control.heartland ${s.control.heartland}`);
     return out;
   },
 };
 
-// A Crusade camp / fortress COMMANDER — felling it LIBERATES the zone (its
-// influence obliterated), for a tier-scaled bounty. (Whoever lands the blow.)
-// (The LEADER in its sanctum consumes World.crusadeRealmContext, so its row
+// A Crusade camp / fortress COMMANDER — felling it LIBERATES the zone (the
+// field collapses locally and the campaign bleeds power), for a tier-scaled
+// bounty. (Whoever lands the blow.)
+// (The LEADER in its arena consumes World.crusadeRealmContext, so its row
 // lives on World.worldKillRules.)
 registerKillHandler({
   id: 'crusade_camp',

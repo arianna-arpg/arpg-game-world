@@ -1,27 +1,38 @@
 // ---------------------------------------------------------------------------
-// CRUSADE FIELD — a spreading-state-machine world event (pure overlay).
+// CRUSADE FIELD — a faction's holy war as a LIVING WARFRONT (pure overlay).
 //
-// A Crusade is faction influence as a SPREADING NETWORK over the zone graph,
-// with warbands leading the vanguard. It seeds a STRONGHOLD in a cardinal
-// direction off in unexplored territory (minted beyond the player's vision),
-// then SPREADS: claiming adjacent zones over time, each one accumulating
-// influence as it's held. A zone's MATURATION climbs a tier ladder by
-// time-held + network-closeness to the stronghold:
+// A Crusade IGNITES somewhere in the wilds — often entirely unbeknownst to the
+// player — and from that moment it is a CAMPAIGN on the warfield fabric
+// (world/warfield.ts): its territory at any coordinate is a PURE FUNCTION of
+// its seeded field identity × its live POWER × a well around its HEART, so the
+// front exists everywhere the moment it is asked about, breathes and crawls on
+// its own clock, and snapshots as a handful of scalars. Nothing overworld is
+// minted: real zones under the field read their local CONTROL through
+// crusadeOn(), and the tier ladder (outpost → camp → fortress → the faction
+// city) derives from that gradient — works RISE where the field runs deep and
+// COLLAPSE on re-entry when it has been beaten back (zone generation re-asks
+// the field every load).
 //
-//   unaffected → touched → occupied → entrenched → converted
+// THE ARC: a young crusade's power OSCILLATES — it grows, its territory
+// swelling and its map-wash deepening to the faction's color, but the player,
+// a rival crusade pressing the same ground, or another event (the Deadwake
+// consuming a hold) can SNUFF it before it takes root. Once power crosses the
+// anchor threshold the crusade plants its THRONE: a seat of power that can no
+// longer be guttered — its heartland claims the very ground (the engine warps
+// the biome), its throne GATE stands in the deepest territory, and only
+// cutting down the Leader in its arena (a true one-on-one before the stands —
+// the crowd answers his champion-calls) collapses the campaign.
 //
-// A freshly-claimed zone is barely changed (touched); a long-held one raises
-// faction structures and floods the faction while suppressing rivals (occupied
-// → a war camp, entrenched → a fortress), and the capital matures into a
-// faction-city LABYRINTH (converted) whose sanctum gate tears open onto the
-// Crusade Leader's inner realm. The engine reads crusadeOn() to materialize the
-// camps / fortress / city + leader and resolves a zone (or the whole crusade)
-// when the player cuts down the tagged commander (or the Leader).
+// DISCOVERY: the map shows NOTHING of a crusade until the player walks into
+// its ground. A crusade may ignite, swell to a throne, and war with a rival
+// while the player remains entirely unaware — the living world, detached from
+// the player's input — and once found, its whole warfront (the gradient wash,
+// the heart sigil, the clash line) is revealed to be fought back.
 //
-// PURE of the engine, exactly like DemonInvasionField: it owns node-space + the
-// maturation clock, queues uncharted mints the engine drains, and never touches
-// World. It is self-contained — it does NOT route through FactionField/Invasion
-// (so a crusade-only faction never leaks into the baseline war machine).
+// PURE of the engine, exactly like HellWarField: it owns coordinate-space and
+// the power clocks, and never touches World. Population/works materialize
+// through the engine's crusadeOn() reads; the throne arena mints through the
+// sanctum gate exactly as before.
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
@@ -30,29 +41,32 @@ import type { ArenaSpec } from '../../data/arenas';
 import { FACTIONS } from '../../data/monsters';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
-import { coordDist, DIRS, projectCoord, type Dir, type MapCoord } from '../../world/coords';
+import { coordDist, DIRS, projectCoord, type MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerBulletinSource } from '../../world/bulletins';
+import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { scaledCap } from '../frequency';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { factionsInContext } from '../../world/traits';
+import { anchorWell, decayingModsMul, driftOffset, fieldNoise01, influenceGrad, latticeWindow, thrustArrowSvg, type FieldMod } from '../../world/warfield';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
-const STEP = 0.5;          // fixed ignition cadence (seconds)
+const STEP = 0.5;          // fixed sim cadence (seconds)
 const CRUSADE_GOLD = '#d8b040';
+const MAX_BULLETINS = 8;
 
-/** One rung of the maturation ladder — a step function over a zone's time-held.
- *  All the per-tier severity (which structure rises, how big the garrison, the
- *  commander's rarity, whether rivals are suppressed) is DATA here. */
+/** One rung of the CONTROL ladder — a step function over the field's local
+ *  strength. All the per-tier severity (which structure rises, how big the
+ *  garrison, the commander's rarity, whether rivals are suppressed) is DATA. */
 export interface CrusadeTier {
   /** 1..4 (touched, occupied, entrenched, converted). */
   tier: number;
   label: string;
-  /** Seconds-held at which this tier takes over (0 = touched on claim). */
-  atSecondsHeld: number;
-  /** STRUCTURES id stamped into the live arena at this tier (null = none). */
+  /** Local control (0..1) at which this tier takes over (ascending). */
+  atControl: number;
+  /** STRUCTURES id raised at generation in a zone of this tier (null = none). */
   structure: string | null;
   /** Crusade pack size materialized at this tier. */
   garrison: [number, number];
@@ -63,97 +77,136 @@ export interface CrusadeTier {
   /** baseTable returns the crusade roster — the zone's population is fully the
    *  crusade's (the rivals are gone). */
   suppressNatives: boolean;
-  /** Native pack-count multiplier (thins the rivals as the crusade tightens). */
+  /** Native pack-count multiplier (thins the rivals as the grip tightens). */
   countMul: number;
   /** Amplifier on the crusade faction in the spawn table. */
   amp: number;
   /** Local-clear reward multiplier at this tier. */
   rewardMul: number;
-  /** Extra structures scattered to make a converted capital a FACTION CITY —
-   *  a weighted street-mix (the village kit: cottages, longhouses, a chapel,
-   *  rampart runs) plus an optional town SQUARE raised once near the works.
+  /** Extra structures scattered to make heart-deep ground a FACTION CITY —
+   *  a weighted street-mix (the village kit) plus an optional town SQUARE.
    *  Only the converted tier sets it. */
   cityFill?: { structures: { structure: string; weight: number }[]; count: [number, number]; square?: string };
 }
 
-/** The whole spreading-state-machine config (tunable data, carried by the def). */
+/** The whole campaign config — every dial of the war as data. Distances are
+ *  MAP UNITS (the node pitch is 78); rates are per second of overlay time. */
 export interface CrusadeSurge {
-  /** Per-step base chance (×pressure) a fresh Crusade ignites. */
+  /** Per-step base chance (×ignition pressure) a fresh Crusade ignites. */
   triggerChance: number;
-  /** Most Crusades alive at once (multiple factions can crusade in parallel). */
+  /** Most Crusades alive at once (multiple factions crusade in parallel). */
   maxConcurrent: number;
-  /** Node-steps from the trigger zone the stronghold coordinate is rolled. */
+  /** Node-steps from the (randomly drawn) charted seed zone the heart lands —
+   *  off in the unknown, where a war can grow unseen. */
   seedSteps: [number, number];
-  /** Tileset a minted stronghold zone is built with. */
-  strongholdTileset: string;
-  /** Maturation-rate multiplier for the capital (it festers fastest → converts
-   *  first, becoming the city + sanctum the others orbit). */
-  strongholdAccel: number;
-  /** Node-distance over which proximity-to-stronghold acceleration falls off. */
-  networkRange: number;
-  /** Floor on a far zone's maturation-rate multiplier. */
-  minNetFactor: number;
-  /** Ceiling on a near-capital zone's maturation-rate multiplier (the top of
-   *  the proximity gradient; the capital itself uses strongholdAccel). */
-  maxNetFactor: number;
-  /** A pushed frontier lands no closer than this to ground the crusade already
-   *  holds (map-units — keeps the simulated front stepping OUTWARD). */
-  frontierDedupDist: number;
-  /** Seconds (×pressure) between a Crusade claiming another zone. */
-  claimInterval: number;
-  /** Cap on zones one Crusade holds. */
-  maxHeldZones: number;
-  /** Chance a claim pushes a SIMULATED frontier (a floating zone in the wilds) vs
-   *  taking a charted neighbour. */
-  frontierMintChance: number;
-  /** Cap on simulated (floating) frontier zones per Crusade. */
-  maxMints: number;
-  /** Node-distance within which a floating crusade zone WIRES INTO the charted
-   *  graph (its exit spawns) — the accessibility stopgap: a crusade zone connects
-   *  only once it's this close to real charted ground, so it's always reachable
-   *  and never inadvertent dead content. Far frontiers stay SIMULATED (shown on
-   *  the warfront heat-map, not yet enterable) until the front reaches near. */
-  accessRadius: number;
-  /** The ladder (ascending atSecondsHeld; covers tiers 1..4). */
+  /** THE FIELD (warfield fabric dials): territory = power × drifting noise ×
+   *  heart well × reach falloff. `reachBase + reachPerPower × power` is the
+   *  footprint's e-folding radius — territory literally GROWS with power. */
+  field: {
+    noiseScale: number; noiseBase: number; noiseAmp: number;
+    driftVel: number; driftTurn: [number, number];
+    wellAmp: number; wellRange: number;
+    reachBase: number; reachPerPower: number;
+  };
+  /** THE POWER MODEL — the campaign's one might scalar. */
+  power: {
+    /** Ignition power (an ember). */
+    start: number;
+    /** Logistic ceiling — an unchecked holy war's full might. */
+    cap: number;
+    /** Growth per second (×vigor ×severity pressure, logistic toward cap).
+     *  A planted crusade festers even when the package is dialed down:
+     *  severity is clamped to [growthFloorMul, growthCapMul]. */
+    growth: number;
+    growthFloorMul: number;
+    growthCapMul: number;
+    /** Crossing this ANCHORS the crusade: its throne is built (invisibly),
+     *  and it can no longer be snuffed — only the Leader's death ends it. */
+    anchorAt: number;
+    /** An UN-anchored crusade whose power falls below this GUTTERS OUT —
+     *  beaten back by the player, a rival, or another event before rooting. */
+    snuffBelow: number;
+    /** An anchored crusade's power never falls below this — the seat holds
+     *  (beaten back, never extinguished) until the Leader falls. */
+    anchoredFloor: number;
+    /** Pre-anchor power OSCILLATION (the young war's ebb and surge) vs the
+     *  settled breath of an anchored seat — the tide swings the territory. */
+    tideAmp: number; tideAmpAnchored: number; tidePeriod: [number, number];
+    /** Per-crusade growth roll — some campaigns are fierce, some slow. */
+    vigor: [number, number];
+    /** devIgnite plants at this power (a meaty, near-anchor war for QA). */
+    devIgnite: number;
+  };
+  /** CLASH (Crusade vs Crusade): overlapping fields contest ground on their
+   *  own; a rival's control at YOUR heart drains your power — a stronger
+   *  crusade can squeeze an unrooted rival to the snuff line. */
+  clash: {
+    /** Power drained per second at FULL rival control over one's heart. */
+    drainPerSec: number;
+    /** Rival/holder influence ratio above which ground reads CONTESTED (the
+     *  floor that keeps a smooth ratio from contesting everywhere). */
+    contestNear: number;
+    /** Above this the front runs HOT (map arrows; both factions injected). */
+    contestHot: number;
+    /** Contested real zones spawn BOTH factions' rosters — the warfront
+     *  stages its own brawls in walked ground. */
+    injectContested: boolean;
+  };
+  /** DECAYING LOCAL SUPPRESSION — the player's (or a consuming event's)
+   *  fleeting fingerprint when a hold is LIBERATED: the field collapses in a
+   *  disc that heals, and the campaign pays a nick of power. */
+  suppress: { radius: number; mul: number; forSec: number; powerNick: number };
+  /** CONTROL normalization + the ladder's ground rules. */
+  control: {
+    /** Influence below this = outside the territory (the wash's edge). */
+    edge: number;
+    /** Influence at (≥) this = control 1 — the deepest read. */
+    full: number;
+    /** Map-units from the heart within which the CITY tier may rise. */
+    heartland: number;
+    /** Control at the player's zone that DISCOVERS the crusade (reveals its
+     *  whole warfront on the map). */
+    discoverAt: number;
+    /** Highest tier outside the heartland (only the heart converts). */
+    nonHeartMaxTier: number;
+  };
+  /** The ladder (ascending atControl; covers tiers 1..4). */
   tiers: CrusadeTier[];
-  /** Highest tier a NON-capital zone can reach (only the stronghold converts). */
-  nonCapitalMaxTier: number;
-  /** Per-faction ignition weight (default 1); pool itself = factionsInContext('crusade'). */
+  /** THE THRONE: once anchored, the gate to the Leader's arena stands in any
+   *  owned real zone within gateRange of the heart. */
+  throne: { gateRange: number };
+  /** The Leader's arena realm (the deep dive through the throne gate).
+   *  `packs`/`garrison` author the arena's population: null packs + a [0,0]
+   *  garrison = the TRUE ONE-ON-ONE (the crowd's champion-calls remain the
+   *  only adds — data/arenas.ts ArenaCrowdSpec). */
+  sanctum: {
+    tileset: string; rewardMul: number; levelBonus: number;
+    /** Leader-kill premium per anchorAt-unit of standing power — a war that
+     *  grew mighty pays mightily. */
+    rewardPerPower: number;
+    /** The Leader's spawn shaping (fed to spawnArenaBoss). */
+    bossBump: number; xpFloor: number;
+    /** Ambient packs in the arena (null = none — the Daresso purity). */
+    packs: { count: [number, number]; size: [number, number] } | null;
+    /** The Leader's standing court at his side ([0,0] = he stands alone). */
+    garrison: { count: [number, number]; spread?: number };
+    arena?: ArenaSpec;
+  };
+  /** Map paint: render-lattice + wash + arrows (the GRADIENT is the strength
+   *  readout — opacity climbs with local control and standing power). */
+  map: {
+    cellBase: number; maxCellsPerAxis: number; pad: number;
+    washAlpha: number; washPowerAlpha: number;
+    /** Edge feather: wash alpha at control 0 as a fraction of full. */
+    washFloor: number;
+    arrows: number;
+    /** Map-fit extent reach = wellRange × (base + perPower × power/cap). */
+    extentBase: number; extentPerPower: number;
+  };
+  /** Per-faction ignition weight (default 1); pool = factionsInContext('crusade'). */
   factionWeights?: Record<string, number>;
   /** Fallback wash colour if the faction has none. */
   color?: string;
-  /** The inner-sanctum realm config (the converted capital's deep dive).
-   *  `arena` (data/arenas.ts) makes the sanctum DISTINCT with one row — a
-   *  forced layout recipe, a fixed name, pack density, even boss-warding
-   *  seals — riding the same pipeline as every event realm. */
-  sanctum: {
-    atSecondsHeld: number; tileset: string; rewardMul: number; levelBonus: number;
-    /** Premium on the Leader kill per CONVERTED zone the crusade held (the
-     *  network-scaled spoils — was a hardcoded 0.25). */
-    rewardPerConverted: number;
-    /** The Leader's spawn shaping (fed to spawnArenaBoss). */
-    bossBump: number; xpFloor: number;
-    arena?: ArenaSpec;
-  };
-  /** CLASH (Crusade vs Crusade): when two different-faction crusades' fronts meet,
-   *  the stronger side wrests the contested border zone — a tug-of-war warfront that
-   *  shifts on its own, which the player can tip by thinning a side. */
-  clash: {
-    /** Seconds between clash-resolution passes. */
-    interval: number;
-    /** Per-pass chance a winnable border actually flips (gradual, not instant). */
-    chance: number;
-    /** Attacker power must exceed the defender's by THIS factor to take the zone
-     *  (>1 — so a weak vanguard can never overrun a mighty, longstanding capital). */
-    takeMargin: number;
-    /** Power per the zone's OWN maturation tier (the local gradient). */
-    perTier: number;
-    /** Power per unit of the crusade's overall MIGHT (held count + capital tier). */
-    perMight: number;
-    /** Held-seconds a freshly-wrested zone is LOCKED from re-flipping — hysteresis
-     *  so a balanced front can SETTLE instead of ping-ponging a border forever. */
-    holdGuard: number;
-  };
 }
 
 /** What a Crusade does to one zone, resolved for the engine to materialize. */
@@ -163,6 +216,10 @@ export interface CrusadeInfo {
   color: string;
   tier: number;
   label: string;
+  /** Local control 0..1 — the gradient this zone sits on. */
+  control: number;
+  /** HEART ground (within the heartland) — where the city may rise and the
+   *  throne gate stands. (Field name kept for the engine seam.) */
   isStronghold: boolean;
   structure: string | null;
   garrison: [number, number];
@@ -173,67 +230,57 @@ export interface CrusadeInfo {
   amp: number;
   rewardMul: number;
   cityFill?: { structures: { structure: string; weight: number }[]; count: [number, number]; square?: string };
-  /** A converted stronghold whose sanctum gate has torn open (host-only mint). */
+  /** An ANCHORED crusade's throne gate stands in this zone (host-only mint). */
   sanctumReady: boolean;
-}
-
-/** Engine-drained: mint a crusade frontier/stronghold zone at an uncharted coord. */
-export interface CrusadeMintRequest {
-  crusadeId: string;
-  coord: MapCoord;
-  anchorZoneId: string;
-  zoneKey: string;
-  tileset: string;
-  level: number;
-  /** A stronghold (the capital) or a pushed frontier. */
-  kind: 'stronghold' | 'frontier';
 }
 
 interface ActiveCrusade {
   id: string;
   faction: string;
   color: string;
-  dir: Dir;                 // the cardinal the vanguard pushes
-  strongholdId: string | null;
-  strongholdCoord: MapCoord;
-  anchorId: string;
+  /** The seat-of-power anchor — a FIELD WELL, never a zone. */
+  heart: MapCoord;
+  /** The campaign's might — the one scalar the whole territory derives from. */
+  power: number;
+  /** The throne stands: no longer snuffable; the gate opens in the deep. */
+  anchored: boolean;
+  /** The player has walked its ground — until then the map shows nothing. */
+  discovered: boolean;
   age: number;
-  minted: boolean;
-  mints: number;
-  claimAcc: number;
-  sanctumMinted: boolean;   // engine has minted the realm (set via markSanctumMinted)
+  /** Seeded field identity (warfield fabric): noise salt, drift, tide. */
+  salt: number;
+  heading: number;
+  turnPeriod: number;
+  tidePhase: number;
+  tidePeriod: number;
+  /** Per-crusade growth roll. */
+  vigor: number;
+  sanctumMinted: boolean;
   dead: boolean;
-}
-
-interface CrusadeZone {
-  crusadeId: string;
-  faction: string;
-  ageHeld: number;
-  netFactor: number;        // maturation-rate multiplier (capital fast, far zones slow)
-  isStronghold: boolean;
 }
 
 export class CrusadeField implements WorldOverlay {
   readonly id = 'crusade';
-  /** Durable: a crusade is the slowest arc in the game — capitals mature over
-   *  minutes of held time toward the sanctum. Territory, maturation clocks,
-   *  and minted strongholds all resume; minted ground rides ownedZones. */
+  /** Durable: a crusade is a slow arc — power grows over minutes toward the
+   *  throne. Campaigns, suppression discs and the owner ledger all resume;
+   *  the territory itself derives from time and needs no saving. */
   readonly persistence = 'durable' as const;
   readonly mapLabel = 'Crusades';
-  /** Mint seam the engine drains (host-only): strongholds + pushed frontiers. */
-  readonly mintRequests: CrusadeMintRequest[] = [];
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
   private readonly cfg: CrusadeSurge;
   private crusades: ActiveCrusade[] = [];
-  private held = new Map<string, CrusadeZone>();
+  /** Decaying local suppression discs (warfield fabric; key = crusade id). */
+  private mods: FieldMod[] = [];
+  private time = 0;
   private acc = 0;
-  private clashAcc = 0;
   private seq = 0;
   private nodesById: Record<string, ZoneDef> = {};
-  /** Engine-drained war bulletins: a front shifted (one crusade overran another). */
-  readonly frontShifts: { zoneId: string; faction: string; from: string }[] = [];
+  /** Last announced owner per VISITED zone — the conquest-bulletin edge. */
+  private lastZoneOwner = new Map<string, string>();
+  /** War news (drained by the registered bulletin source). */
+  readonly bulletins: { text: string; color: string }[] = [];
 
   constructor(ctx: OverlayBuildCtx, surge: CrusadeSurge) {
     this.rng = new Rng(ctx.seed);
@@ -241,200 +288,300 @@ export class CrusadeField implements WorldOverlay {
     this.cfg = surge;
   }
 
+  // --- the tick ---------------------------------------------------------------
+
   update(dt: number, view: OverlayView): void {
     this.nodesById = view.byId;
+    this.time += dt;
+    this.acc += dt;
+    if (this.acc < STEP) return;
+    const step = this.acc;
+    this.acc = 0;
     const g = this.gate();
-    const pressure = clamp(g.severityMul, 0, 1.5); // spread cadence = the SIZE/severity crank
+
+    // POWER: every campaign grows (logistic toward cap), scaled by its vigor
+    // and the severity crank — floored so a planted crusade festers even when
+    // the package is dialed down (growth stops only at death).
+    const P = this.cfg.power;
+    const growMul = clamp(g.severityMul, P.growthFloorMul, P.growthCapMul);
     for (const c of this.crusades) {
       if (c.dead) continue;
-      c.age += dt;
-      // SPREAD: a bound stronghold sends the vanguard outward on a cadence scaled
-      // by pressure (a closed gate freezes expansion but not maturation).
-      if (c.strongholdId && g.active) {
-        c.claimAcc += dt * pressure;
-        while (c.claimAcc >= this.cfg.claimInterval) {
-          c.claimAcc -= this.cfg.claimInterval;
-          this.maybeClaim(c, view);
+      c.age += step;
+      c.power = Math.min(P.cap, c.power + P.growth * c.vigor * growMul * (1 - c.power / P.cap) * step);
+    }
+
+    // CLASH: overlapping campaigns drain each other — a rival's control over
+    // YOUR heart bleeds your power. Runs regardless of the gate (planted
+    // crusades war on even if dialed down); the player tips it by thinning a
+    // side (liberations nick power and suppress the field locally).
+    if (this.crusades.length >= 2) this.tickClash(step);
+
+    // ANCHOR / SNUFF: crossing anchorAt plants the throne (one-way); an
+    // un-anchored campaign ground below snuffBelow gutters out. An anchored
+    // seat never falls below its floor — only the Leader's death ends it.
+    for (const c of this.crusades) {
+      if (c.dead) continue;
+      if (!c.anchored && c.power >= P.anchorAt) {
+        c.anchored = true;
+        if (c.discovered) {
+          this.pushBulletin(`${this.factionName(c)} crusade plants its THRONE — a seat of power rises!`, c.color);
+        }
+      }
+      if (c.anchored) c.power = Math.max(P.anchoredFloor, c.power);
+      else if (c.power < P.snuffBelow) {
+        c.dead = true;
+        if (c.discovered) {
+          this.pushBulletin(`The ${this.factionName(c)} crusade gutters out — its banner never took root.`, c.color);
         }
       }
     }
-    // MATURATION: every held zone accrues time-held, faster near its stronghold —
-    // the "network-connected zones rise in tier" rule. Runs regardless of the
-    // gate (a planted crusade festers even if its package is dialed down).
-    for (const hz of this.held.values()) hz.ageHeld += dt * hz.netFactor;
-    // Drop held zones whose crusade has fallen (the Leader was slain).
-    for (const [zid, hz] of [...this.held]) {
-      const c = this.crusades.find(x => x.id === hz.crusadeId);
-      if (!c || c.dead) this.held.delete(zid);
+
+    // DISCOVERY: walking ground the field holds reveals the whole warfront.
+    const here = view.byId[view.currentZoneId];
+    if (here && here.caveDepth == null) {
+      const read = this.strongestAt(here.map);
+      if (read && read.control >= this.cfg.control.discoverAt && !read.crusade.discovered) {
+        read.crusade.discovered = true;
+        this.pushBulletin(
+          `You have found ${this.factionName(read.crusade)} crusade — its warfront burns on your map!`,
+          read.crusade.color);
+      }
     }
-    // A crusade that LOST its capital to a rival (strongholdId disowned) and holds no
-    // ground is finished — clear it so it stops counting against maxConcurrent.
-    for (const c of this.crusades) {
-      if (c.dead || !c.minted || c.strongholdId) continue;
-      if (![...this.held.values()].some(h => h.crusadeId === c.id)) c.dead = true;
+
+    // Expired suppression discs heal off the ledger.
+    for (let i = this.mods.length - 1; i >= 0; i--) {
+      if (this.time >= this.mods[i].until) this.mods.splice(i, 1);
     }
+
+    this.tickZoneBulletins(view);
     this.crusades = this.crusades.filter(c => !c.dead);
-    // CLASH: where two different-faction crusades' fronts meet, the stronger side
-    // takes the contested border — a tug-of-war that shifts the warfront WITHOUT the
-    // player (runs regardless of the gate — planted crusades war on even if dialed
-    // down). The player tips it by thinning a side (liberating zones / felling a
-    // leader drops that crusade's might everywhere).
-    this.clashAcc += dt;
-    while (this.clashAcc >= this.cfg.clash.interval) {
-      this.clashAcc -= this.cfg.clash.interval;
-      if (this.crusades.length >= 2) this.resolveClashes();
-    }
-    // IGNITION: roll a fresh crusade on the fixed step (gated by pressure).
-    this.acc += dt;
-    while (this.acc >= STEP) { this.acc -= STEP; if (g.active) this.maybeIgnite(view); }
+
+    // IGNITION: a fresh war kindles somewhere in the wilds (gated).
+    if (g.active) this.maybeIgnite(view, g);
   }
 
-  onNodeCharted(): void { /* crusades target coordinates + spread along exits */ }
+  onNodeCharted(): void { /* the field exists everywhere already */ }
+
+  // --- the field --------------------------------------------------------------
+
+  /** A campaign's EFFECTIVE power right now — the grown baseline breathing on
+   *  its tide (harder pre-anchor: the young war ebbs and surges). Pure in t. */
+  private effectivePower(c: ActiveCrusade, t: number): number {
+    const P = this.cfg.power;
+    const amp = c.anchored ? P.tideAmpAnchored : P.tideAmp;
+    return c.power * (1 + amp * Math.sin(((t + c.tidePhase) / c.tidePeriod) * Math.PI * 2));
+  }
+
+  /** One campaign's influence at a coordinate — drifting noise × effective
+   *  power × the heart well × a power-scaled REACH falloff (the footprint
+   *  grows with might) × the healing suppression discs. Pure in (state,
+   *  coord, time) — the warfield fabric composition. */
+  private influence(c: ActiveCrusade, coord: MapCoord, t: number): number {
+    const F = this.cfg.field;
+    const off = driftOffset(c.heading, c.turnPeriod, F.driftVel, t);
+    const n = fieldNoise01(c.salt, (coord.x + off.x) / F.noiseScale, (coord.y + off.y) / F.noiseScale);
+    const d = coordDist(coord, c.heart);
+    const reach = Math.exp(-d / (F.reachBase + F.reachPerPower * c.power));
+    const inf = this.effectivePower(c, t) * (F.noiseBase + F.noiseAmp * n)
+      * anchorWell(coord, c.heart, F.wellAmp, F.wellRange) * reach;
+    return inf * decayingModsMul(this.mods, coord, t, c.id);
+  }
+
+  /** Influence normalized to CONTROL 0..1 (edge → outside, full → deepest). */
+  private control01(inf: number): number {
+    const C = this.cfg.control;
+    return clamp((inf - C.edge) / Math.max(1e-6, C.full - C.edge), 0, 1);
+  }
+
+  /** The strongest campaign at a coordinate (with its control and the best
+   *  rival's contest level), or null where no field reaches. */
+  private strongestAt(coord: MapCoord): {
+    crusade: ActiveCrusade; control: number;
+    rival: ActiveCrusade | null; contest: number;
+  } | null {
+    const t = this.time;
+    let best: ActiveCrusade | null = null, bi = 0;
+    let second: ActiveCrusade | null = null, si = 0;
+    for (const c of this.crusades) {
+      if (c.dead) continue;
+      const inf = this.influence(c, coord, t);
+      if (inf > bi) { second = best; si = bi; best = c; bi = inf; }
+      else if (inf > si) { second = c; si = inf; }
+    }
+    if (!best || bi <= this.cfg.control.edge) return null;
+    // Same-faction campaigns never contest each other (allied banners).
+    const rivalOk = second && second.faction !== best.faction && si > this.cfg.control.edge;
+    const level = rivalOk ? Math.min(1, si / Math.max(1e-6, bi)) : 0;
+    return {
+      crusade: best, control: this.control01(bi),
+      rival: rivalOk && level >= this.cfg.clash.contestNear ? second : null,
+      contest: level,
+    };
+  }
+
+  /** Rival pressure ON a campaign: each different-faction rival's control over
+   *  this heart drains power — the clash resolves itself, field vs field. */
+  private tickClash(dt: number): void {
+    const drains: { c: ActiveCrusade; amt: number }[] = [];
+    for (const c of this.crusades) {
+      if (c.dead) continue;
+      let press = 0;
+      for (const r of this.crusades) {
+        if (r === c || r.dead || r.faction === c.faction) continue;
+        press = Math.max(press, this.control01(this.influence(r, c.heart, this.time)));
+      }
+      if (press > 0) drains.push({ c, amt: this.cfg.clash.drainPerSec * press * dt });
+    }
+    for (const d of drains) d.c.power = Math.max(0, d.c.power - d.amt);
+  }
+
+  /** Owner changes over VISITED ground become war bulletins — only for wars
+   *  the player has FOUND (an unknown crusade stays unknown), and only over
+   *  ground a crusade may actually hold (a sanctuary is never "reached"). */
+  private tickZoneBulletins(view: OverlayView): void {
+    for (const z of view.nodes) {
+      if (!view.visited.has(z.id) || z.caveDepth != null || !eventTargetable(this.id, z)) continue;
+      const read = this.strongestAt(z.map);
+      const now = read && read.control >= (this.cfg.tiers[0]?.atControl ?? 0) ? read.crusade : null;
+      const before = this.lastZoneOwner.get(z.id) ?? '';
+      const nowId = now ? now.id : '';
+      if (before === nowId) continue;
+      this.lastZoneOwner.set(z.id, nowId);
+      const prev = this.crusades.find(c => c.id === before);
+      if (now && now.discovered) {
+        this.pushBulletin(prev && prev.discovered
+          ? `${this.factionName(now)} overrun ${this.factionName(prev)} at ${z.name}!`
+          : `The crusade's front reaches ${z.name}!`, now.color);
+      } else if (!now && prev?.discovered) {
+        this.pushBulletin(`${z.name} is free of the crusade.`, prev.color);
+      }
+    }
+  }
+
+  private factionName(c: ActiveCrusade): string {
+    return (FACTIONS[c.faction]?.name ?? c.faction).replace(/^the /, '');
+  }
+
+  private pushBulletin(text: string, color: string): void {
+    this.bulletins.push({ text, color });
+    if (this.bulletins.length > MAX_BULLETINS) this.bulletins.shift();
+  }
+
+  // --- overlay surface --------------------------------------------------------
 
   affectSpawns(zone: ZoneDef): SpawnBias {
     const info = this.crusadeOn(zone.id);
-    if (!info) return NO_BIAS;
-    // Amplify the crusade faction (present in the base table once suppressNatives
-    // flips it in) and thin the natives as the hold tightens. The camp / fortress
-    // / city packs + the commander are MATERIALIZED by the engine, not biased.
-    return { countMul: info.countMul, factionMul: { [info.faction]: info.amp }, injectFactions: [] };
+    if (info) {
+      // Amplify the crusade faction and thin the natives as the grip tightens;
+      // CONTESTED ground fields BOTH rivals' rosters — the warfront brawls in
+      // walked zones. The works + commander are MATERIALIZED by the engine.
+      const inject: string[] = [];
+      if (this.cfg.clash.injectContested) {
+        const read = this.strongestAt(zone.map);
+        if (read?.rival) inject.push(read.crusade.faction, read.rival.faction);
+      }
+      return { countMul: info.countMul, factionMul: { [info.faction]: info.amp }, injectFactions: inject };
+    }
+    return NO_BIAS;
   }
 
-  renderMap(_nodes: ZoneDef[]): MapLayer {
-    // A WAR-MAP WARFRONT: each crusade paints its held territory as a faction-
-    // coloured INFLUENCE HEAT-MAP so its reach + strength read at a glance. Drawn
-    // off `this.nodesById` (every charted node, not just the visited subset) so the
-    // whole front is revealed like an army's territory — the bigger + hotter the
-    // blob, the mightier the crusade. The stronghold/Leader glyph rides the marker
-    // source (fog:'always'); this layer is the territory + the front line.
-    let under = '';
-    const byId = this.nodesById;
-    for (const c of this.crusades) {
-      if (c.dead) continue;
-      const col = c.color;
-      const mine: { n: ZoneDef; tier: number }[] = [];
-      for (const [zid, hz] of this.held) {
-        if (hz.crusadeId !== c.id) continue;
-        const n = byId[zid];
-        if (n) mine.push({ n, tier: this.tierIdxFor(hz) });
-      }
-      if (!mine.length) continue;
-      // Soft, LAYERED translucent discs per held zone (radius + opacity climb with
-      // tier). They OVERLAP into one continuous field — denser + larger where the
-      // crusade is deep (high-tier, clustered near the stronghold), so a glance
-      // reads its strength. No SVG filter; stacked discs give the falloff.
-      for (const { n, tier } of mine) {
-        const baseR = 20 + 10 * tier;
-        for (const [m, op] of [[1, 0.045 + 0.02 * tier], [0.62, 0.06 + 0.03 * tier], [0.32, 0.09 + 0.045 * tier]] as const) {
-          under += `<circle cx="${n.map.x.toFixed(1)}" cy="${n.map.y.toFixed(1)}" `
-            + `r="${(baseR * m).toFixed(1)}" fill="${col}" fill-opacity="${op.toFixed(3)}"/>`;
-        }
-      }
-      // THE FRONT LINE: a dashed reach-ring around the stronghold spanning the held
-      // territory — wider ring = a crusade that has marched further.
-      const sh = c.strongholdId ? byId[c.strongholdId] : null;
-      if (sh) {
-        let reach = 34;
-        for (const { n } of mine) reach = Math.max(reach, coordDist(n.map, sh.map) + 30);
-        under += `<circle cx="${sh.map.x.toFixed(1)}" cy="${sh.map.y.toFixed(1)}" r="${reach.toFixed(1)}" `
-          + `fill="none" stroke="${col}" stroke-opacity="0.5" stroke-width="1.5" stroke-dasharray="6 5"/>`;
-      }
-    }
-    // THE CLASH FRONT: a ⚔ over every contested held zone (one touching a rival-
-    // faction crusade's territory), so a power struggle reads at a glance.
-    let over = '';
-    for (const [zid, hz] of this.held) {
-      const z = byId[zid];
-      if (!z) continue;
-      const contested = z.exits.some(e => {
-        if (e.to === '?') return false;
-        const nb = this.held.get(e.to);
-        return !!nb && nb.faction !== hz.faction;
-      });
-      if (contested) {
-        over += `<text x="${z.map.x.toFixed(1)}" y="${(z.map.y - 13).toFixed(1)}" text-anchor="middle" `
-          + `font-size="12" fill="#ff5a5a">⚔</text>`;
-      }
-    }
-    return { under, over };
+  /** Event-activity fed to the bloom: crusade ground stirs with its control. */
+  activityAt(zoneId: string): number {
+    const z = this.nodesById[zoneId];
+    if (!z || z.caveDepth != null) return 0;
+    const read = this.strongestAt(z.map);
+    return read ? read.control * 2 : 0;
   }
 
   // --- accessors the engine reads -------------------------------------------
 
-  /** Live config (the engine reads sanctum tileset / reward / level bonus). */
+  /** Live config (the engine reads sanctum tileset / reward / arena shape). */
   surge(): CrusadeSurge { return this.cfg; }
 
-  /** Event-activity fed to the bloom (WorldOverlay.activityAt): held crusade
-   *  ground is heavy turmoil. */
-  activityAt(zoneId: string): number { return this.crusadeOn(zoneId) ? 2 : 0; }
-
-  /** The crusade affecting a zone (its held tier resolved into engine info), or
-   *  null when the zone is untouched. */
+  /** The crusade affecting a zone — its local CONTROL resolved through the
+   *  tier ladder into engine info — or null when the field doesn't reach (or
+   *  the ground refuses events: sanctuary, cave, another event's arena). */
   crusadeOn(zoneId: string): CrusadeInfo | null {
-    const hz = this.held.get(zoneId);
-    if (!hz) return null;
-    const c = this.crusades.find(x => x.id === hz.crusadeId);
-    if (!c || c.dead) return null;
-    const t = this.tierFor(hz);
-    const isConvertedCapital = hz.isStronghold && t.tier >= 4;
+    const z = this.nodesById[zoneId];
+    if (!z || z.caveDepth != null || z.special) return null;
+    if (!eventTargetable(this.id, z)) return null;
+    const read = this.strongestAt(z.map);
+    if (!read) return null;
+    const c = read.crusade;
+    const C = this.cfg.control;
+    let tierIdx = 0;
+    for (const t of this.cfg.tiers) if (read.control >= t.atControl) tierIdx = t.tier;
+    if (tierIdx <= 0) return null;
+    const dHeart = coordDist(z.map, c.heart);
+    const heartGround = dHeart <= C.heartland;
+    if (!heartGround) tierIdx = Math.min(tierIdx, C.nonHeartMaxTier);
+    const t = this.cfg.tiers.find(x => x.tier === tierIdx) ?? this.cfg.tiers[0];
     return {
       crusadeId: c.id, faction: c.faction, color: c.color,
-      tier: t.tier, label: t.label, isStronghold: hz.isStronghold,
+      tier: t.tier, label: t.label, control: read.control,
+      isStronghold: heartGround,
       structure: t.structure, garrison: t.garrison,
       leaderRarity: t.leaderRarity, leaderTag: t.leaderTag,
       suppressNatives: t.suppressNatives, countMul: t.countMul, amp: t.amp,
-      rewardMul: t.rewardMul, cityFill: t.cityFill,
-      sanctumReady: isConvertedCapital && hz.ageHeld >= this.tierAt(4) + this.cfg.sanctum.atSecondsHeld,
+      rewardMul: t.rewardMul,
+      ...(t.cityFill ? { cityFill: t.cityFill } : {}),
+      sanctumReady: c.anchored && dHeart <= this.cfg.throne.gateRange,
     };
   }
 
-  /** Monster id of a crusade's Leader = the faction's warlord (WARLORD_OF), looked
-   *  up by the engine. Exposed for the sanctum spawn + collapse reward scaling. */
+  /** Faction of a crusade (the engine resolves the Leader = its warlord). */
   factionOf(crusadeId: string): string | null {
     return this.crusades.find(c => c.id === crusadeId)?.faction ?? null;
   }
 
-  /** Bind a freshly-minted stronghold zone (the engine calls after placeZoneAt). */
-  bindStronghold(crusadeId: string, zoneId: string): void {
-    const c = this.crusades.find(x => x.id === crusadeId);
-    if (!c || c.dead) return;
-    c.strongholdId = zoneId;
-    c.minted = true;
-    this.registerHeld(zoneId, c, true);
-  }
-
-  /** Bind a freshly-minted pushed frontier zone (registered as touched). */
-  bindFrontier(crusadeId: string, zoneId: string): void {
-    const c = this.crusades.find(x => x.id === crusadeId);
-    if (!c || c.dead) return;
-    this.registerHeld(zoneId, c, false);
-  }
-
-  /** The player cut down a camp/fortress commander — LIBERATE that zone (its
-   *  influence is obliterated). Returns the tier's reward multiplier. */
+  /** A hold was LIBERATED (tagged commander cut down, a conquest, the
+   *  Deadwake consuming the ground): the field collapses locally in a disc
+   *  that HEALS, and the campaign pays a nick of power — enough pressure can
+   *  gutter an unrooted war entirely. Returns the tier's reward multiplier. */
   resolveCrusadeZone(zoneId: string): number {
-    const hz = this.held.get(zoneId);
-    if (!hz) return 1;
-    const mul = this.tierFor(hz).rewardMul;
-    this.held.delete(zoneId);
-    return mul;
+    const z = this.nodesById[zoneId];
+    if (!z) return 1;
+    const info = this.crusadeOn(zoneId);
+    let c = info ? this.crusades.find(x => x.id === info.crusadeId) : undefined;
+    if (!c) {
+      // The ground may read clear THROUGH a fresh suppression disc while the
+      // campaign that raised its works still stands — attribute the blow to
+      // the nearest heart whose reach plausibly covers the zone, so sustained
+      // pressure always lands (repeat liberations CAN gutter an unrooted war,
+      // and a consuming event's strike never vanishes into a mask).
+      let bestD = Infinity;
+      for (const x of this.crusades) {
+        if (x.dead) continue;
+        const d = coordDist(z.map, x.heart);
+        const reach = (this.cfg.field.reachBase + this.cfg.field.reachPerPower * x.power) * 3;
+        if (d <= reach && d < bestD) { bestD = d; c = x; }
+      }
+    }
+    if (!c) return 1;
+    const S = this.cfg.suppress;
+    this.mods.push({
+      key: c.id, at: { x: z.map.x, y: z.map.y },
+      radius: S.radius, mul: S.mul, from: this.time, until: this.time + S.forSec,
+    });
+    c.power = Math.max(0, c.power - S.powerNick);
+    return info?.rewardMul ?? 1;
   }
 
-  /** The Crusade Leader fell — COLLAPSE the whole crusade (every held zone
-   *  reverts). Returns a reward multiplier (the converted-capital reward × a
-   *  per-converted-zone premium). */
+  /** The Crusade Leader fell in his arena — the whole campaign COLLAPSES.
+   *  Returns the reward multiplier, scaled by the standing power (a war that
+   *  grew mighty pays mightily). */
   resolveCrusade(crusadeId: string): number {
     const c = this.crusades.find(x => x.id === crusadeId);
     if (!c) return 1;
     c.dead = true;
-    let converted = 0;
-    for (const hz of this.held.values()) if (hz.crusadeId === crusadeId && this.tierIdxFor(hz) >= 4) converted++;
-    for (const [zid, hz] of [...this.held]) if (hz.crusadeId === crusadeId) this.held.delete(zid);
+    const mul = this.cfg.sanctum.rewardMul
+      * (1 + this.cfg.sanctum.rewardPerPower * (c.power / Math.max(1, this.cfg.power.anchorAt)));
+    this.pushBulletin(`The ${this.factionName(c)} crusade is BROKEN — its throne stands empty.`, c.color);
     this.crusades = this.crusades.filter(x => x.id !== crusadeId);
-    return this.cfg.sanctum.rewardMul * (1 + this.cfg.sanctum.rewardPerConverted * converted);
+    return mul;
   }
 
-  /** Mark a crusade's sanctum realm as minted (so the engine mints it once). */
+  /** Mark a crusade's throne arena as minted (so the engine mints it once). */
   markSanctumMinted(crusadeId: string): void {
     const c = this.crusades.find(x => x.id === crusadeId);
     if (c) c.sanctumMinted = true;
@@ -445,309 +592,69 @@ export class CrusadeField implements WorldOverlay {
 
   activeCount(): number { return this.crusades.filter(c => !c.dead).length; }
 
-  /** Read-only snapshot for markers / tests. */
-  peek(): ReadonlyArray<{ id: string; faction: string; color: string; strongholdId: string | null; coord: MapCoord; held: number; capitalTier: number; sanctumReady: boolean }> {
-    return this.crusades.filter(c => !c.dead).map(c => {
-      const sh = c.strongholdId ? this.held.get(c.strongholdId) : undefined;
-      return {
-        id: c.id, faction: c.faction, color: c.color,
-        strongholdId: c.strongholdId, coord: c.strongholdCoord,
-        held: [...this.held.values()].filter(h => h.crusadeId === c.id).length,
-        capitalTier: sh && sh.crusadeId === c.id ? this.tierIdxFor(sh) : 0,
-        sanctumReady: c.strongholdId ? (this.crusadeOn(c.strongholdId)?.sanctumReady ?? false) : false,
-      };
-    });
+  /** Read-only snapshot for markers / the engine's warp claim / dev QA. */
+  peek(): ReadonlyArray<{
+    id: string; faction: string; color: string; heart: MapCoord;
+    power: number; powerFrac: number; anchored: boolean; discovered: boolean;
+  }> {
+    return this.crusades.filter(c => !c.dead).map(c => ({
+      id: c.id, faction: c.faction, color: c.color,
+      heart: { x: c.heart.x, y: c.heart.y },
+      power: c.power, powerFrac: c.power / Math.max(1, this.cfg.power.cap),
+      anchored: c.anchored, discovered: c.discovered,
+    }));
   }
 
-  // --- worldstate (the persistence pledge) -----------------------------------
+  // --- ignition ---------------------------------------------------------------
 
-  /** Pure JSON: every crusade, the whole held-territory map (maturation clocks
-   *  included), undrained mints + front-shift bulletins, and the counter.
-   *  `ownedZones` claims every held zone AND every pending mint's key-target —
-   *  claiming seized (ordinary) ground is harmless; claiming minted strongholds
-   *  and frontiers is what lets the war survive a relaunch. */
-  snapshot(): unknown {
-    return {
-      ownedZones: [...this.held.keys()],
-      crusades: this.crusades.filter(c => !c.dead).map(c => ({
-        ...c, strongholdCoord: { ...c.strongholdCoord },
-      })),
-      held: [...this.held.entries()].map(([zid, h]) => ({ zid, ...h })),
-      mintRequests: this.mintRequests.map(m => ({ ...m, coord: { ...m.coord } })),
-      frontShifts: this.frontShifts.map(f => ({ ...f })),
-      seq: this.seq,
-    };
-  }
-
-  restore(snap: unknown): void {
-    const s = snap as { crusades?: unknown[]; held?: unknown[]; mintRequests?: unknown[]; frontShifts?: unknown[]; seq?: unknown } | null;
-    if (!s || typeof s !== 'object') return;
-    const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-    if (num(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
-    if (Array.isArray(s.crusades)) {
-      this.crusades = [];
-      for (const raw of s.crusades) {
-        const c = raw as Partial<ActiveCrusade> | null;
-        if (!c || typeof c.id !== 'string' || typeof c.faction !== 'string') continue;
-        if (!FACTIONS[c.faction]) continue; // the marching faction left the registries
-        if (!c.strongholdCoord || ![c.strongholdCoord.x, c.strongholdCoord.y].every(num)) continue;
-        if (![c.age, c.mints, c.claimAcc].every(num)) continue;
-        this.crusades.push({
-          id: c.id, faction: c.faction,
-          color: typeof c.color === 'string' ? c.color : (FACTION_COLORS[c.faction] ?? this.cfg.color ?? CRUSADE_GOLD),
-          dir: DIRS.includes(c.dir as Dir) ? c.dir as Dir : DIRS[0],
-          strongholdId: typeof c.strongholdId === 'string' ? c.strongholdId : null,
-          strongholdCoord: { x: c.strongholdCoord.x, y: c.strongholdCoord.y },
-          anchorId: typeof c.anchorId === 'string' ? c.anchorId : '',
-          age: c.age!, minted: !!c.minted, mints: Math.max(0, Math.floor(c.mints!)),
-          claimAcc: c.claimAcc!, sanctumMinted: !!c.sanctumMinted, dead: false,
-        });
-      }
-    }
-    if (Array.isArray(s.held)) {
-      this.held.clear();
-      const live = new Set(this.crusades.map(c => c.id));
-      for (const raw of s.held) {
-        const h = raw as { zid?: unknown; crusadeId?: unknown; faction?: unknown; ageHeld?: unknown; netFactor?: unknown; isStronghold?: unknown } | null;
-        if (!h || typeof h.zid !== 'string' || typeof h.crusadeId !== 'string' || !live.has(h.crusadeId)) continue;
-        if (typeof h.faction !== 'string' || !num(h.ageHeld) || !num(h.netFactor)) continue;
-        this.held.set(h.zid, {
-          crusadeId: h.crusadeId, faction: h.faction,
-          ageHeld: Math.max(0, h.ageHeld), netFactor: h.netFactor, isStronghold: !!h.isStronghold,
-        });
-      }
-    }
-    if (Array.isArray(s.mintRequests)) {
-      this.mintRequests.length = 0;
-      const live = new Set(this.crusades.map(c => c.id));
-      for (const raw of s.mintRequests) {
-        const m = raw as Partial<CrusadeMintRequest> | null;
-        if (!m || typeof m.crusadeId !== 'string' || !live.has(m.crusadeId)) continue;
-        if (typeof m.zoneKey !== 'string' || typeof m.tileset !== 'string' || typeof m.anchorZoneId !== 'string') continue;
-        if (!m.coord || ![m.coord.x, m.coord.y].every(num) || !num(m.level)) continue;
-        if (m.kind !== 'stronghold' && m.kind !== 'frontier') continue;
-        this.mintRequests.push({
-          crusadeId: m.crusadeId, coord: { x: m.coord.x, y: m.coord.y },
-          anchorZoneId: m.anchorZoneId, zoneKey: m.zoneKey, tileset: m.tileset,
-          level: m.level, kind: m.kind,
-        });
-      }
-    }
-    if (Array.isArray(s.frontShifts)) {
-      this.frontShifts.length = 0;
-      for (const raw of s.frontShifts) {
-        const f = raw as { zoneId?: unknown; faction?: unknown; from?: unknown } | null;
-        if (!f || typeof f.zoneId !== 'string' || typeof f.faction !== 'string' || typeof f.from !== 'string') continue;
-        this.frontShifts.push({ zoneId: f.zoneId, faction: f.faction, from: f.from });
-      }
-    }
-  }
-
-  /** Culled ground falls out of the war; a crusade whose CAPITAL was culled is
-   *  disowned (it can no longer spread — the same cascading defeat a clash
-   *  inflicts), and the fallen-crusade sweep in update() finishes it off. */
-  pruneZones(has: (zoneId: string) => boolean): void {
-    for (const zid of [...this.held.keys()]) if (!has(zid)) this.held.delete(zid);
-    for (const c of this.crusades) {
-      if (c.strongholdId && !has(c.strongholdId)) c.strongholdId = null;
-      if (c.anchorId && !has(c.anchorId)) c.anchorId = '';
-    }
-    for (let i = this.frontShifts.length - 1; i >= 0; i--) {
-      if (!has(this.frontShifts[i].zoneId)) this.frontShifts.splice(i, 1);
-    }
-  }
-
-  // --- internals -------------------------------------------------------------
-
-  private registerHeld(zoneId: string, c: ActiveCrusade, isStronghold: boolean): void {
-    if (this.held.has(zoneId)) return;
-    const z = this.nodesById[zoneId];
-    let netFactor = isStronghold ? this.cfg.strongholdAccel : this.cfg.minNetFactor;
-    if (!isStronghold && z) {
-      const d = coordDist(z.map, c.strongholdCoord);
-      netFactor = clamp(this.cfg.maxNetFactor - d / this.cfg.networkRange, this.cfg.minNetFactor, this.cfg.maxNetFactor);
-    }
-    this.held.set(zoneId, { crusadeId: c.id, faction: c.faction, ageHeld: 0, netFactor, isStronghold });
-  }
-
-  /** Index of the highest tier a held zone has reached (1..4), capped for
-   *  non-capital zones (only the stronghold converts to a city + sanctum). */
-  private tierIdxFor(hz: CrusadeZone): number {
-    let idx = 1;
-    for (const t of this.cfg.tiers) if (hz.ageHeld >= t.atSecondsHeld) idx = t.tier;
-    const cap = hz.isStronghold ? 4 : this.cfg.nonCapitalMaxTier;
-    return Math.min(idx, cap);
-  }
-
-  private tierFor(hz: CrusadeZone): CrusadeTier {
-    const idx = this.tierIdxFor(hz);
-    return this.cfg.tiers.find(t => t.tier === idx) ?? this.cfg.tiers[0];
-  }
-
-  /** atSecondsHeld threshold of a tier index (for sanctum gating). */
-  private tierAt(tierIdx: number): number {
-    return this.cfg.tiers.find(t => t.tier === tierIdx)?.atSecondsHeld ?? 0;
-  }
-
-  /** A crusade's projected POWER at one held zone: the zone's own maturation tier
-   *  (the local gradient) compounded by the crusade's overall MIGHT (held count +
-   *  capital tier). So a deep zone of a big, mature crusade is mighty while a fresh
-   *  frontier of a small one is weak — a minor vanguard can never overrun a capital.
-   *  `sizes` is the precomputed held-count per crusade for the pass. */
-  private zonePower(hz: CrusadeZone, sizes: Map<string, number>): number {
-    const might = (sizes.get(hz.crusadeId) ?? 1) + this.capitalTierOf(hz.crusadeId);
-    return this.tierIdxFor(hz) * this.cfg.clash.perTier + might * this.cfg.clash.perMight;
-  }
-
-  /** The maturation tier of a crusade's capital (1 if none held yet). */
-  private capitalTierOf(crusadeId: string): number {
-    const c = this.crusades.find(x => x.id === crusadeId);
-    const sh = c?.strongholdId ? this.held.get(c.strongholdId) : undefined;
-    // Guard a stale id: if the stronghold zone was wrested by a rival, it no longer
-    // belongs to this crusade — its capital might collapses to the floor.
-    return sh && sh.crusadeId === crusadeId ? this.tierIdxFor(sh) : 1;
-  }
-
-  /** Resolve the WARFRONT where rival crusades meet: every contested border zone (held
-   *  by R, adjacent to a zone held by a DIFFERENT-faction crusade O) flips to the
-   *  STRONGEST attacker whose power clears the defender's by takeMargin. The taken zone
-   *  arrives FRESH (touched) for the winner, so the front is a genuine tug-of-war the
-   *  loser can push back — and a clearly mightier crusade grinds steadily forward. */
-  private resolveClashes(): void {
-    const sizes = new Map<string, number>();
-    for (const hz of this.held.values()) sizes.set(hz.crusadeId, (sizes.get(hz.crusadeId) ?? 0) + 1);
-    const flips: { zoneId: string; to: ActiveCrusade; from: string }[] = [];
-    for (const [nId, defHz] of this.held) {
-      const nz = this.nodesById[nId];
-      if (!nz) continue;
-      if (defHz.ageHeld < this.cfg.clash.holdGuard) continue; // a just-wrested zone holds — no instant ping-pong
-      const defPower = this.zonePower(defHz, sizes);
-      let best: { c: ActiveCrusade; power: number } | null = null;
-      for (const e of nz.exits) {
-        if (e.to === '?') continue;
-        const atkHz = this.held.get(e.to);
-        if (!atkHz || atkHz.faction === defHz.faction) continue; // same faction = allied, no clash
-        const atkPower = this.zonePower(atkHz, sizes);
-        if (atkPower > (best?.power ?? 0)) {
-          const c = this.crusades.find(x => x.id === atkHz.crusadeId && !x.dead);
-          if (c) best = { c, power: atkPower };
-        }
-      }
-      if (best && best.power > defPower * this.cfg.clash.takeMargin && this.rng.chance(this.cfg.clash.chance)) {
-        flips.push({ zoneId: nId, to: best.c, from: defHz.faction });
-      }
-    }
-    for (const f of flips) {
-      // If the wrested zone was a crusade's CAPITAL, disown it — that crusade can no
-      // longer spread (update gates on strongholdId) and its capital might collapses
-      // (capitalTierOf floors), so losing your seat is a real, cascading defeat.
-      const loser = this.crusades.find(x => x.strongholdId === f.zoneId);
-      if (loser) loser.strongholdId = null;
-      this.held.delete(f.zoneId);               // wrested from the loser
-      this.registerHeld(f.zoneId, f.to, false); // …and arrives FRESH for the winner (re-conquest, not inherited maturation)
-      this.frontShifts.push({ zoneId: f.zoneId, faction: f.to.faction, from: f.from });
-    }
-  }
-
-  /** DEV: force a crusade whose stronghold IS the given (current) zone, aged so it
-   *  materializes a meaty tier (a fortress by default) immediately, in-place. (QA.) */
-  devIgnite(view: OverlayView, zoneId: string, ageSeconds = 130): boolean {
-    const here = view.byId[zoneId];
-    if (!here || !eventTargetable(this.id, here)) return false;
-    const faction = this.pickFaction();
-    if (!faction) return false;
-    const id = `cru_${this.seq++}`;
-    this.crusades.push({
-      id, faction, color: FACTION_COLORS[faction] ?? this.cfg.color ?? CRUSADE_GOLD,
-      dir: DIRS[0], strongholdId: null, strongholdCoord: { x: here.map.x, y: here.map.y },
-      anchorId: here.id, age: ageSeconds, minted: true, mints: 0, claimAcc: 0,
-      sanctumMinted: false, dead: false,
-    });
-    this.bindStronghold(id, zoneId);
-    const hz = this.held.get(zoneId);
-    if (hz) hz.ageHeld = ageSeconds; // age up to a visible structure tier
-    return true;
-  }
-
-  private maybeIgnite(view: OverlayView): void {
-    const g = this.gate();
-    if (this.crusades.filter(c => !c.dead).length >= scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)) return;
+  private maybeIgnite(view: OverlayView, g: PackageGate): void {
+    if (this.crusades.length >= scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)) return;
     if (!this.rng.chance(clamp(this.cfg.triggerChance * g.ignitionMul, 0, 1))) return;
-    const here = view.byId[view.currentZoneId];
-    if (!here || here.caveDepth != null || here.eventOwned) return;
+    // The seed zone is a RANDOM eligible charted node — not the player's: a
+    // war may kindle a country away, entirely unbeknownst (fixed-count draws;
+    // a rejected candidate never shifts later rolls).
+    const pool = view.nodes;
+    if (!pool.length) return;
+    let seed: ZoneDef | null = null;
+    for (let t = 0; t < 6 && !seed; t++) {
+      const z = pool[this.rng.int(0, pool.length - 1)];
+      if (z.caveDepth == null && !z.eventOwned && eventTargetable(this.id, z)) seed = z;
+    }
+    if (!seed) return;
     const faction = this.pickFaction();
     if (!faction) return;
-    const dir = DIRS[this.rng.int(0, DIRS.length - 1)];
-    const steps = this.rng.int(this.cfg.seedSteps[0], this.cfg.seedSteps[1]);
-    const coord = projectCoord(here.map, dir, steps);
-    const id = `cru_${this.seq++}`;
-    const color = FACTION_COLORS[faction] ?? this.cfg.color ?? CRUSADE_GOLD;
-    // The stronghold is a banner planted off in UNEXPLORED, uncharted territory
-    // (often beyond the player's vision) — minted FLOATING (a free point, NOT
-    // auto-anchored to the nearest existing node). It wires into the graph only
-    // once the front reaches within accessRadius of charted ground (the engine's
-    // accessibility stopgap); until then it's a simulated point on the warfront.
-    this.crusades.push({
-      id, faction, color, dir, strongholdId: null, strongholdCoord: coord,
-      anchorId: here.id, age: 0, minted: false, mints: 0, claimAcc: 0,
-      sanctumMinted: false, dead: false,
-    });
-    this.mintRequests.push({
-      crusadeId: id, coord, anchorZoneId: here.id, zoneKey: `crusade_${id}`,
-      tileset: this.cfg.strongholdTileset, level: Math.max(here.level, view.charLevel),
-      kind: 'stronghold',
-    });
+    // The heart plants a few node-steps off in the UNKNOWN — on land.
+    let heart: MapCoord | null = null;
+    for (let t = 0; t < 4 && !heart; t++) {
+      const dir = DIRS[this.rng.int(0, DIRS.length - 1)];
+      const steps = this.rng.int(this.cfg.seedSteps[0], this.cfg.seedSteps[1]);
+      const cand = projectCoord(seed.map, dir, steps);
+      if (view.terrain(cand) !== 'ocean') heart = cand;
+    }
+    if (!heart) return;
+    this.plant(faction, heart, this.cfg.power.start, false);
+    // NO bulletin, NO marker — the world does not announce this war. The
+    // player finds it (or its throne finds them).
   }
 
-  /** A Crusade expands its front: SIMULATE a new adjacent zone (a floating point
-   *  one cardinal step off one of its held nodes — the vanguard pressing into the
-   *  wilds), or, where it already touches charted ground, claim a real neighbour. */
-  private maybeClaim(c: ActiveCrusade, view: OverlayView): void {
-    const mine = [...this.held.entries()].filter(([, h]) => h.crusadeId === c.id);
-    if (mine.length >= this.cfg.maxHeldZones) return;
-    // SIMULATE the next adjacent node: project ONE cardinal step off a RANDOM held
-    // node into a fresh coordinate. It's minted FLOATING — the crusade's territory
-    // exists in the wilds (shown on the warfront) before it's reachable; the engine
-    // wires it in once it nears charted ground. The Crusade thus expands STEPWISE
-    // through simulated nodes it can already operate in (no real zone required yet).
-    if (c.mints < this.cfg.maxMints && this.rng.chance(this.cfg.frontierMintChance)) {
-      const from = mine[this.rng.int(0, mine.length - 1)];
-      const fz = this.nodesById[from[0]];
-      if (fz) {
-        const dir = DIRS[this.rng.int(0, DIRS.length - 1)];
-        const coord = projectCoord(fz.map, dir, 1);
-        // Skip if this crusade already holds a node ~at the coordinate.
-        const dup = mine.some(([zid]) => { const z = this.nodesById[zid]; return !!z && coordDist(z.map, coord) < this.cfg.frontierDedupDist; });
-        if (!dup) {
-          const key = `crusade_${c.id}_f${c.mints++}`;
-          this.mintRequests.push({
-            crusadeId: c.id, coord, anchorZoneId: from[0], zoneKey: key,
-            tileset: this.cfg.strongholdTileset,
-            level: Math.max(fz.level, view.charLevel),
-            kind: 'frontier',
-          });
-          return;
-        }
-      }
-    }
-    // Else, where a held node already touches charted ground, claim a real neighbour
-    // (the war reaching the player's explored lands).
-    const cands = new Set<string>();
-    for (const [zid] of mine) {
-      const z = view.byId[zid];
-      if (!z) continue;
-      for (const e of z.exits) {
-        if (e.to === '?') continue;
-        const nb = view.byId[e.to];
-        // THE shared predicate (zonePolicy): no march into a sanctuary, cave,
-        // arena, another event's ground, or a biome that forbids the crusade.
-        if (!nb || this.held.has(nb.id) || !eventTargetable(this.id, nb)) continue;
-        cands.add(nb.id);
-      }
-    }
-    if (!cands.size) return;
-    const arr = [...cands];
-    this.registerHeld(arr[this.rng.int(0, arr.length - 1)], c, false);
+  private plant(faction: string, heart: MapCoord, power: number, discovered: boolean): ActiveCrusade {
+    const P = this.cfg.power;
+    const c: ActiveCrusade = {
+      id: `cru_${this.seq++}`, faction,
+      color: FACTION_COLORS[faction] ?? this.cfg.color ?? CRUSADE_GOLD,
+      heart: { x: heart.x, y: heart.y },
+      power, anchored: power >= P.anchorAt, discovered,
+      age: 0,
+      salt: (this.rng.next() * 0xffffffff) >>> 0,
+      heading: this.rng.range(0, Math.PI * 2),
+      turnPeriod: this.rng.range(this.cfg.field.driftTurn[0], this.cfg.field.driftTurn[1]),
+      tidePhase: this.rng.range(0, Math.PI * 2),
+      tidePeriod: this.rng.range(P.tidePeriod[0], P.tidePeriod[1]),
+      vigor: this.rng.range(P.vigor[0], P.vigor[1]),
+      sanctumMinted: false, dead: false,
+    };
+    this.crusades.push(c);
+    return c;
   }
 
   /** Weighted pick from the crusade-eligible faction pool (data-driven via the
@@ -762,48 +669,268 @@ export class CrusadeField implements WorldOverlay {
     for (const f of pool) { r -= weights[f] ?? 1; if (r <= 0) return f; }
     return pool[pool.length - 1];
   }
+
+  /** DEV: plant a crusade whose HEART is the given (current) zone, at a meaty
+   *  near-anchor power so works materialize immediately, pre-discovered. (QA;
+   *  pass `power` to stage a specific arc — e.g. an un-anchored ember — and
+   *  `faction` to pin the banner for clash staging.) */
+  devIgnite(view: OverlayView, zoneId: string, power?: number, faction?: string): boolean {
+    const here = view.byId[zoneId];
+    if (!here || !eventTargetable(this.id, here)) return false;
+    const f = faction && FACTIONS[faction]?.table?.length ? faction : this.pickFaction();
+    if (!f) return false;
+    this.plant(f, here.map, power ?? this.cfg.power.devIgnite, true);
+    return true;
+  }
+
+  // --- map --------------------------------------------------------------------
+
+  /** THE LIVING WARFRONT — for wars the player has FOUND: each campaign's
+   *  territory as a faction-coloured GRADIENT wash (deeper = stronger, both
+   *  locally and in standing power — the gradient IS the strength readout),
+   *  breathing and crawling on its own clock; heart sigils (♜ mustering, ☗ an
+   *  anchored throne); ⚔ + thrust arrows where rival crusades clash. An
+   *  undiscovered war paints NOTHING — it grows unseen. */
+  renderMap(nodes: ZoneDef[]): MapLayer {
+    const found = this.crusades.filter(c => !c.dead && c.discovered);
+    if (!found.length) return { under: '', over: '' };
+    const M = this.cfg.map;
+    const t = this.time;
+    // Window: discovered hearts + their reach + charted ground.
+    const pts: MapCoord[] = [];
+    for (const c of found) {
+      const reach = this.extentReach(c);
+      pts.push(c.heart,
+        { x: c.heart.x - reach, y: c.heart.y }, { x: c.heart.x + reach, y: c.heart.y },
+        { x: c.heart.x, y: c.heart.y - reach }, { x: c.heart.x, y: c.heart.y + reach });
+    }
+    for (const z of nodes) pts.push(z.map);
+    const win = latticeWindow(pts, M.pad, M.cellBase, M.maxCellsPerAxis);
+    if (!win) return { under: '', over: '' };
+    let under = '';
+    const flows: { x: number; y: number; c: ActiveCrusade; gain: number }[] = [];
+    for (let y = win.oy; y < win.maxY; y += win.cell) {
+      for (let x = win.ox; x < win.maxX; x += win.cell) {
+        const at = { x: x + win.cell / 2, y: y + win.cell / 2 };
+        // Discovered campaigns only — an unknown war must not leak one pixel.
+        let best: ActiveCrusade | null = null, bi = 0, second: ActiveCrusade | null = null, si = 0;
+        for (const c of found) {
+          const inf = this.influence(c, at, t);
+          if (inf > bi) { second = best; si = bi; best = c; bi = inf; }
+          else if (inf > si) { second = c; si = inf; }
+        }
+        if (!best || bi <= this.cfg.control.edge) continue;
+        const control = this.control01(bi);
+        if (control < 0.02) continue;
+        // THE GRADIENT: opacity climbs with local control (feathered edge →
+        // deep core) and the campaign's standing power — a glance reads both
+        // the shape of the territory and the might behind it.
+        const powerFrac = Math.min(1, best.power / this.cfg.power.cap);
+        const alpha = (M.washAlpha + M.washPowerAlpha * powerFrac)
+          * (M.washFloor + (1 - M.washFloor) * control);
+        under += `<rect x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="${win.cell}" height="${win.cell}" `
+          + `fill="${best.color}" fill-opacity="${alpha.toFixed(3)}"/>`;
+        // Hot borders between rival FACTIONS feed the thrust arrows.
+        if (second && second.faction !== best.faction && si > this.cfg.control.edge
+          && si / bi >= this.cfg.clash.contestHot && second.discovered) {
+          const now = this.influence(second, at, t) - bi;
+          const soon = this.influence(second, at, t + 4) - this.influence(best, at, t + 4);
+          flows.push({ x: at.x, y: at.y, c: soon > now ? second : best, gain: Math.abs(soon - now) });
+        }
+      }
+    }
+    let over = '';
+    // Heart sigils: a mustering banner, or the anchored THRONE.
+    for (const c of found) {
+      const x = c.heart.x.toFixed(0), y = c.heart.y.toFixed(0);
+      const fname = this.factionName(c);
+      const pct = Math.round(100 * c.power / Math.max(1, this.cfg.power.anchorAt));
+      if (c.anchored) {
+        over += `<circle cx="${x}" cy="${y}" r="11" fill="none" stroke="${c.color}" stroke-width="1.8" opacity="0.9"/>`
+          + `<text x="${x}" y="${(c.heart.y + 4.5).toFixed(0)}" text-anchor="middle" font-size="13" fill="${c.color}" font-weight="bold">☗`
+          + `<title>The ${fname} crusade's THRONE — its gate stands in the deep territory. Cut down the Leader to break the war.</title></text>`;
+      } else {
+        over += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="3 2" opacity="0.8"/>`
+          + `<text x="${x}" y="${(c.heart.y + 4).toFixed(0)}" text-anchor="middle" font-size="11" fill="${c.color}">♜`
+          + `<title>A ${fname} crusade musters — ${pct}% toward its throne. Snuff it before it roots.</title></text>`;
+      }
+    }
+    // ⚔ over charted contested ground (both wars known).
+    for (const z of nodes) {
+      if (z.caveDepth != null) continue;
+      const read = this.strongestAt(z.map);
+      if (!read?.rival || !read.crusade.discovered || !read.rival.discovered) continue;
+      over += `<text x="${z.map.x.toFixed(0)}" y="${(z.map.y - 13).toFixed(0)}" text-anchor="middle" `
+        + `font-size="12" fill="#ff5a5a">⚔<title>${this.factionName(read.crusade)} vs ${this.factionName(read.rival)} — `
+        + `${Math.round(read.contest * 100)}% pressure</title></text>`;
+    }
+    // Thrust arrows along the strongest live advances.
+    flows.sort((a, b) => b.gain - a.gain);
+    const drawn: { x: number; y: number }[] = [];
+    for (const f of flows) {
+      if (drawn.length >= M.arrows) break;
+      if (drawn.some(d => Math.hypot(d.x - f.x, d.y - f.y) < win.cell * 2)) continue;
+      drawn.push(f);
+      const { ux, uy } = influenceGrad(c => this.influence(f.c, c, t), { x: f.x, y: f.y });
+      over += thrustArrowSvg(f.x, f.y, ux, uy, f.c.color);
+    }
+    return { under, over };
+  }
+
+  /** Map-fit extent: the fitted view encloses each FOUND war's territory. */
+  mapExtent(): ReadonlyArray<MapCoord> {
+    const out: MapCoord[] = [];
+    for (const c of this.crusades) {
+      if (c.dead || !c.discovered) continue;
+      const reach = this.extentReach(c);
+      out.push(
+        { x: c.heart.x - reach, y: c.heart.y }, { x: c.heart.x + reach, y: c.heart.y },
+        { x: c.heart.x, y: c.heart.y - reach }, { x: c.heart.x, y: c.heart.y + reach });
+    }
+    return out;
+  }
+
+  private extentReach(c: ActiveCrusade): number {
+    const M = this.cfg.map;
+    return this.cfg.field.wellRange
+      * (M.extentBase + M.extentPerPower * Math.min(1, c.power / this.cfg.power.cap));
+  }
+
+  // --- worldstate (the persistence pledge) -----------------------------------
+  // Scalars only: the territory derives from time — it cannot be corrupted,
+  // only re-asked. (v2 — the pre-field spreading-state-machine snapshots are
+  // dropped on restore: those wars re-roll fresh, and their old minted zones
+  // lose their claim and scrub through the ordinary transience rules.)
+
+  snapshot(): unknown {
+    return {
+      v: 2,
+      time: Math.round(this.time * 10) / 10,
+      seq: this.seq,
+      crusades: this.crusades.filter(c => !c.dead).map(c => ({
+        id: c.id, faction: c.faction, color: c.color,
+        heart: { x: Math.round(c.heart.x), y: Math.round(c.heart.y) },
+        power: Math.round(c.power * 10) / 10,
+        anchored: c.anchored, discovered: c.discovered,
+        age: Math.round(c.age),
+        salt: c.salt, heading: Math.round(c.heading * 1000) / 1000,
+        turnPeriod: Math.round(c.turnPeriod),
+        tidePhase: Math.round(c.tidePhase * 1000) / 1000,
+        tidePeriod: Math.round(c.tidePeriod),
+        vigor: Math.round(c.vigor * 1000) / 1000,
+        sanctumMinted: c.sanctumMinted,
+      })),
+      mods: this.mods.map(m => ({
+        key: String(m.key), at: { x: Math.round(m.at.x), y: Math.round(m.at.y) },
+        radius: m.radius, mul: m.mul, from: Math.round(m.from * 10) / 10, until: Math.round(m.until * 10) / 10,
+      })),
+      lastZoneOwner: Object.fromEntries(this.lastZoneOwner),
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as {
+      v?: unknown; time?: unknown; seq?: unknown; crusades?: unknown[];
+      mods?: { key?: unknown; at?: { x: number; y: number }; radius?: number; mul?: number; from?: number; until?: number }[];
+      lastZoneOwner?: Record<string, string>;
+    } | null;
+    if (!s || typeof s !== 'object' || s.v !== 2 || !Array.isArray(s.crusades)) return;
+    const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    this.time = num(s.time) ? s.time : 0;
+    if (num(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    this.crusades = [];
+    for (const raw of s.crusades) {
+      const c = raw as Partial<ActiveCrusade> | null;
+      if (!c || typeof c.id !== 'string' || typeof c.faction !== 'string') continue;
+      if (!FACTIONS[c.faction]) continue; // the marching faction left the registries
+      if (!c.heart || ![c.heart.x, c.heart.y].every(num)) continue;
+      if (![c.power, c.age, c.salt, c.heading, c.turnPeriod, c.tidePhase, c.tidePeriod, c.vigor].every(num)) continue;
+      this.crusades.push({
+        id: c.id, faction: c.faction,
+        color: typeof c.color === 'string' ? c.color : (FACTION_COLORS[c.faction] ?? this.cfg.color ?? CRUSADE_GOLD),
+        heart: { x: c.heart.x, y: c.heart.y },
+        power: Math.max(0, c.power!), anchored: !!c.anchored, discovered: !!c.discovered,
+        age: Math.max(0, c.age!),
+        salt: (c.salt! >>> 0), heading: c.heading!, turnPeriod: c.turnPeriod!,
+        tidePhase: c.tidePhase!, tidePeriod: c.tidePeriod!, vigor: c.vigor!,
+        sanctumMinted: !!c.sanctumMinted, dead: false,
+      });
+    }
+    this.mods = [];
+    for (const m of s.mods ?? []) {
+      if (!m || typeof m.key !== 'string' || !m.at || ![m.at.x, m.at.y].every(num)) continue;
+      if (![m.radius, m.mul, m.from, m.until].every(num)) continue;
+      this.mods.push({ key: m.key, at: { x: m.at.x, y: m.at.y }, radius: m.radius!, mul: m.mul!, from: m.from!, until: m.until! });
+    }
+    this.lastZoneOwner = new Map(Object.entries(s.lastZoneOwner ?? {}));
+  }
+
+  /** Nothing minted, nothing owned — only the bulletin memory follows zones. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const [zid] of this.lastZoneOwner) {
+      if (!has(zid)) this.lastZoneOwner.delete(zid);
+    }
+  }
 }
 
-// --- map markers (registered on import — zero panels.ts edits) ---------------
-//
-// A stronghold banner (visible even in the fog, like a quest target — it PULLS
-// the player toward the distant crusade), upgrading to a Leader skull once the
-// capital converts and its sanctum opens.
-// CRUSADE CLASH bulletins: a warfront shifted — one crusade overran a rival.
-// (Registered source; the engine's single collectBulletins pump drains us.)
+// --- bulletins (registered on import — zero panels.ts edits) ------------------
+// War news is DISCOVERY-GATED at the source (the overlay only pushes lines
+// about wars the player has found); the engine's single collectBulletins pump
+// drains us.
 registerBulletinSource((world: World) => {
   const cf = world.sim.crusadeField;
-  if (!cf || !cf.frontShifts.length) return [];
-  const out = cf.frontShifts.map(s => {
-    const zn = world.zoneMap[s.zoneId]?.name ?? s.zoneId;
-    const to = (FACTIONS[s.faction]?.name ?? s.faction).replace(/^the /, '');
-    const from = (FACTIONS[s.from]?.name ?? s.from).replace(/^the /, '');
-    return { text: `${to} overrun ${from} at ${zn}!` };
-  });
-  cf.frontShifts.length = 0;
-  return out;
+  if (!cf || !cf.bulletins.length) return [];
+  return cf.bulletins.splice(0);
 });
 
+// --- map markers (registered on import) ---------------------------------------
+// The heart of every FOUND war: a mustering banner (♜) that becomes the
+// THRONE (☗) once the crusade anchors — fog:'always' so a discovered war's
+// seat pulls the player toward it across uncharted ground. Undiscovered
+// wars show nothing at all.
 registerMarkerSource((world: World): MapMarker[] => {
   const cf = world.sim.crusadeField;
   if (!cf) return [];
   const out: MapMarker[] = [];
   for (const c of cf.peek()) {
-    const node = c.strongholdId ? world.zoneMap[c.strongholdId] : null;
-    const coord = node ? { x: node.map.x, y: node.map.y } : c.coord;
-    if (c.sanctumReady) {
+    if (!c.discovered) continue;
+    if (c.anchored) {
       out.push({
-        id: `crusade-leader-${c.id}`, zoneId: c.strongholdId ?? undefined, coord,
+        id: `crusade-throne-${c.id}`, coord: { x: c.heart.x, y: c.heart.y },
         glyph: '☗', fill: '#2a1e08', stroke: c.color, text: c.color, r: 10,
-        title: `Crusade capital — slay the leader`, fog: 'always', z: 19,
+        title: 'Crusade throne — find its gate, slay the Leader', fog: 'always', z: 19,
       });
     } else {
       out.push({
-        id: `crusade-${c.id}`, zoneId: c.strongholdId ?? undefined, coord,
+        id: `crusade-${c.id}`, coord: { x: c.heart.x, y: c.heart.y },
         glyph: '♜', fill: '#241c08', stroke: c.color, text: c.color, r: 9,
-        title: `A Crusade musters here`, fog: 'always', z: 15,
+        title: 'A Crusade musters here', fog: 'always', z: 15,
       });
     }
   }
+  return out;
+});
+
+// --- zone-info rows (registered on import) ------------------------------------
+// The map's zone box names the ground's holder, its grip, the pressing rival,
+// and the throne gate — the warfront's reads where the player plans.
+registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
+  const cf = world.sim.crusadeField;
+  if (!cf) return [];
+  const info = cf.crusadeOn(zoneId);
+  if (!info) return [];
+  const c = cf.peek().find(x => x.id === info.crusadeId);
+  if (!c?.discovered) return [];
+  const fname = (FACTIONS[info.faction]?.name ?? info.faction).replace(/^the /, '');
+  const out: ZoneInfoEntry[] = [{
+    kind: 'event', icon: info.sanctumReady ? '☗' : '♜', color: info.color,
+    label: info.sanctumReady
+      ? `The crusade's throne gate stands here`
+      : `Crusade ground — ${fname} (${info.label})`,
+    detail: info.sanctumReady
+      ? 'Step through and cut down the Leader'
+      : `${Math.round(info.control * 100)}% grip${info.isStronghold ? ' · heartland' : ''}`,
+    z: info.sanctumReady ? 18 : 9,
+  }];
   return out;
 });

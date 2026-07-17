@@ -42,6 +42,7 @@ import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
 import type { MapLayer, OverlayView, SpawnBias, WorldOverlay } from '../../world/overlay';
 import { NO_BIAS } from '../../world/overlay';
+import { anchorWell, decayingModsMul, driftOffset, fieldNoise01, influenceGrad, latticeWindow, thrustArrowSvg, type FieldMod } from '../../world/warfield';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
 /** Every dial of the war in one place. Distances are MAP UNITS (the node
@@ -155,15 +156,9 @@ interface Seat {
   tidePeriod: number;
 }
 
-/** A decaying local field modifier — see WAR_CFG.modifier. */
-interface FieldMod {
-  seat: number;
-  at: MapCoord;
-  radius: number;
-  mul: number;
-  from: number;
-  until: number;
-}
+// (FieldMod — the decaying local modifier discs — now rides the shared
+// WARFIELD fabric (world/warfield.ts); `key` here is the SEAT INDEX. See
+// WAR_CFG.modifier for the dials.)
 
 export interface ZoneWarState {
   lord: UnderworldLordDef;
@@ -330,38 +325,18 @@ export class HellWarField implements WorldOverlay {
 
   // --- the eternal field ----------------------------------------------------------
 
-  /** Deterministic 2D value noise in [0,1]: hashed lattice corners, bilinear
-   *  blend, two octaves. Pure in (salt, x, y) — the field's fabric. */
-  private noise01(salt: number, x: number, y: number): number {
-    const h = (gx: number, gy: number): number => {
-      let v = (salt ^ 0x9e3779b9) >>> 0;
-      v = Math.imul(v ^ (gx | 0), 0x85ebca6b) >>> 0;
-      v = Math.imul(v ^ (gy | 0), 0xc2b2ae35) >>> 0;
-      v ^= v >>> 13; v = Math.imul(v, 0x27d4eb2f) >>> 0; v ^= v >>> 15;
-      return (v >>> 0) / 4294967296;
-    };
-    const sample = (px: number, py: number): number => {
-      const gx = Math.floor(px), gy = Math.floor(py);
-      const fx = px - gx, fy = py - gy;
-      const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
-      const a = h(gx, gy), b = h(gx + 1, gy), c = h(gx, gy + 1), d = h(gx + 1, gy + 1);
-      return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
-    };
-    return 0.66 * sample(x, y) + 0.34 * sample(x * 2.13 + 51.7, y * 2.13 - 17.3);
-  }
-
-  /** Where a lord's influence noise is LOOKING right now: the drift offset —
-   *  velocity scaled by push temper, along a heading that slowly wheels. The
-   *  fronts crawl forever; nobody marches one way for good. */
-  private driftOffset(s: Seat, t: number): { x: number; y: number } {
+  /** Where a lord's influence noise is LOOKING right now: the warfield drift,
+   *  velocity scaled by push temper — the fronts crawl forever; nobody
+   *  marches one way for good. */
+  private seatDrift(s: Seat, t: number): { x: number; y: number } {
     const lord = lordDef(s.lord);
     const vel = WAR_CFG.field.driftVel * (0.5 + (lord?.temper.push ?? 0.5));
-    const ang = s.heading + Math.sin((t / s.turnPeriod) * Math.PI * 2) * 1.2;
-    return { x: Math.cos(ang) * vel * t, y: Math.sin(ang) * vel * t };
+    return driftOffset(s.heading, s.turnPeriod, vel, t);
   }
 
   /** One lord's influence at a coordinate — the eternal layer × the live
-   *  power × the fleeting local modifiers. Pure in (state, coord, time). */
+   *  power × the fleeting local modifiers. Pure in (state, coord, time);
+   *  composed from the shared WARFIELD fabric. */
   private influence(i: number, coord: MapCoord, t: number): number {
     const s = this.seats[i];
     const lord = lordDef(s.lord);
@@ -374,20 +349,11 @@ export class HellWarField implements WorldOverlay {
       deficit = Math.max(deficit, 1 - this.seats[j].power / WAR_CFG.power.base);
     }
     const amp = F.noiseAmp * (1 + F.opportunismAmp * lord.temper.opportunism * deficit);
-    const off = this.driftOffset(s, t);
-    const n = this.noise01(s.salt, (coord.x + off.x) / F.noiseScale, (coord.y + off.y) / F.noiseScale);
-    const dx = coord.x - s.throne.x, dy = coord.y - s.throne.y;
-    const well = 1 + F.wellAmp * Math.exp(-Math.hypot(dx, dy) / F.wellRange);
-    let inf = s.power * (F.noiseBase + amp * n) * well;
+    const off = this.seatDrift(s, t);
+    const n = fieldNoise01(s.salt, (coord.x + off.x) / F.noiseScale, (coord.y + off.y) / F.noiseScale);
+    const inf = s.power * (F.noiseBase + amp * n) * anchorWell(coord, s.throne, F.wellAmp, F.wellRange);
     // The fleeting fingerprints: suppressions heal, doors close.
-    for (const m of this.mods) {
-      if (m.seat !== i || t >= m.until) continue;
-      const d = Math.hypot(coord.x - m.at.x, coord.y - m.at.y);
-      if (d > m.radius) continue;
-      const life = (m.until - t) / (m.until - m.from);   // 1 → 0 as it fades
-      inf *= 1 + (m.mul - 1) * Math.min(1, life * 1.4);
-    }
-    return inf;
+    return inf * decayingModsMul(this.mods, coord, t, i);
   }
 
   /** The war as any COORDINATE feels it — the everywhere read. Null only in
@@ -469,7 +435,7 @@ export class HellWarField implements WorldOverlay {
       const victim = this.warAt(at);
       if (!victim || victim.seat === i || this.isTruced(i, victim.seat)) continue;
       this.mods.push({
-        seat: i, at, radius: WAR_CFG.modifier.doorRadius, mul: WAR_CFG.modifier.doorMul,
+        key: i, at, radius: WAR_CFG.modifier.doorRadius, mul: WAR_CFG.modifier.doorMul,
         from: this.time, until: this.time + WAR_CFG.modifier.doorFor,
       });
       this.pushBulletin(`${lord.short} opens a door behind ${victim.lord.short}'s lines!`, lord.color);
@@ -557,7 +523,7 @@ export class HellWarField implements WorldOverlay {
     const hold = lord?.temper.hold ?? 0.5;
     const dur = WAR_CFG.modifier.marshalFor / (1 + (WAR_CFG.modifier.holdShrug - 1) * hold);
     this.mods.push({
-      seat: i, at: { x: at.x, y: at.y }, radius: WAR_CFG.modifier.marshalRadius,
+      key: i, at: { x: at.x, y: at.y }, radius: WAR_CFG.modifier.marshalRadius,
       mul: WAR_CFG.modifier.marshalMul, from: this.time, until: this.time + dur,
     });
     this.seats[i].power = Math.max(WAR_CFG.power.floor, this.seats[i].power - WAR_CFG.modifier.marshalPowerNick);
@@ -631,22 +597,14 @@ export class HellWarField implements WorldOverlay {
   renderMap(nodes: { id: string; map: MapCoord; name: string }[]): MapLayer {
     if (!this.anchor) return { under: '', over: '' };
     // Extent: charted hell + thrones + a margin — the window, not the war.
-    let minX = this.anchor.x, maxX = this.anchor.x, minY = this.anchor.y, maxY = this.anchor.y;
-    for (const s of this.seats) {
-      if (!s.throne) continue;
-      minX = Math.min(minX, s.throne.x); maxX = Math.max(maxX, s.throne.x);
-      minY = Math.min(minY, s.throne.y); maxY = Math.max(maxY, s.throne.y);
-    }
-    for (const z of nodes) {
-      minX = Math.min(minX, z.map.x); maxX = Math.max(maxX, z.map.x);
-      minY = Math.min(minY, z.map.y); maxY = Math.max(maxY, z.map.y);
-    }
-    const pad = 140;
-    minX -= pad; maxX += pad; minY -= pad; maxY += pad;
-    // World-anchored ladder: cell = base × 2^k so growth never re-tiles.
-    let cell = WAR_CFG.map.cellBase;
-    while (Math.max(maxX - minX, maxY - minY) / cell > WAR_CFG.map.maxCellsPerAxis) cell *= 2;
-    const ox = Math.floor(minX / cell) * cell, oy = Math.floor(minY / cell) * cell;
+    // (The warfield lattice: world-anchored cell ladder, so growth never
+    // re-tiles and the paint stays a window onto the infinite field.)
+    const pts: MapCoord[] = [this.anchor];
+    for (const s of this.seats) if (s.throne) pts.push(s.throne);
+    for (const z of nodes) pts.push(z.map);
+    const win = latticeWindow(pts, 140, WAR_CFG.map.cellBase, WAR_CFG.map.maxCellsPerAxis);
+    if (!win) return { under: '', over: '' };
+    const { ox, oy, cell, maxX, maxY } = win;
     const t = this.time;
     let under = '';
     const flows: { x: number; y: number; seat: number; gain: number }[] = [];
@@ -696,15 +654,10 @@ export class HellWarField implements WorldOverlay {
       drawn.push(f);
       const lord = lordDef(this.seats[f.seat]?.lord ?? '');
       if (!lord) continue;
-      // Advance direction: the gainer's influence gradient (finite difference).
-      const e = 14;
-      const gx = this.influence(f.seat, { x: f.x + e, y: f.y }, t) - this.influence(f.seat, { x: f.x - e, y: f.y }, t);
-      const gy = this.influence(f.seat, { x: f.x, y: f.y + e }, t) - this.influence(f.seat, { x: f.x, y: f.y - e }, t);
-      const len = Math.hypot(gx, gy) || 1;
-      const ux = -gx / len, uy = -gy / len;  // downhill = into the rival
-      const x2 = f.x + ux * 26, y2 = f.y + uy * 26;
-      over += `<path d="M ${f.x.toFixed(0)} ${f.y.toFixed(0)} L ${x2.toFixed(0)} ${y2.toFixed(0)}" stroke="${lord.color}" stroke-width="2.2" opacity="0.85"/>` +
-        `<path d="M ${x2.toFixed(0)} ${y2.toFixed(0)} l ${(-ux * 7 - uy * 4).toFixed(1)} ${(-uy * 7 + ux * 4).toFixed(1)} l ${(uy * 8).toFixed(1)} ${(-ux * 8).toFixed(1)} Z" fill="${lord.color}" opacity="0.85"/>`;
+      // Advance direction: the gainer's influence gradient (downhill = into
+      // the rival) — the warfield's finite-difference read.
+      const { ux, uy } = influenceGrad(c => this.influence(f.seat, c, t), { x: f.x, y: f.y });
+      over += thrustArrowSvg(f.x, f.y, ux, uy, lord.color);
     }
     return { under, over };
   }
@@ -729,7 +682,7 @@ export class HellWarField implements WorldOverlay {
       })),
       truce: this.truce ? { a: this.truce.a, b: this.truce.b, breakAt: Math.round(this.truce.breakAt) } : null,
       mods: this.mods.map(m => ({
-        seat: m.seat, at: { x: Math.round(m.at.x), y: Math.round(m.at.y) },
+        seat: m.key, at: { x: Math.round(m.at.x), y: Math.round(m.at.y) },
         radius: m.radius, mul: m.mul, from: Math.round(m.from), until: Math.round(m.until),
       })),
       doorAt: Math.round(this.doorAt),
@@ -743,7 +696,7 @@ export class HellWarField implements WorldOverlay {
       anchor?: { x: number; y: number } | null;
       seats?: { lord: string; throne: { x: number; y: number } | null; power: number; strikesOut: number; spoilsUntil: number; manifestAt: number; salt: number; heading: number; turnPeriod: number; tidePhase: number; tidePeriod: number }[];
       truce?: { a: number; b: number; breakAt: number } | null;
-      mods?: FieldMod[];
+      mods?: { seat: number; at: MapCoord; radius: number; mul: number; from: number; until: number }[];
       doorAt?: number;
       lastZoneOwner?: Record<string, number>;
     } | null;
@@ -778,7 +731,7 @@ export class HellWarField implements WorldOverlay {
     this.mods = [];
     for (const m of s.mods ?? []) {
       if (typeof m?.seat !== 'number' || !m.at) continue;
-      this.mods.push({ seat: m.seat, at: { x: m.at.x, y: m.at.y }, radius: m.radius, mul: m.mul, from: m.from, until: m.until });
+      this.mods.push({ key: m.seat, at: { x: m.at.x, y: m.at.y }, radius: m.radius, mul: m.mul, from: m.from, until: m.until });
     }
     this.doorAt = s.doorAt ?? 0;
     this.lastZoneOwner = new Map(Object.entries(s.lastZoneOwner ?? {}));

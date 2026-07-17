@@ -4496,8 +4496,8 @@ export class World {
         },
       },
       {
-        // A Crusade holds this ground — raise its works (camp / fortress /
-        // city) and post its garrison, scaled to how long it's been held.
+        // A Crusade's field holds this ground — raise its works (camp /
+        // fortress / city) and post its garrison, scaled to its local control.
         id: 'crusade',
         reset: () => { this.materializedCrusades.clear(); this.crusadePortals.length = 0; },
         enter: (def, live) => {
@@ -7141,26 +7141,6 @@ export class World {
       this.text(vec(ze.pos.x, ze.pos.y - 38),
         dest ? `a path to ${dest.name} opens!` : 'a new path opens!', '#9ad0e0', 15);
     }
-  }
-
-  /** Distance from a coordinate to the nearest VISITED node — ground the player
-   *  has actually charted (NOT the authored-but-unexplored static zones that
-   *  cloneZones preloads into zoneMap behind the fog). Infinity if none. Gates a
-   *  simulated crusade node's accessibility wire-in: it stays floating out in the
-   *  wilds until the front (or the player's exploration) brings it within reach of
-   *  real, visible ground. */
-  private nearestChartedDist(c: Vec2, dimension?: string): number {
-    let best = Infinity;
-    for (const id of this.visited) {
-      const z = this.zoneMap[id];
-      if (!z) continue;
-      // Dimensions share one coordinate plane — a hell node "near" a surface
-      // coord is a coincidence of numbers, not reachable ground.
-      if ((z.dimension ?? 'surface') !== (dimension ?? 'surface')) continue;
-      const d = Math.hypot(z.map.x - c.x, z.map.y - c.y);
-      if (d < best) best = d;
-    }
-    return best;
   }
 
   /** Seed the zone's monster packs — one type per pack, scattered wide.
@@ -12014,9 +11994,12 @@ export class World {
 
   // ------------------------------------------------------- crusade materialize
   //
-  // A Crusade is a SPREADING state machine owned by the pure CrusadeField overlay
-  // (node-space + the maturation clock); the engine reads crusadeOn() to raise the
-  // faction's works in a held zone you enter and to drain its uncharted mints.
+  // A Crusade is a LIVING WARFRONT owned by the pure CrusadeField overlay (an
+  // analytic field: power × drifting noise × a well around its heart); the
+  // engine reads crusadeOn() — the zone's LOCAL CONTROL resolved through the
+  // tier ladder — to raise the faction's works in ground you enter. Nothing
+  // overworld is minted; works rise AND collapse with the field, because
+  // generation re-asks it every load.
 
   /** Raise a Crusade's works in the zone you've entered, scaled to its influence
    *  TIER: an outpost (touched) → war camp (occupied) → fortress (entrenched) →
@@ -13719,9 +13702,9 @@ export class World {
     });
   }
 
-  /** A converted capital's SANCTUM gate tears open once it has stood long enough.
-   *  Placed once; stepping into it (in the collision pass) loads the Leader's
-   *  inner realm. Mirrors maybeOpenDemonPortal. */
+  /** An ANCHORED crusade's THRONE gate stands in owned ground near its heart
+   *  (crusadeOn().sanctumReady). Placed once; stepping into it (in the
+   *  collision pass) loads the Leader's arena. Mirrors maybeOpenDemonPortal. */
   private maybeOpenCrusadePortal(): void {
     if (this.inCave || this.crusadePortals.length || this.crusadeRealmContext) return;
     const info = this.sim.crusadeField?.crusadeOn(this.zone.id);
@@ -13750,15 +13733,17 @@ export class World {
     this.enterRealmArena({
       caveId: `cave_crusade_${crusadeId}`, tileset: surge.sanctum.tileset,
       arena: surge.sanctum.arena,
-      // The sanctum is the crusade's own keep — a controlled garrison of its
-      // faction (minus the Leader, the curated boss), not the tileset's natives.
-      packs: { count: [2, 4], size: [2, 3] },
+      // The arena's population is AUTHORED on the sanctum config: null packs +
+      // a [0,0] garrison is the true ONE-ON-ONE — the Leader alone on his
+      // sand, the crowd's champion-calls his only reinforcement. The roster
+      // still feeds the CROWD (faction minus the Leader, the curated boss).
+      packs: surge.sanctum.packs,
       rosterTable: (FACTIONS[faction]?.table ?? []).filter(e => e.id !== leaderId),
       returnPos: portalPos,
       boss: {
         monsterId: leaderId, faction, levelBonus: surge.sanctum.levelBonus, bossBump: surge.sanctum.bossBump,
         tag: 'crusade_leader', xpFloor: surge.sanctum.xpFloor,
-        garrison: { count: [6, 10] },
+        garrison: surge.sanctum.garrison,
         announce: '{name} commands the sanctum!', announceColor: '#ffd700',
       },
     });
@@ -27951,48 +27936,13 @@ export class World {
     // manifest only in zones the player explores — the underworld_war
     // zone-runtime row. The war's whole footprint is the field itself.)
 
-    // CRUSADE: mint the stronghold + its SIMULATED frontier nodes at their
-    // uncharted coordinates — minted FLOATING (a free point in the wilds, NOT
-    // auto-anchored to an existing node), so the crusade's territory exists +
-    // expands on the warfront before it's reachable. It wires into the graph only
-    // once it nears charted ground (the accessibility stopgap in the floating drain
-    // below). Host/SP-only; clients get the zone via sendZone.
+    // (CRUSADES mint NOTHING on the overworld: a crusade is a warfield
+    // campaign — its territory IS the field, real zones under it raise the
+    // faction's works at generation from their local control, and the only
+    // minted ground is the throne ARENA through the sanctum gate. The engine's
+    // only overworld touch is the anchored biome claim + release in the warp
+    // sweep below.)
     const cf = this.sim.crusadeField;
-    if (cf && cf.mintRequests.length) {
-      for (const req of cf.mintRequests) {
-        const bind = (): void => {
-          if (req.kind === 'stronghold') cf.bindStronghold(req.crusadeId, req.zoneKey);
-          else cf.bindFrontier(req.crusadeId, req.zoneKey);
-        };
-        if (this.zoneMap[req.zoneKey]) { bind(); continue; }
-        // BIOME: a faction crusade RELOCATES to its patron biome (sylvan→grove/marsh,
-        // etc.) so it spawns in the RIGHT land — warps the ground if none is near. The
-        // zone IS that biome (fieldBiome re-selects the tileset); the crusade's own
-        // structures are stamped on top by materializeCrusade. LEVEL: the radial field.
-        const cFaction = cf.factionOf(req.crusadeId);
-        const rl = cFaction ? this.relocateToFactionBiome(req.coord, cFaction) : { coord: req.coord, warpBiome: null as string | null };
-        // KEYED warp + attribution: the claim RELEASES when the crusade breaks.
-        if (rl.warpBiome) {
-          this.sim.biomeField.setWarp(`crusade_${req.crusadeId}`, {
-            center: rl.coord, radius: 240, biome: rl.warpBiome, strength: 1,
-            label: 'Crusade — a faction claims this ground',
-          });
-        }
-        const anchor = this.zoneMap[req.anchorZoneId] ?? nearestNode(this.zoneMap, rl.coord) ?? this.surfaceAnchor();
-        const def = placeZoneAt(rl.coord, anchor, this.zoneMap, this.nextGenId++, {
-          id: req.zoneKey, tileset: req.tileset, level: this.eventLevel(rl.coord),
-          objective: { kind: 'clear' }, forceWaypoint: req.kind === 'stronghold', forceFrontiers: 1, floating: true, fieldBiome: true,
-          seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
-          biomeFor: this.biomeFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
-        });
-        def.eventOwned = true; // crusade stronghold/frontier — no other overlay squats here
-        this.zoneMap[req.zoneKey] = def;
-        // NB: NO onNodeCharted at mint (floating ⇒ not on the graph yet; it seeds
-        // its territory when the accessibility drain wires it in).
-        bind();
-      }
-      cf.mintRequests.length = 0;
-    }
 
     // CONCLAVE → ELDRITCH INCURSION: when the incubation counter maxes, the Conclave
     // hands an ignition to the shared Incursion field (overlays can't reach each
@@ -28060,18 +28010,30 @@ export class World {
           if (!this.sim.swarmingField?.hasRoost(rid)) bf.unwarp(wid);
         }
       }
+      // AN ANCHORED CRUSADE CLAIMS ITS GROUND: once the throne stands, the
+      // heartland's biome turns to the faction's own country (biomesForFaction
+      // — sylvan groves rise, graves spread for the dead). Keyed per crusade;
+      // the release branch above heals the land when the war breaks.
+      if (cf) {
+        const claimed = new Set(bf.warpIds());
+        for (const c of cf.peek()) {
+          if (!c.anchored || claimed.has(`crusade_${c.id}`)) continue;
+          const biome = biomesForFaction(c.faction)[0];
+          if (!biome) continue;
+          bf.setWarp(`crusade_${c.id}`, {
+            center: { x: c.heart.x, y: c.heart.y }, radius: cf.surge().field.wellRange,
+            biome, strength: 1, label: 'Crusade — the land turns to its faction\'s country',
+          });
+        }
+      }
     }
 
     // FLOATING ZONES wire into the charted graph — a road forms (connectFloatingZone),
-    // so there's no forced trail at spawn. TWO ways in: (1) the player EXPLORES near
-    // it (any rift/quest target within APPROACH_RADIUS of the zone they're in — the
-    // path appears as you approach); OR (2) the CRUSADE accessibility stopgap — a
-    // simulated crusade node wires in once it's within accessRadius of real charted
-    // ground (player-independent), so the front is always reachable, never dead
-    // content (far frontiers stay simulated on the warfront until then). Host/SP
-    // only; new exits stream to clients via the zone snapshot; syncZoneExits()
-    // (below) surfaces the portal live if the road landed on the player's zone.
-    const crusadeAccess = this.sim.crusadeField?.surge().accessRadius ?? 130;
+    // so there's no forced trail at spawn: the player EXPLORES near one (any
+    // rift/quest target within APPROACH_RADIUS of the zone they're in) and the
+    // path appears as they approach. Host/SP only; new exits stream to clients
+    // via the zone snapshot; syncZoneExits() (below) surfaces the portal live
+    // if the road landed on the player's zone.
     for (const z of Object.values(this.zoneMap)) {
       if (!z.floating) continue;
       // Proximity only counts WITHIN a dimension — the planes share one
@@ -28080,19 +28042,17 @@ export class World {
       const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
       const nearPlayer = sameDim
         && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
-      const crusadeReachable = z.id.startsWith('crusade_') && this.nearestChartedDist(z.map, z.dimension) <= crusadeAccess;
-      if (!nearPlayer && !crusadeReachable) continue;
+      if (!nearPlayer) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0));
       this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
       this.text(vec(this.player.pos.x, this.player.pos.y - 90),
         z.id.startsWith('demon_') ? 'A path opens toward the demon rift!'
-          : z.id.startsWith('crusade_') ? 'The crusade frontier reaches charted ground!'
           : 'A path opens toward your quest!',
         '#c8a8e8', 15);
     }
 
-    // LIVE EXITS: any of the drains above (a demon/crusade mint's linkBack +
-    // weave, a floating-quest connect, or any future event) may have appended a
+    // LIVE EXITS: any of the drains above (a demon mint's linkBack + weave, a
+    // floating-quest connect, or any future event) may have appended a
     // NEW exit to the zone the player is STANDING in. Surface its portal now —
     // no need to leave and re-enter for an adjacent link to appear.
     this.syncZoneExits();
