@@ -954,6 +954,33 @@ export class Actor {
    *  while an invoking skill sits on the bar (see SkillDef.invokes) —
    *  order matters; the invoke consumes the lot. */
   runes: string[] = [];
+  /** THE COMBO GRAMMAR (engine/sequence.ts): the recent-cast ring. Real
+   *  uses are recorded ONLY while comboWatch holds, and the array is null
+   *  until the first record — non-combo actors never allocate or churn. */
+  castRing: import('./sequence').CastRecord[] | null = null;
+  /** Monotonic completed-real-cast counter — per-rule consume bookkeeping
+   *  compares seqs so the shared ring itself never needs mutating. */
+  castSeq = 0;
+  /** Cached "anything on this build reads casts?" — an equipped combo_<id>
+   *  grammar or a live comboVaried/comboRepeated conditional (sheet or
+   *  bar-instance mods). Recomputed at most once per COMBO_CFG.watchRefresh
+   *  at the record site (World.recordCast). */
+  comboWatch = false;
+  comboWatchAt = 0;
+  /** Equipped grammar defs (combo_<id> compiled > 0), cached with watch. */
+  comboRules: import('./sequence').ComboRuleDef[] | null = null;
+  /** Per-rule firing bookkeeping: last fire time (icd pacing) + the ring
+   *  seq consumed through (non-overlap rules refuse spans that would
+   *  re-spend already-paid casts). */
+  comboFire: Map<string, { at: number; seq: number }> | null = null;
+  /** comboVaried (1) / comboRepeated (2) condition bits, held while the
+   *  countdown runs — stamped at record time from the ring, decayed in
+   *  updateTimers, read by refreshConditions only while comboWatch. */
+  comboCondBits = 0;
+  comboCondLeft = 0;
+  /** CO-OP MIRROR ONLY (net/snapshot.ts): host-computed combo HUD rows for
+   *  the bar chip. Live worlds compute from the ring directly. */
+  comboHud?: { id: string; lit: number; len: number; glow: number }[];
   /** Distance walked since the last 'move' charge-tap sweep (fed by
    *  World.moveActor; consumed in updateCharges). */
   moveAcc = 0;
@@ -2021,6 +2048,13 @@ export class Actor {
     // windows sits a NEUTRAL transition band — neither bonus nor malus.
     if (this.idleFor > STANCE_PLANT_TIME) mask |= 2048;                // stationary
     else if (this.idleFor < STANCE_MOVE_WINDOW) mask |= 4096;          // moving
+    // THE COMBO GRAMMAR's starter conditions — bits stamped at the record
+    // site, held on the countdown, and read ONLY while comboWatch: an
+    // unwatched actor's mask can never churn on cast history.
+    if (this.comboWatch && this.comboCondLeft > 0) {
+      if (this.comboCondBits & 1) mask |= 8192;                        // comboVaried
+      if (this.comboCondBits & 2) mask |= 16384;                       // comboRepeated
+    }
     const sheetChanged = this.condSheet !== this.sheet;
     if (mask !== this.condMask || sheetChanged) {
       this.condMask = mask;
@@ -2038,6 +2072,8 @@ export class Actor {
       if (mask & 1024) active.push('esRecharging');
       if (mask & 2048) active.push('stationary');
       if (mask & 4096) active.push('moving');
+      if (mask & 8192) active.push('comboVaried');
+      if (mask & 16384) active.push('comboRepeated');
       this.sheet.setConditions(active);
     }
 
@@ -2146,6 +2182,9 @@ export class Actor {
     // seconds since this actor last took damage; the world zeroes it at
     // both damage seams (hits and DoT alike).
     this.recentHurt = Math.min(999, this.recentHurt + dt);
+    // Combo-condition freshness (comboVaried/comboRepeated): the window
+    // decays here so the conditions expire even when no new cast lands.
+    if (this.comboCondLeft > 0) this.comboCondLeft = Math.max(0, this.comboCondLeft - dt);
     // Hire-clock high-water mark (the lifespan sliver's denominator).
     if (this.lifespan > this.lifespanTotal) this.lifespanTotal = this.lifespan;
     // Cooldowns tick faster with cooldownRecovery.

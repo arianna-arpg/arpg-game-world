@@ -886,6 +886,76 @@ const STORMWEAVER: VocationDef = {
   },
 };
 
+/** SPELLBLADE — the Magician's second calling: steel in one hand, sigil in
+ *  the other, and the WEAVE between them. THE COMBO GRAMMAR's flagship
+ *  consumer (engine/sequence.ts, data/combos.ts): the vocation grants the
+ *  Blade-and-Vein rule itself, rides the comboVaried condition, and bends
+ *  the comboWindow stat — every lever an ordinary modifier. */
+const SPELLBLADE_LAYOUT = fan(185); // spine → int_start (offset from the Archmage's 170)
+const SPELLBLADE: VocationDef = {
+  id: 'spellblade', name: 'Spellblade',
+  blurb: 'The blade asks; the sigil answers. Neither is the argument — the alternation is.',
+  color: '#b8a8e8',
+  classId: 'magician',
+  tree: [
+    { id: 's1', name: 'Edge Discipline', description: '12% increased melee damage', kind: 'small', ...SPELLBLADE_LAYOUT.s1, mods: [mod('damage', 'increased', 0.12, ['melee'])], links: ['root'] },
+    { id: 's2', name: 'Sigil Discipline', description: '12% increased spell damage', kind: 'small', ...SPELLBLADE_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12, ['spell'])], links: ['root'] },
+    { id: 's3', name: 'Measured Breath', description: '6% increased attack and cast speed', kind: 'small', ...SPELLBLADE_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.06), mod('castSpeed', 'increased', 0.06)], links: ['root'] },
+    { id: 'n1', name: 'Blade-and-Vein', description: 'THE WEAVE: gain the Blade-and-Vein grammar — an attack and a spell back-to-back surge your attack and cast speed, stacking while you keep alternating', kind: 'notable', ...SPELLBLADE_LAYOUT.n1, mods: [mod('combo_spellblade_weave', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n2', name: 'Woven Steel', description: 'While your last three casts were all different skills: 15% increased damage', kind: 'notable', ...SPELLBLADE_LAYOUT.n2, mods: [mod('damage', 'increased', 0.15, undefined, 'comboVaried')], links: ['s1'] },
+    { id: 'n3', name: 'Long Measure', description: 'Your combo windows stay open 25% longer; 10% increased skill effect duration', kind: 'notable', ...SPELLBLADE_LAYOUT.n3, mods: [mod('comboWindow', 'increased', 0.25), mod('effectDuration', 'increased', 0.1)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Counterpoint Guard', description: 'While your last three casts were all different skills: 10% less damage taken', kind: 'notable', ...SPELLBLADE_LAYOUT.n4, mods: [mod('damageTaken', 'more', -0.1, undefined, 'comboVaried')], links: ['s2'] },
+    { id: 'k1', name: 'The Unbroken Measure', description: 'KEYSTONE: your combo windows stay open 50% longer; 10% increased mana cost', kind: 'keystone', ...SPELLBLADE_LAYOUT.k1, mods: [mod('comboWindow', 'more', 0.5), mod('manaCost', 'increased', 0.1)], links: ['n1', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Study the cadenced kin in the old woods',
+        zone: {
+          tileset: 'deepwood', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'cadence_fencer', weight: 3 }, { id: 'cadence_cantor', weight: 2 },
+              { id: 'steppe_ronin', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'You have watched the measure kept — return and keep your own.',
+      },
+      {
+        offerLabel: 'Hold your tempo against the school\'s answer',
+        zone: {
+          tileset: 'highland', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 4 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'cadence_fencer', weight: 3 }, { id: 'cadence_cantor', weight: 2 },
+              { id: 'storm_acolyte', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'Four measures, unbroken — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Answer the Maestro in the high passes',
+        zone: {
+          tileset: 'highland', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'cadence_maestro' },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The crown changed hands mid-measure — return, Spellblade.',
+      },
+    ],
+  },
+};
+
 /** BASTION — the Guardian's calling: the wall that hits back. */
 const BASTION_LAYOUT = fan(130); // spine → for_start
 const BASTION: VocationDef = {
@@ -1251,6 +1321,7 @@ export const VOCATIONS: Record<string, VocationDef> = {
   [GRAVEBINDER.id]: GRAVEBINDER,
   [WILDSTALKER.id]: WILDSTALKER,
   [ARCHMAGE.id]: ARCHMAGE,
+  [SPELLBLADE.id]: SPELLBLADE,
   [HIEROPHANT.id]: HIEROPHANT,
   [GREENWARDEN.id]: GREENWARDEN,
   [PLAGUELORD.id]: PLAGUELORD,

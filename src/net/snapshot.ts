@@ -38,6 +38,7 @@ import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
+import { COMBO_CFG, comboProgress } from '../engine/sequence';
 
 export type Vec2W = [number, number];
 
@@ -73,6 +74,12 @@ export interface ActorW {
    *  brain to derive pips from): [pips, lit, highlight]. Present only while
    *  this body owns the top-center bar. */
   bb?: [number, number, number];
+  /** INVOCATION RUNES (players only, while banked) — the client's own bar
+   *  draws the woven sequence the host is holding for it. */
+  rn?: string[];
+  /** COMBO GRAMMAR chips, host-computed like the boss bar (clients hold no
+   *  ring): per equipped rule [id, lit, len, glow]. Players only. */
+  cb?: [string, number, number, number][];
   // --- FX (all omitted when absent → renderer skips them gracefully) ---
   ab?: number;                 // absorb pool (white bar)
   st?: StatusW[];              // active statuses (pips + screen ailment FX)
@@ -368,6 +375,13 @@ function actorToW(a: Actor): ActorW {
   // to derive pips from, and the policy must not fork): see BOSS_BAR_OF.
   const bb = BOSS_BAR_OF(a);
   if (bb) w.bb = [bb.pips, bb.lit, bb.hl ? 1 : 0];
+  // Player bar readouts the host owns: banked runes + combo-grammar chips
+  // (host-computed rows — the boss-bar idiom; clients hold no cast ring).
+  if (a.kind === 'player') {
+    if (a.runes.length) w.rn = a.runes.slice();
+    const cb = COMBO_HUD_OF(a);
+    if (cb?.length) w.cb = cb;
+  }
   if (a.absorb > 0) w.ab = Math.round(a.absorb);
   if (a.statuses.length) w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks }));
   if (a.casting) {
@@ -411,12 +425,28 @@ let SEAT_OF: (a: Actor) => string | undefined = () => undefined;
 // Set per-serialize so actorToW ships the host's boss-bar read (one policy —
 // World.bossBarInfo — for the local renderer and every client alike).
 let BOSS_BAR_OF: (a: Actor) => { pips: number; lit: number; hl: boolean } | null = () => null;
+// Set per-serialize: host-computed combo-grammar HUD rows for a player's own
+// bar chips (engine/sequence.ts — the ring lives host-side only).
+let COMBO_HUD_OF: (a: Actor) => [string, number, number, number][] | null = () => null;
 
 export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
   for (const s of world.seats) seatById.set(s.actor, s.id);
   SEAT_OF = (a) => seatById.get(a);
   BOSS_BAR_OF = (a) => world.bossBarInfo(a);
+  COMBO_HUD_OF = (a) => {
+    if (!a.comboRules?.length) return null;
+    const rows: [string, number, number, number][] = [];
+    for (const rule of a.comboRules) {
+      const pr = comboProgress(a.castRing ?? [], rule, world.time, a.sheet.get('comboWindow'));
+      const fire = a.comboFire?.get(rule.id);
+      const glow = fire
+        ? Math.max(0, Math.round((1 - (world.time - fire.at) / COMBO_CFG.hudGlow) * 100) / 100)
+        : 0;
+      rows.push([rule.id, pr.lit, pr.len, glow]);
+    }
+    return rows;
+  };
 
   const seats: Record<string, SeatW> = {};
   for (const s of world.seats) seats[s.id] = seatW(s, world);
@@ -599,6 +629,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it
+    // Player bar readouts (own hero + party): runes verbatim, combo chips
+    // as host-computed rows the renderer prefers over local derivation.
+    a.runes = aw.rn ?? [];
+    a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow }));
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;

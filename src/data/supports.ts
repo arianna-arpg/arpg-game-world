@@ -2389,6 +2389,37 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // --- Cadence gems (THE COMBO GRAMMAR, engine/sequence.ts) ----------------------
+  // Conditional payoffs riding the comboVaried/comboRepeated ConditionIds:
+  // socketing the gem itself wakes the wearer's recent-cast ring (the
+  // instance-mod scan at World.recordCast) — no grammar needed. Each
+  // carries an always-on cost line so the gem reads honestly in the
+  // support no-op matrix even on builds that never earn its condition.
+
+  polyphony: {
+    id: 'polyphony', name: 'Polyphony',
+    description: '30% MORE damage while your last three casts were all DIFFERENT skills; 15% increased mana cost. Many voices, one argument.',
+    color: '#b8a8e8', requiresTags: ['attack', 'spell'],
+    mods: [
+      mod('damage', 'more', 0.3, undefined, 'comboVaried'),
+      mod('manaCost', 'increased', 0.15),
+    ],
+    perLevel: [mod('damage', 'increased', 0.06, undefined, 'comboVaried')],
+    weight: 6,
+  },
+
+  ostinato: {
+    id: 'ostinato', name: 'Ostinato',
+    description: '25% MORE damage while your last three casts repeated ONE skill; 10% increased mana cost. The phrase, insisted upon.',
+    color: '#d8a05a', requiresTags: ['attack', 'spell'],
+    mods: [
+      mod('damage', 'more', 0.25, undefined, 'comboRepeated'),
+      mod('manaCost', 'increased', 0.1),
+    ],
+    perLevel: [mod('damage', 'increased', 0.05, undefined, 'comboRepeated')],
+    weight: 6,
+  },
+
   // --- Minion investment gems ----------------------------------------------------
 
   vicious_brood: {

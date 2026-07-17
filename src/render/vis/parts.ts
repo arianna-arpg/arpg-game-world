@@ -3699,6 +3699,38 @@ const bell: PartPainter = (ctx, r, spec, pal, t = 0) => {
   });
 };
 
+/** THE BEAT PIPS — a carried measure made visible: n small pips in a
+ *  shallow fan that kindle ONE AFTER ANOTHER on the clock. The cadence
+ *  kin's grammar-tell (their combo rules ARE the player's — the pips say
+ *  "this one keeps time" at a glance), and any future music/beat kit's:
+ *  a skald's verses, a metronome construct. Static bakes (no t) show the
+ *  fan dim. params: n (default 3), rate (beats/s, default 1.6). */
+const beatPips: PartPainter = (ctx, r, spec, pal, t) => {
+  const ramp = rampFor(spec, pal, 'glow');
+  const n = Math.max(2, Math.round(P(spec, 'n', 3)));
+  const rate = P(spec, 'rate', 1.6);
+  place(ctx, r, spec, (c, R) => {
+    const span = Math.PI * 0.5;
+    const beat = t === undefined ? -1 : Math.floor(t * rate) % n;
+    const frac = t === undefined ? 0 : (t * rate) % 1;
+    for (let i = 0; i < n; i++) {
+      const a = -span / 2 + (i / (n - 1)) * span;
+      const px = Math.cos(a) * R * 0.85;
+      const py = Math.sin(a) * R * 0.85;
+      const live = i === beat ? Math.max(0, 1 - frac) : 0;
+      c.fillStyle = withAlpha(ramp.base, 0.35 + live * 0.65);
+      c.beginPath();
+      c.arc(px, py, R * (0.1 + live * 0.06), 0, Math.PI * 2);
+      c.fill();
+      if (live > 0.4) {
+        c.strokeStyle = withAlpha(ramp.highlight, live * 0.8);
+        c.lineWidth = 1;
+        c.beginPath(); c.arc(px, py, R * 0.16, 0, Math.PI * 2); c.stroke();
+      }
+    }
+  });
+};
+
 // ===================================================== THE KEEPER'S TACK
 // Adornment parts for kept, worked, and bonded beasts — collars, straps,
 // bags, cages. They read at a glance ON TOP of any body (the entity
@@ -4358,7 +4390,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   mawRing, lure, sporeVents, mossPatch, veinweb, polyps, slimeTrail,
   sailfin, warhorn, drape,
   stakeRow, totemPost,
-  crystalGrowths, roots, stitchSeams, bell, chest,
+  crystalGrowths, roots, stitchSeams, bell, beatPips, chest,
   collar, harness, saddlebags, muzzle,
   floatingShards,
   shroudWrap, carrionFlies,

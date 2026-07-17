@@ -274,6 +274,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The cadenced kin tour the old woods — the duel keeps its own time.
+        { id: 'cadence_fencer', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'cadence_cantor', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'warband_chieftain', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'brute', weight: 1, presence: { from: 6, fadeIn: 3 } },
         // The treant line walks the old woods (presence-banded: saplings in
@@ -4869,6 +4872,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'pit_mauler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // The masterless blade drifts the high passes, practicing.
         { id: 'steppe_ronin', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        // ...and the measured school tours after him — drum, round, and at
+        // depth the crown (THE COMBO GRAMMAR's live tutorial; the payoff
+        // text over their duels names rules the player can earn).
+        { id: 'cadence_fencer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'cadence_cantor', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'cadence_maestro', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'gale_elemental', weight: 1, presence: { to: 18, fadeOut: 9 } },
         // The Horned Tribes' home crags — the full muster, khan at depth.
         { id: 'beastkin_gorer', weight: 3 },

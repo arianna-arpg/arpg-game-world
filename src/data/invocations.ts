@@ -14,6 +14,8 @@
 // `counts` requirement for combination recipes, or both. No engine changes.
 // ---------------------------------------------------------------------------
 
+import { matchSeqRule, type SeqRule } from '../engine/sequence';
+
 export type RuneId = 'ember' | 'arc' | 'rime';
 
 export const RUNE_INFO: Record<RuneId, { label: string; color: string; element: 'fire' | 'lightning' | 'cold' }> = {
@@ -101,26 +103,25 @@ export const INVOCATIONS: InvocationRule[] = [
   },
 ];
 
+/** Each rule's view for THE one sequence matcher (engine/sequence.ts) —
+ *  built once at load. Pattern precedence inside a rule (seq, else counts,
+ *  else the minRunes fallback) is the matcher's own fixed order, which IS
+ *  this registry's historical contract. */
+const RULE_VIEWS: SeqRule<RuneId>[] = INVOCATIONS.map(rule => ({
+  seq: rule.seq,
+  counts: rule.counts
+    ? (Object.entries(rule.counts) as [RuneId, number][]).map(([p, n]) => ({ p, n }))
+    : undefined,
+  minLen: rule.seq || rule.counts ? undefined : rule.minRunes ?? 1,
+}));
+
 /** First matching rule for a banked sequence (rules are ordered most-
- *  specific first). Null only for an empty sequence. */
+ *  specific first). Null only for an empty sequence. Resolution runs
+ *  through THE shared sequence matcher — the same math the combo grammar
+ *  reads cast history with; this registry keeps only its rune alphabet. */
 export function resolveInvocation(runes: string[]): InvocationRule | null {
-  if (!runes.length) return null;
-  for (const rule of INVOCATIONS) {
-    if (rule.seq) {
-      if (runes.length < rule.seq.length) continue;
-      const tail = runes.slice(-rule.seq.length);
-      if (!rule.seq.every((r, i) => tail[i] === r)) continue;
-      return rule;
-    }
-    if (rule.counts) {
-      let ok = true;
-      for (const [r, n] of Object.entries(rule.counts)) {
-        if (runes.filter(x => x === r).length < (n ?? 0)) { ok = false; break; }
-      }
-      if (!ok) continue;
-      return rule;
-    }
-    if (runes.length >= (rule.minRunes ?? 1)) return rule;
+  for (let i = 0; i < INVOCATIONS.length; i++) {
+    if (matchSeqRule(runes, RULE_VIEWS[i], (p, s) => s === p) > 0) return INVOCATIONS[i];
   }
   return null;
 }

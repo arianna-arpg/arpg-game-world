@@ -520,6 +520,8 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
   stationary: 'while stationary', moving: 'while moving', poised: 'while poised',
   poiseBroken: 'while your poise is broken',
   esRecharging: 'while energy shield is recharging',
+  comboVaried: 'while your last three casts were all different skills',
+  comboRepeated: 'while your last three casts repeated one skill',
 };
 
 export function statLabel(stat: string): string {

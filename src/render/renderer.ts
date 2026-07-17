@@ -18,6 +18,8 @@ import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
+import { COMBO_LIST, COMBO_RULES } from '../data/combos';
+import { COMBO_CFG, comboProgress, comboStat } from '../engine/sequence';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
@@ -5071,6 +5073,61 @@ export class Renderer {
         ctx.strokeStyle = 'rgba(0,0,0,0.6)';
         ctx.lineWidth = 1;
         ctx.stroke();
+      }
+    }
+
+    // THE COMBO GRAMMAR chips: one pip row per equipped grammar above the
+    // bar's LEFT edge (the runes hold the right) — pips fill as the live
+    // tail matches the pattern, and a completed measure flashes the rule's
+    // name for a beat. Circles vs the runes' diamonds: two grammars, two
+    // shapes. Co-op mirrors draw host-computed rows (Actor.comboHud);
+    // live worlds read the sheet + ring directly, so the chip appears the
+    // moment a grammar is granted — before the first cast is ever thrown.
+    {
+      type ComboHudRow = { id: string; lit: number; len: number; glow: number };
+      let comboRows: ComboHudRow[] | null = p.comboHud ?? null;
+      if (!comboRows) {
+        for (const rule of COMBO_LIST) {
+          if (p.sheet.get(comboStat(rule.id)) <= 0) continue;
+          const pr = comboProgress(p.castRing ?? [], rule, world.time, p.sheet.get('comboWindow'));
+          const fire = p.comboFire?.get(rule.id);
+          const glow = fire ? Math.max(0, 1 - (world.time - fire.at) / COMBO_CFG.hudGlow) : 0;
+          (comboRows ??= []).push({ id: rule.id, lit: pr.lit, len: pr.len, glow });
+        }
+      }
+      if (comboRows?.length) {
+        let cy = by - 54;
+        for (const row of comboRows) {
+          const rule = COMBO_RULES[row.id];
+          if (!rule) continue;
+          for (let i = 0; i < row.len; i++) {
+            const cx = bx + 8 + i * 14;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+            if (i < row.lit || row.glow > 0) {
+              ctx.fillStyle = rule.color;
+              ctx.globalAlpha = i < row.lit ? 1 : row.glow;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+            } else {
+              ctx.fillStyle = 'rgba(8,8,12,0.7)';
+              ctx.fill();
+            }
+            ctx.strokeStyle = i < row.lit ? 'rgba(0,0,0,0.6)' : 'rgba(160,160,180,0.45)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+          if (row.glow > 0) {
+            ctx.globalAlpha = row.glow;
+            ctx.fillStyle = rule.color;
+            ctx.font = 'bold 11px Verdana';
+            ctx.textAlign = 'left';
+            ctx.fillText(rule.name + '!', bx + 8 + row.len * 14 + 4, cy + 4);
+            ctx.globalAlpha = 1;
+          }
+          cy -= 16;
+        }
+        ctx.textAlign = 'center';
       }
     }
 

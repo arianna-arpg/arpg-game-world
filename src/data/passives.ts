@@ -348,6 +348,12 @@ const nodes: PassiveNode[] = [
   { id: "shatterplate_doctrine", name: "Shatterplate Doctrine", description: "+20 maximum poise; your poise breaking hurls the bar's shards as shrapnel (Shatterplate)", kind: "notable", x: 2124, y: 3906, mods: [mod("poise", "flat", 20), mod("proc_shatterplate", "flat", 1)], links: ["for_p0"] },
   { id: "broken_fury", name: "Broken Fury", description: "While your poise is broken, deal 15% more damage; your poise breaking rouses Unbroken Wrath", kind: "notable", x: 1932, y: 4056, mods: [mod("damage", "more", 0.15, undefined, "poiseBroken"), mod("proc_unbroken_wrath", "flat", 1)], links: ["shatterplate_doctrine"] },
   { id: "twice_quenched", name: "Twice-Quenched Steel", description: "Your poise re-arming tempers it (Tempered Re-arm); +10 maximum poise", kind: "notable", x: 2364, y: 3018, mods: [mod("proc_tempered_rearm", "flat", 1), mod("poise", "flat", 10)], links: ["forged_rhythm"] },
+  // --- THE COMBO GRAMMAR on the tree (engine/sequence.ts, data/combos.ts):
+  // grammars are granted exactly like procs — one combo_<id> modifier per
+  // notable. Battle Cadence drums beside the poise cycle; Prismatic Cycle
+  // closes its rounds at the stormcaller's corner.
+  { id: "battle_cadence", name: "Battle Cadence", description: "Gain the Drumbeat grammar — landing the same skill three times running surges damage and poise damage; +10 maximum poise", kind: "notable", x: 2600, y: 3204, mods: [mod("combo_drumbeat", "flat", 1), mod("poise", "flat", 10)], links: ["for_p1"] },
+  { id: "prismatic_cycle", name: "Prismatic Cycle", description: "Gain the Prismatic Round grammar — casting three different elements in a row surges elemental damage; 8% increased fire, cold and lightning damage", kind: "notable", x: 1520, y: 5080, mods: [mod("combo_elemental_round", "flat", 1), mod("damage", "increased", 0.08, ["fire"]), mod("damage", "increased", 0.08, ["cold"]), mod("damage", "increased", 0.08, ["lightning"])], links: ["sor_x1"] },
   // --- THE RECHARGE STREAM: interruption resistance as an investment
   // ladder, capped by a keystone that buys total steadiness with time.
   { id: "unbroken_stream", name: "Unbroken Stream", description: "40% chance for damage not to interrupt your energy shield recharge; 15% increased recharge rate", kind: "notable", x: 2610, y: 1758, mods: [mod("esRechargeSteadfast", "flat", 0.4), mod("esRechargeRate", "increased", 0.15)], links: ["wil_p0"] },

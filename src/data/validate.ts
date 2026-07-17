@@ -16,6 +16,7 @@ import {
 } from '../engine/skills';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
+import { COMBO_RULES } from './combos';
 import { CLASSES, CLASS_CFG } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunements';
@@ -85,6 +86,31 @@ import { Rng } from '../core/rng';
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   validatePassiveLayout(warn);
+
+  // THE COMBO GRAMMAR (data/combos.ts, engine/sequence.ts): every rule must
+  // carry exactly ONE pattern kind, sane pacing, and an OWNER-scoped payoff
+  // — a grammar completes on a CAST, not a hit, so there is never a struck
+  // target to hand a target-shaped effect to.
+  {
+    const targetShaped = new Set(['status', 'extraHit', 'explosion', 'arc', 'displace', 'collisionDamage', 'summon']);
+    for (const [key, rule] of Object.entries(COMBO_RULES)) {
+      if (rule.id !== key) warn(`combo ${key}: id '${rule.id}' differs from its registry key`);
+      const kinds = [rule.seq, rule.counts, rule.vary, rule.repeat].filter(Boolean).length;
+      if (kinds !== 1) warn(`combo ${rule.id}: ${kinds === 0 ? 'no' : 'more than one'} pattern kind — exactly one of seq/counts/vary/repeat`);
+      if (rule.gate && (rule.seq || rule.counts)) warn(`combo ${rule.id}: gate is read only by vary/repeat — seq/counts steps carry their own predicates`);
+      if (rule.vary && rule.vary.n < 2) warn(`combo ${rule.id}: vary.n must be ≥ 2`);
+      if (rule.repeat && rule.repeat.n < 2) warn(`combo ${rule.id}: repeat.n must be ≥ 2`);
+      if (rule.within !== undefined && !(rule.within > 0)) warn(`combo ${rule.id}: within must be positive`);
+      if (rule.icd !== undefined && rule.icd < 0) warn(`combo ${rule.id}: icd must be ≥ 0`);
+      if (targetShaped.has(rule.effect.type)) {
+        warn(`combo ${rule.id}: payoff '${rule.effect.type}' needs a struck target — combos fire on casts (owner-scoped effects only)`);
+      }
+      const steps = [...(rule.seq ?? []), ...(rule.counts?.map(c => c.step) ?? []), ...(rule.gate ? [rule.gate] : [])];
+      for (const step of steps) {
+        if (step.skillId && !SKILLS[step.skillId]) warn(`combo ${rule.id}: step names unknown skill '${step.skillId}'`);
+      }
+    }
+  }
 
   // POCKET FORMS (data/pocketForms.ts): the shapes purchased ground can take.
   // Every knob is data — so every knob gets a boot check: the default form

@@ -176,7 +176,14 @@ export type ConditionId =
   | 'poiseBroken'
   // The energy shield's recharge is actively FLOWING (delay elapsed, pool
   // climbing) — "while recharging" mods make the stream itself a stance.
-  | 'esRecharging';
+  | 'esRecharging'
+  // THE COMBO GRAMMAR's starter conditions (engine/sequence.ts): the last
+  // COMBO_CFG.conditionRun real casts were all DIFFERENT skills / all the
+  // SAME skill, fresh within the condition window. Derived from the
+  // actor's recent-cast ring — recording (and these bits) wake only while
+  // something on the actor references combos (Actor.comboWatch), so
+  // non-combo builds never churn the mask.
+  | 'comboVaried' | 'comboRepeated';
 
 export interface Modifier {
   stat: string;
@@ -918,6 +925,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** RUNE capacity (the Invocation sequence's length ceiling) — queried
    *  with the invoking skill's tags; base 5, investable like any cap. */
   runeCap:        { label: 'Rune Capacity', base: 5, min: 1, max: 10 },
+  /** COMBO GRAMMAR timing: a multiplier on every equipped combo rule's
+   *  `within` window (engine/sequence.ts) — "your patterns stay open 50%
+   *  longer" is one 'more' modifier. Floored so windows never collapse. */
+  comboWindow:    { label: 'Combo Window', base: 1, min: 0.25, percent: true },
   /** Extra CASCADE placements for ground skills — displaced repeats rippling
    *  from the impact (adds to any innate/grafted GroundCascadeSpec). */
   aoeCascade:     { label: 'Cascade Placements', base: 0, min: 0 },
@@ -1237,6 +1248,14 @@ export class StatSheet {
   private gauges = new Map<string, number>();
   private gaugeKey = '';
 
+  /** Which ConditionIds any registered modifier DEMANDS (`when:`), cached
+   *  lazily and invalidated on source change. Lets systems whose upkeep
+   *  should be null-cost until referenced (the combo grammar's cast ring)
+   *  ask "does anything on this sheet even care?" without scanning mods
+   *  per frame. Skill-local `extra` mods are NOT visible here — callers
+   *  with instance-level consumers scan those themselves. */
+  private whenRefs: Set<ConditionId> | null = null;
+
   /** Replace the active condition set (cache clears only on real change). */
   setConditions(active: ConditionId[]): void {
     const key = active.slice().sort().join(',');
@@ -1247,6 +1266,18 @@ export class StatSheet {
   }
 
   hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
+
+  /** Does any registered (sheet-level) modifier condition on `id`? */
+  usesCondition(id: ConditionId): boolean {
+    if (!this.whenRefs) {
+      const refs = new Set<ConditionId>();
+      for (const mods of this.sources.values()) {
+        for (const m of mods) if (m.when) refs.add(m.when);
+      }
+      this.whenRefs = refs;
+    }
+    return this.whenRefs.has(id);
+  }
 
   /** Replace the live gauge set (cache clears only on real change — keep
    *  gauges INTEGER and event-driven or the cache churns every frame). */
@@ -1264,10 +1295,14 @@ export class StatSheet {
   setSource(name: string, mods: Modifier[]): void {
     this.sources.set(name, mods);
     this.cache.clear();
+    this.whenRefs = null;
   }
 
   removeSource(name: string): void {
-    if (this.sources.delete(name)) this.cache.clear();
+    if (this.sources.delete(name)) {
+      this.cache.clear();
+      this.whenRefs = null;
+    }
   }
 
   hasSource(name: string): boolean { return this.sources.has(name); }

@@ -2631,6 +2631,48 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'skirmish', withdraw: 1.1, skillUse: { finesse: { chance: 0.7 } } },
     detection: 1.1,
   },
+  // --- THE CADENCED KIN: the measured school, and THE COMBO GRAMMAR's
+  // live tutorial (engine/sequence.ts, data/combos.ts). Each body carries
+  // a PLAYER grammar via one ordinary modifier — the same combo_<id> stat
+  // a passive notable grants — so the payoff text over a duel names the
+  // exact rule a build can take; the beat pips on their looks say "this
+  // one keeps time" at a glance. Factionless: the school answers to no
+  // banner. Kits wholly reused — the fencer drums zanshin_cut (its innate
+  // castCycle layers UNDER the cross-skill Drumbeat: two cadence fabrics,
+  // one body), the cantor mixes the three schools into Prismatic Rounds,
+  // the maestro weaves steel and spark into Blade-and-Vein.
+  cadence_fencer: {
+    id: 'cadence_fencer', name: 'Cadence Fencer',
+    color: '#c8b088', shape: 'trapezoid', radius: 13, look: 'cadence_fencer',
+    base: { life: 62, moveSpeed: 146, accuracy: 110, evasion: 48, insight: 25, mana: 60, manaRegen: 6 },
+    mods: [mod('combo_drumbeat', 'flat', 1)],
+    skills: ['zanshin_cut'],
+    xp: 26,
+    brain: { type: 'skirmish', withdraw: 1.05 },
+    detection: 1.05,
+  },
+  cadence_cantor: {
+    id: 'cadence_cantor', name: 'Round Cantor',
+    color: '#b8a8d8', shape: 'diamond', radius: 13, material: 'cloth', look: 'cadence_cantor',
+    base: { life: 34, moveSpeed: 122, mana: 140, manaRegen: 9 },
+    mods: [mod('combo_elemental_round', 'flat', 1)],
+    skills: ['firebolt', 'frostbolt', 'spark'],
+    xp: 22,
+    brain: { type: 'caster' },
+  },
+  /** The school's crown — the Spellblade vocation's proof in enemy hands:
+   *  he weaves cut and spark, and Blade-and-Vein surges HIM exactly as it
+   *  will surge the player who earns it. */
+  cadence_maestro: {
+    id: 'cadence_maestro', name: 'Cadence Maestro',
+    color: '#b8a8e8', shape: 'octagon', radius: 15, look: 'cadence_maestro',
+    base: { life: 150, moveSpeed: 138, accuracy: 114, evasion: 52, insight: 40, mana: 120, manaRegen: 8, poise: 40 },
+    mods: [mod('combo_spellblade_weave', 'flat', 1)],
+    skills: ['zanshin_cut', 'spark'],
+    xp: 60,
+    brain: { type: 'skirmish', withdraw: 1.15 },
+    detection: 1.1,
+  },
   bandit_powder_witch: {
     id: 'bandit_powder_witch', name: 'Powder Witch',
     color: '#8ec8b0', shape: 'star', radius: 13, look: 'bandit_powder_witch',

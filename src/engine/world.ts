@@ -63,6 +63,8 @@ import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocat
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
+import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
+import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
@@ -18056,6 +18058,27 @@ export class World {
     }
   }
 
+  // Dev-tab levers (dev/tabs/combo.ts) — grammar QA without respecs.
+  /** Equip a combo grammar on the local hero via the 'dev:combo' sheet
+   *  source — an ordinary modifier bundle, sheet-visible like any grant.
+   *  The next cast re-evaluates comboWatch immediately. */
+  devComboGrant(ruleId: string): boolean {
+    if (!COMBO_RULES[ruleId]) return false;
+    const p = this.player;
+    const src = p.sheet.getSourceMods('dev:combo') ?? [];
+    if (!src.some(m => m.stat === comboStat(ruleId))) {
+      p.sheet.setSource('dev:combo', [...src, mod(comboStat(ruleId), 'flat', 1)]);
+    }
+    p.comboWatchAt = 0;
+    return true;
+  }
+
+  /** Strip every dev-granted grammar (the ring follows on the next beat). */
+  devComboClear(): void {
+    this.player.sheet.removeSource('dev:combo');
+    this.player.comboWatchAt = 0;
+  }
+
   // Dev-tab levers (dev/tabs/throng.ts) — QA without five hundred walks.
   /** Grant a throng anchor skill straight onto the local bar (dev). */
   devThrongGrant(skillId: string): boolean {
@@ -21428,6 +21451,13 @@ export class World {
     if (!opts.noRepeat && !opts.noCooldown && !caster.construct && !def.invokes) {
       this.bankRune(caster, def);
     }
+    // THE COMBO GRAMMAR (engine/sequence.ts): a completed REAL use joins
+    // the caster's recent-cast ring and settles any equipped grammar —
+    // the runes' real-use gate, minus the invoke exemption (an invoke IS
+    // a cast the grammar may read; only what it BURNED never re-banks).
+    if (!opts.noRepeat && !opts.noCooldown && !caster.construct) {
+      this.recordCast(caster, def);
+    }
     // ECHO RIDERS (support grafts): a completed REAL use raises/refreshes
     // the ghosts. Channel pulses and scheduled repeats never mint them, and
     // ghosts never mint ghosts (the Spirit-Totem recursion guard). Echo
@@ -21496,6 +21526,83 @@ export class World {
       skillContextTags(invoker.def), instanceMods(invoker))));
     if (caster.runes.length >= cap) caster.runes.shift();
     caster.runes.push(rune);
+  }
+
+  /** THE COMBO GRAMMAR's record-and-settle (engine/sequence.ts): push the
+   *  completed real use onto the caster's recent-cast ring, stamp the
+   *  starter conditions, and settle every equipped grammar through THE
+   *  proc executor. NULL-COST DISCIPLINE: the throttled watch check is a
+   *  few cached stat reads; everything past it runs only for actors
+   *  something has opted in — non-combo builds keep a null ring, an
+   *  unchurned condition mask, and byte-identical sim baselines. */
+  private recordCast(caster: Actor, def: SkillDef): void {
+    // "Does anything here read casts?" — re-asked at most once per
+    // watchRefresh: an equipped grammar (combo_<id>, sheet-granted by
+    // passives / vocation nodes / equipMods / affixes / MonsterDef mods),
+    // a sheet-level comboVaried/comboRepeated conditional, or — players
+    // and mercenaries only, the bars that carry support gems — an
+    // instance-level conditional from a socketed gem.
+    if (this.time >= caster.comboWatchAt) {
+      caster.comboWatchAt = this.time + COMBO_CFG.watchRefresh;
+      let rules: ComboRuleDef[] | null = null;
+      for (const rule of COMBO_LIST) {
+        if (caster.sheet.get(comboStat(rule.id)) > 0) (rules ??= []).push(rule);
+      }
+      let watch = !!rules || caster.sheet.usesCondition('comboVaried')
+        || caster.sheet.usesCondition('comboRepeated');
+      if (!watch && (caster.kind === 'player' || caster.kind === 'mercenary')) {
+        outer: for (const inst of caster.skills) {
+          if (!inst) continue;
+          for (const m of instanceMods(inst)) {
+            if (m.when === 'comboVaried' || m.when === 'comboRepeated') {
+              watch = true;
+              break outer;
+            }
+          }
+        }
+      }
+      caster.comboRules = rules;
+      caster.comboWatch = watch;
+      // Un-watched again (grammar unslotted): release the ring — the
+      // history is combat-transient, never a leak.
+      if (!watch && caster.castRing) {
+        caster.castRing = null;
+        caster.comboCondBits = 0;
+        caster.comboCondLeft = 0;
+      }
+    }
+    if (!caster.comboWatch) return;
+    const ring = (caster.castRing ??= []);
+    ring.push({ sid: def.id, tags: def.tags, at: this.time, seq: ++caster.castSeq });
+    if (ring.length > COMBO_CFG.ringCap) ring.shift();
+    // The starter conditions: stamped now from the fresh tail, decayed by
+    // the actor's own clock (Actor.comboCondLeft in updateTimers).
+    const varied = comboVariedNow(ring, this.time);
+    const repeated = comboRepeatedNow(ring, this.time);
+    caster.comboCondBits = (varied ? 1 : 0) | (repeated ? 2 : 0);
+    caster.comboCondLeft = varied || repeated ? COMBO_CFG.conditionWindow : 0;
+    if (!caster.comboRules) return;
+    // Settle equipped grammars: match → consume-fresh + icd → payoff. The
+    // payoff is an owner-scoped ProcEffect through executeProc — floating
+    // text, flash, canonical gain gates, even authored riders (host
+    // 'combo:<id>') all ride the one pipeline.
+    const windowScale = caster.sheet.get('comboWindow');
+    for (const rule of caster.comboRules) {
+      const span = matchComboRule(ring, rule, this.time, windowScale);
+      if (span <= 0) continue;
+      const fire = caster.comboFire?.get(rule.id);
+      if (fire) {
+        if (this.time - fire.at < (rule.icd ?? COMBO_CFG.defaultIcd)) continue;
+        // Spent casts stay spent: the span must hold at least one cast
+        // newer than the last firing's consume line (overlap opts out).
+        if (!rule.overlap && ring[ring.length - span].seq <= fire.seq) continue;
+      }
+      (caster.comboFire ??= new Map()).set(rule.id, { at: this.time, seq: caster.castSeq });
+      this.executeProc({
+        id: 'combo:' + rule.id, name: rule.name, color: rule.color,
+        trigger: 'hit', effect: rule.effect,
+      }, caster, null, null, 0);
+    }
   }
 
   /** Spend stealth on an offensive use: one charge off the bank, and every

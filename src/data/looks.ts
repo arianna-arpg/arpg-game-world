@@ -435,6 +435,50 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'flames', x: 0.85, y: 0.66, scale: 0.4, params: { n: 2 } }],
   },
+  // THE CADENCED KIN — duellists of the measured school. Coin-plain cloth
+  // and one good blade: the identity is TIME made visible. The hip bell
+  // keeps it (live swing), the beat pips count it (live: they kindle in
+  // sequence — the new grammar-tell part), and when a measure completes
+  // the payoff text names a grammar the player can EARN — the family
+  // reuses PLAYER combo rules verbatim, so watching one duel is the
+  // tutorial. No glow-eyes on the fencer (living humans keep the wayfarer
+  // convention); the cantor's lit hood reads "caster", not "construct".
+  cadence_fencer: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.32, scale: 0.85 },
+      { kind: 'sword', params: { len: 0.9 } },
+      { kind: 'bell', x: -0.4, y: 0.55, scale: 0.5 },
+    ],
+    live: [{ kind: 'beatPips', x: -0.6, color: '#d8a05a', scale: 0.9, params: { n: 3 } }],
+  },
+  cadence_cantor: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'hood', x: 0.3, params: { eyes: true, eyeColor: '#e8d8f8' } },
+      { kind: 'staff', params: { orb: '#e8d8f8' } },
+      // The round made wearable: one small rune orbit per school.
+      { kind: 'runes', color: '#ff8a4a', scale: 0.72, params: { n: 2 } },
+      { kind: 'runes', color: '#9ad8f8', scale: 0.9, params: { n: 2 } },
+      { kind: 'runes', color: '#ffe14a', scale: 1.05, params: { n: 2 } },
+      { kind: 'bell', x: -0.4, y: 0.55, scale: 0.45 },
+    ],
+    live: [{ kind: 'beatPips', x: -0.6, color: '#9ad8f8', scale: 0.9, params: { n: 3 } }],
+  },
+  /** The MAESTRO: the school's crown — blade in one hand, spell-focus in
+   *  the other (the weave IS the man), laurel of the measured school,
+   *  four-count pips. */
+  cadence_maestro: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'cape', role: 'cloth' },
+      { kind: 'sword', params: { len: 1.0 } },
+      { kind: 'orb', x: -0.45, y: -0.5, scale: 0.5, color: '#b8a8e8' },
+      { kind: 'laurel', color: '#d8c88a' },
+      { kind: 'bell', x: -0.4, y: 0.6, scale: 0.55 },
+    ],
+    live: [{ kind: 'beatPips', x: -0.65, color: '#b8a8e8', params: { n: 4 } }],
+  },
   frost_caster: {
     parts: [
       { kind: 'robe' },

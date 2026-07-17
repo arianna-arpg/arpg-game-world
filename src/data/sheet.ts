@@ -132,6 +132,8 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'costDamage_mana', 'costDamage_life',
       // Use-charges & ammunition
       'skillCharges', 'skillChargeRate', 'reloadSpeed', 'chargeCap', 'runeCap',
+      // The combo grammar's timing lever
+      'comboWindow',
       // Projectiles — count & flight
       'projectileCount', 'projectileCountChance', 'projectileSpeed', 'projectileSize',
       'pierceCount', 'chainCount', 'forkCount', 'projReturn', 'projNova', 'projPulse',
@@ -225,6 +227,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'chargeCap_', cat: 'skills', blurb: 'Additional maximum stacks of this charge.' },
   { prefix: 'chargeRegen_', cat: 'skills', blurb: 'This charge builds on its own over time.' },
   { prefix: 'proc_', cat: 'skills', blurb: 'Chance this triggered effect fires — on top of its own rate discipline.' },
+  { prefix: 'combo_', cat: 'skills', blurb: 'Equips this cast-pattern grammar: complete its pattern with your recent casts and its payoff fires.' },
   { prefix: 'classSkill_', cat: 'skills', blurb: 'Levels added to every skill gem of this class\'s school.' },
   { prefix: 'remnantDrop_', cat: 'skills', blurb: 'Chance your casts shed this remnant, empowering the next cast of its school.' },
   { prefix: 'minionApply_', cat: 'minions', blurb: 'Your minions\' hits may inflict this status.' },
@@ -511,6 +514,7 @@ const STAT_BLURBS: Record<string, string> = {
   costDamage_life: 'Flat damage per point of life actually paid on the cast.',
   chargeCap: 'Additional maximum stacks for the charges your skills bank.',
   runeCap: 'How long an invocation sequence may grow.',
+  comboWindow: 'Multiplies every combo grammar\'s timing window — patterns stay open longer.',
   projectileCount: 'Additional projectiles per volley.',
   projectileCountChance: 'Chance each volley carries one more projectile.',
   projectileSpeed: 'How fast your projectiles fly.',

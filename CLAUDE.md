@@ -167,7 +167,22 @@ changes.
   (`MonsterDef.cling`): bodies that ride a victim's rim and whack through
   their own kit — size-scaled seats, shake clocks, `rideStatus`, knockback
   scrape; grapple is the shaped open seam — docs in
-  `docs/engine/throng.md`; probe `balance/probe_throng.ts`).
+  `docs/engine/throng.md`; probe `balance/probe_throng.ts`),
+  `sequence.ts` (THE COMBO GRAMMAR — ONE sequence matcher for every cast
+  grammar: `matchSeqRule`/`resolveSeqRules` serve both the invocation
+  rune-weave (`data/invocations.ts` delegates; parity fuzz-pinned) and
+  `ComboRuleDef` cast-cadence rules (`data/combos.ts`) read off a null-
+  cost-until-equipped recent-cast ring (`Actor.castRing`, gated by
+  `comboWatch`); patterns over cast TAGS (ordered seq / counts / vary /
+  repeat + `within` windows × the `comboWindow` stat), payoffs as owner-
+  scoped ProcEffects through THE proc executor, granting via the ordinary
+  `combo_<id>` stat family (passives, the Spellblade vocation, equipMods,
+  `MonsterDef.mods` — the cadenced kin drum the SAME rules players earn,
+  `beatPips` look part as the tell), starter `comboVaried`/`comboRepeated`
+  ConditionIds + Polyphony/Ostinato gems; HUD pip rows + co-op `cb`/`rn`
+  wire fields; vocabulary law: comboChain EXECUTES, castCycle COUNTS,
+  invokes BANKS, the grammar READS — docs in `docs/engine/combo.md`;
+  probe `balance/probe_combo.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense
