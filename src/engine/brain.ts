@@ -110,6 +110,16 @@ export interface MoveSpec {
    *  stands in the way — MINDLESSNESS as an authored trait (shamblers
    *  smearing along a wall while the clever thing walks around it). */
   pathing?: 'route' | 'none';
+  /** HOW the mind weighs dangerous ground (the wayfaring fabric, stamped
+   *  live like pathing — a phase can shift it): 'avoid' (default) prices
+   *  hazards into the flow field (lava detoured, bogs begrudged, roads
+   *  drifted onto — insurance and MonsterDef.pathCosts modulate per body)
+   *  AND refuses self-directed steps into fall boundaries; 'heedless'
+   *  prices everything neutral — the bog-shambler wades where the wolf
+   *  circles — but keeps the fall veto (mindless ≠ suicidal); 'lemming'
+   *  drops both: the authored self-destruction (sappers, panicked routs).
+   *  Forced displacement (knockback, pulls) never consults any of it. */
+  hazards?: 'avoid' | 'heedless' | 'lemming';
   /** Stealth-shroud while stalking; strikes reveal, withdrawal re-cloaks. */
   shroud?: boolean;
   /** skitter: seconds per DART burst (default [0.28, 0.5]) and per dead-stop

@@ -19,6 +19,19 @@
 
 import type { Vec2 } from '../core/math';
 
+/** TRAVEL PREFERENCE — an actor's priced view of the ground (the wayfaring
+ *  fabric). `costOf` answers "what does a cell of this region kind cost ME,
+ *  as a multiplier of plain floor" — 1 neutral, >1 detoured, <1 sought.
+ *  Resolution order lives with the World (MonsterDef.pathCosts override →
+ *  terrain-damage insurance neutralizes → the RegionKind's own price), so
+ *  what hurts a body and what its feet avoid can never disagree. `key` is
+ *  the stable intern identity: equal keys MUST answer costOf identically —
+ *  a WalkField caches per-key cost tables and distance fields against it. */
+export interface PathProfile {
+  key: string;
+  costOf(kind: string): number;
+}
+
 export interface WalkField {
   /** Grid cell size if grid-based — the granularity a swept collision check steps
    *  at (so it can't skip over a thin wall). Optional: a non-grid impl may omit it
@@ -45,13 +58,23 @@ export interface WalkField {
   reachable?(from: Vec2, to: Vec2): boolean;
   /** One step from `from` toward `to` that respects walls/gaps — the AI pathing
    *  hook (a grid flow-field or a navmesh path both satisfy this). Null = no path.
-   *  Optional: Phase-1 has no impl, so steering stays straight-line. */
-  pathStep?(from: Vec2, to: Vec2): Vec2 | null;
+   *  Optional: Phase-1 has no impl, so steering stays straight-line.
+   *  `profile` (the wayfaring fabric) weights the field by the asker's priced
+   *  view of the ground — omitted or uniform, the step is byte-identical to
+   *  the classic unweighted flow field. */
+  pathStep?(from: Vec2, to: Vec2, profile?: PathProfile): Vec2 | null;
   /** Is the STRAIGHT line from→to entirely walkable? The any-angle shortcut:
    *  steering beelines whenever this is true and consults pathStep only when
    *  something actually stands in the way — open ground keeps its beelines
    *  (no 4-connected staircase), warrens path exactly as before. */
   lineWalkable?(from: Vec2, to: Vec2): boolean;
+  /** The any-angle shortcut, PRICED: walkable AND no crossed cell costs the
+   *  asker more than plain floor. Steering with a non-uniform profile gates
+   *  its beeline here, so a hazard the flow field would route around also
+   *  breaks the straight-line shortcut that would have marched through it.
+   *  Optional — a model without costs omits it and callers fall back to
+   *  lineWalkable. */
+  linePreferred?(from: Vec2, to: Vec2, profile: PathProfile): boolean;
   /** Per-tick housekeeping seam: the World calls this once at the top of each
    *  sim tick so an implementation can reset its per-tick cache budgets (the
    *  grid's stale path-field refresh allowance). Optional — a model with no

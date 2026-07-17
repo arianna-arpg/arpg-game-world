@@ -12,10 +12,16 @@
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
-import type { WalkField } from './walk';
-import { regionKind } from './regions';
+import type { PathProfile, WalkField } from './walk';
+import { regionKind, PATH_CFG } from './regions';
 
 export const DEFAULT_CELL = 30;
+
+/** Fixed-point scale for travel costs in the weighted flow field: a plain
+ *  floor cell weighs PATH_SCALE; a priced kind weighs round(cost × scale),
+ *  clamped into a byte (PATH_CFG.maxCost × 8 = 240). Kept small so Dial's
+ *  bucket ring stays 256 wide. */
+export const PATH_SCALE = 8;
 
 /** Framework knobs for the grid's repaint + cache machinery — every collapse,
  *  terraform and door break rides these, so they live here as config, never
@@ -102,10 +108,21 @@ export class GridWalkField implements WalkField {
    *  sometimes stutter" report). ~130KB per field on the largest grids.
    *  Entries are VERSION-STAMPED, refreshed in place under the per-tick
    *  budget (WALK_CFG.distRefreshPerTick — see beginFrame). */
-  private distCache = new Map<number, { d: Int32Array; v: number; t: number }>();
+  private distCache = new Map<number, { d: Int32Array; v: number; t: number; p: PathProfile | null }>();
   /** One retired distance field kept for reuse — an eviction hands its array
    *  to the next miss instead of the GC. */
   private spareDist: Int32Array | null = null;
+  /** TRAVEL PREFERENCE (the wayfaring fabric): per-profile cost tables, one
+   *  byte per kindList entry (round(costOf × PATH_SCALE)), rebuilt when the
+   *  kind table grows. `uniform` profiles (every walkable kind neutral) are
+   *  collapsed onto the classic unweighted field — an interiors grid or a
+   *  heedless mind pays nothing for any of this machinery. */
+  private profTables = new Map<string, { t: Uint8Array; n: number; uniform: boolean }>();
+  /** profile.key → stable per-grid id (≥1; 0 is the classic field), so a
+   *  profiled distance field keys the SAME LRU as the classic ones. */
+  private profIdx = new Map<string, number>();
+  /** Dial's bucket ring, reused across weighted shots on this grid. */
+  private dialRing: number[][] = [];
   /** Scratch BFS/flood queue shared by every recompute on this grid. */
   private scratchQ: number[] = [];
   /** Tick counter + per-tick refresh budget (see beginFrame). Un-ticked
@@ -138,6 +155,34 @@ export class GridWalkField implements WalkField {
     let b = this.kindList.indexOf(id);
     if (b < 0) { b = this.kindList.length; this.kindList.push(id); }
     return b;
+  }
+
+  /** Resolve a profile's per-byte cost table on THIS grid (built lazily, rebuilt
+   *  when the kind table has grown since). `uniform` = every walkable kind came
+   *  back neutral — the caller collapses those onto the classic unweighted
+   *  field, so hazard-free grids and heedless minds never pay for weighting. */
+  private profileEntry(p: PathProfile): { idx: number; t: Uint8Array; uniform: boolean } {
+    let e = this.profTables.get(p.key);
+    if (!e || e.n !== this.kindList.length) {
+      const n = this.kindList.length;
+      const t = new Uint8Array(n);
+      let uniform = true;
+      for (let b = 0; b < n; b++) {
+        const id = this.kindList[b];
+        let w = PATH_SCALE;
+        if (regionKind(id)?.walkable) {
+          const c = Math.min(PATH_CFG.maxCost, Math.max(PATH_CFG.minCost, p.costOf(id)));
+          w = Math.max(1, Math.round(c * PATH_SCALE));
+          if (w !== PATH_SCALE) uniform = false;
+        }
+        t[b] = w;
+      }
+      e = { t, n, uniform };
+      this.profTables.set(p.key, e);
+    }
+    let idx = this.profIdx.get(p.key);
+    if (idx === undefined) { idx = this.profIdx.size + 1; this.profIdx.set(p.key, idx); }
+    return { idx, t: e.t, uniform: e.uniform };
   }
 
   private cx(x: number): number { return Math.min(this.cols - 1, Math.max(0, Math.floor(x / this.cell))); }
@@ -296,28 +341,62 @@ export class GridWalkField implements WalkField {
     return len <= 0 || this.isWalkable(to.x, to.y);
   }
 
+  /** The any-angle shortcut, PRICED (the wayfaring fabric): the same half-cell
+   *  march as lineWalkable, additionally refusing any cell the profile prices
+   *  ABOVE plain floor — a beeline may cross roads (cheaper is fine) but never
+   *  a hazard the flow field would have detoured. Start cell excused exactly
+   *  like lineWalkable: you stand where you stand (an actor already IN the bog
+   *  isn't thereby forbidden from walking out of it). */
+  linePreferred(from: Vec2, to: Vec2, profile: PathProfile): boolean {
+    const e = this.profileEntry(profile);
+    if (e.uniform) return this.lineWalkable(from, to);
+    const tab = e.t;
+    const ok = (x: number, y: number): boolean => {
+      const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
+      if (!this.inGrid(cx, cy)) return false;
+      const i = cy * this.cols + cx;
+      return this.mask[i] === 1 && (tab[this.kind[i]] || PATH_SCALE) <= PATH_SCALE;
+    };
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy);
+    const step = this.cell / 2;
+    for (let s = step; s <= len; s += step) {
+      if (!ok(from.x + dx * (s / len), from.y + dy * (s / len))) return false;
+    }
+    return len <= 0 || ok(to.x, to.y);
+  }
+
   /** One step from `from` toward `to` that respects walls — flow-field following.
    *  Returns the centre of the next cell along the shortest walkable path, `to`
    *  itself on the final approach, or null if unreachable (caller falls back to
-   *  straight-line steering). 4-connected (no diagonal wall-leaks). */
-  pathStep(from: Vec2, to: Vec2): Vec2 | null {
+   *  straight-line steering). 4-connected (no diagonal wall-leaks).
+   *  With a non-uniform `profile` (the wayfaring fabric) the field is WEIGHTED
+   *  by the asker's priced view of the ground — shortest becomes CHEAPEST, so a
+   *  lava lake is detoured and a road is drifted onto; a uniform/omitted
+   *  profile shares the classic unweighted field byte-for-byte. */
+  pathStep(from: Vec2, to: Vec2, profile?: PathProfile): Vec2 | null {
+    let prof: PathProfile | null = profile ?? null;
+    if (prof && this.profileEntry(prof).uniform) prof = null; // neutral view → the classic field
     const tCell = this.cy(to.y) * this.cols + this.cx(to.x);
     const fCell = this.cy(from.y) * this.cols + this.cx(from.x);
     if (this.mask[tCell] !== 1) {
       const s = this.snapToWalkable(to); // target off-mesh → aim at nearest walkable
       const sc = this.cy(s.y) * this.cols + this.cx(s.x);
       if (this.mask[sc] !== 1) return null;
-      return this.stepToward(fCell, sc, from, s);
+      return this.stepToward(fCell, sc, from, s, prof);
     }
-    return this.stepToward(fCell, tCell, from, to);
+    return this.stepToward(fCell, tCell, from, to, prof);
   }
 
-  private stepToward(fCell: number, tCell: number, from: Vec2, to: Vec2): Vec2 | null {
+  private stepToward(fCell: number, tCell: number, from: Vec2, to: Vec2, prof: PathProfile | null): Vec2 | null {
     if (fCell === tCell) return vec(to.x, to.y);
-    const dist = this.distanceTo(tCell);
+    const dist = this.distanceTo(tCell, prof);
     if (this.mask[fCell] !== 1 || dist[fCell] < 0) return null; // actor off-mesh / unreachable
-    if (dist[fCell] <= 1) return vec(to.x, to.y); // adjacent → walk straight in
+    // Adjacent (cell coords, not field units — weighted fields don't count in
+    // steps) → walk straight in.
     const cx = fCell % this.cols, cy = Math.floor(fCell / this.cols);
+    const tx = tCell % this.cols, ty = Math.floor(tCell / this.cols);
+    if (Math.abs(cx - tx) + Math.abs(cy - ty) <= 1) return vec(to.x, to.y);
     let bestC = -1, bestD = dist[fCell];
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = cx + dx, ny = cy + dy;
@@ -330,19 +409,25 @@ export class GridWalkField implements WalkField {
     return vec(this.centerX(bestC % this.cols), this.centerY(Math.floor(bestC / this.cols)));
   }
 
-  /** BFS distance-field to a target cell, LRU-cached (all chasers of one target
+  /** Distance-field to a target cell, LRU-cached (all chasers of one target
    *  share its field; a few distinct targets coexist without evicting each other).
    *  A stale hit (the grid repainted since it shot) refreshes IN PLACE under the
    *  per-tick budget — else it serves as-is: stepToward reads the walkable mask
-   *  live, so a stale field can misroute a step or two, never step onto void. */
-  private distanceTo(tCell: number): Int32Array {
-    const hit = this.distCache.get(tCell);
+   *  live, so a stale field can misroute a step or two, never step onto void.
+   *  A non-null `prof` shoots Dial's WEIGHTED field under its cost table and
+   *  keys the same LRU at its own slot (profIdx), refreshing with the same
+   *  budget — chasers of one target with the same priced view all share one
+   *  field, exactly like the classic case. */
+  private distanceTo(tCell: number, prof: PathProfile | null): Int32Array {
+    const key = prof ? this.profileEntry(prof).idx * this.cols * this.rows + tCell : tCell;
+    const hit = this.distCache.get(key);
     if (hit) {
-      this.distCache.delete(tCell); this.distCache.set(tCell, hit); // refresh LRU
+      this.distCache.delete(key); this.distCache.set(key, hit); // refresh LRU
       if (hit.v !== this.version
         && (this.refreshesLeft > 0 || this.tick - hit.t >= WALK_CFG.distMaxStaleTicks)) {
         this.refreshesLeft--;
-        this.bfsInto(hit.d, tCell);
+        if (hit.p) this.dialInto(hit.d, tCell, this.profileEntry(hit.p).t);
+        else this.bfsInto(hit.d, tCell);
         hit.v = this.version; hit.t = this.tick;
       }
       return hit.d;
@@ -351,8 +436,9 @@ export class GridWalkField implements WalkField {
     // the array comes from the last eviction when one is waiting.
     const d = this.spareDist ?? new Int32Array(this.cols * this.rows);
     this.spareDist = null;
-    this.bfsInto(d, tCell);
-    this.distCache.set(tCell, { d, v: this.version, t: this.tick });
+    if (prof) this.dialInto(d, tCell, this.profileEntry(prof).t);
+    else this.bfsInto(d, tCell);
+    this.distCache.set(key, { d, v: this.version, t: this.tick, p: prof });
     if (this.distCache.size > WALK_CFG.distCacheMax) {
       const oldest = this.distCache.keys().next().value as number; // evict oldest
       const old = this.distCache.get(oldest);
@@ -360,6 +446,47 @@ export class GridWalkField implements WalkField {
       if (old) this.spareDist = old.d;
     }
     return d;
+  }
+
+  /** Shoot a WEIGHTED distance field from `tCell` into `d` under a per-byte
+   *  cost table — Dial's algorithm (a 256-bucket ring over the byte weights):
+   *  strictly nondecreasing pops, FIFO within a bucket, so the field is as
+   *  deterministic as the BFS it generalizes. A cell's weight prices ENTERING
+   *  it; unreachable stays -1. Superseded ring entries are skipped by the
+   *  d[c] === dist check (the lazy-decrease idiom). */
+  private dialInto(d: Int32Array, tCell: number, tab: Uint8Array): void {
+    d.fill(-1);
+    const W = 256; // ring size = max byte weight + 1 (Dial's invariant)
+    const ring = this.dialRing;
+    for (let i = ring.length; i < W; i++) ring.push([]);
+    for (let i = 0; i < W; i++) ring[i].length = 0;
+    d[tCell] = 0;
+    ring[0].push(tCell);
+    let pending = 1;
+    let cur = 0;
+    while (pending > 0) {
+      const b = ring[cur % W];
+      if (b.length === 0) { cur++; continue; }
+      for (let head = 0; head < b.length; head++) {
+        const c = b[head];
+        pending--;
+        if (d[c] !== cur) continue; // superseded by a cheaper relax since push
+        const cx = c % this.cols, cy = (c / this.cols) | 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
+          const nc = ny * this.cols + nx;
+          if (this.mask[nc] !== 1) continue;
+          const nd = cur + (tab[this.kind[nc]] || PATH_SCALE);
+          if (d[nc] >= 0 && d[nc] <= nd) continue;
+          d[nc] = nd;
+          ring[nd % W].push(nc);
+          pending++;
+        }
+      }
+      b.length = 0;
+      cur++;
+    }
   }
 
   /** Shoot a BFS distance field from `tCell` into `d` (reused storage). */

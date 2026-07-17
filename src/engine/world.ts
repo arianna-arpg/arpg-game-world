@@ -124,9 +124,9 @@ import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../w
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
-import type { WalkField } from '../world/walk';
+import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
-import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../world/regions';
+import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG, regionPathCost } from '../world/regions';
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
@@ -16227,6 +16227,7 @@ export class World {
       if (worn) a.carriedGear = worn;
     }
     if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
+    if (def.pathCosts) a.pathCosts = def.pathCosts; // the wayfaring overrides (the magma worm's bath)
     // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
     // update sweep springs it when an enemy strays inside the wake radius.
     if (def.ambush) {
@@ -22485,12 +22486,12 @@ export class World {
   /**
    * Lay down TEMPORARY real terrain (a skill-made ice patch). It joins the
    * doodad and ground lists, so every terrain rule applies in full — then
-   * melts away when its time is up.
+   * melts away when its time is up. `kind` is any REGISTERED ground
+   * RegionKind (regions.ts — the derived GROUND_KINDS predicate senses it,
+   * the chunk baker paints it, the wayfaring fields price it); the old
+   * literal six-kind union was the registry's stale shadow.
    */
-  addTempGround(
-    pos: Vec2, kind: 'ice' | 'mud' | 'bog' | 'swamp' | 'water' | 'tentacle_field',
-    radius: number, duration: number,
-  ): void {
+  addTempGround(pos: Vec2, kind: string, radius: number, duration: number): void {
     const doodad: Doodad = { pos: vec(pos.x, pos.y), radius, kind };
     this.doodads.push(doodad);
     this.grounds.push(doodad);
@@ -29951,13 +29952,14 @@ export class World {
   private applyRegionEffects(a: Actor, kindId: string, deep: boolean, entered: boolean, dt: number, drained: Set<string>): void {
     const def = regionKind(kindId);
     if (!def) return;
-    // GROUND IMMUNITY: a body whose habitat IS this ground, or whose def
+    // GROUND IMMUNITY (groundInsured — THE one predicate, shared with the
+    // wayfaring fabric's travel pricing so what can't hurt a body is never
+    // detoured around): a body whose habitat IS this ground, or whose def
     // lists it in immuneGround, ignores the region OUTRIGHT — statuses,
     // enter effects, drains and damage alike (the magma lurker is not
     // mired in its own melt). FLIERS skip ground regions wholesale: an
     // airborne body is not IN the bog, the water, or the lava it crosses.
-    if (a.flying) return;
-    if (a.habitat?.kind === kindId || a.immuneGround?.includes(kindId)) return;
+    if (this.groundInsured(a, kindId)) return;
     // Per-tick standing status (depth-aware variant for water).
     const src = def.label ?? kindId;
     const stand = deep && def.standStatusDeep ? def.standStatusDeep : def.standStatus;
@@ -34409,6 +34411,84 @@ export class World {
   private convexNav: GridWalkField | null = null;
   private convexNavKey = '';
 
+  // --- TRAVEL PREFERENCE (the wayfaring fabric) -----------------------------
+  /** Interned PathProfiles: identical priced views share one object (and so
+   *  one cost table + one distance field per target inside the grids). Keys
+   *  are deviation-lists, so the map stays a handful of entries per session. */
+  private pathProfiles = new Map<string, PathProfile>();
+
+  /** GROUND INSURANCE — the ONE predicate for "this ground cannot touch this
+   *  body": fliers wholesale, habitat-matched natives, MonsterDef.immuneGround
+   *  bearers. Terrain effects (applyRegionEffects) and travel pricing
+   *  (pathProfileFor) both read it, so what a body wades free it also never
+   *  detours around — pain and preference can't disagree by construction. */
+  groundInsured(a: Actor, kindId: string): boolean {
+    return a.flying || a.habitat?.kind === kindId || a.immuneGround?.includes(kindId) || false;
+  }
+
+  /** An actor's PRICED VIEW of the ground (walk.ts PathProfile), interned.
+   *  Resolution per kind, first answer wins:
+   *    1. Actor.pathCosts override (MonsterDef.pathCosts — <1 relishes: the
+   *       magma worm's bath; >1 dreads beyond the row's own price);
+   *    2. groundInsured → neutral (what can't hurt you isn't avoided);
+   *    3. the RegionKind's own regionPathCost (explicit row ?? derived).
+   *  A HEEDLESS/LEMMING mind (MoveSpec.hazards, stamped to aiHazardMode)
+   *  prices everything neutral — the authored bog-shambler; most actors take
+   *  the shared DEFAULT profile through the no-deviation fast path. */
+  pathProfileFor(a: Actor): PathProfile {
+    const mode = a.aiHazardMode;
+    if (mode === 'heedless' || mode === 'lemming') return World.PATH_UNIFORM;
+    const hab = a.habitat?.kind;
+    if (!a.pathCosts && !a.immuneGround && hab === undefined) return World.PATH_DEFAULT;
+    // Deviation-bearing bodies memo their profile (the sources are spawn-
+    // static; anything that ever grafts pathCosts/immuneGround mid-life must
+    // clear pathProfileMemo — see the Actor field doc).
+    const memo = a.pathProfileMemo;
+    if (memo && memo.mode === mode) return memo.p;
+    // Deviations from the default view: insured kinds neutralize, overrides win.
+    const dev: Record<string, number> = {};
+    if (hab !== undefined) dev[hab] = 1;
+    if (a.immuneGround) for (const k of a.immuneGround) dev[k] = 1;
+    if (a.pathCosts) for (const k in a.pathCosts) dev[k] = a.pathCosts[k];
+    const key = Object.keys(dev).sort().map(k => k + ':' + dev[k]).join('|');
+    let p = this.pathProfiles.get(key);
+    if (!p) {
+      p = { key, costOf: (kind: string) => dev[kind] ?? regionPathCost(kind) };
+      this.pathProfiles.set(key, p);
+    }
+    a.pathProfileMemo = { mode, p };
+    return p;
+  }
+
+  /** The shared no-deviation profile: every kind at its registry price. */
+  private static readonly PATH_DEFAULT: PathProfile = { key: 'default', costOf: regionPathCost };
+  /** The heedless view: every ground neutral (uniform → the classic field). */
+  private static readonly PATH_UNIFORM: PathProfile = { key: 'uniform', costOf: () => 1 };
+
+  /** SELF-PRESERVATION probe (the steering veto's question): would a SELF-
+   *  DIRECTED step onto (x,y) put this body into a self-destruct boundary —
+   *  fall/skyfall/descend/eject/instakill region cells (void, abyss, chasm,
+   *  open sky)? The airborne, the floating, mid-dash/leap bodies, and bodies
+   *  INSURED against the kind (a pit-dweller's habitat) have nothing to fear;
+   *  forced displacement (knockback, pulls) never asks — shoving a hostile
+   *  past a lip stays the payoff it always was. Convex zones read null-cost
+   *  today (classic chasm DOODADS block outright); the pitfall fabric's
+   *  fall-able pit doodads are the named extension seam — when a pit is a
+   *  DROP instead of a wall, this probe should learn to see it too. */
+  fallHazardAt(a: Actor, x: number, y: number): boolean {
+    const wf = this.walk;
+    if (!wf?.regionAt) return false; // convex zones: no fall regions to fear
+    // Ground first (a byte read) — the actor-side exemptions (stat query for
+    // levitation) only run when a fall boundary is actually ahead.
+    const kindId = wf.regionAt(x, y);
+    const rk = regionKind(kindId);
+    if (!rk || rk.walkable || rk.blocks) return false;
+    const bp = rk.boundaryPolicy?.kind;
+    if (bp !== 'fall' && bp !== 'skyfall' && bp !== 'descend' && bp !== 'eject' && bp !== 'instakill') return false;
+    if (a.flying || a.dash || a.leap || this.levitating(a)) return false;
+    return !this.groundInsured(a, kindId);
+  }
+
   /** The zone's PATHING authority: the walk grid where one exists (warrens,
    *  structures), else a lazy NAV GRID raked over the convex zone's blocking
    *  doodads — so flow-field pathing works on plains exactly as it does in
@@ -34457,9 +34537,55 @@ export class World {
         solids.push(d);
       }
     }
+    // TRAVEL PREFERENCE: paint the SENSED ground kinds under every walkable
+    // cell a ground disc covers — sampled through groundAt itself, never a
+    // re-derivation, so bridges (null), fords (shallow), way-masked decks and
+    // the nastiest-ground priority all price exactly as they play (one-source
+    // doctrine: the caldera's lava lakes and the fen's bogs finally EXIST to
+    // pathing). Kind cells stay walkable — only the weighted fields read them;
+    // region EFFECTS keep flowing from groundAt/walk alone (this.walk is null
+    // on convex zones, so painting here double-applies nothing).
+    this.paintNavGrounds(g);
     for (const s of spans) g.fillDisc(s.pos.x, s.pos.y, s.radius, 'ground');
     for (const o of solids) this.stampNavSurface(g, o);
     return g;
+  }
+
+  /** Sample groundAt at each nav cell center under every ground disc and
+   *  stamp the reported kind ('deep_water' where the water reads deep — its
+   *  own registry row prices the swim). Bounded by total WET AREA, not grid
+   *  area, and each cell samples ONCE per rebuild however many discs cover
+   *  it (a flood wake lays chains four pools deep — without the dedup the
+   *  marsh entry re-priced the same water repeatedly); cells outside a
+   *  disc's own circle are skipped before the groundAt query. A groundless
+   *  zone pays one empty loop. */
+  private paintNavGrounds(g: GridWalkField): void {
+    if (this.grounds.length === 0) return;
+    const cell = g.cell;
+    const cols = Math.ceil(this.arena.w / cell);
+    const seen = new Uint8Array(cols * Math.ceil(this.arena.h / cell) + cols + 1);
+    const probe = vec(0, 0);
+    for (const d of this.grounds) {
+      const r2 = (d.radius + cell * 0.5) ** 2;
+      const x0 = Math.max(cell / 2, Math.floor((d.pos.x - d.radius) / cell) * cell + cell / 2);
+      const y0 = Math.max(cell / 2, Math.floor((d.pos.y - d.radius) / cell) * cell + cell / 2);
+      for (let cy = y0; cy <= Math.min(this.arena.h, d.pos.y + d.radius); cy += cell) {
+        for (let cx = x0; cx <= Math.min(this.arena.w, d.pos.x + d.radius); cx += cell) {
+          if ((cx - d.pos.x) ** 2 + (cy - d.pos.y) ** 2 > r2) continue; // bbox corner, not the disc
+          const si = Math.floor(cy / cell) * cols + Math.floor(cx / cell);
+          if (seen[si]) continue; // one sample per cell per rebuild
+          seen[si] = 1;
+          if (!g.isWalkable(cx, cy)) continue; // bounds shape holds
+          probe.x = cx; probe.y = cy;
+          const ground = this.groundAt(probe);
+          if (!ground) continue;
+          const kind = ground.kind === 'water' && ground.deep ? 'deep_water' : ground.kind;
+          if (kind === 'ground') continue;
+          // quiet: no baker ever reads the nav grid's dirty ring — don't churn it.
+          g.fillRegion(cx, cy, cx, cy, kind, true);
+        }
+      }
+    }
   }
 
   /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.

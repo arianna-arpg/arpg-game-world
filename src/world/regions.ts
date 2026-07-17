@@ -164,6 +164,19 @@ export interface RegionKind {
   /** Direct move-speed multiplier while standing in (for kinds that don't use a
    *  status). Existing grounds keep using statuses; this is for new kinds. */
   moveScale?: number;
+  /** TRAVEL PREFERENCE (the wayfaring fabric): how much a pathing mind pays to
+   *  cross a cell of this ground, as a multiplier of plain floor (1 = neutral,
+   *  >1 = detoured around in proportion, <1 = actively sought — roads pull).
+   *  DETERRENCE, never a wall: a finite cost means a mind still wades a thin
+   *  lava band when the detour is longer than the pain. Omit and the cost is
+   *  DERIVED from the row's own declared effects (regionPathCost: standDamage /
+   *  enterStatus / survival / moveScale — future hazard rows are priced safely
+   *  by default). Per-ACTOR modulation lives on the profile, not here: the
+   *  terrain-damage insurance (fliers, habitat, immuneGround) neutralizes a
+   *  kind's cost, and MonsterDef.pathCosts overrides it outright (a magma worm
+   *  relishes the melt at 0.5). Non-walkable kinds never need this — the mask
+   *  already refuses them. */
+  pathCost?: number;
   /** Pure-graphical region — no gameplay effect at all. */
   visualOnly?: boolean;
   visual?: RegionVisualSpec;
@@ -239,7 +252,10 @@ export function survivalResource(id: string): SurvivalResourceDef | undefined { 
 const REGION_KINDS: Record<string, RegionKind> = {};
 
 /** Register a region kind under an open-string id. */
-export function registerRegion(def: RegionKind): void { REGION_KINDS[def.id] = def; }
+export function registerRegion(def: RegionKind): void {
+  REGION_KINDS[def.id] = def;
+  pathCostMemo.delete(def.id); // a late/re-registered row re-prices (wayfaring memo)
+}
 
 /** Look up a region kind (undefined for an unknown id). */
 export function regionKind(id: string | undefined): RegionKind | undefined {
@@ -270,6 +286,59 @@ export const LIQUID_CFG = {
   deepInset: 22,
 };
 
+/** THE WAYFARING TUNABLES — travel-preference framework knobs (never inline
+ *  magic). Derivation defaults price a hazard row that declares effects but no
+ *  explicit pathCost; the clamps bound every resolved cost (explicit, derived,
+ *  per-actor override alike) so one bad data row can't wedge the flow field;
+ *  vetoLookahead is the AI self-preservation probe distance. */
+export const PATH_CFG = {
+  /** Derived cost for a row with standDamage (typed dps while standing —
+   *  the lava class). High: crossing should be a last resort, not a wall. */
+  standDamageCost: 12,
+  /** Derived cost for a row with a once-on-enter sting (the bog-rot class). */
+  enterCost: 3,
+  /** Derived cost for a row that drains a survival resource (breath class). */
+  survivalCost: 3,
+  /** Clamp floor for any resolved cost — relish included (0 would make a
+   *  kind read FREE and vacuum every path through it). */
+  minCost: 0.25,
+  /** Clamp ceiling. Sized to the flow field's fixed-point byte headroom
+   *  (see gridWalk PATH_SCALE): 30 × 8 = 240 < 255. */
+  maxCost: 30,
+  /** SELF-PRESERVATION VETO: how far past its own body radius a steering
+   *  mind probes the ground ahead before refusing a step into a fall/self-
+   *  destruct boundary (world units). */
+  vetoLookahead: 20,
+};
+
+/** Resolved travel cost for a region kind: the row's explicit pathCost, else
+ *  DERIVED from its own declared effects (the safety net that prices future
+ *  hazard rows without anyone remembering to). Deliberately mechanical — only
+ *  unambiguous pain derives (standDamage / enterStatus / survival / moveScale);
+ *  a standStatus alone derives NOTHING (concealment is a benefit, not a toll —
+ *  the slow grounds carry explicit rows instead). Memoized; registerRegion
+ *  invalidates, so late package rows re-price. */
+const pathCostMemo = new Map<string, number>();
+export function regionPathCost(id: string): number {
+  const hit = pathCostMemo.get(id);
+  if (hit !== undefined) return hit;
+  const rk = REGION_KINDS[id];
+  let c = 1;
+  if (rk && rk.walkable) {
+    if (rk.pathCost !== undefined) {
+      c = rk.pathCost;
+    } else {
+      if (rk.standDamage) c = Math.max(c, PATH_CFG.standDamageCost);
+      if (rk.enterStatus) c = Math.max(c, PATH_CFG.enterCost);
+      if (rk.survival) c = Math.max(c, PATH_CFG.survivalCost);
+      if (rk.moveScale !== undefined && rk.moveScale > 0) c = Math.max(c, 1 / rk.moveScale);
+    }
+    c = Math.min(PATH_CFG.maxCost, Math.max(PATH_CFG.minCost, c));
+  }
+  pathCostMemo.set(id, c);
+  return c;
+}
+
 // --- DEFAULT ROWS -----------------------------------------------------------
 // Grid substrate kinds (no terrain effect; pure collision policy).
 registerRegion({ id: 'ground', walkable: true, blocks: false });
@@ -286,19 +355,21 @@ registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, bl
 
 // Existing DOODAD grounds, migrated VERBATIM from the updateTerrainEffects switch
 // (same statuses, sources, durations, and zone-level-scaled bog poison).
-registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired' });
-registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired' });
+// TRAVEL PREFERENCE (pathCost): the slow grounds price their slog explicitly —
+// derivation deliberately refuses to guess from standStatus names (regionPathCost).
+registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired', pathCost: 2 });
+registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired', pathCost: 2 });
 // ASHFIELD — the wildfire front's wake (the creep fabric's convert lane):
 // dead burnt ground, fully walkable, no hazard and no molten glow — the
 // danger PASSED here, that's the point. moveScale 1 is deliberate: a benign
 // effect keeps it in doodadGroundIds so groundAt senses it, clients rebuild
 // it, and affinity tables can name it.
 registerRegion({ id: 'ashfield', walkable: true, blocks: false, label: 'the ashfield', moveScale: 1 });
-registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden' });
-registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple' });
-registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true });
+registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden', pathCost: 2.2 });
+registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8 });
+registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true, pathCost: 1.25 });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
-registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged',
+registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5,
   // bog_rot, NOT combat 'poison': its own row carries the same level-scaled
   // dot without the combat-poison screen vignette — crossing a bog line
   // must sting, never read as the renderer breaking (see status.ts).
@@ -309,9 +380,9 @@ registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', sta
 // lane), a true swim where fused sinks pool deep, and the Coilborn wade
 // both without noticing (MonsterDef.immuneGround).
 registerRegion({ id: 'tide_pool', walkable: true, blocks: false, label: 'the tide pool',
-  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true });
+  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 1.4 });
 registerRegion({ id: 'brine_sink', walkable: true, blocks: false, label: 'the brine',
-  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple',
+  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 2.6,
   // brine_burn, NOT combat 'poison' — same caustic dot, no combat-poison
   // screen vignette: the Coast playtest's "shaders break past a line" was
   // this exact borrow snapping the wash at every sink shoreline.
@@ -324,6 +395,11 @@ registerRegion({ id: 'brine_sink', walkable: true, blocks: false, label: 'the br
 // the crossing a decision, not a stroll; the impassable molten WALL (the
 // caldera's spiral) is the separate magma_core doodad kind.
 registerRegion({ id: 'lava', walkable: true, blocks: false, label: 'the lava',
+  // pathCost 14: the uninsured detour HARD (a lane one cell wide is still worth
+  // a fourteen-cell walk around) but finitely — a mind crosses a thin band when
+  // the way around is longer than the pain. The insured (habitat / immuneGround
+  // / fliers) price it neutral through the profile, never through this row.
+  pathCost: 14,
   standStatus: 'mired',
   standDamage: { dps: 14, dpsPerLevel: 2.2, type: 'fire' },
   enterStatus: { id: 'burn', amount: 1.2, amountPerLevel: 0.5, duration: 2 },
@@ -333,26 +409,29 @@ registerRegion({ id: 'lava', walkable: true, blocks: false, label: 'the lava',
 // sustained lane). The drag is moveScale-mild ON PURPOSE: no icon for wading
 // through shallows of what used to be somebody.
 registerRegion({ id: 'blood_pool', walkable: true, blocks: false, label: 'the blood',
-  moveScale: 0.94,
+  moveScale: 0.94, pathCost: 1.3,
   enterStatus: { id: 'faintness', duration: 6 },
   enterText: { text: 'light-headed…', color: '#d8ccd8' } });
 // CHYME — the Gutworks' digesting bile: the lava doctrine in acid. Typed
 // chaos per second through resistance only, a mired slog, queasy on entry —
 // capping chaos res is the build answer, wading anyway the desperate one.
 registerRegion({ id: 'chyme_pool', walkable: true, blocks: false, label: 'the bile',
+  pathCost: 10,
   standStatus: 'mired',
   standDamage: { dps: 9, dpsPerLevel: 1.8, type: 'chaos' },
   enterStatus: { id: 'queasy', duration: 5 },
   enterText: { text: 'stomach turns!', color: '#a8b86a' } });
-registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared',
+registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared', pathCost: 4.5,
   enterStatus: { id: 'stun', duration: 0.6 }, enterText: { text: 'ensnared!', color: '#7fce6a' } });
 // ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so
 // there's no status icon for so minor an effect). The first consumer of the moveScale seam.
-registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04 });
+// pathCost 0.9: the road PULLS — flow-field minds drift onto live ways when
+// one runs their direction (composes with the coherence fabric's clearways).
+registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04, pathCost: 0.9 });
 // (fog_bank region RETIRED: volumetric fog is the LIVING fog fabric now —
 //  engine/fog.ts grants fogveiled from roaming banks; no ground region.)
 // WEBBING: sticky sheets slow like mire (spider country).
-registerRegion({ id: 'web', walkable: true, blocks: false, label: 'the webbing', standStatus: 'mired',
+registerRegion({ id: 'web', walkable: true, blocks: false, label: 'the webbing', standStatus: 'mired', pathCost: 2.2,
   enterText: { text: 'webbed!', color: '#d8d4c8' } });
 // REEDS: water-margin blades conceal like brush (the ambush margin).
 registerRegion({ id: 'reeds', walkable: true, blocks: false, label: 'the reeds', standStatus: 'concealed' });

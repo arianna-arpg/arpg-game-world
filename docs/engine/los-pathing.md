@@ -121,3 +121,71 @@ everything) and **`MoveSpec.pathing: 'none'`** minds — mindlessness as an
 authored, machine-shiftable trait (zombies pile at walls; the clever thing
 walks around and reopens its firing line, which is what makes the hold-fire
 gate read as intelligence).
+
+## Travel preference (THE WAYFARING FABRIC)
+
+Ground has a PRICE now, and a mind's feet weigh it. Everything is data on
+seams that already existed; nothing names a monster or a terrain in engine
+code.
+
+**The vocabulary, layer by layer (first answer wins):**
+
+- **`RegionKind.pathCost`** (regions.ts) — the kind's common price as a
+  multiplier of plain floor: 1 neutral, >1 detoured in proportion (lava 14,
+  bog 3.5, water 1.8), <1 SOUGHT (road 0.9 — packs drift onto live ways,
+  composing with the coherence fabric's clearways). Omitted rows DERIVE
+  mechanically from their own declared effects (`regionPathCost`:
+  standDamage → `PATH_CFG.standDamageCost`, enterStatus/survival → their
+  knobs, moveScale → its inverse) — a future hazard row is priced safely by
+  default, and a standStatus alone deliberately derives NOTHING
+  (concealment is a benefit, not a toll).
+- **GROUND INSURANCE** (`World.groundInsured` — THE one predicate, shared
+  verbatim with terrain damage): fliers, habitat-matched natives, and
+  `MonsterDef.immuneGround` bearers price an insured kind NEUTRAL. What
+  cannot hurt a body is never detoured around — pain and preference agree
+  by construction.
+- **`MonsterDef.pathCosts`** — the body's OWN price per kind, over
+  everything above. `< 1` RELISHES: the magma worm (`{ lava: 0.5 }`) treats
+  the caldera's pools as a bath and swims them by choice while everything
+  mortal picks along the shore. Validated against the region registry.
+- **`MoveSpec.hazards`** — the mind lever, stamped live per tick
+  (machine-shiftable per phase like `pathing`): `'avoid'` (default) prices
+  ground and honors the veto below; `'heedless'` prices everything neutral
+  (the zombie wades the bog uncaring) but KEEPS the veto — mindless is not
+  suicidal; `'lemming'` drops both — authored self-destruction, one word
+  away (bait a charge phase off a cliff by design).
+
+**The machinery** (`world/gridWalk.ts`): profiles intern on the World
+(`pathProfileFor`) and resolve to per-grid byte cost tables; non-uniform
+profiles shoot Dial's-algorithm WEIGHTED distance fields (deterministic,
+FIFO-in-bucket, `PATH_SCALE` fixed-point) through the same LRU + budgeted
+stale-refresh the classic BFS uses. A UNIFORM view (heedless minds,
+hazard-free grids — every interior) collapses onto the classic unweighted
+field byte-for-byte: the machinery is free where nothing is priced. The
+any-angle beeline gates on **`linePreferred`** — a priced cell breaks the
+shortcut exactly like a wall would (cheap cells never do), so hazards
+actually reach the flow field. Convex zones join through
+`paintNavGrounds`: nav cells sample `groundAt` itself (one-source: bridges
+null, fords wade, way-masked decks stay dry, nastiest-ground priority — the
+caldera's lava lakes finally EXIST to pathing), deduped one sample per cell
+per rebuild. Runtime-stamped grounds price on convex zones; walk-GRID zones
+price whatever their generator painted as regions (gen-time liquids
+already are) — runtime stamps on grid zones are a known, deliberate gap.
+
+**THE SELF-PRESERVATION VETO** (`steerMove` in ai.ts — every self-directed
+step in the AI lands through it): a step about to carry the body into a
+fall/self-destruct boundary (`World.fallHazardAt`: fall / skyfall / descend
+/ eject / instakill region cells — void, abyss, chasm, open sky;
+insurance-aware; the airborne, floating, and mid-dash exempt) is REFUSED —
+slide along the rim on the axis that still stands, else hold ground. This
+kills the old lemming loop (a monster grinding itself dead against the
+fall recovery at ~18% max life a pop chasing an unreachable target).
+Knockback, pulls, and scripted displacement never come through the gate:
+shoving a body past the pit's lip stays the payoff it always was.
+
+Pinned end to end by `balance/probe_pathpref.ts` (37 checks on the real
+engine: pricing + derivation, uniform byte-parity, the detour, finite
+deterrence, relish, beeline gating, profile interning + insurance
+agreement, convex-nav sensing incl. deep-water cores, the behavioral
+wolf-dry/worm-bathes arc, and the veto with its heedless-holds /
+lemming-falls controls).

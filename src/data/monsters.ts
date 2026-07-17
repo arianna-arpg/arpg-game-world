@@ -455,8 +455,18 @@ export interface MonsterDef {
   /** GROUND IMMUNITY: region kinds whose standDamage and heat wash this
    *  body ignores (lava natives). Habitat-matched bodies are implicitly
    *  exempt from their OWN ground; this covers kin who merely visit —
-   *  the magma swimmer crossing a pool it isn't burrowed in. */
+   *  the magma swimmer crossing a pool it isn't burrowed in. The wayfaring
+   *  fabric reads the SAME insurance: an insured kind prices neutral to
+   *  this body's pathing (what can't hurt you isn't detoured around). */
   immuneGround?: string[];
+  /** TRAVEL-COST OVERRIDES (the wayfaring fabric, docs/engine/los-pathing.md):
+   *  this creature's OWN price for crossing a region kind, replacing the
+   *  registry row's pathCost in its flow fields. <1 RELISHES the ground —
+   *  the magma worm treats the lava lane as a bath and drifts into it by
+   *  choice; >1 dreads it beyond the common price (a spirit that recoils
+   *  from running water). Wins over insurance either way; keys validated
+   *  against the region registry. */
+  pathCosts?: Record<string, number>;
   /** CREEP HEART (the creep fabric, engine/creep.ts): this body anchors a
    *  living membrane patch of the named creep KIND — planted at spawn,
    *  growing out from under it, RECOILING when it dies (the source is
@@ -831,7 +841,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       behavior: { reaction: [0.6, 1.3] },
       // MINDLESS FEET (pathing 'none'): it walks AT you, wall or no wall —
       // shamblers smear along masonry while the living route around it.
-      move: { pathing: 'none' },
+      // And HEEDLESS (the wayfaring lever): the dead wade the bog and the
+      // burn uncaring — no ground is priced. The fall veto still holds
+      // (mindless is not suicidal; only 'lemming' walks off the rim).
+      move: { pathing: 'none', hazards: 'heedless' },
     },
   },
 
@@ -854,8 +867,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       perception: { arcDeg: 100, rearMul: 0.2, attentionSpan: [3, 6], alertMul: 0.15 },
       // Slower to remember violence than even the walking dead.
       behavior: { reaction: [0.9, 1.6] },
-      // Mindless feet: it drags itself straight at you (pathing 'none').
-      move: { pathing: 'none' },
+      // Mindless feet: it drags itself straight at you (pathing 'none'),
+      // through whatever ground is in the way (heedless — the dead don't
+      // price pain; the fall veto still holds).
+      move: { pathing: 'none', hazards: 'heedless' },
     },
   },
 
@@ -1861,8 +1876,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['claw'],
     xp: 7,
-    // The tide doesn't THINK — it pours straight and piles at the stone.
-    brain: { type: 'swarm', move: { pathing: 'none' } },
+    // The tide doesn't THINK — it pours straight and piles at the stone,
+    // heedless of what it pours through (the fall veto still holds).
+    brain: { type: 'swarm', move: { pathing: 'none', hazards: 'heedless' } },
     faction: 'undead',
     detection: 0.75,
   },
@@ -2622,6 +2638,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.75)],
     skills: ['firebolt', 'claw'],
     xp: 34,
+    // THE BATH (the wayfaring fabric's debut relish): the melt cannot touch
+    // it (immuneGround), and at pathCost 0.5 its flow fields actively SEEK
+    // the lava lanes — a magma worm crossing the caldera rolls through the
+    // pools by choice while everything mortal picks its way around the shore.
+    immuneGround: ['lava', 'magma_core'],
+    pathCosts: { lava: 0.5 },
     brain: { type: 'swarm' },
     worm: { length: 7, spacing: 17, taper: 0.86 },
   },
@@ -4263,6 +4285,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.6)],
     skills: ['firebolt'], xp: 6,
     faction: 'emberkin',
+    // The tribe is BORN of the burn (ember-bodied): the melt is home ground —
+    // immune outright, and mildly drawn to it when routing (pathCost 0.85).
+    immuneGround: ['lava', 'magma_core'],
+    pathCosts: { lava: 0.85 },
     deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'fire', radius: 42, coalesce: 0.4 },
     brain: { type: 'swarm' },
   },
@@ -4279,6 +4305,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.6)],
     skills: ['ember_dart', 'claw'], xp: 4,
     faction: 'emberkin',
+    immuneGround: ['lava', 'magma_core'], // ember-bodied (the tribe's ground doctrine)
+    pathCosts: { lava: 0.85 },
     presence: { to: 16, fadeOut: 6 },
     brain: { type: 'swarm' },
   },
@@ -4300,6 +4328,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.5)],
     skills: ['claw'], xp: 12,
     faction: 'emberkin',
+    immuneGround: ['lava', 'magma_core'], // ember-bodied (the tribe's ground doctrine)
+    pathCosts: { lava: 0.85 },
     // A hound turns on whatever bites it — and forgets just as fast.
     aggro: { fury: 1.4, waver: 1.4 },
     brain: { type: 'flanker' },
@@ -4311,6 +4341,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.75)],
     skills: ['claw'], xp: 26,
     faction: 'emberkin',
+    immuneGround: ['lava', 'magma_core'], // slag walks its own melt (the tribe's ground doctrine)
+    pathCosts: { lava: 0.85 },
     shellGuard: { side: 'front', max: 50, arcDeg: 130, regenDelay: 5, regenRate: 10 },
     turnSpeed: 3.2,
     // Slag doesn't startle: single-minded, slow to turn, slower to forgive.
@@ -4324,6 +4356,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.6)],
     skills: ['firebolt'], xp: 24,
     faction: 'emberkin',
+    // The priest walks the melt as PROOF OF FAITH (immune) but does not seek
+    // it — cloth-robed flesh, no relish row: the vents test, they don't invite.
+    immuneGround: ['lava', 'magma_core'],
     brain: {
       type: 'caster',
       rules: [{
@@ -4645,6 +4680,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.75), mod('damage', 'increased', 0.15, ['fire'])],
     skills: ['firebolt', 'flame_wave'],
     xp: 0,
+    // A construct OF fire: the summoner's golem wades the caldera's pools
+    // its keeper must walk around — minion build texture, pure data.
+    immuneGround: ['lava', 'magma_core'],
   },
 
   ice_golem: {
@@ -4726,6 +4764,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 36, moveSpeed: 130, mana: 120, manaRegen: 9 },
     mods: [mod('fireRes', 'flat', 0.7)],
     skills: ['firebolt', 'meteor_storm'], xp: 18, faction: 'demon', adorn: 'wings',
+    // EMBER-BODIED (the Legion's ground doctrine): demons made of cinder are
+    // immune to the melt outright; flesh demons (imps, hounds) keep high
+    // fireRes as MITIGATION instead — the resistance-vs-immunity gradient.
+    immuneGround: ['lava', 'magma_core'],
     // A siege-castle garrison fiend BLINKS into a free tower slot and hurls
     // fire from the crown (the Arreat-plateau imp, as pure data).
     detection: 1.3, brain: {
@@ -4744,6 +4786,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 24, moveSpeed: 195, accuracy: 60, mana: 0 },
     mods: [mod('fireRes', 'flat', 0.5)],
     skills: [], xp: 12, faction: 'demon', adorn: 'horns',
+    immuneGround: ['lava', 'magma_core'], // ember-bodied (the Legion's ground doctrine)
     // Explicit burst (the last legacy explodeOnDeath scalar, converted 1:1 to
     // its auto-map). A fast bomber could tune coalesce down to ~0.35.
     detection: 1.0, deathBurst: { mode: 'implode', damageFrac: 1.4, coalesce: 0.8 },
@@ -4770,6 +4813,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 92, moveSpeed: 160, accuracy: 110, mana: 40, manaRegen: 5 },
     mods: [mod('fireRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3)],
     skills: ['heavy_strike', 'infernal_rift'], xp: 28, faction: 'demon', adorn: 'wings',
+    immuneGround: ['lava', 'magma_core'], // ember-bodied (the Legion's ground doctrine)
     detection: 1.4, brain: { type: 'assassin', withdraw: 0.7 },
   },
   // The Legion's champion (WARLORD_OF.demon) and the infernal_rift zone boss.
@@ -4781,6 +4825,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       mod('damage', 'increased', 0.35)],
     skills: ['infernal_rift', 'ground_slam', 'meteor_storm', 'war_cry'],
     xp: 160, boss: true, faction: 'demon', adorn: 'wings',
+    immuneGround: ['lava', 'magma_core'], // the Rift-Tyrant does not pick around puddles
     // DEF-level presence: the champion never marches in shallow war zones,
     // WHEREVER his id is tabled. Invasion set-pieces spawn him explicitly
     // (epicenter/realm), so the story beats are untouched.
@@ -4802,6 +4847,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 12, moveSpeed: 190, accuracy: 70, mana: 0 },
     mods: [mod('fireRes', 'flat', 0.4)],
     skills: ['claw'], xp: 4, faction: 'demon', adorn: 'horns',
+    immuneGround: ['lava', 'magma_core'], // ember-bodied (the Legion's ground doctrine)
     scaleVariance: [0.85, 1.1],
     deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.6 },
     detection: 1.2, brain: { type: 'swarm' },
@@ -7734,6 +7780,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 120, moveSpeed: 100, accuracy: 108, armor: 30, mana: 70, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
     immuneGround: ['lava', 'magma_core'],
+    pathCosts: { lava: 0.45 }, // the lava-lane burrower RELISHES its element above dry ground
     skills: ['claw', 'firebolt'], xp: 36,
     worm: { length: 6, spacing: 15, taper: 0.88 },
     detection: 1.2,

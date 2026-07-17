@@ -23,7 +23,7 @@ import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
 import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES } from '../engine/stats';
-import { regionKind } from '../world/regions';
+import { regionKind, PATH_CFG } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
@@ -850,6 +850,30 @@ export function validateContent(): void {
     if (m.habitat && hasDoodadRule(m.habitat.kind)
       && doodadRuleOf(m.habitat.kind).blocksMove && !m.noObjective) {
       warn(`${m.id}: habitat '${m.habitat.kind}' blocks movement but the def lacks noObjective — a build that cannot reach it soft-locks the clear`);
+    }
+    // THE WAYFARING ROWS: every pathCosts key must be a REGISTERED region
+    // kind (a typo'd id would silently never price), values inside the
+    // framework clamps (outside they'd quietly pin to the clamp — say so),
+    // and pricing a kind that cannot be walked is a dead row worth naming.
+    if (m.pathCosts) {
+      for (const k in m.pathCosts) {
+        const rk = regionKind(k);
+        if (!rk) warn(`${m.id}: pathCosts names unregistered region kind '${k}' — the row never prices`);
+        else if (!rk.walkable) warn(`${m.id}: pathCosts prices non-walkable kind '${k}' — flow fields never enter it; the row is dead`);
+        const v = m.pathCosts[k];
+        if (!(v >= PATH_CFG.minCost && v <= PATH_CFG.maxCost)) {
+          warn(`${m.id}: pathCosts['${k}'] = ${v} outside [${PATH_CFG.minCost}, ${PATH_CFG.maxCost}] — it will clamp (PATH_CFG)`);
+        }
+      }
+    }
+    // immuneGround rows should name kinds that exist SOMEWHERE — region
+    // registry or doodad rules (magma_core is a doodad-band immunity).
+    if (m.immuneGround) {
+      for (const k of m.immuneGround) {
+        if (!regionKind(k) && !hasDoodadRule(k)) {
+          warn(`${m.id}: immuneGround names '${k}' — neither a region kind nor a doodad rule; the insurance never pays`);
+        }
+      }
     }
     // A body wake must shed a real GROUND skill — anything else free-casts
     // into the delivery switch's wrong branch every stride.

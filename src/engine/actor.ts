@@ -498,6 +498,13 @@ export class Actor {
    *  straight-line steer (mindless things pile at walls, an authored trait);
    *  absent/'route' = follow the zone's walkable flow-field. */
   aiPathing?: 'none' | 'route';
+  /** MoveSpec.hazards, stamped per AI tick (machine-shiftable like every
+   *  move knob) — the wayfaring fabric's mind lever. absent/'avoid' = price
+   *  hazards + refuse self-directed steps into fall boundaries; 'heedless' =
+   *  price everything neutral (the bog-shambler wades uncaring) but keep the
+   *  fall veto (mindless ≠ suicidal); 'lemming' = both off — the authored
+   *  self-destruction (a sapper's charge, a panicked rout off the rim). */
+  aiHazardMode?: 'avoid' | 'heedless' | 'lemming';
   /** World time the current engagement began (-1 = never engaged). */
   aiEngagedAt = -1;
   /** ATTENTION SPAN (dim brains): the lock lapses at this world time — the
@@ -999,6 +1006,15 @@ export class Actor {
    *  standDamage and heat wash this body ignores — the magma bestiary
    *  swims its own melt (habitat-matched bodies are exempt implicitly). */
   immuneGround?: string[];
+  /** TRAVEL-COST OVERRIDES (MonsterDef.pathCosts): this body's own price
+   *  for a region kind, replacing the registry's (World.pathProfileFor).
+   *  <1 RELISHES — the magma worm sinks into lava lanes by choice; >1
+   *  dreads beyond the row's price. Wins over insurance either way. */
+  pathCosts?: Record<string, number>;
+  /** The interned PathProfile this body resolved last (World.pathProfileFor
+   *  memo, keyed by the live hazard mode). Anything that grafts pathCosts /
+   *  immuneGround / habitat onto a LIVING actor must clear this. */
+  pathProfileMemo?: { mode: 'avoid' | 'heedless' | 'lemming' | undefined; p: import('../world/walk').PathProfile };
   /** THE BRIM LEDGER (ChannelSpec.brim): per-skill persistent gauge fill.
    *  The live instance rides along so decay/payoff stat queries see
    *  socketed support mods, and the SPEC rides so converted gathers

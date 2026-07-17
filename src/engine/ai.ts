@@ -33,6 +33,7 @@ import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { socketSpec, type SkillInstance } from './skills';
 import type { World } from './world';
+import { PATH_CFG } from '../world/regions';
 
 /** Scratch for moveToward's spacing neighbor query (single-threaded AI
  *  loop; never held across calls). */
@@ -421,6 +422,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // PATHING (MoveSpec.pathing): stamped every tick so the machines can
   // shift it live (a panicked phase can go 'none'); moveToward reads it.
   actor.aiPathing = tuning.move?.pathing;
+  // HAZARD MIND (MoveSpec.hazards): stamped beside it — the wayfaring
+  // fabric's lever; moveToward's pricing and the steering veto read it.
+  actor.aiHazardMode = tuning.move?.hazards;
 
   // THE WANTS (BrainDef.drives): meters drift on their clocks — events jump
   // them elsewhere (World.bumpDrives: kills feed, wounds sting). Seeded on
@@ -668,7 +672,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         if (actor.wanderDir !== undefined) {
           actor.facing = actor.wanderDir;
           // a stroll, not a march
-          world.moveActor(actor, Math.cos(actor.wanderDir), Math.sin(actor.wanderDir), dt * 0.35);
+          steerMove(actor, world, Math.cos(actor.wanderDir), Math.sin(actor.wanderDir), dt * 0.35);
         }
       }
       return;
@@ -1605,6 +1609,31 @@ function updateCarrion(actor: Actor, world: World, dt: number): boolean {
 
 // === SHARED MOVEMENT HELPERS =====================================================
 
+/** THE SELF-PRESERVATION GATE: every SELF-DIRECTED step in this file lands
+ *  through here — knockback, pulls and scripted displacement never do, so
+ *  shoving a body over a pit's lip stays the payoff it always was. A step
+ *  about to carry the body into a fall/self-destruct boundary
+ *  (World.fallHazardAt — void, abyss, chasm, open sky; insurance-aware, the
+ *  airborne exempt) is REFUSED: slide along the rim on whichever axis still
+ *  stands, else hold ground — a mind at the abyss paces the lip instead of
+ *  grinding itself dead against the fall recovery (the old lemming loop:
+ *  fall, re-orient, fall, ~18% max life a pop). 'lemming' minds
+ *  (MoveSpec.hazards) opt out — authored self-destruction, one word away
+ *  and machine-shiftable (bait a charge phase off a cliff by DESIGN). */
+function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number): void {
+  if (actor.aiHazardMode !== 'lemming' && (dx !== 0 || dy !== 0)) {
+    const m = Math.hypot(dx, dy) || 1;
+    const look = actor.radius + PATH_CFG.vetoLookahead;
+    const px = actor.pos.x, py = actor.pos.y;
+    if (world.fallHazardAt(actor, px + (dx / m) * look, py + (dy / m) * look)) {
+      if (dx !== 0 && !world.fallHazardAt(actor, px + Math.sign(dx) * look, py)) dy = 0;
+      else if (dy !== 0 && !world.fallHazardAt(actor, px, py + Math.sign(dy) * look)) dx = 0;
+      else return; // rim-pinned: stand, don't step off
+    }
+  }
+  world.moveActor(actor, dx, dy, dt);
+}
+
 function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt: number): void {
   // Steer toward the next cell along the zone's walkable flow-field instead
   // of straight at the target — around warren walls AND plains cliff pockets
@@ -1615,12 +1644,21 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
   let goal = to;
   if (!actor.flying && actor.aiPathing !== 'none') {
     const pf = world.pathField();
-    // ANY-ANGLE shortcut: beeline while the straight line is walkable (open
-    // ground keeps its beelines — no 4-connected staircase); pay for a
-    // flow-field step only when something actually stands in the way.
-    if (pf?.pathStep && !(pf.lineWalkable?.(actor.pos, to) ?? false)) {
-      const step = pf.pathStep(actor.pos, to);
-      if (step) goal = step;
+    if (pf?.pathStep) {
+      // ANY-ANGLE shortcut, PRICED (the wayfaring fabric): beeline while the
+      // straight line is walkable AND no crossed ground costs this body more
+      // than plain floor (linePreferred; profiles fold insurance and
+      // MonsterDef.pathCosts) — open ground keeps its beelines, and a lava
+      // lake in the line now consults the weighted flow field exactly like a
+      // wall would. Models without costs keep the classic walkable-only gate.
+      const profile = world.pathProfileFor(actor);
+      const clean = pf.linePreferred
+        ? pf.linePreferred(actor.pos, to, profile)
+        : (pf.lineWalkable?.(actor.pos, to) ?? false);
+      if (!clean) {
+        const step = pf.pathStep(actor.pos, to, profile);
+        if (step) goal = step;
+      }
     }
   }
   let dx = goal.x - actor.pos.x, dy = goal.y - actor.pos.y;
@@ -1655,7 +1693,7 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
   // THE UNWATCHED ADVANCE: a stamped stalk-creep scales the step (0 = a
   // statue while watched). Everything above still ran, so the body resumes
   // mid-stride the instant the gaze breaks.
-  world.moveActor(actor, dx, dy, dt * (actor.aiStalkCreep ?? 1));
+  steerMove(actor, world, dx, dy, dt * (actor.aiStalkCreep ?? 1));
 }
 
 /** THE RETREAT GATE: every backpedal flows through here. A WINDED actor
@@ -1677,7 +1715,7 @@ function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: num
       return false;
     }
   }
-  world.moveActor(actor, dx, dy, dt);
+  steerMove(actor, world, dx, dy, dt);
   return true;
 }
 
@@ -1877,7 +1915,7 @@ function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number):
       }
       if (d > slack) {
         actor.facing = angleTo(actor.pos, lead.pos);
-        world.moveActor(actor,
+        steerMove(actor, world,
           lead.pos.x - actor.pos.x, lead.pos.y - actor.pos.y, dt * 0.4); // the amble
         return true;
       }
@@ -1891,7 +1929,7 @@ function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number):
       const toMe = angleTo(lead.pos, actor.pos);
       const tangent = toMe + actor.aiSign * (Math.PI / 2);
       const radial = d > ring * 1.2 ? -0.9 : d < ring * 0.8 ? 0.9 : 0;
-      world.moveActor(actor,
+      steerMove(actor, world,
         Math.cos(tangent) + Math.cos(toMe) * radial,
         Math.sin(tangent) + Math.sin(toMe) * radial, dt * 0.35);
       actor.facing = angleTo(actor.pos, lead.pos); // eyes on the idol
@@ -2157,7 +2195,7 @@ function orbitKernel(ctx: KernelCtx): void {
   const toMe = angleTo(target.pos, a.pos);
   const tangent = toMe + a.aiSign * (Math.PI / 2);
   const radial = d > ring * 1.15 ? -1 : d < ring * 0.8 ? 1 : 0;
-  world.moveActor(a,
+  steerMove(a, world,
     Math.cos(tangent) + Math.cos(toMe) * radial * 0.9,
     Math.sin(tangent) + Math.sin(toMe) * radial * 0.9, dt);
   a.facing = angleTo(a.pos, target.pos);
@@ -2171,7 +2209,7 @@ function weaveKernel(ctx: KernelCtx): void {
   if (chosen) ctx.cast(chosen);
   const wob = Math.sin(world.time * (spec.weaveFreq ?? 9) + a.id * 1.7) * (spec.weaveAmp ?? 0.9);
   const ang = angleTo(a.pos, ctx.goal) + wob;
-  world.moveActor(a, Math.cos(ang), Math.sin(ang), dt);
+  steerMove(a, world, Math.cos(ang), Math.sin(ang), dt);
 }
 
 /** hitAndRun — one strike, then break away before the answer comes. */
@@ -2214,7 +2252,7 @@ function slideCastKernel(ctx: KernelCtx): void {
     const toMe = angleTo(target.pos, a.pos);
     const tangent = toMe + a.aiSign * (Math.PI / 2);
     const radial = d > ring * 1.2 ? -1 : d < ring * 0.7 ? 1 : 0;
-    world.moveActor(a,
+    steerMove(a, world,
       Math.cos(tangent) + Math.cos(toMe) * radial,
       Math.sin(tangent) + Math.sin(toMe) * radial, dt);
     a.facing = angleTo(a.pos, target.pos);
@@ -2357,7 +2395,7 @@ function prowlKernel(ctx: KernelCtx): void {
   const toMe = angleTo(target.pos, a.pos);
   const tangent = toMe + a.aiSign * (Math.PI / 2);
   const radial = d > ring + width ? -0.8 : d < ring - width ? 0.8 : 0;
-  world.moveActor(a,
+  steerMove(a, world,
     Math.cos(tangent) + Math.cos(toMe) * radial,
     Math.sin(tangent) + Math.sin(toMe) * radial, dt);
   a.facing = angleTo(a.pos, target.pos);
@@ -2406,7 +2444,7 @@ function skitterKernel(ctx: KernelCtx): void {
     return;
   }
   const ang = angleTo(a.pos, ctx.goal) + a.aiSign;
-  world.moveActor(a, Math.cos(ang), Math.sin(ang), dt * 1.55);
+  steerMove(a, world, Math.cos(ang), Math.sin(ang), dt * 1.55);
   a.facing = angleTo(a.pos, ctx.goal);
 }
 
@@ -2484,7 +2522,7 @@ function lurkKernel(ctx: KernelCtx): void {
   const toMe = angleTo(target.pos, a.pos);
   const tangent = toMe + a.aiSign * (Math.PI / 2);
   const radial = d > ring * 1.2 ? -0.8 : d < ring * 0.85 ? 0.8 : 0;
-  world.moveActor(a,
+  steerMove(a, world,
     Math.cos(tangent) + Math.cos(toMe) * radial,
     Math.sin(tangent) + Math.sin(toMe) * radial, dt * 0.4);
   a.facing = angleTo(a.pos, target.pos);
