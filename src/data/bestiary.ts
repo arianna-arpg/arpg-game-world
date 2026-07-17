@@ -55,6 +55,8 @@ export const BESTIARY_CFG = {
     detail: 88,
     /** Grimoire slot chip (a bound Spectre form). */
     grimoire: 22,
+    /** Bonded-companion release rows (the actor AS IT STANDS — collar and all). */
+    companion: 24,
     /** What a never-slain page shows: its true dark SILHOUETTE (the classic
      *  bestiary tease), or the old flat shape 'glyph'. */
     undiscovered: 'silhouette' as 'silhouette' | 'glyph',

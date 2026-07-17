@@ -26,6 +26,7 @@ import {
   type BodyLook,
 } from './body';
 import { registerVisCache } from './caches';
+import type { PartSpec } from './parts';
 import { drawShadow, releaseCanvas } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -57,6 +58,9 @@ export interface PortraitDefLike {
   look?: string | undefined;
   demonHorns?: boolean | undefined;
   portrait?: PortraitTune | undefined;
+  /** RUNTIME TACK (Actor.extraParts) — the tamed collar, brands: an
+   *  actor-based portrait wears exactly what the body wears. */
+  extraParts?: PartSpec[] | undefined;
   worm?: {
     length: number;
     spacing?: number | undefined;
@@ -89,6 +93,7 @@ export interface PortraitSubject {
   look?: string | undefined;
   demonHorns?: boolean | undefined;
   tune?: PortraitTune | undefined;
+  extraParts?: PartSpec[] | undefined;
   worm?: NonNullable<PortraitDefLike['worm']> | undefined;
   parts?: PortraitPart[] | undefined;
 }
@@ -104,6 +109,7 @@ export function portraitSubjectOf(def: PortraitDefLike, opts?: {
     shape: def.shape, radius: def.radius, color: def.color,
     material: def.material, adorn: def.adorn, look: def.look,
     demonHorns: def.demonHorns, tune: def.portrait, worm: def.worm,
+    extraParts: def.extraParts,
   };
   if (def.parts?.length && opts?.resolvePart && depth < 2) {
     const parts: PortraitPart[] = [];
@@ -131,7 +137,8 @@ function subjectKey(s: PortraitSubject): string {
   const parts = s.parts?.length
     ? 'p[' + s.parts.map(p => `${subjectKey(p.sub)}@${p.dx},${p.dy},${p.rot}`).join(';') + ']'
     : '';
-  return `${s.shape}|${s.radius}|${s.color}|${s.material ?? ''}|${s.adorn ?? ''}|${s.look ?? ''}|${s.demonHorns ? 'd' : ''}|${tuneKey(s.tune)}|${worm}${parts}`;
+  const tack = s.extraParts?.length ? 'x' + JSON.stringify(s.extraParts) : '';
+  return `${s.shape}|${s.radius}|${s.color}|${s.material ?? ''}|${s.adorn ?? ''}|${s.look ?? ''}|${s.demonHorns ? 'd' : ''}|${tuneKey(s.tune)}|${worm}${parts}${tack}`;
 }
 
 // --- the compositor ----------------------------------------------------------
@@ -164,6 +171,7 @@ function composeSubject(ctx: CanvasRenderingContext2D, s: PortraitSubject,
   const bodyLook: BodyLook = {
     shape: s.shape, radius: r, color: s.color,
     material: s.material, adorn: s.adorn, look: s.look, demonHorns: s.demonHorns,
+    extraParts: s.extraParts,
   };
   const half = spriteHalf(r);
   const dirX = Math.cos(facing), dirY = Math.sin(facing);

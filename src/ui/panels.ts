@@ -39,6 +39,7 @@ import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
 import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
+import type { Actor } from '../engine/actor';
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf,
   type PortraitDefLike, type PortraitSubject,
@@ -1534,6 +1535,7 @@ export class UI {
     if (buildEl) buildEl.scrollTop = prevBuildScroll;
     this.lastInvTab = this.invTab;
     this.wireInventory();
+    this.paintPortraitsIn(this.inventory); // the build flap's Spectre chip
   }
 
   /** Re-attach bag/doll click handlers after a re-render (the panels' idiom).
@@ -1835,31 +1837,82 @@ export class UI {
     });
   }
 
-  /** A portrait tile as row HTML — a sized canvas the post-build paint pass
-   *  (paintBestiaryPortraits) blits the fabric's cached tile into. Dark pages
-   *  show the true dark silhouette (or the legacy glyph, by config). */
-  private monsterPortraitHtml(def: MonsterDef, dark: boolean, size: number, live = false): string {
-    if (dark && BESTIARY_CFG.portrait.undiscovered === 'glyph') return this.monsterGlyph(def, true);
-    const px = Math.round(size * VIS_CFG.portrait.oversample);
-    return `<canvas class="b-port${live ? ' b-port-live' : ''}" data-bport="${def.id}"
-      data-bpmode="${dark ? 'silhouette' : 'full'}" data-bpsize="${size}"
-      width="${px}" height="${px}"
-      style="width:${size}px;height:${size}px;flex:0 0 ${size}px"></canvas>`;
+  /** A LIVE ACTOR's portrait subject — worn exactly as it stands (collar
+   *  tack and all), with its def's dials/worm/parts layered on when the
+   *  registry resolves the defId. The companion-roster seat. */
+  private portraitSubjectOfActor(a: Actor): PortraitSubject {
+    const def = a.defId ? MONSTERS[a.defId] : undefined;
+    return portraitSubjectOf({
+      shape: a.shape, radius: a.radius, color: a.color,
+      material: a.material, adorn: a.adorn, look: a.look,
+      demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
+      portrait: def?.portrait, worm: def?.worm, parts: def?.parts,
+      extraParts: a.extraParts,
+    }, {
+      resolvePart: id => {
+        const p = MONSTERS[id];
+        return p ? this.portraitDefOf(p) : undefined;
+      },
+    });
   }
 
-  /** Fill every portrait canvas the freshly-built book HTML declared. A look
-   *  the fabric cannot paint leaves its tile blank rather than breaking the
-   *  book (the painters themselves no-op unknown kinds, so this is belt). */
-  private paintBestiaryPortraits(): void {
-    for (const cv of this.bestiaryMenu.querySelectorAll<HTMLCanvasElement>('canvas.b-port')) {
-      const def = MONSTERS[cv.dataset.bport ?? ''];
-      if (!def) continue;
+  /** The canvas a paint pass fills — every portrait seat mints through here
+   *  (attr picks the resolver: data-bport = monster def, data-bactor = live
+   *  actor, data-bclass = class look). */
+  private portraitCanvasHtml(attr: string, size: number, live = false): string {
+    const px = Math.round(size * VIS_CFG.portrait.oversample);
+    return `<canvas class="b-port${live ? ' b-port-live' : ''}" ${attr} data-bpsize="${size}"
+      width="${px}" height="${px}"
+      style="width:${size}px;height:${size}px;flex:0 0 ${size}px;vertical-align:middle"></canvas>`;
+  }
+
+  /** A kind's portrait tile as row HTML. Dark pages show the true dark
+   *  silhouette (or the legacy glyph, by config). */
+  private monsterPortraitHtml(def: MonsterDef, dark: boolean, size: number, live = false): string {
+    if (dark && BESTIARY_CFG.portrait.undiscovered === 'glyph') return this.monsterGlyph(def, true);
+    return this.portraitCanvasHtml(
+      `data-bport="${def.id}" data-bpmode="${dark ? 'silhouette' : 'full'}"`, size, live);
+  }
+
+  /** A live actor's portrait as row HTML (resolved by the paint pass). */
+  private actorPortraitHtml(a: Actor, size: number): string {
+    return this.portraitCanvasHtml(`data-bactor="${a.id}"`, size);
+  }
+
+  /** A class's hero-look portrait as row HTML (the mercenary roster seat). */
+  private classPortraitHtml(cls: ClassDef, size: number): string {
+    return this.portraitCanvasHtml(`data-bclass="${cls.id}"`, size);
+  }
+
+  /** Fill every portrait canvas a freshly-built panel declared — ONE pass
+   *  any refresher may call on its root. A look the fabric cannot paint
+   *  leaves its tile blank rather than breaking the panel (the painters
+   *  themselves no-op unknown kinds, so this is belt). */
+  private paintPortraitsIn(root: HTMLElement): void {
+    for (const cv of root.querySelectorAll<HTMLCanvasElement>('canvas.b-port')) {
       try {
-        paintPortrait(cv, this.portraitSubject(def), {
+        let subject: PortraitSubject | null = null;
+        if (cv.dataset.bport) {
+          const def = MONSTERS[cv.dataset.bport];
+          if (def) subject = this.portraitSubject(def);
+        } else if (cv.dataset.bactor) {
+          const a = this.getWorld().actors.find(x => x.id === Number(cv.dataset.bactor));
+          if (a) subject = this.portraitSubjectOfActor(a);
+        } else if (cv.dataset.bclass) {
+          const cls = CLASSES.find(c => c.id === cv.dataset.bclass);
+          if (cls) {
+            subject = portraitSubjectOf({
+              shape: 'circle', radius: VIS_CFG.portrait.seats.classRadius,
+              color: cls.color, look: cls.look,
+            });
+          }
+        }
+        if (!subject) continue;
+        paintPortrait(cv, subject, {
           size: Number(cv.dataset.bpsize) || BESTIARY_CFG.portrait.row,
           mode: cv.dataset.bpmode === 'silhouette' ? 'silhouette' : 'full',
         });
-      } catch { /* a broken look must never break the book */ }
+      } catch { /* a broken look must never break a panel */ }
     }
   }
 
@@ -1975,8 +2028,9 @@ export class UI {
     const release = companions.length ? `
       <div style="border-top:1px solid #2a2a3a;margin-top:8px;padding-top:6px">
         <div style="color:#a8c87a;font-size:11px;margin-bottom:4px">Bonded companions</div>
-        ${companions.map(c => `<div class="bind-btns" style="margin:2px 0">
-          <span style="font-size:11px">${c.name}${c.downed ? ' <span style="color:#e8a860">(down)</span>' : ''} — Lv ${c.level}</span>
+        ${companions.map(c => `<div class="bind-btns" style="margin:2px 0;display:flex;align-items:center;gap:7px">
+          ${this.actorPortraitHtml(c, BESTIARY_CFG.portrait.companion)}
+          <span style="font-size:11px;flex:1;min-width:0">${c.name}${c.downed ? ' <span style="color:#e8a860">(down)</span>' : ''} — Lv ${c.level}</span>
           <button data-untame="${c.id}">Release to the wild</button></div>`).join('')}
       </div>` : '';
 
@@ -2045,7 +2099,7 @@ export class UI {
 
     // The HTML above declared its portrait canvases — fill them from the
     // fabric's tile cache, then set the open entry's portrait breathing.
-    this.paintBestiaryPortraits();
+    this.paintPortraitsIn(this.bestiaryMenu);
     this.animateBestiaryDetail();
   }
 
@@ -2447,7 +2501,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
         const chip = form
           ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright — no corpse read. Rebind or release at the Tracker's book.">
-              ${this.monsterGlyph(form, false)} ${form.name}</span>`
+              ${this.monsterPortraitHtml(form, false, VIS_CFG.portrait.seats.spectreChip)} ${form.name}</span>`
           : `<span style="color:#8a8678">unattuned — reads corpses</span>`;
         grimoire = `<div style="margin-top:3px;font-size:10px">
           <span style="color:#a8d8a0">Grimoire:</span> ${chip}
@@ -3107,9 +3161,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         const cost = world.mercHireCost(o);
         const afford = acc.credits >= cost;
         const vet = o.kind === 'retired';
+        // The blade's own face: its class-look hero body (the portrait
+        // fabric's class seat) — an offer sheet you read at a glance.
+        const cls = CLASSES.find(c => c.id === o.classId);
         return `<div class="skill-entry">
-          <div class="name">${esc(o.name)}
-            ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN — retired at level ${o.retiredLevel}</span>` : ''}</div>
+          <div class="name" style="display:flex;align-items:center;gap:8px">
+            ${cls ? this.classPortraitHtml(cls, VIS_CFG.portrait.seats.merc) : ''}
+            <span>${esc(o.name)}
+            ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN — retired at level ${o.retiredLevel}</span>` : ''}</span></div>
           <div class="desc">${esc(o.blurb)}</div>
           <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}) — a blade is fitted to its patron.</div>
           <div class="bind-btns"><button data-merc-hire="${i}" ${hired || !afford ? 'disabled' : ''}>
@@ -3148,6 +3207,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       world.retireCharacter(); // the run-end flow takes over (retire-flavored screen)
     });
     this.mercMenu.querySelector<HTMLButtonElement>('button[data-merc-close]')?.addEventListener('click', () => this.closeMercMenu());
+    this.paintPortraitsIn(this.mercMenu); // the offer rows' class-look blades
   }
 
   // ------------------------------------------------------------ vocation menu

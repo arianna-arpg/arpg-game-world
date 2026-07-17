@@ -48,6 +48,7 @@ import { FACTIONS, MONSTERS } from '../data/monsters';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { trimVisCaches } from './vis/caches';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
@@ -5086,8 +5087,49 @@ export class Renderer {
       ctx.font = 'bold 12px Verdana';
       ctx.fillStyle = warded ? '#c0c0cc' : '#ffd0d0';
       ctx.fillText(warded ? `${boss.name} — WARDED` : boss.name, w / 2, 52 + oy);
+      // THE MARQUEE PORTRAIT — the boss itself beside its bar, through the
+      // portrait fabric (the same bakes its body blits from). Subject memoed
+      // per boss actor; the tile is the fabric's cached blit. Built from the
+      // ACTOR's replicated look fields (co-op clients have no defId), with
+      // the def's dials/worm/parts layered on when the registry resolves.
+      const psize = VIS_CFG.portrait.seats.marquee;
+      if (psize > 0) {
+        if (this.marqueeSubject?.actorId !== boss.id) {
+          const stamp = (d: { faction?: string }): boolean => !!FACTIONS[d.faction ?? '']?.nubHorns;
+          const def = MONSTERS[boss.defId ?? ''];
+          this.marqueeSubject = {
+            actorId: boss.id,
+            subject: portraitSubjectOf({
+              shape: boss.shape, radius: boss.radius, color: boss.color,
+              material: boss.material, adorn: boss.adorn, look: boss.look,
+              demonHorns: stamp(boss),
+              portrait: def?.portrait, worm: def?.worm, parts: def?.parts,
+              extraParts: boss.extraParts,
+            }, {
+              resolvePart: id => {
+                const p = MONSTERS[id];
+                return p ? { ...p, demonHorns: stamp(p) } : undefined;
+              },
+            }),
+          };
+        }
+        const px = bx - psize - 12, py = 24 + oy + 7 - psize / 2;
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(px - 3, py - 3, psize + 6, psize + 6);
+        ctx.strokeStyle = '#3a3a52';
+        ctx.strokeRect(px - 3, py - 3, psize + 6, psize + 6);
+        if (warded) ctx.globalAlpha = 0.55;
+        ctx.drawImage(portraitTile(this.marqueeSubject.subject, { size: psize }), px, py, psize, psize);
+        ctx.globalAlpha = 1;
+      }
+    } else if (this.marqueeSubject) {
+      this.marqueeSubject = null; // the fight ended — drop the memo
     }
   }
+
+  /** The boss-marquee portrait memo (subject rebuilt only when the bar's
+   *  owner changes — the tile itself lives in the portrait fabric's LRU). */
+  private marqueeSubject: { actorId: number; subject: PortraitSubject } | null = null;
 
   /** Environmental-survival meters under an orb — one slim bar per resource the
    *  player has BELOW max (hidden when full / never-touched). Registry-driven, so a

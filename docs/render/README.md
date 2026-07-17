@@ -167,7 +167,15 @@ plus `live` parts — for the animated study portrait.
 Seats shipped: the Tracker's bestiary (rows + the open entry's breathing
 study portrait + grimoire slot chips; undiscovered pages show the true dark
 SILHOUETTE of the body — `BESTIARY_CFG.portrait` picks sizes and the
-silhouette-vs-glyph policy) and the WEBSITE database — `npm run
+silhouette-vs-glyph policy), the BOSS MARQUEE bar (the boss itself beside
+its name, subject memoed per actor, built from the ACTOR's replicated look
+so co-op clients read it too; dims while WARDED), the bonded-companion
+release rows (actor-based: the collar tack and all — `PortraitDefLike.
+extraParts`), the build-flap Spectre chip, the mercenary offer sheet
+(class-look hero bodies) — non-book seat sizes in `VIS_CFG.portrait.seats`,
+any panel refresher opts in with one `paintPortraitsIn(root)` call over its
+declared `data-bport`/`data-bactor`/`data-bclass` canvases — and the
+WEBSITE database — `npm run
 build:portraits` (vite.portraits.config.ts) bundles the fabric + painters +
 LOOKS into `site/assets/portraits.js` (iife global `HWPortraits`, ~43 KB
 gz), built by CI beside the JSON export and gitignored like it, so site

@@ -91,6 +91,18 @@ export const VIS_CFG = {
     floorOnSwap: 64,
     /** Animated detail portraits breathe (VIS_CFG.body.breatheAmp/Rate). */
     breathe: true,
+    /** NON-BOOK SEATS (px tile sizes; 0 disables a seat). The book's own
+     *  leaves size themselves via BESTIARY_CFG.portrait. */
+    seats: {
+      /** Boss marquee bar: the boss itself beside its name. */
+      marquee: 44,
+      /** Build-flap Spectre chip (the attuned form, inline). */
+      spectreChip: 20,
+      /** Mercenary outpost offer rows (class-look blades). */
+      merc: 30,
+      /** Body radius a CLASS-look portrait assumes (heroes all stand 14). */
+      classRadius: 14,
+    },
   },
 
   /** Actor-anchored text labels (NPC names, overhead prompts, nameplates) —
