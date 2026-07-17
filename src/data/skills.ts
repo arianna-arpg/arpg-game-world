@@ -2861,12 +2861,15 @@ export const SKILLS: Record<string, SkillDef> = {
 
   wellspring_stance: {
     id: 'wellspring_stance', name: 'Wellspring Stance',
-    description: 'TOGGLE: your focus pools DOWNWARD — while the stance burns, spare MANA seeps into your FOOTING: poise refills in combat, not just in the calm after it (the pump keeps a third of your mana untouchable and idles while the bar is whole). Recomposure quickens too. The unshakable duelist\'s idle: stand, settle, set.',
+    description: 'TOGGLE: your focus pools DOWNWARD — the stance CARVES A FOOTING (+30 maximum poise while held) and spare MANA seeps into it: poise refills in combat, not just in the calm after it (the pump keeps a third of your mana untouchable and idles while the bar is whole). Recomposure quickens too. The unshakable duelist\'s idle: stand, settle, set.',
     tags: ['spell', 'aura', 'buff', 'duration'], color: '#c8b878',
     manaCost: 0, cooldown: 0.5, useTime: 0.3,
     delivery: {
       type: 'aura', mode: 'toggle',
-      aura: { radius: 60, selfMods: [mod('poiseRegenPct', 'increased', 0.25)] },
+      // The stance IS the base: poise ships empty (a pool you BUILD), so
+      // the kit carries its own footing — attributes and % passives then
+      // scale this 30 like any other flat source.
+      aura: { radius: 60, selfMods: [mod('poise', 'flat', 30), mod('poiseRegenPct', 'increased', 0.25)] },
     },
     conduits: [{ from: 'mana', to: 'poise', drainPct: 0.035, ratio: 1.2, floor: 0.35 }],
     effects: [],

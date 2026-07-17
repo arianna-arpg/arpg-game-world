@@ -5,7 +5,7 @@
 // skill and just stands there) get a loud console line instead.
 // ---------------------------------------------------------------------------
 
-import { FACTIONS, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
+import { FACTIONS, MATERIAL_NATURE, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
 import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
@@ -905,6 +905,32 @@ export function validateContent(): void {
       const [lo, hi] = def.packSize;
       if (lo < 1 || hi < lo) warn(`monster ${def.id}: packSize [${lo}, ${hi}] is not a sane band`);
       else if (hi > 16) warn(`monster ${def.id}: packSize hi ${hi} > 16 — entry-burst discipline (mind the perf gate)`);
+    }
+
+    // THE DEFENSE-TEXTURE DOCTRINE (docs/engine/defenses.md): the signature
+    // pools (poise / insight / energy shield) ship EMPTY and are AUTHORED
+    // as identities — one per body, so every player answer has fights it
+    // excels in and fights that resist it. Boot keeps the discipline:
+    // (1) rank-and-file never stack signatures (bosses may — the apex
+    //     showpiece exception), (2) objects don't brace, read or ward,
+    // (3) poiseDR without a bar is inert authoring, (4) a NEW surface
+    //     material must declare its nature (else it silently reads flesh:
+    //     breathing, corpse-leaving — decide, don't inherit).
+    {
+      const b = def.base;
+      const sigs = [b.poise ?? 0, b.insight ?? 0, b.energyShield ?? 0].filter(v => v >= 20).length;
+      if (!def.boss && sigs >= 2) {
+        warn(`monster ${def.id}: ${sigs} signature defense pools authored — textures are identities; stack them only on boss showpieces`);
+      }
+      if (def.passive && ((b.poise ?? 0) > 0 || (b.insight ?? 0) > 0 || (b.energyShield ?? 0) > 0)) {
+        warn(`monster ${def.id}: passive object authors a signature pool — objects don't brace (use life/armor for toughness)`);
+      }
+      if ((b.poiseDR ?? 0) > 0 && !def.boss && (b.poise ?? 0) <= 0) {
+        warn(`monster ${def.id}: poiseDR authored with no poise bar — the reduction only exists while an armed bar holds`);
+      }
+      if (def.material && !MATERIAL_NATURE[def.material]) {
+        warn(`monster ${def.id}: material '${def.material}' has no MATERIAL_NATURE row — it will read as flesh (breathes, leaves remains); classify it`);
+      }
     }
   }
 

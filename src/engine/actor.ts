@@ -620,6 +620,13 @@ export class Actor {
   aiWindedUntil = 0;
   aiLastRetreatAt = -1;
   aiKiteSpec?: { kite: number; windedFor?: [number, number] };
+  /** Does this body BREATHE (derived from its def's material nature at
+   *  creation — data/monsters.ts MATERIAL_NATURE, def.breathes override)?
+   *  Breathing bodies tire: with no authored TempoSpec they wear the
+   *  default kite budget (BEHAVIOR_CFG.defaultKite), so every living
+   *  kiter eventually winds and the chase gets its rhythm. Bone, stone,
+   *  ember and ghost-stuff never do — unless their def says otherwise. */
+  breathes = true;
   /** THE UNWATCHED ADVANCE (BehaviorSpec.stalk, stamped per combat tick):
    *  closing-step multiplier while the quarry's gaze holds this body
    *  (0 = a statue); undefined = unwatched or no stalk in the mind. */
@@ -1297,14 +1304,20 @@ export class Actor {
    *  all ordinary modifiers. Refill rides this same value (updateTimers),
    *  so an inverted pool genuinely FILLS while planted. */
   insightMomentum(): number {
+    // SAP (the insightSap stat, worn as ordinary status mods — chill 0.4,
+    // frozen/stunned 1): a bound body reads NOTHING. Multiplies the final
+    // blend so motion and rooted stillness are hobbled alike, and since
+    // the refill rides this same value, a frozen pool also stops filling.
+    const sap = Math.min(1, this.sheet.get('insightSap'));
+    if (sap >= 1) return 0;
     const idle = this.idleFor - DEFENSE_CFG.insight.graceWindow;
     const moving = idle <= 0 ? 1
       : Math.max(0, 1 - idle / Math.max(0.1, this.sheet.get('insightTaper')));
     const inv = Math.min(1, this.sheet.get('insightInversion'));
-    if (inv <= 0) return moving;
+    if (inv <= 0) return moving * (1 - sap);
     const still = idle <= 0 ? 0
       : Math.min(1, idle / Math.max(0.1, this.sheet.get('insightStillTaper')));
-    return moving * (1 - inv) + still * inv;
+    return (moving * (1 - inv) + still * inv) * (1 - sap);
   }
 
   /** Drain the poise bar (damage.ts mitigation + any future data source).
@@ -2952,11 +2965,12 @@ const CONDUIT_POOLS: Record<ConduitPool, {
     feed: (a, amt) => a.gainPoise(amt),
   },
   insight: {
-    // The momentum pool: absent (max 0) on the uninvested... except insight
-    // ships with a universal base — most actors CAN pump it. Drains touch
-    // only the METER, never the momentum taper (stillness/motion stays the
-    // bearer's business); feeds clamp at max — there is no gain gate to
-    // route (the refill in updateTimers writes directly, and so do we).
+    // The momentum pool: absent (max 0) on the uninvested — like every
+    // signature pool it ships empty, so the endpoint idles until a base is
+    // bought (gear, passives) or authored (the bestiary's duelists). Drains
+    // touch only the METER, never the momentum taper (stillness/motion
+    // stays the bearer's business); feeds clamp at max — there is no gain
+    // gate to route (the refill in updateTimers writes directly, so do we).
     cur: a => a.insight,
     max: a => a.maxInsight(),
     room: a => Math.max(0, a.maxInsight() - a.insight),

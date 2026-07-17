@@ -417,6 +417,16 @@ export const BEHAVIOR_CFG = {
   steerHorizon: 0.45,
   /** seek: default nose reach (px) — far past any sight cone. */
   seekRange: 1500,
+  /** THE DEFAULT KITE BUDGET (TempoSpec.kite fallback): every BREATHING
+   *  body (Actor.breathes — MATERIAL_NATURE + the def's own override) that
+   *  never authored a kite wears this wind — `kite` seconds of accrued
+   *  backpedal, then a winded pause — so perpetual kiters are a chase
+   *  RHYTHM, not an exercise in futility, bestiary-wide. An authored
+   *  TempoSpec.kite always wins (kite: Infinity = the deliberate tireless
+   *  runner); a CLEARED axis (tempo: null — the wave frenzy's "never
+   *  pauses, never winds") suppresses it; bone, stone, ember and
+   *  ghost-stuff never tire unless their def opts in (breathes: true). */
+  defaultKite: { kite: 3.2, windedFor: [0.9, 1.5] as [number, number] },
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at cast time
@@ -1127,7 +1137,13 @@ export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning
     else if (layer.morale) out.morale = { ...out.morale, ...layer.morale };
     if (layer.squad === null) out.squad = undefined;
     else if (layer.squad) out.squad = { ...out.squad, ...layer.squad };
-    if (layer.tempo === null) out.tempo = undefined;
+    // TEMPO alone carries an explicit NULL through the merge (not folded
+    // to undefined): downstream, an ABSENT axis means "the default breath
+    // applies" (the living kite fallback in updateAI) while a CLEARED one
+    // must keep meaning "never pauses, never winds" — the wave frenzy's
+    // pledge. Every ?.-read treats null and undefined alike, so only the
+    // fallback gate ever tells them apart.
+    if (layer.tempo === null) out.tempo = null;
     else if (layer.tempo) out.tempo = { ...out.tempo, ...layer.tempo };
     if (layer.behavior === null) out.behavior = undefined;
     else if (layer.behavior) out.behavior = { ...out.behavior, ...layer.behavior,

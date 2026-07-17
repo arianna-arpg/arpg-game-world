@@ -413,9 +413,15 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
 
   // TEMPO bookkeeping: stamp this tick's kite spec (the retreat gate reads
   // it), and let the wind RECOVER while the actor isn't backpedaling.
+  // Authored kite wins; otherwise every body that BREATHES wears the
+  // default budget (living kiters always tire — the bestiary-wide chase
+  // rhythm), and an explicitly CLEARED axis (tempo: null, preserved by
+  // mergeTuning for exactly this read) winds nobody.
   actor.aiKiteSpec = tuning.tempo?.kite !== undefined
     ? { kite: tuning.tempo.kite, windedFor: tuning.tempo.windedFor }
-    : undefined;
+    : tuning.tempo !== null && actor.breathes
+      ? BEHAVIOR_CFG.defaultKite
+      : undefined;
   // Stamp the RESOLVED obedience so the command roll (world.ts, an event —
   // not a tick) reads live machine layers: an enraged phase can go deaf.
   actor.aiObedience = tuning.obedience;

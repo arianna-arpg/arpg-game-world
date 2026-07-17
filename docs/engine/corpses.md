@@ -83,6 +83,32 @@ whose whole grammar is the fuel.
   (render/vis/parts.ts). Corpses render as sinking REMAINS tinted by the
   fallen kind (renderer.drawCorpses).
 
+## Who leaves a corpse — MATERIAL_NATURE
+
+The kill path mints a remnant only for the ORGANIC. `MATERIAL_NATURE`
+(data/monsters.ts) classifies every surface material's gameplay ontology —
+`remains` (this fabric) and `breathes` (the default kite budget, brain.ts):
+
+- **Leave remains**: flesh, fur, scale, chitin, slime, verdant (plant-flesh),
+  bone (the dead leave bones), cloth (dressed bodies — mummies,
+  haunt-servants). Unknown/future materials read as flesh until classified
+  (boot warns).
+- **Leave nothing**: wood (timber splinters), stone (rubble), metal,
+  crystal, ice, ember (cinders scatter), ethereal (ghost-stuff dissipates),
+  void. Barrels, crates, gem caches, doors, wraiths — no more skeletal
+  remains under a smashed box.
+- **`MonsterDef.remains`** overrides either verdict per def: `remains: false`
+  on organic-DRESSED objects (wax pools, banner masts, the aegis crystal);
+  `remains: true` would restore deadfall to a timber horror.
+- The same gate guards the sacrifice lane (`sacrificeMinions` skips
+  no-remains minions rather than wasting the knife). Authored producer
+  lanes — Exhume's `spawnCorpse`, shipwreck `BrittleSpec.corpses`, the
+  demon-crater compounding mint — stay ungated: what a designer digs up
+  deliberately is their business.
+
+Probe pins live in `balance/probe_defenses.ts` (crate/door/haunt mint
+nothing; wolf and wight still fuel the economy; override precedence).
+
 ## Sim & verification
 
 - **Corpse feeder** (`ScenarioDef.corpseFeed`, runner.ts): corpse-consuming

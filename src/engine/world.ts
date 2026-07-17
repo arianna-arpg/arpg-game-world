@@ -49,7 +49,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
@@ -16725,11 +16725,17 @@ export class World {
         Math.pow(a.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow));
     }
     // Bosses hold their ground: a default poise pool (levels with them)
-    // unless the def declares one. Rank-and-file keep the registry base.
+    // unless the def declares one. Rank-and-file keep the registry base —
+    // which ships EMPTY: poise is a defense TEXTURE a def authors, never
+    // ambience (a rabbit has none; a knight declares his).
     if (def.boss && def.base.poise === undefined) {
       a.sheet.setBase('poise',
         DEFENSE_CFG.poise.bossBase + DEFENSE_CFG.poise.bossPerLevel * lv);
     }
+    // BREATH: does this body tire? The material's nature (MATERIAL_NATURE,
+    // data/monsters.ts) with the def's own override — read once here so
+    // the AI's default-kite gate is a field test, not a registry walk.
+    a.breathes = defBreathes(def);
     // Zone Memory: flag the zone's BASE population (spawned inside the tagging
     // window in loadZone) so it can be snapshotted + restored on re-entry. Overlay
     // and event spawns fall outside the window, so they stay live (untouched).
@@ -16929,6 +16935,10 @@ export class World {
       if (haul.length < want && caster.sheet.get('sacrificeMinions', tags, extra) > 0) {
         const victims = this.actors
           .filter(a => a.owner === caster && !a.dead && !a.construct && !!a.defId
+            // Sacrifice yields a CORPSE — only the organic qualify (the
+            // same remains gate as the kill path: a stone hound spills no
+            // fuel, so the knife passes it by rather than wasting it).
+            && (!MONSTERS[a.defId] || defLeavesRemains(MONSTERS[a.defId]))
             && dist(caster.pos, a.pos) <= t.castRange
             && dist(aim, a.pos) - a.radius < Math.max(search, 160))
           .sort((a, b) => (dist(aim, a.pos) - a.radius) - (dist(aim, b.pos) - b.radius));
@@ -26310,8 +26320,12 @@ export class World {
         actor.lootSack = undefined;
       }
       // The ephemeral remnant of their passing — briefly usable (corpses
-      // drop regardless of who did the killing; necromancy isn't picky).
-      if (actor.defId) {
+      // drop regardless of who did the killing; necromancy isn't picky —
+      // but only the ORGANIC leave one: timber splinters, stone rubbles,
+      // ghost-stuff dissipates. MATERIAL_NATURE decides; a def's own
+      // `remains:` overrides either way (data/monsters.ts).
+      const remDef = actor.defId ? MONSTERS[actor.defId] : undefined;
+      if (actor.defId && (!remDef || defLeavesRemains(remDef))) {
         this.corpses.push({
           pos: vec(actor.pos.x, actor.pos.y),
           defId: actor.defId, level: actor.level,

@@ -156,6 +156,16 @@ changes.
   `StatusDef.timeScale` stasis/slow statuses; world- and per-actor scales,
   solo-only menu policy via `Timeflow.allowHold` — docs in
   `docs/engine/timeflow.md`).
+  THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
+  insight / energy shield are authored identities, never ambience —
+  attributes only SCALE them (1%/pt), bases come from gear defense
+  lanes, passives, stance grants, or `MonsterDef.base`;
+  `MATERIAL_NATURE` (data/monsters.ts) gives every surface material a
+  gameplay ontology (`remains` → the kill-path corpse-mint gate;
+  `breathes` → the default kite budget `BEHAVIOR_CFG.defaultKite`, so
+  living kiters always tire), and the `insightSap` stat lets
+  chill/freeze/stun bind the duelist's read — docs in
+  `docs/engine/defenses.md`, probe `balance/probe_defenses.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST

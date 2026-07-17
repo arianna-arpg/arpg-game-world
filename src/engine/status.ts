@@ -374,13 +374,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('moveSpeed', 'more', -0.3),
       mod('attackSpeed', 'more', -0.2),
       mod('castSpeed', 'more', -0.2),
+      // Cold binds the footwork insight reads with: the chilled duelist
+      // slips less and refills slower (insightSap × the momentum blend) —
+      // THE counter to mobile insight-textured bodies, worn as data.
+      mod('insightSap', 'flat', 0.4),
     ],
   },
   frozen: {
     label: 'Frozen', color: '#d8f4ff', duration: 1.5, hardCC: true,
     element: 'cold',
-    // A shatter target for Absolute Zero.
-    mods: [mod('damageTaken', 'more', 0.1)],
+    // A shatter target for Absolute Zero. A frozen nerve reads NOTHING —
+    // insight's slip and refill both die with the momentum (sap 1).
+    mods: [mod('damageTaken', 'more', 0.1), mod('insightSap', 'flat', 1)],
   },
   shock: {
     label: 'Shocked', color: '#ffe14a', duration: 4,
@@ -389,6 +394,8 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   },
   stun: {
     label: 'Stunned', color: '#cccccc', duration: 0.8, hardCC: true,
+    // A rung bell reads nothing: insight momentum dies for the duration.
+    mods: [mod('insightSap', 'flat', 1)],
   },
   // CHRONOMANCY (StatusDef.timeScale → engine/timeflow.ts): the victim's own
   // clock, bent. Ordinary statuses in every other way — hard-cast them, proc
@@ -434,7 +441,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   petrified: {
     label: 'Petrified', color: '#b8b2a4', duration: 1.4,
     timeScale: 0, hardCC: true,
-    mods: [mod('damageTaken', 'more', 0.1)],
+    mods: [mod('damageTaken', 'more', 0.1), mod('insightSap', 'flat', 1)],
   },
   // THE FEAR LADDER (the Gloamwood country's dread): every stack is NERVE
   // LOST — trembling hands (attack/cast speed) and backward-stepping feet —

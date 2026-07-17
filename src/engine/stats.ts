@@ -317,7 +317,12 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // UNINTERRUPTIBLY (an inert, broken bar can't be drained or delayed) to
   // the poiseRearmAt line, where it re-arms. Armed-but-dented bars refill
   // only after poiseCalmDelay seconds without a drain.
-  poise:          { label: 'Maximum Poise', base: 25, min: 0 },
+  // The pool ships EMPTY: poise is an IDENTITY, not ambience — a rabbit has
+  // none, a knight authors his, and a hero BUYS a base (gear lanes,
+  // passives, stance grants) that attributes then only SCALE. A zero-max
+  // bar is fully inert: no DR, no CC shrug, no break fanfare, no weight
+  // anchor (every consumer already gates on max > 0).
+  poise:          { label: 'Maximum Poise', base: 0, min: 0 },
   /** Fraction of max poise recovered per second — the rate of both the
    *  broken-bar recovery climb and the out-of-combat calm refill. */
   poiseRegenPct:  { label: 'Poise Recovery %', base: 0.25, min: 0, percent: true },
@@ -354,7 +359,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // opponent's body language and slipping the brunt. Reduction scales with
   // MOMENTUM (1 while moving, tapering to 0 over insightTaper seconds after
   // stopping) and SPENDS the pool; it only refills while moving.
-  insight:        { label: 'Maximum Insight', base: 30, min: 0 },
+  // Ships EMPTY like poise: the duelist's read is TRAINED, not ambient —
+  // monsters author it as their texture (the stalker, the ronin), heroes
+  // buy a base from gear/passives that attributes only scale.
+  insight:        { label: 'Maximum Insight', base: 0, min: 0 },
   /** Damage reduction at FULL momentum (tapers with it). */
   insightDR:      { label: 'Insight Damage Reduction', base: 0.5, min: 0, max: 0.9, percent: true },
   /** THE INVERSION DIAL (0..1): blends insight's momentum source from
@@ -376,6 +384,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   insightTaper:   { label: 'Insight Taper Time', base: 2.5, min: 0.1 },
   /** Damage avoided per point of insight spent. */
   insightEfficiency: { label: 'Insight Efficiency', base: 1, min: 0.1 },
+  /** Fraction of insight's momentum SAPPED outright (0..1) — the hobbled-
+   *  footwork lever. Statuses that bind the body wear it as an ordinary
+   *  mod (chill 0.4, frozen/stunned/petrified 1), so COLD is the answer
+   *  to the duelist you cannot pin: multiplies the FINAL momentum blend
+   *  (motion and rooted stillness alike read as nothing through a frozen
+   *  nerve), which also stalls the refill — momentum feeds both. Any
+   *  status, ground, or curse can carry it; it is a stat, not a flag. */
+  insightSap:     { label: 'Insight Sapped', base: 0, min: 0, max: 1, percent: true },
 
   // ENDURANCE — the break-less third pool (the D4-Fortify / LE-Endurance
   // shape): while the bar holds, hits are reduced by enduranceDR, FLAT —
@@ -1424,6 +1440,7 @@ const STAT_BLURBS: Record<string, string> = {
   poiseOvercharge: 'Headroom past maximum poise that explicit gains can crest into — a temporary larger buffer.',
   insight: 'A momentum pool that refills only while you are MOVING — it spends itself to blunt incoming hits.',
   insightDR: 'The damage reduction granted while insight remains.',
+  insightSap: 'How much of your insight momentum is sapped away — chill, freeze and stun bind the footwork the pool reads with.',
   endurance: 'A break-less stamina pool: it shaves damage flat off every hit, spending what it prevents.',
   enduranceDR: 'The flat damage shaved per hit while endurance lasts.',
   weight: 'Mass. The heavy resist knockback and poise wear; the light get shoved.',
@@ -1490,10 +1507,14 @@ export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
   },
   fortitude: {
     label: 'Fortitude', short: 'FOR', group: 'resilience',
-    description: '+4 armor, +2 poise, 0.2% increased weight',
+    // Attributes SCALE the signature pools, never seed them: the flat base
+    // must come from gear, passives, or a stance — with none, 1% of zero
+    // is honestly zero. (The everything-investable ladder, kept: the pool
+    // itself is the investment; the attribute is the multiplier.)
+    description: '+4 armor, 1% increased poise, 0.2% increased weight',
     perPoint: [
       mod('armor', 'flat', 4),
-      mod('poise', 'flat', 2),
+      mod('poise', 'increased', 0.01),
       mod('weight', 'increased', 0.002),
     ],
   },
@@ -1519,10 +1540,10 @@ export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
   },
   charisma: {
     label: 'Charisma', short: 'CHA', group: 'resilience',
-    description: '+3 evasion, +2 insight',
+    description: '+3 evasion, 1% increased insight',
     perPoint: [
       mod('evasion', 'flat', 3),
-      mod('insight', 'flat', 2),
+      mod('insight', 'increased', 0.01),
     ],
   },
 
@@ -1548,9 +1569,9 @@ export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
   },
   willpower: {
     label: 'Willpower', short: 'WIL', group: 'resilience',
-    description: '+1.5 energy shield, +1 mana, +0.15% all resistances',
+    description: '1% increased energy shield, +1 mana, +0.15% all resistances',
     perPoint: [
-      mod('energyShield', 'flat', 1.5),
+      mod('energyShield', 'increased', 0.01),
       mod('mana', 'flat', 1),
       mod('fireRes', 'flat', 0.0015),
       mod('coldRes', 'flat', 0.0015),
