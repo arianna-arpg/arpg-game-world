@@ -225,3 +225,18 @@ registerKillHandler({
       'The lattice shatters — starlight spills out of it.', '#9ad4e8', 15);
   },
 });
+
+// THE LADY IS LAID TO REST: the haunted manor's attic finale pays out — the
+// climb's own gem, and the account remembers the house (the manor_entered
+// pools unlock at the Vault; this ledger is for whatever wants the FINISH:
+// future packages, epitaphs, bragging rights).
+registerKillHandler({
+  id: 'manor_lady_laid_to_rest',
+  tag: 'manor_lady',
+  run: ctx => {
+    ctx.bumpLedger('manor_lady_faced');
+    ctx.dropGemAt(ctx.actor.pos);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40),
+      'The house exhales. Somewhere below, a door unlocks itself.', '#d8c8f0', 16);
+  },
+});

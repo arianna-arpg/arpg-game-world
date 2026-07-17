@@ -42,6 +42,7 @@ export const WARLORD_OF: Record<string, string> = {
   flesh: 'flesh_amalgam',
   fungal: 'amanita_sovereign', // the Bloom finally crowns (mycelia package roster)
   nightkin: 'vampire_countess',
+  carven: 'carven_king',
   emberkin: 'emberkin_matriarch',
   junglekin: 'verdant_tyrant',
   sirocco: 'mirage_khagan',

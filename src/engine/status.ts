@@ -40,6 +40,13 @@ export interface StatusDef {
   /** Hard crowd control: the victim cannot move or act while afflicted
    *  (checked by Actor.isStunned — stun, frozen). */
   hardCC?: true;
+  /** PANIC: while afflicted, AI-driven bodies ROUT (the morale machinery's
+   *  flight, forced through updateMorale regardless of the body's own
+   *  courage spec) — fear as a real CC class that REPOSITIONS the fight
+   *  instead of freezing it. Players are input-driven and never routed;
+   *  they wear only the status's ordinary mods. Checked by
+   *  Actor.isPanicked — any status may declare it. */
+  panic?: true;
   /** SELECTIVE CC: while afflicted, the victim cannot USE skills carrying
    *  ANY of these tags (Actor.canUse is the one gate — player, monster,
    *  and minion alike). Silence forbids 'spell', Disarm forbids 'attack',
@@ -399,6 +406,31 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Petrified', color: '#b8b2a4', duration: 1.4,
     timeScale: 0, hardCC: true,
     mods: [mod('damageTaken', 'more', 0.1)],
+  },
+  // THE FEAR LADDER (the Gloamwood country's dread): every stack is NERVE
+  // LOST — trembling hands (attack/cast speed) and backward-stepping feet —
+  // and at max stacks the nerve BREAKS into HORRIFIED: a rout, not a
+  // freeze. Fear is the CC class that REPOSITIONS fights: monsters scatter
+  // (StatusDef.panic rides the morale machinery — refuges, jukes and squad
+  // courage all still apply), which is mercy OR disaster depending on what
+  // they scatter toward. Players never rout (input is courage); they wear
+  // the mods alone. Ordinary statuses end to end: hard-cast, proc'd
+  // (apply_harrowing / damageVs_horrified mint like every lane), shrugged
+  // with ailmentResist, worn by anything from a support gem to a manor.
+  harrowing: {
+    label: 'Harrowing', color: '#b8a4d8', duration: 4,
+    stacking: true, maxStacks: 5, buildup: { into: 'horrified' },
+    modsPerStack: true,
+    mods: [
+      mod('attackSpeed', 'more', -0.04),
+      mod('castSpeed', 'more', -0.04),
+      mod('accuracy', 'more', -0.03),
+    ],
+  },
+  horrified: {
+    label: 'Horrified', color: '#d8c8f0', duration: 1.6,
+    panic: true,
+    mods: [mod('damageTaken', 'more', 0.08)],
   },
   // SELECTIVE CC — the forbidsTags family: each locks ONE verb and leaves
   // the rest of the kit alive (the counterplay IS switching verbs).

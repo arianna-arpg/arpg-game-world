@@ -697,6 +697,84 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { char: '#241f22', wood: '#3c3230', iron: '#3a3d44' },
   },
   drained_husk: { painter: 'drainedHusk', order: 51, params: { skin: '#cfc4bd', shade: '#8a7a80' } },
+  // --- The HALLOW COUNTRY kit (vis/paintersHallow.ts): the harvest rim, the
+  // estate deeps, and the manor's rooms. Every brush is time-free by
+  // construction, so the whole kit BAKES; candle glows live on the light
+  // layer at the jack-o'-lantern's parity.
+  lantern_totem: {
+    painter: 'gourdTotem', order: 54, shadow: 0.4, longShadow: 1.2, bakeWhole: 'static',
+    params: { color: '#d8722a', stake: '#4c3e2c', glow: '#ffb44a' },
+    light: { radius: -3.4, color: '#ff9a3a', intensity: 0.34, flicker: 1.6 },
+  },
+  wicker_effigy: {
+    painter: 'wickerEffigy', order: 55, shadow: 0.45, longShadow: 1.8, bakeWhole: 'static',
+    params: { withy: '#6a5636', bind: '#3c3222', ember: '#e86830', lit: true },
+    light: { radius: -1.9, color: '#e86830', intensity: 0.2, flicker: 2.6 },
+  },
+  rail_fence: {
+    painter: 'railFence', order: 52, shadow: 0.3, longShadow: 0.5, bakeWhole: 'static',
+    params: { wood: '#55432e' },
+  },
+  // The harvest gathered and never carried in: unlit gourds heaped on the
+  // vine tangle — the gourds painter's own unlit face, one params row.
+  gourd_pile: {
+    painter: 'gourds', order: 46, shadow: 0.3,
+    params: { color: '#b8621c', stem: '#5a6a30', vine: '#3c4a26', n: 6 },
+  },
+  iron_fence: {
+    painter: 'ironFence', order: 52, shadow: 0.3, longShadow: 0.6, bakeWhole: 'static',
+    params: { iron: '#2e3138', stone: '#5a5750' },
+  },
+  lych_gate: {
+    painter: 'lychGate', order: 55, shadow: 0.5, longShadow: 1.4, bakeWhole: 'static',
+    params: { wood: '#463828', roof: '#3a3f46', ridge: '#565c66' },
+  },
+  dead_topiary: {
+    painter: 'deadTopiary', order: 53, shadow: 0.5, longShadow: 0.9, bakeWhole: 'static',
+    params: { leaf: '#2c3a2a', sprig: '#55503a' },
+  },
+  // --- The manor's rooms (dust, portraiture, the stopped hour) --------------
+  dust_sheet: {
+    painter: 'dustSheet', order: 53, shadow: 0.45, bakeWhole: 'static',
+    params: { sheet: '#b8b2a4', fold: '#7e7a6e' },
+  },
+  candelabra: {
+    painter: 'candelabra', order: 54, shadow: 0.35, bakeWhole: 'static',
+    params: { metal: '#6a5a30', wax: '#d8d0b8', flame: '#ffc860' },
+    light: { radius: -4.2, color: '#ffc860', intensity: 0.34, flicker: 3 },
+  },
+  standing_portrait: {
+    painter: 'standingPortrait', order: 54, shadow: 0.35, bakeWhole: 'static',
+    params: { frame: '#8a6a32', canvas: '#181410', face: '#c8bca8' },
+  },
+  banquet_table: {
+    painter: 'banquetTable', order: 53, shadow: 0.5, bakeWhole: 'static',
+    params: { wood: '#4a382a', runner: '#4a1a24', plate: '#b8b2a0' },
+  },
+  grandfather_clock: {
+    painter: 'caseClock', order: 54, shadow: 0.45, longShadow: 1.1, bakeWhole: 'static',
+    params: { case: '#3e2e20', face: '#d8d0b8', hand: '#2a2118' },
+  },
+  manor_mirror: {
+    painter: 'standingMirror', order: 54, shadow: 0.4, bakeWhole: 'static',
+    params: { frame: '#5a4a2c', glass: '#0e1418', glint: '#8fb0c0' },
+  },
+  // The ways between the house's floors (sidezone triggers, labels roof-gated).
+  manor_stair: {
+    painter: 'stairFlight', order: 54, shadow: 0.4,
+    params: { wood: '#4c3a28', dark: '#0a0808', runner: '#4a1a24', label: 'Upstairs' },
+  },
+  attic_stair: {
+    painter: 'stairFlight', order: 54, shadow: 0.4,
+    params: { wood: '#3e2e20', dark: '#060505', runner: '#3a3226', label: 'the Attic' },
+  },
+  // The family plot's sealed door: the cave-mouth idiom in pale estate stone,
+  // a cold gleam past the jamb (it minted an ossuary, and it knows).
+  mausoleum_door: {
+    painter: 'caveMouth', order: 55, shadow: 0.5, longShadow: 1.1,
+    params: { color: '#8a8578', throat: '#0a0c10', glow: '#9fb8c8', label: 'the Mausoleum' },
+    light: { radius: -1.6, color: '#9fb8c8', intensity: 0.14 },
+  },
   // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
   // STALK at ground level (the trunk painter, fungal-toned, sized to the
   // bodyScale trunk), the parametric cap riding the canopy pass above.

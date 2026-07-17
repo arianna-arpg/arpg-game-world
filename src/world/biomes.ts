@@ -216,6 +216,12 @@ export const BIOMES: Record<string, BiomeInfo> = {
   ossuary: { patronFaction: 'undead', mapColor: '#cfc4ac', label: 'Ossuary', spacing: 64,
     allowedLayouts: { plains: 1 },
     landmarks: [{ landmark: 'sinkhole', chance: 0.12 }] },
+  // THE GLOAM MANOR: the haunted house's rooms — realm/pocket-only (no
+  // field seat, no climate row): the manor's grand stair mints its floors
+  // (the ossuary pattern). The tag gives the house a HOME — patron for
+  // rouse/garrison logic and the wildlife gate (no hares upstairs).
+  manor: { patronFaction: 'undead', mapColor: '#4a3a2c', label: 'Gloam Manor', spacing: 64,
+    allowedLayouts: { rooms: 1 } },
   // THE SUNKEN RUIN: the swallowed civilization under the jungle — realm/
   // pocket-only (no field seat, no climate row): the ruin_gate sidezone mints
   // it (the ossuary pattern). Registering the tag gives it a HOME — patron
@@ -587,7 +593,7 @@ export interface BiomeSeedDef {
 export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'grove', weight: 1.2 },
   { biome: 'forest', weight: 1.3 },
-  { biome: 'gloamwood', weight: 1.2 }, // the cool-damp woods: haunted where the forest ends
+  { biome: 'gloamwood', weight: 1.5 }, // the cool-damp woods: haunted where the forest ends — COUNTRY acreage now (three faces: hallowfield rim / heart wood / mournstead estates)
   { biome: 'jungle', weight: 1.6 },    // warm∧wet gate — high seed weight so its belt reads as one green throat
 
   { biome: 'field', weight: 1.1 },

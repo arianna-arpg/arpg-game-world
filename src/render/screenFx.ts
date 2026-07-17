@@ -53,6 +53,11 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
   // a statue does not have a pulse.
   petrifying: { kind: 'pall', color: '#8f8a80', intensity: 0.5, stacksScale: true },
   petrified:  { kind: 'pall', color: '#b8b2a4', intensity: 0.9 },
+  // THE FEAR ladder (the Gloamwood country): nerve draining reads as a cold
+  // violet pall climbing with the stacks; a broken nerve is the same pall at
+  // full press with the edges closing in — dread, not damage.
+  harrowing: { kind: 'pall', color: '#9a86c8', intensity: 0.45, stacksScale: true },
+  horrified: { kind: 'pall', color: '#b8a4e8', intensity: 0.85 },
 };
 
 export interface ActiveFx { def: ScreenFxDef; color: string; k: number; }

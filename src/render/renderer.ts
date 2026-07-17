@@ -66,6 +66,7 @@ import { cameraModeOf, placeCamera } from './camera';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
+import './vis/paintersHallow'; // side-effect: the Hallow-country kit's painters register
 import './vis/paintersAether'; // side-effect: the Aetherial kit's painters register
 import './vis/paintersHome'; // side-effect: the hearth-and-bed kit's painters register
 import './vis/paintersSea'; // side-effect: the ship-deck kit + ghost hull register

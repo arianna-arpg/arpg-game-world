@@ -19,6 +19,7 @@
 import { registerDoodadRule } from '../engine/levelgen';
 import { mintCave } from '../engine/worldgen';
 import { transitDwell } from './transit';
+import { TILESETS } from './tilesets';
 import type { ZoneDef } from './zones';
 
 /** Everything a mint may read from the live world, passed by the engine. */
@@ -202,4 +203,86 @@ registerSidezone({
     map: { x: parent.map.x, y: parent.map.y }, // off-graph; type-required
     caveDepth: (parent.caveDepth ?? 0) + 1,
   }),
+});
+
+// --- THE GLOAM MANOR'S FLOORS ------------------------------------------------
+// The haunted house is BIGGER INSIDE THAN THE MAP: the manor's ground floor
+// is real in-zone space (the gloam_manor structure, walk in the front door),
+// and its grand stair dwells UP into minted floor-zones — the cellar pattern
+// turned vertical, the caveStack carrying the nesting (upstairs minted from
+// the grounds, the attic minted from upstairs; climbing back down unwinds
+// the ladder). Each floor is a hand-written mint furnishing ONE plan
+// structure (manor_upper / manor_attic) on unlit boards, wearing the
+// 'gloam_manor' interior tileset's theme and packs so the whole house reads
+// from ONE source of truth. 'manor_entered' is the estate's GATEWAY SEAM
+// (the vault_entered pattern): the Harrowing gem pools and any future
+// package simply name it.
+
+/** The manor floors borrow the interior tileset's face at MINT time (one
+ *  source of truth: theme, packs, and the cave-scale genqa case all read
+ *  the same def). */
+const manorFace = () => TILESETS['gloam_manor'];
+
+// (The stair/mausoleum doodad RULES live in data/formations.ts with the rest
+// of the country kit — the generation graph needs the kinds; this file only
+// needs the doors.)
+
+registerSidezone({
+  kind: 'manor_stair',
+  dwell: 0.7,
+  indoorsOnly: true, // the stair is dwelled from the hall, never through a wall
+  ledgerOnEnter: 'manor_entered',
+  mint: ({ parent, seed, id }) => ({
+    id, name: 'Gloam Manor — Upstairs',
+    level: Math.max(1, parent.level + 1),
+    size: { w: 560, h: 430 },
+    theme: { ...manorFace().theme },
+    seed,                        // fixed floor — the house keeps its rooms
+    // The plan is the content; the boards beyond it stay unlit and bare
+    // but for what the spiders kept.
+    layout: [{ kind: 'web', count: [1, 3] }],
+    fixtures: [{ structure: 'manor_upper', x: 280, y: 200 }],
+    objective: { kind: 'clear' },
+    packs: manorFace().packs,
+    exits: [{ to: parent.id, side: 's' }],
+    map: { x: parent.map.x, y: parent.map.y }, // off-graph; type-required
+    caveDepth: (parent.caveDepth ?? 0) + 1,
+  }),
+});
+
+registerSidezone({
+  kind: 'attic_stair',
+  dwell: 0.7,
+  indoorsOnly: true,
+  mint: ({ parent, seed, id }) => ({
+    id, name: 'Gloam Manor — the Attic',
+    level: Math.max(1, parent.level + 1),
+    size: { w: 480, h: 400 },
+    theme: { ...manorFace().theme },
+    seed,
+    layout: [{ kind: 'web', count: [2, 4] }],
+    fixtures: [{ structure: 'manor_attic', x: 240, y: 185 }],
+    objective: { kind: 'clear' },
+    packs: manorFace().packs,
+    // The top of the house: whatever keeps it, keeps it HERE (the attic's
+    // authored tenant rides fauna — the one lane a hand-written mint owns).
+    fauna: [{ id: 'lady_of_the_house', chance: 1, count: [1, 1] }],
+    exits: [{ to: parent.id, side: 's' }],
+    map: { x: parent.map.x, y: parent.map.y },
+    caveDepth: (parent.caveDepth ?? 0) + 1,
+  }),
+});
+
+// --- THE MAUSOLEUM -------------------------------------------------------------
+// The estate's family plot keeps a sealed pale door (the mausoleum_court
+// cluster plants it): dwell through and the plot confesses an OSSUARY — the
+// bone-true interior tileset wholesale, each door rolling its own face
+// (bonefields / reliquary), so two plots in one parish read as two crypts
+// of one family. The 'mausoleum_opened' ledger key is the plot's GATEWAY
+// SEAM (the vault_entered pattern) for future packages and Vault unlocks.
+registerSidezone({
+  kind: 'mausoleum_door',
+  dwell: 0.7,
+  ledgerOnEnter: 'mausoleum_opened',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'ossuary', { rollVariant: true }),
 });

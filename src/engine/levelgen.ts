@@ -5544,7 +5544,10 @@ registerStamp('structure', (ctx, spec) => {
   // Plan/generator defs route through the plan pipeline; legacy walls/props defs
   // keep the VERBATIM classic path (dispatch gated on the def, so the rng draw
   // pattern of every existing structure stamp is untouched).
-  if (s.plan || s.generator) { placeStructurePlan(ctx, s); return; }
+  // Compositions may seat a plan structure ON their shared site (the estate
+  // pattern: one authored idea = the house AND its grounds); outside a
+  // composition ctx.siteAt is undefined and the plan sites itself as ever.
+  if (s.plan || s.generator) { placeStructurePlan(ctx, s, ctx.siteAt); return; }
   const at = findSpot(ctx, Math.max(s.halfW, s.halfH) * 1.3, true, 30);
   if (at && areaFreeOf(ctx, at, Math.max(s.halfW, s.halfH) * 1.2, hazardGrounds())) {
     placeStructure(ctx, s, at);
@@ -6252,7 +6255,7 @@ export function compositionDefs(): CompositionDef[] { return Object.values(COMPO
 /** The stamps that consume a composition site (ctx.siteAt) as their anchor —
  *  validation warns when `at` rides any other kind (it would be silently
  *  ignored: those handlers site themselves). */
-export const SITE_AWARE_STAMPS: ReadonlySet<string> = new Set(['clearing', 'formation', 'cluster']);
+export const SITE_AWARE_STAMPS: ReadonlySet<string> = new Set(['clearing', 'formation', 'cluster', 'structure']);
 
 interface CompositionPlan { def: CompositionDef; sites: Record<string, Vec2> }
 

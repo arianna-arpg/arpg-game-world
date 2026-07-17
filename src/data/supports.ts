@@ -2884,6 +2884,27 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // THE HARROWING pair (the Gloamwood country's fear-craft, unlocked by
+  // walking the manor — the manor_entered pool). Fear is the CC that
+  // REPOSITIONS: build stacks, break nerve, fight the rout.
+  unnerving: {
+    id: 'unnerving', name: 'Unnerving',
+    description: '30% chance for hits to build HARROWING — trembling hands, backward feet — toward the broken-nerve rout. Your hits land 12% harder per stack already worn.',
+    color: '#b8a4d8',
+    mods: [mod('apply_harrowing', 'flat', 0.3), mod('damageVs_harrowing', 'flat', 0.12)],
+    perLevel: [mod('apply_harrowing', 'flat', 0.05)],
+    weight: 5,
+  },
+
+  haunted_service: {
+    id: 'haunted_service', name: 'Haunted Service',
+    description: 'Your minions\' hits carry the household\'s dread: 25% chance to build HARROWING, and your minions deal 15% increased damage to the harrowed.',
+    color: '#9a86c8', requiresTags: ['minion'],
+    mods: [mod('minionApply_harrowing', 'flat', 0.25), mod('minionDamage', 'increased', 0.15)],
+    perLevel: [mod('minionApply_harrowing', 'flat', 0.05)],
+    weight: 5,
+  },
+
   potency: {
     id: 'potency', name: 'Potency',
     description: 'Ailments you apply are 30% stronger — hit-fed and baseline alike, skill-native and chance-granted alike. The crank.',

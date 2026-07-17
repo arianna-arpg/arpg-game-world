@@ -1494,6 +1494,92 @@ const tentacleRing: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** A CARVED GOURD HEAD — the Carven Court's face: a ribbed pumpkin sphere,
+ *  triangle eyes and a saw grin cut through to the candle (pal.glow or
+ *  spec.color). params: grin 'saw'|'calm' (the king smiles differently),
+ *  lit (false = the carving without the candle). */
+const gourdHead: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const glow = spec.color ?? pal.glow;
+  const calm = PS(spec, 'grin') === 'calm';
+  const lit = PB(spec, 'lit', true);
+  place(ctx, r, spec, (c, R) => {
+    const trace = (): void => { c.beginPath(); c.ellipse(0, 0, R, R * 0.88, 0, 0, Math.PI * 2); };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    volume(c, R, ramp, trace);
+    // Rib seams over the sphere.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.8);
+    c.lineWidth = Math.max(1, R * 0.06);
+    for (let s = -1; s <= 1; s++) {
+      c.beginPath();
+      c.ellipse(s * R * 0.36, 0, R * 0.3, R * 0.84, 0, -1.2, 1.2);
+      c.stroke();
+    }
+    // The stem, kinked forward of the crown.
+    c.strokeStyle = shade(ramp.base, -0.45);
+    c.lineWidth = Math.max(1.5, R * 0.12);
+    c.beginPath();
+    c.moveTo(-R * 0.05, -R * 0.8);
+    c.lineTo(R * 0.12, -R * 1.05);
+    c.stroke();
+    // The carving: what the knife let out.
+    const ink = lit ? glow : ramp.shadow;
+    c.fillStyle = lit ? withAlpha(ink, 0.95) : withAlpha(ink, 0.9);
+    const e = R * 0.22;
+    c.beginPath();
+    c.moveTo(-e * 1.5, -e * 0.3); c.lineTo(-e * 0.5, -e * 0.3); c.lineTo(-e, -e * 1.2); c.closePath();
+    c.moveTo(e * 1.5, -e * 0.3); c.lineTo(e * 0.5, -e * 0.3); c.lineTo(e, -e * 1.2); c.closePath();
+    c.fill();
+    if (calm) {
+      // The calm grin: one thin unbroken crescent — worse, somehow.
+      c.strokeStyle = withAlpha(ink, 0.95);
+      c.lineWidth = Math.max(1.5, R * 0.1);
+      c.beginPath();
+      c.arc(0, e * 0.4, R * 0.5, 0.35, Math.PI - 0.35);
+      c.stroke();
+    } else {
+      for (let t = 0; t < 4; t++) {
+        c.fillRect(-e * 1.7 + t * e * 0.9, e * (t % 2 ? 0.55 : 0.8), e * 0.6, e * 0.5);
+      }
+    }
+  });
+};
+
+/** SPLAYED STRAW LIMBS — the scarecrow's cross-frame: pole arms flung wide,
+ *  straw bursting from the wrists and collar. params: droop (arm sag). */
+const strawLimbs: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const straw = shade(pal.cloth.light, 0.1);
+  const droop = P(spec, 'droop', 0.18);
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    // The cross-pole: both arms in one bowed stroke.
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(2, R * 0.14);
+    c.beginPath();
+    c.moveTo(-R * 0.15, -R * 1.15);
+    c.quadraticCurveTo(0, -R * (1.15 - droop) * 0.4, -R * 0.15, R * 1.15);
+    c.stroke();
+    // Straw fans at the wrists and the collar knot.
+    c.strokeStyle = withAlpha(straw, 0.9);
+    c.lineWidth = Math.max(1, R * 0.05);
+    for (const wy of [-1.15, 1.15]) {
+      for (let i = 0; i < 4; i++) {
+        const a = (i - 1.5) * 0.35 + (wy < 0 ? -Math.PI / 2 : Math.PI / 2);
+        c.beginPath();
+        c.moveTo(-R * 0.15, R * wy);
+        c.lineTo(-R * 0.15 + Math.cos(a) * R * 0.34, R * wy + Math.sin(a) * R * 0.34);
+        c.stroke();
+      }
+    }
+    c.beginPath();
+    c.arc(0, 0, R * 0.16, 0, Math.PI * 2);
+    c.strokeStyle = shade(ramp.base, -0.25);
+    c.lineWidth = Math.max(1.5, R * 0.1);
+    c.stroke();
+  });
+};
+
 /** A floating glowing core — rift hearts, wisp bodies, construct nuclei. */
 const orb: PartPainter = (ctx, r, spec, pal) => {
   const col = spec.color ?? pal.glow;
@@ -4252,6 +4338,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   eyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
   claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow, musket,
   halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes, veilSashes, glassFins,
+  gourdHead, strawLimbs,
   shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
   barkPlates, branchArms, stalactites, nestTwigs,
   oozeLobes, fleshFolds, eyeCluster, raptorArms, segmentRings,

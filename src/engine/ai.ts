@@ -1018,6 +1018,11 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
     return true;
   };
   if (actor.aiMoraleUntil > world.time) return rout();
+  // PANIC (StatusDef.panic — the fear CC class): a status-driven rout that
+  // overrides the body's own courage spec entirely — the bravest wall flees
+  // while horrified. Rides the SAME rout (refuges, jukes, squad dynamics),
+  // so fear composes with every flight behavior already authored.
+  if (actor.isPanicked()) return rout();
   if (!m || (m.breakAtLife === undefined && !m.breakOutnumbered && !m.skittish)) return false;
   // SKITTISH: anything non-kin inside the bubble is reason enough to bolt.
   if (m.skittish) {

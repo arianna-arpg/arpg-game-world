@@ -434,9 +434,21 @@ export const TILESETS: Record<string, TilesetDef> = {
   // hang, crows that see you long before you see them.
   gloamwood: {
     id: 'gloamwood',
+    // THE COUNTRY'S HEART. Gloamwood is a three-face country now (the
+    // desert/karst model): the HALLOWFIELD rim (feral pumpkin crofts, the
+    // Carven Court) gives way to this deep wood, which gives way to the
+    // MOURNSTEAD estates (the manor, the family plots) in the deepest gloam.
+    // The heart stands aside from the very rim so the country's first face
+    // is the harvest — and darkens from there.
+    depthAffinity: { from: 0.15, fadeIn: 0.25 },
     compositions: [
       { composition: 'hangmans_hill', chance: 0.35 },
       { composition: 'witchs_croft', chance: 0.35 },
+      // The country bleeds through its own middle: a festival ring the
+      // Court walked in from the rim, a family plot the estates lost track
+      // of under the crooked roof.
+      { composition: 'carven_ring', chance: 0.15 },
+      { composition: 'family_plot', chance: 0.12 },
     ],
     nameFirst: ['Gloamwood', 'Duskhollow', 'Ravenmourn', 'Widowshade', 'Hangmans', 'Palegrove', 'Mourning', 'Shrouded', 'Witchlight', 'Hollowmoor', 'Blackbough', 'Grimhallow', 'Candlewake', 'Nightbriar', 'Sorrowfen', 'Cinderveil', 'Wolfsvigil', 'Lanternlost'],
     nameSecond: ['Weald', 'Hollow', 'Thicket', 'Copse', 'Vale', 'Reach', 'Crossing', 'Wood', 'Glen', 'Bourne', 'Shade', 'Warren', 'Mile', 'Parish', 'Vigil', 'Acre'],
@@ -574,6 +586,369 @@ export const TILESETS: Record<string, TilesetDef> = {
     structures: [
       { structure: 'pillaged_township', chance: 0.15 },
       { structure: 'watchtower', chance: 0.1 },
+    ],
+  },
+
+  // THE HALLOWFIELD (the Gloamwood country's rim): the harvest that no one
+  // gathered. Feral crofts at the wood's edge — PARKLAND, not forest
+  // (the weald's recipe in living wood): clustered gloam-oak stands with
+  // jack-o'-lanterns glowing UNDER the canopies, open stubble between,
+  // and the ground itself the ambush — pumpkin patches everywhere, and
+  // some of the pumpkins were never pumpkins (patch_lurker), some of the
+  // scarecrows were never furniture (scarecrow_watcher). Warm candle-amber
+  // dots against the blue-grey gloam: the country's first face is the
+  // friendly-shaped one, which is the trick.
+  hallowfield: {
+    id: 'hallowfield',
+    depthAffinity: { to: 0.35, fadeOut: 0.3 },
+    // PARKLAND (the weald's patchwork read, in living wood): discrete oak
+    // stands — each one a sealed veil pocket with a lantern lit under it —
+    // on open field studded with the harvest's furniture. Every mix a dial.
+    forceLayout: 'parkland',
+    layoutParams: {
+      parklandGroves: [6, 9],
+      parklandGroveR: [140, 240],
+      parklandTrees: [{ kind: 'gloam_oak', weight: 1, radius: [36, 54] }],
+      parklandHearts: [{ kind: 'gloam_oak', weight: 1, radius: [52, 64] }],
+      // THE ASK, kept: a carved lantern glowing under better than half the
+      // stand canopies — the stands read as kept shrines, not wild wood.
+      parklandHeartExtra: { kind: 'jack_o_lantern', chance: 0.55, radius: [9, 12] },
+      // Field furniture between the stands: the watch the crofts kept.
+      // Counts stay modest — scarecrows and totems paint live (the karst
+      // spire lesson); the patches are ground and cost nothing.
+      parklandFloor: [
+        { kind: 'scarecrow', weight: 3, radius: [12, 16] },
+        { kind: 'hay_bale', weight: 2, radius: [12, 16] },
+        { kind: 'lantern_totem', weight: 2, radius: [12, 16] },
+        { kind: 'dead_tree', weight: 2, radius: [14, 22] },
+        { kind: 'gourd_pile', weight: 2, radius: [12, 16] },
+        { kind: 'wicker_effigy', weight: 1, radius: [22, 28] },
+      ],
+      parklandFloorN: [22, 36],
+    },
+    compositions: [
+      { composition: 'carven_ring', chance: 0.4 },
+      { composition: 'witchs_croft', chance: 0.45 },
+    ],
+    nameFirst: ['Hallowfield', 'Carven', 'Gourdlit', 'Reapwait', 'Latefallow', 'Cricklane', 'Wickfield', 'Strawmark', 'Allhollow', 'Emberwick', 'Furrowend', 'Tatterfield', 'Grinning', 'Harvestmoon'],
+    nameSecond: ['Acres', 'Crofts', 'Furrows', 'Rows', 'Field', 'Fallow', 'Patch', 'Stubble', 'Commons', 'Plots', 'Reach', 'Verge'],
+    theme: {
+      // Dusk over stubble: a shade lighter than the heart wood — the gloam
+      // arriving, not yet arrived — and every warm dot is a carved grin.
+      dayLight: 0.6,
+      nightDark: 0.84,
+      heat: 0.35,
+      fog: { banks: [1, 3], kinds: [{ id: 'gloam_shroud', weight: 2 }, { id: 'grave_mist' }] },
+      ground: {
+        // Harvest umber folded into the gloam greens: leaf-rot and cut
+        // stubble; the clearing lift reads as field, never sun.
+        palette: ['#12140e', '#1a1c12', '#242416', '#2e2c1a', '#3c3823', '#54482c'],
+        bias: 0.44, alpha: 0.5, strength: 1.05,
+        clearing: { reach: 150, lift: 0.24 },
+      },
+      ambientFx: [{ kind: 'motes', color: '#b0a890', intensity: 0.7 }],
+      floor: '#0e100a', grid: '#151a10', border: '#2e3a28',
+      obstacle: '#333d28', obstacleEdge: '#55663f', accent: '#ffb44a',
+      mud: '#1c2014', chasm: '#050704', water: '#16303a', wall: '#3a3226',
+      tree: '#2e3a2c', grass: '#44502e',
+      road: '#4a4030',
+    },
+    sizeW: [2800, 3800], sizeH: [2000, 2800], ellipseChance: 0.2, biome: 'gloamwood',
+    // Field furniture pooling into whatever the stands leave open: patch
+    // ranks, fence lines, the processions of carved light.
+    layout: [
+      { kind: 'pumpkin_patch', count: [6, 10] },
+      { kind: 'jack_o_lantern', count: [6, 12] },
+      { kind: 'formation', count: [1, 2], formation: 'pumpkin_rows' },
+      { kind: 'formation', count: [1, 2], formation: 'fence_line' },
+      { kind: 'formation', count: [0, 1], formation: 'scarecrow_row' },
+      { kind: 'formation', count: [0, 1], formation: 'lantern_procession' },
+      { kind: 'log', count: [1, 3] }, { kind: 'stump', count: [2, 4] },
+      { kind: 'rocks', count: [2, 5], radius: [16, 30] },
+      { kind: 'river', count: [0, 1] },
+      { kind: 'cave', count: [0, 1] },
+      { kind: 'ruin', count: [0, 1] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [100, 160] },
+      { kind: 'gourd_pile', count: [1, 3] },
+      { kind: 'bone_pile', count: [0, 2] },
+      { kind: 'briarwood', count: [1, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'herbalists_croft' },
+    ],
+    variants: [
+      // The carved acres: patch country proper — ranks on ranks, and the
+      // lanterns thick enough to read the rows by.
+      { name: 'the carved acres', layout: [
+        { kind: 'formation', count: [2, 3], formation: 'pumpkin_rows' },
+        { kind: 'pumpkin_patch', count: [4, 8] },
+        { kind: 'jack_o_lantern', count: [4, 8] },
+        { kind: 'formation', count: [0, 1], formation: 'fence_line' },
+        { kind: 'gourd_pile', count: [1, 3] },
+      ] },
+      // Crow country: the watch rows — crosses pacing the furrow lines,
+      // and not all of them furniture.
+      { name: 'crow country', layout: [
+        { kind: 'formation', count: [1, 2], formation: 'scarecrow_row' },
+        { kind: 'scarecrow', count: [2, 4] },
+        { kind: 'hay_bale', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'fence_line' },
+        { kind: 'dead_tree', count: [2, 4] },
+      ] },
+      // The bonfire rows: the Court's festival ground — totems marching,
+      // the wicker patrons standing over the walk.
+      { name: 'the bonfire rows', layout: [
+        { kind: 'formation', count: [1, 2], formation: 'lantern_procession' },
+        { kind: 'lantern_totem', count: [2, 4] },
+        { kind: 'wicker_effigy', count: [1, 2] },
+        { kind: 'jack_o_lantern', count: [3, 6] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+      ] },
+    ],
+    packs: {
+      count: [5, 8], size: [3, 5],
+      // The Carven Court holds its own rows — and the wood's crows, the
+      // marsh-lights, and the Night Court's foragers all cross them, which
+      // is a brawl (carven|nightkin and carven|undead run hostile).
+      table: [
+        { id: 'gourdling', weight: 4, presence: { to: 14, fadeOut: 7 } },
+        { id: 'patch_lurker', weight: 3 },
+        { id: 'scarecrow_watcher', weight: 3 },
+        { id: 'carrion_crow', weight: 2, presence: { to: 18, fadeOut: 9 } },
+        { id: 'will_o_wisp', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'lantern_sower', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'harvest_effigy', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'feeding_thrall', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'night_hunter', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'carven_king', weight: 1, presence: { from: 13, fadeIn: 5 } },
+      ],
+    },
+    // Old graves under new furrows (never rolled: no 'spawners' objective
+    // here — the field's threats are the field's).
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'waves', weight: 1 },
+    ],
+    structures: [
+      { structure: 'hay_barn', chance: 0.3 },
+      { structure: 'garden_gazebo', chance: 0.12 },
+    ],
+  },
+
+  // THE MOURNSTEAD (the Gloamwood country's deep face): the estate at the
+  // wood's heart. The deep dark presses in on grounds somebody once kept —
+  // iron boundaries and topiary walks losing to the trees, gas lamps still
+  // lit on lanes that go nowhere now, the family plot with its pale sealed
+  // door (the mausoleum mints an OSSUARY below), and the MANOR itself:
+  // walk in the front door, cross the sheeted rooms, find the grand stair —
+  // the house is bigger inside than the map (manor_stair mints the floors).
+  mournstead: {
+    id: 'mournstead',
+    depthAffinity: { from: 0.5, fadeIn: 0.3 },
+    compositions: [
+      { composition: 'manor_grounds', chance: 0.55 },
+      { composition: 'family_plot', chance: 0.5 },
+      { composition: 'hangmans_hill', chance: 0.15 },
+    ],
+    nameFirst: ['Mournstead', 'Widowsworth', 'Blackbanner', 'Gravenholm', 'Ashenhall', 'Vigilkeep', 'Lachrymere', 'Sablecourt', 'Dimhallow', 'Palewick', 'Sorrowseat', 'Duskmanor'],
+    nameSecond: ['Estate', 'Grounds', 'Parish', 'Demesne', 'Walk', 'Garden', 'Seat', 'Holding', 'Acre', 'Vigil', 'Rest', 'Keep'],
+    theme: {
+      // Colder and dimmer than the heart wood: wrought iron, wet slate,
+      // moss on marble — the gloam with a pedigree.
+      dayLight: 0.5,
+      nightDark: 0.88,
+      heat: 0.3,
+      fog: { banks: [2, 4], kinds: [{ id: 'grave_mist', weight: 2 }, { id: 'gloam_shroud' }, { id: 'river_mist' }] },
+      ground: {
+        palette: ['#0e1012', '#141618', '#1b1e1f', '#232826', '#2e3430', '#454e44'],
+        bias: 0.46, alpha: 0.5, strength: 1.05,
+        clearing: { reach: 150, lift: 0.2 },
+      },
+      ambientFx: [{ kind: 'motes', color: '#98a8b8', intensity: 0.8 }],
+      floor: '#0b0d0e', grid: '#121618', border: '#2c3a3a',
+      obstacle: '#2c343a', obstacleEdge: '#4a5a5e', accent: '#9fb8c8',
+      mud: '#181c1a', chasm: '#040606', water: '#122830', wall: '#3a3630',
+      tree: '#28332e', grass: '#38443c',
+      road: '#3c3830',
+    },
+    sizeW: [2400, 3400], sizeH: [1800, 2500], ellipseChance: 0.2, biome: 'gloamwood',
+    // The estate's furniture, pooling under the deep wood's roof (the
+    // forest recipe rides the biome's own tree mix; clearings run larger
+    // here — grounds want lawns).
+    layoutParams: {
+      forestClearings: [3, 6],
+      forestCoverDeep: 0.85,
+    },
+    layout: [
+      { kind: 'dead_tree', count: [3, 6] },
+      { kind: 'log', count: [1, 3] }, { kind: 'stump', count: [2, 4] },
+      { kind: 'web', count: [2, 4] },
+      { kind: 'tombstone', count: [4, 8] },
+      { kind: 'weathered_statue', count: [1, 2] },
+      { kind: 'lantern_post', count: [1, 3] },
+      { kind: 'formation', count: [0, 1], formation: 'iron_boundary' },
+      { kind: 'formation', count: [0, 1], formation: 'topiary_walk' },
+      { kind: 'rocks', count: [2, 5], radius: [16, 30] },
+      { kind: 'river', count: [0, 1] },
+      { kind: 'cave', count: [0, 1] },
+      { kind: 'ruin', count: [0, 2] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [110, 170] },
+      { kind: 'jack_o_lantern', count: [0, 2] },
+      { kind: 'burial_urn', count: [1, 3] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'briarwood', count: [1, 2] },
+      { kind: 'drained_husk', count: [0, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'night_feast' },
+    ],
+    variants: [
+      // The lord's wood: the walked lanes — lamps and statuary holding a
+      // line the trees stopped honoring.
+      { name: "the lord's wood", layout: [
+        { kind: 'formation', count: [1, 2], formation: 'topiary_walk' },
+        { kind: 'lantern_post', count: [2, 4] },
+        { kind: 'weathered_statue', count: [2, 3] },
+        { kind: 'dead_tree', count: [3, 5] },
+        { kind: 'dead_topiary', count: [2, 4] },
+      ] },
+      // The drowned garden: the water feature won. Statues to their knees,
+      // the fountain still working at nothing.
+      { name: 'the drowned garden', layout: [
+        { kind: 'river', count: [1, 1] },
+        { kind: 'fountain', count: [1, 1] },
+        { kind: 'dead_topiary', count: [3, 5] },
+        { kind: 'weathered_statue', count: [2, 3] },
+        { kind: 'web', count: [1, 3] },
+      ] },
+      // The kept rows: the parish buried right — stones in ranks behind
+      // iron, an obelisk for whoever paid for one.
+      { name: 'the kept rows', layout: [
+        { kind: 'formation', count: [2, 3], formation: 'gravestone_rows' },
+        { kind: 'tombstone', count: [8, 14] },
+        { kind: 'formation', count: [1, 2], formation: 'iron_boundary' },
+        { kind: 'black_obelisk', count: [0, 1] },
+        { kind: 'dead_tree', count: [2, 4] },
+      ] },
+    ],
+    packs: {
+      count: [5, 8], size: [3, 5],
+      // The household and its keepers: the estate dead walk the grounds,
+      // the Night Court keeps its old visiting rights, and Carven raiders
+      // cross the fence line after dark (hostile — the brawl is scenery).
+      table: [
+        { id: 'gloomling', weight: 3, presence: { to: 16, fadeOut: 8 } },
+        { id: 'sheeted_haunt', weight: 2 },
+        { id: 'zombie', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'poltergeist', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'hollow_butler', weight: 1, presence: { from: 5, fadeIn: 2 } },
+        { id: 'will_o_wisp', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'grave_hag', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'banshee', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'barrow_wight', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'scarecrow_watcher', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vampire_thrall', weight: 1, presence: { from: 5, fadeIn: 2 } },
+        { id: 'pallbearer', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'dusk_rider', weight: 1, presence: { from: 12, fadeIn: 6 } },
+        { id: 'gloom_coach', weight: 1, presence: { from: 14 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'offering', weight: 1 },
+      { kind: 'procession', weight: 1 },
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+    ],
+    structures: [
+      { structure: 'chapel', chance: 0.3 },
+      { structure: 'cottage', chance: 0.3 },
+      { structure: 'garden_gazebo', chance: 0.35 },
+      { structure: 'pillaged_township', chance: 0.1 },
+    ],
+  },
+
+  // THE GLOAM MANOR (interior, the haunted house's rooms): the face the
+  // manor's minted floors wear (data/sidezones.ts borrows theme + packs at
+  // mint — ONE source of truth), and a cave-scale identity in its own right
+  // for the QA sweeps and any future door. Clarity doctrine indoors: dark
+  // parquet, pale sheeted masses, candle anchors — the room reads before
+  // the room moves.
+  gloam_manor: {
+    id: 'gloam_manor',
+    frontier: false, perfProbe: true,
+    sky: 'sheltered', // rooms — no storm reaches a made bed
+    nameFirst: ['Gloam', 'Widowed', 'Shuttered', 'Sable', 'Lachrym', 'Dimlit'],
+    nameSecond: ['Manor', 'Rooms', 'Wing', 'Hall', 'Gallery', 'Parlors'],
+    theme: {
+      ambientDark: 0.32,
+      heat: 0.4,
+      ground: {
+        // Parquet and dust: warm browns under candle-fall.
+        palette: ['#1c1712', '#241d16', '#2c241a', '#342a1e', '#3e3222'],
+        bias: 0.5, alpha: 0.5, speckles: 0.6,
+      },
+      ambientFx: [{ kind: 'motes', color: '#b8a888', intensity: 0.5 }],
+      floor: '#161210', grid: '#221c14', border: '#4a3a2c',
+      obstacle: '#3e3226', obstacleEdge: '#5e4a36', accent: '#ffc860',
+      wall: '#4a3a2c',
+      tree: '#3a3226',
+    },
+    sizeW: [1150, 1500], sizeH: [880, 1150], biome: 'manor',
+    layout: [
+      { kind: 'dust_sheet', count: [3, 6] },
+      { kind: 'candelabra', count: [2, 5] },
+      { kind: 'web', count: [2, 4] },
+      { kind: 'standing_portrait', count: [1, 3] },
+      { kind: 'manor_mirror', count: [1, 2] },
+      { kind: 'bone_pile', count: [0, 2] },
+    ],
+    variants: [
+      // The shut rooms: the wing they closed first — everything sheeted,
+      // everything webbed, and the sheets are why you knock first.
+      { name: 'the shut rooms', layout: [
+        { kind: 'dust_sheet', count: [5, 8] },
+        { kind: 'web', count: [3, 5] },
+        { kind: 'candelabra', count: [1, 3] },
+      ] },
+      // The long gallery: the family, framed, watching the corridor.
+      { name: 'the long gallery', layout: [
+        { kind: 'standing_portrait', count: [4, 7] },
+        { kind: 'candelabra', count: [3, 6] },
+        { kind: 'manor_mirror', count: [2, 3] },
+      ] },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      table: [
+        { id: 'sheeted_haunt', weight: 3 },
+        { id: 'gloomling', weight: 2 },
+        { id: 'poltergeist', weight: 2 },
+        { id: 'will_o_wisp', weight: 1, presence: { to: 10, fadeOut: 5 } },
+        { id: 'hollow_butler', weight: 1, presence: { from: 4, fadeIn: 2 } },
+        { id: 'banshee', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'barrow_wight', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      ],
+    },
+    // Cave-scale mints (the QA sweep, any future door) carve real rooms:
+    // the interior generators' walls in the house's own timber.
+    caveLayouts: { rooms: 2, dungeon: 1 },
+    layoutParams: {
+      floorStyle: 'boards',
+      rooms: [5, 9], doorChance: 0.6,
+    },
+    // Something under the floorboards, should a mint ever ask (never rolled:
+    // no 'spawners' objective in the house).
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 1 },
     ],
   },
 
@@ -6069,7 +6444,10 @@ export interface BiomeLore { title: string; blurb: string; }
 export const BIOME_LORE: Record<string, BiomeLore> = {
   deepwood:       { title: 'Deepwood',          blurb: 'Deep old forest, green over green — fungal rot working below, thorns finding purchase above, and elder treants waking where the wood runs deepest.' },
   forest:         { title: 'Forest',            blurb: 'A true canopy: a near-sealed roof of crowns you move UNDER to see into, trails of beaten earth threading between the sun-wells where the light pools.' },
-  gloamwood:      { title: 'Gloamwood',         blurb: 'Fog is territory here. Roaming banks feed the things that hunt from within them — bait them into the open, or ride the same murk unseen.' },
+  gloamwood:      { title: 'Gloamwood',         blurb: 'Fog is territory here. Roaming banks feed the things that hunt from within them — bait them into the open, or ride the same murk unseen. The heart of the gloam country: the feral crofts lie back toward the light, the estates deeper in.' },
+  hallowfield:    { title: 'The Hallowfield',   blurb: 'The harvest that no one gathered: oak stands with carved lanterns glowing under the canopies, pumpkin patches ranked to the fence lines — and some of the pumpkins were never pumpkins, and some of the scarecrows turn their heads. The Carven Court keeps these rows now.' },
+  mournstead:     { title: 'The Mournstead',    blurb: 'The estate at the wood\'s heart. Iron boundaries and topiary walks losing to the trees, lamps lit on lanes that go nowhere, the family plot with its pale sealed door — and the manor itself, which is bigger inside than the map.' },
+  gloam_manor:    { title: 'Gloam Manor',       blurb: 'The house put to sleep: sheeted furniture that billows when you cross the room, the family framed and watching, candles nobody snuffs — and the Lady keeping the attic, at the top of a stair that should not fit inside.' },
   taiga:          { title: 'Taiga',             blurb: 'Close, hushed conifer dark — deep drifts, frozen pools, and the firewood caches of travelers who never came back, the aurora breathing overhead.' },
   tundra:         { title: 'Tundra',            blurb: 'A frozen expanse under a permanent floor of snow, where every storm deepens the drifts and the cover never fully melts away.' },
   cinderlands:    { title: 'Cinderlands',       blurb: 'Scorched black flats where fire has already passed — ash, ember and the heat-shimmer of a land still cooling from the burn.' },

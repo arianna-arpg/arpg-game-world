@@ -109,6 +109,11 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // teeth run it), and her wars ride OUT from under it. Rich feeding
   // elsewhere is an ESTATE (the Long Night's grounds), never a capital.
   nightkin: { roaming: 0.6, aggression: 1.2, warlordHome: 'origin', homeBiome: 'gloamwood', eventRange: 170, contexts: ['baseline', 'crusade'] },
+  // The Carven Court — the harvest gone feral: it barely leaves its rows
+  // (the crofts ARE the argument), territorial about every furrow, and its
+  // King crowns only under the wood it ripened in. Shares the gloam with
+  // the Night Court and hates it — the country's own three-way war.
+  carven: { roaming: 0.3, aggression: 0.95, warlordHome: 'origin', homeBiome: 'gloamwood', eventRange: 150, contexts: ['baseline'], temper: 'territorial' },
   // The Junglekin — the strangling green's tribes: they barely leave the
   // treeline (the walls ARE the argument) and never cede a lane of it.
   junglekin: { roaming: 0.25, aggression: 1.0, warlordHome: 'origin', homeBiome: 'jungle', eventRange: 160, contexts: ['baseline'], temper: 'territorial' },

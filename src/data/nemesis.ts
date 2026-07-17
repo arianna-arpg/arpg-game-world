@@ -60,6 +60,21 @@ export const NEMESIS_NAMES = {
         'Grave-Sweet', 'the Uninvited', 'Dawn-Debtor', 'the Decanted',
       ],
     },
+    // The Carven Court names itself out of the almanac and the furrow —
+    // hedge-names, feast-names, whatever the field overheard. Epithets read
+    // like weather entries in a farmer's year that went wrong.
+    carven: {
+      first: [
+        'Barleysere', 'Mawkin', 'Tatterhood', 'Gourdred', 'Hobfellow',
+        'Rattlewick', 'Summergone', 'Chaffrey', 'Hollowvine', 'Stubblejack',
+        'Merrowmast', 'Winnowill',
+      ],
+      epithets: [
+        'the Unharvested', 'of the Last Furrow', 'Straw-Ribbed', 'the Grinning',
+        'Field-Sworn', 'the Carved', 'Wick-Hearted', 'of the Long Stubble',
+        'Frost-Bitten', 'the Scything', 'Crow-Fed', 'the Vined',
+      ],
+    },
     // The Sand Sarcophate remembers itself in dynastic regnal style — throne
     // names and funerary titles, every epithet an entry from the tomb ledger.
     sarcophate: {

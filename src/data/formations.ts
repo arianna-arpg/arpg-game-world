@@ -1093,3 +1093,134 @@ registerFormation({
     { kind: 'jungle_bloom', radius: [9, 12], every: 6, jitter: 16 },
   ],
 });
+
+// --- THE HALLOW COUNTRY KIT (the Gloamwood's harvest rim + estate deeps) ------
+// Doodad semantics registered beside their arrangements (the kennel-yard
+// contract): totems and effigies are honest solids, fence runs are thin
+// collide-as-drawn bars you SHOOT OVER (sight and shot sail; feet do not),
+// the manor's furniture blocks like furniture. Painters live in
+// render/vis/paintersHallow.ts; every kind is an open-registry citizen.
+registerDoodadRule('lantern_totem', {
+  overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  // Struck totems gutter out the way lone lanterns do — the light is the loot.
+  brittle: { on: ['hit'], orbChance: 0.3, text: 'the totem gutters out—', color: '#ffb44a' },
+});
+registerDoodadRule('wicker_effigy', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 130, bodyScale: 0.4,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('rail_fence', {
+  overlap: 'solid', blocksMove: true, spacing: 8,
+  surface: { hw: 1.0, hh: 0.22 },
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerDoodadRule('iron_fence', {
+  overlap: 'solid', blocksMove: true, spacing: 6,
+  surface: { hw: 1.0, hh: 0.18 },
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+// The lych gate is a WALK-UNDER arch: the way through the fence line — feet
+// pass beneath the saddle roof, so the gate is inert on purpose.
+registerDoodadRule('lych_gate', { overlap: 'inert', spacing: 220 });
+registerStamp('lych_gate', stampSingle('lych_gate', [22, 28]));
+// The country's SIDEZONE MOUTHS (their SidezoneDefs live in data/sidezones.ts;
+// the rules live HERE so the generation graph — clusters, plans, the QA
+// sweep — knows the kinds without importing the sidezone registry):
+// the family plot's pale door down into the ossuary, and the manor's
+// stairs between its minted floors.
+registerDoodadRule('mausoleum_door', { overlap: 'trigger', spacing: 500 });
+registerDoodadRule('manor_stair', { overlap: 'trigger', spacing: 20 });
+registerDoodadRule('attic_stair', { overlap: 'trigger', spacing: 20 });
+registerDoodadRule('dead_topiary', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('gourd_pile', { overlap: 'inert', spacing: 44 });
+// The manor's rooms: sheeted masses and laid tables collide as drawn
+// (structure-grid aligned), portraits and the stopped clock stand thin.
+registerDoodadRule('dust_sheet', {
+  overlap: 'solid', blocksMove: true, spacing: 34,
+  surface: { hw: 0.9, hh: 0.68, orient: 'fixed' },
+});
+registerDoodadRule('candelabra', { overlap: 'solid', blocksMove: true, spacing: 26 });
+registerDoodadRule('standing_portrait', {
+  overlap: 'solid', blocksMove: true, spacing: 26,
+  surface: { hw: 0.75, hh: 0.3, orient: 'fixed' },
+});
+registerDoodadRule('banquet_table', {
+  overlap: 'solid', blocksMove: true, spacing: 60,
+  surface: { hw: 1.0, hh: 0.36, orient: 'fixed' },
+});
+registerDoodadRule('grandfather_clock', {
+  overlap: 'solid', blocksMove: true, spacing: 30,
+  surface: { hw: 0.5, hh: 0.9, orient: 'fixed' },
+});
+registerDoodadRule('manor_mirror', {
+  overlap: 'solid', blocksMove: true, spacing: 30,
+  surface: { hw: 0.55, hh: 0.42, orient: 'fixed' },
+});
+registerStamp('lantern_totem', stampSingle('lantern_totem', [12, 16]));
+registerStamp('wicker_effigy', stampSingle('wicker_effigy', [22, 30]));
+registerStamp('gourd_pile', stampSingle('gourd_pile', [12, 18]));
+registerStamp('dead_topiary', stampSingle('dead_topiary', [16, 24]));
+registerStamp('dust_sheet', stampSingle('dust_sheet', [14, 20]));
+registerStamp('candelabra', stampSingle('candelabra', [8, 11]));
+registerStamp('standing_portrait', stampSingle('standing_portrait', [11, 15]));
+registerStamp('manor_mirror', stampSingle('manor_mirror', [11, 14]));
+
+// A FENCE LINE: a split-rail run down an old field edge — patches sprawl
+// along it, and somebody keeps a lantern lit at the stile.
+registerFormation({
+  id: 'fence_line', arrange: 'line', span: [300, 560], step: 46,
+  pieces: [
+    { kind: 'rail_fence', radius: [20, 26], jitter: 3, rot: 'chain' },
+    { kind: 'pumpkin_patch', radius: [14, 20], every: 4, jitter: 34 },
+    { kind: 'jack_o_lantern', radius: [9, 12], every: 6, jitter: 22 },
+  ],
+});
+
+// A SCARECROW ROW: the watch the fields kept — crosses pacing a furrow
+// line, bales and gourds between. Some of the watchers are not furniture.
+registerFormation({
+  id: 'scarecrow_row', arrange: 'line', span: [280, 520], step: 66,
+  pieces: [
+    { kind: 'scarecrow', radius: [12, 16], jitter: 10, rot: true },
+    { kind: 'pumpkin_patch', radius: [14, 20], every: 2, jitter: 30 },
+    { kind: 'hay_bale', radius: [12, 16], every: 3, jitter: 26, rot: true },
+  ],
+});
+
+// A LANTERN PROCESSION: carved totems wandering off toward the wood —
+// whoever carves them walks this way at dusk, and the lights mark the walk.
+registerFormation({
+  id: 'lantern_procession', arrange: 'meander', span: [340, 620], step: 60,
+  params: { wobble: 28 },
+  pieces: [
+    { kind: 'lantern_totem', radius: [13, 17], jitter: 8, rot: true },
+    { kind: 'jack_o_lantern', radius: [9, 12], every: 2, jitter: 18 },
+    { kind: 'gourd_pile', radius: [11, 15], every: 3, jitter: 26 },
+  ],
+});
+
+// AN IRON BOUNDARY: the estate's wrought fence marching its old property
+// line, lamps at the piers, the topiary beasts inside the wire.
+registerFormation({
+  id: 'iron_boundary', arrange: 'line', span: [320, 580], step: 44,
+  pieces: [
+    { kind: 'iron_fence', radius: [20, 26], jitter: 2, rot: 'chain' },
+    { kind: 'lantern_post', radius: [9, 12], every: 5, jitter: 6 },
+    { kind: 'dead_topiary', radius: [15, 21], every: 6, jitter: 34, rot: true },
+  ],
+});
+
+// A TOPIARY WALK: the garden path nobody prunes now — clipped beasts and
+// pale statuary pacing a lane, a lamp where the walk turns.
+registerFormation({
+  id: 'topiary_walk', arrange: 'line', span: [260, 460], step: 62,
+  pieces: [
+    { kind: 'dead_topiary', radius: [16, 24], jitter: 12, rot: true },
+    { kind: 'weathered_statue', radius: [12, 16], every: 3, jitter: 16, rot: true },
+    { kind: 'lantern_post', radius: [9, 12], every: 4, jitter: 12 },
+  ],
+});

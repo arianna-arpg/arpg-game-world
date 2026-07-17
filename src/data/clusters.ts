@@ -234,3 +234,41 @@ registerCluster({
   ],
   poi: true,
 });
+
+// THE CARVEN COURT: the harvest-folk's festival ground — a wicker patron at
+// the center, lantern totems and offering heaps ringing it, the patches
+// crowding in past the swept ground. Ring contract: the paired composition
+// (carven_ring) clears ≤76, so every non-centerpiece ring starts at 102+
+// (clearing max + fattest piece radius) — pieces never fight the reservation.
+registerCluster({
+  id: 'carven_court',
+  anchor: { radius: 30, kind: 'wicker_effigy' },
+  pieces: [
+    { kind: 'wicker_effigy', radius: [24, 30], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'lantern_totem', radius: [13, 17], count: [3, 5], ring: [44, 66], rot: true, centerpiece: true },
+    { kind: 'gourd_pile', radius: [11, 15], count: [2, 4], ring: [102, 150] },
+    { kind: 'pumpkin_patch', radius: [14, 20], count: [3, 5], ring: [104, 158] },
+    { kind: 'scarecrow', radius: [12, 16], count: [1, 2], ring: [108, 164], rot: true },
+    { kind: 'hay_bale', radius: [12, 16], count: [1, 3], ring: [104, 156], rot: true },
+  ],
+  poi: true,
+});
+
+// THE MAUSOLEUM COURT: the estate's family plot — the sealed pale door at
+// the heart (mausoleum_door = the sidezone mouth DOWN into the ossuary;
+// 'mausoleum_opened' is the gateway ledger), urns at the threshold, the
+// household's stones in the ground around it. Same ring contract: paired
+// clearing ≤76, non-centerpiece rings from 102.
+registerCluster({
+  id: 'mausoleum_court',
+  anchor: { radius: 28, kind: 'mausoleum_door' },
+  pieces: [
+    { kind: 'mausoleum_door', radius: [24, 28], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'burial_urn', radius: [11, 15], count: [2, 3], ring: [38, 56], rot: true, centerpiece: true },
+    { kind: 'tombstone', radius: [11, 16], count: [4, 7], ring: [102, 154], rot: true },
+    { kind: 'weathered_statue', radius: [12, 16], count: [1, 2], ring: [106, 158], rot: true },
+    { kind: 'dead_tree', radius: [14, 22], count: [1, 2], ring: [116, 172], rot: true },
+    { kind: 'bone_pile', radius: [10, 16], count: [1, 2], ring: [104, 160] },
+  ],
+  poi: true,
+});

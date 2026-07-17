@@ -6251,6 +6251,209 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'juggernaut', enrage: 0.5, move: { style: 'charge', commitRange: 420, chargeSpeed: 2.8 } },
   },
 
+  // --- THE CARVEN COURT (the harvest that no one gathered) -------------------
+  // The Hallowfield's own: things somebody CARVED — or that carved
+  // themselves — walking the feral crofts at the Gloamwood's rim. A core
+  // faction with a real grudge ledger: the Court hates the Night Court
+  // (the fields resent the estate that let them go wild) and the plain
+  // dead alike, so the country brawls three ways where the faces meet.
+  // Textures per the enemy-feel doctrine: rind-shell lurker, evasion straw,
+  // ES-glass sower, poise wicker — and straw burns (family fireRes runs
+  // NEGATIVE where straw is the body; feeding them fire is the counterlever).
+
+  // The gourdling: seed-fruit on runner legs. Individually a joke; a patch
+  // of them is a bevy of small bad news that POPS.
+  gourdling: {
+    id: 'gourdling', name: 'Gourdling',
+    color: '#c8681e', shape: 'circle', radius: 7, material: 'wood', look: 'gourdling',
+    base: { life: 20, moveSpeed: 165, evasion: 40, mana: 16, manaRegen: 3 },
+    skills: ['claw'], xp: 5, faction: 'carven', tags: ['plant'],
+    scaleVariance: [0.8, 1.2],
+    detection: 0.9,
+    // Stamped rind, wet seeds: the pop is the point.
+    deathBurst: { mode: 'implode', damageFrac: 0.35, radius: 50, coalesce: 0.4, damageType: 'physical' },
+    brain: {
+      type: 'swarm',
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
+    },
+  },
+  // The patch lurker: the user-facing promise kept — a pumpkin that was
+  // NEVER a pumpkin. It spawns ON a patch (habitat), sits as scenery
+  // (ambush) until you wade in picking, then the rind opens around a knot
+  // of pale tentacles. Crack the FRONT rind (a thin shell, not poise), then
+  // the meat is soft.
+  patch_lurker: {
+    id: 'patch_lurker', name: 'Patch Lurker',
+    color: '#b85e1c', shape: 'circle', radius: 12, material: 'wood', look: 'patch_lurker',
+    base: { life: 95, moveSpeed: 105, accuracy: 105, mana: 40, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.25)],
+    skills: ['lash_roots', 'claw'], xp: 26, faction: 'carven', tags: ['plant'],
+    shellGuard: { side: 'front', max: 70, arcDeg: 160, regenDelay: 5 },
+    habitat: { kind: 'pumpkin_patch', minRadius: 10, grace: 36 },
+    ambush: { radius: 110, announce: 'the patch was never asleep!' },
+    vision: { arcDeg: 360 }, // it has no face until it opens
+    detection: 1.0,
+    brain: { type: 'juggernaut' },
+  },
+  // The scarecrow watcher: the cross in the field that turns its head when
+  // you have already walked past it. Straw takes no clean hit (evasion is
+  // the pole) and holds no line — but straw BURNS, and it knows it.
+  // Post-planted: after the fight it walks back to its cross and waits.
+  scarecrow_watcher: {
+    id: 'scarecrow_watcher', name: 'Scarecrow Watcher',
+    color: '#8a7648', shape: 'triangle', radius: 12, material: 'wood', look: 'scarecrow_watcher',
+    base: { life: 66, moveSpeed: 135, evasion: 115, mana: 60, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', -0.35), mod('chaosRes', 'flat', 0.25)],
+    skills: ['claw', 'summon_crows'], xp: 24, faction: 'carven', tags: ['plant'],
+    ambush: { radius: 135, announce: 'the scarecrow turns its head—' },
+    post: true,
+    nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'increased', 0.35), mod('attackSpeed', 'more', 0.12)] },
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.05,
+      behavior: { dodge: { chance: 0.45, reaction: [0.12, 0.3], exit: 'lateral' } },
+    },
+  },
+  // The lantern sower: the one who CARVES. A robed shape drifting the rows,
+  // lobbing lit gourds that burst in fire and dread — glass behind a wick
+  // (energy shield over next to no meat).
+  lantern_sower: {
+    id: 'lantern_sower', name: 'Lantern Sower',
+    color: '#d8722a', shape: 'pentagon', radius: 11, material: 'cloth', look: 'lantern_sower',
+    base: { life: 30, energyShield: 100, moveSpeed: 120, mana: 160, manaRegen: 11 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['gourd_toss'], xp: 30, faction: 'carven', tags: ['plant'],
+    gemBias: ['fire', 'curse'],
+    detection: 1.1,
+    brain: { type: 'strafer' },
+  },
+  // The harvest effigy: the wicker patron woken — a bound-withy hulk that
+  // walks through hits (poise is the whole body) on legs that turn like
+  // haystacks. Wicker burns even better than straw.
+  harvest_effigy: {
+    id: 'harvest_effigy', name: 'Harvest Effigy',
+    color: '#6a5636', shape: 'octagon', radius: 18, material: 'wood', look: 'harvest_effigy',
+    base: { life: 280, moveSpeed: 78, accuracy: 115, armor: 25, poise: 85, mana: 30, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', -0.25), mod('chaosRes', 'flat', 0.3)],
+    skills: ['heavy_strike'], xp: 55, faction: 'carven', tags: ['plant'],
+    turnSpeed: 3,
+    presence: { from: 7, fadeIn: 3 },
+    detection: 0.9,
+    brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+  // THE CARVEN KING: the harvest crowned — a robed regal scarecrow under a
+  // calm-cut grin, walking the rows it never let anyone bring in. The
+  // Court's warlord: wails the nerve out of you, lobs its own lit fruit,
+  // and calls the patch up out of the ground when pressed.
+  carven_king: {
+    id: 'carven_king', name: 'the Carven King',
+    color: '#e8832a', shape: 'star', radius: 16, material: 'wood', look: 'carven_king',
+    base: { life: 640, moveSpeed: 110, accuracy: 125, armor: 45, poise: 70, evasion: 30, mana: 200, manaRegen: 14 },
+    mods: [mod('fireRes', 'flat', -0.15), mod('chaosRes', 'flat', 0.4)],
+    skills: ['harrowing_wail', 'gourd_toss', 'heavy_strike'], xp: 170, faction: 'carven', tags: ['plant'],
+    nocturne: { phases: ['dusk', 'night'], mods: [mod('damageTaken', 'more', -0.12)] },
+    presence: { from: 13, fadeIn: 5 },
+    drops: 1, wardPriority: 2,
+    detection: 1.2,
+    brain: {
+      type: 'commander', perception: { alertShout: 520 },
+      rules: [
+        { when: { lifeBelow: 0.6 }, every: [9, 13], hold: [0.3, 0.5],
+          announce: 'The King calls the harvest up!',
+          actions: [{ do: 'summon', monster: 'gourdling', count: 3, ring: 64 }] },
+      ],
+    },
+  },
+  // The bound scarecrow: the player-taught answer (Summon Scarecrow) — a
+  // straw sentinel wearing the watcher's silhouette, its blows carrying the
+  // Harrowing by nature. A minion vessel: xp 0, no drops, courage optional.
+  bound_scarecrow: {
+    id: 'bound_scarecrow', name: 'Bound Scarecrow',
+    color: '#9a8658', shape: 'triangle', radius: 12, material: 'wood', look: 'scarecrow_watcher',
+    base: { life: 130, moveSpeed: 125, accuracy: 110, evasion: 60, mana: 20, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', -0.25), mod('apply_harrowing', 'flat', 0.35)],
+    skills: ['claw'], xp: 0, tags: ['plant', 'construct'],
+    drops: 0,
+  },
+
+  // --- THE MANOR HAUNTS (the household that never gave notice) ---------------
+  // The Mournstead estate's staff, still keeping the house: furniture that
+  // billows, service that curdles, and the Lady at the top of the stairs.
+  // All faction 'undead' — the apparition wing (poltergeist, banshee,
+  // gloomling, barrow wight) already fields beside them in the manor packs.
+
+  // The sheeted haunt: the classic — a dust sheet with nothing under it.
+  // It spawns ON sheeted furniture (habitat) and waits (ambush) until you
+  // cross the room. Glass-thin: a ghost is mostly ectoplasm (ES) and nerve.
+  sheeted_haunt: {
+    id: 'sheeted_haunt', name: 'Sheeted Haunt',
+    color: '#b8b2a4', shape: 'circle', radius: 11, material: 'ethereal', look: 'sheeted_haunt',
+    base: { life: 24, energyShield: 85, moveSpeed: 150, mana: 30, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.4), mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 22, faction: 'undead', tags: ['undead'],
+    habitat: { kind: 'dust_sheet', minRadius: 8, grace: 44 },
+    // Furniture-bound: never a clear-objective seat (the root_wraith rule —
+    // a body confined to a blocking doodad must not hold the door shut).
+    noObjective: true,
+    ambush: { radius: 100, announce: 'the dust sheet BILLOWS—' },
+    levitates: true,
+    detection: 1.1,
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      behavior: { dodge: { chance: 0.5, reaction: [0.1, 0.25], exit: 'lateral' } },
+    },
+  },
+  // The hollow butler: the service that never ended. It keeps the household
+  // DRESSED — a litany of candle-courage on whatever haunts stand near —
+  // and despairs at guests personally.
+  hollow_butler: {
+    id: 'hollow_butler', name: 'Hollow Butler',
+    color: '#6a6a7a', shape: 'pentagon', radius: 12, material: 'cloth', look: 'hollow_butler',
+    base: { life: 40, energyShield: 70, moveSpeed: 115, mana: 150, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['despair'], xp: 28, faction: 'undead', tags: ['undead'],
+    gemBias: ['curse'], wardPriority: 1,
+    detection: 1.0,
+    brain: {
+      type: 'commander',
+      rules: [
+        { when: {}, every: [7, 11], hold: [0.2, 0.4],
+          announce: 'the house is SERVED.',
+          actions: [{ do: 'buff', buff: { type: 'buff', id: 'households_order', duration: 6,
+            mods: [mod('damage', 'more', 0.2), mod('moveSpeed', 'more', 0.15)] } }] },
+      ],
+    },
+  },
+  // THE LADY OF THE HOUSE: the attic's tenant and the climb's answer — an
+  // authored boss (the marquee lights by contract). She drifts through her
+  // own walls (phasing), wails the nerve from your hands, throws the
+  // household at you piece by piece, and wakes the sheets when pressed.
+  lady_of_the_house: {
+    id: 'lady_of_the_house', name: 'the Lady of the House',
+    color: '#d8c8f0', shape: 'star', radius: 14, material: 'ethereal', look: 'lady_of_the_house',
+    base: { life: 300, energyShield: 380, moveSpeed: 125, accuracy: 120, mana: 250, manaRegen: 16 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.5), mod('phasing', 'flat', 1)],
+    skills: ['harrowing_wail', 'hurl_debris', 'despair'], xp: 240, faction: 'undead', tags: ['undead'],
+    boss: true,
+    tag: 'manor_lady', // the attic-finale kill row keys on this (killHandlers.ts)
+    levitates: true,
+    drops: 2, wardPriority: 2,
+    detection: 1.2,
+    brain: {
+      type: 'commander', perception: { alertShout: 460 },
+      rules: [
+        { when: { lifeBelow: 0.65 }, every: [10, 14], hold: [0.3, 0.5],
+          announce: 'The house wakes with her—',
+          actions: [{ do: 'summon', monster: 'sheeted_haunt', count: 2, ring: 70 }] },
+        { when: { distUnder: 120 }, every: [5, 8], hold: [0.1, 0.2],
+          actions: [
+            { do: 'buff', buff: { type: 'buff', id: 'gloam_fade', duration: 0.9, mods: [mod('invisible', 'flat', 1)] } },
+            { do: 'teleport', to: 'awayFromTarget', range: 300 },
+          ] },
+      ],
+    },
+  },
+
   // --- THE VERMINFALL (rats, roaches, the warren-folk — the faction whose
   //     target is your HOME GROUND) ------------------------------------------
   // Two tiers, one family. The PREY tier (gutter rat, gutter roach) rides the
@@ -9647,6 +9850,12 @@ const RELATIONS: Record<string, FactionStance> = {
   'nightkin|sylvan': 'hostile',
   'nightkin|beastkin': 'hostile',
   'nightkin|demon': 'hostile',
+  // The Carven Court is the harvest the estates let go feral: it resents
+  // the Night Court that owned those fields AND the household dead the
+  // Court keeps — so the Gloamwood country brawls three ways wherever the
+  // faces meet (the sirocco/erg doctrine, transplanted to the crofts).
+  'carven|nightkin': 'hostile',
+  'carven|undead': 'hostile',
   // The Caulborn are the thing HELL is afraid of: an invading organism
   // remaking the underworld inside its own membrane. The Legion fights for
   // its home ground; the Glut resents a rival meat; the eldritch recognize
@@ -9863,6 +10072,20 @@ export const FACTIONS: Record<string, {
       { id: 'starfall_shardling', weight: 4 },
       { id: 'starfall_prism', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'gravity_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+  },
+  carven: {
+    name: 'the Carven Court',
+    // The harvest musters as a FIELD: gourdlings and lurkers throng the
+    // young rows, the watchers and sowers walk the middle stubble, and the
+    // wicker patron and the King stand only where the season has turned.
+    table: [
+      { id: 'gourdling', weight: 4, presence: { to: 14, fadeOut: 7 } },
+      { id: 'patch_lurker', weight: 3 },
+      { id: 'scarecrow_watcher', weight: 3 },
+      { id: 'lantern_sower', weight: 2, presence: { from: 4, fadeIn: 2 } },
+      { id: 'harvest_effigy', weight: 1, presence: { from: 7, fadeIn: 3 } },
+      { id: 'carven_king', weight: 1, presence: { from: 13, fadeIn: 5 } },
     ],
   },
   nightkin: {

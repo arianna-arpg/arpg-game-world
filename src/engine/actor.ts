@@ -1414,6 +1414,12 @@ export class Actor {
     return this.statuses.some(s => STATUS_DEFS[s.id]?.hardCC);
   }
 
+  /** Wearing any PANIC status (StatusDef.panic — the fear CC class)?
+   *  AI bodies rout while this holds; players wear only the mods. */
+  isPanicked(): boolean {
+    return this.statuses.some(s => STATUS_DEFS[s.id]?.panic);
+  }
+
   /** Holding a guard stance right now? */
   isGuarding(): boolean { return this.casting?.mode === 'guard'; }
 

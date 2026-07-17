@@ -26,6 +26,7 @@ export const FACTION_COLORS: Record<string, string> = {
   beastkin: '#c8823a',
   flesh: '#c85a6a',
   nightkin: '#a83a5a',
+  carven: '#d8722a',
   emberkin: '#e88a3a',
   junglekin: '#3fae5c',
   sirocco: '#f0c880',

@@ -732,6 +732,121 @@ export const STRUCTURES: Record<string, StructureDef> = {
     courtyardFloorStyle: 'cobble',
   },
 
+  // --- THE GLOAM ESTATE (the Mournstead kit) --------------------------------
+  // The manor you WALK INTO: a slate-roofed pile whose ground floor is real
+  // in-zone space — four rooms off a central corridor, vision confined room
+  // by room, the household's furniture under dust sheets, and the grand
+  // stair at the corridor's head (manor_stair = the sidezone UP; the floors
+  // above are minted zones, so the house is bigger inside than the map).
+  // The undead garrison is the staff that never gave notice.
+  gloam_manor: {
+    id: 'gloam_manor', halfW: 180, halfH: 135, cellSize: 30,
+    plan: [
+      '############',
+      '#k.g#Y.#m.i#',
+      '#.t.#..#c..#',
+      'W.c.D..D..hW',
+      '#u..#..#..r#',
+      '#####..#####',
+      'Wc..D..D..cW',
+      '#.u.#..#t.g#',
+      '#####DD#####',
+    ],
+    legend: {
+      Y: { doodad: { kind: 'manor_stair', radius: 16 }, interior: true },
+      c: { doodad: { kind: 'candelabra', radius: 9 }, interior: true },
+      u: { doodad: { kind: 'dust_sheet', radius: 15 }, interior: true },
+      t: { doodad: { kind: 'banquet_table', radius: 24 }, interior: true },
+      i: { doodad: { kind: 'standing_portrait', radius: 12 }, interior: true },
+      g: { doodad: { kind: 'grandfather_clock', radius: 12 }, interior: true },
+      m: { doodad: { kind: 'manor_mirror', radius: 12 }, interior: true },
+    },
+    garrison: 'undead', garrisonSize: [3, 5],
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'slate', floorStyle: 'boards',
+  },
+
+  // The manor's SECOND STOREY — the plan a minted floor-zone furnishes
+  // (never rolled on open ground): two bedrooms off the landing hall, the
+  // attic stair at the balustrade, the way back DOWN through the south
+  // door to the descent portal. 'S' wakes arrivals at the landing.
+  manor_upper: {
+    id: 'manor_upper', halfW: 150, halfH: 105, cellSize: 30,
+    plan: [
+      '##########',
+      '#Z.u#m.ic#',
+      'W.c.#..Z.W',
+      '##D####D##',
+      '#..g..t.u#',
+      'Wc.S..A.mW',
+      '####DD####',
+    ],
+    legend: {
+      A: { doodad: { kind: 'attic_stair', radius: 16 }, interior: true },
+      c: { doodad: { kind: 'candelabra', radius: 9 }, interior: true },
+      u: { doodad: { kind: 'dust_sheet', radius: 15 }, interior: true },
+      t: { doodad: { kind: 'banquet_table', radius: 22 }, interior: true },
+      i: { doodad: { kind: 'standing_portrait', radius: 12 }, interior: true },
+      g: { doodad: { kind: 'grandfather_clock', radius: 12 }, interior: true },
+      m: { doodad: { kind: 'manor_mirror', radius: 12 }, interior: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'slate', floorStyle: 'boards',
+  },
+
+  // The ATTIC — the top of the house and the end of the climb: one long
+  // room under the ridge, the household's kept things, and the twin
+  // mirrors nobody covered. Whatever still keeps the house keeps it here.
+  manor_attic: {
+    id: 'manor_attic', halfW: 120, halfH: 90, cellSize: 30,
+    plan: [
+      '########',
+      '#u.gg.u#',
+      '#c.mm.c#',
+      '#......#',
+      '#..S...#',
+      '###DD###',
+    ],
+    legend: {
+      c: { doodad: { kind: 'candelabra', radius: 9 }, interior: true },
+      u: { doodad: { kind: 'dust_sheet', radius: 15 }, interior: true },
+      g: { doodad: { kind: 'grandfather_clock', radius: 12 }, interior: true },
+      m: { doodad: { kind: 'manor_mirror', radius: 12 }, interior: true },
+    },
+    confineVision: true,
+    roofs: 'auto', roofStyle: 'slate', floorStyle: 'boards',
+  },
+
+  // A GARDEN GAZEBO: the estate lawn's roofed folly — corner lanterns hold
+  // up a timber cap over open sides (an open lean-to: the veil never
+  // confines it), benches facing whatever the garden used to be.
+  garden_gazebo: {
+    id: 'garden_gazebo', halfW: 60, halfH: 60, cellSize: 30,
+    plan: [
+      'L..L',
+      '.b..',
+      '..b.',
+      'L..L',
+    ],
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
+
+  // A HAY BARN: the harvest rim's working hulk — bales still racked, doors
+  // you can put a shoulder (or anything else) through on three sides.
+  hay_barn: {
+    id: 'hay_barn', halfW: 120, halfH: 90, cellSize: 30,
+    plan: [
+      '########',
+      '#HH...C#',
+      'X......#',
+      'X....HH#',
+      '#C...H.#',
+      '###XX###',
+    ],
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'thatch', floorStyle: 'packed',
+  },
+
   // --- PLAN STRUCTURES (generator-emitted blueprints) ------------------------
   // halfW/halfH on plan defs are DOCUMENTATION-grade estimates only — the plan
   // pipeline derives the true rect from the emitted rows × cellSize.

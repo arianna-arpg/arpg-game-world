@@ -7062,6 +7062,87 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 720, weight: 1 },
   },
 
+  // --- THE HARROWING (the Gloamwood country's fear-craft) --------------------
+  // The player-facing pool the haunted manor unlocks ('manor_entered' gates
+  // the Vault bundle) plus the Carven Court's own verbs. The family identity
+  // is the FEAR LADDER (status.ts harrowing → horrified): build dread, break
+  // nerve, and fight things while they flee — the CC class that repositions.
+
+  gourd_bomb: {
+    id: 'gourd_bomb', name: 'Gourd Bomb',
+    description: 'Lob a carved gourd packed with wick and dread. It bursts in flame — and whatever the carving means, those caught reading it lose their nerve.',
+    tags: ['spell', 'fire', 'aoe', 'duration'], color: '#e8832a',
+    manaCost: 12, cooldown: 4, useTime: 0.8,
+    baseDamage: { fire: [11, 17] },
+    delivery: { type: 'ground', radius: 75, castRange: 430, delay: 0.6 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'harrowing', chance: 0.5 },
+      { type: 'status', status: 'burn', chance: 0.25, magnitude: 0.25 },
+    ],
+    requirements: { intelligence: 14 },
+    ai: { range: 400, weight: 3, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
+  harrowing_wail: {
+    id: 'harrowing_wail', name: 'Harrowing Wail',
+    description: 'A wail with a winter in it. Builds HARROWING on everything in the cone — trembling hands, backward feet — until the nerve BREAKS and they rout outright.',
+    tags: ['spell', 'aoe', 'duration', 'warcry'], color: '#b8a4d8',
+    manaCost: 10, cooldown: 5, useTime: 0.7,
+    baseDamage: { physical: [5, 8] },
+    delivery: { type: 'cone', range: 170, arcDeg: 75 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'harrowing', chance: 0.85 },
+    ],
+    requirements: { willpower: 14 },
+    ai: { range: 150, weight: 3, keepDistance: 110 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('statusChance', 'increased', 0.03)] },
+  },
+
+  summon_scarecrow: {
+    id: 'summon_scarecrow', name: 'Summon Scarecrow',
+    description: 'Plant a bound scarecrow to watch your field. Its blows carry the Harrowing by nature. Scales with your minion stats.',
+    tags: ['spell', 'summon', 'minion'], color: '#9a8658',
+    manaCost: 20, cooldown: 2, useTime: 0.9,
+    delivery: { type: 'summon', monsterId: 'bound_scarecrow', count: 1, maxActive: 2 },
+    meta: { skillId: 'command_assault', label: 'Attack!' },
+    effects: [],
+    requirements: { wisdom: 12, willpower: 10 },
+    ai: { range: 400, weight: 2, keepDistance: 300 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
+  },
+
+  // The Court's own verbs (noDrop, the shared catalog as ever): the sower's
+  // lit fruit and the watcher's murder-call.
+  gourd_toss: {
+    id: 'gourd_toss', name: 'Lit Gourd', noDrop: true,
+    description: 'The sower lobs one of its carvings, still grinning.',
+    tags: ['spell', 'fire', 'projectile'], color: '#d8722a',
+    manaCost: 9, cooldown: 2.2, useTime: 0.9,
+    baseDamage: { fire: [8, 13] },
+    delivery: { type: 'projectile', speed: 320, radius: 10, range: 460 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'harrowing', chance: 0.4 },
+      { type: 'status', status: 'burn', chance: 0.3, magnitude: 0.25 },
+    ],
+    requirements: { intelligence: 14 },
+    ai: { range: 420, weight: 2, keepDistance: 240 },
+  },
+
+  summon_crows: {
+    id: 'summon_crows', name: 'Murder Call', noDrop: true,
+    description: 'The watcher opens its arms and the field answers.',
+    tags: ['spell', 'summon', 'minion'], color: '#2a2d34',
+    manaCost: 12, cooldown: 6, useTime: 0.9,
+    delivery: { type: 'summon', monsterId: 'carrion_crow', count: 2, maxActive: 4 },
+    effects: [],
+    requirements: { willpower: 14 },
+    ai: { range: 500, weight: 2, keepDistance: 200 },
+  },
+
   // --- THE VERMINFALL's verbs -----------------------------------------------
   // The warren's spew (nests + broodpriests + the King all share it) and the
   // fester rat's rotting bite — noDrop monster verbs on the shared catalog.

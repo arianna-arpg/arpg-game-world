@@ -4699,6 +4699,116 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 3 } }],
     shadowScale: 0.6,
   },
+
+  // --- THE CARVEN COURT (the Gloamwood country's harvest-kin) ----------------
+  // Reads at a glance, per the clarity doctrine: EVERY Court body wears the
+  // carved gourd somewhere (the faction signature), and the silhouette says
+  // the texture — runner legs = fodder, tentacles = the rind you crack,
+  // splayed cross = the straw that dodges, robe+lantern = the glass caster,
+  // withy hulk = the poise wall, crown+calm grin = the King.
+
+  /** The gourdling: a carved head on runner legs — the pop made cute. */
+  gourdling: {
+    parts: [
+      { kind: 'legs', scale: 0.85, role: 'dark', params: { n: 4 } },
+      { kind: 'gourdHead', scale: 1.0 },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The patch lurker: a fat gourd over a knot of pale arms — the rind
+   *  (front shell) reads as the face it doesn't have. */
+  patch_lurker: {
+    parts: [
+      { kind: 'gourdHead', scale: 1.05, params: { grin: 'saw' } },
+    ],
+    live: [
+      { kind: 'tentacleRing', scale: 0.95, role: 'bone', params: { n: 7, len: 1.6 } },
+    ],
+    shadowScale: 1.05,
+  },
+  /** The scarecrow watcher: the field cross woken — splayed straw limbs,
+   *  hung tatters, the carved head sitting slightly wrong on the pole. */
+  scarecrow_watcher: {
+    parts: [
+      { kind: 'strawLimbs', scale: 1.1, role: 'wood' },
+      { kind: 'tatters', scale: 0.9, role: 'cloth' },
+      { kind: 'gourdHead', scale: 0.6, x: 0.16 },
+    ],
+    shadowScale: 0.85,
+  },
+  /** The lantern sower: robes, a dim calm-cut head, and the lantern it
+   *  carves the others by. */
+  lantern_sower: {
+    parts: [
+      { kind: 'robe', scale: 1.0, role: 'cloth' },
+      { kind: 'gourdHead', scale: 0.5, x: 0.18, params: { grin: 'calm' } },
+      { kind: 'lantern', x: 0.5, y: -0.6, scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.8,
+  },
+  /** The harvest effigy: the wicker patron — bound withies, branch arms,
+   *  embers riding the weave, the head a smouldering carve. */
+  harvest_effigy: {
+    parts: [
+      { kind: 'barkPlates', scale: 1.1, role: 'wood' },
+      { kind: 'branchArms', scale: 1.15, role: 'wood' },
+      { kind: 'gourdHead', scale: 0.7, x: 0.1 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.7 }],
+    shadowScale: 1.25,
+  },
+  /** The Carven King: robed, crowned, calm-grinned — the harvest that
+   *  decided it was a court. */
+  carven_king: {
+    parts: [
+      { kind: 'cape', scale: 1.1, role: 'dark' },
+      { kind: 'robe', scale: 1.05, role: 'cloth' },
+      { kind: 'gourdHead', scale: 0.72, x: 0.12, params: { grin: 'calm' } },
+      { kind: 'crown', x: 0.12, y: -0.55, scale: 0.5, role: 'metal' },
+      { kind: 'scythe', scale: 1.05, role: 'metal' },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 1.15,
+  },
+
+  // --- THE MANOR HAUNTS (the Mournstead estate's household) ------------------
+
+  /** The sheeted haunt: a dust sheet with nothing under it — the fold-lines
+   *  still pressed, the two dark places where it looks. */
+  sheeted_haunt: {
+    parts: [
+      { kind: 'shroudWrap', scale: 1.1, role: 'bone' },
+      { kind: 'eyes', color: '#241f2e', params: { n: 2, spread: 0.42, dist: 0.28, size: 0.15 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.5,
+  },
+  /** The hollow butler: livery over nothing — high collar, a service mask,
+   *  the candle it keeps the household dressed by. */
+  hollow_butler: {
+    parts: [
+      { kind: 'torso', scale: 0.95, role: 'cloth' },
+      { kind: 'collar', scale: 0.9, role: 'dark' },
+      { kind: 'mask', scale: 0.55, x: 0.15, role: 'bone' },
+      { kind: 'lantern', x: 0.5, y: 0.55, scale: 0.6, color: '#ffc860' },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The Lady of the House: a pale court gown drifting its own halls —
+   *  veils that move on no wind, a mourning mask, grave-light in tow. */
+  lady_of_the_house: {
+    parts: [
+      { kind: 'robe', scale: 1.1, role: 'bone' },
+      { kind: 'mask', scale: 0.5, x: 0.16, role: 'bone' },
+      { kind: 'laurel', scale: 0.55, x: 0.1, y: -0.5, role: 'metal' },
+    ],
+    live: [
+      { kind: 'veilSashes', scale: 1.0, role: 'cloth' },
+      { kind: 'wisps', x: -0.4, scale: 0.9, params: { n: 3 } },
+    ],
+    shadowScale: 0.55,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

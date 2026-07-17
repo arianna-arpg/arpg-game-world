@@ -547,3 +547,52 @@ registerComposition({
     { kind: 'bone', count: [1, 3], where: { field: 'shore', max: 0.5, params: { kinds: ['chyme_pool'], reach: 200 } } },
   ],
 });
+
+// THE CARVEN RING: the harvest-folk's festival ground found lit and swept —
+// the wicker patron and its lantern ring (carven_court's numeric contract:
+// clearing ≤76, outer pieces from 102), a procession of carved totems
+// wandering off toward whatever the court walks to at dusk.
+registerComposition({
+  id: 'carven_ring',
+  sites: [{ id: 'ring', radius: [140, 180] }],
+  pre: [{ kind: 'clearing', at: 'ring', count: [1, 1], radius: [60, 76] }],
+  post: [
+    { kind: 'cluster', cluster: 'carven_court', at: 'ring', count: [1, 1] },
+    { kind: 'formation', formation: 'lantern_procession', count: [0, 1] },
+  ],
+});
+
+// THE MANOR GROUNDS: the estate whole, as ONE authored idea — the house
+// seated on the composition's own site (the structure stamp is site-aware
+// for exactly this), its yard held open by the pre-clearing, the wrought
+// boundary and the garden walks laid around it. Fence pieces landing inside
+// the house's reserved rect stand down piece by piece — the boundary decays
+// exactly where the manor already won the ground, which is how hundred-year
+// fences read.
+registerComposition({
+  id: 'manor_grounds',
+  sites: [{ id: 'grounds', radius: [200, 250], hard: true }],
+  pre: [{ kind: 'clearing', at: 'grounds', count: [1, 1], radius: [150, 190] }],
+  post: [
+    { kind: 'structure', structure: 'gloam_manor', at: 'grounds', count: [1, 1] },
+    { kind: 'formation', formation: 'iron_boundary', at: 'grounds', count: [1, 2] },
+    { kind: 'formation', formation: 'topiary_walk', count: [1, 2] },
+    { kind: 'lych_gate', count: [0, 1] },
+    { kind: 'well', count: [0, 1] },
+    { kind: 'lantern_post', count: [2, 4] },
+  ],
+});
+
+// THE FAMILY PLOT: the estate's dead, kept the way estates keep them — the
+// mausoleum court on cleared ground (its door mints the ossuary below),
+// stone rows radiating, the iron boundary somewhere off in the trees.
+registerComposition({
+  id: 'family_plot',
+  sites: [{ id: 'plot', radius: [150, 190] }],
+  pre: [{ kind: 'clearing', at: 'plot', count: [1, 1], radius: [60, 76] }],
+  post: [
+    { kind: 'cluster', cluster: 'mausoleum_court', at: 'plot', count: [1, 1] },
+    { kind: 'formation', formation: 'gravestone_rows', count: [1, 2] },
+    { kind: 'formation', formation: 'iron_boundary', count: [0, 1] },
+  ],
+});
