@@ -18,6 +18,7 @@ import { lightReach, wellDimScale } from '../../engine/lightwells';
 import { GridWalkField } from '../../world/gridWalk';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { ORB_DEFS } from '../../data/orbs';
+import { courtLord } from '../../packages/courts';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
 import { litPolygon, polygonPath } from './sight';
@@ -213,6 +214,21 @@ export class LightLayer {
     // Zone exits breathe their accent so the way out reads in the dark.
     for (const e of world.exits) {
       push(e.pos.x, e.pos.y, 85, world.zone.theme.accent, 0.3, e);
+    }
+
+    // OPEN ENCOUNTER FIELDS (the breach): the tear's own unlight pools over
+    // the uncovered ground — lord-tinted where a court rolled — and a
+    // standing court door burns like the threshold it is. Movers (the ring
+    // breathes every frame), so they live-march like flashes do.
+    const EC = VIS_CFG.lights.encounter;
+    for (const enc of world.encountersView()) {
+      if (enc.phase === 'open' || enc.phase === 'collapsing') {
+        const c = (enc.lordId ? courtLord(enc.lordId)?.color : undefined) ?? enc.def.trigger.color;
+        push(enc.pos.x, enc.pos.y, Math.min(enc.radius, EC.radiusCap), c, EC.intensity);
+      } else if (enc.phase === 'door' && enc.doorAt) {
+        const c = (enc.lordId ? courtLord(enc.lordId)?.color : undefined) ?? enc.def.trigger.color;
+        push(enc.doorAt.x, enc.doorAt.y, EC.doorRadius, c, EC.doorIntensity);
+      }
     }
 
     // Doodad emissives — declared per kind in DOODAD_VISUALS.light, served

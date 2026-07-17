@@ -978,6 +978,79 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ============================================================ THE UNRUSTED
+  // Brass under verdigris: every silhouette is PLATE + INSTRUMENT (pauldrons,
+  // aprons, hammers, windings), and the whole legion shares one cold
+  // verdigris eye-light — the family reads as a single workshop at a glance,
+  // each rank by the tool it carries. The coil warden's storm-blue lens is
+  // the deliberate exception: the one body that drinks the lightning wears
+  // the lightning's color (the debt and its waiver, visible at range).
+  /** The line rank: work-apron over plate, the estate's mace still in hand. */
+  awakened_custodian: {
+    parts: [
+      { kind: 'torso', scale: 0.92, role: 'dark' },
+      { kind: 'pauldrons', scale: 0.95 },
+      { kind: 'apron', role: 'accent' },
+      { kind: 'mace', params: { len: 0.9 } },
+      { kind: 'eyes', color: '#7ff0d0', params: { spread: 0.3, dist: 0.44, size: 0.08 } },
+    ],
+  },
+  /** The watch: helm and shield under one wide unblinking lens. */
+  brass_sentinel: {
+    parts: [
+      { kind: 'torso', scale: 0.88, role: 'dark' },
+      { kind: 'shield', x: 0.15, scale: 0.9 },
+      { kind: 'helm' },
+      { kind: 'eyes', color: '#7ff0d0', params: { n: 1, spread: 0, dist: 0.5, size: 0.12 } },
+    ],
+  },
+  /** The mender: apron, tool-pack, rivet hammer — the smallest body in the
+   *  legion and the first one to kill. */
+  verdigris_wright: {
+    parts: [
+      { kind: 'torso', scale: 0.82, role: 'dark' },
+      { kind: 'apron', role: 'accent' },
+      { kind: 'pack', x: -0.35, scale: 0.75 },
+      { kind: 'hammer', scale: 0.85 },
+      { kind: 'eyes', color: '#7ff0d0', params: { spread: 0.3, dist: 0.46, size: 0.08 } },
+    ],
+  },
+  /** The storm-engine: winding-rings around a lit core, humming. */
+  coil_warden: {
+    parts: [
+      { kind: 'torso', scale: 0.85, role: 'dark' },
+      { kind: 'segmentRings', scale: 1.0, params: { n: 3 } },
+      { kind: 'orb', scale: 0.45, role: 'glow' },
+      { kind: 'eyes', color: '#9ae8ff', params: { spread: 0.32, dist: 0.46, size: 0.07 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, color: '#9ae8ff', alpha: 0.4 }],
+  },
+  /** The siege-frame: girders for shoulders, chain in the joints, a
+   *  driver-hammer for an arm. */
+  scaffold_colossus: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'armorPlates', scale: 1.05 },
+      { kind: 'chains', rot: 0.4, params: { n: 3 } },
+      { kind: 'hammer', scale: 1.15 },
+      { kind: 'eyes', color: '#7ff0d0', params: { spread: 0.34, dist: 0.4, size: 0.07 } },
+    ],
+  },
+  /** THE CUSTODIAN: the whole uniform — plate, apron, chained seal, and the
+   *  estate's keyring worn where a crown would sit. */
+  the_custodian: {
+    parts: [
+      { kind: 'cape', scale: 1.0, role: 'dark' },
+      { kind: 'torso', scale: 0.95, role: 'dark' },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'apron', role: 'accent' },
+      { kind: 'chains', rot: 0.5, params: { n: 2 } },
+      { kind: 'crown', x: 0.28, scale: 0.65 },
+      { kind: 'mace', params: { len: 1.0 } },
+      { kind: 'eyes', color: '#7ff0d0', params: { spread: 0.3, dist: 0.42, size: 0.08 } },
+    ],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [
@@ -5065,6 +5138,199 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
     shadowScale: 1.15,
+  },
+
+  // --- THE RIFTSPAWN (the Breach's own bodies — no more borrowed demon looks) --
+  //
+  // FAMILY TELLS, so the player reads "breach" at a glance from any of them:
+  // floating void-shards orbiting the body, a single iris eye where a face
+  // should be, and glassy fins in place of honest limbs. Each COURT'S kin then
+  // add their lord's accent — Ashkarra flame + sash, Thulvane icicle +
+  // crystal, Vexira glass + rune, Nulgrave maw + ooze — so the lord behind a
+  // tear reads from its first minion.
+
+  /** The rank-and-file rift-spawn: a glassy imp-sized splinter — shard orbit,
+   *  one iris, finned. Nothing borrowed from hell. */
+  riftspawn: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'glassFins', scale: 0.85, role: 'glow' },
+      { kind: 'irisEye', x: 0.3, scale: 0.5 },
+    ],
+    live: [{ kind: 'floatingShards', scale: 0.8, params: { n: 3, orbit: 1.25 } }],
+  },
+  /** The horror: a wrong-way-out blob crowded with eyes, trailing veil
+   *  sashes — the shape a thing takes when it half-remembers bodies. */
+  rift_horror: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.18, seed: 41 } },
+      { kind: 'veilSashes', scale: 0.95, role: 'glow', params: { sashes: 3 } },
+      { kind: 'eyeCluster', x: 0.28, scale: 0.65, params: { n: 5 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 0.8, params: { n: 3 } }],
+  },
+  /** Xal, the Riftmaw: the warlord — a torso that is mostly DOOR, the mawring
+   *  gaping where a chest should be, crowned in shard-orbit. (The planted
+   *  'rift_maw' gate look above is unrelated ground anatomy.) */
+  xal_riftmaw: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'mawRing', x: 0.18, scale: 0.8, params: { gape: 0.55 } },
+      { kind: 'irisEye', x: 0.52, y: -0.3, scale: 0.34 },
+      { kind: 'crown', x: 0.3, y: -0.52, scale: 0.55, role: 'dark' },
+    ],
+    live: [
+      { kind: 'floatingShards', scale: 1.1, params: { n: 5, orbit: 1.35 } },
+      { kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 2 } },
+    ],
+    shadowScale: 1.1,
+  },
+
+  /** ASHKARRA'S KIN — the emberkin: a swarm splinter wearing rose-fire. */
+  breach_emberkin: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'glassFins', scale: 0.8, role: 'glow' },
+      { kind: 'irisEye', x: 0.3, scale: 0.45 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.75, params: { n: 4 } }],
+  },
+  /** …and the pyrelight: a robed candle of the far shore, sash-trailed. */
+  breach_pyrelight: {
+    parts: [
+      { kind: 'robe', scale: 1.0, role: 'cloth' },
+      { kind: 'veilSashes', scale: 0.9, role: 'glow', params: { sashes: 2 } },
+      { kind: 'halo', x: 0.1, y: -0.5, scale: 0.55 },
+      { kind: 'irisEye', x: 0.34, scale: 0.4 },
+    ],
+    live: [{ kind: 'flames', x: -0.15, scale: 0.8, params: { n: 2 } }],
+  },
+
+  /** THULVANE'S KIN — the rimehusk: a hollow carapace rimed in icicles. */
+  breach_rimehusk: {
+    parts: [
+      { kind: 'carapace', scale: 1.05 },
+      { kind: 'icicles', y: 0.15, scale: 0.9, params: { n: 5 } },
+      { kind: 'irisEye', x: 0.36, scale: 0.5 },
+    ],
+    live: [{ kind: 'floatingShards', scale: 0.85, params: { n: 3, orbit: 1.2 } }],
+    shadowScale: 1.05,
+  },
+  /** …and the hollowchill: a hooded absence breathing out the cold. */
+  breach_hollowchill: {
+    parts: [
+      { kind: 'tatters', scale: 1.0, role: 'cloth' },
+      { kind: 'hood', scale: 0.85, role: 'dark' },
+      { kind: 'icicles', y: 0.3, scale: 0.7, params: { n: 4 } },
+      { kind: 'irisEye', x: 0.3, scale: 0.42 },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.55, scale: 0.7 }],
+  },
+
+  /** VEXIRA'S KIN — the arcling: all fin and feeler, a spark with a will. */
+  breach_arcling: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'glassFins', scale: 1.0, role: 'glow' },
+      { kind: 'antennae', x: 0.3, scale: 0.7, params: { n: 2 } },
+      { kind: 'irisEye', x: 0.28, scale: 0.45 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
+  },
+  /** …and the stormveil: a rune-written sheet of glass walking its charge. */
+  breach_stormveil: {
+    parts: [
+      { kind: 'veilSashes', scale: 1.05, role: 'glow', params: { sashes: 4 } },
+      { kind: 'glassFins', scale: 0.9, role: 'glow' },
+      { kind: 'halo', x: 0.08, y: -0.45, scale: 0.6 },
+      { kind: 'irisEye', x: 0.3, scale: 0.44 },
+    ],
+    live: [{ kind: 'runes', scale: 0.85, params: { n: 4 } }],
+  },
+
+  /** NULGRAVE'S KIN — the gnawmouth: a swarm-thing that is chiefly teeth. */
+  breach_gnawmouth: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.22, seed: 73 } },
+      { kind: 'fangJaw', x: 0.3, scale: 0.75 },
+      { kind: 'lashFringe', scale: 0.85, params: { n: 6 } },
+      { kind: 'irisEye', x: 0.15, y: -0.25, scale: 0.4 },
+    ],
+    live: [{ kind: 'floatingShards', scale: 0.7, params: { n: 2, orbit: 1.15 } }],
+  },
+  /** …and the unshaped: meat that never decided — lobes, eyes, appetite. */
+  breach_unshaped: {
+    parts: [
+      { kind: 'blob', scale: 1.1, params: { irr: 0.3, seed: 19 } },
+      { kind: 'oozeLobes', scale: 1.0, params: { n: 4 } },
+      { kind: 'eyeCluster', x: 0.2, scale: 0.7, params: { n: 6 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.2, scale: 0.85, params: { n: 3 } }],
+    shadowScale: 1.1,
+  },
+
+  // The FOUR VESSELS — each lord poured into a body. Big, singular
+  // silhouettes: the player has met the kin's accent all field long, and the
+  // vessel is that accent made sovereign.
+
+  /** The Vessel of Ashkarra: a processional pyre — robe, brand, halo, and a
+   *  crown of fire that walks. */
+  vessel_ashkarra: {
+    parts: [
+      { kind: 'robe', scale: 1.15, role: 'cloth' },
+      { kind: 'veilSashes', scale: 1.05, role: 'glow', params: { sashes: 3 } },
+      { kind: 'brand', x: 0.2, y: -0.2, scale: 0.7 },
+      { kind: 'halo', x: 0.1, y: -0.55, scale: 0.75 },
+      { kind: 'irisEye', x: 0.36, scale: 0.5 },
+    ],
+    live: [
+      { kind: 'flames', x: -0.1, scale: 1.05, params: { n: 4 } },
+      { kind: 'floatingShards', scale: 1.15, params: { n: 4, orbit: 1.4 } },
+    ],
+    shadowScale: 1.15,
+  },
+  /** The Vessel of Thulvane: a grown-over stillness — crystal risen through
+   *  a torso that has stopped arguing with it. */
+  vessel_thulvane: {
+    parts: [
+      { kind: 'torso', scale: 1.1 },
+      { kind: 'crystalGrowths', scale: 1.0, params: { n: 4 } },
+      { kind: 'icicles', y: 0.2, scale: 1.0, params: { n: 6 } },
+      { kind: 'halo', x: 0.08, y: -0.5, scale: 0.7 },
+      { kind: 'irisEye', x: 0.38, scale: 0.5 },
+    ],
+    live: [
+      { kind: 'breathPuff', x: 0.55, scale: 0.85 },
+      { kind: 'floatingShards', scale: 1.1, params: { n: 4, orbit: 1.35 } },
+    ],
+    shadowScale: 1.15,
+  },
+  /** The Vessel of Vexira: a standing arc — glass and rune and very little
+   *  patience, the fastest thing the court owns. */
+  vessel_vexira: {
+    parts: [
+      { kind: 'glassFins', scale: 1.25, role: 'glow' },
+      { kind: 'veilSashes', scale: 1.0, role: 'glow', params: { sashes: 4 } },
+      { kind: 'halo', x: 0.06, y: -0.5, scale: 0.8 },
+      { kind: 'irisEye', x: 0.34, scale: 0.52 },
+    ],
+    live: [
+      { kind: 'runes', scale: 1.0, params: { n: 5 } },
+      { kind: 'wisps', scale: 0.9, params: { n: 4 } },
+    ],
+  },
+  /** The Vessel of Nulgrave: the Hunger given a throat — a sphincter-maw
+   *  body ringed in lashes, haustral folds doing the swallowing. */
+  vessel_nulgrave: {
+    parts: [
+      { kind: 'blob', scale: 1.15, params: { irr: 0.26, seed: 88 } },
+      { kind: 'haustraFolds', scale: 1.0 },
+      { kind: 'sphincterMaw', x: 0.2, scale: 0.85, params: { gape: 0.5 } },
+      { kind: 'lashFringe', scale: 1.05, params: { n: 8 } },
+      { kind: 'eyeCluster', x: 0.05, y: -0.4, scale: 0.6, params: { n: 4 } },
+    ],
+    live: [{ kind: 'floatingShards', scale: 1.1, params: { n: 3, orbit: 1.3 } }],
+    shadowScale: 1.2,
   },
 
   // --- THE MANOR HAUNTS (the Mournstead estate's household) ------------------

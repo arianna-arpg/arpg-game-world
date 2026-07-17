@@ -377,6 +377,11 @@ export const VIS_CFG = {
     bloomAlpha: 0.5,
     /** The hero's own lantern-glow at night (world units). */
     heroRadius: 190,
+    /** OPEN ENCOUNTER FIELDS (breach rings): the tear's own unlight — one
+     *  center glow per open/collapsing field (lord-tinted) and a stronger
+     *  candle on a standing court door. Radius caps keep a 600px cataclysm
+     *  from becoming a searchlight. */
+    encounter: { radiusCap: 250, intensity: 0.3, doorRadius: 130, doorIntensity: 0.5 },
   },
 
   /** Projectiles + impact flashes. */
@@ -398,6 +403,36 @@ export const VIS_CFG = {
     zoneWashFadeSec: 2.5,
     /** Safety ceiling on any zone wash's alpha — no event whites out the field. */
     zoneWashMaxAlpha: 0.3,
+  },
+
+  /** ENCOUNTER FIELDS (renderer.drawEncounters) — the breach ring's whole
+   *  look grammar: the veiled-knot shimmer beyond the rim, the rim's crackle
+   *  ticks and orbiting edge motes, and the collapse styling. Colors come
+   *  from the DEF + the rolled court lord ('@event' doctrine); these are the
+   *  global shape/budget dials. */
+  encounterField: {
+    /** How far past the rim veiled knots shimmer (px) — the parallel shore
+     *  glimpsed, never mapped. */
+    previewBand: 150,
+    /** Shimmer ghost: peak alpha + half-size (px) of the flickering mote. */
+    shimmerAlpha: 0.5,
+    shimmerSize: 3.2,
+    /** Rim motes: one per this many px of circumference, capped; px size. */
+    edgeMoteSpacing: 68,
+    edgeMoteMax: 26,
+    edgeMoteSize: 2.4,
+    /** Rim crackle: one radial tick per this many px of circumference,
+     *  capped; tick length px. */
+    crackleSpacing: 130,
+    crackleMax: 16,
+    crackleLen: 11,
+    /** The soft outer glow stroke under the crisp rim (px width, alpha). */
+    glowWidth: 10,
+    glowAlpha: 0.2,
+    /** Collapse: interior wash climbs to this alpha as the rim comes home,
+     *  and rim motes orbit this much faster. */
+    collapseWashAlpha: 0.22,
+    collapseMoteHzMul: 2.6,
   },
 
   /** THE LOW-LIFE VIGNETTE (renderer.drawLowLifeGlow): blood seeps in from

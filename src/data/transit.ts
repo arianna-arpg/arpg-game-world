@@ -184,6 +184,12 @@ registerTransit({ kind: 'realm_gate:dim_aetherial', dwell: 0.45, radius: 36, rin
 // long for a gate, and the ring burns the Underworld's own red.
 registerTransit({ kind: 'realm_gate:dim_underworld', dwell: 0.95, radius: 34, ring: { radius: 46, color: '#d84a2a' } });
 
+// Court doors (the encounter court fabric): the fed breach's standing way into
+// its lord's domain. A deliberate linger — you are walking into a patron's
+// house — with the ring left unset so it tints with the zone it stands in
+// (the gate look itself carries the lord's banner).
+registerTransit({ kind: 'realm_gate:court', dwell: 0.85, radius: 36, ring: { radius: 48 } });
+
 // Ward seals: the ritual anchors that ward an arena's boss (data/arenas.ts).
 // Dwell one to shatter it; the ring burns infernal.
 registerTransit({ kind: 'ward_seal', dwell: 0.9, radius: 30, ring: { radius: 34, color: '#ff9a50' } });

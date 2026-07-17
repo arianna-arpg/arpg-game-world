@@ -5112,31 +5112,149 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   // --- BREACH: rift-spawn that pour from tears in reality. A NET-NEW faction
   //     grafted in by the Breach content package's faction generator (the def
-  //     lists these ids; registerFactions wires the roster/traits/warlord). ---
+  //     lists these ids; registerFactions wires the roster/traits/warlord).
+  //     Second pass: the family wears its OWN looks now (riftspawn glass,
+  //     iris eyes, shard orbits — data/looks.ts) instead of borrowed demon
+  //     bodies, and each court lord's kin below carry that lord's accent so
+  //     the power behind a tear reads from its first minion. ---
   breach_spawn: {
     id: 'breach_spawn', name: 'Breach Spawn',
-    color: '#9a3ad8', shape: 'pentagon', radius: 11, look: 'imp',
+    color: '#9a3ad8', shape: 'pentagon', radius: 11, look: 'riftspawn', material: 'void',
     base: { life: 30, moveSpeed: 195, accuracy: 85, mana: 0 },
     mods: [mod('chaosRes', 'flat', 0.5)],
-    skills: ['claw'], xp: 11, faction: 'breach', adorn: 'spikes',
+    skills: ['claw'], xp: 11, faction: 'breach',
     detection: 1.2, brain: { type: 'swarm' },
   },
   breach_horror: {
     id: 'breach_horror', name: 'Breach Horror',
-    color: '#7a2ad0', shape: 'octagon', radius: 15, material: 'void', look: 'deep_horror',
+    color: '#7a2ad0', shape: 'octagon', radius: 15, material: 'void', look: 'rift_horror',
     base: { life: 70, moveSpeed: 140, mana: 120, manaRegen: 8 },
     mods: [mod('chaosRes', 'flat', 0.6), mod('coldRes', 'flat', 0.3)],
-    skills: ['firebolt', 'infernal_rift'], xp: 24, faction: 'breach', adorn: 'wings',
+    skills: ['firebolt', 'infernal_rift'], xp: 24, faction: 'breach',
     detection: 1.3, brain: { type: 'strafer' },
   },
   breach_lord: {
     id: 'breach_lord', name: 'Xal, the Riftmaw',
-    color: '#b04ae8', shape: 'star', radius: 27, material: 'void', look: 'demon_lord',
+    color: '#b04ae8', shape: 'star', radius: 27, material: 'void', look: 'xal_riftmaw',
     base: { life: 520, moveSpeed: 130, accuracy: 130, mana: 240, manaRegen: 12 },
     mods: [mod('chaosRes', 'flat', 0.6), mod('coldRes', 'flat', 0.4), mod('damage', 'increased', 0.35)],
     skills: ['infernal_rift', 'meteor_storm', 'ground_slam', 'war_cry'],
-    xp: 175, boss: true, faction: 'breach', adorn: 'wings',
+    xp: 175, boss: true, faction: 'breach',
     detection: 1.4, brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+
+  // --- THE COURT OF THE BREACH (packages/courts.ts): each lord's kin, mixed
+  //     into a courted field at rosterShare — the lord's accent on the family
+  //     silhouette. ASHKARRA, the Rose Pyre: fire that is the wrong color. ---
+  breach_emberkin: {
+    id: 'breach_emberkin', name: 'Emberkin',
+    color: '#ff5a78', shape: 'pentagon', radius: 10, look: 'breach_emberkin', material: 'ember',
+    base: { life: 26, moveSpeed: 205, accuracy: 88, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', 0.6)],
+    skills: ['claw'], xp: 12, faction: 'breach',
+    detection: 1.25, brain: { type: 'swarm' },
+  },
+  breach_pyrelight: {
+    id: 'breach_pyrelight', name: 'Pyrelight',
+    color: '#ff7a92', shape: 'oval', radius: 13, look: 'breach_pyrelight', material: 'ember',
+    base: { life: 52, moveSpeed: 150, mana: 110, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', 0.7)],
+    skills: ['firebolt'], xp: 22, faction: 'breach',
+    detection: 1.3, brain: { type: 'strafer' },
+  },
+  // THULVANE, the Stillness Between: the cold that waits on the far side.
+  breach_rimehusk: {
+    id: 'breach_rimehusk', name: 'Rimehusk',
+    color: '#58b8ff', shape: 'hexagon', radius: 15, look: 'breach_rimehusk', material: 'ice',
+    base: { life: 95, moveSpeed: 120, armor: 30, poise: 25, mana: 40, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.75)],
+    skills: ['rimeclaw', 'frost_pulse'], xp: 26, faction: 'breach',
+    detection: 1.2, brain: { type: 'juggernaut' },
+  },
+  breach_hollowchill: {
+    id: 'breach_hollowchill', name: 'Hollowchill',
+    color: '#8ad0ff', shape: 'oval', radius: 13, look: 'breach_hollowchill', material: 'ice',
+    base: { life: 48, moveSpeed: 145, mana: 130, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.7)],
+    skills: ['frostbolt', 'frost_nova'], xp: 24, faction: 'breach',
+    detection: 1.3, brain: { type: 'caster' },
+  },
+  // VEXIRA, the Arc Across: the spark that finds every gap.
+  breach_arcling: {
+    id: 'breach_arcling', name: 'Arcling',
+    color: '#cfe8ff', shape: 'kite', radius: 10, look: 'breach_arcling', material: 'crystal',
+    base: { life: 24, moveSpeed: 215, accuracy: 92, evasion: 40, mana: 60, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.7)],
+    skills: ['spark_bolt'], xp: 13, faction: 'breach',
+    detection: 1.3, brain: { type: 'skirmish' },
+  },
+  breach_stormveil: {
+    id: 'breach_stormveil', name: 'Stormveil',
+    color: '#aacef0', shape: 'rhombus', radius: 14, look: 'breach_stormveil', material: 'crystal',
+    base: { life: 55, moveSpeed: 140, mana: 140, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.75)],
+    skills: ['lightning_bolt', 'shock_nova'], xp: 26, faction: 'breach',
+    detection: 1.3, brain: { type: 'artillery' },
+  },
+  // NULGRAVE, the Hunger Behind the Skin: appetite before anatomy.
+  breach_gnawmouth: {
+    id: 'breach_gnawmouth', name: 'Gnawmouth',
+    color: '#e044c8', shape: 'circle', radius: 11, look: 'breach_gnawmouth', material: 'slime',
+    base: { life: 34, moveSpeed: 190, accuracy: 86 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['claw'], xp: 13, faction: 'breach',
+    aggro: { fixation: 1.3 },
+    detection: 1.35, brain: { type: 'swarm' },
+  },
+  breach_unshaped: {
+    id: 'breach_unshaped', name: 'The Unshaped',
+    color: '#b83aa8', shape: 'octagon', radius: 17, look: 'breach_unshaped', material: 'slime',
+    base: { life: 130, moveSpeed: 105, poise: 30, mana: 100, manaRegen: 7 },
+    mods: [mod('chaosRes', 'flat', 0.7)],
+    skills: ['void_hook', 'maw_bloom'], xp: 32, faction: 'breach',
+    detection: 1.2, brain: { type: 'juggernaut' },
+  },
+
+  // The FOUR VESSELS — a lord poured into a body (courts registry `vessel`;
+  // spawned CROWNED by the domain's arena pipeline, tag 'court_vessel' pays
+  // the bounty). Each is its kin's accent made sovereign, so the fight reads
+  // on sight after a field of its minions.
+  vessel_ashkarra: {
+    id: 'vessel_ashkarra', name: 'Vessel of Ashkarra',
+    color: '#ff5a78', shape: 'star', radius: 26, look: 'vessel_ashkarra', material: 'ember',
+    base: { life: 660, moveSpeed: 125, accuracy: 135, mana: 260, manaRegen: 13 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('fireRes', 'flat', 0.8), mod('damage', 'increased', 0.4)],
+    skills: ['firebolt', 'meteor_storm', 'infernal_rift', 'war_cry'],
+    xp: 230, boss: true, faction: 'breach',
+    detection: 1.4, brain: { type: 'juggernaut', enrage: 0.35 },
+  },
+  vessel_thulvane: {
+    id: 'vessel_thulvane', name: 'Vessel of Thulvane',
+    color: '#58b8ff', shape: 'hexagon', radius: 26, look: 'vessel_thulvane', material: 'ice',
+    base: { life: 700, moveSpeed: 108, accuracy: 130, armor: 60, poise: 60, mana: 240, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.85), mod('damage', 'increased', 0.35)],
+    skills: ['frost_nova', 'ice_spear', 'rime_fang'],
+    xp: 235, boss: true, faction: 'breach',
+    detection: 1.4, brain: { type: 'juggernaut', enrage: 0.3 },
+  },
+  vessel_vexira: {
+    id: 'vessel_vexira', name: 'Vessel of Vexira',
+    color: '#cfe8ff', shape: 'kite', radius: 23, look: 'vessel_vexira', material: 'crystal',
+    base: { life: 560, moveSpeed: 175, accuracy: 140, evasion: 70, mana: 300, manaRegen: 15 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('lightningRes', 'flat', 0.85), mod('damage', 'increased', 0.4)],
+    skills: ['spark_bolt', 'chain_lightning', 'shock_nova', 'storm_call'],
+    xp: 225, boss: true, faction: 'breach',
+    detection: 1.45, brain: { type: 'flanker' },
+  },
+  vessel_nulgrave: {
+    id: 'vessel_nulgrave', name: 'Vessel of Nulgrave',
+    color: '#e044c8', shape: 'octagon', radius: 28, look: 'vessel_nulgrave', material: 'slime',
+    base: { life: 780, moveSpeed: 112, accuracy: 128, poise: 50, mana: 220, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.8), mod('damage', 'increased', 0.35)],
+    skills: ['devouring_maw', 'void_hook', 'maw_bloom', 'despair'],
+    xp: 245, boss: true, faction: 'breach',
+    aggro: { fixation: 1.2 },
+    detection: 1.4, brain: { type: 'juggernaut', enrage: 0.45 },
   },
 
   // --- THE IRON CRUSADE: militant zealots who march only behind a Crusade. A

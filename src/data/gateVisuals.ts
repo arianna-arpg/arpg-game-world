@@ -113,3 +113,19 @@ registerGateLook('fracture', {
   halo: { radius: 82, alpha: 0.2 },
   prompt: 'a rift yawns — step in', promptColor: EVENT_COLOR,
 });
+
+// COURT DOOR — the fed breach that FAILED to seal, condensed into a standing
+// way to its lord's domain (the encounter court fabric). Slow counter-turning
+// churn, long jagged rays, heavy mote orbit — a wound wearing a doorway's
+// patience. Rim + rays tint with the LORD's banner ('@event'); the per-lord
+// call-to-action rides the gate view's prompt override, so this one row
+// serves every court.
+registerGateLook('court', {
+  radius: 38, core: '#0c0614', rim: EVENT_COLOR, inner: EVENT_COLOR,
+  pulseHz: 3.6, pulseAmp: 0.16, spin: -0.35,
+  rays: { count: 10, r0: 7, r1: 30, alt: 10 },
+  halo: { radius: 96, alpha: 0.26 },
+  motes: { count: 6, orbit: 52, size: 2.8, hz: 0.7 },
+  glyph: '◈', glyphColor: '#e8d8ff', glyphSize: 20,
+  prompt: 'the lord\'s domain gapes', promptColor: EVENT_COLOR,
+});

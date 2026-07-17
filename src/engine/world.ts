@@ -183,7 +183,8 @@ import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/reg
 import { ENCOUNTER_CFG } from '../packages/encounters';
 import type { BoroughSpec, ExtractDisperseSpec } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
-import type { ActiveEncounter, BoroughRuntime } from './encounter';
+import { courtLord, courtLordForZone } from '../packages/courts';
+import type { ActiveEncounter, BoroughRuntime, VeilKnot } from './encounter';
 import { boroughVendorWeights } from '../data/boroughs';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
@@ -5013,6 +5014,14 @@ export class World {
       radius: chosen.scale.startRadius, timer: 0, maxTimer: 0, spawnTimer: 0,
       kills: 0, bonusUsed: 0, spawned: new Set(),
     };
+    // THE COURT (def.court): roll WHICH lord themes this zone's field — its own
+    // salted stream (courtLordForZone), so every existing draw above stays
+    // byte-identical and the world map's marker agrees without asking us.
+    if (chosen.def.court) {
+      const lord = courtLordForZone(packageSeed(this.manifest.seed, chosen.def.packageId),
+        def.id, chosen.def.court.lords);
+      if (lord) enc.lordId = lord.id;
+    }
     this.encounters.push(enc);
     // An EXTRACT encounter stands its node the moment the zone does — the seam
     // is scenery you can find, not a diamond that pops on approach.
@@ -5031,9 +5040,35 @@ export class World {
     bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — now you know it exists
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label} opens!`, e.def.trigger.color, 20);
     this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.scale.startRadius, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+    // THE VEIL (def.veil): roll the far shore NOW — every knot this field can
+    // ever uncover, dealt across the full maxRadius disc from the encounter
+    // stream (deterministic per zone-load) and sorted by distance so the
+    // advancing rim uncovers them in order. Spawning becomes UNCOVERING.
+    if (e.def.veil) this.seedVeil(e);
     // THE ECHO RITE (EncounterDef.echoParty — the Mirrorkin): the field's
     // opening breath forms one reflection per living hero.
     if (e.def.echoParty) this.spawnPartyEchoes(e);
+  }
+
+  /** Deal the veiled knots (def.veil): count = disc area × knotPer10k, each
+   *  carrying its own scale.spawnBatch roll. Uniform areal density (sqrt) —
+   *  the ring's PACE, not clustering, sets the danger: a wider tear simply
+   *  holds more of the far shore. */
+  private seedVeil(e: ActiveEncounter): void {
+    const v = e.def.veil!;
+    const area = Math.PI * e.scale.maxRadius * e.scale.maxRadius;
+    const count = Math.max(1, Math.round((area / 10_000) * v.knotPer10k));
+    const knots: VeilKnot[] = [];
+    for (let i = 0; i < count; i++) {
+      const ang = this.encRng.range(0, Math.PI * 2);
+      const r = Math.sqrt(this.encRng.next()) * e.scale.maxRadius;
+      const pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 12);
+      // d is the TRUE post-clamp distance — a knot pushed inward by a zone
+      // edge uncovers when the rim actually reaches where it stands.
+      knots.push({ pos, d: dist(pos, e.pos), n: this.encRng.int(e.scale.spawnBatch[0], e.scale.spawnBatch[1]) });
+    }
+    knots.sort((a, b) => a.d - b.d);
+    e.veil = { knots, cursor: 0, pending: [], peakRadius: e.radius, collapseFrom: 0, shards: [] };
   }
 
   /** THE PARTY ECHO (EncounterDef.echoParty — the Mirrorkin's rite, and the
@@ -5079,22 +5114,32 @@ export class World {
     }
   }
 
-  /** Grow each open field, pulse spawns inside it, drain the kill-fed timer.
-   *  (Extract encounters branch to their own driver — dwell-armed, counting
-   *  DOWN, defended — so this path stays byte-identical for the plain kind.) */
+  /** Grow each open field, feed it monsters — by pulse (classic) or by
+   *  UNCOVERING (def.veil) — and drain the kill-fed timer. A veiled field's
+   *  timer ends in a COLLAPSE, not a close; a fed court door outlives it.
+   *  (Extract/borough encounters branch to their own drivers, so those paths
+   *  stay byte-identical.) */
   private updateEncounters(dt: number): void {
     for (const e of this.encounters) {
       if (e.def.extract) { this.updateExtraction(e, dt); continue; }
       if (e.def.borough) { this.updateBorough(e, dt); continue; }
+      if (e.phase === 'collapsing') { this.updateVeilCollapse(e, dt); continue; }
       if (e.phase !== 'open') continue;
       e.radius = Math.min(e.scale.maxRadius, e.radius + e.scale.growthPerSec * dt);
-      e.spawnTimer -= dt;
-      if (e.spawnTimer <= 0 && this.insideCount(e) < ENCOUNTER_CFG.fieldCap) {
-        e.spawnTimer = this.encRng.range(e.scale.spawnInterval[0], e.scale.spawnInterval[1]);
-        this.spawnInRadius(e, this.encRng.int(e.scale.spawnBatch[0], e.scale.spawnBatch[1]));
+      if (e.veil) {
+        this.updateVeil(e);
+      } else {
+        e.spawnTimer -= dt;
+        if (e.spawnTimer <= 0 && this.insideCount(e) < ENCOUNTER_CFG.fieldCap) {
+          e.spawnTimer = this.encRng.range(e.scale.spawnInterval[0], e.scale.spawnInterval[1]);
+          this.spawnInRadius(e, this.encRng.int(e.scale.spawnBatch[0], e.scale.spawnBatch[1]));
+        }
       }
       e.timer -= dt;
-      if (e.timer <= 0) this.closeEncounter(e);
+      if (e.timer <= 0) {
+        if (e.veil) this.beginCollapse(e);
+        else this.closeEncounter(e);
+      }
     }
     for (let i = this.encounters.length - 1; i >= 0; i--) {
       if (this.encounters[i].phase === 'closing') this.encounters.splice(i, 1);
@@ -5104,6 +5149,188 @@ export class World {
     this.updateExtractionDepartures(dt);
     // …and so does the refugees' road to Lastlight.
     this.updateBoroughRefugees(dt);
+  }
+
+  /** THE ADVANCING RIM (def.veil, phase open): uncover knots the ring has
+   *  reached, then ACTIVATE them — at most veil.maxPerTick a frame and never
+   *  past the fieldCap, so a surging tear queues its horrors at the rim
+   *  instead of flooding the frame. Also speaks the court's deepen line the
+   *  moment the door threshold is crossed. */
+  private updateVeil(e: ActiveEncounter): void {
+    const v = e.def.veil!;
+    const run = e.veil!;
+    run.peakRadius = Math.max(run.peakRadius, e.radius);
+    while (run.cursor < run.knots.length && run.knots[run.cursor].d <= e.radius + v.uncoverSlack) {
+      run.pending.push(run.cursor++);
+    }
+    const door = e.def.court?.door;
+    if (door && !run.deepened && run.peakRadius / e.scale.maxRadius >= door.atUncoverFrac) {
+      run.deepened = true;
+      const lord = e.lordId ? courtLord(e.lordId) : undefined;
+      if (lord) {
+        this.text(vec(e.pos.x, e.pos.y - 48), lord.deeds.deepen, lord.color, 16);
+        this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 90, color: lord.color, life: 0.6, maxLife: 0.6 });
+      }
+    }
+    let drained = 0;
+    while (run.pending.length && drained < v.maxPerTick && this.insideCount(e) < ENCOUNTER_CFG.fieldCap) {
+      this.activateKnot(e, run.knots[run.pending.shift()!]);
+      drained++;
+    }
+  }
+
+  /** A knot ACTIVATES: its bodies tear through exactly where they waited —
+   *  the court lord's kin at rosterShare, the def's family for the rest — with
+   *  an arrival flash (the light layer picks it up) and, sometimes, a standing
+   *  shard of the far shore. */
+  private activateKnot(e: ActiveEncounter, k: VeilKnot): void {
+    const v = e.def.veil!;
+    const lord = e.lordId ? courtLord(e.lordId) : undefined;
+    const share = e.def.court?.rosterShare ?? 0;
+    for (let i = 0; i < k.n; i++) {
+      const facId = this.encRng.pick(e.def.factions);
+      const fromLord = !!lord?.roster.length && this.encRng.chance(share);
+      let type: string;
+      if (fromLord) {
+        type = this.weightedPick(lord!.roster, this.zone.level);
+      } else {
+        const roster = FACTIONS[facId];
+        if (!roster?.table.length) continue;
+        type = this.weightedPick(roster.table, this.zone.level);
+      }
+      const m = this.createMonster(type, this.zone.level, 'enemy');
+      m.faction = facId;
+      const ang = this.encRng.range(0, Math.PI * 2);
+      const rr = this.encRng.range(0, 26); // a tight knot, not a scatter
+      m.pos = this.clampPos(vec(k.pos.x + Math.cos(ang) * rr, k.pos.y + Math.sin(ang) * rr), m.radius);
+      e.spawned.add(m.id);
+      this.actors.push(m);
+    }
+    this.flashes.push({ pos: vec(k.pos.x, k.pos.y), radius: 46, color: lord?.color ?? e.def.trigger.color, life: 0.45, maxLife: 0.45 });
+    if (v.shard && this.encRng.chance(v.shard.chance)) {
+      const spot = this.findFreeSpot(vec(k.pos.x, k.pos.y), 12);
+      if (spot) {
+        const d = { pos: spot, radius: this.encRng.range(7, 11), kind: v.shard.kind };
+        this.doodads.push(d);
+        e.veil!.shards.push(d);
+        this.markDoodadsChanged();
+      }
+    }
+  }
+
+  /** The timer bled out: the ring turns and comes home. Uncovered-but-unwoken
+   *  knots are lost to the far shore; what it woke, it now comes back for. */
+  private beginCollapse(e: ActiveEncounter): void {
+    const v = e.def.veil!;
+    const run = e.veil!;
+    e.phase = 'collapsing';
+    run.collapseFrom = Math.max(1, e.radius);
+    run.pending.length = 0;
+    this.text(vec(e.pos.x, e.pos.y - 30), v.text.collapse, e.def.trigger.color, 18);
+  }
+
+  /** THE COLLAPSE (phase collapsing): the rim recedes at a size-proportional
+   *  speed (every collapse lands the veil.collapseSec beat) and EVAPORATES the
+   *  rift-spawn it passes over — no corpse, no credit; they were never fully
+   *  here. Bosses always cross; so does any body pressed within
+   *  spareEngagedWithin of a living hero (the fight you're in is yours to
+   *  finish). Shards of the far shore wink out as the rim reclaims them. */
+  private updateVeilCollapse(e: ActiveEncounter, dt: number): void {
+    const v = e.def.veil!;
+    const run = e.veil!;
+    const lord = e.lordId ? courtLord(e.lordId) : undefined;
+    const tint = lord?.color ?? e.def.trigger.color;
+    e.radius = Math.max(0, e.radius - (run.collapseFrom / Math.max(0.1, v.collapseSec)) * dt);
+    for (const a of this.actors) {
+      if (a.dead || !e.spawned.has(a.id)) continue;
+      if (dist(a.pos, e.pos) - a.radius <= e.radius) continue; // still on veiled ground
+      if (MONSTERS[a.defId ?? '']?.boss || a.rarity === 'crowned'
+        || (v.spareEngagedWithin > 0 && this.heroWithin(a.pos, v.spareEngagedWithin))) {
+        e.spawned.delete(a.id); // CROSSED OVER — the rim never claims it now
+        continue;
+      }
+      e.spawned.delete(a.id);
+      this.slipAway(a, '', tint);
+    }
+    let shardGone = false;
+    for (let i = run.shards.length - 1; i >= 0; i--) {
+      const d = run.shards[i];
+      if (dist(d.pos, e.pos) <= e.radius) continue;
+      const di = this.doodads.indexOf(d);
+      if (di >= 0) this.doodads.splice(di, 1);
+      run.shards.splice(i, 1);
+      shardGone = true;
+      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 38, color: tint, life: 0.4, maxLife: 0.4 });
+    }
+    if (shardGone) this.markDoodadsChanged();
+    if (e.radius <= 0) this.sealVeiled(e);
+  }
+
+  /** The rim reaches home: pay the seal (uncovered fraction sweetens it), and
+   *  either close clean — or, when the court's door threshold was FED, fail
+   *  to close at all: the tear condenses into the lord's standing door. */
+  private sealVeiled(e: ActiveEncounter): void {
+    const v = e.def.veil!;
+    const run = e.veil!;
+    bumpLedger(this.ledger, e.def.ledger.onClose);
+    const uncovered = clamp(run.peakRadius / e.scale.maxRadius, 0, 1);
+    const mul = e.scale.rewardMul * (1 + uncovered * v.rewardUncoverBonus);
+    this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul));
+    const gems = 1 + Math.floor(mul);
+    for (let i = 0; i < gems; i++) this.dropGemAt(e.pos);
+    const lord = e.lordId ? courtLord(e.lordId) : undefined;
+    if (e.def.court?.door && lord && run.deepened) {
+      e.phase = 'door';
+      e.doorAt = this.clearTransitSpot(vec(e.pos.x, e.pos.y), 60);
+      this.text(vec(e.pos.x, e.pos.y - 30), lord.deeds.stands, lord.color, 18);
+      this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 130, color: lord.color, life: 0.8, maxLife: 0.8 });
+    } else {
+      e.phase = 'closing';
+      this.text(vec(e.pos.x, e.pos.y - 30), `${e.def.label} sealed!`, e.def.trigger.color, 18);
+      this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: Math.max(90, run.collapseFrom * 0.5), color: e.def.trigger.color, life: 0.5, maxLife: 0.5 });
+    }
+  }
+
+  /** Any living hero within r of p? (The collapse's crossed-over test.) */
+  private heroWithin(p: Vec2, r: number): boolean {
+    for (const s of this.seats) {
+      if (!s.actor.dead && dist(s.actor.pos, p) <= r) return true;
+    }
+    return false;
+  }
+
+  /** THE DOOR (phase door): step through into the lord's domain — the shared
+   *  realm-arena pipeline (mint from the lord's ArenaSpec, cave-return home,
+   *  the VESSEL as the warded-or-fielded pinnacle). The domain's ambient
+   *  population mixes the def's family roster with the lord's own kin. */
+  private enterCourtDomain(e: ActiveEncounter): void {
+    const lord = e.lordId ? courtLord(e.lordId) : undefined;
+    const door = e.def.court?.door;
+    if (!lord || !door || e.phase !== 'door' || !e.doorAt) return;
+    // The court contract: a domain PINS its tileset (package validate()
+    // enforces it at QA) — there is no sane ambient fallback for a realm.
+    if (!lord.domain.tileset) {
+      console.warn(`[courts] lord '${lord.id}' domain pins no tileset — the door is inert`);
+      return;
+    }
+    const facId = e.def.factions[0] ?? '';
+    const table = [
+      ...(FACTIONS[facId]?.table ?? []),
+      ...lord.roster,
+    ].filter(r => r.id !== lord.vessel && !MONSTERS[r.id]?.boss);
+    this.enterRealmArena({
+      caveId: `cave_court_${lord.id}_${this.zone.id}`,
+      tileset: lord.domain.tileset,
+      arena: lord.domain,
+      packs: null,                // the domain's own packs band decides (data)
+      rosterTable: table,
+      levelOverride: Math.max(1, this.zone.level + door.levelBonus),
+      returnPos: e.doorAt,
+      boss: {
+        monsterId: lord.vessel, faction: facId, tag: 'court_vessel',
+        levelBonus: 0, announce: lord.deeds.manifest, announceColor: lord.color,
+      },
+    });
   }
 
   /** Spawn n monsters from the encounter roster, UNIFORMLY inside its radius. */
@@ -5516,6 +5743,35 @@ export class World {
     };
     this.encounters.push(enc);
     this.materializeExtractionNode(enc);
+    return true;
+  }
+
+  /** DEV (Events tab): OPEN a veiled encounter field (the Breach) right here —
+   *  no dice, gate ignored, already open. `fed` pre-feeds the peak so the
+   *  court's door threshold is already crossed (the collapse will condense
+   *  into the lord's standing door — the whole chain QA-able in one sitting);
+   *  `scaleId` pins a scale ('fracture' = the shortest clock to that door). */
+  devForceBreachField(fed = false, scaleId?: string): boolean {
+    const spec = allEncounterSpecs().find(s => s.veil);
+    if (!spec || this.inCave || this.zone.objective.kind === 'safe') return false;
+    if (this.encounters.some(x => x.def.veil && x.phase !== 'closing')) return true;
+    const rng = new Rng(((this.time * 997) | 0) ^ 0xbf1e);
+    const scale = (scaleId && spec.scales.find(s => s.id === scaleId)) || rng.weighted(spec.scales);
+    const at = this.clampPos(this.farPoint(320, true), 24);
+    const enc: ActiveEncounter = {
+      def: spec, scale, pos: vec(at.x, at.y), phase: 'dormant',
+      radius: scale.startRadius, timer: 0, maxTimer: 0, spawnTimer: 0,
+      kills: 0, bonusUsed: 0, spawned: new Set(),
+    };
+    if (spec.court) {
+      const lord = courtLordForZone(packageSeed(this.manifest.seed, spec.packageId), this.zone.id, spec.court.lords);
+      if (lord) enc.lordId = lord.id;
+    }
+    this.encounters.push(enc);
+    this.openEncounter(enc);
+    // Pre-fed: the peak already stands at the full tear, so the very next
+    // veil tick speaks the lord's deepen line and arms the door — organically.
+    if (fed && enc.veil) enc.veil.peakRadius = scale.maxRadius;
     return true;
   }
 
@@ -6026,8 +6282,8 @@ export class World {
    *  variant's — for look slots authored as '@event'. The Underworld breach is
    *  a DOODAD (its painter already rides the visual fabric), so not repeated
    *  here. A new enterable realm joins with one push + one registered look. */
-  realmGatesView(): { pos: Vec2; kind: string; color?: string }[] {
-    const out: { pos: Vec2; kind: string; color?: string }[] = [];
+  realmGatesView(): { pos: Vec2; kind: string; color?: string; prompt?: string }[] {
+    const out: { pos: Vec2; kind: string; color?: string; prompt?: string }[] = [];
     if (this.demonPortals.length) {
       const c = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id)?.color;
       for (const dp of this.demonPortals) out.push({ pos: dp.pos, kind: 'demon', ...(c ? { color: c } : {}) });
@@ -6038,6 +6294,14 @@ export class World {
     }
     for (const np of this.necropolisPortals) out.push({ pos: np.pos, kind: 'necropolis' });
     for (const fr of this.fractureRifts) out.push({ pos: fr.pos, kind: 'fracture', color: fr.color });
+    // COURT DOORS (encounter fabric): a fed veiled field's standing way into
+    // its lord's domain — tinted and prompted by the lord's own row.
+    for (const e of this.encounters) {
+      if (e.phase !== 'door' || !e.doorAt) continue;
+      const lord = e.lordId ? courtLord(e.lordId) : undefined;
+      const kind = e.def.court?.door?.gateKind ?? 'court';
+      out.push({ pos: e.doorAt, kind, ...(lord ? { color: lord.color, prompt: lord.gatePrompt } : {}) });
+    }
     return out;
   }
 
@@ -7911,12 +8175,14 @@ export class World {
 
   /** SILENT DEPARTURE — the actor leaves the world without dying: no corpse,
    *  no credit, no rattles (a fled hare, the frog's dive into its refuge
-   *  pond). A soft flash + a line mark the exit; nothing else fires. */
-  slipAway(actor: Actor, text: string): void {
+   *  pond, rift-spawn the collapsing veil reclaims). A soft flash + a line
+   *  mark the exit; nothing else fires. `color` tints both (the default is
+   *  the wildlife gold; the veil passes its own). */
+  slipAway(actor: Actor, text: string, color = '#c8a850'): void {
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
-    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60, color: '#c8a850', life: 0.5, maxLife: 0.5 });
-    this.text(vec(actor.pos.x, actor.pos.y - 30), text, '#c8a850', 14);
+    this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60, color, life: 0.5, maxLife: 0.5 });
+    this.text(vec(actor.pos.x, actor.pos.y - 30), text, color, 14);
   }
 
   /** The Hunt beast begins a flee — a bulletin so the player knows to give chase
@@ -28076,6 +28342,18 @@ export class World {
         for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
         for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
         for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+        // COURT DOORS (encounter fabric): the fed breach's standing way into
+        // its lord's domain — the same deliberate dwell as every threshold
+        // (its 'realm_gate:<gateKind>' transit row sets the feel).
+        for (const e of this.encounters) {
+          if (e.phase !== 'door' || !e.doorAt) continue;
+          const at = e.doorAt;
+          gates.push({
+            pos: at, kind: e.def.court?.door?.gateKind ?? 'court',
+            key: `court:${e.def.id}:${e.lordId ?? ''}`,
+            enter: () => this.enterCourtDomain(e),
+          });
+        }
         // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
         // and hold fast to BOARD. The boarding is a realm gate like any other
         // threshold (its 'realm_gate:wraithsail' transit row sizes the

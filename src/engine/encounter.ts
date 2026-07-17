@@ -11,7 +11,42 @@
 import type { Vec2 } from '../core/math';
 import type { EncounterDef, EncounterScale } from '../packages/encounters';
 
-export type EncPhase = 'dormant' | 'open' | 'closing';
+/** dormant → open → (veil only) collapsing → (fed court door only) door → closing.
+ *  Plain encounters keep the classic open → closing hop. */
+export type EncPhase = 'dormant' | 'open' | 'collapsing' | 'door' | 'closing';
+
+/** One VEILED KNOT (def.veil): a pre-rolled spawn point on the far shore,
+ *  waiting for the rim to uncover it. Never serialized (zone-local, re-rolled
+ *  deterministically from the encounter stream on every load). */
+export interface VeilKnot {
+  pos: Vec2;
+  /** Distance from the field center (knots sort by this — the uncover cursor
+   *  walks the array as the radius grows). */
+  d: number;
+  /** Bodies this knot tears through when activated (scale.spawnBatch roll). */
+  n: number;
+}
+
+/** VEIL runtime riding an ActiveEncounter (def.veil set). One optional bag
+ *  keeps plain encounters byte-identical (the ExtractRuntime pattern). */
+export interface VeilRuntime {
+  /** Every knot, sorted by d ascending. */
+  knots: VeilKnot[];
+  /** First not-yet-uncovered index (cursor into `knots`). */
+  cursor: number;
+  /** Uncovered knots waiting on fieldCap room (indices, FIFO). */
+  pending: number[];
+  /** Widest the rim ever reached (the uncovered-fraction basis: reward bonus
+   *  + the court door threshold read peak / scale.maxRadius). */
+  peakRadius: number;
+  /** Radius at collapse start (the shrink is collapseFrom → 0 over
+   *  veil.collapseSec). */
+  collapseFrom: number;
+  /** Shards of the far shore this field left standing (evaporate at collapse). */
+  shards: import('./levelgen').Doodad[];
+  /** The door-threshold announcement spoke once (mid-fight). */
+  deepened?: boolean;
+}
 
 /** EXTRACT-ONLY runtime riding an ActiveEncounter (def.extract set). One
  *  optional bag keeps plain encounters byte-identical. Zone-local like its
@@ -94,4 +129,11 @@ export interface ActiveEncounter {
   ex?: ExtractRuntime;
   /** Borough-mode runtime (def.borough) — absent on plain encounters. */
   bo?: BoroughRuntime;
+  /** Veil-mode runtime (def.veil) — absent on plain encounters. */
+  veil?: VeilRuntime;
+  /** The rolled court lord id (def.court; courtLordForZone — the same pure
+   *  roll the map marker makes). Absent = no court fields this zone. */
+  lordId?: string;
+  /** The standing door to the lord's domain ('door' phase only). */
+  doorAt?: Vec2;
 }

@@ -950,6 +950,16 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 5, color: '#3a6a9a', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
     light: { radius: -2.6, color: '#7fc0f0', intensity: 0.3, flicker: 1.3 },
   },
+  // RIFTSHARD — a splinter of the far shore the veil leaves standing where a
+  // knot tore through (encounter fabric, VeilSpec.shard): void-glass in the
+  // breach's violet, its restless little light the uncovered ground's glow.
+  // Evaporates when the collapsing rim reclaims it. Walkable dressing — the
+  // extraction ring-scatter discipline (small kinds never wall a path).
+  riftshard: {
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.35,
+    params: { points: 4, color: '#5a2a8a', material: 'void', coreGlow: { color: '#d9a3ff' } },
+    light: { radius: -3.0, color: '#b04ae8', intensity: 0.4, flicker: 2.2 },
+  },
   ice_spike: {
     painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.5, longShadow: 1.3,
     params: { points: 4, color: '#a8ccdf', material: 'ice', coreGlow: { color: '#e8f6ff' } },

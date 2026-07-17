@@ -443,6 +443,79 @@ export interface BoroughSpec {
   };
 }
 
+// --- THE VEIL: edge-activation spawning + the collapse ------------------------
+//
+// A veiled encounter inverts the pulse contract: its monsters PRE-EXIST as
+// dormant KNOTS rolled across the full maxRadius disc the moment the field
+// opens — a parallel shore the ring UNCOVERS as it grows. Nothing spawns at
+// random points inside the field; bodies activate exactly where the advancing
+// rim reaches them, so a fast-fed tear (kills push the radius) uncovers MORE
+// of what waits — the larger the breach, the more dangerous, structurally.
+// When the timer bleeds out the ring COLLAPSES back across the ground it
+// uncovered, and the rim EVAPORATES the rift-spawn it passes over (no corpse,
+// no credit — they were never fully here); only the fight pressed close to a
+// hero crosses over and stays. Attached via EncounterDef.veil (the DemonSurge
+// promotion pattern): undefined = the classic pulse encounter, byte-identical.
+
+export interface VeilSpec {
+  /** Veiled knots per 10,000 px² of the FULL maxRadius disc (each knot
+   *  activates scale.spawnBatch bodies — the per-scale batches keep their
+   *  character; ~1.0 lands the classic total spawn budget). */
+  knotPer10k: number;
+  /** Most knots ACTIVATED per frame once uncovered (burst guard; activation
+   *  also holds while the field sits at ENCOUNTER_CFG.fieldCap — uncovered
+   *  knots WAIT at the rim rather than over-flooding the frame). */
+  maxPerTick: number;
+  /** Activation slack (px): a knot wakes when the rim comes within this of
+   *  it — a breath early, so bodies tear through AT the edge, never pop in
+   *  behind it. */
+  uncoverSlack: number;
+  /** An activating knot may leave a shard of the far shore standing (a small
+   *  WALKABLE dressing doodad — the extraction ring-scatter discipline; its
+   *  light spec makes the uncovered ground glow). Evaporates at collapse. */
+  shard?: { kind: string; chance: number };
+  /** Seal-reward bonus at full uncover: reward × (1 + uncoveredFrac × this) —
+   *  the volatile, wide-open tear pays for what it risked. */
+  rewardUncoverBonus: number;
+  /** Seconds the collapse takes rim-to-center regardless of size (speed is
+   *  radius-proportional — every collapse lands the same beat). */
+  collapseSec: number;
+  /** The receding rim SPARES rift-spawn within this range of a living hero —
+   *  the fight you are in crosses over; the rest evaporate. Bosses always
+   *  cross. 0 = the rim spares nothing. */
+  spareEngagedWithin: number;
+  /** Every string the HUD speaks (tone is data, not engine prose). */
+  text: { collapse: string };
+}
+
+// --- THE COURT: a patron lord themes the field, a door tears to its domain ---
+//
+// An encounter with a court rolls ONE lord (packages/courts.ts) per zone —
+// a pure seeded roll every reader agrees on. The lord's roster seasons the
+// field mix, its banner tints the ring, and a field fed past the door
+// threshold DEEPENS: when the collapse completes, the tear condenses into a
+// standing DOOR to the lord's domain (the shared realm-arena pipeline) where
+// its VESSEL waits. Undefined = no court, byte-identical.
+
+export interface CourtSpec {
+  /** CourtLordDef ids this encounter draws from (the breach's four). */
+  lords: string[];
+  /** Share of field spawns drawn from the LORD's roster (the rest roll the
+   *  def's own factions) — the theme without losing the family. */
+  rosterShare: number;
+  /** The door to the lord's domain. Absent = theming only, no pinnacle. */
+  door?: {
+    /** Peak-uncovered fraction (peakRadius / maxRadius) the field must reach
+     *  while open for the tear to deepen — feed it or it seals clean. */
+    atUncoverFrac: number;
+    /** Gate kind: the data/gateVisuals.ts look + the 'realm_gate:<kind>'
+     *  transit row ('court' is the stock fabric row). */
+    gateKind: string;
+    /** Domain zone level over the current zone. */
+    levelBonus: number;
+  };
+}
+
 /** The ledger keys an encounter bumps — these drive the discovery ladder.
  *  EVERY key here must be READ by some unlock/tier (and vice versa): the
  *  event QA harness enforces the contract in both directions, so a key only
@@ -501,6 +574,14 @@ export interface EncounterDef {
    *  (composes with the ordinary scales; the reflections join the field's
    *  spawned set, so their falls feed the timer like any kill). */
   echoParty?: EchoPartySpec;
+  /** Promotes this encounter's spawning to THE VEIL (edge-activation knots +
+   *  the evaporating collapse). Undefined = classic pulse spawning inside the
+   *  radius, byte-identical. Composes with `echoParty` and `court`. */
+  veil?: VeilSpec;
+  /** Fields a COURT over this encounter: a seeded patron lord themes the mix
+   *  and tints the ring, and (with `door`) a fully-fed field's collapse leaves
+   *  a standing way into the lord's domain. Undefined = no court. */
+  court?: CourtSpec;
 }
 
 /** The echo-party rite as data — every number a knob. */

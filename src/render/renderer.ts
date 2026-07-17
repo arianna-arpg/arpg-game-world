@@ -29,6 +29,7 @@ import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { transitRing } from '../data/transit';
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
+import { courtLord } from '../packages/courts';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { VEIL_DEFAULTS } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
@@ -721,10 +722,16 @@ export class Renderer {
 
   private drawEncounters(world: World): void {
     const { ctx } = this;
+    const EF = VIS_CFG.encounterField;
+    const t = world.time;
     for (const e of world.encountersView()) {
-      const col = e.def.trigger.color;
+      // The rolled court lord owns the field's tint (its banner IS the tell —
+      // you learn which power waits before its first minion lands a blow);
+      // an uncourted field keeps its def color.
+      const lord = e.lordId ? courtLord(e.lordId) : undefined;
+      const col = lord?.color ?? e.def.trigger.color;
       if (e.phase === 'dormant') {
-        const pulse = 1 + 0.15 * Math.sin(world.time * 4);
+        const pulse = 1 + 0.15 * Math.sin(t * 4);
         const s = 13 * pulse;
         ctx.beginPath();
         ctx.arc(e.pos.x, e.pos.y, e.def.trigger.activateRadius, 0, Math.PI * 2);
@@ -732,34 +739,108 @@ export class Renderer {
         ctx.globalAlpha = 1;
         ctx.save();
         ctx.translate(e.pos.x, e.pos.y); ctx.rotate(Math.PI / 4);
-        ctx.fillStyle = col; ctx.globalAlpha = 0.9; ctx.fillRect(-s / 2, -s / 2, s, s);
+        ctx.fillStyle = e.def.trigger.color; ctx.globalAlpha = 0.9; ctx.fillRect(-s / 2, -s / 2, s, s);
         ctx.globalAlpha = 1; ctx.strokeStyle = '#f0d8ff'; ctx.lineWidth = 1.5;
         ctx.strokeRect(-s / 2, -s / 2, s, s);
         ctx.restore();
-      } else if (e.phase === 'open') {
+      } else if (e.phase === 'open' || e.phase === 'collapsing') {
+        const collapsing = e.phase === 'collapsing';
+        const from = e.veil?.collapseFrom ?? e.scale.maxRadius;
+        const closed = collapsing && from > 0 ? 1 - e.radius / from : 0;
+        // Interior wash — deepens as a collapse comes home (the veil taking
+        // its light back with it).
         ctx.beginPath();
         ctx.arc(e.pos.x, e.pos.y, e.radius, 0, Math.PI * 2);
-        ctx.fillStyle = col; ctx.globalAlpha = 0.10; ctx.fill();
-        ctx.globalAlpha = 0.85; ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke();
-        ctx.globalAlpha = 0.12; ctx.lineWidth = 1; ctx.setLineDash([6, 8]);
-        ctx.beginPath();
-        ctx.arc(e.pos.x, e.pos.y, e.scale.maxRadius, 0, Math.PI * 2); ctx.stroke();
-        ctx.setLineDash([]); ctx.globalAlpha = 1;
+        ctx.fillStyle = col;
+        ctx.globalAlpha = 0.10 + (collapsing ? EF.collapseWashAlpha * closed : 0);
+        ctx.fill();
+        // The rim: a soft glow stroke under a crisp edge (white-hot on the
+        // way home).
+        ctx.globalAlpha = EF.glowAlpha; ctx.strokeStyle = col; ctx.lineWidth = EF.glowWidth;
+        ctx.stroke();
+        ctx.globalAlpha = collapsing ? 0.95 : 0.85;
+        ctx.strokeStyle = collapsing ? '#f2e8ff' : col;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        // The promised extent (open only) — a dashed ghost of the full tear.
+        if (!collapsing) {
+          ctx.globalAlpha = 0.12; ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.setLineDash([6, 8]);
+          ctx.beginPath();
+          ctx.arc(e.pos.x, e.pos.y, e.scale.maxRadius, 0, Math.PI * 2); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        // RIM CRACKLE — short radial ticks flickering along the edge, the
+        // reality seam arguing with itself. Deterministic per-index hash;
+        // zero allocation.
+        if (e.radius > 24) {
+          const circ = Math.PI * 2 * e.radius;
+          const nTick = Math.min(EF.crackleMax, Math.max(4, Math.round(circ / EF.crackleSpacing)));
+          ctx.strokeStyle = collapsing ? '#f2e8ff' : col; ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let k = 0; k < nTick; k++) {
+            const a = k * 2.399963 + t * 0.15; // golden-angle spread, slow drift
+            const flick = 0.5 + 0.5 * Math.sin(t * 7 + k * 2.3);
+            if (flick < 0.35) continue;
+            const r0 = e.radius - EF.crackleLen * 0.5, r1 = e.radius + EF.crackleLen * (0.5 + 0.5 * flick);
+            ctx.moveTo(e.pos.x + Math.cos(a) * r0, e.pos.y + Math.sin(a) * r0);
+            ctx.lineTo(e.pos.x + Math.cos(a) * r1, e.pos.y + Math.sin(a) * r1);
+          }
+          ctx.globalAlpha = 0.55; ctx.stroke();
+          // EDGE MOTES — embers of the far shore riding the rim (they run
+          // for the center when the collapse turns).
+          const nMote = Math.min(EF.edgeMoteMax, Math.max(6, Math.round(circ / EF.edgeMoteSpacing)));
+          const hz = 0.4 * (collapsing ? EF.collapseMoteHzMul : 1);
+          ctx.fillStyle = col;
+          for (let k = 0; k < nMote; k++) {
+            const a = t * hz * (k % 2 ? 1 : -1) + (k / nMote) * Math.PI * 2;
+            ctx.globalAlpha = 0.3 + 0.4 * Math.sin(t * 2.6 + k * 1.7) ** 2;
+            ctx.beginPath();
+            ctx.arc(e.pos.x + Math.cos(a) * e.radius, e.pos.y + Math.sin(a) * e.radius,
+              EF.edgeMoteSize, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        // THE VEILED SHORE (def.veil, open only): knots the rim has not yet
+        // reached shimmer faintly just beyond it — the parallel shore
+        // glimpsed, not mapped. Nearest read clearest; the band fades out.
+        if (!collapsing && e.veil) {
+          const run = e.veil;
+          ctx.fillStyle = col; ctx.strokeStyle = col;
+          for (let i = run.cursor; i < run.knots.length; i++) {
+            const k = run.knots[i];
+            if (k.d > e.radius + EF.previewBand) break; // sorted — the rest are farther
+            const fade = 1 - (k.d - e.radius) / EF.previewBand;
+            const flick = 0.4 + 0.6 * Math.sin(t * 3.1 + i * 2.4) ** 2;
+            ctx.globalAlpha = EF.shimmerAlpha * Math.max(0, fade) * flick;
+            const s = EF.shimmerSize * (0.8 + 0.4 * flick);
+            ctx.save();
+            ctx.translate(k.pos.x, k.pos.y);
+            ctx.rotate(Math.PI / 4 + t * 0.5 + i);
+            ctx.strokeRect(-s, -s, s * 2, s * 2);
+            ctx.restore();
+          }
+        }
+        ctx.globalAlpha = 1;
+        // The diamond keeps standing at the heart of the field.
         ctx.save();
         ctx.translate(e.pos.x, e.pos.y); ctx.rotate(Math.PI / 4);
-        ctx.fillStyle = col; ctx.fillRect(-7, -7, 14, 14);
+        ctx.fillStyle = e.def.trigger.color; ctx.fillRect(-7, -7, 14, 14);
         ctx.restore();
       }
     }
-    // REALM GATES — the demon rift, crusade sanctum, necropolis way and
-    // fracture tear all draw through ONE pass; each gate's whole look (halo,
-    // rims, churn, rays, motes, glyph, prompt) is its kind's data row in
-    // data/gateVisuals.ts, '@event' slots tinting with the event's own color.
+    // REALM GATES — the demon rift, crusade sanctum, necropolis way, fracture
+    // tear and standing COURT DOORS all draw through ONE pass; each gate's
+    // whole look (halo, rims, churn, rays, motes, glyph, prompt) is its
+    // kind's data row in data/gateVisuals.ts, '@event' slots tinting with the
+    // event's own color and per-instance prompts (the lord's own call) riding
+    // the view row.
     for (const g of world.realmGatesView()) this.drawRealmGate(g, world.time);
   }
 
-  /** THE gate painter — every realm gate draws from its GateLook row. */
-  private drawRealmGate(g: { pos: Vec2; kind: string; color?: string }, time: number): void {
+  /** THE gate painter — every realm gate draws from its GateLook row. A view
+   *  row may carry its own `prompt` (a court door speaking its lord's line);
+   *  the look's prompt is the kind-wide fallback. */
+  private drawRealmGate(g: { pos: Vec2; kind: string; color?: string; prompt?: string }, time: number): void {
     const look = gateLookOf(g.kind);
     const col = (c: string): string => c === EVENT_COLOR ? (g.color ?? '#c8c8e8') : c;
     const { ctx } = this;
@@ -820,12 +901,13 @@ export class Renderer {
       ctx.fillText(look.glyph, g.pos.x, g.pos.y);
       ctx.textBaseline = 'alphabetic';
     }
-    if (look.prompt) {
+    const prompt = g.prompt ?? look.prompt;
+    if (prompt) {
       ctx.globalAlpha = 0.9; ctx.font = 'bold 11px Verdana'; ctx.textAlign = 'center';
       ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 3;
-      ctx.strokeText(look.prompt, g.pos.x, g.pos.y - look.radius - 13);
+      ctx.strokeText(prompt, g.pos.x, g.pos.y - look.radius - 13);
       ctx.fillStyle = col(look.promptColor ?? look.inner);
-      ctx.fillText(look.prompt, g.pos.x, g.pos.y - look.radius - 13);
+      ctx.fillText(prompt, g.pos.x, g.pos.y - look.radius - 13);
       ctx.globalAlpha = 1;
     }
   }
@@ -846,19 +928,26 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** The breach timer bar (the kill-fed countdown), screen-space near the top. */
+  /** The breach timer bar (the kill-fed countdown), screen-space near the top.
+   *  A COLLAPSING veil keeps the bar and drains it with the ring instead —
+   *  the last act stays legible to the second. */
   private drawEncounterHud(world: World): void {
-    const open = world.encountersView().find(e => e.phase === 'open');
+    const open = world.encountersView().find(e => e.phase === 'open' || e.phase === 'collapsing');
     if (!open) return;
     const { ctx } = this;
     const w = this.uiW; // virtual — this pass runs inside the UI-scale sub-pass
     // Sits under the boss bar; both slide down when the co-op party strip shows.
     const oy = world.party.strip.length > 1 ? 20 : 0;
     const bw = 320, bh = 14, bx = w / 2 - bw / 2, by = 74 + oy;
-    const frac = clamp(open.timer / open.maxTimer, 0, 1);
+    const collapsing = open.phase === 'collapsing';
+    const from = open.veil?.collapseFrom ?? 0;
+    const frac = collapsing
+      ? (from > 0 ? clamp(open.radius / from, 0, 1) : 0)
+      : clamp(open.timer / open.maxTimer, 0, 1);
+    const lord = open.lordId ? courtLord(open.lordId) : undefined;
     ctx.textAlign = 'center';
     ctx.font = 'bold 13px Verdana';
-    ctx.fillStyle = open.def.trigger.color;
+    ctx.fillStyle = lord?.color ?? open.def.trigger.color;
     // A staged encounter re-titles its bar (the borough's muster → assault);
     // plain encounters keep speaking their scale.
     ctx.fillText(open.hudLabel ?? open.scale.label, w / 2, by - 6);
