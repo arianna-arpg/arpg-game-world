@@ -1423,25 +1423,27 @@ const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
 const MIREILLE_GIFT_SKILLS = ['life_flask', 'mana_flask'];
 const MIREILLE_GIFT_LEDGER = 'mireille_flasks_given';
 /** One teachable move in the gem loop Mireille's gift walks the player
- *  through: `pending` is the live read for whether the move still wants
- *  making on the hero's actual state. Directions, glows and the
- *  inventory's open-on-Skill-Gems default all key off the step id
- *  (mireilleGiftLesson) — a new teachable move is one row here, no
- *  surface edits. */
+ *  through: `pendingSkills` is the live read for WHICH gift skills still
+ *  want the move made on the hero's actual state (empty = step resolved).
+ *  Directions, glows and the inventory's open-on-Skill-Gems default all
+ *  key off the step id (mireilleGiftLesson); per-skill surfaces — the
+ *  unbound slot keys a still-unbarred flask could land on — key off the
+ *  subject ids (mireilleLessonSkills). A new teachable move is one row
+ *  here, no surface edits. */
 interface MireilleLessonStep {
   id: 'learn' | 'bar';
-  /** Live read: does the move still want demonstrating right now? */
-  pending: (w: World) => boolean;
+  /** Live read: the gift skills this move still wants demonstrating on. */
+  pendingSkills: (w: World) => string[];
 }
 const MIREILLE_LESSON_STEPS: MireilleLessonStep[] = [
   { // press a carried gift gem to memory (the Skill Gems tab)
     id: 'learn',
-    pending: w => MIREILLE_GIFT_SKILLS.some(id => !w.meta.knownSkills.has(id)
+    pendingSkills: w => MIREILLE_GIFT_SKILLS.filter(id => !w.meta.knownSkills.has(id)
       && w.meta.skillInv.some(i => i.def.id === id)),
   },
   { // set a learned gift flask onto the action bar (the BUILD flap)
     id: 'bar',
-    pending: w => MIREILLE_GIFT_SKILLS.some(id => w.meta.knownSkills.has(id)
+    pendingSkills: w => MIREILLE_GIFT_SKILLS.filter(id => w.meta.knownSkills.has(id)
       && !w.player.skills.some(s => s?.def.id === id)),
   },
 ];
@@ -13999,8 +14001,9 @@ export class World {
    *  off the action bar → 'bar'), null once the lesson is LIVED. PUBLIC —
    *  the lesson state is the one source of truth every teaching surface
    *  reads: her talk line (innkeepPrompt), the inventory's
-   *  open-on-Skill-Gems default and the Skill Gems tab + BUILD flap glows
-   *  (ui/panels.ts). LATCHED SHUT by the ledgers (MIREILLE_LESSON_STEPS):
+   *  open-on-Skill-Gems default and the Skill Gems tab + BUILD flap +
+   *  unbound-slot-key glows (ui/panels.ts, with mireilleLessonSkills for
+   *  the per-skill grain). LATCHED SHUT by the ledgers (MIREILLE_LESSON_STEPS):
    *  once every step has been demonstrated — or the reward paid, or the
    *  account graduated — this is null FOREVER, so unlearning or unbinding
    *  a flask later reads as the build choice it is, never as the tutorial
@@ -14010,6 +14013,18 @@ export class World {
     if (this.mireilleLessonLived()) return null;
     if (!this.ledger[MIREILLE_GIFT_LEDGER]) return null;
     return this.mireilleLessonStep();
+  }
+
+  /** The CURRENT lesson step's SUBJECTS: which gift skills still want the
+   *  move mireilleGiftLesson() is pointing at — the per-skill grain a
+   *  surface marks rows and keys with (today: each still-unbarred flask's
+   *  row lights its unbound slot keys in the BUILD drawer). Wears the same
+   *  latch as the step read: a lived lesson — or none owed — reads EMPTY,
+   *  so a per-skill glow can no more outlive the lesson than the tab's. */
+  mireilleLessonSkills(): string[] {
+    const step = this.mireilleGiftLesson();
+    if (step === null) return [];
+    return MIREILLE_LESSON_STEPS.find(s => s.id === step)?.pendingSkills(this) ?? [];
   }
 
   /** Has the lesson been LIVED (completed once, however long ago)? Any of:
@@ -14029,7 +14044,7 @@ export class World {
    *  really sit learned and barred); every TEACHING surface reads the
    *  latched mireilleGiftLesson() instead. */
   private mireilleLessonStep(): 'learn' | 'bar' | null {
-    for (const s of MIREILLE_LESSON_STEPS) if (s.pending(this)) return s.id;
+    for (const s of MIREILLE_LESSON_STEPS) if (s.pendingSkills(this).length) return s.id;
     return null;
   }
 

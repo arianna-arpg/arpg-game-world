@@ -201,10 +201,11 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
-  /** One-shot for the flap's TUTORIAL GLOW: set the first time the flap is
-   *  opened this run — "glow until opened", then trust the player. Re-armed
-   *  per run (resetRunView) so the next hero's lesson can teach again. */
-  private buildFlapTaught = false;
+  // (The flap's TUTORIAL GLOW carries no UI state of its own — like the
+  //  Skill Gems tab's, it reads LIVE off World.mireilleGiftLesson each
+  //  render: glowing while the bar step pends and the drawer is closed,
+  //  quiet the moment the lesson advances or latches LIVED. An early idle
+  //  browse can't silence a step that hasn't been walked yet.)
   /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
    *  support gems — one panel, one key, zero overlapping windows. */
   invTab: 'gear' | 'skills' | 'gems' = 'gear';
@@ -758,7 +759,6 @@ export class UI {
     this.oceanCache = null;
     this.invTab = 'gear';
     this.lastInvTab = null;
-    this.buildFlapTaught = false; // re-arm the flap's lesson glow for the new hero
   }
 
   showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
@@ -1457,14 +1457,16 @@ export class UI {
     // management view. State persists like the satchel's.
     const wf = this.getWorld().nearFont();
     // MIREILLE'S LESSON, read from its one source of truth (the world): at
-    // the 'bar' step the flap handle GLOWS until first opened (the one-shot
-    // above); at the 'learn' step the Skill Gems TAB glows from any other
-    // tab. The glow always marks the lesson's next click — and the lesson
-    // LATCHES LIVED in the ledgers (World.mireilleGiftLesson), so once the
-    // loop has been walked — this run, a past character, or undone again by
-    // choice (unlearn, unbind) — these stay quiet forever after.
+    // the 'learn' step the Skill Gems TAB glows from any other tab; at the
+    // 'bar' step the flap handle glows while the drawer is CLOSED, then the
+    // unbound slot keys inside take over (learnedListHtml) — one mechanism,
+    // three surfaces, each live off the same read every render. The glow
+    // always marks the lesson's next click — and the lesson LATCHES LIVED
+    // in the ledgers (World.mireilleGiftLesson), so once the loop has been
+    // walked — this run, a past character, or undone again by choice
+    // (unlearn, unbind) — these stay quiet forever after.
     const lesson = this.getWorld().mireilleGiftLesson();
-    const flapGlow = lesson === 'bar' && !this.buildFlapOpen && !this.buildFlapTaught;
+    const flapGlow = lesson === 'bar' && !this.buildFlapOpen;
     const drawerHandle = `
       <button data-buildflap class="${flapGlow ? 'tut-glow' : ''}"
         title="Your learned skills — the whole build, full management"
@@ -1556,9 +1558,6 @@ export class UI {
     // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {
       this.buildFlapOpen = !this.buildFlapOpen;
-      // The tutorial glow's one-shot: any click that lands the flap OPEN
-      // proves the surface is found — the glow never nags again this run.
-      if (this.buildFlapOpen) this.buildFlapTaught = true;
       this.refreshInventory();
     });
     if (this.buildFlapOpen) {
@@ -2388,13 +2387,25 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' — click a skill to bind' : ''}:</span>
         ${bankChips}
       </div>` : '';
+    // MIREILLE'S LESSON at KEY grain: while the bar step pends, each gift
+    // flask still off the bar lights the UNBOUND slot keys it could land on
+    // — the same live, latched read as the tab and flap glows (the flap
+    // stops glowing once opened; these carry the next click the rest of the
+    // way). Occupied keys stay dark on purpose: the lesson teaches a free
+    // key, never an overwrite. Latch and step both live in the world
+    // (mireilleGiftLesson/mireilleLessonSkills), so a barred flask's row
+    // quiets the instant it lands, and a lived lesson never re-lights here
+    // over a later unbind.
+    const lessonSkills = world.mireilleGiftLesson() === 'bar' ? world.mireilleLessonSkills() : [];
     return graftBank + [...m.knownSkills.values()].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
+      const teachRow = lessonSkills.includes(def.id);
       const binds = this.slotLabels().map((label, slot) => {
         const bound = p.skills[slot]?.def.id === def.id;
+        const teachKey = teachRow && !p.skills[slot];
         return `<button data-bind="${def.id}" data-slot="${slot}"
-          class="${bound ? 'bound' : ''}">${label}</button>`;
+          class="${bound ? 'bound' : ''}${teachKey ? ' tut-glow' : ''}">${label}</button>`;
       }).join('');
       // Mark gems that BOARD THE CREW (forwarded into the minions' own
       // skills) so the lane is legible — independent of whether the gem

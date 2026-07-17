@@ -5,8 +5,11 @@
 // unbinding a flask, unlearning both, a veteran deal on a graduated account,
 // mid-lesson unlearn as agency, gems traded away, and a legacy resumed save.
 // The lesson state is a LEDGER fact (world.ts MIREILLE_LESSON_STEPS): no
-// teaching surface — tab glow, flap glow, talk line, open-on-Skill-Gems —
-// may ever re-light over the player's own build choices.
+// teaching surface — tab glow, flap glow, the unbound-slot-key glows, talk
+// line, open-on-Skill-Gems — may ever re-light over the player's own build
+// choices. The step's SUBJECTS (mireilleLessonSkills — which gift skills
+// still want the move; the key-grain read behind the drawer's slot-key
+// glows) must track the arc one flask at a time and wear the same latch.
 // Run: npx tsx balance/probe_mireille_lesson.ts
 // ---------------------------------------------------------------------------
 
@@ -39,6 +42,9 @@ const bindFree = (w: World, sid: string): boolean =>
   w.bindSkill(w.player.skills.findIndex(s => s === null), sid);
 const barSlotOf = (w: World, sid: string): number =>
   w.player.skills.findIndex(s => s?.def.id === sid);
+// The key-grain read, flattened for equality checks (registry order:
+// life then mana — MIREILLE_GIFT_SKILLS' own).
+const subjects = (w: World): string => w.mireilleLessonSkills().join(',');
 // The gift's own shape, dealt directly (mireilleService's hand-over) for the
 // worlds that don't walk the dwell.
 const giveDirect = (w: World): void => {
@@ -55,6 +61,8 @@ check('A0: no lesson before her arc begins', A.mireilleGiftLesson() === null);
 A.meta.skillInv.push(makeSkillInstance(SKILLS['life_flask']!, 1, 0));
 check('A0b: a wild carried flask gem rolls no lesson (arc-scoped)',
   A.mireilleGiftLesson() === null);
+check('A0c: and names no subjects (key-grain glows stay dark too)',
+  subjects(A) === '', `subjects=[${subjects(A)}]`);
 A.meta.skillInv.pop();
 
 // Mireille herself, spawned the way town does (createMonster + push), close
@@ -68,15 +76,24 @@ check('A1: the dwell hands over both gift gems',
   `skillInv=[${A.meta.skillInv.map(i => i.def.id).join(',')}]`);
 check('A1b: the hand-over is ledgered', (A.ledger[GIFT] ?? 0) >= 1);
 check('A1c: lesson opens on the learn step', A.mireilleGiftLesson() === 'learn');
+check('A1d: the learn step names both carried gifts as its subjects',
+  subjects(A) === 'life_flask,mana_flask', `subjects=[${subjects(A)}]`);
 
 check('A2: learning one flask keeps the learn step (one still carried)',
   learn(A, 'life_flask') && A.mireilleGiftLesson() === 'learn');
+check('A2b: the subjects narrow to the flask still carried',
+  subjects(A) === 'mana_flask', `subjects=[${subjects(A)}]`);
 check('A3: learning the second advances to the bar step',
   learn(A, 'mana_flask') && A.mireilleGiftLesson() === 'bar');
+check('A3b: the bar step names both learned, unbarred flasks (both rows light their free keys)',
+  subjects(A) === 'life_flask,mana_flask', `subjects=[${subjects(A)}]`);
 check('A4: barring one flask keeps the bar step (one still unbound) — mid-arc teaching persists',
   bindFree(A, 'life_flask') && A.mireilleGiftLesson() === 'bar');
+check('A4b: the barred flask leaves the subjects — its keys quiet, its twin still glows',
+  subjects(A) === 'mana_flask', `subjects=[${subjects(A)}]`);
 check('A5: barring the second completes the lesson',
   bindFree(A, 'mana_flask') && A.mireilleGiftLesson() === null);
+check('A5c: no subjects survive the close', subjects(A) === '', `subjects=[${subjects(A)}]`);
 
 step(A, 0.2); // updateMireille: the belt ledgers the close + graduation + the brim
 check('A5b: the close is LEDGERED (the belt)', (A.ledger[LIVED] ?? 0) >= 1);
@@ -91,6 +108,8 @@ check('A6b: her reward brims the founts (fill ledgered)',
 A.bindSkill(barSlotOf(A, 'life_flask'), null);
 check('A7: unbinding a flask does NOT re-light the lesson (the bug)',
   A.mireilleGiftLesson() === null);
+check('A7b: nor its keys — the latch covers the key grain',
+  subjects(A) === '', `subjects=[${subjects(A)}]`);
 check('A8: unlearning both flasks does NOT re-light the lesson',
   A.unlearnSkill('life_flask') && A.unlearnSkill('mana_flask')
   && A.mireilleGiftLesson() === null);
@@ -112,6 +131,7 @@ check('B1c: no lesson rolls for the veteran', B.mireilleGiftLesson() === null);
 B.bindSkill(barSlotOf(B, 'life_flask'), null);
 step(B, 0.2);
 check('B2: the veteran unbinding a flask stays quiet', B.mireilleGiftLesson() === null);
+check('B2b: and their keys never glow', subjects(B) === '', `subjects=[${subjects(B)}]`);
 
 // === C) mid-lesson agency: unlearning her gift IS commanding the loop ======
 const C = makeSimWorld('tamer', 24603);
@@ -121,6 +141,8 @@ learn(C, 'life_flask');
 check('C2: unlearning mid-lesson closes the lesson for good (agency)',
   C.unlearnSkill('life_flask') && C.mireilleGiftLesson() === null
   && (C.ledger[LIVED] ?? 0) >= 1);
+check('C2-keys: the agency latch empties the subjects mid-arc too',
+  subjects(C) === '', `subjects=[${subjects(C)}]`);
 step(C, 0.2);
 check('C2b: that mastery graduates the account too',
   (C.account.ledger[LEDGER_FLASK_LESSON] ?? 0) >= 1);
