@@ -3114,6 +3114,45 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
+    // FEAR GLYPH (the harrowing ladder, status.ts): dread reads BEFORE the
+    // rout — quiver ticks fan over the crown as stacks climb (trembling on
+    // the sim clock), and a broken nerve (any PANIC status) rings the body
+    // in a shivering dashed circle while it flees. Tunables in VIS_CFG.fx.
+    {
+      const harrow = a.statuses.find(s => s.id === 'harrowing');
+      const panicked = a.isPanicked();
+      if (harrow || panicked) {
+        const fxCfg = VIS_CFG.fx;
+        if (panicked) {
+          const jit = Math.sin(world.time * 17 + a.id * 1.3) * 1.6;
+          ctx.strokeStyle = fxCfg.fearPanicColor;
+          ctx.setLineDash([4, 5]);
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = fxCfg.fearGlyphAlpha;
+          ctx.beginPath();
+          ctx.arc(jit * 0.4, 0, a.radius + 7 + jit, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (harrow) {
+          const n = Math.min(5, harrow.stacks);
+          ctx.strokeStyle = fxCfg.fearQuiverColor;
+          ctx.lineWidth = 1.6;
+          ctx.globalAlpha = fxCfg.fearGlyphAlpha * (0.5 + 0.1 * n);
+          for (let i = 0; i < n; i++) {
+            const aa = -Math.PI / 2 + (i - (n - 1) / 2) * 0.42;
+            const jx = Math.sin(world.time * 13 + i * 1.7 + a.id) * 1.4;
+            const bx = Math.cos(aa) * (a.radius + 6) + jx;
+            const by = Math.sin(aa) * (a.radius + 6);
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.lineTo(bx + Math.cos(aa) * 5, by + Math.sin(aa) * 5);
+            ctx.stroke();
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+
     // Stance feedback: conditional 'stationary' mods (Colossus Stance) are
     // invisible ±28% swings without a cue — SHOW the plant. The ring fades
     // in as the feet set and locks solid (with root-spikes) once planted.

@@ -345,6 +345,12 @@ export const VIS_CFG = {
     streakAlpha: 0.4,
     coreAlpha: 0.85,
     flashRimAlpha: 0.7,
+    /** FEAR GLYPH (the harrowing ladder): quiver ticks over a harrowed
+     *  body's crown (count = stacks) and the trembling ring on a broken
+     *  nerve (horrified) — dread reads at a glance, before the rout. */
+    fearQuiverColor: '#b8a4d8',
+    fearPanicColor: '#d8c8f0',
+    fearGlyphAlpha: 0.75,
     /** EVENT ZONE WASH (world/zoneWash.ts): seconds for a full 0→1 swing of
      *  the displayed wash — settles / lifts / zone hops seep, never pop. */
     zoneWashFadeSec: 2.5,

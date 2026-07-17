@@ -789,6 +789,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   gloamwood: [
     { id: 'glow_moth', chance: 0.45, count: [2, 4] },
     { id: 'squirrel', chance: 0.4, count: [2, 3] },
+    // Field rats in the stubble — the country's rim is old cropland, and
+    // cropland keeps its rats long after it stops keeping farmers.
+    { id: 'gutter_rat', chance: 0.35, count: [1, 3] },
   ],
 };
 
@@ -6357,10 +6360,28 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.2,
     brain: {
       type: 'commander', perception: { alertShout: 520 },
+      // The warlord fight in three beats: the orchard RAINS (a telegraphed
+      // ring of lit gourds), the harvest RISES (gourdling calls under
+      // pressure), and at the end the King LIGHTS HIS OWN CROWN — the
+      // berserk trade in straw: faster and harder, and burning already
+      // (his fireRes runs negative; the bonfire makes the weakness a
+      // spectacle instead of a footnote).
       rules: [
+        { when: {}, every: [11, 15], hold: [0.4, 0.6],
+          announce: 'The orchard answers him.',
+          actions: [{ do: 'ring', skill: 'gourd_toss', radius: 170, count: 6, waves: 1, delay: 0.9, at: 'self' }] },
         { when: { lifeBelow: 0.6 }, every: [9, 13], hold: [0.3, 0.5],
           announce: 'The King calls the harvest up!',
           actions: [{ do: 'summon', monster: 'gourdling', count: 3, ring: 64 }] },
+        { when: { lifeBelow: 0.35 }, every: [999, 999], hold: [0.4, 0.6],
+          announce: 'The King lights his own crown—',
+          actions: [{ do: 'buff', buff: { type: 'buff', id: 'kings_bonfire', duration: 999,
+            mods: [
+              mod('damage', 'more', 0.3),
+              mod('attackSpeed', 'more', 0.2),
+              mod('moveSpeed', 'more', 0.2),
+              mod('damageTaken', 'more', 0.15),
+            ] } }] },
       ],
     },
   },
