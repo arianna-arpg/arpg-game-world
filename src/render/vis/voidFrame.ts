@@ -116,6 +116,20 @@ function drawSkirt(ctx: CanvasRenderingContext2D, theme: ZoneTheme,
   const c0 = withAlpha(earth, alpha), c1 = withAlpha(earth, 0);
   if (ell) {
     ctx.save();
+    // Clip to OUTSIDE the oval (the motes' evenodd idiom) BEFORE the squash
+    // transform. A canvas radial gradient CLAMPS to its offset-0 color
+    // inside the start radius, so the unclipped ring also washed the ENTIRE
+    // interior with the skirt's earth tone at full alpha — a whole-screen
+    // muddy veil that snapped on and off with viewInside's binary corner
+    // test (the jarring "fog-like overlay" a playtest caught by stepping
+    // east on an isle: one view corner slipping past the rim flipped the
+    // wash over the whole world). Clipped, the skirt exists only past the
+    // rim, and its visible share grows continuously from a sliver as a
+    // corner exits — the gate stays a pure perf early-out.
+    ctx.beginPath();
+    ctx.rect(camX, camY, vw, vh);
+    ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    ctx.clip('evenodd');
     ctx.translate(w / 2, h / 2);
     ctx.scale(1, h / w);
     const R = w / 2, E = R + D;
