@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:web": "vite build --base=./ --outDir site/play --emptyOutDir",
+    "build:portraits": "vite build --config vite.portraits.config.ts",
     "preview": "vite preview",
     "check": "tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json",
     "sim": "tsx balance/cli.ts",

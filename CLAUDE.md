@@ -258,6 +258,14 @@ changes.
   ride the baked EDGE-OVERLAY fabric (`render/vis/overlays.ts`), and
   engine-hostile canvas features gate on the measured CAPABILITY PROBE
   (`render/vis/canvasCaps.ts` — e.g. `VIS_CFG.statusFx.desatMode`).
+  THE PORTRAIT FABRIC (`render/vis/portrait.ts`, vis-pure) draws any def AS
+  ITSELF in a standalone tile via the same bakes the world blits — measured
+  zoom-to-fit, worm trails, composite parts, silhouette mode, an animated
+  clock path — feeding the bestiary book (`BESTIARY_CFG.portrait`), per-def
+  dials on `MonsterDef.portrait`, and the WEBSITE database via the
+  `npm run build:portraits` bundle (`site/assets/portraits.js`, CI-built +
+  gitignored beside the `export-web-data` JSON — site pixels can no more
+  drift from src/ than site facts can).
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.

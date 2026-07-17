@@ -12,6 +12,7 @@ on:
       - 'src/**'
       - 'index.html'
       - 'vite.config.ts'
+      - 'vite.portraits.config.ts'
       - 'site/**'
       - 'scripts/export-web-data.ts'
       - '.github/workflows/pages.yml'
@@ -45,6 +46,13 @@ jobs:
 
       - name: Export game data → site/data/*.json
         run: npx tsx scripts/export-web-data.ts
+
+      # The database page's monster portraits: the game's own painters
+      # (render/vis/portrait.ts + the part grammar + LOOKS), bundled as one
+      # iife the page loads beside the JSON — site pixels regenerate from
+      # src/ on every deploy exactly like site facts do.
+      - name: Build the portrait bundle → site/assets/portraits.js
+        run: npx vite build --config vite.portraits.config.ts
 
       # --- Phase 3: the playable in-browser demo, built into site/play ---
       # The game is a static Vite build; --base=./ keeps hashed asset URLs

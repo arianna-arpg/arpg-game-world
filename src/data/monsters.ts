@@ -15,6 +15,7 @@ import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
+import type { PortraitTune } from '../render/vis/portrait';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
 
@@ -359,6 +360,10 @@ export interface MonsterDef {
   /** Part-grammar portrait (data/looks.ts) — skeletons read as skeletons
    *  from overhead. Omitted = the legacy shape+adorn body. */
   look?: string;
+  /** BOOK/DATABASE PORTRAIT dials (render/vis/portrait.ts): zoom, nudge,
+   *  facing, pose clock, worm-trail length for this kind's composed portrait
+   *  in the bestiary and the website. Omitted = the fabric's measured fit. */
+  portrait?: PortraitTune;
   /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
    *  (world bosses, dragons, leviathans). Each part is a full monster def —
    *  it fights with its own skills and its death fires break effects on the

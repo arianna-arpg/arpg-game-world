@@ -46,6 +46,21 @@ export const BESTIARY_CFG = {
   ] as const,
   /** Entries per book page (the UI leafs through the registry this many at a time). */
   pageSize: 8,
+  /** THE BOOK'S PORTRAITS (render/vis/portrait.ts — the same bakes the world
+   *  draws). Sizes are CSS px (the ui-scale fabric zooms the whole panel). */
+  portrait: {
+    /** List-row tile edge. */
+    row: 30,
+    /** The open entry's study portrait. */
+    detail: 88,
+    /** Grimoire slot chip (a bound Spectre form). */
+    grimoire: 22,
+    /** What a never-slain page shows: its true dark SILHOUETTE (the classic
+     *  bestiary tease), or the old flat shape 'glyph'. */
+    undiscovered: 'silhouette' as 'silhouette' | 'glyph',
+    /** The open entry's portrait LIVES (breathes; wisps/flames play). */
+    animate: true,
+  },
 };
 
 /** The account-ledger key holding lifetime kills of one kind. A CROSS-FILE

@@ -52,6 +52,9 @@
   .card .cmeta{display:flex;gap:12px;margin-top:11px;font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint)}
   .card .cmeta b{color:var(--ink-dim);font-weight:600}
   .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  /* monster portrait thumb (painted lazily by assets/portraits.js) */
+  .card .mport{position:absolute;top:10px;right:12px;width:44px;height:44px;pointer-events:none;opacity:.95;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+  .card.has-port .cname,.card.has-port .cdesc{padding-right:52px}
 
   .empty{text-align:center;padding:70px 20px;color:var(--ink-faint)}
   .empty h3{font-family:var(--font-head);color:var(--ink-dim);margin-bottom:8px}
@@ -71,6 +74,10 @@
   .drawer .close:hover{color:var(--ink);border-color:var(--line-2)}
   .dbody{padding:22px 26px 40px}
   .dbody .desc{color:var(--ink-dim);font-size:15px;margin-bottom:20px}
+  /* the drawer's monster portrait — the creature as the game draws it */
+  .dportrait{display:flex;flex-direction:column;align-items:center;gap:10px;background:radial-gradient(ellipse at 50% 42%,rgba(255,255,255,.05),transparent 68%),#080a10;border:1px solid var(--line);border-radius:12px;padding:20px 16px 14px;margin-bottom:22px}
+  .dportrait canvas{width:132px;height:132px}
+  .dportcap{font-family:var(--font-head);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
   .kv{display:grid;grid-template-columns:132px 1fr;gap:8px 16px;font-size:14px}
   .kv dt{color:var(--ink-faint);font-family:var(--font-head);font-size:12.5px;letter-spacing:.03em}
   .kv dd{margin:0;color:var(--ink)}
@@ -141,6 +148,10 @@
 <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden></aside>
 
 <script src="../assets/nav.js"></script>
+<!-- The portrait bundle: the game's own body painters (built by CI / `npm run
+     build:portraits`). Optional — the catalog degrades to dot-only cards when
+     it's absent (e.g. a fresh clone before the first build). -->
+<script src="../assets/portraits.js"></script>
 <script src="../assets/database.js"></script>
 </body>
 </html>

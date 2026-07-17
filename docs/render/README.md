@@ -141,6 +141,42 @@ head + two claws + reaping tail) is the shipped exemplar — dragons and
 world bosses are data from here, and huge creatures keep moderate root
 bodies (sane casting cones) while their bulk lives in parts.
 
+## The portrait fabric — defs drawn as themselves, anywhere (`vis/portrait.ts`)
+
+Any def-like (`MonsterDef`, `ClassDef`, a website JSON row) renders into a
+standalone tile through the SAME bakes the world blits: `portraitSubjectOf`
+resolves the def (look, material, adorn, faction horn-style stamped by the
+caller, worm trail, composite parts expanded via a `resolvePart` callback),
+and the compositor mirrors `drawActor`'s stack — contact shadow, the facing
+rule (part-grammar looks and oriented shapes rotate; discs hold), the body
+bake, live parts on a pose clock, adorns facing-rotated, the live tentacle
+writhe. Drawn == shown: a bestiary page or database card can never drift
+from the in-game body, because it IS the in-game body.
+
+Fit is MEASURED, never guessed: a probe composition rasterizes once per
+geometry, its opaque bounding box is cached, and the tile bakes at exactly
+the radius that fills it (`VIS_CFG.portrait.fill`) — content-centered, so a
+trailing worm sits composed. Per-def dials ride `MonsterDef.portrait`
+(`PortraitTune`: zoom/nudge/facing/pose-clock/trail). Finished tiles live in
+their own steward-registered LRU (`'portraits'`; zone-swap floor + run-swap
+clear); the underlying body bakes share the global sprite cache and re-fetch
+through `baked()` as ever. `portraitTile` is the cached blit path (list
+rows, cards); `drawPortraitInto` repaints live with your own clock — breathe
+plus `live` parts — for the animated study portrait.
+
+Seats shipped: the Tracker's bestiary (rows + the open entry's breathing
+study portrait + grimoire slot chips; undiscovered pages show the true dark
+SILHOUETTE of the body — `BESTIARY_CFG.portrait` picks sizes and the
+silhouette-vs-glyph policy) and the WEBSITE database — `npm run
+build:portraits` (vite.portraits.config.ts) bundles the fabric + painters +
+LOOKS into `site/assets/portraits.js` (iife global `HWPortraits`, ~43 KB
+gz), built by CI beside the JSON export and gitignored like it, so site
+pixels regenerate from src/ exactly as site facts do. The exporter stamps
+`demonHorns` per monster (the one fact `raw` can't carry — it derives from
+FACTIONS, which the vis-pure bundle never imports). The module imports only
+body/parts/sprites/caches/visConfig — never World, never the renderer; keep
+it that way or the website bundle grows an engine.
+
 ## Climates — ambient FX, desert heat, living skies
 
 `ZoneTheme.ambientFx` declares a zone's standing sensory weather

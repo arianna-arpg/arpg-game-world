@@ -38,7 +38,12 @@ import {
 import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
-import { MONSTERS, type MonsterDef } from '../data/monsters';
+import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
+import {
+  drawPortraitInto, paintPortrait, portraitSubjectOf,
+  type PortraitDefLike, type PortraitSubject,
+} from '../render/vis/portrait';
+import { VIS_CFG } from '../render/vis/visConfig';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { PASSIVE_CHOICE_CFG, choiceGroupOf, choiceLockReason, choiceOptionOf, choicePickLimit, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
@@ -1772,6 +1777,9 @@ export class UI {
   // A page darkens to '???' until first blood, then reveals in STUDY TIERS
   // as account-lifetime kills accrue; the full threshold MASTERS it.
 
+  /** The open entry's live-portrait animation frame (0 = none running). */
+  private bestiaryAnim = 0;
+
   showBestiary(): void {
     this.bestiaryOpen = true;
     this.bestiaryMenu.classList.remove('hidden');
@@ -1781,13 +1789,15 @@ export class UI {
   closeBestiary(): void {
     this.bestiaryOpen = false;
     this.bestiaryMenu.classList.add('hidden');
+    cancelAnimationFrame(this.bestiaryAnim);
+    this.bestiaryAnim = 0;
     dndCancel(); // never strand a lifted page on a closed book
     hideTooltip();
   }
 
-  /** A kind's little portrait: its silhouette LANGUAGE (shape + color), as
-   *  inline SVG — no renderer round-trip, readable at 22px, and any new
-   *  ActorShape falls back to the circle rather than breaking the book. */
+  /** The flat SVG shape-glyph — now the FALLBACK read (undiscovered pages
+   *  when BESTIARY_CFG.portrait.undiscovered = 'glyph', and any body the
+   *  portrait fabric cannot paint). The real seats draw the portrait fabric. */
   private monsterGlyph(def: MonsterDef, dark: boolean): string {
     const c = dark ? '#3a384c' : def.color;
     const pts: Record<string, string> = {
@@ -1806,6 +1816,74 @@ export class UI {
         ? `<polygon points="${pts[def.shape]}" fill="${c}"/>`
         : `<circle cx="11" cy="11" r="9" fill="${c}"/>`;
     return `<svg width="22" height="22" viewBox="0 0 22 22" style="flex:0 0 22px">${body}</svg>`;
+  }
+
+  /** def → the portrait fabric's def-like. The fabric is vis-pure and cannot
+   *  read FACTIONS, so the faction's horn style is stamped here (exactly the
+   *  derivation drawActor makes for live bodies). */
+  private portraitDefOf(def: MonsterDef): PortraitDefLike {
+    return { ...def, demonHorns: !!FACTIONS[def.faction ?? '']?.nubHorns };
+  }
+
+  /** The resolved portrait subject — composite parts expanded from the live
+   *  registry so a leviathan's page wears its claws. */
+  private portraitSubject(def: MonsterDef): PortraitSubject {
+    return portraitSubjectOf(this.portraitDefOf(def), {
+      resolvePart: id => {
+        const p = MONSTERS[id];
+        return p ? this.portraitDefOf(p) : undefined;
+      },
+    });
+  }
+
+  /** A portrait tile as row HTML — a sized canvas the post-build paint pass
+   *  (paintBestiaryPortraits) blits the fabric's cached tile into. Dark pages
+   *  show the true dark silhouette (or the legacy glyph, by config). */
+  private monsterPortraitHtml(def: MonsterDef, dark: boolean, size: number, live = false): string {
+    if (dark && BESTIARY_CFG.portrait.undiscovered === 'glyph') return this.monsterGlyph(def, true);
+    const px = Math.round(size * VIS_CFG.portrait.oversample);
+    return `<canvas class="b-port${live ? ' b-port-live' : ''}" data-bport="${def.id}"
+      data-bpmode="${dark ? 'silhouette' : 'full'}" data-bpsize="${size}"
+      width="${px}" height="${px}"
+      style="width:${size}px;height:${size}px;flex:0 0 ${size}px"></canvas>`;
+  }
+
+  /** Fill every portrait canvas the freshly-built book HTML declared. A look
+   *  the fabric cannot paint leaves its tile blank rather than breaking the
+   *  book (the painters themselves no-op unknown kinds, so this is belt). */
+  private paintBestiaryPortraits(): void {
+    for (const cv of this.bestiaryMenu.querySelectorAll<HTMLCanvasElement>('canvas.b-port')) {
+      const def = MONSTERS[cv.dataset.bport ?? ''];
+      if (!def) continue;
+      try {
+        paintPortrait(cv, this.portraitSubject(def), {
+          size: Number(cv.dataset.bpsize) || BESTIARY_CFG.portrait.row,
+          mode: cv.dataset.bpmode === 'silhouette' ? 'silhouette' : 'full',
+        });
+      } catch { /* a broken look must never break the book */ }
+    }
+  }
+
+  /** The open entry's portrait LIVES: wisps play, the body breathes — the
+   *  same pure-clock pose math the world draws, on the book's own rAF. One
+   *  small canvas, only while the book is open with a selection. */
+  private animateBestiaryDetail(): void {
+    cancelAnimationFrame(this.bestiaryAnim);
+    this.bestiaryAnim = 0;
+    if (!BESTIARY_CFG.portrait.animate) return;
+    const cv = this.bestiaryMenu.querySelector<HTMLCanvasElement>('canvas.b-port-live');
+    if (!cv) return;
+    const def = MONSTERS[cv.dataset.bport ?? ''];
+    if (!def) return;
+    const subject = this.portraitSubject(def);
+    const tick = (): void => {
+      if (!this.bestiaryOpen || !cv.isConnected) { this.bestiaryAnim = 0; return; }
+      try {
+        drawPortraitInto(cv, subject, performance.now() / 1000);
+      } catch { this.bestiaryAnim = 0; return; }
+      this.bestiaryAnim = requestAnimationFrame(tick);
+    };
+    this.bestiaryAnim = requestAnimationFrame(tick);
   }
 
   refreshBestiary(): void {
@@ -1832,7 +1910,7 @@ export class UI {
       const canLift = liftable && done && spectreAttunable(acc, def);
       return `<div class="b-row${dark ? ' dark' : sel}${canLift ? ' attunable' : ''}" data-bst="${dark ? '' : def.id}"${
         canLift ? ` data-drag="bestiaryForm:${def.id}"` : ''}>
-        ${this.monsterGlyph(def, dark)}
+        ${this.monsterPortraitHtml(def, dark, BESTIARY_CFG.portrait.row)}
         <div style="flex:1;min-width:0">
           <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
             ${dark ? '???' : def.name}${def.boss ? ' <span style="color:#e64db4;font-size:9px">BOSS</span>' : ''}
@@ -1879,9 +1957,15 @@ export class UI {
               : '★ Mastered — a Spectre skill, once learned, binds this form here at the book.')
             : '★ Mastered — too mighty a form for spectral binding.'}</div>`;
       }
+      // The STUDY PORTRAIT: the creature itself, large and alive, beside its
+      // revealed page — the intimate read the tiers were building toward.
       detail = `<div style="border:1px solid #3a3a52;border-radius:4px;padding:8px;margin-top:8px;background:rgba(20,20,30,0.5)">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${this.monsterGlyph(def, false)}
-          <b>${def.name}</b>${def.boss ? ' <span style="color:#e64db4;font-size:10px">BOSS</span>' : ''}</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          ${this.monsterPortraitHtml(def, false, BESTIARY_CFG.portrait.detail, true)}
+          <div style="flex:1;min-width:0"><b style="font-size:14px">${def.name}</b>${
+            def.boss ? ' <span style="color:#e64db4;font-size:10px">BOSS</span>' : ''}
+            <div style="color:#8a8678;font-size:10px;margin-top:2px">as it walks the world — drawn from the hunt itself</div>
+          </div></div>
         ${body}</div>`;
     }
 
@@ -1914,7 +1998,7 @@ export class UI {
           return `<span class="spec-slot" data-drop="spectreSlot:${inst.def.id}">
             <span style="color:${inst.def.color};font-size:10px">${inst.def.name} Lv ${inst.level}</span>
             ${form
-              ? `${this.monsterGlyph(form, false)} <span style="color:#a8d8a0">${form.name}</span>
+              ? `${this.monsterPortraitHtml(form, false, BESTIARY_CFG.portrait.grimoire)} <span style="color:#a8d8a0">${form.name}</span>
                  <button data-slot-release="${inst.def.id}" title="Release the attunement (back to corpse-reading)">✕</button>`
               : '<span class="empty">drag a mastered ★ form here</span>'}
           </span>`;
@@ -1959,6 +2043,11 @@ export class UI {
       if (this.inventoryOpen) this.refreshInventory();
     }));
     this.bestiaryMenu.querySelector<HTMLButtonElement>('[data-bst-close]')?.addEventListener('click', () => this.closeBestiary());
+
+    // The HTML above declared its portrait canvases — fill them from the
+    // fabric's tile cache, then set the open entry's portrait breathing.
+    this.paintBestiaryPortraits();
+    this.animateBestiaryDetail();
   }
 
   // ------------------------------------------------------------ oracle stone

@@ -145,7 +145,7 @@ function normSkill(s: Record<string, any>, kind: 'skill' | 'support') {
   };
 }
 
-function normMonster(m: Record<string, any>) {
+function normMonster(m: Record<string, any>, factions: Record<string, any>) {
   const base = m.base && typeof m.base === 'object' ? m.base : {};
   return {
     id: m.id,
@@ -161,6 +161,10 @@ function normMonster(m: Record<string, any>) {
     xp: m.xp ?? null,
     skills: Array.isArray(m.skills) ? m.skills : [],
     boss: !!m.boss,
+    // The one look fact `raw` can't carry: horn STYLE derives from the
+    // faction table, which the site's portrait bundle (vis-pure) never
+    // imports — stamp the derived flag so site portraits match the game.
+    demonHorns: !!factions?.[m.faction ?? '']?.nubHorns,
     raw: m,
   };
 }
@@ -340,8 +344,9 @@ async function main() {
     .map((s) => normSkill(s, 'support'));
 
   // ---- monsters ----------------------------------------------------------
+  const monsterFactions = ((monstersMod as any).FACTIONS ?? {}) as Record<string, any>;
   const monsters = toList(pick(monstersMod, ['MONSTERS', 'monsters'], 'monsters'), 'MONSTERS')
-    .map(normMonster);
+    .map((m) => normMonster(m, monsterFactions));
 
   // ---- classes -----------------------------------------------------------
   const classes = toList(pick(classesMod, ['CLASSES', 'classes'], 'classes'), 'CLASSES')

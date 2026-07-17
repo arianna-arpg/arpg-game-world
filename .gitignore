@@ -25,6 +25,13 @@ build/build-info.json
 # it on every deploy, so the live /play/ always matches the source.
 /site/play/
 
+# ── Website portrait bundle ──────────────────────────────────
+# The database page's monster-portrait renderer (the game's own
+# painters, bundled): built into site/assets by CI (and locally
+# with `npm run build:portraits`). Generated, never committed —
+# site pixels regenerate from src/ exactly like site/data JSON.
+/site/assets/portraits.js
+
 # ── Game saves ───────────────────────────────────────────────
 # Personal runtime state that changes every session. Ignored so
 # your play history doesn't bloat the repo. To keep ONE sample

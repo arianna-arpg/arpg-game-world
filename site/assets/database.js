@@ -7,6 +7,11 @@
   var DATA_DIR = '../data/';
   var PALETTE = { skill: '#ff8a4c', support: '#a98bff', monster: '#ef6b6b', class: '#e9c46a' };
   var TYPE_LABEL = { all: 'All', skill: 'Skills', support: 'Supports', monster: 'Monsters', class: 'Classes' };
+  // Monster portraits (assets/portraits.js — the game's own painters, bundled).
+  // Sizes are CSS px; backing stores ride the bundle's oversample factor.
+  var PORTRAIT = { card: 44, detail: 132 };
+  function portraitsReady() { return typeof window.HWPortraits === 'object' && !!window.HWPortraits; }
+  function portraitOS() { try { return window.HWPortraits.oversample() || 2; } catch (e) { return 2; } }
 
   var state = { type: 'all', q: '', sort: 'name', tags: new Set(), dmg: new Set(), faction: new Set() };
   var DB = { all: [], meta: null };
@@ -201,18 +206,55 @@
     Array.prototype.forEach.call(el.grid.querySelectorAll('.card'), function (c) {
       c.addEventListener('click', function () { openDetail(c.getAttribute('data-type'), c.getAttribute('data-id')); });
     });
+    paintCardPortraits();
   }
   function card(e) {
     var ac = accent(e);
     var tags = (e.tags || []).slice(0, 4).map(function (t) { return '<span class="t">' + esc(t) + '</span>'; }).join('');
     var meta = cardMeta(e);
-    return '<button class="card" data-type="' + e.type + '" data-id="' + esc(e.id) + '" style="--accent:' + ac + '">' +
+    // Monster cards wear their portrait (painted lazily as they scroll in).
+    var port = '';
+    if (e.type === 'monster' && portraitsReady()) {
+      var px = Math.round(PORTRAIT.card * portraitOS());
+      port = '<canvas class="mport" data-mport="' + esc(e.id) + '" width="' + px + '" height="' + px + '" aria-hidden="true"></canvas>';
+    }
+    return '<button class="card' + (port ? ' has-port' : '') + '" data-type="' + e.type + '" data-id="' + esc(e.id) + '" style="--accent:' + ac + '">' +
+      port +
       '<div class="cname"><span class="dot" style="background:' + ac + '"></span>' + esc(e.name) +
       '<span class="kindpill">' + e.type + '</span></div>' +
       (e.description ? '<div class="cdesc">' + esc(e.description) + '</div>' : '<div class="cdesc"></div>') +
       (tags ? '<div class="ctags">' + tags + '</div>' : '') +
       (meta ? '<div class="cmeta">' + meta + '</div>' : '') +
       '</button>';
+  }
+
+  // ---- monster portraits (the game's own painters) -------------------------
+  function paintMonsterCanvas(cv, size) {
+    if (!portraitsReady()) return;
+    var m = find('monster', cv.getAttribute('data-mport'));
+    if (!m || !m.raw) return;
+    try {
+      window.HWPortraits.paintMonsterRow(cv, m,
+        function (id) { return find('monster', id); }, { size: size });
+    } catch (err) { /* a portrait must never break the catalog */ }
+  }
+  var portObserver = null;
+  function paintCardPortraits() {
+    if (portObserver) { portObserver.disconnect(); portObserver = null; }
+    var canvases = el.grid.querySelectorAll('canvas.mport');
+    if (!canvases.length || !portraitsReady()) return;
+    if (typeof IntersectionObserver !== 'function') {
+      Array.prototype.forEach.call(canvases, function (c) { paintMonsterCanvas(c, PORTRAIT.card); });
+      return;
+    }
+    portObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        portObserver.unobserve(en.target);
+        paintMonsterCanvas(en.target, PORTRAIT.card);
+      });
+    }, { rootMargin: '200px' });
+    Array.prototype.forEach.call(canvases, function (c) { portObserver.observe(c); });
   }
   function cardMeta(e) {
     if (e.type === 'monster') {
@@ -243,6 +285,8 @@
     selType = type; selId = id;
     var ac = accent(e);
     el.drawer.innerHTML = detailHTML(e, ac);
+    var dcv = el.drawer.querySelector('canvas.mport-detail');
+    if (dcv) paintMonsterCanvas(dcv, PORTRAIT.detail);
     el.drawer.hidden = false;
     requestAnimationFrame(function () { el.drawer.classList.add('open'); el.scrim.classList.add('open'); });
     document.body.style.overflow = 'hidden';
@@ -287,12 +331,22 @@
       if (e.skills && e.skills.length) row('Signature skills', badges(e.skills));
     }
 
+    // The monster itself, drawn by the game's own painters — the drawer leads
+    // with the creature, then the facts.
+    var portrait = '';
+    if (e.type === 'monster' && portraitsReady() && e.raw) {
+      var px = Math.round(PORTRAIT.detail * portraitOS());
+      portrait = '<div class="dportrait"><canvas class="mport-detail" data-mport="' + esc(e.id) + '" width="' + px + '" height="' + px + '"></canvas>' +
+        '<div class="dportcap">as it walks the world — drawn by the game\'s own painters</div></div>';
+    }
+
     return '<div class="dhead">' +
       '<div class="titles"><div class="dk" style="color:' + ac + '">' + e.type + '</div>' +
       '<h2 id="drawer-title" tabindex="-1">' + esc(e.name) + '</h2>' +
       '<div class="idline">' + esc(e.id) + '</div></div>' +
       '<button class="close" aria-label="Close">✕</button></div>' +
       '<div class="dbody">' +
+      portrait +
       (e.description ? '<p class="desc">' + esc(e.description) + '</p>' : '') +
       '<dl class="kv">' + kv.join('') + '</dl>' +
       '<div class="dsub">Full entry</div>' +

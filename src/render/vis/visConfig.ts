@@ -63,6 +63,36 @@ export const VIS_CFG = {
     longAlpha: 0.2,
   },
 
+  /** THE PORTRAIT FABRIC (vis/portrait.ts) — defs drawn as themselves in the
+   *  bestiary, dev tools and the website database. Per-def dials ride
+   *  MonsterDef.portrait; these are the fabric-wide physics. */
+  portrait: {
+    /** Measured content half-extent → this fraction of the tile half. */
+    fill: 0.86,
+    /** Display facing (radians): π/2 faces the reader, the book's gaze. */
+    facing: Math.PI / 2,
+    /** Frozen pose clock for live parts (wisps, flames) in static tiles. */
+    poseT: 0.35,
+    /** Backing px per CSS px — crisp under ui-scale zoom + retina. */
+    oversample: 2,
+    /** Radius the fit probe composes at before measuring opaque bounds. */
+    probeR: 20,
+    /** Largest body radius a tile bakes at (bounds the bake canvases). */
+    maxRenderR: 120,
+    /** Trailing segments a worm's portrait shows (0 = head only). */
+    wormTrail: 4,
+    /** Ground the figure with the world's contact shadow. */
+    shadow: true,
+    /** The undiscovered tease: true geometry flooded to this one tone
+     *  (matches the book's dark-glyph ink). */
+    silhouette: '#3a384c',
+    /** Finished-tile LRU cap + the post-zone-swap floor (cache steward). */
+    maxTiles: 192,
+    floorOnSwap: 64,
+    /** Animated detail portraits breathe (VIS_CFG.body.breatheAmp/Rate). */
+    breathe: true,
+  },
+
   /** Actor-anchored text labels (NPC names, overhead prompts, nameplates) —
    *  drawn ABOVE the canopy/roof fades for clarity, but gated on the SAME
    *  smoothed fade the player's eyes get so a concealed actor leaks no text.
