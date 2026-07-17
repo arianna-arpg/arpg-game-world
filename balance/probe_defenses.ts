@@ -36,7 +36,7 @@ import { mitigateTyped } from '../src/engine/damage';
 import { ATTRIBUTES, STAT_DEFS } from '../src/engine/stats';
 import { BEHAVIOR_CFG, mergeTuning } from '../src/engine/brain';
 import { updateAI } from '../src/engine/ai';
-import { MONSTERS, MATERIAL_NATURE, defBreathes, defLeavesRemains } from '../src/data/monsters';
+import { FACTIONS, MONSTERS, MATERIAL_NATURE, defBreathes, defLeavesRemains } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 
 let failed = 0;
@@ -121,6 +121,35 @@ const stepAI = (w: World, dt: number, n = 1): void => {
   check('defLeavesRemains honors override precedence',
     defLeavesRemains(MONSTERS.wax_pool) === false && defLeavesRemains(MONSTERS.plains_wolf) === true
     && defLeavesRemains(MONSTERS.door_timber) === false);
+}
+
+// ------------------------------- THE UNRUSTED: the no-corpse legion (data) --
+// The reserved construct legion's identity rides the remains fabric end to
+// end: every roster body pins remains: false (material 'metal' already votes
+// no — the explicit flag holds the doctrine through any future re-dress),
+// never breathes (the chase never winds), and shrugs the flesh ailments
+// through the tagged ailmentResist rows. Killing one feeds NO corpse economy
+// — Corpse Explosion, the wagon, the Deadwake all go hungry on their ground —
+// while the organic control keeps minting beside it.
+{
+  seedGlobalRandom(0xb2a55);
+  const w = makeSimWorld('warrior', 1002);
+  const roster = FACTIONS.unrusted.table.map(e => e.id);
+  check('unrusted roster is authored in full (6 ranks)', roster.length === 6, roster.join(','));
+  for (const id of roster) {
+    const d = MONSTERS[id];
+    check(`${id}: leaves NO remains (the anti-necromancy pin)`, !!d && !defLeavesRemains(d));
+    check(`${id}: never breathes (tireless metal)`, !!d && !defBreathes(d));
+    check(`${id}: shrugs the bleed family (ailmentResist, physical-tagged)`,
+      !!d?.mods?.some(m => m.stat === 'ailmentResist' && (m.tags ?? []).includes('physical')));
+    check(`${id}: shrugs venom (ailmentResist, chaos-tagged)`,
+      !!d?.mods?.some(m => m.stat === 'ailmentResist' && (m.tags ?? []).includes('chaos')));
+  }
+  const mints = (a: Actor): number => { const n = w.corpses.length; w.kill(a); return w.corpses.length - n; };
+  const custodian = spawn(w, 'awakened_custodian', 4, 300, 300);
+  const skeleton = spawn(w, 'skeleton_warrior', 4, 900, 300);
+  check('killed custodian mints NO corpse at the kill path', mints(custodian) === 0);
+  check('the graves still pay beside it (skeleton control mints)', mints(skeleton) === 1);
 }
 
 // ------------------------------------------------- CC honesty at zero max --

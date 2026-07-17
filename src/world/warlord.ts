@@ -66,6 +66,7 @@ export const WARLORD_OF: Record<string, string> = {
   // faction owns no ground, so no rise can trigger).
   smoulder: 'the_ashmother',
   magpie: 'the_magpie_king',
+  unrusted: 'the_custodian',
 };
 
 const RISE_ZONES = 2;   // owned zones a faction needs to crown a warlord

@@ -100,6 +100,9 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // these contexts yet, and the validator holds the bar.
   smoulder: { roaming: 0.6, aggression: 1.3, warlordHome: 'origin', contexts: ['burnfields'], temper: 'territorial' },
   magpie: { roaming: 1.1, aggression: 1.0, warlordHome: 'capital', contexts: ['magpie_court'], temper: 'skittish' },
+  // The Unrusted barely march — custodians hold POSTS (the sprawl is the
+  // station; the crusade context is the one campaign that would move them).
+  unrusted: { roaming: 0.25, aggression: 0.9, warlordHome: 'origin', contexts: ['verdigris'], temper: 'territorial' },
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },

@@ -115,6 +115,21 @@ export const NEMESIS_NAMES = {
         'Who Counts the Fallen', 'the Throne-Hungry', 'of the Burning Column', 'the Oathless',
       ],
     },
+    // The Unrusted speak in maker's-marks and duty-rolls — a name here is a
+    // catalogue entry that refused to be struck off. Recorded with the
+    // reserved roster (RESERVED_KIN) so the tongue is ready the day the
+    // legion fields.
+    unrusted: {
+      first: [
+        'Gnomon', 'Ferrule', 'Tessella', 'Mandrel', 'Pinion', 'Cotterin',
+        'Verdigran', 'Lathion', 'Burnisa', 'Templum', 'Calliprax', 'Astrolan',
+      ],
+      epithets: [
+        'the Still-Bright', 'of the Ninth Winding', 'Rust-Refused', 'the Unoiled',
+        'Keeper of the Long Inventory', 'the Overwound', 'of the Sealed Foundry', 'Patina-Crowned',
+        'the Load-Bearing', 'Who Kept the Rounds', 'the Uncounted Cog', 'of the Old Tolerances',
+      ],
+    },
   } as Record<string, { first?: string[]; epithets?: string[] }>,
 };
 

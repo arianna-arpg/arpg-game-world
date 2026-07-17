@@ -7721,6 +7721,139 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE UNRUSTED (the old empire's constructs — RESERVED: see RESERVED_KIN)
+  // Custodian machines that outlived their makers and kept the rounds: brass
+  // bodies under honest verdigris, still sweeping halls that rotted out from
+  // under them. Authored in full, fielded by NOTHING: their door is the
+  // Verdigris Sprawl (the machine-court biome) and/or a custodian crusade
+  // (FACTION_TRAITS contexts) — build either, strike RESERVED_KIN['unrusted'].
+  // THE ANTI-NECROMANCY FACTION: a construct's death leaves NO corpse
+  // (remains: false pinned on every def — material 'metal' already votes no;
+  // the flag holds the doctrine even if a kin is ever re-dressed in stone or
+  // crystal), so wherever the legion holds ground, Corpse Explosion goes
+  // hungry, the wagon economy runs dry, and the Deadwake starves — the
+  // standing counter-weight to every deathAligned banner (and the RELATIONS
+  // grudge: keeping the dead OUT of the empire's halls was the charter).
+  // Nothing here bleeds (ailmentResist at its 0.9 cap, physical-tagged —
+  // bleed, hemorrhage, the impale family all shrug; house law keeps true
+  // immunity unreachable) and nothing envenoms (0.75 chaos-tagged — venom
+  // finds no veins; chaos-rot builds are dampened, never blanked). DEFENSE
+  // TEXTURE (docs/engine/defenses.md): PLATED NO-CORPSE ATTRITION — armor +
+  // poise walls that never dodge, never tire (metal breathes: false — the
+  // chase never winds) and never regenerate; the wright is the only mender,
+  // so the fight is "break the line faster than it is re-riveted" — vs the
+  // scarab's shell-then-meat crack and the hive's bonded swarm arithmetic.
+  // The legible family debt: BRASS CONDUCTS — lightning cracks the whole
+  // legion open, except the one body that was built to drink it.
+
+  /** The line rank: a house-guard that swept a dynasty's halls and now
+   *  sweeps them of the living. Slow, plated, tireless — a butler the
+   *  size of a door. */
+  awakened_custodian: {
+    id: 'awakened_custodian', name: 'Awakened Custodian',
+    color: '#7fa08e', shape: 'pentagon', radius: 13, material: 'metal', look: 'awakened_custodian',
+    base: { life: 78, moveSpeed: 108, accuracy: 100, armor: 45, poise: 45, mana: 8, manaRegen: 1 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['cleave'],
+    xp: 24,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 0.9,
+    temper: 'territorial',
+    brain: { type: 'juggernaut' },
+  },
+  /** The watch: a tower that walks its own rounds. One lens, dead centre,
+   *  never blinking — and a bell-voice that wakes the whole floor. */
+  brass_sentinel: {
+    id: 'brass_sentinel', name: 'Brass Sentinel',
+    color: '#b8965a', shape: 'octagon', radius: 12, material: 'metal', look: 'brass_sentinel',
+    base: { life: 52, moveSpeed: 122, accuracy: 108, armor: 30, mana: 90, manaRegen: 7 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['spark'],
+    xp: 26,
+    faction: 'unrusted', tags: ['construct'],
+    vision: { arcDeg: 360, rearMul: 1 }, // a lens has no back
+    detection: 1.3,
+    gemBias: ['lightning', 'spell'],
+    temper: 'territorial',
+    brain: { type: 'strafer', perception: { alertShout: 460 } },
+  },
+  /** The mender: tool-apron, rivet hammer, no interest in you at all — it
+   *  is here for the LINE (mend on kin through the ordinary heal fabric).
+   *  Kill the wright first, or fight masonry that repairs mid-siege. */
+  verdigris_wright: {
+    id: 'verdigris_wright', name: 'Verdigris Wright',
+    color: '#58a882', shape: 'circle', radius: 10, material: 'metal', look: 'verdigris_wright',
+    base: { life: 46, moveSpeed: 132, accuracy: 96, armor: 18, mana: 120, manaRegen: 9 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['mend', 'heavy_strike'],
+    xp: 30,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 1.0,
+    gemBias: ['spell'], wardPriority: 1,
+    presence: { from: 6 },
+    temper: 'territorial',
+    brain: { type: 'strafer' },
+  },
+  /** The storm-engine: a winding of brass that was a power-house once and
+   *  is a weapon now — the ONE body in the legion the lightning feeds
+   *  (the exception that teaches the family rule). */
+  coil_warden: {
+    id: 'coil_warden', name: 'Coil Warden',
+    color: '#66a8b8', shape: 'hexagon', radius: 12, material: 'metal', look: 'coil_warden',
+    base: { life: 60, moveSpeed: 118, accuracy: 102, armor: 22, mana: 160, manaRegen: 11 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', 0.75)],
+    skills: ['chain_lightning', 'spark'],
+    xp: 34,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 1.1,
+    gemBias: ['lightning', 'spell'], wardPriority: 1,
+    presence: { from: 8 },
+    temper: 'territorial',
+    brain: { type: 'strafer' },
+  },
+  /** The siege-frame: scaffolding that decided the building was DONE — a
+   *  slow tower of girder and chain whose footfalls rattle the ground. */
+  scaffold_colossus: {
+    id: 'scaffold_colossus', name: 'Scaffold Colossus',
+    color: '#6e7f74', shape: 'square', radius: 21, material: 'metal', look: 'scaffold_colossus',
+    base: { life: 240, moveSpeed: 78, accuracy: 98, armor: 60, poise: 110, mana: 20, manaRegen: 2 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['ground_slam', 'heavy_strike'],
+    xp: 58,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 0.85,
+    turnSpeed: 2.8,
+    scaling: { life: { incPerLevel: 0.06 } },
+    presence: { from: 9 },
+    temper: 'territorial',
+    brain: { type: 'juggernaut', enrage: 0.35 },
+  },
+  // THE CUSTODIAN: the office, not the machine — the seniormost body still
+  // holding the whole inventory. What it cannot sweep it slams; what it
+  // cannot slam it re-rivets between blows. Crown recorded in WARLORD_OF
+  // (inert while doorless — a barred faction owns no ground to rise from).
+  the_custodian: {
+    id: 'the_custodian', name: 'The Custodian',
+    color: '#88b09a', shape: 'hexagon', radius: 17, material: 'metal', look: 'the_custodian',
+    base: { life: 300, moveSpeed: 102, accuracy: 112, armor: 70, poise: 130, mana: 140, manaRegen: 9 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['ground_slam', 'heavy_strike', 'mend'],
+    xp: 120,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 1.1,
+    turnSpeed: 3.2,
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 12 },
+    temper: 'territorial',
+    brain: { type: 'commander', perception: { alertShout: 520 } },
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
 
   // THE DEN MATRON: the she-wolf the whelps answer to. She carries a pocket
@@ -10716,6 +10849,11 @@ const RELATIONS: Record<string, FactionStance> = {
   // same floor.
   'smoulder|sylvan': 'hostile',
   'magpie|vermin': 'hostile',
+  // — and the Unrusted were BUILT to keep the dead out of the empire's
+  // halls: anti-necromancy is the charter itself (their kills feed no
+  // corpse economy, and their ground gives the Risen Host nothing to
+  // raise — the war is total by construction).
+  'unrusted|undead': 'hostile',
   // The Seethe wants the deep sand to itself: the packs raid its warrens
   // for grubs, and the Court remembers when the erg was ITS floor alone —
   // the desert's turf war grows a third banner.
@@ -10758,6 +10896,7 @@ const RELATIONS: Record<string, FactionStance> = {
 export const RESERVED_KIN: Record<string, string> = {
   smoulder: 'the burn-ledger mechanic (the Kindling) — un-barred early they would inundate every fire spec',
   magpie: 'the Magpie Court event/biome — loot-eaters loose in ordinary gen would tax every build',
+  unrusted: 'the Verdigris Sprawl biome / custodian crusade — a corpse-starving legion loose in ordinary gen would quietly bankrupt every corpse spec',
 };
 
 /** RUN-SCOPED DIPLOMACY LAYERS — stances that hold for ONE RUN, over the
@@ -10899,6 +11038,22 @@ export const FACTIONS: Record<string, {
       { id: 'magpie_snatch', weight: 4 },
       { id: 'magpie_shrikeblade', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'the_magpie_king', weight: 1, presence: { from: 10, fadeIn: 5 } },
+    ],
+  },
+  // The old empire's custodian machines — RESERVED (see RESERVED_KIN):
+  // complete and validated, doorless until the Verdigris Sprawl mints.
+  // Presence floors are HARD gates (from with no fadeIn): the legion
+  // deploys by inventory, not by drift — a rank musters at strength or
+  // not at all.
+  unrusted: {
+    name: 'the Unrusted',
+    table: [
+      { id: 'awakened_custodian', weight: 4 },
+      { id: 'brass_sentinel', weight: 3 },
+      { id: 'verdigris_wright', weight: 2, presence: { from: 6 } },
+      { id: 'coil_warden', weight: 2, presence: { from: 8 } },
+      { id: 'scaffold_colossus', weight: 1, presence: { from: 9 } },
+      { id: 'the_custodian', weight: 1, presence: { from: 12 } },
     ],
   },
   // What rides the meteors — fielded ONLY under an active starfall front
