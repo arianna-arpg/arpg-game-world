@@ -837,6 +837,23 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Bogged', color: '#6a8a3a', duration: 0.8,
     mods: [mod('moveSpeed', 'more', -0.45)],
   },
+  // TERRAIN-ENTRY STINGS — the bog's rot and the brine's salt burn wear
+  // their OWN rows instead of borrowing combat 'poison', deliberately: the
+  // borrowed id dragged the full combat-poison SCREEN VIGNETTE with it, so
+  // grazing any bog/brine shoreline SNAPPED a heavy green wash over the
+  // whole frame at a razor world-line — read in playtests (marsh AND the
+  // original Coast report) as "the shaders break past a line", not as
+  // feedback. These carry the dot and the floating text; the screen-fx
+  // registry deliberately holds NO row for them. Combat poison keeps its
+  // vignette untouched.
+  bog_rot: {
+    label: 'Bog-Rotted', color: '#6a8a3a', duration: 1,
+    element: 'chaos', dotType: 'chaos', stackPolicy: 'strongest',
+  },
+  brine_burn: {
+    label: 'Brine-Burned', color: '#9fd8c8', duration: 1,
+    element: 'chaos', dotType: 'chaos', stackPolicy: 'strongest',
+  },
   slippery: {
     label: 'Slippery', color: '#bfe8ff', duration: 0.7,
     mods: [mod('traction', 'more', -0.85)],

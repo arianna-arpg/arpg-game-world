@@ -288,7 +288,10 @@ registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water',
 registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged',
-  enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
+  // bog_rot, NOT combat 'poison': its own row carries the same level-scaled
+  // dot without the combat-poison screen vignette — crossing a bog line
+  // must sting, never read as the renderer breaking (see status.ts).
+  enterStatus: { id: 'bog_rot', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
 // The littoral country's wet kit. The TIDE POOL is a wadeable jewel (mirror-
 // bright, harmless); the BRINE SINK is the exposed seabed's caustic heart —
 // a salt-burn on entry (the bog's level-scaled idiom, poison = the caustic
@@ -298,7 +301,10 @@ registerRegion({ id: 'tide_pool', walkable: true, blocks: false, label: 'the tid
   standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true });
 registerRegion({ id: 'brine_sink', walkable: true, blocks: false, label: 'the brine',
   standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple',
-  enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 },
+  // brine_burn, NOT combat 'poison' — same caustic dot, no combat-poison
+  // screen vignette: the Coast playtest's "shaders break past a line" was
+  // this exact borrow snapping the wash at every sink shoreline.
+  enterStatus: { id: 'brine_burn', amount: 1.5, amountPerLevel: 0.7, duration: 1 },
   enterText: { text: 'the brine burns!', color: '#9fd8c8' } });
 // LAVA — a real LIQUID: crossable, and it COOKS whoever isn't insured
 // (fliers, habitat-matched bodies, immuneGround bearers wade free). Heavy
