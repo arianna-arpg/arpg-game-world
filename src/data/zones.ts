@@ -20,6 +20,7 @@ import type { ZoneFogSpec } from '../engine/fog';
 import type { ZoneCreepSpec } from '../engine/creep';
 import type { CollapseSpec } from '../engine/collapse';
 import type { FluxSpec } from '../engine/flux';
+import type { RecoveryPolicy } from '../world/regions';
 import type { WildlifeRow } from './monsters';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
@@ -470,6 +471,18 @@ export interface ZoneTheme {
    *  sets only the TEMPO. Needs a grid layout. Variants override wholesale.
    *  Composes with `collapse` when their governed kinds are disjoint. */
   flux?: FluxSpec;
+  /** THE PITFALL POLICY (the pitfall fabric, engine/pitfall.ts): what a
+   *  PIT-FAMILY fall MEANS in this zone — every arrest past a chasm/void/
+   *  abyss lip (grid cells and stamped pit doodads alike) resolves through
+   *  THIS policy instead of the region row's default. The flagship is
+   *  `{ kind: 'descend' }`: the faller drops ONE STRATUM into the pit's own
+   *  deterministically-minted underzone (landing toll in `damage`; omitted =
+   *  PIT_CFG.fallDamage), hostiles shoved past the lip are swallowed with
+   *  full credit to the shover, and the hollow's mouth climbs back out at
+   *  the rim. Absent = the region rows' classic behavior, byte-identical.
+   *  Sky doors (skyfall rows) and authored ejects are never overridden.
+   *  Variants override wholesale (the collapse precedent). */
+  pitfall?: RecoveryPolicy;
   /** THE UNDERSTORY (render/vis/understory.ts): what shows through this
    *  zone's `window` region cells. 'cloudsea' = the endless procedural cloud
    *  deck. A zone with `ZoneDef.below` shows the CAPTURED zone beneath it

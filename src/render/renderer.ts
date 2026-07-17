@@ -24,7 +24,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { stratumOf } from '../world/strata';
-import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, type Doodad } from '../engine/levelgen';
+import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, pitRegionOf, type Doodad } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { transitRing } from '../data/transit';
@@ -4244,7 +4244,10 @@ export class Renderer {
     for (const d of world.doodads) {
       if (d.gone || d.pos.x < x0 || d.pos.x > x1 || d.pos.y < y0 || d.pos.y > y1) continue;
       if (blocksMovement(d)) {
-        ctx.strokeStyle = 'rgba(255,80,80,0.9)';
+        // Fall-able pits are DROPS, not walls (the pitfall fabric): violet,
+        // so the truth layer reads the difference at a glance — the mover
+        // never pushes off these discs; it grasps their lips and falls.
+        ctx.strokeStyle = pitRegionOf(d) ? 'rgba(168,120,255,0.9)' : 'rgba(255,80,80,0.9)';
         outlineShape(hitSurfaceOf(d, 'move'), d.pos.x, d.pos.y);
       }
       if (blocksProjectiles(d)) {

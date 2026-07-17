@@ -464,10 +464,11 @@ export interface Doodad {
    *  0→1 as the lifespan runs out — the renderer shrinks/fades by it, so the
    *  growth visibly "wilts and withers away". Absent on permanent terrain. */
   wilt?: number;
-  /** A 'chasm' marked FALL-ABLE (Phase 3): instead of just blocking at its rim, a
-   *  move arrested here reports a 'void' collision → the void RegionKind's recovery
-   *  (respawn-on-edge + damage). Default (absent) = today's blocking chasm. Per-chasm
-   *  data, so a generator chooses which gaps are lethal. */
+  /** FALL-ABLE override (the pitfall fabric): per-stamp switch over the
+   *  kind-level DoodadRule.fall — `true` makes THIS pit fall-able even where
+   *  the rule is silent (the legacy Phase-3 stamps; falls resolve through
+   *  the rule's region, else 'void'), `false` makes THIS one a decorative
+   *  crack that never drops. Absent = the rule decides (pitRegionOf). */
   fall?: boolean;
   /** GEN-TIME ONLY: placed by a rule-breaker stamp that ignored 'portalClear' —
    *  the convex portal-clear splice spares it (deliberate portal furniture). */
@@ -893,6 +894,18 @@ export interface DoodadRule {
    *  never by kind literal, so a package's rope crossing or a brittle rotten
    *  plank joins the same physics with one row. */
   spans?: boolean;
+  /** FALL-ABLE PIT (the pitfall fabric, engine/pitfall.ts): this kind's
+   *  interior is a DROP, not a wall — bodies grasp its lip (the aetherial
+   *  cloud-edge law), can be shoved past it, and falls resolve through the
+   *  named REGION row's boundary policy ('chasm' / 'void' / 'abyss' — or the
+   *  zone's ZoneTheme.pitfall override: descend one stratum, classic rim
+   *  scramble, whatever the data says). Kind-level; the per-stamp
+   *  Doodad.fall boolean overrides either way. Gen-time behavior is
+   *  UNCHANGED (blocksMove stays true: placement spacing, navigability and
+   *  AI pathing all still treat the pit as impassable — you route around a
+   *  hole exactly like a wall; only the RUNTIME mover knows the difference
+   *  between stone and a long way down). */
+  fall?: { region: string };
   /** TRAVELED WAY (the clearway fabric): this ground kind claims right-of-way
    *  — see ClearwaySpec. One row turns any package's flagstone way or bone
    *  road into a corridor scatter respects and liquids yield to. */
@@ -1570,7 +1583,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // blockers could choke a corridor. Water keeps a depth heart so its ponds
   // still swim past the wading shelf. Vines deliberately stay a scatter:
   // a tangle IS an interlocking weave.
-  chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true, pour: { fuseGap: 0 }, hazardGround: true },
+  chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true, pour: { fuseGap: 0 }, hazardGround: true,
+    // Every chasm is a REAL drop (the pitfall fabric): grasp the lip, fall
+    // past it — what falling MEANS stays the 'chasm' region row's policy
+    // unless the zone's theme.pitfall says descend.
+    fall: { region: 'chasm' } },
   // LAVA is a LIQUID now: crossable ground that COOKS the uninsured (the
   // 'lava' RegionKind carries the standDamage; fliers, habitat-matched
   // bodies and immuneGround bearers wade free). The impassable molten
@@ -2026,6 +2043,21 @@ export function blocksSightOf(d: Doodad): boolean {
   if (d.door?.open || d.door?.broken) return false;
   const r = doodadRule(d.kind);
   return r.blocksSight ?? !!r.blocksShot;
+}
+
+/** THE PITFALL DERIVATION (the pitfall fabric, engine/pitfall.ts): is this
+ *  doodad a FALL-ABLE pit, and which REGION row owns its falls? Kind-level
+ *  default on the rule (DoodadRule.fall); the stamp-level Doodad.fall boolean
+ *  overrides either way (true = fall-able even where the rule is silent —
+ *  the legacy Phase-3 stamps, resolving to the rule's region or 'void';
+ *  false = a decorative crack that never drops). Null = not a pit: the
+ *  doodad keeps blocking like the wall it is. Gen-time consumers keep
+ *  reading blocksMovement — only the runtime mover asks this. */
+export function pitRegionOf(d: Doodad): string | null {
+  if (d.fall === false) return null;
+  const rule = doodadRule(d.kind).fall;
+  if (d.fall === true) return rule?.region ?? 'void';
+  return rule?.region ?? null;
 }
 
 /** Casts a DRAWN vision shadow (the sight veil): solid to both arrows and

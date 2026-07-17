@@ -533,6 +533,43 @@ export function validateContent(): void {
     fuelTags: declaredFuels,
   })) warn(msg);
 
+  // PITFALL (the pitfall fabric, engine/pitfall.ts): every DoodadRule.fall
+  // names a registered VOID-LIKE region row (a pit resolving through
+  // walkable ground or a true wall is a dead lever that could never fire),
+  // and every theme pitfall policy (base AND variant overrides) is a sane
+  // pit policy — descend/fall/eject/block with damage inside honest bands.
+  // Sky doors are their own fabric: a pit declaring 'skyfall' is almost
+  // certainly a data slip and warns loud.
+  for (const k of doodadRuleKinds()) {
+    const fall = doodadRuleOf(k).fall;
+    if (!fall) continue;
+    const rk = regionKind(fall.region);
+    if (!rk) {
+      warn(`doodad rule '${k}' fall.region '${fall.region}' is not a registered region kind`);
+    } else if (rk.walkable || rk.blocks) {
+      warn(`doodad rule '${k}' fall.region '${fall.region}' is not void-like (!walkable && !blocks) — its falls could never resolve`);
+    }
+  }
+  for (const t of Object.values(TILESETS)) {
+    const specs: { owner: string; policy: NonNullable<typeof t.theme.pitfall> }[] = [];
+    if (t.theme.pitfall) specs.push({ owner: `tileset '${t.id}'`, policy: t.theme.pitfall });
+    for (const v of t.variants ?? []) {
+      if (v.theme?.pitfall) specs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, policy: v.theme.pitfall });
+    }
+    for (const { owner, policy } of specs) {
+      if (policy.kind === 'skyfall' || policy.kind === 'teleport' || policy.kind === 'instakill') {
+        warn(`${owner} theme.pitfall kind '${policy.kind}' — pits take descend/fall/eject/block; sky doors and executions are their own fabrics`);
+      }
+      const dmg = policy.kind === 'descend' || policy.kind === 'fall' || policy.kind === 'eject' ? policy.damage : undefined;
+      if (dmg) {
+        if (dmg.pctMaxLife !== undefined && (dmg.pctMaxLife < 0 || dmg.pctMaxLife > 0.9)) {
+          warn(`${owner} theme.pitfall damage pctMaxLife ${dmg.pctMaxLife} outside the honest band [0, 0.9]`);
+        }
+        if (dmg.amount < 0) warn(`${owner} theme.pitfall damage amount ${dmg.amount} is negative`);
+      }
+    }
+  }
+
   // CONJURY: rider grants (data/conjury.ts) and every skill's conjure /
   // trailConjure grant rows name real statuses — the called-cloud presence
   // rides the fog/creep safety-net contract.

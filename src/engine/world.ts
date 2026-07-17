@@ -70,10 +70,11 @@ import { OFFERING_CFG, STRAGGLER_CFG } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
-  hitSurfaceOf, normalizeDoodadBound,
+  hitSurfaceOf, normalizeDoodadBound, pitRegionOf,
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
+import { anyPitNear, PIT_CFG, pitAt, pitSectorKey, pitSupportedAt, type PitSurface } from './pitfall';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import {
@@ -147,8 +148,10 @@ import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } 
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
  *  override confinement) + an opt-in COLLISION RESULT (what stopped the move — the
- *  knockback-collision-proc seam). Both omitted = the original byte-identical clamp. */
-interface ClampOpts { disp?: DisplacementPolicy; out?: CollisionResult; }
+ *  knockback-collision-proc seam) + the MOVING BODY itself (the pitfall confine
+ *  reads its ground insurance: a body HOME in a pit's kind walks it like floor).
+ *  All omitted = the original byte-identical clamp. */
+interface ClampOpts { disp?: DisplacementPolicy; out?: CollisionResult; mover?: Actor; }
 /** DEV noclip displacement: phase through walls/rocks/void (bounds still hold). */
 const NOCLIP_DISP: DisplacementPolicy = { ignoreConfine: true };
 /** A LEVITATING body's walk: void bands cross underfoot (the float), walls
@@ -27149,9 +27152,13 @@ export class World {
         const sc = this.cScratch; sc.hit = 'none';
         a.pos = this.clampPos(vec(
           a.pos.x + p.vx * dt,
-          a.pos.y + p.vy * dt), a.radius, from, { out: sc });
+          a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
         const hit = sc.hit as string;
-        if (hit === 'void') this.resolveBoundary(a, sc, from);
+        // FORCED displacement (the shove in flight): the one lane a hostile
+        // can truly be put past a pit's lip — the pitfall fabric's descend
+        // routing pays the shover for it (walkers merely arrested at a rim
+        // by their own steering are held, never dropped).
+        if (hit === 'void') this.resolveBoundary(a, sc, from, true);
         if ((hit === 'wall' || hit === 'void') && !p.collided && p.caster && p.inst && !p.caster.dead) {
           p.collided = true;
           this.rollCollisionProcs(p.caster, p.inst, a);
@@ -28378,6 +28385,82 @@ export class World {
         if (!anchored) {
           this.text(vec(land.x, land.y - 40), `the sky lets you go — ${this.zone.name} rises to meet you`, '#9fc0e8', 14);
         }
+      },
+    });
+  }
+
+  /** THE PIT TAKES ITS DUE (the pitfall fabric's 'descend' routing): the
+   *  player DROPS into the pit's own underzone (beginPitDescent); ally seats
+   *  scramble back from the lip; a hostile SHOVED past its support is
+   *  swallowed — killed with full credit to whoever shoved it (the knockback
+   *  payoff: xp, loot at the rim it fell from, objective counts tick — no
+   *  soft-locks by construction), while one merely arrested at a rim by its
+   *  own steering HOLDS there: nothing native to the world suicides into a
+   *  hole. Bodies home in the pit never reach here (the confine holds them),
+   *  nor do the floating (resolveBoundary's guard) — and the airborne sail
+   *  their arcs (dash/leap answer to their own landings, the skyfall rule). */
+  private routePitFall(a: Actor, policy: { damage?: DamageSpec }, pre: Vec2, forced: boolean): void {
+    if (a.flying || a.dash || a.leap) return;
+    if (a === this.player) {
+      this.beginPitDescent(policy);
+      return;
+    }
+    if (a.team === 'player' || this.seats.some(s => s.actor === a)) {
+      // Allies scramble: back to standing ground, shaken — a seat must never
+      // be lost down a hole its player didn't choose.
+      const s = this.walk?.snapToWalkable(a.pos) ?? pre;
+      this.teleportActor(a, vec(s.x, s.y), '#cfe0ff');
+      return;
+    }
+    if (!forced) return; // held at the lip — steering never walks a body off
+    // Swallowed: the shove in flight carries its caster, and the dark pays
+    // the shover like any killer — knockback into the pit IS the kill.
+    const shover = a.push?.caster && !a.push.caster.dead ? a.push.caster : undefined;
+    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius + 14, color: '#141019', life: 0.4, maxLife: 0.4 });
+    this.text(vec(a.pos.x, a.pos.y - 22), 'swallowed by the dark!', '#9a8ab8', 12);
+    this.kill(a, false, shover);
+  }
+
+  /** THE LONG WAY DOWN: the floor of this pit is a ZONE. It mints once,
+   *  deterministically, one stratum down the strata ladder (mintCave with no
+   *  tileset face-rolls under this zone's own anchor — a surface fall opens
+   *  the Galleries, a cave floor's chasm opens the next rung, a hell pit
+   *  caves hell), and the same stretch of the same gorge always opens into
+   *  the same hollow (PIT_CFG.sectorSize identity — the crevice-shaft
+   *  contract, shared by revisits, re-falls and co-op clients alike). The
+   *  chasm_fall traversal rides the body down; the hollow's mouth climbs
+   *  back out AT THE RIM you fell from (caveReturn — the anti-stuck
+   *  guarantee: every pit-cave keeps its way home). Landing costs the
+   *  policy's toll — never lethal: the pit delivers you hurt, not dead. The
+   *  future cave-web (the UNDERWAY seam, docs/engine/pitfall.md) links these
+   *  hollows laterally; their ids and seeds are already stable for it. */
+  private beginPitDescent(policy: { damage?: DamageSpec }): void {
+    if (this.traversal || this.pendingRespawn) return;
+    const parent = this.zone;
+    const at = this.player.pos;
+    const seed = hashStr(pitSectorKey(parent.id, at.x, at.y));
+    const id = `cave_${parent.id}_pit_${seed}`;
+    if (!this.caveMap[id]) this.caveMap[id] = mintCave(parent, seed, id);
+    const rim = vec(at.x, at.y);
+    const entryWas = this.entryFrom;
+    const dmg = policy.damage ?? PIT_CFG.fallDamage;
+    this.beginTraversal('chasm_fall', {
+      swap: () => {
+        // Descending DEEPER (the sidezone ladder discipline): bank the way
+        // home; the hollow's exit climbs back out at this very rim.
+        if (this.caveReturn) this.caveStack.push(this.caveReturn);
+        this.caveReturn = { zoneId: parent.id, pos: rim, entryFrom: entryWas, kind: 'pitfall' };
+        this.loadZone(id, parent.id);
+        this.caveExitGrace = true;
+        bumpLedger(this.ledger, PIT_CFG.ledger);
+      },
+      done: () => {
+        // The toll lands WITH the body (the traversal keeps it invulnerable
+        // until the land phase clears — a mid-veil bite would silently
+        // no-op, and a fall that never hurts reads as a free elevator).
+        this.applyEnvDamage(this.player, dmg);
+        this.text(vec(this.player.pos.x, this.player.pos.y - 40),
+          `the dark catches you — ${this.zone.name}`, '#b8a888', 14);
       },
     });
   }
@@ -29805,7 +29888,14 @@ export class World {
       if (((this.terrainTick + i) & 15) !== 0) continue;
       const a = this.actors[i];
       if (a.dead || a.construct || a.leap || a.dash || a.anchored || a.passive) continue;
-      if (!this.pointInSolid(a.pos.x, a.pos.y, -a.radius * 0.3)) continue;
+      const stuck = this.pointInSolid(a.pos.x, a.pos.y, -a.radius * 0.3);
+      if (!stuck) continue;
+      // A body over a FALL-ABLE pit is not stuck (the pitfall fabric): a
+      // grasped lip is lawful footing, a home body (the void angler) roams
+      // its own ground, and a body truly past all support belongs to the
+      // fall doors — the rescue snap must never hand out a free teleport
+      // off a lip (the aetherial rescue-snap lesson, disc space).
+      if (pitRegionOf(stuck)) continue;
       const free = this.findFreeSpot(a.pos, a.radius);
       a.pos.x = free.x; a.pos.y = free.y;
     }
@@ -34462,6 +34552,13 @@ export class World {
       let moved = false;
       for (const o of this.doodadsAt(out.x, out.y)) {
         if (!blocksMovement(o)) continue;
+        // THE PITFALL FABRIC (engine/pitfall.ts): a fall-able pit is a DROP,
+        // not a wall — the push loop leaves it whole and the pit confine
+        // below owns the crossing (grasp the lip, arrest at support loss,
+        // the region's boundary policy decides what the fall means). Gen
+        // and pathing still read blocksMovement: only the mover knows the
+        // difference between stone and a long way down.
+        if (pitRegionOf(o)) continue;
         // The hit-surface fabric: trunks (discs) keep the classic radial
         // slide byte-for-byte; oblong surfaces (door slabs, benches) push
         // out through their true face — walking into a door slides you
@@ -34471,12 +34568,12 @@ export class World {
         if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
         moved = true;
         out.x = push.x; out.y = push.y;
-        // CLASSIFY (opt-in): record what stopped us, for the collision-proc + fall
-        // seam. A FALL-able chasm reports 'void' (→ recovery), else a 'wall' impact.
+        // CLASSIFY (opt-in): record what stopped us, for the collision-proc
+        // seam (fall-able pits never reach here — the pit confine classifies
+        // their arrests as 'void' with the pit's own region).
         if (opts?.out) {
-          const fall = o.kind === 'chasm' && o.fall;
-          opts.out.hit = fall ? 'void' : 'wall'; opts.out.at = vec(o.pos.x, o.pos.y);
-          opts.out.blockedKind = fall ? 'void' : o.kind;
+          opts.out.hit = 'wall'; opts.out.at = vec(o.pos.x, o.pos.y);
+          opts.out.blockedKind = o.kind;
           opts.out.normal = { x: push.nx, y: push.ny };
         }
       }
@@ -34521,6 +34618,61 @@ export class World {
         // A placement/teleport (no origin): nearest walkable.
         const s = this.walk.snapToWalkable(out);
         out.x = s.x; out.y = s.y;
+      }
+    }
+    // THE PITFALL CONFINE (the pitfall fabric, engine/pitfall.ts): fall-able
+    // pit doodads are DROPS, not walls. The sweep advances while the body's
+    // grasp disc still overlaps standing ground or a spanning deck — the
+    // aetherial cloud-lip law in disc space, drawn == tested against the
+    // chasmPit painter's blob union — and slides along rims exactly as the
+    // walk confine slides along walls. An arrest past all support classifies
+    // 'void' carrying the pit's own REGION, so the boundary policy (or the
+    // zone's theme.pitfall) decides what the fall MEANS. Fall-ignoring
+    // displacements (fliers, levitators, blinks) sail across; a body HOME in
+    // a pit's kind (the insurance trio: wings / habitat / immune ground)
+    // walks it like floor. Zones without pits pay one empty-list check.
+    {
+      const pits = this.zonePits();
+      if (pits.length && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
+        const grasp = radius * WALK_CFG.ledgeGrasp;
+        const home = this.pitHomeKinds(opts?.mover, pits);
+        if (from) {
+          if (anyPitNear(pits, from.x, from.y, out.x, out.y, radius + PIT_CFG.sweepGran)) {
+            const desired = vec(out.x, out.y);
+            const r = this.pitResolve(pits, from, out, grasp, home);
+            out.x = r.x; out.y = r.y;
+            if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
+              // The blocker is the pit just past the confined point toward
+              // the goal (the walk confine's probe-beyond discipline).
+              const bx = desired.x - r.x, by = desired.y - r.y, bl = Math.hypot(bx, by) || 1;
+              const hitPit = pitAt(pits, this.bridges,
+                r.x + (bx / bl) * PIT_CFG.sweepGran, r.y + (by / bl) * PIT_CFG.sweepGran, home)
+                ?? pitAt(pits, this.bridges, desired.x, desired.y, home);
+              if (hitPit) {
+                opts.out.hit = 'void';
+                opts.out.at = desired;
+                opts.out.blockedKind = hitPit.region;
+              }
+            }
+          }
+        } else if (!pitSupportedAt(pits, this.bridges, out.x, out.y, grasp, home)) {
+          // A placement/teleport (no origin) may not land IN a pit: march a
+          // FIXED ray from the covering disc's heart until the whole UNION
+          // lets go (a radial per-disc push ping-pongs inside a blob's
+          // waist — the ray walks straight out of a chain of wells).
+          const over0 = pitAt(pits, this.bridges, out.x, out.y, home);
+          if (over0) {
+            let dx = out.x - over0.x, dy = out.y - over0.y;
+            const dl = Math.hypot(dx, dy);
+            if (dl < 0.001) { dx = 1; dy = 0; } else { dx /= dl; dy /= dl; }
+            let px = over0.x + dx * (over0.r + radius);
+            let py = over0.y + dy * (over0.r + radius);
+            for (let s = 0; s < 64 && pitAt(pits, this.bridges, px, py, home); s++) {
+              px += dx * PIT_CFG.sweepGran; py += dy * PIT_CFG.sweepGran;
+            }
+            out.x = px; out.y = py;
+          }
+        }
       }
     }
     return out;
@@ -34572,26 +34724,42 @@ export class World {
   /** A MOVE was arrested entering a region with a boundary policy (void → fall).
    *  Routes to the data-driven RecoveryPolicy — never a literal void rule. The actor
    *  is already confined to the EDGE by clampPos; `pre` is where they moved from. */
-  private resolveBoundary(a: Actor, result: CollisionResult, pre: Vec2): void {
-    const policy = regionKind(result.blockedKind)?.boundaryPolicy;
+  private resolveBoundary(a: Actor, result: CollisionResult, pre: Vec2, forced = false): void {
+    let policy = regionKind(result.blockedKind)?.boundaryPolicy;
+    // THE PITFALL OVERRIDE (ZoneTheme.pitfall — the pitfall fabric): the zone
+    // declares what a PIT-FAMILY fall MEANS here. Resolution: the zone's own
+    // word (theme.pitfall) → the CAVE DEFAULT (every rung below the surface
+    // descends — a cave's chasm is a mouth of the next stratum,
+    // PIT_CFG.caveFall; the descent abyss opts back out with an explicit
+    // row) → the region row's classic default. Only fall-family defaults are
+    // overridden: sky doors (skyfall) and authored ejects keep their meaning.
+    if (policy && (policy.kind === 'fall' || policy.kind === 'descend')) {
+      policy = this.zone.theme.pitfall
+        ?? ((this.zone.caveDepth ?? 0) >= 1 ? PIT_CFG.caveFall : policy);
+    }
     if (!policy) return;
     // A LEVITATING actor floats over fall pits (void): no fall damage / eject — so it
     // can't be knocked into the void for a cheap kill. (Pathing still avoids void.)
-    if (this.levitating(a) && policy.kind === 'fall') return;
-    // Debounce fall/eject/skyfall so being held against a void edge doesn't
-    // melt the actor every frame — one recovery per ~0.6s.
-    if (policy.kind === 'fall' || policy.kind === 'eject' || policy.kind === 'skyfall') {
+    if (this.levitating(a) && (policy.kind === 'fall' || policy.kind === 'descend')) return;
+    // Debounce fall/eject/skyfall/descend so being held against a void edge
+    // doesn't melt the actor every frame — one recovery per ~0.6s.
+    if (policy.kind === 'fall' || policy.kind === 'eject' || policy.kind === 'skyfall' || policy.kind === 'descend') {
       if (this.time - (a.lastFall ?? -9) < 0.6) return;
       a.lastFall = this.time;
     }
-    this.applyRecovery(a, policy, pre);
+    this.applyRecovery(a, policy, pre, forced);
   }
 
   /** THE recovery dispatcher: map a RecoveryPolicy → existing primitives (push,
    *  teleport, damage, kill). New outcomes are new union arms, never new call sites. */
-  private applyRecovery(a: Actor, policy: RecoveryPolicy, pre: Vec2): void {
+  private applyRecovery(a: Actor, policy: RecoveryPolicy, pre: Vec2, forced = false): void {
     switch (policy.kind) {
       case 'block': return;
+      case 'descend': {
+        // THE PIT IS A DOOR (the pitfall fabric): the fall goes somewhere.
+        this.routePitFall(a, policy, pre, forced);
+        return;
+      }
       case 'eject': {
         // Shove back the way it came (off the hazard) + optional damage.
         this.pushActor(a, angleTo(a.pos, pre), 140);
@@ -34686,6 +34854,96 @@ export class World {
     // multiple. Without this the stop quantizes differently every frame (the
     // sample spacing shifts with per-frame move length) and a body pressed
     // against a wall visibly VIBRATES on and off it.
+    let lo = lastT, hi = blockedT;
+    for (let k = 0; k < 4; k++) {
+      const mid = (lo + hi) / 2;
+      if (passable(start.x + dx * mid, start.y + dy * mid)) lo = mid; else hi = mid;
+    }
+    return vec(start.x + dx * lo, start.y + dy * lo);
+  }
+
+  // --- THE PITFALL SURFACES (the pitfall fabric, engine/pitfall.ts) ----------
+
+  /** Every fall-able pit doodad in the zone, resolved once and cached against
+   *  the doodad list's identity + length + revision (the ground baker's
+   *  staleness idiom) — a loadZone's fresh array, a runtime decor push (the
+   *  descent's rolled rents) and a temp-ground splice all re-derive on the
+   *  next query. Empty almost everywhere: pitless zones pay these compares
+   *  and nothing else. Public: the dev hitbox layer and the probe read the
+   *  same list the mover tests. */
+  zonePits(): readonly PitSurface[] {
+    const c = this.pitsCache;
+    if (c.arr !== this.doodads || c.len !== this.doodads.length || c.rev !== this.doodadsRev) {
+      c.arr = this.doodads; c.len = this.doodads.length; c.rev = this.doodadsRev;
+      c.list = [];
+      for (const d of this.doodads) {
+        if (d.gone) continue;
+        const region = pitRegionOf(d);
+        if (region) c.list.push({ x: d.pos.x, y: d.pos.y, r: d.radius, kind: d.kind, region });
+      }
+    }
+    return c.list;
+  }
+  private pitsCache: { arr: readonly Doodad[] | null; len: number; rev: number; list: PitSurface[] } =
+    { arr: null, len: -1, rev: -1, list: [] };
+
+  /** Pit kinds this body is HOME in, among the zone's own pits — the ground
+   *  INSURANCE doctrine (fliers wholesale, habitat natives, immuneGround
+   *  bearers — the same trio updateTerrainEffects wades lava with), so the
+   *  void angler roams and hunts across its chasm and can never be shoved
+   *  into it: what can't hurt a body can't swallow it either. Null (the
+   *  common case) allocates nothing. */
+  private pitHomeKinds(a: Actor | undefined, pits: readonly PitSurface[]): readonly string[] | null {
+    if (!a) return null;
+    let home: string[] | null = null;
+    for (const p of pits) {
+      if (home?.includes(p.kind)) continue;
+      if (a.flying || a.habitat?.kind === p.kind || a.immuneGround?.includes(p.kind)) {
+        (home ??= []).push(p.kind);
+      }
+    }
+    return home;
+  }
+
+  /** Swept pit confine — walkResolve's disc-space mirror: the farthest point
+   *  along from→to whose grasp disc keeps hold, with single-axis slides so a
+   *  body skirts a rim the way it slides along a wall. A start already past
+   *  all support HOLDS where it stands (the aetherial rescue-snap lesson: no
+   *  free teleport off a lip — the fall doors already own that body). */
+  private pitResolve(pits: readonly PitSurface[], from: Vec2, to: Vec2,
+    grasp: number, home: readonly string[] | null): Vec2 {
+    if (!pitSupportedAt(pits, this.bridges, from.x, from.y, grasp, home)) return vec(from.x, from.y);
+    const full = this.pitSweep(pits, from, to, grasp, home);
+    if (full.x === to.x && full.y === to.y) return full;
+    const xOnly = this.pitSweep(pits, from, vec(to.x, from.y), grasp, home);
+    const yOnly = this.pitSweep(pits, from, vec(from.x, to.y), grasp, home);
+    const d2 = (p: Vec2): number => (p.x - from.x) ** 2 + (p.y - from.y) ** 2;
+    let best = full;
+    if (d2(xOnly) > d2(best)) best = xOnly;
+    if (d2(yOnly) > d2(best)) best = yOnly;
+    return best;
+  }
+
+  /** March the segment at PIT_CFG.sweepGran, stop where support would end,
+   *  then bisect to the lip (walkSweep's contact refine, disc space) so a
+   *  body pressed against a rim rests AT it instead of vibrating on a
+   *  sample-grid multiple. */
+  private pitSweep(pits: readonly PitSurface[], start: Vec2, end: Vec2,
+    grasp: number, home: readonly string[] | null): Vec2 {
+    const dx = end.x - start.x, dy = end.y - start.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.0001) return vec(start.x, start.y);
+    const passable = (px: number, py: number): boolean =>
+      pitSupportedAt(pits, this.bridges, px, py, grasp, home);
+    const steps = Math.max(1, Math.ceil(len / PIT_CFG.sweepGran));
+    let lastT = 0;
+    let blockedT = -1;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (!passable(start.x + dx * t, start.y + dy * t)) { blockedT = t; break; }
+      lastT = t;
+    }
+    if (blockedT < 0) return vec(start.x + dx * lastT, start.y + dy * lastT);
     let lo = lastT, hi = blockedT;
     for (let k = 0; k < 4; k++) {
       const mid = (lo + hi) / 2;

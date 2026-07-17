@@ -51,7 +51,18 @@ export type RecoveryPolicy =
   // keeps whatever else steps off). Wings, levitation and airborne moves
   // (dash/leap) never trigger it. Ends every detached-island hard-lock: any
   // edge, anywhere, is always a way down.
-  | { kind: 'skyfall' };
+  | { kind: 'skyfall' }
+  // THE PIT IS A DOOR (the pitfall fabric, engine/pitfall.ts): losing the
+  // floor over a chasm DROPS you one stratum — the pit's own underzone mints
+  // deterministically (the strata fabric's ladder) and the world continues
+  // below: the player rides the chasm_fall traversal down and climbs back
+  // out at the very rim; ally seats scramble; a hostile SHOVED past the lip
+  // is swallowed — killed with full credit to whoever shoved it (the
+  // knockback payoff), loot left at the rim. Wings, levitation, airborne
+  // moves, and bodies whose HABITAT is the pit never fall. `damage` is the
+  // landing toll (never lethal for players — applyEnvDamage floors at 1
+  // unless canKill).
+  | { kind: 'descend'; damage?: DamageSpec };
 
 /** Per-DISPLACEMENT override so no movement ability is ever boxed in by the
  *  walkability model. A flicker teleport / wall-phase / future "insane mechanic"

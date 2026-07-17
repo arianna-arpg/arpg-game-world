@@ -78,3 +78,27 @@ registerTraversal({
   text: 'the cloud gives way!',
   textColor: '#c8d4ea',
 });
+
+/** CHASM FALL — the sky fall's dark sibling (the pitfall fabric's descend):
+ *  the lip lets go and the body drops away from the camera into the pit's
+ *  own night — tumbling, pale dust and rim-grit rushing UP past the view,
+ *  the world going to black instead of white — and the veil clears one
+ *  stratum down, in the hollow the pit was always the mouth of. Knees bent,
+ *  winded, alive; the landing toll is the zone's pitfall policy (or
+ *  PIT_CFG.fallDamage), never this row. */
+registerTraversal({
+  id: 'chasm_fall',
+  windup: 0.22,
+  rise: 1.05,
+  land: 0.9,
+  veil: '#08060a',
+  veilPeak: 1,
+  scaleTo: 0.3,
+  lift: -34,
+  spin: 3.2,
+  streaks: { count: 18, color: '#8d8672', dir: -1 },
+  shake: 3,
+  status: { id: 'winded' },
+  text: 'the lip gives way!',
+  textColor: '#b8a888',
+});

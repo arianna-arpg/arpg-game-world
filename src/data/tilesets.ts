@@ -1068,6 +1068,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.12,
       heat: 0.05,
+      // Glacial chasms are MOUTHS (the pitfall fabric): fall past a lip and
+      // the ice hollows beneath the tundra catch you, one stratum down.
+      pitfall: { kind: 'descend' },
       ground: { scale: 1.9, strength: 0.9, speckles: 0.7 },
       fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
       floor: '#0c1115', grid: '#131c24', border: '#33505f',
@@ -2294,6 +2297,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       // the wound leeches the day (volcanic runs dayLight 1.15; this is the
       // opposite pole of the same dial).
       dayLight: 0.95, nightDark: 0.85, ambientDark: 0.1,
+      // The waste's rents and chasms DROP (the pitfall fabric): the scoured
+      // land is a roof over older dark.
+      pitfall: { kind: 'descend' },
       // Pale hate-glow adrift in dead air — cold light where fire country
       // wears warm heat-shimmer.
       ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#8fe8b0' }],
@@ -2436,6 +2442,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Steppes', 'Marches', 'Plains', 'Reaches', 'Waste', 'Approach', 'Threshold', 'Expanse', 'Scarlands', 'Fields', 'Verge', 'Descent', 'Flats', 'Outlands', 'Span', 'Steps'],
     theme: {
       heat: 0.9, dayLight: 0.92, nightDark: 0.8, ambientDark: 0.18,
+      // Hell's pits go DEEPER into hell (the pitfall fabric): an abyssal
+      // rent is a mouth of the marches' own underdark.
+      pitfall: { kind: 'descend' },
       // Standing embers on the wind + a breath of heat-shimmer: hell's air.
       ambientFx: [
         { kind: 'motes', intensity: 0.4, color: '#ff9a4a' },
@@ -4325,6 +4334,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#070610', grid: '#100e1c', border: '#241f3a',
       obstacle: '#1c1830', obstacleEdge: '#3a3056', accent: '#7fe0d8',
       chasm: '#020205', mud: '#100c1a', water: '#0a1622',
+      // OPT-OUT of the cave default (PIT_CFG.caveFall): the descent abyss
+      // owns its own vertical economy — the shaft banks the haul, the
+      // darkness meter is the clock, and a rent here bites the classic way
+      // instead of minting a free stratum past both.
+      pitfall: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'physical', canKill: true } },
     },
     sizeW: [2400, 2600], sizeH: [2400, 2600],
     layout: [], // the 'descent' layout generator builds terrain (ignores this)
@@ -4591,6 +4605,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Reach', 'Maw', 'Hollow', 'Gaze', 'Tangle', 'Verge', 'Coil', 'Tangleweb', 'Sprawl', 'Murmur', 'Whorl', 'Brood', 'Snarl', 'Wound', 'Threshold', 'Tendrils'],
     theme: {
       ambientDark: 0.35,
+      // What the eldritch ground swallows, its underdark keeps (the pitfall
+      // fabric): chasms descend.
+      pitfall: { kind: 'descend' },
       floor: '#0a0f0b', grid: '#0f1810', border: '#3a5a44',
       obstacle: '#1c3a2c', obstacleEdge: '#3a6a4e', accent: '#7fce6a',
       chasm: '#040806', mud: '#10180e', water: '#0c2620', tree: '#2a4a36', wall: '#3a3a52',
@@ -4637,6 +4654,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Deep', 'Trench', 'Shelf', 'Reach', 'Sound', 'Gulf', 'Abyss', 'Fathoms', 'Current', 'Depths', 'Hollow', 'Sink', 'Drift', 'Brine', 'Maw', 'Shoals'],
     theme: {
       ambientFx: [{ kind: 'caustics' }, { kind: 'bubbles' }],
+      // The seabed's trenches DROP (the pitfall fabric): below the deep
+      // there are hollows still — the drowned strata's own ladder.
+      pitfall: { kind: 'descend' },
       ground: { scale: 1.8, stretchX: 1.4, strength: 0.9, speckles: 0.6 },
       ambientDark: 0.35,
       floor: '#08151f', grid: '#0d2030', border: '#2a6a8a',
@@ -5308,6 +5328,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Reach', 'Karst', 'Clefts', 'Gulfs', 'Maze', 'Scars', 'Pavement', 'Rents', 'Crossing', 'Steps'],
     theme: {
       dayLight: 1.25,
+      // THE GORGE IS A DOOR (the pitfall fabric): the Reach's chasm maze
+      // drops into the karst's own galleries — the cave-richest country
+      // finally connects from above.
+      pitfall: { kind: 'descend' },
       ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#c8c0a8' }],
       ground: {
         scale: 1.9, stretchX: 1.3, strength: 1.15, speckles: 0.55,
@@ -5544,6 +5568,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Geode', 'Spires', 'Lattice', 'Vault', 'Reach', 'Hollow', 'Shards', 'Facets', 'Cluster', 'Prism', 'Spindle', 'Fields', 'Cavern', 'Array', 'Bloom', 'Drift'],
     theme: {
       ambientDark: 0.3,
+      // Crystal country cracks DEEP (the pitfall fabric): chasms descend.
+      pitfall: { kind: 'descend' },
       floor: '#0e1320', grid: '#16203a', border: '#4a6aa8',
       obstacle: '#2a3a6a', obstacleEdge: '#5a7ad0', accent: '#9fd8ff', water: '#1a3a6a',
       ground: {
@@ -5658,6 +5684,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.15,
       heat: 1,
+      // A volcanic chasm opens onto the country's own underworks (the
+      // pitfall fabric — the magma galleries' anchor affinity makes the
+      // stratum below likelier to glow).
+      pitfall: { kind: 'descend' },
       ground: { scale: 0.75, strength: 1.3 },
       floor: '#160d08', grid: '#241208', border: '#6a3818',
       obstacle: '#48281a', obstacleEdge: '#8a4a26', accent: '#ff7a2a', lava: '#7a1a08', chasm: '#1b0703',
