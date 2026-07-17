@@ -67,6 +67,13 @@ export interface ObjectiveTuning {
 export type ObjectiveSpec = (
   /** A sanctuary: nothing spawns, nothing seals, nothing is asked. */
   | { kind: 'safe' }
+  /** NO ask at all: a HOSTILE ground with no errand — the population spawns
+   *  like anywhere else, but nothing ever completes, nothing pays (no clear
+   *  bounty, no chest), and exits never seal. The vocabulary for "just
+   *  terrain": pit-dropped hollows (PIT_CFG.dropCave.objective) and any
+   *  future pocket that is a place, not a task. `label` overrides the HUD's
+   *  default line. */
+  | { kind: 'none'; label?: string }
   | { kind: 'clear' }
   /** Survive N waves (0 = endless — the original arena mode). A boss cadence
    *  is DATA: every `bossEveryWaves` waves, `bossId` emerges (The Pit's lord
@@ -132,7 +139,7 @@ export type ObjectiveSpec = (
  *  objectives now that wave/spawner progress rides Zone Memory. A zone's
  *  ObjectiveTuning.seal overrides its kind's row. */
 export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
-  safe: false, clear: false, waves: false, escape: false, spawners: false,
+  safe: false, none: false, clear: false, waves: false, escape: false, spawners: false,
   boss: true, beacon: false, procession: false, bounty: false, offering: false,
   puzzle: false,
 };
@@ -711,6 +718,20 @@ export interface ZoneDef {
    *  the prefix survives only as a churn-id namespace for string-only classifiers
    *  over zones that may no longer exist (corpse records, save strips). */
   caveDepth?: number;
+  /** PIT-CHAIN depth (pit-minted hollows only — the pitfall fabric): how many
+   *  CONSECUTIVE pit-falls hang above this pocket. beginPitDescent stamps
+   *  parent chain + 1 at mint; at PIT_CFG.dropCave.maxChain the player's
+   *  falls stop descending (the classic edge-bite instead — the world runs
+   *  out of down). Walking in through a real mouth mints no chain, so only
+   *  chained DROPS are metered. Absent = 0. */
+  pitChain?: number;
+  /** NO WAY ON: this pocket minted with no way further down or sideways —
+   *  no deeper-mouth roll, no Underworld breach, no descending hollow
+   *  reveals, and generateLayout strips any sidezone ENTRANCE a face,
+   *  variant or composition tries to place (the one chokepoint; the Descent
+   *  Delver honors it too). Its own chasms may still drop, metered by
+   *  pitChain above. Stamped by mintCave (CaveMintOpts.noDeeper). */
+  noDeeper?: boolean;
   /** The SURFACE biome this underground ladder hangs beneath (caves only) —
    *  provenance for the strata fabric's cave-face pick, inherited rung to
    *  rung so a depth-3 gallery still knows it lives under volcanic country.

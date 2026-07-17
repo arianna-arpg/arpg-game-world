@@ -16,7 +16,7 @@
 // for its entrance kind). Nothing here is keyed to a zone id.
 // ---------------------------------------------------------------------------
 
-import { registerDoodadRule } from '../engine/levelgen';
+import { registerDoodadRule, registerSidezoneEntranceKind } from '../engine/levelgen';
 import { mintCave } from '../engine/worldgen';
 import { transitDwell } from './transit';
 import { TILESETS } from './tilesets';
@@ -71,6 +71,10 @@ export const SIDEZONES: Record<string, SidezoneDef> = {};
 export function registerSidezone(def: SidezoneDef): void {
   if (SIDEZONES[def.kind]) console.warn(`[sidezones] re-registering '${def.kind}' — overriding`);
   SIDEZONES[def.kind] = def;
+  // Generation learns the KIND (levelgen's entrance set): a ZoneDef.noDeeper
+  // pocket strips every registered entrance at the layout chokepoint — new
+  // sidezone kinds inherit the discipline by registering, zero extra wiring.
+  registerSidezoneEntranceKind(def.kind);
 }
 
 export function sidezoneOf(kind: string): SidezoneDef | undefined {

@@ -7,16 +7,23 @@
 // anti-stuck guarantee), the knockback swallow with full killer credit vs
 // the steering hold (nothing suicides), the insured (home habitat bodies,
 // levitators, dashes), spanning decks, placement hygiene, the unstuck
-// sentinel's lip truce, and the co-op wire.
+// sentinel's lip truce, the co-op wire — and THE DROP-CAVE DOCTRINE
+// (PIT_CFG.dropCave, the anti-farm contract): one hollow per zone (identity
+// 'zone' folds every sector), the punishment mint (objective 'none' pays
+// nothing ever; noDeeper strips mouths/breach/descending hollows), the
+// chain bottoming out at maxChain (the classic edge-bite, monsters still
+// swallowed), and the scatter arrival (each fall lands somewhere new, on
+// lawful reachable ground, never at the door).
 // Run: npx tsx balance/probe_pitfall.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { PIT_CFG, pitAt, pitSupportedAt, pitSectorKey } from '../src/engine/pitfall';
+import { PIT_CFG, pitAt, pitSupportedAt, pitSectorKey, pitIdentityKey } from '../src/engine/pitfall';
 import { pitRegionOf, type Doodad } from '../src/engine/levelgen';
 import { regionKind } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
+import { OBJECTIVE_SEALS, objectiveEarnsChest } from '../src/data/zones';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 import { vec } from '../src/core/math';
 import type { World } from '../src/engine/world';
@@ -297,6 +304,170 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
     && regionKind('abyss')?.boundaryPolicy?.kind === 'fall');
   check('contract: the sector key is pure math (co-op / revisit identity)',
     pitSectorKey('z', 481, 0) === 'z:pitfall:1,0' && pitSectorKey('z', 479, -1) === 'z:pitfall:0,-1');
+  check('contract: identity policy — \'zone\' folds every fall to ONE key; \'sector\' keeps the lattice',
+    PIT_CFG.dropCave.identity === 'zone'
+    && pitIdentityKey('z', 481, 0) === 'z:pitfall' && pitIdentityKey('z', 40, 900) === 'z:pitfall');
+  {
+    const was = PIT_CFG.dropCave.identity;
+    PIT_CFG.dropCave.identity = 'sector';
+    check('contract: flipping identity to \'sector\' restores the classic lattice (the UNDERWAY seam)',
+      pitIdentityKey('z', 481, 0) === pitSectorKey('z', 481, 0));
+    PIT_CFG.dropCave.identity = was;
+  }
+}
+
+// --- 8) THE ONE HOLLOW: every fall in a zone opens the SAME cave ------------
+// The anti-farm identity: deliberate re-drops at OPPOSITE ends of a zone —
+// different 480u sectors by construction — land in one shared, remembered
+// hollow instead of minting fresh objective-bearing zones forever.
+{
+  const world = makeSimWorld('warrior', 4109);
+  world.zone.theme.pitfall = { kind: 'descend' };
+  const parentId = world.zone.id;
+  const p = world.player;
+  const fallAt = (bx: number, by: number, from: number): string => {
+    layPitBlob(world, bx, by);
+    p.pos = vec(from, by);
+    for (let i = 0; i < 240 && !world.traversal; i++) { world.moveActor(p, 1, 0, DT); world.update(DT); }
+    for (let i = 0; i < 600 && world.traversal; i++) world.update(DT);
+    return world.zone.id;
+  };
+  const idA = fallAt(900, 600, 780);
+  check('one hollow: the fall landed underground', idA !== parentId && idA.startsWith(`cave_${parentId}_pit_`), `'${idA}'`);
+  const outA = world.exits.find(e => e.to === parentId);
+  if (outA) priv(world).travelThrough(outA);
+  // The far corner of the arena — a DIFFERENT sector of the same zone.
+  const idB = fallAt(360, 1080, 240);
+  check('one hollow: a fall in a DIFFERENT sector of the same zone opens the SAME cave',
+    idA === idB, `A='${idA}' B='${idB}'`);
+  check('one hollow: distinct sectors were actually crossed (the check has teeth)',
+    pitSectorKey(parentId, 900, 600) !== pitSectorKey(parentId, 360, 1080));
+  delete world.zone.theme.pitfall;
+}
+
+// --- 9) THE PUNISHMENT MINT: no errand, no doors, chain stamped -------------
+// PIT_CFG.dropCave: a pit-dropped hollow asks 'none' (nothing completes,
+// nothing pays), mints noDeeper (no mouths / breach / descending hollows —
+// the strip owns strays), and wears pitChain 1 under a surface zone.
+{
+  const world = makeSimWorld('warrior', 4110);
+  layPitBlob(world, 900, 600);
+  world.zone.theme.pitfall = { kind: 'descend' };
+  const p = world.player;
+  p.pos = vec(780, 600);
+  const xp0 = world.seats[0].meta.xp;
+  for (let i = 0; i < 240 && !world.traversal; i++) { world.moveActor(p, 1, 0, DT); world.update(DT); }
+  for (let i = 0; i < 600 && world.traversal; i++) world.update(DT);
+  const def = world.zone;
+  check('punishment: the hollow asks NOTHING (objective \'none\' — the drop-cave doctrine)',
+    def.objective.kind === 'none');
+  check('punishment: the hollow is minted noDeeper + pitChain 1',
+    def.noDeeper === true && def.pitChain === 1, `noDeeper=${def.noDeeper} chain=${def.pitChain}`);
+  check('punishment: authored \'cave\' rows filtered from the minted layout (no deeper-mouth guarantee to trip)',
+    def.layout.every(r => r.kind !== 'cave'), `${def.layout.length} rows`);
+  check('punishment: no breach, no descending hollow kinds survive the mint',
+    !def.breach && !(def.hollows && Object.keys(def.hollows.table).includes('crevice_hollow')),
+    def.hollows ? `hollow table [${Object.keys(def.hollows.table).join(',')}]` : 'no hollows');
+  check('punishment: generation grew NO sidezone doors (mouths/shafts stripped)',
+    !world.doodads.some(d => d.kind === 'cave_entrance' || d.kind === 'crevice_shaft'),
+    `${world.doodads.length} doodads stand`);
+  // Empty the hollow by hand: with nothing left alive, a 'clear' zone would
+  // complete and pay 40 + level×30. A 'none' zone must pay NOTHING, forever.
+  world.actors = world.actors.filter(a => !(a.team === 'enemy' && !a.dead));
+  for (let i = 0; i < 120; i++) world.update(DT);
+  check('punishment: an emptied hollow never completes, never pays (the farm is dead)',
+    world.seats[0].meta.xp === xp0 && !world.completedObjectives.has(def.id),
+    `xp ${xp0} → ${world.seats[0].meta.xp}`);
+  check('punishment: \'none\' is data-sealed OPEN and chestless (the vocabulary contract)',
+    OBJECTIVE_SEALS.none === false && !objectiveEarnsChest({ kind: 'none' })
+    && world.exits.length > 0, `${world.exits.length} exits stand`);
+  delete world.zone.theme.pitfall;
+}
+
+// --- 10) THE BOTTOM: the ladder runs out at maxChain ------------------------
+// Chained drops mint chain 1, then chain 2 (= maxChain): there the player's
+// fall resolves as the CLASSIC edge-bite — no traversal, no new rung — while
+// a shoved hostile is still swallowed (the knockback payoff keeps its teeth).
+{
+  const drop = PIT_CFG.dropCave;
+  const arrivalWas = drop.arrival;
+  drop.arrival = 'portal'; // deterministic probe geometry: land AT the mouth (its splice-cleared ground)
+  const world = makeSimWorld('warrior', 4111);
+  world.zone.theme.pitfall = { kind: 'descend' };
+  const p = world.player;
+  const dropOnce = (): boolean => {
+    // Lay a fresh blob just east of wherever we stand (portal arrivals stand
+    // in the mouth's splice-cleared ground) and SHOVE the player over the lip
+    // — the deck-test idiom, immune to walls a walk might snag on.
+    const bx = p.pos.x + 100, by = p.pos.y;
+    layPitBlob(world, bx, by);
+    const from = world.zone.id;
+    world.pushActor(p, 0, 340);
+    for (let i = 0; i < 420 && world.zone.id === from && !world.traversal; i++) world.update(DT);
+    for (let i = 0; i < 600 && world.traversal; i++) world.update(DT);
+    return world.zone.id !== from;
+  };
+  layPitBlob(world, 900, 600);
+  p.pos = vec(780, 600);
+  for (let i = 0; i < 240 && !world.traversal; i++) { world.moveActor(p, 1, 0, DT); world.update(DT); }
+  for (let i = 0; i < 600 && world.traversal; i++) world.update(DT);
+  check('bottom: rung 1 hangs one fall deep', world.zone.pitChain === 1, `chain ${world.zone.pitChain}`);
+  const fell2 = dropOnce();
+  check('bottom: rung 1\'s own chasm still DROPS (chain below maxChain descends)',
+    fell2 && world.zone.pitChain === 2, `chain ${world.zone.pitChain}`);
+  const lifeBefore = p.life;
+  const idBefore = world.zone.id;
+  const mintsBefore = Object.keys(world.caveMap).length;
+  const fell3 = dropOnce();
+  check('bottom: at maxChain the world runs OUT of down — no swap, no mint',
+    !fell3 && world.zone.id === idBefore && Object.keys(world.caveMap).length === mintsBefore,
+    `still in '${world.zone.id}', ${Object.keys(world.caveMap).length} mints`);
+  check('bottom: the refused fall still BITES (the classic edge toll, not a free bounce)',
+    p.life <= lifeBefore - 0.05 * p.maxLife(), `life ${lifeBefore.toFixed(0)} → ${p.life.toFixed(0)}`);
+  // The knockback payoff never dulls: a wolf shoved past the same lip dies.
+  const wolf = world.createMonster('plains_wolf', 5, 'enemy');
+  wolf.pos = vec(p.pos.x + 12, p.pos.y);
+  world.actors.push(wolf);
+  world.pushActor(wolf, 0, 300, p);
+  for (let i = 0; i < 90 && !wolf.dead; i++) world.update(DT);
+  check('bottom: a hostile shoved past the lip at maxChain is STILL swallowed', wolf.dead);
+  drop.arrival = arrivalWas;
+}
+
+// --- 11) THE SCATTER: the dark does not deliver you to the door -------------
+// arrival 'scatter': each fall lands somewhere NEW out in the hollow —
+// validated ground (the clampPos identity test), never beside the climb-out
+// mouth, never over a further pit — and the mouth stays a pure walk away.
+{
+  const world = makeSimWorld('warrior', 4112);
+  world.zone.theme.pitfall = { kind: 'descend' };
+  const parentId = world.zone.id;
+  const p = world.player;
+  const fall = (): void => {
+    layPitBlob(world, 900, 600);
+    p.pos = vec(780, 600);
+    for (let i = 0; i < 240 && !world.traversal; i++) { world.moveActor(p, 1, 0, DT); world.update(DT); }
+    for (let i = 0; i < 600 && world.traversal; i++) world.update(DT);
+  };
+  fall();
+  const mouth = world.exits.find(e => e.to === parentId);
+  const land1 = vec(p.pos.x, p.pos.y);
+  check('scatter: the fall lands OUT in the hollow, not at the climb-out mouth',
+    !!mouth && dist(p.pos.x, p.pos.y, mouth.pos.x, mouth.pos.y) > 150,
+    mouth ? `${dist(p.pos.x, p.pos.y, mouth.pos.x, mouth.pos.y).toFixed(0)}u from the mouth` : 'no mouth');
+  const lawful = world.clampPos(vec(p.pos.x, p.pos.y), p.radius);
+  check('scatter: the landing is lawful ground (clampPos moves it nowhere)',
+    dist(lawful.x, lawful.y, p.pos.x, p.pos.y) < 1);
+  check('scatter: never delivered onto a further pit (no chain-fall on arrival)',
+    !pitAt(world.zonePits(), [], p.pos.x, p.pos.y, null));
+  if (mouth) {
+    priv(world).travelThrough(mouth); // climb out…
+    fall();                           // …and tumble back in
+    check('scatter: a SECOND fall lands somewhere NEW (the tumble is not a spawn point)',
+      dist(p.pos.x, p.pos.y, land1.x, land1.y) > 1,
+      `${dist(p.pos.x, p.pos.y, land1.x, land1.y).toFixed(0)}u apart`);
+  }
+  delete world.zone.theme.pitfall;
 }
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);

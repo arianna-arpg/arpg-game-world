@@ -25,6 +25,7 @@
 // ---------------------------------------------------------------------------
 
 import type { DamageSpec, RecoveryPolicy } from '../world/regions';
+import type { ObjectiveSpec } from '../data/zones';
 
 /** One fall-able pit disc, resolved by the World at loadZone: the doodad's
  *  stamped geometry plus the REGION row that owns its falls (the policy /
@@ -78,6 +79,46 @@ export const PIT_CFG = {
    *  structural default instead of a row on every cave face, so every
    *  future face inherits the ladder for free. */
   caveFall: { kind: 'descend' } as RecoveryPolicy,
+  /** THE DROP-CAVE DOCTRINE — what a pit-minted hollow IS, all data: a
+   *  punishment pocket, never a farm. The fall costs you the toll and the
+   *  climb back; it pays no bounty, opens no further doors, and runs out of
+   *  down. Every dial here is the anti-exploit contract in one place. */
+  dropCave: {
+    /** Pit-cave IDENTITY — which stretch of world opens which hollow.
+     *  'zone' (default): EVERY fall in a zone opens the ONE same hollow —
+     *  deliberate re-drops re-enter the same picked-over dark (no minting a
+     *  fresh cave per gorge sector to farm). 'sector': the classic
+     *  `sectorSize` lattice — several hollows under one long gulf (the
+     *  UNDERWAY cave-web seam's granularity; flip when that pass wants
+     *  laterally-linked hollows again). */
+    identity: 'zone' as 'zone' | 'sector',
+    /** Consecutive pit-falls before the world runs out of down: a hollow
+     *  whose `ZoneDef.pitChain` has reached this resolves further falls as
+     *  the classic edge-bite (the crack below is too narrow for a body)
+     *  instead of minting rung N+1. Walking in through a REAL mouth resets
+     *  the count — only chained drops are metered. Hostiles shoved past a
+     *  lip are swallowed regardless (the knockback payoff never dulls). */
+    maxChain: 2,
+    /** The minted hollow's ask: 'none' — nothing completes, nothing pays
+     *  (no clear bounty, no chest), exits never seal. The fall is a toll,
+     *  not an errand. */
+    objective: { kind: 'none', label: 'The dark asks nothing — find your way back up' } as ObjectiveSpec,
+    /** Pit hollows mint with NO WAY ON (ZoneDef.noDeeper): no deeper-mouth
+     *  roll, no Underworld breach, no descending hollow reveals, and
+     *  generation strips any sidezone door a face or composition tries to
+     *  place. Their own chasms still drop (metered by `maxChain` above). */
+    noDeeper: true,
+    /** Where the fall DELIVERS you: 'scatter' — a random validated stand out
+     *  in the hollow's dark, so the climb-out mouth must be WALKED to;
+     *  'portal' — the classic beside-the-mouth arrival. */
+    arrival: 'scatter' as 'scatter' | 'portal',
+    /** Scatter placement contract: sample tries, then the minimum distance
+     *  from the climb-out mouth — the flat floor clamped by a fraction of
+     *  the hollow's own diagonal so cramped pockets stay satisfiable. */
+    scatterTries: 48,
+    scatterMinDist: 380,
+    scatterMinFrac: 0.3,
+  },
 };
 
 /** The pit interior covering a point — or null where the world still holds
@@ -139,10 +180,21 @@ export function anyPitNear(
   return false;
 }
 
-/** The pit-identity key a fall at (x, y) resolves to — hashed by the caller
- *  (hashStr) into the underzone's mint seed. Pure string math so co-op
- *  clients, revisits, and the probe all derive the same hollow. */
+/** The classic SECTOR key — the `sectorSize` lattice cell a fall at (x, y)
+ *  lands in. Kept beside the identity resolver below for the reserved
+ *  UNDERWAY seam (several linked hollows under one gulf). */
 export function pitSectorKey(zoneId: string, x: number, y: number): string {
   const sx = Math.floor(x / PIT_CFG.sectorSize), sy = Math.floor(y / PIT_CFG.sectorSize);
   return `${zoneId}:pitfall:${sx},${sy}`;
+}
+
+/** THE pit-identity key a fall at (x, y) resolves to — hashed by the caller
+ *  (hashStr) into the underzone's mint seed. Pure string math so co-op
+ *  clients, revisits, and the probe all derive the same hollow. Granularity
+ *  is policy (PIT_CFG.dropCave.identity): 'zone' — every fall in the zone
+ *  shares ONE hollow (deliberate re-drops re-enter the same picked-over
+ *  dark); 'sector' — the classic per-stretch lattice. */
+export function pitIdentityKey(zoneId: string, x: number, y: number): string {
+  return PIT_CFG.dropCave.identity === 'zone'
+    ? `${zoneId}:pitfall` : pitSectorKey(zoneId, x, y);
 }

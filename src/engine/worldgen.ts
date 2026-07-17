@@ -15,7 +15,8 @@ import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type Tile
 import { hasLayout } from './levelgen';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
-import type { BlendSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
+import type { BlendSpec, HollowRollSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
+import { hollowDescends } from '../data/hollows';
 import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
@@ -993,12 +994,33 @@ export interface CaveMintOpts {
   /** BLEND override for this mint (the blend fabric): a spec wins over the
    *  tileset/variant declaration; null suppresses it. Absent = data decides. */
   blend?: BlendSpec | null;
+  /** The pocket's objective instead of the classic { kind: 'clear' } — a
+   *  pit-dropped hollow asks 'none' (PIT_CFG.dropCave.objective). */
+  objective?: ObjectiveSpec;
+  /** PIT-CHAIN stamp (ZoneDef.pitChain): how many consecutive pit-falls hang
+   *  above this pocket — beginPitDescent passes parent chain + 1. */
+  pitChain?: number;
+  /** NO WAY ON (ZoneDef.noDeeper): mint with no deeper-mouth roll, no
+   *  Underworld breach, no descending hollow kinds, no authored 'cave' rows;
+   *  generateLayout additionally strips any sidezone entrance stray. The
+   *  deeper-chance draw still BURNS (the seeded draw-order contract) — only
+   *  its answer is refused. */
+  noDeeper?: boolean;
 }
 
 /** The face roll's IDENTITY SUB-STREAM salt: strata decisions (face + face
  *  variant) draw from their own seeded Rng so the MAIN stream's draw order per
  *  resolved tileset keeps the classic contract exactly. */
 const CAVE_FACE_SALT = 0x57a7a;
+
+/** A noDeeper pocket's hollow roll: keep the caches, the ambushes, the veins —
+ *  drop every reveal kind that DECLARES a way down (HollowDef.descends). An
+ *  emptied table drops the whole roll (undefined), never a zero-kind spec. */
+function sealedHollows(spec: HollowRollSpec): HollowRollSpec | undefined {
+  const table = Object.fromEntries(
+    Object.entries(spec.table).filter(([kind, w]) => w > 0 && !hollowDescends(kind)));
+  return Object.keys(table).length ? { ...spec, table } : undefined;
+}
 
 export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId?: string, opts?: CaveMintOpts): ZoneDef {
   // THE CAVE LADDER: depth counts caves-within-caves — resolved FIRST because
@@ -1041,8 +1063,11 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // Only SURFACE ladders breach — hell's caves are just caves (a breach FROM
   // the Underworld INTO the Underworld would be a teleport to the hellgate
   // dressed as revelation).
-  const breach = depth >= caveBreachDepth() && !parent.dimension;
-  const deeper = !breach && rng.chance(deeperChanceAt(depth));
+  // NO WAY ON (opts.noDeeper — pit-dropped hollows): the breach and the
+  // deeper mouth are both refused, but the deeper-chance draw still burns
+  // wherever it would have (a same-seed mint differs only in the answer).
+  const breach = depth >= caveBreachDepth() && !parent.dimension && !opts?.noDeeper;
+  const deeper = !breach && rng.chance(deeperChanceAt(depth)) && !opts?.noDeeper;
   // VARIANT: a named or seeded-rolled TilesetVariant replaces the base stamps,
   // exactly as a generated zone's roll would. Opts callers (gates, realms)
   // draw on the MAIN stream as they always have; a FACE-ROLLED mint instead
@@ -1067,10 +1092,19 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // COMMON rows ride along whichever face rolled — the brittle-kit doctrine
   // (what the biome always IS must not vanish when a face is chosen) now
   // holds for minted pockets exactly as it does for generated zones.
-  const layout = [
+  let layout = [
     ...(ts.common ?? []), ...rows,
     ...(deeper ? [{ kind: 'cave' as const, count: [1, 1] as [number, number] }] : []),
   ];
+  // NO WAY ON: a face or variant may AUTHOR 'cave' rows of its own — a
+  // noDeeper pocket drops them too (the deeper-mouth guarantee in levelgen
+  // keys on these rows; with none present it stays silent by construction).
+  if (opts?.noDeeper) layout = layout.filter(r => r.kind !== 'cave');
+  // …and its wall secrets keep their caches/ambushes/veins but never a way
+  // down: reveal kinds that DECLARE descent (HollowDef.descends — the
+  // crevice shaft) are filtered from the roll table; an emptied table drops
+  // the roll entirely.
+  const hollows = opts?.noDeeper && ts.hollows ? sealedHollows(ts.hollows) : ts.hollows;
   // NAMING wears the band: the Galleries' depth-2 "Deep …", the Depths'
   // "Sunless …" — the prefix is stratum data, the breach naming stays its own.
   const prefix = namePrefixAt(depth);
@@ -1101,7 +1135,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     // sandstone — and the sunken ruin's authored ruin_wall — ride this.)
     ...(ts.layoutParams || opts?.layoutParams
       ? { layoutParams: { ...ts.layoutParams, ...opts?.layoutParams } } : {}),
-    objective: { kind: 'clear' },           // never gates the way back out
+    objective: opts?.objective ?? { kind: 'clear' }, // neither gates the way back out
     // A cave face's puzzle repertoire + scenery-actors ride down too (a
     // geode grotto may hold a chord) — placement stays a LOAD concern on
     // the salted streams.
@@ -1112,9 +1146,12 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     map: { x: parent.map.x, y: parent.map.y }, // unused off-graph, but type-required
     seed: entranceSeed,                     // fixed layout, persists across revisits
     // SECRET HOLLOWS (the hollows fabric): the face's budget rides onto the
-    // minted def — grid layouts wall up their secrets, convex ones ignore it.
-    ...(ts.hollows ? { hollows: ts.hollows } : {}),
+    // minted def — grid layouts wall up their secrets, convex ones ignore it
+    // (noDeeper pockets carry the descent-filtered table from above).
+    ...(hollows ? { hollows } : {}),
     caveDepth: depth,
+    ...(opts?.pitChain !== undefined ? { pitChain: opts.pitChain } : {}),
+    ...(opts?.noDeeper ? { noDeeper: true } : {}),
     ...(anchor ? { anchor } : {}),
     ...(breach ? { breach: true } : {}),
     ...(parent.dimension ? { dimension: parent.dimension } : {}),

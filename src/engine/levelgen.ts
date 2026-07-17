@@ -2055,6 +2055,19 @@ function doodadRule(kind: DoodadKind): DoodadRule {
   return (DOODAD_RULES as Record<string, DoodadRule>)[kind] ?? RUNTIME_RULES[kind] ?? { overlap: 'ground' };
 }
 
+/** Doodad kinds that are SIDEZONE ENTRANCES — registered by data/sidezones
+ *  (registerSidezone tells this leaf the KIND; the def itself stays over
+ *  there, no cycle). Generation needs only the set: a ZoneDef.noDeeper
+ *  pocket strips every entrance any face, variant or composition tried to
+ *  place — the one chokepoint all placement paths flow through. */
+const SIDEZONE_ENTRANCE_KINDS = new Set<string>();
+export function registerSidezoneEntranceKind(kind: string): void {
+  SIDEZONE_ENTRANCE_KINDS.add(kind);
+}
+export function isSidezoneEntranceKind(kind: string): boolean {
+  return SIDEZONE_ENTRANCE_KINDS.has(kind);
+}
+
 /** Public accessor for consumers outside the generator (renderer occlusion,
  *  validators) — same resolution as the internal lookup. */
 export function doodadRuleOf(kind: DoodadKind): DoodadRule { return doodadRule(kind); }
@@ -3889,6 +3902,26 @@ export function generateLayout(
       ctx.doodads.splice(i, 1);
     }
   }
+  // NO WAY ON (ZoneDef.noDeeper — pit-dropped hollows): the pocket refuses
+  // to grow new doors. Any sidezone ENTRANCE a face, variant, composition,
+  // structure plan or landmark managed to place is stripped HERE — the one
+  // chokepoint every placement path flows through (mintCave already filters
+  // the authored rows, the deeper roll, the breach and the descending
+  // hollows; this catches strays so future content obeys for free). Draw-
+  // free: the placements already drew — same def, same rng, same strip.
+  // Seed-PAIRED kinds (cave_entrance) splice their zip entry in lockstep,
+  // exactly like the void sweep above.
+  if (def.noDeeper) {
+    for (let i = ctx.doodads.length - 1; i >= 0; i--) {
+      const d = ctx.doodads[i];
+      if (!isSidezoneEntranceKind(d.kind)) continue;
+      if (doodadRule(d.kind).seedPaired) {
+        const ordinal = ctx.doodads.slice(0, i).filter(x => doodadRule(x.kind).seedPaired).length;
+        ctx.caveSeeds.splice(ordinal, 1);
+      }
+      ctx.doodads.splice(i, 1);
+    }
+  }
   // THE UNIVERSAL REACHABILITY INVARIANT: an entrance or exit that is not
   // accessible is neither an entrance nor an exit; an objective set-piece the
   // player cannot walk to may as well not exist. Draw-free (no rng), no-op
@@ -3911,7 +3944,9 @@ export function generateLayout(
   // (Boundless zones — the Descent's streamed abyss — are exempt: their layout
   // deliberately hosts no deeper mouth, and a mouth in the starter patch would
   // splice the Underworld ladder into a mode built around resurfacing.)
-  if ((def.caveDepth || def.pocket) && !def.breach && !def.boundless
+  // (noDeeper pockets are exempt by definition — their mint filtered every
+  // 'cave' row, and the strip above owns the stray case.)
+  if ((def.caveDepth || def.pocket) && !def.breach && !def.boundless && !def.noDeeper
     && def.layout.some(s => s.kind === 'cave')
     && !ctx.doodads.some(d => d.kind === 'cave_entrance')) {
     let best: Vec2 | null = null;

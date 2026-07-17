@@ -75,7 +75,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
-import { anyPitNear, PIT_CFG, pitAt, pitSectorKey, pitSupportedAt, type PitSurface } from './pitfall';
+import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
@@ -9786,6 +9786,9 @@ export class World {
     // arena (The Pit) are sealed rooms — no shaft-keeper mints a mineshaft
     // through their floors (the same objective gate every ambient system uses).
     if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
+    // NO WAY ON (ZoneDef.noDeeper — pit-dropped hollows): a pocket that
+    // promised no further doors refuses the shaft-keeper's too.
+    if (def.noDeeper) return;
     // Delvers dig DOWN toward the world's own underworld: ground that HANGS
     // (ZoneDef.below — a sky shelf over the land) and ground outside the
     // surface dimension entirely never hosts a shaft. Both are one-field
@@ -29875,6 +29878,16 @@ export class World {
   private routePitFall(a: Actor, policy: { damage?: DamageSpec }, pre: Vec2, forced: boolean): void {
     if (a.flying || a.dash || a.leap) return;
     if (a === this.player) {
+      // THE LADDER RUNS OUT (PIT_CFG.dropCave.maxChain): a hollow already
+      // hanging maxChain consecutive falls deep resolves the next fall as
+      // the CLASSIC edge-bite — same toll, no new rung, the anti-farm floor.
+      // Player-only by design: hostiles shoved past a lip are swallowed
+      // regardless (the knockback payoff never dulls with depth).
+      if ((this.zone.pitChain ?? 0) >= PIT_CFG.dropCave.maxChain) {
+        this.text(vec(a.pos.x, a.pos.y - 34), 'the crack narrows — nothing below but stone', '#9a8ab8', 12);
+        this.applyRecovery(a, { kind: 'fall', to: 'edge', damage: policy.damage ?? PIT_CFG.fallDamage }, pre, forced);
+        return;
+      }
       this.beginPitDescent(policy);
       return;
     }
@@ -29911,9 +29924,21 @@ export class World {
     if (this.traversal || this.pendingRespawn) return;
     const parent = this.zone;
     const at = this.player.pos;
-    const seed = hashStr(pitSectorKey(parent.id, at.x, at.y));
+    const drop = PIT_CFG.dropCave;
+    const seed = hashStr(pitIdentityKey(parent.id, at.x, at.y));
     const id = `cave_${parent.id}_pit_${seed}`;
-    if (!this.caveMap[id]) this.caveMap[id] = mintCave(parent, seed, id);
+    // THE PUNISHMENT MINT (PIT_CFG.dropCave): the hollow asks nothing
+    // (objective 'none' — no clear bounty, no chest), opens nothing
+    // (noDeeper — no mouths, no breach, no shaft reveals), and counts the
+    // chain of falls above it (pitChain — the maxChain meter in
+    // routePitFall). All policy, zero bespoke ids.
+    if (!this.caveMap[id]) {
+      this.caveMap[id] = mintCave(parent, seed, id, undefined, {
+        objective: { ...drop.objective },
+        noDeeper: drop.noDeeper,
+        pitChain: (parent.pitChain ?? 0) + 1,
+      });
+    }
     const rim = vec(at.x, at.y);
     const entryWas = this.entryFrom;
     const dmg = policy.damage ?? PIT_CFG.fallDamage;
@@ -29924,6 +29949,10 @@ export class World {
         if (this.caveReturn) this.caveStack.push(this.caveReturn);
         this.caveReturn = { zoneId: parent.id, pos: rim, entryFrom: entryWas, kind: 'pitfall' };
         this.loadZone(id, parent.id);
+        // THE SCATTER (drop.arrival): the dark does not deliver you to the
+        // door — the fall lands somewhere out in the hollow, and the climb-
+        // out mouth must be WALKED to. 'portal' keeps the classic arrival.
+        if (drop.arrival === 'scatter') this.scatterPitArrival();
         this.caveExitGrace = true;
         bumpLedger(this.ledger, PIT_CFG.ledger);
       },
@@ -29936,6 +29965,51 @@ export class World {
           `the dark catches you — ${this.zone.name}`, '#b8a888', 14);
       },
     });
+  }
+
+  /** THE SCATTER (PIT_CFG.dropCave.arrival 'scatter'): relocate the just-
+   *  landed party from the climb-out mouth to a random validated stand out
+   *  in the hollow. The contract per candidate: on-mesh, clear of solids,
+   *  never over a further pit (no chain-fall on arrival), never delivered
+   *  INTO damaging/drowning ground, and reachable from the mouth (the way
+   *  home stays a walk, never a dig). Degrades to the farthest reachable
+   *  stand (the player still stands AT the mouth here, so farthestStand's
+   *  player-distance IS mouth-distance), then to the classic portal arrival.
+   *  Deliberately NON-seeded (rand): each fall lands somewhere new — the
+   *  hollow's identity is deterministic, the tumble through the dark is not. */
+  private scatterPitArrival(): void {
+    if (this.zone.boundless) return; // streamed arenas own their arrivals
+    const drop = PIT_CFG.dropCave;
+    const p = this.player;
+    const mouth = this.zoneEntry;
+    const minD = Math.min(drop.scatterMinDist,
+      Math.hypot(this.arena.w, this.arena.h) * drop.scatterMinFrac);
+    const pits = this.zonePits();
+    const ok = (x: number, y: number): boolean => {
+      if (this.walk && !this.walk.isWalkable(x, y)) return false;
+      if (this.pointInSolid(x, y, p.radius * 0.5)) return false;
+      if (pitAt(pits, this.bridges, x, y, null)) return false;
+      const rk = this.walk?.regionAt ? regionKind(this.walk.regionAt(x, y)) : undefined;
+      if (rk?.standDamage || rk?.survival) return false;
+      return !(this.walk?.reachable && !this.walk.reachable(mouth, vec(x, y)));
+    };
+    let land: Vec2 | null = null;
+    for (let t = 0; t < drop.scatterTries && !land; t++) {
+      const sp = samplePoint(this.arena, 60, rand);
+      if (dist(vec(sp.x, sp.y), mouth) < minD) continue;
+      if (ok(sp.x, sp.y)) land = vec(sp.x, sp.y);
+    }
+    if (!land) land = this.farthestStand(p.radius, true);
+    if (!land || pitAt(pits, this.bridges, land.x, land.y, null)
+      || dist(land, mouth) < 40) return; // cramped hollow: the classic arrival stands
+    p.pos = this.clampPos(vec(land.x, land.y), p.radius);
+    // Seats ride the tumble together (the skyfall idiom) — scattered, but
+    // never separated from each other.
+    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+    for (const a of this.actors) {
+      if (a === p || !seatActors.has(a)) continue;
+      a.pos = this.clampPos(vec(land.x + rand(-60, 60), land.y + rand(30, 70)), a.radius);
+    }
   }
 
   /** PACKAGE FURNISH: manifest-active packages may plant fixtures inside a
@@ -35538,6 +35612,9 @@ export class World {
       case 'safe':
         return; // sanctuaries ask nothing
 
+      case 'none':
+        return; // hostile ground with no errand: nothing completes, nothing pays
+
       case 'clear':
         if (!this.objectiveDone && this.countedEnemies().length === 0) {
           this.completeObjective(`${this.zone.name} cleared!`);
@@ -36839,6 +36916,7 @@ export class World {
     }
     if (this.objectiveDone) return 'Cleared';
     switch (o.kind) {
+      case 'none': return o.label ?? 'Nothing is asked of you here';
       case 'clear': return `Clear the area — ${this.countedEnemies().length} remain`;
       case 'boss': return `Slay ${MONSTERS[o.id].name}`;
       case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;

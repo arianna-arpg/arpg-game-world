@@ -54,6 +54,12 @@ export interface HollowDef {
   id: string;
   /** What geometry the carver hunts for this kind (default 'pocket'). */
   shape?: 'pocket' | 'passage';
+  /** This reveal opens a WAY DOWN (a sidezone mouth, a shaft — the crevice).
+   *  A pocket minted noDeeper (ZoneDef.noDeeper — pit-dropped hollows)
+   *  filters descending kinds from its roll table at mint, so the wall never
+   *  hides a door the pocket promised not to have. Declare it on any future
+   *  shaft-like secret; caches/ambushes/veins stay unmarked and survive. */
+  descends?: boolean;
   /** Furnish the carved space. Runs once at reveal and once per remembered
    *  re-reveal (revive=true) — honor the revive discipline. */
   reveal(ctx: HollowRevealCtx): void;
@@ -71,6 +77,12 @@ export function hollowDef(id: string): HollowDef | undefined { return HOLLOWS[id
 
 export function hollowShapeOf(id: string): 'pocket' | 'passage' {
   return HOLLOWS[id]?.shape ?? 'pocket';
+}
+
+/** Does this reveal kind open a way down? (Unregistered ids answer false —
+ *  the roll table validator owns the typo complaint, not this fold.) */
+export function hollowDescends(id: string): boolean {
+  return !!HOLLOWS[id]?.descends;
 }
 
 /** A seeded point inside the rect, inset from its edges. */
@@ -153,6 +165,7 @@ registerHollow({
  *  face-rolled fresh by the strata fabric. STRUCTURAL: revives always. */
 registerHollow({
   id: 'crevice_hollow',
+  descends: true, // the shaft is a WAY DOWN — noDeeper pockets filter it at mint
   blurb: 'The wall was the lid on a whole further cave.',
   reveal(c) {
     c.addDoodad({ pos: c.center, radius: 24, kind: 'crevice_shaft' });
