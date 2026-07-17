@@ -358,6 +358,12 @@ export interface MonsterDef {
    *  flesh horror opts out; a panting brass hound opts in. Omitted = the
    *  material decides. */
   breathes?: boolean;
+  /** HEFT (the mass fabric): multiplies the radius-derived weight DEFAULT —
+   *  "heavier (or lighter) than the silhouette says" — while still composing
+   *  with per-spawn scale variance and the material's density. Ignored when
+   *  base.weight pins an absolute value. The leaden thrall's 2.4 makes a
+   *  knee-high ingot an anchor; the shale skitter's 0.28 lets stone fly. */
+  heft?: number;
   /** Part-grammar portrait (data/looks.ts) — skeletons read as skeletons
    *  from overhead. Omitted = the legacy shape+adorn body. */
   look?: string;
@@ -669,30 +675,37 @@ export interface MonsterDef {
 // MATERIAL NATURE — what a surface material IMPLIES about the body under it,
 // read wherever the engine needs an ONTOLOGY, not a shader: REMAINS (does
 // death leave a raisable corpse-economy remnant — world.ts kill path + the
-// sacrifice lane) and BREATH (does the body tire under the default kite
-// budget — ai.ts / BEHAVIOR_CFG.defaultKite). Render materials stay in
-// render/vis/materials.ts; THIS table is the gameplay truth beside the defs
-// that wear it. A def overrides either verdict with `remains:`/`breathes:`;
-// materials absent here read as flesh (organic, breathing) — the safe
-// default for anything alive enough to author a monster around.
+// sacrifice lane), BREATH (does the body tire under the default kite
+// budget — ai.ts / BEHAVIOR_CFG.defaultKite), and DENSITY (how much BODY per
+// unit of silhouette — the mass fabric's third column: the radius-derived
+// weight default multiplies by it, so a knee-high iron thrall anchors while
+// a man-high wisp flies from a slap; engine/mass.ts + docs/engine/mass.md).
+// Density 1 = organic norm; bone stays 1 on purpose (a skeleton is mostly
+// air — volume, not substance); a def escapes the verdict with base.weight
+// (absolute) or heft (a multiplier that keeps composing). Render materials
+// stay in render/vis/materials.ts; THIS table is the gameplay truth beside
+// the defs that wear it. A def overrides the first two verdicts with
+// `remains:`/`breathes:`; materials absent here read as flesh (organic,
+// breathing, density 1) — the safe default for anything alive enough to
+// author a monster around.
 // ---------------------------------------------------------------------------
-export const MATERIAL_NATURE: Record<string, { remains: boolean; breathes: boolean }> = {
+export const MATERIAL_NATURE: Record<string, { remains: boolean; breathes: boolean; density?: number }> = {
   flesh:    { remains: true,  breathes: true },
   fur:      { remains: true,  breathes: true },
   scale:    { remains: true,  breathes: true },
   chitin:   { remains: true,  breathes: true },   // spiracles count
-  slime:    { remains: true,  breathes: false },  // organic, but no lungs
+  slime:    { remains: true,  breathes: false, density: 0.9 },   // organic, but no lungs; mostly water
   verdant:  { remains: true,  breathes: false },  // plant-flesh: fibrous remains, no breath
   bone:     { remains: true,  breathes: false },  // the dead leave bones; the dead don't tire
-  cloth:    { remains: true,  breathes: false },  // dressed bodies: mummies, haunt-servants
-  wood:     { remains: false, breathes: false },  // timber splinters
-  stone:    { remains: false, breathes: false },  // rubble
-  metal:    { remains: false, breathes: false },
-  crystal:  { remains: false, breathes: false },
-  ice:      { remains: false, breathes: false },  // melts where it falls
-  ember:    { remains: false, breathes: false },  // cinders scatter
-  ethereal: { remains: false, breathes: false },  // ghost-stuff dissipates
-  void:     { remains: false, breathes: false },
+  cloth:    { remains: true,  breathes: false, density: 0.85 },  // dressed bodies: mummies, haunt-servants
+  wood:     { remains: false, breathes: false, density: 1.15 },  // timber splinters
+  stone:    { remains: false, breathes: false, density: 1.6 },   // rubble
+  metal:    { remains: false, breathes: false, density: 1.85 },
+  crystal:  { remains: false, breathes: false, density: 1.5 },
+  ice:      { remains: false, breathes: false, density: 1.3 },   // melts where it falls
+  ember:    { remains: false, breathes: false, density: 0.6 },   // cinders scatter
+  ethereal: { remains: false, breathes: false, density: 0.35 },  // ghost-stuff dissipates
+  void:     { remains: false, breathes: false, density: 0.55 },
 };
 
 /** Does this def's death leave a corpse-economy remnant? The def's own
@@ -704,6 +717,13 @@ export function defLeavesRemains(def: MonsterDef): boolean {
 /** Does this body breathe — i.e. tire under the default kite budget? */
 export function defBreathes(def: MonsterDef): boolean {
   return def.breathes ?? MATERIAL_NATURE[def.material ?? 'flesh']?.breathes ?? true;
+}
+
+/** How much BODY per unit of silhouette (the mass fabric's density column):
+ *  multiplies the radius-derived weight default at spawn. Unknown materials
+ *  read organic (1) like everywhere else in the nature table. */
+export function defDensity(def: MonsterDef): number {
+  return MATERIAL_NATURE[def.material ?? 'flesh']?.density ?? 1;
 }
 
 /** One ambient-fauna row: an independent per-zone roll (chance), a band size,
@@ -8820,6 +8840,49 @@ export const MONSTERS: Record<string, MonsterDef> = {
     tags: ['construct'],
     temper: 'territorial',
     brain: { type: 'basic' },
+    // Spilled FLAKES, not blocks: heft undercuts stone's density so the
+    // shambler's chaff flies from a cleave — the mass fabric's bowling
+    // pins (engine/mass.ts; a plowing body scatters them by the row).
+    heft: 0.45,
+  },
+  // --- THE WEIGHT LESSON (the mass fabric, engine/mass.ts) ------------------
+  // Two stonekin who teach mass AT A GLANCE, one from each end of the scale.
+  // The sarsen ram is the quarry's avalanche: a charging block (the aurochs'
+  // charge kernel on stone rails) whose gore carries a knockback strength
+  // worth a wall's attention — its authority (radius × stone density ×
+  // poise anchor) multiplies the launch, and impact finishes what the horns
+  // start. The lode thrall is the DENSITY EXCEPTION that proves the material
+  // rule: knee-high, ore-dense (metal × heft ≈ weight 2.5) — the smallest
+  // body in the country and the hardest to move, read instantly by the
+  // anchor it wears. Counterlevers stay material-honest: the ram keeps the
+  // stonekin freeze-thaw debt; the thrall CONDUCTS (lightning debt) where
+  // stone never did, and shrugs fire like the ore it is.
+  sarsen_ram: {
+    id: 'sarsen_ram', name: 'Sarsen Ram',
+    color: '#8f8874', shape: 'hexagon', radius: 22, material: 'stone', look: 'sarsen_ram',
+    base: { life: 190, moveSpeed: 96, accuracy: 102, armor: 45, poise: 50, evasion: 0, mana: 30, manaRegen: 3 },
+    mods: [
+      mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25),
+      mod('knockback', 'flat', 240, ['melee']),
+    ],
+    skills: ['heavy_strike'], xp: 48,
+    faction: 'elemental',
+    tags: ['construct'],
+    turnSpeed: 2.2, temper: 'territorial',
+    brain: { type: 'juggernaut', enrage: 0.4, move: { style: 'charge', commitRange: 360, chargeSpeed: 2.7 } },
+    heft: 1.15,
+  },
+  lode_thrall: {
+    id: 'lode_thrall', name: 'Lode Thrall',
+    color: '#6d7076', shape: 'hexagon', radius: 10, material: 'metal', look: 'lode_thrall',
+    base: { life: 95, moveSpeed: 58, accuracy: 100, armor: 70, poise: 25, evasion: 0, mana: 0 },
+    mods: [mod('lightningRes', 'flat', -0.3), mod('fireRes', 'flat', 0.35)],
+    skills: ['heavy_strike'], xp: 34,
+    faction: 'elemental',
+    tags: ['construct'],
+    turnSpeed: 2.0, temper: 'territorial',
+    brain: { type: 'juggernaut' },
+    heft: 2.2,
   },
   // --- THE HAUNTING's bodies (spawned by the package, never rostered) -------
   // THE GRIEF-ANCHOR: a standing knot of sorrow the haunting winds around.
@@ -11325,6 +11388,10 @@ export const FACTIONS: Record<string, {
       { id: 'karst_slinger', weight: 2, presence: { from: 5 } },
       { id: 'petrified_warden', weight: 1, presence: { from: 8 } },
       { id: 'scree_shambler', weight: 1, presence: { from: 9 } },
+      // The WEIGHT LESSON pair (the mass fabric): the avalanche and the
+      // anchor muster with their kin — same hard floors as the old stone.
+      { id: 'sarsen_ram', weight: 1, presence: { from: 7 } },
+      { id: 'lode_thrall', weight: 1, presence: { from: 6 } },
       // THE CRYSTALKIN (the attunement pass): the glass court finally
       // musters with its faction — the shard fields were never leaderless,
       // only unlisted. Chaff early, the court proper with level.

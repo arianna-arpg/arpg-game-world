@@ -104,6 +104,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'bumperDome', order: 46,
     light: { radius: -2.0, color: '#9fd8ec', intensity: 0.45 },
   },
+  // The quarry's standing argument (the mass fabric): the bumper dome in
+  // old sarsen — same live rim, no glaze, no lamp; stone keeps its counsel.
+  sarsen_bumper: {
+    painter: 'bumperDome', order: 46,
+    params: { body: '#8f8874', rim: '#d8cc9a', core: '#6f6a58' },
+  },
   // LAVA reads as FIRE UNDER PACK ICE now: hot hearts glow up through the
   // merged flow, dark crust plates ride the surface with melt seams burning
   // at their edges, crawl-glow wanders beneath. One body, like water.

@@ -28,6 +28,23 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // THE MASS FABRIC's player-side gem (engine/mass.ts) — weight made a
+  // weapon. Sister to Crushing Impact, different lane: the crush re-rolls
+  // YOUR SKILL's damage on arrest; this one scales the fabric's own
+  // momentum wounds and the authority behind the launch itself.
+  battering_ram: {
+    id: 'battering_ram', name: 'Battering Ram',
+    description: 'This skill drives with your WHOLE WEIGHT behind it: hits shove far harder, your shove authority grows, and victims arrested mid-flight — by wall or by a body heavy enough to be one — take crueller impact wounds.',
+    color: '#c8a068', requiresTags: ['melee'],
+    mods: [
+      mod('knockback', 'flat', 90),
+      mod('shoveAuthority', 'flat', 0.25),
+      mod('impactDamage', 'flat', 0.4),
+    ],
+    perLevel: [mod('knockback', 'flat', 12), mod('impactDamage', 'flat', 0.05)],
+    weight: 6,
+  },
+
   // --- The Wildcraft disciplines (the jungle's arts, bottled) ----------------
   serrated_edge: {
     id: 'serrated_edge', name: 'Serrated Edge',

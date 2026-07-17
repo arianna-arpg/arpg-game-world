@@ -458,8 +458,19 @@ export const STAT_DEFS: Record<string, StatDef> = {
 
   // BODY MASS & SUBSTANCE
   /** How shovable this body is: knockback and crowd separation divide by
-   *  it. Monsters default it from body radius (DEFENSE_CFG.weight). */
+   *  it. Monsters default it from body radius × material density
+   *  (DEFENSE_CFG.weight, MATERIAL_NATURE) — and the mass fabric
+   *  (engine/mass.ts) reads the same number as shove AUTHORITY: the heavy
+   *  both resist shoves and shove harder. */
   weight:         { label: 'Weight', base: 1, min: 0.05 },
+  /** Multiplies your shove AUTHORITY (engine/mass.ts) — the pusher-side
+   *  term every owned push carries, applied AFTER the body-size clamp so
+   *  investment scales openly. Tag-filtered through the live skill, so
+   *  "authority on melee skills" is one passive away. */
+  shoveAuthority: { label: 'Shove Authority', base: 0, percent: true },
+  /** Scales the impact wounds your shoves inflict on arrest (wall slams
+   *  and the bowling lane both — engine/mass.ts). Tag-filtered. */
+  impactDamage:   { label: 'Impact Damage', base: 0, percent: true },
   /** > 0: no body collision at all — walks THROUGH actors (and they through
    *  it). Hits and targeting are unaffected; this is substance, not stealth. */
   phasing:        { label: 'Phasing', base: 0, min: 0 },

@@ -39,7 +39,9 @@ import {
 import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
-import { FACTIONS, MONSTERS, type MonsterDef } from '../data/monsters';
+import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
+import { heftTierOf } from '../engine/mass';
+import { DEFENSE_CFG } from '../engine/defense';
 import type { Actor } from '../engine/actor';
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf,
@@ -2043,6 +2045,14 @@ export class UI {
       } else body += hidden('Arts');
       if (reveals('hide')) {
         body += line('Armor', String(b.armor ?? 0)) + line('Evasion', String(b.evasion ?? 0));
+        // HEFT (the mass fabric): the def's resolved resting weight — the
+        // same derivation the spawn fold uses (radius × material density ×
+        // heft, unless base.weight pins it) — read out as a tier word.
+        // "Can I shove this?" answered before the first attempt.
+        const defWeight = b.weight ?? (
+          Math.pow(def.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow)
+          * defDensity(def) * (def.heft ?? 1));
+        body += line('Heft', heftTierOf(defWeight));
         const quirks = (def.mods ?? [])
           .map(m => STAT_DEFS[m.stat]?.label ?? m.stat).join(', ');
         if (quirks) body += line('Quirks', quirks);

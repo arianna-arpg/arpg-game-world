@@ -21,6 +21,7 @@ import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } 
 import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
+import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
@@ -49,7 +50,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
@@ -17022,11 +17023,15 @@ export class World {
       if (def.juvenileBelow !== undefined && s <= def.juvenileBelow && def.juvenileBrain) a.brain = def.juvenileBrain;
     }
     // WEIGHT defaults from the BODY: mass grows with the (post-variance)
-    // radius unless the def brings its own base.weight — so the bestiary
-    // gets heft for free and any monster can still override it as data.
+    // radius × the material's DENSITY (MATERIAL_NATURE — a knee-high iron
+    // thrall anchors, a man-high wisp flies from a slap) × the def's HEFT
+    // multiplier, unless the def brings its own base.weight — so the
+    // bestiary gets honest heft for free and any monster can still pin or
+    // scale it as data (engine/mass.ts; docs/engine/mass.md).
     if (def.base.weight === undefined) {
       a.sheet.setBase('weight',
-        Math.pow(a.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow));
+        Math.pow(a.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow)
+        * defDensity(def) * (def.heft ?? 1));
     }
     // Bosses hold their ground: a default poise pool (levels with them)
     // unless the def declares one. Rank-and-file keep the registry base —
@@ -23847,7 +23852,13 @@ export class World {
    * (v₀ = strength × damping ⇒ ∫v = strength), so existing data keeps its
    * reach — it just moves like physics now.
    */
-  pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: SkillInstance): void {
+  pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: SkillInstance,
+    opts?: {
+      /** The impulse arrives with its authority ALREADY SPENT (a plow-
+       *  through's momentum hand-off, engine/mass.ts) — fold only the
+       *  target's weight, never the shover's again. */
+      noAuthority?: boolean;
+    }): void {
     // Planted things stay put — and a DORMANT un-roused neutral is planted:
     // stray splash knockback must not scatter a sleeping band (the hit that
     // ROUSES it restores physics the same tick aiAwakened latches).
@@ -23856,11 +23867,17 @@ export class World {
     // knockback counterplay, engine/cling.ts) — released first so the
     // impulse lands on a free body.
     if (target.clingTo) this.clingRelease(target);
+    // AUTHORITY: the PUSHER's mass folds in (engine/mass.ts) — heavy bodies
+    // shove harder, exactly 1 at effective weight 1 so every casterless
+    // push (wind, traps, tracks) and every fresh-hero knockback keeps its
+    // tuned reach. The asymmetry the fabric exists for: the ogre moves you
+    // more readily than you move it, UNLESS you build toward poise/mass.
+    const auth = caster && !opts?.noAuthority ? shoveAuthority(caster, inst) : 1;
     // WEIGHT: mass divides the shove — a knockback that sends a goblin
     // flying nudges an ogre. effectiveWeight folds in CURRENT unbroken
     // poise (a poised colossus is an anchor; break the bar to move it) on
     // top of the weight stat (Fortitude raises it, curses can shed it).
-    const eff = strength / target.effectiveWeight();
+    const eff = strength * auth / target.effectiveWeight();
     const vx = Math.cos(dir) * eff * PUSH_DAMPING;
     const vy = Math.sin(dir) * eff * PUSH_DAMPING;
     const p = target.push;
@@ -23872,6 +23889,108 @@ export class World {
       if (caster && inst) { p.caster = caster; p.inst = inst; p.collided = false; }
     } else {
       target.push = { vx, vy, caster, inst };
+    }
+  }
+
+  /** Scratch for the bowling-lane slam sweep (actorsNear contract). */
+  private readonly slamScratch: Actor[] = [];
+
+  /** IMPACT (engine/mass.ts): a push arrested by a wall — or by a body heavy
+   *  enough to BE one — wounds the arrested body: momentum (arrest speed ×
+   *  its own effective weight) as a fraction of ITS max life, dealt as
+   *  PHYSICAL through the one mitigation ladder (armor and the defender
+   *  stack apply; never evasion/block — you dodge a wall with your feet),
+   *  kill credited to the shover exactly like the pitfall lane. Hostile-
+   *  authored only: casterless weather and friendly repositioning bruise
+   *  nothing. Per-body ICD so a corner's double clamp is one wound. */
+  private resolveImpactHit(a: Actor, speed: number, p: NonNullable<Actor['push']>): void {
+    if (a.dead || a.invulnerable || a.untargetable) return;
+    if (!p.caster || p.caster.dead || !this.hostileTo(p.caster, a)) return;
+    if (this.time < a.slamIcdUntil) return;
+    const frac = impactFrac(speed, a.effectiveWeight()) * impactScale(p.caster, p.inst);
+    if (frac <= 0) return;
+    a.slamIcdUntil = this.time + MASS_CFG.impact.icdSec;
+    const out: { clamped?: boolean } = {};
+    const taken = mitigateTyped(a, { physical: frac * a.maxLife() }, { out });
+    a.life -= taken;
+    a.hitFlash = 0.15;
+    this.flashes.push({
+      pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
+      color: '#c8b8a0', life: 0.22, maxLife: 0.22,
+    });
+    this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 14);
+    if (out.clamped) this.text(vec(a.pos.x, a.pos.y - 20), 'capped', '#9ab0c8', 12);
+    if (a.life <= 0 && !a.dead) this.kill(a, false, p.caster);
+  }
+
+  /** THE BOWLING LANE (engine/mass.ts): one step of a fast-enough push swept
+   *  against bodies in its path. A blocker at slam.arrestRatio of the
+   *  mover's mass ARRESTS it — wall rules for the mover (impact wound +
+   *  the caster's collision procs: a wall of meat is still a wall) and a
+   *  token lean on the blocker; anything lighter is PLOWED THROUGH — it
+   *  takes the struck fraction and inherits transfer × the mover's speed
+   *  as a shove with authority ALREADY SPENT (never re-folded), while the
+   *  mover sheds plowDamping per body. Dormant neutrals are spared like
+   *  every environmental strike; phasing bodies have no rim to strike;
+   *  aloft and grounded bodies pass over/under each other. */
+  private sweepBodySlam(a: Actor, p: NonNullable<Actor['push']>, speed: number): void {
+    const near = this.actorsNear(a.pos.x, a.pos.y, a.radius + 96, this.slamScratch);
+    const dir = Math.atan2(p.vy, p.vx);
+    const moverW = a.effectiveWeight();
+    const casterLive = p.caster && !p.caster.dead ? p.caster : undefined;
+    for (const b of near) {
+      if (b === a || b === p.caster || b.dead || b.downed) continue;
+      if (b.untargetable || b.invulnerable) continue;
+      if (isDormant(b)) continue;
+      if (!!a.flying !== !!b.flying) continue;
+      if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
+      if (dist(a.pos, b.pos) > a.radius + b.radius) continue;
+      const arrested = b.effectiveWeight() >= moverW * MASS_CFG.slam.arrestRatio;
+      // The ICD gates the WOUND and the momentum hand-off (a lingering
+      // overlap must not re-shove every frame into a slingshot) — but
+      // NEVER the arrest itself: a wall of meat that was leaned on a
+      // heartbeat ago is still a wall, not a hole.
+      if (this.time >= b.slamIcdUntil) {
+        b.slamIcdUntil = this.time + MASS_CFG.impact.icdSec;
+        // The struck body's share of the mover's momentum — hostile-authored
+        // only, mitigated, credited (a chain kill pays the original shover).
+        const frac = impactFrac(speed, moverW)
+          * (casterLive ? impactScale(casterLive, p.inst) : 1)
+          * MASS_CFG.slam.struckFrac;
+        if (frac > 0 && casterLive && this.hostileTo(casterLive, b)) {
+          const out: { clamped?: boolean } = {};
+          const taken = mitigateTyped(b, { physical: frac * b.maxLife() }, { out });
+          b.life -= taken;
+          b.hitFlash = 0.15;
+          this.text(b.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
+          if (out.clamped) this.text(vec(b.pos.x, b.pos.y - 20), 'capped', '#9ab0c8', 12);
+          if (b.life <= 0 && !b.dead) this.kill(b, false, casterLive);
+        }
+        // The blocker feels a lean, the plowed inherit momentum (authority
+        // already spent either way — never re-folded).
+        if (!b.dead) {
+          this.pushActor(b, dir,
+            speed * (arrested ? MASS_CFG.slam.arrestNudge : MASS_CFG.slam.transfer) / PUSH_DAMPING,
+            p.caster, p.inst, { noAuthority: true });
+        }
+        // Plowing costs the mover speed only when it actually plowed.
+        if (!arrested) {
+          p.vx *= MASS_CFG.slam.plowDamping; p.vy *= MASS_CFG.slam.plowDamping;
+          speed *= MASS_CFG.slam.plowDamping;
+        }
+      }
+      if (arrested) {
+        // ARREST: the blocker is a wall. The mover takes the wall wound
+        // (its OWN icd governs it), the crush procs roll, the flight ends.
+        if (!p.collided && casterLive && p.inst) {
+          p.collided = true;
+          this.rollCollisionProcs(casterLive, p.inst, a);
+        }
+        this.resolveImpactHit(a, speed, p);
+        p.vx = 0; p.vy = 0;
+        return;
+      }
+      if (speed < MASS_CFG.slam.minSpeed) return;
     }
   }
 
@@ -28590,11 +28709,17 @@ export class World {
       if (a.push) {
         const p = a.push;
         const from = a.pos;
+        const speed = Math.hypot(p.vx, p.vy);
         const sc = this.cScratch; sc.hit = 'none';
         a.pos = this.clampPos(vec(
           a.pos.x + p.vx * dt,
           a.pos.y + p.vy * dt), a.radius, from, { out: sc, mover: a });
         const hit = sc.hit as string;
+        // THE BOWLING LANE (engine/mass.ts): a body flying fast enough
+        // slams through — or is arrested by — bodies in its path. Swept
+        // BEFORE the wall verdict so a plow that sheds speed below the
+        // impact gate honestly arrives soft.
+        if (speed >= MASS_CFG.slam.minSpeed) this.sweepBodySlam(a, p, speed);
         // FORCED displacement (the shove in flight): the one lane a hostile
         // can truly be put past a pit's lip — the pitfall fabric's descend
         // routing pays the shover for it (walkers merely arrested at a rim
@@ -28604,6 +28729,10 @@ export class World {
           p.collided = true;
           this.rollCollisionProcs(p.caster, p.inst, a);
         }
+        // IMPACT (the mass fabric): the wall arrest itself wounds — momentum
+        // made damage, hostile-authored only. Void lips stay the pitfall
+        // fabric's own resolution (never double-punished).
+        if (hit === 'wall') this.resolveImpactHit(a, speed, p);
         // Exponential ease-out: the shove bleeds off like momentum, not a timer.
         const decay = Math.exp(-PUSH_DAMPING * dt);
         p.vx *= decay; p.vy *= decay;

@@ -5434,6 +5434,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
       { kind: 'bone_pile', count: [1, 2] },
       { kind: 'watcher_stone', count: [0, 2] },
+      // THE SARSEN BUMPERS (the mass fabric): leaning knobs that answer a
+      // touch with a weight-scaled fling — near the Reach's gulfs, the
+      // bounce is the whole conversation (data/tracks.ts rule).
+      { kind: 'sarsen_bumper', count: [1, 3] },
     ],
     variants: [
       // The side-zone hunter's roll: every pocket seems to hold a mouth.
@@ -5470,6 +5474,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'rockgrub', weight: 2 },
         { id: 'stalagmite_lurker', weight: 1, presence: { from: 5 } },
         { id: 'petrified_warden', weight: 1, presence: { from: 8 } },
+        // The WEIGHT LESSON pair (the mass fabric, engine/mass.ts): the
+        // charging avalanche and the knee-high anchor walk their home turf.
+        { id: 'sarsen_ram', weight: 2, presence: { from: 5 } },
+        { id: 'lode_thrall', weight: 1, presence: { from: 4 } },
         { id: 'shard_spire', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 10 } },
       ],

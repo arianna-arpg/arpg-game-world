@@ -219,6 +219,12 @@ const nodes: PassiveNode[] = [
   { id: "rng_pc2", name: "Volley", description: "25% chance to fire an additional projectile; 15% increased projectile speed", kind: "notable", x: 3960, y: 2574, mods: [mod("projectileCountChance", "flat", 0.25), mod("projectileSpeed", "increased", 0.15)], links: ["rng_s3"] },
   { id: "war_kb1", name: "Repulsion", description: "+50 knockback strength on melee hits", kind: "small", x: 3108, y: 4044, mods: [mod("knockback", "flat", 50, ["melee"])], links: ["war_s1"] },
   { id: "war_kb2", name: "Shockwave", description: "+120 knockback strength on melee hits; 15% increased melee damage", kind: "notable", x: 2538, y: 4548, mods: [mod("knockback", "flat", 120, ["melee"]), mod("damage", "increased", 0.15, ["melee"])], links: ["war_s3"] },
+  // THE MASS CLUSTER (engine/mass.ts) — weight as buildcraft, hung off the
+  // Shockwave knockback lane: Ballast makes you the one who stays put, the
+  // Millstone makes you the one who moves others (authority + impact).
+  { id: "mass_s1", name: "Ballast", description: "20% increased weight; +40 knockback strength on melee hits", kind: "small", x: 2340, y: 4926, mods: [mod("weight", "increased", 0.2), mod("knockback", "flat", 40, ["melee"])], links: ["war_kb2"] },
+  { id: "mass_s2", name: "Follow-Through", description: "+20% impact damage, +10% shove authority", kind: "small", x: 2160, y: 5064, mods: [mod("impactDamage", "flat", 0.2), mod("shoveAuthority", "flat", 0.1)], links: ["mass_s1"] },
+  { id: "mass_n1", name: "The Millstone", description: "+0.4 weight, 25% increased weight, +25% shove authority, +45% impact damage", kind: "notable", x: 2304, y: 5232, mods: [mod("weight", "flat", 0.4), mod("weight", "increased", 0.25), mod("shoveAuthority", "flat", 0.25), mod("impactDamage", "flat", 0.45)], links: ["mass_s2"] },
   { id: "sor_df1", name: "Force Wave", description: "+80 push force on spell hits (enemies driven back)", kind: "small", x: 156, y: 3324, mods: [mod("displaceForce", "flat", 80, ["spell"])], links: ["sor_df2"] },
   { id: "sor_df2", name: "Vortex Master", description: "+180 push force on spell hits; 12% increased spell damage", kind: "notable", x: 132, y: 3618, mods: [mod("displaceForce", "flat", 180, ["spell"]), mod("damage", "increased", 0.12, ["spell"])], links: [] },
   { id: "sor_df3", name: "Gravity Well", description: "-100 pull force on spell hits (enemies drawn toward you)", kind: "notable", x: 108, y: 2964, mods: [mod("displaceForce", "flat", -100, ["spell"])], links: [] },

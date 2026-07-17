@@ -5179,6 +5179,10 @@ registerStamp('petrified_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [30
 registerStamp('petrified_elder', stampSingle('petrified_elder', [44, 62]));
 registerStamp('petrified_trunk', stampSingle('petrified_trunk', [16, 24]));
 registerStamp('watcher_stone', (ctx, spec) => stampSolid(ctx, 'watcher_stone', spec.radius ?? [14, 20]));
+// The mass fabric's standing argument (data/tracks.ts rule + bumperDome
+// painter): walk-through trigger, so a single-place is honest — the rule's
+// contact payload does the arguing, not the footprint.
+registerStamp('sarsen_bumper', stampSingle('sarsen_bumper', [15, 19]));
 registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
 // Flora clarity: fruiting bush clumps + feathery fern understory.
 registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false));

@@ -606,6 +606,31 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.8,
   },
+  /** The quarry's avalanche (the mass fabric's weight lesson, heavy end):
+   *  a block of sarsen behind a horn sweep — the yoke hump and plate spine
+   *  say WEIGHT before the charge does. */
+  sarsen_ram: {
+    parts: [
+      { kind: 'hump', scale: 1.05 },
+      { kind: 'armorPlates', role: 'base', scale: 0.95 },
+      { kind: 'ramHorns', scale: 1.15 },
+      { kind: 'snout', scale: 0.62 },
+      { kind: 'eyes', color: '#d8cc9a', params: { spread: 0.3, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  /** The density exception, read at a glance: a knee-high ingot WEARING AN
+   *  ANCHOR — chains, a squat helm, no neck to speak of. The smallest body
+   *  in the country and the hardest to move (metal × heft; engine/mass.ts). */
+  lode_thrall: {
+    parts: [
+      { kind: 'disc', role: 'metal', scale: 0.95 },
+      { kind: 'chains', scale: 0.85 },
+      { kind: 'anchor', role: 'metal', scale: 0.9 },
+      { kind: 'helm', role: 'metal', scale: 0.7 },
+      { kind: 'eyes', color: '#9ac8e0', params: { spread: 0.26, dist: 0.5, size: 0.09 } },
+    ],
+    shadowScale: 0.9,
+  },
   flame_elemental: {
     parts: [
       { kind: 'disc', scale: 0.8 },

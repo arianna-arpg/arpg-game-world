@@ -81,3 +81,21 @@ registerDoodadRule('rime_bumper', {
     notFactions: ['rimebound'],
   },
 });
+
+// --- THE SARSEN BUMPER — the quarry's standing argument ---------------------
+// The rime bumper's grammar in old stone (the mass fabric's terrain voice):
+// a leaning sarsen knob that answers a touch with a weight-scaled radial
+// fling — no slip, no damage of its own; MASS does the arithmetic (a scree
+// flake flies a screen, the sarsen ram barely notices, and near a gulf lip
+// the bounce is the whole conversation). The stonekin are spared — they
+// know their own furniture.
+registerDoodadRule('sarsen_bumper', {
+  overlap: 'trigger',
+  spacing: 110,
+  forbidOn: ['water', 'lava', 'chasm'],
+  contact: {
+    impulse: 400,
+    icdSec: 0.45,
+    notFactions: ['elemental'],
+  },
+});

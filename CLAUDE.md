@@ -175,9 +175,24 @@ changes.
   `MATERIAL_NATURE` (data/monsters.ts) gives every surface material a
   gameplay ontology (`remains` → the kill-path corpse-mint gate;
   `breathes` → the default kite budget `BEHAVIOR_CFG.defaultKite`, so
-  living kiters always tire), and the `insightSap` stat lets
+  living kiters always tire; `density` → the mass fabric's weight fold),
+  and the `insightSap` stat lets
   chill/freeze/stun bind the duelist's read — docs in
   `docs/engine/defenses.md`, probe `balance/probe_defenses.ts`.
+  THE MASS & AUTHORITY FABRIC (`engine/mass.ts` — who moves whom): the
+  heavy both RESIST shoves and SHOVE HARDER — `pushActor` folds the
+  pusher's `effectiveWeight^pow` (clamped, exactly 1 at weight 1 so every
+  tuned strength and casterless push keeps its reach) over the existing
+  target-weight divide; monster weight defaults from radius × material
+  `density` × `MonsterDef.heft`; arrested momentum WOUNDS (wall impact =
+  mitigated physical from speed × own weight, hostile-authored only,
+  shover keeps kill credit like the pitfall lane) and THE BOWLING LANE
+  slams bodies through bodies (arrest-vs-plow by mass ratio, momentum
+  hand-offs with authority already spent); player levers are ordinary
+  stats (`shoveAuthority`, `impactDamage` + the Battering Ram support +
+  the mass passive cluster); bestiary prints a HEFT tier per def — dials
+  in `MASS_CFG`, docs in `docs/engine/mass.md`, probe
+  `balance/probe_mass.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST

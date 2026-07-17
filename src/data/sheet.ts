@@ -146,7 +146,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'swingArc', 'meleeReach', 'meleeReverb', 'splashRadius',
       'meleeSweep', 'sweepRange', 'sweepSpeed',
       // Impact & control
-      'knockback', 'displaceForce', 'knockBuffet',
+      'knockback', 'displaceForce', 'knockBuffet', 'shoveAuthority', 'impactDamage',
       // Areas & ground
       'aoeShape', 'aoeScatter', 'aoeCascade', 'cascadeStep', 'aoeSpin', 'pulseCount',
       'stormCount', 'stormImmediate', 'fissureCount', 'fissureBranches',
@@ -453,7 +453,7 @@ const STAT_BLURBS: Record<string, string> = {
   staggerWindow: 'How long a staggered wound takes to finish landing.',
   hitImmune: 'Incoming HITS are dodged outright — damage over time still ticks.',
   hitCap: 'A ceiling on the life damage any single hit may land — attrition still does full work.',
-  weight: 'Mass. The heavy resist knockback and poise wear; the light get shoved.',
+  weight: 'Mass. The heavy resist knockback and poise wear, and shove harder in the bargain; the light get shoved.',
   phasing: 'No body collision at all — you walk through others, and they through you. Substance, not stealth.',
   evasionToArmor: 'This fraction of your evasion is read again as armor — the swap\'s gain dial.',
   evasionForgone: 'This fraction of your evasion is renounced outright — the swap\'s forgo dial.',
@@ -551,6 +551,8 @@ const STAT_BLURBS: Record<string, string> = {
   sweepRange: 'How far a sweeping crescent travels.',
   sweepSpeed: 'How fast a sweeping crescent travels.',
   knockback: 'Your melee hits shove the victim away.',
+  shoveAuthority: 'Multiplies your shove authority — how much of your mass every push you author carries. The heavy move the light; this moves the needle.',
+  impactDamage: 'Scales the impact wounds your shoves inflict when the victim is arrested — by a wall, or by a body heavy enough to be one.',
   displaceForce: 'Signed on-hit displacement — positive shoves the victim away, negative drags them in.',
   knockBuffet: 'Your knockbacks batter victims in RANDOM directions instead of shoving them away.',
   aoeShape: 'Overrides the geometry of your areas — circle, square, triangle.',

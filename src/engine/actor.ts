@@ -983,6 +983,11 @@ export class Actor {
     /** The attacker + skill behind this knockback, so a collision can roll the
      *  caster's 'collision' procs (the knockback-collision-damage support). */
     caster?: Actor; inst?: import('./skills').SkillInstance; collided?: boolean } | null = null;
+  /** IMPACT gate (the mass fabric, engine/mass.ts): world time before which
+   *  this body takes no further impact wounds — one launch is one wound,
+   *  even against a corner's double clamp or a lingering body overlap.
+   *  Transient combat state, never snapshotted. */
+  slamIcdUntil = 0;
   /** Set while a cast bar is running / a channel is held. */
   casting: CastingState | null = null;
 
