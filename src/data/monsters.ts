@@ -7854,6 +7854,132 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'commander', perception: { alertShout: 520 } },
   },
 
+  // --- THE GILDED COMPACT (merchant princes — RESERVED: see RESERVED_KIN) ---
+  // The first FRIENDLY faction with teeth: counting-houses on wheels,
+  // charter-sworn escorts, and vault-stock that walks. Authored in full,
+  // fielded by NOTHING: their doors are the wandering vendor camps (the
+  // VendorDef counter fabric, data/vendors.ts — Brandt's precedent, under
+  // canvas), the caravan-escort economy (the Caravanner's bands,
+  // data/caravan.ts, grown teeth), and a reworked Delving Rush economy
+  // event (still being specified) — build any one, strike
+  // RESERVED_KIN['compact']. NEUTRAL DOCTRINE (recorded now, WIRED by the
+  // door, not before): compact bodies are civil until wronged — the
+  // migration-herd posture (ai.ts DORMANT_TAGS + NEUTRAL_RESET; the door
+  // pass registers a 'compact' dormant tag via registerDormantTag with a
+  // forgiving cool-down — trade is the point, not slaughter). ROBBERY IS A
+  // CHOICE: their deaths ride the ordinary nemesis grudge ledger
+  // (data/nemesis.ts GRUDGE_TIERS — known/hated/hunted), and this is the
+  // faction where the player CLIMBS that ladder on purpose — the day the
+  // camps ship, a hunted name pays its tariffs in ambushes instead of
+  // coin. NAMING: the gilded_ id prefix belongs to the hoard-kin
+  // (gilded_scamp / gilded_hoarder / the 'gilded_hoard' tag) — Compact
+  // monster ids deliberately never wear it. DEFENSE TEXTURE
+  // (docs/engine/defenses.md): BOUGHT STEEL — modest life under purchased
+  // plate, drilled guard-craft (the blade's INSIGHT pool — the one duelist
+  // read money can hire; the swordsaint precedent, alive and salaried),
+  // and the vault golem's stone patience; no shell to crack, no bond to
+  // unravel — you are fighting PAYROLL, organized by the paymaster's
+  // shout (door-pass tuning: squad scatter on the master's death — the
+  // pack fabric already speaks it). Unlike the Unrusted beside them, the
+  // Compact's people are ORGANIC: rob them and their corpses feed the
+  // same economies their golem starves — the moral ledger keeps itself.
+
+  /** The charter-sworn escort: a professional. Reads your swing the way a
+   *  clerk reads a ledger line (insight), answers inside the riposte
+   *  window, and wastes nothing on flourish. */
+  hired_blade: {
+    id: 'hired_blade', name: 'Hired Blade',
+    color: '#b8a05a', shape: 'pentagon', radius: 12, look: 'hired_blade',
+    base: { life: 64, moveSpeed: 158, accuracy: 110, evasion: 55, armor: 20, insight: 35, mana: 30, manaRegen: 4 },
+    skills: ['cleave', 'riposte'],
+    xp: 26,
+    faction: 'compact',
+    detection: 1.1,
+    brain: { type: 'skirmish', withdraw: 1.05, behavior: { dodge: { chance: 0.5, reaction: [0.1, 0.3], exit: 'lateral' } } },
+  },
+  /** The road-warden: the flanker who decides where the fight is ALLOWED
+   *  to happen — forged spikes across the lane, then in from the side. */
+  compact_outrider: {
+    id: 'compact_outrider', name: 'Compact Outrider',
+    color: '#c8a86a', shape: 'kite', radius: 11, look: 'compact_outrider',
+    base: { life: 50, moveSpeed: 178, accuracy: 105, evasion: 65, mana: 40, manaRegen: 5 },
+    skills: ['caltrops', 'cleave'],
+    xp: 24,
+    faction: 'compact',
+    detection: 1.25,
+    brain: { type: 'skirmish', withdraw: 1.2, behavior: { encircle: { front: 2 } } },
+  },
+  /** The assayer in the field: everything has a price, and the
+   *  tally-keeper finds YOURS (expose_weakness — the painted window his
+   *  blades collect on). Ruin the appraisal before it ruins you. */
+  compact_tallykeeper: {
+    id: 'compact_tallykeeper', name: 'Compact Tally-Keeper',
+    color: '#d8b878', shape: 'star', radius: 11, look: 'compact_tallykeeper',
+    base: { life: 44, moveSpeed: 128, accuracy: 100, mana: 140, manaRegen: 10 },
+    skills: ['expose_weakness'],
+    xp: 28,
+    faction: 'compact',
+    gemBias: ['spell'], wardPriority: 1,
+    detection: 1.1,
+    presence: { from: 4 },
+    brain: { type: 'strafer' },
+  },
+  /** The paymaster: whip, lantern, and a voice that turns hired steel
+   *  into a COLUMN (war_cry on the escort's tempo). The contract dies
+   *  with him — kill the master and the payroll remembers it is only
+   *  payroll. */
+  caravan_master: {
+    id: 'caravan_master', name: 'Caravan Master',
+    color: '#c89452', shape: 'rhombus', radius: 13, look: 'caravan_master',
+    base: { life: 90, moveSpeed: 150, accuracy: 108, evasion: 40, armor: 25, insight: 25, mana: 60, manaRegen: 6 },
+    skills: ['war_cry', 'cleave'],
+    xp: 34,
+    faction: 'compact',
+    detection: 1.2,
+    presence: { from: 6 },
+    brain: { type: 'commander', perception: { alertShout: 480 } },
+  },
+  /** The walking strongroom: the Compact's OWN construct — stone patience
+   *  with the actual vault strapped to its back. The remains fabric is
+   *  general, not an Unrusted privilege: stone leaves no corpse (pinned
+   *  here too), but CRACKING the vault pays double — the one body in the
+   *  company whose death is worth more than its wage. */
+  vault_golem: {
+    id: 'vault_golem', name: 'Vault Golem',
+    color: '#9a8c6a', shape: 'square', radius: 18, material: 'stone', look: 'vault_golem',
+    base: { life: 200, moveSpeed: 82, accuracy: 96, armor: 55, poise: 95, mana: 16, manaRegen: 2 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical'])], // stone does not bleed
+    skills: ['heavy_strike', 'ground_slam'],
+    xp: 55,
+    faction: 'compact', tags: ['construct'],
+    detection: 0.85,
+    turnSpeed: 2.6,
+    drops: 2, // crack the vault, spill the stock
+    presence: { from: 8 },
+    temper: 'territorial',
+    brain: { type: 'juggernaut' },
+  },
+  // THE FACTOR: the Compact's standing prince — the one who signs. He
+  // reads a duel like a contract (insight, the painted flaw, the riposte
+  // answer) and every blade on the ground is on HIS ledger. Crown recorded
+  // in WARLORD_OF (inert while doorless — a barred faction owns no ground
+  // to rise from).
+  the_factor: {
+    id: 'the_factor', name: 'The Factor',
+    color: '#e0c060', shape: 'hexagon', radius: 14, look: 'the_factor',
+    base: { life: 250, moveSpeed: 150, accuracy: 115, evasion: 60, armor: 35, insight: 50, mana: 120, manaRegen: 9 },
+    skills: ['expose_weakness', 'riposte', 'cleave'],
+    xp: 115,
+    faction: 'compact',
+    detection: 1.3,
+    turnSpeed: 6,
+    drops: 2, // a prince settles accounts — in full
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 12 },
+    brain: { type: 'commander', perception: { alertShout: 520 }, behavior: { dodge: { chance: 0.45, reaction: [0.1, 0.3], exit: 'lateral' } } },
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
 
   // THE DEN MATRON: the she-wolf the whelps answer to. She carries a pocket
@@ -10854,6 +10980,9 @@ const RELATIONS: Record<string, FactionStance> = {
   // corpse economy, and their ground gives the Risen Host nothing to
   // raise — the war is total by construction).
   'unrusted|undead': 'hostile',
+  // The Compact's charters put a PERMANENT price on the road-toll trade:
+  // merchants and bandits want the same wagons, pointed opposite ways.
+  'compact|bandit': 'hostile',
   // The Seethe wants the deep sand to itself: the packs raid its warrens
   // for grubs, and the Court remembers when the erg was ITS floor alone —
   // the desert's turf war grows a third banner.
@@ -10897,6 +11026,7 @@ export const RESERVED_KIN: Record<string, string> = {
   smoulder: 'the burn-ledger mechanic (the Kindling) — un-barred early they would inundate every fire spec',
   magpie: 'the Magpie Court event/biome — loot-eaters loose in ordinary gen would tax every build',
   unrusted: 'the Verdigris Sprawl biome / custodian crusade — a corpse-starving legion loose in ordinary gen would quietly bankrupt every corpse spec',
+  compact: 'the vendor-camp / caravan-escort economy — the friendly faction with teeth needs its trade doors (and its neutral-until-provoked wiring) before its war doors',
 };
 
 /** RUN-SCOPED DIPLOMACY LAYERS — stances that hold for ONE RUN, over the
@@ -11054,6 +11184,21 @@ export const FACTIONS: Record<string, {
       { id: 'coil_warden', weight: 2, presence: { from: 8 } },
       { id: 'scaffold_colossus', weight: 1, presence: { from: 9 } },
       { id: 'the_custodian', weight: 1, presence: { from: 12 } },
+    ],
+  },
+  // The merchant princes — RESERVED (see RESERVED_KIN): complete and
+  // validated, doorless until the trade doors ship. HARD presence floors
+  // again (from with no fadeIn): a charter company arrives staffed or not
+  // at all — nobody sends the Factor to a hamlet.
+  compact: {
+    name: 'the Gilded Compact',
+    table: [
+      { id: 'hired_blade', weight: 4 },
+      { id: 'compact_outrider', weight: 3 },
+      { id: 'compact_tallykeeper', weight: 2, presence: { from: 4 } },
+      { id: 'caravan_master', weight: 2, presence: { from: 6 } },
+      { id: 'vault_golem', weight: 1, presence: { from: 8 } },
+      { id: 'the_factor', weight: 1, presence: { from: 12 } },
     ],
   },
   // What rides the meteors — fielded ONLY under an active starfall front

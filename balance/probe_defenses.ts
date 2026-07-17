@@ -150,6 +150,17 @@ const stepAI = (w: World, dt: number, n = 1): void => {
   const skeleton = spawn(w, 'skeleton_warrior', 4, 900, 300);
   check('killed custodian mints NO corpse at the kill path', mints(custodian) === 0);
   check('the graves still pay beside it (skeleton control mints)', mints(skeleton) === 1);
+
+  // The fabric is GENERAL, not an Unrusted privilege: the Gilded Compact's
+  // own construct starves the corpse economies too — while the company's
+  // LIVING payroll still feeds them (rob merchants, fuel necromancy: the
+  // moral ledger keeps itself through the same one gate).
+  const golem = spawn(w, 'vault_golem', 8, 300, 900);
+  const blade = spawn(w, 'hired_blade', 8, 900, 900);
+  check('killed vault golem mints NO corpse (stone, cross-faction)', mints(golem) === 0);
+  check('killed hired blade mints one (the Compact bleeds — organic)', mints(blade) === 1);
+  check('compact roster is authored in full (6 seats)', FACTIONS.compact.table.length === 6,
+    FACTIONS.compact.table.map(e => e.id).join(','));
 }
 
 // ------------------------------------------------- CC honesty at zero max --

@@ -1051,6 +1051,75 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ======================================================= THE GILDED COMPACT
+  // Payroll in the field: living professionals in cloth-and-plate (cape,
+  // bandolier, working steel) — coin-warm silhouettes against the Unrusted's
+  // cold verdigris, and NO glow-eyes (the wayfarer convention: human faces
+  // stay dark; lit lenses are for constructs and the dead). The one lit body
+  // is the company's own golem, hauling the actual vault on its back.
+  /** The escort: cloak squared, kit strapped, sword honest. A uniform, not
+   *  an outfit — every blade on a contract dresses the same. */
+  hired_blade: {
+    parts: [
+      { kind: 'cape', scale: 0.9, role: 'dark' },
+      { kind: 'torso', scale: 0.9 },
+      { kind: 'bandolier' },
+      { kind: 'sword', y: 0.05, params: { len: 0.9 } },
+    ],
+  },
+  /** The road-warden: light, quick, half the body given to the kit — the
+   *  spike-satchel and knives of someone who chooses the ground first. */
+  compact_outrider: {
+    parts: [
+      { kind: 'torso', scale: 0.85 },
+      { kind: 'bandolier' },
+      { kind: 'pack', x: -0.32, scale: 0.7 },
+      { kind: 'daggers', params: { len: 0.55 } },
+    ],
+  },
+  /** The assayer: robes, the open ledger, the appraisal-stone raised — a
+   *  reader, not a fighter, which is exactly the problem. */
+  compact_tallykeeper: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'book', scale: 0.9 },
+      { kind: 'gem', x: 0.3, scale: 0.7, role: 'glow' },
+    ],
+  },
+  /** The paymaster: whip in one hand, lantern in the other — the column
+   *  moves at HIS pace, and the light says which wagon he is watching. */
+  caravan_master: {
+    parts: [
+      { kind: 'cape', scale: 0.95, role: 'dark' },
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'whip' },
+      { kind: 'lantern', x: -0.2 },
+    ],
+  },
+  /** The walking strongroom: plate over stone over chain, the strongbox
+   *  strapped where a pack would ride — the vault IS the silhouette. */
+  vault_golem: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'armorPlates', scale: 1.0 },
+      { kind: 'chest', x: -0.35, scale: 0.85, params: { straps: 2, glow: 0.6 } },
+      { kind: 'chains', rot: 0.35, params: { n: 2 } },
+      { kind: 'eyes', color: '#f0d080', params: { spread: 0.32, dist: 0.42, size: 0.08 } },
+    ],
+  },
+  /** THE FACTOR: the signature made flesh — princely cape, working sword,
+   *  the signet-stone, and a crown he PAID for. */
+  the_factor: {
+    parts: [
+      { kind: 'cape', scale: 1.0, role: 'dark' },
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'pauldrons', scale: 0.95 },
+      { kind: 'sword', y: 0.05, params: { len: 0.95 } },
+      { kind: 'gem', x: -0.25, scale: 0.6, role: 'glow' },
+      { kind: 'crown', x: 0.26, scale: 0.7, role: 'glow' },
+    ],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [

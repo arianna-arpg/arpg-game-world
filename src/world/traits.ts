@@ -103,6 +103,11 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Unrusted barely march — custodians hold POSTS (the sprawl is the
   // station; the crusade context is the one campaign that would move them).
   unrusted: { roaming: 0.25, aggression: 0.9, warlordHome: 'origin', contexts: ['verdigris'], temper: 'territorial' },
+  // The Compact goes EVERYWHERE and starts nothing — the roads are the
+  // business model and the throne sits wherever the ledgers do. 'wary'
+  // temper on purpose: a company disperses when the trouble ends unless
+  // struck on the way out (the future dormancy wiring shares the posture).
+  compact: { roaming: 1.2, aggression: 0.6, warlordHome: 'capital', contexts: ['compact'], temper: 'wary' },
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },

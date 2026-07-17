@@ -130,6 +130,21 @@ export const NEMESIS_NAMES = {
         'the Load-Bearing', 'Who Kept the Rounds', 'the Uncounted Cog', 'of the Old Tolerances',
       ],
     },
+    // The Gilded Compact names its terrors the way it names its accounts —
+    // counting-house christenings, epithets straight off the ledger's edge.
+    // Recorded with the reserved roster (RESERVED_KIN): the day the player
+    // starts robbing caravans, the grudge climbs in the Compact's own tongue.
+    compact: {
+      first: [
+        'Aurelio', 'Salvestra', 'Brocard', 'Vindemia', 'Ottaline', 'Fiorenz',
+        'Cambial', 'Solidor', 'Argentel', 'Ducatessa', 'Perpetua', 'Florin',
+      ],
+      epithets: [
+        'the Solvent', 'of the Fourth Ledger', 'Debt-Remembered', 'the Underwriter',
+        'Gold-Sworn', 'Who Holds the Note', 'the Compounding', 'of the Long Margin',
+        'Tariff-Tongued', 'the Escrowed', 'Half-Interest', 'the Foreclosed',
+      ],
+    },
   } as Record<string, { first?: string[]; epithets?: string[] }>,
 };
 

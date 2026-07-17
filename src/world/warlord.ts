@@ -67,6 +67,7 @@ export const WARLORD_OF: Record<string, string> = {
   smoulder: 'the_ashmother',
   magpie: 'the_magpie_king',
   unrusted: 'the_custodian',
+  compact: 'the_factor',
 };
 
 const RISE_ZONES = 2;   // owned zones a faction needs to crown a warlord
