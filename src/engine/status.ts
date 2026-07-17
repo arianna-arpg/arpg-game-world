@@ -910,6 +910,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('detectionRange', 'more', -0.45), mod('accuracy', 'increased', -0.15)],
   },
 
+  // THE GLOAMING's veil (packages/defs/gloaming.ts grants row): worn by every
+  // body standing in the gloom OUTSIDE a light's reach. Both edges cut the
+  // same cloth — your sight shrinks AND you are harder to see — so brush
+  // stealth composes multiplicatively toward near-invisibility, and enemy
+  // cones close in exactly as the player's world does. The dark's own kin
+  // never wear it (the grant row's notFactions filter).
+  gloomveiled: {
+    label: 'Gloom-veiled', color: '#a89ad0', duration: 1.2,
+    mods: [mod('detectionRange', 'more', -0.45), mod('detectability', 'more', -0.45)],
+  },
+
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,
     // No DoT — the payload arrives all at once when the timer runs out

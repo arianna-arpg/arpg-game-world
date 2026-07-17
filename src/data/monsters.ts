@@ -355,6 +355,11 @@ export interface MonsterDef {
   /** Multiplier on detection range (1 = baseline). Low shambles past you
    *  (zombie 0.55); high senses you from afar (blood mite 1.6). */
   detection?: number;
+  /** LIGHTWELL hunger (engine/lightwells.ts): power/sec this body drinks from
+   *  any pooled light source whose lit reach it stands inside. The snuffwick's
+   *  whole verb — defend-the-lamp emerges from spawn placement + this number,
+   *  zero bespoke AI. */
+  wellDrain?: number;
   /** AGGRO PERSONALITY (the attention axes, read wherever an event grafts a
    *  targeting tune onto this body — extraction swarms today, any future
    *  beacon-chaser tomorrow). All default 1; each is a pure multiplier:
@@ -6460,6 +6465,81 @@ export const MONSTERS: Record<string, MonsterDef> = {
     grants: [{ atLevel: 20, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
     detection: 0.9,
     brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+
+  // --- THE GLOAMBORN (the dark's own — packages/defs/gloaming.ts) -----------
+  // Context faction 'gloamborn' (contexts:['gloaming']): these bodies exist
+  // ONLY where the front stands, injected by the overlay. No warlord, no
+  // nation, no names (noNemesis) — the dark is not a court, it is a tide.
+  // Four silhouettes, four defense textures, one glance each; and the light
+  // itself is the counterplay: motes and keepers DRINK the wells (wellDrain),
+  // so defending your lamp is the fight the front keeps starting.
+
+  // The SNUFFWICK: a drifting knot of dark motes with a violet fringe — it
+  // gathers on lamplight and DRINKS it (wellDrain: the pool visibly dims
+  // while they crowd it). Swarm fodder with a straw; fire answers it best
+  // (the family's straw pole: burnt dark is just dark gone).
+  snuffwick: {
+    id: 'snuffwick', name: 'Snuffwick',
+    color: '#3a3048', shape: 'circle', radius: 8, material: 'ethereal', look: 'snuffwick',
+    base: { life: 18, moveSpeed: 165, accuracy: 90, evasion: 45, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3), mod('fireRes', 'flat', -0.25)],
+    skills: ['claw'], xp: 5, faction: 'gloamborn',
+    levitates: true, noNemesis: true,
+    wellDrain: 1.4, // its whole verb: park on a light and drink it dim
+    detection: 0.9,
+    brain: {
+      type: 'swarm',
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9 },
+    },
+  },
+  // The MURK PROWLER: the thing that hunts where sight is short — a low,
+  // lean silhouette of ears and claws that stalks SHROUDED (the assassin
+  // brain: the strike reveals, the withdrawal re-cloaks). Gloom-veiled prey
+  // can barely see; the prowler was never impaired (the dark's kin are
+  // exempt from the veil). Evasion pole: accuracy and AoE answer it.
+  murk_prowler: {
+    id: 'murk_prowler', name: 'Murk Prowler',
+    color: '#4a4258', shape: 'pentagon', radius: 12, material: 'fur', look: 'murk_prowler',
+    base: { life: 70, moveSpeed: 180, accuracy: 120, evasion: 95, mana: 20, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.3), mod('fireRes', 'flat', -0.15)],
+    skills: ['claw', 'gore_rend'], xp: 28, faction: 'gloamborn',
+    gemBias: ['attack', 'physical'],
+    noNemesis: true,
+    detection: 1.3,
+    brain: { type: 'assassin' },
+  },
+  // The WICK KEEPER: a robed thief wearing a STOLEN light — the lantern it
+  // carries burns a cold violet that never warms anyone, and sips any well
+  // it lingers near (a lesser straw). ES-glass artillery: it drains and
+  // despairs from the second rank behind a slick of borrowed shine — burst
+  // the shield between sips or it simply keeps drinking.
+  wick_keeper: {
+    id: 'wick_keeper', name: 'Wick Keeper',
+    color: '#5a4a78', shape: 'star', radius: 12, material: 'cloth', look: 'wick_keeper',
+    base: { life: 45, energyShield: 120, moveSpeed: 110, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['essence_drain', 'despair'], xp: 40, faction: 'gloamborn',
+    gemBias: ['chaos', 'duration'], wardPriority: 1,
+    noNemesis: true,
+    wellDrain: 0.8,
+    detection: 1.2,
+    brain: { type: 'artillery' },
+  },
+  // The HOLLOW SHEPHERD: the tide's tall warden — a shrouded pillar under a
+  // crook whose lantern is DEAD (the one dark lamp in a fabric of lit ones:
+  // the silhouette IS the tell). It walks the front's ground slow and
+  // implacable and hits like a closing door. Poise wall: zero evasion, zero
+  // tricks — you go through the break-bar.
+  hollow_shepherd: {
+    id: 'hollow_shepherd', name: 'Hollow Shepherd',
+    color: '#2e2838', shape: 'octagon', radius: 16, material: 'cloth', look: 'hollow_shepherd',
+    base: { life: 260, moveSpeed: 85, accuracy: 110, armor: 40, poise: 75, mana: 30, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', -0.1)],
+    skills: ['heavy_strike'], xp: 60, faction: 'gloamborn',
+    noNemesis: true,
+    detection: 0.85, // slow to notice; does not stop noticing
+    brain: { type: 'juggernaut', enrage: 0.4 },
   },
 
   // --- THE GLOAMWOOD (the haunted wood's own: carrion, crones, lanterns,

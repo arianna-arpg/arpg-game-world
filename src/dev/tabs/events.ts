@@ -72,6 +72,11 @@ export const eventsTab: DevTabDef = {
       // her alongside THIS port so the court walks ashore on the next frame.
       forceEvent('Wraithsail (summon near)', (w, v, z) => w.sim.wraithsailField?.devSummon(v, z) ?? false),
       forceEvent('Wraithsail (dock here)', (w, v, z) => w.sim.wraithsailField?.devDock(v, z) ?? false),
+      // THE GLOAMING: ignition is world-scale (the front rises from the
+      // gloamwood and marches the web — watch the map darken); recede sends
+      // a risen front home rim-first.
+      forceEvent('Gloaming (rise from the wood)', (w) => { w.sim.gloamingField?.devIgnite(); return !!w.sim.gloamingField; }),
+      forceEvent('Gloaming (recede)', (w) => { w.sim.gloamingField?.devRecede(); return !!w.sim.gloamingField; }),
     );
 
     // Incursion + incubation have bespoke signatures (a far landing / a counter).

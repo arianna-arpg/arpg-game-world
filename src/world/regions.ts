@@ -232,6 +232,13 @@ export interface SurvivalResourceDef {
   underflowRampTo?: number;
   /** Seconds of continuous underflow to reach underflowRampTo (omit = no ramp). */
   underflowRampSecs?: number;
+  /** Floating warning shown ~every 0.8s while empty and taking underflow damage.
+   *  Each meter names its own doom ('drowning!', 'the dark gnaws!') — REQUIRED when
+   *  underflowPctLifePerSec > 0 (validated at boot, so a damaging meter can never
+   *  borrow another meter's death cry). */
+  underflowText?: string;
+  /** Warning text colour (defaults to the meter colour). */
+  underflowTextColor?: string;
   /** HUD meter fill colour (the readout loops this table, so a new resource draws
    *  for free — just add a row + a colour). */
   color: string;
@@ -240,13 +247,15 @@ export interface SurvivalResourceDef {
 export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
   // Drowning RAMPS: ~5%/s at first, climbing to ~25%/s after 10s under without air —
   // a tightening panic, not a flat tax. Refilling breath (an air pocket) resets it.
-  breath: { id: 'breath', label: 'Breath', max: 12, regen: 5, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, color: '#6ac0f8' },
-  // LIGHT — the Descent's encroaching-darkness countdown. It only ever DRAINS (no
-  // passive regen); running over a light spot bursts it back up. underflow does NO
-  // life damage — at zero the dark CONSUMES you and the engine resurfaces you
-  // (handled explicitly in updateDescent), a cleaner "the dark takes you" than chip
-  // damage. The HUD survival readout draws this meter for free (it loops this table).
-  light: { id: 'light', label: 'Light', max: 100, regen: 0, underflowPctLifePerSec: 0, color: '#ffe08a' },
+  breath: { id: 'breath', label: 'Breath', max: 12, regen: 5, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, underflowText: 'drowning!', color: '#6ac0f8' },
+  // LIGHT — the darkness-survival meter, worn by TWO fabrics. It only ever DRAINS
+  // (no passive regen); light SOURCES give it back. In the Descent the dark
+  // CONSUMES you at zero (updateDescent resurfaces BEFORE the meter can underflow —
+  // predictive check, so the ramp below never fires down there). Under THE GLOAMING
+  // (the surface dark, packages/defs/gloaming.ts) an empty meter gnaws exactly like
+  // drowning: same ramp shape, the panic of the unlit. The HUD survival readout
+  // draws this meter for free (it loops this table).
+  light: { id: 'light', label: 'Light', max: 100, regen: 0, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, underflowText: 'the dark gnaws!', underflowTextColor: '#a89ad0', color: '#ffe08a' },
 };
 
 export function survivalResource(id: string): SurvivalResourceDef | undefined { return SURVIVAL_RESOURCES[id]; }

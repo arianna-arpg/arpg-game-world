@@ -14,6 +14,7 @@
 import type { World } from '../../engine/world';
 import { dayCycle } from '../../world/daynight';
 import type { Doodad } from '../../engine/levelgen';
+import { lightReach, wellDimScale } from '../../engine/lightwells';
 import { GridWalkField } from '../../world/gridWalk';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { ORB_DEFS } from '../../data/orbs';
@@ -77,6 +78,10 @@ export class LightLayer {
     for (const d of world.doodads) {
       const spec = DOODAD_VISUALS[d.kind]?.light;
       if (!spec) continue;
+      // Pooled LIGHTWELLS dim per frame — this cache (keyed on list identity
+      // + length only) cannot see that, so they bypass clustering entirely
+      // and push as live individually-resolved lights in collect().
+      if (d.well) continue;
       const lr = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
       const key = `${d.kind}|${Math.floor(d.pos.x / bin)},${Math.floor(d.pos.y / bin)}`;
       let acc = bins.get(key);
@@ -175,6 +180,27 @@ export class LightLayer {
       if (!r) continue;
       push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
         0.4 * Math.min(1, o.life / 2));
+    }
+
+    // POOLED LIGHTWELLS (engine/lightwells.ts) — survival infrastructure,
+    // pushed right after the movers so terrain emissives can never starve
+    // them out of the cap. Reach + intensity resolve through lightReach /
+    // wellDimScale — THE resolver the engine's residence test also rides,
+    // so the pool of light the player sees is exactly the ground that
+    // feeds them (drawn == tested). Position is static: the occlusion poly
+    // caches per grid version at the UN-dimmed reach (its widest).
+    for (const d of world.lightwellDoodads()) {
+      if (!d.well) continue; // steady rows stay clustered
+      const spec = DOODAD_VISUALS[d.kind]?.light;
+      if (!spec) continue;
+      const reach = lightReach(d);
+      if (reach === null || reach <= 0) continue;
+      const dim = wellDimScale(d);
+      const flick = spec.flicker
+        ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + d.pos.x * 0.13) : 1;
+      const baseR = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
+      push(d.pos.x, d.pos.y, reach * flick, resolveColor(spec.color, world.zone.theme),
+        spec.intensity * dim * flick, d, baseR);
     }
 
     // Zone exits breathe their accent so the way out reads in the dark.
@@ -288,6 +314,10 @@ export class LightLayer {
       * night * night * (3 - 2 * night);
     const floor = world.zone.theme.ambientDark;
     if (floor !== undefined) dark = Math.max(dark, floor);
+    // THE GLOAMING: the dark that EATS light — deeper than any natural hour,
+    // even at noon. One eased scalar from the engine (gloom × its ceiling).
+    const gloom = world.gloomDarkness();
+    if (gloom > 0) dark = Math.max(dark, gloom);
     if (world.descentView()) dark = Math.min(dark, 0.12);
     return Math.min(0.92, dark);
   }

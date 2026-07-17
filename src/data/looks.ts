@@ -3310,6 +3310,54 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'wisps', scale: 0.6, params: { n: 2 } },
     ],
   },
+
+  // --- THE GLOAMBORN (the dark's own — every part an existing painter) ------
+  /** The snuffwick: a knot of dark motes with a violet fringe and two pale
+   *  points that are watching your lamp. The will-o-wisp INVERTED — where
+   *  that body is a glow with a halo, this is a dark with one. */
+  snuffwick: {
+    parts: [
+      { kind: 'disc', scale: 0.62, role: 'dark' },
+      { kind: 'halo', scale: 1.15, alpha: 0.5, color: '#8a7ab8' },
+      { kind: 'eyes', scale: 0.8, role: 'glow', params: { n: 2 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.8, role: 'dark', params: { n: 3 } }],
+  },
+  /** The murk prowler: low, lean, all ears and claws — a hunting silhouette
+   *  built to read at one glance even with your sight cut short. */
+  murk_prowler: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'tatters', scale: 0.7, alpha: 0.8, role: 'dark' },
+      { kind: 'tuftEars', scale: 1.1 },
+      { kind: 'eyes', scale: 0.9, role: 'glow', params: { n: 2 } },
+      { kind: 'claws', scale: 1.1, params: { len: 0.55, talons: 3 } },
+      { kind: 'tail', params: { len: 0.75 } },
+    ],
+  },
+  /** The wick keeper: a robed thief under a hood, holding a STOLEN light —
+   *  the lantern burns cold violet-white, a shine that never warms. */
+  wick_keeper: {
+    parts: [
+      { kind: 'robe', scale: 1.0, role: 'dark' },
+      { kind: 'hood', x: 0.26, scale: 1.0, role: 'dark', params: { eyes: true } },
+      { kind: 'lantern', x: 0.55, y: 0.4, scale: 0.9, color: '#b8a2e8' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, params: { n: 2 }, color: '#b8a2e8' }],
+  },
+  /** The hollow shepherd: a tall shrouded pillar under a crook — and the
+   *  lantern on the crook is DEAD, the one dark lamp in a world of lit ones.
+   *  The unlit silhouette IS the tell. */
+  hollow_shepherd: {
+    parts: [
+      { kind: 'robe', scale: 1.1, role: 'dark' },
+      { kind: 'shroudWrap', scale: 1.05, alpha: 0.85 },
+      { kind: 'hood', x: 0.3, scale: 1.15, role: 'dark' },
+      { kind: 'staff', x: 0.5, y: 0.5, scale: 1.25 },
+      { kind: 'lantern', x: 0.62, y: 0.52, scale: 0.85, color: '#241e30', alpha: 0.95 },
+    ],
+    shadowScale: 1.15,
+  },
   /** The dusk rider: a headless drape at a gallop — cape streaming, scythe
    *  out. No head. That's the point. */
   dusk_rider: {

@@ -129,6 +129,11 @@ export interface SeatW {
   seq?: number;
   rooted?: boolean;
   slippery?: boolean;
+  /** Environmental-survival meters (breath, light) — only rows BELOW max ride
+   *  (the HUD hides full meters, and most frames most seats carry none). The
+   *  client rebuilds its own hero's Actor.survival map from this so the
+   *  registry-driven survival bars draw exactly as on the host. */
+  survival?: Record<string, number>;
 }
 
 // --- per-seat META wire (Layer 2: the build/progression the client UI reads) ---
@@ -315,7 +320,20 @@ export interface StateSnapshot {
    *  (openHollow is idempotent, applied in bare mode: carve + seam splice;
    *  the contents ride the host's own streams). */
   hollows?: string[];
+  /** LIVE POOLED LIGHTWELLS (engine/lightwells.ts): runtime-spawned light
+   *  sources with per-tick power (dim) state. They never ride the one-shot
+   *  zone doodad list — this 20 Hz reconcile IS their client existence
+   *  (upsert by id, absent = dissipated; the gutter-out flash rides the
+   *  ordinary flash stream). Present only while any pooled well stands. */
+  wells?: WellW[];
+  /** The current zone's eased GLOOM (the Gloaming) — the client's ambient
+   *  darkness, wash, and zone-info read it off the world exactly as the
+   *  host's renderer does. Present only while > 0. */
+  gloom?: number;
 }
+
+/** One live pooled lightwell: id, kind, pos, doodad radius, power fraction. */
+export interface WellW { i: number; k: string; x: number; y: number; r: number; pf: number; }
 
 const v2 = (p: { x: number; y: number }): Vec2W => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100];
 
@@ -440,7 +458,23 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     })),
     doors: doorStatesOf(world),
     hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
+    wells: wellsOf(world),
+    gloom: world.gloom() > 0.005 ? Math.round(world.gloom() * 1000) / 1000 : undefined,
   };
+}
+
+/** Live pooled lightwells (undefined when none stand — the common case). */
+function wellsOf(world: World): WellW[] | undefined {
+  let out: WellW[] | undefined;
+  for (const d of world.lightwellDoodads()) {
+    if (!d.well) continue;
+    (out ??= []).push({
+      i: d.well.id, k: d.kind, x: Math.round(d.pos.x), y: Math.round(d.pos.y),
+      r: Math.round(d.radius * 10) / 10,
+      pf: Math.round((d.well.max > 0 ? d.well.power / d.well.max : 0) * 1000) / 1000,
+    });
+  }
+  return out;
 }
 
 /** Live structure-door states (id → state), or undefined when every door in the
@@ -457,6 +491,7 @@ function doorStatesOf(world: World): Record<string, 'open' | 'broken'> | undefin
 function seatW(s: Seat, world: World): SeatW {
   const a = s.actor;
   const seq = world.lastInputSeq.get(s.id);
+  const surv = survivalOf(a);
   return {
     pos: v2(a.pos),
     life: Math.max(0, Math.round(a.life)), maxLife: Math.round(a.maxLife()),
@@ -466,7 +501,18 @@ function seatW(s: Seat, world: World): SeatW {
     ...(seq !== undefined ? { seq } : {}),
     ...(world.movementLocked(a) ? { rooted: true } : {}),
     ...(a.sheet.get('traction') < 0.999 ? { slippery: true } : {}),
+    ...(surv ? { survival: surv } : {}),
   };
+}
+
+/** Below-max survival rows (undefined when none — full meters ship nothing). */
+function survivalOf(a: Actor): Record<string, number> | undefined {
+  if (!a.survival) return undefined;
+  let out: Record<string, number> | undefined;
+  for (const [res, v] of a.survival) {
+    (out ??= {})[res] = Math.round(v * 10) / 10;
+  }
+  return out;
 }
 
 // ----------------------------------------------------------- apply (client) --
@@ -509,6 +555,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     for (const id of snap.hollows) {
       world.openHollow(id, null, { silent: true, bare: true });
     }
+  }
+  // Live pooled LIGHTWELLS + the zone's gloom (the Gloaming): converge the
+  // local doodad list on the host's wells (upsert by id, absent = gone) and
+  // hand the eased gloom scalar to the render inputs. Same zone guard.
+  if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
+    world.applyNetWells(snap.wells ?? []);
+    world.setNetGloom(snap.gloom ?? 0);
   }
 
   if (!MINION_OWNER) MINION_OWNER = new Actor('owner', 'player', { x: 0, y: 0 });
@@ -671,6 +724,16 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // double-count against recalcSeat's sources).
     p.life = me.life; p.mana = me.mana; p.es = me.es;
     p.dead = me.dead; p.downed = me.downed;
+    // Environmental-survival meters: rebuild the own hero's map from the wire
+    // so the registry-driven HUD bars (breath, light) draw exactly as on the
+    // host. Absent on the wire = every meter full = no map (bars hidden).
+    if (me.survival) {
+      p.survival ??= new Map();
+      for (const k of [...p.survival.keys()]) if (!(k in me.survival)) p.survival.delete(k);
+      for (const [k, v] of Object.entries(me.survival)) p.survival.set(k, v);
+    } else if (p.survival?.size) {
+      p.survival.clear();
+    }
   }
 
   // Rebuild the party strip from seat-tagged actors (events don't fire on a client).
@@ -744,7 +807,10 @@ export function serializeZone(world: World): ZoneMsg {
     dimension: world.zone.dimension,
     arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
     theme: world.zone.theme,
-    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, wild: d.wild, fall: d.fall })),
+    // Pooled LIGHTWELLS are excluded on purpose: they ride the per-tick
+    // wells channel EXCLUSIVELY (a copy here would arrive stateless and
+    // duplicate the reconciled one).
+    doodads: world.doodads.filter(d => !d.well).map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, wild: d.wild, fall: d.fall })),
     exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,

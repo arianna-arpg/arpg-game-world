@@ -3150,6 +3150,18 @@ export interface ConjureEffect {
   look?: string;
 }
 
+/** PLANTS A LIGHTWELL (engine/lightwells.ts) at the resolution point — a
+ *  registered pooled light-source doodad the survival fabric runs: it feeds
+ *  the LIGHT meter of every resident in its glow, drains per resident, dims
+ *  as it spends, and gutters out at zero. The pool scales with the caster's
+ *  effectDuration and the glow's reach with area mods (via the planted
+ *  doodad's radius) — existing duration/area gems work unmodified. */
+export interface KindleEffect {
+  type: 'kindle';
+  /** Lightwell doodad kind (must wear a LIGHTWELLS row + a light spec). */
+  kind: string;
+}
+
 /** Restores a resource immediately (Power Surge, resource orbs). Poise
  *  restores flow through gainPoise — they feed a broken bar's recovery
  *  climb and may crest past max into poiseOvercharge headroom. */
@@ -3388,7 +3400,7 @@ export type SkillEffect =
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
-  | RestoreSkillChargesEffect | ConjureEffect;
+  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect;
 
 // --- The skill definition ---------------------------------------------------
 

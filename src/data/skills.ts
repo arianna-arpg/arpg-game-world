@@ -7211,6 +7211,33 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
   },
 
+  // ==========================================================================
+  // THE GLOAMING's counterplay (docs/engine/gloaming.md): light you can PLANT.
+  // A kindled wick is a real LIGHTWELL — the same fabric as the front's own
+  // gloomwells and the world's campfires: it feeds the LIGHT meter of every
+  // resident in its glow, burns per resident, dims as it spends, gutters out.
+  // Useful anywhere the dark drinks (a gloaming, the Descent's abyss floor is
+  // its own lane) and honest everywhere else. Duration gems deepen the pool,
+  // area gems widen the glow — zero bespoke supports, the fabric folds both.
+  // ==========================================================================
+  kindle_wick: {
+    id: 'kindle_wick', name: 'Kindle',
+    description: 'Set a hand-lit wick where you point: a small standing light that feeds the Light of everyone in its glow. It burns for every body it warms — share it and it spends twice as fast — and gutters out when the pool is drunk. Duration deepens the wick; area widens the glow.',
+    tags: ['spell', 'duration', 'aoe'], color: '#ffd890',
+    manaCost: 16, cooldown: 5, useTime: 0.6,
+    delivery: { type: 'ground', radius: 30, castRange: 380, occlusion: 'free' },
+    effects: [
+      { type: 'kindle', kind: 'kindled_wick' },
+    ],
+    requirements: { willpower: 12 },
+    minDropLevel: 4,
+    ai: { range: 300, weight: 1, keepDistance: 200 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.03)] },
+    thresholds: [
+      { level: 10, label: 'The wick remembers the sun', mods: [mod('effectDuration', 'increased', 0.35)] },
+    ],
+  },
+
   harrowing_wail: {
     id: 'harrowing_wail', name: 'Harrowing Wail',
     description: 'A wail with a winter in it. Builds HARROWING on everything in the cone — trembling hands, backward feet — until the nerve BREAKS and they rout outright.',

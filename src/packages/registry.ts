@@ -22,6 +22,7 @@ import { DEMON_INVASION } from './defs/demonInvasion';
 import { EXTRACTION } from './defs/extraction';
 import { FACTION_POLITICS } from './defs/factionPolitics';
 import { FRACTURES } from './defs/fractures';
+import { GLOAMING } from './defs/gloaming';
 import { HAUNTING } from './defs/haunting';
 import { HOLDFAST } from './defs/holdfast';
 import { HUNT } from './defs/hunt';
@@ -71,6 +72,7 @@ export const PACKAGES: ContentPackage[] = [
   VERMINFALL,
   MIRRORKIN,
   LONGCANDLE,
+  GLOAMING,
   VENDETTA,
   WORLDBOSS,
   PIT,
@@ -113,6 +115,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   mirrorkin: 0x312a,
   longcandle: 0xca4d,
   long_night: 0x10c7,
+  gloaming: 0x910a,
   pit: 0x9147,
   worldboss: 0xb055,
   unsealing: 0x5ea1,

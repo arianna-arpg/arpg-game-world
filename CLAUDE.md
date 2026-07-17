@@ -118,6 +118,20 @@ changes.
   `DimensionDef.sky`) — docs in `docs/engine/spans.md` +
   `docs/engine/dimensions.md`; probes `balance/probe_dimensions.ts` +
   `balance/probe_radiance.ts`),
+  `lightwells.ts` (THE LIGHTWELL + SURVIVAL-METER FABRICS: finite-power
+  residence lights as data — `LightwellDef` rows in `data/lightwells.ts`
+  (pool in resident-seconds, per-resident drain, dim curve), `lightReach()`
+  THE resolver shared by render + residence test so drawn == tested
+  through every stage of dimming, the generic `'kindle'` SkillEffect
+  plants registered wells; survival meters are `SURVIVAL_RESOURCES` rows
+  in `world/regions.ts` with per-row underflow ramps keyed per resource
+  (`Actor.underflowSince`/`lastGaspAt`) — breath, light, a future warmth
+  are rows, never fields; THE GLOAMING
+  (`packages/defs+overlays/gloaming.ts`) rides both: a world-map darkness
+  front seeded by Gloamwood's biome, breathing as one BFS-hop float, met
+  in-zone by the LIGHT meter, spawned wells, `gloomveiled` stealth and
+  the gloamborn — docs in `docs/engine/gloaming.md`; probe
+  `balance/probe_gloaming.ts`),
   `timeflow.ts` (THE TIMEFLOW FABRIC: time itself as data — one TimeHold
   registry behind the pause menu's real pause, Ultimatum-style menu
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and

@@ -818,11 +818,14 @@ export class Actor {
   /** World time of the last boundary recovery (fall/eject) — debounces repeated
    *  fall damage while held against a void edge. */
   lastFall?: number;
-  /** World time of the last drown 'gasping!' text — throttles the warning. */
-  lastGaspAt?: number;
-  /** World time the actor STARTED drowning (breath empty); drives the drown-damage
-   *  RAMP. Cleared the moment breath is regained (air pocket / leaving deep water). */
-  drowningSince?: number;
+  /** World time of the last underflow warning PER RESOURCE ('drowning!', 'the
+   *  dark gnaws!') — throttles each meter's cry on its own clock. */
+  lastGaspAt?: Record<string, number>;
+  /** World time each survival resource STARTED running empty (resource id → time);
+   *  drives THAT meter's underflow-damage ramp. Keyed per resource so a head held
+   *  under water and a light eaten by the gloom each panic on their own schedule.
+   *  A key clears the moment its meter regains any value. */
+  underflowSince?: Record<string, number>;
   /** Environmental-survival meters (breath, …) — generic, data-driven (NOT a
    *  hardcoded breath field). Lazily created; regenerates toward each resource's max. */
   survival?: Map<string, number>;

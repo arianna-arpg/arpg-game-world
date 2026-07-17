@@ -72,10 +72,11 @@ import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
   hitSurfaceOf, normalizeDoodadBound, pitRegionOf,
-  type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
+  type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
 import { anyPitNear, PIT_CFG, pitAt, pitSectorKey, pitSupportedAt, type PitSurface } from './pitfall';
+import { lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import {
@@ -94,6 +95,7 @@ import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import '../data/sympathies'; // side-effect: the sympathy link registry fills
+import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
@@ -9564,9 +9566,12 @@ export class World {
     const cfg = df.surge();
     if (this.player.dead || this.player.downed) return; // death → onPlayerDown → resurface
     const p = this.player.pos;
-    // DARKNESS encroaches.
+    // DARKNESS encroaches. The consume check is PREDICTIVE — resurface the frame
+    // the drain would empty the meter, BEFORE drainSurvival can see zero: in the
+    // abyss the dark takes you whole, it never gnaws (the light row's underflow
+    // ramp belongs to the surface Gloaming, and must not fire down here).
+    if ((this.player.survival?.get('light') ?? cfg.lightMax) - cfg.drainRate * dt <= 0) { this.resurfaceFromDescent('consumed'); return; }
     this.drainSurvival(this.player, 'light', cfg.drainRate, dt);
-    if ((this.player.survival?.get('light') ?? cfg.lightMax) <= 0) { this.resurfaceFromDescent('consumed'); return; }
     // LIGHT spots push it back (run over a glowing crystalline cluster).
     for (let i = this.doodads.length - 1; i >= 0; i--) {
       const d = this.doodads[i];
@@ -9680,6 +9685,305 @@ export class World {
     const max = this.sim.descentField?.surge().lightMax ?? 100;
     const light = this.player.survival?.get('light') ?? max;
     return { depth: run.depth, echoes: this.descentEchoes, lightFrac: clamp(light / max, 0, 1), shaft: run.origin };
+  }
+
+  // --- LIGHTWELLS (engine/lightwells.ts) -------------------------------------
+  //
+  // Light sources as survival infrastructure: a well FEEDS the LIGHT meter of
+  // every resident inside its lit reach; pooled wells DRAIN per resident, DIM
+  // as data (the resolver scales reach + intensity together), and gutter out
+  // at zero. lightReach() is THE shared resolver with the render light layer:
+  // the pool of light the player sees is exactly the ground that feeds them.
+  // Null-cost in zones with no lightwell rows on the ground. Docs:
+  // docs/engine/gloaming.md.
+
+  private wells: Doodad[] = [];
+  private wellArr: Doodad[] | null = null;
+  private wellLen = -1;
+  private wellRev = -1;
+  /** Monotonic well id — the co-op wire's upsert key (runtime wells never
+   *  ride the one-shot zone doodad list). */
+  private wellSeq = 0;
+
+  /** Every doodad wearing a LIGHTWELLS row — the one list the engine sweep and
+   *  the render light layer both walk, rebuilt lazily on the same (identity,
+   *  length, rev) keys as the spatial/veil indexes. */
+  lightwellDoodads(): readonly Doodad[] {
+    if (this.wellArr !== this.doodads || this.wellLen !== this.doodads.length
+      || this.wellRev !== this.doodadsRev) {
+      this.wells = this.doodads.filter(d => !!lightwellOf(d.kind));
+      this.wellArr = this.doodads;
+      this.wellLen = this.doodads.length;
+      this.wellRev = this.doodadsRev;
+    }
+    return this.wells;
+  }
+
+  /** Plant a lightwell at runtime (the Gloaming's kindles, a kindled wick).
+   *  The kind must wear a LIGHTWELLS row (+ a DOODAD_VISUALS light spec —
+   *  validated at boot: a lightwell without a glow is a contradiction).
+   *  poolMul scales a pooled well's endurance (a caster's investment). */
+  spawnLightwell(kind: string, pos: Vec2, opts?: { radius?: number; poolMul?: number }): Doodad | null {
+    const def = lightwellOf(kind);
+    if (!def) return null;
+    const d: Doodad = { pos: vec(pos.x, pos.y), radius: opts?.radius ?? rand(14, 20), kind: kind as DoodadKind };
+    if (def.pool !== undefined) {
+      const max = Math.max(1, def.pool * (opts?.poolMul ?? 1));
+      d.well = { power: max, max, id: ++this.wellSeq };
+    }
+    this.doodads.push(d);
+    this.markDoodadsChanged();
+    return d;
+  }
+
+  /** Plant a caster's lightwell (the 'kindle' skill effect): the pool deepens
+   *  with effectDuration, the glow widens with area mods (folded into the
+   *  doodad's radius — the visual grammar scales reach off it, so drawn and
+   *  tested widen together). */
+  private plantKindle(caster: Actor, kind: string, at: Vec2, aoeScale: number, durScale: number): void {
+    const d = this.spawnLightwell(kind, at, {
+      radius: rand(11, 14) * Math.sqrt(Math.max(0.01, aoeScale)),
+      poolMul: Math.max(0.1, durScale),
+    });
+    if (!d) return;
+    this.flashes.push({ pos: vec(at.x, at.y), radius: 80, color: '#ffd890', life: 0.4, maxLife: 0.4 });
+    this.text(vec(at.x, at.y - 14), 'kindled', '#ffd890', 11);
+  }
+
+  /** The lightwell sweep: residents feed, pools drain PER RESIDENT (two
+   *  heroes empty one well twice as fast — deliberate co-op pressure), and
+   *  monsters with MonsterDef.wellDrain drink the light from the dark's side
+   *  (the snuffwick's whole verb, zero bespoke AI). Host-side only — clients
+   *  receive wells + meters over the wire. */
+  private updateLightwells(dt: number): void {
+    const wells = this.lightwellDoodads();
+    if (!wells.length) return;
+    const lightDef = survivalResource('light');
+    const lightMax = lightDef?.max ?? 100;
+    for (let i = wells.length - 1; i >= 0; i--) {
+      const d = wells[i];
+      const def = lightwellOf(d.kind);
+      if (!def) continue;
+      const reach = lightReach(d);
+      if (reach === null || reach <= 0) continue;
+      // RESIDENTS: live player seats with their feet in the light.
+      let residents = 0;
+      for (const s of this.seats) {
+        const a = s.actor;
+        if (!a || a.dead || a.downed) continue;
+        if (dist(a.pos, d.pos) > reach) continue;
+        residents++;
+        // FEED — only a meter that exists and wants: an absent map is
+        // semantically full (the survival fabric's lazy-create contract).
+        const cur = a.survival?.get('light');
+        if (cur !== undefined && cur < lightMax) {
+          a.survival!.set('light', Math.min(lightMax, cur + def.feed * dt));
+        }
+      }
+      if (!d.well) continue; // steady rows: feed forever, never drain
+      // THE DARK DRINKS TOO: bodies whose def declares wellDrain suck power
+      // while inside the reach — data on the monster row, not a behavior.
+      let hunger = 0;
+      for (const a of this.actors) {
+        if (a.dead || !a.defId) continue;
+        const wd = MONSTERS[a.defId]?.wellDrain;
+        if (!wd) continue;
+        if (dist(a.pos, d.pos) <= reach) hunger += wd;
+      }
+      d.well.power = Math.max(0, d.well.power - ((def.drainPerResident ?? 1) * residents + hunger) * dt);
+      if (d.well.power <= 0) {
+        // GUTTERED OUT: the well dissipates with a small sigh — splice +
+        // rev bump (the popBrittle discipline) so every doodad cache re-syncs.
+        const idx = this.doodads.indexOf(d);
+        if (idx >= 0) this.doodads.splice(idx, 1);
+        this.markDoodadsChanged();
+        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 90, color: def.out?.color ?? '#ffe08a', life: 0.45, maxLife: 0.45 });
+        if (def.out?.text) this.text(vec(d.pos.x, d.pos.y - 14), def.out.text, def.out.color ?? '#ffe08a', 12);
+      }
+    }
+  }
+
+  // --- THE GLOAMING (packages/overlays/gloaming.ts) ---------------------------
+  //
+  // The engine half of the world-map darkness front: ease the in-zone gloom
+  // toward the overlay's target, drain the LIGHT meter of every seat outside
+  // a light's reach, keep the event's lightwells fielded, grant the gloom
+  // statuses (the fog fabric's filter grammar), and stamp the discovery
+  // ledger. Every lever is GLOAMING_SURGE data read through field.surge().
+  // Docs: docs/engine/gloaming.md.
+
+  /** The current zone's EASED gloom (0..1) — the one number the renderer's
+   *  darkness, the wash, and the wire all read. */
+  private gloomCur = 0;
+  private gloomZone = '';
+  private gloamWellTimer = 0;
+  private gloamPrevPhase = 'idle';
+
+  /** The zone's live gloom (0 when the Gloaming isn't here). */
+  gloom(): number { return this.gloomCur; }
+
+  /** The gloom's ambient-darkness contribution (render light layer input):
+   *  eased gloom × the surge's darkness ceiling. */
+  gloomDarkness(): number {
+    if (this.gloomCur <= 0.001) return 0;
+    const gf = this.sim.gloamingField;
+    return gf ? this.gloomCur * gf.surge().gloomDark : 0;
+  }
+
+  /** Is this point inside ANY light's tested reach? (lightReach — the same
+   *  resolver the drawn glow uses: drawn == tested.) */
+  lightCoverAt(p: Vec2): boolean {
+    for (const d of this.lightwellDoodads()) {
+      const r = lightReach(d);
+      if (r !== null && r > 0 && dist(p, d.pos) <= r) return true;
+    }
+    return false;
+  }
+
+  /** CLIENT-SIDE (co-op): converge the local doodad list on the host's live
+   *  pooled wells — upsert by well id, absent = dissipated (the gutter-out
+   *  flash rides the ordinary flash stream). Runtime wells never ride the
+   *  one-shot zone doodad list, so this 20 Hz reconcile IS their whole
+   *  existence here; power arrives as a fraction (max 1), which is all the
+   *  dim resolver reads. */
+  applyNetWells(wells: readonly { i: number; k: string; x: number; y: number; r: number; pf: number }[]): void {
+    let changed = false;
+    const byId = new Map<number, Doodad>();
+    for (const d of this.doodads) if (d.well) byId.set(d.well.id, d);
+    const seen = new Set<number>();
+    for (const w of wells) {
+      seen.add(w.i);
+      const d = byId.get(w.i);
+      if (!d) {
+        this.doodads.push({ pos: vec(w.x, w.y), radius: w.r, kind: w.k as DoodadKind, well: { power: w.pf, max: 1, id: w.i } });
+        changed = true;
+      } else {
+        d.pos.x = w.x; d.pos.y = w.y;
+        if (d.radius !== w.r) { d.radius = w.r; changed = true; }
+        d.well!.power = w.pf;
+        d.well!.max = 1;
+      }
+    }
+    for (let i = this.doodads.length - 1; i >= 0; i--) {
+      const d = this.doodads[i];
+      if (d.well && !seen.has(d.well.id)) { this.doodads.splice(i, 1); changed = true; }
+    }
+    if (changed) this.markDoodadsChanged();
+  }
+
+  /** CLIENT-SIDE (co-op): the host's eased zone gloom — a render input (the
+   *  client never runs updateGloaming, so this write is uncontested). */
+  setNetGloom(g: number): void {
+    this.gloomCur = clamp(g, 0, 1);
+    this.gloomZone = this.zone.id;
+  }
+
+  private updateGloaming(dt: number): void {
+    const gf = this.sim.gloamingField;
+    if (!gf) { this.gloomCur = 0; return; }
+    const cfg = gf.surge();
+    const target = skyOf(this.zone) === 'sheltered' ? 0 : gf.gloomOn(this.zone.id);
+    // Ease toward the front's target — EXCEPT across a zone change: arriving
+    // in a gloomed zone is honest (the dark does not fade in politely).
+    if (this.gloomZone !== this.zone.id) {
+      this.gloomCur = target;
+      this.gloomZone = this.zone.id;
+      this.gloamWellTimer = cfg.wells.firstSec;
+    } else {
+      this.gloomCur += (target - this.gloomCur) * Math.min(1, dt / Math.max(0.1, cfg.easeSec));
+      if (Math.abs(target - this.gloomCur) < 0.004) this.gloomCur = target;
+    }
+
+    // THE FRONT OUTLASTED: a witnessed gloaming that has fully receded banks
+    // the survival ledger once, on the observed transition (resume-safe).
+    const phase = gf.phaseNow();
+    if (this.gloamPrevPhase !== 'idle' && phase === 'idle' && gf.isWitnessed()) {
+      bumpLedger(this.ledger, 'gloaming_survived');
+      this.text(this.player.pos, 'the gloaming is outlasted', '#d8cfa8', 13);
+    }
+    this.gloamPrevPhase = phase;
+
+    // CLEAR GROUND: the meter recovers fast once the dark lifts, and the HUD
+    // bar retires at full (mirrors the Descent's delete-on-resurface).
+    if (target <= 0) {
+      if (this.gloomCur <= 0.01) {
+        this.gloomCur = 0;
+        for (const s of this.seats) {
+          const a = s.actor;
+          const cur = a?.survival?.get('light');
+          if (a && cur !== undefined) {
+            const max = survivalResource('light')?.max ?? 100;
+            const next = Math.min(max, cur + cfg.recoverPerSec * dt);
+            if (next >= max) a.survival!.delete('light');
+            else a.survival!.set('light', next);
+          }
+        }
+      }
+      return;
+    }
+
+    // THE EVENT'S OWN LIGHTS: keep gloomwells fielded through the zone —
+    // intermittent, capped, seeded near the party but never on top of it,
+    // never stacked, never in rock. Placement rolls ride the world rng (the
+    // front's world-map clock stays the overlay's own deterministic stream).
+    if (this.gloomCur > 0.15) {
+      this.gloamWellTimer -= dt;
+      if (this.gloamWellTimer <= 0) {
+        this.gloamWellTimer = rand(cfg.wells.everySec[0], cfg.wells.everySec[1]);
+        const alive = this.lightwellDoodads().filter(d => d.kind === cfg.wells.kind && d.well);
+        if (alive.length < cfg.wells.cap) {
+          const seatArr = this.seats.filter(s => s.actor && !s.actor.dead);
+          const anchor = seatArr.length ? seatArr[randInt(0, seatArr.length - 1)].actor!.pos : this.player.pos;
+          for (let tries = 0; tries < 14; tries++) {
+            const ang = rand(0, Math.PI * 2);
+            const r = rand(cfg.wells.nearR[0], cfg.wells.nearR[1]);
+            const p = vec(anchor.x + Math.cos(ang) * r, anchor.y + Math.sin(ang) * r);
+            if (p.x < 60 || p.y < 60 || p.x > this.arena.w - 60 || p.y > this.arena.h - 60) continue;
+            if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue;
+            if (this.pointInSolid(p.x, p.y, 20)) continue;
+            if (alive.some(d => dist(d.pos, p) < cfg.wells.minSep)) continue;
+            const d = this.spawnLightwell(cfg.wells.kind, p);
+            if (d) {
+              this.flashes.push({ pos: vec(p.x, p.y), radius: 110, color: '#ffe08a', life: 0.6, maxLife: 0.6 });
+              this.text(vec(p.x, p.y - 18), 'a light flares through the murk', '#ffe08a', 12);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    // THE DARK DRINKS YOU: seats outside every light's reach bleed the meter,
+    // scaled by the gloom's depth (the rim is a warning, the deep is a bill).
+    if (this.gloomCur > 0.02) {
+      for (const s of this.seats) {
+        const a = s.actor;
+        if (!a || a.dead || a.downed) continue;
+        if (this.lightCoverAt(a.pos)) continue;
+        this.drainSurvival(a, 'light', cfg.drainPerSec * this.gloomCur, dt);
+      }
+    }
+
+    // GLOOM GRANTS (the fog fabric's filter grammar): bodies in the dark
+    // outside light wear the veil — sight shrinks, presence dims. The dark's
+    // own kin (notFactions) hunt unimpaired: the front is their home.
+    if (this.gloomCur > 0.2 && cfg.grants.length) {
+      for (const a of this.actors) {
+        if (a.dead) continue;
+        if (this.lightCoverAt(a.pos)) continue;
+        for (const row of cfg.grants) {
+          if (row.notFactions && a.faction && row.notFactions.includes(a.faction)) continue;
+          a.applyStatus(row.status, 0, 1, 'The Gloaming');
+        }
+      }
+    }
+
+    // DISCOVERY: standing in the deep dark is how the world learns its name.
+    if (this.gloomCur >= 0.9 && !gf.isWitnessed()) {
+      gf.markWitnessed();
+      bumpLedger(this.ledger, 'gloaming_seen');
+      this.text(this.player.pos, 'THE GLOAMING — the dark itself, risen', '#a89ad0', 15);
+    }
   }
 
   // --- ELDRITCH INCURSION EVENTS (Pass 2c) -----------------------------------
@@ -18610,6 +18914,12 @@ export class World {
         // executor's origin is the caster — Shatterstep departure
         // semantics; a CALLED cloud goes where you point it).
         for (const fx of def.effects) {
+          // A KINDLED LIGHT goes where you point it too (the lightwell
+          // fabric): pool scales with effectDuration, reach with area.
+          if (fx.type === 'kindle') {
+            this.plantKindle(caster, fx.kind, at, aoeScale, caster.sheet.get('effectDuration', tags, extra));
+            continue;
+          }
           if (fx.type === 'conjure') {
             const cr = fx.radius * aoeScale;
             const cd = fx.duration * caster.sheet.get('effectDuration', tags, extra);
@@ -19828,6 +20138,11 @@ export class World {
           ...(fx.look !== undefined ? { look: fx.look } : {}),
           ...(fx.follow ? { follow: true } : {}),
         });
+      }
+      // A KINDLED LIGHT from any non-ground delivery stands where the skill
+      // resolved (ground deliveries plant at the target, in the case block).
+      if (fx.type === 'kindle' && d.type !== 'ground') {
+        this.plantKindle(caster, fx.kind, origin, aoeScale, durScale);
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -26423,6 +26738,10 @@ export class World {
     // The Delver: dwell the shaft to descend; the abyss tick runs the dark + streaming.
     this.updateDelver(dt);
     this.updateDescent(dt);
+    // Lightwells: residents feed on the light, pooled wells drain + dim + gutter.
+    this.updateLightwells(dt);
+    // The Gloaming: ease the zone's gloom, drain the unlit, field the wells.
+    this.updateGloaming(dt);
     // The boat: stream the coast + watch for a landing dwell (the sailing mode).
     this.updateSailing(dt);
     // Dwell beside a prior run's corpse to reclaim its lost gems.
@@ -30150,21 +30469,28 @@ export class World {
     if (!a.survival) a.survival = new Map();
     const v = Math.max(0, (a.survival.get(resource) ?? def.max) - drain * dt);
     a.survival.set(resource, v);
-    if (v > 0) { a.drowningSince = undefined; return; } // air regained → the drowning ramp resets
+    if (v > 0) { if (a.underflowSince) delete a.underflowSince[resource]; return; } // refilled → THAT meter's ramp resets
     if (def.underflowPctLifePerSec > 0 && !a.invulnerable) {
-      // RAMPING drown: from underflowPctLifePerSec up to underflowRampTo over
-      // underflowRampSecs of continuous underflow — the dread of staying under (breath:
-      // 5%→25% / sec over 10s). A flat resource (light, underflow 0) never enters here.
-      if (a.drowningSince === undefined) a.drowningSince = this.time;
+      // RAMPING underflow, clocked PER RESOURCE: from underflowPctLifePerSec up to
+      // underflowRampTo over underflowRampSecs of continuous emptiness — the dread of
+      // staying down (breath: 5%→25% / sec over 10s; light gnaws the same shape under
+      // the Gloaming). A flat row (underflow 0) never enters here, and every knob —
+      // rates, ramp, warning text + colour — lives on the SURVIVAL_RESOURCES row.
+      const since = (a.underflowSince ??= {});
+      if (since[resource] === undefined) since[resource] = this.time;
       let pct = def.underflowPctLifePerSec;
       if (def.underflowRampTo !== undefined && def.underflowRampSecs) {
-        const t = clamp((this.time - a.drowningSince) / def.underflowRampSecs, 0, 1);
+        const t = clamp((this.time - since[resource]) / def.underflowRampSecs, 0, 1);
         pct = def.underflowPctLifePerSec + (def.underflowRampTo - def.underflowPctLifePerSec) * t;
       }
       a.life -= a.maxLife() * pct * dt;
-      // Throttle the warning on a dedicated timer (NOT movement) so it shows once
-      // every ~0.8s whether the drowning actor is still or swimming.
-      if (this.time - (a.lastGaspAt ?? -9) >= 0.8) { a.lastGaspAt = this.time; this.text(a.pos, 'drowning!', '#6ac0f8', 12); }
+      // Throttle the warning on a dedicated per-resource timer (NOT movement) so it
+      // shows once every ~0.8s whether the suffering actor is still or moving.
+      const gasp = (a.lastGaspAt ??= {});
+      if (this.time - (gasp[resource] ?? -9) >= 0.8) {
+        gasp[resource] = this.time;
+        this.text(a.pos, def.underflowText ?? 'failing!', def.underflowTextColor ?? def.color, 12);
+      }
       if (a.life <= 0 && !a.dead) this.kill(a, false);
     }
   }

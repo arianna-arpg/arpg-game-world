@@ -1802,6 +1802,25 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       coreGlow: { color: '#fff2c0' }, motes: { color: '#ffe9a8' } },
     light: { radius: -3.4, color: '#ffe08a', intensity: 0.5, flicker: 1.8 },
   },
+  // THE GLOAMING's spawned lightwell (engine/lightwells.ts): a knot of pale
+  // light flaring up through the murk. Same shard grammar as the Descent's
+  // light_spot, worn moon-gold and WIDE — its drawn glow IS the residence
+  // that feeds the LIGHT meter (drawn == tested), so the flicker stays low
+  // and the reach generous. Dimming is the fabric's own (power scales this
+  // spec through lightReach); at zero it dissipates.
+  gloomwell: {
+    longShadow: 0.5, painter: 'shard', order: 54, shadow: 0.4,
+    params: { points: 7, color: '#d8c890', material: 'crystal',
+      coreGlow: { color: '#fff6d8' }, motes: { color: '#ffeebc' } },
+    light: { radius: -6.5, color: '#ffeebc', intensity: 0.55, flicker: 0.9 },
+  },
+  // The player's own planted light (the Kindle skill): a hand-set votive —
+  // smaller pool, humbler reach, the same lightwell contract.
+  kindled_wick: {
+    painter: 'wayshrine', order: 55, shadow: 0.4, longShadow: 0.7,
+    params: { stone: '#6e6254', roof: '#4a4034', flame: '#ffd890' },
+    light: { radius: -5.5, color: '#ffd890', intensity: 0.5, flicker: 1.2 },
+  },
   descent_platform: {
     painter: 'platformRing', order: 54,
     light: { radius: -2.2, color: '#7fe0d8', intensity: 0.3 },

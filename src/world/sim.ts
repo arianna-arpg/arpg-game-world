@@ -31,6 +31,7 @@ import type { HauntField } from '../packages/overlays/haunting';
 import type { LongNightField } from '../packages/overlays/longNight';
 import type { VerminfallField } from '../packages/overlays/verminfall';
 import type { LongCandleField } from '../packages/overlays/longcandle';
+import type { GloamingField } from '../packages/overlays/gloaming';
 import type { DemonInvasionField } from '../packages/overlays/demonInvasion';
 import type { FractureField } from '../packages/overlays/fractures';
 import type { HuntField } from '../packages/overlays/hunt';
@@ -199,6 +200,11 @@ export class WorldSim {
    *  Umbral Parliament's shadows on a night-claimed ground (both when both
    *  courts claim it — the war). It owns the night claims; dawn clears them. */
   readonly longCandleField: LongCandleField | null;
+  /** The Gloaming overlay if its package is in the manifest, else null — the
+   *  engine reads gloomOn() for a zone's gloom target and surge() for every
+   *  in-zone lever (meter drain, lightwell spawning, gloom grants, darkness);
+   *  the field owns the world-map front's clock + coverage. */
+  readonly gloamingField: GloamingField | null;
   /** The holdfast overlay if its package is in the manifest, else null — the engine
    *  reads infoFor()/isLocked() to raise the locked bonus exit + its guardian and to
    *  resolve the toll. It owns the durable per-zone lock state. */
@@ -398,6 +404,7 @@ export class WorldSim {
     this.deepwinterField = surface<DeepwinterField>('deepwinter') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
+    this.gloamingField = surface<GloamingField>('gloaming') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
     this.unsealingField = surface<UnsealingField>('unsealing') ?? null;
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;

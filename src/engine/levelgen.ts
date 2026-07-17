@@ -507,6 +507,11 @@ export interface Doodad {
    *  the classic disc (radius / bodyRadiusOf per channel). Consumers never
    *  read this directly: hitSurfaceOf() is the one resolver. */
   hitbox?: HitShape;
+  /** LIGHTWELL state (engine/lightwells.ts): a finite power pool drained by
+   *  residents, dimming the glow as it runs down. Present ONLY on pooled
+   *  lightwell kinds (steady ambient rows carry none); `id` is the co-op
+   *  wire key (wells spawn at runtime and ride their own snapshot channel). */
+  well?: { power: number; max: number; id: number };
   /** Broad-phase bound for the spatial index when `hitbox` (or a rule-level
    *  surface) pokes past `radius` — max(radius, shapeBoundR). OWNED by
    *  normalizeDoodadBound (stamped at index-rebuild time); never author it. */

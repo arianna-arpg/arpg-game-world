@@ -276,6 +276,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_harrowing', kind: 'skill', cost: 190, reqLedger: 'manor_entered', label: 'Skill Pool — the Harrowing',
     description: 'Gourd Bomb, Harrowing Wail, Summon Scarecrow may drop. Whatever you met on the stairs taught you this.',
     payload: { skillIds: ['gourd_bomb', 'harrowing_wail', 'summon_scarecrow'] } },
+  // Light-craft is learned in the dark (the gloaming_seen ledger the deep
+  // gloom stamps — stood in, not taught).
+  { id: 'gem_skills_gloaming', kind: 'skill', cost: 170, reqLedger: 'gloaming_seen', label: 'Skill Pool — the Gloaming',
+    description: 'Kindle may drop. You stood in the risen dark and learned what a light is worth.',
+    payload: { skillIds: ['kindle_wick'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',

@@ -315,6 +315,8 @@ function runSim(seed: number, steps: number): { sim: WorldSim; zoneMap: Record<s
       ['unsealingField.devIgnite', typeof s.unsealingField?.devIgnite === 'function'],
       ['wraithsailField.devSummon', typeof s.wraithsailField?.devSummon === 'function'],
       ['wraithsailField.devDock', typeof s.wraithsailField?.devDock === 'function'],
+      ['gloamingField.devIgnite', typeof s.gloamingField?.devIgnite === 'function'],
+      ['gloamingField.devRecede', typeof s.gloamingField?.devRecede === 'function'],
     ];
     for (const [name, present] of devSeams) assert(present, 'lifecycle', `dev seam ${name} present`);
   }

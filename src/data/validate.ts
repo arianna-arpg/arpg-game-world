@@ -24,7 +24,7 @@ import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
 import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES } from '../engine/stats';
 import type { AIAction, BrainDef, BrainTuning, FlockSpec } from '../engine/brain';
-import { regionKind, PATH_CFG } from '../world/regions';
+import { regionKind, PATH_CFG, SURVIVAL_RESOURCES } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
@@ -74,6 +74,8 @@ import {
   SYMPATHY_LINKS, SYMPATHY_LISTENABLE, SYMPATHY_RADIUS_REQUIRED, SYMPATHY_RELATIONS,
 } from '../engine/sympathy';
 import './sympathies'; // side-effect: the sympathy link defs register before validation
+import { LIGHTWELLS } from '../engine/lightwells';
+import './lightwells'; // side-effect: the ambient lightwell rows register before validation
 import { ITEM_AFFIX_LIST } from './itemaffixes';
 import { strataDefs } from '../world/strata';
 import { hollowDef } from './hollows';
@@ -104,6 +106,32 @@ export function validateContent(): void {
       if (f.packDensity !== undefined && !(f.packDensity > 0)) warn(`pocket form '${f.id}': packDensity must be > 0`);
       if (f.bounty !== undefined && !(f.bounty > 0)) warn(`pocket form '${f.id}': bounty must be > 0`);
       if (f.caches && !(f.caches[0] >= 0 && f.caches[1] >= f.caches[0])) warn(`pocket form '${f.id}': caches band malformed`);
+    }
+  }
+
+  // SURVIVAL METERS (world/regions.ts SURVIVAL_RESOURCES): a meter that deals
+  // underflow damage must NAME its own doom — the warning text is per-row data,
+  // so the gloom can never cry 'drowning!' in breath-blue. Ramp knobs coherent.
+  {
+    for (const r of Object.values(SURVIVAL_RESOURCES)) {
+      const damaging = r.underflowPctLifePerSec > 0 || r.underflowRampTo !== undefined;
+      if (damaging && !r.underflowText) warn(`survival '${r.id}': underflow damage with no underflowText — the doom is nameless`);
+      if (r.underflowRampTo !== undefined && !(r.underflowRampSecs && r.underflowRampSecs > 0)) warn(`survival '${r.id}': underflowRampTo without a positive underflowRampSecs`);
+      if (r.underflowRampTo !== undefined && r.underflowRampTo < r.underflowPctLifePerSec) warn(`survival '${r.id}': ramp peak ${r.underflowRampTo} below the starting rate`);
+      if (!(r.max > 0)) warn(`survival '${r.id}': max must be > 0`);
+    }
+  }
+
+  // LIGHTWELLS (engine/lightwells.ts): a lightwell without a glow is a
+  // contradiction — the drawn radius IS the tested residence, so every row's
+  // kind must wear a DOODAD_VISUALS light spec; the numeric levers must be sane.
+  {
+    for (const w of Object.values(LIGHTWELLS)) {
+      if (!DOODAD_VISUALS[w.kind]?.light) warn(`lightwell '${w.kind}': no DOODAD_VISUALS light spec — drawn==tested has nothing to draw`);
+      if (!(w.feed > 0)) warn(`lightwell '${w.kind}': feed must be > 0`);
+      if (w.pool !== undefined && !(w.pool > 0)) warn(`lightwell '${w.kind}': pool must be > 0 when present`);
+      if (w.drainPerResident !== undefined && w.drainPerResident < 0) warn(`lightwell '${w.kind}': drainPerResident must be ≥ 0`);
+      if (w.minReachFrac !== undefined && (w.minReachFrac < 0 || w.minReachFrac > 1)) warn(`lightwell '${w.kind}': minReachFrac outside [0,1]`);
     }
   }
 
