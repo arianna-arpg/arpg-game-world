@@ -12,6 +12,7 @@ import { ESSENCES } from '../data/essences';
 import { STATUS_DEFS } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
+import { throngSightSet } from '../engine/throng';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
 import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
@@ -3051,6 +3052,18 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
+  /** Per-frame memo of the LOCAL viewer's throng sight — which husk kinds
+   *  this seat's bar reveals (engine/throng.ts throngSightSet). */
+  private throngSightAt = -1;
+  private throngSightMemo: Set<string> = new Set();
+  private throngSightOf(world: World): Set<string> {
+    if (world.time !== this.throngSightAt) {
+      this.throngSightAt = world.time;
+      this.throngSightMemo = throngSightSet(world.player.skills);
+    }
+    return this.throngSightMemo;
+  }
+
   private drawActor(a: Actor, world: World): void {
     const { ctx } = this;
     const { x, y } = a.pos;
@@ -3058,6 +3071,12 @@ export class Renderer {
     // A BURROWED body is underground: the dust line and the swelling
     // emergence telegraph (world-pushed flashes) carry the whole visual.
     if (a.burrow) return;
+
+    // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists
+    // only to an attuned eye — the LOCAL bar must anchor its kind or the
+    // body simply isn't drawn (per viewer; co-op peers each gate their
+    // own POV). Claimed bodies and everything else pass untouched.
+    if (a.throngWild !== undefined && !this.throngSightOf(world).has(a.throngWild)) return;
 
     // AT SEA the hero IS the boat: hull + sail + a trailing wake, rotated to
     // the facing. Zone-keyed (world.sailing), so co-op clients skin it too.
@@ -4904,7 +4923,11 @@ export class Renderer {
         // layers), or the stacks of the buff the skill grants (Carve).
         {
           let count = 0;
-          if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
+          if (def.throng) {
+            // THE THRONG: the badge is the roster — the one number the
+            // whole playstyle turns on (engine/throng.ts).
+            count = world.throngBodiesOf(p, def.id).length;
+          } else if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
             count = world.minionsOfSkill(p, def.id).length;
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {
             count = world.zones.filter(z =>

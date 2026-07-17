@@ -18,6 +18,7 @@ import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
+import type { ThrongSpec } from './throng';
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -3389,6 +3390,20 @@ export interface RecallImpalesEffect {
   spearShare?: number;
 }
 
+/** THE THRONG SWEEP (engine/throng.ts): re-aim the caster's whole throng
+ *  roster at the aim point through the command fabric's assault orders —
+ *  fired per channel pulse (trackAim), it IS the Overlord sweep. Scoped to
+ *  the carrying skill's own roster; a foe within the pin radius of the aim
+ *  becomes the focused quarry. Defaults ride THRONG_CFG.direct. */
+export interface ThrongDirectEffect {
+  type: 'throngDirect';
+  /** Foe-snap radius at the aim (default THRONG_CFG.direct.pin). */
+  pin?: number;
+  /** Seconds orders persist after the last pulse (default
+   *  THRONG_CFG.direct.linger). */
+  linger?: number;
+}
+
 export type SkillEffect =
   | DamageEffect | StatusEffect | BuffEffect | KnockbackEffect
   | PullEffect | SpawnZoneEffect | GainChargeEffect | AbsorbEffect
@@ -3400,7 +3415,7 @@ export type SkillEffect =
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
-  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect;
+  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect;
 
 // --- The skill definition ---------------------------------------------------
 
@@ -3727,6 +3742,13 @@ export interface SkillDef {
     perMinion: { size: number; damage: number; life: number };
     duration?: number;
   };
+
+  /** THE THRONG (engine/throng.ts): this skill ANCHORS a gathered swarm —
+   *  slotted, it reveals its kind's unclaimed husks in the world and
+   *  walking through one claims it; cast, it channels the direct sweep.
+   *  Sources, cap, batch-normalization all ride the spec. The collection
+   *  IS the mechanic — see docs/engine/throng.md. */
+  throng?: ThrongSpec;
 
   /** A PREREQUISITE gate this skill demands before it can fire — a charge
    *  floor, a worn buff, a resource threshold, a held guard, a running
@@ -4254,6 +4276,13 @@ export interface SkillInstance {
      *  and the actors the chain has already infected (the shared set rides
      *  the whole lineage — the wave only travels outward). */
     contagion?: { gen: number; seen: Set<number> };
+    /** THE THRONG (transient source clocks, reset on load): the hit-fed
+     *  gauge (0..100), the next mote condensation time, and the onCrit
+     *  icd stamp. Gauge fill survives zone hops (it rides the instance),
+     *  never the session — a fresh boot starts cold, like every ramp. */
+    throngGauge?: number;
+    throngMoteAt?: number;
+    throngCritAt?: number;
   };
 }
 

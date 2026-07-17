@@ -105,7 +105,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'summoner', cost: 260,
     blurb: 'The shepherd of monsters, with the Hive\'s swarm and the voice that commands it.',
     skillIds: ['venom_bolt', 'summon_skeleton', 'summon_skeleton_archer',
-      'summon_swarmlings', 'command_assault'] },
+      'summon_swarmlings', 'command_assault', 'gather_cinderkin'] },
   { classId: 'swashbuckler', cost: 240,
     blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
     skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],

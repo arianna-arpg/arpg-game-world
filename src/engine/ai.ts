@@ -29,12 +29,16 @@ import {
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
+import { isThrongBody, throngHeelOffset } from './throng';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { socketSpec, type SkillInstance } from './skills';
 import type { World } from './world';
 import { PATH_CFG } from '../world/regions';
+
+/** Scratch for the throng heel-ring offset (single-threaded AI loop). */
+const THRONG_HEEL_OFF = { x: 0, y: 0 };
 
 /** Scratch for moveToward's spacing neighbor query (single-threaded AI
  *  loop; never held across calls). */
@@ -581,15 +585,30 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // would drag them off their master's flank. An ORDERED quarry is exempt
   // from both leashes: the commander explicitly sent them.
   if (!target || (actor.isMinion() && !ordered && best > (actor.guardMode ? 260 : 700))) {
-    if (actor.owner && dist(actor.pos, actor.owner.pos) > 90) {
+    // THE THRONG'S LOOSE RING (engine/throng.ts): a gathered body heels to
+    // its own stable seat on a slow orbit around the keeper, with a tight
+    // arrive tolerance — the cloud trails as a CLOUD, never a conga dot.
+    // Classic minions heel dead-on with the classic 90px tolerance.
+    let heelGoal: Vec2 | null = null;
+    if (actor.owner) {
+      if (isThrongBody(actor)) {
+        throngHeelOffset(actor, world.time, THRONG_HEEL_OFF);
+        const gx = actor.owner.pos.x + THRONG_HEEL_OFF.x;
+        const gy = actor.owner.pos.y + THRONG_HEEL_OFF.y;
+        if (dist(actor.pos, vec(gx, gy)) > 24) heelGoal = vec(gx, gy);
+      } else if (dist(actor.pos, actor.owner.pos) > 90) {
+        heelGoal = actor.owner.pos;
+      }
+    }
+    if (heelGoal) {
       // LEASH RECALL: a minion that can't make progress home (snagged on
       // terrain) or fell impossibly far behind TELEPORTS to its owner —
       // a reserved golem must never rot in a wall. Safe by construction:
       // this branch only runs with NO target, and an armed bomber fuse
       // early-returns long before the heel.
       if (actor.isMinion() && updateRecall(actor, world, dt)) return;
-      actor.facing = angleTo(actor.pos, actor.owner.pos);
-      moveToward(actor, world, actor.owner.pos, dt);
+      actor.facing = angleTo(actor.pos, heelGoal);
+      moveToward(actor, world, heelGoal, dt);
     }
     if (!target) {
       // Idle stalkers fade back into their shroud.

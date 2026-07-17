@@ -91,6 +91,14 @@ export interface CharacterSave {
    *  resume, downed state included. Optional → older saves load unchanged;
    *  a removed def simply releases that bond. */
   companions?: { defId: string; level: number; skillId: string; downed?: boolean }[];
+  /** THE THRONG (engine/throng.ts): the gathered rosters, one row per
+   *  anchor skill — re-fielded beside the keeper on resume. Optional →
+   *  older saves load unchanged; an unslotted anchor's row just drops
+   *  (the disband rule would have released it anyway). */
+  throng?: { skillId: string; defId: string; level: number; count: number }[];
+  /** The throng's run-long pocket-claim ledger (World.throngClaimed —
+   *  the completedObjectives idiom): claimed seats stay empty on revisit. */
+  throngClaimed?: string[];
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   level: number;            // Actor level (display + xp continuity)
   // Content-package run state (optional → old saves still load). The expedition
@@ -187,6 +195,22 @@ export function serializeCharacter(world: World): CharacterSave {
     // never wake pre-cleared — the rule the old prefix filter hardcoded,
     // now derived from ownership itself.
     completedObjectives: [...world.completedObjectives].filter(id => keptZones.has(id) || id.startsWith('cave_')),
+    // THE THRONG: rosters aggregate to one row per anchor skill (count +
+    // the highest body level — claims re-level on restore anyway); the
+    // claim ledger rides whole (keys are tiny, stale ones harmless).
+    throng: (() => {
+      const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
+      for (const a of world.actors) {
+        if (a.dead || a.owner !== world.player || !a.defId) continue;
+        if (!a.sourceSkillId?.startsWith('__throng:')) continue;
+        const skillId = a.sourceSkillId.slice('__throng:'.length);
+        const row = rows.get(skillId);
+        if (row) { row.count++; row.level = Math.max(row.level, a.level); }
+        else rows.set(skillId, { skillId, defId: a.defId, level: a.level, count: 1 });
+      }
+      return [...rows.values()];
+    })(),
+    throngClaimed: [...world.throngClaimed],
     modeId: m.modeId,
     modeStage: m.modeStage,
     charId: m.charId,
@@ -289,6 +313,10 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   if (save.mercenary?.snapshot) world.restoreHiredMerc(save.mercenary);
   // Re-field tamed companions beside the keeper (downed state included).
   if (save.companions?.length) world.restoreCompanions(save.companions);
+  // THE THRONG: the claim ledger first (pocket finiteness), then the
+  // gathered rosters beside the keeper (engine/throng.ts).
+  world.throngClaimed = new Set(save.throngClaimed ?? []);
+  if (save.throng?.length) world.restoreThrong(save.throng);
   return true;
 }
 

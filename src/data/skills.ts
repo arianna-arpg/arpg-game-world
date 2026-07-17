@@ -4474,6 +4474,70 @@ export const SKILLS: Record<string, SkillDef> = {
   // never a bar slot of its own). Payloads are ordinary catalog skills —
   // the transformation primitive meta-combos are built from.
 
+  // === THE THRONG (engine/throng.ts) — the swarm you GATHER ================
+  // Collection IS the mechanic: slotted, each anchor REVEALS its kind's
+  // unclaimed husks (only to you) and walking through one claims it; held,
+  // the channel SWEEPS the whole roster at the cursor (assault orders, a
+  // pinned quarry when you point at flesh). Three flavors, three source
+  // grammars — the playstyle axis is pure ThrongSourceRow data.
+
+  gather_cinderkin: {
+    id: 'gather_cinderkin', name: 'Gather the Cinderkin',
+    description: 'ATTUNE to the ember-folk: their pockets smoulder for your eye alone, and walking among them makes them YOURS — a finite treasure the world does not regrow. HOLD to sweep the horde at the cursor; they LATCH to what they reach and bite while it carries them. Release, and they linger on the task, then heel.',
+    tags: ['spell', 'minion', 'summon', 'fire'], color: '#e08848',
+    manaCost: 2, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: { interval: 0.25, move: 'slowed', moveFactor: 0.8 },
+    delivery: { type: 'self' },
+    effects: [{ type: 'throngDirect' }],
+    throng: {
+      monsterId: 'cinderkin', cap: 10,
+      sources: [{ kind: 'pocket', perZone: [1, 2], cluster: [3, 5], chance: 0.85 }],
+    },
+    requirements: { willpower: 12 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.1), mod('minionLife', 'increased', 0.1)] },
+    minDropLevel: 4,
+  },
+
+  beckon_palewisps: {
+    id: 'beckon_palewisps', name: 'Beckon the Palewisps',
+    description: 'The battle itself gives up its dead to you: kills may raise a palewisp husk at the corpse, and BLOWS TRADED — yours and your court\'s — fill a gauge that stirs wisps even from bosses who bring no court of their own. Walk through a risen husk to bind it; its zaps PHASE through stone. HOLD to sweep the host at the cursor.',
+    tags: ['spell', 'minion', 'summon', 'cold'], color: '#b8d8e8',
+    manaCost: 2, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: { interval: 0.25, move: 'slowed', moveFactor: 0.8 },
+    delivery: { type: 'self' },
+    effects: [{ type: 'throngDirect' }],
+    throng: {
+      monsterId: 'palewisp', cap: 8,
+      sources: [
+        { kind: 'onKill', chance: 0.28 },
+        { kind: 'gauge', per: 'both', fill: 4, yield: [2, 3] },
+      ],
+    },
+    requirements: { willpower: 14 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.11), mod('minionLife', 'increased', 0.09)] },
+    minDropLevel: 6,
+  },
+
+  raise_gnatveil: {
+    id: 'raise_gnatveil', name: 'Raise the Gnatveil',
+    description: 'Gnats condense out of the air on their own clock — sometimes at your heels, sometimes a walk away — and evaporate if left unclaimed. Each is nearly nothing; the CLOUD is the weapon: riders stack HARRIED on whatever carries them, spoiling aim and attention. HOLD to sweep the veil at the cursor.',
+    tags: ['spell', 'minion', 'summon', 'physical'], color: '#a8b860',
+    manaCost: 1, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: { interval: 0.25, move: 'slowed', moveFactor: 0.85 },
+    delivery: { type: 'self' },
+    effects: [{ type: 'throngDirect' }],
+    throng: {
+      monsterId: 'gnatling', cap: 24, batch: 8,
+      sources: [{ kind: 'motes', every: [6, 10], at: 'mixed', ttl: 40 }],
+    },
+    requirements: { willpower: 10 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.08), mod('minionLife', 'increased', 0.12)] },
+    minDropLevel: 5,
+  },
+
   summon_swarmlings: {
     id: 'summon_swarmlings', name: 'Hivecall',
     description: 'TOGGLE a hive contract: mana stays reserved while up to five swarmlings scurry for you, reknitting themselves whenever they fall. SHIFT-press the slot to ENRAGE the horde — a pressed wave of speed and spite.',
@@ -11231,6 +11295,40 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'melee', range: 42, arcDeg: 80 },
     effects: [{ type: 'damage' }],
     ai: { range: 48, weight: 2 },
+  },
+
+  // THE THRONG's kit whacks (engine/throng.ts kinds) — ordinary catalog
+  // pieces, so supports, statuses and the whole hit pipeline apply while
+  // a rider swings them from its seat (engine/cling.ts).
+  cinder_bite: {
+    id: 'cinder_bite', name: 'Cinder Bite', noDrop: true,
+    description: 'A hot little mouthful.',
+    tags: ['attack', 'melee', 'fire'], color: '#e08848',
+    manaCost: 0, cooldown: 0, useTime: 0.85,
+    baseDamage: { fire: [4, 7] },
+    delivery: { type: 'melee', range: 40, arcDeg: 70 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 46, weight: 2 },
+  },
+  pale_zap: {
+    id: 'pale_zap', name: 'Pale Zap', noDrop: true,
+    description: 'A cold thread of the other side.',
+    tags: ['spell', 'projectile', 'cold'], color: '#b8d8e8',
+    manaCost: 0, cooldown: 0, useTime: 0.9,
+    baseDamage: { cold: [4, 6] },
+    delivery: { type: 'projectile', speed: 380, radius: 6, range: 300 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 280, weight: 2, keepDistance: 170 },
+  },
+  gnat_nip: {
+    id: 'gnat_nip', name: 'Gnat Nip', noDrop: true,
+    description: 'Barely a bite. Barely.',
+    tags: ['attack', 'melee', 'physical'], color: '#a8b860',
+    manaCost: 0, cooldown: 0, useTime: 0.7,
+    baseDamage: { physical: [1, 2] },
+    delivery: { type: 'melee', range: 34, arcDeg: 60 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 40, weight: 2 },
   },
 
   // The Rimebound's melee verb: every court fang carries the cold — bites

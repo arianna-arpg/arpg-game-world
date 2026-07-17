@@ -928,6 +928,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('detectionRange', 'more', -0.45), mod('detectability', 'more', -0.45)],
   },
 
+  // HARRIED — the gnat-cloud's misdirection seed (THE THRONG's smallest
+  // flavor, and any future biting-cloud kin): each stack is one more
+  // maddening speck in the eyes. Never a blind (that ladder is claimed) —
+  // a shallow, stacking aim-and-attention spoiler whose ceiling is the
+  // crowd itself. Refreshed by the riders' latch clock (ClingSpec.
+  // rideStatus), so shaking the swarm off IS the cleanse.
+  harried: {
+    label: 'Harried', color: '#b8c86a', duration: 1.6,
+    stacking: true, maxStacks: 6, modsPerStack: true,
+    mods: [mod('accuracy', 'increased', -0.04), mod('detectionRange', 'more', -0.03)],
+  },
+
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,
     // No DoT — the payload arrives all at once when the timer runs out

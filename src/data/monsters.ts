@@ -15,6 +15,7 @@ import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
+import type { ClingSpec } from '../engine/cling';
 import type { PortraitTune } from '../render/vis/portrait';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
@@ -364,6 +365,10 @@ export interface MonsterDef {
    *  facing, pose clock, worm-trail length for this kind's composed portrait
    *  in the bestiary and the website. Omitted = the fabric's measured fit. */
   portrait?: PortraitTune;
+  /** THE LATCH (engine/cling.ts): this kind LATCHES onto its quarry on
+   *  contact — riding the silhouette, whacking through its own kit, shaken
+   *  off on the spec's clock. The Pikmin blow; any monster can wear it. */
+  cling?: ClingSpec;
   /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
    *  (world bosses, dragons, leviathans). Each part is a full monster def —
    *  it fights with its own skills and its death fires break effects on the
@@ -1170,6 +1175,55 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'],
     xp: 0,
     brain: { type: 'swarm' },
+  },
+
+  // --- THE THRONG's gatherable kinds (engine/throng.ts) ---------------------
+  // Bodies you FIND, never cast: unclaimed they stand as sight-gated husks
+  // (planted scenery until walked through); claimed they are ordinary
+  // minions in every pipeline. Deliberately brittle — the army is a world
+  // resource spent by attrition, and its scaling wears the owner's minion
+  // investment at 1/batch (the quadratic killer).
+  cinderkin: {
+    id: 'cinderkin', name: 'Cinderkin',
+    color: '#e08848', shape: 'circle', radius: 8, material: 'ember', look: 'imp',
+    base: { life: 16, moveSpeed: 205, accuracy: 80, evasion: 55, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: ['cinder_bite'],
+    xp: 0,
+    // The Pikmin blow: reach the quarry, LATCH, and bite while it carries
+    // you — shaken off on the clock, scraped off by anything that sweeps.
+    cling: { shakeSec: [4, 6.5] },
+    brain: { type: 'swarm' },
+  },
+  palewisp: {
+    id: 'palewisp', name: 'Palewisp',
+    color: '#b8d8e8', shape: 'diamond', radius: 7, material: 'ethereal', look: 'spirit',
+    base: { life: 12, moveSpeed: 190, evasion: 70, mana: 40, manaRegen: 4 },
+    // Ghost-flavor: the zap PHASES (walls mean nothing to the dead's
+    // aim — the los.ts stat lever), and the body floats.
+    mods: [mod('phasing', 'flat', 1)],
+    skills: ['pale_zap'],
+    xp: 0,
+    flier: true, levitates: true,
+    brain: { type: 'caster' },
+  },
+  gnatling: {
+    id: 'gnatling', name: 'Gnatling',
+    color: '#a8b860', shape: 'circle', radius: 4, material: 'chitin', look: 'swarm_bug',
+    base: { life: 5, moveSpeed: 230, accuracy: 70, evasion: 80, mana: 0 },
+    skills: ['gnat_nip'],
+    xp: 0,
+    flier: true, levitates: true,
+    // The misdirection seed: near-worthless bites, but every rider stacks
+    // HARRIED on the carried — a cloud that spoils aim and attention.
+    // victimMinRatio 0: a gnat rides anything with a pulse.
+    cling: { shakeSec: [2.5, 4], rideStatus: 'harried', victimMinRatio: 0 },
+    brain: {
+      type: 'swarm',
+      // The murmuration lever: the veil swirls as one cloud in combat
+      // (idle heeling rides the throng's own loose ring instead).
+      behavior: { flock: { kin: 'def', cohesion: 1.1, separation: 0.9, alignment: 0.8, weave: 1.6, erratic: 1.2 } },
+    },
   },
 
   mender_sprite: {

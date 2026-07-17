@@ -1541,6 +1541,40 @@ export function validateContent(): void {
         && !s.useCharges && !s.noDrop) {
         warn(`skill ${s.id}: host-scoped restoreSkillCharges on a droppable skill with no own bank — mark it noDrop (a convert/meta payload) or scope it 'all'`);
       }
+      // THE THRONG SWEEP without a throng: a throngDirect effect on a
+      // skill with no ThrongSpec has no roster to aim — a dead button.
+      if (fx.type === 'throngDirect' && !s.throng) {
+        warn(`skill ${s.id}: throngDirect effect without SkillDef.throng — no roster to sweep`);
+      }
+    }
+    // THE THRONG spec net (engine/throng.ts): typos here are silent
+    // no-shows in the world — say so at boot.
+    if (s.throng) {
+      const th = s.throng;
+      if (!MONSTERS[th.monsterId]) warn(`skill ${s.id}: throng.monsterId '${th.monsterId}' is not a monster def`);
+      if (th.cap < 1) warn(`skill ${s.id}: throng.cap ${th.cap} < 1`);
+      if (th.batch !== undefined && th.batch < 1) warn(`skill ${s.id}: throng.batch ${th.batch} < 1`);
+      if (!th.sources.length) warn(`skill ${s.id}: throng.sources is empty — the roster can never grow`);
+      if (th.sources.filter(r => r.kind === 'motes').length > 1) {
+        warn(`skill ${s.id}: multiple throng 'motes' rows — one clock per skill, the first wins`);
+      }
+      for (const row of th.sources) {
+        if (row.kind === 'pocket') {
+          if (row.perZone[0] > row.perZone[1]) warn(`skill ${s.id}: throng pocket perZone lo > hi`);
+          if (row.cluster[0] > row.cluster[1]) warn(`skill ${s.id}: throng pocket cluster lo > hi`);
+        } else if (row.kind === 'motes') {
+          if (row.every[0] > row.every[1]) warn(`skill ${s.id}: throng motes every lo > hi`);
+        } else if (row.kind === 'gauge') {
+          if (!(row.fill > 0)) warn(`skill ${s.id}: throng gauge fill must be positive`);
+          if (row.yield[0] > row.yield[1]) warn(`skill ${s.id}: throng gauge yield lo > hi`);
+        } else if ((row.kind === 'onCrit' || row.kind === 'onKill')
+          && !(row.chance > 0 && row.chance <= 1)) {
+          warn(`skill ${s.id}: throng ${row.kind} chance outside (0, 1]`);
+        }
+      }
+      if (!s.effects.some(fx => fx.type === 'throngDirect')) {
+        warn(`skill ${s.id}: SkillDef.throng without a throngDirect effect — the roster can never be swept (add the effect, or this is a deliberate passive-gather skill)`);
+      }
     }
   }
   for (const sup of Object.values(SUPPORTS)) {

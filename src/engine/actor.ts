@@ -22,6 +22,7 @@ import {
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { TuneSpec } from './tuning';
+import type { ClingSpec, ClingRide } from './cling';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
@@ -1203,6 +1204,29 @@ export class Actor {
    *  fulfilled or expired. Set via ai.ts issueCommand — never by hand, so
    *  receipt reliably drops the current agenda and the order OVERRIDES. */
   aiCommand?: CommandState;
+  // --- THE THRONG (engine/throng.ts) + THE LATCH (engine/cling.ts) ---------
+  /** An UNCLAIMED THRONG HUSK: the monster kind it belongs to. Husks are
+   *  passive/untargetable/invulnerable scenery-actors only an attuned bar
+   *  can SEE (throngSightSet) — walking through one claims it into the
+   *  matching skill's roster. Cleared on claim (the husk is re-minted as
+   *  a real minion). */
+  throngWild?: string;
+  /** Pocket husks carry their run-long claim key (World.throngClaimed —
+   *  the finiteness fact: a claimed pocket seat never re-materializes). */
+  throngPocketKey?: string;
+  /** Mote husks evaporate at this world-time if never claimed. */
+  throngExpiresAt?: number;
+  /** THE LATCH: this body's cling temper (stamped from MonsterDef.cling
+   *  at mint — any monster can be a clinger). */
+  cling?: ClingSpec;
+  /** The live ride, when latched (position slaved to the victim's rim;
+   *  movement suppressed at the mover; combat runs the normal pipeline). */
+  clingTo?: ClingRide;
+  /** No re-latch before this world-time (the shake's grace). */
+  clingCooldownUntil = 0;
+  /** Latch decision throttle (positions slave every tick regardless). */
+  clingThinkAt = 0;
+
   /** A TAMED COMPANION (the Hunter's bond — World.tameCompanion): fights at
    *  its keeper's side like a minion, but DOWNS instead of dying — revived
    *  by a lingering ally seat or its keeper's whistle. Sweep-exempt via its

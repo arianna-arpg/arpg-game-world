@@ -22,7 +22,7 @@ import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSk
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
-import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
+import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
@@ -139,6 +139,11 @@ import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, type FrontConsumeRow } f
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
+import {
+  batchScaleOf, isThrongBody, THRONG_CFG, throngMarkerOf, throngPocketKey,
+  throngSkillSalt, throngSpecsOn, type ThrongSourceRow, type ThrongSpec,
+} from './throng';
+import { CLING_CFG, clingEligible, clingSeatPos, clingSeatsOf } from './cling';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneSpans, type SpanField } from './spans';
@@ -2496,6 +2501,18 @@ export class World {
    *  the reward pays ONCE — no farming a single zone's bounty. Per-run: a fresh
    *  character re-earns it. Static-zone keys are persisted; gen_/quest_ are not. */
   completedObjectives = new Set<string>();
+  /** THE THRONG's run-long pocket-claim ledger (the completedObjectives
+   *  idiom — outlives zone memory and the campfire): keys minted by
+   *  throngPocketKey; a claimed pocket seat never re-materializes this
+   *  run. Serialized with the character (engine/throng.ts). */
+  throngClaimed = new Set<string>();
+  /** Last credited kill site per keeper actor-id (the 'lastKill' mote
+   *  anchor) — validated at use; a stale cross-zone stamp falls back to
+   *  a near-stand. */
+  private throngLastKill = new Map<number, Vec2>();
+  /** Throng source-sweep throttle + the live investment-rebake clock. */
+  private throngScan = 0;
+  private throngRebake = 0;
   /** The quest accepted this run (single-slot): its target zone + id, and whether
    *  its field objective is done (awaiting the return-to-giver turn-in). `fieldDone`
    *  lives HERE, not on the per-zone-load objectiveDone latch, so walking home (a
@@ -3922,6 +3939,10 @@ export class World {
     // never a draw off layout/spawn rng.
     this.bootScenery(def, pois);
     this.bootPuzzles(def, pois, memory);
+    // THE THRONG POCKET BOOT (engine/throng.ts): finite gatherable husks
+    // stand up on their own salted stream — same discipline as the two
+    // lines above; claimed seats (throngClaimed, run-long) stay empty.
+    this.bootThrong(pois);
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
@@ -16944,6 +16965,9 @@ export class World {
       for (const link of def.sympathy) innate.push(mod(sympathyStat(link), 'flat', 1));
     }
     if (innate.length) a.sheet.setSource('innate', innate);
+    // THE LATCH (engine/cling.ts): any monster can be a clinger — stamped
+    // at mint so summons, claims and wild spawns all wear it identically.
+    if (def.cling) a.cling = def.cling;
     // Monsters grow with wave level through the same modifier system. The
     // baseline (life/damage/accuracy/evasion) is a global lever; per-stat scaling
     // is opt-in below.
@@ -17468,7 +17492,9 @@ export class World {
    *  its bonded companions — retinue-scoped orders (meta commands,
    *  conducted casts) reach both without knowing the marker scheme. */
   minionServes(m: Actor, skillId: string): boolean {
-    return m.sourceSkillId === skillId || m.sourceSkillId === '__companion:' + skillId;
+    return m.sourceSkillId === skillId
+      || m.sourceSkillId === '__companion:' + skillId
+      || m.sourceSkillId === throngMarkerOf(skillId);
   }
 
   /** The face a bar slot PRESENTS: while a skill's conversion rule holds,
@@ -17689,6 +17715,473 @@ export class World {
     this.releaseContract(a, false);
     this.kill(a, true);
     this.charDirty = true;
+  }
+
+  // ------------------------------------------------------------- the throng --
+  // THE THRONG FABRIC (engine/throng.ts + docs/engine/throng.md): the swarm
+  // you GATHER. Specs/config/pure math live in the module; these executors
+  // are the world-side half — boot, claim, sources, the sweep, the latch.
+  // Husks are passive/untargetable/invulnerable scenery-actors (the
+  // extraction-node armor) only an attuned bar can SEE; claims re-mint them
+  // as real minions at the claimer's level wearing the owner's minion
+  // investment at the batch scale (bakeMinionOwnerStats' one divisor).
+
+  /** Every living body of one throng skill's roster. */
+  throngBodiesOf(keeper: Actor, skillId: string): Actor[] {
+    const marker = throngMarkerOf(skillId);
+    return this.actors.filter(a =>
+      !a.dead && a.owner === keeper && a.sourceSkillId === marker);
+  }
+
+  /** The roster cap: spec.cap folded through the owner's minionMaxCount
+   *  with the skill's own context — +minions investment and Endless Swarm
+   *  grow the throng with NO throng-specific stat. */
+  throngCapOf(keeper: Actor, inst: SkillInstance): number {
+    const spec = inst.def.throng;
+    if (!spec) return 0;
+    return Math.max(1, Math.round(keeper.sheet.get(
+      'minionMaxCount', skillContextTags(inst.def), instanceMods(inst), spec.cap)));
+  }
+
+  /** Mint one unclaimed HUSK: a planted scenery-body of the throng kind,
+   *  untouchable and (to unattuned eyes) unseen. Zone-leveled — claims
+   *  re-mint at the claimer's level. */
+  private mintThrongHusk(
+    monsterId: string, pos: Vec2, opts?: { pocketKey?: string; ttl?: number },
+  ): Actor | null {
+    if (!MONSTERS[monsterId]) return null;
+    const husk = this.createMonster(monsterId, Math.max(1, this.zone.level), 'enemy');
+    husk.throngWild = monsterId;
+    husk.passive = true;
+    husk.untargetable = true;
+    husk.invulnerable = true;
+    husk.noBounty = true;
+    if (opts?.pocketKey) husk.throngPocketKey = opts.pocketKey;
+    if (opts?.ttl !== undefined) husk.throngExpiresAt = this.time + opts.ttl;
+    husk.pos = this.clampPos(vec(pos.x, pos.y), husk.radius);
+    this.actors.push(husk);
+    return husk;
+  }
+
+  /** The one throng-body mint (claims and save-restores share it). */
+  private mintThrongBody(keeper: Actor, inst: SkillInstance, pos: Vec2, level: number): Actor {
+    const spec = inst.def.throng!;
+    const body = this.createMonster(spec.monsterId, Math.max(1, level), keeper.team, keeper);
+    body.noBounty = true;
+    body.sourceSkillId = throngMarkerOf(inst.def.id);
+    body.summonInst = inst;
+    body.lifelineId = this.conjurationLifeline(keeper);
+    // THE BATCH RULE: owner investment folds at 1/batch — five gathered
+    // bodies wear one classic minion's worth of scaling (engine/throng.ts).
+    this.bakeMinionOwnerStats(body, keeper, inst, batchScaleOf(spec));
+    body.fillResources();
+    body.pos = this.clampPos(vec(pos.x, pos.y), body.radius);
+    this.actors.push(body);
+    return body;
+  }
+
+  /** CLAIM a husk (the Pikmin pluck — walking through it): the husk goes
+   *  quietly, a REAL roster body stands in its place, and a pocket seat's
+   *  key is remembered run-long so the world genuinely runs dry. */
+  private claimThrongHusk(keeper: Actor, inst: SkillInstance, husk: Actor): void {
+    if (husk.throngPocketKey) this.throngClaimed.add(husk.throngPocketKey);
+    husk.throngWild = undefined;
+    this.kill(husk, true);
+    const body = this.mintThrongBody(keeper, inst, husk.pos, keeper.level);
+    this.text(vec(body.pos.x, body.pos.y - 14), '+1', THRONG_CFG.joinColor, 11);
+    this.flashes.push({
+      pos: vec(body.pos.x, body.pos.y), radius: body.radius + 8,
+      color: THRONG_CFG.joinColor, life: 0.35, maxLife: 0.35,
+    });
+    this.charDirty = true;
+  }
+
+  /** Re-field a SAVED throng beside the resuming keeper (character.ts).
+   *  A roster whose anchor skill is no longer ON THE BAR was released by
+   *  the disband rule the moment the bar changed — its rows just drop. */
+  restoreThrong(
+    list: { skillId: string; defId: string; level: number; count: number }[],
+    keeper: Actor = this.player,
+  ): void {
+    for (const row of list) {
+      const inst = keeper.skills.find(s => s?.def.id === row.skillId && s.def.throng);
+      if (!inst || !MONSTERS[row.defId]) continue;
+      const n = Math.min(row.count, this.throngCapOf(keeper, inst));
+      for (let i = 0; i < n; i++) {
+        const ang = rand(0, Math.PI * 2);
+        this.mintThrongBody(keeper, inst, vec(
+          keeper.pos.x + Math.cos(ang) * rand(30, 70),
+          keeper.pos.y + Math.sin(ang) * rand(30, 70)), Math.max(1, row.level));
+      }
+    }
+  }
+
+  /** THE POCKET BOOT (loadZone): each anchor skill's finite finds roll on
+   *  their OWN salted stream (zoneSeed ^ THRONG_CFG.salt ^ skill salt) —
+   *  slotting another throng skill can never shift this one's spots, so
+   *  the run-long claim keys stay honest. The stream's SHAPE is fixed
+   *  (every draw happens whether or not a mint is due) for the same
+   *  reason. Placement rides the leftover-POI stream like puzzles and
+   *  scenery — never a generation concern. */
+  private bootThrong(pois: Vec2[]): void {
+    const anchors = new Map<string, ThrongSpec>();
+    for (const seat of this.seats) {
+      for (const { inst, spec } of throngSpecsOn(seat.actor.skills)) {
+        if (spec.sources.some(r => r.kind === 'pocket')) anchors.set(inst.def.id, spec);
+      }
+    }
+    if (!anchors.size) return;
+    for (const skillId of [...anchors.keys()].sort()) {
+      const spec = anchors.get(skillId)!;
+      const rng = new Rng(((this.currentZoneSeed ^ THRONG_CFG.salt) ^ throngSkillSalt(skillId)) >>> 0);
+      let pocket = 0;
+      for (const row of spec.sources) {
+        if (row.kind !== 'pocket') continue;
+        const has = row.chance === undefined || rng.next() < row.chance;
+        const n = rng.int(row.perZone[0], row.perZone[1]);
+        for (let p = 0; p < n; p++, pocket++) {
+          const heart = this.interactSpot(pois, rng, THRONG_CFG.pocket.reach, THRONG_CFG.pocket.portalClear);
+          const cluster = rng.int(row.cluster[0], row.cluster[1]);
+          for (let s = 0; s < cluster; s++) {
+            const ang = rng.range(0, Math.PI * 2);
+            const d = rng.range(6, THRONG_CFG.pocket.scatter);
+            const key = throngPocketKey(this.zone.id, skillId, pocket, s);
+            if (!has || this.throngClaimed.has(key)) continue;
+            this.mintThrongHusk(spec.monsterId, vec(
+              heart.x + Math.cos(ang) * d, heart.y + Math.sin(ang) * d), { pocketKey: key });
+          }
+        }
+      }
+    }
+  }
+
+  /** A validated husk stand near `at` (walkable, out of solids). */
+  private throngStandNear(at: Vec2): Vec2 {
+    for (let i = 0; i < 10; i++) {
+      const ang = rand(0, Math.PI * 2);
+      const d = rand(10, 42);
+      const x = at.x + Math.cos(ang) * d, y = at.y + Math.sin(ang) * d;
+      if (this.walk && !this.walk.isWalkable(x, y)) continue;
+      if (this.pointInSolid(x, y, 8)) continue;
+      return vec(x, y);
+    }
+    return this.clampPos(vec(at.x, at.y), 8);
+  }
+
+  /** Where a mote condenses (ThrongMoteRow.at). 'far' is an expedition:
+   *  a walkable stand at least farMin out, degrading to the farthest
+   *  stand the ground allows; 'mixed' coin-flips near/far per mote. */
+  private throngMoteSpot(keeper: Actor, at: 'near' | 'far' | 'lastKill' | 'mixed'): Vec2 | null {
+    if (at === 'mixed') at = chance(0.5) ? 'near' : 'far';
+    if (at === 'lastKill') {
+      const p = this.throngLastKill.get(keeper.id);
+      if (p && this.walk?.isWalkable(p.x, p.y)) return this.throngStandNear(p);
+    }
+    if (at === 'far') {
+      for (let i = 0; i < 14; i++) {
+        const x = rand(80, this.arena.w - 80), y = rand(80, this.arena.h - 80);
+        if (dist(vec(x, y), keeper.pos) < THRONG_CFG.motes.farMin) continue;
+        if (this.walk && !this.walk.isWalkable(x, y)) continue;
+        if (this.pointInSolid(x, y, 10)) continue;
+        return vec(x, y);
+      }
+      const stand = this.farthestStand(10, false);
+      if (stand) return stand;
+    }
+    const band = THRONG_CFG.motes.near;
+    for (let i = 0; i < 10; i++) {
+      const ang = rand(0, Math.PI * 2);
+      const d = rand(band[0], band[1]);
+      const x = keeper.pos.x + Math.cos(ang) * d, y = keeper.pos.y + Math.sin(ang) * d;
+      if (this.walk && !this.walk.isWalkable(x, y)) continue;
+      if (this.pointInSolid(x, y, 10)) continue;
+      return vec(x, y);
+    }
+    return null;
+  }
+
+  /** THE THRONG SWEEP (0.2s): mote evaporation, the disband rule, walk-
+   *  through collection, and mote scheduling. Collection is deliberately
+   *  a MOVEMENT act — no button, no dwell ring: pass among them and they
+   *  are yours. */
+  private updateThrong(dt: number): void {
+    this.throngScan -= dt;
+    if (this.throngScan > 0) return;
+    this.throngScan = 0.2;
+    const t = this.time;
+    // Mote evaporation + THE DISBAND RULE: a roster whose anchor left the
+    // bar RELEASES where it stands — re-wilded as claimable husks that
+    // linger a while, never a silent delete. Losses you can regather.
+    for (const m of [...this.actors]) {
+      if (m.dead) continue;
+      if (m.throngWild && m.throngExpiresAt !== undefined && t >= m.throngExpiresAt) {
+        this.kill(m, true);
+        continue;
+      }
+      if (!m.owner || !isThrongBody(m)) continue;
+      const anchored = m.owner.skills.some(s =>
+        s?.def.throng && throngMarkerOf(s.def.id) === m.sourceSkillId);
+      if (!anchored) {
+        const defId = m.defId;
+        this.kill(m, true);
+        if (defId) this.mintThrongHusk(defId, m.pos, { ttl: THRONG_CFG.motes.ttl * 2 });
+      }
+    }
+    // THE LIVE REBAKE (1s cadence): standing bodies re-fold the owner's
+    // CURRENT minion investment at the batch scale — socketing a gem or
+    // taking a passive reaches the gathered army without re-gathering it.
+    this.throngRebake -= 0.2;
+    const rebake = this.throngRebake <= 0;
+    if (rebake) this.throngRebake = 1;
+    for (const seat of this.seats) {
+      const keeper = seat.actor;
+      if (keeper.dead || keeper.downed) continue;
+      for (const { inst, spec } of throngSpecsOn(keeper.skills)) {
+        if (rebake) {
+          for (const b of this.throngBodiesOf(keeper, inst.def.id)) {
+            this.bakeMinionOwnerStats(b, keeper, inst, batchScaleOf(spec));
+          }
+        }
+        // COLLECTION: sighted husks in reach join while cap room remains.
+        let roster = this.throngBodiesOf(keeper, inst.def.id).length;
+        const cap = this.throngCapOf(keeper, inst);
+        if (roster < cap) {
+          for (const a of [...this.actors]) {
+            if (a.dead || a.throngWild !== spec.monsterId) continue;
+            const reach = THRONG_CFG.collect.reach + keeper.radius + a.radius;
+            if (dist(keeper.pos, a.pos) > reach) continue;
+            this.claimThrongHusk(keeper, inst, a);
+            if (++roster >= cap) break;
+          }
+        }
+        // MOTE SCHEDULING (one motes row per skill — the first wins; a
+        // second row is a validator warning, never a silent double-clock).
+        const moteRow = spec.sources.find((r): r is Extract<ThrongSourceRow, { kind: 'motes' }> => r.kind === 'motes');
+        if (moteRow) {
+          const st = inst.state ??= {};
+          if (st.throngMoteAt === undefined) {
+            st.throngMoteAt = t + rand(moteRow.every[0], moteRow.every[1]);
+          } else if (t >= st.throngMoteAt) {
+            st.throngMoteAt = t + rand(moteRow.every[0], moteRow.every[1]);
+            const pos = this.throngMoteSpot(keeper, moteRow.at);
+            if (pos) {
+              this.mintThrongHusk(spec.monsterId, pos,
+                { ttl: moteRow.ttl ?? THRONG_CFG.motes.ttl });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /** THE COMBAT SOURCES' hit half — called from resolveHit (post-land,
+   *  depth 0, dealt > 0): onCrit rolls and the hit-fed gauge (the add-less
+   *  boss fallback). Bails in two comparisons for non-throng builds. */
+  private throngOnHit(caster: Actor, target: Actor, wasCrit: boolean, lethal: boolean): void {
+    let lord = caster;
+    while (lord.owner) lord = lord.owner;
+    if (lord.kind !== 'player') return;
+    if (target.team === lord.team || target.passive || target.untargetable) return;
+    if (lethal) this.throngLastKill.set(lord.id, vec(target.pos.x, target.pos.y));
+    for (const { inst, spec } of throngSpecsOn(lord.skills)) {
+      const st = inst.state ??= {};
+      for (const row of spec.sources) {
+        if (row.kind === 'onCrit') {
+          if (!wasCrit || caster !== lord) continue;
+          if (this.time < (st.throngCritAt ?? 0) || !chance(row.chance)) continue;
+          st.throngCritAt = this.time + (row.icd ?? THRONG_CFG.critIcd);
+          this.mintThrongHusk(spec.monsterId, this.throngStandNear(target.pos),
+            { ttl: THRONG_CFG.motes.ttl });
+        } else if (row.kind === 'gauge') {
+          const fromMinion = caster !== lord;
+          const counts = row.per === 'both' || (row.per === 'minionHit' ? fromMinion : !fromMinion);
+          if (!counts) continue;
+          st.throngGauge = (st.throngGauge ?? 0) + row.fill;
+          if (st.throngGauge >= 100) {
+            st.throngGauge = 0;
+            const n = Math.round(rand(row.yield[0], row.yield[1]));
+            for (let i = 0; i < n; i++) {
+              this.mintThrongHusk(spec.monsterId, this.throngStandNear(lord.pos),
+                { ttl: THRONG_CFG.motes.ttl });
+            }
+            this.text(vec(lord.pos.x, lord.pos.y - 18), 'the throng stirs',
+              THRONG_CFG.joinColor, 12);
+          }
+        }
+      }
+    }
+  }
+
+  /** The kill half — called from kill() under player-side credit: onKill
+   *  rows raise a husk at the corpse. Conjured victims (noBounty) never
+   *  feed it — summoner spawn streams stay a closed door here too. */
+  private throngOnKill(victim: Actor, killer: Actor | undefined): void {
+    if (!killer || victim.noBounty || victim.throngWild) return;
+    let lord = killer;
+    while (lord.owner) lord = lord.owner;
+    if (lord.kind !== 'player') return;
+    for (const { spec } of throngSpecsOn(lord.skills)) {
+      for (const row of spec.sources) {
+        if (row.kind !== 'onKill' || !chance(row.chance)) continue;
+        this.mintThrongHusk(spec.monsterId, this.throngStandNear(victim.pos),
+          { ttl: THRONG_CFG.motes.ttl });
+      }
+    }
+  }
+
+  /** THE THRONG SWEEP VERB (throngDirect — fired per channel pulse): the
+   *  whole roster is re-aimed at the cursor through the command fabric's
+   *  assault orders; a foe near the aim becomes the pinned quarry. The
+   *  Overlord verb, riding issueCommand end to end — obedience, the
+   *  ordered-quarry override and the heel exemption all come free. */
+  private throngDirect(
+    caster: Actor, inst: SkillInstance, aim: Vec2, fx: { pin?: number; linger?: number },
+  ): void {
+    const spec = inst.def.throng;
+    if (!spec) return;
+    const bodies = this.throngBodiesOf(caster, inst.def.id);
+    if (!bodies.length) {
+      this.failNote(caster, inst.def.id + ':nothrong', 'no throng gathered');
+      return;
+    }
+    const mark = vec(aim.x, aim.y);
+    const until = this.time + (fx.linger ?? spec.direct?.linger ?? THRONG_CFG.direct.linger);
+    const radius = spec.direct?.radius ?? THRONG_CFG.direct.radius;
+    let quarry: Actor | undefined;
+    let qd = fx.pin ?? THRONG_CFG.direct.pin;
+    for (const e of this.enemiesOf(caster)) {
+      if (e.passive || e.untargetable || e.sheet.get('invisible') > 0) continue;
+      const dq = dist(e.pos, mark);
+      if (dq < qd) { qd = dq; quarry = e; }
+    }
+    for (const m of bodies) {
+      const cmd: CommandState = {
+        kind: 'assault', pos: vec(mark.x, mark.y), until, radius, issuerId: caster.id,
+      };
+      if (quarry) cmd.targetId = quarry.id;
+      issueCommand(m, cmd);
+    }
+  }
+
+  // Dev-tab levers (dev/tabs/throng.ts) — QA without five hundred walks.
+  /** Grant a throng anchor skill straight onto the local bar (dev). */
+  devThrongGrant(skillId: string): boolean {
+    const def = SKILLS[skillId];
+    if (!def?.throng) return false;
+    const p = this.player;
+    if (p.skills.some(s => s?.def.id === skillId)) return true;
+    const slot = p.skills.findIndex(s => !s);
+    if (slot < 0) return false;
+    const inst = makeSkillInstance(def, 1);
+    this.localSeat.meta.knownSkills.set(skillId, inst);
+    p.skills[slot] = inst;
+    this.charDirty = true;
+    return true;
+  }
+
+  /** Plant a husk pocket beside the player (dev — no claim keys: a test
+   *  pocket is never remembered against the world's real ones). */
+  devThrongPocketHere(skillId: string, n = 4): boolean {
+    const spec = SKILLS[skillId]?.throng;
+    if (!spec) return false;
+    for (let i = 0; i < n; i++) {
+      const ang = rand(0, Math.PI * 2);
+      this.mintThrongHusk(spec.monsterId, vec(
+        this.player.pos.x + Math.cos(ang) * rand(50, 90),
+        this.player.pos.y + Math.sin(ang) * rand(50, 90)));
+    }
+    return true;
+  }
+
+  /** Fill a slotted anchor's gauge to the brink (dev). */
+  devThrongFillGauge(skillId: string): boolean {
+    const inst = this.player.skills.find(s => s?.def.id === skillId && s.def.throng);
+    if (!inst) return false;
+    (inst.state ??= {}).throngGauge = 96;
+    return true;
+  }
+
+  /** Mint claimed roster bodies outright (dev). */
+  devThrongMint(skillId: string, n: number): boolean {
+    const inst = this.player.skills.find(s => s?.def.id === skillId && s.def.throng);
+    if (!inst) return false;
+    for (let i = 0; i < n; i++) {
+      const ang = rand(0, Math.PI * 2);
+      this.mintThrongBody(this.player, inst, vec(
+        this.player.pos.x + Math.cos(ang) * rand(30, 70),
+        this.player.pos.y + Math.sin(ang) * rand(30, 70)), this.player.level);
+    }
+    return true;
+  }
+
+  // -------------------------------------------------------------- the latch --
+  /** THE LATCH SWEEP (engine/cling.ts): slave every rider to its seat each
+   *  tick (drawn == held — runs AFTER movement/wind/separation so the seat
+   *  wins the frame); attach/detach decisions on each rider's own think
+   *  clock. Combat stays 100% pipeline: a rider keeps casting its own kit
+   *  from the seat. */
+  private updateClings(): void {
+    let seats: Map<number, number> | null = null;
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      const ride = a.clingTo;
+      if (ride) {
+        const v = this.actorById(ride.id);
+        const cmd = a.aiCommand;
+        // A fresh order pointing AWAY from the ridden victim peels the
+        // rider off (the direct channel re-throws your own riders).
+        const redirected = cmd !== undefined && cmd.targetId !== ride.id
+          && dist(cmd.pos, v?.pos ?? cmd.pos) > (cmd.radius ?? COMMAND_CFG.markRadius);
+        if (!v || v.dead || this.time >= ride.until || redirected) {
+          this.clingRelease(a);
+          continue;
+        }
+        clingSeatPos(v, a, ride.ang, a.pos);
+        a.facing = ride.ang + Math.PI;
+        a.aiTargetId = ride.id; // the ride IS the fight — acquire churn never wanders
+        const spec = a.cling;
+        if (spec?.rideStatus && this.time >= ride.statusAt) {
+          ride.statusAt = this.time + CLING_CFG.rideStatusEvery;
+          v.applyStatus(spec.rideStatus, 0, 1, 'cling');
+        }
+        continue;
+      }
+      if (!a.cling || a.passive || this.time < a.clingThinkAt) continue;
+      a.clingThinkAt = this.time + CLING_CFG.thinkEvery;
+      if (this.time < a.clingCooldownUntil || isDormant(a)) continue;
+      const v = a.aiTargetId !== undefined ? this.actorById(a.aiTargetId) : undefined;
+      if (!v || !clingEligible(a, v)) continue;
+      const pad = a.cling.pad ?? CLING_CFG.attachPad;
+      if (dist(a.pos, v.pos) > a.radius + v.radius + pad) continue;
+      if (!seats) {
+        seats = new Map();
+        for (const r of this.actors) {
+          if (!r.dead && r.clingTo) seats.set(r.clingTo.id, (seats.get(r.clingTo.id) ?? 0) + 1);
+        }
+      }
+      const used = seats.get(v.id) ?? 0;
+      if (used >= clingSeatsOf(v)) continue; // full coat: fight on at the rim
+      seats.set(v.id, used + 1);
+      const shake = a.cling.shakeSec ?? CLING_CFG.shakeSec;
+      a.clingTo = {
+        id: v.id,
+        ang: angleTo(v.pos, a.pos) + rand(-0.5, 0.5),
+        until: this.time + rand(shake[0], shake[1]),
+        statusAt: this.time,
+      };
+      a.aiTargetId = v.id;
+    }
+  }
+
+  /** Hop a rider off (shake, death, redirect, knockback) + re-latch grace. */
+  private clingRelease(a: Actor): void {
+    const ride = a.clingTo;
+    a.clingTo = undefined;
+    a.clingCooldownUntil = this.time + CLING_CFG.reattachGrace;
+    if (!ride) return;
+    a.pos = this.clampPos(vec(
+      a.pos.x + Math.cos(ride.ang) * CLING_CFG.detachHop,
+      a.pos.y + Math.sin(ride.ang) * CLING_CFG.detachHop), a.radius);
   }
 
   /** THE GRIMOIRE: attune a MASTERED bestiary form to ONE grimoire-summon
@@ -20346,6 +20839,10 @@ export class World {
           this.failNote(caster, def.id + ':noledger', 'nothing owed');
         }
       }
+      // THE THRONG SWEEP (throngDirect — the Overlord verb): the carrying
+      // skill's whole roster re-aims at the cursor through assault orders;
+      // fired per channel pulse, the held sweep TRACKS (engine/throng.ts).
+      if (fx.type === 'throngDirect') this.throngDirect(caster, inst, aim, fx);
       // ORDER THE PACK (minionCast — Skeletal Strike, the Harvester's Reap):
       // every living minion of the HOST skill executes the order skill — at
       // the caster's mark, or each at its own nearest prey. The pack acts;
@@ -20353,9 +20850,19 @@ export class World {
       if (fx.type === 'minionCast' && SKILLS[fx.skillId]) {
         const lord = caster.owner ?? caster;
         const hostId = inst.hostSkillId;
-        const troops = this.actors.filter(m =>
+        let troops = this.actors.filter(m =>
           m.owner === lord && !m.dead && !m.construct
           && (!hostId || this.minionServes(m, hostId)));
+        // ONE VOICE, ONE ACTOR (THE THRONG RULE): a conducted act executes
+        // on the NEAREST throng bodies only (THRONG_CFG.metaDelegate) —
+        // fifty gathered imps never each cast the execute. Classic minions
+        // in the same order are untouched.
+        const throngTroops = troops.filter(isThrongBody);
+        if (throngTroops.length > THRONG_CFG.metaDelegate) {
+          throngTroops.sort((x, y) => dist(x.pos, aim) - dist(y.pos, aim));
+          const keep = new Set(throngTroops.slice(0, THRONG_CFG.metaDelegate));
+          troops = troops.filter(m => !isThrongBody(m) || keep.has(m));
+        }
         let sent = 0;
         for (const m of troops) {
           let orderAt: Vec2 | null = null;
@@ -21733,6 +22240,47 @@ export class World {
    * minion-shaping stats — size, speed, damage, life, explosion payloads,
    * lifespan, and mana reservation — into the minion at birth.
    */
+  /** Fold the OWNER's minion-stat investment onto a freshly minted body —
+   *  THE ONE INHERITANCE SEAM (spawnMinion and throng claims share it).
+   *  `scale` tempers every owner CONTRIBUTION (damage/life/haste/regen/
+   *  status-carry, mores and flats alike) — THE THRONG BATCH RULE passes
+   *  1/batch so five gathered bodies wear one classic minion's worth of
+   *  investment. Base body stats and minionSize are never scaled: the
+   *  divisor tempers the investment, not the creature. */
+  bakeMinionOwnerStats(minion: Actor, caster: Actor, inst: SkillInstance, scale = 1): void {
+    const tags = skillContextTags(inst.def);
+    const extra = instanceMods(inst);
+    const size = caster.sheet.get('minionSize', tags, extra);
+    minion.radius = Math.max(5, minion.radius * size);
+    const haste = caster.sheet.get('minionHaste', tags, extra);
+    const s = scale;
+    const ownerMods = [
+      mod('damage', 'more', (caster.sheet.get('minionDamage', tags, extra) - 1) * s),
+      mod('life', 'more', (caster.sheet.get('minionLife', tags, extra) - 1) * s),
+      mod('damageTaken', 'more', (caster.sheet.get('minionDamageTaken', tags, extra) - 1) * s),
+      mod('moveSpeed', 'more', (caster.sheet.get('minionMoveSpeed', tags, extra) * haste - 1) * s),
+      mod('attackSpeed', 'more', (haste - 1) * s),
+      mod('castSpeed', 'more', (haste - 1) * s),
+      mod('detectionRange', 'more', (caster.sheet.get('minionDetectionRange', tags, extra) - 1) * s),
+      // Minion regeneration (Vital Bond / Convocation investment): queried
+      // with the SUMMON skill's tags, so gems and tag-filtered passives
+      // split freely by skill or type.
+      mod('lifeRegen', 'flat', caster.sheet.get('minionRegen', tags, extra) * s),
+      mod('lifeRegenPct', 'flat', caster.sheet.get('minionRegenPct', tags, extra) * s),
+    ];
+    // MINION STATUS CARRY: the owner's minionApply_<status> investment becomes
+    // the minion's own apply_<status> chance — "minions poison on hit" is one
+    // modifier anywhere on the owner (gem, passive, vocation node). Generated
+    // per-status alongside apply_<id> in engine/status.ts.
+    for (const sid of STATUS_IDS) {
+      const carry = caster.sheet.get('minionApply_' + sid, tags, extra);
+      if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry * s));
+    }
+    minion.sheet.setSource('owner', ownerMods);
+    // Meat Shield: guarded minions keep a short leash and fight defensively.
+    minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
+  }
+
   private spawnMinion(
     caster: Actor, inst: SkillInstance,
     overrides?: { monsterId?: string; pos?: Vec2; delivery?: SummonDelivery; dmgMult?: number },
@@ -21800,34 +22348,9 @@ export class World {
     // sheet source) are live for the minion's whole life. Corpse-raised
     // bodies (Raise Spectre) resolve fit HERE, against the actual kit.
     this.forwardSummonSockets(inst, minion.skills);
-    const size = caster.sheet.get('minionSize', tags, extra);
-    minion.radius = Math.max(5, minion.radius * size);
-    const haste = caster.sheet.get('minionHaste', tags, extra);
-    const ownerMods = [
-      mod('damage', 'more', caster.sheet.get('minionDamage', tags, extra) - 1),
-      mod('life', 'more', caster.sheet.get('minionLife', tags, extra) - 1),
-      mod('damageTaken', 'more', caster.sheet.get('minionDamageTaken', tags, extra) - 1),
-      mod('moveSpeed', 'more', caster.sheet.get('minionMoveSpeed', tags, extra) * haste - 1),
-      mod('attackSpeed', 'more', haste - 1),
-      mod('castSpeed', 'more', haste - 1),
-      mod('detectionRange', 'more', caster.sheet.get('minionDetectionRange', tags, extra) - 1),
-      // Minion regeneration (Vital Bond / Convocation investment): queried
-      // with the SUMMON skill's tags, so gems and tag-filtered passives
-      // split freely by skill or type.
-      mod('lifeRegen', 'flat', caster.sheet.get('minionRegen', tags, extra)),
-      mod('lifeRegenPct', 'flat', caster.sheet.get('minionRegenPct', tags, extra)),
-    ];
-    // MINION STATUS CARRY: the owner's minionApply_<status> investment becomes
-    // the minion's own apply_<status> chance — "minions poison on hit" is one
-    // modifier anywhere on the owner (gem, passive, vocation node). Generated
-    // per-status alongside apply_<id> in engine/status.ts.
-    for (const sid of STATUS_IDS) {
-      const carry = caster.sheet.get('minionApply_' + sid, tags, extra);
-      if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry));
-    }
-    minion.sheet.setSource('owner', ownerMods);
-    // Meat Shield: guarded minions keep a short leash and fight defensively.
-    minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
+    // The owner-investment fold — ONE seam shared with throng claims
+    // (which pass the batch scale); a summon wears it whole.
+    this.bakeMinionOwnerStats(minion, caster, inst);
     // RAMPED SUMMONS: a channel's held ramp (Spirit Pyre's quadratic climb)
     // or a charge-up's gather mints HOTTER bodies — clamped so channel
     // double-dips can't launder into a standing army.
@@ -23341,6 +23864,10 @@ export class World {
     // stray splash knockback must not scatter a sleeping band (the hit that
     // ROUSES it restores physics the same tick aiAwakened latches).
     if (target.construct || target.anchored || target.leap || isDormant(target)) return;
+    // A latched rider is SCRAPED LOOSE by any real shove (the latch's
+    // knockback counterplay, engine/cling.ts) — released first so the
+    // impulse lands on a free body.
+    if (target.clingTo) this.clingRelease(target);
     // WEIGHT: mass divides the shove — a knockback that sends a goblin
     // flying nudges an ogre. effectiveWeight folds in CURRENT unbroken
     // poise (a poised colossus is an anchor; break the bar to move it) on
@@ -25140,6 +25667,10 @@ export class World {
       const ek = caster.sheet.get('esOnKill', tags, extra);
       if (ek > 0) caster.es = Math.min(caster.maxEs(), caster.es + ek);
     }
+    // THE THRONG'S COMBAT SOURCES (engine/throng.ts): onCrit rolls + the
+    // hit-fed gauge, and the lastKill mote anchor. Top-level landed hits
+    // only — echoes and riders never double-feed the gauge.
+    if (dealt > 0 && depth === 0) this.throngOnHit(caster, target, wasCrit, lethal);
     const elite = target.rarity === 'rare' || target.rarity === 'champion'
       || target.rarity === 'crowned'
       || !!(target.defId && MONSTERS[target.defId]?.boss);
@@ -26556,6 +27087,9 @@ export class World {
         this.noteNemesisKill(actor);
         // Kill-fed encounters: a foe slain inside an open breach extends it.
         if (this.encounters.length) this.feedEncounters(actor);
+        // THE THRONG's onKill sources: credited kills may raise a husk at
+        // the corpse (engine/throng.ts — conjured victims never feed it).
+        this.throngOnKill(actor, killer);
         // CONJURED bodies (Actor.noBounty) pay nothing — no xp, no loot, no
         // elite spill, no orbs. The summoner is the prize; endlessly farming
         // its spawn is a closed door.
@@ -27588,6 +28122,7 @@ export class World {
     this.updatePendingMetas(dt);
     this.updatePendingPersists(dt);
     this.updateMinionMeta(dt);
+    this.updateThrong(dt); // THE THRONG's source/collection sweep (engine/throng.ts)
     if (this.lockHint > 0) this.lockHint -= dt;
 
     // Actors: timers, DoT, dash movement, lifespans.
@@ -28180,6 +28715,9 @@ export class World {
     this.updateDrops(dt);
     this.updateOrbs(dt);
     this.updateRemnants(dt);
+    // THE LATCH slave step LAST among movers — the seat wins the frame
+    // (drawn == held; engine/cling.ts).
+    this.updateClings();
 
     // Corpses decay
     for (let i = this.corpses.length - 1; i >= 0; i--) {
@@ -36438,6 +36976,10 @@ export class World {
 
   moveActor(a: Actor, dx: number, dy: number, dt: number): void {
     if (this.movementLocked(a)) return;
+    // A LATCHED rider's position is slaved to its seat (engine/cling.ts):
+    // the mover contract simply refuses — no pit checks, no wall slides,
+    // no drift for a body that is riding another.
+    if (a.clingTo) return;
     // Channeling restricts movement per the skill's data, opened back up by
     // the channelMobility stat (immobile 0 / slowed factor / normal 1, + stat).
     let channelFactor = 1;

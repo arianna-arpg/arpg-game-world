@@ -155,7 +155,19 @@ changes.
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and
   `StatusDef.timeScale` stasis/slow statuses; world- and per-actor scales,
   solo-only menu policy via `Timeflow.allowHold` — docs in
-  `docs/engine/timeflow.md`).
+  `docs/engine/timeflow.md`),
+  `throng.ts` + `cling.ts` (THE THRONG FABRIC — the swarm you GATHER, the
+  Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
+  sight-gated wild husks CLAIMED by walking through them, acquisition as
+  open `ThrongSourceRow`s (finite pockets / timed motes / crit + kill
+  triggers / a hit-fed gauge for add-less bosses), the held channel's
+  `throngDirect` sweep riding assault orders, owner minion investment
+  folded at 1/batch (`bakeMinionOwnerStats` — the ONE fold, quadratic-
+  proof), nearest-1 meta delegation, unslot = disband-to-husks; THE LATCH
+  (`MonsterDef.cling`): bodies that ride a victim's rim and whack through
+  their own kit — size-scaled seats, shake clocks, `rideStatus`, knockback
+  scrape; grapple is the shaped open seam — docs in
+  `docs/engine/throng.md`; probe `balance/probe_throng.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense
