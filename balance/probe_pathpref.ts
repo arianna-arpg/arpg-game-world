@@ -30,6 +30,8 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { updateAI } from '../src/engine/ai';
 import { MONSTERS } from '../src/data/monsters';
+import type { Doodad } from '../src/engine/levelgen';
+import type { RecoveryPolicy } from '../src/world/regions';
 import { GridWalkField, PATH_SCALE } from '../src/world/gridWalk';
 import { regionPathCost, PATH_CFG } from '../src/world/regions';
 import type { PathProfile } from '../src/world/walk';
@@ -297,6 +299,84 @@ function voidRig(monsterId: string): { w: World; m: import('../src/engine/actor'
   check('the lemming control FALLS (authored self-destruction still exists)',
     m.lastFall !== undefined && (m.dead || m.life < m.maxLife()));
   delete MONSTERS['probe_lemming'];
+}
+
+// -------------------- the veto at fall-able pit DOODADS (the pitfall fabric)
+// The named seam, closed: pit doodads stopped being walls (drops now — the
+// pitfall pass), so the veto must see their surfaces or a steered mind
+// grinds the classic-fall recovery to death at the rim (measured: a wolf
+// died in <8s pressing a chasm band before the fix).
+function pitRig(monsterId: string, descend = false):
+  { w: World; m: import('../src/engine/actor').Actor; bandX: number } {
+  const w = makeSimWorld('warrior', 31337);
+  w.player.invulnerable = true;
+  const aw = w.arena.w, ah = w.arena.h;
+  const bandX = aw * 0.5;
+  for (let y = -60; y <= ah + 90; y += 100) {
+    const d: Doodad = { pos: vec(bandX, y), radius: 80, kind: 'chasm' };
+    w.doodads.push(d);
+  }
+  if (descend) (w.zone.theme as { pitfall?: RecoveryPolicy }).pitfall = { kind: 'descend' };
+  w.player.pos = vec(bandX + 400, ah * 0.5);
+  const m = w.createMonster(monsterId, 5, 'enemy');
+  m.pos = vec(bandX - 400, ah * 0.5);
+  w.actors.push(m);
+  return { w, m, bandX };
+}
+{
+  const { w, m, bandX } = pitRig('plains_wolf');
+  let maxX = -Infinity;
+  for (let t = 0; t < 8; t += 1 / 60) { step(w, 1 / 60); if (m.dead) break; maxX = Math.max(maxX, m.pos.x); }
+  check('pit doodads: an avoid mind holds short of the lip — alive, unhurt, no falls',
+    !m.dead && m.lastFall === undefined && m.life === m.maxLife(),
+    `life ${Math.round(m.life)}/${Math.round(m.maxLife())}`);
+  check('…vetoed BEFORE the rim (no lip-grinding against the pit confine)',
+    maxX > bandX - 400 + 60 && maxX < bandX - 80 + 15, `maxX ${maxX.toFixed(0)} vs lip ${(bandX - 80).toFixed(0)}`);
+  // The predicate itself, both sides of the insurance.
+  check('fallHazardAt sees the pit surface for the uninsured',
+    w.fallHazardAt(m, bandX, w.arena.h * 0.5) === true);
+  MONSTERS['probe_pitproof'] = {
+    ...MONSTERS['plains_wolf'], id: 'probe_pitproof', name: 'Probe Pitproof',
+    immuneGround: ['chasm'],
+  };
+  const proof = w.createMonster('probe_pitproof', 5, 'enemy');
+  w.actors.push(proof);
+  check('…and stays silent for a body HOME in the pit (insurance, one predicate)',
+    w.fallHazardAt(proof, bandX, w.arena.h * 0.5) === false);
+  delete MONSTERS['probe_pitproof'];
+}
+{
+  // Classic-fall zones are where the grind KILLED: only the lemming still may.
+  MONSTERS['probe_lemming'] = {
+    ...MONSTERS['plains_wolf'], id: 'probe_lemming', name: 'Probe Lemming',
+    brain: { type: 'basic', move: { pathing: 'none', hazards: 'lemming' } },
+  };
+  const { w, m } = pitRig('probe_lemming');
+  for (let t = 0; t < 8; t += 1 / 60) { step(w, 1 / 60); if (m.dead) break; }
+  check('pit doodads: the lemming control still grinds the classic fall (authored-only)',
+    m.lastFall !== undefined && (m.dead || m.life < m.maxLife()));
+  // On a DESCEND zone the pitfall fabric's own forced-only gate holds even a
+  // lemming pressed at the rim unharmed (steering never walks a body off).
+  const d = pitRig('probe_lemming', true);
+  for (let t = 0; t < 8; t += 1 / 60) { step(d.w, 1 / 60); if (d.m.dead) break; }
+  check('descend pits: even a pressed lemming is HELD by the forced-only swallow gate',
+    !d.m.dead && d.m.life === d.m.maxLife(),
+    `life ${Math.round(d.m.life)}/${Math.round(d.m.maxLife())}`);
+  delete MONSTERS['probe_lemming'];
+}
+{
+  // The payoff lane must stay lethal: a hostile SHOVED past its support on a
+  // descend zone is swallowed, with the kill credited to the shover.
+  const { w, m, bandX } = pitRig('plains_wolf', true);
+  m.pos = vec(bandX - 92, w.arena.h * 0.5); // toes at the lip
+  const xpBefore = w.seats[0].meta.xp; // xp is SEAT meta, never an actor field
+  for (let i = 0; i < 30 && !m.dead; i++) {
+    w.pushActor(m, 0, 900, w.player); // due east, into the dark
+    step(w, 0.1);
+  }
+  check('the shove still swallows (the veto never gates forced displacement)', m.dead);
+  check('…with full credit to the shover', w.seats[0].meta.xp > xpBefore,
+    `xp ${xpBefore} -> ${w.seats[0].meta.xp}`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

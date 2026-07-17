@@ -175,13 +175,19 @@ already are) — runtime stamps on grid zones are a known, deliberate gap.
 **THE SELF-PRESERVATION VETO** (`steerMove` in ai.ts — every self-directed
 step in the AI lands through it): a step about to carry the body into a
 fall/self-destruct boundary (`World.fallHazardAt`: fall / skyfall / descend
-/ eject / instakill region cells — void, abyss, chasm, open sky;
-insurance-aware; the airborne, floating, and mid-dash exempt) is REFUSED —
-slide along the rim on the axis that still stands, else hold ground. This
-kills the old lemming loop (a monster grinding itself dead against the
-fall recovery at ~18% max life a pop chasing an unreachable target).
-Knockback, pulls, and scripted displacement never come through the gate:
-shoving a body past the pit's lip stays the payoff it always was.
+/ eject / instakill region cells — void, abyss, chasm, open sky — AND
+fall-able pit DOODAD surfaces, read from the pitfall fabric's own
+`zonePits`/`pitAt` with the same deck negation and home-kind insurance the
+mover's pit confine tests; insurance-aware; the airborne, floating, and
+mid-dash exempt) is REFUSED — slide along the rim on the axis that still
+stands, else hold ground. This kills the old lemming loop (a monster
+grinding itself dead against the fall recovery at ~18% max life a pop
+chasing an unreachable target) — including its DOODAD-LANE rebirth when
+the pitfall fabric turned chasm doodads from walls into drops (measured: a
+steered wolf died in under 8s pressing a classic-fall pit rim; with the
+veto it holds short of the lip, unhurt). Knockback, pulls, and scripted
+displacement never come through the gate: shoving a body past the pit's
+lip stays the payoff it always was, swallow credit and all.
 
 Pinned end to end by `balance/probe_pathpref.ts` (37 checks on the real
 engine: pricing + derivation, uniform byte-parity, the detour, finite

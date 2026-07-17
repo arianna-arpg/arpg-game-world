@@ -34580,24 +34580,43 @@ export class World {
 
   /** SELF-PRESERVATION probe (the steering veto's question): would a SELF-
    *  DIRECTED step onto (x,y) put this body into a self-destruct boundary —
-   *  fall/skyfall/descend/eject/instakill region cells (void, abyss, chasm,
-   *  open sky)? The airborne, the floating, mid-dash/leap bodies, and bodies
-   *  INSURED against the kind (a pit-dweller's habitat) have nothing to fear;
-   *  forced displacement (knockback, pulls) never asks — shoving a hostile
-   *  past a lip stays the payoff it always was. Convex zones read null-cost
-   *  today (classic chasm DOODADS block outright); the pitfall fabric's
-   *  fall-able pit doodads are the named extension seam — when a pit is a
-   *  DROP instead of a wall, this probe should learn to see it too. */
+   *  fall/skyfall/descend/eject/instakill region CELLS (void, abyss, chasm,
+   *  open sky) or a fall-able pit DOODAD's surface (the pitfall fabric —
+   *  the named seam, closed: the veto reads THE SAME pit list and home-kind
+   *  insurance the mover's pit confine tests, so what would arrest or
+   *  swallow a body is exactly what its feet refuse — before the fix a
+   *  steered mind GROUND the classic-fall recovery to death at a pit rim,
+   *  the doodad-lane rebirth of the lemming loop). The airborne, the
+   *  floating, mid-dash/leap bodies, and bodies INSURED against the kind (a
+   *  pit-dweller's habitat) have nothing to fear; forced displacement
+   *  (knockback, pulls) never asks — shoving a hostile past a lip stays the
+   *  payoff it always was. */
   fallHazardAt(a: Actor, x: number, y: number): boolean {
+    // Ground first (a byte read / a handful of disc compares) — the actor-
+    // side exemptions (stat query for levitation) only run when a fall
+    // boundary is actually ahead.
+    let kindId: string | undefined;
     const wf = this.walk;
-    if (!wf?.regionAt) return false; // convex zones: no fall regions to fear
-    // Ground first (a byte read) — the actor-side exemptions (stat query for
-    // levitation) only run when a fall boundary is actually ahead.
-    const kindId = wf.regionAt(x, y);
-    const rk = regionKind(kindId);
-    if (!rk || rk.walkable || rk.blocks) return false;
-    const bp = rk.boundaryPolicy?.kind;
-    if (bp !== 'fall' && bp !== 'skyfall' && bp !== 'descend' && bp !== 'eject' && bp !== 'instakill') return false;
+    if (wf?.regionAt) {
+      const k = wf.regionAt(x, y);
+      const rk = regionKind(k);
+      if (rk && !rk.walkable && !rk.blocks) {
+        const bp = rk.boundaryPolicy?.kind;
+        if (bp === 'fall' || bp === 'skyfall' || bp === 'descend' || bp === 'eject' || bp === 'instakill') kindId = k;
+      }
+    }
+    if (kindId === undefined) {
+      // Fall-able pit doodads (engine/pitfall.ts): pitAt honors spanning
+      // decks and the pit-kind insurance exactly as the mover does. Every
+      // registered pit region is fall-family by validation, so a covering
+      // surface IS the hazard — no per-policy re-resolution here.
+      const pits = this.zonePits();
+      if (pits.length) {
+        const over = pitAt(pits, this.bridges, x, y, this.pitHomeKinds(a, pits));
+        if (over) kindId = over.region;
+      }
+    }
+    if (kindId === undefined) return false;
     if (a.flying || a.dash || a.leap || this.levitating(a)) return false;
     return !this.groundInsured(a, kindId);
   }
@@ -35126,20 +35145,18 @@ export class World {
   private pitsCache: { arr: readonly Doodad[] | null; len: number; rev: number; list: PitSurface[] } =
     { arr: null, len: -1, rev: -1, list: [] };
 
-  /** Pit kinds this body is HOME in, among the zone's own pits — the ground
-   *  INSURANCE doctrine (fliers wholesale, habitat natives, immuneGround
-   *  bearers — the same trio updateTerrainEffects wades lava with), so the
-   *  void angler roams and hunts across its chasm and can never be shoved
-   *  into it: what can't hurt a body can't swallow it either. Null (the
-   *  common case) allocates nothing. */
+  /** Pit kinds this body is HOME in, among the zone's own pits — THE ground
+   *  INSURANCE predicate (groundInsured: fliers wholesale, habitat natives,
+   *  immuneGround bearers — the exact same read terrain damage and travel
+   *  pricing make), so the void angler roams and hunts across its chasm and
+   *  can never be shoved into it: what can't hurt a body can't swallow it
+   *  either. Null (the common case) allocates nothing. */
   private pitHomeKinds(a: Actor | undefined, pits: readonly PitSurface[]): readonly string[] | null {
     if (!a) return null;
     let home: string[] | null = null;
     for (const p of pits) {
       if (home?.includes(p.kind)) continue;
-      if (a.flying || a.habitat?.kind === p.kind || a.immuneGround?.includes(p.kind)) {
-        (home ??= []).push(p.kind);
-      }
+      if (this.groundInsured(a, p.kind)) (home ??= []).push(p.kind);
     }
     return home;
   }

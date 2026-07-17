@@ -128,10 +128,14 @@ the tell: no terrace, no drop).
 - **Pit windows**: the understory's headless mode could show the ACTUAL
   minted hollow through a pit's dark (the `window` visual seam) — vertigo
   as truth.
-- **Steering-veto pit sight**: `fallHazardAt` (the wayfaring fabric's
-  self-preservation probe) reads grid cells today; teaching it the pit
-  surfaces (`zonePits`) is one clause once both fabrics land — until then
-  the forced-only swallow rule already guarantees no AI suicides.
+- ~~**Steering-veto pit sight**~~ — CLOSED: `fallHazardAt` (the wayfaring
+  fabric's self-preservation probe) now reads the pit surfaces through the
+  same `pitAt`/`pitHomeKinds` the mover's confine tests, so steered minds
+  hold short of a lip instead of pressing it (on classic-`fall` zones a
+  pressed rim GROUND the recovery damage — the forced-only rule protects
+  only `descend`; the veto protects everywhere). `pitHomeKinds` reads
+  `groundInsured` outright — pain, pricing, falls and the veto share the
+  one predicate. Pinned in `balance/probe_pathpref.ts`.
 - **Brittle spans over descend pits**: `rotten_bridge` keeps its authored
   collapse recovery (edge + toll). Routing a span's give-way through the
   zone's pitfall policy is one data field if a biome ever wants planks that
