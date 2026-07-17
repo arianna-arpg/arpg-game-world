@@ -313,7 +313,16 @@ export class WeatherField implements WorldOverlay {
     }
   }
 
-  /** The strongest front covering this zone's node, or null (= clear). */
+  /** The strongest front covering this zone's node, or null (= clear) — at
+   *  its EDGE-FADED strength: the same linear rim falloff the selection has
+   *  always scored by is now what the sample RETURNS (as a copy — the stored
+   *  front keeps its raw time-ramped intensity). Without this, a drifting
+   *  front's rim crossing the node stepped every consumer from null to FULL
+   *  intensity in one frame: the whole-screen wash + particles slammed in
+   *  and out (the "jarring muddied/fog-like overlay" playtest sighting),
+   *  spawn bias over-applied at rims, and a rim-grazing front could
+   *  flicker. Coverage now waxes from ~0 as a front arrives over the node
+   *  and wanes as it leaves, continuous by construction. */
   sample(zone: ZoneDef): WeatherFront | null {
     let best: WeatherFront | null = null;
     let bestS = 0.04; // ignore trivially weak coverage
@@ -323,7 +332,9 @@ export class WeatherField implements WorldOverlay {
       const s = f.intensity * (1 - d / f.radius);
       if (s > bestS) { bestS = s; best = f; }
     }
-    return best;
+    return best
+      ? { ...best, pos: { ...best.pos }, vel: { ...best.vel }, intensity: bestS }
+      : null;
   }
 
   affectSpawns(zone: ZoneDef): SpawnBias {
