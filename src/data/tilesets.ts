@@ -3363,6 +3363,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#171408', grid: '#242012', border: '#7a7048',
       obstacle: '#5c5432', obstacleEdge: '#8a7c4e', accent: '#e8d888',
       sand: '#d8c890', water: '#1d6a8a', tree: '#3f6a3a', mud: '#5a5038',
+      // Rarely, the sea decides: one spanning tidal wall crossing the whole
+      // beach, announced, always parted by a clear weave-corridor. The
+      // gentlest face keeps it a story, not a fixture (chance 0.22).
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.22, delay: [40, 80], waves: [120, 200], announce: { text: 'the sea rises!', color: '#bfe8ef' } },
+        ],
+      },
     },
     sizeW: [2300, 3100], sizeH: [1550, 2150], ellipseChance: 0.25, biome: 'littoral',
     docks: 1, // the country's harbor face: firm ground, open water
@@ -3460,6 +3469,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#1c1a12', grid: '#2a281c', border: '#8a8468',
       obstacle: '#6a6450', obstacleEdge: '#9a9276', accent: '#d8f0e0',
       sand: '#ddd2b4', water: '#5a9a8e', mud: '#6a6252', tree: '#7a7458',
+      // The pan's own weather, in two registers: quick briny washes that
+      // leave DRYING tide pools (the fade wake — the tide's visit written,
+      // then unwritten), and the rare TIDAL WALL — the drained seabed
+      // remembering what owned it: a spanning wave, cardinal + announced,
+      // always parted by one clear corridor.
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          { id: 'brinesurge', line: [2, 3], delay: [12, 24], waves: [40, 70], chance: 0.75 },
+          { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.4, delay: [35, 70], waves: [100, 160], announce: { text: 'the sea returns!', color: '#bfe8ef' } },
+        ],
+      },
     },
     sizeW: [2500, 3400], sizeH: [1700, 2300], ellipseChance: 0.15, biome: 'littoral',
     // The tide reclaims its floor in patches: drowned-margin pockets welling
@@ -3677,6 +3698,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#0e1414', grid: '#1a2424', border: '#4a7a76',
       obstacle: '#2f4a4a', obstacleEdge: '#4f7a76', accent: '#7ec8d8',
       water: '#155a72', sand: '#9a9478', mud: '#3a4038', tree: '#2e5a4a',
+      // Half inside the sea already: floodcrest picket waves are the
+      // margin's fixture weather, and better than half of visits the sea
+      // ITSELF comes — a spanning tidal wall with its guaranteed corridor.
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          { id: 'floodcrest', line: [3, 5], delay: [10, 20], waves: [55, 90] },
+          { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.55, delay: [25, 50], waves: [80, 130], announce: { text: 'the sea rises!', color: '#bfe8ef' } },
+        ],
+      },
     },
     sizeW: [2200, 3000], sizeH: [1550, 2100], ellipseChance: 0.2, biome: 'littoral',
     layout: [
@@ -5075,6 +5106,19 @@ export const TILESETS: Record<string, TilesetDef> = {
       ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#f06a7a' }],
       // The red haze: faintness climbs on the grant's own cadence inside it.
       fog: { banks: [1, 3], kinds: [{ id: 'blood_mist' }] },
+      // "Arteries paying out on the heartbeat" — made literal: stretched
+      // crests of blood sweep the galleries on a pump cadence, pooled wake
+      // DRAINING behind them (the halls flood and empty like a live
+      // vessel). TWO lanes on independent clocks — a gallery crossing runs
+      // ~45s, so one lane alone reads as a slow drip; staggered lanes keep
+      // a pulse always somewhere mid-stroke, systole chasing diastole.
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          { id: 'sanguine_pulse', line: [1, 2], delay: [5, 9], waves: [6, 12] },
+          { id: 'sanguine_pulse', line: [1, 1], delay: [20, 32], waves: [6, 12] },
+        ],
+      },
     },
     sizeW: [2600, 3600], sizeH: [1900, 2600], ellipseChance: 0,
     layout: [

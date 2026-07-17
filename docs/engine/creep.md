@@ -95,7 +95,8 @@ meadow "emberwind" and marsh "floodwake" tileset variants.
 | `affinity` | advance multipliers by GROUND KIND (`ground` map + `default` for bare floor); `clearway` is the multiplier over live way discs — **0 makes roads firebreaks** (a way sample CAPS the target: a 0 is a wall, and `starve` finishes the job) |
 | `starve` | `{below, after}` — the land ahead reads dead for `after` seconds → the section gutters (recede + die) |
 | `consume` | rows of `{fuel, leave?, feed?, spawn?, fx?}` — eats doodads whose `DoodadRule.fuel` matches (the habitat idiom: classification on the rule, policy on the front): swap to the remnant kind or fell outright, stoke the section, sometimes birth kin (capped `CREEP_CFG.front.spawnMax` per visit) |
-| `convert` | `{ground, shallow?, every?, r?}` — ground stamped behind the trailing rim as real runtime discs (ashfield behind the blaze; `shallow: true` water behind the crest — **the ford contract: a wake wades, never drowns**) |
+| `convert` | `{ground, shallow?, every?, r?, fade?}` — ground stamped behind the trailing rim as real runtime discs (ashfield behind the blaze; `shallow: true` water behind the crest — **the ford contract: a wake wades, never drowns**). `fade: {after: [lo,hi], rate?}` is **THE EVAPORATING WAKE**: each pool dwells its rolled seconds then CONTRACTS at `rate` units/sec until gone — the wave's whole visit is written and then unwritten, and the zone reverts. World-side it is the generic `Doodad.evap` fabric: quantized radius steps (`World.EVAP`) keep the chunk baker's stale trickle bounded, the countdown lives ON the doodad so a revisit resumes the drying, a fresh wave crossing a drying pool re-wets its clock instead of stacking a twin, and `addTempGround(…, {evaporate})` opens the same drying to any temp ground |
+| `stretch` | across-bearing rim multiplier — the crest STRETCHED perpendicular to its march (2.6 = the sanguine artery's gallery-filling pulse; 1.7 = the tidal wall's face). ONE anisotropy folded into `rimMulOf`, THE rim product shared by the hit test, the render bake (gradient remapped through the ellipse; boundary traced exactly), the edge telegraph and wave-line spacing — drawn == tested at every angle, pixel-pinned live |
 | `quench` | ONE lever: `{types, power}` — typed damage on the skin stalls the section's vigor; at zero it gutters. Vigor breathes back at `CREEP_CFG.front.vigorRegen` |
 | `feed` | ONE mirror lever — typed damage STOKES the section. Keep `power` HIGH: a stray splash from a passing build must never meaningfully hasten an authored danger |
 | `yieldWays` | live way discs are masked out of cover, grants, drag, wake stamps AND the drawn skin — from ONE list (`setWays` → per-section `nearWays`), so the dry deck on screen is the dry deck in the hit test |
@@ -104,11 +105,36 @@ meadow "emberwind" and marsh "floodwake" tileset variants.
 | `skin` / `edge` (on the def) | render: `'water'`/`'blaze'` bake families beside the classic membrane, and the LEADING-EDGE telegraph (arc + direction streaks on the bearing side — the advance reads at a glance). Knobs in `VIS_CFG.creep.edge` |
 
 **Spawning fronts.** Ambient: `ZoneCreepSpec.fronts` rows —
-`{id, line?, bearing?, delay?, waves?}` — spawn picket-line WAVES from the
-boundary the bearing points away from; `waves` makes them return after the
-last section dies or leaves. Runtime: `field.addFront(def, x, y, bearing,
-{reach?, bornFrac?, boundTo?})` — the package seam; `boundTo` still works
-(kill the caller, the section recoils), and `cleanseAt` force-gutters.
+`{id, line?, spacing?, reach?, gap?, jitter?, chance?, announce?, bearing?,
+delay?, waves?, when?}` — spawn WAVES from the boundary the bearing points
+away from; `waves` makes them return after the last section dies or leaves.
+Runtime: `field.addFront(def, x, y, bearing, {reach?, bornFrac?, boundTo?})`
+— the package seam; `boundTo` still works (kill the caller, the section
+recoils), and `cleanseAt` force-gutters.
+
+**Wave shapes (per-lane, no twin CreepDefs).** `line: [lo,hi]` is the
+classic picket; **`line: 'span'` is THE TIDAL WALL** — the line computed to
+cross the zone's whole breadth at `spacing` (× band × stretch), fielded
+middle-out so the saturation cap trims flanks, never one side. **A spanning
+wave ALWAYS leaves at least one clear corridor** — the safe weave-lane is a
+structural guarantee, not authoring courtesy: corridors roll inside
+`gapMargin`, and any section whose own rolled rim ceiling (reach ×
+(1 + lobing × `lobeCeil`) × stretch) would crowd one is NUDGED to its
+shoulder (never dropped — the wall stays solid both sides). `gap: {width?,
+count?}` tunes the promise (`width` = truly rim-free lane, default
+`CREEP_CFG.front.gapWidth`); spanning lanes march jitter-0 so the corridor
+survives the whole crossing (probe-pinned: cover 0.000 along it, break-in
+to exit, hero parked inside unharmed). `reach: [lo,hi]` re-sizes sections
+per lane — one kind fields both a shin-high wash and a towering crest.
+`chance` rolls the lane's existence once per visit (the intra-zone-EVENT
+dial: 0.22 = the rare day the sea decides); `announce` prints one arrival
+line on every seat (the wildlife arrival-line idiom); `bearing: 'cardinal'`
+rolls compass bearings (spanning waves read cleanest wall-to-wall);
+`when` (the radiance gate) composes — a storm-tide is one row away.
+Aquatic honesty: `CreepDef.notAquatic` kinds never field in
+`ZoneDef.aquatic` arenas — **no water within water** — filtered
+structurally at `buildZoneCreep` (blends and cross-seeds can't smuggle
+one under the sea) and linted at boot for authored dead rows.
 
 **The quench tap.** `World.frontSplash` sits beside the mallet seam at
 every blast site (melee arcs, novas, targeted splash, cones/beams, pops,

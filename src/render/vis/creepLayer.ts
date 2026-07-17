@@ -17,7 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import type { CreepField, CreepSource } from '../../engine/creep';
-import { creepRimMul, CREEP_CFG } from '../../engine/creep';
+import { rimMulOf, CREEP_CFG } from '../../engine/creep';
 import { VIS_CFG } from './visConfig';
 import { shade, withAlpha } from './color';
 import { heartbeat } from './painters';
@@ -65,13 +65,38 @@ function rimPath(c: CanvasRenderingContext2D, src: CreepSource, cx: number, cy: 
   c.beginPath();
   for (let i = 0; i <= STEPS; i++) {
     const ang = (i / STEPS) * Math.PI * 2;
-    const r = reach * creepRimMul(src.harm, ang);
+    const r = reach * rimMulOf(src, ang);
     const x = cx + Math.cos(ang) * r;
     const y = cy + Math.sin(ang) * r;
     if (i === 0) c.moveTo(x, y);
     else c.lineTo(x, y);
   }
   c.closePath();
+}
+
+/** A stretched crest's baked stretch factor (1 for everything round —
+ *  classic sources of a stretched DEF stay round too; only a marching run
+ *  wears the ellipse, exactly as rimMulOf reads it). */
+function stretchOf(src: CreepSource): number {
+  return src.front ? Math.max(0.5, src.def.front?.stretch ?? 1) : 1;
+}
+
+/** Fill the current path with the current style, mapping the FILL through
+ *  the crest's ellipse (about the bearing axis) so a radial gradient's
+ *  falloff rides the stretched body instead of pinching at the across-rim.
+ *  Canvas paths keep the coordinates they were traced with — only the
+ *  gradient is remapped, so the boundary stays rimMulOf's exact product. */
+function fillStretched(c: CanvasRenderingContext2D, src: CreepSource, cx: number, cy: number): void {
+  const st = stretchOf(src);
+  if (st === 1 || !src.front) { c.fill(); return; }
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(src.front.bearing);
+  c.scale(1, st);
+  c.rotate(-src.front.bearing);
+  c.translate(-cx, -cy);
+  c.fill();
+  c.restore();
 }
 
 /** The front skins — the same rim truth in two new keys. WATER: layered
@@ -107,7 +132,7 @@ function frontSkinSprite(
     g.addColorStop(1, withAlpha(shade(pal.color, -0.35), pal.alpha * 0.4));
   }
   c.fillStyle = g;
-  c.fill();
+  fillStretched(c, src, cx, cy);
 
   if (src.def.skin === 'water') {
     // Surge bands: concentric swells riding the same rim function, denser
@@ -124,7 +149,7 @@ function frontSkinSprite(
     for (let i = 0; i < flecks; i++) {
       const ang = rng() * Math.PI * 2;
       const f = 0.62 + Math.sqrt(rng()) * 0.34;
-      const r = R * creepRimMul(src.harm, ang) * f;
+      const r = R * rimMulOf(src, ang) * f;
       c.fillStyle = withAlpha(pal.rim, 0.22 + rng() * 0.3);
       c.beginPath();
       c.arc(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 0.8 + rng() * 1.8, 0, Math.PI * 2);
@@ -141,7 +166,7 @@ function frontSkinSprite(
     c.lineCap = 'round';
     for (let i = 0; i < tongues; i++) {
       const ang = (i / tongues) * Math.PI * 2 + rng() * 0.5;
-      const base = R * creepRimMul(src.harm, ang) * (body - 0.06 + rng() * 0.08);
+      const base = R * rimMulOf(src, ang) * (body - 0.06 + rng() * 0.08);
       const len = R * (0.1 + rng() * 0.14);
       const sway = (rng() - 0.5) * 0.5;
       const x0 = cx + Math.cos(ang) * base, y0 = cy + Math.sin(ang) * base;
@@ -159,7 +184,7 @@ function frontSkinSprite(
     for (let i = 0; i < sparks; i++) {
       const ang = rng() * Math.PI * 2;
       const f = 0.3 + Math.sqrt(rng()) * 0.64;
-      const r = R * creepRimMul(src.harm, ang) * f;
+      const r = R * rimMulOf(src, ang) * f;
       const nr = 0.7 + rng() * 1.4;
       c.fillStyle = withAlpha(shade(pal.glow, 0.4), 0.25);
       c.beginPath(); c.arc(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, nr * 2.2, 0, Math.PI * 2); c.fill();
@@ -193,7 +218,9 @@ function membraneSprite(src: CreepSource): HTMLCanvasElement {
   const alpha = src.def.alpha ?? d.alpha;
   let harmSum = 0;
   for (const h of src.harm) harmSum += h.a;
-  const ceil = src.maxReach * (1 + harmSum) + cfg.bakePad;
+  // A stretched crest bakes on a canvas sized by its ACROSS axis (× 1 for
+  // everything round — the classic size to the byte).
+  const ceil = src.maxReach * (1 + harmSum) * Math.max(1, stretchOf(src)) + cfg.bakePad;
   const size = Math.max(2, Math.ceil(ceil * 2));
   spr = document.createElement('canvas');
   spr.width = size;
@@ -223,7 +250,7 @@ function membraneSprite(src: CreepSource): HTMLCanvasElement {
   g.addColorStop(Math.min(0.98, body), withAlpha(color, alpha * 0.92));
   g.addColorStop(1, withAlpha(shade(color, -0.12), alpha * 0.3));
   c.fillStyle = g;
-  c.fill();
+  fillStretched(c, src, cx, cy);
 
   // Vein filaments: heart→rim walks with a little wander and the odd
   // branch — a soft glow under-stroke, then the dark core line.
@@ -240,7 +267,7 @@ function membraneSprite(src: CreepSource): HTMLCanvasElement {
     for (let sIdx = 1; sIdx <= segs; sIdx++) {
       const f = (sIdx / segs) * endFrac;
       const wobble = (rng() - 0.5) * 0.5;
-      const r = src.maxReach * creepRimMul(src.harm, bearing + wobble * 0.3) * f;
+      const r = src.maxReach * rimMulOf(src, bearing + wobble * 0.3) * f;
       pts.push({ x: cx + Math.cos(bearing + wobble) * r, y: cy + Math.sin(bearing + wobble) * r });
     }
     const trace = (): void => {
@@ -280,7 +307,7 @@ function membraneSprite(src: CreepSource): HTMLCanvasElement {
   for (let i = 0; i < nodes; i++) {
     const ang = rng() * Math.PI * 2;
     const f = Math.sqrt(rng()) * body * 0.94;
-    const r = src.maxReach * creepRimMul(src.harm, ang) * f;
+    const r = src.maxReach * rimMulOf(src, ang) * f;
     const x = cx + Math.cos(ang) * r;
     const y = cy + Math.sin(ang) * r;
     const nr = 1.2 + rng() * 1.5;
@@ -358,7 +385,9 @@ export function drawCreepLayer(
     // lobed rim.
     const cycle = (time * cfg.pulseSpeed * pulse + s.phase * 0.17) % 1;
     const lobing = s.def.lobing ?? d.lobing;
-    const rPulse = cycle * s.cur * (1 - lobing * 0.62);
+    // A sub-1 stretch narrows the across-rim — the circular pulse stays
+    // inside it (× 1 for everything round and every stretch ≥ 1).
+    const rPulse = cycle * s.cur * (1 - lobing * 0.62) * Math.min(1, stretchOf(s));
     const a = cfg.pulseAlpha * hb * Math.min(1, s.cur / s.maxReach);
     if (rPulse > 6 && a > 0.01) {
       ctx.globalAlpha = a * (1 - cycle * 0.6);
@@ -400,7 +429,7 @@ function drawLeadingEdge(
   ctx.beginPath();
   for (let i = 0; i <= STEPS; i++) {
     const ang = bearing - half + (i / STEPS) * half * 2;
-    const r = s.cur * creepRimMul(s.harm, ang);
+    const r = s.cur * rimMulOf(s, ang);
     const x = s.pos.x + Math.cos(ang) * r;
     const y = s.pos.y + Math.sin(ang) * r;
     if (i === 0) ctx.moveTo(x, y);
@@ -422,7 +451,7 @@ function drawLeadingEdge(
     const f = i / cfg.streaks;
     const ang = bearing + (f - 0.5) * half * 1.5;
     const cyc = (time * cfg.streakSpeed + f * 7.13 + s.phase) % 1;
-    const r0 = s.cur * creepRimMul(s.harm, ang);
+    const r0 = s.cur * rimMulOf(s, ang);
     const runOut = cfg.streakLen * (0.6 + f * 0.8);
     const x0 = s.pos.x + Math.cos(ang) * (r0 + cyc * runOut);
     const y0 = s.pos.y + Math.sin(ang) * (r0 + cyc * runOut);

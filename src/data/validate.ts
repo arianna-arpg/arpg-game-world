@@ -59,7 +59,7 @@ import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
 import { lintTrackSpec, TRACK_CFG, trackRider, trackRiderIds, validateTrackRiders, type TrackSpec } from '../engine/tracks';
 import { MELDS } from './melds';
-import { BIOMES } from '../world/biomes';
+import { BIOMES, isAquaticBiome } from '../world/biomes';
 import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
 import { validateFog } from '../engine/fog';
@@ -647,11 +647,14 @@ export function validateContent(): void {
   // sensed ground kinds, monsters, remnant doodads — and consume fuels
   // against the fuel tags DoodadRules actually declare (the dead-row lint:
   // a consume row nothing feeds warns loud).
-  const creepSpecs: { owner: string; spec: NonNullable<typeof TILESETS[string]['theme']['creep']> }[] = [];
+  const creepSpecs: { owner: string; spec: NonNullable<typeof TILESETS[string]['theme']['creep']>; aquatic?: boolean }[] = [];
   for (const t of Object.values(TILESETS)) {
-    if (t.theme.creep) creepSpecs.push({ owner: `tileset '${t.id}'`, spec: t.theme.creep });
+    // Aquatic owners (whole-floor seabeds) stamp the flag so validateCreep
+    // can warn about sea-forsworn rows the build would silently skip.
+    const aq = isAquaticBiome(t.biome);
+    if (t.theme.creep) creepSpecs.push({ owner: `tileset '${t.id}'`, spec: t.theme.creep, ...(aq ? { aquatic: true } : {}) });
     for (const v of t.variants ?? []) {
-      if (v.theme?.creep) creepSpecs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, spec: v.theme.creep });
+      if (v.theme?.creep) creepSpecs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, spec: v.theme.creep, ...(aq ? { aquatic: true } : {}) });
     }
   }
   const declaredFuels = new Set<string>();

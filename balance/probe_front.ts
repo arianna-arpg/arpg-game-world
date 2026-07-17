@@ -12,9 +12,10 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { CREEPS, CREEP_CFG } from '../src/engine/creep';
+import { buildZoneCreep, CreepField, CREEPS, CREEP_CFG, registerCreep } from '../src/engine/creep';
 import type { Doodad } from '../src/engine/levelgen';
 import { vec } from '../src/core/math';
+import { Rng } from '../src/core/rng';
 import type { BuildSpec } from '../src/sim/types';
 
 let failed = 0;
@@ -311,6 +312,198 @@ const fnv = (text: string): string => {
     if (n === 3) { returned = n; break; }
   }
   check('lanes: the next wave RETURNS on the row\'s cadence (waves lever)', returned === 3);
+}
+
+// --- 7) THE TIDAL SPAN: the wall crosses, THE CORRIDOR HOLDS ---------------
+{
+  const world = makeSimWorld('warrior', 24608);
+  const W = world.arena.w, H = world.arena.h;
+  const f = world.creepEnsure()!;
+  f.installLanes([{
+    id: 'tidalwall', line: 'span', bearing: 0, delay: [0.5, 0.5],
+    spacing: 0.8, reach: [90, 120], gap: { width: 140 },
+  }]);
+  const dt = 1 / 60;
+  for (let i = 0; i < 90; i++) world.update(dt);
+  const secs = f.sources.filter(s => s.front?.rowIdx === 0);
+  check('span: the wall fields wall-to-wall (a line, not a picket)', secs.length >= 4,
+    `${secs.length} sections across H=${H}`);
+  check('span: the lane reach override held', secs.every(s => s.maxReach >= 90 && s.maxReach <= 120),
+    secs.map(s => s.maxReach.toFixed(0)).join(','));
+  check('span: bearings exactly parallel (spanning lanes never jitter)',
+    secs.every(s => s.front!.bearing === 0));
+  // Find the promised corridor from the fielded geometry: the widest hole
+  // between adjacent rim CEILINGS (maxReach × (1+Σa) × stretch).
+  const st = Math.max(1, CREEPS['tidalwall'].front!.stretch ?? 1);
+  const rows = secs.map(s => {
+    let sum = 0;
+    for (const h of s.harm) sum += h.a;
+    return { y: s.pos.y, ceil: s.maxReach * (1 + sum) * st };
+  }).sort((a, b) => a.y - b.y);
+  let gapY = -1, gapW = 0;
+  for (let i = 0; i + 1 < rows.length; i++) {
+    const lo = rows[i].y + rows[i].ceil, hi = rows[i + 1].y - rows[i + 1].ceil;
+    if (hi - lo > gapW) { gapW = hi - lo; gapY = (lo + hi) / 2; }
+  }
+  check('span: a clear corridor at least gap.width wide exists between rim ceilings',
+    gapW >= 140, `widest hole ${gapW.toFixed(0)} at y=${gapY.toFixed(0)}`);
+  // March the whole crossing: the corridor must NEVER read on-creep while
+  // the wall's own tracks flood solid — the weave lane is a promise about
+  // the hit test, held for the wave's entire life. The hero PARKS in the
+  // corridor for the duration: standing in the weave lane must be fully
+  // survivable (no cover → no undertow, no breath drain — and no drowned
+  // hero stalling the sim, which is exactly what parking him mid-wall did).
+  const p = world.player;
+  const wallY = rows[0].y;
+  let corridorMax = 0, wallMax = 0, t = 0, tick = 0;
+  while (f.sources.some(s => s.front?.rowIdx === 0) && t < 140) {
+    p.pos.x = 400;
+    p.pos.y = gapY;
+    world.update(dt); t += dt; tick++;
+    if (tick % 30 === 0) {
+      for (let x = 20; x < W; x += 30) {
+        corridorMax = Math.max(corridorMax, f.coverAt(x, gapY));
+        wallMax = Math.max(wallMax, f.coverAt(x, wallY));
+      }
+    }
+  }
+  check('span: THE CORRIDOR HELD the whole crossing (never on-creep anywhere along it)',
+    corridorMax < CREEP_CFG.hitFloor, `max corridor cover ${corridorMax.toFixed(3)} vs floor ${CREEP_CFG.hitFloor}`);
+  check('span: the wall itself flooded solid on its own track', wallMax >= 0.99,
+    `max wall cover ${wallMax.toFixed(3)}`);
+  check('span: the wave crossed and left (no lingering sections)',
+    !f.sources.some(s => s.front?.rowIdx === 0), `crossed in ${t.toFixed(0)}s`);
+  const breathRow = p.survival?.get('breath');
+  check('span: the hero LIVED in the weave lane (no drown, no undertow)',
+    !p.dead && (breathRow === undefined || breathRow > 10),
+    `alive ${!p.dead}, breath ${breathRow?.toFixed(1) ?? 'full'}`);
+}
+
+// --- 8) THE EVAPORATING WAKE: pools dry, the floor reverts -----------------
+{
+  const world = makeSimWorld('warrior', 24609);
+  const cx = world.arena.w / 2, cy = world.arena.h / 2;
+  const f = world.creepEnsure()!;
+  f.addFront(CREEPS['brinesurge'], cx - 500, cy, 0, { reach: 90, bornFrac: 1 });
+  const dt = 1 / 60;
+  for (let i = 0; i < 60 * 20; i++) world.update(dt);
+  const pools = world.doodads.filter(d => d.kind === 'tide_pool' && d.evap);
+  check('evap: the wake stamps DRYING tide pools (convert.fade)', pools.length >= 2,
+    `${pools.length} pools`);
+  const p0 = pools[0];
+  const center = vec(p0.pos.x, p0.pos.y);
+  const r0 = p0.radius;
+  check('evap: a live pool is real sensed ground', world.groundAt(center)?.kind === 'tide_pool');
+  const radii = new Set<number>([p0.radius]);
+  let gone = -1;
+  for (let i = 0; i < 60 * 80 && gone < 0; i++) {
+    world.update(dt);
+    radii.add(p0.radius);
+    if (!world.doodads.includes(p0)) gone = i / 60;
+  }
+  check('evap: the pool contracted then vanished (the zone reverts)', gone > 0,
+    gone > 0 ? `r0 ${r0.toFixed(0)} gone at ${gone.toFixed(1)}s` : `still r=${p0.radius.toFixed(1)}`);
+  check('evap: contraction is QUANTIZED steps (a bounded stale trickle, never per-frame churn)',
+    radii.size >= 3 && radii.size <= 20, `${radii.size} distinct radii`);
+  check('evap: the floor reverted under it', world.groundAt(center)?.kind !== 'tide_pool',
+    `now: ${world.groundAt(center)?.kind ?? 'bare'}`);
+  // addTempGround's evaporate option: the patch DRIES at expiry instead of
+  // popping — the same fabric, opened to every temp-ground caller.
+  const at = vec(cx + 320, cy + 320);
+  world.addTempGround(at, 'ashfield', 40, 1.0, { evaporate: { rate: 30 } });
+  const patch = world.doodads.find(d => d.kind === 'ashfield' && d.pos.x === at.x && d.pos.y === at.y)!;
+  for (let i = 0; i < 72; i++) world.update(dt); // 1.2s: dwell served, drying begun
+  check('evap: addTempGround evaporate DRIES instead of popping',
+    world.doodads.includes(patch) && patch.radius < 40,
+    `r ${patch.radius.toFixed(1)} at 1.2s (was 40)`);
+  let patchGone = false;
+  for (let i = 0; i < 60 * 4 && !patchGone; i++) {
+    world.update(dt);
+    patchGone = !world.doodads.includes(patch);
+  }
+  check('evap: the temp patch finished drying away', patchGone);
+}
+
+// --- 9) STRETCH: one ellipse truth for hit test and bound ------------------
+{
+  registerCreep({ id: 'probe_stretch', lobing: 0, front: { speed: 10, stretch: 2.5 } });
+  const world = makeSimWorld('warrior', 24610);
+  const cx = world.arena.w / 2, cy = world.arena.h / 2;
+  const f = world.creepEnsure()!;
+  const src = f.addFront(CREEPS['probe_stretch'], cx, cy, 0, { reach: 100, bornFrac: 1 })!;
+  const along = f.rimAt(src, 0), across = f.rimAt(src, Math.PI / 2);
+  check('stretch: across-rim = along-rim × stretch (rimMulOf, lobing 0 exact)',
+    Math.abs(across / along - 2.5) < 1e-9, `${along.toFixed(1)} → ${across.toFixed(1)}`);
+  check('stretch: the broad-phase bound covers the across axis', src.bound >= across,
+    `bound ${src.bound.toFixed(1)} vs across ${across.toFixed(1)}`);
+  const on = f.coverAt(cx, cy + across * 0.9);
+  const off = f.coverAt(cx, cy + across * 1.05);
+  const offAlong = f.coverAt(cx + across * 0.9, cy);
+  check('stretch: cover rides the stretched rim (in wet, out dry)',
+    on >= CREEP_CFG.hitFloor && off === 0, `in ${on.toFixed(2)}, out ${off.toFixed(2)}`);
+  check('stretch: the along axis stays UNstretched (a wall, not a bigger circle)',
+    offAlong === 0, `cover at 2.25R along: ${offAlong.toFixed(2)}`);
+}
+
+// --- 10) NOTAQUATIC: no water within water ---------------------------------
+{
+  const dry = buildZoneCreep(
+    { pockets: [0, 0], kinds: [], fronts: [{ id: 'tidalwall' }] },
+    { w: 2000, h: 1400 }, new Rng(7));
+  const wet = buildZoneCreep(
+    { pockets: [0, 0], kinds: [], fronts: [{ id: 'tidalwall' }] },
+    { w: 2000, h: 1400, aquatic: true }, new Rng(7));
+  check('aquatic: the tidal lane is refused under the sea (structural, not authorial)',
+    dry !== null && wet === null, `dry ${dry ? 'field' : 'null'}, aquatic ${wet ? 'field' : 'null'}`);
+  const wet2 = buildZoneCreep(
+    { pockets: [2, 3], kinds: [{ id: 'brinesurge' }, { id: 'caulflesh' }] },
+    { w: 2000, h: 1400, aquatic: true }, new Rng(9));
+  check('aquatic: sea-forsworn pocket kinds filtered; unflagged kinds still grow',
+    wet2 !== null && wet2.sources.length > 0 && wet2.sources.every(s => s.def.id === 'caulflesh'),
+    wet2 ? `${wet2.sources.length} pockets: ${[...new Set(wet2.sources.map(s => s.def.id))].join(',')}` : 'null');
+}
+
+// --- 11) CHANCE: the intra-zone-event dial ---------------------------------
+{
+  const mk = (seed: number): number => {
+    const f2 = buildZoneCreep(
+      { pockets: [0, 0], kinds: [], fronts: [{ id: 'floodcrest', chance: 0.5 }] },
+      { w: 1500, h: 1000 }, new Rng(seed));
+    return f2 ? f2.laneCount() : 0;
+  };
+  check('chance: per-visit roll is deterministic per seed',
+    mk(41) === mk(41) && mk(97) === mk(97));
+  let on = 0;
+  for (let s = 0; s < 30; s++) on += mk(1000 + s) ? 1 : 0;
+  check('chance: both outcomes occur across seeds (an event, not a fixture)',
+    on > 4 && on < 26, `${on}/30 visits fielded the lane`);
+  const always = buildZoneCreep(
+    { pockets: [0, 0], kinds: [], fronts: [{ id: 'floodcrest' }] },
+    { w: 1500, h: 1000 }, new Rng(5));
+  check('chance: absent = fixture (and chance-less rows draw no extra rng)',
+    always?.laneCount() === 1);
+}
+
+// --- 12) ANNOUNCE: one arrival line per fielding wave ----------------------
+{
+  const f = new CreepField(new Rng(77), 1600, 1200);
+  const seen: string[] = [];
+  f.setTerrain({
+    groundKindAt: () => null,
+    eachFuelNear: () => {},
+    consume: () => {},
+    stamp: () => {},
+    drag: () => {},
+    drown: () => {},
+    announce: text => seen.push(text),
+  });
+  f.installLanes([
+    { id: 'tidalwall', line: 'span', bearing: 0, delay: [0, 0], announce: { text: 'the sea rises!' } },
+    { id: 'floodcrest', line: [2, 2], bearing: 0, delay: [0, 0] },
+  ]);
+  f.update(0.1, 0, []);
+  check('announce: one line per announcing wave — silent rows stay silent',
+    seen.length === 1 && seen[0] === 'the sea rises!', seen.join('|') || 'none');
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL FRONT CHECKS PASSED');

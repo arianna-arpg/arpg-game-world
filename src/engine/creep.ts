@@ -142,6 +142,13 @@ export interface CreepDef {
    *  on the bearing side plus direction streaks, so the advance reads at a
    *  glance. Only front sources draw it. */
   edge?: { color: string; style: 'foam' | 'flame'; width?: number };
+  /** This kind never fields in an AQUATIC arena (ZoneDef.aquatic — the
+   *  whole-floor seabed): a water wave inside the sea is water within
+   *  water. buildZoneCreep skips the kind's pockets AND its lanes there —
+   *  structural, so a blended or cross-seeded spec can never smuggle one
+   *  under the sea. Runtime addSource/addFront stay open (a package that
+   *  wants one owns the call). */
+  notAquatic?: true;
 }
 
 // --- The advancing front (all optional — absent levers cost nothing) --------
@@ -184,6 +191,13 @@ export interface FrontConsumeRow {
 export interface FrontSpec {
   /** March speed, units/sec, before affinity/vigor/stoke modulation. */
   speed: number;
+  /** Across-bearing rim multiplier — the crest STRETCHED perpendicular to
+   *  its march (1 = round; 2.6 = a wide wall of water, the artery's pulse
+   *  filling its gallery). ONE anisotropy folded into THE rim function
+   *  (rimMulOf), so the hit test, the render bake, the edge telegraph and
+   *  the wave-line spacing all read the same ellipse — drawn == tested at
+   *  every angle. 1 (or absent) is bit-exact identity. */
+  stretch?: number;
   affinity?: FrontAffinity;
   /** Sustained starvation gutters the section: advance multiplier at or
    *  below `below` for `after` seconds → the source recedes and dies. */
@@ -192,8 +206,17 @@ export interface FrontSpec {
   /** Ground stamped behind the trailing rim as the front passes — the
    *  scorch behind the blaze, the wet wake behind the crest. `shallow`
    *  marks stamped liquid wadeable (the ford contract, never a new deep).
-   *  `every` is the stamp cadence as a fraction of the band radius. */
-  convert?: { ground: string; shallow?: boolean; every?: number; r?: [number, number] };
+   *  `every` is the stamp cadence as a fraction of the band radius.
+   *  `fade` is THE EVAPORATING WAKE: each stamped pool dwells [lo, hi]
+   *  seconds (rolled per pool on the section's private stream), then
+   *  CONTRACTS at `rate` units/sec until gone — the wave passes, its
+   *  pools shrink like drying puddles, and the zone reverts to what it
+   *  was (the world-side Doodad.evap fabric; quantized steps keep the
+   *  ground baker's stale trickle bounded). */
+  convert?: {
+    ground: string; shallow?: boolean; every?: number; r?: [number, number];
+    fade?: { after: [number, number]; rate?: number };
+  };
   /** Damage of these types striking the skin STALLS the section: `power`
    *  is the damage that takes one section from full vigor to guttered. */
   quench?: { types: readonly string[]; power: number };
@@ -221,10 +244,39 @@ export interface FrontSpec {
  *  builds that event. */
 export interface FrontSpawnRow {
   id: string;
-  /** Band sources per wave (a picket line abreast). Default [3, 4]. */
-  line?: [number, number];
-  /** March bearing in radians; absent/'roll' = rolled per wave. */
-  bearing?: number | 'roll';
+  /** Band sources per wave (a picket line abreast; default [3, 4]) — or
+   *  'span': THE TIDAL WALL, the line computed to cross the zone's whole
+   *  breadth at `spacing`. A spanning wave ALWAYS leaves at least one
+   *  clear corridor (`gap` merely tunes it) — the safe weave-lane is a
+   *  structural guarantee, never an authoring courtesy. */
+  line?: [number, number] | 'span';
+  /** Section spacing along the line, × the section band (mean reach ×
+   *  stretch). Default CREEP_CFG.front.lineSpacing. Tighter = a denser
+   *  wall; the validator floors it at 0.4 (triple-stacking). */
+  spacing?: number;
+  /** Per-lane section reach roll — the SAME kind fields small recurring
+   *  washes on one row and a towering crest on another, no twin CreepDef. */
+  reach?: [number, number];
+  /** The spanning wave's clear corridors: `width` = the guaranteed
+   *  rim-free lane (world units — flanking sections hold their whole lobe
+   *  ceiling clear of it; default CREEP_CFG.front.gapWidth), `count` = how
+   *  many corridors roll (default exactly 1). */
+  gap?: { width?: number; count?: [number, number] };
+  /** Per-lane bearing jitter override (radians). Spanning lanes default 0
+   *  — parallel march is what keeps the corridor open the whole crossing;
+   *  picket lanes keep CREEP_CFG.front.bearingJitter's grown look. */
+  jitter?: number;
+  /** Chance this lane exists AT ALL this visit (rolled once on the salted
+   *  field stream) — the intra-zone-event dial: 1/absent = fixture,
+   *  0.35 = the rare day the sea decides. */
+  chance?: number;
+  /** One floating line on every seat when a wave of this lane actually
+   *  fields (the wildlife arrival-line idiom) — 'the sea rises!'. */
+  announce?: { text: string; color?: string };
+  /** March bearing in radians; absent/'roll' = rolled per wave;
+   *  'cardinal' = one of the four compass bearings per wave (spanning
+   *  waves read cleanest wall-to-wall on a cardinal). */
+  bearing?: number | 'roll' | 'cardinal';
   /** Seconds before the first wave. Default [6, 14]. */
   delay?: [number, number];
   /** After a wave dies or leaves, the next arrives in [lo, hi] seconds.
@@ -276,8 +328,11 @@ export interface CreepTerrain {
   eachFuelNear(x: number, y: number, r: number, fn: (fuel: string, ref: unknown) => void): void;
   /** Execute one consume row on a fueled doodad (swap/remove + FX + kin). */
   consume(ref: unknown, row: FrontConsumeRow, bearing: number): void;
-  /** Stamp converted ground behind the trailing rim. */
-  stamp(x: number, y: number, r: number, ground: string, shallow: boolean): void;
+  /** Stamp converted ground behind the trailing rim. `fade` asks the world
+   *  to EVAPORATE the stamp: dwell `after` seconds, then contract at
+   *  `rate` units/sec until gone (the Doodad.evap fabric). */
+  stamp(x: number, y: number, r: number, ground: string, shallow: boolean,
+    fade?: { after: number; rate: number }): void;
   /** Displace one covered body (mover contract; world applies the spares). */
   drag(a: CreepActorLike, dx: number, dy: number): void;
   /** Drain a covered player's breath (survival fabric; world gates seats). */
@@ -286,6 +341,9 @@ export interface CreepTerrain {
    *  CondHeld — the lane gate's window. Absent = every lane unconditional,
    *  so bare harnesses keep their content.) */
   condHeld?(cond: FrontCond): boolean;
+  /** One floating arrival line on every seat (FrontSpawnRow.announce —
+   *  the wildlife arrival-line idiom). Absent = silent waves everywhere. */
+  announce?(text: string, color?: string): void;
 }
 
 /** The registry of record. A new creep kind is one registerCreep row —
@@ -315,7 +373,7 @@ export interface CreepValidationLookups {
  *  front lever resolves against the registry it points at. */
 export function validateCreep(
   hasStatus: (id: string) => boolean,
-  themeSpecs: readonly { owner: string; spec: ZoneCreepSpec }[],
+  themeSpecs: readonly { owner: string; spec: ZoneCreepSpec; aquatic?: boolean }[],
   lookups?: CreepValidationLookups,
 ): string[] {
   const bad: string[] = [];
@@ -372,8 +430,20 @@ export function validateCreep(
     }
     if (fs.drag && !(fs.drag.accel > 0)) bad.push(`creep '${id}': drag.accel must be > 0`);
     if (fs.drown && !(fs.drown.drain > 0)) bad.push(`creep '${id}': drown.drain must be > 0`);
+    if (fs.stretch !== undefined && !(fs.stretch >= 0.5 && fs.stretch <= 4)) {
+      bad.push(`creep '${id}': front.stretch wants [0.5, 4] — a wall, not a hairline`);
+    }
+    const fade = fs.convert?.fade;
+    if (fade) {
+      if (!(fade.after[0] >= 0 && fade.after[1] >= fade.after[0])) {
+        bad.push(`creep '${id}': convert.fade.after wants 0 <= lo <= hi`);
+      }
+      if (fade.rate !== undefined && !(fade.rate > 0)) {
+        bad.push(`creep '${id}': convert.fade.rate must be > 0`);
+      }
+    }
   }
-  for (const { owner, spec } of themeSpecs) {
+  for (const { owner, spec, aquatic } of themeSpecs) {
     for (const k of spec.kinds) {
       if (!CREEPS[k.id]) bad.push(`${owner}: creep spec names unregistered kind '${k.id}'`);
     }
@@ -382,11 +452,45 @@ export function validateCreep(
       const def = CREEPS[f.id];
       if (!def) { bad.push(`${owner}: front lane names unregistered kind '${f.id}'`); continue; }
       if (!def.front) bad.push(`${owner}: front lane '${f.id}' — that row carries no front levers`);
-      if (f.line && !(f.line[0] >= 1 && f.line[1] >= f.line[0])) bad.push(`${owner}: front lane '${f.id}' line wants 1 <= lo <= hi`);
+      if (Array.isArray(f.line) && !(f.line[0] >= 1 && f.line[1] >= f.line[0])) bad.push(`${owner}: front lane '${f.id}' line wants 1 <= lo <= hi`);
       for (const [name, band] of [['delay', f.delay], ['waves', f.waves]] as const) {
         if (band && !(band[0] >= 0 && band[1] >= band[0])) bad.push(`${owner}: front lane '${f.id}' ${name} wants 0 <= lo <= hi`);
       }
       if (typeof f.bearing === 'number' && !fin(f.bearing)) bad.push(`${owner}: front lane '${f.id}' bearing must be finite`);
+      if (f.spacing !== undefined && !(f.spacing >= 0.4)) {
+        bad.push(`${owner}: front lane '${f.id}' spacing < 0.4 — sections triple-stack`);
+      }
+      if (f.reach && !(f.reach[0] > 0 && f.reach[1] >= f.reach[0])) {
+        bad.push(`${owner}: front lane '${f.id}' reach wants 0 < lo <= hi`);
+      }
+      if (f.gap) {
+        if (f.line !== 'span') bad.push(`${owner}: front lane '${f.id}' gap without line 'span' — picket lines are already sparse`);
+        if (f.gap.width !== undefined && !(f.gap.width >= 90)) {
+          bad.push(`${owner}: front lane '${f.id}' gap.width < 90 — no honest weave lane`);
+        }
+        if (f.gap.count && !(f.gap.count[0] >= 1 && f.gap.count[1] >= f.gap.count[0])) {
+          bad.push(`${owner}: front lane '${f.id}' gap.count wants 1 <= lo <= hi`);
+        }
+      }
+      if (f.jitter !== undefined && !(f.jitter >= 0 && f.jitter <= 0.5)) {
+        bad.push(`${owner}: front lane '${f.id}' jitter wants [0, 0.5]`);
+      }
+      if (f.chance !== undefined && !(f.chance > 0 && f.chance <= 1)) {
+        bad.push(`${owner}: front lane '${f.id}' chance wants (0, 1]`);
+      }
+      if (f.announce && !f.announce.text) {
+        bad.push(`${owner}: front lane '${f.id}' announce with empty text`);
+      }
+    }
+    // Aquatic owners growing sea-forsworn kinds: the build refuses them
+    // structurally — warn so authored specs never carry dead rows.
+    if (aquatic) {
+      for (const k of spec.kinds) {
+        if (CREEPS[k.id]?.notAquatic) bad.push(`${owner}: aquatic arena grows notAquatic creep '${k.id}' (dead row — the build skips it)`);
+      }
+      for (const f of spec.fronts ?? []) {
+        if (CREEPS[f.id]?.notAquatic) bad.push(`${owner}: aquatic arena fields notAquatic front '${f.id}' (dead row — the build skips it)`);
+      }
     }
   }
   return bad;
@@ -467,6 +571,18 @@ export const CREEP_CFG = {
     /** Way discs cached per section refresh no farther than this beyond
      *  the rim ceiling (the yieldWays mask's broad phase). */
     wayPad: 60,
+    /** THE EVAPORATING WAKE's default contraction pace (units/sec) when a
+     *  convert.fade row names none. */
+    fadeRate: 7,
+    /** Spanning waves (line 'span'): the guaranteed clear corridor's
+     *  default width (world units of truly rim-free lane), how far in
+     *  from the flanks a corridor may roll (fraction of the crossing —
+     *  a gap pressed against the boundary is no lane at all), and the
+     *  harmonic-amplitude ceiling fraction the gap math holds sections
+     *  clear by (Σa ≤ lobing × this, from addSource's descending rolls). */
+    gapWidth: 150,
+    gapMargin: 0.16,
+    lobeCeil: 0.71,
   },
 };
 
@@ -482,6 +598,29 @@ export function creepRimMul(harm: readonly RimHarm[], ang: number): number {
   let m = 1;
   for (const h of harm) m += h.a * Math.sin(h.k * ang + h.p);
   return m;
+}
+
+/** The across-bearing stretch at a relative angle: the exact polar radius
+ *  of an ellipse with semi-axis 1 along the bearing and `stretch` across
+ *  it (r(θ) = s/√(s²cos²θ + sin²θ)). 1 is bit-exact identity — a round
+ *  row pays one compare. */
+export function creepStretchMul(stretch: number, angRel: number): number {
+  if (stretch === 1) return 1;
+  const c = Math.cos(angRel), s = Math.sin(angRel);
+  return stretch / Math.sqrt(stretch * stretch * c * c + s * s);
+}
+
+/** THE one live rim modulation for a source: harmonics × the front's
+ *  across-bearing stretch. The hit test, the render bake, the edge
+ *  telegraph and the wave-line spacing all multiply the live front by
+ *  THIS product — drawn and tested share one shape truth at every angle.
+ *  Only a marching source can be stretched (the ellipse needs a bearing);
+ *  every round source folds to creepRimMul exactly. */
+export function rimMulOf(src: CreepSource, ang: number): number {
+  const m = creepRimMul(src.harm, ang);
+  const st = src.def.front?.stretch;
+  if (st === undefined || st === 1 || !src.front) return m;
+  return m * creepStretchMul(st, ang - src.front.bearing);
 }
 
 export type CreepSourceState = 'grow' | 'hold' | 'recede';
@@ -575,6 +714,12 @@ export class CreepField {
    *  tap's early-out (a zone with no fronts pays nothing per hit). */
   quenchable = false;
 
+  /** Live lane count — chance rolls may have thinned the authored rows
+   *  (buildZoneCreep asks before keeping an otherwise-empty field). */
+  laneCount(): number {
+    return this.lanes.length;
+  }
+
   constructor(rng: CreepRng, w: number, h: number) {
     this.rng = rng;
     this.w = w;
@@ -593,13 +738,20 @@ export class CreepField {
     this.ways = ways;
   }
 
-  /** Seed the ambient front lanes from a theme spec (buildZoneCreep). */
+  /** Seed the ambient front lanes from a theme spec (buildZoneCreep). A
+   *  lane wearing `chance` exists-or-not per VISIT — the intra-zone-event
+   *  roll, drawn only when authored so chance-less specs keep their exact
+   *  stream. */
   installLanes(rows: readonly FrontSpawnRow[]): void {
     const fd = CREEP_CFG.front;
-    this.lanes = rows.map((row, idx) => ({
-      row, idx, live: 0, pending: true,
-      timer: this.rng.range(...(row.delay ?? fd.delay)),
-    }));
+    this.lanes = [];
+    for (const row of rows) {
+      if (row.chance !== undefined && this.rng.next() >= row.chance) continue;
+      this.lanes.push({
+        row, idx: this.lanes.length, live: 0, pending: true,
+        timer: this.rng.range(...(row.delay ?? fd.delay)),
+      });
+    }
   }
 
   /** Plant a patch. `reach` overrides the def roll; `bornFrac` starts the
@@ -702,6 +854,10 @@ export class CreepField {
     };
     const fs = src.def.front;
     if (fs?.quench || fs?.feed) this.quenchable = true;
+    // The bound learned at addSource predates the run state — refresh so a
+    // stretched crest widens its broad phase (round fronts recompute the
+    // identical value).
+    this.refreshBound(src);
   }
 
   /** One private xorshift step for a section's runtime rolls. */
@@ -715,20 +871,26 @@ export class CreepField {
   }
 
   /** Field a lane's wave: a picket line of sections abreast, entering from
-   *  the boundary the bearing points away from, swelling as they come. */
+   *  the boundary the bearing points away from, swelling as they come — or
+   *  a 'span' wall crossing the zone's whole breadth, always parted by at
+   *  least one clear corridor (the safe weave-lane is structural). */
   private spawnWave(lane: FrontLane): void {
     const def = CREEPS[lane.row.id];
     if (!def?.front) return;
     const fd = CREEP_CFG.front;
-    const bearing = (lane.row.bearing === undefined || lane.row.bearing === 'roll')
+    const row = lane.row;
+    const bearing = (row.bearing === undefined || row.bearing === 'roll')
       ? this.rng.range(0, Math.PI * 2)
-      : lane.row.bearing;
+      : row.bearing === 'cardinal'
+        ? [0, Math.PI / 2, Math.PI, -Math.PI / 2][this.rng.int(0, 3)]
+        : row.bearing;
     const dx = Math.cos(bearing), dy = Math.sin(bearing);
     // Walk BACK along the bearing from the zone heart to the rim — the
     // wave breaks in from the land's edge and crosses the whole ground.
     const cx = this.w / 2, cy = this.h / 2;
     const d = CREEP_CFG.def;
-    const band = ((def.reach ?? d.reach)[0] + (def.reach ?? d.reach)[1]) / 2;
+    const reachBand = row.reach ?? def.reach ?? d.reach;
+    const band = (reachBand[0] + reachBand[1]) / 2;
     const m = Math.min(band * 0.6, Math.min(this.w, this.h) * 0.2);
     let t = Infinity;
     if (dx > 1e-6) t = Math.min(t, (cx - m) / dx);
@@ -738,14 +900,83 @@ export class CreepField {
     if (!Number.isFinite(t)) return;
     const ox = cx - dx * t, oy = cy - dy * t;
     const px = -dy, py = dx;
-    const n = this.rng.int(...(lane.row.line ?? fd.line));
-    for (let i = 0; i < n; i++) {
-      const off = (i - (n - 1) / 2) * band * fd.lineSpacing;
-      const src = this.addSource(def, ox + px * off, oy + py * off, { bornFrac: fd.lineBorn });
-      if (!src) break; // the field is saturated — the wave arrives short
-      this.attachFront(src, bearing + this.rng.range(-fd.bearingJitter, fd.bearingJitter), lane.idx);
-      lane.live++;
+    // Offsets along the perpendicular. The multiplier chain stays in the
+    // classic left-to-right order so a lane without new fields lands its
+    // sections on byte-identical ground (× 1 is exact).
+    const sMul = row.spacing ?? fd.lineSpacing;
+    const stMul = Math.max(1, def.front.stretch ?? 1);
+    let plan: { off: number; reach?: number }[];
+    if (row.line === 'span') {
+      // THE TIDAL WALL: fill the crossing at spacing, middle-out (the
+      // saturation cap then trims FLANKS, never one whole side), and part
+      // it with rolled corridors no section's rim ceiling may crowd —
+      // clear width is a promise about RIMS, not about spawn points, so
+      // each section's reach rolls FIRST and its own lobe+stretch ceiling
+      // holds it clear. Crowding sections are NUDGED to the corridor's
+      // shoulder rather than dropped — the wall stays solid on both
+      // flanks (dropping them gutted small zones to a single crest);
+      // floor() keeps the outermost offsets inside the crossing.
+      const extent = Math.abs(dy) * this.w + Math.abs(dx) * this.h;
+      const step = band * sMul * stMul;
+      const n = Math.max(1, Math.floor(extent / step) + 1);
+      plan = [];
+      for (let i = 0; i < n; i++) plan.push({ off: (i - (n - 1) / 2) * step });
+      plan.sort((a, b) => Math.abs(a.off) - Math.abs(b.off));
+      const rb = row.reach ?? reachBand;
+      for (const p of plan) p.reach = this.rng.range(rb[0], rb[1]);
+      const lobing = def.lobing ?? d.lobing;
+      const width = row.gap?.width ?? fd.gapWidth;
+      const nGaps = row.gap?.count ? this.rng.int(...row.gap.count) : 1;
+      const g0 = -extent / 2 + extent * fd.gapMargin;
+      const g1 = extent / 2 - extent * fd.gapMargin;
+      const gaps: number[] = [];
+      for (let g = 0; g < nGaps; g++) gaps.push(this.rng.range(g0, g1));
+      for (let pass = 0; pass < 2; pass++) {
+        for (const p of plan) {
+          const thr = width / 2 + p.reach! * (1 + lobing * fd.lobeCeil) * stMul;
+          for (const gp of gaps) {
+            const rel = p.off - gp;
+            if (Math.abs(rel) < thr) p.off = gp + (rel >= 0 ? thr : -thr);
+          }
+        }
+      }
+      // Belt and suspenders: a section two corridors ping-ponged between
+      // (multi-gap rows only) is dropped, and nudges past the crossing's
+      // ends fall off the land.
+      plan = plan.filter(p => {
+        const thr = width / 2 + p.reach! * (1 + lobing * fd.lobeCeil) * stMul;
+        return Math.abs(p.off) <= extent / 2
+          && gaps.every(gp => Math.abs(p.off - gp) >= thr - 0.01);
+      });
+    } else {
+      const n = this.rng.int(...(row.line ?? fd.line));
+      plan = [];
+      for (let i = 0; i < n; i++) plan.push({ off: (i - (n - 1) / 2) * band * sMul * stMul });
     }
+    // A spanning line may not jitter its bearings apart — parallel march
+    // is what keeps the corridor open across the whole crossing.
+    const jitter = row.jitter ?? (row.line === 'span' ? 0 : fd.bearingJitter);
+    let fielded = 0;
+    for (const p of plan) {
+      const sx = ox + px * p.off, sy = oy + py * p.off;
+      // 'span' ends past the land (diagonal bearings) are skipped, never
+      // clamped — clamping would fold the wave's ends into stacked corners.
+      if (row.line === 'span'
+        && (sx < -band * 0.5 || sx > this.w + band * 0.5
+          || sy < -band * 0.5 || sy > this.h + band * 0.5)) continue;
+      const reach = p.reach
+        ?? (row.reach ? this.rng.range(row.reach[0], row.reach[1]) : undefined);
+      const src = this.addSource(def, sx, sy, {
+        bornFrac: fd.lineBorn,
+        ...(reach !== undefined ? { reach } : {}),
+      });
+      if (!src) break; // the field is saturated — the wave arrives short
+      this.attachFront(src,
+        jitter > 0 ? bearing + this.rng.range(-jitter, jitter) : bearing, lane.idx);
+      lane.live++;
+      fielded++;
+    }
+    if (fielded > 0 && row.announce) this.terrain?.announce?.(row.announce.text, row.announce.color);
     // A wave the saturation cap refused entirely still owes its return —
     // a lane must never die of a crowded moment.
     if (lane.live === 0 && lane.row.waves) {
@@ -812,16 +1043,20 @@ export class CreepField {
   }
 
   /** The ONE rim function: live front distance modulated by the source's
-   *  harmonics at a bearing (creepRimMul — shared with the render bake).
-   *  Ceiling = cur × (1 + Σa) — refreshBound keeps the broad phase honest. */
+   *  harmonics × any front stretch (rimMulOf — shared with the render
+   *  bake). Ceiling = cur × (1 + Σa) × stretch — refreshBound keeps the
+   *  broad phase honest. */
   rimAt(src: CreepSource, ang: number): number {
-    return src.cur * creepRimMul(src.harm, ang);
+    return src.cur * rimMulOf(src, ang);
   }
 
   private refreshBound(src: CreepSource): void {
     let sum = 0;
     for (const h of src.harm) sum += h.a;
-    src.bound = src.cur * (1 + sum) + 4;
+    // A stretched crest's ceiling is its ACROSS axis (× 1 for everything
+    // round — bit-exact with the classic bound).
+    const st = src.front ? Math.max(1, src.def.front?.stretch ?? 1) : 1;
+    src.bound = src.cur * (1 + sum) * st + 4;
   }
 
   /** Cover from ONE source at a point: 1 over the body, thinning to 0 at
@@ -1003,7 +1238,16 @@ export class CreepField {
         // ACROSS a live way — the same list the cover mask reads, tested
         // as a disc so a wide stamp can't slop onto the causeway.
         if (fs.yieldWays && this.wayIntersects(run, ax, ay, r)) continue;
-        this.terrain.stamp(ax, ay, r, conv.ground, conv.shallow ?? false);
+        // The evaporating wake: each pool's dwell rolls on the section's
+        // private stream (rows without fade draw nothing extra).
+        const fade = conv.fade
+          ? {
+            after: conv.fade.after[0]
+              + (conv.fade.after[1] - conv.fade.after[0]) * this.frontRoll(run),
+            rate: conv.fade.rate ?? fd.fadeRate,
+          }
+          : undefined;
+        this.terrain.stamp(ax, ay, r, conv.ground, conv.shallow ?? false, fade);
         run.stamps++;
       }
     }
@@ -1121,20 +1365,31 @@ export class CreepField {
  *  the zone grows nothing ambiently; runtime seams use World.creepEnsure. */
 export function buildZoneCreep(
   spec: ZoneCreepSpec | undefined,
-  arena: { w: number; h: number; boundless?: boolean },
+  arena: { w: number; h: number; boundless?: boolean; aquatic?: boolean },
   rng: CreepRng,
 ): CreepField | null {
-  if (!spec || (!spec.kinds.length && !spec.fronts?.length)) return null;
+  if (!spec) return null;
+  // WATER WITHIN WATER, refused structurally: an AQUATIC arena (whole-floor
+  // seabed) never grows a kind that forswears it (CreepDef.notAquatic) —
+  // the tidal wall breaks on coasts, never under the sea, and no blend or
+  // cross-seeded spec can smuggle one in. Dry zones take the exact same
+  // arrays (no filter run) — their streams cannot move.
+  const kinds = arena.aquatic ? spec.kinds.filter(k => !CREEPS[k.id]?.notAquatic) : spec.kinds;
+  const fronts = arena.aquatic
+    ? (spec.fronts ?? []).filter(f => !CREEPS[f.id]?.notAquatic)
+    : spec.fronts ?? [];
+  if (!kinds.length && !fronts.length) return null;
   if (arena.boundless) return null; // streamed arenas have no stable bounds to skin
   const field = new CreepField(rng, arena.w, arena.h);
   const n = rng.int(spec.pockets[0], spec.pockets[1]);
   let total = 0;
-  for (const k of spec.kinds) total += k.weight ?? 1;
+  for (const k of kinds) total += k.weight ?? 1;
   const placed: { x: number; y: number }[] = [];
   for (let i = 0; i < n; i++) {
+    if (!kinds.length) break; // every pocket kind was sea-forsworn
     let roll = rng.range(0, total);
-    let pick = spec.kinds[spec.kinds.length - 1];
-    for (const k of spec.kinds) {
+    let pick = kinds[kinds.length - 1];
+    for (const k of kinds) {
       roll -= k.weight ?? 1;
       if (roll <= 0) { pick = k; break; }
     }
@@ -1162,6 +1417,6 @@ export function buildZoneCreep(
   }
   // Ambient front lanes install AFTER the pocket rolls — the pocket stream
   // is untouched by a theme growing fronts beside its pockets.
-  if (spec.fronts?.length) field.installLanes(spec.fronts);
-  return (field.sources.length || spec.fronts?.length) ? field : null;
+  if (fronts.length) field.installLanes(fronts);
+  return (field.sources.length || field.laneCount()) ? field : null;
 }

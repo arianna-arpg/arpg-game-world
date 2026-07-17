@@ -79,6 +79,7 @@ registerCreep({
 registerCreep({
   id: 'floodcrest',
   color: '#1c4a5e', rim: '#bfe8ef', glow: '#7fd4e8',
+  notAquatic: true, // water within water — the crest breaks on land, never under the sea
   alpha: 0.62,
   reach: [95, 150],
   lobing: 0.3,
@@ -194,6 +195,117 @@ registerCreep({
   },
   grants: [
     { status: 'starfire', notFactions: ['vesperkin'] },
+  ],
+});
+
+/** THE BRINESURGE — the drained seabed's own weather: a quick, shin-high
+ *  briny wash that sweeps the pans and leaves a chain of TIDE POOLS drying
+ *  behind it (convert.fade — the pools contract like evaporating puddles
+ *  until the crust reads bare again; the tide's whole visit is written and
+ *  then unwritten). Wet ground hastens it, the causeway decks stay dry
+ *  (yieldWays), and it never drowns anyone — the pressure is the shove and
+ *  the wading slog, not the lungs. The Coilborn and the Deep's own wade
+ *  free: this is their water remembering them. */
+registerCreep({
+  id: 'brinesurge',
+  color: '#1a4a44', rim: '#e8f6ee', glow: '#9fe8d8',
+  notAquatic: true,
+  alpha: 0.6,
+  reach: [65, 105],
+  lobing: 0.28,
+  spread: 34,
+  recede: 100,
+  pulse: 1.4,
+  skin: 'water',
+  edge: { color: '#eafff4', style: 'foam' },
+  front: {
+    speed: 42,
+    affinity: {
+      ground: { water: 1.5, tide_pool: 1.5, brine_sink: 1.6, mud: 1.1, sand: 0.95 },
+      default: 0.9,
+    },
+    yieldWays: true,
+    convert: { ground: 'tide_pool', every: 1.9, r: [0.6, 0.85], fade: { after: [16, 28], rate: 8 } },
+    drag: { accel: 70, notFactions: ['deep', 'coilborn'] },
+    quench: { types: ['cold'], power: 380 },
+  },
+  grants: [
+    { status: 'wading', notFactions: ['deep', 'coilborn'] },
+  ],
+});
+
+/** THE TIDAL WALL — the sea itself deciding to take the land back for a
+ *  minute. Meant for `line: 'span'` lanes: a wall of stretched crests
+ *  crossing the zone's whole breadth, ALWAYS parted by at least one clear
+ *  corridor (the spanning wave's structural guarantee — the player's
+ *  weave-lane is a promise about rims, rolled fresh per wave), announced
+ *  as it breaks. Inside it you are swimming with a serious undertow and a
+ *  draining breath; behind it the land lies under a wadeable shallow wake
+ *  that DRIES pool by pool until the shore is itself again. Freezing a
+ *  tsunami is a feat, priced accordingly. */
+registerCreep({
+  id: 'tidalwall',
+  color: '#0f3a52', rim: '#eaf8ff', glow: '#7fd4e8',
+  notAquatic: true,
+  alpha: 0.7,
+  reach: [170, 240],
+  lobing: 0.24,
+  spread: 40,
+  recede: 120,
+  pulse: 1.1,
+  skin: 'water',
+  edge: { color: '#ffffff', style: 'foam', width: 6 },
+  front: {
+    speed: 30,
+    stretch: 1.7,
+    affinity: {
+      ground: { water: 1.4, tide_pool: 1.4, brine_sink: 1.4, bog: 1.2, swamp: 1.2, mud: 1.1 },
+      default: 0.95,
+    },
+    yieldWays: true,
+    convert: { ground: 'water', shallow: true, every: 2.0, r: [0.55, 0.75], fade: { after: [22, 38], rate: 6 } },
+    drag: { accel: 150, notFactions: ['deep', 'coilborn'] },
+    drown: { drain: 2.2 },
+    quench: { types: ['cold'], power: 950 },
+  },
+  grants: [
+    { status: 'swimming', notFactions: ['deep', 'coilborn'] },
+  ],
+});
+
+/** THE SANGUINE PULSE — the artery paying out on the heartbeat, made
+ *  literal. A crest of blood STRETCHED wide across its march (front.stretch
+ *  — the ellipse fills the gallery wall-to-wall) that sweeps the Sanguine's
+ *  open rivers on a pump cadence (`waves` every dozen seconds), carries
+ *  bodies downstream on the flow, and leaves pooled blood that DRAINS
+ *  behind it — the halls flood and empty like a working vessel. The flesh's
+ *  own ride the current unbothered; everyone else wades. Cold congeals a
+ *  pulse mid-stroke. */
+registerCreep({
+  id: 'sanguine_pulse',
+  color: '#4a0c16', rim: '#f08a96', glow: '#e03848',
+  notAquatic: true,
+  alpha: 0.66,
+  reach: [110, 150],
+  lobing: 0.18,
+  spread: 50,
+  recede: 130,
+  pulse: 2.2,
+  skin: 'water',
+  edge: { color: '#ff6a76', style: 'foam' },
+  front: {
+    speed: 58,
+    stretch: 2.6,
+    affinity: {
+      ground: { blood_pool: 1.5, water: 1.2 },
+      default: 1,
+    },
+    convert: { ground: 'blood_pool', every: 1.9, r: [0.5, 0.7], fade: { after: [9, 15], rate: 10 } },
+    drag: { accel: 120, notFactions: ['flesh'] },
+    quench: { types: ['cold'], power: 620 },
+  },
+  grants: [
+    { status: 'wading', notFactions: ['flesh'] },
   ],
 });
 

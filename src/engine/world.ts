@@ -2459,7 +2459,11 @@ export class World {
   /** Ground-overlay doodads only (terrain status lookups). */
   private grounds: Doodad[] = [];
   /** Skill-made terrain (Icy Comet's patch), swept out as it expires. */
-  private tempGrounds: { doodad: Doodad; remaining: number }[] = [];
+  private tempGrounds: { doodad: Doodad; remaining: number; evaporate?: { rate: number } }[] = [];
+  /** Doodads mid-evaporation (Doodad.evap): stamped creep wakes and
+   *  evaporate-marked temp grounds join at runtime; loadZone re-harvests
+   *  from the doodad list so a revisit resumes the drying. */
+  private evaporating: Doodad[] = [];
   shrines: Shrine[] = [];
   altars: Altar[] = [];
   chests: Chest[] = [];
@@ -3593,6 +3597,9 @@ export class World {
     this.snowCover = (this.zone.theme.heat ?? 0.5) <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
     this.snowFloor = 0;
     this.tempGrounds = [];
+    // Evaporating pools persist ON their doodads (zone memory) — harvest
+    // them back into the sweep so a revisit resumes the drying mid-step.
+    this.evaporating = this.doodads.filter(d => d.evap && !d.gone);
     // THE LIVING FOG (engine/fog.ts): banks gather on a SALTED copy of the
     // layout seed — fog can never advance layout/spawn rng — and roam from
     // there, transient like all ambient texture. Open-sky zones (no
@@ -3606,7 +3613,10 @@ export class World {
     // rng. Runtime spreaders (packages, creep-heart monsters) plant more
     // through creepEnsure(); everything here is rebuilt per visit.
     this.creep = buildZoneCreep(
-      this.zone.theme.creep, this.arena,
+      this.zone.theme.creep,
+      // The aquatic flag rides along so sea-forsworn kinds (notAquatic —
+      // no water waves inside the sea) are refused structurally at build.
+      { ...this.arena, ...(this.zone.aquatic ? { aquatic: true } : {}) },
       new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0));
     // Advancing fronts read the land through ONE installed window (ways
     // snapshot + terrain adapter); a front-less field pays nothing for it.
@@ -23056,11 +23066,20 @@ export class World {
    * the chunk baker paints it, the wayfaring fields price it); the old
    * literal six-kind union was the registry's stale shadow.
    */
-  addTempGround(pos: Vec2, kind: string, radius: number, duration: number): void {
-    const doodad: Doodad = { pos: vec(pos.x, pos.y), radius, kind };
+  addTempGround(pos: Vec2, kind: string, radius: number, duration: number,
+    opts?: { shallow?: boolean; evaporate?: { rate?: number } }): void {
+    const doodad: Doodad = {
+      pos: vec(pos.x, pos.y), radius, kind,
+      ...(opts?.shallow ? { shallow: true } : {}),
+    };
     this.doodads.push(doodad);
     this.grounds.push(doodad);
-    this.tempGrounds.push({ doodad, remaining: duration });
+    this.tempGrounds.push({
+      doodad, remaining: duration,
+      ...(opts?.evaporate
+        ? { evaporate: { rate: opts.evaporate.rate ?? CREEP_CFG.front.fadeRate } }
+        : {}),
+    });
   }
 
   private updateTempGrounds(dt: number): void {
@@ -23069,10 +23088,58 @@ export class World {
       t.remaining -= dt;
       if (t.remaining > 0) continue;
       this.tempGrounds.splice(i, 1);
+      // An evaporate-marked patch DRIES instead of popping: hand it to the
+      // evaporation sweep (the dwell is served — contraction starts now).
+      if (t.evaporate && !t.doodad.gone) {
+        t.doodad.evap = { t: 0, rate: t.evaporate.rate };
+        this.evaporating.push(t.doodad);
+        continue;
+      }
       const di = this.doodads.indexOf(t.doodad);
       if (di !== -1) this.doodads.splice(di, 1);
       const gi = this.grounds.indexOf(t.doodad);
       if (gi !== -1) this.grounds.splice(gi, 1);
+    }
+  }
+
+  /** THE EVAPORATING GROUND's shared paces (per-pool data rides
+   *  Doodad.evap): contraction is QUANTIZED — each step shrinks stepFrac
+   *  of the current radius (floored at stepMin units) then waits
+   *  step ÷ rate seconds, so the average shrink IS the authored rate while
+   *  the chunk baker pays a bounded stale trickle instead of a per-frame
+   *  churn. Below minRadius the pool retires outright (a speck of water
+   *  is nothing to wade). */
+  static readonly EVAP = {
+    stepFrac: 0.14,
+    stepMin: 3,
+    minRadius: 14,
+  };
+
+  /** THE EVAPORATING GROUND: pools wearing Doodad.evap dwell, then dry —
+   *  the radius IS the one truth (groundAt, wading statuses, path pricing
+   *  and the chunk bake all read the same number), so drawn == tested at
+   *  every step by construction. */
+  private updateEvaporation(dt: number): void {
+    const cfg = World.EVAP;
+    for (let i = this.evaporating.length - 1; i >= 0; i--) {
+      const d = this.evaporating[i];
+      const ev = d.evap;
+      if (!ev || d.gone) { this.evaporating.splice(i, 1); continue; }
+      ev.t -= dt;
+      if (ev.t > 0) continue;
+      const step = Math.max(cfg.stepMin, d.radius * cfg.stepFrac);
+      d.radius -= step;
+      if (d.radius <= cfg.minRadius) {
+        delete d.evap;
+        this.evaporating.splice(i, 1);
+        const di = this.doodads.indexOf(d);
+        if (di !== -1) this.doodads.splice(di, 1);
+        const gi = this.grounds.indexOf(d);
+        if (gi !== -1) this.grounds.splice(gi, 1);
+      } else {
+        ev.t += step / ev.rate;
+      }
+      this.markDoodadsChanged();
     }
   }
 
@@ -27762,6 +27829,7 @@ export class World {
     this.actorGridRev++;
 
     this.updateTempGrounds(dt);
+    this.updateEvaporation(dt);
     this.updatePendingBursts();
     this.updatePendingContagions();
     this.updateTerrainEffects(dt);
@@ -30384,7 +30452,7 @@ export class World {
         }
       },
       consume: (ref, row) => this.frontConsume(ref as Doodad, row),
-      stamp: (x, y, r, ground, shallow) => {
+      stamp: (x, y, r, ground, shallow, fade) => {
         // Converted ground is ordinary runtime terrain: a real disc in the
         // doodad list (groundAt senses it, the chunk baker repaints it,
         // the index rebuild is the same one every brittle pop pays).
@@ -30393,25 +30461,32 @@ export class World {
         // pool would only dirty chunks for nothing (the wet country the
         // crest crosses is conversion-free by definition).
         if (this.groundAt(vec(px, py))?.kind === ground) return;
-        // SHALLOW POOLS NEVER STACK: the ford-lightening visual draws per
-        // shallow disc, so overlapping wake pools composite into a flat
-        // pale wash that erases the mottle under the crossed band (the
-        // "ground goes flat past a line" read). Kissing is fine; landing
-        // ON an existing shallow pool of the same water is refused — the
-        // wake is a chain of pools by contract, not a smear.
-        if (shallow) {
+        // SHALLOW (and evaporating) POOLS NEVER STACK: the ford-lightening
+        // visual draws per shallow disc, so overlapping wake pools
+        // composite into a flat pale wash that erases the mottle under the
+        // crossed band (the "ground goes flat past a line" read). Kissing
+        // is fine; landing ON an existing pool of the same kind is refused
+        // — the wake is a chain of pools by contract, not a smear. A FRESH
+        // wave crossing a drying pool re-wets it instead: the dwell clock
+        // resets, no twin stacks on top.
+        if (shallow || fade) {
           for (const o of this.doodadsNear(px, py, r)) {
-            if (o.kind !== ground || !o.shallow || o.gone) continue;
+            if (o.kind !== ground || !(o.shallow || o.evap) || o.gone) continue;
             const dd = Math.hypot(o.pos.x - px, o.pos.y - py);
-            if (dd < (o.radius + r) * 0.95) return;
+            if (dd < (o.radius + r) * 0.95) {
+              if (fade && o.evap) o.evap.t = Math.max(o.evap.t, fade.after);
+              return;
+            }
           }
         }
         const d: Doodad = {
           pos: vec(px, py),
           radius: r, kind: ground, ...(shallow ? { shallow: true } : {}),
+          ...(fade ? { evap: { t: fade.after, rate: fade.rate } } : {}),
         };
         this.doodads.push(d);
         if (GROUND_KINDS.includes(d.kind)) this.grounds.push(d);
+        if (fade) this.evaporating.push(d);
         this.markDoodadsChanged();
       },
       drag: (a, dx, dy) => {
@@ -30436,6 +30511,13 @@ export class World {
       // structural FrontCond is radiance's own shape (the cast is the
       // zero-import doctrine's price, paid once here).
       condHeld: (c) => this.radianceCondHeld(c as RadianceCond),
+      // A fielding wave's arrival line (FrontSpawnRow.announce), on every
+      // seat — the wildlife arrival-line idiom.
+      announce: (text, color) => {
+        for (const s of this.seats) {
+          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), text, color ?? '#9fd8e8', 13);
+        }
+      },
     });
   }
 

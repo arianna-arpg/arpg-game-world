@@ -99,7 +99,12 @@ changes.
   `creep.ts` (THE CREEP FABRIC: living ground membrane as data — CreepDef
   kinds + ZoneTheme.creep pockets, runtime sources via World.creepEnsure /
   MonsterDef.creepSource hearts that recoil on death; the drawn skin is
-  the hit surface — docs in `docs/engine/creep.md`),
+  the hit surface; WAVE SHAPES as per-lane data — `line: 'span'` tidal
+  walls with a structurally guaranteed clear corridor, `FrontSpec.stretch`
+  artery-wide crests, `convert.fade` evaporating wakes riding the generic
+  `Doodad.evap` drying fabric, `chance`/`announce` intra-zone-event dials,
+  `CreepDef.notAquatic` no-water-within-water — docs in
+  `docs/engine/creep.md`),
   `collapse.ts` + `traversal.ts` + `render/vis/understory.ts` (THE VERTICAL
   FABRICS: dissolving ground as a `ZoneTheme.collapse` spec — contact
   crumble + seeded rim-inward melt, an eroding-but-guaranteed causeway to

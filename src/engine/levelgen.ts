@@ -452,6 +452,13 @@ export interface Doodad {
   dir?: number;
   /** Water only: a ford — always wading-depth, never swimming. */
   shallow?: boolean;
+  /** THE EVAPORATING GROUND (World.updateEvaporation): dwell `t` seconds,
+   *  then CONTRACT — radius stepping down at `rate` units/sec (quantized;
+   *  EVAP_CFG) until the pool is gone and the floor reverts. Stamped by
+   *  creep-front wakes (FrontSpec.convert.fade) and addTempGround's
+   *  evaporate option; carried ON the doodad so a revisit within the
+   *  zone's memory TTL resumes the drying where it left off. */
+  evap?: { t: number; rate: number };
   /** Vegetation/rock random spin (radians), set at stamp time from the seeded
    *  layout rng — so a place keeps its orientations across revisits. */
   rot?: number;
