@@ -658,8 +658,11 @@ export type AIAction =
   | { do: 'announce'; text: string; color?: string; size?: number }
   /** Cast a skill by id THROUGH the normal pipeline (the actor's level, its
    *  stats, its costs — full player parity). `force` skips cost + cast bar
-   *  for choreography that must never fizzle. */
-  | { do: 'cast'; skill: string; at?: 'target' | 'self' | 'anchor' | 'behindTarget' | 'awayFromTarget' | 'randomNear'; force?: boolean; mult?: number }
+   *  for choreography that must never fizzle. `at:'ahead'` aims the actor's
+   *  OWN next stride — `ahead` px along its facing (default 120), ground-
+   *  snapped: the walking-colossus verb, a footfall telegraphing where the
+   *  BODY goes, not where the prey stands. */
+  | { do: 'cast'; skill: string; at?: 'target' | 'self' | 'anchor' | 'behindTarget' | 'awayFromTarget' | 'randomNear' | 'ahead'; ahead?: number; force?: boolean; mult?: number }
   /** Raise minions/adds in a ring around self (or the spawn anchor). `tag`
    *  marks them (ward gates + goto tagCleared read it); `lifespan` for
    *  waves that expire. */

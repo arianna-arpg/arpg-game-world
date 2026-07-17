@@ -640,6 +640,16 @@ export function validateContent(): void {
     for (const stat of Object.keys(m.scaling ?? {})) {
       if (!STAT_DEFS[stat]) warn(`${m.id}: scaling references unknown stat '${stat}'`);
     }
+    // THE HIT CEILING (hitCap): 0/absent = uncapped, so an authored cap
+    // must be a real positive number — and one the body's own life keeps
+    // meaningful (a cap at or past base life never clamps: dead data).
+    if (m.base.hitCap !== undefined) {
+      if (!Number.isFinite(m.base.hitCap) || m.base.hitCap <= 0) {
+        warn(`${m.id}: base.hitCap must be a positive number (omit for uncapped)`);
+      } else if (m.base.hitCap >= (m.base.life ?? 50)) {
+        warn(`${m.id}: base.hitCap ${m.base.hitCap} >= base life ${m.base.life ?? 50} — the cap can never clamp`);
+      }
+    }
     // A breathing shell needs an ARC to breathe — side 'all' has none.
     if (m.shellGuard?.breathe && m.shellGuard.side === 'all') {
       warn(`${m.id}: shellGuard.breathe on side 'all' — no arc to breathe; the spec is inert`);
@@ -805,6 +815,11 @@ export function validateContent(): void {
     if (s.delivery.type === 'construct' && s.baseDamage
       && !s.effects.some(e => e.type === 'damage')) {
       warn(`skill ${s.id}: construct carries baseDamage but no 'damage' effect — grafted construct-fx hits resolve for ZERO (add the effect or drop the roll)`);
+    }
+    // THE TOLL (selfCleanse): the portion is a fraction of banked stacks —
+    // outside (0,1] it is a typo, not a design.
+    if (s.selfCleanse && !(s.selfCleanse.stacksPortion > 0 && s.selfCleanse.stacksPortion <= 1)) {
+      warn(`skill ${s.id}: selfCleanse.stacksPortion must be in (0,1]`);
     }
   }
 

@@ -7917,6 +7917,122 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['cleave'], xp: 0,
   },
 
+  // DOLMOURN, THE IRON BELL — the walking mausoleum of the karst country
+  // (worldboss 'iron_bell', biome-locked apparition). Almost passive: glacial
+  // pace, no charge, no chase — its MOVEMENT is the enemy. The brain's stride
+  // beat casts ironbell_step at the colossus's OWN next foot placement (the
+  // at:'ahead' verb — the ground decal burns there for the whole 2.6s bar,
+  // the cast roots the hull, then ordinary walking carries it INTO its own
+  // crater: the mausoleum gait, from stock machinery). The carried bell
+  // answers each landing with ironbell_toll — stun ring + selfCleanse: the
+  // banked afflictions shed, and re-stacking becomes the fight's rhythm.
+  //
+  // DEFENSE TEXTURE (the hitCap marquee): mountainous armor + a per-hit LIFE
+  // ceiling — bursts flatten to the cap and READ 'capped' — while statuses
+  // stack free and DoT ticks pass the cap by construction. Ailment builds
+  // headline ON PURPOSE; a throughput build survives between the steps and
+  // may still SUNDER the parts (breakDamage chunks are mechanic damage, the
+  // slow lane through the wall). Counterplay ladder: each cracked bearing
+  // column OPENS THE HULL (stacking damageTaken — the mausoleum never
+  // slows: it is inexorable, you crack it open instead; note moveSpeed
+  // wears a global stat floor of 30, so slows below it are dead data);
+  // crack THE BELL and the toll falls silent forever (breakDisables
+  // reaches scripted beats via the aiSkillBans set).
+  primeval_ironbell: {
+    id: 'primeval_ironbell', name: 'Dolmourn, the Iron Bell',
+    color: '#8d8672', shape: 'rectangle', radius: 34, material: 'stone', look: 'ironbell_mausoleum',
+    base: {
+      life: 1500, moveSpeed: 30, accuracy: 140, armor: 160, poise: 150,
+      mana: 200, manaRegen: 10, weight: 14, hitCap: 26,
+    },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: [],
+    xp: 640, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.5, turnSpeed: 0.9,
+    scaling: { life: { incPerLevel: 0.15 }, hitCap: { incPerLevel: 0.15 } },
+    parts: [
+      { monster: 'primeval_ironbell_leg', dx: 1.25, dy: 1.15, lifeFrac: 0.13, breakDamage: 0.05,
+        breakMods: [mod('damageTaken', 'increased', 0.06)] },
+      { monster: 'primeval_ironbell_leg', dx: 1.25, dy: -1.15, lifeFrac: 0.13, breakDamage: 0.05,
+        breakMods: [mod('damageTaken', 'increased', 0.06)] },
+      { monster: 'primeval_ironbell_leg', dx: -1.25, dy: 1.15, lifeFrac: 0.13, breakDamage: 0.05,
+        breakMods: [mod('damageTaken', 'increased', 0.06)] },
+      { monster: 'primeval_ironbell_leg', dx: -1.25, dy: -1.15, lifeFrac: 0.13, breakDamage: 0.05,
+        breakMods: [mod('damageTaken', 'increased', 0.06)] },
+      { monster: 'primeval_ironbell_bell', dx: -1.55, dy: 0, lifeFrac: 0.2, breakDamage: 0.08,
+        breakDisables: ['ironbell_toll'], breakMods: [mod('damageTaken', 'increased', 0.1)] },
+    ],
+    brain: {
+      type: 'juggernaut',
+      script: [
+        { id: 'procession',
+          cadences: [
+            { every: 6.5, first: 3.5, actions: [{ do: 'cast', skill: 'ironbell_step', at: 'ahead', ahead: 120 }] },
+            // The toll rings AS the foot lands: step bar 2.6s + impact delay
+            // 0.35s — the offset keeps the two beats ONE readable moment.
+            { every: 6.5, first: 6.4, actions: [{ do: 'cast', skill: 'ironbell_toll', at: 'self', force: true }] },
+          ],
+          goto: [{ to: 'clangor', atLifeFrac: 0.6 }] },
+        { id: 'clangor', rewardGems: 1,
+          announce: 'The Bell quickens — the toll comes faster!',
+          mods: [mod('moveSpeed', 'more', 0.3)],
+          onEnter: [{ do: 'summon', monster: 'toll_wretch', count: 3, ring: 230, tag: 'bell_procession' }],
+          cadences: [
+            { every: 5.2, first: 1.2, actions: [{ do: 'cast', skill: 'ironbell_step', at: 'ahead', ahead: 130 }] },
+            { every: 5.2, first: 4.1, actions: [{ do: 'cast', skill: 'ironbell_toll', at: 'self', force: true }] },
+          ],
+          goto: [{ to: 'lastpeal', atLifeFrac: 0.25 }] },
+        { id: 'lastpeal', rewardGems: 2,
+          announce: 'DOLMOURN TOLLS THE LAST PEAL — live between the steps!',
+          mods: [mod('moveSpeed', 'more', 0.45), mod('damage', 'more', 0.3)],
+          cadences: [
+            { every: 4.2, first: 0.8, actions: [{ do: 'cast', skill: 'ironbell_step', at: 'ahead', ahead: 140 }] },
+            { every: 4.2, first: 3.7, actions: [{ do: 'cast', skill: 'ironbell_toll', at: 'self', force: true }] },
+          ],
+          goto: [] },
+      ],
+    },
+  },
+  /** A bearing column — crack it and the hull OPENS WIDER (breakMods). */
+  primeval_ironbell_leg: {
+    id: 'primeval_ironbell_leg', name: 'Bearing Column',
+    color: '#847e6c', shape: 'hexagon', radius: 11, material: 'stone', look: 'ironbell_leg',
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    base: { life: 120, moveSpeed: 0, armor: 110, poise: 90, weight: 12, hitCap: 15 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: [], xp: 0,
+    scaling: { life: { incPerLevel: 0.15 }, hitCap: { incPerLevel: 0.15 } },
+  },
+  /** The bell itself — crack it and the toll falls SILENT (breakDisables):
+   *  afflictions bank freely for the rest of the fight. The strategic part. */
+  primeval_ironbell_bell: {
+    id: 'primeval_ironbell_bell', name: 'The Iron Bell',
+    color: '#b8a878', shape: 'trapezoid', radius: 13, material: 'metal', look: 'ironbell_bell',
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    base: { life: 120, moveSpeed: 0, armor: 70, poise: 70, weight: 10, hitCap: 18 },
+    skills: [], xp: 0,
+    scaling: { life: { incPerLevel: 0.15 }, hitCap: { incPerLevel: 0.15 } },
+  },
+  /** Keeper of the Toll — the Bell's tender: the hushmaiden grammar in
+   *  funeral stone, the chime at the hip naming its office at a glance. */
+  bell_keeper: {
+    id: 'bell_keeper', name: 'Keeper of the Toll',
+    color: '#9a917c', shape: 'circle', radius: 10, material: 'cloth', look: 'bell_keeper',
+    base: { life: 95, moveSpeed: 62, accuracy: 110, armor: 45, mana: 60, manaRegen: 4 },
+    skills: ['cleave'], xp: 30,
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.1,
+  },
+  /** Toll-wretch — shroud-bound penitent chaff chained to the procession. */
+  toll_wretch: {
+    id: 'toll_wretch', name: 'Toll-Wretch',
+    color: '#7c766a', shape: 'circle', radius: 8, material: 'cloth', look: 'toll_wretch',
+    base: { life: 42, moveSpeed: 74, accuracy: 95 },
+    skills: ['claw'], xp: 12,
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    brain: { type: 'swarm' },
+  },
+
   // ASHVEIN, the Furnace Below — hell's own sovereign (UNDERWORLD-ONLY: the
   // def's dimension row keeps it off the surface instance's roster entirely).
   primeval_ashvein: {

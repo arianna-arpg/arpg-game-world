@@ -17490,6 +17490,13 @@ export class World {
     const def = inst.def;
     const extra = instanceMods(inst);
     SIM_TAP.current?.onCast?.(caster, inst, !!opts.noRepeat);
+    // THE TOLL (SkillDef.selfCleanse): firing rings a portion of the
+    // caster's OWN afflictions off — once per press (scheduled repeats
+    // re-fire the delivery, never the absolution), and hit-independent:
+    // an empty field still buys the relief.
+    if (def.selfCleanse && !opts.noRepeat) {
+      this.ringAfflictions(caster, def.selfCleanse.stacksPortion);
+    }
     // Tags granted by socketed supports count here too: a Dive-Bombed
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(def, grantedTags(inst));
@@ -22319,6 +22326,42 @@ export class World {
     return stripped;
   }
 
+  /** THE PARTIAL TOLL (SkillDef.selfCleanse): ring a PORTION of every
+   *  harmful affliction off the bearer — stacking statuses shed
+   *  round(stacks × portion) (min 1; per-stack mods re-synced, the source
+   *  lifted with the last stack), single-stack afflictions lose portion of
+   *  their remaining time instead. cleanseActor's graded cousin: the bell
+   *  buys a BEAT of relief, never absolution — re-stacking is the fight's
+   *  rhythm, and cracking the bell silences it. */
+  private ringAfflictions(target: Actor, portion: number): number {
+    if (portion <= 0) return 0;
+    let rung = 0;
+    for (let i = target.statuses.length - 1; i >= 0; i--) {
+      const s = target.statuses[i];
+      const def = STATUS_DEFS[s.id];
+      if (def?.beneficial) continue;
+      if (s.stacks > 1) {
+        s.stacks -= Math.max(1, Math.round(s.stacks * portion));
+        if (s.stacks <= 0) {
+          target.statuses.splice(i, 1);
+          if (!target.statuses.some(o => o.id === s.id)) {
+            target.sheet.removeSource('status:' + s.id);
+          }
+        } else if (def?.mods && def.modsPerStack) {
+          // The sunscorch-dwindle discipline: per-stack mods re-sync on
+          // every shed so the sheet never wears stacks the body lost.
+          target.sheet.setSource('status:' + s.id,
+            def.mods.map(m => ({ ...m, value: m.value * s.stacks })));
+        }
+      } else {
+        s.remaining *= 1 - portion;
+      }
+      rung++;
+    }
+    if (rung > 0) this.text(target.pos, 'rung clean', '#d8c8a0', 12);
+    return rung;
+  }
+
   /** Apply a skill's heal/cleanse effects to every ALLY a geometry test
    *  accepts — the mend half of heal-and-harm deliveries (the damage half
    *  already swept the enemies). */
@@ -22390,10 +22433,15 @@ export class World {
     for (const e of this.actors) {
       if (!this.isBurstTarget(e, sourceTeam)) continue;
       if (dist(pos, e.pos) - e.radius > radius) continue;
-      const taken = mitigateTyped(e, { [type]: dmg });
+      const out: { clamped?: boolean } = {};
+      const taken = mitigateTyped(e, { [type]: dmg }, { out });
       e.life -= taken;
       e.hitFlash = 0.15;
       this.text(e.pos, Math.round(taken).toString(), color, 14);
+      // The burst lane prints its own number, so it carries its own capped
+      // read — this is the resolveHit-bypassing path the cap must still
+      // speak on (cast honesty holds on every lane that prints).
+      if (out.clamped) this.text(vec(e.pos.x, e.pos.y - 20), 'capped', '#9ab0c8', 12);
       if (e.life <= 0 && !e.dead) this.kill(e);
     }
     this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
@@ -22954,6 +23002,11 @@ export class World {
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
         this.text(vec(target.pos.x, target.pos.y - 20), 'CULLED!', '#c8a0e8', 14);
+      }
+      // CAPPED: the victim's hitCap flattened the life cut (cast honesty —
+      // a clamped blow must never read as full work; the counter is DoT).
+      if (result.clamped) {
+        this.text(vec(target.pos.x, target.pos.y - 20), 'capped', '#9ab0c8', 12);
       }
       // The poise bar SHATTERED under this blow — the breaker's payoff
       // loop (poiseBreakDealt, with the breaking skill's context). The
@@ -28613,6 +28666,12 @@ export class World {
     }
     if (pd.breakDisables?.length) {
       root.skills = root.skills.filter(s => !s || !pd.breakDisables!.includes(s.def.id));
+      // Choreography mints its OWN instances (aiActionInsts), so the kit
+      // filter alone can't silence a scripted beat — the break also writes
+      // the ban set every scripted verb checks at mint. One break, silent
+      // on every lane (the Iron Bell's cracked bell, Cragmaw's spent fist).
+      root.aiSkillBans ??= new Set();
+      for (const id of pd.breakDisables) root.aiSkillBans.add(id);
     }
   }
 

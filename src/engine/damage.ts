@@ -192,6 +192,9 @@ export interface HitResult {
   poiseBroke?: boolean;
   /** This hit EXECUTED via the attacker's cullThreshold (the world prints it). */
   culled?: boolean;
+  /** This hit's life cut was FLATTENED by the victim's hitCap stat — the
+   *  world prints it, so a capped blow never masquerades as full work. */
+  clamped?: boolean;
 }
 
 const RES_STAT: Record<DamageType, string | null> = {
@@ -234,8 +237,9 @@ export interface MitigateOpts {
   attacker?: Actor;
   tags?: Set<SkillTag>;
   extra?: Modifier[];
-  /** Out-param: set when this bundle broke the victim's poise. */
-  out?: { poiseBroke?: boolean };
+  /** Out-params: poiseBroke when this bundle broke the victim's poise;
+   *  clamped when the victim's hitCap flattened the life cut. */
+  out?: { poiseBroke?: boolean; clamped?: boolean };
 }
 
 /**
@@ -340,9 +344,25 @@ export function mitigateTyped(
     aura.ledger.balance += skim;
     total -= skim;
   }
-  return soakDamage(target, total, opts?.attacker
+  let landed = soakDamage(target, total, opts?.attacker
     ? { pen: { attacker: opts.attacker, tags: opts.tags, extra: opts.extra } }
     : undefined);
+  // THE HIT CEILING (hitCap): a per-hit cap on the LIFE damage any single
+  // mitigated packet may land — applied HERE, after the whole ladder, so
+  // every hit that reaches life passes under it: applyHit swings and the
+  // caster-less area lane (death-bursts, doodad lashes, minion beams)
+  // alike. DoT ticks never enter mitigateTyped (applyDotCore soaks
+  // directly), so attrition keeps full work by construction — the cap is
+  // a defense TEXTURE with a counter-build, never an immunity. Poise and
+  // the pools above still drained in full: only the life cut flattens.
+  if (landed > 0) {
+    const cap = target.sheet.get('hitCap');
+    if (cap > 0 && landed > cap) {
+      landed = cap;
+      if (opts?.out) opts.out.clamped = true;
+    }
+  }
+  return landed;
 }
 
 /** Apply a rolled packet to a defender. Returns what actually landed. */
@@ -445,7 +465,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     }
   }
 
-  const out: { poiseBroke?: boolean } = {};
+  const out: { poiseBroke?: boolean; clamped?: boolean } = {};
   const total = mitigateTyped(target, packet.amounts,
     { attacker, tags: packet.tags, extra: packet.extra, out });
   target.life -= total;
@@ -507,7 +527,7 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   }
   return {
     evaded: false, immune: false, blocked: false, total, crit: packet.crit,
-    poiseBroke: out.poiseBroke, culled,
+    poiseBroke: out.poiseBroke, culled, clamped: out.clamped,
   };
 }
 

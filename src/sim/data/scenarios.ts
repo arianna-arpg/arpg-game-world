@@ -247,6 +247,32 @@ for (const classId of ['warrior', 'magician']) {
   }
 }
 
+// THE IRON BELL TEXTURE PROBE (hitCap) — the INVERSION is the claim. On the
+// training dummy the loaded-dice burst build far outguns the venom stacker;
+// into the Iron Bell the order FLIPS: every jackpot flattens to the per-hit
+// ceiling (dps_out collapses toward cap × cast rate) while poison ticks
+// pass the cap whole (applyDot never enters mitigateTyped). The dummy rows
+// are the control, the matchup rows the claim; if the four numbers ever
+// stop inverting, the texture died silently — investigate before shipping.
+add({
+  id: 'ironbell_ctrl_rot_dummy', label: 'Iron Bell control — venom stacker vs dummy',
+  build: 'ironbell_rot_l12', pilot: pilotFor('magician'),
+  waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
+  duration: 30, stop: 'duration',
+  notes: 'Control leg of the hitCap inversion — compare with matchup_ironbell_rot.',
+});
+add({
+  id: 'ironbell_ctrl_burst_dummy', label: 'Iron Bell control — loaded-dice nuker vs dummy',
+  build: 'ironbell_burst_l12', pilot: pilotFor('magician'),
+  waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
+  duration: 30, stop: 'duration',
+  notes: 'Control leg of the hitCap inversion — compare with matchup_ironbell_burst.',
+});
+add(matchupDuel('ironbell_rot_l12', 'primeval_ironbell',
+  { level: 12, pilot: pilotFor('magician'), duration: 240 }));
+add(matchupDuel('ironbell_burst_l12', 'primeval_ironbell',
+  { level: 12, pilot: pilotFor('magician'), duration: 240 }));
+
 // ------------------------------------------------------------------ suites --
 
 /** Named bundles: the unit a balance pass (or a CI gate) runs. */
@@ -279,6 +305,10 @@ export const SUITES: Record<string, string[]> = {
   fortune: Object.keys(SCENARIOS).filter(id => id.startsWith('fortune_probe_')),
   /** Curated texture matchups (starter archetypes × confirmed texture seats). */
   matchups: Object.keys(SCENARIOS).filter(id => id.startsWith('matchup_')),
+  /** The Iron Bell defense-texture INVERSION (hitCap): the burst build wins
+   *  the dummy and loses the bell; the rot build the reverse. Four rows. */
+  ironbell: Object.keys(SCENARIOS).filter(id =>
+    id.startsWith('matchup_ironbell_') || id.startsWith('ironbell_ctrl_')),
   /** Everything registered. */
   all: [], // filled below
 };

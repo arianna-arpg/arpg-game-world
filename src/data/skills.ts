@@ -58,6 +58,41 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 80, weight: 3 },
   },
 
+  // --- THE IRON BELL's verbs (worldboss 'iron_bell') -------------------------
+  // The walking mausoleum's whole fight is these two beats: the STRIDE is a
+  // ground cast aimed at the colossus's OWN next foot placement (the brain's
+  // at:'ahead' verb — the FORESIGHT decal telegraphs the footfall for the
+  // entire windup), and the TOLL is its punctuation — the carried bell rings
+  // banked afflictions off the bearer (SkillDef.selfCleanse) and stuns the
+  // near field. Both are ordinary data: any body may learn to walk this way.
+  ironbell_step: {
+    id: 'ironbell_step', name: 'Sepulchral Stride',
+    description: 'The colossus commits its next footfall: a long, honest wind-up — then the ground beneath the foot is unmade, and everything near is hurled aside.',
+    noDrop: true,
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#8d8672',
+    manaCost: 0, cooldown: 2.5, useTime: 2.6,
+    baseDamage: { physical: [46, 64] },
+    delivery: { type: 'ground', radius: 96, castRange: 300, delay: 0.35 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 430 },
+    ],
+  },
+  ironbell_toll: {
+    id: 'ironbell_toll', name: 'The Toll',
+    description: 'The carried bell RINGS: a portion of the bearer\'s banked afflictions shed at once, and the near field is stunned senseless.',
+    noDrop: true,
+    tags: ['spell', 'aoe', 'physical'], color: '#d8c8a0',
+    manaCost: 0, cooldown: 2.5, useTime: 0.4,
+    baseDamage: { physical: [8, 12] },
+    delivery: { type: 'nova', radius: 215 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 1, durationOverride: 1.15 },
+    ],
+    selfCleanse: { stacksPortion: 0.34 },
+  },
+
   war_cry: {
     id: 'war_cry', name: 'War Cry',
     description: 'Bellow a battle cry, rallying yourself for greater damage.',

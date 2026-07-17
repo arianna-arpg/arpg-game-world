@@ -59,6 +59,15 @@ export interface WorldBossDef {
    *  the overlay INSTANCE's dimension, so an underworld-only sovereign is one
    *  field on the row. */
   dimension?: string;
+  /** Restrict manifestation to these ZoneDef.biome ids (the encounters.ts
+   *  allowlist idiom). Absent = anywhere the zone-policy floor admits. A
+   *  biome-locked sovereign only enters the roll when the charted web holds
+   *  ground that admits it — it never eats the roster's turn from exile. */
+  biomes?: string[];
+  /** The honest ask, ONE line, shown wherever the fight is pitched (the
+   *  zone-info row today) — the promise may never disagree with the ground:
+   *  say what cracks this body, not just that it stands here. */
+  pitch?: string;
   /** The boss ROOT monster def — its hitbox silhouette rides MonsterDef.parts. */
   monster: string;
   /** Relative roll weight among sibling defs of the same archetype (default 1). */
@@ -655,10 +664,14 @@ export class WorldBossField implements WorldOverlay {
   devManifest(view: OverlayView, zoneId: string, defId?: string): boolean {
     const z = view.byId[zoneId];
     if (!z || !this.targetable(z)) return false;
+    // Force waives TUNING (level floors), never ELIGIBILITY: the biome lock
+    // is zone policy, so both dev branches re-apply it (the Ashvein-on-the-
+    // surface lesson — an explicit id needs the full natural predicate).
     const def = defId
       ? this.cfg.defs.find(d => d.id === defId && d.archetype === 'apparition'
-        && (d.dimension ?? 'surface') === (this.dimension ?? 'surface')) ?? null
-      : this.pickDef('apparition', Number.POSITIVE_INFINITY);
+        && (d.dimension ?? 'surface') === (this.dimension ?? 'surface')
+        && this.admitsBiome(d, z)) ?? null
+      : this.pickDef('apparition', Number.POSITIVE_INFINITY, d => this.admitsBiome(d, z));
     if (!def) return false;
     const a: ActiveApparition = {
       id: `wb_${this.seq++}`, defId: def.id, zoneId,
@@ -699,13 +712,22 @@ export class WorldBossField implements WorldOverlay {
     return eventTargetable(this.id, z);
   }
 
-  private pickDef(archetype: WorldBossArchetype, charLevel: number): WorldBossDef | null {
+  private pickDef(
+    archetype: WorldBossArchetype, charLevel: number,
+    eligible?: (d: WorldBossDef) => boolean,
+  ): WorldBossDef | null {
     const pool = this.cfg.defs
       .filter(d => d.archetype === archetype
         && (d.dimension ?? 'surface') === (this.dimension ?? 'surface')
-        && charLevel >= (d.minLevel ?? 1))
+        && charLevel >= (d.minLevel ?? 1)
+        && (!eligible || eligible(d)))
       .map(d => ({ def: d, weight: d.weight ?? 1 }));
     return pool.length ? this.rng.weighted(pool).def : null;
+  }
+
+  /** Does this zone's biome admit the def? (No lock = every biome does.) */
+  private admitsBiome(def: WorldBossDef, z: ZoneDef): boolean {
+    return !def.biomes || (z.biome != null && def.biomes.includes(z.biome));
   }
 
   /** A zone's charted, unlocked, in-dimension road neighbours. */
@@ -793,12 +815,17 @@ export class WorldBossField implements WorldOverlay {
 
   /** Herald an apparition at an eligible node (dark-node lure by config). */
   private tryHerald(view: OverlayView): boolean {
-    const def = this.pickDef('apparition', view.charLevel);
-    if (!def) return false;
-    const all = view.nodes.filter(z => this.targetable(z)
+    const open = (z: ZoneDef): boolean => this.targetable(z)
       && !this.apparitions.some(a => a.zoneId === z.id)
       && !this.serpents.some(s => s.arenaZoneId === z.id)
-      && !this.lairs.some(l => l.lairZoneId === z.id));
+      && !this.lairs.some(l => l.lairZoneId === z.id);
+    // Biome-locked sovereigns only join the roll when admissible ground is
+    // actually on the web — a karst-bound bell over a karstless chart must
+    // not eat the whole roster's turn.
+    const def = this.pickDef('apparition', view.charLevel,
+      d => !d.biomes || view.nodes.some(z => open(z) && this.admitsBiome(d, z)));
+    if (!def) return false;
+    const all = view.nodes.filter(z => open(z) && this.admitsBiome(def, z));
     const seen = all.filter(z => view.visited.has(z.id));
     const dark = all.filter(z => !view.visited.has(z.id));
     const pool = (this.rng.chance(this.cfg.apparition.unchartedChance) && dark.length) ? dark

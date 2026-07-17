@@ -550,6 +550,12 @@ export class Actor {
   aiAnchor?: Vec2;
   /** Minted skill instances for scripted casts (aiActions), by skill id. */
   aiActionInsts?: Map<string, SkillInstance>;
+  /** Skill ids SILENCED on this body. onPartBroken's breakDisables writes
+   *  here as well as filtering the kit list, because choreography (the
+   *  aiActions verbs) mints its own instances and never consults the kit —
+   *  this set is the shared truth both lanes read. A cracked bell stays
+   *  silent on every lane. */
+  aiSkillBans?: Set<string>;
   /** Whether the AI shroud source is currently applied (so a tuning swap
    *  away from a shrouded style reliably de-cloaks). */
   aiShrouded = false;

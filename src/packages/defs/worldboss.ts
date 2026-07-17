@@ -100,6 +100,22 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       reward: { xp: 760, gems: 4 },
     },
     {
+      // THE IRON BELL — the walking mausoleum of the karst country. Almost
+      // passive: glacial pace, no chase — its MOVEMENT is the enemy (every
+      // stride a telegraphed footfall cast at its own next foot placement),
+      // and the bell it carries RINGS its banked afflictions off on the
+      // beat. Defense texture: mountainous armor + hitCap (bursts flatten,
+      // read 'capped') while DoTs do full work — ailment builds headline
+      // ON PURPOSE; crack the carried bell and the toll falls silent.
+      id: 'iron_bell', name: 'Dolmourn, the Iron Bell', archetype: 'apparition',
+      biomes: ['karst'],
+      monster: 'primeval_ironbell', minLevel: 7, levelBonus: 2,
+      glyph: '🔔', color: '#8d8672',
+      escort: { table: [{ id: 'bell_keeper', weight: 2 }, { id: 'toll_wretch', weight: 3 }], count: [3, 5] },
+      reward: { xp: 850, gems: 5 },
+      pitch: 'the steps ARE the battle — no single blow cracks it; rot, burn and bleed do',
+    },
+    {
       id: 'velketh', name: 'Velketh, the Enthroned Husk', archetype: 'lair',
       monster: 'primeval_velketh', minLevel: 8, levelBonus: 3,
       glyph: '👁', color: '#9a6ad2',
@@ -121,10 +137,13 @@ const PRIMEVAL_FACTION: FactionSpec = {
   roster: [
     { id: 'primeval_spawn', weight: 5 },
     { id: 'primeval_cinder', weight: 3 },
+    { id: 'bell_keeper', weight: 2 },
+    { id: 'toll_wretch', weight: 3 },
     { id: 'primeval_wyrm_head', weight: 1 },
     { id: 'primeval_cragmaw', weight: 1 },
     { id: 'primeval_ashvein', weight: 1 },
     { id: 'primeval_velketh', weight: 1 },
+    { id: 'primeval_ironbell', weight: 1 },
   ],
 };
 
@@ -173,6 +192,9 @@ export const WORLDBOSS: ContentPackage = {
       }
       for (const e of d.escort?.table ?? []) {
         if (!look.monster(e.id)) out.push(`world boss '${d.id}' escort '${e.id}' unknown`);
+      }
+      for (const b of d.biomes ?? []) {
+        if (!look.biome(b)) out.push(`world boss '${d.id}' biome '${b}' unknown`);
       }
     }
     return out;
@@ -260,10 +282,12 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
       out.push({
         kind: 'event', icon: fight.def.glyph, color: fight.def.color,
         label: fight.def.name,
-        detail: fight.archetype === 'apparition'
+        // A def's authored pitch is THE honest ask (it must never disagree
+        // with the minted fight) — generic archetype copy is the fallback.
+        detail: fight.def.pitch ?? (fight.archetype === 'apparition'
           ? 'a sovereign stands here — and will not wait forever'
           : fight.archetype === 'lair' ? 'something colossal is fused to this place'
-            : 'the head of the world-serpent rests here',
+            : 'the head of the world-serpent rests here'),
         z: 24,
       });
       continue;
@@ -314,6 +338,9 @@ registerKillHandler({
       const def = f.onBossSlain(key);
       if (!def) continue;
       ctx.bumpLedger('worldboss_slain');
+      // The world remembers WHICH sovereign fell, not just that one did —
+      // per-def keys cost nothing and future content gates on them freely.
+      ctx.bumpLedger(`worldboss_slain_${def.id}`);
       if (ctx.credit) {
         ctx.grantXp(def.reward.xp);
         for (let i = 0; i < def.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);

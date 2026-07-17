@@ -3647,6 +3647,15 @@ export interface SkillDef {
    *  with one stack per point (its maxStacks caps the crowd bonus). */
   empower?: { radius: number; dmgPerPower?: number; buffPerPower?: BuffEffect };
 
+  /** THE TOLL (once per press, at execution): ring a PORTION of the
+   *  caster's OWN harmful afflictions off — stacking statuses shed
+   *  round(stacks × portion) (min 1), single-stack ones lose portion of
+   *  their remaining time instead. The cleanse effect's graded, self-scoped
+   *  cousin, and deliberately hit-independent: the bell rings whether or
+   *  not anyone stands in the blast. Counterplay belongs to the data that
+   *  grants it (the Iron Bell's bell-part breakDisables its toll). */
+  selfCleanse?: { stacksPortion: number };
+
   /** CHRONOMANCY (engine/timeflow.ts): completing this cast HOLDS TIME — a
    *  timeflow hold for `duration` seconds at `scale` (0 = stopped, fractions
    *  = slow-motion), exempting the caster's chosen circle ('caster' walks

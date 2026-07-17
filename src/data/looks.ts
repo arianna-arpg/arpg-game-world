@@ -2124,6 +2124,53 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#b8c8e8', params: { spread: 0.35, dist: 0.58, size: 0.09 } },
     ],
   },
+  /** THE IRON BELL, the hull: a walking mausoleum — masonry courses under
+   *  twin stelae ranks, a tomb-face at the prow, funeral cloth trailing.
+   *  Deliberately BELL-LESS: the bell and the bearing columns are separate
+   *  hittable part-actors (MonsterDef.parts), so the silhouette teaches the
+   *  fight's anatomy at a glance — hull, legs, bell, three different asks. */
+  ironbell_mausoleum: {
+    parts: [
+      { kind: 'armorPlates', scale: 1.12, alpha: 0.95 },
+      { kind: 'stakeRow', y: -0.55, scale: 0.78, alpha: 0.9 },
+      { kind: 'stakeRow', y: 0.55, scale: 0.78, alpha: 0.9 },
+      { kind: 'skull', x: 0.6, scale: 0.5, alpha: 0.85 },
+      { kind: 'shroudWrap', x: -0.35, scale: 0.9, alpha: 0.5 },
+    ],
+    shadowScale: 1.45,
+  },
+  /** A bearing column of the Iron Bell: weathered stone flutes. Reads as
+   *  ARCHITECTURE, not creature — the leg you crack, never a foe you duel. */
+  ironbell_leg: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'barkPlates', scale: 0.9, alpha: 0.9 },
+    ],
+  },
+  /** The carried bell itself — yoke ring under a great swaying bell (the
+   *  hushmaiden's instrument at mausoleum scale). Crack it: the toll dies. */
+  ironbell_bell: {
+    parts: [{ kind: 'collar', scale: 0.9, alpha: 0.9 }],
+    live: [{ kind: 'bell', scale: 1.45, params: { swing: 0.6 } }],
+  },
+  /** Keeper of the Toll: the hushmaiden grammar in funeral stone — robe,
+   *  hood, the small chime at the hip names its office at a glance. */
+  bell_keeper: {
+    parts: [
+      { kind: 'robe', scale: 0.92, alpha: 0.95 },
+      { kind: 'hood', x: 0.26, params: { eyes: true } },
+      { kind: 'bell', y: 0.48, scale: 0.55 },
+    ],
+  },
+  /** Toll-wretch: a shroud-bound penitent chained to the procession. */
+  toll_wretch: {
+    parts: [
+      { kind: 'disc', scale: 0.8, alpha: 0.9 },
+      { kind: 'shroudWrap', scale: 0.85, alpha: 0.8 },
+      { kind: 'collar', scale: 0.7 },
+      { kind: 'eyes', x: 0.3, scale: 0.6 },
+    ],
+  },
   /** The quiet made flesh: a veiled bell-bearer — the bell IS the threat. */
   hushmaiden: {
     parts: [

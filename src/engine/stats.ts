@@ -651,6 +651,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** >0: incoming HITS are dodged outright — attacks, spells, projectiles
    *  alike (DoTs still tick; costs still bleed). Cerement's shroud. */
   hitImmune:      { label: 'Hit Immunity', base: 0, min: 0 },
+  /** >0: a CEILING on the life damage any single mitigated HIT may land
+   *  (hitImmune's graded cousin — the unburstable defense texture). Every
+   *  hit still connects and still drains poise/pools in full; only the
+   *  life cut flattens to the cap, and the clamp READS as 'capped' where
+   *  the number prints. DoT ticks never pass this gate (applyDot soaks
+   *  directly) — attrition does full work ON PURPOSE: a body wearing this
+   *  is sold to ailment builds, not walled off from everyone. 0 = uncapped. */
+  hitCap:         { label: 'Per-Hit Damage Cap', base: 0, min: 0 },
 
   // Layered defenses
   /** Fraction of incoming damage paid from mana before life (capped 90%). */

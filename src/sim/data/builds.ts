@@ -144,6 +144,31 @@ BUILDS['summoner_warriors_l10'] = warriorSummoner('summoner_warriors_l10');
 BUILDS['summoner_faultfinder_l10'] = warriorSummoner('summoner_faultfinder_l10',
   [{ id: 'resonance', level: 1 }, { id: 'faultfinder', level: 1 }, { id: 'tectonic_echoes', level: 1 }]);
 
+// THE IRON BELL TEXTURE PAIR (hitCap): the same sovereign, two answers. The
+// ROT build stacks poison + decay — DoT ticks pass the per-hit ceiling by
+// construction, so it should CRACK the colossus inside the episode. The
+// BURST build is the loaded-dice nuker — every jackpot flattens to the cap
+// (and reads 'capped' in-world), so it should WALL: alive between the
+// steps, going nowhere. If the pair ever converges, the texture is dead.
+BUILDS['ironbell_rot_l12'] = {
+  id: 'ironbell_rot_l12', label: 'Venom stacker vs the Iron Bell @ L12',
+  classId: 'magician', level: 12,
+  skills: [{
+    id: 'venom_bolt', level: gemLevelAt(12),
+    supports: [{ id: 'poison_chance', level: 1 }, { id: 'putrefaction', level: 1 }],
+  }],
+  passives: greedyPassives('magician', 12),
+};
+BUILDS['ironbell_burst_l12'] = {
+  id: 'ironbell_burst_l12', label: 'Loaded-dice nuker vs the Iron Bell @ L12',
+  classId: 'magician', level: 12,
+  skills: [{
+    id: 'fulminate', level: gemLevelAt(12),
+    supports: [{ id: 'loaded_dice', level: 1 }],
+  }],
+  passives: greedyPassives('magician', 12),
+};
+
 // FORTUNE-FABRIC PROBES (rollTop gates / proc riders / damageSpread): the
 // same wide-dice caster twice — the bare bolt, and the full gambler (Loaded
 // Dice widening the dice; the tree's Thunderstruck + Static Shrapnel rider +

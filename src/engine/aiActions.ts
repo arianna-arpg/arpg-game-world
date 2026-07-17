@@ -20,6 +20,10 @@ import type { World } from './world';
 /** Mint (and cache) a skill instance for scripted casts — leveled like the
  *  monster's own kit (createMonster's formula), so choreography scales. */
 function mintInst(actor: Actor, skillId: string): SkillInstance | null {
+  // breakDisables reaches CHOREOGRAPHY here: every scripted verb that
+  // fires a skill (cast / ring / nova) mints through this one gate, so a
+  // part-break ban silences the beat itself — not just the kit list.
+  if (actor.aiSkillBans?.has(skillId)) return null;
   const def = SKILLS[skillId];
   if (!def) return null;
   const cache = actor.aiActionInsts ??= new Map();
@@ -33,11 +37,19 @@ function mintInst(actor: Actor, skillId: string): SkillInstance | null {
 /** Resolve a named choreography point against actor / target / anchor. */
 function resolvePoint(
   actor: Actor, target: Actor | null,
-  at: 'target' | 'self' | 'anchor' | 'behindTarget' | 'awayFromTarget' | 'randomNear' | undefined,
+  at: 'target' | 'self' | 'anchor' | 'behindTarget' | 'awayFromTarget' | 'randomNear' | 'ahead' | undefined,
+  aheadDist?: number,
 ): Vec2 {
   switch (at) {
     case 'self': return vec(actor.pos.x, actor.pos.y);
     case 'anchor': return actor.aiAnchor ?? vec(actor.pos.x, actor.pos.y);
+    case 'ahead':
+      // The actor's OWN next stride: a point dead ahead along its facing —
+      // the walking-colossus verb. A footfall telegraphs where the BODY is
+      // going, not where the prey stands; the beat's `ahead` sets the pace.
+      return vec(
+        actor.pos.x + Math.cos(actor.facing) * (aheadDist ?? 120),
+        actor.pos.y + Math.sin(actor.facing) * (aheadDist ?? 120));
     case 'behindTarget':
       if (!target) break;
       return vec(
@@ -99,7 +111,10 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
     if (act.do !== 'cast') return;
     const inst = mintInst(actor, act.skill);
     if (!inst) return;
-    const aim = resolvePoint(actor, target, act.at);
+    let aim = resolvePoint(actor, target, act.at, act.ahead);
+    // A stride beds on STANDABLE ground exactly as a summon ring does —
+    // the foot never falls where the body could not stand.
+    if (act.at === 'ahead') aim = groundPoint(world, aim, actor.radius);
     if (act.force) {
       actor.aimPos = vec(aim.x, aim.y); // guided payloads chase the scripted mark
       world.executeSkill(actor, inst, aim, { noCooldown: true, dmgMult: act.mult ?? 1 });
