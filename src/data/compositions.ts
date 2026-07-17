@@ -148,6 +148,19 @@ registerComposition({
   ],
 });
 
+// A RESONANCE COURT: swept ground ringed by a tuning circle — the crystal
+// country's ritual set-piece; whoever tuned here kept the floor clean.
+// Numeric contract: tuning_circle 130·0.92−8 = 112 ≥ clearing 85 + piece 20.
+// (Pure decor — the ACTIVITY riddles are actor fixtures the puzzle placer
+// stands up at load, engine/puzzles.ts; this composition is the country
+// remembering that crystals get tuned.)
+registerComposition({
+  id: 'resonance_court',
+  sites: [{ id: 'court', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [60, 85] }],
+  post: [{ kind: 'formation', formation: 'tuning_circle', at: 'court', count: [1, 1] }],
+});
+
 // A DROWNED PROCESSION: braided reed-lines plaited down the waterline, wisps
 // keeping their lights over the wet ground. Gated on a WET world; the braids
 // themselves band to the shore of whatever water the zone actually poured.

@@ -222,6 +222,9 @@ export type KnownDoodadKind =
   | 'burial_urn'     // grave clay: spills orbs — and sometimes wakes its tenants
   | 'crystal_cluster' // a knee-high lattice: shatters to a strike, pays in gems
   | 'icicle_cluster'  // brittle ice fangs: shatter when brushed or struck
+  // The crystal-country kit (the attunement pass — resonant identity)
+  | 'crystal_spire'   // a tall singing needle: glassy (see/shoot through), TOLLS when struck
+  | 'geode_shell'     // a split geode bowl: crack it open, keep what glitters
   // The bog set (mire/marsh dressing + hazard)
   | 'sunken_log'      // a waterlogged trunk half-swallowed by the mire
   | 'marsh_wisp'      // a hovering bog-light: glow and omen, no body to bar the way
@@ -1292,6 +1295,16 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
       spawn: { monster: 'skeleton_warrior', count: [1, 2], chance: 0.22, text: 'the dead wake!' } } },
   crystal_cluster: { overlap: 'solid', blocksMove: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], gemChance: 0.3, orbChance: 0.35, text: 'the lattice shatters!', color: '#7fc0f0' } },
+  // The crystal-country kit (the attunement pass): the SPIRE is glass all
+  // the way up — walk around it, see and shoot through it — and it TOLLS
+  // when struck (the karst resonance fabric wearing crystal: a singing
+  // field is also an alarm field). The GEODE is the country's brittle
+  // treasure pot: crack the bowl, keep what glitters.
+  crystal_spire: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 150, bodyScale: 0.55,
+    forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    resonance: { text: 'the spire sings…', color: '#9fd8ff' } },
+  geode_shell: { overlap: 'solid', blocksMove: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    brittle: { on: ['hit'], gemChance: 0.6, orbChance: 0.3, text: 'the geode splits!', color: '#9fd8ff' } },
   icicle_cluster: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['water', 'lava'],
     brittle: { on: ['hit', 'near'], reach: 30, orbChance: 0.25, text: 'shatter!', color: '#bfe0f0' } },
   // The spelunker kit: the strata fabric's cavern dressing. Stone teeth roll
@@ -5143,6 +5156,11 @@ registerStamp('puffcap_cluster', stampSingle('puffcap_cluster', [12, 17]));
 registerStamp('burial_urn', stampSingle('burial_urn', [12, 16]));
 registerStamp('crystal_cluster', stampSingle('crystal_cluster', [14, 20]));
 registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
+// The crystal-country kit (the attunement pass): tall singing needles +
+// treasure geodes — plain solids; the identity rides their rules
+// (spire resonance toll, geode brittle spill) and painters.
+registerStamp('crystal_spire', (ctx, spec) => stampSolid(ctx, 'crystal_spire', spec.radius ?? [16, 26]));
+registerStamp('geode_shell', stampSingle('geode_shell', [15, 22]));
 // The spelunker kit: cavern furniture (strata fabric). Solids ride the rock
 // grammar; sheets and pools merge as ground; the vein hunts a wall's foot
 // (grid zones) or a standing stone's flank (convex) — the secret_wall

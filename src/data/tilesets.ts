@@ -21,7 +21,7 @@ import { presenceMul, type LevelEnvelope } from '../engine/presence';
 export type BlendRoll = BlendSpec & { chance?: number };
 
 export interface ObjectiveWeight {
-  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession' | 'bounty' | 'offering';
+  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession' | 'bounty' | 'offering' | 'puzzle';
   weight: number;
 }
 
@@ -77,6 +77,17 @@ export interface TilesetDef {
   /** The destructible spawner object 'spawners' objectives place. */
   spawnerId: string;
   objectives: ObjectiveWeight[];
+  /** ACTIVITY PUZZLES the biome may stand up per zone (engine/puzzles.ts):
+   *  chance rows into the PUZZLES presets (data/puzzles.ts), folded onto
+   *  minted ZoneDefs and rolled at LOAD on a salted stream (never moves
+   *  layout rng). A 'puzzle' objective row in `objectives` draws its preset
+   *  from these same rows — the biome's repertoire is one list. */
+  puzzles?: { id: string; chance: number }[];
+  /** AMBIENT SCENERY-ACTORS the biome plants per zone (World.bootScenery):
+   *  passive object-actor rows — freestanding resonant crystals, future
+   *  shrine-bodies — spawned at LOAD on their own salted stream. Folded
+   *  onto minted ZoneDefs exactly like `puzzles`. */
+  scenery?: { monster: string; count: [number, number] }[];
   /** Chance a generated zone from this tileset rolls an ELLIPSE arena (0 = never). */
   ellipseChance?: number;
   /** Biome tag stamped on generated zones — faction-traits home matching. */
@@ -3718,6 +3729,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     // mint (mintCave), pure data. The grid layouts carry the SECRETS (the
     // hollows fabric hunts wall mass), so they weigh a little heavier now.
     caveLayouts: { plains: 4.5, rooms: 2.5, dungeon: 2, labyrinth: 1 },
+    // Rarely, the dark keeps a CHORD (engine/puzzles.ts): a ringed riddle
+    // deep underground — the crystal grotto face's promise, cave-wide odds.
+    puzzles: [{ id: 'great_chord', chance: 0.06 }],
     // What the walls are hiding (grid layouts): mostly honest treasure and
     // trouble; sometimes a passage the map never admitted to; rarely, the
     // lid on a whole further cave.
@@ -5508,27 +5522,100 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { plains: 4, rooms: 2.5, dungeon: 1.5 },
   },
 
-  // CRYSTAL — prismatic shard fields (biome:'crystal'). Crystal doodads fire random
-  // laser beams (the crystal_beam effect) → a constant-movement dance.
+  // THE CRYSTAL COUNTRY — prismatic shard fields (biome:'crystal'), the
+  // ATTUNEMENT biome. Three fabrics meet here: the old laser dance stays
+  // (crystal doodads fire crystal_beam — a place that keeps you moving),
+  // freestanding RESONANT CRYSTALS take the color of the blows that land
+  // on them and pulse it over friend and foe alike (engine/tuning.ts),
+  // and the country poses RIDDLES (engine/puzzles.ts — chords, lattices,
+  // refrains) as side-finds or the zone's own ask. Three faces: the open
+  // SHARD STEPPES (base — the beam-dance), the enclosed GEODE HOLLOWS
+  // (reef walls; the treasure is inside the teeth), and the SINGING
+  // SPIRES (a tolling needle country — noise is the tax on violence:
+  // every struck spire turns the zone's head, the karst resonance fabric
+  // wearing glass).
   crystal: {
     id: 'crystal', biome: 'crystal',
-    compositions: [{ composition: 'energist_cache', chance: 0.25 }],
+    compositions: [
+      { composition: 'energist_cache', chance: 0.25 },
+      { composition: 'resonance_court', chance: 0.3 },
+    ],
     nameFirst: ['Prismatic', 'Shardbound', 'Glittering', 'Faceted', 'Resonant', 'Lucent', 'Refractive', 'Gleaming', 'Crystalline', 'Spectral', 'Glassgrown', 'Iridescent', 'Singing', 'Brilliant', 'Geodebound', 'Glasswrought', 'Sparkling', 'Light-Riven'],
     nameSecond: ['Geode', 'Spires', 'Lattice', 'Vault', 'Reach', 'Hollow', 'Shards', 'Facets', 'Cluster', 'Prism', 'Spindle', 'Fields', 'Cavern', 'Array', 'Bloom', 'Drift'],
     theme: {
       ambientDark: 0.3,
       floor: '#0e1320', grid: '#16203a', border: '#4a6aa8',
       obstacle: '#2a3a6a', obstacleEdge: '#5a7ad0', accent: '#9fd8ff', water: '#1a3a6a',
+      ground: {
+        palette: ['#0a0e1a', '#101828', '#182238', '#22304a', '#2c3e5e'],
+        bias: 0.46, alpha: 0.5, speckles: 1.5,
+      },
+      // Light on glass: motes drift like caught refractions and a faint
+      // aurora sheets the sky — the country reads prismatic before a
+      // single crystal is on screen.
+      ambientFx: [
+        { kind: 'motes', color: '#9fd8ff' },
+        { kind: 'aurora', intensity: 0.45 },
+      ],
+      // Glass throws thin shadow — crystal bodies shade lighter than stone.
+      sightVeil: { doodadMul: 0.75 },
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.2,
+    // What the country ALWAYS is, whichever face rolls: understory lattice,
+    // surfacing veins, the odd split geode, loose stone between.
+    common: [
+      { kind: 'crystal_cluster', count: [2, 4] },
+      { kind: 'crystal_vein', count: [1, 3] },
+      { kind: 'geode_shell', count: [1, 2] },
+      { kind: 'rocks', count: [2, 4], radius: [18, 34] },
+      { kind: 'scree', count: [1, 2] },
+    ],
+    // Base face — THE SHARD STEPPES: open ground, the laser dance, a lode
+    // line breaking the surface, a needle or two on the skyline.
     layout: [
-      { kind: 'crystal', count: [5, 9] }, { kind: 'rocks', count: [3, 6], radius: [18, 38] },
-      { kind: 'scree', count: [1, 3] },
+      { kind: 'crystal', count: [5, 8] },
       { kind: 'cliff', count: [1, 3] },
-      // Knee-high lattices — the harvestable understory of the shard fields.
-      { kind: 'crystal_cluster', count: [2, 5] },
-      // A lode line breaking the surface in a run.
+      { kind: 'crystal_spire', count: [1, 3] },
       { kind: 'formation', count: [1, 2], formation: 'crystal_run' },
+    ],
+    variants: [
+      // GEODE HOLLOWS — the country closed over its treasure: reef walls
+      // of needle and lattice, geodes tucked in their lee, deeper shadow.
+      { name: 'geode hollows',
+        theme: { ambientDark: 0.34, accent: '#8fc8f0',
+          ground: { palette: ['#090c16', '#0e1422', '#141e30', '#1c2a42', '#263854'], bias: 0.44, alpha: 0.55, speckles: 1.2 } },
+        layout: [
+          { kind: 'formation', count: [2, 3], formation: 'shard_reef' },
+          { kind: 'crystal', count: [3, 6] },
+          { kind: 'geode_shell', count: [2, 4] },
+          { kind: 'cliff', count: [2, 4] },
+          { kind: 'chasm', count: [0, 1] },
+        ] },
+      // SINGING SPIRES — the needle country: taller, brighter, LOUDER —
+      // every strike answered (spire resonance), storm-glass crackling
+      // between the verses.
+      { name: 'singing spires',
+        theme: { accent: '#b8e4ff',
+          ambientFx: [{ kind: 'motes', color: '#b8e4ff' }, { kind: 'aurora', intensity: 0.6 }],
+          ground: { palette: ['#0b101e', '#121a2c', '#1a2640', '#243452', '#304468'], bias: 0.48, alpha: 0.5, speckles: 1.7 } },
+        layout: [
+          { kind: 'crystal_spire', count: [6, 10] },
+          { kind: 'formation', count: [1, 2], formation: 'spire_chorus' },
+          { kind: 'crystal', count: [3, 5] },
+          { kind: 'charged_crystal', count: [2, 4] },
+          { kind: 'static_bloom', count: [2, 4] },
+        ] },
+    ],
+    // The ambient VOICES (engine/tuning.ts): strike one with an element and
+    // the pulse washes friend and foe alike — the fight bends around them.
+    scenery: [{ monster: 'resonant_crystal', count: [3, 5] }],
+    // The riddle repertoire (engine/puzzles.ts): side-finds, and the pool
+    // the 'puzzle' objective draws from.
+    puzzles: [
+      { id: 'great_chord', chance: 0.3 },
+      { id: 'charged_lattice', chance: 0.25 },
+      { id: 'singing_refrain', chance: 0.25 },
+      { id: 'shatter_chord', chance: 0.12 },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -5546,10 +5633,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         // Living lattice: weaving creepers and shardlings that SHATTER.
         { id: 'prism_creeper', weight: 2 },
         { id: 'resonant_shardling', weight: 3, presence: { to: 20, fadeOut: 10 } },
+        // THE CRYSTALKIN (the attunement pass): the glass court proper —
+        // presence rides each def, so the court arrives with level.
+        { id: 'facet_stalker', weight: 2 },
+        { id: 'chime_haunt', weight: 2 },
+        { id: 'geode_shellback', weight: 1 },
+        { id: 'discord_siren', weight: 1 },
       ],
     },
-    spawnerId: 'rime_stone',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }],
+    spawnerId: 'resonant_stone',
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'puzzle', weight: 2 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }],
   },
 
   // VOLCANIC — an erupting caldera (biome:'volcanic'). Lava vents periodically

@@ -383,6 +383,45 @@ registerFormation({
     { kind: 'crystal', radius: [14, 20], every: 3, jitter: 10 },
   ],
 });
+
+// --- The crystal country's set-pieces (the attunement pass) -----------------
+// A TUNING CIRCLE: lattice clusters ringing swept ground, veins radiating —
+// the country's ritual court, read at a glance as "someone TUNED here."
+// Paired with resonance_court (compositions.ts): 130·0.92−8 = 112 ≥ 85+20.
+registerFormation({
+  id: 'tuning_circle', arrange: 'orbit', span: [130, 180], step: 54,
+  params: { rings: [1, 1], innerFrac: 0.92 },
+  pieces: [
+    { kind: 'crystal_cluster', radius: [13, 20], jitter: 8 },
+    { kind: 'crystal_vein', radius: [12, 18], every: 2, jitter: 18 },
+  ],
+});
+// A SPIRE CHORUS: singing needles strung along a joint line — every one
+// TOLLS when struck (resonance), so a chorus is a fence of alarms the
+// careful thread and the loud regret.
+registerFormation({
+  id: 'spire_chorus', arrange: 'meander', span: [380, 660], step: 72,
+  params: { wobble: 30 },
+  pieces: [
+    { kind: 'crystal_spire', radius: [15, 24], jitter: 12, rot: true },
+    { kind: 'crystal_cluster', radius: [12, 18], every: 2, jitter: 24 },
+    { kind: 'scree', radius: [16, 26], every: 3, jitter: 26 },
+  ],
+});
+// A SHARD REEF: the lode surfacing as a WALL — needles and lattice knitted
+// into a run, geodes tucked in its lee. The geode face's enclosure grammar
+// (thread the gaps; the treasure is inside the teeth). Deliberately NO bare
+// 'crystal' pieces — that's the laser hazard, and a formation disc would be
+// a beam-less fake (crystal_run's doctrine).
+registerFormation({
+  id: 'shard_reef', arrange: 'meander', span: [340, 620], step: 48,
+  params: { wobble: 22 },
+  pieces: [
+    { kind: 'crystal_spire', radius: [14, 20], jitter: 10, rot: true },
+    { kind: 'crystal_cluster', radius: [13, 19], every: 2, jitter: 14 },
+    { kind: 'geode_shell', radius: [15, 21], every: 4, jitter: 22 },
+  ],
+});
 // A GLOWWORM COURT: lure-light colonies rimming a mineral pool terrace — the
 // dark's own commons, lit by the things that fish it.
 registerFormation({

@@ -156,7 +156,18 @@ changes.
   `balance/probe_coherence.ts`.
   ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
   `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the
-  monster-LURE fabric — docs in `docs/engine/objectives.md`);
+  monster-LURE fabric — docs in `docs/engine/objectives.md`).
+  THE ATTUNEMENT FABRIC (crystals take the color of the blow):
+  `MonsterDef.tune` bodies re-tune to a landed hit's dominant ROLLED type
+  (conversions honored) and pulse `attuned_<tone>` onto friend and foe
+  alike — engine/tuning.ts + the `attuned_*` status family; docs in
+  `docs/engine/attunement.md`. THE PUZZLE FABRIC (activity riddles as
+  data): lights-out lattices, singing refrains, attunement chords as open
+  `PUZZLE_KINDS` + `PUZZLES` presets (engine/puzzles.ts +
+  `data/puzzles.ts`), placed at zone LOAD on a salted stream, offered
+  per-biome via `TilesetDef.puzzles`, askable as the `'puzzle'` objective;
+  `ZoneDef.scenery` plants ambient object-actor rows the same way — docs
+  in `docs/engine/puzzles.md`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
   `loot.ts` (nestable loot tables + DROP_CFG kill-path levers).

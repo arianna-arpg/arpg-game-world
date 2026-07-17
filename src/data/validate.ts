@@ -61,6 +61,9 @@ import { validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
 import { validateCreep } from '../engine/creep';
 import './creeps'; // side-effect: the creep kind defs register before validation
+import { attunedStatus } from '../engine/tuning';
+import { PUZZLE_KINDS } from '../engine/puzzles';
+import { PUZZLES } from './puzzles'; // also side-effect: presets register before validation
 import { validateConjury } from './conjury';
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import {
@@ -149,6 +152,106 @@ export function validateContent(): void {
       }
       for (const k of Object.keys(hs.table)) {
         if (!hollowDef(k)) warn(`tileset '${t.id}' hollows: unregistered kind '${k}'`);
+      }
+    }
+  }
+
+  // THE ATTUNEMENT + PUZZLE FABRICS (engine/tuning.ts + engine/puzzles.ts):
+  // every knob is data, so every knob gets a boot check.
+  {
+    // One attuned_<type> status per damage type — the fabric's whole
+    // dressing lane; a missing row would strand a tone invisible.
+    for (const t of DAMAGE_TYPES) {
+      if (!STATUS_DEFS[attunedStatus(t)]) {
+        warn(`attunement: missing status '${attunedStatus(t)}' for damage type '${t}'`);
+      }
+    }
+    // Tunable bodies: tone pools must be real damage types; a rolled pool
+    // must have something to roll.
+    for (const m of Object.values(MONSTERS)) {
+      const tu = m.tune;
+      if (!tu) continue;
+      for (const t of tu.tones ?? []) {
+        if (!(DAMAGE_TYPES as readonly string[]).includes(t)) {
+          warn(`monster '${m.id}' tune.tones: unknown damage type '${t}'`);
+        }
+      }
+      if (tu.base && !(DAMAGE_TYPES as readonly string[]).includes(tu.base)) {
+        warn(`monster '${m.id}' tune.base: unknown damage type '${tu.base}'`);
+      }
+      if (tu.roll && tu.tones && !tu.tones.length) {
+        warn(`monster '${m.id}' tune.roll with an empty tone pool`);
+      }
+    }
+    // Puzzle presets: kinds registered, fixture defs real + on the
+    // object-actor contract (passive + immortal — a riddle whose nodes die
+    // or fight is a different feature), bands sane, reward casts real.
+    for (const [id, spec] of Object.entries(PUZZLES)) {
+      const kind = PUZZLE_KINDS[spec.kind];
+      if (!kind) { warn(`puzzle preset '${id}': unregistered kind '${spec.kind}'`); continue; }
+      const heartId = spec.heart === false ? undefined : spec.heart ?? kind.heartMonster;
+      for (const mid of [spec.node ?? kind.nodeMonster, heartId]) {
+        if (!mid) continue;
+        const md = MONSTERS[mid];
+        if (!md) warn(`puzzle preset '${id}': unknown fixture monster '${mid}'`);
+        else if (!md.passive || !md.immortal) {
+          warn(`puzzle preset '${id}': fixture '${mid}' must be passive+immortal (the object-actor contract)`);
+        }
+      }
+      if (spec.grid && (spec.grid[0] < 2 || spec.grid[1] < 2)) {
+        warn(`puzzle preset '${id}': grid [${spec.grid}] below 2×2`);
+      }
+      if (spec.grid && spec.grid[0] * spec.grid[1] > 25) {
+        warn(`puzzle preset '${id}': grid [${spec.grid}] beyond 5×5 (readability sanity)`);
+      }
+      if (spec.count && !(spec.count[1] >= spec.count[0] && spec.count[0] >= 2)) {
+        warn(`puzzle preset '${id}': count [${spec.count}] is not a ≥2 range`);
+      }
+      if (spec.rounds && !(spec.rounds[1] >= spec.rounds[0] && spec.rounds[0] >= 1)) {
+        warn(`puzzle preset '${id}': rounds [${spec.rounds}] is not a ≥1 range`);
+      }
+      for (const t of spec.tones ?? []) {
+        if (!(DAMAGE_TYPES as readonly string[]).includes(t)) {
+          warn(`puzzle preset '${id}' tones: unknown damage type '${t}'`);
+        }
+      }
+      if (spec.reward?.cast && !SKILLS[spec.reward.cast]) {
+        warn(`puzzle preset '${id}' reward.cast: unknown skill '${spec.reward.cast}'`);
+      }
+      if (spec.kind === 'chord' && spec.heart === false && !spec.tones?.length) {
+        warn(`puzzle preset '${id}': a heartless chord needs tones[0] as its fixed goal`);
+      }
+    }
+    // Tileset + authored-zone rows: presets exist, chances are chances,
+    // fixture rows name real passive bodies, pinned objectives resolve.
+    for (const t of Object.values(TILESETS)) {
+      for (const row of t.puzzles ?? []) {
+        if (!PUZZLES[row.id]) warn(`tileset '${t.id}' puzzles: unknown preset '${row.id}'`);
+        if (!(row.chance > 0 && row.chance <= 1)) {
+          warn(`tileset '${t.id}' puzzles '${row.id}': chance ${row.chance} outside (0,1]`);
+        }
+      }
+      for (const row of t.scenery ?? []) {
+        const md = MONSTERS[row.monster];
+        if (!md) warn(`tileset '${t.id}' scenery: unknown monster '${row.monster}'`);
+        else if (!md.passive) warn(`tileset '${t.id}' scenery: '${row.monster}' is not passive (scenery rows are object-actors)`);
+        if (!(row.count[1] >= row.count[0] && row.count[0] >= 0)) {
+          warn(`tileset '${t.id}' scenery '${row.monster}': count [${row.count}] is not a range`);
+        }
+      }
+      if (t.objectives.some(o => o.kind === 'puzzle') && !t.puzzles?.length) {
+        warn(`tileset '${t.id}': a 'puzzle' objective row but no puzzles repertoire — every ask would repeat the engine default`);
+      }
+    }
+    for (const z of Object.values(ZONES)) {
+      for (const row of z.puzzles ?? []) {
+        if (!PUZZLES[row.id]) warn(`zone '${z.id}' puzzles: unknown preset '${row.id}'`);
+      }
+      for (const row of z.scenery ?? []) {
+        if (!MONSTERS[row.monster]) warn(`zone '${z.id}' scenery: unknown monster '${row.monster}'`);
+      }
+      if (z.objective.kind === 'puzzle' && z.objective.puzzle && !PUZZLES[z.objective.puzzle]) {
+        warn(`zone '${z.id}': objective pins unknown puzzle preset '${z.objective.puzzle}'`);
       }
     }
   }

@@ -799,11 +799,19 @@ export function placeZoneAt(
     id, name, level,
     size,
     shape, biome,
+    // AQUATIC (the coherence fabric): open-seabed biomes stamp the flag so
+    // habitat-bearing flora places freely and the default gravel exit-road
+    // stands down — durable on the def, one classifier (isAquaticBiome).
+    ...(isAquaticBiome(biome) ? { aquatic: true } : {}),
     theme: spec.special ? SPECIAL_ARENA_THEME
       : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
     layout,
     ...(layoutType !== 'plains' ? { layoutType } : {}),
     objective,
+    // The biome's puzzle repertoire + ambient scenery-actors ride the def
+    // (rolled at LOAD on salted streams — never a generation concern).
+    ...(tileset.puzzles ? { puzzles: tileset.puzzles } : {}),
+    ...(tileset.scenery ? { scenery: tileset.scenery } : {}),
     packs: spec.packsOverride ?? tileset.packs,
     exits,
     map,
@@ -1074,6 +1082,11 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ...(ts.layoutParams || opts?.layoutParams
       ? { layoutParams: { ...ts.layoutParams, ...opts?.layoutParams } } : {}),
     objective: { kind: 'clear' },           // never gates the way back out
+    // A cave face's puzzle repertoire + scenery-actors ride down too (a
+    // geode grotto may hold a chord) — placement stays a LOAD concern on
+    // the salted streams.
+    ...(ts.puzzles ? { puzzles: ts.puzzles } : {}),
+    ...(ts.scenery ? { scenery: ts.scenery } : {}),
     packs: ts.packs,
     exits: [{ to: parent.id, side: 's' }],  // the sole exit — back to the surface
     map: { x: parent.map.x, y: parent.map.y }, // unused off-graph, but type-required
@@ -1108,6 +1121,7 @@ function rollObjective(
     case 'procession': return { kind: 'procession' }; // numbers default from PROCESSION_CFG
     case 'bounty': return { kind: 'bounty' };         // numbers default from BOUNTY_CFG
     case 'offering': return { kind: 'offering' };     // altar + numbers roll at load
+    case 'puzzle': return { kind: 'puzzle' };         // preset resolves at load (ZoneDef.puzzles rows)
     default: return { kind: 'clear' };
   }
 }

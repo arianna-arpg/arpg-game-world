@@ -131,6 +131,9 @@ import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, type FrontConsumeRow } from './creep';
+import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
+import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
@@ -482,6 +485,17 @@ export const RESONANCE_CFG = {
   lureStandoff: 52,
   lureLinger: 3.5,
 };
+
+/** AMBIENT SCENERY-ACTOR tunables (World.bootScenery — ZoneDef.scenery
+ *  rows: passive object-actors planted at load on their own salted
+ *  stream). */
+export const SCENERY_CFG = {
+  /** Placement-stream salt over the zone seed (never moves layout rng;
+   *  distinct from PUZZLE_CFG.salt so the lanes can't shift each other). */
+  salt: 0x0f17c5,
+  /** Door clearance a planted body keeps (interactSpot's clear). */
+  portalClear: 200,
+} as const;
 
 /** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
  *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched);
@@ -1653,6 +1667,10 @@ interface ZoneMemory {
    *  secret stays revealed — the re-entry re-carves each id through the
    *  shared openHollow path in revive mode. */
   hollows?: string[];
+  /** SOLVED riddle run-ids at capture (the puzzle fabric): bootPuzzles
+   *  re-enters them through kind.solved — never gate progression on it
+   *  (the objective's own done-ness lives in completedObjectives). */
+  puzzlesDone?: string[];
   /** WAVES zones: the assault's progress at capture — the wave counter plus
    *  whether a wave was mid-fight (its survivors ride `enemies` like any other
    *  population). Exits no longer seal on waves, so a boundary cross must
@@ -3803,6 +3821,12 @@ export class World {
         };
       }
     }
+    // AMBIENT SCENERY + THE PUZZLE PLACER (engine/puzzles.ts): the zone's
+    // planted object-actors and activity riddles stand up HERE, each on its
+    // own salted stream + the leftover POIs — never a generation concern,
+    // never a draw off layout/spawn rng.
+    this.bootScenery(def, pois);
+    this.bootPuzzles(def, pois, memory);
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
@@ -10218,6 +10242,10 @@ export class World {
       ...(procession ? { procession } : {}),
       ...(z.objective.kind === 'offering' && this.offering
         ? { altarOffered: this.offering.offered } : {}),
+      // Solved riddles stay solved for the memory's life (bootPuzzles
+      // re-enters them through kind.solved — proof, not homework).
+      ...(this.puzzles.some(r => r.done)
+        ? { puzzlesDone: this.puzzles.filter(r => r.done).map(r => r.id) } : {}),
     };
   }
 
@@ -10455,6 +10483,9 @@ export class World {
         ...(procMemo ? { procession: procMemo } : {}),
         ...(typeof m.altarOffered === 'number' && Number.isFinite(m.altarOffered)
           ? { altarOffered: Math.max(0, Math.floor(m.altarOffered)) } : {}),
+        ...(Array.isArray(m.puzzlesDone)
+          ? { puzzlesDone: m.puzzlesDone.filter((x): x is string => typeof x === 'string') }
+          : {}),
       });
     }
     // Quests: active entries whose def AND zone both still stand; the
@@ -16175,6 +16206,13 @@ export class World {
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
     if (def.volatile) a.volatile = def.volatile; // the poked nest arms
     if (def.onHitByType) { a.onHitByType = def.onHitByType; a.onHitTypeIcd = def.onHitTypeIcd; } // the body's element grammar
+    // TUNABLE (the attunement fabric): the body wakes in its ground state —
+    // or, for riddle hearts, a rolled one — and WEARS the tone from tick one.
+    if (def.tune) {
+      a.tune = def.tune;
+      a.tone = rollStartTone(def.tune, () => rand(0, 1));
+      a.applyStatus(attunedStatus(a.tone), 0, TUNE_CFG.holdScale, 'attunement');
+    }
     // CARRIED GEAR (MonsterDef.carry — the Hollowborn): mint the real piece
     // the body walks in wearing; its credited kill drops exactly this.
     if (def.carry && (def.carry.chance === undefined || chance(def.carry.chance))) {
@@ -21827,6 +21865,304 @@ export class World {
     });
   }
 
+  private readonly attuneScratch: Actor[] = [];
+  /** THE ATTUNEMENT FABRIC (MonsterDef.tune, engine/tuning.ts): a tunable
+   *  body takes the blow's tone. State first — the tone and its worn
+   *  `attuned_<tone>` status swap on every change (the status IS the
+   *  dressing lane: nameplate, co-op wire, fx read only what the body
+   *  wears) — then the WASH: the same status pulsed briefly onto every
+   *  living body near, allies and enemies alike (the crystal doesn't take
+   *  sides), paced by TUNE_CFG.pulseIcd so a flurry re-rings once, not per
+   *  hit. Puzzles listen to every change (World.puzzleTuned — the chord
+   *  riddles); resonate() is the NOISE sibling (struck stone turns heads),
+   *  this one is the COLOR. */
+  private attuneCrystal(a: Actor, tone: DamageType, striker?: Actor | null): void {
+    const spec = a.tune;
+    if (!spec || a.tone === tone) return;
+    const prev = a.tone;
+    a.tone = tone;
+    if (prev) a.endStatus(attunedStatus(prev));
+    a.applyStatus(attunedStatus(tone), 0, TUNE_CFG.holdScale, 'attunement');
+    const tint = toneTint(tone);
+    const washFor = spec.pulse === false ? 0
+      : spec.pulse?.duration ?? TUNE_CFG.pulseDuration;
+    if (washFor > 0 && this.time - a.attunePulsedAt >= TUNE_CFG.pulseIcd) {
+      a.attunePulsedAt = this.time;
+      const radius = (spec.pulse === false ? undefined : spec.pulse?.radius)
+        ?? TUNE_CFG.pulseRadius;
+      const sdef = STATUS_DEFS[attunedStatus(tone)];
+      const scale = washFor / Math.max(0.01, sdef?.duration ?? washFor);
+      for (const x of this.actorsNear(a.pos.x, a.pos.y, a.radius + radius + 64, this.attuneScratch)) {
+        if (x === a || x.dead || x.downed || x.construct || x.passive) continue;
+        if (dist(x.pos, a.pos) - x.radius > a.radius + radius) continue;
+        x.applyStatus(attunedStatus(tone), 0, scale, 'attunement');
+        this.flashes.push({
+          pos: vec(x.pos.x, x.pos.y), radius: x.radius + 5,
+          color: tint, life: 0.16, maxLife: 0.16,
+        });
+      }
+      this.flashes.push({
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + radius,
+        color: tint, life: 0.3, maxLife: 0.3,
+      });
+    }
+    this.text(vec(a.pos.x, a.pos.y - a.radius - 8), TUNE_CFG.text(tone), tint, 12);
+    this.flashes.push({
+      pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
+      color: tint, life: 0.25, maxLife: 0.25,
+    });
+    this.puzzleTuned(a, tone, striker ?? null);
+  }
+
+  // --- THE PUZZLE FABRIC (engine/puzzles.ts) --------------------------------
+
+  /** This zone's live activity riddles (bootPuzzles builds them at load). */
+  private puzzles: PuzzleRun[] = [];
+  private puzzleHostCache: PuzzleHost | null = null;
+
+  /** The narrow world surface puzzle kinds drive — kinds never import World. */
+  private puzzleHost(): PuzzleHost {
+    this.puzzleHostCache ??= {
+      now: () => this.time,
+      rng: () => rand(0, 1),
+      flash: (pos, radius, color, life = 0.25) =>
+        this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life, maxLife: life }),
+      say: (pos, msg, color, size = 12) => this.text(vec(pos.x, pos.y), msg, color, size),
+      setTone: (node, tone) => this.setPuzzleTone(node, tone),
+      kindle: (node, seconds) => node.applyStatus(PUZZLE_CFG.kindleStatus, 0,
+        seconds / Math.max(0.01, STATUS_DEFS[PUZZLE_CFG.kindleStatus]?.duration ?? 1), 'the refrain'),
+      quench: node => node.endStatus(PUZZLE_CFG.kindleStatus),
+      heroNear: (pos, within) => this.actors.some(x => !x.dead && x.team === 'player'
+        && x.kind !== 'minion' && x.kind !== 'mercenary' && dist(x.pos, pos) <= within),
+      complete: run => this.completePuzzle(run),
+    };
+    return this.puzzleHostCache;
+  }
+
+  /** Puzzle-OWNED tone setter: the same dressing lane a real attunement swap
+   *  uses (tone + worn status), minus the wash — a lattice cell going dark
+   *  must not buff the room. */
+  private setPuzzleTone(a: Actor, tone: DamageType): void {
+    if (a.tone === tone) return;
+    if (a.tone) a.endStatus(attunedStatus(a.tone));
+    a.tone = tone;
+    a.applyStatus(attunedStatus(tone), 0, TUNE_CFG.holdScale, 'attunement');
+  }
+
+  /** AMBIENT SCENERY-ACTORS (ZoneDef.scenery): passive object-actor rows —
+   *  the crystal country's freestanding resonant crystals; any future
+   *  shrine-body — planted at LOAD on their OWN salted stream + the
+   *  leftover POIs (the puzzle placer's exact discipline; a separate salt
+   *  so the two lanes never shift each other's rolls). Scenery defs are
+   *  ordinary passive monsters: resolveHit plays them, statuses dress
+   *  them, zone memory remembers them like any body. */
+  private bootScenery(def: ZoneDef, pois: Vec2[]): void {
+    const rows = def.scenery ?? [];
+    if (!rows.length) return;
+    const rng = new Rng((this.currentZoneSeed ^ SCENERY_CFG.salt) >>> 0);
+    for (const row of rows) {
+      if (!MONSTERS[row.monster]) {
+        console.warn(`[world] zone '${def.id}' scenery names unknown monster '${row.monster}' — skipped`);
+        continue;
+      }
+      const n = rng.int(row.count[0], row.count[1]);
+      for (let i = 0; i < n; i++) {
+        const at = this.interactSpot(pois, rng, 560, SCENERY_CFG.portalClear);
+        const m = this.createMonster(row.monster, Math.max(1, def.level), 'enemy');
+        m.pos = this.clampPos(
+          vec(at.x + rng.range(-24, 24), at.y + rng.range(-24, 24)), m.radius);
+        this.actors.push(m);
+      }
+    }
+  }
+
+  /** THE PUZZLE PLACER — stands the zone's riddles up at LOAD, never at
+   *  generation (the fog-bank discipline: a SALTED stream over the zone
+   *  seed, zero layout/spawn rng moved, zero genqa surface). Sources: a
+   *  `puzzle` OBJECTIVE (pinned preset, or drawn from the zone's own rows)
+   *  + ZoneDef.puzzles chance rows (folded from TilesetDef.puzzles at
+   *  mint), capped by PUZZLE_CFG.maxPerZone. Fixtures are ordinary passive
+   *  monster defs — resolveHit plays them, statuses dress them, co-op
+   *  ships them like any body. Zone memory re-enters finished runs SOLVED
+   *  (kind.solved dressing — proof, not homework). */
+  private bootPuzzles(def: ZoneDef, pois: Vec2[], memory?: ZoneMemory | null): void {
+    this.puzzles = [];
+    this.puzzleHostCache = null; // closures rebind to the fresh zone
+    const o = def.objective;
+    const rows = def.puzzles ?? [];
+    if (o.kind !== 'puzzle' && !rows.length) return;
+    const rng = new Rng((this.currentZoneSeed ^ PUZZLE_CFG.salt) >>> 0);
+    const wants: { preset: string; isObjective: boolean }[] = [];
+    if (o.kind === 'puzzle') {
+      wants.push({
+        preset: o.puzzle
+          ?? (rows.length ? rows[rng.int(0, rows.length - 1)].id : PUZZLE_CFG.defaultPreset),
+        isObjective: true,
+      });
+    }
+    for (const row of rows) {
+      if (wants.length >= PUZZLE_CFG.maxPerZone) break;
+      if (wants.some(w => w.preset === row.id)) continue;
+      if (rng.next() >= row.chance) continue;
+      wants.push({ preset: row.id, isObjective: false });
+    }
+    const host = this.puzzleHost();
+    for (const want of wants) {
+      const spec = PUZZLES[want.preset];
+      const kind = spec ? PUZZLE_KINDS[spec.kind] : undefined;
+      if (!spec || !kind) {
+        console.warn(`[world] zone '${def.id}' names unknown puzzle preset '${want.preset}' — skipped`);
+        continue;
+      }
+      const runId = `${want.preset}#${this.puzzles.length}`;
+      // Geometry: a centered grid, or an even ring around a (possible) heart.
+      const seats: Vec2[] = [];
+      let footprint: number;
+      if (kind.geometry === 'grid') {
+        const [gw, gh] = spec.grid ?? [3, 3];
+        const pitch = spec.spacing ?? kind.spacing;
+        footprint = ((Math.max(gw, gh) - 1) / 2) * pitch + 90;
+        for (let r = 0; r < gh; r++) {
+          for (let c = 0; c < gw; c++) {
+            seats.push(vec((c - (gw - 1) / 2) * pitch, (r - (gh - 1) / 2) * pitch));
+          }
+        }
+      } else {
+        const band = spec.count ?? kind.count ?? [4, 5];
+        const n = rng.int(band[0], band[1]);
+        const ringR = spec.spacing ?? kind.spacing;
+        footprint = ringR + 90;
+        const a0 = rng.range(0, Math.PI * 2);
+        for (let i = 0; i < n; i++) {
+          const ang = a0 + (i / n) * Math.PI * 2;
+          seats.push(vec(Math.cos(ang) * ringR, Math.sin(ang) * ringR));
+        }
+      }
+      const at = this.interactSpot(pois, rng, 680, PUZZLE_CFG.portalClear + footprint);
+      const nodes: Actor[] = [];
+      const nodeDef = spec.node ?? kind.nodeMonster;
+      for (let i = 0; i < seats.length; i++) {
+        const m = this.createMonster(nodeDef, Math.max(1, def.level), 'enemy');
+        m.pos = this.clampPos(vec(at.x + seats[i].x, at.y + seats[i].y), m.radius);
+        m.puzzleNode = { id: runId, idx: i };
+        this.actors.push(m);
+        nodes.push(m);
+      }
+      let heart: Actor | undefined;
+      const heartDef = spec.heart === false ? undefined : spec.heart ?? kind.heartMonster;
+      if (heartDef) {
+        heart = this.createMonster(heartDef, Math.max(1, def.level), 'enemy');
+        heart.pos = this.clampPos(vec(at.x, at.y), heart.radius);
+        this.actors.push(heart);
+        // The heart's tone IS the riddle — rolled on the placement stream
+        // (deterministic per zone seed), constrained by the spec's palette.
+        const pool = spec.tones ?? [...ELEMENTAL_TYPES];
+        this.setPuzzleTone(heart, pool[rng.int(0, pool.length - 1)] ?? 'fire');
+      }
+      const run: PuzzleRun = {
+        id: runId, spec, kind, at: vec(at.x, at.y), nodes,
+        ...(heart ? { heart } : {}),
+        state: {}, done: false, isObjective: want.isObjective,
+      };
+      this.puzzles.push(run);
+      kind.boot(run, host);
+      // Remembered solves re-enter SOLVED; a completed puzzle OBJECTIVE
+      // (completedObjectives — outlives zone memory) counts the same.
+      if (memory?.puzzlesDone?.includes(runId) || (want.isObjective && this.objectiveDone)) {
+        run.done = true;
+        kind.solved?.(run, host);
+      }
+    }
+  }
+
+  private updatePuzzles(dt: number): void {
+    if (!this.puzzles.length) return;
+    const host = this.puzzleHost();
+    for (const run of this.puzzles) {
+      if (!run.done) run.kind.tick?.(run, host, dt);
+    }
+  }
+
+  /** resolveHit's route for a landed hit on a puzzle node — the WHO gate
+   *  ('player' counts the whole side: heroes, minions, mercs; 'any' lets
+   *  the zone itself play) lives here so kinds stay pure. */
+  private puzzleStruck(node: Actor, striker: Actor | null): void {
+    const pn = node.puzzleNode;
+    if (!pn) return;
+    const run = this.puzzles.find(r => r.id === pn.id);
+    if (!run || run.done || !run.kind.struck) return;
+    const who = run.spec.who ?? run.kind.who;
+    if (who === 'player' && striker?.team !== 'player') return;
+    run.kind.struck(run, node, this.puzzleHost(), striker);
+  }
+
+  /** The attunement fabric's listener: a tunable body's tone moved. Only
+   *  nodes enrolled in a run route further (ambient crystals just glow). */
+  private puzzleTuned(node: Actor, tone: DamageType, striker: Actor | null): void {
+    void striker;
+    const pn = node.puzzleNode;
+    if (!pn) return;
+    const run = this.puzzles.find(r => r.id === pn.id);
+    if (!run || run.done || !run.kind.tuned) return;
+    run.kind.tuned(run, node, this.puzzleHost(), tone);
+  }
+
+  /** A riddle RESOLVES: latch, chorus, and the spec's own rewards — a
+   *  generous parting wash of the finishing tone (the fabric pays in its
+   *  own coin), gems, a free-cast flourish. The objective lane (chest, xp,
+   *  unseal) rides updateObjective's watcher, exactly like every kind. */
+  private completePuzzle(run: PuzzleRun): void {
+    if (run.done) return;
+    run.done = true;
+    const label = run.spec.label ?? run.kind.label;
+    const goal = (run.state.goal as DamageType | undefined) ?? 'lightning';
+    const tint = toneTint(goal);
+    for (const n of run.nodes) {
+      this.flashes.push({
+        pos: vec(n.pos.x, n.pos.y), radius: n.radius + 26,
+        color: tint, life: 0.5, maxLife: 0.5,
+      });
+    }
+    this.text(vec(run.at.x, run.at.y - 20), `${label} resolves!`, tint, 16);
+    const rw = run.spec.reward;
+    if (rw?.gems) {
+      for (let i = 0; i < rw.gems; i++) {
+        this.dropGemAt(vec(run.at.x + rand(-30, 30), run.at.y + rand(-30, 30)));
+      }
+    }
+    if (rw?.washFor) {
+      const sid = attunedStatus(goal);
+      const sdef = STATUS_DEFS[sid];
+      const scale = rw.washFor / Math.max(0.01, sdef?.duration ?? rw.washFor);
+      for (const x of this.actors) {
+        if (x.dead || x.team !== 'player' || x.construct || x.passive) continue;
+        if (dist(x.pos, run.at) > TUNE_CFG.pulseRadius * 2) continue;
+        x.applyStatus(sid, 0, scale, 'attunement');
+      }
+    }
+    if (rw?.cast && SKILLS[rw.cast]) {
+      if (!this.hazardCaster) {
+        const c = new Actor('Resonance', 'player', vec(0, 0));
+        c.untargetable = true; c.invulnerable = true;
+        this.hazardCaster = c;
+      }
+      const caster = this.hazardCaster;
+      caster.level = Math.max(1, this.zone.level);
+      caster.pos = vec(run.at.x, run.at.y);
+      const inst = makeSkillInstance(SKILLS[rw.cast], 1 + Math.floor(this.zone.level / 3));
+      this.executeSkill(caster, inst, vec(run.at.x, run.at.y), { noCooldown: true, noRepeat: true });
+    }
+  }
+
+  /** Live riddle views for the zone panel + attention chevrons
+   *  (data/puzzles.ts registers both — the beacons.ts idiom). */
+  puzzleViews(): { id: string; label: string; line: string; done: boolean; pos: Vec2; isObjective: boolean }[] {
+    return this.puzzles.map(r => ({
+      id: r.id, label: r.spec.label ?? r.kind.label, line: r.kind.status(r),
+      done: r.done, pos: r.at, isObjective: r.isObjective,
+    }));
+  }
+
   /** The zone-side mallet: offer a zone's strike moment to the surfaces
    *  with the SAME gates its victims saw — containment (zoneHas for the
    *  zone's own footprint, or an override blast shape at `at`/`radius` for
@@ -23186,6 +23522,25 @@ export class World {
           }
           break; // one row per landed hit — the icd's clean unit
         }
+      }
+      // THE ATTUNEMENT FABRIC (MonsterDef.tune, engine/tuning.ts): the
+      // blow's dominant ROLLED type becomes the struck body's TONE —
+      // conversions already spoke (packet.amounts is post-fold), so what
+      // tunes is what truly struck. Locked bodies (the chord's heart) hold
+      // their note; unaccepted tones wash past; physical is a tone like
+      // any other, so battering an attuned crystal back to its ground
+      // state — "shattering the attunement" — is a deliberate act.
+      if (dealt > 0 && target.tune && !target.dead && !target.untargetable) {
+        const tone = toneOfAmounts(packet.amounts);
+        if (tone && tone !== target.tone
+          && !target.tune.locked && toneAccepted(target.tune, tone)) {
+          this.attuneCrystal(target, tone, caster);
+        }
+      }
+      // THE PUZZLE FABRIC (engine/puzzles.ts): a landed hit on an enrolled
+      // node plays its run — the refrain's answers, the lattice's toggles.
+      if (dealt > 0 && target.puzzleNode && !target.dead) {
+        this.puzzleStruck(target, caster);
       }
       // CONTAGION (SkillDef/SupportDef.contagion): the struck victim may
       // become the next CAST SITE — after a telegraphed beat the skill (or
@@ -26268,6 +26623,7 @@ export class World {
     this.materializeLiveZoneEvents();
 
     this.updateObjective(dt);
+    this.updatePuzzles(dt);
     this.updateEncounters(dt);
     this.updateHunt(dt);
     this.updateFractures(dt);
@@ -33436,6 +33792,20 @@ export class World {
         }
         return;
 
+      case 'puzzle': {
+        // THE RIDDLE (engine/puzzles.ts): the run itself is driven by the
+        // fabric (resolveHit routes, updatePuzzles ticks); this watcher only
+        // banks the objective when it resolves. A placer that stood nothing
+        // up (unknown preset — already warned) completes vacuously rather
+        // than wedge the zone's chest forever.
+        if (this.objectiveDone) return;
+        const run = this.puzzles.find(r => r.isObjective);
+        if (!run || run.done) {
+          this.completeObjective(`${run ? (run.spec.label ?? run.kind.label) : 'the riddle'} resolved!`);
+        }
+        return;
+      }
+
       case 'beacon': {
         // SURVEY SPIRES: presence (not idleness — you will be fighting)
         // inside a stone's hold ring builds ITS charge; every stone with
@@ -34419,6 +34789,13 @@ export class World {
       case 'bounty': {
         const n = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark').length;
         return `Hunt the marked — ${n} writ${n === 1 ? '' : 's'} unclaimed`;
+      }
+      case 'puzzle': {
+        const run = this.puzzles.find(r => r.isObjective);
+        if (!run) return 'Seek out the riddle';
+        // The kind's own line, capitalized for the HUD's opening position.
+        const line = run.kind.status(run);
+        return line.charAt(0).toUpperCase() + line.slice(1);
       }
       case 'offering': {
         const of = this.offering;

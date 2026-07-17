@@ -6,7 +6,7 @@
 // referenced from any skill's `status` effect by id.
 // ---------------------------------------------------------------------------
 
-import { mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
+import { conversionStat, mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
 
 export interface StatusDef {
   label: string;
@@ -724,6 +724,71 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('staggerWindow', 'increased', 0.3),
       mod('damageTaken', 'more', -0.06),
     ],
+  },
+  // THE ATTUNED FAMILY (engine/tuning.ts — the attunement fabric): one row
+  // per damage type. A tuned crystal WEARS its tone as this status (held
+  // until retuned) and PULSES it briefly onto everyone near on a tone
+  // change — allies and enemies alike; the crystal doesn't take sides.
+  // Each grants that element's edge: increased damage of the type, a
+  // little of its resistance, and (elements) a sliver of physical CARRIED
+  // AS the type — blows near a fire-tuned crystal take the crystal's
+  // color. Physical is the ground state: no conversion (there is nothing
+  // to convert INTO it that wouldn't unmake the elemental rows' point),
+  // armor instead — the shattered, load-bearing note. These colors ARE
+  // the tone tints everywhere (toneTint reads them back): change a hue
+  // here and the crystal glow, pulse ring, and text all follow.
+  attuned_physical: {
+    label: 'Attuned: Physical', color: '#cdc6b6', duration: 6,
+    beneficial: true,
+    mods: [
+      mod('damage', 'increased', 0.15, ['physical']),
+      mod('armor', 'increased', 0.15),
+    ],
+  },
+  attuned_fire: {
+    label: 'Attuned: Fire', color: '#ff8a3a', duration: 6,
+    beneficial: true,
+    mods: [
+      mod('damage', 'increased', 0.15, ['fire']),
+      mod(conversionStat('physical', 'fire'), 'flat', 0.12),
+      mod('fireRes', 'flat', 0.1),
+    ],
+  },
+  attuned_cold: {
+    label: 'Attuned: Cold', color: '#b8e8ff', duration: 6,
+    beneficial: true,
+    mods: [
+      mod('damage', 'increased', 0.15, ['cold']),
+      mod(conversionStat('physical', 'cold'), 'flat', 0.12),
+      mod('coldRes', 'flat', 0.1),
+    ],
+  },
+  attuned_lightning: {
+    label: 'Attuned: Lightning', color: '#ffe27a', duration: 6,
+    beneficial: true,
+    mods: [
+      mod('damage', 'increased', 0.15, ['lightning']),
+      mod(conversionStat('physical', 'lightning'), 'flat', 0.12),
+      mod('lightningRes', 'flat', 0.1),
+    ],
+  },
+  attuned_chaos: {
+    label: 'Attuned: Chaos', color: '#c88aff', duration: 6,
+    beneficial: true,
+    mods: [
+      mod('damage', 'increased', 0.15, ['chaos']),
+      mod(conversionStat('physical', 'chaos'), 'flat', 0.12),
+      mod('chaosRes', 'flat', 0.1),
+    ],
+  },
+  // KINDLED — the puzzle fabric's blink (engine/puzzles.ts): a chime crystal
+  // lit by the refrain's playback or a correct answer. Pure display — the
+  // status lane is the one dressing wire (nameplate, co-op, fx), so a lit
+  // crystal is lit for every seat with zero bespoke sync. Duration 1 on
+  // purpose: appliers pass exact seconds as the durationScale.
+  kindled: {
+    label: 'Kindled', color: '#ffe9a8', duration: 1,
+    beneficial: true,
   },
   // PHASING: the bearer has no BODY for a while — walks through the pack
   // and the pack through it (crowd separation skips phasing actors; hits

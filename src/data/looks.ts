@@ -3786,6 +3786,103 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'crystalGrowths', role: 'accent', scale: 0.85, params: { n: 4 } }],
     shadowScale: 0.7,
   },
+
+  // ---------------------------------------------- ATTUNEMENT FIXTURES
+  // The struck-crystal world objects (engine/tuning.ts + engine/puzzles.ts):
+  // bodies that read as GROWN geology, not creatures. The TONE is worn LIVE
+  // (Actor.tone → the renderer's pooled glow + the worn status ring), so
+  // these bakes stay tone-free on purpose — one sprite serves every element.
+  /** A freestanding resonant crystal: a shard rosette around a bright core. */
+  resonant_crystal: {
+    parts: [
+      { kind: 'crystalGrowths', scale: 1.1, params: { n: 6 } },
+      { kind: 'disc', scale: 0.5 },
+      { kind: 'orb', scale: 0.42, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', role: 'glow', alpha: 0.5, params: { n: 2 } }],
+    shadowScale: 0.7,
+  },
+  /** The chord's heart: a crowned monolith — visibly the SENIOR stone. */
+  heart_crystal: {
+    parts: [
+      { kind: 'stalactites', scale: 1.1, params: { n: 7 } },
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'orb', scale: 0.5, role: 'glow' },
+      { kind: 'runes', scale: 0.95, params: { n: 5 } },
+      { kind: 'halo', scale: 1.08, alpha: 0.5 },
+    ],
+    live: [{ kind: 'crystalGrowths', role: 'accent', scale: 0.9, params: { n: 5 } }],
+    shadowScale: 0.75,
+  },
+  /** A chime crystal: a slender shard cluster that sings — small, bright. */
+  chime_crystal: {
+    parts: [
+      { kind: 'crystalGrowths', scale: 0.95, params: { n: 3 } },
+      { kind: 'orb', scale: 0.4, role: 'glow' },
+      { kind: 'runes', scale: 0.8, params: { n: 3 } },
+    ],
+    shadowScale: 0.6,
+  },
+  /** A lattice cell: a squat faceted stud — the board's tile, not a jewel. */
+  lattice_crystal: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'crystalGrowths', scale: 0.8, params: { n: 4 } },
+      { kind: 'gem', scale: 0.5, role: 'glow' },
+    ],
+    shadowScale: 0.6,
+  },
+
+  // ------------------------------------------------- THE CRYSTALKIN
+  // Four jobs, four silhouettes, zero new part painters: the STALKER is low
+  // glass with fin-blades (fast + edged reads instantly); the HAUNT is a
+  // robed drift under a halo (the buffer — soft, lit, unhurried); the
+  // SHELLBACK is a shard-armored dome with its soft core SHOWING at the
+  // brow (the ES pole teaches its own weak point); the SIREN is torn glass
+  // with orbiting fragments (wrongness you can see across the court).
+  /** Low glass predator: edged fins over a plated back, blades forward. */
+  facet_stalker: {
+    parts: [
+      { kind: 'carapace', scale: 0.95 },
+      { kind: 'glassFins', role: 'accent', scale: 0.95, params: { n: 3 } },
+      { kind: 'claws', x: 0.55, scale: 0.8 },
+      { kind: 'eyes', color: '#e8f4ff', params: { spread: 0.3, dist: 0.42, size: 0.09 } },
+    ],
+    shadowScale: 0.9,
+  },
+  /** The chime that doesn't take sides: a hooded drift under its own bell-halo. */
+  chime_haunt: {
+    parts: [
+      { kind: 'robe', scale: 0.9, alpha: 0.92 },
+      { kind: 'hood', x: 0.24, params: { eyes: true } },
+      { kind: 'runes', scale: 0.95, params: { n: 4 } },
+      { kind: 'halo', scale: 1.1, alpha: 0.6 },
+    ],
+    live: [{ kind: 'wisps', role: 'glow', alpha: 0.55, params: { n: 3 } }],
+    shadowScale: 0.55,
+  },
+  /** The walking geode: shard-crowned dome, the soft core glowing at the brow. */
+  geode_shellback: {
+    parts: [
+      { kind: 'carapace', scale: 1.05 },
+      { kind: 'crystalGrowths', role: 'accent', scale: 1.0, params: { n: 5 } },
+      { kind: 'scutes', scale: 0.9 },
+      { kind: 'gem', x: 0.5, scale: 0.4, role: 'glow' },
+      { kind: 'eyes', color: '#cfe8ff', params: { spread: 0.26, dist: 0.55, size: 0.07 } },
+    ],
+    shadowScale: 1.0,
+  },
+  /** The wrong note: torn glass, a keening mouth, fragments orbiting out of key. */
+  discord_siren: {
+    parts: [
+      { kind: 'tatters', params: { n: 5 } },
+      { kind: 'glassFins', role: 'dark', scale: 0.9, params: { n: 4 } },
+      { kind: 'maw', x: 0.3, scale: 0.6 },
+      { kind: 'eyes', color: '#e8c8ff', params: { spread: 0.34, dist: 0.4, size: 0.08 } },
+    ],
+    live: [{ kind: 'floatingShards', role: 'accent', scale: 0.9, params: { n: 4 } }],
+    shadowScale: 0.7,
+  },
   /** The spire of eyes: a stalk of meat that is mostly retina. */
   spire_of_eyes: {
     parts: [

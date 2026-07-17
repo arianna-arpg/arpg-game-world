@@ -21,6 +21,7 @@ import {
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
+import type { TuneSpec } from './tuning';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
@@ -1031,6 +1032,19 @@ export class Actor {
   onHitTypeIcd?: number;
   /** Response payload instances, minted lazily per skill id. */
   onHitTypeInsts?: Map<string, SkillInstance>;
+  /** TUNABLE spec (MonsterDef.tune — the attunement fabric): landed hits
+   *  re-TUNE this body to the blow's dominant rolled type. */
+  tune?: TuneSpec;
+  /** The tunable body's CURRENT tone (engine/tuning.ts). Read by puzzles
+   *  (the chord), worn as `attuned_<tone>` for display/co-op/fx. */
+  tone?: DamageType;
+  /** Last time this body's tone-change PULSED (TUNE_CFG.pulseIcd pacing —
+   *  state still moves every landed hit; only the wash is throttled). */
+  attunePulsedAt = -Infinity;
+  /** PUZZLE NODE (engine/puzzles.ts): which live puzzle run this fixture
+   *  belongs to and its node index — stamped by World's puzzle placer at
+   *  zone load; landed hits route to the run's kind hooks. */
+  puzzleNode?: { id: string; idx: number };
   /** CARRIED GEAR (MonsterDef.carry — the Hollowborn): a REAL rolled item the
    *  body walked in wearing. The kill path drops exactly this piece INSTEAD
    *  of a table roll — the walking loot beacon's whole contract. */
@@ -2019,6 +2033,22 @@ export class Actor {
         this.expiredStatuses.push(s); // world processes ruptures
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
       }
+    }
+  }
+
+  /** End every instance of a status NOW, silently — the deliberate dispel
+   *  lane (a retuned crystal sheds its old tone; no expiry side-effects,
+   *  no rupture pops — those belong to real expiries). Same two steps the
+   *  expiry path runs: splice + modifier-source cleanup. */
+  endStatus(id: string): void {
+    let any = false;
+    for (let i = this.statuses.length - 1; i >= 0; i--) {
+      if (this.statuses[i].id !== id) continue;
+      this.statuses.splice(i, 1);
+      any = true;
+    }
+    if (any && !this.statuses.some(o => o.id === id)) {
+      this.sheet.removeSource('status:' + id);
     }
   }
 

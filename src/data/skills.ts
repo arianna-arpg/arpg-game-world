@@ -5230,6 +5230,24 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { willpower: 20 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('damageVs_petrified', 'flat', 0.04)] },
   },
+  // THE PRISMATIC RAY — refraction as a verb: white light is every color at
+  // once. The beam carries all three elements in ONE packet, so its TONE
+  // (the attunement fabric reads the dominant ROLLED type, conversions and
+  // all) is whatever the BUILD amplifies — a fire-stacked caster's ray
+  // attunes crystals to fire; an untouched ray leans lightning (the wide
+  // top of its roll). THE deliberate tuning tool, and an honest rainbow
+  // lance without a crystal in sight.
+  prismatic_ray: {
+    id: 'prismatic_ray', name: 'Prismatic Ray',
+    description: 'Lance a thin beam of SPLIT light — fire, cold and lightning riding one ray. Crystals take your strongest color.',
+    tags: ['spell', 'fire', 'cold', 'lightning'], color: '#cfe8ff',
+    manaCost: 12, cooldown: 0.5, useTime: 0.75,
+    baseDamage: { fire: [6, 9], cold: [6, 9], lightning: [3, 12] },
+    delivery: { type: 'cone', range: 330, arcDeg: 7, beamFx: true },
+    effects: [{ type: 'damage' }],
+    requirements: { intelligence: 22 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
   // THE BASILISK'S STARE (noDrop): gaze_beam's grammar pointed at the Karst
   // ladder — the thin held ray BUILDS petrifying stack by stack (the climb
   // is the slow; the cap is the statue). Break line of sight, close the
@@ -7003,6 +7021,57 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [],
     requirements: { willpower: 30, intelligence: 24 },
     ai: { range: 720, weight: 1 },
+  },
+
+  // The crystal country's own mouth (the attunement pass): the lode calves
+  // its living lattice — shardlings that shatter, creepers, glimmer-chaff.
+  spew_shards: {
+    id: 'spew_shards', name: 'Calving Lattice', noDrop: true,
+    description: 'The stone calves glittering young.',
+    tags: ['spell', 'summon', 'minion', 'lightning'], color: '#9fd8ff',
+    manaCost: 0, cooldown: 3.6, useTime: 1.3,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'resonant_shardling', weight: 3 },
+        { id: 'prism_creeper', weight: 1 },
+        { id: 'lumen_wisp', weight: 1 },
+      ],
+      count: 1, maxActive: 6,
+    },
+    effects: [],
+    requirements: { willpower: 30 },
+    ai: { range: 720, weight: 1 },
+  },
+
+  // Crystalkin verbs (the attunement pass) — both peals ring EVERYONE
+  // (nova affects:'all'): kin, foes, and any standing crystal all take the
+  // note, and the attunement fabric decides what that means. The haunt's
+  // chime is a GIFT that doesn't care whose side you're on; the siren's
+  // wail re-tunes the whole court to chaos — its own kin included, which
+  // is what discord is.
+  resonant_peal: {
+    id: 'resonant_peal', name: 'Resonant Peal', noDrop: true,
+    description: 'A chime that rings through everything standing near — friend, foe, and the crystals themselves.',
+    tags: ['spell', 'lightning'], color: '#ffe27a',
+    manaCost: 0, cooldown: 7, useTime: 1.1,
+    baseDamage: { lightning: [4, 8] },
+    delivery: { type: 'nova', radius: 150, affects: 'all' },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'attuned_lightning', chance: 1 },
+    ],
+    ai: { range: 140, weight: 1.4 },
+  },
+  discord_wail: {
+    id: 'discord_wail', name: 'Discord', noDrop: true,
+    description: 'A shriek out of key — everything near takes the wrong note.',
+    tags: ['spell', 'chaos'], color: '#c88aff',
+    manaCost: 0, cooldown: 6, useTime: 1.2,
+    baseDamage: { chaos: [7, 12] },
+    delivery: { type: 'nova', radius: 160, affects: 'all' },
+    effects: [{ type: 'damage' }],
+    ai: { range: 150, weight: 1.3 },
   },
 
   // Themed spawner mouths (the bestiary expansion): each biome family's

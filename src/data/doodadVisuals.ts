@@ -406,6 +406,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'gallows', order: 55, shadow: 0.5, longShadow: 1.8,
     params: { wood: '#5c4a34', rope: '#a89468' },
   },
+  // The gloam roadside's iron cage-post (paintersGloam) — had its painter
+  // all along, never a registry row; the last warned fallback disc, closed.
+  gibbet: {
+    painter: 'gibbet', order: 55, shadow: 0.5, longShadow: 1.6,
+    params: { iron: '#3a3a42', wood: '#4a3e2e' },
+  },
   fishing_rack: {
     painter: 'fishingRack', order: 53, shadow: 0.35, longShadow: 0.8,
     params: { wood: '#6a5a40', fish: '#b0a284' },
@@ -896,6 +902,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'cairn', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge' },
   },
+  // The Stonewrought's raised waymark (data/attunements.ts terraform) — the
+  // cairn painter in transient dress; wilt fade rides the shared pipeline.
+  // (Was the repo's LAST warned generic-disc fallback, with gibbet below.)
+  stone_cairn: {
+    painter: 'cairn', order: 54, shadow: 0.5,
+    params: { color: '#8a8272', edge: '#a89e8a' },
+  },
   scree: {
     painter: 'scree', order: 37, params: { color: 'theme:obstacle' },
     blend: { strength: 0.32, feather: 14, color: 'theme:obstacle' },
@@ -1188,6 +1201,25 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     longShadow: 0.6, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.5,
     params: { points: 7, color: '#4a7aa8', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
     light: { radius: -2.2, color: '#7fc0f0', intensity: 0.22, flicker: 1.3 },
+  },
+  // The crystal-country kit (the attunement pass): the SPIRE is the tall
+  // singing needle — few points, long shadow, the strongest lamp in the
+  // family (a chorus of them lights a court); the GEODE is a split bowl
+  // reading as treasure — dense facets, edge-lit, motes drifting out of
+  // the crack.
+  crystal_spire: {
+    longShadow: 1.25,
+    painter: 'shard', order: 53, bakeWhole: 'static', shadow: 0.55,
+    params: { points: 3, color: '#456a9e', material: 'crystal',
+      coreGlow: { color: '#b8e4ff' }, edgeGlow: { color: '#9fd8ff', alpha: 0.3 } },
+    light: { radius: -3.2, color: '#8fd0ff', intensity: 0.38, flicker: 1.6 },
+  },
+  geode_shell: {
+    longShadow: 0.55,
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.5,
+    params: { points: 8, color: '#3f5a86', material: 'crystal',
+      coreGlow: { color: '#cfe8ff' }, motes: { color: '#cfe8ff' } },
+    light: { radius: -2, color: '#9fd8ff', intensity: 0.24, flicker: 2.2 },
   },
   // The storm-scar kit: lightning's leavings, all inert.
   fulgurite: {

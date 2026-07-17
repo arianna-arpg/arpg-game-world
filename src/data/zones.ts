@@ -112,6 +112,14 @@ export type ObjectiveSpec = (
    *  lost, just hungry — until a world event brings new blood. Numbers
    *  default from data/objectives.ts OFFERING_CFG. */
   | { kind: 'offering'; need?: [number, number]; altarId?: string }
+  /** AN ACTIVITY PUZZLE (engine/puzzles.ts — the puzzle fabric): the zone
+   *  stands up one of its riddles as THE ask — a lights-out lattice to
+   *  kindle, a refrain to answer, a chord to attune. `puzzle` pins a
+   *  PUZZLES preset (data/puzzles.ts); absent, the zone rolls from its own
+   *  `ZoneDef.puzzles` rows (folded from TilesetDef.puzzles at mint), so
+   *  the biome's repertoire IS the objective pool. Roads stay open (the
+   *  riddle waits); the chest banks on the solve. */
+  | { kind: 'puzzle'; puzzle?: string }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -122,6 +130,7 @@ export type ObjectiveSpec = (
 export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   safe: false, clear: false, waves: false, escape: false, spawners: false,
   boss: true, beacon: false, procession: false, bounty: false, offering: false,
+  puzzle: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -136,7 +145,7 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
  *  locks its roads, yet still stakes its reward. Endless arenas never do —
  *  nothing completes. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
-  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering']);
+  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering', 'puzzle']);
 
 export function objectiveEarnsChest(o: ObjectiveSpec): boolean {
   if (o.kind === 'waves' && o.waves === 0) return false;
@@ -562,6 +571,19 @@ export interface ZoneDef {
    *  replays the same topology on return. New layout families register their own. */
   layoutType?: string;
   objective: ObjectiveSpec;
+  /** ACTIVITY PUZZLES this zone may stand up at LOAD (engine/puzzles.ts):
+   *  chance-rolled rows into the PUZZLES presets (data/puzzles.ts), capped
+   *  by PUZZLE_CFG.maxPerZone, placed on a SALTED stream (never moves
+   *  layout/spawn rng — the fog-bank discipline). Folded from
+   *  TilesetDef.puzzles at mint; authored zones list rows directly. A
+   *  `puzzle` OBJECTIVE draws its preset from these rows when unpinned. */
+  puzzles?: { id: string; chance: number }[];
+  /** AMBIENT SCENERY-ACTORS planted at LOAD (World.bootScenery): passive
+   *  object-actor rows — the crystal country's freestanding resonant
+   *  crystals — on their own salted stream, the puzzles discipline
+   *  exactly. Folded from TilesetDef.scenery at mint. (Distinct from
+   *  `fixtures` below — those are STRUCTURE stamps at authored spots.) */
+  scenery?: { monster: string; count: [number, number] }[];
   packs?: PackSpec;
   /** AUTHORED AMBIENT FAUNA — this zone's own WildlifeRow list, REPLACING the
    *  biome's WILDLIFE table outright. The one lane past the sanctuary gate:

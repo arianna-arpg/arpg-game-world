@@ -13,6 +13,7 @@ import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
+import type { TuneSpec } from '../engine/tuning';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
 
@@ -517,6 +518,17 @@ export interface MonsterDef {
   }>>;
   /** Seconds between element-response firings (default 0.8). */
   onHitTypeIcd?: number;
+  /** TUNABLE (the attunement fabric, engine/tuning.ts): every landed hit's
+   *  DOMINANT rolled type becomes this body's TONE — strike a crystal with
+   *  fire and it is attuned to fire; batter it back to physical and the
+   *  attunement "shatters". A tone CHANGE pulses `attuned_<tone>` onto
+   *  everyone near, allies and enemies alike, and the body wears its tone
+   *  as the same status (held until retuned). onHitByType's sibling: that
+   *  row is a reaction MATRIX (per-type verbs), this is reaction STATE —
+   *  and engine/puzzles.ts listens to every change (the chord riddles).
+   *  Meant for passive fixture bodies (resonant crystals), but nothing
+   *  stops a living bearer from wearing a mood ring. */
+  tune?: TuneSpec;
   /** CARRIED GEAR — the Hollowborn's contract: the body spawns WEARING one
    *  real rolled item (createMonster mints it at the body's level) and its
    *  credited kill drops EXACTLY that piece instead of a gear-table roll.
@@ -2699,6 +2711,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     spawner: true,
   },
 
+  // The crystal country's own mouth (the attunement pass — its 'spawners'
+  // objective no longer borrows the rime stone): the lode calving its
+  // living lattice.
+  resonant_stone: {
+    id: 'resonant_stone', name: 'Resonant Stone',
+    color: '#9fd8ff', shape: 'square', radius: 20, material: 'crystal', look: 'elemental_rift',
+    base: { life: 180, moveSpeed: 0, armor: 30, evasion: 0, mana: 999, manaRegen: 50 },
+    mods: [mod('lightningRes', 'flat', 0.6)],
+    skills: ['spew_shards'],
+    xp: 50,
+    spawner: true,
+  },
+
   // --- The Goblin warband: a faction with a grudge ---------------------------
   // Goblins and the undead share no love; in WAR ZONES they spawn brawling.
 
@@ -3863,6 +3888,84 @@ export const MONSTERS: Record<string, MonsterDef> = {
     immortal: true,
   },
 
+  // --- ATTUNEMENT FIXTURES (engine/tuning.ts + engine/puzzles.ts) -----------
+  // Struck-crystal world objects on the dummy/barrel pattern — REAL actors,
+  // so every delivery in the game plays them (arcs, arrows, novas, minions).
+  // passive + immortal + noObjective: scenery with a health bar that never
+  // dies, never counts, never pays; moveSpeed 0 (no orbDrops) derives
+  // anchored, so pulls and shoves leave a laid board alone; aims:false —
+  // a crystal has no face. All wear MonsterDef.tune or a puzzle enrolment
+  // (or both) and dress their state as `attuned_<tone>` / `kindled`.
+
+  // The biome's AMBIENT voice: freestanding, fully tunable — strike it with
+  // any element and the pulse washes friend and foe alike. The living
+  // texture the crystal country fights around.
+  resonant_crystal: {
+    id: 'resonant_crystal', name: 'Resonant Crystal',
+    color: '#9fd8ff', shape: 'circle', radius: 15, material: 'crystal', look: 'resonant_crystal',
+    base: { life: 320, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+    tune: {},
+  },
+
+  // The chord's LOCKED voice: rolls a starting tone at spawn and HOLDS it —
+  // the riddle's answer key (the placer re-rolls it on the zone's own
+  // salted stream, so co-op and revisits agree). Its pulse is muted: the
+  // heart poses the question, it doesn't hand out the reward.
+  heart_crystal: {
+    id: 'heart_crystal', name: 'Heart Crystal',
+    color: '#cfe8ff', shape: 'circle', radius: 26, material: 'crystal', look: 'heart_crystal',
+    base: { life: 900, lifeRegen: 200, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+    // The pool is the three ELEMENTS by def — a heart is answerable by any
+    // caster's kit (chaos/physical goals belong to authored spec.tones).
+    tune: { roll: true, locked: true, pulse: false, tones: ['fire', 'cold', 'lightning'] },
+  },
+
+  // The chord's OPEN voices: fully tunable ring crystals — their pulses
+  // fire (the riddle pays as you work it), and the chord kind listens to
+  // every change through the attunement fabric itself.
+  chord_crystal: {
+    id: 'chord_crystal', name: 'Chord Crystal',
+    color: '#9fd8ff', shape: 'circle', radius: 15, material: 'crystal', look: 'resonant_crystal',
+    base: { life: 320, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+    tune: {},
+  },
+
+  // The refrain's chimes: puzzle-owned (no tune — the SONG decides what
+  // glows, not the blow), kindling to playback and correct answers.
+  chime_crystal: {
+    id: 'chime_crystal', name: 'Chime Crystal',
+    color: '#ffe9a8', shape: 'circle', radius: 13, material: 'crystal', look: 'chime_crystal',
+    base: { life: 260, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+  },
+
+  // The lattice's cells: puzzle-owned toggles (lit rides the lightning
+  // tone's dressing; dark is the ground state — at a glance, gold vs grey).
+  lattice_crystal: {
+    id: 'lattice_crystal', name: 'Lattice Crystal',
+    color: '#ffe27a', shape: 'circle', radius: 13, material: 'crystal', look: 'lattice_crystal',
+    base: { life: 260, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+  },
+
   // Friendly scenery folk: they stand at their posts and cannot be harmed.
   // Behavior binds to npcRole (vendor / innkeep / caravanner / questgiver),
   // so any body — these or a package's — can staff a counter.
@@ -4437,6 +4540,69 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'elemental',
     deathBurst: { mode: 'implode', damageFrac: 0.55, damageType: 'lightning', radius: 46, coalesce: 0.4 },
     brain: { type: 'swarm' },
+  },
+
+  // --- THE CRYSTALKIN (the attunement pass): the country's own court ---------
+  // Four bodies, four jobs, distinct at a glance: the STALKER is low, fast
+  // glass with fin-blades (skirmish geometry); the HAUNT is a robed drift of
+  // glass and halo (the buffer — its chime rings EVERYONE, the attunement
+  // fabric decides what that means); the SHELLBACK is a walking geode
+  // (crack the shining shell, reach the soft core — the ES pole worn as
+  // anatomy); the SIREN is wrong-colored glass whose wail re-tunes the
+  // court to chaos, its own kin included. All elemental faction — the
+  // Unbound Elements muster them wherever the country calls.
+
+  // Skirmisher: hit-and-slide glass predator. Cold-brittle like all true
+  // crystal (the freeze-thaw law), storm-fed like its creeper cousin.
+  facet_stalker: {
+    id: 'facet_stalker', name: 'Facet Stalker',
+    color: '#a8d0f0', shape: 'oval', radius: 13, material: 'crystal', look: 'facet_stalker',
+    base: { life: 62, moveSpeed: 168, accuracy: 92, evasion: 70, mana: 0 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.2)],
+    skills: ['claw'], xp: 22,
+    faction: 'elemental',
+    presence: { from: 5, fadeIn: 3 },
+    brain: { type: 'flanker', move: { style: 'weave' } },
+  },
+  // Support caster: the chime that doesn't take sides. Its peal buffs its
+  // kin AND any foe standing near — and re-tunes standing crystals to
+  // lightning through the ordinary fabric (nova affects 'all').
+  chime_haunt: {
+    id: 'chime_haunt', name: 'Chime Haunt',
+    color: '#ffe9a8', shape: 'circle', radius: 12, material: 'ethereal', look: 'chime_haunt',
+    base: { life: 44, moveSpeed: 105, accuracy: 80, mana: 60, manaRegen: 6 },
+    mods: [mod('lightningRes', 'flat', 0.5)],
+    skills: ['spark', 'resonant_peal'], xp: 26,
+    faction: 'elemental',
+    presence: { from: 7, fadeIn: 4 },
+    brain: { type: 'strafer' },
+  },
+  // Bruiser: the walking geode — a shining ES shell over a soft mineral
+  // core. Break the glass (the recharge is the fight's clock) and the
+  // inside is nearly meat. The ES-pole texture worn as anatomy.
+  geode_shellback: {
+    id: 'geode_shellback', name: 'Geode Shellback',
+    color: '#7aa0d0', shape: 'circle', radius: 17, material: 'crystal', look: 'geode_shellback',
+    base: { life: 70, energyShield: 150, moveSpeed: 92, accuracy: 88, mana: 0 },
+    mods: [mod('esRechargeRate', 'increased', 0.5), mod('coldRes', 'flat', -0.2), mod('lightningRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 34,
+    faction: 'elemental',
+    presence: { from: 9, fadeIn: 4 },
+    scaleVariance: [0.95, 1.25],
+    brain: { type: 'juggernaut' },
+  },
+  // The wrong note: a chaos caster whose wail hits EVERYTHING near —
+  // players, its own kin, and the crystals, which take the chaos tone and
+  // pulse it onward. Kill it first or fight inside its discord.
+  discord_siren: {
+    id: 'discord_siren', name: 'Discord Siren',
+    color: '#c88aff', shape: 'oval', radius: 13, material: 'crystal', look: 'discord_siren',
+    base: { life: 56, moveSpeed: 118, accuracy: 84, evasion: 40, mana: 70, manaRegen: 7 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('lightningRes', 'flat', 0.2)],
+    skills: ['discord_wail'], xp: 30,
+    faction: 'elemental',
+    presence: { from: 11, fadeIn: 5 },
+    brain: { type: 'skirmish' },
   },
 
   // --- Ambient fauna: the ember wisp (volcanic wildlife) ----------------------
@@ -10155,6 +10321,17 @@ export const FACTIONS: Record<string, {
       { id: 'karst_slinger', weight: 2, presence: { from: 5 } },
       { id: 'petrified_warden', weight: 1, presence: { from: 8 } },
       { id: 'scree_shambler', weight: 1, presence: { from: 9 } },
+      // THE CRYSTALKIN (the attunement pass): the glass court finally
+      // musters with its faction — the shard fields were never leaderless,
+      // only unlisted. Chaff early, the court proper with level.
+      { id: 'lumen_wisp', weight: 2, presence: { to: 12, fadeOut: 5 } },
+      { id: 'prism_creeper', weight: 2, presence: { to: 22, fadeOut: 10 } },
+      { id: 'resonant_shardling', weight: 2, presence: { to: 16, fadeOut: 8 } },
+      { id: 'facet_stalker', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'chime_haunt', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'geode_shellback', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      { id: 'glassguard_sentinel', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'discord_siren', weight: 1, presence: { from: 11, fadeIn: 5 } },
     ],
   },
   sylvan: {

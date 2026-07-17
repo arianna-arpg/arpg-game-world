@@ -10,6 +10,7 @@ import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
 import { STATUS_DEFS } from '../engine/status';
+import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
 import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
@@ -2988,6 +2989,24 @@ export class Renderer {
       ctx.globalAlpha = 0.13 * baseAlpha;
       ctx.drawImage(bodySprite(look), -half, -half);
       ctx.restore();
+    }
+    // ATTUNED TONE (the attunement fabric, engine/tuning.ts): a tuned body
+    // POOLS its element beneath itself — a soft breathing glow in the tone's
+    // tint. The worn status ring below tells the list; this tells WHAT the
+    // crystal is at a glance, across the arena. Render-only read of
+    // Actor.tone (the bake stays tone-free: one sprite serves every
+    // element); the handful of tunable fixtures per zone keeps it cheap.
+    if (a.tone) {
+      const tint = toneTint(a.tone);
+      const pulse = 0.72 + 0.28 * Math.sin(world.time * 2.4 + a.id * 0.9);
+      const gr = a.radius * 2.0;
+      const g = ctx.createRadialGradient(0, 0, a.radius * 0.35, 0, 0, gr);
+      g.addColorStop(0, withAlpha(tint, 0.36 * pulse * baseAlpha));
+      g.addColorStop(1, withAlpha(tint, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, gr, 0, Math.PI * 2);
+      ctx.fill();
     }
     ctx.save();
     // Idle breathing — a live transform over the static bake. Scenery

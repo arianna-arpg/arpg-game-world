@@ -100,6 +100,9 @@ export interface SavedZoneMemory {
   procession?: SavedProcessionMemo;
   /** OFFERING zones: how fed the hungering altar was at capture. */
   altarOffered?: number;
+  /** SOLVED riddle run-ids (the puzzle fabric) — solved stays solved for
+   *  the memory's life; never gates progression. */
+  puzzlesDone?: string[];
 }
 
 /** The procession rider, plain JSON (mirrors the engine's shape). */

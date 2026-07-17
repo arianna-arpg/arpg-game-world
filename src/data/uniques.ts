@@ -73,6 +73,21 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'life', kind: 'increased', range: [-0.12, -0.08] },
     ],
   },
+  // THE ATTUNEMENT PASS's anchor: the crystal country distilled into a
+  // pendant — blows leave part-lightning (the fabric reads the MIX, so the
+  // fork is a walking tuning tool), and the storm-share of the wearer's
+  // kit brightens to match.
+  {
+    id: 'tuning_fork', name: 'The Tuning Fork', baseId: 'amulet_opal', weight: 70,
+    minIlvl: 7,
+    flavor: 'Strike anything, it says, and I will tell you what it truly is.',
+    lines: [
+      { stat: 'convert_physical_lightning', kind: 'flat', range: [0.2, 0.3] },
+      { stat: 'damage', kind: 'increased', range: [0.1, 0.16], tags: ['lightning'] },
+      { stat: 'lightningRes', kind: 'flat', range: [0.1, 0.15] },
+      { stat: 'castSpeed', kind: 'increased', range: [0.04, 0.07] },
+    ],
+  },
   {
     id: 'gravebloom', name: 'Gravebloom', baseId: 'helmet_es', weight: 100,
     flavor: 'What you plant in sorrow you may harvest in service.',

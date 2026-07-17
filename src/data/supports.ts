@@ -9,7 +9,7 @@
 // with skill points.
 // ---------------------------------------------------------------------------
 
-import { mod } from '../engine/stats';
+import { conversionStat, mod } from '../engine/stats';
 import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG } from '../engine/skills';
 import type { SupportDef } from '../engine/skills';
 
@@ -307,6 +307,36 @@ export const SUPPORTS: Record<string, SupportDef> = {
     color: '#9a948a', requiresTags: ['physical'],
     mods: [mod('apply_petrifying', 'flat', 0.1), mod('damageVs_petrified', 'increased', 0.15)],
     perLevel: [mod('apply_petrifying', 'flat', 0.015), mod('damageVs_petrified', 'increased', 0.025)],
+    weight: 5,
+  },
+  // REFRACTION — the crystal country's lens (the attunement pass): the
+  // supported blow SPLITS into the spectrum. A slice of its physical leaves
+  // as each element and the elemental portions brighten — on a physical
+  // skill it's a prism; on an elemental skill the conversion rows idle but
+  // the brightening pays, so the socket is never silent. Changes the
+  // packet's MIX, which is exactly what the attunement fabric reads: a
+  // refracted mace tunes crystals to whichever color your build feeds.
+  refraction: {
+    id: 'refraction', name: 'Refraction',
+    description: 'Supported skills REFRACT: 10% of physical damage becomes each element, and the skill deals 12% increased elemental damage — every blow a spectrum.',
+    color: '#cfe8ff',
+    // The socket gate IS the no-op audit (ANY-of): only skills with
+    // something to refract — physical to split or an element to brighten.
+    // Pure-chaos, auras, flasks and wards are REFUSED, never inert.
+    requiresTags: ['physical', 'fire', 'cold', 'lightning'],
+    mods: [
+      mod(conversionStat('physical', 'fire'), 'flat', 0.1),
+      mod(conversionStat('physical', 'cold'), 'flat', 0.1),
+      mod(conversionStat('physical', 'lightning'), 'flat', 0.1),
+      mod('damage', 'increased', 0.12, ['fire']),
+      mod('damage', 'increased', 0.12, ['cold']),
+      mod('damage', 'increased', 0.12, ['lightning']),
+    ],
+    perLevel: [
+      mod('damage', 'increased', 0.02, ['fire']),
+      mod('damage', 'increased', 0.02, ['cold']),
+      mod('damage', 'increased', 0.02, ['lightning']),
+    ],
     weight: 5,
   },
   barbed_snare: {
