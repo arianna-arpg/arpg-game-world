@@ -1653,20 +1653,22 @@ const antennae: PartPainter = (ctx, r, spec, pal) => {
 };
 
 /** ARACHNID LEGS: paired arcs reaching out and forward — the spider read.
- *  params: pairs, or n = total legs (pairs wins if both). */
+ *  params: pairs, or n = total legs (pairs wins if both); len = reach mult. */
 const legs: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'base');
   const pairs = Math.round(P(spec, 'pairs', P(spec, 'n', 8) / 2));
+  const len = P(spec, 'len', 1);
   place(ctx, r, spec, (c, R) => {
     c.lineCap = 'round';
+    const reach = R * len;
     for (let i = 0; i < pairs; i++) {
       const t = pairs === 1 ? 0.5 : i / (pairs - 1);
       const a0 = 0.9 - t * 1.9; // fan from forward to back
       for (const side of [-1, 1]) {
         const ang = side * a0 * -1 + (side < 0 ? Math.PI : 0);
-        const bx = Math.cos(ang) * R * 0.7, by = Math.sin(ang) * R * 0.7;
-        const kx = Math.cos(ang) * R * 1.35, ky = Math.sin(ang) * R * 1.35 - R * 0.12;
-        const tx = Math.cos(ang) * R * 1.7, ty = Math.sin(ang) * R * 1.7 + R * 0.22;
+        const bx = Math.cos(ang) * reach * 0.7, by = Math.sin(ang) * reach * 0.7;
+        const kx = Math.cos(ang) * reach * 1.35, ky = Math.sin(ang) * reach * 1.35 - R * 0.12;
+        const tx = Math.cos(ang) * reach * 1.7, ty = Math.sin(ang) * reach * 1.7 + R * 0.22;
         c.strokeStyle = i % 2 ? ramp.base : shade(ramp.base, -0.14);
         c.lineWidth = Math.max(1.6, R * 0.09);
         c.beginPath();
