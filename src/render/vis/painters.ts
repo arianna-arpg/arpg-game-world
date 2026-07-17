@@ -8104,7 +8104,218 @@ const tortureRack: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- THE TRACK FABRIC's kit (engine/tracks.ts + vis/trackLayer.ts) -----------
+
+/** CARVED HAZARD GROOVE — the lane a track rider grinds, laid as a way
+ *  (layTraveledWay kind 'track_groove') so it bakes with the ground: a dark
+ *  scored channel with twin ruts and chipped lips. Learnable at a glance
+ *  before the blade ever arrives — readability guarantee #1. */
+const trackGroove: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { base?: ColorSpec; rut?: ColorSpec; lip?: ColorSpec };
+  const base = resolveColor(p.base, theme, shade(theme.floor, -0.34));
+  const rut = resolveColor(p.rut, theme, shade(base, -0.4));
+  const lip = resolveColor(p.lip, theme, withAlpha(shade(theme.floor, 0.24), 0.5));
+  ctx.save();
+  // The channel body — one smooth band through the chained discs.
+  ctx.strokeStyle = base;
+  ctx.fillStyle = base;
+  pathBand(ctx, group, -2);
+  // Twin ruts: parallel scores riding each segment's direction.
+  ctx.lineCap = 'round';
+  for (let i = 0; i < group.length - 1; i++) {
+    const a = group[i], b = group[i + 1];
+    const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1 || len > (a.radius + b.radius) * 1.35) continue;
+    const nx = -dy / len, ny = dx / len;
+    const off = Math.min(a.radius, b.radius) * 0.42;
+    ctx.strokeStyle = rut;
+    ctx.lineWidth = 2.6;
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(a.pos.x + nx * off * s, a.pos.y + ny * off * s);
+      ctx.lineTo(b.pos.x + nx * off * s, b.pos.y + ny * off * s);
+      ctx.stroke();
+    }
+    // Chipped lip: a faint bright edge on one shoulder, occasional cross-score.
+    ctx.strokeStyle = lip;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(a.pos.x + nx * (off + 5), a.pos.y + ny * (off + 5));
+    ctx.lineTo(b.pos.x + nx * (off + 5), b.pos.y + ny * (off + 5));
+    ctx.stroke();
+    if (((a.pos.x * 7 + a.pos.y * 13) | 0) % 5 === 0) {
+      ctx.beginPath();
+      ctx.moveTo(a.pos.x + nx * off, a.pos.y + ny * off);
+      ctx.lineTo(a.pos.x - nx * off, a.pos.y - ny * off);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+};
+
+/** SHEAR DISC — the grinding buzzsaw: a spun ring of jagged teeth around a
+ *  scored hub. Drawn to d.radius under d.rot, which the track layer sets
+ *  from the SAME pose the contact sweep tested — drawn == tested. */
+const shearDisc: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { body?: ColorSpec; edge?: ColorSpec; hub?: ColorSpec; teeth?: number };
+  const body = resolveColor(p.body, theme, '#b8dcec');
+  const edge = resolveColor(p.edge, theme, '#eaf6fc');
+  const hub = resolveColor(p.hub, theme, shade(body, -0.45));
+  const teeth = p.teeth ?? 10;
+  for (const d of group) {
+    const r = d.radius;
+    ctx.save();
+    ctx.translate(d.pos.x, d.pos.y);
+    // Ground shadow — the blade sits IN its groove.
+    ctx.fillStyle = 'rgba(6, 10, 16, 0.42)';
+    ctx.beginPath();
+    ctx.ellipse(0, 2, r * 1.02, r * 0.92, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (d.rot !== undefined) ctx.rotate(d.rot);
+    // The toothed wheel: body disc + triangular shear teeth.
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = edge;
+    for (let i = 0; i < teeth; i++) {
+      const a0 = (i / teeth) * Math.PI * 2;
+      const a1 = a0 + (Math.PI * 2 / teeth) * 0.45;
+      const aT = a0 + (Math.PI * 2 / teeth) * 0.72;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a0) * r * 0.74, Math.sin(a0) * r * 0.74);
+      ctx.lineTo(Math.cos(aT) * r, Math.sin(aT) * r);
+      ctx.lineTo(Math.cos(a1) * r * 0.74, Math.sin(a1) * r * 0.74);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Hub + radial scores: the spin read even in a still frame.
+    ctx.fillStyle = hub;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(body, -0.3), 0.85);
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.3, Math.sin(a) * r * 0.3);
+      ctx.lineTo(Math.cos(a) * r * 0.68, Math.sin(a) * r * 0.68);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = withAlpha(edge, 0.9);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** RIME FLAIL — the revolving blade arm: a crystalline beam of chained ice
+ *  blocks with a bright leading edge, drawn oriented by d.rot. The beam's
+ *  half-extents come from params and are VALIDATION-PINNED to the rider's
+ *  rect surface (the DoodadRule.surface agreement doctrine) — the drawn
+ *  beam IS the tested rect. */
+const rimeFlail: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { beamHw?: number; beamHh?: number; body?: ColorSpec; edge?: ColorSpec };
+  const body = resolveColor(p.body, theme, '#a8d4e8');
+  const edge = resolveColor(p.edge, theme, '#f0fafe');
+  for (const d of group) {
+    const hw = p.beamHw ?? d.radius;
+    const hh = p.beamHh ?? Math.max(7, d.radius * 0.16);
+    ctx.save();
+    ctx.translate(d.pos.x, d.pos.y);
+    ctx.fillStyle = 'rgba(6, 10, 16, 0.36)';
+    ctx.beginPath();
+    ctx.ellipse(0, 2, hw, Math.max(hh * 1.4, hw * 0.2), d.rot ?? 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (d.rot !== undefined) ctx.rotate(d.rot);
+    // The beam: chained ice blocks, slightly staggered — a flail, not a plank.
+    const blocks = Math.max(3, Math.round(hw / (hh * 1.6)));
+    for (let i = 0; i < blocks; i++) {
+      const f = blocks === 1 ? 0 : i / (blocks - 1);
+      const bx = -hw + f * hw * 2;
+      const bw = (hw * 2) / blocks * 0.56;
+      const stag = ((i * 41) % 5 - 2) * hh * 0.14;
+      ctx.fillStyle = i === blocks - 1 ? edge : shade(body, -0.08 + (i % 2) * 0.12);
+      ctx.beginPath();
+      ctx.roundRect(bx - bw / 2, -hh + stag, bw, hh * 2, hh * 0.4);
+      ctx.fill();
+    }
+    // Leading edge: a bright shear line down the whole length.
+    ctx.strokeStyle = withAlpha(edge, 0.95);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-hw, -hh * 0.6);
+    ctx.lineTo(hw, -hh * 0.6);
+    ctx.stroke();
+    // Hub boss at the pivot end.
+    ctx.fillStyle = shade(body, -0.4);
+    ctx.beginPath();
+    ctx.arc(-hw * 0.92, 0, hh * 1.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** BUMPER DOME — the squat glazed knockback dome: a low ice boss with a
+ *  bright live rim (the BOUNCE read) breathing on the shared clock. Its
+ *  disc is its hit surface — drawn == tested at the doodad rule's radius. */
+const bumperDome: GroupPainter = (env, group, def) => {
+  const { ctx, theme, time } = env;
+  const p = (def.params ?? {}) as { body?: ColorSpec; rim?: ColorSpec; core?: ColorSpec };
+  const body = resolveColor(p.body, theme, '#8ec8e0');
+  const rim = resolveColor(p.rim, theme, '#eaf8ff');
+  const core = resolveColor(p.core, theme, shade(body, 0.3));
+  for (const d of group) {
+    const r = d.radius;
+    const pulse = 0.55 + 0.25 * Math.sin(time * 2.1 + (d.pos.x + d.pos.y) * 0.02);
+    ctx.save();
+    ctx.translate(d.pos.x, d.pos.y);
+    ctx.fillStyle = 'rgba(6, 10, 16, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.14, r * 1.04, r * 0.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The dome: base disc, glaze highlight off-centre.
+    ctx.fillStyle = shade(body, -0.22);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.08, r * 0.82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = withAlpha(core, 0.85);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.24, -r * 0.34, r * 0.34, r * 0.22, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // The LIVE rim — the "this thing answers back" ring.
+    ctx.strokeStyle = withAlpha(rim, pulse);
+    ctx.lineWidth = Math.max(2.2, r * 0.12);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.94, 0, Math.PI * 2);
+    ctx.stroke();
+    // Radial score marks: the sprung-coil read.
+    ctx.strokeStyle = withAlpha(shade(body, -0.35), 0.8);
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.26;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5);
+      ctx.lineTo(Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
+  trackGroove, shearDisc, rimeFlail, bumperDome,
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth, hatch,

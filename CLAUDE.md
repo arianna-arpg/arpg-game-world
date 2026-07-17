@@ -132,6 +132,19 @@ changes.
   in-zone by the LIGHT meter, spawned wells, `gloomveiled` stealth and
   the gloamborn — docs in `docs/engine/gloaming.md`; probe
   `balance/probe_gloaming.ts`),
+  `tracks.ts` (THE TRACK FABRIC: moving hazards on authored ways as pure
+  data — TrackSpec lanes (waypoints, loop/pingpong, speed, pauses, per-rider
+  phase) whose rider poses are a PURE FUNCTION of the synced clock
+  (`trackPose` — deterministic across seats/resumes by construction);
+  payloads ride existing levers (mitigated typed hits, statuses,
+  `pushActor` shoves — pit-aware with owner credit), the same grammar on
+  static doodads via `DoodadRule.contact` (bumpers); readability contract:
+  carved `track_groove` ways, warn arcs + `imminentThreatTo` from the same
+  resolver, drawn==tested rider surfaces; authoring via landmark builders /
+  `ZoneTheme.tracks` / `World.tracksEnsure`; debut = the GLACIAL HEART
+  (deepwinter's heart graft: ice disc over a chasm moat, shear-disc ring +
+  rime-flail rotor + rime bumpers, the Winter King anchored at the wheel) —
+  docs in `docs/engine/tracks.md`; probe `balance/probe_tracks.ts`),
   `timeflow.ts` (THE TIMEFLOW FABRIC: time itself as data — one TimeHold
   registry behind the pause menu's real pause, Ultimatum-style menu
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and

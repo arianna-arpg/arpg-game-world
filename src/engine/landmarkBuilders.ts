@@ -19,12 +19,13 @@
 
 import { vec, type Vec2 } from '../core/math';
 import {
-  registerLandmarkBuilder, type LandmarkBuildCtx, type DoodadKind,
+  layTraveledWay, registerLandmarkBuilder, type LandmarkBuildCtx, type DoodadKind,
 } from './levelgen';
 import {
   Mask, disc, ring, radial, band, halfPlane, wanderPath, spiralPath,
   paintRegion, paintLiquid, liquidOf, bearingNoise,
 } from './genkit';
+import { ringPath } from './tracks';
 
 /** The def's liquid (params.liquid overrides def.liquid; default water). */
 function liq(b: LandmarkBuildCtx): ReturnType<typeof liquidOf> {
@@ -339,6 +340,108 @@ registerLandmarkBuilder('pit', (b) => {
   const floorKind = b.param<string | undefined>('floorKind', undefined);
   if (floorKind) paintLiquid(b.ctx, b.grid, floor, liquidOf(floorKind));
   b.interior = floor;
+});
+
+// --- GLACIAL HEART ---------------------------------------------------------------
+// The Winter King's frozen-lake boss arena: an ice disc HANGING OVER THE DEEP.
+// A chasm moat rings the lake — the pitfall fabric decides what falling MEANS
+// (tundra's ZoneTheme.pitfall 'descend' drops a body one stratum into the
+// under-ice dark; other biomes keep the classic rim scramble) — crossed by
+// two causeways. Carved hazard lanes grind the disc (the track fabric: a
+// shear-disc ring riding a baked groove + a revolving flail hub at the dais),
+// rime bumpers answer footwork with flings, and the outer shore bares ice
+// teeth so the drop reads at a glance. Every count and radius is a param;
+// the lanes are ordinary TrackSpecs any landmark could author.
+registerLandmarkBuilder('glacial_heart', (b) => {
+  const { rng, r, ctx } = b;
+  const seed = rng.int(0, 1 << 30);
+  const cx = b.center.x, cy = b.center.y;
+  // THE LAKE — a wobbled ice disc.
+  const iceR = r * (b.param('iceR', 0.66) as number);
+  const lake = frame(b);
+  radial(lake, cx, cy, (a) => iceR + bearingNoise(a, iceR * 0.06, seed));
+  // THE MOAT — the deep, minus its causeways.
+  const moatR = r * (b.param('moatR', 0.9) as number);
+  const moat = frame(b);
+  radial(moat, cx, cy, (a) => moatR + bearingNoise(a, moatR * 0.05, seed ^ 0x5a5a));
+  moat.subtract(lake);
+  const causeways = Math.max(1, b.param('causeways', 2) as number);
+  const cwW = b.param('causewayW', 36) as number;
+  const cw0 = rng.range(0, Math.PI * 2);
+  const cwBearings: number[] = [];
+  for (let i = 0; i < causeways; i++) {
+    const a = cw0 + (i / causeways) * Math.PI * 2 + rng.range(-0.18, 0.18);
+    cwBearings.push(a);
+    const cut = frame(b);
+    band(cut, [
+      vec(cx + Math.cos(a) * iceR * 0.7, cy + Math.sin(a) * iceR * 0.7),
+      vec(cx + Math.cos(a) * (moatR + 40), cy + Math.sin(a) * (moatR + 40)),
+    ], cwW);
+    moat.subtract(cut);
+  }
+  // Deep first, lake second — the disc is always whole ice, the causeway
+  // strips keep the zone's own ground.
+  paintLiquid(ctx, b.grid, moat, liquidOf(b.param('deep', 'chasm')));
+  paintLiquid(ctx, b.grid, lake, liq(b));
+  // ICE TEETH on the outer shore: the rim-of-the-deep read, parted at each
+  // causeway mouth so the crossings stay legible.
+  const teeth = rng.int(...(b.param('teeth', [10, 15]) as [number, number]));
+  for (let i = 0; i < teeth; i++) {
+    const a = rng.range(0, Math.PI * 2);
+    if (cwBearings.some(cb => Math.abs(Math.atan2(Math.sin(a - cb), Math.cos(a - cb))) < 0.36)) continue;
+    const rr = moatR + rng.range(10, 30);
+    ctx.doodads.push({
+      pos: vec(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr),
+      radius: rng.range(10, 16), kind: 'ice_spike', rot: rng.range(0, Math.PI * 2),
+    });
+  }
+  // THE ROTOR — a flail wheel at the dais: a tight hub ring whose radial
+  // arms (hw 56 — the rider def's pinned beam) sweep hub → 112px. No groove
+  // on purpose: the grooveless lane strokes a live hub ring, the wheel's
+  // mount read.
+  const rotorHubR = b.param('rotorHubR', 56) as number;
+  const rotorReach = rotorHubR * 2;
+  (ctx.tracks ??= []).push({
+    path: ringPath(cx, cy, rotorHubR, 20, rng.range(0, Math.PI * 2)),
+    closed: true, mode: 'loop',
+    speed: b.param('rotorSpeed', 46) as number,
+    riders: Array.from({ length: b.param('rotorArms', 2) as number },
+      (_, i) => ({ kind: 'rime_flail', phase: i / (b.param('rotorArms', 2) as number) })),
+    groove: false, ownerTag: 'winter_king',
+  });
+  // THE SHEAR RING — the buzzsaw lane, seated between the rotor's reach and
+  // the rim (never overhanging the deep), riding a carved groove.
+  const laneR = (rotorReach + iceR - 64) / 2 + 18;
+  const laneRiders = b.param('laneRiders', 3) as number;
+  const lanePts = ringPath(cx, cy, laneR, 30, rng.range(0, Math.PI * 2));
+  (ctx.tracks ??= []).push({
+    path: lanePts, closed: true, mode: 'loop',
+    speed: b.param('laneSpeed', 95) as number,
+    riders: Array.from({ length: laneRiders }, (_, i) => ({ kind: 'shear_disc', phase: i / laneRiders })),
+    groove: true, ownerTag: 'winter_king',
+  });
+  layTraveledWay(ctx, [...lanePts, lanePts[0]],
+    { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
+  // RIME BUMPERS — jittered into whichever annuli actually have fair room
+  // (inside the shear lane and between it and the rim), never on the lane
+  // itself. A roll's thin ring simply contributes no band; a degenerate
+  // disc places none at all.
+  const bumperN = rng.int(...(b.param('bumpers', [4, 6]) as [number, number]));
+  const bands = ([
+    [rotorReach + 24, laneR - 36],
+    [laneR + 38, iceR - 32],
+  ] as [number, number][]).filter(([lo, hi]) => hi - lo >= 24);
+  const placedB: Vec2[] = [];
+  for (let tries = 0; placedB.length < bumperN && tries < 90 && bands.length; tries++) {
+    const [lo, hi] = bands[tries % bands.length];
+    const a = rng.range(0, Math.PI * 2);
+    const rr = rng.range(lo, hi);
+    const p = vec(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+    if (placedB.some(q => Math.hypot(q.x - p.x, q.y - p.y) < 96)) continue;
+    placedB.push(p);
+    ctx.doodads.push({ pos: p, radius: 17, kind: 'rime_bumper' });
+  }
+  b.interior = lake;
 });
 
 // --- LAKE ----------------------------------------------------------------------

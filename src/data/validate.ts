@@ -57,6 +57,7 @@ import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS, LOOKS, SELF_DRESSING_KINDS } from './
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
+import { lintTrackSpec, TRACK_CFG, trackRider, trackRiderIds, validateTrackRiders, type TrackSpec } from '../engine/tracks';
 import { MELDS } from './melds';
 import { BIOMES } from '../world/biomes';
 import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
@@ -142,6 +143,71 @@ export function validateContent(): void {
       if (w.decayPerSec !== undefined && w.pool === undefined) warn(`lightwell '${w.kind}': decayPerSec without a pool decays nothing`);
       if (w.minReachFrac !== undefined && (w.minReachFrac < 0 || w.minReachFrac > 1)) warn(`lightwell '${w.kind}': minReachFrac outside [0,1]`);
     }
+  }
+
+  // THE TRACK FABRIC (engine/tracks.ts + data/tracks.ts): moving hazards are
+  // a READABILITY contract — so every registered rider must resolve its look
+  // (drawn==tested has nothing to draw otherwise), its payload must speak
+  // registered vocabulary (status ids, damage types), rect riders must AGREE
+  // with their painter's beam params (the DoodadRule.surface doctrine: the
+  // drawn beam IS the tested rect), and authored theme lanes must lint sane —
+  // including the tunneling guard (a lane faster than its blade is thick
+  // could step past a body between sweeps). Contact doodads (bumpers) speak
+  // the same payload grammar and get the same sweep. The glacial heart's
+  // landmark + builder must both resolve — the deepwinter graft names them
+  // by string and a rename would fail silently at crystallization.
+  {
+    validateTrackRiders(warn);
+    for (const id of trackRiderIds()) {
+      const rdef = trackRider(id)!;
+      const vis = DOODAD_VISUALS[rdef.kind];
+      if (!vis) warn(`track rider '${id}': kind '${rdef.kind}' has no DOODAD_VISUALS row — nothing to draw`);
+      if (rdef.payload.status && !STATUS_DEFS[rdef.payload.status.id]) {
+        warn(`track rider '${id}': payload status '${rdef.payload.status.id}' unregistered`);
+      }
+      if (rdef.payload.hit && !DAMAGE_TYPES.includes(rdef.payload.hit.type)) {
+        warn(`track rider '${id}': payload damage type '${rdef.payload.hit.type}' unknown`);
+      }
+      if (rdef.surface.kind === 'rect' && vis) {
+        const bp = vis.params as { beamHw?: number; beamHh?: number } | undefined;
+        if (bp?.beamHw !== rdef.surface.hw || bp?.beamHh !== rdef.surface.hh) {
+          warn(`track rider '${id}': painter beam params (${bp?.beamHw}×${bp?.beamHh}) disagree with surface (${rdef.surface.hw}×${rdef.surface.hh}) — the drawn beam must BE the tested rect`);
+        }
+      }
+    }
+    for (const kind of doodadRuleKinds()) {
+      const c = doodadRuleOf(kind).contact;
+      if (!c) continue;
+      if (!c.hit && !c.status && !c.impulse) warn(`contact doodad '${kind}': payload does nothing`);
+      if (c.status && !STATUS_DEFS[c.status.id]) warn(`contact doodad '${kind}': status '${c.status.id}' unregistered`);
+      if (c.hit && !DAMAGE_TYPES.includes(c.hit.type)) warn(`contact doodad '${kind}': damage type '${c.hit.type}' unknown`);
+      if (c.impulse !== undefined && (c.impulse < 0 || c.impulse > 900)) warn(`contact doodad '${kind}': impulse ${c.impulse} outside [0,900]`);
+      if (c.icdSec !== undefined && (c.icdSec < 0.2 || c.icdSec > 10)) warn(`contact doodad '${kind}': icd ${c.icdSec}s outside [0.2,10]`);
+      if (!DOODAD_VISUALS[kind]) warn(`contact doodad '${kind}': no DOODAD_VISUALS row — an invisible bumper is a lie`);
+    }
+    const lintThemeLanes = (tracks: TrackSpec[] | undefined, where: string): void => {
+      for (let i = 0; i < (tracks?.length ?? 0); i++) {
+        const spec = tracks![i];
+        for (const g of lintTrackSpec(spec, `${where} lane ${i}`)) warn(`tracks: ${g}`);
+        for (const r of spec.riders ?? []) {
+          const rd = trackRider(r.kind);
+          if (!rd) continue;
+          const thin = rd.surface.kind === 'circle' ? rd.surface.r * 2 : Math.min(rd.surface.hw, rd.surface.hh) * 2;
+          if (spec.speed * TRACK_CFG.applyEvery > thin) {
+            warn(`tracks: ${where} lane ${i} rider '${r.kind}' can tunnel — speed ${spec.speed} × sweep ${TRACK_CFG.applyEvery}s outruns its ${thin.toFixed(0)}px thickness`);
+          }
+        }
+      }
+    };
+    for (const t of Object.values(TILESETS)) {
+      lintThemeLanes(t.theme?.tracks, `tileset ${t.id}`);
+      for (const v of t.variants ?? []) {
+        lintThemeLanes((v as { theme?: { tracks?: TrackSpec[] } }).theme?.tracks, `tileset ${t.id}:${v.name}`);
+      }
+    }
+    for (const z of Object.values(ZONES)) lintThemeLanes(z.theme?.tracks, `zone ${z.id}`);
+    if (!hasLandmark('glacial_heart')) warn(`deepwinter: 'glacial_heart' landmark unregistered — the heart graft would mint nothing`);
+    if (!hasLandmarkBuilder('glacial_heart')) warn(`deepwinter: 'glacial_heart' builder unregistered`);
   }
 
   // STRATA (world/strata.ts): the vertical ladder must TILE — contiguous

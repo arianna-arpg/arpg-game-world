@@ -65,6 +65,8 @@ import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawFogLayer } from './vis/fogLayer';
 import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
+import { drawTrackLanes, drawTrackRiders, drawTrackWarnArcs } from './vis/trackLayer';
+import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
 import { cameraModeOf, placeCamera } from './camera';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
@@ -316,7 +318,17 @@ export class Renderer {
     // WALL EYES (vis/wallEyes.ts): seeking pupils over the baked sockets of
     // any eyes-flagged wall region — wall-surface detail, so under doodads.
     if (!VIS_ABLATE.has('doodads')) this.wallEyesPass.draw(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    // TRACK LANES (vis/trackLayer.ts): grooveless runtime lanes stroke their
+    // path here — ground detail, under doodads and riders alike.
+    if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
+      drawTrackLanes(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
+    // TRACK RIDERS: the moving hazards, posed from the shared clock through
+    // the one painter registry — over the ground and grooves, under actors.
+    if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
+      drawTrackRiders(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
     if (!VIS_ABLATE.has('motionfx')) {
       this.updateMotionFx(world);
       this.drawMotionFx();   // wake ripples + snow pocks, over grounds, under actors
@@ -337,6 +349,11 @@ export class Renderer {
       drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
     }
     this.drawZones(world);
+    // TRACK WARN ARCS: the approach telegraph — with the un-exploded discs,
+    // under actors, sampling the riders' ACTUAL future along their lanes.
+    if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
+      drawTrackWarnArcs(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
     this.drawDeathBursts(world);   // coalescing spore/orb gather + the tracking volatile orb
     this.drawEncounters(world);    // breach diamonds + their growing fields (under actors)
     this.drawFractures(world);     // fracture object / crawling fissure / chasm maw (under actors)
@@ -4321,6 +4338,17 @@ export class Renderer {
           ctx.strokeStyle = 'rgba(255,170,60,0.8)';
           outlineShape(shot, d.pos.x, d.pos.y);
         }
+      }
+    }
+    // TRACK RIDERS (the track fabric): magenta — the posed surface the
+    // contact sweep tested THIS frame, from the same pure resolver the
+    // painter drew. If the outline hugs the blade, the fabric is honest.
+    ctx.strokeStyle = 'rgba(255,120,235,0.95)';
+    for (const tr of world.tracks) {
+      for (const r of tr.riders) {
+        const pose = trackPose(tr, world.time, r.phase, r.def);
+        if (pose.x < x0 || pose.x > x1 || pose.y < y0 || pose.y > y1) continue;
+        outlineShape(trackRiderSurface(r.def, pose), pose.x, pose.y);
       }
     }
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';

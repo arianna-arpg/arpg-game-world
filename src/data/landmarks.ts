@@ -131,6 +131,16 @@ registerLandmark({
 registerLandmark({
   id: 'frozen_lake', builder: 'lake', size: [560, 920], liquid: 'ice',
 });
+// THE GLACIAL HEART — the Winter King's frozen-lake boss arena (deepwinter
+// grafts this onto the heart zone instead of the plain lake): an ice disc
+// hanging over a chasm moat, causeway-crossed, ground by carved hazard lanes
+// (the track fabric) and studded with rime bumpers. Never rolled ambiently —
+// the heart is the only door it enters by; ordinary winters keep their
+// ordinary lakes.
+registerLandmark({
+  id: 'glacial_heart', builder: 'glacial_heart', size: [900, 1150], liquid: 'ice',
+  poi: true, mustReach: true, clearSite: true,
+});
 registerLandmark({
   // clearSite: the water table clears its own ground — desert scatter runs
   // dense enough (fulgurites, shimmer, glass) that a poured pool otherwise

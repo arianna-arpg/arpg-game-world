@@ -20,6 +20,7 @@
 
 import { dist, vec, type Vec2 } from '../core/math';
 import { shapeBoundR, type HitShape } from './shapes';
+import type { TrackSpec, TrackPayload } from './tracks';
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
@@ -687,6 +688,11 @@ export interface GeneratedLayout {
    *  through-wall passages hiding inside the wall mass behind brittle seams.
    *  The world consumes these (World.openHollow) — carve, reveal, memory. */
   hollows?: HollowSpec[];
+  /** MOVING-HAZARD LANES (the track fabric, engine/tracks.ts): authored at
+   *  generation (landmark builders, recipes) so the groove bakes under the
+   *  blade. World.loadZone places these; ZoneMsg ships them; rider motion
+   *  derives from the synced clock — the geometry is the whole wire. */
+  tracks?: TrackSpec[];
 }
 
 /** One secret carved inside the wall mass (the HOLLOWS fabric). The pocket's
@@ -872,6 +878,13 @@ export interface DoodadRule {
    *  environmental hazards: lava's heat wash, a leyline node's element surge —
    *  one row here instead of a kind-keyed engine special case. */
   effect?: DoodadEffect;
+  /** CONTACT PAYLOAD (the track fabric, engine/tracks.ts): touching this
+   *  kind's hit surface applies the one moving-hazard payload grammar —
+   *  typed mitigated damage, a status, a weight-scaled radial shove (the
+   *  bumper). Tested against hitSurfaceOf, so drawn == tested; swept by
+   *  World.updateTracks beside the lane riders. A bumper is a rider that
+   *  never left home. */
+  contact?: TrackPayload;
   /** ENGULFING terrain: when a stamp lays this kind, earlier solids/triggers
    *  its discs cover are spliced (a boulder hovering over a fresh chasm is a
    *  draw error). FALSE keeps the lapping look (a pool around its boulders).
@@ -2217,6 +2230,10 @@ export interface GenCtx {
    *  center/origin instead of drawing a findSpot site, so several entries of
    *  one composition coordinate around a shared point. */
   siteAt?: Vec2;
+  /** MOVING-HAZARD LANES a builder authored (the track fabric): surfaced on
+   *  GeneratedLayout.tracks. Builders push via `(ctx.tracks ??= []).push()` —
+   *  absent on every trackless layout, zero cost, zero rng. */
+  tracks?: TrackSpec[];
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
   /** WAKE HERE: the last spawn cell a plan structure declared (CellSpec.spawn)
@@ -3925,6 +3942,7 @@ export function generateLayout(
     pockets: ctx.pockets,
     landmarkSpawns: ctx.landmarkSpawns,
     hollows: ctx.hollows,
+    tracks: ctx.tracks,
   };
 }
 

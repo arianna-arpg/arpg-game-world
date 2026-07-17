@@ -1841,6 +1841,36 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'breathPuff', scale: 0.8, color: '#dff4ff' }],
   },
+  /** The rime skater: the Court's lake-dancer — a TALL THIN glide of a body,
+   *  short frost-tatters, a swept glow crest, twin long shin-blades worn low.
+   *  The silhouette IS the tell (upright + gliding = it lunges); nothing else
+   *  on the lake is this narrow. Zero new painters. */
+  rime_skater: {
+    parts: [
+      { kind: 'torso', scale: 0.88 },
+      { kind: 'tatters', scale: 0.7, alpha: 0.85 },
+      { kind: 'crest', scale: 1.2, role: 'glow' },
+      { kind: 'icicles', scale: 0.7, params: { n: 3 } },
+      { kind: 'daggers', params: { len: 0.85 } },
+      { kind: 'eyes', role: 'glow', params: { n: 2 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.6, color: '#dff4ff' }],
+  },
+  /** The rime wrecker: the Court's battering ram — LOW and WIDE where the
+   *  skater is tall and thin: a pack-ice carapace slab, ram horns forward,
+   *  a frozen hump, spikes riding the shell. Reads "do not stand in front"
+   *  at a glance. Zero new painters. */
+  rime_wrecker: {
+    parts: [
+      { kind: 'carapace', scale: 1.06 },
+      { kind: 'hump', x: -0.18, scale: 0.95 },
+      { kind: 'ramHorns', x: 0.42, scale: 1.25, role: 'bone' },
+      { kind: 'icicles', scale: 0.9, params: { n: 4 } },
+      { kind: 'eyes', role: 'glow', params: { n: 2 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.9 }],
+    shadowScale: 1.05,
+  },
   /** The winter herald: the court's bannered knight — helm, pauldrons, the
    *  standard of the coming winter over one shoulder. */
   winter_herald: {

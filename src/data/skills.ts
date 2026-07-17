@@ -6820,6 +6820,62 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 430, weight: 2, keepDistance: 300 },
   },
 
+  // --- THE WINTER KING's arena kit (the glacial heart) ----------------------
+  // Three casts that INTERPLAY with the frozen-lake arena instead of merely
+  // damaging: a shove the ice keeps carrying (traction momentum), a pull that
+  // parks you where the blades come around (the track fabric), and a slick
+  // that makes both worse. All three are ordinary rows through the one
+  // pipeline — any future body may borrow them.
+
+  winters_sweep: {
+    id: 'winters_sweep', name: "Winter's Sweep",
+    description: 'The crown answers: a driven ring of frost that HURLS bodies outward — and on glare ice, a shove keeps travelling. The arena is the other half of this blow.',
+    tags: ['attack', 'cold', 'aoe'], color: '#bfe8ff',
+    manaCost: 20, cooldown: 9, useTime: 1.15,
+    baseDamage: { cold: [9, 14], physical: [8, 12] },
+    delivery: { type: 'nova', radius: 175 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 1 },
+      { type: 'knockback', strength: 190 },
+    ],
+    ai: { range: 155, weight: 3 },
+  },
+
+  call_of_the_deep: {
+    id: 'call_of_the_deep', name: 'Call of the Deep',
+    description: 'The dark under the ice INHALES: a delayed maw that drags everything toward its centre. Stand where the blades are not about to be.',
+    tags: ['spell', 'cold', 'aoe', 'duration'], color: '#7aa8c8',
+    manaCost: 24, cooldown: 12, useTime: 0.9,
+    baseDamage: { cold: [5, 8] },
+    delivery: {
+      type: 'ground', radius: 150, castRange: 430, delay: 0.9,
+      lingerDuration: 2.4, tickInterval: 0.5, pull: 200, pullRadius: 280,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.5 },
+    ],
+    ai: { range: 420, weight: 2, keepDistance: 150 },
+  },
+
+  glare_ice: {
+    id: 'glare_ice', name: 'Glare Ice',
+    description: 'Breathe a sheet of polished ice over the ground — REAL ice: traction becomes a rumor there, for everyone.',
+    tags: ['spell', 'cold', 'aoe', 'duration'], color: '#d8f2fc',
+    manaCost: 18, cooldown: 10, useTime: 0.8,
+    baseDamage: { cold: [4, 7] },
+    delivery: {
+      type: 'ground', radius: 130, castRange: 460, delay: 0.7, occlusion: 'free',
+      leaveTerrain: { kind: 'ice', radius: 130, duration: 9 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.4 },
+    ],
+    ai: { range: 440, weight: 2 },
+  },
+
   ice_shards: {
     id: 'ice_shards', name: 'Ice Shards',
     description: 'CHANNEL: spray a continuous fan of tiny ice shards while the trigger is held.',

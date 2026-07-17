@@ -88,6 +88,22 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     blend: { mode: 'path', strength: 0.3, feather: 12, color: 'theme:road|#574f44' },
     params: { color: 'theme:road|#574f44' },
   },
+  // THE TRACK FABRIC's kit (engine/tracks.ts + data/tracks.ts). The groove is
+  // a way like the road — carved channel a hazard rides, baked with the
+  // ground; the riders draw LIVE through vis/trackLayer.ts (synthetic groups,
+  // never in world.doodads) but their looks are ordinary rows here.
+  track_groove: {
+    painter: 'trackGroove', order: 21,
+    blend: { mode: 'path', strength: 0.34, feather: 10, color: '#141a22' },
+  },
+  shear_disc: { painter: 'shearDisc', order: 50 },
+  // AGREEMENT CONTRACT: beamHw/beamHh mirror the rider surface's hw/hh
+  // (validation-pinned) — the drawn beam IS the tested rect.
+  rime_flail: { painter: 'rimeFlail', order: 50, params: { beamHw: 56, beamHh: 9 } },
+  rime_bumper: {
+    painter: 'bumperDome', order: 46,
+    light: { radius: -2.0, color: '#9fd8ec', intensity: 0.45 },
+  },
   // LAVA reads as FIRE UNDER PACK ICE now: hot hearts glow up through the
   // merged flow, dark crust plates ride the surface with melt seams burning
   // at their edges, crawl-glow wanders beneath. One body, like water.

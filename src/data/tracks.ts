@@ -1,0 +1,83 @@
+// ---------------------------------------------------------------------------
+// TRACK RIDERS + CONTACT DOODADS — the moving-hazard kit, as data.
+//
+// A rider row = a body that travels authored lanes (engine/tracks.ts): its
+// honest hit surface, its payload (typed mitigated damage / status / shove),
+// its look (a DOODAD_VISUALS painter row keyed by `kind`), its warn arc. A
+// contact rule = the SAME payload grammar on a doodad that never moves (the
+// bumper). Debut kit is the Deepwinter set — the Winter King's frozen-lake
+// court — but the grammar is open: a sawmill's log blade, a clockwork
+// vault's sweep arm are one row each, zero engine edits.
+//
+// AGREEMENT CONTRACT (validation-pinned, the DoodadRule.surface doctrine):
+// a rect rider's beam params on its visual row must equal its surface
+// half-extents — the drawn beam IS the tested rect.
+// ---------------------------------------------------------------------------
+
+import { registerDoodadRule } from '../engine/levelgen';
+import { registerTrackRider } from '../engine/tracks';
+
+// --- THE SHEAR DISC — the buzzsaw ------------------------------------------
+// A grinding wheel of ice-shard teeth riding carved grooves. Physical bite +
+// bleed + a soft shove (on glare ice, even the soft shove travels). The
+// Rimebound are HOME among their blades — the court skates between them.
+registerTrackRider({
+  id: 'shear_disc',
+  kind: 'shear_disc',
+  surface: { kind: 'circle', r: 30 },
+  spin: 9,
+  payload: {
+    hit: { base: 24, perLevel: 7, type: 'physical' },
+    status: { id: 'bleed', chance: 0.6 },
+    impulse: 120,
+    icdSec: 0.9,
+    notFactions: ['rimebound'],
+  },
+  warnAhead: 140,
+  color: '#cfeefc',
+});
+
+// --- THE RIME FLAIL — the revolving blade arm ------------------------------
+// A crystalline beam sweeping a hub (fan-blade energy): the lane is a tight
+// ring, the arm points radially, and the whole spoke wheels forever. Cold
+// bite + chill + a real shove — the arm that sweeps you toward the rim.
+registerTrackRider({
+  id: 'rime_flail',
+  kind: 'rime_flail',
+  surface: { kind: 'rect', hw: 56, hh: 9 },
+  orient: 'radial',
+  payload: {
+    hit: { base: 18, perLevel: 6, type: 'cold' },
+    status: { id: 'chill', chance: 1 },
+    impulse: 240,
+    icdSec: 0.8,
+    notFactions: ['rimebound'],
+  },
+  warnAhead: 150,
+  color: '#bfe8ff',
+});
+
+// --- THE CARVED GROOVE — the lane made legible ------------------------------
+// Ground way discs laid under every gen-authored lane (layTraveledWay kind
+// 'track_groove'): walkable, never blocking, CLEARWAY-protected so scatter
+// can never squat on a blade's path — the lane the player learns is a lane
+// the generator promised to keep clear.
+registerDoodadRule('track_groove', { overlap: 'ground', clearway: {} });
+
+// --- THE RIME BUMPER — the pinball dome ------------------------------------
+// A squat glazed dome that answers a touch with a WEIGHT-SCALED radial fling
+// (pushActor — impulse-additive, pit-aware: near an abyss lip, the bounce is
+// the whole conversation) plus a lick of slip. No damage of its own — a
+// bumper is a movement argument, and the arena's edge does the arithmetic.
+// Walk-through on purpose (overlap 'trigger'): you don't lean on a bumper,
+// you get thrown by it. The Court is spared — they know their own furniture.
+registerDoodadRule('rime_bumper', {
+  overlap: 'trigger',
+  spacing: 96,
+  contact: {
+    impulse: 430,
+    status: { id: 'slippery', chance: 1 },
+    icdSec: 0.4,
+    notFactions: ['rimebound'],
+  },
+});

@@ -84,7 +84,7 @@ import {
   sympathyRelationOf, sympathyStat,
 } from './sympathy';
 import { CHARGE_DEFS } from './charges';
-import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
+import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance, type HitShape } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
@@ -96,6 +96,7 @@ import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import '../data/sympathies'; // side-effect: the sympathy link registry fills
 import '../data/lightwells'; // side-effect: the ambient lightwell rows register
+import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
@@ -135,6 +136,7 @@ import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, type FrontConsumeRow } from './creep';
+import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
 import { PUZZLES } from '../data/puzzles';
@@ -3609,6 +3611,18 @@ export class World {
     // Advancing fronts read the land through ONE installed window (ways
     // snapshot + terrain adapter); a front-less field pays nothing for it.
     if (this.creep) this.installCreepFront(this.creep);
+    // THE TRACK FABRIC (engine/tracks.ts): moving-hazard lanes. Gen-emitted
+    // lanes (landmark builders — the groove already baked under them) plus
+    // ZoneTheme rows; packages ensure more at runtime. Placement is pure
+    // geometry — no rng, no state: rider poses derive from the synced clock.
+    this.tracks = [];
+    this.trackSweepAcc = 0;
+    for (const spec of [...(layout.tracks ?? []), ...(this.zone.theme.tracks ?? [])]) {
+      this.addTrack(spec);
+    }
+    // Standing contact doodads (DoodadRule.contact — bumpers): collected once;
+    // swept beside the lanes.
+    this.collectContactHazards();
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
@@ -7292,6 +7306,33 @@ export class World {
       if (!best || L.timer < best.eta) {
         best = { ref: L, pos: vec(L.dest.x, L.dest.y), radius: r, eta: L.timer,
           casterPos: vec(e.pos.x, e.pos.y) };
+      }
+    }
+    // TRACK RIDERS (the track fabric): a blade closing on this body is a
+    // threat like any un-exploded disc — and because rider motion is a pure
+    // function of the clock, the scan samples the ACTUAL future, not an
+    // estimate. The player's eyes (the warn arc) and this read are one truth
+    // from one resolver.
+    for (const tr of this.tracks) {
+      const b = tr.bound;
+      const margin = pad + actor.radius + 40;
+      if (actor.pos.x < b.x0 - margin || actor.pos.x > b.x1 + margin ||
+          actor.pos.y < b.y0 - margin || actor.pos.y > b.y1 + margin) continue;
+      const horizon = Math.min(TRACK_CFG.threatHorizon, BEHAVIOR_CFG.dodgeHorizon);
+      for (const r of tr.riders) {
+        const p = r.def.payload;
+        if (!p.hit && !p.impulse) continue;
+        for (let t = TRACK_CFG.threatStep; t <= horizon; t += TRACK_CFG.threatStep) {
+          const pose = trackPose(tr, this.time + t, r.phase, r.def);
+          if (!shapeContains(riderSurface(r.def, pose), pose.x, pose.y,
+            actor.pos.x, actor.pos.y, actor.radius + pad)) continue;
+          if (!best || t < best.eta) {
+            const reach = r.def.surface.kind === 'circle'
+              ? r.def.surface.r : Math.hypot(r.def.surface.hw, r.def.surface.hh);
+            best = { ref: r, pos: vec(pose.x, pose.y), radius: reach + pad, eta: t };
+          }
+          break; // first cover is the read — later samples only age it
+        }
       }
     }
     return best;
@@ -11898,14 +11939,28 @@ export class World {
       }
     }
     // THE WINTER KING holds the glacial heart — a tagged (Crowned) boss whose
-    // fall breaks the winter and starts the thaw.
+    // fall breaks the winter and starts the thaw. He crowns himself AT THE
+    // WHEEL: the grafted arena's rotor lane (the smallest track wearing his
+    // ownerTag) marks the dais, so the King rises among his own blades —
+    // spared by their faction grammar, anchored by his ice habitat. Hearts
+    // from older saves (plain frozen_lake, no lanes) keep the far-point rise.
     const king = df.kingIn(def.id);
     if (king && MONSTERS[king.bossDefId]) {
       const boss = this.createMonster(king.bossDefId, lvl, 'enemy');
       boss.faction = cfg.faction;
       boss.tag = 'winter_king';
       if (king.promote !== 'none') this.promoteRarity(boss, king.promote === 'crowned' ? 'crowned' : 'champion');
-      boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
+      let daisAt: Vec2 | null = null;
+      let daisArea = Infinity;
+      for (const tr of this.tracks) {
+        if (tr.spec.ownerTag !== 'winter_king') continue;
+        const area = (tr.bound.x1 - tr.bound.x0) * (tr.bound.y1 - tr.bound.y0);
+        if (area < daisArea) {
+          daisArea = area;
+          daisAt = vec((tr.bound.x0 + tr.bound.x1) / 2, (tr.bound.y0 + tr.bound.y1) / 2);
+        }
+      }
+      boss.pos = this.clampPos(daisAt ?? this.farPoint(520, true), boss.radius);
       this.actors.push(boss);
       this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
       this.text(vec(boss.pos.x, boss.pos.y - 60),
@@ -12264,8 +12319,13 @@ export class World {
     const heartId = df.consumeHeartMark();
     if (heartId) {
       const def = this.zoneMap[heartId];
-      if (def && !def.landmarks?.some(l => l.landmark === 'frozen_lake' && l.chance >= 1)) {
-        (def.landmarks ??= []).push({ landmark: 'frozen_lake', chance: 1 });
+      // The heart now grafts the GLACIAL HEART — the frozen-lake boss ARENA
+      // (chasm moat, causeways, carved hazard lanes, bumpers) — instead of
+      // the plain lake. Old saves whose heart already wears a chance-1
+      // frozen_lake keep it (the scar stands; no double lake).
+      if (def && !def.landmarks?.some(l =>
+        (l.landmark === 'glacial_heart' || l.landmark === 'frozen_lake') && l.chance >= 1)) {
+        (def.landmarks ??= []).push({ landmark: 'glacial_heart', chance: 1 });
       }
     }
   }
@@ -27712,6 +27772,7 @@ export class World {
     this.updateCollapse(dt);
     this.updateFlux(dt);
     this.updateSpans(dt);
+    this.updateTracks(dt);
     this.conjured?.update(dt, this.actors);
     this.updateShrines();
     this.updateAltars(dt);
@@ -30146,6 +30207,136 @@ export class World {
    *  (ambient texture, never serialized); null until a theme spec or a
    *  runtime source needs it. Dev-inspect via __game.world().creep. */
   creep: CreepField | null = null;
+
+  /** THE TRACK FABRIC (engine/tracks.ts): this zone's moving-hazard lanes.
+   *  Rider poses are a PURE FUNCTION of the synced clock (trackPose), so the
+   *  list is the whole state — rebuilt each loadZone from the layout's
+   *  gen-emitted lanes + ZoneTheme.tracks rows, extended at runtime via
+   *  tracksEnsure. Never serialized beyond ZoneMsg's spec ship (clients
+   *  derive motion from world.time). Dev-inspect via __game.world().tracks. */
+  tracks: PlacedTrack[] = [];
+  /** Static doodads wearing a DoodadRule.contact payload (bumpers) — the
+   *  rider grammar on bodies that never left home. Collected once per zone;
+   *  swept beside the lanes on the same cadence. */
+  private contactHazards: { d: Doodad; gate: Map<number, number> }[] = [];
+  private trackSweepAcc = 0;
+
+  /** Place one authored lane. Refuses garbage loudly (lint gripes + the
+   *  rider cap) rather than carrying a NaN lane into the sim. */
+  addTrack(spec: TrackSpec): PlacedTrack | null {
+    const gripes = lintTrackSpec(spec, this.zone.id);
+    if (gripes.length) { for (const g of gripes) console.warn(`[tracks] ${g}`); return null; }
+    const live = this.tracks.reduce((n, t) => n + t.riders.length, 0);
+    if (live + spec.riders.length > TRACK_CFG.maxRidersPerZone) {
+      console.warn(`[tracks] ${this.zone.id}: rider cap ${TRACK_CFG.maxRidersPerZone} — lane refused`);
+      return null;
+    }
+    const placed = placeTrack(spec);
+    this.tracks.push(placed);
+    return placed;
+  }
+
+  /** The runtime seam (the creepEnsure idiom): a package or a boss fight
+   *  plants lanes mid-visit. Gen-emitted lanes get their groove baked; these
+   *  stroke live through the track layer. */
+  tracksEnsure(specs: TrackSpec[]): void {
+    for (const s of specs) this.addTrack(s);
+  }
+
+  /** Re-scan the doodad list for DoodadRule.contact carriers (bumpers).
+   *  loadZone calls it once; anything that PLANTS such a doodad mid-visit
+   *  (a package, a boss beat, a probe) calls it again — existing gates are
+   *  kept so re-scans never reset a body's re-hit grace. */
+  collectContactHazards(): void {
+    const prior = new Map(this.contactHazards.map(c => [c.d, c.gate]));
+    this.contactHazards = [];
+    for (const d of this.doodads) {
+      if (doodadRuleOf(d.kind).contact) {
+        this.contactHazards.push({ d, gate: prior.get(d) ?? new Map() });
+      }
+    }
+  }
+
+  /** Co-op client install (applyZone): adopt the host's lane list verbatim —
+   *  geometry is the whole wire; motion derives from the synced clock. */
+  setNetTracks(specs: TrackSpec[]): void {
+    this.tracks = [];
+    for (const s of specs) this.addTrack(s);
+  }
+
+  /** The contact sweep — lane riders + standing contact doodads, one cadence,
+   *  one payload grammar. Pose sampling is pure (trackPose); only the payload
+   *  lands here, host-side. Filters mirror the burst/fog conventions: dead,
+   *  downed, untargetable, invulnerable and passive bodies are never touched;
+   *  dormant and airborne bodies are spared unless the payload says otherwise;
+   *  the faction grammar spares whoever is HOME among the blades. */
+  private updateTracks(dt: number): void {
+    if (!this.tracks.length && !this.contactHazards.length) return;
+    this.trackSweepAcc += dt;
+    if (this.trackSweepAcc < TRACK_CFG.applyEvery) return;
+    this.trackSweepAcc = 0;
+    for (const tr of this.tracks) {
+      const owner = tr.spec.ownerTag ? this.actors.find(a => a.tag === tr.spec.ownerTag && !a.dead) : undefined;
+      for (const r of tr.riders) {
+        const pose = trackPose(tr, this.time, r.phase, r.def);
+        const shape = riderSurface(r.def, pose);
+        this.sweepHazardSurface(pose.x, pose.y, shape, pose.dir, r.def.payload, r.icdUntil, owner);
+      }
+    }
+    for (const c of this.contactHazards) {
+      if (c.d.gone) continue;
+      const rule = doodadRuleOf(c.d.kind);
+      if (!rule.contact) continue;
+      const shape = hitSurfaceOf(c.d, 'move');
+      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined);
+    }
+  }
+
+  /** Apply one hazard surface to every touchable body: typed damage through
+   *  the ONE mitigation ladder (the burst lane's discipline — never true
+   *  damage, prints its own number + capped read), statuses via applyStatus,
+   *  shoves via pushActor (weight-scaled, impulse-additive, pit-aware — an
+   *  owned shove over an abyss lip kills through the pitfall fabric's forced
+   *  lane WITH CREDIT). One ICD gate per body per source covers the whole
+   *  payload row. */
+  private sweepHazardSurface(
+    x: number, y: number, shape: HitShape, laneDir: number,
+    payload: TrackPayload, gate: Map<number, number>, owner: Actor | undefined,
+  ): void {
+    for (const a of this.actors) {
+      if (a.dead || a.downed || a.untargetable || a.invulnerable || a.passive) continue;
+      if (payload.sparesDormant !== false && isDormant(a)) continue;
+      if (payload.sparesAirborne !== false && (a.flying || a.leap)) continue;
+      if (payload.factions && (!a.faction || !payload.factions.includes(a.faction))) continue;
+      if (payload.notFactions && a.faction && payload.notFactions.includes(a.faction)) continue;
+      if ((gate.get(a.id) ?? -Infinity) > this.time) continue;
+      if (!shapeContains(shape, x, y, a.pos.x, a.pos.y, a.radius)) continue;
+      gate.set(a.id, this.time + (payload.icdSec ?? TRACK_CFG.icdSec));
+      if (payload.hit) {
+        const dmg = payload.hit.base + (payload.hit.perLevel ?? 0) * Math.max(1, this.zone.level);
+        const out: { clamped?: boolean } = {};
+        const taken = mitigateTyped(a, { [payload.hit.type]: dmg }, { out });
+        a.life -= taken;
+        a.hitFlash = 0.15;
+        this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR[payload.hit.type], 14);
+        if (out.clamped) this.text(vec(a.pos.x, a.pos.y - 20), 'capped', '#9ab0c8', 12);
+        if (a.life <= 0 && !a.dead) this.kill(a, false, owner);
+      }
+      if (payload.status && !a.dead && Math.random() < (payload.status.chance ?? 1)) {
+        a.applyStatus(payload.status.id, 0, 1, 'the hazard');
+      }
+      if (payload.impulse && !a.dead) {
+        const dx = a.pos.x - x, dy = a.pos.y - y;
+        const dir = Math.hypot(dx, dy) > 1e-3 ? Math.atan2(dy, dx) : laneDir;
+        this.pushActor(a, dir, payload.impulse, owner);
+      }
+    }
+    // Opportunistic gate hygiene — expired entries never accumulate past a
+    // zone's population.
+    if (gate.size > 96) {
+      for (const [id, until] of gate) if (until < this.time) gate.delete(id);
+    }
+  }
 
   /** The runtime seam every package/monster spreader uses: get the zone's
    *  creep field, building an empty one on demand — creep is a fabric ANY

@@ -22,6 +22,7 @@ import type { CollapseSpec } from '../engine/collapse';
 import type { FluxSpec } from '../engine/flux';
 import type { RecoveryPolicy } from '../world/regions';
 import type { SpanRowSpec } from '../engine/spans';
+import type { TrackSpec } from '../engine/tracks';
 import { dimensionDef } from '../world/dimensions';
 import type { WildlifeRow } from './monsters';
 
@@ -494,6 +495,14 @@ export interface ZoneTheme {
    *  exit on permanent ground — probe_radiance pins it). Needs a grid
    *  layout. Variants override wholesale, like collapse/flux. */
   spans?: SpanRowSpec[];
+  /** MOVING-HAZARD LANES (the track fabric, engine/tracks.ts): authored
+   *  hazard tracks this zone always runs — buzzsaw rings, shuttling blades,
+   *  anything a TrackSpec can say. Zone-space coordinates, so theme rows fit
+   *  FIXED layouts (authored interiors, arenas); generated zones author
+   *  lanes from their landmark builders/recipes instead (the groove bakes
+   *  under the blade there). Rider poses derive from the shared clock —
+   *  deterministic across seats and resumes by construction. */
+  tracks?: TrackSpec[];
   /** THE UNDERSTORY (render/vis/understory.ts): what shows through this
    *  zone's `window` region cells. 'cloudsea' = the endless procedural cloud
    *  deck. A zone with `ZoneDef.below` shows the CAPTURED zone beneath it

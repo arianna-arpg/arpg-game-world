@@ -20,6 +20,7 @@ import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
 import type { Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
+import type { TrackSpec } from '../engine/tracks';
 import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
 import type { ZoneShape } from '../world/shape';
@@ -534,7 +535,12 @@ function angLerp(a: number, b: number, t: number): number {
  *  When `prev` + `alpha` (0..1) are given, actor POSITIONS/facing are interpolated
  *  prev→snap for smooth motion between 20 Hz snapshots (everything else uses snap). */
 export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSnapshot | null, alpha = 1): void {
-  world.time = snap.time;
+  // The shared clock interpolates exactly like actor positions do: every
+  // time-driven read on the client — painter sway, projectile form phase,
+  // TRACK RIDER POSES (trackPose is a pure function of this clock) — glides
+  // at render rate instead of stepping at the 20 Hz wire. Monotonic: alpha
+  // walks prev.time → snap.time, and snapshots only move forward.
+  world.time = prev && alpha < 1 ? prev.time + (snap.time - prev.time) * alpha : snap.time;
   world.arena.w = snap.arena.w;
   world.arena.h = snap.arena.h;
 
@@ -799,6 +805,11 @@ export interface ZoneMsg {
    *  did. The shipped walk grid already arrives pre-carved for anything
    *  opened before the client stepped in. */
   hollows?: HollowSpec[];
+  /** MOVING-HAZARD LANES (the track fabric): the host's placed specs,
+   *  verbatim. Geometry is the WHOLE wire — rider poses derive from the
+   *  synced clock on both sides (trackPose is pure), so lanes cost zero
+   *  steady-state bytes and can never desync mid-zone. */
+  tracks?: TrackSpec[];
 }
 
 export function serializeZone(world: World): ZoneMsg {
@@ -816,6 +827,7 @@ export function serializeZone(world: World): ZoneMsg {
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,
     structures: world.structures.length ? world.structures : undefined,
     hollows: world.zoneHollows.length ? world.zoneHollows : undefined,
+    tracks: world.tracks.length ? world.tracks.map(t => t.spec) : undefined,
   };
 }
 
@@ -853,4 +865,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
     boundary: e.b,
   }));
   world.waypointPos = msg.waypoint ? { x: msg.waypoint[0], y: msg.waypoint[1] } : null;
+  // MOVING-HAZARD LANES: adopt the host's placed specs — the client's track
+  // layer poses riders off the synced clock from here on (zero per-tick wire).
+  world.setNetTracks(msg.tracks ?? []);
 }

@@ -8038,21 +8038,80 @@ export const MONSTERS: Record<string, MonsterDef> = {
   winter_king: {
     id: 'winter_king', name: 'the Winter King',
     color: '#dcf2fc', shape: 'star', radius: 22, material: 'ice', look: 'winter_king',
+    // The marquee bar (boss-bar contract): a crown holds court under its own
+    // banner — the ladder below gives it three pips.
+    boss: true,
     base: { life: 260, moveSpeed: 92, accuracy: 105, armor: 40, poise: 80, mana: 160, manaRegen: 10 },
     mods: [mod('coldRes', 'flat', 0.8), mod('fireRes', 'flat', -0.25), mod('blockChance', 'flat', 0.3)],
-    skills: ['shield_up', 'avalanche', 'frost_nova', 'heavy_strike'],
+    // The arena kit (winters_sweep / call_of_the_deep / glare_ice) INTERPLAYS
+    // with the glacial heart: shoves the ice keeps carrying, pulls that park
+    // you in the blades' path, slick that makes both worse. His poise-folded
+    // weight is his only shove insurance ON PURPOSE — break the poise and a
+    // knockback build may hurl the King into his own deep: the pitfall
+    // fabric credits the shover and the winter honestly breaks.
+    skills: ['shield_up', 'avalanche', 'frost_nova', 'heavy_strike',
+      'winters_sweep', 'call_of_the_deep', 'glare_ice'],
     xp: 90,
     faction: 'rimebound',
     // The crown answers insult with the whole court.
     aggro: { fury: 1.4, waver: 0.6 },
     brain: {
       type: 'juggernaut', enrage: 0.35,
+      // THE HP LADDER (three-pip bar): the court first, the lake itself second.
+      phases: [
+        { atLifeFrac: 0.66, announce: 'the lake glazes over — the King breathes!',
+          mods: [mod('castSpeed', 'more', 0.15)] },
+        { atLifeFrac: 0.33, announce: 'the deep answers its King!',
+          mods: [mod('moveSpeed', 'more', 0.2), mod('castSpeed', 'more', 0.1)] },
+      ],
       rules: [{
         when: { distUnder: 520 }, every: [14, 20], hold: [0.4, 0.6],
         announce: 'the King calls the hunt!',
         actions: [{ do: 'summon', monster: 'rime_hound', count: 3, ring: 52 }],
+      }, {
+        // Past the first breath the court's lake-dancers answer too.
+        when: { distUnder: 520, lifeBelow: 0.66 }, every: [18, 26], hold: [0.3, 0.5],
+        announce: 'skate them down!',
+        actions: [{ do: 'summon', monster: 'rime_skater', count: 2, ring: 70 }],
       }],
     },
+  },
+
+  // THE RIME SKATER — the Court's lake-dancer: a blade-shinned courtier who
+  // treats glare ice as a ballroom (pathCosts RELISH — lanes and slicks are
+  // its preferred roads, the wayfaring fabric's mind lever) and closes with a
+  // dash you hear coming. Fast, brittle, readable: the tall thin silhouette
+  // + long blade shins ARE the tell — if it's upright and gliding, it lunges.
+  rime_skater: {
+    id: 'rime_skater', name: 'Rime Skater',
+    color: '#c8ecf8', shape: 'diamond', radius: 12, material: 'ice', look: 'rime_skater',
+    base: { life: 60, moveSpeed: 150, accuracy: 112, evasion: 40, poise: 10, mana: 60, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.7), mod('fireRes', 'flat', -0.3)],
+    skills: ['dash_strike'],
+    xp: 26,
+    faction: 'rimebound',
+    // Ice is a ballroom, not a hazard: relish keeps it ON lanes and slicks.
+    pathCosts: { ice: 0.5 },
+    packSize: [2, 4],
+    brain: { type: 'flanker' },
+  },
+
+  // THE RIME WRECKER — the Court's battering ram: a hunched slab of pack-ice
+  // muscle whose whole argument is the SHOVE (guard-bash knockback through
+  // the one BASH grammar). On the heart's lake it is the arena made flesh —
+  // it lines you up with the blades and the deep; everywhere else it is
+  // simply a door that walks. Slow, heavy, telegraphed: the low wide
+  // ram-horned silhouette reads "do not be in front of this".
+  rime_wrecker: {
+    id: 'rime_wrecker', name: 'Rime Wrecker',
+    color: '#9cc4d8', shape: 'oval', radius: 17, material: 'ice', look: 'rime_wrecker',
+    base: { life: 170, moveSpeed: 70, accuracy: 100, armor: 35, poise: 70, mana: 40, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.7), mod('fireRes', 'flat', -0.25)],
+    skills: ['shield_up', 'heavy_strike'],
+    xp: 40,
+    faction: 'rimebound',
+    packSize: [1, 2],
+    brain: { type: 'juggernaut' },
   },
 
   // THE BOG DWELLER — the mire maw's MOBILE cousin: a hunched sod-back that
@@ -10934,6 +10993,10 @@ export const FACTIONS: Record<string, {
       { id: 'frost_witch', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'winter_herald', weight: 2, presence: { from: 9, fadeIn: 4 } },
       { id: 'frost_giant', weight: 1, presence: { from: 12 } },
+      // The heart's arena bodies, sworn to the wider banner too: the
+      // lake-dancer arrives with the true court, the walking door late.
+      { id: 'rime_skater', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'rime_wrecker', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
   },
   // The tomb-dynasty musters in burial order: scarabs boil out first and
