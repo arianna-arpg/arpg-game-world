@@ -12,6 +12,7 @@ import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
 } from '../engine/stats';
+import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import {
   crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel,
@@ -103,20 +104,11 @@ const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚙</text></svg>',
 )}") 13 13, crosshair`;
 
-/** Stats worth showing on the sheet, in display order. */
-const SHEET_STATS = [
-  'life', 'lifeRegen', 'lifeRegenPct', 'mana', 'manaRegen', 'manaRegenPct', 'moveSpeed',
-  'attackSpeed', 'castSpeed', 'accuracy', 'evasion', 'armor',
-  'poise', 'poiseDR', 'poiseRegenPct', 'insight', 'insightDR', 'endurance', 'enduranceDR', 'weight',
-  'blockChance', 'blockPower', 'guardStrength', 'energyShield', 'esRechargeRate', 'esDotResist', 'manaShield',
-  'critChance', 'critMulti',
-  'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
-  'aoeRadius', 'effectDuration', 'cooldownRecovery',
-  'minionDamage', 'minionLife',
-];
-
 /** Resistance rows display the EFFECTIVE (soft/hard-capped) value, with the
- *  raw overcap alongside when it exceeds the cap (shred insurance). */
+ *  raw overcap alongside when it exceeds the cap (shred insurance). The
+ *  sheet's ORGANIZATION — which stats print where, and when — lives in
+ *  data/sheet.ts (SHEET_CATS/SHEET_VITALS); this map is only the resist
+ *  rows' special double read. */
 const SHEET_RES: Record<string, DamageType> = {
   fireRes: 'fire', coldRes: 'cold', lightningRes: 'lightning', chaosRes: 'chaos',
 };
@@ -194,6 +186,12 @@ export class UI {
   getPadActive: (() => boolean) | null = null;
 
   charSheetOpen = false;
+  /** The Statistics tab open on the character sheet (persists across
+   *  re-renders — a page stays where you left it). */
+  private charTab = 'offense';
+  /** "Show unused": list every seated stat on the active tab, base or not
+   *  (generated families still surface only once touched — see sheet.ts). */
+  private charShowAll = false;
   inventoryOpen = false;
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
@@ -630,7 +628,9 @@ export class UI {
     if (!def) return null;
     return {
       title: def.label,
-      description: def.desc ?? 'No notes on this one yet.',
+      // The authored blurb, else the generated family's shared line
+      // (apply_<status>, orbOnKill_<orb>... — data/sheet.ts).
+      description: statBlurbOf(id) ?? 'No notes on this one yet.',
       meta: `base ${def.percent ? `${Math.round(def.base * 100)}%` : def.base}`,
     };
   }
@@ -1046,8 +1046,11 @@ export class UI {
       </div>`;
     }).join('');
 
-    const statRows = SHEET_STATS.map(id => {
+    // ONE row renderer — the vitals band and every tab row alike (resist
+    // rows keep their effective-vs-raw double read wherever they print).
+    const statRowHtml = (id: string): string => {
       const def = STAT_DEFS[id];
+      if (!def) return '';
       const resType = SHEET_RES[id];
       const raw = p.sheet.get(id);
       const v = resType ? resistValue(p, resType) : raw;
@@ -1058,7 +1061,30 @@ export class UI {
         text += ` <span style="color:#8a8678;font-size:10px">(${Math.round(raw * 100)}% raw)</span>`;
       }
       return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:help"><span>${def.label}</span><span class="val">${text}</span></div>`;
-    }).join('');
+    };
+
+    // THE STATISTICS TABS (data/sheet.ts — the sheet's organization as
+    // data): attributes and the vitals band stay above, always; below, one
+    // tab per category. Core rows anchor a tab; the rest surface only as
+    // the build touches them, so the sheet reads as the build being played
+    // instead of a wall of untouched dials. Generated families and any
+    // unseated stat fold in live — nothing invested is ever invisible.
+    const tabModels = sheetTabs(id => p.sheet.get(id), this.charShowAll);
+    if (!tabModels.some(t => t.cat === this.charTab)) this.charTab = tabModels[0]?.cat ?? 'offense';
+    const active = tabModels.find(t => t.cat === this.charTab);
+    const tabStrip = `<div class="book-tabs stat-tabs">${tabModels.map(t =>
+      `<button class="book-tab${t.cat === this.charTab ? ' active' : ''}${t.rows.length === 0 ? ' bare' : ''}"
+        data-stattab="${t.cat}" title="${esc(t.def.blurb)}">${t.def.label}${
+        t.invested > 0 ? `<span class="n">${t.invested}</span>` : ''}</button>`).join('')}</div>`;
+    const vitalRows = SHEET_VITALS.map(statRowHtml).join('');
+    const statRows = active ? active.rows.map(statRowHtml).join('') : '';
+    const tabNotes = !active ? ''
+      : (active.rows.length === 0
+        ? `<div style="color:#8a8678;font-size:10px;padding:4px 0 2px">Nothing invested here yet —
+            gear, passives and gems that touch these stats will appear as rows.</div>` : '')
+      + (!this.charShowAll && active.hidden > 0
+        ? `<div style="color:#6a6478;font-size:9px;margin-top:5px">${active.hidden} untouched
+            stat${active.hidden === 1 ? '' : 's'} not shown — “show unused” lists the whole shelf.</div>` : '');
 
     // The vocation TITLE rides the class name once granted — "Warrior, Warbringer".
     const vocTitle = m.vocations
@@ -1079,6 +1105,9 @@ export class UI {
         title="${def.name}${carried ? ' — carried' : ' — LOST: ↺ re-kindles a granted copy (worthless to salvage or the font)'}">
         ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
     }).join('');
+    // Same-scroll restore (the golden rule — a re-render must never yank
+    // the sheet mid-read; gear swaps and tab flips land where you were).
+    const prevScroll = this.charSheet.scrollTop;
     this.charSheet.innerHTML = `
       <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
         margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
@@ -1091,17 +1120,34 @@ export class UI {
       </div>
       <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree — P)</span></h3>
       ${attrRows}
-      <h3>Statistics</h3>
-      ${statRows}
+      <h3 style="display:flex;justify-content:space-between;align-items:baseline">Statistics
+        <label style="font-weight:normal;font-size:10px;color:#8a8678;cursor:pointer"
+          title="List every stat this tab organizes, invested or not — generated families still surface only once touched">
+          <input type="checkbox" data-statshowall${this.charShowAll ? ' checked' : ''}
+            style="width:10px;height:10px;margin:0 3px 0 0;vertical-align:-1px;accent-color:var(--gold)">show unused</label></h3>
+      <div style="border-bottom:1px solid var(--panel-border);margin-bottom:6px;padding-bottom:3px">${vitalRows}</div>
+      ${tabStrip}
+      <div style="font-size:10px;color:#8a8678;margin:2px 0 5px">${esc(active?.def.blurb ?? '')}</div>
+      ${statRows}${tabNotes}
       <div style="margin-top:8px;color:#8a8678;font-size:10px">
         Tag-scaled stats (damage, speed) shown without skill context — each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
+    this.charSheet.scrollTop = prevScroll;
     this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-reacquire]').forEach(btn =>
       btn.addEventListener('click', () => {
         world.requestMeta({ t: 'reacquireSkill', skillId: btn.dataset.reacquire! });
         this.refreshCharSheet();
       }));
+    this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-stattab]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        this.charTab = btn.dataset.stattab!;
+        this.refreshCharSheet();
+      }));
+    this.charSheet.querySelector<HTMLInputElement>('input[data-statshowall]')?.addEventListener('change', e => {
+      this.charShowAll = (e.target as HTMLInputElement).checked;
+      this.refreshCharSheet();
+    });
   }
 
   // --------------------------------------------------------------- inventory

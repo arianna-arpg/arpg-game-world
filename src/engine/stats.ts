@@ -232,8 +232,8 @@ export interface StatDef {
   /** Display as percentage in the character sheet. */
   percent?: boolean;
   /** One sheet-tooltip line on what the stat DOES (assigned from
-   *  STAT_BLURBS below — the mechanics live in defense.ts/damage.ts; this
-   *  is the player-facing why). */
+   *  data/sheet.ts's STAT_BLURBS — the mechanics live in defense.ts/
+   *  damage.ts; this is the player-facing why). */
   desc?: string;
 }
 
@@ -1411,71 +1411,13 @@ export type AttributeId =
 /** The triad axes — UI grouping/theming only; mechanics live in perPoint. */
 export type AttributeGroup = 'force' | 'execution' | 'resilience' | 'life';
 
-// --- Sheet blurbs ------------------------------------------------------------
-// One line per SHEET-VISIBLE stat on what it does, assigned into STAT_DEFS
-// (UI reads STAT_DEFS[id].desc — one registry, any surface). Deliberately
-// mechanical-but-unnumbered: curves live in defense.ts/damage.ts and retune
-// freely without staling a word here. ATTRIBUTES carry NO blurbs at all —
-// their tooltips derive LIVE from perPoint modifiers, so what Strength
-// grants is always exactly what Strength grants.
-const STAT_BLURBS: Record<string, string> = {
-  life: 'Your health pool. Reaching zero downs you — and death here is permanent.',
-  lifeRegen: 'Flat life restored every second.',
-  lifeRegenPct: 'A fraction of your MAXIMUM life restored every second, on top of flat regeneration.',
-  mana: 'The casting pool skills spend.',
-  manaRegen: 'Flat mana restored every second.',
-  manaRegenPct: 'A fraction of your MAXIMUM mana restored every second, on top of flat regeneration.',
-  lowLifeLine: 'The life fraction below which you count as on low life — raising it wakes low-life gear, passives, and the blood vignette sooner.',
-  moveSpeed: 'How fast you travel.',
-  traction: 'Grip on the ground — below full, movement becomes momentum that slides (ice).',
-  attackSpeed: 'Multiplies how quickly attack skills swing.',
-  castSpeed: 'Multiplies how quickly spells cast.',
-  accuracy: 'Contests enemy evasion — the higher it is, the less you whiff.',
-  evasion: 'Entropy-based avoidance: dodges bank on a deterministic meter, never pure dice, and a hit is always eventually due.',
-  armor: 'Physical mitigation on a self-limiting curve — big hits punch through more; investment is uncapped and never reaches immunity.',
-  poise: 'A break-bar hits wear down. While it holds you shrug stagger and keep some damage reduction; broken, it lies inert until it recovers — uninterruptibly — and re-arms.',
-  poiseDR: 'The damage reduction granted while your poise holds.',
-  poiseRearmAt: 'How full a broken poise bar must climb back before it re-arms.',
-  poiseCalmDelay: 'How long the drains must stop before an unbroken, dented bar refills.',
-  poiseOvercharge: 'Headroom past maximum poise that explicit gains can crest into — a temporary larger buffer.',
-  insight: 'A momentum pool that refills only while you are MOVING — it spends itself to blunt incoming hits.',
-  insightDR: 'The damage reduction granted while insight remains.',
-  insightSap: 'How much of your insight momentum is sapped away — chill, freeze and stun bind the footwork the pool reads with.',
-  endurance: 'A break-less stamina pool: it shaves damage flat off every hit, spending what it prevents.',
-  enduranceDR: 'The flat damage shaved per hit while endurance lasts.',
-  weight: 'Mass. The heavy resist knockback and poise wear; the light get shoved.',
-  blockChance: 'The odds an incoming hit is blocked.',
-  blockPower: 'The fraction of a blocked hit that is stopped.',
-  guardStrength: 'How much punishment a raised guard absorbs before it breaks.',
-  conduitRate: 'How fast your conduits pump — the drain side of every running resource conversion.',
-  conduitEfficiency: 'How much a conduit delivers per point it drains — the exchange rate on every running conversion.',
-  evasionToArmor: 'This fraction of your evasion is read again as armor — the swap\'s gain dial.',
-  evasionForgone: 'This fraction of your evasion is renounced outright — the swap\'s forgo dial.',
-  esToPoise: 'This fraction of your energy shield is read again as maximum poise — the swap\'s gain dial.',
-  esForgone: 'This fraction of your energy shield is renounced outright — the swap\'s forgo dial.',
-  insightInversion: 'Blends what feeds insight: 0 = motion (the default), 1 = stillness — planted feet ramp it in, walking bleeds it.',
-  insightStillTaper: 'Seconds of unbroken stillness to reach full inverted momentum — the rooted stance is earned slowly.',
-  energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment — but a wound mid-recharge interrupts the flow and the wait starts over.',
-  esRechargeSteadfast: 'The chance a wound fails to interrupt a running energy shield recharge.',
-  esDotResist: 'How much of a damage-over-time seep the shield stops before it reaches life.',
-  manaShield: 'A fraction of incoming damage paid from mana instead of life.',
-  critChance: 'The odds a hit strikes critically.',
-  critMulti: 'The damage multiplier a critical strike applies.',
-  fireRes: 'Fire damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
-  coldRes: 'Cold damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
-  lightningRes: 'Lightning damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
-  chaosRes: 'Chaos damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
-  aoeRadius: 'Widens every area effect you create.',
-  restorePower: 'Scales every fount pour and restore-over-time stream you drink.',
-  restorePctMax: 'Your fount drinks add this fraction of the pool\'s maximum to their pour.',
-  effectDuration: 'Lengthens your timed effects — buffs, ailments you inflict, lingering zones.',
-  cooldownRecovery: 'Speeds the return of every cooldown.',
-  minionDamage: 'Scales the damage everything you summon deals.',
-  minionLife: 'Scales the life of everything you summon.',
-};
-for (const [id, d] of Object.entries(STAT_BLURBS)) {
-  if (STAT_DEFS[id]) STAT_DEFS[id].desc = d;
-}
+// --- Sheet blurbs & layout ---------------------------------------------------
+// The character sheet's ORGANIZATION lives in data/sheet.ts — tab categories,
+// per-stat seats, vitals, generated-family seats, and the one-line blurb per
+// stat (assigned into StatDef.desc there; UI reads STAT_DEFS[id].desc — one
+// registry, any surface). ATTRIBUTES carry NO blurbs at all — their tooltips
+// derive LIVE from perPoint modifiers, so what Strength grants is always
+// exactly what Strength grants. balance/probe_sheet.ts audits the weave.
 
 export interface AttributeDef {
   label: string;
