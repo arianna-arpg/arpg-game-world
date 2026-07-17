@@ -29191,6 +29191,19 @@ export class World {
         // pool would only dirty chunks for nothing (the wet country the
         // crest crosses is conversion-free by definition).
         if (this.groundAt(vec(px, py))?.kind === ground) return;
+        // SHALLOW POOLS NEVER STACK: the ford-lightening visual draws per
+        // shallow disc, so overlapping wake pools composite into a flat
+        // pale wash that erases the mottle under the crossed band (the
+        // "ground goes flat past a line" read). Kissing is fine; landing
+        // ON an existing shallow pool of the same water is refused — the
+        // wake is a chain of pools by contract, not a smear.
+        if (shallow) {
+          for (const o of this.doodadsNear(px, py, r)) {
+            if (o.kind !== ground || !o.shallow || o.gone) continue;
+            const dd = Math.hypot(o.pos.x - px, o.pos.y - py);
+            if (dd < (o.radius + r) * 0.95) return;
+          }
+        }
         const d: Doodad = {
           pos: vec(px, py),
           radius: r, kind: ground, ...(shallow ? { shallow: true } : {}),

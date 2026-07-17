@@ -105,7 +105,7 @@ const fnv = (text: string): string => {
   p.pos.y = cy;
   const heroAt = p.pos.x;
   let dragSeen = false;
-  for (let i = 0; i < 60 * 7; i++) {
+  for (let i = 0; i < 60 * 22; i++) {
     world.update(dt);
     if (!dragSeen && p.pos.x > heroAt + 40) dragSeen = true;
   }
@@ -115,12 +115,26 @@ const fnv = (text: string): string => {
   // Scan the marched-over stretch: stamp clocks stagger by seed, so the
   // wake's first pool lands SOMEWHERE along the path, never at a fixed x.
   let wakeShallow = false, wakeDeep = false;
-  for (let off = 40; off <= 260; off += 20) {
+  for (let off = 40; off <= 420; off += 20) {
     const g = world.groundAt(vec(startX + off, cy));
     if (g?.kind === 'water') { wakeShallow ||= !g.deep; wakeDeep ||= g.deep; }
   }
   check('flood: a wadeable SHALLOW wake behind (the ford contract, never a new deep)',
     wakeShallow && !wakeDeep, `shallow ${wakeShallow}, deep ${wakeDeep}`);
+  // POOLS NEVER STACK: overlapping shallow discs pile their per-disc ford
+  // lightening into a flat wash that erases the mottle (the "ground goes
+  // flat past a line" playtest read) — geometry spaces them and the stamp
+  // adapter refuses the rest; this pin holds both honest.
+  const pools = world.doodads.filter(d => d.kind === 'water' && d.shallow === true);
+  let stacked = 0;
+  for (let i = 0; i < pools.length; i++) {
+    for (let j = i + 1; j < pools.length; j++) {
+      const dd = Math.hypot(pools[i].pos.x - pools[j].pos.x, pools[i].pos.y - pools[j].pos.y);
+      if (dd < (pools[i].radius + pools[j].radius) * 0.95) stacked++;
+    }
+  }
+  check('flood: wake pools never overlap (the ford-wash bug stays dead)',
+    pools.length > 0 && stacked === 0, `${pools.length} pools, ${stacked} stacked pairs`);
   check('flood: wake discs are real terrain (doodad list carries shallow water)',
     world.doodads.some(d => d.kind === 'water' && d.shallow === true));
   check('flood: the undertow CARRIED the hero downstream', dragSeen,

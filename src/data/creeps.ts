@@ -97,14 +97,17 @@ registerCreep({
       default: 0.85,
     },
     yieldWays: true,
-    // The lasting wake is a wet CHANNEL, not a rolling lake — sparse, narrow
-    // stamps measured best against the floodwake perf forensic (marsh water
-    // chunk bakes are the expensive kind; wider/rarer pools regressed: big
-    // discs stale MORE chunks each and bake heavier). The stamp adapter
-    // also refuses to re-wet ground that already reads wet, and sections
-    // stagger their stamp clocks so a wave never stales several chunks in
-    // the same frame.
-    convert: { ground: 'water', shallow: true, every: 1.35, r: [0.6, 0.85] },
+    // The lasting wake is a CHAIN OF SEPARATE POOLS — spacing (2.0 × band)
+    // strictly beats the largest diameter (1.5 × band), because overlapping
+    // shallow discs STACK their per-disc ford-lightening sprites into a
+    // flat pale wash that erases the mottle under the crossed band (the
+    // "shaders look broken / ground goes flat past a line" playtest read —
+    // measured: 4-deep stack ≈ 0.96 wash, ground contrast 0.95 → 0.35).
+    // The stamp adapter enforces it structurally too (no shallow stamp may
+    // land on an existing shallow pool), refuses to re-wet ground that
+    // already reads wet, and sections stagger their stamp clocks so a wave
+    // never stales several chunks in the same frame.
+    convert: { ground: 'water', shallow: true, every: 2.0, r: [0.55, 0.75] },
     drag: { accel: 95, notFactions: ['deep'] },
     drown: { drain: 1.4 },
     quench: { types: ['cold'], power: 520 },
