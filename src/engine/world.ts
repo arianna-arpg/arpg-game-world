@@ -3577,10 +3577,21 @@ export class World {
     // dimension whose entry names a gate doodad KIND turns every standing
     // doodad of that kind into a realm gate here (the Ascent's shining arch
     // at a cloud shelf's far end). Pure registry scan — no kind literals.
+    // ONE exception, same registry read: a gate whose DESTINATION is the
+    // zone underfoot never arms. enterDimension can only land in the
+    // dimension's own gate zone, so an arch standing INSIDE that zone is a
+    // door to the ground it stands on — the "Firmament inside the Firmament"
+    // loop: an exit-labeled ring that recenters the player where they
+    // arrived (and, planted near a fan portal, OUT-DWELLS it — realm_gate
+    // 0.45s vs zone_exit 0.5s — sealing a real road out). The doodad still
+    // stands (the arrival's own monument); only the crossing disarms, and
+    // dimGatesView stops labeling it as a way somewhere. Heals by
+    // construction: dimGates is re-derived every load, never persisted.
     this.dimGates = [];
     for (const dimId of dimensionIds()) {
-      const gd = dimensionDef(dimId).entry?.gateDoodad;
-      if (!gd) continue;
+      const ent = dimensionDef(dimId).entry;
+      const gd = ent?.gateDoodad;
+      if (!ent || !gd || ent.gate.id === def.id) continue;
       for (const d of this.doodads) {
         if (d.kind === gd) this.dimGates.push({ pos: vec(d.pos.x, d.pos.y), dimId, radius: d.radius });
       }

@@ -21,6 +21,12 @@
 //              (exemptions mirror the splice EXACTLY: keep-tagged waiver
 //              pieces, doors, plan-structure rects — a bare reservation
 //              shields nothing from the carve)
+//   gateDwell  no registered dimension gate doodad (a live realm-gate dwell
+//              wherever it stands — world.ts arms it per load) within
+//              dwell-overlap reach of a portal: an overlapped pair leaves
+//              the portal un-dwellable (the gate's quicker dwell fires
+//              first — the sealed Firmament fan road); floor from transit
+//              rows + PORTAL_RADIUS, all data
 //   clearway   traveled ways hold their right-of-way: no un-waived blocker
 //              body on a live (non-wild) way disc (exemptions mirror
 //              sweepClearways EXACTLY), decked soft ground never coexists
@@ -53,7 +59,9 @@ import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
-import { generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP } from '../src/engine/worldgen';
+import { generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS } from '../src/engine/worldgen';
+import { transitRadius } from '../src/data/transit';
+import { dimensionDef, dimensionIds } from '../src/world/dimensions';
 import {
   generateLayout, validateStamps, validateCompositions, compositionDefs,
   doodadRuleOf, layoutIds, blocksMovement, normalizeDoodadBound, bodyRadiusOf,
@@ -83,6 +91,15 @@ const VERBOSE = args.includes('--verbose');
 // Portal-clear constants mirrored from levelgen (not exported on purpose —
 // the harness asserts the OBSERVABLE promise, not the internals).
 const EXIT_CLEAR_CARVE = 95;
+
+// Registered dimension gate-doodad kinds → their dimension. The load-time
+// scan in world.ts arms every standing doodad of these kinds as a live realm
+// gate; the gateDwell invariant below keeps them off the portals.
+const GATE_DOODAD_DIMS = new Map<string, string>();
+for (const dimId of dimensionIds()) {
+  const gd = dimensionDef(dimId).entry?.gateDoodad;
+  if (gd) GATE_DOODAD_DIMS.set(gd, dimId);
+}
 
 interface CaseResult {
   name: string;
@@ -154,6 +171,26 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
       && pts.some(p => Math.hypot(p.x - d.pos.x, p.y - d.pos.y) < EXIT_CLEAR_CARVE * 0.9 + d.radius));
     if (blockersNearPortals.length) {
       fails.push(`${name}: ${blockersNearPortals.length} blocker(s) inside a portal clear (${[...new Set(blockersNearPortals.map(d => d.kind))].join(',')})`);
+    }
+  }
+  // DIMENSION GATE DOODADS keep off the portals: a registered gateDoodad is
+  // a live realm-gate dwell wherever it stands (world.ts arms it per load),
+  // and its stand-on disc overlapping a portal's leaves the portal
+  // un-dwellable — the gate's quicker dwell fires first and the road seals
+  // (the Firmament's fan is a progression road). The floor is DATA: the
+  // gate's own transit radius + the portal's + a body's width. Runs on
+  // every layout shape — grid zones route blockers, but a dwell overlap is
+  // not a routing problem.
+  {
+    const pts = [entry, ...exits];
+    for (const d of doodads) {
+      const dimId = GATE_DOODAD_DIMS.get(d.kind);
+      if (dimId === undefined) continue;
+      const floor = transitRadius(`realm_gate:dim_${dimId}`, 32) + PORTAL_RADIUS + 24;
+      if (pts.some(p => Math.hypot(p.x - d.pos.x, p.y - d.pos.y) < floor)) {
+        fails.push(`${name}: dimension gate doodad '${d.kind}' within dwell-overlap reach (${floor}px) of a portal`);
+        break;
+      }
     }
   }
   // THE CLEARWAY CONTRACT (the coherence fabric): traveled ways hold their

@@ -1658,6 +1658,12 @@ registerLayout('colosseum', colosseumLayout);
 // makes the generation invariant own the promise the collapse relies on.
 // All knobs are layoutParams: the sanctum face runs the same recipe dense
 // and unbroken; a frontier shelf runs it airy and riddled.
+// The gate landing's portal standoff (layoutParams.gateClear overrides):
+// sized to the EXIT_CLEAR band every findSpot placement honors near portals,
+// and safely above the dwell-honesty floor genqa asserts (realm-gate stand-on
+// radius + portal radius + a body's width ≈ 90) — the arch's dwell disc and a
+// portal's must never both cover one standing spot.
+const GATE_LANDING_CLEAR = 150;
 function aetherLatticeLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
   const grid = ensureGrid(ctx);
@@ -1683,16 +1689,39 @@ function aetherLatticeLayout(ctx: GenCtx, def: ZoneDef): void {
     }
     isles.push(vec(cx, cy));
   }
-  // Portal isles: the entry + every exit stands on its own cloud.
-  for (const pt of [ctx.entry, ...ctx.exits]) {
+  // Portal isles: the entry + every exit stands on its own cloud. Snapshot
+  // the organic drift first — portal isles carry live dwells and are never
+  // gate-landing candidates (below).
+  const organic = isles.slice();
+  const portals = [ctx.entry, ...ctx.exits];
+  for (const pt of portals) {
     disc(carve, pt.x, pt.y, 130);
     isles.push(vec(pt.x, pt.y));
   }
   // THE GATE LANDING: the far end of the crossing — the isle farthest from
-  // the entry, given a clean reserved platform of its own.
-  let gate = isles[0];
+  // the entry, given a clean reserved platform of its own. Candidates are
+  // ORGANIC isles keeping gateClear of every portal: the arch is a live
+  // realm-gate dwell wherever it stands, and planted on an exit portal it
+  // OUT-DWELLS it (realm_gate 0.45s vs zone_exit 0.5s) — the exit turns
+  // un-dwellable and a real road out seals (on the Firmament's fan, a
+  // progression road). Degrade to the organic isle farthest from all
+  // portals; a portal isle only if nothing else stands at all.
+  const gateClear = layoutParam(def, 'gateClear', GATE_LANDING_CLEAR) as number;
+  const portalD2 = (p: Vec2): number => {
+    let m = Infinity;
+    for (const q of portals) m = Math.min(m, (p.x - q.x) ** 2 + (p.y - q.y) ** 2);
+    return m;
+  };
+  let pool = organic.filter(p => portalD2(p) >= gateClear * gateClear);
+  if (!pool.length && organic.length) {
+    let best = organic[0];
+    for (const p of organic) if (portalD2(p) > portalD2(best)) best = p;
+    pool = [best];
+  }
+  if (!pool.length) pool = isles;
+  let gate = pool[0];
   let bd = -1;
-  for (const p of isles) {
+  for (const p of pool) {
     const d = (p.x - ctx.entry.x) ** 2 + (p.y - ctx.entry.y) ** 2;
     if (d > bd) { bd = d; gate = p; }
   }

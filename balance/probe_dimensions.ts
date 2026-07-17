@@ -24,6 +24,12 @@
 //    off-surface ground never host a Descent delver's hellward shaft.
 //  · LOAD HEALS: synthetic accretion onto the hub and a synthetic unmarked
 //    cross-dim edge both strip at the next loadZone (old saves self-heal).
+//  · THE SELF-GATE SEAL: a realm-gate doodad standing in its own dimension's
+//    GATE ZONE never arms (its destination is the ground underfoot — the
+//    "Firmament inside the Firmament" loop, whose quick dwell also sealed
+//    any fan portal it was planted on), while the launch shelf's arch — a
+//    true crossing — always arms; and no armed gate's stand-on disc may
+//    overlap a live exit portal's (the un-dwellable pair).
 //  · DETERMINISM: the same seed grows the same realm web twice.
 //
 // Exit 1 on any failure.
@@ -36,6 +42,7 @@ import { World } from '../src/engine/world';
 import { HUB_ZONE } from '../src/data/zones';
 import type { ZoneDef } from '../src/data/zones';
 import { dimensionDef, dimensionIds, GATE_FANOUT, isRoadlessGateHub } from '../src/world/dimensions';
+import { transitRadius } from '../src/data/transit';
 
 bootSimEngine();
 
@@ -92,7 +99,7 @@ function crawl(w: World, gateId: string, depth: number): string[] {
   return [...seen];
 }
 
-let sawRoadless = false, sawRoaded = false, sawShelf = false;
+let sawRoadless = false, sawRoaded = false, sawShelf = false, sawArmedGate = false;
 
 for (let s = 0; s < SEEDS; s++) {
   const seed = 1000 + s * 7919;
@@ -111,6 +118,12 @@ for (let s = 0; s < SEEDS; s++) {
       sawShelf = true;
       check(`[${seed}] shelf is aether ground`, shelf.biome === 'aether', `biome=${shelf.biome}`);
       check(`[${seed}] shelf wears the Crossing name`, /\bCrossing\b/.test(shelf.name), shelf.name);
+      // THE ARCH ARMS WHERE IT MUST: the launch shelf's ascendant gate is a
+      // true crossing (its destination is NOT this shelf) — the self-gate
+      // disarm must never eat it, or the Ascent itself dies.
+      const shelfGates = (wa.dimGates as { dimId: string }[]).filter(g => g.dimId === 'aetherial');
+      check(`[${seed}] shelf raises an ARMED ascendant gate`, shelfGates.length >= 1, `${shelfGates.length} armed`);
+      if (shelfGates.length) sawArmedGate = true;
       // THE DELVER RIG: force the roll wide open — the shape gate alone must
       // refuse a shaft through a floating shelf (ZoneDef.below).
       const df = wa.sim.descentField;
@@ -140,6 +153,23 @@ for (let s = 0; s < SEEDS; s++) {
     if (!gate) continue;
     check(`[${seed}] ${dimId}: gate wears its declared biome`, gate.biome === ent.gate.biome,
       `biome=${gate.biome} (declared ${ent.gate.biome})`);
+
+    // THE SELF-GATE SEAL: we now stand IN the gate zone (enterDimension ends
+    // in loadZone). No armed realm gate may target the ground underfoot —
+    // the arch is the arrival's monument, never a door back into this very
+    // zone (the "Firmament inside the Firmament" loop).
+    const dgHere = wa.dimGates as { pos: { x: number; y: number }; dimId: string }[];
+    const selfGates = dgHere.filter(g => dimensionDef(g.dimId).entry?.gate.id === wa.zone.id);
+    check(`[${seed}] ${dimId}: no armed self-gate inside the gate zone`, selfGates.length === 0,
+      `${selfGates.length} armed`);
+    // THE DWELL-HONESTY FLOOR, engine-side: no armed gate's stand-on disc
+    // overlaps a live exit portal's — an overlapped pair leaves the portal
+    // un-dwellable (the genqa gateDwell invariant's runtime twin).
+    const liveExits = wa.exits as { pos: { x: number; y: number }; radius: number }[];
+    const overlapped = dgHere.filter(g => liveExits.some(e =>
+      Math.hypot(e.pos.x - g.pos.x, e.pos.y - g.pos.y) < transitRadius(`realm_gate:dim_${g.dimId}`, 32) + e.radius));
+    check(`[${seed}] ${dimId}: no armed gate dwell overlapping an exit portal`, overlapped.length === 0,
+      `${overlapped.length} overlapped`);
 
     const visited = crawl(w, gate.id, 3);
     const allowed = new Set<string>([
@@ -232,8 +262,9 @@ for (let s = 0; s < SEEDS; s++) {
   check('same seed → same gate zone + same realm palette field', prints[0] === prints[1]);
 }
 
-// The rig must have exercised all three shapes, or the sweep proved nothing.
-check('rig saw a roadless hub, a roaded gate, and a launch shelf', sawRoadless && sawRoaded && sawShelf);
+// The rig must have exercised all four shapes, or the sweep proved nothing.
+check('rig saw a roadless hub, a roaded gate, a launch shelf, and an ARMED shelf arch',
+  sawRoadless && sawRoaded && sawShelf && sawArmedGate);
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL CHECKS PASS');
 process.exit(failed ? 1 : 0);
