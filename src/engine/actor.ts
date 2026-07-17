@@ -774,6 +774,12 @@ export class Actor {
   /** Environmental-survival meters (breath, …) — generic, data-driven (NOT a
    *  hardcoded breath field). Lazily created; regenerates toward each resource's max. */
   survival?: Map<string, number>;
+  /** World time an EXTERNAL fabric last held a survival resource under
+   *  (resource id → time) — the advancing flood's drown lane stamps it so
+   *  the terrain sweep's regen doesn't refill against the hold. The region
+   *  sweep's own drains use its frame-local set; this is the seam for
+   *  everything that drains from OUTSIDE that sweep. */
+  survivalHeldAt?: Record<string, number>;
 
   /** Scenery with a health bar: never acts, never walks, never counted. */
   passive = false;

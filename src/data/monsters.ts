@@ -4093,6 +4093,33 @@ export const MONSTERS: Record<string, MonsterDef> = {
     deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'fire', radius: 42, coalesce: 0.4 },
     brain: { type: 'swarm' },
   },
+  // THE WILDFIRE'S GET (the advancing front's consume.spawn lane): what
+  // burning country births. A cinderling crawls out of eaten brush — a
+  // live coal on legs, all crack-glow and shed sparks, gone in two hits.
+  // An emberwisp lifts off a burning crown — a floating spark that pelts
+  // from range. Both ordinary emberkin (roster rows below): a warband can
+  // field them anywhere the tribe walks, front or no front.
+  cinderling: {
+    id: 'cinderling', name: 'Cinderling',
+    color: '#c86a3a', shape: 'diamond', radius: 7, material: 'ember', look: 'cinderling',
+    base: { life: 10, moveSpeed: 175, accuracy: 80, evasion: 15, mana: 20, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', 0.6)],
+    skills: ['ember_dart', 'claw'], xp: 4,
+    faction: 'emberkin',
+    presence: { to: 16, fadeOut: 6 },
+    brain: { type: 'swarm' },
+  },
+  emberwisp: {
+    id: 'emberwisp', name: 'Emberwisp',
+    color: '#ff9a3c', shape: 'circle', radius: 7, material: 'ember', look: 'emberwisp',
+    base: { life: 12, moveSpeed: 150, accuracy: 90, evasion: 45, mana: 40, manaRegen: 5 },
+    mods: [mod('fireRes', 'flat', 0.75)],
+    skills: ['ember_dart'], xp: 8,
+    faction: 'emberkin',
+    flier: true, levitates: true,
+    presence: { from: 3, fadeIn: 3 },
+    brain: { type: 'skirmish', withdraw: 1.2 },
+  },
   cinder_hound: {
     id: 'cinder_hound', name: 'Cinder Hound',
     color: '#d87a4a', shape: 'triangle', radius: 12, material: 'ember', look: 'cinder_hound',
@@ -9820,6 +9847,8 @@ export const FACTIONS: Record<string, {
     name: 'the Emberkin',
     table: [
       { id: 'ashling', weight: 4 },
+      { id: 'cinderling', weight: 3, presence: { to: 16, fadeOut: 6 } },
+      { id: 'emberwisp', weight: 2, presence: { from: 3, fadeIn: 3 } },
       { id: 'cinder_hound', weight: 3 },
       { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'vent_priest', weight: 2, presence: { from: 8, fadeIn: 4 } },

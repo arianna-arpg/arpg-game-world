@@ -898,6 +898,12 @@ export interface DoodadRule {
    *  ground — see HabitatSpec. One row keeps a package's new flora coherent
    *  everywhere, no per-tileset gating required. */
   habitat?: HabitatSpec;
+  /** FUEL: what an advancing front's consumption reads (the creep fabric's
+   *  FrontConsumeRow.fuel — a wildfire eats 'kindling' and 'timber' rows
+   *  as it passes, leaving remnants). One word of classification on the
+   *  rule, exactly the habitat idiom: the kind declares WHAT it is; which
+   *  front eats it and what it leaves stay data on the front's row. */
+  fuel?: string;
   /** POURED BODY: blob stamps of this GROUND kind stop scattering big
    *  overlapping circles and instead rasterize ONE organic mask (wobbled
    *  radial core + lobes) emitted through the shared paintLiquid lattice —
@@ -1426,18 +1432,18 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // is a one-crown patch (aim assist already can't hold what waits under it),
   // a grove cluster opens as one, a forest is a roof. Cover/reveal/status all
   // ride VEIL_DEFAULTS unless a kind says otherwise.
-  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {}, mutable: true },
+  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {}, mutable: true, fuel: 'timber' },
   palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {}, mutable: true },
   /** Evergreen spire — tundra/deepwood conifer (pineCrown canopy). */
-  conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {} },
+  conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {}, fuel: 'timber' },
   /** The FOREST's canopy body: a broad oak whose crown is built to KNIT —
    *  the forest recipe plants them closer than their crowns span, so the
    *  veil index reads whole stands as single sealed masses. */
-  forest_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {} },
+  forest_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {}, fuel: 'timber' },
   /** The GLOAMWOOD's canopy body: forest_oak's exact walk-under/veil
    *  mechanics under a grey-dark crooked crown (the haunted wood seals its
    *  roof the same way the green one does). */
-  gloam_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {} },
+  gloam_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {}, fuel: 'timber' },
   // The Gloamwood croft kit: a walkable gourd tangle, its lone carved
   // cousin (inert, candle-lit, pops), and the hanged road's gibbets.
   pumpkin_patch: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -1502,7 +1508,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // around), and the true circles the sweep verified honest as drawn:
   // mounds, kiln/salt/umbilic columns, wells, pot clusters, vents, domes,
   // shard clusters.
-  firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50, surface: { hw: 1.05, hh: 0.55 } },
+  firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50, surface: { hw: 1.05, hh: 0.55 }, fuel: 'timber' },
   // Settlement + wayside clutter (towns, roads, farms, ruins).
   fountain:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140 },
   well:      { overlap: 'solid', blocksMove: true, spacing: 110 },
@@ -1516,7 +1522,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   coach_wreck:  { overlap: 'solid', blocksMove: true, spacing: 90, surface: { hw: 0.9, hh: 0.55, angle: 0.15 }, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   drained_husk: { overlap: 'ground', walkOnly: true },
   scarecrow: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
-  hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55,
+  hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55, fuel: 'kindling',
     surface: { hw: 1.0, hh: 0.72 } }, // the rolled bale's drawn ellipse (r × 0.75r)
   pot_cluster: { overlap: 'solid', blocksMove: true, spacing: 45 },
   rubble:    { overlap: 'ground', walkOnly: true },
@@ -1533,7 +1539,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   rug:       { overlap: 'ground', walkOnly: true },
   banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
-  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true },
+  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true, fuel: 'kindling' },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true,
     surface: { hw: 0.65, hh: 0.34 } }, // the headstone slab (arch face 1.3r wide; thin depth)
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
@@ -1610,11 +1616,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   sand:      { overlap: 'ground', pour: {} },
   heat_shimmer: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'chasm'] },
   // The doodad kingdom (round 4).
-  dead_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, bodyScale: 0.35 },
+  dead_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, bodyScale: 0.35, fuel: 'timber' },
   stump:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 22 },
   log:       { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26, surface: { hw: 1.7, hh: 0.62 } },
-  flowers:   { overlap: 'ground' },
-  reeds:     { overlap: 'ground', walkOnly: true },
+  flowers:   { overlap: 'ground', fuel: 'kindling' },
+  reeds:     { overlap: 'ground', walkOnly: true, fuel: 'kindling' },
   cactus:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, forbidOn: ['water', 'chasm'] },
   web:       { overlap: 'ground', walkOnly: true },
   geyser:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, forbidOn: ['water', 'chasm'] },
@@ -1631,11 +1637,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   road:      { overlap: 'ground', walkOnly: true,
     clearway: { decks: ['water', 'tide_pool', 'mud', 'bog', 'swamp', 'ice'],
       yieldsTo: ['lava', 'magma_core', 'cinder', 'gore', 'chasm'] } },
-  grass:     { overlap: 'ground' },
+  grass:     { overlap: 'ground', fuel: 'kindling' },
   /** The Field's boundary fringe: pure visual, deliberately NOT walk-gated —
    *  it straddles the tallgrass rim to round the raster's right angles off. */
-  hedgerow:  { overlap: 'ground' },
-  brush:     { overlap: 'ground', spin: true },
+  hedgerow:  { overlap: 'ground', fuel: 'kindling' },
+  brush:     { overlap: 'ground', spin: true, fuel: 'kindling' },
   campfire:  { overlap: 'ground' },
   ritual_pentagram: { overlap: 'ground' },
   tentacle_field:   { overlap: 'ground' },
@@ -1725,8 +1731,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     rockForm: { spire: true } }, // spires always roll MONO — one snug honest column
   // Flora clarity: a berry bush is walkable cover exactly like brush; ferns
   // are pure understory decoration.
-  berry_bush: { overlap: 'ground', spin: true },
-  fern:       { overlap: 'ground', walkOnly: true, spin: true },
+  berry_bush: { overlap: 'ground', spin: true, fuel: 'kindling' },
+  fern:       { overlap: 'ground', walkOnly: true, spin: true, fuel: 'kindling' },
   // The fungal kit: shelves are low solids (step behind, shoot over);
   // toadstools are walkable fairy-ring decoration.
   shelf_fungus: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 36, forbidOn: ['water', 'lava', 'chasm'] },

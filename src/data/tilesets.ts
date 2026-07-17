@@ -2790,6 +2790,41 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'mist_pool', count: [1, 3] },
       { kind: 'haven_stone', count: [0, 1] },
     ],
+    variants: [
+      // THE EMBERWIND — the smoulder-front demo face (the advancing front
+      // fabric's wildfire debut): a lea gone to dry fuel — deep grass,
+      // heavy brush, stacked hay and split wood — where a FIRE FRONT
+      // breaks in on the wind every couple of minutes and marches, eating
+      // the fuel rows and leaving ashfield + charred snags. The meadow's
+      // exit roads are the FIREBREAKS (clearway 0): cross the gravel and
+      // watch the blaze gutter at the verge.
+      {
+        name: 'emberwind',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [100, 170] },
+          { kind: 'wayshrine', count: [0, 1] },
+          { kind: 'flowers', count: [4, 8], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 11 } } },
+          { kind: 'log', count: [0, 2] },
+          { kind: 'grass', count: [9, 14] },
+          { kind: 'trees', count: [7, 11] },
+          { kind: 'grove', count: [2, 3] },
+          { kind: 'brush', count: [6, 10] },
+          { kind: 'hay_bale', count: [1, 3] },
+          { kind: 'firewood_pile', count: [0, 2] },
+          { kind: 'rocks', count: [3, 6], radius: [16, 32] },
+          { kind: 'berry_bush', count: [1, 3] },
+          { kind: 'water', count: [0, 1] },
+          { kind: 'formation', count: [1, 2], formation: 'oak_hedgerow' },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        theme: {
+          creep: {
+            pockets: [0, 0], kinds: [],
+            fronts: [{ id: 'wildfire', line: [3, 4], waves: [80, 120], delay: [10, 18] }],
+          },
+        },
+      },
+    ],
     packs: {
       count: [5, 7], size: [2, 4],
       table: [
@@ -4415,6 +4450,41 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Rushes trace the waterlines the rows above pooled (shore strata).
       { kind: 'formation', count: [1, 3], formation: 'reed_shoreline',
         where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'bog', 'swamp'], reach: 140 } } },
+    ],
+    variants: [
+      // THE FLOODWAKE — the flood-prone demo face (the advancing front
+      // fabric's floodcrest debut): low fen given to sudden water — every
+      // couple of minutes a CREST breaks in from the land's edge and rolls
+      // the whole ground, swimming-slow and breath-draining inside, an
+      // undertow carrying bodies downstream (the deep's kin ride free),
+      // a wadeable shallow wake left behind. The exit roads' DECKED
+      // stretches stay dry in skin and hit test alike — the causeway
+      // fabric is the survival route, exactly as laid.
+      {
+        name: 'floodwake',
+        layout: [
+          { kind: 'reeds', count: [4, 7] }, { kind: 'geyser', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
+          { kind: 'fern', count: [1, 3] }, { kind: 'fishing_rack', count: [0, 1] },
+          { kind: 'bog', count: [3, 5] }, { kind: 'water', count: [2, 4] },
+          { kind: 'swamp', count: [2, 3] }, { kind: 'trees', count: [3, 6] },
+          { kind: 'thicket', count: [1, 2] },
+          { kind: 'gas_pod', count: [0, 2] },
+          { kind: 'sunken_log', count: [1, 3] },
+          { kind: 'marsh_wisp', count: [2, 4] },
+          { kind: 'peat_mound', count: [1, 2] },
+          { kind: 'gel_pool', count: [2, 3], radius: [38, 64] },
+          { kind: 'sunken_stone', count: [1, 3] },
+          { kind: 'hollow_log', count: [0, 2] },
+          { kind: 'formation', count: [1, 3], formation: 'reed_shoreline',
+            where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'bog', 'swamp'], reach: 140 } } },
+        ],
+        theme: {
+          creep: {
+            pockets: [0, 0], kinds: [],
+            fronts: [{ id: 'floodcrest', line: [3, 5], waves: [70, 110], delay: [8, 16] }],
+          },
+        },
+      },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

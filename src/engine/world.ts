@@ -129,7 +129,7 @@ import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
-import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField } from './creep';
+import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, type FrontConsumeRow } from './creep';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
@@ -3502,6 +3502,9 @@ export class World {
     this.creep = buildZoneCreep(
       this.zone.theme.creep, this.arena,
       new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0));
+    // Advancing fronts read the land through ONE installed window (ways
+    // snapshot + terrain adapter); a front-less field pays nothing for it.
+    if (this.creep) this.installCreepFront(this.creep);
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
@@ -18182,6 +18185,7 @@ export class World {
         // seam — walk up and play the bell on purpose (the PoE2 combo),
         // smash the pots on the follow-through. Team-wide by design:
         // minions and co-op allies swing mallets too.
+        this.frontSplash(caster, inst, caster.pos, reach);
         this.strikeSurfaces(caster, caster.pos, reach, (p, r) =>
           dist(caster.pos, p) - r <= reach
           && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2);
@@ -18249,6 +18253,7 @@ export class World {
           // rings bells and pops brittle scenery. Mend-washes ('allies')
           // strike nothing — a blessing is not a blow — and 'all' bursts
           // already reach the bell as a victim (resolveHit rings it).
+          this.frontSplash(caster, inst, origin, radius);
           this.strikeSurfaces(caster, origin, radius, (p, r) =>
             inAoe(origin, radius, shape, caster.facing, p, r)
             && !(d.edgeOnly && dist(origin, p) + r < radius * d.edgeOnly)
@@ -18316,6 +18321,7 @@ export class World {
               }
             }
             // THE MALLET: the named strike's splash is a blast too.
+            this.frontSplash(caster, inst, targetInfo.pos, splash);
             this.strikeSurfaces(caster, targetInfo.pos, splash);
           }
         }
@@ -18376,6 +18382,7 @@ export class World {
         // THE MALLET: the wedge rings bells and pops brittle scenery it can
         // see — same range/arc/edge/occlusion gates as its victims (razor
         // beamFx cones included: the laser is a mallet too).
+        this.frontSplash(caster, inst, caster.pos, range);
         this.strikeSurfaces(caster, caster.pos, range, (p, r) => {
           const dd = dist(caster.pos, p);
           return dd - r <= range
@@ -19295,6 +19302,7 @@ export class World {
           this.resolveHit(caster, inst, victim, mult, 0, flatBonus);
         }
         // THE MALLET: the pop's own shape strikes the surfaces.
+        this.frontSplash(caster, inst, at, radius);
         this.strikeSurfaces(caster, at, radius, (p, r) =>
           inAoe(at, radius, shape, caster.facing, p, r));
         this.flashes.push({
@@ -21760,6 +21768,9 @@ export class World {
     if (z.exposure || z.healTick) return;
     const cAt = at ?? z.pos;
     const r = radius ?? z.radius;
+    // A lingering field parked ON a marching skin quenches or stokes it on
+    // the zone's own strike cadence — the sustained-pressure verb.
+    this.frontSplash(z.caster, z.inst, cAt, r);
     this.strikeSurfaces(z.caster, cAt, r, (p, pr) =>
       (at !== undefined || radius !== undefined
         ? inAoe(cAt, r, z.shape, z.facing, p, pr, z.arcRad)
@@ -22136,6 +22147,7 @@ export class World {
     }
     this.flashes.push({ pos: vec(at.x, at.y), radius, color: inst.def.color, life: 0.3, maxLife: 0.3 });
     // THE MALLET: the movement eruption is a blast — dive-bomb your bell.
+    this.frontSplash(caster, inst, at, radius);
     this.strikeSurfaces(caster, at, radius);
   }
 
@@ -22449,6 +22461,9 @@ export class World {
     // pops brittle scenery — the exploding corpse beside the bell already
     // damaged it without a toll; now the blast answers too.
     this.strikeSurfaces(null, pos, radius);
+    // The ownerless lane carries its type in hand — a marching skin under
+    // the blast drinks it directly (quench/feed, FrontSpec levers).
+    if (this.creep?.quenchable) this.creep.damageSkin(pos.x, pos.y, radius, { [type]: dmg });
   }
 
   // --- DEATH BURST: the telegraphed coalesce → implode / tracking-orb on enemy death ---
@@ -28997,7 +29012,117 @@ export class World {
     this.creep = new CreepField(
       new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0),
       this.arena.w, this.arena.h);
+    this.installCreepFront(this.creep);
     return this.creep;
+  }
+
+  /** THE FRONT'S TERRAIN WINDOW (engine/creep.ts CreepTerrain): everything
+   *  an advancing front reads or writes, adapted onto seams that already
+   *  exist — groundAt, the doodad index, kind swaps + markDoodadsChanged,
+   *  the wind fabric's displacement discipline, the survival fabric's
+   *  breath. The leaf stays import-free; the world stays the only mutator.
+   *  Installed wherever a field is born (loadZone build + creepEnsure). */
+  private frontSpawned = 0;
+  private installCreepFront(field: CreepField): void {
+    this.frontSpawned = 0;
+    // Live way discs (kept roads/causeways — wild stretches already gave
+    // themselves back to the land and don't count). Ways never move at
+    // runtime, so one snapshot serves the visit; the field hands slices of
+    // THIS list to its cover mask and the render clip alike.
+    const ways: { x: number; y: number; r: number }[] = [];
+    for (const d of this.doodads) {
+      if (d.wild || d.gone) continue;
+      if (!doodadRuleOf(d.kind).clearway) continue;
+      ways.push({ x: d.pos.x, y: d.pos.y, r: d.radius });
+    }
+    field.setWays(ways);
+    field.setTerrain({
+      groundKindAt: (x, y) => this.groundAt(vec(x, y))?.kind ?? null,
+      eachFuelNear: (x, y, r, fn) => {
+        for (const d of this.doodadsNear(x, y, r)) {
+          if (d.gone || d.keep || d.door) continue;
+          const fuel = doodadRuleOf(d.kind).fuel;
+          if (!fuel) continue;
+          if (dist(d.pos, vec(x, y)) > r + d.radius) continue;
+          fn(fuel, d);
+        }
+      },
+      consume: (ref, row) => this.frontConsume(ref as Doodad, row),
+      stamp: (x, y, r, ground, shallow) => {
+        // Converted ground is ordinary runtime terrain: a real disc in the
+        // doodad list (groundAt senses it, the chunk baker repaints it,
+        // the index rebuild is the same one every brittle pop pays).
+        const px = clamp(x, 8, this.arena.w - 8), py = clamp(y, 8, this.arena.h - 8);
+        // Already that ground? Stay the hand — a flood re-wetting a marsh
+        // pool would only dirty chunks for nothing (the wet country the
+        // crest crosses is conversion-free by definition).
+        if (this.groundAt(vec(px, py))?.kind === ground) return;
+        const d: Doodad = {
+          pos: vec(px, py),
+          radius: r, kind: ground, ...(shallow ? { shallow: true } : {}),
+        };
+        this.doodads.push(d);
+        if (GROUND_KINDS.includes(d.kind)) this.grounds.push(d);
+        this.markDoodadsChanged();
+      },
+      drag: (a, dx, dy) => {
+        // The undertow rides the wind fabric's exact spares: planted
+        // sentries, anchored bodies, constructs and the airborne feel
+        // nothing; weight leans against the carry; origin-aware confine.
+        const b = a as Actor;
+        if (b.dead || b.downed || b.anchored || b.construct || b.leap || b.passive || isDormant(b)) return;
+        const w = Math.max(0.4, b.effectiveWeight());
+        b.pos = this.clampPos(vec(b.pos.x + dx / w, b.pos.y + dy / w), b.radius, b.pos);
+      },
+      drown: (a, drain, dt) => {
+        // The crest pulls breath exactly as deep water does — player seats
+        // only; what dwells in the flood is adapted to it. The hold stamp
+        // keeps the terrain sweep's regen from refilling against us.
+        const b = a as Actor;
+        if (!this.seatOf(b) || b.dead || b.downed) return;
+        (b.survivalHeldAt ??= {})['breath'] = this.time;
+        this.drainSurvival(b, 'breath', drain, dt);
+      },
+    });
+  }
+
+  /** THE FRONT EATS: one fueled doodad consumed by a passing front —
+   *  swapped to its remnant kind or felled outright (the popBrittle
+   *  removal discipline: splice + explicit rev bump), a flash in the
+   *  row's tint, and sometimes KIN crawling out of the wreck (capped per
+   *  visit — a burning grove births a pack, never a flood). */
+  private frontConsume(d: Doodad, row: FrontConsumeRow): void {
+    if (d.gone) return;
+    const at = vec(d.pos.x, d.pos.y);
+    const color = row.fx ?? '#e8d0a0';
+    if (row.leave) {
+      d.kind = row.leave;
+      delete d.adorn;
+      delete d.effect;
+      this.markDoodadsChanged();
+    } else {
+      d.gone = true;
+      const i = this.doodads.indexOf(d);
+      if (i >= 0) this.doodads.splice(i, 1);
+      this.markDoodadsChanged();
+    }
+    this.flashes.push({ pos: at, radius: Math.max(20, d.radius * 1.8), color, life: 0.32, maxLife: 0.32 });
+    if (row.spawn && this.frontSpawned < CREEP_CFG.front.spawnMax && chance(row.spawn.chance)) {
+      const m = this.createMonster(row.spawn.monster, Math.max(1, this.zone.level), 'enemy');
+      m.pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), m.radius);
+      this.actors.push(m);
+      this.frontSpawned++;
+    }
+  }
+
+  /** THE FRONT DRINKS THE BLOW: a blast's typed roll splashes any marching
+   *  skin under it — the quench/feed lane (FrontSpec.quench/feed), rowed
+   *  data, no element table. Sits beside the mallet seam at every blast
+   *  site; null-cost while no live front carries a lever, and the roll is
+   *  the ordinary one (the same dice a victim would see). */
+  private frontSplash(caster: Actor | null, inst: SkillInstance | null | undefined, at: Vec2, reach: number): void {
+    if (!caster || !inst || !this.creep?.quenchable) return;
+    this.creep.damageSkin(at.x, at.y, reach, rollSkillDamage(caster, inst).amounts);
   }
 
   /** The runtime seam every package/monster fog-bringer uses: get the zone's
@@ -29192,9 +29317,14 @@ export class World {
       }
       // Survival regen for every resource NOT drained this frame (breath refills
       // out of the water). Only actors that ever entered a draining region carry a map.
+      // External holds count too: a fabric draining from OUTSIDE this sweep
+      // (the flood front's drown lane) stamps survivalHeldAt — no refilling
+      // against a head held under.
       if (a.survival) {
         for (const [res, val] of a.survival) {
           if (drained.has(res)) continue;
+          const held = a.survivalHeldAt?.[res];
+          if (held !== undefined && this.time - held < 0.12) continue;
           const sd = survivalResource(res);
           if (sd && val < sd.max) a.survival.set(res, Math.min(sd.max, val + sd.regen * dt));
         }
@@ -31592,6 +31722,7 @@ export class World {
           }
           this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
           // THE MALLET: each path-blast is a fresh strike surface.
+          this.frontSplash(p.caster, p.inst, p.pos, radius);
           this.strikeSurfaces(p.caster, p.pos, radius);
         }
         if (ts.zone) {
@@ -32542,6 +32673,7 @@ export class World {
             }
             // THE MALLET: the dying breath is a plain-disc blast, exactly
             // as its victims see it.
+            this.frontSplash(z.caster, z.inst, z.pos, radius);
             this.strikeSurfaces(z.caster, z.pos, radius);
             this.flashes.push({
               pos: vec(z.pos.x, z.pos.y), radius, color: z.color,

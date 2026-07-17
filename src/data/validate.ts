@@ -22,7 +22,8 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunement
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
-import { STAT_DEFS, STAT_TRADES } from '../engine/stats';
+import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES } from '../engine/stats';
+import { regionKind } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
@@ -404,7 +405,11 @@ export function validateContent(): void {
 
   // CREEP: every kind's grants name real statuses; every theme creep spec
   // (base AND variant overrides) names registered kinds — the creep fabric
-  // rides the fog fabric's exact safety-net contract.
+  // rides the fog fabric's exact safety-net contract. Advancing-front rows
+  // resolve every lever against the registry it points at: damage types,
+  // sensed ground kinds, monsters, remnant doodads — and consume fuels
+  // against the fuel tags DoodadRules actually declare (the dead-row lint:
+  // a consume row nothing feeds warns loud).
   const creepSpecs: { owner: string; spec: NonNullable<typeof TILESETS[string]['theme']['creep']> }[] = [];
   for (const t of Object.values(TILESETS)) {
     if (t.theme.creep) creepSpecs.push({ owner: `tileset '${t.id}'`, spec: t.theme.creep });
@@ -412,7 +417,18 @@ export function validateContent(): void {
       if (v.theme?.creep) creepSpecs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, spec: v.theme.creep });
     }
   }
-  for (const msg of validateCreep(id => !!STATUS_DEFS[id], creepSpecs)) warn(msg);
+  const declaredFuels = new Set<string>();
+  for (const k of doodadRuleKinds()) {
+    const fuel = doodadRuleOf(k).fuel;
+    if (fuel) declaredFuels.add(fuel);
+  }
+  for (const msg of validateCreep(id => !!STATUS_DEFS[id], creepSpecs, {
+    isDamageType: id => (DAMAGE_TYPES as readonly string[]).includes(id),
+    hasGroundKind: id => !!regionKind(id),
+    hasMonster: id => !!MONSTERS[id],
+    hasDoodadKind: id => hasDoodadRule(id),
+    fuelTags: declaredFuels,
+  })) warn(msg);
 
   // CONJURY: rider grants (data/conjury.ts) and every skill's conjure /
   // trailConjure grant rows name real statuses — the called-cloud presence

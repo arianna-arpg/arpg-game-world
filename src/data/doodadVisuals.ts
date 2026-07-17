@@ -72,6 +72,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     blend: { strength: 0.42, feather: 26, color: 'theme:sand|#c9a86a' },
     params: { core: { color: 'theme:sand|#c9a86a', alpha: 0.4 } },
   },
+  // ASHFIELD — the wildfire front's dead wake (creep fabric convert lane):
+  // cold char-grey, mud's exact grammar, deliberately NO ember light — the
+  // glow is cinder's job; this ground says the danger already passed.
+  ashfield: {
+    painter: 'liquid', order: 17,
+    blend: { strength: 0.44, feather: 26, color: '#2a2624' },
+    params: {
+      core: { color: '#221f1d', alpha: 0.45 },
+      blotch: { color: '#141110' },
+    },
+  },
   road: {
     painter: 'gravelPath', order: 20,
     blend: { mode: 'path', strength: 0.3, feather: 12, color: 'theme:road|#574f44' },
@@ -350,6 +361,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   dead_tree: {
     painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: '#4a4038' },
+  },
+  // CHARRED SNAG — what the wildfire front leaves of timber: the dead
+  // tree's silhouette in charcoal (painter REUSED; the swap is one kind
+  // write + one visuals row, exactly the vocabulary doctrine).
+  charred_snag: {
+    painter: 'deadTree', order: 54, shadow: 0.5, longShadow: 1.0,
+    params: { color: '#26211e' },
   },
   stump: {
     painter: 'stump', order: 52, shadow: 0.5,

@@ -446,6 +446,17 @@ export const VIS_CFG = {
     pulseSpeed: 0.55,
     /** Vein glow: the wide soft under-stroke's alpha share of the core. */
     veinGlow: 0.35,
+    /** THE LEADING EDGE (advancing fronts, CreepDef.edge): the telegraph's
+     *  arc half-width (radians around the bearing), stroke alpha/width,
+     *  and the direction streaks breaking ahead of the rim. */
+    edge: {
+      arc: 1.15,
+      alpha: 0.6,
+      width: 6,
+      streaks: 6,
+      streakLen: 34,
+      streakSpeed: 0.9,
+    },
   },
 
   /** THE UNDERSTORY (vis/understory.ts) — the world seen far below through

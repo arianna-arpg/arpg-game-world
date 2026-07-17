@@ -80,6 +80,69 @@ lip) scaled by the live front, breathing on `heartbeat()` (exported from
 painters — one organism, one pulse), plus a live pulse front riding
 heart→rim. Ablate pass name `'creep'`; knobs in `VIS_CFG.creep`.
 
+## THE ADVANCING FRONT (`CreepDef.front` — optional per-row levers)
+
+A creep with a `front` block MARCHES instead of anchoring. Every lever is
+optional and every absent lever costs nothing — **a row without `front`
+ticks byte-identically to the classic fabric** (pinned by
+`balance/probe_front.ts` against a pre-change fingerprint). Debut rows in
+`data/creeps.ts`: the **floodcrest** and the **wildfire**; demo faces:
+meadow "emberwind" and marsh "floodwake" tileset variants.
+
+| Lever | What it says |
+| --- | --- |
+| `speed` | march pace (units/sec) before modulation |
+| `affinity` | advance multipliers by GROUND KIND (`ground` map + `default` for bare floor); `clearway` is the multiplier over live way discs — **0 makes roads firebreaks** (a way sample CAPS the target: a 0 is a wall, and `starve` finishes the job) |
+| `starve` | `{below, after}` — the land ahead reads dead for `after` seconds → the section gutters (recede + die) |
+| `consume` | rows of `{fuel, leave?, feed?, spawn?, fx?}` — eats doodads whose `DoodadRule.fuel` matches (the habitat idiom: classification on the rule, policy on the front): swap to the remnant kind or fell outright, stoke the section, sometimes birth kin (capped `CREEP_CFG.front.spawnMax` per visit) |
+| `convert` | `{ground, shallow?, every?, r?}` — ground stamped behind the trailing rim as real runtime discs (ashfield behind the blaze; `shallow: true` water behind the crest — **the ford contract: a wake wades, never drowns**) |
+| `quench` | ONE lever: `{types, power}` — typed damage on the skin stalls the section's vigor; at zero it gutters. Vigor breathes back at `CREEP_CFG.front.vigorRegen` |
+| `feed` | ONE mirror lever — typed damage STOKES the section. Keep `power` HIGH: a stray splash from a passing build must never meaningfully hasten an authored danger |
+| `yieldWays` | live way discs are masked out of cover, grants, drag, wake stamps AND the drawn skin — from ONE list (`setWays` → per-section `nearWays`), so the dry deck on screen is the dry deck in the hit test |
+| `drag` | `{accel, notFactions?}` — the undertow: covered bodies carried along the bearing through the mover contract with the wind fabric's exact spares (dormant/anchored/constructs/airborne exempt; weight leans against it) |
+| `drown` | `{drain}` — covered PLAYER seats drain breath (the survival fabric; monsters never drown). The `Actor.survivalHeldAt` stamp keeps terrain regen from refilling against the hold |
+| `skin` / `edge` (on the def) | render: `'water'`/`'blaze'` bake families beside the classic membrane, and the LEADING-EDGE telegraph (arc + direction streaks on the bearing side — the advance reads at a glance). Knobs in `VIS_CFG.creep.edge` |
+
+**Spawning fronts.** Ambient: `ZoneCreepSpec.fronts` rows —
+`{id, line?, bearing?, delay?, waves?}` — spawn picket-line WAVES from the
+boundary the bearing points away from; `waves` makes them return after the
+last section dies or leaves. Runtime: `field.addFront(def, x, y, bearing,
+{reach?, bornFrac?, boundTo?})` — the package seam; `boundTo` still works
+(kill the caller, the section recoils), and `cleanseAt` force-gutters.
+
+**The quench tap.** `World.frontSplash` sits beside the mallet seam at
+every blast site (melee arcs, novas, targeted splash, cones/beams, pops,
+movement eruptions, projectile path-blasts, zone strike moments, dying
+breaths, plus the typed ownerless `burstDamage` lane) and rolls the
+ORDINARY skill dice against the skin — one-roller doctrine, gated null-cost
+behind `CreepField.quenchable`. Deliberately untapped: proc explosions and
+leap landings (marginal lanes; add beside their `strikeSurfaces` calls if a
+row ever needs them).
+
+**Anti-goals (load-bearing).** There is NO reaction matrix: a front names
+only the types it cares about, unlisted types are silence (probe-pinned:
+fire does nothing to the flood). Player casts never ignite fronts or
+terrain that isn't already burning — **ignition-by-player-damage is a
+reserved seam, default OFF everywhere**, to be added (if ever) as a per-row
+/ per-zone opt-in so fire builds never become a liability.
+
+**Reserved seams, named.**
+- *Escape-chase event*: bind an `ObjectiveSpec` `'escape'` zone to a lane
+  (or `addFront` from the event) — the front IS the pursuer. Nothing built
+  yet; the spawn rows and `addFront` are the whole contract it needs.
+- *Attunement ice-jackpot*: enough cold poured into a floodcrest section
+  tunes it briefly SOLID into standable ice — belongs to the attunement
+  fabric (`engine/tuning.ts`, in flight in a co-session) and should land
+  there, reading `quench` intake off this fabric rather than adding a lever
+  here.
+- *Ignition opt-in*: see anti-goals above.
+
+**Co-op note.** Creep still never serializes (transience contract), and
+front state (runtime quench, consumed doodads, wake stamps) is
+host-authoritative with no delta lane — guests converge on zone resync,
+exactly like brittle pops. A future wire would model on the `doors`/
+`hollows` meta-delta channels.
+
 ## Extension seams
 
 - A new creep anywhere = one `registerCreep` row + a `creep:` line on a
@@ -92,3 +155,8 @@ heart→rim. Ablate pass name `'creep'`; knobs in `VIS_CFG.creep`.
 - The Eldritch incursion plants `blightgrowth` at its in-zone event sites
   (the corruption's spatial footprint) and `cleanseAt` rides its collapse
   payoff — see `src/packages/overlays/incursion.ts`.
+- Front validation lives with the fabric: `validateCreep` takes the
+  registry lookups (damage types, sensed grounds, monsters, doodad kinds,
+  declared fuel tags) from `validate.ts` — every lever resolves or warns at
+  boot, and a consume row no `DoodadRule.fuel` feeds is a dead row that
+  warns loud.

@@ -3985,6 +3985,35 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'emberSparks', color: '#ffb870', scale: 0.8, params: { n: 2 } }],
     shadowScale: 0.6,
   },
+  /** The wildfire's crawling coal: charred-black hide split by hot cracks,
+   *  a live flame licking off its back — burning NOW, where its ashling
+   *  cousin merely smolders. Every part painter reused. */
+  cinderling: {
+    parts: [
+      { kind: 'blob', color: '#2e1e16', params: { irr: 0.32, seed: 11 } },
+      { kind: 'lavaCracks', color: '#ff8a3a', scale: 0.7 },
+      { kind: 'eyes', color: '#ffe8c0', params: { spread: 0.5, dist: 0.5, size: 0.14 } },
+    ],
+    live: [
+      { kind: 'flames', color: '#ff9a3a', scale: 0.7 },
+      { kind: 'emberSparks', color: '#ffb060', scale: 0.6, params: { n: 3 } },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The spark off a burning crown: barely a body at all — a dim char
+   *  mote wrapped in wisp-light and open flame, floating on its own heat.
+   *  Reads airborne + ranged at a glance next to the ground-bound coal. */
+  emberwisp: {
+    parts: [
+      { kind: 'blob', color: '#241813', scale: 0.6, alpha: 0.75, params: { irr: 0.4, seed: 23 } },
+      { kind: 'eyes', color: '#fff0c8', params: { spread: 0.3, dist: 0.4, size: 0.16 } },
+    ],
+    live: [
+      { kind: 'wisps', color: '#ffc060', params: { n: 3 } },
+      { kind: 'flames', color: '#ff9a3a', scale: 0.85 },
+    ],
+    shadowScale: 0.35,
+  },
   /** The vent-hound: a lean runner maned in fire. */
   cinder_hound: {
     parts: [

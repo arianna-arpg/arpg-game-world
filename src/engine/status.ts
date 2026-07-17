@@ -168,6 +168,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     stackPolicy: 'strongest',
     hitMagnitude: 0.35, baseline: { dps: 3, perLevel: 1.2 },
   },
+  flamewreathed: {
+    // STANDING IN A LIVE FIRE FRONT (the wildfire creep's grant): a short,
+    // refreshed terrain burn on the caster-less baseline lane — pressure
+    // that asks you to LEAVE, not a one-shot. Its own row so the front's
+    // heat tunes independently of the ignite ailment.
+    label: 'Flame-Wreathed', color: '#ffb547', duration: 1.2,
+    element: 'fire',
+    dotType: 'fire',
+    stackPolicy: 'strongest',
+    baseline: { dps: 4, perLevel: 1.4 },
+  },
   poison: {
     label: 'Poisoned', color: '#7ec850', duration: 6,
     element: 'chaos',

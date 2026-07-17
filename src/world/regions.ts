@@ -277,6 +277,12 @@ registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, bl
 // (same statuses, sources, durations, and zone-level-scaled bog poison).
 registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired' });
 registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired' });
+// ASHFIELD — the wildfire front's wake (the creep fabric's convert lane):
+// dead burnt ground, fully walkable, no hazard and no molten glow — the
+// danger PASSED here, that's the point. moveScale 1 is deliberate: a benign
+// effect keeps it in doodadGroundIds so groundAt senses it, clients rebuild
+// it, and affinity tables can name it.
+registerRegion({ id: 'ashfield', walkable: true, blocks: false, label: 'the ashfield', moveScale: 1 });
 registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden' });
 registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple' });
 registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true });

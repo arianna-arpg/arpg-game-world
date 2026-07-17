@@ -10389,6 +10389,20 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   // --- The melt & the deep: lurker/angler armaments ---------------------------
+  ember_dart: {
+    id: 'ember_dart', name: 'Ember Dart', noDrop: true,
+    description: 'A spat coal — quick, small, and eager to catch. The wildfire kin\'s pelting verb.',
+    tags: ['spell', 'projectile', 'fire'], color: '#ff9a3c',
+    manaCost: 3, cooldown: 0, useTime: 0.55,
+    baseDamage: { fire: [3, 6] },
+    delivery: { type: 'projectile', speed: 300, radius: 6, range: 340 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.25, magnitude: 0.3 },
+    ],
+    ai: { range: 300, weight: 2, keepDistance: 150 },
+  },
+
   magma_lob: {
     id: 'magma_lob', name: 'Magma Lob',
     description: 'Heave a gout of living melt in a lazy arc — it bursts where it lands and leaves a pool of fire that CLOSES like cooling slag, gone exactly as its duration dies.',
