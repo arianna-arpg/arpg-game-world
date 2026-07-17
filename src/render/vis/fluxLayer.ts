@@ -22,8 +22,18 @@ import { FluxPhase } from '../../engine/flux';
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { VIS_CFG } from './visConfig';
+import { registerVisCache } from './caches';
+import { releaseCanvas } from './sprites';
 
 const SPRITES = new Map<string, HTMLCanvasElement>();
+
+registerVisCache({
+  id: 'fluxBillows',
+  count: () => SPRITES.size,
+  bytes: () => { let b = 0; for (const c of SPRITES.values()) b += c.width * c.height * 4; return b; },
+  onZoneSwap: () => { if (VIS_CFG.memory.billowClearOnSwap) { for (const c of SPRITES.values()) releaseCanvas(c); SPRITES.clear(); } },
+  onRunSwap: () => { for (const c of SPRITES.values()) releaseCanvas(c); SPRITES.clear(); },
+});
 
 /** One walkable-cloud sprite per tint: a DENSER heart than fog (this cloud
  *  is ground — it has to read solid enough to stand on) with the same long

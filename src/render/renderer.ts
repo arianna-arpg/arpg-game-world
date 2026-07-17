@@ -49,6 +49,9 @@ import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
+import { trimVisCaches } from './vis/caches';
+import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
+import { canvasCap } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
@@ -224,9 +227,28 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** The cache steward's boundary detectors (vis/caches.ts): which World
+   *  and which zone the last frame drew — identity flips fan out the trims. */
+  private stewardWorld: unknown = null;
+  private stewardZone: unknown = null;
+
   render(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
+
+    // THE CACHE STEWARD's boundaries (vis/caches.ts): a zone swap trims
+    // every registered cache to its post-swap posture; a NEW WORLD (menu →
+    // fresh run) releases the lot. Detected here — the renderer is the one
+    // place that sees both identities every frame — and fanned out before
+    // anything draws, so evictees re-bake on sight, never mid-use.
+    if (this.stewardWorld !== world) {
+      if (this.stewardWorld !== null) trimVisCaches('run');
+      this.stewardWorld = world;
+      this.stewardZone = world.zone;
+    } else if (this.stewardZone !== world.zone) {
+      this.stewardZone = world.zone;
+      trimVisCaches('zone');
+    }
 
     // Frame delta off the sim clock — the smoothing step for canopy/roof fades.
     this.frameDt = clamp(world.time - this.lastRenderTime, 0, 0.1);
@@ -1000,7 +1022,10 @@ export class Renderer {
   }
 
   /** Status-ailment screen overlays — EDGE-hugging so the centered HUD stays
-   *  clear. Combat ailments only (see screenFx.STATUS_FX_REGISTRY). */
+   *  clear. Combat ailments only (see screenFx.STATUS_FX_REGISTRY). Every
+   *  wash draws through the baked edge-overlay fabric (vis/overlays.ts):
+   *  the pulse rides globalAlpha over a cached sprite, so a fight full of
+   *  ailments costs blits, not per-frame gradient rasters. */
   private drawStatusFx(world: World): void {
     const fx = collectActiveFx(world.player.statuses);
     if (fx.length === 0) return;
@@ -1015,13 +1040,14 @@ export class Renderer {
         const k = f.def.intensity ?? 0.6;
         r += cr * k; g += cg * k; b += cb * k; wsum += k; peak = Math.max(peak, k);
       }
-      r /= wsum; g /= wsum; b /= wsum;
+      // Quantized blend channels key the bake; a multi-ailment palette
+      // shift walks a handful of LRU entries, never one per frame.
+      const qr = qChan(r / wsum), qg = qChan(g / wsum), qb = qChan(b / wsum);
       const a = peak * (0.16 + 0.1 * (0.5 + 0.5 * Math.sin(t * 3)));
-      const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.34, w / 2, h / 2, Math.hypot(w, h) / 2);
-      grd.addColorStop(0, 'rgba(0,0,0,0)');
-      grd.addColorStop(1, `rgba(${r | 0},${g | 0},${b | 0},${a.toFixed(3)})`);
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, w, h);
+      drawEdgeOverlay(ctx, w, h, {
+        key: `sfxvig|${qr},${qg},${qb}`, innerFrac: 0.34,
+        stops: [[0, `rgba(${qr},${qg},${qb},0)`], [1, `rgba(${qr},${qg},${qb},1)`]],
+      }, a);
     }
     if (fx.some(f => f.def.kind === 'frost')) this.drawFrost(w, h, t);
     if (fx.some(f => f.def.kind === 'stars')) this.drawStunStars(w, h, t);
@@ -1039,15 +1065,23 @@ export class Renderer {
   private drawPall(w: number, h: number, k: number): void {
     const { ctx } = this;
     const C = VIS_CFG.statusFx;
-    ctx.globalCompositeOperation = 'saturation';
-    ctx.fillStyle = `rgba(128,128,128,${(C.pallDesat * k).toFixed(3)})`;
-    ctx.fillRect(0, 0, w, h);
-    ctx.globalCompositeOperation = 'source-over';
-    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * (0.42 - 0.18 * k), w / 2, h / 2, Math.hypot(w, h) / 2);
-    grd.addColorStop(0, 'rgba(232,224,236,0)');
-    grd.addColorStop(1, withAlpha(C.pallWash, C.pallAlpha * k));
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, w, h);
+    // The DESATURATE half is a non-separable blend — a per-frame software
+    // fallback on some engines (the canvasCaps probe measures, never
+    // sniffs). Where it's slow, the baked wash below carries the read alone;
+    // VIS_CFG.statusFx.desatMode pins the answer either way.
+    const desatOn = C.desatMode === 'on'
+      || (C.desatMode === 'auto' && canvasCap('blendSaturation'));
+    if (desatOn) {
+      ctx.globalCompositeOperation = 'saturation';
+      ctx.fillStyle = `rgba(128,128,128,${(C.pallDesat * k).toFixed(3)})`;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    const kq = qFrac(k);
+    drawEdgeOverlay(ctx, w, h, {
+      key: `pall|${C.pallWash}|${kq}`, innerFrac: 0.42 - 0.18 * kq,
+      stops: [[0, withAlpha(C.pallWash, 0)], [1, withAlpha(C.pallWash, 1)]],
+    }, C.pallAlpha * k);
   }
 
   /** THE DARKEN (blind): the room closes in — a near-black iris tightening
@@ -1055,21 +1089,21 @@ export class Renderer {
   private drawDarken(w: number, h: number, k: number): void {
     const { ctx } = this;
     const C = VIS_CFG.statusFx;
-    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * (0.5 - 0.3 * k), w / 2, h / 2, Math.hypot(w, h) * (0.62 - 0.1 * k));
-    grd.addColorStop(0, 'rgba(6,4,10,0)');
-    grd.addColorStop(1, `rgba(6,4,10,${(C.darkenFloor * k).toFixed(3)})`);
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, w, h);
+    const kq = qFrac(k);
+    drawEdgeOverlay(ctx, w, h, {
+      key: `darken|${kq}`, innerFrac: 0.5 - 0.3 * kq,
+      outerFrac: 2 * (0.62 - 0.1 * kq),
+      stops: [[0, 'rgba(6,4,10,0)'], [1, 'rgba(6,4,10,1)']],
+    }, C.darkenFloor * k);
   }
 
   /** Icy edge wash + drifting snowflakes (chill / frozen). */
   private drawFrost(w: number, h: number, t: number): void {
     const { ctx } = this;
-    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.hypot(w, h) / 2);
-    grd.addColorStop(0, 'rgba(0,0,0,0)');
-    grd.addColorStop(1, 'rgba(150,220,255,0.22)');
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, w, h);
+    drawEdgeOverlay(ctx, w, h, {
+      key: 'frost', innerFrac: 0.3,
+      stops: [[0, 'rgba(150,220,255,0)'], [1, 'rgba(150,220,255,1)']],
+    }, 0.22);
     ctx.textAlign = 'center';
     ctx.font = '16px Verdana';
     ctx.fillStyle = 'rgba(230,248,255,0.85)';
@@ -1153,15 +1187,18 @@ export class Renderer {
     const sev = start > 0 ? 1 - Math.min(frac / start, 1) : 1;
     const inner = Math.max(0, C.innerFrom + (C.innerTo - C.innerFrom) * sev
       - C.beat.reach * beat - C.hit.reach * surge) * Math.min(w, h);
+    // Baked seep (vis/overlays.ts): the systole's press and the wound-flush
+    // hue quantize into the key — a beat cycle walks a stable handful of
+    // LRU entries and the per-frame cost is one blit under `a`.
     const flush = Math.min(1, C.beat.flushMix * beat + C.hit.flushMix * surge);
-    const mid = blendRgb(C.mid, C.flush, flush);
-    const edge = blendRgb(C.edge, C.flush, flush * 0.6);
-    const grd = ctx.createRadialGradient(w / 2, h / 2, inner, w / 2, h / 2, Math.hypot(w, h) / 2);
-    grd.addColorStop(0, 'rgba(0,0,0,0)');
-    grd.addColorStop(C.midStop, `rgba(${mid},${(a * C.midAlpha).toFixed(3)})`);
-    grd.addColorStop(1, `rgba(${edge},${a.toFixed(3)})`);
-    ctx.fillStyle = grd;
-    ctx.fillRect(0, 0, w, h);
+    const innerQ = qFrac(inner / Math.min(w, h));
+    const flushQ = qFrac(flush, 0.1);
+    const mid = blendRgb(C.mid, C.flush, flushQ);
+    const edge = blendRgb(C.edge, C.flush, flushQ * 0.6);
+    drawEdgeOverlay(ctx, w, h, {
+      key: `lowlife|${innerQ}|${flushQ}`, innerFrac: innerQ,
+      stops: [[0, `rgba(${mid},0)`], [C.midStop, `rgba(${mid},${C.midAlpha})`], [1, `rgba(${edge},1)`]],
+    }, a);
   }
 
   /** THE TIMEFLOW WASH (engine/timeflow.ts): while a hold carrying a hud
@@ -1299,11 +1336,11 @@ export class Renderer {
       const [sr, sg, sb] = hexToRgb(spore.color); // the bloom's own hue (data-driven — a 2nd influence-biome tints its own)
       ctx.fillStyle = `rgba(${sr},${sg},${sb},${(0.04 + 0.10 * d).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
-      const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.hypot(w, h) * 0.6);
-      grd.addColorStop(0, 'rgba(0,0,0,0)');
-      grd.addColorStop(1, `rgba(${Math.round(sr * 0.6)},${Math.round(sg * 0.7)},${Math.round(sb * 0.6)},${(0.10 + 0.18 * d).toFixed(3)})`);
-      ctx.fillStyle = grd;
-      ctx.fillRect(0, 0, w, h);
+      drawEdgeOverlay(ctx, w, h, {
+        key: `spore|${spore.color}`, innerFrac: 0.32, outerFrac: 1.2,
+        stops: [[0, `rgba(${Math.round(sr * 0.6)},${Math.round(sg * 0.7)},${Math.round(sb * 0.6)},0)`],
+          [1, `rgba(${Math.round(sr * 0.6)},${Math.round(sg * 0.7)},${Math.round(sb * 0.6)},1)`]],
+      }, 0.10 + 0.18 * d);
       this.drawSporeMotes(w, h, world.time, d, spore.color);
     }
   }

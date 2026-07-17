@@ -11,10 +11,36 @@
 import { withAlpha } from './color';
 import { DAY_LENGTH, dayCycle } from '../../world/daynight';
 import { VIS_CFG } from './visConfig';
+import { registerVisCache } from './caches';
 
 // (bodies bake through vis/body.ts; this module owns the cache + primitives)
 
 const cache = new Map<string, HTMLCanvasElement>();
+
+/** Shrink the LRU to its `keep` NEWEST entries, releasing every evicted
+ *  backing store (the steward's zone-swap floor: a session that walks many
+ *  biomes must not hold every biome's bestiary and crowns forever — the
+ *  next zone re-bakes what it actually fields, the floor keeps the
+ *  biome-agnostic working set warm). Same safety argument as the in-cap
+ *  eviction below: eviction takes the LRU-STALEST first, and every draw
+ *  re-fetches through baked(). */
+export function trimBakes(keep: number): void {
+  while (cache.size > Math.max(0, keep)) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    const victim = cache.get(oldest);
+    if (victim) releaseCanvas(victim);
+    cache.delete(oldest);
+  }
+}
+
+registerVisCache({
+  id: 'sprites',
+  count: () => cache.size,
+  bytes: () => { let b = 0; for (const c of cache.values()) b += c.width * c.height * 4; return b; },
+  onZoneSwap: () => trimBakes(VIS_CFG.memory.spriteFloorOnSwap),
+  onRunSwap: () => trimBakes(0),
+});
 
 /** Fetch-or-bake. `paint` runs once with the canvas's 2d context, origin at
  *  the canvas CENTER (translate applied), then the result is cached under

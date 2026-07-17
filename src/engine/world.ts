@@ -29913,7 +29913,18 @@ export class World {
         if (--drop <= 0) break;
       }
     }
-    this.losMemo.set(key, { ok, until: this.time + LOS_CFG.memoTtl });
+    // DE-SYNCHRONIZED expiry (LOS_CFG.memoJitter): a zone load seeds whole
+    // cohorts of pairs in one tick — on a SHARED TTL they all expire, all
+    // re-march their rays and all re-stamp the same deadline every cycle
+    // forever (the measured crowded-zone stampede). Each pair instead wears
+    // a deterministic offset hashed off its OWN key: same freshness on
+    // average, expiries spread across the window, and no draw from any rng
+    // stream (seeded sim runs stay byte-identical).
+    const j = LOS_CFG.memoJitter;
+    const ttl = j > 0
+      ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(key, 0x9E3779B1) >>> 16) / 65536))
+      : LOS_CFG.memoTtl;
+    this.losMemo.set(key, { ok, until: this.time + ttl });
     return ok;
   }
 
@@ -30023,9 +30034,16 @@ export class World {
    *  stacks dwindle. The status's own buildup ladder decides the cost of
    *  being SEEN, and a fresh conversion is answered with a LURE ping — the
    *  zone turns toward you. Proximity-honest by design (no ray: the eyes
-   *  that matter share your chamber); brittle pops remove doodads, so the
-   *  eye list is filtered live, never cached. Player seats only. */
+   *  that matter share your chamber); brittle pops remove doodads, and the
+   *  eye list re-gathers exactly when the doodad set changes (the
+   *  identity+length+rev idiom below — a per-tick filter allocated a fresh
+   *  array every frame in every gaze zone for a set that changes at event
+   *  rate). Player seats only. */
   private gazeTimers = new Map<number, number>();
+  private gazeEyes: Doodad[] = [];
+  private gazeEyesArr: unknown = null;
+  private gazeEyesLen = -1;
+  private gazeEyesRev = -1;
   private updateGaze(dt: number): void {
     const spec = this.zone.theme.gaze;
     if (!spec?.kinds.length) return;
@@ -30033,13 +30051,19 @@ export class World {
     const closeReach = spec.closeReach ?? GAZE_CFG.closeReach;
     const statusId = spec.status ?? GAZE_CFG.status;
     const markId = STATUS_DEFS[statusId]?.buildup?.into;
-    let eyes: Doodad[] | null = null;
+    if (this.gazeEyesArr !== this.doodads || this.gazeEyesLen !== this.doodads.length
+      || this.gazeEyesRev !== this.doodadsRev) {
+      this.gazeEyesArr = this.doodads;
+      this.gazeEyesLen = this.doodads.length;
+      this.gazeEyesRev = this.doodadsRev;
+      this.gazeEyes = this.doodads.filter(d => spec.kinds.includes(d.kind));
+    }
+    const eyes = this.gazeEyes;
     for (const s of this.seats) {
       const a = s.actor;
       if (a.dead || a.downed) continue;
       const held = a.statuses.find(x => x.id === statusId);
       let t = (this.gazeTimers.get(a.id) ?? 0) + dt;
-      eyes ??= this.doodads.filter(d => spec.kinds.includes(d.kind));
       let watched = false;
       for (const d of eyes) {
         const dd = dist(a.pos, d.pos);

@@ -81,6 +81,18 @@ Celestial skills (`meteor`, `meteor_storm`, `meteoric_bombardment`,
   survives blindness for `max(PerceptionSpec.memory, LOS_CFG.chaseMemory)`
   then snaps; `relentless` never lets go; `PerceptionSpec.xray` (burrowers'
   tremor-sense) skips the gate. `aiLastSeen` refreshes only while seen.
+  The candidate walk itself is ZERO-ALLOC (the enemiesOf predicate inlined,
+  cheapest checks first) — it runs per actor per tick, and a minted array
+  per call was a leading slice of the sim's garbage-per-second (GC pressure
+  IS the crowd-fight stutter on the engines that collect slowest).
+- **The ray memo** (`World.losCached`, `LOS_CFG.memoTtl`): perception rays
+  are TTL-memoized, and each PAIR wears a deterministic TTL offset
+  (`LOS_CFG.memoJitter`, hashed off the pair key — never the rng stream, so
+  seeded sims stay byte-identical). On a SHARED clock every ray cached at
+  zone load expired in the same tick, re-marched together, and re-stamped
+  the same deadline — a self-resynchronizing raycast stampede every TTL,
+  measured as the crowded-zone frame spike (autocorrelation peak 0.74 at
+  the shared period; 0.22 with the jitter). 0 restores the shared clock.
 - **Hold fire** (`pickSkill`): skills whose delivery a wall would eat are
   unusable while the line is blocked (`World.aiNeedsFireLine`) — meteor
   casters bombard from cover, ray casters close for the line.

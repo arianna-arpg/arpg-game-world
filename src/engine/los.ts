@@ -95,6 +95,14 @@ export const LOS_CFG = {
   /** Perception-ray memo TTL (seconds): acquireTarget probes candidates
    *  every tick; the memo keeps the rays at event rate. */
   memoTtl: 0.25,
+  /** TTL spread (fraction of memoTtl): each PAIR wears its own deterministic
+   *  offset inside ±memoJitter/2. Without it every ray cached in the same
+   *  moment (a zone load seeds hundreds at once) expires in the same tick,
+   *  re-marches together, and re-stamps the same deadline — a self-
+   *  resynchronizing raycast stampede every TTL, measured as the crowded-
+   *  zone frame spike. Keyed off the pair (never the rng stream), so seeded
+   *  sim runs stay byte-deterministic. 0 restores the shared clock. */
+  memoJitter: 0.7,
   /** Seconds an AI channel keeps gnawing a wall before it lets the grip go
    *  (the ray caster gives up and repositions). */
   channelGrace: 0.9,

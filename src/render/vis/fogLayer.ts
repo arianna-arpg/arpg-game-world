@@ -15,8 +15,18 @@
 
 import type { FogField } from '../../engine/fog';
 import { VIS_CFG } from './visConfig';
+import { registerVisCache } from './caches';
+import { releaseCanvas } from './sprites';
 
 const SPRITES = new Map<string, HTMLCanvasElement>();
+
+registerVisCache({
+  id: 'fogBillows',
+  count: () => SPRITES.size,
+  bytes: () => { let b = 0; for (const c of SPRITES.values()) b += c.width * c.height * 4; return b; },
+  onZoneSwap: () => { if (VIS_CFG.memory.billowClearOnSwap) { for (const c of SPRITES.values()) releaseCanvas(c); SPRITES.clear(); } },
+  onRunSwap: () => { for (const c of SPRITES.values()) releaseCanvas(c); SPRITES.clear(); },
+});
 
 /** One soft billow sprite per fog color: dense heart, long dissolving rim.
  *  The rim's zero-stop is what sells dissipation — lobes thin into nothing

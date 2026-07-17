@@ -585,6 +585,48 @@ export const VIS_CFG = {
   statusFx: {
     pallDesat: 0.5, pallWash: '#e8e0ec', pallAlpha: 0.34,
     darkenFloor: 0.78,
+    /** The pall's DESATURATE half rides a non-separable blend ('saturation')
+     *  — GPU-free on some engines, a full-surface software fallback on
+     *  others (the Firefox cliff). 'auto' asks the canvasCaps probe and
+     *  keeps the grey-out only where it measures fast; the baked pale wash
+     *  (always drawn) carries the read where it doesn't. 'on'/'off' pin it. */
+    desatMode: 'auto' as 'auto' | 'on' | 'off',
+  },
+
+  /** CANVAS CAPABILITY PROBE (vis/canvasCaps.ts): one-time micro-timings of
+   *  the canvas features that differ WILDLY between engines. A feature is
+   *  "slow here" when its per-op time exceeds baseline × slowFactor. */
+  caps: {
+    probeSize: 192,
+    probeReps: 6,
+    slowFactorDefault: 6,
+    /** Per-probe overrides ({ blendSaturation: 4 } tightens that verdict). */
+    slowFactor: {} as Record<string, number>,
+  },
+
+  /** EDGE OVERLAYS (vis/overlays.ts): the baked full-screen wash family
+   *  (status vignettes, pall wash, blind iris, frost rim, low-life seep,
+   *  spore bloom). bakeH: bake sprite height (radial falloffs are
+   *  resolution-free — the stretch is pixel-equivalent to a direct fill);
+   *  aspectQ: frame-shape buckets per unit aspect; quantum / colorQuantum:
+   *  key grain for MOVING shape params and blended colours (the LRU absorbs
+   *  the steps a heartbeat or ladder sweeps through). */
+  overlays: {
+    bakeH: 180,
+    aspectQ: 8,
+    quantum: 0.02,
+    colorQuantum: 12,
+  },
+
+  /** THE CACHE STEWARD's dials (vis/caches.ts — policy sits with each
+   *  cache; these are the shared levers). spriteFloorOnSwap: entries the
+   *  shared bake LRU keeps across a zone swap (the biome-agnostic working
+   *  set: primitives, HUD, the party — everything else re-bakes on sight);
+   *  membranes/billows are zone-flavoured and clear wholesale. */
+  memory: {
+    spriteFloorOnSwap: 512,
+    creepClearOnSwap: true,
+    billowClearOnSwap: true,
   },
 
   /** THE VOID FRAME (vis/voidFrame.ts) — what the world ends into. The

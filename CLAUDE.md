@@ -224,8 +224,13 @@ changes.
   cache, baked actor bodies, ground texture chunks, the doodad painter
   library (kinds map to painters via `src/data/doodadVisuals.ts` — a new
   doodad kind needs ONE data entry, no renderer edits), the dynamic light
-  layer (doodad `light` specs as data), and weather particles. Tunables in
-  `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
+  layer (doodad `light` specs as data), and weather particles. Session
+  hygiene rides THE CACHE STEWARD (`render/vis/caches.ts` — every render
+  cache registers; zone/run boundaries trim + release), full-screen washes
+  ride the baked EDGE-OVERLAY fabric (`render/vis/overlays.ts`), and
+  engine-hostile canvas features gate on the measured CAPABILITY PROBE
+  (`render/vis/canvasCaps.ts` — e.g. `VIS_CFG.statusFx.desatMode`).
+  Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via

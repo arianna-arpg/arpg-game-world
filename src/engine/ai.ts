@@ -1232,11 +1232,22 @@ function acquireTarget(
   let currentD = 0;
   let tauntTarget: Actor | null = null;
   let tauntBest = Infinity;
-  for (const e of world.enemiesOf(actor)) {
-    if (e.sheet.get('invisible') > 0) continue;
+  // ZERO-ALLOC candidate walk: this scan runs per actor per tick, and
+  // world.enemiesOf() mints a fresh filtered array per call — at a hundred
+  // bodies that alone was a meaningful slice of the sim's measured
+  // garbage-per-second (GC pressure IS the crowd-fight stutter on the
+  // engines that collect it slowest). Same predicate as enemiesOf, inline,
+  // cheapest checks first; behavior byte-identical.
+  const roster = world.actors;
+  for (let ri = 0; ri < roster.length; ri++) {
+    const e = roster[ri];
+    if (e.dead || e.untargetable || e.downed) continue;
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive) continue;
+    if (!(world.hostileTo(actor, e)
+      || (e.construct?.breakable !== undefined && e.owner === actor))) continue;
+    if (e.sheet.get('invisible') > 0) continue;
     // SEGMENT FABRIC: a segmented creature is engaged by its NEAREST
     // hittable body — the coil beside you counts, not only the far head.
     // Detection, range gates and kiting all inherit this d. Perception

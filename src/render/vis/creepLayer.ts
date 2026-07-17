@@ -21,8 +21,32 @@ import { creepRimMul, CREEP_CFG } from '../../engine/creep';
 import { VIS_CFG } from './visConfig';
 import { shade, withAlpha } from './color';
 import { heartbeat } from './painters';
+import { registerVisCache } from './caches';
+import { releaseCanvas } from './sprites';
 
 const BAKES = new Map<string, HTMLCanvasElement>();
+
+/** Evict the oldest skin, RELEASING its store (membranes are the big bakes
+ *  — a grown source's skin runs to whole-megabyte canvases; left to the GC
+ *  they are exactly the surfaces a long session drowns in). */
+function evictOldestBake(): void {
+  const oldest = BAKES.keys().next().value;
+  if (oldest === undefined) return;
+  const victim = BAKES.get(oldest);
+  if (victim) releaseCanvas(victim);
+  BAKES.delete(oldest);
+}
+
+registerVisCache({
+  id: 'creepSkins',
+  count: () => BAKES.size,
+  bytes: () => { let b = 0; for (const c of BAKES.values()) b += c.width * c.height * 4; return b; },
+  // Skins key on source personalities — zone-local by construction, so a
+  // swap clears wholesale (a re-entered zone re-bakes the same skins
+  // deterministically from the same seeds).
+  onZoneSwap: () => { if (VIS_CFG.memory.creepClearOnSwap) { for (const c of BAKES.values()) releaseCanvas(c); BAKES.clear(); } },
+  onRunSwap: () => { for (const c of BAKES.values()) releaseCanvas(c); BAKES.clear(); },
+});
 
 /** Tiny deterministic stream for bake-time rolls (never Math.random —
  *  a source's skin must look the same every frame and every visit). */
@@ -184,10 +208,7 @@ function membraneSprite(src: CreepSource): HTMLCanvasElement {
   // is untouched, so every legacy row bakes byte-identically.
   if (src.def.skin === 'water' || src.def.skin === 'blaze') {
     frontSkinSprite(c, src, cx, cy, { color, rim, glow, alpha });
-    if (BAKES.size >= cfg.maxBakes) {
-      const oldest = BAKES.keys().next().value;
-      if (oldest !== undefined) BAKES.delete(oldest);
-    }
+    if (BAKES.size >= cfg.maxBakes) evictOldestBake();
     BAKES.set(key, spr);
     return spr;
   }
@@ -284,10 +305,7 @@ function membraneSprite(src: CreepSource): HTMLCanvasElement {
   c.lineWidth = 2.2;
   c.stroke();
 
-  if (BAKES.size >= cfg.maxBakes) {
-    const oldest = BAKES.keys().next().value;
-    if (oldest !== undefined) BAKES.delete(oldest);
-  }
+  if (BAKES.size >= cfg.maxBakes) evictOldestBake();
   BAKES.set(key, spr);
   return spr;
 }

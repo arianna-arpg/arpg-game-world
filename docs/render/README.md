@@ -387,6 +387,42 @@ reveal shows a furnished, boarded room, which is the whole trick.
 - **Rebalance the whole look**: `vis/visConfig.ts` — nothing else has magic
   numbers.
 
+## Memory, capability and the screen-wash fabric
+
+Three small fabrics keep long sessions smooth on every engine:
+
+- **The cache steward** (`vis/caches.ts`): every render cache REGISTERS
+  (module caches at load, renderer-owned instances at construction) with its
+  own `onZoneSwap` / `onRunSwap` handlers and census hooks. The renderer
+  detects the two boundaries (zone identity flip → `trimVisCaches('zone')`,
+  new World → `'run'`) and fans out; policy sits WITH each cache, dials in
+  `VIS_CFG.memory` (the bake LRU keeps `spriteFloorOnSwap` newest entries
+  across a swap; membranes and billows clear wholesale — zone-flavoured by
+  construction). Without the steward every cache grew to its cap and held
+  FOREVER: a long sitting saturated hundreds of live canvases, and engines
+  that keep a surface per canvas (and GCs that walk what still holds them)
+  degraded into the "lag accumulates until refresh" profile. A new cache
+  joins the discipline (and the QA census, `visCacheStats()`) by
+  registering — no wiring anywhere else.
+- **The capability probe** (`vis/canvasCaps.ts`): canvas features that
+  differ WILDLY between engines (the non-separable blends above all) are
+  micro-timed ONCE per session on a small offscreen surface — measured,
+  never UA-sniffed — and consumers ask `canvasCap(id)`. The pall's
+  desaturate rides it (`VIS_CFG.statusFx.desatMode: 'auto'`): where
+  'saturation' compositing is a software cliff (the Firefox class), the
+  baked wash carries the read alone. New probe = one `CAP_PROBES` row;
+  thresholds in `VIS_CFG.caps`.
+- **Edge overlays** (`vis/overlays.ts`): the full-screen wash family — DoT
+  vignettes, the pall wash, the blind iris, the frost rim, the low-life
+  seep, the spore bloom — is ONE parameterized shape (clear centre → tinted
+  screen edge) baked small and stretched (radial falloffs are
+  resolution-free), with the pulse riding `globalAlpha`. What used to mint
+  a full-screen `createRadialGradient` PER FRAME per overlay is now one
+  blit; moving shapes (a tightening iris, a systole) QUANTIZE the moving
+  parameter into the bake key (`VIS_CFG.overlays.quantum`) and the LRU
+  absorbs the handful of steps. A new wash is a `drawEdgeOverlay` call with
+  stops — no new gradient code.
+
 ## Gotchas
 
 - `hash01` must mix with **unsigned** shifts (`>>>`); the first draft
