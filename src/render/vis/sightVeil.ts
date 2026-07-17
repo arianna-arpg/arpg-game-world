@@ -48,6 +48,11 @@
 // frame at that boundary — the abrupt-shift class the coast QA pass hunted.
 // Wall-edge facing flips need no feather: their quads are area-continuous
 // through the plane (the sliver degenerates to zero as the eye aligns).
+// And a DOODAD's shadow is BOUNDED BY ITS CASTER (castLen): the wedge ends
+// a body-scaled length past the body, never at the screen rim — unbounded,
+// a knee-high rock banded the whole zone in dark from off-screen (the
+// "two differently shaded sections split by a straight line" sighting).
+// Wall runs keep the veil's full reach: the rampart is a visible cause.
 //
 // The vis-layer doctrine holds: no World import — the pass reads a structural
 // view (World satisfies it) plus the same pure terrain-data helpers the LoS
@@ -99,7 +104,29 @@ export const SIGHT_VEIL_GEO = {
    *  0.24 rad the melt begins ~hw·tan(feather/2) ≈ 3 px off the face —
    *  strictly inside the collision envelope. */
   rectFeather: 0.24,
+  /** A DOODAD shadow's LENGTH scales with its CASTER, never the screen:
+   *  the wedge ends castLen(bodyR) = clamp(r × castFarR, ≥ castFarFloor)
+   *  world px past the body (still capped by the veil's own far). Without
+   *  the cap a knee-high rock threw its wedge the full view diagonal — a
+   *  razor-edged dark band crossing the whole zone from a caster standing
+   *  OFF-SCREEN, read in playtests as "two differently shaded sections
+   *  split by a straight line" (the Sundered Point sighting; the swing of
+   *  that band as the hero moved was the older "abrupt shader shift"
+   *  report). Bodies shade like bodies: a trunk throws a tree-length
+   *  shadow, a boulder a boulder's. WALL runs (OccEdge) keep the full far
+   *  on purpose — a rampart's far side is honestly unseen, and the wall
+   *  itself is a visible cause standing at the shadow's root. */
+  castFarR: 13,
+  /** Shadow-length floor (world px) so saplings still read as cover. */
+  castFarFloor: 160,
 } as const;
+
+/** THE ONE doodad-shadow length resolver (world px past the body) — draw()
+ *  and occludedAt() both ride it, so drawn and tested can never disagree
+ *  about where a shadow ends. */
+function castLen(bodyR: number): number {
+  return Math.max(SIGHT_VEIL_GEO.castFarFloor, bodyR * SIGHT_VEIL_GEO.castFarR);
+}
 
 /** blocksSight per region id, memoized (regionAt returns strings at cell
  *  cadence — a Map get beats a registry walk in the extraction loop). */
@@ -295,11 +322,16 @@ export class SightVeil {
     if (len2 < 1) return 0;
     let f = 0;
     if (this.doodadF > 0) {
+      // Reach guard mirrors the drawn wedge exactly (castLen, eye-relative):
+      // a point past a body's shadow length reads clear of THAT body.
+      const len = Math.sqrt(len2);
       for (const c of this.discs) {
+        if (len > Math.hypot(c.x - px, c.y - py) + castLen(c.r)) continue;
         if (segHitsCircle(px, py, qx, qy, len2, c.x, c.y, c.r)) { f = this.doodadF; break; }
       }
       if (f < this.doodadF) {
         for (const r of this.rects) {
+          if (len > Math.hypot(r.x - px, r.y - py) + castLen(r.boundR)) continue;
           if (segHitsCircle(px, py, qx, qy, len2, r.x, r.y, r.boundR)) { f = this.doodadF; break; }
         }
       }
@@ -393,7 +425,9 @@ export class SightVeil {
         // collapse, and the inside skip above is met at zero area.
         const melt = Math.min(1, (d - c.r) / SIGHT_VEIL_GEO.discFeather);
         if (melt <= 0) continue;
-        const reach = far * melt;
+        // The wedge ends a body-scaled length past the caster (castLen) —
+        // never at the screen rim. Both distances run eye-relative.
+        const reach = Math.min(far, d + castLen(c.r)) * melt;
         const sin = c.r / d, cos = Math.sqrt(Math.max(0, 1 - sin * sin));
         const ux = dx / d, uy = dy / d;
         const t1x = ux * cos - uy * sin, t1y = ux * sin + uy * cos;
@@ -407,7 +441,9 @@ export class SightVeil {
         dquads++;
       }
       for (const r of this.rects) {
-        dquads += rectShadowPath(b, r, px, py, far, ox, oy, k);
+        // Same body-scaled reach as the discs (castLen, eye-relative).
+        const reach = Math.min(far, Math.hypot(r.x - px, r.y - py) + castLen(r.boundR));
+        dquads += rectShadowPath(b, r, px, py, reach, ox, oy, k);
       }
       if (dquads) {
         b.fillStyle = `rgba(${t.r},${t.g},${t.b},${doodadA.toFixed(3)})`;

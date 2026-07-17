@@ -740,7 +740,26 @@ export interface PourSpec {
    *  auto-bridging two blockers could choke a corridor the navigability
    *  net would then have to chew back open (default 1 for poured kinds). */
   fuseGap?: number;
+  /** Max extra clearance (px) a GUARD TRIM recedes by, cell-noised (default
+   *  POUR_CFG.bankWobble; 0 restores exact trims). A guard's boundary is a
+   *  straight rect/disc edge, and an exact cell trim against it guillotines
+   *  the pour dead straight — the wobble laps the trimmed bank organically.
+   *  Trim-only-MORE: the guard contract itself never loosens. */
+  bankWobble?: number;
 }
+
+/** Modular pour defaults — every knob a PourSpec row can override. */
+export const POUR_CFG = {
+  /** Guard-trim bank wobble: max extra recession (px) off a reservation/
+   *  portal/forbid boundary. Without it two ponds trimmed by one route
+   *  corridor shared a single RAZOR line across the zone — the "straight
+   *  horizontal (or vertical) line with two differently shaded sections"
+   *  playtest sighting. */
+  bankWobble: 52,
+  /** Feature size (px) of the bank-wobble noise — a few cells, so the lap
+   *  reads as shoreline, not dither. */
+  bankWobbleScale: 96,
+} as const;
 
 /** THE COHERENCE DIALS — modular defaults for the clearway/habitat fabric
  *  (never inline literals): pad = extra daylight between a way and the bodies
@@ -6832,12 +6851,23 @@ function forbiddersOf(ctx: GenCtx, kind: DoodadKind): Doodad[] {
 function maskGuards(ctx: GenCtx, m: Mask, kind: DoodadKind, hard: boolean): void {
   const cr = m.cell * 1.05;
   const forbidders = ruleIgnored(ctx, 'forbid') ? [] : forbiddersOf(ctx, kind);
+  // BANK WOBBLE (POUR_CFG / PourSpec.bankWobble): each cell's guard clearance
+  // grows by seeded value noise, so a trim against a straight reservation or
+  // portal boundary recedes on an organic lap instead of a guillotine line —
+  // two ponds trimmed by one route corridor read as one razor line across
+  // the zone (the straight-line playtest sighting). Trim-only-MORE by
+  // construction: the guard tests run at cr + wob ≥ cr, so no contract
+  // (reservation, portal clear, forbid) ever loosens.
+  const wobAmp = doodadRule(kind).pour?.bankWobble ?? POUR_CFG.bankWobble;
+  const wobSeed = ((ctx.seed ?? 0) ^ 0x6b4a) >>> 0;
   for (let cy = 0; cy < m.rows; cy++) {
     for (let cx = 0; cx < m.cols; cx++) {
       if (!m.get(cx, cy)) continue;
       const c = m.center(cx, cy);
-      if (cellGuarded(ctx, c, cr, kind, hard)
-        || forbidders.some(f => dist(c, f.pos) < cr + f.radius)) {
+      const wob = wobAmp > 0
+        ? valueNoise2(c.x, c.y, POUR_CFG.bankWobbleScale, wobSeed) * wobAmp : 0;
+      if (cellGuarded(ctx, c, cr + wob, kind, hard)
+        || forbidders.some(f => dist(c, f.pos) < cr + wob + f.radius)) {
         m.set(cx, cy, false);
       }
     }
