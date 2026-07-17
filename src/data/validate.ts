@@ -23,6 +23,7 @@ import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
 import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES } from '../engine/stats';
+import type { AIAction, BrainDef, BrainTuning, FlockSpec } from '../engine/brain';
 import { regionKind, PATH_CFG } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
@@ -742,6 +743,62 @@ export function validateContent(): void {
     feintCheck(def.id, def.brain?.behavior?.feint?.chance, 'brain');
     for (const [i, v] of (def.brainVariants ?? []).entries()) {
       feintCheck(def.id, v.brain?.behavior?.feint?.chance, `brainVariants[${i}]`);
+    }
+  }
+
+  // THE MURMURATION FABRIC — three boot checks, def + variants alike:
+  // (1) scripted verbs cast REAL skills (aiActions' mintInst no-ops on a
+  //     typo — a dive that silently never fires), (2) flock dials stay
+  //     physical (a runaway weave is a body-sized blender), (3) a declared
+  //     natural group is a sane band (entry-burst discipline).
+  const scriptedCasts = (b: BrainDef | undefined, push: (skill: string) => void): void => {
+    if (!b) return;
+    const fromActs = (acts?: readonly AIAction[]): void => {
+      for (const a of acts ?? []) {
+        if ((a.do === 'cast' || a.do === 'ring' || a.do === 'nova') && typeof a.skill === 'string') push(a.skill);
+      }
+    };
+    for (const ph of b.phases ?? []) { fromActs(ph.onEnter); for (const c of ph.cadences ?? []) fromActs(c.actions); }
+    for (const ph of b.script ?? []) { fromActs(ph.onEnter); fromActs(ph.onExit); for (const c of ph.cadences ?? []) fromActs(c.actions); }
+    for (const r of b.rules ?? []) fromActs(r.actions);
+    fromActs(b.onDeath);
+  };
+  const collectFlocks = (b: BrainDef | undefined, visit: (fl: FlockSpec, at: string) => void): void => {
+    if (!b) return;
+    const fromTuning = (t: BrainTuning | undefined | null, at: string): void => {
+      if (t?.behavior?.flock) visit(t.behavior.flock, at);
+    };
+    fromTuning(b, 'base');
+    for (const [i, ph] of (b.phases ?? []).entries()) fromTuning(ph.use, `phases[${i}]`);
+    for (const [i, ph] of (b.script ?? []).entries()) fromTuning(ph.use, `script[${ph.id ?? i}]`);
+    for (const [i, r] of (b.rules ?? []).entries()) fromTuning(r.use, `rules[${i}]`);
+    for (const [i, c] of (b.cycle ?? []).entries()) fromTuning(c.use, `cycle[${i}]`);
+  };
+  for (const def of Object.values(MONSTERS)) {
+    const brains: [string, BrainDef | undefined][] = [
+      ['brain', def.brain],
+      ...(def.brainVariants ?? []).map((v, i): [string, BrainDef | undefined] => [`brainVariants[${i}]`, v.brain]),
+    ];
+    for (const [src, b] of brains) {
+      scriptedCasts(b, skill => {
+        if (!SKILLS[skill]) warn(`monster ${def.id}: ${src} scripted verb casts unknown skill '${skill}'`);
+      });
+      collectFlocks(b, (fl, at) => {
+        const bad = (msg: string): void => warn(`monster ${def.id}: ${src} ${at} flock ${msg}`);
+        if (fl.radius !== undefined && (fl.radius <= 0 || fl.radius > 400)) bad(`radius ${fl.radius} outside (0, 400]`);
+        if (fl.weave !== undefined && (fl.weave < 0 || fl.weave > 8)) bad(`weave ${fl.weave} outside [0, 8] (weavePower semantics)`);
+        if (fl.erratic !== undefined && (fl.erratic < 0 || fl.erratic > 6)) bad(`erratic ${fl.erratic} outside [0, 6]`);
+        if (fl.amplitude !== undefined && (fl.amplitude <= 0 || fl.amplitude > 90)) bad(`amplitude ${fl.amplitude} outside (0, 90]`);
+        for (const k of ['cohesion', 'separation', 'alignment'] as const) {
+          const v = fl[k];
+          if (v !== undefined && (v < 0 || v > 3)) bad(`${k} ${v} outside [0, 3]`);
+        }
+      });
+    }
+    if (def.packSize) {
+      const [lo, hi] = def.packSize;
+      if (lo < 1 || hi < lo) warn(`monster ${def.id}: packSize [${lo}, ${hi}] is not a sane band`);
+      else if (hi > 16) warn(`monster ${def.id}: packSize hi ${hi} > 16 — entry-burst discipline (mind the perf gate)`);
     }
   }
 

@@ -2542,6 +2542,26 @@ export class Renderer {
 
   private drawZones(world: World): void {
     const { ctx } = this;
+    // TELEGRAPHED LEAPS (LeapDelivery.telegraph): a diving body's landing
+    // ring, painted at its dest for the whole flight — the un-exploded-disc
+    // grammar (outline + faint fill) firming through the drop, so a stoop
+    // reads exactly as urgently as it is. Drawn where it WILL land: the
+    // leap's own interpolation guarantees the arrival.
+    for (const a of world.actors) {
+      const L = a.leap;
+      if (!L?.telegraph || a.dead) continue;
+      const t = Math.max(0, Math.min(1, 1 - L.timer / L.total));
+      ctx.beginPath();
+      ctx.arc(L.dest.x, L.dest.y, L.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = L.telegraph.color;
+      ctx.globalAlpha = 0.45 + 0.35 * t;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.globalAlpha = 0.07 + 0.15 * t;
+      ctx.fillStyle = L.telegraph.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     for (const z of world.zones) {
       // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
       // line the capsule's width, not a disc. Deterministic jitter (seeded

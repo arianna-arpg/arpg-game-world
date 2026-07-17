@@ -1653,10 +1653,10 @@ const antennae: PartPainter = (ctx, r, spec, pal) => {
 };
 
 /** ARACHNID LEGS: paired arcs reaching out and forward — the spider read.
- *  params: pairs. */
+ *  params: pairs, or n = total legs (pairs wins if both). */
 const legs: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'base');
-  const pairs = Math.round(P(spec, 'pairs', 4));
+  const pairs = Math.round(P(spec, 'pairs', P(spec, 'n', 8) / 2));
   place(ctx, r, spec, (c, R) => {
     c.lineCap = 'round';
     for (let i = 0; i < pairs; i++) {

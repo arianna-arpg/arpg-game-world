@@ -23,11 +23,12 @@ import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
 import type { Actor } from './actor';
 import {
-  alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, evalCondition, mergeTuning,
+  alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, evalCondition, FLOCK_CFG, mergeTuning,
   normalizeBrain, POST_CFG, tuningOf,
   type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
+import { erraticTurn, weaveVel } from './flight';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
@@ -38,6 +39,11 @@ import { PATH_CFG } from '../world/regions';
 /** Scratch for moveToward's spacing neighbor query (single-threaded AI
  *  loop; never held across calls). */
 const spacingScratch: Actor[] = [];
+
+/** Scratch for the flock steer's neighbor query + weave velocity (same
+ *  single-threaded contract as spacingScratch). */
+const flockScratch: Actor[] = [];
+const flockVecScratch = vec(0, 0);
 
 /** Tags whose actor stays NEUTRAL — no targeting, movement, or casting — until a
  *  wounding strike ROUSES it (World.resolveHit sets the per-actor aiAwakened latch).
@@ -425,6 +431,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // HAZARD MIND (MoveSpec.hazards): stamped beside it — the wayfaring
   // fabric's lever; moveToward's pricing and the steering veto read it.
   actor.aiHazardMode = tuning.move?.hazards;
+  // THE MURMURATION (BehaviorSpec.flock): stamped every tick — idle and
+  // combat alike, a flock murmurates with nobody watching — and machine-
+  // shiftable, so an aloft phase wears heavy coupling and a grounded
+  // feeding window sheds it. steerMove folds it into every self-directed
+  // step; undefined = not a flock body, one branch of cost.
+  actor.aiFlock = tuning.behavior?.flock;
 
   // THE WANTS (BrainDef.drives): meters drift on their clocks — events jump
   // them elsewhere (World.bumpDrives: kills feed, wounds sting). Seeded on
@@ -667,7 +679,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         actor.aiTimer -= dt;
         if (actor.aiTimer <= 0) {
           actor.aiTimer = rand(1.5, 4.5);
-          actor.wanderDir = Math.random() < 0.35 ? undefined : rand(0, Math.PI * 2);
+          // An AIRBORNE FLOCK BODY never parks (a locust can't hover-stand):
+          // its idle always draws a bearing, so the fold's pull reaches it
+          // every tick and the murmuration reads as perpetual motion.
+          // Grounded and flockless idles keep their classic 35% dead stops.
+          const restless = actor.aiFlock && actor.flying;
+          actor.wanderDir = (!restless && Math.random() < 0.35) ? undefined : rand(0, Math.PI * 2);
         }
         if (actor.wanderDir !== undefined) {
           actor.facing = actor.wanderDir;
@@ -1621,6 +1638,15 @@ function updateCarrion(actor: Actor, world: World, dt: number): boolean {
  *  (MoveSpec.hazards) opt out — authored self-destruction, one word away
  *  and machine-shiftable (bait a charge phase off a cliff by DESIGN). */
 function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: number): void {
+  // THE MURMURATION (BehaviorSpec.flock, stamped as aiFlock): boid steering
+  // folded into the desire BEFORE the self-preservation veto — the flock
+  // bends the mind's bearing, the veto still refuses the rim. Composable
+  // with every kernel and every idle conduct: an orbiting flock wheels as
+  // one vortex, a fleeing one drives as a herd.
+  if (actor.aiFlock && dt > 0) {
+    const v = flockSteer(actor, world, dx, dy, dt);
+    dx = v.x; dy = v.y;
+  }
   if (actor.aiHazardMode !== 'lemming' && (dx !== 0 || dy !== 0)) {
     const m = Math.hypot(dx, dy) || 1;
     const look = actor.radius + PATH_CFG.vetoLookahead;
@@ -1632,6 +1658,99 @@ function steerMove(actor: Actor, world: World, dx: number, dy: number, dt: numbe
     }
   }
   world.moveActor(actor, dx, dy, dt);
+}
+
+/** THE FLOCK STEER — the classic boid triad (separation / cohesion /
+ *  alignment) plus the trajectory axes (weave / erratic — engine/flight.ts,
+ *  the projectile integrator's own math), blended into a unit-space desire.
+ *  Flockmates are actors that THEMSELVES wear a flock spec and match the
+ *  kin rule — a drone is never dragged into its cousins' wheeling, and two
+ *  packs that drift together merge into one murmuration. Neighbors come
+ *  from the actor grid (one O(local) query per carrier tick), contributions
+ *  capped at FLOCK_CFG.maxNeighbors — a starling tracks its seven nearest,
+ *  and so do we. moveActor normalizes the result: direction is all that
+ *  leaves here. */
+function flockSteer(
+  actor: Actor, world: World, dx: number, dy: number, dt: number,
+): { x: number; y: number } {
+  const fl = actor.aiFlock!;
+  const R = fl.radius ?? FLOCK_CFG.radius;
+  const m = Math.hypot(dx, dy);
+  let ux = m > 0.001 ? dx / m : 0;
+  let uy = m > 0.001 ? dy / m : 0;
+  const sepR = R * FLOCK_CFG.sepFrac;
+  const kin = fl.kin ?? 'def';
+  let n = 0, cx = 0, cy = 0, ax = 0, ay = 0, sx = 0, sy = 0;
+  for (const b of world.actorsNear(actor.pos.x, actor.pos.y, R, flockScratch)) {
+    if (b === actor || b.dead || b.team !== actor.team || !b.aiFlock) continue;
+    if (kin === 'def' ? b.defId !== actor.defId
+      : kin === 'squad' ? (actor.squadId === undefined || b.squadId !== actor.squadId)
+      : b.faction !== actor.faction) continue;
+    const d = dist(actor.pos, b.pos);
+    if (d > R) continue;
+    n++;
+    cx += b.pos.x; cy += b.pos.y;
+    // Alignment reads the world-maintained velocity estimate — headings,
+    // not speeds, so a paused straggler doesn't drag the mean to zero.
+    const bm = Math.hypot(b.velEst.x, b.velEst.y);
+    if (bm > 20) { ax += b.velEst.x / bm; ay += b.velEst.y / bm; }
+    if (d < sepR && d > 0.01) {
+      const w = 1 - d / sepR;
+      sx += ((actor.pos.x - b.pos.x) / d) * w;
+      sy += ((actor.pos.y - b.pos.y) / d) * w;
+    }
+    if (n >= FLOCK_CFG.maxNeighbors) break;
+  }
+  if (n > 0) {
+    // WILL-THINNING: in company, the individual whim dilutes — the fold's
+    // terms below outrank a lone body's own bearing, which is what turns
+    // eight wanderers into one shape instead of a loose acquaintance.
+    const will = Math.max(FLOCK_CFG.willFloor, 1 - n * FLOCK_CFG.willThin);
+    ux *= will; uy *= will;
+    const coh = (fl.cohesion ?? 1) * FLOCK_CFG.cohesionGain;
+    const ali = (fl.alignment ?? 1) * FLOCK_CFG.alignmentGain;
+    const sep = (fl.separation ?? 1) * FLOCK_CFG.separationGain;
+    const gx = cx / n - actor.pos.x, gy = cy / n - actor.pos.y;
+    const gm = Math.hypot(gx, gy);
+    // Centroid pull at FULL strength until the body is inside the fold —
+    // the ease knees at the separation reach (sepR), not the sense radius,
+    // or mid-range cohesion is strangled and wander noise wins: the flock
+    // breathes without ever condensing.
+    if (gm > 1 && coh > 0) {
+      const w = coh * Math.min(1, gm / sepR);
+      ux += (gx / gm) * w; uy += (gy / gm) * w;
+    }
+    const am = Math.hypot(ax, ay);
+    if (am > 0.01 && ali > 0) { ux += (ax / am) * ali; uy += (ay / am) * ali; }
+    ux += sx * sep; uy += sy * sep;
+  }
+  // TRAJECTORY-WORN FLIGHT: erratic random-walks a mean-reverting bearing
+  // offset (the integrator's own increment, bounded for a long-lived body);
+  // weave folds the figure-eight's velocity form across the blended bearing
+  // — the same lissajous the projectile's offset draws, phase-seeded by
+  // actor id like every body rhythm in the engine.
+  if (fl.erratic) {
+    actor.aiFlockErr = actor.aiFlockErr * Math.max(0, 1 - FLOCK_CFG.erraticDecay * dt)
+      + erraticTurn(fl.erratic, dt);
+  } else if (actor.aiFlockErr !== 0) {
+    actor.aiFlockErr = 0;
+  }
+  const um = Math.hypot(ux, uy);
+  if (fl.weave || actor.aiFlockErr !== 0) {
+    let head = um > 0.001 ? Math.atan2(uy, ux) : (actor.facingPrev ?? actor.facing);
+    if (actor.aiFlockErr !== 0) {
+      head += actor.aiFlockErr;
+      const hm = um > 0.001 ? um : 1;
+      ux = Math.cos(head) * hm; uy = Math.sin(head) * hm;
+    }
+    if (fl.weave) {
+      const amp = fl.amplitude ?? FLOCK_CFG.amplitude;
+      weaveVel(fl.weave, amp, world.time + actor.id * 1.7, head, flockVecScratch);
+      ux += flockVecScratch.x / FLOCK_CFG.weaveRefSpeed;
+      uy += flockVecScratch.y / FLOCK_CFG.weaveRefSpeed;
+    }
+  }
+  return { x: ux, y: uy };
 }
 
 function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt: number): void {

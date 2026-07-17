@@ -1679,6 +1679,12 @@ export interface LeapDelivery {
   airTime: number;
   /** Landing shockwave radius (scaled by area modifiers). */
   radius: number;
+  /** CAST HONESTY for enemy dives: paint the landing ring at the dest for
+   *  the whole flight (the un-exploded-disc grammar, firming as it falls) —
+   *  read by the player's eyes AND by dodge-minds (imminentThreatTo), so a
+   *  stooping flock is dodgeable by everything that reads telegraphs.
+   *  `true` uses the skill's own color. */
+  telegraph?: boolean | { color?: string };
 }
 
 /** Stateful Mark/Recall: first use marks the aim point and the skill
@@ -3187,6 +3193,17 @@ export interface CleanseEffect {
   count?: number;
 }
 
+/** THE FORM-DROP: the caster strips ONE NAMED status from ITSELF at cast —
+ *  beneficial or not (cleanse only strips afflictions from allies) — via the
+ *  deliberate dispel lane (Actor.endStatus: no expiry side-effects). Wings
+ *  fold at the stoop (the murmuration's dive sheds `aloft`), a stance ends
+ *  on its follow-through. Delivery-agnostic: whatever the skill throws, the
+ *  shed is the caster's own. */
+export interface ShedEffect {
+  type: 'shed';
+  status: string;
+}
+
 /** IRON WARD (#34): while it holds, the bearer takes `reduce` LESS damage
  *  and BANKS what still lands (to `cap`); when the ward ends, the bank
  *  DETONATES around them as physical damage × ratio. Pain, with interest. */
@@ -3364,7 +3381,7 @@ export type SkillEffect =
   | DamageEffect | StatusEffect | BuffEffect | KnockbackEffect
   | PullEffect | SpawnZoneEffect | GainChargeEffect | AbsorbEffect
   | RestoreEffect | TerrainEffect | RecallMinionsEffect | DrainChargeEffect
-  | HealEffect | CleanseEffect | CommandMinionsEffect
+  | HealEffect | CleanseEffect | ShedEffect | CommandMinionsEffect
   | IronWardEffect | GuardSurgeEffect | ReduceCooldownsEffect
   | RestoreOverTimeEffect | WardEffect | SiphonOrbEffect
   | DetonateMinionsEffect | SpawnCorpseEffect | DragCorpsesEffect | ShatterConstructsEffect

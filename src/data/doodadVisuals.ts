@@ -285,6 +285,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { clay: '#d8c9a2', lid: '#c2ae7e' },
   },
   brood_husk: { painter: 'bones', order: 51, params: { color: '#c9b088' } },
+  // A roost mast (THE MURMURATION): a resin-lacquered pole flying a molted
+  // wing-membrane — the banner painter's streaming cloth in pale chitin
+  // gold, so the flock's furniture waves even when the flock is away.
+  roost_mast: {
+    painter: 'bannerPost', order: 53, shadow: 0.4, longShadow: 1.3,
+    params: { cloth: '#e6d0a0' },
+  },
   bone_arch: {
     painter: 'boneArch', order: 54, shadow: 0.55, longShadow: 1.1,
     params: { bone: '#d8ccb0' },

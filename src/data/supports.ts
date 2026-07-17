@@ -45,6 +45,17 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('apply_poison', 'flat', 0.04)],
     weight: 6,
   },
+  // The anti-air lane (damageVs_aloft — the flight status's auto-minted
+  // counter-stat): fowling as buildcraft, priced for the murmuration and
+  // every winged thing after it.
+  fowlers_eye: {
+    id: 'fowlers_eye', name: 'Fowler\'s Eye',
+    description: 'This skill\'s projectiles are FLETCHED FOR THE SKY: far more damage against anything Aloft, and quicker through the air besides.',
+    color: '#e8d8a0', requiresTags: ['projectile'],
+    mods: [mod('damageVs_aloft', 'increased', 0.35), mod('projectileSpeed', 'increased', 0.1)],
+    perLevel: [mod('damageVs_aloft', 'increased', 0.05)],
+    weight: 5,
+  },
   smothering_spores: {
     id: 'smothering_spores', name: 'Smothering Spores',
     description: 'This skill\'s lingering work hangs THICKER: wider, longer, and laced with a poison that finds idle lungs.',

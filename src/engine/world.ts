@@ -11,6 +11,7 @@
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
+import { erraticTurn, spinOffset, weaveOffset } from './flight';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type BrainPhase, type CastingState, type GainEvent, type Team } from './actor';
@@ -6879,9 +6880,15 @@ export class World {
       // detection) still notice you on arrival — by design, that's their thing.
       const at = this.farPoint(840);
       const type = this.weightedPick(picks, def.level);
-      // SIZE: a weighted ARCHETYPE spread (swarm / standard / grazing) when the zone
-      // defines one — so a Field varies dense clusters and grazing pairs — else the band.
-      const n = spec.archetypes?.length ? rollPackSize(spec.archetypes) : randInt(spec.size[0], spec.size[1]);
+      // SIZE: a def that declares its NATURAL GROUP (MonsterDef.packSize)
+      // sizes its own packs — murmurations field as flocks, hermits walk
+      // alone — else a weighted ARCHETYPE spread (swarm / standard /
+      // grazing) when the zone defines one, else the flat band. One size
+      // roll on the stream whichever lane resolves, so undeclared defs
+      // spawn byte-identically to what they always did.
+      const ps = MONSTERS[type]?.packSize;
+      const n = ps ? randInt(ps[0], ps[1])
+        : spec.archetypes?.length ? rollPackSize(spec.archetypes) : randInt(spec.size[0], spec.size[1]);
       const leaderRarity = rollRarity(crownedEligible); // one elite may lead the pack
       // A co-spawned pack IS a squad: shared id + a leader (the elite when one
       // rolled, else the first body) — squad tactics (muster, tokens, focus
@@ -7262,6 +7269,23 @@ export class World {
       if (dist(actor.pos, at) > r) continue;
       if (!best || eta < best.eta) {
         best = { ref: cs, pos: vec(at.x, at.y), radius: r, eta,
+          casterPos: vec(e.pos.x, e.pos.y) };
+      }
+    }
+    // TELEGRAPHED LEAPS (LeapDelivery.telegraph): a diving body's painted
+    // landing ring is a threat like any un-exploded disc — dodge-minds read
+    // the stoop exactly the way the player's eyes do. Scanned off the raw
+    // actor list because a leaper is untargetable (it vanishes from
+    // enemiesOf mid-flight) yet its landing is the one thing that matters.
+    for (const e of this.actors) {
+      const L = e.leap;
+      if (!L?.telegraph || e === actor || e.dead) continue;
+      if (L.timer > BEHAVIOR_CFG.dodgeHorizon) continue;
+      if (!this.hostileTo(e, actor)) continue;
+      const r = L.radius + pad;
+      if (dist(actor.pos, L.dest) > r) continue;
+      if (!best || L.timer < best.eta) {
+        best = { ref: L, pos: vec(L.dest.x, L.dest.y), radius: r, eta: L.timer,
           casterPos: vec(e.pos.x, e.pos.y) };
       }
     }
@@ -16328,7 +16352,7 @@ export class World {
     // TURN SPEED: the bestiary default smooths every pivot; big and shelled
     // bodies author their own lumber. Player seats never pass through here.
     a.turnSpeed = def.turnSpeed ?? MONSTER_TURN_DEFAULT;
-    if (def.flier) a.flying = true;
+    if (def.flier) { a.flying = true; a.flyingBase = true; }
     a.spawnedAt = this.time;
     // Monsters' skills level up with them — same leveling system as the player.
     const skillLevel = 1 + Math.floor(lv / 4);
@@ -19369,6 +19393,11 @@ export class World {
           radius: d.radius * aoeScale,
           inst, dmgMult: useMult,
           wasUntargetable: caster.untargetable,
+          // CAST HONESTY (LeapDelivery.telegraph): the landing ring rides
+          // the leap state — drawn at dest all flight, dodge-readable.
+          telegraph: d.telegraph
+            ? { color: (typeof d.telegraph === 'object' ? d.telegraph.color : undefined) ?? def.color }
+            : undefined,
         };
         caster.untargetable = true; // airborne: nothing can touch them
         caster.dash = null;
@@ -19774,6 +19803,12 @@ export class World {
       }
       if (d.type === 'self' && fx.type === 'cleanse') {
         this.cleanseActor(caster, fx.count ?? 2);
+      }
+      // THE FORM-DROP (ShedEffect): strip one named status off the CASTER
+      // through the deliberate dispel lane — delivery-agnostic (a stooping
+      // leap folds its own wings at cast; flight re-derives next tick).
+      if (fx.type === 'shed') {
+        caster.endStatus(fx.status);
       }
       // Terrain effects land at the resolution origin — for blinks that is
       // the DEPARTURE point (Shatterstep's ice patch where you stood).
@@ -32071,6 +32106,9 @@ export class World {
    * feature: erratic spirals wobble, orbiting weaves trace figure-eights
    * around the caster, dampened jitter flies true.
    */
+  /** Scratch for the flight-math local offsets (zero-alloc hot path). */
+  private flightScratch = vec(0, 0);
+
   private advanceProjectile(p: Projectile, dt: number): Vec2 {
     // ACCELERATION (Momentum): the flight gathers or bleeds speed over its
     // life — floored at a crawl so a decelerating shot never parks forever.
@@ -32175,30 +32213,27 @@ export class World {
           p.guideDir += Math.sign(diff) * Math.min(Math.abs(diff), p.homing * dt);
         }
       }
-      if (p.erratic > 0) p.guideDir += rand(-p.erratic, p.erratic) * dt * 5;
+      if (p.erratic > 0) p.guideDir += erraticTurn(p.erratic, dt);
       p.anchor.x += Math.cos(p.guideDir) * step;
       p.anchor.y += Math.sin(p.guideDir) * step;
       gx = p.anchor.x; gy = p.anchor.y;
       if (!p.guided) p.dir = p.guideDir;
     }
 
-    // Local offsets ride the guide. Spin's circle scales with its strength
-    // (a weak gyre is a tight shimmer, full strength the old wide wheel).
+    // Local offsets ride the guide — THE flight math (engine/flight.ts), the
+    // same formulas the flock steering fabric wears on bodies. Spin's circle
+    // scales with its strength (a weak gyre is a tight shimmer, full strength
+    // the old wide wheel); weave loops the lissajous figure-eight across the
+    // guide's heading (the tangent while polar — an orbiting weave loops
+    // figure-eights around the caster's ring).
     if (p.spin > 0) {
-      const r = p.amp * Math.min(1, p.spin / 8);
-      gx += Math.cos(p.spin * p.age) * r;
-      gy += Math.sin(p.spin * p.age) * r;
+      spinOffset(p.spin, p.amp, p.age, this.flightScratch);
+      gx += this.flightScratch.x; gy += this.flightScratch.y;
     }
     if (p.weave > 0) {
-      // Figure-eight: lateral sine + half-amplitude double-frequency drift,
-      // laid across the guide's heading (the tangent while polar — an
-      // orbiting weave loops figure-eights around the caster's ring).
       const head = polar ? p.angle + Math.PI / 2 : p.guideDir;
-      const lat = p.amp * Math.sin(p.weave * p.age * 2);
-      const lon = p.amp * 0.5 * Math.sin(p.weave * p.age * 4);
-      const perp = head + Math.PI / 2;
-      gx += Math.cos(perp) * lat + Math.cos(head) * lon;
-      gy += Math.sin(perp) * lat + Math.sin(head) * lon;
+      weaveOffset(p.weave, p.amp, p.age, head, this.flightScratch);
+      gx += this.flightScratch.x; gy += this.flightScratch.y;
     }
     return vec(gx, gy);
   }
@@ -33858,6 +33893,14 @@ export class World {
           // PHASING: no body, no shoulder — a phasing actor passes through
           // the crowd (and it through them). Hits/targeting are untouched.
           if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
+          // ALTITUDE SPLIT: a FLYING body streams over grounded ones (and
+          // they under it) — the renderer lifts it off its shadow, so the
+          // shoulder it no longer throws is the shoulder it no longer has
+          // (drawn == tested). Same-altitude pairs still part normally:
+          // two fliers shoulder in the air, two walkers on the ground.
+          // Hits/targeting untouched — a swing still swats what passes
+          // overhead; it just can't be body-blocked.
+          if (a.flying !== b.flying) continue;
           // Constructs and rooted objects (spawners, caches) are anchored:
           // only the mobile party gets pushed.
           const ang = angleTo(a.pos, b.pos);

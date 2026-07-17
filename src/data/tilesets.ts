@@ -1480,6 +1480,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The Seethe's foragers range the open erg (the fourth face is near).
         { id: 'chitin_drone', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'chitin_lancer', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // A murmuration crossing the open erg — the flock ranges far past
+        // the warren (packSize fields the whole wheel when this rolls).
+        { id: 'chitin_skimmer', weight: 1, presence: { from: 7, fadeIn: 3 } },
         // A wrapped soldier far off its post: the erg is riddled with broken
         // tombs, and the dynasty's patrols wander out of them (HARD floor —
         // the family discipline: nothing this old arrives gradually).
@@ -1647,6 +1650,15 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rocks', count: [2, 4], radius: [18, 38] }, { kind: 'cactus', count: [0, 2] },
         { kind: 'heat_shimmer', count: [3, 5] }, { kind: 'fulgurite', count: [0, 2] },
       ] },
+      // Roost fields: THE MURMURATION's country — mast-stands where the
+      // flock settles at rest, molt-husks drifted around their feet. Look
+      // up: the sky here is usually already moving.
+      { name: 'roost fields', layout: [
+        { kind: 'roost_mast', count: [3, 5] }, { kind: 'brood_husk', count: [4, 7] },
+        { kind: 'egg_clutch', count: [2, 4] }, { kind: 'rocks', count: [2, 4], radius: [18, 38] },
+        { kind: 'heat_shimmer', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'murmuration_roost' },
+      ] },
     ],
     nameFirst: ['Seething', 'Burrowed', 'Thrumming', 'Chittering', 'Brood-Warm', 'Wax-Sealed', 'Resin-Weeping', 'Carapace', 'Hollow-Sung', 'Humming', 'Chitin-Choked', 'Ten-Thousand'],
     nameSecond: ['Warrens', 'Seethe', 'Nests', 'Combs', 'Broodlands', 'Mounds', 'Cradle', 'Undersand', 'Hollows', 'Ground'],
@@ -1705,6 +1717,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'chitin_spitter', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'chitin_burrower', weight: 1, presence: { from: 7, fadeIn: 4 } },
         { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // THE MURMURATION — the resident sky (packSize on the defs fields
+        // the skimmer as a true flock; the singer binds it, the saltant is
+        // the crater in it). Def-level hard floors back these ramps.
+        { id: 'chitin_skimmer', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'chitin_saltant', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'chitin_stridulant', weight: 1, presence: { from: 8, fadeIn: 3 } },
         // (No sovereign in the daily scatter: the queen holds her throne —
         // meet her at the warlord capital or in the deep war musters.)
         // The desert's other tenants dispute the ground (the turf war's

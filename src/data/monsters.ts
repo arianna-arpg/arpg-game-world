@@ -9,6 +9,7 @@
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
+import type { BrainTuning, PhaseDef } from '../engine/brain';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { registerAIAction } from '../engine/aiActions';
@@ -603,8 +604,15 @@ export interface MonsterDef {
   /** FLIER: true flight — moves on the noclip policy (over rocks, walls,
    *  chasms, water; zone bounds still hold) and the renderer lifts + bobs
    *  the body off its grounded shadow so flight reads at a glance. Pair
-   *  with `levitates` so a flier never falls to the void it crosses. */
+   *  with `levitates` so a flier never falls to the void it crosses.
+   *  Flight can also be a WORN STATE: any StatusDef with `flight: true`
+   *  (the murmuration's `aloft`) rides the same flag while it lasts. */
   flier?: boolean;
+  /** NATURAL GROUP SIZE: when a zone pack rolls this def, the pack sizes
+   *  from THIS band instead of the zone's — murmurations field as flocks
+   *  of a dozen, hermits walk alone — so group character is the BODY's
+   *  fact, not re-authored per tileset row. */
+  packSize?: [number, number];
   /** PACK BOND — the synchronic seam: these mods are worn ONLY while a
    *  living bond-holder stands within `radius` (default 520). `kin` names
    *  who holds the bond (a defId, tag or faction); omitted = any living
@@ -816,6 +824,58 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'gutter_rat', chance: 0.35, count: [1, 3] },
   ],
 };
+
+/** THE DIVE-CYCLE WHEEL (the murmuration's brain, as a data factory): aloft
+ *  ⇄ stoop ⇄ grounded on the script FSM. Aloft: weave the ring flock-heavy —
+ *  the orbit outranges every kit tooth, so the sky casts nothing and the
+ *  murmuration is pure motion. Stoop: ONE telegraphed dive (visible bar +
+ *  the leap's painted landing ring) at whoever pressed within reach — the
+ *  early lane desyncs a wheeling flock, the late lane sweeps the rest, and
+ *  an unengaged flock never stoops at all: it just murmurates. Grounded:
+ *  alight first (idempotent wing-fold, so even a fizzled dive lands the
+ *  window honestly), then the caste's own ground conduct — THE melee
+ *  player's turn — until the wings come back. */
+const wingCycle = (opts: {
+  /** The stoop skill cast at the wheel's dive beat ('' = never dives — the
+   *  singer merely alights on its clock). */
+  dive: string;
+  /** Seconds aloft before the dive lanes open / the sweep fires. */
+  aloftFor: number;
+  /** Seconds the stoop beat owns (bar + air + landing margin). */
+  stoopFor: number;
+  /** Seconds grounded — the punish window. */
+  groundFor: number;
+  /** Press range that invites the early stoop. */
+  stoopWithin: number;
+  /** The aloft tuning (orbit + flock + the trajectory axes). */
+  air: BrainTuning;
+  /** The grounded tuning (the caste's own feet). */
+  ground: BrainTuning;
+}): PhaseDef[] => [
+  {
+    id: 'aloft',
+    onEnter: [{ do: 'cast', skill: 'wing_up', force: true }],
+    use: opts.air,
+    goto: opts.dive
+      ? [
+        { to: 'stoop', after: opts.aloftFor * 0.55, when: { distUnder: opts.stoopWithin, chance: 0.5 } },
+        { to: 'stoop', after: opts.aloftFor, when: { distUnder: opts.stoopWithin + 280 } },
+      ]
+      : [{ to: 'grounded', after: opts.aloftFor }],
+  },
+  ...(opts.dive ? [{
+    id: 'stoop',
+    onEnter: [{ do: 'cast', skill: opts.dive } as const],
+    use: { move: { style: 'hold' } } as BrainTuning,
+    goto: [{ to: 'grounded', after: opts.stoopFor }],
+  } satisfies PhaseDef] : []),
+  {
+    id: 'grounded',
+    onEnter: [{ do: 'cast', skill: 'alight', force: true }],
+    use: opts.ground,
+    goto: [{ to: 'aloft', after: opts.groundFor }],
+  },
+];
 
 export const MONSTERS: Record<string, MonsterDef> = {
 
@@ -9441,7 +9501,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'chitin',
     detection: 1.3,
     scaleVariance: [0.85, 1.15],
-    brain: { type: 'swarm', move: { style: 'skitter', dart: [0.25, 0.5], pause: [0.1, 0.25] } },
+    brain: {
+      type: 'swarm', move: { style: 'skitter', dart: [0.25, 0.5], pause: [0.1, 0.25] },
+      // The murmuration lever, grafted: the streamed cloud swirls as ONE
+      // (kin 'faction' merges it with any resident flock it passes) while
+      // the wingling keeps its wings-first ground-rush identity.
+      behavior: { flock: { kin: 'faction', cohesion: 0.8, alignment: 0.9, separation: 1, weave: 2.2, erratic: 0.9 } },
+    },
   },
   /** The hive's tomorrow on double wings: she seeds clutches mid-fight, and
    *  the flight BREAKS if enough of her sisters fall — the Swarming's only
@@ -9493,6 +9559,117 @@ export const MONSTERS: Record<string, MonsterDef> = {
     passive: true,
     orbDrops: 0.35,
     loot: 'royal_jelly_cache',
+  },
+
+  // ------------------------- THE MURMURATION (the standing sky) ------------
+  // Where the Swarming's wing is an EVENT (flightRoster bodies streaming
+  // through on the hive cycle), the murmuration is the hivesands' RESIDENT
+  // sky: true fliers on the aloft ⇄ stoop ⇄ grounded wheel. Aloft they wear
+  // the flock lever (BehaviorSpec.flock, kin 'faction' — packs that drift
+  // together merge into ONE murmuration) and the trajectory axes (weave /
+  // erratic — the projectile integrator's own math), so the flock reads as a
+  // boiling SHAPE in the sky before it reads as bodies, and homing / fork /
+  // chain / ricochet finally have prey worthy of them. Dives are the melee
+  // window's OTHER half: a visible bar, a painted landing ring (the leap
+  // telegraph lever), then a grounded beat where the wings are folded and
+  // the sand can answer. Silhouette doctrine holds: ground Seethe is SHELL
+  // AND LEGS, the wing is WINGS FIRST — and the murmuration is wings ONLY,
+  // lifted and bobbing off its shadow (Actor.flying via the aloft status).
+
+  /** The flock's coin: a locust the size of a gull, worthless alone and a
+   *  weather system by the dozen. packSize fields it as a true flock. */
+  chitin_skimmer: {
+    id: 'chitin_skimmer', name: 'Chitin Skimmer',
+    color: '#e6c060', shape: 'circle', radius: 8, material: 'chitin', look: 'chitin_skimmer',
+    base: { life: 26, moveSpeed: 175, accuracy: 96, evasion: 70, mana: 0 },
+    skills: ['claw'], xp: 10,
+    faction: 'chitin',
+    detection: 1.2,
+    temper: 'territorial',
+    scaleVariance: [0.85, 1.15],
+    packSize: [8, 12],
+    brain: {
+      type: 'swarm',
+      // The lead body's fall scatters the wheel — shoot the front of the V.
+      squad: { onLeaderDeath: 'scatter' },
+      script: wingCycle({
+        dive: 'locust_dive', aloftFor: 6, stoopFor: 1.6, groundFor: 3.4, stoopWithin: 380,
+        air: {
+          move: { style: 'orbit', ring: 190, pace: 1.12, flipEvery: [2.4, 4.2], flipChance: 0.3 },
+          // Sense reach 220: a murmuration folds across pack seams — two
+          // flocks that drift within a wing's reach become one shape.
+          behavior: { flock: { kin: 'faction', radius: 220, cohesion: 1.1, alignment: 1.25, separation: 1, weave: 3.2, erratic: 1.1 } },
+        },
+        ground: {
+          move: { style: 'skitter', dart: [0.28, 0.5], pause: [0.2, 0.42] },
+          behavior: { flock: { kin: 'faction', cohesion: 0.4, alignment: 0.3, separation: 1.2 } },
+        },
+      }),
+    },
+  },
+
+  /** The heavy of the wing: saltatorial femurs folded under a slab of
+   *  carapace — its stoop is a promised crater, its grounded recovery the
+   *  longest window the murmuration ever offers. */
+  chitin_saltant: {
+    id: 'chitin_saltant', name: 'Chitin Saltant',
+    color: '#c89040', shape: 'kite', radius: 13, material: 'chitin', look: 'chitin_saltant',
+    base: { life: 130, moveSpeed: 150, accuracy: 102, armor: 35, poise: 30, mana: 20, manaRegen: 3 },
+    skills: ['heavy_strike'], xp: 30,
+    faction: 'chitin',
+    detection: 1.0,
+    temper: 'territorial',
+    presence: { from: 6 },
+    packSize: [2, 3],
+    brain: {
+      type: 'juggernaut',
+      script: wingCycle({
+        dive: 'saltant_slam', aloftFor: 7.5, stoopFor: 2.0, groundFor: 4.6, stoopWithin: 420,
+        air: {
+          move: { style: 'orbit', ring: 240, pace: 0.9, flipEvery: [3, 5], flipChance: 0.25 },
+          behavior: { flock: { kin: 'faction', radius: 220, cohesion: 0.7, alignment: 0.9, separation: 1.1, weave: 1.8, erratic: 0.6, amplitude: 40 } },
+        },
+        ground: {
+          move: { style: 'direct' },
+        },
+      }),
+    },
+  },
+
+  /** The singer: its wing-comb drone is the murmuration's spine — a furor
+   *  carried on the song (kill it and the frenzy dies with it). It never
+   *  stoops; it only alights, and those landings are its whole weakness. */
+  chitin_stridulant: {
+    id: 'chitin_stridulant', name: 'Chitin Stridulant',
+    color: '#f0d488', shape: 'oval', radius: 11, material: 'chitin', look: 'chitin_stridulant',
+    base: { life: 110, moveSpeed: 140, accuracy: 100, evasion: 45, mana: 140, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['stridulate', 'bile_spray'], xp: 42,
+    faction: 'chitin',
+    detection: 1.1,
+    temper: 'territorial',
+    gemBias: ['buff'],
+    wardPriority: 1,
+    presence: { from: 8 },
+    packSize: [1, 2],
+    brain: {
+      type: 'commander',
+      // THE SONG IS A RESERVE: it fires the moment flock kin stand in
+      // earshot — the foe's distance is irrelevant to an ally-nova, so the
+      // range-to-target pick gate must never be its clock. An idle roost
+      // hums with furor pulses before you ever see it.
+      skillUse: { reserve: [{ skill: 'stridulate', when: { alliesWithin: { count: 1, radius: 300 } } }] },
+      script: wingCycle({
+        dive: '', aloftFor: 8, stoopFor: 0, groundFor: 3.2, stoopWithin: 0,
+        air: {
+          move: { style: 'holdRange', hold: 300, band: [0.7, 1.35] },
+          behavior: { flock: { kin: 'faction', radius: 220, cohesion: 0.9, alignment: 1.1, separation: 1, weave: 1.4, erratic: 0.5 } },
+        },
+        ground: {
+          move: { style: 'holdRange', hold: 260, band: [0.7, 1.4] },
+        },
+      }),
+    },
   },
 
   // ======================================================= THE SAND SARCOPHATE

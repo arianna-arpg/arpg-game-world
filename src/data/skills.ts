@@ -5531,6 +5531,63 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'summon', monsterId: 'chitin_drone', count: 2, maxActive: 8 },
     effects: [],
   },
+
+  // ==================== THE MURMURATION (chitin winged caste) ==============
+  // The dive-cycle grammar: wing_up grants the `aloft` flight state (script
+  // onEnter, force-cast — a takeoff is not a decision), the stoop skills are
+  // LEAP deliveries with the landing-telegraph lever and shed aloft at cast
+  // (wings fold when the dive commits), and the grounded window between is
+  // the melee player's turn. Script-only (never on kit lists), so the cycle
+  // machine keeps sole authority over when the sky comes down.
+  wing_up: {
+    id: 'wing_up', name: 'Take to the Wing', noDrop: true,
+    description: 'The wings catch: the body lifts from the reachable world and rides the swarm-wind.',
+    tags: ['spell', 'buff', 'movement'], color: '#e8d8a0',
+    manaCost: 0, cooldown: 1.2, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'status', status: 'aloft', chance: 1 }],
+  },
+  locust_dive: {
+    id: 'locust_dive', name: 'Stooping Bite', noDrop: true,
+    description: 'The weave tightens, the wings fold, and the locust falls on the mark — readable from the ring it paints.',
+    tags: ['attack', 'physical', 'movement'], color: '#e0b054',
+    manaCost: 0, cooldown: 6, useTime: 0.5,
+    baseDamage: { physical: [6, 11] },
+    delivery: { type: 'leap', range: 420, airTime: 0.85, radius: 60, telegraph: true },
+    effects: [{ type: 'shed', status: 'aloft' }, { type: 'damage' }],
+    ai: { range: 400, weight: 1 },
+  },
+  saltant_slam: {
+    id: 'saltant_slam', name: 'Stooping Crush', noDrop: true,
+    description: 'The saltant folds its great femurs and drops like a thrown stone — the crater is promised before it lands.',
+    tags: ['attack', 'physical', 'movement', 'aoe'], color: '#c89040',
+    manaCost: 0, cooldown: 8, useTime: 0.65,
+    baseDamage: { physical: [14, 24] },
+    delivery: { type: 'leap', range: 460, airTime: 1.05, radius: 92, telegraph: true },
+    effects: [
+      { type: 'shed', status: 'aloft' },
+      { type: 'damage' },
+      { type: 'knockback', strength: 55 },
+    ],
+    ai: { range: 440, weight: 1 },
+  },
+  alight: {
+    id: 'alight', name: 'Alight', noDrop: true,
+    description: 'The wings still; the body settles onto the sand.',
+    tags: ['spell', 'movement'], color: '#e8d8a0',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'shed', status: 'aloft' }],
+  },
+  stridulate: {
+    id: 'stridulate', name: 'Stridulation', noDrop: true,
+    description: 'The singer saws its wing-combs and the whole murmuration answers — a furor carried on the drone.',
+    tags: ['spell', 'buff', 'aoe', 'duration'], color: '#e8c878',
+    manaCost: 12, cooldown: 12, useTime: 0.8,
+    delivery: { type: 'nova', radius: 260, affects: 'allies' },
+    effects: [{ type: 'status', status: 'furor', chance: 1 }],
+    ai: { range: 300, weight: 2, keepDistance: 220 },
+  },
   lay_grub_clutch: {
     id: 'lay_grub_clutch', name: 'Lay Grub Clutch',
     description: 'Bury a clutch of pale eggs. Left alone they HATCH a wave of maggots; broken, they are only a smear.',

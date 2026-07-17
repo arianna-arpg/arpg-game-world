@@ -337,8 +337,8 @@ export interface MonsterPartDef {
 // The AI vocabulary (BrainDef, archetypes, phases, rules, scripts, actions)
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
-export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec } from './brain';
-import type { BrainDef, BrainType, BrainTuning, CommandState, PostSpec } from './brain';
+export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec, FlockSpec } from './brain';
+import type { BrainDef, BrainType, BrainTuning, CommandState, FlockSpec, PostSpec } from './brain';
 
 /** A worm/snake body: trailing segments that follow the head. The base
  *  fields are the legacy render-only trail; the SEGMENT-FABRIC fields
@@ -383,6 +383,10 @@ export interface LeapState {
   inst: SkillInstance;
   dmgMult: number;
   wasUntargetable: boolean;
+  /** CAST HONESTY (LeapDelivery.telegraph): the landing ring is painted at
+   *  `dest` for the whole flight — drawn where it WILL land, read by the
+   *  player's eyes and by dodge-minds through imminentThreatTo alike. */
+  telegraph?: { color: string };
 }
 
 export interface ActiveBuff {
@@ -548,6 +552,14 @@ export class Actor {
   /** ELBOW ROOM (BehaviorSpec.spacing): this tick's kin-repulsion radius,
    *  stamped by updateAI while closing on a target (undefined = none). */
   aiSpacing?: number;
+  /** THE MURMURATION (BehaviorSpec.flock): this tick's resolved flock spec,
+   *  stamped per AI tick (idle and combat alike — a flock murmurates even
+   *  with nobody watching); steerMove folds it into every self-directed
+   *  step. Undefined = not a flock body, zero cost. */
+  aiFlock?: FlockSpec;
+  /** Erratic-axis accumulated bearing offset (mean-reverting — see
+   *  engine/flight.ts erraticTurn): the body's random walk, bounded. */
+  aiFlockErr = 0;
   /** READING THE CAST (BehaviorSpec.dodge): the telegraph currently being
    *  tracked (zone / casting-state identity — the read rolls ONCE per
    *  telegraph), whether the read succeeded, when the feet may move, and
@@ -1102,8 +1114,14 @@ export class Actor {
   posPrev?: { x: number; y: number };
   /** FLIER (MonsterDef.flier): moves on the noclip displacement policy —
    *  over rocks, walls, chasms and water — and the renderer lifts + bobs the
-   *  body off its shadow so flight READS at a glance. */
+   *  body off its shadow so flight READS at a glance. Re-derived each status
+   *  tick as `flyingBase || any worn StatusDef.flight` — flight can be a
+   *  STATE a body cycles through (the murmuration's aloft), not only a
+   *  birthright. */
   flying = false;
+  /** The def-innate half of `flying` (MonsterDef.flier) — what the status
+   *  re-derivation restores to when the last flight status ends. */
+  flyingBase = false;
   /** PACK BOND transition tracker (MonsterDef.bond) — the sheet source only
    *  moves on held/dropped edges, never per frame. */
   bondHeld = false;
@@ -2187,6 +2205,20 @@ export class Actor {
         if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
       }
     }
+
+    // FLIGHT AS A STATE (StatusDef.flight): the flying flag — noclip
+    // displacement, ground insurance, the renderer's lift-and-bob — follows
+    // any worn flight status live (wing_up puts a locust in the sky, the
+    // stooping dive sheds it). Re-DERIVED here rather than hooked, so every
+    // removal path — expiry above, cleanses, dispel splices — self-heals on
+    // the next tick without a web of callbacks.
+    let fly = this.flyingBase;
+    if (!fly && this.statuses.length) {
+      for (const s of this.statuses) {
+        if (STATUS_DEFS[s.id]?.flight) { fly = true; break; }
+      }
+    }
+    this.flying = fly;
 
     // Absorption shield expiry
     if (this.absorb > 0) {

@@ -58,6 +58,10 @@ const SWARMING_SURGE: SwarmingSurge = {
     { id: 'chitin_lancer', weight: 3 },                // the ground wasp flies escort (reused)
     { id: 'chitin_replete', weight: 2 },               // the fleeing larder (jelly on kill)
     { id: 'chitin_alate', weight: 1 },                 // the break-throat (def floor: HARD from 8)
+    // THE MURMURATION rides the cycle: resident skimmers join the wing when
+    // it streams — true fliers wheeling over the rush (dive-cycle brain,
+    // reused whole from the baseline caste).
+    { id: 'chitin_skimmer', weight: 3 },
   ],
   alateId: 'chitin_alate',
   levelBonus: 0,            // at the zone's own level (the radial field stands)

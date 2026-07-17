@@ -285,7 +285,74 @@ export interface BehaviorSpec {
    *  still bites, and a broken gaze resumes the advance mid-stride. Pair
    *  with low `turnSpeed` and a lurk style for the full dread. */
   stalk?: { arcDeg?: number; creep?: number };
+  /** THE MURMURATION (FlockSpec): boid steering folded into every
+   *  self-directed step — the flock moves as ONE SHAPE before it reads as
+   *  individuals. Composable with any move style (an orbiting flock is a
+   *  wheeling murmuration; a fleeing one is a drivable herd) and machine-
+   *  shiftable like every lever, so an aloft phase can wear heavy coupling
+   *  and a grounded feeding window can shed it. */
+  flock?: FlockSpec;
 }
+
+/** FLOCK STEERING as data — the classic boid triad plus the trajectory
+ *  axes, worn per body (both parties must carry a spec to count as
+ *  flockmates, so a drone is never dragged into its cousins' wheeling).
+ *  Neighbor queries ride the actor grid (World.actorsNear): O(local), one
+ *  query per carrier tick, contributions capped at FLOCK_CFG.maxNeighbors —
+ *  a starling tracks its seven nearest, and so do we. Reused wholesale by
+ *  anything that groups: murmurations today, droved livestock tomorrow. */
+export interface FlockSpec {
+  /** Neighbor sense reach in px (default FLOCK_CFG.radius). */
+  radius?: number;
+  /** Pull toward the local flock's center, 0..~2 (default 1). */
+  cohesion?: number;
+  /** Push off pressing flockmates, 0..~2 (default 1) — the SOFT elbow the
+   *  hard body-separation pass no longer supplies between the airborne. */
+  separation?: number;
+  /** Match flockmates' headings, 0..~2 (default 1) — what turns a crowd of
+   *  orbiters into one rotating vortex. */
+  alignment?: number;
+  /** Who counts as a flockmate: 'def' (default) same MonsterDef, 'squad'
+   *  same spawned squad, 'faction' any same-faction carrier — cross-caste
+   *  murmurations that merge when packs drift together. */
+  kin?: 'def' | 'squad' | 'faction';
+  /** TRAJECTORY-WORN FLIGHT (engine/flight.ts — the projectile axes on a
+   *  body): `weave` loops the figure-eight across the steering bearing
+   *  (weavePower semantics), `erratic` random-walks the bearing (erratic-
+   *  Power semantics, mean-reverting on a body), `amplitude` sizes the
+   *  weave in px (default FLOCK_CFG.amplitude). */
+  weave?: number;
+  erratic?: number;
+  amplitude?: number;
+}
+
+/** Flock-steering tunables — the modular thresholds FlockSpec dials scale. */
+export const FLOCK_CFG = {
+  /** Default neighbor sense reach (px). */
+  radius: 130,
+  /** Neighbor contributions cap — the starling's seven. */
+  maxNeighbors: 7,
+  /** Separation reach as a fraction of the sense radius. */
+  sepFrac: 0.45,
+  /** Base gains the spec's 0..~2 dials multiply. */
+  cohesionGain: 0.75,
+  separationGain: 1.2,
+  alignmentGain: 0.5,
+  /** WILL-THINNING: a flock body's OWN desire dilutes by this per sensed
+   *  flockmate (floored) — in company, the fold's pull outranks the
+   *  individual whim, which is the murmuration itself: alone it walks
+   *  where it wants; in seven's company it goes where the shape goes. */
+  willThin: 0.12,
+  willFloor: 0.4,
+  /** Reference speed (px/s) the weave's velocity form normalizes against —
+   *  how hard a given weavePower bends a body's unit desire. */
+  weaveRefSpeed: 170,
+  /** Default weave amplitude for bodies (projectiles default 45/35). */
+  amplitude: 30,
+  /** Erratic offset mean-reversion rate (per second) — the body wanders,
+   *  never drifts away forever. */
+  erraticDecay: 1.4,
+};
 
 /** The behavior fabric's modular thresholds (avoid-hardcoding: tune here). */
 export const BEHAVIOR_CFG = {

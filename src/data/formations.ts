@@ -553,6 +553,28 @@ registerFormation({
   ],
 });
 
+// THE MURMURATION'S ROOST KIT (rules ride the gen import graph, beside the
+// kit that uses them). A roost mast: a resin-lacquered pole flying a molted
+// wing-membrane — where the flock settles between flights. Solid but
+// shot-permeable (a pole, not a wall); the pennant painter keeps it alive.
+registerDoodadRule('roost_mast', {
+  overlap: 'solid', blocksMove: true, blocksShot: false,
+  spacing: 90, bodyScale: 0.5,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerStamp('roost_mast', stampSingle('roost_mast', [12, 18]));
+
+// A MURMURATION ROOST: a mast-stand in a rough wheel — husk-drifts and a
+// clutch or two between the poles. Where the sky sits down.
+registerFormation({
+  id: 'murmuration_roost', arrange: 'ring', span: [110, 145], step: 44,
+  pieces: [
+    { kind: 'roost_mast', radius: [12, 17], jitter: 8, rot: true },
+    { kind: 'brood_husk', radius: [10, 14], every: 2, jitter: 14 },
+    { kind: 'egg_clutch', radius: [10, 13], every: 3, jitter: 12 },
+  ],
+});
+
 // --- GRID / ORBIT / BRAID (the second arranger wave) --------------------------
 
 // AN ORCHARD: planted rows — someone tends these trees, or someone did.

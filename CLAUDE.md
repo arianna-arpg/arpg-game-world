@@ -74,7 +74,13 @@ changes.
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
   (layered modifier engine), `damage.ts`, `status.ts`, `skills.ts` (skill
   schema), `actor.ts` (one entity model for player/monsters/minions),
-  `ai.ts` + `brain.ts` (composable enemy AI), `los.ts` (THE occlusion
+  `ai.ts` + `brain.ts` (composable enemy AI; THE FLOCKING FABRIC —
+  `BehaviorSpec.flock` murmuration steering at the steerMove gate,
+  `StatusDef.flight` aloft states riding `Actor.flying`,
+  `LeapDelivery.telegraph` honest dive rings, `MonsterDef.packSize`
+  natural group sizing, `engine/flight.ts` = the ONE weave/erratic math
+  shared with projectiles — docs in `docs/engine/flocking.md`),
+  `los.ts` (THE occlusion
   raycast: one shot/sight ray over doodads + grid regions, `LOS_CFG`
   delivery defaults, the `phasing` stat lever; AI pathing rides
   `World.pathField()`; its DRAWN half is THE SIGHT VEIL —

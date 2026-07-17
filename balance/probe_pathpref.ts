@@ -32,7 +32,7 @@ import { updateAI } from '../src/engine/ai';
 import { MONSTERS } from '../src/data/monsters';
 import type { Doodad } from '../src/engine/levelgen';
 import type { RecoveryPolicy } from '../src/world/regions';
-import { GridWalkField, PATH_SCALE } from '../src/world/gridWalk';
+import { GridWalkField } from '../src/world/gridWalk';
 import { regionPathCost, PATH_CFG } from '../src/world/regions';
 import type { PathProfile } from '../src/world/walk';
 import { vec, type Vec2 } from '../src/core/math';

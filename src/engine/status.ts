@@ -58,6 +58,14 @@ export interface StatusDef {
   /** Shatters early if the absorption shield that granted it breaks
    *  (Aegis Ward's Warded armor). */
   boundToAbsorb?: true;
+  /** FLIGHT AS A STATE: while worn, the body FLIES — Actor.flying (noclip
+   *  displacement, ground/fall insurance, the renderer's lift-and-bob)
+   *  re-derives from worn flight statuses each tick, so takeoffs and
+   *  landings are ordinary status traffic through the one skill pipeline
+   *  (the murmuration's wing_up / stooping dive). Distinct from the softer
+   *  `levitation` STAT (cloudform): a levitator floats over voids but walls
+   *  still confine; a flier crosses everything. */
+  flight?: true;
   /** IMPALE personality: the status's banked `rupture` DISCHARGES into
    *  the bearer's NEXT qualifying top-level hit as its own separate
    *  mitigated blow (then the status is spent) — instead of waiting for
@@ -844,6 +852,19 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Cloudform', color: '#dceafc', duration: 3,
     beneficial: true,
     mods: [mod('levitation', 'flat', 1), mod('moveSpeed', 'increased', 0.1)],
+  },
+  // ALOFT — TRUE FLIGHT as a worn state (StatusDef.flight): the bearer
+  // rides the flying flag itself — noclip over rocks, walls and chasms,
+  // ground/fall insurance, the renderer's lift-and-bob — for as long as the
+  // wings hold. The murmuration's air phase (wing_up grants it, the
+  // stooping dive sheds it via cleanse), and an open lever: any skill,
+  // ground or trap that grants/strips `aloft` moves a body between the
+  // sky and the reachable world. `damageVs_aloft` auto-mints with it —
+  // fowling as buildcraft. Speed while airborne is the status's own gift.
+  aloft: {
+    label: 'Aloft', color: '#e8d8a0', duration: 999,
+    beneficial: true, flight: true,
+    mods: [mod('moveSpeed', 'increased', 0.25)],
   },
   // --- THE CALLED CLOUD'S GIFTS (conjured-cloud presences, engine/flux.ts) --
   // Standing in a cloud a SKILL called grants these on the fog idiom:

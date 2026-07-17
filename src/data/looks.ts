@@ -3704,6 +3704,50 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.7,
   },
+  // THE MURMURATION — the resident flock. Same wings-first doctrine as the
+  // Swarming castes, pushed one step further: these are TRUE fliers (lifted
+  // and bobbing off small shadows), so the silhouettes are wings ONLY with
+  // the body an afterthought — and each caste keeps ONE unmistakable tell:
+  // the skimmer's long abdomen, the saltant's folded jump-femurs, the
+  // singer's comb crest. Zero new painters; composition does the work.
+  /** A chitin skimmer: a gull-sized locust — swept wings and a trailing
+   *  abdomen, built to be a dot in a boiling shape until it isn't. */
+  chitin_skimmer: {
+    parts: [
+      { kind: 'tail', x: -0.25, scale: 0.75 },
+      { kind: 'disc', scale: 0.38 },
+      { kind: 'wings', scale: 1.45, alpha: 0.75 },
+      { kind: 'antennae', scale: 0.6 },
+      { kind: 'eyes', color: '#ffd890', params: { spread: 0.4, dist: 0.52, size: 0.15 } },
+    ],
+    shadowScale: 0.35,
+  },
+  /** A chitin saltant: the wing's heavy — a slab of carapace slung between
+   *  wings, saltatorial femurs folded like drawn crossbows (the raptor-arm
+   *  read: when you can see the legs cock, the crater is coming). */
+  chitin_saltant: {
+    parts: [
+      { kind: 'wings', scale: 1.25, alpha: 0.7 },
+      { kind: 'carapace', scale: 0.85 },
+      { kind: 'raptorArms', scale: 0.9 },
+      { kind: 'mandibles', scale: 0.55 },
+    ],
+    shadowScale: 0.45,
+  },
+  /** A chitin stridulant: the singer — palest of the wing, crowned in a
+   *  wing-comb crest, the song shimmering off it. Kill the crest-bearer
+   *  and the murmuration loses its spine. */
+  chitin_stridulant: {
+    parts: [
+      { kind: 'wings', scale: 1.3, alpha: 0.75 },
+      { kind: 'blob', scale: 0.52, params: { irr: 0.1, seed: 313 } },
+      { kind: 'crest', scale: 0.95, role: 'accent', params: { n: 5 } },
+      { kind: 'antennae', scale: 1.1 },
+      { kind: 'eyes', color: '#ffe0a0', params: { spread: 0.42, dist: 0.5, size: 0.14 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, alpha: 0.5 }],
+    shadowScale: 0.4,
+  },
 
   // --- THE SMALL LIVES (ambience: prey with personality) -------------------
   /** A squirrel: all tail. */
