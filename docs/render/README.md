@@ -61,6 +61,25 @@ src/data/
    **Rampart** cells (raised structure walls) additionally bake running-bond
    masonry — mortar courses, per-block quarry tone — so built walls never
    read as cave rock.
+   **THE ASYNC UPLOAD SWAP** (`VIS_CFG.ground.asyncUpload`): every (re)bake
+   rasters into ONE shared scratch canvas and swaps into the chunk as an
+   `ImageBitmap` when `createImageBitmap` resolves — the chunk's live image
+   is never mutated, because blitting a just-mutated canvas re-uploads its
+   whole texture *synchronously inside `drawImage`*, and that upload (not
+   the ~2-4ms raster) was the 40ms hitch class behind every runtime ground
+   mutation in liquid-heavy biomes (flood-front wake stamps, temp grounds,
+   geyser pools, brittle carves — pinned by a JS self-profiler trace: ~all
+   spike-window samples on the native `drawImage` leaf). One snapshot in
+   flight at a time (the queue is "still stale next frame"); a chunk draws
+   its old self — or the flat stand-in on first appearance — until its
+   bitmap lands, which is the stale-chunk contract that always existed.
+   `false` restores the legacy sync path (A/B, rollback). Measured: browser
+   spike windows 131 → 1 on the flood-wake repro (same-context A/B); the
+   desktop compositor reads neutral-in-noise across an interleaved
+   off/on/off/on forensic set. If desktop hitch storms ever correlate with
+   `grB` again, suspect the bitmap alloc/close churn first (the sync path
+   reused one canvas; bitmaps are immutable and must reallocate ~0.8MB per
+   swap) — a pooled OffscreenCanvas front/back scheme would be the answer.
 
 4. **Doodad painters** (`vis/painters.ts` + `data/doodadVisuals.ts`). Every
    doodad kind maps to a painter + params. Painters are parametric families

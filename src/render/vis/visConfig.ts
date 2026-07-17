@@ -283,6 +283,13 @@ export const VIS_CFG = {
      *  most of the screen twice per frame. Per-kind opt-out:
      *  params.liveBody on the DOODAD_VISUALS entry. */
     bakeLiquidBody: true,
+    /** THE ASYNC UPLOAD SWAP: (re)baked chunks raster into a shared scratch
+     *  and swap in as ImageBitmaps when createImageBitmap resolves — the
+     *  chunk's live image is never mutated, so blitting it never pays the
+     *  synchronous texture re-upload inside drawImage (the flood-wake /
+     *  temp-ground / brittle-carve hitch class: raster was ~2-4ms, the
+     *  upload-in-drawImage was the 40ms). false = the legacy sync path. */
+    asyncUpload: true,
     /** Max STALE-chunk rebakes per frame after a walk-grid repaint (door
      *  break, terraform, crawling fissure). Stale chunks keep drawing their
      *  old bake until their turn — a repaint must never rebake a whole

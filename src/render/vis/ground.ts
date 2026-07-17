@@ -115,7 +115,18 @@ interface StaticGroup {
 
 /** One live chunk: its bake, the walk version + beds rev it reflects, and a
  *  monotonic bake stamp (`at`) — the stale queue re-bakes OLDEST first. */
-interface ChunkEntry { img: HTMLCanvasElement; v: number; b: number; at: number }
+/** One cached floor chunk. `img` is an ImageBitmap on the async-upload path
+ *  (null until its first snapshot lands — the flat stand-in draws meanwhile),
+ *  or a plain canvas on the legacy sync path. `pending` marks a snapshot in
+ *  flight so the stale scan doesn't re-enqueue it every frame. */
+interface ChunkEntry { img: HTMLCanvasElement | ImageBitmap | null; pending: boolean; v: number; b: number; at: number }
+
+/** Free a chunk image either way (bitmaps close, canvases zero their store). */
+function dropChunkImg(img: HTMLCanvasElement | ImageBitmap | null): void {
+  if (!img) return;
+  if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) img.close();
+  else releaseCanvas(img as HTMLCanvasElement);
+}
 
 export class GroundRenderer {
   private chunks = new Map<string, ChunkEntry>();
@@ -147,6 +158,18 @@ export class GroundRenderer {
   private bedsFloodRev = 0;
   /** Monotonic bake sequence, stamped per bake (see ChunkEntry.at). */
   private bakeSeq = 0;
+  /** THE ASYNC UPLOAD SWAP (VIS_CFG.ground.asyncUpload): rebakes raster into
+   *  ONE reused scratch canvas, snapshot through createImageBitmap off the
+   *  hot path, and the chunk keeps blitting its OLD image until the bitmap
+   *  lands — because the hitch was never the raster: blitting a canvas that
+   *  was JUST mutated re-uploads its whole texture synchronously INSIDE
+   *  drawImage (the self-profiler pinned ~all spike time on the native
+   *  drawImage leaf during flood-front wake stamping), and a bitmap swap
+   *  moves that upload off the frame entirely. One snapshot in flight at a
+   *  time — the queue is just "still stale next frame". */
+  private scratch: HTMLCanvasElement | null = null;
+  private snapAt = 0;
+  private zoneEpoch = 0;
   /** THE BLEND (engine/blend.ts), memoized per zone: the compiled weight
    *  field + the partner tileset's theme a blended zone's bakes mix toward.
    *  null entry = the zone is unblended (the common case, zero cost). */
@@ -181,8 +204,10 @@ export class GroundRenderer {
       // Release the old zone's whole cache NOW (≈ maxChunks × chunk² of
       // pixels): left to the GC, a few zone hops of discarded floors pile
       // up GPU-side and the collection lands as a hitch storm mid-play.
-      for (const e of this.chunks.values()) releaseCanvas(e.img);
+      for (const e of this.chunks.values()) dropChunkImg(e.img);
       this.chunks.clear();
+      this.zoneEpoch++; // in-flight snapshots for the old zone land dead
+      this.snapAt = 0;
       this.zoneRef = world.zone;
       this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
       // Re-arm the static gather for the new zone.
@@ -207,16 +232,31 @@ export class GroundRenderer {
     const budgetLeft = (): boolean =>
       performance.now() - bakeT0 < VIS_CFG.ground.bakeBudgetMs;
 
+    // The async swap needs createImageBitmap and the config's word; the
+    // legacy sync path stays whole behind the same branch (ablate/rollback).
+    const async = VIS_CFG.ground.asyncUpload && typeof createImageBitmap === 'function';
+    // A wedged snapshot (hidden tab, driver loss) must not dam the pipe
+    // forever — past this age the next one may start over it. Checked LIVE
+    // at each start site, so a snap begun this very frame never reads as
+    // wedged to a later pass.
+    const snapBusy = (): boolean => {
+      if (this.snapAt === 0) return false;
+      if (performance.now() - this.snapAt <= 500) return true;
+      this.snapAt = 0; // wedged — stop waiting on it
+      return false;
+    };
+
     // --- PASS 1: inventory the visible window. LRU-touch live entries; sort
     // what needs work into never-baked vs stale (walk repaint or bed change).
     const missing: { key: string; cx: number; cy: number }[] = [];
-    const stale: { entry: ChunkEntry; cx: number; cy: number }[] = [];
+    const stale: { entry: ChunkEntry; key: string; cx: number; cy: number }[] = [];
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const key = `${cx},${cy}`;
         const entry = this.chunks.get(key);
         if (!entry) { missing.push({ key, cx, cy }); continue; }
         this.chunks.delete(key); this.chunks.set(key, entry); // LRU touch
+        if (entry.pending) continue; // its snapshot is already in flight
         const bedsStale = entry.b < this.bedsFloodRev
           || this.bedsTouched(entry.b, cx * C, cy * C, C);
         if (bedsStale || (wf && entry.v < ver)) {
@@ -224,41 +264,53 @@ export class GroundRenderer {
             || (wf ? this.chunkStale(wf, entry.v, cx * C, cy * C, C) : false);
           // Untouched by any repaint — just adopt the current stamps.
           if (!touched) { entry.v = ver; entry.b = this.bedsRev; }
-          else stale.push({ entry, cx, cy });
+          else stale.push({ entry, key, cx, cy });
         }
       }
     }
 
     // --- PASS 2: bake. Never-baked chunks first (ONE is always allowed —
     // streaming must progress; the rest hold to the time budget), then stale
-    // chunks oldest-bake-first under the count + time budgets. A stale chunk
-    // re-bakes INTO its own canvas — zero alloc, zero GC pressure (the old
-    // release+create pair churned ~0.8MB of backing store per rebake, and a
-    // melting shelf rebakes continuously).
+    // chunks oldest-bake-first under the count + time budgets. Sync path: a
+    // stale chunk re-bakes INTO its own canvas — zero alloc (the old
+    // release+create pair churned ~0.8MB of backing store per rebake). Async
+    // path: the raster lands in the shared scratch and the SWAP waits for
+    // the bitmap — the chunk's live image is never mutated, so blitting it
+    // stays a texture reference, never a re-upload.
     let rebakes = 0;
     let bakedNew = false;
     for (const m of missing) {
       if (bakedNew && !budgetLeft()) break; // stand in flat this frame
-      this.chunks.set(m.key,
-        { img: this.bake(world, wf, m.cx, m.cy), v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+      if (async) {
+        if (snapBusy()) break; // one snapshot at a time
+        this.startSnap(world, wf, m.cx, m.cy, m.key, null, ver);
+      } else {
+        this.chunks.set(m.key,
+          { img: this.bake(world, wf, m.cx, m.cy), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+      }
       bakedNew = true;
       this.evictOverCap();
     }
     stale.sort((a, b) => a.entry.at - b.entry.at);
     for (const s of stale) {
       if (rebakes >= VIS_CFG.ground.rebakesPerFrame || !budgetLeft()) break;
-      s.entry.img = this.bake(world, wf, s.cx, s.cy, s.entry.img);
-      s.entry.v = ver; s.entry.b = this.bedsRev; s.entry.at = ++this.bakeSeq;
+      if (async) {
+        if (snapBusy()) break;
+        this.startSnap(world, wf, s.cx, s.cy, s.key, s.entry, ver);
+      } else {
+        s.entry.img = this.bake(world, wf, s.cx, s.cy, s.entry.img as HTMLCanvasElement);
+        s.entry.v = ver; s.entry.b = this.bedsRev; s.entry.at = ++this.bakeSeq;
+      }
       rebakes++;
     }
 
-    // --- PASS 3: blit the window in spatial order. Chunks whose bake didn't
-    // land this frame draw the flat floor stand-in (missing) or their old
-    // self (stale) until their turn comes.
+    // --- PASS 3: blit the window in spatial order. Chunks whose bake (or
+    // whose first snapshot) didn't land yet draw the flat floor stand-in, or
+    // their old self until the swap comes.
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const entry = this.chunks.get(`${cx},${cy}`);
-        if (entry) {
+        if (entry?.img) {
           ctx.drawImage(entry.img, cx * C, cy * C);
         } else {
           ctx.fillStyle = world.zone.theme.floor;
@@ -269,7 +321,7 @@ export class GroundRenderer {
     // PREFETCH: bake at most one not-yet-baked chunk in the ring just
     // outside the viewport, so walking streams floor in ahead of arrival
     // instead of hitching the frame a new column first appears on.
-    if (rebakes === 0 && budgetLeft()) {
+    if (rebakes === 0 && budgetLeft() && (!async || !snapBusy())) {
       let bx0 = x0 - 1, bx1 = x1 + 1, by0 = y0 - 1, by1 = y1 + 1;
       if (!world.arena.boundless) {
         bx0 = Math.max(0, bx0); by0 = Math.max(0, by0);
@@ -281,13 +333,50 @@ export class GroundRenderer {
           if (cy >= y0 && cy <= y1 && cx >= x0 && cx <= x1) continue; // visible: handled above
           const key = `${cx},${cy}`;
           if (this.chunks.get(key)) continue;
-          this.chunks.set(key,
-            { img: this.bake(world, wf, cx, cy), v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+          if (async) {
+            this.startSnap(world, wf, cx, cy, key, null, ver);
+          } else {
+            this.chunks.set(key,
+              { img: this.bake(world, wf, cx, cy), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+          }
           this.evictOverCap();
           break outer;
         }
       }
     }
+  }
+
+  /** Raster a chunk into the shared scratch, then snapshot it into an
+   *  ImageBitmap OFF the frame and swap it in when it lands. The entry keeps
+   *  its old image (or the flat stand-in) meanwhile — exactly the contract
+   *  stale chunks always had, now covering the upload too. Serialized: one
+   *  snapshot in flight, the rest stay stale and re-enter next frame. */
+  private startSnap(world: World, wf: GridWalkField | null, cx: number, cy: number,
+    key: string, entry: ChunkEntry | null, ver: number): void {
+    const C = VIS_CFG.ground.chunk;
+    if (!this.scratch) this.scratch = document.createElement('canvas');
+    this.bake(world, wf, cx, cy, this.scratch);
+    const e: ChunkEntry = entry
+      ?? { img: null, pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq };
+    if (!entry) this.chunks.set(key, e);
+    e.pending = true;
+    const epoch = this.zoneEpoch;
+    const bRev = this.bedsRev;
+    const seq = ++this.bakeSeq;
+    this.snapAt = performance.now();
+    createImageBitmap(this.scratch, 0, 0, C, C).then(bmp => {
+      if (this.snapAt !== 0) this.snapAt = 0;
+      // The world moved on while we uploaded? A dead snapshot closes quietly:
+      // zone swapped (epoch), or the entry was evicted from the cache.
+      if (epoch !== this.zoneEpoch || this.chunks.get(key) !== e) { bmp.close(); return; }
+      dropChunkImg(e.img);
+      e.img = bmp;
+      e.pending = false;
+      e.v = ver; e.b = bRev; e.at = seq;
+    }).catch(() => {
+      if (this.snapAt !== 0) this.snapAt = 0;
+      if (epoch === this.zoneEpoch && this.chunks.get(key) === e) e.pending = false;
+    });
   }
 
   /** Drop least-recently-used chunks past the cache cap, freeing their
@@ -297,7 +386,7 @@ export class GroundRenderer {
       const oldest = this.chunks.keys().next().value;
       if (oldest === undefined) break;
       const old = this.chunks.get(oldest);
-      if (old) releaseCanvas(old.img);
+      if (old) dropChunkImg(old.img);
       this.chunks.delete(oldest);
     }
   }
