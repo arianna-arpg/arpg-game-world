@@ -1515,8 +1515,15 @@ export class Renderer {
         // SHIMMER (the frail cloud): a quick, cell-desynced glitter — the wash
         // itself is the warning, so it has to LIVE, not sit like paint.
         else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(performance.now() / 480 + (cx * 7 + cy * 13) * 0.53);
+        else if (vis.animate === 'prism') alpha *= 0.72 + 0.28 * Math.sin(performance.now() / 700 + (cx * 5 + cy * 9) * 0.41);
         ctx.globalAlpha = Math.max(0, alpha);
-        ctx.fillStyle = vis.fill;
+        // PRISM (the rainbow spans): the fill's hue walks the whole spectrum,
+        // phase-offset per cell so a span reads as a banded arc, not a slab.
+        // Any future kind joins by declaring animate:'prism' — the fill color
+        // is ignored in favour of the living hue.
+        ctx.fillStyle = vis.animate === 'prism'
+          ? `hsl(${(performance.now() / 24 + (cx * 11 + cy * 17) * 6) % 360} 78% 68%)`
+          : vis.fill;
         ctx.fillRect(cx * cell, cy * cell, cell + 0.6, cell + 0.6);
       }
     }

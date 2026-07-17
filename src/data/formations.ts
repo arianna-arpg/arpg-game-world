@@ -1263,3 +1263,51 @@ registerFormation({
     { kind: 'lantern_post', radius: [9, 12], every: 4, jitter: 12 },
   ],
 });
+
+// =============================================================================
+// THE VESPERLANDS (aether_vesper) — the cosmos country's furniture semantics,
+// registered beside the gen graph like every open-registry kit (the gloamwood
+// precedent: kinds are open strings, rules live where genqa loads them).
+// Every painter is an existing one re-dressed (doodadVisuals.ts).
+// =============================================================================
+registerDoodadRule('spire_of_evening', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 300,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+// The veiled way's mouth-mark: knee-high, walk-through-able clutter — a hint,
+// never an obstacle (kicking the cairn over is not how you find the bridge).
+registerDoodadRule('star_cairn', { overlap: 'inert', spacing: 30, voidOk: true });
+registerDoodadRule('moonwell', {
+  overlap: 'solid', blocksMove: true, spacing: 130,
+  effect: { id: 'status_wash', statusId: 'moonlit', interval: 0.9, radius: 52, chance: 1, power: 2.5 },
+});
+registerDoodadRule('sundial_gnomon', { overlap: 'solid', blocksMove: true, spacing: 110 });
+registerDoodadRule('orrery_stand', { overlap: 'solid', blocksMove: true, spacing: 90 });
+registerDoodadRule('comet_shard', {
+  overlap: 'solid', spacing: 64, brittle: { on: ['hit'] },
+});
+registerDoodadRule('nightbloom_tuft', { overlap: 'ground', spacing: 34 });
+// Tethered star-paper over the gaps — the one dressing allowed off standing
+// cloud (the sky_lantern precedent: a float, not a stand).
+registerDoodadRule('star_lantern', { overlap: 'ground', spacing: 56, voidOk: true });
+
+// A PROCESSION OF LANTERNS: star-paper strung along a walk — the vesper
+// roads' habit of explaining themselves at night.
+registerFormation({
+  id: 'lantern_procession', arrange: 'line', span: [240, 420], step: 58,
+  pieces: [
+    { kind: 'star_lantern', radius: [8, 11], jitter: 10 },
+    { kind: 'star_cairn', radius: [7, 9], every: 4, jitter: 14 },
+  ],
+});
+
+// AN OBSERVATORY RING: orreries and dials around a well of moonlight — the
+// country's scholars left their instruments mid-question.
+registerFormation({
+  id: 'observatory_ring', arrange: 'ring', span: [110, 170], step: 56,
+  pieces: [
+    { kind: 'orrery_stand', radius: [11, 14], jitter: 8, rot: true },
+    { kind: 'sundial_gnomon', radius: [10, 13], every: 3, jitter: 10, rot: true },
+    { kind: 'moonwell', radius: [14, 18], every: 4, jitter: 6 },
+  ],
+});

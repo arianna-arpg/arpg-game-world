@@ -230,6 +230,25 @@ export interface FrontSpawnRow {
   /** After a wave dies or leaves, the next arrives in [lo, hi] seconds.
    *  Absent = one wave per visit. */
   waves?: [number, number];
+  /** RADIANCE GATE (world/radiance.ts): the lane fields waves only while
+   *  this condition holds over the zone — comet lanes that fly by night
+   *  ({ radiance: { to: 0.3 } }), flood lanes that ride the storm
+   *  ({ weather: ['storm'] }). A pending wave whose sky says no simply
+   *  WAITS at the door (re-asked every tick); live sections already
+   *  marching finish their crossing — dawn does not delete a comet
+   *  mid-flight, it just sends no more. Typed structurally (FrontCond)
+   *  so this leaf keeps its zero-import doctrine; world/radiance's
+   *  RadianceCond satisfies it. */
+  when?: FrontCond;
+}
+
+/** The structural twin of world/radiance's RadianceCond — the leaf's own
+ *  view of a sky condition (it never evaluates one; the terrain window's
+ *  condHeld does). */
+export interface FrontCond {
+  radiance?: { from?: number; to?: number };
+  weather?: string[];
+  phases?: string[];
 }
 
 /** What a zone grows ambiently — lives on ZoneTheme.creep. Pocket count
@@ -263,6 +282,10 @@ export interface CreepTerrain {
   drag(a: CreepActorLike, dx: number, dy: number): void;
   /** Drain a covered player's breath (survival fabric; world gates seats). */
   drown(a: CreepActorLike, drain: number, dt: number): void;
+  /** Does a sky condition hold over this zone right now? (World.radiance-
+   *  CondHeld — the lane gate's window. Absent = every lane unconditional,
+   *  so bare harnesses keep their content.) */
+  condHeld?(cond: FrontCond): boolean;
 }
 
 /** The registry of record. A new creep kind is one registerCreep row —
@@ -869,11 +892,15 @@ export class CreepField {
    *  legacy path — a row without front levers ticks byte-identically. */
   update(dt: number, _time: number, actors: readonly CreepActorLike[]): void {
     const d = CREEP_CFG.def;
-    // Ambient lanes: waves break in when their timers land.
+    // Ambient lanes: waves break in when their timers land — unless the
+    // lane's radiance gate says the sky is wrong (a night lane by day
+    // WAITS at the door, timer spent, and fields the wave the moment its
+    // condition holds again).
     for (const lane of this.lanes) {
       if (!lane.pending) continue;
       lane.timer -= dt;
       if (lane.timer > 0) continue;
+      if (lane.row.when && !(this.terrain?.condHeld?.(lane.row.when) ?? true)) continue;
       lane.pending = false;
       this.spawnWave(lane);
     }

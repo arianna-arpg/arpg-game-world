@@ -9091,6 +9091,102 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // ==========================================================================
+  // THE VESPERKIN — the cosmos country's own (aether_vesper; grafted by the
+  // Ascent package, contexts ['aetherial']). The day/night kin: nearly every
+  // body wears NOCTURNE mods, so the same meadow is two different countries
+  // by sun and by star — moths blaze at noon and gutter at dusk, hounds
+  // arrive with the dark, the herds grow flighty under stars. Defense
+  // textures per the doctrine: swarm-evasion / prey / night-flanker /
+  // gap-ambusher / ES-construct / the phased sovereign.
+  // ==========================================================================
+
+  /** The moth: a scrap of daylight with wings — noon's swarm, dusk's
+   *  litter. Day-worn nocturne (the pallbearer's inverted pole): bright
+   *  hours make it quick; the dark leaves it stumbling into your swings. */
+  lumen_moth: {
+    id: 'lumen_moth', name: 'Lumen Moth',
+    color: '#f4ecd0', shape: 'diamond', radius: 8, material: 'ethereal', look: 'lumen_moth',
+    base: { life: 22, moveSpeed: 125, evasion: 25, mana: 10, manaRegen: 1 },
+    skills: ['talon_rake'], xp: 5, faction: 'vesperkin',
+    flier: true, levitates: true,
+    nocturne: { phases: ['day', 'dawn'], mods: [mod('evasion', 'flat', 30), mod('moveSpeed', 'increased', 0.2)] },
+    deathBurst: { mode: 'implode', damageFrac: 0.12, coalesce: 0.4, damageType: 'fire' },
+    presence: { to: 15, fadeOut: 6 },
+    scaleVariance: [0.8, 1.2],
+    brain: { type: 'swarm' },
+  },
+
+  /** The grazer: a constellation wearing an elk's patience — the meadows'
+   *  herd-life, walking the glass. Starlight spooks it quick (night
+   *  evasion); breaking it sighs out cold. The hounds' whole economy. */
+  star_grazer: {
+    id: 'star_grazer', name: 'Star Grazer',
+    color: '#c8d0ee', shape: 'oval', radius: 13, material: 'ethereal', look: 'star_grazer',
+    base: { life: 60, moveSpeed: 108, mana: 10, manaRegen: 1 },
+    skills: ['talon_rake'], xp: 10, faction: 'vesperkin',
+    nocturne: { phases: ['night', 'dusk'], mods: [mod('evasion', 'flat', 40), mod('moveSpeed', 'increased', 0.15)] },
+    deathBurst: { mode: 'implode', damageFrac: 0.2, coalesce: 0.55, damageType: 'cold' },
+    presence: { to: 17, fadeOut: 7 },
+    scaleVariance: [0.85, 1.3],
+    brain: { type: 'flee' },
+  },
+
+  /** The hound: the dark's own courser — spark-maned, pack-run, pouncing
+   *  off the star-spans the night just built for it. Day finds it heavy
+   *  and short-tempered; night makes it the meadow's fastest thing. */
+  comet_hound: {
+    id: 'comet_hound', name: 'Comet Hound',
+    color: '#d8a878', shape: 'triangle', radius: 12, material: 'ethereal', look: 'comet_hound',
+    base: { life: 95, moveSpeed: 112, evasion: 20, mana: 40, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['squall_bite', 'claw'], xp: 26, faction: 'vesperkin',
+    nocturne: { phases: ['night', 'dusk'], mods: [mod('moveSpeed', 'increased', 0.25), mod('damage', 'increased', 0.2), mod('evasion', 'flat', 25)] },
+    presence: { from: 9, fadeIn: 4 },
+    gemBias: ['fire', 'movement'],
+    brain: { type: 'flanker' },
+  },
+
+  // (The gap-predator role is the EXISTING void_angler — the void family's
+  // lure-fisher, threaded into the vesper pack table as a guest: what waits
+  // under the star-spans was always the same thing that waits in the dark
+  // between worlds. Reuse, not a twin.)
+
+  /** The keeper: a brass orrery that never stopped calculating — rings,
+   *  a caged star, and verdicts of falling sky (every starcall it lands
+   *  is the lootable art). ES-glass: crack the calculation, the body is
+   *  nothing. */
+  orrery_keeper: {
+    id: 'orrery_keeper', name: 'Orrery Keeper',
+    color: '#b9a684', shape: 'star', radius: 13, material: 'metal', look: 'orrery_keeper',
+    base: { life: 70, moveSpeed: 70, energyShield: 90, mana: 160, manaRegen: 9 },
+    mods: [mod('lightningRes', 'flat', 0.3), mod('fireRes', 'flat', 0.3)],
+    skills: ['starcall', 'static_discharge'], xp: 48, faction: 'vesperkin',
+    presence: { from: 11, fadeIn: 4 },
+    gemBias: ['fire', 'aoe'],
+    brain: { type: 'caster' },
+  },
+
+  /** The Noctarch: the wane's sovereign — the hour between lights wearing
+   *  a crown. Strongest exactly when the meadows are (night), thinning to
+   *  a rumor by noon; the wane it is named for is yours. */
+  noctarch_of_the_wane: {
+    id: 'noctarch_of_the_wane', name: 'Noctarch of the Wane',
+    color: '#a89ae0', shape: 'star', radius: 16, material: 'ethereal', look: 'noctarch',
+    base: { life: 260, moveSpeed: 96, mana: 260, manaRegen: 11, energyShield: 70, evasion: 25 },
+    mods: [mod('coldRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3)],
+    skills: ['starcall', 'skyhook', 'cirrus_veil'], xp: 110, faction: 'vesperkin',
+    nocturne: { phases: ['night'], mods: [mod('damage', 'increased', 0.25), mod('castSpeed', 'increased', 0.15)] },
+    presence: { from: 13, fadeIn: 5 },
+    gemBias: ['fire', 'cold'],
+    brain: {
+      type: 'caster',
+      phases: [
+        { atLifeFrac: 0.55, mods: [mod('castSpeed', 'increased', 0.2)], announce: 'The wane calls its hounds!', onEnter: [{ do: 'summon', monster: 'comet_hound', count: 2, ring: 130 }] },
+      ],
+    },
+  },
+
+  // ==========================================================================
   // THE SIROCCO COURT — the deep desert's own (the gnolls keep the rim; past
   // the shimmer line the sand answers to older tenants). Presence-staged so
   // the court only musters where the country runs deep and hot; every verb
@@ -10031,6 +10127,9 @@ const RELATIONS: Record<string, FactionStance> = {
   'sylvan|undead': 'hostile',
   // The high sky has a food chain: shrikes stoop on the weather-scraps.
   'galekin|zephyrid': 'hostile',
+  // — and the cosmos hunts it: comet hounds run the wild sky's herds down
+  // where the vesper meadows meet the drift.
+  'vesperkin|zephyrid': 'hostile',
   // Gnolls run with the warband — and burn the groves.
   'gnoll|goblin': 'ally',
   'gnoll|sylvan': 'hostile',

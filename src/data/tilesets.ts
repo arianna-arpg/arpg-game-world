@@ -63,6 +63,11 @@ export interface TilesetVariant {
   /** BLEND override for this face: its own roll, or null to SUPPRESS the
    *  tileset-level blend on this face. Absent = the tileset's declaration. */
   blend?: BlendRoll | null;
+  /** LAYOUT-KNOB overrides merged over the tileset's layoutParams at mint
+   *  (spec still outranks both) — a face can retune its RECIPE the way
+   *  theme retunes its colors: the prism face weights its span table
+   *  toward rainbows without a sibling tileset. Absent = byte-identical. */
+  layoutParams?: Record<string, unknown>;
 }
 
 export interface TilesetDef {
@@ -110,6 +115,15 @@ export interface TilesetDef {
   /** false = NEVER field-minted at a frontier (realm / cave / incursion-only
    *  tilesets: Fractures capstones, cave mouths, the Eldritch incursion). */
   frontier?: false;
+  /** REALM MEMBERSHIP: this tileset belongs to the named DIMENSION's own
+   *  biome pools — a realm mint (placeZoneAt with spec.dimension, the gate
+   *  mint) resolves it through pickTilesetForBiome's realm parameter even
+   *  though `frontier: false` keeps it out of every SURFACE pool. The two
+   *  flags carry ONE meaning each: `frontier` gates the surface field,
+   *  `realm` grants a dimension's field — without this, a realm whose
+   *  palette names only realm-locked tilesets silently minted the fallback
+   *  (the wasteland-Firmament defect: heaven wearing hell's face). */
+  realm?: string;
   /** PERF-GATE OPT-IN for non-frontier tilesets: true = this tileset has a
    *  walkable steady state a blind probe can sample (caves, minted interiors),
    *  so `npm run perf` appends it to the sweep matrix AFTER the frontier
@@ -5888,7 +5902,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     // walk has no steady state here anyway — the shelf MELTS under the
     // walker, who falls through to a random surface zone mid-sample (the
     // old sweeps' phantom "aether" rows measured whatever zone caught them).
-    frontier: false,
+    // realm:'aetherial' keeps it IN its own dimension's biome pools — the
+    // surface exclusion alone starved the realm palette and every aetherial
+    // mint fell back to the inherited hell-corridor tileset.
+    frontier: false, realm: 'aetherial',
     biome: 'aether',
     nameFirst: ['Aether', 'Empyrean', 'Dawnfield', 'Cloudreach', 'Heavenspan', 'Skyshoal', 'Zenith'],
     // 'Crossing' is RESERVED for launch shelves (defs/ascent.ts renames its
@@ -6085,7 +6102,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // frail span drops the span. What the Host built does not fall.
   aether_spires: {
     id: 'aether_spires',
-    frontier: false, // realm tileset (see aether) — launch-gated, melts underfoot
+    frontier: false, realm: 'aetherial', // realm tileset (see aether) — launch-gated, melts underfoot
     biome: 'aether_spires',
     nameFirst: ['Aurelian', 'Empyrean', 'Zenith', 'Highspire', 'Dawnhold', 'Vesperal'],
     nameSecond: ['Courts', 'Spans', 'Gallery', 'Approach', 'Terraces', 'Processional'],
@@ -6215,7 +6232,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // taught. Croc and the plumber both walked so this biome could drift.
   aether_drift: {
     id: 'aether_drift',
-    frontier: false, // realm tileset (see aether) — the torn lattice ejects a blind walker
+    frontier: false, realm: 'aetherial', // realm tileset (see aether) — the torn lattice ejects a blind walker
     biome: 'aether_drift',
     nameFirst: ['Drift', 'Zephyr', 'Windward', 'Skysworn', 'Cirrus', 'Gale', 'Aeolian'],
     // 'Crossing' stays RESERVED for launch shelves (defs/ascent.ts).
@@ -6380,13 +6397,201 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE VESPERLANDS — the Aetherial's cosmos face: firmament-glass isles
+  // that hold forever, and everything BETWEEN them answering the sky. The
+  // day/night country: sunbridges by light, star-spans by dark, prism-spans
+  // under rain, veiled ways for the faithful (engine/spans.ts + the
+  // radiance fabric), and COMET LANES streaking the void meadows at night
+  // (the cometfall front, radiance-gated). The realm's ephemeral thesis at
+  // its purest: the same zone is two different countries by sun and by
+  // star, within one visit.
+  aether_vesper: {
+    id: 'aether_vesper',
+    frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the realm's own web
+    perfProbe: true, // stable arteries hold a blind walker — honest to sweep
+    biome: 'aether_vesper',
+    nameFirst: ['Vesper', 'Evenfall', 'Starfield', 'Twilight', 'Auroral', 'Midnight', 'Eventide'],
+    nameSecond: ['Meadows', 'Reaches', 'Walk', 'Shoals', 'Court', 'Verge', 'Passage'],
+    theme: {
+      floor: '#d8d8ea', grid: '#bcc0da', border: '#8e94b8',
+      obstacle: '#e2e2f0', obstacleEdge: '#a2a8cc', accent: '#cfe0ff',
+      wall: '#c8ccdf', water: '#9fd8e8',
+      // The day/night swing IS this face's identity: bright noons, deep
+      // true-dark nights (the star-spans' own hour).
+      dayLight: 1.2, nightDark: 0.72, heat: 0.3,
+      ground: {
+        palette: ['#a8aac8', '#bcbcd6', '#cfcfe4', '#e0dff0', '#f0eef8'],
+        bias: 0.58, alpha: 0.56, scale: 1.55, strength: 0.9, speckles: 0.35, evenness: 0.3,
+      },
+      ambientFx: [
+        { kind: 'motes', color: '#e8eeff', intensity: 0.9 },
+        { kind: 'aurora', color: '#a8b8f0', intensity: 0.5 },
+      ],
+      fog: { banks: [1, 3], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+      // THE SPANS (engine/spans.ts): what stands is the sky's decision.
+      // Sunbridges die under a true storm (radiance 0.5 < 0.55) and at
+      // night; star-spans hold through night AND a starfall's lifted dark
+      // (floor 0.32 ≤ 0.35); prisms exist only while the sky weeps. The
+      // twilight gap (0.35–0.55) is deliberate: at dusk and dawn only the
+      // glass and the veiled ways hold — the crossing thins twice a day.
+      spans: [
+        { region: 'span_sun', when: { radiance: { from: 0.55 } } },
+        { region: 'span_star', when: { radiance: { to: 0.35 } } },
+        { region: 'span_prism', when: { weather: ['rain', 'storm'] } },
+      ],
+      // THE COMET MEADOWS: night lanes of cometfall streaking the voids —
+      // no ambient pockets, lanes only, and only while the dark holds.
+      creep: {
+        pockets: [0, 0],
+        kinds: [{ id: 'cometfall' }],
+        fronts: [
+          { id: 'cometfall', line: [1, 1], delay: [6, 14], waves: [12, 22], when: { radiance: { to: 0.35 } } },
+          { id: 'cometfall', line: [1, 2], delay: [18, 30], waves: [16, 28], when: { radiance: { to: 0.2 } } },
+        ],
+      },
+    },
+    sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
+    forceLayout: 'aether_vesper',
+    layout: [
+      { kind: 'cloud_billow', count: [5, 8] },
+      { kind: 'star_lantern', count: [4, 7] },
+      { kind: 'nightbloom_tuft', count: [5, 9] },
+      { kind: 'comet_shard', count: [3, 6] },
+      { kind: 'moonwell', count: [1, 2] },
+      { kind: 'sundial_gnomon', count: [1, 3] },
+      { kind: 'orrery_stand', count: [1, 3] },
+      { kind: 'aether_crystal', count: [2, 4] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [80, 120] },
+    ],
+    variants: [
+      // EVENTIDE SHOALS: the gentle face — long golden light, one lazy
+      // comet lane, the observatory left mid-question.
+      {
+        name: 'eventide shoals',
+        layout: [
+          { kind: 'cloud_billow', count: [6, 9] },
+          { kind: 'star_lantern', count: [5, 8] },
+          { kind: 'nightbloom_tuft', count: [4, 7] },
+          { kind: 'sundial_gnomon', count: [2, 4] },
+          { kind: 'orrery_stand', count: [2, 4] },
+          { kind: 'moonwell', count: [1, 2] },
+          { kind: 'flowers', count: [1, 3] },
+        ],
+        theme: {
+          accent: '#ffd9a0', dayLight: 1.3, nightDark: 0.66,
+          creep: {
+            pockets: [0, 0],
+            kinds: [{ id: 'cometfall' }],
+            fronts: [
+              { id: 'cometfall', line: [1, 1], delay: [10, 20], waves: [18, 30], when: { radiance: { to: 0.3 } } },
+            ],
+          },
+        },
+      },
+      // MIDNIGHT MEADOWS: the Frogger face — wide void gaps, three comet
+      // lanes, and the dark arriving with teeth. Star country proper.
+      {
+        name: 'midnight meadows',
+        layout: [
+          { kind: 'cloud_billow', count: [4, 7] },
+          { kind: 'star_lantern', count: [5, 9] },
+          { kind: 'nightbloom_tuft', count: [7, 12] },
+          { kind: 'comet_shard', count: [5, 9] },
+          { kind: 'moonwell', count: [1, 3] },
+        ],
+        theme: {
+          accent: '#a8b8f0', dayLight: 1.05, nightDark: 0.78,
+          ground: {
+            palette: ['#9092b8', '#a4a6c8', '#babadA', '#d0cfe8', '#e4e2f4'],
+            bias: 0.54, alpha: 0.58, scale: 1.5, strength: 0.95, speckles: 0.42, evenness: 0.28,
+          },
+          ambientFx: [
+            { kind: 'motes', color: '#dce6ff', intensity: 1.2 },
+            { kind: 'aurora', color: '#8fa0e8', intensity: 0.65 },
+          ],
+          creep: {
+            pockets: [0, 0],
+            kinds: [{ id: 'cometfall' }],
+            fronts: [
+              { id: 'cometfall', line: [1, 1], delay: [5, 10], waves: [10, 18], when: { radiance: { to: 0.35 } } },
+              { id: 'cometfall', line: [1, 2], delay: [12, 20], waves: [12, 22], when: { radiance: { to: 0.3 } } },
+              { id: 'cometfall', line: [2, 2], delay: [24, 36], waves: [16, 26], when: { radiance: { to: 0.15 } } },
+            ],
+          },
+          spans: [
+            { region: 'span_sun', when: { radiance: { from: 0.55 } } },
+            { region: 'span_star', when: { radiance: { to: 0.4 } } },
+            { region: 'span_prism', when: { weather: ['rain', 'storm'] } },
+          ],
+        },
+      },
+      // PRISM REACH: the rain-loving face — mist in the basins, span-lace
+      // leaning hard toward prisms and veils (the storm is the key).
+      {
+        name: 'prism reach',
+        layout: [
+          { kind: 'cloud_billow', count: [6, 9] },
+          { kind: 'star_lantern', count: [4, 7] },
+          { kind: 'nightbloom_tuft', count: [5, 8] },
+          { kind: 'moonwell', count: [2, 3] },
+          { kind: 'aether_crystal', count: [3, 6] },
+          { kind: 'flowers', count: [1, 2] },
+        ],
+        layoutParams: {
+          spanKinds: [
+            { kind: 'span_prism', w: 4 },
+            { kind: 'span_veiled', w: 3 },
+            { kind: 'span_sun', w: 2 },
+            { kind: 'span_star', w: 2 },
+          ],
+          spanLinks: [3, 5],
+        },
+        theme: {
+          accent: '#b8e0c8', dayLight: 1.12, nightDark: 0.7,
+          fog: { banks: [2, 4], kinds: [{ id: 'aether_veil', weight: 2 }, { id: 'mist' }] },
+        },
+      },
+    ],
+    // The cosmos kin keep this country; the wind's and the Host's own pass
+    // through on their errands (RELATIONS makes vesperkin × zephyrid ground
+    // fight itself — the hounds hunt the grazers' cousins).
+    packs: {
+      count: [3, 5], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },  // a swarm of moths / a grazing herd
+        { weight: 5, size: [2, 4] },  // the standard constellation
+        { weight: 3, size: [1, 2] },  // one heavy body and its shadow
+      ],
+      table: [
+        { id: 'lumen_moth', weight: 4 },
+        { id: 'star_grazer', weight: 3 },
+        { id: 'comet_hound', weight: 3, presence: { from: 9, fadeIn: 4 } },
+        { id: 'void_angler', weight: 2, presence: { from: 10, fadeIn: 4 } },
+        { id: 'orrery_keeper', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'noctarch_of_the_wane', weight: 0.6, presence: { from: 13, fadeIn: 5 } },
+        // Guests: the wild sky drifts through the meadows.
+        { id: 'cloud_grazer', weight: 1.5, presence: { to: 16, fadeOut: 7 } },
+        { id: 'mistwing_shrike', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'cherub_wisp', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled (no 'spawners' objective up here)
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.2 },
+    ],
+  },
+
   // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset
   // (biome 'aether_sanctum' resolves here). The same lattice run dense and
   // UNBROKEN — wide causeways, no sky-holes, and NO CollapseSpec: this
   // ground holds. The waypoint home the shelves are crossed to reach.
   aether_sanctum: {
     id: 'aether_sanctum',
-    frontier: false, // realm tileset (see aether) — reached by the Ascent, not frontiers
+    frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the Ascent, not frontiers
     biome: 'aether_sanctum',
     nameFirst: ['Firmament', 'Empyrean', 'Zenith', 'Aurelian'],
     nameSecond: ['Landing', 'Vault', 'Court', 'Rest'],
@@ -6456,6 +6661,20 @@ export const TILESETS_BY_BIOME: Record<string, string[]> = (() => {
   return m;
 })();
 
+/** dimension id → biome id → the REALM tileset ids that wear it (TilesetDef
+ *  .realm). A dimension's mints see the UNION of this and the surface pool:
+ *  hell keeps riding shared frontier tilesets (its demon-warp zones mint the
+ *  same wasteland on the surface), while the Aetherial's launch-gated faces
+ *  stay invisible to every surface roll yet field their own country. */
+export const REALM_TILESETS_BY_BIOME: Record<string, Record<string, string[]>> = (() => {
+  const m: Record<string, Record<string, string[]>> = {};
+  for (const t of Object.values(TILESETS)) {
+    if (!t.biome || !t.realm) continue;
+    ((m[t.realm] ??= {})[t.biome] ??= []).push(t.id);
+  }
+  return m;
+})();
+
 /** A seeded tileset choice for a field biome (so deepwood/jungle/meadow all stay
  *  reachable for 'grove', and the pick is deterministic per the zone's rng).
  *  Undefined when the biome has no frontier tileset (caller falls back).
@@ -6464,8 +6683,13 @@ export const TILESETS_BY_BIOME: Record<string, string[]> = (() => {
  *  depthAffinity, faces weigh themselves by their envelope at that depth —
  *  the sub-biome staging pick (desert: waste rim → erg heart). Biomes whose
  *  faces declare no envelopes keep the plain uniform pick, byte-identical. */
-export function pickTilesetForBiome(biome: string, rng: Rng, depth?: number): string | undefined {
-  const c = TILESETS_BY_BIOME[biome];
+export function pickTilesetForBiome(biome: string, rng: Rng, depth?: number, realm?: string): string | undefined {
+  // A realm caller (spec.dimension mints, the gate mint) widens the pool with
+  // its OWN tilesets (TilesetDef.realm) — the surface pool alone starved any
+  // biome whose faces are all realm-locked (the wasteland-Firmament defect).
+  const shared = TILESETS_BY_BIOME[biome];
+  const owned = realm ? REALM_TILESETS_BY_BIOME[realm]?.[biome] : undefined;
+  const c = owned?.length ? (shared?.length ? [...shared, ...owned] : owned) : shared;
   if (!c || !c.length) return undefined;
   if (depth === undefined || !c.some(id => TILESETS[id].depthAffinity)) return rng.pick(c);
   const weights = c.map(id => {
@@ -6624,6 +6848,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   aether_spires:  { title: 'Aetherial Spires',  blurb: 'The built courts among the clouds — solid stone that holds, though a fight carried onto a frail connecting span will still drop the span.' },
   aether_drift:   { title: 'Aetherial Drift',   blurb: 'Drifting cloud-rafts riding the wind — gusts warn and then shove; read the rhythm or the sky simply lets you go, straight down.' },
   aether_sanctum: { title: 'Aetherial Sanctum', blurb: 'The dense, unbroken lattice at the crossing’s end — wide causeways, no sky-holes, ground that finally holds. The waypoint home.' },
+  aether_vesper:  { title: 'The Vesperlands',   blurb: 'The cosmos country: glass isles forever, and everything between them answering the sky — sunbridges by day, star-spans by night, rainbows in the rain, and ways you cross on faith alone.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no

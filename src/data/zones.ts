@@ -21,6 +21,8 @@ import type { ZoneCreepSpec } from '../engine/creep';
 import type { CollapseSpec } from '../engine/collapse';
 import type { FluxSpec } from '../engine/flux';
 import type { RecoveryPolicy } from '../world/regions';
+import type { SpanRowSpec } from '../engine/spans';
+import { dimensionDef } from '../world/dimensions';
 import type { WildlifeRow } from './monsters';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
@@ -483,6 +485,15 @@ export interface ZoneTheme {
    *  Sky doors (skyfall rows) and authored ejects are never overridden.
    *  Variants override wholesale (the collapse precedent). */
   pitfall?: RecoveryPolicy;
+  /** EPHEMERAL SPANS (engine/spans.ts): condition-held ground — walkable
+   *  region runs whose EXISTENCE tracks a RadianceCond (world/radiance.ts):
+   *  sunbridges that stand while the sky is bright, star-spans that stand
+   *  at night, prism-spans that stand under rain or storm. The layout
+   *  paints the kinds; these rows set only the CONDITIONS. Spans are
+   *  shortcuts and prizes, never the only road (the recipes keep every
+   *  exit on permanent ground — probe_radiance pins it). Needs a grid
+   *  layout. Variants override wholesale, like collapse/flux. */
+  spans?: SpanRowSpec[];
   /** THE UNDERSTORY (render/vis/understory.ts): what shows through this
    *  zone's `window` region cells. 'cloudsea' = the endless procedural cloud
    *  deck. A zone with `ZoneDef.below` shows the CAPTURED zone beneath it
@@ -818,8 +829,14 @@ export type SkyExposure = 'open' | 'sheltered';
  *  co-op sides agree from a fresh mint, a save, or a snapshot alike. */
 export function skyOf(zone: ZoneDef): SkyExposure {
   if (zone.sky) return zone.sky;
-  if ((zone.dimension ?? 'surface') !== 'surface') return 'sheltered';
+  // Off-surface ground derives its DIMENSION's declared exposure (the
+  // underworld's roof of world vs the Aetherial's open heavens) — default
+  // sheltered, the pre-registry behavior. Cave pockets shelter regardless
+  // of whose dimension they hang in (an explicit def sky still overrides).
   if (zone.caveDepth != null) return 'sheltered';
+  if ((zone.dimension ?? 'surface') !== 'surface') {
+    return dimensionDef(zone.dimension).sky ?? 'sheltered';
+  }
   return 'open';
 }
 

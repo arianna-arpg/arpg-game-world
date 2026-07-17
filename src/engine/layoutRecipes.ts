@@ -2156,6 +2156,158 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('aether_drift', aetherDriftLayout);
 
+// --- AETHER VESPER (the Vesperlands) ----------------------------------------------
+// The cosmos country: FIRMAMENT-GLASS isles that hold forever (no collapse,
+// no flux — this face's transience answers the SKY, not a clock), chained by
+// permanent glass causeways (every portal keeps a forever-road: spans are
+// shortcuts and prizes, never the only way — the genqa/probe contract), and
+// laced with EPHEMERAL SPANS (engine/spans.ts): sunbridges that stand while
+// the sky is bright, star-spans the dark reveals, prism-spans that exist only
+// under rain or storm, and VEILED WAYS — always walkable, painted at the very
+// threshold of sight, marked only by a star-cairn at each mouth (the leap of
+// faith). PRIZE ISLES hang off the lattice reachable ONLY by span — what the
+// night (or the rain, or your nerve) unlocks. The wide voids between isles
+// are the comet lanes' meadows (theme.creep.fronts, radiance-gated).
+// Knobs are layoutParams: isles, isleRadius, causewayWidth, spanLinks,
+// spanWidth, spanKinds (weighted), prizeIsles.
+function aetherVesperLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const M = 110;
+  const isleR = layoutParam(def, 'isleRadius', [150, 230]) as [number, number];
+  const isleN = layoutParam(def, 'isles', [5, 7]) as [number, number];
+  const carve = Mask.forRect(0, 0, arena.w, arena.h);
+  const isles: Vec2[] = [];
+  for (let i = 0, n = rng.int(isleN[0], isleN[1]); i < n; i++) {
+    const r = rng.range(isleR[0], isleR[1]);
+    const cx = rng.range(M + r * 0.6, Math.max(M + r * 0.6, arena.w - M - r * 0.6));
+    const cy = rng.range(M + r * 0.6, Math.max(M + r * 0.6, arena.h - M - r * 0.6));
+    disc(carve, cx, cy, r);
+    for (let l = 0, ln = rng.int(1, 2); l < ln; l++) {
+      const a = rng.range(0, Math.PI * 2);
+      disc(carve, cx + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.5, r * rng.range(0.4, 0.6));
+    }
+    isles.push(vec(cx, cy));
+  }
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    disc(carve, pt.x, pt.y, 130);
+    isles.push(vec(pt.x, pt.y));
+  }
+  // The monument isle: the far anchor of the lattice (spire_of_evening).
+  let monument = isles[0];
+  let bd = -1;
+  for (const p of isles) {
+    const d = (p.x - ctx.entry.x) ** 2 + (p.y - ctx.entry.y) ** 2;
+    if (d > bd) { bd = d; monument = p; }
+  }
+  disc(carve, monument.x, monument.y, 140);
+
+  // PRIZE ISLES: hung off the lattice, carved but NEVER arteried — their
+  // only doors are the spans rolled below. Placed away from every main
+  // isle so the gap is honest (a prize you could walk to is no prize).
+  const prizeN = layoutParam(def, 'prizeIsles', [1, 2]) as [number, number];
+  const prizes: Vec2[] = [];
+  for (let i = 0, n = rng.int(prizeN[0], prizeN[1]); i < n && isles.length; i++) {
+    for (let tries = 0; tries < 18; tries++) {
+      const px = rng.range(M + 90, arena.w - M - 90), py = rng.range(M + 90, arena.h - M - 90);
+      const nearest = Math.sqrt(Math.min(...isles.map(p => (p.x - px) ** 2 + (p.y - py) ** 2)));
+      if (nearest < 330 || nearest > 620) continue; // a real gap, but a bridgeable one
+      disc(carve, px, py, rng.range(96, 128));
+      prizes.push(vec(px, py));
+      break;
+    }
+  }
+
+  // PERMANENT CAUSEWAYS: chain every main isle (portals included) into one
+  // connected lattice on ground that never leaves — the forever-roads.
+  const cwW = layoutParam(def, 'causewayWidth', [48, 64]) as [number, number];
+  const linked: Vec2[] = [isles[isles.length - 1]];
+  const pending = isles.slice(0, -1);
+  while (pending.length) {
+    let bi = 0, bj = 0, best = Infinity;
+    for (let i = 0; i < pending.length; i++) {
+      for (let j = 0; j < linked.length; j++) {
+        const d = (pending[i].x - linked[j].x) ** 2 + (pending[i].y - linked[j].y) ** 2;
+        if (d < best) { best = d; bi = i; bj = j; }
+      }
+    }
+    const from = linked[bj], to = pending.splice(bi, 1)[0];
+    const pts = wanderPath(rng, from, to, { step: 105, wobble: 34, bowFrac: 0.16 });
+    const halfW = rng.range(cwW[0], cwW[1]) / 2;
+    band(carve, pts, halfW);
+    reserveArtery(ctx, pts, halfW);
+    linked.push(to);
+  }
+
+  // THE SPANS: rolled kinds over taut, bow-less bridges. Every prize isle
+  // gets exactly one; then a few isle-to-isle shortcuts lace the lattice.
+  // Painted BEFORE the ground carve so bridge mouths dock flush under the
+  // glass (ground wins where they overlap an isle).
+  const spanW = layoutParam(def, 'spanWidth', [48, 58]) as [number, number];
+  const spanKinds = layoutParam(def, 'spanKinds', [
+    { kind: 'span_sun', w: 3 },
+    { kind: 'span_star', w: 3 },
+    { kind: 'span_prism', w: 2 },
+    { kind: 'span_veiled', w: 2 },
+  ]) as { kind: string; w: number }[];
+  const rollSpanKind = (): string => {
+    let total = 0;
+    for (const k of spanKinds) total += k.w;
+    let r = rng.range(0, total);
+    for (const k of spanKinds) { r -= k.w; if (r <= 0) return k.kind; }
+    return spanKinds[spanKinds.length - 1].kind;
+  };
+  const cairns: Vec2[] = [];
+  const laySpan = (from: Vec2, to: Vec2, kind: string): void => {
+    const pts = wanderPath(rng, from, to, { step: 90, wobble: 14, bowFrac: 0.08 });
+    const m = Mask.forRect(0, 0, arena.w, arena.h);
+    band(m, pts, rng.range(spanW[0], spanW[1]) / 2);
+    paintRegion(grid, m, kind);
+    if (kind === 'span_veiled') {
+      // The tiniest inclination: a cairn at each mouth, nothing on the gap.
+      const a = pts[0], b = pts[pts.length - 1];
+      const t = 42 / Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+      cairns.push(vec(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+      cairns.push(vec(b.x - (b.x - a.x) * t, b.y - (b.y - a.y) * t));
+    }
+  };
+  for (const p of prizes) {
+    let near = isles[0], nd = Infinity;
+    for (const c of isles) {
+      const d = (c.x - p.x) ** 2 + (c.y - p.y) ** 2;
+      if (d < nd) { nd = d; near = c; }
+    }
+    laySpan(near, p, rollSpanKind());
+    ctx.pois.push(vec(p.x, p.y)); // the prize: interactives roll onto it
+  }
+  const linkN = layoutParam(def, 'spanLinks', [2, 4]) as [number, number];
+  for (let i = 0, n = rng.int(linkN[0], linkN[1]); i < n && isles.length > 2; i++) {
+    const a = rng.pick(isles), b = rng.pick(isles);
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (a === b || d < 320 || d > 900) continue;
+    laySpan(a, b, rollSpanKind());
+  }
+
+  paintRegion(grid, carve, 'ground');
+
+  // The evening spire: the country's landmark, on forever-ground.
+  ctx.doodads.push({ pos: vec(monument.x, monument.y), radius: rng.range(24, 30), kind: 'spire_of_evening' });
+  ctx.pois.push(vec(monument.x, monument.y));
+  (ctx.mustReach ??= []).push(vec(monument.x, monument.y));
+  ctx.reserved.push({ pos: vec(monument.x, monument.y), radius: 110 });
+  // Cairns placed after the ground exists — they stand at span mouths, on glass.
+  for (const c of cairns) {
+    ctx.doodads.push({ pos: vec(c.x, c.y), radius: rng.range(7, 9), kind: 'star_cairn' });
+  }
+
+  scatterDecoration(ctx, def);
+}
+registerLayout('aether_vesper', aetherVesperLayout);
+
 // --- SHIP DECK (the Wraithsail's boards) -----------------------------------------
 // A HULL as a zone: one long pointed form — bow to the north portal, stern to
 // the south — walled by the dark beyond the bulwark. The SAME recipe serves

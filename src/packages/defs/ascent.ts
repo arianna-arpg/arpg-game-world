@@ -100,6 +100,26 @@ const ZEPHYRID_FACTION: FactionSpec = {
   ],
 };
 
+/** THE VESPERKIN — the cosmos country's kin (aether_vesper, the realm's
+ *  fourth mood): day/night fauna on the NOCTURNE fabric — moths that blaze
+ *  at noon, hounds that arrive with the dark, the gap-angler, the orrery
+ *  construct, the Noctarch. Realm content like its three neighbours:
+ *  contexts ['aetherial'], no warlord; RELATIONS pits them against the
+ *  zephyrid herds where the meadows meet the drift. */
+const VESPERKIN_FACTION: FactionSpec = {
+  id: 'vesperkin',
+  name: 'the Vesperkin',
+  color: '#b0a8e0',
+  traits: { roaming: 0.5, aggression: 0.85, warlordHome: 'capital', contexts: ['aetherial'] },
+  roster: [
+    { id: 'lumen_moth', weight: 4 },
+    { id: 'star_grazer', weight: 3 },
+    { id: 'comet_hound', weight: 3 },
+    { id: 'orrery_keeper', weight: 2 },
+    { id: 'noctarch_of_the_wane', weight: 0.6 },
+  ],
+};
+
 /** The launch shelves' reserved name pool ("<X> Crossing" — shelves alone
  *  wear 'Crossing'; the realm web's pools dropped it to keep the map honest). */
 const CROSSING_NAMES = ['Skyshoal', 'Cloudreach', 'Dawnfield', 'Empyrean', 'Heavenspan', 'Zenith', 'Aurelian', 'Vesper'];
@@ -180,7 +200,7 @@ export const ASCENT: ContentPackage = {
   defaultStartLevel: 10,
   defaultEnabled: true,
   world: { overlay: (ctx) => new AscentField(ctx, ASCENT_SURGE) },
-  factions: [SERAPHIC_FACTION, GALEKIN_FACTION, ZEPHYRID_FACTION],
+  factions: [SERAPHIC_FACTION, GALEKIN_FACTION, ZEPHYRID_FACTION, VESPERKIN_FACTION],
   validate: (look) => [
     ...(look.faction('seraphic') ? [] : [`the 'seraphic' faction is unknown`]),
     // The shelf mints from the 'aether' tileset and the gate zone from
@@ -188,7 +208,10 @@ export const ASCENT: ContentPackage = {
     // a rename can never fall back to a warned cavern.
     ...(look.tileset('aether') ? [] : [`the 'aether' tileset is unregistered`]),
     ...(look.tileset('aether_sanctum') ? [] : [`the 'aether_sanctum' tileset is unregistered`]),
+    ...(look.tileset('aether_vesper') ? [] : [`the 'aether_vesper' tileset is unregistered`]),
     ...(look.monster('cherub_wisp') ? [] : [`the 'cherub_wisp' warden is unknown`]),
     ...(look.monster('principality_of_dawn') ? [] : [`the 'principality_of_dawn' warden is unknown`]),
+    ...(look.monster('lumen_moth') ? [] : [`the 'lumen_moth' vesperkin is unknown`]),
+    ...(look.monster('noctarch_of_the_wane') ? [] : [`the 'noctarch_of_the_wane' sovereign is unknown`]),
   ],
 };

@@ -87,6 +87,13 @@ export interface WeatherDef {
    *  baking pass neutrally (the tolerance doctrine). No draws added, so
    *  kinds without one keep their exact spawn streams. */
   birthGeo?: Record<string, { min?: number; max?: number }>;
+  /** RADIANCE DIAL: how this front bends the sky's light while it covers a
+   *  zone (world/radiance.ts — radiance = clamp01(max(light × mul, floor))).
+   *  Omitted = light passes through. `mul` dims: rain greys the noon, a
+   *  blood moon crushes the night blacker. `floor` LIFTS: a starfall makes
+   *  midnight glitter brighter than dusk — the one night the star-bridges'
+   *  neighbours may also stand. Read only by the radiance scalar. */
+  radiance?: { mul?: number; floor?: number };
 }
 
 /** The registry of record — one row per weather kind. Every consumer is a
@@ -95,10 +102,12 @@ export interface WeatherDef {
 export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
   clear: { label: 'Clear', color: '#000000', countMul: 1.0, factionMul: {} },
   rain: {
+    radiance: { mul: 0.72 },
     label: 'Rain', color: '#4a6a9a', countMul: 1.05, factionMul: { sylvan: 1.3, wild: 1.15 },
     wind: 0.4, skyWeight: { day: 3, dusk: 2, night: 1, dawn: 2 },
   },
   storm: {
+    radiance: { mul: 0.5 },
     label: 'Storm', color: '#6a5ab0', countMul: 1.25, factionMul: { elemental: 1.8 },
     // The sky calls lightning down at random — more often the harder it rages.
     strike: { skillId: 'storm_call', radius: 80, telegraph: 0.7, ratePerSec: 1.3 },
@@ -107,14 +116,17 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     skyWeight: { day: 1, dusk: 2, night: 3, dawn: 1 },
   },
   fog: {
+    radiance: { mul: 0.62 },
     label: 'Fog', color: '#9aa0a8', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 },
     rampFrac: 0.5, wind: 0.12, skyWeight: { day: 2, dusk: 3, night: 2, dawn: 3 },
   },
   ashfall: {
+    radiance: { mul: 0.75 },
     label: 'Ashfall', color: '#b06a3a', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 },
     wind: 0.3, skyWeight: { day: 1, dusk: 1 },
   },
   bloodmoon: {
+    radiance: { mul: 0.4 },
     label: 'Blood Moon', color: '#b03038', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 },
     wind: 0.18, skyWeight: { night: 2 },
   },
@@ -124,6 +136,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  heat (ZoneTheme.heat — a taiga keeps it forever, a desert sheds it in
    *  moments). Gentle wind; drifts in slowly, day or night. */
   snow: {
+    radiance: { mul: 0.85 },
     label: 'Snowfall', color: '#cfe0f0', countMul: 1.0, factionMul: { wild: 1.2, rimebound: 1.25 },
     wind: 0.45, rampFrac: 0.5, skyWeight: { day: 0.8, dusk: 1, night: 1 },
   },
@@ -135,6 +148,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  court's own ground), and the Rimebound hunting fat beneath it. Under a
    *  Deepwinter run the swell is the front's army answering its weather. */
   blizzard: {
+    radiance: { mul: 0.55 },
     label: 'Blizzard', color: '#9fc8e8', countMul: 1.15,
     factionMul: { rimebound: 1.6, wild: 1.1 },
     strike: { skillId: 'icy_comet', radius: 80, telegraph: 0.9, ratePerSec: 0.4 },
@@ -148,6 +162,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  between yourself and the sky — WIND_CFG shelter) and the gnolls who
    *  hunt inside it; the grit itself is the WEATHER_FX row. */
   sandstorm: {
+    radiance: { mul: 0.6 },
     label: 'Sandstorm', color: '#c9a86a', countMul: 1.3,
     factionMul: { gnoll: 1.3 },
     rampFrac: 0.3, wind: 0.95,
@@ -160,6 +175,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  hunts fatter beneath it — and the red streak wash (WEATHER_FX) is the
    *  tell that you are inside the meat's own climate. */
   hemorrhage: {
+    radiance: { mul: 0.65 },
     label: 'Blood Rain', color: '#a83a48', countMul: 1.25,
     factionMul: { flesh: 1.5 },
     rampFrac: 0.4, wind: 0.15,
@@ -173,6 +189,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  sometimes around a standing FALLEN STAR heart). Two other systems'
    *  night — the shower and the court — from one registry row. */
   starfall: {
+    radiance: { floor: 0.32 },
     label: 'Starfall', color: '#9ad4e8', countMul: 1.15,
     factionMul: { elemental: 1.4 },
     strike: { skillId: 'starfall_shard', radius: 70, telegraph: 0.9, ratePerSec: 0.5 },
@@ -185,6 +202,7 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  strike machinery — cold-green chaos tears, the torment lingering) and
    *  the Legion stirring beneath it. Starfall's grammar on demon ground. */
   hellsear: {
+    radiance: { mul: 0.8 },
     label: 'Hellsear', color: '#7de84a', countMul: 1.2,
     factionMul: { demon: 1.35 },
     strike: { skillId: 'hate_eruption', radius: 72, telegraph: 0.85, ratePerSec: 0.45 },

@@ -162,6 +162,41 @@ registerCreep({
   ],
 });
 
+/** THE COMETFALL — the night sky crossing the ground. A comet is a FAST,
+ *  NARROW section streaking one bearing: born at the rim, across the whole
+ *  zone in seconds, gone off the far edge — the lane's next streak already
+ *  owed. The land means nothing to it (affinity default 1 everywhere, no
+ *  clearway row — sky-fire ignores roads and voids alike), it eats nothing
+ *  and converts nothing (the streak IS the event); its teeth are the
+ *  star-sear on whoever it crosses and the along-bearing SHOVE (the
+ *  undertow lever worn as a comet's wake). Lanes carry it only where a
+ *  theme says so, and only under the sky the row names (FrontSpawnRow.when
+ *  — the vesper country flies these at night). Enough cold can stall a
+ *  streak mid-field — expensive, deliberate, and never required: stepping
+ *  aside is always the cheaper answer. */
+registerCreep({
+  id: 'cometfall',
+  color: '#2a2440', rim: '#9fd0ff', glow: '#ffe9c8',
+  alpha: 0.66,
+  reach: [30, 46],
+  lobing: 0.22,
+  spread: 60,
+  recede: 160,
+  pulse: 2.4,
+  skin: 'blaze',
+  edge: { color: '#cfe4ff', style: 'flame' },
+  front: {
+    speed: 235,
+    affinity: { default: 1 },
+    starve: { below: 0.05, after: 30 },
+    drag: { accel: 210, notFactions: ['vesperkin'] },
+    quench: { types: ['cold'], power: 700 },
+  },
+  grants: [
+    { status: 'starfire', notFactions: ['vesperkin'] },
+  ],
+});
+
 // --- The fronts' remnant vocabulary (runtime-ruled kinds, the attunements
 // registerDoodadRule idiom — no KnownDoodadKind union edit needed) ----------
 

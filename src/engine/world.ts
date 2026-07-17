@@ -136,12 +136,14 @@ import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TU
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
+import { buildZoneSpans, type SpanField } from './spans';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
-import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy } from '../world/dimensions';
+import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
+import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
 import { courseBiomeAt, courseMintHints, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
@@ -1918,6 +1920,11 @@ export class World {
    *  theme carries a FluxSpec — pads phase on seeded rhythms, carrier rafts
    *  shuttle their lanes bearing riders, gusts shove. Zone-transient. */
   flux: FluxField | null = null;
+  /** EPHEMERAL SPANS (engine/spans.ts): this zone's CONDITION-HELD ground,
+   *  when its theme carries span rows — sunbridges that stand by day,
+   *  star-spans that stand by night, prism-spans that stand under rain
+   *  (world/radiance.ts conditions). Zone-transient like its siblings. */
+  spans: SpanField | null = null;
   /** CONJURED GROUND (engine/flux.ts): the ledger of walkable cloud skills
    *  called into being (World.conjureCloud) — over any conjurable void, in
    *  any grid zone. Annexes cells from collapse/flux and returns them on
@@ -3414,6 +3421,50 @@ export class World {
       const kept = def.exits.filter(e => !e.crossDim || !roadless(e.to));
       if (kept.length !== def.exits.length) def.exits = kept;
     }
+    // UNMARKED CROSS-DIMENSION HEAL: an edge whose destination lives in
+    // another dimension WITHOUT the declared crossDim marker is never legal
+    // (isIllegalCrossDim used to seal it forever as "a sealed rift" — a dead
+    // portal squatting the zone). Strip it at load instead: the def heals
+    // permanently, and the live seal stays as the belt for anything appended
+    // mid-session. Warn once per edge so the appender stays traceable.
+    {
+      const kept = def.exits.filter(e => {
+        if (e.to === '?' || e.crossDim) return true;
+        const dest = this.zoneMap[e.to];
+        if (!dest || (dest.dimension ?? 'surface') === (def.dimension ?? 'surface')) return true;
+        console.warn(`[world] healed unmarked cross-dimension edge ${def.id}(${def.dimension ?? 'surface'}) → ${e.to}(${dest.dimension ?? 'surface'}) — stripped at load`);
+        return false;
+      });
+      if (kept.length !== def.exits.length) def.exits = kept;
+    }
+    // ROADLESS-HUB FAN HEAL: a roadless gate hub holds EXACTLY its minted fan
+    // (GATE_FANOUT — the same constant enterDimension mints with). Older
+    // saves accreted weave roads onto the Firmament before the weaver learned
+    // the hub rule; trim the def back to its fan and drop the partners'
+    // reciprocals (their own back-edges at index 0 are never touched — the
+    // append-only invariant makes the fan a stable prefix).
+    if (isRoadlessGateHub(def) && def.exits.length > GATE_FANOUT) {
+      const dropped = def.exits.slice(GATE_FANOUT);
+      def.exits = def.exits.slice(0, GATE_FANOUT);
+      console.warn(`[world] trimmed roadless gate hub '${def.id}' back to its ${GATE_FANOUT}-road fan (${dropped.length} accreted edge(s) healed)`);
+      for (const e of dropped) {
+        const p = this.zoneMap[e.to];
+        if (!p || def.exits.some(x => x.to === p.id)) continue;
+        const kept = p.exits.filter((x, i) => i === 0 || x.to !== def.id);
+        if (kept.length !== p.exits.length) p.exits = kept;
+      }
+    } else if (!isRoadlessGateHub(def)) {
+      // The partner-side mirror: an accreted edge INTO a roadless hub that
+      // the hub itself no longer names (its fan heal ran on an earlier load)
+      // strips here too — whichever side loads first, both heal.
+      const kept = def.exits.filter((e, i) => {
+        if (e.to === '?' || i === 0) return true;
+        const dest = this.zoneMap[e.to];
+        if (!dest || !isRoadlessGateHub(dest)) return true;
+        return dest.exits.some(x => x.to === def.id);
+      });
+      if (kept.length !== def.exits.length) def.exits = kept;
+    }
     this.exits = def.exits.map((e, i) => this.placeExit(e, i));
     // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
     // re-derived every load) so generateLayout below can erect the gate
@@ -4252,6 +4303,17 @@ export class World {
       this.flux = buildZoneFlux(fspec, this.walk,
         new Rng((this.currentZoneSeed ^ FLUX_CFG.salt) >>> 0), this.zoneEntry, fgoal,
         this.exits.map(e => vec(e.pos.x, e.pos.y)));
+    }
+
+    // EPHEMERAL SPANS (engine/spans.ts): stand this zone's condition-held
+    // ground up when its theme asks for it — sunbridges, star-spans, prism
+    // walks. State derives from (world time, sky front, skyOf) alone, so a
+    // resume or a co-op client re-derives the identical bridges. Painted to
+    // the honest state IMMEDIATELY (arriving at night shows no sunbridge).
+    this.spans = null;
+    const sspec = this.zone.theme.spans;
+    if (sspec?.length && this.walk instanceof GridWalkField) {
+      this.spans = buildZoneSpans(sspec, this.walk, (c) => this.radianceCondHeld(c));
     }
 
     // CONJURED GROUND: every grid zone gets the ledger (conjurable region
@@ -6135,9 +6197,19 @@ export class World {
       // reached by its own mechanism alone. A roaded gate (the Hellgate)
       // keeps the classic crossDim back-edge — THE one sanctioned crossing.
       const roadless = dim.entry?.road === false;
+      // The gate's tileset resolves from its declared biome THROUGH THE
+      // DIMENSION'S OWN POOL (TilesetDef.realm) — realm-locked faces like the
+      // sanctum are invisible to surface picks by design. A miss here is an
+      // authoring hole (validateDimensions asserts it at boot); degrade
+      // LOUDLY, never silently into hell's face (the wasteland-Firmament).
+      const gateTileset = pickTilesetForBiome(gateSpec.biome,
+        new Rng((this.manifest.seed ^ gateSpec.seedSalt) >>> 0), undefined, dim.id);
+      if (!gateTileset) {
+        console.warn(`[world] enterDimension('${dim.id}'): gate biome '${gateSpec.biome}' resolves NO tileset (surface or realm pool) — falling back to 'wasteland'`);
+      }
       const gen = placeZoneAt(surfaceAnchor.map, surfaceAnchor, this.zoneMap, this.nextGenId++, {
         id: gateId,
-        tileset: pickTilesetForBiome(gateSpec.biome, new Rng((this.manifest.seed ^ gateSpec.seedSalt) >>> 0)) ?? 'wasteland',
+        tileset: gateTileset ?? 'wasteland',
         biomeFor: this.dimensionBiomeFor(dim.id),
         levelFor: this.levelFor,
         level: Math.max(this.zone.level + (dim.levelBonus ?? 0), this.player.level),
@@ -6150,8 +6222,9 @@ export class World {
         dimension: dim.id,
         objective: { kind: 'clear' }, // arrivals carry no entryFrom — never gated
         // A realm HUB fans wide: the gate is where the dimension's own web
-        // grows from, so it opens three ways instead of the frontier 1-2.
-        forceFrontiers: 3,
+        // grows from, so it opens GATE_FANOUT ways instead of the frontier
+        // 1-2 — the SAME constant the roadless-hub load heal trims back to.
+        forceFrontiers: GATE_FANOUT,
         ...(roadless ? { noBackEdge: true } : { gateCross: true }),
       });
       // No onNodeCharted: gate zones sit outside every overlay's ledgers.
@@ -6317,10 +6390,8 @@ export class World {
    *  must never link INTO it (nearestLinkable) nor duplicate roads onto it. Pure
    *  registry read: no persisted flags, nothing to heal. */
   private roadlessGateHub(z: ZoneDef): boolean {
-    const dim = z.dimension;
-    if (!dim) return false;
-    const ent = dimensionDef(dim)?.entry;
-    return !!ent && ent.road === false && ent.gate.id === z.id;
+    return isRoadlessGateHub(z); // one predicate (world/dimensions.ts) — the
+    // weaver, the linkers, the anchor pickers and the load heal all read it.
   }
 
   /** Eagerly resolve EVERY unresolved '?' frontier of a just-visited zone into a real,
@@ -9355,6 +9426,12 @@ export class World {
     // arena (The Pit) are sealed rooms — no shaft-keeper mints a mineshaft
     // through their floors (the same objective gate every ambient system uses).
     if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
+    // Delvers dig DOWN toward the world's own underworld: ground that HANGS
+    // (ZoneDef.below — a sky shelf over the land) and ground outside the
+    // surface dimension entirely never hosts a shaft. Both are one-field
+    // classifiers, so any future floating or realm pocket exempts itself by
+    // being what it is (no delver allowlist to maintain).
+    if (def.below || (def.dimension ?? 'surface') !== 'surface') return;
     if (!df.delverAllowed(this.player.level)) return;
     const roll = new Rng(((def.seed ?? 0) ^ 0xde17e2) >>> 0); // stable per mouth
     // The draw stays seeded per mouth; the THRESHOLD folds in the package's
@@ -27202,6 +27279,7 @@ export class World {
     this.updateCreep(dt);
     this.updateCollapse(dt);
     this.updateFlux(dt);
+    this.updateSpans(dt);
     this.conjured?.update(dt, this.actors);
     this.updateShrines();
     this.updateAltars(dt);
@@ -28260,6 +28338,23 @@ export class World {
     for (let i = 0; i < Math.min(4, ev.dispersed.length); i++) {
       const v = ev.dispersed[i];
       this.flashes.push({ pos: vec(v.x, v.y), radius: 30, color: '#e6edfb', life: 0.5, maxLife: 0.5 });
+    }
+    this.routeSkyFalls(ev.fell);
+  }
+
+  // --- THE SPAN consequences (engine/spans.ts) -------------------------------
+
+  /** Tick the zone's condition-held ground: conditions re-evaluate against
+   *  the live sky (radianceCondHeld), transitions repaint through the grid's
+   *  own machinery, and falls route through the ONE skyfall path the
+   *  collapse and flux already share. */
+  private updateSpans(dt: number): void {
+    const sf = this.spans;
+    if (!sf) return;
+    const ev = sf.update(dt, (c) => this.radianceCondHeld(c), this.groundFallEligible());
+    for (let i = 0; i < Math.min(5, ev.voided.length); i++) {
+      const v = ev.voided[i];
+      this.flashes.push({ pos: vec(v.x, v.y), radius: 22, color: '#dfe8fa', life: 0.4, maxLife: 0.4 });
     }
     this.routeSkyFalls(ev.fell);
   }
@@ -29690,6 +29785,10 @@ export class World {
         (b.survivalHeldAt ??= {})['breath'] = this.time;
         this.drainSurvival(b, 'breath', drain, dt);
       },
+      // The lane gate's sky window (FrontSpawnRow.when) — the leaf's
+      // structural FrontCond is radiance's own shape (the cast is the
+      // zero-import doctrine's price, paid once here).
+      condHeld: (c) => this.radianceCondHeld(c as RadianceCond),
     });
   }
 
@@ -29797,6 +29896,20 @@ export class World {
    *  wash) — the node map and its spawn bias stay node-space concerns. */
   skyFront(): WeatherFront | null {
     return skyOf(this.zone) === 'sheltered' ? null : this.sim.weather.sample(this.zone);
+  }
+
+  /** THE RADIANCE SCALAR (world/radiance.ts): the sky's light over THIS zone
+   *  right now — dayCycle().light bent by the live front's radiance dial,
+   *  flat twilight under shelter. Pure per (time, front kind, skyOf): host,
+   *  client and a resume all agree. Every radiance consumer reads it here. */
+  radiance(): number {
+    return radianceOf(this.time, this.skyFront()?.kind ?? null, skyOf(this.zone) === 'sheltered');
+  }
+
+  /** Does a RadianceCond hold over this zone right now? The one gate the
+   *  span fabric, front lanes and any future radiance-keyed row consult. */
+  radianceCondHeld(cond: RadianceCond | undefined): boolean {
+    return radianceCondHeld(cond, this.time, this.skyFront()?.kind ?? null, skyOf(this.zone) === 'sheltered');
   }
 
   zoneWind(): { nx: number; ny: number; strength: number } | null {

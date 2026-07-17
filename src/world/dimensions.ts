@@ -60,6 +60,13 @@ export interface DimensionEntry {
 export interface DimensionDef {
   id: string;
   label: string;
+  /** SKY EXPOSURE the dimension's zones DERIVE when their def doesn't say
+   *  (data/zones.ts skyOf): 'sheltered' (the default — hell has a roof of
+   *  world) or 'open' (the Aetherial IS the sky: weather fronts, radiance,
+   *  wind and strikes all reach its ground; its cave-pockets still derive
+   *  sheltered off caveDepth). Inline literal union — the nocturne-phases
+   *  idiom — so this leaf never imports the zone vocabulary it feeds. */
+  sky?: 'open' | 'sheltered';
   /** Map-tab accent + node fallback tint. */
   color: string;
   /** The dimension's biome palette (weighted) — what its frontiers mint.
@@ -133,6 +140,23 @@ export function dimensionDef(id: string | undefined): DimensionDef {
 
 export function dimensionIds(): string[] { return Object.keys(DIMENSIONS); }
 
+/** How many frontier roads a dimension's GATE ZONE fans out when it mints
+ *  (World.enterDimension) — and therefore the EXACT degree a roadless gate
+ *  hub is allowed to hold forever (the load-time heal trims accretion back
+ *  to this fan). One constant, two readers, no drift. */
+export const GATE_FANOUT = 3;
+
+/** Is this zone a dimension's ROADLESS gate hub (DimensionEntry.road ===
+ *  false, gate.id match — the Firmament)? Such a hub's edge set is exactly
+ *  its minted frontiers, FOREVER: no linker, weaver, or anchor fallback may
+ *  forge a road into it. Pure registry read (no persisted flags, nothing to
+ *  heal) — structural typing so pure worldgen callers need no ZoneDef import. */
+export function isRoadlessGateHub(z: { id: string; dimension?: string }): boolean {
+  if (!z.dimension) return false;
+  const ent = dimensionDef(z.dimension)?.entry;
+  return !!ent && ent.road === false && ent.gate.id === z.id;
+}
+
 registerDimension({ id: 'surface', label: 'The Surface', color: '#8fb86a' });
 registerDimension({
   id: 'underworld', label: 'The Underworld', color: '#d84a2a',
@@ -199,6 +223,12 @@ registerDimension({
 });
 registerDimension({
   id: 'aetherial', label: 'The Aetherial', color: '#9fc0e8',
+  // The realm ABOVE the weather is not sheltered FROM it: fronts, wind,
+  // strikes and the radiance scalar all reach the shelves and meadows —
+  // the storm wetting the land below is the same storm your prism-span
+  // condenses out of. (Cave-pockets like launch shelves still derive
+  // sheltered off caveDepth — mint them sky:'open' where they shouldn't.)
+  sky: 'open',
   // The realm above the clouds, two moods wide: the dissolving cloud
   // SHELVES (the 'aether' torn lattices) and the built HIGH SPIRES (courts
   // and ephemeral spans — only the fray falls). The FIRMAMENT (the sanctum
@@ -212,6 +242,10 @@ registerDimension({
     // flux fabric). Its climate gate pools it in the realm's wettest
     // reaches — the storm shelves foretold below.
     { biome: 'aether_drift', weight: 0.9 },
+    // THE VESPERLANDS — the cosmos country: ground that answers the sky
+    // (the span fabric + radiance-gated comet lanes). Its climate gate
+    // pools it in the realm's coldest reaches — the auroral belt.
+    { biome: 'aether_vesper', weight: 0.9 },
   ],
   levelBonus: 4,
   // The high air: cold, thin, and bone-dry — no seas above the sky. The

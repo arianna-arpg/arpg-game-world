@@ -101,6 +101,17 @@ changes.
   (`data/traversals.ts`); the world far BELOW shown through `window`
   region cells — the Ascent/Aetherial ride all three; docs in
   `docs/engine/collapse.md`),
+  `spans.ts` + `world/radiance.ts` (THE RADIANCE + SPAN FABRICS: the sky's
+  light as ONE scalar — dayCycle × WeatherDef.radiance dials, flat under
+  shelter — read through `World.radiance()`/`radianceCondHeld(cond)`;
+  condition-held ground as `ZoneTheme.spans` rows — sunbridges by day,
+  star-spans by night, prism-spans under rain, veiled leap-of-faith ways —
+  and radiance-gated creep-front lanes (`FrontSpawnRow.when`, the night's
+  cometfall); DIMENSION SEALS + realm tileset pools in
+  `world/dimensions.ts` (`TilesetDef.realm`, `isRoadlessGateHub`,
+  `DimensionDef.sky`) — docs in `docs/engine/spans.md` +
+  `docs/engine/dimensions.md`; probes `balance/probe_dimensions.ts` +
+  `balance/probe_radiance.ts`),
   `timeflow.ts` (THE TIMEFLOW FABRIC: time itself as data — one TimeHold
   registry behind the pause menu's real pause, Ultimatum-style menu
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and

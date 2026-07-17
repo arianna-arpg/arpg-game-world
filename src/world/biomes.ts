@@ -522,6 +522,18 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { aether_drift: 1 },
     eventDensityMul: 0.4,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE VESPERLANDS — the Aetherial's cosmos country (the realm's fourth
+  // mood): firmament-glass isles that hold forever, laced by ground that
+  // answers the SKY — sunbridges, star-spans, prism walks, veiled ways
+  // (the span fabric) — with comet lanes streaking the voids at night.
+  // Pools in the realm's COLDEST reaches: the auroral belt the climate
+  // axes were waiting for. Patroned by the VESPERKIN, not the Host — the
+  // cosmos keeps its own fauna.
+  aether_vesper: { patronFaction: 'vesperkin', mapColor: '#b0a8e0', label: 'Vesperlands', spacing: 92,
+    climate: { temperature: { to: 0.34, fadeOut: 0.1 } },
+    allowedLayouts: { aether_vesper: 1 },
+    eventDensityMul: 0.4,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */

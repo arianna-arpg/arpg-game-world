@@ -5383,6 +5383,16 @@ registerStamp('haven_stone', stampSingle('haven_stone', [12, 16]));
 registerStamp('gale_vane', stampSingle('gale_vane', [9, 12]));
 registerStamp('cloud_coral', stampSingle('cloud_coral', [16, 30]));
 registerStamp('spire_of_gales', stampSingle('spire_of_gales', [24, 32]));
+// The Vesperlands kit: the cosmos country's furniture (rules registered in
+// data/formations.ts — the open-registry pair every stamp needs).
+registerStamp('star_lantern', stampSingle('star_lantern', [8, 11]));
+registerStamp('nightbloom_tuft', stampSingle('nightbloom_tuft', [10, 16]));
+registerStamp('comet_shard', stampSingle('comet_shard', [9, 14]));
+registerStamp('moonwell', stampSingle('moonwell', [14, 18]));
+registerStamp('sundial_gnomon', stampSingle('sundial_gnomon', [10, 13]));
+registerStamp('orrery_stand', stampSingle('orrery_stand', [11, 14]));
+registerStamp('star_cairn', stampSingle('star_cairn', [7, 9]));
+registerStamp('spire_of_evening', stampSingle('spire_of_evening', [24, 32]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));

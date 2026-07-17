@@ -28,7 +28,10 @@ import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
 import { POCKET_FORMS, DEFAULT_POCKET_FORM } from './pocketForms';
-import { TILESETS, type BlendRoll } from './tilesets';
+import { TILESETS, pickTilesetForBiome, type BlendRoll } from './tilesets';
+import { dimensionDef, dimensionIds } from '../world/dimensions';
+import { validateRadianceCond } from '../world/radiance';
+import { SPAN_CFG } from '../engine/spans';
 import { hasBlendField } from '../engine/blend';
 import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
@@ -494,6 +497,33 @@ export function validateContent(): void {
   // safety net, exactly as validateStamps backstops the open StampKind.
   for (const msg of validateWeather(id => !!SKILLS[id])) warn(msg);
 
+  // DIMENSIONS: every registered dimension's palette biome — and its gate
+  // biome — must resolve at least one tileset THROUGH THAT DIMENSION'S pool
+  // (surface pool ∪ TilesetDef.realm members). A biome that resolves nothing
+  // makes every mint keep its inherited corridor tileset (or the gate fall
+  // back to 'wasteland'): the aetherial ran that way for two days — heaven
+  // minting hell's face — because its faces were realm-locked out of the
+  // shared index with no membership anywhere else. Never again silent.
+  const dimProbeRng = new Rng(0xd1a5eed);
+  for (const dimId of dimensionIds()) {
+    if (dimId === 'surface') continue; // the surface IS the shared pool
+    const dim = dimensionDef(dimId);
+    for (const row of dim.biomes ?? []) {
+      if (!pickTilesetForBiome(row.biome, dimProbeRng, undefined, dimId)) {
+        warn(`dimension '${dimId}': palette biome '${row.biome}' resolves NO tileset in its pool — mints will keep the inherited corridor tileset`);
+      }
+    }
+    const gateBiome = dim.entry?.gate.biome;
+    if (gateBiome && !pickTilesetForBiome(gateBiome, dimProbeRng, undefined, dimId)) {
+      warn(`dimension '${dimId}': gate biome '${gateBiome}' resolves NO tileset in its pool — the gate zone will mint as 'wasteland'`);
+    }
+    for (const course of dim.courses ?? []) {
+      if (!pickTilesetForBiome(course.biome, dimProbeRng, undefined, dimId)) {
+        warn(`dimension '${dimId}': course '${course.id}' biome '${course.biome}' resolves NO tileset in its pool`);
+      }
+    }
+  }
+
   // FOG: every bank's grants name real statuses; every theme fog spec (base
   // AND variant overrides) names registered banks — the fog fabric's safety
   // net, same contract as weather above.
@@ -532,6 +562,40 @@ export function validateContent(): void {
     hasDoodadKind: id => hasDoodadRule(id),
     fuelTags: declaredFuels,
   })) warn(msg);
+  // Front-lane radiance gates carry sane conditions (the span contract).
+  for (const { owner, spec } of creepSpecs) {
+    for (const row of spec.fronts ?? []) {
+      if (row.when) for (const msg of validateRadianceCond(`${owner} front lane '${row.id}'`, row.when as import('../world/radiance').RadianceCond)) warn(msg);
+    }
+  }
+
+  // EPHEMERAL SPANS: every theme span row (base AND variant overrides) names
+  // registered region kinds — the standing kind, its fading twin, and the
+  // void it becomes — and carries a sane RadianceCond. The span fabric
+  // repaints between exactly these three; an unregistered kind would paint
+  // an invisible, unwalkable hole with no warning look.
+  for (const t of Object.values(TILESETS)) {
+    const spanSpecs: { owner: string; rows: NonNullable<typeof t.theme.spans> }[] = [];
+    if (t.theme.spans) spanSpecs.push({ owner: `tileset '${t.id}'`, rows: t.theme.spans });
+    for (const v of t.variants ?? []) {
+      if (v.theme?.spans) spanSpecs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, rows: v.theme.spans });
+    }
+    for (const { owner, rows } of spanSpecs) {
+      for (const row of rows) {
+        if (!regionKind(row.region)) warn(`${owner}: span region '${row.region}' is not registered`);
+        else if (!regionKind(row.region)?.walkable) warn(`${owner}: span region '${row.region}' is not walkable — a span IS ground`);
+        const fadeK = row.fadeRegion ?? `${row.region}_fading`;
+        if (!regionKind(fadeK)) warn(`${owner}: span fade region '${fadeK}' is not registered`);
+        const voidK = row.voidRegion ?? SPAN_CFG.voidRegion;
+        if (!regionKind(voidK)) warn(`${owner}: span void region '${voidK}' is not registered`);
+        else if (regionKind(voidK)?.walkable) warn(`${owner}: span void region '${voidK}' is walkable — a gone span must be a hole`);
+        for (const msg of validateRadianceCond(`${owner} span '${row.region}'`, row.when)) warn(msg);
+        if (!row.when || (!row.when.radiance && !row.when.weather?.length && !row.when.phases?.length)) {
+          warn(`${owner}: span '${row.region}' has no condition — permanent ground belongs to the layout, not the span fabric`);
+        }
+      }
+    }
+  }
 
   // PITFALL (the pitfall fabric, engine/pitfall.ts): every DoodadRule.fall
   // names a registered VOID-LIKE region row (a pit resolving through

@@ -20,7 +20,7 @@ import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
-import { dimensionDef, dimensionsEnteredBy } from '../world/dimensions';
+import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
 import type { CourseMintHints } from '../world/courses';
 
 // The node-space coordinate vocabulary (Dir, MapCoord, MAP_DIR, projectCoord) now
@@ -363,6 +363,10 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
       z.objective.kind !== 'safe' &&            // never link a sanctuary
       z.caveDepth == null &&                    // caves live off-graph anyway
       !z.pocket &&                              // a purchased cul-de-sac keeps its one road
+      !isRoadlessGateHub(z) &&                  // a roadless gate hub's edges are EXACTLY its minted
+                                               // frontiers — the weave was the one linker still forging
+                                               // inbound roads (the "exit back to the Firmament" loop;
+                                               // nearestLinkable learned this rule a pass earlier)
       !z.floating && !z.concealed &&           // never weave into an UNWIRED / HIDDEN zone (a concealed
                                                // Incursion epicenter reveals + wires via connectFloatingZone,
                                                // which clears both flags BEFORE it weaves — so this only blocks
@@ -529,7 +533,9 @@ export function placeZoneAt(
     // SUB-BIOME STAGING: land biomes with depth-affine faces (the desert's
     // waste/erg/glasspan) weigh the pick by how deep into the region this
     // mint sits — same lever the marine split reads, generalized as data.
-    picked = picked ?? pickTilesetForBiome(fb, rng, spec.biomeDepthFor?.(target));
+    // A dimensioned mint widens the pool with its realm's own tilesets
+    // (TilesetDef.realm) — surface mints pass no realm, byte-identical.
+    picked = picked ?? pickTilesetForBiome(fb, rng, spec.biomeDepthFor?.(target), spec.dimension);
     if (picked) tilesetId = picked;
   }
   // Same guard mintCave carries: a directed mint naming an unregistered
@@ -553,6 +559,7 @@ export function placeZoneAt(
   let layout = tileset.layout;
   let variantName: string | undefined;
   let variantTheme: Partial<ZoneDef['theme']> | undefined;
+  let variantLayoutParams: Record<string, unknown> | undefined;
   if (tileset.variants && tileset.variants.length) {
     // A NAMED face (spec.variant — perf-gate pins, dev mints) skips the roll;
     // the spec-less stream stays byte-identical. Unknown names warn and roll.
@@ -564,6 +571,7 @@ export function placeZoneAt(
     variantName = v.name;
     layout = v.layout;
     variantTheme = v.theme; // a face may RECOLOR itself (merged over base below)
+    variantLayoutParams = v.layoutParams; // …and retune its recipe knobs (merged below)
   }
   if (tileset.common && tileset.common.length) layout = [...tileset.common, ...layout];
 
@@ -773,12 +781,15 @@ export function placeZoneAt(
       } : {}),
     }
     : undefined;
-  // Layout knobs, spec ▷ course ▷ tileset ▷ biome (most-specific wins) — baked
-  // so revisits/co-op replay the same recipe tweaks. A course slots UNDER the
-  // spec (a directed mint may still override the artery's orientation).
+  // Layout knobs, spec ▷ course ▷ variant ▷ tileset ▷ biome (most-specific
+  // wins) — baked so revisits/co-op replay the same recipe tweaks. A course
+  // slots UNDER the spec (a directed mint may still override the artery's
+  // orientation); the rolled FACE slots between its tileset and the course
+  // (the theme-merge precedence, mirrored onto recipe knobs).
   const layoutParams = {
     ...(biome ? BIOMES[biome]?.layoutParams : undefined),
     ...tileset.layoutParams,
+    ...variantLayoutParams,
     ...onCourse?.layoutParams,
     ...spec.layoutParams,
   };
@@ -853,12 +864,17 @@ export function placeZoneAt(
     // mismatched anchor gains no road into this zone (a directed mint whose
     // anchor fell back to a cross-dimension zone would otherwise stamp the
     // exact "hell exit to the surface" defect on the ANCHOR'S side).
-    if (spec.linkBack && src && srcDim === myDim) {
+    if (spec.linkBack && src && srcDim === myDim && !isRoadlessGateHub(src)) {
       const recSide = OPP_DIR[backSide];
       const at = findNonCollidingAt(recSide, src.exits, rng, src.size) ?? bestSpacedAt(recSide, src.exits, src.size);
       src.exits.push({ to: def.id, side: recSide, at });
     } else if (spec.linkBack && src && srcDim !== myDim) {
       console.warn(`[worldgen] refused cross-dimension linkBack ${src.id} (${srcDim}) → ${def.id} (${myDim})`);
+    } else if (spec.linkBack && src && isRoadlessGateHub(src)) {
+      // A directed mint anchored ON a roadless gate hub keeps its own back-
+      // edge (reachability) but forges NO reciprocal road onto the hub —
+      // the hub's edge set is exactly its minted frontiers, forever.
+      console.warn(`[worldgen] refused linkBack onto roadless gate hub ${src.id} ← ${def.id}`);
     }
     // Weave opportunistic roads into already-charted neighbours (density).
     weaveConnections(def, zoneMap, rng);
@@ -873,10 +889,14 @@ export function placeZoneAt(
 export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng: Rng): void {
   // Prefer the nearest anchor whose road stays DRY (the route guard) — a
   // floating zone across a strait must not bridge the water; fall back to the
-  // plain nearest if no dry route exists (reachability still trumps).
+  // plain nearest if no dry route exists (reachability still trumps). A
+  // ROADLESS GATE HUB is never an anchor (its edge set is exactly its minted
+  // frontiers): with no other node charted yet, the zone simply stays
+  // floating until the realm web grows — the drain re-asks every approach.
   const exclude = new Set([fresh.id]);
   const anchor = nearestNode(zoneMap, fresh.map, exclude, fresh.dimension,
-    (z) => routeOk(fresh.map, z.map)) ?? nearestNode(zoneMap, fresh.map, exclude, fresh.dimension);
+    (z) => !isRoadlessGateHub(z) && routeOk(fresh.map, z.map))
+    ?? nearestNode(zoneMap, fresh.map, exclude, fresh.dimension, (z) => !isRoadlessGateHub(z));
   if (!anchor) return;
   const backSide = sideToward(fresh.map, anchor.map);
   fresh.exits.unshift({ to: anchor.id, side: backSide });

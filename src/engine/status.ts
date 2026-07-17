@@ -186,6 +186,27 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     stackPolicy: 'strongest',
     baseline: { dps: 4, perLevel: 1.4 },
   },
+  starfire: {
+    // STANDING IN A PASSING COMET (the cometfall front's grant): a hot,
+    // brief star-sear on the caster-less baseline lane — the streak itself
+    // is the danger and dodging it is the game (the night sky's Frogger).
+    // Fire-typed so fire res answers it; deliberately NO screen-fx row
+    // (the terrain-stings rule: environment stings say so in text, never
+    // by wearing a combat vignette).
+    label: 'Star-Seared', color: '#ffd9a0', duration: 1.1,
+    element: 'fire',
+    dotType: 'fire',
+    stackPolicy: 'strongest',
+    baseline: { dps: 6, perLevel: 1.8 },
+  },
+  moonlit: {
+    // A MOONWELL's blessing (doodad status_wash): the starlight carries
+    // your steps — a small, honest speed grace for keeping to the night
+    // country's lit basins. The updraft_vent/windswept grammar, vesper-toned.
+    label: 'Moonlit', color: '#cfe0ff', duration: 2.5,
+    beneficial: true,
+    mods: [mod('moveSpeed', 'more', 0.08)],
+  },
   poison: {
     label: 'Poisoned', color: '#7ec850', duration: 6,
     element: 'chaos',

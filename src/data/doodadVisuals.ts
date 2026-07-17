@@ -2040,6 +2040,66 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { marble: '#e6e5df', gold: '#d8b56a', streamer: '#bfe8f4' },
     light: { radius: -2.6, color: '#bfe8f4', intensity: 0.3 },
   },
+  // The Vesperlands kit (aether_vesper): the cosmos country's furniture —
+  // every piece an existing painter re-dressed (the skyglass_spur doctrine:
+  // a new kind is a data row, never a renderer edit).
+  // The dawn-spire painter in evening dress: violet marble, cold gold.
+  spire_of_evening: {
+    painter: 'spireOfDawn', order: 56, shadow: 0.55, longShadow: 2.2,
+    params: { marble: '#dcd6ec', gold: '#a898e0', light: 'theme:accent|#cfe0ff' },
+    light: { radius: -4.2, color: '#cfe0ff', intensity: 0.5, flicker: 0.5 },
+  },
+  // The waystone painter as a SMALL trail-cairn: the veiled way's only
+  // confession — a knee-high stone with a star-chip, glowing just enough
+  // to make you wonder why anyone stacked stones at the edge of nothing.
+  star_cairn: {
+    painter: 'surveySpire', order: 50, shadow: 0.3, longShadow: 0.5,
+    params: { stone: '#8a90a8', gem: '#e6eeff' },
+    light: { radius: -2.2, color: '#dce8ff', intensity: 0.24, flicker: 0.7 },
+  },
+  // The fountain painter as a silver night-basin (status_wash → moonlit).
+  moonwell: {
+    painter: 'fountain', order: 53, shadow: 0.4,
+    light: { radius: -3.0, color: '#cfe0ff', intensity: 0.3, flicker: 0.4 },
+  },
+  // The vane painter as a SUNDIAL: a stone blade on a low disc — the day
+  // country's timepiece (and the sunbridges' silent explanation).
+  sundial_gnomon: {
+    painter: 'galeVane', order: 51, shadow: 0.35,
+    params: { pole: '#c8c2b0', vane: '#e8e0c8', tail: '#f4d98a' },
+  },
+  // The harp painter as an ORRERY: strung rings that sway on the same
+  // animation — brass tones, a caged star for a soundboard.
+  orrery_stand: {
+    painter: 'harpPillar', order: 53, shadow: 0.45, longShadow: 1.0,
+    params: { marble: '#b9a684', string: '#cfe0ff', gold: '#8a98c8' },
+    light: { radius: -2.4, color: '#cfe0ff', intensity: 0.2 },
+  },
+  // A fallen star still cooling: the crystal painter warm-hearted, brittle
+  // (one blow and it rings apart — the comet meadows' cuttable dressing).
+  comet_shard: {
+    painter: 'aetherCrystal', order: 50, shadow: 0.28,
+    params: { body: '#ffe0b8', deep: '#c88a5a', gleam: '#ffffff' },
+    light: { radius: -3.0, color: '#ffd9a0', intensity: 0.38, flicker: 1.4 },
+  },
+  // Night-blooming fleece (the liquid tuft painter): pale by day; its own
+  // faint light is what the dusk turns on.
+  nightbloom_tuft: {
+    painter: 'liquid', order: 47,
+    blend: { strength: 0.28, feather: 18, color: '#d8dcf2' },
+    params: {
+      core: { color: '#d4d8ee', alpha: 0.2 },
+      tufts: { color: '#c8cee8', flower: '#eef2ff' },
+    },
+    light: { radius: -1.6, color: '#bfd0ff', intensity: 0.14 },
+  },
+  // The sky-lantern painter in star-paper — the vesper roads' tethered
+  // lights, floating over the gaps (voidOk, like its drift cousin).
+  star_lantern: {
+    painter: 'skyLantern', order: 55, shadow: 0.18,
+    params: { paper: '#dce8ff', frame: '#8a98c8', glow: '#bcd2ff' },
+    light: { radius: -4.2, color: '#bcd2ff', intensity: 0.4, flicker: 2.2 },
+  },
 
   // --- The ship-deck kit (vis/paintersSea.ts): the Wraithsail's boards ------
   // Masts carry a cold masthead light (the ghost ship sails lit); rails and

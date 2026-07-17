@@ -93,8 +93,10 @@ export interface RegionVisualSpec {
   fill: string;
   /** 0..1 opacity of the wash. */
   alpha?: number;
-  /** A gentle animated shimmer/pulse (renderer interprets). */
-  animate?: 'shimmer' | 'pulse' | 'drift';
+  /** A gentle animated shimmer/pulse (renderer interprets). 'prism' walks
+   *  the fill's hue around the whole spectrum, phase-offset per cell — the
+   *  rainbow-span grammar (the declared fill becomes the fallback only). */
+  animate?: 'shimmer' | 'pulse' | 'drift' | 'prism';
   /** BOUNDARY EDGE: painted on every side facing walkable ground so the
    *  region's rim READS at a glance — a flesh wall's pale membrane, the
    *  mycelium's luminous weave. Bakes with the ground chunks; `width` in
@@ -568,6 +570,52 @@ registerRegion({
 registerRegion({
   id: 'aureate_court', walkable: true, blocks: false, label: 'the court',
   visual: { fill: '#efe9d6', alpha: 0.5 },
+});
+// --- THE EPHEMERAL SPANS (engine/spans.ts — condition-held ground) -----------
+// Bridges whose EXISTENCE answers the sky (world/radiance.ts conditions).
+// Each family is a walkable base kind + a `_fading` twin (the leaving
+// warning): the span fabric repaints base ↔ twin ↔ the zone's sky-void as
+// its condition swings, and the visuals here are the whole render story —
+// no fabric-specific drawing anywhere. All REAL fills (never window): a
+// standing bridge is present, honest paint over the sky beneath it.
+// SUNBRIDGE: stands while the sky is bright (day, and not under a black
+// storm) — warm gold light laid across the gap.
+registerRegion({
+  id: 'span_sun', walkable: true, blocks: false, label: 'the sunbridge',
+  visual: { fill: '#f4d98a', alpha: 0.5, animate: 'drift', edge: { color: '#ffedbb', width: 4 } },
+});
+registerRegion({
+  id: 'span_sun_fading', walkable: true, blocks: false, label: 'the failing sunbridge',
+  visual: { fill: '#e8c56a', alpha: 0.34, animate: 'shimmer' },
+});
+// STAR-SPAN: the inverse — a walk of starlight that only the dark reveals.
+// By day the gap is simply bare.
+registerRegion({
+  id: 'span_star', walkable: true, blocks: false, label: 'the star-span',
+  visual: { fill: '#bcd2ff', alpha: 0.44, animate: 'shimmer', edge: { color: '#e6eeff', width: 3 } },
+});
+registerRegion({
+  id: 'span_star_fading', walkable: true, blocks: false, label: 'the failing star-span',
+  visual: { fill: '#93a8d8', alpha: 0.3, animate: 'shimmer' },
+});
+// PRISM-SPAN: stands only while rain or storm covers the zone — the rainbow
+// bridge, hue walking the spectrum (the 'prism' grammar above).
+registerRegion({
+  id: 'span_prism', walkable: true, blocks: false, label: 'the prism-span',
+  visual: { fill: '#b8e0c8', alpha: 0.5, animate: 'prism', edge: { color: '#f2fbff', width: 3 } },
+});
+registerRegion({
+  id: 'span_prism_fading', walkable: true, blocks: false, label: 'the failing prism-span',
+  visual: { fill: '#b8e0c8', alpha: 0.3, animate: 'prism' },
+});
+// VEILED WAY: the leap of faith. ALWAYS walkable — no span row, no fabric,
+// nothing to fail — but painted at the very threshold of sight: a breath of
+// paleness over the void that only a deliberate eye (or a monster casually
+// crossing the gap) betrays. The star-cairn doodads at its mouths are the
+// authored "tiniest inclination"; walking out anyway is the faith.
+registerRegion({
+  id: 'span_veiled', walkable: true, blocks: false, label: 'the veiled way',
+  visual: { fill: '#cfd8ea', alpha: 0.06 },
 });
 // DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
 // you start drowning (the survival system). The underwater zones' open sea.

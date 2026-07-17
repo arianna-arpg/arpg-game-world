@@ -11300,6 +11300,31 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.12), mod('effectDuration', 'increased', 0.05)] },
   },
 
+  starcall: {
+    id: 'starcall', name: 'Starcall',
+    description: 'Ask the night for one of its own: a long breath later a star arrives where you pointed, and the ground remembers it. The Vesperlands\' keepers call them down like punctuation.',
+    tags: ['spell', 'fire', 'physical', 'aoe'], color: '#ffd9a0',
+    manaCost: 24, cooldown: 5, useTime: 0.7,
+    baseDamage: { fire: [9, 14], physical: [7, 12] },
+    delivery: {
+      type: 'ground', radius: 64, castRange: 380,
+      lingerDuration: 0.1, tickInterval: 0.1,
+      pulse: { delay: 2.0 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.35, magnitude: 0.5 },
+    ],
+    requirements: { intelligence: 24 },
+    minDropLevel: 12,
+    ai: { range: 340, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+    thresholds: [
+      { level: 10, label: 'The longer fall', mods: [mod('aoeRadius', 'increased', 0.2)] },
+      { level: 18, label: 'A heavier sky', mods: [mod('damage', 'increased', 0.25)] },
+    ],
+  },
+
   feather_volley: {
     id: 'feather_volley', name: 'Feather Volley',
     description: 'A wing\'s worth of razor feathers, fanned across the arc — light as breath leaving, heavy as verdicts arriving.',

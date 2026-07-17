@@ -4797,6 +4797,82 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.6,
   },
 
+  // --- THE VESPERKIN (the cosmos country's kin — monsters.ts block) ----------
+  // The clarity doctrine, night-keyed: every body carries a POINT OF LIGHT
+  // somewhere (the faction signature — a moth's glow, a hide of stars, a
+  // spark mane, a dangled lure, a caged sun, a crown of last light), and
+  // the silhouette says the texture: wings = swarm, antlers = prey, snout
+  // and mane = the night pack, lure over a maw = the gap's trap, rings and
+  // shards = the glass construct, crown and sashes = the sovereign.
+
+  /** The moth: two bright wings around a mote — daylight with a wingspan. */
+  lumen_moth: {
+    parts: [
+      { kind: 'featherWings', scale: 1.2, role: 'glow' },
+      { kind: 'disc', scale: 0.55 },
+      { kind: 'eyes', params: { n: 2, spread: 0.35, dist: 0.3, size: 0.14 } },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.8 }],
+    shadowScale: 0.35,
+  },
+  /** The grazer: an elk of pale hide pricked with constellation-spots,
+   *  antlers like a star chart. */
+  star_grazer: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'antlers', scale: 1.15, role: 'glow' },
+      { kind: 'spots', scale: 0.85, alpha: 0.55, role: 'glow' },
+      { kind: 'legs', scale: 0.9, params: { n: 4 } },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.32, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 0.6, params: { n: 2 } }],
+    shadowScale: 0.7,
+  },
+  /** The hound: a courser all snout and spark — the mane burns, the tail
+   *  streaks, the pack arrives with the dark. */
+  comet_hound: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'snout', scale: 0.95 },
+      { kind: 'mane', scale: 0.9, role: 'glow' },
+      { kind: 'tail', scale: 1.0 },
+      { kind: 'legs', scale: 0.9, params: { n: 4 } },
+      { kind: 'eyes', params: { n: 2, spread: 0.45, dist: 0.3, size: 0.12 } },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.85 }],
+    shadowScale: 0.6,
+  },
+  // (void_angler keeps its existing void-family look — the vesper meadows
+  // borrow the body whole, lure and all.)
+  /** The keeper: brass rings around a caged star — an instrument that
+   *  decided to keep working the sky without anyone to read it. */
+  orrery_keeper: {
+    parts: [
+      { kind: 'disc', scale: 0.9, role: 'metal' },
+      { kind: 'orb', y: -0.05, scale: 0.65, role: 'glow' },
+      { kind: 'floatingShards', scale: 1.1, role: 'metal' },
+      { kind: 'runes', scale: 0.9, role: 'glow' },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The Noctarch: the hour between lights crowned — sashes of dusk, wings
+   *  of last light, one held star. */
+  noctarch: {
+    parts: [
+      { kind: 'featherWings', scale: 1.15, role: 'glow' },
+      { kind: 'robe', scale: 0.95, role: 'cloth' },
+      { kind: 'veilSashes', scale: 0.95, role: 'cloth' },
+      { kind: 'crown', scale: 0.65, role: 'metal' },
+      { kind: 'orb', y: 0.4, scale: 0.6, role: 'glow' },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.3, size: 0.12 } },
+    ],
+    live: [
+      { kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 3 } },
+      { kind: 'emberSparks', scale: 0.7 },
+    ],
+    shadowScale: 0.6,
+  },
+
   // --- THE CARVEN COURT (the Gloamwood country's harvest-kin) ----------------
   // Reads at a glance, per the clarity doctrine: EVERY Court body wears the
   // carved gourd somewhere (the faction signature), and the silhouette says
