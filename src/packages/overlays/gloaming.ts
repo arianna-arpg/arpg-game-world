@@ -88,6 +88,17 @@ export interface GloamingSurge {
   injectFactions: string[];
   /** Gloom depth at which injections begin. */
   injectFrom: number;
+  /** World-map TERRITORY dressing (the deepwinter tile idiom): covered
+   *  ground rasterizes to map cells — tiles never alpha-stack, so the web
+   *  reads as ONE contiguous dark country at high ring counts — with road
+   *  TENDRILS between covered neighbours (the front travels the exits, and
+   *  the map says so). nodeR/roadR in map px; maxAlpha at full gloom. */
+  map: { cellSpan: number; nodeR: number; roadR: number; maxAlpha: number };
+  /** CO-OCCURRENCE flavor rows, open by overlay id: standing in deep gloom
+   *  while the named event is ALSO active in the same zone announces the
+   *  pairing once per front (the three-way light war). Detection rides the
+   *  generic Sim.overlayFor + activityAt — a future pairing is one row. */
+  pairs: Record<string, { text: string; color: string }>;
   color: string;
 }
 
@@ -126,6 +137,9 @@ export class GloamingField implements WorldOverlay {
   private news: WorldBulletin[] = [];
   /** Zone ids already announced as covered this front (rim news fires once). */
   private told = new Set<string>();
+  /** Co-occurrence pairings already announced this front (one light war
+   *  bulletin per partner per front — resume-safe via snapshot). */
+  private pairsTold = new Set<string>();
 
   constructor(ctx: OverlayBuildCtx, surge: GloamingSurge) {
     this.rng = new Rng(ctx.seed);
@@ -187,6 +201,7 @@ export class GloamingField implements WorldOverlay {
             this.phase = 'waxing';
             this.ringF = -1;
             this.told.clear();
+            this.pairsTold.clear();
             this.witnessed = false;
             this.seq++;
             this.news.push({ text: 'A gloaming gathers over the wood — the dark is rising.', color: this.cfg.color });
@@ -250,6 +265,15 @@ export class GloamingField implements WorldOverlay {
   frontSeq(): number { return this.seq; }
   isWitnessed(): boolean { return this.witnessed; }
   markWitnessed(): void { this.witnessed = true; }
+  /** One-shot co-occurrence gate (engine half calls when a surge.pairs
+   *  partner is live under this front's gloom): true = fresh, announce. */
+  markPairTold(id: string): boolean {
+    if (this.pairsTold.has(id)) return false;
+    this.pairsTold.add(id);
+    const row = this.cfg.pairs[id];
+    if (row) this.news.push({ text: row.text, color: row.color });
+    return true;
+  }
   /** Drained by the module-scope bulletin source. */
   drainNews(): WorldBulletin[] { const n = this.news; this.news = []; return n; }
 
@@ -275,13 +299,78 @@ export class GloamingField implements WorldOverlay {
 
   renderMap(nodes: ZoneDef[]): MapLayer {
     if (this.phase === 'idle') return { under: '', over: '' };
-    let under = '';
-    let over = '';
+    const mc = this.cfg.map;
+    const s = mc.cellSpan;
+    // THE TERRITORY (the deepwinter tile idiom): rasterize the covered web
+    // into map cells — tiles never alpha-stack, so adjacent zones fuse into
+    // ONE contiguous dark country instead of node polka — with road TENDRILS
+    // stamped along every exit whose both ends stand covered (the front
+    // travels the exits; the map says so). Each cell keeps the DEEPEST gloom
+    // that touched it, so the wood's heart reads darker than the rim.
+    const covered: { z: ZoneDef; g: number }[] = [];
+    const gById = new Map<string, number>();
     for (const z of nodes) {
       const g = this.gloomOn(z.id);
-      if (g <= 0.03) continue;
-      under += `<circle cx="${z.map.x}" cy="${z.map.y}" r="36" fill="#141024" fill-opacity="${(0.55 * g).toFixed(3)}"/>`;
-      // The rim reads as a faint breathing ring on the freshest ground.
+      gById.set(z.id, g);
+      if (g > 0.03) covered.push({ z, g });
+    }
+    if (!covered.length) return { under: '', over: '' };
+    const cells = new Map<string, number>();
+    const stamp = (x: number, y: number, R: number, g: number): void => {
+      const g0 = Math.floor((x - R) / s), g1 = Math.floor((x + R) / s);
+      const h0 = Math.floor((y - R) / s), h1 = Math.floor((y + R) / s);
+      for (let gx = g0; gx <= g1; gx++) {
+        for (let gy = h0; gy <= h1; gy++) {
+          const cx = (gx + 0.5) * s, cy = (gy + 0.5) * s;
+          if ((cx - x) * (cx - x) + (cy - y) * (cy - y) > R * R) continue;
+          const key = `${gx},${gy}`;
+          const prev = cells.get(key);
+          if (prev === undefined || g > prev) cells.set(key, g);
+        }
+      }
+    };
+    for (const { z, g } of covered) {
+      stamp(z.map.x, z.map.y, mc.nodeR * (0.7 + 0.3 * g), g);
+      for (const e of z.exits) {
+        if (e.to === '?' || z.id >= e.to) continue; // each edge once
+        const g2 = gById.get(e.to) ?? 0;
+        if (g2 <= 0.03) continue;
+        const nb = nodes.find(n => n.id === e.to);
+        if (!nb) continue;
+        const dx = nb.map.x - z.map.x, dy = nb.map.y - z.map.y;
+        const len = Math.hypot(dx, dy);
+        const steps = Math.max(1, Math.ceil(len / s));
+        for (let i = 0; i <= steps; i++) {
+          const t = i / steps;
+          stamp(z.map.x + dx * t, z.map.y + dy * t, mc.roadR, g + (g2 - g) * t);
+        }
+      }
+    }
+    let under = '';
+    let edges = '';
+    for (const [key, g] of cells) {
+      const ci = key.indexOf(',');
+      const gx = Number(key.slice(0, ci)), gy = Number(key.slice(ci + 1));
+      const x = gx * s, y = gy * s;
+      under += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(s + 0.6).toFixed(1)}" height="${(s + 0.6).toFixed(1)}" fill="#141024" fill-opacity="${(mc.maxAlpha * g).toFixed(3)}"/>`;
+      // THE FRONTIER: every covered→open cell edge joins one path (the rim
+      // of the dark as a single line around the whole territory).
+      if (!cells.has(`${gx + 1},${gy}`)) edges += `M${(x + s).toFixed(1)} ${y.toFixed(1)}V${(y + s).toFixed(1)}`;
+      if (!cells.has(`${gx - 1},${gy}`)) edges += `M${x.toFixed(1)} ${y.toFixed(1)}V${(y + s).toFixed(1)}`;
+      if (!cells.has(`${gx},${gy + 1}`)) edges += `M${x.toFixed(1)} ${(y + s).toFixed(1)}H${(x + s).toFixed(1)}`;
+      if (!cells.has(`${gx},${gy - 1}`)) edges += `M${x.toFixed(1)} ${y.toFixed(1)}H${(x + s).toFixed(1)}`;
+    }
+    let over = '';
+    if (edges) {
+      // The gloaming's frontier BREATHES (deepwinter's ants march; the dark
+      // does not march — it swells and thins like held breath).
+      over += `<path d="${edges}" fill="none" stroke="${this.cfg.color}" stroke-width="1.4" stroke-opacity="0.45" stroke-dasharray="4 6">`
+        + `<animate attributeName="stroke-opacity" values="0.25;0.55;0.25" dur="3.2s" repeatCount="indefinite"/>`
+        + `</path>`;
+    }
+    // The freshest rim zones keep their per-node breathing ring — the
+    // zone-precision read ("THIS ground just went dark") over the territory.
+    for (const { z, g } of covered) {
       if (g < 0.45) {
         over += `<circle cx="${z.map.x}" cy="${z.map.y}" r="30" fill="none" stroke="${this.cfg.color}" stroke-opacity="0.5" stroke-dasharray="4 6"><animate attributeName="r" values="26;33;26" dur="3.2s" repeatCount="indefinite"/></circle>`;
       }
@@ -293,12 +382,12 @@ export class GloamingField implements WorldOverlay {
     return {
       phase: this.phase, ringF: this.ringF, phaseT: this.phaseT,
       cooldownLeft: this.cooldownLeft, witnessed: this.witnessed, seq: this.seq,
-      told: [...this.told],
+      told: [...this.told], pairsTold: [...this.pairsTold],
     };
   }
 
   restore(snap: unknown): void {
-    const s = snap as Partial<{ phase: GloamPhase; ringF: number; phaseT: number; cooldownLeft: number; witnessed: boolean; seq: number; told: string[] }> | null;
+    const s = snap as Partial<{ phase: GloamPhase; ringF: number; phaseT: number; cooldownLeft: number; witnessed: boolean; seq: number; told: string[]; pairsTold: string[] }> | null;
     if (!s || typeof s !== 'object') return;
     if (s.phase === 'idle' || s.phase === 'waxing' || s.phase === 'holding' || s.phase === 'waning') this.phase = s.phase;
     if (typeof s.ringF === 'number' && Number.isFinite(s.ringF)) this.ringF = clamp(s.ringF, -1, this.cfg.maxRing);
@@ -307,6 +396,7 @@ export class GloamingField implements WorldOverlay {
     if (typeof s.witnessed === 'boolean') this.witnessed = s.witnessed;
     if (typeof s.seq === 'number') this.seq = s.seq;
     if (Array.isArray(s.told)) this.told = new Set(s.told.filter(x => typeof x === 'string'));
+    if (Array.isArray(s.pairsTold)) this.pairsTold = new Set(s.pairsTold.filter(x => typeof x === 'string'));
     this.hopsForLen = -1; // coverage re-derives from the restored graph
   }
 }

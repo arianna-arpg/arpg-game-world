@@ -128,9 +128,18 @@ export function validateContent(): void {
   {
     for (const w of Object.values(LIGHTWELLS)) {
       if (!DOODAD_VISUALS[w.kind]?.light) warn(`lightwell '${w.kind}': no DOODAD_VISUALS light spec — drawn==tested has nothing to draw`);
-      if (!(w.feed > 0)) warn(`lightwell '${w.kind}': feed must be > 0`);
+      if (w.burst) {
+        // A burst is one gulp, never a residence: the two grammars exclude.
+        if (!(w.burst.grant > 0) || !Number.isFinite(w.burst.grant)) warn(`lightwell '${w.kind}': burst.grant must be a finite > 0`);
+        if (w.feed !== undefined) warn(`lightwell '${w.kind}': burst rows never feed (drop 'feed')`);
+        if (w.pool !== undefined) warn(`lightwell '${w.kind}': burst rows carry no pool (drop 'pool')`);
+        if (w.decayPerSec !== undefined) warn(`lightwell '${w.kind}': burst rows never decay (drop 'decayPerSec')`);
+        if (w.drainPerResident !== undefined) warn(`lightwell '${w.kind}': burst rows have no residents (drop 'drainPerResident')`);
+      } else if (!(typeof w.feed === 'number' && w.feed > 0)) warn(`lightwell '${w.kind}': residence rows need feed > 0`);
       if (w.pool !== undefined && !(w.pool > 0)) warn(`lightwell '${w.kind}': pool must be > 0 when present`);
       if (w.drainPerResident !== undefined && w.drainPerResident < 0) warn(`lightwell '${w.kind}': drainPerResident must be ≥ 0`);
+      if (w.decayPerSec !== undefined && !(w.decayPerSec >= 0 && Number.isFinite(w.decayPerSec))) warn(`lightwell '${w.kind}': decayPerSec must be a finite ≥ 0`);
+      if (w.decayPerSec !== undefined && w.pool === undefined) warn(`lightwell '${w.kind}': decayPerSec without a pool decays nothing`);
       if (w.minReachFrac !== undefined && (w.minReachFrac < 0 || w.minReachFrac > 1)) warn(`lightwell '${w.kind}': minReachFrac outside [0,1]`);
     }
   }

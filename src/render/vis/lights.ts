@@ -54,10 +54,15 @@ export class LightLayer {
   private bctx = this.buf.getContext('2d')!;
   private lights: LightSource[] = [];
   private polyCache = new WeakMap<object, PolyCacheEntry>();
-  /** Static-emissive clusters, rebuilt when the zone's doodad list changes. */
+  /** Static-emissive clusters, rebuilt when the zone's doodad list changes.
+   *  Keyed on identity + length + the mutation rev: the rev catches IN-PLACE
+   *  flips (a pooled well attached to an authored doodad at zone load or by
+   *  wire adoption) that would otherwise leave the doodad baked bright in a
+   *  cluster while it ALSO draws as a live dimming well. */
   private clusters: LightCluster[] = [];
   private clustersFor: unknown = null;
   private clustersLen = -1;
+  private clustersRev = -1;
   /** This frame's resolved ambient darkness (rendered + reusable by callers). */
   ambient = 0;
 
@@ -66,11 +71,13 @@ export class LightLayer {
    *  every member's own glow, the kind's color/intensity/flicker. Isolated
    *  sources (a lone campfire) become 1:1 clusters — one uniform path. */
   private zoneClusters(world: World): LightCluster[] {
-    if (this.clustersFor === world.doodads && this.clustersLen === world.doodads.length) {
+    if (this.clustersFor === world.doodads && this.clustersLen === world.doodads.length
+      && this.clustersRev === world.doodadsVersion()) {
       return this.clusters;
     }
     this.clustersFor = world.doodads;
     this.clustersLen = world.doodads.length;
+    this.clustersRev = world.doodadsVersion();
     const bin = VIS_CFG.lights.clusterBin;
     type Acc = { sx: number; sy: number; n: number; members: { x: number; y: number; lr: number }[];
       color: string; intensity: number; flicker?: number };

@@ -28,8 +28,10 @@ import { DOODAD_VISUALS } from '../data/doodadVisuals';
 export interface LightwellDef {
   /** Doodad kind this row governs (open string — runtime kinds welcome). */
   kind: string;
-  /** LIGHT meter refill per second granted to EACH resident inside the reach. */
-  feed: number;
+  /** LIGHT meter refill per second granted to EACH resident inside the reach.
+   *  Required for residence rows (validated > 0); absent on burst rows —
+   *  a flare is drunk in one gulp, never sipped. */
+  feed?: number;
   /** Finite power pool in resident-seconds. Omit = STEADY: burns forever,
    *  never dims, never dissipates (the ambient campfire row). */
   pool?: number;
@@ -37,6 +39,22 @@ export interface LightwellDef {
    *  resident-seconds). Two heroes drain one well twice as fast: the
    *  emergent co-op pressure is the point, not a bug. */
   drainPerResident?: number;
+  /** Passive pool loss per second, residents or not — an ABANDONED well
+   *  gutters on its own clock instead of hogging the event's well cap
+   *  forever. Omit = 0: resident-drain only (the kindled wick — a player's
+   *  investment never rots). Meaningful only with a pool. */
+  decayPerSec?: number;
+  /** BURST row — the Descent's light-spot grammar as data: the first body
+   *  to trigger it drinks `grant` LIGHT in one gulp and the well is
+   *  CONSUMED (flash + text). Bursts are pickups, not shelter: they never
+   *  count as light COVER (a spot's glow does not stop the dark's drain —
+   *  descent canon), only bodies already CARRYING a light meter pop one
+   *  (no flare is wasted in peacetime), and a full meter still consumes
+   *  the spot (sloppy routing pays — the descent economy). `on` picks the
+   *  trigger surface: 'touch' = the doodad's own body (+BURST_TOUCH_PAD —
+   *  run over the crystals), 'reach' = the drawn glow via lightReach
+   *  (drawn == tested). Exclusive with feed/pool/decay (validated). */
+  burst?: { grant: number; on: 'touch' | 'reach'; text?: string; color?: string };
   /** Dim curve exponent: reach + intensity scale by powerFrac^dimExp
    *  (default 0.5 — area-honest, the glow visibly wanes from the first sip). */
   dimExp?: number;
@@ -46,6 +64,10 @@ export interface LightwellDef {
   /** Dissipation dressing when a pooled well empties. */
   out?: { text?: string; color?: string };
 }
+
+/** The 'touch' trigger's grace pad (px past body-on-body) — the Descent's
+ *  own run-over reach, kept byte-identical through the generalization. */
+export const BURST_TOUCH_PAD = 4;
 
 /** The open registry: kind → row. Data files register at import time. */
 export const LIGHTWELLS: Record<string, LightwellDef> = {};

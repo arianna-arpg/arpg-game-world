@@ -39,9 +39,24 @@ outbreak plural.
 - Snapshot = `{ phase, ring, phaseT, cooldownLeft, seq }` (pure JSON); the
   coverage map is RE-DERIVED from ring + the graph on restore (contagion's
   re-derive lesson). `devIgnite`/`devRecede` seams for the Events tab + eventqa.
-- Presentation: map under-wash per covered zone (alpha × gloom), zone-info
-  rows, a `mapLabel` chip, bulletins on first charted cover + recession.
-  `affectSpawns`: nightkin bias × gloom + `injectFactions` gloamborn/nightkin.
+- Presentation: THE TERRITORY on the world map (`surge.map`) — covered
+  ground rasterizes to map cells (the deepwinter tile idiom: tiles never
+  alpha-stack, so adjacent zones fuse into ONE contiguous dark country at
+  high ring counts), road TENDRILS stamped along every exit whose both ends
+  stand covered (the front travels the exits; the map says so), each cell
+  keeping the deepest gloom that touched it, plus a single BREATHING
+  frontier path around the whole territory (deepwinter's ants march; the
+  dark swells and thins) and the per-node breathing ring on the freshest
+  rim zones. Zone-info rows, a `mapLabel` chip, bulletins on first charted
+  cover + recession. `affectSpawns`: nightkin bias × gloom +
+  `injectFactions` gloamborn/nightkin.
+- CO-OCCURRENCE (`surge.pairs`, open by overlay id): standing in gloom
+  > 0.4 while the named event is ALSO active in the zone announces the
+  pairing once per front (bulletin + local text) — the gloaming×longcandle
+  row is the promised THREE-WAY LIGHT WAR. Detection is generic
+  (`Sim.overlayFor(id)?.activityAt?.(zone)`), so a future pairing is one
+  data row; the package's `relationships` additionally 'amplifies'
+  longcandle so runs compose the war more often.
 
 ## The meter (world/regions.ts `light` row — SHARED with Descent)
 
@@ -67,15 +82,44 @@ Data rows (`registerLightwell`) over doodad kinds; the Gloaming's spawned
 lights AND ambient zone lights (campfires, braziers, lantern posts…) are the
 same fabric with different rows:
 
-- `feed` — meter refill/sec granted to each resident inside the lit reach.
+- `feed` — meter refill/sec granted to each resident inside the lit reach
+  (residence rows only — validated > 0 there, absent on burst rows).
 - `pool` — finite power (resident-seconds). Omit = steady: burns forever,
   never dims, never dies (the weak-but-steady ambient row).
 - `drainPerResident` — pool loss/sec per resident. Two heroes drain one well
   twice as fast — the co-op pressure is deliberate.
+- `decayPerSec` — passive pool loss, residents or not: an ABANDONED well
+  gutters on its own clock instead of hogging the event's spawn cap after
+  the party moves on (the gloomwell's row). Omit = resident-drain only
+  (the kindled wick — a player's investment never rots).
+- `burst` — the one-gulp mode (the Descent's light-spot grammar as data):
+  `{grant, on: 'touch'|'reach', text?, color?}` — the first body to trigger
+  it drinks `grant` LIGHT and the well is CONSUMED. Bursts are pickups, not
+  shelter: they never count as light COVER (a spot's glow does not stop any
+  drain — descent canon), only bodies already CARRYING a light meter pop one
+  (no flare wasted in peacetime), and a full meter still consumes it (sloppy
+  routing pays). `'touch'` = the doodad body + `BURST_TOUCH_PAD` (run over
+  the crystals — byte-identical to the old descent loop); `'reach'` = the
+  drawn glow via `lightReach` (drawn == tested). Exclusive with
+  feed/pool/decay (validated). `light_spot` registers in defs/descent.ts
+  with the surge's own `lightBurst` dial.
 - `dimExp`, `minReachFrac` — the dim curve: reach and intensity scale by
   `powerFrac^dimExp` (floored while any power remains); the light's state is
   legible at a glance, no UI.
 - `out` — dissipation dressing (flash + text) when the pool empties.
+
+**Pooled AMBIENT kinds** (the zone-load attach story): an authored doodad
+whose row declares `pool` (or `burst`) gets its `Doodad.well` minted by
+`World.attachZoneWells()` at the END of loadZone — host/solo only (clients
+never run loadZone) and BEFORE the first render, so the light-cluster bake
+never captures a pooled well. Idempotent: within the zone-memory TTL a
+revisit keeps drained pools and guttered absences; when the world forgets
+the zone, the lights are lit again. Co-op clients ADOPT the state instead:
+`applyNetWells` matches an incoming well row to an un-welled ZoneMsg doodad
+by kind + position and attaches, rather than minting a twin (the cluster
+cache keys identity+length+`doodadsVersion()` so the in-place flip re-bins).
+The debut row is the jack_o_lantern: ~40 resident-seconds of gourd-light
+that dies where it stands — and snuffwicks drink it too.
 
 **Drawn == tested**: `lightReach(d)` in engine/lightwells.ts is THE resolver —
 the render light layer and the residence/feed test both call it (the visual

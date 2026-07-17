@@ -18,6 +18,7 @@
 //     swarming crawler, a ranged seer, a heavy brute. No warlord, no relations.
 // ---------------------------------------------------------------------------
 
+import { registerLightwell } from '../../engine/lightwells';
 import { DescentField, type DescentSurge } from '../overlays/descent';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -41,6 +42,17 @@ const DESCENT_SURGE: DescentSurge = {
   cullRadius: 1700,
   doodadTarget: 26,
 };
+
+// THE LIGHT SPOT joins the lightwell fabric as its burst-mode debut: the same
+// one-gulp run-over refill it always was (grant = the surge's own dial, the
+// 'touch' trigger = the crystal's body + the fabric's pad — byte-identical
+// geometry), now served by the ONE updateLightwells sweep instead of a
+// bespoke descent loop. Bursts are pickups, not shelter: a spot's glow never
+// counts as light COVER, so the abyss's drain economy is untouched.
+registerLightwell({
+  kind: 'light_spot',
+  burst: { grant: DESCENT_SURGE.lightBurst, on: 'touch', text: 'the light holds back the dark!', color: '#ffe08a' },
+});
 
 /** The DEPTHKIN — the abyss's pale brood. contexts:['descent'] keeps them out of
  *  ordinary generation; they appear ONLY via the descent tileset's pack table. No

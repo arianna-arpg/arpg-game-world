@@ -20,7 +20,14 @@
 //   - the in-zone engine half: the meter drains outside light and holds
 //     inside it, gloomveiled lands on everyone in the dark EXCEPT the
 //     dark's own kin (and never on the lit), the discovery + outlasted
-//     ledgers stamp once each.
+//     ledgers stamp once each,
+//   - the queued levers: decayPerSec (abandoned gloomwells gutter; the
+//     decay-free wick holds byte-still), the BURST mode (light_spot's
+//     run-over gulp byte-parity incl. the touch pad, no-meter no-pop,
+//     full-meter waste, never light cover), the pooled-AMBIENT attach
+//     (zone-load mint, idempotent TTL revisit, wire ADOPT without twins),
+//     the map TERRITORY (tiles + road tendrils + one frontier path), and
+//     the surge.pairs three-way-light-war ledger (engine lane + resume).
 // Run: npx tsx balance/probe_gloaming.ts
 // ---------------------------------------------------------------------------
 
@@ -158,7 +165,8 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   step(w, 0.1, 10);
   const fed = hero.survival.get('light')!;
   check('residence feeds the meter (feed + clear-ground recovery ≈ 27/s)', fed > 64 && fed < 70, `${fed.toFixed(1)}`);
-  check('one resident drains ~1/s', d.well!.power > 24.6 && d.well!.power < 25.4, `${d.well!.power.toFixed(2)}`);
+  check('one resident drains ~1.35/s (per-resident + the row\'s decay)',
+    d.well!.power > 24.4 && d.well!.power < 24.9, `${d.well!.power.toFixed(2)}`);
 
   // The dark drinks too: a snuffwick inside the reach adds its wellDrain.
   const wick = w.createMonster('snuffwick', 5, 'enemy');
@@ -167,8 +175,8 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   const p0 = d.well!.power;
   step(w, 0.1, 10);
   const perSec = p0 - d.well!.power;
-  check('hero + snuffwick drain ~2.4/s (per-resident + hunger)',
-    perSec > 2.1 && perSec < 2.7, `${perSec.toFixed(2)}/s`);
+  check('hero + snuffwick drain ~2.75/s (per-resident + hunger + decay)',
+    perSec > 2.45 && perSec < 3.05, `${perSec.toFixed(2)}/s`);
   wick.dead = true;
 
   // The DIM CURVE shrinks the TESTED reach exactly as the drawn one.
@@ -193,6 +201,92 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   const wickWell = w.doodads[w.doodads.length - 1];
   check('kindle plants a wick', w.doodads.length === before + 1 && wickWell.kind === 'kindled_wick');
   check('effectDuration deepens the pool (18 × 1.5)', wickWell.well?.max === 27, `${wickWell.well?.max}`);
+}
+
+// -------------------------------------- the queued levers (decay/burst/ambient) --
+{
+  seedGlobalRandom(0xfade); // pin this section's stream (worlds share the global rng)
+  const w = makeSimWorld('warrior', 0xfade);
+  const hero = w.player;
+  hero.sheet.setSource('probe', [{ stat: 'life', kind: 'flat', value: 99999 }]);
+  hero.life = hero.maxLife();
+
+  // DECAY: an abandoned gloomwell gutters on its own clock; a decay-free
+  // kindled wick abandoned beside it holds byte-still.
+  const far = vec(hero.pos.x + 900, hero.pos.y);
+  const gw = w.spawnLightwell('gloomwell', far, { radius: 16 })!;
+  const kw = w.spawnLightwell('kindled_wick', vec(far.x, far.y + 400), { radius: 12 })!;
+  const kw0 = kw.well!.power;
+  step(w, 0.25, 40); // 10s, nobody near either light
+  const lost = 26 - gw.well!.power;
+  check('an abandoned gloomwell decays ~0.35/s', lost > 3.1 && lost < 3.9, `${lost.toFixed(2)} in 10s`);
+  check('a decay-free wick abandoned holds byte-still', kw.well!.power === kw0, `${kw.well!.power}`);
+
+  // BURST (the light-spot grammar): rows pin the descent dials.
+  check('light_spot wears the burst row (grant = the surge\'s 45, on touch)',
+    LIGHTWELLS.light_spot?.burst?.grant === 45 && LIGHTWELLS.light_spot.burst.on === 'touch'
+    && LIGHTWELLS.light_spot.feed === undefined && LIGHTWELLS.light_spot.pool === undefined);
+  check('the gourd is the pooled-ambient debut', LIGHTWELLS.jack_o_lantern?.pool === 40);
+
+  // A spot pops on TOUCH for a meter-carrying body: one gulp, consumed.
+  const spotAt = vec(hero.pos.x + 300, hero.pos.y);
+  w.doodads.push({ pos: vec(spotAt.x, spotAt.y), radius: 18, kind: 'light_spot' as never });
+  const spot = w.doodads[w.doodads.length - 1];
+  hero.survival = new Map([['light', 40]]);
+  hero.pos = vec(spotAt.x - (18 + hero.radius + 4) - 6, spotAt.y); // just OUTSIDE the pad
+  step(w, 0.1, 2);
+  check('outside the touch pad the spot keeps', w.doodads.includes(spot));
+  hero.pos = vec(spotAt.x - (18 + hero.radius + 2), spotAt.y);     // inside the pad
+  const m0 = hero.survival.get('light')!; // clear-ground recovery also runs (~1.8/tick)
+  step(w, 0.1, 1);
+  const gained = (hero.survival.get('light') ?? 0) - m0;
+  check('run-over pops the spot for one 45-gulp',
+    !w.doodads.includes(spot) && gained > 44.9 && gained < 47, `+${gained.toFixed(1)}`);
+
+  // No meter = no pop (no flare wasted in peacetime)…
+  w.doodads.push({ pos: vec(spotAt.x, spotAt.y + 200), radius: 18, kind: 'light_spot' as never });
+  const spot2 = w.doodads[w.doodads.length - 1];
+  hero.survival = undefined as never;
+  hero.pos = vec(spotAt.x, spotAt.y + 200);
+  step(w, 0.1, 2);
+  check('a meterless body never pops a flare', w.doodads.includes(spot2));
+  // …but a FULL meter still consumes it (sloppy routing pays — descent
+  // economy). The clear-ground recovery lane retires a full meter the same
+  // tick, so the meter reads full-or-retired — never over.
+  hero.survival = new Map([['light', 100]]);
+  step(w, 0.1, 1);
+  check('a full meter still consumes the spot (the gulp is wasted)',
+    !w.doodads.includes(spot2) && (hero.survival?.get('light') ?? 100) === 100);
+
+  // Bursts are pickups, never shelter: no light cover at a spot's heart.
+  w.doodads.push({ pos: vec(spotAt.x, spotAt.y - 300), radius: 18, kind: 'light_spot' as never });
+  check('a flare never shelters (burst rows are not light cover)',
+    !w.lightCoverAt(vec(spotAt.x, spotAt.y - 300)));
+  check('…while a pooled well does', w.lightCoverAt(vec(gw.pos.x, gw.pos.y)));
+
+  // AMBIENT ATTACH (zone load, host/solo): a pooled-row authored doodad gets
+  // its well minted; idempotent across re-attach (the TTL revisit contract).
+  w.doodads.push({ pos: vec(hero.pos.x + 500, hero.pos.y + 500), radius: 14, kind: 'jack_o_lantern' as never });
+  const gourd = w.doodads[w.doodads.length - 1];
+  const attach = (w as unknown as { attachZoneWells(): void });
+  attach.attachZoneWells();
+  check('zone-load attach mints the gourd\'s pool', gourd.well?.power === 40 && gourd.well.max === 40);
+  const id0 = gourd.well!.id;
+  gourd.well!.power = 17;
+  attach.attachZoneWells();
+  check('attach is idempotent (a drained gourd stays drained)', gourd.well!.power === 17 && gourd.well!.id === id0);
+
+  // WIRE ADOPT (client side): an incoming well row lands ON the authored
+  // doodad (matched kind+pos) instead of minting a twin; absent = gone.
+  const w2 = makeSimWorld('warrior', 0xfeed);
+  w2.doodads.push({ pos: vec(100, 100), radius: 14, kind: 'jack_o_lantern' as never });
+  const cg = w2.doodads[w2.doodads.length - 1];
+  const nDood = w2.doodads.length;
+  w2.applyNetWells([{ i: 7001, k: 'jack_o_lantern', x: 100, y: 100, r: 14, pf: 0.5 }]);
+  check('the wire ADOPTS the authored doodad (no twin minted)',
+    w2.doodads.length === nDood && cg.well?.id === 7001 && cg.well.power === 0.5 && cg.well.max === 1);
+  w2.applyNetWells([]);
+  check('absent from the wire = guttered on the client too', !w2.doodads.includes(cg));
 }
 
 // ------------------------------------------------------------- the front ----
@@ -232,6 +326,10 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   f.update(2, view); // ringF ≈ 0.25
   const seedG = f.gloomOn('gw1');
   check('front: the wood glooms FIRST', seedG > 0 && f.gloomOn('b') === 0, `seed ${seedG.toFixed(2)}`);
+  // While the ground is rim-fresh (< 0.45) the zone-precision breathing ring
+  // marks it — captured HERE; at full hold nothing is rim-fresh any more.
+  check('territory: rim-fresh nodes wear the breathing ring',
+    f.renderMap(nodes).over.includes('<circle'));
   for (let i = 0; i < 16; i++) f.update(0.5, view); // → ring cap
   check('front: holds at full reach', f.phaseNow() === 'holding');
   const g = ['gw1', 'a', 'b', 'c'].map(id => f.gloomOn(id));
@@ -240,6 +338,26 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   check('front: the wood stands in FULL dark', g[0] === 1);
   check('front: sheltered ground never covered', f.gloomOn('shel') === 0);
   check('front: sanctuaries never covered', f.gloomOn('town') === 0);
+
+  // THE TERRITORY: at full reach the map reads as ONE dark country — tiles
+  // (never alpha-stacking), a road TENDRIL between covered neighbours, and
+  // a single breathing frontier path. The pinned cell (x=126,y=0) lies on
+  // the a→b road MIDPOINT, outside both node discs: only the tendril
+  // stamps it — the contiguity is real, not two blobs near each other.
+  const layer = f.renderMap(nodes);
+  const rects = (layer.under.match(/<rect /g) ?? []).length;
+  check('territory: the covered web rasterizes to tiles', rects > 100, `${rects} cells`);
+  check('territory: road tendrils bridge covered neighbours',
+    layer.under.includes('<rect x="126.0" y="0.0"'));
+  check('territory: one breathing frontier path', layer.over.includes('<path d="M'));
+
+  // Pair ledger: once per front, resume-safe.
+  check('pairs: first sighting announces', f.markPairTold('longcandle') === true
+    && f.drainNews().some(n => n.text.includes('Candle-war')));
+  check('pairs: …exactly once per front', f.markPairTold('longcandle') === false);
+  const fPair = mk();
+  fPair.restore(JSON.parse(JSON.stringify(f.snapshot())));
+  check('pairs: the told set survives resume', fPair.markPairTold('longcandle') === false);
 
   // Roundtrip + determinism.
   const snapHold = JSON.stringify(f.snapshot());
@@ -271,6 +389,7 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
 
 // ------------------------------------------- the in-zone engine half --------
 {
+  seedGlobalRandom(0xd00d); // pin this section's stream (insert-order-proof)
   const w = makeSimWorld('warrior', 0xd00d);
   const hero = w.player;
   hero.sheet.setSource('probe', [{ stat: 'life', kind: 'flat', value: 99999 }]);
@@ -314,6 +433,17 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
     check('the veil lifts in the light', !worn(hero));
     check('…while the unlit wolf stays veiled', worn(wolf));
     d.well!.power = d.well!.max; // keep it burning for the recede beat
+
+    // THE THREE-WAY LIGHT WAR (surge.pairs, generic by overlay id): another
+    // event live in this zone under deep gloom → told once, engine-side.
+    const lc = w.sim.overlayFor('longcandle');
+    check('the quiet sim constructs the candle field too', !!lc);
+    if (lc) {
+      (lc as unknown as { activityAt(z: string): number }).activityAt = () => 1;
+      step(w, 0.1, 2);
+      check('deep gloom + a live candle-war = the pairing told (engine lane)',
+        gf.markPairTold('longcandle') === false);
+    }
 
     // Outlasting a witnessed front stamps the survival ledger ONCE.
     raw.phaseNow = () => 'idle';

@@ -76,7 +76,7 @@ import {
   type ResonanceSpec,
 } from './levelgen';
 import { anyPitNear, PIT_CFG, pitAt, pitSectorKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { lightReach, lightwellOf } from './lightwells';
+import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import {
@@ -4386,6 +4386,9 @@ export class World {
       this.sim.wraithsailField?.onBoardingLeft();
       this.streamCoast(true);
     }
+    // POOLED-AMBIENT lightwells wake with the zone (after every doodad source
+    // above — generation, memory restore, package dressing — has finished).
+    this.attachZoneWells();
   }
 
   /** THE ZONE-RUNTIME REGISTRY — one row per package's in-zone runtime, built
@@ -9572,18 +9575,10 @@ export class World {
     // ramp belongs to the surface Gloaming, and must not fire down here).
     if ((this.player.survival?.get('light') ?? cfg.lightMax) - cfg.drainRate * dt <= 0) { this.resurfaceFromDescent('consumed'); return; }
     this.drainSurvival(this.player, 'light', cfg.drainRate, dt);
-    // LIGHT spots push it back (run over a glowing crystalline cluster).
-    for (let i = this.doodads.length - 1; i >= 0; i--) {
-      const d = this.doodads[i];
-      if (d.kind !== 'light_spot') continue;
-      if (dist(d.pos, p) <= d.radius + this.player.radius + 4) {
-        const cur = this.player.survival?.get('light') ?? cfg.lightMax;
-        this.player.survival?.set('light', Math.min(cfg.lightMax, cur + cfg.lightBurst));
-        this.doodads.splice(i, 1);
-        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 120, color: '#ffe08a', life: 0.5, maxLife: 0.5 });
-        this.text(vec(d.pos.x, d.pos.y - 16), 'the light holds back the dark!', '#ffe08a', 13);
-      }
-    }
+    // LIGHT spots push the dark back — served by the lightwell fabric's BURST
+    // lane now (updateLightwells; the row registers in defs/descent.ts with
+    // this surge's own grant): same run-over trigger, same one-gulp refill,
+    // and a spot's glow still never shelters (bursts are not light cover).
     // DEPTH: how far you've delved from the shaft — scales danger + payout.
     run.depth = Math.floor(dist(p, run.origin) / Math.max(1, cfg.depthUnit));
     // Continuous Depthkin pressure (faster the deeper you are) — floor + ramp
@@ -9705,6 +9700,12 @@ export class World {
    *  ride the one-shot zone doodad list). */
   private wellSeq = 0;
 
+  /** The doodad list's mutation version (bumped by markDoodadsChanged) —
+   *  render caches that must notice IN-PLACE doodad mutations (a well
+   *  attached at zone load, a wire-adopted pool) key on this beside the
+   *  identity+length pair, which alone is blind to them. */
+  doodadsVersion(): number { return this.doodadsRev; }
+
   /** Every doodad wearing a LIGHTWELLS row — the one list the engine sweep and
    *  the render light layer both walk, rebuilt lazily on the same (identity,
    *  length, rev) keys as the spatial/veil indexes. */
@@ -9717,6 +9718,26 @@ export class World {
       this.wellRev = this.doodadsRev;
     }
     return this.wells;
+  }
+
+  /** THE POOLED-AMBIENT ATTACH (zone load, host/solo only — clients never
+   *  run loadZone; they ADOPT well state off the 20 Hz wire instead): every
+   *  AUTHORED doodad whose lightwell row declares a pool (or burst) gets its
+   *  well state minted here, so an ambient kind joins the finite-power
+   *  economy with ONE data field. Idempotent — a zone revisited within the
+   *  memory TTL keeps its drained pools (and its guttered absences); when
+   *  the world forgets the zone, the lights are lit again. Runs BEFORE the
+   *  first render so the light-cluster bake never captures a pooled well. */
+  private attachZoneWells(): void {
+    let changed = false;
+    for (const d of this.doodads) {
+      if (d.well) continue;
+      const def = lightwellOf(d.kind);
+      if (!def) continue;
+      if (def.pool !== undefined) { d.well = { power: def.pool, max: def.pool, id: ++this.wellSeq }; changed = true; }
+      else if (def.burst) { d.well = { power: 1, max: 1, id: ++this.wellSeq }; changed = true; }
+    }
+    if (changed) this.markDoodadsChanged();
   }
 
   /** Plant a lightwell at runtime (the Gloaming's kindles, a kindled wick).
@@ -9764,6 +9785,30 @@ export class World {
       const d = wells[i];
       const def = lightwellOf(d.kind);
       if (!def) continue;
+      // BURST rows (the Descent's light-spot grammar): one gulp, consumed.
+      // Only a body already CARRYING a light meter pops one — no flare is
+      // wasted in peacetime — and a full meter still consumes it (sloppy
+      // routing pays). Never the residence lane, never light cover.
+      if (def.burst) {
+        for (const s of this.seats) {
+          const a = s.actor;
+          if (!a || a.dead || a.downed) continue;
+          const cur = a.survival?.get('light');
+          if (cur === undefined) continue;
+          const within = def.burst.on === 'touch'
+            ? dist(a.pos, d.pos) <= d.radius + a.radius + BURST_TOUCH_PAD
+            : dist(a.pos, d.pos) <= (lightReach(d) ?? 0);
+          if (!within) continue;
+          a.survival!.set('light', Math.min(lightMax, cur + def.burst.grant));
+          const idx = this.doodads.indexOf(d);
+          if (idx >= 0) this.doodads.splice(idx, 1);
+          this.markDoodadsChanged();
+          this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 120, color: def.burst.color ?? '#ffe08a', life: 0.5, maxLife: 0.5 });
+          if (def.burst.text) this.text(vec(d.pos.x, d.pos.y - 16), def.burst.text, def.burst.color ?? '#ffe08a', 13);
+          break; // first toucher takes it
+        }
+        continue;
+      }
       const reach = lightReach(d);
       if (reach === null || reach <= 0) continue;
       // RESIDENTS: live player seats with their feet in the light.
@@ -9777,7 +9822,7 @@ export class World {
         // semantically full (the survival fabric's lazy-create contract).
         const cur = a.survival?.get('light');
         if (cur !== undefined && cur < lightMax) {
-          a.survival!.set('light', Math.min(lightMax, cur + def.feed * dt));
+          a.survival!.set('light', Math.min(lightMax, cur + (def.feed ?? 0) * dt));
         }
       }
       if (!d.well) continue; // steady rows: feed forever, never drain
@@ -9790,7 +9835,9 @@ export class World {
         if (!wd) continue;
         if (dist(a.pos, d.pos) <= reach) hunger += wd;
       }
-      d.well.power = Math.max(0, d.well.power - ((def.drainPerResident ?? 1) * residents + hunger) * dt);
+      // Residents + the dark's mouths + the row's own passive decay (an
+      // abandoned well gutters instead of hogging the spawn cap forever).
+      d.well.power = Math.max(0, d.well.power - ((def.drainPerResident ?? 1) * residents + hunger + (def.decayPerSec ?? 0)) * dt);
       if (d.well.power <= 0) {
         // GUTTERED OUT: the well dissipates with a small sigh — splice +
         // rev bump (the popBrittle discipline) so every doodad cache re-syncs.
@@ -9831,9 +9878,12 @@ export class World {
   }
 
   /** Is this point inside ANY light's tested reach? (lightReach — the same
-   *  resolver the drawn glow uses: drawn == tested.) */
+   *  resolver the drawn glow uses: drawn == tested.) BURST rows never count:
+   *  a flare is a pickup, not shelter (descent canon — the spots glow and
+   *  the dark drains on). */
   lightCoverAt(p: Vec2): boolean {
     for (const d of this.lightwellDoodads()) {
+      if (lightwellOf(d.kind)?.burst) continue;
       const r = lightReach(d);
       if (r !== null && r > 0 && dist(p, d.pos) <= r) return true;
     }
@@ -9853,7 +9903,21 @@ export class World {
     const seen = new Set<number>();
     for (const w of wells) {
       seen.add(w.i);
-      const d = byId.get(w.i);
+      let d = byId.get(w.i);
+      if (!d) {
+        // AMBIENT ADOPT: an AUTHORED pooled/burst doodad already stands here
+        // from the ZoneMsg — attach the host's well state to IT (matched by
+        // kind + position) instead of minting a twin. Runtime wells (a
+        // gloomwell, a kindled wick) never match and take the push lane.
+        const adopt = this.doodads.find(x => !x.well && x.kind === w.k
+          && Math.abs(x.pos.x - w.x) < 1.5 && Math.abs(x.pos.y - w.y) < 1.5);
+        if (adopt) {
+          adopt.well = { power: w.pf, max: 1, id: w.i };
+          byId.set(w.i, adopt);
+          d = adopt;
+          changed = true;
+        }
+      }
       if (!d) {
         this.doodads.push({ pos: vec(w.x, w.y), radius: w.r, kind: w.k as DoodadKind, well: { power: w.pf, max: 1, id: w.i } });
         changed = true;
@@ -9983,6 +10047,20 @@ export class World {
       gf.markWitnessed();
       bumpLedger(this.ledger, 'gloaming_seen');
       this.text(this.player.pos, 'THE GLOAMING — the dark itself, risen', '#a89ad0', 15);
+    }
+
+    // CO-OCCURRENCE (surge.pairs, open by overlay id): another event live in
+    // THIS zone under real gloom — the three-way light war and its kin —
+    // announced once per front through the field's own news queue. Detection
+    // is fully generic: Sim.overlayFor + the overlay's own activityAt.
+    if (this.gloomCur > 0.4) {
+      for (const pid of Object.keys(cfg.pairs)) {
+        const act = this.sim.overlayFor(pid)?.activityAt?.(this.zone.id) ?? 0;
+        if (act > 0 && gf.markPairTold(pid)) {
+          const row = cfg.pairs[pid];
+          this.text(this.player.pos, row.text, row.color, 13);
+        }
+      }
     }
   }
 

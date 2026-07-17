@@ -41,6 +41,15 @@ export const GLOAMING_SURGE: GloamingSurge = {
   ],
   injectFactions: ['gloamborn', 'nightkin'],
   injectFrom: 0.35,
+  // The world map's territory read: covered ground fuses into one dark
+  // country (tiles never stack), roads between covered zones run as tendrils.
+  map: { cellSpan: 9, nodeR: 34, roadR: 13, maxAlpha: 0.55 },
+  // CO-OCCURRENCE flavor (announced once per front, detection generic by
+  // overlay id): a candle-war fought under the risen dark is the promised
+  // three-way light war — the courts war OVER light while the dark EATS it.
+  pairs: {
+    longcandle: { text: 'Candle-war under the gloaming — three sides now, and the dark eats what they fight for.', color: '#e8c060' },
+  },
   color: '#6a5a9c',
 };
 
@@ -96,10 +105,12 @@ export const GLOAMING: ContentPackage = {
   world: { overlay: (ctx) => new GloamingField(ctx, GLOAMING_SURGE) },
   factions: [GLOAMBORN_FACTION],
   // The Court hunts best under a borrowed dark: a risen gloaming feeds the
-  // Long Night's whole calendar (co-occurrence with a Vigil night is the
-  // three-way light war, unscripted).
+  // Long Night's whole calendar, and the candle-courts war harder for light
+  // the dark is eating (the three-way light war — the pairs row above
+  // announces it; these rows make runs COMPOSE it more often).
   relationships: [
     { a: 'gloaming', b: 'long_night', kind: 'amplifies', strength: 1.15 },
+    { a: 'gloaming', b: 'longcandle', kind: 'amplifies', strength: 1.1 },
   ],
   validate: (look) => [
     ...GLOAMBORN_FACTION.roster.filter(e => !look.monster(e.id)).map(e => `gloamborn '${e.id}' unknown`),
