@@ -47,7 +47,9 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
     slitherSecondsPerEdge: 50,     // a slow, visible crossing — chase it on the map
     sealSeconds: 32,               // the slip-past window before each pass shuts
     cooldown: [700, 1300],         // the world breathes after a slaying
-    wall: { count: 7, dist: 74, radius: 24 }, // the coil plug around each sealed portal
+    // The coil plug around each sealed portal — sized to the TRUE world
+    // snake (the segment-fabric rescale): a colossus's coils read colossal.
+    wall: { count: 7, dist: 88, radius: 30 },
   },
   apparition: {
     igniteChance: 0.0012,          // roughly every 7 minutes of play, gate willing
@@ -77,19 +79,25 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
   },
   defs: [
     {
+      // THE TRUE WORLD SNAKE (the SEGMENT FABRIC's debut — docs/engine/
+      // segments.md): a colossal head the whole body trails, every segment
+      // hittable, scale plates tearing where the damage spreads. The myth
+      // pays like one.
       id: 'vhorun', name: 'Vhorun, the Sunder-Wyrm', archetype: 'roamer',
       monster: 'primeval_wyrm_head', minLevel: 10, levelBonus: 3,
       glyph: '🐍', color: '#7fb069',
       escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [3, 5] },
       roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', arenaName: 'The Sunder-Coil' },
-      reward: { xp: 900, gems: 5 },
+      arenaBand: { w: [3200, 3800], h: [2300, 2800] }, // room for the body to sweep
+      pitch: 'every scale of it is a target — tear the plates along its length and it bleeds the harder, but a torn coil spits venom',
+      reward: { xp: 1250, gems: 6 },
     },
     {
       id: 'cragmaw', name: 'Cragmaw, the Orogeny', archetype: 'apparition',
       monster: 'primeval_cragmaw', minLevel: 6, levelBonus: 2,
       glyph: '⛰', color: '#b0916a',
       escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [2, 4] },
-      reward: { xp: 700, gems: 4 },
+      reward: { xp: 850, gems: 4 },
     },
     {
       id: 'ashvein', name: 'Ashvein, the Furnace Below', archetype: 'apparition',
@@ -97,7 +105,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       monster: 'primeval_ashvein', minLevel: 1, levelBonus: 2,
       glyph: '☄', color: '#e06a2a',
       escort: { table: [{ id: 'primeval_cinder', weight: 1 }], count: [3, 5] },
-      reward: { xp: 760, gems: 4 },
+      reward: { xp: 920, gems: 5 },
     },
     {
       // THE IRON BELL — the walking mausoleum of the karst country. Almost
@@ -120,8 +128,8 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       monster: 'primeval_velketh', minLevel: 8, levelBonus: 3,
       glyph: '👁', color: '#9a6ad2',
       escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [2, 3] },
-      lair: { structureKind: 'husk_throne', zoneName: 'The Husk Throne' },
-      reward: { xp: 800, gems: 5 },
+      lair: { structureKind: 'husk_throne', zoneName: 'The Husk Throne', radius: 165 },
+      reward: { xp: 980, gems: 5 },
     },
   ],
 };

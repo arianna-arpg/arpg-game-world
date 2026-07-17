@@ -168,6 +168,71 @@ export function temperOf(def: MonsterDef | undefined, factionTemper?: TemperId):
   return def?.temper ?? factionTemper ?? 'wary';
 }
 
+/** THE SEGMENT FABRIC's data face (docs/engine/segments.md) — a worm/snake
+ *  body as one spec. `length`/`spacing`/`taper` alone = the classic
+ *  render-only trail every legacy worm keeps, byte-identical. The fabric
+ *  fields OPT IN per def:
+ *    - `hittable` — every trailing segment becomes a REAL hit body: the
+ *      drawn circle IS the tested circle (engine/segments.ts segR), every
+ *      hit funnel (projectiles, melee, novas, zones, beams, AI range, aim
+ *      assist) connects with the nearest body, and a landed blow feeds the
+ *      creature's ONE shared life pool — the segment is WHERE it landed,
+ *      never a damage multiplier. One creature: one kill, one nameplate,
+ *      one boss bar, one loot/xp credit, all by construction.
+ *    - `looks` — per-segment kit-parts from the LOOKS registry, so the
+ *      chain reads as ONE animal at a glance (plates, fins, the tail).
+ *    - `wounds` — per-segment wound states layered on the shared pool.
+ *  DRIVE SEAM: segment positions come from the 'trail' drive (serpentine
+ *  trail-the-head, World.updateWorms) — an articulated limb-chain / gait
+ *  drive (the walking-colossus seam) slots in as a new `drive` kind writing
+ *  the same segments[]; the hit/life/feedback side is drive-agnostic.
+ *  Rigid anchored limbs can ride the PARTS fabric instead — they compose. */
+export interface WormSpec {
+  length: number;
+  spacing?: number;
+  taper?: number;
+  /** Opt-in: segments are real hittable bodies (drawn = tested). */
+  hittable?: boolean;
+  /** Per-segment kit-part looks (the one-animal read). */
+  looks?: WormLookSpec;
+  /** Per-segment wound states (requires `hittable`). */
+  wounds?: WormWoundSpec;
+  /** Follow drive ('trail' = serpentine trail-the-head, the stock drive
+   *  and the default). Reserved seam for articulated chains. */
+  drive?: 'trail';
+}
+
+/** Kit-part looks per segment class — LOOKS registry ids. Unset classes
+ *  fall back to the head's own bake scaled down (the legacy tail). */
+export interface WormLookSpec {
+  /** The ordinary body segment (scale plates, coil rings…). */
+  body?: string;
+  /** The LAST segment (tail spade, flukes, a stinger). */
+  tail?: string;
+  /** Every nth segment wears an accent look instead (dorsal fins, spine
+   *  sails) — never the tail. n ≥ 2. */
+  every?: { n: number; look: string };
+}
+
+/** Per-segment WOUND states, layered on the shared pool: each segment
+ *  carries a pool of `frac` × the root's max life; skill damage landing ON
+ *  that segment drains it (the shared pool is fed regardless); at zero the
+ *  segment TEARS — permanent for this life, drawn + tested smaller, `mods`
+ *  laid on the root per torn segment (one stacking sheet source), and an
+ *  optional retaliation `burst` at the torn coil. Rewards spreading damage
+ *  along the body without ever double-counting a hit. */
+export interface WormWoundSpec {
+  /** Wound pool per segment, as a fraction of the root's max life. */
+  frac: number;
+  /** Mods laid on the root PER torn segment (stacking source). */
+  mods?: Modifier[];
+  /** Floating text at the tear (default 'TORN'). */
+  text?: string;
+  /** Retaliation pop at the torn segment: typed damage to enemies-of-the-
+   *  worm within `radius`, as `damageFrac` × the root's max life. */
+  burst?: { radius: number; damageFrac: number; type?: DamageType; color?: string };
+}
+
 export interface MonsterDef {
   id: string;
   name: string;
@@ -219,8 +284,10 @@ export interface MonsterDef {
   levitates?: boolean;
   /** AI archetype (omit for the basic approach-and-attack brain). */
   brain?: BrainDef;
-  /** Worm/snake body: trailing segments that follow the head. */
-  worm?: { length: number; spacing?: number; taper?: number };
+  /** Worm/snake body: trailing segments that follow the head. The base
+   *  fields alone are the legacy render-only trail; the fabric fields make
+   *  every segment REAL (docs/engine/segments.md). */
+  worm?: WormSpec;
   /** Detonates on death for this fraction of max life (bombers). For an ENEMY this now
    *  AUTO-maps to a telegraphed coalesce-implode (the player gets an escape window). */
   explodeOnDeath?: number;
@@ -7799,19 +7866,35 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // tag 'worldboss_boss' + the instance eventKey at spawn.
   // ==========================================================================
 
-  // VHORUN, the Sunder-WyRM's HEAD — the settled serpent's fight. Erupted and
-  // anchored (moveSpeed 0): it repositions only by BURROW-teleport in Act II.
-  // Four hitboxes: the neck root, the maw (the prize weakspot), two coils.
+  // VHORUN, the Sunder-Wyrm — the TRUE WORLD SNAKE (the SEGMENT FABRIC's
+  // debut, docs/engine/segments.md): a colossal head the whole body TRAILS,
+  // every segment a real hittable body sharing the one life pool, scale
+  // plates TEARING where you spread the damage (each tear stacks damage
+  // taken on the wyrm and pops venom at the wound). It MOVES now — the
+  // fight is the body: coils sweep the arena as it turns, the plates read
+  // head/sail/tail at a glance, and Act II's burrow re-forms the spine at
+  // the eruption. Head-cluster weakspots stay the PARTS fabric: the maw
+  // (the prize) and two neck-coils, spread wide by the grown radius.
   primeval_wyrm_head: {
     id: 'primeval_wyrm_head', name: 'Vhorun, the Sunder-Wyrm',
-    color: '#7fb069', shape: 'oval', radius: 30, material: 'chitin', look: 'sand_wyrm',
-    base: { life: 950, moveSpeed: 0, accuracy: 130, armor: 45, mana: 280, manaRegen: 14, weight: 9 },
+    color: '#7fb069', shape: 'oval', radius: 72, material: 'chitin', look: 'sand_wyrm',
+    base: { life: 1250, moveSpeed: 58, accuracy: 130, armor: 45, mana: 280, manaRegen: 14, weight: 9 },
     mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3), mod('damage', 'increased', 0.4)],
     skills: ['venom_bolt', 'bile_spray', 'ground_slam'],
-    xp: 640, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
-    detection: 1.4, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 2.6,
-    worm: { length: 10, spacing: 20, taper: 0.9 },
-    ambush: { radius: 340, announce: 'The ground HEAVES — Vhorun rises!' },
+    xp: 900, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.4, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 1.7,
+    worm: {
+      length: 26, spacing: 44, taper: 0.975,
+      hittable: true,
+      looks: { body: 'wyrm_plate', tail: 'wyrm_tail_spade', every: { n: 5, look: 'wyrm_sail' } },
+      wounds: {
+        frac: 0.05,
+        mods: [mod('damageTaken', 'increased', 0.015)],
+        text: 'SCALE TORN',
+        burst: { radius: 95, damageFrac: 0.035, type: 'chaos', color: '#9fe07a' },
+      },
+    },
+    ambush: { radius: 560, announce: 'The ground HEAVES — Vhorun rises!' },
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
       { monster: 'primeval_wyrm_maw', dx: 1.35, dy: 0, lifeFrac: 0.4, breakDamage: 0.16 },
@@ -7825,23 +7908,27 @@ export const MONSTERS: Record<string, MonsterDef> = {
       },
     ],
     brain: {
-      type: 'artillery',
+      // A moving colossus CHASES — juggernaut locomotion under the same
+      // 3-act script; the worm fabric's slither-weave rides the approach.
+      type: 'juggernaut',
       script: [
-        { // ACT I — the LURKING COIL: spit and slam from the crater.
+        { // ACT I — the HUNTING COIL: it comes for you, spitting as it turns.
           id: 'coiled',
           cadences: [{ every: 5.5, first: 3, actions: [{ do: 'cast', skill: 'bile_spray', at: 'target', force: true }] }],
           goto: [{ to: 'thrash', atLifeFrac: 0.62 }],
         },
-        { // ACT II — it THRASHES: burrows away and erupts anew, venom raining.
+        { // ACT II — it THRASHES: burrows away and erupts anew (the spine
+          // re-forms at the eruption), venom raining. Telegraphs scaled to
+          // the colossus: bigger rings, longer wind-up, the same honesty.
           id: 'thrash',
           rewardGems: 1,
           announce: 'Vhorun THRASHES — the earth splits under it!',
           mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
           onEnter: [
-            { do: 'teleport', to: 'awayFromTarget', range: 300 },
-            { do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 175, delay: 0.85, push: { strength: 220 } },
+            { do: 'teleport', to: 'awayFromTarget', range: 420 },
+            { do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 300, delay: 1.0, push: { strength: 260 } },
           ],
-          cadences: [{ every: 7, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 150, count: 6, waves: 1, delay: 0.9, at: 'anchor' }] }],
+          cadences: [{ every: 7, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 280, count: 9, waves: 1, delay: 0.9, at: 'anchor' }] }],
           goto: [{ to: 'fury', atLifeFrac: 0.28 }],
         },
         { // ACT III — the BROOD: its spawn boil up and WARD it; break the ward.
@@ -7850,10 +7937,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
           announce: 'The Sunder-Wyrm keens — its brood answers!',
           mods: [mod('damage', 'more', 0.4)],
           onEnter: [
-            { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 220, at: 'anchor', tag: 'wyrm_brood' },
+            { do: 'summon', monster: 'primeval_spawn', count: 5, ring: 320, at: 'anchor', tag: 'wyrm_brood' },
             { do: 'ward', tag: 'wyrm_brood', announce: 'The brood breaks — Vhorun is BARED!' },
           ],
-          cadences: [{ every: 3, actions: [{ do: 'push', radius: 240, strength: 140, from: 'anchor' }] }],
+          cadences: [{ every: 3, actions: [{ do: 'push', radius: 340, strength: 160, from: 'anchor' }] }],
           goto: [],
         },
       ],
@@ -7861,7 +7948,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   primeval_wyrm_maw: {
     id: 'primeval_wyrm_maw', name: 'Sunder-Maw',
-    color: '#a4cc7e', shape: 'oval', radius: 17, material: 'chitin', look: 'leviathan_head',
+    color: '#a4cc7e', shape: 'oval', radius: 40, material: 'chitin', look: 'leviathan_head',
     noNemesis: true, faction: 'primeval', tags: ['primeval'],
     base: { life: 220, moveSpeed: 0, mana: 140, manaRegen: 10, poise: 70 },
     skills: ['venom_bolt'], xp: 0,
@@ -7869,34 +7956,43 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   primeval_wyrm_coil: {
     id: 'primeval_wyrm_coil', name: 'Sunder-Coil',
-    color: '#6a9458', shape: 'oval', radius: 15, material: 'chitin',
+    color: '#6a9458', shape: 'oval', radius: 34, material: 'chitin', look: 'wyrm_plate',
     noNemesis: true, faction: 'primeval', tags: ['primeval'],
     base: { life: 150, moveSpeed: 0, mana: 80, manaRegen: 6, poise: 50 },
     skills: ['whirling_reap'], xp: 0,
   },
   // The PASSING body — the glimpse as it slithers a zone: engine-wheeled
-  // (driven), untouchable scenery-in-motion with a long trailing worm.
+  // (driven), untouchable scenery-in-motion with a long trailing worm. It
+  // wears the full segment KIT (plates/sails/tail) at world-snake scale so
+  // the glimpse and the fight are unmistakably the SAME animal — but stays
+  // fabric-OFF (no hittable): a passing myth, not a target.
   primeval_wyrm_passing: {
     id: 'primeval_wyrm_passing', name: 'Vhorun, the Sunder-Wyrm',
-    color: '#7fb069', shape: 'oval', radius: 22, material: 'chitin', look: 'sand_wyrm',
-    base: { life: 100, moveSpeed: 120, mana: 0 },
+    color: '#7fb069', shape: 'oval', radius: 55, material: 'chitin', look: 'sand_wyrm',
+    base: { life: 100, moveSpeed: 150, mana: 0 },
     skills: [], xp: 0,
     faction: 'primeval', tags: ['primeval'],
-    worm: { length: 14, spacing: 18, taper: 0.92 },
+    worm: {
+      length: 30, spacing: 46, taper: 0.975,
+      looks: { body: 'wyrm_plate', tail: 'wyrm_tail_spade', every: { n: 5, look: 'wyrm_sail' } },
+    },
     driven: true, passive: true, invulnerable: true, untargetable: true,
     noNemesis: true, noBestiary: true,
   },
 
   // CRAGMAW, the Orogeny — the walking mountain (timed apparition). Two fist
-  // silhouettes; sunder one and the slam is DISARMED.
+  // silhouettes; sunder one and the slam is DISARMED. MYTHIC-SCALE PASS:
+  // a mountain LOOMS — the hull and fists grew into the tier the name
+  // promises (plain rescale, no segments: an orogeny is a mass, not a
+  // chain), telegraphs scaled with the silhouette so the reads stay fair.
   primeval_cragmaw: {
     id: 'primeval_cragmaw', name: 'Cragmaw, the Orogeny',
-    color: '#b0916a', shape: 'octagon', radius: 27, material: 'stone', look: 'golem',
-    base: { life: 880, moveSpeed: 46, accuracy: 125, armor: 85, mana: 220, manaRegen: 12, weight: 9 },
+    color: '#b0916a', shape: 'octagon', radius: 48, material: 'stone', look: 'golem',
+    base: { life: 1050, moveSpeed: 46, accuracy: 125, armor: 85, mana: 220, manaRegen: 12, weight: 9 },
     mods: [mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.4)],
     skills: ['ground_slam', 'hurl_debris', 'cleave'],
-    xp: 600, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
-    detection: 1.3, turnSpeed: 2.2,
+    xp: 780, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.3, turnSpeed: 1.8,
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
       { monster: 'primeval_cragmaw_fist', dx: 0.85, dy: 1.25, lifeFrac: 0.28, breakDamage: 0.1, breakDisables: ['ground_slam'] },
@@ -7910,7 +8006,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       script: [
         { // ACT I — the MOUNTAIN WALKS: shockwave slams that hurl you back.
           id: 'mountain',
-          cadences: [{ every: 4.5, first: 3, actions: [{ do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 180, delay: 0.85, push: { strength: 240 } }] }],
+          cadences: [{ every: 4.5, first: 3, actions: [{ do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 250, delay: 0.95, push: { strength: 260 } }] }],
           goto: [{ to: 'barrage', atLifeFrac: 0.55 }],
         },
         { // ACT II — the BARRAGE: it plants itself and rains the hillside down.
@@ -7919,7 +8015,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           rewardGems: 1,
           announce: 'Cragmaw tears the hillside loose — SHELTER!',
           mods: [mod('damage', 'more', 0.35), mod('attackSpeed', 'increased', 0.15)],
-          cadences: [{ every: 6, actions: [{ do: 'ring', skill: 'hurl_debris', radius: 160, count: 5, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
+          cadences: [{ every: 6, actions: [{ do: 'ring', skill: 'hurl_debris', radius: 230, count: 6, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
           goto: [{ to: 'landslide', atLifeFrac: 0.22 }],
         },
         { // ACT III — the LANDSLIDE: shards of it break off and swarm.
@@ -7928,8 +8024,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
           rewardGems: 2,
           announce: 'The Orogeny CRUMBLES FORWARD — it will bury you!',
           mods: [mod('moveSpeed', 'more', 0.4), mod('damage', 'more', 0.4)],
-          onEnter: [{ do: 'summon', monster: 'primeval_spawn', count: 3, ring: 200, at: 'anchor', tag: 'cragmaw_shard' }],
-          cadences: [{ every: 2.8, actions: [{ do: 'push', radius: 230, strength: 150, from: 'anchor' }] }],
+          onEnter: [{ do: 'summon', monster: 'primeval_spawn', count: 4, ring: 260, at: 'anchor', tag: 'cragmaw_shard' }],
+          cadences: [{ every: 2.8, actions: [{ do: 'push', radius: 300, strength: 160, from: 'anchor' }] }],
           goto: [],
         },
       ],
@@ -7938,7 +8034,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   primeval_cragmaw_fist: {
     id: 'primeval_cragmaw_fist', name: 'Orogen Fist',
-    color: '#9a7c56', shape: 'octagon', radius: 13, material: 'stone',
+    color: '#9a7c56', shape: 'octagon', radius: 24, material: 'stone',
     noNemesis: true, faction: 'primeval', tags: ['primeval'],
     base: { life: 130, moveSpeed: 0, mana: 60, manaRegen: 6, poise: 60 },
     skills: ['cleave'], xp: 0,
@@ -8062,13 +8158,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   // ASHVEIN, the Furnace Below — hell's own sovereign (UNDERWORLD-ONLY: the
   // def's dimension row keeps it off the surface instance's roster entirely).
+  // MYTHIC-SCALE PASS: a rising furnace SUN (plain rescale — its identity is
+  // a levitating mass of ember, not a chain); telegraphs grown with it.
   primeval_ashvein: {
     id: 'primeval_ashvein', name: 'Ashvein, the Furnace Below',
-    color: '#e06a2a', shape: 'star', radius: 25, material: 'ember', look: 'magma_lurker',
-    base: { life: 820, moveSpeed: 62, accuracy: 135, armor: 55, mana: 320, manaRegen: 16 },
+    color: '#e06a2a', shape: 'star', radius: 38, material: 'ember', look: 'magma_lurker',
+    base: { life: 950, moveSpeed: 62, accuracy: 135, armor: 55, mana: 320, manaRegen: 16 },
     mods: [mod('fireRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.4), mod('damage', 'increased', 0.4)],
     skills: ['magma_glob', 'flame_wave', 'meteor_storm'],
-    xp: 640, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    xp: 800, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.4, levitates: true,
     scaling: { life: { incPerLevel: 0.15 } },
     brain: {
@@ -8076,7 +8174,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       script: [
         { // ACT I — the SMOLDER: globs and rolling fire.
           id: 'smolder',
-          cadences: [{ every: 5, first: 3, actions: [{ do: 'nova', skill: 'magma_glob', at: 'self', zoneRadius: 165, delay: 0.85, push: { strength: 180 } }] }],
+          cadences: [{ every: 5, first: 3, actions: [{ do: 'nova', skill: 'magma_glob', at: 'self', zoneRadius: 220, delay: 0.95, push: { strength: 200 } }] }],
           goto: [{ to: 'furnace', atLifeFrac: 0.55 }],
         },
         { // ACT II — the FURNACE OPENS: cinders boil out and WARD it under a
@@ -8086,7 +8184,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           announce: 'The furnace OPENS — the sky catches fire!',
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
-            { do: 'summon', monster: 'primeval_cinder', count: 4, ring: 210, at: 'anchor', tag: 'ashvein_cinder' },
+            { do: 'summon', monster: 'primeval_cinder', count: 5, ring: 260, at: 'anchor', tag: 'ashvein_cinder' },
             { do: 'ward', tag: 'ashvein_cinder', announce: 'The cinders gutter — Ashvein is BARED!' },
           ],
           cadences: [{ every: 9, actions: [{ do: 'cast', skill: 'meteor_storm', at: 'target', force: true }] }],
@@ -8098,7 +8196,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           rewardGems: 2,
           announce: 'Ashvein RUPTURES — run between the waves!',
           mods: [mod('moveSpeed', 'more', 0.45), mod('damage', 'more', 0.45)],
-          cadences: [{ every: 5, actions: [{ do: 'ring', skill: 'magma_glob', radius: 170, count: 7, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
+          cadences: [{ every: 5, actions: [{ do: 'ring', skill: 'magma_glob', radius: 240, count: 8, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
           goto: [],
         },
       ],
@@ -8110,14 +8208,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // wall), sweeping the chamber with two anchored arm silhouettes.
   primeval_velketh: {
     id: 'primeval_velketh', name: 'Velketh, the Enthroned Husk',
-    color: '#9a6ad2', shape: 'pentagon', radius: 24, material: 'void',
-    base: { life: 900, moveSpeed: 0, accuracy: 135, armor: 50, mana: 320, manaRegen: 18, weight: 9 },
+    color: '#9a6ad2', shape: 'pentagon', radius: 34, material: 'void',
+    base: { life: 1000, moveSpeed: 0, accuracy: 135, armor: 50, mana: 320, manaRegen: 18, weight: 9 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.45)],
     skills: ['lash_roots', 'venom_bolt', 'bile_spray'],
-    xp: 660, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    xp: 780, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.6, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 2.0,
-    habitat: { kind: 'husk_throne', grace: 48 },
-    ambush: { radius: 300, announce: 'The husk SPLITS along old seams — Velketh wakes!' },
+    habitat: { kind: 'husk_throne', grace: 52 },
+    ambush: { radius: 380, announce: 'The husk SPLITS along old seams — Velketh wakes!' },
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
       {
@@ -8134,7 +8232,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       script: [
         { // ACT I — ENTHRONED: it never leaves the dais; the chamber comes to it.
           id: 'enthroned',
-          cadences: [{ every: 5.5, first: 3.5, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 140, count: 5, waves: 1, delay: 0.85, at: 'anchor' }] }],
+          cadences: [{ every: 5.5, first: 3.5, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 190, count: 6, waves: 1, delay: 0.85, at: 'anchor' }] }],
           goto: [{ to: 'clutch', atLifeFrac: 0.55 }],
         },
         { // ACT II — the CLUTCH: its brood swarms out of the husk and WARDS it.
@@ -8143,7 +8241,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           announce: 'The throne DISGORGES its clutch!',
           mods: [mod('damage', 'more', 0.35)],
           onEnter: [
-            { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 190, at: 'anchor', tag: 'velketh_clutch' },
+            { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 240, at: 'anchor', tag: 'velketh_clutch' },
             { do: 'ward', tag: 'velketh_clutch', announce: 'The clutch is broken — the husk is BARED!' },
           ],
           goto: [{ to: 'paroxysm', atLifeFrac: 0.22 }],
@@ -8154,7 +8252,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
           announce: 'Velketh convulses — the whole chamber HEAVES!',
           mods: [mod('damage', 'more', 0.45), mod('attackSpeed', 'increased', 0.2)],
           cadences: [
-            { every: 2.6, actions: [{ do: 'push', radius: 240, strength: 150, from: 'anchor' }] },
+            { every: 2.6, actions: [{ do: 'push', radius: 300, strength: 160, from: 'anchor' }] },
             { every: 6, actions: [{ do: 'cast', skill: 'bile_spray', at: 'target', force: true }] },
           ],
           goto: [],
@@ -8164,7 +8262,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   primeval_velketh_arm: {
     id: 'primeval_velketh_arm', name: 'Husk Arm',
-    color: '#7e56ae', shape: 'oval', radius: 13, material: 'void',
+    color: '#7e56ae', shape: 'oval', radius: 20, material: 'void',
     noNemesis: true, faction: 'primeval', tags: ['primeval'],
     base: { life: 140, moveSpeed: 0, mana: 70, manaRegen: 6, poise: 50 },
     skills: ['whirling_reap'], xp: 0,

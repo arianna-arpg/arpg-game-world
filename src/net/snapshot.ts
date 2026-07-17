@@ -28,6 +28,7 @@ import { emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { MONSTERS } from '../data/monsters';
 import { PASSIVE_NODES } from '../data/passives';
 import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { makeSkillInstance, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
@@ -78,7 +79,12 @@ export interface ActorW {
   con?: { kind: string; domeRadius?: number };  // construct (dome bubble)
   fuse?: number;               // armed bomber fuse
   leap?: { timer: number; total: number };       // airborne leap (body swell)
-  worm?: { seg: Vec2W[]; taper: number };         // snake/worm trailing segments
+  /** Snake/worm trailing segments. SEGMENT-FABRIC extras ride only when
+   *  live (bosses, briefly): `ht` = hittable chain (solid draw + hitbox
+   *  overlay truth), `wd` = torn-segment bitmask (torn draws/tests smaller),
+   *  `sf` = per-segment flash countdowns. Kit-part looks are NOT shipped —
+   *  the client re-resolves them from MONSTERS[defId].worm.looks. */
+  worm?: { seg: Vec2W[]; taper: number; ht?: 1; wd?: number; sf?: number[] };
 }
 
 export interface StatusW { id: string; stacks: number; }
@@ -361,7 +367,19 @@ function actorToW(a: Actor): ActorW {
   if (a.construct) w.con = { kind: a.construct.kind, domeRadius: a.construct.domeRadius };
   if (a.fuse !== undefined) w.fuse = a.fuse;
   if (a.leap) w.leap = { timer: a.leap.timer, total: a.leap.total };
-  if (a.worm) w.worm = { seg: a.worm.segments.map(v2), taper: a.worm.taper };
+  if (a.worm) {
+    w.worm = { seg: a.worm.segments.map(v2), taper: a.worm.taper };
+    // SEGMENT FABRIC: hittable/torn/flash state rides only while present.
+    if (a.worm.hittable) w.worm.ht = 1;
+    if (a.worm.wounded?.some(t => t)) {
+      let bits = 0;
+      a.worm.wounded.forEach((t, i) => { if (t && i < 30) bits |= (1 << i); });
+      w.worm.wd = bits;
+    }
+    if (a.worm.flash?.some(f => f > 0)) {
+      w.worm.sf = a.worm.flash.map(f => Math.round(f * 100) / 100);
+    }
+  }
   return w;
 }
 
@@ -565,7 +583,21 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
         const ps = paw?.seg[i];
         return ps && lerping ? { x: ps[0] + (s[0] - ps[0]) * alpha, y: ps[1] + (s[1] - ps[1]) * alpha } : { x: s[0], y: s[1] };
       });
-      a.worm = ({ segments: seg, taper: aw.worm.taper, length: aw.worm.seg.length, spacing: 0 } as unknown as WormBody);
+      // SEGMENT FABRIC: torn bitmask → wounded[], flash countdowns, and the
+      // kit-part looks re-resolved from the def registry (defId ships; the
+      // strings never ride the wire) — the client draws the same solid
+      // plated chain the host tested, tears and all.
+      const wounded = aw.worm.wd !== undefined
+        ? seg.map((_, i) => (aw.worm!.wd! & (1 << i)) !== 0)
+        : undefined;
+      const looks = aw.worm.ht && aw.defId ? MONSTERS[aw.defId]?.worm?.looks : undefined;
+      a.worm = ({
+        segments: seg, taper: aw.worm.taper, length: aw.worm.seg.length, spacing: 0,
+        ...(aw.worm.ht ? { hittable: true } : {}),
+        ...(wounded ? { wounded } : {}),
+        ...(aw.worm.sf ? { flash: aw.worm.sf } : {}),
+        ...(looks ? { looks } : {}),
+      } as unknown as WormBody);
     } else {
       a.worm = undefined;
     }

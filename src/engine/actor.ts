@@ -23,7 +23,7 @@ import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
-import type { DeathBurstDef } from '../data/monsters';
+import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
 import type { PartSpec } from '../render/vis/parts';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
@@ -339,7 +339,12 @@ export interface MonsterPartDef {
 export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec } from './brain';
 import type { BrainDef, BrainType, BrainTuning, CommandState, PostSpec } from './brain';
 
-/** A worm/snake body: trailing segments that follow the head. */
+/** A worm/snake body: trailing segments that follow the head. The base
+ *  fields are the legacy render-only trail; the SEGMENT-FABRIC fields
+ *  (engine/segments.ts — docs/engine/segments.md) make the chain REAL:
+ *  hittable bodies, wound states, per-segment feedback and kit-part looks,
+ *  all opt-in per monster def. Absent, everything below stays undefined
+ *  and the worm is byte-identical to what it always was. */
 export interface WormBody {
   /** Number of trailing segments. */
   length: number;
@@ -348,6 +353,23 @@ export interface WormBody {
   /** Radius multiplier from one segment to the next (default 0.88). */
   taper: number;
   segments: Vec2[];
+  /** Segments are REAL hittable bodies — every hit funnel tests the drawn
+   *  circles (segments.ts segR — the one radius law both sides consume). */
+  hittable?: boolean;
+  /** Per-segment kit-part looks (WormLookSpec: body plates, every-nth
+   *  accents, the tail cap) — the chain reads as ONE animal. */
+  looks?: WormLookSpec;
+  /** Per-segment wound states (WormWoundSpec): pool frac × root max life,
+   *  mods laid on the root per torn segment, optional tear burst. */
+  wounds?: WormWoundSpec;
+  /** Runtime: per-segment hit-feedback flash countdowns — stamped by the
+   *  damage funnel (applyHit) exactly like Actor.hitFlash, never on a miss. */
+  flash?: number[];
+  /** Runtime: per-segment wound pools (lazily seeded on first blood). */
+  woundHp?: number[];
+  /** Runtime: torn segments — permanent for this life; a torn segment
+   *  draws smaller and TESTS smaller (drawn = tested, wounded or whole). */
+  wounded?: boolean[];
 }
 
 /** Airborne leap in flight (leap delivery); resolved by the world. */
@@ -405,6 +427,16 @@ export class Actor {
   brain?: BrainDef;
   /** Worm/snake bodies: trailing segments updated by the world. */
   worm?: WormBody;
+  /** SEGMENT-FABRIC contact latch: which body the collection geometry
+   *  touched (segment index; -1 = head), stamped by noteBodyHit right
+   *  before resolveHit and CONSUMED (read + cleared) by the one damage
+   *  funnel (applyHit) — so wound accounting and per-segment flash ride
+   *  landed damage, never a whiffed or evaded swing. */
+  segHitPending?: number;
+  /** SEGMENT-FABRIC tears this frame (segment indices), queued by the
+   *  damage funnel and drained by World.updateWorms — mods on the root,
+   *  the tear text/burst, all applied in one deterministic sweep. */
+  segTears?: number[];
   /** MULTI-PART MONSTERS — this actor IS a part, rigidly anchored to its
    *  root's facing frame. Its own life/skills/statuses work normally; its
    *  death fires the part-break effects on the root instead of the loot

@@ -11,6 +11,7 @@ import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
 import { STATUS_DEFS } from '../engine/status';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
+import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
 import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
@@ -2831,22 +2832,48 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** A worm's trailing body, drawn tail-first so the head sits on top. One
-   *  shaded circle bake (the head's look) scales down the whole spine. */
+  /** A worm's trailing body, drawn tail-first so the head sits on top.
+   *  Legacy trail: one shaded circle bake (the head's look) scales down the
+   *  whole spine, ghost-faded toward the tail. THE SEGMENT FABRIC upgrades
+   *  it from data: per-segment KIT-PART looks (WormLookSpec — plates, fins,
+   *  the tail cap; one bake per look, scaled per segment) rotated to the
+   *  spine's own direction so the chain reads as ONE animal; hittable
+   *  chains draw SOLID (they are real bodies — drawn = tested via the one
+   *  segR radius law), flash per struck segment, and wear their tears
+   *  (torn segments draw smaller and dimmer, exactly as they test). */
   private drawWormTail(a: Actor): void {
     const { ctx } = this;
     const w = a.worm!;
-    const look: BodyLook = { shape: 'circle', radius: a.radius, color: a.color, material: a.material };
-    const img = a.hitFlash > 0 ? bodyFlashSprite(look) : bodySprite(look);
+    const solid = !!w.hittable;
+    const baseLook: BodyLook = { shape: 'circle', radius: a.radius, color: a.color, material: a.material };
     const half = spriteHalf(a.radius);
     for (let i = w.segments.length - 1; i >= 0; i--) {
       // (radius shrinks front-to-back; iterate display back-to-front)
-      const r = a.radius * Math.pow(w.taper, i + 1);
+      const r = segR(a, i);
       const seg = w.segments[i];
       const k = r / a.radius;
+      const lookId = segLook(w, i);
+      const look: BodyLook = lookId ? { ...baseLook, look: lookId } : baseLook;
+      // Feedback: the STRUCK segment flashes (damage-funnel stamped); a
+      // fabric-less worm keeps the legacy whole-spine flash off the head.
+      const flashing = (w.flash?.[i] ?? 0) > 0 || (!solid && a.hitFlash > 0);
+      const img = flashing ? bodyFlashSprite(look) : bodySprite(look);
       drawShadow(ctx, seg.x, seg.y, r, 0.7);
-      ctx.globalAlpha = 0.55 + 0.35 * (1 - (i + 1) / (w.segments.length + 1));
-      ctx.drawImage(img, seg.x - half * k, seg.y - half * k, half * 2 * k, half * 2 * k);
+      ctx.globalAlpha = solid
+        ? (w.wounded?.[i] ? SEG_CFG.woundAlpha : 1)
+        : 0.55 + 0.35 * (1 - (i + 1) / (w.segments.length + 1));
+      if (lookId) {
+        // Plates FACE along the spine: each segment wears the direction to
+        // its ahead-neighbor, the way the head wears its facing.
+        const ahead = i === 0 ? a.pos : w.segments[i - 1];
+        ctx.save();
+        ctx.translate(seg.x, seg.y);
+        ctx.rotate(Math.atan2(ahead.y - seg.y, ahead.x - seg.x));
+        ctx.drawImage(img, -half * k, -half * k, half * 2 * k, half * 2 * k);
+        ctx.restore();
+      } else {
+        ctx.drawImage(img, seg.x - half * k, seg.y - half * k, half * 2 * k, half * 2 * k);
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -4176,6 +4203,17 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(a.pos.x, a.pos.y, a.radius, 0, Math.PI * 2);
       ctx.stroke();
+      // SEGMENT FABRIC truth: a hittable chain shows every tested circle
+      // (torn segments show their shrunken truth); render-only tails show
+      // nothing — they carry no hit surface, honestly.
+      if (segsHittable(a)) {
+        for (let i = 0; i < a.worm!.segments.length; i++) {
+          const s = a.worm!.segments[i];
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, segR(a, i), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
     }
     ctx.strokeStyle = 'rgba(80,230,255,0.9)';
     for (const p of world.projectiles) {

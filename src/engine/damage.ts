@@ -22,6 +22,7 @@ import { DEFENSE_CFG } from './defense';
 import type { Actor } from './actor';
 import { instanceMods, skillContextTags, type SkillInstance } from './skills';
 import { STATUS_DEFS, TAUNT_CFG } from './status';
+import { feedWound, stampSegFlash } from './segments';
 import { SIM_TAP } from './tap';
 
 export interface DamagePacket {
@@ -375,6 +376,12 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
 /** The actual hit pipeline. applyHit is its thin observed wrapper, so the sim
  *  tap sees EVERY exit — evade, immunity, block, and the landed wound alike. */
 function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
+  // SEGMENT FABRIC: consume the collection-time contact latch up front —
+  // whatever happens below (evade, block, land), the latch never goes
+  // stale or misattributes a later, unrelated hit. Wound accounting and
+  // the per-segment flash fire only where damage actually lands.
+  const segHit = target.segHitPending;
+  target.segHitPending = undefined;
   if (target.invulnerable) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
@@ -424,6 +431,10 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
         - target.sheet.get('blockValue'));
       target.life -= leaked;
       target.hitFlash = 0.1;
+      if (leaked > 0 && segHit !== undefined && segHit >= 0) {
+        stampSegFlash(target, segHit);
+        if (feedWound(target, segHit, leaked)) (target.segTears ??= []).push(segHit);
+      }
     }
     return { evaded: false, immune: false, blocked: true, total: leaked, crit: false };
   }
@@ -470,6 +481,13 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     { attacker, tags: packet.tags, extra: packet.extra, out });
   target.life -= total;
   target.hitFlash = 0.15;
+  // SEGMENT FABRIC: the landed blow marks the struck body — the coil that
+  // took it flashes, and its wound pool drains by exactly what the shared
+  // pool lost (one blow, one deduction, one attribution).
+  if (total > 0 && segHit !== undefined && segHit >= 0) {
+    stampSegFlash(target, segHit);
+    if (feedWound(target, segHit, total)) (target.segTears ??= []).push(segHit);
+  }
 
   // RECUPERATION (the stagger-heal): a fraction of what landed on LIFE
   // flows back over recuperateTime seconds — a restore stream, so

@@ -3851,6 +3851,38 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'mandibles', scale: 0.9 },
     ],
   },
+  // ——— THE WYRM SEGMENT KIT (SEGMENT FABRIC / WormLookSpec) — worn PER
+  // SEGMENT by great segmented bodies (the Sunder-Wyrm's spine debuts them,
+  // any chain may adopt them): plate / sail / tail, each drawn +X =
+  // spine-forward — the fabric rotates every segment along its own trail,
+  // so the chain reads as ONE armored animal, never a run of blobs. ———
+  /** The SPINE PLATE — the ordinary body segment: ringed hide under an
+   *  imbricated keel of scutes. */
+  wyrm_plate: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.1, seed: 233 } },
+      { kind: 'segmentRings', params: { n: 3 } },
+      { kind: 'scutes', scale: 0.92, role: 'metal' },
+    ],
+  },
+  /** The SAIL segment (the every-nth accent): the plate under a raised
+   *  dorsal sail — the silhouette beat that says ONE long animal at a
+   *  glance, and the wound you can pick out mid-fight. */
+  wyrm_sail: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.1, seed: 233 } },
+      { kind: 'segmentRings', params: { n: 3 } },
+      { kind: 'sailfin', scale: 1.02, params: { spines: 6 } },
+    ],
+  },
+  /** The TAIL segment: ringed hide lashing out into a spaded tip. */
+  wyrm_tail_spade: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.12, seed: 233 } },
+      { kind: 'segmentRings', params: { n: 2 } },
+      { kind: 'tailSpade', scale: 1.1, role: 'metal' },
+    ],
+  },
   /** The mire burrower: the wet cousin — slicker, softer, fewer teeth. */
   mire_burrower: {
     parts: [

@@ -34,6 +34,7 @@
 
 import type { World } from './world';
 import type { Actor } from './actor';
+import { nearestBody, reachTo } from './segments';
 import { LOS_CFG } from './los';
 
 export interface AimAssistTuning {
@@ -62,9 +63,11 @@ export interface AssistedAim {
   targetId: number | null;
 }
 
-/** Edge distance from a point to an actor (big targets are easier to hold). */
+/** Edge distance from a point to an actor's NEAREST hittable body (big
+ *  targets are easier to hold; a segmented colossus is holdable along its
+ *  whole length — SEGMENT FABRIC, plain bodies byte-identical). */
 const edgeDist = (a: Actor, x: number, y: number): number =>
-  Math.hypot(a.pos.x - x, a.pos.y - y) - a.radius;
+  reachTo(a, { x, y });
 
 export function assistAim(
   world: World,
@@ -111,9 +114,13 @@ export function assistAim(
     }
   }
   if (!target) return { x: raw.x, y: raw.y, targetId: null };
+  // The pull lands on the NEAREST body of the held creature — hover a coil,
+  // magnetize onto that coil; never dragged across the map toward a distant
+  // head. Plain targets: the center, exactly as before.
+  const snap = nearestBody(target, { x: raw.x, y: raw.y }).pos;
   return {
-    x: raw.x + (target.pos.x - raw.x) * strength,
-    y: raw.y + (target.pos.y - raw.y) * strength,
+    x: raw.x + (snap.x - raw.x) * strength,
+    y: raw.y + (snap.y - raw.y) * strength,
     targetId: target.id,
   };
 }

@@ -84,8 +84,14 @@ export interface WorldBossDef {
   /** ROAMER: the passing-body visual monster (driven, untargetable), the wall
    *  doodad kind its coils plug roads with, and the minted arena's name. */
   roam?: { passingMonster: string; wallKind: string; arenaName: string };
-  /** LAIR: the structure doodad it is habitat-bound to + the lair zone name. */
-  lair?: { structureKind: string; zoneName: string };
+  /** LAIR: the structure doodad it is habitat-bound to + the lair zone name.
+   *  `radius` sizes the dais (default 130) — the habitat confine derives
+   *  radius + grace, so the throne IS the leash length, as data. */
+  lair?: { structureKind: string; zoneName: string; radius?: number };
+  /** Minted-ground FOOTPRINT floor (ZoneSpec.sizeBand — the pocket-form
+   *  seam reused): a colossus's arena guarantees itself room to sweep.
+   *  Absent = the anchor tileset's own bands, exactly as before. */
+  arenaBand?: { w: [number, number]; h: [number, number] };
   /** Kill spoils paid by the kill rule on top of the ordinary boss drop path. */
   reward: { xp: number; gems: number };
 }

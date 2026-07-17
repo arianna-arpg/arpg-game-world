@@ -656,6 +656,36 @@ export function validateContent(): void {
     for (const stat of Object.keys(m.scaling ?? {})) {
       if (!STAT_DEFS[stat]) warn(`${m.id}: scaling references unknown stat '${stat}'`);
     }
+    // THE SEGMENT FABRIC (docs/engine/segments.md): every knob a worm spec
+    // carries must resolve — looks against the LOOKS registry, wounds only
+    // on hittable chains (the pools are fed by landed segment hits), the
+    // torn bitmask's wire cap, and physical dials that stay physical.
+    if (m.worm) {
+      const w = m.worm;
+      if (w.length <= 0) warn(`${m.id}: worm.length must be positive`);
+      if (w.spacing !== undefined && w.spacing <= 0) warn(`${m.id}: worm.spacing must be positive`);
+      if (w.taper !== undefined && (w.taper <= 0 || w.taper > 1.05)) {
+        warn(`${m.id}: worm.taper ${w.taper} out of band (0, 1.05]`);
+      }
+      for (const [slot, id] of [['body', w.looks?.body], ['tail', w.looks?.tail], ['every', w.looks?.every?.look]] as const) {
+        if (id && !LOOKS[id]) warn(`${m.id}: worm.looks.${slot} '${id}' is not in LOOKS`);
+      }
+      if (w.looks?.every && w.looks.every.n < 2) {
+        warn(`${m.id}: worm.looks.every.n must be >= 2 (1 would replace every body plate)`);
+      }
+      if (w.wounds) {
+        if (!w.hittable) warn(`${m.id}: worm.wounds without worm.hittable — wound pools can never be fed`);
+        if (w.wounds.frac <= 0 || w.wounds.frac > 1) warn(`${m.id}: worm.wounds.frac ${w.wounds.frac} out of band (0, 1]`);
+        if (w.length > 30) warn(`${m.id}: worm.wounds on a ${w.length}-segment chain — the co-op torn bitmask carries 30; extra segments never replicate their tears`);
+        for (const md of w.wounds.mods ?? []) {
+          if (!STAT_DEFS[md.stat]) warn(`${m.id}: worm.wounds mod references unknown stat '${md.stat}'`);
+        }
+        const b = w.wounds.burst;
+        if (b && (b.radius <= 0 || b.damageFrac <= 0)) {
+          warn(`${m.id}: worm.wounds.burst needs positive radius and damageFrac`);
+        }
+      }
+    }
     // THE HIT CEILING (hitCap): 0/absent = uncapped, so an authored cap
     // must be a real positive number — and one the body's own life keeps
     // meaningful (a cap at or past base life never clamps: dead data).

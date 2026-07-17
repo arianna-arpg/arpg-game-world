@@ -29,6 +29,7 @@ import {
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { runAIActions } from './aiActions';
+import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { socketSpec, type SkillInstance } from './skills';
 import type { World } from './world';
@@ -734,7 +735,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       if (lt && !lt.dead && !lt.passive && lt.team !== actor.team
         && lt.sheet.get('invisible') <= 0) {
         target = lt;
-        best = dist(actor.pos, target.pos);
+        best = segsHittable(target)
+          ? dist(actor.pos, nearestBody(target, actor.pos).pos)
+          : dist(actor.pos, target.pos);
         actor.aiTargetId = lt.id;
         actor.facing = angleTo(actor.pos, target.pos);
       }
@@ -1208,7 +1211,14 @@ function acquireTarget(
     // Scenery is not prey: nobody dedicates their life to a barrel,
     // and the townsfolk are not on the menu.
     if (e.passive) continue;
-    const d = dist(actor.pos, e.pos);
+    // SEGMENT FABRIC: a segmented creature is engaged by its NEAREST
+    // hittable body — the coil beside you counts, not only the far head.
+    // Detection, range gates and kiting all inherit this d. Perception
+    // LoS below stays head-based (you SEE the creature by its head);
+    // plain monsters take the classic center distance, byte-identical.
+    const d = segsHittable(e)
+      ? dist(actor.pos, nearestBody(e, actor.pos).pos)
+      : dist(actor.pos, e.pos);
     let reach = detect * e.sheet.get('detectability');
     if ((e.charges.get('stealth') ?? 0) > 0) reach *= STEALTH_DETECT_MUL;
     if (alerted) reach *= 1.5;
@@ -2035,7 +2045,10 @@ function makeCtx(
     goal = surroundGoal(actor, world, target,
       Math.max(40, target.radius + actor.radius + 4));
   } else {
-    goal = target.pos;
+    // SEGMENT FABRIC: close on the creature's NEAREST hittable body — a
+    // melee hound bites the coil beside it instead of marching the whole
+    // length of a colossus to its head. Plain targets: the head, as ever.
+    goal = segsHittable(target) ? nearestBody(target, actor.pos).pos : target.pos;
   }
   return {
     a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,

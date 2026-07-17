@@ -18,6 +18,7 @@ import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
+import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
@@ -363,6 +364,34 @@ export function inAoe(center: Vec2, radius: number, shape: AoeShape, facing: num
     return Math.abs(target.x - center.x) <= half && Math.abs(target.y - center.y) <= half;
   }
   return dist(center, target) - targetRadius <= radius;
+}
+
+/** SEGMENT-AWARE inAoe (the fabric's shape funnel): does the shape catch ANY
+ *  hittable body of the actor — and if so, WHICH? Head first (byte-identical
+ *  for every plain monster), then the chain in order. `bodyOk` lets a caller
+ *  fold per-body gates into the pick (edge bands, firing lines) so a coil in
+ *  the open is honestly hittable while the head hides behind cover. Returns
+ *  the CONTACT body or null. One creature = at most ONE contact per query —
+ *  a burst overlapping five coils is one hit on one life pool, never five. */
+export function inAoeBody(
+  center: Vec2, radius: number, shape: AoeShape, facing: number, a: Actor,
+  arcRad?: number, bodyOk?: (pos: Vec2, r: number) => boolean,
+): SegBody | null {
+  if (inAoe(center, radius, shape, facing, a.pos, a.radius, arcRad)
+    && (!bodyOk || bodyOk(a.pos, a.radius))) {
+    return { pos: a.pos, r: a.radius, seg: SEG_CFG.HEAD };
+  }
+  if (segsHittable(a)) {
+    const segs = a.worm!.segments;
+    for (let i = 0; i < segs.length; i++) {
+      const r = segR(a, i);
+      if (inAoe(center, radius, shape, facing, segs[i], r, arcRad)
+        && (!bodyOk || bodyOk(segs[i], r))) {
+        return { pos: segs[i], r, seg: i };
+      }
+    }
+  }
+  return null;
 }
 
 // --- transient entities ------------------------------------------------------
@@ -12564,6 +12593,9 @@ export class World {
       objective: { kind: 'clear' }, // slaying the sovereign IS clearing the ground
       seed: (this.manifest.seed ^ hashStr(id)) >>> 0,
       ...(anchor.dimension ? { dimension: anchor.dimension } : {}),
+      // A colossus guarantees itself room to sweep (WorldBossDef.arenaBand →
+      // the pocket-form sizeBand seam; absent = the anchor's own bands).
+      ...(req.def.arenaBand ? { sizeBand: req.def.arenaBand } : {}),
     });
     this.zoneMap[id] = gen;
     this.sim.onNodeCharted(gen, this.simView());
@@ -12699,7 +12731,7 @@ export class World {
     // The LAIR's throne rises first — the habitat ground the sovereign binds to
     // (the per-frame confine sweep welds the body to the nearest matching dais).
     if (fight.archetype === 'lair' && fight.def.lair) {
-      this.doodads.push({ pos: vec(at.x, at.y), radius: 130, kind: fight.def.lair.structureKind });
+      this.doodads.push({ pos: vec(at.x, at.y), radius: fight.def.lair.radius ?? 130, kind: fight.def.lair.structureKind });
     }
     // Minted arenas already carry the level bonus; an apparition stands in an
     // ordinary zone and takes it here.
@@ -16120,6 +16152,11 @@ export class World {
         spacing: def.worm.spacing ?? def.radius * 1.1,
         taper: def.worm.taper ?? 0.88,
         segments: [],
+        // THE SEGMENT FABRIC (engine/segments.ts): hittable chains, wound
+        // states, kit-part looks — all data off the def, absent = legacy.
+        ...(def.worm.hittable ? { hittable: true } : {}),
+        ...(def.worm.looks ? { looks: def.worm.looks } : {}),
+        ...(def.worm.wounds ? { wounds: def.worm.wounds } : {}),
       };
     }
     if (def.explodeOnDeath) a.explodeOnDeath = def.explodeOnDeath;
@@ -16338,7 +16375,10 @@ export class World {
     for (const a of pool) {
       if (dist(caster.pos, a.pos) > t.castRange) continue;
       if (!qualifies(a)) continue;
-      const dd = dist(aim, a.pos) - a.radius;
+      // SEGMENT FABRIC: the cursor finds the creature by its NEAREST
+      // hittable body — hover a coil, target the worm (plain monsters:
+      // the classic edge distance, byte-identical).
+      const dd = reachTo(a, aim);
       if (dd < bd) { bd = dd; best = a; }
     }
     // AUTO-TARGET: nothing near the cursor — take the nearest valid target
@@ -18147,9 +18187,14 @@ export class World {
           (d.arcDeg * Math.PI / 180) * Math.sqrt(aoeScale) * arcScale);
         const struck = new Set<number>();
         for (const enemy of this.enemiesOf(caster)) {
-          if (dist(caster.pos, enemy.pos) - enemy.radius > reach) continue;
-          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, enemy.pos))) > arcRad / 2) continue;
+          // SEGMENT FABRIC: the swing connects with the NEAREST hittable
+          // body — the coil beside you, not only the head across the room.
+          // Plain monsters: nearest body IS the head, byte-identical.
+          const nb = nearestBody(enemy, caster.pos);
+          if (dist(caster.pos, nb.pos) - nb.r > reach) continue;
+          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
           struck.add(enemy.id);
+          noteBodyHit(enemy, nb.seg);
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
         }
         // Reverberation: the blow rings outward to extra nearby enemies.
@@ -18198,8 +18243,6 @@ export class World {
         // WALLS SHAPE BURSTS (occlusion): the wash reaches only what the
         // origin has a firing line to — cover is cover even inside the ring.
         const phase = this.skillOcclusion(caster, inst) === 'free';
-        const sees = (v: Actor): boolean =>
-          phase || v === caster || this.lineOfFire(origin, v.pos);
         let pool = d.affects === 'all'
           ? this.actors.filter(a => !a.dead && !a.untargetable)
           : d.affects === 'allies'
@@ -18208,30 +18251,38 @@ export class World {
         // Capped-target novas (Galvanic Reserve): the burst picks the
         // NEAREST N instead of washing the whole room — walled-off bodies
         // never consume a slot.
+        // SEGMENT FABRIC: containment, the edge band and the firing line
+        // all judge PER BODY — a coil in the burst is honestly struck while
+        // the head shelters behind stone, and the hollow of an edge-band
+        // nova spares only bodies wholly inside it. One contact per
+        // creature; plain monsters take the exact head-circle test.
+        const novaBody = (v: Actor): SegBody | null =>
+          inAoeBody(origin, radius, shape, caster.facing, v, undefined,
+            (bp, br) =>
+              !(d.edgeOnly && dist(origin, bp) + br < radius * d.edgeOnly)
+              && (phase || v === caster || this.lineOfFire(origin, bp)));
         if (d.maxTargets !== undefined) {
           pool = pool
-            .filter(v => inAoe(origin, radius, shape, caster.facing, v.pos, v.radius) && sees(v))
+            .filter(v => novaBody(v) !== null)
             .sort((a, b) => dist(origin, a.pos) - dist(origin, b.pos))
             .slice(0, Math.max(1, d.maxTargets));
         }
         for (const victim of pool) {
-          if (!inAoe(origin, radius, shape, caster.facing, victim.pos, victim.radius)) continue;
-          // Edge-band novas (Shock Nova): the hollow center spares them.
-          if (d.edgeOnly
-            && dist(origin, victim.pos) + victim.radius < radius * d.edgeOnly) continue;
           // Status-gated novas (Soul Glut): only the afflicted are devoured.
           if (d.requiresStatus
             && !victim.statuses.some(s => d.requiresStatus!.includes(s.id))) continue;
-          if (!sees(victim)) continue;
+          const nb = novaBody(victim);
+          if (!nb) continue;
+          noteBodyHit(victim, nb.seg);
           this.resolveHit(caster, inst, victim, useMult, 0, flatBonus);
           // LANCE VISUALS (Lancing Flurry): every victim is struck down a
           // drawn line from the origin — simultaneous razor lances.
           if (d.lanceFx) {
             this.flashes.push({
               pos: vec(origin.x, origin.y),
-              radius: dist(origin, victim.pos) + victim.radius,
+              radius: dist(origin, nb.pos) + nb.r,
               color: def.color, life: 0.22, maxLife: 0.22,
-              beam: true, facing: angleTo(origin, victim.pos),
+              beam: true, facing: angleTo(origin, nb.pos),
             });
           }
         }
@@ -18316,7 +18367,10 @@ export class World {
             const splash = d.splash * aoeScale;
             for (const enemy of this.enemiesOf(caster)) {
               if (enemy === targetInfo.actor) continue;
-              if (dist(targetInfo.pos, enemy.pos) - enemy.radius <= splash) {
+              // SEGMENT FABRIC: splash reaches the nearest hittable body.
+              const nb = nearestBody(enemy, targetInfo.pos);
+              if (dist(targetInfo.pos, nb.pos) - nb.r <= splash) {
+                noteBodyHit(enemy, nb.seg);
                 this.resolveHit(caster, inst, enemy, useMult * 0.5, 0);
               }
             }
@@ -18343,12 +18397,17 @@ export class World {
         // never through stone. A phasing use burns through everything.
         const phase = this.skillOcclusion(caster, inst) === 'free';
         for (const enemy of this.enemiesOf(caster)) {
-          const dd = dist(caster.pos, enemy.pos);
-          if (dd - enemy.radius > range) continue;
+          // SEGMENT FABRIC: the wedge judges range, rim, angle and firing
+          // line against the NEAREST hittable body (head for everything
+          // plain — the classic test, byte-identical).
+          const nb = nearestBody(enemy, caster.pos);
+          const dd = dist(caster.pos, nb.pos);
+          if (dd - nb.r > range) continue;
           // Edge-band cones (Surgical Strike): only the far rim cuts.
-          if (d.edgeOnly && dd + enemy.radius < range * d.edgeOnly) continue;
-          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, enemy.pos))) > arcRad / 2) continue;
-          if (!phase && !this.lineOfFire(caster.pos, enemy.pos)) continue;
+          if (d.edgeOnly && dd + nb.r < range * d.edgeOnly) continue;
+          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+          if (!phase && !this.lineOfFire(caster.pos, nb.pos)) continue;
+          noteBodyHit(enemy, nb.seg);
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
         }
         // LASER presentation (beamFx): razor cones ARE hitscan — draw the
@@ -20304,8 +20363,11 @@ export class World {
       if (!hasDamage && !hasHeal) continue;
       for (const e of this.actors) {
         if (e.dead) continue;
-        const touching = pointSegDist(e.pos.x, e.pos.y, t.ax, t.ay, t.bx, t.by) <= t.width + e.radius;
-        if (!touching) continue;
+        // SEGMENT FABRIC: the band bites whichever hittable body crosses it
+        // (plain monsters: the classic point-segment test, byte-identical).
+        const touch = bodyWhere(e, (bp, br) =>
+          pointSegDist(bp.x, bp.y, t.ax, t.ay, t.bx, t.by) <= t.width + br);
+        if (!touch) continue;
         if (hasDamage && damageTick && this.isBurstTarget(e, t.owner.team)) {
           const tick: Partial<Record<DamageType, number>> = {};
           for (const [k, v] of Object.entries(t.amounts)) tick[k as DamageType] = (v ?? 0) * TETHER_TICK;
@@ -20313,6 +20375,7 @@ export class World {
           if (taken > 0) {
             e.life -= taken;
             e.hitFlash = 0.1;
+            stampSegFlash(e, touch.seg);
             this.accumulateDotText(e, taken, TETHER_TICK);
             if (e.life <= 0 && !e.dead) this.kill(e, false, t.owner);
           }
@@ -21795,8 +21858,10 @@ export class World {
     this.text(at, 'aftershock!', z.color, 12);
     this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
     for (const v of this.zoneVictims(z)) {
-      if (dist(at, v.pos) - v.radius > radius) continue;
+      const nb = bodyWhere(v, (bp, br) => dist(at, bp) - br <= radius);
+      if (!nb) continue;
       if (!this.zoneSees(z, v)) continue;
+      noteBodyHit(v, nb.seg);
       this.resolveHit(z.caster, z.inst, v, z.dmgMult * damageScale, z.depth, z.flatBonus, true);
     }
     // THE MALLET: the segment's detonation is a fresh blast at the piece
@@ -22723,6 +22788,9 @@ export class World {
           pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8,
           color: def.color, life: 0.25, maxLife: 0.25,
         });
+        // SEGMENT FABRIC: the blow BANKED — drop the contact latch so the
+        // late landing feeds the shared pool with no stale attribution.
+        target.segHitPending = undefined;
         return;
       }
     }
@@ -24943,6 +25011,18 @@ export class World {
     // A garrisoned monster frees its tower slot as it falls (occupancy also
     // self-heals on evaluation — this is just the tidy fast path).
     if (actor.garrison) this.releaseGarrison(actor);
+    // A SEGMENTED body dies along its WHOLE length — one flash per coil,
+    // tail-ward, so a colossus reads as collapsing rather than vanishing.
+    // Presentation only: the kill (credit, loot, xp) is the one death above.
+    if (actor.worm?.hittable && !silent) {
+      for (let i = 0; i < actor.worm.segments.length; i++) {
+        const s = actor.worm.segments[i];
+        this.flashes.push({
+          pos: vec(s.x, s.y), radius: segR(actor, i) + 6,
+          color: actor.color, life: 0.25 + i * 0.045, maxLife: 0.25 + i * 0.045,
+        });
+      }
+    }
     // BREAKABLE-OBJECT DEATH BURSTS: an unstable construct detonates
     // HOWEVER it ends — broken by its owner, shattered by the rite,
     // evicted by a recast, or simply expired. One rule, fired once.
@@ -26582,8 +26662,11 @@ export class World {
         if (inst && hits && inst.def.delivery.type === 'dash' && inst.def.delivery.width > 0) {
           for (const enemy of this.enemiesOf(a)) {
             if (hits.has(enemy.id)) continue;
-            if (dist(a.pos, enemy.pos) - enemy.radius <= inst.def.delivery.width / 2 + a.radius) {
+            // SEGMENT FABRIC: the corridor clips the nearest hittable body.
+            const nb = nearestBody(enemy, a.pos);
+            if (dist(a.pos, nb.pos) - nb.r <= inst.def.delivery.width / 2 + a.radius) {
               hits.add(enemy.id);
+              noteBodyHit(enemy, nb.seg);
               // Corridor grazes can be tuned down (Closing Fang: the
               // arrival is the bite, not the trip past).
               this.resolveHit(a, inst, enemy, inst.def.delivery.corridorScale ?? 1);
@@ -26752,7 +26835,7 @@ export class World {
     this.updateChests(dt);
 
     this.updateLeaps(dt);
-    this.updateWorms();
+    this.updateWorms(dt);
     this.updateParts();
     this.updateCreepHearts();
     this.updateProjectiles(dt);
@@ -28690,8 +28773,14 @@ export class World {
     }
   }
 
-  /** Worm bodies: each trailing segment follows the one ahead of it. */
-  private updateWorms(): void {
+  /** Worm bodies: each trailing segment follows the one ahead of it (the
+   *  'trail' drive — THE SEGMENT FABRIC's stock dynamics; an articulated
+   *  limb-chain drive would write the same segments[] from its own gait).
+   *  Also the fabric's one deterministic sweep: per-segment hit-flash decay
+   *  and the TEAR queue drained here — a torn segment lays the wound mods
+   *  on the root (one stacking source), speaks, and pops its retaliation
+   *  burst, all in frame order regardless of which funnel landed the blow. */
+  private updateWorms(dt: number): void {
     for (const a of this.actors) {
       if (!a.worm || a.dead) continue;
       const w = a.worm;
@@ -28708,6 +28797,51 @@ export class World {
           seg.y += (prev.y - seg.y) * pull;
         }
         prev = seg;
+      }
+      tickSegFlash(w, dt);
+      if (a.segTears?.length) {
+        const spec = w.wounds;
+        for (const seg of a.segTears) {
+          const at = w.segments[seg];
+          if (!at || !spec) continue;
+          const r = segR(a, seg);
+          this.text(vec(at.x, at.y - r - 6), spec.text ?? 'TORN', '#ffd24a', 13);
+          this.flashes.push({
+            pos: vec(at.x, at.y), radius: r + 10,
+            color: spec.burst?.color ?? '#ffd24a', life: 0.25, maxLife: 0.25,
+          });
+          // The retaliation pop: the torn coil bites back — typed damage to
+          // the worm's enemies around the wound (environmental idiom, the
+          // worm credited as killer so a death here reads honestly).
+          if (spec.burst) {
+            const b = spec.burst;
+            const amounts: Partial<Record<DamageType, number>> =
+              { [b.type ?? 'physical']: a.maxLife() * b.damageFrac };
+            for (const e of this.enemiesOf(a)) {
+              if (reachTo(e, at) > b.radius) continue;
+              const taken = mitigateTyped(e, { ...amounts });
+              if (taken > 0) {
+                e.life -= taken;
+                e.hitFlash = 0.1;
+                this.text(vec(e.pos.x, e.pos.y - 12), Math.round(taken).toString(), b.color ?? '#ffd24a', 11);
+                if (e.life <= 0 && !e.dead) this.kill(e, false, a);
+              }
+            }
+            this.flashes.push({
+              pos: vec(at.x, at.y), radius: b.radius,
+              color: b.color ?? '#ffd24a', life: 0.3, maxLife: 0.3,
+            });
+          }
+        }
+        // Wound mods stack per torn segment — ONE sheet source, rebuilt to
+        // the live count (INCREASED sums across repeats).
+        if (spec?.mods?.length) {
+          const n = woundCount(a);
+          const stacked: Modifier[] = [];
+          for (let i = 0; i < n; i++) stacked.push(...spec.mods);
+          a.sheet.setSource('segWounds', stacked);
+        }
+        a.segTears = undefined;
       }
     }
   }
@@ -31508,6 +31642,25 @@ export class World {
     return projFormTouches(p.shape, p.pos.x, p.pos.y, p.dir, p.radius, p.age, cx, cy, cr);
   }
 
+  /** SEGMENT-AWARE flight-vs-creature: which hittable body does the flight
+   *  touch — head first (byte-identical for plain monsters), then the chain
+   *  in head-to-tail order, every circle exactly as drawn. Returns the
+   *  contact body or null. The per-actor rehit ledger above this keeps one
+   *  creature = one hit per pass, however many coils the flight crosses. */
+  private projTouchesBody(p: Projectile, a: Actor): SegBody | null {
+    if (this.projTouches(p, a.pos.x, a.pos.y, a.radius)) {
+      return { pos: a.pos, r: a.radius, seg: SEG_CFG.HEAD };
+    }
+    if (segsHittable(a)) {
+      const segs = a.worm!.segments;
+      for (let i = 0; i < segs.length; i++) {
+        const r = segR(a, i);
+        if (this.projTouches(p, segs[i].x, segs[i].y, r)) return { pos: segs[i], r, seg: i };
+      }
+    }
+    return null;
+  }
+
   /** The flight's leading-edge reach along its heading — what terrain
    *  contact uses, so a thin rolling front dies when the FRONT meets the
    *  wall instead of a full disc early (center-line blocking; see
@@ -31884,7 +32037,8 @@ export class World {
           // SELECTIVE PIERCE (Heartchaser): everything but the prey is
           // mist — the arrow passes harmlessly through the crowd.
           if (p.preyId !== undefined && enemy.id !== p.preyId) continue;
-          if (this.projTouches(p, enemy.pos.x, enemy.pos.y, enemy.radius)) {
+          const bodyTouch = this.projTouchesBody(p, enemy);
+          if (bodyTouch) {
             // A raised shield in the projectile's path stops it cold —
             // no pierce, no chain, no statuses. Just a dent in the shield.
             const guardRaw = Object.values(rollSkillDamage(p.caster, p.inst).amounts)
@@ -31919,6 +32073,7 @@ export class World {
                 }
               }
             }
+            noteBodyHit(enemy, bodyTouch.seg);
             this.resolveHit(p.caster, p.inst, enemy, p.mult, 0, hitFlat);
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
             // SHATTER: the first impact flings a fan of shard projectiles
@@ -32411,8 +32566,10 @@ export class World {
               color: z.color, life: 0.3, maxLife: 0.3,
             });
             for (const v of this.zoneVictims(z)) {
-              if (!this.zoneHas(z, v.pos, v.radius)) continue;
+              const nb = bodyWhere(v, (bp, br) => this.zoneHas(z, bp, br));
+              if (!nb) continue;
               if (!this.zoneSees(z, v)) continue;
+              noteBodyHit(v, nb.seg);
               this.resolveHit(z.caster, z.inst, v,
                 z.dmgMult * z.volatile.damageScale, z.depth, z.flatBonus, true);
             }
@@ -32463,12 +32620,14 @@ export class World {
           z.pulse.interval = Math.max(0.05, z.pulse.interval * z.pulse.intervalStep);
           const pr = z.seg ? z.radius : z.radius * z.pulse.radiusMult;
           for (const v of this.zoneVictims(z)) {
-            const caught = z.seg
-              ? this.zoneHas(z, v.pos, v.radius)
-              : inAoe(z.pos, pr, z.shape, z.facing, v.pos, v.radius, z.arcRad);
-            if (!caught) continue;
-            if (z.edge && dist(z.pos, v.pos) + v.radius < z.radius * z.edge) continue;
+            const nb = bodyWhere(v, (bp, br) =>
+              (z.seg
+                ? this.zoneHas(z, bp, br)
+                : inAoe(z.pos, pr, z.shape, z.facing, bp, br, z.arcRad))
+              && !(z.edge && dist(z.pos, bp) + br < z.radius * z.edge));
+            if (!nb) continue;
             if (!this.zoneSees(z, v)) continue;
+            noteBodyHit(v, nb.seg);
             this.resolveHit(z.caster, z.inst, v,
               z.dmgMult * z.pulse.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
@@ -32616,8 +32775,14 @@ export class World {
             }
           } else {
           for (const victim of this.zoneVictims(z)) {
-            if (!this.zoneHas(z, victim.pos, victim.radius)) continue;
-            if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
+            // SEGMENT FABRIC: the ground catches whichever hittable body
+            // stands on it — a coil parked in the fire burns as honestly
+            // as a head (containment + edge hollow judged per body; plain
+            // monsters keep the exact classic test).
+            const nb = bodyWhere(victim, (bp, br) =>
+              this.zoneHas(z, bp, br)
+              && !(z.edge && dist(z.pos, bp) + br < z.radius * z.edge));
+            if (!nb) continue;
             // Fume zones: the unexposed breathe free. Gated BEFORE the
             // sweep ledger so an unbitten crossing never burns its
             // once-per-life entry on a hit that didn't land.
@@ -32629,6 +32794,7 @@ export class World {
               if (z.struck.has(victim.id)) continue;
               z.struck.add(victim.id);
             }
+            noteBodyHit(victim, nb.seg);
             this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
           // THE MALLET: the tick strikes the surfaces with its victims'
@@ -32667,7 +32833,9 @@ export class World {
           if (z.endBurst) {
             const radius = z.radius * (z.endBurst.radiusScale ?? 1);
             for (const victim of this.zoneVictims(z)) {
-              if (dist(z.pos, victim.pos) - victim.radius > radius) continue;
+              const nb = bodyWhere(victim, (bp, br) => dist(z.pos, bp) - br <= radius);
+              if (!nb) continue;
+              noteBodyHit(victim, nb.seg);
               this.resolveHit(z.caster, z.inst, victim,
                 z.dmgMult * z.endBurst.damageScale, z.depth, z.flatBonus, true);
             }
