@@ -179,7 +179,7 @@ import { claimedZonesFromBag } from '../world/overlay';
 import { collectBulletins, BULLETIN_CFG } from '../world/bulletins';
 import { edgeBlockAt } from '../world/edgeBlocks';
 import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldboss';
-import { eventTargetable } from '../world/zonePolicy';
+import { eventTargetable, holdfastHostable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/weather';
 import { dayCycle, inPhases } from '../world/daynight';
@@ -8451,9 +8451,14 @@ export class World {
    *  the eager web skips it (it stays '?', mint-on-unlock behind the gate). */
   private rollHoldfast(def: ZoneDef): void {
     const hf = this.sim.holdfastField;
-    // A purchased POCKET never hosts its own holdfast — a toll behind a toll
-    // would chain cul-de-sacs off the web (and re-sell ground already bought).
-    if (!hf || def.special || def.eventOwned || def.floating || def.pocket || def.objective.kind === 'safe') return;
+    // THE HOSTING LAW (zonePolicy.holdfastHostable — one predicate for the
+    // natural roll, the dev force, and the overlay belt): no gate on ground
+    // that can't honestly anchor a fresh minted zone — off-graph caves and
+    // sidezones, event-owned/floating/special/concealed mints, sanctuaries,
+    // purchased pockets (a toll behind a toll would chain cul-de-sacs and
+    // re-sell bought ground), breach maws, boundless streams — and biomes
+    // may deny 'holdfast' as pure data.
+    if (!hf || !holdfastHostable(def)) return;
     // Holdfast density = its original encounterDensity × the live MYCELIA suppression ONLY
     // (NOT the full eventDensityFor — keep biome density out of the holdfast roll so a
     // spore-laced zone raises fewer gates without otherwise re-tuning shipped behaviour).
@@ -8781,7 +8786,11 @@ export class World {
    *  shows the real minted thing, not a runtime approximation. (QA Event tab.) */
   devForceHoldfast(): boolean {
     const hf = this.sim.holdfastField;
-    if (!hf || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return false;
+    // The dev force obeys the SAME hosting law as the natural roll (it skips
+    // only the level band) — a QA button that could plant gates on ground the
+    // real roll refuses (a pocket, an event-owned mint, a cave) manufactures
+    // sightings of states normal play can never produce.
+    if (!hf || this.inCave || !holdfastHostable(this.zone)) return false;
     const info = hf.devForce(this.zone);
     if (!info) return false;
     if (!info.exitAppended) {
@@ -27554,6 +27563,17 @@ export class World {
     // so a damaged world self-heals into "a rift that never opens" instead of a
     // door to the wrong plane. Diagnosis lands in the console via placeExit.
     if (this.isIllegalCrossDim(ed)) return true;
+    // A PURCHASED POCKET'S ONE ROAD HOME NEVER SEALS BEHIND POLICY. The
+    // objective seal spares only the entry edge — and a WAYPOINT re-entry
+    // carries no entry edge, so a pocket that rolled a sealing objective
+    // (a legacy save's boss pocket; a future authored form) would lock its
+    // buyer inside a dead end. A roving edge blockade across the only road
+    // would strand outright (the edge-block contract already forbids
+    // stranding — this is the engine-side belt). The toll lock above still
+    // binds (it is the gate's own, payable ask) and a defective cross-dim
+    // edge still heals sealed; everything below is policy, and policy never
+    // traps the buyer in bought ground.
+    if (this.zone.pocket) return false;
     // EDGE BLOCKADE (world/edgeBlocks.ts): a living event holds this road shut
     // (the world-serpent's coils). Checked BEFORE the objectiveDone early-out —
     // clearing a zone never opens a strangled pass; only the event's own end
@@ -33810,17 +33830,23 @@ export class World {
     const step = 60;
     let best: Vec2 | null = null;
     let bd = -1;
+    let bestOpen: Vec2 | null = null; // the walkable-only understudy
+    let bo = -1;
     for (let y = 90; y < this.arena.h - 60; y += step) {
       for (let x = 90; x < this.arena.w - 60; x += step) {
         if (this.walk && !this.walk.isWalkable(x, y)) continue;
         if (this.pointInSolid(x, y, radius * 0.5)) continue;
+        const d = dist(vec(x, y), this.player.pos);
+        if (d > bo) { bo = d; bestOpen = vec(x, y); }
         if (needReachable && this.walk?.reachable
           && !this.walk.reachable(this.zoneEntry, vec(x, y))) continue;
-        const d = dist(vec(x, y), this.player.pos);
         if (d > bd) { bd = d; best = vec(x, y); }
       }
     }
-    return best;
+    // Reachability that eliminated EVERY stand is a broken metric (an entry
+    // sitting off-mesh reports nothing reachable) — a far walkable stand
+    // still beats the entry stack the callers would otherwise fall to.
+    return best ?? bestOpen;
   }
 
   // ---------------------------------------------------------------- misc ----

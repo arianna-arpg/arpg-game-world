@@ -31,6 +31,13 @@ export interface TargetableZone extends PolicyZone {
   floating?: boolean;
   eventOwned?: boolean;
   pocket?: boolean;
+  /** The transient/unanchored classes holdfastHostable reads on top of the
+   *  event floor (eventTargetable itself ignores them — overlay targeting is
+   *  unchanged): a cave-ladder breach maw, boundless streamed ground, a
+   *  still-concealed mint. */
+  breach?: boolean;
+  boundless?: boolean;
+  concealed?: boolean;
   objective?: { kind: string };
 }
 
@@ -79,4 +86,22 @@ export function eventTargetable(eventId: string, zone: TargetableZone): boolean 
   if (zone.caveDepth != null || zone.floating || zone.eventOwned || zone.special || zone.pocket) return false;
   if (zone.objective && zone.objective.kind === 'safe') return false;
   return eventAllowed(eventId, zone);
+}
+
+/** May a HOLDFAST rise here — the locked bonus exit that MINTS a purchased
+ *  pocket off this zone? ONE law for every asker: the natural first-visit
+ *  roll (World.rollHoldfast), the dev-tools force (World.devForceHoldfast),
+ *  and the overlay's own belt (HoldfastField), so a QA sighting always means
+ *  what a player sighting means. Composes the event floor — off-graph ground
+ *  (caves, sidezones, sepulcher pockets: caveDepth), event-owned or floating
+ *  mints, special arenas, sanctuaries, and purchased pockets can never
+ *  honestly anchor a FRESH minted zone, and biome data may deny the
+ *  'holdfast' id like any event (deny/allowEvents) — with the transient or
+ *  unanchored classes the floor doesn't name: a breach maw, boundless
+ *  streamed ground, a still-concealed mint. A gate raised on any of these
+ *  would sell a zone minted off ground the world graph can't stand behind
+ *  (or, in a cave, a ghost portal with no wardens to pay). */
+export function holdfastHostable(zone: TargetableZone): boolean {
+  if (zone.breach || zone.boundless || zone.concealed) return false;
+  return eventTargetable('holdfast', zone);
 }

@@ -84,6 +84,35 @@ Validation: `validateHoldfast` resolves rows through
   and the pre-policy chains (roving events, hunt targets, necropolis gates)
   carry the same veto.
 
+## The hosting law (where a gate may rise at all)
+
+`zonePolicy.holdfastHostable(zone)` is the ONE predicate — the natural
+first-visit roll (`World.rollHoldfast`), the dev-tools force
+(`World.devForceHoldfast`), and the overlay's own belt
+(`HoldfastField.ensureRolled` / `devForce`) all ask it, so a QA sighting
+always means what a player sighting means. It composes the event floor
+(`eventTargetable('holdfast', …)`): **no gate on off-graph ground** (caves,
+sidezones, sepulcher pockets — `caveDepth`), event-owned or floating mints,
+special arenas, sanctuaries, or purchased pockets (a toll behind a toll) —
+plus the transient/unanchored classes the floor doesn't name: breach maws,
+boundless streamed ground, still-concealed mints. Because it routes through
+the event policy, **a biome can deny holdfasts as pure data**
+(`BiomeDef.denyEvents: ['holdfast']`). A gate raised on any refused class
+would sell a zone minted off ground the graph can't stand behind — or, in a
+cave, a ghost "warded toll" portal with no wardens to pay.
+
+## The never-sealed road home (the soft-lock invariant)
+
+A pocket's one exit **never seals behind policy** (`World.isExitLocked`
+short-circuits on `zone.pocket`): the objective seal spares only the entry
+edge and a waypoint re-entry has no entry edge (a legacy-save pocket that
+rolled a sealing objective used to lock its buyer in), and a roving edge
+blockade across a dead end's only road would strand outright — the
+edge-block registry's own contract forbids stranding; this is the engine
+belt. The holdfast toll lock itself still binds (it is the gate's own,
+payable ask, and it can't exist inside a pocket), and a defective
+cross-dimension edge still heals sealed.
+
 ## The probe
 
 `npx tsx balance/probe_holdfast_pocket.ts [seeds]` — the standing contract

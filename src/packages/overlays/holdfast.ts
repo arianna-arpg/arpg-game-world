@@ -21,6 +21,7 @@ import { Rng } from '../../core/rng';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { META_CURRENCY_LABEL } from '../../meta/account';
+import { holdfastHostable } from '../../world/zonePolicy';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -105,6 +106,12 @@ export class HoldfastField implements WorldOverlay {
   ensureRolled(zone: ZoneDef, density: number): HoldfastInfo | null {
     const existing = this.infos.get(zone.id);
     if (existing !== undefined) return existing;
+    // THE HOSTING LAW belt (zonePolicy.holdfastHostable — the same predicate
+    // the engine's roll and dev force ask): an ineligible def gets a plain
+    // null WITHOUT a stored decision, so the durable ledger never learns
+    // cave/sidezone/event-zone ids and a zone whose eligibility could ever
+    // change hasn't been baked refused.
+    if (!holdfastHostable(zone)) return null;
     let info: HoldfastInfo | null = null;
     const g = this.gate();
     const rng = new Rng((this.seed ^ hashStr(zone.id)) >>> 0);
@@ -212,6 +219,9 @@ export class HoldfastField implements WorldOverlay {
   /** DEV: force a fresh sealed holdfast in this zone regardless of the gate/roll (QA).
    *  The engine then appends the exit + raises the gate (World.devForceHoldfast). */
   devForce(zone: ZoneDef): HoldfastInfo | null {
+    // Same hosting law as the natural roll (QA skips the LEVEL band only,
+    // never the ground law) — see ensureRolled's belt.
+    if (!holdfastHostable(zone)) return null;
     const existing = this.infos.get(zone.id);
     if (existing && existing.locked) return existing; // re-pressing reuses the live gate (no duplicate exit)
     const rng = new Rng((this.seed ^ hashStr(zone.id) ^ 0x77) >>> 0);

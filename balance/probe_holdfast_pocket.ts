@@ -15,20 +15,33 @@
 //    spawnPoint sampler degrades to "far from the player" in cramped ground —
 //    never to the entry stack (the death-ball).
 //  · DETERMINISM: the same run re-asked mints the same forms.
+//  · THE HOSTING LAW (zonePolicy.holdfastHostable): no gate may rise on
+//    ground that can't anchor a fresh minted zone — caves/sidezones,
+//    event-owned/floating/special/concealed mints, sanctuaries, pockets,
+//    breach maws, boundless streams, biome-denied ground — through BOTH the
+//    pure predicate and the real engine paths (devForceHoldfast + the
+//    overlay's ensureRolled belt), so dev-tools QA can't manufacture states
+//    normal play refuses.
+//  · THE ROAD HOME: a pocket's one exit never seals behind policy — not the
+//    objective seal (waypoint re-entries carry no entry edge to spare), not
+//    a roving edge blockade. Bought ground can't trap its buyer.
 //
 // Exit 1 on any failure — or on a dead rig (a sweep that never saw a hoard,
 // a delve, and a walled carve proved nothing).
 //   npx tsx balance/probe_holdfast_pocket.ts [30]
 
 import { bootSimEngine, classById } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { makeAccount } from '../src/meta/account';
 import { buildManifest } from '../src/packages/manifest';
-import { World } from '../src/engine/world';
+import { World, type ZoneExit } from '../src/engine/world';
 import { HUB_ZONE, OBJECTIVE_SEALS } from '../src/data/zones';
 import type { ZoneDef, ZoneExitDef } from '../src/data/zones';
 import { POCKET_FORMS, pocketFormOf } from '../src/data/pocketForms';
 import { GridWalkField } from '../src/world/gridWalk';
-import { eventTargetable } from '../src/world/zonePolicy';
+import { eventTargetable, holdfastHostable } from '../src/world/zonePolicy';
+import { BIOMES } from '../src/world/biomes';
+import { registerEdgeBlockSource } from '../src/world/edgeBlocks';
 
 bootSimEngine();
 
@@ -45,8 +58,12 @@ const POCKET_PACK_FLOOR = 0.3;
 
 const SEEDS = Number(process.argv[2] ?? 30);
 
-/** A quiet world with ONLY the holdfast package live. */
+/** A quiet world with ONLY the holdfast package live. Seeds the GLOBAL
+ *  Math.random too (probes-must-seedGlobalRandom): seedless mints draw on the
+ *  shared stream, so without this the frontier WALK — which hosts get gates,
+ *  which pockets mint — differs per boot and per run. */
 function makeWorld(seed: number): World {
+  seedGlobalRandom(seed ^ 0x5eed);
   const account = makeAccount();
   const manifest = buildManifest(account, seed);
   for (const p of manifest.packages) p.enabled = p.id === 'holdfast';
@@ -242,6 +259,159 @@ for (let s = 0; s < SEEDS; s++) {
       check(`seed ${seed} ${pocket.id}: spawnPoint honors the grace floor`, false,
         `worst ${spawnWorst.toFixed(0)} < bar ${bar.toFixed(0)} (maxD ${maxD.toFixed(0)})`);
     }
+  }
+}
+
+// --- THE HOSTING LAW: no gate on ground that can't anchor a fresh mint -------------
+{
+  const world = makeWorld(910001);
+  const w = world as any;
+  world.devTravelTo(HUB_ZONE);
+  const hub = world.zoneMap[HUB_ZONE];
+
+  // Rig-alive: the ELIGIBLE baseline must pass, or every refusal below is vacuous.
+  check('hosting: an ordinary uncharted zone is hostable', holdfastHostable(hub));
+
+  // The pure predicate, per refused class (clones — the law is structural).
+  const base = { ...hub };
+  const refused: [string, Partial<ZoneDef>][] = [
+    ['cave/sidezone (caveDepth)', { caveDepth: 1 }],
+    ['event-owned mint', { eventOwned: true }],
+    ['floating mint', { floating: true }],
+    ['special arena', { special: true }],
+    ['purchased pocket', { pocket: true }],
+    ['sanctuary', { objective: { kind: 'safe' } }],
+    ['breach maw', { breach: true }],
+    ['boundless stream', { boundless: true }],
+    ['concealed mint', { concealed: true }],
+  ];
+  let refusedOk = 0;
+  for (const [label, flags] of refused) {
+    if (holdfastHostable({ ...base, ...flags } as ZoneDef)) {
+      check(`hosting: refuses ${label}`, false);
+    } else refusedOk++;
+  }
+  check(`hosting: every refused class refuses (${refusedOk}/${refused.length})`,
+    refusedOk === refused.length);
+
+  // Biome DATA deny: 'holdfast' is a first-class event id for zone policy.
+  // (The hub is an authored zone with no biome — use a minted neighbor, and
+  // FAIL loudly if none exists: a skipped check proves nothing.)
+  const biomed = Object.values(world.zoneMap)
+    .find(z => z.biome && BIOMES[z.biome] && holdfastHostable(z));
+  if (biomed) {
+    const b = BIOMES[biomed.biome!];
+    const saved = b.denyEvents;
+    b.denyEvents = [...(saved ?? []), 'holdfast'];
+    check('hosting: a biome denies holdfasts as pure data', !holdfastHostable(biomed),
+      `biome=${biomed.biome}`);
+    if (saved === undefined) delete b.denyEvents; else b.denyEvents = saved;
+    check('hosting: deny row restored, zone hostable again', holdfastHostable(biomed));
+  } else {
+    check('hosting: a biomed zone exists to test the data deny (rig)', false);
+  }
+
+  // THE REAL ENGINE PATHS. devForce inside a live POCKET refuses:
+  world.devForceHoldfast();
+  const lockExit = world.zoneMap[HUB_ZONE].exits.find((e: ZoneExitDef) => e.lock);
+  if (lockExit && lockExit.to !== '?') {
+    const pocket = world.zoneMap[lockExit.to];
+    w.sim.holdfastField.unlock(HUB_ZONE);
+    world.devTravelTo(pocket.id);
+    const before = pocket.exits.length;
+    check('hosting: devForce refuses inside a purchased pocket',
+      world.devForceHoldfast() === false && pocket.exits.length === before);
+  } else {
+    check('hosting: hub gate forced (rig)', false, 'devForceHoldfast made no exit in the hub');
+  }
+
+  // ...and inside a real CAVE. GUARANTEED, not seed-lucky: hunt seeds until a
+  // hub gate sells a DELVE (its form row floors a cave mouth), then descend it.
+  let caveTested = false;
+  for (let s = 0; s < 8 && !caveTested; s++) {
+    const cw = makeWorld(930001 + s * 101);
+    const cwAny = cw as any;
+    cw.devTravelTo(HUB_ZONE);
+    cw.devForceHoldfast();
+    const le = cw.zoneMap[HUB_ZONE].exits.find((e: ZoneExitDef) => e.lock);
+    if (!le || le.to === '?') continue;
+    const p = cw.zoneMap[le.to];
+    if (!p || p.pocketForm !== 'delve') continue;
+    cw.loadZone(p.id, HUB_ZONE);
+    const mouth = (cwAny.caveEntrances as { pos: unknown; seed: number; kind: string }[])[0];
+    if (!mouth) { check('hosting: delve cave mouth present (rig)', false, `none in ${p.id}`); break; }
+    cwAny.enterSidezone(mouth);
+    const caveDef = cwAny.zone as ZoneDef;
+    const caveExits = caveDef.exits.length;
+    const chf = cwAny.sim.holdfastField;
+    check('hosting: cave def wears caveDepth (the off-graph class)', caveDef.caveDepth != null);
+    check('hosting: devForce refuses inside a cave', cw.devForceHoldfast() === false);
+    check('hosting: overlay belt refuses a cave def outright',
+      chf.ensureRolled(caveDef, 999) === null && caveDef.exits.length === caveExits);
+    const snap = chf.snapshot() as { infos: [string, unknown][] };
+    check('hosting: the durable ledger never learns the cave id',
+      !snap.infos.some(([id]) => id === caveDef.id));
+    caveTested = true;
+  }
+  check('hosting: the cave class was actually exercised (rig)', caveTested);
+
+  // Integration: a real zone flipped event-owned refuses the force too.
+  world.devTravelTo(HUB_ZONE);
+  const neighbor = hub.exits.map(e => world.zoneMap[e.to]).find(z => z && !z.pocket && !z.special
+    && z.objective.kind !== 'safe' && !world.zoneMap[z.id].exits.some((e: ZoneExitDef) => e.lock));
+  if (neighbor) {
+    world.devTravelTo(neighbor.id);
+    neighbor.eventOwned = true;
+    check('hosting: devForce refuses a live event-owned zone', world.devForceHoldfast() === false);
+    delete neighbor.eventOwned;
+  }
+}
+
+// --- THE ROAD HOME: a pocket's one exit never seals behind policy ------------------
+const probeBlock = { armed: false, zoneId: '' };
+registerEdgeBlockSource((_wld, from, to) =>
+  probeBlock.armed && (from === probeBlock.zoneId || to === probeBlock.zoneId)
+    ? { reason: 'probe blockade', source: 'probe' } : null);
+{
+  const world = makeWorld(920001);
+  const w = world as any;
+  const pairs = mintPockets(world);
+  const pair = pairs[0];
+  if (!pair) {
+    check('road-home: pocket minted (rig)', false);
+  } else {
+    const { host, pocket } = pair;
+    // CONTROL — the seal machinery must fire where the law permits it: a
+    // sealing objective on the HOST, entered with no entry edge (the
+    // waypoint shape), seals its exits.
+    const savedObj = host.objective;
+    host.objective = { kind: 'clear', seal: true } as ZoneDef['objective'];
+    world.loadZone(host.id);
+    const anyExit = (w.exits as ZoneExit[]).find(x => x.to !== '?');
+    check('road-home: control — a sealing objective seals a NORMAL zone entered waypoint-style',
+      !!anyExit && world.isExitLocked(anyExit!) === true,
+      anyExit ? `to=${anyExit.to}` : 'no exit');
+    host.objective = savedObj;
+
+    // THE INVARIANT — the same trap shape on the POCKET stays open.
+    const savedP = pocket.objective;
+    pocket.objective = { kind: 'clear', seal: true } as ZoneDef['objective'];
+    world.loadZone(pocket.id); // NO from: the waypoint re-entry shape
+    const back = (w.exits as ZoneExit[]).find(x => x.to === host.id);
+    check('road-home: a sealing objective can NEVER seal the pocket road',
+      !!back && world.isExitLocked(back!) === false);
+    pocket.objective = savedP;
+
+    // A roving edge blockade across the only road is refused from inside too.
+    probeBlock.armed = true; probeBlock.zoneId = pocket.id;
+    check('road-home: an edge blockade cannot seal the pocket road from inside',
+      !!back && world.isExitLocked(back!) === false);
+    // Control: the SAME source does hold the road from the non-pocket side.
+    world.loadZone(host.id, pocket.id);
+    const toPocket = (w.exits as ZoneExit[]).find(x => x.to === pocket.id);
+    check('road-home: control — the same blockade holds the road from the host side',
+      !!toPocket && world.isExitLocked(toPocket!) === true);
+    probeBlock.armed = false;
   }
 }
 
