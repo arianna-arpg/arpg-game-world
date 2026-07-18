@@ -55,9 +55,20 @@ export const TRACK_CFG = {
   /** Default per-body re-hit grace (seconds) when a payload names none. */
   icdSec: 0.9,
   /** Contact sweep cadence (seconds) — the creep/fog dressOccupants beat.
-   *  Impulse/damage land at most once per ICD anyway; this just bounds the
-   *  sweep cost. */
-  applyEvery: 0.1,
+   *  Impulse/damage land at most once per ICD anyway; this bounds the sweep
+   *  cost AND the worst-case contact latency (a hit registers at most one
+   *  beat after the surface truly crossed the body). */
+  applyEvery: 0.05,
+  /** THE SWEPT BEAT (precision): between two sweep beats a fast surface can
+   *  cross a body entirely (a 520px/s dart clears a torso between 0.05s
+   *  samples). The pose is a pure clock function, so the in-between is free:
+   *  the sweep sub-samples the beat window so no surface point ever jumps
+   *  more than this many px between tested poses — contact lands at the pose
+   *  that actually crossed you, never a tunnel, never a phantom. */
+  sweepStepPx: 7,
+  /** Substep ceiling per rider per beat (cost guard; at speed 600 × 0.05s a
+   *  beat is 30px ≈ 5 steps — the ceiling only bites on degenerate dials). */
+  sweepStepsMax: 12,
   /** Default warn-arc length (px of lane ahead of the rider) when a rider
    *  names none. The telegraph the player and the dodge-AI both read. */
   warnAhead: 130,
@@ -67,8 +78,11 @@ export const TRACK_CFG = {
   /** Threat sampling step (seconds) — the future is exact (pure resolver),
    *  this only bounds how finely we ask it. */
   threatStep: 0.22,
-  /** Sanity ceiling: riders per zone (validation + ensure guard). */
-  maxRidersPerZone: 24,
+  /** Sanity ceiling: riders per zone (validation + ensure guard). Raised
+   *  24→40 for the blade lattice (a tiled room of small async rotors is
+   *  ~8 hubs × 1-2 arms beside the classic mincers/saws); still a sanity
+   *  bound, not a perf budget — the sweep prefilters bodies per lane. */
+  maxRidersPerZone: 40,
   /** Landing shove when a payload carries impulse but the victim is already
    *  dead-centre on the rider (degenerate radial) — push along the lane. */
   degenerateDir: 0.0,
@@ -87,9 +101,15 @@ export interface TrackPayload {
   hit?: { base: number; perLevel?: number; type: DamageType };
   /** Status stamped on contact (applyStatus, chance-gated). */
   status?: { id: string; chance?: number };
-  /** Radial shove strength (pushActor — weight-scaled, impulse-additive,
-   *  pit-aware through the push integrator's forced lane). */
+  /** Shove strength (pushActor — weight-scaled, impulse-additive, pit-aware
+   *  through the push integrator's forced lane). Direction per `push`. */
   impulse?: number;
+  /** THE SHOVE'S GRAIN: 'radial' (default) pushes away from the surface
+   *  center — the boulder bowls, the bumper flings; 'along' pushes in the
+   *  lane's TRAVEL direction at the contact pose — the sweeper arm that
+   *  CARRIES a body around its route instead of merely wounding it (on a
+   *  rotor ring that is the tangent: you are batted ahead of the arm). */
+  push?: 'radial' | 'along';
   /** Per-body re-hit grace, seconds (default TRACK_CFG.icdSec). */
   icdSec?: number;
   /** SPEED GATE: only a body ARRIVING at this push-speed or faster feels
@@ -529,6 +549,7 @@ export function validateTrackRiders(warn: (msg: string) => void): void {
     if (!p.hit && !p.status && !p.impulse) warn(`track rider ${def.id}: payload does nothing`);
     if (p.hit && (p.hit.base < 0 || p.hit.base > 400)) warn(`track rider ${def.id}: hit.base ${p.hit.base} outside [0,400]`);
     if (p.impulse !== undefined && (p.impulse < 0 || p.impulse > 900)) warn(`track rider ${def.id}: impulse ${p.impulse} outside [0,900]`);
+    if (p.push && !p.impulse) warn(`track rider ${def.id}: push grain '${p.push}' without impulse — dead field`);
     if (p.icdSec !== undefined && (p.icdSec < 0.2 || p.icdSec > 10)) warn(`track rider ${def.id}: icd ${p.icdSec}s outside [0.2,10]`);
     if (def.warnAhead !== undefined && (def.warnAhead < 0 || def.warnAhead > 420)) warn(`track rider ${def.id}: warnAhead ${def.warnAhead} outside [0,420]`);
   }

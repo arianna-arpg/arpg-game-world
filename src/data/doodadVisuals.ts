@@ -146,6 +146,23 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'rimeFlail', order: 50,
     params: { beamHw: 62, beamHh: 10, body: '#8a7a52', edge: '#d8c890' },
   },
+  // The ONE great arm — heavier metal, brighter edge (the longest warn arc
+  // in the kit deserves the most readable blade).
+  ruin_greatblade: {
+    painter: 'rimeFlail', order: 50,
+    params: { beamHw: 96, beamHh: 14, body: '#7a6a46', edge: '#e0d0a0' },
+  },
+  // The blunt sweeper bar — deliberately EDGELESS bronze (its payload is the
+  // carry, not the cut; the look must not promise a wound it doesn't deal).
+  ruin_sweeparm: {
+    painter: 'rimeFlail', order: 50,
+    params: { beamHw: 70, beamHh: 9, body: '#8a7a52', edge: '#b8a878' },
+  },
+  // The lattice's short arm.
+  ruin_scythe: {
+    painter: 'rimeFlail', order: 50,
+    params: { beamHw: 28, beamHh: 8, body: '#8a7a52', edge: '#d0c084' },
+  },
   ruin_boulder: {
     painter: 'rollingStone', order: 51,
     params: { body: '#8a8168', edge: '#c0b088', scar: '#3e382c' },

@@ -59,6 +59,65 @@ registerTrackRider({
   color: '#d8c890',
 });
 
+// --- THE RUIN GREATBLADE — the ONE great arm --------------------------------
+// A wheel that mounts a single enormous cleaver instead of a fan of arms:
+// the room turns on one slow, unmistakable edge. Heavier bite, longer ICD,
+// the longest warn arc in the kit — you always see it coming, and it still
+// owns the floor it sweeps. (Mincer dial `greatBlade` swaps a wheel to this.)
+registerTrackRider({
+  id: 'ruin_greatblade',
+  kind: 'ruin_greatblade',
+  surface: { kind: 'rect', hw: 96, hh: 14 },
+  orient: 'radial',
+  payload: {
+    hit: { base: 40, perLevel: 10, type: 'physical' },
+    impulse: 360,
+    icdSec: 1.2,
+  },
+  warnAhead: 260,
+  color: '#e0d0a0',
+});
+
+// --- THE RUIN SWEEPARM — the arm that CARRIES -------------------------------
+// A blunt bronze bar on the same wheeling grammar — the trap's OWN physics
+// instead of its edge: push 'along' rides the lane's travel direction, so a
+// caught body is batted AROUND the ring ahead of the bar (and everything
+// pushActor already owns arrives free — weight scaling, wall wounds, pit
+// lips WITH credit). Chip damage only; the ride is the payload.
+registerTrackRider({
+  id: 'ruin_sweeparm',
+  kind: 'ruin_sweeparm',
+  surface: { kind: 'rect', hw: 70, hh: 9 },
+  orient: 'radial',
+  payload: {
+    hit: { base: 6, perLevel: 2, type: 'physical' },
+    impulse: 480,
+    push: 'along',
+    icdSec: 0.7,
+  },
+  warnAhead: 190,
+  color: '#b8a878',
+});
+
+// --- THE RUIN SCYTHE — the lattice's short arm ------------------------------
+// A stubby wheeling blade for TILED floors (the bladeLattice archetype): each
+// hub small enough that seams stay walkable, quick enough that the room
+// reads as live machinery. Light bite + bleed; the danger is the FIELD.
+registerTrackRider({
+  id: 'ruin_scythe',
+  kind: 'ruin_scythe',
+  surface: { kind: 'rect', hw: 28, hh: 8 },
+  orient: 'radial',
+  payload: {
+    hit: { base: 14, perLevel: 5, type: 'physical' },
+    status: { id: 'bleed', chance: 0.35 },
+    impulse: 120,
+    icdSec: 0.8,
+  },
+  warnAhead: 130,
+  color: '#d0c084',
+});
+
 // --- THE RUIN BOULDER — the loosed stone ------------------------------------
 // One heavy mass on a ONCE-lane: the plate clicks, the cradle empties, the
 // runway groove fills with rolling stone. Crushing bite + a real launch —

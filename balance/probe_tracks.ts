@@ -15,6 +15,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { mitigateTyped } from '../src/engine/damage';
 import { placeTrack, trackPose, ringPath, linePath, lintTrackSpec, TRACK_CFG, type TrackSpec } from '../src/engine/tracks';
 import { type Doodad } from '../src/engine/levelgen';
 import { serializeZone, applyZone } from '../src/net/snapshot';
@@ -292,6 +293,94 @@ const DT = 1 / 60;
   const gripes2 = lintTrackSpec({ path: ringPath(0, 0, 100, 8), closed: true, speed: 9999, riders: [{ kind: 'nope', phase: 1.2 }] } as TrackSpec, 'probe');
   check('lint: silly speed, unknown rider, out-of-range phase all gripe',
     gripes2.length >= 3, gripes2.join(' | '));
+}
+
+// --- 8) THE SWEPT BEAT: fast surfaces cannot tunnel ------------------------
+// (The precision contract: one sample per sweep beat let a 520px/s bolt
+// cross a torso BETWEEN samples — a visible pass-through that never bit.
+// The sweep now sub-samples the beat window at surface-honest steps, so
+// contact lands at the pose that actually crossed the body. Eight staggered
+// crossings must bite eight times — alignment can never save a bolt.)
+{
+  let bit = 0;
+  for (let k = 0; k < 8; k++) {
+    const world = makeSimWorld('warrior', 8901 + k);
+    const p = world.player;
+    p.pos = vec(700 + k * 3.7, 500); // stagger vs the beat grid
+    world.addTrack({
+      path: linePath(vec(300, 500), vec(1100, 500)), mode: 'once', speed: 520,
+      riders: [{ kind: 'ruin_dart' }], bornAt: world.time + 0.2,
+    });
+    const life0 = p.life;
+    for (let i = 0; i < Math.ceil(2.4 / DT); i++) {
+      p.pos.x = 700 + k * 3.7; p.pos.y = 500; // re-park (the hit shoves)
+      world.update(DT);
+    }
+    if (p.life < life0 - 0.01) bit++;
+  }
+  check('swept beat: 8 staggered dart crossings, 8 bites (no tunnel, ever)',
+    bit === 8, `${bit}/8 bit`);
+}
+
+// --- 9) THE SHOVE'S GRAIN: 'along' carries, 'radial' flings ----------------
+// (TrackPayload.push — the trap's own physics: a sweeparm bats bodies AROUND
+// its route; the classic grain flings them away from the surface center.
+// Same geometry, one dial — the displacement axis is the proof.)
+{
+  const ride = (rider: string): { dx: number; dy: number } => {
+    const world = makeSimWorld('warrior', 8951);
+    world.player.pos = vec(200, 200);
+    const m = world.createMonster('plains_wolf', 5, 'enemy');
+    m.pos = vec(700, 540); // 40px BESIDE the lane — inside a radial arm's reach
+    world.actors.push(m);
+    world.addTrack({
+      path: linePath(vec(400, 500), vec(1000, 500)), mode: 'once', speed: 300,
+      riders: [{ kind: rider }], bornAt: world.time + 0.1,
+    });
+    const x0 = m.pos.x, y0 = m.pos.y;
+    for (let i = 0; i < Math.ceil(2.6 / DT); i++) world.update(DT);
+    return { dx: m.pos.x - x0, dy: m.pos.y - y0 };
+  };
+  const along = ride('ruin_sweeparm');   // push:'along'
+  const radial = ride('ruin_fanblade');  // classic radial
+  check("grain 'along': the sweeparm CARRIES down the lane (Δx dominates)",
+    along.dx > 30 && Math.abs(along.dx) > Math.abs(along.dy) * 1.5,
+    `Δ(${along.dx.toFixed(0)},${along.dy.toFixed(0)})`);
+  check("grain 'radial': the fan arm flings ASIDE (Δy dominates)",
+    Math.abs(radial.dy) > Math.abs(radial.dx),
+    `Δ(${radial.dx.toFixed(0)},${radial.dy.toFixed(0)})`);
+}
+
+// --- 10) THE MITIGATION LADDER, to the decimal -----------------------------
+// (The damage-pass pin: a trap hit is typed physical through mitigateTyped —
+// armor applies, no true damage. The probe computes the ladder's own answer
+// for the victim and demands the live bite MATCH it.)
+{
+  const world = makeSimWorld('warrior', 8971);
+  world.player.pos = vec(200, 200);
+  // A PLATED victim (cistern_warden base armor 30) — the shave must be real.
+  const m = world.createMonster('cistern_warden', 5, 'enemy');
+  m.pos = vec(700, 500);
+  world.actors.push(m);
+  const raw = 22 + 7 * Math.max(1, world.zone.level); // ruin_sawblade hit @ zone level
+  const expected = mitigateTyped(m, { physical: raw });
+  const life0 = m.life;
+  world.addTrack({
+    path: linePath(vec(400, 500), vec(1000, 500)), mode: 'once', speed: 300,
+    riders: [{ kind: 'ruin_sawblade' }], bornAt: world.time + 0.1,
+  });
+  let firstBite = 0;
+  for (let i = 0; i < Math.ceil(2.6 / DT) && !firstBite; i++) {
+    m.pos.x = 700; m.pos.y = 500; // hold still; ignore bleed ticks via first-delta read
+    const before = m.life;
+    world.update(DT);
+    if (m.life < before - 0.01) firstBite = before - m.life;
+  }
+  check('ladder: the saw\'s first bite EQUALS mitigateTyped\'s own answer (armor applied, typed, no true damage)',
+    firstBite > 0 && Math.abs(firstBite - expected) < Math.max(1, expected * 0.06),
+    `bite ${firstBite.toFixed(1)} vs ladder ${expected.toFixed(1)} (raw ${raw})`);
+  check('ladder: mitigation actually SHAVED the raw number (armor is real)',
+    expected < raw - 0.5 && life0 > m.life, `raw ${raw} → ${expected.toFixed(1)}`);
 }
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);

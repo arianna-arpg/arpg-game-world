@@ -402,5 +402,103 @@ const DT = 1 / 60;
     && bare.doodads.every(d => d.kind !== 'track_groove' && d.kind !== 'boulder_cradle'));
 }
 
+// --- 11) THE WHEEL DIALS + THE BLADE LATTICE --------------------------------
+// (The trap-polish pass: every mincer wheel rolls its own character — blade
+// count, rim speed, FREE seating with real clusters, spin direction, the ONE
+// great blade, the carry-bar — and the bladeLattice tiles a grand hall with
+// small async wheels behind structural walkable seams.)
+{
+  const THEME = { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' };
+  const arena = { w: 1600, h: 1200 };
+  const entry = vec(120, arena.h / 2), exits = [vec(arena.w - 120, arena.h / 2)];
+  const genWith = (seed: number, trapworks: Record<string, unknown>): ReturnType<typeof generateLayout> =>
+    generateLayout({
+      id: `qa_wheel_${seed}`, name: 'QA Wheels', level: 8, size: { w: arena.w, h: arena.h },
+      theme: THEME, layout: [{ kind: 'rocks', count: [2, 3] }], layoutType: 'dungeon', seed,
+      layoutParams: { rooms: [7, 10], roomCellsMax: 13, trapworks },
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    } as never, arena, new Rng(seed), entry, exits);
+  const rings = (out: ReturnType<typeof generateLayout>): NonNullable<typeof out.tracks> =>
+    (out.tracks ?? []).filter(t => t.closed);
+  const winding = (path: { x: number; y: number }[]): number => {
+    let a = 0;
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i], q = path[(i + 1) % path.length];
+      a += p.x * q.y - q.x * p.y;
+    }
+    return Math.sign(a);
+  };
+
+  // Dialed wheels: bands honored, seats free, both windings reachable.
+  const DIAL = { mincerRooms: { chance: 1, max: 2, blades: [2, 4], speed: [75, 145], seating: 'random', reverse: 0.5 } };
+  let sawCluster = false, bandsOk = true, windings = new Set<number>();
+  for (let s = 0; s < 6; s++) {
+    const w = rings(genWith(9000 + s * 131, DIAL));
+    for (const t of w) {
+      if (t.riders.length < 2 || t.riders.length > 4) bandsOk = false;
+      if (t.speed < 75 || t.speed > 145) bandsOk = false;
+      windings.add(winding(t.path));
+      const ph = t.riders.map(r => r.phase ?? 0).sort((x, y) => x - y);
+      for (let i = 1; i < ph.length; i++) if (ph[i] - ph[i - 1] < 0.08) sawCluster = true;
+    }
+  }
+  check('wheels: blade count and rim speed stay inside the authored bands', bandsOk);
+  check('wheels: FREE seating clusters arms (two seats within 0.08 of a turn witnessed)', sawCluster);
+  check('wheels: both spin directions minted (reverse rolls widdershins rings)', windings.size === 2,
+    `windings ${[...windings].join(',')}`);
+
+  // The ONE great blade + the carry-bar (forced): rider swap laws.
+  const great = rings(genWith(9301, { mincerRooms: { chance: 1, max: 1, greatBlade: 1 } }));
+  check('wheels: greatBlade mounts ONE ruin_greatblade (single arm, the whole identity)',
+    great.length >= 1 && great.every(t => t.riders.length === 1 && t.riders[0].kind === 'ruin_greatblade'),
+    great.map(t => `${t.riders.map(r => r.kind)}×${t.riders.length}`).join(' '));
+  const sweep = rings(genWith(9302, { mincerRooms: { chance: 1, max: 1, sweepArm: 1 } }));
+  check('wheels: sweepArm mounts the carry-bar (ruin_sweeparm, the push-along debut)',
+    sweep.length >= 1 && sweep.every(t => t.riders.every(r => r.kind === 'ruin_sweeparm')));
+
+  // The lattice: async hubs, structural seams, grooved tells.
+  let lat: ReturnType<typeof rings> = [];
+  let latOut: ReturnType<typeof generateLayout> | null = null;
+  for (let s = 0; s < 5 && lat.length < 3; s++) {
+    latOut = genWith(9400 + s * 37, { bladeLattice: { chance: 1, max: 1 } });
+    lat = rings(latOut);
+  }
+  const hubOf = (t: (typeof lat)[number]): { x: number; y: number; r: number } => {
+    let cx = 0, cy = 0;
+    for (const p of t.path) { cx += p.x; cy += p.y; }
+    cx /= t.path.length; cy /= t.path.length;
+    return { x: cx, y: cy, r: Math.hypot(t.path[0].x - cx, t.path[0].y - cy) };
+  };
+  check('lattice: a grand hall tiles ≥3 async wheels (adaptive fit delivered)',
+    lat.length >= 3, `${lat.length} hubs`);
+  check('lattice: every hub swings the short arm on its own rolled speed',
+    lat.length >= 3 && lat.every(t => t.riders.every(r => r.kind === 'ruin_scythe'))
+    && new Set(lat.map(t => Math.round(t.speed))).size >= 2,
+    lat.map(t => Math.round(t.speed)).join(','));
+  const REACH = 28; // ruin_scythe arm half-length (mirrors the rider surface)
+  let seamsOk = lat.length >= 3;
+  for (let i = 0; i < lat.length; i++) {
+    for (let j = i + 1; j < lat.length; j++) {
+      const a = hubOf(lat[i]), b = hubOf(lat[j]);
+      if (Math.hypot(a.x - b.x, a.y - b.y) < a.r + b.r + REACH * 2 + 1) seamsOk = false;
+    }
+  }
+  check('lattice: STRUCTURAL seams — no two sweeps can ever meet (walkable weave)', seamsOk);
+  check('lattice: the rings are GROOVED (the carved tell) and mincers are not',
+    lat.length >= 3 && lat.every(t => t.groove === true));
+
+  // Determinism + the legacy character (chance/max-only dials keep the
+  // classic pair — even seats, 105px/s, the fan arm).
+  const d1 = genWith(9500, DIAL), d2 = genWith(9500, DIAL);
+  check('wheels: deterministic per seed (double-gen identical lanes)',
+    JSON.stringify(d1.tracks ?? []) === JSON.stringify(d2.tracks ?? []));
+  const legacy = rings(genWith(9501, { mincerRooms: { chance: 1, max: 1 } }));
+  check('wheels: legacy chance/max dials keep the CLASSIC pair (2 even arms @105)',
+    legacy.length === 1 && legacy[0].riders.length === 2 && legacy[0].speed === 105
+    && Math.abs((legacy[0].riders[0].phase ?? 0) - 0) < 1e-9
+    && Math.abs((legacy[0].riders[1].phase ?? 0) - 0.5) < 1e-9,
+    legacy.map(t => `n=${t.riders.length} v=${t.speed}`).join(' '));
+}
+
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

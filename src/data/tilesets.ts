@@ -2693,7 +2693,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         dartWards: { chance: 0.65, max: 2 },
         boulderRuns: { chance: 0.55, max: 1 },
         falseFloors: { chance: 0.6, max: 2 },
-        mincerRooms: { chance: 0.45, max: 1 },
+        // Every wheel its own machine: 2-3 arms seated FREE (clusters and
+        // lonely gaps), rim speed rolled per wheel, a third widdershins,
+        // one in five mounting the ONE great blade.
+        mincerRooms: {
+          chance: 0.45, max: 1,
+          blades: [2, 3], speed: [85, 130], seating: 'random',
+          reverse: 0.35, greatBlade: 0.2,
+        },
       },
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
@@ -2735,12 +2742,32 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'rubble', count: [2, 4] },
         { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
       ], layoutParams: {
+        // The machine face builds GRANDER halls (roomCellsMax 8 → 13, up to
+        // ~390px) — the mincers mount wider wheels there and the blade
+        // lattice gets a floor worth tiling (its adaptive fit shrinks wheels
+        // in mean halls; a grand hall carries them full-size).
+        roomCellsMax: 13,
         trapworks: {
           sawHalls: { chance: 0.9, max: 3 },
           dartWards: { chance: 0.8, max: 2 },
           boulderRuns: { chance: 0.7, max: 1 },
           falseFloors: { chance: 0.7, max: 2 },
-          mincerRooms: { chance: 0.65, max: 1 },
+          // The machines-won face turns every wheel dial up: more arms,
+          // wider speed spread, free seating, the great blade one in four —
+          // and one hub bar in three is the SWEEPARM (the bar that CARRIES
+          // you around the wheel instead of cutting).
+          mincerRooms: {
+            chance: 0.65, max: 2,
+            blades: [2, 4], speed: [75, 145], seating: 'random',
+            reverse: 0.4, greatBlade: 0.35, sweepArm: 0.3,
+          },
+          // THE BLADE LATTICE debut: the grand hall tiled with small async
+          // wheels — desynced speeds and spins, walkable seams, grooved
+          // rings carving the tell into the flagstone. (A cave zone usually
+          // holds ONE grand hall, and the lattice and the great blade both
+          // want it — the chances split the marquee between them; the mint
+          // repro is the tuning truth.)
+          bladeLattice: { chance: 0.5, max: 1 },
         },
       } },
     ],

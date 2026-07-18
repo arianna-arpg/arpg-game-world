@@ -113,8 +113,30 @@ IS their client existence, absence culls).
 
 Riders: `ruin_sawblade` (shearDisc re-palette, bronze), `ruin_fanblade`
 (rimeFlail re-palette, hw 62 — validation-pinned to its visual beam),
+`ruin_greatblade` (the ONE enormous arm, hw 96 — heavier bite, the longest
+warn arc in the kit; the mincer's `greatBlade` dial mounts it solo, claiming
+the grandest unclaimed hall), `ruin_sweeparm` (the blunt CARRY-bar, hw 70 —
+`push:'along'`: chip damage, big impulse down the lane's travel direction —
+a caught body is batted around the wheel; deliberately edgeless bronze, the
+look must not promise a wound it doesn't deal), `ruin_scythe` (the short
+arm, hw 28 — the blade lattice's substrate),
 `ruin_boulder` (`rollingStone` painter — rotation-stable seams, the roll
 reads), `ruin_dart` (`dartBolt`, warnAhead 0 — the rake is the warning).
+
+**The wheel dials** (`mincerRooms`): every laid wheel rolls its own character
+— `blades` [lo,hi] arms, `speed` [lo,hi] rim px/s (slow wheels and fast
+wheels in one crypt), `seating` `'even'`|`'random'` (free seats CLUSTER —
+three arms nearly stacked, one lonely gap), `reverse` widdershins chance,
+`greatBlade`/`sweepArm` rider-swap chances, `rider` override. Legacy
+chance/max-only dials keep the classic even pair at 105px/s.
+**The blade lattice** (`bladeLattice`): one grand hall TILED with small
+async wheels — a hub grid where every node rolls its own speed, direction,
+blade count, seat and fill. Seams are STRUCTURAL (pitch clamps so adjacent
+sweeps can never meet; fill misses leave lanes through), rings are grooved
+(the carved tell), and the fit is ADAPTIVE — hubs shrink to the hall,
+hopeless halls stay quiet (author `roomCellsMax` up for full-size lattice
+country; the toothed halls do). It picks BEFORE the mincers — the rarest
+archetype gets the grandest floor.
 Tells: `ruin_plate`/`ruin_plate_hidden` (`floorPlate` painter, `sink`
 dial), `ruin_floor_gap` (chasmPit — a TRUE pit, `DoodadRule.fall`),
 `boulder_cradle` (boulder painter — you SEE the stone waiting),
@@ -125,7 +147,7 @@ spits).
 
 All dials in `TRAPWORK_CFG` (salt, sweep beat, press pad, crumble/rumble/
 rake delays, dart/boulder speeds, `maxPerZone` 14, `revealNear`).
-Named-unbuilt: `trapSense` reveal stat; labyrinth-layout trap pass (the
-braided maze wants saws badly); lever fixtures (a struck `passive+immortal`
-actor driving `lanes` — the puzzle-node sensing lane is already open);
-grapple-plates for the mass fabric's shove grammar.
+Named-unbuilt: `trapSense` reveal stat; lever fixtures (a struck
+`passive+immortal` actor driving `lanes` — the puzzle-node sensing lane is
+already open); grapple-plates for the mass fabric's shove grammar. (The
+labyrinth trap pass and the surface rooms seam are BUILT — see Authoring.)

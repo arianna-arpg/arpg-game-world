@@ -26,7 +26,7 @@ import {
   doorSurfaceOf, layoutParam, layTraveledWay, registerLayout, registerTrapPass, scatterDecoration,
   stampEntries, type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
 } from './levelgen';
-import { ringPath } from './tracks';
+import { ringPath, trackRider } from './tracks';
 
 const CELL = 30;
 /** Interior margin (cells) between the arena border and any carved space. */
@@ -405,8 +405,45 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
 export interface TrapGenSpec {
   /** Always-on buzzsaw lanes shuttling long corridor stretches. */
   sawHalls?: { chance: number; max?: number };
-  /** Room-spanning rotor arms wheeling big chambers (the meat mincer). */
-  mincerRooms?: { chance: number; max?: number };
+  /** Room-spanning rotor arms wheeling big chambers (the meat mincer).
+   *  Every laid wheel rolls its own character off the dials — all optional,
+   *  defaults = the classic pair at 105px/s:
+   *  `blades` [lo,hi] arms per wheel; `speed` [lo,hi] rim px/s (a wide band
+   *  is the "some wheels turn slowly" lever — hub size varies the angular
+   *  feel further); `seating` 'even' fans the arms uniformly, 'random'
+   *  seats them free (clusters happen — three arms nearly stacked, one
+   *  lonely gap); `reverse` chance a wheel runs widdershins; `greatBlade`
+   *  chance a wheel mounts the ONE enormous arm instead (ruin_greatblade,
+   *  forced single — falls back to the fan in halls too small for its tip);
+   *  `sweepArm` chance a wheel swings the blunt CARRY-bar instead
+   *  (ruin_sweeparm, push 'along' — bodies are batted around the ring: the
+   *  trap's physics instead of its edge; greatBlade outranks);
+   *  `rider` overrides the default arm kind. */
+  mincerRooms?: {
+    chance: number; max?: number;
+    blades?: [number, number]; speed?: [number, number];
+    seating?: 'even' | 'random'; reverse?: number; greatBlade?: number;
+    sweepArm?: number;
+    rider?: string;
+  };
+  /** THE BLADE LATTICE — one hall TILED with small async wheels: a grid of
+   *  hubs, every node rolling its own speed, spin direction, blade count,
+   *  seat and fill, so the floor reads as a field of desynced machinery
+   *  with WALKABLE SEAMS (pitch is clamped so adjacent sweeps can never
+   *  overlap; `fill` misses leave lanes through). ADAPTIVE: it takes the
+   *  grandest unused hall and clamps hub size so a 2×2 grid fits what it
+   *  accepts — a mean hall shrinks the wheels, a hopeless one stays quiet
+   *  (author roomCellsMax up if a face wants full-size lattice halls).
+   *  Dials: `pitch` hub grid spacing px; `hubR` [lo,hi] ring radius;
+   *  `blades` [lo,hi] per hub; `speed` [lo,hi] rim px/s; `reverse` per-hub
+   *  widdershins chance; `fill` per-node occupancy; `maxHubs` budget (the
+   *  rider cap stays honest); `rider` arm kind (default ruin_scythe). */
+  bladeLattice?: {
+    chance: number; max?: number;
+    pitch?: number; hubR?: [number, number]; blades?: [number, number];
+    speed?: [number, number]; reverse?: number; fill?: number;
+    maxHubs?: number; rider?: string;
+  };
   /** A visible plate mid-corridor wired to a dart volley raking across it. */
   dartWards?: { chance: number; max?: number };
   /** A HIDDEN plate deep in a long hall that looses the cradled boulder
@@ -592,30 +629,135 @@ function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: T
     });
   }
 
-  // --- MINCER ROOMS: rotor arms wheeling the chamber — the room IS the
-  // hazard, and anything that walks it (either side) feeds the blades.
+  // --- THE WHEEL COUNTRY: shared candidacy for the rotor archetypes — big
+  // portal-clear unassigned chambers; each consumer marks the hall it took.
+  const armReach = (id: string): number => {
+    const s = trackRider(id)?.surface;
+    return !s ? 62 : s.kind === 'rect' ? s.hw : s.r;
+  };
+  const usedRooms = new Set<number>();
   const bigRooms = geo.rooms
     .map((r, i) => ({ r, i }))
     .filter(({ r, i }) => !r.portal && !geo.assigned.has(i)
       && Math.min(r.w, r.h) >= CELL * 5.2 && clearOfPortals(vec(r.cx, r.cy), 150));
-  let mincersLaid = 0;
-  for (let k = 0; k < (spec.mincerRooms?.max ?? 1); k++) {
-    const want = rng.chance(spec.mincerRooms?.chance ?? 0);
+
+  // --- THE BLADE LATTICE (FIRST — the rarest, site-hungriest archetype gets
+  // first pick of the grandest hall): one floor TILED with small async
+  // wheels — every hub rolls its own speed, direction, blade count and seat,
+  // so the room reads as a field of desynced machinery. The seams are
+  // STRUCTURAL: pitch is clamped so two neighboring sweeps can never meet,
+  // and fill misses leave whole lanes through. Grooved rings carve the tell.
+  const ld = spec.bladeLattice;
+  for (let k = 0; k < (ld?.max ?? 1); k++) {
+    const want = rng.chance(ld?.chance ?? 0);
     if (!want) continue;
-    const cand = bigRooms[mincersLaid];
+    // The GRANDEST hall — a lattice earns the biggest floor there is
+    // (candidacy order is authoring order, not size).
+    const cand = bigRooms.filter(c => !usedRooms.has(c.i))
+      .sort((a, b) => Math.min(b.r.w, b.r.h) - Math.min(a.r.w, a.r.h))[0];
     if (!cand) continue;
-    mincersLaid++;
+    const rider = ld?.rider ?? 'ruin_scythe';
+    const reach = armReach(rider);
+    const hubBand = ld?.hubR ?? [30, 46];
+    const seam = 34; // the walkable promise between adjacent sweeps
     const rm = cand.r;
-    // Hub sized so the arm's tip (hub + 62) clears the walls by ≥ 6px — a
-    // small room gets a center-pivot ceiling fan, a great hall a wide wheel.
-    const hubR = Math.max(8, Math.min(rm.w, rm.h) * 0.5 - 68);
+    // ADAPTIVE FIT: the hall it got decides the wheel size — hubs clamp so a
+    // 2×2 grid ALWAYS fits what we accept (pitch spaces worst-case sweeps;
+    // a node rolling small only widens its seams). Tips clear walls by 8px,
+    // the mincer's own convention. Halls too mean for any wheel skip.
+    const avail = Math.min(rm.w, rm.h) - 16;
+    const hubMax = (avail - seam) / 4 - reach;
+    if (hubMax < 16) continue; // no honest wheel fits — the dial stays quiet
+    const effLo = Math.min(hubBand[0], hubMax);
+    const effHi = Math.min(hubBand[1], hubMax);
+    const pitch = Math.max(ld?.pitch ?? 0, (effHi + reach) * 2 + seam);
+    const cols = Math.floor((rm.w - 16 - 2 * (effHi + reach)) / pitch) + 1;
+    const rows = Math.floor((rm.h - 16 - 2 * (effHi + reach)) / pitch) + 1;
+    if (cols < 2 || rows < 2) continue; // a lattice needs a FIELD, not a line
+    usedRooms.add(cand.i);
+    const x0 = rm.cx - ((cols - 1) * pitch) / 2;
+    const y0 = rm.cy - ((rows - 1) * pitch) / 2;
+    let hubs = 0;
+    const maxHubs = ld?.maxHubs ?? 8;
+    for (let j = 0; j < rows && hubs < maxHubs; j++) {
+      for (let i = 0; i < cols && hubs < maxHubs; i++) {
+        if (!rng.chance(ld?.fill ?? 0.75)) continue; // the gap IS the lane
+        hubs++;
+        const hubR = rng.range(effLo, effHi);
+        const speedBand = ld?.speed ?? [70, 150];
+        const speed = rng.range(speedBand[0], speedBand[1]);
+        const reversed = rng.chance(ld?.reverse ?? 0.5);
+        const bladeBand = ld?.blades ?? [1, 2];
+        const blades = rng.int(bladeBand[0], bladeBand[1]);
+        const riders: { kind: string; phase: number }[] = [];
+        for (let b = 0; b < blades; b++) riders.push({ kind: rider, phase: rng.range(0, 1) });
+        const path = ringPath(x0 + i * pitch, y0 + j * pitch, hubR, 12, rng.range(0, Math.PI * 2));
+        if (reversed) path.reverse();
+        (ctx.tracks ??= []).push({
+          path, closed: true, mode: 'loop', speed, riders, groove: true,
+        });
+      }
+    }
+  }
+
+  // --- MINCER ROOMS: rotor arms wheeling the chamber — the room IS the
+  // hazard, and anything that walks it (either side) feeds the blades. Each
+  // wheel rolls its own CHARACTER off the dials (count, rim speed, seating,
+  // direction, the rare ONE GREAT BLADE); the per-laid draw shape is fixed —
+  // roll everything, use what applies — so a future dial addition never
+  // reshuffles a seed.
+  let mincerCursor = 0;
+  const md = spec.mincerRooms;
+  for (let k = 0; k < (md?.max ?? 1); k++) {
+    const want = rng.chance(md?.chance ?? 0);
+    if (!want) continue;
+    const bladeBand = md?.blades ?? [2, 2];
+    let blades = rng.int(bladeBand[0], bladeBand[1]);
+    const speedBand = md?.speed ?? [105, 105];
+    const speed = rng.range(speedBand[0], speedBand[1]);
+    const reversed = rng.chance(md?.reverse ?? 0);
+    const great = rng.chance(md?.greatBlade ?? 0);
+    const sweep = rng.chance(md?.sweepArm ?? 0); // always rolls (fixed shape)
+    // The hall: cursor order normally; a GREAT roll claims the grandest
+    // unclaimed floor instead — the enormous arm needs the room, and the
+    // one-blade wheel is the archetype's marquee (selection draws nothing).
+    let cand: { r: IntRoom; i: number } | undefined;
+    if (great) {
+      cand = bigRooms.filter(c => !usedRooms.has(c.i))
+        .sort((a, b) => Math.min(b.r.w, b.r.h) - Math.min(a.r.w, a.r.h))[0];
+    } else {
+      while (bigRooms[mincerCursor] && usedRooms.has(bigRooms[mincerCursor].i)) mincerCursor++;
+      cand = bigRooms[mincerCursor];
+      if (cand) mincerCursor++;
+    }
+    if (!cand) continue;
+    usedRooms.add(cand.i);
+    const rm = cand.r;
+    let rider = great ? 'ruin_greatblade'
+      : sweep ? 'ruin_sweeparm'
+        : md?.rider ?? 'ruin_fanblade';
+    // Hub sized so the arm's TIP clears the walls by ≥ 6px — a small room
+    // gets a center-pivot ceiling fan, a great hall a wide wheel. The great
+    // arm needs a great hall: fall back to the fan where its tip can't fit.
+    let hubR = Math.min(rm.w, rm.h) * 0.5 - (armReach(rider) + 6);
+    if (great && hubR < 8) {
+      rider = sweep ? 'ruin_sweeparm' : md?.rider ?? 'ruin_fanblade';
+      hubR = Math.min(rm.w, rm.h) * 0.5 - (armReach(rider) + 6);
+    } else if (great) {
+      blades = 1; // the ONE blade — that is the whole identity
+    }
+    hubR = Math.max(8, hubR);
+    const riders: { kind: string; phase: number }[] = [];
+    for (let b = 0; b < blades; b++) {
+      // 'even' fans the arms uniformly; 'random' seats them free — clusters
+      // happen by design. The seat roll always burns (fixed draw shape).
+      const seat = rng.range(0, 1);
+      riders.push({ kind: rider, phase: (md?.seating ?? 'even') === 'random' ? seat : b / blades });
+    }
+    const path = ringPath(rm.cx, rm.cy, hubR, 16, rng.range(0, Math.PI * 2));
+    if (reversed) path.reverse(); // widdershins — same ring, opposite grain
     (ctx.tracks ??= []).push({
-      path: ringPath(rm.cx, rm.cy, hubR, 16, rng.range(0, Math.PI * 2)),
-      closed: true,
-      mode: 'loop',
-      speed: 105,
-      riders: [{ kind: 'ruin_fanblade', phase: 0 }, { kind: 'ruin_fanblade', phase: 0.5 }],
-      groove: false,
+      path, closed: true, mode: 'loop', speed, riders, groove: false,
     });
   }
 

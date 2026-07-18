@@ -150,10 +150,14 @@ changes.
   phase) whose rider poses are a PURE FUNCTION of the synced clock
   (`trackPose` — deterministic across seats/resumes by construction);
   payloads ride existing levers (mitigated typed hits, statuses,
-  `pushActor` shoves — pit-aware with owner credit), the same grammar on
+  `pushActor` shoves — pit-aware with owner credit; `TrackPayload.push`
+  picks the shove's GRAIN: radial fling or 'along' the lane — the sweeper
+  arm that CARRIES bodies around its route), the same grammar on
   static doodads via `DoodadRule.contact` (bumpers); readability contract:
   carved `track_groove` ways, warn arcs + `imminentThreatTo` from the same
-  resolver, drawn==tested rider surfaces; authoring via landmark builders /
+  resolver, drawn==tested rider surfaces, and THE SWEPT BEAT (the contact
+  sweep sub-samples each beat at surface-honest steps — fast surfaces can
+  never tunnel a body between samples); authoring via landmark builders /
   `ZoneTheme.tracks` / `World.tracksEnsure`; debut = the GLACIAL HEART
   (deepwinter's heart graft: ice disc over a chasm moat, shear-disc ring +
   rime-flail rotor + rime bumpers, the Winter King anchored at the wheel) —
@@ -168,9 +172,13 @@ changes.
   floors into the pitfall fabric's descend (the swallow = pushActor's
   tiniest owned nudge — credit intact). Generation-MESHED via the
   interiorGen trap pass (`layoutParams.trapworks` dials: saw halls, mincer
-  rooms, dart wards, boulder runs, false floors — geometry-honest off real
-  corridors/rooms; sunken_ruin is the debut, its 'toothed halls' variant
-  the dense face; the SURFACE `rooms` recipe records its geometry as
+  rooms — every wheel rolling its own blade count/rim speed/free seating/
+  spin direction, plus the ONE great blade and the push-along sweeparm —
+  BLADE LATTICES (a grand hall tiled with small async wheels behind
+  structural walkable seams), dart wards, boulder runs, false floors —
+  geometry-honest off real corridors/rooms; sunken_ruin is the debut, its
+  'toothed halls' variant the dense face; the SURFACE `rooms` recipe
+  records its geometry as
   `ctx.trapGeo` and generateLayout's finished-grid tail runs the SAME pass
   via `registerTrapPass` — the mountain pass's sprung boulder runs are the
   surface debut, and rooms-rolled caves inherit a tileset's dials). The

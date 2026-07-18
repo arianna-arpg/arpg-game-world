@@ -256,12 +256,22 @@ export function validateContent(): void {
     const lintTrapDials = (spec: unknown, where: string): void => {
       if (!spec || typeof spec !== 'object') return;
       for (const [arch, dial] of Object.entries(spec as Record<string, { chance?: number; max?: number }>)) {
-        if (!['sawHalls', 'mincerRooms', 'dartWards', 'boulderRuns', 'falseFloors'].includes(arch)) {
+        if (!['sawHalls', 'mincerRooms', 'bladeLattice', 'dartWards', 'boulderRuns', 'falseFloors'].includes(arch)) {
           warn(`trapworks: ${where} names unknown archetype '${arch}'`);
           continue;
         }
         if (dial.chance === undefined || dial.chance < 0 || dial.chance > 1) warn(`trapworks: ${where}.${arch} chance outside [0,1]`);
         if (dial.max !== undefined && (dial.max < 1 || dial.max > 4)) warn(`trapworks: ${where}.${arch} max outside [1,4]`);
+        // The wheel dials stay physical: bands ordered, speeds inside the
+        // track lint's own (0,600], riders resolvable at boot.
+        const wd = dial as { blades?: [number, number]; speed?: [number, number]; hubR?: [number, number]; rider?: string; seating?: string };
+        for (const bandKey of ['blades', 'speed', 'hubR'] as const) {
+          const band = wd[bandKey];
+          if (band && !(band[0] <= band[1] && band[0] > 0)) warn(`trapworks: ${where}.${arch}.${bandKey} band [${band}] not ordered-positive`);
+        }
+        if (wd.speed && wd.speed[1] > 600) warn(`trapworks: ${where}.${arch}.speed exceeds the lane lint's 600px/s`);
+        if (wd.rider && !trackRider(wd.rider)) warn(`trapworks: ${where}.${arch}.rider '${wd.rider}' unregistered`);
+        if (wd.seating && !['even', 'random'].includes(wd.seating)) warn(`trapworks: ${where}.${arch}.seating '${wd.seating}' unknown`);
       }
     };
     for (const t of Object.values(TILESETS)) {

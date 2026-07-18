@@ -32413,10 +32413,21 @@ export class World {
     }
     this.trackSweepAcc += dt;
     if (this.trackSweepAcc < TRACK_CFG.applyEvery) return;
+    const beatDt = this.trackSweepAcc; // elapsed since the previous sweep beat
     this.trackSweepAcc = 0;
     for (const tr of this.tracks) {
       // Disarmed lanes are retracted whole; pending lanes haven't been born.
       if (!tr.armed || trackPending(tr, this.time)) continue;
+      // Body prefilter per lane (the bound the threat scan already keeps):
+      // the swept beat below samples several poses — cull the zone's
+      // population to this lane's neighborhood ONCE, not per substep.
+      let cand: Actor[] | null = null;
+      for (const a of this.actors) {
+        if (a.dead) continue;
+        if (a.pos.x < tr.bound.x0 - a.radius || a.pos.x > tr.bound.x1 + a.radius
+          || a.pos.y < tr.bound.y0 - a.radius || a.pos.y > tr.bound.y1 + a.radius) continue;
+        (cand ??= []).push(a);
+      }
       const owner = tr.spec.ownerId !== undefined
         ? this.actors.find(a => a.id === tr.spec.ownerId && !a.dead)
         : tr.spec.ownerTag ? this.actors.find(a => a.tag === tr.spec.ownerTag && !a.dead) : undefined;
@@ -32441,8 +32452,32 @@ export class World {
         }
         r.resting = false;
         r.lastLive = { x: pose.x, y: pose.y };
-        const shape = riderSurface(r.def, pose);
-        this.sweepHazardSurface(pose.x, pose.y, shape, pose.dir, r.def.payload, r.icdUntil, owner);
+        if (!cand) continue; // nobody near the lane — poses need no testing
+        // THE SWEPT BEAT (the precision contract): one sample per beat lets
+        // a fast surface cross a body BETWEEN samples (a 520px/s dart clears
+        // a torso in ~30ms; a long arm's tip outruns its own hub several
+        // times over). The pose is a pure clock function, so the in-between
+        // is free — walk the beat window at surface-honest steps (center
+        // travel + rotation×reach bounds any point's motion) and land the
+        // payload at the pose that actually CROSSED the body: contact is
+        // where the blade was, the shove points where it was going.
+        const reach = r.def.surface.kind === 'circle'
+          ? r.def.surface.r : Math.hypot(r.def.surface.hw, r.def.surface.hh);
+        const prev = trackPose(tr, this.time - beatDt, r.phase, r.def);
+        const dRotRaw = pose.rot - prev.rot;
+        const rotSwept = r.def.surface.kind === 'rect'
+          ? Math.abs(Math.atan2(Math.sin(dRotRaw), Math.cos(dRotRaw))) * reach
+          : 0; // discs are rotation-invariant — only the center's travel matters
+        const travel = Math.hypot(pose.x - prev.x, pose.y - prev.y) + rotSwept;
+        const steps = Math.min(TRACK_CFG.sweepStepsMax,
+          Math.max(1, Math.ceil(travel / TRACK_CFG.sweepStepPx)));
+        for (let k = 1; k <= steps; k++) {
+          const sub = k === steps ? pose
+            : trackPose(tr, this.time - beatDt + (k / steps) * beatDt, r.phase, r.def);
+          if (sub.pending) continue; // a release/rest edge inside the beat
+          const shape = riderSurface(r.def, sub);
+          this.sweepHazardSurface(sub.x, sub.y, shape, sub.dir, r.def.payload, r.icdUntil, owner, cand);
+        }
       }
     }
     for (const c of this.contactHazards) {
@@ -32450,7 +32485,7 @@ export class World {
       const rule = doodadRuleOf(c.d.kind);
       if (!rule.contact) continue;
       const shape = hitSurfaceOf(c.d, 'move');
-      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined);
+      this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined, this.actors);
     }
   }
 
@@ -32464,8 +32499,9 @@ export class World {
   private sweepHazardSurface(
     x: number, y: number, shape: HitShape, laneDir: number,
     payload: TrackPayload, gate: Map<number, number>, owner: Actor | undefined,
+    bodies: Actor[],
   ): void {
-    for (const a of this.actors) {
+    for (const a of bodies) {
       if (a.dead || a.downed || a.untargetable || a.invulnerable || a.passive) continue;
       if (payload.sparesDormant !== false && isDormant(a)) continue;
       if (payload.sparesAirborne !== false && (a.flying || a.leap)) continue;
@@ -32493,8 +32529,17 @@ export class World {
         a.applyStatus(payload.status.id, 0, 1, 'the hazard');
       }
       if (payload.impulse && !a.dead) {
-        const dx = a.pos.x - x, dy = a.pos.y - y;
-        const dir = Math.hypot(dx, dy) > 1e-3 ? Math.atan2(dy, dx) : laneDir;
+        // The shove's grain (TrackPayload.push): 'along' rides the lane's
+        // travel direction at the contact pose — the sweeper arm CARRIES
+        // bodies around its route; 'radial' (default) flings from the
+        // surface center — the boulder bowls, the bumper launches.
+        let dir: number;
+        if (payload.push === 'along') {
+          dir = laneDir;
+        } else {
+          const dx = a.pos.x - x, dy = a.pos.y - y;
+          dir = Math.hypot(dx, dy) > 1e-3 ? Math.atan2(dy, dx) : laneDir;
+        }
         this.pushActor(a, dir, payload.impulse, owner);
       }
     }

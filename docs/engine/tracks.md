@@ -77,10 +77,15 @@ engine lever: `hit` (typed, zone-level-scaled, through `mitigateTyped` — the
 burst lane's discipline, never "true damage", prints its own number + capped
 read), `status` (`applyStatus`), `impulse` (`pushActor` — weight-scaled,
 impulse-additive, **pit-aware**: an owned shove past an abyss lip kills
-through the pitfall fabric's forced lane *with credit*), `icdSec` per body,
-`factions`/`notFactions` (the fog-grant grammar — the Rimebound skate their
-own blades), `sparesAirborne` / `sparesDormant` (default true — fliers pass
-over, planted sentries are scenery).
+through the pitfall fabric's forced lane *with credit*), `push` — **the
+shove's grain**: `'radial'` (default) flings away from the surface center
+(the boulder bowls, the bumper launches); `'along'` pushes in the lane's
+travel direction *at the contact pose* — the sweeper arm that CARRIES a body
+around its route instead of wounding it (`ruin_sweeparm` is the debut: chip
+damage, big carry — the trap's physics instead of its edge), `icdSec` per
+body, `factions`/`notFactions` (the fog-grant grammar — the Rimebound skate
+their own blades), `sparesAirborne` / `sparesDormant` (default true — fliers
+pass over, planted sentries are scenery).
 
 The same payload attaches to **static doodads** via `DoodadRule.contact` — a
 bumper is a rider that never left home (`rime_bumper`: pure fling + slip).
@@ -101,6 +106,18 @@ bumper is a rider that never left home (`rime_bumper`: pure fling + slip).
    painter beam params are validation-pinned to their surface. The steering
    veto is deliberately BLIND to riders (`fallHazardAt` — they are dodgeable
    hazards, not fall boundaries).
+4. **The swept beat** (the precision contract): the contact sweep runs on a
+   beat (`applyEvery`), and one sample per beat would let a fast surface
+   cross a body BETWEEN samples — a 520px/s dart clears a torso in ~30ms,
+   and a long arm's tip outruns its own hub several times over. The pose is
+   a pure clock function, so the in-between is free: the sweep sub-samples
+   each beat window at surface-honest steps (`sweepStepPx` — center travel
+   plus rotation×reach bounds any point's motion) and lands the payload at
+   the pose that actually CROSSED the body. No tunneling, ever; the shove
+   points where the blade was going at contact, not where it is a beat
+   later. Bodies are prefiltered per lane by its bound, so substeps cost
+   only near live machinery (probe-pinned: 8 staggered dart crossings, 8
+   bites).
 
 ## Co-op
 
@@ -130,7 +147,10 @@ the winter honestly breaks.
 
 ## Config
 
-`TRACK_CFG` (`engine/tracks.ts`): `salt`, `icdSec` 0.9, `applyEvery` 0.1
-(sweep cadence — the tunneling lint warns when a lane outruns its blade's
-thickness per sweep), `warnAhead` 130, `threatHorizon`/`threatStep`,
-`maxRidersPerZone` 24.
+`TRACK_CFG` (`engine/tracks.ts`): `salt`, `icdSec` 0.9, `applyEvery` 0.05
+(sweep beat — worst-case contact latency, halved in the precision pass),
+`sweepStepPx` 7 / `sweepStepsMax` 12 (the swept beat's sub-sampling: no
+surface point moves farther than this between tested poses — tunneling is
+structurally dead), `warnAhead` 130, `threatHorizon`/`threatStep`,
+`maxRidersPerZone` 40 (raised for the blade lattice; a sanity bound, not a
+perf budget — the sweep prefilters bodies per lane).
