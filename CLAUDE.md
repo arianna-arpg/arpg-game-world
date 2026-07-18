@@ -286,6 +286,29 @@ changes.
   strip law) — incl. via `stairwell_hollow` pockets INSIDE building mass.
   Dials in `SETTLED_CFG`, docs in `docs/engine/settled.md`, probe
   `balance/probe_settled.ts`.
+  THE FORECHART (`world/forechart.ts` + the World sweep — the world charted
+  AHEAD of the walker): a budgeted background sweep keeps a VEILED HALO of
+  fully-minted zones around the player (the real chartFrontier path,
+  nothing forked; mints stamped `ZoneDef.veiled`) — full graph citizens
+  events seat on, factions contest, fronts march over, invisible at ONE
+  fog seam (`World.visible`) until found (entry, the ring-1 unveil,
+  surveys, omen reveals); far SOUNDINGS grow veiled clusters at requested
+  coordinates (`WorldOverlay.requestSoundings` / `World.forechartSounding`).
+  EVENT SEATS (`world/seats.ts` — `pickSeat` + per-def `SeatTuning`) are
+  the one data-driven "where does this event land": range envelopes +
+  known/unknown/veiled weights (hunt, haunting, longNight, longcandle,
+  verminfall, brigands, crusade retrofitted; demon/migration/wraithsail/
+  deepwinter bboxes widened; haunting's LATENT grief = the
+  dormancy-until-found template). THE OMENS (`world/omens.ts`,
+  `registerOmenSource`) are the findability guarantee: whisper/reveal
+  radii that AGE WIDER (`widenPerMin`) — bearings murmured near, seats
+  surveyed close, nothing lost forever; the crusade alone swears silence.
+  THE HARBOR (`data/ports.ts`): ports as knowledge hubs — mint-time
+  shipping LANES (`routePortLanes`, wet-chord tested), the HARBOR BOARD
+  doodad (dwell → the revived Sail panel: passage incl. lane-known veiled
+  harbors, hearsay rows, purchasable CHARTS = survey pulses via the
+  `harborChart` intent). Dials in `FORECHART_CFG`/`OMEN_CFG`/`PORT_CFG`;
+  docs in `docs/engine/forechart.md`; probe `balance/probe_forechart.ts`.
   THE PLY FABRIC (`engine/plies.ts` — hit-counted durability, the
   Pikmin/Overlord damage model): `MonsterDef.plies` bodies EAT N landed
   hits magnitude-blind (one ply per blow, no life moves; thud floor,

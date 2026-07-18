@@ -21,6 +21,7 @@ import { Rng } from '../../core/rng';
 import { START_ZONE, type ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { inPhases } from '../../world/daynight';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
@@ -37,6 +38,10 @@ export interface LongCandleSurge {
   /** Standing claims per court at once (×concurrency crank). */
   maxVigils: number;
   maxConvenes: number;
+  /** WHERE a court claims (the seat fabric, world/seats.ts). Night claims
+   *  clear at dawn, so the envelope stays TIGHT and known-leaning — a claim
+   *  the player can't plausibly reach before sunrise is a wasted candle. */
+  seat: SeatTuning;
   /** Candle-shrines raised on a vigil ground. */
   shrines: [number, number];
   /** Packs fielded per claimed ground per visit, and their size. */
@@ -201,10 +206,14 @@ export class LongCandleField implements WorldOverlay {
     if (this.claims.filter(c => c.kind === kind).length >= cap) return;
     if (!this.rng.chance(clamp(this.cfg.igniteChance * g.ignitionMul, 0, 1))) return;
     const held = new Set(this.claims.filter(c => c.kind === kind).map(c => c.zoneId));
-    const cands = view.nodes.filter(z =>
-      this.claimable(z) && !held.has(z.id) && view.visited.has(z.id));
-    if (!cands.length) return;
-    const pick = cands[this.rng.int(0, cands.length - 1)];
+    // Seated through the seat fabric (surge.seat): tight + known-leaning by
+    // TUNING (dawn clears claims — far dark ground would waste the candle),
+    // but the ring beyond the walked map is now reachable data, not a wall.
+    const pick = pickSeat(view, {
+      event: this.id, ...this.cfg.seat,
+      filter: z => this.claimable(z) && !held.has(z.id),
+    }, this.rng);
+    if (!pick) return;
     this.claims.push({ id: `${kind}_${this.seq++}`, zoneId: pick.id, kind });
   }
 }

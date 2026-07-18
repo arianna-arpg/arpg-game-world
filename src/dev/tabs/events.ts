@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import type { World } from '../../engine/world';
+import { collectOmens, omenReach } from '../../world/omens';
 import type { OverlayView } from '../../world/overlay';
 import type { FrequencyProfile } from '../../packages/frequency';
 import type { DevTabDef } from '../panel';
@@ -203,6 +204,40 @@ export const eventsTab: DevTabDef = {
     });
     revealLbl.append(revealChk, document.createTextNode('reveal all wars on the map (QA lens)'));
 
+    // --- THE FORECHART BOARD: the veiled halo + omens, live -------------------
+    // How much world stands minted-but-unseen, the pending far soundings, and
+    // every live omen (id · distance · aged whisper/reveal reach) — the QA
+    // window into "is the world really out there waiting". The sounding
+    // button grows a far veiled cluster on each compass point in turn.
+    const foreWrap = document.createElement('div');
+    css(foreWrap, { fontSize: '11px', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.5' });
+    const syncForechart = (): void => {
+      const w = runActive();
+      if (!w) { foreWrap.textContent = '(start a run first)'; return; }
+      const veiled = w.forechartVeiledCount();
+      const total = Object.keys(w.zoneMap).length;
+      const rows = [`veiled ${veiled} / minted ${total} · soundings pending ${w.devForechartSoundings()}`];
+      const here = w.zone.map;
+      for (const o of collectOmens(w)) {
+        const reach = omenReach(o);
+        const d = Math.round(Math.hypot(o.at.x - here.x, o.at.y - here.y));
+        rows.push(`${o.id.padEnd(22)} d${String(d).padStart(5)}  whisper ${Math.round(reach.whisper)}  reveal ${Math.round(reach.reveal)}`);
+      }
+      if (rows.length === 1) rows.push('(no live omens)');
+      foreWrap.textContent = rows.join('\n');
+    };
+    const foreRefresh = btn('Refresh forechart', syncForechart);
+    let soundOctant = 0;
+    const soundBtn = btn('Sound far cluster (compass walk)', () => {
+      const w = runActive();
+      if (!w) { flash('start a run first'); return; }
+      const a = (soundOctant++ % 8) * (Math.PI / 4);
+      const at = { x: w.zone.map.x + Math.cos(a) * 1000, y: w.zone.map.y + Math.sin(a) * 1000 };
+      w.forechartSounding(at, undefined, w.zone.dimension);
+      flash(`sounding queued 1000u out (octant ${((soundOctant - 1) % 8)}) — watch veiled count grow`);
+      syncForechart();
+    });
+
     // --- GATE INSPECTOR: the resolved per-package gates, live -----------------
     // The one QA window into the weighting math: what resolveGates actually
     // produced for the character's level (share / pressure / the three muls),
@@ -240,8 +275,9 @@ export const eventsTab: DevTabDef = {
       section('Force event in CURRENT zone'), spawnRow,
       section('Live event frequency (this run)'), freqWrap, freqReset,
       section('Crusade warfront (live)'), cruWrap, cruRefresh, revealLbl,
+      section('The forechart (veiled halo + omens, live)'), foreWrap, foreRefresh, soundBtn,
       section('Resolved package gates (live)'), gateWrap, gateRefresh,
     );
-    return { el: pane, onShow: () => { syncFreq(); syncGates(); syncCrusades(); } };
+    return { el: pane, onShow: () => { syncFreq(); syncGates(); syncCrusades(); syncForechart(); } };
   },
 };

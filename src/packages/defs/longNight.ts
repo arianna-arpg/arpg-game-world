@@ -29,6 +29,18 @@ export const LONG_NIGHT_SURGE: LongNightSurge = {
   igniteChance: 0.012,      // per 0.5s NIGHT step, × pressure — a patient court
   maxPending: 2,
   maxConverted: 3,          // a handful of estates, never the map
+  // WHERE the coach parks (world/seats.ts): the whole minted web in reach,
+  // leaning into country nobody has walked — an unknown ground FEEDS UNSEEN
+  // (no map pin until known), and the omen below is its widening voice.
+  seat: { range: { max: 540 }, unknownMul: 1.7, veiledMul: 1.2 },
+  omen: {
+    whisper: 160, reveal: 55, widenPerMin: 10,
+    lines: [
+      'wheel-ruts of a heavy coach, rolling {bearing} — no drover runs at night',
+      'the hamlets speak of pale callers {bearing} of here, {dist}',
+      'a wine-dark hush lies over the {bearing} country',
+    ],
+  },
   beginPhases: ['night'],
   nightsToConvert: 3,       // the promise: three fed nights and it turns
   bloodmoonWorth: 2,        // the blood moon feeds double

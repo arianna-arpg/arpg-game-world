@@ -398,12 +398,16 @@ export class MigrationField implements WorldOverlay {
     return [...regions.entries()].map(([regionId, point]) => ({ regionId, point: { x: point.x, y: point.y } }));
   }
 
-  /** The bounding box of the VISIBLE (charted) map, padded by scoutMargin so a herd
-   *  can set off toward a Field just beyond the frontier. Null when nothing's charted. */
+  /** The bounding box of the MINTED WORLD (the walked map + the forechart's
+   *  veiled halo), padded by scoutMargin so a herd can set off toward a Field
+   *  just beyond even that rim. Herds thereby cross country the player has
+   *  never seen — a migration met mid-march arrives from genuinely unknown
+   *  ground, and one never met at all still truly happened. Null when
+   *  nothing's minted. */
   private visibleBounds(view: OverlayView): { minX: number; minY: number; maxX: number; maxY: number } | null {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, seen = 0;
     for (const n of view.nodes) {
-      if (!view.visited.has(n.id) || n.caveDepth != null) continue;
+      if (n.caveDepth != null) continue;
       seen++;
       if (n.map.x < minX) minX = n.map.x;
       if (n.map.x > maxX) maxX = n.map.x;

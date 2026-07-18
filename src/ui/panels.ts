@@ -3176,6 +3176,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
   refreshSail(): void {
     if (!this.sailOpen) return;
     const world = this.getWorld();
+    const acc = this.getAccount();
     const ports = world.sailMenuPorts();
     const rows = ports.length
       ? ports.map(p => `<div class="skill-entry">
@@ -3184,12 +3185,24 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           <div class="bind-btns"><button data-sail-port="${esc(p.id)}">Sail</button></div>
         </div>`).join('')
       : `<div class="skill-entry"><div class="desc">No other harbors charted — set out across the open sea.</div></div>`;
+    // THE HEARSAY (world.harborHearsay — the omen fabric's far rumors): each
+    // row is sailor's talk about something seated out in unknown country,
+    // with a CHART for sale that surveys the seat onto the map. Reading is
+    // free; knowing where costs.
+    const hearsay = world.harborHearsay();
+    const hearsayRows = hearsay.length
+      ? `<h3 style="margin:12px 0 4px 0">Hearsay at the dock</h3>` + hearsay.map(h => `<div class="skill-entry">
+          <div class="desc" style="font-style:italic">“${esc(h.line)}”</div>
+          ${h.canChart ? `<div class="bind-btns"><button data-sail-hearsay="${esc(h.id)}"${acc.credits < h.price ? ' disabled' : ''}>Buy chart · ${h.price}</button></div>` : ''}
+        </div>`).join('')
+      : '';
     this.sailMenu.innerHTML = `<h2>The Harbor</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"The sea takes you wherever there's a shore to take you in."</div>`
       + rows
       + `<div class="skill-entry"><div class="name">Chart a course</div>`
       + `<div class="desc">Sail the open ocean until a new continent's shore.</div>`
       + `<div class="bind-btns"><button data-sail-chart>Set sail</button></div></div>`
+      + hearsayRows
       + `<div class="bind-btns" style="margin-top:10px"><button data-sail-close>Close</button></div>`;
     this.sailMenu.querySelectorAll<HTMLButtonElement>('button[data-sail-port]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -3200,6 +3213,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     this.sailMenu.querySelector<HTMLButtonElement>('button[data-sail-chart]')?.addEventListener('click', () => {
       world.chartCourse();
       this.closeSail();
+    });
+    this.sailMenu.querySelectorAll<HTMLButtonElement>('button[data-sail-hearsay]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'harborChart', omen: btn.dataset.sailHearsay! });
+        this.refreshSail(); // the row leaves the board; the map gained the mark
+      });
     });
     this.sailMenu.querySelector<HTMLButtonElement>('button[data-sail-close]')?.addEventListener('click', () => this.closeSail());
   }
@@ -3419,7 +3438,10 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         const b = world.zoneMap[e.to];
         if (!b) continue;
         if (!inDim(b)) continue; // a cross-dimension edge (the hellgate's way home) draws in neither view
-        if (!world.visible(z) && !world.visible(b)) continue; // both ends fogged → no road
+        // BOTH ends must be visible: a road drawn into a veiled node would
+        // leak the forechart's ahead-minted ground (a line to blank map is a
+        // coordinate spoiler). Fully-fogged pairs never drew anyway.
+        if (!world.visible(z) || !world.visible(b)) continue;
         const key = z.id < e.to ? z.id + '|' + e.to : e.to + '|' + z.id;
         if (drawn.has(key)) continue;
         drawn.add(key);
@@ -3441,7 +3463,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       for (const to of z.searoutes ?? []) {
         const b = world.zoneMap[to];
         if (!b || !inDim(b)) continue;
-        if (!world.visible(z) && !world.visible(b)) continue;
+        // Same veil law as the roads: a lane to a veiled harbor is the
+        // HARBOR's knowledge (the Sail menu lists it), never the map's.
+        if (!world.visible(z) || !world.visible(b)) continue;
         const key = 'sea:' + (z.id < to ? z.id + '|' + to : to + '|' + z.id);
         if (drawn.has(key)) continue;
         drawn.add(key);

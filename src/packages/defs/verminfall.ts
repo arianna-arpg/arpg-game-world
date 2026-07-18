@@ -30,6 +30,11 @@ const VERMIN_COLOR = '#b39a5a';
 const VERMIN_SURGE: VerminfallSurge = {
   igniteChance: 0.014,   // per 0.5s step — patient, but nearer than you'd like
   maxConcurrent: 1,      // one warren at a time reads cleanest (a knob)
+  // The seat lean (world/seats.ts): the town-hem envelope + closeness law are
+  // the overlay's own; this tips the pick toward the near ring you HAVEN'T
+  // walked — vermin dig where nobody's been looking (townPressure tells on
+  // them either way: the swelling gutter fauna is their announcement).
+  seat: { unknownMul: 1.6, veiledMul: 1.15 },
   seedMaxDist: 260,      // claims only the town's near ring — the warren wants what the town keeps
   levelMax: 12,          // the soft ground; a harder tuning can send them deeper
   nests: [2, 4],         // warren nests per claim (the clear condition)

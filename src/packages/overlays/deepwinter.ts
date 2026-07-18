@@ -614,6 +614,13 @@ export class DeepwinterField implements WorldOverlay {
     if (!this.rng.chance(clamp(this.cfg.igniteChance * this.gate().ignitionMul, 0, 1))) return;
     const surface = view.nodes.filter(z => z.caveDepth == null);
     if (!surface.length) return;
+    // THE NEVER-RETROACTIVE LAW reads what the PLAYER knows, not what the
+    // forechart has minted: clearance is measured from visited ∪ surveyed
+    // nodes only, so the eye may open INSIDE the veiled halo — cold country
+    // a stone's throw past the known rim, already swallowing ground nobody
+    // has walked by the time the wash crosses the map's edge. (Scanning ALL
+    // minted nodes would shove every winter out past the halo instead.)
+    const known = surface.filter(z => view.visited.has(z.id) || view.surveyed.has(z.id));
     const town = view.byId[START_ZONE];
     const tc = town ? town.map : { x: 0, y: 0 };
     const here = view.byId[view.currentZoneId]?.map;
@@ -643,7 +650,7 @@ export class DeepwinterField implements WorldOverlay {
         if (view.terrain(c) === 'ocean') continue; // land-bound: no eye at sea
         if (!this.cfg.centerBiomes.includes(biomeAt(c, this.biomeSeed))) continue;
         let clear = true;
-        for (const n of surface) {
+        for (const n of known) {
           if (coordDist(n.map, c) < this.cfg.minClearFromCharted) { clear = false; break; }
         }
         if (!clear) continue;

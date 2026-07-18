@@ -75,7 +75,7 @@ const mkView = (nodes: ZoneDef[], currentZoneId: string,
   terrain: OverlayView['terrain'] = () => 'land'): OverlayView => ({
   nodes, byId: Object.fromEntries(nodes.map(n => [n.id, n])), allNodes: nodes,
   terrain, currentZoneId, time: 0, census: {}, charLevel: 20,
-  gates: new Map(), visited: new Set(nodes.map(n => n.id)),
+  gates: new Map(), visited: new Set(nodes.map(n => n.id)), surveyed: new Set<string>(),
 });
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }): number =>

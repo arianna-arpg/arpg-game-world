@@ -163,7 +163,10 @@ import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { castRay, LOS_CFG } from './los';
-import { coordDist } from '../world/coords';
+import { coordDist, type MapCoord } from '../world/coords';
+import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
+import { OMEN_CFG, collectOmens, omenLine, omenReach } from '../world/omens';
+import { PORT_CFG } from '../data/ports';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
@@ -1261,6 +1264,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
+    case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
     // GEAR intents — uids/cells are untrusted client numbers, ids plain strings.
     case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
@@ -2405,6 +2409,13 @@ export class World {
   private caravanGate = new Dwell();
   /** The port dock's linger-to-sail gate (same consumed-latch discipline). */
   private sailGate = new Dwell();
+  /** THE HARBOR BOARD's linger-to-read gate (data/ports.ts — hearsay +
+   *  passage + charts; the dock itself still CASTS OFF directly). */
+  private harborGate = new Dwell();
+  /** ONE-SHOT: set when the player dwells at a port's harbor board. The main
+   *  loop polls it and opens the harbor menu (the Caravanner indirection —
+   *  World can't import the UI). */
+  harborDwellRequested = false;
   /** ONE-SHOT: set when the player dwells by the Caravanner IN TOWN. The main loop
    *  polls this (a flag, not a callback, so it survives world re-creation), opens the
    *  menu, and clears it. World can't import the UI, hence the indirection. */
@@ -3423,6 +3434,7 @@ export class World {
     if (!isCave) {
       this.visited.add(zoneId);   // caves never chart onto the map
       if (def.concealed) def.concealed = false; // you've reached it — the blight is no longer hidden
+      if (def.veiled) def.veiled = false;       // …and the forechart's veil lifts underfoot
       this.caveReturn = null;     // any surface load means we're no longer underground
       this.caveStack.length = 0;  // …and the whole ladder unwinds with it
       this.realmContext = null;   // …and no longer in a demon realm (clears a fled realm)
@@ -3514,6 +3526,18 @@ export class World {
     // ghosts. One ring only (the new nodes' own frontiers stay lazy). A cave/town or the
     // flag-off case is a no-op. (Charts from this zone's context, like the lazy path did.)
     if (!isCave) this.eagerChartNeighbors(def);
+
+    // THE RING-1 UNVEIL (the forechart law): every direct neighbour of ground
+    // you STAND ON is part of the classic one-ring map preview — if the
+    // forechart minted it ahead (veiled), finding this zone finds them. The
+    // per-sweep invariant pass (updateForechart) backstops the same rule for
+    // late weaves; this is the immediate, entry-moment lift.
+    if (!isCave) {
+      for (const e of def.exits) {
+        const n = e.to !== '?' ? this.zoneMap[e.to] : undefined;
+        if (n?.veiled) n.veiled = false;
+      }
+    }
 
     // ROADLESS-DIMENSION HEAL: a persisted cross-edge into (or out of) a
     // dimension that has since sworn off its road (DimensionEntry.road:
@@ -3662,6 +3686,12 @@ export class World {
         this.arena.w / 2 + Math.cos(a) * (this.arena.w / 2 - 150),
         this.arena.h / 2 + Math.sin(a) * (this.arena.h / 2 - 150));
       this.doodads.push({ pos: this.clampPos(dock, 26), radius: 26, kind: 'dock' });
+      // THE HARBOR BOARD (data/ports.ts): planted a step INLAND of the dock —
+      // dwell to read the hearsay (far omens as rumor rows), hire passage down
+      // the shipping lanes, or buy a chart of a far seat. The dock keeps its
+      // own law: dwelling THERE still casts off directly.
+      const board = vec(dock.x - Math.cos(a) * 130, dock.y - Math.sin(a) * 130);
+      this.doodads.push({ pos: this.clampPos(board, 16), radius: 16, kind: 'harbor_board' });
     }
     // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
     this.breachPos = null;
@@ -6489,8 +6519,10 @@ export class World {
         biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, port: true,
         objective: { kind: 'clear' }, // never a gated harbor: sail-in arrivals carry no entryFrom
       });
+      if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD — veiled harbors too
       this.zoneMap[gen.id] = gen;
       this.sim.onNodeCharted(gen, this.simView());
+      this.routePortLanes(gen);
       return gen;
     }
     // Field regions are a SURFACE feature — a dimensioned source never joins one.
@@ -6523,6 +6555,7 @@ export class World {
         this.courseMintFor(source.dimension));
     this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
+    if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD of the walker
     this.zoneMap[gen.id] = gen;
     // Chart into the sim — it ROUTES to the overlays of the node's dimension
     // (sim.onNodeCharted): surface mints feed the surface systems, hell mints
@@ -6721,6 +6754,7 @@ export class World {
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     if (gdef?.reward.destLevelDelta) gen.level = Math.max(1, gen.level + gdef.reward.destLevelDelta); // the base reward bias
     this.applyPocketSpec(gen, form, roll, pocket);
+    if (this.mintVeil) gen.veiled = true; // a pocket minted in veiled country stays veiled with it
     this.zoneMap[gen.id] = gen;
     this.sim.onNodeCharted(gen, this.simView());
     return gen;
@@ -6897,10 +6931,232 @@ export class World {
     for (const z of Object.values(this.zoneMap)) {
       if (!inPulse(z)) continue;
       if (z.concealed) z.concealed = false; // recon out-scries concealment
+      if (z.veiled) z.veiled = false;       // …and pierces the forechart's veil
       if (!this.surveyed.has(z.id) && !this.visited.has(z.id)) news++;
       this.surveyed.add(z.id);
     }
     return news;
+  }
+
+  // --- THE FORECHART (world/forechart.ts) — the world charted ahead ----------
+  // A budgeted background sweep keeps a VEILED HALO of fully-minted zones
+  // around the player: frontier resolution through the SAME chartFrontier
+  // machinery travel uses (ports, courses, enclaves, the weave — nothing
+  // forked), each mint stamped ZoneDef.veiled so no player surface shows it
+  // until found. World events thereby choose homes from a world that already
+  // exists many steps out — and the player stumbles onto them.
+
+  /** Sweep context: while true, chartFrontier stamps its mints `veiled`.
+   *  Set/cleared ONLY inside updateForechart's try/finally — every other
+   *  mint path (travel, quests, events, dev) stays visible as always. */
+  private mintVeil = false;
+  private forechartNextAt = 0;
+  /** Far pre-chart requests being grown (deduped; each drops when its cluster
+   *  reaches size or its ground proves unmintable). Transient by design — a
+   *  resumed run's events re-request theirs (the drain re-asks every sweep). */
+  private soundings: { at: MapCoord; radius: number; dimension: string }[] = [];
+
+  /** How many veiled zones stand right now (the halo's live size). */
+  forechartVeiledCount(): number {
+    let n = 0;
+    for (const z of Object.values(this.zoneMap)) if (z.veiled) n++;
+    return n;
+  }
+
+  /** DEV: how many far soundings are pending (the Events tab's board). */
+  devForechartSoundings(): number { return this.soundings.length; }
+
+  /** PUBLIC far pre-chart: grow a veiled cluster of real zones around a far
+   *  coordinate (events beyond the halo, harbor charts, dev QA). Deduped
+   *  against pending soundings and against ground that already exists. */
+  forechartSounding(at: MapCoord, radius?: number, dimension?: string): void {
+    const r = radius ?? FORECHART_CFG.sounding.radius;
+    const dim = dimension ?? 'surface';
+    if (this.soundings.some(s => s.dimension === dim && coordDist(s.at, at) < r)) return;
+    this.soundings.push({ at: { x: at.x, y: at.y }, radius: r, dimension: dim });
+  }
+
+  /** THE SWEEP — called once per frame from update; self-throttled. */
+  private updateForechart(): void {
+    if (!FORECHART_CFG.enabled || this.gameOver) return;
+    if (this.time < this.forechartNextAt) return;
+    this.forechartNextAt = this.time + FORECHART_CFG.sweepSec;
+    // Fresh far requests from the overlays (the mint-request drain pattern),
+    // tagged by each instance's own dimension in the sim collector.
+    for (const req of this.sim.drainSoundings()) {
+      this.forechartSounding(req.at, req.radius, req.dimension);
+    }
+    const all = Object.values(this.zoneMap);
+    // BACKPRESSURE: the halo must never crowd the worldstate save cap — the
+    // player's own ground always has headroom to mint.
+    if (all.length >= WORLDSTATE_CFG.zoneCap - FORECHART_CFG.capHeadroom) return;
+    let veiled = 0;
+    for (const z of all) if (z.veiled) veiled++;
+    if (veiled >= FORECHART_CFG.maxVeiled) return;
+    // The halo centers on the STANDING zone (a cave sweeps around its surface
+    // anchor coordinate — def.map carries the parent's). Same-dimension only.
+    const dim = this.zone.dimension ?? 'surface';
+    const origin = this.zone.map;
+    let budget = FORECHART_CFG.perSweep
+      * (veiled < FORECHART_CFG.hustleBelow ? FORECHART_CFG.hustleMul : 1);
+    const cands: { z: ZoneDef; d: number }[] = [];
+    for (const z of all) {
+      if (!forechartSource(z, dim) || z.id === this.zone.id) continue;
+      const d = coordDist(z.map, origin);
+      if (d <= FORECHART_CFG.ring) cands.push({ z, d });
+    }
+    cands.sort((a, b) => a.d - b.d); // grow evenly outward: close gaps first
+    this.mintVeil = true;
+    try {
+      for (const { z } of cands) {
+        if (budget <= 0) break;
+        this.chartNeighborsOf(z);
+        budget--;
+      }
+      budget = this.growSoundings(budget, all);
+    } finally {
+      this.mintVeil = false;
+    }
+    // THE VEIL INVARIANT: a zone adjacent to VISITED ground is the classic
+    // one-ring map preview — never veiled. Entry lifts its own ring at once
+    // (loadZone); this pass backstops late weaves and wrap-around links.
+    for (const z of all) {
+      if (!z.veiled) continue;
+      if (z.exits.some(e => e.to !== '?' && this.visited.has(e.to))) z.veiled = false;
+    }
+  }
+
+  /** COASTAL SHIPPING LANES (data/ports.ts): a freshly-minted port routes
+   *  searoutes to its nearest standing ports — so the sea network PRE-EXISTS
+   *  the sailing of it (the forechart mints veiled harbors down the coast,
+   *  and by the time the player docks anywhere, the lanes are waiting).
+   *  Sampled against the continent field so a lane never implies sailing
+   *  straight through a landmass; the player's own sailed crossings still
+   *  append their routes exactly as before (landAshore/sailTo). */
+  private routePortLanes(fresh: ZoneDef): void {
+    if (!fresh.port || fresh.dimension) return;
+    const L = PORT_CFG.lanes;
+    const cands = Object.values(this.zoneMap)
+      .filter(z => z.port && z.id !== fresh.id && !z.dimension
+        && !z.searoutes?.includes(fresh.id)
+        && (z.searoutes?.length ?? 0) < L.maxPerPort)
+      .map(z => ({ z, d: coordDist(z.map, fresh.map) }))
+      .filter(c => c.d <= L.range)
+      .sort((a, b) => a.d - b.d);
+    let added = 0;
+    for (const { z, d } of cands) {
+      if (added >= L.perPort) break;
+      // The WET test — LONG lanes only: a short run is an honest coastal hop
+      // (harbor nodes sit inland of the shoreline, so same-shore chords read
+      // land); a long lane must show open water on the chord, so two harbors
+      // flanking a continent's interior never get a straight-line route.
+      const wet = d <= L.wetTestBeyond || [0.25, 0.5, 0.75].some(t => this.continentFor({
+        x: fresh.map.x + (z.map.x - fresh.map.x) * t,
+        y: fresh.map.y + (z.map.y - fresh.map.y) * t,
+      }).kind === 'ocean');
+      if (!wet) continue;
+      (fresh.searoutes ??= []).push(z.id);
+      (z.searoutes ??= []).push(fresh.id);
+      added++;
+    }
+  }
+
+  /** Grow each pending SOUNDING a step: seed a floating veiled anchor where
+   *  nothing stands, else resolve one cluster member's frontiers; drop the
+   *  request once its cluster reaches size (or its ground refuses to grow).
+   *  Shares (and returns) the sweep's remaining budget. */
+  private growSoundings(budget: number, all: ZoneDef[]): number {
+    let worked = 0;
+    for (let i = this.soundings.length - 1; i >= 0 && budget > 0; i--) {
+      if (worked >= FORECHART_CFG.sounding.perSweep) break;
+      const s = this.soundings[i];
+      const near = zonesWithin(all, s.at, s.radius, s.dimension)
+        .filter(z => !z.pocket && !z.eventOwned);
+      if (near.length >= FORECHART_CFG.sounding.maxNodes) {
+        this.soundings.splice(i, 1); // grown — the cluster stands
+        continue;
+      }
+      if (near.length === 0) {
+        // Nothing out there yet: seed the ANCHOR — floating (disconnected
+        // until approached, the fog-of-war law) + veiled, its frontiers the
+        // cluster's growth buds. Ocean-refusing: pull ashore like every mint.
+        const dry = s.dimension === 'surface' && this.continentFor(s.at).kind === 'ocean'
+          ? this.pullToLand(s.at) : s.at;
+        if (s.dimension === 'surface' && this.continentFor(dry).kind === 'ocean') {
+          this.soundings.splice(i, 1); // open ocean through and through — refuse
+          continue;
+        }
+        const biomeFor = s.dimension !== 'surface' ? this.dimensionBiomeFor(s.dimension) : this.biomeFor;
+        const depthFor = s.dimension !== 'surface' ? this.dimensionBiomeDepthFor(s.dimension) : this.biomeDepthFor;
+        const gen = placeZoneAt(dry, null, this.zoneMap, this.nextGenId++, {
+          biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor,
+          climateFor: this.climateFor, fieldBiome: true, floating: true,
+          ...(s.dimension !== 'surface' ? { dimension: s.dimension } : {}),
+        });
+        gen.veiled = true;
+        if (s.dimension !== 'surface') gen.level += dimensionDef(s.dimension).levelBonus ?? 0;
+        this.zoneMap[gen.id] = gen;
+        this.sim.onNodeCharted(gen, this.simView());
+        budget--; worked++;
+        continue;
+      }
+      // Grow: resolve the cluster member nearest the heart that still has buds
+      // (the floating anchor itself is the first bud — the sounding exception).
+      const src = near
+        .filter(z => forechartSource(z, s.dimension, true))
+        .sort((a, b) => coordDist(a.map, s.at) - coordDist(b.map, s.at))[0];
+      if (!src) { this.soundings.splice(i, 1); continue; } // no buds left — done growing
+      this.chartNeighborsOf(src);
+      budget--; worked++;
+    }
+    return budget;
+  }
+
+  // --- THE OMENS (world/omens.ts) — the world murmurs about the unfound ------
+  private omenNextAt = 0;
+  /** Whisper/reveal memory per omen instance. TRANSIENT by design: a resumed
+   *  run may murmur the same rumor once more — the world repeating itself is
+   *  no lie, and the reveal re-stamps ground already surveyed (idempotent). */
+  private omenWhisperedAt = new Map<string, number>();
+  private omenRevealed = new Set<string>();
+
+  /** The murmuring pass: every registered omen source is read on a hushed
+   *  cadence; whispers carry a bearing, reveals survey the seat onto the map
+   *  (both radii AGE wider — the findability guarantee). */
+  private updateOmens(): void {
+    if (this.gameOver || this.time < this.omenNextAt) return;
+    this.omenNextAt = this.time + OMEN_CFG.checkSec;
+    const here = this.zone.map;
+    const dim = this.zone.dimension ?? 'surface';
+    for (const o of collectOmens(this)) {
+      if ((o.dimension ?? 'surface') !== dim) continue;
+      const reach = omenReach(o);
+      const d = coordDist(o.at, here);
+      // THE REVEAL: near enough (or the omen has aged loud enough) — the seat
+      // is surveyed onto the map, once per instance.
+      if (reach.reveal > 0 && d <= reach.reveal && o.zoneId && !this.omenRevealed.has(o.id)) {
+        const z = this.zoneMap[o.zoneId];
+        if (z) {
+          this.omenRevealed.add(o.id);
+          z.veiled = false;
+          z.concealed = false;
+          this.surveyed.add(z.id);
+          const line = o.lines.length ? omenLine(o, o.lines[0], here) : 'something waits out there';
+          this.text(vec(this.player.pos.x, this.player.pos.y - 110),
+            `${line} — it is marked on your map.`, o.color ?? OMEN_CFG.color, OMEN_CFG.size + 1);
+        }
+        continue;
+      }
+      // THE WHISPER: a murmured bearing, cooled per omen so it never nags.
+      if (d <= reach.whisper && o.lines.length) {
+        const last = this.omenWhisperedAt.get(o.id);
+        if (last !== undefined && this.time - last < OMEN_CFG.whisperCooldownSec) continue;
+        this.omenWhisperedAt.set(o.id, this.time);
+        const line = omenLine(o, o.lines[Math.floor(Math.random() * o.lines.length)], here);
+        this.text(vec(this.player.pos.x, this.player.pos.y - 110),
+          line, o.color ?? OMEN_CFG.color, OMEN_CFG.size);
+      }
+    }
   }
 
   /** Shape a freshly-minted Field zone to its contiguous heat-map region: resize the
@@ -7034,6 +7290,19 @@ export class World {
     if (this.isIllegalCrossDim(e as ZoneExitDef)) {
       this.warnCrossDim(this.zone.exits[defIndex] ?? (e as ZoneExitDef), dest);
       return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label: 'a sealed rift' };
+    }
+    // THE VEIL AT THE DOOR (the forechart): a portal into veiled country reads
+    // as uncharted — the zone EXISTS (minted ahead), but its name is the
+    // walk's to earn. The level preview stays exact (it IS the real level).
+    // Normally unreachable (the ring-1 unveil lifts every standing neighbour
+    // at entry) — the belt for dev travel and freshly-wired sounding ground.
+    if (dest.veiled) {
+      return {
+        pos, radius: PORTAL_RADIUS, to: e.to, defIndex,
+        label: `Uncharted · Lv ${dest.level}${bgLabel ? ` · ${bgLabel}` : ''}${meldLabel ? ` · ${meldLabel}` : ''}`,
+        ...(boundary ? { boundary } : {}),
+        ...(meld ? { meld } : {}),
+      };
     }
     const sub = dest.objective.kind === 'waves' && dest.objective.waves === 0
       ? 'endless' : `Lv ${dest.level}`;
@@ -7882,6 +8151,7 @@ export class World {
       nodes, byId, allNodes,
       currentZoneId: this.zone.id, time: this.time, census,
       charLevel, gates: this.sim.gatesFor(charLevel), visited: this.visited,
+      surveyed: this.surveyed,
       terrain: (c) => this.continentFor(c).kind,
     };
   }
@@ -12187,8 +12457,10 @@ export class World {
     const center = this.crusadeWorksAt ?? this.clampPos(this.farPoint(420, true), 24);
     // The garrison: a crusade pack with a tier-promoted, tagged commander. The
     // converted city's defenders are untagged — you reach the Leader through the
-    // sanctum gate, not by clearing the streets.
-    const n = randInt(info.garrison[0], info.garrison[1]);
+    // sanctum gate, not by clearing the streets. ENTRENCHMENT scales the head
+    // count (CrusadeInfo.entrenchMul — age buys ranks): a war found late
+    // fields a deeper yard than one caught kindling.
+    const n = Math.max(1, Math.round(randInt(info.garrison[0], info.garrison[1]) * info.entrenchMul));
     for (let k = 0; k < n; k++) {
       const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = info.faction;
@@ -14962,8 +15234,12 @@ export class World {
   sailMenuPorts(): { id: string; name: string; level: number; sailed: boolean }[] {
     if (!this.zone.port) return [];
     const routes = new Set(this.zone.searoutes ?? []);
+    // The harbor lists what the WORLD knows plus what the HARBOR knows: every
+    // found port, and any VEILED harbor a shipping lane already runs to (the
+    // forechart routes lanes at mint — "ships run there, friend; never been?").
+    // Sailing a lane into veiled country IS the discovery.
     return Object.values(this.zoneMap)
-      .filter(z => z.port && z.id !== this.zone.id)
+      .filter(z => z.port && z.id !== this.zone.id && (!z.veiled || routes.has(z.id)))
       .map(z => ({ id: z.id, name: z.name, level: z.level, sailed: routes.has(z.id) }));
   }
 
@@ -15015,6 +15291,7 @@ export class World {
       });
       this.zoneMap[gen.id] = gen;
       this.sim.onNodeCharted(gen, this.simView());
+      this.routePortLanes(gen); // the new continent's harbor joins the lane web
       this.sailTo(gen.id);
       return gen.id;
     }
@@ -15063,6 +15340,64 @@ export class World {
       && this.dwellReachable(this.player.pos, dock.pos);
     if (!this.sailGate.fire(engaged && this.canSail() && this.playerIdle(), engaged, dt, CARAVAN_DWELL)) return;
     this.enterSailing();
+  }
+
+  /** THE HARBOR BOARD dwell (data/ports.ts): linger at a port's notice board
+   *  to open the harbor menu — hearsay, passage down the lanes, charts. The
+   *  Caravanner's consumed-latch discipline; the dock keeps casting off. */
+  private updateHarborBoard(dt: number): void {
+    const board = this.zone.port ? this.doodads.find(d => d.kind === 'harbor_board') : undefined;
+    const engaged = !!board && dist(this.player.pos, board.pos) <= 96
+      && this.dwellReachable(this.player.pos, board.pos);
+    if (!this.harborGate.fire(engaged && this.playerIdle(), !!engaged, dt, CARAVAN_DWELL)) return;
+    this.harborDwellRequested = true;
+  }
+
+  /** THE HEARSAY (the harbor board's rumor rows): every live omen FAR enough
+   *  to be sailor's talk (PORT_CFG.hearsay.farBeyond — near murmurs are the
+   *  land's own business), freshest-loudest first, each priced as a CHART
+   *  that would survey its seat onto the map. Pure read for the panel. */
+  harborHearsay(): { id: string; line: string; price: number; canChart: boolean }[] {
+    const here = this.zone.map;
+    const H = PORT_CFG.hearsay;
+    const out: { id: string; line: string; price: number; canChart: boolean }[] = [];
+    for (const o of collectOmens(this)) {
+      if ((o.dimension ?? 'surface') !== 'surface') continue; // harbors are surface ears
+      if (this.omenRevealed.has(o.id)) continue;              // already on the map
+      const d = coordDist(o.at, here);
+      if (d < H.farBeyond) continue;
+      const line = o.lines.length ? omenLine(o, o.lines[0], here) : 'something waits out there';
+      out.push({
+        id: o.id, line,
+        price: Math.max(H.chartPriceMin, Math.round(d * H.chartPricePerDist)),
+        canChart: !!o.zoneId && !!this.zoneMap[o.zoneId ?? ''],
+      });
+      if (out.length >= H.max) break;
+    }
+    return out;
+  }
+
+  /** Buy the CHART of a rumored seat (requestMeta 'harborChart', host-only):
+   *  credits spend, then the seat's surroundings are SURVEYED — the spire's
+   *  own reveal machinery, bought at the dock. The walk (or the sail) out
+   *  there is still yours. */
+  buyHarborChart(omenId: string): void {
+    const o = collectOmens(this).find(x => x.id === omenId && (x.dimension ?? 'surface') === 'surface');
+    const z = o?.zoneId ? this.zoneMap[o.zoneId] : undefined;
+    if (!o || !z || this.omenRevealed.has(o.id)) return;
+    const H = PORT_CFG.hearsay;
+    const price = Math.max(H.chartPriceMin, Math.round(coordDist(o.at, this.zone.map) * H.chartPricePerDist));
+    if (this.account.credits < price) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        `the chart is ${price} ${META_CURRENCY_LABEL} — beyond your purse`, '#e8a050', 14);
+      return;
+    }
+    this.account.credits -= price;
+    this.accountDirty = true;
+    this.omenRevealed.add(o.id);
+    this.surveyAround(z, H.chartReveal);
+    this.text(vec(this.player.pos.x, this.player.pos.y - 84),
+      'The chart is inked — far country is marked on your map.', '#7fd0ff', 15);
   }
 
   // --- THE VOYAGE (the boat on the open sea) ----------------------------------
@@ -15458,6 +15793,7 @@ export class World {
         dest.floating = false;
         this.zoneMap[dest.id] = dest;
         this.sim.onNodeCharted(dest, this.simView());
+        this.routePortLanes(dest); // a fresh landfall joins the lane web too
       }
     }
     // The crossing is charted: sea-route memory both ways (the map's sea lane).
@@ -16239,8 +16575,11 @@ export class World {
   visible(z: ZoneDef): boolean {
     // Concealed ground (an Incursion landing) is hidden from the map AND its
     // auto-fit until the player approaches/enters it — so a far blight stays
-    // obscured and never zooms the map out. Everything else is on the map (gentle).
-    return !z.concealed;
+    // obscured and never zooms the map out. VEILED ground (the forechart's
+    // ahead-minted halo, world/forechart.ts) is hidden the same way until
+    // FOUND — entry, adjacency to visited ground, a survey pulse, or an omen
+    // reveal lift it. Everything else is on the map (gentle).
+    return !z.concealed && !z.veiled;
   }
 
   /** Is the player by the quartermaster? (Renderer prompt box.) */
@@ -17030,10 +17369,13 @@ export class World {
       // snapshot reconciles, reverting anything the host rejected.
       this.clientActionHook(action);
       // EXCEPT zone-changing actions: caravanTo runs a full loadZone (heavy regen,
-      // and the client would mint with its OWN seed → a divergent flicker), and
-      // vocationQuest MINTS a quest zone into the world map. Forward only; the
+      // and the client would mint with its OWN seed → a divergent flicker),
+      // vocationQuest MINTS a quest zone into the world map, and harborChart
+      // runs a SURVEY PULSE (mints + reveals graph ground). Forward only; the
       // host's authoritative snapshot/zone broadcast moves the client.
-      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest') this.applyAction(this.localSeat, action);
+      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart') {
+        this.applyAction(this.localSeat, action);
+      }
     } else {
       this.applyAction(this.localSeat, action);
     }
@@ -17079,6 +17421,7 @@ export class World {
       case 'dropSkill': this.dropFromInventory(seat, 'skill', action.index); break;
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
+      case 'harborChart': this.buyHarborChart(action.omen); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
@@ -28576,6 +28919,8 @@ export class World {
     this.updateCaravan(dt);
     // The port dock's linger-to-sail (naval travel menu).
     this.updateSail(dt);
+    // The harbor board's linger-to-read (hearsay + passage + charts).
+    this.updateHarborBoard(dt);
     // The quartermaster hands you a hunt for lingering (auto-accept on dwell).
     this.updateQuestGiver(dt);
     this.updateVocationSites();
@@ -28615,6 +28960,11 @@ export class World {
     this.feedMyceliaActivity();
     // Advance the living world (day/night, weather drift, faction territory).
     this.sim.update(dt, this.simView());
+    // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
+    // any far soundings the overlays have requested (world/forechart.ts).
+    this.updateForechart();
+    // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
+    this.updateOmens();
     this.reconcileMyceliaWarps();
     this.reconcileDeepwinter();
     this.updateStorm(dt);

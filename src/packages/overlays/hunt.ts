@@ -23,6 +23,7 @@ import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -49,6 +50,11 @@ export interface HuntSurge {
   trackStages: [number, number];
   /** Seconds the player must dwell by the tracks to read the trail. */
   dwellSeconds: number;
+  /** WHERE the lair seats (the seat fabric, world/seats.ts): a distance
+   *  envelope + known/unknown/veiled weights. The forechart mints the halo
+   *  this draws from — a hunt may now open in country nobody has walked,
+   *  and the trail pin leads the player out into it. */
+  seat: SeatTuning;
 }
 
 /** What the engine reads to materialize the beast in a zone. */
@@ -247,14 +253,18 @@ export class HuntField implements WorldOverlay {
 
   private maybeIgnite(view: OverlayView): void {
     if (!this.rng.chance(clamp(this.cfg.triggerChance * this.gate().ignitionMul, 0, 1))) return;
-    // The FIRST tracks appear in a random CHARTED, eligible node OTHER than
-    // where the player stands — so the hunt begins as a zone you navigate to.
-    const lairs = view.nodes.filter(n =>
-      view.visited.has(n.id) && n.id !== view.currentZoneId && eventTargetable(this.id, n));
-    if (!lairs.length) return;
+    // The FIRST tracks appear somewhere OTHER than where the player stands —
+    // seated through the seat fabric (surge.seat): the pool is the whole
+    // minted web, veiled halo included, inside the tuned distance envelope.
+    // The old visited-only filter is gone — a hunt begins as country you
+    // navigate INTO, not a cleared zone you backtrack to.
     const beast = this.pickBeast();
     if (!beast) return;
-    const lair = lairs[this.rng.int(0, lairs.length - 1)];
+    const lair = pickSeat(view, {
+      event: this.id, ...this.cfg.seat,
+      filter: n => n.id !== view.currentZoneId,
+    }, this.rng);
+    if (!lair) return;
     const color = FACTION_COLORS[beast.faction] ?? HUNT_GOLD;
     // Roll how many times the tracks are found (incl. this first) before the beast
     // is located — each non-final find relocates the trail to an adjacent zone.

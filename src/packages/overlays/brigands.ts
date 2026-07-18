@@ -26,6 +26,7 @@ import { coordDist, type MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { scaledCap } from '../frequency';
@@ -49,6 +50,12 @@ export interface BrigandSurge {
   /** Per-STEP chance a fresh raid sets out (gated by pressure + the concurrency cap). */
   igniteChance: number;
   maxConcurrent: number;
+  /** WHERE the raid DESCENDS (the seat fabric) — known-leaning: a raid the
+   *  player never meets is noise. */
+  seatTarget: SeatTuning;
+  /** WHERE the band MUSTERS — unknown-leaning: the column forms beyond
+   *  sight and marches in (minSpan still holds between the two). */
+  seatOrigin: SeatTuning;
   /** Seconds the band MUSTERS at its origin before marching (rolled in range). */
   musterSeconds: [number, number];
   /** March speed toward the target zone (node-units/sec). */
@@ -282,19 +289,24 @@ export class BrigandField implements WorldOverlay {
   /** Muster a fresh raid at one charted zone, bound to STRIKE another (unanchored — outlaws
    *  raid anywhere, no biome blob needed). Both ends are visited so the march shows on the map. */
   private tryIgnite(view: OverlayView): void {
-    const nodes = view.nodes.filter(n => view.visited.has(n.id) && this.raidable(n));
-    if (nodes.length < 2) return;
-    // ONE raid per zone at a time — a fresh band never targets a zone a live band already
-    // claims (no double-pour / double-count); origin may still be any visited node.
+    // ONE raid per zone at a time — a fresh band never targets a zone a live
+    // band already claims (no double-pour / double-count).
     const taken = new Set(this.bands.map(b => b.targetZoneId));
-    const targets = nodes.filter(n => !taken.has(n.id));
-    if (!targets.length) return;
-    const target = targets[this.rng.int(0, targets.length - 1)];
-    let origin = nodes[this.rng.int(0, nodes.length - 1)];
-    for (let t = 0; t < 6 && coordDist(origin.map, target.map) < this.cfg.minSpan; t++) {
-      origin = nodes[this.rng.int(0, nodes.length - 1)];
-    }
-    if (coordDist(origin.map, target.map) < this.cfg.minSpan) return;
+    // TARGET: seated known-leaning (a raid the player never meets is noise);
+    // ORIGIN: seated unknown-leaning — the column MUSTERS beyond sight and
+    // marches INTO the mapped world, so the ⚔ pin crossing the map's edge
+    // reads as an arrival, not a spawn. Both ride the seat fabric.
+    const target = pickSeat(view, {
+      event: this.id, ...this.cfg.seatTarget,
+      filter: n => this.raidable(n) && !taken.has(n.id),
+    }, this.rng);
+    if (!target) return;
+    const origin = pickSeat(view, {
+      event: this.id, ...this.cfg.seatOrigin,
+      filter: n => this.raidable(n) && n.id !== target.id
+        && coordDist(n.map, target.map) >= this.cfg.minSpan,
+    }, this.rng);
+    if (!origin) return;
     this.bands.push(this.makeBand(origin.map, target.map, target.id));
   }
 }

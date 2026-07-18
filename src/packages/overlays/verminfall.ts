@@ -29,6 +29,7 @@ import type { World } from '../../engine/world';
 import { coordDist } from '../../world/coords';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -42,6 +43,10 @@ export interface VerminfallSurge {
   igniteChance: number;
   /** Most infestations festering at once (×concurrency crank). */
   maxConcurrent: number;
+  /** Seat weights (the seat fabric, world/seats.ts) — the TOWN-centered
+   *  envelope + closeness falloff stay verminfall's own law (the overlay's
+   *  filter/weigh); this row adds the known/unknown lean over it. */
+  seat: SeatTuning;
   /** Max node-distance from town a warren may claim — the INVERSE of the
    *  Contagion's seedMinDist: vermin nest in the town's shadow, never the
    *  far wilds. */
@@ -299,19 +304,19 @@ export class VerminfallField implements WorldOverlay {
     const town = view.byId[START_ZONE];
     const tc = town ? town.map : { x: 0, y: 0 };
     const claimed = new Set(this.infestations.filter(i => !i.dead).map(i => i.zoneId));
-    const cands = view.nodes.filter(z =>
-      this.claimable(z) && !claimed.has(z.id) && view.visited.has(z.id)
-      && coordDist(z.map, tc) <= this.cfg.seedMaxDist);
-    if (!cands.length) return;
-    // Weight by CLOSENESS (nearer = likelier): the warren digs at the town's hem.
-    let total = 0;
-    const weights = cands.map(z => {
-      const w = Math.max(10, this.cfg.seedMaxDist - coordDist(z.map, tc));
-      total += w; return w;
-    });
-    let r = this.rng.next() * total;
-    let src = cands[cands.length - 1];
-    for (let i = 0; i < cands.length; i++) { r -= weights[i]; if (r <= 0) { src = cands[i]; break; } }
+    // Seated through the seat fabric: the TOWN-centered envelope + closeness
+    // falloff ride the `weigh` escape hatch (the warren digs at the town's
+    // hem — that law is verminfall's own, not the picker's), while the
+    // visited-only filter is gone: a warren may fester in a near ring the
+    // player never walked, and its town-pressure (the swelling gutter
+    // fauna) remains its built-in announcement.
+    const src = pickSeat(view, {
+      event: this.id, ...this.cfg.seat,
+      filter: z => this.claimable(z) && !claimed.has(z.id)
+        && coordDist(z.map, tc) <= this.cfg.seedMaxDist,
+      weigh: (z) => Math.max(10, this.cfg.seedMaxDist - coordDist(z.map, tc)),
+    }, this.rng);
+    if (!src) return;
     this.infestations.push(this.makeInfestation(src));
   }
 }

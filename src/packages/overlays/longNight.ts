@@ -30,6 +30,8 @@ import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
 import { dayCycle, inPhases, type DayPhase } from '../../world/daynight';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
+import { registerOmenSource } from '../../world/omens';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { registerZoneWashSource } from '../../world/zoneWash';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -44,6 +46,14 @@ const COURT_CRIMSON = '#b83a5a';
 export interface LongNightSurge {
   /** Per-STEP chance a fresh ground establishes (night hours only, × pressure). */
   igniteChance: number;
+  /** WHERE the Court parks its coach (the seat fabric, world/seats.ts): the
+   *  whole minted web inside the envelope — a ground may establish in country
+   *  nobody has walked and FEED there, night after night, converting unseen
+   *  (its growing estate is its own announcement when finally found). */
+  seat: SeatTuning;
+  /** The UNKNOWN ground's murmurs (world/omens.ts) — known grounds pin on the
+   *  map instead. Converted estates whisper louder (the overlay scales it). */
+  omen?: { whisper: number; reveal?: number; widenPerMin?: number; lines: string[] };
   /** Un-converted grounds the Court works at once. */
   maxPending: number;
   /** HARD estate cap: once this many zones are converted, the Court stops
@@ -391,9 +401,9 @@ export class LongNightField implements WorldOverlay {
   }
 
   /** Read-only snapshot for the map markers. */
-  peek(): ReadonlyArray<{ id: string; x: number; y: number; fedNights: number; toConvert: number; converted: boolean; court: boolean }> {
+  peek(): ReadonlyArray<{ id: string; zoneId: string; x: number; y: number; fedNights: number; toConvert: number; converted: boolean; court: boolean }> {
     return this.grounds.map(gr => ({
-      id: gr.id, x: gr.coord.x, y: gr.coord.y,
+      id: gr.id, zoneId: gr.zoneId, x: gr.coord.x, y: gr.coord.y,
       fedNights: gr.fedNights, toConvert: this.cfg.nightsToConvert,
       converted: gr.converted, court: gr.countessHere,
     }));
@@ -430,10 +440,15 @@ export class LongNightField implements WorldOverlay {
 
   private tryEstablish(view: OverlayView): void {
     const taken = new Set(this.grounds.map(gr => gr.zoneId));
-    const nodes = view.nodes.filter(n =>
-      view.visited.has(n.id) && this.targetable(n) && !taken.has(n.id));
-    if (!nodes.length) return;
-    this.grounds.push(this.mintGround(nodes[this.rng.int(0, nodes.length - 1)]));
+    // Seated through the seat fabric (surge.seat): the visited-only filter is
+    // gone — the Court may park in the veiled halo and feed unseen, so a far
+    // ground found late is already CONVERTED (the stumble is the story).
+    const z = pickSeat(view, {
+      event: this.id, ...this.cfg.seat,
+      filter: n => this.targetable(n) && !taken.has(n.id),
+    }, this.rng);
+    if (!z) return;
+    this.grounds.push(this.mintGround(z));
   }
 
   private mintGround(z: ZoneDef): FeedingGround {
@@ -447,18 +462,40 @@ export class LongNightField implements WorldOverlay {
 }
 
 // --- map markers + zone-info (registered on import) ---------------------------
+// KNOWN grounds pin; a ground feeding in country the player has never seen
+// stays off the map (found by boots, a survey, or the omen's widening voice)
+// — the stumble onto a fully-converted estate is the Long Night's best scene.
 registerMarkerSource((world: World): MapMarker[] => {
   const lnf = world.sim.longNightField;
   if (!lnf) return [];
-  return lnf.peek().map(gr => ({
-    id: `long_night-${gr.id}`, coord: { x: gr.x, y: gr.y },
-    glyph: gr.court ? '♕' : gr.converted ? '⚰' : '☾',
-    fill: '#180a10', stroke: COURT_CRIMSON, text: '#e8c8d0', r: 7,
-    title: gr.court ? 'The COUNTESS holds court here — break it and the Long Night breaks'
-      : gr.converted ? 'A converted feeding ground — burn the gloom coach BY DAY to reclaim it'
-        : `The Court feeds here by night (${gr.fedNights} of ${gr.toConvert} nights) — burn the coach by day`,
-    fog: 'always', z: 16,
-  }));
+  return lnf.peek()
+    .filter(gr => world.visited.has(gr.zoneId) || world.surveyed.has(gr.zoneId))
+    .map(gr => ({
+      id: `long_night-${gr.id}`, coord: { x: gr.x, y: gr.y },
+      glyph: gr.court ? '♕' : gr.converted ? '⚰' : '☾',
+      fill: '#180a10', stroke: COURT_CRIMSON, text: '#e8c8d0', r: 7,
+      title: gr.court ? 'The COUNTESS holds court here — break it and the Long Night breaks'
+        : gr.converted ? 'A converted feeding ground — burn the gloom coach BY DAY to reclaim it'
+          : `The Court feeds here by night (${gr.fedNights} of ${gr.toConvert} nights) — burn the coach by day`,
+      fog: 'always', z: 16,
+    }));
+});
+
+// The UNKNOWN ground's voice (world/omens.ts): a converted estate murmurs
+// louder than a fresh one — grounds deepen unseen, and the world lets it slip.
+registerOmenSource((world: World) => {
+  const lnf = world.sim.longNightField;
+  const om = lnf?.surge().omen;
+  if (!lnf || !om) return [];
+  return lnf.peek()
+    .filter(gr => !world.visited.has(gr.zoneId) && !world.surveyed.has(gr.zoneId))
+    .map(gr => ({
+      id: `long_night-${gr.id}`, at: { x: gr.x, y: gr.y }, zoneId: gr.zoneId,
+      color: COURT_CRIMSON,
+      lines: om.lines, whisper: om.whisper * (gr.converted ? 1.35 : 1),
+      reveal: om.reveal, widenPerMin: om.widenPerMin,
+      age: gr.fedNights * 60, // fed nights ARE its age — the estate's voice deepens
+    }));
 });
 
 registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {

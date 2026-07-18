@@ -915,6 +915,7 @@ export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, Zone
   anchor.exits.push({ to: fresh.id, side: recSide, at });
   fresh.floating = false;
   fresh.concealed = false; // a road has formed — the player has found it; reveal it
+  fresh.veiled = false;    // …and the forechart's veil lifts the same way
   weaveConnections(fresh, zoneMap, rng);
 }
 

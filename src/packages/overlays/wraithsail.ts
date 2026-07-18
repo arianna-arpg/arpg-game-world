@@ -558,8 +558,11 @@ export class WraithsailField implements WorldOverlay {
   private visibleBounds(view: OverlayView): { minX: number; minY: number; maxX: number; maxY: number } | null {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     let any = false;
+    // The MINTED world's box (walked map + the forechart's veiled halo): the
+    // ghost ship haunts every sea the world has grown a coast for — she may
+    // dock at a veiled harbor the player has never seen, and be MET there.
     for (const n of view.nodes) {
-      if (!view.visited.has(n.id) || n.caveDepth != null) continue;
+      if (n.caveDepth != null) continue;
       any = true;
       minX = Math.min(minX, n.map.x); maxX = Math.max(maxX, n.map.x);
       minY = Math.min(minY, n.map.y); maxY = Math.max(maxY, n.map.y);

@@ -414,17 +414,18 @@ export class DemonInvasionField implements WorldOverlay {
     const g = this.gate();
     if (this.invasions.length >= scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)) return;
     if (!this.rng.chance(clamp(this.cfg.triggerChance * g.ignitionMul, 0, 1))) return;
-    // Roll a COORDINATE within the VISIBLE map's bounding box (the extent the
-    // player's map actually shows, + a small spread past the frontier). The
-    // invasion thus erupts WITHIN what the player can see — never 1000 nodes off
-    // in the unexplored void — but it need NOT land on a charted node: if a node
-    // already sits there it SEIZES it; otherwise it SIMULATES a floating
-    // epicenter at the coordinate (no forced road trail, like a crusade banner).
-    // (`visited` only sizes the box here — it does NOT gate the coordinate, so the
-    // epicenter can be uncharted ground inside the visible frontier.)
+    // Roll a COORDINATE within the MINTED WORLD's bounding box (+ a small
+    // spread past its rim). With the forechart's veiled halo the minted world
+    // reaches many steps past the walked map — an invasion may now erupt in
+    // country the player has never seen and FESTER there (its storm veil and
+    // stage ladder are its own announcement as they approach). It need NOT
+    // land on a node: if one sits there it SEIZES it; otherwise it SIMULATES
+    // a floating epicenter at the coordinate (no forced road trail).
+    // (The box was sized by `visited` before the forechart existed — the halo
+    // is the new, wider "world that exists to erupt in".)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, seen = 0;
     for (const n of view.nodes) {
-      if (!view.visited.has(n.id) || n.caveDepth != null) continue;
+      if (n.caveDepth != null) continue;
       seen++;
       if (n.map.x < minX) minX = n.map.x; if (n.map.x > maxX) maxX = n.map.x;
       if (n.map.y < minY) minY = n.map.y; if (n.map.y > maxY) maxY = n.map.y;

@@ -727,6 +727,15 @@ export interface ZoneDef {
    *  obscured + never zooms the map out. Cleared when the player approaches
    *  (connectFloatingZone) or enters it. Absent = a normal, visible zone. */
   concealed?: boolean;
+  /** THE FORECHART (engine forechart fabric): this zone was minted AHEAD of the
+   *  player's own exploration — a full citizen of the graph (events seat on it,
+   *  factions contest it, roads weave through it) that no player-facing surface
+   *  shows until it is FOUND. Distinct from `concealed` (a hidden event mint
+   *  that stays out of the road weave): veiled ground weaves and links like any
+   *  ground — only the map is blind. Unveiled by entry, by adjacency to a
+   *  visited zone (the classic one-ring map preview), by a survey pulse, or by
+   *  an omen/chart reveal. Absent = a normal, visible zone. */
+  veiled?: boolean;
   /** This zone is the EPICENTER/territory of another world event (a demon rift, a
    *  crusade stronghold/frontier, an incursion epicenter). Set at mint so other
    *  overlays (e.g. Conclave) don't squat their own content on it. Persists (unlike

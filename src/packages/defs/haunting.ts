@@ -28,6 +28,19 @@ import type { ContentPackage } from '../types';
 export const HAUNT_SURGE: HauntSurge = {
   igniteChance: 0.010,        // per 0.5s step, × pressure — a slow, patient grief
   maxConcurrent: 2,
+  // WHERE grief settles (the seat fabric): anywhere on the minted web inside
+  // a findable envelope, leaning toward ground nobody has walked — an unknown
+  // seat settles LATENT (frozen, silent) and RISES when found; the omen below
+  // is its widening voice, so no grief waits forever.
+  seat: { range: { max: 560 }, unknownMul: 1.8, veiledMul: 1.2 },
+  omen: {
+    whisper: 170, reveal: 60, widenPerMin: 14,
+    lines: [
+      'a cold thread in the air — weeping, {bearing} of here, {dist}',
+      'the birds will not fly {bearing} — something grieves there',
+      'a mourner’s song carries from the {bearing}, faint and wrong',
+    ],
+  },
   // The phase-agnostic BACKSTOP lapse. Under night-only holdPhases the DAWN is
   // what actually ends an unbroken haunt (a whole night is ~96s, shorter than
   // this floor), so the ttl only bites if holdPhases is widened or removed.

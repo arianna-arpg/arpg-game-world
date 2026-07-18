@@ -2063,6 +2063,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'dock', order: 58,
     light: { radius: 90, color: '#ffd898', intensity: 0.3, flicker: 2.2 },
   },
+  // THE HARBOR BOARD (data/ports.ts): the port's notice board a step inland
+  // of the dock — dwell to read the hearsay / hire passage / buy a chart.
+  // The signpost painter under a reading-lantern glow.
+  harbor_board: {
+    painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
+    light: { radius: 60, color: '#ffd898', intensity: 0.2, flicker: 1.6 },
+  },
   campfire: {
     painter: 'campfire', order: 53,
     light: { radius: -5, color: '#ffae52', intensity: 0.6, flicker: 6 },

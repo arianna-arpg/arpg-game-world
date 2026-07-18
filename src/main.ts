@@ -854,6 +854,13 @@ function tick(now: number): void {
         world.salvageDwellRequested = false;
         if (!ui.salvageOpen) ui.showSalvage();
       }
+      // The HARBOR BOARD dwell (a port's notice board) asks to open the
+      // harbor menu — hearsay, passage down the lanes, charts. (The dock
+      // itself still casts off directly; the board is the harbor's EARS.)
+      if (world.harborDwellRequested && !ui.escapeMenuOpen) {
+        world.harborDwellRequested = false;
+        if (!ui.sailOpen) ui.showSail();
+      }
       // The Oracle-stone dwell asks to open the communion menu.
       if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
         world.oracleDwellRequested = false;

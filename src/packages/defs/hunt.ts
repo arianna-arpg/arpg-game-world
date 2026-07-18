@@ -17,6 +17,10 @@ const HUNT_SURGE: HuntSurge = {
     { faction: 'wild', defId: 'wilds_behemoth', weight: 1 },
     // Add a beast for any faction here — one line each (e.g. an undead colossus).
   ],
+  // WHERE the lair seats (the seat fabric): off the player's boots, inside
+  // the forechart halo's reach, leaning hard into country nobody has walked
+  // — the trail pin then leads the hunter out into the unknown.
+  seat: { range: { min: 140, max: 640 }, unknownMul: 2.2, veiledMul: 1.25 },
 };
 
 export const HUNT: ContentPackage = {

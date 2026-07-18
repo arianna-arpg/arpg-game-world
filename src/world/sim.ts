@@ -72,6 +72,7 @@ import { FactionField } from './faction';
 import { WorldDrives } from './drives';
 import { InvasionField } from './invasion';
 import { biasTable, composeBias, type OverlayView, type WorldOverlay } from './overlay';
+import type { SoundingRequest } from './forechart';
 import { Reputation } from './reputation';
 import { WarlordField } from './warlord';
 import { WeatherField, WEATHER_DEFS } from './weather';
@@ -675,6 +676,24 @@ export class WorldSim {
     let a = 0;
     for (const o of this.overlays) a += o.activityAt?.(zid) ?? 0;
     return a;
+  }
+
+  /** Drain every overlay's FAR PRE-CHART requests (WorldOverlay.requestSoundings
+   *  — the forechart fabric's mint-request seam). The engine's forechart sweep
+   *  calls this once per sweep and grows veiled ground at each coordinate; a
+   *  hook that throws is skipped so one bad requester never stalls the halo. */
+  drainSoundings(): SoundingRequest[] {
+    const out: SoundingRequest[] = [];
+    for (const o of this.overlays) {
+      if (!o.requestSoundings) continue;
+      try {
+        // Stamp each request with the REQUESTING INSTANCE's dimension — an
+        // overlay never names a plane it doesn't run in.
+        for (const r of o.requestSoundings()) out.push({ ...r, dimension: o.dimension ?? 'surface' });
+      }
+      catch (e) { console.warn(`[forechart] overlay '${this.overlayKey(o)}' requestSoundings failed — skipped`, e); }
+    }
+    return out;
   }
 
   /** Compose day × weather × faction into the zone's effective spawning.

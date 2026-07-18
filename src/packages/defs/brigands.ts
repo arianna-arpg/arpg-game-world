@@ -23,8 +23,13 @@ import type { ContentPackage } from '../types';
 
 /** The whole nomadic-raid mechanic as data — every number is a knob. */
 const BRIGAND_SURGE: BrigandSurge = {
-  igniteChance: 0.02,    // per 0.5s step — an occasional raid (gated by ≥2 charted nodes)
+  igniteChance: 0.02,    // per 0.5s step — an occasional raid
   maxConcurrent: 2,
+  // The two seats (world/seats.ts): the raid DESCENDS on ground worth
+  // raiding — known-leaning, close enough to meet — while the column
+  // MUSTERS beyond sight (unknown-heavy, far-tilted) and marches IN.
+  seatTarget: { range: { max: 420 }, unknownMul: 0.5 },
+  seatOrigin: { range: { min: 120, max: 720 }, unknownMul: 2.4, veiledMul: 1.3, prefer: 'far' },
   musterSeconds: [25, 55], // they gather at the origin before setting out…
   marchSpeed: 8,           // …then march across the map toward ONE target zone (node-units/sec)
   presentSeconds: [45, 90],// linger on the struck zone this long, waiting for a mark to wander in

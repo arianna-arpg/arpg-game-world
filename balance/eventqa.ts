@@ -232,6 +232,7 @@ function starterView(sim: WorldSim, zoneMap: Record<string, ZoneDef>, time: numb
     charLevel: 50,
     gates: sim.gatesFor(50),
     visited: new Set(nodes.map(z => z.id)),
+    surveyed: new Set<string>(),
   };
 }
 function runSim(seed: number, steps: number): { sim: WorldSim; zoneMap: Record<string, ZoneDef>; time: number } {

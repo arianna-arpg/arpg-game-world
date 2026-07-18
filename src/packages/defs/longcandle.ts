@@ -29,6 +29,10 @@ const CANDLE_SURGE: LongCandleSurge = {
   igniteChance: 0.02,   // per 0.5s step, night only — most nights SOMETHING walks
   maxVigils: 1,
   maxConvenes: 1,
+  // Tight + known-leaning (world/seats.ts): dawn clears every claim, so a
+  // court beyond a night's reach would waste its own candle. The one-ring
+  // beyond the walked map is fair ground; the deep veil is not.
+  seat: { range: { max: 340 }, unknownMul: 0.6, veiledMul: 0.7 },
   shrines: [2, 3],
   packCount: [2, 3],
   packSize: [2, 4],

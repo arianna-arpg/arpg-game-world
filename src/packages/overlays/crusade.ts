@@ -47,6 +47,7 @@ import { registerBulletinSource } from '../../world/bulletins';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { scaledCap } from '../frequency';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { factionsInContext } from '../../world/traits';
@@ -96,9 +97,19 @@ export interface CrusadeSurge {
   triggerChance: number;
   /** Most Crusades alive at once (multiple factions crusade in parallel). */
   maxConcurrent: number;
-  /** Node-steps from the (randomly drawn) charted seed zone the heart lands —
-   *  off in the unknown, where a war can grow unseen. */
+  /** WHERE the SEED ZONE draws (the seat fabric, world/seats.ts): with the
+   *  forechart's veiled halo in the pool, a war kindles a genuine country
+   *  away — far-tilted, unknown-heavy by tuning. The heart then plants
+   *  seedSteps BEYOND the seed, deeper still into the unknown. */
+  seat: SeatTuning;
+  /** Node-steps from the drawn seed zone the heart lands — off in the
+   *  unknown, where a war can grow unseen. */
   seedSteps: [number, number];
+  /** ENTRENCHMENT: a war that has STOOD deepens — garrison counts at
+   *  materialize scale by 1 + perMin × age-in-minutes, capped at maxMul.
+   *  Power buys tiers (works, structures); AGE buys ranks in the yard —
+   *  stumbling onto an old warfront should feel like arriving late. */
+  entrench: { perMin: number; maxMul: number };
   /** THE FIELD (warfield fabric dials): territory = power × drifting noise ×
    *  heart well × reach falloff. `reachBase + reachPerPower × power` is the
    *  footprint's e-folding radius — territory literally GROWS with power. */
@@ -232,6 +243,10 @@ export interface CrusadeInfo {
   cityFill?: { structures: { structure: string; weight: number }[]; count: [number, number]; square?: string };
   /** An ANCHORED crusade's throne gate stands in this zone (host-only mint). */
   sanctumReady: boolean;
+  /** ENTRENCHMENT (surge.entrench): 1 + perMin × campaign-age-in-minutes,
+   *  capped — the engine scales materialize garrison counts by it. A war
+   *  found late fields deeper ranks than one caught kindling. */
+  entrenchMul: number;
 }
 
 interface ActiveCrusade {
@@ -534,6 +549,7 @@ export class CrusadeField implements WorldOverlay {
     const heartGround = dHeart <= C.heartland;
     if (!heartGround) tierIdx = Math.min(tierIdx, C.nonHeartMaxTier);
     const t = this.cfg.tiers.find(x => x.tier === tierIdx) ?? this.cfg.tiers[0];
+    const E = this.cfg.entrench;
     return {
       crusadeId: c.id, faction: c.faction, color: c.color,
       tier: t.tier, label: t.label, control: read.control,
@@ -544,6 +560,7 @@ export class CrusadeField implements WorldOverlay {
       rewardMul: t.rewardMul,
       ...(t.cityFill ? { cityFill: t.cityFill } : {}),
       sanctumReady: c.anchored && dHeart <= this.cfg.throne.gateRange,
+      entrenchMul: Math.min(E.maxMul, 1 + E.perMin * (c.age / 60)),
     };
   }
 
@@ -647,13 +664,11 @@ export class CrusadeField implements WorldOverlay {
     // The seed zone is a RANDOM eligible charted node — not the player's: a
     // war may kindle a country away, entirely unbeknownst (fixed-count draws;
     // a rejected candidate never shifts later rolls).
-    const pool = view.nodes;
-    if (!pool.length) return;
-    let seed: ZoneDef | null = null;
-    for (let t = 0; t < 6 && !seed; t++) {
-      const z = pool[this.rng.int(0, pool.length - 1)];
-      if (z.caveDepth == null && !z.eventOwned && eventTargetable(this.id, z)) seed = z;
-    }
+    // Seated through the seat fabric (surge.seat): with the forechart's
+    // veiled halo in view.nodes, the draw is far-tilted and unknown-heavy —
+    // a war kindles a country away, on ground that EXISTS but that nobody
+    // has walked, and entrenches long before anyone knows its name.
+    const seed = pickSeat(view, { event: this.id, ...this.cfg.seat }, this.rng);
     if (!seed) return;
     const faction = this.pickFaction();
     if (!faction) return;

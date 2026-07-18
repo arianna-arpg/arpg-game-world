@@ -37,6 +37,8 @@ import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
 import { inPhases, phaseAhead, type DayPhase } from '../../world/daynight';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
+import { registerOmenSource } from '../../world/omens';
+import { pickSeat, type SeatTuning } from '../../world/seats';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { registerZoneWashSource } from '../../world/zoneWash';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -52,6 +54,20 @@ export interface HauntSurge {
   /** Per-STEP chance a fresh grief settles (gated by pressure + the cap). */
   igniteChance: number;
   maxConcurrent: number;
+  /** WHERE a grief settles (the seat fabric, world/seats.ts): distance
+   *  envelope + known/unknown/veiled weights over the whole minted web —
+   *  the forechart's veiled halo included. */
+  seat: SeatTuning;
+  /** THE LATENT GRIEF (dormancy-until-found): a grief seated on ground the
+   *  player doesn't know (neither visited nor surveyed) settles LATENT —
+   *  clock frozen, wheel-exempt, invisible on every surface — and RISES the
+   *  moment its ground becomes known (walking in wakes it around you). Its
+   *  ttl can never lapse unfound. Default true when a seat lands unknown. */
+  latentOnUnknown?: boolean;
+  /** The murmurs a LATENT grief casts (world/omens.ts) — whisper/reveal
+   *  radii age wider so no grief waits forever in silence. Absent = silent
+   *  latency (found only by boots or a survey). */
+  omen?: { whisper: number; reveal?: number; widenPerMin?: number; lines: string[] };
   /** Seconds an UNBROKEN haunt holds before drifting on (rolled in range). */
   ttlSeconds: [number, number];
   /** Seconds between streamed apparitions while a player stands the ground. */
@@ -128,6 +144,11 @@ interface ActiveHaunt {
   anchorLifeFrac: number;
   bossLifeFrac: number;
   waneFrac: number;
+  /** Seconds since the grief settled (drives the omen's widening voice). */
+  age: number;
+  /** LATENT: seated on unknown ground, clock frozen, invisible — rises when
+   *  the ground becomes known (see HauntSurge.latentOnUnknown). */
+  latent?: boolean;
   /** DEV: a pinned grief ignores the wheel (never dissipates, never lapses) —
    *  it still WANES visually near a boundary so the pulse can be previewed. */
   pinned?: boolean;
@@ -181,6 +202,16 @@ export class HauntField implements WorldOverlay {
     const holds = (p: DayPhase) => !this.cfg.holdPhases || this.cfg.holdPhases.includes(p);
     for (let i = this.haunts.length - 1; i >= 0; i--) {
       const h = this.haunts[i];
+      h.age += dt;
+      // THE LATENT GRIEF: seated on unknown ground it waits — wheel-exempt,
+      // clock frozen (it can never lapse unfound). The moment its ground is
+      // KNOWN (walked or surveyed — an omen reveal counts) it RISES and the
+      // ordinary lifecycle takes over; found in an unholdable hour, the next
+      // wheel check dissolves it honestly (nothing was fought, nothing lost).
+      if (h.latent) {
+        if (view.visited.has(h.zoneId) || view.surveyed.has(h.zoneId)) h.latent = false;
+        else { h.waneFrac = 0; continue; }
+      }
       if (!holds(ahead.phase) && !h.pinned) { this.dissipate(i); continue; }
       h.waneFrac = this.cfg.waneSeconds && !holds(ahead.next)
         ? Math.min(1, Math.max(0, 1 - ahead.endsIn / this.cfg.waneSeconds)) : 0;
@@ -226,6 +257,7 @@ export class HauntField implements WorldOverlay {
   renderMap(): MapLayer {
     let over = '';
     for (const h of this.haunts) {
+      if (h.latent) continue; // a latent grief paints nothing — found, not shown
       const col = this.cfg.color ?? HAUNT_PALE;
       const x = h.coord.x.toFixed(1), y = h.coord.y.toFixed(1);
       // A slow, pale breath around the held zone — grief, not war. A waning
@@ -241,9 +273,11 @@ export class HauntField implements WorldOverlay {
 
   surge(): HauntSurge { return this.cfg; }
 
-  /** The grief holding this zone, if any. */
+  /** The grief holding this zone, if any. A LATENT grief reads as nothing —
+   *  it rises (update clears latency the tick its ground becomes known)
+   *  before any materializer could ask again. */
   hauntOn(zoneId: string): HauntInfo | null {
-    const h = this.haunts.find(x => x.zoneId === zoneId);
+    const h = this.haunts.find(x => x.zoneId === zoneId && !x.latent);
     if (!h) return null;
     return {
       id: h.id, anchorBroken: h.anchorBroken,
@@ -307,9 +341,10 @@ export class HauntField implements WorldOverlay {
   carriedCount(): number { return this.carried.length; }
 
   /** A settled grief keeps its ground restless (feeds the bloom); a broken
-   *  anchor — the locked, must-be-faced state — weighs double. */
+   *  anchor — the locked, must-be-faced state — weighs double. A latent
+   *  grief stirs nothing (it hasn't risen). */
   activityAt(zoneId: string): number {
-    const h = this.haunts.find(x => x.zoneId === zoneId);
+    const h = this.haunts.find(x => x.zoneId === zoneId && !x.latent);
     return h ? (h.anchorBroken ? 2 : 1) : 0;
   }
 
@@ -346,6 +381,8 @@ export class HauntField implements WorldOverlay {
           ttlLeft: h.ttlLeft, anchorBroken: !!h.anchorBroken,
           anchorLifeFrac: frac(h.anchorLifeFrac, 1), bossLifeFrac: frac(h.bossLifeFrac, 1),
           waneFrac: frac(h.waneFrac, 0),
+          age: typeof h.age === 'number' && Number.isFinite(h.age) ? Math.max(0, h.age) : 0,
+          ...(h.latent ? { latent: true } : {}),
           // A DEV pin is a live-session probe, never a saved fact.
         });
       }
@@ -381,10 +418,11 @@ export class HauntField implements WorldOverlay {
     this.dissipated = this.dissipated.filter(d => has(d.zoneId));
   }
 
-  /** Read-only snapshot for the map markers. */
-  peek(): ReadonlyArray<{ id: string; x: number; y: number; broken: boolean; waneFrac: number }> {
+  /** Read-only snapshot for the map markers + the omen source. */
+  peek(): ReadonlyArray<{ id: string; zoneId: string; x: number; y: number; broken: boolean; waneFrac: number; latent: boolean; age: number }> {
     return this.haunts.map(h => ({
-      id: h.id, x: h.coord.x, y: h.coord.y, broken: h.anchorBroken, waneFrac: h.waneFrac,
+      id: h.id, zoneId: h.zoneId, x: h.coord.x, y: h.coord.y, broken: h.anchorBroken,
+      waneFrac: h.waneFrac, latent: !!h.latent, age: h.age,
     }));
   }
 
@@ -410,11 +448,19 @@ export class HauntField implements WorldOverlay {
 
   private tryIgnite(view: OverlayView): void {
     const taken = new Set(this.haunts.map(h => h.zoneId));
-    const nodes = view.nodes.filter(n =>
-      view.visited.has(n.id) && this.hauntable(n) && !taken.has(n.id));
-    if (!nodes.length) return;
-    const z = nodes[this.rng.int(0, nodes.length - 1)];
-    this.haunts.push(this.mintHaunt(z, this.rng.range(this.cfg.ttlSeconds[0], this.cfg.ttlSeconds[1])));
+    // Seated through the seat fabric (surge.seat): the pool is the whole
+    // minted web — the forechart's veiled halo included — so a grief may
+    // settle where nobody has walked. Unknown ground settles LATENT (the
+    // dormancy-until-found law above); known ground rises live, as always.
+    const z = pickSeat(view, {
+      event: this.id, ...this.cfg.seat,
+      filter: n => !taken.has(n.id),
+    }, this.rng);
+    if (!z) return;
+    const h = this.mintHaunt(z, this.rng.range(this.cfg.ttlSeconds[0], this.cfg.ttlSeconds[1]));
+    if ((this.cfg.latentOnUnknown ?? true)
+      && !view.visited.has(z.id) && !view.surveyed.has(z.id)) h.latent = true;
+    this.haunts.push(h);
   }
 
   /** Mint a settle on `z` — and if a banished grief's wounds are banked, the
@@ -429,6 +475,7 @@ export class HauntField implements WorldOverlay {
       anchorLifeFrac: c?.anchorLifeFrac ?? 1,
       bossLifeFrac: c?.bossLifeFrac ?? 1,
       waneFrac: 0,
+      age: 0,
       pinned,
     };
   }
@@ -438,13 +485,28 @@ export class HauntField implements WorldOverlay {
 registerMarkerSource((world: World): MapMarker[] => {
   const hf = world.sim.hauntField;
   if (!hf) return [];
-  return hf.peek().map(h => ({
+  return hf.peek().filter(h => !h.latent).map(h => ({
     id: `haunting-${h.id}`, coord: { x: h.x, y: h.y },
     glyph: '☽', fill: '#12141c', stroke: HAUNT_PALE, text: '#d8e0f0', r: 7,
     title: h.waneFrac > 0 ? 'A haunting thins in the coming light — it will not hold'
       : h.broken ? 'A grief UNBOUND — the Wailing One walks here'
         : 'A haunting holds this ground',
     fog: 'always', z: 16,
+  }));
+});
+
+// A LATENT grief murmurs instead of marking (world/omens.ts): the whisper
+// carries a bearing, the reveal surveys the seat — both aging wider, so no
+// grief waits forever unfound. Active haunts pin; latent ones haunt the ear.
+registerOmenSource((world: World) => {
+  const hf = world.sim.hauntField;
+  const om = hf?.surge().omen;
+  if (!hf || !om) return [];
+  return hf.peek().filter(h => h.latent).map(h => ({
+    id: `haunting-${h.id}`, at: { x: h.x, y: h.y }, zoneId: h.zoneId,
+    color: hf.surge().color ?? HAUNT_PALE,
+    lines: om.lines, whisper: om.whisper, reveal: om.reveal,
+    widenPerMin: om.widenPerMin, age: h.age,
   }));
 });
 

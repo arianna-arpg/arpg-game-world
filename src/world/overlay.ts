@@ -13,6 +13,7 @@
 import { MONSTERS } from '../data/monsters';
 import type { PackTableEntry, ZoneDef } from '../data/zones';
 import type { PackageGate } from '../packages/types';
+import type { SoundingRequest } from './forechart';
 
 /** Read-only snapshot of the world handed to overlays each tick. */
 export interface OverlayView {
@@ -46,6 +47,11 @@ export interface OverlayView {
    *  `nodes` (every authored + minted zone in the graph, visited or not), so an
    *  overlay can choose to act only within what the player can see. */
   visited: ReadonlySet<string>;
+  /** Zone ids the player KNOWS without having walked (survey pulses, omen
+   *  reveals, harbor charts — map intel). visited ∪ surveyed = everything the
+   *  player can point to; a seat spec's "unknown ground" is outside both.
+   *  (ZoneDef.veiled is the stricter read: minted ahead and still invisible.) */
+  surveyed: ReadonlySet<string>;
 }
 
 /**
@@ -144,6 +150,14 @@ export interface WorldOverlay {
    *  was culled by the sanitizer so a ghost entry can never hold a
    *  concurrency slot, feed activityAt, or pin a marker to a void. */
   pruneZones?(has: (zoneId: string) => boolean): void;
+  /** FAR PRE-CHART REQUESTS (the forechart fabric, world/forechart.ts) —
+   *  drained by the engine each forechart sweep, mint-request style (the
+   *  demon/worldboss pendingMints pattern, generalized): return the far
+   *  coordinates this event wants VEILED GROUND grown at (a seat beyond the
+   *  halo, a cross-ocean landing), and CLEAR your own queue — the engine
+   *  grows a small veiled cluster there over the following sweeps. Requests
+   *  are budgeted + deduplicated engine-side; asking is always safe. */
+  requestSoundings?(): SoundingRequest[];
 }
 
 /** Scan a saved per-overlay snapshot bag for THE ZONE-CLAIM CONVENTION

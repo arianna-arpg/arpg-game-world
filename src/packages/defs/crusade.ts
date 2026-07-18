@@ -75,7 +75,16 @@ const CRUSADE_FACTION: FactionSpec = {
 export const CRUSADE_SURGE: CrusadeSurge = {
   triggerChance: 0.006,   // per 0.5s step (×ignition pressure) — now and then, a war kindles
   maxConcurrent: 3,       // several crusades / factions march at once
-  seedSteps: [3, 5],      // hearts plant 3-5 node-steps off a RANDOM charted zone — the unknown
+  // THE SEED SEAT (world/seats.ts): far-tilted + unknown-heavy over the whole
+  // minted web — with the forechart's veiled halo, a war kindles a genuine
+  // country away, on real ground nobody has walked. min keeps embers off the
+  // player's doorstep; no max — the deep halo and soundings are fair country.
+  seat: { range: { min: 220 }, unknownMul: 3, veiledMul: 1.5, prefer: 'far' },
+  seedSteps: [3, 5],      // …then the heart plants 3-5 node-steps BEYOND the seed — deeper still
+  // ENTRENCHMENT: age buys ranks — a war standing 10 minutes fields ~1.5×
+  // garrison heads; one found a half-hour late fields the full 1.9× press.
+  // (Power buys the WORKS; age buys the YARD. Both read at materialize.)
+  entrench: { perMin: 0.05, maxMul: 1.9 },
   // THE FIELD: territory = power × drifting noise × heart well × reach falloff.
   // reachBase + reachPerPower×power is the footprint's e-folding radius — the
   // territory literally grows and retracts with the campaign's might.

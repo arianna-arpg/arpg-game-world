@@ -314,7 +314,7 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
     nodes, byId, allNodes: nodes,
     terrain: () => 'land',
     currentZoneId: 'a', time: 150, census: {}, charLevel: 10,
-    gates: new Map(), visited: new Set(nodes.map(z => z.id)),
+    gates: new Map(), visited: new Set(nodes.map(z => z.id)), surveyed: new Set<string>(),
   };
   const mk = (): GloamingField => new GloamingField({ seed: 0x910a, gate, biomeSeed: 7 }, FAST);
 

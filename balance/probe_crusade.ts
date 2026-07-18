@@ -53,7 +53,7 @@ const mkZone = (id: string, x: number, y: number, kind = 'clear', extra: Partial
 const mkView = (nodes: ZoneDef[], currentZoneId: string): OverlayView => ({
   nodes, byId: Object.fromEntries(nodes.map(n => [n.id, n])), allNodes: nodes,
   terrain: () => 'land', currentZoneId, time: 0, census: {}, charLevel: 20,
-  gates: new Map(), visited: new Set(nodes.map(n => n.id)),
+  gates: new Map(), visited: new Set(nodes.map(n => n.id)), surveyed: new Set<string>(),
 });
 
 const tick = (f: CrusadeField, view: OverlayView, seconds: number): void => {

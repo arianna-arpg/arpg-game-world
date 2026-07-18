@@ -126,7 +126,7 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   const view: OverlayView = {
     nodes: zones, byId: Object.fromEntries(zones.map(n => [n.id, n])), allNodes: zones,
     terrain: () => 'land', currentZoneId: 'za', time: 0, census: {}, charLevel: 20,
-    gates: new Map(), visited: new Set(['za', 'zb']),
+    gates: new Map(), visited: new Set(['za', 'zb']), surveyed: new Set<string>(),
   };
   f.update(0.05, view);
   check('C: devIgnite seizes the standing zone', f.devIgnite(view, 'za') && f.activeCount() === 1);
