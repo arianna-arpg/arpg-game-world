@@ -453,6 +453,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_gloaming', kind: 'skill', cost: 170, reqLedger: 'gloaming_seen', label: 'Skill Pool — the Gloaming',
     description: 'Kindle may drop. You stood in the risen dark and learned what a light is worth.',
     payload: { skillIds: ['kindle_wick'] } },
+  // THE AUREOLE KATA — the Seraph City's circular judgement (the family the
+  // aether_gloria/aether_seraphal pass deferred). When the High Bastion
+  // mints an entry ledger (the ruin_entered GATEWAY SEAM pattern), this row
+  // and sup_aureole should adopt it as reqLedger — learned by walking the
+  // courts, like every country discipline.
+  { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — the Aureole',
+    description: 'Gloriole, Colonnade, Gloria may drop. The circular judgement of the Seraph City: courts that convene on the accused.',
+    payload: { skillIds: ['gloriole', 'colonnade', 'gloria'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
@@ -483,6 +491,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Vital Bond, Bloodletter\'s Rhythm, Remnant Conduit, Metronome, Colossus Stance, Transfusion Bond, Controlled Burn may drop.',
     payload: { supportIds: ['vital_bond', 'bloodletters_rhythm', 'remnant_conduit',
       'metronome', 'colossus_stance', 'transfusion_bond', 'controlled_burn'] } },
+  // The Aureole kata's socketable verdicts (see gem_skills_aureole — adopt
+  // the High Bastion's entry ledger here too when it exists).
+  { id: 'sup_aureole', kind: 'support', cost: 140, reqLevel: 1, label: 'Support Pool — the Aureole',
+    description: 'Aureate Writ and Sanctal Cautery may drop. The tribune\'s docket and the gilt fire that closes wounds shut.',
+    payload: { supportIds: ['aureate_writ', 'sanctal_cautery'] } },
 
   // --- Town features (the roguelite town framework) ------------------------
   { id: 'feat_brandt_gems',     kind: 'feature', cost: 60,  reqLevel: 0, label: 'Brandt: +2 Wares',     description: 'Brandt stocks 6 gems instead of 4.',                   payload: { flag: FEATURE.BRANDT_EXTRA_GEMS } },

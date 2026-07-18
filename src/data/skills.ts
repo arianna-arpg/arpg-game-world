@@ -11858,6 +11858,125 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   // ==========================================================================
+  // THE AUREOLE KATA — the Seraph City's deferred player family (the queued
+  // chip of the aether_gloria/aether_seraphal pass): CIRCULAR JUDGEMENT that
+  // CONVENES ON THE ACCUSED. Every shipped circle centers its geometry on
+  // the CASTER — the orbiters' tethers, aureole's own brow-ring, Halo's
+  // outward wash, the consecrated floors underfoot. This kata sends the
+  // court OUT: the crown descends on a head and hunts, the colonnade
+  // convenes around the aim, the hemicycle closes on its own stage. Pure
+  // composition of shipped levers — no new engine machinery.
+  // ==========================================================================
+
+  gloriole: {
+    id: 'gloriole', name: 'Gloriole',
+    description: 'Set a crown of dawn TURNING where you point: it unwinds from nothing, walks onto the nearest head, and widens into a gloriole over the whole court — every pass of the ring another stroke of the verdict. The one halo in the catalog that circles THEM, not you.',
+    tags: ['spell', 'fire', 'lightning', 'projectile', 'duration'], color: '#ffecb0',
+    manaCost: 17, cooldown: 5, useTime: 0.55,
+    baseDamage: { fire: [6, 10], lightning: [5, 9] },
+    delivery: {
+      type: 'projectile', speed: 28, radius: 12, range: 9999,
+      duration: 5, rehit: 0.8,
+      origin: 'cursor', originRange: 340,
+      // UNTETHERED spiral (no orbit): the anchor is the CAST POINT, and
+      // homing drifts it onto prey (advanceProjectile's stalking-anchor
+      // branch) — the crown lands where aimed, then rides the nearest
+      // head. The radius unwinds from 0 at spiral × speed × 0.1 ≈ 15 u/s:
+      // a tight coronet early, a court-wide gloriole by the last breath.
+      trajectory: { spiral: 5.2, homing: 2.2 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.2 },
+    ],
+    requirements: { willpower: 18, intelligence: 10 },
+    minDropLevel: 11,
+    ai: { range: 320, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('effectDuration', 'increased', 0.04)] },
+    thresholds: [
+      { level: 10, label: 'The longer reign', mods: [mod('effectDuration', 'increased', 0.25)] },
+      { level: 18, label: 'A crueler crown', mods: [mod('damage', 'increased', 0.25)] },
+    ],
+  },
+
+  colonnade: {
+    id: 'colonnade', name: 'Colonnade',
+    description: 'Raise the rotunda court AROUND them: five columns of marble-light stand a wide ring at the aim, and on the beat a column SPEAKS — a needle of gilt fire at whoever sits the court. Open by law: shots and sight thread the columns, and the judged may run — past pillars that keep pronouncing.',
+    // 'totem' = the deployed-object umbrella tag (solar_orb's precedent),
+    // so totem supports board the columns.
+    tags: ['spell', 'fire', 'lightning', 'totem', 'duration', 'aoe'], color: '#f4e2c0',
+    manaCost: 24, cooldown: 9, useTime: 0.7,
+    // The columns never strike ON PLANT — this roll exists for CONSTRUCT-FX
+    // readers (bone_prison's precedent: Pulsing Ramparts' beat and Violent
+    // Genesis' arrival scale off the host's roll). Per-column, kept lean.
+    baseDamage: { fire: [5, 8] },
+    delivery: {
+      type: 'construct', kind: 'pylon',
+      // The colonnade LAW (vs bone_prison's tight ten-bar cage): FIVE
+      // columns on a WIDE ring — a court you duel across, never a wall.
+      ring: { segments: 5, radius: 118 },
+      range: 240, interval: 1.2, duration: 6, maxActive: 5,
+      life: 30, placeRange: 340,
+      castSkillId: 'aureate_lash',
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 20, intelligence: 12 },
+    minDropLevel: 12,
+    ai: { range: 300, weight: 1.5, keepDistance: 240 },
+    // Host levels grow the COURT (the ring rides aoeScale, the session
+    // rides effectDuration); the lash is minted at effectiveSkillLevel and
+    // carries the family's damage growth itself.
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05), mod('effectDuration', 'increased', 0.06)] },
+    thresholds: [
+      { level: 14, label: 'The wider court', mods: [mod('aoeRadius', 'increased', 0.2)] },
+    ],
+  },
+
+  aureate_lash: {
+    id: 'aureate_lash', name: 'Aureate Lash', noDrop: true,
+    description: 'One column of the court pronounces: a needle of gilt fire across the ring.',
+    tags: ['spell', 'fire', 'lightning', 'projectile'], color: '#ffe6b8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { lightning: [7, 11], fire: [3, 6] },
+    delivery: { type: 'projectile', speed: 640, radius: 7, range: 300 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.15 },
+    ],
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  gloria: {
+    id: 'gloria', name: 'Gloria',
+    description: 'Convene the amphitheater at range: a hemicycle of dawnfire seats itself around the point you name, open chord facing you — then the whole crescent CLOSES on its own stage, striking each of the seated once as the light passes over them, and the verdict lands where they were herded.',
+    tags: ['spell', 'fire', 'lightning', 'aoe', 'duration'], color: '#ffe4a8',
+    manaCost: 20, cooldown: 5.5, useTime: 0.65,
+    baseDamage: { fire: [14, 21], lightning: [11, 17] },
+    delivery: {
+      type: 'ground', radius: 150, castRange: 330,
+      shape: 'crescent', arcDeg: 175,
+      lingerDuration: 1.15, tickInterval: 0.1,
+      // THE CLOSING COURT: the hemicycle collapses onto its center over
+      // the linger (quadIn — holds a beat, then the verdict falls). With
+      // hitOnce the shrinking band is a moving HIT SURFACE: each seated
+      // enemy is struck exactly once as the light crosses them. The
+      // impact stays off (noImpact — the pass does the judging) and the
+      // endBurst is the sentence spoken at the stage.
+      sizeOver: { from: 1, to: 0.12, curve: 'quadIn' },
+      hitOnce: true, noImpact: true,
+      endBurst: { damageScale: 0.55, radiusScale: 0.3 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.35, magnitude: 0.4 },
+    ],
+    requirements: { willpower: 16, intelligence: 14 },
+    minDropLevel: 11,
+    ai: { range: 300, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  // ==========================================================================
   // THE CIRRUS KATA — the HIGH AIR itself, learned from the wild sky: vapor
   // condensed to blade and body. Where the Empyrean speaks judgement and the
   // Gale lays roads, the Cirrus CHANGES WHAT YOU ARE: its signature is

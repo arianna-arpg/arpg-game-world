@@ -4362,6 +4362,26 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('apply_addled', 'flat', 0.02)],
     weight: 5, minDropLevel: 12,
   },
+  // --- THE AUREOLE KATA's socketable verdicts (the Seraph City family):
+  // both ride GENERATED per-status stat lanes (resolveHit's apply_<status>
+  // sweep, the damageVs_<status> multiplier) — the maddering/addling and
+  // beheld precedents: zero new machinery, alive on ANY hitting kit. ---
+  aureate_writ: {
+    id: 'aureate_writ', name: 'Aureate Writ',
+    description: 'Supported skills READ THE FLAW ALOUD: 22% of hits leave the victim EXPOSED — a weak spot painted on the health bar, 40% more through the window — and the bearer prosecutes what it publishes: hits land 12% harder against the exposed. The tribune\'s whole docket in one stone: paint the spot, then hit it.',
+    color: '#f0d890', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_exposed', 'flat', 0.22), mod('damageVs_exposed', 'flat', 0.12)],
+    perLevel: [mod('apply_exposed', 'flat', 0.02), mod('damageVs_exposed', 'flat', 0.015)],
+    weight: 5, minDropLevel: 11,
+  },
+  sanctal_cautery: {
+    id: 'sanctal_cautery', name: 'Sanctal Cautery',
+    description: 'Supported skills close the ledger AND the wound: 25% of hits SEAR — gilt fire cauterizes, and for its span every heal the victim drinks is HALVED (regen, leech, mending bonds alike). The kata\'s answer to whatever refuses to stay judged: menders, drinkers, the self-repairing.',
+    color: '#f8d8a0', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_sear', 'flat', 0.25)],
+    perLevel: [mod('apply_sear', 'flat', 0.025)],
+    weight: 5, minDropLevel: 12,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);
