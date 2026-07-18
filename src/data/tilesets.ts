@@ -7832,6 +7832,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the realm's own web
     perfProbe: true, // massif bodies + gleam lattice — honest to sweep
     biome: 'aether_bastion',
+    // THE COUNTRY'S RIM (dimensionBiomeDepth stages the faces): the silver
+    // marches — deeper in, the Gloria's hemicycles rise, then Seraphal.
+    depthAffinity: { to: 0.45, fadeOut: 0.25 },
     nameFirst: ['Argent', 'Aurelian', 'Radiant', 'Zenith', 'Empyral', 'Golden', 'Silverline', 'Highcrown'],
     nameSecond: ['Bastion', 'Citadel', 'Ramparts', 'Crown', 'Procession', 'Ward', 'Approach'],
     theme: {
@@ -8019,6 +8022,192 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
     compositions: [
       { composition: 'choir_ring', chance: 0.15 },
+    ],
+  },
+
+  // THE GLORIA — the bastion country's MIDDLE face: the hemicycle approach.
+  // Half-circle architecture rises among the keeps — amphitheaters open
+  // their chords to the field, rotunda courts ring their sanctums, laurel
+  // and columns replace scree and crystal. White marble gains on silver;
+  // the city is near. Same recipe, staged dials (the recipe discipline).
+  aether_gloria: {
+    id: 'aether_gloria',
+    frontier: false, realm: 'aetherial',
+    biome: 'aether_bastion', // the COUNTRY's shared biome — depth stages the faces
+    depthAffinity: { from: 0.25, fadeIn: 0.2, to: 0.78, fadeOut: 0.2 },
+    nameFirst: ['Gloria', 'Laurel', 'Hemicycle', 'Choral', 'Aurelian', 'Radiant', 'Pilgrim'],
+    nameSecond: ['Approach', 'Terraces', 'Forum', 'Gardens', 'Steps', 'Rotunda', 'Walk'],
+    theme: {
+      floor: '#e6e3d6', grid: '#cbc8b8', border: '#a09a84',
+      obstacle: '#efece0', obstacleEdge: '#b8b2a0', accent: '#ffd97a',
+      wall: '#d8d4c4', water: '#9fd8e8',
+      dayLight: 1.38, nightDark: 0.48, heat: 0.42,
+      ground: {
+        palette: ['#cfcaba', '#dcd7c6', '#e8e3d4', '#f2eee2', '#faf8f0'],
+        bias: 0.62, alpha: 0.52, scale: 1.8, strength: 0.85, speckles: 0.28, evenness: 0.36,
+      },
+      ambientFx: [
+        { kind: 'overclouds', color: '#fff8ea', intensity: 0.95 },
+        { kind: 'motes', color: '#ffedc2', intensity: 0.8 },
+        { kind: 'aurora', color: '#ffdf9a', intensity: 0.35 },
+      ],
+      fog: { banks: [1, 2], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+    },
+    sizeW: [2600, 3400], sizeH: [1900, 2600], ellipseChance: 0,
+    forceLayout: 'aether_bastion',
+    layoutParams: {
+      massifMasses: [
+        { kind: 'amphitheater', weight: 3 },
+        { kind: 'rotunda_court', weight: 2.2 },
+        { kind: 'gilt_ring', weight: 1.2 },
+        { kind: 'bastion', weight: 0.8 },
+      ],
+      massifSizeR: [130, 280],
+      massifCoverage: [0.13, 0.19],
+      massifLaneW: 116,
+      massifPortalClear: 170,
+      massifMaxMasses: 11,
+      massifSeatGround: true,
+      massifPlaceTries: 240,
+      continentFrac: 0.38,
+      satellites: [2, 3],
+    },
+    layout: [
+      { kind: 'cloud_billow', count: [3, 6] },
+      { kind: 'seraph_statue', count: [2, 4] },
+      { kind: 'harp_pillar', count: [2, 4] },
+      { kind: 'prayer_bell', count: [2, 4] },
+      { kind: 'laurel_topiary', count: [2, 5] },
+      { kind: 'mosaic_medallion', count: [2, 4] },
+      { kind: 'flowers', count: [3, 6] },
+      { kind: 'mist_font', count: [1, 2] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 130] },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'cherub_wisp', weight: 3 },
+        { id: 'power_of_the_bastion', weight: 3, presence: { from: 11, fadeIn: 4 } },
+        { id: 'virtue_lance', weight: 2.5 },
+        { id: 'herald_of_the_choir', weight: 2.5, presence: { from: 12, fadeIn: 4 } },
+        { id: 'aureole_tribune', weight: 2.2, presence: { from: 12, fadeIn: 4 } },
+        { id: 'lampad_of_the_vigil', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'dominion_scales', weight: 2, presence: { from: 13, fadeIn: 5 } },
+        { id: 'ophan_wheel', weight: 1.8 },
+        { id: 'throne_of_the_law', weight: 1.6, presence: { from: 13, fadeIn: 5 } },
+        { id: 'seraphal_lyrist', weight: 1.5, presence: { from: 13, fadeIn: 4 } },
+        { id: 'watcher_unblinking', weight: 1.5 },
+        { id: 'principality_of_dawn', weight: 0.8, presence: { from: 15, fadeIn: 6 } },
+        { id: 'lumen_moth', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.25 },
+    ],
+  },
+
+  // SERAPHAL — the country's HEART: the city of the Aetherial lords. The
+  // full-blown city in the clouds — pantheon domes, colonnaded rotundas,
+  // column-run forums, dense as a metropolis and white-gold as a reliquary.
+  // Everything circular; everything crowned; everything watched. The
+  // Olympian read: this is where the realm's gods keep their seats.
+  aether_seraphal: {
+    id: 'aether_seraphal',
+    frontier: false, realm: 'aetherial',
+    perfProbe: true, // the country's densest face — the honest worst case
+    biome: 'aether_bastion', // the COUNTRY's shared biome — depth stages the faces
+    depthAffinity: { from: 0.58, fadeIn: 0.22 },
+    nameFirst: ['Seraphal', 'Empyral', 'Deiform', 'Aurelian', 'Zenith', 'Olympian', 'Sovereign'],
+    nameSecond: ['Pantheon', 'Forum', 'Sanctum', 'Acropolis', 'Court', 'Crown', 'Seat'],
+    theme: {
+      floor: '#efe9da', grid: '#d4cfbc', border: '#a89f86',
+      obstacle: '#f4f0e4', obstacleEdge: '#c2bba6', accent: '#ffd97a',
+      wall: '#e0dac8', water: '#9fd8e8',
+      // The city never truly darkens: the gold holds the light (the realm's
+      // brightest noon, its shallowest night).
+      dayLight: 1.45, nightDark: 0.42, heat: 0.44,
+      ground: {
+        palette: ['#d8d2c0', '#e4dfcd', '#eeead9', '#f6f3e6', '#fdfbf4'],
+        bias: 0.64, alpha: 0.5, scale: 1.85, strength: 0.8, speckles: 0.26, evenness: 0.4,
+      },
+      ambientFx: [
+        { kind: 'overclouds', color: '#fff2dc', intensity: 0.9 },
+        { kind: 'motes', color: '#ffe9b8', intensity: 1 },
+        { kind: 'aurora', color: '#ffd97a', intensity: 0.45 },
+      ],
+      fog: { banks: [0, 1], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+    },
+    sizeW: [2700, 3500], sizeH: [2000, 2700], ellipseChance: 0,
+    forceLayout: 'aether_bastion',
+    layoutParams: {
+      massifMasses: [
+        { kind: 'pantheon', weight: 3 },
+        { kind: 'rotunda_court', weight: 2.6 },
+        { kind: 'grand_colonnade', weight: 2 },
+        { kind: 'amphitheater', weight: 1.4 },
+      ],
+      massifSizeR: [140, 300],
+      massifCoverage: [0.17, 0.24], // the CITY: densest face in the country
+      massifLaneW: 100,             // streets, not fields
+      massifPortalClear: 170,
+      massifMaxMasses: 13,
+      massifSeatGround: true,
+      massifPlaceTries: 280,
+      continentFrac: 0.42,          // the city is the continent
+      satellites: [1, 2],
+      gleamWidth: [54, 68],
+      processionalWidth: [64, 84],
+    },
+    layout: [
+      { kind: 'seraph_statue', count: [2, 4] },
+      { kind: 'pantheon_column', count: [2, 5] },
+      { kind: 'aureate_brazier', count: [2, 4] },
+      { kind: 'laurel_topiary', count: [3, 6] },
+      { kind: 'mosaic_medallion', count: [3, 6] },
+      { kind: 'prayer_bell', count: [1, 3] },
+      { kind: 'flowers', count: [2, 5] },
+      { kind: 'cloud_billow', count: [2, 4] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [100, 140] },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'power_of_the_bastion', weight: 3, presence: { from: 11, fadeIn: 3 } },
+        { id: 'aureole_tribune', weight: 2.8, presence: { from: 12, fadeIn: 3 } },
+        { id: 'virtue_lance', weight: 2.5 },
+        { id: 'herald_of_the_choir', weight: 2.5, presence: { from: 12, fadeIn: 4 } },
+        { id: 'dominion_scales', weight: 2.5, presence: { from: 13, fadeIn: 4 } },
+        { id: 'throne_of_the_law', weight: 2.2, presence: { from: 13, fadeIn: 4 } },
+        { id: 'seraphal_lyrist', weight: 2, presence: { from: 13, fadeIn: 3 } },
+        { id: 'ophan_wheel', weight: 2 },
+        { id: 'lampad_of_the_vigil', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'principality_of_dawn', weight: 1.2, presence: { from: 14, fadeIn: 5 } },
+        { id: 'watcher_unblinking', weight: 1.5 },
+        { id: 'cherub_wisp', weight: 1.5 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.3 },
     ],
   },
 
@@ -8302,6 +8491,8 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   aether_sanctum: { title: 'Aetherial Sanctum', blurb: 'The dense, unbroken lattice at the crossing’s end — wide causeways, no sky-holes, ground that finally holds. The waypoint home.' },
   aether_vesper:  { title: 'The Vesperlands',   blurb: 'The cosmos country: glass isles forever, and everything between them answering the sky — sunbridges by day, star-spans by night, rainbows in the rain, and ways you cross on faith alone.' },
   aether_bastion: { title: 'The High Bastion',  blurb: 'The Host\'s seat: enormous silver-and-gold citadels strewn about a rolling cloud continent, gleamways of bound blue light bridging the rim — and higher cloud still streaming overhead. Everything here holds; everything here is watched.' },
+  aether_gloria:  { title: 'The Gloria',        blurb: 'The seraph city\'s approach: hemicycle amphitheaters opening their chords to the field, rotunda courts ringing their sanctums, laurel and marble gaining on silver with every step deeper. The choirs carry farther here.' },
+  aether_seraphal:{ title: 'Seraphal',          blurb: 'The city of the Aetherial lords: pantheon domes and colonnaded forums in white marble and gold, streets of light between them, the cloudsea far below. The seats of gods incarnate — and every one of them home.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no

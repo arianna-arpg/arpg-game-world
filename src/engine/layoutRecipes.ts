@@ -2385,7 +2385,10 @@ function aetherBastionLayout(ctx: GenCtx, def: ZoneDef): void {
   for (let i = 0, n = rng.int(satN[0], satN[1]); i < n; i++) {
     for (let tries = 0; tries < 16; tries++) {
       const a = rng.range(0, Math.PI * 2);
-      const d = baseR * rng.range(1.42, 1.75);
+      // An ABSOLUTE gap past the rim (not a baseR multiple): a city-scale
+      // continent times 1.42+ overflowed the arena and starved every
+      // satellite — and with them, every gleamway.
+      const d = baseR + rng.range(300, 540);
       const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
       if (px < M + 140 || py < M + 140 || px > arena.w - M - 140 || py > arena.h - M - 140) continue;
       if (sats.some(s => Math.hypot(s.x - px, s.y - py) < 460)) continue;

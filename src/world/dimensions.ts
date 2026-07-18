@@ -326,3 +326,28 @@ export function dimensionBiomeAt(dimId: string, coord: MapCoord, seed: number): 
   }
   return fieldBiomePick(table, bestGx, bestGy, { x: bestPx, y: bestPy }, seed, dimId);
 }
+
+/** How DEEP into its region a coordinate sits on a DIMENSION's own field —
+ *  1 at the jittered Voronoi seat, →0 at the boundary: the surface
+ *  biomeDepth mirrored over dimensionBiomeAt's exact cell math, so a realm
+ *  COUNTRY can stage its faces (the High Bastion rim → Seraphal heart)
+ *  through the same depthAffinity envelopes the desert and the marine
+ *  shelves read below. Pure + deterministic. */
+export function dimensionBiomeDepth(dimId: string, coord: MapCoord, seed: number): number {
+  const def = dimensionDef(dimId);
+  if (!def.biomes?.length) return 0;
+  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
+  const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
+  let bd = Infinity;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const gx = cx + dx, gy = cy + dy;
+      const h = hashCell(gx, gy, seed);
+      const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
+      const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
+      const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
+      if (d < bd) bd = d;
+    }
+  }
+  return Math.max(0, Math.min(1, 1 - Math.sqrt(bd) / (span * 0.5)));
+}

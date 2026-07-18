@@ -2361,6 +2361,23 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { paper: '#dff2ff', frame: '#7f96c8', glow: '#9fd4ff' },
     light: { radius: -4.5, color: '#9fd4ff', intensity: 0.5, flicker: 1.4 },
   },
+  // The Seraph City kit (aether_gloria / aether_seraphal; kinds in
+  // data/massifs.ts): laurel greens against white marble, columns, gold
+  // fire, and inlaid pavement medallions — the Roman/Olympian dressing.
+  laurel_topiary: {
+    painter: 'deadTopiary', order: 53, shadow: 0.5, longShadow: 0.9, bakeWhole: 'static',
+    params: { leaf: '#3f6b34', sprig: '#c8a44a' },
+  },
+  pantheon_column: {
+    painter: 'harpPillar', order: 53, shadow: 0.45, longShadow: 1.3,
+    params: { marble: '#efe9da', string: '#efe9da', gold: '#d8b56a' },
+  },
+  // (aureate_brazier: the shipped aether-court kind — the city reuses it.)
+  mosaic_medallion: {
+    painter: 'gravelPath', order: 21,
+    blend: { mode: 'path', strength: 0.3, feather: 10, color: '#b89b55' },
+    params: { color: '#b89b55' },
+  },
 
   // --- The ship-deck kit (vis/paintersSea.ts): the Wraithsail's boards ------
   // Masts carry a cold masthead light (the ghost ship sails lit); rails and

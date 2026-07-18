@@ -163,7 +163,7 @@ import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
-import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
+import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
 import { courseBiomeAt, courseMintHints, type CourseMintHints, type CourseSpec } from '../world/courses';
@@ -6489,10 +6489,12 @@ export class World {
     // takes an explicit target); a normal source uses generateZone's node-step projection.
     // A non-surface source samples ITS OWN dimension's biome palette (hell grows hell).
     const biomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
-    // Biome DEPTH is a SURFACE Voronoi read — meaningless inside a dimension's
-    // own palette, so hell mints carry no geo.biomeDepth (data hygiene; the
-    // demon drain already omits it the same way).
-    const depthFor = source.dimension ? undefined : this.biomeDepthFor;
+    // Biome DEPTH follows the PLANE: surface mints read the surface Voronoi,
+    // dimension mints read their OWN field's depth (dimensionBiomeDepth) —
+    // realm countries stage their faces by it (the High Bastion), and a
+    // dimension whose biomes declare no envelopes is byte-identical (the
+    // envelope algebra ignores the datum).
+    const depthFor = source.dimension ? this.dimensionBiomeDepthFor(source.dimension) : this.biomeDepthFor;
     const gen = source.field
       ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
         { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
@@ -6506,6 +6508,17 @@ export class World {
     // feed hell's own overlay instances. Parallel world-states, one graph.
     this.sim.onNodeCharted(gen, this.simView());
     return gen;
+  }
+
+  /** A DIMENSION's biome-DEPTH sampler (how deep into its own Voronoi region
+   *  a coord sits) — the surface biomeDepthFor mirrored onto the realm's
+   *  field, so realm COUNTRIES stage their faces by depthAffinity exactly as
+   *  the desert and the marine shelves do below (the High Bastion rim →
+   *  Seraphal heart). Same seed expression as dimensionBiomeFor: the two
+   *  samplers must read the same cells. */
+  private dimensionBiomeDepthFor(dimId: string): (c: { x: number; y: number }) => number {
+    const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
+    return (c) => dimensionBiomeDepth(dimId, c, seed);
   }
 
   /** A DIMENSION's biome sampler (its own jittered-Voronoi palette), composed
@@ -6667,7 +6680,8 @@ export class World {
       tileset: pocket?.tileset ?? exitDef.tileset,
       biomeFor: source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor,
       levelFor: this.levelFor,
-      biomeDepthFor: source.dimension ? undefined : this.biomeDepthFor,
+      biomeDepthFor: source.dimension
+        ? this.dimensionBiomeDepthFor(source.dimension) : this.biomeDepthFor,
       climateFor: this.climateFor,
       fieldBiome: !pocket?.tileset,
       dimension: source.dimension,
@@ -8078,7 +8092,7 @@ export class World {
     const anchor = this.zoneMap[this.zone.id] ?? this.zone;
     const gen = placeZoneAt(hit, anchor, this.zoneMap, this.nextGenId++, {
       biomeFor: sampler, levelFor: this.levelFor,
-      biomeDepthFor: surface ? this.biomeDepthFor : undefined,
+      biomeDepthFor: surface ? this.biomeDepthFor : this.dimensionBiomeDepthFor(dimId),
       climateFor: this.climateFor, fieldBiome: true,
       dimension: surface ? undefined : dimId,
       courseFor: this.courseMintFor(surface ? undefined : dimId),
@@ -28650,7 +28664,7 @@ export class World {
           ...(rl.warpBiome ? {} : { fieldBiome: true }),
           seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
           biomeFor: dfDim ? this.dimensionBiomeFor(dfDim) : this.biomeFor,
-          ...(dfDim ? {} : { biomeDepthFor: this.biomeDepthFor }),
+          biomeDepthFor: dfDim ? this.dimensionBiomeDepthFor(dfDim) : this.biomeDepthFor,
           climateFor: this.climateFor,
           ...(dfDim ? { dimension: dfDim } : {}),
         });

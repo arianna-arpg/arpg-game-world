@@ -913,3 +913,17 @@ registerRegion({ id: 'bastion_wall', walkable: false, blocks: true, label: 'the 
 registerRegion({ id: 'gilt_parapet', walkable: false, blocks: true, label: 'the gilt parapet',
   blocksShot: false, blocksSight: false,
   visual: { fill: '#b08a3e', alpha: 0.92, masonry: true, edge: { color: '#ffd97a', width: 4 } } });
+// PANTHEON WALL: the seraph city's white marble — dressed coursing under a
+// gold rim (the same pale-fill law as bastion_wall: the masonry bake keeps
+// most of the surface near mix(fill, black, 0.42), so only a bright base
+// reads MARBLE). A TRUE WALL: the dome and the temple ring stop everything.
+registerRegion({ id: 'pantheon_wall', walkable: false, blocks: true, label: 'the pantheon wall',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#e2dcc8', alpha: 1, masonry: true, edge: { color: '#ffd97a', width: 5 } } });
+// COLONNADE: marble columns in line — the SEE-THROUGH wall (bodies stop;
+// shots and sight thread the columns), the amphitheater's seating and the
+// forum's pillar runs. Distinct from gilt_parapet on purpose: gold rail vs
+// white columns is the city's material counterpoint.
+registerRegion({ id: 'colonnade', walkable: false, blocks: true, label: 'the colonnade',
+  blocksShot: false, blocksSight: false,
+  visual: { fill: '#d8d2be', alpha: 0.92, masonry: true, edge: { color: '#f8f2de', width: 4 } } });

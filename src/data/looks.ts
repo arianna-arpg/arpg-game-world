@@ -5081,6 +5081,29 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'plume', x: 0.3, scale: 0.8 },
     ],
   },
+  /** The tribune: the city's magistrate — scales carried openly across the
+   *  shoulders, laurel over the halo's place (LAW outranks light here). No
+   *  lance, no horn: the read-at-a-glance is judgment, not war. */
+  aureole_tribune: {
+    parts: [
+      { kind: 'featherWings', scale: 1.05, role: 'cloth' },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'balanceScales', y: -0.1, scale: 1.0, role: 'metal' },
+      { kind: 'laurelCrown', scale: 0.9 },
+    ],
+  },
+  /** The lyrist: the forum's muse — the lyre held forward, wings folded
+   *  low, a faint halo. Strings on the silhouette and nothing else in the
+   *  roster carries them: the buffer reads before the buff lands. */
+  seraphal_lyrist: {
+    parts: [
+      { kind: 'featherWings', scale: 0.95, role: 'glow', alpha: 0.85 },
+      { kind: 'robe', scale: 0.9 },
+      { kind: 'lyre', x: 0.42, scale: 1.05 },
+      { kind: 'halo', scale: 0.8, alpha: 0.45 },
+    ],
+  },
+
   /** The dominion: marble made law — plates, the open book, the scales' chains. */
   dominion_scales: {
     parts: [

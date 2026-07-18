@@ -10170,6 +10170,34 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  /** The tribune: the Seraph City's magistrate — a walking court. The scales
+   *  across the shoulders are the tell: judgment pillars, not lances. Holds
+   *  a small bond court around itself (the law steadies its bailiffs). */
+  aureole_tribune: {
+    id: 'aureole_tribune', name: 'Aureole Tribune',
+    color: '#efe2c0', shape: 'pentagon', radius: 14, material: 'ethereal', look: 'aureole_tribune',
+    base: { life: 130, moveSpeed: 100, mana: 160, manaRegen: 8, energyShield: 60 },
+    skills: ['judgement_pillar', 'war_cry'], xp: 34, faction: 'seraphic',
+    flier: true, levitates: true,
+    bond: { mods: [mod('damage', 'increased', 0.15), mod('castSpeed', 'increased', 0.1)], radius: 170 },
+    presence: { from: 12, fadeIn: 4 },
+    brain: { type: 'commander' },
+  },
+
+  /** The lyrist: the forum's muse — the song is the aura (a cast-speed bond
+   *  court; the choirs sing FASTER around her) and the feathers answer
+   *  whoever interrupts it. Kill the music first. */
+  seraphal_lyrist: {
+    id: 'seraphal_lyrist', name: 'Seraphal Lyrist',
+    color: '#ffedc6', shape: 'oval', radius: 12, material: 'ethereal', look: 'seraphal_lyrist',
+    base: { life: 80, moveSpeed: 95, mana: 200, manaRegen: 10, energyShield: 35 },
+    skills: ['feather_volley'], xp: 28, faction: 'seraphic',
+    flier: true, levitates: true,
+    bond: { mods: [mod('castSpeed', 'increased', 0.25)], radius: 200 },
+    presence: { from: 13, fadeIn: 4 },
+    brain: { type: 'strafer' },
+  },
+
   // ==========================================================================
   // THE GALEKIN — the Driftways' own weather-fauna (faction registered by
   // the ascent package beside the Host: realm content, contexts aetherial).

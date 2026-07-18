@@ -348,7 +348,16 @@ function seatOnWalkable(grid: GridWalkField, at: Vec2, r: number): boolean {
     const a = (i / 8) * Math.PI * 2;
     if (!grid.isWalkable(at.x + Math.cos(a) * pr, at.y + Math.sin(a) * pr) && ++off > 1) return false;
   }
-  return true;
+  // THE BEYOND RING: a body must leave some field around itself — a seat
+  // that swallows its whole isle (a pantheon on a satellite) strands wall
+  // over open sky. Two of four compass points past the silhouette must
+  // still be ground.
+  let open = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 8;
+    if (grid.isWalkable(at.x + Math.cos(a) * r * 1.7, at.y + Math.sin(a) * r * 1.7)) open++;
+  }
+  return open >= 2;
 }
 
 /** The reservation probe (the layoutRecipes idiom, local on purpose —

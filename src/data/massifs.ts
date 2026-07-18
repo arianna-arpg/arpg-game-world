@@ -16,8 +16,9 @@
 //   drystone          PARAPET        bodies stop — you duel ACROSS the wall
 // ---------------------------------------------------------------------------
 
-import { registerMassKind } from '../engine/massif';
-import { registerDoodadRule } from '../engine/levelgen';
+import { registerMassKind, registerMassShape } from '../engine/massif';
+import { registerDoodadRule, registerStamp, stampSingle } from '../engine/levelgen';
+import { bearingNoise, disc, radial } from '../engine/genkit';
 
 // THE HEDGE — bocage: grown boundary lines and block-plots (D2's Act-1 fields
 // read). Ridge-heavy so hedges run in LINES you walk along hunting the end;
@@ -254,4 +255,127 @@ registerMassKind({
     { kind: 'aether_crystal', weight: 1, radius: [12, 16] },
   ],
   skirtChance: 0.24,
+});
+
+// =============================================================================
+// THE SERAPH CITY (the bastion country's deeper faces — aether_gloria /
+// aether_seraphal): CIRCULAR and HALF-CIRCULAR architecture, deepening as
+// the country does — hemicycle amphitheaters, colonnaded rotundas, pantheon
+// domes. The Roman/Olympian read over the same massif fabric: white marble
+// and gold where the rim wore silver.
+// =============================================================================
+// THE CRESCENT — the hemicycle: a court ring with one great bite swallowed
+// (the amphitheater's open chord IS its mouth — no punches, no interior POI:
+// the bowl is open to the field by construction). One rng draw (the facing).
+registerMassShape('crescent', {
+  reach: 1.5,
+  paint: (m, at, r, rng, o) => {
+    const rOf = (a: number): number =>
+      Math.min(r * 1.42, r * (1 + bearingNoise(a, o.lobe * 0.5, o.seed)));
+    const outer = m.like();
+    radial(outer, at.x, at.y, rOf);
+    const inner = m.like();
+    radial(inner, at.x, at.y, a => rOf(a) * 0.62);
+    outer.subtract(inner);
+    const dir = rng.range(0, Math.PI * 2);
+    const bite = m.like();
+    disc(bite, at.x + Math.cos(dir) * r * 1.15, at.y + Math.sin(dir) * r * 1.15, r * 1.3);
+    outer.subtract(bite);
+    m.union(outer);
+  },
+});
+
+// The city's dressing kit (visuals in data/doodadVisuals.ts — every painter
+// an existing one re-dressed): laurel greens, marble columns, gold fire,
+// inlaid pavement medallions.
+registerDoodadRule('laurel_topiary', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 56,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('pantheon_column', {
+  overlap: 'solid', blocksMove: true, spacing: 84,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+// (aureate_brazier: rule + look already shipped with the aether courts —
+// the city's braziers ARE that kind; leverage before mint.)
+registerDoodadRule('mosaic_medallion', { overlap: 'ground', spacing: 150 });
+// Layout-row stamps (the dead_topiary precedent — a kind a tileset scatters
+// as singles needs its stamp beside its rule).
+registerStamp('laurel_topiary', stampSingle('laurel_topiary', [13, 19]));
+registerStamp('pantheon_column', stampSingle('pantheon_column', [10, 14]));
+registerStamp('mosaic_medallion', stampSingle('mosaic_medallion', [26, 40]));
+
+// THE PANTHEON — the dome itself: a near-perfect round mass (lobe barely
+// breathes), gold statuary crowning the drum. The city's gravest silhouette.
+registerMassKind({
+  id: 'pantheon',
+  region: 'pantheon_wall',
+  shapes: [{ shape: 'blob', weight: 1 }],
+  lobe: 0.05,
+  skirt: [
+    { kind: 'pantheon_column', weight: 2, radius: [10, 14] },
+    { kind: 'aureate_brazier', weight: 1.5, radius: [11, 15] },
+    { kind: 'laurel_topiary', weight: 1, radius: [13, 18] },
+  ],
+  skirtChance: 0.4,
+  skirtSpacing: 52,
+  crest: [
+    { kind: 'gilded_seraph', weight: 2, radius: [15, 21] },
+    { kind: 'triumph_spire', weight: 1, radius: [16, 24] },
+  ],
+  crestChance: 0.32,
+  crestSpacing: 84,
+});
+
+// THE ROTUNDA COURT — the colonnaded temple ring: a marble court whose
+// interior is a PLACE (the POI machinery), columns pacing the outer skirt.
+registerMassKind({
+  id: 'rotunda_court',
+  region: 'pantheon_wall',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.07,
+  mouths: [1, 2],
+  skirt: [
+    { kind: 'pantheon_column', weight: 2.5, radius: [10, 14] },
+    { kind: 'laurel_topiary', weight: 1, radius: [13, 18] },
+  ],
+  skirtChance: 0.38,
+  skirtSpacing: 56,
+  crest: [{ kind: 'gilded_seraph', weight: 1, radius: [14, 19] }],
+  crestChance: 0.14,
+  crestSpacing: 100,
+});
+
+// THE AMPHITHEATER — the hemicycle: colonnade seating you duel ACROSS (the
+// parapet policy — the bowl is a stage, the rim is never a corridor). NO
+// crest: the open sweep is the read.
+registerMassKind({
+  id: 'amphitheater',
+  region: 'colonnade',
+  shapes: [{ shape: 'crescent', weight: 1 }],
+  lobe: 0.09,
+  skirt: [
+    { kind: 'laurel_topiary', weight: 2, radius: [13, 18] },
+    { kind: 'flowers', weight: 1.5, radius: [12, 18] },
+  ],
+  skirtChance: 0.3,
+  skirtSpacing: 60,
+});
+
+// THE GRAND COLONNADE — column lines running the forum (the curtain's law
+// in marble, SEE-THROUGH: shots and sight thread the columns).
+registerMassKind({
+  id: 'grand_colonnade',
+  region: 'colonnade',
+  shapes: [{ shape: 'chain', weight: 2 }, { shape: 'ridge', weight: 1.5 }],
+  lobe: 0.08,
+  skirt: [
+    { kind: 'gleam_lamp', weight: 1.5, radius: [8, 11] },
+    { kind: 'laurel_topiary', weight: 1, radius: [12, 16] },
+  ],
+  skirtChance: 0.24,
+  skirtSpacing: 68,
+  crest: [{ kind: 'gilded_seraph', weight: 1, radius: [13, 18] }],
+  crestChance: 0.1,
+  crestSpacing: 130,
 });

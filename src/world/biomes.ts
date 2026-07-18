@@ -613,6 +613,18 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { aether_vesper: 1 },
     eventDensityMul: 0.4,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE HIGH BASTION — the Aetherial's citadel COUNTRY (the realm's fifth
+  // mood, and its first staged one): silver-and-gold massif architecture on
+  // rolling cloud, deepening by dimensionBiomeDepth from the bastion rim
+  // through the hemicycle Gloria to SERAPHAL, the city of the Aetherial
+  // lords (three faces share this biome id — the mountain-country pattern,
+  // relocated to the sky). Pools in the realm's WARMEST reaches — the
+  // sunlit belt, the vesper cold's counterpart.
+  aether_bastion: { patronFaction: 'seraphic', mapColor: '#e8d9a0', label: 'High Bastion', spacing: 92,
+    climate: { temperature: { from: 0.38, fadeIn: 0.1 } },
+    allowedLayouts: { aether_bastion: 1 },
+    eventDensityMul: 0.4,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */
