@@ -11,7 +11,7 @@
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
-import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
+import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type TilesetDef, type TilesetVariant } from '../data/tilesets';
 import { hasLayout } from './levelgen';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
@@ -1077,17 +1077,24 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   let rows = ts.layout;
   let variantName: string | undefined;
   let variantTheme: Partial<ZoneDef['theme']> | undefined;
+  let variantLayoutParams: Record<string, unknown> | undefined;
+  const wearVariant = (v: TilesetVariant): void => {
+    // A face carries its RECIPE knobs down the ladder too (v.layoutParams —
+    // the surface mint honored these from day one; caves dropped them, so a
+    // variant's own dial set silently never fired underground: the sunken
+    // ruin's 'toothed halls' trap density was the first casualty).
+    rows = v.layout; variantName = v.name; variantTheme = v.theme;
+    variantLayoutParams = v.layoutParams;
+  };
   if (opts?.variant && ts.variants?.length) {
     const v = ts.variants.find(x => x.name === opts.variant);
-    if (v) { rows = v.layout; variantName = v.name; variantTheme = v.theme; }
+    if (v) wearVariant(v);
     else console.warn(`[worldgen] mintCave '${id}': tileset '${ts.id}' has no variant '${opts.variant}' — base layout`);
   } else if (opts?.rollVariant && ts.variants?.length) {
-    const v = rng.pick(ts.variants);
-    rows = v.layout; variantName = v.name; variantTheme = v.theme;
+    wearVariant(rng.pick(ts.variants));
   } else if (faceRolled && ts.variants?.length
     && faceRng.chance(ts.caveFace?.variantChance ?? 0)) {
-    const v = faceRng.pick(ts.variants);
-    rows = v.layout; variantName = v.name; variantTheme = v.theme;
+    wearVariant(faceRng.pick(ts.variants));
   }
   // COMMON rows ride along whichever face rolled — the brittle-kit doctrine
   // (what the biome always IS must not vanish when a face is chosen) now
@@ -1129,12 +1136,13 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     theme,
     layout,
     ...(layoutType ? { layoutType } : {}),
-    // The spec ▷ tileset merge the surface mint honors: a cave tileset's own
-    // layoutParams (interiorWall, floorStyle, room dials) finally reach their
-    // generators; explicit opts still win per key. (The buried vault's
-    // sandstone — and the sunken ruin's authored ruin_wall — ride this.)
-    ...(ts.layoutParams || opts?.layoutParams
-      ? { layoutParams: { ...ts.layoutParams, ...opts?.layoutParams } } : {}),
+    // The spec ▷ variant ▷ tileset merge the surface mint honors: a cave
+    // tileset's own layoutParams (interiorWall, floorStyle, room dials) and
+    // the rolled FACE's overrides both reach their generators; explicit opts
+    // still win per key. (The buried vault's sandstone, the sunken ruin's
+    // ruin_wall, and the toothed halls' trap dials all ride this.)
+    ...(ts.layoutParams || variantLayoutParams || opts?.layoutParams
+      ? { layoutParams: { ...ts.layoutParams, ...variantLayoutParams, ...opts?.layoutParams } } : {}),
     objective: opts?.objective ?? { kind: 'clear' }, // neither gates the way back out
     // A cave face's puzzle repertoire + scenery-actors ride down too (a
     // geode grotto may hold a chord) — placement stays a LOAD concern on

@@ -328,5 +328,34 @@ const DT = 1 / 60;
   check('gen: the trap pass is deterministic per seed (double-run identical)', deterministic);
 }
 
+// --- 9) THE MINT PATH REGRESSIONS (the player's "no traps" report) ----------
+// (a) mintCave DROPPED variant layoutParams — the toothed halls' dense dials
+// never fired underground; (b) labyrinth faces had no trap pass at all.
+{
+  const w = makeSimWorld('warrior', 9701);
+  const def = mintCave(w.zone, 555001, 'probe_toothed', 'sunken_ruin', { variant: 'toothed halls' });
+  const dials = (def.layoutParams?.trapworks ?? {}) as Record<string, { chance?: number }>;
+  check('mint: a cave VARIANT carries its layoutParams down the ladder (toothed dials land)',
+    dials.sawHalls?.chance === 0.9, `sawHalls.chance=${dials.sawHalls?.chance}`);
+  const FULL = {
+    sawHalls: { chance: 1, max: 2 }, mincerRooms: { chance: 1, max: 1 },
+    dartWards: { chance: 1, max: 2 }, boulderRuns: { chance: 1, max: 1 },
+    falseFloors: { chance: 1, max: 2 },
+  };
+  let traps = 0, lanes = 0;
+  for (let s = 0; s < 3 && traps + lanes === 0; s++) {
+    const seed = 777 + s * 3301;
+    const forced = {
+      ...def, seed, layoutType: 'labyrinth',
+      layoutParams: { ...def.layoutParams, trapworks: FULL },
+    } as typeof def;
+    const layout = generateLayout(forced, { w: 1300, h: 1000 }, new Rng(seed), vec(120, 500), [vec(1180, 500)]);
+    traps = layout.trapworks?.length ?? 0;
+    lanes = layout.tracks?.length ?? 0;
+  }
+  check('mint: the LABYRINTH is trap country (lattice runs + chambers feed the one pass)',
+    traps >= 2 && lanes >= 1, `traps=${traps} lanes=${lanes}`);
+}
+
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

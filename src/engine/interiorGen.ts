@@ -424,6 +424,12 @@ interface TrapGeo {
   grid: GridWalkField;
   halfW: number;
   doors: PlacedDoor[];
+  /** Pre-computed straight candidate legs (the labyrinth hands its lattice
+   *  runs over directly — chained collinear links; chambers ride `rooms`).
+   *  When present these REPLACE the room-graph edge walk; each leg is still
+   *  grid-validated + trimmed through corridorStretch, so a chamber crossing
+   *  or a braid knock never fools a lane onto unwalkable ground. */
+  runs?: { a: Vec2; b: Vec2 }[];
 }
 
 /** A straight corridor stretch: the longest center-line run along one leg of
@@ -473,26 +479,32 @@ function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: T
   const lerpAt = (s: TrapStretch, f: number): Vec2 =>
     vec(s.a.x + (s.b.x - s.a.x) * f, s.a.y + (s.b.y - s.a.y) * f);
 
-  // Candidate stretches off the REAL carved corridors, longest first.
+  // Candidate stretches off the REAL carved corridors, longest first. The
+  // room-graph walks its L-legs; a runs-bearing caller (the labyrinth)
+  // hands its lattice chains over instead — one validator either way.
   const stretches: TrapStretch[] = [];
   const seen = new Set<string>();
-  for (let i = 0; i < geo.rooms.length; i++) {
-    for (const j of geo.adj[i]) {
-      if (j <= i) continue;
-      const a = geo.rooms[i], b = geo.rooms[j];
-      for (const leg of [
-        [vec(a.cx, a.cy), vec(b.cx, a.cy)],
-        [vec(b.cx, a.cy), vec(b.cx, b.cy)],
-      ] as const) {
-        const s = corridorStretch(geo, leg[0], leg[1]);
-        if (!s) continue;
-        const key = `${Math.round((s.a.x + s.b.x) / 2)}:${Math.round((s.a.y + s.b.y) / 2)}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (!clearOfPortals(lerpAt(s, 0.5))) continue;
-        stretches.push(s);
+  const legs: [Vec2, Vec2][] = [];
+  if (geo.runs) {
+    for (const r of geo.runs) legs.push([r.a, r.b]);
+  } else {
+    for (let i = 0; i < geo.rooms.length; i++) {
+      for (const j of geo.adj[i]) {
+        if (j <= i) continue;
+        const a = geo.rooms[i], b = geo.rooms[j];
+        legs.push([vec(a.cx, a.cy), vec(b.cx, a.cy)]);
+        legs.push([vec(b.cx, a.cy), vec(b.cx, b.cy)]);
       }
     }
+  }
+  for (const leg of legs) {
+    const s = corridorStretch(geo, leg[0], leg[1]);
+    if (!s) continue;
+    const key = `${Math.round((s.a.x + s.b.x) / 2)}:${Math.round((s.a.y + s.b.y) / 2)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!clearOfPortals(lerpAt(s, 0.5), 130)) continue;
+    stretches.push(s);
   }
   stretches.sort((x, y) => y.len - x.len);
   const takeStretch = (minLen: number): TrapStretch | null => {
@@ -735,14 +747,17 @@ function labyrinthLayout(ctx: GenCtx, def: ZoneDef): void {
   const clampR = (x: number, y: number, r: number): number =>
     Math.max(CELL, Math.min(r, x - rind, arena.w - rind - x, y - rind, arena.h - rind - y));
 
-  // CHAMBERS: swell a few junctions into fight-sized rounds.
+  // CHAMBERS: swell a few junctions into fight-sized rounds (captured — the
+  // trap pass below reads them as its mincer candidates).
   const chamberBand = layoutParam(def, 'chambers', [2, 4] as [number, number]);
   const chamberR = layoutParam(def, 'chamberR', [80, 140] as [number, number]);
   const chambers = rng.int(chamberBand[0], chamberBand[1]);
+  const placedChambers: { x: number; y: number; r: number }[] = [];
   for (let k = 0; k < chambers; k++) {
     const i = rng.int(0, nx - 1), j = rng.int(0, ny - 1);
-    const r = rng.range(chamberR[0], chamberR[1]);
-    grid.fillDisc(nodeX(i), nodeY(j), clampR(nodeX(i), nodeY(j), r), floorKind);
+    const r = clampR(nodeX(i), nodeY(j), rng.range(chamberR[0], chamberR[1]));
+    grid.fillDisc(nodeX(i), nodeY(j), r, floorKind);
+    placedChambers.push({ x: nodeX(i), y: nodeY(j), r });
   }
 
   // PORTALS: every entry/exit carves a mouth to its nearest lattice node.
@@ -775,6 +790,48 @@ function labyrinthLayout(ctx: GenCtx, def: ZoneDef): void {
     }
   }
   ctx.pois.push(vec(nodeX(far[0]), nodeY(far[1])));
+
+  // THE TRAP PASS (trapworks fabric) — the maze is trap country: its lattice
+  // chains ARE ready-made lanes (collinear links fused into straight runs —
+  // ≥2 links = a run; every run still grid-validated + trimmed through the
+  // one corridorStretch validator), its chambers ready-made mincer rounds
+  // (inscribed-square rects). Room-graph-only archetypes (false floors want
+  // dead-end ROOMS) find no candidates here by construction and skip; their
+  // chance draws still burn, so the stream stays seed-stable per layout.
+  const runs: { a: Vec2; b: Vec2 }[] = [];
+  for (let j = 0; j < ny; j++) {
+    let i0 = -1;
+    for (let i = 0; i < nx; i++) {
+      const linked = i + 1 < nx && links.has(linkKey(idx(i, j), idx(i + 1, j)));
+      if (linked && i0 < 0) i0 = i;
+      if (!linked && i0 >= 0) {
+        if (i - i0 >= 2) runs.push({ a: vec(nodeX(i0), nodeY(j)), b: vec(nodeX(i), nodeY(j)) });
+        i0 = -1;
+      }
+    }
+  }
+  for (let i = 0; i < nx; i++) {
+    let j0 = -1;
+    for (let j = 0; j < ny; j++) {
+      const linked = j + 1 < ny && links.has(linkKey(idx(i, j), idx(i, j + 1)));
+      if (linked && j0 < 0) j0 = j;
+      if (!linked && j0 >= 0) {
+        if (j - j0 >= 2) runs.push({ a: vec(nodeX(i), nodeY(j0)), b: vec(nodeX(i), nodeY(j)) });
+        j0 = -1;
+      }
+    }
+  }
+  const chamberRooms: IntRoom[] = placedChambers.map(c => {
+    const s = c.r * 1.41;   // the inscribed square — mincer sizing reads w/h
+    return { x: c.x - s / 2, y: c.y - s / 2, w: s, h: s, cx: c.x, cy: c.y };
+  });
+  layInteriorTrapworks(ctx,
+    layoutParam(def, 'trapworks', undefined) as TrapGenSpec | undefined, {
+      rooms: chamberRooms,
+      adj: chamberRooms.map(() => []),
+      assigned: new Set(),
+      grid, halfW, doors: [], runs,
+    });
 
   ctx.walk = grid;
   scatterDecoration(ctx, def);

@@ -2295,12 +2295,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       // what tells a sunken hall from a Durance cell — the Durance TORMENTS
       // (racks, cages, hate); the sunken city DEFENDS. Every face fields
       // some of the old machines; the 'toothed halls' variant fields most.
+      // Dials sit ABOVE naive intent on purpose: real corridor geometry
+      // rejects hard (short legs, portal/door clearances), so authored
+      // chance ≠ delivered count — the mint-path repro is the tuning truth.
       trapworks: {
-        sawHalls: { chance: 0.55, max: 2 },
-        dartWards: { chance: 0.5, max: 2 },
-        boulderRuns: { chance: 0.4, max: 1 },
-        falseFloors: { chance: 0.45, max: 1 },
-        mincerRooms: { chance: 0.3, max: 1 },
+        sawHalls: { chance: 0.7, max: 2 },
+        dartWards: { chance: 0.65, max: 2 },
+        boulderRuns: { chance: 0.55, max: 1 },
+        falseFloors: { chance: 0.6, max: 2 },
+        mincerRooms: { chance: 0.45, max: 1 },
       },
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
