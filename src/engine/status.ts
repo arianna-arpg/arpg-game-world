@@ -37,6 +37,27 @@ export interface StatusDef {
   /** Chance that any attack/spell the victim begins fizzles, stunning it
    *  briefly — a curse that acts as an interrupt (Befuddlement). */
   interruptChance?: number;
+  /** THE TURNED HAND (the confusion family — engine seam at World.moveActor):
+   *  while worn, the bearer's VOLITIONAL movement intent flips — up walks
+   *  down, left walks right. One artery, every mover, symmetric by
+   *  construction: the player's keys and stick, a monster's steering (its
+   *  brain commands 'approach', the feet answer 'away'), a minion's orders.
+   *  Forced motion is untouched by the same construction — knockback
+   *  (pushActor), grab reeling and track shoves ride other arteries, so the
+   *  world still moves you TRUE; only your own steps turn contrary. Composes
+   *  with Settings.invertMove as an honest XOR: a by-choice inverted player
+   *  who is hexed plays standard for the duration (two turns make a true). */
+  invertMove?: true;
+  /** THE ADDLED HAND (the confusion family — engine seam at World.useSkill,
+   *  beside interruptChance, its misfiring sibling): chance that a
+   *  volitional cast fires a DIFFERENT ready skill from the caster's own kit
+   *  instead of the pressed one — cooldowns burn at the worst moments.
+   *  Player bar presses and AI-chosen casts read the same law (bar slots /
+   *  aiActionInsts are one pool); internal mints (metas, converts), triggered
+   *  fires, and the reflex lane (flasks are never touched, as pressed OR as
+   *  substitute) are exempt. Befuddlement FIZZLES the hand; this REDIRECTS
+   *  it. */
+  scrambleChance?: number;
   /** Hard crowd control: the victim cannot move or act while afflicted
    *  (checked by Actor.isStunned — stun, frozen). */
   hardCC?: true;
@@ -725,6 +746,34 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('aiAimJitter', 'flat', 0.38),
       mod('aiAimLead', 'more', -1),
     ],
+  },
+  /** THE CONFUSION FAMILY — CONTROL ITSELF as the hit surface, symmetric by
+   *  construction (both engine seams read the STATUS, not the seat: a hexed
+   *  monster's feet and hands betray it exactly like yours — the player
+   *  leverages these EQUALLY). The mind lanes divide clean: befuddlement
+   *  FIZZLES the hand, bewilder unmakes the AIM (anti-monster by nature);
+   *  these two turn what the hand DOES. Disoriented is the pressure carrier
+   *  — the maze building in the inner ear, stack by stack, until the world
+   *  turns at the cap. */
+  disoriented: {
+    label: 'Disoriented', color: '#9ad8d0', duration: 6,
+    stacking: true, maxStacks: 5, buildup: { into: 'widdershins' },
+  },
+  /** The carrier's cap: every volitional step flips (StatusDef.invertMove —
+   *  World.moveActor is the one seam). Never a stun: you keep everything
+   *  except your bearings — walk it off backwards, or stand and fight. */
+  widdershins: {
+    label: 'Widdershins', color: '#5ecec0', duration: 3.5,
+    invertMove: true,
+  },
+  /** The direct hex on the casting hand (StatusDef.scrambleChance —
+   *  World.useSkill is the one seam): pressed buttons may fire the kit's
+   *  NEIGHBOR instead, burning cooldowns at inopportune moments. Applied
+   *  straight (no ladder) — the counterplay is the timer and the discipline
+   *  to hold your combos until it passes. */
+  addled: {
+    label: 'Addled', color: '#e0b464', duration: 6,
+    scrambleChance: 0.4,
   },
 
   // --- Blessings (positive statuses, applied to allies) ----------------------

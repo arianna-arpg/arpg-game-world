@@ -538,6 +538,14 @@ function readLocalInput(dt: number): PlayerInput | null {
   // The move stick adds its ANALOG vector — deflection rides straight into
   // moveActor, so half-tilt is a slow stalk without any new movement path.
   if (padLive) { dx += pad.move.x; dy += pad.move.y; }
+  // INVERTED MOVEMENT (Settings.invertMove): the player's own standard,
+  // applied at the DEVICE layer — one flip for keys and stick alike,
+  // before intent enters the wire (southpaw swaps WHICH stick moves; this
+  // flips WHICH WAY movement goes). The widdershins hex flips again at the
+  // engine's one mover, so a by-choice inverted hero who is hexed plays
+  // STANDARD for the duration — two turns make a true; the XOR is the
+  // design, not an accident.
+  if (settings.invertMove) { dx = -dx; dy = -dy; }
 
   // Aim: the mouse cursor — unless the pad owns the reticle (last device to
   // speak wins). Pad aim is the stick's direction at deflection-scaled reach

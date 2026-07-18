@@ -84,6 +84,13 @@ export interface Settings {
    *  sim/inputs never stutter. OFF kills only the fake hitches (comfort /
    *  accessibility); every other pall read stays. */
   statusFalter: boolean;
+  /** Invert movement axes: up walks down, left walks right — movement keys
+   *  and the move stick alike, applied at the device layer in one place
+   *  (main.ts readLocalInput). Distinct from pad.southpaw (which trades
+   *  WHICH stick moves — this flips WHICH WAY movement goes). The
+   *  widdershins hex (engine/status.ts invertMove) flips over whatever
+   *  this says: two turns make a true. */
+  invertMove: boolean;
   /** GEAR pickup style: 'vacuum' (default) hoovers ground gear by walking
    *  over it, exactly like gems; 'key' keeps it a deliberate press (the
    *  pickup bind). A feel preference — both stay first-class. */
@@ -152,6 +159,7 @@ export interface SettingsSave {
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
   statusFalter?: boolean;
+  invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
   aimTick?: Partial<AimTickOptions>;
@@ -263,6 +271,7 @@ export const makeSettings = (): Settings => ({
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
   statusFalter: true,
+  invertMove: false,
   gearPickup: 'vacuum',
   castTelegraphs: true,
   aimTick: { ...DEFAULT_AIM_TICK },
@@ -283,6 +292,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
   statusFalter: s.statusFalter,
+  invertMove: s.invertMove,
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
   aimTick: { ...s.aimTick },
@@ -331,6 +341,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     },
     lowLifePulse: s.lowLifePulse ?? true,
     statusFalter: s.statusFalter ?? true,
+    invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
     // Tick identity: unknown styles (a removed entry) fall back; the alpha

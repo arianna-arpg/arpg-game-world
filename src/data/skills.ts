@@ -5440,6 +5440,59 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // --- THE CONFUSION FAMILY's arts (droppable gems): CONTROL itself as the
+  // hit surface — the turned hand, the addled hand. Symmetric by
+  // construction (status.ts invertMove/scrambleChance read the STATUS, not
+  // the seat), so everything the widdershin kin do to you, these do BACK:
+  // a hexed monster's feet walk contrary to its brain and its casts fire
+  // the wrong button, exactly like yours. ---
+  witching_bell: {
+    id: 'witching_bell', name: 'Witching Bell',
+    description: 'Ring a bell only the inner ear hears — every head in reach loses another cardinal (disoriented, stack on stack). At the fifth the world TURNS: they walk widdershins, feet contrary to every intent. Herding monsters ABOUT — off ledges, out of their own auras, into the ground you laid — is the art.',
+    tags: ['spell', 'chaos', 'aoe'], color: '#9ad8d0',
+    manaCost: 14, cooldown: 3.6, useTime: 0.7,
+    baseDamage: { chaos: [9, 14] },
+    delivery: { type: 'nova', radius: 140 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'disoriented', chance: 1 },
+    ],
+    requirements: { willpower: 18 },
+    ai: { range: 120, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+  scatterhex: {
+    id: 'scatterhex', name: 'Scatterhex',
+    description: 'A hex that crosses the wires between wanting and doing: the struck hand keeps REACHING WRONG (addled) — pressed casts may fire the kit\'s neighbor instead, and cooldowns burn at the worst possible moment. Watch a warcaster spend its opener on a wall.',
+    tags: ['spell', 'chaos', 'projectile'], color: '#e0b464',
+    manaCost: 11, cooldown: 5.5, useTime: 0.6,
+    baseDamage: { chaos: [8, 13] },
+    delivery: { type: 'projectile', speed: 300, radius: 10, range: 440 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'addled', chance: 1 },
+    ],
+    requirements: { willpower: 16, wisdom: 8 },
+    ai: { range: 400, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  turnwise_hex: {
+    id: 'turnwise_hex', name: 'Turnwise Hex',
+    description: 'Point at one mind and turn it WIDDERSHINS outright — no ladder, no patience: every step it takes runs contrary while the hex rides. A charger flees, a fleer charges, and the melee that wanted your throat spends the whole spell walking somewhere honest. Never a stun: it keeps its hands; you take its feet.',
+    tags: ['spell', 'chaos', 'duration', 'targeted'], color: '#5ecec0',
+    manaCost: 15, cooldown: 9, useTime: 0.5,
+    targeting: { target: 'enemy', castRange: 360 },
+    delivery: { type: 'target' },
+    baseDamage: { chaos: [6, 10] },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'widdershins', chance: 1 },
+    ],
+    requirements: { willpower: 20, wisdom: 10 },
+    ai: { range: 340, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   gut_hurl: {
     id: 'gut_hurl', name: 'Gut Hurl',
     description: 'Heave a wet knot of viscera. It hits like a sack of rot and leaves the victim VULNERABLE — opened a little wider for everything after.',

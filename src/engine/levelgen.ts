@@ -106,6 +106,11 @@ export type KnownDoodadKind =
   | 'jack_o_lantern' // a lone CARVED gourd, candle-lit — grins in the dark, pops when struck
   | 'hanging_cage' // a gibbet: post + chained cage, bone bundle inside (the hanged road)
   | 'feeding_stake' // the Court's larder-post: shackle-ring on a stained stake (the feast lane)
+  | 'witch_bell'    // a crook-hung bell in the gloam, rung by no hand you can see (the widdershin court)
+  | 'mazing_stone'  // a spiral-carved standing stone — the country's oldest warning about directions
+  // ('maddercap' — the court's addling toadstools — is a RUNTIME kind like
+  // sarsen_bumper/gore_stakes: its whole rule, touch payload included,
+  // lives in data/tracks.ts beside its contact siblings.)
   | 'coach_wreck' // a burned gloom coach — the Court's carriage after somebody's noon
   | 'drained_husk' // walkable pale remains, bled empty and folded where they knelt
   | 'ice_spike' // a rimed crystal fang jutting from frozen ground (taiga/tundra)
@@ -1811,6 +1816,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The night-feast kit: stakes are thin honest posts, the wreck is a
   // cart-class solid, husks are walk-over litter (the feast reads underfoot).
   feeding_stake: { overlap: 'solid', blocksMove: true, spacing: 34, surface: { hw: 0.34, hh: 0.34 } },
+  // The widdershin court's dressing (the confusion family's landmarks).
+  witch_bell: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, bodyScale: 0.35,
+    forbidOn: ['water', 'lava', 'chasm'],
+    resonance: { radius: 420, text: 'the bell stirs, unstruck…' } },
+  mazing_stone: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60,
+    forbidOn: ['water', 'lava', 'chasm'] },
   coach_wreck:  { overlap: 'solid', blocksMove: true, spacing: 90, surface: { hw: 0.9, hh: 0.55, angle: 0.15 }, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   drained_husk: { overlap: 'ground', walkOnly: true },
   scarecrow: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
@@ -5454,6 +5465,12 @@ registerStamp('rusted_snare', stampSingle('rusted_snare', [8, 11]));
 registerStamp('gloam_oak', stampSingle('gloam_oak', [38, 58]));
 registerStamp('pumpkin_patch', (ctx, spec) => stampBlob(ctx, 'pumpkin_patch', spec.radius ?? [16, 30], [2, 4], false));
 registerStamp('jack_o_lantern', stampSingle('jack_o_lantern', [9, 12]));
+// The widdershin court's furniture: the bell stands alone; maddercaps puff
+// in walkable clumps (their touch-rule in data/tracks.ts does the arguing);
+// the mazing stone is an honest solid.
+registerStamp('witch_bell', stampSingle('witch_bell', [14, 18]));
+registerStamp('maddercap', (ctx, spec) => stampBlob(ctx, 'maddercap', spec.radius ?? [12, 20], [2, 4], false));
+registerStamp('mazing_stone', (ctx, spec) => stampSolid(ctx, 'mazing_stone', spec.radius ?? [14, 20]));
 registerStamp('hanging_cage', stampSingle('hanging_cage', [20, 27]));
 registerStamp('fishing_rack', stampSingle('fishing_rack', [16, 24]));
 registerStamp('charcoal_mound', stampSingle('charcoal_mound', [18, 28]));

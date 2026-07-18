@@ -260,6 +260,35 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ==================================================== THE CONFUSION KIN
+  // The widdershin court's tutors: spiral eyes are the family's face (the
+  // at-a-glance "controls in danger" tell), worn LIVE so they visibly turn.
+  /** The mazer moth: powder lobes with false eyespots; the REAL eyes
+   *  spiral. Flighty, dusty, wrong. */
+  mazer_moth: {
+    parts: [
+      { kind: 'mothWings', scale: 1.0 },
+      { kind: 'disc', scale: 0.62 },
+      { kind: 'antennae', scale: 0.85 },
+    ],
+    live: [
+      { kind: 'spiralEyes', params: { spread: 0.34, dist: 0.45, size: 0.16 } },
+    ],
+  },
+  /** The widdershin wisp: a contrary spirit — glow-core body under a halo,
+   *  carrying the bell it rings only for the inner ear; the bell sways and
+   *  the eyes turn (counterclockwise, both, always). */
+  widdershin_wisp: {
+    parts: [
+      { kind: 'orb', scale: 0.95 },
+      { kind: 'halo', scale: 1.15, alpha: 0.8 },
+    ],
+    live: [
+      { kind: 'bell', x: -0.35, scale: 0.75, params: { swing: 0.22 } },
+      { kind: 'spiralEyes', params: { spread: 0.3, dist: 0.3, size: 0.2, turns: 3 } },
+    ],
+  },
+
   // =============================================================== DEMONS
   imp: {
     parts: [

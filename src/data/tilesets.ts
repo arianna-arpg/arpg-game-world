@@ -1094,6 +1094,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'mushroom_ring', count: [0, 1] },
         { kind: 'river', count: [0, 1] },
         { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+        // The widdershin court's furniture: teal caps that addle brushed
+        // feet (rule in data/tracks.ts), the odd bell, the odd warning.
+        { kind: 'maddercap', count: [1, 3] },
+        { kind: 'witch_bell', count: [0, 1] },
+        { kind: 'mazing_stone', count: [0, 2] },
       ] },
     ],
     packs: {
@@ -1108,6 +1113,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'zombie', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'hollow_lantern', weight: 2 },
+        // The widdershin court: the confusion family's tutors (dust that
+        // addles the hand, bells that turn the feet) — early enough to
+        // teach the tells, faded before the Court's own heavies own it.
+        { id: 'mazer_moth', weight: 2, presence: { to: 24, fadeOut: 10 } },
+        { id: 'widdershin_wisp', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'feeding_thrall', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'vampire_thrall', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'crimson_bat', weight: 2, presence: { to: 22, fadeOut: 10 } },

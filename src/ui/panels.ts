@@ -4191,6 +4191,10 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips — brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${this.getSettings().statusFalter ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Invert Movement</span>
+        <button id="opt-invertmove" title="Up walks down, left walks right — movement keys and the move stick alike (Swap Sticks trades WHICH stick moves; this flips WHICH WAY movement goes). Fair warning: the widdershins hex inverts controls too, so wearing it while this is ON plays standard for the duration — two turns make a true.">${this.getSettings().invertMove ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Improvised Strike (empty slots swing)</span>
         <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike — the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${this.getSettings().improvisedStrike ? 'ON' : 'OFF'}</button>
       </div>
@@ -4268,6 +4272,14 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-falter')!.addEventListener('click', () => {
       const s = this.getSettings();
       s.statusFalter = !s.statusFalter;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // Movement inversion is a device-layer preference (main.ts flips the
+    // assembled intent) — the widdershins hex composes over it as XOR.
+    root.querySelector<HTMLElement>('#opt-invertmove')!.addEventListener('click', () => {
+      const s = this.getSettings();
+      s.invertMove = !s.invertMove;
       this.saveSettings();
       this.renderKeybinds(root, onBack);
     });

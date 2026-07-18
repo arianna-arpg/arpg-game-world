@@ -1227,6 +1227,7 @@ export class Renderer {
     }
     if (fx.some(f => f.def.kind === 'frost')) this.drawFrost(w, h, t);
     if (fx.some(f => f.def.kind === 'stars')) this.drawStunStars(w, h, t);
+    if (fx.some(f => f.def.kind === 'spin')) this.drawSpin(w, h, t);
     const pall = fx.filter(f => f.def.kind === 'pall');
     if (pall.length) this.drawPall(w, h, Math.min(1, Math.max(...pall.map(f => (f.def.intensity ?? 1) * f.k))));
     const dark = fx.filter(f => f.def.kind === 'darken');
@@ -1291,6 +1292,32 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
     ctx.font = '12px Verdana';
+  }
+
+  /** WIDDERSHINS chevrons (the confusion family's spin): a ring of small
+   *  arrows orbiting COUNTERCLOCKWISE at the screen's rim — the turn
+   *  itself is the message. Kept sparse and edge-bound so the fight stays
+   *  readable; the flipped feet are the real effect, this only names it. */
+  private drawSpin(w: number, h: number, t: number): void {
+    const { ctx } = this;
+    const n = 7, R = Math.min(w, h) * 0.46;
+    ctx.strokeStyle = '#5ecec0';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = -t * 1.6 + (i / n) * Math.PI * 2; // negative sweep = widdershins
+      const cx = w / 2 + Math.cos(a) * R;
+      const cy = h / 2 + Math.sin(a) * R * 0.62;
+      const dir = a - Math.PI / 2; // tangent along the counterclockwise travel
+      ctx.globalAlpha = 0.35 + 0.3 * Math.sin(t * 3 + i * 1.7);
+      const L = 9;
+      ctx.beginPath();
+      ctx.moveTo(cx - Math.cos(dir - 0.5) * L, cy - Math.sin(dir - 0.5) * L);
+      ctx.lineTo(cx, cy);
+      ctx.lineTo(cx - Math.cos(dir + 0.5) * L, cy - Math.sin(dir + 0.5) * L);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** Little stars circling the upper screen (stun). */

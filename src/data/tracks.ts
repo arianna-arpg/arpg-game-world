@@ -100,6 +100,24 @@ registerDoodadRule('sarsen_bumper', {
   },
 });
 
+// --- THE MADDERCAP — the confusion family's terrain voice -------------------
+// Spiral-capped toadstools that PUFF when brushed: a chime of addling dust,
+// and the walker loses a cardinal (disoriented — five brushes and they turn
+// widdershins). Walk-through by design (overlap 'trigger'): feet decide, and
+// a careful route simply goes around — the clump is a PRICE on the straight
+// line, never a wall. Faction-blind like every touch-rule: the dust addles
+// wolf and hero alike, and herding a pack THROUGH the caps with a Turnwise
+// Hex is exactly the emergent play the family exists for.
+registerDoodadRule('maddercap', {
+  overlap: 'trigger',
+  spacing: 70,
+  forbidOn: ['water', 'lava', 'chasm'],
+  contact: {
+    icdSec: 1.2,
+    status: { id: 'disoriented', chance: 1 },
+  },
+});
+
 // --- THE GORE STAKES — the grab fabric's terrain payoff ---------------------
 // Sharpened rows in the grip kin's grounds (engine/grab.ts). SPEED-GATED
 // (TrackPayload.minSpeed): careful feet pick through free, but any body

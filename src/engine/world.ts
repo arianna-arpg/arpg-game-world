@@ -18705,6 +18705,11 @@ export class World {
     };
   }
 
+  /** Re-entrancy latch for THE ADDLED HAND (StatusDef.scrambleChance): the
+   *  substitute cast must never roll a second scramble — one turn per
+   *  press, no redirect chains. */
+  private scrambleLatch = false;
+
   /**
    * The one path through which ANYONE uses ANY skill. Validates, pays, and
    * either executes instantly (cast time 0) or starts a cast / channel /
@@ -18847,6 +18852,42 @@ export class World {
           this.text(caster.pos, 'befuddled!', '#c878b8', 12);
           return false;
         }
+      }
+    }
+    // THE ADDLED HAND (StatusDef.scrambleChance — befuddlement's misfiring
+    // sibling): a volitional press may fire a DIFFERENT ready skill from
+    // the caster's own kit — the hand goes to the wrong button, and
+    // cooldowns burn at the worst moment. Symmetric by construction:
+    // player bar slots and a monster's aiActionInsts are one pool law.
+    // Exempt: internal mints (hostSkillId — metas/converts), triggered
+    // fires (trigDepth), the reflex lane BOTH ways (flasks are never
+    // touched, pressed or substituted), and the substitute call itself
+    // (the latch — one turn per press, no scramble chains).
+    if (!this.scrambleLatch && !inst.hostSkillId && !inst.state?.trigDepth
+      && !def.reflex && (def.tags.includes('attack') || def.tags.includes('spell'))) {
+      for (const s of caster.statuses) {
+        const sd = STATUS_DEFS[s.id];
+        if (!sd?.scrambleChance || !chance(sd.scrambleChance)) continue;
+        const pool: SkillInstance[] = [];
+        const admit = (k: SkillInstance | null | undefined): void => {
+          if (!k || k === inst || k.def.id === def.id || k.def.reflex) return;
+          if (!(k.def.tags.includes('attack') || k.def.tags.includes('spell'))) return;
+          if (instanceTrigger(k) !== undefined) return; // armed triggers are not buttons
+          if (k.def.delivery.type === 'aura') return;   // never thrash a stance
+          if (!caster.canUse(k)) return; // the wrong button still has to WORK
+          pool.push(k);
+        };
+        for (const k of caster.skills) admit(k);
+        if (caster.aiActionInsts) for (const k of caster.aiActionInsts.values()) admit(k);
+        if (pool.length) {
+          const sub = pool[Math.min(pool.length - 1, Math.floor(rand(0, pool.length)))];
+          this.text(vec(caster.pos.x, caster.pos.y - 16), 'addled!', sd.color, 12);
+          this.scrambleLatch = true;
+          const ok = this.useSkill(caster, sub, aim, seatPress);
+          this.scrambleLatch = false;
+          return ok;
+        }
+        break; // a one-button kit: the addled hand still finds it
       }
     }
 
@@ -38353,6 +38394,16 @@ export class World {
         if (want > 0.001) hold.struggle += GRAB_CFG.break.moveFeed * Math.min(1, want) * dt;
       }
       return;
+    }
+    // WIDDERSHINS (StatusDef.invertMove — the confusion family's turned
+    // hand): VOLITIONAL intent flips at the one mover, so the player's
+    // keys, a monster's steering and a minion's orders all betray their
+    // bearers alike — the brain commands 'approach', the feet answer
+    // 'away'. Knockback (pushActor), grab reeling and track shoves ride
+    // other arteries untouched: the world still moves you true; only your
+    // own steps turn contrary.
+    for (const s of a.statuses) {
+      if (STATUS_DEFS[s.id]?.invertMove) { dx = -dx; dy = -dy; break; }
     }
     // Channeling restricts movement per the skill's data, opened back up by
     // the channelMobility stat (immobile 0 / slowed factor / normal 1, + stat).

@@ -823,6 +823,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { color: '#d8722a', stem: '#5a6a30', glow: '#ffb44a', lit: true, n: 1 },
     light: { radius: -2.6, color: '#ff9a3a', intensity: 0.28, flicker: 1.3 },
   },
+  // --- The widdershin court's dressing (the confusion family's landmarks;
+  // kinds in levelgen.ts, the maddercap's touch-rule in data/tracks.ts) ---
+  witch_bell: {
+    painter: 'hungBell', order: 54, shadow: 0.35, longShadow: 1.4,
+    params: { wood: '#43382a', metal: '#7ca89e' },
+    light: { radius: -2.2, color: '#5ecec0', intensity: 0.2, flicker: 0.8 },
+  },
+  maddercap: {
+    painter: 'toadstools', order: 47,
+    params: { cap: '#3f9a8e', speck: '#c8ece4' },
+  },
+  mazing_stone: {
+    painter: 'spiralStone', order: 52, shadow: 0.45, longShadow: 1.7,
+    params: { stone: '#68706c', carve: '#374440' },
+  },
   hanging_cage: {
     painter: 'gibbet', order: 55, shadow: 0.45, longShadow: 1.6,
     params: { wood: '#4c3e2c', iron: '#3a3d44', bone: '#c9bda2' },

@@ -650,6 +650,83 @@ const spikes: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** HYPNO-SPIRAL EYES — the confusion family's face: where an eye would sit,
+ *  a tight drawn spiral (live: it slowly TURNS, counterclockwise of
+ *  course). The at-a-glance promise on any body that unmakes your bearings
+ *  — wear it beside disoriented/widdershins/addled kits so the player can
+ *  read "controls are in danger" before the first hex lands. params:
+ *  spread (lateral frac of R), dist (forward frac), size (frac of R),
+ *  turns. */
+const spiralEyes: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'glow');
+  place(ctx, r, spec, (c, R) => {
+    const spread = P(spec, 'spread', 0.42), dist = P(spec, 'dist', 0.5);
+    const size = P(spec, 'size', 0.16), turns = P(spec, 'turns', 2.5);
+    for (const side of [-1, 1]) {
+      c.save();
+      c.translate(R * dist, R * spread * side);
+      c.rotate(-t * 0.9); // widdershins, naturally
+      c.strokeStyle = ramp.highlight;
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.beginPath();
+      const S = R * size, end = turns * Math.PI * 2;
+      for (let a = 0; a <= end; a += 0.25) {
+        const rr = S * (a / end);
+        const x = Math.cos(-a) * rr, y = Math.sin(-a) * rr;
+        if (a === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.stroke();
+      c.restore();
+    }
+  });
+};
+
+/** MOTH WINGS — broad powder lobes swept back, each wearing an EYESPOT
+ *  (the false gaze every collector knows). Distinct on purpose from the
+ *  demons' membrane `wings` and the raptors' `featherWings`: soft rounded
+ *  silhouette, no ribs, dust flecks instead of sheen. params: span (lobe
+ *  length frac of R), spot (eyespot size frac of the lobe). */
+const mothWings: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    const span = P(spec, 'span', 1.7), spot = P(spec, 'spot', 0.3);
+    const back = Math.PI;
+    for (const side of [-1, 1]) {
+      for (const [spread, len, w] of [[0.55, span, 0.62], [0.95, span * 0.72, 0.5]] as const) {
+        const ang = back + side * spread;
+        const tx = Math.cos(ang) * R * len, ty = Math.sin(ang) * R * len;
+        c.fillStyle = withAlpha(ramp.base, 0.95);
+        c.beginPath();
+        c.moveTo(R * 0.1, side * R * 0.2);
+        c.quadraticCurveTo(tx * 0.5 - side * R * 0.2 * Math.sin(ang), ty * 0.5 + R * 0.2 * Math.cos(ang), tx, ty);
+        c.quadraticCurveTo(tx * 0.6 + side * R * w * Math.sin(ang), ty * 0.6 - R * w * 0.5 * Math.cos(ang), R * 0.02, side * R * 0.05);
+        c.closePath();
+        c.fill();
+        outlined(c, ramp, 1.05);
+        // The eyespot on the big lobe only: ring + dark pupil — the false
+        // regard that makes a moth read as a WATCHER at a glance.
+        if (len === span) {
+          const ex = tx * 0.55, ey = ty * 0.55, er = R * len * spot * 0.32;
+          c.strokeStyle = withAlpha(ramp.highlight, 0.85);
+          c.lineWidth = Math.max(1, R * 0.06);
+          c.beginPath(); c.arc(ex, ey, er, 0, Math.PI * 2); c.stroke();
+          c.fillStyle = shade(ramp.base, -0.45);
+          c.beginPath(); c.arc(ex, ey, er * 0.45, 0, Math.PI * 2); c.fill();
+        }
+      }
+      // Powder: a few pale dust flecks off the trailing edge.
+      c.fillStyle = withAlpha(ramp.highlight, 0.5);
+      for (let i = 0; i < 3; i++) {
+        const ang = back + side * (0.5 + i * 0.22);
+        const dr = R * (span * 0.75 + i * 0.16);
+        c.beginPath();
+        c.arc(Math.cos(ang) * dr, Math.sin(ang) * dr, R * 0.045, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  });
+};
+
 /** Membrane wings swept back (the adorn, part-ified). */
 const wings: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'base');
@@ -4508,6 +4585,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   cobraHood, fangJaw, coil,
   anchor,
   grapnel, yoke, gulletSac,
+  spiralEyes, mothWings,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

@@ -6771,6 +6771,37 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
   // A scrap of dark with eyes — the gloam's lesser kin, swarming and fading.
+  // THE CONFUSION KIN (the widdershin court): tutors for the control lanes.
+  // Everything they do to you, the droppable arts do BACK (witching_bell /
+  // scatterhex / turnwise_hex) — status.ts invertMove/scrambleChance read
+  // the STATUS, never the seat, so a hexed monster's feet walk contrary to
+  // its own brain and its casts fire the wrong button, exactly like yours.
+  // Spiral eyes (looks.ts) are the at-a-glance promise on both.
+  mazer_moth: {
+    id: 'mazer_moth', name: 'Mazer Moth',
+    color: '#9ad8d0', shape: 'triangle', radius: 9, material: 'chitin', look: 'mazer_moth',
+    base: { life: 16, moveSpeed: 195, accuracy: 80, evasion: 55, mana: 30, manaRegen: 3 },
+    skills: ['scatterhex', 'talon_rake'], xp: 9,
+    faction: 'occult',
+    flier: true, levitates: true,
+    // Dust in threes and fives: one moth is a curiosity, a flight is a
+    // cooldown massacre — the pack IS the threat budget.
+    packSize: [3, 5],
+    aggro: { fixation: 1.4, fury: 0.5, waver: 1.5 },
+    brain: { type: 'swarm' },
+  },
+  widdershin_wisp: {
+    id: 'widdershin_wisp', name: 'Widdershin Wisp',
+    color: '#5ecec0', shape: 'circle', radius: 8, material: 'ethereal', look: 'widdershin_wisp',
+    base: { life: 20, moveSpeed: 150, accuracy: 90, evasion: 45, mana: 45, manaRegen: 5 },
+    skills: ['witching_bell', 'turnwise_hex'], xp: 12,
+    faction: 'occult',
+    flier: true, levitates: true,
+    // Spirit texture: a couple of honest swats, not a life pool.
+    plies: { count: 2 },
+    brain: { type: 'caster' },
+  },
+
   gloomling: {
     id: 'gloomling', name: 'Gloomling',
     color: '#5a6a7a', shape: 'pentagon', radius: 9, material: 'ethereal', look: 'gloomling',

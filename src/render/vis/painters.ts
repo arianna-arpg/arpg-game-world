@@ -3949,6 +3949,105 @@ const shelfFungus: GroupPainter = (env, group, def) => {
 
 /** A TOADSTOOL CLUMP — little speckled caps huddling two-to-four: the fairy
  *  ring's citizens. Cap tone jitters per cap; specks ring the crown. */
+/** A CROOK-HUNG BELL — the widdershin court's chapel furniture: a leaning
+ *  post, a curled crook, the bell under it, mouth down. The chime is for
+ *  the inner ear (the confusion kin and the maddercap do the actual
+ *  arguing); this is the landmark that says WHOSE wood you are in.
+ *  params: wood, metal. */
+const hungBell: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; metal?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#4c3e2c');
+  const metal = resolveColor(p.metal, theme, '#7a8a86');
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const R = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((hash01(1, seed) - 0.5) * 0.24);
+    // The post, up from the ground anchor, curling into the crook.
+    ctx.strokeStyle = wood;
+    ctx.lineWidth = Math.max(2, R * 0.18);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, R * 0.2);
+    ctx.lineTo(0, -R * 1.5);
+    ctx.quadraticCurveTo(R * 0.05, -R * 1.95, R * 0.55, -R * 1.85);
+    ctx.stroke();
+    // The bell at the crook's tip.
+    const bx = R * 0.55, by = -R * 1.55;
+    ctx.fillStyle = metal;
+    ctx.beginPath();
+    ctx.moveTo(bx - R * 0.16, by - R * 0.16);
+    ctx.quadraticCurveTo(bx - R * 0.24, by + R * 0.18, bx - R * 0.34, by + R * 0.28);
+    ctx.lineTo(bx + R * 0.34, by + R * 0.28);
+    ctx.quadraticCurveTo(bx + R * 0.24, by + R * 0.18, bx + R * 0.16, by - R * 0.16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(metal, -0.5), 0.9);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(shade(metal, 0.35), 0.7);
+    ctx.beginPath();
+    ctx.moveTo(bx - R * 0.26, by + R * 0.22);
+    ctx.lineTo(bx + R * 0.26, by + R * 0.22);
+    ctx.stroke();
+    // The clapper peeking under the mouth.
+    ctx.fillStyle = shade(metal, -0.55);
+    ctx.beginPath();
+    ctx.arc(bx, by + R * 0.34, R * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** A SPIRAL-CARVED STANDING STONE — the country's oldest warning about
+ *  directions: a tapered, leaning monolith wearing one deep widdershins
+ *  groove (wound counterclockwise, like everything else in that court).
+ *  params: stone, carve. */
+const spiralStone: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stone?: ColorSpec; carve?: ColorSpec };
+  const { ctx, theme } = env;
+  const stone = resolveColor(p.stone, theme, '#6a6e6a');
+  const carve = resolveColor(p.carve, theme, '#3c443f');
+  for (const o of group) {
+    const seed = ((o.pos.x * 11 + o.pos.y * 5) | 0) >>> 0;
+    const R = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((hash01(2, seed) - 0.5) * 0.2);
+    // The monolith: a tapered slab, lit side toward the sun.
+    const L = VIS_CFG.lightAngle;
+    const g = ctx.createLinearGradient(Math.cos(L) * R, Math.sin(L) * R, -Math.cos(L) * R, -Math.sin(L) * R);
+    g.addColorStop(0, shade(stone, 0.18));
+    g.addColorStop(1, shade(stone, -0.22));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-R * 0.5, R * 0.3);
+    ctx.lineTo(-R * 0.34, -R * 1.4);
+    ctx.quadraticCurveTo(0, -R * 1.72, R * 0.3, -R * 1.34);
+    ctx.lineTo(R * 0.52, R * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(stone, -0.5), 0.85);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // The carve: a widdershins spiral incised at the heart.
+    ctx.strokeStyle = carve;
+    ctx.lineWidth = Math.max(1.2, R * 0.07);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const cy0 = -R * 0.6, S = R * 0.34, end = 2.6 * Math.PI * 2;
+    for (let a = 0; a <= end; a += 0.3) {
+      const rr = S * (a / end);
+      const x = Math.cos(-a) * rr, y = cy0 + Math.sin(-a) * rr * 0.8;
+      if (a === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 const toadstools: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { cap?: ColorSpec; speck?: ColorSpec };
   const { ctx, theme } = env;
@@ -8683,7 +8782,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
   clotMound, arteryStalk, sphincterDoor, membraneSeal, villusBed, lashBed, gutKnuckle, ocularKnot, colossalHeart,
-  watcherStone,
+  watcherStone, hungBell, spiralStone,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
   cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,

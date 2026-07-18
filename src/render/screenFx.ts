@@ -13,8 +13,7 @@
 
 import { STATUS_DEFS, type ActiveStatus } from '../engine/status';
 
-export type ScreenFxKind = 'vignette' | 'frost' | 'stars' | 'pall' | 'darken';
-// Future kinds (one entry + one draw branch each): 'spin' (daze).
+export type ScreenFxKind = 'vignette' | 'frost' | 'stars' | 'pall' | 'darken' | 'spin';
 
 export interface ScreenFxDef {
   kind: ScreenFxKind;
@@ -62,6 +61,14 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
   retching:  { kind: 'vignette', intensity: 0.7 },
   blind:     { kind: 'darken', intensity: 0.9 },
   seen:      { kind: 'vignette', intensity: 0.4 },
+  // THE CONFUSION FAMILY (status.ts invertMove/scrambleChance — these rows
+  // are only the READS): the building maze is a teal edge wash climbing
+  // with the stacks; WIDDERSHINS is the SPIN — a chevron orbit running
+  // COUNTERCLOCKWISE, the one overlay whose motion IS the mechanic (your
+  // steps run contrary too); the addled hand is a gold flicker at the rim.
+  disoriented: { kind: 'vignette', intensity: 0.45, stacksScale: true },
+  widdershins: { kind: 'spin', intensity: 0.9 },
+  addled:      { kind: 'vignette', intensity: 0.45 },
   // THE KARST ladder: stone climbing the body reads as the world draining
   // toward limestone grey (the pall's desaturate, stack-scaled), and full
   // petrification is stone-grey stillness — beatless like the swoon, because

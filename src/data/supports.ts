@@ -4343,6 +4343,25 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('apply_beheld', 'flat', 0.025), mod('damageVs_seen', 'flat', 0.015)],
     weight: 5, minDropLevel: 10,
   },
+  // The confusion family's socketable halves (status.ts — CONTROL as the
+  // hit surface): both ride the auto-generated apply_ lanes like their
+  // flesh-country siblings above, and both work on ANY hitting kit.
+  maddering: {
+    id: 'maddering', name: 'Maddering',
+    description: 'Supported skills ring in the INNER EAR: 30% of hits build disoriented. Five deep and they turn WIDDERSHINS — every step contrary to its own brain — and a turned enemy is a HERDED one: ring them off ledges, out of formation, into the ground you laid.',
+    color: '#9ad8d0', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_disoriented', 'flat', 0.3)],
+    perLevel: [mod('apply_disoriented', 'flat', 0.025)],
+    weight: 5, minDropLevel: 10,
+  },
+  addling: {
+    id: 'addling', name: 'Addling',
+    description: 'Supported skills CROSS THE WIRES: 20% of hits leave the target addled — its casts may fire the wrong button entirely, burning cooldowns at your convenience. A control economy, not a damage one: what a boss wastes, you did not have to survive.',
+    color: '#e0b464', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_addled', 'flat', 0.2)],
+    perLevel: [mod('apply_addled', 'flat', 0.02)],
+    weight: 5, minDropLevel: 12,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);
