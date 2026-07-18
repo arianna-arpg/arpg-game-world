@@ -1162,6 +1162,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'stairFlight', order: 54, shadow: 0.4,
     params: { wood: '#3e2e20', dark: '#060505', runner: '#2e3a4a', label: 'the Garret' },
   },
+  // The sewers' door + its one honest lamp (the descend lane's civic mouth).
+  sewer_grate: { painter: 'sewerGrate', order: 22, bakeWhole: 'static' },
+  light_shaft: {
+    painter: 'lightShaft', order: 58,
+    light: { radius: -2.2, color: '#c8dce8', intensity: 0.4 },
+  },
   lantern_post: {
     painter: 'lanternPost', order: 55, shadow: 0.35, longShadow: 1.5,
     light: { radius: -11, color: '#ffd898', intensity: 0.5, flicker: 4 },

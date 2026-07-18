@@ -8772,8 +8772,51 @@ const targetButt: GroupPainter = (env, group) => {
   }
 };
 
+/** A SEWER GRATE: the undercity's door — a ringed iron grille set into the
+ *  paving, dark between the bars (what's down there is not the street's
+ *  business until you dwell on it). */
+const sewerGrate: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.fillStyle = '#101410';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a3f3a';
+    ctx.lineWidth = Math.max(2, r * 0.14);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.88, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = Math.max(1, r * 0.09);
+    const h = settledHash(o.pos.x, o.pos.y);
+    ctx.rotate(h * Math.PI);
+    for (let k = -2; k <= 2; k++) {
+      const x = k * r * 0.3;
+      const half = Math.sqrt(Math.max(0, r * 0.8 * r * 0.8 - x * x));
+      ctx.beginPath(); ctx.moveTo(x, -half); ctx.lineTo(x, half); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** GRATE-LIGHT: the shaft of street-day falling into the dark — a soft cool
+ *  pool with a brighter core (the light layer amplifies it at need). */
+const lightShaft: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    const g2 = ctx.createRadialGradient(o.pos.x, o.pos.y, 0, o.pos.x, o.pos.y, r * 1.4);
+    g2.addColorStop(0, withAlpha('#d8e8f0', 0.28));
+    g2.addColorStop(0.5, withAlpha('#b8d0dc', 0.12));
+    g2.addColorStop(1, withAlpha('#b8d0dc', 0));
+    ctx.fillStyle = g2;
+    ctx.fillRect(o.pos.x - r * 1.5, o.pos.y - r * 1.5, r * 3, r * 3);
+    ctx.fillStyle = withAlpha('#e8f4f8', 0.2);
+    ctx.beginPath(); ctx.ellipse(o.pos.x, o.pos.y, r * 0.5, r * 0.34, 0, 0, Math.PI * 2); ctx.fill();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
-  wheatStalk, windmillTower, chimneyStack, hideRack, targetButt,
+  wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,

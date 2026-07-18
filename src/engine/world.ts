@@ -79,6 +79,7 @@ import {
   type ResonanceSpec,
 } from './levelgen';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
+import { makeTierView, resolveTierCrossing, tierFloorOf, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
@@ -693,6 +694,11 @@ interface Projectile {
    *  radius0 on a fixed rhythm. */
   pulse?: number;
   radius0?: number;
+  /** THE TIER FABRIC: the layer this flight travels on (caster's at spawn).
+   *  Tier-1 flights cross deck-height air — the region blocksShot sweep
+   *  exempts rows that are tier FLOOR (an arrow sails over a butte's top;
+   *  a duct shot still stops on the earth between tunnels). */
+  tier?: number;
   pos: Vec2; dir: number; speed: number; radius: number;
   /** Fractional speed change per second of flight (Momentum; floors low). */
   accel?: number;
@@ -1723,6 +1729,8 @@ interface ZoneEnemyMemo {
   /** Display name at capture — a named elite ("Goresnap the Bilious") must be
    *  the SAME foe on re-entry, or the memorability the mill buys evaporates. */
   name?: string;
+  /** THE TIER FABRIC: the layer it stood on — a deck body returns to its deck. */
+  tier?: number;
 }
 
 /** What a left zone remembers, per run, for ZONE_MEMORY_TTL game-seconds: the
@@ -2499,6 +2507,9 @@ export class World {
    *  the spawn samplers take the untouched convex path (zero regression). When
    *  present, they consult it so actors stay on walkable ground and AI paths. */
   walk: WalkField | null = null;
+  /** THE TIER FABRIC (engine/tiers.ts): the second layer's stateless walk
+   *  view over the SAME grid (null in flat/convex zones). */
+  private tierView: WalkView | null = null;
   /** Underwater air-pocket discs (centre + radius) — the renderer draws a round wash
    *  + rising bubbles inside each (the air-pocket indicator). Empty outside the sea.
    *  Also reused by the Unmade's flood phase for its shrinking relief islands. */
@@ -3630,6 +3641,10 @@ export class World {
     this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
     this.walk = layout.walk ?? null; // a non-convex layout's walkability (else convex)
+    // THE TIER FABRIC (engine/tiers.ts): the second layer's walk view — a
+    // stateless adapter over the SAME grid (tier flags on region rows), so
+    // carves and repaints self-heal on both layers by construction.
+    this.tierView = this.walk ? makeTierView(this.walk) : null;
     this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
     this.structures = layout.structures ?? []; // plan structures (rects/roofs/doors/slots)
     // A PORT's DOCK: planted on the oceanward arena edge (the coast landmark's
@@ -7287,6 +7302,11 @@ export class World {
       // rolled, else the first body) — squad tactics (muster, tokens, focus
       // fire, formations, leader-death reactions) all key off these stamps.
       const squadId = this.nextSquadId();
+      // THE TIER SPLIT (engine/tiers.ts): a tiered zone seeds a share of its
+      // packs on the second layer — the deck duel and the valley duel are
+      // different packs. Rolled per PACK so squads never straddle a rim.
+      const tierPack = !!def.tiers && this.tierView !== null
+        && Math.random() < (def.tiers.packSplit ?? TIER_CFG.packSplit);
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(type, def.level, 'enemy');
         // TERRAIN-BOUND (MonsterDef.habitat): the body exists only on its
@@ -7301,6 +7321,10 @@ export class World {
           // blob that clampPos's passes can't escape — a monster BORN embedded
           // pingpongs against the collision resolve forever (cost + nonsense).
           m.pos = this.findFreeSpot(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+          if (tierPack && this.tierView && this.walk) {
+            const q = this.tierView.snapToWalkable(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)));
+            if (tierFloorOf(this.walk.regionAt?.(q.x, q.y))) { m.pos = vec(q.x, q.y); m.tier = 1; }
+          }
         }
         this.actors.push(m);
       }
@@ -11124,7 +11148,7 @@ export class World {
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
-        name: a.name,
+        name: a.name, ...(a.tier ? { tier: a.tier } : {}),
       });
     }
     // Structure-door states (id → open/broken): the doodads carry the live state;
@@ -11210,8 +11234,9 @@ export class World {
       if (e.rarity) this.promoteRarity(m, e.rarity);
       if (e.name) m.name = e.name; // the exact remembered name, never a re-roll
       if (e.tag) m.tag = e.tag;
+      if (e.tier) m.tier = e.tier; // the tier fabric: a deck body returns to its deck
       m.fromZoneGen = true;
-      m.pos = this.clampPos(vec(e.x, e.y), m.radius);
+      m.pos = this.clampPos(vec(e.x, e.y), m.radius, undefined, { mover: m });
       m.fillResources();
       m.life = Math.max(1, Math.min(m.maxLife(), e.life));
       this.actors.push(m);
@@ -11380,6 +11405,7 @@ export class World {
           ...(memo.rarity && RARITY_DEFS[memo.rarity as MonsterRarity] ? { rarity: memo.rarity as MonsterRarity } : {}),
           ...(memo.tag ? { tag: memo.tag } : {}),
           ...(memo.name ? { name: memo.name } : {}),
+          ...(memo.tier ? { tier: memo.tier } : {}),
         });
       }
       const doorState: Record<string, 'open' | 'broken'> = {};
@@ -17461,6 +17487,12 @@ export class World {
 
   /** Are two actors on opposing sides — counting faction diplomacy? */
   hostileTo(a: Actor, b: Actor): boolean {
+    // THE TIER LAW (engine/tiers.ts): layers share a screen, never a fight —
+    // a deck body and a valley body cannot target, strike, or threaten each
+    // other. Sitting in the ONE hostility gate, targeting, swings, threat
+    // and projectiles all agree for free. (Shoving a body OFF its layer is
+    // the honest way to bring a fight down — the rim fall in the push lane.)
+    if ((a.tier ?? 0) !== (b.tier ?? 0)) return false;
     if (a.team !== b.team) return true;
     // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
     // whose side the food nominally stands on — and it's ONE-directional:
@@ -22155,6 +22187,9 @@ export class World {
 
     this.projectiles.push({
       pos: vec(origin.x, origin.y),
+      // THE TIER LAW: a flight belongs to its caster's layer (chain children
+      // spread-copy it; hostility keeps victims same-tier).
+      tier: caster.tier,
       dir, guideDir: dir,
       guided: spiral > 0 || orbit > 0 || spin > 0 || weave > 0,
       speed,
@@ -29381,6 +29416,20 @@ export class World {
         // routing pays the shover for it (walkers merely arrested at a rim
         // by their own steering are held, never dropped).
         if (hit === 'void') this.resolveBoundary(a, sc, from, true);
+        // THE RIM FALL (engine/tiers.ts): a tier-1 body SHOVED past its
+        // layer's rim — where the deck's floor ends but the valley below
+        // stands — FALLS: it lands on tier 0 at the overshoot, staggered.
+        // Walking never drops (the rim is a wall to feet); only force does.
+        if (hit === 'wall' && a.tier === 1 && this.walk && this.zone.tiers) {
+          const rawX = from.x + p.vx * dt, rawY = from.y + p.vy * dt;
+          if (!tierFloorOf(this.walk.regionAt?.(rawX, rawY)) && this.walk.isWalkable(rawX, rawY)) {
+            a.tier = 0;
+            a.pos = this.clampPos(vec(rawX, rawY), a.radius, undefined, { mover: a });
+            a.applyStatus('stun', 0, TIER_CFG.fallStunSec, 'the fall');
+            this.text(vec(a.pos.x, a.pos.y - 20), 'over the edge!', '#c8b8a0', 13);
+            p.vx *= 0.4; p.vy *= 0.4;
+          }
+        }
         if ((hit === 'wall' || hit === 'void') && !p.collided && p.caster && p.inst && !p.caster.dead) {
           p.collided = true;
           this.rollCollisionProcs(p.caster, p.inst, a);
@@ -35462,8 +35511,12 @@ export class World {
         const n = Math.max(1, Math.ceil(slen / step));
         for (let i = 1; i <= n; i++) {
           const sx = prev.x + sdx * (i / n), sy = prev.y + sdy * (i / n);
-          const k = regionKind(this.walk.regionAt(sx, sy));
-          if (k?.blocksShot) {
+          const kId = this.walk.regionAt(sx, sy);
+          const k = regionKind(kId);
+          // Tier-1 flights cross deck-height air: a row that is tier FLOOR
+          // (a butte top, a span) is open ground under the arrow, never a
+          // wall — while true earth (a duct's surroundings) still stops it.
+          if (k?.blocksShot && !((p.tier ?? 0) === 1 && tierFloorOf(kId))) {
             this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
@@ -37921,6 +37974,15 @@ export class World {
     }
     const b1 = clampToBounds(out, radius, this.arena);
     out.x = b1.x; out.y = b1.y;
+    // THE TIER SWAP (engine/tiers.ts): a tier-1 mover confines against ITS
+    // layer's floor — the tier view is scoped over this.walk for exactly the
+    // confine block below (synchronous, never re-entrant: walkResolve/
+    // walkSweep read this.walk, so the swap reaches every sample without
+    // threading a param through four layers). Restored in the finally.
+    const moverTier = (opts?.mover as { tier?: number } | undefined)?.tier ?? 0;
+    const tierSwap = moverTier === 1 && this.tierView && this.walk ? this.walk : null;
+    if (tierSwap) this.walk = this.tierView as unknown as GridWalkField;
+    try {
     // NON-CONVEX zones (Phase 2/3): keep the actor on walkable ground, but ASK THE
     // REGION POLICY (not a bare bool) — walls confine, void is enter-then-resolve,
     // and a displacement may opt to cross. NULL walk (plains + existing) skips all.
@@ -37959,6 +38021,7 @@ export class World {
         out.x = s.x; out.y = s.y;
       }
     }
+    } finally { if (tierSwap) this.walk = tierSwap; } // the tier swap ends with the walk confine
     // THE PITFALL CONFINE (the pitfall fabric, engine/pitfall.ts): fall-able
     // pit doodads are DROPS, not walls. The sweep advances while the body's
     // grasp disc still overlaps standing ground or a spanning deck — the
@@ -37972,7 +38035,9 @@ export class World {
     // walks it like floor. Zones without pits pay one empty-list check.
     {
       const pits = this.zonePits();
-      if (pits.length && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
+      // Tier-1 movers pass over pit mouths (a deck spans the world's floor
+      // features — the rim fall is their only way down).
+      if (pits.length && moverTier !== 1 && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
         const grasp = radius * WALK_CFG.ledgeGrasp;
         const home = this.pitHomeKinds(opts?.mover, pits);
         if (from) {
@@ -38142,8 +38207,24 @@ export class World {
   private steppedClamp(a: Actor, dest: Vec2, from: Vec2, disp?: DisplacementPolicy): void {
     const sc = this.cScratch;
     sc.hit = 'none';
-    a.pos = this.clampPos(dest, a.radius, from, { out: sc, disp });
+    // TIER CROSSING (engine/tiers.ts): standing on a link (ramp, culvert)
+    // and stepping toward ground only the other layer owns FLIPS the body's
+    // tier BEFORE the clamp judges the move — walking up a ramp is just
+    // walking. (Pure read; flat zones return the tier untouched.)
+    if (this.zone.tiers && this.walk) a.tier = resolveTierCrossing(this.walk, a.tier, from, dest);
+    a.pos = this.clampPos(dest, a.radius, from, { out: sc, disp, mover: a });
     if ((sc.hit as string) === 'void') this.resolveBoundary(a, sc, from);
+    // THE LADDER TOGGLE (the crossing law's second half): a link cell whose
+    // neighborhood is BOTH-tier ground (a culvert well among street-over-duct
+    // cells) never trips the exit rule — so ENTERING a link flips the layer
+    // outright, latched to one toggle per visit. Stepping onto an open
+    // culvert IS descending; reaching a well from the duct IS surfacing.
+    // Ramps self-correct through the exit rule above either way.
+    if (this.zone.tiers && this.walk?.regionAt) {
+      const onLink = tierLinkOf(this.walk.regionAt(a.pos.x, a.pos.y));
+      if (onLink && !a.onTierLink) a.tier = a.tier === 1 ? 0 : 1;
+      a.onTierLink = onLink;
+    }
   }
 
   /** Environmental (un-resisted) damage — drowning, fall, void. Flows into the

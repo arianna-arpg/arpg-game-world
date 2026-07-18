@@ -41,6 +41,7 @@ import {
   type DoodadKind, type GenCtx,
 } from './levelgen';
 import { carveMassifs, registerMassShape } from './massif';
+import { carveSewerTier } from './tiers';
 import { bearingNoise, disc, radial, wanderPath } from './genkit';
 
 // --- CONFIG ------------------------------------------------------------------
@@ -367,6 +368,10 @@ function districtLayout(ctx: GenCtx, def: ZoneDef): void {
   for (const e of ctx.exits) {
     if (!grid.reachable(ctx.entry, e)) grid.carveCorridor(ctx.entry.x, ctx.entry.y, e.x, e.y, 34);
   }
+  // THE UNDER-LATTICE (the tier fabric, engine/tiers.ts): faces that dial
+  // `sewerTier` sink a duct web BENEATH their streets and blocks — the same
+  // zone, one layer down (covered exposure; culvert wells are the doors).
+  if (ctx.rng.chance(layoutParam(def, 'sewerTier', 0))) carveSewerTier(ctx, def, grid);
   scatterDecoration(ctx, def);
 }
 

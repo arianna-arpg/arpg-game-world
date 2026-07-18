@@ -652,6 +652,21 @@ export interface ZoneTheme {
   };
 }
 
+/** THE TIER FABRIC's zone declaration (engine/tiers.ts — a second walkable
+ *  layer derived from the region map). Lives here so the data leaf owns the
+ *  schema and the engine imports the type, never the reverse. */
+export interface ZoneTiers {
+  /** Which way the second layer sits — labels + render semantics only. */
+  kind: 'over' | 'under';
+  /** 'open' = both layers visible at once (buttes); 'covered' = only the
+   *  ACTIVE layer draws (sewers, future stacked floors). */
+  exposure: 'open' | 'covered';
+  /** HUD label for tier 1 ("the butte tops", "the drains"). */
+  label?: string;
+  /** Fraction of ambient packs seeded on tier 1 (default TIER_CFG.packSplit). */
+  packSplit?: number;
+}
+
 export interface ZoneDef {
   id: string;
   name: string;
@@ -735,6 +750,12 @@ export interface ZoneDef {
    *  weighted table of registered reveal kinds (data/hollows.ts) they roll.
    *  Grid zones only — convex layouts keep the classic secret_wall beat. */
   hollows?: HollowRollSpec;
+  /** THE TIER FABRIC (engine/tiers.ts): this zone carries a SECOND walkable
+   *  layer derived from its region map (RegionKind.tier/tierLink rows).
+   *  Stamped by the recipes that carve one (needles buttes, district sewer
+   *  lattices) — regenerated with the layout, never authored by hand. */
+  tiers?: ZoneTiers;
+  /* (ZoneTiers lives just below ZoneDef — the tier fabric's declaration.) */
   /** GEOGRAPHIC context baked at mint — how the zone sits in the WORLD's
    *  fields. biomeDepth: 0 = at its biome blob's edge, 1 = deep interior
    *  (a deep-sea zone far inside the deepsea region rolls more void trenches

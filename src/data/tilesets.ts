@@ -670,6 +670,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     common: [
       { kind: 'rubble', count: [1, 2] },
+      // Every district keeps its drains: the grate is the sewers' door
+      // (data/sidezones.ts — the descend lane's civic mouth).
+      { kind: 'sewer_grate', count: [1, 2] },
     ],
     variants: [
       // The ghetto: brick stacked on brick, the lanes barely a cart wide —
@@ -685,6 +688,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifMasses: [{ kind: 'tenement', weight: 4 }],
         massifCoverage: [0.26, 0.34], massifSizeR: [150, 260], massifLaneW: 64,
         boulevards: [1, 1],
+        // The ghetto's smuggler drains: most warrens carry the UNDER-TIER
+        // duct web (the tier fabric — culvert wells on the lanes, tunnels
+        // beneath the blocks; the street grates keep minting the DEEP
+        // sewerworks below both).
+        sewerTier: 0.75,
         courtKit: [
           { kind: 'broken_cart', weight: 2, radius: [15, 19] },
           { kind: 'rubble', weight: 2, radius: [14, 22] },
@@ -836,6 +844,159 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar',
     objectives: [{ kind: 'clear', weight: 1 }],
     caveLayouts: { rooms: 1 },
+  },
+
+  // THE SEWERWORKS — the city's underdark (frontier:false): what the grates
+  // mint below the districts. Slick coursed stone on the dungeon/labyrinth
+  // room-graphs, the floors half-drowned in what the city sends down, the
+  // vermin tide at home, and the gulpers grown fat in the dark. Grate-light
+  // shafts are the one honest lamp.
+  sewerworks: {
+    id: 'sewerworks',
+    nameFirst: ['Blackwater', 'Undercroft', 'Tallowdrip', 'Gratefall', 'Cistern', 'Sump', 'Old King’s', 'Pauper’s'],
+    nameSecond: ['Drains', 'Galleries', 'Sluices', 'Warrens', 'Channels', 'Culverts', 'Sump'],
+    theme: {
+      ambientDark: 0.3,
+      ground: {
+        scale: 1.1, strength: 0.85, speckles: 0.25,
+        palette: ['#101410', '#182018', '#20281e', '#283026', '#30382c'], bias: 0.48, alpha: 0.55,
+        coast: { reach: 60, shift: -0.3, kinds: ['water', 'bog'] },
+      },
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      floor: '#0e120e', grid: '#161c16', border: '#4a5a4c',
+      obstacle: '#26302a', obstacleEdge: '#54745c', accent: '#8ac8a0',
+      tree: '#26302a', wall: '#26302a',
+    },
+    sizeW: [1600, 2400], sizeH: [1300, 1900], ellipseChance: 0, biome: 'metropolis', sky: 'sheltered',
+    frontier: false, perfProbe: true,
+    layoutParams: { interiorWall: 'sewer_wall', floorStyle: 'flagstone', rooms: [6, 10], doorChance: 0.5 },
+    layout: [
+      { kind: 'bog', count: [2, 4] },
+      { kind: 'mud', count: [1, 3] },
+      { kind: 'web', count: [1, 3] },
+      { kind: 'rubble', count: [1, 2] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'light_shaft', count: [1, 2] },
+    ],
+    variants: [
+      // Half-drowned: the outfalls backed up — wading country, the gulpers' favorite.
+      { name: 'the flooded galleries', layout: [
+        { kind: 'water', count: [2, 4] },
+        { kind: 'bog', count: [3, 5] },
+        { kind: 'mud', count: [2, 4] },
+        { kind: 'light_shaft', count: [1, 2] },
+        { kind: 'bone_pile', count: [0, 2] },
+      ] },
+      // The warren face: the tide's home ground — nests in the dry corners.
+      { name: 'the rat warrens', layout: [
+        { kind: 'web', count: [2, 4] },
+        { kind: 'bone_pile', count: [2, 4] },
+        { kind: 'rubble', count: [2, 3] },
+        { kind: 'gore', count: [0, 2] },
+        { kind: 'light_shaft', count: [0, 1] },
+      ] },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      // The tide underfoot, the thinking vermin behind it, the city's own
+      // castoffs — and the gulper that owns the deep water.
+      table: [
+        { id: 'warren_rat', weight: 3, presence: { to: 16, fadeOut: 7 } },
+        { id: 'fester_rat', weight: 2 },
+        { id: 'gutter_shiv', weight: 1.5 },
+        { id: 'verminkin_skulker', weight: 1.5, presence: { from: 4, fadeIn: 3 } },
+        { id: 'verminkin_broodpriest', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'warren_nest', weight: 1 },
+        { id: 'gorge_gulper', weight: 1, presence: { from: 4, fadeIn: 3 } },
+        { id: 'umbral_footpad', weight: 0.8, presence: { from: 7, fadeIn: 3 } },
+        { id: 'rat_king', weight: 0.6, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 1.5 },
+      { kind: 'spawners', weight: 1.5 },
+    ],
+    caveLayouts: { dungeon: 2.5, rooms: 1.5, labyrinth: 1 },
+    hollows: {
+      count: [0, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2 },
+    },
+  },
+
+  // THE NEEDLES — the highland's standing tables (THE TIER FABRIC's open
+  // debut, a SIBLING face of the mountain country): butte masses whose tops
+  // are a SECOND walkable layer — ramps cut the rims, rope spans string the
+  // summits, the valley threads beneath the bridges, and a shove settles
+  // arguments the long way down. Open exposure: you see the whole stack;
+  // only the law keeps the fights apart.
+  needles: {
+    id: 'needles',
+    forceLayout: 'needles',
+    nameFirst: ['Devil’s', 'Kestrel', 'Split', 'Red', 'Thousand', 'Watcher’s', 'Broken', 'Old Giant’s'],
+    nameSecond: ['Needles', 'Buttes', 'Tables', 'Spires', 'Stacks', 'Mesas'],
+    theme: {
+      dayLight: 1.1,
+      nightDark: 0.85,
+      ground: {
+        scale: 1.5, strength: 1.0, speckles: 0.38,
+        palette: ['#241a10', '#332414', '#42301a', '#523c20', '#604828'], bias: 0.55, alpha: 0.5,
+        clearing: { reach: 120, lift: 0.2 },
+      },
+      floor: '#1a130c', grid: '#241a10', border: '#7a6a4e',
+      obstacle: '#57503c', obstacleEdge: '#a89a72', accent: '#d8a24a',
+      tree: '#4a5a2e', wall: '#57503c',
+    },
+    sizeW: [3200, 4200], sizeH: [2400, 3100], ellipseChance: 0.25, biome: 'highland', sky: 'open',
+    // A minority face beside the mountain country's own (flat half-weight).
+    depthAffinity: { mul: 0.5 },
+    layoutParams: {
+      massifMasses: [{ kind: 'butte', weight: 1 }],
+      massifCoverage: [0.2, 0.28], massifSizeR: [200, 340], massifLaneW: 120,
+      massifPortalClear: 260,
+      tierPackSplit: 0.45,
+    },
+    layout: [
+      { kind: 'rocks', count: [4, 7], radius: [16, 32] },
+      { kind: 'scree', count: [3, 5] },
+      { kind: 'brush', count: [2, 4] },
+      { kind: 'grass', count: [3, 5] },
+      { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'standing_stone', count: [0, 2] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    variants: [
+      // The wind gaps: fewer, grander tables — the spans carry the read.
+      { name: 'the wind gaps', layout: [
+        { kind: 'rocks', count: [3, 5], radius: [16, 30] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'dead_tree', count: [2, 4] },
+        { kind: 'grass', count: [2, 4] },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'butte', weight: 1 }],
+        massifCoverage: [0.16, 0.22], massifSizeR: [260, 380],
+      } },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      table: [
+        { id: 'crag_condor', weight: 3 },
+        { id: 'gnoll_prowler', weight: 2 },
+        { id: 'plains_wolf', weight: 1.5, presence: { to: 12, fadeOut: 5 } },
+        { id: 'brute', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'basilisk', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'beacon', weight: 1.5 },
+      { kind: 'escape', weight: 1 },
+    ],
+    caveLayouts: { plains: 3, rooms: 2 },
   },
 
   // THE FOREST — the deep wood proper. Where the deepwood/grove is open

@@ -136,6 +136,25 @@ registerMassKind({
   crestSpacing: 84,
 });
 
+// THE BUTTE — the needle country's standing tables (THE TIER FABRIC's open
+// debut): region 'butte_top' is a TRUE WALL to the valley and FLOOR to
+// whoever stands the summit. The needles recipe (engine/tiers.ts) cuts a
+// ramp across one rim per butte and strings spans between neighbors — the
+// Thousand-Needles read. Scree banks the foot; the crowns stay bare (the
+// plateau IS the crown).
+registerMassKind({
+  id: 'butte',
+  region: 'butte_top',
+  shapes: [{ shape: 'blob', weight: 2 }, { shape: 'slab', weight: 1.5 }],
+  lobe: 0.16,
+  skirt: [
+    { kind: 'scree', weight: 3, radius: [14, 24] },
+    { kind: 'rocks', weight: 2, radius: [14, 26] },
+    { kind: 'brush', weight: 1, radius: [14, 22] },
+  ],
+  skirtChance: 0.34,
+});
+
 // THE CROFT — farmland's worked plot: a drystone-bound yard (the PARAPET
 // texture — you duel across a croft wall, then walk around to its stile).
 // Hay and the odd cart inside the read; wheat presses at the foot.

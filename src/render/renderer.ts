@@ -435,6 +435,11 @@ export class Renderer {
     this.drawDrops(world);
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
+    // THE TIER VEIL (the tier fabric, covered exposure): standing on the
+    // UNDER layer, the street above is a ceiling — the world dims and the
+    // duct web paints live from the region map's tierVisual rows (viewport
+    // cells only; the other layer's bodies are skipped in drawActor).
+    this.drawTierVeil(world, vw, vh);
     for (const f of world.flashes) this.drawFlash(f);
     if (!VIS_ABLATE.has('actors')) {
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
@@ -2144,6 +2149,48 @@ export class Renderer {
     this.labels.push({ a, text: this.resolveText(text), color, dy, font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
   }
 
+  /** THE TIER VEIL (engine/tiers.ts, 'covered' exposure): while the local
+   *  hero stands on the UNDER layer, everything above is a ceiling — dim the
+   *  scene, then paint the duct web live from the region map (tierVisual
+   *  rows, viewport cells only — a few hundred rects, no bake to invalidate;
+   *  carves self-heal by construction). On the street tier the under layer
+   *  simply doesn't draw — the city keeps its face. */
+  private drawTierVeil(world: World, vw: number, vh: number): void {
+    const tiers = world.zone.tiers;
+    if (!tiers || tiers.exposure !== 'covered') return;
+    if ((world.player?.tier ?? 0) !== 1) return;
+    const wf = world.walk;
+    if (!wf?.regionAt) return;
+    const ctx = this.ctx;
+    const cs = (wf as { cell?: number; cellSize?: number }).cell
+      ?? (wf as { cellSize?: number }).cellSize ?? 30;
+    const x0 = this.cam.x, y0 = this.cam.y;
+    ctx.fillStyle = 'rgba(6,8,6,0.82)';
+    ctx.fillRect(x0, y0, vw, vh);
+    const gx0 = Math.floor(x0 / cs), gy0 = Math.floor(y0 / cs);
+    const gx1 = Math.ceil((x0 + vw) / cs), gy1 = Math.ceil((y0 + vh) / cs);
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const id = wf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+        const rk = regionKind(id);
+        if (!rk || (rk.tier !== 1 && !rk.tierLink)) continue;
+        const tv = rk.tierVisual;
+        ctx.fillStyle = tv?.fill ?? '#1c241e';
+        ctx.fillRect(gx * cs, gy * cs, cs + 0.5, cs + 0.5);
+        if (rk.tierLink) {
+          // The way out reads bright — a culvert's ring of street-light.
+          ctx.fillStyle = 'rgba(200,220,232,0.16)';
+          ctx.fillRect(gx * cs, gy * cs, cs + 0.5, cs + 0.5);
+        }
+        if (tv?.edge) {
+          ctx.strokeStyle = tv.edge;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(gx * cs + 1, gy * cs + 1, cs - 2, cs - 2);
+        }
+      }
+    }
+  }
+
   /** How readable a label anchored at this POINT may be (0..1), keyed on the
    *  live canopy/roof fades over it. 1 = nothing covers the anchor (or its
    *  cover has faded open — the near-fade that reveals the body reveals the
@@ -3257,6 +3304,13 @@ export class Renderer {
       if (a === world.player) this.drawGrabMeter(a, world);
       return;
     }
+
+    // THE TIER FABRIC (engine/tiers.ts), COVERED exposure: the other layer
+    // is behind a ceiling (or under a street) — its bodies don't draw at
+    // all. OPEN exposure draws both layers (the whole point of the buttes);
+    // the same-tier combat law keeps the fights honest either way.
+    if (world.zone.tiers?.exposure === 'covered'
+      && (a.tier ?? 0) !== (world.player?.tier ?? 0)) return;
 
     // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists
     // only to an attuned eye — the LOCAL bar must anchor its kind or the

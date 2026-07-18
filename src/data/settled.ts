@@ -176,6 +176,17 @@ registerDoodadRule('city_stair', { overlap: 'trigger', spacing: 20 });
 registerDoodadRule('garret_stair', { overlap: 'trigger', spacing: 20 });
 registerStamp('garret_stair', stampSingle('garret_stair', [11, 14]));
 
+// --- THE SEWER MOUTHS ------------------------------------------------------------------
+// The city's OTHER ladder (the descend lane's civic door): a street grate
+// dwells DOWN into the minted sewerworks — every district keeps its drains.
+// Wide spacing on purpose: one or two mouths per ward, never a grate carpet.
+registerDoodadRule('sewer_grate', { overlap: 'trigger', spacing: 420 });
+registerStamp('sewer_grate', stampSingle('sewer_grate', [15, 18]));
+// Grate-light: the shaft of street-day falling into the dark — the sewer's
+// one honest lamp (inert art + a cool light pool; placed by the sewer faces).
+registerDoodadRule('light_shaft', { overlap: 'inert', spacing: 320 });
+registerStamp('light_shaft', stampSingle('light_shaft', [18, 24]));
+
 // --- WAYSIDE COMPOSITE: the village green ------------------------------------------
 // The commons every hamlet keeps: the well at the center, benches and lamps,
 // a cart come to market. (Structures ring it via the village compositions —

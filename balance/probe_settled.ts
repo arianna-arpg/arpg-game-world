@@ -44,7 +44,7 @@ import {
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { massKindOf, massShapeIds } from '../src/engine/massif';
-import { BIOMES, BIOME_FIELD } from '../src/world/biomes';
+import { BIOMES, BIOME_FIELD, BIOME_FIELD_BANDS, biomeAt } from '../src/world/biomes';
 import { boundaryGateOf } from '../src/data/boundaryGates';
 import { TILESETS } from '../src/data/tilesets';
 import { MONSTERS, WILDLIFE } from '../src/data/monsters';
@@ -270,6 +270,40 @@ const regionCells = (grid: GridWalkField, id: string): number => {
     const a2 = fingerprint(gen(bdef, 909091)), b2 = fingerprint(gen(bdef, 909091));
     check('D10 blocks byte-deterministic', a2 === b2 && a2.length > 0);
   }
+}
+
+// --- RIG H: THE BELT GUARANTEE ---------------------------------------------------
+// The structural promise the field bands exist for: EVERY world seed has its
+// capital and its worked land near home — never boom-or-bust. (Pre-band, the
+// ~4-cell settled ring lost the roll outright in whole worlds: the live bug
+// this rig pins. Downs is moisture-conditional by design — it must claim the
+// belt in a healthy share of worlds, not all of them.)
+{
+  check('H1 field bands registered (civic core + settled belt)',
+    BIOME_FIELD_BANDS.some(b => b.id === 'civic_core') && BIOME_FIELD_BANDS.some(b => b.id === 'settled_belt'));
+  let worldsWithFarm = 0, worldsWithMetro = 0, worldsWithDowns = 0;
+  const SEEDS_H = [11, 22, 33, 44, 55, 66, 77, 88, 99, 110];
+  for (const seed of SEEDS_H) {
+    let farm = 0, metro = 0, downs = 0;
+    for (let r = 60; r <= 640; r += 60) {
+      for (let a = 0; a < Math.PI * 2; a += 0.2) {
+        const b = biomeAt({ x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) }, seed);
+        if (b === 'farmland') farm++;
+        else if (b === 'metropolis') metro++;
+        else if (b === 'downs') downs++;
+      }
+    }
+    if (farm > 0) worldsWithFarm++;
+    if (metro > 0) worldsWithMetro++;
+    if (downs > 0) worldsWithDowns++;
+    note(`seed ${seed}: farmland ${farm} · metropolis ${metro} · downs ${downs}`);
+  }
+  check('H2 EVERY world grows farmland near home (the shire ring forces it)',
+    worldsWithFarm === SEEDS_H.length, `${worldsWithFarm}/${SEEDS_H.length}`);
+  check('H3 EVERY world raises its capital (the civic core forces it)',
+    worldsWithMetro === SEEDS_H.length, `${worldsWithMetro}/${SEEDS_H.length}`);
+  check('H4 the downs claim their share of worlds (dry-conditional by design)',
+    worldsWithDowns >= 5, `${worldsWithDowns}/${SEEDS_H.length}`);
 }
 
 // --- SIM RIGS (the live world) -----------------------------------------------------

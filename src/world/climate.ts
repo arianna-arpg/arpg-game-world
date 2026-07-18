@@ -107,6 +107,18 @@ registerClimateAxis({
     { kind: 'coastal', probe: 620, amp: 1 },
   ],
 });
+registerClimateAxis({
+  // PURE distance-from-home, noise-free BY DESIGN: wildness carries ±0.15
+  // noise with ~800-unit features, so a whole world's near-home readings
+  // shift together — any absolute wildness threshold is seed-shifty. The
+  // hearth axis is the deterministic geometry lever for anything that must
+  // hold at home in EVERY world (the civic field bands ride it; future
+  // near-home event gates can too). 0 at the town, 1 by ~640 map units.
+  id: 'hearth', label: 'Hearth', base: 0,
+  layers: [
+    { kind: 'radial', innerRadius: 0, span: 640, amp: 1 },
+  ],
+});
 
 /** Structural tunables. `origin` anchors radial layers (home = the town's
  *  canonical map coord — the world grows outward from it). */

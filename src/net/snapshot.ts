@@ -62,6 +62,7 @@ export interface ActorW {
   gb?: [string, number];
   pl?: number;                 // plies remaining (THE PLY FABRIC pips)
   plm?: number;                // plies ceiling (omit both when the fabric is off)
+  tr?: number;                 // THE TIER FABRIC: walkable layer (omit at 0)
   aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
   inv?: number;                // sheet invisible (omit when 0)
@@ -389,6 +390,8 @@ function actorToW(a: Actor): ActorW {
   if (gbHold) w.gb = gbHold;
   // THE PLY FABRIC's pips (engine/plies.ts).
   if (a.pliesMax > 0) { w.pl = a.plies; w.plm = a.pliesMax; }
+  // THE TIER FABRIC's layer (engine/tiers.ts) — clients gate draw + veil on it.
+  if (a.tier) w.tr = a.tier;
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
   if (a.kind === 'player') { const s = SEAT_OF(a); if (s) w.seat = s; }
   if (a.adorn) w.adorn = a.adorn;
@@ -701,6 +704,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it
     a.grabHud = aw.gb;    // held meter mirror (cleared when absent — freed)
     a.plies = aw.pl ?? 0; a.pliesMax = aw.plm ?? 0; // ply pips (render-only)
+    a.tier = aw.tr ?? 0; // tier layer (host-authoritative — draw/veil gate)
     // Player bar readouts (own hero + party): runes verbatim, combo chips
     // as host-computed rows the renderer prefers over local derivation.
     a.runes = aw.rn ?? [];

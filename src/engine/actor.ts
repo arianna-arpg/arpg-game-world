@@ -544,6 +544,14 @@ export class Actor {
    *  only once life recovers above the threshold — a coward that already
    *  ran and got cornered turns desperate instead of fleeing forever. */
   aiMoraleBroke = false;
+  /** THE TIER FABRIC (engine/tiers.ts): which walkable LAYER of the zone
+   *  this body stands on (0 = ground truth, 1 = the second layer — butte
+   *  tops, sewer ducts). Movement confines against the tier's own floor,
+   *  crossings flip it, and every hit gate is same-tier only. */
+  tier = 0;
+  /** Tier-link latch: TRUE while standing on a crossing cell (one toggle per
+   *  entry — stepping onto a culvert descends you once, not every frame). */
+  onTierLink = false;
   /** Squad identity, stamped at spawn by GROUP spawners (packs, camps,
    *  garrisons, bands). Leaders anchor focus-fire and on-death reactions. */
   squadId?: number;

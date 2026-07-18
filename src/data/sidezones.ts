@@ -330,3 +330,16 @@ registerSidezone({
   dwell: 0.7,
   mint: townhouseFloor,
 });
+
+// --- THE SEWERS (the city's underdark — the descend lane's civic door) ----------
+// A street grate dwells DOWN into the minted SEWERWORKS: the ruin_gate
+// pattern under the boulevards. Every grate keeps its own drains forever
+// (position-hash seed), each mint rolls its own face, and 'sewers_entered'
+// is the undercity's GATEWAY SEAM (the ruin_entered pattern) for future
+// packages, unlock doors and bounty lines.
+registerSidezone({
+  kind: 'sewer_grate',
+  dwell: 0.7,
+  ledgerOnEnter: 'sewers_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'sewerworks', { rollVariant: true }),
+});

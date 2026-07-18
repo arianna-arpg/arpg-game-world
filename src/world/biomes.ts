@@ -20,6 +20,7 @@
 
 import { continentAt, continentSeedFrom } from './continents';
 import { climateAt, climateAffinity, validateClimateSpecs, type ClimateSpec } from './climate';
+import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import type { MapCoord } from './coords';
 
 export interface BiomeInfo {
@@ -459,7 +460,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // wildness gated LOW so the downs read as old walked land near the
   // settled web, thinning where the true wilds begin.
   downs:   { patronFaction: 'wild', mapColor: '#9aa26a', label: 'Downs', spacing: 92,
-    climate: { temperature: 'mild', moisture: { to: 0.52, fadeOut: 0.16 }, wildness: { to: 0.62, fadeOut: 0.2 } },
+    // Temperature taste dropped (the farmland note): the dry settled half is
+    // the identity, whatever the origin's weather rolled.
+    climate: { moisture: { to: 0.52, fadeOut: 0.16 }, wildness: { to: 0.62, fadeOut: 0.2 } },
     allowedLayouts: { massif: 1 },
     structures: [{ structure: 'watchtower', chance: 0.28 }],
     landmarks: [
@@ -474,7 +477,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // lays real portal roads; the tileset faces stage outskirts → crop seas →
   // harvest villages.
   farmland: { patronFaction: 'chattel', mapColor: '#b7ac58', label: 'Farmland', spacing: 74,
-    climate: { temperature: 'mild', moisture: { from: 0.38, fadeIn: 0.14 }, wildness: { to: 0.42, fadeOut: 0.16 } },
+    // No temperature taste ON PURPOSE (cool shires grow oats): a frigid- or
+    // scorched-origin world must never starve the belt. Moisture splits the
+    // settled band with the downs (wet half here, dry half theirs).
+    climate: { moisture: { from: 0.38, fadeIn: 0.14 }, wildness: { to: 0.42, fadeOut: 0.16 } },
     allowedLayouts: { fields: 1 },
     meld: 'farmland_meld',
     layoutParams: {
@@ -750,6 +756,84 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'mycelia', weight: 1.2 }, // rare fungal regions — the dormant homes the bloom collapses to
 ];
 
+// --- CLIMATE-BANDED FIELD TABLES ----------------------------------------------
+// THE STRUCTURAL FIX for band-bound countries: the settled ring (wildness ≤
+// ~0.42) spans only THREE-TO-FIVE Voronoi cells per world, and under the one
+// global table those few cells are contested by every mild-climate biome —
+// so a given world frequently rolled NO farmland, NO metropolis, NO downs at
+// all (boom-or-bust the share probes' cross-seed averages hid). A FIELD BAND
+// claims a climate stratum for its OWN table: cells whose site value holds
+// the band's envelope (presenceMul ≥ 0.5 — the first matching band wins)
+// pick from the band table instead of the global one, with every biome's own
+// climate affinity still multiplying INSIDE it (a dry world's belt goes to
+// the downs, a wet world's to the farmland — the moisture split decides who
+// dominates, never whether the belt exists; fieldBiomePick's all-zero
+// fallback to raw weights is the guarantee's floor). Generic on purpose: a
+// future 'maritime' band could claim archipelago rings the same way.
+// SURFACE-only (dimension palettes keep their own tables whole).
+export interface BiomeFieldBand {
+  id: string;
+  /** The climate stratum this band claims: an axis + envelope over its 0..1
+   *  value at the CELL SITE (bands resolve in registration order). */
+  when: { axis: string; env: LevelEnvelope };
+  table: BiomeSeedDef[];
+}
+
+export const BIOME_FIELD_BANDS: BiomeFieldBand[] = [];
+
+export function registerFieldBand(band: BiomeFieldBand): void {
+  if (BIOME_FIELD_BANDS.some(b => b.id === band.id)) {
+    console.warn(`[biomes] re-registering field band '${band.id}' — overriding`);
+    BIOME_FIELD_BANDS.splice(BIOME_FIELD_BANDS.findIndex(b => b.id === band.id), 1);
+  }
+  BIOME_FIELD_BANDS.push(band);
+}
+
+/** The first band whose stratum holds at this climate reading (surface pick
+ *  path only), or null for the global table. */
+function bandTableFor(climate: Record<string, number>): readonly BiomeSeedDef[] | null {
+  for (const b of BIOME_FIELD_BANDS) {
+    const v = climate[b.when.axis];
+    if (v !== undefined && presenceMul(b.when.env, v) >= 0.5) return b.table;
+  }
+  return null;
+}
+
+// THE CIVIC RINGS (a single-entry table FORCES — the all-zero fallback picks
+// it whatever the cell's climate rolled, so the force is affinity-proof):
+// the cells nearest home ARE the capital, the ring around them IS the first
+// worked land — every world stages the layered approach (city → shires →
+// belt → wilds) as STRUCTURE, never as a lottery. Keyed on the noise-free
+// HEARTH axis: ring radii are true geometry, sized to the field's 260-unit
+// cell pitch so each ring always contains cell sites (the origin cell's
+// jittered site sits within ~165 units — inside the core by construction).
+registerFieldBand({
+  id: 'civic_core',
+  when: { axis: 'hearth', env: { to: 0.27, fadeOut: 0.02 } }, // r ≲ 180
+  table: [{ biome: 'metropolis', weight: 1 }],
+});
+registerFieldBand({
+  id: 'shire_ring',
+  when: { axis: 'hearth', env: { from: 0.27, fadeIn: 0.02, to: 0.6, fadeOut: 0.04 } }, // r ~180..400
+  table: [{ biome: 'farmland', weight: 1 }],
+});
+// THE SETTLED BELT: the diced fringe of the tamed ring (r ~400..570) —
+// farmland spreads on, the downs claim the dry cells (their own moisture
+// affinities decide), the old mild biomes keep minority seats so the belt
+// never reads as one crop. Metropolis keeps a token outer-borough seat.
+registerFieldBand({
+  id: 'settled_belt',
+  when: { axis: 'hearth', env: { from: 0.6, fadeIn: 0.04, to: 0.85, fadeOut: 0.08 } },
+  table: [
+    { biome: 'farmland', weight: 2 },
+    { biome: 'downs', weight: 1.8 },
+    { biome: 'field', weight: 1 },
+    { biome: 'grove', weight: 0.8 },
+    { biome: 'grave', weight: 0.4 },
+    { biome: 'metropolis', weight: 0.4 },
+  ],
+});
+
 /** Tunable thresholds (modular, not scattered literals): the Voronoi cell size,
  *  seed jitter, the heat-map render cell, and the marine DEEP threshold — how far
  *  INTO a marine region (biomeDepth, 1=center) before the true DEEP-SEA zone mints
@@ -842,25 +926,29 @@ export function fieldBiomePick(
   const hit = pickMemo.get(memoKey);
   if (hit !== undefined) return hit;
   const climate = climateAt(site, fieldSeed, dimension);
-  const weights: number[] = new Array(table.length);
+  // FIELD BANDS (surface only): a claimed climate stratum swaps in its own
+  // candidate table — the settled ring's guarantee. Biome affinities still
+  // multiply inside the band; the all-zero fallback below floors it.
+  const src = dimension === 'surface' ? (bandTableFor(climate) ?? table) : table;
+  const weights: number[] = new Array(src.length);
   let total = 0;
-  for (let i = 0; i < table.length; i++) {
-    const s = table[i];
+  for (let i = 0; i < src.length; i++) {
+    const s = src[i];
     const w = (s.weight ?? 1) * climateAffinity(BIOMES[s.biome]?.climate, climate);
     weights[i] = w; total += w;
   }
   const h = hashCell(gx, gy, (fieldSeed ^ 0x5bd1e995) >>> 0);
-  let picked = table[table.length - 1].biome;
+  let picked = src[src.length - 1].biome;
   if (total <= 0) {
     let raw = 0;
-    for (const s of table) raw += s.weight ?? 1;
+    for (const s of src) raw += s.weight ?? 1;
     let r = (h / 0x100000000) * raw;
-    for (const s of table) { r -= s.weight ?? 1; if (r <= 0) { picked = s.biome; break; } }
+    for (const s of src) { r -= s.weight ?? 1; if (r <= 0) { picked = s.biome; break; } }
   } else {
     let r = (h / 0x100000000) * total;
-    for (let i = 0; i < table.length; i++) {
+    for (let i = 0; i < src.length; i++) {
       r -= weights[i];
-      if (r <= 0) { picked = table[i].biome; break; }
+      if (r <= 0) { picked = src[i].biome; break; }
     }
   }
   if (pickMemo.size >= PICK_MEMO_CAP) pickMemo.clear();
@@ -925,7 +1013,15 @@ export function fieldNoise(x: number, y: number, seed: number): number {
 /** Boot validator: every BIOME_FIELD biome must exist in BIOMES (so the heat-map
  *  has a colour + a future generated zone has a backing biome). Returns the bad ids. */
 export function validateBiomeField(): string[] {
-  return BIOME_FIELD.filter(s => !BIOMES[s.biome]).map(s => s.biome);
+  return [
+    ...BIOME_FIELD.filter(s => !BIOMES[s.biome]).map(s => s.biome),
+    // Band tables walk the same check (an unknown biome in a band would
+    // silently pick nothing), plus their stratum axis must be registered.
+    ...BIOME_FIELD_BANDS.flatMap(b => [
+      ...b.table.filter(s => !BIOMES[s.biome]).map(s => `${b.id}: ${s.biome}`),
+      ...(climateAt({ x: 0, y: 0 }, 1)[b.when.axis] === undefined ? [`${b.id}: unknown axis '${b.when.axis}'`] : []),
+    ]),
+  ];
 }
 
 /** Boot validator: every biome's climate spec must reference registered axes

@@ -74,6 +74,8 @@ export interface SavedEnemyMemo {
   rarity?: string;
   tag?: string;
   name?: string;
+  /** THE TIER FABRIC: the walkable layer it stood on (absent at 0). */
+  tier?: number;
 }
 
 /** One zone's TTL'd memory (the engine's ZoneMemory, keyed for an array). */

@@ -234,6 +234,20 @@ export interface RegionKind {
    *  window stay see-through — the arrow-slit: a wall you can shoot and see
    *  through but never walk through. */
   blocksSight?: boolean;
+  /** THE TIER FABRIC (engine/tiers.ts): this region is FLOOR on the zone's
+   *  SECOND walkable layer. Composes with `walkable` (the tier-0 truth):
+   *  {walkable:false, tier:1} = a butte top / a duct under a building —
+   *  wall to one layer, ground to the other; {walkable:true, tier:1} = a
+   *  bridge deck / a duct under the street — one cell, two floors. */
+  tier?: 1;
+  /** A CROSSING between the tiers (ramps, stairwell wells, culverts):
+   *  walkable on BOTH layers; a body stepping off it toward ground only the
+   *  other tier owns FLIPS its tier (resolveTierCrossing). Implies tier. */
+  tierLink?: boolean;
+  /** What the SECOND layer looks like where a covered zone reveals it (the
+   *  sewer view): drawn live by the tier veil for the local under-player.
+   *  Open-exposure rows skip it — their ordinary visual serves both reads. */
+  tierVisual?: { fill: string; edge?: string };
   /** SURFACE MOTION FX: bodies moving through this ground spawn the named
    *  transient (renderer motion-FX system) — water's wake rings today; a
    *  future tar could ripple with one word. Data, never an id compare in
@@ -892,6 +906,50 @@ registerRegion({ id: 'tenement_wall', walkable: false, blocks: true, label: 'the
 registerRegion({ id: 'manor_wall', walkable: false, blocks: true, label: 'the manor walls',
   blocksShot: true, blocksSight: true,
   visual: { fill: '#45483e', alpha: 1, masonry: true, edge: { color: '#9a9a84', width: 4 } } });
+// SEWER WALL: the undercity's slick coursed stone — the city's masonry gone
+// green at the waterline (a TRUE WALL; the drains were built as well as the
+// streets above them, and they keep their secrets the same way).
+registerRegion({ id: 'sewer_wall', walkable: false, blocks: true, label: 'the sewer wall',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#26302a', alpha: 1, masonry: true, edge: { color: '#54745c', width: 3 } } });
+
+// --- THE TIER FABRIC ROWS (engine/tiers.ts — one cell, two floors) -------------
+// BUTTE TOP: the needle's summit — a cliff wall to the valley (TRUE WALL:
+// bodies, shots and sight stop at the rock), FLOOR to whoever stands on it.
+// The plateau fill + pale rim carry the height read from below.
+registerRegion({ id: 'butte_top', walkable: false, blocks: true, label: 'the butte top',
+  blocksShot: true, blocksSight: true, tier: 1,
+  visual: { fill: '#57503c', alpha: 1, edge: { color: '#a89a72', width: 6 } } });
+// BUTTE SPAN: a rope-and-plank deck strung between summits — the valley
+// walks UNDER it, the tops walk OVER it (walkable on both tiers). Shots and
+// sight pass (open air both above and below the planks).
+registerRegion({ id: 'butte_span', walkable: true, blocks: false, label: 'the span',
+  tier: 1,
+  visual: { fill: '#6a5638', alpha: 0.85, edge: { color: '#8a744e', width: 3 } } });
+// TIER RAMP: the switchback cut up a butte's rim — THE crossing (walkable on
+// both tiers; stepping off it onto ground only one tier owns flips you).
+registerRegion({ id: 'tier_ramp', walkable: true, blocks: false, label: 'the ramp',
+  tier: 1, tierLink: true,
+  visual: { fill: '#7a6a48', alpha: 0.9, edge: { color: '#a89a72', width: 3 } } });
+// SEWER DUCT: the drain under the street — the street above keeps its own
+// face (no visual: the cell draws as ordinary ground), the duct below shows
+// only through the tier veil when you're down there.
+registerRegion({ id: 'sewer_duct', walkable: true, blocks: false, label: 'the duct',
+  tier: 1,
+  tierVisual: { fill: '#1c241e', edge: '#54745c' } });
+// SEWER UNDER-WALL: the duct where it runs beneath a building — the block
+// keeps its brick face and its TRUE-WALL policy on the street tier; the
+// tunnel below is the tier's business alone.
+registerRegion({ id: 'sewer_under_wall', walkable: false, blocks: true, label: 'the under-wall',
+  blocksShot: true, blocksSight: true, tier: 1,
+  visual: { fill: '#4a3226', alpha: 1, masonry: true, edge: { color: '#8a6a4a', width: 4 } },
+  tierVisual: { fill: '#181f1a', edge: '#54745c' } });
+// CULVERT WELL: the open drain-mouth — the crossing between street and duct
+// (walkable both tiers, flips on exit). Reads as a ringed well from above.
+registerRegion({ id: 'culvert_well', walkable: true, blocks: false, label: 'the culvert',
+  tier: 1, tierLink: true,
+  visual: { fill: '#222824', alpha: 0.95, edge: { color: '#54745c', width: 4 } },
+  tierVisual: { fill: '#26302a', edge: '#6a8a70' } });
 
 // --- THE HIGH BASTION (aether_bastion; kinds in data/massifs.ts) -------------
 // BASTION WALL: the Host's citadel curtain — glossy silver coursing under a
