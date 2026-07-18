@@ -24,6 +24,7 @@ import { CHARGE_DEFS } from './charges';
 import type { TuneSpec } from './tuning';
 import type { ClingSpec, ClingRide } from './cling';
 import type { GripHold } from './grab';
+import type { PlySpec } from './plies';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
@@ -1237,6 +1238,18 @@ export class Actor {
    *  fulfilled or expired. Set via ai.ts issueCommand — never by hand, so
    *  receipt reliably drops the current agenda and the order OVERRIDES. */
   aiCommand?: CommandState;
+  // --- THE PLY FABRIC (engine/plies.ts) ------------------------------------
+  /** Hit-counted durability: plies remaining / the resolved ceiling.
+   *  While plies remain, landed hits TEAR ONE PLY and move no life —
+   *  magnitude-blind (the Pikmin model); the untouched life pool
+   *  underneath stays fully live for DoTs, self-destruction and the
+   *  exposed phase. 0/0 = the fabric is off (almost everything). */
+  plies = 0;
+  pliesMax = 0;
+  /** The worn spec (stamped from MonsterDef.plies at mint — floor,
+   *  spentStatus; re-derived idempotently by the minion rebake). */
+  plySpec?: PlySpec;
+
   // --- THE THRONG (engine/throng.ts) + THE LATCH (engine/cling.ts) ---------
   /** An UNCLAIMED THRONG HUSK: the monster kind it belongs to. Husks are
    *  passive/untargetable/invulnerable scenery-actors only an attuned bar

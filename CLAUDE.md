@@ -241,6 +241,16 @@ changes.
   the mass passive cluster); bestiary prints a HEFT tier per def — dials
   in `MASS_CFG`, docs in `docs/engine/mass.md`, probe
   `balance/probe_mass.ts`.
+  THE PLY FABRIC (`engine/plies.ts` — hit-counted durability, the
+  Pikmin/Overlord damage model): `MonsterDef.plies` bodies EAT N landed
+  hits magnitude-blind (one ply per blow, no life moves; thud floor,
+  `spentStatus` bracket) over a DUAL live life pool — DoTs pierce to it
+  and kill() never consults plies, so self-destruction and burn-the-swarm
+  counterplay stay sovereign; `minionPlies` owner stat under the QUANTA
+  LAW (never fractioned, never batch-scaled), pip-row read in place of a
+  life bar, `pl`/`plm` wire; a 1-ply kind is the horde-tier substrate —
+  dials in `PLY_CFG`, docs in `docs/engine/plies.md`, probe
+  `balance/probe_plies.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST

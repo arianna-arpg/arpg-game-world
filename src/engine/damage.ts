@@ -19,6 +19,7 @@ import {
   type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { DEFENSE_CFG } from './defense';
+import { plyFloorOf } from './plies';
 import type { Actor } from './actor';
 import { instanceMods, skillContextTags, type SkillInstance } from './skills';
 import { STATUS_DEFS, TAUNT_CFG } from './status';
@@ -189,6 +190,9 @@ export interface HitResult {
   blocked: boolean;
   total: number;
   crit: boolean;
+  /** THE PLY FABRIC ate this hit whole — one ply tore, no life moved
+   *  (engine/plies.ts; the world reads it for feedback, never for math). */
+  plyEaten?: boolean;
   /** This hit SHATTERED the target's poise bar (the world prints it). */
   poiseBroke?: boolean;
   /** This hit EXECUTED via the attacker's cullThreshold (the world prints it). */
@@ -479,6 +483,25 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   const out: { poiseBroke?: boolean; clamped?: boolean } = {};
   const total = mitigateTyped(target, packet.amounts,
     { attacker, tags: packet.tags, extra: packet.extra, out });
+  // THE PLY GATE (engine/plies.ts): a plied body EATS the landed hit whole
+  // — magnitude-blind, one ply tears, NO life moves. Runs AFTER mitigation
+  // so poise still chips (poise-break stays honest counterplay) and AFTER
+  // evasion/block (a dodge is a dodge). Sub-floor tickles thud: they tear
+  // nothing and wound nothing while plies remain. The last tear stamps the
+  // spec's 'worn open' status — the bracket seam's first rider.
+  if (target.plies > 0) {
+    if (total >= plyFloorOf(target)) {
+      target.plies--;
+      if (target.plies === 0 && target.plySpec?.spentStatus) {
+        target.applyStatus(target.plySpec.spentStatus, 0, 1, 'plies');
+      }
+    }
+    target.hitFlash = 0.12;
+    return {
+      evaded: false, immune: false, blocked: false, total: 0,
+      crit: packet.crit, poiseBroke: out.poiseBroke, plyEaten: true,
+    };
+  }
   target.life -= total;
   target.hitFlash = 0.15;
   // SEGMENT FABRIC: the landed blow marks the struck body — the coil that

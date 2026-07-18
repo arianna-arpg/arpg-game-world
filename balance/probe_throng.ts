@@ -52,6 +52,14 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   check('registry: the three anchors carry ThrongSpecs',
     !!SKILLS.gather_cinderkin?.throng && !!SKILLS.beckon_palewisps?.throng
     && !!SKILLS.raise_gnatveil?.throng);
+  // THE SOURCE SWAP (user-directed): the LATCHING flavor is battle-fed
+  // (replenishable mid-fight), the RANGED flavor is the world-found
+  // finite treasure. Pinned so a future re-shuffle is a deliberate act.
+  check('doctrine: latchers battle-fed, ranged world-found',
+    SKILLS.gather_cinderkin.throng!.sources.some(r => r.kind === 'gauge')
+    && SKILLS.gather_cinderkin.throng!.sources.some(r => r.kind === 'onKill')
+    && SKILLS.beckon_palewisps.throng!.sources.some(r => r.kind === 'pocket')
+    && !SKILLS.beckon_palewisps.throng!.sources.some(r => r.kind === 'gauge'));
   check('registry: the three kinds exist (cinderkin latches, gnat rides harried)',
     !!MONSTERS.cinderkin?.cling && !!MONSTERS.palewisp && MONSTERS.gnatling?.cling?.rideStatus === 'harried');
   check('registry: harried is a stacking status', STATUS_DEFS.harried?.stacking === true);
@@ -193,23 +201,24 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   const w = makeSimWorld('summoner', 0xd00d);
   const p = w.player;
   // The gauge cares about LANDED hits — pin accuracy so the assertions
-  // never ride an evasion roll.
+  // never ride an evasion roll. (Post-swap: the LATCHING cinderkin carry
+  // the combat sources — melee attrition demands mid-fight replenishment.)
   p.sheet.setSource('probeacc', [mod('accuracy', 'increased', 8)]);
-  w.devThrongGrant('beckon_palewisps');
-  const inst = p.skills.find(s => s?.def.id === 'beckon_palewisps')!;
-  w.devThrongFillGauge('beckon_palewisps');
+  w.devThrongGrant('gather_cinderkin');
+  const inst = p.skills.find(s => s?.def.id === 'gather_cinderkin')!;
+  w.devThrongFillGauge('gather_cinderkin');
   const prey = w.createMonster('zombie', 8, 'enemy');
   prey.pos = vec(p.pos.x + 40, p.pos.y);
   w.actors.push(prey);
   const claw = makeSkillInstance(SKILLS.claw, 1);
   w.executeSkill(p, claw, vec(prey.pos.x, prey.pos.y));
   check('gauge: a landed hit past the brink MINTS husks beside the keeper',
-    w.actors.filter(a => a.throngWild === 'palewisp').length >= 2
+    w.actors.filter(a => a.throngWild === 'cinderkin').length >= 2
     && (inst.state?.throngGauge ?? 99) === 0,
-    `${w.actors.filter(a => a.throngWild === 'palewisp').length} husks`);
+    `${w.actors.filter(a => a.throngWild === 'cinderkin').length} husks`);
 
   // onKill: 0.28/kill × 20 kills ⇒ P(none) ≈ 0.1% on the seeded stream.
-  const husks0 = w.actors.filter(a => a.throngWild === 'palewisp').length;
+  const husks0 = w.actors.filter(a => a.throngWild === 'cinderkin').length;
   for (let i = 0; i < 20; i++) {
     const v = w.createMonster('zombie', 1, 'enemy');
     v.pos = vec(p.pos.x + 38, p.pos.y);
@@ -218,7 +227,7 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
     w.executeSkill(p, claw, vec(v.pos.x, v.pos.y));
   }
   check('onKill: credited kills raise husks at the corpses',
-    w.actors.filter(a => a.throngWild === 'palewisp').length > husks0);
+    w.actors.filter(a => a.throngWild === 'cinderkin').length > husks0);
 }
 
 // --- 4) Meta delegation: one voice, one actor ------------------------------

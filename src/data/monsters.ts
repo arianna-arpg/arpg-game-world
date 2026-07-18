@@ -16,6 +16,7 @@ import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
 import type { ClingSpec } from '../engine/cling';
+import type { PlySpec } from '../engine/plies';
 import type { PortraitTune } from '../render/vis/portrait';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
@@ -380,6 +381,11 @@ export interface MonsterDef {
    *  struggle-speed tier (2 = scrambles out double-quick). Omitted falls
    *  to GRAB_CFG.policy by rarity (uniques refuse, rares scramble). */
   grabbable?: boolean | number;
+  /** THE PLY FABRIC (engine/plies.ts): hit-counted durability — this kind
+   *  EATS N landed hits (magnitude-blind) before its life pool is exposed.
+   *  The life underneath stays live for DoTs and self-destruction. Any
+   *  kind can wear it; a 1-ply body is the horde-tier substrate. */
+  plies?: PlySpec;
   /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
    *  (world bosses, dragons, leviathans). Each part is a full monster def —
    *  it fights with its own skills and its death fires break effects on the
@@ -1218,6 +1224,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // The Pikmin blow: reach the quarry, LATCH, and bite while it carries
     // you — shaken off on the clock, scraped off by anything that sweeps.
     cling: { shakeSec: [4, 6.5] },
+    // The melee flavor eats the most swings — count-durable (plies), with
+    // the tiny life underneath left for DoTs and deliberate detonation.
+    plies: { count: 4 },
     brain: { type: 'swarm' },
   },
   palewisp: {
@@ -1230,6 +1239,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['pale_zap'],
     xp: 0,
     flier: true, levitates: true,
+    // The stand-off flavor eats fewer blows — its safety is distance.
+    plies: { count: 2 },
     brain: { type: 'caster' },
   },
   gnatling: {
@@ -1243,6 +1254,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // HARRIED on the carried — a cloud that spoils aim and attention.
     // victimMinRatio 0: a gnat rides anything with a pulse.
     cling: { shakeSec: [2.5, 4], rideStatus: 'harried', victimMinRatio: 0 },
+    // One swat, one gnat — but a swat it takes to matter (sub-floor
+    // splash never clears the veil by accident).
+    plies: { count: 1 },
     brain: {
       type: 'swarm',
       // The murmuration lever: the veil swirls as one cloud in combat

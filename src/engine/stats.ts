@@ -1210,6 +1210,9 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // More minion shaping (baked at summon time)
   minionDetectionRange: { label: 'Minion Detection Range', base: 1, min: 0.2 },
   minionHaste:    { label: 'Minion Action Speed', base: 1, min: 0.2 },
+  /** THE PLY FABRIC (engine/plies.ts): flat extra plies on plied minions.
+   *  Quanta — rounded at the bake, never batch-scaled. */
+  minionPlies:    { label: 'Minion Plies', base: 0, min: 0 },
   /** Seconds a slain minion clings to unlife after death effects fire. */
   minionUndying:  { label: 'Minion Undying Duration', base: 0 },
 };

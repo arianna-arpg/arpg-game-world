@@ -60,6 +60,8 @@ export interface ActorW {
    *  ([verb label, struggle 0..1] — the boss-bar idiom; clients hold no
    *  pair state). Everyone reads the same bar: victim, holder, rescuers. */
   gb?: [string, number];
+  pl?: number;                 // plies remaining (THE PLY FABRIC pips)
+  plm?: number;                // plies ceiling (omit both when the fabric is off)
   aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
   inv?: number;                // sheet invisible (omit when 0)
@@ -385,6 +387,8 @@ function actorToW(a: Actor): ActorW {
   // pair on the holder, shipped on the held body's own row.
   const gbHold = GRAB_HUD_OF(a);
   if (gbHold) w.gb = gbHold;
+  // THE PLY FABRIC's pips (engine/plies.ts).
+  if (a.pliesMax > 0) { w.pl = a.plies; w.plm = a.pliesMax; }
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
   if (a.kind === 'player') { const s = SEAT_OF(a); if (s) w.seat = s; }
   if (a.adorn) w.adorn = a.adorn;
@@ -696,6 +700,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it
     a.grabHud = aw.gb;    // held meter mirror (cleared when absent — freed)
+    a.plies = aw.pl ?? 0; a.pliesMax = aw.plm ?? 0; // ply pips (render-only)
     // Player bar readouts (own hero + party): runes verbatim, combo chips
     // as host-computed rows the renderer prefers over local derivation.
     a.runes = aw.rn ?? [];

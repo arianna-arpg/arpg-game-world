@@ -4481,9 +4481,14 @@ export const SKILLS: Record<string, SkillDef> = {
   // pinned quarry when you point at flesh). Three flavors, three source
   // grammars — the playstyle axis is pure ThrongSourceRow data.
 
+  // SOURCE DOCTRINE (the 07-17 swap, user-directed): the LATCHING flavor is
+  // battle-fed — melee riders live in the blast radius, so their grammar
+  // must replenish MID-FIGHT (kills kindle, traded blows fill the gauge);
+  // the RANGED flavor is the world-found finite treasure — it stands off,
+  // so its scarcity can afford to be geographic.
   gather_cinderkin: {
-    id: 'gather_cinderkin', name: 'Gather the Cinderkin',
-    description: 'ATTUNE to the ember-folk: their pockets smoulder for your eye alone, and walking among them makes them YOURS — a finite treasure the world does not regrow. HOLD to sweep the horde at the cursor; they LATCH to what they reach and bite while it carries them. Release, and they linger on the task, then heel.',
+    id: 'gather_cinderkin', name: 'Stoke the Cinderkin',
+    description: 'The fight itself STOKES them: kills may kindle a cinderkin husk at the corpse, and BLOWS TRADED — yours and your court\'s — heat a gauge that coughs up embers even from bosses who bring no court of their own. Walk through a kindled husk to claim it; they LATCH to what they reach and bite while it carries them. HOLD to sweep the horde at the cursor.',
     tags: ['spell', 'minion', 'summon', 'fire'], color: '#e08848',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -4503,8 +4508,8 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   beckon_palewisps: {
-    id: 'beckon_palewisps', name: 'Beckon the Palewisps',
-    description: 'The battle itself gives up its dead to you: kills may raise a palewisp husk at the corpse, and BLOWS TRADED — yours and your court\'s — fill a gauge that stirs wisps even from bosses who bring no court of their own. Walk through a risen husk to bind it; its zaps PHASE through stone. HOLD to sweep the host at the cursor.',
+    id: 'beckon_palewisps', name: 'Gather the Palewisps',
+    description: 'ATTUNE to the quiet dead: their haunts glimmer for your eye alone, and walking among them makes them YOURS — a finite gathering the world does not regrow. They keep their distance and their zaps PHASE through stone. HOLD to sweep the host at the cursor; release, and they linger on the task, then heel.',
     tags: ['spell', 'minion', 'summon', 'cold'], color: '#b8d8e8',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',

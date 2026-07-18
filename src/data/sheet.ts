@@ -180,6 +180,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     used: [
       'minionDamage', 'minionLife', 'minionMaxCount', 'minionDamageTaken',
       'minionSize', 'minionMoveSpeed', 'minionHaste', 'minionRegen', 'minionRegenPct',
+      'minionPlies',
       'minionDetectionRange', 'minionDecayRate', 'minionRespawnTime', 'minionUndying',
       'minionGuard', 'minionDeathHeal', 'minionDeathHealFlat', 'minionExpiryIsDeath',
       'minionExplodeDeath', 'minionExplodeLowLife',
@@ -629,6 +630,7 @@ const STAT_BLURBS: Record<string, string> = {
   minionSize: 'How large your minions grow.',
   minionMoveSpeed: 'How fast your minions travel.',
   minionHaste: 'Speeds everything your minions do.',
+  minionPlies: 'Extra PLIES on hit-counted minions — each ply eats one landed blow whole, however hard it struck.',
   minionRegen: 'Flat life your minions regenerate each second.',
   minionRegenPct: 'A fraction of each minion\'s maximum life regenerated each second.',
   minionDetectionRange: 'How far your minions notice prey.',

@@ -969,6 +969,17 @@ export function validateContent(): void {
       else if (hi > 16) warn(`monster ${def.id}: packSize hi ${hi} > 16 — entry-burst discipline (mind the perf gate)`);
     }
 
+    // THE PLY FABRIC (engine/plies.ts): a malformed spec is a body that
+    // never wears its durability — say so at boot.
+    if (def.plies) {
+      if (def.plies.count < 1) warn(`monster ${def.id}: plies.count ${def.plies.count} < 1 — omit the spec instead`);
+      if (def.plies.floor !== undefined && def.plies.floor < 0) warn(`monster ${def.id}: plies.floor < 0`);
+      if (def.plies.perLevel !== undefined && def.plies.perLevel < 0) warn(`monster ${def.id}: plies.perLevel < 0`);
+      if (def.plies.spentStatus && !STATUS_DEFS[def.plies.spentStatus]) {
+        warn(`monster ${def.id}: plies.spentStatus '${def.plies.spentStatus}' unregistered`);
+      }
+    }
+
     // THE DEFENSE-TEXTURE DOCTRINE (docs/engine/defenses.md): the signature
     // pools (poise / insight / energy shield) ship EMPTY and are AUTHORED
     // as identities — one per body, so every player answer has fights it
@@ -1658,6 +1669,7 @@ export function validateContent(): void {
         }
       }
     }
+    // THE PLY FABRIC net (engine/plies.ts) rides the monster sweep below;
     // THE THRONG spec net (engine/throng.ts): typos here are silent
     // no-shows in the world — say so at boot.
     if (s.throng) {

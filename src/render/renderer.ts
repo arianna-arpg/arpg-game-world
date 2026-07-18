@@ -14,6 +14,7 @@ import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
 import { throngSightSet } from '../engine/throng';
 import { GRAB_VERB_LABEL } from '../engine/grab';
+import { PLY_CFG } from '../engine/plies';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
 import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
@@ -3542,6 +3543,20 @@ export class Renderer {
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
       ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
+    }
+    // THE PLY ROW (engine/plies.ts): a plied body wears PIPS, not a bar —
+    // each dot one hit it can still eat. Same dent rule as every bar
+    // (untorn stays clean); once the plies spend out, the ordinary life
+    // bar above takes over and the body reads EXPOSED.
+    if (a !== world.player && a.pliesMax > 0 && a.plies > 0 && a.plies < a.pliesMax) {
+      const pip = PLY_CFG.pip;
+      const w = (a.pliesMax - 1) * pip.gap;
+      for (let i = 0; i < a.pliesMax; i++) {
+        ctx.fillStyle = i < a.plies ? pip.color : pip.spentColor;
+        ctx.beginPath();
+        ctx.arc(x - w / 2 + i * pip.gap, y - a.radius - 8, pip.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
     // finite hire show how much of it remains — swarms stay clean. A clock,

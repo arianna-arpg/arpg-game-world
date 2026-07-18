@@ -154,6 +154,7 @@ import {
   grabRefusal, grabSeatPos, struggleRate,
   type GrabSpec, type GrabThrowSpec, type GrabVerb,
 } from './grab';
+import { plyCountOf } from './plies';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneSpans, type SpanField } from './spans';
@@ -17002,6 +17003,12 @@ export class World {
     // per-body word over the rarity tiers — the Winter King is never
     // luggage; a fat unique toad may opt back in.
     if (def.grabbable !== undefined) a.grabbable = def.grabbable;
+    // THE PLY FABRIC (engine/plies.ts): hit-counted durability stamped at
+    // mint — the life pool underneath stays authored and fully live.
+    if (def.plies) {
+      a.plySpec = def.plies;
+      a.pliesMax = a.plies = plyCountOf(def.plies, level);
+    }
     // Monsters grow with wave level through the same modifier system. The
     // baseline (life/damage/accuracy/evasion) is a global lever; per-stat scaling
     // is opt-in below.
@@ -22728,6 +22735,17 @@ export class World {
     minion.sheet.setSource('owner', ownerMods);
     // Meat Shield: guarded minions keep a short leash and fight defensively.
     minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
+    // THE PLY FABRIC's owner lever (minionPlies): flat extra plies on a
+    // plied body. QUANTA LAW: never fractioned, never batch-scaled (+1 ply
+    // is one more real hit eaten on EVERY body — linear in count, never
+    // quadratic). Re-derived from the def each bake (idempotent under the
+    // live rebake); current plies clamp, never refill.
+    if (minion.plySpec) {
+      const bonus = Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
+      const spent = Math.max(0, minion.pliesMax - minion.plies);
+      minion.pliesMax = plyCountOf(minion.plySpec, minion.level) + bonus;
+      minion.plies = Math.max(0, minion.pliesMax - spent);
+    }
   }
 
   private spawnMinion(

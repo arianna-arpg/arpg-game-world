@@ -142,11 +142,17 @@ in cling.ts assumes the victim outweighs the rider. Misdirection-by-carry
 
 ## Shipped flavors (data/skills.ts + data/monsters.ts)
 
+SOURCE DOCTRINE (user-directed): the LATCHING flavor is BATTLE-FED — melee
+riders live in the blast radius, so their grammar replenishes mid-fight;
+the RANGED flavor is the world-found finite treasure — it stands off, so
+its scarcity can afford to be geographic. Every kind wears THE PLY FABRIC
+(docs/engine/plies.md): hit-counted durability over a tiny live life pool.
+
 | anchor | kind | sources | identity |
 |---|---|---|---|
-| Gather the Cinderkin | `cinderkin` (imp, r8, latch + fire bites) | pocket | the finite treasure-army |
-| Beckon the Palewisps | `palewisp` (spirit, r7, phasing zaps, flier) | onKill + gauge | the battle feeds the host; bosses feed it slower but surely |
-| Raise the Gnatveil | `gnatling` (r4, flock, latch + `harried`) | motes (mixed) | the harrying cloud — misdirection, not murder |
+| Stoke the Cinderkin (`gather_cinderkin`) | `cinderkin` (imp, r8, latch + fire bites, 4 plies) | onKill + gauge | the battle-stoked vanguard — attrition feeds replenishment |
+| Gather the Palewisps (`beckon_palewisps`) | `palewisp` (spirit, r7, phasing zaps, flier, 2 plies) | pocket | the finite haunting — hoard, spend, mourn |
+| Raise the Gnatveil (`raise_gnatveil`) | `gnatling` (r4, flock, latch + `harried`, 1 ply) | motes (mixed) | the harrying cloud — misdirection, not murder |
 
 ## Verification
 
