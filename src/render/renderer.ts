@@ -2969,7 +2969,7 @@ export class Renderer {
     }
   }
 
-  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean }): void {
+  private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean; haze?: number }): void {
     const { ctx } = this;
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
@@ -2992,6 +2992,50 @@ export class Renderer {
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(f.pos.x, f.pos.y); ctx.lineTo(f.pos.x + ex, f.pos.y + ey); ctx.stroke();
       ctx.lineCap = 'butt'; ctx.globalAlpha = 1;
+      return;
+    }
+    // HEAT-HAZE RING (Flash.haze — the mirage kit's death breath): no fill,
+    // no wash. Pale refraction rings breathe outward through the life while
+    // shimmer ticks rise inside — the lens letting go. `haze` scales the
+    // wobble; the light layer skips these (refraction, not emission).
+    if (f.haze) {
+      const k = 1 - t;                 // 0 → 1 across the life
+      const age = f.maxLife - f.life;  // seconds since the pop
+      const R = f.radius * (0.35 + 0.65 * k);
+      ctx.strokeStyle = f.color;
+      ctx.lineCap = 'round';
+      for (let ring = 0; ring < 3; ring++) {
+        const rr = R * (1 - ring * 0.18);
+        if (rr <= 3) continue;
+        ctx.globalAlpha = t * (0.16 - ring * 0.04);
+        ctx.lineWidth = 1.5 + ring * 0.8;
+        ctx.beginPath();
+        const segs = 30;
+        for (let s = 0; s <= segs; s++) {
+          const a = (s / segs) * Math.PI * 2;
+          const wob = Math.sin(a * 5 + age * 11 + ring * 2.1) * rr * 0.05 * f.haze;
+          const x = f.pos.x + Math.cos(a) * (rr + wob), y = f.pos.y + Math.sin(a) * (rr + wob);
+          if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
+      // Rising shimmer ticks — seeded per pop, lifting as the ring grows.
+      ctx.globalAlpha = t * 0.3;
+      ctx.lineWidth = 1.2;
+      const seed = ((f.pos.x * 13 + f.pos.y * 7) | 0) >>> 0;
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + (seed % 63) * 0.1;
+        const d0 = R * (0.25 + 0.5 * (((i * 37 + seed) % 100) / 100));
+        const x = f.pos.x + Math.cos(a) * d0;
+        const y = f.pos.y + Math.sin(a) * d0 - k * 14;
+        ctx.beginPath();
+        ctx.moveTo(x - 1.5, y + 3);
+        ctx.lineTo(x + 1.5, y - 3);
+        ctx.stroke();
+      }
+      ctx.lineCap = 'butt';
+      ctx.globalAlpha = 1;
       return;
     }
     ctx.globalAlpha = t * 0.5;

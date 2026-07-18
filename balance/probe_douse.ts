@@ -15,6 +15,7 @@ import { resistValue } from '../src/engine/damage';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { doodadRuleOf } from '../src/engine/levelgen';
 import { liquidBodyIsLive } from '../src/render/vis/painters';
+import { MONSTERS } from '../src/data/monsters';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -121,6 +122,48 @@ check('mirage: the vanish is untouched (brittle near, inert light)',
 check('mirage: bastion/caravan stay DISTANT promises (mirageGhost silhouettes)',
   DOODAD_VISUALS.mirage_bastion.painter === 'mirageGhost'
   && DOODAD_VISUALS.mirage_caravan.painter === 'mirageGhost');
+
+// --- 7) THE POP DRESS + THE POOLED AMBUSH ----------------------------------
+// The lie's death breath: all three mirages pop with the heat-haze ring
+// (brittle.pop.haze → Flash.haze), and the caravan's wake is a weighted
+// POOL — stalkers the common truth, the Sirocco Court answering sometimes.
+const caravanRule = doodadRuleOf('mirage_caravan');
+check('pop: all three mirage lies breathe the haze ring',
+  ['mirage_oasis', 'mirage_bastion', 'mirage_caravan']
+    .every(k => (doodadRuleOf(k).brittle?.pop?.haze ?? 0) > 0));
+const pool = caravanRule.brittle?.spawn;
+const poolRows = Array.isArray(pool) ? pool : [];
+const poolIds = poolRows.map(r => r.monster);
+check('ambush: the caravan wake is a weighted POOL of 3+ faces', poolRows.length >= 3);
+check('ambush: the stalker nest stays the heaviest face',
+  poolRows.length > 0 && poolRows[0].monster === 'dune_stalker'
+  && (poolRows[0].w ?? 1) >= Math.max(...poolRows.map(r => r.w ?? 1)));
+check('ambush: the Sirocco Court answers sometimes (dancer + husk pooled)',
+  poolIds.includes('mirage_dancer') && poolIds.includes('salt_husk'));
+check('ambush: every pooled face is a REGISTERED monster', poolIds.every(id => !!MONSTERS[id]));
+// Behavior: break caravans until at least two distinct faces have shown.
+p.pos = { x: 1200, y: 900 }; // dry corner, clear of every douse rig
+const facesSeen = new Set<string>();
+let breaks = 0;
+while (facesSeen.size < 2 && breaks < 120) {
+  p.life = p.maxLife();
+  const before = new Set(world.actors.map(a => a.id));
+  world.doodads.push({ pos: { x: p.pos.x, y: p.pos.y }, radius: 50, kind: 'mirage_caravan' });
+  world.markDoodadsChanged();
+  step(0.1); // the near sweep pops it under the hero's feet
+  breaks++;
+  for (const a of world.actors) {
+    if (before.has(a.id) || a.dead) continue;
+    if (a.defId) facesSeen.add(a.defId);
+    a.dead = true; // count the face, then clear the field for the next break
+  }
+}
+check('ambush: multiple faces witnessed over repeated breaks',
+  facesSeen.size >= 2, `${breaks} breaks → ${[...facesSeen].join(', ')}`);
+check('ambush: every witnessed face came from the pool',
+  [...facesSeen].every(id => poolIds.includes(id)));
+check('pop: the break flash carries the haze style (and the stock read keeps none)',
+  world.flashes.some(f => (f.haze ?? 0) > 0));
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

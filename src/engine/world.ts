@@ -1056,6 +1056,11 @@ interface Flash {
   meteor?: boolean;
   /** Draw a straight BEAM from pos along `facing` for `radius` length (crystal laser). */
   beam?: boolean;
+  /** HEAT-HAZE RING (the mirage kit's death breath): no fill, no glow —
+   *  pale wobbling refraction rings + rising shimmer ticks; the value
+   *  scales the wobble (0..1]. The light layer skips haze flashes
+   *  (refraction, not emission). */
+  haze?: number;
 }
 
 /** Summons still emerging from a "scattered in sequence" cast — or arriving
@@ -36590,7 +36595,14 @@ export class World {
     const br = doodadRuleOf(d.kind).brittle;
     if (!br) return;
     const color = br.color ?? '#c8b89a';
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 2.2, color, life: 0.3, maxLife: 0.3 });
+    // POP DRESS (brittle.pop): reshape the break flash — the mirage kit
+    // trades the pale blast for the heat-haze ring. Absent = the stock read.
+    const fx = br.pop;
+    this.flashes.push({
+      pos: vec(d.pos.x, d.pos.y), radius: fx?.radius ?? d.radius * 2.2, color,
+      life: fx?.life ?? 0.3, maxLife: fx?.life ?? 0.3,
+      ...(fx?.haze ? { haze: fx.haze } : {}),
+    });
     if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
     if (br.orbChance && chance(br.orbChance)) {
       this.shedOrb(chance(0.5) ? 'life' : 'mana', d.pos);
@@ -36635,16 +36647,26 @@ export class World {
     }
     // FUME: the wreck exhales a lingering hazard cloud (gas pods, spore sacs).
     if (br.fume) this.mintHazardCloud(vec(d.pos.x, d.pos.y), br.fume);
-    // WAKE: something was living in there (urn ambushes, hive husks).
-    if (br.spawn && chance(br.spawn.chance ?? 1)) {
-      const [lo, hi] = br.spawn.count ?? [1, 1];
+    // WAKE: something was living in there (urn ambushes, hive husks). The
+    // pool (array) form draws ONE face by weight per break — an ambush has
+    // a single nature — then that row's own chance gates the clutch as
+    // ever. Single-row specs skip the draw: their rng stream is
+    // byte-identical to the old read.
+    const spawnRows = !br.spawn ? [] : Array.isArray(br.spawn) ? br.spawn : [br.spawn];
+    let sp = spawnRows[0];
+    if (spawnRows.length > 1) {
+      let roll = rand(0, spawnRows.reduce((s, r) => s + (r.w ?? 1), 0));
+      for (const r of spawnRows) { roll -= r.w ?? 1; if (roll <= 0) { sp = r; break; } }
+    }
+    if (sp && chance(sp.chance ?? 1)) {
+      const [lo, hi] = sp.count ?? [1, 1];
       const n = lo + Math.floor(rand(0, hi - lo + 1));
       for (let i = 0; i < n; i++) {
-        const m = this.createMonster(br.spawn.monster, Math.max(1, this.zone.level), 'enemy');
+        const m = this.createMonster(sp.monster, Math.max(1, this.zone.level), 'enemy');
         m.pos = this.clampPos(vec(d.pos.x + rand(-22, 22), d.pos.y + rand(-22, 22)), m.radius);
         this.actors.push(m);
       }
-      if (n > 0 && br.spawn.text) this.text(vec(d.pos.x, d.pos.y - 28), br.spawn.text, color, 12);
+      if (n > 0 && sp.text) this.text(vec(d.pos.x, d.pos.y - 28), sp.text, color, 12);
     }
     // THE SHALLOW GRAVE: the wreck spills BODIES, not the living — raisable
     // fuel for the corpse economy (the charnel kit's necromancer bait; a

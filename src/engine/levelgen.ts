@@ -1008,6 +1008,17 @@ export interface DoodadRule {
 }
 
 /** How a lifeless breakable gives way (World.popBrittle executes it). */
+/** One face of a brittle WAKE (BrittleSpec.spawn): who was really inside.
+ *  In the pool (array) form, `w` weights the face rolled per break. */
+export interface BrittleSpawn {
+  monster: string;
+  count?: [number, number];
+  chance?: number;
+  text?: string;
+  /** Pool weight (array form only; default 1). */
+  w?: number;
+}
+
 export interface BrittleSpec {
   /** What sets it off — any listed trigger fires:
    *  'hit'   = any STRIKE connects: a projectile in flight (the flight step
@@ -1037,6 +1048,14 @@ export interface BrittleSpec {
   /** Break flavor: floating text + flash tint. */
   text?: string;
   color?: string;
+  /** POP DRESS: reshape the break's flash. `haze` swaps the pale blast for
+   *  the HEAT-HAZE RING (Flash.haze, a renderer flash STYLE beside
+   *  bolt/meteor/beam — faint wobbling refraction rings + rising shimmer
+   *  ticks, no fill, no glow; the value scales the wobble): the mirage
+   *  kit's death breath. radius/life override the stock d.radius×2.2 /
+   *  0.3s. Any brittle kind may wear one, and event-spawn rings can adopt
+   *  the same flash style in a later pass. */
+  pop?: { haze?: number; radius?: number; life?: number };
   /** One-shot flavor the first time a dwell clock STARTS ticking — the creak
    *  before the drop, the hollow knock behind the stone. */
   warn?: string;
@@ -1048,8 +1067,13 @@ export interface BrittleSpec {
   fume?: { skillId?: string; radius?: number; linger?: number; tickInterval?: number;
     dmgMult?: number; delay?: number; color?: string };
   /** Break WAKES something: monsters spawned at the wreck — urn ambushes,
-   *  hive husks. `chance` gates the whole clutch; `count` rolls per break. */
-  spawn?: { monster: string; count?: [number, number]; chance?: number; text?: string };
+   *  hive husks. `chance` gates the whole clutch; `count` rolls per break.
+   *  ARRAY form = a weighted POOL: ONE row is drawn by `w` per break (then
+   *  its own chance gates the clutch exactly as ever) — an ambush has a
+   *  single nature, never a mixed crowd. The caravan lie belongs to the
+   *  stalkers most days and to the Sirocco Court when the heat is in the
+   *  mood; any faction can buy into any wreck with one row. */
+  spawn?: BrittleSpawn | BrittleSpawn[];
   /** COLLAPSE: the doodad WAS the footing (a rotten span over a drop).
    *  Bodies riding it when it goes take the fall recovery — confined to the
    *  hazard's edge ('edge', default) or returned to safe ground
@@ -1650,13 +1674,26 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // through; walking close enough to KNOW pops the lie (brittle 'near', the
   // whole existing machinery: text, poof tint, and the caravan's ambush on
   // the spawn lane — the doodad→actor bridge, never a moving doodad).
+  // All three lies die the same way now: not a blast but a BREATH — the
+  // heat-haze ring (brittle.pop.haze) wobbling outward where the promise
+  // stood, shimmer ticks rising as the lens lets go.
   mirage_oasis: { overlap: 'inert', spacing: 520,
-    brittle: { on: ['near'], reach: 120, text: 'the water was never there…', color: '#bfe8f0' } },
+    brittle: { on: ['near'], reach: 120, text: 'the water was never there…', color: '#bfe8f0',
+      pop: { haze: 1, radius: 150, life: 0.85 } } },
   mirage_bastion: { overlap: 'inert', spacing: 640,
-    brittle: { on: ['near'], reach: 130, text: 'the walls scatter into heat…', color: '#bfe8f0' } },
+    brittle: { on: ['near'], reach: 130, text: 'the walls scatter into heat…', color: '#bfe8f0',
+      pop: { haze: 1, radius: 180, life: 0.85 } } },
+  // The caravan's ambush is a POOL: the stalker nest stays the common truth,
+  // but the desert's own Court answers sometimes — the dancers were the
+  // caravan, or the crew never left at all. Salt keeps.
   mirage_caravan: { overlap: 'inert', spacing: 560,
     brittle: { on: ['near'], reach: 120, text: 'it was never a caravan—', color: '#bfe8f0',
-      spawn: { monster: 'dune_stalker', count: [2, 3], chance: 0.45, text: 'the sand rises hunting!' } } },
+      pop: { haze: 1, radius: 170, life: 0.85 },
+      spawn: [
+        { monster: 'dune_stalker', count: [2, 3], chance: 0.45, w: 3, text: 'the sand rises hunting!' },
+        { monster: 'mirage_dancer', count: [2, 3], chance: 0.45, w: 1.5, text: 'the Court steps out of the heat!' },
+        { monster: 'salt_husk', count: [2, 4], chance: 0.45, w: 1.5, text: 'the caravan\'s crew never left—' },
+      ] } },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
   // reels the nearest intruder each beat and bites whatever reaches the lip.

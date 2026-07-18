@@ -175,6 +175,7 @@ export class LightLayer {
         '#ffe8c0', Math.min(0.9, this.ambient + 0.15));
     }
     for (const f of world.flashes) {
+      if (f.haze) continue; // refraction, not emission — a haze ring casts no glow
       const k = f.maxLife > 0 ? f.life / f.maxLife : 0;
       push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k);
     }

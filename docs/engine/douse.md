@@ -59,6 +59,19 @@ exact face**:
   cleanly on the pop. True water stays baked.
 - `mirage_bastion` / `mirage_caravan` keep the `mirageGhost` silhouette look:
   their lie is the horizon's, not the waterline's.
+- **The death breath**: every mirage pops with the HEAT-HAZE RING —
+  `BrittleSpec.pop { haze, radius, life }` reshapes the break flash into
+  `Flash.haze`, a renderer flash *style* beside bolt/meteor/beam (pale
+  wobbling refraction rings + rising shimmer ticks; no fill, no wash, and
+  the light layer skips it — refraction, not emission). Any brittle kind
+  may wear one; event-spawn rings can adopt the style in a later pass.
+- **The pooled ambush**: `BrittleSpec.spawn` accepts an ARRAY — a weighted
+  pool drawing ONE face per break (`w`), that row's own `chance` gating the
+  clutch as ever (single-row specs keep a byte-identical rng stream). The
+  caravan rolls the stalker nest most days (w 3) and the Sirocco Court
+  otherwise: `mirage_dancer` troupes ('the Court steps out of the heat!')
+  or `salt_husk` crews ('the caravan's crew never left—'), w 1.5 each. Any
+  faction buys into any wreck with one row.
 
 Probe: `npx tsx balance/probe_douse.ts`. Dials: `DOUSE_CFG` (regions.ts),
 per-row `douses`, per-kind `flicker`, `HEAT_CFG` unchanged.
