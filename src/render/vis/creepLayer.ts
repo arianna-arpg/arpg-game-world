@@ -17,7 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import type { CreepField, CreepSource } from '../../engine/creep';
-import { rimMulOf, CREEP_CFG } from '../../engine/creep';
+import { anisoMode, crestPoint, rimMulOf, CREEP_CFG } from '../../engine/creep';
 import { VIS_CFG } from './visConfig';
 import { shade, withAlpha } from './color';
 import { heartbeat } from './painters';
@@ -76,9 +76,14 @@ function rimPath(c: CanvasRenderingContext2D, src: CreepSource, cx: number, cy: 
 
 /** A stretched crest's baked stretch factor (1 for everything round —
  *  classic sources of a stretched DEF stay round too; only a marching run
- *  wears the ellipse, exactly as rimMulOf reads it). */
+ *  wears the ellipse, exactly as rimMulOf reads it). AFFINE rows (flow /
+ *  swell — anisoMode) bake CANONICAL: rimMulOf already answers harmonics-
+ *  only for them, and the blit transform wears the ellipse + the live
+ *  swell, so a steering bearing can never stale a bake. */
 function stretchOf(src: CreepSource): number {
-  return src.front ? Math.max(0.5, src.def.front?.stretch ?? 1) : 1;
+  if (!src.front) return 1;
+  if (anisoMode(src) === 'affine') return 1;
+  return Math.max(0.5, src.def.front?.stretch ?? 1);
 }
 
 /** Fill the current path with the current style, mapping the FILL through
@@ -378,7 +383,21 @@ export function drawCreepLayer(
     const hb = heartbeat(time * pulse + s.phase);
     const scale = (s.cur / s.maxReach) * (1 + cfg.breathe * (hb - 0.35));
     const half = (spr.width / 2) * scale;
-    ctx.drawImage(spr, s.pos.x - half, s.pos.y - half, half * 2, half * 2);
+    if (run && anisoMode(s) === 'affine') {
+      // THE AFFINE BLIT: the canonical bake under rotate(bearing) ∘
+      // scale(elong, stretch) — the exact transform the hit test inverts,
+      // so drawn == tested mid-steer and mid-swell alike (the radial
+      // gradient rides the ellipse for free under the scale).
+      const st = Math.max(0.5, s.def.front?.stretch ?? 1);
+      ctx.save();
+      ctx.translate(s.pos.x, s.pos.y);
+      ctx.rotate(run.bearing);
+      ctx.scale(run.elong, st);
+      ctx.drawImage(spr, -half, -half, half * 2, half * 2);
+      ctx.restore();
+    } else {
+      ctx.drawImage(spr, s.pos.x - half, s.pos.y - half, half * 2, half * 2);
+    }
 
     // The live pulse: one front riding heart→rim, brightest on the lub.
     // Kept inside the body plateau so a circular ring never pokes past a
@@ -424,10 +443,20 @@ function drawLeadingEdge(
   const STEPS = 26;
   const flick = e.style === 'flame' ? 0.75 + 0.25 * Math.sin(time * 11 + s.phase * 3) : 1;
   const width = (e.width ?? cfg.width) * flick;
+  // An AFFINE source's rim lives through its transform — the arc traces
+  // crestPoint (THE resolver rider seats share), stroked in world space so
+  // the line width stays uniform whatever the ellipse does.
+  const affine = anisoMode(s) === 'affine';
 
   // The arc: traced along the live rim across the bearing's spread.
   ctx.beginPath();
   for (let i = 0; i <= STEPS; i++) {
+    if (affine) {
+      const p = crestPoint(s, -half + (i / STEPS) * half * 2, 1);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+      continue;
+    }
     const ang = bearing - half + (i / STEPS) * half * 2;
     const r = s.cur * rimMulOf(s, ang);
     const x = s.pos.x + Math.cos(ang) * r;
@@ -449,12 +478,19 @@ function drawLeadingEdge(
   ctx.lineWidth = e.style === 'flame' ? 1.6 : 2.2;
   for (let i = 0; i < cfg.streaks; i++) {
     const f = i / cfg.streaks;
-    const ang = bearing + (f - 0.5) * half * 1.5;
     const cyc = (time * cfg.streakSpeed + f * 7.13 + s.phase) % 1;
-    const r0 = s.cur * rimMulOf(s, ang);
     const runOut = cfg.streakLen * (0.6 + f * 0.8);
-    const x0 = s.pos.x + Math.cos(ang) * (r0 + cyc * runOut);
-    const y0 = s.pos.y + Math.sin(ang) * (r0 + cyc * runOut);
+    let x0: number, y0: number;
+    if (affine) {
+      const p = crestPoint(s, (f - 0.5) * half * 1.5, 1);
+      x0 = p.x + Math.cos(bearing) * cyc * runOut;
+      y0 = p.y + Math.sin(bearing) * cyc * runOut;
+    } else {
+      const ang = bearing + (f - 0.5) * half * 1.5;
+      const r0 = s.cur * rimMulOf(s, ang);
+      x0 = s.pos.x + Math.cos(ang) * (r0 + cyc * runOut);
+      y0 = s.pos.y + Math.sin(ang) * (r0 + cyc * runOut);
+    }
     ctx.globalAlpha = cfg.alpha * (1 - cyc) * 0.9;
     ctx.beginPath();
     ctx.moveTo(x0, y0);

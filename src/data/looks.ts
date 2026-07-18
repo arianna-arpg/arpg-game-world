@@ -3251,6 +3251,17 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'slimeTrail', color: '#4a0a12', params: { n: 5 } }],
   },
+  /** The pale corpuscle: a blanched cell all fringe and purpose — its lash
+   *  skirt is the lances it stabs with, its one red eye is the grudge. */
+  pale_corpuscle: {
+    parts: [
+      { kind: 'blob', alpha: 0.96, params: { irr: 0.22, seed: 149 } },
+      { kind: 'lashFringe', params: { n: 10, len: 0.42 } },
+      { kind: 'veinweb', alpha: 0.35, params: { n: 3 } },
+      { kind: 'eyes', color: '#c04050', params: { n: 1, spread: 0, dist: 0.35, size: 0.11 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#e0ccd2', params: { n: 3 } }],
+  },
   /** The tract worm: a soft sour head all rings and appetite (its body is
    *  the worm spec's segments — this is only the face it surfaces with). */
   tract_worm: {

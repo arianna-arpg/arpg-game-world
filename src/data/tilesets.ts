@@ -5823,6 +5823,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         fronts: [
           { id: 'sanguine_pulse', line: [1, 2], delay: [5, 9], waves: [6, 12] },
           { id: 'sanguine_pulse', line: [1, 1], delay: [20, 32], waves: [6, 12] },
+          // THE BORE: one hard slug of pumped blood that STEERS the
+          // galleries (FrontSpec.flow — it hugs the winding walls, rebounds
+          // out of blind pockets), elongates as the pump feeds it, and
+          // spends itself mid-zone; pale corpuscles ride its crest and
+          // spear what it carries. Announced — you hear the vessel take a
+          // breath before the wave takes you.
+          { id: 'sanguine_bore', line: [1, 1], delay: [10, 18], waves: [14, 24], chance: 0.8,
+            announce: { text: 'the vessel surges!', color: '#ff8090' } },
         ],
       },
     },

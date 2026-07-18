@@ -103,7 +103,15 @@ changes.
   walls with a structurally guaranteed clear corridor, `FrontSpec.stretch`
   artery-wide crests, `convert.fade` evaporating wakes riding the generic
   `Doodad.evap` drying fabric, `chance`/`announce` intra-zone-event dials,
-  `CreepDef.notAquatic` no-water-within-water — docs in
+  `CreepDef.notAquatic` no-water-within-water; THE VESSEL BORE —
+  `FrontSpec.flow` wall-following steering (whisker probes over
+  `CreepTerrain.openAt` + dead-end rebounds; `confine` walls the current's
+  whole gameplay surface to the vessel), `travel` finite runs that
+  disperse, `swell` along-axis elongation (affine anisotropy: drawn ==
+  tested through ONE transform, `crestPoint` THE seat resolver), and
+  `riders` crest-borne kin (`World.updateCreepRiders` mounts real
+  monsters, `crestborne` marker; debut `sanguine_bore` + the
+  `pale_corpuscle` white-cell surfers on the Sanguine's lanes) — docs in
   `docs/engine/creep.md`),
   `collapse.ts` + `traversal.ts` + `render/vis/understory.ts` (THE VERTICAL
   FABRICS: dissolving ground as a `ZoneTheme.collapse` spec — contact

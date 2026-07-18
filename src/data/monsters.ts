@@ -6398,6 +6398,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     deathBurst: { mode: 'implode', damageFrac: 0.55, coalesce: 0.6, damageType: 'physical' },
     detection: 0.9, brain: { type: 'juggernaut' },
   },
+  // The vessel's own answer: a blanched cell that rides the sanguine
+  // bore's crest (FrontSpec.riders — position slaved to the crest, kit its
+  // own) and spears what the blood carries past — the artery cleaning
+  // itself. Dropped by the dispersing wave, it patrols the gallery until
+  // the next pump. High detection: it exists to notice what doesn't belong.
+  pale_corpuscle: {
+    id: 'pale_corpuscle', name: 'Pale Corpuscle',
+    color: '#e8d8dc', shape: 'oval', radius: 13, material: 'slime', look: 'pale_corpuscle',
+    base: { life: 95, moveSpeed: 110, accuracy: 108, armor: 12, poise: 35, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.35)],
+    skills: ['claw'], xp: 32, faction: 'flesh',
+    detection: 1.4,
+    brain: { type: 'basic' },
+  },
   // The tract's own tenant: a worm that knows every bend (the sandmaw's
   // spec, gone soft and sour).
   tract_worm: {

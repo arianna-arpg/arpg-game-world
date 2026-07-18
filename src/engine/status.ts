@@ -1034,6 +1034,14 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Wading', color: '#4a90c8', duration: 0.5,
     mods: [mod('moveSpeed', 'more', -0.3)],
   },
+  crestborne: {
+    // RIDING THE SURGE (FrontSpec.riders — World.updateCreepRiders): a pure
+    // MARKER re-stamped every tick while a body sits a marching crest's
+    // seat. Cleansing it is harmless (the seat re-stamps next beat); it
+    // carries no mods by design — the readable hook other systems may key
+    // off, never the mechanism.
+    label: 'Crestborne', color: '#f08a96', duration: 0.5,
+  },
   swimming: {
     label: 'Swimming', color: '#2a6ab8', duration: 0.5,
     mods: [mod('moveSpeed', 'more', -0.6), mod('evasion', 'more', -0.3)],

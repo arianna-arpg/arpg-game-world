@@ -23,6 +23,7 @@ import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { TuneSpec } from './tuning';
 import type { ClingSpec, ClingRide } from './cling';
+import type { CreepSource } from './creep';
 import type { GripHold } from './grab';
 import type { PlySpec } from './plies';
 import type { MonsterRarity } from './rarity';
@@ -459,6 +460,12 @@ export class Actor {
    *  first update tick — after every spawn path has settled the body's true
    *  position — and the planted source is bound to this life. */
   creepPlanted?: boolean;
+  /** CREST RIDER (FrontSpec.riders — World.updateCreepRiders): mounted on a
+   *  marching creep section, position slaved to crestPoint every tick
+   *  (drawn == seated). Dismounts when the section disperses or dies, on
+   *  hard-CC or a grab, or a shove past CREEP_CFG.front.rider.dismountPush.
+   *  Never serializes — creep is transient and riders are zone-local. */
+  surf?: { src: CreepSource; ang: number };
   /** Bomber fuse: armed countdown to self-detonation (renderer flashes it). */
   fuse?: number;
   /** Airborne leap in flight. */

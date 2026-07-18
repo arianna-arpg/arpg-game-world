@@ -139,7 +139,7 @@ import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
-import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, type FrontConsumeRow } from './creep';
+import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
@@ -32404,8 +32404,10 @@ export class World {
    *  breath. The leaf stays import-free; the world stays the only mutator.
    *  Installed wherever a field is born (loadZone build + creepEnsure). */
   private frontSpawned = 0;
+  private frontRiders = 0;
   private installCreepFront(field: CreepField): void {
     this.frontSpawned = 0;
+    this.frontRiders = 0;
     // Live way discs (kept roads/causeways — wild stretches already gave
     // themselves back to the land and don't count). Ways never move at
     // runtime, so one snapshot serves the visit; the field hands slices of
@@ -32484,6 +32486,12 @@ export class World {
         (b.survivalHeldAt ??= {})['breath'] = this.time;
         this.drainSurvival(b, 'breath', drain, dt);
       },
+      // THE VESSEL FLOW's ground truth (FrontSpec.flow steering + the
+      // confine mask + rider seat pull-in all read THIS): the walk grid
+      // where one exists, bare bounds where none does — open zones steer
+      // nothing and confine nothing, exactly as authored.
+      openAt: (x, y) => x >= 0 && y >= 0 && x <= this.arena.w && y <= this.arena.h
+        && (!this.walk || this.walk.isWalkable(x, y)),
       // The lane gate's sky window (FrontSpawnRow.when) — the leaf's
       // structural FrontCond is radiance's own shape (the cast is the
       // zero-import doctrine's price, paid once here).
@@ -32567,10 +32575,80 @@ export class World {
   }
 
   /** Tick the creep field: fronts advance/recoil (bound hearts watched) +
-   *  dress occupants on the apply cadence. */
+   *  dress occupants on the apply cadence — then seat the crest riders on
+   *  the freshly-marched rims (drawn == seated within the same frame). */
   private updateCreep(dt: number): void {
     if (!this.creep) return;
     this.creep.update(dt, this.time, this.actors);
+    this.updateCreepRiders();
+  }
+
+  /** THE CREST RIDERS (FrontSpec.riders): the world half. MOUNT — a
+   *  section born with a rider plan fields real monsters onto its crest
+   *  seats, once, capped per visit (the consume-kin ledger's sibling; a
+   *  wave past the cap surges riderless). MAINTAIN — every mounted body
+   *  is slaved to crestPoint each tick, THE resolver rider seats, the
+   *  affine telegraph and the probes all share, so a surfing body stands
+   *  exactly where the drawn crest is; seats that lap a wall on a tight
+   *  bend pull in toward the heart until they find open ground. DISMOUNT
+   *  — the section dispersing or dying drops its crew where they ride;
+   *  hard-CC, a grab, or a shove past rider.dismountPush throws them off
+   *  (counterplay: knock the surfer from its wave). Riders keep their
+   *  whole kit throughout — the position is borrowed, the fight is theirs. */
+  private updateCreepRiders(): void {
+    const field = this.creep;
+    if (!field) return;
+    const rd = CREEP_CFG.front.rider;
+    for (const s of field.sources) {
+      const run = s.front;
+      if (!run?.riderPlan || run.ridersMounted || s.state === 'recede') continue;
+      run.ridersMounted = true;
+      for (const seat of run.riderPlan) {
+        if (this.frontRiders >= rd.max) break;
+        const at = crestPoint(s, seat.ang, rd.seatFrac);
+        const m = this.createMonster(seat.monster, Math.max(1, this.zone.level), 'enemy');
+        m.pos = this.clampPos(vec(at.x, at.y), m.radius);
+        m.surf = { src: s, ang: seat.ang };
+        this.actors.push(m);
+        this.frontRiders++;
+      }
+    }
+    for (const a of this.actors) {
+      const surf = a.surf;
+      if (!surf) continue;
+      const s = surf.src;
+      const pushSpeed = a.push ? Math.hypot(a.push.vx, a.push.vy) : 0;
+      if (a.dead || s.cur < CREEP_CFG.minReach || s.state === 'recede'
+        || !field.sources.includes(s) || a.isStunned() || a.heldBy !== undefined
+        || pushSpeed >= rd.dismountPush) {
+        delete a.surf;
+        continue;
+      }
+      const at = crestPoint(s, surf.ang, rd.seatFrac);
+      let px = at.x, py = at.y;
+      if (this.walk && !this.walk.isWalkable(px, py)) {
+        // Pull the seat in toward the heart until it finds open ground —
+        // f 0 is the heart itself, the honest degraded seat while a crest
+        // rides hard against stone (steering keeps the heart open).
+        let found = false;
+        for (const f of [0.72, 0.46, 0.2, 0]) {
+          const qx = s.pos.x + (at.x - s.pos.x) * f;
+          const qy = s.pos.y + (at.y - s.pos.y) * f;
+          if (this.walk.isWalkable(qx, qy)) { px = qx; py = qy; found = true; break; }
+        }
+        if (!found) {
+          // Not even the heart is open this tick: hold position — and if
+          // the wave has genuinely LEFT the rider behind, the mount is
+          // over (the divorce clause: a stranded body must never trail a
+          // departed wave on an invisible tether — live-QA caught a
+          // rim-hugging bore towing a corpuscle 600u back).
+          if (Math.hypot(a.pos.x - s.pos.x, a.pos.y - s.pos.y) > s.bound * 1.35) delete a.surf;
+          continue;
+        }
+      }
+      a.pos = this.clampPos(vec(px, py), a.radius, a.pos);
+      a.applyStatus(rd.mountStatus, 0, 1, 'the surge');
+    }
   }
 
   private updateSnow(dt: number): void {

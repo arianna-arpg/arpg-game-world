@@ -235,6 +235,71 @@ export interface FrontSpec {
   /** The drowning ramp: covered PLAYERS drain this much breath/sec (the
    *  survival fabric — monsters never drown, exactly as in deep water). */
   drown?: { drain: number };
+  /** THE VESSEL FLOW — the section STEERS: whisker probes read the open
+   *  ground ahead (CreepTerrain.openAt — the walk grid's truth) and the
+   *  bearing bends toward the deepest channel, so the bolus follows a
+   *  winding gallery like a current following its bank, deflects hard off
+   *  walls it strikes, and REBOUNDS out of dead ends. Rows without flow
+   *  march their fixed bearing exactly as before. */
+  flow?: FrontFlowSpec;
+  /** THE FINITE RUN: the section rolls `range` (units, on its private
+   *  stream) at birth and DISPERSES — recede where it stands — when its
+   *  odometer passes it; `taper` eases the last fraction of the run down
+   *  toward CREEP_CFG.front.travelTaperFloor first, so the surge visibly
+   *  loses pressure before it lets go. The pumped bolus's whole life:
+   *  born, rushes, spends itself, gone. */
+  travel?: { range: [number, number]; taper?: number };
+  /** THE SWELL: the bolus ELONGATES along its march as it travels —
+   *  `1 → max` over `per` units, eased. Rides the affine anisotropy (see
+   *  anisoMode): the drawn skin, the hit test, the crest seats and the
+   *  edge telegraph all stretch through ONE transform. Composes with
+   *  `stretch` (across) — a slug that fills the tube and keeps growing
+   *  longer as the pump feeds it. */
+  swell?: { max: number; per: number };
+  /** CREST RIDERS — kin seated ON the marching rim (the artery's white
+   *  cells surfing their own weather). Seats roll on the section's
+   *  private stream at birth; the WORLD mounts real monsters onto them
+   *  (World.updateCreepRiders — capped per visit like consume kin) and
+   *  slaves each body to crestPoint every tick (drawn == seated). A rider
+   *  keeps its whole kit — it stabs what the surge carries past — and
+   *  dismounts when the section disperses, when hard-CC'd or grabbed, or
+   *  when a shove past CREEP_CFG.front.rider.dismountPush throws it off. */
+  riders?: readonly FrontRiderRow[];
+}
+
+/** The vessel-flow steering levers (FrontSpec.flow). */
+export interface FrontFlowSpec {
+  /** Steering rate cap, radians/sec — how sharply the current can bend.
+   *  Urgency (a closing wall) and `bounce` scale it up, never past the
+   *  rebound burst. */
+  steer: number;
+  /** Rebound sharpness 0..1: how much of a hard wall contact turns into a
+   *  crisp angular deflection instead of a smooth swerve (and how hard a
+   *  dead-end rebound whips around). Default CREEP_CFG.front.flow.bounce. */
+  bounce?: number;
+  /** Lookahead multiplier over the live nose reach (cur × elong).
+   *  Default CREEP_CFG.front.flow.probeFrac. */
+  probe?: number;
+  /** Side-whisker spread, radians. Default CREEP_CFG.front.flow.whiskerAng. */
+  whisker?: number;
+  /** VESSEL CONFINEMENT: cover (grants, drag, drown — the whole gameplay
+   *  surface) additionally requires an OPEN LINE from the section heart to
+   *  the point (openAt ray-march), so the current can never reach through
+   *  a wall into the corridor next door. A gameplay honesty mask like
+   *  hitFloor — the drawn splash may still lap the stone. */
+  confine?: boolean;
+}
+
+/** One crest-rider row (FrontSpec.riders). */
+export interface FrontRiderRow {
+  monster: string;
+  /** Riders per section, rolled on the private stream. Default [1, 1]. */
+  count?: [number, number];
+  /** Chance this row mounts at all, per section. Default 1. */
+  chance?: number;
+  /** Seat spread about the nose, radians (body frame).
+   *  Default CREEP_CFG.front.rider.seatArc. */
+  arc?: number;
 }
 
 /** One ambient front lane on a zone's creep spec: which kind marches, how
@@ -341,6 +406,11 @@ export interface CreepTerrain {
    *  CondHeld — the lane gate's window. Absent = every lane unconditional,
    *  so bare harnesses keep their content.) */
   condHeld?(cond: FrontCond): boolean;
+  /** Is this point open ground a current can occupy? (The walk grid's
+   *  truth, arena bounds included — World adapts isWalkable.) Absent =
+   *  flow rows march straight and confine masks nothing: a bare harness
+   *  keeps every legacy behavior. */
+  openAt?(x: number, y: number): boolean;
   /** One floating arrival line on every seat (FrontSpawnRow.announce —
    *  the wildlife arrival-line idiom). Absent = silent waves everywhere. */
   announce?(text: string, color?: string): void;
@@ -441,6 +511,54 @@ export function validateCreep(
       if (fade.rate !== undefined && !(fade.rate > 0)) {
         bad.push(`creep '${id}': convert.fade.rate must be > 0`);
       }
+    }
+    if (fs.flow) {
+      if (!fin(fs.flow.steer) || !(fs.flow.steer > 0 && fs.flow.steer <= 10)) {
+        bad.push(`creep '${id}': flow.steer wants (0, 10] rad/sec`);
+      }
+      if (fs.flow.bounce !== undefined && !(fs.flow.bounce >= 0 && fs.flow.bounce <= 1)) {
+        bad.push(`creep '${id}': flow.bounce wants [0, 1]`);
+      }
+      if (fs.flow.probe !== undefined && !(fs.flow.probe > 0 && fs.flow.probe <= 4)) {
+        bad.push(`creep '${id}': flow.probe wants (0, 4]`);
+      }
+      if (fs.flow.whisker !== undefined && !(fs.flow.whisker > 0.1 && fs.flow.whisker <= 1.2)) {
+        bad.push(`creep '${id}': flow.whisker wants (0.1, 1.2] rad`);
+      }
+    }
+    if (fs.travel) {
+      if (!(fs.travel.range[0] > 0 && fs.travel.range[1] >= fs.travel.range[0])) {
+        bad.push(`creep '${id}': travel.range wants 0 < lo <= hi`);
+      }
+      if (fs.travel.taper !== undefined && !(fs.travel.taper > 0 && fs.travel.taper <= 0.9)) {
+        bad.push(`creep '${id}': travel.taper wants (0, 0.9]`);
+      }
+    }
+    if (fs.swell) {
+      if (!(fs.swell.max >= 1 && fs.swell.max <= 4)) {
+        bad.push(`creep '${id}': swell.max wants [1, 4] — a slug, not a serpent`);
+      }
+      if (!(fs.swell.per > 0)) bad.push(`creep '${id}': swell.per must be > 0`);
+    }
+    for (const r of fs.riders ?? []) {
+      if (!r.monster) bad.push(`creep '${id}': rider row with empty monster`);
+      else if (lookups && !lookups.hasMonster(r.monster)) {
+        bad.push(`creep '${id}': rider names unknown monster '${r.monster}'`);
+      }
+      if (r.count && !(r.count[0] >= 1 && r.count[1] >= r.count[0])) {
+        bad.push(`creep '${id}': rider count wants 1 <= lo <= hi`);
+      }
+      if (r.chance !== undefined && !(r.chance > 0 && r.chance <= 1)) {
+        bad.push(`creep '${id}': rider chance wants (0, 1]`);
+      }
+      if (r.arc !== undefined && !(r.arc > 0 && r.arc <= 1.4)) {
+        bad.push(`creep '${id}': rider arc wants (0, 1.4] rad`);
+      }
+    }
+    // The engine stamps the mount marker on every seated rider — a rider
+    // row without the status registered would wear an unknown id.
+    if (fs.riders?.length && !hasStatus(CREEP_CFG.front.rider.mountStatus)) {
+      bad.push(`creep '${id}': riders need status '${CREEP_CFG.front.rider.mountStatus}' registered`);
     }
   }
   for (const { owner, spec, aquatic } of themeSpecs) {
@@ -574,6 +692,58 @@ export const CREEP_CFG = {
     /** THE EVAPORATING WAKE's default contraction pace (units/sec) when a
      *  convert.fade row names none. */
     fadeRate: 7,
+    /** THE VESSEL FLOW's shared steering grammar (per-row dials ride
+     *  FrontFlowSpec; these are the fabric's own senses and paces). */
+    flow: {
+      /** Side-whisker spread (radians) — five whiskers at 0, ±1×, ±2×. */
+      whiskerAng: 0.5,
+      /** openAt march samples per whisker (depth resolution). */
+      steps: 4,
+      /** Lookahead × the live nose reach (cur × elong)… */
+      probeFrac: 1.15,
+      /** …never shorter than this (units) — slow slugs still see walls. */
+      probeMin: 90,
+      /** Score penalty per radian off-center — straight is preferred until
+       *  the channel says otherwise (kills open-field oscillation). */
+      anglePenalty: 0.35,
+      /** Turn-rate boost factor as the center whisker closes (× (1−depth)). */
+      urgency: 2.2,
+      /** All whiskers at or under this depth = a DEAD END: rebound. */
+      deadEndFrac: 0.3,
+      /** Rebound turn-rate burst at bounce 1 (scales with the row's dial). */
+      bounceBoost: 3.2,
+      /** Rebound bearing jitter (radians, rolled once per rebound on the
+       *  section's private stream — the slosh never retraces exactly). */
+      reboundJitter: 0.35,
+      /** Default rebound sharpness when the row names none. */
+      bounce: 0.35,
+      /** Spawn snap-in: a flow section born on closed ground (the zone rim
+       *  is wall in a carved map) marches along its bearing to the first
+       *  open point, at most this fraction of the arena's short side. */
+      snapMaxFrac: 0.5,
+      /** Confine ray-march sample spacing (units) — the vessel wall test. */
+      confineStep: 26,
+    },
+    /** CREST RIDERS' shared grammar (per-row dials ride FrontRiderRow). */
+    rider: {
+      /** Riders mounted across ONE zone visit (world-side ledger — the
+       *  consume-kin cap's sibling; waves past it surge riderless). */
+      max: 8,
+      /** Seat radius as a fraction of the live rim — on the lip, inside
+       *  the welt. */
+      seatFrac: 0.86,
+      /** Default seat spread about the nose (radians, body frame). */
+      seatArc: 0.55,
+      /** A live shove at or past this speed throws the rider off its
+       *  seat (counterplay: knock the surfer from its wave). */
+      dismountPush: 240,
+      /** The marker status every seated rider wears (re-stamped each
+       *  tick; cleanse-harmless — the readable hook, never the mechanism). */
+      mountStatus: 'crestborne',
+    },
+    /** travel.taper's floor: the surge never quite stalls before it
+     *  disperses — pressure dying, not brakes. */
+    travelTaperFloor: 0.22,
     /** Spanning waves (line 'span'): the guaranteed clear corridor's
      *  default width (world units of truly rim-free lane), how far in
      *  from the flanks a corridor may roll (fraction of the crossing —
@@ -610,16 +780,62 @@ export function creepStretchMul(stretch: number, angRel: number): number {
   return stretch / Math.sqrt(stretch * stretch * c * c + s * s);
 }
 
+/** THE TWO ANISOTROPY MODES. 'polar' is the classic product — harmonics ×
+ *  the stretch ellipse, world-anchored, exact for a FIXED bearing (the
+ *  tidal wall). A row wearing `flow` or `swell` is 'affine': its shape
+ *  lives in a BODY frame (harmonics canonical, nose along +X) and the
+ *  world sees it through one transform — rotate(bearing) ∘ scale(elong,
+ *  stretch) — so a STEERING bearing rotates the whole skin and a growing
+ *  elong stretches it live, while the hit test runs the exact inverse
+ *  (sourceCover) and the seats/telegraph ride crestPoint. Drawn == tested
+ *  in both modes; they simply keep the truth in different frames. */
+export function anisoMode(src: CreepSource): 'polar' | 'affine' {
+  const fs = src.def.front;
+  if (!src.front || !fs) return 'polar';
+  return (fs.flow || fs.swell) ? 'affine' : 'polar';
+}
+
+/** THE CREST RESOLVER — a body-frame angle (0 = the nose) and a rim
+ *  fraction → one world point, through whichever anisotropy the source
+ *  wears. Rider seats, the affine edge telegraph and every probe read
+ *  THIS function, so a seated body, the drawn arc and a test can never
+ *  disagree about where the crest is. */
+export function crestPoint(src: CreepSource, bodyAng: number, frac: number): { x: number; y: number } {
+  const run = src.front;
+  const r = src.cur * creepRimMul(src.harm, bodyAng) * frac;
+  if (!run) {
+    return { x: src.pos.x + Math.cos(bodyAng) * r, y: src.pos.y + Math.sin(bodyAng) * r };
+  }
+  if (anisoMode(src) === 'affine') {
+    const st = Math.max(0.5, src.def.front?.stretch ?? 1);
+    const qx = Math.cos(bodyAng) * r * run.elong;
+    const qy = Math.sin(bodyAng) * r * st;
+    const c = Math.cos(run.bearing), s = Math.sin(run.bearing);
+    return { x: src.pos.x + qx * c - qy * s, y: src.pos.y + qx * s + qy * c };
+  }
+  const wAng = run.bearing + bodyAng;
+  const rw = src.cur * rimMulOf(src, wAng) * frac;
+  return { x: src.pos.x + Math.cos(wAng) * rw, y: src.pos.y + Math.sin(wAng) * rw };
+}
+
 /** THE one live rim modulation for a source: harmonics × the front's
  *  across-bearing stretch. The hit test, the render bake, the edge
  *  telegraph and the wave-line spacing all multiply the live front by
  *  THIS product — drawn and tested share one shape truth at every angle.
  *  Only a marching source can be stretched (the ellipse needs a bearing);
- *  every round source folds to creepRimMul exactly. */
+ *  every round source folds to creepRimMul exactly. An AFFINE source
+ *  (anisoMode) returns its harmonics alone — the CANONICAL shape; its
+ *  ellipse lives in the transform (the bake traces this and the blit
+ *  wears the scale, so the render path needs no second truth). */
 export function rimMulOf(src: CreepSource, ang: number): number {
   const m = creepRimMul(src.harm, ang);
   const st = src.def.front?.stretch;
-  if (st === undefined || st === 1 || !src.front) return m;
+  if (st === undefined || st === 1 || !src.front) {
+    // A swelling row may be stretch-less: still affine (elong lives in the
+    // transform), still canonical here — same harmonics-only answer.
+    return m;
+  }
+  if (anisoMode(src) === 'affine') return m;
   return m * creepStretchMul(st, ang - src.front.bearing);
 }
 
@@ -659,6 +875,18 @@ export interface FrontRun {
   /** The spawn-row index that fielded this section (wave respawn ledger;
    *  -1 for runtime addFront sections). */
   rowIdx: number;
+  /** THE SWELL's live along-axis multiplier (1 = round; grows toward
+   *  swell.max over the march). Read by the affine anisotropy everywhere. */
+  elong: number;
+  /** THE FINITE RUN's rolled range (Infinity when the row has none). */
+  rangeMax: number;
+  /** A live rebound's rolled target bearing (dead-end flow steering) —
+   *  cleared the moment the way ahead opens. */
+  rebound?: number;
+  /** Rider seats rolled at birth (body-frame angles; null = no riders).
+   *  The WORLD consumes this plan exactly once (ridersMounted). */
+  riderPlan: { monster: string; ang: number }[] | null;
+  ridersMounted: boolean;
 }
 
 export interface CreepSource {
@@ -851,8 +1079,54 @@ export class CreepField {
       roll: (src.seed ^ 0x9e3779b9) >>> 0 || 1,
       nearWays: [],
       rowIdx,
+      elong: 1,
+      rangeMax: Infinity,
+      riderPlan: null,
+      ridersMounted: false,
     };
     const fs = src.def.front;
+    const run = src.front;
+    // NEW-LEVER ROLLS, in a FIXED order (travel, then riders) and each
+    // gated on its lever — a legacy row draws nothing here and its private
+    // stream stays byte-identical. Future levers APPEND, never reorder.
+    if (fs?.travel) {
+      run.rangeMax = fs.travel.range[0]
+        + (fs.travel.range[1] - fs.travel.range[0]) * this.frontRoll(run);
+    }
+    if (fs?.riders?.length) {
+      const rd = CREEP_CFG.front.rider;
+      const plan: { monster: string; ang: number }[] = [];
+      for (const row of fs.riders) {
+        if (row.chance !== undefined && this.frontRoll(run) >= row.chance) continue;
+        const [lo, hi] = row.count ?? [1, 1];
+        const n = lo + (hi > lo ? Math.min(hi - lo, Math.floor(this.frontRoll(run) * (hi - lo + 1))) : 0);
+        const arc = row.arc ?? rd.seatArc;
+        for (let i = 0; i < n; i++) {
+          // One rider sits near the nose; a crew spreads across the face.
+          const ang = n === 1
+            ? (this.frontRoll(run) - 0.5) * arc
+            : -arc + (2 * arc) * (i / (n - 1)) + (this.frontRoll(run) - 0.5) * arc * 0.3;
+          plan.push({ monster: row.monster, ang });
+        }
+      }
+      if (plan.length) run.riderPlan = plan;
+    }
+    // SPAWN SNAP-IN (flow rows): a section born on closed ground — the zone
+    // rim is solid wall in a carved map — marches along its bearing to the
+    // first open point, so the bolus starts INSIDE the vessel it will
+    // follow. Deterministic (no rolls); without openAt nothing moves.
+    if (fs?.flow && this.terrain?.openAt) {
+      const open = this.terrain.openAt;
+      if (!open(src.pos.x, src.pos.y)) {
+        const step = Math.max(24, src.cur * 0.5);
+        const maxD = Math.min(this.w, this.h) * CREEP_CFG.front.flow.snapMaxFrac;
+        for (let d = step; d <= maxD; d += step) {
+          const x = src.pos.x + run.dx * d, y = src.pos.y + run.dy * d;
+          if (x < 8 || y < 8 || x > this.w - 8 || y > this.h - 8) continue;
+          if (open(x, y)) { src.pos.x = x; src.pos.y = y; break; }
+        }
+      }
+    }
     if (fs?.quench || fs?.feed) this.quenchable = true;
     // The bound learned at addSource predates the run state — refresh so a
     // stretched crest widens its broad phase (round fronts recompute the
@@ -1053,10 +1327,12 @@ export class CreepField {
   private refreshBound(src: CreepSource): void {
     let sum = 0;
     for (const h of src.harm) sum += h.a;
-    // A stretched crest's ceiling is its ACROSS axis (× 1 for everything
-    // round — bit-exact with the classic bound).
+    // A stretched crest's ceiling is its ACROSS axis; a swelling bolus's
+    // is its LONG axis — the broad phase covers whichever wins (× 1 for
+    // everything round — bit-exact with the classic bound).
     const st = src.front ? Math.max(1, src.def.front?.stretch ?? 1) : 1;
-    src.bound = src.cur * (1 + sum) * st + 4;
+    const el = src.front?.elong ?? 1;
+    src.bound = src.cur * (1 + sum) * Math.max(st, el) + 4;
   }
 
   /** Cover from ONE source at a point: 1 over the body, thinning to 0 at
@@ -1069,6 +1345,32 @@ export class CreepField {
     const broad = src.bound + pad;
     if (dd > broad * broad) return 0;
     if (src.front && src.def.front?.yieldWays && this.wayMasked(src.front, x, y)) return 0;
+    const run = src.front;
+    if (run && anisoMode(src) === 'affine') {
+      // THE INVERSE TRANSFORM: rotate the offset into the body frame and
+      // unscale (elong, stretch) — the point then tests against the
+      // CANONICAL harmonics exactly as the blit drew them: drawn == tested
+      // at every live bearing and every stage of the swell. (The pad rides
+      // the canonical rim, so its world grace scales with the local axis —
+      // a hair generous along the nose, honest everywhere it matters.)
+      const st = Math.max(0.5, src.def.front?.stretch ?? 1);
+      const c = Math.cos(run.bearing), s = Math.sin(run.bearing);
+      const bx = (dx * c + dy * s) / run.elong;
+      const by = (-dx * s + dy * c) / st;
+      const rim = src.cur * creepRimMul(src.harm, Math.atan2(by, bx)) + pad;
+      if (rim <= 0.001) return 0;
+      const f = Math.sqrt(bx * bx + by * by) / rim;
+      if (f >= 1) return 0;
+      // VESSEL CONFINEMENT (flow.confine): the current exists only where
+      // the vessel does — an open line back to the heart, or nothing. The
+      // wall between two corridors is a wall to the blood.
+      if (src.def.front?.flow?.confine && this.terrain?.openAt
+        && !this.openLine(src.pos.x, src.pos.y, x, y)) return 0;
+      const body = CREEP_CFG.bodyFrac;
+      if (f <= body) return 1;
+      const t = (1 - f) / (1 - body);
+      return t * t * (3 - 2 * t);
+    }
     const rim = this.rimAt(src, Math.atan2(dy, dx)) + pad;
     if (rim <= 0.001) return 0;
     const f = Math.sqrt(dd) / rim;
@@ -1077,6 +1379,24 @@ export class CreepField {
     if (f <= body) return 1;
     const t = (1 - f) / (1 - body);
     return t * t * (3 - 2 * t);
+  }
+
+  /** Is the straight line between two points open the whole way? (openAt
+   *  ray-march at flow.confineStep — the vessel-confinement wall test.
+   *  Without a window everything is open: bare fields confine nothing.) */
+  private openLine(x0: number, y0: number, x1: number, y1: number): boolean {
+    const open = this.terrain?.openAt;
+    if (!open) return true;
+    const dx = x1 - x0, dy = y1 - y0;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const step = CREEP_CFG.front.flow.confineStep;
+    if (d <= step) return true;
+    const n = Math.ceil(d / step);
+    for (let i = 1; i < n; i++) {
+      const f = i / n;
+      if (!open(x0 + dx * f, y0 + dy * f)) return false;
+    }
+    return true;
   }
 
   /** Peak live cover at a point, 0..1 (renderer grades, AI curiosity). */
@@ -1197,6 +1517,11 @@ export class CreepField {
       this.sampleFront(s, fs, run);
     }
 
+    // THE VESSEL FLOW: bend the bearing toward the deepest open channel
+    // before this tick's march — the current follows its bank. Rows
+    // without flow (or fields without an openAt window) skip entirely.
+    if (fs.flow && this.terrain?.openAt) this.steerFront(s, fs, run, dt);
+
     // Vigor breathes back (quench must outpace it); the stoke burns down.
     if (run.vigor < 1) run.vigor = Math.min(1, run.vigor + fd.vigorRegen * dt);
     if (run.stoke > 0) run.stoke = Math.max(0, run.stoke - fd.stokeDecay * dt);
@@ -1206,12 +1531,39 @@ export class CreepField {
     const k = Math.min(1, fd.easeRate * dt);
     run.mult += (run.multTarget - run.mult) * k;
 
-    const v = fs.speed * run.vigor * (1 + run.stoke) * run.mult;
+    let v = fs.speed * run.vigor * (1 + run.stoke) * run.mult;
+    // THE FINITE RUN's taper: the last fraction of the rolled range eases
+    // toward the floor — pressure dying, not brakes. (Legacy rows carry
+    // rangeMax Infinity and never enter.)
+    if (fs.travel?.taper && Number.isFinite(run.rangeMax) && run.rangeMax > 0) {
+      const left = Math.max(0, run.rangeMax - run.traveled) / run.rangeMax;
+      if (left < fs.travel.taper) {
+        const t = left / fs.travel.taper;
+        const floor = fd.travelTaperFloor;
+        v *= floor + (1 - floor) * (t * t * (3 - 2 * t));
+      }
+    }
     if (v > 0.01) {
       s.pos.x += run.dx * v * dt;
       s.pos.y += run.dy * v * dt;
       run.traveled += v * dt;
       run.sinceStamp += v * dt;
+    }
+
+    // THE SWELL: elongation follows the odometer, eased; the broad-phase
+    // bound chases the growing long axis live.
+    if (fs.swell) {
+      const t = Math.min(1, run.traveled / fs.swell.per);
+      run.elong = 1 + (fs.swell.max - 1) * (t * t * (3 - 2 * t));
+      this.refreshBound(s);
+    }
+
+    // THE FINITE RUN: past the rolled range the surge DISPERSES — recede
+    // where it stands (the recoil IS the dispersal read; riders drop as
+    // it thins). The whole visit written, then unwritten.
+    if (run.traveled >= run.rangeMax && s.state !== 'recede') {
+      s.state = 'recede';
+      return true;
     }
 
     // Starvation gutters the section: the land ahead reads dead for long
@@ -1232,8 +1584,10 @@ export class CreepField {
         if (run.stamps >= fd.stampMax) break;
         const rr = conv.r ?? fd.stampR;
         const r = Math.max(12, s.cur * (rr[0] + (rr[1] - rr[0]) * this.frontRoll(run)));
-        const ax = s.pos.x - run.dx * s.cur * fd.stampTrail;
-        const ay = s.pos.y - run.dy * s.cur * fd.stampTrail;
+        // The trailing rim of a swollen bolus sits elong × further back
+        // (× 1 exact for everything legacy — the wake stays byte-stable).
+        const ax = s.pos.x - run.dx * s.cur * run.elong * fd.stampTrail;
+        const ay = s.pos.y - run.dy * s.cur * run.elong * fd.stampTrail;
         // Decks stay dry: a yielding front never stamps its wake over or
         // ACROSS a live way — the same list the cover mask reads, tested
         // as a disc so a wide stamp can't slop onto the causeway.
@@ -1289,8 +1643,10 @@ export class CreepField {
         const f = fd.samples === 1 ? 0.75
           : fd.sampleAhead[0] + (fd.sampleAhead[1] - fd.sampleAhead[0]) * (i / (fd.samples - 1));
         const lat = (i - (fd.samples - 1) / 2) * fd.sampleSpread * 1.2;
-        const x = s.pos.x + run.dx * s.cur * f - run.dy * s.cur * lat;
-        const y = s.pos.y + run.dy * s.cur * f + run.dx * s.cur * lat;
+        // A swollen bolus reads the land off its true NOSE (× 1 exact for
+        // everything legacy).
+        const x = s.pos.x + run.dx * s.cur * run.elong * f - run.dy * s.cur * lat;
+        const y = s.pos.y + run.dy * s.cur * run.elong * f + run.dx * s.cur * lat;
         if (aff.clearway !== undefined && this.wayMasked(run, x, y)) {
           wayCap = Math.min(wayCap, aff.clearway);
           sum += aff.clearway;
@@ -1306,8 +1662,8 @@ export class CreepField {
     // stoke the section, let the world roll any kin.
     if (fs.consume?.length && this.terrain) {
       let budget = fd.consumeBudget;
-      const hx = s.pos.x + run.dx * s.cur * fd.consumeAhead;
-      const hy = s.pos.y + run.dy * s.cur * fd.consumeAhead;
+      const hx = s.pos.x + run.dx * s.cur * run.elong * fd.consumeAhead;
+      const hy = s.pos.y + run.dy * s.cur * run.elong * fd.consumeAhead;
       this.terrain.eachFuelNear(hx, hy, s.cur * fd.consumeReach, (fuel, ref) => {
         if (budget <= 0) return;
         const row = fs.consume!.find(c => c.fuel === fuel);
@@ -1316,6 +1672,71 @@ export class CreepField {
         this.terrain!.consume(ref, row, run.bearing);
         if (row.feed) run.stoke = Math.min(fd.stokeMax, run.stoke + row.feed);
       });
+    }
+  }
+
+  /** THE VESSEL FLOW's whisker steering, every tick: five openAt probes
+   *  fan ahead of the nose; the bearing bends toward the deepest channel
+   *  (an off-center penalty keeps open-field march straight), turns harder
+   *  as the center whisker closes (`urgency` × the row's `bounce` — the
+   *  visible deflection off a struck wall), and a DEAD END rebounds: the
+   *  target flips π (jittered once per rebound on the private stream) at a
+   *  burst turn rate, so the bolus visibly slaps the cap and rushes back
+   *  out. Deterministic given the land; rimMulOf reads the live bearing,
+   *  so the whole skin — drawn, tested, seated — turns with the current. */
+  private steerFront(s: CreepSource, fs: FrontSpec, run: FrontRun, dt: number): void {
+    const fd = CREEP_CFG.front.flow;
+    const fl = fs.flow!;
+    const open = this.terrain!.openAt!;
+    const nose = s.cur * run.elong;
+    const P = Math.max(fd.probeMin, nose * (fl.probe ?? fd.probeFrac));
+    const wAng = fl.whisker ?? fd.whiskerAng;
+    const bounce = fl.bounce ?? fd.bounce;
+    let dC = 1;
+    let best = 0, bestScore = -Infinity;
+    let deadEnd = true;
+    for (let w = 0; w < 5; w++) {
+      const off = (w === 0 ? 0 : w <= 2 ? (w === 1 ? 1 : -1) : (w === 3 ? 2 : -2)) * wAng;
+      const ca = Math.cos(run.bearing + off), sa = Math.sin(run.bearing + off);
+      let depth = 1;
+      for (let i = 1; i <= fd.steps; i++) {
+        const f = i / fd.steps;
+        const x = s.pos.x + ca * P * f, y = s.pos.y + sa * P * f;
+        if (x < 0 || y < 0 || x > this.w || y > this.h || !open(x, y)) {
+          depth = (i - 1) / fd.steps;
+          break;
+        }
+      }
+      if (w === 0) dC = depth;
+      if (depth > fd.deadEndFrac) deadEnd = false;
+      const score = depth - Math.abs(off) * fd.anglePenalty;
+      if (score > bestScore + 1e-9) { bestScore = score; best = w; }
+    }
+    let target: number;
+    let rate = fl.steer;
+    if (deadEnd) {
+      // One rebound, one roll: the target holds until the way ahead opens
+      // — a per-tick re-roll would jitter the turn into a shiver.
+      if (run.rebound === undefined) {
+        run.rebound = run.bearing + Math.PI
+          + (this.frontRoll(run) - 0.5) * 2 * fd.reboundJitter;
+      }
+      target = run.rebound;
+      rate = fl.steer * (1 + bounce * fd.bounceBoost);
+    } else {
+      run.rebound = undefined;
+      const bestOff = (best === 0 ? 0 : best <= 2 ? (best === 1 ? 1 : -1) : (best === 3 ? 2 : -2)) * wAng;
+      target = run.bearing + bestOff;
+      if (dC < 1) rate = fl.steer * (1 + (1 - dC) * (fd.urgency + bounce * fd.bounceBoost));
+    }
+    let d = target - run.bearing;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const step = Math.max(-rate * dt, Math.min(rate * dt, d));
+    if (step !== 0) {
+      run.bearing += step;
+      run.dx = Math.cos(run.bearing);
+      run.dy = Math.sin(run.bearing);
     }
   }
 

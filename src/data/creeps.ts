@@ -351,6 +351,54 @@ registerCreep({
   ],
 });
 
+/** THE SANGUINE BORE — blood PUMPED, not poured: one hard slug that rushes
+ *  the vessel and FOLLOWS it (FrontSpec.flow — whisker steering reads the
+ *  walk grid, so the bolus bends with the winding galleries like a current
+ *  following its bank, deflects off struck walls, and REBOUNDS out of
+ *  blind pockets), ELONGATING as the pump feeds it (swell — the slug
+ *  visibly stretches down the tube) until the pressure dies and it
+ *  DISPERSES mid-zone (travel — dwell rolled per pump; the taper is the
+ *  surge audibly losing its push). The current is vessel-CONFINED
+ *  (flow.confine): the wall between two galleries is a wall to the blood —
+ *  no grant, no drag, no drown reaches through stone. Everyone the bore
+ *  covers is swept hard downstream — except the flesh's own, who ride it
+ *  like weather — and PALE CORPUSCLES surf the crest itself, spearing
+ *  whatever the blood carries past: the artery cleaning itself. Cold
+ *  congeals a slug mid-rush. */
+registerCreep({
+  id: 'sanguine_bore',
+  color: '#560e1a', rim: '#ff9aa4', glow: '#ff4454',
+  notAquatic: true,
+  alpha: 0.7,
+  // Sized to the TUBES, not the halls — the bolus fills the vessel it
+  // follows; swell supplies the length, never the width.
+  reach: [58, 84],
+  lobing: 0.16,
+  spread: 60,
+  recede: 150,
+  pulse: 2.6,
+  skin: 'water',
+  edge: { color: '#ff8090', style: 'foam', width: 5 },
+  front: {
+    speed: 165,
+    stretch: 1.5,
+    flow: { steer: 2.6, bounce: 0.45, confine: true },
+    travel: { range: [1500, 2400], taper: 0.3 },
+    swell: { max: 2.3, per: 1000 },
+    affinity: {
+      ground: { blood_pool: 1.25, water: 1.1 },
+      default: 1,
+    },
+    convert: { ground: 'blood_pool', every: 1.6, r: [0.5, 0.7], fade: { after: [7, 12], rate: 11 } },
+    drag: { accel: 300, notFactions: ['flesh'] },
+    riders: [{ monster: 'pale_corpuscle', count: [1, 2], chance: 0.65 }],
+    quench: { types: ['cold'], power: 700 },
+  },
+  grants: [
+    { status: 'wading', notFactions: ['flesh'] },
+  ],
+});
+
 // --- The fronts' remnant vocabulary (runtime-ruled kinds, the attunements
 // registerDoodadRule idiom — no KnownDoodadKind union edit needed) ----------
 

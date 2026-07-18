@@ -169,6 +169,59 @@ host-authoritative with no delta lane — guests converge on zone resync,
 exactly like brittle pops. A future wire would model on the `doors`/
 `hollows` meta-delta channels.
 
+## THE VESSEL BORE (flow / travel / swell / riders — per-row levers)
+
+Blood PUMPED, not poured: four more optional `FrontSpec` levers turn a
+marching crest into a **bolus that follows the vessel** — steering with the
+walls, elongating as it rushes, spending itself mid-zone, and carrying its
+own crew. Absent levers cost nothing (probe-pinned: the classic fingerprint
+and the legacy attach path are byte-identical); debut row
+`sanguine_bore` + the `pale_corpuscle` rider on the Sanguine's lanes.
+
+| Lever | What it says |
+| --- | --- |
+| `flow` | THE STEERING: five whisker probes read open ground ahead (`CreepTerrain.openAt` — the walk grid's truth) and the bearing bends toward the deepest channel each tick, so the bolus follows a winding gallery like a current following its bank. `steer` caps the turn rate; a closing center whisker scales it up (`bounce` dials how crisp the deflection reads); a DEAD END rebounds — target flips π (jittered once per rebound on the private stream) at a burst rate, and the surge visibly slaps the cap and rushes back out. `confine: true` is VESSEL CONFINEMENT: cover — grants, drag, drown, the whole gameplay surface — additionally requires an open ray back to the heart, so the current never reaches through a wall into the corridor next door (a gameplay honesty mask like `hitFloor`; the drawn splash may still lap the stone). Flow sections born on closed ground (a walled rim) SNAP IN along their bearing to the first open point — the wave starts inside the vessel it will follow. |
+| `travel` | THE FINITE RUN: `range` rolls per section on its private stream; past it the surge DISPERSES (recede where it stands — riders drop as it thins). `taper` eases the last fraction toward `CREEP_CFG.front.travelTaperFloor` first: pressure dying, not brakes. |
+| `swell` | THE ELONGATION: the bolus stretches ALONG its march, `1 → max` over `per` units, eased — the slug visibly lengthens down the tube while `stretch` keeps owning the width. |
+| `riders` | CREST RIDERS: `{ monster, count?, chance?, arc? }` rows roll seats on the section's private stream at birth; the WORLD mounts real monsters onto them (`World.updateCreepRiders`, capped per visit by `front.rider.max` — the consume-kin ledger's sibling) and slaves each body to the crest every tick. A rider keeps its whole kit — it stabs what the surge carries past — and wears the `crestborne` marker status (re-stamped, cleanse-harmless, the hook other systems may key off). DISMOUNT: the section dispersing/dying drops the crew where they ride; hard-CC or a grab throws them; a shove at `rider.dismountPush`+ knocks the surfer off its wave — and a dropped rider is just a monster again. |
+
+**The two anisotropy modes (`anisoMode`).** A `stretch`-only front is
+`'polar'` — the classic world-anchored harmonics × ellipse product, exact
+for a FIXED bearing (the tidal wall; byte-stable forever). A row wearing
+`flow` or `swell` is `'affine'`: its shape lives in a BODY frame (harmonics
+canonical, nose along +X) and the world sees it through ONE transform —
+`rotate(bearing) ∘ scale(elong, stretch)` — so a steering bearing rotates
+the whole skin and a growing elong stretches it live. The hit test runs the
+exact inverse transform (`sourceCover`), the render blits the canonical
+bake under the same transform (the radial gradient rides the ellipse for
+free), and **`crestPoint(src, bodyAng, frac)`** is THE resolver — rider
+seats, the affine edge telegraph and every probe read it, so a seated body,
+the drawn arc and a test can never disagree. Drawn == tested in both modes;
+they keep the truth in different frames.
+
+**Immunity is data you already have.** The natives ride free through the
+existing levers: `drag.notFactions` waives the sweep, grant filters waive
+the statuses, and the mass fabric is the player's counterplay lane (weight
+leans against the carry — the drag divide is `effectiveWeight`, so heavy
+and poised builds already wade where the light are swept).
+
+**Knobs.** `CREEP_CFG.front.flow` (whisker spread/steps, probe reach,
+angle penalty, urgency, dead-end threshold, rebound jitter, snap-in cap,
+confine ray step) and `CREEP_CFG.front.rider` (per-visit cap, seat
+fraction/arc, dismount shove, mount status). Validation covers every lever
+(`validateCreep`, incl. rider monster existence and the mount status's
+registration).
+
+**Reserved seams, named.**
+- *Peristalsis down the tract*: the gutworks' queued push is one bore row
+  with `flow` + a slow `travel` on the tract faces — no new machinery.
+- *Escape-chase pairing*: a bore lane bound to an `'escape'` objective is
+  the pursuer that follows you around corners; the spawn rows already
+  carry it.
+- *Heart-driven pumps*: a `MonsterDef.creepSource`-style heart that
+  `addFront`s a bore on its own cadence (kill the heart, still the vessel)
+  — the runtime seam is open; nothing built yet.
+
 ## Extension seams
 
 - A new creep anywhere = one `registerCreep` row + a `creep:` line on a
