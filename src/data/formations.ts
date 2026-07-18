@@ -1310,7 +1310,11 @@ registerDoodadRule('spire_of_evening', {
 });
 // The veiled way's mouth-mark: knee-high, walk-through-able clutter — a hint,
 // never an obstacle (kicking the cairn over is not how you find the bridge).
-registerDoodadRule('star_cairn', { overlap: 'inert', spacing: 30, voidOk: true });
+// walkOnly keeps GATED lays (the star_procession's punctuation) off the open
+// sky — a stone stack is a stand, not a float; voidOk stays as insurance for
+// the layout's own authored mouth-marks (direct pushes answer to no gate,
+// and the ground-required sweep must never eat a veiled way's only hint).
+registerDoodadRule('star_cairn', { overlap: 'inert', spacing: 30, voidOk: true, walkOnly: true });
 registerDoodadRule('moonwell', {
   overlap: 'solid', blocksMove: true, spacing: 130,
   effect: { id: 'status_wash', statusId: 'moonlit', interval: 0.9, radius: 52, chance: 1, power: 2.5 },
@@ -1330,6 +1334,14 @@ registerDoodadRule('star_lantern', { overlap: 'ground', spacing: 56, voidOk: tru
 // that id is gloamwood's carved-gourd walk; sharing it would shadow it.)
 registerFormation({
   id: 'star_procession', arrange: 'line', span: [240, 420], step: 58,
+  // siteWalk: the head anchors on an isle/causeway (the country is mostly
+  // open sky) — the paper may then run out over the gap (star_lantern is the
+  // sanctioned float), while the cairns keep to the ground (walkOnly).
+  // siteRadius stays HEAD-sized (not span-derived): the isles' interiors are
+  // ribboned with reserved causeway arteries, and a span-scale clearance
+  // probe finds no seat there — the head only needs its own footing, and a
+  // walk near the roads is the point (they're what the lanterns explain).
+  siteWalk: true, siteRadius: 60,
   pieces: [
     { kind: 'star_lantern', radius: [8, 11], jitter: 10 },
     { kind: 'star_cairn', radius: [7, 9], every: 4, jitter: 14 },
@@ -1339,7 +1351,15 @@ registerFormation({
 // AN OBSERVATORY RING: orreries and dials around a well of moonlight — the
 // country's scholars left their instruments mid-question.
 registerFormation({
-  id: 'observatory_ring', arrange: 'ring', span: [110, 170], step: 56,
+  id: 'observatory_ring', arrange: 'ring', span: [60, 110], step: 44,
+  // siteWalk: the ring centers on an isle — every piece is solid (walk-gated),
+  // so a blind sky-site would lay NOTHING; arcs that overhang the void still
+  // drop their pieces, which is the look ("instruments left mid-question").
+  // Span is ISLE-scale (the isles roll r 150-230 with reserved artery spines
+  // through their middles): a wider ring sheds nearly every instrument to the
+  // walk gate. siteRadius likewise eases below the around-arranger default so
+  // the center can seat between the arteries; pieces gate themselves.
+  siteWalk: true, siteRadius: 70,
   pieces: [
     { kind: 'orrery_stand', radius: [11, 14], jitter: 8, rot: true },
     { kind: 'sundial_gnomon', radius: [10, 13], every: 3, jitter: 10, rot: true },

@@ -7630,6 +7630,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
     forceLayout: 'aether_vesper',
     layout: [
+      // The country's arranged furniture first (clear extents before the
+      // scatter fills in): the roads explain themselves at night, and some
+      // isle keeps its instruments (data/formations.ts, both siteWalk —
+      // the isles are the only ground here).
+      { kind: 'formation', formation: 'star_procession', count: [1, 2] },
+      { kind: 'formation', formation: 'observatory_ring', count: [0, 1] },
       { kind: 'cloud_billow', count: [5, 8] },
       { kind: 'star_lantern', count: [4, 7] },
       { kind: 'nightbloom_tuft', count: [5, 9] },
@@ -7648,6 +7654,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       {
         name: 'eventide shoals',
         layout: [
+          // THE observatory face: the ring is the promise the blurb makes.
+          // Several attempts: the isles' artery-ribboned interiors shed a
+          // poorly seated arc (and occasionally null the site), and the face
+          // must not roll instrument-less — extra arcs read as MORE
+          // observatory, never as clutter, on isles this sparse.
+          { kind: 'formation', formation: 'observatory_ring', count: [2, 3] },
+          { kind: 'formation', formation: 'star_procession', count: [1, 2] },
           { kind: 'cloud_billow', count: [6, 9] },
           { kind: 'star_lantern', count: [5, 8] },
           { kind: 'nightbloom_tuft', count: [4, 7] },
@@ -7672,6 +7685,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       {
         name: 'midnight meadows',
         layout: [
+          // Star country proper: the processions' own hour (no observatory —
+          // this face deliberately carries no instruments).
+          { kind: 'formation', formation: 'star_procession', count: [2, 3] },
           { kind: 'cloud_billow', count: [4, 7] },
           { kind: 'star_lantern', count: [5, 9] },
           { kind: 'nightbloom_tuft', count: [7, 12] },
@@ -7709,6 +7725,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       {
         name: 'prism reach',
         layout: [
+          // The country-wide habit rides every face (the instruments don't —
+          // the rain face keeps its wells and glass).
+          { kind: 'formation', formation: 'star_procession', count: [1, 2] },
           { kind: 'cloud_billow', count: [6, 9] },
           { kind: 'star_lantern', count: [4, 7] },
           { kind: 'nightbloom_tuft', count: [5, 8] },

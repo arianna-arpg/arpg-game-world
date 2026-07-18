@@ -2447,6 +2447,12 @@ export interface GenCtx {
    *  center/origin instead of drawing a findSpot site, so several entries of
    *  one composition coordinate around a shared point. */
   siteAt?: Vec2;
+  /** TRANSIENT: site probes (findSpot) keep to WALKABLE ground while set —
+   *  the lattice countries (the Vesperlands' isles) are MOSTLY open sky, and
+   *  a walk-blind site strands a whole arrangement over the void. Opt-in per
+   *  consumer (FormationDef.siteWalk threads it); unset = byte-identical
+   *  acceptance for every existing caller. */
+  siteWalk?: boolean;
   /** MOVING-HAZARD LANES a builder authored (the track fabric): surfaced on
    *  GeneratedLayout.tracks. Builders push via `(ctx.tracks ??= []).push()` —
    *  absent on every trackless layout, zero cost, zero rng. */
@@ -6337,6 +6343,11 @@ export interface FormationDef {
   siteRadius?: number;
   /** Portal-margin policy for the chain + pieces (default false = soft). */
   hard?: boolean;
+  /** Site the chain head/center on WALKABLE ground (GenCtx.siteWalk): opt in
+   *  where the geometry is mostly void (the Vesperlands' cloud isles) — a
+   *  walk-blind site there strands the arrangement over open sky. Unset =
+   *  the exact acceptance (and rng stream) of today. */
+  siteWalk?: boolean;
 }
 
 /** Lays the anchor chain: `start` is the sited chain origin (line/meander) or
@@ -6524,8 +6535,18 @@ function stampFormation(ctx: GenCtx, def: FormationDef): void {
   const siteFrac = meta?.siteFrac ?? (around ? 0.9 : 0.3);
   const site = def.siteRadius ?? Math.round(def.span[1] * siteFrac);
   // A composition SITE pre-resolves the origin (shared with the bundle's other
-  // entries); otherwise the chain sites itself exactly as before.
-  const start = ctx.siteAt ?? findSpot(ctx, site, def.hard ?? false, 24, false);
+  // entries); otherwise the chain sites itself exactly as before — on walkable
+  // ground when the def demands it (siteWalk: the cloud-isle geometries).
+  let start: Vec2 | null | undefined = ctx.siteAt;
+  if (!start) {
+    const prevSiteWalk = ctx.siteWalk;
+    try {
+      ctx.siteWalk = def.siteWalk;
+      start = findSpot(ctx, site, def.hard ?? false, 24, false);
+    } finally {
+      ctx.siteWalk = prevSiteWalk;
+    }
+  }
   if (!start) return;
   const anchors = arranger(ctx, def, start, ctx.rng);
   if (anchors.length < 2) return;
@@ -6998,6 +7019,10 @@ function findSpot(
       ctx.rng.range(sy + rInset, sy + sh - rInset));
     if (!clearOf(ctx, p, r, hard)) continue;
     if (inReserved(ctx, p, r)) continue;
+    // WALKABLE SITE (ctx.siteWalk, transient): a mostly-void lattice rejects
+    // the open-sky samples here, inside the try loop, so the 26 tries hunt
+    // ground instead of settling for sky. Unset = no draw is filtered.
+    if (ctx.siteWalk && ctx.walk && !ctx.walk.isWalkable(p.x, p.y)) continue;
     if ((effSpacing > 0 || spacingIgnored) && checkSolids && !ruleIgnored(ctx, 'solids')
         && ctx.doodads.some(d => isSolid(d.kind) && dist(p, d.pos) < r + d.radius + effSpacing)) continue;
     // RULE gates (only when a kind is supplied): keep solids/decoration on walkable
