@@ -11,7 +11,7 @@
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
-import { erraticTurn, spinOffset, weaveOffset } from './flight';
+import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type BrainPhase, type CastingState, type GainEvent, type Team } from './actor';
@@ -111,7 +111,7 @@ import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE } from '../data/townBuild';
 // Also a side-effect import: pulling these registers the bestiary's recording
 // kill-rule at boot (the knowledge accrues whether or not the book is read).
-import { BESTIARY_CFG, bestiaryEligible, spectreAttunable } from '../data/bestiary';
+import { BESTIARY_CFG, bestiaryEligible, bestiaryKey, bestiaryKills, bestiaryThreshold, spectreAttunable } from '../data/bestiary';
 import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
@@ -152,11 +152,15 @@ import {
 } from './throng';
 import { CLING_CFG, clingEligible, clingSeatPos, clingSeatsOf } from './cling';
 import {
+  LITE_CFG, LitePool, liteNoise, liteRingOffset, resolveLiteKind,
+  type LiteKind,
+} from './lite';
+import {
   GRAB_CFG, GRAB_MARKER, GRAB_VERB_LABEL, grabHolderMove, grabHoldBounds,
   grabRefusal, grabSeatPos, LEDGER_SEIZED, struggleRate,
   type GrabSpec, type GrabThrowSpec, type GrabVerb,
 } from './grab';
-import { plyCountOf } from './plies';
+import { plyCountOf, plyFloorOf } from './plies';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneSpans, type SpanField } from './spans';
@@ -2602,6 +2606,28 @@ export class World {
   /** Throng source-sweep throttle + the live investment-rebake clock. */
   private throngScan = 0;
   private throngRebake = 0;
+  // THE LITE TIER (engine/lite.ts): the packed pool + its per-zone kind rows.
+  // Bodies here are typed-array ROWS, not Actors — see docs/engine/lite.md.
+  readonly lite = new LitePool();
+  liteKinds: LiteKind[] = [];
+  private liteKindIdxMap = new Map<string, number>();
+  /** Largest lite-kind radius this zone (contact/carve query pad). */
+  private liteMaxR = 0;
+  /** Per-victim pooled-bite clocks (actor id → next bite time). */
+  private liteBeatAt = new Map<number, number>();
+  /** Live throng-direct marks per (owner id · kindIdx) — the cloud's order. */
+  private liteOrders = new Map<number, { x: number; y: number; targetId?: number; until: number }>();
+  /** Credited pool-death aggregates, flushed once per sweep. */
+  private liteXpAcc = 0;
+  private liteKills = new Map<string, number>();
+  private liteDemoteClock = 0;
+  /** Latch-promotion budget, refilled per sweep (LITE_CFG.promote). */
+  private litePromoteBudget = 0;
+  /** Contact scratch (per-victim per-kind press counts). */
+  private liteCounts = new Int32Array(16);
+  /** CLIENT half (co-op): the host's `lt` draw list, applied by snapshot —
+   *  null on the host (the renderer reads the live pool instead). */
+  liteWire: { k: string[]; b: number[] } | null = null;
   /** The quest accepted this run (single-slot): its target zone + id, and whether
    *  its field objective is done (awaiting the return-to-giver turn-in). `fieldDone`
    *  lives HERE, not on the per-zone-load objectiveDone latch, so walking home (a
@@ -4068,6 +4094,10 @@ export class World {
     // stand up on their own salted stream — same discipline as the two
     // lines above; claimed seats (throngClaimed, run-long) stay empty.
     this.bootThrong(pois);
+    // THE LITE POOL BOOT (engine/lite.ts): carry keeper-owned rows across,
+    // zero the pool, pour the theme's ambient swarms on their own salted
+    // stream, re-field the carried roster — same boot discipline again.
+    this.bootLite(def, pois);
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
@@ -18278,6 +18308,18 @@ export class World {
       !a.dead && a.owner === keeper && a.sourceSkillId === marker);
   }
 
+  /** The FULL roster census: promoted/classic bodies + (for a lite-tier
+   *  anchor) the pool rows the keeper owns of the spec's kind. */
+  throngRosterCount(keeper: Actor, inst: SkillInstance): number {
+    const spec = inst.def.throng;
+    let n = this.throngBodiesOf(keeper, inst.def.id).length;
+    if (spec?.tier === 'lite') {
+      const kindIdx = this.liteKindOf(spec.monsterId);
+      if (kindIdx >= 0) n += this.lite.countOwned(keeper.id, kindIdx);
+    }
+    return n;
+  }
+
   /** The roster cap: spec.cap folded through the owner's minionMaxCount
    *  with the skill's own context — +minions investment and Endless Swarm
    *  grow the throng with NO throng-specific stat. */
@@ -18331,11 +18373,25 @@ export class World {
   private claimThrongHusk(keeper: Actor, inst: SkillInstance, husk: Actor): void {
     if (husk.throngPocketKey) this.throngClaimed.add(husk.throngPocketKey);
     husk.throngWild = undefined;
+    const at = vec(husk.pos.x, husk.pos.y);
+    let radius = husk.radius;
     this.kill(husk, true);
-    const body = this.mintThrongBody(keeper, inst, husk.pos, keeper.level);
-    this.text(vec(body.pos.x, body.pos.y - 14), '+1', THRONG_CFG.joinColor, 11);
+    const spec = inst.def.throng!;
+    if (spec.tier === 'lite') {
+      // THE LITE TIER (engine/lite.ts): the claim joins the POOL — a row,
+      // not a minion. Promotion mints the real body when a boundary asks.
+      const kindIdx = this.liteKindOf(spec.monsterId);
+      if (kindIdx >= 0) {
+        this.lite.spawn(kindIdx, at.x, at.y, 1, keeper.id, this.liteKinds[kindIdx].plies0);
+      }
+    } else {
+      const body = this.mintThrongBody(keeper, inst, at, keeper.level);
+      at.x = body.pos.x; at.y = body.pos.y;
+      radius = body.radius;
+    }
+    this.text(vec(at.x, at.y - 14), '+1', THRONG_CFG.joinColor, 11);
     this.flashes.push({
-      pos: vec(body.pos.x, body.pos.y), radius: body.radius + 8,
+      pos: vec(at.x, at.y), radius: radius + 8,
       color: THRONG_CFG.joinColor, life: 0.35, maxLife: 0.35,
     });
     this.charDirty = true;
@@ -18352,6 +18408,22 @@ export class World {
       const inst = keeper.skills.find(s => s?.def.id === row.skillId && s.def.throng);
       if (!inst || !MONSTERS[row.defId]) continue;
       const n = Math.min(row.count, this.throngCapOf(keeper, inst));
+      // A lite-tier roster resumes as POOL ROWS (fresh plies — wear does
+      // not persist across a save, matching a classic roster's full-life
+      // re-field). Classic rosters mint real bodies exactly as before.
+      const spec = inst.def.throng!;
+      if (spec.tier === 'lite') {
+        const kindIdx = this.liteKindOf(spec.monsterId);
+        if (kindIdx < 0) continue;
+        for (let i = 0; i < n; i++) {
+          const ang = (i / Math.max(1, n)) * Math.PI * 2;
+          const bx = keeper.pos.x + Math.cos(ang) * 50, by = keeper.pos.y + Math.sin(ang) * 50;
+          const open = this.liteOpenAt(bx, by);
+          this.lite.spawn(kindIdx, open ? bx : keeper.pos.x, open ? by : keeper.pos.y,
+            1, keeper.id, this.liteKinds[kindIdx].plies0);
+        }
+        continue;
+      }
       for (let i = 0; i < n; i++) {
         const ang = rand(0, Math.PI * 2);
         this.mintThrongBody(keeper, inst, vec(
@@ -18488,7 +18560,9 @@ export class World {
           }
         }
         // COLLECTION: sighted husks in reach join while cap room remains.
-        let roster = this.throngBodiesOf(keeper, inst.def.id).length;
+        // A lite-tier roster counts its POOL rows beside any promoted
+        // bodies (engine/lite.ts) — the cap is the cap either way.
+        let roster = this.throngRosterCount(keeper, inst);
         const cap = this.throngCapOf(keeper, inst);
         if (roster < cap) {
           for (const a of [...this.actors]) {
@@ -18585,7 +18659,11 @@ export class World {
     const spec = inst.def.throng;
     if (!spec) return;
     const bodies = this.throngBodiesOf(caster, inst.def.id);
-    if (!bodies.length) {
+    // A lite-tier anchor's roster may live ENTIRELY in the pool — the sweep
+    // is live as long as ANY body (row or promoted) answers.
+    const liteKindIdx = spec.tier === 'lite' ? this.liteKindOf(spec.monsterId) : -1;
+    const liteRows = liteKindIdx >= 0 ? this.lite.countOwned(caster.id, liteKindIdx) : 0;
+    if (!bodies.length && !liteRows) {
       this.failNote(caster, inst.def.id + ':nothrong', 'no throng gathered');
       return;
     }
@@ -18598,6 +18676,16 @@ export class World {
       if (e.passive || e.untargetable || e.sheet.get('invisible') > 0) continue;
       const dq = dist(e.pos, mark);
       if (dq < qd) { qd = dq; quarry = e; }
+    }
+    // THE LITE ORDER (engine/lite.ts): pool rows march by ONE stamped mark
+    // per (keeper, kind) — re-stamped each channel pulse, exactly like the
+    // per-body assault orders below. The cling promotion boundary fires in
+    // the sweep once the cloud reaches a pinned quarry's rim.
+    if (liteKindIdx >= 0) {
+      const order: { x: number; y: number; targetId?: number; until: number } =
+        { x: mark.x, y: mark.y, until };
+      if (quarry) order.targetId = quarry.id;
+      this.liteOrders.set(caster.id * 256 + liteKindIdx, order);
     }
     for (const m of bodies) {
       const cmd: CommandState = {
@@ -18678,6 +18766,564 @@ export class World {
         this.player.pos.y + Math.sin(ang) * rand(30, 70)), this.player.level);
     }
     return true;
+  }
+
+  // ---------------------------------------------------------- the lite tier --
+  // THE LITE TIER (engine/lite.ts + docs/engine/lite.md): hundreds of bodies
+  // for the price of none. The pool/config/pure math live in the module;
+  // these executors are the world-side half — boot pours, the batched
+  // steer-and-bite sweep, the carve (damage in), promotion at the
+  // interaction boundaries (latch / grab / conducted order), and the
+  // demote/disband ledger for lite-tier throng rosters.
+
+  /** Scratch (single-threaded sweep). */
+  private readonly liteVec = vec(0, 0);
+  private readonly liteVictimScratch: Actor[] = [];
+  private readonly liteKeeperScratch = new Map<number, Actor | null>();
+
+  /** Resolve (and cache) a def's pooled kind for THIS zone. -1 = the kind
+   *  never opted in (MonsterDef.lite is the one gate). */
+  liteKindOf(defId: string): number {
+    let idx = this.liteKindIdxMap.get(defId);
+    if (idx !== undefined) return idx;
+    const def = MONSTERS[defId];
+    const kind = def ? resolveLiteKind(def, Math.max(1, this.zone.level), XP_SCALE) : null;
+    idx = kind ? this.liteKinds.length : -1;
+    if (kind) {
+      this.liteKinds.push(kind);
+      this.liteMaxR = Math.max(this.liteMaxR, kind.radius);
+    }
+    this.liteKindIdxMap.set(defId, idx);
+    return idx;
+  }
+
+  /** The pool's ground truth: arena bounds + the walk grid (the creep
+   *  openAt idiom). Deliberately NOT clampPos and NOT doodad solidity —
+   *  pool bodies are beneath the hit-surface fabric's notice. */
+  private liteOpenAt(x: number, y: number): boolean {
+    return x >= 0 && y >= 0 && x <= this.arena.w && y <= this.arena.h
+      && (!this.walk || this.walk.isWalkable(x, y));
+  }
+
+  /** ZONE BOOT (loadZone, beside scenery/puzzles/throng): carry keeper-owned
+   *  rows across as kind+plies, zero the pool, pour the theme's ambient
+   *  swarms on their own salted stream (fixed shape — every draw happens
+   *  whether or not a body mints), then re-field the carried roster. */
+  private bootLite(def: ZoneDef, pois: Vec2[]): void {
+    const pool = this.lite;
+    const carried: { owner: number; defId: string; plies: number }[] = [];
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i] || !pool.owner[i]) continue;
+      const k = this.liteKinds[pool.kind[i]];
+      if (k) carried.push({ owner: pool.owner[i], defId: k.defId, plies: pool.plies[i] });
+    }
+    pool.reset(this.arena.w, this.arena.h);
+    this.liteKinds = [];
+    this.liteKindIdxMap.clear();
+    this.liteMaxR = 0;
+    this.liteBeatAt.clear();
+    this.liteOrders.clear();
+    this.liteXpAcc = 0;
+    this.liteKills.clear();
+    this.litePromoteBudget = 0;
+    const spec = def.theme.lite;
+    if (spec?.swarms.length) {
+      const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt) >>> 0);
+      for (const row of spec.swarms) {
+        const has = rng.next() < (row.chance ?? 1);
+        const pockets = rng.int(row.pockets[0], row.pockets[1]);
+        let poured = false;
+        for (let p = 0; p < pockets; p++) {
+          const heart = this.interactSpot(pois, rng, LITE_CFG.pour.reach, LITE_CFG.pour.portalClear);
+          const n = rng.int(row.size[0], row.size[1]);
+          for (let s = 0; s < n; s++) {
+            const ang = rng.range(0, Math.PI * 2);
+            const d = rng.range(4, LITE_CFG.pour.scatter);
+            if (!has) continue;
+            const kindIdx = this.liteKindOf(row.monsterId);
+            if (kindIdx < 0) continue;
+            const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;
+            const open = this.liteOpenAt(bx, by);
+            if (pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,
+              this.liteKinds[kindIdx].plies0) >= 0) poured = true;
+          }
+        }
+        if (poured && row.announce) {
+          for (const s of this.seats) {
+            this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce,
+              row.announceColor ?? '#c8a878', 13);
+          }
+        }
+      }
+    }
+    for (let c = 0; c < carried.length; c++) {
+      const row = carried[c];
+      const keeper = this.actorById(row.owner);
+      if (!keeper || keeper.dead) continue;
+      if (!keeper.skills.some(s =>
+        s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === row.defId)) continue;
+      const kindIdx = this.liteKindOf(row.defId);
+      if (kindIdx < 0) continue;
+      const ang = (c / Math.max(1, carried.length)) * Math.PI * 2;
+      const bx = keeper.pos.x + Math.cos(ang) * 46, by = keeper.pos.y + Math.sin(ang) * 46;
+      const open = this.liteOpenAt(bx, by);
+      pool.spawn(kindIdx, open ? bx : keeper.pos.x, open ? by : keeper.pos.y,
+        1, keeper.id, row.plies);
+    }
+  }
+
+  /** THE LITE SWEEP (every frame): demote/disband on its cadence, then the
+   *  batched steer + pooled bite, then the aggregate flushes (xp, bestiary). */
+  private updateLite(dt: number): void {
+    this.liteDemoteClock -= dt;
+    if (this.liteDemoteClock <= 0) {
+      this.liteDemoteClock = LITE_CFG.demote.every;
+      this.liteDemoteSweep();
+    }
+    if (this.lite.liveCount > 0) this.liteSteerAndBite(dt);
+    if (this.liteXpAcc >= 1) {
+      const n = Math.floor(this.liteXpAcc);
+      this.liteXpAcc -= n;
+      this.grantXp(n);
+    }
+    if (this.liteKills.size) this.liteFlushKills();
+  }
+
+  /** One batched pass: buckets, per-body goal → weave/wobble/separation →
+   *  integrate against the walk grid, then per-victim contact aggregation
+   *  (the pooled bite) + the LATCH promotion boundary. All noise is
+   *  integer-hashed per (row, tick) — the pool never draws global rand. */
+  private liteSteerAndBite(dt: number): void {
+    const pool = this.lite;
+    const kinds = this.liteKinds;
+    pool.rebuildBuckets();
+    this.litePromoteBudget = LITE_CFG.promote.latchPerSweep;
+    const t = this.time;
+    const wobTick = (t * LITE_CFG.steer.wobbleHz) | 0;
+    const s = this.liteVec;
+    const keepers = this.liteKeeperScratch;
+    keepers.clear();
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i]) continue;
+      const k = kinds[pool.kind[i]];
+      if (!k) { pool.free(i); continue; }
+      // FIXTURE kinds (speed 0): truly pinned — no goal, no weave, no
+      // separation shove; any residual nudge bleeds off. A speed-0 row is
+      // a prop with plies (barnacles, eggs), not a slow walker.
+      if (k.speed <= 0) {
+        pool.vx[i] *= 0.7;
+        pool.vy[i] *= 0.7;
+        continue;
+      }
+      const px = pool.x[i], py = pool.y[i];
+      let gx = px, gy = py, arrive = 10;
+      const own = pool.owner[i];
+      if (own) {
+        let keeper = keepers.get(own);
+        if (keeper === undefined) { keeper = this.actorById(own) ?? null; keepers.set(own, keeper); }
+        const order = this.liteOrders.get(own * 256 + pool.kind[i]);
+        if (order && t < order.until) {
+          const tgt = order.targetId !== undefined ? this.actorById(order.targetId) : undefined;
+          if (tgt && !tgt.dead) { gx = tgt.pos.x; gy = tgt.pos.y; arrive = tgt.radius + k.radius + 2; }
+          else { gx = order.x; gy = order.y; arrive = 14; }
+        } else if (keeper && !keeper.dead) {
+          liteRingOffset(pool.seat[i], t, s);
+          gx = keeper.pos.x + s.x; gy = keeper.pos.y + s.y;
+          arrive = 8;
+        } else { gx = pool.hx[i]; gy = pool.hy[i]; }
+      } else {
+        let bd = k.aggro * k.aggro, found = false;
+        for (const seat of this.seats) {
+          const a = seat.actor;
+          if (a.dead || a.downed) continue;
+          const dx = a.pos.x - px, dy = a.pos.y - py;
+          const dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; gx = a.pos.x; gy = a.pos.y; found = true; }
+        }
+        if (found) arrive = 6;
+        else {
+          const slow = (t * 0.25) | 0;
+          const wang = liteNoise(i, slow) * Math.PI;
+          gx = pool.hx[i] + Math.cos(wang) * LITE_CFG.homeLeash * Math.abs(liteNoise(i + 7717, slow));
+          gy = pool.hy[i] + Math.sin(wang) * LITE_CFG.homeLeash * Math.abs(liteNoise(i + 3191, slow));
+          arrive = 18;
+        }
+      }
+      const dx = gx - px, dy = gy - py;
+      const d = Math.hypot(dx, dy);
+      let dvx = 0, dvy = 0;
+      if (d > arrive) {
+        const jit = 1 + (((pool.seat[i] >>> 8) & 0xff) / 255 - 0.5) * 2 * LITE_CFG.steer.speedJitter;
+        const speed = k.speed * jit;
+        const head = Math.atan2(dy, dx)
+          + liteNoise(i, wobTick) * LITE_CFG.steer.erratic * k.erratic;
+        dvx = Math.cos(head) * speed;
+        dvy = Math.sin(head) * speed;
+        weaveVel(LITE_CFG.steer.weave * k.weave, LITE_CFG.steer.weaveAmp,
+          t + pool.phase[i], head, s);
+        dvx += s.x; dvy += s.y;
+      }
+      pool.sepFold(i, k.radius * 2.4, LITE_CFG.steer.sepIters, s);
+      dvx += s.x * LITE_CFG.steer.sep * k.separation;
+      dvy += s.y * LITE_CFG.steer.sep * k.separation;
+      const cr = Math.min(1, LITE_CFG.steer.accel * dt);
+      pool.vx[i] += (dvx - pool.vx[i]) * cr;
+      pool.vy[i] += (dvy - pool.vy[i]) * cr;
+      const nx = px + pool.vx[i] * dt, ny = py + pool.vy[i] * dt;
+      if (this.liteOpenAt(nx, ny)) { pool.x[i] = nx; pool.y[i] = ny; }
+      else if (this.liteOpenAt(nx, py)) { pool.x[i] = nx; pool.vy[i] *= -0.4; }
+      else if (this.liteOpenAt(px, ny)) { pool.y[i] = ny; pool.vx[i] *= -0.4; }
+      else { pool.vx[i] *= -0.5; pool.vy[i] *= -0.5; }
+    }
+    // THE POOLED BITE + THE LATCH BOUNDARY, per victim.
+    const victims = this.liteVictimScratch;
+    victims.length = 0;
+    for (const a of this.actors) {
+      if (a.dead || a.downed || a.untargetable || a.passive || a.throngWild) continue;
+      if (isDormant(a)) continue;
+      victims.push(a);
+    }
+    for (const v of victims) this.liteBiteVictim(v, t);
+    victims.length = 0;
+    if (this.liteBeatAt.size > 512) this.liteBeatAt.clear();
+  }
+
+  /** Count the bodies of each kind pressing this victim's rim; on the
+   *  victim's own staggered beat land ONE mitigated, ply-gated hit scaled
+   *  by count (capped per kind). A pressing CLING kind promotes its nearest
+   *  body instead — the real latch takes it from there. */
+  private liteBiteVictim(v: Actor, t: number): void {
+    const pool = this.lite;
+    const kinds = this.liteKinds;
+    if (this.liteCounts.length < kinds.length) this.liteCounts = new Int32Array(kinds.length * 2);
+    const counts = this.liteCounts;
+    counts.fill(0, 0, kinds.length);
+    const vTeam = v.team === 'player' ? 1 : 0;
+    let pressed = false, creditOwner = 0, latchIdx = -1, latchD = Infinity;
+    pool.forEachIn(v.pos.x, v.pos.y, v.radius + this.liteMaxR + LITE_CFG.contact.pad, 0, i => {
+      if (pool.team[i] === vTeam) return;
+      const k = kinds[pool.kind[i]];
+      if (!k) return;
+      const dx = pool.x[i] - v.pos.x, dy = pool.y[i] - v.pos.y;
+      const rr = v.radius + k.radius + LITE_CFG.contact.pad;
+      const dd = dx * dx + dy * dy;
+      if (dd > rr * rr) return;
+      counts[pool.kind[i]]++;
+      pressed = true;
+      if (!creditOwner && pool.owner[i]) creditOwner = pool.owner[i];
+      if (k.clings && dd < latchD) { latchD = dd; latchIdx = i; }
+    });
+    if (!pressed) return;
+    // THE LATCH BOUNDARY: a clinging kind at the rim stands up as a real
+    // body (budgeted per sweep; free seats only — the coat law holds).
+    if (latchIdx >= 0 && this.litePromoteBudget > 0 && !v.untargetable && !v.passive) {
+      let riders = 0;
+      for (const r of this.actors) if (!r.dead && r.clingTo?.id === v.id) riders++;
+      if (riders < clingSeatsOf(v)) {
+        this.litePromoteBudget--;
+        const body = this.promoteLite(latchIdx);
+        if (body) body.aiTargetId = v.id;
+      }
+    }
+    let due = this.liteBeatAt.get(v.id);
+    let beat = Infinity;
+    let total = 0;
+    for (let ki = 0; ki < kinds.length; ki++) {
+      if (!counts[ki] || kinds[ki].contactDamage <= 0) continue;
+      beat = Math.min(beat, kinds[ki].contactBeat);
+      total++;
+    }
+    if (!total) return;
+    if (due === undefined) {
+      // First press arms a staggered clock — no instant bite on a brush,
+      // and a crowd of victims never spikes one frame.
+      const frac = ((v.id * 2654435761) >>> 16 & 0xff) / 255;
+      this.liteBeatAt.set(v.id, t + beat * (LITE_CFG.contact.stagger + frac * (1 - LITE_CFG.contact.stagger)));
+      return;
+    }
+    if (t < due) return;
+    this.liteBeatAt.set(v.id, t + beat);
+    const amounts: Partial<Record<DamageType, number>> = {};
+    for (let ki = 0; ki < kinds.length; ki++) {
+      if (!counts[ki]) continue;
+      const k = kinds[ki];
+      if (k.contactDamage <= 0) continue;
+      amounts[k.contactType] = (amounts[k.contactType] ?? 0)
+        + k.contactDamage * Math.min(counts[ki], k.countCap);
+    }
+    const credit = creditOwner ? this.actorById(creditOwner) : undefined;
+    this.litePooledHit(v, amounts, credit);
+  }
+
+  /** The pooled bite lands: real mitigation, the real PLY GATE (one tear
+   *  per beat however thick the cloud — the pooled bite IS one blow), then
+   *  life + the kill ladder with the keeper's credit. Bodily damage — no
+   *  evade, no block, no crit (the grab-burst precedent). */
+  private litePooledHit(
+    v: Actor, amounts: Partial<Record<DamageType, number>>, credit: Actor | undefined,
+  ): void {
+    if (v.dead || v.invulnerable) return;
+    let domType: DamageType = 'physical', domAmt = 0;
+    for (const ty of Object.keys(amounts) as DamageType[]) {
+      if ((amounts[ty] ?? 0) > domAmt) { domAmt = amounts[ty]!; domType = ty; }
+    }
+    const taken = mitigateTyped(v, amounts);
+    if (v.plies > 0) {
+      if (taken >= plyFloorOf(v)) {
+        v.plies--;
+        if (v.plies === 0 && v.plySpec?.spentStatus) {
+          v.applyStatus(v.plySpec.spentStatus, 0, 1, 'plies');
+        }
+      }
+      v.hitFlash = 0.12;
+      return;
+    }
+    v.life -= taken;
+    v.hitFlash = 0.15;
+    if (taken > 0.5) this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[domType], 11);
+    if (v.life <= 0 && !v.dead) this.kill(v, false, credit);
+  }
+
+  /** THE CARVE (damage in): the strike-surface seam and the projectile
+   *  sweep both land here — every body of an opposing team inside the
+   *  delivery's exact geometry tears one ply (a null striker carves every
+   *  side: a blast is a blast). FX are budgeted; deaths aggregate. */
+  private liteCarve(
+    striker: Actor | null, at: Vec2, reach: number,
+    test?: (pos: Vec2, radius: number) => boolean,
+  ): void {
+    const pool = this.lite;
+    if (!pool.liveCount) return;
+    const kinds = this.liteKinds;
+    const carveTeam = striker ? (striker.team === 'player' ? 0 : 1) : -1;
+    const pad = this.liteMaxR + 8;
+    const rr = (reach + pad) * (reach + pad);
+    let torn = 0, fx = 0, cx = 0, cy = 0;
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i]) continue;
+      if (carveTeam >= 0 && pool.team[i] !== carveTeam) continue;
+      const dx = pool.x[i] - at.x, dy = pool.y[i] - at.y;
+      if (dx * dx + dy * dy > rr) continue;
+      const k = kinds[pool.kind[i]];
+      if (!k) continue;
+      this.liteVec.x = pool.x[i];
+      this.liteVec.y = pool.y[i];
+      if (test) { if (!test(this.liteVec, k.radius)) continue; }
+      else if (Math.sqrt(dx * dx + dy * dy) - k.radius > reach) continue;
+      if (pool.plies[i] > 1) {
+        pool.plies[i]--;
+        if (fx < LITE_CFG.fx.flashes) {
+          fx++;
+          this.flashes.push({ pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
+        }
+        continue;
+      }
+      torn++;
+      cx += pool.x[i]; cy += pool.y[i];
+      if (fx < LITE_CFG.fx.flashes) {
+        fx++;
+        this.flashes.push({ pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 6, color: k.color, life: 0.22, maxLife: 0.22 });
+      }
+      this.liteNoteDeath(k, pool.team[i], striker);
+      pool.free(i);
+    }
+    if (torn >= LITE_CFG.fx.countTextAt) {
+      this.text(vec(cx / torn, cy / torn - 10), `×${torn}`, '#e8d8a0', 13);
+    }
+  }
+
+  /** A pool death's ledger: ENEMY rows felled by the player's side accrue
+   *  the kind's xp (createMonster's own bounty formula) + a bestiary count,
+   *  flushed per sweep. Pool deaths drop nothing and feed no objectives —
+   *  ambience with teeth (docs/engine/lite.md). */
+  private liteNoteDeath(k: LiteKind, rowTeam: number, credit: Actor | null | undefined): void {
+    if (rowTeam !== 0) return;
+    if (credit && credit.team !== 'player') return;
+    if (k.xpValue > 0) this.liteXpAcc += k.xpValue;
+    this.liteKills.set(k.defId, (this.liteKills.get(k.defId) ?? 0) + 1);
+  }
+
+  /** Bestiary flush (the recording rule's aggregate half): counts cap at
+   *  the study threshold; durable writes ride the next scheduled save. */
+  private liteFlushKills(): void {
+    if (this.metaProgressionActive()) {
+      for (const [defId, n] of this.liteKills) {
+        const def = MONSTERS[defId];
+        if (!def || !bestiaryEligible(def)) continue;
+        const need = bestiaryThreshold(def);
+        const have = bestiaryKills(this.account, defId);
+        if (have >= need) continue;
+        const key = bestiaryKey(defId);
+        this.account.ledger[key] = (this.account.ledger[key] ?? 0) + Math.min(n, need - have);
+      }
+    }
+    this.liteKills.clear();
+  }
+
+  /** The projectile's pool sweep (one flight step): tear along the segment
+   *  front-first, honoring the pierce budget. Returns true when the flight
+   *  ENDS on a body (pierce spent, non-rehit). Cross-team only — your own
+   *  veil never eats your arrows, but an enemy volley thins your cloud. */
+  private liteProjectileSweep(p: Projectile, x0: number, y0: number): boolean {
+    const pool = this.lite;
+    const kinds = this.liteKinds;
+    const carveTeam = p.caster.team === 'player' ? 0 : 1;
+    let stopped = false;
+    pool.forEachAlong(x0, y0, p.pos.x, p.pos.y, this.liteMaxR + p.radius + 2, i => {
+      if (pool.team[i] !== carveTeam) return;
+      const k = kinds[pool.kind[i]];
+      if (!k) return;
+      const bx = pool.x[i], by = pool.y[i];
+      if (pool.plies[i] > 1) {
+        pool.plies[i]--;
+        this.flashes.push({ pos: vec(bx, by), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
+      } else {
+        this.flashes.push({ pos: vec(bx, by), radius: k.radius + 5, color: k.color, life: 0.18, maxLife: 0.18 });
+        this.liteNoteDeath(k, pool.team[i], p.caster);
+        pool.free(i);
+      }
+      if (p.rehit) return;                       // sails on, chewing freely
+      if (p.pierce > 0) { p.pierce--; return; }  // spends a pierce per body
+      p.pos.x = bx; p.pos.y = by;                // the flight ends HERE
+      stopped = true;
+      return true;
+    });
+    return stopped;
+  }
+
+  /** PROMOTION — the lite → full crossing. A keeper-owned row stands up
+   *  through the throng mint (owner investment at the batch scale, the
+   *  '__throng:' marker); a wild row mints plain at the zone's level.
+   *  PLIES SPENT survive the crossing (the lossless-round-trip law). */
+  promoteLite(i: number): Actor | null {
+    const pool = this.lite;
+    if (!pool.alive[i]) return null;
+    const k = this.liteKinds[pool.kind[i]];
+    if (!k || !MONSTERS[k.defId]) return null;
+    const ownerId = pool.owner[i];
+    const pos = vec(pool.x[i], pool.y[i]);
+    const spent = Math.max(0, k.plies0 - pool.plies[i]);
+    let body: Actor | null = null;
+    if (ownerId) {
+      const keeper = this.actorById(ownerId);
+      if (keeper && !keeper.dead) {
+        const inst = keeper.skills.find(s =>
+          s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === k.defId);
+        if (inst) body = this.mintThrongBody(keeper, inst, pos, keeper.level);
+      }
+      if (!body) return null; // orphaned row: the disband sweep re-wilds it
+    } else {
+      body = this.createMonster(k.defId, Math.max(1, this.zone.level),
+        pool.team[i] === 1 ? 'player' : 'enemy');
+      body.pos = this.clampPos(pos, body.radius);
+      this.actors.push(body);
+    }
+    if (body.pliesMax > 0) body.plies = Math.max(1, body.pliesMax - spent);
+    pool.free(i);
+    return body;
+  }
+
+  /** Promote the nearest matching rows to `at` (the conducted-order and
+   *  grab boundaries). Filters: owner, kind, opposing team — pass what the
+   *  boundary knows. */
+  litePromoteNearest(at: Vec2, opts: {
+    within: number; max: number;
+    owner?: number; kindIdx?: number; opposing?: Team;
+    /** Rank candidates by distance to THIS point instead of `at` (the grab
+     *  swing: search around the caster, promote what the cursor points at). */
+    rank?: Vec2;
+  }): Actor[] {
+    const pool = this.lite;
+    const picks: { i: number; d: number }[] = [];
+    const carveTeam = opts.opposing ? (opts.opposing === 'player' ? 0 : 1) : undefined;
+    const rank = opts.rank ?? at;
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i]) continue;
+      if (opts.owner !== undefined && pool.owner[i] !== opts.owner) continue;
+      if (opts.kindIdx !== undefined && pool.kind[i] !== opts.kindIdx) continue;
+      if (carveTeam !== undefined && pool.team[i] !== carveTeam) continue;
+      const dx = pool.x[i] - at.x, dy = pool.y[i] - at.y;
+      if (dx * dx + dy * dy > opts.within * opts.within) continue;
+      const rx = pool.x[i] - rank.x, ry = pool.y[i] - rank.y;
+      picks.push({ i, d: rx * rx + ry * ry });
+    }
+    picks.sort((a, b) => a.d - b.d);
+    const out: Actor[] = [];
+    for (const pick of picks) {
+      if (out.length >= opts.max) break;
+      const body = this.promoteLite(pick.i);
+      if (body) out.push(body);
+    }
+    return out;
+  }
+
+  /** DEMOTION + THE DISBAND LEDGER (LITE_CFG.demote cadence): a promoted
+   *  lite-tier throng body gone quiet — no ride, no hold, no order, no
+   *  target, no cast, no statuses — folds back into the pool (spent plies
+   *  carried; a full pool leaves it promoted). Orphaned rows (keeper gone
+   *  or anchor unslotted) re-wild as claimable husks where they stand —
+   *  the throng's own disband law, never a silent delete. */
+  private liteDemoteSweep(): void {
+    const pool = this.lite;
+    for (const a of [...this.actors]) {
+      if (a.dead || !a.owner || !isThrongBody(a)) continue;
+      const inst = a.owner.skills.find(s => s && throngMarkerOf(s.def.id) === a.sourceSkillId);
+      const spec = inst?.def.throng;
+      if (!spec || spec.tier !== 'lite') continue;
+      if (a.clingTo || a.heldBy !== undefined || a.gripping || a.casting) continue;
+      if (a.aiCommand || a.aiTargetId !== undefined) continue;
+      if (a.statuses.length > 0) continue;
+      const kindIdx = this.liteKindOf(spec.monsterId);
+      if (kindIdx < 0) continue;
+      const k = this.liteKinds[kindIdx];
+      const spent = a.pliesMax > 0 ? Math.max(0, a.pliesMax - a.plies) : 0;
+      if (pool.spawn(kindIdx, a.pos.x, a.pos.y, 1, a.owner.id,
+        Math.max(1, k.plies0 - spent)) < 0) continue;
+      this.kill(a, true);
+    }
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i] || !pool.owner[i]) continue;
+      const k = this.liteKinds[pool.kind[i]];
+      if (!k) { pool.free(i); continue; }
+      const keeper = this.actorById(pool.owner[i]);
+      const anchored = keeper && !keeper.dead && keeper.skills.some(s =>
+        s?.def.throng?.tier === 'lite' && s.def.throng.monsterId === k.defId);
+      if (anchored) continue;
+      const hx = pool.x[i], hy = pool.y[i];
+      pool.free(i);
+      this.mintThrongHusk(k.defId, vec(hx, hy), { ttl: THRONG_CFG.motes.ttl * 2 });
+    }
+  }
+
+  /** Dev/QA: pour n bodies of a kind around a point (deterministic ring —
+   *  the perf harness and probes lean on it). Returns how many stood. */
+  devLitePour(defId: string, n: number, at?: Vec2, team: Team = 'enemy', owner?: Actor): number {
+    const kindIdx = this.liteKindOf(defId);
+    if (kindIdx < 0) return 0;
+    const k = this.liteKinds[kindIdx];
+    const c = at ?? this.player.pos;
+    let made = 0;
+    for (let i = 0; i < n; i++) {
+      const ang = (i * 2.39996) % (Math.PI * 2); // golden-angle spiral
+      const d = 34 + Math.sqrt(i) * 16;
+      const bx = c.x + Math.cos(ang) * d, by = c.y + Math.sin(ang) * d;
+      const open = this.liteOpenAt(bx, by);
+      if (this.lite.spawn(kindIdx, open ? bx : c.x, open ? by : c.y,
+        team === 'player' ? 1 : 0, owner?.id ?? 0, k.plies0) >= 0) made++;
+    }
+    return made;
+  }
+
+  /** Dev/QA census. */
+  devLiteCensus(): { live: number; kinds: { defId: string; n: number }[] } {
+    const pool = this.lite;
+    const by = new Map<string, number>();
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i]) continue;
+      const k = this.liteKinds[pool.kind[i]];
+      if (k) by.set(k.defId, (by.get(k.defId) ?? 0) + 1);
+    }
+    return { live: pool.liveCount, kinds: [...by].map(([defId, n]) => ({ defId, n })) };
   }
 
   // -------------------------------------------------------------- the latch --
@@ -19501,6 +20147,17 @@ export class World {
     const targetSpec = instanceCurseField(inst) ? undefined : instanceTargeting(inst);
     if (targetSpec) {
       targetInfo = this.resolveTargeting(caster, inst, aim);
+      // THE GRAB BOUNDARY (engine/lite.ts): a seize whose reach found no
+      // full body PROMOTES the nearest opposing pool row at the aim, then
+      // re-resolves through the ordinary targeting — you cannot hold a
+      // row of floats, so the row stands up to be held.
+      if (!targetInfo && this.lite.liveCount
+        && def.effects.some(f => f.type === 'grabSeize')) {
+        const stood = this.litePromoteNearest(aim, {
+          within: 90, max: 1, opposing: caster.team,
+        });
+        if (stood.length) targetInfo = this.resolveTargeting(caster, inst, aim);
+      }
       if (!targetInfo && targetSpec.fallback !== 'aim') {
         this.failNote(caster, def.id + ':notarget', 'no valid target');
         return false;
@@ -19879,6 +20536,23 @@ export class World {
     const tags = skillContextTags(def, grantedTags(inst));
     let useMult = opts.dmgMult ?? 1;
     let targetInfo = opts.targetInfo ?? null;
+    // THE GRAB BOUNDARY, melee half (engine/lite.ts): a grab SWING with no
+    // full body in reach promotes the nearest opposing pool row first, so
+    // the hand closes on something real — the swing alone would only carve
+    // it. Lives HERE (not useSkill) so every execution path — player press,
+    // monster AI, echo repeats — crosses the boundary.
+    if (this.lite.liveCount && def.delivery.type === 'melee'
+      && def.effects.some(f => f.type === 'grabSeize')) {
+      const reach = caster.radius + (def.delivery.range ?? 60) + 24;
+      let anyClose = false;
+      for (const e of this.enemiesOf(caster)) {
+        if (dist(caster.pos, e.pos) - e.radius <= reach) { anyClose = true; break; }
+      }
+      if (!anyClose) {
+        this.litePromoteNearest(caster.pos,
+          { within: reach, max: 1, opposing: caster.team, rank: aim });
+      }
+    }
     // CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): tally
     // the weighted enemies in reach (a boss counts for six men) and let
     // the POWER score feed the use's damage and/or a stacked buff.
@@ -21792,6 +22466,21 @@ export class World {
       if (fx.type === 'minionCast' && SKILLS[fx.skillId]) {
         const lord = caster.owner ?? caster;
         const hostId = inst.hostSkillId;
+        // THE CONDUCTED-ORDER BOUNDARY (engine/lite.ts): a lite-tier host
+        // roster promotes its nearest rows FIRST so the one-voice delegate
+        // below has real actors to speak through.
+        if (hostId) {
+          const hostSpec = lord.skills.find(s => s?.def.id === hostId)?.def.throng;
+          if (hostSpec?.tier === 'lite') {
+            const kindIdx = this.liteKindOf(hostSpec.monsterId);
+            if (kindIdx >= 0) {
+              this.litePromoteNearest(aim, {
+                within: 1e9, max: THRONG_CFG.metaDelegate,
+                owner: lord.id, kindIdx,
+              });
+            }
+          }
+        }
         let troops = this.actors.filter(m =>
           m.owner === lord && !m.dead && !m.construct
           && (!hostId || this.minionServes(m, hostId)));
@@ -24312,6 +25001,11 @@ export class World {
       if (!br || !br.on.includes('hit')) continue;
       this.popBrittle(o, striker);
     }
+    // THE LITE TIER (engine/lite.ts): the same strike CARVES THE POOL with
+    // the delivery's exact geometry — every verb that plays the surfaces
+    // (melee arcs, novas, splash, zone pulses, ownerless blasts) mows the
+    // crowd automatically, present and future alike.
+    this.liteCarve(striker, at, reach, test);
   }
 
   /** A resonant stone TOLLS (DoodadRule.resonance): lure ping at the stone +
@@ -29362,6 +30056,7 @@ export class World {
     this.updatePendingPersists(dt);
     this.updateMinionMeta(dt);
     this.updateThrong(dt); // THE THRONG's source/collection sweep (engine/throng.ts)
+    this.updateLite(dt);   // THE LITE TIER's batched sweep (engine/lite.ts)
     if (this.lockHint > 0) this.lockHint -= dt;
 
     // Actors: timers, DoT, dash movement, lifespans.
@@ -36363,6 +37058,15 @@ export class World {
             break;
           }
         }
+      }
+      // THE LITE TIER (engine/lite.ts): the flight mows the pool along this
+      // step — cross-team only, honoring the pierce budget (a non-piercing
+      // arrow spends on the first gnat; rehit orbs chew through freely).
+      // Runs AFTER real-body impacts: a full actor that stopped the flight
+      // spares the cloud behind it.
+      if (!dead && this.lite.liveCount && this.liteProjectileSweep(p, prev.x, prev.y)) {
+        dead = true;
+        diedOnBody = true;
       }
       // Ball Lightning: periodic zaps to everything near the flight path.
       const zap = (p.inst.def.delivery as ProjectileDelivery).zap;

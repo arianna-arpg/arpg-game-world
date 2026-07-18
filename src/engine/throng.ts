@@ -113,6 +113,14 @@ export interface ThrongSpec {
   /** Batch-normalization denominator override (default THRONG_CFG.batch):
    *  owner minion-stat investment folds onto each body at 1/batch. */
   batch?: number;
+  /** THE LITE TIER (engine/lite.ts): 'lite' seats the gathered roster in
+   *  the packed pool — rows, not minions. Claims spawn rows, the direct
+   *  sweep marches the cloud by one stamped mark, and bodies PROMOTE to
+   *  real actors only at the interaction boundaries (the latch, the grab,
+   *  the conducted order), demoting back when quiet. The monsterId should
+   *  carry MonsterDef.lite (the validator warns otherwise). Omitted =
+   *  classic full-actor roster, byte-identical. */
+  tier?: 'lite';
 }
 
 // --- Config -----------------------------------------------------------------

@@ -319,6 +319,26 @@ changes.
   life bar, `pl`/`plm` wire; a 1-ply kind is the horde-tier substrate —
   dials in `PLY_CFG`, docs in `docs/engine/plies.md`, probe
   `balance/probe_plies.ts`.
+  THE LITE TIER (`engine/lite.ts` — hundreds of bodies for the price of
+  none): a DOTS-style packed pool (struct-of-arrays rows — no Actor, no
+  StatSheet, no brain) for crowd bodies, batch-updated and batch-blitted
+  (renderer drawLite: one composited sprite per body); `MonsterDef.lite`
+  opts a kind in (the pooled contact band + steering texture; radius/
+  speed/plies/cling/look all read off the def), `ThrongSpec.tier: 'lite'`
+  seats a gathered roster in the pool, and `ZoneTheme.lite` pours ambient
+  tides on a salted stream (the sewerworks' wade-through VERMIN TIDE is
+  the debut). Damage IN rides TWO hooks — the `strikeSurfaces` seam
+  (every area verb's exact drawn geometry carves the pool) and the
+  projectile step (pierce-budget honest); a lite body IS its ply count
+  (one carve, one tear, magnitude-blind). Damage OUT is THE POOLED BITE:
+  one mitigated, ply-gated, count-capped hit per victim per staggered
+  beat, keeper-credited. PROMOTION mints a real Actor at the interaction
+  boundaries (the cling latch, the grab, the minionCast delegate);
+  lite-tier throng bodies DEMOTE back when quiet — kind/owner/plies-spent
+  survive the round trip losslessly. Co-op ships the `lt` draw list
+  (host-authoritative, self-healing); `npm run perf -- --lite=N` is the
+  horde-stress forensics lever. Dials in `LITE_CFG`, docs in
+  `docs/engine/lite.md`, probe `balance/probe_lite.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST

@@ -24,6 +24,7 @@ import type { RecoveryPolicy } from '../world/regions';
 import type { SpanRowSpec } from '../engine/spans';
 import type { TrackSpec } from '../engine/tracks';
 import type { TrapworkSpec } from '../engine/trapworks';
+import type { ZoneLiteSpec } from '../engine/lite';
 import { dimensionDef } from '../world/dimensions';
 import type { WildlifeRow } from './monsters';
 
@@ -505,6 +506,11 @@ export interface ZoneTheme {
    *  plant more at runtime through World.creepEnsure(). No spec = no
    *  ambient creep. */
   creep?: ZoneCreepSpec;
+  /** THE LITE TIER's ambient pours (engine/lite.ts): pockets of PACKED-POOL
+   *  bodies — the wade-through crowd — seated on the leftover-POI stream
+   *  at zone boot (salted; never moves layout/spawn rng). Each row's
+   *  monsterId must opt in via MonsterDef.lite. No spec = no pours. */
+  lite?: ZoneLiteSpec;
   /** LIVING COLLAPSE (the collapse fabric, engine/collapse.ts): this zone's
    *  ground DISSOLVES — cells crumble where feet touch, the rim flakes away
    *  on a seeded schedule marching inward, and the last standing ground is

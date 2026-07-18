@@ -813,7 +813,12 @@ async function perfMode() {
       if (seedFlag) star.seed = Number(seedFlag);
       opts.mintPins = { ...(opts.mintPins ?? {}), '*': star };
     }
-    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag || !!seedFlag;
+    // `--lite=N` — THE LITE-TIER HORDE STRESS (engine/lite.ts): pour N
+    // packed-pool bodies around the hero in every sampled zone. Forensics
+    // only: the claim is the DELTA against a bare run of the same filter.
+    const liteFlag = flagValue('--lite');
+    if (liteFlag) opts.lite = Number(liteFlag);
+    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag || !!seedFlag || !!liteFlag;
     console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
       (opts.filter ? `, filter '${opts.filter}'` : '') +
       (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +

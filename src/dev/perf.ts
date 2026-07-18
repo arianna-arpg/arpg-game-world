@@ -59,6 +59,13 @@ export interface PerfSweepOpts {
    *  WHOLE mint for one tileset (outranks mintSeed + index) — the worst-case
    *  lever for tilesets whose heavy scene is a COUNT roll, not a face. */
   mintPins?: Record<string, { variant?: string; layout?: string; seed?: number }>;
+  /** THE LITE STRESS (forensics — engine/lite.ts): pour this many packed-
+   *  pool bodies around the hero in EVERY sampled zone (control included)
+   *  before its walk. The tide chases the walking hero, so the whole
+   *  steady window wades through the crowd. Deterministic (the dev pour
+   *  rolls no dice); compare against a bare run of the same filter for the
+   *  pool's true frame cost. Never one of the gate's own settings. */
+  lite?: number;
 }
 
 export interface PerfZoneStats {
@@ -68,6 +75,9 @@ export interface PerfZoneStats {
   layout: string;
   doodads: number;
   actors: number;
+  /** Live LITE-TIER pool rows when the window closed (engine/lite.ts —
+   *  the tide's census beside the actor count it undercuts). */
+  lite: number;
   frames: number;
   /** rAF-gap percentiles/extreme (ms) — the pacing the player feels. */
   gapP50: number; gapP95: number; gapP99: number; gapMax: number;
@@ -105,7 +115,7 @@ type FrameDump = { gap: number[]; sim: number[]; ren: number[] };
 
 function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
   tileset: string; zone: string; variant: string | null; layout: string;
-  doodads: number; actors: number;
+  doodads: number; actors: number; lite: number;
   snowBakes: number; groundBakes: number; snowCover: number;
 }): PerfZoneStats {
   const gap = [...f.gap].sort((a, b) => a - b);
@@ -174,6 +184,9 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   const sampleCurrentZone = async (tilesetId: string): Promise<PerfZoneStats> => {
     const zw = g.world();
     zw.player.invulnerable = true; // unkillable but TARGETABLE: combat stays real
+    // THE LITE STRESS: the tide pours before the entry walk, so both the
+    // burst and the steady window carry the full crowd.
+    if (opts.lite) zw.devLitePour('vermin_tide', opts.lite);
     const entryWorst = await walkPhase(settleMs);
     // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
     // hops zones at a rate no player ever will, and V8's collection storm
@@ -192,6 +205,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       variant: zw2.zone.variantName ?? null,
       layout: zw2.zone.layoutType ?? 'plains',
       doodads: zw2.doodads.length, actors: zw2.actors.length,
+      lite: zw2.lite.liveCount,
       snowBakes: VIS_TELEMETRY.snowBakes, groundBakes: VIS_TELEMETRY.groundBakes,
       snowCover: +zw2.snowCover.toFixed(2),
     });

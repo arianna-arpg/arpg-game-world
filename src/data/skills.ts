@@ -4636,6 +4636,10 @@ export const SKILLS: Record<string, SkillDef> = {
     throng: {
       monsterId: 'gnatling', cap: 24, batch: 8,
       sources: [{ kind: 'motes', every: [6, 10], at: 'mixed', ttl: 40 }],
+      // THE LITE TIER (engine/lite.ts): the veil rides the packed pool —
+      // twenty-four bodies at effectively zero cost, promoting to real
+      // latchers only where the sweep pins a quarry.
+      tier: 'lite',
     },
     requirements: { willpower: 10 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.08), mod('minionLife', 'increased', 0.12)] },

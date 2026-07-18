@@ -17,6 +17,7 @@ import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
 import type { ClingSpec } from '../engine/cling';
 import type { PlySpec } from '../engine/plies';
+import type { LiteSpec } from '../engine/lite';
 import type { PortraitTune } from '../render/vis/portrait';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
@@ -386,6 +387,13 @@ export interface MonsterDef {
    *  The life underneath stays live for DoTs and self-destruction. Any
    *  kind can wear it; a 1-ply body is the horde-tier substrate. */
   plies?: PlySpec;
+  /** THE LITE TIER (engine/lite.ts): this kind can live as a PACKED POOL
+   *  ROW — hundreds of bodies for the price of none (wading fodder, cloud
+   *  minions). The spec adds only the pooled bite + steering texture; the
+   *  rest (radius, speed, plies, cling, flier, xp, the whole look) reads
+   *  off this def, so a promoted body is the same creature. Opt-in only:
+   *  nothing spawns pooled unless a pour/throng/dev lever says so. */
+  lite?: LiteSpec;
   /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
    *  (world bosses, dragons, leviathans). Each part is a full monster def —
    *  it fights with its own skills and its death fires break effects on the
@@ -1317,6 +1325,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // One swat, one gnat — but a swat it takes to matter (sub-floor
     // splash never clears the veil by accident).
     plies: { count: 1 },
+    // THE LITE TIER (engine/lite.ts): the veil's roster lives in the pool
+    // (raise_gnatveil is tier 'lite') — near-nothing pooled nips; the
+    // cloud's real teeth are the LATCH promotions (harried stacks) once
+    // the direct sweep pins a quarry.
+    lite: { contact: { damage: 1 }, weave: 1.4, erratic: 1.3 },
     brain: {
       type: 'swarm',
       // The murmuration lever: the veil swirls as one cloud in combat
@@ -7538,6 +7551,23 @@ export const MONSTERS: Record<string, MonsterDef> = {
       move: { style: 'juke', hookEvery: [0.25, 0.6], hookArc: 1.3, freezeChance: 0.25, freeze: [0.15, 0.4] },
       tempo: { kite: 2.8, windedFor: [0.7, 1.2] },
     },
+  },
+  // THE VERMIN TIDE — the LITE TIER's enemy debut (engine/lite.ts): the
+  // drains' crowd itself, poured by the hundred as packed-pool rows the
+  // hero WADES THROUGH AND OBLITERATES. One ply, a near-nothing pooled
+  // nibble that only matters as a crowd; the def is also its promoted form
+  // (a grabbed rat stands up as this body, claw and all).
+  vermin_tide: {
+    id: 'vermin_tide', name: 'Vermin Tide',
+    color: '#7a6a56', shape: 'oval', radius: 5, material: 'fur', look: 'rat',
+    base: { life: 6, moveSpeed: 168, accuracy: 60, evasion: 40, mana: 0 },
+    skills: ['claw'],
+    xp: 1,
+    faction: 'vermin', tags: ['beast', 'vermin'],
+    drops: 0,
+    plies: { count: 1 },
+    lite: { contact: { damage: 2 }, aggro: 320, erratic: 1.25, separation: 1.1 },
+    brain: { type: 'basic', move: { style: 'skitter' } },
   },
   // THE GUTTER ROACH: what the rats leave, the roaches keep. Cellar-and-cavern
   // prey — near-blind, armored in the smallest way, gone the moment you move.

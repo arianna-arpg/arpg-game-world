@@ -234,6 +234,18 @@ export function validateContent(): void {
       }
     }
     for (const z of Object.values(ZONES)) lintThemeLanes(z.theme?.tracks, `zone ${z.id}`);
+    // THE LITE TIER net (engine/lite.ts): a theme pour of a kind that never
+    // opted in mints nothing — a silent empty zone is a lie at boot time.
+    const lintLitePour = (spec: { swarms?: { monsterId: string; pockets: [number, number]; size: [number, number] }[] } | undefined, where: string): void => {
+      for (const row of spec?.swarms ?? []) {
+        if (!MONSTERS[row.monsterId]) warn(`lite: ${where} pours unknown monster '${row.monsterId}'`);
+        else if (!MONSTERS[row.monsterId].lite) warn(`lite: ${where} pours '${row.monsterId}' which has no MonsterDef.lite — nothing would mint`);
+        if (row.pockets[0] > row.pockets[1]) warn(`lite: ${where} pockets lo > hi`);
+        if (row.size[0] > row.size[1]) warn(`lite: ${where} size lo > hi`);
+      }
+    };
+    for (const t of Object.values(TILESETS)) lintLitePour(t.theme?.lite, `tileset ${t.id}`);
+    for (const z of Object.values(ZONES)) lintLitePour(z.theme?.lite, `zone ${z.id}`);
     if (!hasLandmark('glacial_heart')) warn(`deepwinter: 'glacial_heart' landmark unregistered — the heart graft would mint nothing`);
     if (!hasLandmarkBuilder('glacial_heart')) warn(`deepwinter: 'glacial_heart' builder unregistered`);
   }
@@ -1723,6 +1735,11 @@ export function validateContent(): void {
       }
       if (!s.effects.some(fx => fx.type === 'throngDirect')) {
         warn(`skill ${s.id}: SkillDef.throng without a throngDirect effect — the roster can never be swept (add the effect, or this is a deliberate passive-gather skill)`);
+      }
+      // THE LITE TIER net (engine/lite.ts): a lite-tier anchor whose kind
+      // never opted in has no pool to live in — claims would fizzle.
+      if (th.tier === 'lite' && MONSTERS[th.monsterId] && !MONSTERS[th.monsterId].lite) {
+        warn(`skill ${s.id}: throng.tier 'lite' but monster '${th.monsterId}' has no MonsterDef.lite — claims cannot join the pool`);
       }
     }
   }

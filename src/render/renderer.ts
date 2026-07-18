@@ -57,7 +57,7 @@ import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
-import { trimVisCaches } from './vis/caches';
+import { registerVisCache, trimVisCaches } from './vis/caches';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
@@ -168,6 +168,13 @@ export class Renderer {
     const idle: (f: () => void) => unknown =
       typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (f) => setTimeout(f, 400);
     idle(() => { try { canvasCapsReport(); } catch { /* probe failure = default verdicts */ } });
+    // THE LITE TIER's per-kind composite bakes (drawLite) join the cache
+    // steward: tiny (a handful of kinds), dropped at every zone boundary.
+    registerVisCache({
+      id: 'lite',
+      count: () => this.liteSprites.size,
+      onZoneSwap: () => this.liteSprites.clear(),
+    });
   }
 
   /** Wired by main.ts (same altitude as getSettings): has the CONTROLLER
@@ -442,6 +449,9 @@ export class Renderer {
     this.drawRemnants(world);
     for (const f of world.flashes) this.drawFlash(f);
     if (!VIS_ABLATE.has('actors')) {
+      // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
+      // one composited sprite per body, no per-body state churn.
+      this.drawLite(world, vw, vh);
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
@@ -3312,6 +3322,75 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
+  /** THE LITE TIER's per-kind composite bakes (shadow + body in ONE
+   *  sprite, so the hot loop is one drawImage per body). Keyed by def id;
+   *  cleared at zone boundaries via the cache steward. */
+  private readonly liteSprites = new Map<string, { img: HTMLCanvasElement; half: number; flier: boolean }>();
+
+  private liteSpriteOf(defId: string): { img: HTMLCanvasElement; half: number; flier: boolean } | null {
+    let s = this.liteSprites.get(defId);
+    if (s) return s;
+    const def = MONSTERS[defId];
+    if (!def) return null;
+    const look: BodyLook = {
+      shape: def.shape, radius: def.radius, color: def.color,
+      material: def.material, look: def.look,
+    };
+    const body = bodySprite(look);
+    const half = spriteHalf(def.radius);
+    const cv = document.createElement('canvas');
+    cv.width = half * 2;
+    cv.height = half * 2 + 4;
+    const c = cv.getContext('2d')!;
+    c.fillStyle = 'rgba(0,0,0,0.26)';
+    c.beginPath();
+    c.ellipse(half, half + def.radius * 0.85 + 2, def.radius * 0.95,
+      Math.max(1.5, def.radius * 0.34), 0, 0, Math.PI * 2);
+    c.fill();
+    c.drawImage(body, 0, 0);
+    s = { img: cv, half, flier: !!def.flier };
+    this.liteSprites.set(defId, s);
+    return s;
+  }
+
+  /** THE LITE TIER's batch blit (engine/lite.ts + docs/engine/lite.md):
+   *  the host draws the live pool's raw arrays; a co-op client draws the
+   *  `lt` wire mirror (World.liteWire). Viewport-culled, one drawImage per
+   *  body, a phase bob for fliers — no save/restore, no per-body state. */
+  private drawLite(world: World, vw: number, vh: number): void {
+    const wire = world.liteWire;
+    const pool = world.lite;
+    if (wire ? !wire.b.length : !pool.liveCount) return;
+    const { ctx } = this;
+    const pad = 48;
+    const minX = this.cam.x - pad, minY = this.cam.y - pad;
+    const maxX = this.cam.x + vw + pad, maxY = this.cam.y + vh + pad;
+    const t = world.time;
+    if (wire) {
+      for (let j = 0; j <= wire.b.length - 3; j += 3) {
+        const x = wire.b[j + 1], y = wire.b[j + 2];
+        if (x < minX || x > maxX || y < minY || y > maxY) continue;
+        const s = this.liteSpriteOf(wire.k[wire.b[j]] ?? '');
+        if (!s) continue;
+        const bob = s.flier ? Math.sin(t * 5 + j * 0.8) * 2.2 : 0;
+        ctx.drawImage(s.img, x - s.half, y - s.half + bob);
+      }
+      return;
+    }
+    const kinds = world.liteKinds;
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i]) continue;
+      const x = pool.x[i], y = pool.y[i];
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
+      const k = kinds[pool.kind[i]];
+      if (!k) continue;
+      const s = this.liteSpriteOf(k.defId);
+      if (!s) continue;
+      const bob = s.flier ? Math.sin(t * 5 + pool.phase[i]) * 2.2 : 0;
+      ctx.drawImage(s.img, x - s.half, y - s.half + bob);
+    }
+  }
+
   /** Per-frame memo of the LOCAL viewer's throng sight — which husk kinds
    *  this seat's bar reveals (engine/throng.ts throngSightSet). */
   private throngSightAt = -1;
@@ -5255,8 +5334,15 @@ export class Renderer {
           let count = 0;
           if (def.throng) {
             // THE THRONG: the badge is the roster — the one number the
-            // whole playstyle turns on (engine/throng.ts).
+            // whole playstyle turns on (engine/throng.ts). A lite-tier
+            // roster's POOL ROWS count too (engine/lite.ts; a co-op client
+            // shows only promoted bodies — its pool mirror carries no
+            // owners, an accepted MVP-fidelity degradation).
             count = world.throngBodiesOf(p, def.id).length;
+            if (def.throng.tier === 'lite' && world.lite.liveCount) {
+              const kindIdx = world.liteKindOf(def.throng.monsterId);
+              if (kindIdx >= 0) count += world.lite.countOwned(p.id, kindIdx);
+            }
           } else if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
             count = world.minionsOfSkill(p, def.id).length;
           } else if (def.delivery.type === 'ground' && def.delivery.follow) {

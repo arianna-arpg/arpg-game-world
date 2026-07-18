@@ -208,6 +208,19 @@ export function serializeCharacter(world: World): CharacterSave {
         if (row) { row.count++; row.level = Math.max(row.level, a.level); }
         else rows.set(skillId, { skillId, defId: a.defId, level: a.level, count: 1 });
       }
+      // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
+      // its count — the roster resumes at full strength either way.
+      for (const s of world.player.skills) {
+        const spec = s?.def.throng;
+        if (!spec || spec.tier !== 'lite') continue;
+        const kindIdx = world.liteKindOf(spec.monsterId);
+        if (kindIdx < 0) continue;
+        const n = world.lite.countOwned(world.player.id, kindIdx);
+        if (!n) continue;
+        const row = rows.get(s!.def.id);
+        if (row) row.count += n;
+        else rows.set(s!.def.id, { skillId: s!.def.id, defId: spec.monsterId, level: world.player.level, count: n });
+      }
       return [...rows.values()];
     })(),
     throngClaimed: [...world.throngClaimed],

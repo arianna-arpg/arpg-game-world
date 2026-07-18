@@ -873,6 +873,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         coast: { reach: 60, shift: -0.3, kinds: ['water', 'bog'] },
       },
       fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      // THE VERMIN TIDE (engine/lite.ts — the lite tier's enemy debut):
+      // the drains seethe with packed-pool rats the hero wades through and
+      // obliterates. Pocket hearts seat on the leftover-POI stream.
+      lite: { swarms: [{
+        monsterId: 'vermin_tide', pockets: [2, 4], size: [22, 40], chance: 0.9,
+        announce: 'the drains begin to seethe…', announceColor: '#a89078',
+      }] },
       floor: '#0e120e', grid: '#161c16', border: '#4a5a4c',
       obstacle: '#26302a', obstacleEdge: '#54745c', accent: '#8ac8a0',
       tree: '#26302a', wall: '#26302a',

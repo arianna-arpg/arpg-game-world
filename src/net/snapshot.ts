@@ -367,6 +367,11 @@ export interface StateSnapshot {
    *  convergence; an armed→sprung edge replays each effect's MIRROR half
    *  client-side (visuals only; lanes ride laneArm/laneOnce). */
   trapState?: { i: string; s: 0 | 1; t: number }[];
+  /** THE LITE TIER's pool draw list (engine/lite.ts): `k` = kind table
+   *  (MonsterDef ids), `b` = flat (kindIdx, x, y) triples. Present only
+   *  while the host's pool holds bodies; the client renders it verbatim
+   *  (World.liteWire) — host-authoritative, self-healing at 20 Hz. */
+  lt?: { k: string[]; b: number[] };
 }
 
 /** One live pooled lightwell: id, kind, pos, doodad radius, power fraction. */
@@ -550,7 +555,24 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     trapState: world.trapworks.length
       ? world.trapworks.map(tw => ({ i: tw.id, s: (tw.state === 'sprung' ? 1 : 0) as 0 | 1, t: Math.round(tw.sprungAt * 100) / 100 }))
       : undefined,
+    lt: liteOf(world),
   };
+}
+
+/** THE LITE TIER's draw list (engine/lite.ts): a kind table + flat rounded
+ *  (kindIdx, x, y) triples — positions only, the wells idiom (this 20 Hz
+ *  reconcile IS the pool's client existence; a dropped packet self-heals).
+ *  Undefined while the pool is empty (the common case ships zero bytes). */
+function liteOf(world: World): { k: string[]; b: number[] } | undefined {
+  const pool = world.lite;
+  if (!pool.liveCount) return undefined;
+  const k = world.liteKinds.map(x => x.defId);
+  const b: number[] = [];
+  for (let i = 0; i < pool.used; i++) {
+    if (!pool.alive[i]) continue;
+    b.push(pool.kind[i], Math.round(pool.x[i]), Math.round(pool.y[i]));
+  }
+  return { k, b };
 }
 
 /** The complete tag→armed map (undefined when no tagged lane stands). The
@@ -686,6 +708,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.applyNetWells(snap.wells ?? []);
     world.setNetGloom(snap.gloom ?? 0);
   }
+  // THE LITE TIER's draw list (engine/lite.ts): the client renders the
+  // host's pool verbatim off this mirror — absent truly means empty (the
+  // wells idiom; a dropped packet self-heals at the next reconcile).
+  world.liteWire = snap.lt ?? null;
 
   if (!MINION_OWNER) MINION_OWNER = new Actor('owner', 'player', { x: 0, y: 0 });
   const lerping = !!prev && alpha < 1;
