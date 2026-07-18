@@ -494,6 +494,143 @@ export const CLASSES: ClassDef[] = [
     // cheap, and everywhere.
     bar: ['summon_swarmlings', 'raise_gnatveil', 'command_assault', null, null, null, null, null],
     startNode: 'wis_start', // the shepherd's craft — wisdom's fourth door
+  },
+
+  // --- THE PARITY EIGHT (class pass round two) --------------------------------
+  // Every star point now anchors FOUR classes. Each of these eight claims an
+  // under-leveraged fabric as its identity: constructs+mass, the redirect
+  // duel, the pale bargain, the latch-as-mark, the fortune levers, the
+  // confusion crowd, the invocation bank, the attunement tones. Kits mix
+  // minted signatures with promoted catalog gems; the parity contract
+  // (budget 60 / kit 3 / globally-unique bars) binds them all.
+
+  {
+    id: 'wallwright', name: 'Wallwright',
+    look: 'class_wallwright',
+    description: 'Architecture, weaponized. Raises stone where stone is needed, charges through what it raised, and swings demolition arcs that leave survivors load-bearing no more — the wall is a weapon that hasn\'t fallen yet.',
+    color: '#b0a890',
+    attributes: {
+      strength: 18, prowess: 4, fortitude: 10,
+      dexterity: 0, finesse: 0, charisma: 0,
+      intelligence: 12, wisdom: 2, willpower: 2,
+      vitality: 12,
+    },
+    // Raise (Stone Rampart), break (Toppling Stroke), breach (Shield
+    // Charge): the mason's full argument, in order.
+    bar: ['stone_rampart', 'toppling_stroke', 'shield_charge', null, null, null, null, null],
+    startNode: 'str_start',
+  },
+  {
+    id: 'matador', name: 'Matador',
+    look: 'class_matador',
+    description: 'The fight as theatre with exactly one critic. Bait the charge, step through the horns, and schedule the third act — whatever survives its own momentum answers to the blade.',
+    color: '#d84a5a',
+    attributes: {
+      strength: 16, prowess: 16, fortitude: 0,
+      dexterity: 12, finesse: 2, charisma: 6,
+      intelligence: 0, wisdom: 0, willpower: 0,
+      vitality: 8,
+    },
+    // Insult (Planted Banderilla), pass (Cape Feint), sentence (Perfect
+    // Strike) — the corrida's grammar over the mass fabric's own physics.
+    bar: ['planted_banderilla', 'cape_feint', 'perfect_strike', null, null, null, null, null],
+    startNode: 'prw_start',
+  },
+  {
+    id: 'flagellant', name: 'Flagellant',
+    look: 'class_flagellant',
+    description: 'Pain, notarized. A covenant that feeds on its keeper and repays exactly when the flesh runs short — whole men owe; the broken are owed. The order\'s arithmetic has never once been audited.',
+    color: '#c05838',
+    attributes: {
+      strength: 18, prowess: 0, fortitude: 16,
+      dexterity: 0, finesse: 0, charisma: 0,
+      intelligence: 12, wisdom: 0, willpower: 4,
+      vitality: 10,
+    },
+    // The vow (low-life power), the sin priced (Transgression), the debt
+    // structured (Blood Mortgage): three covenants, one ledger.
+    bar: ['ashen_vow', 'transgression', 'blood_mortgage', null, null, null, null, null],
+    startNode: 'for_start',
+  },
+  {
+    id: 'falconer', name: 'Falconer',
+    look: 'class_falconer',
+    description: 'The mark has wings and an opinion. One huntress on the glove, loosed to LATCH and ride the quarry vulnerable; the Falconer reads the field, steps out of their own silhouette, and arrives where she\'s holding.',
+    color: '#c8a86a',
+    attributes: {
+      strength: 0, prowess: 0, fortitude: 0,
+      dexterity: 18, finesse: 8, charisma: 2,
+      intelligence: 16, wisdom: 0, willpower: 8,
+      vitality: 8,
+    },
+    // Loose her (Cast the Falcon), read it (Expose Weakness), be elsewhere
+    // (Cloudstep): the hunt conducted, never chased.
+    bar: ['cast_falcon', 'expose_weakness', 'cloudstep', null, null, null, null, null],
+    startNode: 'dex_start',
+  },
+  {
+    id: 'sharper', name: 'Sharper',
+    look: 'class_sharper',
+    description: 'Probability owes money. Cards thrown flat with every suit riding, odds palmed until the house pays wrong, and an exit practiced quiet — nobody can prove anything, which is the trick.',
+    color: '#c8b078',
+    attributes: {
+      strength: 0, prowess: 4, fortitude: 0,
+      dexterity: 16, finesse: 16, charisma: 12,
+      intelligence: 4, wisdom: 0, willpower: 0,
+      vitality: 8,
+    },
+    // Deal (Thrown Ace), cheat (Stack the Deck), leave (Quiet Step) — the
+    // fortune fabric's first player-facing kit.
+    bar: ['thrown_ace', 'stack_the_deck', 'quiet_step', null, null, null, null, null],
+    startNode: 'fin_start',
+  },
+  {
+    id: 'firebrand', name: 'Firebrand',
+    look: 'class_firebrand',
+    description: 'The riot, delivered as a speech. Say the true terrible thing at the wrong volume, and the crowd does the fighting; keep the horn and the wail for when the constables insist.',
+    color: '#e07040',
+    attributes: {
+      strength: 0, prowess: 0, fortitude: 0,
+      dexterity: 4, finesse: 4, charisma: 18,
+      intelligence: 8, wisdom: 0, willpower: 16,
+      vitality: 10,
+    },
+    // Turn them (Incite), rally yours (Trumpet Peal), rout the rest
+    // (Harrowing Wail): the confusion family as a public-speaking career.
+    bar: ['incite', 'trumpet_peal', 'harrowing_wail', null, null, null, null, null],
+    startNode: 'cha_start',
+  },
+  {
+    id: 'runeweaver', name: 'Runeweaver',
+    look: 'class_runeweaver',
+    description: 'Spells are sentences; runes are the words; patience is the grammar. Bank the weave sigil by sigil and release it as whatever the pattern spells — the invocation fabric\'s own class.',
+    color: '#8a9ae8',
+    attributes: {
+      strength: 0, prowess: 0, fortitude: 0,
+      dexterity: 4, finesse: 6, charisma: 0,
+      intelligence: 22, wisdom: 10, willpower: 10,
+      vitality: 8,
+    },
+    // Weave (Invocation banks the runes), ground (Rune of Power), step
+    // (Warp): the scribe's craft at combat tempo.
+    bar: ['invocation', 'rune_of_power', 'warp', null, null, null, null, null],
+    startNode: 'int_start',
+  },
+  {
+    id: 'resonator', name: 'Resonator',
+    look: 'class_resonator',
+    description: 'Everything rings if struck sincerely. Strikes leave bodies humming one bright tone; the chord, played fortissimo, shatters loudest at whatever note the flesh confessed — the attunement law made a discipline.',
+    color: '#88c8b8',
+    attributes: {
+      strength: 6, prowess: 0, fortitude: 0,
+      dexterity: 0, finesse: 0, charisma: 4,
+      intelligence: 10, wisdom: 12, willpower: 18,
+      vitality: 10,
+    },
+    // Strike the tone (Tuning Strike), play the chord (Shatterchord), wear
+    // the wards (Purity of Elements): the bell-founder's liturgy.
+    bar: ['tuning_strike', 'shatterchord', 'purity_of_elements', null, null, null, null, null],
+    startNode: 'wil_start',
   }
 ];
 

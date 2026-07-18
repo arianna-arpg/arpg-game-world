@@ -4578,6 +4578,181 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 300, weight: 1 },
   },
 
+  // ==========================================================================
+  // THE PARITY-EIGHT SIGNATURES (class pass round two) — one small themed
+  // family seed per new class, every def a re-tuned copy of a PROVEN shape
+  // (construct barrier, dash-decoy, taunt nova, toggle aura, persistent
+  // summon, projectile, self buff, charm nova, tone statuses). No new
+  // effect machinery: the fabrics these classes anchor (mass, fortune,
+  // cling, invocation, attunement) already speak through ordinary levers.
+  // ==========================================================================
+
+  // --- THE WALLWRIGHT: the wall is a weapon that hasn't fallen yet ---------
+  toppling_stroke: {
+    id: 'toppling_stroke', name: 'Toppling Stroke',
+    description: 'A mason\'s judgement swung sideways: a wide, deliberate demolition arc that hits like falling masonry — and whatever survives it staggers SUNDERED, load-bearing no more. Best delivered beside your own rampart, where the argument has walls.',
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#a8a090',
+    manaCost: 9, cooldown: 3, useTime: 0.55,
+    baseDamage: { physical: [14, 22] },
+    delivery: { type: 'melee', range: 95, arcDeg: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sundered', chance: 0.3 },
+    ],
+    requirements: { strength: 16 },
+    ai: { range: 90, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('poiseDamage', 'increased', 0.08)] },
+  },
+
+  // --- THE MATADOR: the fight is a performance with exactly one critic ----
+  cape_feint: {
+    id: 'cape_feint', name: 'Cape Feint',
+    description: 'The pass: a soundless side-step THROUGH the blow, your afterimage holding the cape where you were. The crowd gasps; the horns find cloth. The work is in never seeming hurried.',
+    tags: ['attack', 'physical', 'movement'], color: '#d84a5a',
+    manaCost: 8, cooldown: 3.5, useTime: 0,
+    baseDamage: { physical: [3, 6] },
+    delivery: { type: 'dash', distance: 190, speed: 1700, width: 0, phase: true, decoyDuration: 1.2 },
+    effects: [{ type: 'damage' }],
+    requirements: { prowess: 12, dexterity: 12 },
+    minDropLevel: 8,
+    ai: { range: 180, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('cooldownRecovery', 'increased', 0.06)] },
+  },
+  planted_banderilla: {
+    id: 'planted_banderilla', name: 'Planted Banderilla',
+    description: 'A ribboned barb thrown to STING and INSULT: the struck beast forgets every other quarrel — TAUNTED onto you — and carries the barb VULNERABLE where it lodged. The third act is yours to schedule.',
+    tags: ['attack', 'projectile', 'physical', 'duration'], color: '#e0763a',
+    manaCost: 10, cooldown: 6, useTime: 0.35,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'projectile', speed: 640, radius: 7, range: 520 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'taunted', chance: 1 },
+      { type: 'status', status: 'vulnerable', chance: 0.6 },
+    ],
+    requirements: { prowess: 14 },
+    minDropLevel: 8,
+    ai: { range: 480, weight: 1.6, keepDistance: 240 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('damage', 'increased', 0.08)] },
+  },
+
+  // --- THE FLAGELLANT: pain, notarized ------------------------------------
+  ashen_vow: {
+    id: 'ashen_vow', name: 'Ashen Vow',
+    description: 'TOGGLE a covenant written on your own skin: the vow FEEDS on you, a slow ember of life — and repays in kind exactly when the flesh runs short. Below half life the bargain turns generous: harder blows, iron hide. The order\'s arithmetic: whole men owe; the broken are owed.',
+    tags: ['spell', 'aura', 'buff', 'physical'], color: '#c05838',
+    manaCost: 0, cooldown: 1, useTime: 0,
+    delivery: {
+      type: 'aura', mode: 'toggle',
+      aura: {
+        radius: 10,
+        // The pale bargain, worn as a class identity: the strong mods only
+        // wake at LOW LIFE — the vow's whole game is living near the edge.
+        selfMods: [
+          mod('damage', 'increased', 0.1),
+          mod('damage', 'more', 0.25, undefined, 'lowLife'),
+          mod('armor', 'increased', 0.35, undefined, 'lowLife'),
+          mod('lifeLeech', 'flat', 0.02, undefined, 'lowLife'),
+        ],
+      },
+      upkeep: { lifeFractionPerSec: 0.012 },
+    },
+    effects: [],
+    requirements: { fortitude: 14 },
+  },
+
+  // --- THE FALCONER: the mark has wings and an opinion --------------------
+  cast_falcon: {
+    id: 'cast_falcon', name: 'Cast the Falcon',
+    description: 'Loose your huntress and she CHOOSES: the falcon LATCHES onto prey and rides it — talons working, the quarry held VULNERABLE under her grip — until it dies or shakes her, and then she picks again. The bond is standing: mana stays reserved while she flies, and she returns from every death to the glove.',
+    tags: ['spell', 'summon', 'minion', 'duration'], color: '#c8a86a',
+    manaCost: 10, cooldown: 4, useTime: 0.5,
+    delivery: {
+      type: 'summon', monsterId: 'hunting_falcon',
+      count: 1, maxActive: 1,
+      persistent: { reserve: 9, respawnTime: 5, toggle: true },
+    },
+    effects: [],
+    requirements: { dexterity: 16 },
+    ai: { range: 420, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.12), mod('minionLife', 'increased', 0.1)] },
+  },
+
+  // --- THE SHARPER: probability owes money and pays in cards --------------
+  thrown_ace: {
+    id: 'thrown_ace', name: 'Thrown Ace',
+    description: 'One card off the top, thrown flat and SPINNING — and until it lands not even you know the suit: edge, ember, frost and spark ride every throw. The house rule is simple: whatever turns up, the Sharper dealt it.',
+    tags: ['attack', 'projectile', 'physical', 'fire', 'cold', 'lightning'], color: '#e8d8b0',
+    manaCost: 6, cooldown: 0, useTime: 0.3,
+    baseDamage: { physical: [3, 5], fire: [2, 6], cold: [2, 6], lightning: [1, 8] },
+    delivery: { type: 'projectile', speed: 720, radius: 6, range: 560 },
+    effects: [{ type: 'damage' }],
+    requirements: { finesse: 14 },
+    ai: { range: 520, weight: 2, keepDistance: 280 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  stack_the_deck: {
+    id: 'stack_the_deck', name: 'Stack the Deck',
+    description: 'Palm the odds themselves: for a while, every chance you take is QUIETLY IMPROVED — procs land luckier and your tricks reset sooner. Nobody can prove anything. That is the trick.',
+    tags: ['spell', 'buff', 'duration'], color: '#c8b078',
+    manaCost: 14, cooldown: 14, useTime: 0.3,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'stacked_deck', duration: 8,
+      mods: [mod('luck', 'flat', 0.25), mod('cooldownRecovery', 'increased', 0.15)],
+    }],
+    requirements: { finesse: 12, charisma: 8 },
+    ai: { range: 300, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.1)] },
+  },
+
+  // --- THE FIREBRAND: the riot, delivered as a speech ----------------------
+  incite: {
+    id: 'incite', name: 'Incite',
+    description: 'Say the true, terrible thing at exactly the wrong volume: every mind in earshot risks going MADDENED — blades turning on the nearest anything, friend first — and half of them lose the thread entirely. You will be elsewhere when the constables arrive.',
+    tags: ['spell', 'aoe', 'chaos', 'duration'], color: '#e07040',
+    manaCost: 16, cooldown: 10, useTime: 0.5,
+    delivery: { type: 'nova', radius: 220, affects: 'enemies' },
+    effects: [
+      { type: 'status', status: 'maddened', chance: 0.45 },
+      { type: 'status', status: 'befuddlement', chance: 0.35 },
+    ],
+    requirements: { charisma: 16 },
+    ai: { range: 200, weight: 1.6 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.08), mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  // --- THE RESONATOR: everything rings if struck sincerely ----------------
+  tuning_strike: {
+    id: 'tuning_strike', name: 'Tuning Strike',
+    description: 'Strike the body like a bell and LISTEN: the blow leaves it RINGING one of the three bright tones — flame, frost or storm, whichever the flesh confesses (the attunement law: the tone marks friend to its kin and prey to you). A Resonator never asks what something is. They strike, and it says.',
+    tags: ['attack', 'melee', 'physical', 'duration'], color: '#b0d8c8',
+    manaCost: 7, cooldown: 0, useTime: 0.45,
+    baseDamage: { physical: [8, 13] },
+    delivery: { type: 'melee', range: 85, arcDeg: 85 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'attuned_fire', chance: 0.34 },
+      { type: 'status', status: 'attuned_cold', chance: 0.33 },
+      { type: 'status', status: 'attuned_lightning', chance: 0.33 },
+    ],
+    requirements: { willpower: 14 },
+    ai: { range: 80, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('statusMagnitude', 'increased', 0.05)] },
+  },
+  shatterchord: {
+    id: 'shatterchord', name: 'Shatterchord',
+    description: 'Every tone at once, played FORTISSIMO: a ringing burst of flame, frost and storm that punishes whatever you have tuned — a struck bell shatters loudest at its own note. The circle widens as the chord learns your reach.',
+    tags: ['spell', 'aoe', 'fire', 'cold', 'lightning'], color: '#88c8d8',
+    manaCost: 18, cooldown: 7, useTime: 0.6,
+    baseDamage: { fire: [7, 11], cold: [7, 11], lightning: [5, 14] },
+    delivery: { type: 'nova', radius: 190, affects: 'enemies' },
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 16 },
+    ai: { range: 170, weight: 1.8 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
   // The COMMAND (also the summons' meta payload): the horde goes where you
   // point — the inverse Bombardment (#39). Equippable on its own, too.
   command_assault: {

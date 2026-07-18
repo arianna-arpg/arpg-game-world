@@ -1289,6 +1289,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     plies: { count: 2 },
     brain: { type: 'caster' },
   },
+  // THE FALCONER'S huntress (cast_falcon): one persistent aerial companion
+  // on the LATCH fabric — she picks prey, rides it, and her grip holds the
+  // quarry VULNERABLE (the mark IS the bird). Gnatling's proven chassis at
+  // raptor scale; talon_rake from the bestiary arsenal.
+  hunting_falcon: {
+    id: 'hunting_falcon', name: 'Hunting Falcon',
+    color: '#c8a86a', shape: 'kite', radius: 7, material: 'flesh', look: 'vulture',
+    base: { life: 34, moveSpeed: 280, accuracy: 110, evasion: 120, mana: 20, manaRegen: 4 },
+    skills: ['talon_rake'],
+    xp: 0,
+    flier: true, levitates: true,
+    cling: { shakeSec: [3, 5], rideStatus: 'vulnerable', victimMinRatio: 0 },
+  },
+
   gnatling: {
     id: 'gnatling', name: 'Gnatling',
     color: '#a8b860', shape: 'circle', radius: 4, material: 'chitin', look: 'swarm_bug',

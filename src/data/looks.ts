@@ -1680,6 +1680,63 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'staff', params: { orb: 'glow' } },
     ],
   },
+  // --- The parity eight (class pass round two) -------------------------------
+  class_wallwright: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons', scale: 1.0 },
+      { kind: 'hammer' },
+    ],
+  },
+  class_matador: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'cape' },
+      { kind: 'sword', params: { len: 1.15, w: 0.05 } },
+    ],
+  },
+  class_flagellant: {
+    parts: [
+      { kind: 'robe', role: 'cloth' },
+      { kind: 'hood', x: 0.3 },
+      { kind: 'spikes', scale: 0.5, params: { n: 3 } },
+    ],
+  },
+  class_falconer: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.28, scale: 0.8 },
+      { kind: 'pauldrons', scale: 0.7, role: 'cloth' },
+    ],
+  },
+  class_sharper: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.3, scale: 0.85 },
+      { kind: 'knife', mirror: true },
+    ],
+  },
+  class_firebrand: {
+    parts: [
+      { kind: 'robe', role: 'cloth' },
+      { kind: 'halo', scale: 0.8, alpha: 0.3 },
+      { kind: 'runes', color: '#e07040', params: { n: 2 } },
+    ],
+  },
+  class_runeweaver: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'runes', params: { n: 6 } },
+      { kind: 'staff', params: { orb: 'glow' } },
+    ],
+  },
+  class_resonator: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'halo', scale: 1.05, alpha: 0.35 },
+      { kind: 'staff' },
+    ],
+  },
 
   // --- The parity-pass adversaries (monsters.ts wears these) ----------------
   bandit_trapsmith: {

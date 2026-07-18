@@ -11,7 +11,7 @@ import type { DevTabDef } from '../panel';
 import { DEV_UI, btn, css, hrow, section } from '../ui';
 import { bestiaryKey, bestiaryList, bestiaryThreshold } from '../../data/bestiary';
 import { CLASS_LEVEL_MILESTONES, classLevelLedgerKey } from '../../meta/account';
-import { discoveryLedgerKeys } from '../../meta/unlocks';
+import { discoveryLedgerKeys, discoveryLedgerNeeds } from '../../meta/unlocks';
 
 export const accountTab: DevTabDef = {
   id: 'account',
@@ -70,11 +70,12 @@ export const accountTab: DevTabDef = {
         return CLASS_LEVEL_MILESTONES.length;
       })),
       btn('All web ledgers', () => stamp('web-stamped', l => {
-        // Registry-derived (discoveryLedgerKeys): every threshold AND hard
-        // lesson the authored web names, in one press — never drifts.
-        const keys = discoveryLedgerKeys();
-        for (const k of keys) l[k] = Math.max(l[k] ?? 0, 1);
-        return keys.length;
+        // Registry-derived (discoveryLedgerNeeds): every threshold AND hard
+        // lesson the authored web names, at its NEEDED COUNT (the Flagellant
+        // wants eight deaths, not one) — never drifts.
+        const needs = discoveryLedgerNeeds();
+        for (const [k, n] of Object.entries(needs)) l[k] = Math.max(l[k] ?? 0, n);
+        return Object.keys(needs).length;
       })),
       btn('Forget discoveries', () => stamp('forgotten', l => {
         let n = 0;

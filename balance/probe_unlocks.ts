@@ -46,6 +46,8 @@ const WORLD_FACTS = new Set<string>([
   'warlords_killed',    // engine/killHandlers.ts (warband warlord put down)
   'unmade_slain',       // quests/defs.ts reward ledger (the Chronophage)
   'broodmothers_slain', // engine/killHandlers.ts (any brood-queen kind put down)
+  'fallen_stars_broken', // engine/killHandlers.ts (a starfall lattice shattered)
+  'account_deaths',     // the death flow (LEDGER_ACCOUNT_DEATHS — dying is always earnable)
 ]);
 const MILESTONE_RE = /^class_(.+)_level_(\d+)$/;
 const classIds = new Set(CLASSES.map(c => c.id));
@@ -84,7 +86,10 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
         : [];
       const gotChain = u.requiresUnlock === undefined ? []
         : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
-      return (wantLedger === (u.reqLedger !== undefined))
+      const wantCounts = b.discover?.ledgerCounts;
+      const countsOk = wantCounts === undefined ? u.reqLedgerCounts === undefined
+        : JSON.stringify(u.reqLedgerCounts) === JSON.stringify(wantCounts);
+      return (wantLedger === (u.reqLedger !== undefined)) && countsOk
         && chainIds.length === gotChain.length && chainIds.every(id => gotChain.includes(id))
         && (u.kind === 'class' && u.payload.hint === b.discover?.hint);
     }));
@@ -111,7 +116,10 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
       const d = b.discover;
       const chainOk = d?.classes === undefined
         || (Array.isArray(d.classes) ? d.classes : [d.classes]).every(id => reachable.has(id));
-      const keys = d?.ledger === undefined ? [] : Array.isArray(d.ledger) ? d.ledger : [d.ledger];
+      const keys = [
+        ...(d?.ledger === undefined ? [] : Array.isArray(d.ledger) ? d.ledger : [d.ledger]),
+        ...Object.keys(d?.ledgerCounts ?? {}), // counted keys accrue in play like any fact
+      ];
       const ledgerOk = keys.every(k => {
         const m = MILESTONE_RE.exec(k);
         return m ? reachable.has(m[1]) : WORLD_FACTS.has(k); // a fact is earnable in the wild
@@ -180,6 +188,15 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
   a.ledger[LEDGER_SEIZED] = 1;
   check('hard lesson: seized_by_grip reveals the Brawler',
     visibleClassIds().includes('brawler') && isClassDiscovered(a, 'brawler'));
+
+  // The COUNTED lever (ledgerCounts debut): the Flagellant is discovered by
+  // DYING — and presence alone is not enough, the tally must reach eight.
+  a.ledger['account_deaths'] = 7;
+  check('counted: seven deaths keep the Flagellant shrouded',
+    !visibleClassIds().includes('flagellant') && !isClassDiscovered(a, 'flagellant'));
+  a.ledger['account_deaths'] = 8;
+  check('counted: the eighth death reveals the Flagellant',
+    visibleClassIds().includes('flagellant') && isClassDiscovered(a, 'flagellant'));
 
   // No visible entry may ever carry an unmet reqClasses (the law, swept wide).
   check('moot law: nothing visible wants a deeper pool than the account holds',

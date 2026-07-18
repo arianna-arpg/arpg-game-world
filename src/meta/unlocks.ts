@@ -134,6 +134,9 @@ export const SLOT_TIERS: readonly { id: string; slots: number; cost: number }[] 
 export interface ClassDiscoverSpec {
   /** Account-ledger key(s) that must all be present (≥1). */
   ledger?: string | string[];
+  /** Ledger COUNT thresholds (ANDed) — the counted-milestone form: "die
+   *  eight times" is a discovery too (compiles to reqLedgerCounts). */
+  ledgerCounts?: Record<string, number>;
   /** Class id(s) whose bundles must be OWNED first. */
   classes?: string | string[];
   /** The shrouded rumor line shown while undiscovered. */
@@ -357,6 +360,55 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     supportIds: ['broodclutch', 'vicious_brood', 'hiveborn'],
     discover: { ledger: 'broodmothers_slain',
       hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },
+
+  // --- THE PARITY EIGHT (class pass round two): every star point's fourth
+  // door. Gate textures deliberately span the whole discovery vocabulary —
+  // four ownership chains, two deep play-thresholds, one world fact, and
+  // the debut of the COUNTED lever (the Flagellant is discovered by DYING).
+  { classId: 'wallwright', cost: 280,
+    blurb: 'Architecture, weaponized: raise the rampart, breach through it, and swing the demolition arc that unbuilds whatever argues back.',
+    skillIds: ['stone_rampart', 'toppling_stroke', 'shield_charge'],
+    discover: { classes: 'breaker',
+      hint: 'Whoever learns every way a wall can fall eventually owes the other trade an apprenticeship.' } },
+  { classId: 'matador', cost: 280,
+    blurb: 'The duel as theatre: bait the charge, pass through the horns, schedule the third act.',
+    skillIds: ['planted_banderilla', 'cape_feint', 'perfect_strike'],
+    discover: { classes: 'brawler',
+      hint: 'Past the pit there is a finer arena, where the crowd pays to watch a fighter never get hit at all.' } },
+  { classId: 'flagellant', cost: 300,
+    blurb: 'Pain, notarized: a covenant that feeds on its keeper and repays exactly when the flesh runs short.',
+    skillIds: ['ashen_vow', 'transgression', 'blood_mortgage'],
+    // THE COUNTED DISCOVERY (ledgerCounts debut): the account's own deaths
+    // are the syllabus — the same lifetime counter the Immortal reads.
+    discover: { ledgerCounts: { [LEDGER_ACCOUNT_DEATHS]: 8 },
+      hint: 'You have died enough times to notice: something in you keeps the receipts. An order exists that balances them.' } },
+  { classId: 'falconer', cost: 300,
+    blurb: 'The mark has wings and an opinion: one huntress, loosed to latch and hold the quarry open.',
+    skillIds: ['cast_falcon', 'expose_weakness', 'cloudstep'],
+    discover: { ledger: classLevelLedgerKey('tamer', 10),
+      hint: 'Walk far enough with a bond at your heel and something above starts keeping pace with you both.' } },
+  { classId: 'sharper', cost: 280,
+    blurb: 'Probability owes money: every suit rides every throw, the odds arrive pre-palmed, and nobody can prove anything.',
+    skillIds: ['thrown_ace', 'stack_the_deck', 'quiet_step'],
+    discover: { classes: 'swashbuckler',
+      hint: 'The duelist\'s stage has a back room. The games there are quicker, quieter, and the blades are shaped like cards.' } },
+  { classId: 'firebrand', cost: 300,
+    blurb: 'The riot, delivered as a speech: the crowd does the fighting, and you were provably elsewhere.',
+    skillIds: ['incite', 'trumpet_peal', 'harrowing_wail'],
+    discover: { classes: 'beguiler',
+      hint: 'One whispered madness turns a mind. Somewhere there is a school for saying it to a square full of them.' } },
+  { classId: 'runeweaver', cost: 320,
+    blurb: 'Spells are sentences, runes are the words, patience is the grammar — the invocation bank made a calling.',
+    skillIds: ['invocation', 'rune_of_power', 'warp'],
+    discover: { ledger: classLevelLedgerKey('magician', 20),
+      hint: 'At the twentieth circle the Magician\'s letters stop meaning and start DOING. Few study past the alphabet.' } },
+  { classId: 'resonator', cost: 300,
+    blurb: 'Everything rings if struck sincerely: leave the body humming a bright tone, then play the chord fortissimo.',
+    skillIds: ['tuning_strike', 'shatterchord', 'purity_of_elements'],
+    // The starfall lattices already sing when broken (killHandlers stamps
+    // fallen_stars_broken) — whoever shattered one has heard the tone.
+    discover: { ledger: 'fallen_stars_broken',
+      hint: 'Break a fallen star and listen to the lattice go: everything, struck sincerely, will tell you its note.' } },
 ];
 
 const gemNames = (ids: readonly string[], reg: Record<string, { name: string }>): string =>
@@ -380,6 +432,7 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
   return {
     id: classBundleId(b.classId), kind: 'class', cost: b.cost,
     ...(d?.ledger !== undefined ? { reqLedger: d.ledger } : {}),
+    ...(d?.ledgerCounts !== undefined ? { reqLedgerCounts: d.ledgerCounts } : {}),
     ...(chain.length ? { requiresUnlock: chain } : {}),
     label: `Class — ${name}`,
     description: `${b.blurb} The ${name} joins the class roll at character select`
@@ -650,17 +703,26 @@ export function undiscoveredClassUnlocks(a: Account): Unlockable[] {
     u.kind === 'class' && !isUnlockOwned(a, u) && !isUnlockVisible(a, u));
 }
 
-/** Every ledger key named by any class-discovery spec (deduped) — the dev
- *  tab's "stamp the world's lessons" lever derives from this, so QA keys
+/** Every ledger requirement named by any class-discovery spec, as
+ *  key → MINIMUM COUNT (presence keys need 1; counted keys their
+ *  threshold). The dev tab's "stamp the world's lessons" lever and the
+ *  probe's reachability walk both derive from this, so QA and invariants
  *  can never drift from the authored web. */
-export function discoveryLedgerKeys(): string[] {
-  const keys = new Set<string>();
+export function discoveryLedgerNeeds(): Record<string, number> {
+  const needs: Record<string, number> = {};
   for (const b of CLASS_BUNDLES) {
-    const l = b.discover?.ledger;
-    if (l === undefined) continue;
-    for (const k of Array.isArray(l) ? l : [l]) keys.add(k);
+    const d = b.discover;
+    if (!d) continue;
+    const l = d.ledger;
+    if (l !== undefined) for (const k of Array.isArray(l) ? l : [l]) needs[k] = Math.max(needs[k] ?? 0, 1);
+    for (const [k, n] of Object.entries(d.ledgerCounts ?? {})) needs[k] = Math.max(needs[k] ?? 0, n);
   }
-  return [...keys];
+  return needs;
+}
+
+/** The keys alone (see discoveryLedgerNeeds). */
+export function discoveryLedgerKeys(): string[] {
+  return Object.keys(discoveryLedgerNeeds());
 }
 
 export function isUnlockOwned(a: Account, u: Unlockable): boolean {

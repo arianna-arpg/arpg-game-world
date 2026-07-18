@@ -68,6 +68,17 @@ Three composable levers:
   broodmother / the Brood Sovereign; wisdom's fourth door, the throng
   fabric's own class). The star now grows past three-per-point; the rumor
   wall is what keeps a deeper roster legible.
+- **The parity eight (round two — every point's fourth door):**
+  Breaker owned → **Wallwright** (constructs + the mass fabric) · Brawler
+  owned → **Matador** (the redirect duel) · **eight account deaths →
+  Flagellant** (`ledgerCounts` debut: the counted discovery — the same
+  lifetime counter the Immortal reads) · Tamer played L10 → **Falconer**
+  (the latch as a mark: her falcon rides prey vulnerable) · Swashbuckler
+  owned → **Sharper** (the fortune fabric: `luck`, palmed) · Beguiler
+  owned → **Firebrand** (the confusion family at crowd volume) · Magician
+  played L20 → **Runeweaver** (the invocation bank) · **a fallen star
+  broken → Resonator** (`fallen_stars_broken`; the attunement tones as a
+  player discipline).
 
 ## Vocation coverage (the class pass)
 
