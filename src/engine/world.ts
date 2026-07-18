@@ -9804,6 +9804,10 @@ export class World {
     // arena (The Pit) are sealed rooms — no shaft-keeper mints a mineshaft
     // through their floors (the same objective gate every ambient system uses).
     if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
+    // OWNED / SPECIAL ground: an event's realm arena (the crusade throne, a
+    // demon rift, the necropolis) is a stage, not a cave system — no shaft
+    // through the colosseum sand (the eventOwned contract, underground).
+    if (def.eventOwned || def.special) return;
     // NO WAY ON (ZoneDef.noDeeper — pit-dropped hollows): a pocket that
     // promised no further doors refuses the shaft-keeper's too.
     if (def.noDeeper) return;
@@ -9850,7 +9854,11 @@ export class World {
     const prevReturn = this.caveReturn
       ? { zoneId: this.caveReturn.zoneId, pos: vec(this.caveReturn.pos.x, this.caveReturn.pos.y), entryFrom: this.caveReturn.entryFrom }
       : null;
-    if (!this.caveMap[id]) this.caveMap[id] = mintCave(this.zone, ((this.zone.seed ?? 0) ^ 0xab10de) >>> 0, id, 'descent');
+    if (!this.caveMap[id]) {
+      const abyss = mintCave(this.zone, ((this.zone.seed ?? 0) ^ 0xab10de) >>> 0, id, 'descent');
+      abyss.eventOwned = true; // the dive's own ground — same owned-realm classifier as the arenas
+      this.caveMap[id] = abyss;
+    }
     this.caveReturn = { zoneId: parentCaveId, pos: vec(site.platform.x, site.platform.y), entryFrom: this.entryFrom };
     this.descentRun = { caveId: id, parentCaveId, origin: vec(0, 0), prevReturn, payout: 0, depth: 0 };
     bumpLedger(this.ledger, 'descents_run');
@@ -10322,6 +10330,12 @@ export class World {
     // CLEAR GROUND: the meter recovers fast once the dark lifts, and the HUD
     // bar retires at full (mirrors the Descent's delete-on-resurface).
     if (target <= 0) {
+      // …but NEVER while a DESCENT run holds the meter: in the abyss the lamp
+      // belongs to the dive (its own drain + light-spot bursts). Without this
+      // guard the surface fabric "recovered" the freshly-lit lamp to full and
+      // retired it EVERY frame — no light bar, every light spot a no-op, and
+      // the dark could never consume anyone (the meter always read absent).
+      if (this.descentRun) return;
       if (this.gloomCur <= 0.01) {
         this.gloomCur = 0;
         for (const s of this.seats) {
@@ -11818,6 +11832,11 @@ export class World {
             variant: a.variant, rollVariant: a.rollVariant } : undefined;
       const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(o.caveId)) >>> 0, o.caveId,
         a?.tileset ?? o.tileset, opts);
+      // OWNED GROUND, underground too: an event's realm arena is its own
+      // stage — ambient cave systems (the Descent's Delver, any future
+      // cave-side roll) read the same classifier the overworld contract uses
+      // and stay out (no per-system allowlist to maintain).
+      realm.eventOwned = true;
       if (o.levelOverride !== undefined) realm.level = Math.max(1, o.levelOverride);
       const band = a?.packs ?? o.packs;
       realm.packs = band
