@@ -33,6 +33,10 @@ import { runStructureGen } from './structureGen';
 // Type-only: veil.ts value-imports this module (rules/Doodad); the type flows
 // back erased, so there is no runtime cycle.
 import type { VeilSpec } from './veil';
+// Type-only for the same reason: interiorGen value-imports this module and
+// registers its trap pass through registerTrapPass at eval — the dial/geometry
+// types flow back erased.
+import type { TrapGenSpec, TrapGeo } from './interiorGen';
 import type { DamageType, Modifier } from './stats';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
@@ -1220,6 +1224,20 @@ function sweepClearways(ctx: GenCtx): void {
   let w = 0;
   for (const d of ctx.doodads) if (!doomed.has(d)) ctx.doodads[w++] = d;
   ctx.doodads.length = w;
+}
+
+/** THE TRAP PASS SEAM (the trapworks fabric's gen half): interiorGen registers
+ *  layInteriorTrapworks here at module eval — a registration, not an import,
+ *  because interiorGen value-imports us (registerLayout at its eval; a runtime
+ *  cycle would touch our registries before they initialize). The interior
+ *  generators keep their own in-recipe invocation (their rng stream must not
+ *  move); this seam serves recipes that RECORD their geometry (ctx.trapGeo —
+ *  the surface rooms maze) so layoutParams.trapworks meets them at the
+ *  finished-grid tail, where late wall carves (plan structures) already show
+ *  in the walkable truth a lane validates against. */
+let TRAP_PASS: ((ctx: GenCtx, spec: TrapGenSpec, geo: TrapGeo) => void) | null = null;
+export function registerTrapPass(fn: (ctx: GenCtx, spec: TrapGenSpec, geo: TrapGeo) => void): void {
+  TRAP_PASS = fn;
 }
 
 /** THE BOULDER CHUTES (layoutParams.boulderChutes) — the mountain's rolling
@@ -2436,6 +2454,12 @@ export interface GenCtx {
   /** TRAPWORK MECHANISMS a builder/pass authored (the trapworks fabric):
    *  surfaced on GeneratedLayout.trapworks the same way. */
   trapworks?: TrapworkSpec[];
+  /** ROOM/CORRIDOR TRUTH a recipe RECORDED for the trapworks gen pass
+   *  (interiorGen's layInteriorTrapworks, seated via registerTrapPass): set by
+   *  roomsLayout — pure bookkeeping of geometry already drawn, zero rng — and
+   *  met by layoutParams.trapworks at generateLayout's finished-grid tail
+   *  beside the boulder chutes. Absent (every other recipe) = no pass runs. */
+  trapGeo?: TrapGeo;
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
   /** WAKE HERE: the last spawn cell a plan structure declared (CellSpec.spawn)
@@ -2760,14 +2784,16 @@ function roomsLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
   const grid = new GridWalkField(arena.w, arena.h, 30);
   const M = 70;
-  const rooms: { cx: number; cy: number }[] = [];
+  // Full rects + the room graph are KEPT (not just centers): recorded as
+  // ctx.trapGeo below so the trapworks gen pass can measure real corridors.
+  const rooms: { x: number; y: number; w: number; h: number; cx: number; cy: number; portal?: boolean }[] = [];
   const n = rng.int(5, 8);
   for (let i = 0; i < n; i++) {
     const rw = rng.range(240, 440), rh = rng.range(220, 380);
     const cx = rng.range(M + rw / 2, Math.max(M + rw / 2, arena.w - M - rw / 2));
     const cy = rng.range(M + rh / 2, Math.max(M + rh / 2, arena.h - M - rh / 2));
     grid.fillRect(cx - rw / 2, cy - rh / 2, cx + rw / 2, cy + rh / 2, true);
-    rooms.push({ cx, cy });
+    rooms.push({ x: cx - rw / 2, y: cy - rh / 2, w: rw, h: rh, cx, cy });
   }
   // Every portal (entry + exits) gets a room + a spur from the exact portal point,
   // so the player and each exit are guaranteed on connected walkable ground.
@@ -2777,13 +2803,29 @@ function roomsLayout(ctx: GenCtx, def: ZoneDef): void {
     const cy = Math.min(Math.max(pt.y, M + rh / 2), arena.h - M - rh / 2);
     grid.fillRect(cx - rw / 2, cy - rh / 2, cx + rw / 2, cy + rh / 2, true);
     grid.carveCorridor(pt.x, pt.y, cx, cy, 44);
-    rooms.push({ cx, cy });
+    rooms.push({ x: cx - rw / 2, y: cy - rh / 2, w: rw, h: rh, cx, cy, portal: true });
   }
   // Chain every room (guarantees ONE connected component) + a few extra loops.
-  for (let i = 1; i < rooms.length; i++) tunnel(grid, rooms[i - 1], rooms[i], 42);
+  const adj: number[][] = rooms.map(() => []);
+  const link = (i: number, j: number): void => {
+    if (i === j || adj[i].includes(j)) return;
+    adj[i].push(j); adj[j].push(i);
+  };
+  for (let i = 1; i < rooms.length; i++) { tunnel(grid, rooms[i - 1], rooms[i], 42); link(i - 1, i); }
   const extra = rng.int(2, 4);
-  for (let i = 0; i < extra; i++) tunnel(grid, rng.pick(rooms), rng.pick(rooms), 38);
+  for (let i = 0; i < extra; i++) {
+    // rng.pick stays (draw-shape untouched); indexOf recovers the edge.
+    const a = rng.pick(rooms), b = rng.pick(rooms);
+    tunnel(grid, a, b, 38);
+    link(rooms.indexOf(a), rooms.indexOf(b));
+  }
   ctx.walk = grid;
+  // RECORD the carved truth for the trapworks gen pass (generateLayout's tail
+  // meets layoutParams.trapworks there — after plan structures have carved, so
+  // lanes validate against the final grid). Pure bookkeeping: no draws, and
+  // dial-less zones never run the pass — byte-identical by construction.
+  // halfW 42 = the chain corridors' carve (dart reach reads it); no doors here.
+  ctx.trapGeo = { rooms, adj, assigned: new Set(), grid, halfW: 42, doors: [] };
   // The tileset's authored clutter scatters INSIDE the carved rooms + corridors —
   // findSpot walk-gates solids/triggers onto walkable cells, same as flesh/mycelia/
   // underwater. (Rooms previously ran NO def.layout stamps at all, so highland
@@ -4013,6 +4055,20 @@ export function generateLayout(
   // (stamps, landmarks, clusters, fx layers). Draw-free; runs before the
   // portal splice + reachability guards so they act on the final geometry.
   fuseGroundBodies(ctx);
+  // THE TRAP PASS on recorded geometry (layoutParams.trapworks): a recipe that
+  // captured its room/corridor truth (ctx.trapGeo — the surface rooms maze)
+  // meets the interior trap pass HERE, on the finished grid (a plan structure
+  // carved after the layout splits a stretch honestly) and BEFORE the clearway
+  // sweep (grooves take their right-of-way). The interior generators invoke it
+  // in-recipe instead and never set trapGeo — no double-lay; dial-less zones
+  // draw nothing.
+  if (ctx.trapGeo && !ctx.lite) {
+    const trapSpec = layoutParam<TrapGenSpec | undefined>(def, 'trapworks', undefined);
+    if (trapSpec) {
+      if (TRAP_PASS) TRAP_PASS(ctx, trapSpec, ctx.trapGeo);
+      else console.warn(`[trapworks] '${def.id}' authors layoutParams.trapworks but no trap pass is registered — the dial is dead`);
+    }
+  }
   // THE BOULDER CHUTES (layoutParams.boulderChutes): probed off the finished
   // walkable truth, BEFORE the clearway sweep so each runway immediately
   // holds its right-of-way — the gauntlet can never be plugged by scatter.

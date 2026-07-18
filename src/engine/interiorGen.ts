@@ -23,8 +23,8 @@ import { vec, type Vec2 } from '../core/math';
 import type { StampSpec, ZoneDef } from '../data/zones';
 import { GridWalkField } from '../world/gridWalk';
 import {
-  doorSurfaceOf, layoutParam, layTraveledWay, registerLayout, scatterDecoration, stampEntries,
-  type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
+  doorSurfaceOf, layoutParam, layTraveledWay, registerLayout, registerTrapPass, scatterDecoration,
+  stampEntries, type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
 } from './levelgen';
 import { ringPath } from './tracks';
 
@@ -417,7 +417,11 @@ export interface TrapGenSpec {
   falseFloors?: { chance: number; max?: number };
 }
 
-interface TrapGeo {
+/** The geometry the trap pass measures against. The interior generators build
+ *  it in-recipe; a SURFACE recipe with real room/corridor truth records it as
+ *  `ctx.trapGeo` instead (roomsLayout) and generateLayout's finished-grid tail
+ *  feeds it back through the registerTrapPass seam — one pass, every caller. */
+export interface TrapGeo {
   rooms: IntRoom[];
   adj: number[][];
   assigned: Set<number>;
@@ -838,3 +842,11 @@ function labyrinthLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 
 registerLayout('labyrinth', labyrinthLayout);
+
+// THE TRAP-PASS SEAM: hand the one pass to levelgen so SURFACE recipes that
+// record their geometry (ctx.trapGeo — roomsLayout) meet layoutParams.trapworks
+// at the finished-grid tail. A registration, not an import: levelgen cannot
+// runtime-import this module (we call its registerLayout at module eval — a
+// cycle would hit levelgen's registries before they exist; the types flow back
+// `import type`, erased).
+registerTrapPass(layInteriorTrapworks);

@@ -170,7 +170,11 @@ changes.
   interiorGen trap pass (`layoutParams.trapworks` dials: saw halls, mincer
   rooms, dart wards, boulder runs, false floors — geometry-honest off real
   corridors/rooms; sunken_ruin is the debut, its 'toothed halls' variant
-  the dense face). The dead build no allegiance: trap payloads spare NO
+  the dense face; the SURFACE `rooms` recipe records its geometry as
+  `ctx.trapGeo` and generateLayout's finished-grid tail runs the SAME pass
+  via `registerTrapPass` — the mountain pass's sprung boulder runs are the
+  surface debut, and rooms-rolled caves inherit a tileset's dials). The
+  dead build no allegiance: trap payloads spare NO
   faction. Kit in `data/trapworks.ts`; hidden-plate close-up resolve in
   `render/vis/trapLayer.ts`; docs in `docs/engine/trapworks.md`; probe
   `balance/probe_trapworks.ts`),

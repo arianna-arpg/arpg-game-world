@@ -21,10 +21,11 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { linePath, placeTrack, trackDone, trackPending, trackPose, type TrackSpec } from '../src/engine/tracks';
 import {
   trapEffect, trapTriggerHit, TRAPWORK_CFG,
-  type PlacedTrapwork, type TrapHost,
+  type BoulderEffectRow, type PlacedTrapwork, type TrapHost,
 } from '../src/engine/trapworks';
 import { generateLayout } from '../src/engine/levelgen';
 import { mintCave } from '../src/engine/worldgen';
+import { GridWalkField } from '../src/world/gridWalk';
 import { Rng } from '../src/core/rng';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 import { vec } from '../src/core/math';
@@ -355,6 +356,50 @@ const DT = 1 / 60;
   }
   check('mint: the LABYRINTH is trap country (lattice runs + chambers feed the one pass)',
     traps >= 2 && lanes >= 1, `traps=${traps} lanes=${lanes}`);
+}
+
+// --- 10) THE SURFACE SEAM: the rooms recipe records, the tail lays ----------
+// (The dead-dial regression net: layoutParams.trapworks on a surface 'rooms'
+// tileset silently laid NOTHING — the pass was interior-only. roomsLayout now
+// records its room/corridor truth as ctx.trapGeo and generateLayout's
+// finished-grid tail feeds it to the SAME pass via registerTrapPass.)
+{
+  const THEME = { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' };
+  const arena = { w: 2600, h: 1950 };
+  const entry = vec(140, arena.h / 2), exits = [vec(arena.w - 140, arena.h / 2)];
+  const defOf = (seed: number, trapworks?: Record<string, unknown>): Parameters<typeof generateLayout>[0] => ({
+    id: `qa_surface_${seed}`, name: 'QA Surface', level: 8, size: { w: arena.w, h: arena.h },
+    theme: THEME, layout: [{ kind: 'rocks', count: [3, 5] }], layoutType: 'rooms', seed,
+    ...(trapworks ? { layoutParams: { trapworks } } : {}),
+    objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+  }) as Parameters<typeof generateLayout>[0];
+  const FORCED = { boulderRuns: { chance: 1, max: 2 }, sawHalls: { chance: 1, max: 1 }, dartWards: { chance: 1, max: 1 } };
+  const seed = 61007;
+  const out = generateLayout(defOf(seed, FORCED), arena, new Rng(seed), entry, exits);
+  const boulders = (out.trapworks ?? []).filter(t => t.effects.some(e => e.kind === 'boulder'));
+  check('surface: forced dials LAY sprung runs on the rooms maze',
+    boulders.length >= 1, `${boulders.length} boulder traps, ${out.trapworks?.length ?? 0} total`);
+  check('surface: the cradle names the head, the groove wears the runway',
+    out.doodads.some(d => d.kind === 'boulder_cradle') && out.doodads.some(d => d.kind === 'track_groove'));
+  const gw = out.walk;
+  const runsOf = (t: { effects: { kind: string }[] }): BoulderEffectRow[] =>
+    t.effects.filter((e): e is BoulderEffectRow => e.kind === 'boulder');
+  check('surface: every loosed run is honestly rollable (from→to lineWalkable)',
+    gw instanceof GridWalkField && boulders.every(t => runsOf(t).every(e =>
+      gw.lineWalkable(vec(e.from.x, e.from.y), vec(e.to.x, e.to.y)))));
+  check('surface: every plate sits on walkable ground, clear of the portals',
+    gw instanceof GridWalkField && (out.trapworks ?? []).every(t => {
+      const at = t.trigger.kind === 'plate' ? t.trigger.at : undefined;
+      return !at || (gw.isWalkable(at.x, at.y)
+        && [entry, ...exits].every(p => Math.hypot(p.x - at.x, p.y - at.y) >= 100));
+    }));
+  const out2 = generateLayout(defOf(seed, FORCED), arena, new Rng(seed), entry, exits);
+  check('surface: deterministic per seed (double-run identical mechanisms)',
+    JSON.stringify(out.trapworks ?? []) === JSON.stringify(out2.trapworks ?? []));
+  const bare = generateLayout(defOf(seed), arena, new Rng(seed), entry, exits);
+  check('surface: dial-less rooms zones lay NOTHING (stream-safe silence)',
+    (bare.trapworks ?? []).length === 0 && (bare.tracks ?? []).length === 0
+    && bare.doodads.every(d => d.kind !== 'track_groove' && d.kind !== 'boulder_cradle'));
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

@@ -57,6 +57,8 @@ const DT = 1 / 60;
       !!MONSTERS[id] && !!LOOKS[MONSTERS[id].look ?? '']);
   }
   check('registry: pine_stand formation registered', hasFormation('pine_stand'));
+  check('registry: the pass authors the SPRUNG run (trapworks.boulderRuns — the once-dead dial, live)',
+    !!(TILESETS.highland.layoutParams?.trapworks as { boulderRuns?: { chance: number } } | undefined)?.boulderRuns);
   check('registry: drover_waystation composition registered', hasComposition('drover_waystation'));
   check("registry: region 'gorge' = a fall door (chasm contract, granite lip)",
     regionKind('gorge')?.walkable === false && regionKind('gorge')?.blocks === false
@@ -413,6 +415,44 @@ const DT = 1 / 60;
   const wk = world.walk;
   check("carom law: the grid's kindAt reader answers (wall vs gorge vs ground)",
     wk instanceof GridWalkField && typeof wk.kindAt === 'function');
+}
+
+// --- 9) THE SPRUNG RUN, through the REAL mint path --------------------------
+// (The dead-dial regression net's second half: the pass BRIEFLY authored
+// trapworks.boulderRuns and delivered ZERO over 10 real mints — surface
+// roomsLayout never ran the trap pass. The seam is live now; pin the
+// delivered floor AND one full spring: plate press → lane born → stone gone.)
+{
+  const world = makeSimWorld('warrior', 37001);
+  let zones = 0, sprung = 0, cradles = 0;
+  let sprangLive = false, laneBorn = false;
+  for (let i = 0; i < 10; i++) {
+    const id = world.devMintTileset('highland', 0, 8, { layoutType: 'rooms' });
+    if (!id || !world.devTravelTo(id)) continue;
+    zones++;
+    const traps = world.trapworks.filter(t => t.spec.effects.some(e => e.kind === 'boulder'));
+    sprung += traps.length;
+    cradles += world.doodads.filter(d => d.kind === 'boulder_cradle' && !d.gone).length;
+    // The first delivered trap gets the LIVE test: stand on the hidden plate,
+    // watch the mechanism spring and the once-lane enter the world.
+    const tw = traps[0];
+    const plateAt = tw?.spec.trigger.kind === 'plate' ? tw.spec.trigger.at : undefined;
+    if (tw && plateAt && !sprangLive) {
+      const lanesBefore = world.tracks.length;
+      world.player.pos.x = plateAt.x;
+      world.player.pos.y = plateAt.y;
+      for (let f = 0; f < 20 && tw.state !== 'sprung'; f++) world.update(DT);
+      sprangLive = tw.state === 'sprung';
+      laneBorn = world.tracks.length === lanesBefore + 1
+        && world.tracks[world.tracks.length - 1].spec.tag === tw.id;
+    }
+  }
+  check('sprung run: real mints DELIVER (the zero-boulder dial, un-deadened)',
+    zones === 10 && sprung >= 3, `${sprung} runs over ${zones} zones`);
+  check('sprung run: every delivered run cradles its stone (the honest tell)',
+    cradles >= sprung, `${cradles} cradles / ${sprung} runs`);
+  check('sprung run: the plate SPRINGS under a live press', sprangLive);
+  check('sprung run: the loosed stone is a real once-lane, trap-tagged', laneBorn);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

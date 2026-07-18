@@ -33,6 +33,21 @@ an effect kind with zero engine edits.
    on real walls, runways pre-grooved. Portal/door clearances enforced;
    every rng draw rides the layout stream (genqa determinism pins the pass).
    Surfaced on `GeneratedLayout.trapworks` → placed by loadZone.
+   **Two invocation homes, one pass.** The interior generators
+   (dungeon/edifice/labyrinth) run it in-recipe, before their scatter. The
+   **surface `rooms` recipe** records its room/corridor truth as
+   `ctx.trapGeo` (rects + graph + grid + corridor half-width — pure
+   bookkeeping, zero draws) and generateLayout's finished-grid tail feeds
+   it to the same pass through the `registerTrapPass` seam (interiorGen
+   registers at module eval; a registration, not an import, so the module
+   graph stays acyclic). The tail runs beside the boulder chutes: a plan
+   structure carved after the layout already shows in the walkable truth a
+   stretch validates against, and grooves still precede the clearway
+   sweep. Any rooms tileset can author the dials — the mountain pass's
+   sprung `boulderRuns` is the surface debut — and a rooms-rolled CAVE
+   under such a tileset inherits them via mintCave's layoutParams merge
+   (deliberate: mountain caves spring stones too). Dial-less zones draw
+   nothing (byte-identical; probe-pinned in `probe_trapworks` §10).
 2. **`ZoneTheme.trapworks`** — fixed rows for authored layouts.
 3. **`World.trapworksEnsure(specs)`** — the runtime seam.
 

@@ -5422,11 +5422,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { from: 0.24, fadeIn: 0.2, to: 0.74, fadeOut: 0.18 },
     // THE PASS ROLLS STONES TOO (the delivery repro's verdict: the most
     // common middle-band face fielded ZERO boulders): ambient chutes probe
-    // the maze's own straight corridors. (The trapworks sprung-run grammar
-    // stays interior-only — surface roomsLayout is levelgen's own recipe and
-    // never runs that pass; wiring it is a queued seam, not a dial here.)
+    // the maze's own straight corridors — and the SPRUNG run is live now
+    // (the seam the boulder pass queued): roomsLayout records its corridor
+    // truth (ctx.trapGeo) and the interiorGen trap pass meets the dial at
+    // the finished-grid tail. One hidden plate deep in a long hall looses
+    // the cradled stone — the chutes teach the shape, the plate springs it.
     layoutParams: {
       boulderChutes: { count: [1, 2], minLen: 380, maxLen: 900, rest: 8, bounces: [0, 1] },
+      trapworks: { boulderRuns: { chance: 0.55, max: 1 } },
     },
     compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }, { composition: 'cistern_court', chance: 0.1 }, { composition: 'drover_waystation', chance: 0.16 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],

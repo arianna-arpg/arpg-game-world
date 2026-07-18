@@ -572,6 +572,37 @@ for (const ts of Object.values(TILESETS)) {
   });
 }
 
+// --- 3b³. THE TRAPWORKS DIAL through the surface rooms recipe -----------------
+// layoutParams.trapworks historically fired only inside the interior
+// generators; the surface 'rooms' recipe now records its room/corridor truth
+// (ctx.trapGeo) and meets the SAME pass at generateLayout's finished-grid
+// tail. Every tileset/variant that AUTHORS the dial runs here through 'rooms'
+// at its own scale, so plates, lanes, grooves and cradles land under every
+// invariant (portal clears, reachability, inverse forbidOn, determinism).
+// This is also the rooms-rolled CAVE reality headless: a cave minted under a
+// trapworks tileset inherits these dials via mintCave's layoutParams merge.
+for (const ts of Object.values(TILESETS)) {
+  const rolls = [
+    ...(ts.layoutParams?.trapworks ? [{ tag: 'base', params: ts.layoutParams }] : []),
+    ...(ts.variants ?? []).flatMap(v => {
+      const vp = v.layoutParams as Record<string, unknown> | undefined;
+      return vp?.trapworks ? [{ tag: v.name ?? 'variant', params: { ...ts.layoutParams, ...vp } }] : [];
+    }),
+  ];
+  for (const { tag, params } of rolls) {
+    runCase(`trapworks:${ts.id}/${tag}@rooms`, {
+      id: `qa_traps_${ts.id}_${tag.replace(/\W+/g, '_')}`, name: `QA traps ${ts.id}`, level: 8,
+      size: { w: mid(ts.sizeW), h: mid(ts.sizeH) },
+      theme: ts.theme,
+      layout: [...(ts.common ?? []), ...ts.layout],
+      layoutType: 'rooms',
+      layoutParams: params,
+      objective: { kind: 'clear' },
+      exits: [], map: { x: 0, y: 0 },
+    });
+  }
+}
+
 // --- 3c. BOUNDARY GATES on every enclave biome's layouts ----------------------
 // Live, the World stamps def.exitBoundaries at load (placeExit's prediction
 // seam); headless defs author it directly so the gate composable — façade,
