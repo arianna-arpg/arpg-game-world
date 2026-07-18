@@ -2154,6 +2154,16 @@ export function registerDoodadRule(kind: string, rule: DoodadRule): void {
   clearwayKindsCache = null; // a late traveled-way row must join the clearway gate
 }
 
+/** Retire a RUNTIME-registered rule (the workshop's ungraft lane — a quiet
+ *  remove-then-register is how a re-graft avoids the collision warn above).
+ *  Built-in rules are untouchable through this seam by construction. */
+export function unregisterDoodadRule(kind: string): void {
+  if (!(kind in RUNTIME_RULES)) return;
+  delete RUNTIME_RULES[kind];
+  hazardGroundsCache = null;
+  clearwayKindsCache = null;
+}
+
 /** The placement rule for a kind (a safe non-blocking ground default if unlisted). */
 function doodadRule(kind: DoodadKind): DoodadRule {
   return (DOODAD_RULES as Record<string, DoodadRule>)[kind] ?? RUNTIME_RULES[kind] ?? { overlap: 'ground' };

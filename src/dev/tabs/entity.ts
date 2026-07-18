@@ -54,6 +54,11 @@ export const entityTab: DevTabDef = {
         const f = forgeHandle();
         if (!f) { ctx.flash('forge off (config.ts DEV.entityForge)'); return; }
         f.open(selId ?? undefined);
+      }),
+      btn('🖌 Glyph Forge', () => {
+        const gf = (window as unknown as Record<string, unknown>).__glyphForge as ForgeHandle | undefined;
+        if (!gf) { ctx.flash('forge off (config.ts DEV.entityForge)'); return; }
+        gf.open();
       }));
 
     const filter = textInput('filter…');

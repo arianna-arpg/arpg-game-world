@@ -22,6 +22,7 @@ import './data/compositions'; // side-effect: registers the whole-zone compositi
 import './data/fog'; // side-effect: registers the living fog bank kinds
 import './data/creeps'; // side-effect: registers the living creep kinds
 import './data/traversals'; // side-effect: registers the vertical-crossing kinds (sky launch/fall)
+import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
 import { updateAI } from './engine/ai';
 import { World } from './engine/world';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
@@ -42,6 +43,7 @@ import { DEV, GAME_TITLE } from './config';
 import { mountDevPanel } from './dev/panel';
 import { mountPassiveEditor } from './dev/passiveEditor';
 import { mountEntityForge } from './dev/entityForge';
+import { mountGlyphForge } from './dev/glyphForge';
 import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
 import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, type Account } from './meta/account';
@@ -480,7 +482,12 @@ if (DEV.panel) mountDevPanel(() => world);
 if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
 // DEV: the Entity Forge (config.ts DEV.entityForge) — start-menu button +
 // full-screen editor; the dev panel's Forge tab rides it too. Off (0) = no-op.
-if (DEV.entityForge) mountEntityForge(ui, () => world);
+// The Glyph Forge (draw kit-parts + doodad kinds) mounts SECOND so its
+// start-menu hook chains behind the Entity Forge's.
+if (DEV.entityForge) {
+  mountEntityForge(ui, () => world);
+  mountGlyphForge(ui, () => world);
+}
 
 // Boot: show the start menu immediately (built from the synchronous localStorage
 // loaders so it appears instantly), THEN reconcile against the disk files in the

@@ -1,10 +1,12 @@
-# The Workshop & the Entity Forge
+# The Workshop & the Forges
 
-Dev-authored entities as data — the entity creator/tweaker in the
-passive-tree-editor lineage. The **store** is `src/meta/workshop.ts`; the
-**editor** is `src/dev/entityForge.ts` (+ `src/dev/forgeSchema.ts`, the
-inspector-as-data registry) with an in-game seat at `src/dev/tabs/entity.ts`.
-Gate: `config.ts DEV.entityForge`.
+Dev-authored content as data — the creator/tweaker family in the
+passive-tree-editor lineage. The **store** is `src/meta/workshop.ts`
+(entities + drawn parts + drawn doodad kinds, one hybrid-persisted file);
+the **editors** are `src/dev/entityForge.ts` (+ `src/dev/forgeSchema.ts`,
+the inspector-as-data registry) and `src/dev/glyphForge.ts` (the drawing
+editor for kit-parts and doodads), with an in-game seat at
+`src/dev/tabs/entity.ts`. Gate: `config.ts DEV.entityForge`.
 
 ## The doctrine
 
@@ -105,6 +107,64 @@ never carries husk objects the engine would misread as opted-in.
   is the sketchbook, the source tree stays the authored roster. The passive
   editor's whole-file rewrite lane was deliberately **not** reused:
   monsters.ts is 11k hand-authored lines, not an editor-owned file.
+
+## The Glyph Fabric — painters as data
+
+Shipped part kinds are hand-written painter functions; **glyphs are the data
+tier under them** (`render/vis/parts.ts`): a `GlyphDef` is a vector op-list
+in body space (unit = R, +X = facing) executed by ONE interpreter through
+the same `place()` wrapper every painter opens with — so a hand-drawn part
+inherits row transforms, palette-role ramps, materials, baking and live
+animation exactly like shipped kinds. The op vocabulary is the measured 80%
+of the painter corpus: smoothed/straight `poly`/`path`, `disc`, `ring`
+(arc), per-op ±y `mirror` (the fangs/ears side-loop), `role`/`color` +
+`shade` + `alpha` tones, px or R-relative stroke widths with the 1px floor,
+the `outlined()` edge, and a `sway` sine drift that animates wherever a
+clock flows. The long tail (volume() gradients, expression loops) stays
+hand-written code, on purpose.
+
+- `registerGlyphPart(kind, glyph)` — runtime registration under the same
+  `custom_` namespace law (shipped painters unshadowable/untouchable);
+  every dispatch site already guards unknown kinds, so deletion degrades to
+  the silent skip.
+- Note for tweakers: several shipped painters already carry variant params —
+  e.g. **`snout` has `params: { ears: false }`** (the "muzzle + ear pair"
+  painter with the ear block gated) — check the painter before redrawing.
+- Promotion home: `src/data/glyphParts.ts` (`GLYPH_PARTS` +
+  `registerShippedGlyph`, collision-refusing) — Export TS emits its rows.
+
+## The Part Forge & the Doodad Forge (`dev/glyphForge.ts`)
+
+One drawing surface, two modes (start-menu "Part & Doodad Forge" button —
+the `onStartMenuRender` hook CHAINS, entity forge first):
+
+- **PART mode**: draw ops (poly/path click-to-place with Enter/dbl-click
+  commit, disc/ring center+rim, select-drag to move), per-op inspector
+  (role/color/shade/alpha, fill/stroke/outline/mirror/smooth/closed, widths,
+  sway), **STENCIL TRACE** (any `PART_PAINTERS` kind rendered faintly under
+  your strokes — the "candid snout" flow), a multi-radius preview strip, and
+  Save → `upsertWorkshopGlyphPart` → the kind appears live in the Entity
+  Forge's add-part list ("✎ draw new…" cross-links back).
+- **DOODAD mode**: the same drawing plus look dials (color with
+  `'theme:key|#fallback'` biome dressing, material, order/shadow/longShadow,
+  light spec) and the **WHOLE `DoodadRule`** (overlap class, blocking flags,
+  spacing, bodyScale + a full-rule JSON pane for brittle/contact/clearway/
+  habitat/…). **AUTO-COLLISION**: `deriveGlyphSurface` reads the drawn
+  extents — round drawings become a tightened disc (`rule.bodyScale`),
+  oblong ones the rect `rule.surface` (spun with the seeded rot) — the two
+  data lanes `hitSurfaceOf` resolves, so movement, shots, sight and nav all
+  test what was drawn; the derived shape is overlaid dashed and overridable.
+  Graft writes `DOODAD_VISUALS[kind]` (painter `'glyph'` —
+  `render/vis/glyphDoodad.ts`, registered under the paintersGloam contract)
+  + `registerDoodadRule` (with the new quiet `unregisterDoodadRule` for
+  warn-free re-grafts). Place-at-hero / sprinkle push instances into the
+  live zone — the doodad index and nav self-heal by construction. Export TS
+  emits the visuals row + rule registration + a scatter `StampSpec` hint.
+
+Schema note: the workshop file is v2 (`entities` + `glyphParts` +
+`doodads`); v1 files are adopted whole — additive arrays default empty, an
+upgrade never wipes. Structures are deliberately NOT doodads and stay a
+separate future pass (grid-plan machinery: rooms/doors/roofs).
 
 ## Boundaries (by design)
 

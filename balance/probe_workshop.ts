@@ -24,11 +24,21 @@ import { makeSkillInstance, type SkillDef } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { vec } from '../src/core/math';
 import {
-  findPrefixSquatters, graftWorkshopEntity, isWorkshopId, parseWorkshopSave,
-  removeWorkshopEntity, serializeEntityTS, ungraftWorkshopId,
-  upsertWorkshopEntity, workshop, workshopEntity, WORKSHOP_PREFIX,
-  type WorkshopEntity, type WorkshopSave,
+  deriveGlyphSurface, findPrefixSquatters, graftWorkshopEntity,
+  graftWorkshopDoodad, isWorkshopId, parseWorkshopSave,
+  removeWorkshopDoodad, removeWorkshopEntity, removeWorkshopGlyphPart,
+  serializeDoodadTS, serializeEntityTS, serializeGlyphPartTS,
+  ungraftWorkshopDoodadKind, ungraftWorkshopId,
+  upsertWorkshopDoodad, upsertWorkshopEntity, upsertWorkshopGlyphPart,
+  workshop, workshopEntity, WORKSHOP_PREFIX,
+  type WorkshopDoodadKind, type WorkshopEntity, type WorkshopSave,
 } from '../src/meta/workshop';
+import {
+  PART_PAINTERS, registerGlyphPart, unregisterGlyphPart, type GlyphDef,
+} from '../src/render/vis/parts';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
+import { doodadRuleOf, hitSurfaceOf, type Doodad } from '../src/engine/levelgen';
+import { shapeContains } from '../src/engine/shapes';
 import { getPath, setPath } from '../src/dev/forgeSchema';
 
 let failed = 0;
@@ -98,9 +108,9 @@ const mkEntity = (): WorkshopEntity => ({
   const good: WorkshopSave = { schemaVersion: 1, entities: [mkEntity()] };
   const parsed = parseWorkshopSave(JSON.parse(JSON.stringify(good)));
   check('save gate: a well-formed save round-trips its rows',
-    parsed !== null && parsed.length === 1 && parsed[0].def.id === 'custom_probe_brute');
-  check('save gate: schema mismatch = null (wipe-on-mismatch)',
-    parseWorkshopSave({ schemaVersion: 2, entities: [mkEntity()] }) === null
+    parsed !== null && parsed.entities.length === 1 && parsed.entities[0].def.id === 'custom_probe_brute');
+  check('save gate: schema mismatch = null (wipe-on-mismatch; v1 + v2 accepted)',
+    parseWorkshopSave({ schemaVersion: 3, entities: [mkEntity()] }) === null
     && parseWorkshopSave('nonsense') === null
     && parseWorkshopSave(null) === null);
   const smuggle = {
@@ -109,7 +119,7 @@ const mkEntity = (): WorkshopEntity => ({
   };
   const kept = parseWorkshopSave(JSON.parse(JSON.stringify(smuggle)));
   check('save gate: law-breaking and malformed rows are dropped, good rows kept',
-    kept !== null && kept.length === 1 && kept[0].def.id === 'custom_probe_brute');
+    kept !== null && kept.entities.length === 1 && kept.entities[0].def.id === 'custom_probe_brute');
 }
 
 // --- 3) First-class combat citizenship --------------------------------------
@@ -228,12 +238,133 @@ const mkEntity = (): WorkshopEntity => ({
   check('setPath: untouched keys survive the traffic', o.radius === 14 && getPath(o, 'base.life') === 40);
 }
 
+// --- 7) THE GLYPH FABRIC — painters as data ---------------------------------
+{
+  const fin: GlyphDef = {
+    ops: [
+      { kind: 'poly', pts: [[0.2, 0.1], [0.9, 0.4], [0.3, 0.5]], mirror: true, outline: true },
+      { kind: 'disc', x: 0.5, y: 0, rx: 0.15, role: 'glow' },
+      { kind: 'path', pts: [[-0.4, 0], [-0.9, 0.2]], wR: 0.08, sway: { ay: 0.1, freq: 3 } },
+    ],
+  };
+  check('glyph law: registration refuses an unprefixed kind',
+    registerGlyphPart('finblade', fin) !== null && PART_PAINTERS.finblade === undefined);
+  check('glyph law: prefix parity with the workshop', WORKSHOP_PREFIX === 'custom_');
+  check('glyph: a registered kind is a live PART_PAINTERS citizen',
+    registerGlyphPart('custom_probe_fin', fin) === null
+    && typeof PART_PAINTERS.custom_probe_fin === 'function');
+  const snoutBefore = PART_PAINTERS.snout;
+  unregisterGlyphPart('snout');
+  check('glyph law: unregister cannot touch a shipped painter',
+    PART_PAINTERS.snout === snoutBefore);
+  unregisterGlyphPart('custom_probe_fin');
+  check('glyph: unregister removes the drawn kind (looks skip it silently)',
+    PART_PAINTERS.custom_probe_fin === undefined);
+
+  check('glyph store: upsert registers + persists the row',
+    upsertWorkshopGlyphPart({ kind: 'custom_probe_fin', glyph: fin }) === null
+    && workshop.glyphParts.length === 1
+    && typeof PART_PAINTERS.custom_probe_fin === 'function');
+  check('glyph store: a v1 (entity-only) save still parses — upgrade never wipes',
+    (() => {
+      const v1 = { schemaVersion: 1, entities: [mkEntity()] };
+      const parsed = parseWorkshopSave(JSON.parse(JSON.stringify(v1)));
+      return parsed !== null && parsed.entities.length === 1
+        && parsed.glyphParts.length === 0 && parsed.doodads.length === 0;
+    })());
+  check('glyph store: v2 rows round-trip, law-breaking part rows drop',
+    (() => {
+      const v2: WorkshopSave = {
+        schemaVersion: 2, entities: [],
+        glyphParts: [{ kind: 'custom_probe_fin', glyph: fin }, { kind: 'snout', glyph: fin }],
+      };
+      const parsed = parseWorkshopSave(JSON.parse(JSON.stringify(v2)));
+      return parsed !== null && parsed.glyphParts.length === 1
+        && parsed.glyphParts[0].kind === 'custom_probe_fin';
+    })());
+  check('glyph export: the GLYPH_PARTS promotion row emits clean',
+    (() => {
+      const src = serializeGlyphPartTS({ kind: 'custom_probe_fin', glyph: fin });
+      return src.includes('custom_probe_fin:') && src.includes('mirror: true')
+        && !src.includes('undefined');
+    })());
+  check('glyph store: remove un-registers and empties',
+    removeWorkshopGlyphPart('custom_probe_fin')
+    && PART_PAINTERS.custom_probe_fin === undefined
+    && workshop.glyphParts.length === 0);
+}
+
+// --- 8) DRAWN DOODAD KINDS + auto-collision ---------------------------------
+{
+  const slabGlyph: GlyphDef = {
+    ops: [{ kind: 'poly', pts: [[-1.4, -0.4], [1.4, -0.4], [1.4, 0.4], [-1.4, 0.4]], outline: true }],
+  };
+  const roundGlyph: GlyphDef = {
+    ops: [{ kind: 'disc', rx: 0.8 }, { kind: 'ring', rx: 0.9, wR: 0.05 }],
+  };
+  const derivedSlab = deriveGlyphSurface(slabGlyph);
+  check('auto-collision: an oblong drawing derives the RECT surface word',
+    derivedSlab.surface !== undefined
+    && Math.abs(derivedSlab.surface.hw - 1.4) < 0.01
+    && Math.abs(derivedSlab.surface.hh - 0.4) < 0.01
+    && derivedSlab.surface.orient === 'rot');
+  const derivedRound = deriveGlyphSurface(roundGlyph);
+  check('auto-collision: a round drawing derives the tightened DISC (bodyScale)',
+    derivedRound.bodyScale !== undefined && Math.abs(derivedRound.bodyScale - 0.9) < 0.01
+    && derivedRound.surface === undefined);
+  const mirrored = deriveGlyphSurface({ ops: [{ kind: 'poly', pts: [[0, 0.2], [1, 0.6], [0.5, 0.7]], mirror: true }] });
+  check('auto-collision: per-op mirror symmetrizes the derived extents',
+    mirrored.surface !== undefined && Math.abs(mirrored.surface.hh - 0.7) < 0.01);
+
+  const row: WorkshopDoodadKind = {
+    kind: 'custom_probe_slab', glyph: slabGlyph, color: '#8a8276',
+    order: 52, shadow: 0.5,
+    rule: { overlap: 'solid', blocksMove: true, blocksShot: true, surface: derivedSlab.surface },
+  };
+  check('doodad law: graft refuses an unprefixed kind',
+    graftWorkshopDoodad({ ...row, kind: 'slab' }) !== null && DOODAD_VISUALS.slab === undefined);
+  check('doodad: graft lands the VISUAL row + the runtime rule',
+    upsertWorkshopDoodad(row) === null
+    && DOODAD_VISUALS.custom_probe_slab?.painter === 'glyph'
+    && doodadRuleOf('custom_probe_slab').blocksMove === true
+    && workshop.doodads.length === 1);
+
+  // The resolver truth every consumer reads: a standing instance tests the
+  // drawn rect, spun with its seeded rot.
+  const d: Doodad = { pos: { x: 500, y: 500 }, radius: 20, kind: 'custom_probe_slab', rot: 0 };
+  const surf = hitSurfaceOf(d, 'move');
+  check('doodad: hitSurfaceOf resolves the drawn rect (drawn == tested)',
+    surf.kind === 'rect'
+    && shapeContains(surf, d.pos.x, d.pos.y, 500 + 20 * 1.3, 500, 0)      // inside the long axis
+    && !shapeContains(surf, d.pos.x, d.pos.y, 500, 500 + 20 * 0.9, 0));   // outside the short axis
+  const w = makeSimWorld('warrior', 0x9f21);
+  const near = w.player.pos;
+  const inst: Doodad = { pos: { x: near.x + 60, y: near.y }, radius: 18, kind: 'custom_probe_slab', rot: 0 };
+  w.doodads.push(inst);
+  check('doodad: a runtime-pushed instance joins the spatial index (self-heal)',
+    w.doodadsAt(inst.pos.x, inst.pos.y).includes(inst));
+
+  check('doodad export: promotion literals carry visual + rule + scatter hint',
+    (() => {
+      const src = serializeDoodadTS(row);
+      return src.includes("painter: 'glyph'") && src.includes('registerDoodadRule(')
+        && src.includes('custom_probe_slab') && !src.includes('undefined');
+    })());
+  check('doodad: remove un-grafts both registries',
+    removeWorkshopDoodad('custom_probe_slab')
+    && DOODAD_VISUALS.custom_probe_slab === undefined
+    && doodadRuleOf('custom_probe_slab').blocksMove === undefined
+    && workshop.doodads.length === 0);
+  ungraftWorkshopDoodadKind('custom_probe_slab'); // idempotent tidy
+}
+
 // --- cleanup ----------------------------------------------------------------
 removeWorkshopEntity('custom_probe_brute');
 check('cleanup: registry pristine again',
   findPrefixSquatters().length === 0
   && Object.keys(MONSTERS).every(id => !id.startsWith(WORKSHOP_PREFIX))
-  && workshop.entities.length === 0);
+  && workshop.entities.length === 0 && workshop.glyphParts.length === 0
+  && workshop.doodads.length === 0);
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

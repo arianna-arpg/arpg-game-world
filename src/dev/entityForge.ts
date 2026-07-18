@@ -1012,7 +1012,12 @@ export function mountEntityForge(ui: UI, getWorld: () => World): { open: (id?: s
       const addRow = hrow();
       const kindSel = selectEl();
       for (const k of Object.keys(PART_PAINTERS).sort()) kindSel.append(option(k, k));
-      addRow.append(kindSel,
+      addRow.append(
+        btn('✎ draw new…', () => {
+          const gf = (window as unknown as Record<string, unknown>).__glyphForge as { open: (m?: string) => void } | undefined;
+          if (gf) gf.open('part'); else flash('glyph forge off');
+        }),
+        kindSel,
         btn('+ part', () => {
           pushUndo();
           we.look!.parts.push({ kind: kindSel.value });

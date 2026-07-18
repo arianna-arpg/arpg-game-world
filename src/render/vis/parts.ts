@@ -4528,3 +4528,198 @@ export function paintLiveParts(ctx: CanvasRenderingContext2D, r: number,
     if (painter) painter(ctx, r, spec, pal, t);
   }
 }
+
+// ===========================================================================
+// THE GLYPH FABRIC — painters as DATA (the Part Forge's substrate).
+//
+// A GlyphDef is a list of vector ops in body space (unit = R, +X = facing)
+// executed by ONE interpreter through the same place() wrapper every
+// hand-written painter opens with — so a hand-drawn part inherits the whole
+// row-transform fabric (x/y/rot/scale/alpha/mirror), palette-role
+// recoloring, material ramps, baking and live animation EXACTLY like a
+// shipped kind; paintLook / paintLiveParts / paintTack dispatch it with zero
+// edits. The op vocabulary is the measured 80% of the painter corpus (filled
+// smoothed polys + paths, discs, arc rings, per-op ±y mirror, role+shade+
+// alpha color, px-or-R-relative stroke widths, the outlined() edge); the
+// long tail (volume() gradients, expression loops) stays hand-written code.
+//
+// registerGlyphPart() slots a glyph into PART_PAINTERS at runtime — the
+// record is deliberately mutable, and every dispatch site already guards
+// unknown kinds — under the workshop's namespace law: only 'custom_' kinds
+// may be created or replaced, so a drawn part can never shadow a shipped
+// painter (prefix parity with meta/workshop's WORKSHOP_PREFIX is probe-
+// pinned; render code deliberately does not import the meta layer).
+// ===========================================================================
+
+export interface GlyphOp {
+  kind: 'poly' | 'path' | 'disc' | 'ring';
+  /** poly/path vertices in R units (+X = facing). */
+  pts?: [number, number][];
+  /** disc/ring center + radii in R units (ry defaults to rx). */
+  x?: number;
+  y?: number;
+  rx?: number;
+  ry?: number;
+  /** ring only: arc span in radians (defaults to the full circle). */
+  a0?: number;
+  a1?: number;
+  /** Quadratic midpoint smoothing over the vertices (hand-drawn curves). */
+  smooth?: boolean;
+  /** Close the vertex loop (poly defaults closed, path defaults open). */
+  closed?: boolean;
+  /** Palette role (rampFor semantics; explicit color wins), tone nudge
+   *  (-1..1 via shade()), and alpha (withAlpha — the house idiom). */
+  role?: PaletteRole;
+  color?: string;
+  shade?: number;
+  alpha?: number;
+  /** poly/disc FILL by default; path/ring STROKE by default. Width is w px,
+   *  or wR × R with the 1px floor — both regimes the painters use. */
+  fill?: boolean;
+  stroke?: boolean;
+  w?: number;
+  wR?: number;
+  /** The outlined() pass after the fill (the standard part edge). */
+  outline?: boolean;
+  /** Draw a second y-mirrored pass (the ±side loop fangs/ears use). */
+  mirror?: boolean;
+  /** Live drift: a sin(t·freq + phase) offset in R units. Animates where a
+   *  clock flows (live rows); baked stacks freeze at t = 0 — deterministic. */
+  sway?: { ax?: number; ay?: number; freq?: number; phase?: number };
+}
+
+export interface GlyphDef {
+  ops: GlyphOp[];
+}
+
+/** Glyph dials — caps keep a drawn part bake-cheap and save-small. */
+export const GLYPH_CFG = {
+  maxOps: 128,
+  maxPts: 96,
+  outlineW: 1.4,   // the outlined() default the corpus uses
+  strokeFloor: 1,  // px floor under R-relative widths (Math.max regime)
+} as const;
+
+const GLYPH_PREFIX = 'custom_';
+
+function traceGlyphOp(c: CanvasRenderingContext2D, R: number, op: GlyphOp): void {
+  c.beginPath();
+  if (op.kind === 'disc' || op.kind === 'ring') {
+    const rx = Math.abs(op.rx ?? 0.1) * R;
+    const ry = Math.abs(op.ry ?? op.rx ?? 0.1) * R;
+    c.ellipse((op.x ?? 0) * R, (op.y ?? 0) * R, rx, ry, 0,
+      op.kind === 'ring' ? (op.a0 ?? 0) : 0,
+      op.kind === 'ring' ? (op.a1 ?? Math.PI * 2) : Math.PI * 2);
+    return;
+  }
+  const pts = (op.pts ?? []).slice(0, GLYPH_CFG.maxPts);
+  if (pts.length < 2) return;
+  const closed = op.closed ?? op.kind === 'poly';
+  if (op.smooth && pts.length > 2) {
+    // Quadratic midpoint smoothing: vertices become control points, the
+    // curve flows through segment midpoints — hand-clicked points read as
+    // drawn strokes, the corpus's quadraticCurveTo idiom.
+    const mid = (a: [number, number], b: [number, number]): [number, number] =>
+      [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    if (closed) {
+      const m0 = mid(pts[pts.length - 1], pts[0]);
+      c.moveTo(m0[0] * R, m0[1] * R);
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i];
+        const m = mid(p, pts[(i + 1) % pts.length]);
+        c.quadraticCurveTo(p[0] * R, p[1] * R, m[0] * R, m[1] * R);
+      }
+      c.closePath();
+    } else {
+      c.moveTo(pts[0][0] * R, pts[0][1] * R);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const p = pts[i];
+        const m = mid(p, pts[i + 1]);
+        c.quadraticCurveTo(p[0] * R, p[1] * R, m[0] * R, m[1] * R);
+      }
+      const last = pts[pts.length - 1];
+      c.lineTo(last[0] * R, last[1] * R);
+    }
+  } else {
+    c.moveTo(pts[0][0] * R, pts[0][1] * R);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0] * R, pts[i][1] * R);
+    if (closed) c.closePath();
+  }
+}
+
+function drawGlyphOp(c: CanvasRenderingContext2D, R: number, op: GlyphOp,
+  pal: LookPalette, t: number | undefined): void {
+  const ramp = rampFor({ kind: '', color: op.color, role: op.role } as PartSpec, pal, 'base');
+  const tone = withAlpha(shade(ramp.base, op.shade ?? 0), op.alpha ?? 1);
+  const sw = op.sway;
+  const dx = sw ? Math.sin((t ?? 0) * (sw.freq ?? 2) + (sw.phase ?? 0)) * (sw.ax ?? 0) * R : 0;
+  const dy = sw ? Math.sin((t ?? 0) * (sw.freq ?? 2) + (sw.phase ?? 0)) * (sw.ay ?? 0) * R : 0;
+  c.save();
+  if (dx || dy) c.translate(dx, dy);
+  traceGlyphOp(c, R, op);
+  const strokeDefault = op.kind === 'path' || op.kind === 'ring';
+  const doFill = op.fill ?? !strokeDefault;
+  const doStroke = op.stroke ?? strokeDefault;
+  if (doFill) {
+    c.fillStyle = tone;
+    c.fill();
+  }
+  if (doStroke) {
+    c.strokeStyle = tone;
+    c.lineWidth = op.w ?? (op.wR !== undefined
+      ? Math.max(GLYPH_CFG.strokeFloor, R * op.wR) : 1);
+    c.stroke();
+  }
+  if (op.outline) outlined(c, ramp, GLYPH_CFG.outlineW);
+  c.restore();
+}
+
+/** Execute a glyph through the ordinary part plumbing (place() transform +
+ *  per-op ±y mirror passes — scale(1,-1) flips arcs consistently, the same
+ *  mechanism place() uses for whole-part mirror). */
+export function paintGlyph(ctx: CanvasRenderingContext2D, r: number, spec: PartSpec,
+  pal: LookPalette, glyph: GlyphDef, t?: number): void {
+  place(ctx, r, spec, (c, R) => {
+    for (const op of glyph.ops.slice(0, GLYPH_CFG.maxOps)) {
+      const passes = op.mirror ? [1, -1] : [1];
+      for (const m of passes) {
+        c.save();
+        if (m < 0) c.scale(1, -1);
+        drawGlyphOp(c, R, op, pal, t);
+        c.restore();
+      }
+    }
+  });
+}
+
+/** Register a hand-drawn part kind (the Part Forge's seam). NAMESPACE LAW:
+ *  only 'custom_' kinds may be created or replaced — a drawn part can never
+ *  shadow a shipped painter. Returns an error string, or null on success. */
+export function registerGlyphPart(kind: string, glyph: GlyphDef): string | null {
+  if (!kind.startsWith(GLYPH_PREFIX)) {
+    return `glyph part kind must start with '${GLYPH_PREFIX}' (got '${kind || '<empty>'}')`;
+  }
+  if (!glyph || !Array.isArray(glyph.ops)) return 'glyph needs an ops array';
+  const g: GlyphDef = { ops: glyph.ops.slice(0, GLYPH_CFG.maxOps) };
+  PART_PAINTERS[kind] = (ctx, r, spec, pal, t) => paintGlyph(ctx, r, spec, pal, g, t);
+  return null;
+}
+
+/** Un-register a drawn part kind (prefix-guarded like the workshop's
+ *  ungraft — shipped painters are untouchable through this seam). Looks
+ *  still naming the kind simply skip it (the dispatch guard). */
+export function unregisterGlyphPart(kind: string): void {
+  if (kind.startsWith(GLYPH_PREFIX)) delete PART_PAINTERS[kind];
+}
+
+/** Register a SHIPPED glyph row (data/glyphParts.ts — the promotion home):
+ *  any kind name, but collisions REFUSE loudly — a promoted glyph can never
+ *  clobber a hand-written painter or another glyph. Boot-time data lane. */
+export function registerShippedGlyph(kind: string, glyph: GlyphDef): void {
+  if (PART_PAINTERS[kind]) {
+    console.warn(`[parts] shipped glyph '${kind}' collides with an existing painter — refused`);
+    return;
+  }
+  const g: GlyphDef = { ops: (glyph.ops ?? []).slice(0, GLYPH_CFG.maxOps) };
+  PART_PAINTERS[kind] = (ctx, r, spec, pal, t) => paintGlyph(ctx, r, spec, pal, g, t);
+}
