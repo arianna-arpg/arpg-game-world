@@ -5193,6 +5193,11 @@ registerStamp('watcher_stone', (ctx, spec) => stampSolid(ctx, 'watcher_stone', s
 // painter): walk-through trigger, so a single-place is honest — the rule's
 // contact payload does the arguing, not the footprint.
 registerStamp('sarsen_bumper', stampSingle('sarsen_bumper', [15, 19]));
+// The grab fabric's staked ground (data/tracks.ts speed-gated contact
+// rule + the impaler painter): walk-through trigger the same way — feet
+// pick through free, HURLED bodies are shredded. Stand-sized on purpose
+// (a needle disc lets a fast body slip between contact samples).
+registerStamp('gore_stakes', stampSingle('gore_stakes', [16, 22]));
 registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
 // Flora clarity: fruiting bush clumps + feathery fern understory.
 registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false));

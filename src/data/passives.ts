@@ -225,6 +225,12 @@ const nodes: PassiveNode[] = [
   { id: "mass_s1", name: "Ballast", description: "20% increased weight; +40 knockback strength on melee hits", kind: "small", x: 2340, y: 4926, mods: [mod("weight", "increased", 0.2), mod("knockback", "flat", 40, ["melee"])], links: ["war_kb2"] },
   { id: "mass_s2", name: "Follow-Through", description: "+20% impact damage, +10% shove authority", kind: "small", x: 2160, y: 5064, mods: [mod("impactDamage", "flat", 0.2), mod("shoveAuthority", "flat", 0.1)], links: ["mass_s1"] },
   { id: "mass_n1", name: "The Millstone", description: "+0.4 weight, 25% increased weight, +25% shove authority, +45% impact damage", kind: "notable", x: 2304, y: 5232, mods: [mod("weight", "flat", 0.4), mod("weight", "increased", 0.25), mod("shoveAuthority", "flat", 0.25), mod("impactDamage", "flat", 0.45)], links: ["mass_s2"] },
+  // THE GRIP CLUSTER (engine/grab.ts) — the grab fabric's buildcraft, grown
+  // straight out of the mass cluster (weight IS grip's other half): hands
+  // that hold harder, skin that slips holds, and the Takedown grammar.
+  { id: "grip_s1", name: "Wrestler's Hands", description: "+15% grip power, +15% wriggle", kind: "small", x: 2470, y: 5334, mods: [mod("gripPower", "flat", 0.15), mod("wriggle", "flat", 0.15)], links: ["mass_n1"] },
+  { id: "grip_s2", name: "Eelskin", description: "+35% wriggle (struggle out of holds faster)", kind: "small", x: 2148, y: 5400, mods: [mod("wriggle", "flat", 0.35)], links: ["mass_n1"] },
+  { id: "grip_n1", name: "Seizing Style", description: "+30% grip power; learn the Takedown measure (seize, then throw — blows land harder and the grip grows surer while the rhythm holds)", kind: "notable", x: 2622, y: 5472, mods: [mod("gripPower", "flat", 0.3), mod("combo_grapplers_rhythm", "flat", 1)], links: ["grip_s1"] },
   { id: "sor_df1", name: "Force Wave", description: "+80 push force on spell hits (enemies driven back)", kind: "small", x: 156, y: 3324, mods: [mod("displaceForce", "flat", 80, ["spell"])], links: ["sor_df2"] },
   { id: "sor_df2", name: "Vortex Master", description: "+180 push force on spell hits; 12% increased spell damage", kind: "notable", x: 132, y: 3618, mods: [mod("displaceForce", "flat", 180, ["spell"]), mod("damage", "increased", 0.12, ["spell"])], links: [] },
   { id: "sor_df3", name: "Gravity Well", description: "-100 pull force on spell hits (enemies drawn toward you)", kind: "notable", x: 108, y: 2964, mods: [mod("displaceForce", "flat", -100, ["spell"])], links: [] },

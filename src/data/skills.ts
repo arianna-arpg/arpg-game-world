@@ -4492,7 +4492,10 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'throngDirect' }],
     throng: {
       monsterId: 'cinderkin', cap: 10,
-      sources: [{ kind: 'pocket', perZone: [1, 2], cluster: [3, 5], chance: 0.85 }],
+      sources: [
+        { kind: 'onKill', chance: 0.28 },
+        { kind: 'gauge', per: 'both', fill: 4, yield: [2, 3] },
+      ],
     },
     requirements: { willpower: 12 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.1), mod('minionLife', 'increased', 0.1)] },
@@ -4510,10 +4513,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'throngDirect' }],
     throng: {
       monsterId: 'palewisp', cap: 8,
-      sources: [
-        { kind: 'onKill', chance: 0.28 },
-        { kind: 'gauge', per: 'both', fill: 4, yield: [2, 3] },
-      ],
+      sources: [{ kind: 'pocket', perZone: [1, 2], cluster: [3, 5], chance: 0.85 }],
     },
     requirements: { willpower: 14 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.11), mod('minionLife', 'increased', 0.09)] },
@@ -9588,6 +9588,118 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { willpower: 12 },
     ai: { range: 200, weight: 2 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  // ======================= THE GRAB FABRIC (engine/grab.ts) ================
+  // Sustained bodily control as ordinary skill rows: SEIZE establishes the
+  // hold (grabSeize — mass-gated, policy-tiered, struggled against), HEAVE
+  // spends it (grabThrow — the holding gate refuses mime work; the impulse
+  // rides pushActor, so shove authority, wall wounds, the bowling lane and
+  // pit swallows all pay out with credit). The verbs wear the 'grab' and
+  // 'throw' tags: supports scope to exactly their half of the art, and the
+  // combo grammar reads seize-then-heave measures with no matcher edits.
+  // The monk's other argument — the hand that holds before it strikes.
+
+  seize: {
+    id: 'seize', name: 'Seize',
+    description: 'Close the distance and CLOSE THE HAND: the catch is hoisted bodily and CARRIED — struggling, jostling, worth every step — until you drop it, lose it, or Heave it somewhere instructive. The mass law is the whole contract: grow your weight and grip, or hold only what is smaller than your argument.',
+    tags: ['attack', 'melee', 'physical', 'grab'], color: '#d8a06a',
+    manaCost: 0, cooldown: 5, useTime: 0.45,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'melee', range: 70, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'grabSeize', grab: { verb: 'carry' } },
+    ],
+    requirements: { strength: 12 },
+    ai: { range: 66, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('gripPower', 'flat', 0.04)] },
+  },
+  heave: {
+    id: 'heave', name: 'Heave',
+    description: 'Spend the catch: what your hands hold leaves them AT SPEED, toward the cursor, with your whole weight behind it. Walls end the flight the hard way, lighter bodies in the lane are bowled through, and a chasm keeps what it is given — with your name on the credit. Nothing held, nothing thrown.',
+    tags: ['attack', 'melee', 'physical', 'throw'], color: '#e0b070',
+    manaCost: 0, cooldown: 2, useTime: 0.4,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'self' },
+    gate: { holding: true, note: 'nothing held' },
+    effects: [{ type: 'grabThrow', impulse: 560, damageMult: 1.3 }],
+    requirements: { strength: 14 },
+    ai: { range: 90, weight: 5 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('shoveAuthority', 'flat', 0.04)] },
+  },
+
+  // --- THE GRIP KIN's kit (the traveling holdsmen — data/monsters.ts) ------
+  // The same fabric worn monster-side, one verb each so every silhouette
+  // teaches one lesson: the gaff DRAGS you out of your line, the clinch
+  // PINS you under the yoke, the gulp SWALLOWS you whole and spits you at
+  // your friends. All through the one pipeline; all mass-gated; all
+  // struggled against. noDrop — the player lane is Seize/Heave.
+
+  gaff_cast: {
+    id: 'gaff_cast', name: 'Gaff Cast', noDrop: true,
+    description: 'A barbed hook on a waxed line, thrown flat and hauled home — the catch comes DRAGGED behind the wrangler, out of its line and away from its friends, until the grip is struggled off or torn open.',
+    tags: ['attack', 'projectile', 'physical', 'grab'], color: '#b08a5a',
+    manaCost: 0, cooldown: 7, useTime: 0.6,
+    baseDamage: { physical: [7, 12] },
+    delivery: { type: 'projectile', speed: 660, radius: 7, range: 300, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'grabSeize', grab: { verb: 'drag', haul: 'away', breakMult: 1.15 } },
+    ],
+    requirements: { dexterity: 12 },
+    ai: { range: 280, weight: 3, keepDistance: 230 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  mauler_clinch: {
+    id: 'mauler_clinch', name: 'Mauler\'s Clinch', noDrop: true,
+    description: 'The yoke-bearer\'s answer to footwork: both fists close and the catch goes DOWN, pinned under old timber and older technique, held for the hammering — or for the toss.',
+    tags: ['attack', 'melee', 'physical', 'grab'], color: '#c89058',
+    manaCost: 0, cooldown: 8, useTime: 0.55,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'melee', range: 74, arcDeg: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'grabSeize', grab: { verb: 'pin', breakMult: 0.9 } },
+    ],
+    requirements: { strength: 16 },
+    ai: { range: 70, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  mauler_toss: {
+    id: 'mauler_toss', name: 'Mauler\'s Toss', noDrop: true,
+    description: 'What the clinch caught, the toss SPENDS: the pinned body leaves the yoke-mauler\'s hands toward whatever will stop it least gently. The old schools called the pair one word.',
+    tags: ['attack', 'melee', 'physical', 'throw'], color: '#d8a060',
+    manaCost: 0, cooldown: 3, useTime: 0.5,
+    baseDamage: { physical: [12, 20] },
+    delivery: { type: 'self' },
+    gate: { holding: true, note: 'nothing held' },
+    effects: [{ type: 'grabThrow', impulse: 620, damageMult: 1.4 }],
+    requirements: { strength: 16 },
+    ai: { range: 90, weight: 5 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  gulp: {
+    id: 'gulp', name: 'Gulp', noDrop: true,
+    description: 'The whole argument in one bite: the catch goes IN — hidden, digested, and leeched — until it carves its way back out, is torn free by its friends, or is SPAT, at speed, at whoever the gullet\'s owner likes least. The gulletsack bulges while it works. That is not decoration; that is your friend.',
+    tags: ['attack', 'melee', 'physical', 'grab'], color: '#b46a8a',
+    manaCost: 0, cooldown: 9, useTime: 0.6,
+    baseDamage: { physical: [8, 14] },
+    delivery: { type: 'melee', range: 66, arcDeg: 90 },
+    effects: [
+      { type: 'damage' },
+      {
+        type: 'grabSeize', grab: {
+          verb: 'swallow',
+          dot: { type: 'physical', frac: 0.05 }, leech: 0.6,
+          burstHurt: 0.07,
+          throw: { impulse: 640, spitAt: 'foe' },
+        },
+      },
+    ],
+    requirements: { strength: 14 },
+    ai: { range: 62, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
   // ======================= Trajectories, returns & shrapnel ================

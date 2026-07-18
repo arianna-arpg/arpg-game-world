@@ -4365,6 +4365,115 @@ const anchor: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ===================================================== THE GRIP KIN'S TACK
+// The grab fabric's silhouette tells (engine/grab.ts — one verb per part,
+// so the player reads WHICH hold is coming at a glance): the grapnel
+// drags, the yoke pins, the gulletsack swallows. All reusable by any
+// future holdsman, angler, or devourer kit.
+
+/** GRAPNEL-AND-LINE — a barbed J-hook resting against a coiled throwing
+ *  line: the DRAGGER's tell (gaff wranglers, whalers, wall-scalers).
+ *  params: len (hook reach ÷ body radius). */
+const grapnel: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  const len = P(spec, 'len', 0.9);
+  place(ctx, r, spec, (c, R) => {
+    const L = R * len;
+    // The coil: three loops of waxed line, read as rope not ring.
+    c.strokeStyle = shade(ramp.base, -0.3);
+    c.lineWidth = Math.max(1.2, R * 0.07);
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.arc(-L * 0.28, L * 0.2, R * (0.26 + i * 0.09), 0.3, Math.PI * 2 - 0.2);
+      c.stroke();
+    }
+    // The shank up out of the coil...
+    c.strokeStyle = ramp.base;
+    c.lineCap = 'round';
+    c.lineWidth = Math.max(1.6, R * 0.1);
+    c.beginPath(); c.moveTo(-L * 0.28, L * 0.1); c.lineTo(L * 0.3, -L * 0.55); c.stroke();
+    // ...into the J-hook, barb cocked outward.
+    c.beginPath();
+    c.arc(L * 0.44, -L * 0.42, L * 0.24, Math.PI * 0.75, Math.PI * 1.95);
+    c.stroke();
+    c.fillStyle = shade(ramp.base, 0.14);
+    c.beginPath();
+    c.moveTo(L * 0.62, -L * 0.58);
+    c.lineTo(L * 0.78, -L * 0.72);
+    c.lineTo(L * 0.68, -L * 0.44);
+    c.closePath(); c.fill();
+    c.lineCap = 'butt';
+  });
+};
+
+/** THE OX-YOKE — a shoulder-borne double-bow beam: the PINNER's tell
+ *  (pit maulers, beast-tamed brutes, anything that puts weight ON you).
+ *  Drawn across the body axis so the silhouette widens unmistakably.
+ *  params: span (beam half-width ÷ body radius). */
+const yoke: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const span = P(spec, 'span', 1.25);
+  place(ctx, r, spec, (c, R) => {
+    const W = R * span;
+    // The beam: a worn timber bar with a slight working bow.
+    c.strokeStyle = ramp.base;
+    c.lineCap = 'round';
+    c.lineWidth = Math.max(2.2, R * 0.16);
+    c.beginPath();
+    c.moveTo(-W, -R * 0.06);
+    c.quadraticCurveTo(0, -R * 0.2, W, -R * 0.06);
+    c.stroke();
+    // The two oxbows: U-loops hanging under the beam (empty — whatever
+    // wore this yoke, the mauler is what is left).
+    c.lineWidth = Math.max(1.4, R * 0.09);
+    c.strokeStyle = shade(ramp.base, -0.18);
+    for (const s of [-0.55, 0.55]) {
+      c.beginPath();
+      c.arc(W * s, R * 0.08, R * 0.22, Math.PI * 1.05, Math.PI * 1.95, true);
+      c.stroke();
+    }
+    // End knobs: the carry-worn stubs.
+    c.fillStyle = shade(ramp.base, 0.12);
+    for (const s of [-1, 1]) {
+      c.beginPath(); c.arc(W * s, -R * 0.06, R * 0.11, 0, Math.PI * 2); c.fill();
+    }
+    c.lineCap = 'butt';
+  });
+};
+
+/** THE GULLETSACK — a distended under-jaw throat sac: the SWALLOWER's
+ *  tell (gorge gulpers, pelican-things, any devourer that keeps what it
+ *  takes). In live[] it works — a slow digestive squeeze; static bakes
+ *  show it slack. params: bulge (sac radius ÷ body radius), rate. */
+const gulletSac: PartPainter = (ctx, r, spec, pal, t) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const bulge = P(spec, 'bulge', 0.62);
+  const rate = P(spec, 'rate', 0.9);
+  place(ctx, r, spec, (c, R) => {
+    const work = t === undefined ? 0 : Math.sin(t * Math.PI * 2 * rate) * 0.08;
+    const B = R * bulge * (1 + work);
+    // The sac: a soft teardrop slung low and forward.
+    c.fillStyle = shade(ramp.base, -0.06);
+    c.beginPath();
+    c.ellipse(R * 0.18, R * 0.3, B, B * (0.82 - work * 0.5), 0.3, 0, Math.PI * 2);
+    c.fill();
+    outlined(c, ramp, 1.1);
+    // The stretch-sheen: taut skin catches light along the swell.
+    c.strokeStyle = withAlpha(ramp.highlight, 0.5);
+    c.lineWidth = 1;
+    c.beginPath();
+    c.arc(R * 0.14, R * 0.24, B * 0.7, -1.9, -0.6);
+    c.stroke();
+    // Sag creases at the throat root.
+    c.strokeStyle = withAlpha(shade(ramp.base, -0.35), 0.7);
+    for (let i = 0; i < 2; i++) {
+      c.beginPath();
+      c.arc(R * 0.2, R * 0.28, B * (0.36 + i * 0.22), 0.7, 2.1);
+      c.stroke();
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -4398,6 +4507,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   canopicJar, sarcophagusLid,
   cobraHood, fangJaw, coil,
   anchor,
+  grapnel, yoke, gulletSac,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

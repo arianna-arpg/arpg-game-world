@@ -92,6 +92,12 @@ export interface TrackPayload {
   impulse?: number;
   /** Per-body re-hit grace, seconds (default TRACK_CFG.icdSec). */
   icdSec?: number;
+  /** SPEED GATE: only a body ARRIVING at this push-speed or faster feels
+   *  the payload (the impale stakes — a careful walker picks through;
+   *  anything HURLED through them is shredded). Omit for always-on rows
+   *  (saws, bumpers). Read off the body's push velocity — the one honest
+   *  speed a displaced body has; self-walked feet are never 'thrown'. */
+  minSpeed?: number;
   /** The fog-grant faction grammar: only these factions are touched… */
   factions?: string[];
   /** …or these factions are spared (the Court skates its own lake). */

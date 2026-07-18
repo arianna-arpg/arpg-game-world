@@ -149,6 +149,11 @@ import {
   throngSkillSalt, throngSpecsOn, type ThrongSourceRow, type ThrongSpec,
 } from './throng';
 import { CLING_CFG, clingEligible, clingSeatPos, clingSeatsOf } from './cling';
+import {
+  GRAB_CFG, GRAB_MARKER, GRAB_VERB_LABEL, grabHolderMove, grabHoldBounds,
+  grabRefusal, grabSeatPos, struggleRate,
+  type GrabSpec, type GrabThrowSpec, type GrabVerb,
+} from './grab';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneSpans, type SpanField } from './spans';
@@ -16993,6 +16998,10 @@ export class World {
     // THE LATCH (engine/cling.ts): any monster can be a clinger — stamped
     // at mint so summons, claims and wild spawns all wear it identically.
     if (def.cling) a.cling = def.cling;
+    // THE GRAB FABRIC's victim-side policy override (engine/grab.ts):
+    // per-body word over the rarity tiers — the Winter King is never
+    // luggage; a fat unique toad may opt back in.
+    if (def.grabbable !== undefined) a.grabbable = def.grabbable;
     // Monsters grow with wave level through the same modifier system. The
     // baseline (life/damage/accuracy/evasion) is a global lever; per-stat scaling
     // is opt-in below.
@@ -18234,6 +18243,295 @@ export class World {
       a.pos.y + Math.sin(ride.ang) * CLING_CFG.detachHop), a.radius);
   }
 
+  // -------------------------------------------------------------- the grab --
+  /** THE GRAB SWEEP (engine/grab.ts): run the release ladder for every live
+   *  hold, then slave the victim to its seat (drawn == held — runs right
+   *  after the latch sweep, so seats win the frame in both fabrics). The
+   *  victim REELS to the seat at reelSpeed first (a gaff catch is hauled
+   *  across the ground, not teleported), passive struggle accrues by the
+   *  mass law, swallow digests through the one mitigation ladder with
+   *  holder credit, and the marker statuses re-stamp on a short beat. */
+  private updateGrabs(dt: number): void {
+    // THE ORPHAN REPAIR: a victim whose holder is GONE (zone travel, a
+    // splice, a vanished id) must not stay bound to a ghost — heldBy is
+    // the victim's side of the pair and only this sweep may clear it.
+    // (The holder side self-heals below: a missing victim releases.)
+    for (const a of this.actors) {
+      if (a.heldBy === undefined) continue;
+      const holder = this.actorById(a.heldBy);
+      if (!holder || holder.dead || holder.gripping?.id !== a.id) {
+        a.heldBy = undefined;
+        if (a.untargetable && a.statuses.some(s => s.id === 'swallowed')) a.untargetable = false;
+        for (let i = a.statuses.length - 1; i >= 0; i--) {
+          const id = a.statuses[i].id;
+          if (id === 'seized' || id === 'swallowed') {
+            a.statuses.splice(i, 1);
+            a.sheet.removeSource('status:' + id);
+          }
+        }
+      }
+    }
+    for (const a of this.actors) {
+      const hold = a.gripping;
+      if (!hold) continue;
+      const v = this.actorById(hold.id);
+      // The pair dies with either body or a vanished id (zone edges).
+      if (!v || v.dead || a.dead || v.heldBy !== a.id) { this.grabRelease(a); continue; }
+      // THE RELEASE LADDER — CC, sever, struggle, patience (grab.ts docs).
+      if (GRAB_CFG.release.onHardCC && a.isStunned()) {
+        this.text(v.pos, 'torn free!', '#a8d8a0', 12);
+        this.grabRelease(a);
+        continue;
+      }
+      if (hold.severed >= (hold.spec.severFrac ?? GRAB_CFG.break.severFrac)) {
+        this.text(v.pos, 'torn free!', '#a8d8a0', 12);
+        this.grabRelease(a);
+        continue;
+      }
+      if (hold.struggle >= 1) {
+        // BURST OUT: a swallowed meal fights its way back through the
+        // holder's own flank (physical, mitigated, victim-credited).
+        const burst = hold.spec.burstHurt ?? (hold.verb === 'swallow' ? GRAB_CFG.swallow.burstHurt : 0);
+        if (burst > 0 && !a.invulnerable) {
+          const taken = mitigateTyped(a, { physical: burst * a.maxLife() });
+          a.life -= taken;
+          a.hitFlash = 0.15;
+          this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
+          if (a.life <= 0 && !a.dead) this.kill(a, false, v);
+        }
+        this.text(v.pos, 'broke free!', '#a8d8a0', 12);
+        this.grabRelease(a);
+        continue;
+      }
+      if (this.time >= hold.until) {
+        // Patience ends at the HOLDER's choosing: a throw-spec spits the
+        // catch (the gulper aims it at your allies), else a plain drop.
+        const t = hold.spec.throw;
+        if (t) this.grabThrowRelease(a, t.impulse, this.grabSpitDir(a, v, t));
+        else this.grabRelease(a);
+        continue;
+      }
+      // THE SLAVE STEP: reel to the seat, then ride it (one resolver —
+      // grabSeatPos — so probe, renderer and sweep can never disagree).
+      grabSeatPos(a, v, hold, this.grabScratch);
+      const gap = dist(v.pos, this.grabScratch);
+      const step = GRAB_CFG.reelSpeed * dt;
+      if (gap > step) {
+        const ang = angleTo(v.pos, this.grabScratch);
+        v.pos = this.clampPos(vec(
+          v.pos.x + Math.cos(ang) * step, v.pos.y + Math.sin(ang) * step), v.radius);
+      } else {
+        v.pos = this.clampPos(vec(this.grabScratch.x, this.grabScratch.y), v.radius);
+      }
+      v.facing = angleTo(v.pos, a.pos);
+      // The grip absorbs residual momentum — a held body does not slide
+      // (a real shove feeds the meter at pushActor instead).
+      if (v.push) { v.push.vx = 0; v.push.vy = 0; }
+      // PASSIVE STRUGGLE: the mass law's rate, every second held.
+      hold.struggle += struggleRate(hold, a, v) * dt;
+      // Markers + rideStatus on a short beat (cleanse-proof by refresh).
+      if (this.time >= hold.statusAt) {
+        hold.statusAt = this.time + 0.25;
+        v.applyStatus(GRAB_MARKER[hold.verb], 0, 1, 'grab');
+        if (hold.spec.rideStatus) v.applyStatus(hold.spec.rideStatus, 0, 1, 'grab');
+      }
+      // SWALLOW: digestion — typed, mitigated, leeched, holder-credited.
+      const dot = hold.spec.dot;
+      if (dot && !v.invulnerable) {
+        const taken = mitigateTyped(v, { [dot.type]: dot.frac * v.maxLife() * dt });
+        if (taken > 0) {
+          v.life -= taken;
+          hold.dotAcc += taken;
+          if (hold.spec.leech) a.healBy(taken * hold.spec.leech);
+          if (v.life <= 0 && !v.dead) {
+            this.kill(v, false, a);
+            this.grabRelease(a);
+          }
+        }
+      }
+    }
+  }
+
+  /** Scratch for the grab slave step (per-frame, no allocation). */
+  private readonly grabScratch = { x: 0, y: 0 };
+
+  /** Release a hold in place: unwind the pair, restore what the swallow
+   *  suspended, strip the marker statuses NOW (their refresh is gone but a
+   *  half-second of ghost pip — or a concealed body — would be a lie), and
+   *  stamp the victim's re-seize grace. The catch stands where the seat
+   *  left it; a THROW is grabThrowRelease's job on top of this. */
+  private grabRelease(a: Actor): void {
+    const hold = a.gripping;
+    a.gripping = undefined;
+    if (!hold) return;
+    const v = this.actorById(hold.id);
+    if (!v) return;
+    if (v.heldBy === a.id) v.heldBy = undefined;
+    if (hold.verb === 'swallow') v.untargetable = hold.wasUntargetable ?? false;
+    for (let i = v.statuses.length - 1; i >= 0; i--) {
+      const id = v.statuses[i].id;
+      if (id === 'seized' || id === 'swallowed') {
+        v.statuses.splice(i, 1);
+        v.sheet.removeSource('status:' + id);
+      }
+    }
+    v.grabProofUntil = this.time + GRAB_CFG.break.graceSec;
+  }
+
+  /** The spit direction for a monster's own throw-release: 'foe' aims the
+   *  catch at the holder's nearest OTHER enemy (the gulper spits you at
+   *  your friends); 'away' (default) follows the holder's facing. */
+  private grabSpitDir(a: Actor, v: Actor, t: GrabThrowSpec): number {
+    if (t.spitAt === 'foe') {
+      let best: Actor | null = null, bd = 620;
+      for (const e of this.enemiesOf(a)) {
+        if (e === v || e.dead || e.untargetable) continue;
+        const dd = dist(a.pos, e.pos);
+        if (dd < bd) { bd = dd; best = e; }
+      }
+      if (best) return angleTo(a.pos, best.pos);
+    }
+    return a.facing;
+  }
+
+  /** THE THROW: release the current hold as a directed impulse with the
+   *  holder as author — pushActor folds shove authority, and the mass
+   *  fabric's wall wounds, bowling lane and pit swallows pay out with
+   *  kill credit intact. `damageMult` re-rolls the carrying skill against
+   *  the thrown body itself first (the send-off blow). */
+  private grabThrowRelease(
+    a: Actor, impulse: number, dir: number, inst?: SkillInstance, damageMult?: number,
+  ): void {
+    const hold = a.gripping;
+    if (!hold) return;
+    const v = this.actorById(hold.id);
+    this.grabRelease(a);
+    if (!v || v.dead) return;
+    // The catch leaves from the holder's rim along the throw — the flight
+    // starts clear of the thrower's own body.
+    v.pos = this.clampPos(vec(
+      a.pos.x + Math.cos(dir) * (a.radius + v.radius) * 0.9,
+      a.pos.y + Math.sin(dir) * (a.radius + v.radius) * 0.9), v.radius);
+    v.facing = dir + Math.PI;
+    if (damageMult && inst && this.hostileTo(a, v)) {
+      this.resolveHit(a, inst, v, damageMult, 0);
+    }
+    if (!v.dead) this.pushActor(v, dir, impulse, a, inst);
+    this.flashes.push({
+      pos: vec(a.pos.x, a.pos.y), radius: a.radius + v.radius + 10,
+      color: '#d8a06a', life: 0.2, maxLife: 0.2,
+    });
+  }
+
+  /** THE SEIZE (the grabSeize skill effect): try to establish a hold on a
+   *  struck body. Pure law lives in grabRefusal (mass gate, policy tiers,
+   *  altitude, phasing); the world adds what only it can test — dormancy
+   *  (the sentry spare), the re-seize grace, hostility, and the reach pad
+   *  (a projectile catch beyond it still reels: the hold begins at range
+   *  and the sweep hauls the body in). A refused seize is a failNote on
+   *  the local hero and silence on everyone else. */
+  private grabSeize(caster: Actor, inst: SkillInstance, victim: Actor, spec: GrabSpec): boolean {
+    if (caster.dead || victim.dead) return false;
+    if (isDormant(victim)) return false;                    // planted stays planted
+    if (!this.hostileTo(caster, victim)) return false;
+    if (this.time < victim.grabProofUntil) {
+      if (caster === this.player) this.failNote(caster, inst.def.id + ':slip', 'it slips the grip');
+      return false;
+    }
+    const grip = caster.sheet.get('gripPower', skillContextTags(inst.def), instanceMods(inst));
+    const why = grabRefusal(caster, victim, spec, grip);
+    if (why) {
+      if (caster === this.player) this.failNote(caster, inst.def.id + ':grab', why);
+      return false;
+    }
+    // A latched rider is peeled INTO the fist (the latch's own release
+    // first, so the two fabrics never share a body's movement).
+    if (victim.clingTo) this.clingRelease(victim);
+    // The seize interrupts whatever the catch was winding up.
+    victim.casting = null;
+    const bounds = grabHoldBounds(spec);
+    caster.gripping = {
+      id: victim.id, verb: spec.verb, spec,
+      until: this.time + rand(bounds[0], bounds[1]),
+      skillId: inst.def.id,
+      struggle: 0, severed: 0, statusAt: this.time, dotAcc: 0,
+      bearing: rand(-0.35, 0.35),
+      wasUntargetable: victim.untargetable,
+    };
+    victim.heldBy = caster.id;
+    if (spec.verb === 'swallow') victim.untargetable = true;
+    victim.applyStatus(GRAB_MARKER[spec.verb], 0, 1, 'grab');
+    caster.aiTargetId = victim.id; // the catch IS the fight
+    this.text(vec(victim.pos.x, victim.pos.y - 14),
+      GRAB_VERB_LABEL[spec.verb] + '!', '#d8a06a', 13);
+    this.flashes.push({
+      pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius + 12,
+      color: '#d8a06a', life: 0.25, maxLife: 0.25,
+    });
+    return true;
+  }
+
+  // Dev-tab levers (dev/tabs/grab.ts) — QA without five hundred walks.
+  /** Grant a grapple-lane gem straight onto the local bar (dev). */
+  devGrabGrant(skillId: string): boolean {
+    const def = SKILLS[skillId];
+    if (!def?.effects.some(fx => fx.type === 'grabSeize' || fx.type === 'grabThrow')) return false;
+    const p = this.player;
+    if (p.skills.some(s => s?.def.id === skillId)) return true;
+    const slot = p.skills.findIndex(s => !s);
+    if (slot < 0) return false;
+    const inst = makeSkillInstance(def, 1);
+    this.localSeat.meta.knownSkills.set(skillId, inst);
+    p.skills[slot] = inst;
+    this.charDirty = true;
+    return true;
+  }
+
+  /** Spawn one grip-kin body a stride away (dev). */
+  devGrabSpawn(defId: string): boolean {
+    if (!MONSTERS[defId]) return false;
+    const ang = rand(0, Math.PI * 2);
+    const m = this.createMonster(defId, Math.max(1, this.player.level), 'enemy');
+    m.pos = this.clampPos(vec(
+      this.player.pos.x + Math.cos(ang) * rand(130, 190),
+      this.player.pos.y + Math.sin(ang) * rand(130, 190)), m.radius);
+    this.actors.push(m);
+    return true;
+  }
+
+  /** Force the nearest live enemy to SEIZE the local hero with the named
+   *  verb (dev — the victim's-eye QA). Rides the REAL grabSeize path with
+   *  the matching kin skill, so the mass law still speaks: a build too
+   *  heavy for the seizing body honestly refuses here too. */
+  devGrabSeizeMe(verb: GrabVerb): boolean {
+    const p = this.player;
+    let best: Actor | null = null, bd = Infinity;
+    for (const e of this.enemiesOf(p)) {
+      // Furniture never seizes (a crate is an 'enemy' to loot logic only).
+      if (e.dead || e.untargetable || e.passive || e.construct || e.anchored) continue;
+      const dd = dist(p.pos, e.pos);
+      if (dd < bd) { bd = dd; best = e; }
+    }
+    if (!best) return false;
+    const skillId = verb === 'swallow' ? 'gulp'
+      : verb === 'pin' ? 'mauler_clinch'
+      : verb === 'drag' ? 'gaff_cast' : 'seize';
+    const fx = SKILLS[skillId]?.effects.find(f => f.type === 'grabSeize');
+    if (!fx || fx.type !== 'grabSeize') return false;
+    p.grabProofUntil = 0;             // the grace never blocks a dev press
+    if (best.gripping) this.grabRelease(best);
+    return this.grabSeize(best, makeSkillInstance(SKILLS[skillId], 1), p, fx.grab);
+  }
+
+  /** Tear every live hold open (dev). */
+  devGrabClearAll(): boolean {
+    let any = false;
+    for (const a of this.actors) {
+      if (a.gripping) { this.grabRelease(a); any = true; }
+    }
+    return any;
+  }
+
   /** THE GRIMOIRE: attune a MASTERED bestiary form to ONE grimoire-summon
    *  instance (per instance — two Spectre gems may hold two forms; formId ''
    *  releases the attunement back to corpse-reading). Mastery + the
@@ -18362,6 +18660,16 @@ export class World {
    */
   useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
     this.markSeatActed(caster); // a cast/attack interrupts THAT seat's dwell
+    // HELD FAST (the grab fabric): a body in someone's grip cannot cast —
+    // except the reflex lane (flasks are never locked out) — and every
+    // refused press MASHES the break meter: the button IS the struggle.
+    if (caster.heldBy !== undefined && !caster.isReflex(inst)) {
+      const holder = this.actorById(caster.heldBy);
+      const hold = holder?.gripping;
+      if (hold && hold.id === caster.id) hold.struggle += GRAB_CFG.break.mashPress;
+      this.failNote(caster, 'grab:held', 'held fast — struggle!');
+      return false;
+    }
     // An overdrive toggle with debt outstanding is LOCKED ON — canUse would
     // refuse silently; this supplies the why.
     {
@@ -20893,6 +21201,13 @@ export class World {
       // skill's whole roster re-aims at the cursor through assault orders;
       // fired per channel pulse, the held sweep TRACKS (engine/throng.ts).
       if (fx.type === 'throngDirect') this.throngDirect(caster, inst, aim, fx);
+      // THE THROW (the grab fabric): release the current catch toward the
+      // aim — the holding gate already refused an empty-handed press, so
+      // a missing hold here (a race, a monster's optimism) is just quiet.
+      if (fx.type === 'grabThrow' && caster.gripping) {
+        const dir = dist(aim, caster.pos) > 4 ? angleTo(caster.pos, aim) : caster.facing;
+        this.grabThrowRelease(caster, fx.impulse, dir, inst, fx.damageMult);
+      }
       // ORDER THE PACK (minionCast — Skeletal Strike, the Harvester's Reap):
       // every living minion of the HOST skill executes the order skill — at
       // the caster's mark, or each at its own nearest prey. The pack acts;
@@ -24004,6 +24319,21 @@ export class World {
     // stray splash knockback must not scatter a sleeping band (the hit that
     // ROUSES it restores physics the same tick aiAwakened latches).
     if (target.construct || target.anchored || target.leap || isDormant(target)) return;
+    // A HELD body eats the shove INTO the grip (the grab fabric): the
+    // impulse jostles the break meter instead of moving the pair — the
+    // hold, not the body, absorbs the blow.
+    if (target.heldBy !== undefined) {
+      const holder = this.actorById(target.heldBy);
+      const hold = holder?.gripping;
+      if (hold && hold.id === target.id) hold.struggle += strength * GRAB_CFG.break.shoveFeed;
+      return;
+    }
+    // A hard enough shove ON a holder tears its hold loose first (a pair
+    // never rides a launch); the stumble itself then lands normally.
+    if (target.gripping && strength >= GRAB_CFG.release.shove) {
+      this.text(target.pos, 'the grip breaks!', '#a8d8a0', 12);
+      this.grabRelease(target);
+    }
     // A latched rider is SCRAPED LOOSE by any real shove (the latch's
     // knockback counterplay, engine/cling.ts) — released first so the
     // impulse lands on a free body.
@@ -25398,6 +25728,12 @@ export class World {
           }
         }
       }
+      // ALLY SEVER (the grab fabric): wounding a HOLDER worries its grip —
+      // severFrac of its max life torn off in hits and the hold rips open
+      // in the sweep. Co-op's rescue verb: hit the thing, free the friend.
+      if (target.gripping && dealt > 0 && caster.id !== target.gripping.id) {
+        target.gripping.severed += dealt / target.maxLife();
+      }
       // Striking the thorned costs blood (thorns / reflect / Nettles).
       this.applyThorns(target, caster, dealt);
       // IRON WARD: the warded bank what still lands — the bill comes due
@@ -25675,6 +26011,11 @@ export class World {
         const buffet = fx.mode === 'buffet' || caster.sheet.get('knockBuffet', tags, extra) > 0;
         const ang = buffet ? rand(0, Math.PI * 2) : angleTo(caster.pos, target.pos);
         this.pushActor(target, ang, fx.strength, caster, inst);
+      } else if (fx.type === 'grabSeize') {
+        // THE SEIZE (the grab fabric, engine/grab.ts): the landed hit
+        // tries to close the hold — mass law, policy and grace all gate
+        // inside; a refusal notes only on the local hero.
+        this.grabSeize(caster, inst, target, fx.grab);
       } else if (fx.type === 'pull') {
         // GET OVER HERE: one impulse sized to the gap yanks the target to
         // the caster's feet, riding the push physics — walls interrupt the
@@ -28952,6 +29293,9 @@ export class World {
     // THE LATCH slave step LAST among movers — the seat wins the frame
     // (drawn == held; engine/cling.ts).
     this.updateClings();
+    // THE GRAB sweep rides right behind it (engine/grab.ts): the release
+    // ladder, then the held body's seat wins ITS frame the same way.
+    this.updateGrabs(dt);
 
     // Corpses decay
     for (let i = this.corpses.length - 1; i >= 0; i--) {
@@ -31821,6 +32165,11 @@ export class World {
       if (payload.notFactions && a.faction && payload.notFactions.includes(a.faction)) continue;
       if ((gate.get(a.id) ?? -Infinity) > this.time) continue;
       if (!shapeContains(shape, x, y, a.pos.x, a.pos.y, a.radius)) continue;
+      // SPEED-GATED rows (TrackPayload.minSpeed — the impale stakes): only
+      // a body ARRIVING at push-speed feels them; a careful walker picks
+      // through untouched, and no ICD is burned on the stroll.
+      if (payload.minSpeed
+        && Math.hypot(a.push?.vx ?? 0, a.push?.vy ?? 0) < payload.minSpeed) continue;
       gate.set(a.id, this.time + (payload.icdSec ?? TRACK_CFG.icdSec));
       if (payload.hit) {
         const dmg = payload.hit.base + (payload.hit.perLevel ?? 0) * Math.max(1, this.zone.level);
@@ -36033,6 +36382,12 @@ export class World {
         const d = dist(a.pos, b.pos);
         const minD = a.radius + b.radius;
         if (d < minD && d > 0.01) {
+          // A GRAB PAIR is one body for the shoulder pass (the grab
+          // fabric): the seat deliberately overlaps its holder — parting
+          // them every frame would walk the holder across the map under
+          // its own luggage. Third parties still shoulder both; the
+          // slave step re-seats the held AFTER this pass regardless.
+          if (a.heldBy === b.id || b.heldBy === a.id) continue;
           // PHASING: no body, no shoulder — a phasing actor passes through
           // the crowd (and it through them). Hits/targeting are untouched.
           if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
@@ -37570,6 +37925,19 @@ export class World {
     // the mover contract simply refuses — no pit checks, no wall slides,
     // no drift for a body that is riding another.
     if (a.clingTo) return;
+    // A HELD body's movement is REPLACED by struggle (the grab fabric):
+    // intent feeds the break meter through the one mover, then refuses —
+    // mashing the stick IS the escape mechanic, for player and monster
+    // alike (a held wolf's own brain keeps walking, and so keeps fighting).
+    if (a.heldBy !== undefined) {
+      const holder = this.actorById(a.heldBy);
+      const hold = holder?.gripping;
+      if (hold && hold.id === a.id) {
+        const want = Math.hypot(dx, dy);
+        if (want > 0.001) hold.struggle += GRAB_CFG.break.moveFeed * Math.min(1, want) * dt;
+      }
+      return;
+    }
     // Channeling restricts movement per the skill's data, opened back up by
     // the channelMobility stat (immobile 0 / slowed factor / normal 1, + stat).
     let channelFactor = 1;
@@ -37602,6 +37970,14 @@ export class World {
       if (ad.type === 'aura' && ad.moveFactor !== undefined && ad.moveFactor > 0) {
         channelFactor *= ad.moveFactor;
       }
+    }
+    // A LIVE HOLD is a burden (the grab fabric): carrying walks slow,
+    // hauling drags, pinning and swallowing ROOT — the verb's factor
+    // composes like a channel's (engine/grab.ts holderMove).
+    if (a.gripping) {
+      const gf = grabHolderMove(a.gripping);
+      if (gf <= 0) return;
+      channelFactor *= gf;
     }
     const len = Math.hypot(dx, dy);
     if (len < 0.001) return;

@@ -198,7 +198,24 @@ changes.
   ConditionIds + Polyphony/Ostinato gems; HUD pip rows + co-op `cb`/`rn`
   wire fields; vocabulary law: comboChain EXECUTES, castCycle COUNTS,
   invokes BANKS, the grammar READS — docs in `docs/engine/combo.md`;
-  probe `balance/probe_combo.ts`).
+  probe `balance/probe_combo.ts`),
+  `grab.ts` (THE GRAB FABRIC — sustained bodily control as ONE state pair:
+  `Actor.gripping`/`heldBy`, verbs carry/drag/pin/swallow as `GrabSpec`
+  presets on the `grabSeize` skill effect, throw-release via `grabThrow` +
+  the `holding` gate; the victim slaves to `grabSeatPos` (drawn == held,
+  reeled in at `reelSpeed`), mass-law eligibility off `effectiveWeight` ×
+  the `gripPower`/`wriggle` stats, and the counterplay LADDER — struggle
+  (refused inputs feed the meter at moveActor/useSkill/pushActor; reflex
+  flasks pierce), ally SEVER on holder damage, hard-CC/shove releases,
+  finite holds (monster expiry spits via `spitAt`); throws ride pushActor
+  so authority, wall wounds, the bowling lane and pit credit arrive from
+  the mass fabric free; policy tiers by rarity + `MonsterDef.grabbable`;
+  `seized`/`swallowed` markers (+ `StatusDef.conceals` renderer skip),
+  struggle-meter HUD + co-op `gb` wire; THE GRIP KIN tutors (wrangler
+  drag / yoke-mauler pin drumming the Takedown combo / gulper + planted
+  maw_bloom swallow) with grapnel/yoke/gulletSac kit-part tells, and the
+  `gore_stakes` speed-gated contact terrain (`TrackPayload.minSpeed`) —
+  docs in `docs/engine/grab.md`; probe `balance/probe_grab.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense

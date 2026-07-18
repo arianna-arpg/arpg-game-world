@@ -73,6 +73,16 @@ export type SkillTag =
   // they distinguish the Tamer's few named beasts from a summoner's swarms
   // and never socket into a skill with no bond to deepen.
   | 'companion'
+  // 'grab' marks skills that SEIZE (a grabSeize effect — the grab fabric,
+  // engine/grab.ts): the gate for grip supports and tag-filtered
+  // investment, and a combo-grammar symbol (seize-then-heave measures
+  // read through the one sequence matcher with no matcher edits).
+  | 'grab'
+  // 'throw' marks skills that RELEASE a held body as an impulse
+  // (grabThrow) — the other half of the grapple alphabet, so throw-scoped
+  // supports (authority, impact) never socket into a skill with no
+  // catch to send.
+  | 'throw'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -478,6 +488,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Scales the impact wounds your shoves inflict on arrest (wall slams
    *  and the bowling lane both — engine/mass.ts). Tag-filtered. */
   impactDamage:   { label: 'Impact Damage', base: 0, percent: true },
+  /** THE GRAB FABRIC's holder-side lever (engine/grab.ts): opens the mass
+   *  gate (holder weight × (1+gripPower) vs victim weight) and slows the
+   *  held body's struggle. Tag-filtered through the seizing skill, so
+   *  "grip on grab skills" is one gem away. */
+  gripPower:      { label: 'Grip Power', base: 0, percent: true },
+  /** THE GRAB FABRIC's victim-side lever: struggle out of holds this much
+   *  faster (the eel's answer to the ogre's palm). */
+  wriggle:        { label: 'Wriggle', base: 0, percent: true },
   /** > 0: no body collision at all — walks THROUGH actors (and they through
    *  it). Hits and targeting are unaffected; this is substance, not stealth. */
   phasing:        { label: 'Phasing', base: 0, min: 0 },

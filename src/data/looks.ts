@@ -479,6 +479,49 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'beatPips', x: -0.65, color: '#b8a8e8', params: { n: 4 } }],
   },
+  // THE GRIP KIN (the grab fabric's tutors — engine/grab.ts): one verb per
+  // silhouette, one tack part per verb (render/vis/parts.ts): the GRAPNEL
+  // drags, the YOKE pins, the GULLETSACK swallows. The read at a glance IS
+  // the counterplay briefing — you know which hold is coming before it
+  // lands, and the sac visibly WORKS while something is inside.
+  gaff_wrangler: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.3, scale: 0.8 },
+      { kind: 'net', x: -0.38, y: -0.45, scale: 0.7, role: 'cloth' },
+      { kind: 'grapnel', x: -0.12, y: 0.5, scale: 0.95 },
+    ],
+  },
+  yoke_mauler: {
+    parts: [
+      { kind: 'torso', scale: 1.08 },
+      { kind: 'warpaint', scale: 0.9 },
+      { kind: 'harness', scale: 0.85 },
+      { kind: 'yoke', y: -0.32, scale: 1.05 },
+    ],
+  },
+  gorge_gulper: {
+    parts: [
+      { kind: 'blob', scale: 1.06, params: { irr: 0.14, seed: 611 } },
+      { kind: 'spots', scale: 0.9, role: 'dark' },
+      { kind: 'eyes', x: 0.32, scale: 0.8, color: '#e8d878' },
+      { kind: 'fangJaw', x: 0.44, scale: 0.8 },
+    ],
+    live: [{ kind: 'gulletSac', x: 0.26, y: 0.18, scale: 1.0 }],
+    shadowScale: 0.95,
+  },
+  maw_bloom: {
+    parts: [
+      { kind: 'roots', scale: 1.15, role: 'dark' },
+      { kind: 'fronds', scale: 0.95 },
+      { kind: 'polyps', scale: 0.72, role: 'accent' },
+      { kind: 'mawRing', scale: 0.9 },
+    ],
+    // The bloom's craw works the same slow squeeze as the gulper's sac —
+    // one live part, two devourers, the same "something is inside" read.
+    live: [{ kind: 'gulletSac', y: 0.12, scale: 0.8, params: { rate: 0.6 } }],
+    shadowScale: 0.9,
+  },
   frost_caster: {
     parts: [
       { kind: 'robe' },

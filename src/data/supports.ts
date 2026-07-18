@@ -45,6 +45,28 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // THE GRAB FABRIC's pair (engine/grab.ts) — one gem per half of the art,
+  // scoped by the grapple alphabet itself ('grab' / 'throw' tags), so
+  // neither can socket into a skill with no hold to deepen or no catch to
+  // send. Battering Ram composes on throws already (melee + the mass
+  // stats); these are the fabric-native lanes.
+  iron_grip: {
+    id: 'iron_grip', name: 'Iron Grip',
+    description: 'This skill\'s holds are LOCKED: the grip closes on far heavier bodies, and what it holds struggles free far slower. The mass law bends toward the hand.',
+    color: '#c8a068', requiresTags: ['grab'],
+    mods: [mod('gripPower', 'flat', 0.35)],
+    perLevel: [mod('gripPower', 'flat', 0.06)],
+    weight: 6,
+  },
+  trebuchet_arm: {
+    id: 'trebuchet_arm', name: 'Trebuchet Arm',
+    description: 'This skill\'s throws leave with SIEGE intent: far more launch authority behind the release, and crueller wounds wherever the flight is arrested — by wall, by body, or by the bottom of something.',
+    color: '#d8b078', requiresTags: ['throw'],
+    mods: [mod('shoveAuthority', 'flat', 0.35), mod('impactDamage', 'flat', 0.45)],
+    perLevel: [mod('impactDamage', 'flat', 0.06)],
+    weight: 6,
+  },
+
   // --- The Wildcraft disciplines (the jungle's arts, bottled) ----------------
   serrated_edge: {
     id: 'serrated_edge', name: 'Serrated Edge',

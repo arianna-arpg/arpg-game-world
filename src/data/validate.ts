@@ -1630,6 +1630,33 @@ export function validateContent(): void {
       if (fx.type === 'throngDirect' && !s.throng) {
         warn(`skill ${s.id}: throngDirect effect without SkillDef.throng — no roster to sweep`);
       }
+      // THE GRAB FABRIC net (engine/grab.ts): a bad verb or an untagged
+      // grapple is a silent no-show — say so at boot.
+      if (fx.type === 'grabSeize') {
+        const g = fx.grab;
+        if (!['carry', 'drag', 'pin', 'swallow'].includes(g.verb)) {
+          warn(`skill ${s.id}: grabSeize verb '${g.verb}' unknown`);
+        }
+        if (g.holdSec && g.holdSec[0] > g.holdSec[1]) warn(`skill ${s.id}: grab holdSec lo > hi`);
+        if (g.dot && !(g.dot.frac > 0)) warn(`skill ${s.id}: grab dot.frac must be positive`);
+        if (g.dot && g.verb !== 'swallow') {
+          warn(`skill ${s.id}: grab dot on a non-swallow verb — digestion belongs to the gullet`);
+        }
+        if (g.leech !== undefined && !g.dot) warn(`skill ${s.id}: grab leech without a dot — nothing to drink`);
+        if (g.throw && !(g.throw.impulse > 0)) warn(`skill ${s.id}: grab throw.impulse must be positive`);
+        if (!s.tags.includes('grab')) {
+          warn(`skill ${s.id}: grabSeize without the 'grab' tag — supports and the combo grammar cannot find it`);
+        }
+      }
+      if (fx.type === 'grabThrow') {
+        if (!(fx.impulse > 0)) warn(`skill ${s.id}: grabThrow impulse must be positive`);
+        if (!s.tags.includes('throw')) {
+          warn(`skill ${s.id}: grabThrow without the 'throw' tag — supports and the combo grammar cannot find it`);
+        }
+        if (!s.gate?.holding) {
+          warn(`skill ${s.id}: grabThrow without gate.holding — empty-handed presses will spend a cast on nothing`);
+        }
+      }
     }
     // THE THRONG spec net (engine/throng.ts): typos here are silent
     // no-shows in the world — say so at boot.

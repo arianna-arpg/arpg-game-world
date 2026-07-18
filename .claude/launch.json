@@ -170,6 +170,20 @@
       "autoPort": false
     },
     {
+      "name": "arpg-dev-qa10",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5286",
+        "--strictPort"
+      ],
+      "port": 5286,
+      "autoPort": false
+    },
+    {
       "name": "arpg-downs-island",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

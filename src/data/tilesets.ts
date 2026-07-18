@@ -2143,6 +2143,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'vines', count: [1, 3], where: { field: 'climate', params: { axis: 'moisture' }, min: 0.55 } },
       { kind: 'fern', count: [2, 4], where: { field: 'radial', max: 0.55 } },
       { kind: 'jungle_brush', count: [1, 3], where: { field: 'radial', max: 0.5 } },
+      // THE GORE STAKES (the grab fabric's terrain payoff, data/tracks.ts):
+      // the grip kin's sharpened rows ride every face of the green.
+      { kind: 'gore_stakes', count: [0, 2], radius: [16, 22] },
     ],
     variants: [
       // The flora face: growth for growth's sake — emergent giants over a
@@ -2237,6 +2240,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'emerald_prowler', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'saurian_bulwark', weight: 2, presence: { from: 11, fadeIn: 5 } },
         { id: 'verdant_tyrant', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        // THE GRIP KIN tour the green (the grab fabric): the yoke-mauler
+        // pins and drums the Takedown measure; the bloom waits to be fed.
+        { id: 'yoke_mauler', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        { id: 'gaff_wrangler', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
         // What was here before them: the canopy's own hunters and the silk.
         { id: 'veilstalker', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'spitting_horror', weight: 2, presence: { to: 16, fadeOut: 8 } },
@@ -2454,6 +2462,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'sunken_log', count: [1, 2] },
       { kind: 'marsh_wisp', count: [1, 3] },
       { kind: 'venom_bloom', count: [1, 2] },
+      // THE GORE STAKES (the grab fabric's terrain payoff, data/tracks.ts):
+      // the wranglers' sharpened rows — walk through free, be THROWN
+      // through and be shredded. Stand-sized (a needle disc would let a
+      // fast body slip between contact samples).
+      { kind: 'gore_stakes', count: [1, 3], radius: [16, 22] },
     ],
     packs: {
       count: [5, 7], size: [3, 5],
@@ -2463,6 +2476,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'crypt_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'husk_swarmer', weight: 2, presence: { to: 18, fadeOut: 9 } },
         { id: 'fen_hound', weight: 2 },
+        // THE GRIP KIN work the fen (the grab fabric's live tutorial):
+        // the wrangler gaffs, the gulper swallows, the bloom waits.
+        { id: 'gaff_wrangler', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'gorge_gulper', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'frost_witch', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // Grave-lights and the drowned court's wailers haunt the mire.
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },

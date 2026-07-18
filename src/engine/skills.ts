@@ -19,6 +19,7 @@ import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
 import type { ThrongSpec } from './throng';
+import type { GrabSpec } from './grab';
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -2685,6 +2686,11 @@ export interface GateSpec {
   /** A RECENT WOUND: usable only within `within` seconds of the caster
    *  last TAKING damage (Reprisal — the counter-blow's license). */
   recentDamage?: { within: number };
+  /** A LIVE HOLD (the grab fabric, engine/grab.ts): the caster must be
+   *  GRIPPING a body — the throw-grapple's license (Heave without a catch
+   *  is mime work). Actor-local like every gate: the HUD, the AI and the
+   *  press all read Actor.gripping. */
+  holding?: true;
   /** Refusal/HUD note when THIS gate is the unmet one (default 'not ready'
    *  — a flask's thirst gate says 'brimming'). */
   note?: string;
@@ -3071,6 +3077,25 @@ export interface KnockbackEffect { type: 'knockback'; strength: number; mode?: '
  *  `stun` extends a stun across the drag (× the base stun duration). */
 export interface PullEffect { type: 'pull'; stun?: number; }
 
+/** THE SEIZE (the grab fabric, engine/grab.ts): a landed hit tries to
+ *  establish a HOLD on the struck body — carry/drag/pin/swallow per the
+ *  spec's verb, gated by the mass law, policy tiers, and the break grace.
+ *  A refused seize is quiet on monsters and a failNote on the local hero
+ *  (the mass gate teaching its own lesson). Any skill in the one pipeline
+ *  may carry it — player grapples and monster maws are the same row. */
+export interface GrabSeizeEffect { type: 'grabSeize'; grab: GrabSpec; }
+
+/** THE THROW (the grab fabric): releases the caster's CURRENT hold as a
+ *  directed impulse through pushActor — shove authority, wall-impact
+ *  wounds, the bowling lane and pit swallows all fold in from the mass
+ *  fabric, kill credit intact. Aims at the cast's aim point (a monster's
+ *  aim is its AI target). `damageMult` re-rolls the skill's damage against
+ *  the thrown body itself on release (the send-off blow); the impulse
+ *  scales with the caster's shoveAuthority inside pushActor as ever.
+ *  Gate the carrying skill with `gate: { holding: true }` so the press
+ *  refuses honestly when nothing is held. */
+export interface GrabThrowEffect { type: 'grabThrow'; impulse: number; damageMult?: number; }
+
 /** Leaves a lingering damage zone at the impact point (Expunge's cloud). */
 export interface SpawnZoneEffect {
   type: 'spawnZone';
@@ -3415,7 +3440,8 @@ export type SkillEffect =
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
-  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect;
+  | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
+  | GrabSeizeEffect | GrabThrowEffect;
 
 // --- The skill definition ---------------------------------------------------
 

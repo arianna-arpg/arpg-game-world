@@ -23,6 +23,7 @@ import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { TuneSpec } from './tuning';
 import type { ClingSpec, ClingRide } from './cling';
+import type { GripHold } from './grab';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
@@ -1258,6 +1259,24 @@ export class Actor {
   clingCooldownUntil = 0;
   /** Latch decision throttle (positions slave every tick regardless). */
   clingThinkAt = 0;
+  // --- THE GRAB FABRIC (engine/grab.ts) ------------------------------------
+  /** The live hold this actor OWNS (holder side — the victim's position is
+   *  slaved to grabSeatPos; the pair is 1:1 by law, World.updateGrabs). */
+  gripping?: GripHold;
+  /** Held BY this actor id (victim side). Movement is replaced (moveActor
+   *  refuses and converts intent into struggle); casts refuse except the
+   *  reflex lane — flasks are never locked out. */
+  heldBy?: number;
+  /** No re-seize before this world-time (the break's grace — anti-chain). */
+  grabProofUntil = 0;
+  /** Victim-side policy override (MonsterDef.grabbable, stamped at mint):
+   *  true/false = grabbable/never; a number = struggle-speed tier
+   *  (engine/grab.ts grabPolicyOf — undefined falls to the rarity tiers). */
+  grabbable?: boolean | number;
+  /** CO-OP CLIENT stand-in for the held-meter HUD: [verb label, struggle
+   *  0..1] host-computed (snapshot `gb`, the boss-bar idiom). The local
+   *  hero reads its own live pair; a client mirror reads this. */
+  grabHud?: [string, number];
 
   /** A TAMED COMPANION (the Hunter's bond — World.tameCompanion): fights at
    *  its keeper's side like a minion, but DOWNS instead of dying — revived
@@ -2751,6 +2770,9 @@ export class Actor {
     for (const g of instanceGates(inst)) {
       if (g.charge && (this.charges.get(g.charge.id) ?? 0) < g.charge.amount) return g;
       if (g.buff && !this.buffs.has(g.buff)) return g;
+      // THE HOLDING GATE (the grab fabric): the throw-grapple's license —
+      // gripping is actor-local state, so HUD, AI and press agree.
+      if (g.holding && !this.gripping) return g;
       if (g.resource) {
         const cur = g.resource.kind === 'mana' ? this.mana
           : g.resource.kind === 'life' ? this.life

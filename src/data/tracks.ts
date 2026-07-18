@@ -99,3 +99,25 @@ registerDoodadRule('sarsen_bumper', {
     notFactions: ['elemental'],
   },
 });
+
+// --- THE GORE STAKES — the grab fabric's terrain payoff ---------------------
+// Sharpened rows in the grip kin's grounds (engine/grab.ts). SPEED-GATED
+// (TrackPayload.minSpeed): careful feet pick through free, but any body
+// ARRIVING at push-speed — a Heave, a mauler's toss, a bowling-lane plow,
+// a bumper fling — is shredded and left bleeding. Mass and authority do
+// the launch arithmetic; the stakes just collect what arrives. Walkable
+// on purpose: the lane between the stakes is the duel's geometry.
+registerDoodadRule('gore_stakes', {
+  overlap: 'trigger',
+  spacing: 90,
+  forbidOn: ['lava', 'chasm'],
+  contact: {
+    // 520: above every ordinary combat knockback's brief peak (impulse
+    // speed = strength × damping ÷ weight) — only REAL launches qualify:
+    // a Heave, a mauler's toss, a bumper fling, a bowling-lane plow.
+    minSpeed: 520,
+    hit: { base: 9, perLevel: 1.1, type: 'physical' },
+    status: { id: 'bleed', chance: 0.8 },
+    icdSec: 0.5,
+  },
+});

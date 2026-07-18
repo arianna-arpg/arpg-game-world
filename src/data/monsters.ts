@@ -375,6 +375,11 @@ export interface MonsterDef {
    *  contact — riding the silhouette, whacking through its own kit, shaken
    *  off on the spec's clock. The Pikmin blow; any monster can wear it. */
   cling?: ClingSpec;
+  /** THE GRAB FABRIC's victim-side policy word (engine/grab.ts): true /
+   *  false = grabbable / never regardless of rarity; a number is a
+   *  struggle-speed tier (2 = scrambles out double-quick). Omitted falls
+   *  to GRAB_CFG.policy by rarity (uniques refuse, rares scramble). */
+  grabbable?: boolean | number;
   /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
    *  (world bosses, dragons, leviathans). Each part is a full monster def —
    *  it fights with its own skills and its death fires break effects on the
@@ -2673,6 +2678,82 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'skirmish', withdraw: 1.15 },
     detection: 1.1,
   },
+  // --- THE GRIP KIN: the grab fabric's live tutorial (engine/grab.ts) —
+  // traveling holdsmen of the old takedown schools, factionless like the
+  // measured school above. ONE VERB PER SILHOUETTE, and the kit-part IS
+  // the tell: the wrangler's grapnel-and-line DRAGS you out of your line,
+  // the yoke-shouldered mauler PINS you and drums the player's own
+  // Takedown measure (clinch into toss — the payoff text over a duel
+  // names the earnable rule, the cadenced-kin teaching pattern), the
+  // gulletsack gulper SWALLOWS you whole and spits you at your friends.
+  // Every hold is mass-gated, struggled against, ally-severed — the
+  // counterplay ladder is the lesson plan. Vocabulary law: the LATCH
+  // rides, the TETHER links, the PULL yanks once — the GRAB holds.
+  gaff_wrangler: {
+    id: 'gaff_wrangler', name: 'Gaff Wrangler',
+    color: '#b08a5a', shape: 'trapezoid', radius: 12, look: 'gaff_wrangler',
+    base: { life: 70, moveSpeed: 126, accuracy: 108, evasion: 30, insight: 20, mana: 40, manaRegen: 4 },
+    // The hook, and a boot for adjacency (the improvised floor IS the
+    // player-grade claw — its ai hint exists for exactly this).
+    skills: ['gaff_cast', 'improvised_strike'],
+    xp: 28,
+    heft: 1.1,
+    // keepDistance on the gaff + a catch slaved to the hand = the DRAG
+    // emerges from standoff-seeking alone: the wrangler forever backs
+    // toward the range it can never re-open, hauling you with it.
+    brain: { type: 'skirmish', withdraw: 1.1 },
+    detection: 1.05,
+    gemBias: ['physical', 'melee'],
+  },
+  yoke_mauler: {
+    id: 'yoke_mauler', name: 'Yoke Mauler',
+    color: '#c89058', shape: 'pentagon', radius: 17, look: 'yoke_mauler',
+    // POISE IDENTITY (the defense-texture doctrine): a pinner IS an
+    // anchor — authored poise with real DR, and the heft to open the
+    // mass gate on most bodies fool enough to stand in the ring.
+    base: { life: 150, moveSpeed: 96, accuracy: 106, armor: 20, poise: 80, poiseDR: 0.35, mana: 0 },
+    mods: [mod('combo_grapplers_rhythm', 'flat', 1)],
+    skills: ['mauler_clinch', 'mauler_toss', 'improvised_strike'],
+    xp: 44,
+    heft: 1.5,
+    brain: { type: 'juggernaut' },
+    detection: 1.0,
+    gemBias: ['physical', 'melee'],
+  },
+  gorge_gulper: {
+    id: 'gorge_gulper', name: 'Gorge Gulper',
+    color: '#7a9a5a', shape: 'oval', radius: 16, material: 'flesh', look: 'gorge_gulper',
+    base: { life: 170, moveSpeed: 72, accuracy: 104, armor: 12, mana: 30, manaRegen: 3 },
+    // The maw's own reel (shared catalog — what the caulborn floor casts,
+    // the fen toad casts), then the bite that KEEPS.
+    skills: ['tongue_reel', 'gulp'],
+    xp: 46,
+    heft: 1.35,
+    brain: { type: 'basic' },
+    detection: 0.95,
+    gemBias: ['physical', 'melee'],
+  },
+  /** The planted swallower: a carnivorous bloom that stays where it grew
+   *  (moveSpeed 0 = anchored — the sentry doctrine) and GULPS whatever it
+   *  HATES that strays — or is thrown — into reach. Hostility rides the
+   *  ordinary team/faction fabric (it will not eat same-team kin without
+   *  a faction war), so its pane-proved meal is the player's side; the
+   *  faction-BLIND throw payoffs (stakes, walls, pits) cover hurling
+   *  enemies into hazards. Same gulp row as the gulper — zero new skills. */
+  maw_bloom: {
+    id: 'maw_bloom', name: 'Maw Bloom',
+    color: '#8a6a9a', shape: 'hexagon', radius: 13, material: 'verdant', look: 'maw_bloom',
+    base: { life: 110, moveSpeed: 0, accuracy: 102, armor: 15, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['gulp'],
+    xp: 30,
+    heft: 2.2,
+    grabbable: false,
+    ambush: { radius: 150, announce: 'the bloom leans —' },
+    brain: { type: 'basic' },
+    gemBias: ['chaos', 'duration'],
+  },
+
   bandit_powder_witch: {
     id: 'bandit_powder_witch', name: 'Powder Witch',
     color: '#8ec8b0', shape: 'star', radius: 13, look: 'bandit_powder_witch',

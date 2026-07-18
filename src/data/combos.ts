@@ -73,6 +73,25 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
     },
   },
 
+  // TAKEDOWN — the grab fabric's measure (engine/grab.ts): a 'grab' cast
+  // then a 'throw' cast back-to-back — Seize into Heave, the clinch into
+  // the toss. The Smash-grammar promise kept: the throw-grapple is a
+  // SEQUENCE the combo matcher reads off the same tags the supports scope
+  // by. Granted by the Seizing Style notable; the yoke-mauler drums it
+  // monster-side (the payoff text over a duel names the earnable rule).
+  grapplers_rhythm: {
+    id: 'grapplers_rhythm', name: 'Takedown', color: '#d8a06a',
+    blurb: 'Seize, then THROW — a grab followed by a throw closes the measure: your blows land harder and your grip grows surer while the rhythm holds.',
+    seq: [{ anyTags: ['grab'] }, { anyTags: ['throw'] }],
+    within: 6,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'takedown_surge', duration: 4, maxStacks: 2,
+        mods: [mod('damage', 'increased', 0.15, ['melee']), mod('gripPower', 'flat', 0.2)],
+      },
+    },
+  },
+
   // DRUMBEAT — the same blow, three times running, lands heavier: damage
   // and poise damage that stack as the drum keeps time. The repetition
   // grammar (fresh trios re-form by design — the consume rule makes every

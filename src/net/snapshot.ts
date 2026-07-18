@@ -40,6 +40,7 @@ import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
 import { COMBO_CFG, comboProgress } from '../engine/sequence';
+import { GRAB_VERB_LABEL } from '../engine/grab';
 
 export type Vec2W = [number, number];
 
@@ -55,6 +56,10 @@ export interface ActorW {
   passive: boolean;
   ut: boolean;                 // untargetable (ghostly alpha)
   tw?: string;                 // throngWild husk kind (per-viewer sight gate)
+  /** THE GRAB FABRIC's held-meter row, host-computed on the HELD body
+   *  ([verb label, struggle 0..1] — the boss-bar idiom; clients hold no
+   *  pair state). Everyone reads the same bar: victim, holder, rescuers. */
+  gb?: [string, number];
   aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
   inv?: number;                // sheet invisible (omit when 0)
@@ -376,6 +381,10 @@ function actorToW(a: Actor): ActorW {
   // THE THRONG's husk marker rides the wire so a co-op client's renderer
   // sight-gates against ITS OWN bar (engine/throng.ts).
   if (a.throngWild) w.tw = a.throngWild;
+  // THE GRAB FABRIC's held meter (engine/grab.ts): computed off the LIVE
+  // pair on the holder, shipped on the held body's own row.
+  const gbHold = GRAB_HUD_OF(a);
+  if (gbHold) w.gb = gbHold;
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
   if (a.kind === 'player') { const s = SEAT_OF(a); if (s) w.seat = s; }
   if (a.adorn) w.adorn = a.adorn;
@@ -442,12 +451,22 @@ let BOSS_BAR_OF: (a: Actor) => { pips: number; lit: number; hl: boolean } | null
 // Set per-serialize: host-computed combo-grammar HUD rows for a player's own
 // bar chips (engine/sequence.ts — the ring lives host-side only).
 let COMBO_HUD_OF: (a: Actor) => [string, number, number, number][] | null = () => null;
+// Set per-serialize: the grab fabric's held-meter row for a HELD body
+// (engine/grab.ts — pair state lives host-side only; the same bar the
+// host renderer draws off the live pair).
+let GRAB_HUD_OF: (a: Actor) => [string, number] | null = () => null;
 
 export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
   for (const s of world.seats) seatById.set(s.actor, s.id);
   SEAT_OF = (a) => seatById.get(a);
   BOSS_BAR_OF = (a) => world.bossBarInfo(a);
+  GRAB_HUD_OF = (a) => {
+    if (a.heldBy === undefined) return null;
+    const hold = world.actors.find(h => h.id === a.heldBy)?.gripping;
+    if (!hold || hold.id !== a.id) return null;
+    return [GRAB_VERB_LABEL[hold.verb], Math.round(Math.min(1, hold.struggle) * 100) / 100];
+  };
   COMBO_HUD_OF = (a) => {
     if (!a.comboRules?.length) return null;
     const rows: [string, number, number, number][] = [];
@@ -676,6 +695,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
     a.throngWild = aw.tw; // husk kind → the client's own sight gate reads it
+    a.grabHud = aw.gb;    // held meter mirror (cleared when absent — freed)
     // Player bar readouts (own hero + party): runes verbatim, combo chips
     // as host-computed rows the renderer prefers over local derivation.
     a.runes = aw.rn ?? [];

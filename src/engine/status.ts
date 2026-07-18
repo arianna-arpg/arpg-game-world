@@ -66,6 +66,13 @@ export interface StatusDef {
    *  `levitation` STAT (cloudform): a levitator floats over voids but walls
    *  still confine; a flier crosses everything. */
   flight?: true;
+  /** CONCEALMENT AS A STATE: while worn, the body is not DRAWN at all —
+   *  the renderer's one skip (a swallowed catch, a future burrower or
+   *  submerged lurker). Pure presentation: targeting, collision and
+   *  statuses keep their own truths (a swallowed body is ALSO
+   *  untargetable, but that is the grab sweep's doing, not this flag's).
+   *  Ships to co-op clients on the ordinary status wire. */
+  conceals?: true;
   /** IMPALE personality: the status's banked `rupture` DISCHARGES into
    *  the bearer's NEXT qualifying top-level hit as its own separate
    *  mitigated blow (then the status is spent) — instead of waiting for
@@ -938,6 +945,24 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Harried', color: '#b8c86a', duration: 1.6,
     stacking: true, maxStacks: 6, modsPerStack: true,
     mods: [mod('accuracy', 'increased', -0.04), mod('detectionRange', 'more', -0.03)],
+  },
+
+  // THE GRAB FABRIC's marker pair (engine/grab.ts) — the READ, not the
+  // mechanism: the hold itself lives on the actor pair (gripping/heldBy)
+  // and the sweep re-stamps these each beat while it lives, so a cleanse
+  // is harmless (the grip is bodily, not a curse) and the wire ships the
+  // predicament to every client for free. Short durations = they fall off
+  // on their own the moment the sweep stops refreshing.
+  seized: {
+    label: 'Seized', color: '#d8a06a', duration: 0.5,
+    // A body in someone's fists reads NOTHING but the fists — the
+    // duelist's momentum dies like any bound nerve (insightSap).
+    mods: [mod('insightSap', 'flat', 1)],
+  },
+  swallowed: {
+    label: 'Swallowed', color: '#b46a8a', duration: 0.5,
+    conceals: true,
+    mods: [mod('insightSap', 'flat', 1)],
   },
 
   living_bomb: {

@@ -258,6 +258,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'impaler', order: 53, shadow: 0.5, longShadow: 1.6,
     params: { wood: '#382018', husk: '#191013', wrap: '#3a3026' },
   },
+  // THE GRIP KIN's ground argument (the grab fabric, engine/grab.ts):
+  // sharpened fen-stakes wearing what the wranglers didn't keep. The
+  // impaler painter verbatim in wetland timber — the terrain half of the
+  // throw payoff (speed-gated contact rule in data/tracks.ts: walkers
+  // pick through free; anything HURLED through is shredded).
+  gore_stakes: {
+    painter: 'impaler', order: 53, shadow: 0.45, longShadow: 1.5,
+    params: { wood: '#4a3626', husk: '#241a14', wrap: '#3c3226' },
+  },
   gore: {
     painter: 'liquid', order: 26,
     params: {

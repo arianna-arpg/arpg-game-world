@@ -149,6 +149,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'meleeSweep', 'sweepRange', 'sweepSpeed',
       // Impact & control
       'knockback', 'displaceForce', 'knockBuffet', 'shoveAuthority', 'impactDamage',
+      'gripPower', 'wriggle',
       // Areas & ground
       'aoeShape', 'aoeScatter', 'aoeCascade', 'cascadeStep', 'aoeSpin', 'pulseCount',
       'stormCount', 'stormImmediate', 'fissureCount', 'fissureBranches',
@@ -557,6 +558,8 @@ const STAT_BLURBS: Record<string, string> = {
   knockback: 'Your melee hits shove the victim away.',
   shoveAuthority: 'Multiplies your shove authority — how much of your mass every push you author carries. The heavy move the light; this moves the needle.',
   impactDamage: 'Scales the impact wounds your shoves inflict when the victim is arrested — by a wall, or by a body heavy enough to be one.',
+  gripPower: 'Your holds close on heavier bodies and are struggled out of slower — the grab fabric\'s holder-side lever.',
+  wriggle: 'You struggle out of holds faster — the grab fabric\'s victim-side lever.',
   displaceForce: 'Signed on-hit displacement — positive shoves the victim away, negative drags them in.',
   knockBuffet: 'Your knockbacks batter victims in RANDOM directions instead of shoving them away.',
   aoeShape: 'Overrides the geometry of your areas — circle, square, triangle.',

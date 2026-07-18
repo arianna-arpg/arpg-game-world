@@ -13,6 +13,7 @@ import { STATUS_DEFS } from '../engine/status';
 import { toneTint } from '../engine/tuning';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
 import { throngSightSet } from '../engine/throng';
+import { GRAB_VERB_LABEL } from '../engine/grab';
 import { SEG_CFG, segLook, segR, segsHittable } from '../engine/segments';
 import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
@@ -3072,6 +3073,35 @@ export class Renderer {
     return this.throngSightMemo;
   }
 
+  /** THE STRUGGLE METER (the grab fabric, engine/grab.ts): the held body's
+   *  break meter, drawn over its head for everyone — victim, holder, and
+   *  the rescue party all read the same bar. Host reads the LIVE pair off
+   *  the holder; a co-op client reads the host-computed mirror
+   *  (ActorW.gb → Actor.grabHud). Draws nothing for free bodies. */
+  private drawGrabMeter(a: Actor, world: World): void {
+    let label: string | undefined, frac = 0;
+    if (a.heldBy !== undefined) {
+      const hold = world.actors.find(h => h.id === a.heldBy)?.gripping;
+      if (hold && hold.id === a.id) {
+        label = GRAB_VERB_LABEL[hold.verb];
+        frac = hold.struggle;
+      }
+    }
+    if (!label && a.grabHud) { label = a.grabHud[0]; frac = a.grabHud[1]; }
+    if (!label) return;
+    const { ctx } = this;
+    const bw = 40, bh = 4;
+    const gx = a.pos.x - bw / 2, gy = a.pos.y - a.radius - 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(gx - 1, gy - 1, bw + 2, bh + 2);
+    ctx.fillStyle = '#d8a06a';
+    ctx.fillRect(gx, gy, bw * Math.min(1, Math.max(0, frac)), bh);
+    ctx.fillStyle = '#e8d8b8';
+    ctx.font = 'bold 9px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillText(a === world.player ? `${label} — struggle!` : label, a.pos.x, gy - 3);
+  }
+
   private drawActor(a: Actor, world: World): void {
     const { ctx } = this;
     const { x, y } = a.pos;
@@ -3079,6 +3109,17 @@ export class Renderer {
     // A BURROWED body is underground: the dust line and the swelling
     // emergence telegraph (world-pushed flashes) carry the whole visual.
     if (a.burrow) return;
+
+    // CONCEALMENT AS A STATE (StatusDef.conceals): a body worn INSIDE
+    // another — the grab fabric's swallowed, any future burrow-status —
+    // is not drawn at all; the holder's working gulletsack is the read.
+    // Ships on the ordinary status wire, so co-op clients skip it too.
+    // The LOCAL hero keeps their struggle meter even unseen: swallowed
+    // is a predicament, not a blackout.
+    if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) {
+      if (a === world.player) this.drawGrabMeter(a, world);
+      return;
+    }
 
     // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists
     // only to an attuned eye — the LOCAL bar must anchor its kind or the
@@ -3688,6 +3729,12 @@ export class Renderer {
         ctx.globalAlpha = baseAlpha;
       }
     }
+
+    // THE STRUGGLE METER (the grab fabric): a held body wears its break
+    // meter above the head — the victim reads how close freedom is, the
+    // HOLDER reads how long the catch will keep, and every ally reads
+    // where the rescue stands.
+    this.drawGrabMeter(a, world);
 
     // Cast bar above the head (telegraphs enemy casts, too)
     const cs = a.casting;
