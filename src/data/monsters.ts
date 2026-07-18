@@ -6224,7 +6224,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'clot_shambler', name: 'Clot Shambler',
     color: '#5a1220', shape: 'octagon', radius: 17, material: 'slime', look: 'clot_shambler',
     base: { life: 240, moveSpeed: 55, accuracy: 100, armor: 30, poise: 45, mana: 0 },
-    mods: [mod('chaosRes', 'flat', 0.4), mod('physRes', 'flat', 0.2)],
+    mods: [mod('chaosRes', 'flat', 0.4), mod('damageTaken', 'more', -0.2)], // the soak: blows sink IN (deep_horror's lever — physRes was a dead stat)
     skills: ['claw'], xp: 40, faction: 'flesh',
     deathBurst: { mode: 'implode', damageFrac: 0.55, coalesce: 0.6, damageType: 'physical' },
     detection: 0.9, brain: { type: 'juggernaut' },
@@ -6341,7 +6341,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'caul_lasher', name: 'Caul Lasher',
     color: '#3a2c48', shape: 'oval', radius: 14, material: 'chitin', look: 'caul_lasher',
     base: { life: 140, moveSpeed: 0, accuracy: 108, armor: 25, poise: 60, mana: 30, manaRegen: 3 },
-    mods: [mod('chaosRes', 'flat', 0.5), mod('physRes', 'flat', 0.15)],
+    mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.15)],
     skills: ['caul_lash'], xp: 30, faction: 'caulborn',
     ambush: { radius: 150, announce: 'the ground unknots…' },
     turnSpeed: 3.2,
@@ -10086,7 +10086,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'dust_djinn', name: 'Dust Djinn',
     color: '#d8b878', shape: 'star', radius: 13, material: 'ethereal', look: 'dust_djinn',
     base: { life: 66, moveSpeed: 120, accuracy: 95, mana: 90, manaRegen: 6, evasion: 45 },
-    mods: [mod('physRes', 'flat', 0.2)],
+    mods: [mod('damageTaken', 'more', -0.2)], // wind shrugs at steel (the soak lever — physRes was a dead stat)
     skills: ['whirl_of_grit'], xp: 28,
     faction: 'sirocco',
     levitates: true,
@@ -10140,7 +10140,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'mirage_khagan', name: 'Mirage Khagan',
     color: '#f0c880', shape: 'star', radius: 16, material: 'cloth', look: 'mirage_khagan',
     base: { life: 300, moveSpeed: 118, accuracy: 105, evasion: 55, mana: 160, manaRegen: 8 },
-    mods: [mod('fireRes', 'flat', 0.5), mod('physRes', 'flat', 0.15)],
+    mods: [mod('fireRes', 'flat', 0.5), mod('damageTaken', 'more', -0.15)],
     skills: ['mirage_knife', 'heat_split', 'whirl_of_grit'], xp: 120,
     faction: 'sirocco',
     gemBias: ['fire', 'melee'],
@@ -10224,7 +10224,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'brood_sovereign', name: 'Brood Sovereign',
     color: '#e8a84a', shape: 'star', radius: 17, material: 'chitin', look: 'brood_sovereign',
     base: { life: 310, moveSpeed: 122, accuracy: 106, armor: 45, poise: 50, mana: 160, manaRegen: 8 },
-    mods: [mod('chaosRes', 'flat', 0.5), mod('physRes', 'flat', 0.15)],
+    mods: [mod('chaosRes', 'flat', 0.5), mod('damageTaken', 'more', -0.15)],
     skills: ['heavy_strike', 'lay_chitin_clutch'], xp: 125,
     faction: 'chitin',
     gemBias: ['summon', 'minion'],
@@ -10444,14 +10444,16 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // sarcophagus, and what steps OUT of a cracked case is the second life —
   // fast, bare, and past its armor (brain.onDeath, the one death-division
   // seam). Family debts: dry linen BURNS (fireRes deficit family-wide), and
-  // nothing embalmed fears venom (poisonRes). Gold marks rank; the husk has
-  // none left. Kills feed the Deadwake — the faction row is deathAligned.
+  // nothing embalmed fears venom or rot (chaos-tagged ailmentResist — the
+  // one shrug lever the status-apply gate reads; the whole chaos-ailment
+  // family shrugs with it). Gold marks rank; the husk has none left. Kills
+  // feed the Deadwake — the faction row is deathAligned.
   /** The gilded beetle-swarm of the vaults: numbers, not defenses. */
   tomb_scarab: {
     id: 'tomb_scarab', name: 'Tomb Scarab',
     color: '#c9a24a', shape: 'circle', radius: 8, material: 'chitin', look: 'tomb_scarab',
     base: { life: 22, moveSpeed: 175, accuracy: 100, armor: 30, evasion: 0, mana: 0 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.2)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('fireRes', 'flat', -0.2)],
     skills: ['claw'], xp: 7,
     faction: 'sarcophate',
     tags: ['beast'],
@@ -10464,7 +10466,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sarcophate_legionary', name: 'Sarcophate Legionary',
     color: '#d8cba8', shape: 'pentagon', radius: 12, material: 'cloth', look: 'sarcophate_legionary',
     base: { life: 62, moveSpeed: 108, accuracy: 102, armor: 25, poise: 25, evasion: 0, mana: 0 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.25)],
     skills: ['entombing_lash'], xp: 18,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10479,7 +10481,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'canopic_bearer', name: 'Canopic Bearer',
     color: '#b89858', shape: 'pentagon', radius: 12, material: 'cloth', look: 'canopic_bearer',
     base: { life: 38, energyShield: 48, moveSpeed: 118, accuracy: 100, mana: 70, manaRegen: 6 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.2)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('fireRes', 'flat', -0.2)],
     skills: ['spectral_finger', 'despair'], xp: 24,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10493,7 +10495,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sarcophagus_warden', name: 'Sarcophagus Warden',
     color: '#cfc4ac', shape: 'hexagon', radius: 22, material: 'stone', look: 'sarcophagus_warden',
     base: { life: 240, moveSpeed: 72, accuracy: 98, armor: 45, poise: 80, evasion: 0, mana: 30, manaRegen: 3 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.3)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.3)],
     skills: ['heavy_strike', 'ground_slam'], xp: 55,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10512,7 +10514,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'risen_husk', name: 'Risen Husk',
     color: '#a89070', shape: 'triangle', radius: 11, material: 'cloth', look: 'risen_husk',
     base: { life: 52, moveSpeed: 200, accuracy: 106, evasion: 30, armor: 5, mana: 0 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.35)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('fireRes', 'flat', -0.35)],
     skills: ['claw'], xp: 14,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10530,7 +10532,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'canopic_jackal', name: 'Sethuk the Jackal-Jarred',
     color: '#c8a050', shape: 'triangle', radius: 13, material: 'cloth', look: 'canopic_jackal',
     base: { life: 150, moveSpeed: 195, accuracy: 112, evasion: 70, armor: 10, mana: 0 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('fireRes', 'flat', -0.25)],
     skills: ['entombing_lash'], xp: 90,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10543,7 +10545,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'canopic_falcon', name: 'Qeresh the Falcon-Jarred',
     color: '#d8b868', shape: 'kite', radius: 12, material: 'cloth', look: 'canopic_falcon',
     base: { life: 95, energyShield: 90, moveSpeed: 140, accuracy: 112, mana: 70, manaRegen: 7 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('fireRes', 'flat', -0.25)],
     skills: ['spectral_finger', 'bone_arrow'], xp: 90,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10556,7 +10558,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'canopic_ape', name: 'Hapura the Ape-Jarred',
     color: '#b89858', shape: 'hexagon', radius: 19, material: 'cloth', look: 'canopic_ape',
     base: { life: 280, moveSpeed: 92, accuracy: 104, armor: 40, poise: 95, evasion: 0, mana: 20, manaRegen: 3 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.3)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.3)],
     skills: ['ground_slam', 'heavy_strike'], xp: 95,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10570,7 +10572,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'canopic_vizier', name: 'Imsah the Vizier-Jarred',
     color: '#d8c078', shape: 'pentagon', radius: 13, material: 'cloth', look: 'canopic_vizier',
     base: { life: 120, energyShield: 110, moveSpeed: 120, accuracy: 106, mana: 110, manaRegen: 9 },
-    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.25)],
     skills: ['despair', 'doom_chant', 'lifedrain'], xp: 95,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10587,7 +10589,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sand_regent', name: 'Sand Regent',
     color: '#e8c060', shape: 'hexagon', radius: 26, material: 'stone', look: 'sand_regent',
     base: { life: 640, moveSpeed: 95, accuracy: 112, armor: 55, poise: 150, evasion: 0, mana: 90, manaRegen: 8 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', -0.25)],
     skills: ['entombing_lash', 'ground_slam', 'doom_chant'], xp: 420,
     faction: 'sarcophate',
     tags: ['undead'],
@@ -10614,16 +10616,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // squeezed), and the WET GROUND is its armor — every member ignores the
   // water/swamp/bog/mud footing that taxes everything else in its country
   // (immuneGround: movement-as-enemy is the identity). Counterlevers hold
-  // the doctrine honest: venom-proof blood (poisonRes) but COLD-BLOODED —
-  // frost bites the serpent harder (the one family that fears the chill
-  // lanes, where the Rimebound fear fire). Poison STACKS are the offense.
+  // the doctrine honest: venom-proof blood (chaos-tagged ailmentResist —
+  // bog-rot shrugs with it; the serpent is unbothered by its own swamp)
+  // but COLD-BLOODED — frost bites the serpent harder (the one family that
+  // fears the chill lanes, where the Rimebound fear fire). Poison STACKS
+  // are the offense.
   // Hard presence floors on the court tiers (the sarcophate discipline).
   // Warlord: the Coil Matriarch (WARLORD_OF) — the crown DOES march.
   marsh_adder: {
     id: 'marsh_adder', name: 'Marsh Adder',
     color: '#6a9a4a', shape: 'circle', radius: 9, material: 'scale', look: 'marsh_adder',
     base: { life: 26, moveSpeed: 190, accuracy: 100, evasion: 50, mana: 0 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('coldRes', 'flat', -0.25)],
     skills: ['fang_strike'], xp: 8,
     faction: 'coilborn',
     tags: ['beast'],
@@ -10637,7 +10641,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'bog_strider', name: 'Bog Strider',
     color: '#4a8a6a', shape: 'triangle', radius: 12, material: 'scale', look: 'bog_strider',
     base: { life: 58, moveSpeed: 150, accuracy: 102, evasion: 55, mana: 20, manaRegen: 2 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('coldRes', 'flat', -0.25)],
     skills: ['fang_strike', 'dart_volley'], xp: 18,
     faction: 'coilborn',
     immuneGround: ['water', 'swamp', 'bog', 'mud', 'tide_pool', 'brine_sink'],
@@ -10653,7 +10657,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'hooded_spitter', name: 'Hooded Spitter',
     color: '#7ab04e', shape: 'oval', radius: 12, material: 'scale', look: 'hooded_spitter',
     base: { life: 55, moveSpeed: 105, accuracy: 100, evasion: 30, mana: 60, manaRegen: 4 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('coldRes', 'flat', -0.25)],
     skills: ['acid_spray', 'venom_bolt'], xp: 22,
     faction: 'coilborn',
     immuneGround: ['water', 'swamp', 'bog', 'mud', 'tide_pool', 'brine_sink'],
@@ -10669,7 +10673,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'fang_priest', name: 'Fang Priest',
     color: '#5aa07a', shape: 'pentagon', radius: 13, material: 'scale', look: 'fang_priest',
     base: { life: 70, moveSpeed: 95, accuracy: 100, evasion: 25, mana: 140, manaRegen: 8 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('coldRes', 'flat', -0.25)],
     skills: ['venom_bolt', 'poison_nova'], xp: 26,
     faction: 'coilborn',
     immuneGround: ['water', 'swamp', 'bog', 'mud', 'tide_pool', 'brine_sink'],
@@ -10694,7 +10698,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'constrictor_knight', name: 'Constrictor Knight',
     color: '#3f7a68', shape: 'hexagon', radius: 16, material: 'scale', look: 'constrictor_knight',
     base: { life: 210, moveSpeed: 85, accuracy: 104, armor: 40, poise: 70, evasion: 15, mana: 20, manaRegen: 2 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('coldRes', 'flat', -0.3)],
     skills: ['constrictor_coil', 'heavy_strike'], xp: 50,
     faction: 'coilborn',
     immuneGround: ['water', 'swamp', 'bog', 'mud', 'tide_pool', 'brine_sink'],
@@ -10711,7 +10715,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'siren_adder', name: 'Siren-Adder',
     color: '#4a9a9a', shape: 'oval', radius: 12, material: 'scale', look: 'siren_adder',
     base: { life: 85, moveSpeed: 110, accuracy: 102, evasion: 60, mana: 120, manaRegen: 7 },
-    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    mods: [mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('coldRes', 'flat', -0.25)],
     skills: ['siren_song', 'venom_bolt'], xp: 30,
     faction: 'coilborn',
     immuneGround: ['water', 'swamp', 'bog', 'mud', 'tide_pool', 'brine_sink'],
@@ -10729,7 +10733,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'coil_matriarch', name: 'Coil Matriarch',
     color: '#3f9a7e', shape: 'star', radius: 20, material: 'scale', look: 'coil_matriarch',
     base: { life: 190, moveSpeed: 100, accuracy: 110, evasion: 45, armor: 20, mana: 180, manaRegen: 10 },
-    mods: [mod('poisonRes', 'flat', 1), mod('coldRes', 'flat', -0.25), mod('damage', 'increased', 0.12)],
+    mods: [mod('ailmentResist', 'flat', 0.9, ['chaos']), mod('coldRes', 'flat', -0.25), mod('damage', 'increased', 0.12)],
     skills: ['constrictor_coil', 'poison_nova', 'siren_song'], xp: 65,
     faction: 'coilborn',
     immuneGround: ['water', 'swamp', 'bog', 'mud', 'tide_pool', 'brine_sink'],

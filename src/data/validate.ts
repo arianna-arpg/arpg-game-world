@@ -23,7 +23,7 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunement
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
-import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES } from '../engine/stats';
+import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES, type Modifier } from '../engine/stats';
 import type { AIAction, BrainDef, BrainTuning, FlockSpec } from '../engine/brain';
 import { regionKind, PATH_CFG, SURVIVAL_RESOURCES } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
@@ -993,6 +993,28 @@ export function validateContent(): void {
       if (def.material && !MATERIAL_NATURE[def.material]) {
         warn(`monster ${def.id}: material '${def.material}' has no MATERIAL_NATURE row — it will read as flesh (breathes, leaves remains); classify it`);
       }
+      // DEAD-STAT NET: a def mod naming a stat no registry ever seated is a
+      // silent no-op — the sheet folds it, nothing queries it, and the
+      // author believes a lever exists (the poisonRes drift: 17 defs wore a
+      // venom shrug the engine never read; the real lever is element-tagged
+      // ailmentResist). By validate time every static stat AND generated
+      // family row sits in STAT_DEFS (registrations run at module init;
+      // probe_sheet audits the seating), so absence here means dead weight,
+      // never late registration.
+      const deadStat = (where: string, ms?: Modifier[]): void => {
+        for (const m of ms ?? []) {
+          if (!(m.stat in STAT_DEFS)) {
+            warn(`monster ${def.id}: ${where} stat '${m.stat}' is seated in no registry — a silent no-op (dead stat)`);
+          }
+          if (m.fromStat !== undefined && !(m.fromStat in STAT_DEFS)) {
+            warn(`monster ${def.id}: ${where} link fromStat '${m.fromStat}' is seated in no registry — the siphon reads nothing`);
+          }
+        }
+      };
+      deadStat('mod', def.mods);
+      deadStat('bond mod', def.bond?.mods);
+      deadStat('nocturne mod', def.nocturne?.mods);
+      deadStat('worm-wound mod', def.worm?.wounds?.mods);
     }
   }
 
