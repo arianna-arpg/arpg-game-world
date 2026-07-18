@@ -21,6 +21,7 @@ import '../engine/landmarkBuilders';
 import '../data/landmarks';
 import '../engine/layoutRecipes';
 import '../engine/interiorGen';
+import '../data/massifs';
 import '../data/compositions';
 import '../data/fog';
 import '../data/creeps';

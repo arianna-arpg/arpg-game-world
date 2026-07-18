@@ -106,6 +106,16 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // desert/tundra/highland/volcanic/coast = spacious, legible branching).
   grove:  { patronFaction: 'sylvan', mapColor: '#3f8a3a', label: 'Grove', spacing: 56,
     climate: { temperature: 'mild', moisture: { from: 0.3, fadeIn: 0.2 } },
+    // Mostly the classic open woodland scatter; the odd BOCAGE face (the
+    // massif fabric) — grown hedge-lines and a walled fold among the trees,
+    // the pastoral mixture archetype in the grove's own green.
+    allowedLayouts: { plains: 4, massif: 1 },
+    layoutParams: {
+      massifMasses: [
+        { kind: 'hedge', weight: 3 }, { kind: 'fold', weight: 1.5 }, { kind: 'tor', weight: 1 },
+      ],
+      massifCoverage: [0.12, 0.19],
+    },
     landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 }] },
   // The FOREST proper — where the grove is open woodland, the forest is a
   // ROOF: the 'forest' recipe plants veiled canopy masses whose coverage
@@ -203,8 +213,13 @@ export const BIOMES: Record<string, BiomeInfo> = {
   grave:  { patronFaction: 'undead', mapColor: '#6a5a8a', label: 'Graveland', spacing: 60,
     // Interior families join the pool: CATACOMB dungeons and mausoleum
     // labyrinths under the open graves, the odd manor EDIFICE still standing.
-    allowedLayouts: { plains: 6, bastion: 1, metropolis: 1, dungeon: 1, labyrinth: 0.5, edifice: 0.5 },
-    layoutParams: { ruined: 0.85 },
+    // massif = the SACKED ACRES face (the massif fabric): ruin courts and
+    // barrow mounds standing as the interior masses of an open graveland.
+    allowedLayouts: { plains: 6, bastion: 1, metropolis: 1, massif: 1.5, dungeon: 1, labyrinth: 0.5, edifice: 0.5 },
+    layoutParams: { ruined: 0.85,
+      massifMasses: [
+        { kind: 'ruincourt', weight: 3 }, { kind: 'barrow', weight: 2 }, { kind: 'hedge', weight: 1 },
+      ] },
     structures: [{ structure: 'hedge_labyrinth', chance: 0 }, { structure: 'watchtower', chance: 0.2 }],
     landmarks: [{ landmark: 'sinkhole', chance: 0.15 }, { landmark: 'tar_pool', chance: 0.2 }] },
   // THE OSSUARY: the Necropolis' interior sanctum — bone country, not grave
@@ -382,7 +397,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // hunting here, it just answers to a crown now.
   tundra:   { patronFaction: 'rimebound', mapColor: '#bcd0d8', label: 'Tundra', spacing: 96,
     climate: { temperature: 'cold', moisture: { to: 0.55, fadeOut: 0.2 } },
-    allowedLayouts: { plains: 3, expanse: 1, riverland: 1 },
+    // massif = the SCOURED FELLS face (the massif fabric): wind-bared tors
+    // and scarp bluffs standing out of the snow — the reference stone mix.
+    allowedLayouts: { plains: 3, expanse: 1, riverland: 1, massif: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.45 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.35 }, { landmark: 'frozen_strand', chance: 0.22 }, { landmark: 'cirque', chance: 0.15 }] },
   // Taiga: the WINTER FOREST — the tundra's dense-canopied sibling: tight
@@ -424,6 +441,23 @@ export const BIOMES: Record<string, BiomeInfo> = {
     climate: { temperature: 'mild', moisture: 'dry', wildness: { from: 0.3, fadeIn: 0.25 } },
     allowedLayouts: { karst: 3, parkland: 1 },
     landmarks: [{ landmark: 'sinkhole', chance: 0.18 }, { landmark: 'canyon', chance: 0.14 }] },
+  // THE DOWNS: the settled world's open bones — rolling bracken heath studded
+  // with LARGE impassable bodies (THE MASSIF FABRIC's home country, its whole
+  // recipe): grey tors and scarp bluffs you walk around, drystone folds you
+  // duel across, hedge-lines you fire blind through, barrows that only watch.
+  // The MIXTURE archetype as a region: open country that plays open while
+  // every crossing is a negotiation. Claims the mild belt's DRIER, SETTLED
+  // half (karst keeps the wild stone; the grove keeps the damp woods) —
+  // wildness gated LOW so the downs read as old walked land near the
+  // settled web, thinning where the true wilds begin.
+  downs:   { patronFaction: 'wild', mapColor: '#9aa26a', label: 'Downs', spacing: 92,
+    climate: { temperature: 'mild', moisture: { to: 0.52, fadeOut: 0.16 }, wildness: { to: 0.62, fadeOut: 0.2 } },
+    allowedLayouts: { massif: 1 },
+    structures: [{ structure: 'watchtower', chance: 0.28 }],
+    landmarks: [
+      { landmark: 'lake', chance: 0.18 }, { landmark: 'lone_mountain', chance: 0.14 },
+      { landmark: 'sinkhole', chance: 0.1 }, { landmark: 'valley', chance: 0.15 },
+    ] },
   marsh:    { patronFaction: 'undead', mapColor: '#4a6a52', label: 'Marsh', spacing: 58,
     climate: { moisture: 'wet' },
     allowedLayouts: { islands: 2, plains: 1 },
@@ -635,6 +669,11 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // mild∧dry∧wild gate is narrow, so where it holds it should read as one
   // coherent stone country, and it simply doesn't exist elsewhere.
   { biome: 'karst', weight: 1.9 },
+  // 1.4: the downs claim the mild belt's drier SETTLED half (low-wildness
+  // gate — the karst inverse), sharing that band with grove/field/grave:
+  // enough seed weight to read as coherent walked country where its gate
+  // holds, never crowding the woods out of the damp half.
+  { biome: 'downs', weight: 1.4 },
   { biome: 'marsh', weight: 1.5 },
   { biome: 'flesh', weight: 1.25 }, // a four-faced country deserves the acreage
 

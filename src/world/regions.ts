@@ -737,6 +737,35 @@ registerRegion({ id: 'hardpan', walkable: true, blocks: false, label: 'the hardp
   moveScale: 1.05,
   visual: { fill: '#8a7a4e', alpha: 0.3 } });
 
+// --- THE MASSIF FABRIC's reference walls (engine/massif.ts) -------------------
+// CRAG: bare standing rock — the interior mass of open-country massif zones
+// (tors, bluffs, scarp slabs). A TRUE WALL like the mountain face it is:
+// bodies, arrows and SIGHT all stop (a shot has no business flying through a
+// crag — the 'wall' doctrine), and the pale weathered rim announces stone
+// against any floor (the flesh-wall lesson). Uncoursed on purpose: this is
+// the land's own bone, not masonry — ruin/rampart kinds carry the built read.
+registerRegion({ id: 'crag', walkable: false, blocks: true, label: 'the crag',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#3d3a31', alpha: 1, edge: { color: '#93886d', width: 5 } } });
+// DRYSTONE: a waist-high field wall — stacked stone, no mortar (fold courts,
+// old boundary lines). The PARAPET POLICY in the open country: bodies never
+// cross, but shots and sight sail over, so a walled fold is a prize you duel
+// ACROSS before you walk around to its mouth — never a corridor. Masonry
+// coursing at a lower alpha so it reads BUILT but low.
+registerRegion({ id: 'drystone', walkable: false, blocks: true, label: 'the field wall',
+  blocksShot: false, blocksSight: false,
+  visual: { fill: '#4a4438', alpha: 0.94, masonry: true, edge: { color: '#928a6e', width: 3 } } });
+// HEDGEWALL: a grown boundary line — bocage, not brush (data/massifs.ts rides
+// it for hedge masses). The THIRD block texture between crag and drystone:
+// bodies stop, SIGHT stops (you cannot read what waits behind the green), but
+// SHOTS pass — an arrow threads leaves a wall of stone would eat. Firing
+// blind THROUGH your own cover is the kind's whole conversation. Foliage
+// coursing over a deep hedge green, sunlit fringe rim (the verdure contrast
+// discipline; distinct tones so jungle verdure stays its own read).
+registerRegion({ id: 'hedgewall', walkable: false, blocks: true, label: 'the hedgerow',
+  blocksShot: false, blocksSight: true,
+  visual: { fill: '#1e3610', alpha: 1, foliage: true, edge: { color: '#68a03c', width: 5 } } });
+
 // SUNKSTONE WALL: the buried vault's dressed sandstone — the negative space
 // of halls the desert swallowed (the ruin_wall contract in sand tones). A
 // TRUE WALL, coursed so the vault reads BUILT; the pale-gold rim announces

@@ -55,6 +55,7 @@ import '../src/engine/landmarkBuilders';
 import '../src/data/landmarks';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
+import '../src/data/massifs';
 import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';

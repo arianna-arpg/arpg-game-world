@@ -154,6 +154,36 @@
       ],
       "port": 5290,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa9",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5288",
+        "--strictPort"
+      ],
+      "port": 5288,
+      "autoPort": false
+    },
+    {
+      "name": "arpg-downs-island",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "D:/Games/Claude/arpg-downs-island",
+        "--",
+        "--port",
+        "5287",
+        "--strictPort"
+      ],
+      "port": 5287,
+      "autoPort": false
     }
   ]
 }
