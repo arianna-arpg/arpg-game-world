@@ -20,6 +20,13 @@ export interface AmbientFxSpec {
 
 export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec,
   w: number, h: number, t: number): void {
+  // A 0-sized backing store (a hidden pane before its first resize event
+  // sizes the canvas) has nothing to paint — and it poisons every
+  // `% w` / `% h` / `% diag` below into NaN, which KILLS the frame the
+  // moment one reaches a gradient (caustics — gradients are the render
+  // path's one throwing sink). One guard at the one entry; every painter
+  // below stays naive. `!(x > 0)` also refuses NaN dimensions themselves.
+  if (!(w > 0) || !(h > 0)) return;
   const k = spec.intensity ?? 1;
   switch (spec.kind) {
     case 'bubbles': return bubbles(ctx, w, h, t, k, spec.color ?? '#cfeefa');
