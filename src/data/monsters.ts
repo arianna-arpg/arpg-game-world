@@ -749,6 +749,10 @@ export interface WildlifeRow {
   near?: string;
   /** Floated at the heroes when this row spawns — the "something stirs" beat. */
   announce?: string;
+  /** THE TIER FABRIC: this fauna lives on the SECOND layer (scamps atop the
+   *  buttes, gutter life in the drains). Zones without a tier layer skip the
+   *  row — the same graceful no-op as `near` without its doodad. */
+  tier?: 1;
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
@@ -817,6 +821,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   metropolis: [
     { id: 'gutter_rat', chance: 0.7, count: [2, 5] },
     { id: 'gutter_roach', chance: 0.4, count: [2, 4] },
+    // The drains' own gutter life (tier rows no-op in untiered districts).
+    { id: 'gutter_rat', chance: 0.5, count: [2, 4], tier: 1 },
+    { id: 'gutter_roach', chance: 0.45, count: [2, 4], tier: 1 },
     { id: 'carrion_crow', chance: 0.4, count: [2, 4] },
     { id: 'dooryard_hen', chance: 0.2, count: [2, 4] },
     { id: 'meadow_hare', chance: 0.1, count: [1, 2] },
@@ -900,6 +907,16 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'taiga_elk', chance: 0.45, count: [2, 3] },
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+  ],
+  // THE BUTTELAND (the needle country — its own biome since the tier pass):
+  // valley life below, and THE TOP-ONLY FLICKER — a scamp that dens where
+  // only the ramps and spans reach, the butte-top treasure that runs.
+  butteland: [
+    { id: 'taiga_elk', chance: 0.4, count: [2, 3] },
+    { id: 'meadow_hare', chance: 0.45, count: [2, 3] },
+    { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+    { id: 'gilded_scamp', chance: 0.35, count: [1, 1], tier: 1,
+      announce: 'a golden flicker crosses the tabletops above…' },
   ],
   // The karst country: sparse dry-stone life — hares grazing the pockets,
   // moths in the gulf-shade, bloodwings nesting the crag rims.

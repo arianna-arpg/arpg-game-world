@@ -134,6 +134,45 @@ export function resolveTierCrossing(
   return tier;
 }
 
+// --- THE TIER KIT ---------------------------------------------------------------
+// The layer generates its OWN dressing (the "truly independent, layered
+// zones" law): tier-tagged doodads scattered over the layer's floor — the
+// drains grow webbier than the street above them, the tops keep caches the
+// valley never sees. Rows ride layoutParams ('tierKit') so any face retunes
+// or replaces the kit without a fork; every piece is stamped `tier: 1`, and
+// the ground-sense / collision / flight / renderer gates keep it layer-honest.
+
+/** One weighted tier-kit row (what the layer itself grows). */
+export interface TierKitRow { kind: string; count: [number, number]; radius?: [number, number] }
+
+export function layTierKit(
+  ctx: GenCtx, grid: GridWalkField, rows: TierKitRow[],
+  cellFilter: (kind: string | undefined) => boolean,
+): void {
+  const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
+  const cells: Vec2[] = [];
+  const cols = Math.floor(ctx.arena.w / cs), rows2 = Math.floor(ctx.arena.h / cs);
+  for (let gy = 1; gy < rows2 - 1; gy++) {
+    for (let gx = 1; gx < cols - 1; gx++) {
+      const x = gx * cs + cs / 2, y = gy * cs + cs / 2;
+      if (cellFilter(grid.regionAt?.(x, y))) cells.push(vec(x, y));
+    }
+  }
+  if (!cells.length) return;
+  for (const row of rows) {
+    const n = ctx.rng.int(row.count[0], row.count[1]);
+    for (let k = 0; k < n; k++) {
+      const c = cells[ctx.rng.int(0, cells.length - 1)];
+      const r = row.radius ?? [12, 18];
+      ctx.doodads.push({
+        pos: vec(c.x + ctx.rng.range(-cs * 0.3, cs * 0.3), c.y + ctx.rng.range(-cs * 0.3, cs * 0.3)),
+        radius: ctx.rng.range(r[0], r[1]), kind: row.kind,
+        rot: ctx.rng.range(0, Math.PI * 2), tier: 1,
+      });
+    }
+  }
+}
+
 // --- 'needles' — THE BUTTE COUNTRY RECIPE ----------------------------------------
 // Thousand-Needles verticality on the massif fabric: butte masses (region
 // 'butte_top' — wall to the valley, FLOOR up top), ramps painted across one
@@ -194,7 +233,16 @@ function needlesLayout(ctx: GenCtx, def: ZoneDef): void {
   def.tiers = {
     kind: 'over', exposure: 'open', label: 'the butte tops',
     packSplit: layoutParam(def, 'tierPackSplit', TIER_CFG.packSplit),
+    // RIM DUELS: the needle country's whole conversation — trade arrows
+    // across the rims and spans; sight does the refereeing.
+    rimDuels: layoutParam(def, 'rimDuels', true),
   };
+  // The tops keep their own kit — and the caches the valley never sees.
+  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', [
+    { kind: 'rock', count: [2, 5], radius: [12, 22] },
+    { kind: 'grass', count: [2, 4], radius: [14, 24] },
+    { kind: 'spelunker_pack', count: [0, 2], radius: [10, 13] },
+  ]), k => k === 'butte_top');
   scatterDecoration(ctx, def);
 }
 
@@ -292,6 +340,14 @@ export function carveSewerTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): 
     kind: 'under', exposure: 'covered', label: 'the drains',
     packSplit: layoutParam(def, 'tierPackSplit', 0.3),
   };
+  // The drains' OWN generation layer: webbier than the street above (the
+  // ceiling harvest), boned, and stocked with what only smugglers carry.
+  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', [
+    { kind: 'web', count: [4, 8], radius: [16, 30] },
+    { kind: 'bone_pile', count: [2, 4], radius: [10, 16] },
+    { kind: 'rubble', count: [1, 3], radius: [12, 20] },
+    { kind: 'smuggler_cache', count: [1, 2], radius: [10, 13] },
+  ]), k => k === 'sewer_duct' || k === 'sewer_under_wall');
 }
 
 /** THE DEEP DOOR PREFERS THE DRAINS: after scatter, a tiered district pulls

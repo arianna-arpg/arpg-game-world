@@ -179,6 +179,15 @@ registerStamp('garret_stair', stampSingle('garret_stair', [11, 14]));
 // rotated INTO its tunnel's first leg): pure art on both-layers ground —
 // inert, walk-through, visible from street AND drain alike.
 registerDoodadRule('culvert_stair', { overlap: 'inert', spacing: 40 });
+// THE SMUGGLERS' CACHE: what only the drains ever carry — a strapped bundle
+// stashed where the watch never walks (the spelunker_pack pattern in the
+// runners' own colors; knock it open, keep what spills). Laid tier-tagged by
+// the sewer carver — street players never see it, duct runners farm it.
+registerDoodadRule('smuggler_cache', {
+  overlap: 'inert', spacing: 60,
+  brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.9, orbChance: 0.6, text: 'a smuggler’s stash spills open…', color: '#8ac8a0' },
+});
+registerStamp('smuggler_cache', stampSingle('smuggler_cache', [10, 13]));
 
 // --- THE SEWER MOUTHS ------------------------------------------------------------------
 // The city's OTHER ladder (the descend lane's civic door): a street grate

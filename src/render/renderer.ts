@@ -390,6 +390,10 @@ export class Renderer {
     if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
       drawTrackLanes(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
     }
+    // THE TIER VEIL (covered exposure) sits UNDER the doodad pass: the
+    // under-layer's own furniture (a duct's webs, the smugglers' caches)
+    // draws ON TOP of the tunnel floor it stands in.
+    this.drawTierVeil(world, vw, vh);
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
     // TRACK RIDERS: the moving hazards, posed from the shared clock through
     // the one painter registry — over the ground and grooves, under actors.
@@ -436,11 +440,6 @@ export class Renderer {
     this.drawDrops(world);
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
-    // THE TIER VEIL (the tier fabric, covered exposure): standing on the
-    // UNDER layer, the street above is a ceiling — the world dims and the
-    // duct web paints live from the region map's tierVisual rows (viewport
-    // cells only; the other layer's bodies are skipped in drawActor).
-    this.drawTierVeil(world, vw, vh);
     for (const f of world.flashes) this.drawFlash(f);
     if (!VIS_ABLATE.has('actors')) {
       for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
@@ -2075,7 +2074,19 @@ export class Renderer {
     const env: PaintEnv = { ctx, theme: world.zone.theme, time: world.time, world };
     type Grp = { kind: string; list: readonly Doodad[]; def: DoodadVisualDef | undefined };
     const groups: Grp[] = [];
-    for (const [kind, list] of this.culled) groups.push({ kind, list, def: DOODAD_VISUALS[kind] });
+    // THE TIER FABRIC, covered exposure: the other layer's furniture is
+    // behind a ceiling (or under a street) — filter it out of the frame.
+    // Open zones and flat zones pay nothing (hideTier stays null).
+    const zt = world.zone.tiers;
+    const hideTier = zt?.exposure === 'covered'
+      ? ((world.player?.tier ?? 0) === 1 ? 0 : 1) : null;
+    for (const [kind, list] of this.culled) {
+      groups.push({
+        kind,
+        list: hideTier === null ? list : list.filter(d => (d.tier ?? 0) !== hideTier),
+        def: DOODAD_VISUALS[kind],
+      });
+    }
     groups.sort((a, b) => (a.def?.order ?? 50) - (b.def?.order ?? 50));
     // The sun's cast this frame — directional shadows SPIN through the day
     // and stretch toward dawn/dusk (null at night).

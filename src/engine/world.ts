@@ -2510,6 +2510,11 @@ export class World {
   /** THE TIER FABRIC (engine/tiers.ts): the second layer's stateless walk
    *  view over the SAME grid (null in flat/convex zones). */
   private tierView: WalkView | null = null;
+  /** THE CHASE-MEMORY LEDGER (the tier chase's second half): recent link
+   *  crossings, so a pursuer who picks up the trail AFTER the quarry went
+   *  down still learns which stair it took (ring-buffered, age-pruned at
+   *  read; cleared with the zone). */
+  private tierCrossings: { x: number; y: number; actorId: number; team: string; at: number }[] = [];
   /** Underwater air-pocket discs (centre + radius) — the renderer draws a round wash
    *  + rising bubbles inside each (the air-pocket indicator). Empty outside the sea.
    *  Also reused by the Unmade's flood phase for its shrinking relief islands. */
@@ -3645,6 +3650,7 @@ export class World {
     // stateless adapter over the SAME grid (tier flags on region rows), so
     // carves and repaints self-heal on both layers by construction.
     this.tierView = this.walk ? makeTierView(this.walk) : null;
+    this.tierCrossings.length = 0; // the chase ledger is zone-local
     this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
     this.structures = layout.structures ?? []; // plan structures (rects/roofs/doors/slots)
     // A PORT's DOCK: planted on the oceanward arena edge (the coast landmark's
@@ -7489,11 +7495,27 @@ export class World {
         * presenceMul(MONSTERS[w.id]?.presence, lvl);
       if (Math.random() >= chance) continue;
       const n = randInt(w.count[0], w.count[1]);
+      // TIER ROW (WildlifeRow.tier — the tier fabric): fauna that lives on
+      // the SECOND layer (scamps atop the buttes, rats in the drains). A
+      // zone without a tier layer simply skips the row — the same graceful
+      // no-op as `near` without its doodad.
+      if (w.tier === 1 && (!def.tiers || !this.tierView)) continue;
       // PLACEMENT HINT (row.near): the band spawns on the RIM of a matching
       // doodad — frogs at the water's edge, not the meadow's middle. A zone
       // without one simply skips the row (no pond, no frogs).
       let at = this.farPoint(700);
-      if (w.near) {
+      if (w.tier === 1 && this.tierView && this.walk) {
+        // Sample the LAYER for a seat (several tries — a lone random point
+        // often lands a valley away from any deck; one miss must not eat
+        // the row's whole chance).
+        let seat: Vec2 | null = null;
+        for (let s = 0; s < 8 && !seat; s++) {
+          const q = this.tierView.snapToWalkable(vec(rand(200, this.arena.w - 200), rand(200, this.arena.h - 200)));
+          if (tierFloorOf(this.walk.regionAt?.(q.x, q.y))) seat = vec(q.x, q.y);
+        }
+        if (!seat) continue; // the layer truly has no floor — skip, never strand
+        at = seat;
+      } else if (w.near) {
         const spots = this.doodads.filter(d => d.kind === w.near && !d.gone);
         if (!spots.length) continue;
         const s = spots[randInt(0, spots.length - 1)];
@@ -7508,7 +7530,15 @@ export class World {
         m.squadId = squadId;
         m.squadLeader = k === 0;
         if (!m.habitat) {
-          m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+          if (w.tier === 1 && this.tierView && this.walk) {
+            // Tier fauna seats on its OWN floor (the jittered snap keeps the
+            // band together without wandering off the deck).
+            const q = this.tierView.snapToWalkable(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)));
+            if (tierFloorOf(this.walk.regionAt?.(q.x, q.y))) { m.pos = vec(q.x, q.y); m.tier = 1; }
+            else { m.pos = vec(at.x, at.y); m.tier = 1; }
+          } else {
+            m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+          }
         }
         this.actors.push(m);
         landed++;
@@ -17492,7 +17522,10 @@ export class World {
     // other. Sitting in the ONE hostility gate, targeting, swings, threat
     // and projectiles all agree for free. (Shoving a body OFF its layer is
     // the honest way to bring a fight down — the rim fall in the push lane.)
-    if ((a.tier ?? 0) !== (b.tier ?? 0)) return false;
+    // EXCEPT under RIM DUELS (ZoneTiers.rimDuels, open exposure): cross-tier
+    // hostility stands and SIGHT mediates — the butte walls' blocksSight
+    // already confine the fights to rims and spans, which is the fantasy.
+    if ((a.tier ?? 0) !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
     if (a.team !== b.team) return true;
     // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
     // whose side the food nominally stands on — and it's ONE-directional:
@@ -33109,13 +33142,16 @@ export class World {
       // VEIL cover (canopy patches): standing under a member crown wears the
       // veil's standStatus — the fogveiled pattern, detectability as data.
       // ONE bucket query per actor; statuses/AI read the rest from the sheet.
-      if (hasVeil) {
+      // Tier-0 only: crowns are STREET furniture — a duct runner is under a
+      // ceiling, not under the wheat (the tier fabric's layer honesty).
+      if (hasVeil && (a.tier ?? 0) === 0) {
         const cover = veils.coverAt(a.pos.x, a.pos.y);
         const vs = cover ? (cover.spec.standStatus ?? VEIL_DEFAULTS.standStatus) : undefined;
         if (vs) a.applyStatus(vs, 0, 1, 'canopy');
       }
-      // DOODAD-sourced region (the migrated grounds: mud/water/bog/…).
-      const ground = this.groundAt(a.pos);
+      // DOODAD-sourced region (the migrated grounds: mud/water/bog/…),
+      // sensed on the actor's OWN layer.
+      const ground = this.groundAt(a.pos, a.tier);
       const prevG = a.groundKind;
       a.groundKind = ground?.kind;
       if (ground) this.applyRegionEffects(a, ground.kind, ground.deep, prevG !== ground.kind, dt, drained);
@@ -35448,6 +35484,9 @@ export class World {
       // entirely — through rock and masonry like mist.
       if (!dead && !p.phase) {
         for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
+          // THE TIER FABRIC: a flight only meets ITS layer's furniture — a
+          // duct bolt neither shatters nor stops on the street's pots above.
+          if ((o.tier ?? 0) !== (p.tier ?? 0)) continue;
           // BRITTLE 'hit': the arrow finds it — pots shatter, hidden faces
           // give. Flight continues unless the kind also blocks shots (a
           // secret wall stops the arrow THAT opened it).
@@ -37934,6 +37973,10 @@ export class World {
   clampPos(p: Vec2, radius: number, from?: Vec2, opts?: ClampOpts): Vec2 {
     const b0 = clampToBounds(p, radius, this.arena);
     const out = vec(b0.x, b0.y);
+    // THE TIER FABRIC: the mover's layer, read once — gates the doodad
+    // collision below (a street lamp never blocks the duct runner beneath
+    // it) and the walk-confine swap further down.
+    const mvTier = (opts?.mover as { tier?: number } | undefined)?.tier ?? 0;
     // A wall-phasing displacement (ignoreConfine) stays in-bounds but skips doodad
     // + walk confinement (a flicker/teleport lands past rocks, walls, the void).
     if (!opts?.disp?.ignoreConfine) {
@@ -37943,6 +37986,7 @@ export class World {
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
       for (const o of this.doodadsAt(out.x, out.y)) {
+        if ((o.tier ?? 0) !== mvTier) continue; // its layer's furniture only
         if (!blocksMovement(o)) continue;
         // THE PITFALL FABRIC (engine/pitfall.ts): a fall-able pit is a DROP,
         // not a wall — the push loop leaves it whole and the pit confine
@@ -37979,7 +38023,7 @@ export class World {
     // confine block below (synchronous, never re-entrant: walkResolve/
     // walkSweep read this.walk, so the swap reaches every sample without
     // threading a param through four layers). Restored in the finally.
-    const moverTier = (opts?.mover as { tier?: number } | undefined)?.tier ?? 0;
+    const moverTier = mvTier;
     const tierSwap = moverTier === 1 && this.tierView && this.walk ? this.walk : null;
     if (tierSwap) this.walk = this.tierView as unknown as GridWalkField;
     try {
@@ -38234,6 +38278,10 @@ export class World {
           if (Math.hypot(e.pos.x - a.pos.x, e.pos.y - a.pos.y) > 900) continue;
           e.aiTierGoal = { x: a.pos.x, y: a.pos.y, until: this.time + 8 };
         }
+        // THE LEDGER (chase memory): late pursuers — the ones who pick up
+        // the trail after the stair — read the crossing from here.
+        this.tierCrossings.push({ x: a.pos.x, y: a.pos.y, actorId: a.id, team: a.team, at: this.time });
+        if (this.tierCrossings.length > 12) this.tierCrossings.shift();
       }
       a.onTierLink = onLink;
     }
@@ -38387,9 +38435,31 @@ export class World {
    * are ON the planks); water is 'deep' toward a circle's center unless the
    * circle is a shallow ford. Priority favors the nastier ground.
    */
-  groundAt(p: Vec2): { kind: string; deep: boolean } | null {
+  /** THE CHASE MEMORY (the tier fabric): the freshest hostile crossing near
+   *  where this hunter last saw its quarry — a pursuer who arrives late
+   *  still learns which stair the trail went down. Null when the ledger
+   *  holds nothing fresh (10s) or near (600u). */
+  recentTierCrossing(a: Actor): { x: number; y: number } | null {
+    if (!this.zone.tiers || !this.tierCrossings.length) return null;
+    const ref = a.aiLastSeen ?? a.pos;
+    let best: { x: number; y: number } | null = null;
+    let bestD = 600;
+    for (const c of this.tierCrossings) {
+      if (this.time - c.at > 10 || c.team === a.team) continue;
+      const d = Math.hypot(c.x - ref.x, c.y - ref.y);
+      if (d < bestD) { bestD = d; best = { x: c.x, y: c.y }; }
+    }
+    return best;
+  }
+
+  groundAt(p: Vec2, tier = 0): { kind: string; deep: boolean } | null {
     if (this.bridges.some(b => dist(p, b.pos) <= b.radius)) return null;
     let soft: { kind: string; deep: boolean } | null = null;
+    // THE TIER FABRIC: ground belongs to its LAYER — a web laid on the
+    // street cannot snare a body running the duct beneath it (and a duct's
+    // own filth never wets the street). Untiered zones carry all-zero tiers,
+    // so the compare is free everywhere else.
+    const wantTier = tier;
     // WATER DEPTH is BODY-aware, not per-stamp: deep = penetrating past the
     // configured inset of ANY covering non-ford disc. A lake laid down as many
     // overlapping discs reads as one contiguous body — the seam between two
@@ -38399,6 +38469,7 @@ export class World {
     // are shallow no matter how deep the channel they cross.
     let inWater = false, ford = false, pen = 0;
     for (const d of this.doodadsAt(p.x, p.y)) {
+      if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
       const dd = dist(p, d.pos);
       if (dd > d.radius) continue;
       if (d.kind === 'bog' || d.kind === 'swamp' || d.kind === 'ice' || d.kind === 'tentacle_field') {

@@ -665,6 +665,11 @@ export interface ZoneTiers {
   label?: string;
   /** Fraction of ambient packs seeded on tier 1 (default TIER_CFG.packSplit). */
   packSplit?: number;
+  /** RIM DUELS (open exposure): cross-tier hostility is ALLOWED — sight and
+   *  the region map mediate instead (butte walls block eyes and arrows, so
+   *  the fights that happen are the honest ones: across rims and spans).
+   *  Covered zones must never set it (a ceiling is not a vantage). */
+  rimDuels?: boolean;
 }
 
 export interface ZoneDef {

@@ -660,6 +660,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // through, and the ordinary re-acquire resumes the hunt on the other
       // side. Above the lure (a vanished quarry outranks a glow), below the
       // post (duty still outranks the grudge).
+      if (!actor.aiTierGoal && !actor.isMinion() && actor.aiLastSeen
+        && world.time - actor.aiLosSeenAt < 6) {
+        // CHASE MEMORY (the ledger): the trail went cold mid-hunt — if a
+        // fresh hostile crossing sits near where the quarry was last seen,
+        // that stair IS the trail. Late pursuers follow it like the rest.
+        const c = world.recentTierCrossing(actor);
+        if (c) actor.aiTierGoal = { x: c.x, y: c.y, until: world.time + 8 };
+      }
       if (actor.aiTierGoal && !actor.isMinion()) {
         const g = actor.aiTierGoal;
         if (world.time > g.until) actor.aiTierGoal = undefined;

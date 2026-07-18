@@ -474,6 +474,12 @@ export interface Doodad {
    *  presence from these tags, and hands the piece to `evap` the beat its
    *  front stops covering the zone. Never persisted, never in layouts. */
   weatherDress?: string;
+  /** THE TIER FABRIC (engine/tiers.ts): the walkable LAYER this doodad lives
+   *  on (absent = 0, the ground truth). Tier-tagged pieces are laid by the
+   *  tier carvers (a duct's own webs, a butte-top cache): ground sensing,
+   *  the mover's collision, flight blockers and the renderer all honor it —
+   *  a street web can never snare the tunnel beneath it. */
+  tier?: number;
   /** Vegetation/rock random spin (radians), set at stamp time from the seeded
    *  layout rng — so a place keeps its orientations across revisits. */
   rot?: number;

@@ -1167,6 +1167,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // The culvert's stair prop: treads descend ALONG rot — the tunnel's first
   // bearing — so the street reads where the drain runs (the tier fabric).
   culvert_stair: { painter: 'culvertStair', order: 23, bakeWhole: 'static' },
+  // The smugglers' stash (drains-only loot — the potCluster bundle re-tinted).
+  smuggler_cache: {
+    painter: 'potCluster', order: 52, shadow: 0.35,
+    params: { clay: '#3a4a3e', strap: '#8ac8a0' },
+  },
   light_shaft: {
     painter: 'lightShaft', order: 58,
     light: { radius: -2.2, color: '#c8dce8', intensity: 0.4 },
