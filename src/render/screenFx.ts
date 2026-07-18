@@ -25,6 +25,18 @@ export interface ScreenFxDef {
   /** Scale strength by the status's CURRENT stack fraction (stacks/maxStacks)
    *  — a buildup ladder reads as pressure rising, not a binary flicker. */
   stacksScale?: true;
+  /** THE FALTER — 0..1 strength of the DELIBERATE simulated stutter (scaled
+   *  by this fx's live k like every other channel). While worn, the
+   *  renderer HOLDS whole presented frames on a jittered cadence
+   *  (VIS_CFG.statusFx.falter dials): the game itself seems to lag — a
+   *  fake, bounded hitch, the vasovagal skip. THIS IS INTENDED BEHAVIOR,
+   *  designed and documented (docs/render/falter.md), not a performance
+   *  defect: a light-headed hero is MEANT to make the player doubt their
+   *  frame rate for a beat. Presentation-only by construction — the sim,
+   *  inputs and the co-op wire never falter — and settings.statusFalter is
+   *  the player's off switch. Any status may wear it; it debuts on the
+   *  faintness ladder. */
+  falter?: number;
 }
 
 export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
@@ -39,10 +51,13 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
   // THE FLESH COUNTRY's ladders. The PALL is the vasovagal read: the world
   // desaturates and pales as faintness climbs (stack-scaled), and a swoon is
   // the full white-out drag. Deliberately beatless — the low-life vignette
-  // owns the heartbeat; a faint is STILLNESS. Queasy/retching wear the sour
-  // edge; blind closes the room in; seen is the amber of being LOOKED AT.
-  faintness: { kind: 'pall', intensity: 0.55, stacksScale: true },
-  swoon:     { kind: 'pall', intensity: 1.0 },
+  // owns the heartbeat; a faint is STILLNESS. Both wear THE FALTER: the
+  // frame itself skips as the head goes light (deliberate fake lag — see
+  // the falter field above; a swoon stutters at full press). Queasy/
+  // retching wear the sour edge; blind closes the room in; seen is the
+  // amber of being LOOKED AT.
+  faintness: { kind: 'pall', intensity: 0.55, stacksScale: true, falter: 0.55 },
+  swoon:     { kind: 'pall', intensity: 1.0, falter: 1 },
   queasy:    { kind: 'vignette', intensity: 0.4, stacksScale: true },
   retching:  { kind: 'vignette', intensity: 0.7 },
   blind:     { kind: 'darken', intensity: 0.9 },
@@ -62,15 +77,28 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
 
 export interface ActiveFx { def: ScreenFxDef; color: string; k: number; }
 
+/** Shared empty result — the statusless frame (the overwhelming common case)
+ *  allocates nothing. Callers never mutate collectActiveFx results. */
+const EMPTY_FX: ActiveFx[] = [];
+
 /** The screen effects to draw for the player's current statuses (combat only). */
 export function collectActiveFx(statuses: ActiveStatus[]): ActiveFx[] {
-  const out: ActiveFx[] = [];
+  let out: ActiveFx[] | null = null;
   for (const s of statuses) {
     const def = STATUS_FX_REGISTRY[s.id];
     if (!def) continue;
     const cap = STATUS_DEFS[s.id]?.maxStacks ?? 1;
     const k = def.stacksScale ? Math.min(1, Math.max(0, (s.stacks || 1) / cap)) : 1;
-    out.push({ def, color: def.color ?? STATUS_DEFS[s.id]?.color ?? '#ffffff', k });
+    (out ??= []).push({ def, color: def.color ?? STATUS_DEFS[s.id]?.color ?? '#ffffff', k });
   }
-  return out;
+  return out ?? EMPTY_FX;
+}
+
+/** The strongest live falter strength across the active fx (0 = none): each
+ *  row's authored `falter` scaled by its k, so a climbing faintness ladder
+ *  stutters harder as it climbs. The renderer's hold gate is the one reader. */
+export function collectFalterK(fx: ActiveFx[]): number {
+  let k = 0;
+  for (const f of fx) if (f.def.falter) k = Math.max(k, f.def.falter * f.k);
+  return k;
 }

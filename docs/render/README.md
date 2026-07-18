@@ -8,7 +8,12 @@ draw code enumerates content ids.
 ```
 src/render/
   renderer.ts        — frame orchestration, passes, HUD (reads registries, owns no looks)
-  screenFx.ts        — status ailment → full-screen FX registry
+  screenFx.ts        — status ailment → full-screen FX registry, incl. THE
+                       FALTER (ScreenFxDef.falter — deliberate SIMULATED
+                       frame-stutter while light-headed; bounded,
+                       presentation-only, settings-switchable; design
+                       charter in docs/render/falter.md — never "fix" it
+                       as a perf bug)
   vis/
     visConfig.ts     — VIS_CFG: every tunable (light angle, shadow alpha, chunk size…)
     color.ts         — hex/HSL math, shade/mix/withAlpha, hash01, valueNoise

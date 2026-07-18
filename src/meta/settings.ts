@@ -78,6 +78,12 @@ export interface Settings {
    *  is a real build choice: a 1/1-life or 90%-reserved hero would otherwise
    *  dwell inside a permanent wound. The hit-while-low surge always shows. */
   lowLifePulse: boolean;
+  /** THE FALTER (render/screenFx.ts ScreenFxDef.falter): faintness and the
+   *  swoon deliberately HOLD presented frames — a simulated lag spike, the
+   *  vasovagal skip. Designed and documented (docs/render/falter.md); the
+   *  sim/inputs never stutter. OFF kills only the fake hitches (comfort /
+   *  accessibility); every other pall read stays. */
+  statusFalter: boolean;
   /** GEAR pickup style: 'vacuum' (default) hoovers ground gear by walking
    *  over it, exactly like gems; 'key' keeps it a deliberate press (the
    *  pickup bind). A feel preference — both stay first-class. */
@@ -145,6 +151,7 @@ export interface SettingsSave {
   pad?: Partial<PadOptions>;
   cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
+  statusFalter?: boolean;
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
   aimTick?: Partial<AimTickOptions>;
@@ -255,6 +262,7 @@ export const makeSettings = (): Settings => ({
   pad: { ...DEFAULT_PAD_OPTIONS },
   cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
+  statusFalter: true,
   gearPickup: 'vacuum',
   castTelegraphs: true,
   aimTick: { ...DEFAULT_AIM_TICK },
@@ -274,6 +282,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   pad: { ...s.pad },
   cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
+  statusFalter: s.statusFalter,
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
   aimTick: { ...s.aimTick },
@@ -321,6 +330,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
       color: /^#[0-9a-f]{6}$/i.test(s.cursor?.color ?? '') ? s.cursor!.color! : DEFAULT_CURSOR_OPTIONS.color,
     },
     lowLifePulse: s.lowLifePulse ?? true,
+    statusFalter: s.statusFalter ?? true,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
     // Tick identity: unknown styles (a removed entry) fall back; the alpha

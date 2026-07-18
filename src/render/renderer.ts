@@ -48,7 +48,7 @@ import { roofStyle } from '../data/structures';
 import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
 import { UI_SCALE_CFG } from '../ui/uiScale';
 import { padDisplay } from '../core/gamepad';
-import { collectActiveFx } from './screenFx';
+import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
@@ -58,7 +58,7 @@ import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/por
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { trimVisCaches } from './vis/caches';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
-import { canvasCap } from './vis/canvasCaps';
+import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
@@ -160,6 +160,13 @@ export class Renderer {
     this.ctx = canvas.getContext('2d')!;
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    // Warm the canvas capability probe (vis/canvasCaps.ts) off the hot
+    // path: verdicts are lazy (first canvasCap ask) and the GPU-class
+    // probe costs ~a frame ONCE — spend it here in boot/menu idle, never
+    // mid-fight on the first pall.
+    const idle: (f: () => void) => unknown =
+      typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : (f) => setTimeout(f, 400);
+    idle(() => { try { canvasCapsReport(); } catch { /* probe failure = default verdicts */ } });
   }
 
   /** Wired by main.ts (same altitude as getSettings): has the CONTROLLER
@@ -242,6 +249,18 @@ export class Renderer {
   private stewardWorld: unknown = null;
   private stewardZone: unknown = null;
 
+  /** This frame's collected status screen-fx (screenFx.ts) — gathered once
+   *  at the top of render() for the falter gate, reused by drawStatusFx. */
+  private frameFx: ActiveFx[] = [];
+  /** THE FALTER's scheduler (wall-clock ms): when the current held frame
+   *  releases, when the next hitch lands, and whether a falter-bearing fx
+   *  was live last frame (fresh activation re-arms firstDelaySec). */
+  private falterHoldUntil = 0;
+  private falterNextAt = 0;
+  private falterArmed = false;
+  private falterW = 0;
+  private falterH = 0;
+
   render(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
@@ -251,13 +270,52 @@ export class Renderer {
     // fresh run) releases the lot. Detected here — the renderer is the one
     // place that sees both identities every frame — and fanned out before
     // anything draws, so evictees re-bake on sight, never mid-use.
+    let boundary = false;
     if (this.stewardWorld !== world) {
       if (this.stewardWorld !== null) trimVisCaches('run');
       this.stewardWorld = world;
       this.stewardZone = world.zone;
+      boundary = true;
     } else if (this.stewardZone !== world.zone) {
       this.stewardZone = world.zone;
       trimVisCaches('zone');
+      boundary = true;
+    }
+
+    // THE FALTER (screenFx.ScreenFxDef.falter × VIS_CFG.statusFx.falter):
+    // while a falter-bearing status rides the LOCAL hero, hold the whole
+    // presented frame on a jittered cadence — the deliberate fake lag spike
+    // (docs/render/falter.md). DESIGNED, not a defect: the sim keeps
+    // stepping, inputs keep landing, the co-op wire never pauses; only what
+    // the eye gets is briefly stale, exactly like the hitch it impersonates.
+    // Boundary frames (zone/world flip) and resizes always draw — a swap's
+    // first frame or a fresh backing store must never present stale pixels.
+    this.frameFx = collectActiveFx(world.player.statuses);
+    const resized = w !== this.falterW || h !== this.falterH;
+    this.falterW = w; this.falterH = h;
+    const falterK = (this.getSettings?.().statusFalter ?? true)
+      ? collectFalterK(this.frameFx) : 0;
+    if (falterK <= 0 || boundary || resized) {
+      // Not faltering (or must draw): disarm so the NEXT activation gets a
+      // fresh firstDelaySec beat instead of a mid-schedule leftover.
+      this.falterArmed = false;
+      this.falterHoldUntil = 0;
+    } else {
+      const nowMs = performance.now();
+      const F = VIS_CFG.statusFx.falter;
+      if (!this.falterArmed) {
+        this.falterArmed = true;
+        this.falterNextAt = nowMs + F.firstDelaySec * 1000;
+      }
+      if (nowMs < this.falterHoldUntil) return; // mid-hold: present the held frame
+      if (nowMs >= this.falterNextAt) {
+        const hold = F.holdMs[0] + (F.holdMs[1] - F.holdMs[0]) * falterK;
+        const period = (F.periodSec[0] + (F.periodSec[1] - F.periodSec[0]) * falterK) * 1000;
+        this.falterHoldUntil = nowMs + hold;
+        // Render-side jitter only — never the sim's streams.
+        this.falterNextAt = nowMs + hold + period * (1 + (Math.random() * 2 - 1) * F.jitter);
+        return; // the hold begins on this frame — keep what's presented
+      }
     }
 
     // Frame delta off the sim clock — the smoothing step for canopy/roof fades.
@@ -423,7 +481,7 @@ export class Renderer {
     }
 
     this.drawAtmosphere(world);
-    this.drawStatusFx(world);     // status ailment overlays (edge vignettes/frost/stars)
+    this.drawStatusFx();          // status ailment overlays (edge vignettes/frost/stars)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge
     // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
     // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
@@ -1144,8 +1202,8 @@ export class Renderer {
    *  wash draws through the baked edge-overlay fabric (vis/overlays.ts):
    *  the pulse rides globalAlpha over a cached sprite, so a fight full of
    *  ailments costs blits, not per-frame gradient rasters. */
-  private drawStatusFx(world: World): void {
-    const fx = collectActiveFx(world.player.statuses);
+  private drawStatusFx(): void {
+    const fx = this.frameFx; // gathered once at the top of render()
     if (fx.length === 0) return;
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height, t = performance.now() / 1000;
@@ -1188,7 +1246,7 @@ export class Renderer {
     // sniffs). Where it's slow, the baked wash below carries the read alone;
     // VIS_CFG.statusFx.desatMode pins the answer either way.
     const desatOn = C.desatMode === 'on'
-      || (C.desatMode === 'auto' && canvasCap('blendSaturation'));
+      || (C.desatMode === 'auto' && canvasCap('blendSaturation', w * h));
     if (desatOn) {
       ctx.globalCompositeOperation = 'saturation';
       ctx.fillStyle = `rgba(128,128,128,${(C.pallDesat * k).toFixed(3)})`;
@@ -1800,10 +1858,16 @@ export class Renderer {
       this.lastFxSpawn.clear();
     }
     const dt = this.frameDt;
-    for (let i = this.liquidFx.length - 1; i >= 0; i--) {
-      this.liquidFx[i].age += dt;
-      if (this.liquidFx[i].age >= this.liquidFx[i].max) this.liquidFx.splice(i, 1);
+    // Age + expire in one order-preserving compaction — splice() here minted
+    // a removed-elements array per expiry, steady garbage in wake-heavy
+    // zones (every wader ripples ~6/s).
+    let live = 0;
+    for (let i = 0; i < this.liquidFx.length; i++) {
+      const f = this.liquidFx[i];
+      f.age += dt;
+      if (f.age < f.max) this.liquidFx[live++] = f;
     }
+    this.liquidFx.length = live;
     for (const a of world.actors) {
       if (a.dead || a.construct) continue;
       // "Moving" = stepped within the last beat (lastMoveAt is stamped by

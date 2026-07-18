@@ -657,28 +657,64 @@ export const VIS_CFG = {
 
   /** STATUS SCREEN-FX tunables (render/screenFx.ts registry + the renderer's
    *  drawStatusFx branches): the PALL (the flesh country's vasovagal read —
-   *  desaturation + a pale edge wash, beatless on purpose) and the DARKEN
-   *  (blind — the room closing in). */
+   *  desaturation + a pale edge wash, beatless on purpose), the DARKEN
+   *  (blind — the room closing in), and THE FALTER (below). */
   statusFx: {
     pallDesat: 0.5, pallWash: '#e8e0ec', pallAlpha: 0.34,
     darkenFloor: 0.78,
     /** The pall's DESATURATE half rides a non-separable blend ('saturation')
      *  — GPU-free on some engines, a full-surface software fallback on
-     *  others (the Firefox cliff). 'auto' asks the canvasCaps probe and
-     *  keeps the grey-out only where it measures fast; the baked pale wash
-     *  (always drawn) carries the read where it doesn't. 'on'/'off' pin it. */
+     *  others (the Firefox cliff). 'auto' asks the canvasCaps probe (both
+     *  the relative verdict AND the per-frame budget at the live canvas
+     *  size) and keeps the grey-out only where it measures cheap; the baked
+     *  pale wash (always drawn) carries the read where it doesn't.
+     *  'on'/'off' pin it. */
     desatMode: 'auto' as 'auto' | 'on' | 'off',
+    /** THE FALTER — the DELIBERATE stutter (see docs/render/falter.md).
+     *  While a falter-bearing status (ScreenFxDef.falter — faintness, the
+     *  swoon) rides the local hero, the renderer HOLDS the presented frame
+     *  on a jittered cadence: a fake, bounded lag spike, the vasovagal
+     *  skip. INTENDED BEHAVIOR, not a defect — players are MEANT to worry
+     *  their game is stuttering while light-headed. Presentation-only by
+     *  construction: the sim, inputs and the co-op wire never falter, and
+     *  settings.statusFalter is the player's off switch.
+     *  periodSec/holdMs lerp [at-strength-0 → at-strength-1]; jitter is a
+     *  ± fraction on each period roll; firstDelaySec lands the first hitch
+     *  just after the status blooms (the "did my game just—?" beat). */
+    falter: {
+      periodSec: [2.4, 0.8] as [number, number],
+      holdMs: [70, 240] as [number, number],
+      jitter: 0.4,
+      firstDelaySec: 0.3,
+    },
   },
 
   /** CANVAS CAPABILITY PROBE (vis/canvasCaps.ts): one-time micro-timings of
    *  the canvas features that differ WILDLY between engines. A feature is
-   *  "slow here" when its per-op time exceeds baseline × slowFactor. */
+   *  "slow here" when its per-op time exceeds baseline × slowFactor
+   *  (RELATIVE — the software-fallback detector), or when its extra cost
+   *  over a plain fill, scaled to the caller's declared per-frame surface,
+   *  exceeds budgetMs (ABSOLUTE — a "merely 2×" blend is still refused
+   *  once the canvas is big enough to turn it into a real frame tax). */
   caps: {
-    probeSize: 192,
-    probeReps: 6,
+    /** Probe surface + reps are sized so the FEATURE's work dominates the
+     *  one forced flush: a GPU-class readback costs ~1ms of fixed sync
+     *  regardless of what was drawn, so at a small surface × few reps both
+     *  probes read as pure sync and every verdict flattens to "fast"
+     *  (measured: 192²×6 hid a 15× blend behind identical 0.167ms reads).
+     *  256²×24 puts a genuinely slow blend at ~8ms of real work against
+     *  ~1ms of sync — the ratio survives the noise — while the whole
+     *  lazy probe stays a once-per-session ~12ms. */
+    probeSize: 256,
+    probeReps: 24,
     slowFactorDefault: 6,
     /** Per-probe overrides ({ blendSaturation: 4 } tightens that verdict). */
     slowFactor: {} as Record<string, number>,
+    /** Per-frame ms a full-surface decorative feature may cost before the
+     *  verdict refuses it (the pall's desat asks with the canvas area). */
+    budgetMsDefault: 2,
+    /** Per-probe budget overrides, same shape as slowFactor. */
+    budgetMs: {} as Record<string, number>,
   },
 
   /** EDGE OVERLAYS (vis/overlays.ts): the baked full-screen wash family

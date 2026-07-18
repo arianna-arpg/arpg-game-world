@@ -14,11 +14,18 @@
 // Everything is DATA: a feature is a CapProbe row (id + how to exercise
 // it), the slow/fast verdict is a per-probe multiplier in
 // VIS_CFG.caps.slowFactor, and consumers ask `canvasCap(id)` — true means
-// "fast here, use the pretty path". Adding a future probe (ctx.filter,
-// shadowBlur, …) is one row + one consumer branch. Render-only: the sim
-// never imports this, so verdicts can never move a baseline.
+// "fast here, use the pretty path". A consumer that paints a KNOWN surface
+// per frame passes its pixel area too — `canvasCap(id, w * h)` — and the
+// verdict additionally refuses when the feature's measured EXTRA cost,
+// scaled to that surface, would overrun VIS_CFG.caps.budgetMs: a blend can
+// be "only 2× baseline" and still be a 5ms tax at 1440p, and no decorative
+// flourish is worth that slice of a 16ms frame. Adding a future probe
+// (ctx.filter, shadowBlur, …) is one row + one consumer branch.
+// Render-only: the sim never imports this, so verdicts can never move a
+// baseline.
 //
-// Verdicts are per-SESSION (probed lazily on first ask, ~2-4ms total):
+// Verdicts are per-SESSION (probed lazily on first ask, a few ms total —
+// GPU-class readbacks cost more than software ones, still once-per-run):
 // drivers and browsers change under us, so nothing is persisted.
 // ---------------------------------------------------------------------------
 
@@ -73,7 +80,14 @@ function ensureProbed(): Record<string, number> {
     const C = VIS_CFG.caps;
     const c = document.createElement('canvas');
     c.width = C.probeSize; c.height = C.probeSize;
-    const ctx = c.getContext('2d', { willReadFrequently: true });
+    // SAME surface class as the canvas the verdicts vouch for: the main
+    // canvas is a plain (GPU-eligible) context, so the probe must be too.
+    // `willReadFrequently` would demote the probe to a software raster and
+    // measure the WRONG engine path — a blend the GPU composites for free
+    // can read slow in software (withholding the authored look), and a
+    // software-cheap op can read fast where the real surface stalls. The
+    // 1×1 readback below is what forces the deferred GPU queue honest.
+    const ctx = c.getContext('2d');
     if (!ctx) return results;
     for (const id in CAP_PROBES) {
       results[id] = timeProbe(ctx, C.probeSize, CAP_PROBES[id], C.probeReps);
@@ -89,13 +103,26 @@ function ensureProbed(): Record<string, number> {
 }
 
 /** Is `feature` FAST here? True = use the authored path. Unknown features
- *  and failed probes answer true — the fallback is for measured slowness. */
-export function canvasCap(feature: string): boolean {
+ *  and failed probes answer true — the fallback is for measured slowness.
+ *  Two independent refusals, both data (VIS_CFG.caps):
+ *  - RELATIVE (always): per-op time > baseline × slowFactor — the software
+ *    -fallback detector (the whole surface dropped off the GPU).
+ *  - ABSOLUTE (when the caller passes its per-frame pixel `areaPx`): the
+ *    feature's cost OVER a plain fill, scaled from the probe surface to
+ *    the caller's, exceeds budgetMs — "fast-ish" is still refused when the
+ *    real canvas is big enough to turn it into a frame tax. */
+export function canvasCap(feature: string, areaPx?: number): boolean {
   const r = ensureProbed();
   const base = r.baseline;
   const own = r[feature];
   if (base === undefined || own === undefined || base <= 0) return true;
-  return own <= base * (VIS_CFG.caps.slowFactor[feature] ?? VIS_CFG.caps.slowFactorDefault);
+  const C = VIS_CFG.caps;
+  if (own > base * (C.slowFactor[feature] ?? C.slowFactorDefault)) return false;
+  if (areaPx !== undefined && areaPx > 0) {
+    const extraMs = Math.max(0, own - base) * (areaPx / (C.probeSize * C.probeSize));
+    if (extraMs > (C.budgetMs[feature] ?? C.budgetMsDefault)) return false;
+  }
+  return true;
 }
 
 /** Dev/QA readout: raw per-probe ms and the verdicts. */
