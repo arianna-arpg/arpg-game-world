@@ -22,10 +22,17 @@
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import type { Doodad } from '../../engine/levelgen';
-import { TRACK_CFG, trackPose, type PlacedTrack } from '../../engine/tracks';
+import { TRACK_CFG, trackDone, trackPending, trackPose, type PlacedTrack } from '../../engine/tracks';
 import type { World } from '../../engine/world';
 import { withAlpha } from './color';
 import { PAINTERS, type PaintEnv } from './painters';
+
+/** Retracted (disarmed) or retired (done once-) lanes draw nothing at all —
+ *  the trapworks appear/disappear contract: what cannot hurt you is not
+ *  shown. A gen-carved groove stays baked in the ground as the only tell. */
+function laneLive(tr: PlacedTrack, time: number): boolean {
+  return tr.armed && !trackDone(tr, time);
+}
 
 /** Track bound vs the camera window (both inflated a little — warn arcs and
  *  beam sweeps reach past the polyline). */
@@ -41,6 +48,7 @@ export function drawTrackLanes(ctx: CanvasRenderingContext2D, world: World,
   camX: number, camY: number, vw: number, vh: number): void {
   for (const tr of world.tracks) {
     if (tr.spec.groove) continue;               // the ground bake already carries it
+    if (!laneLive(tr, world.time)) continue;
     if (!inView(tr, camX, camY, vw, vh)) continue;
     const pts = tr.arc.pts;
     ctx.save();
@@ -67,7 +75,34 @@ export function drawTrackLanes(ctx: CanvasRenderingContext2D, world: World,
 export function drawTrackWarnArcs(ctx: CanvasRenderingContext2D, world: World,
   camX: number, camY: number, vw: number, vh: number): void {
   for (const tr of world.tracks) {
+    if (!laneLive(tr, world.time)) continue;
     if (!inView(tr, camX, camY, vw, vh)) continue;
+    // THE RAKE — a PENDING lane (bornAt ahead) strokes its WHOLE coming way,
+    // pulsing harder as birth nears: the volley's firing lines lighting the
+    // room before the bolts fly, the boulder's runway rumbling awake. Same
+    // honest geometry (the arc IS the future for a once-lane).
+    if (trackPending(tr, world.time)) {
+      const r0 = tr.riders[0];
+      if (r0 && (r0.def.payload.hit || r0.def.payload.impulse)) {
+        const lead = (tr.spec.bornAt ?? 0) - world.time;
+        const pulse = 0.16 + 0.2 * (0.5 + 0.5 * Math.sin(world.time * 11))
+          + 0.16 * Math.max(0, 1 - lead / 1.2);
+        const width = r0.def.surface.kind === 'circle'
+          ? r0.def.surface.r * 1.6
+          : Math.min(r0.def.surface.hw, r0.def.surface.hh) * 2.4;
+        const pts = tr.arc.pts;
+        ctx.save();
+        ctx.strokeStyle = withAlpha(r0.def.color ?? '#e8b45a', Math.min(0.5, pulse));
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      continue;
+    }
     const speed = Math.max(1e-3, tr.spec.speed);
     for (const r of tr.riders) {
       const p = r.def.payload;
@@ -108,6 +143,7 @@ export function drawTrackRiders(ctx: CanvasRenderingContext2D, world: World,
   if (!world.tracks.length) return;
   const env: PaintEnv = { ctx, theme: world.zone.theme, time: world.time, world };
   for (const tr of world.tracks) {
+    if (!laneLive(tr, world.time)) continue;
     if (!inView(tr, camX, camY, vw, vh)) continue;
     for (const r of tr.riders) {
       const def = DOODAD_VISUALS[r.def.kind];

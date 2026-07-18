@@ -21,6 +21,7 @@
 import { dist, vec, type Vec2 } from '../core/math';
 import { shapeBoundR, type HitShape } from './shapes';
 import type { TrackSpec, TrackPayload } from './tracks';
+import type { TrapworkSpec } from './trapworks';
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
@@ -700,6 +701,11 @@ export interface GeneratedLayout {
    *  blade. World.loadZone places these; ZoneMsg ships them; rider motion
    *  derives from the synced clock — the geometry is the whole wire. */
   tracks?: TrackSpec[];
+  /** TRAPWORK MECHANISMS (the trapworks fabric, engine/trapworks.ts):
+   *  trigger→effect rows authored at generation (the interiors' trap pass
+   *  lays plates, rays, runways and grooves with full room/corridor
+   *  knowledge). World.loadZone places them; sprung state is transient. */
+  trapworks?: TrapworkSpec[];
 }
 
 /** One secret carved inside the wall mass (the HOLLOWS fabric). The pocket's
@@ -2254,6 +2260,9 @@ export interface GenCtx {
    *  GeneratedLayout.tracks. Builders push via `(ctx.tracks ??= []).push()` —
    *  absent on every trackless layout, zero cost, zero rng. */
   tracks?: TrackSpec[];
+  /** TRAPWORK MECHANISMS a builder/pass authored (the trapworks fabric):
+   *  surfaced on GeneratedLayout.trapworks the same way. */
+  trapworks?: TrapworkSpec[];
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
   /** WAKE HERE: the last spawn cell a plan structure declared (CellSpec.spawn)
@@ -3985,6 +3994,7 @@ export function generateLayout(
     landmarkSpawns: ctx.landmarkSpawns,
     hollows: ctx.hollows,
     tracks: ctx.tracks,
+    trapworks: ctx.trapworks,
   };
 }
 

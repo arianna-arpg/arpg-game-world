@@ -36,6 +36,16 @@ interface TrackSpec {
 }
 ```
 
+**Trapworks extensions** (docs/engine/trapworks.md rides these): `mode:
+'once'` + `bornAt` = a lane born at a clock second running ONE clamped pass
+(pending riders hold the start pose, frozen and harmless — the track layer
+strokes the whole coming way as a pulsing RAKE instead; the World culls done
+lanes with a terminal burst — `trackDone`/`trackPending`); `armed` + `tag`
+= `World.setTracksArmed(tag, on)` retracts/reveals whole lanes (unswept,
+undrawn, unthreatening while off); `ownerId` = actor-id kill credit (the
+presser who loosed the boulder — players wear no tags). Purity holds
+everywhere: local time = clock − bornAt, still the one synced clock.
+
 Three authoring surfaces, one runtime:
 
 1. **Generation** — a landmark builder or recipe pushes `(ctx.tracks ??= [])`

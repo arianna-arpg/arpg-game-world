@@ -110,6 +110,63 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'bumperDome', order: 46,
     params: { body: '#8f8874', rim: '#d8cc9a', core: '#6f6a58' },
   },
+  // THE TRAPWORKS kit (engine/trapworks.ts + data/trapworks.ts): the sunken
+  // city's mechanisms in old bronze and moss-bitten stone. Saw, fan, boulder
+  // and dart are track RIDERS (drawn live via vis/trackLayer.ts); the rest
+  // are standing tells. Verdigris-warm palette on purpose — the same machine
+  // grammar as the Winter King's court, in a dead civilization's metal.
+  ruin_sawblade: {
+    painter: 'shearDisc', order: 50,
+    params: { body: '#8a7a52', edge: '#d0c084', hub: '#4a4232', teeth: 12 },
+  },
+  // AGREEMENT CONTRACT: beamHw/beamHh mirror the rider surface's hw/hh
+  // (validation-pinned) — the drawn arm IS the tested rect.
+  ruin_fanblade: {
+    painter: 'rimeFlail', order: 50,
+    params: { beamHw: 62, beamHh: 10, body: '#8a7a52', edge: '#d8c890' },
+  },
+  ruin_boulder: {
+    painter: 'rollingStone', order: 51,
+    params: { body: '#8a8168', edge: '#c0b088', scar: '#3e382c' },
+  },
+  ruin_dart: {
+    painter: 'dartBolt', order: 52,
+    params: { body: '#6e5a3a', head: '#d8cba0', fletch: '#3a4a3a' },
+  },
+  // The pressure plate: a worn slab a half-tone off the floor. The hidden
+  // variant sits nearly flush (sink) — vis/trapLayer.ts resolves it close-up.
+  ruin_plate: {
+    painter: 'floorPlate', order: 24,
+    params: { body: '#7a7260', rim: '#443e34', boss: '#988c6a' },
+  },
+  ruin_plate_hidden: {
+    painter: 'floorPlate', order: 24,
+    params: { body: '#6e6858', rim: '#57503f', boss: '#6e6858', sink: 0.22 },
+  },
+  // The sprung false floor — a true pit (DoodadRule.fall), wearing the same
+  // chasmPit lip-stone law every drop in the game wears: drawn == tested.
+  ruin_floor_gap: {
+    painter: 'chasmPit', order: 40,
+    params: {
+      rim: { color: '#5a5444', alpha: 0.5, grow: 6 },
+      core: { color: '#050508' },
+      cracks: {},
+      ledges: {},
+      mist: { color: '#6a7a5a', alpha: 0.06 },
+    },
+  },
+  // The perched boulder at a runway's head — the Indiana-Jones tell: you SEE
+  // the stone waiting before you ever find the plate that frees it.
+  boulder_cradle: {
+    painter: 'boulder', order: 52, shadow: 0.5,
+    params: { color: '#8a8168' },
+  },
+  // The dart maw: the watcher-stone gaze slab re-cut as a carved face whose
+  // eye TRACKS you — the wall that watches is the wall that spits.
+  dart_maw: {
+    painter: 'watcherStone', order: 53, shadow: 0.5, longShadow: 1.1,
+    params: { color: '#7d7666', edge: '#3e382c', iris: '#7aa06a' },
+  },
   // LAVA reads as FIRE UNDER PACK ICE now: hot hearts glow up through the
   // merged flow, dark crust plates ride the surface with melt seams burning
   // at their edges, crawl-glow wanders beneath. One body, like water.

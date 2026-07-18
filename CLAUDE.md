@@ -150,6 +150,22 @@ changes.
   (deepwinter's heart graft: ice disc over a chasm moat, shear-disc ring +
   rime-flail rotor + rime bumpers, the Winter King anchored at the wheel) —
   docs in `docs/engine/tracks.md`; probe `balance/probe_tracks.ts`),
+  `trapworks.ts` (THE TRAPWORKS FABRIC — triggers wired to the world's own
+  hazards, as data: plates/triplines (`TrapworkSpec`, feet-honest pure
+  `trapTriggerHit`) driving an OPEN effect registry (`registerTrapEffect` —
+  handlers speak only the narrow `TrapHost`) whose core four ride existing
+  fabrics: `lanes` arm/disarm tagged track lanes, `boulder`/`volley` loose
+  ONCE-lanes (`mode:'once'` + `bornAt` + presser `ownerId` credit; the
+  pending lane's RAKE stroke is the telegraph), `collapse` drops false
+  floors into the pitfall fabric's descend (the swallow = pushActor's
+  tiniest owned nudge — credit intact). Generation-MESHED via the
+  interiorGen trap pass (`layoutParams.trapworks` dials: saw halls, mincer
+  rooms, dart wards, boulder runs, false floors — geometry-honest off real
+  corridors/rooms; sunken_ruin is the debut, its 'toothed halls' variant
+  the dense face). The dead build no allegiance: trap payloads spare NO
+  faction. Kit in `data/trapworks.ts`; hidden-plate close-up resolve in
+  `render/vis/trapLayer.ts`; docs in `docs/engine/trapworks.md`; probe
+  `balance/probe_trapworks.ts`),
   `timeflow.ts` (THE TIMEFLOW FABRIC: time itself as data — one TimeHold
   registry behind the pause menu's real pause, Ultimatum-style menu
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and

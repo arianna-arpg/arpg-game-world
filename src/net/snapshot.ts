@@ -21,6 +21,7 @@ import { Actor, type ActorAdorn, type ActorShape, type Team,
 import type { Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
 import type { TrackSpec } from '../engine/tracks';
+import type { TrapworkSpec } from '../engine/trapworks';
 import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
 import type { ZoneShape } from '../world/shape';
@@ -339,6 +340,19 @@ export interface StateSnapshot {
    *  darkness, wash, and zone-info read it off the world exactly as the
    *  host's renderer does. Present only while > 0. */
   gloom?: number;
+  /** RUNTIME LANE STATE (the track fabric's trapworks levers). `laneArm` =
+   *  the complete tag→armed map whenever any TAGGED lane stands (both-ways
+   *  toggles need the full map — a reverted flip must still converge);
+   *  `laneOnce` = every live ONCE-lane's spec (the loosed boulder, the
+   *  volley in flight) — the wells idiom: this 20 Hz reconcile IS their
+   *  client existence, absence culls, a dropped packet self-heals. */
+  laneArm?: Record<string, 0 | 1>;
+  laneOnce?: TrackSpec[];
+  /** TRAPWORK states (engine/trapworks.ts): id + armed/sprung + spring
+   *  clock, shipped while any mechanism stands — the same idempotent 20 Hz
+   *  convergence; an armed→sprung edge replays each effect's MIRROR half
+   *  client-side (visuals only; lanes ride laneArm/laneOnce). */
+  trapState?: { i: string; s: 0 | 1; t: number }[];
 }
 
 /** One live pooled lightwell: id, kind, pos, doodad radius, power fraction. */
@@ -495,7 +509,33 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
     wells: wellsOf(world),
     gloom: world.gloom() > 0.005 ? Math.round(world.gloom() * 1000) / 1000 : undefined,
+    laneArm: laneArmOf(world),
+    laneOnce: laneOnceOf(world),
+    trapState: world.trapworks.length
+      ? world.trapworks.map(tw => ({ i: tw.id, s: (tw.state === 'sprung' ? 1 : 0) as 0 | 1, t: Math.round(tw.sprungAt * 100) / 100 }))
+      : undefined,
   };
+}
+
+/** The complete tag→armed map (undefined when no tagged lane stands). The
+ *  FULL map ships — trapworks toggles run both ways, so a lane flipped back
+ *  to its authored state must still converge on the client. */
+function laneArmOf(world: World): Record<string, 0 | 1> | undefined {
+  let out: Record<string, 0 | 1> | undefined;
+  for (const tr of world.tracks) {
+    if (!tr.spec.tag) continue;
+    (out ??= {})[tr.spec.tag] = tr.armed ? 1 : 0;   // tags flip in lockstep (setTracksArmed)
+  }
+  return out;
+}
+
+/** Every live once-lane spec (undefined when none — the common case). */
+function laneOnceOf(world: World): TrackSpec[] | undefined {
+  let out: TrackSpec[] | undefined;
+  for (const tr of world.tracks) {
+    if (tr.spec.mode === 'once') (out ??= []).push(tr.spec);
+  }
+  return out;
 }
 
 /** Live pooled lightwells (undefined when none stand — the common case). */
@@ -595,6 +635,13 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     for (const id of snap.hollows) {
       world.openHollow(id, null, { silent: true, bare: true });
     }
+  }
+  // Runtime LANE state (trapworks levers): reconcile tagged arm flips + live
+  // once-lanes every snapshot (undefined laneOnce truly means none stand —
+  // the cull half of the wells idiom). Same zone-identity guard.
+  if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
+    world.setNetLaneState(snap.laneArm, snap.laneOnce);
+    world.setNetTrapState(snap.trapState);
   }
   // Live pooled LIGHTWELLS + the zone's gloom (the Gloaming): converge the
   // local doodad list on the host's wells (upsert by id, absent = gone) and
@@ -849,6 +896,10 @@ export interface ZoneMsg {
    *  synced clock on both sides (trackPose is pure), so lanes cost zero
    *  steady-state bytes and can never desync mid-zone. */
   tracks?: TrackSpec[];
+  /** TRAPWORK MECHANISMS (the trapworks fabric): the host's placed specs —
+   *  the client renders tells/rakes and replays sprung mirrors; all
+   *  authority (sweeps, springs, credit) stays host-side. */
+  trapworks?: TrapworkSpec[];
 }
 
 export function serializeZone(world: World): ZoneMsg {
@@ -867,6 +918,7 @@ export function serializeZone(world: World): ZoneMsg {
     structures: world.structures.length ? world.structures : undefined,
     hollows: world.zoneHollows.length ? world.zoneHollows : undefined,
     tracks: world.tracks.length ? world.tracks.map(t => t.spec) : undefined,
+    trapworks: world.trapworks.length ? world.trapworks.map(t => t.spec) : undefined,
   };
 }
 
@@ -907,4 +959,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   // MOVING-HAZARD LANES: adopt the host's placed specs — the client's track
   // layer poses riders off the synced clock from here on (zero per-tick wire).
   world.setNetTracks(msg.tracks ?? []);
+  // TRAPWORK MECHANISMS: adopt the host's specs (tells already ride the
+  // doodad list above); states converge via StateSnapshot.trapState.
+  world.setNetTrapworks(msg.trapworks ?? []);
 }

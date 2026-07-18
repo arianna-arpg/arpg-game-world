@@ -311,6 +311,153 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE DOWNS — the massif fabric's home country (engine/massif.ts): rolling
+  // bracken heath where LARGE impassable bodies stand in the open — grey tors
+  // and scarp bluffs (true walls), drystone folds (parapets you duel across),
+  // hedge-lines (blind cover shots thread), barrows crowned with old stones.
+  // The MIXTURE archetype: the zone plays OPEN — long sightlines, wide floor —
+  // while every crossing negotiates around the bones. Three faces re-mix the
+  // same mass vocabulary through variant layoutParams alone: the recipe-tweak
+  // doctrine, applied to terrain masses.
+  downs: {
+    id: 'downs',
+    forceLayout: 'massif',
+    compositions: [{ composition: 'stone_sanctum', chance: 0.12 }],
+    nameFirst: ['Bracken', 'Harrow', 'Greywether', 'Wold', 'Mistle', 'Cairn', 'Whinny', 'Old Meadow', 'Shepherd’s', 'Thorn', 'Fallow', 'Drover’s', 'Weathered', 'Barrowman’s'],
+    nameSecond: ['Downs', 'Moor', 'Wolds', 'Leas', 'Heath', 'Fells', 'Commons', 'Folds', 'Acres', 'Pastures', 'Rise', 'Balks'],
+    theme: {
+      dayLight: 1.12,
+      nightDark: 0.8,
+      // Heath floor: dry greens over bruised browns, lifted where the open
+      // weave runs between the bodies (real meadow light), banks dark at the
+      // odd pond margin.
+      ground: {
+        scale: 1.6, strength: 1.05, speckles: 0.4,
+        palette: ['#161c0f', '#232c14', '#31391c', '#3f4826', '#4d5530'], bias: 0.55, alpha: 0.52,
+        coast: { reach: 80, shift: -0.3, kinds: ['water', 'bog'] },
+        clearing: { reach: 120, lift: 0.24 },
+      },
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      floor: '#11150c', grid: '#1a2112', border: '#6a6a4e',
+      obstacle: '#4c473a', obstacleEdge: '#7a7258', accent: '#c8b86a',
+      tree: '#3a5a2e', wall: '#3d3a31',
+    },
+    sizeW: [3200, 4300], sizeH: [2300, 3100], ellipseChance: 0.3, biome: 'downs', sky: 'open',
+    layoutParams: {
+      // The base face mixes the whole vocabulary; coverage sits at the
+      // reference density (country first, bones everywhere).
+      massifMasses: [
+        { kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 2 },
+        { kind: 'fold', weight: 1.3 }, { kind: 'barrow', weight: 1.2 },
+        { kind: 'hedge', weight: 1 },
+      ],
+      massifCoverage: [0.15, 0.23],
+    },
+    layout: [
+      { kind: 'grass', count: [5, 8] },
+      { kind: 'brush', count: [3, 5] },
+      { kind: 'flowers', count: [2, 4] },
+      { kind: 'rocks', count: [4, 8], radius: [16, 32] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'standing_stone', count: [1, 3] },
+      { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'log', count: [1, 3] },
+      { kind: 'cave', count: [0, 2] },
+      { kind: 'camp', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+    ],
+    // Whatever face rolls, the downs always carry their bones' litter.
+    common: [
+      { kind: 'bone_pile', count: [0, 2] },
+    ],
+    variants: [
+      // The stone face: tors and bluffs crowd the heath — cave-mouthed crag
+      // country, the walk-around at its most massive.
+      { name: 'the grey tors', layout: [
+        { kind: 'rocks', count: [6, 10], radius: [18, 38] },
+        { kind: 'scree', count: [3, 5] },
+        { kind: 'grass', count: [4, 6] },
+        { kind: 'standing_stone', count: [1, 2] },
+        { kind: 'cave', count: [1, 3] },
+        { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'tor', weight: 4 }, { kind: 'bluff', weight: 2.5 }, { kind: 'fold', weight: 0.6 }],
+        massifCoverage: [0.18, 0.26], massifSizeR: [190, 340],
+      } },
+      // The settled face: folds, hedge-lines and swallowed steadings — the
+      // old walked land, its courts still holding what the owners left.
+      { name: 'the old fields', layout: [
+        { kind: 'grass', count: [6, 9] },
+        { kind: 'flowers', count: [3, 5] },
+        { kind: 'brush', count: [3, 5] },
+        { kind: 'rocks', count: [3, 5], radius: [14, 26] },
+        { kind: 'dead_tree', count: [1, 3] },
+        { kind: 'camp', count: [0, 1] },
+        { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+      ], layoutParams: {
+        massifMasses: [
+          { kind: 'fold', weight: 3 }, { kind: 'hedge', weight: 2.5 },
+          { kind: 'ruincourt', weight: 2 }, { kind: 'tor', weight: 0.8 },
+        ],
+        massifCoverage: [0.14, 0.2],
+      } },
+      // The burial face: the mounds hold the high ground and the old dead
+      // keep their markers — barrow country under a thin mist.
+      { name: 'the barrowfield', layout: [
+        { kind: 'grass', count: [4, 7] },
+        { kind: 'tombstone', count: [3, 6] },
+        { kind: 'standing_stone', count: [2, 4] },
+        { kind: 'dead_tree', count: [2, 4] },
+        { kind: 'scree', count: [2, 3] },
+        { kind: 'bone_pile', count: [1, 3] },
+      ], layoutParams: {
+        massifMasses: [
+          { kind: 'barrow', weight: 3.5 }, { kind: 'tor', weight: 1 }, { kind: 'fold', weight: 1 },
+        ],
+        massifCoverage: [0.14, 0.21],
+      } },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      // The living downs hunt in packs; the barrows lend their dead where
+      // presence deepens; the stones themselves watch the deep country.
+      table: [
+        { id: 'fen_hound', weight: 3, presence: { to: 18, fadeOut: 8 } },
+        { id: 'dire_wolf', weight: 3 },
+        { id: 'moon_howler', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'gnoll_prowler', weight: 3 },
+        { id: 'gnoll_butcher', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'warband_chieftain', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'zombie', weight: 2, presence: { to: 20, fadeOut: 10 } },
+        { id: 'skeleton_archer', weight: 2 },
+        { id: 'crypt_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'basilisk', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'stone_sentinel', weight: 1, presence: { from: 11, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'procession', weight: 1 },
+    ],
+    caveLayouts: { plains: 3, rooms: 2, dungeon: 1 },
+    // The bodies themselves hide the finds: cache and ambush hollows carve
+    // into tor/bluff wall mass behind brittle seams (grid layout — the
+    // hollows fabric's requirement — comes with the recipe).
+    hollows: {
+      count: [0, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 1 },
+    },
+  },
+
   // THE FOREST — the deep wood proper. Where the deepwood/grove is open
   // woodland you see across, the forest is a CANOPY: the 'forest' layout
   // recipe (biome allowedLayouts) plants veiled walk-under masses whose
@@ -2136,6 +2283,17 @@ export const TILESETS: Record<string, TilesetDef> = {
     layoutParams: {
       interiorWall: 'ruin_wall', floorStyle: 'flagstone',
       rooms: [7, 11], doorChance: 0.6, corridorCells: 2,
+      // THE TRAPWORKS (engine/trapworks.ts + the interiorGen trap pass):
+      // what tells a sunken hall from a Durance cell — the Durance TORMENTS
+      // (racks, cages, hate); the sunken city DEFENDS. Every face fields
+      // some of the old machines; the 'toothed halls' variant fields most.
+      trapworks: {
+        sawHalls: { chance: 0.55, max: 2 },
+        dartWards: { chance: 0.5, max: 2 },
+        boulderRuns: { chance: 0.4, max: 1 },
+        falseFloors: { chance: 0.45, max: 1 },
+        mincerRooms: { chance: 0.3, max: 1 },
+      },
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
     // rubble off the old vaults, roots that got here first, the gloom's own
@@ -2168,6 +2326,22 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'marsh_wisp', count: [1, 2] },
         { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
       ] },
+      // The MACHINES won: the face where the old defenses barely slept —
+      // grooves scored into every hall, plinths for the mechanism hearts,
+      // and the trap pass dialed to full (the Indiana-Jones face).
+      { name: 'toothed halls', layout: [
+        { kind: 'ruin_plinth', count: [1, 3] },
+        { kind: 'rubble', count: [2, 4] },
+        { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
+      ], layoutParams: {
+        trapworks: {
+          sawHalls: { chance: 0.9, max: 3 },
+          dartWards: { chance: 0.8, max: 2 },
+          boulderRuns: { chance: 0.7, max: 1 },
+          falseFloors: { chance: 0.7, max: 2 },
+          mincerRooms: { chance: 0.65, max: 1 },
+        },
+      } },
     ],
     nameFirst: ['Sunken', 'Swallowed', 'Rootbound', 'Verdigris', 'Mosswrit', 'Drowned', 'Forgotten', 'Greenlaid', 'Strangled', 'Old'],
     nameSecond: ['Halls', 'Undercroft', 'Sanctum', 'Vaults', 'Precinct', 'Galleries', 'Cloister', 'Reliquary'],
@@ -2196,9 +2370,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         // wardens the city left, then what crawled in after all of them.
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 2 },
-        // The Hollowborn — what the flood interred, the halls still field.
-        { id: 'blade_swarm', weight: 2, presence: { from: 6, fadeIn: 3 } },
-        { id: 'shield_anima', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The city's OWN dead + its standing wardens (the Hollowborn went
+        // home to the Durance — that spine is theirs; this crypt fields the
+        // civilization that built the machines).
+        { id: 'crypt_warden', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'colossus_shard', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'ruin_sentinel', weight: 2, presence: { from: 8, fadeIn: 3 } },
         { id: 'blowgun_wretch', weight: 2, presence: { to: 16, fadeOut: 7 } },
         { id: 'strangler_maw', weight: 1, presence: { from: 8, fadeIn: 4 } },

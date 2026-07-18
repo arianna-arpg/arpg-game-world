@@ -23,9 +23,10 @@ import { vec, type Vec2 } from '../core/math';
 import type { StampSpec, ZoneDef } from '../data/zones';
 import { GridWalkField } from '../world/gridWalk';
 import {
-  doorSurfaceOf, layoutParam, registerLayout, scatterDecoration, stampEntries,
+  doorSurfaceOf, layoutParam, layTraveledWay, registerLayout, scatterDecoration, stampEntries,
   type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
 } from './levelgen';
+import { ringPath } from './tracks';
 
 const CELL = 30;
 /** Interior margin (cells) between the arena border and any carved space. */
@@ -343,8 +344,8 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
     const cur = queue.shift()!;
     for (const nx of adj[cur]) if (depth[nx] < 0) { depth[nx] = depth[cur] + 1; queue.push(nx); }
   }
+  const assigned = new Set<number>();
   if (P('roles', true)) {
-    const assigned = new Set<number>();
     for (const role of interiorRoleDefs()) {
       const eligible = rooms.map((_, i) => i)
         .filter(i => !rooms[i].portal && !assigned.has(i) && depth[i] >= 0);
@@ -378,9 +379,269 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
     }
   }
 
+  // 7.5) THE TRAP PASS (the trapworks fabric): the crypt's mechanisms laid
+  // WITH the geometry in hand — saw lanes down real corridor stretches,
+  // rotor mincers in real chambers, plates wired to volleys/boulders/false
+  // floors at real coordinates. Runs BEFORE scatter so every carved groove
+  // is clearway-protected against squatting clutter.
+  layInteriorTrapworks(ctx, P('trapworks', undefined) as TrapGenSpec | undefined,
+    { rooms, adj, assigned, grid, halfW, doors: placedDoors });
+
   // 8) The tileset's own clutter dresses the carved floor (walk-gated), same
   // as rooms/flesh/mycelia.
   scatterDecoration(ctx, def);
+}
+
+// --- THE TRAP PASS -------------------------------------------------------------
+// layoutParams.trapworks (TrapGenSpec) dials which mechanism archetypes a
+// tileset's interiors field and how hard. All geometry-honest: candidates are
+// measured off the ACTUAL carved corridors (grid center-line runs outside
+// every room rect) and the ACTUAL rooms, portals and doors keep clearance,
+// and every rng draw rides the layout stream — genqa's determinism invariant
+// pins the whole pass for free.
+
+/** The tileset dial set (layoutParams.trapworks). Chances roll per attempt
+ *  slot (max slots each), so draw shape is fixed per archetype. */
+export interface TrapGenSpec {
+  /** Always-on buzzsaw lanes shuttling long corridor stretches. */
+  sawHalls?: { chance: number; max?: number };
+  /** Room-spanning rotor arms wheeling big chambers (the meat mincer). */
+  mincerRooms?: { chance: number; max?: number };
+  /** A visible plate mid-corridor wired to a dart volley raking across it. */
+  dartWards?: { chance: number; max?: number };
+  /** A HIDDEN plate deep in a long hall that looses the cradled boulder
+   *  down it (single-use; the runway groove is the tell). */
+  boulderRuns?: { chance: number; max?: number };
+  /** Hidden plates in dead-end chambers whose wrong step drops the floor
+   *  into the stratum below (the pitfall fabric's descend). */
+  falseFloors?: { chance: number; max?: number };
+}
+
+interface TrapGeo {
+  rooms: IntRoom[];
+  adj: number[][];
+  assigned: Set<number>;
+  grid: GridWalkField;
+  halfW: number;
+  doors: PlacedDoor[];
+}
+
+/** A straight corridor stretch: the longest center-line run along one leg of
+ *  an L-corridor that is walkable and OUTSIDE every room rect. */
+interface TrapStretch { a: Vec2; b: Vec2; len: number; horiz: boolean; used?: boolean }
+
+function corridorStretch(geo: TrapGeo, from: Vec2, to: Vec2): TrapStretch | null {
+  const horiz = Math.abs(to.y - from.y) < 0.01;
+  const len = Math.hypot(to.x - from.x, to.y - from.y);
+  if (len < 60) return null;
+  const step = CELL / 2;
+  const n = Math.ceil(len / step);
+  let best: [number, number] | null = null;
+  let runStart = -1;
+  for (let i = 0; i <= n; i++) {
+    const f = i / n;
+    const x = from.x + (to.x - from.x) * f, y = from.y + (to.y - from.y) * f;
+    const clear = geo.grid.isWalkable(x, y)
+      && !geo.rooms.some(r => x > r.x - 2 && x < r.x + r.w + 2 && y > r.y - 2 && y < r.y + r.h + 2);
+    if (clear && runStart < 0) runStart = i;
+    if ((!clear || i === n) && runStart >= 0) {
+      const runEnd = clear ? i : i - 1;
+      if (!best || runEnd - runStart > best[1] - best[0]) best = [runStart, runEnd];
+      runStart = -1;
+    }
+  }
+  if (!best) return null;
+  // Shrink both ends most of a cell so lanes never kiss a room mouth (or its
+  // door) — dungeon corridors are SHORT; over-trimming starves every archetype.
+  const f0 = Math.min(1, (best[0] * step + CELL * 0.8) / len);
+  const f1 = Math.max(0, (best[1] * step - CELL * 0.8) / len);
+  if (f1 <= f0) return null;
+  const a = vec(from.x + (to.x - from.x) * f0, from.y + (to.y - from.y) * f0);
+  const b = vec(from.x + (to.x - from.x) * f1, from.y + (to.y - from.y) * f1);
+  const sl = Math.hypot(b.x - a.x, b.y - a.y);
+  return sl >= 80 ? { a, b, len: sl, horiz } : null;
+}
+
+function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: TrapGeo): void {
+  if (!spec) return;
+  const { rng } = ctx;
+  const portalPts = [ctx.entry, ...ctx.exits];
+  const clearOfPortals = (p: Vec2, min = 150): boolean =>
+    portalPts.every(q => Math.hypot(p.x - q.x, p.y - q.y) >= min);
+  const clearOfDoors = (p: Vec2, min = 70): boolean =>
+    geo.doors.every(d => Math.hypot(p.x - d.pos.x, p.y - d.pos.y) >= min);
+  const lerpAt = (s: TrapStretch, f: number): Vec2 =>
+    vec(s.a.x + (s.b.x - s.a.x) * f, s.a.y + (s.b.y - s.a.y) * f);
+
+  // Candidate stretches off the REAL carved corridors, longest first.
+  const stretches: TrapStretch[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < geo.rooms.length; i++) {
+    for (const j of geo.adj[i]) {
+      if (j <= i) continue;
+      const a = geo.rooms[i], b = geo.rooms[j];
+      for (const leg of [
+        [vec(a.cx, a.cy), vec(b.cx, a.cy)],
+        [vec(b.cx, a.cy), vec(b.cx, b.cy)],
+      ] as const) {
+        const s = corridorStretch(geo, leg[0], leg[1]);
+        if (!s) continue;
+        const key = `${Math.round((s.a.x + s.b.x) / 2)}:${Math.round((s.a.y + s.b.y) / 2)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!clearOfPortals(lerpAt(s, 0.5))) continue;
+        stretches.push(s);
+      }
+    }
+  }
+  stretches.sort((x, y) => y.len - x.len);
+  const takeStretch = (minLen: number): TrapStretch | null => {
+    for (const s of stretches) {
+      if (!s.used && s.len >= minLen) { s.used = true; return s; }
+    }
+    return null;
+  };
+
+  // --- BOULDER RUNS: the longest halls first (hidden plate deep in, cradle
+  // at the head, runway groove the whole way — single-use).
+  for (let k = 0; k < (spec.boulderRuns?.max ?? 1); k++) {
+    const want = rng.chance(spec.boulderRuns?.chance ?? 0);
+    if (!want) continue;
+    const s = takeStretch(240);
+    if (!s) continue;
+    const plate = lerpAt(s, 0.62);
+    if (!clearOfDoors(plate)) continue;
+    (ctx.trapworks ??= []).push({
+      id: `gen_boulder${k}`,
+      trigger: { kind: 'plate', at: plate, r: 15 },
+      hidden: true,
+      effects: [{ kind: 'boulder', from: { x: s.a.x, y: s.a.y }, to: { x: s.b.x, y: s.b.y } }],
+      announce: 'stone grinds loose overhead —',
+    });
+    ctx.doodads.push({ pos: vec(s.a.x, s.a.y), radius: 24, kind: 'boulder_cradle' });
+    layTraveledWay(ctx, [s.a, s.b], { kind: 'track_groove', band: [12, 15], step: 26, overgrowth: 0 });
+  }
+
+  // --- SAW HALLS: always-on shuttling blades, groove carved, learnable.
+  for (let k = 0; k < (spec.sawHalls?.max ?? 1); k++) {
+    const want = rng.chance(spec.sawHalls?.chance ?? 0);
+    if (!want) continue;
+    const s = takeStretch(140);
+    if (!s) continue;
+    const two = s.len >= 280;
+    (ctx.tracks ??= []).push({
+      path: [{ x: s.a.x, y: s.a.y }, { x: s.b.x, y: s.b.y }],
+      mode: 'pingpong',
+      speed: 140,
+      riders: two
+        ? [{ kind: 'ruin_sawblade', phase: 0 }, { kind: 'ruin_sawblade', phase: 0.5 }]
+        : [{ kind: 'ruin_sawblade' }],
+      groove: true,
+    });
+    layTraveledWay(ctx, [s.a, s.b], { kind: 'track_groove', band: [13, 16], step: 26, overgrowth: 0 });
+  }
+
+  // --- DART WARDS: a visible plate mid-hall; carved maws on one wall; a
+  // volley rakes ACROSS the corridor when pressed (re-arms — a standing ward).
+  for (let k = 0; k < (spec.dartWards?.max ?? 1); k++) {
+    const want = rng.chance(spec.dartWards?.chance ?? 0);
+    if (!want) continue;
+    const s = takeStretch(130);
+    if (!s) continue;
+    const mid = lerpAt(s, 0.5);
+    if (!clearOfDoors(mid)) continue;
+    const alongX = s.horiz ? 1 : 0, alongY = s.horiz ? 0 : 1;
+    const perpX = s.horiz ? 0 : 1, perpY = s.horiz ? 1 : 0;
+    const reach = geo.halfW + CELL * 0.9;
+    const rays: { a: Vec2; b: Vec2 }[] = [];
+    const count = 4;
+    for (let i = 0; i < count; i++) {
+      const off = (i - (count - 1) / 2) * CELL * 0.9;
+      const cx = mid.x + alongX * off, cy = mid.y + alongY * off;
+      rays.push({
+        a: { x: cx - perpX * reach, y: cy - perpY * reach },
+        b: { x: cx + perpX * reach, y: cy + perpY * reach },
+      });
+      ctx.doodads.push({
+        pos: vec(cx - perpX * (reach - 4), cy - perpY * (reach - 4)),
+        radius: 12, kind: 'dart_maw',
+      });
+    }
+    (ctx.trapworks ??= []).push({
+      id: `gen_dartward${k}`,
+      trigger: { kind: 'plate', at: mid, r: 16 },
+      rearm: 7,
+      effects: [{ kind: 'volley', rays }],
+      announce: 'the carved mouths draw breath —',
+    });
+  }
+
+  // --- MINCER ROOMS: rotor arms wheeling the chamber — the room IS the
+  // hazard, and anything that walks it (either side) feeds the blades.
+  const bigRooms = geo.rooms
+    .map((r, i) => ({ r, i }))
+    .filter(({ r, i }) => !r.portal && !geo.assigned.has(i)
+      && Math.min(r.w, r.h) >= CELL * 5.2 && clearOfPortals(vec(r.cx, r.cy), 150));
+  let mincersLaid = 0;
+  for (let k = 0; k < (spec.mincerRooms?.max ?? 1); k++) {
+    const want = rng.chance(spec.mincerRooms?.chance ?? 0);
+    if (!want) continue;
+    const cand = bigRooms[mincersLaid];
+    if (!cand) continue;
+    mincersLaid++;
+    const rm = cand.r;
+    // Hub sized so the arm's tip (hub + 62) clears the walls by ≥ 6px — a
+    // small room gets a center-pivot ceiling fan, a great hall a wide wheel.
+    const hubR = Math.max(8, Math.min(rm.w, rm.h) * 0.5 - 68);
+    (ctx.tracks ??= []).push({
+      path: ringPath(rm.cx, rm.cy, hubR, 16, rng.range(0, Math.PI * 2)),
+      closed: true,
+      mode: 'loop',
+      speed: 105,
+      riders: [{ kind: 'ruin_fanblade', phase: 0 }, { kind: 'ruin_fanblade', phase: 0.5 }],
+      groove: false,
+    });
+  }
+
+  // --- FALSE FLOORS: dead-end chambers where the wrong flagstone is a door
+  // to the stratum below (hidden plates; the pitfall fabric owns the drop —
+  // in a cave-rung interior the descend default already mints the hollow).
+  const deadEnds = geo.rooms
+    .map((r, i) => ({ r, i }))
+    .filter(({ r, i }) => !r.portal && geo.adj[i].length === 1
+      && Math.min(r.w, r.h) >= CELL * 4.6 && clearOfPortals(vec(r.cx, r.cy), 170));
+  let floorsLaid = 0;
+  for (let k = 0; k < (spec.falseFloors?.max ?? 1); k++) {
+    const want = rng.chance(spec.falseFloors?.chance ?? 0);
+    if (!want) continue;
+    const cand = deadEnds[floorsLaid];
+    if (!cand) continue;
+    floorsLaid++;
+    const rm = cand.r;
+    const inX = rm.x + CELL * 1.2, inW = rm.w - CELL * 2.4;
+    const inY = rm.y + CELL * 1.2, inH = rm.h - CELL * 2.4;
+    for (let p = 0; p < 2; p++) {
+      const at = vec(inX + rng.range(0.15, 0.85) * inW, inY + rng.range(0.15, 0.85) * inH);
+      if (!clearOfDoors(at)) continue;
+      const a2 = rng.range(0, Math.PI * 2);
+      (ctx.trapworks ??= []).push({
+        id: `gen_floor${k}_${p}`,
+        trigger: { kind: 'plate', at, r: 14 },
+        hidden: true,
+        effects: [{
+          kind: 'collapse',
+          cells: [
+            { x: at.x, y: at.y, r: 26 },
+            { x: at.x + Math.cos(a2) * 30, y: at.y + Math.sin(a2) * 30, r: 24 },
+            { x: at.x - Math.cos(a2 + 0.9) * 26, y: at.y - Math.sin(a2 + 0.9) * 26, r: 22 },
+          ],
+        }],
+        announce: 'the flags shift underfoot —',
+      });
+    }
+    // The honest whisper: a little rubble where the masons cut corners.
+    ctx.doodads.push({ pos: vec(rm.cx + rng.range(-14, 14), rm.cy + rng.range(-14, 14)), radius: 12, kind: 'rubble' });
+  }
 }
 
 registerLayout('dungeon', (ctx, def) => interiorLayout(ctx, def));

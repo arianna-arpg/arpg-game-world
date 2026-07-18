@@ -148,8 +148,11 @@ export interface TrackSpec {
   /** Closed ring (the last point joins the first). */
   closed?: boolean;
   /** 'loop' circulates (closed or open-with-teleport-home is refused —
-   *  open loops require closed geometry); 'pingpong' shuttles end↔end. */
-  mode?: 'loop' | 'pingpong';
+   *  open loops require closed geometry); 'pingpong' shuttles end↔end;
+   *  'once' runs the open lane a SINGLE pass from birth (`bornAt`) and
+   *  retires at the far end (the loosed boulder, the dart in flight —
+   *  World.updateTracks culls the done lane with a terminal burst). */
+  mode?: 'loop' | 'pingpong' | 'once';
   /** Lane speed, px/s. */
   speed: number;
   /** Dwell plateaus: the rider PAUSES `sec` on arriving at waypoint index
@@ -164,6 +167,23 @@ export interface TrackSpec {
   /** Actor TAG credited for this lane's kills and shoves (the King owns his
    *  court's blades) — resolved live, absent = uncredited environment. */
   ownerTag?: string;
+  /** Actor ID credited instead (the trapworks lane a presser loosed —
+   *  players wear no tags; resolved live like ownerTag, id outranks tag). */
+  ownerId?: number;
+  /** Zone-clock second this lane goes LIVE (default 0 = the zone's own
+   *  dawn). Before it, riders hold the lane's start pose, PENDING — unspun,
+   *  unswept, unthreatening; the track layer strokes the whole coming lane
+   *  instead (the volley's rake flashing before the bolts fly). Purity
+   *  holds: local time = clock − bornAt, still the one synced clock. */
+  bornAt?: number;
+  /** Initial armed state (default true). A DISARMED lane retracts whole:
+   *  riders undrawn, unswept, unthreatening — only a gen-carved groove
+   *  remains as the tell. Flipped live via World.setTracksArmed(tag) — the
+   *  pressure plate's appear/disappear lever. */
+  armed?: boolean;
+  /** Wiring handle: the trapworks fabric (and anything else) arms, disarms
+   *  and finds lanes by tag. Not unique — one plate may throw many lanes. */
+  tag?: string;
 }
 
 // --- placed tracks (runtime) ----------------------------------------------
@@ -184,12 +204,15 @@ export interface PlacedTrack {
   schedule: ScheduleSpan[];
   /** Seconds for one one-way pass (travel + pauses). */
   passSec: number;
-  /** Full cycle: loop = passSec; pingpong = 2·passSec. */
+  /** Full cycle: loop = passSec; pingpong = 2·passSec; once = passSec. */
   periodSec: number;
   riders: PlacedRider[];
   /** Lane AABB inflated by the widest rider's reach — the threat scan's and
    *  the render cull's quick reject. */
   bound: { x0: number; y0: number; x1: number; y1: number };
+  /** Live armed state (seeded from spec.armed; flipped by setTracksArmed).
+   *  The ONE gate the sweep, the threat scan, and the track layer all read. */
+  armed: boolean;
 }
 
 export interface PlacedRider {
@@ -201,8 +224,10 @@ export interface PlacedRider {
 
 /** A resolved rider pose — position, lane bearing, surface rotation. The ONE
  *  truth the contact sweep, the painter, the warn arc, and the threat scan
- *  all sample. */
-export interface TrackPose { x: number; y: number; dir: number; rot: number; paused: boolean }
+ *  all sample. `pending` = the lane's bornAt hasn't struck yet: the rider
+ *  holds the start pose, frozen and harmless (the boulder still in its
+ *  cradle, the bolt still in the wall). */
+export interface TrackPose { x: number; y: number; dir: number; rot: number; paused: boolean; pending?: boolean }
 
 // --- construction ----------------------------------------------------------
 
@@ -247,6 +272,7 @@ export function placeTrack(spec: TrackSpec): PlacedTrack {
   const minPts = spec.closed ? 3 : 2;
   if (!spec.path || spec.path.length < minPts) throw new Error(`[tracks] path needs ≥${minPts} points`);
   if ((spec.mode ?? 'loop') === 'loop' && !spec.closed) throw new Error(`[tracks] 'loop' requires closed geometry (use pingpong for open lanes)`);
+  if (spec.mode === 'once' && spec.closed) throw new Error(`[tracks] 'once' rides an open lane (a closed ring has no far end to retire at)`);
   const arc = buildArc(spec.path, !!spec.closed);
   if (arc.total < 24) throw new Error(`[tracks] degenerate lane (${arc.total.toFixed(1)}px)`);
   const { spans, passSec } = buildSchedule(arc, spec);
@@ -266,7 +292,7 @@ export function placeTrack(spec: TrackSpec): PlacedTrack {
     x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
   }
   const bound = { x0: x0 - maxReach, y0: y0 - maxReach, x1: x1 + maxReach, y1: y1 + maxReach };
-  return { spec, arc, schedule: spans, passSec, periodSec, riders, bound };
+  return { spec, arc, schedule: spans, passSec, periodSec, riders, bound, armed: spec.armed ?? true };
 }
 
 // --- the pure resolver -----------------------------------------------------
@@ -302,19 +328,37 @@ function scheduleS(spans: ScheduleSpan[], t: number): { s: number; paused: boole
 }
 
 /** THE resolver: a rider's exact pose at an absolute clock second. Pure —
- *  same clock in, same pose out, on every seat and every resume. */
+ *  same clock in, same pose out, on every seat and every resume. A lane with
+ *  `bornAt` runs on LOCAL time (clock − bornAt): before birth the rider
+ *  holds the start pose pending and unspun; a 'once' lane clamps at the far
+ *  end instead of wrapping (the shatter pose the cull reads). Absent bornAt,
+ *  local time == the clock — existing lanes are numerics-identical. */
 export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider?: TrackRiderDef): TrackPose {
+  const tl = timeSec - (tr.spec.bornAt ?? 0);
+  if (tl < 0) {
+    const { s } = scheduleS(tr.schedule, 0);
+    const p = pointAt(tr.arc, s);
+    const base = rider?.surface.kind === 'rect'
+      ? p.dir + (rider.orient === 'radial' ? -Math.PI / 2 : 0)
+      : p.dir;
+    return { x: p.x, y: p.y, dir: p.dir, rot: base, paused: true, pending: true };
+  }
   const period = Math.max(1e-3, tr.periodSec);
-  let t = ((timeSec + phase * period) % period + period) % period;
+  let t: number;
   let reversed = false;
-  if ((tr.spec.mode ?? 'loop') === 'pingpong' && t > tr.passSec) {
-    t = tr.periodSec - t;          // mirror the return leg through the SAME schedule
-    reversed = true;
+  if (tr.spec.mode === 'once') {
+    t = Math.min(tl, tr.passSec);  // single pass — clamp at the far end, never wrap
+  } else {
+    t = ((tl + phase * period) % period + period) % period;
+    if ((tr.spec.mode ?? 'loop') === 'pingpong' && t > tr.passSec) {
+      t = tr.periodSec - t;        // mirror the return leg through the SAME schedule
+      reversed = true;
+    }
   }
   const { s, paused } = scheduleS(tr.schedule, t);
   const p = pointAt(tr.arc, s);
   const dir = reversed ? p.dir + Math.PI : p.dir;
-  const spin = (rider?.spin ?? 0) * timeSec;
+  const spin = (rider?.spin ?? 0) * tl;
   // 'radial' turns the rect across the lane; on a CCW ring the −π/2 turn
   // points local −x at the ring's center, so a hub-ended painter (the flail's
   // boss) lands its pivot at the wheel's heart. The surface is symmetric —
@@ -330,6 +374,20 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
 export function riderSurface(def: TrackRiderDef, pose: TrackPose): HitShape {
   if (def.surface.kind === 'circle') return { kind: 'circle', r: def.surface.r };
   return { kind: 'rect', hw: def.surface.hw, hh: def.surface.hh, rot: pose.rot };
+}
+
+/** A 'once' lane whose single pass has fully run (local time past the far
+ *  end) — the cull test World.updateTracks and the probe both read. Pure of
+ *  the same clock as trackPose; cyclic lanes are never done. */
+export function trackDone(tr: PlacedTrack, timeSec: number): boolean {
+  if (tr.spec.mode !== 'once') return false;
+  return timeSec - (tr.spec.bornAt ?? 0) >= tr.passSec;
+}
+
+/** Still waiting on bornAt — the pending read shared by the sweep skip, the
+ *  track layer's rake telegraph, and the threat scan. */
+export function trackPending(tr: PlacedTrack, timeSec: number): boolean {
+  return timeSec < (tr.spec.bornAt ?? 0);
 }
 
 // --- author helpers --------------------------------------------------------
@@ -357,6 +415,10 @@ export function lintTrackSpec(spec: TrackSpec, where: string): string[] {
   const minPts = spec.closed ? 3 : 2;
   if (!spec.path || spec.path.length < minPts) out.push(`${where}: path needs ≥${minPts} points`);
   if ((spec.mode ?? 'loop') === 'loop' && !spec.closed) out.push(`${where}: 'loop' requires closed:true (open lanes pingpong)`);
+  if (spec.mode === 'once' && spec.closed) out.push(`${where}: 'once' requires an open lane (closed rings never retire)`);
+  if (spec.mode === 'once' && (spec.riders?.length ?? 0) > 1 && spec.riders.some(r => (r.phase ?? 0) !== 0)) {
+    out.push(`${where}: 'once' riders share the single pass — phase offsets are dead weight (stagger bornAt across lanes instead)`);
+  }
   if (!(spec.speed > 0) || spec.speed > 600) out.push(`${where}: speed ${spec.speed} outside (0,600] px/s`);
   if (!spec.riders?.length) out.push(`${where}: lane with no riders`);
   for (const r of spec.riders ?? []) {

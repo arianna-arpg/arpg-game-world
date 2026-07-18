@@ -23,6 +23,7 @@ import type { FluxSpec } from '../engine/flux';
 import type { RecoveryPolicy } from '../world/regions';
 import type { SpanRowSpec } from '../engine/spans';
 import type { TrackSpec } from '../engine/tracks';
+import type { TrapworkSpec } from '../engine/trapworks';
 import { dimensionDef } from '../world/dimensions';
 import type { WildlifeRow } from './monsters';
 
@@ -510,6 +511,11 @@ export interface ZoneTheme {
    *  under the blade there). Rider poses derive from the shared clock —
    *  deterministic across seats and resumes by construction. */
   tracks?: TrackSpec[];
+  /** TRAPWORK MECHANISMS (engine/trapworks.ts) for FIXED layouts — plates,
+   *  triplines and their wired effects at authored coordinates; generated
+   *  zones author trapworks from their own gen pass instead (plates seated
+   *  in real corridors, runways pre-grooved). */
+  trapworks?: TrapworkSpec[];
   /** THE UNDERSTORY (render/vis/understory.ts): what shows through this
    *  zone's `window` region cells. 'cloudsea' = the endless procedural cloud
    *  deck. A zone with `ZoneDef.below` shows the CAPTURED zone beneath it

@@ -4693,6 +4693,21 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 1.1,
   },
+  /** The Shard: the toppled colossus's animate fragment — HEADLESS masonry
+   *  (no eyes at all: the sentinel's lit gaze is exactly what this is not),
+   *  bigger plates, brighter moss, verdigris fracture seams, the broken
+   *  forearm dragged as a maul. Reads at a glance: statue-kin, but a piece
+   *  of something much larger. */
+  colossus_shard: {
+    parts: [
+      { kind: 'torso', color: '#8a8168', scale: 1.28 },
+      { kind: 'armorPlates', color: '#6e6752', scale: 1.15 },
+      { kind: 'mossPatch', color: '#6a8a48', scale: 1.1 },
+      { kind: 'stitchSeams', color: '#7aa06a', scale: 1.0 },
+      { kind: 'hammer', color: '#565040', scale: 1.3 },
+    ],
+    shadowScale: 1.25,
+  },
   /** The Tyrant: crest and frill over old chitin — the treeline's own crown. */
   verdant_tyrant: {
     parts: [

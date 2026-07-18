@@ -71,6 +71,7 @@ import { drawFogLayer } from './vis/fogLayer';
 import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
 import { drawTrackLanes, drawTrackRiders, drawTrackWarnArcs } from './vis/trackLayer';
+import { drawTrapworkTells } from './vis/trapLayer';
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
 import { cameraModeOf, placeCamera } from './camera';
@@ -358,6 +359,11 @@ export class Renderer {
     // under actors, sampling the riders' ACTUAL future along their lanes.
     if (world.tracks.length && !VIS_ABLATE.has('tracks')) {
       drawTrackWarnArcs(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
+    }
+    // TRAPWORK TELLS (vis/trapLayer.ts): hidden triggers resolve close-up
+    // for the LOCAL hero — the keen eye at a walk spots the odd flagstone.
+    if (world.trapworks.length && !VIS_ABLATE.has('tracks')) {
+      drawTrapworkTells(this.ctx, world, world.player.pos.x, world.player.pos.y);
     }
     this.drawDeathBursts(world);   // coalescing spore/orb gather + the tracking volatile orb
     this.drawEncounters(world);    // breach diamonds + their growing fields (under actors)

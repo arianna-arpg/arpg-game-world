@@ -8314,8 +8314,150 @@ const bumperDome: GroupPainter = (env, group, def) => {
   }
 };
 
+/** ROLLING STONE — the loosed boulder in motion (the trapworks kit): one
+ *  round mass whose crack seams and chip scars turn WITH d.rot, so the roll
+ *  reads at a glance (the boulder painter re-seeds its lobes from position —
+ *  right for standing rock, shape-morphing for a mover; this one is
+ *  rotation-stable by construction). Drawn to d.radius under d.rot —
+ *  the tested disc exactly. */
+const rollingStone: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { body?: ColorSpec; edge?: ColorSpec; scar?: ColorSpec };
+  const body = resolveColor(p.body, theme, '#8a8168');
+  const edge = resolveColor(p.edge, theme, '#b8ac86');
+  const scar = resolveColor(p.scar, theme, shade(body, -0.4));
+  for (const d of group) {
+    const r = d.radius;
+    ctx.save();
+    ctx.translate(d.pos.x, d.pos.y);
+    // Ground shadow — heavy, tight under the mass.
+    ctx.fillStyle = 'rgba(6, 10, 16, 0.46)';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.16, r * 1.04, r * 0.86, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (d.rot !== undefined) ctx.rotate(d.rot);
+    // The mass: dark base disc, lit crown offset opposite travel.
+    ctx.fillStyle = shade(body, -0.24);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(-r * 0.08, -r * 0.1, r * 0.84, 0, Math.PI * 2);
+    ctx.fill();
+    // Crack seams + chip scars, all in rotating space — the roll's read.
+    ctx.strokeStyle = withAlpha(scar, 0.9);
+    ctx.lineWidth = Math.max(1.6, r * 0.07);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2 + 0.7;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22);
+      ctx.quadraticCurveTo(
+        Math.cos(a + 0.5) * r * 0.55, Math.sin(a + 0.5) * r * 0.55,
+        Math.cos(a + 0.34) * r * 0.9, Math.sin(a + 0.34) * r * 0.9);
+      ctx.stroke();
+    }
+    ctx.fillStyle = withAlpha(edge, 0.55);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 2.1;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.58, Math.sin(a) * r * 0.58, r * 0.11, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = withAlpha(edge, 0.8);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.97, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** FLOOR PLATE — the pressure plate (the trapworks kit): a flat inset slab
+ *  a shade off the floor, rim-scored, with a worn center boss. `sink`
+ *  alphas the whole tell toward the floor — the hidden variant's whole
+ *  difference is its palette sitting nearly flush (render/vis/trapLayer.ts
+ *  adds the close-up resolve for those). Flat by design: no shadow — a
+ *  plate is IN the floor, not on it. */
+const floorPlate: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { body?: ColorSpec; rim?: ColorSpec; boss?: ColorSpec; sink?: number };
+  const body = resolveColor(p.body, theme, '#7a7260');
+  const rim = resolveColor(p.rim, theme, '#4a443a');
+  const boss = resolveColor(p.boss, theme, '#948a6e');
+  const sink = p.sink ?? 1;
+  for (const d of group) {
+    const r = d.radius;
+    ctx.save();
+    ctx.translate(d.pos.x, d.pos.y);
+    ctx.globalAlpha *= sink;
+    // The inset: dark seam ring, then the plate a half-tone off the floor.
+    ctx.strokeStyle = withAlpha(rim, 0.85);
+    ctx.lineWidth = Math.max(1.6, r * 0.14);
+    ctx.beginPath();
+    ctx.rect(-r * 0.92, -r * 0.92, r * 1.84, r * 1.84);
+    ctx.stroke();
+    ctx.fillStyle = withAlpha(body, 0.9);
+    ctx.fillRect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
+    // Worn boss + corner pins — the "this square answers" grammar.
+    ctx.fillStyle = withAlpha(boss, 0.8);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = withAlpha(rim, 0.9);
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      ctx.beginPath();
+      ctx.arc(sx * r * 0.62, sy * r * 0.62, r * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** DART BOLT — the volley's bolt in flight (the trapworks kit): a short
+ *  heavy quarrel oriented by d.rot (circle riders carry the lane bearing),
+ *  bright head, dark fletch. Tiny on purpose — the RAKE telegraph did the
+ *  warning; the bolt itself is consequence. */
+const dartBolt: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { body?: ColorSpec; head?: ColorSpec; fletch?: ColorSpec };
+  const body = resolveColor(p.body, theme, '#6e5a3a');
+  const head = resolveColor(p.head, theme, '#d8cba0');
+  const fletch = resolveColor(p.fletch, theme, '#3a4a3a');
+  for (const d of group) {
+    const r = Math.max(4, d.radius);
+    const len = r * 3.2;
+    ctx.save();
+    ctx.translate(d.pos.x, d.pos.y);
+    if (d.rot !== undefined) ctx.rotate(d.rot);
+    ctx.strokeStyle = body;
+    ctx.lineWidth = Math.max(2, r * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(-len * 0.5, 0);
+    ctx.lineTo(len * 0.34, 0);
+    ctx.stroke();
+    ctx.fillStyle = head;
+    ctx.beginPath();
+    ctx.moveTo(len * 0.56, 0);
+    ctx.lineTo(len * 0.24, -r * 0.55);
+    ctx.lineTo(len * 0.24, r * 0.55);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = fletch;
+    for (const s of [-1, 1] as const) {
+      ctx.beginPath();
+      ctx.moveTo(-len * 0.5, 0);
+      ctx.lineTo(-len * 0.3, s * r * 0.6);
+      ctx.lineTo(-len * 0.24, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
-  trackGroove, shearDisc, rimeFlail, bumperDome,
+  trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth, hatch,

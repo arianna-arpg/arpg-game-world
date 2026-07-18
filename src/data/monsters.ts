@@ -4743,6 +4743,25 @@ export const MONSTERS: Record<string, MonsterDef> = {
     presence: { from: 10, fadeIn: 4 },
     brain: { type: 'juggernaut' },
   },
+  // The toppled colossus does not sleep: a FRAGMENT of the ruin-court's
+  // fallen statue, animate and headless, dragging its own broken forearm as
+  // a maul. The sunken city's heavy warden — its swat (caul_lash's rooted
+  // arc, knockback 260) THROWS bodies into the halls' own machines: the saw
+  // lanes, the plates, the fresh-opened floors. The trapworks' best friend
+  // and the mass fabric's kin. Stone: no corpse (remains pinned — a broken
+  // statue leaves rubble, not meat), no breath, no hurry.
+  colossus_shard: {
+    id: 'colossus_shard', name: 'Colossus Shard',
+    color: '#8a8168', shape: 'square', radius: 21, material: 'stone', look: 'colossus_shard',
+    base: { life: 250, moveSpeed: 55, accuracy: 90, armor: 55, poise: 70, mana: 60, manaRegen: 5, poiseDR: 0.5 },
+    skills: ['caul_lash', 'ground_slam'], xp: 55,
+    faction: 'junglekin',
+    remains: false,
+    aggro: { fixation: 2.0, fury: 0.4, waver: 0.2 },
+    gemBias: ['physical', 'melee'],
+    presence: { from: 12, fadeIn: 5 },
+    brain: { type: 'juggernaut' },
+  },
   verdant_tyrant: {
     id: 'verdant_tyrant', name: 'Verdant Tyrant',
     color: '#3fae5c', shape: 'star', radius: 17, material: 'chitin', look: 'verdant_tyrant',

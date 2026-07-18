@@ -100,6 +100,7 @@ import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import '../data/sympathies'; // side-effect: the sympathy link registry fills
 import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
+import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
@@ -139,7 +140,8 @@ import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, type FrontConsumeRow } from './creep';
-import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
+import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
+import { lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
@@ -3667,6 +3669,17 @@ export class World {
     // Standing contact doodads (DoodadRule.contact — bumpers): collected once;
     // swept beside the lanes.
     this.collectContactHazards();
+    // THE TRAPWORKS FABRIC (engine/trapworks.ts): triggers wired to the
+    // world's own hazards. Gen-emitted rows (the interiors' trap pass) plus
+    // ZoneTheme rows; runtime ensures extend. Sprung state is transient —
+    // the zone re-generation re-arms every mechanism (the collapse
+    // transience doctrine: leave and return, the crypt has reset its teeth).
+    this.trapworks = [];
+    this.trapSweepAcc = 0;
+    this.trapDeferred = [];
+    for (const spec of [...(layout.trapworks ?? []), ...(this.zone.theme.trapworks ?? [])]) {
+      this.addTrapwork(spec);
+    }
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
@@ -7605,6 +7618,7 @@ export class World {
     // estimate. The player's eyes (the warn arc) and this read are one truth
     // from one resolver.
     for (const tr of this.tracks) {
+      if (!tr.armed || trackDone(tr, this.time)) continue;   // retracted / retired lanes threaten nothing
       const b = tr.bound;
       const margin = pad + actor.radius + 40;
       if (actor.pos.x < b.x0 - margin || actor.pos.x > b.x1 + margin ||
@@ -7615,6 +7629,7 @@ export class World {
         if (!p.hit && !p.impulse) continue;
         for (let t = TRACK_CFG.threatStep; t <= horizon; t += TRACK_CFG.threatStep) {
           const pose = trackPose(tr, this.time + t, r.phase, r.def);
+          if (pose.pending) continue;                        // the bolt still in the wall — real only past bornAt
           if (!shapeContains(riderSurface(r.def, pose), pose.x, pose.y,
             actor.pos.x, actor.pos.y, actor.radius + pad)) continue;
           if (!best || t < best.eta) {
@@ -28881,6 +28896,7 @@ export class World {
     this.updateFlux(dt);
     this.updateSpans(dt);
     this.updateTracks(dt);
+    this.updateTrapworks(dt);
     this.conjured?.update(dt, this.actors);
     this.updateShrines();
     this.updateAltars(dt);
@@ -31458,6 +31474,268 @@ export class World {
     for (const s of specs) this.addTrack(s);
   }
 
+  /** THE ARM LEVER — flip every lane wearing `tag` (the pressure plate's
+   *  appear/disappear verb; the trapworks fabric's main wire into tracks).
+   *  Arming pops a flash at each rider's pose so the appearance reads as an
+   *  event, not a glitch; disarming pops the same at the vanishing blade.
+   *  Idempotent — re-setting the same state is silent (the 20 Hz co-op
+   *  repeat applies it every snapshot). */
+  setTracksArmed(tag: string, armed: boolean): void {
+    for (const tr of this.tracks) {
+      if (tr.spec.tag !== tag || tr.armed === armed) continue;
+      tr.armed = armed;
+      for (const r of tr.riders) {
+        const pose = trackPose(tr, this.time, r.phase, r.def);
+        const reach = r.def.surface.kind === 'circle'
+          ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
+        this.flashes.push({ pos: vec(pose.x, pose.y), radius: reach * 1.4, color: r.def.color ?? '#cfc4ae', life: 0.4, maxLife: 0.4 });
+      }
+    }
+  }
+
+  /** Co-op client: reconcile runtime lane state off the 20 Hz snapshot —
+   *  tagged arm flips (idempotent map) + live ONCE-lanes (upsert by identity
+   *  key, absence or a done clock culls; the wells-channel idiom: this
+   *  reconcile IS their client existence). */
+  setNetLaneState(arm: Record<string, 0 | 1> | undefined, once: TrackSpec[] | undefined): void {
+    if (arm) for (const [tag, on] of Object.entries(arm)) this.setTracksArmed(tag, !!on);
+    const live = once ?? [];
+    const keyOf = (s: TrackSpec): string =>
+      `${s.tag ?? ''}#${s.bornAt ?? 0}#${s.path[0]?.x ?? 0},${s.path[0]?.y ?? 0}`;
+    const have = new Set(this.tracks.filter(t => t.spec.mode === 'once').map(t => keyOf(t.spec)));
+    for (const s of live) if (!have.has(keyOf(s))) this.addTrack(s);
+    const want = new Set(live.map(keyOf));
+    for (let i = this.tracks.length - 1; i >= 0; i--) {
+      const tr = this.tracks[i];
+      if (tr.spec.mode === 'once' && !want.has(keyOf(tr.spec))) this.tracks.splice(i, 1);
+    }
+  }
+
+  /** THE TRAPWORKS FABRIC (engine/trapworks.ts): this zone's trigger→effect
+   *  mechanisms. Rebuilt each loadZone from layout + theme rows (sprung
+   *  state is transient — re-entry re-arms the crypt); extended at runtime
+   *  via trapworksEnsure. Dev-inspect via __game.world().trapworks. */
+  trapworks: PlacedTrapwork[] = [];
+  private trapSweepAcc = 0;
+  /** Deferred trap work on the zone clock (crumble bells, mirror plants).
+   *  Host drains in updateTrapworks; a co-op client drains in
+   *  setNetTrapState (its only tick). Cleared every loadZone. */
+  private trapDeferred: { at: number; run: () => void }[] = [];
+
+  /** Place one authored trapwork + its tell doodad. Refuses garbage loudly
+   *  (the addTrack discipline). */
+  addTrapwork(spec: TrapworkSpec, opts?: { noTell?: boolean }): PlacedTrapwork | null {
+    const gripes = lintTrapworkSpec(spec, this.zone.id);
+    if (gripes.length) { for (const g of gripes) console.warn(`[trapworks] ${g}`); return null; }
+    if (this.trapworks.length >= TRAPWORK_CFG.maxPerZone) {
+      console.warn(`[trapworks] ${this.zone.id}: cap ${TRAPWORK_CFG.maxPerZone} — trapwork refused`);
+      return null;
+    }
+    const id = spec.id ?? `tw_${this.trapworks.length}`;
+    const placed: PlacedTrapwork = { spec, id, state: 'armed', rearmAt: Infinity, sprungAt: -1, springs: 0 };
+    this.trapworks.push(placed);
+    // The TELL — a plate wears a doodad at its press disc (hidden plates a
+    // fainter kind; render/vis/trapLayer.ts resolves them close-up).
+    // Triplines default to none (their emitter doodads are authored by gen).
+    const vis = spec.visKind ?? (spec.trigger.kind === 'plate'
+      ? (spec.hidden ? 'ruin_plate_hidden' : 'ruin_plate') : '');
+    if (vis && !opts?.noTell) {
+      const at = trapAnchor(spec.trigger);
+      this.doodads.push({ pos: vec(at.x, at.y), radius: (spec.trigger.r ?? TRAPWORK_CFG.plateRadius) + 4, kind: vis } as Doodad);
+      this.markDoodadsChanged();
+    }
+    return placed;
+  }
+
+  /** The runtime seam (the tracksEnsure idiom): packages/boss beats plant
+   *  mechanisms mid-visit. */
+  trapworksEnsure(specs: TrapworkSpec[]): void {
+    for (const s of specs) this.addTrapwork(s);
+  }
+
+  /** The trigger sweep + the deferred drain. Presses are FEET-honest
+   *  (trapTriggerHit pads only a fraction of body radius), filters mirror
+   *  the payload grammar (dormant planted, airborne, faction spares), and
+   *  one press springs every wired effect with the presser's credit. */
+  private updateTrapworks(dt: number): void {
+    if (this.trapDeferred.length) {
+      for (let i = this.trapDeferred.length - 1; i >= 0; i--) {
+        if (this.time < this.trapDeferred[i].at) continue;
+        const d = this.trapDeferred[i];
+        this.trapDeferred.splice(i, 1);
+        d.run();
+      }
+    }
+    if (!this.trapworks.length) return;
+    this.trapSweepAcc += dt;
+    if (this.trapSweepAcc < TRAPWORK_CFG.sweepEvery) return;
+    this.trapSweepAcc = 0;
+    for (const tw of this.trapworks) {
+      if (tw.state === 'sprung') {
+        if (this.time >= tw.rearmAt) {
+          tw.state = 'armed';
+          const at = trapAnchor(tw.spec.trigger);
+          this.flashes.push({ pos: vec(at.x, at.y), radius: 18, color: '#b8a888', life: 0.3, maxLife: 0.3 });
+        }
+        continue;
+      }
+      const t = tw.spec.trigger;
+      for (const a of this.actors) {
+        if (a.dead || a.downed || a.untargetable || a.invulnerable || a.passive) continue;
+        if ((t.sparesDormant ?? true) && isDormant(a)) continue;
+        if ((t.sparesAirborne ?? true) && (a.flying || a.leap)) continue;
+        const who = t.who ?? 'any';
+        if (who === 'player' && a.team !== 'player') continue;
+        if (who === 'enemy' && a.team === 'player') continue;
+        if (t.factions && (!a.faction || !t.factions.includes(a.faction))) continue;
+        if (t.notFactions && a.faction && t.notFactions.includes(a.faction)) continue;
+        if (!trapTriggerHit(t, a.pos.x, a.pos.y, a.radius)) continue;
+        this.springTrapwork(tw, a);
+        break;
+      }
+    }
+  }
+
+  /** Spring: latch state, click, announce, and run every effect row through
+   *  the open registry with the presser's id (credit flows to whoever stepped
+   *  wrong — or whoever baited the pack across the plate). */
+  springTrapwork(tw: PlacedTrapwork, presser?: Actor): void {
+    if (tw.state !== 'armed') return;
+    tw.state = 'sprung';
+    tw.sprungAt = this.time;
+    tw.springs++;
+    tw.rearmAt = tw.spec.rearm && tw.spec.rearm > 0 ? this.time + tw.spec.rearm : Infinity;
+    const at = trapAnchor(tw.spec.trigger);
+    const color = tw.spec.color ?? TRAPWORK_CFG.springColor;
+    this.flashes.push({ pos: vec(at.x, at.y), radius: 30, color, life: 0.4, maxLife: 0.4 });
+    this.text(vec(at.x, at.y - 16), tw.spec.announce ?? 'click —', '#d8c8a0', 12);
+    const host = this.trapHost();
+    for (const row of tw.spec.effects) {
+      trapEffect(row.kind)?.spring(host, tw, row, presser?.id);
+    }
+  }
+
+  /** The narrow host facade effects drive (TrapHost — the PuzzleHost law).
+   *  Built fresh per call: springs are event-rate. */
+  trapHost(): TrapHost {
+    return {
+      time: this.time,
+      tracksEnsure: (specs) => this.tracksEnsure(specs),
+      setTracksArmed: (tag, armed) => this.setTracksArmed(tag, armed),
+      laneArmed: (tag) => this.tracks.some(tr => tr.spec.tag === tag && tr.armed),
+      collapseFloor: (cells, delaySec, presserId, visualOnly) =>
+        this.collapseFloor(cells, delaySec, presserId, visualOnly),
+      clearDoodads: (kind, at, r) => this.clearDoodadsNear(kind, at, r),
+      fx: (at, radius, color) =>
+        this.flashes.push({ pos: vec(at.x, at.y), radius, color, life: 0.4, maxLife: 0.4 }),
+      defer: (sec, run) => this.trapDeferred.push({ at: this.time + Math.max(0, sec), run }),
+    };
+  }
+
+  /** FALSE FLOOR: after the crumble telegraph, the cells become fall-able
+   *  pit doodads (the Descent's runtime-chasm precedent — markDoodadsChanged
+   *  re-syncs every cache) and every body standing wholly over the fresh
+   *  dark takes THE TINIEST OWNED NUDGE (pushActor): the push integrator's
+   *  forced lane then routes everyone through the pitfall fabric's own law —
+   *  the player descends into the minted hollow below, allies scramble,
+   *  hostiles are swallowed WITH CREDIT to the presser, and a body grasping
+   *  the lip holds it (drawn == tested, the law of the lip untouched).
+   *  visualOnly = the co-op client mirror (doodads + FX, no routing). */
+  collapseFloor(cells: { x: number; y: number; r?: number }[], delaySec: number,
+    presserId?: number, visualOnly?: boolean): void {
+    const plant = (): void => {
+      const made: Doodad[] = [];
+      for (const c of cells) {
+        const r = c.r ?? 26;
+        // Idempotent (the 20 Hz mirror re-runs): a gap already yawning here
+        // is not planted twice.
+        if (this.doodads.some(d => d.kind === 'ruin_floor_gap' && !d.gone
+          && Math.abs(d.pos.x - c.x) < 8 && Math.abs(d.pos.y - c.y) < 8)) continue;
+        const d = { pos: vec(c.x, c.y), radius: r, kind: 'ruin_floor_gap', fall: true } as Doodad;
+        this.doodads.push(d);
+        made.push(d);
+      }
+      if (!made.length) return;
+      this.markDoodadsChanged();
+      for (const d of made) {
+        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius + 10, color: '#141019', life: 0.5, maxLife: 0.5 });
+      }
+      this.shake = Math.max(this.shake, 1.6);
+      if (visualOnly) return;
+      const presser = presserId !== undefined
+        ? this.actors.find(a => a.id === presserId && !a.dead) : undefined;
+      for (const a of this.actors) {
+        if (a.dead || a.downed || a.flying || a.dash || a.leap) continue;
+        const g = made.find(d => dist(a.pos, d.pos) <= d.radius);
+        if (!g) continue;
+        const dir = Math.atan2(g.pos.y - a.pos.y, g.pos.x - a.pos.x);
+        this.pushActor(a, Number.isFinite(dir) ? dir : 0, 70, presser);
+      }
+    };
+    if (delaySec <= 0) { plant(); return; }
+    // The crumble telegraph: the shiver the dash escapes.
+    for (const c of cells) {
+      this.flashes.push({ pos: vec(c.x, c.y), radius: (c.r ?? 26) * 0.9, color: '#8a7a5c', life: delaySec, maxLife: delaySec });
+    }
+    if (cells.length) {
+      this.text(vec(cells[0].x, cells[0].y - 18), 'the floor gives way —', '#c8b892', 12);
+    }
+    this.trapDeferred.push({ at: this.time + delaySec, run: plant });
+  }
+
+  /** Retire decor doodads of a kind near a point (the emptied cradle —
+   *  the popBrittle discipline: gone + rev bump re-sync every cache). */
+  clearDoodadsNear(kind: string, at: { x: number; y: number }, r: number): void {
+    let any = false;
+    for (const d of this.doodads) {
+      if (d.kind !== kind || d.gone) continue;
+      if (dist(d.pos, at) > r) continue;
+      d.gone = true;
+      any = true;
+    }
+    if (any) this.markDoodadsChanged();
+  }
+
+  /** Co-op client install (applyZone): adopt the host's trapwork specs —
+   *  tells already ride the zone doodad list, so no re-plant. */
+  setNetTrapworks(specs: TrapworkSpec[]): void {
+    this.trapworks = [];
+    this.trapDeferred = [];
+    for (const s of specs) this.addTrapwork(s, { noTell: true });
+  }
+
+  /** Co-op client: reconcile trap states off the 20 Hz snapshot (idempotent;
+   *  a dropped packet self-heals). An armed→sprung transition replays each
+   *  effect's MIRROR half (visuals only — lanes ride laneArm/laneOnce; the
+   *  gaps plant on the host's own crumble schedule via defer). Also the
+   *  client's only deferred-drain tick. */
+  setNetTrapState(rows: { i: string; s: 0 | 1; t: number }[] | undefined): void {
+    if (this.trapDeferred.length) {
+      for (let i = this.trapDeferred.length - 1; i >= 0; i--) {
+        if (this.time < this.trapDeferred[i].at) continue;
+        const d = this.trapDeferred[i];
+        this.trapDeferred.splice(i, 1);
+        d.run();
+      }
+    }
+    if (!rows) return;
+    for (const row of rows) {
+      const tw = this.trapworks.find(t => t.id === row.i);
+      if (!tw) continue;
+      if (row.s === 1 && tw.state === 'armed') {
+        tw.state = 'sprung';
+        tw.sprungAt = row.t;
+        tw.springs++;
+        const host = this.trapHost();
+        for (const eff of tw.spec.effects) {
+          trapEffect(eff.kind)?.mirror?.(host, tw, eff);
+        }
+      } else if (row.s === 0 && tw.state === 'sprung') {
+        tw.state = 'armed';
+      }
+    }
+  }
+
   /** The contact sweep — lane riders + standing contact doodads, one cadence,
    *  one payload grammar. Pose sampling is pure (trackPose); only the payload
    *  lands here, host-side. Filters mirror the burst/fog conventions: dead,
@@ -31466,11 +31744,30 @@ export class World {
    *  the faction grammar spares whoever is HOME among the blades. */
   private updateTracks(dt: number): void {
     if (!this.tracks.length && !this.contactHazards.length) return;
+    // ONCE-lanes retire at the far end (the boulder meets the wall): cull on
+    // the pure clock test with a terminal burst at the exact final pose.
+    // Splice-in-place so lane identity survives for everything else.
+    for (let i = this.tracks.length - 1; i >= 0; i--) {
+      const tr = this.tracks[i];
+      if (!trackDone(tr, this.time)) continue;
+      for (const r of tr.riders) {
+        const pose = trackPose(tr, this.time, r.phase, r.def);
+        const reach = r.def.surface.kind === 'circle'
+          ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
+        this.flashes.push({ pos: vec(pose.x, pose.y), radius: reach * 1.7, color: r.def.color ?? '#cfc4ae', life: 0.45, maxLife: 0.45 });
+        this.shake = Math.max(this.shake, Math.min(2.4, reach * 0.05));
+      }
+      this.tracks.splice(i, 1);
+    }
     this.trackSweepAcc += dt;
     if (this.trackSweepAcc < TRACK_CFG.applyEvery) return;
     this.trackSweepAcc = 0;
     for (const tr of this.tracks) {
-      const owner = tr.spec.ownerTag ? this.actors.find(a => a.tag === tr.spec.ownerTag && !a.dead) : undefined;
+      // Disarmed lanes are retracted whole; pending lanes haven't been born.
+      if (!tr.armed || trackPending(tr, this.time)) continue;
+      const owner = tr.spec.ownerId !== undefined
+        ? this.actors.find(a => a.id === tr.spec.ownerId && !a.dead)
+        : tr.spec.ownerTag ? this.actors.find(a => a.tag === tr.spec.ownerTag && !a.dead) : undefined;
       for (const r of tr.riders) {
         const pose = trackPose(tr, this.time, r.phase, r.def);
         const shape = riderSurface(r.def, pose);

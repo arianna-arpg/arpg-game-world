@@ -59,6 +59,7 @@ import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './struc
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
 import { lintTrackSpec, TRACK_CFG, trackRider, trackRiderIds, validateTrackRiders, type TrackSpec } from '../engine/tracks';
+import { lintTrapworkSpec, type TrapworkSpec } from '../engine/trapworks';
 import { MELDS } from './melds';
 import { BIOMES, isAquaticBiome } from '../world/biomes';
 import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
@@ -234,6 +235,41 @@ export function validateContent(): void {
     for (const z of Object.values(ZONES)) lintThemeLanes(z.theme?.tracks, `zone ${z.id}`);
     if (!hasLandmark('glacial_heart')) warn(`deepwinter: 'glacial_heart' landmark unregistered — the heart graft would mint nothing`);
     if (!hasLandmarkBuilder('glacial_heart')) warn(`deepwinter: 'glacial_heart' builder unregistered`);
+  }
+
+  // THE TRAPWORKS FABRIC (engine/trapworks.ts + data/trapworks.ts): authored
+  // theme mechanisms must lint sane (unregistered effect kinds fail HERE,
+  // never as a silent no-op spring), every tell kind the kit names must draw,
+  // and generation dial sets must stay physical (a chance outside [0,1] is a
+  // typo, not a style).
+  {
+    const lintThemeTraps = (rows: TrapworkSpec[] | undefined, where: string): void => {
+      for (let i = 0; i < (rows?.length ?? 0); i++) {
+        for (const g of lintTrapworkSpec(rows![i], `${where} trapwork ${i}`)) warn(`trapworks: ${g}`);
+      }
+    };
+    for (const t of Object.values(TILESETS)) lintThemeTraps(t.theme?.trapworks, `tileset ${t.id}`);
+    for (const z of Object.values(ZONES)) lintThemeTraps(z.theme?.trapworks, `zone ${z.id}`);
+    for (const kind of ['ruin_plate', 'ruin_plate_hidden', 'ruin_floor_gap', 'boulder_cradle', 'dart_maw']) {
+      if (!DOODAD_VISUALS[kind]) warn(`trapworks: tell kind '${kind}' has no DOODAD_VISUALS row — an invisible mechanism is a lie`);
+    }
+    const lintTrapDials = (spec: unknown, where: string): void => {
+      if (!spec || typeof spec !== 'object') return;
+      for (const [arch, dial] of Object.entries(spec as Record<string, { chance?: number; max?: number }>)) {
+        if (!['sawHalls', 'mincerRooms', 'dartWards', 'boulderRuns', 'falseFloors'].includes(arch)) {
+          warn(`trapworks: ${where} names unknown archetype '${arch}'`);
+          continue;
+        }
+        if (dial.chance === undefined || dial.chance < 0 || dial.chance > 1) warn(`trapworks: ${where}.${arch} chance outside [0,1]`);
+        if (dial.max !== undefined && (dial.max < 1 || dial.max > 4)) warn(`trapworks: ${where}.${arch} max outside [1,4]`);
+      }
+    };
+    for (const t of Object.values(TILESETS)) {
+      lintTrapDials(t.layoutParams?.trapworks, `tileset ${t.id} layoutParams.trapworks`);
+      for (const v of t.variants ?? []) {
+        lintTrapDials((v.layoutParams as Record<string, unknown> | undefined)?.trapworks, `tileset ${t.id}:${v.name} layoutParams.trapworks`);
+      }
+    }
   }
 
   // STRATA (world/strata.ts): the vertical ladder must TILE — contiguous
