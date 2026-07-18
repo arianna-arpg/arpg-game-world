@@ -135,6 +135,30 @@ export interface RegionEnterStatus {
   duration: number;
 }
 
+/** A region row's DOUSE lane (RegionKind.douses): the ground as CURE.
+ *  Statuses shed while you stand in it — the wet inverse of the swelter
+ *  bake, read by World's region sweep (shedding) and by the ambient
+ *  accrual loops (suppression: doused ground never bakes what it strips). */
+export interface DouseSpec {
+  /** Status ids this ground strips (one stack from each per beat). */
+  statuses: string[];
+  /** Seconds per shed beat (DOUSE_CFG.every when unset). */
+  every?: number;
+  /** Floating text when a listed status fully lifts. */
+  text?: string;
+  /** Text tint (DOUSE_CFG.color when unset). */
+  color?: string;
+}
+
+/** Douse-lane defaults (the per-row fields override). */
+export const DOUSE_CFG = {
+  /** Seconds per shed beat when a row names none — brisk on purpose: refuge
+   *  should feel decisive (8 scorch stacks gone in ~2.5s of wading). */
+  every: 0.3,
+  /** Default float tint: cool water-blue. */
+  color: '#7ad4f0',
+} as const;
+
 export interface RegionKind {
   id: string;
   /** Does NORMAL movement stay inside walkable cells (i.e. is THIS cell standable)? */
@@ -156,6 +180,16 @@ export interface RegionKind {
   enterText?: { text: string; color: string };
   /** Drains a survival resource while standing in (deep_water → breath). */
   survival?: { resource: string; drain: number };
+  /** DOUSE (refuge as data): standing in this ground SHEDS the listed
+   *  statuses — one stack from each per `every` seconds (DOUSE_CFG.every
+   *  when unset), sheet kept honest per shed, `text` floating once when a
+   *  status fully lifts. The heat loop honors it in reverse: ground that
+   *  douses a status also refuses to BAKE it while you stand there (water
+   *  is true refuge from the sun, not a slower tug-of-war). Insurance
+   *  gates it like every other ground effect — a flier skimming the pool
+   *  is not wet. Any row may wear one: the water family strips sunscorch
+   *  today; a snowmelt spring could strip burn tomorrow. */
+  douses?: DouseSpec;
   /** TERRAIN DAMAGE: typed dps while standing in (lava). Applied through
    *  the victim's RESISTANCE only — never armor/evasion (terrain doesn't
    *  swing) — so capping the matching res IS the build answer. The
@@ -377,7 +411,12 @@ registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', s
 // it, and affinity tables can name it.
 registerRegion({ id: 'ashfield', walkable: true, blocks: false, label: 'the ashfield', moveScale: 1 });
 registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden', pathCost: 2.2 });
-registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8 });
+// Water is REFUGE (the douse lane): wading strips the desert's sunscorch —
+// and the heatstroke it curdled into — a stack per beat, and suppresses the
+// bake while you stand in. This is why the mirage oasis is cruel: the water
+// that would save you is the one thing it only looks like.
+registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8,
+  douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the water quenches…' } });
 registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true, pathCost: 1.25 });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5,
@@ -391,7 +430,11 @@ registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', sta
 // lane), a true swim where fused sinks pool deep, and the Coilborn wade
 // both without noticing (MonsterDef.immuneGround).
 registerRegion({ id: 'tide_pool', walkable: true, blocks: false, label: 'the tide pool',
-  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 1.4 });
+  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 1.4,
+  douses: { statuses: ['sunscorched', 'heatstroke'], text: 'the water quenches…' } });
+// (NO douse row here, deliberately: the brine is hot caustic soup, not
+// refuge — and the saltflat's design commitment is a pan with no mercy.
+// The probe pins this absence; add one only as a considered design change.)
 registerRegion({ id: 'brine_sink', walkable: true, blocks: false, label: 'the brine',
   standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 2.6,
   // brine_burn, NOT combat 'poison' — same caustic dot, no combat-poison
@@ -651,6 +694,8 @@ registerRegion({
   // The ocean FLOOR: a mild slow + a slippery, low-traction step ('seabed') — trudging
   // the seabed, not the heavier 'swimming' wade. Breath still drains down here.
   standStatus: 'seabed', survival: { resource: 'breath', drain: 1 },
+  // Fully submerged = fully quenched (the douse lane, water's own row echoed).
+  douses: { statuses: ['sunscorched', 'heatstroke'], text: 'the water quenches…' },
   visual: { fill: '#0c2740', alpha: 0.55, animate: 'drift' },
 });
 // FLESH: a writhing organic chamber floor (the flesh biome's circular chambers).

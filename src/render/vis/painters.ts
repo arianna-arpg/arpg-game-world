@@ -435,6 +435,16 @@ export interface LiquidParams {
   /** EMBER BED (cinder): dense coal glints across the merged body, each
    *  pulsing on its own clock, brightest at the bed's heart. */
   embers?: { color: ColorSpec; density?: number };
+  /** ILLUSION FLICKER (the mirage's tell): a rare, brief blink — the disc's
+   *  whole body dips translucent under a sideways shear for a beat, its
+   *  sheen cutting out with it, on a seeded per-disc clock (periods jitter,
+   *  so two illusions never sync). Outside the blink the draw is EXACTLY
+   *  the shared statics + sheen a true pool uses — the tell is the blink,
+   *  never the body. Implies a LIVE body (liquidBodyIsLive returns true for
+   *  flicker kinds by construction: a chunk-baked body could neither blink
+   *  nor vanish cleanly when a brittle pop calls the lie). Any liquid kind
+   *  may wear one — a false lava seam or phantom blood pool is one row away. */
+  flicker?: { every?: number; len?: number; dip?: number };
 }
 
 /** The STATIC body of a liquid group — rim silhouette, core fill, inset pass.
@@ -470,7 +480,9 @@ export function paintLiquidBody(env: PaintEnv, group: readonly Doodad[],
  *  for the painter and the chunk baker so they can never both (or neither)
  *  paint it. */
 export function liquidBodyIsLive(def: DoodadVisualDef): boolean {
-  return !VIS_CFG.ground.bakeLiquidBody || !!(def.params as { liveBody?: boolean } | undefined)?.liveBody;
+  const p = def.params as { liveBody?: boolean; flicker?: unknown } | undefined;
+  // A flickering body is live BY CONSTRUCTION — the blink re-draws it.
+  return !VIS_CFG.ground.bakeLiquidBody || !!p?.liveBody || !!p?.flicker;
 }
 
 /** EVERYTHING about a liquid group that never moves: the body fills, the
@@ -540,9 +552,86 @@ export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
   }
 }
 
+/** Deep-water sheen: two bright arcs drifting across each pool — one home
+ *  for the plain group pass and the illusion lane's per-disc draw. */
+function paintLiquidSheen(env: PaintEnv, group: readonly Doodad[], p: LiquidParams): void {
+  if (!p.sheen) return;
+  const { ctx, theme, time } = env;
+  const col = resolveColor(p.sheen.color, theme);
+  ctx.lineCap = 'round';
+  for (const d of group) {
+    if (d.shallow) continue;
+    for (let k = 0; k < 2; k++) {
+      const drift = time * 0.35 + d.pos.x * 0.013 + k * 2.4;
+      const a0 = (drift % (Math.PI * 2));
+      ctx.globalAlpha = 0.13 + 0.06 * Math.sin(time * 1.1 + k);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = Math.max(1.5, d.radius * 0.06);
+      ctx.beginPath();
+      ctx.arc(d.pos.x, d.pos.y, d.radius * (0.45 + k * 0.24), a0, a0 + 1.1);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Where a disc sits in its illusion-blink cycle (LiquidParams.flicker):
+ *  k = 0 at rest, a 0→1→0 sine envelope through the blink; n = the blink
+ *  ordinal (per-blink shear direction rolls off it). Pure clock math off
+ *  the disc's own seed — deterministic, stateless, jittered per disc. */
+function flickerAt(d: Doodad, time: number, f: NonNullable<LiquidParams['flicker']>): { k: number; n: number } {
+  const seed = ((d.pos.x * 23 + d.pos.y * 47) | 0) >>> 0;
+  const every = (f.every ?? 3.2) * (0.75 + hash01(seed, 29) * 0.5);
+  const base = time + hash01(seed, 31) * every;
+  const ph = base % every;
+  const len = f.len ?? 0.12;
+  const n = Math.floor(base / every);
+  return { k: ph < len ? Math.sin(Math.PI * (ph / len)) : 0, n };
+}
+
+/** A def whose body alphas are scaled by `mul` — the blink's dimmed re-draw
+ *  (allocated on blink frames only; the rest path never runs this). */
+function dimLiquid(def: DoodadVisualDef, mul: number): DoodadVisualDef {
+  const p = (def.params ?? {}) as unknown as LiquidParams;
+  const params: LiquidParams = {
+    ...p,
+    rim: p.rim && { ...p.rim, alpha: p.rim.alpha * mul },
+    core: { ...p.core, alpha: p.core.alpha * mul },
+    inner: p.inner && { ...p.inner, alpha: p.inner.alpha * mul },
+    heart: p.heart && { ...p.heart, alpha: (p.heart.alpha ?? 0.3) * mul },
+  };
+  return { ...def, params: params as unknown as Record<string, unknown> };
+}
+
 const liquid: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as LiquidParams;
   const { ctx, theme, time } = env;
+  // THE ILLUSION LANE (params.flicker): each disc draws ALONE so its blink
+  // can wrap everything it shows. At rest the draw IS the shared statics +
+  // sheen every true pool uses (the reskin doctrine: the lie cannot drift
+  // from the water it mimics); through the blink the body re-draws dimmed
+  // under a sideways shear and the sheen cuts out for the beat.
+  if (p.flicker) {
+    for (const d of group) {
+      const one = [d];
+      const fl = flickerAt(d, time, p.flicker);
+      if (fl.k <= 0) {
+        paintLiquidStatics(env, one, def);
+        paintLiquidSheen(env, one, p);
+        continue;
+      }
+      const dip = 1 - (1 - (p.flicker.dip ?? 0.45)) * fl.k;
+      const seed = ((d.pos.x * 23 + d.pos.y * 47) | 0) >>> 0;
+      const dir = hash01(fl.n, seed + 5) < 0.5 ? -1 : 1;
+      ctx.save();
+      ctx.translate(d.pos.x, d.pos.y);
+      ctx.transform(1, 0, dir * 0.13 * fl.k, 1, 0, 0);
+      ctx.translate(-d.pos.x, -d.pos.y);
+      paintLiquidStatics(env, one, dimLiquid(def, dip));
+      ctx.restore();
+    }
+    return;
+  }
   // Body + fords + molten crust normally bake with the floor chunks; a kind
   // that opted out (params.liveBody) — or a bakeLiquidBody=false fallback —
   // paints them here, exactly as the chunk baker would.
@@ -666,24 +755,7 @@ const liquid: GroupPainter = (env, group, def) => {
     }
     ctx.globalAlpha = 1;
   }
-  if (p.sheen) {
-    // Deep-water sheen: two bright arcs drifting across each pool.
-    const col = resolveColor(p.sheen.color, theme);
-    ctx.lineCap = 'round';
-    for (const d of group) {
-      if (d.shallow) continue;
-      for (let k = 0; k < 2; k++) {
-        const drift = time * 0.35 + d.pos.x * 0.013 + k * 2.4;
-        const a0 = (drift % (Math.PI * 2));
-        ctx.globalAlpha = 0.13 + 0.06 * Math.sin(time * 1.1 + k);
-        ctx.strokeStyle = col;
-        ctx.lineWidth = Math.max(1.5, d.radius * 0.06);
-        ctx.beginPath();
-        ctx.arc(d.pos.x, d.pos.y, d.radius * (0.45 + k * 0.24), a0, a0 + 1.1);
-        ctx.stroke();
-      }
-    }
-  }
+  paintLiquidSheen(env, group, p);
   if (p.glassSheen) {
     // Ice: diagonal glass bands sliding slowly — the frozen mirror. Drawn
     // per GROUP, not per disc: a few long diagonal bands sweep the whole

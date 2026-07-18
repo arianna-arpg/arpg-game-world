@@ -13,6 +13,19 @@
 
 import type { DoodadVisualDef } from '../render/vis/painters';
 
+// THE WATER LOOK — one shared params object (the reskin doctrine: hovel/
+// goblin_hut for plans, this for liquids). The mirage oasis draws with these
+// EXACT rows — same nested objects, by reference — so the lie and the truth
+// can never drift apart as water is retuned. (Lily pads stay on water's own
+// row: the pad pass is coastline-derived and lush-biome-gated, so a desert
+// pool grows none either way — the fake stays faithful where it matters.)
+const WATER_LOOK = {
+  rim: { color: '#9ab8cc', alpha: 0.5, grow: 4 },
+  core: { color: 'theme:water|#1d4264', alpha: 0.85 },
+  fords: { lighten: 0.3, alpha: 0.55 },
+  sheen: { color: '#d8f0fa' },
+};
+
 export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
 
   // --- Sailing layer (under everything) -----------------------------------
@@ -27,10 +40,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   water: {
     painter: 'liquid', order: 10,
     params: {
-      rim: { color: '#9ab8cc', alpha: 0.5, grow: 4 },
-      core: { color: 'theme:water|#1d4264', alpha: 0.85 },
-      fords: { lighten: 0.3, alpha: 0.55 },
-      sheen: { color: '#d8f0fa' },
+      ...WATER_LOOK,
       pads: { color: '#6ba036', biomes: ['grove', 'meadow', 'isle'] },
     },
   },
@@ -461,7 +471,24 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // THE MIRAGE KIT: light, not matter — no shadow on purpose (a shadow is
   // exactly what a mirage cannot afford), drawn late so the lie sits over
   // the terrain it's telling you about.
-  mirage_oasis: { painter: 'mirageGhost', order: 56, params: { form: 'oasis' } },
+  // THE MIRAGE OASIS — the desert's cruelest promise wears REAL water's
+  // exact face (WATER_LOOK, the shared object): same body, same theme tint,
+  // same drifting sheen, at water's own paint order. Now that wading
+  // genuinely quenches the sunscorch (water's douse row), this lie has
+  // TEETH: you see the pool, you commit the trek, and at arm's reach the
+  // brittle 'near' pop scatters it exactly as ever. The tells are honest
+  // and small, for veterans to learn: a rare half-beat FLICKER (the
+  // generic liquid illusion lever — alpha dip + sideways shear on a seeded
+  // clock), no wet shore, and no palms — the haven court's green only ever
+  // gathers around true pools. (Flicker implies a live body, so the pool
+  // never bakes into floor chunks and vanishes clean on the pop.)
+  mirage_oasis: {
+    painter: 'liquid', order: 10,
+    params: { ...WATER_LOOK, flicker: { every: 3.2, len: 0.12, dip: 0.45 } },
+  },
+  // The bastion and caravan stay DISTANT promises — pale silhouette stacks
+  // shimmering over the heat line (mirageGhost): their lie is the horizon's,
+  // not the waterline's.
   mirage_bastion: { painter: 'mirageGhost', order: 56, params: { form: 'bastion' } },
   mirage_caravan: { painter: 'mirageGhost', order: 56, params: { form: 'caravan' } },
   dead_tree: {

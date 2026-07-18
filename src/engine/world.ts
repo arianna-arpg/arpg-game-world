@@ -31756,7 +31756,10 @@ export class World {
    *  `swelter` (the desert country) — cadence scaled by the zone's baked
    *  climate temperature, so the erg's hot heart cooks faster than its rim.
    *  SHADE dwindles stacks — a canopy crown (palms, awnings), a roof, or
-   *  night. In swelter country there is no neutral ground while the sun is
+   *  night — and WATER outdoes shade (RegionKind.douses, the region
+   *  fabric's refuge lane): a douse row underfoot suppresses both bake
+   *  lanes here while its own beat sheds the stacks faster than shade
+   *  ever could. In swelter country there is no neutral ground while the sun is
    *  up: you are baking or you are sheltering — that is the commitment the
    *  biome asks. Elsewhere, no shimmer and no shade = the heat holds
    *  (byte-identical to the old loop). Player seats only (monsters live
@@ -31800,18 +31803,7 @@ export class World {
       } else if (scorch && shaded) {
         if (t >= HEAT_CFG.dwindleEvery) {
           t = 0;
-          scorch.stacks--;
-          // Keep the sheet honest: per-stack mods re-sync on every shed, and
-          // the source LIFTS with the last stack (splicing alone would leave
-          // the fire-res erosion stuck on the sheet forever).
-          const def = STATUS_DEFS.sunscorched;
-          if (scorch.stacks <= 0) {
-            a.statuses.splice(a.statuses.indexOf(scorch), 1);
-            a.sheet.removeSource('status:sunscorched');
-          } else if (def?.mods) {
-            a.sheet.setSource('status:sunscorched',
-              def.mods.map(m => ({ ...m, value: m.value * scorch.stacks })));
-          }
+          this.shedStatusStack(a, scorch);
         }
       } else {
         t = Math.min(t, Math.max(HEAT_CFG.stackEvery, HEAT_CFG.dwindleEvery));
@@ -31971,17 +31963,7 @@ export class World {
       } else if (held) {
         if (t >= GAZE_CFG.dwindleEvery) {
           t = 0;
-          held.stacks--;
-          // Mirror the heat lane's shed hygiene (beheld carries no mods, but
-          // a themed override status might): re-sync or lift the source.
-          const def = STATUS_DEFS[statusId];
-          if (held.stacks <= 0) {
-            a.statuses.splice(a.statuses.indexOf(held), 1);
-            a.sheet.removeSource(`status:${statusId}`);
-          } else if (def?.mods && def.modsPerStack) {
-            a.sheet.setSource(`status:${statusId}`,
-              def.mods.map(m => ({ ...m, value: m.value * held.stacks })));
-          }
+          this.shedStatusStack(a, held);
         }
       } else {
         t = Math.min(t, Math.max(GAZE_CFG.stackEvery, GAZE_CFG.dwindleEvery));
@@ -32970,6 +32952,10 @@ export class World {
         if (gk && gk !== prevR) regionKind(prevR)?.onExit?.(a, this);
         if (gk) this.applyRegionEffects(a, gk, false, prevR !== gk, dt, drained);
       }
+      // THE DOUSE BEAT — ground as cure (RegionKind.douses): with both
+      // region sources freshly stamped, the refuge lane sheds what the
+      // row under this body names.
+      this.douseSweep(a, dt);
       // Survival regen for every resource NOT drained this frame (breath refills
       // out of the water). Only actors that ever entered a draining region carry a map.
       // External holds count too: a fabric draining from OUTSIDE this sweep
