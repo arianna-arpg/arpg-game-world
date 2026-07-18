@@ -7,8 +7,12 @@
 //   GET  /__save/:slot  → reads  saves/save_<slot>.json   (404 → '{}')
 //   POST /__save/:slot  → writes saves/save_<slot>.json   (body IS the save)
 //
-// Slot 0 = account, 1 = character, 2 = settings. The plugin is schema-blind:
-// the body is the client's serialized save, stored verbatim.
+// Slot 0 = account, 1 = character, 2 = settings; short lowercase NAMES are
+// tool stores ('workshop' = the Entity Forge). The slot charset (digits, or
+// [a-z][a-z0-9_-]{0,31}) is the path-safety guarantee — no dots, no
+// separators, so a slot can never escape saves/. Keep the regex in lockstep
+// with launcher/server.cjs. The plugin is schema-blind: the body is the
+// client's serialized save, stored verbatim.
 // ---------------------------------------------------------------------------
 
 import { defineConfig } from 'vite';
@@ -47,7 +51,9 @@ function diskSavePlugin() {
 
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     const url = req.url ?? '';
-    const m = /^\/__save\/(\d+)(?:\?.*)?$/.exec(url);
+    // Numeric slots OR short lowercase names — the charset IS the traversal
+    // guard (mirrored in launcher/server.cjs; keep in lockstep).
+    const m = /^\/__save\/(\d+|[a-z][a-z0-9_-]{0,31})(?:\?.*)?$/.exec(url);
     if (!m) { next(); return; }
     const file = slotPath(m[1]);
     if (req.method === 'GET') {

@@ -296,6 +296,10 @@ export class UI {
    *  editor can re-attach its select/drag/link handlers to the freshly-drawn SVG
    *  (set by mountPassiveEditor when DEV.passiveTreeEditor is on; else unused). */
   onTreeRender?: () => void;
+  /** DEV start-menu hook: invoked at the end of every renderStartMenu (the menu
+   *  rebuilds its innerHTML per render, so injected entries must re-inject).
+   *  Set by mountEntityForge when DEV.entityForge is on; else unused. */
+  onStartMenuRender?: () => void;
 
   constructor(
     private getWorld: () => World,
@@ -4521,6 +4525,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () =>
       this.renderKeybinds(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+    this.onStartMenuRender?.();
   }
 
   // ------------------------------------------------------- expedition setup

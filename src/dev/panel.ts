@@ -25,6 +25,7 @@ import { accountTab } from './tabs/account';
 import { throngTab } from './tabs/throng';
 import { comboTab } from './tabs/combo';
 import { grabTab } from './tabs/grab';
+import { entityTab } from './tabs/entity';
 
 /** What the shell hands every tab at build time. */
 export interface DevTabCtx {
@@ -46,7 +47,7 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, entityTab];
 
 export function mountDevPanel(getWorld: () => World): void {
   const openBtn = document.createElement('button');

@@ -21,6 +21,17 @@ export const DEV = {
    *  ghost/noclip, kill-all).
    *  0 = off (no button, zero overhead). */
   panel: 1,
+  /** 1 = THE ENTITY FORGE (dev/entityForge.ts): a full-screen entity
+   *  creator/tweaker reachable from the START MENU ("Entity Forge" button) and
+   *  from the dev panel's Forge tab in-game. Compose looks from the part
+   *  grammar (drag to offset, wheel to scale, [ ] to rotate, live animated
+   *  preview), tune every MonsterDef field through the schema-driven
+   *  inspector, and save to THE WORKSHOP (meta/workshop.ts — hybrid-persisted
+   *  JSON; entities graft into the live registries under the 'custom_'
+   *  namespace and ride every fabric shipped content rides). Export TS emits
+   *  the def+look as source literals for hand-promotion into src/data.
+   *  0 = off (no button, no tab, zero overhead). */
+  entityForge: 1,
   /** 1 = PASSIVE-TREE EDITOR: with the tree open (P), click a node to SELECT it,
    *  drag to move it, click ANOTHER node (while one is selected) to add/remove the
    *  link between them, click the selected node to deselect, double-click empty

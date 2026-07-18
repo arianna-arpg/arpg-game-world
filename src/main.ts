@@ -41,6 +41,8 @@ import { CLASSES, type ClassDef } from './data/classes';
 import { DEV, GAME_TITLE } from './config';
 import { mountDevPanel } from './dev/panel';
 import { mountPassiveEditor } from './dev/passiveEditor';
+import { mountEntityForge } from './dev/entityForge';
+import { loadWorkshopSync, reconcileWorkshopFromDisk } from './meta/workshop';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
 import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, type Account } from './meta/account';
 import {
@@ -465,6 +467,10 @@ window.__game = {
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
 };
 
+// THE WORKSHOP (meta/workshop.ts): graft dev-authored entities from the
+// localStorage mirror into the live registries BEFORE the content sweep, so
+// a custom def answers to the exact same boot lint as shipped content.
+loadWorkshopSync();
 // Cross-check the data files; authoring mistakes warn instead of failing silently.
 validateContent();
 
@@ -472,6 +478,9 @@ validateContent();
 if (DEV.panel) mountDevPanel(() => world);
 // DEV: the passive-tree editor (config.ts DEV.passiveTreeEditor). Off (0) = no-op.
 if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
+// DEV: the Entity Forge (config.ts DEV.entityForge) — start-menu button +
+// full-screen editor; the dev panel's Forge tab rides it too. Off (0) = no-op.
+if (DEV.entityForge) mountEntityForge(ui, () => world);
 
 // Boot: show the start menu immediately (built from the synchronous localStorage
 // loaders so it appears instantly), THEN reconcile against the disk files in the
@@ -485,6 +494,11 @@ void (async (): Promise<void> => {
   Object.assign(settings, s);
   applyUiScale(settings.uiScale);             // the disk save may carry a different dial
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
+  // Workshop disk reconcile: the save file is the cross-session authority
+  // (another machine, a cleared browser profile). When it changed anything,
+  // re-run the content sweep so the adopted defs get linted too (rare — the
+  // mirror matches the disk in steady state, so no double warnings normally).
+  if (await reconcileWorkshopFromDisk()) validateContent();
   // SELF-HEAL: release merc engagements whose patron no longer exists anywhere
   // (a run save wiped without its death flow ever running).
   if (healMercEngagements(account, [c?.charId, ...account.roster.map(r => r.charId)]) > 0) {

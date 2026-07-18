@@ -9,6 +9,12 @@
 //                          parsed as JSON regardless of content-type, because
 //                          sendBeacon posts text/plain — see persistence.ts)
 //
+// Slots are numeric (account/character/settings/roster) or short lowercase
+// NAMES for tool stores ('workshop' = the Entity Forge). The slot charset
+// (digits, or [a-z][a-z0-9_-]{0,31}) is the path-safety guarantee — no dots,
+// no separators, so a slot can never leave savesDir. Keep the regex in
+// lockstep with vite.config.ts.
+//
 // Serving over http://127.0.0.1 (not file://) keeps the game's absolute asset
 // paths, same-origin fetch/sendBeacon saves, and WebRTC co-op all working
 // with zero changes to game code. The dev-only /__dev/passives endpoint is
@@ -67,7 +73,8 @@ function startGameServer(opts) {
     const url = req.url ?? '/';
 
     // --- /__save/:slot — byte-compatible with the Vite disk-save plugin ---
-    const m = /^\/__save\/(\d+)(?:\?.*)?$/.exec(url);
+    // (numeric slots or short lowercase names; charset = traversal guard)
+    const m = /^\/__save\/(\d+|[a-z][a-z0-9_-]{0,31})(?:\?.*)?$/.exec(url);
     if (m) {
       const file = slotPath(m[1]);
       if (req.method === 'GET') {

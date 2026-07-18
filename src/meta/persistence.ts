@@ -22,11 +22,17 @@ const KEY = 'arpg_account_v1';
 const SETTINGS_KEY = 'arpg_settings_v1';
 
 // Disk save slots (the Vite plugin maps these to saves/save_<slot>.json).
+// Slots are numeric (account/character/settings/roster) or short lowercase
+// NAMES for tool stores ('workshop' → save_workshop.json) — both endpoint
+// implementations (vite.config.ts + launcher/server.cjs) accept the same
+// charset, which is also the path-safety guarantee (no dots, no separators).
 const ACCOUNT_SLOT = 0;
 const SETTINGS_SLOT = 2;
 
+export type SaveSlot = number | string;
+
 /** Read a save slot from disk; null on 404 / network error / no endpoint. */
-export async function diskGet<T>(slot: number): Promise<T | null> {
+export async function diskGet<T>(slot: SaveSlot): Promise<T | null> {
   try {
     const res = await fetch(`/__save/${slot}`, { method: 'GET' });
     if (!res.ok) return null;
@@ -34,7 +40,7 @@ export async function diskGet<T>(slot: number): Promise<T | null> {
   } catch { return null; }
 }
 /** Write a save slot to disk (fire-and-forget; localStorage already holds it). */
-export function diskPut(slot: number, body: string): void {
+export function diskPut(slot: SaveSlot, body: string): void {
   fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
     .catch(() => { /* endpoint absent — localStorage is the fallback */ });
 }
@@ -44,7 +50,7 @@ export function diskPut(slot: number, body: string): void {
  *  the player closes the game on the death screen, and the disk-first loader
  *  would then resurrect the dead character). sendBeacon is queued by the browser
  *  and flushed even on unload; we fall back to the plain POST when it's absent. */
-export function diskBeacon(slot: number, body: string): void {
+export function diskBeacon(slot: SaveSlot, body: string): void {
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
       // A string body is sent as text/plain; the middleware JSON.parses it
