@@ -1325,10 +1325,11 @@ registerDoodadRule('nightbloom_tuft', { overlap: 'ground', spacing: 34 });
 // cloud (the sky_lantern precedent: a float, not a stand).
 registerDoodadRule('star_lantern', { overlap: 'ground', spacing: 56, voidOk: true });
 
-// A PROCESSION OF LANTERNS: star-paper strung along a walk — the vesper
-// roads' habit of explaining themselves at night.
+// A STAR PROCESSION: star-paper strung along a walk — the vesper roads'
+// habit of explaining themselves at night. (Not 'lantern_procession' —
+// that id is gloamwood's carved-gourd walk; sharing it would shadow it.)
 registerFormation({
-  id: 'lantern_procession', arrange: 'line', span: [240, 420], step: 58,
+  id: 'star_procession', arrange: 'line', span: [240, 420], step: 58,
   pieces: [
     { kind: 'star_lantern', radius: [8, 11], jitter: 10 },
     { kind: 'star_cairn', radius: [7, 9], every: 4, jitter: 14 },
