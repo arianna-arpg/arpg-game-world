@@ -116,6 +116,24 @@ registerCluster({
   poi: true,
 });
 
+// THE WAYSTATION COURT: a drover's rest on the mountain climb — the
+// sheltering stone at the heart, a LIT fire beside it (real WARMTH: the
+// windchill loop's mercy, placeable — DoodadRule.warms), the drove road's
+// small furniture, and the pines that grew where sparks couldn't reach.
+// The mountain's one bargain: everyone on the pass knows where the fire is.
+registerCluster({
+  id: 'waystation_court',
+  anchor: { radius: 24 },
+  pieces: [
+    { kind: 'haven_stone', radius: [20, 26], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'campfire', radius: [9, 11], count: [1, 1], ring: [38, 52] },
+    { kind: 'cairn', radius: [10, 14], count: [1, 2], ring: [68, 110], rot: true },
+    { kind: 'wayshrine', radius: [12, 16], count: [0, 1], ring: [80, 130], rot: true },
+    { kind: 'conifer', radius: [24, 34], count: [1, 3], ring: [100, 155], rot: true },
+  ],
+  poi: true,
+});
+
 // THE SUNKEN COURT: a village square the sands kept — column stubs and
 // urns around the one lintel still holding a doorway DOWN (vault_gate =
 // the sidezone mouth; 'vault_entered' is the gateway ledger).

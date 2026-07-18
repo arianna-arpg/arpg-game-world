@@ -12,6 +12,7 @@
 import type { BlendSpec, CompositionRoll, HollowRollSpec, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
+import { climateAffinity, type ClimateSpec } from '../world/climate';
 
 /** A tileset-declared BLEND (the blend fabric, engine/blend.ts): zones minted
  *  from this tileset interleave the named partner's theme + kit + packs by
@@ -161,6 +162,16 @@ export interface TilesetDef {
    *  the waste holds the rim, the erg claims the heart. Omitted = weight 1
    *  everywhere, so single-face biomes behave exactly as before. */
   depthAffinity?: LevelEnvelope;
+  /** GEO-LOCKED FACES: a climate envelope (the BiomeInfo.climate vocabulary —
+   *  named bands or inline from/to envelopes) weighting THIS face by the
+   *  mint coordinate's BAKED climate in pickTilesetForBiome. Because the
+   *  climate field is coherent over a whole region, every zone of one
+   *  stretch reads the same face — the per-RANGE identity lock (a cold
+   *  mountain range crowns in snow on every summit; a warm one never does).
+   *  Composes with depthAffinity (stage × place). Omitted = weight 1 at any
+   *  climate; mints without a climate sampler treat every envelope as
+   *  neutral — existing biomes byte-identical. */
+  geoAffinity?: Record<string, ClimateSpec>;
   /** THE UNDERGROUND'S claim: carrying this joins the cave-face pool the
    *  strata fabric picks unforced cave mints from (see CaveFaceSpec). */
   caveFace?: CaveFaceSpec;
@@ -5020,23 +5031,54 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 1 }],
   },
 
-  // HIGHLAND — windswept crags (biome 'highland', → rooms layout = a mountain-pass
-  // maze of corridors and chambers carved into the rock).
+  // ======================= THE MOUNTAIN COUNTRY =============================
+  // ONE high biome ('highland'), the desert model CLIMBED: depthAffinity is
+  // the ALTITUDE (deeper into the range = higher up the mountain), and the
+  // crown faces are geoAffinity-LOCKED per range by the baked climate — a
+  // cold range crowns in SNOW on every summit, a warm 'lowland' range never
+  // does. The per-mountain identity rides the coherent climate field; no two
+  // ranges need to agree.
+  //   foothills (rim, massif recipe): the pinewood foot — tor and bluff
+  //     bones among the stands, the gentle approach, one teaching chute.
+  //   highland (mid, the KEPT rooms-maze): the mountain pass itself.
+  //   overpass (mid-high, the karst recipe re-dialed): broad ledge shelves
+  //     over the GORGE threaded by narrow worn corridors — boulder chutes,
+  //     landslides, drop-caves. The precarious crossing.
+  //   snowcrown / stonecrown (heart, geo-locked): the summit — white or bare.
+  //
+  // THE PASS — windswept crags (→ rooms layout = a mountain-pass maze of
+  // corridors and chambers carved into the rock). The middle of the climb.
   highland: {
     id: 'highland', biome: 'highland',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }, { composition: 'cistern_court', chance: 0.1 }],
+    depthAffinity: { from: 0.24, fadeIn: 0.2, to: 0.74, fadeOut: 0.18 },
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }, { composition: 'cistern_court', chance: 0.1 }, { composition: 'drover_waystation', chance: 0.16 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
       floor: '#13130f', grid: '#1d1c16', border: '#5a5240',
       obstacle: '#3a3528', obstacleEdge: '#6a6048', accent: '#c8b890',
-      wall: '#4a4436', mud: '#3a3428',
+      wall: '#4a4436', mud: '#3a3428', tree: '#2a4636',
+      // Granite mottle underfoot (the country facelift — highland previously
+      // ran the bare light/dark derivation).
+      ground: {
+        scale: 1.7, strength: 1.05, speckles: 0.7,
+        palette: ['#15140f', '#23211a', '#312e24', '#403c2e', '#4e4a3a'], bias: 0.5, alpha: 0.5,
+      },
+      // A light cold tax in the pass — the climb has begun (lee/roofs/fires
+      // shed; the rooms-maze walls windbreak generously by construction).
+      windchill: 0.35,
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0,
     layout: [
       { kind: 'rocks', count: [4, 8], radius: [20, 42] },
       { kind: 'boulder_field', count: [1, 2] }, { kind: 'cairn', count: [1, 2] },
       { kind: 'scree', count: [1, 3] },
+      // Hardy pines climb into the pass — thinning with the altitude the
+      // deeper faces finish (the foothills' stands, remembered).
+      { kind: 'conifers', count: [2, 5] },
+      { kind: 'formation', count: [0, 1], formation: 'pine_stand' },
+      // Cold-range passes wear the first dust of the crown to come.
+      { kind: 'snowdrift', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.4 } },
       { kind: 'gallows', count: [0, 1] }, { kind: 'wayshrine', count: [0, 1] },
       // High-country stillness — and the poacher's craft left wound in the
       // scree (the snare bills whoever springs it; watch your step).
@@ -5088,6 +5130,464 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'rime_stone',
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }],
+  },
+
+  // THE FOOTHILLS — the pinewood foot of the range (rim face, massif recipe):
+  // open walked ground under spread-out pine stands, with the mountain's own
+  // bones (tor knuckles, bluff tables) rising through the timber. The gentle
+  // approach — no cold tax yet, one teaching chute at most — and on a COLD
+  // range the first snow dust already reaches down this far (climate-gated
+  // rows: the crown announces itself from the very first zone).
+  foothills: {
+    id: 'foothills', biome: 'highland',
+    depthAffinity: { to: 0.32, fadeOut: 0.26 },
+    forceLayout: 'massif',
+    layoutParams: {
+      massifMasses: [{ kind: 'tor', weight: 3 }, { kind: 'bluff', weight: 2 }, { kind: 'fold', weight: 0.8 }],
+      massifCoverage: [0.13, 0.19],
+      boulderChutes: { count: [0, 1], rest: 8 },
+    },
+    compositions: [
+      { composition: 'drover_waystation', chance: 0.24 },
+      { composition: 'war_camp', chance: 0.12 },
+      { composition: 'powder_cache', chance: 0.1 },
+    ],
+    nameFirst: ['Pinebound', 'Whispering', 'Bouldered', 'Green-Shouldered', 'Mistfoot', 'Old-Drove', 'Shadowed', 'Bracken', 'Stonefoot', 'Windbreak', 'Cairnfoot', 'Timberline'],
+    nameSecond: ['Foothills', 'Approach', 'Slopes', 'Shoulders', 'Rise', 'Drove', 'Skirts', 'Vale', 'Benches', 'Climb'],
+    theme: {
+      floor: '#12140e', grid: '#1c1e15', border: '#5a5e46',
+      obstacle: '#3a3d2c', obstacleEdge: '#6a6e50', accent: '#b8cc90',
+      wall: '#4a4a38', mud: '#3a3828', tree: '#2a4a34',
+      ground: {
+        scale: 1.5, strength: 1.0, speckles: 0.9,
+        palette: ['#141710', '#212619', '#2e3320', '#3c3f28', '#4a4a32'], bias: 0.48, alpha: 0.5,
+      },
+    },
+    sizeW: [2600, 3400], sizeH: [1900, 2600], ellipseChance: 0, sky: 'open',
+    layout: [
+      { kind: 'conifers', count: [8, 14] },
+      { kind: 'formation', count: [2, 4], formation: 'pine_stand' },
+      { kind: 'rocks', count: [4, 7], radius: [20, 40] },
+      { kind: 'scree', count: [1, 3] },
+      { kind: 'boulder_field', count: [0, 1] },
+      { kind: 'wayshrine', count: [0, 1] },
+      { kind: 'meditation_cairn', count: [0, 1] },
+      { kind: 'haven_stone', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      // A cold range dusts its foot; a warm one never does (the lock, read
+      // from the very first zone of the climb).
+      { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+    ],
+    common: [
+      { kind: 'cairn', count: [1, 2] },
+      { kind: 'bone_pile', count: [0, 1] },
+    ],
+    variants: [
+      // Denser timber — the stands close ranks under the tors.
+      { name: 'the pinewood', layout: [
+        { kind: 'conifers', count: [14, 20] },
+        { kind: 'formation', count: [3, 5], formation: 'pine_stand' },
+        { kind: 'rocks', count: [3, 6], radius: [18, 36] },
+        { kind: 'scree', count: [1, 2] },
+        { kind: 'haven_stone', count: [0, 1] },
+        { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'tor', weight: 3 }, { kind: 'bluff', weight: 1.2 }],
+        massifCoverage: [0.11, 0.16],
+      } },
+      // The old drove road country — folds and open benches, thin timber.
+      { name: 'the open drove', layout: [
+        { kind: 'conifers', count: [4, 8] },
+        { kind: 'formation', count: [1, 2], formation: 'pine_stand' },
+        { kind: 'rocks', count: [5, 8], radius: [20, 42] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'wayshrine', count: [0, 1] },
+        { kind: 'gallows', count: [0, 1] },
+        { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
+        { kind: 'snowdrift', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'fold', weight: 2.5 }, { kind: 'tor', weight: 1.5 }, { kind: 'bluff', weight: 1 }],
+        massifCoverage: [0.12, 0.17],
+      } },
+    ],
+    packs: {
+      count: [6, 9], size: [3, 5],
+      table: [
+        { id: 'brute', weight: 3 },
+        { id: 'javelin_skirmisher', weight: 2, presence: { to: 20, fadeOut: 10 } },
+        { id: 'alpha_stalker', weight: 2 },
+        { id: 'beastkin_gorer', weight: 3 },
+        { id: 'beastkin_impaler', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'steppe_ronin', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'cadence_fencer', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        // The mountain's own: thermals over the foot, stone on the move.
+        { id: 'crag_condor', weight: 2, presence: { from: 3, fadeIn: 2 } },
+        { id: 'boulderback', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
+        { id: 'gale_elemental', weight: 1, presence: { to: 18, fadeOut: 9 } },
+      ],
+    },
+    caveLayouts: { rooms: 2, plains: 1 },
+    spawnerId: 'rime_stone',
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'bounty', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'spawners', weight: 1 }],
+  },
+
+  // THE OVERPASS — the precarious crossing (mid-high face, the karst recipe
+  // re-dialed): BROAD ledge shelves — pocket radii half again the Reach's —
+  // hanging over the GORGE, threaded by NARROW worn corridors. The fall
+  // region drops into the mountain's own galleries (pitfall descend — the
+  // drop-cave doctrine already governs the farm), boulder chutes cross the
+  // big shelves on a cradle cadence (the SM64 gauntlet — leap or weave), and
+  // every so often the mountainside itself lets go (the landslide span-front,
+  // clear corridor guaranteed by construction). Windchill begins to bite.
+  overpass: {
+    id: 'overpass', biome: 'highland',
+    depthAffinity: { from: 0.34, fadeIn: 0.22, to: 0.88, fadeOut: 0.12 },
+    forceLayout: 'karst',
+    layoutParams: {
+      karstGulf: 'gorge',
+      karstPocketR: [150, 260], karstGap: [330, 420], karstCorridorW: [40, 58],
+      karstLoops: 0.26, karstCrags: [2, 4], karstWobble: 40, karstRim: [90, 140],
+      boulderChutes: { count: [2, 3], rest: 6.5 },
+    },
+    compositions: [
+      { composition: 'drover_waystation', chance: 0.18 },
+      { composition: 'stone_sanctum', chance: 0.14 },
+    ],
+    nameFirst: ['Sheer', 'Howling', 'Broken', 'Hanging', 'Windcut', 'Scarred', 'Vertiginous', 'Boulder-Run', 'Goat-Track', 'White-Knuckle', 'Cloudworn', 'Slipstone'],
+    nameSecond: ['Overpass', 'Ledges', 'Scarps', 'Shelves', 'Traverse', 'Switchbacks', 'Crossing', 'Gorge-Way', 'Cornice', 'Spans'],
+    theme: {
+      dayLight: 1.15,
+      // THE GORGE IS A DOOR (the pitfall fabric): a lost footing drops one
+      // stratum into the mountain's galleries — with full shove credit.
+      pitfall: { kind: 'descend' },
+      windchill: 0.55,
+      ambientFx: [{ kind: 'motes', intensity: 0.3, color: '#c8d0da' }],
+      ground: {
+        scale: 1.8, stretchX: 1.2, strength: 1.1, speckles: 0.5,
+        palette: ['#101216', '#1c1f24', '#2a2e34', '#3a3f46', '#4a505a'], bias: 0.5, alpha: 0.5,
+      },
+      floor: '#0e1013', grid: '#181b20', border: '#9aa2ac',
+      obstacle: '#3a3f46', obstacleEdge: '#6a7280', accent: '#c8d0da',
+      tree: '#3a5a40', mud: '#2e3238',
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [{
+          id: 'landslide', line: 'span', bearing: 'cardinal',
+          gap: { width: 170, count: [1, 2] },
+          chance: 0.6, delay: [16, 32], waves: [80, 130],
+          announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
+        }],
+      },
+    },
+    sizeW: [3400, 4400], sizeH: [2400, 3200], ellipseChance: 0, sky: 'open',
+    layout: [
+      { kind: 'rocks', count: [6, 10], radius: [20, 44] },
+      { kind: 'rock_spire', count: [2, 5] },
+      { kind: 'scree', count: [3, 5] },
+      { kind: 'conifers', count: [3, 6] },
+      { kind: 'cave', count: [1, 3] },
+      { kind: 'charged_crystal', count: [0, 2] },
+      { kind: 'stormglass_shard', count: [1, 2] },
+      { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
+      // The cold range's shelf-ice and drift pockets (the lock, mid-climb).
+      { kind: 'snowdrift', count: [0, 4], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+      { kind: 'ice', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.4 } },
+      // NO camp row: palisade rects can't seat honestly on pocket-maze
+      // ground (the karst lesson) — the Overpass garrisons are its packs.
+    ],
+    common: [
+      { kind: 'cairn', count: [1, 2] },
+      { kind: 'bone_pile', count: [1, 2] },
+      // Leaning sarsen knobs near the gulfs — the mass fabric's bounce is
+      // the whole conversation at a gorge lip.
+      { kind: 'sarsen_bumper', count: [1, 2] },
+    ],
+    variants: [
+      // Every shelf seems to hold a way down.
+      { name: 'cave-riddled', layout: [
+        { kind: 'rocks', count: [5, 8], radius: [20, 40] },
+        { kind: 'rock_spire', count: [2, 4] },
+        { kind: 'scree', count: [3, 5] },
+        { kind: 'conifers', count: [2, 4] },
+        { kind: 'cave', count: [2, 4] },
+        { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+      ] },
+      // The high shelves: vaster benches, meaner ledges between them.
+      { name: 'the high shelves', layout: [
+        { kind: 'rocks', count: [6, 10], radius: [22, 46] },
+        { kind: 'rock_spire', count: [3, 6] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'conifers', count: [2, 5] },
+        { kind: 'cave', count: [1, 2] },
+        { kind: 'stormglass_shard', count: [1, 3] },
+        { kind: 'snowdrift', count: [0, 4], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+      ], layoutParams: {
+        karstPocketR: [190, 300], karstCorridorW: [36, 50], karstGap: [360, 450],
+        boulderChutes: { count: [2, 4], rest: 6 },
+      } },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'crag_condor', weight: 3 },
+        { id: 'javelin_skirmisher', weight: 3 },
+        { id: 'scree_skitter', weight: 2 },
+        { id: 'scree_shambler', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'sarsen_ram', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'boulderback', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'beastkin_horncaller', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'gale_elemental', weight: 2 },
+        { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'pit_mauler', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'molting_behemoth', weight: 1, presence: { from: 14, fadeIn: 6 } },
+      ],
+    },
+    caveLayouts: { rooms: 2, plains: 1, dungeon: 0.5 },
+    // The mountainside hides its finds in the crag rim — and some crevices
+    // go DOWN (the drop-cave-richest surface face by design).
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2, crevice_hollow: 2, vein_hollow: 1.5 },
+    },
+    spawnerId: 'rime_stone',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+    ],
+  },
+
+  // THE SNOWCROWN — a COLD range's summit (heart face, geo-LOCKED: only a
+  // range whose baked temperature runs cold ever crowns white). Frozen theme
+  // heat pins a standing snow floor, snowfall deepens it, auroras walk the
+  // night, and the windchill is the whole conversation: hearth to hearth,
+  // lee to lee, while the crown sheds avalanches on snow weather. The
+  // 'lowland mountain' never mints this face — that is the point.
+  snowcrown: {
+    id: 'snowcrown', biome: 'highland',
+    depthAffinity: { from: 0.66, fadeIn: 0.24 },
+    geoAffinity: { temperature: { to: 0.36, fadeOut: 0.08 } },
+    forceLayout: 'massif',
+    layoutParams: {
+      massifMasses: [{ kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 1.5 }],
+      massifCoverage: [0.1, 0.16],
+      boulderChutes: { count: [1, 2], rest: 7.5 },
+    },
+    compositions: [
+      { composition: 'drover_waystation', chance: 0.16 },
+      { composition: 'stone_sanctum', chance: 0.12 },
+    ],
+    nameFirst: ['Whitecrowned', 'Howling', 'Glacial', 'Snowblind', 'Auroral', 'Icebound', 'Wind-Scoured', 'Frostveiled', 'Silent', 'Cloudpiercing'],
+    nameSecond: ['Crown', 'Summit', 'Peak', 'Cap', 'Fields', 'Cornice', 'Heights', 'Roof', 'Shoulder', 'Spire'],
+    theme: {
+      heat: 0.02,
+      windchill: 1,
+      dayLight: 1.3,
+      nightDark: 0.5,
+      pitfall: { kind: 'descend' },
+      ambientFx: [{ kind: 'aurora' }],
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
+      ground: {
+        scale: 1.9, strength: 0.85, speckles: 0.6,
+        palette: ['#181d26', '#28303c', '#3a4552', '#556274', '#76859a'], bias: 0.55, alpha: 0.5,
+      },
+      floor: '#0e1218', grid: '#1a2028', border: '#aab6c2',
+      obstacle: '#3a4552', obstacleEdge: '#76859a', accent: '#d8e6f2',
+      tree: '#24423a', mud: '#93b6c8',
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          {
+            id: 'landslide', line: 'span', bearing: 'cardinal',
+            gap: { width: 180, count: [1, 2] },
+            chance: 0.45, delay: [20, 40], waves: [90, 150],
+            announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
+          },
+          // Snow weather FEEDS the crown's slides — the avalanche lane waits
+          // at the door until the sky says so (FrontCond.weather).
+          {
+            id: 'landslide', line: 'span', bearing: 'cardinal',
+            gap: { width: 170, count: [1, 2] },
+            chance: 0.65, delay: [10, 24], waves: [60, 100],
+            when: { weather: ['snow', 'blizzard'] },
+            announce: { text: 'the crown sheds — avalanche!', color: '#e8f2fa' },
+          },
+        ],
+      },
+    },
+    sizeW: [2400, 3200], sizeH: [1700, 2400], ellipseChance: 0, sky: 'open',
+    layout: [
+      { kind: 'snowdrift', count: [8, 14], where: { field: 'noise', max: 0.47, params: { scale: 560, seed: 5 } } },
+      { kind: 'ice', count: [2, 4] },
+      { kind: 'icicle_cluster', count: [1, 3] },
+      { kind: 'conifers', count: [3, 6] },
+      { kind: 'formation', count: [0, 2], formation: 'pine_stand' },
+      { kind: 'rocks', count: [4, 7], radius: [20, 42] },
+      { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
+      { kind: 'haven_stone', count: [0, 1] },
+      { kind: 'meditation_cairn', count: [0, 1] },
+      { kind: 'stormglass_shard', count: [0, 2] },
+    ],
+    common: [
+      { kind: 'cairn', count: [1, 3] },
+    ],
+    variants: [
+      // Drift-buried fields under walking banks of white.
+      { name: 'whiteout fields', layout: [
+        { kind: 'snowdrift', count: [9, 14], where: { field: 'noise', max: 0.47, params: { scale: 600, seed: 7 } } },
+        { kind: 'ice', count: [1, 3] },
+        { kind: 'conifers', count: [2, 4] },
+        { kind: 'rocks', count: [3, 6], radius: [18, 38] },
+        { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
+        { kind: 'haven_stone', count: [0, 1] },
+      ], theme: { fog: { banks: [2, 3], kinds: [{ id: 'mist' }] } } },
+      // The icefall — sheet ice and hanging teeth, the slickest climb.
+      { name: 'the icefall', layout: [
+        { kind: 'ice', count: [4, 7] },
+        { kind: 'icicle_cluster', count: [2, 4] },
+        { kind: 'snowdrift', count: [5, 9], where: { field: 'noise', max: 0.47, params: { scale: 560, seed: 9 } } },
+        { kind: 'rocks', count: [4, 7], radius: [20, 40] },
+        { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
+        { kind: 'stormglass_shard', count: [1, 2] },
+      ] },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'snow_swimmer', weight: 3 },
+        { id: 'frost_witch', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'crag_condor', weight: 2 },
+        { id: 'boulderback', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'beastkin_horncaller', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'gale_elemental', weight: 2 },
+        { id: 'stone_sentinel', weight: 1, presence: { from: 11, fadeIn: 5 } },
+        { id: 'troll_mauler', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        // The cold's own giant walks the white — HARD gate, the tundra law.
+        { id: 'frost_giant', weight: 1, presence: { from: 12 } },
+      ],
+    },
+    caveLayouts: { rooms: 2, plains: 1 },
+    hollows: {
+      count: [0, 2],
+      table: { cache_hollow: 3, vein_hollow: 2, ambush_hollow: 1 },
+    },
+    landmarks: [{ landmark: 'frozen_lake', chance: 0.18 }, { landmark: 'cirque', chance: 0.15 }],
+    spawnerId: 'rime_stone',
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'beacon', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'offering', weight: 1 }],
+  },
+
+  // THE STONECROWN — a WARM range's bald summit (heart face, the geo-lock's
+  // other pole): no snow, ever — wind-bitten grass, krummholz pine, standing
+  // stones and the Horned Tribes' high seats. The gale is the tax here
+  // (windchill rides windAt), and the boulder-runs are the tribes' own
+  // proving ground. The 'lowlands mountain' the lock promises.
+  stonecrown: {
+    id: 'stonecrown', biome: 'highland',
+    depthAffinity: { from: 0.66, fadeIn: 0.24 },
+    geoAffinity: { temperature: { from: 0.42, fadeIn: 0.08 } },
+    forceLayout: 'massif',
+    layoutParams: {
+      massifMasses: [{ kind: 'bluff', weight: 2.5 }, { kind: 'tor', weight: 2 }, { kind: 'fold', weight: 1 }],
+      massifCoverage: [0.12, 0.18],
+      boulderChutes: { count: [1, 3], rest: 7 },
+    },
+    compositions: [
+      { composition: 'war_camp', chance: 0.2 },
+      { composition: 'drover_waystation', chance: 0.12 },
+      { composition: 'fallen_colossus', chance: 0.1 },
+    ],
+    nameFirst: ['Barecrowned', 'Sunstruck', 'Grey', 'Thornwind', 'Old', 'Wind-Bitten', 'Krummholz', 'Stony', 'Beacon', 'Khan-Held'],
+    nameSecond: ['Crown', 'Summit', 'Fell', 'Top', 'Bald', 'Heights', 'Table', 'Dome', 'Seat', 'Plateau'],
+    theme: {
+      windchill: 0.75,
+      dayLight: 1.2,
+      pitfall: { kind: 'descend' },
+      ground: {
+        scale: 1.6, strength: 1.05, speckles: 0.8,
+        palette: ['#191a16', '#26271f', '#343428', '#454436', '#565244'], bias: 0.5, alpha: 0.5,
+      },
+      floor: '#13130e', grid: '#1e1d16', border: '#8a8668',
+      obstacle: '#454436', obstacleEdge: '#767252', accent: '#c8b880',
+      tree: '#4a5a38', mud: '#3a3828',
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [{
+          id: 'landslide', line: 'span', bearing: 'cardinal',
+          gap: { width: 170, count: [1, 2] },
+          chance: 0.5, delay: [16, 32], waves: [85, 140],
+          announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
+        }],
+      },
+    },
+    sizeW: [2400, 3200], sizeH: [1700, 2400], ellipseChance: 0, sky: 'open',
+    layout: [
+      { kind: 'rocks', count: [6, 10], radius: [20, 44] },
+      { kind: 'boulder_field', count: [1, 2] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'conifers', count: [1, 3] },
+      { kind: 'charged_crystal', count: [0, 2] },
+      { kind: 'stormglass_shard', count: [1, 3] },
+      { kind: 'gallows', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
+      { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      // Crags crown the HIGH ground here too (the pass's elevation read).
+      { kind: 'rocks', count: [2, 4], radius: [20, 44],
+        where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
+    ],
+    common: [
+      { kind: 'cairn', count: [2, 4] },
+      { kind: 'bone_pile', count: [0, 2] },
+    ],
+    variants: [
+      // The tribes muster on the roof of their world.
+      { name: "the khan's seat", layout: [
+        { kind: 'rocks', count: [5, 8], radius: [20, 40] },
+        { kind: 'scree', count: [2, 3] },
+        { kind: 'conifers', count: [0, 2] },
+        { kind: 'camp', count: [1, 2] },
+        { kind: 'formation', count: [1, 2], formation: 'standing_avenue' },
+        { kind: 'gallows', count: [0, 1] },
+      ] },
+      // Mountain scrub — wind-carded thorn and stunted pine.
+      { name: 'thornfell', layout: [
+        { kind: 'rocks', count: [5, 8], radius: [18, 38] },
+        { kind: 'brush', count: [3, 5] },
+        { kind: 'thicket', count: [1, 2] },
+        { kind: 'conifers', count: [2, 4] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+      ] },
+    ],
+    packs: {
+      count: [6, 9], size: [3, 5],
+      table: [
+        { id: 'beastkin_gorer', weight: 3 },
+        { id: 'beastkin_impaler', weight: 2, presence: { from: 5, fadeIn: 2 } },
+        { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'beastkin_horncaller', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'beastlord_khan', weight: 1, presence: { from: 15, fadeIn: 5 } },
+        { id: 'crag_condor', weight: 3 },
+        { id: 'boulderback', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'steppe_ronin', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'cadence_maestro', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'gale_elemental', weight: 1 },
+      ],
+    },
+    caveLayouts: { rooms: 2, plains: 1 },
+    hollows: {
+      count: [0, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 1 },
+    },
+    landmarks: [{ landmark: 'cirque', chance: 0.12 }],
+    spawnerId: 'rime_stone',
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'bounty', weight: 2 }, { kind: 'beacon', weight: 2 }, { kind: 'spawners', weight: 1 }],
   },
 
   // MARSH — fetid wetland (biome 'marsh', → islands layout = boggy islets between
@@ -6957,9 +7457,14 @@ export const REALM_TILESETS_BY_BIOME: Record<string, Record<string, string[]>> =
  *
  *  When the caller knows the mint's biomeDepth AND any candidate declares a
  *  depthAffinity, faces weigh themselves by their envelope at that depth —
- *  the sub-biome staging pick (desert: waste rim → erg heart). Biomes whose
- *  faces declare no envelopes keep the plain uniform pick, byte-identical. */
-export function pickTilesetForBiome(biome: string, rng: Rng, depth?: number, realm?: string): string | undefined {
+ *  the sub-biome staging pick (desert: waste rim → erg heart). A candidate's
+ *  geoAffinity folds the mint's BAKED climate the same way (the mountain
+ *  country's per-range snow lock). Biomes whose faces declare no envelopes
+ *  keep the plain uniform pick, byte-identical. */
+export function pickTilesetForBiome(
+  biome: string, rng: Rng, depth?: number, realm?: string,
+  climate?: Record<string, number>,
+): string | undefined {
   // A realm caller (spec.dimension mints, the gate mint) widens the pool with
   // its OWN tilesets (TilesetDef.realm) — the surface pool alone starved any
   // biome whose faces are all realm-locked (the wasteland-Firmament defect).
@@ -6967,10 +7472,14 @@ export function pickTilesetForBiome(biome: string, rng: Rng, depth?: number, rea
   const owned = realm ? REALM_TILESETS_BY_BIOME[realm]?.[biome] : undefined;
   const c = owned?.length ? (shared?.length ? [...shared, ...owned] : owned) : shared;
   if (!c || !c.length) return undefined;
-  if (depth === undefined || !c.some(id => TILESETS[id].depthAffinity)) return rng.pick(c);
+  const staged = depth !== undefined && c.some(id => TILESETS[id].depthAffinity);
+  const geoed = !!climate && c.some(id => TILESETS[id].geoAffinity);
+  if (!staged && !geoed) return rng.pick(c);
   const weights = c.map(id => {
-    const aff = TILESETS[id].depthAffinity;
-    return aff ? presenceMul(aff, depth) : 1;
+    const t = TILESETS[id];
+    const dAff = t.depthAffinity && depth !== undefined ? presenceMul(t.depthAffinity, depth) : 1;
+    const gAff = t.geoAffinity && climate ? climateAffinity(t.geoAffinity, climate) : 1;
+    return dAff * gAff;
   });
   let total = 0;
   for (const w of weights) total += w;

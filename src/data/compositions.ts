@@ -518,6 +518,21 @@ registerComposition({
   ],
 });
 
+// --- THE MOUNTAIN'S REST -----------------------------------------------------
+
+// THE DROVER WAYSTATION: the climb's rest stop — a cleared bench, the
+// sheltering stone and its FIRE. From the foothills up, warmth is a PLACE
+// (the windchill loop reads the campfire's warms rule): the composition
+// teaches the counterplay the crown will demand, one waystation at a time.
+registerComposition({
+  id: 'drover_waystation',
+  sites: [{ id: 'rest', radius: [110, 150] }],
+  pre: [{ kind: 'clearing', at: 'rest', count: [1, 1], radius: [50, 66] }],
+  post: [
+    { kind: 'cluster', cluster: 'waystation_court', at: 'rest', count: [1, 1] },
+  ],
+});
+
 // THE CARAVAN GRAVEYARD: the trade that stopped mid-stride — a wreck line
 // keeled over in file, urns spilled between (brittle: looting pays, and
 // sometimes objects), vultures' leavings everywhere. No gate, no relief:

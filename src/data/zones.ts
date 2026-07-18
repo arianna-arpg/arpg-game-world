@@ -534,6 +534,18 @@ export interface ZoneTheme {
    *  (every non-desert biome, byte-identical). ~0.85 waste, 1 erg,
    *  1.2 glasspan. All cadence math in HEAT_CFG. */
   swelter?: number;
+  /** OPEN-AIR WINDCHILL (World.updateWindchill): swelter's high-country
+   *  inverse. Zones that declare this bank CHILL stacks on the ordinary cold
+   *  ladder (chill → frozen at the cap) while a player stands in the open —
+   *  cadence scaled by the zone's baked climate temperature (colder bakes
+   *  faster), the LIVE gale (windAt strength — a blizzard on the crown bites
+   *  hardest), and the dark. WARMTH sheds: a warms-ruled fire
+   *  (DoodadRule.warms — the waystation hearth), a roof, or the lee of any
+   *  windbreak while wind blows (windAt's own shelter probe — duck behind a
+   *  boulder to warm up). 0/absent = no cold tax (every other biome,
+   *  byte-identical). The mountain country's commitment: in the open you are
+   *  freezing or you are warming. Cadence math in WINDCHILL_CFG. */
+  windchill?: number;
   /** THE GAZE (World.updateGaze): the zone's own eyes regard whoever walks
    *  it. Doodads of `kinds` are EYES: any OPEN eye with a player seat in its
    *  `reach` (beyond `closeReach` — walk right up and it flinches shut, the

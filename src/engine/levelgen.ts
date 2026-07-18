@@ -875,6 +875,12 @@ export interface DoodadRule {
    *  bridge plank, a hanging bloom would opt in). One data flag per kind =
    *  the whole ground-required methodology, all zones. */
   voidOk?: boolean;
+  /** THIS KIND WARMS (World.updateWindchill): standing within reach of it
+   *  sheds windchill — the campfire/hearth/brazier classifier, one data flag
+   *  per kind (the habitat/fuel idiom). `true` = WINDCHILL_CFG.warmReach;
+   *  a number = that radius in world units. Lit fires only — a cold fire
+   *  ring is a ledger, not a hearth. */
+  warms?: number | true;
   /** Renderer occlusion (fake-2D depth): when the LOCAL hero stands within
    *  `radius + pad` of this doodad, its draw fades toward `alpha` so the
    *  character reads through the canopy. Data-driven per kind. */
@@ -1214,6 +1220,91 @@ function sweepClearways(ctx: GenCtx): void {
   let w = 0;
   for (const d of ctx.doodads) if (!doomed.has(d)) ctx.doodads[w++] = d;
   ctx.doodads.length = w;
+}
+
+/** THE BOULDER CHUTES (layoutParams.boulderChutes) — the mountain's rolling
+ *  gauntlet, generation-meshed on the FINISHED walkable truth so ANY recipe
+ *  can wear it (the overpass ledges, a massif fell, an open pass — one dial,
+ *  no recipe edits). Each chute is a long straight clear run probed off the
+ *  real grid: worn into the ground as a track_groove runway (the learnable
+ *  tell — clearway-protected, so the sweep keeps it unpluggable), headed by
+ *  a rock-pile cradle, and run by an ordinary once+rearm TrackSpec — the
+ *  stone breaks loose, rolls the chute, shatters at the foot (often the
+ *  gorge lip — the run ends where the ground does), and the cradle rests
+ *  until the next release (tracks.ts rearm: pure of the synced clock, so
+ *  every seat and every resume agree). Uncredited environment; the payload's
+ *  sparesAirborne default means a leap clears the stone — dodging is the
+ *  whole conversation. Zones without the param draw NOTHING (stream-safe).
+ *  Spec fields (all dials): count [lo,hi]; minLen/maxLen; rider (registered
+ *  track rider, default ruin_boulder); speed; rest (cradle seconds between
+ *  rolls); riders (bodies per lane; default 2 on long chutes); portalClear. */
+export interface BoulderChuteSpec {
+  count: [number, number];
+  minLen?: number; maxLen?: number;
+  rider?: string; speed?: number; rest?: number; riders?: number;
+  portalClear?: number;
+}
+
+function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 1e-6 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+  return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+}
+
+function layBoulderChutes(ctx: GenCtx, def: ZoneDef): void {
+  const spec = layoutParam<BoulderChuteSpec | undefined>(def, 'boulderChutes', undefined);
+  if (!spec || ctx.lite) return;
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  if (!grid) return; // convex layouts carry no walkable truth to probe
+  const want = ctx.rng.int(spec.count[0], spec.count[1]);
+  if (want <= 0) return;
+  const minLen = spec.minLen ?? 480;
+  const maxLen = spec.maxLen ?? 1050;
+  const portalClear = spec.portalClear ?? 150;
+  const heads: Vec2[] = [];
+  let laid = 0;
+  for (let tries = 0; laid < want && tries < 110; tries++) {
+    const ang = ctx.rng.range(0, Math.PI * 2);
+    const px = ctx.rng.range(ctx.arena.w * 0.14, ctx.arena.w * 0.86);
+    const py = ctx.rng.range(ctx.arena.h * 0.14, ctx.arena.h * 0.86);
+    if (!grid.isWalkable(px, py)) continue;
+    // March both ways along the bearing to the run's true ends (half-cell
+    // steps — the lineWalkable stride), clamped at maxLen.
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const step = grid.cell / 2;
+    let lo = 0, hi = 0;
+    while (lo > -maxLen && grid.isWalkable(px + dx * (lo - step), py + dy * (lo - step))) lo -= step;
+    while (hi < maxLen && grid.isWalkable(px + dx * (hi + step), py + dy * (hi + step))) hi += step;
+    if (hi - lo < minLen) continue;
+    const head = vec(px + dx * (lo + 26), py + dy * (lo + 26));
+    const foot = vec(px + dx * (hi - 10), py + dy * (hi - 10));
+    // Portals keep their aprons (the portal-clear contract) and chutes keep
+    // their distance from one another (each gauntlet reads alone).
+    if ([ctx.entry, ...ctx.exits].some(p => segDist(p.x, p.y, head.x, head.y, foot.x, foot.y) < portalClear)) continue;
+    if (heads.some(h => Math.hypot(h.x - head.x, h.y - head.y) < 220)) continue;
+    heads.push(head);
+    laid++;
+    // The runway — worn stone the whole length; the clearway sweep keeps it open.
+    layTraveledWay(ctx, [head, foot], { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
+    // The cradle — a rock BESIDE the head names where the stone comes from.
+    // Perpendicular seat: never ON the runway (the clearway sweep would
+    // rightly splice it) and never past the lip (the run's head hugs the
+    // walkable edge — a back-step would float over the gorge).
+    const cpx = head.x - dy * 34, cpy = head.y + dx * 34;
+    if (grid.isWalkable(cpx, cpy)) {
+      ctx.doodads.push({
+        pos: vec(cpx, cpy),
+        radius: ctx.rng.range(14, 18), kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2),
+      });
+    }
+    const bodies = spec.riders ?? (hi - lo > 780 ? 2 : 1);
+    (ctx.tracks ??= []).push({
+      path: [head, foot], mode: 'once', speed: spec.speed ?? 225, rearm: spec.rest ?? 7,
+      riders: Array.from({ length: bodies }, (_, i) => ({ kind: spec.rider ?? 'ruin_boulder', phase: i / bodies })),
+      groove: true,
+    });
+  }
 }
 
 /** FORBIDON WINS, GLOBALLY (see generateLayout): the stamp gate's inverse as
@@ -1612,8 +1703,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // room — surfaces pin 'fixed' so the slab never spins with a stray rot.
   bed:       { overlap: 'solid', blocksMove: true, spacing: 40,
     surface: { hw: 0.72, hh: 1.05, orient: 'fixed' } }, // headboard-north frame (taller than wide)
-  hearth:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60,
-    surface: { hw: 0.85, hh: 0.6, orient: 'fixed' } },  // chest-high stone: stops arrows, not eyes
+  hearth:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, warms: true,
+    surface: { hw: 0.85, hh: 0.6, orient: 'fixed' } },  // chest-high stone: stops arrows, not eyes — and WARMS (windchill)
   stool:     { overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.7 },
   shelf:     { overlap: 'solid', blocksMove: true, spacing: 40,
     surface: { hw: 0.95, hh: 0.34, orient: 'fixed' } }, // a wall-hugging board (wide, shallow)
@@ -1711,7 +1802,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   geyser:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, forbidOn: ['water', 'chasm'] },
   snowdrift: { overlap: 'ground', pour: {} },
   bone_pile: { overlap: 'ground', walkOnly: true },
-  brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
+  brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40, warms: true },
   standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46,
     surface: { hw: 0.7, hh: 0.42 } }, // the slab monolith's base (widest ±0.7r)
   // A walkable gravel path (stays on walkable ground in grid zones). THE
@@ -1727,7 +1818,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
    *  it straddles the tallgrass rim to round the raster's right angles off. */
   hedgerow:  { overlap: 'ground', fuel: 'kindling' },
   brush:     { overlap: 'ground', spin: true, fuel: 'kindling' },
-  campfire:  { overlap: 'ground' },
+  // A lit fire WARMS (the windchill lane's mercy): any camp's ring of light
+  // is a warm island on the cold slope — friend's or foe's.
+  campfire:  { overlap: 'ground', warms: true },
   ritual_pentagram: { overlap: 'ground' },
   tentacle_field:   { overlap: 'ground' },
   cave_entrance:    { overlap: 'trigger', spacing: 40, seedPaired: true },
@@ -3845,6 +3938,10 @@ export function generateLayout(
   // (stamps, landmarks, clusters, fx layers). Draw-free; runs before the
   // portal splice + reachability guards so they act on the final geometry.
   fuseGroundBodies(ctx);
+  // THE BOULDER CHUTES (layoutParams.boulderChutes): probed off the finished
+  // walkable truth, BEFORE the clearway sweep so each runway immediately
+  // holds its right-of-way — the gauntlet can never be plugged by scatter.
+  layBoulderChutes(ctx, def);
   // THE CLEARWAY CONTRACT, GLOBALLY: traveled ways collect their right-of-way
   // after every placement system has spoken — ways yield to molten/void
   // ground, deck the soft wet ground they cross (ford the true bodies), and

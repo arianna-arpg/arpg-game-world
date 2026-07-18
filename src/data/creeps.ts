@@ -273,6 +273,48 @@ registerCreep({
   ],
 });
 
+/** THE LANDSLIDE — the mountainside letting go. Meant for `line: 'span'`
+ *  lanes rolled DOWNSLOPE (bearing 'cardinal' — one grain per zone, the
+ *  slope's own): a wall of churning rubble crossing the zone's breadth,
+ *  ALWAYS parted by at least one clear corridor (the spanning wave's
+ *  structural guarantee — the lee between the big stones is the player's
+ *  weave-lane), announced by the mountain's groan. Inside it you are
+ *  stone-lashed and carried downhill; behind it the slope lies under loose
+ *  slide-scree that settles pool by pool until the ground is itself again
+ *  (convert.fade — the whole slide is written and then unwritten). It cares
+ *  NOTHING for roads — a slide buries the path (no clearway row, no
+ *  yieldWays; the corridor is the only mercy) — and it spares NO faction:
+ *  the mountain builds no allegiance. Ice hastens it, open water bogs it
+ *  down; enough raw FORCE can shatter a section early (quench physical,
+ *  priced like freezing a tsunami — stepping into the corridor is always
+ *  the cheaper answer). */
+registerCreep({
+  id: 'landslide',
+  color: '#3a342a', rim: '#b8ab90', glow: '#8a7f68',
+  alpha: 0.72,
+  reach: [90, 140],
+  lobing: 0.3,
+  spread: 60,
+  recede: 140,
+  pulse: 1.8,
+  skin: 'membrane',
+  edge: { color: '#d8cdb4', style: 'foam', width: 5 },
+  front: {
+    speed: 120,
+    stretch: 1.8,
+    affinity: {
+      ground: { ice: 1.2, snowdrift: 1.1, scree_wake: 1.1, water: 0.55, bog: 0.5, swamp: 0.5 },
+      default: 1,
+    },
+    convert: { ground: 'scree_wake', every: 1.7, r: [0.5, 0.7], fade: { after: [12, 22], rate: 9 } },
+    drag: { accel: 240 },
+    quench: { types: ['physical'], power: 1100 },
+  },
+  grants: [
+    { status: 'stonelashed' },
+  ],
+});
+
 /** THE SANGUINE PULSE — the artery paying out on the heartbeat, made
  *  literal. A crest of blood STRETCHED wide across its march (front.stretch
  *  — the ellipse fills the gallery wall-to-wall) that sweeps the Sanguine's
@@ -323,3 +365,9 @@ registerDoodadRule('charred_snag', {
 // don't pour), no hazard, and pointedly not in any causeway yieldsTo list —
 // a road through old burn country is just a road.
 registerDoodadRule('ashfield', { overlap: 'ground', walkOnly: true });
+
+// SCREE WAKE — the landslide's settling rubble as GROUND (region row in
+// world/regions.ts carries the mild slog; visual in doodadVisuals). The
+// convert.fade lane evaporates every pool, so the slope heals itself —
+// runtime stamps only, never authored layouts.
+registerDoodadRule('scree_wake', { overlap: 'ground', walkOnly: true });

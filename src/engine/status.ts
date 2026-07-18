@@ -214,6 +214,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     stackPolicy: 'strongest',
     baseline: { dps: 6, perLevel: 1.8 },
   },
+  stonelashed: {
+    // CAUGHT IN A LANDSLIDE (the landslide front's grant): battered by
+    // tumbling stone on the caster-less baseline lane, footing wrecked —
+    // pressure that asks you to reach the corridor, not a one-shot. Physical
+    // so armor answers it; no screen-fx (the terrain-stings rule).
+    label: 'Stonelashed', color: '#b8ab90', duration: 1.2,
+    dotType: 'physical',
+    stackPolicy: 'strongest',
+    baseline: { dps: 5, perLevel: 1.6 },
+    mods: [mod('moveSpeed', 'more', -0.15)],
+  },
   moonlit: {
     // A MOONWELL's blessing (doodad status_wash): the starlight carries
     // your steps — a small, honest speed grace for keeping to the night

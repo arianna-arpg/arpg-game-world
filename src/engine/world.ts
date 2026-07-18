@@ -547,6 +547,44 @@ export const HEAT_CFG = {
   sunUpMin: 0.55,
 };
 
+/** MOUNTAIN COLD (World.updateWindchill) — swelter's high-country inverse
+ *  (ZoneTheme.windchill zones): open air banks CHILL stacks on the ordinary
+ *  cold ladder (chill → frozen at the cap — the whiteout fog's exact grant,
+ *  zone-wide), cadence scaled by the zone's baked climate temperature and
+ *  by the LIVE gale (windAt strength — a storm on the crown bites hardest).
+ *  WARMTH sheds them: a hearth-ruled fire (DoodadRule.warms), a roof, or —
+ *  when wind is blowing — the LEE of any anchored solid (windAt's own
+ *  shelter probe: the rock is your wall against the sky). In windchill
+ *  country there is no neutral ground in the open: you are freezing or you
+ *  are warming — the swelter commitment, inverted. Zones without the theme
+ *  row never enter the loop (byte-identical). Player seats only. */
+export const WINDCHILL_CFG = {
+  /** OPEN-AIR base cadence: seconds per chill stack at windchill 1 in a
+   *  temperate-baked zone with still air. Effective cadence = stackEvery /
+   *  (windchill × (coldBase + coldGain × (1 − temperature)) ×
+   *  (1 + windGain × windStrength) × nightMul-if-dark). */
+  stackEvery: 4.2,
+  coldBase: 0.5,
+  coldGain: 1.1,
+  /** The gale's teeth: cadence multiplier per unit of live wind strength. */
+  windGain: 0.9,
+  /** Cold bites harder after dark (dayCycle light below nightBelow). */
+  nightMul: 1.4,
+  nightBelow: 0.3,
+  /** Seconds per stack shed while warmed (hearth, roof, or lee). */
+  dwindleEvery: 1.1,
+  /** While exposed with stacks up, the world owns the chill's clock (the
+   *  short def duration would otherwise lapse between slow cadence ticks and
+   *  the ladder could never climb). Held only while EXPOSED — step into
+   *  warmth and the ordinary decay resumes. */
+  holdTtl: 2.0,
+  /** DoodadRule.warms radius default when a rule says `warms: true`. */
+  warmReach: 96,
+  /** Wind must actually be blowing for the lee to mean anything (below this
+   *  strength a null windAt just means calm, not shelter). */
+  leeMinWind: 0.12,
+};
+
 /** DIRECTIONAL WIND tunables (World.windAt). A weather front's drift vector
  *  IS the wind; its WeatherDef.wind scales strength. Movement pays or gains
  *  by its dot with the gale; anything anchored and solid UPWIND shelters
@@ -29301,6 +29339,7 @@ export class World {
     this.updatePendingContagions();
     this.updateTerrainEffects(dt);
     this.updateHeat(dt);
+    this.updateWindchill(dt);
     this.updateGaze(dt);
     this.updateFog(dt);
     this.updateCreep(dt);
@@ -31714,6 +31753,80 @@ export class World {
     }
   }
 
+  /** MOUNTAIN COLD — swelter's high-country inverse (ZoneTheme.windchill;
+   *  dials in WINDCHILL_CFG). Open air banks CHILL on the ordinary cold
+   *  ladder (chill → frozen at the cap — the whiteout fog's grant, worn
+   *  zone-wide), cadence scaled by the baked climate temperature, the LIVE
+   *  gale, and the dark. WARMTH sheds: a warms-ruled fire (DoodadRule.warms),
+   *  a roof, or — while wind actually blows — the lee windAt already carves
+   *  (duck behind a boulder to warm up: the windbreak IS the counterplay).
+   *  Zones without the theme row never enter the loop (byte-identical).
+   *  Player seats only, like the heat. */
+  private chillTimers = new Map<number, number>();
+  private updateWindchill(dt: number): void {
+    const chillDial = this.zone.theme.windchill ?? 0;
+    if (chillDial <= 0) return;
+    const bakedT = this.zoneMap[this.zone.id]?.geo?.climate?.temperature ?? 0.5;
+    const coldMul = WINDCHILL_CFG.coldBase + WINDCHILL_CFG.coldGain * (1 - bakedT);
+    const dark = dayCycle(this.time).light < WINDCHILL_CFG.nightBelow;
+    const zw = this.zoneWind();
+    for (const s of this.seats) {
+      const a = s.actor;
+      if (a.dead || a.downed) continue;
+      let t = (this.chillTimers.get(a.id) ?? 0) + dt;
+      // WARMTH, cheapest test first: a roof, then any warms-ruled fire in
+      // reach (the waystation hearth), then the lee of a windbreak.
+      let warmed = this.underRoofAt(a.pos);
+      if (!warmed) {
+        for (const d of this.doodadsNear(a.pos.x, a.pos.y, WINDCHILL_CFG.warmReach)) {
+          if (d.gone) continue;
+          const warms = doodadRuleOf(d.kind).warms;
+          if (!warms) continue;
+          const reach = warms === true ? WINDCHILL_CFG.warmReach : warms;
+          if (dist(a.pos, d.pos) <= reach + a.radius * 0.5) { warmed = true; break; }
+        }
+      }
+      let windStr = 0;
+      if (!warmed && zw && zw.strength >= WINDCHILL_CFG.leeMinWind) {
+        const felt = this.windAt(a.pos);
+        if (!felt) warmed = true; // becalmed in a lee — the rock is your wall
+        else windStr = felt.strength;
+      }
+      const chill = a.statuses.find(x => x.id === 'chill');
+      if (!warmed) {
+        const every = WINDCHILL_CFG.stackEvery
+          / (chillDial * coldMul * (1 + WINDCHILL_CFG.windGain * windStr)
+            * (dark ? WINDCHILL_CFG.nightMul : 1));
+        if (t >= every) {
+          t = 0;
+          a.applyStatus('chill', 0, 1, 'the mountain cold');
+          if ((a.statuses.find(x => x.id === 'chill')?.stacks ?? 0) === 1) {
+            this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'chilled to the bone!', '#7ad4ff', 12);
+          }
+        }
+        // While exposed the world owns the chill's clock (slow cadences must
+        // not lapse between ticks or the freeze ladder could never climb);
+        // warmth hands the clock straight back to the ordinary decay.
+        if (chill && chill.stacks > 0) chill.remaining = Math.max(chill.remaining, WINDCHILL_CFG.holdTtl);
+      } else if (chill && t >= WINDCHILL_CFG.dwindleEvery) {
+        t = 0;
+        chill.stacks--;
+        // Sheet honesty on the way down — the scorch loop's exact discipline.
+        const def = STATUS_DEFS.chill;
+        if (chill.stacks <= 0) {
+          a.statuses.splice(a.statuses.indexOf(chill), 1);
+          a.sheet.removeSource('status:chill');
+        } else if (def?.mods) {
+          a.sheet.setSource('status:chill',
+            def.mods.map(m => ({ ...m, value: m.value * chill.stacks })));
+        }
+      } else if (warmed) {
+        t = Math.min(t, WINDCHILL_CFG.dwindleEvery);
+      }
+      this.chillTimers.set(a.id, t);
+    }
+  }
+
   /** THE GAZE — the flesh country's regard (ZoneTheme.gaze; swelter's sibling
    *  lane, in eyes). Doodads of the spec'd kinds are EYES: any OPEN eye with a
    *  player seat in reach (beyond closeReach — press close and it flinches
@@ -32190,6 +32303,22 @@ export class World {
         : tr.spec.ownerTag ? this.actors.find(a => a.tag === tr.spec.ownerTag && !a.dead) : undefined;
       for (const r of tr.riders) {
         const pose = trackPose(tr, this.time, r.phase, r.def);
+        // A rider resting in its cradle (a rearm lane between passes) is
+        // harmless — the pose's own pending flag is the one truth. The
+        // first pending sample after a pass bursts at the far end (the
+        // boulder meets the gorge — the once-lane retire read, recurring).
+        if (pose.pending) {
+          if (r.resting === false) {
+            const end = tr.arc.pts[tr.arc.pts.length - 1];
+            const reach = r.def.surface.kind === 'circle'
+              ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
+            this.flashes.push({ pos: vec(end.x, end.y), radius: reach * 1.7, color: r.def.color ?? '#cfc4ae', life: 0.45, maxLife: 0.45 });
+            this.shake = Math.max(this.shake, Math.min(2.4, reach * 0.05));
+          }
+          r.resting = true;
+          continue;
+        }
+        r.resting = false;
         const shape = riderSurface(r.def, pose);
         this.sweepHazardSurface(pose.x, pose.y, shape, pose.dir, r.def.payload, r.icdUntil, owner);
       }

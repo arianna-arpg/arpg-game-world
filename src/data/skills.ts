@@ -5651,6 +5651,30 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'self' },
     effects: [{ type: 'shed', status: 'aloft' }],
   },
+  // --- THE MOUNTAIN'S OWN (the highland country kin) ------------------------
+  condor_stoop: {
+    id: 'condor_stoop', name: 'Stooping Talons', noDrop: true,
+    description: 'The condor folds off its thermal and falls — the ring on the ground is the only warning it owes.',
+    tags: ['attack', 'physical', 'movement'], color: '#c8b090',
+    manaCost: 0, cooldown: 7, useTime: 0.55,
+    baseDamage: { physical: [9, 16] },
+    delivery: { type: 'leap', range: 470, airTime: 0.95, radius: 66, telegraph: true },
+    effects: [
+      { type: 'shed', status: 'aloft' },
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3 },
+    ],
+    ai: { range: 440, weight: 1 },
+  },
+  wake_the_scree: {
+    id: 'wake_the_scree', name: 'Wake the Scree', noDrop: true,
+    description: 'A long note off the horn — and the slope answers: what looked like rubble stands up hungry.',
+    tags: ['spell', 'summon'], color: '#b8ab90',
+    manaCost: 40, cooldown: 12, useTime: 0.8,
+    delivery: { type: 'summon', monsterId: 'scree_skitter', count: 2, maxActive: 4 },
+    effects: [],
+    ai: { range: 600, weight: 1.4, keepDistance: 320 },
+  },
   stridulate: {
     id: 'stridulate', name: 'Stridulation', noDrop: true,
     description: 'The singer saws its wing-combs and the whole murmuration answers — a furor carried on the drone.',

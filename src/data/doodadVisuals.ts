@@ -83,6 +83,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       blotch: { color: '#141110' },
     },
   },
+  // SCREE WAKE — the landslide front's settling rubble (creep convert lane):
+  // pale broken stone in mud's grammar, no glow — the slide already passed;
+  // the convert.fade lane dries each pool away (the slope heals itself).
+  scree_wake: {
+    painter: 'liquid', order: 17,
+    blend: { strength: 0.4, feather: 24, color: '#5a5448' },
+    params: {
+      core: { color: '#6a6355', alpha: 0.42 },
+      blotch: { color: '#3e3a30' },
+    },
+  },
   road: {
     painter: 'gravelPath', order: 20,
     blend: { mode: 'path', strength: 0.3, feather: 12, color: 'theme:road|#574f44' },

@@ -487,6 +487,24 @@ registerRegion({
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
   visual: { fill: '#0b0906', alpha: 1, edge: { color: '#8d8672', width: 5 } },
 });
+// THE GORGE — the mountain country's fall (the overpass ledges hang over it):
+// the chasm's exact contract under GRANITE — a cold blue-black drop whose
+// standing lip is frost-pale grey stone, so every gap reads as sheer
+// mountainside falling away. Its own row (the comment above, honored) so the
+// karst limestone and the mountain granite each tune their depth freely.
+registerRegion({
+  id: 'gorge', walkable: false, blocks: false, label: 'the gorge',
+  boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'physical', canKill: true } },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  visual: { fill: '#07090c', alpha: 1, edge: { color: '#9aa2ac', width: 5 } },
+});
+// SCREE WAKE — the landslide front's settling rubble (the creep fabric's
+// convert lane, the ashfield's mountain twin): loose sliding stone that
+// slows the crossing a touch while it lasts — the front's convert.fade
+// evaporates each pool, so the slope heals itself. The mild moveScale keeps
+// it in doodadGroundIds (groundAt senses it, clients rebuild it, affinity
+// tables can name it).
+registerRegion({ id: 'scree_wake', walkable: true, blocks: false, label: 'the slide-scree', moveScale: 0.85, pathCost: 1.5 });
 // CLOUD VOID: the gap where a cloud shelf has fallen away (the collapse
 // fabric's melt region) — and the Aetherial's authored sky-gaps. The void's
 // physics (shots and sight sail over, levitators float free) under the

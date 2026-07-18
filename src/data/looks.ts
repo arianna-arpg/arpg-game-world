@@ -3121,6 +3121,42 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'bandolier' },
     ],
   },
+  /** The horncaller: the great curled WARHORN across the body is the whole
+   *  read — robe, rack, and the horn it lives to sound (the khan wears his
+   *  at the hip; the caller IS the horn). */
+  beastkin_horncaller: {
+    parts: [
+      { kind: 'robe', scale: 0.9 },
+      { kind: 'ramHorns', scale: 1.0 },
+      { kind: 'warhorn', scale: 1.25 },
+      { kind: 'eyes', color: '#ffce7a', params: { spread: 0.35, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The crag condor: WINGS FIRST at any distance — a broad earth-brown fan,
+   *  bare head, a ruff plume; the pass's patient sky (the shrike's grammar,
+   *  carrion-toned). */
+  crag_condor: {
+    parts: [
+      { kind: 'featherWings', scale: 1.4 },
+      { kind: 'torso', scale: 0.62 },
+      { kind: 'beak', scale: 0.95 },
+      { kind: 'plume', x: -0.2, scale: 0.55 },
+      { kind: 'eyes', params: { n: 2, spread: 0.38, dist: 0.34, size: 0.12 } },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The boulderback: a dome of stone-grey shell under rock studs — parked,
+   *  it IS one of the chute's boulders; then the legs unfold. That is the
+   *  whole lesson. */
+  boulderback: {
+    parts: [
+      { kind: 'carapace', scale: 1.05, role: 'base' },
+      { kind: 'armorPlates', scale: 0.9 },
+      { kind: 'spikes', scale: 0.7 },
+      { kind: 'snout', scale: 0.55 },
+      { kind: 'eyes', color: '#d8cc9a', params: { spread: 0.3, dist: 0.6, size: 0.08 } },
+    ],
+  },
   /** The khan: the great rack, a mane, the warhorn at his hip. */
   beastlord_khan: {
     parts: [

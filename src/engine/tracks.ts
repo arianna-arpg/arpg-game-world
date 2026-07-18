@@ -182,6 +182,15 @@ export interface TrackSpec {
    *  instead (the volley's rake flashing before the bolts fly). Purity
    *  holds: local time = clock − bornAt, still the one synced clock. */
   bornAt?: number;
+  /** CRADLE REST for a 'once' lane: after its pass the rider returns to the
+   *  start pose PENDING (visible in the cradle, harmless, unspun) for this
+   *  many seconds, then rolls again — forever, purely on the synced clock
+   *  (cycle = passSec + rearm; no state, no rng, so every seat and every
+   *  resume agree by construction). Rider `phase` staggers releases a
+   *  fraction of the whole cycle apart — one chute, boulders in file. The
+   *  recurring mountain boulder-run; plain 'once' stays the single loosed
+   *  pass (the trapworks' sprung roll). */
+  rearm?: number;
   /** Initial armed state (default true). A DISARMED lane retracts whole:
    *  riders undrawn, unswept, unthreatening — only a gen-carved groove
    *  remains as the tell. Flipped live via World.setTracksArmed(tag) — the
@@ -226,6 +235,9 @@ export interface PlacedRider {
   phase: number;
   /** Per-body re-hit gate: actor id → world time the gate reopens. */
   icdUntil: Map<number, number>;
+  /** Runtime rest-window edge detector (rearm lanes): the sweep bursts once
+   *  as a rider's pass ends. Cosmetic only — never persisted, resume-safe. */
+  resting?: boolean;
 }
 
 /** A resolved rider pose — position, lane bearing, surface rotation. The ONE
@@ -279,10 +291,15 @@ export function placeTrack(spec: TrackSpec): PlacedTrack {
   if (!spec.path || spec.path.length < minPts) throw new Error(`[tracks] path needs ≥${minPts} points`);
   if ((spec.mode ?? 'loop') === 'loop' && !spec.closed) throw new Error(`[tracks] 'loop' requires closed geometry (use pingpong for open lanes)`);
   if (spec.mode === 'once' && spec.closed) throw new Error(`[tracks] 'once' rides an open lane (a closed ring has no far end to retire at)`);
+  if (spec.rearm !== undefined && spec.mode !== 'once') throw new Error(`[tracks] rearm rides 'once' lanes (cyclic modes already circulate)`);
   const arc = buildArc(spec.path, !!spec.closed);
   if (arc.total < 24) throw new Error(`[tracks] degenerate lane (${arc.total.toFixed(1)}px)`);
   const { spans, passSec } = buildSchedule(arc, spec);
-  const periodSec = (spec.mode ?? 'loop') === 'pingpong' ? passSec * 2 : passSec;
+  // A rearmed once-lane cycles pass + cradle-rest; its period is the whole
+  // cycle so phase offsets and threat horizons read the true rhythm.
+  const periodSec = (spec.mode ?? 'loop') === 'pingpong' ? passSec * 2
+    : spec.mode === 'once' && (spec.rearm ?? 0) > 0 ? passSec + (spec.rearm ?? 0)
+      : passSec;
   const riders: PlacedRider[] = [];
   let maxReach = 0;
   for (const r of spec.riders ?? []) {
@@ -302,6 +319,17 @@ export function placeTrack(spec: TrackSpec): PlacedTrack {
 }
 
 // --- the pure resolver -----------------------------------------------------
+
+/** The start-of-lane holding pose — pre-birth AND a rearm lane's cradle rest
+ *  share it: parked, harmless, unspun (the pending grammar's one look). */
+function cradlePose(tr: PlacedTrack, rider?: TrackRiderDef): TrackPose {
+  const { s } = scheduleS(tr.schedule, 0);
+  const p = pointAt(tr.arc, s);
+  const base = rider?.surface.kind === 'rect'
+    ? p.dir + (rider.orient === 'radial' ? -Math.PI / 2 : 0)
+    : p.dir;
+  return { x: p.x, y: p.y, dir: p.dir, rot: base, paused: true, pending: true };
+}
 
 /** Arc position s → world point + lane tangent. */
 function pointAt(arc: ArcTable, s: number): { x: number; y: number; dir: number } {
@@ -341,19 +369,23 @@ function scheduleS(spans: ScheduleSpan[], t: number): { s: number; paused: boole
  *  local time == the clock — existing lanes are numerics-identical. */
 export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider?: TrackRiderDef): TrackPose {
   const tl = timeSec - (tr.spec.bornAt ?? 0);
-  if (tl < 0) {
-    const { s } = scheduleS(tr.schedule, 0);
-    const p = pointAt(tr.arc, s);
-    const base = rider?.surface.kind === 'rect'
-      ? p.dir + (rider.orient === 'radial' ? -Math.PI / 2 : 0)
-      : p.dir;
-    return { x: p.x, y: p.y, dir: p.dir, rot: base, paused: true, pending: true };
-  }
+  if (tl < 0) return cradlePose(tr, rider);
   const period = Math.max(1e-3, tr.periodSec);
   let t: number;
   let reversed = false;
+  let spinT = tl;
   if (tr.spec.mode === 'once') {
-    t = Math.min(tl, tr.passSec);  // single pass — clamp at the far end, never wrap
+    if ((tr.spec.rearm ?? 0) > 0) {
+      // REARMED once-lane: pass + cradle-rest cycling forever on the pure
+      // clock. Phase staggers riders across the whole cycle; the rest window
+      // wears the pending grammar (visible in the cradle, harmless, unspun).
+      const tc = ((tl + phase * period) % period + period) % period;
+      if (tc > tr.passSec) return cradlePose(tr, rider);
+      t = tc;
+      spinT = tc; // each release spins fresh from the cradle
+    } else {
+      t = Math.min(tl, tr.passSec);  // single pass — clamp at the far end, never wrap
+    }
   } else {
     t = ((tl + phase * period) % period + period) % period;
     if ((tr.spec.mode ?? 'loop') === 'pingpong' && t > tr.passSec) {
@@ -364,7 +396,7 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
   const { s, paused } = scheduleS(tr.schedule, t);
   const p = pointAt(tr.arc, s);
   const dir = reversed ? p.dir + Math.PI : p.dir;
-  const spin = (rider?.spin ?? 0) * tl;
+  const spin = (rider?.spin ?? 0) * spinT;
   // 'radial' turns the rect across the lane; on a CCW ring the −π/2 turn
   // points local −x at the ring's center, so a hub-ended painter (the flail's
   // boss) lands its pivot at the wheel's heart. The surface is symmetric —
@@ -384,9 +416,10 @@ export function riderSurface(def: TrackRiderDef, pose: TrackPose): HitShape {
 
 /** A 'once' lane whose single pass has fully run (local time past the far
  *  end) — the cull test World.updateTracks and the probe both read. Pure of
- *  the same clock as trackPose; cyclic lanes are never done. */
+ *  the same clock as trackPose; cyclic lanes are never done, and a REARMED
+ *  once-lane cycles forever (its rest windows are pose-level pending). */
 export function trackDone(tr: PlacedTrack, timeSec: number): boolean {
-  if (tr.spec.mode !== 'once') return false;
+  if (tr.spec.mode !== 'once' || (tr.spec.rearm ?? 0) > 0) return false;
   return timeSec - (tr.spec.bornAt ?? 0) >= tr.passSec;
 }
 
@@ -422,8 +455,12 @@ export function lintTrackSpec(spec: TrackSpec, where: string): string[] {
   if (!spec.path || spec.path.length < minPts) out.push(`${where}: path needs ≥${minPts} points`);
   if ((spec.mode ?? 'loop') === 'loop' && !spec.closed) out.push(`${where}: 'loop' requires closed:true (open lanes pingpong)`);
   if (spec.mode === 'once' && spec.closed) out.push(`${where}: 'once' requires an open lane (closed rings never retire)`);
-  if (spec.mode === 'once' && (spec.riders?.length ?? 0) > 1 && spec.riders.some(r => (r.phase ?? 0) !== 0)) {
-    out.push(`${where}: 'once' riders share the single pass — phase offsets are dead weight (stagger bornAt across lanes instead)`);
+  if (spec.mode === 'once' && !spec.rearm && (spec.riders?.length ?? 0) > 1 && spec.riders.some(r => (r.phase ?? 0) !== 0)) {
+    out.push(`${where}: 'once' riders share the single pass — phase offsets are dead weight (stagger bornAt across lanes, or rearm the lane)`);
+  }
+  if (spec.rearm !== undefined) {
+    if (spec.mode !== 'once') out.push(`${where}: rearm rides 'once' lanes only`);
+    if (!(spec.rearm >= 1) || spec.rearm > 90) out.push(`${where}: rearm ${spec.rearm}s outside [1,90]`);
   }
   if (!(spec.speed > 0) || spec.speed > 600) out.push(`${where}: speed ${spec.speed} outside (0,600] px/s`);
   if (!spec.riders?.length) out.push(`${where}: lane with no riders`);

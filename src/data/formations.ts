@@ -261,6 +261,18 @@ registerFormation({
   ],
 });
 
+// A PINE STAND: a huddled copse of evergreens on open ground — the mountain
+// approach's signature scatter (spread-out CLUSTERS, never a roof: conifer
+// bodies bake static and the crowns stay cheap, the parkland lesson).
+registerFormation({
+  id: 'pine_stand', arrange: 'orbit', span: [150, 240], step: 56,
+  params: { rings: [1, 2], innerFrac: 0.55 },
+  pieces: [
+    { kind: 'conifer', radius: [26, 40], jitter: 22, rot: true },
+    { kind: 'rock', radius: [14, 20], every: 4, jitter: 26, rot: true },
+  ],
+});
+
 // A FIN PROCESSION: the steppes' horn-blades marching down an old scar, bone
 // heaped at their roots (all inert — the formations doctrine: look-alike
 // hazards never ride a formation).

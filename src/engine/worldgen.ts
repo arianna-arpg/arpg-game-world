@@ -534,9 +534,12 @@ export function placeZoneAt(
     // SUB-BIOME STAGING: land biomes with depth-affine faces (the desert's
     // waste/erg/glasspan) weigh the pick by how deep into the region this
     // mint sits — same lever the marine split reads, generalized as data.
+    // GEO-LOCKED faces (TilesetDef.geoAffinity) fold the coord's baked
+    // climate the same way — the mountain country's per-range snow lock.
     // A dimensioned mint widens the pool with its realm's own tilesets
     // (TilesetDef.realm) — surface mints pass no realm, byte-identical.
-    picked = picked ?? pickTilesetForBiome(fb, rng, spec.biomeDepthFor?.(target), spec.dimension);
+    picked = picked ?? pickTilesetForBiome(fb, rng, spec.biomeDepthFor?.(target), spec.dimension,
+      spec.climateFor?.(target, spec.dimension));
     if (picked) tilesetId = picked;
   }
   // Same guard mintCave carries: a directed mint naming an unregistered

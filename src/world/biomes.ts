@@ -664,7 +664,9 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'deepsea', weight: 0.9 },
   { biome: 'tundra', weight: 1.8 },
   { biome: 'taiga', weight: 1.6 },
-  { biome: 'highland', weight: 1.5 },
+  // 1.9: the MOUNTAIN COUNTRY (foothills → pass → overpass → geo-locked
+  // crowns need the acreage to stage the whole climb — the karst precedent).
+  { biome: 'highland', weight: 1.9 },
   // 1.9: the karst COUNTRY (two staged faces need the acreage) — its
   // mild∧dry∧wild gate is narrow, so where it holds it should read as one
   // coherent stone country, and it simply doesn't exist elsewhere.

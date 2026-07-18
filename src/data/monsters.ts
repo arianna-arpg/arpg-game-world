@@ -6207,6 +6207,80 @@ export const MONSTERS: Record<string, MonsterDef> = {
       squad: { idle: { style: 'siege' } }, // the khan anchors his war-camp
     },
   },
+  /** The tribes' horn on the high roads (the Mountain Country's caster tell):
+   *  it WAKES THE SLOPE — a summon note that stands the scree up, a litany
+   *  that drums the muster's blood, and an alert shout that turns a quiet
+   *  traverse loud. The great curled WARHORN across the body is the whole
+   *  silhouette; kill the horn first — the mountain listens to it. */
+  beastkin_horncaller: {
+    id: 'beastkin_horncaller', name: 'Beastkin Horncaller',
+    color: '#c09858', shape: 'octagon', radius: 12, material: 'fur', look: 'beastkin_horncaller',
+    base: { life: 60, moveSpeed: 125, accuracy: 100, mana: 140, manaRegen: 9 },
+    skills: ['wake_the_scree', 'war_cry'], xp: 32, faction: 'beastkin', adorn: 'horns',
+    gemBias: ['summon', 'physical'], wardPriority: 1,
+    detection: 1.3,
+    presence: { from: 6, fadeIn: 3 },
+    brain: {
+      type: 'caster', perception: { alertShout: 520 },
+      rules: [{
+        // The muster litany (the spore_caller idiom, in brass): nearby kin
+        // fight to the horn's cadence. distUnder keeps it on-screen.
+        when: { alliesWithin: { count: 2, radius: 300 }, distUnder: 700 }, every: [12, 19], hold: [0.3, 0.5],
+        announce: 'the horn drums the muster…',
+        actions: [{ do: 'buff', buff: { type: 'buff', id: 'horn_muster', duration: 6, mods: [mod('moveSpeed', 'increased', 0.15), mod('damage', 'increased', 0.12)] } }],
+      }],
+    },
+  },
+
+  // --- THE MOUNTAIN'S OWN (wild fauna of the highland country) --------------
+  /** The sky of the pass: broad-winged carrion riders wheeling one thermal as
+   *  a flock (the murmuration lever), stooping one at a time onto the painted
+   *  ring (the leap telegraph). WINGS FIRST at any distance; the grounded
+   *  recovery beat is the window — the chitin wing's doctrine, feathered. */
+  crag_condor: {
+    id: 'crag_condor', name: 'Crag Condor',
+    color: '#8a7460', shape: 'circle', radius: 11, material: 'fur', look: 'crag_condor',
+    base: { life: 60, moveSpeed: 190, accuracy: 105, evasion: 60, mana: 0 },
+    skills: ['claw'], xp: 22,
+    faction: 'wild',
+    detection: 1.3,
+    temper: 'territorial',
+    scaleVariance: [0.9, 1.15],
+    packSize: [3, 5],
+    brain: {
+      type: 'swarm',
+      squad: { onLeaderDeath: 'scatter' },
+      script: wingCycle({
+        dive: 'condor_stoop', aloftFor: 7, stoopFor: 1.8, groundFor: 3.8, stoopWithin: 420,
+        air: {
+          move: { style: 'orbit', ring: 230, pace: 1.0, flipEvery: [3, 5], flipChance: 0.25 },
+          behavior: { flock: { kin: 'def', radius: 240, cohesion: 1.0, alignment: 1.15, separation: 1.05, weave: 2.4, erratic: 0.8 } },
+        },
+        ground: {
+          move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.25, 0.45] },
+        },
+      }),
+    },
+  },
+  /** The rolling stone that isn't: a shelled hillside grazer that CURLS and
+   *  BOWLS — the mass fabric is its whole kit (heft × the committed charge:
+   *  arrest-vs-plow, wall wounds, and a gorge-lip shove pays the pitfall
+   *  lane). Dome and studs read 'boulder' at a glance — the chutes already
+   *  taught you what boulders do; this one turns around. */
+  boulderback: {
+    id: 'boulderback', name: 'Boulderback',
+    color: '#7a7264', shape: 'hexagon', radius: 19, material: 'chitin', look: 'boulderback',
+    base: { life: 170, moveSpeed: 92, accuracy: 100, armor: 50, poise: 45, evasion: 0, mana: 25, manaRegen: 3 },
+    mods: [
+      mod('lightningRes', 'flat', 0.3), mod('coldRes', 'flat', -0.2),
+      mod('knockback', 'flat', 260, ['melee']),
+    ],
+    skills: ['heavy_strike'], xp: 44,
+    faction: 'wild',
+    turnSpeed: 2.4, temper: 'territorial',
+    brain: { type: 'juggernaut', enrage: 0.45, move: { style: 'charge', commitRange: 520, chargeSpeed: 3.1 } },
+    heft: 1.6,
+  },
 
   // --- THE GLUT (faction 'flesh' — meat that wants more meat) ---------------
   lesser_ooze: {
