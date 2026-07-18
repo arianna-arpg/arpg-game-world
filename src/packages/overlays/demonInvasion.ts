@@ -22,6 +22,7 @@ import type { ZoneDef } from '../../data/zones';
 import { coordDist, type MapCoord } from '../../world/coords';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
+import { registerEventFront } from '../../engine/eventWeather';
 import type { World } from '../../engine/world';
 import { scaledCap } from '../frequency';
 import type { DemonSurge, InvasionStage, InvasionType } from '../encounters';
@@ -486,6 +487,24 @@ export class DemonInvasionField implements WorldOverlay {
     return best;
   }
 }
+
+// --- the pinned sky (registered on import) -----------------------------------
+//
+// THE DEMON STORM AS WEATHER (engine/eventWeather.ts): every zone the storm
+// radius covers reads the stage's `weather` row through World.skyFront — the
+// crimson veil, ember wind, bent radiance and the temporary occupation dress
+// all ride the ordinary weather stack, and all of it LIFTS when the invasion
+// breaks. Sanctuaries keep their own sky (the meteor gate's same courtesy);
+// sheltered ground (caves, interiors, roofed dimensions) is already refused
+// upstream by skyFront itself.
+registerEventFront({
+  id: 'demon_invasion',
+  sample: (world: World, zone: ZoneDef) => {
+    if (zone.objective.kind === 'safe') return null;
+    const info = world.sim.demonFieldFor(zone.dimension)?.invasionOn(zone.id);
+    return info?.stage.weather ?? null;
+  },
+});
 
 // --- zone-info row (registered on import) ------------------------------------
 //

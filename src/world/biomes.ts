@@ -686,7 +686,15 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
  *  seed jitter, the heat-map render cell, and the marine DEEP threshold — how far
  *  INTO a marine region (biomeDepth, 1=center) before the true DEEP-SEA zone mints
  *  instead of shallow isles/coast (the user's "deep into the biome → deep sea"). */
-export const BIOME_FIELD_CFG = { cellSpan: 260, jitter: 0.45, renderCell: 52, deepThreshold: 0.5 } as const;
+export const BIOME_FIELD_CFG = {
+  cellSpan: 260, jitter: 0.45, renderCell: 52, deepThreshold: 0.5,
+  /** Strength lost per second by a RELEASED warp (BiomeField.release) — the
+   *  "volcano cooling off" dial: an ended event's wash heals gradually over
+   *  ~strength/rate seconds instead of snapping, and a re-push mid-fade
+   *  (setWarp) revives it. 0.03 ≈ a full-strength scar fading over half a
+   *  minute of map time. */
+  warpFadePerSec: 0.03,
+} as const;
 
 /** Marine-depth MINT TARGETS (data, not worldgen literals): past deepThreshold a
  *  marine frontier mints the deep biome; shallower, a coast biome keeps its own
@@ -709,17 +717,23 @@ export function isAquaticBiome(biome: string | undefined): boolean {
 }
 
 /** A local WARP of the field — the HEAT-SOURCE seam. Within `radius` of `center`,
- *  bias the biome toward `biome`. Pushed by quests/world-events in a future pass;
- *  the BiomeField overlay holds the live list (see biomeField.ts). */
+ *  bias the biome toward `biome`. THE TRANSIENCE LAW (docs/engine/transience.md):
+ *  every warp is KEYED, OWNED and RECONCILED — its owner re-asserts it while the
+ *  event lives (setWarp is replace-by-id) and releases it when the event ends
+ *  (release → a gradual fade, unwarp → instant). Warps are PRESENTATION +
+ *  ATTRIBUTION only: the world-map heat wash and the zone-info box read them;
+ *  the MINT path samples the BASE field, so no temporary event ever bakes its
+ *  biome into newly-charted ground. There is no permanent push — a lasting
+ *  scar on the world is a deliberate, player-consented act, not a warp. */
 export interface BiomeFieldModifier {
   center: MapCoord;
   radius: number;
   biome: string;
   /** 0..1 — how strongly it overrides the base field (1 = full override). */
   strength: number;
-  /** Optional stable id so a TRANSIENT warp (a Mycelia bloom that crawls + recedes) can
-   *  be replaced/removed by key (setWarp/unwarp). Omitted = a permanent push (Incursion). */
-  id?: string;
+  /** Stable id — the reconcile/release key (`<owner>_<instance>` by convention:
+   *  `mycelia:<zone>`, `incursion_<epId>`, `crusade_<id>`, `swarm_roost_<id>`). */
+  id: string;
   /** ATTRIBUTION: what is warping this land ("Mycelia bloom", "Demonic invasion") —
    *  the map's zone-info box and the warped-cell pulse surface it, so the heat map
    *  never appears to change "for no reason". */

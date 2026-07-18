@@ -460,6 +460,11 @@ export interface Doodad {
    *  evaporate option; carried ON the doodad so a revisit within the
    *  zone's memory TTL resumes the drying where it left off. */
   evap?: { t: number; rate: number };
+  /** WEATHER DRESS tag (engine/weatherDress.ts): the WeatherKind whose front
+   *  planted this piece. Runtime-only set-dressing — the reconcile derives
+   *  presence from these tags, and hands the piece to `evap` the beat its
+   *  front stops covering the zone. Never persisted, never in layouts. */
+  weatherDress?: string;
   /** Vegetation/rock random spin (radians), set at stamp time from the seeded
    *  layout rng — so a place keeps its orientations across revisits. */
   rot?: number;

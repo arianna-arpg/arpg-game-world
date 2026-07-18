@@ -31,6 +31,15 @@ export interface WeatherFxDef {
    *  (renderer.smoothWeather). Small = the front slams in BY DESIGN;
    *  omitted = VIS_CFG.weather.fadeSec. */
   fadeIn?: number;
+  /** THE VEIL — a screen-space radial GRADIENT in the front's color: clear at
+   *  the center, gathering toward the edges (the Helltide read: the world seen
+   *  through the event's air, heaviest at the rim of your attention). `alpha`
+   *  = edge strength at full intensity; `inner` = clear-core radius as a
+   *  fraction of the view's half-diagonal (default 0.4); `pulse` = slow
+   *  breathing depth 0..1 (default 0.12 — barely-alive, never a strobe).
+   *  Drawn UNDER the particles, scaled by the same displayed intensity, so it
+   *  crossfades in and out with the front like everything else. */
+  veil?: { alpha: number; inner?: number; pulse?: number };
 }
 
 export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
@@ -48,6 +57,21 @@ export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
   // The white wind: snow moving SIDEWAYS — the sandstorm's streak grammar in
   // pale ice (the flake row above is the gentle sibling; this one bites).
   blizzard: { form: 'streak', count: 120, vel: [-400, 140], len: 15, alpha: 0.5, color: '#e8f4ff', fadeIn: 2 },
+  // THE DEMON STORM (event-pinned — a Demon Invasion's sky): embers RISING off
+  // the ground into a crimson vignette veil. The gradient veil, not the flat
+  // wash, is what sells "the world seen through the event" — and it crossfades
+  // out with the front the moment the invasion breaks.
+  demonstorm: {
+    form: 'mote', count: 55, vel: [12, -48], size: 2.2, alpha: 0.55, color: '#ff8a4a',
+    fadeIn: 3, veil: { alpha: 0.34, inner: 0.38 },
+  },
+  // THE PALL (event-pinned — an Incursion's air): spore-motes adrift on no
+  // wind, under a faint sick-green veil that deepens toward the epicenter
+  // (intensity = the zone's live influence). Slow to gather, slow to lift.
+  eldritch_pall: {
+    form: 'mote', count: 40, vel: [16, -10], size: 2.0, alpha: 0.42, color: '#a8e88f',
+    fadeIn: 8, veil: { alpha: 0.3, inner: 0.42, pulse: 0.18 },
+  },
 };
 
 /** Draw a weather front's particles over the scene (screen space). Every
@@ -62,6 +86,23 @@ export function drawWeatherFx(ctx: CanvasRenderingContext2D, kind: WeatherKind,
   const [vx, vy] = def.vel;
   const W = w + 80, H = h + 80; // wrap margin so particles enter off-screen
   ctx.save();
+  // THE VEIL first (under the particles): a radial gradient in the FRONT'S
+  // color — clear core, gathering edges — breathing at pulse depth. One
+  // gradient fill per frame; scaled by the same displayed intensity, so it
+  // rides the ordinary weather crossfade in and out.
+  if (def.veil) {
+    const wc = WEATHER_DEFS[kind].color;
+    const cx = w / 2, cy = h / 2;
+    const half = Math.hypot(cx, cy);
+    const breathe = 1 - (def.veil.pulse ?? 0.12) * (0.5 + 0.5 * Math.sin(t * 0.6));
+    const edge = def.veil.alpha * intensity * breathe;
+    const g = ctx.createRadialGradient(cx, cy, half * (def.veil.inner ?? 0.4), cx, cy, half);
+    g.addColorStop(0, withAlpha(wc, 0));
+    g.addColorStop(0.55, withAlpha(wc, edge * 0.35));
+    g.addColorStop(1, withAlpha(wc, edge));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  }
   if (def.form === 'streak') {
     ctx.strokeStyle = withAlpha(color, a);
     ctx.lineWidth = 1.2;

@@ -125,6 +125,12 @@ export interface InvasionStage {
   rewardMul: number;
   /** Once reached, the epicenter may tear open a portal to the demon realm. */
   opensPortal?: boolean;
+  /** THE PINNED SKY at this stage (engine/eventWeather.ts): an eventOnly
+   *  WEATHER_DEFS kind laid over every covered zone at this intensity — the
+   *  invasion AS weather (wash, veil, particles, radiance, wind, dress), all
+   *  of it lifting the moment the invasion breaks. Omitted = no pinned sky
+   *  at this stage (a young strike may not yet stain the air). */
+  weather?: { kind: string; intensity: number };
 }
 
 /** The spatial + storm + portal config a demon-invasion encounter carries — the

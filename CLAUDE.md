@@ -274,6 +274,20 @@ changes.
   from `TilesetDef.sky`/`ZoneSpec.sky`, caves + off-surface dimensions
   sheltered by derivation) gates ALL in-zone weather through
   `World.skyFront()` — no storms inside cellars, caves, or interiors.
+  THE TRANSIENCE DOCTRINE (events borrow the world, never own it — docs
+  in `docs/engine/transience.md`): world events read as THEIR OWN WEATHER
+  (`engine/eventWeather.ts` `registerEventFront` sources folded at
+  `World.skyFront()` — `WeatherDef.eventOnly` rows: the Demon Storm per
+  `InvasionStage.weather`, the Incursion's pall at max × influence, each
+  wearing a `WEATHER_FX.veil` gradient), lay TEMPORARY ground dress
+  (`engine/weatherDress.ts` + `WeatherDef.dress` — planted while the front
+  holds, dissolved via `Doodad.evap` as it passes, deterministic per
+  zone+kind), and tint the map wash only through KEYED, reconciled,
+  DECAYING BiomeField warps (`setWarp`/`release` + the engine warp sweep;
+  `BIOME_FIELD_CFG.warpFadePerSec`) — while THE MINT PATH samples the BASE
+  field (`sampleBiome`), so no temporary event ever bakes its biome into
+  newly-charted ground; permanent scars are registered, player-authored
+  acts only. Probe `balance/probe_transience.ts`.
   THE INTERIOR FABRIC (rooms as data — docs in `docs/engine/interiors.md`):
   `StructureDef.confineVision` veils the world beyond the room while the
   local hero is under its roof (`render/vis/roomVeil.ts` VISION VOLUMES,

@@ -4,7 +4,9 @@
 // Unlike a Demon Invasion (a marching storm) or a Crusade (a spreading army), an
 // Incursion fields NO host: it LANDS a cluster of themed epicenter zones far off
 // in the unexplored wilds (hidden — the map neither draws them nor zooms to them),
-// locks that ground into its own biome, and then slowly REACHES OUT — organic,
+// wears its blight over that ground WHILE IT LIVES (a keyed heat-map warp + the
+// pinned pall — both recede when it collapses; the transience law,
+// docs/engine/transience.md), and slowly REACHES OUT — organic,
 // non-circular tentacles of influence (Pass 2b) — to nearby zones, where it fires
 // deliberately-wired EVENTS (Pass 2c) and can be repelled (Pass 2d). Every dial,
 // crucially the SPREAD aggression + the growth CAP, is data on the archetype, so a
@@ -28,6 +30,7 @@ import type { ZoneDef } from '../../data/zones';
 import { DIRS, MAP_DIR, projectCoord, type MapCoord } from '../../world/coords';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
+import { registerEventFront } from '../../engine/eventWeather';
 import { scaledCap } from '../frequency';
 import type { World } from '../../engine/world';
 
@@ -153,10 +156,18 @@ export interface IncursionArchetype {
   announce: string;
   /** Theming colour (gloop, washes, bulletins). */
   color: string;
+  /** THE PALL (engine/eventWeather.ts): an eventOnly WEATHER_DEFS kind pinned
+   *  over influenced zones at `max × influence` — the veil DEEPENS toward the
+   *  epicenter and recedes as the reach is cleansed back, and it clears
+   *  entirely when the incursion collapses. Omitted = the blight has no air. */
+  weather?: { kind: string; max: number };
   // --- THE LANDING (Pass 2a) ---
   /** Tileset the epicenter zones are minted from. */
   tileset: string;
-  /** Biome the landing locks its ground into (a heat-map warp). */
+  /** Biome the landing wears on the world map while it lives — a KEYED
+   *  heat-map warp per epicenter (presentation + attribution only; minted
+   *  ground keeps its TRUE biome), released to fade when the epicenter
+   *  falls. The transience law, docs/engine/transience.md. */
   biome: string;
   /** The corruption adornment attached to mutated doodads/monsters (Pass 2c). */
   adorn: string;
@@ -234,6 +245,7 @@ export const INCURSION_ARCHETYPES: Record<string, IncursionArchetype> = {
     factions: ['eldritch'],
     announce: 'An observer has landed — something vast turns its gaze upon this world.',
     color: '#7fce6a', // a sickly bioluminescent green over the eldritch violet
+    weather: { kind: 'eldritch_pall', max: 0.85 },
     tileset: 'eldritch',
     biome: 'eldritch',
     adorn: 'tentacles',
@@ -780,6 +792,26 @@ export class IncursionField implements WorldOverlay {
     }));
   }
 }
+
+// --- the pall (registered on import) -----------------------------------------
+//
+// THE PALL AS WEATHER (engine/eventWeather.ts): influenced zones read the
+// archetype's `weather` row through World.skyFront at max × influence — the
+// air goes wrong exactly as deep as the reach runs, recedes as tentacles are
+// cleansed back, and clears when the incursion collapses. The blight's GROUND
+// flavor stays its own event kit (doodad mutation, tentacle fields, spawns) —
+// all of it runtime, none of it persisted; the pall is the light over it.
+registerEventFront({
+  id: 'incursion',
+  sample: (world: World, zone: ZoneDef) => {
+    if (zone.objective.kind === 'safe') return null;
+    const inc = world.sim.incursionField;
+    const wx = inc ? inc.eventContext(zone.id)?.archetype.weather : undefined;
+    if (!inc || !wx) return null;
+    const influence = inc.influence(zone.id);
+    return influence > 0.03 ? { kind: wx.kind, intensity: wx.max * influence } : null;
+  },
+});
 
 // --- zone-info row (registered on import) ------------------------------------
 //

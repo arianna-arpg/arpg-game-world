@@ -18,6 +18,7 @@
 
 import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
+import { WEATHER_DEFS } from '../../world/weather';
 import type { DemonSurge, InvasionStage, InvasionType } from '../encounters';
 import { DemonInvasionField } from '../overlays/demonInvasion';
 import type { ContentPackage } from '../types';
@@ -83,12 +84,17 @@ const INVASION_TYPES: InvasionType[] = [
 
 /** The escalation ladder — a step function over elapsed age. Each row is a
  *  THRESHOLD; the overlay walks to the last one crossed and scales it by live
- *  pressure. "The longer it festers, the worse it gets" is this table. */
+ *  pressure. "The longer it festers, the worse it gets" is this table — and
+ *  `weather` is its SKY: the pinned Demon Storm (WEATHER_DEFS.demonstorm —
+ *  crimson veil, ember wind, the temporary occupation dress) deepening with
+ *  every stage. The land beneath it is never touched; break the invasion and
+ *  the storm crossfades out, the dress evaporates, and the zone stands
+ *  exactly as it was authored (the transience doctrine's Helltide read). */
 const INVASION_STAGES: InvasionStage[] = [
-  { atSeconds: 0,   label: 'Demon Incursion', strengthBonus: 0, radiusBonus: 0,   meteorRatePerSec: 0.16, meteorSpawnChance: 0.25, rewardMul: 1.0 },
-  { atSeconds: 90,  label: 'Demon Siege',     strengthBonus: 2, radiusBonus: 90,  meteorRatePerSec: 0.28, meteorSpawnChance: 0.35, rewardMul: 1.6 },
-  { atSeconds: 210, label: 'Hellstorm',       strengthBonus: 4, radiusBonus: 190, meteorRatePerSec: 0.45, meteorSpawnChance: 0.45, rewardMul: 2.4, opensPortal: true },
-  { atSeconds: 360, label: 'Cataclysm',       strengthBonus: 7, radiusBonus: 320, meteorRatePerSec: 0.66, meteorSpawnChance: 0.55, rewardMul: 3.5, opensPortal: true },
+  { atSeconds: 0,   label: 'Demon Incursion', strengthBonus: 0, radiusBonus: 0,   meteorRatePerSec: 0.16, meteorSpawnChance: 0.25, rewardMul: 1.0, weather: { kind: 'demonstorm', intensity: 0.45 } },
+  { atSeconds: 90,  label: 'Demon Siege',     strengthBonus: 2, radiusBonus: 90,  meteorRatePerSec: 0.28, meteorSpawnChance: 0.35, rewardMul: 1.6, weather: { kind: 'demonstorm', intensity: 0.65 } },
+  { atSeconds: 210, label: 'Hellstorm',       strengthBonus: 4, radiusBonus: 190, meteorRatePerSec: 0.45, meteorSpawnChance: 0.45, rewardMul: 2.4, opensPortal: true, weather: { kind: 'demonstorm', intensity: 0.85 } },
+  { atSeconds: 360, label: 'Cataclysm',       strengthBonus: 7, radiusBonus: 320, meteorRatePerSec: 0.66, meteorSpawnChance: 0.55, rewardMul: 3.5, opensPortal: true, weather: { kind: 'demonstorm', intensity: 1.0 } },
 ];
 
 /** The spatial / storm / portal config carried by the epicenter encounter. */
@@ -187,6 +193,11 @@ export const DEMON_INVASION: ContentPackage = {
     const out: string[] = [];
     const s = BALOR_SURGE;
     if (!look.skill(s.meteorSkillId)) out.push(`meteor skill '${s.meteorSkillId}' unknown`);
+    for (const st of s.stages) {
+      if (st.weather && !WEATHER_DEFS[st.weather.kind]) {
+        out.push(`stage '${st.label}' pins unknown weather kind '${st.weather.kind}'`);
+      }
+    }
     if (!look.tileset(s.epicenterTileset)) out.push(`epicenter tileset '${s.epicenterTileset}' unknown`);
     if (!look.tileset(s.portal.tileset)) out.push(`portal tileset '${s.portal.tileset}' unknown`);
     if (!look.monster(s.portal.champion.monsterId)) out.push(`champion '${s.portal.champion.monsterId}' unknown`);

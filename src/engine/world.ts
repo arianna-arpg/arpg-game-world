@@ -191,7 +191,7 @@ import type { MigrationInfo, MigrationSurge } from '../packages/overlays/migrati
 import type { SwarmInfo, SwarmingSurge } from '../packages/overlays/swarming';
 import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
-import type { IncursionArchetype } from '../packages/overlays/incursion';
+import { INCURSION_ARCHETYPES, type IncursionArchetype } from '../packages/overlays/incursion';
 import { holdfastTollCost, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
 import { pocketFormOf, DEFAULT_POCKET_FORM, type PocketFormDef } from '../data/pocketForms';
 import { lordDef } from '../packages/lords';
@@ -212,6 +212,8 @@ import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldbo
 import { eventTargetable, holdfastHostable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/weather';
+import { eventFrontFor } from './eventWeather';
+import { WEATHER_DRESS_CFG, dressPlanFor, rollDressPieces } from './weatherDress';
 import { dayCycle, inPhases } from '../world/daynight';
 import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
@@ -2033,9 +2035,12 @@ export class World {
   /** Steer a FACTION event toward its patron biome: search outward from `coord` for a
    *  nearby spot whose FIELD biome belongs to `faction` (sylvan→grove, demon→rift…),
    *  so e.g. a Sylvan Crusade lands in actual groves/marshes — not a flesh/rift cell.
-   *  Returns the matching coord + warpBiome=null. If NONE is found within range (the
-   *  "warp if none nearby" fallback the user chose), returns the original coord + the
-   *  faction's primary biome to WARP the local ground to (so the zone still matches). */
+   *  Returns the matching coord + warpBiome=null. If NONE is found within range,
+   *  returns the original coord + the faction's primary biome — the caller reads a
+   *  non-null warpBiome as "no home ground near" and mints the zone as an explicit
+   *  INTRUSION (spec.tileset + its authored biome) instead of field-resolving.
+   *  NOBODY warps the field off this anymore (the transience law): a temporary
+   *  event may stand on foreign ground; it may not repaint it. */
   private relocateToFactionBiome(coord: { x: number; y: number }, faction: string): { coord: { x: number; y: number }; warpBiome: string | null } {
     // Ashore FIRST: an event epicenter drained onto open ocean would raise its
     // realm mid-sea (the biome field is seeded independently of the landmass
@@ -3638,6 +3643,7 @@ export class World {
     // resets with it — whoever holds snow here (Deepwinter) re-pins on entry.
     this.snowCover = (this.zone.theme.heat ?? 0.5) <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
     this.snowFloor = 0;
+    this.weatherDressAcc = WEATHER_DRESS_CFG.cadenceSec; // dress reconciles on the first beat in
     this.tempGrounds = [];
     // Evaporating pools persist ON their doodads (zone memory) — harvest
     // them back into the sweep so a revisit resumes the drying mid-step.
@@ -28506,25 +28512,25 @@ export class World {
     // EVERY instance drains — each DIMENSION's rifts tear in its own graph:
     // hell's epicenters carry hell's dimension/palette/level pressure and never
     // touch the surface biome field (only surface events scorch the surface wash).
-    const df = this.sim.demonField;
     for (const dfi of this.sim.demonFieldsAll()) {
       if (!dfi.mintRequests.length) continue;
       const dfDim = dfi.dimension; // undefined = the surface instance
       for (const req of dfi.mintRequests) {
         if (this.zoneMap[req.zoneKey]) { dfi.bindTarget(req.invId, req.zoneKey); continue; }
-        // BIOME: steer the rift toward demon land (rift/volcanic); warp the ground if
-        // none is near. LEVEL: the radial field at the (relocated) coord, not the player.
-        // (Hell needs no steering — its whole field is demon country already.)
+        // BIOME: steer the rift toward EXISTING demon land (rift/volcanic) —
+        // placement preference, never transformation. LEVEL: the radial field
+        // at the (relocated) coord, not the player. (Hell needs no steering —
+        // its whole field is demon country already.)
         const rl = dfDim ? { coord: req.coord, warpBiome: null as string | null }
           : this.relocateToFactionBiome(req.coord, 'demon');
-        // KEYED warp + attribution: the scorch RECEDES when this invasion ends
-        // (sweepEventWarps) — a repelled invasion no longer scars the wash forever.
-        if (rl.warpBiome) {
-          this.sim.biomeField.setWarp(`demon_${req.invId}`, {
-            center: rl.coord, radius: 240, biome: rl.warpBiome, strength: 1,
-            label: 'Demonic invasion — the ground is scorched',
-          });
-        }
+        // THE TRANSIENCE LAW (docs/engine/transience.md): the invasion NEVER
+        // warps the biome field. On real demon country the mint field-resolves
+        // as ever (local rift-family face); with none near (rl.warpBiome set —
+        // the old scorch-warp case) the rift stands as an explicit INTRUSION:
+        // spec.tileset wins, wearing its own authored biome, and the land
+        // around it stays exactly what it was. Its in-zone presence is the
+        // pinned Demon Storm (event weather + dress), which lifts with the
+        // invasion — the map's storm ring is the only cartography it gets.
         const anchor = this.zoneMap[req.anchorZoneId]
           ?? nearestNode(this.zoneMap, rl.coord, undefined, dfDim)
           ?? (dfDim ? this.zoneMap[dimensionDef(dfDim).entry?.gate.id ?? ''] : undefined)
@@ -28532,7 +28538,8 @@ export class World {
         const def = placeZoneAt(rl.coord, anchor, this.zoneMap, this.nextGenId++, {
           id: req.zoneKey, tileset: req.tileset,
           level: this.eventLevel(rl.coord) + (dfDim ? dimensionDef(dfDim).levelBonus ?? 0 : 0),
-          objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true, fieldBiome: true,
+          objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true,
+          ...(rl.warpBiome ? {} : { fieldBiome: true }),
           seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
           biomeFor: dfDim ? this.dimensionBiomeFor(dfDim) : this.biomeFor,
           ...(dfDim ? {} : { biomeDepthFor: this.biomeDepthFor }),
@@ -28598,9 +28605,13 @@ export class World {
         // Re-anchor the overlay's epicenter (tentacles + intensity capsules) on
         // where the zone ACTUALLY landed — ashore, post anti-crowd.
         inc.bindEpicenter(req.id, req.zoneKey, def.map);
-        // PERMANENT by design — an incursion LOCKS its landing's ground; the
-        // label keeps even that deliberate scar attributable on the map.
-        this.sim.biomeField.warp({
+        // KEYED blight warp (the transience law): the halo holds while the
+        // epicenter lives — the warp sweep below re-asserts it every beat
+        // (which also re-raises it on a resumed save) and RELEASES it when
+        // the Observer falls, so the stain fades off the healed land instead
+        // of scarring the world forever. Presentation + attribution only:
+        // ground minted inside it still comes out its TRUE biome.
+        this.sim.biomeField.setWarp(`incursion_${req.id}`, {
           center: def.map, radius: req.biomeRadius, biome: req.biome, strength: req.biomeStrength,
           label: 'Eldritch incursion — the ground is blighted',
         });
@@ -28608,29 +28619,52 @@ export class World {
       inc.mintRequests.length = 0;
     }
 
-    // EVENT WARPS RECEDE WITH THEIR EVENTS: a repelled (or burned-out) invasion
-    // and a broken crusade release their hold on the land — the wash heals; the
-    // zones they minted stand as the scar. Incursion blight is permanent BY
-    // DESIGN (unkeyed). Reconciled against the overlays' own liveness (peek),
-    // so every ending — kill, burnout, collapse — heals within a beat.
+    // EVENT WARPS RECEDE WITH THEIR EVENTS (the transience law,
+    // docs/engine/transience.md): every warp is keyed + owned, reconciled here
+    // against its owner's own liveness (peek) every beat — the live half
+    // RE-ASSERTS (which also re-raises warps a resumed save lost with the
+    // transient field), the dead half RELEASES (a gradual fade at
+    // BIOME_FIELD_CFG.warpFadePerSec — the land HEALS, it never snaps). Every
+    // ending — kill, burnout, collapse, package absent — heals by construction.
     this.warpSweepAcc += dt;
     if (this.warpSweepAcc >= 1) {
       this.warpSweepAcc = 0;
       const bf = this.sim.biomeField;
+      const liveEps = new Map<string, { coord: { x: number; y: number }; archetype: string }>();
+      for (const p of inc.peek()) {
+        for (const ep of p.epicenters) liveEps.set(ep.id, { coord: ep.coord, archetype: p.archetype });
+      }
       for (const wid of bf.warpIds()) {
         if (wid.startsWith('demon_')) {
-          const invId = wid.slice('demon_'.length);
-          if (!df || !df.peek().some(i => i.id === invId)) bf.unwarp(wid);
+          // No producer since the transience pass (invasions never warp the
+          // field) — release any stale stain a mid-session module swap left.
+          bf.release(wid);
+        } else if (wid.startsWith('incursion_')) {
+          // The blight fades once its epicenter falls (or the whole landing
+          // collapses) — the deliberate inversion of the old permanent scar.
+          if (!liveEps.has(wid.slice('incursion_'.length))) bf.release(wid);
         } else if (wid.startsWith('crusade_')) {
           const cid = wid.slice('crusade_'.length);
-          if (!cf || !cf.peek().some(c => c.id === cid)) bf.unwarp(wid);
+          if (!cf || !cf.peek().some(c => c.id === cid)) bf.release(wid);
         } else if (wid.startsWith('swarm_roost_')) {
-          // A planted roost stands while its field remembers it (permanent
-          // ecology BY the snapshot, not by an unkeyed scar — a run without
-          // the package, or a culled roost, heals within a beat).
+          // A planted roost stands while its field remembers it (standing
+          // ecology BY the snapshot — and cullable: a culled roost, or a run
+          // without the package, heals within a beat).
           const rid = wid.slice('swarm_roost_'.length);
-          if (!this.sim.swarmingField?.hasRoost(rid)) bf.unwarp(wid);
+          if (!this.sim.swarmingField?.hasRoost(rid)) bf.release(wid);
         }
+      }
+      // LIVE INCURSION EPICENTERS KEEP THEIR HALO: re-assert each bound
+      // epicenter's keyed warp (idempotent replace; also revives after a
+      // resume — the transient field carries nothing across saves itself).
+      for (const [epId, at] of liveEps) {
+        const a = INCURSION_ARCHETYPES[at.archetype];
+        if (!a) continue;
+        bf.setWarp(`incursion_${epId}`, {
+          center: { x: at.coord.x, y: at.coord.y }, radius: a.biomeWarp.radius,
+          biome: a.biome, strength: a.biomeWarp.strength,
+          label: 'Eldritch incursion — the ground is blighted',
+        });
       }
       // AN ANCHORED CRUSADE CLAIMS ITS GROUND: once the throne stands, the
       // heartland's biome turns to the faction's own country (biomesForFaction
@@ -29305,6 +29339,7 @@ export class World {
     this.updateWindPush(dt);
     this.updateBrittle(dt);
     this.updateSnow(dt);
+    this.updateWeatherDress(dt);
     this.updateDrops(dt);
     this.updateOrbs(dt);
     this.updateRemnants(dt);
@@ -31785,6 +31820,10 @@ export class World {
    *  seam). updateSnow floors at max(biome floor, this). */
   snowFloor = 0;
 
+  /** Weather-dress reconcile cadence clock (engine/weatherDress.ts). Starts
+   *  full so the first beat after a spawn/entry reconciles immediately. */
+  private weatherDressAcc: number = WEATHER_DRESS_CFG.cadenceSec;
+
   /** THE LIVING FOG this zone breathes (engine/fog.ts): roaming banks whose
    *  drawn lobes ARE the gameplay surface — statuses granted while inside,
    *  edges honest as they dissipate. Rebuilt each loadZone (ambient texture,
@@ -32422,6 +32461,68 @@ export class World {
     this.snowCover = clamp(this.snowCover, floor, 1);
   }
 
+  /** THE WEATHER DRESS reconcile (engine/weatherDress.ts): while the sky over
+   *  this zone is a kind that DRESSES ground (WeatherDef.dress — the Demon
+   *  Storm's occupation kit is the debut), plant its pieces; the beat the
+   *  front stops covering the zone (drifted on, event repelled, faded thin),
+   *  hand every piece to Doodad.evap — the land dissolves back to exactly
+   *  what was authored. Presence derives from the tagged doodads themselves,
+   *  so the reconcile is idempotent across entries, hops and resumes; the
+   *  plant rolls a per-(zone, kind) salted stream — never the layout's — so
+   *  the same front over the same zone lays the same dress every time. */
+  private updateWeatherDress(dt: number): void {
+    this.weatherDressAcc += dt;
+    if (this.weatherDressAcc < WEATHER_DRESS_CFG.cadenceSec) return;
+    this.weatherDressAcc = 0;
+    // Sanctuary ground stays untouched; a boundless arena has no floor to dress.
+    const eligible = !this.arena.boundless && this.zone.objective.kind !== 'safe';
+    const f = eligible ? this.skyFront() : null;
+    const plan = f ? dressPlanFor(f.kind) : null;
+    const holds = !!plan && !!f && f.intensity >= plan.fadeBelow;
+    // DISSOLVE: every planted piece whose front no longer holds this zone.
+    let standing = false;
+    for (const d of this.doodads) {
+      if (!d.weatherDress || d.gone || d.evap) continue;
+      if (holds && d.weatherDress === f!.kind) { standing = true; continue; }
+      d.evap = { t: 0, rate: dressPlanFor(d.weatherDress)?.evapRate ?? WEATHER_DRESS_CFG.evapRate };
+      this.evaporating.push(d);
+    }
+    // PLANT: the front holds hard enough and none of its dress stands yet.
+    if (!plan || !f || standing || f.intensity < plan.plantAbove) return;
+    const rng = new Rng((this.currentZoneSeed ^ hashStr(`wxdress:${f.kind}`) ^ WEATHER_DRESS_CFG.salt) >>> 0);
+    const pieces = rollDressPieces(rng, plan, f.intensity, this.arena,
+      (x, y, r, row) => this.dressSpotOk(x, y, r, !!row.solid));
+    for (const p of pieces) {
+      const d: Doodad = {
+        pos: vec(p.x, p.y), radius: p.r, kind: p.row.doodad as DoodadKind,
+        rot: p.rot, weatherDress: f.kind,
+      };
+      normalizeDoodadBound(d);
+      this.doodads.push(d);
+    }
+  }
+
+  /** Placement truth for one dress piece: on the walk mesh, inside no solid,
+   *  clear of transit doors (clearOfDoors — THE portal clearance), off the
+   *  player's feet, and — for solid rows — a walkable ring around the seat so
+   *  planted dress can never plug a lane. */
+  private dressSpotOk(x: number, y: number, r: number, solid: boolean): boolean {
+    if (this.walk && !this.walk.isWalkable(x, y)) return false;
+    if (this.pointInSolid(x, y, r + 8)) return false;
+    if (!this.clearOfDoors(vec(x, y), WEATHER_DRESS_CFG.portalClear)) return false;
+    if (dist(this.player.pos, vec(x, y)) < WEATHER_DRESS_CFG.playerClear) return false;
+    if (solid) {
+      const probe = r + WEATHER_DRESS_CFG.solidRingProbe;
+      for (let k = 0; k < 4; k++) {
+        const a = (k / 4) * Math.PI * 2;
+        const px = x + Math.cos(a) * probe, py = y + Math.sin(a) * probe;
+        if (this.walk && !this.walk.isWalkable(px, py)) return false;
+        if (this.pointInSolid(px, py, 10)) return false;
+      }
+    }
+    return true;
+  }
+
   /** THE ZONE'S WIND this frame — direction from the covering front's own
    *  drift, strength from its WeatherDef.wind × intensity × the gust wave.
    *  Cached per sim frame (every mover asks). Null in calm skies. */
@@ -32433,7 +32534,16 @@ export class World {
    *  directional wind, weather-fog, snowfall, the renderer's particles and
    *  wash) — the node map and its spawn bias stay node-space concerns. */
   skyFront(): WeatherFront | null {
-    return skyOf(this.zone) === 'sheltered' ? null : this.sim.weather.sample(this.zone);
+    if (skyOf(this.zone) === 'sheltered') return null;
+    // EVENT-PINNED WEATHER (engine/eventWeather.ts): a world event holding this
+    // ground may pin its own front — a Demon Invasion's storm, an Incursion's
+    // pall — folded here so EVERY consumer of the sky (wash, particles, veil,
+    // radiance, wind, strikes, dress) reads one truth. Strongest wins: one sky
+    // at a time reads clean, and a raging blizzard can still drown a young
+    // storm's first minutes.
+    const pinned = eventFrontFor(this, this.zone);
+    const sky = this.sim.weather.sample(this.zone);
+    return pinned && pinned.intensity >= (sky?.intensity ?? 0) ? pinned : sky;
   }
 
   /** THE RADIANCE SCALAR (world/radiance.ts): the sky's light over THIS zone

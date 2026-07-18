@@ -55,6 +55,37 @@ export interface WeatherStrike {
   throughRoofs?: boolean;
 }
 
+/** One kind of ground piece a weather front DRESSES its covered zone with —
+ *  a registered doodad kind, planted while the front holds and DISSOLVED
+ *  (Doodad.evap) when it passes. Rows are pure data; the machinery is the
+ *  weather-dress fabric (engine/weatherDress.ts + World.updateWeatherDress). */
+export interface WeatherDressRow {
+  /** Registered doodad kind (validated at boot — doodadVisuals row required). */
+  doodad: string;
+  /** Pieces planted at full intensity (scaled down toward count[0] when faint). */
+  count: [number, number];
+  /** Doodad radius range. */
+  radius: [number, number];
+  /** Minimum spacing between pieces of THIS row (default WEATHER_DRESS_CFG.minGap). */
+  minGap?: number;
+  /** Solid rows additionally require a walkable RING around the seat so dress
+   *  can never plug a lane (the placer's own belt; the kind's registered rule
+   *  still decides actual collision — drawn == tested as everywhere). */
+  solid?: boolean;
+}
+
+/** A front's whole dress kit + its thresholds. All dials optional — defaults
+ *  ride WEATHER_DRESS_CFG so a bare `dress: { rows: [...] }` is a valid kit. */
+export interface WeatherDressSpec {
+  rows: WeatherDressRow[];
+  /** Displayed-intensity gate to PLANT (default WEATHER_DRESS_CFG.plantAbove). */
+  plantAbove?: number;
+  /** Displayed-intensity gate to DISSOLVE (default WEATHER_DRESS_CFG.fadeBelow). */
+  fadeBelow?: number;
+  /** Dissolve speed in radius-units/sec (default WEATHER_DRESS_CFG.evapRate). */
+  evapRate?: number;
+}
+
 export interface WeatherDef {
   label: string;
   /** Minimap cell + renderer wash tint. ('clear' keeps a token black — it is
@@ -67,8 +98,19 @@ export interface WeatherDef {
   /** Which day phases the sky may birth this front under, and how strongly it
    *  favours it there (maybeSpawn scans the registry; clear = simply fewer
    *  fronts). Omitted ⇒ never sky-born — only 'clear', the no-front sentinel,
-   *  should omit it (validateWeather warns otherwise). */
+   *  and eventOnly kinds should omit it (validateWeather warns otherwise). */
   skyWeight?: Partial<Record<DayPhase, number>>;
+  /** EVENT-PINNED kind: the sky never births this front — a world EVENT pins
+   *  it over the ground it holds (engine/eventWeather.ts sources folded at
+   *  World.skyFront). Such kinds legitimately omit skyWeight; everything else
+   *  about them (wash, particles, radiance, wind, strikes, dress) rides the
+   *  same registry row as any sky-born front. */
+  eventOnly?: boolean;
+  /** TEMPORARY GROUND DRESS this front lays over the zones it covers — planted
+   *  while it holds, dissolved (Doodad.evap) as it passes; nothing persists.
+   *  The set-dressing half of the transience doctrine (docs/engine/transience.md):
+   *  an event may FLAVOR the land it borrows, never repaint it. */
+  dress?: WeatherDressSpec;
   /** Environmental strikes while you stand under this front (optional). */
   strike?: WeatherStrike;
   /** Fraction of the front's LIFE spent ramping in/out (default 0.4) — a
@@ -210,6 +252,41 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     skyWeight: { night: 0.8, dusk: 0.45 },
     birthGeo: { wildness: { min: 0.5 } },
   },
+  /** DEMON STORM — a Demon Invasion's OWN sky, pinned (never sky-born) over
+   *  every zone its storm radius covers (packages/overlays/demonInvasion.ts
+   *  event-front source; per-stage strength on InvasionStage.weather). The
+   *  Helltide read: the LAND stays exactly what it was — the bruised light,
+   *  the ember wind and the planted legion dress below are the whole
+   *  occupation, and every piece of it lifts when the invasion breaks.
+   *  Spawn muls stay NEUTRAL: the invasion overlay already tilts its covered
+   *  zones (DemonSurge.stormFactionMul) — the weather row is presentation. */
+  demonstorm: {
+    radiance: { mul: 0.72 },
+    label: 'Demon Storm', color: '#c22e30', countMul: 1.0, factionMul: {},
+    wind: 0.25, rampFrac: 0.25,
+    eventOnly: true,
+    // THE TEMPORARY OCCUPATION KIT — existing underworld kinds only (a dress
+    // row is data; a new look would be one doodadVisuals entry). Planted on
+    // covered ground while the storm holds, evaporated as it lifts.
+    dress: {
+      rows: [
+        { doodad: 'hell_fin', count: [2, 4], radius: [16, 24], minGap: 220, solid: true },
+        { doodad: 'demon_banner', count: [2, 3], radius: [10, 12], minGap: 260, solid: true },
+        { doodad: 'ember_fissure', count: [4, 7], radius: [14, 22], minGap: 150 },
+      ],
+    },
+  },
+  /** THE PALL — an Eldritch Incursion's air over ground its reach holds
+   *  (IncursionArchetype.weather; strength = the zone's live influence, so
+   *  the veil DEEPENS toward the epicenter and recedes as tentacles are
+   *  cleansed back). Its ground flavor stays the incursion's own event kit
+   *  (doodad mutation, tentacle fields) — the pall is the light going wrong. */
+  eldritch_pall: {
+    radiance: { mul: 0.78 },
+    label: 'The Pall', color: '#6fc75f', countMul: 1.0, factionMul: {},
+    wind: 0.1, rampFrac: 0.5,
+    eventOnly: true,
+  },
 };
 
 /** Register a weather kind under an open-string id (see WeatherKind) — one
@@ -221,16 +298,33 @@ export function registerWeather(id: string, def: WeatherDef): void {
 }
 
 /** BOOT VALIDATION (wired into validateContent beside validateStamps) — the
- *  cross-checks the closed union used to make unnecessary. The caller passes a
- *  skill resolver so this module stays data-import-free. */
-export function validateWeather(hasSkill: (id: string) => boolean): string[] {
+ *  cross-checks the closed union used to make unnecessary. The caller passes
+ *  resolvers so this module stays data-import-free. */
+export function validateWeather(
+  hasSkill: (id: string) => boolean,
+  hasDoodad?: (kind: string) => boolean,
+): string[] {
   const bad: string[] = [];
   for (const [kind, def] of Object.entries(WEATHER_DEFS)) {
     if (def.strike && !hasSkill(def.strike.skillId)) {
       bad.push(`weather '${kind}': strike names unknown skill '${def.strike.skillId}'`);
     }
-    if (kind !== 'clear' && !def.skyWeight) {
-      bad.push(`weather '${kind}': no skyWeight — the sky can never birth it (only 'clear', the no-front sentinel, omits one)`);
+    // Sky-born kinds need a skyWeight; event-pinned kinds must NOT carry one
+    // (an eventOnly front drifting in off the weather rng would fire outside
+    // its event's lifetime — the transience contract broken by the sky itself).
+    if (kind !== 'clear' && !def.eventOnly && !def.skyWeight) {
+      bad.push(`weather '${kind}': no skyWeight — the sky can never birth it (only 'clear', the no-front sentinel, and eventOnly kinds omit one)`);
+    }
+    if (def.eventOnly && def.skyWeight) {
+      bad.push(`weather '${kind}': eventOnly AND skyWeight — an event-pinned front must never be sky-born (drop one)`);
+    }
+    for (const row of def.dress?.rows ?? []) {
+      if (hasDoodad && !hasDoodad(row.doodad)) {
+        bad.push(`weather '${kind}': dress row names unregistered doodad kind '${row.doodad}'`);
+      }
+      if (row.count[0] > row.count[1] || row.radius[0] > row.radius[1]) {
+        bad.push(`weather '${kind}': dress row '${row.doodad}' has an inverted count/radius range`);
+      }
     }
   }
   return bad;

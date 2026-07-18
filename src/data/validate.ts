@@ -661,7 +661,7 @@ export function validateContent(): void {
   // WEATHER: every registered kind's cross-refs resolve (a strike names a real
   // skill, sky-spawnable kinds carry a skyWeight) — the open WeatherKind's
   // safety net, exactly as validateStamps backstops the open StampKind.
-  for (const msg of validateWeather(id => !!SKILLS[id])) warn(msg);
+  for (const msg of validateWeather(id => !!SKILLS[id], k => !!DOODAD_VISUALS[k])) warn(msg);
 
   // DIMENSIONS: every registered dimension's palette biome — and its gate
   // biome — must resolve at least one tileset THROUGH THAT DIMENSION'S pool
