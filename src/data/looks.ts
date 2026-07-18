@@ -1670,6 +1670,16 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'halo', scale: 0.7, alpha: 0.4 },
     ],
   },
+  // The shepherd of the swarm wears the swarm's own alphabet: feelers up,
+  // powder-lobed wings folded, a staff whose tip glows like a brood-lamp.
+  class_hivecaller: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'mothWings', scale: 0.9, alpha: 0.85 },
+      { kind: 'antennae', scale: 0.85 },
+      { kind: 'staff', params: { orb: 'glow' } },
+    ],
+  },
 
   // --- The parity-pass adversaries (monsters.ts wears these) ----------------
   bandit_trapsmith: {

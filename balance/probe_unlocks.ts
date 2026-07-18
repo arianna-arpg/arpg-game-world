@@ -45,6 +45,7 @@ const WORLD_FACTS = new Set<string>([
   'crowned_killed',     // engine/killHandlers.ts (Crowned rare put down)
   'warlords_killed',    // engine/killHandlers.ts (warband warlord put down)
   'unmade_slain',       // quests/defs.ts reward ledger (the Chronophage)
+  'broodmothers_slain', // engine/killHandlers.ts (any brood-queen kind put down)
 ]);
 const MILESTONE_RE = /^class_(.+)_level_(\d+)$/;
 const classIds = new Set(CLASSES.map(c => c.id));

@@ -4463,6 +4463,40 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // the sylvan theming lives on the VocationDef that plants it.
   },
 
+  // --- The vocation-coverage shrines (class pass): five more secret-site
+  // givers in the Heartwood's exact passive+invulnerable factionless shape.
+  // Each is scenery with a name; its theming lives on the VocationDef.
+  brood_heart: {
+    id: 'brood_heart', name: 'the Brood-Heart',
+    color: '#b8c84a', shape: 'octagon', radius: 16, material: 'verdant', look: 'menhir',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0, passive: true, invulnerable: true,
+  },
+  pack_stone: {
+    id: 'pack_stone', name: 'the Pack-Stone',
+    color: '#a8c87a', shape: 'octagon', radius: 15, material: 'stone', look: 'menhir',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0, passive: true, invulnerable: true,
+  },
+  gearwright_wreck: {
+    id: 'gearwright_wreck', name: 'the Gearwright\'s Wreck',
+    color: '#a8905a', shape: 'octagon', radius: 16, material: 'stone', look: 'menhir',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0, passive: true, invulnerable: true,
+  },
+  stillwater_basin: {
+    id: 'stillwater_basin', name: 'the Stillwater',
+    color: '#c8e0d8', shape: 'octagon', radius: 15, material: 'stone', look: 'menhir',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0, passive: true, invulnerable: true,
+  },
+  barrow_stone: {
+    id: 'barrow_stone', name: 'the Barrow Door',
+    color: '#c8d8e8', shape: 'octagon', radius: 16, material: 'stone', look: 'menhir',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0, passive: true, invulnerable: true,
+  },
+
   // THE STONEFATHER — the Stonewrought secret vocation's shrine (a standing
   // menhir that remembers). Same passive+invulnerable factionless giver shape
   // as the Heartwood.

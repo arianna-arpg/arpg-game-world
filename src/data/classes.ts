@@ -465,6 +465,35 @@ export const CLASSES: ClassDef[] = [
     // released as a wall of air.
     bar: ['mantra_strike', 'wellspring_stance', 'long_exhale', null, null, null, null, null],
     startNode: 'wil_start',
+  },
+
+  // --- Beyond the parity twelve -----------------------------------------------
+  // The star's points anchor three classes each; from here the roster GROWS
+  // past three-per-point — the parity contract (budget, kit size, unique
+  // kits) still binds every newcomer, but a point may now anchor four. The
+  // discovery web (meta/unlocks.ts) is what keeps a deeper roster legible:
+  // new classes arrive as rumors, not as a longer shop shelf.
+
+  {
+    id: 'hivecaller', name: 'Hivecaller',
+    look: 'class_hivecaller',
+    description: 'The swarm is the weapon and the shepherd is its will. A reserved hive that reknits itself, a veil of biting motes gathered off the air, and one pointed word that sends the whole chorus somewhere specific.',
+    color: '#b8c84a',
+    attributes: {
+      strength: 2, prowess: 0, fortitude: 2,
+      dexterity: 4, finesse: 2, charisma: 4,
+      intelligence: 6, wisdom: 14, willpower: 16,
+      vitality: 10,
+    },
+    // The zoomancer's grammar, all three verbs THRONG-flavored: Hivecall
+    // reserves the standing swarm (persistent, self-reknitting), Raise the
+    // Gnatveil sweeps wild motes into a harrying cloud, and Command:
+    // Assault is the pointed finger the whole chorus obeys. Deliberately
+    // distinct from the Summoner (corpse legions from a bolt-caster's
+    // distance) and the Tamer (ONE bond, held): the Hivecaller is MANY,
+    // cheap, and everywhere.
+    bar: ['summon_swarmlings', 'raise_gnatveil', 'command_assault', null, null, null, null, null],
+    startNode: 'wis_start', // the shepherd's craft — wisdom's fourth door
   }
 ];
 

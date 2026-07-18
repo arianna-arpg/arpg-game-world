@@ -177,6 +177,21 @@ registerKillHandler({
   },
 });
 
+// KILL THE MOTHER, HEAR THE HIVE — putting down any brood-queen kind stamps
+// the discovery ledger the Hivecaller's Vault rumor resolves on (the
+// discovery web, meta/unlocks.ts): the swarm outlives its mother, and it
+// listens for a new caller. Counts whoever lands the blow, like a Crowned.
+const BROODMOTHER_KINDS = new Set(['broodmother', 'chrysalid_broodmother', 'brood_sovereign']);
+registerKillHandler({
+  id: 'broodmother_fall',
+  when: ctx => BROODMOTHER_KINDS.has(ctx.actor.defId ?? ''),
+  run: ctx => {
+    ctx.bumpLedger('broodmothers_slain');
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40),
+      'The brood-mother falls — and the swarm keeps humming.', '#b8c84a', 15);
+  },
+});
+
 // THE OBSERVER at an Eldritch Incursion's epicenter — felling it COLLAPSES that
 // epicenter (and the whole incursion once its last falls), for festering-scaled
 // spoils. The deep payoff for tracking the blight to its hidden source.

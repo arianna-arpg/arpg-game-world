@@ -344,6 +344,19 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     supportIds: ['colossus_stance', 'stillwater_discipline'],
     discover: { classes: 'cleric',
       hint: 'Past the Cleric\'s long watch waits a stiller discipline. Fury is a debt; stillness pays cash.' } },
+
+  // --- Beyond the parity twelve: wisdom's fourth door -------------------------
+  // THE HIVECALLER — the swarm-shepherd (the throng fabric's own class).
+  // Discovered the way a hive changes hands: kill a brood-queen
+  // (killHandlers.ts broodmothers_slain — broodmothers roam the wilds and
+  // crown the chitin country) and the humming does not stop; it waits.
+  { classId: 'hivecaller', cost: 300,
+    blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering — and one pointed word the whole chorus obeys.',
+    skillIds: ['summon_swarmlings', 'raise_gnatveil', 'command_assault',
+      'beckon_palewisps'],
+    supportIds: ['broodclutch', 'vicious_brood', 'hiveborn'],
+    discover: { ledger: 'broodmothers_slain',
+      hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },
 ];
 
 const gemNames = (ids: readonly string[], reg: Record<string, { name: string }>): string =>

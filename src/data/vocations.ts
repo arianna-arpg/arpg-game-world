@@ -1313,6 +1313,619 @@ const STONEWROUGHT: VocationDef = {
   },
 };
 
+// --- THE COVERAGE PASS: every class carries a vocation line ------------------
+// Fourteen chains (the thirteen vocation-less classes + the Hivecaller's),
+// each leaning on its class's OWN fabric (grab, trapworks, mass, song,
+// combo, timeflow, throng) and each UNLOCKED with its own texture: secret
+// sites behind five different filters, a pilgrim chain that must be walked
+// to every run, a chain any class may stumble into, escort work, survival
+// recitals, meditation circuits, and one two-step duel at a barrow door.
+
+const PACKWARDEN_LAYOUT = fan(225); // spine → wis_start (offset from the Gravebinder's 210)
+const PACKWARDEN: VocationDef = {
+  id: 'packwarden', name: 'Packwarden',
+  blurb: 'The bond runs both ways and the pack knows it. Wilder companions, harder claims, and a den that heals as one body.',
+  color: '#a8c87a',
+  classId: 'tamer',
+  secret: {
+    site: {
+      npc: 'pack_stone',
+      filter: { biomes: ['taiga', 'forest'], minLevel: 18 },
+      chance: 0.5,
+    },
+    classLockedDiscovery: true,
+    unlockedOffer: 'menu',
+    offerFlavor: '"Claw-marks older than any kingdom score this stone. Whatever sharpened itself here is watching you work — and it approves so far."',
+    discoveryText: 'Something circles the stone at the edge of sight, keeping pace with you.',
+  },
+  tree: [
+    { id: 's1', name: 'Denspeech', description: '20% increased companion damage', kind: 'small', ...PACKWARDEN_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
+    { id: 's2', name: 'Thick Pelt', description: 'Companions have 25% increased life', kind: 'small', ...PACKWARDEN_LAYOUT.s2, mods: [mod('minionLife', 'increased', 0.25)], links: ['root'] },
+    { id: 's3', name: 'Loping Gait', description: '15% increased companion movement speed; 5% increased movement speed', kind: 'small', ...PACKWARDEN_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.15), mod('moveSpeed', 'increased', 0.05)], links: ['root'] },
+    { id: 'n1', name: 'Second Bond', description: '+1 maximum minion — the den holds another', kind: 'notable', ...PACKWARDEN_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Red in Tooth', description: 'Companions have 25% chance to Poison on hit; 15% increased companion damage', kind: 'notable', ...PACKWARDEN_LAYOUT.n2, mods: [mod('minionApply_poison', 'flat', 0.25), mod('minionDamage', 'increased', 0.15)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Den-Mended', description: 'Companions regenerate 3% of their life per second', kind: 'notable', ...PACKWARDEN_LAYOUT.n3, mods: [mod('minionRegenPct', 'flat', 0.03)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Warden\'s Hide', description: '+40 maximum life; 15% increased armor — the pack defends its keeper', kind: 'notable', ...PACKWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 40), mod('armor', 'increased', 0.15)], links: ['s2'] },
+    { id: 'k1', name: 'One Body, Many Teeth', description: '20% more companion damage; companions fight on for 2 more seconds when slain', kind: 'keystone', ...PACKWARDEN_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionUndying', 'flat', 2)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Cull the rabid packs turning on their own runs',
+        zone: { tileset: 'deepwood', direction: 'n', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [6, 8], size: [3, 5], table: [
+            { id: 'plains_wolf', weight: 3 }, { id: 'dire_wolf', weight: 2 }, { id: 'werewolf', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'The runs are quiet — return to the Pack-Stone\'s work.' },
+      { offerLabel: 'Drive the moon-touched from the taiga dens',
+        zone: { tileset: 'taiga', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 3 },
+          packsOverride: { count: [5, 7], size: [3, 5], table: [
+            { id: 'werewolf', weight: 2 }, { id: 'dire_wolf', weight: 3 }, { id: 'plains_wolf', weight: 2 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The dens breathe easy — return to the quartermaster.' },
+      { offerLabel: 'Face the Crowned Matron and take the den\'s blessing',
+        zone: { tileset: 'deepwood', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'den_matron', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'The Matron yielded — return, Packwarden.' },
+    ],
+  },
+};
+
+const GROUNDBREAKER_LAYOUT = fan(105); // spine → str_start (offset from the Warbringer's 90)
+const GROUNDBREAKER: VocationDef = {
+  id: 'groundbreaker', name: 'Groundbreaker',
+  blurb: 'Stances are load-bearing and so is the ground. Break both, then bill whatever is still standing.',
+  color: '#c8824a',
+  classId: 'breaker',
+  tree: [
+    { id: 's1', name: 'Wrecking Rhythm', description: '20% increased poise damage', kind: 'small', ...GROUNDBREAKER_LAYOUT.s1, mods: [mod('poiseDamage', 'increased', 0.2)], links: ['root'] },
+    { id: 's2', name: 'Set Shoulders', description: '15% increased armor; +25 maximum life', kind: 'small', ...GROUNDBREAKER_LAYOUT.s2, mods: [mod('armor', 'increased', 0.15), mod('life', 'flat', 25)], links: ['root'] },
+    { id: 's3', name: 'Wide Swing', description: '10% increased area of effect', kind: 'small', ...GROUNDBREAKER_LAYOUT.s3, mods: [mod('aoeRadius', 'increased', 0.1)], links: ['root'] },
+    { id: 'n1', name: 'Faultfinder', description: 'Melee hits: 20% chance to Sunder; 15% increased poise damage', kind: 'notable', ...GROUNDBREAKER_LAYOUT.n1, mods: [mod('apply_sundered', 'flat', 0.2, ['melee']), mod('poiseDamage', 'increased', 0.15)], links: ['s1'] },
+    { id: 'n2', name: 'Aftershock Doctrine', description: '25% increased stagger window; 10% increased area damage', kind: 'notable', ...GROUNDBREAKER_LAYOUT.n2, mods: [mod('staggerWindow', 'increased', 0.25), mod('damage', 'increased', 0.1, ['aoe'])], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Quarry Legs', description: '+30 knockback strength; 6% increased movement speed', kind: 'notable', ...GROUNDBREAKER_LAYOUT.n3, mods: [mod('knockback', 'flat', 30), mod('moveSpeed', 'increased', 0.06)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Broken Before Billed', description: '25% increased damage against Sundered enemies', kind: 'notable', ...GROUNDBREAKER_LAYOUT.n4, mods: [mod('damageVs_sundered', 'flat', 0.25)], links: ['s2'] },
+    { id: 'k1', name: 'The Ground Gives First', description: '15% more area damage; melee hits deal 20% more poise damage', kind: 'keystone', ...GROUNDBREAKER_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['aoe']), mod('poiseDamage', 'more', 0.2, ['melee'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Shatter the resonant stones singing in the karst',
+        zone: { tileset: 'karst_reach', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'resonant_stone', count: [3, 4] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'The karst is silent — return to the quartermaster.' },
+      { offerLabel: 'Bring down the stone court of the crown peaks',
+        zone: { tileset: 'stonecrown', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [5, 7], size: [2, 4], table: [
+            { id: 'stone_golem', weight: 2 }, { id: 'troll_mauler', weight: 2 }, { id: 'rockgrub', weight: 3 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The court is rubble — return to the quartermaster.' },
+      { offerLabel: 'Fell the Crowned Colossus in the foothills',
+        zone: { tileset: 'foothills', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'stone_golem', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'It broke first — return, Groundbreaker.' },
+    ],
+  },
+};
+
+const SPEARHEAD_LAYOUT = fan(75); // spine → str_start (the other shoulder of 90)
+const SPEARHEAD: VocationDef = {
+  id: 'spearhead', name: 'Spearhead',
+  blurb: 'First through the gap, and the gap is wherever you say it is. Weight, momentum, and a line that advances because stopping never came up.',
+  color: '#d8c07a',
+  classId: 'vanguard',
+  tree: [
+    { id: 's1', name: 'Point of Contact', description: '15% increased melee damage; +20 knockback strength', kind: 'small', ...SPEARHEAD_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['melee']), mod('knockback', 'flat', 20)], links: ['root'] },
+    { id: 's2', name: 'March Discipline', description: '8% increased movement speed', kind: 'small', ...SPEARHEAD_LAYOUT.s2, mods: [mod('moveSpeed', 'increased', 0.08)], links: ['root'] },
+    { id: 's3', name: 'Shieldwall Shoulders', description: '15% increased armor; +25 maximum life', kind: 'small', ...SPEARHEAD_LAYOUT.s3, mods: [mod('armor', 'increased', 0.15), mod('life', 'flat', 25)], links: ['root'] },
+    { id: 'n1', name: 'Thrown Gate', description: '+35% shove authority — the heavy learn to move for you', kind: 'notable', ...SPEARHEAD_LAYOUT.n1, mods: [mod('shoveAuthority', 'increased', 0.35)], links: ['s1'] },
+    { id: 'n2', name: 'Momentum Ledger', description: '30% increased impact damage — walls, and whatever you put into them, pay out', kind: 'notable', ...SPEARHEAD_LAYOUT.n2, mods: [mod('impactDamage', 'increased', 0.3)], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Unbroken Column', description: '20% increased stagger window; 10% increased armor', kind: 'notable', ...SPEARHEAD_LAYOUT.n3, mods: [mod('staggerWindow', 'increased', 0.2), mod('armor', 'increased', 0.1)], links: ['s2', 's3'] },
+    { id: 'n4', name: 'Breach Instinct', description: 'While moving: 10% increased melee damage; 5% increased movement speed', kind: 'notable', ...SPEARHEAD_LAYOUT.n4, mods: [mod('damage', 'increased', 0.1, ['melee'], 'moving'), mod('moveSpeed', 'increased', 0.05)], links: ['s3'] },
+    { id: 'k1', name: 'The Gap Is a Door', description: 'While moving: 20% more melee damage. +40 knockback strength', kind: 'keystone', ...SPEARHEAD_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['melee'], 'moving'), mod('knockback', 'flat', 40)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Break OUT of the wasteland encirclement',
+        zone: { tileset: 'wasteland', direction: 'w', distance: 1, level: 'character',
+          objective: { kind: 'escape', interval: [4, 7] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'You walked out the far side — return to the quartermaster.' },
+      { offerLabel: 'Escort the relief column through bandit country',
+        zone: { tileset: 'grassland', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'procession', robbers: [
+            { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_bruiser', weight: 2 }, { id: 'bandit_fusilier', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The column came through whole — return to the quartermaster.' },
+      { offerLabel: 'Take the Crowned Keeper\'s palisade head-on',
+        zone: { tileset: 'downs', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'bandit_keeper', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'The palisade has a hole in it now — return, Spearhead.' },
+    ],
+  },
+};
+
+const SWORDSAINT_LAYOUT = fan(35); // spine → prw_start (offset from the Bloodreaver's 50)
+const SWORDSAINT: VocationDef = {
+  id: 'swordsaint', name: 'Swordsaint',
+  blurb: 'The sword as a sentence and the sentence as a life. A barrow keeps the old master\'s cadence; earn it in two strokes.',
+  color: '#c8d8e8',
+  classId: 'blademaster',
+  secret: {
+    site: {
+      npc: 'barrow_stone',
+      filter: { biomes: ['ossuary', 'sepulcher'], minLevel: 22 },
+      chance: 0.45,
+    },
+    classLockedDiscovery: true,
+    unlockedOffer: 'menu',
+    offerFlavor: '"A sword is buried here point-down, and the door remembers every hand that failed the draw. Yours, it does not close against."',
+    discoveryText: 'A barrow door stands ajar — steel keeps time somewhere below.',
+  },
+  tree: [
+    { id: 's1', name: 'Measured Breath', description: '10% increased attack speed', kind: 'small', ...SWORDSAINT_LAYOUT.s1, mods: [mod('attackSpeed', 'increased', 0.1)], links: ['root'] },
+    { id: 's2', name: 'Read the Wrist', description: '15% increased evasion', kind: 'small', ...SWORDSAINT_LAYOUT.s2, mods: [mod('evasion', 'increased', 0.15)], links: ['root'] },
+    { id: 's3', name: 'Longer Cadence', description: '20% increased combo window — the measure forgives a late beat', kind: 'small', ...SWORDSAINT_LAYOUT.s3, mods: [mod('comboWindow', 'increased', 0.2)], links: ['root'] },
+    { id: 'n1', name: 'Opening Read', description: 'Melee hits: 20% chance to apply Vulnerable', kind: 'notable', ...SWORDSAINT_LAYOUT.n1, mods: [mod('apply_vulnerable', 'flat', 0.2, ['melee'])], links: ['s1'] },
+    { id: 'n2', name: 'The Third Stroke Settles', description: '30% increased combo window; 12% increased melee damage', kind: 'notable', ...SWORDSAINT_LAYOUT.n2, mods: [mod('comboWindow', 'increased', 0.3), mod('damage', 'increased', 0.12, ['melee'])], links: ['s3', 's1'] },
+    { id: 'n3', name: 'Empty Scabbard Mind', description: '15% increased attack speed; 10% increased evasion', kind: 'notable', ...SWORDSAINT_LAYOUT.n3, mods: [mod('attackSpeed', 'increased', 0.15), mod('evasion', 'increased', 0.1)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Duelist\'s Ledger', description: '25% increased damage against Vulnerable enemies', kind: 'notable', ...SWORDSAINT_LAYOUT.n4, mods: [mod('damageVs_vulnerable', 'flat', 0.25)], links: ['s2'] },
+    { id: 'k1', name: 'One Perfect Stroke', description: '15% more melee damage; 30% increased damage against Vulnerable enemies; 10% increased attack speed', kind: 'keystone', ...SWORDSAINT_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['melee']), mod('damageVs_vulnerable', 'flat', 0.3), mod('attackSpeed', 'increased', 0.1)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    // The DUEL chain: two steps, heavier point payouts (3+3 = the same six
+    // every three-step chain pays — the texture differs, the economy doesn't).
+    steps: [
+      { offerLabel: 'Silence the blade-wraiths rehearsing in the ossuary',
+        zone: { tileset: 'ossuary', direction: 's', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [5, 7], size: [2, 4], table: [
+            { id: 'blade_wraith', weight: 3 }, { id: 'blade_swarm', weight: 2 }, { id: 'mirror_husk', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 1000, gems: 4, vocationPoints: 3,
+        turnInPrompt: 'The rehearsal is over — the barrow door waits.' },
+      { offerLabel: 'Answer the Barrow Swordsaint\'s draw',
+        zone: { tileset: 'sepulcher_sands', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'barrow_swordsaint', levelBonus: 2 },
+          forceWaypoint: true, floating: true, wpExclusionRadius: 1 },
+        xp: 2400, gems: 6, vocationPoints: 3,
+        turnInPrompt: 'The old master bows — return, Swordsaint.' },
+    ],
+  },
+};
+
+const PITFIGHTER_LAYOUT = fan(65); // spine → prw_start (the other fist of 50)
+const PITFIGHTER: VocationDef = {
+  id: 'pitfighter', name: 'Pitfighter',
+  blurb: 'The pit\'s arithmetic, formalized: hands that hold, hips that answer, and a crowd that only respects what gets back up.',
+  color: '#d8885a',
+  classId: 'brawler',
+  tree: [
+    { id: 's1', name: 'Knuckle Rhythm', description: '12% increased attack speed', kind: 'small', ...PITFIGHTER_LAYOUT.s1, mods: [mod('attackSpeed', 'increased', 0.12)], links: ['root'] },
+    { id: 's2', name: 'Corner Cutman', description: '+30 maximum life; +2 life regeneration per second', kind: 'small', ...PITFIGHTER_LAYOUT.s2, mods: [mod('life', 'flat', 30), mod('lifeRegen', 'flat', 2)], links: ['root'] },
+    { id: 's3', name: 'Low Center', description: '15% increased grip power', kind: 'small', ...PITFIGHTER_LAYOUT.s3, mods: [mod('gripPower', 'increased', 0.15)], links: ['root'] },
+    { id: 'n1', name: 'Iron Clinch', description: '30% increased grip power — what you catch, stays caught', kind: 'notable', ...PITFIGHTER_LAYOUT.n1, mods: [mod('gripPower', 'increased', 0.3)], links: ['s3'] },
+    { id: 'n2', name: 'Slippery When Held', description: '40% increased wriggle — nothing keeps YOU, either', kind: 'notable', ...PITFIGHTER_LAYOUT.n2, mods: [mod('wriggle', 'increased', 0.4)], links: ['s3', 's2'] },
+    { id: 'n3', name: 'Crowd-Pleaser', description: 'Melee hits: 15% chance to apply Vulnerable; 10% increased melee damage', kind: 'notable', ...PITFIGHTER_LAYOUT.n3, mods: [mod('apply_vulnerable', 'flat', 0.15, ['melee']), mod('damage', 'increased', 0.1, ['melee'])], links: ['s1'] },
+    { id: 'n4', name: 'Takedown Artist', description: 'Gain the Takedown measure (seize, then throw, and the crowd pays out) — the Grappler\'s Rhythm combo', kind: 'notable', ...PITFIGHTER_LAYOUT.n4, mods: [mod('combo_grapplers_rhythm', 'flat', 1)], links: ['s1', 's2'] },
+    { id: 'k1', name: 'Last One Standing', description: '15% more melee damage; +40 maximum life; 20% increased grip power', kind: 'keystone', ...PITFIGHTER_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['melee']), mod('life', 'flat', 40), mod('gripPower', 'increased', 0.2)], links: ['n3', 'n4'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Survive four rounds in the grand arena',
+        zone: { tileset: 'grand_arena', direction: 's', distance: 1, level: 'character',
+          objective: { kind: 'waves', waves: 4 }, special: true,
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'Four rounds, one you — return to the quartermaster.' },
+      { offerLabel: 'Teach the gripping kin what hands are for',
+        zone: { tileset: 'mire', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [5, 7], size: [2, 4], table: [
+            { id: 'gaff_wrangler', weight: 3 }, { id: 'yoke_mauler', weight: 2 }, { id: 'gorge_gulper', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'They understand now — return to the quartermaster.' },
+      { offerLabel: 'Throw the Crowned Mauler in its own pit',
+        zone: { tileset: 'grand_arena', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'yoke_mauler', levelBonus: 1, promote: { rarity: 'crowned' } },
+          special: true, forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'It stayed down — return, Pitfighter.' },
+    ],
+  },
+};
+
+const THORNWALL_LAYOUT = fan(115); // spine → for_start (offset from the Bastion's 130)
+const THORNWALL: VocationDef = {
+  id: 'thornwall', name: 'Thornwall',
+  blurb: 'Hitting you was always the mistake; now it is an itemized invoice. Quills, spite, and a wall that bills by the blow.',
+  color: '#9ab0a8',
+  classId: 'sentinel',
+  tree: [
+    { id: 's1', name: 'First Quill', description: '+15 thorns', kind: 'small', ...THORNWALL_LAYOUT.s1, mods: [mod('thorns', 'flat', 15)], links: ['root'] },
+    { id: 's2', name: 'Set Footing', description: '15% increased armor', kind: 'small', ...THORNWALL_LAYOUT.s2, mods: [mod('armor', 'increased', 0.15)], links: ['root'] },
+    { id: 's3', name: 'Deep Roots', description: '+30 maximum life', kind: 'small', ...THORNWALL_LAYOUT.s3, mods: [mod('life', 'flat', 30)], links: ['root'] },
+    { id: 'n1', name: 'Bristling Ledger', description: '+30 thorns; 10% increased armor', kind: 'notable', ...THORNWALL_LAYOUT.n1, mods: [mod('thorns', 'flat', 30), mod('armor', 'increased', 0.1)], links: ['s1'] },
+    { id: 'n2', name: 'Barbed Answer', description: 'Melee hits: 20% chance to Root — stand still and be billed', kind: 'notable', ...THORNWALL_LAYOUT.n2, mods: [mod('apply_rooted', 'flat', 0.2, ['melee'])], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Paid in Kind', description: '25% increased damage against Rooted enemies', kind: 'notable', ...THORNWALL_LAYOUT.n3, mods: [mod('damageVs_rooted', 'flat', 0.25)], links: ['s2', 's3'] },
+    { id: 'n4', name: 'Living Palisade', description: '+3 life regeneration per second; 15% increased stagger window', kind: 'notable', ...THORNWALL_LAYOUT.n4, mods: [mod('lifeRegen', 'flat', 3), mod('staggerWindow', 'increased', 0.15)], links: ['s3'] },
+    { id: 'k1', name: 'The Wall Collects', description: '+60 thorns; 15% increased armor; +30 maximum life', kind: 'keystone', ...THORNWALL_LAYOUT.k1, mods: [mod('thorns', 'flat', 60), mod('armor', 'increased', 0.15), mod('life', 'flat', 30)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Clear the briar-maulers from the petrified weald',
+        zone: { tileset: 'petrified_weald', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [6, 8], size: [3, 5], table: [
+            { id: 'thorn_sprite', weight: 3 }, { id: 'briar_beast', weight: 2 } ] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'The weald is passable — return to the quartermaster.' },
+      { offerLabel: 'Hold the mournstead crossroads through the night\'s waves',
+        zone: { tileset: 'mournstead', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 4 },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The crossroads held — return to the quartermaster.' },
+      { offerLabel: 'Let the Crowned Briar-Beast break itself on you',
+        zone: { tileset: 'gloamwood', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'briar_beast', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'It broke; you stood — return, Thornwall.' },
+    ],
+  },
+};
+
+const IMPALER_LAYOUT = fan(345); // spine → dex_start (offset from the Wildstalker's 330)
+const IMPALER: VocationDef = {
+  id: 'impaler', name: 'Impaler',
+  blurb: 'Leave steel in every wound and call it home through the crowd. The field is a fence-line waiting for posts.',
+  color: '#b8c8a0',
+  classId: 'lancer',
+  tree: [
+    { id: 's1', name: 'Long Arm', description: '15% increased projectile damage', kind: 'small', ...IMPALER_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['projectile'])], links: ['root'] },
+    { id: 's2', name: 'Follow-Through', description: '15% increased projectile speed', kind: 'small', ...IMPALER_LAYOUT.s2, mods: [mod('projectileSpeed', 'increased', 0.15)], links: ['root'] },
+    { id: 's3', name: 'Planted Stance', description: '10% increased armor; +20 maximum life', kind: 'small', ...IMPALER_LAYOUT.s3, mods: [mod('armor', 'increased', 0.1), mod('life', 'flat', 20)], links: ['root'] },
+    { id: 'n1', name: 'Pinning Word', description: 'Projectiles: 20% chance to Root', kind: 'notable', ...IMPALER_LAYOUT.n1, mods: [mod('apply_rooted', 'flat', 0.2, ['projectile'])], links: ['s1'] },
+    { id: 'n2', name: 'Fencepost Doctrine', description: '30% increased damage against Rooted enemies', kind: 'notable', ...IMPALER_LAYOUT.n2, mods: [mod('damageVs_rooted', 'flat', 0.3)], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Wrenching Recall', description: '15% increased projectile damage; 10% increased attack speed', kind: 'notable', ...IMPALER_LAYOUT.n3, mods: [mod('damage', 'increased', 0.15, ['projectile']), mod('attackSpeed', 'increased', 0.1)], links: ['s2', 's3'] },
+    { id: 'n4', name: 'Skewer the Charge', description: '+30 knockback strength; 15% increased stagger window', kind: 'notable', ...IMPALER_LAYOUT.n4, mods: [mod('knockback', 'flat', 30), mod('staggerWindow', 'increased', 0.15)], links: ['s3'] },
+    { id: 'k1', name: 'The Harvest Comes Home', description: '20% more projectile damage against Rooted enemies... and everything else pays 10% more', kind: 'keystone', ...IMPALER_LAYOUT.k1, mods: [mod('damageVs_rooted', 'flat', 0.2), mod('damage', 'more', 0.1, ['projectile'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Break the chitin lancer-lines drilling on the sands',
+        zone: { tileset: 'hivesands', direction: 'w', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [6, 8], size: [3, 5], table: [
+            { id: 'chitin_lancer', weight: 3 }, { id: 'chitin_drone', weight: 2 }, { id: 'chitin_spitter', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'Their line is fenceposts now — return to the quartermaster.' },
+      { offerLabel: 'Spike the birthing pods before the tide hatches',
+        zone: { tileset: 'marsh', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'birthing_pod', count: [3, 4] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'Nothing hatched — return to the quartermaster.' },
+      { offerLabel: 'Pin the Constrictor Knight to its own tangle',
+        zone: { tileset: 'mangrove_tangle', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'constrictor_knight', levelBonus: 1 },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'It hangs where you left it — return, Impaler.' },
+    ],
+  },
+};
+
+const ENGINEWRIGHT_LAYOUT = fan(315); // spine → dex_start (the workshop side of 330)
+const ENGINEWRIGHT: VocationDef = {
+  id: 'enginewright', name: 'Enginewright',
+  blurb: 'The battlefield is a workshop and the ruins are a syllabus. Faster rearms, crueler payloads, and ground that argues on your behalf.',
+  color: '#a8905a',
+  classId: 'trapper',
+  secret: {
+    site: {
+      npc: 'gearwright_wreck',
+      filter: { biomes: ['jungle', 'ruin'], minLevel: 16 },
+      chance: 0.5,
+    },
+    classLockedDiscovery: true,
+    unlockedOffer: 'menu',
+    offerFlavor: '"Half a machine older than the ruin around it — and its living half still clicks when YOU walk past. It has work for hands like yours."',
+    discoveryText: 'Something in the wreck begins, very quietly, to tick.',
+  },
+  tree: [
+    { id: 's1', name: 'Oiled Springs', description: '12% increased cooldown recovery', kind: 'small', ...ENGINEWRIGHT_LAYOUT.s1, mods: [mod('cooldownRecovery', 'increased', 0.12)], links: ['root'] },
+    { id: 's2', name: 'Wider Blast Bore', description: '12% increased area of effect', kind: 'small', ...ENGINEWRIGHT_LAYOUT.s2, mods: [mod('aoeRadius', 'increased', 0.12)], links: ['root'] },
+    { id: 's3', name: 'Field Kit', description: '10% increased mine and trap damage', kind: 'small', ...ENGINEWRIGHT_LAYOUT.s3, mods: [mod('damage', 'increased', 0.1, ['mine']), mod('damage', 'increased', 0.1, ['trap'])], links: ['root'] },
+    { id: 'n1', name: 'Double Charge', description: '20% increased mine damage; 10% increased area of effect', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n1, mods: [mod('damage', 'increased', 0.2, ['mine']), mod('aoeRadius', 'increased', 0.1)], links: ['s3'] },
+    { id: 'n2', name: 'Tripwire Patience', description: '20% increased trap damage; 15% increased status magnitude', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n2, mods: [mod('damage', 'increased', 0.2, ['trap']), mod('statusMagnitude', 'increased', 0.15)], links: ['s3', 's2'] },
+    { id: 'n3', name: 'Rapid Rearm', description: '20% increased cooldown recovery', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n3, mods: [mod('cooldownRecovery', 'increased', 0.2)], links: ['s1'] },
+    { id: 'n4', name: 'Sapper\'s Instinct', description: '10% increased movement speed; 15% increased evasion — never beside your own work when it goes off', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n4, mods: [mod('moveSpeed', 'increased', 0.1), mod('evasion', 'increased', 0.15)], links: ['s1', 's2'] },
+    { id: 'k1', name: 'The Ground Does the Arguing', description: '20% more mine and trap damage', kind: 'keystone', ...ENGINEWRIGHT_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['mine']), mod('damage', 'more', 0.2, ['trap'])], links: ['n1', 'n2'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Walk OUT of the toothed halls with the wreck\'s prize',
+        zone: { tileset: 'sunken_ruin', direction: 's', distance: 1, level: 'character',
+          objective: { kind: 'escape', interval: [4, 6] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'You kept your feet — the wreck approves.' },
+      { offerLabel: 'Dismantle the ruin\'s living sentries for parts',
+        zone: { tileset: 'sunken_ruin', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [5, 7], size: [2, 4], table: [
+            { id: 'ruin_sentinel', weight: 3 }, { id: 'brass_sentinel', weight: 1 }, { id: 'stone_sentinel', weight: 2 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'Parts acquired — return to the quartermaster.' },
+      { offerLabel: 'Overload the Crowned Sentinel at the heart of the works',
+        zone: { tileset: 'sunken_ruin', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'ruin_sentinel', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'The works are yours — return, Enginewright.' },
+    ],
+  },
+};
+
+const BANNERLORD_LAYOUT = fan(10); // spine → cha_start
+const BANNERLORD: VocationDef = {
+  id: 'bannerlord', name: 'Bannerlord',
+  blurb: 'Wars are won by whoever the field believes in. Plant the colors, hold the road, and make belief a line item.',
+  color: '#e0b060',
+  classId: 'warlord',
+  tree: [
+    { id: 's1', name: 'Parade Voice', description: '15% increased warcry cooldown recovery', kind: 'small', ...BANNERLORD_LAYOUT.s1, mods: [mod('cooldownRecovery', 'increased', 0.15, ['warcry'])], links: ['root'] },
+    { id: 's2', name: 'Standard-Bearer\'s Arm', description: '12% increased damage', kind: 'small', ...BANNERLORD_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12)], links: ['root'] },
+    { id: 's3', name: 'Command Presence', description: '+20 insight; +20 maximum life', kind: 'small', ...BANNERLORD_LAYOUT.s3, mods: [mod('insight', 'flat', 20), mod('life', 'flat', 20)], links: ['root'] },
+    { id: 'n1', name: 'The Colors Hold', description: '15% increased armor; 15% increased stagger window', kind: 'notable', ...BANNERLORD_LAYOUT.n1, mods: [mod('armor', 'increased', 0.15), mod('staggerWindow', 'increased', 0.15)], links: ['s3'] },
+    { id: 'n2', name: 'Named and Doomed', description: 'Warcries: 25% chance to apply Vulnerable — what the voice singles out, the field finishes', kind: 'notable', ...BANNERLORD_LAYOUT.n2, mods: [mod('apply_vulnerable', 'flat', 0.25, ['warcry'])], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Rout Arithmetic', description: '25% increased damage against Vulnerable enemies', kind: 'notable', ...BANNERLORD_LAYOUT.n3, mods: [mod('damageVs_vulnerable', 'flat', 0.25)], links: ['s2'] },
+    { id: 'n4', name: 'Longer Reveille', description: '20% increased warcry cooldown recovery; +15 insight', kind: 'notable', ...BANNERLORD_LAYOUT.n4, mods: [mod('cooldownRecovery', 'increased', 0.2, ['warcry']), mod('insight', 'flat', 15)], links: ['s1'] },
+    { id: 'k1', name: 'The Field Believes', description: '15% more damage; +30 insight — presence, weaponized', kind: 'keystone', ...BANNERLORD_LAYOUT.k1, mods: [mod('damage', 'more', 0.15), mod('insight', 'flat', 30)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Escort the colors down the contested road',
+        zone: { tileset: 'downs', direction: 'n', distance: 1, level: 'character',
+          objective: { kind: 'procession', robbers: [
+            { id: 'bandit_matchlock', weight: 2 }, { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_grenadier', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'The colors arrived flying — return to the quartermaster.' },
+      { offerLabel: 'Hold the muster field through five assaults',
+        zone: { tileset: 'grassland', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 5 },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'Five assaults, one field, your colors — return home.' },
+      { offerLabel: 'Depose the Crowned Chief and take his warband\'s oath',
+        zone: { tileset: 'hell_steppes', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'goblin_chief', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'They kneel to your banner now — return, Bannerlord.' },
+    ],
+  },
+};
+
+const WARCHANTER_LAYOUT = fan(20); // spine → cha_start (a half-step off the Bannerlord)
+const WARCHANTER: VocationDef = {
+  id: 'warchanter', name: 'Warchanter',
+  blurb: 'The battle keeps time whether it wants to or not — and the meter always resolves. Longer songs, crueler refrains, a Coda worth the wait.',
+  color: '#c890d8',
+  classId: 'skald',
+  tree: [
+    { id: 's1', name: 'Trained Diaphragm', description: '12% increased song damage', kind: 'small', ...WARCHANTER_LAYOUT.s1, mods: [mod('damage', 'increased', 0.12, ['song'])], links: ['root'] },
+    { id: 's2', name: 'Carrying Voice', description: '12% increased area of effect', kind: 'small', ...WARCHANTER_LAYOUT.s2, mods: [mod('aoeRadius', 'increased', 0.12)], links: ['root'] },
+    { id: 's3', name: 'Steady Meter', description: '10% increased cast speed', kind: 'small', ...WARCHANTER_LAYOUT.s3, mods: [mod('castSpeed', 'increased', 0.1)], links: ['root'] },
+    { id: 'n1', name: 'The Drumbeat', description: 'Gain the Drumbeat measure — cadence itself pays out (the combo grammar reads your casts)', kind: 'notable', ...WARCHANTER_LAYOUT.n1, mods: [mod('combo_drumbeat', 'flat', 1)], links: ['s3'] },
+    { id: 'n2', name: 'Cruel Refrain', description: '20% increased song damage; 15% increased status magnitude', kind: 'notable', ...WARCHANTER_LAYOUT.n2, mods: [mod('damage', 'increased', 0.2, ['song']), mod('statusMagnitude', 'increased', 0.15)], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Wide Chorus', description: '15% increased area of effect; 8% increased cast speed', kind: 'notable', ...WARCHANTER_LAYOUT.n3, mods: [mod('aoeRadius', 'increased', 0.15), mod('castSpeed', 'increased', 0.08)], links: ['s2'] },
+    { id: 'n4', name: 'Longer Held Note', description: '20% increased combo window; 10% increased song damage', kind: 'notable', ...WARCHANTER_LAYOUT.n4, mods: [mod('comboWindow', 'increased', 0.2), mod('damage', 'increased', 0.1, ['song'])], links: ['s3', 's1'] },
+    { id: 'k1', name: 'The Meter Resolves', description: '20% more song damage; 15% increased area of effect', kind: 'keystone', ...WARCHANTER_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['song']), mod('aoeRadius', 'increased', 0.15)], links: ['n2', 'n4'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Perform through four movements at the mournstead recital',
+        zone: { tileset: 'mournstead', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'waves', waves: 4, bossEveryWaves: 2, bossId: 'banshee' },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'The recital survived its critics — return to the quartermaster.' },
+      { offerLabel: 'Silence the discordant choir in the gloam',
+        zone: { tileset: 'gloamwood', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [5, 7], size: [3, 4], table: [
+            { id: 'banshee', weight: 2 }, { id: 'decay_wraith', weight: 2 }, { id: 'spirit_wisp', weight: 2 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'Only your song remains — return to the quartermaster.' },
+      { offerLabel: 'Out-play the Wraith Piper at its own wake',
+        zone: { tileset: 'mournstead', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'wraith_piper', levelBonus: 1 },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'The Piper yields the stage — return, Warchanter.' },
+    ],
+  },
+};
+
+const VEILWEAVER_LAYOUT = fan(0); // spine → cha_start (the misdirected third of the trio)
+const VEILWEAVER: VocationDef = {
+  id: 'veilweaver', name: 'Veilweaver',
+  blurb: 'Never be where the blow lands; ideally be three other places instead. Doubles, addled hands, and an audience that swings at smoke.',
+  color: '#b878c8',
+  classId: 'beguiler',
+  tree: [
+    { id: 's1', name: 'Soft Footfall', description: '15% increased evasion', kind: 'small', ...VEILWEAVER_LAYOUT.s1, mods: [mod('evasion', 'increased', 0.15)], links: ['root'] },
+    { id: 's2', name: 'Patter', description: '10% increased cast speed', kind: 'small', ...VEILWEAVER_LAYOUT.s2, mods: [mod('castSpeed', 'increased', 0.1)], links: ['root'] },
+    { id: 's3', name: 'Slipping Silhouette', description: '6% increased movement speed', kind: 'small', ...VEILWEAVER_LAYOUT.s3, mods: [mod('moveSpeed', 'increased', 0.06)], links: ['root'] },
+    { id: 'n1', name: 'Turned Ankle, Turned Mind', description: 'Hits: 15% chance to Disorient — the crowd loses the thread', kind: 'notable', ...VEILWEAVER_LAYOUT.n1, mods: [mod('apply_disoriented', 'flat', 0.15)], links: ['s2'] },
+    { id: 'n2', name: 'Smoke Ledger', description: '20% increased evasion; 15% increased status magnitude', kind: 'notable', ...VEILWEAVER_LAYOUT.n2, mods: [mod('evasion', 'increased', 0.2), mod('statusMagnitude', 'increased', 0.15)], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Exit, Pursued by Nothing', description: '8% increased movement speed; 10% increased evasion', kind: 'notable', ...VEILWEAVER_LAYOUT.n3, mods: [mod('moveSpeed', 'increased', 0.08), mod('evasion', 'increased', 0.1)], links: ['s3'] },
+    { id: 'n4', name: 'Punish the Lunge', description: '25% increased damage against Disoriented enemies', kind: 'notable', ...VEILWEAVER_LAYOUT.n4, mods: [mod('damageVs_disoriented', 'flat', 0.25)], links: ['s1', 's3'] },
+    { id: 'k1', name: 'The House Always Misses', description: '15% more damage against Disoriented enemies; 15% increased evasion', kind: 'keystone', ...VEILWEAVER_LAYOUT.k1, mods: [mod('damageVs_disoriented', 'flat', 0.15), mod('damage', 'more', 0.1), mod('evasion', 'increased', 0.15)], links: ['n2', 'n4'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Unmask the mirage court dancing on the sandsea',
+        zone: { tileset: 'sandsea', direction: 'w', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: { count: [5, 7], size: [3, 4], table: [
+            { id: 'mirage_dancer', weight: 3 }, { id: 'heat_double', weight: 2 }, { id: 'mirror_husk', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'Every mask came off — return to the quartermaster.' },
+      { offerLabel: 'Walk out of the desert that keeps lying to you',
+        zone: { tileset: 'desert', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'escape', interval: [4, 6] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The desert blinked first — return to the quartermaster.' },
+      { offerLabel: 'Beguile the Mirage Khagan under his own sun',
+        zone: { tileset: 'sandsea', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'mirage_khagan', levelBonus: 1 },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'The Khagan bowed to an empty robe — return, Veilweaver.' },
+    ],
+  },
+};
+
+const CHRONARCH_LAYOUT = fan(265); // spine → wil_start (offset from the Hierophant's 250)
+const CHRONARCH: VocationDef = {
+  id: 'chronarch', name: 'Chronarch',
+  blurb: 'Time is a budget and everyone else is overdrawn. Wound the clock, pocket the change, and be early to every ending.',
+  color: '#88d8d8',
+  classId: 'chronomancer',
+  tree: [
+    { id: 's1', name: 'Borrowed Second', description: '12% increased cooldown recovery', kind: 'small', ...CHRONARCH_LAYOUT.s1, mods: [mod('cooldownRecovery', 'increased', 0.12)], links: ['root'] },
+    { id: 's2', name: 'Quick Hands', description: '10% increased cast speed', kind: 'small', ...CHRONARCH_LAYOUT.s2, mods: [mod('castSpeed', 'increased', 0.1)], links: ['root'] },
+    { id: 's3', name: 'Patient Ledger', description: '+15 insight; +20 maximum mana', kind: 'small', ...CHRONARCH_LAYOUT.s3, mods: [mod('insight', 'flat', 15), mod('mana', 'flat', 20)], links: ['root'] },
+    { id: 'n1', name: 'Needle of Stillness', description: 'Spells: 12% chance to apply Stasis', kind: 'notable', ...CHRONARCH_LAYOUT.n1, mods: [mod('apply_stasis', 'flat', 0.12, ['spell'])], links: ['s2'] },
+    { id: 'n2', name: 'Collect on the Pause', description: '30% increased damage against enemies in Stasis', kind: 'notable', ...CHRONARCH_LAYOUT.n2, mods: [mod('damageVs_stasis', 'flat', 0.3)], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Compound Interest', description: '20% increased cooldown recovery', kind: 'notable', ...CHRONARCH_LAYOUT.n3, mods: [mod('cooldownRecovery', 'increased', 0.2)], links: ['s1'] },
+    { id: 'n4', name: 'Early to Every Ending', description: '10% increased cast speed; 6% increased movement speed', kind: 'notable', ...CHRONARCH_LAYOUT.n4, mods: [mod('castSpeed', 'increased', 0.1), mod('moveSpeed', 'increased', 0.06)], links: ['s3'] },
+    { id: 'k1', name: 'The Clock Owes You', description: '15% more spell damage; 15% increased cooldown recovery', kind: 'keystone', ...CHRONARCH_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['spell']), mod('cooldownRecovery', 'increased', 0.15)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    // The PATIENT chain: surfaces ten levels after every other vocation —
+    // a chronomancer's trial should itself arrive late and be worth it.
+    offerAtLevel: 40,
+    steps: [
+      { offerLabel: 'Still the leyline nexus that will not stop happening',
+        zone: { tileset: 'leyline_nexus', direction: 'n', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          forceWaypoint: true },
+        xp: 1000, gems: 3, turnInPrompt: 'The nexus settles into one single now — return home.' },
+      { offerLabel: 'Shatter the resonant stones counting the wrong hours',
+        zone: { tileset: 'crystal', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'resonant_stone', count: [3, 4] },
+          forceWaypoint: true },
+        xp: 1400, gems: 4, turnInPrompt: 'The hours run true — return to the quartermaster.' },
+      { offerLabel: 'Unseat the Oblivion Knight from the moment it holds',
+        zone: { tileset: 'abyssal_rift', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'oblivion_knight', levelBonus: 1 },
+          forceWaypoint: true, floating: true, wpExclusionRadius: 1 },
+        xp: 2400, gems: 6, turnInPrompt: 'The moment let go — return, Chronarch.' },
+    ],
+  },
+};
+
+const STILLMIND_LAYOUT = fan(238); // spine → wil_start (the quiet side of 250)
+const STILLMIND: VocationDef = {
+  id: 'stillmind', name: 'Stillmind',
+  blurb: 'Fury is a debt; stillness pays cash. Sit by the water anyone can find and almost no one stays beside.',
+  color: '#e8e0c8',
+  classId: 'ascetic',
+  secret: {
+    site: {
+      npc: 'stillwater_basin',
+      filter: { biomes: ['highland'], minLevel: 20 },
+      chance: 0.5,
+    },
+    // ANYONE may sit by the water: the calling is not class-locked — a
+    // Warrior who lingers hears it too (the one chain a stranger can walk
+    // before any account unlock; the gate node still disciplines spending).
+    classLockedDiscovery: false,
+    unlockedOffer: 'menu',
+    offerFlavor: '"The water is not still because nothing moves it. It is still because it has finished moving. Sit. There is work that is done by not doing."',
+    discoveryText: 'Beside the basin, your breath slows to match something older.',
+  },
+  tree: [
+    { id: 's1', name: 'Settled Breath', description: '+2% of maximum life regenerated per second', kind: 'small', ...STILLMIND_LAYOUT.s1, mods: [mod('lifeRegenPct', 'flat', 0.02)], links: ['root'] },
+    { id: 's2', name: 'Open Palm', description: '12% increased melee damage', kind: 'small', ...STILLMIND_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12, ['melee'])], links: ['root'] },
+    { id: 's3', name: 'Unhurried Cup', description: '15% increased mana regeneration', kind: 'small', ...STILLMIND_LAYOUT.s3, mods: [mod('manaRegen', 'increased', 0.15)], links: ['root'] },
+    { id: 'n1', name: 'Reflex Like Water', description: '+1 reflex — flasks answer even mid-form', kind: 'notable', ...STILLMIND_LAYOUT.n1, mods: [mod('reflex', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Rooted Mountain', description: '20% increased armor; 20% increased stagger window', kind: 'notable', ...STILLMIND_LAYOUT.n2, mods: [mod('armor', 'increased', 0.2), mod('staggerWindow', 'increased', 0.2)], links: ['s1', 's2'] },
+    { id: 'n3', name: 'Empty Vessel Fills', description: '20% increased mana regeneration; +20 maximum mana', kind: 'notable', ...STILLMIND_LAYOUT.n3, mods: [mod('manaRegen', 'increased', 0.2), mod('mana', 'flat', 20)], links: ['s3'] },
+    { id: 'n4', name: 'The Practiced Form', description: '12% increased attack speed; 10% increased melee damage', kind: 'notable', ...STILLMIND_LAYOUT.n4, mods: [mod('attackSpeed', 'increased', 0.12), mod('damage', 'increased', 0.1, ['melee'])], links: ['s2', 's3'] },
+    { id: 'k1', name: 'Stillness, Paid Out', description: '15% more melee damage; +2% of maximum life regenerated per second', kind: 'keystone', ...STILLMIND_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['melee']), mod('lifeRegenPct', 'flat', 0.02)], links: ['n2', 'n4'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Sit the three waystones of the crown ridge',
+        zone: { tileset: 'stonecrown', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'beacon', count: 3 },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'Three stones sat, three stones lit — return to the water.' },
+      { offerLabel: 'Keep the form through the snowline\'s three assaults',
+        zone: { tileset: 'snowcrown', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 3 },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The form held; the snow did not — return home.' },
+      { offerLabel: 'Answer the Crowned Mantis, form against form',
+        zone: { tileset: 'meadow', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'emerald_mantis', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'It bowed first — return, Stillmind.' },
+    ],
+  },
+};
+
+const SWARMLORD_LAYOUT = fan(195); // spine → wis_start (wisdom's fourth door, offset from 210)
+const SWARMLORD: VocationDef = {
+  id: 'swarmlord', name: 'Swarmlord',
+  blurb: 'The hive decided you speak for it now. Deeper reserves, harder shells, and a chorus that simply does not run out.',
+  color: '#b8c84a',
+  classId: 'hivecaller',
+  secret: {
+    site: {
+      npc: 'brood_heart',
+      filter: { biomes: ['desert', 'jungle', 'ruin'], minLevel: 20 },
+      chance: 0.5,
+    },
+    classLockedDiscovery: true,
+    // THE PILGRIM CHAIN: even account-unlocked, the Brood-Heart must be
+    // FOUND each run — the hive does not take appointments in town.
+    unlockedOffer: 'site',
+    offerFlavor: '"The chamber hums at the pitch of your pulse. Whatever throne this was, the court has voted, and the vote is unanimous, and it is you."',
+    discoveryText: 'The humming turns toward you like a thousand small heads.',
+  },
+  tree: [
+    { id: 's1', name: 'Brood Arithmetic', description: '20% increased minion damage', kind: 'small', ...SWARMLORD_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
+    { id: 's2', name: 'Waxbound Shells', description: 'Minions have 25% increased life', kind: 'small', ...SWARMLORD_LAYOUT.s2, mods: [mod('minionLife', 'increased', 0.25)], links: ['root'] },
+    { id: 's3', name: 'Skitterspeed', description: '20% increased minion movement speed', kind: 'small', ...SWARMLORD_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.2)], links: ['root'] },
+    { id: 'n1', name: 'One More Voice', description: '+1 maximum minion — the chorus grows', kind: 'notable', ...SWARMLORD_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Chitin Plies', description: '+1 minion ply — every body in the swarm EATS one more blow before it breaks (the quanta law)', kind: 'notable', ...SWARMLORD_LAYOUT.n2, mods: [mod('minionPlies', 'flat', 1)], links: ['s2'] },
+    { id: 'n3', name: 'Venom Relay', description: 'Minions have 25% chance to Poison on hit', kind: 'notable', ...SWARMLORD_LAYOUT.n3, mods: [mod('minionApply_poison', 'flat', 0.25)], links: ['s1', 's3'] },
+    { id: 'n4', name: 'Harrying Chorus', description: 'Minions have 20% chance to Harry on hit — the cloud spoils aim and attention', kind: 'notable', ...SWARMLORD_LAYOUT.n4, mods: [mod('minionApply_harried', 'flat', 0.2)], links: ['s3', 's2'] },
+    { id: 'k1', name: 'The Hive Does Not Run Out', description: '20% more minion damage; slain minions fight on for 2 more seconds', kind: 'keystone', ...SWARMLORD_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionUndying', 'flat', 2)], links: ['n1', 'n4'] },
+  ],
+  quest: {
+    steps: [
+      { offerLabel: 'Crack the rival hive-nodes seeding the sands',
+        zone: { tileset: 'hivesands', direction: 's', distance: 1, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'hive_node', count: [3, 4] },
+          forceWaypoint: true },
+        xp: 800, gems: 3, turnInPrompt: 'Their nodes are husks — the Brood-Heart hums approval.' },
+      { offerLabel: 'Hold the mire against the rival brood\'s tide',
+        zone: { tileset: 'mire', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 4 },
+          packsOverride: { count: [5, 7], size: [3, 5], table: [
+            { id: 'chitin_drone', weight: 3 }, { id: 'chitin_wingling', weight: 2 },
+            { id: 'chitin_burrower', weight: 1 }, { id: 'chitin_spitter', weight: 1 } ] },
+          forceWaypoint: true },
+        xp: 1200, gems: 4, turnInPrompt: 'The tide broke on your chorus — the Heart hums louder.' },
+      { offerLabel: 'Depose the Brood Sovereign and take the hive\'s crown',
+        zone: { tileset: 'hivesands', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'brood_sovereign', levelBonus: 1 },
+          forceWaypoint: true, floating: true },
+        xp: 2000, gems: 6, turnInPrompt: 'The Sovereign kneels; the hum is a coronation — return, Swarmlord.' },
+    ],
+  },
+};
+
 // --- registry -----------------------------------------------------------------
 
 /** Every vocation, keyed by id. Adding one = one def above + one entry here. */
@@ -1333,6 +1946,21 @@ export const VOCATIONS: Record<string, VocationDef> = {
   [ASHBORN.id]: ASHBORN,
   [EXSANGUINATOR.id]: EXSANGUINATOR,
   [STONEWROUGHT.id]: STONEWROUGHT,
+  // The coverage pass: every class now carries a line.
+  [PACKWARDEN.id]: PACKWARDEN,
+  [GROUNDBREAKER.id]: GROUNDBREAKER,
+  [SPEARHEAD.id]: SPEARHEAD,
+  [SWORDSAINT.id]: SWORDSAINT,
+  [PITFIGHTER.id]: PITFIGHTER,
+  [THORNWALL.id]: THORNWALL,
+  [IMPALER.id]: IMPALER,
+  [ENGINEWRIGHT.id]: ENGINEWRIGHT,
+  [BANNERLORD.id]: BANNERLORD,
+  [WARCHANTER.id]: WARCHANTER,
+  [VEILWEAVER.id]: VEILWEAVER,
+  [CHRONARCH.id]: CHRONARCH,
+  [STILLMIND.id]: STILLMIND,
+  [SWARMLORD.id]: SWARMLORD,
 };
 
 export const VOCATION_LIST: VocationDef[] = Object.values(VOCATIONS);

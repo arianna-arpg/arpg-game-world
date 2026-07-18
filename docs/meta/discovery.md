@@ -63,6 +63,26 @@ Three composable levers:
   (the Wisdom door), Cleric (the Will door) · Necromancer owned → Summoner ·
   Cleric owned → Ascetic · **Crowned slain → Tamer** · **the Unmade slain →
   Chronomancer**
+- **Beyond the parity twelve:** **a brood-queen slain → Hivecaller**
+  (`broodmothers_slain`, killHandlers.ts — broodmother / chrysalid
+  broodmother / the Brood Sovereign; wisdom's fourth door, the throng
+  fabric's own class). The star now grows past three-per-point; the rumor
+  wall is what keeps a deeper roster legible.
+
+## Vocation coverage (the class pass)
+
+Every class carries a vocation line (30 chains over 28 classes —
+data/vocations.ts). The pipeline the system enforces: play the game →
+unlock the class (this web) → play the class → find the vocation's chain
+(quartermaster at L30, or its SECRET SITE in the world) → complete it →
+the account unlocks that chain for EVERY future character, any class.
+Unlock textures deliberately vary: five secret sites behind five different
+filters (the Pack-Stone in taiga/forest, the Barrow Door in ossuary lands,
+the Gearwright's Wreck in the ruins, the Stillwater — which any class may
+find, not just the Ascetic — and the Brood-Heart, a PILGRIM chain that
+must be walked to every run even once unlocked), plus escort processions,
+survival recitals with a boss cadence, meditation beacon-circuits, escape
+gauntlets, and one two-step barrow duel.
 
 Play thresholds work on *any* class once owned (the Sentinel gates on
 *playing* the Guardian), so the web nests as deep as authoring wants.
