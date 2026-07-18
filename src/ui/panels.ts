@@ -260,6 +260,9 @@ export class UI {
    *  drifting weather front or territory tint can be silenced and never
    *  misread as the biome heat map "changing at random". Session-scoped. */
   private mapLayersOff = new Set<string>();
+  /** True while the wash-intensity slider is held — the map's auto-refresh
+   *  must not rebuild the very element under the pointer mid-drag. */
+  private mapWashDragging = false;
   /** The fitted map box (set each refreshMap) so the wheel/drag handlers can
    *  recompute the viewBox without a full re-render. */
   private mapBox = { minX: 0, minY: 0, w: 1, h: 1 };
@@ -3331,8 +3334,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     if (!this.mapOpen) return;
     // The 0.5s auto-refresh must NOT tear out the SVG mid drag-pan (it would kill
     // the gesture and misfire the pin guard) — skip the rebuild while dragging; the
-    // selection/box don't change during a pan anyway.
-    if (this.mapDragging) return;
+    // selection/box don't change during a pan anyway. Same courtesy for the wash
+    // slider: a rebuild would replace the very element under the pointer.
+    if (this.mapDragging || this.mapWashDragging) return;
     const world = this.getWorld();
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
@@ -3491,7 +3495,16 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const known = zones.filter(z => visited.has(z.id) && (z.dimension ?? 'surface') === dim);
     const allLayers = world.sim.mapLayers(known, dim);
     const layers = allLayers.filter(l => !this.mapLayersOff.has(l.id));
-    const simUnder = layers.map(l => l.under).join('');
+    // WASH INTENSITY (Settings.mapWash — rails in MAP_CFG.wash): every overlay
+    // WASH rides one alpha-slope filter, so the territory gradient can be
+    // dimmed for a clean chart or CRANKED to read a warfront's exact reach
+    // (the QA dial that ships). Badges/sigils/markers (the over layers) never
+    // scale. Always mounted (slope 1 = the authored look) so the slider
+    // live-tunes the standing SVG without a rebuild under the pointer.
+    const washMul = this.getSettings().mapWash;
+    const simUnder = `<defs><filter id="map-wash-fx"><feComponentTransfer>`
+      + `<feFuncA type="linear" slope="${washMul.toFixed(2)}"/></feComponentTransfer></filter></defs>`
+      + `<g filter="url(#map-wash-fx)">${layers.map(l => l.under).join('')}</g>`;
     const simOver = layers.map(l => l.over).join('');
 
     // NON-SURFACE SUBSTRATE WASH: another dimension's map paints its OWN biome
@@ -3655,6 +3668,23 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         this.refreshMap();
       });
     });
+    // THE WASH SLIDER: live-tune the standing SVG's filter slope (no rebuild
+    // under the pointer — the auto-refresh holds while dragging), persist on
+    // release. The filter is always mounted, so every input lands instantly.
+    const washEl = this.worldMap.querySelector<HTMLInputElement>('#map-wash-mul');
+    if (washEl) {
+      washEl.addEventListener('pointerdown', () => { this.mapWashDragging = true; });
+      washEl.addEventListener('input', () => {
+        const st = this.getSettings();
+        st.mapWash = +washEl.value;
+        this.worldMap.querySelector('#map-wash-fx feFuncA')?.setAttribute('slope', st.mapWash.toFixed(2));
+        const val = this.worldMap.querySelector<HTMLElement>('#map-wash-val');
+        if (val) { val.textContent = `${st.mapWash.toFixed(2)}×`; val.style.color = st.mapWash !== 1 ? '#b8d8a8' : '#6a6a78'; }
+      });
+      const release = (): void => { this.mapWashDragging = false; this.saveSettings(); this.refreshMap(); };
+      washEl.addEventListener('pointerup', release);
+      washEl.addEventListener('change', release);
+    }
   }
 
   /** LAYER TOGGLE CHIPS — one per sim overlay currently painting the map (plus
@@ -3672,7 +3702,15 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         border:1px solid ${off ? '#33333e' : '#4a4a5e'};background:${off ? '#141418' : '#22222e'};
         color:${off ? '#55555e' : '#b8b4a8'};${off ? 'text-decoration:line-through;' : ''}">${esc(l.label)}</button>`;
     }).join('');
-    return `<div style="font-size:9px;color:#6a6a78;margin:-2px 0 6px 0">layers: ${chips}</div>`;
+    // The WASH slider rides the chip row: one intensity dial over every layer's
+    // territory/weather wash (MAP_CFG.wash rails; Settings.mapWash persists).
+    const wash = this.getSettings().mapWash;
+    const washUi = `<span style="margin-left:10px;white-space:nowrap">wash
+      <input id="map-wash-mul" type="range" min="${MAP_CFG.wash.min}" max="${MAP_CFG.wash.max}"
+        step="${MAP_CFG.wash.step}" value="${wash}" style="width:76px;vertical-align:middle"
+        title="Territory/weather wash intensity — crank it to read a warfront's exact reach and gradient; 1× is the authored look. Badges and markers never scale.">
+      <span id="map-wash-val" style="color:${wash !== 1 ? '#b8d8a8' : '#6a6a78'}">${wash.toFixed(2)}×</span></span>`;
+    return `<div style="font-size:9px;color:#6a6a78;margin:-2px 0 6px 0">layers: ${chips}${washUi}</div>`;
   }
 
   /** The QUESTS view of the map panel: the journal of active + completed quests. */

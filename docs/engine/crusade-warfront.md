@@ -84,10 +84,23 @@ borders feed the map's thrust arrows.
 marker, no bulletin, no extent. Discovery flips when the player's standing
 zone reads `control ≥ control.discoverAt` (walking covered ground —
 equivalently, when the growing front swallows ground they're on). From then on
-the whole warfront renders: the gradient wash (opacity ∝ local control ×
-standing power — the gradient IS the strength readout), the ♜ mustering /
-☗ throne sigil, ⚔ contested badges, thrust arrows, zone-info rows, and war
-bulletins (front reaches / overruns / gutters / throne / broken).
+the warfront renders: the gradient wash (opacity ∝ local control × standing
+power — the gradient IS the strength readout), ⚔ contested badges, thrust
+arrows, zone-info rows, and war bulletins (front reaches / overruns / gutters
+/ throne / broken).
+
+**The throne is found by walking it.** A discovered war paints NO heart sigil
+— the wash deepening toward the seat is the only trail. Standing in
+gate-bearing heart ground (`sanctumReady`) binds the ☗ marker to THAT zone
+(`throneZoneId`, snapshot-persisted, bulletin on the find); the marker is a
+zone alias like any other, never a raw-coordinate icon.
+
+**QA visibility:** the map panel's **wash slider** (beside the layer chips —
+`Settings.mapWash`, rails in `MAP_CFG.wash`) scales every overlay wash's
+opacity through one alpha-slope filter (badges/markers never scale), and the
+dev Events tab's **reveal lens** (`cf.devReveal(true)`) paints every war —
+hearts, sigils, power labels, discovered or not — plus a live board of each
+campaign's power, clash pressure, anchor state and found-throne zone.
 
 ## Zones under the field
 

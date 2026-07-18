@@ -256,6 +256,11 @@ interface ActiveCrusade {
   /** Per-crusade growth roll. */
   vigor: number;
   sanctumMinted: boolean;
+  /** The zone the player FOUND the throne gate in (walked heart ground with
+   *  the gate standing) — the map's ☗ binds to THIS zone, never to the raw
+   *  heart coordinate. Null until found: the warfront gradient is the only
+   *  thing an un-explored throne shows. */
+  throneZoneId: string | null;
   dead: boolean;
 }
 
@@ -345,6 +350,19 @@ export class CrusadeField implements WorldOverlay {
         this.pushBulletin(
           `You have found ${this.factionName(read.crusade)} crusade — its warfront burns on your map!`,
           read.crusade.color);
+      }
+      // THE THRONE IS FOUND BY WALKING IT: standing in gate-bearing heart
+      // ground binds the ☗ to THAT zone. Until then even an anchored war
+      // shows only its gradient — the deepening wash IS the trail to the seat.
+      const info = this.crusadeOn(here.id);
+      if (info?.sanctumReady) {
+        const c = this.crusades.find(x => x.id === info.crusadeId);
+        if (c && !c.dead && c.throneZoneId !== here.id) {
+          if (c.throneZoneId == null) {
+            this.pushBulletin(`The ${this.factionName(c)} crusade's THRONE GATE stands at ${here.name}!`, c.color);
+          }
+          c.throneZoneId = here.id;
+        }
       }
     }
 
@@ -592,17 +610,33 @@ export class CrusadeField implements WorldOverlay {
 
   activeCount(): number { return this.crusades.filter(c => !c.dead).length; }
 
-  /** Read-only snapshot for markers / the engine's warp claim / dev QA. */
+  /** QA LENS: paint every war on the map — hearts, sigils, power labels —
+   *  discovered or not. Transient (never snapshotted); the dev tab's toggle. */
+  devReveal(on: boolean): void { this.devRevealAll = on; }
+  private devRevealAll = false;
+
+  /** Read-only snapshot for markers / the engine's warp claim / dev QA.
+   *  `pressure` is the hottest rival control over this war's own heart —
+   *  the live clash-drain read (what is squeezing whom, right now). */
   peek(): ReadonlyArray<{
     id: string; faction: string; color: string; heart: MapCoord;
     power: number; powerFrac: number; anchored: boolean; discovered: boolean;
+    throneZoneId: string | null; pressure: number;
   }> {
-    return this.crusades.filter(c => !c.dead).map(c => ({
-      id: c.id, faction: c.faction, color: c.color,
-      heart: { x: c.heart.x, y: c.heart.y },
-      power: c.power, powerFrac: c.power / Math.max(1, this.cfg.power.cap),
-      anchored: c.anchored, discovered: c.discovered,
-    }));
+    return this.crusades.filter(c => !c.dead).map(c => {
+      let pressure = 0;
+      for (const r of this.crusades) {
+        if (r === c || r.dead || r.faction === c.faction) continue;
+        pressure = Math.max(pressure, this.control01(this.influence(r, c.heart, this.time)));
+      }
+      return {
+        id: c.id, faction: c.faction, color: c.color,
+        heart: { x: c.heart.x, y: c.heart.y },
+        power: c.power, powerFrac: c.power / Math.max(1, this.cfg.power.cap),
+        anchored: c.anchored, discovered: c.discovered,
+        throneZoneId: c.throneZoneId, pressure,
+      };
+    });
   }
 
   // --- ignition ---------------------------------------------------------------
@@ -644,6 +678,7 @@ export class CrusadeField implements WorldOverlay {
       color: FACTION_COLORS[faction] ?? this.cfg.color ?? CRUSADE_GOLD,
       heart: { x: heart.x, y: heart.y },
       power, anchored: power >= P.anchorAt, discovered,
+      throneZoneId: null,
       age: 0,
       salt: (this.rng.next() * 0xffffffff) >>> 0,
       heading: this.rng.range(0, Math.PI * 2),
@@ -692,7 +727,7 @@ export class CrusadeField implements WorldOverlay {
    *  anchored throne); ⚔ + thrust arrows where rival crusades clash. An
    *  undiscovered war paints NOTHING — it grows unseen. */
   renderMap(nodes: ZoneDef[]): MapLayer {
-    const found = this.crusades.filter(c => !c.dead && c.discovered);
+    const found = this.crusades.filter(c => !c.dead && (c.discovered || this.devRevealAll));
     if (!found.length) return { under: '', over: '' };
     const M = this.cfg.map;
     const t = this.time;
@@ -732,7 +767,7 @@ export class CrusadeField implements WorldOverlay {
           + `fill="${best.color}" fill-opacity="${alpha.toFixed(3)}"/>`;
         // Hot borders between rival FACTIONS feed the thrust arrows.
         if (second && second.faction !== best.faction && si > this.cfg.control.edge
-          && si / bi >= this.cfg.clash.contestHot && second.discovered) {
+          && si / bi >= this.cfg.clash.contestHot && (second.discovered || this.devRevealAll)) {
           const now = this.influence(second, at, t) - bi;
           const soon = this.influence(second, at, t + 4) - this.influence(best, at, t + 4);
           flows.push({ x: at.x, y: at.y, c: soon > now ? second : best, gain: Math.abs(soon - now) });
@@ -740,26 +775,28 @@ export class CrusadeField implements WorldOverlay {
       }
     }
     let over = '';
-    // Heart sigils: a mustering banner, or the anchored THRONE.
-    for (const c of found) {
-      const x = c.heart.x.toFixed(0), y = c.heart.y.toFixed(0);
-      const fname = this.factionName(c);
-      const pct = Math.round(100 * c.power / Math.max(1, this.cfg.power.anchorAt));
-      if (c.anchored) {
-        over += `<circle cx="${x}" cy="${y}" r="11" fill="none" stroke="${c.color}" stroke-width="1.8" opacity="0.9"/>`
-          + `<text x="${x}" y="${(c.heart.y + 4.5).toFixed(0)}" text-anchor="middle" font-size="13" fill="${c.color}" font-weight="bold">☗`
-          + `<title>The ${fname} crusade's THRONE — its gate stands in the deep territory. Cut down the Leader to break the war.</title></text>`;
-      } else {
-        over += `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="${c.color}" stroke-width="1.4" stroke-dasharray="3 2" opacity="0.8"/>`
-          + `<text x="${x}" y="${(c.heart.y + 4).toFixed(0)}" text-anchor="middle" font-size="11" fill="${c.color}">♜`
-          + `<title>A ${fname} crusade musters — ${pct}% toward its throne. Snuff it before it roots.</title></text>`;
+    // NO HEART SIGILS for the player: the gradient IS the whole read — the
+    // wash deepens toward the seat, and the ☗ appears only as a MARKER on the
+    // gate's zone once the player has walked it (the marker source below).
+    // The DEV REVEAL lens (QA) draws the hidden truth: every heart, sigil'd
+    // and power-labelled, discovered or not — so a QA pass can watch wars
+    // press each other's powerlevels without walking a step.
+    if (this.devRevealAll) {
+      for (const c of this.crusades) {
+        if (c.dead) continue;
+        const x = c.heart.x.toFixed(0), y = c.heart.y.toFixed(0);
+        const pct = Math.round(100 * c.power / Math.max(1, this.cfg.power.anchorAt));
+        over += `<circle cx="${x}" cy="${y}" r="${c.anchored ? 11 : 9}" fill="none" stroke="${c.color}" stroke-width="1.5" stroke-dasharray="${c.anchored ? 'none' : '3 2'}" opacity="0.85"/>`
+          + `<text x="${x}" y="${(c.heart.y + 4).toFixed(0)}" text-anchor="middle" font-size="${c.anchored ? 13 : 11}" fill="${c.color}"${c.anchored ? ' font-weight="bold"' : ''}>${c.anchored ? '☗' : '♜'}</text>`
+          + `<text x="${x}" y="${(c.heart.y + 20).toFixed(0)}" text-anchor="middle" font-size="8" fill="${c.color}" opacity="0.9">${Math.round(c.power)} pw · ${pct}%${c.discovered ? '' : ' · unseen'}</text>`;
       }
     }
-    // ⚔ over charted contested ground (both wars known).
+    // ⚔ over charted contested ground (both wars known — or the QA lens on).
     for (const z of nodes) {
       if (z.caveDepth != null) continue;
       const read = this.strongestAt(z.map);
-      if (!read?.rival || !read.crusade.discovered || !read.rival.discovered) continue;
+      if (!read?.rival) continue;
+      if (!this.devRevealAll && (!read.crusade.discovered || !read.rival.discovered)) continue;
       over += `<text x="${z.map.x.toFixed(0)}" y="${(z.map.y - 13).toFixed(0)}" text-anchor="middle" `
         + `font-size="12" fill="#ff5a5a">⚔<title>${this.factionName(read.crusade)} vs ${this.factionName(read.rival)} — `
         + `${Math.round(read.contest * 100)}% pressure</title></text>`;
@@ -781,7 +818,7 @@ export class CrusadeField implements WorldOverlay {
   mapExtent(): ReadonlyArray<MapCoord> {
     const out: MapCoord[] = [];
     for (const c of this.crusades) {
-      if (c.dead || !c.discovered) continue;
+      if (c.dead || !(c.discovered || this.devRevealAll)) continue;
       const reach = this.extentReach(c);
       out.push(
         { x: c.heart.x - reach, y: c.heart.y }, { x: c.heart.x + reach, y: c.heart.y },
@@ -819,6 +856,7 @@ export class CrusadeField implements WorldOverlay {
         tidePeriod: Math.round(c.tidePeriod),
         vigor: Math.round(c.vigor * 1000) / 1000,
         sanctumMinted: c.sanctumMinted,
+        throneZoneId: c.throneZoneId,
       })),
       mods: this.mods.map(m => ({
         key: String(m.key), at: { x: Math.round(m.at.x), y: Math.round(m.at.y) },
@@ -853,7 +891,9 @@ export class CrusadeField implements WorldOverlay {
         age: Math.max(0, c.age!),
         salt: (c.salt! >>> 0), heading: c.heading!, turnPeriod: c.turnPeriod!,
         tidePhase: c.tidePhase!, tidePeriod: c.tidePeriod!, vigor: c.vigor!,
-        sanctumMinted: !!c.sanctumMinted, dead: false,
+        sanctumMinted: !!c.sanctumMinted,
+        throneZoneId: typeof c.throneZoneId === 'string' ? c.throneZoneId : null,
+        dead: false,
       });
     }
     this.mods = [];
@@ -865,10 +905,15 @@ export class CrusadeField implements WorldOverlay {
     this.lastZoneOwner = new Map(Object.entries(s.lastZoneOwner ?? {}));
   }
 
-  /** Nothing minted, nothing owned — only the bulletin memory follows zones. */
+  /** Nothing minted, nothing owned — the bulletin memory and the found-throne
+   *  bindings follow zones (a culled gate zone un-binds; the war stands and
+   *  the throne re-binds the next time the player walks its heart ground). */
   pruneZones(has: (zoneId: string) => boolean): void {
     for (const [zid] of this.lastZoneOwner) {
       if (!has(zid)) this.lastZoneOwner.delete(zid);
+    }
+    for (const c of this.crusades) {
+      if (c.throneZoneId && !has(c.throneZoneId)) c.throneZoneId = null;
     }
   }
 }
@@ -884,29 +929,23 @@ registerBulletinSource((world: World) => {
 });
 
 // --- map markers (registered on import) ---------------------------------------
-// The heart of every FOUND war: a mustering banner (♜) that becomes the
-// THRONE (☗) once the crusade anchors — fog:'always' so a discovered war's
-// seat pulls the player toward it across uncharted ground. Undiscovered
-// wars show nothing at all.
+// ONE marker, and only once EARNED: the ☗ binds to the ZONE the player found
+// the throne gate in — never to the raw heart coordinate, never before the
+// walk. Until then a crusade's entire map presence is its warfront gradient
+// (the wash deepening toward the seat IS the trail). Undiscovered wars show
+// nothing at all.
 registerMarkerSource((world: World): MapMarker[] => {
   const cf = world.sim.crusadeField;
   if (!cf) return [];
   const out: MapMarker[] = [];
   for (const c of cf.peek()) {
-    if (!c.discovered) continue;
-    if (c.anchored) {
-      out.push({
-        id: `crusade-throne-${c.id}`, coord: { x: c.heart.x, y: c.heart.y },
-        glyph: '☗', fill: '#2a1e08', stroke: c.color, text: c.color, r: 10,
-        title: 'Crusade throne — find its gate, slay the Leader', fog: 'always', z: 19,
-      });
-    } else {
-      out.push({
-        id: `crusade-${c.id}`, coord: { x: c.heart.x, y: c.heart.y },
-        glyph: '♜', fill: '#241c08', stroke: c.color, text: c.color, r: 9,
-        title: 'A Crusade musters here', fog: 'always', z: 15,
-      });
-    }
+    if (!c.discovered || !c.throneZoneId) continue;
+    const fname = (FACTIONS[c.faction]?.name ?? c.faction).replace(/^the /, '');
+    out.push({
+      id: `crusade-throne-${c.id}`, zoneId: c.throneZoneId,
+      glyph: '☗', fill: '#2a1e08', stroke: c.color, text: c.color, r: 10,
+      title: `The ${fname} crusade's throne gate — cut down the Leader`, fog: 'charted', z: 19,
+    });
   }
   return out;
 });

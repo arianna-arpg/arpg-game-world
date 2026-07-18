@@ -43,6 +43,13 @@ export const MAP_LABEL_MODES: MapLabelModeDef[] = [
 export const MAP_CFG = {
   /** Default name-card mode (Settings.mapLabels persists the player's pick). */
   labelMode: 'hover' as MapLabelMode,
+  /** WASH INTENSITY (Settings.mapWash persists the pick): one multiplier on
+   *  every overlay layer's territory/weather WASH opacity — an feFuncA alpha
+   *  slope over the under-layers, so badges/sigils stay crisp while the
+   *  washes dim (< 1) or bloom (> 1). The QA read: crank it to SEE exactly
+   *  where a warfront runs and how far a front reaches; 1 is the authored
+   *  look, and the slider lives beside the layer chips. */
+  wash: { min: 0.25, max: 3, step: 0.25, default: 1 },
   /** Invisible hit halo around every zone disc — hover/click forgiveness so
    *  the pointer target matches what the eye reads as "the zone". */
   nodeHitR: 14,

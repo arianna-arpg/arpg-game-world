@@ -116,6 +116,12 @@ export interface Settings {
    *  charted name, classic-map style. Cards never intercept the cursor in ANY
    *  mode — map hit-testing belongs to zone geometry alone. */
   mapLabels: MapLabelMode;
+  /** WORLD-MAP WASH INTENSITY (ui/mapConfig.ts MAP_CFG.wash): one multiplier
+   *  on every overlay layer's territory/weather wash opacity — 1 is the
+   *  authored look; crank it to READ a warfront's exact reach and gradient
+   *  (the QA dial that ships), dim it for a cleaner chart. Badges, sigils
+   *  and markers never scale — only the washes. */
+  mapWash: number;
   /** THE UI SCALE DIAL (ui/uiScale.ts): one multiplier that grows every
    *  reading surface together — DOM panels/tooltips/popups via the fabric
    *  stylesheet, the canvas HUD via the renderer's scaled sub-pass. The
@@ -146,6 +152,7 @@ export interface SettingsSave {
   resumeSpawn?: ResumeSpawn;
   improvisedStrike?: boolean;
   mapLabels?: MapLabelMode;
+  mapWash?: number;
   uiScale?: number;
   cameraMode?: CameraModeId;
 }
@@ -255,6 +262,7 @@ export const makeSettings = (): Settings => ({
   resumeSpawn: WORLDSTATE_CFG.resume,
   improvisedStrike: true,
   mapLabels: MAP_CFG.labelMode,
+  mapWash: MAP_CFG.wash.default,
   uiScale: UI_SCALE_CFG.default,
   cameraMode: CAMERA_CFG.default,
 });
@@ -273,6 +281,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   resumeSpawn: s.resumeSpawn,
   improvisedStrike: s.improvisedStrike,
   mapLabels: s.mapLabels,
+  mapWash: s.mapWash,
   uiScale: s.uiScale,
   cameraMode: s.cameraMode,
 });
@@ -327,6 +336,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     improvisedStrike: s.improvisedStrike ?? true,
     // Unknown values (a renamed mode) fall back to the registry default.
     mapLabels: MAP_LABEL_MODES.some(m => m.id === s.mapLabels) ? s.mapLabels! : MAP_CFG.labelMode,
+    // Re-clamped into the wash rails (a hand-edited save can't blind the map).
+    mapWash: clamp(s.mapWash ?? MAP_CFG.wash.default, MAP_CFG.wash.min, MAP_CFG.wash.max),
     // Re-clamped into the fabric's rails, like every numeric option.
     uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
     // Unknown values (a renamed mode, a pre-dial save) fall back to the

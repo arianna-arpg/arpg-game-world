@@ -137,12 +137,28 @@ const fB = new CrusadeField({ seed: 0x22, gate: () => GATE, biomeSeed: 1 }, S0);
   check('B: caves and special arenas never read the field',
     fB.crusadeOn('cave') === null && fB.crusadeOn('arena') === null);
   const wash = fB.renderMap(all);
-  check('B: a FOUND war paints the gradient + the throne sigil',
-    wash.under.includes('fill-opacity') && wash.over.includes('☗') && fB.mapExtent().length > 0);
+  check('B: a FOUND war paints the gradient (extent stretches the fit)',
+    wash.under.includes('fill-opacity') && fB.mapExtent().length > 0);
   // Deeper cells wash denser: compare a heart-adjacent cell's opacity to a rim cell's.
   const ops = [...wash.under.matchAll(/fill-opacity="([\d.]+)"/g)].map(m => parseFloat(m[1]));
   check('B: the wash is a real GRADIENT (deep > rim)', ops.length > 4 && Math.max(...ops) > Math.min(...ops) * 1.8,
     `${ops.length} cells, ${Math.min(...ops).toFixed(3)}..${Math.max(...ops).toFixed(3)}`);
+  // THE THRONE STAYS OFF THE MAP until walked: no heart sigil of any kind —
+  // the deepening wash is the ONLY trail to an unexplored seat.
+  check('B: NO heart sigil pre-walk — the gradient is the only trail',
+    !wash.over.includes('☗') && !wash.over.includes('♜') && fB.peek()[0]?.throneZoneId === null);
+  // WALK THE GATE ZONE: standing in sanctumReady ground binds the ☗ to it.
+  fB.update(0.5, mkView(all, 'za'));
+  check('B: walking the gate zone BINDS the throne to that zone (+ bulletin)',
+    fB.peek()[0]?.throneZoneId === 'za' && fB.bulletins.some(b => b.text.includes('THRONE GATE')),
+    `throneZoneId=${fB.peek()[0]?.throneZoneId}`);
+  // THE QA LENS: reveal paints hearts + power labels; off restores the purity.
+  fB.devReveal(true);
+  const lens = fB.renderMap(all);
+  check('B: the dev REVEAL lens paints hearts + power labels',
+    lens.over.includes(' pw') && (lens.over.includes('☗') || lens.over.includes('♜')));
+  fB.devReveal(false);
+  check('B: lens off restores the sigil-free map', !fB.renderMap(all).over.includes(' pw'));
 }
 
 // ----------------------------------------------- C. the Daresso purity data --

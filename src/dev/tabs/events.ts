@@ -35,7 +35,10 @@ export const eventsTab: DevTabDef = {
 
     spawnRow.append(
       forceEvent('Demon Invasion', (w, v, z) => w.sim.demonField?.devIgnite(v, z) ?? false),
-      forceEvent('Crusade', (w, v, z) => w.sim.crusadeField?.devIgnite(v, z) ?? false),
+      forceEvent('Crusade (throne here)', (w, v, z) => w.sim.crusadeField?.devIgnite(v, z) ?? false),
+      // The pre-anchor arc: an EMBER that oscillates, can be snuffed by
+      // liberations/rivals, and must GROW to its throne — the young-war QA.
+      forceEvent('Crusade (ember here)', (w, v, z) => w.sim.crusadeField?.devIgnite(v, z, 40) ?? false),
       forceEvent('Fracture', (w, v, z) => w.sim.fractureField?.devIgnite(v, z) ?? false),
       forceEvent('Hunt Beast', (w, v, z) => w.sim.huntField?.devIgnite(v, z) ?? false),
       forceEvent('Conclave Ritual', (w, v, z) => w.sim.conclaveField?.devOpenRitual(v, z) ?? false),
@@ -158,6 +161,48 @@ export const eventsTab: DevTabDef = {
       }
     };
 
+    // --- CRUSADE WARFRONT: the live campaign board + the QA reveal lens -------
+    // Powers, clash pressure (the hottest rival control over each heart — who
+    // is squeezing whom), anchor/discovery state, and the found-throne zone.
+    // The REVEAL toggle paints every war on the world map (hearts + power
+    // labels, discovered or not) — pair it with the map's wash slider to
+    // watch two fields fight over ground during a QA pass.
+    const cruWrap = document.createElement('div');
+    css(cruWrap, { fontSize: '11px', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.5' });
+    const syncCrusades = (): void => {
+      const w = runActive();
+      const cf = w?.sim.crusadeField;
+      if (!w || !cf) { cruWrap.textContent = '(start a run first / crusade package off)'; return; }
+      const wars = cf.peek();
+      const rows = ['war          power  press  state    throne'];
+      for (const c of wars) {
+        rows.push(
+          c.faction.padEnd(12)
+          + String(Math.round(c.power)).padStart(5)
+          + `${Math.round(c.pressure * 100)}%`.padStart(7)
+          + (c.anchored ? '  ⚓ throne' : '  ~ ember ').padEnd(9)
+          + (c.discovered ? '' : ' (unseen)')
+          + '  ' + (c.throneZoneId ?? '—'),
+        );
+      }
+      if (!wars.length) rows.push('(no wars alive)');
+      cruWrap.textContent = rows.join('\n');
+    };
+    const cruRefresh = btn('Refresh wars', syncCrusades);
+    const revealLbl = document.createElement('label');
+    css(revealLbl, { fontSize: '11px', display: 'inline-flex', gap: '5px', alignItems: 'center', marginLeft: '10px', cursor: 'pointer' });
+    const revealChk = document.createElement('input');
+    revealChk.type = 'checkbox';
+    revealChk.addEventListener('change', () => {
+      const w = runActive();
+      if (!w?.sim.crusadeField) { flash('no crusade field this run'); revealChk.checked = false; return; }
+      w.sim.crusadeField.devReveal(revealChk.checked);
+      flash(revealChk.checked
+        ? 'QA reveal ON — every war paints on the map (hearts + power labels); crank the map wash slider to read the fronts'
+        : 'QA reveal off — discovery rules restored');
+    });
+    revealLbl.append(revealChk, document.createTextNode('reveal all wars on the map (QA lens)'));
+
     // --- GATE INSPECTOR: the resolved per-package gates, live -----------------
     // The one QA window into the weighting math: what resolveGates actually
     // produced for the character's level (share / pressure / the three muls),
@@ -194,8 +239,9 @@ export const eventsTab: DevTabDef = {
     pane.append(
       section('Force event in CURRENT zone'), spawnRow,
       section('Live event frequency (this run)'), freqWrap, freqReset,
+      section('Crusade warfront (live)'), cruWrap, cruRefresh, revealLbl,
       section('Resolved package gates (live)'), gateWrap, gateRefresh,
     );
-    return { el: pane, onShow: () => { syncFreq(); syncGates(); } };
+    return { el: pane, onShow: () => { syncFreq(); syncGates(); syncCrusades(); } };
   },
 };
