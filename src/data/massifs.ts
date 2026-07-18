@@ -17,6 +17,7 @@
 // ---------------------------------------------------------------------------
 
 import { registerMassKind } from '../engine/massif';
+import { registerDoodadRule } from '../engine/levelgen';
 
 // THE HEDGE — bocage: grown boundary lines and block-plots (D2's Act-1 fields
 // read). Ridge-heavy so hedges run in LINES you walk along hunting the end;
@@ -150,4 +151,107 @@ registerMassKind({
   ],
   skirtChance: 0.36,
   skirtSpacing: 54,
+});
+
+// =============================================================================
+// THE HIGH BASTION (aether_bastion) — the Host's citadel country: ENORMOUS
+// silver-and-gold architecture strewn about a rolling cloud continent. The
+// masses ARE the citadels (the metropolis massing doctrine at fortress
+// scale): silver TRUE walls you walk around, gold statuary riding the
+// rooflines, gilt balustrade courts you duel across. Dressing kit below;
+// visuals are re-dressed existing painters (data/doodadVisuals.ts).
+// =============================================================================
+// The kit's rules: statuary is solid architecture; the gleam-lamp is the
+// bridge light — a bound flame that may hang past the rim over the void
+// (the sky_lantern/star_lantern float precedent — a tether, not a stand).
+registerDoodadRule('gilded_seraph', {
+  overlap: 'solid', blocksMove: true, spacing: 90,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('triumph_spire', {
+  overlap: 'solid', blocksMove: true, spacing: 120,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('gleam_lamp', { overlap: 'ground', spacing: 60, voidOk: true });
+
+// THE BASTION — the citadel keep itself: square-shouldered silver masses and
+// long curtain runs, the gold skyline riding the crest (statues and spires
+// ON the roofs — the High Heavens read from the street). Lamps and crystal
+// gather at the foot where the processions pass.
+registerMassKind({
+  id: 'bastion',
+  region: 'bastion_wall',
+  shapes: [{ shape: 'block', weight: 2.5 }, { shape: 'slab', weight: 1.5 }, { shape: 'chain', weight: 0.6 }],
+  lobe: 0.1, // dressed coursing, not geology — the walls stay square-shouldered
+  skirt: [
+    { kind: 'gleam_lamp', weight: 2, radius: [8, 11] },
+    { kind: 'aether_crystal', weight: 1.5, radius: [12, 18] },
+    { kind: 'flowers', weight: 1, radius: [12, 18] },
+  ],
+  skirtChance: 0.36,
+  skirtSpacing: 54,
+  crest: [
+    { kind: 'gilded_seraph', weight: 2, radius: [14, 20] },
+    { kind: 'triumph_spire', weight: 1.5, radius: [16, 24] },
+    { kind: 'harp_pillar', weight: 1, radius: [12, 16] },
+  ],
+  crestChance: 0.3,
+  crestSpacing: 78,
+});
+
+// THE HIGH COURT — a citadel court with a gate or two: the silver ring
+// around a held interior (the POI machinery makes the courtyard a PLACE —
+// spawns, loot anchors, and the reachability net guarding the way in).
+registerMassKind({
+  id: 'high_court',
+  region: 'bastion_wall',
+  shapes: [{ shape: 'court', weight: 2 }, { shape: 'slab', weight: 0.5 }],
+  lobe: 0.09,
+  mouths: [1, 2],
+  skirt: [
+    { kind: 'gleam_lamp', weight: 2, radius: [8, 11] },
+    { kind: 'flowers', weight: 1, radius: [12, 18] },
+  ],
+  skirtChance: 0.3,
+  skirtSpacing: 60,
+  crest: [{ kind: 'gilded_seraph', weight: 1, radius: [13, 18] }],
+  crestChance: 0.16,
+  crestSpacing: 96,
+});
+
+// THE CURTAIN — the long wall: silver ramparts running the cloud like
+// breakwaters (chain/ridge silhouettes — the 'sea of ramparts' face leans on
+// it). Sparse crest: a statue paces the wall-walk here and there; the LINE
+// is the read, and hunting its end is the play.
+registerMassKind({
+  id: 'curtain',
+  region: 'bastion_wall',
+  shapes: [{ shape: 'chain', weight: 2.5 }, { shape: 'ridge', weight: 1.5 }],
+  lobe: 0.1,
+  skirt: [
+    { kind: 'gleam_lamp', weight: 1.5, radius: [8, 11] },
+    { kind: 'aether_crystal', weight: 1, radius: [12, 16] },
+  ],
+  skirtChance: 0.26,
+  skirtSpacing: 64,
+  crest: [{ kind: 'gilded_seraph', weight: 1, radius: [13, 18] }],
+  crestChance: 0.14,
+  crestSpacing: 120,
+});
+
+// THE GILT RING — the gold balustrade court (the PARAPET texture in precious
+// metal): shots and sight sail over the rail, so the garden inside is a
+// prize you duel across before you walk the ring to its gate. NO crest —
+// the see-over promise is the kind's whole point (the fold's law, gilded).
+registerMassKind({
+  id: 'gilt_ring',
+  region: 'gilt_parapet',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.08,
+  mouths: [1, 2],
+  skirt: [
+    { kind: 'flowers', weight: 2, radius: [12, 18] },
+    { kind: 'aether_crystal', weight: 1, radius: [12, 16] },
+  ],
+  skirtChance: 0.24,
 });

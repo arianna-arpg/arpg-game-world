@@ -35,6 +35,7 @@ import {
 import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
 } from './genkit';
+import { carveMassifs } from './massif';
 
 /** The negative-space region a carved recipe leaves between its passages —
  *  'wall' reads as rock (true wall: blocks shots + sight); a biome may swap
@@ -2336,6 +2337,147 @@ function aetherVesperLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('aether_vesper', aetherVesperLayout);
+
+// --- AETHER BASTION (the High Bastion) --------------------------------------------
+// The Host's citadel country — the High Heavens read: ONE rolling cloud
+// CONTINENT (not an isle lattice — the ground is generous here) strewn with
+// ENORMOUS silver-and-gold citadel masses (the massif fabric at fortress
+// scale, seat-gated onto the cloud), GLEAMWAYS — permanent bridges of bound
+// blue light — arcing off the rim to satellite isles and prize vaults, and
+// reserved PROCESSIONALS (the metropolis boulevard read) the architecture
+// must leave clear. No collapse, no flux, no conditional spans: everything
+// here HOLDS — the country's thesis is permanence at altitude, and the
+// verticality is painted instead (theme.ambientFx 'overclouds' above,
+// understory 'cloudsea' below through every rim).
+// Knobs are layoutParams: continentFrac, satellites, prizeIsles,
+// gleamWidth, processionals + every massif dial (massifMasses/SizeR/
+// Coverage/LaneW/SeatGround…).
+function aetherBastionLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const M = 120;
+  // THE CONTINENT: a great central cloud + rolling lobes — most of the zone
+  // stands on it, and the portals are carved into its body or bridged in.
+  const carve = Mask.forRect(0, 0, arena.w, arena.h);
+  const cx = arena.w / 2 + rng.range(-arena.w * 0.05, arena.w * 0.05);
+  const cy = arena.h / 2 + rng.range(-arena.h * 0.05, arena.h * 0.05);
+  const baseR = Math.min(arena.w, arena.h) * (layoutParam(def, 'continentFrac', 0.36) as number);
+  disc(carve, cx, cy, baseR);
+  for (let i = 0, n = rng.int(6, 9); i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rng.range(-0.3, 0.3);
+    const d = baseR * rng.range(0.55, 0.95);
+    disc(carve, cx + Math.cos(a) * d, cy + Math.sin(a) * d, baseR * rng.range(0.38, 0.6));
+  }
+  const anchors: Vec2[] = [vec(cx, cy)];
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    disc(carve, pt.x, pt.y, 130);
+    anchors.push(vec(pt.x, pt.y));
+  }
+
+  // SATELLITE ISLES: outriders off the rim — reached ONLY by gleamway (the
+  // bridges are the country's signature; a satellite is where you feel them).
+  const satN = layoutParam(def, 'satellites', [2, 3]) as [number, number];
+  const sats: Vec2[] = [];
+  for (let i = 0, n = rng.int(satN[0], satN[1]); i < n; i++) {
+    for (let tries = 0; tries < 16; tries++) {
+      const a = rng.range(0, Math.PI * 2);
+      const d = baseR * rng.range(1.42, 1.75);
+      const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+      if (px < M + 140 || py < M + 140 || px > arena.w - M - 140 || py > arena.h - M - 140) continue;
+      if (sats.some(s => Math.hypot(s.x - px, s.y - py) < 460)) continue;
+      const r = rng.range(130, 175);
+      disc(carve, px, py, r);
+      disc(carve, px + rng.range(-r, r) * 0.5, py + rng.range(-r, r) * 0.5, r * rng.range(0.4, 0.55));
+      sats.push(vec(px, py));
+      ctx.pois.push(vec(px, py));
+      break;
+    }
+  }
+  // PRIZE VAULTS: small far isles — one gleamway each, nothing else.
+  const prizeN = layoutParam(def, 'prizeIsles', [1, 2]) as [number, number];
+  const prizes: Vec2[] = [];
+  for (let i = 0, n = rng.int(prizeN[0], prizeN[1]); i < n; i++) {
+    for (let tries = 0; tries < 18; tries++) {
+      const px = rng.range(M + 100, arena.w - M - 100), py = rng.range(M + 100, arena.h - M - 100);
+      const near = Math.min(
+        Math.hypot(px - cx, py - cy) - baseR,
+        ...sats.map(s => Math.hypot(s.x - px, s.y - py)),
+        ...anchors.slice(1).map(p => Math.hypot(p.x - px, p.y - py)));
+      if (near < 320 || near > 640) continue; // a real gap, but a bridgeable one
+      disc(carve, px, py, rng.range(95, 125));
+      prizes.push(vec(px, py));
+      ctx.pois.push(vec(px, py));
+      break;
+    }
+  }
+
+  // THE PROCESSIONALS: every portal chained to the continent heart — the
+  // off-continent stretches become true cloud causeways and are RESERVED
+  // (a citadel must not squat a sky-bridge); ON the continent nothing is
+  // reserved: the massif weave law (laneW) IS the street grammar, and
+  // reserving the full chains starved the citadel field to nothing (the
+  // bound-conservative exclusion fanned from the heart — measured 1-4%
+  // wall cover before this changed).
+  const cwW = layoutParam(def, 'processionalWidth', [56, 72]) as [number, number];
+  for (const p of anchors.slice(1)) {
+    const pts = wanderPath(rng, vec(cx, cy), p, { step: 110, wobble: 26, bowFrac: 0.12 });
+    const halfW = rng.range(cwW[0], cwW[1]) / 2;
+    const overSky = pts.map(pt => !carve.has(pt.x, pt.y));
+    band(carve, pts, halfW);
+    const off = pts.filter((_, i) => overSky[i]);
+    if (off.length) reserveArtery(ctx, off, halfW);
+  }
+
+  // THE GLEAMWAYS: permanent bridges of bound light — satellites and prizes
+  // dock to the nearest standing body. Painted BEFORE the ground carve so
+  // every mouth ends flush under the cloud (ground wins the overlap).
+  const gleamW = layoutParam(def, 'gleamWidth', [46, 58]) as [number, number];
+  const lampPts: Vec2[] = [];
+  const layGleam = (from: Vec2, to: Vec2): void => {
+    const pts = wanderPath(rng, from, to, { step: 90, wobble: 10, bowFrac: 0.06 });
+    const m = Mask.forRect(0, 0, arena.w, arena.h);
+    band(m, pts, rng.range(gleamW[0], gleamW[1]) / 2);
+    paintRegion(grid, m, 'span_gleam');
+    // Bound lights pace the crossing (voidOk — they hang over the gap).
+    for (let i = 1; i < pts.length - 1; i += 2) lampPts.push(pts[i]);
+  };
+  for (const s of sats) layGleam(vec(cx, cy), s);
+  for (const p of prizes) {
+    let from = vec(cx, cy), best = Infinity;
+    for (const c of [vec(cx, cy), ...sats, ...anchors.slice(1)]) {
+      const d = Math.hypot(c.x - p.x, c.y - p.y);
+      if (d < best) { best = d; from = c; }
+    }
+    layGleam(from, p);
+  }
+
+  paintRegion(grid, carve, 'ground');
+
+  // THE TRIUMPH: the country's landmark — a grand gold-flame monument at the
+  // continent's heart, reserved BEFORE the citadels carve so the parade
+  // ground around it stays open (the spire_of_evening contract).
+  const monument = vec(cx + rng.range(-60, 60), cy + rng.range(-60, 60));
+  ctx.pois.push(vec(monument.x, monument.y));
+  (ctx.mustReach ??= []).push(vec(monument.x, monument.y));
+  ctx.reserved.push({ pos: vec(monument.x, monument.y), radius: 130 });
+
+  // THE CITADELS: the massif fabric carves the silver-and-gold architecture
+  // (mix/size/coverage all tileset layoutParams; massifSeatGround keeps every
+  // keep's footing on the cloud).
+  carveMassifs(ctx, def);
+
+  ctx.doodads.push({ pos: vec(monument.x, monument.y), radius: rng.range(26, 32), kind: 'triumph_spire' });
+  for (const l of lampPts) {
+    ctx.doodads.push({ pos: vec(l.x, l.y), radius: rng.range(8, 10), kind: 'gleam_lamp' });
+  }
+
+  scatterDecoration(ctx, def);
+}
+registerLayout('aether_bastion', aetherBastionLayout);
 
 // --- SHIP DECK (the Wraithsail's boards) -----------------------------------------
 // A HULL as a zone: one long pointed form — bow to the north portal, stern to

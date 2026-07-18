@@ -246,6 +246,10 @@ registerDimension({
     // (the span fabric + radiance-gated comet lanes). Its climate gate
     // pools it in the realm's coldest reaches — the auroral belt.
     { biome: 'aether_vesper', weight: 0.9 },
+    // THE HIGH BASTION — the citadel country: the Host's seat (enormous
+    // silver-and-gold massif architecture, permanent gleamways, clouds
+    // over the clouds). Permanence at altitude — the shelves' opposite.
+    { biome: 'aether_bastion', weight: 0.9 },
   ],
   levelBonus: 4,
   // The high air: cold, thin, and bone-dry — no seas above the sky. The

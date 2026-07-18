@@ -687,6 +687,19 @@ registerRegion({
   id: 'span_veiled', walkable: true, blocks: false, label: 'the veiled way',
   visual: { fill: '#cfd8ea', alpha: 0.06 },
 });
+// GLEAMWAY: the High Bastion's bridge — light made PERMANENT ROAD. Same
+// ephemeral-blue family as the star-span, but no span row ever drives it:
+// the recipe paints it as standing ground (the citadels' engineers bound
+// the light; the sky is not consulted). Brighter than any conditional span
+// on purpose — a promise that holds reads richer than one that comes and
+// goes, and the two must never be mistaken for each other mid-fight.
+registerRegion({
+  id: 'span_gleam', walkable: true, blocks: false, label: 'the gleamway',
+  // Alpha rides HIGH: the live drift overlay is all the paint this ground
+  // gets (animated fills never bake), and beneath it glows the sunlit
+  // cloudsea — at half-alpha the blue muddied to tan over the warm deck.
+  visual: { fill: '#9fd4ff', alpha: 0.8, animate: 'drift', edge: { color: '#e8f6ff', width: 4 } },
+});
 // DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
 // you start drowning (the survival system). The underwater zones' open sea.
 registerRegion({
@@ -879,3 +892,24 @@ registerRegion({ id: 'tenement_wall', walkable: false, blocks: true, label: 'the
 registerRegion({ id: 'manor_wall', walkable: false, blocks: true, label: 'the manor walls',
   blocksShot: true, blocksSight: true,
   visual: { fill: '#45483e', alpha: 1, masonry: true, edge: { color: '#9a9a84', width: 4 } } });
+
+// --- THE HIGH BASTION (aether_bastion; kinds in data/massifs.ts) -------------
+// BASTION WALL: the Host's citadel curtain — glossy silver coursing under a
+// polished rim (the brightest TRUE wall in the register: every other wall is
+// the ground's dark bone; this one is ARCHITECTURE wearing light). Bodies,
+// shots and sight all stop — a citadel you could shoot through would be a
+// pavilion — so the country plays as the massif negotiation at fortress
+// scale: you see the silver, you walk AROUND it.
+registerRegion({ id: 'bastion_wall', walkable: false, blocks: true, label: 'the bastion wall',
+  blocksShot: true, blocksSight: true,
+  // Fill authored BRIGHT on purpose: the masonry bake courses most of the
+  // surface in mix(fill, black, 0.42) — a mid fill reads slate; only a pale
+  // silver base keeps the coursing metallic (measured, not guessed).
+  visual: { fill: '#b8c2d8', alpha: 1, masonry: true, edge: { color: '#eef2fc', width: 5 } } });
+// GILT PARAPET: the gold balustrade — waist-high glory (the drystone/parapet
+// policy in precious metal): bodies never cross, but shots and sight sail
+// over, so a gilded court is a prize you duel ACROSS before you find its
+// gate. The gold-against-silver counterpoint is the country's palette law.
+registerRegion({ id: 'gilt_parapet', walkable: false, blocks: true, label: 'the gilt parapet',
+  blocksShot: false, blocksSight: false,
+  visual: { fill: '#b08a3e', alpha: 0.92, masonry: true, edge: { color: '#ffd97a', width: 4 } } });

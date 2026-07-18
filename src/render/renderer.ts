@@ -1487,9 +1487,10 @@ export class Renderer {
       ctx.fillRect(0, 0, w, h);
     }
     // The zone's STANDING ambience — underwater caustics + bubble splays,
-    // desert heat haze — declared on the theme (vis/ambientFx.ts).
+    // desert heat haze — declared on the theme (vis/ambientFx.ts). The camera
+    // rides along for the world-anchored kinds (overclouds' parallax).
     for (const fx of world.zone.theme.ambientFx ?? []) {
-      drawAmbientFx(ctx, fx, w, h, world.time);
+      drawAmbientFx(ctx, fx, w, h, world.time, this.cam.x, this.cam.y);
     }
     // WIND STREAMLINES: thin wisps riding the gale across the screen — the
     // flow made faintly visible (direction + strength read at a glance).

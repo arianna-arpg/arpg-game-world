@@ -2323,6 +2323,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -4.2, color: '#bcd2ff', intensity: 0.4, flicker: 2.2 },
   },
 
+  // --- The High Bastion kit (aether_bastion; kinds in data/massifs.ts) ------
+  // The citadel country's dressing: every painter an existing one re-dressed
+  // (the reskin doctrine). The seraph goes GOLD (statuary riding the silver
+  // rooflines), the survey spire becomes a triumph monument (silver shaft,
+  // gold flame-gem), and the sky-lantern becomes the gleamway's bound blue
+  // light — tuned to the span_gleam region so bridge and lamp read as one law.
+  gilded_seraph: {
+    painter: 'seraphStatue', order: 54, shadow: 0.5, longShadow: 1.4,
+    params: { marble: '#f0e6c8', shadow: '#a89468', gold: '#ffd97a' },
+    light: { radius: -2.5, color: '#ffe2a0', intensity: 0.18 },
+  },
+  triumph_spire: {
+    painter: 'surveySpire', order: 54, shadow: 0.4, longShadow: 1.1,
+    params: { stone: '#9aa2bc', gem: '#ffd97a' },
+    light: { radius: -2.6, color: '#ffe2a0', intensity: 0.25, flicker: 0.8 },
+  },
+  gleam_lamp: {
+    painter: 'skyLantern', order: 55, shadow: 0.18,
+    params: { paper: '#dff2ff', frame: '#7f96c8', glow: '#9fd4ff' },
+    light: { radius: -4.5, color: '#9fd4ff', intensity: 0.5, flicker: 1.4 },
+  },
+
   // --- The ship-deck kit (vis/paintersSea.ts): the Wraithsail's boards ------
   // Masts carry a cold masthead light (the ghost ship sails lit); rails and
   // cargo are honest weathered timber. The ghost hull is the ship SIGHTED at

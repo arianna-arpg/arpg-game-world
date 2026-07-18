@@ -12,14 +12,14 @@ import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
 }
 
 export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec,
-  w: number, h: number, t: number): void {
+  w: number, h: number, t: number, camX = 0, camY = 0): void {
   // A 0-sized backing store (a hidden pane before its first resize event
   // sizes the canvas) has nothing to paint — and it poisons every
   // `% w` / `% h` / `% diag` below into NaN, which KILLS the frame the
@@ -36,7 +36,53 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'aurora': return aurora(ctx, w, h, t, k, spec.color ?? '#7fe8b8');
     case 'spores': return spores(ctx, w, h, t, k, spec.color ?? '#b8e88f');
     case 'sandDrift': return sandDrift(ctx, w, h, t, k, spec.color ?? '#d8c090');
+    case 'overclouds': return overclouds(ctx, w, h, t, k, spec.color ?? '#ffffff', camX, camY);
   }
+}
+
+/** CLOUDS OVER THE CLOUDS — soft veils drifting ABOVE the scene (the sky
+ *  country's verticality read: you stand on cloud, and higher cloud still
+ *  slides between you and the sun). Two decks, both world-anchored through
+ *  the camera at PARALLAX > 1, so panning makes them stream faster than the
+ *  ground — the whole "they are above you" statement in one multiplier.
+ *  Cam-less callers (previews, sims) degrade to pure screen drift.
+ *  Deterministic from (i, t) like every ambient — zero particle state. */
+function overclouds(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string, camX: number, camY: number): void {
+  ctx.save();
+  const wrap = (v: number, span: number): number => ((v % span) + span) % span;
+  // Deck A: the great slow veils. Deck B: low fast wisps (deeper parallax —
+  // nearer the camera, streaming hardest).
+  const decks = [
+    { n: Math.round(5 * k), par: 1.3, speed: 14, rx: [200, 380], ry: [70, 130], a: 0.11 },
+    { n: Math.round(4 * k), par: 1.6, speed: 30, rx: [110, 210], ry: [36, 70], a: 0.08 },
+  ];
+  for (let d = 0; d < decks.length; d++) {
+    const deck = decks[d];
+    for (let i = 0; i < deck.n; i++) {
+      const lane = hash01(i, 13 + d * 31);
+      const rx = deck.rx[0] + hash01(i, 17 + d) * (deck.rx[1] - deck.rx[0]);
+      const ry = deck.ry[0] + hash01(i, 19 + d) * (deck.ry[1] - deck.ry[0]);
+      // Wrap in a margin-padded space so a cloud slides fully off one side
+      // before it re-enters the other (no pop at the seam).
+      const spanX = w + rx * 2, spanY = h + ry * 2;
+      const x = wrap(hash01(i, 23 + d) * spanX + t * (deck.speed + lane * deck.speed) - camX * deck.par, spanX) - rx;
+      const y = wrap(hash01(i, 29 + d) * spanY + Math.sin(t * 0.05 + i * 2.1) * 24 - camY * deck.par, spanY) - ry;
+      const g = ctx.createRadialGradient(x, y, Math.max(1, ry * 0.25), x, y, Math.max(2, rx));
+      g.addColorStop(0, withAlpha(color, deck.a * k));
+      g.addColorStop(0.65, withAlpha(color, deck.a * 0.55 * k));
+      g.addColorStop(1, withAlpha(color, 0));
+      ctx.fillStyle = g;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(1, Math.max(0.05, ry / rx));
+      ctx.beginPath();
+      ctx.arc(0, 0, rx, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
 }
 
 /** DRIFTING SAND — grains streaking low on one shared slant (the ground wind

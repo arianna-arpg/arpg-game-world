@@ -7790,6 +7790,211 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE HIGH BASTION — the Aetherial's citadel face: the Host's SEAT. One
+  // rolling cloud continent strewn with ENORMOUS silver-and-gold architecture
+  // (the massif fabric at fortress scale — bastion keeps, high courts, gilt
+  // balustrade rings), GLEAMWAYS of bound blue light bridging the rim to
+  // satellite isles and prize vaults, reserved processionals the citadels
+  // must leave clear (the metropolis boulevard read), and clouds OVER the
+  // clouds (ambientFx 'overclouds') with the cloudsea far below — the
+  // vertical sandwich is the country's whole mood. Everything HOLDS: no
+  // collapse, no flux, no conditional spans — permanence at altitude is the
+  // thesis (the vesper's sky-answering ground, answered back).
+  aether_bastion: {
+    id: 'aether_bastion',
+    frontier: false, realm: 'aetherial', // realm tileset (see aether) — reached by the realm's own web
+    perfProbe: true, // massif bodies + gleam lattice — honest to sweep
+    biome: 'aether_bastion',
+    nameFirst: ['Argent', 'Aurelian', 'Radiant', 'Zenith', 'Empyral', 'Golden', 'Silverline', 'Highcrown'],
+    nameSecond: ['Bastion', 'Citadel', 'Ramparts', 'Crown', 'Procession', 'Ward', 'Approach'],
+    theme: {
+      floor: '#dde1ef', grid: '#c2c8de', border: '#93a0c2',
+      obstacle: '#e8ebf5', obstacleEdge: '#aab4d0', accent: '#ffd97a',
+      wall: '#ccd3e6', water: '#9fd8e8',
+      // Bright noons over polished silver; nights deep enough that the
+      // gleamways and the gold crests carry the scene.
+      dayLight: 1.35, nightDark: 0.5, heat: 0.4,
+      ground: {
+        palette: ['#c3cade', '#d2d8e8', '#e0e5f1', '#edf0f8', '#f9fafd'],
+        bias: 0.62, alpha: 0.52, scale: 1.8, strength: 0.85, speckles: 0.3, evenness: 0.34,
+      },
+      ambientFx: [
+        // THE VERTICAL SANDWICH: higher cloud streams OVER the citadels
+        // (camera-parallax veils) while the cloudsea rolls far below.
+        { kind: 'overclouds', color: '#ffffff', intensity: 1 },
+        { kind: 'motes', color: '#fff2d8', intensity: 0.7 },
+        { kind: 'aurora', color: '#ffdf9a', intensity: 0.35 },
+      ],
+      fog: { banks: [1, 2], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+    },
+    sizeW: [2600, 3400], sizeH: [1900, 2600], ellipseChance: 0,
+    forceLayout: 'aether_bastion',
+    layoutParams: {
+      // The citadel mix (data/massifs.ts kinds) at FORTRESS scale — the
+      // default massif dials describe field boulders; these describe
+      // architecture you read from across the zone.
+      massifMasses: [
+        { kind: 'bastion', weight: 3 },
+        { kind: 'high_court', weight: 1.6 },
+        { kind: 'gilt_ring', weight: 1.2 },
+      ],
+      // Sizes are BASE radii — shape reach (1.45–1.85×) inflates the true
+      // silhouette, so the top of the band already reads enormous; the WIDE
+      // band is deliberate (great keeps + lesser architecture between them —
+      // uniform giants geometrically cap at 3-4 bodies and starve the field;
+      // measured, not guessed: bound-scale dials delivered 0–3% wall cover).
+      massifSizeR: [130, 290],
+      massifCoverage: [0.12, 0.18], // arena-fraction (the cloud is ~half of it)
+      massifLaneW: 120,
+      massifPortalClear: 170, // portal pads + processional reserves already guard arrival
+      massifMaxMasses: 11,
+      massifSeatGround: true, // keeps every keep's footing on the cloud
+      massifPlaceTries: 240,  // most darts land on sky — buy the tries back
+    },
+    layout: [
+      { kind: 'cloud_billow', count: [4, 7] },
+      { kind: 'seraph_statue', count: [1, 3] },
+      { kind: 'harp_pillar', count: [2, 5] },
+      { kind: 'prayer_bell', count: [1, 3] },
+      { kind: 'aether_crystal', count: [2, 5] },
+      { kind: 'flowers', count: [2, 4] },
+      { kind: 'mist_font', count: [1, 2] },
+      { kind: 'updraft_vent', count: [0, 2] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 130] },
+    ],
+    variants: [
+      // ARGENT PROCESSIONAL: the parade face — the keeps at their grandest,
+      // the ways widest, the noon at its most polished.
+      {
+        name: 'argent processional',
+        layout: [
+          { kind: 'cloud_billow', count: [4, 7] },
+          { kind: 'seraph_statue', count: [2, 4] },
+          { kind: 'harp_pillar', count: [3, 6] },
+          { kind: 'prayer_bell', count: [1, 3] },
+          { kind: 'aether_crystal', count: [2, 4] },
+          { kind: 'flowers', count: [2, 4] },
+          { kind: 'mist_font', count: [1, 2] },
+        ],
+        layoutParams: {
+          massifMasses: [
+            { kind: 'bastion', weight: 4 },
+            { kind: 'high_court', weight: 1.2 },
+            { kind: 'gilt_ring', weight: 0.6 },
+          ],
+          massifSizeR: [150, 310],
+          massifMaxMasses: 10,
+          processionalWidth: [64, 84],
+        },
+        theme: { accent: '#ffe2a0', dayLight: 1.4, nightDark: 0.46 },
+      },
+      // GILDED COURTS: the garden face — held courts and balustrade rings,
+      // warm gold over the silver, the interiors the prizes.
+      {
+        name: 'gilded courts',
+        layout: [
+          { kind: 'cloud_billow', count: [4, 6] },
+          { kind: 'seraph_statue', count: [1, 3] },
+          { kind: 'harp_pillar', count: [2, 4] },
+          { kind: 'prayer_bell', count: [2, 4] },
+          { kind: 'aether_crystal', count: [2, 4] },
+          { kind: 'flowers', count: [3, 6] },
+          { kind: 'mist_font', count: [1, 3] },
+        ],
+        layoutParams: {
+          massifMasses: [
+            { kind: 'high_court', weight: 3 },
+            { kind: 'gilt_ring', weight: 2.4 },
+            { kind: 'bastion', weight: 1 },
+          ],
+          massifSizeR: [120, 260],
+          massifCoverage: [0.11, 0.16],
+        },
+        theme: {
+          accent: '#ecd382', dayLight: 1.3,
+          ground: {
+            palette: ['#cfcdd8', '#dcd8e0', '#e8e3e8', '#f2edee', '#faf6f0'],
+            bias: 0.6, alpha: 0.52, scale: 1.8, strength: 0.85, speckles: 0.32, evenness: 0.32,
+          },
+          ambientFx: [
+            { kind: 'overclouds', color: '#fff6e4', intensity: 0.9 },
+            { kind: 'motes', color: '#ffedc2', intensity: 0.9 },
+            { kind: 'aurora', color: '#ffd97a', intensity: 0.4 },
+          ],
+        },
+      },
+      // SEA OF RAMPARTS: the curtain-wall face — long silver walls running
+      // the cloud like breakwaters, more satellites, the gleam hour deep
+      // and blue (the bridges carry the night).
+      {
+        name: 'sea of ramparts',
+        layout: [
+          { kind: 'cloud_billow', count: [5, 8] },
+          { kind: 'harp_pillar', count: [2, 4] },
+          { kind: 'aether_crystal', count: [3, 6] },
+          { kind: 'seraph_statue', count: [1, 2] },
+          { kind: 'flowers', count: [1, 3] },
+          { kind: 'updraft_vent', count: [1, 3] },
+        ],
+        layoutParams: {
+          massifMasses: [
+            { kind: 'curtain', weight: 3.5 },
+            { kind: 'bastion', weight: 1 },
+            { kind: 'high_court', weight: 0.5 },
+          ],
+          massifSizeR: [120, 250], // chains reach 1.85× — the walls run LONG
+          massifCoverage: [0.13, 0.19],
+          satellites: [3, 4],
+          gleamWidth: [50, 64],
+        },
+        theme: {
+          accent: '#9fd4ff', dayLight: 1.15, nightDark: 0.62,
+          ground: {
+            palette: ['#b6bed6', '#c6cde0', '#d6dbea', '#e5e8f2', '#f2f4fa'],
+            bias: 0.58, alpha: 0.54, scale: 1.7, strength: 0.9, speckles: 0.34, evenness: 0.3,
+          },
+          ambientFx: [
+            { kind: 'overclouds', color: '#e8f0ff', intensity: 1 },
+            { kind: 'motes', color: '#dce8ff', intensity: 0.8 },
+            { kind: 'aurora', color: '#8fb4e8', intensity: 0.5 },
+          ],
+        },
+      },
+    ],
+    // The Host's SEAT: its line troops thickest here — with the wild sky's
+    // own kin drifting the rims (RELATIONS keeps the grazers wary).
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'cherub_wisp', weight: 3 },
+        { id: 'power_of_the_bastion', weight: 3, presence: { from: 10, fadeIn: 4 } },
+        { id: 'virtue_lance', weight: 2.5 },
+        { id: 'lampad_of_the_vigil', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'herald_of_the_choir', weight: 2, presence: { from: 12, fadeIn: 4 } },
+        { id: 'dominion_scales', weight: 2, presence: { from: 13, fadeIn: 5 } },
+        { id: 'ophan_wheel', weight: 1.8 },
+        { id: 'throne_of_the_law', weight: 1.5, presence: { from: 13, fadeIn: 5 } },
+        { id: 'watcher_unblinking', weight: 1.5 },
+        { id: 'principality_of_dawn', weight: 0.7, presence: { from: 15, fadeIn: 6 } },
+        { id: 'lumen_moth', weight: 1.2 },
+        { id: 'mistwing_shrike', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled (no 'spawners' objective up here)
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.15 },
+    ],
+  },
+
   // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset
   // (biome 'aether_sanctum' resolves here). The same lattice run dense and
   // UNBROKEN — wide causeways, no sky-holes, and NO CollapseSpec: this
@@ -8069,6 +8274,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   aether_drift:   { title: 'Aetherial Drift',   blurb: 'Drifting cloud-rafts riding the wind — gusts warn and then shove; read the rhythm or the sky simply lets you go, straight down.' },
   aether_sanctum: { title: 'Aetherial Sanctum', blurb: 'The dense, unbroken lattice at the crossing’s end — wide causeways, no sky-holes, ground that finally holds. The waypoint home.' },
   aether_vesper:  { title: 'The Vesperlands',   blurb: 'The cosmos country: glass isles forever, and everything between them answering the sky — sunbridges by day, star-spans by night, rainbows in the rain, and ways you cross on faith alone.' },
+  aether_bastion: { title: 'The High Bastion',  blurb: 'The Host\'s seat: enormous silver-and-gold citadels strewn about a rolling cloud continent, gleamways of bound blue light bridging the rim — and higher cloud still streaming overhead. Everything here holds; everything here is watched.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no

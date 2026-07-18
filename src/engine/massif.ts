@@ -330,6 +330,27 @@ function pickWeighted<T extends { weight: number }>(rng: Rng, rows: readonly T[]
   return rows[rows.length - 1];
 }
 
+/** Opt-in seat probe (layoutParam `massifSeatGround`): the dart's CORE must
+ *  stand on WALKABLE ground — the cloud-isle countries (the High Bastion)
+ *  reject the open-sky darts a land-locked zone never rolls (the formation
+ *  siteWalk law at mass scale). The probe rings the BASE radius (not the
+ *  bound: a chain's bound is a long march, not a disc — bound-ringing made
+ *  high-reach shapes unseatable on any real isle) and tolerates 2 of 8
+ *  points off-cloud: the bulk seats on ground, while a lobe or a chain's
+ *  tail may still prow past the rim — a bastion brow over the void is the
+ *  look; a bastion floating in it is a bug. Draw-free: rejections spend
+ *  the dart, never shift the stream. */
+function seatOnWalkable(grid: GridWalkField, at: Vec2, r: number): boolean {
+  if (!grid.isWalkable(at.x, at.y)) return false;
+  const pr = r * 0.9;
+  let off = 0;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    if (!grid.isWalkable(at.x + Math.cos(a) * pr, at.y + Math.sin(a) * pr) && ++off > 1) return false;
+  }
+  return true;
+}
+
 /** The reservation probe (the layoutRecipes idiom, local on purpose —
  *  reservations are circles OR rects). */
 function resHits(ctx: GenCtx, x: number, y: number, r: number): boolean {
@@ -372,13 +393,17 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
   const portalClear = layoutParam<number>(def, 'massifPortalClear', MASSIF_CFG.portalClear);
   const maxMasses = layoutParam<number>(def, 'massifMaxMasses', MASSIF_CFG.maxMasses);
   const lobe = layoutParam<number>(def, 'massifLobe', MASSIF_CFG.lobe);
+  const seatGround = layoutParam<boolean>(def, 'massifSeatGround', false);
+  // Dart budget as a dial: a mostly-void country burns most darts on sky and
+  // seat rejections — it buys more tries instead of shipping empty fields.
+  const placeTries = layoutParam<number>(def, 'massifPlaceTries', MASSIF_CFG.placeTries);
 
   const portals = [ctx.entry, ...ctx.exits];
   const targetCover = rng.range(coverBand[0], coverBand[1]) * arena.w * arena.h;
 
   const placed: PlacedMass[] = [];
   let covered = 0;
-  for (let t = 0; t < MASSIF_CFG.placeTries; t++) {
+  for (let t = 0; t < placeTries; t++) {
     if (covered >= targetCover || placed.length >= maxMasses) break;
     // Fixed per-try draw shape (r, x, y, kind, shape): rejections change which
     // darts land, never how the stream advances past a landed one.
@@ -394,6 +419,7 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     if (portals.some(p => Math.hypot(p.x - at.x, p.y - at.y) < portalClear + bound)) continue;
     if (resHits(ctx, at.x, at.y, bound + laneW / 2)) continue;
     if (placed.some(m => Math.hypot(m.cm.at.x - at.x, m.cm.at.y - at.y) < m.cm.bound + bound + laneW)) continue;
+    if (seatGround && !seatOnWalkable(grid, at, r)) continue;
 
     const seed = rng.int(0, 0x7fffffff);
     const body = Mask.forRect(0, 0, arena.w, arena.h);
