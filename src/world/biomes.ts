@@ -418,7 +418,12 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // or concentric fortress commanding a pass — plus roadside watchtowers.
   // The high crags belong to the Horned Tribes now (the gnolls keep the
   // desert): beastkin war-camps stud the passes, their khan thrones on high.
-  highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Highland', spacing: 88,
+  // Relabelled 'Mountains' (the country pass): the id stays 'highland' — it
+  // is load-bearing across saves, tables and the biome field — but every
+  // player-facing read says what the place IS. ('Highland' the WORD is
+  // reserved for a future butte-country biome — the Devil's Tower idea.)
+  highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Mountains', spacing: 88,
+    meld: 'mountain_meld',
     climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry' },
     // rooms = the mountain-pass maze; labyrinth = the stone warren the old
     // folk cut (a full-zone maze, braided so it fights instead of frustrates).

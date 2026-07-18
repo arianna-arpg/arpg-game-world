@@ -260,6 +260,17 @@ export class GridWalkField implements WalkField {
     return this.mask[cy * this.cols + cx] === 1;
   }
 
+  /** The region-kind id painted at a world point ('wall' for the unpainted
+   *  default; undefined off-grid). The public READ the private kindByte
+   *  writers imply — gen passes that must tell SOLID stone from a fall
+   *  region finally have the word (a boulder caroms off a wall; it rolls
+   *  OFF a gorge lip). */
+  kindAt(x: number, y: number): string | undefined {
+    const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
+    if (!this.inGrid(cx, cy)) return undefined;
+    return this.kindList[this.kind[cy * this.cols + cx]] ?? 'wall';
+  }
+
   /** LEDGE GRASP (WALK_CFG.ledgeGrasp): is any part of a body disc still on
    *  something that HOLDS it? Support means "not over open void" — walkable
    *  ground or a blocking mass both count (a wall you're pressed into is not

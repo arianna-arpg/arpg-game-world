@@ -191,6 +191,16 @@ export interface TrackSpec {
    *  recurring mountain boulder-run; plain 'once' stays the single loosed
    *  pass (the trapworks' sprung roll). */
   rearm?: number;
+  /** THE STONE WEARS THIN: seconds of ROLL before this lane's rider
+   *  SHATTERS, rolled per release on a pure integer hash of (lane length,
+   *  bornAt, rider phase, release ordinal) — no state, no rng stream, so
+   *  every seat and every resume agree. A roll at or past the full pass =
+   *  the stone completes its run and bursts at the far end exactly as
+   *  before; a shorter roll ends the ride mid-lane, burst at the shatter
+   *  point — the run's END is driven by stamina, not by what it hit. Rides
+   *  'once' lanes only (with rearm it makes the recurring gauntlet whose
+   *  stones die unpredictably — the Bob-omb read). */
+  shatter?: [number, number];
   /** Initial armed state (default true). A DISARMED lane retracts whole:
    *  riders undrawn, unswept, unthreatening — only a gen-carved groove
    *  remains as the tell. Flipped live via World.setTracksArmed(tag) — the
@@ -238,6 +248,10 @@ export interface PlacedRider {
   /** Runtime rest-window edge detector (rearm lanes): the sweep bursts once
    *  as a rider's pass ends. Cosmetic only — never persisted, resume-safe. */
   resting?: boolean;
+  /** Last riding position the sweep sampled — where the rest-transition
+   *  burst fires (a shattered stone dies mid-lane, not at the arc's end).
+   *  Cosmetic only — never persisted, resume-safe. */
+  lastLive?: { x: number; y: number };
 }
 
 /** A resolved rider pose — position, lane bearing, surface rotation. The ONE
@@ -320,6 +334,20 @@ export function placeTrack(spec: TrackSpec): PlacedTrack {
 
 // --- the pure resolver -----------------------------------------------------
 
+/** Per-release RIDE CAP for a shatter lane (seconds of roll before the stone
+ *  gives out) — a pure integer hash of shared inputs, so the pose resolver,
+ *  the done test, and every seat at any clock agree. Infinity without the
+ *  lever. `k` is the release ordinal (the phase-shifted cycle index). */
+export function rideCapOf(tr: PlacedTrack, phase: number, k: number): number {
+  const sh = tr.spec.shatter;
+  if (!sh) return Infinity;
+  let h = Math.imul(k + 1, 2654435761) >>> 0;
+  h = (h ^ ((tr.arc.total * 97) | 0) ^ (((tr.spec.bornAt ?? 0) * 131) | 0) ^ ((phase * 8191) | 0)) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  return sh[0] + (h / 4294967296) * (sh[1] - sh[0]);
+}
+
 /** The start-of-lane holding pose — pre-birth AND a rearm lane's cradle rest
  *  share it: parked, harmless, unspun (the pending grammar's one look). */
 function cradlePose(tr: PlacedTrack, rider?: TrackRiderDef): TrackPose {
@@ -379,12 +407,19 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
       // REARMED once-lane: pass + cradle-rest cycling forever on the pure
       // clock. Phase staggers riders across the whole cycle; the rest window
       // wears the pending grammar (visible in the cradle, harmless, unspun).
-      const tc = ((tl + phase * period) % period + period) % period;
-      if (tc > tr.passSec) return cradlePose(tr, rider);
+      // A shatter roll (rideCapOf, pure per release) can end the ride early —
+      // the stone spends the tail of its pass window already back in the
+      // cradle, and the cycle length never moves.
+      const shifted = tl + phase * period;
+      const tc = (shifted % period + period) % period;
+      const k = Math.floor(shifted / period);
+      if (tc > Math.min(tr.passSec, rideCapOf(tr, phase, k))) return cradlePose(tr, rider);
       t = tc;
       spinT = tc; // each release spins fresh from the cradle
     } else {
-      t = Math.min(tl, tr.passSec);  // single pass — clamp at the far end, never wrap
+      // Single pass — clamp at the far end (or at the shatter point: the
+      // retire burst then fires exactly where the stone gave out).
+      t = Math.min(tl, tr.passSec, rideCapOf(tr, phase, 0));
     }
   } else {
     t = ((tl + phase * period) % period + period) % period;
@@ -420,7 +455,10 @@ export function riderSurface(def: TrackRiderDef, pose: TrackPose): HitShape {
  *  once-lane cycles forever (its rest windows are pose-level pending). */
 export function trackDone(tr: PlacedTrack, timeSec: number): boolean {
   if (tr.spec.mode !== 'once' || (tr.spec.rearm ?? 0) > 0) return false;
-  return timeSec - (tr.spec.bornAt ?? 0) >= tr.passSec;
+  // A shattered stone is done the moment its stamina ran out (phase 0 —
+  // plain once-lanes ride unphased; the lint says so).
+  const cap = Math.min(tr.passSec, rideCapOf(tr, 0, 0));
+  return timeSec - (tr.spec.bornAt ?? 0) >= cap;
 }
 
 /** Still waiting on bornAt — the pending read shared by the sweep skip, the
@@ -461,6 +499,11 @@ export function lintTrackSpec(spec: TrackSpec, where: string): string[] {
   if (spec.rearm !== undefined) {
     if (spec.mode !== 'once') out.push(`${where}: rearm rides 'once' lanes only`);
     if (!(spec.rearm >= 1) || spec.rearm > 90) out.push(`${where}: rearm ${spec.rearm}s outside [1,90]`);
+  }
+  if (spec.shatter !== undefined) {
+    if (spec.mode !== 'once') out.push(`${where}: shatter rides 'once' lanes only`);
+    const [lo, hi] = spec.shatter;
+    if (!(lo >= 0.5) || !(hi >= lo) || hi > 120) out.push(`${where}: shatter [${lo},${hi}] outside [0.5,120] lo≤hi`);
   }
   if (!(spec.speed > 0) || spec.speed > 600) out.push(`${where}: speed ${spec.speed} outside (0,600] px/s`);
   if (!spec.riders?.length) out.push(`${where}: lane with no riders`);

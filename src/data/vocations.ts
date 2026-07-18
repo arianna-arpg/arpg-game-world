@@ -205,7 +205,7 @@ const WARBRINGER: VocationDef = {
   quest: {
     steps: [
       {
-        offerLabel: 'Break the warband mustering in the highlands',
+        offerLabel: 'Break the warband mustering in the mountains',
         zone: {
           tileset: 'highland', direction: 'w', distance: 1, level: 'character',
           objective: { kind: 'clear' },
@@ -703,7 +703,7 @@ const SHADOWDANCER: VocationDef = {
   quest: {
     steps: [
       {
-        offerLabel: 'Cut the bandit road in the highlands',
+        offerLabel: 'Cut the bandit road in the mountains',
         zone: {
           tileset: 'highland', direction: 's', distance: 1, level: 'character',
           objective: { kind: 'clear' },
@@ -774,7 +774,7 @@ const BLOODREAVER: VocationDef = {
   quest: {
     steps: [
       {
-        offerLabel: 'Answer the warhorns in the highlands',
+        offerLabel: 'Answer the warhorns in the mountains',
         zone: {
           tileset: 'highland', direction: 'w', distance: 1, level: 'character',
           objective: { kind: 'waves', waves: 4 },

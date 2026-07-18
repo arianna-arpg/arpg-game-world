@@ -134,7 +134,7 @@ import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
-import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG, regionPathCost } from '../world/regions';
+import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec } from '../world/regions';
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
@@ -31691,6 +31691,64 @@ export class World {
    * poison on ENTRY. Because these are ordinary statuses, they show as
    * pips, scale with the stat engine, and anything else can apply them.
    */
+  /** Shed ONE stack of a live status, keeping the sheet honest: per-stack
+   *  mods re-sync to the new count, and the source LIFTS with the last
+   *  stack (the heat lane's shed hygiene, extracted for every dwindle
+   *  lane — heat's shade, the gaze's dark, the douse beat). */
+  private shedStatusStack(a: Actor, st: ActiveStatus): void {
+    st.stacks--;
+    const def = STATUS_DEFS[st.id];
+    if (st.stacks <= 0) {
+      a.statuses.splice(a.statuses.indexOf(st), 1);
+      a.sheet.removeSource(`status:${st.id}`);
+    } else if (def?.mods) {
+      a.sheet.setSource(`status:${st.id}`,
+        def.mods.map(m => ({ ...m, value: m.value * (def.modsPerStack ? st.stacks : 1) })));
+    }
+  }
+
+  /** The douse row under an actor's feet, if any (RegionKind.douses — the
+   *  region fabric's refuge lane): the doodad ground first, then the grid
+   *  region, each honoring the same insurance every other ground effect
+   *  rides (a flier skimming the pool is not wet). */
+  private douseRowAt(a: Actor): DouseSpec | undefined {
+    if (a.groundKind) {
+      const row = regionKind(a.groundKind)?.douses;
+      if (row && !this.groundInsured(a, a.groundKind)) return row;
+    }
+    if (a.gridRegion) {
+      const row = regionKind(a.gridRegion)?.douses;
+      if (row && !this.groundInsured(a, a.gridRegion)) return row;
+    }
+    return undefined;
+  }
+
+  /** THE DOUSE BEAT (region sweep tail — ground as CURE): while a douse row
+   *  holds an actor, shed one stack of each listed status per beat. Brisk
+   *  relief by design; the row's text floats as the last stack lifts, and
+   *  the clock parks while there is nothing to quench. */
+  private douseTimers = new Map<number, number>();
+  private douseSweep(a: Actor, dt: number): void {
+    const row = this.douseRowAt(a);
+    if (!row || !a.statuses.some(s => row.statuses.includes(s.id))) {
+      this.douseTimers.delete(a.id);
+      return;
+    }
+    const t = (this.douseTimers.get(a.id) ?? 0) + dt;
+    if (t < (row.every ?? DOUSE_CFG.every)) { this.douseTimers.set(a.id, t); return; }
+    this.douseTimers.set(a.id, 0);
+    let lifted = false;
+    for (const id of row.statuses) {
+      const st = a.statuses.find(x => x.id === id);
+      if (!st) continue;
+      this.shedStatusStack(a, st);
+      if (!a.statuses.includes(st)) lifted = true;
+    }
+    if (lifted && row.text) {
+      this.text(vec(a.pos.x, a.pos.y - a.radius - 6), row.text, row.color ?? DOUSE_CFG.color, 12);
+    }
+  }
+
   /** DESERT HEAT — the sunscorch loop. TWO lanes bake stacks on (each
    *  eroding fire resistance; at the cap the buildup ladder converts them
    *  into HEATSTROKE): the fast lane is standing in a heat-shimmer field;
@@ -31726,7 +31784,11 @@ export class World {
         }
       }
       const shaded = this.isShaded(a);
-      const bakeEvery = inField ? HEAT_CFG.stackEvery : sunEvery;
+      // WATER IS REFUGE: ground that douses the scorch never bakes it —
+      // both heat lanes hold while a douse row holds you (the shedding
+      // itself is the region sweep's douse beat, on its own faster clock).
+      const doused = this.douseRowAt(a)?.statuses.includes('sunscorched') ?? false;
+      const bakeEvery = doused ? Infinity : inField ? HEAT_CFG.stackEvery : sunEvery;
       if (bakeEvery < Infinity && !shaded) {
         if (t >= bakeEvery) {
           t = 0;
@@ -32313,11 +32375,13 @@ export class World {
         const pose = trackPose(tr, this.time, r.phase, r.def);
         // A rider resting in its cradle (a rearm lane between passes) is
         // harmless — the pose's own pending flag is the one truth. The
-        // first pending sample after a pass bursts at the far end (the
-        // boulder meets the gorge — the once-lane retire read, recurring).
+        // first pending sample after a pass bursts where the ride actually
+        // ENDED (lastLive: the far end for a completed run, mid-lane for a
+        // stone that shattered on its stamina roll — the recurring once-
+        // lane retire read, honest to the shatter lever).
         if (pose.pending) {
           if (r.resting === false) {
-            const end = tr.arc.pts[tr.arc.pts.length - 1];
+            const end = r.lastLive ?? tr.arc.pts[tr.arc.pts.length - 1];
             const reach = r.def.surface.kind === 'circle'
               ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
             this.flashes.push({ pos: vec(end.x, end.y), radius: reach * 1.7, color: r.def.color ?? '#cfc4ae', life: 0.45, maxLife: 0.45 });
@@ -32327,6 +32391,7 @@ export class World {
           continue;
         }
         r.resting = false;
+        r.lastLive = { x: pose.x, y: pose.y };
         const shape = riderSurface(r.def, pose);
         this.sweepHazardSurface(pose.x, pose.y, shape, pose.dir, r.def.payload, r.icdUntil, owner);
       }

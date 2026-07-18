@@ -5420,9 +5420,17 @@ export const TILESETS: Record<string, TilesetDef> = {
   highland: {
     id: 'highland', biome: 'highland',
     depthAffinity: { from: 0.24, fadeIn: 0.2, to: 0.74, fadeOut: 0.18 },
+    // THE PASS ROLLS STONES TOO (the delivery repro's verdict: the most
+    // common middle-band face fielded ZERO boulders): ambient chutes probe
+    // the maze's own straight corridors. (The trapworks sprung-run grammar
+    // stays interior-only — surface roomsLayout is levelgen's own recipe and
+    // never runs that pass; wiring it is a queued seam, not a dial here.)
+    layoutParams: {
+      boulderChutes: { count: [1, 2], minLen: 380, maxLen: 900, rest: 8, bounces: [0, 1] },
+    },
     compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }, { composition: 'cistern_court', chance: 0.1 }, { composition: 'drover_waystation', chance: 0.16 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
-    nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
+    nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Defile', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
       floor: '#13130f', grid: '#1d1c16', border: '#5a5240',
       obstacle: '#3a3528', obstacleEdge: '#6a6048', accent: '#c8b890',
@@ -5514,7 +5522,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     layoutParams: {
       massifMasses: [{ kind: 'tor', weight: 3 }, { kind: 'bluff', weight: 2 }, { kind: 'fold', weight: 0.8 }],
       massifCoverage: [0.13, 0.19],
-      boulderChutes: { count: [0, 1], rest: 8 },
+      // Every foothill zone teaches the boulder now (the delivery repro read
+      // [0,1] as mostly-nothing); an occasional single carom off a tor.
+      boulderChutes: { count: [1, 2], rest: 8, bounces: [0, 1] },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.24 },
@@ -5546,6 +5556,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // A cold range dusts its foot; a warm one never does (the lock, read
       // from the very first zone of the climb).
       { kind: 'snowdrift', count: [0, 3], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
+      // Crags crowd the HIGH ground (elevation strata — the whole country
+      // reads uphill toward its own heart).
+      { kind: 'rocks', count: [2, 4], radius: [20, 44],
+        where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
     ],
     common: [
       { kind: 'cairn', count: [1, 2] },
@@ -5617,7 +5631,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       karstGulf: 'gorge',
       karstPocketR: [150, 260], karstGap: [330, 420], karstCorridorW: [40, 58],
       karstLoops: 0.26, karstCrags: [2, 4], karstWobble: 40, karstRim: [90, 140],
-      boulderChutes: { count: [2, 3], rest: 6.5 },
+      boulderChutes: { count: [2, 3], rest: 6.5, bounces: [0, 2] },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.18 },
@@ -5644,7 +5658,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         fronts: [{
           id: 'landslide', line: 'span', bearing: 'cardinal',
           gap: { width: 170, count: [1, 2] },
-          chance: 0.6, delay: [16, 32], waves: [80, 130],
+          chance: 0.75, delay: [12, 26], waves: [70, 115],
           announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
         }],
       },
@@ -5693,7 +5707,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'snowdrift', count: [0, 4], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
       ], layoutParams: {
         karstPocketR: [190, 300], karstCorridorW: [36, 50], karstGap: [360, 450],
-        boulderChutes: { count: [2, 4], rest: 6 },
+        // Bounces where the rare crag face allows — but the Overpass's own
+        // signature ending is the GORGE: most runs die over the lip (a fall
+        // region never caroms; the massif fells are the switchback country).
+        boulderChutes: { count: [2, 4], rest: 6, bounces: [1, 3] },
       } },
     ],
     packs: {
@@ -5744,7 +5761,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layoutParams: {
       massifMasses: [{ kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 1.5 }],
       massifCoverage: [0.1, 0.16],
-      boulderChutes: { count: [1, 2], rest: 7.5 },
+      boulderChutes: { count: [1, 2], rest: 7.5, bounces: [0, 2] },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.16 },
@@ -5773,7 +5790,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           {
             id: 'landslide', line: 'span', bearing: 'cardinal',
             gap: { width: 180, count: [1, 2] },
-            chance: 0.45, delay: [20, 40], waves: [90, 150],
+            chance: 0.55, delay: [18, 34], waves: [85, 135],
             announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
           },
           // Snow weather FEEDS the crown's slides — the avalanche lane waits
@@ -5800,6 +5817,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'haven_stone', count: [0, 1] },
       { kind: 'meditation_cairn', count: [0, 1] },
       { kind: 'stormglass_shard', count: [0, 2] },
+      // The crown's own crags ride the high ground (elevation strata).
+      { kind: 'rocks', count: [2, 4], radius: [20, 42],
+        where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
     ],
     common: [
       { kind: 'cairn', count: [1, 3] },
@@ -5863,7 +5883,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layoutParams: {
       massifMasses: [{ kind: 'bluff', weight: 2.5 }, { kind: 'tor', weight: 2 }, { kind: 'fold', weight: 1 }],
       massifCoverage: [0.12, 0.18],
-      boulderChutes: { count: [1, 3], rest: 7 },
+      boulderChutes: { count: [1, 3], rest: 7, bounces: [0, 2] },
     },
     compositions: [
       { composition: 'war_camp', chance: 0.2 },
@@ -5888,7 +5908,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         fronts: [{
           id: 'landslide', line: 'span', bearing: 'cardinal',
           gap: { width: 170, count: [1, 2] },
-          chance: 0.5, delay: [16, 32], waves: [85, 140],
+          chance: 0.65, delay: [14, 28], waves: [80, 130],
           announce: { text: 'the mountainside lets go!', color: '#b8ab90' },
         }],
       },
@@ -7998,7 +8018,11 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   eldritch:       { title: 'The Eldritch',      blurb: 'A concealed, tentacular growth floating far off the charted frontier — overgrown wrongness native to the Eldritch, found only by those who wander too far.' },
   deepsea:        { title: 'The Deep Sea',      blurb: 'Open ocean that drowns you — mostly deep water dotted with air-pockets and void trenches; reach the next breath before your own runs out.' },
   shipdeck:       { title: 'The Wraithsail',    blurb: 'The ghost ship\'s own boards, boarded at open sea — the Drowned Court musters deck by deck, the hold keeps the Drowned Register, and the Tidebound Regent waits in the great cabin. She goes down with him.' },
-  highland:       { title: 'Highlands',         blurb: 'Windswept crags carved into a mountain-pass maze of corridors and chambers threaded between the standing rock.' },
+  highland:       { title: 'The Mountain Pass', blurb: 'Windswept crags carved into a mountain-pass maze of corridors and chambers threaded between the standing rock — the middle of the climb, where the boulders start finding you.' },
+  foothills:      { title: 'The Foothills',     blurb: 'The pinewood foot of the range: open drove country under spread-out stands, the mountain\'s own bones rising through the timber, and the first cold dust on a range that crowns white.' },
+  overpass:       { title: 'The Overpass',      blurb: 'The precarious crossing: broad ledge shelves hanging over the gorge, narrow worn corridors between them, boulders on the roll and a mountainside that sometimes lets go entirely.' },
+  snowcrown:      { title: 'The Snowcrown',     blurb: 'A cold range\'s summit — standing snow, walking drifts, auroras and avalanche weather. In the open you are freezing or you are warming; the waystation fires are the road.' },
+  stonecrown:     { title: 'The Stonecrown',    blurb: 'A warm range\'s bald summit — wind-bitten fell, krummholz pine and standing stones, the Horned Tribes throned on the roof of their world. No snow, ever; the gale is the tax.' },
   marsh:          { title: 'Marsh',             blurb: 'Fetid wetland of boggy islets strung between sluggish water and sucking mire, every step a negotiation with the ground.' },
   flesh:          { title: 'Flesh Warrens',     blurb: 'The flesh country\'s wound-rim: a writhing, pulsing warren — chambers that throb around you, sparse organic clutter, and an aberrant swarm that belongs to the walls.' },
   sanguine:       { title: 'The Sanguine',      blurb: 'The body\'s open rivers — blood pooled into galleries and red mirrors, arteries paying out on the heartbeat, and a mist that turns heads light. Keep moving or go pale.' },

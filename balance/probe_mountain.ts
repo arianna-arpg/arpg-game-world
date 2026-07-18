@@ -17,7 +17,8 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import { TILESETS, pickTilesetForBiome } from '../src/data/tilesets';
-import { placeTrack, trackPose, trackDone, lintTrackSpec, linePath, type TrackSpec } from '../src/engine/tracks';
+import { placeTrack, trackPose, trackDone, lintTrackSpec, linePath, rideCapOf, type TrackSpec } from '../src/engine/tracks';
+import { GridWalkField } from '../src/world/gridWalk';
 import { generateLayout, hasFormation, hasComposition, layoutParam, type GeneratedLayout } from '../src/engine/levelgen';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
 import { CREEPS } from '../src/engine/creep';
@@ -317,6 +318,101 @@ const DT = 1 / 60;
   // The overpass face carries the dial for real.
   check('chutes: the overpass face authors the dial',
     !!layoutParam({ ...defOf(undefined, 1), layoutParams: TILESETS.overpass.layoutParams }, 'boulderChutes', undefined));
+}
+
+// --- 7) THE STONE WEARS THIN (TrackSpec.shatter) ----------------------------
+{
+  const mk = (shatter?: [number, number], rearm?: number): ReturnType<typeof placeTrack> => placeTrack({
+    path: linePath(vec(100, 300), vec(700, 300)), mode: 'once', speed: 200,
+    ...(rearm !== undefined ? { rearm } : {}), ...(shatter ? { shatter } : {}),
+    riders: [{ kind: 'ruin_boulder', phase: 0 }],
+  });
+  const tr = mk([1, 1], 5); // fixed roll: every release dies at exactly 1s of roll
+  const early = trackPose(tr, 1.5, 0);
+  check('shatter: the stone dies mid-lane on its stamina roll (pending before the pass ends)',
+    early.pending === true, `pending=${early.pending}`);
+  const riding = trackPose(tr, 0.6, 0);
+  check('shatter: before the roll it RIDES', !riding.pending && riding.x > 100, `x=${riding.x.toFixed(0)}`);
+  const next = trackPose(tr, 8.6, 0); // cycle 2 (period 8): riding again at 0.6 in
+  check('shatter: the cradle still re-releases on the untouched cycle', !next.pending,
+    `x=${next.x.toFixed(0)}`);
+  // Per-release variance + purity: caps differ across releases, and a fresh
+  // placement (a resume) computes the identical caps.
+  const varied = mk([1, 2.6], 5);
+  const caps = [0, 1, 2, 3, 4, 5].map(k => rideCapOf(varied, 0, k));
+  check('shatter: caps VARY per release (the unpredictable death)',
+    Math.max(...caps) - Math.min(...caps) > 0.3, caps.map(c => c.toFixed(2)).join(','));
+  check('shatter: caps stay in the authored band', caps.every(c => c >= 1 && c <= 2.6));
+  const varied2 = mk([1, 2.6], 5);
+  check('shatter: pure of the clock (rebuild == resume == same caps)',
+    caps.every((c, i) => Math.abs(c - rideCapOf(varied2, 0, i)) < 1e-9));
+  // Plain once + shatter: retires AT the shatter moment, burst pose held there.
+  const single = mk([1, 1]);
+  check('shatter: a plain once-lane retires the moment the stone gives out',
+    !trackDone(single, 0.9) && trackDone(single, 1.05));
+  const deadPose = trackPose(single, 3.0, 0);
+  check('shatter: the retire pose holds the SHATTER POINT (mid-lane, not the far end)',
+    Math.abs(deadPose.x - 300) < 12, `x=${deadPose.x.toFixed(0)} (1s at 200px/s from 100)`);
+  const lints = lintTrackSpec({ path: linePath(vec(0, 0), vec(100, 0)), mode: 'pingpong', speed: 100, shatter: [1, 2], riders: [{ kind: 'ruin_boulder' }] }, 'probe');
+  check('shatter lint: cyclic modes refuse the lever', lints.some(m => m.includes('shatter')));
+  const lints2 = lintTrackSpec({ path: linePath(vec(0, 0), vec(100, 0)), mode: 'once', speed: 100, shatter: [0.1, 2], riders: [{ kind: 'ruin_boulder' }] }, 'probe');
+  check('shatter lint: silly bands gripe', lints2.some(m => m.includes('shatter')));
+}
+
+// --- 8) DELIVERY FLOORS + THE CAROM, through the REAL mint path -------------
+// (The "no boulders" regression net: authored chance ≠ delivered count — the
+// repro that caught the pass fielding ZERO is pinned here for keeps.)
+{
+  const world = makeSimWorld('warrior', 36001);
+  const laneStats = (face: string, n: number): { zones: number; lanes: number; zero: number; carom: number; caromLegsOk: boolean; shattered: number } => {
+    let zones = 0, lanes = 0, zero = 0, carom = 0, shattered = 0;
+    let caromLegsOk = true;
+    for (let i = 0; i < n; i++) {
+      const id = world.devMintTileset(face, 0, 8);
+      if (!id || !world.devTravelTo(id)) continue;
+      zones++;
+      let here = 0;
+      for (const t of world.tracks) {
+        if (!((t.spec.rearm ?? 0) > 0)) continue;
+        here++;
+        if (t.spec.shatter) shattered++;
+        if (t.spec.path.length > 2) {
+          carom++;
+          // Every leg of a caroming lane must be honestly walkable.
+          const gw = world.walk;
+          if (gw instanceof GridWalkField) {
+            for (let s = 1; s < t.spec.path.length; s++) {
+              if (!gw.lineWalkable(t.spec.path[s - 1], t.spec.path[s])) caromLegsOk = false;
+            }
+          }
+        }
+      }
+      lanes += here;
+      if (here === 0) zero++;
+    }
+    return { zones, lanes, zero, carom, caromLegsOk, shattered };
+  };
+  const pass = laneStats('highland', 6);
+  check('delivery: the PASS rolls stones now (the repro\'s zero-boulder face, fixed)',
+    pass.zones > 0 && pass.zero === 0, `zones ${pass.zones}, zero-lane ${pass.zero}`);
+  const foot = laneStats('foothills', 6);
+  check('delivery: every foothill zone teaches the boulder', foot.zones > 0 && foot.zero === 0,
+    `zones ${foot.zones}, zero-lane ${foot.zero}`);
+  const over = laneStats('overpass', 6);
+  check('delivery: the overpass gauntlet never comes up empty', over.zones > 0 && over.zero === 0,
+    `zones ${over.zones}, lanes ${over.lanes}`);
+  check('delivery: chute stones carry the stamina roll (shatter on every lane)',
+    over.shattered === over.lanes, `${over.shattered}/${over.lanes}`);
+  const crown = laneStats('stonecrown', 8);
+  check('carom: the massif fell CAROMS (multi-leg lanes delivered on real mints)',
+    crown.carom >= 1, `${crown.carom} caroming of ${crown.lanes} lanes`);
+  check('carom: every carom leg is honestly walkable (drawn groove = rollable truth)',
+    crown.caromLegsOk);
+  // The gorge never caroms: on the overpass a run that dies at the lip ends
+  // there (kindAt tells stone from fall — the reader the carom law rides).
+  const wk = world.walk;
+  check("carom law: the grid's kindAt reader answers (wall vs gorge vs ground)",
+    wk instanceof GridWalkField && typeof wk.kindAt === 'function');
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

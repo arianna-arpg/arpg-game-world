@@ -39,7 +39,7 @@ import '../src/data/settled';
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import {
-  doodadRuleOf, generateLayout, hasLayout, type GenCtx, type GeneratedLayout,
+  doodadRuleOf, generateLayout, hasLayout, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';

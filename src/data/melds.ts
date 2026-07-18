@@ -76,6 +76,20 @@ registerMeld({
   ],
 });
 
+// THE MOUNTAINS' REACH — the range announces its stone before its snow:
+// scattered rock and scree past the last soft ground, the first hardy pines,
+// a cairn somebody stacked to find the way back down.
+registerMeld({
+  id: 'mountain_meld',
+  label: 'the mountains rise ahead',
+  rows: [
+    { kind: 'rocks', count: [2, 4], radius: [12, 24] },
+    { kind: 'scree', count: [1, 3] },
+    { kind: 'conifers', count: [1, 2] },
+    { kind: 'cairn', count: [0, 1] },
+  ],
+});
+
 // THE TAIGA'S REACH — the cold comes out to meet you: standing drifts past
 // the treeline, the first dark conifers, the odd fang of standing ice.
 registerMeld({

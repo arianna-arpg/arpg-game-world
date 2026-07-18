@@ -1243,6 +1243,17 @@ export interface BoulderChuteSpec {
   minLen?: number; maxLen?: number;
   rider?: string; speed?: number; rest?: number; riders?: number;
   portalClear?: number;
+  /** WALL-CAROMS per chute (rolled): when the probe's march is stopped by
+   *  STONE (never by the open-field length cap), the run may REFLECT off the
+   *  face that stopped it and keep rolling — the Bob-omb switchback. Legs
+   *  shorter than `legMin` refuse the carom. 0/absent = straight runs. */
+  bounces?: [number, number];
+  legMin?: number;
+  /** THE STONE'S STAMINA as fractions of the full run's travel time, rolled
+   *  per release (TrackSpec.shatter): below 1 the stone dies mid-run at its
+   *  own unpredictable point, above 1 it completes and bursts at the foot.
+   *  Default [0.65, 1.25]; `false` = tireless stones (the old read). */
+  shatterFrac?: [number, number] | false;
 }
 
 function segDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
@@ -1277,16 +1288,58 @@ function layBoulderChutes(ctx: GenCtx, def: ZoneDef): void {
     while (lo > -maxLen && grid.isWalkable(px + dx * (lo - step), py + dy * (lo - step))) lo -= step;
     while (hi < maxLen && grid.isWalkable(px + dx * (hi + step), py + dy * (hi + step))) hi += step;
     if (hi - lo < minLen) continue;
+    // What stopped the march decides the ENDING: SOLID stone can carom the
+    // run onward (spec.bounces); a fall region swallows it (the stone rolls
+    // off the lip — no wall, no bounce); the open-field cap just ends it.
+    const solidStopAt = (x: number, y: number, adx: number, ady: number): boolean => {
+      const k = grid.kindAt(x + adx * step * 1.5, y + ady * step * 1.5);
+      if (k === undefined) return true; // the arena frame is stone enough
+      const rk = regionKind(k);
+      return !!rk?.blocks;
+    };
     const head = vec(px + dx * (lo + 26), py + dy * (lo + 26));
-    const foot = vec(px + dx * (hi - 10), py + dy * (hi - 10));
-    // Portals keep their aprons (the portal-clear contract) and chutes keep
-    // their distance from one another (each gauntlet reads alone).
-    if ([ctx.entry, ...ctx.exits].some(p => segDist(p.x, p.y, head.x, head.y, foot.x, foot.y) < portalClear)) continue;
+    const pts: Vec2[] = [head, vec(px + dx * (hi - 10), py + dy * (hi - 10))];
+    // THE CAROM: the run REFLECTS off the face that stopped it — mirror the
+    // bearing across each axis, keep whichever reflected march runs farther,
+    // stop when no leg clears legMin or the leg ends anywhere but stone.
+    // The Bob-omb switchback, honest to the ground: walls bounce, gorges
+    // swallow, open field simply runs out.
+    if (spec.bounces && hi < maxLen && solidStopAt(pts[1].x, pts[1].y, dx, dy)) {
+      const want = ctx.rng.int(spec.bounces[0], spec.bounces[1]);
+      const legMin = spec.legMin ?? 220;
+      let ang2 = ang;
+      for (let b = 0; b < want; b++) {
+        const last = pts[pts.length - 1];
+        let bestLen = 0, bestAng = 0;
+        for (const na of [Math.PI - ang2, -ang2]) {
+          const nx = Math.cos(na), ny = Math.sin(na);
+          let run = 0;
+          while (run < maxLen && grid.isWalkable(last.x + nx * (run + step), last.y + ny * (run + step))) run += step;
+          if (run > bestLen) { bestLen = run; bestAng = na; }
+        }
+        if (bestLen < legMin) break;
+        const end = vec(last.x + Math.cos(bestAng) * (bestLen - 10), last.y + Math.sin(bestAng) * (bestLen - 10));
+        pts.push(end);
+        ang2 = bestAng;
+        // The NEXT bounce needs this leg to have died on stone too.
+        if (!(bestLen < maxLen && solidStopAt(end.x, end.y, Math.cos(bestAng), Math.sin(bestAng)))) break;
+      }
+    }
+    // Portals keep their aprons on EVERY leg (the portal-clear contract) and
+    // chutes keep their distance from one another (each gauntlet reads alone).
+    const nearPortal = [ctx.entry, ...ctx.exits].some(p => {
+      for (let s = 1; s < pts.length; s++) {
+        if (segDist(p.x, p.y, pts[s - 1].x, pts[s - 1].y, pts[s].x, pts[s].y) < portalClear) return true;
+      }
+      return false;
+    });
+    if (nearPortal) continue;
     if (heads.some(h => Math.hypot(h.x - head.x, h.y - head.y) < 220)) continue;
     heads.push(head);
     laid++;
-    // The runway — worn stone the whole length; the clearway sweep keeps it open.
-    layTraveledWay(ctx, [head, foot], { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
+    // The runway — worn stone the whole (possibly caroming) length; the
+    // clearway sweep keeps it open.
+    layTraveledWay(ctx, pts, { kind: 'track_groove', band: [13, 17], step: 26, overgrowth: 0 });
     // The cradle — a rock BESIDE the head names where the stone comes from.
     // Perpendicular seat: never ON the runway (the clearway sweep would
     // rightly splice it) and never past the lip (the run's head hugs the
@@ -1298,9 +1351,21 @@ function layBoulderChutes(ctx: GenCtx, def: ZoneDef): void {
         radius: ctx.rng.range(14, 18), kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2),
       });
     }
-    const bodies = spec.riders ?? (hi - lo > 780 ? 2 : 1);
+    let total = 0;
+    for (let s = 1; s < pts.length; s++) total += Math.hypot(pts[s].x - pts[s - 1].x, pts[s].y - pts[s - 1].y);
+    const speed = spec.speed ?? 225;
+    // THE STAMINA ROLL (spec.shatterFrac -> TrackSpec.shatter): the run's end
+    // is driven by the stone wearing thin, not by what it hit — some die
+    // mid-lane, some complete. Absolute seconds derive from THIS chute's
+    // true travel time, so long and short runs feel the same law.
+    const sf = spec.shatterFrac ?? [0.65, 1.25];
+    const shatter: [number, number] | undefined = sf === false ? undefined
+      : [Math.max(1, Math.round(total / speed * sf[0] * 10) / 10),
+        Math.max(1.2, Math.round(total / speed * sf[1] * 10) / 10)];
+    const bodies = spec.riders ?? (total > 780 ? 2 : 1);
     (ctx.tracks ??= []).push({
-      path: [head, foot], mode: 'once', speed: spec.speed ?? 225, rearm: spec.rest ?? 7,
+      path: pts, mode: 'once', speed, rearm: spec.rest ?? 7,
+      ...(shatter ? { shatter } : {}),
       riders: Array.from({ length: bodies }, (_, i) => ({ kind: spec.rider ?? 'ruin_boulder', phase: i / bodies })),
       groove: true,
     });
