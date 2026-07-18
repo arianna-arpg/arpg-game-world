@@ -26,6 +26,8 @@ import { STATUS_DEFS } from '../src/engine/status';
 import { MONSTERS } from '../src/data/monsters';
 import { LOOKS } from '../src/data/looks';
 import { regionKind } from '../src/world/regions';
+import { BIOMES } from '../src/world/biomes';
+import { WEATHER_DEFS } from '../src/world/weather';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -453,6 +455,87 @@ const DT = 1 / 60;
     cradles >= sprung, `${cradles} cradles / ${sprung} runs`);
   check('sprung run: the plate SPRINGS under a live press', sprangLive);
   check('sprung run: the loosed stone is a real once-lane, trap-tagged', laneBorn);
+}
+
+// --- 9) THE LIFT-OUT: the Highlands stand alone -----------------------------
+{
+  check("lift: needles wears its OWN biome ('butteland' — the Highlands)",
+    TILESETS.needles?.biome === 'butteland');
+  check('lift: the labels split — Mountains climb, Highlands stand',
+    BIOMES.highland?.label === 'Mountains' && BIOMES.butteland?.label === 'Highlands');
+  let leaked = false, served = false;
+  for (let s = 0; s < 300; s++) {
+    const m = pickTilesetForBiome('highland', new Rng(9100 + s * 7), (s % 10) / 10,
+      undefined, { temperature: (s % 7) / 7, moisture: 0.3 });
+    if (m === 'needles') leaked = true;
+    const b = pickTilesetForBiome('butteland', new Rng(9100 + s * 7));
+    if (b === 'needles') served = true;
+  }
+  check('lift: the mountain country NEVER deals the buttes (no dilution)', !leaked);
+  check('lift: the Highlands deal their own face', served);
+  check('gale: the dry sky registered (wind is the teeth)',
+    (WEATHER_DEFS.gale?.wind ?? 0) >= 0.85 && !!WEATHER_DEFS.gale?.birthGeo);
+}
+
+// --- 10) THE HOLLOW TORS: bored galleries, orphan-proof ---------------------
+{
+  const world = makeSimWorld('warrior', 37001);
+  let boredZone: string | null = null;
+  for (let i = 0; i < 10 && !boredZone; i++) {
+    const face = i % 2 ? 'stonecrown' : 'foothills';
+    const id = world.devMintTileset(face, 0, 9);
+    if (!id || !world.devTravelTo(id)) continue;
+    const zd = world.zoneMap[world.zone.id];
+    if (zd?.tiers?.label === 'the hollow tors') boredZone = id;
+  }
+  check('bores: a hollow tor delivered through the REAL mint path', !!boredZone,
+    boredZone ?? 'none in 10 mints');
+  if (boredZone) {
+    const gw = world.walk;
+    if (gw instanceof GridWalkField) {
+      // Census the tier cells + flood from a mouth: every gallery cell must
+      // be reachable on tier 1 (the drains' zero-orphan law, borne here).
+      const cs = gw.cell;
+      const key = (cx: number, cy: number): string => `${cx}:${cy}`;
+      const tierCells = new Set<string>();
+      const mouths: [number, number][] = [];
+      for (let cy = 0; cy < gw.rows; cy++) {
+        for (let cx = 0; cx < gw.cols; cx++) {
+          const k = gw.kindAt(cx * cs + cs / 2, cy * cs + cs / 2);
+          if (k === 'tor_gallery' || k === 'tor_mouth') {
+            tierCells.add(key(cx, cy));
+            if (k === 'tor_mouth') mouths.push([cx, cy]);
+          }
+        }
+      }
+      check('bores: gallery + mouth cells painted', tierCells.size > 8 && mouths.length >= 2,
+        `${tierCells.size} tier cells, ${mouths.length} mouth cells`);
+      const seen = new Set<string>();
+      const stack: [number, number][] = mouths.length ? [mouths[0]] : [];
+      while (stack.length) {
+        const [cx, cy] = stack.pop()!;
+        const k = key(cx, cy);
+        if (seen.has(k) || !tierCells.has(k)) continue;
+        seen.add(k);
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      }
+      // A zone may bore TWO separate tors (disconnected galleries by
+      // design) — flood from EVERY mouth; the union must cover everything.
+      for (let i = 1; i < mouths.length; i++) stack.push(mouths[i]);
+      while (stack.length) {
+        const [cx, cy] = stack.pop()!;
+        const k = key(cx, cy);
+        if (seen.has(k) || !tierCells.has(k)) continue;
+        seen.add(k);
+        stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+      }
+      check('bores: ZERO orphan gallery cells (every cell reaches a mouth)',
+        seen.size === tierCells.size, `${seen.size}/${tierCells.size}`);
+      const stairs = world.doodads.filter(d => d.kind === 'culvert_stair').length;
+      check('bores: the cut stairs stand at the feet (two per bore)',
+        stairs >= 2 && stairs % 2 === 0, `${stairs} stairs`);
+    }
+  }
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

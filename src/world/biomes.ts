@@ -421,8 +421,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // desert): beastkin war-camps stud the passes, their khan thrones on high.
   // Relabelled 'Mountains' (the country pass): the id stays 'highland' — it
   // is load-bearing across saves, tables and the biome field — but every
-  // player-facing read says what the place IS. ('Highland' the WORD is
-  // reserved for a future butte-country biome — the Devil's Tower idea.)
+  // player-facing read says what the place IS. (The WORD 'Highlands' now
+  // belongs to the butte country below.)
   highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Mountains', spacing: 88,
     meld: 'mountain_meld',
     climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry' },
@@ -437,6 +437,18 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'canyon', chance: 0.25 }, { landmark: 'valley', chance: 0.25 },
       { landmark: 'lone_mountain', chance: 0.18 }, { landmark: 'cirque', chance: 0.12 },
     ] },
+  // THE HIGHLANDS — the butte country (the reserved word, spent): warm dry
+  // tablelands where the summits are a SECOND LAND (the tier fabric's
+  // needles face — Devil's Tower / Thousand Needles). Its OWN biome, lifted
+  // out of the Mountains so one country CLIMBS and the other stands in
+  // stories — a range should never read as a patchwork of habitats. The
+  // wildness gate keeps the tables off the settled belt (the karst idiom,
+  // warmed); the Mountains hold the cold half of dry, the Highlands the
+  // warm half past the desert's deep-dry claim.
+  butteland: { patronFaction: 'wild', mapColor: '#b0854a', label: 'Highlands', spacing: 96,
+    climate: { temperature: { from: 0.42, fadeIn: 0.12 }, moisture: 'dry', wildness: { from: 0.2, fadeIn: 0.15 } },
+    allowedLayouts: { needles: 1 },
+    landmarks: [{ landmark: 'canyon', chance: 0.2 }, { landmark: 'lone_mountain', chance: 0.1 }] },
   // THE KARST COUNTRY: wind-cut limestone in the wild dry midlands — TWO
   // depth-staged faces share the tag (the desert model): the KARST REACH at
   // the rim (an above-ground cavern country whose chasm gulfs ARE the maze —
@@ -730,6 +742,9 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // 1.9: the MOUNTAIN COUNTRY (foothills → pass → overpass → geo-locked
   // crowns need the acreage to stage the whole climb — the karst precedent).
   { biome: 'highland', weight: 1.9 },
+  // 1.2: the HIGHLANDS (butte country) — a spectacle biome: rarer than the
+  // countries it stands between, unmistakable when the tables rise.
+  { biome: 'butteland', weight: 1.2 },
   // 1.9: the karst COUNTRY (two staged faces need the acreage) — its
   // mild∧dry∧wild gate is narrow, so where it holds it should read as one
   // coherent stone country, and it simply doesn't exist elsewhere.

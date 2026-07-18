@@ -951,6 +951,22 @@ registerRegion({ id: 'culvert_well', walkable: true, blocks: false, label: 'the 
   visual: { fill: '#222824', alpha: 0.95, edge: { color: '#54745c', width: 4 } },
   tierVisual: { fill: '#26302a', edge: '#6a8a70' } });
 
+// TOR GALLERY: a hollow tor's bored tunnel (the massif-bore lane,
+// engine/tiers.ts boreMassifTunnels): the mass keeps the CRAG's exact
+// surface face — true wall, same granite, the bore invisible from above —
+// while the gallery through the rock is the covered tier's alone.
+registerRegion({ id: 'tor_gallery', walkable: false, blocks: true, label: 'the tor gallery',
+  blocksShot: true, blocksSight: true, tier: 1,
+  visual: { fill: '#3d3a31', alpha: 1, edge: { color: '#93886d', width: 5 } },
+  tierVisual: { fill: '#16181c', edge: '#7a828c' } });
+// TOR MOUTH: the cut stair into the hillside — the crossing between the
+// open slope and the gallery (the culvert well's granite twin: walkable
+// both tiers, flips on the ladder toggle).
+registerRegion({ id: 'tor_mouth', walkable: true, blocks: false, label: 'the tor mouth',
+  tier: 1, tierLink: true,
+  visual: { fill: '#2e2b24', alpha: 0.95, edge: { color: '#93886d', width: 4 } },
+  tierVisual: { fill: '#1c1f24', edge: '#8a8f98' } });
+
 // --- THE HIGH BASTION (aether_bastion; kinds in data/massifs.ts) -------------
 // BASTION WALL: the Host's citadel curtain — glossy silver coursing under a
 // polished rim (the brightest TRUE wall in the register: every other wall is

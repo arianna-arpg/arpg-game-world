@@ -631,13 +631,149 @@ function dressMasses(ctx: GenCtx, grid: GridWalkField, placed: PlacedMass[], lan
 
 // --- THE RECIPE --------------------------------------------------------------
 
+/** THE POST-CARVE HOOKS: fabrics that want the finished mass list register
+ *  here — the massif recipe hands every carved mass over once the weave is
+ *  healed, and each hook decides from the def's own layoutParams whether it
+ *  has business in this zone. Zero coupling: massif never imports its
+ *  consumers (the in-house hollow-tor bore below runs first, directly). */
+export type MassifPost = (ctx: GenCtx, def: ZoneDef, grid: GridWalkField, masses: CarvedMass[]) => void;
+const MASSIF_POSTS: MassifPost[] = [];
+export function registerMassifPost(fn: MassifPost): void { MASSIF_POSTS.push(fn); }
+
+// --- THE HOLLOW TORS --------------------------------------------------------
+// The mountain sibling of the sewer under-lattice (engine/tiers.ts): large
+// SOLID masses BORED with a tier-1 gallery straight through the rock — a
+// cavern network inside the zone itself, dialed by layoutParams.massifBores.
+// The drains' orphan-proof law holds end to end: a bore lays only when BOTH
+// mouths seat on standing valley ground and every tunnel cell is the mass's
+// own rock; the gallery region repaints in the crag's exact surface face
+// (tor_gallery, regions.ts — the bore is invisible from above), so the only
+// tells are the two cut stairs at the feet. Tier semantics live entirely on
+// the REGION ROWS (tier/tierLink — the tier fabric's law); this pass only
+// paints them. Absent param = zero rng draws, zero carve (stream-safe).
+
+export interface MassifBoreSpec {
+  /** Per-eligible-mass roll. */
+  chance: number;
+  /** Bores per zone (default 2). */
+  max?: number;
+  /** Only masses at least this bounding radius bore (default 110). */
+  minR?: number;
+  /** Gallery region (default 'tor_gallery'); mouth link (default 'tor_mouth'). */
+  region?: string;
+  mouth?: string;
+  /** Gallery half-width in px (default 32 — the sewer duct's gauge). */
+  halfW?: number;
+}
+
+/** Floor-for-tier-1 read off the region row (the tier fabric's predicate,
+ *  re-derived locally so massif stays import-free of its consumers). */
+function tierFloorRow(kindId: string | undefined): boolean {
+  const rk = kindId ? regionKind(kindId) : undefined;
+  return !!rk && (rk.tier === 1 || !!rk.tierLink);
+}
+
+export function boreMassifTunnels(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, masses: CarvedMass[]): void {
+  const spec = layoutParam(def, 'massifBores', undefined) as MassifBoreSpec | undefined;
+  if (!spec || ctx.lite) return;
+  const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
+  const galleryId = spec.region ?? 'tor_gallery';
+  const mouthId = spec.mouth ?? 'tor_mouth';
+  const halfW = spec.halfW ?? 32;
+  const cap = spec.max ?? 2;
+  let bored = 0;
+  for (const m of masses) {
+    if (bored >= cap) break;
+    if (m.bound < (spec.minR ?? 110)) continue;
+    if (!ctx.rng.chance(spec.chance)) continue;
+    // The mass's own SOLID region only — courts, parapets and already-tiered
+    // rock never bore.
+    const massK = grid.regionAt?.(m.at.x, m.at.y);
+    if (!massK || !regionKind(massK)?.blocks || tierFloorRow(massK)) continue;
+    const a0 = ctx.rng.range(0, Math.PI * 2);
+    for (let tryA = 0; tryA < 6; tryA++) {
+      const a = a0 + tryA * (Math.PI / 6);
+      // Both feet along the axis: the last mass cell out from the heart,
+      // then standing ground just past it (the mouth's seat).
+      const ends: { mouth: Vec2; out: number }[] = [];
+      let inner1: Vec2 | null = null, inner2: Vec2 | null = null;
+      for (const s of [1, -1]) {
+        const dx = Math.cos(a) * s, dy = Math.sin(a) * s;
+        let footD = -1;
+        for (let d = cs; d <= m.bound + cs * 4; d += cs * 0.5) {
+          const k = grid.regionAt?.(m.at.x + dx * d, m.at.y + dy * d);
+          if (k === massK) footD = d;
+          else if (footD > 0) break;
+        }
+        if (footD <= 0) break;
+        const landD = footD + cs * 1.5;
+        if (!grid.isWalkable(m.at.x + dx * landD, m.at.y + dy * landD)) break;
+        const inner = vec(m.at.x + dx * footD, m.at.y + dy * footD);
+        if (s === 1) inner1 = inner; else inner2 = inner;
+        ends.push({ mouth: vec(m.at.x + dx * landD, m.at.y + dy * landD), out: s === 1 ? a : a + Math.PI });
+      }
+      if (ends.length < 2 || !inner1 || !inner2) continue;
+      // ONE straight gallery through the heart: every cell between the feet
+      // must still be the mass's own rock (a POI court or a prior bore
+      // refuses the line — try the next bearing).
+      const len = Math.hypot(inner2.x - inner1.x, inner2.y - inner1.y);
+      const steps = Math.max(1, Math.ceil(len / (cs * 0.5)));
+      let clear = true;
+      for (let st = 0; st <= steps; st++) {
+        const k = grid.regionAt?.(
+          inner1.x + (inner2.x - inner1.x) * (st / steps),
+          inner1.y + (inner2.y - inner1.y) * (st / steps));
+        if (k !== massK) { clear = false; break; }
+      }
+      if (!clear) continue;
+      // Bore it — mouth to mouth, gated to the mass's own cells (the sliver
+      // at each foot joins gallery to mouth; valley cells stay valley), then
+      // the mouth crossings, then the stair props rotated INTO the hill
+      // (a door that lies is worse than no door — the drains' law).
+      const span = Math.hypot(ends[1].mouth.x - ends[0].mouth.x, ends[1].mouth.y - ends[0].mouth.y);
+      const strokes = Math.max(1, Math.ceil(span / (cs * 0.5)));
+      for (let st = 0; st <= strokes; st++) {
+        const t = st / strokes;
+        const x = ends[0].mouth.x + (ends[1].mouth.x - ends[0].mouth.x) * t;
+        const y = ends[0].mouth.y + (ends[1].mouth.y - ends[0].mouth.y) * t;
+        // Per-CELL gate: only the mass's own rock ever converts — the
+        // gallery can never slop a wall stub onto valley ground at a thin
+        // neck, and the foot slivers join gallery to mouth exactly.
+        for (let oy = -halfW; oy <= halfW; oy += cs * 0.5) {
+          for (let ox = -halfW; ox <= halfW; ox += cs * 0.5) {
+            if (grid.regionAt?.(x + ox, y + oy) !== massK) continue;
+            grid.fillRegion(x + ox - 1, y + oy - 1, x + ox + 1, y + oy + 1, galleryId);
+          }
+        }
+      }
+      for (const e of ends) {
+        grid.fillRegion(e.mouth.x - cs, e.mouth.y - cs, e.mouth.x + cs, e.mouth.y + cs, mouthId);
+        ctx.doodads.push({ pos: vec(e.mouth.x, e.mouth.y), radius: 16, kind: 'culvert_stair', rot: e.out + Math.PI });
+      }
+      bored++;
+      break;
+    }
+  }
+  // ATTEMPT-HONEST: generation may run more than once for one def (the
+  // retry loop, mint-then-load) — write THIS attempt's truth uncondition-
+  // ally, set or cleared, so a def can never wear a stale layer whose
+  // galleries a later attempt rolled away. (A massif-recipe zone has no
+  // other tier author; needles/districts run their own recipes.)
+  def.tiers = bored ? {
+    kind: 'under', exposure: 'covered', label: 'the hollow tors',
+    packSplit: layoutParam(def, 'tierPackSplit', 0.15),
+  } : undefined;
+}
+
 /** MASSIF — wide-open country studded with large impassable bodies: the
  *  mixture archetype (see the module header). ensureGrid + carveMassifs +
- *  the per-exit belt + the tileset's own scatter (walk-gated into the open
- *  weave for free). */
+ *  the hollow-tor bores + the per-exit belt + the tileset's own scatter
+ *  (walk-gated into the open weave for free). */
 function massifLayout(ctx: GenCtx, def: ZoneDef): void {
   const grid = ensureGrid(ctx);
-  carveMassifs(ctx, def);
+  const masses = carveMassifs(ctx, def);
+  boreMassifTunnels(ctx, def, grid, masses);
+  for (const post of MASSIF_POSTS) post(ctx, def, grid, masses);
   // Belt-and-suspenders (the dunefield idiom): every exit stays walkable from
   // the entry whatever the dice rolled — the heal makes this a near no-op.
   for (const e of ctx.exits) {

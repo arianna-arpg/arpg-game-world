@@ -948,9 +948,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       obstacle: '#57503c', obstacleEdge: '#a89a72', accent: '#d8a24a',
       tree: '#4a5a2e', wall: '#57503c',
     },
-    sizeW: [3200, 4200], sizeH: [2400, 3100], ellipseChance: 0.25, biome: 'highland', sky: 'open',
-    // A minority face beside the mountain country's own (flat half-weight).
-    depthAffinity: { mul: 0.5 },
+    sizeW: [3200, 4200], sizeH: [2400, 3100], ellipseChance: 0.25, biome: 'butteland', sky: 'open',
+    // THE HIGHLANDS' own face (lifted out of the mountain country — one
+    // biome climbs, this one stands in stories; no depth staging: the
+    // tables ARE the country, rim to heart).
     layoutParams: {
       massifMasses: [{ kind: 'butte', weight: 1 }],
       massifCoverage: [0.2, 0.28], massifSizeR: [200, 340], massifLaneW: 120,
@@ -5726,6 +5727,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Every foothill zone teaches the boulder now (the delivery repro read
       // [0,1] as mostly-nothing); an occasional single carom off a tor.
       boulderChutes: { count: [1, 2], rest: 8, bounces: [0, 1] },
+      // THE HOLLOW TORS (the tier fabric through the massif bore): some of
+      // the big bones carry a gallery straight through the rock — the cut
+      // stairs at the feet are the doors.
+      massifBores: { chance: 0.4, max: 2 },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.24 },
@@ -5963,6 +5968,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifMasses: [{ kind: 'tor', weight: 2.5 }, { kind: 'bluff', weight: 1.5 }],
       massifCoverage: [0.1, 0.16],
       boulderChutes: { count: [1, 2], rest: 7.5, bounces: [0, 2] },
+      // Wind-cut galleries through the crown's bones — shelter the windchill
+      // never reaches (a bored tor is a warm road; the stairs are the doors).
+      massifBores: { chance: 0.35, max: 2 },
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.16 },
@@ -6085,6 +6093,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifMasses: [{ kind: 'bluff', weight: 2.5 }, { kind: 'tor', weight: 2 }, { kind: 'fold', weight: 1 }],
       massifCoverage: [0.12, 0.18],
       boulderChutes: { count: [1, 3], rest: 7, bounces: [0, 2] },
+      // The tribes' smuggler roads: galleries bored through the fell's bones.
+      massifBores: { chance: 0.45, max: 2 },
     },
     compositions: [
       { composition: 'war_camp', chance: 0.2 },
@@ -8637,6 +8647,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   overpass:       { title: 'The Overpass',      blurb: 'The precarious crossing: broad ledge shelves hanging over the gorge, narrow worn corridors between them, boulders on the roll and a mountainside that sometimes lets go entirely.' },
   snowcrown:      { title: 'The Snowcrown',     blurb: 'A cold range\'s summit — standing snow, walking drifts, auroras and avalanche weather. In the open you are freezing or you are warming; the waystation fires are the road.' },
   stonecrown:     { title: 'The Stonecrown',    blurb: 'A warm range\'s bald summit — wind-bitten fell, krummholz pine and standing stones, the Horned Tribes throned on the roof of their world. No snow, ever; the gale is the tax.' },
+  needles:        { title: 'The Highlands',     blurb: 'Butte country: red tables standing over dry savannah, their summits a second land — ramps cut the rims, rope spans string the tops, and a shove settles arguments the long way down.' },
   marsh:          { title: 'Marsh',             blurb: 'Fetid wetland of boggy islets strung between sluggish water and sucking mire, every step a negotiation with the ground.' },
   flesh:          { title: 'Flesh Warrens',     blurb: 'The flesh country\'s wound-rim: a writhing, pulsing warren — chambers that throb around you, sparse organic clutter, and an aberrant swarm that belongs to the walls.' },
   sanguine:       { title: 'The Sanguine',      blurb: 'The body\'s open rivers — blood pooled into galleries and red mirrors, arteries paying out on the heartbeat, and a mist that turns heads light. Keep moving or go pale.' },

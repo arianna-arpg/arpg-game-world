@@ -211,6 +211,21 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     skyWeight: { day: 1.6, dusk: 1.2 },
     birthGeo: { temperature: { min: 0.55 }, moisture: { max: 0.4 } },
   },
+  /** GALE — the dry country's wind made a front of its own: no rain, no
+   *  grit, just the SKY LEANING ON YOU. Born over dry ground away from the
+   *  deep-hot sandstorm belt (birthGeo bands), its teeth are entirely the
+   *  WIND fabric — headwind slog, gust shove, the lee of every boulder
+   *  suddenly worth knowing — and on the mountain faces it feeds the
+   *  windchill cadence (windAt strength IS the multiplier). The Mountains'
+   *  and the Highlands' shared sky. */
+  gale: {
+    label: 'Gale', color: '#b8c4c8', countMul: 1,
+    factionMul: {},
+    rampFrac: 0.35, wind: 0.9,
+    radiance: { mul: 0.92 },
+    skyWeight: { day: 0.8, dusk: 1, night: 0.6 },
+    birthGeo: { moisture: { max: 0.45 }, temperature: { max: 0.6 } },
+  },
   /** HEMORRHAGE — the flesh country bleeding into its own sky: a slow red
    *  rain born only over deep wild ground (the country's wildness band),
    *  drifting at a wounded crawl. Its teeth are what it FEEDS — the Glut
