@@ -1,0 +1,254 @@
+// ---------------------------------------------------------------------------
+// ONE-OFF PROBE — THE DISCOVERY WEB + THE MOOT LAW (meta/unlocks.ts):
+// non-starter classes are shrouded rumors until FOUND — played into
+// (per-class level milestones), chained onto (own the parent bundle), or
+// learned the hard way (world-fact ledgers: seized by a grip, a trap
+// sprung underfoot, a crown/warlord/the Unmade put down). The authored
+// spec COMPILES onto the same generic gates every unlock rides; the whole
+// web must stay REACHABLE from the starting three; class-slot tiers hide
+// while the pool can't fill the hand they sell (no dead purchases); the
+// buy gate refuses the undiscovered outright. Live half: the engine
+// stamps land — per-class milestones (grantSeatXp), the seize lesson
+// (grabSeize → LEDGER_SEIZED), the trap lesson (springTrapwork →
+// LEDGER_TRAP_SPRUNG) — for the LOCAL HERO only, all three.
+// Run: npx tsx balance/probe_unlocks.ts
+// ---------------------------------------------------------------------------
+
+import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
+import {
+  CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, allUnlockables, applyUnlock,
+  availableUnlocks, classBundleId, classUnlockFor, discoveryLedgerKeys,
+  isClassDiscovered, isUnlockVisible, undiscoveredClassUnlocks,
+} from '../src/meta/unlocks';
+import {
+  CLASS_LEVEL_MILESTONES, STARTER_CLASSES, classLevelLedgerKey, makeAccount,
+} from '../src/meta/account';
+import { CLASSES } from '../src/data/classes';
+import { LEDGER_SEIZED } from '../src/engine/grab';
+import { LEDGER_TRAP_SPRUNG, type PlacedTrapwork } from '../src/engine/trapworks';
+import { vec } from '../src/core/math';
+
+let failed = 0;
+const check = (name: string, ok: boolean, detail = ''): void => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
+  if (!ok) failed++;
+};
+
+// The world facts the web may hang a hard lesson on, WITH their stamp homes —
+// a new fact key in a discover row must register its source here (this list
+// is the probe's map of who stamps what; an unknown key = a rumor that can
+// never resolve).
+const WORLD_FACTS = new Set<string>([
+  LEDGER_SEIZED,        // world.ts grabSeize (victim = local hero)
+  LEDGER_TRAP_SPRUNG,   // world.ts springTrapwork (presser = local hero)
+  'crowned_killed',     // engine/killHandlers.ts (Crowned rare put down)
+  'warlords_killed',    // engine/killHandlers.ts (warband warlord put down)
+  'unmade_slain',       // quests/defs.ts reward ledger (the Chronophage)
+]);
+const MILESTONE_RE = /^class_(.+)_level_(\d+)$/;
+const classIds = new Set(CLASSES.map(c => c.id));
+const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
+
+// --- 0) The registry weave --------------------------------------------------
+{
+  const nonStarters = CLASSES.filter(c => !STARTER_CLASSES.includes(c.id));
+  check('weave: every non-starter class has exactly one bundle',
+    nonStarters.every(c => bundleByClass.has(c.id)) && CLASS_BUNDLES.length === nonStarters.length,
+    `${CLASS_BUNDLES.length} bundles / ${nonStarters.length} non-starters`);
+  check('weave: no bundle sells a starter or a ghost class',
+    CLASS_BUNDLES.every(b => classIds.has(b.classId) && !STARTER_CLASSES.includes(b.classId)));
+  check('weave: every bundle is SHROUDED (discover row + non-empty hint)',
+    CLASS_BUNDLES.every(b => !!b.discover && b.discover.hint.trim().length > 0));
+  check('weave: ownership chains name real bundled classes',
+    CLASS_BUNDLES.every(b => {
+      const cs = b.discover?.classes;
+      if (cs === undefined) return true;
+      return (Array.isArray(cs) ? cs : [cs]).every(id => bundleByClass.has(id));
+    }));
+  check('weave: every discovery ledger key is a real milestone or a mapped world fact',
+    discoveryLedgerKeys().every(k => {
+      const m = MILESTONE_RE.exec(k);
+      if (m) return classIds.has(m[1]) && CLASS_LEVEL_MILESTONES.includes(Number(m[2]));
+      return WORLD_FACTS.has(k);
+    }), discoveryLedgerKeys().join(', '));
+  check('weave: the compile carries the gates onto the catalog entry',
+    CLASS_BUNDLES.every(b => {
+      const u = classUnlockFor(b.classId);
+      if (!u) return false;
+      const wantLedger = b.discover?.ledger !== undefined;
+      const wantChain = b.discover?.classes !== undefined;
+      const chainIds = wantChain
+        ? (Array.isArray(b.discover!.classes) ? b.discover!.classes! : [b.discover!.classes!]).map(classBundleId)
+        : [];
+      const gotChain = u.requiresUnlock === undefined ? []
+        : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
+      return (wantLedger === (u.reqLedger !== undefined))
+        && chainIds.length === gotChain.length && chainIds.every(id => gotChain.includes(id))
+        && (u.kind === 'class' && u.payload.hint === b.discover?.hint);
+    }));
+  check('weave: slot tiers each carry the MOOT LAW at their own count',
+    SLOT_TIERS.every(t => {
+      const u = UNLOCK_CATALOG.find(x => x.id === t.id);
+      return !!u && u.kind === 'slot' && u.reqClasses === t.slots;
+    }));
+  check('weave: slot tiers chain strictly in sequence',
+    SLOT_TIERS.every((t, i) => {
+      const u = UNLOCK_CATALOG.find(x => x.id === t.id)!;
+      return i === 0 ? u.requiresUnlock === undefined : u.requiresUnlock === SLOT_TIERS[i - 1].id;
+    }));
+}
+
+// --- 1) Reachability: the whole web closes from the starting three ----------
+{
+  const reachable = new Set<string>(STARTER_CLASSES);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const b of CLASS_BUNDLES) {
+      if (reachable.has(b.classId)) continue;
+      const d = b.discover;
+      const chainOk = d?.classes === undefined
+        || (Array.isArray(d.classes) ? d.classes : [d.classes]).every(id => reachable.has(id));
+      const keys = d?.ledger === undefined ? [] : Array.isArray(d.ledger) ? d.ledger : [d.ledger];
+      const ledgerOk = keys.every(k => {
+        const m = MILESTONE_RE.exec(k);
+        return m ? reachable.has(m[1]) : WORLD_FACTS.has(k); // a fact is earnable in the wild
+      });
+      if (chainOk && ledgerOk) { reachable.add(b.classId); grew = true; }
+    }
+  }
+  const stranded = CLASSES.filter(c => !reachable.has(c.id)).map(c => c.id);
+  check('web: every class is REACHABLE from the starting three',
+    stranded.length === 0, stranded.length ? `stranded: ${stranded.join(', ')}` : `${reachable.size}/${CLASSES.length}`);
+}
+
+// --- 2) The account walk: mystery, discovery, the moot law, the refusal -----
+{
+  const a = makeAccount();
+  a.credits = 100000;
+  const visibleClassIds = (): string[] => availableUnlocks(a)
+    .filter(u => u.kind === 'class')
+    .map(u => (u.kind === 'class' ? u.payload.classId : ''))
+    .sort();
+  const visibleSlotIds = (): string[] => availableUnlocks(a)
+    .filter(u => u.kind === 'slot').map(u => u.id);
+
+  check('fresh: every non-starter is a rumor, none purchasable',
+    visibleClassIds().length === 0 && undiscoveredClassUnlocks(a).length === CLASS_BUNDLES.length);
+  check('fresh: NO slot tier surfaces over a 3-class pool (the old dead buy)',
+    visibleSlotIds().length === 0);
+  check('fresh: starters read as discovered', STARTER_CLASSES.every(id => isClassDiscovered(a, id)));
+
+  // The undiscovered refuse the coin outright (visibility IS the buy gate).
+  const ascetic = classUnlockFor('ascetic')!;
+  const before = a.credits;
+  check('refusal: buying an undiscovered class fails and charges nothing',
+    !applyUnlock(a, ascetic) && a.credits === before && !a.unlockedClasses.has('ascetic'));
+
+  // Play the Magician to 10 → its INT kin surface, exactly those two.
+  a.ledger[classLevelLedgerKey('magician', 10)] = 1;
+  check('discovery: Magician L10 reveals exactly its INT kin',
+    visibleClassIds().join(',') === 'pyromancer,sorcerer', visibleClassIds().join(','));
+
+  check('discovery: rumors and the visible never overlap',
+    undiscoveredClassUnlocks(a).every(u => u.kind === 'class' && !visibleClassIds().includes(u.payload.classId)));
+
+  // Buy one → the pool can fill a 4th slot → tier 4 surfaces (and only it).
+  check('buy: the Sorcerer joins the pool', applyUnlock(a, classUnlockFor('sorcerer')!)
+    && a.unlockedClasses.has('sorcerer'));
+  check('moot law: a 4-deep pool surfaces slot tier 4 alone',
+    visibleSlotIds().join(',') === 'slot_tier_4');
+  check('buy: slot tier 4', applyUnlock(a, UNLOCK_CATALOG.find(u => u.id === 'slot_tier_4')!));
+  check('moot law: tier 5 stays HIDDEN while the pool is 4 (sequence owned, pool short)',
+    visibleSlotIds().length === 0);
+  check('buy: the Pyromancer deepens the pool to 5', applyUnlock(a, classUnlockFor('pyromancer')!));
+  check('moot law: tier 5 surfaces the moment the pool can fill it',
+    visibleSlotIds().join(',') === 'slot_tier_5');
+
+  // Deeper study → the WIS/WIL doors; the Necromancer OWNED chains the Summoner.
+  a.ledger[classLevelLedgerKey('magician', 15)] = 1;
+  check('discovery: Magician L15 opens the Wisdom and Will doors',
+    visibleClassIds().includes('necromancer') && visibleClassIds().includes('cleric')
+    && !visibleClassIds().includes('summoner'));
+  check('buy: the Necromancer', applyUnlock(a, classUnlockFor('necromancer')!));
+  check('chain: OWNING the Necromancer reveals the Summoner (the nested ladder)',
+    visibleClassIds().includes('summoner') && isClassDiscovered(a, 'summoner'));
+
+  // The hard lesson: a grip caught you once → the Brawler stops being a rumor.
+  a.ledger[LEDGER_SEIZED] = 1;
+  check('hard lesson: seized_by_grip reveals the Brawler',
+    visibleClassIds().includes('brawler') && isClassDiscovered(a, 'brawler'));
+
+  // No visible entry may ever carry an unmet reqClasses (the law, swept wide).
+  check('moot law: nothing visible wants a deeper pool than the account holds',
+    allUnlockables().filter(u => isUnlockVisible(a, u))
+      .every(u => u.reqClasses === undefined || a.unlockedClasses.size >= u.reqClasses));
+
+  // Migration stance: a class OWNED before its discover row existed is
+  // discovered by definition — never re-shrouded, never a rumor.
+  const b = makeAccount();
+  b.unlockedClasses.add('ascetic');
+  check('migration: an owned class never re-shrouds',
+    isClassDiscovered(b, 'ascetic')
+    && undiscoveredClassUnlocks(b).every(u => u.kind === 'class' && u.payload.classId !== 'ascetic'));
+}
+
+// --- 3) LIVE: the engine stamps land (local hero only) ----------------------
+bootSimEngine();
+seedGlobalRandom(0x1c0de);
+{
+  // Per-class milestones ride grantSeatXp exactly as far as the level goes.
+  const w = makeSimWorld('warrior', 0x51a7);
+  while (w.player.level < 15) w.grantXp(400);
+  const has = (k: string): boolean => (w.ledger[k] ?? 0) >= 1;
+  check('live: warrior L15 stamps class milestones 5/10/15',
+    has(classLevelLedgerKey('warrior', 5)) && has(classLevelLedgerKey('warrior', 10))
+    && has(classLevelLedgerKey('warrior', 15)));
+  check('live: unreached milestones stay unstamped',
+    !has(classLevelLedgerKey('warrior', 20)) && !has(classLevelLedgerKey('warrior', 25)));
+  check('live: the milestones are CLASS-true (no phantom magician keys)',
+    !has(classLevelLedgerKey('magician', 5)));
+  check('live: the global reached_level_10 sweep still runs beside it',
+    has('reached_level_10'));
+}
+{
+  // The seize lesson: the real grabSeize path, victim = the local hero.
+  const w = makeSimWorld('summoner', 0x9a04);
+  const p = w.player;
+  const m = w.createMonster('yoke_mauler', Math.max(3, p.level), 'enemy');
+  m.pos = vec(p.pos.x + 60, p.pos.y);
+  w.actors.push(m);
+  check('live: the mauler pins the hero (real path)', w.devGrabSeizeMe('pin'));
+  check('live: the seize lesson is stamped', (w.ledger[LEDGER_SEIZED] ?? 0) === 1);
+  // A SECOND catch: break the live hold first (a re-seize through a standing
+  // pair is refused by the grace, correctly), then let it catch again.
+  w.devGrabClearAll();
+  p.grabProofUntil = 0;
+  check('live: a second catch tallies (raw count by design)',
+    w.devGrabSeizeMe('pin') && (w.ledger[LEDGER_SEIZED] ?? 0) === 2);
+}
+{
+  // The trap lesson: springTrapwork with the hero's own feet — and ONLY the
+  // hero's. A baited monster teaches the account nothing.
+  const w = makeSimWorld('rogue', 0x7a11);
+  const p = w.player;
+  const mk = (id: string): PlacedTrapwork => ({
+    spec: { id, trigger: { kind: 'plate', at: vec(p.pos.x, p.pos.y), r: 20 }, effects: [] },
+    id, state: 'armed', rearmAt: Infinity, sprungAt: 0, springs: 0,
+  });
+  const tw1 = mk('probe_tw1'), tw2 = mk('probe_tw2'), tw3 = mk('probe_tw3');
+  w.trapworks.push(tw1, tw2, tw3);
+  w.springTrapwork(tw1, p);
+  check('live: the hero springing a plate stamps the trap lesson',
+    (w.ledger[LEDGER_TRAP_SPRUNG] ?? 0) === 1 && tw1.state === 'sprung');
+  const m = w.createMonster('yoke_mauler', 3, 'enemy');
+  w.actors.push(m);
+  w.springTrapwork(tw2, m);
+  w.springTrapwork(tw3, undefined);
+  check('live: a baited monster (or nobody) teaches nothing',
+    (w.ledger[LEDGER_TRAP_SPRUNG] ?? 0) === 1 && tw2.state === 'sprung' && tw3.state === 'sprung');
+}
+
+console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
+process.exit(failed ? 2 : 0);

@@ -266,6 +266,14 @@ export const GRAB_VERB_LABEL: Record<GrabVerb, string> = {
   carry: 'Carried', drag: 'Dragged', pin: 'Pinned', swallow: 'Swallowed',
 };
 
+/** Account-ledger key: the LOCAL HERO has been seized by a grip (any verb).
+ *  Stamped by world.ts grabSeize the moment the hold lands, merged into the
+ *  account on death like every counter. THE HARD LESSON seam: discovery
+ *  gates read it — the Brawler surfaces in the Vault because something out
+ *  there put its hands on you first (unlocks.ts ClassBundleDef.discover).
+ *  A raw tally on purpose: "survive 10 holds" content reads the same key. */
+export const LEDGER_SEIZED = 'seized_by_grip';
+
 /** The victim-side policy tier: struggle multiplier, or 0 = ungrabbable.
  *  Actor.grabbable (stamped from MonsterDef at mint) wins outright;
  *  otherwise rarity looks up GRAB_CFG.policy (players/mercs tier 1). */

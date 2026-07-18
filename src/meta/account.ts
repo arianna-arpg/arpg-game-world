@@ -127,6 +127,22 @@ export const LEDGER_ACCOUNT_DEATHS = 'account_deaths';
  *  surface quiet on this account forever: completed never re-opens. */
 export const LEDGER_FLASK_LESSON = 'mireille_flasks_filled';
 
+/** PER-CLASS play milestones, stamped into the RUN ledger as
+ *  `class_<classId>_level_<m>` (world.ts grantSeatXp — local seat only,
+ *  once per run, merged into the account on death like every other key).
+ *  These are THE DISCOVERY WEB's raw material (unlocks.ts
+ *  ClassBundleDef.discover): playing a class deep is how the account
+ *  learns that class's kin exist. Any future content may gate on the same
+ *  keys — "reach level 20 as any three classes" is a reqLedgerCounts row
+ *  away. Extend the list freely; keys stamp lazily (only levels actually
+ *  reached), so the ledger stays lean. */
+export const CLASS_LEVEL_MILESTONES: readonly number[] = [5, 10, 15, 20, 25, 30, 40, 50];
+
+/** The ledger key for "reached level `m` playing `classId`" — ONE spelling
+ *  shared by the stamp sweep (world.ts) and every gate that reads it. */
+export const classLevelLedgerKey = (classId: string, m: number): string =>
+  `class_${classId}_level_${m}`;
+
 /** First disk save slot the character ROSTER may use (0/1/2 are account /
  *  run-character / settings). Lives here (not modes.ts) so deserialization can
  *  sanity-check entries without a value import back into the modes registry. */

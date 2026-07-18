@@ -6,10 +6,24 @@
 // gems that may then drop, or a town FEATURE flag. Adding a new unlock is one
 // entry here. Modelled as a discriminated union on `kind` so the apply/own
 // switches narrow `payload` with no casts under strict mode.
+//
+// Two laws this file also owns:
+//   THE MOOT LAW (UnlockBase.reqClasses) — a purchase whose worth depends on
+//   the class pool's depth (slot tiers) hides until the pool can fill it: no
+//   dead purchases, ever.
+//   THE DISCOVERY WEB (ClassBundleDef.discover) — non-starter classes are
+//   shrouded rumors until FOUND: played into (per-class level milestones),
+//   chained onto (own the parent class), or learned the hard way (the world's
+//   own ledger facts — seized by a grip, a trap sprung underfoot). Probe:
+//   balance/probe_unlocks.ts proves the web reachable + the laws honest.
 // ---------------------------------------------------------------------------
 
-import { FEATURE, LEDGER_ACCOUNT_DEATHS, type Account } from './account';
+import { FEATURE, LEDGER_ACCOUNT_DEATHS, classLevelLedgerKey, type Account } from './account';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
+// Pure fabric leaves (no engine cycle): the HARD-LESSON ledger keys the
+// discovery web reads — seized by a grip, sprung a trap with your own feet.
+import { LEDGER_SEIZED } from '../engine/grab';
+import { LEDGER_TRAP_SPRUNG } from '../engine/trapworks';
 import { IMMORTAL_CFG } from './modes';
 import { CLASSES } from '../data/classes';
 import { SKILLS } from '../data/skills';
@@ -38,11 +52,20 @@ interface UnlockBase {
    *  least its value. The presence form above is sugar for `{key: 1}`; this is
    *  for genuine tallies — the Immortal covenant's "die 20 times". */
   reqLedgerCounts?: Record<string, number>;
+  /** Minimum size of the account's unlocked-class POOL (starters included).
+   *  THE MOOT LAW: a purchase whose value depends on pool depth (a class
+   *  SLOT is a hand size — a hand wider than the pool deals nothing) stays
+   *  HIDDEN until the pool can actually fill it. Slot tiers author this at
+   *  their own slot count; any future pool-fed purchase reuses the gate. */
+  reqClasses?: number;
 }
 
 export type Unlockable =
   | (UnlockBase & { kind: 'slot'; payload: { slotCount: number } })
-  | (UnlockBase & { kind: 'class'; payload: { classId: string; skillIds: string[]; supportIds: string[] } })
+  | (UnlockBase & { kind: 'class'; payload: { classId: string; skillIds: string[]; supportIds: string[];
+      /** The shrouded RUMOR line shown while the class is undiscovered
+       *  (never the name/cost — see ClassDiscoverSpec.hint). */
+      hint?: string } })
   | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
   | (UnlockBase & { kind: 'support'; payload: { supportIds: string[] } })
   | (UnlockBase & { kind: 'feature'; requiresFeature?: string; payload: { flag: string } })
@@ -71,9 +94,52 @@ export const SLOT_TIERS: readonly { id: string; slots: number; cost: number }[] 
  *    3. and, downstream for free, realizing the class in a run opens its home
  *       VOCATION chain at the quartermaster (vocations key off the character's
  *       class — no extra wiring here).
- *  Adding a class to the game = one ClassDef + one entry here. Gem-name lists
- *  in the Vault card are generated from the live registries, so renames never
+ *  Adding a class to the game = one ClassDef + one entry here (plus,
+ *  usually, a `discover` row — see THE DISCOVERY WEB above; a bundle
+ *  without one is simply visible from the start). Gem-name lists in the
+ *  Vault card are generated from the live registries, so renames never
  *  go stale. Starter classes (account.ts STARTER_CLASSES) need no bundle. */
+/** THE DISCOVERY WEB — how a class SURFACES in the Vault at all.
+ *
+ *  "If someone doesn't know what they're looking for, they have to find
+ *  what they're looking for first." A class bundle with a `discover` spec
+ *  is INVISIBLE (a shrouded rumor card, hint only — never name or price)
+ *  until its gate is met; only then does it become purchasable. The spec is
+ *  pure authoring sugar: it COMPILES onto the same generic gates every
+ *  unlock already rides (reqLedger / requiresUnlock), so the gate engine
+ *  grew zero new switches. Three composable levers:
+ *
+ *    ledger   — world FACTS, ANDed. Two families:
+ *               · play thresholds: classLevelLedgerKey('magician', 15) —
+ *                 stamped by the level-up sweep for whatever class is being
+ *                 PLAYED (account.ts CLASS_LEVEL_MILESTONES), so the
+ *                 starting three branch into their kin by being lived in,
+ *                 and any purchased class can gate deeper kin the same way;
+ *               · hard lessons: any ledger key the world stamps —
+ *                 LEDGER_SEIZED (a grip caught you → the Brawler),
+ *                 LEDGER_TRAP_SPRUNG (the floor clicked under you → the
+ *                 Trapper), 'crowned_killed', 'unmade_slain', … Learning by
+ *                 doing — mostly by having it done to you.
+ *    classes  — class bundle(s) that must be OWNED first (ids), for nested
+ *               ladders: Magician L15 reveals the Necromancer; OWNING the
+ *               Necromancer reveals the Summoner.
+ *    hint     — the rumor line the shrouded card whispers. Point at the
+ *               DEED, never the reward: the hint is a compass, not a
+ *               catalog entry.
+ *
+ *  Absent `discover` = visible from the start (nothing forces mystery).
+ *  Discovery is read live off the account ledger, so it survives every
+ *  death by construction — and balance/probe_unlocks.ts walks the whole
+ *  web each run to prove every class stays REACHABLE from the starters. */
+export interface ClassDiscoverSpec {
+  /** Account-ledger key(s) that must all be present (≥1). */
+  ledger?: string | string[];
+  /** Class id(s) whose bundles must be OWNED first. */
+  classes?: string | string[];
+  /** The shrouded rumor line shown while undiscovered. */
+  hint: string;
+}
+
 export interface ClassBundleDef {
   classId: string;
   cost: number;
@@ -81,156 +147,249 @@ export interface ClassBundleDef {
   blurb: string;
   skillIds: string[];
   supportIds?: string[];
+  /** THE DISCOVERY WEB row (see above). Absent = visible from the start. */
+  discover?: ClassDiscoverSpec;
 }
 
 export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
+  // --- THE BLOOD LINE: the Warrior is the Strength branch — its road opens
+  // the STR kin first, then the Prowess and Fortitude anchors; each anchor,
+  // owned and lived in, opens its own deeper kin.
   { classId: 'berserker', cost: 240,
     blurb: 'Fury as a fighting style: heavy arcs, boiling blood, and the whole rage-fed Warpath.',
     skillIds: ['heavy_strike', 'whirlwind', 'dash',
-      'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'] },
+      'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'],
+    discover: { ledger: classLevelLedgerKey('warrior', 15),
+      hint: 'Some come back from the Warrior\'s road changed — louder, redder, faster than the line can hold.' } },
+  // --- THE MIND LINE: the Magician is the Intelligence branch — played deep,
+  // it opens its own INT kin first, then the doors into its constituent
+  // Wisdom and Willpower schools; those chain onward by OWNERSHIP.
   { classId: 'sorcerer', cost: 150,
     blurb: 'The scholar of annihilation steps forward, frost ward in hand.',
     skillIds: ['infernal_ray', 'storm_call', 'ice_shield'],
-    supportIds: ['spark_discipline'] },
+    supportIds: ['spark_discipline'],
+    discover: { ledger: classLevelLedgerKey('magician', 10),
+      hint: 'Past the tenth circle of the Magician\'s study, the elements stop answering one at a time.' } },
+  // --- THE SHADOW LINE: the Rogue is the Dexterity branch — its road forks
+  // into the ranged and dueling crafts first, the darker and louder arts
+  // after; the field disciplines chain by ownership.
   { classId: 'ranger', cost: 200,
     blurb: 'Death from afar — and the field disciplines that perfect the shot.',
     skillIds: ['piercing_arrow', 'fan_of_blades', 'quickstep'],
-    supportIds: ['perfect_draw', 'wandering_mark'] },
+    supportIds: ['perfect_draw', 'wandering_mark'],
+    discover: { ledger: classLevelLedgerKey('rogue', 10),
+      hint: 'The alley teaches the knife. The treeline teaches something longer.' } },
   { classId: 'guardian', cost: 300,
     blurb: 'The unmoved wall, raised together with the Bulwark\'s wards, pacts, and reprisals.',
     skillIds: ['hammer_of_judgment', 'aegis_ward', 'rallying_howl',
       'iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link',
       'stone_communion'],
-    supportIds: ['stoneblood_conduit', 'bulwarks_tithe'] },
+    supportIds: ['stoneblood_conduit', 'bulwarks_tithe'],
+    discover: { ledger: classLevelLedgerKey('warrior', 15),
+      hint: 'Veterans of the Warrior\'s road tell of a way of standing that armies name like a wall.' } },
   { classId: 'summoner', cost: 260,
     blurb: 'The shepherd of monsters, with the Hive\'s swarm and the voice that commands it.',
     skillIds: ['venom_bolt', 'summon_skeleton', 'summon_skeleton_archer',
-      'summon_swarmlings', 'command_assault', 'gather_cinderkin'] },
+      'summon_swarmlings', 'command_assault', 'gather_cinderkin'],
+    discover: { classes: 'necromancer',
+      hint: 'The Necromancer raises what fell. A gentler shepherd asks the living to follow too.' } },
   { classId: 'swashbuckler', cost: 240,
     blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
     skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],
-    supportIds: ['momentum'] },
+    supportIds: ['momentum'],
+    discover: { ledger: classLevelLedgerKey('rogue', 10),
+      hint: 'Past the tenth quiet job, some knives start wanting an audience.' } },
   { classId: 'juggernaut', cost: 320,
     blurb: 'It hits, it takes hits, and it does not stop — and now it keeps the wake: votive flames, a lit vigil, and the last word.',
     // Frenzy rides along: it left the Rogue's (starter) bar in the parity
     // pass, so this bundle is what keeps the fast fury-feeder droppable.
     skillIds: ['piledriver', 'reckoning', 'stone_skin', 'frenzy',
       'cindershell', 'deathwatch', 'requiem'],
-    supportIds: ['kindled_wake', 'victors_tempo', 'abundant_harvest'] },
+    supportIds: ['kindled_wake', 'victors_tempo', 'abundant_harvest'],
+    discover: { classes: 'guardian',
+      hint: 'The wall, taught to walk forward.' } },
   { classId: 'pyromancer', cost: 220,
     blurb: 'Everything burns eventually — these are the words for "now".',
-    skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'] },
+    skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'],
+    discover: { ledger: classLevelLedgerKey('magician', 10),
+      hint: 'Deep in the Magician\'s studies there is a chapter singed at every corner.' } },
   { classId: 'assassin', cost: 320,
     blurb: 'The quiet trade, with the Verdict\'s marks, dooms, and executions in its kit.',
     skillIds: ['rend', 'eviscerate', 'invisibility',
       'expose_weakness', 'word_of_doom', 'execution'],
-    supportIds: ['exposure', 'bristling_riposte'] },
+    supportIds: ['exposure', 'bristling_riposte'],
+    discover: { ledger: classLevelLedgerKey('rogue', 15),
+      hint: 'The Rogue\'s road forks in the dark. One branch keeps a ledger of names.' } },
   { classId: 'necromancer', cost: 420,
     blurb: 'Death as a resource: the corpse-and-poison artisan, with the whole Harvest & Hordes gamut.',
     skillIds: ['poison_nova', 'raise_dead', 'despair',
       'reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
       'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst'],
-    supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond'] },
+    supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond'],
+    discover: { ledger: classLevelLedgerKey('magician', 15),
+      hint: 'The Magician\'s syllabus ends at a door marked WISDOM. What studies past it does not study alone.' } },
   { classId: 'tamer', cost: 280,
     blurb: 'The wild answers a steady gaze: stalk in unannounced, hold the claim, and fight beside the bond that downs but never dies.',
     skillIds: ['goad', 'tame_beast', 'stalk', 'command_assault'],
     supportIds: ['alphas_bond', 'pack_instinct', 'reciprocal_bond',
-      'gentling_hand', 'beast_master'] },
+      'gentling_hand', 'beast_master'],
+    // A HARD LESSON, not a syllabus: Crowned beasts roam the base wilds
+    // (killHandlers stamps the same key the Warbands package reads).
+    discover: { ledger: 'crowned_killed',
+      hint: 'Every pack answers to a crown. Put one down, and you will know the bond can be claimed.' } },
   { classId: 'cleric', cost: 450,
     blurb: 'The support archetype, played straight: Communion\'s mending arts and the Devout\'s sanctified arsenal, bundled with the one class built to carry them.',
     skillIds: ['sanctified_strike', 'mend', 'consecration', 'benediction',
       'greater_mending', 'communion', 'healing_rain', 'healing_stream', 'cleansing_light',
       'lifedrain', 'soul_volley', 'tree_of_life', 'font_of_renewal', 'summon_cleric', 'spirit_mender'],
-    supportIds: ['intensive_care', 'mending_chain', 'overmend'] },
+    supportIds: ['intensive_care', 'mending_chain', 'overmend'],
+    discover: { ledger: classLevelLedgerKey('magician', 15),
+      hint: 'The Magician\'s syllabus ends at a second door, marked WILL. Behind it, someone is mending.' } },
 
   // --- The parity twelve (every star point now anchors three classes) -------
   { classId: 'breaker', cost: 260,
     blurb: 'The executioner\'s grammar: break the stance, quake the rout, pass The Verdict — the whole slam-and-sentence school rides along.',
     skillIds: ['sunder_maul', 'earthquake', 'verdict',
       'tolling_ruin', 'groundswell', 'faultbreak'],
-    supportIds: ['concussive_blows'] },
+    supportIds: ['concussive_blows'],
+    discover: { ledger: classLevelLedgerKey('warrior', 10),
+      hint: 'Warriors who keep to the road learn where a stance carries its weight — and how to take it out.' } },
   { classId: 'vanguard', cost: 240,
     blurb: 'First through the gap, shield still moving — with the charges, thrusts, and leaps of the advancing line.',
     skillIds: ['charge', 'shockfront', 'marching_bulwark',
       'shield_charge', 'bastion_thrust', 'crushing_leap'],
-    supportIds: ['phalanx'] },
+    supportIds: ['phalanx'],
+    discover: { ledger: classLevelLedgerKey('warrior', 10),
+      hint: 'March the Warrior\'s road far enough and the shield stops meaning "stay put".' } },
   { classId: 'blademaster', cost: 300,
     blurb: 'The sword as a sentence, with the whole dueling school: the thousand cuts and the one perfect stroke.',
     skillIds: ['iai_strike', 'zanshin_cut', 'riposte',
       'thousand_cuts', 'sheathed_moon', 'perfect_strike', 'infinite_slashes'],
-    supportIds: ['building_rhythm'] },
+    supportIds: ['building_rhythm'],
+    discover: { classes: 'berserker',
+      hint: 'Fury, worn long enough, starts dreaming of one perfect stroke.' } },
   { classId: 'brawler', cost: 240,
     blurb: 'No blade, no apology — the pit\'s arithmetic, plus the carving rhythms that keep the fists warm.',
     skillIds: ['one_two', 'chain_pull', 'haymaker',
       'carve', 'deep_carve', 'bloodlust'],
-    supportIds: ['echoing_might'] },
+    supportIds: ['echoing_might'],
+    // THE user-named exemplar of learn-by-getting-wrecked: the grip kin
+    // (wranglers, yoke-maulers, gulpers, planted maws) teach with their
+    // hands — world.ts grabSeize stamps LEDGER_SEIZED when one catches YOU.
+    discover: { ledger: LEDGER_SEIZED,
+      hint: 'Something out there will put its hands on you. Survive it, and you will know what hands are for.' } },
   { classId: 'sentinel', cost: 280,
     blurb: 'Hitting it is the mistake: spikes, quills, bells, and every other way a wall bills its visitors.',
     skillIds: ['spiked_bulwark', 'bristleback', 'reprisal',
       'defiant_bulwark', 'tolling_bell', 'rearguard_aegis'],
-    supportIds: ['answering_steel'] },
+    supportIds: ['answering_steel'],
+    // A nested PLAY threshold on a non-starter: the Guardian must be owned,
+    // dealt, and lived in — the web runs deeper than the starting three.
+    discover: { ledger: classLevelLedgerKey('guardian', 10),
+      hint: 'Stand the Guardian\'s watch long enough to learn it: hitting you was always the mistake.' } },
   { classId: 'lancer', cost: 280,
     blurb: 'Steel left in every wound and called home through the crowd: the full impale ledger, javelin rain included.',
     skillIds: ['skewer', 'pinning_spear', 'spear_recall',
       'voltspear', 'blightspear', 'skyfall_volley', 'radiant_lance'],
-    supportIds: ['skewering_blows', 'tripwire_web'] },
+    supportIds: ['skewering_blows', 'tripwire_web'],
+    discover: { classes: 'ranger',
+      hint: 'The Ranger\'s steel comes back as rumor. Somewhere, it comes back by hand.' } },
   { classId: 'trapper', cost: 300,
     blurb: 'The battlefield as a workshop: snares, mines, sentries, and the patience to let the ground do the arguing.',
     skillIds: ['caltrops', 'aftershock_snare', 'ballista_sentry',
       'cinderwhirl_trap', 'frost_trap', 'fire_mine', 'detonate_mines', 'lodestone'],
-    supportIds: ['tripwire', 'enduring_snares'] },
+    supportIds: ['tripwire', 'enduring_snares'],
+    // Learn-by-getting-wrecked, the field-craft edition: spring any
+    // trapwork with your own feet (world.ts springTrapwork stamps it) —
+    // the sunken ruins' toothed halls and the highland's boulder plates
+    // are the world's own tutors.
+    discover: { ledger: LEDGER_TRAP_SPRUNG,
+      hint: 'The floor clicks before it kills. Step wrong once — and live — and the workshop is yours.' } },
   { classId: 'warlord', cost: 320,
     blurb: 'Presence as mechanics — the first Charisma class, with the horns, standards, and blessings of command.',
     skillIds: ['battle_standard', 'single_out', 'challenging_shout',
       'war_horn', 'trumpet_peal', 'blessing_of_might'],
-    supportIds: ['provocation', 'clamor'] },
+    supportIds: ['provocation', 'clamor'],
+    // The war-camps' own lesson (killHandlers stamps warlords_killed —
+    // the same key that unlocks Demon Invasions): kill command, learn it.
+    discover: { ledger: 'warlords_killed',
+      hint: 'Kill a thing that commands, and its voice goes looking for a new throat.' } },
   { classId: 'skald', cost: 340,
     blurb: 'The battle keeps time whether it wants to or not: the whole hymnal, shrieks and squalls included.',
     skillIds: ['war_chant', 'dissonance', 'coda',
       'keening_shriek', 'gust_burst', 'aureole'],
-    supportIds: ['held_note', 'countermelody'] },
+    supportIds: ['held_note', 'countermelody'],
+    discover: { classes: 'warlord',
+      hint: 'Command, held long enough, starts keeping time.' } },
   { classId: 'beguiler', cost: 320,
     blurb: 'Never be where the blow lands: doubles, decoys, quiet steps, and one whispered madness.',
     skillIds: ['decoy', 'shadow_clone', 'beguile',
       'cloudstep', 'quiet_step', 'mirage_archer'],
-    supportIds: ['synchronicity', 'vessel_of_shadow'] },
+    supportIds: ['synchronicity', 'vessel_of_shadow'],
+    discover: { ledger: classLevelLedgerKey('rogue', 15),
+      hint: 'Far down the Rogue\'s road: the best hiding place is someone else\'s certainty.' } },
   { classId: 'chronomancer', cost: 380,
     blurb: 'Time as a resource everyone else spends carelessly — up to and including stopping it outright.',
     skillIds: ['stasis_lock', 'torpor_field', 'time_dilation',
       'time_stop', 'warp', 'temporal_pad'],
-    supportIds: ['lingering_moment', 'borrowed_haste'] },
+    supportIds: ['lingering_moment', 'borrowed_haste'],
+    // The Chronophage's spoils (quests/defs.ts stamps unmade_slain — the
+    // same key the far Caravan tiers read): time-craft is TAKEN, not taught.
+    discover: { ledger: 'unmade_slain',
+      hint: 'The thing that eats time can die. What spills out can be studied.' } },
   { classId: 'ascetic', cost: 300,
     blurb: 'Stillness pays cash: the practiced palm, the rooted stances, and the long breath between.',
     skillIds: ['mantra_strike', 'wellspring_stance', 'long_exhale',
       'grit_stance', 'surgewind', 'siphon_strike'],
-    supportIds: ['colossus_stance', 'stillwater_discipline'] },
+    supportIds: ['colossus_stance', 'stillwater_discipline'],
+    discover: { classes: 'cleric',
+      hint: 'Past the Cleric\'s long watch waits a stiller discipline. Fury is a debt; stillness pays cash.' } },
 ];
 
 const gemNames = (ids: readonly string[], reg: Record<string, { name: string }>): string =>
   ids.map(i => reg[i]?.name ?? i).join(', ');
 
+/** The catalog id a class bundle wears — ONE spelling for the discovery
+ *  web's ownership chains, classUnlockFor, and the entry itself. */
+export const classBundleId = (classId: string): string => `class_${classId}`;
+
 function classBundleEntry(b: ClassBundleDef): Unlockable {
   const cls = CLASSES.find(c => c.id === b.classId);
   const name = cls?.name ?? b.classId;
   const sups = b.supportIds ?? [];
+  // THE DISCOVERY COMPILE: the authored spec becomes the same generic gates
+  // every unlock rides — ledger facts → reqLedger, ownership chains →
+  // requiresUnlock (bundle ids) — so isUnlockVisible/applyUnlock needed no
+  // new machinery to learn mystery.
+  const d = b.discover;
+  const chain = d?.classes === undefined ? []
+    : (Array.isArray(d.classes) ? d.classes : [d.classes]).map(classBundleId);
   return {
-    id: `class_${b.classId}`, kind: 'class', cost: b.cost,
+    id: classBundleId(b.classId), kind: 'class', cost: b.cost,
+    ...(d?.ledger !== undefined ? { reqLedger: d.ledger } : {}),
+    ...(chain.length ? { requiresUnlock: chain } : {}),
     label: `Class — ${name}`,
     description: `${b.blurb} The ${name} joins the class roll at character select`
       + ` — and once realized in a run, its Vocation chain opens.`
       + ` Gems added to the drop pool: ${gemNames(b.skillIds, SKILLS)}`
       + (sups.length ? ` · supports: ${gemNames(sups, SUPPORTS)}` : '') + '.',
-    payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups] },
+    payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups],
+      ...(d ? { hint: d.hint } : {}) },
   };
 }
 
 export const UNLOCK_CATALOG: Unlockable[] = [
   // --- Class slots: a bigger HAND at character select, bought in sequence ----
+  // THE MOOT LAW (reqClasses): each tier also waits for the class POOL to be
+  // deep enough to fill the hand it sells — a 4th slot over 3 classes deals
+  // nothing, so it never surfaces to be bought. Because the class-select
+  // teasers offer "more slots" exactly when pool > hand, the next tier is
+  // always purchasable the moment the teaser exists (the two stay in step).
   ...SLOT_TIERS.map((t, i): Unlockable => ({
-    id: t.id, kind: 'slot', cost: t.cost,
+    id: t.id, kind: 'slot', cost: t.cost, reqClasses: t.slots,
     ...(i > 0 ? { requiresUnlock: SLOT_TIERS[i - 1].id } : {}),
     label: `Class Slot ${t.slots}`,
-    description: `Surface a ${t.slots}th selectable class at character select, dealt at random from your unlocked classes (Class unlocks below deepen that pool).`,
+    description: `Surface a ${t.slots}th selectable class at character select, dealt at random from your unlocked classes (Class unlocks below deepen that pool — a slot only surfaces once your pool can fill it).`,
     payload: { slotCount: t.slots },
   })),
 
@@ -443,7 +602,39 @@ const CATALOG_BY_ID = new Map(UNLOCK_CATALOG.map(u => [u.id, u] as const));
  *  The class-select teasers use it to point a locked class at its exact
  *  Vault purchase. */
 export function classUnlockFor(classId: string): Unlockable | undefined {
-  return CATALOG_BY_ID.get(`class_${classId}`);
+  return CATALOG_BY_ID.get(classBundleId(classId));
+}
+
+/** Has the account DISCOVERED this class (its Vault entry surfaced, or it is
+ *  already owned / a starter)? The read every teasing surface shares: an
+ *  undiscovered class shows as a shrouded rumor — hint only, never name —
+ *  and cannot be bought (applyUnlock rides the same visibility gate).
+ *  Owned counts as discovered by definition, so accounts that bought a
+ *  class before its discover row existed are never re-shrouded. */
+export function isClassDiscovered(a: Account, classId: string): boolean {
+  const u = classUnlockFor(classId);
+  if (!u) return true; // starters (and any classless id) have no mystery
+  return isUnlockOwned(a, u) || isUnlockVisible(a, u);
+}
+
+/** Class bundles the account has NOT yet discovered (unowned + gate unmet) —
+ *  the Vault's rumor wall reads these for their payload.hint. */
+export function undiscoveredClassUnlocks(a: Account): Unlockable[] {
+  return UNLOCK_CATALOG.filter(u =>
+    u.kind === 'class' && !isUnlockOwned(a, u) && !isUnlockVisible(a, u));
+}
+
+/** Every ledger key named by any class-discovery spec (deduped) — the dev
+ *  tab's "stamp the world's lessons" lever derives from this, so QA keys
+ *  can never drift from the authored web. */
+export function discoveryLedgerKeys(): string[] {
+  const keys = new Set<string>();
+  for (const b of CLASS_BUNDLES) {
+    const l = b.discover?.ledger;
+    if (l === undefined) continue;
+    for (const k of Array.isArray(l) ? l : [l]) keys.add(k);
+  }
+  return [...keys];
 }
 
 export function isUnlockOwned(a: Account, u: Unlockable): boolean {
@@ -535,6 +726,9 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
       if ((a.ledger[k] ?? 0) < n) return false;
     }
   }
+  // THE MOOT LAW: pool-fed purchases (class slots) hide until the unlocked-
+  // class pool is deep enough for the purchase to actually do something.
+  if (u.reqClasses !== undefined && a.unlockedClasses.size < u.reqClasses) return false;
   // Sequential feature ladders (e.g. Mireille life → mana → XP buff).
   if (u.kind === 'feature' && u.requiresFeature && !a.features.has(u.requiresFeature)) return false;
   return true;

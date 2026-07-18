@@ -141,7 +141,7 @@ import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
-import { lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
+import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
@@ -151,7 +151,7 @@ import {
 import { CLING_CFG, clingEligible, clingSeatPos, clingSeatsOf } from './cling';
 import {
   GRAB_CFG, GRAB_MARKER, GRAB_VERB_LABEL, grabHolderMove, grabHoldBounds,
-  grabRefusal, grabSeatPos, struggleRate,
+  grabRefusal, grabSeatPos, LEDGER_SEIZED, struggleRate,
   type GrabSpec, type GrabThrowSpec, type GrabVerb,
 } from './grab';
 import { plyCountOf } from './plies';
@@ -228,7 +228,8 @@ import { ActiveZoneEvent } from './zoneEvent';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
   STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
-  LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, type Account,
+  LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
+  classLevelLedgerKey, type Account,
 } from '../meta/account';
 import {
   modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
@@ -14075,9 +14076,19 @@ export class World {
     // Every 10-level milestone — the Caravan tiers (and future unlocks) gate on these.
     // Same once-per-run, local-seat-only shape; merges into account.ledger on death.
     if (seat === this.localSeat) {
-      for (let m = 10; m <= 90; m += 10) {
-        const key = `reached_level_${m}`;
-        if (p.level >= m && !this.ledger[key]) bumpLedger(this.ledger, key);
+      for (let m10 = 10; m10 <= 90; m10 += 10) {
+        const key = `reached_level_${m10}`;
+        if (p.level >= m10 && !this.ledger[key]) bumpLedger(this.ledger, key);
+      }
+    }
+    // PER-CLASS milestones — the DISCOVERY WEB's raw material (account.ts
+    // CLASS_LEVEL_MILESTONES → unlocks.ts ClassBundleDef.discover): playing a
+    // class deep is how the account learns that class's kin exist. Same
+    // once-per-run, local-seat-only, merge-on-death shape as the sweep above.
+    if (seat === this.localSeat) {
+      for (const ms of CLASS_LEVEL_MILESTONES) {
+        const key = classLevelLedgerKey(m.classDef.id, ms);
+        if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
       }
     }
   }
@@ -18524,6 +18535,11 @@ export class World {
       pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius + 12,
       color: '#d8a06a', life: 0.25, maxLife: 0.25,
     });
+    // THE HARD LESSON (discovery web): a grip catching the LOCAL hero teaches
+    // the account that holds exist — unlocks.ts gates read the tally (the
+    // Brawler's rumor resolves). Local seat only, like every ledger stamp:
+    // the account learns what its own body was taught. Merges on death.
+    if (victim === this.player) bumpLedger(this.ledger, LEDGER_SEIZED);
     return true;
   }
 
@@ -32240,6 +32256,11 @@ export class World {
     const color = tw.spec.color ?? TRAPWORK_CFG.springColor;
     this.flashes.push({ pos: vec(at.x, at.y), radius: 30, color, life: 0.4, maxLife: 0.4 });
     this.text(vec(at.x, at.y - 16), tw.spec.announce ?? 'click —', '#d8c8a0', 12);
+    // THE HARD LESSON (discovery web): the LOCAL hero pressing a trigger with
+    // their own feet teaches the account what a plate is — unlocks.ts gates
+    // read the tally (the Trapper's rumor resolves). A baited pack springing
+    // it teaches nothing: the lesson is in the misstep, not the spectacle.
+    if (presser === this.player) bumpLedger(this.ledger, LEDGER_TRAP_SPRUNG);
     const host = this.trapHost();
     for (const row of tw.spec.effects) {
       trapEffect(row.kind)?.spring(host, tw, row, presser?.id);

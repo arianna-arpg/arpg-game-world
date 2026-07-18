@@ -101,6 +101,14 @@ export interface TrapTrigger {
   sparesDormant?: boolean;
 }
 
+/** Account-ledger key: the LOCAL HERO pressed a trapwork trigger with their
+ *  own feet (world.ts springTrapwork stamps it when the presser is the local
+ *  hero; merged into the account on death). THE HARD LESSON seam: discovery
+ *  gates read it — the Trapper surfaces in the Vault because the floor
+ *  clicked under YOU once (unlocks.ts ClassBundleDef.discover). A raw tally:
+ *  "spring 20 traps and live" content reads the same key. */
+export const LEDGER_TRAP_SPRUNG = 'trap_sprung';
+
 // --- effects ---------------------------------------------------------------
 
 /** One effect row — `kind` picks a registered handler; the rest is that

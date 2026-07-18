@@ -10,6 +10,8 @@
 import type { DevTabDef } from '../panel';
 import { DEV_UI, btn, css, hrow, section } from '../ui';
 import { bestiaryKey, bestiaryList, bestiaryThreshold } from '../../data/bestiary';
+import { CLASS_LEVEL_MILESTONES, classLevelLedgerKey } from '../../meta/account';
+import { discoveryLedgerKeys } from '../../meta/unlocks';
 
 export const accountTab: DevTabDef = {
   id: 'account',
@@ -45,7 +47,49 @@ export const accountTab: DevTabDef = {
     note.textContent = 'Writes the same bestiary:<id> account-ledger keys the kill rule bumps. Reopen the Tracker’s book to see the pages move.';
     css(note, { color: DEV_UI.textDim, fontSize: '10px', padding: '2px 4px' });
 
-    pane.append(head, row, note);
+    // --- CLASS DISCOVERY (meta/unlocks.ts, the discovery web) ---------------
+    // Stamps the ACCOUNT ledger directly (real play stamps the RUN ledger and
+    // merges on death) so the Vault's rumor wall can be walked without dying
+    // twenty times. Ownership-chained classes still need their parent bought —
+    // that is the web working, not a gap here.
+    const dHead = section('Class discovery (account ledger)');
+    const dRow = hrow();
+    /** Mutate the account ledger through one save-booking gate. */
+    const stamp = (label: string, fn: (l: Record<string, number>) => number): void => {
+      const w = runActive();
+      if (!w) { flash('start a run first'); return; }
+      const n = fn(w.account.ledger);
+      w.accountDirty = true;
+      flash(`discovery ${label}: ${n} keys`);
+    };
+    dRow.append(
+      btn('Milestones: current class', () => stamp('milestones', l => {
+        const w = runActive()!;
+        const cls = w.meta.classDef.id;
+        for (const m of CLASS_LEVEL_MILESTONES) l[classLevelLedgerKey(cls, m)] = 1;
+        return CLASS_LEVEL_MILESTONES.length;
+      })),
+      btn('All web ledgers', () => stamp('web-stamped', l => {
+        // Registry-derived (discoveryLedgerKeys): every threshold AND hard
+        // lesson the authored web names, in one press — never drifts.
+        const keys = discoveryLedgerKeys();
+        for (const k of keys) l[k] = Math.max(l[k] ?? 0, 1);
+        return keys.length;
+      })),
+      btn('Forget discoveries', () => stamp('forgotten', l => {
+        let n = 0;
+        const web = new Set(discoveryLedgerKeys());
+        for (const k of Object.keys(l)) {
+          if (web.has(k) || /^class_.+_level_\d+$/.test(k)) { delete l[k]; n++; }
+        }
+        return n;
+      })),
+    );
+    const dNote = document.createElement('div');
+    dNote.textContent = 'Rumor cards resolve into purchasable Class bundles as their keys land. “Forget” re-shrouds everything unowned (owned classes never re-lock).';
+    css(dNote, { color: DEV_UI.textDim, fontSize: '10px', padding: '2px 4px' });
+
+    pane.append(head, row, note, dHead, dRow, dNote);
     return { el: pane };
   },
 };

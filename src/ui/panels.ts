@@ -61,7 +61,7 @@ import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
-import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isUnlockOwned } from '../meta/unlocks';
+import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, undiscoveredClassUnlocks } from '../meta/unlocks';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
@@ -150,11 +150,16 @@ export class UI {
    *  navigation (Vault, Event Weights, Back) doesn't re-roll it; reset only when
    *  a run ends (resetClassRoster, called on death) so each new run deals fresh. */
   /** The dealt hand + locked teasers, cached per offer. `dealtFor` fingerprints
-   *  the deal INPUTS (hand size + unlocked-class pool) so buying a Class Slot
-   *  OR a Class bundle mid-offer re-deals; menu navigation keeps the hand. */
+   *  the deal INPUTS (hand size + unlocked-class pool + DISCOVERED set) so
+   *  buying a Class Slot OR a Class bundle mid-offer re-deals — including a
+   *  purchase whose ownership chain reveals new kin; menu navigation keeps
+   *  the hand. `rumors` are the shrouded cards: hints of UNDISCOVERED
+   *  classes, dealt into the leftover teaser slots — mystery with a compass,
+   *  never a name (the discovery web, meta/unlocks.ts). */
   private classRoster: {
     picks: ClassDef[];
     teasers: { def: ClassDef; reason: 'slots' | 'class' }[];
+    rumors: string[];
     dealtFor: string;
   } | null = null;
   /** The LIFE-CONTRACT selected on the class screen (meta/modes.ts). Sticky
@@ -786,14 +791,21 @@ export class UI {
     // + purchased Class bundles). Class Slots set the HAND SIZE; Class unlocks
     // deepen the pool the hand is dealt from.
     const pool = CLASSES.filter(c => isClassUnlocked(acc, c.id));
+    // THE DISCOVERY SPLIT (meta/unlocks.ts): locked classes the account has
+    // DISCOVERED tease with their full face and exact Vault remedy; the
+    // undiscovered stay shrouded — a rumor card whispers the hint, never the
+    // name. "If you don't know what you're looking for, find it first."
     const lockedClasses = CLASSES.filter(c => !isClassUnlocked(acc, c.id));
+    const discoveredLocked = lockedClasses.filter(c => isClassDiscovered(acc, c.id));
+    const undiscovered = lockedClasses.filter(c => !isClassDiscovered(acc, c.id));
     // Roguelike roll: shuffle the pool, surface the hand plus a few locked
     // TEASERS. Rolled ONCE per new-run offer + CACHED, so menu navigation
     // (Vault / Event Weights / Back) keeps the same offer; only a death
     // (resetClassRoster) deals a fresh hand — OR a mid-offer Vault purchase
     // that changes the deal inputs (a Class Slot widens the hand, a Class
-    // bundle deepens the pool), which re-deals so the purchase shows.
-    const dealtFor = `${selectable}|${pool.map(c => c.id).join(',')}`;
+    // bundle deepens the pool — and may REVEAL chained kin), which re-deals
+    // so the purchase shows.
+    const dealtFor = `${selectable}|${pool.map(c => c.id).join(',')}|${discoveredLocked.map(c => c.id).join(',')}`;
     if (this.classRoster && this.classRoster.dealtFor !== dealtFor) {
       this.classRoster = null;
     }
@@ -808,15 +820,23 @@ export class UI {
       const shuffled = shuffle([...pool]);
       const picks = shuffled.slice(0, Math.min(selectable, shuffled.length));
       // Teasers, by WHAT unlocks them: pool classes beyond the hand first
-      // (more Class Slots surface those), then locked classes (their Class
-      // bundle in the Vault does) — each card names its remedy.
+      // (more Class Slots surface those — and the moot law keeps the next
+      // slot tier purchasable exactly whenever such a teaser exists), then
+      // DISCOVERED locked classes (their Class bundle in the Vault does) —
+      // each card names its remedy. Leftover teaser slots deal RUMORS from
+      // the undiscovered (hint lines off their shrouded Vault entries).
       const teasers = [
         ...shuffled.slice(picks.length).map(def => ({ def, reason: 'slots' as const })),
-        ...shuffle([...lockedClasses]).map(def => ({ def, reason: 'class' as const })),
+        ...shuffle([...discoveredLocked]).map(def => ({ def, reason: 'class' as const })),
       ].slice(0, TEASER_COUNT);
-      this.classRoster = { picks, teasers, dealtFor };
+      const rumors = shuffle([...undiscovered])
+        .slice(0, Math.max(0, TEASER_COUNT - teasers.length))
+        .map(c => classUnlockFor(c.id))
+        .filter((u): u is NonNullable<typeof u> => !!u)
+        .map(u => (u.kind === 'class' ? u.payload.hint : undefined) ?? 'Something out there has not introduced itself yet.');
+      this.classRoster = { picks, teasers, rumors, dealtFor };
     }
-    const { picks, teasers } = this.classRoster;
+    const { picks, teasers, rumors } = this.classRoster;
 
     // Starting-skill chips — hover for the full name + description (the bar
     // read straight from ClassDef, so a re-barred class shows its truth).
@@ -837,6 +857,16 @@ export class UI {
       return u ? `🔒 Locked — “${u.label}” in the Vault (${u.cost} ${META_CURRENCY_LABEL})`
         : '🔒 Unlocked in the Vault';
     };
+    // A RUMOR card: an undiscovered class, shrouded. The hint is a compass
+    // toward the DEED; the identity stays the world's secret until earned
+    // (the discovery web, meta/unlocks.ts). Clicks route to the Vault like
+    // any locked card — its rumor wall repeats every whisper.
+    const rumorCard = (hint: string): string => `
+      <div class="class-card locked" data-locked="true" style="opacity:.45">
+        <div class="cname" style="color:#8a8494;letter-spacing:3px">? ? ?</div>
+        <div class="cdesc" style="font-style:italic">“${hint}”</div>
+        <div class="class-lock">🔒 Undiscovered — the world teaches what the Vault cannot sell.</div>
+      </div>`;
     const classCard = (c: ClassDef, note?: string): string => `
       <div class="class-card ${note ? 'locked' : ''}" data-id="${c.id}" data-locked="${!!note}"
         ${note ? 'style="opacity:.5"' : ''}>
@@ -893,7 +923,8 @@ export class UI {
       </div>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
         Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL} &nbsp;·&nbsp;
-        hand of ${picks.length} &nbsp;·&nbsp; ${pool.length} of ${CLASSES.length} classes unlocked &nbsp;(re-deals each new run)</div>
+        hand of ${picks.length} &nbsp;·&nbsp; ${pool.length} of ${CLASSES.length} classes unlocked${undiscovered.length
+          ? ` &nbsp;·&nbsp; ${undiscovered.length} undiscovered` : ''} &nbsp;(re-deals each new run)</div>
       <div class="subtitle">
         A random hand is dealt each run from the classes your account has unlocked.
         Class Slots widen the hand; Class unlocks (each bundling its thematic gems)
@@ -902,7 +933,7 @@ export class UI {
         Pick a class to begin; tune the world mix under Event Weights first if you like.
       </div>
       ${modeRow}
-      <div class="class-grid">${picks.map(c => classCard(c)).join('')}${teasers.map(t => classCard(t.def, lockNote(t))).join('')}</div>
+      <div class="class-grid">${picks.map(c => classCard(c)).join('')}${teasers.map(t => classCard(t.def, lockNote(t))).join('')}${rumors.map(rumorCard).join('')}</div>
       <div class="acct-btns">
         <button id="event-weights-btn">⚙ Event Weights</button>
         <button id="account-btn">Unlocks (Vault)</button>
@@ -999,6 +1030,18 @@ export class UI {
               <div class="udesc">${u.description}</div>
               <button disabled>✓ Owned</button>
             </div>`).join('');
+      // THE RUMOR WALL (discovery web, meta/unlocks.ts): classes the account
+      // has NOT yet discovered hang here shrouded — the hint whispers at the
+      // deed, the name and price stay the world's secret until it is done.
+      const rumors = undiscoveredClassUnlocks(acc);
+      const rumorCards = rumors.map(u => `
+            <div class="unlock-card" style="opacity:.55">
+              <div class="ukind">class · undiscovered</div>
+              <div class="uname" style="letter-spacing:3px">? ? ?</div>
+              <div class="udesc" style="font-style:italic">“${(u.kind === 'class' ? u.payload.hint : undefined)
+                ?? 'The world has not introduced this one yet.'}”</div>
+              <button disabled>Undiscovered</button>
+            </div>`).join('');
       this.accountScreen.innerHTML = `
         <div class="vault-head">
           <h1>The Vault — Account Unlocks</h1>
@@ -1008,6 +1051,7 @@ export class UI {
         <div class="vault-body">
           <h3 class="vault-sub">Available</h3>
           <div class="unlock-grid">${cards}</div>
+          ${rumors.length ? `<h3 class="vault-sub">Rumors — classes not yet discovered</h3><div class="unlock-grid">${rumorCards}</div>` : ''}
           ${owned.length ? `<h3 class="vault-sub">Owned</h3><div class="unlock-grid">${ownedCards}</div>` : ''}
           <div class="acct-btns"><button id="acct-close">Back</button></div>
         </div>`;
