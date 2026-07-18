@@ -41,7 +41,7 @@ import {
   type DoodadKind, type GenCtx,
 } from './levelgen';
 import { carveMassifs, registerMassShape } from './massif';
-import { carveSewerTier } from './tiers';
+import { carveSewerTier, relocateGratesIntoDucts } from './tiers';
 import { bearingNoise, disc, radial, wanderPath } from './genkit';
 
 // --- CONFIG ------------------------------------------------------------------
@@ -373,6 +373,9 @@ function districtLayout(ctx: GenCtx, def: ZoneDef): void {
   // zone, one layer down (covered exposure; culvert wells are the doors).
   if (ctx.rng.chance(layoutParam(def, 'sewerTier', 0))) carveSewerTier(ctx, def, grid);
   scatterDecoration(ctx, def);
+  // The deep door prefers the drains: pull scattered grates INTO the duct
+  // web (weighted — a grate left beside a building still reads).
+  relocateGratesIntoDucts(ctx, def, grid);
 }
 
 registerLayout('district', districtLayout);

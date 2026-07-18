@@ -1164,6 +1164,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // The sewers' door + its one honest lamp (the descend lane's civic mouth).
   sewer_grate: { painter: 'sewerGrate', order: 22, bakeWhole: 'static' },
+  // The culvert's stair prop: treads descend ALONG rot — the tunnel's first
+  // bearing — so the street reads where the drain runs (the tier fabric).
+  culvert_stair: { painter: 'culvertStair', order: 23, bakeWhole: 'static' },
   light_shaft: {
     painter: 'lightShaft', order: 58,
     light: { radius: -2.2, color: '#c8dce8', intensity: 0.4 },

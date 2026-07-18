@@ -8815,8 +8815,41 @@ const lightShaft: GroupPainter = (env, group) => {
   }
 };
 
+/** THE CULVERT STAIR: stone steps descending INTO the drain — drawn ALONG
+ *  the doodad's rot (the tunnel's first bearing), each tread darker than the
+ *  last, so the street reads which way the tunnel runs before anyone climbs
+ *  down. A ringed mouth like the well it opens from. */
+const culvertStair: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The mouth ring (street-side lip).
+    ctx.strokeStyle = '#54745c';
+    ctx.lineWidth = Math.max(2, r * 0.14);
+    ctx.strokeRect(-r * 0.95, -r * 0.62, r * 1.9, r * 1.24);
+    // Treads march +X (into the tunnel), each darker — the descent reads.
+    const steps = 5;
+    for (let s = 0; s < steps; s++) {
+      const t = s / (steps - 1);
+      const shadeK = 0.78 - t * 0.62;
+      ctx.fillStyle = `rgb(${Math.round(74 * shadeK + 12)},${Math.round(86 * shadeK + 14)},${Math.round(78 * shadeK + 12)})`;
+      const x0 = -r * 0.85 + t * r * 1.5;
+      ctx.fillRect(x0, -r * 0.52, r * 0.32, r * 1.04);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(x0 + r * 0.26, -r * 0.52, r * 0.06, r * 1.04);
+    }
+    // The black past the last tread: the drain itself.
+    ctx.fillStyle = '#080c08';
+    ctx.fillRect(r * 0.68, -r * 0.52, r * 0.28, r * 1.04);
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
-  wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft,
+  wheatStalk, windmillTower, chimneyStack, hideRack, targetButt, sewerGrate, lightShaft, culvertStair,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,

@@ -38222,7 +38222,19 @@ export class World {
     // Ramps self-correct through the exit rule above either way.
     if (this.zone.tiers && this.walk?.regionAt) {
       const onLink = tierLinkOf(this.walk.regionAt(a.pos.x, a.pos.y));
-      if (onLink && !a.onTierLink) a.tier = a.tier === 1 ? 0 : 1;
+      if (onLink && !a.onTierLink) {
+        a.tier = a.tier === 1 ? 0 : 1;
+        a.aiTierGoal = undefined; // crossed — any chase goal is spent
+        // THE PURSUIT STAMP (the tier chase): whoever was hunting THIS body
+        // watched it take the stair — hand every engaged pursuer in earshot
+        // the crossing as a goal; walking onto it flips them through, and
+        // the ordinary re-acquire picks the hunt back up on the other side.
+        for (const e of this.actors) {
+          if (e.dead || e === a || e.aiTargetId !== a.id) continue;
+          if (Math.hypot(e.pos.x - a.pos.x, e.pos.y - a.pos.y) > 900) continue;
+          e.aiTierGoal = { x: a.pos.x, y: a.pos.y, until: this.time + 8 };
+        }
+      }
       a.onTierLink = onLink;
     }
   }

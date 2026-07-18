@@ -175,6 +175,10 @@ registerDoodadRule('target_butt', {
 registerDoodadRule('city_stair', { overlap: 'trigger', spacing: 20 });
 registerDoodadRule('garret_stair', { overlap: 'trigger', spacing: 20 });
 registerStamp('garret_stair', stampSingle('garret_stair', [11, 14]));
+// The culvert's STAIR PROP (the tier fabric lays it on each joined well,
+// rotated INTO its tunnel's first leg): pure art on both-layers ground —
+// inert, walk-through, visible from street AND drain alike.
+registerDoodadRule('culvert_stair', { overlap: 'inert', spacing: 40 });
 
 // --- THE SEWER MOUTHS ------------------------------------------------------------------
 // The city's OTHER ladder (the descend lane's civic door): a street grate

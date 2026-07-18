@@ -552,6 +552,10 @@ export class Actor {
   /** Tier-link latch: TRUE while standing on a crossing cell (one toggle per
    *  entry — stepping onto a culvert descends you once, not every frame). */
   onTierLink = false;
+  /** THE TIER CHASE (engine/tiers.ts): the crossing a fleeing quarry used —
+   *  stamped on every engaged pursuer the moment the ladder toggle fires, so
+   *  the hunt walks to the stair and follows it through. */
+  aiTierGoal?: { x: number; y: number; until: number };
   /** Squad identity, stamped at spawn by GROUP spawners (packs, camps,
    *  garrisons, bands). Leaders anchor focus-fire and on-death reactions. */
   squadId?: number;

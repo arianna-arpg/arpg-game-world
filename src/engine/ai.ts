@@ -654,6 +654,21 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // Deliberately BELOW patrol routes and ABOVE lure/drives/wander: a
       // route or an order outranks the post; duty outranks curiosity.
       if (!actor.isMinion() && updatePost(actor, world, dt)) return;
+      // THE TIER CHASE (engine/tiers.ts): a quarry that crossed a layer left
+      // its pursuers a GOAL — the crossing it used (stamped by the ladder
+      // toggle). Walk to the stair; stepping onto the link flips this body
+      // through, and the ordinary re-acquire resumes the hunt on the other
+      // side. Above the lure (a vanished quarry outranks a glow), below the
+      // post (duty still outranks the grudge).
+      if (actor.aiTierGoal && !actor.isMinion()) {
+        const g = actor.aiTierGoal;
+        if (world.time > g.until) actor.aiTierGoal = undefined;
+        else {
+          actor.facing = angleTo(actor.pos, g);
+          moveToward(actor, world, g, dt);
+          return;
+        }
+      }
       // LURE FABRIC (World.setLure/lureFor): a live lure — a charging survey
       // spire, a future bait or noise — DRAWS the unaware toward its point.
       // Idle-only by construction (this branch is targetless), so combat,

@@ -28,6 +28,7 @@ import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
+import { tierLinkOf } from '../engine/tiers';
 import { stratumOf } from '../world/strata';
 import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, pitRegionOf, type Doodad } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
@@ -2169,26 +2170,81 @@ export class Renderer {
     ctx.fillRect(x0, y0, vw, vh);
     const gx0 = Math.floor(x0 / cs), gy0 = Math.floor(y0 / cs);
     const gx1 = Math.ceil((x0 + vw) / cs), gy1 = Math.ceil((y0 + vh) / cs);
+    // ONE COHERENT TUNNEL, not cell confetti (the sewerworks schema worn by
+    // the drains): duct floors lay flagstone-toned slabs (world-hashed jitter
+    // so the pattern is seam-stable), tunnel WALL FACES bake as coursed
+    // sewer-stone bands wherever the duct meets earth (drawn per boundary
+    // EDGE, so runs read as continuous masonry), crossings glow with the
+    // street-light falling down their stair.
+    const floorAt = (gx: number, gy: number): { rk: ReturnType<typeof regionKind>; link: boolean } | null => {
+      const rk = regionKind(wf.regionAt!(gx * cs + cs / 2, gy * cs + cs / 2));
+      if (!rk || (rk.tier !== 1 && !rk.tierLink)) return null;
+      return { rk, link: !!rk.tierLink };
+    };
+    const jit = (gx: number, gy: number): number => {
+      const n = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
+      return n - Math.floor(n);
+    };
     for (let gy = gy0; gy <= gy1; gy++) {
       for (let gx = gx0; gx <= gx1; gx++) {
-        const id = wf.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
-        const rk = regionKind(id);
-        if (!rk || (rk.tier !== 1 && !rk.tierLink)) continue;
-        const tv = rk.tierVisual;
-        ctx.fillStyle = tv?.fill ?? '#1c241e';
-        ctx.fillRect(gx * cs, gy * cs, cs + 0.5, cs + 0.5);
-        if (rk.tierLink) {
-          // The way out reads bright — a culvert's ring of street-light.
-          ctx.fillStyle = 'rgba(200,220,232,0.16)';
-          ctx.fillRect(gx * cs, gy * cs, cs + 0.5, cs + 0.5);
+        const f = floorAt(gx, gy);
+        if (!f) continue;
+        const x = gx * cs, y = gy * cs;
+        // FLOOR: two flagstone tones off the world hash + a wet seam line.
+        const h = jit(gx, gy);
+        const base = f.rk!.tierVisual?.fill ?? '#1e2620';
+        ctx.fillStyle = base;
+        ctx.fillRect(x, y, cs + 0.5, cs + 0.5);
+        ctx.fillStyle = h > 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.14)';
+        ctx.fillRect(x + 1, y + 1, cs - 2, cs - 2);
+        if (h > 0.82) { // the odd wet slick catching the dark
+          ctx.fillStyle = 'rgba(120,180,150,0.07)';
+          ctx.fillRect(x + cs * 0.2, y + cs * 0.3, cs * 0.6, cs * 0.4);
         }
-        if (tv?.edge) {
-          ctx.strokeStyle = tv.edge;
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(gx * cs + 1, gy * cs + 1, cs - 2, cs - 2);
+        // WALL FACES: every edge against non-tunnel earth is coursed stone —
+        // a band + brick seams, drawn INTO the floor cell so runs join up.
+        const wallBand = (dx: number, dy: number): void => {
+          const t = Math.max(5, cs * 0.24);
+          const wx = dx === 0 ? x : (dx > 0 ? x + cs - t : x);
+          const wy = dy === 0 ? y : (dy > 0 ? y + cs - t : y);
+          const ww = dx === 0 ? cs + 0.5 : t;
+          const wh = dy === 0 ? cs + 0.5 : t;
+          ctx.fillStyle = '#26302a';
+          ctx.fillRect(wx, wy, ww, wh);
+          ctx.fillStyle = 'rgba(0,0,0,0.4)'; // mortar seams — the coursed read
+          if (dx === 0) {
+            for (let k = 0; k < 3; k++) ctx.fillRect(x + ((k + (gy % 2) * 0.5) / 3) * cs, wy, 1.4, wh);
+          } else {
+            for (let k = 0; k < 3; k++) ctx.fillRect(wx, y + ((k + (gx % 2) * 0.5) / 3) * cs, ww, 1.4);
+          }
+          ctx.fillStyle = '#54745c'; // the waterline highlight where wall meets floor
+          if (dy < 0) ctx.fillRect(x, wy + wh - 1.6, cs + 0.5, 1.6);
+          else if (dy > 0) ctx.fillRect(x, wy, cs + 0.5, 1.6);
+          else if (dx < 0) ctx.fillRect(wx + ww - 1.6, y, 1.6, cs + 0.5);
+          else ctx.fillRect(wx, y, 1.6, cs + 0.5);
+        };
+        if (!floorAt(gx, gy - 1)) wallBand(0, -1);
+        if (!floorAt(gx, gy + 1)) wallBand(0, 1);
+        if (!floorAt(gx - 1, gy)) wallBand(-1, 0);
+        if (!floorAt(gx + 1, gy)) wallBand(1, 0);
+        if (f.link) {
+          // The way out: street-light falls down the stair mouth.
+          const g2 = ctx.createRadialGradient(x + cs / 2, y + cs / 2, 0, x + cs / 2, y + cs / 2, cs * 1.4);
+          g2.addColorStop(0, 'rgba(210,228,238,0.22)');
+          g2.addColorStop(1, 'rgba(210,228,238,0)');
+          ctx.fillStyle = g2;
+          ctx.fillRect(x - cs, y - cs, cs * 3, cs * 3);
         }
       }
     }
+    // The hero's own lamp: a soft pool so the near tunnel reads (the light
+    // layer sits under this veil — the pool is the veil's own mercy).
+    const pp = world.player!.pos;
+    const lp = ctx.createRadialGradient(pp.x, pp.y, 0, pp.x, pp.y, 220);
+    lp.addColorStop(0, 'rgba(232,220,180,0.14)');
+    lp.addColorStop(1, 'rgba(232,220,180,0)');
+    ctx.fillStyle = lp;
+    ctx.fillRect(pp.x - 230, pp.y - 230, 460, 460);
   }
 
   /** How readable a label anchored at this POINT may be (0..1), keyed on the
@@ -3309,8 +3365,11 @@ export class Renderer {
     // is behind a ceiling (or under a street) — its bodies don't draw at
     // all. OPEN exposure draws both layers (the whole point of the buttes);
     // the same-tier combat law keeps the fights honest either way.
+    // EXCEPT on a CROSSING: a link cell is ground on BOTH layers (an open
+    // stair mouth) — whoever stands in the doorway is seen from both sides.
     if (world.zone.tiers?.exposure === 'covered'
-      && (a.tier ?? 0) !== (world.player?.tier ?? 0)) return;
+      && (a.tier ?? 0) !== (world.player?.tier ?? 0)
+      && !(world.walk?.regionAt && tierLinkOf(world.walk.regionAt(a.pos.x, a.pos.y)))) return;
 
     // THE THRONG SIGHT GATE (engine/throng.ts): an unclaimed husk exists
     // only to an attuned eye — the LOCAL bar must anchor its kind or the

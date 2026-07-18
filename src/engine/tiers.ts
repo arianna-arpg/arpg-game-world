@@ -264,19 +264,65 @@ export function carveSewerTier(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): 
     }
   };
   let joined = 0;
+  const wellDir = new Map<number, number>(); // well index → its tunnel's FIRST bearing
   for (let i = 1; i < wells.length; i++) {
     const a = wells[i - 1], b = wells[i];
     const elbow1 = vec(b.x, a.y), elbow2 = vec(a.x, b.y);
-    if (legClear(a, elbow1) && legClear(elbow1, b)) { paintLeg(a, elbow1); paintLeg(elbow1, b); joined++; }
-    else if (legClear(a, elbow2) && legClear(elbow2, b)) { paintLeg(a, elbow2); paintLeg(elbow2, b); joined++; }
+    let elbow: Vec2 | null = null;
+    if (legClear(a, elbow1) && legClear(elbow1, b)) elbow = elbow1;
+    else if (legClear(a, elbow2) && legClear(elbow2, b)) elbow = elbow2;
+    if (!elbow) continue;
+    paintLeg(a, elbow); paintLeg(elbow, b); joined++;
+    // The stair must FACE its tunnel: record each endpoint's first bearing.
+    if (!wellDir.has(i - 1)) wellDir.set(i - 1, Math.atan2(elbow.y - a.y, elbow.x - a.x));
+    if (!wellDir.has(i)) wellDir.set(i, Math.atan2(elbow.y - b.y, elbow.x - b.x));
   }
   if (!joined) return;
-  // Wells LAST (over the duct ends): the crossings stand on both layers.
-  for (const p of wells) {
+  // Wells LAST (over the duct ends): the crossings stand on both layers —
+  // and each joined well wears its STAIR PROP, rotated INTO the tunnel it
+  // starts (a stairway facing north into an east-running duct would lie).
+  for (let i = 0; i < wells.length; i++) {
+    const p = wells[i];
+    const dir = wellDir.get(i);
+    if (dir === undefined) continue; // an unjoined well carves nothing — no lying doors
     grid.fillRegion(p.x - cs, p.y - cs, p.x + cs, p.y + cs, 'culvert_well');
+    ctx.doodads.push({ pos: vec(p.x, p.y), radius: 16, kind: 'culvert_stair', rot: dir });
   }
   def.tiers = {
     kind: 'under', exposure: 'covered', label: 'the drains',
     packSplit: layoutParam(def, 'tierPackSplit', 0.3),
   };
+}
+
+/** THE DEEP DOOR PREFERS THE DRAINS: after scatter, a tiered district pulls
+ *  its sewer grates (the classic Sewerworks mints) down INTO the duct web —
+ *  weighted, never absolute (a grate left beside a building still reads).
+ *  Under-wall cells are the best seats: the deep door is FOUND from below. */
+export function relocateGratesIntoDucts(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
+  if (!def.tiers || def.tiers.kind !== 'under') return;
+  const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
+  const inTunnel: Vec2[] = [];
+  const preferred: Vec2[] = [];
+  const cols = Math.floor(ctx.arena.w / cs), rows = Math.floor(ctx.arena.h / cs);
+  for (let gy = 1; gy < rows - 1; gy++) {
+    for (let gx = 1; gx < cols - 1; gx++) {
+      const x = gx * cs + cs / 2, y = gy * cs + cs / 2;
+      const k = grid.regionAt?.(x, y);
+      if (k === 'sewer_duct') inTunnel.push(vec(x, y));
+      else if (k === 'sewer_under_wall') preferred.push(vec(x, y));
+    }
+  }
+  if (!inTunnel.length && !preferred.length) return;
+  const bias = layoutParam(def, 'grateInDrains', 0.7);
+  for (const d of ctx.doodads) {
+    if (d.kind !== 'sewer_grate' || !ctx.rng.chance(bias)) continue;
+    const pool = preferred.length && ctx.rng.chance(0.65) ? preferred : (inTunnel.length ? inTunnel : preferred);
+    for (let t = 0; t < 12; t++) {
+      const p = pool[ctx.rng.int(0, pool.length - 1)];
+      if (ctx.doodads.some(o => o !== d && (o.kind === 'culvert_stair' || o.kind === 'sewer_grate')
+        && Math.hypot(o.pos.x - p.x, o.pos.y - p.y) < 90)) continue;
+      d.pos = vec(p.x, p.y);
+      break;
+    }
+  }
 }
