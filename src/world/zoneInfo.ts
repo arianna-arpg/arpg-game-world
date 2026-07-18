@@ -41,6 +41,13 @@ export interface ZoneInfoEntry {
   /** Accent colour for the icon chip (reuse the marker stroke / faction colour
    *  for instant icon↔row correspondence). */
   color?: string;
+  /** Badge disc fill. When set, the pane renders the icon as a MINI BADGE —
+   *  the same filled disc + ring + glyph the chart draws — so the row and the
+   *  map icon are visibly the same object (the marker fold sets it; a plain
+   *  contributor may leave it unset for a flat glyph). */
+  fill?: string;
+  /** Glyph tone inside a filled badge (defaults to `color`). */
+  glyphColor?: string;
   /** Primary text (the authored event title, the biome name, …). */
   label: string;
   /** Secondary text — stage / tier / severity / monster level, etc. */
@@ -70,11 +77,17 @@ export function zoneInfoFor(world: World, zoneId: string): ZoneInfoEntry[] {
 
   // EVENTS — fold every map marker anchored on this node. Respect the SAME fog
   // gate the map uses (a 'charted' marker hides on un-visited ground), so the box
-  // never reveals more than the map already shows.
+  // never reveals more than the map already shows. The fold carries the marker's
+  // WHOLE badge look (fill/stroke/text) + its detail line: since map icons are
+  // pointer-transparent paint (the interactivity contract), this pane row IS the
+  // icon's one and only info surface — it must read as the same badge.
   for (const m of collectMarkers(world)) {
     if (m.zoneId !== zoneId) continue;
     if (m.fog === 'charted' && !charted) continue;
-    out.push({ kind: 'event', icon: m.glyph, color: m.stroke, label: m.title, z: m.z ?? 0 });
+    out.push({
+      kind: 'event', icon: m.glyph, color: m.stroke, fill: m.fill, glyphColor: m.text,
+      label: m.title, detail: m.detail, z: m.z ?? 0,
+    });
   }
 
   // EXTRA rows — richer event detail now, zone modifiers later (the spine).

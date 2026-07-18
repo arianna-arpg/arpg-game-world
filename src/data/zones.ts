@@ -152,6 +152,43 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
   return o.seal ?? OBJECTIVE_SEALS[o.kind];
 }
 
+/** THE MAP READ — how each objective kind announces itself on the world map's
+ *  zone pane BEFORE you walk in: a glyph + a static "what this ground asks"
+ *  phrase. No live progress here (that's World.objectiveText(), the in-zone
+ *  HUD line) — this is the chart's promise, not the fight's scoreboard. A
+ *  Record over the kind union so a new kind can't ship unreadable — the
+ *  compiler demands its row, exactly like OBJECTIVE_SEALS above. */
+export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; read: string }> = {
+  safe: { glyph: '⌂', read: 'sanctuary' },
+  none: { glyph: '·', read: 'open ground — nothing asked' },
+  clear: { glyph: '⚔', read: 'clear the area' },
+  waves: { glyph: '≋', read: 'survive the assault' },
+  escape: { glyph: '⇥', read: 'find the way out' },
+  spawners: { glyph: '✸', read: 'destroy the spawners' },
+  boss: { glyph: '☠', read: 'a lair' },
+  beacon: { glyph: '◬', read: 'charge the survey spire' },
+  procession: { glyph: '⛟', read: 'escort the caravan' },
+  bounty: { glyph: '✜', read: 'hunt the marked quarry' },
+  offering: { glyph: '♨', read: 'feed the hungering altar' },
+  puzzle: { glyph: '❖', read: 'answer the riddle' },
+};
+
+/** Resolve a spec to its pane read, honoring the spec-level refinements the
+ *  static table can't know (endless arenas, authored 'none' labels, the
+ *  waystone circuit). Boss NAMES stay a call-site concern — the panel owns
+ *  the MONSTERS import and its own spoiler policy. */
+export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string } {
+  const base = OBJECTIVE_READS[o.kind];
+  if (o.kind === 'none' && o.label) return { glyph: base.glyph, read: o.label };
+  if (o.kind === 'waves') {
+    return { glyph: base.glyph, read: o.waves === 0 ? 'endless waves' : `survive ${o.waves} waves` };
+  }
+  if (o.kind === 'beacon' && (o.count ?? 1) > 1) {
+    return { glyph: base.glyph, read: `attune the waystone circuit (${o.count})` };
+  }
+  return base;
+}
+
 /** Which kinds bank a sealed objective CHEST (the treasure that unlocks on
  *  completion). DECOUPLED from exit-sealing on purpose: a waves zone no longer
  *  locks its roads, yet still stakes its reward. Endless arenas never do —

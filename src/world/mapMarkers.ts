@@ -7,6 +7,13 @@
 // each map refresh. Adding one is `registerMarkerSource(...)`; the renderer
 // (panels.refreshMap) is a dumb generic pass, so NO panels.ts edit per marker.
 //
+// A marker is PAINT, never a pointer target (the interactivity contract,
+// ui/mapConfig.ts): the map renders the whole marker layer pointer-transparent,
+// so a badge can never intercept, flicker, or occlude its zone's hover. Its
+// words — `title` (+ optional `detail`) — surface in the map's ZONE PANE via
+// zoneInfo's marker fold, styled as the same badge (fill/stroke/text), NOT as
+// a native browser tooltip.
+//
 // `fog` is the visibility grant: 'always' shows even on un-charted ground (a
 // quest reveals its target before a path exists — the fog-of-war affordance),
 // 'charted' only once the anchor zone is visited (no spoilers — the corpse).
@@ -29,6 +36,9 @@ export interface MapMarker {
   text: string;
   r?: number;
   title: string;
+  /** Optional second line under `title` in the zone pane — the "what do I do
+   *  about it" half (the corpse's "reclaim your gear"). Pane-only, like title. */
+  detail?: string;
   /** 'always' = visible even on un-charted ground; 'charted' = only when the
    *  anchor zone is visited. */
   fog: 'always' | 'charted';
@@ -116,7 +126,10 @@ registerMarkerSource((world): MapMarker[] => {
     out.push({
       id: `corpse-${node.id}`, zoneId: node.id, glyph: '☠', fill: '#1a0e12', stroke: '#d05050',
       text: '#e8a0a0', r: 9, fog: 'charted', z: 10,
-      title: `Your ${d.classId} (lv ${d.charLevel}) fell in ${d.zoneName} — reclaim your gear`,
+      // The pane reads this under the zone's own header, so "here" is exact —
+      // the old tooltip's "fell in <name>" repeated what the header now says.
+      title: `Your ${d.classId} (lv ${d.charLevel}) fell here`,
+      detail: 'reclaim your gear from the corpse',
     });
   }
   return out;

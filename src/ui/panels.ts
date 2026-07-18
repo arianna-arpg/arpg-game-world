@@ -76,7 +76,7 @@ import { bound, defaultEnabledFor } from '../packages/manifest';
 import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
-import type { ZoneDef } from '../data/zones';
+import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
@@ -3408,9 +3408,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 
     // THE INTERACTIVITY CONTRACT (ui/mapConfig.ts): only zone GEOMETRY answers
     // the cursor — the disc, the waypoint diamond, and their invisible hit
-    // halos. TEXT NEVER HIT-TESTS, and NAME CARDS render as a separate top
-    // layer below, so a label can never cover a neighbor's waypoint and steal
-    // its click (the clustered-map dead-waypoint bug). Cards obey the player's
+    // halos. Every OTHER layer rides pointer-transparent groups at the
+    // assembly below, and the map carries NO native <title> tooltips — an
+    // icon's words live in the ZONE PANE (zoneInfo) instead, so a badge can
+    // never intercept or flicker a hover, and a label can never steal a
+    // neighbor's waypoint click (the clustered-map dead-waypoint bug). NAME
+    // CARDS render as a separate top layer and obey the player's
     // Settings.mapLabels mode ('hover' = rise under the cursor; 'always' = the
     // classic full chart) — except pinLabel kinds (data/zoneKinds.ts — towns),
     // the pinned zone, and the zone you stand in, whose cards stay FIXED on.
@@ -3461,10 +3464,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           font-size="${kd.glyph.size ?? 10}" fill="${kd.glyph.color}" pointer-events="none">${kd.glyph.char}</text>` : ''}
         ${wp ? `<rect x="${z.map.x - 16.5}" y="${z.map.y - 16.5}" width="9" height="9"
           fill="#5ad8d8" transform="rotate(45 ${z.map.x - 12} ${z.map.y - 12})"${travelAttrs}/>
-        <circle cx="${z.map.x - 12}" cy="${z.map.y - 12}" r="${MAP_CFG.wpHitR}" fill="none" pointer-events="all"${travelAttrs}>
-          <title>${canTravel ? 'Waypoint — click to travel' : 'Waypoint (attuned)'}</title></circle>` : ''}
+        <circle cx="${z.map.x - 12}" cy="${z.map.y - 12}" r="${MAP_CFG.wpHitR}" fill="none" pointer-events="all"${travelAttrs}/>` : ''}
         ${z.port ? `<text x="${z.map.x + 14}" y="${z.map.y - 10}" text-anchor="middle"
-          font-size="11" fill="#9ad0e8">⚓<title>Port — sail from its dock</title></text>` : ''}
+          font-size="11" fill="#9ad0e8" pointer-events="none">⚓</text>` : ''}
         ${current ? `<text x="${z.map.x}" y="${z.map.y - 18}" text-anchor="middle"
           font-size="9" fill="#ffd700" pointer-events="none">YOU ARE HERE</text>` : ''}</g>`;
 
@@ -3564,10 +3566,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // 'always' markers (the quest target) pierce the fog. Adding a marker is a
     // registerMarkerSource() call — no edit here. Anchors on a zone node, or a
     // raw coordinate when the target isn't yet a charted node.
-    // Marker titles come from authored data (quest labels, class/zone names), so
-    // escape them before they land in an SVG <title> — a stray < or & would break
-    // the whole map's XML.
-    let deaths = '';
+    // Markers are PAINT (the interactivity contract — ui/mapConfig.ts): the
+    // whole layer renders inside a pointer-transparent group below, so a badge
+    // on a zone passes hover/click/travel straight through to the node
+    // geometry beneath it, and its words (title/detail) reach the player
+    // through the ZONE PANE's marker fold (world/zoneInfo.ts) — never a
+    // native tooltip fighting the hover card.
+    let markers = '';
     for (const m of collectMarkers(world)) {
       const node = m.zoneId ? world.zoneMap[m.zoneId] : undefined;
       // Markers stay on THEIR dimension's tab — a zone-anchored marker derives
@@ -3579,15 +3584,8 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       const cx = node ? node.map.x : (m.coord?.x ?? 0);
       const cy = node ? node.map.y : (m.coord?.y ?? 0);
       const r = m.r ?? 9;
-      // A zone-anchored marker is an ALIAS of its node, never an occluder (the
-      // interactivity contract — ui/mapConfig.ts): it carries data-zone so
-      // hover/pin resolve through it, and the node's travel click when one
-      // exists — clicking the quest "?" on a waypoint zone just GOES there.
-      const mTravel = node && world.discoveredWaypoints.has(node.id) && world.zone.id !== node.id;
-      deaths += `<g${node ? ` data-zone="${node.id}"` : ''}${mTravel ? ` class="wp-node" data-wp="${node.id}"` : ''}
-        style="cursor:${mTravel ? 'pointer' : 'help'}"><title>${esc(m.title)}</title>`
-        + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${m.fill}" stroke="${m.stroke}" stroke-width="1.5"/>`
-        + `<text x="${cx}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="${m.text}" pointer-events="none">${m.glyph}</text></g>`;
+      markers += `<g><circle cx="${cx}" cy="${cy}" r="${r}" fill="${m.fill}" stroke="${m.stroke}" stroke-width="1.5"/>`
+        + `<text x="${cx}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="${m.text}">${m.glyph}</text></g>`;
     }
 
     // The map grows as frontiers are charted — fit the view to the VISIBLE graph
@@ -3610,6 +3608,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // Preserve the side-box scroll across the wholesale rebuild — else the 0.5s
     // auto-refresh snaps a pinned, scrolled list back to the top twice a second.
     const prevAsideScroll = this.worldMap.querySelector<HTMLElement>('#map-aside')?.scrollTop ?? 0;
+    // The SVG ASSEMBLY enforces the interactivity contract STRUCTURALLY: every
+    // layer but the nodes rides a pointer-events:none group (under: ocean/
+    // washes/roads/stubs; over: markers/overlay badges/name cards). Paint
+    // order is unchanged — but no overlay layer, shipped or future, can ever
+    // hit-test over a zone or pop a native tooltip, with zero per-overlay
+    // audits (an overlay-authored <title> inside a transparent group is inert
+    // markup: no hit target, no tooltip).
     this.worldMap.innerHTML = `
       <h2>World Map
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
@@ -3624,7 +3629,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
       ${this.mapLayerChipsHtml(allLayers)}
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none">${ocean}${simUnder}${edges}${stubs}${nodes}${deaths}${simOver}${cards}</svg>
+        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${cards}</g></svg>
         <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
       </div>`;
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
@@ -3783,9 +3788,24 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       const kc = kd.ring?.color ?? '#ffd700';
       chips.push(`<span class="zi-chip" style="color:${kc};border-color:${kc}">${kd.glyph ? esc(kd.glyph.char) + ' ' : ''}${esc(kd.label)}${kd.subLabel ? ` — ${esc(kd.subLabel)}` : ''}</span>`);
     } else if (revealed) {
-      const lvText = zone!.objective.kind === 'waves' && zone!.objective.waves === 0
-        ? 'endless waves' : `monster lv ${zone!.level}`;
-      chips.push(`<span class="zi-chip">${bi ? esc(bi.label) + ' · ' : ''}${lvText}</span>`);
+      // Plain level line — the ask itself (endless waves included) now lives
+      // on the OBJECTIVE chip below, so the two never say the same thing.
+      chips.push(`<span class="zi-chip">${bi ? esc(bi.label) + ' · ' : ''}monster lv ${zone!.level}</span>`);
+    }
+    // THE OBJECTIVE READ — "what this ground asks", straight from the data
+    // vocabulary (objectiveRead / OBJECTIVE_READS, data/zones.ts). Same fog
+    // gate as the name; 'safe' stays silent (the kind chip already says
+    // sanctuary). WALKED ground names a lair's master; merely scouted ground
+    // keeps the mystery. A sealing ask says so — the one fact that reroutes a
+    // run — and a met one wears its ✓.
+    if (revealed && zone!.objective.kind !== 'safe') {
+      const o = zone!.objective;
+      const or = objectiveRead(o);
+      const done = world.completedObjectives.has(zoneId);
+      const bossName = o.kind === 'boss' && charted ? MONSTERS[o.id]?.name : undefined;
+      const label = bossName ? `${or.read} — ${bossName}` : or.read;
+      const tail = done ? ' ✓' : objectiveSeals(o) ? ' · exits seal' : '';
+      chips.push(`<span class="zi-chip"${done ? ' style="color:#7ec46a;border-color:#3a5a3e"' : ''}>${esc(or.glyph)} ${esc(label)}${esc(tail)}</span>`);
     }
     if (world.discoveredWaypoints.has(zoneId)) {
       chips.push(`<span class="zi-chip" style="color:#5ad8d8;border-color:#3a7a7a">◆ waypoint${zoneId !== world.zone.id ? ' — click its node to travel' : ''}</span>`);
@@ -3815,8 +3835,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       if (!rows.length) continue;
       body += `<div class="zi-group">${g.title}</div>`;
       for (const r of rows) {
-        body += `<div class="zi-row">`
-          + `<span class="zi-icon" style="color:${r.color ?? '#d8d4c8'}">${esc(r.icon)}</span>`
+        // A marker-mirroring row wears the SAME BADGE the chart draws (disc
+        // fill + ring + glyph). Map icons are pointer-transparent paint, so
+        // this row is the icon's one info surface — the correspondence must
+        // be visual, not just a matching glyph.
+        const icon = r.fill
+          ? `<span class="zi-badge" style="background:${r.fill};border-color:${r.color ?? '#d8d4c8'};color:${r.glyphColor ?? r.color ?? '#d8d4c8'}">${esc(r.icon)}</span>`
+          : `<span class="zi-icon" style="color:${r.color ?? '#d8d4c8'}">${esc(r.icon)}</span>`;
+        body += `<div class="zi-row">` + icon
           + `<span class="zi-txt">${esc(r.label)}`
           + (r.detail ? ` <span class="zi-detail">— ${esc(r.detail)}</span>` : '')
           + `</span></div>`;

@@ -3,14 +3,24 @@
 // INTERACTIVITY CONTRACT the panel renders by:
 //
 //   1. Only ZONE GEOMETRY answers the cursor — the disc, the waypoint diamond,
-//      and their invisible hit halos below. TEXT NEVER HIT-TESTS (name cards,
-//      sub-lines, "YOU ARE HERE", marker glyphs all ride pointer-events:none),
-//      so a label can never cover a neighbor's waypoint and steal its click —
-//      the clustered-map "dead waypoint" bug is impossible by construction.
-//   2. Anything ANCHORED on a zone (a quest "?", a corpse skull) is an ALIAS
-//      of that zone's interactivity, never an occluder: it carries the zone's
-//      hover identity, and the zone's travel click when one exists.
-//   3. NAME CARDS are an overlay layer painted above everything, shown by the
+//      and their invisible hit halos. NOTHING ELSE HIT-TESTS: refreshMap wraps
+//      every other layer (biome/territory washes, roads, markers, overlay
+//      badges, name cards) in pointer-events:none GROUPS at the one render
+//      site, so no icon, sigil, or label — present or future, from any
+//      overlay — can intercept, flicker, or steal a zone's hover/click. The
+//      clustered-map "dead waypoint" bug and the badge-hover flicker are
+//      impossible by construction, with zero per-overlay audits.
+//   2. An icon ANCHORED on a zone (a quest "?", a corpse skull) still reads
+//      and travels as its zone BY GEOMETRY: it sits inside the node's hit
+//      halo, so the pointer falls through to the disc beneath. (The old
+//      data-zone "alias" attributes on markers are retired as redundant.)
+//   3. THE ZONE PANE (#map-aside, right of the chart) is THE info surface.
+//      The map itself carries NO native <title> tooltips — every icon's words
+//      live in the pane instead, drawn as the SAME badge (zoneInfo folds each
+//      marker's glyph/fill/stroke/detail) beside the identity chips (kind,
+//      biome · level, the objective read, waypoint, port). Hover previews a
+//      zone in the pane; click pins it.
+//   4. NAME CARDS are an overlay layer painted above everything, shown by the
 //      MAP_LABEL_MODES policy below (Settings.mapLabels persists the choice);
 //      ZONE_KINDS entries with pinLabel (data/zoneKinds.ts — towns) keep
 //      their card in every mode.
