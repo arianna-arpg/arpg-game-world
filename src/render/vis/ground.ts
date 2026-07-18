@@ -860,6 +860,19 @@ export class GroundRenderer {
             ctx.fillStyle = vis.fill;
             ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
             ctx.globalAlpha = 1;
+            // TEXTURE FLAGS ON VISUAL ROWS: masonry / foliage / eyes are
+            // declared on RegionVisualSpec, but the bakes below only ran on
+            // the theme-tinted (visual-less) wall branch — every coursed row
+            // (drystone, ruin_wall, rampart, the durance…) silently baked
+            // flat. Honor them here in the row's OWN tones (ramp derived
+            // from vis.fill), under the boundary edge so the rim still wins.
+            if (!def?.walkable) {
+              const vDark = mix(vis.fill, '#000000', 0.42);
+              const vLit = mix(vis.fill, '#ffffff', 0.34);
+              if (vis.masonry) this.bakeMasonry(ctx, x, y, cell, ox, oy, vis.fill, vDark, vLit);
+              if (vis.foliage) this.bakeFoliage(ctx, x, y, cell, ox, oy, vis.fill, vDark, vLit);
+              if (vis.eyes) this.bakeWallEyes(ctx, x, y, cell, ox, oy, vis.fill, vDark, vLit);
+            }
           }
           // BOUNDARY EDGE (RegionVisualSpec.edge): a bright rim on every side
           // facing walkable ground, so a wall in its floor's own tones still

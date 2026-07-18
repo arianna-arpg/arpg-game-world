@@ -99,3 +99,31 @@ registerMeld({
     { kind: 'rocks', count: [1, 2], radius: [10, 20] },
   ],
 });
+
+// THE FARMLAND'S REACH — the worked land announces itself: the first wheat
+// stands past the treeline, a rail fence somebody still mends, a bale left
+// where the cutting stopped.
+registerMeld({
+  id: 'farmland_meld',
+  label: 'the fields begin',
+  rows: [
+    { kind: 'wheat', count: [2, 4] },
+    { kind: 'hay_bale', count: [0, 2] },
+    { kind: 'grass', count: [1, 3] },
+    { kind: 'flowers', count: [0, 2] },
+    { kind: 'scarecrow', count: [0, 1] },
+  ],
+});
+
+// THE CITY'S REACH — the road grows crowded before the wall does: a lamp
+// somebody lights, cast-off cargo, rubble where the verge was quarried.
+registerMeld({
+  id: 'metropolis_meld',
+  label: 'the city rises beyond',
+  rows: [
+    { kind: 'street_lamp', count: [1, 2] },
+    { kind: 'broken_cart', count: [0, 1] },
+    { kind: 'rubble', count: [1, 2] },
+    { kind: 'hay_bale', count: [0, 1] },
+  ],
+});

@@ -469,6 +469,375 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
   },
 
+  // THE FARMLAND — the settled belt's worked half (biome 'farmland', the
+  // 'fields' recipe: engine/settled.ts). The layered approach the country
+  // stages by FACE: open shires → crop seas (wheat that eats sight — the
+  // veil fabric at ankle height) → harvest towns (the village kit, paved
+  // and lamplit) → fallow shires where the wild creeps back. Real roads
+  // portal-to-portal on every face; the crop fields are veil patches, so
+  // the calm is watchful — you cannot read the wheat.
+  farmland: {
+    id: 'farmland',
+    forceLayout: 'fields',
+    compositions: [
+      { composition: 'harvest_steading', chance: 0.24 },
+      { composition: 'orchard_rows', chance: 0.14 },
+      { composition: 'drover_waystation', chance: 0.1 },
+      { composition: 'witchs_croft', chance: 0.08 },
+    ],
+    nameFirst: ['Wheatlea', 'Millbrook', 'Barleigh', 'Croftmere', 'Tithe', 'Oxbow', 'Greenlea', 'Fallowdene', 'Hedgeford', 'Drover’s', 'Harrowmill', 'Goodman’s'],
+    nameSecond: ['Fields', 'Furlongs', 'Crofts', 'Acres', 'Lanes', 'Commons', 'Holdings', 'Fallows', 'Hedgerows', 'Reach', 'Steading', 'Grange'],
+    theme: {
+      dayLight: 1.14,
+      nightDark: 0.82,
+      // Worked earth: green rows ripening to gold, lifted along the open
+      // lanes, banked dark at the pond margins.
+      ground: {
+        scale: 1.5, strength: 1.05, speckles: 0.42,
+        palette: ['#1a1c0e', '#293014', '#3b3d1a', '#4d4a22', '#5c552a'], bias: 0.58, alpha: 0.5,
+        coast: { reach: 80, shift: -0.28, kinds: ['water', 'bog'] },
+        clearing: { reach: 130, lift: 0.22 },
+      },
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      floor: '#12150c', grid: '#1b2112', border: '#6f6a4a',
+      obstacle: '#4c473a', obstacleEdge: '#7a7258', accent: '#d8c06a',
+      tree: '#3f5c2e', wall: '#4a4438',
+    },
+    sizeW: [3200, 4400], sizeH: [2300, 3200], ellipseChance: 0.25, biome: 'farmland', sky: 'open',
+    layoutParams: {
+      massifMasses: [
+        { kind: 'hedge', weight: 3 }, { kind: 'croft', weight: 2 }, { kind: 'fold', weight: 1.5 },
+      ],
+      massifCoverage: [0.09, 0.14],
+      roadCount: [1, 2], roadKind: 'road', roadWidth: [15, 20],
+    },
+    // The base face: the open shires — worked land at its widest.
+    layout: [
+      { kind: 'grass', count: [5, 8] },
+      { kind: 'flowers', count: [2, 4] },
+      { kind: 'brush', count: [2, 4] },
+      { kind: 'rocks', count: [2, 4], radius: [14, 26] },
+      { kind: 'cluster', count: [1, 2], cluster: 'wheat_field' },
+      { kind: 'formation', count: [1, 2], formation: 'fence_line' },
+      { kind: 'formation', count: [0, 1], formation: 'orchard_walk' },
+      { kind: 'hay_bale', count: [1, 3] },
+      { kind: 'well', count: [0, 1] },
+      { kind: 'cluster', count: [0, 1], cluster: 'village_green' },
+      { kind: 'cluster', count: [0, 1], cluster: 'millstead' },
+      { kind: 'structure', count: [0, 1], structure: 'hovel' },
+      { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+    ],
+    // Whatever face rolls, somebody worked this ground and left in a hurry.
+    common: [
+      { kind: 'hay_bale', count: [0, 2] },
+    ],
+    variants: [
+      // The deep fields: wheat and corn to every horizon, the road a rumor
+      // between the stands — vision is the fight here (Grim Dawn's fields).
+      { name: 'the crop seas', layout: [
+        { kind: 'cluster', count: [3, 5], cluster: 'wheat_field' },
+        { kind: 'formation', count: [2, 4], formation: 'corn_rows' },
+        { kind: 'formation', count: [1, 2], formation: 'scarecrow_row' },
+        { kind: 'cluster', count: [0, 1], cluster: 'millstead' },
+        { kind: 'grass', count: [3, 5] },
+        { kind: 'hay_bale', count: [1, 3] },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'hedge', weight: 3 }, { kind: 'croft', weight: 1 }],
+        massifCoverage: [0.05, 0.09],
+        roadCount: [1, 1], roadWidth: [14, 18],
+      } },
+      // The settled face: the village kit proper — cottages, the chapel,
+      // trades, the green, and a paved lamplit way through it all.
+      { name: 'the harvest towns', layout: [
+        { kind: 'cluster', count: [1, 1], cluster: 'village_green' },
+        { kind: 'structure', count: [1, 3], structure: 'cottage' },
+        { kind: 'structure', count: [0, 1], structure: 'longhouse' },
+        { kind: 'structure', count: [0, 1], structure: 'chapel' },
+        { kind: 'structure', count: [0, 1], structure: 'hay_barn' },
+        { kind: 'structure', count: [0, 1], structure: 'coaching_inn' },
+        { kind: 'structure', count: [0, 1], structure: 'skinners_hut' },
+        { kind: 'structure', count: [0, 1], structure: 'fletchers_range' },
+        { kind: 'structure', count: [0, 2], structure: 'hovel' },
+        { kind: 'formation', count: [1, 2], formation: 'fence_line' },
+        { kind: 'cluster', count: [1, 2], cluster: 'wheat_field' },
+        { kind: 'flowers', count: [2, 4] },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'croft', weight: 2 }, { kind: 'hedge', weight: 1.5 }],
+        massifCoverage: [0.05, 0.09],
+        roadCount: [2, 3], roadKind: 'paved_way', roadWidth: [20, 26], wayLamps: 'street_lamp',
+      } },
+      // The wild rim: the fields nobody bound this year — the hedges gone
+      // leggy, the old walls swallowed, the watchers walking their rows.
+      { name: 'the fallow shires', layout: [
+        { kind: 'grass', count: [6, 9] },
+        { kind: 'dead_tree', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'scarecrow_row' },
+        { kind: 'cluster', count: [1, 2], cluster: 'wheat_field' },
+        { kind: 'rocks', count: [3, 5], radius: [14, 26] },
+        { kind: 'bone_pile', count: [0, 2] },
+        { kind: 'structure', count: [0, 1], structure: 'hovel' },
+      ], layoutParams: {
+        massifMasses: [
+          { kind: 'hedge', weight: 2 }, { kind: 'ruincourt', weight: 2 },
+          { kind: 'fold', weight: 1.5 }, { kind: 'barrow', weight: 0.5 },
+        ],
+        massifCoverage: [0.12, 0.17],
+        overgrowth: [0.08, 0.2],
+      } },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      // The worked land's own troubles: the Chattel gone wrong, the Carven
+      // watching the rows, the roads' bandits — and the boar that owns the
+      // headland. Deeper presence brings the harvest court out in force.
+      table: [
+        { id: 'feral_hen', weight: 2, presence: { to: 8, fadeOut: 4 } },
+        { id: 'feral_aurochs', weight: 2 },
+        { id: 'shepherds_hound', weight: 2 },
+        { id: 'sounder_boar', weight: 2 },
+        { id: 'bandit_cutthroat', weight: 2.5 },
+        { id: 'bandit_bruiser', weight: 1.5, presence: { from: 4, fadeIn: 3 } },
+        { id: 'gourdling', weight: 2, presence: { to: 14, fadeOut: 6 } },
+        { id: 'patch_lurker', weight: 1.5 },
+        { id: 'scarecrow_watcher', weight: 2 },
+        { id: 'lantern_sower', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'harvest_effigy', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'the_bellwether', weight: 0.5, presence: { from: 9, fadeIn: 4 } },
+        { id: 'carven_king', weight: 0.5, presence: { from: 11, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2.5 },
+      { kind: 'procession', weight: 1.5 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'offering', weight: 1 },
+    ],
+    caveLayouts: { plains: 3, rooms: 2 },
+  },
+
+  // THE METROPOLIS — the walled city (biome 'metropolis', the 'district'
+  // recipe: engine/settled.ts). An ENCLAVE: every crossing into the biome
+  // wears the city gate. The faces are DISTRICTS sharing one generator:
+  // the warrens' brick massing (alley sight-fights, squats hollowed into
+  // the block mass, stairs that climb into minted rooms), the boulevards'
+  // planned blocks (real plan structures off a weighted pool, plazas,
+  // paved seams), and the high quarter's manor courts (garden walls,
+  // fountains, townhouses seated INSIDE the grand courts).
+  metropolis: {
+    id: 'metropolis',
+    forceLayout: 'district',
+    compositions: [{ composition: 'hangmans_hill', chance: 0.1 }],
+    nameFirst: ['Coppergate', 'Tallow', 'Lantern', 'Cinder', 'Wethervane', 'Guilder’s', 'Old King’s', 'Pauper’s', 'Silverstitch', 'Cordwainer’s', 'Bellfound', 'Ledgerman’s'],
+    nameSecond: ['Ward', 'Rows', 'Quarter', 'Walk', 'Shambles', 'Terraces', 'Close', 'Yards', 'Circus', 'Gateside', 'Commons', 'Steps'],
+    theme: {
+      dayLight: 1.06,
+      nightDark: 0.94,
+      // Paved greys warmed by lamp gold; the brick mass reads warm against
+      // the setts, the manor stone cool against both.
+      ground: {
+        scale: 1.2, strength: 0.9, speckles: 0.3,
+        palette: ['#16130f', '#221d16', '#2e2820', '#3a332a', '#453d31'], bias: 0.52, alpha: 0.5,
+        clearing: { reach: 110, lift: 0.18 },
+      },
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      floor: '#131210', grid: '#1c1a16', border: '#6a6456',
+      obstacle: '#4a3f33', obstacleEdge: '#7d705c', accent: '#d8c06a',
+      tree: '#3a4a2c', wall: '#4a3226',
+    },
+    sizeW: [3000, 4000], sizeH: [2200, 3000], ellipseChance: 0, biome: 'metropolis', sky: 'open',
+    layoutParams: {
+      districtMode: 'massing',
+      massifMasses: [{ kind: 'tenement', weight: 3 }, { kind: 'manor', weight: 0.8 }],
+      massifCoverage: [0.2, 0.28], massifSizeR: [170, 300], massifLaneW: 84,
+      boulevards: [1, 2],
+      courtKit: [
+        { kind: 'market_stall', weight: 2, radius: [20, 26] },
+        { kind: 'well', weight: 1, radius: [16, 20] },
+        { kind: 'street_lamp', weight: 1.5, radius: [9, 12] },
+        { kind: 'broken_cart', weight: 1, radius: [15, 19] },
+      ],
+    },
+    layout: [
+      { kind: 'rubble', count: [2, 4] },
+      { kind: 'broken_cart', count: [1, 2] },
+      { kind: 'market_stall', count: [1, 3] },
+      { kind: 'street_lamp', count: [2, 4] },
+      { kind: 'banner_post', count: [1, 2] },
+      { kind: 'structure', count: [0, 1], structure: 'townhouse' },
+    ],
+    common: [
+      { kind: 'rubble', count: [1, 2] },
+    ],
+    variants: [
+      // The ghetto: brick stacked on brick, the lanes barely a cart wide —
+      // line of sight is its own fight off the boulevard, and the blocks
+      // themselves hide squats, stashes and stairs (the hollows fabric).
+      { name: 'the warrens', layout: [
+        { kind: 'rubble', count: [4, 7] },
+        { kind: 'broken_cart', count: [1, 2] },
+        { kind: 'bone_pile', count: [1, 3] },
+        { kind: 'street_lamp', count: [1, 2] },
+        { kind: 'web', count: [1, 3] },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'tenement', weight: 4 }],
+        massifCoverage: [0.26, 0.34], massifSizeR: [150, 260], massifLaneW: 64,
+        boulevards: [1, 1],
+        courtKit: [
+          { kind: 'broken_cart', weight: 2, radius: [15, 19] },
+          { kind: 'rubble', weight: 2, radius: [14, 22] },
+          { kind: 'firewood_pile', weight: 1, radius: [10, 14] },
+        ],
+      } },
+      // The planned city: surveyed blocks off the pool, plazas at the
+      // gates, paved seams, corner lamps — the furbished roadscape.
+      { name: 'the boulevards', layout: [
+        { kind: 'market_stall', count: [2, 4] },
+        { kind: 'banner_post', count: [1, 3] },
+        { kind: 'street_lamp', count: [2, 4] },
+        { kind: 'flowers', count: [1, 3] },
+      ], layoutParams: {
+        districtMode: 'blocks',
+        blockSize: 380, streetWidth: 100, plazaChance: 0.24, paveStreets: true,
+        blockPool: [
+          { structure: 'metro_house', weight: 3 },
+          { structure: 'townhouse', weight: 2 },
+          { structure: 'longhouse', weight: 1 },
+          { structure: 'market_row', weight: 1 },
+          { structure: 'cottage', weight: 0.8 },
+          { structure: 'chapel', weight: 0.6 },
+        ],
+        plazaKit: [
+          { kind: 'fountain', weight: 2, radius: [20, 26] },
+          { kind: 'market_stall', weight: 2, radius: [20, 26] },
+          { kind: 'well', weight: 1, radius: [16, 20] },
+        ],
+      } },
+      // The high quarter: garden courts behind pale stone, fountains and
+      // clipped beasts, townhouses seated in the grand yards — and stairs
+      // that go UP (the ascension lane's richest ground).
+      { name: 'the high quarter', layout: [
+        { kind: 'formation', count: [1, 2], formation: 'iron_boundary' },
+        { kind: 'formation', count: [1, 2], formation: 'topiary_walk' },
+        { kind: 'structure', count: [1, 2], structure: 'townhouse' },
+        { kind: 'structure', count: [0, 1], structure: 'chapel' },
+        { kind: 'street_lamp', count: [2, 4] },
+        { kind: 'flowers', count: [2, 4] },
+      ], layoutParams: {
+        massifMasses: [{ kind: 'manor', weight: 3.5 }, { kind: 'tenement', weight: 0.6 }],
+        massifCoverage: [0.16, 0.22], massifSizeR: [200, 340], massifLaneW: 110,
+        boulevards: [1, 2],
+        courtKit: [
+          { kind: 'fountain', weight: 2, radius: [20, 26] },
+          { kind: 'dead_topiary', weight: 2, radius: [14, 20] },
+          { kind: 'street_lamp', weight: 2, radius: [9, 12] },
+          { kind: 'weathered_statue', weight: 1.5, radius: [12, 16] },
+        ],
+        courtStructure: { structure: 'townhouse', chance: 0.5 },
+        courtStructMinR: 200,
+      } },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      // The city's own food chain: the vermin tide underfoot, the crimp
+      // gangs working the lanes, the umbral trades after dark — and the
+      // Hollowborn walking the armories the guilds sealed.
+      table: [
+        { id: 'gutter_shiv', weight: 3, presence: { to: 16, fadeOut: 7 } },
+        { id: 'press_ganger', weight: 2, presence: { from: 3, fadeIn: 2 } },
+        { id: 'crimp_captain', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'warren_rat', weight: 2.5, presence: { to: 14, fadeOut: 6 } },
+        { id: 'fester_rat', weight: 1.5 },
+        { id: 'verminkin_skulker', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'verminkin_broodpriest', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'rat_king', weight: 0.5, presence: { from: 9, fadeIn: 4 } },
+        { id: 'bandit_cutthroat', weight: 1.5 },
+        { id: 'umbral_footpad', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'hollow_vanguard', weight: 1.5, presence: { from: 6, fadeIn: 3 } },
+        { id: 'blade_swarm', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'shield_anima', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'the_unworn', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2.5 },
+      { kind: 'circuit', weight: 1.5 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'offering', weight: 0.5 },
+    ],
+    caveLayouts: { rooms: 3, dungeon: 2 },
+    // The blocks themselves keep secrets: squats and stashes walled into the
+    // brick mass, and stairwells that climb into minted rooms (the ascension
+    // lane through the hollows fabric).
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 2, ambush_hollow: 2, stairwell_hollow: 2 },
+    },
+  },
+
+  // THE TOWNHOUSE — the settled belt's interior (frontier:false): the floors
+  // the city_stair/garret_stair mints climb into. Procedural rooms on worn
+  // boards (every house rolls its own floorplan — the ruin_gate pattern
+  // turned vertical); a garret_stair row means some houses climb twice.
+  townhouse: {
+    id: 'townhouse',
+    nameFirst: ['Worn', 'Creaking', 'Panelled', 'Lamplit', 'Dusty', 'Shuttered'],
+    nameSecond: ['Rooms', 'Boards', 'Landing', 'Lodgings', 'Halls'],
+    theme: {
+      ambientDark: 0.22,
+      ground: {
+        scale: 1.1, strength: 0.8, speckles: 0.2,
+        palette: ['#191106', '#241a0c', '#2e2210', '#382a16', '#42321c'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#1c130a', grid: '#241a0e', border: '#5c4a32',
+      obstacle: '#3a2c1e', obstacleEdge: '#6a5638', accent: '#e8c87a',
+      tree: '#3a2c1e', wall: '#3a2c1e',
+    },
+    sizeW: [1000, 1400], sizeH: [800, 1100], ellipseChance: 0, biome: 'metropolis', sky: 'sheltered',
+    frontier: false, perfProbe: true,
+    layoutParams: { floorStyle: 'boards', interiorWall: 'tenement_wall', rooms: [3, 6], doorChance: 0.65 },
+    layout: [
+      { kind: 'garret_stair', count: [0, 1] },
+      { kind: 'web', count: [1, 3] },
+      { kind: 'dust_sheet', count: [0, 2] },
+      { kind: 'candelabra', count: [0, 2] },
+    ],
+    variants: [
+      // The kept rooms: somebody still dusts here — and keeps the stair lit.
+      { name: 'the kept rooms', layout: [
+        { kind: 'garret_stair', count: [0, 1] },
+        { kind: 'candelabra', count: [1, 3] },
+        { kind: 'standing_portrait', count: [0, 2] },
+        { kind: 'manor_mirror', count: [0, 1] },
+      ] },
+      // The squat: the door was never locked and everything burnable burned.
+      { name: 'the squat', layout: [
+        { kind: 'garret_stair', count: [0, 1] },
+        { kind: 'web', count: [2, 4] },
+        { kind: 'rubble', count: [1, 3] },
+        { kind: 'bone_pile', count: [0, 2] },
+      ] },
+    ],
+    packs: {
+      count: [2, 3], size: [2, 3],
+      table: [
+        { id: 'gutter_shiv', weight: 2 },
+        { id: 'warren_rat', weight: 2 },
+        { id: 'fester_rat', weight: 1 },
+        { id: 'umbral_footpad', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'verminkin_skulker', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
+    caveLayouts: { rooms: 1 },
+  },
+
   // THE FOREST — the deep wood proper. Where the deepwood/grove is open
   // woodland you see across, the forest is a CANOPY: the 'forest' layout
   // recipe (biome allowedLayouts) plants veiled walk-under masses whose

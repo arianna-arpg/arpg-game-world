@@ -624,3 +624,43 @@ registerComposition({
     { kind: 'formation', formation: 'iron_boundary', count: [0, 1] },
   ],
 });
+
+// --- THE SETTLED BELT ---------------------------------------------------------
+
+// THE HARVEST STEADING: a working farm as ONE idea — the house on its cleared
+// yard, the barn off across the track, fences binding the wheat, the well
+// where the yard meets the lane. The farmland's signature composition.
+registerComposition({
+  id: 'harvest_steading',
+  sites: [
+    { id: 'house', radius: [110, 150], hard: true },
+    { id: 'barn', radius: [120, 160] },
+  ],
+  pre: [{ kind: 'clearing', at: 'house', count: [1, 1], radius: [90, 120] }],
+  post: [
+    { kind: 'structure', structure: 'cottage', at: 'house', count: [1, 1] },
+    { kind: 'structure', structure: 'hay_barn', at: 'barn', count: [0, 1] },
+    { kind: 'formation', formation: 'fence_line', count: [1, 2] },
+    { kind: 'cluster', cluster: 'wheat_field', count: [1, 2] },
+    { kind: 'hay_bale', count: [1, 3] },
+    { kind: 'well', count: [0, 1] },
+    { kind: 'scarecrow', count: [0, 1] },
+  ],
+});
+
+// THE GOBLIN WARREN CAMP: the hovel blueprint re-skinned showing NATIVE — a
+// staked hut on trodden ground, the warband's fire and litter, deep-grove
+// squatters where the shire's poorest cousin would stand (the reskin
+// doctrine's proof: one plan, two countries).
+registerComposition({
+  id: 'goblin_warren_camp',
+  sites: [{ id: 'camp', radius: [140, 180] }],
+  pre: [{ kind: 'clearing', at: 'camp', count: [1, 1], radius: [100, 130] }],
+  post: [
+    { kind: 'structure', structure: 'goblin_hut', at: 'camp', count: [1, 1] },
+    { kind: 'structure', structure: 'goblin_hut', count: [0, 1] },
+    { kind: 'camp', count: [1, 1] },
+    { kind: 'bone_pile', count: [1, 3] },
+    { kind: 'banner_post', count: [0, 2] },
+  ],
+});

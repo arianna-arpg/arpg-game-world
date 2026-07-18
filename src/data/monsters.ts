@@ -793,6 +793,35 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
       announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
   ],
+  // THE FARMLAND: the settled belt's living texture — the pasture grazing
+  // (posted, flocking, wolf-hunted through the prey lane), the folk about
+  // their yards, the watch at its posts, and the sky's opportunists. The
+  // wolves' hunger drives make the fold-raid a scene that stages ITSELF.
+  farmland: [
+    { id: 'wool_sheep', chance: 0.8, count: [4, 7] },
+    { id: 'plow_ox', chance: 0.5, count: [1, 2] },
+    { id: 'dooryard_hen', chance: 0.7, count: [3, 6] },
+    { id: 'greylag_goose', chance: 0.35, count: [2, 3] },
+    { id: 'meadow_hare', chance: 0.5, count: [2, 4] },
+    { id: 'crofter', chance: 0.55, count: [2, 4] },
+    { id: 'village_warden', chance: 0.4, count: [1, 2] },
+    { id: 'plains_wolf', chance: 0.3, count: [2, 3] },
+    { id: 'carrion_crow', chance: 0.5, count: [3, 6] },
+    { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
+    { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
+      announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
+  ],
+  // THE METROPOLIS: the city's gutter tier — rats and roaches under the
+  // stalls, crows on the rooflines, escaped market birds, and the scamp
+  // working the richest floors in the world.
+  metropolis: [
+    { id: 'gutter_rat', chance: 0.7, count: [2, 5] },
+    { id: 'gutter_roach', chance: 0.4, count: [2, 4] },
+    { id: 'carrion_crow', chance: 0.4, count: [2, 4] },
+    { id: 'dooryard_hen', chance: 0.2, count: [2, 4] },
+    { id: 'meadow_hare', chance: 0.1, count: [1, 2] },
+    { id: 'gilded_scamp', chance: 0.08, count: [1, 1] },
+  ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
     { id: 'sand_skitterer', chance: 0.55, count: [3, 5] },
@@ -7848,6 +7877,221 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE PASTURE (the living farm) ------------------------------------------
+  // The Chattel's CALM cousins: real livestock for the farmland biome, spawned
+  // as ambient fauna. All 'critter'-tagged (the prey lane — wolves' hunger
+  // drives already hunt them, no new code), near-blind (unperturbed by
+  // anything that doesn't touch them), posted hold:false (they GRAZE — the
+  // idle wander orbits home), and they ROUT on a wound (morale, not scripts):
+  // a predator in the fold writes its own scene.
+
+  wool_sheep: {
+    id: 'wool_sheep', name: 'Sheep',
+    color: '#e6e0d0', shape: 'oval', radius: 11, material: 'fur', look: 'the_bellwether',
+    base: { life: 22, moveSpeed: 130, mana: 0 },
+    mods: [mod('detectability', 'more', -0.3)],
+    skills: [],
+    xp: 2,
+    tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1,
+    drops: 0,
+    scaleVariance: [0.85, 1.15], scaleStats: true,
+    packSize: [4, 7],
+    post: { hold: false, slack: 220 },
+    noNemesis: true,
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 300, rearMul: 0.9 },
+      move: { style: 'juke', hookEvery: [0.4, 0.9], hookArc: 1.1, freezeChance: 0.15, freeze: [0.2, 0.4] },
+      tempo: { kite: 3.0, windedFor: [0.9, 1.5] },
+      // ANY wound routs it; a flockmate dying scatters the fold; they settle
+      // and drift back to grazing once the trouble passes (rallyAfter).
+      morale: { breakAtLife: 0.999, panicOnAllyDeath: { radius: 260, duration: 2.5 }, rallyAfter: 4 },
+      // The fold moves as ONE — grounded flocking (the murmuration math with
+      // its feet on the turf; a fleeing fold is a drivable herd).
+      behavior: { flock: { cohesion: 1.1, separation: 1.0, alignment: 0.8, kin: 'def' } },
+    },
+  },
+  plow_ox: {
+    id: 'plow_ox', name: 'Plow Ox',
+    color: '#a8845c', shape: 'rhombus', radius: 16, material: 'fur', look: 'feral_aurochs',
+    base: { life: 95, moveSpeed: 105, mana: 0 },
+    skills: [],
+    xp: 4,
+    tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1,
+    drops: 0,
+    heft: 1.5, // a wall of patient meat — shoves barely move it
+    scaleVariance: [0.9, 1.2], scaleStats: true,
+    packSize: [1, 2],
+    post: { hold: false, slack: 180 },
+    noNemesis: true,
+    brain: {
+      type: 'basic',
+      move: { style: 'retreat' }, // no juking in an ox — it just LEAVES
+      tempo: { kite: 4.0, windedFor: [1.2, 2.0] },
+      morale: { breakAtLife: 0.9, rallyAfter: 5 },
+    },
+  },
+  dooryard_hen: {
+    id: 'dooryard_hen', name: 'Dooryard Hen',
+    color: '#c89a6a', shape: 'circle', radius: 6, material: 'fur', look: 'feral_hen',
+    base: { life: 8, moveSpeed: 175, evasion: 60, mana: 0 },
+    mods: [mod('detectability', 'more', -0.4)],
+    skills: [],
+    xp: 1,
+    tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1,
+    drops: 0,
+    scaleVariance: [0.8, 1.1],
+    packSize: [3, 6],
+    post: { hold: false, slack: 160 },
+    noNemesis: true,
+    brain: {
+      type: 'basic',
+      // Hens ARE jumpy — the one pasture animal that scatters when you charge
+      // through (a tiny skittish radius: flapping underfoot, not panic).
+      morale: { skittish: { radius: 90, duration: [0.8, 1.4] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.55], hookArc: 1.3, freezeChance: 0.2, freeze: [0.15, 0.35] },
+      tempo: { kite: 2.4, windedFor: [0.7, 1.2] },
+      behavior: { flock: { cohesion: 0.9, separation: 1.2, alignment: 0.6, kin: 'def' } },
+    },
+  },
+  // THE GOOSE: the one resident that was never neutral. Territorial — come
+  // close and it COMES AT YOU (claws, honking implied) — but it's still a
+  // critter: the fox and the wolf want it more than it wants you.
+  greylag_goose: {
+    id: 'greylag_goose', name: 'Greylag Goose',
+    color: '#d8d8cc', shape: 'circle', radius: 8, material: 'fur', look: 'feral_hen',
+    base: { life: 14, moveSpeed: 150, evasion: 50, mana: 0 },
+    skills: ['claw'],
+    xp: 3,
+    tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.5,
+    temper: 'territorial',
+    drops: 0,
+    packSize: [2, 3],
+    post: { hold: false, slack: 170 },
+    noNemesis: true,
+    brain: { type: 'basic', morale: { breakAtLife: 0.45, rallyAfter: 3 } },
+  },
+
+  // --- THE FREEHOLDS (the settled belt's living folk) ---------------------------
+  // The farmland's own people, as ambient fauna: crofters mill about their
+  // yards (post hold:false) and BOLT when trouble starts — they never start
+  // anything (near-blind, no kit); wardens stand the village watch under the
+  // SENTRY fabric (dormant 'freehold_watch': planted vs weather, roused by a
+  // wound — world.ts rouse row — forgiving by NEUTRAL_RESET). Faction
+  // 'freehold' wars with the roads' predators through the ordinary RELATIONS
+  // table: a bandit raid on the shires is the living-world loop running, not
+  // an event script. Folk pay no xp and mint no nemeses — killing the help
+  // is a choice, never a farm.
+  crofter: {
+    id: 'crofter', name: 'Crofter',
+    color: '#c8a86e', shape: 'circle', radius: 12, look: 'npc_trader',
+    base: { life: 48, moveSpeed: 122, mana: 0 },
+    skills: [],
+    xp: 0,
+    faction: 'freehold',
+    detection: 0.1,
+    drops: 0,
+    post: { hold: false, slack: 200 },
+    noNemesis: true,
+    brain: {
+      type: 'basic',
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.0, freezeChance: 0.1 },
+      tempo: { kite: 3.5, windedFor: [1.0, 1.6] },
+      morale: { breakAtLife: 0.999, panicOnAllyDeath: { radius: 300, duration: 3 }, rallyAfter: 5 },
+    },
+  },
+  village_warden: {
+    id: 'village_warden', name: 'Village Warden',
+    color: '#c8a84b', shape: 'pentagon', radius: 13, look: 'npc_captain',
+    base: { life: 105, moveSpeed: 118, accuracy: 102, armor: 20, poise: 40, mana: 30, manaRegen: 3 },
+    skills: ['heavy_strike'],
+    xp: 0,
+    faction: 'freehold',
+    tag: 'freehold_watch', // the sentry fabric: planted + dormant until a wound turns the watch out
+    detection: 0.9,
+    drops: 0,
+    post: true, // the professional STANDS his watch
+    noNemesis: true,
+    brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+
+  // --- THE HEADLAND'S OWN --------------------------------------------------------
+  // The boar that owns the crop margin: a charging sounder (the tusker's
+  // grammar homed on the fields — calves bolt, adults COMMIT).
+  sounder_boar: {
+    id: 'sounder_boar', name: 'Sounder Boar',
+    color: '#6e563e', shape: 'rhombus', radius: 14, material: 'fur', look: 'tusker',
+    base: { life: 78, moveSpeed: 155, accuracy: 96, armor: 12, poise: 55, mana: 20, manaRegen: 3 },
+    skills: ['gore_rend'],
+    xp: 20,
+    faction: 'beast', tags: ['beast'],
+    detection: 0.9,
+    temper: 'territorial',
+    turnSpeed: 3.6,
+    scaleVariance: [0.85, 1.3], scaleStats: true,
+    juvenileBelow: 0.95, juvenileBrain: { type: 'flee' }, // the piglets bolt
+    packSize: [3, 5],
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'charge', commitRange: 340, chargeSpeed: 2.5 },
+    },
+  },
+
+  // --- THE CRIMP GANGS (the metropolis' press) -----------------------------------
+  // The city's own predators, one verb per silhouette (the grip-kin law worn
+  // in the lanes): the SHIV skirmishes and SNATCHES loose valuables off the
+  // cobbles (the scamp's looter lever — kill it and it spills), the GANGER
+  // CLINCHES you into the alley (the mauler's pin row verbatim — shared
+  // catalog, no fork — his yoke-board is the tell), and the CAPTAIN rings
+  // the press-bell that musters both.
+  gutter_shiv: {
+    id: 'gutter_shiv', name: 'Gutter Shiv',
+    color: '#8a7a5c', shape: 'trapezoid', radius: 11, look: 'gutter_shiv',
+    base: { life: 40, moveSpeed: 172, accuracy: 104, evasion: 40, mana: 0, insight: 30 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['claw'],
+    xp: 14, faction: 'bandit',
+    detection: 1.2,
+    looter: { kinds: ['gear', 'essence'], reach: 40 }, // it works the crowd — and the floor
+    brain: {
+      type: 'skirmish', withdraw: 1.25,
+      move: { style: 'skitter', dart: [0.25, 0.5], pause: [0.08, 0.2] },
+      behavior: { dodge: { chance: 0.45, reaction: [0.12, 0.3], exit: 'lateral' } },
+    },
+  },
+  press_ganger: {
+    id: 'press_ganger', name: 'Press-Ganger',
+    color: '#7a6248', shape: 'octagon', radius: 16, look: 'press_ganger',
+    base: { life: 92, moveSpeed: 114, accuracy: 100, armor: 26, poise: 45, mana: 40, manaRegen: 4 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['mauler_clinch', 'heavy_strike'],
+    xp: 26, faction: 'bandit',
+    detection: 1.0,
+    heft: 1.4, // the mass law's ticket: enough shoulder to clinch a hero
+    brain: { type: 'juggernaut' },
+  },
+  crimp_captain: {
+    id: 'crimp_captain', name: 'Crimp Captain',
+    color: '#9a8452', shape: 'hexagon', radius: 15, look: 'crimp_captain',
+    base: { life: 210, moveSpeed: 122, accuracy: 108, armor: 35, poise: 60, mana: 60, manaRegen: 5 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['heavy_strike', 'war_cry'],
+    xp: 85, faction: 'bandit',
+    detection: 1.1,
+    turnSpeed: 5,
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 8, fadeIn: 4 },
+    brain: { type: 'commander', perception: { alertShout: 500 } },
+  },
+
   // --- THE STARFALL COURT (what rides the meteors) ----------------------------
   // Event-NATIVE crystal-forms: they hold no ground and march no wars —
   // zones under an active STARFALL front (the weather registry's rare night
@@ -11274,6 +11518,16 @@ const RELATIONS: Record<string, FactionStance> = {
   'demon|undead': 'hostile',
   'demon|wild': 'hostile',
   'demon|elemental': 'neutral',
+  // The settled belt's living-world loop: the FREEHOLDS defend the worked
+  // land against everything that raids it — the roads' bandits, the Chattel
+  // gone wrong, the Carven walking the rows, the warband, the vermin tide.
+  // These pairs ARE the farm-raid drama; no event script stages it.
+  'freehold|bandit': 'hostile',
+  'freehold|chattel': 'hostile',
+  'freehold|carven': 'hostile',
+  'freehold|goblin': 'hostile',
+  'freehold|vermin': 'hostile',
+  'freehold|undead': 'hostile',
   // The Horned Tribes run with the packs, raid the warband's roads, and
   // burn the groves for winter pasture.
   'beastkin|gnoll': 'ally',
@@ -11512,6 +11766,16 @@ export const FACTIONS: Record<string, {
       { id: 'feral_aurochs', weight: 3 },
       { id: 'shepherds_hound', weight: 2 },
       { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+  },
+  // The settled belt's OWN side: the watch first, the folk behind them.
+  // Fielded by the RELATIONS pairs (farm-raid war zones) and the farmland
+  // fauna rows — never as an aggressor roster.
+  freehold: {
+    name: 'the Freeholds',
+    table: [
+      { id: 'village_warden', weight: 3 },
+      { id: 'crofter', weight: 1.5 },
     ],
   },
   // Born from fire — RESERVED (see RESERVED_KIN): the roster is complete and

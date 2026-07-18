@@ -114,3 +114,29 @@ registerBoundaryGate({
   accent: '#c8a04a',
   label: 'a warded toll',
 });
+
+// THE CITY GATE: the metropolis' walled mouth — a broad coursed-stone façade
+// pierced by one high passage, lamps burning either side of the way, the
+// traffic's leavings out front and the first lit street dressed inside.
+// Civic majesty is the POINT: after the shires and the crop seas, THIS is
+// where the player reads "I have arrived at the capital." Every zone edge
+// crossing the metropolis boundary wears it (BiomeInfo.enclave), so the
+// approach works from any road in.
+registerBoundaryGate({
+  id: 'city_gate',
+  halfWidth: 260, depth: 190, mouthWidth: 150,
+  wallRegion: 'rampart', floorStyle: 'cobble',
+  archKind: 'gate_arch', pylonKind: 'gate_pylon', brazierKind: 'street_lamp',
+  dress: [
+    { kind: 'broken_cart', count: [0, 1] },
+    { kind: 'hay_bale', count: [0, 2] },
+    { kind: 'banner_post', count: [1, 2] },
+  ],
+  dressInner: [
+    { kind: 'street_lamp', count: [1, 2] },
+    { kind: 'market_stall', count: [0, 1] },
+    { kind: 'rubble', count: [0, 1] },
+  ],
+  accent: '#d8c06a',
+  label: 'the city gate stands open',
+});

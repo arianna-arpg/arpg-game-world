@@ -1058,6 +1058,51 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -1.8, color: '#bfe8f4', intensity: 0.14 },
   },
   well: { painter: 'well', order: 54, shadow: 0.55, longShadow: 0.9 },
+  // --- THE SETTLED BELT KIT (engine/settled.ts recipes + data/settled.ts) -----
+  // The crops: base tuft on the ground pass, crown on the canopy pass (the
+  // veil fabric's visual half — standing wheat HIDES what stands in it).
+  wheat: {
+    painter: 'wheatStalk', order: 47, bakeWhole: 'static',
+    blend: { strength: 0.32, feather: 18, color: '#8a7a3a' },
+    params: { stalk: '#a8924a' },
+    canopy: { painter: 'wheatTops', params: { head: '#c8a84a', tassel: '#e0cc7a' } },
+  },
+  corn_stand: {
+    painter: 'wheatStalk', order: 47, bakeWhole: 'static',
+    blend: { strength: 0.3, feather: 18, color: '#5a6a30' },
+    params: { stalk: '#5a6a30' },
+    canopy: { painter: 'wheatTops', params: { head: '#7a8a3a', tassel: '#d8c87a', tall: 1.35 } },
+  },
+  // The lit street: the lantern_post look on a civic pole (same painter — a
+  // lamp is a lamp), night-lit for free through the darkness buffer.
+  street_lamp: {
+    painter: 'lanternPost', order: 55, shadow: 0.35, longShadow: 1.5,
+    light: { radius: -11, color: '#ffd898', intensity: 0.5, flicker: 4 },
+  },
+  // The paved way: the road painter in dressed-sett grey (path-banded like
+  // the road — one continuous street, never a caterpillar of discs).
+  paved_way: {
+    painter: 'gravelPath', order: 21,
+    blend: { mode: 'path', strength: 0.34, feather: 12, color: '#5a584f' },
+    params: { color: '#5a584f' },
+  },
+  windmill: {
+    painter: 'windmillTower', order: 52, shadow: 0.6, longShadow: 2.4,
+    canopy: { painter: 'windmillSails', live: true },
+  },
+  chimney_stack: { painter: 'chimneyStack', order: 56, shadow: 0.2, bakeWhole: 'static' },
+  hide_rack: { painter: 'hideRack', order: 52, shadow: 0.35, bakeWhole: 'static' },
+  target_butt: { painter: 'targetButt', order: 52, shadow: 0.35, bakeWhole: 'static' },
+  // The burgher stairs: the manor's flight painter, city-labelled (the
+  // ascension mouths — data/sidezones.ts owns the doors).
+  city_stair: {
+    painter: 'stairFlight', order: 54, shadow: 0.4,
+    params: { wood: '#4c3a28', dark: '#0a0808', runner: '#2e3a4a', label: 'the Rooms Above' },
+  },
+  garret_stair: {
+    painter: 'stairFlight', order: 54, shadow: 0.4,
+    params: { wood: '#3e2e20', dark: '#060505', runner: '#2e3a4a', label: 'the Garret' },
+  },
   lantern_post: {
     painter: 'lanternPost', order: 55, shadow: 0.35, longShadow: 1.5,
     light: { radius: -11, color: '#ffd898', intensity: 0.5, flicker: 4 },

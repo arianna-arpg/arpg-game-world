@@ -268,6 +268,16 @@ registerFloorStyle({ id: 'flagstone', fill: '#4e4a42', seam: '#322f28', pattern:
 registerFloorStyle({ id: 'tile', fill: '#5a5248', seam: '#3c362e', pattern: 'tile', unit: 16 });
 registerFloorStyle({ id: 'packed', fill: '#3a3022', seam: '#2c2418', pattern: 'packed', unit: 20 });
 
+/** ONE blueprint, two countries (the reskin doctrine): the hovel and the
+ *  goblin_hut share these exact rows — only legend/roof/garrison differ.
+ *  Reskins reference the SAME const so the plans can never drift apart. */
+const HOVEL_PLAN = [
+  '#####',
+  '#Z.f#',
+  '#...#',
+  '##X##',
+];
+
 export const STRUCTURES: Record<string, StructureDef> = {
 
   // A one-room cottage — a PLAN now: boarded floor, a dwell-open door, a
@@ -845,6 +855,111 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
     confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'thatch', floorStyle: 'packed',
+  },
+
+  // --- THE SETTLED BELT KIT ---------------------------------------------------
+  // Farmland + metropolis pieces (engine/settled.ts recipes roll them; the
+  // village compositions bind them). The hovel/goblin_hut PAIR is the reskin
+  // doctrine demonstrated: SAME rows, different legend/roof/garrison — one
+  // blueprint, two countries (a crofter's hovel on the shire lane; a staked
+  // warren hut in the deep grove).
+
+  // A HOVEL: the one-room poverty of the lane's end — a cold hearth-corner,
+  // one bed, a door you could put a shoulder through.
+  hovel: {
+    id: 'hovel', halfW: 65, halfH: 52, cellSize: 26,
+    plan: HOVEL_PLAN,
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'thatch', floorStyle: 'packed',
+  },
+
+  // THE GOBLIN HUT: the hovel's rows re-skinned — staked timber for coursed
+  // wall, a warband's tenants for the crofter (the goblins showing native in
+  // their own camps: grove clearings, cave pockets — wherever a composition
+  // pitches it).
+  goblin_hut: {
+    id: 'goblin_hut', halfW: 65, halfH: 52, cellSize: 26,
+    plan: HOVEL_PLAN,
+    legend: { '#': { region: 'palisade' } },
+    garrison: 'goblin', garrisonSize: [2, 3],
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'thatch', floorStyle: 'packed',
+  },
+
+  // THE SKINNER'S HUT: the trade reads from the yard — stretched hides on
+  // their racks around a working shed, the smell implied.
+  skinners_hut: {
+    id: 'skinners_hut', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '_R___R_',
+      '_#####_',
+      'R#f..C#',
+      '_#...X#',
+      '_##D##R',
+    ],
+    legend: {
+      R: { doodad: { kind: 'hide_rack', radius: 13 }, courtyard: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'packed',
+  },
+
+  // THE FLETCHER'S RANGE: a workshop with its shooting lane — target butts
+  // pacing the yard fence, the bench and stores under the roof.
+  fletchers_range: {
+    id: 'fletchers_range', halfW: 117, halfH: 78, cellSize: 26,
+    plan: [
+      '#####____',
+      '#k..#_A__',
+      '#b..D____',
+      '#f.C#__A_',
+      '#####____',
+    ],
+    legend: {
+      A: { doodad: { kind: 'target_butt', radius: 12 }, courtyard: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
+
+  // THE COACHING INN: the crossroads trade's anchor — a long common hall,
+  // two let rooms, and the stable yard where the hay and the lamps wait for
+  // whoever's still on the road after dark.
+  coaching_inn: {
+    id: 'coaching_inn', halfW: 169, halfH: 104, cellSize: 26,
+    plan: [
+      '#############',
+      '#Z.r#b...b#p#',
+      '#...D.....D.#',
+      '#Z.r#b...b#C#',
+      '####...h.####',
+      '_L__D.....___',
+      '_H______H_L__',
+      '__H______H___',
+    ],
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+    courtyardFloorStyle: 'packed',
+  },
+
+  // THE TOWNHOUSE: the burgher city house — two rooms and a stair that goes
+  // somewhere the map doesn't show (city_stair dwells UP into a minted floor
+  // — the gloam manor's climb worn by every quarter that can afford boards).
+  // Windowed street face: the room veil spills sight through each W.
+  townhouse: {
+    id: 'townhouse', halfW: 104, halfH: 78, cellSize: 26,
+    plan: [
+      '########',
+      '#U..#p.#',
+      '#...D.k#',
+      'W.b.#.z#',
+      '###D####',
+    ],
+    legend: {
+      U: { doodad: { kind: 'city_stair', radius: 15 }, interior: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'slate', floorStyle: 'boards',
   },
 
   // --- PLAN STRUCTURES (generator-emitted blueprints) ------------------------

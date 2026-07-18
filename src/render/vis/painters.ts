@@ -8456,7 +8456,153 @@ const dartBolt: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- THE SETTLED BELT KIT --------------------------------------------------------
+
+/** Stable 0..1 hash off world position — the settled kit's only "random":
+ *  every painter below is time-free (bake-eligible) unless declared live. */
+const settledHash = (x: number, y: number, salt = 0): number => {
+  const n = Math.sin(x * 12.9898 + y * 78.233 + salt * 37.719) * 43758.5453;
+  return n - Math.floor(n);
+};
+
+/** WHEAT/CORN STALK BASE: the rooted tuft under a crop crown — a leaning fan
+ *  of stalks off a position-seeded bearing (the crown itself rides the canopy
+ *  pass: wheatTops). Params: stalk. */
+const wheatStalk: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stalk?: ColorSpec };
+  const { ctx, theme } = env;
+  const stalk = resolveColor(p.stalk, theme, '#a8924a');
+  const dark = shade(stalk, -0.35);
+  for (const o of group) {
+    const r = o.radius;
+    const h = settledHash(o.pos.x, o.pos.y);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.8, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    const n = 6 + Math.floor(h * 4);
+    ctx.strokeStyle = stalk;
+    ctx.lineWidth = Math.max(1, r * 0.07);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + h * 6.28;
+      const lean = 0.35 + settledHash(o.pos.x, o.pos.y, i + 1) * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.18, Math.sin(a) * r * 0.12);
+      ctx.lineTo(Math.cos(a) * r * lean, Math.sin(a) * r * lean * 0.7 - r * 0.25);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** THE WINDMILL TOWER: a coursed stone drum, cap boss and door notch — the
+ *  sails are the LIVE canopy wheeling above it (windmillSails). */
+const windmillTower: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.fillStyle = '#4a443a';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha('#2c2820', 0.7);
+    ctx.lineWidth = Math.max(1, r * 0.06);
+    for (const f of [0.5, 0.72, 0.92]) { ctx.beginPath(); ctx.arc(0, 0, r * f, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.fillStyle = '#6a6152';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.34, 0, Math.PI * 2); ctx.fill();
+    const a = o.rot ?? 0;
+    ctx.fillStyle = '#241c12';
+    ctx.beginPath(); ctx.arc(Math.cos(a) * r * 0.82, Math.sin(a) * r * 0.82, r * 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** A CHIMNEY STACK: the tenement crest's roofline silhouette — a mortared
+ *  brick rect with its cap and flue shadow (inert art on the wall mass). */
+const chimneyStack: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    const h = settledHash(o.pos.x, o.pos.y);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(h * 0.5 - 0.25);
+    ctx.fillStyle = '#5a3a2a';
+    ctx.fillRect(-r * 0.5, -r * 0.7, r, r * 1.4);
+    ctx.strokeStyle = withAlpha('#2e1c12', 0.8);
+    ctx.lineWidth = 1;
+    for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(-r * 0.5, k * r * 0.28); ctx.lineTo(r * 0.5, k * r * 0.28); ctx.stroke(); }
+    ctx.fillStyle = '#6e564a';
+    ctx.fillRect(-r * 0.6, -r * 0.85, r * 1.2, r * 0.22);
+    ctx.fillStyle = '#181210';
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.3, r * 0.26, r * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** THE SKINNER'S RACK: two posts and the hide stretched between them, laced
+ *  taut — the trade read from across the yard. Oriented by rot. */
+const hideRack: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.fillStyle = '#3a2c1c';
+    ctx.beginPath(); ctx.arc(-r * 0.95, 0, r * 0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.95, 0, r * 0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#3a2c1c';
+    ctx.lineWidth = Math.max(1.5, r * 0.1);
+    ctx.strokeRect(-r * 0.9, -r * 0.5, r * 1.8, r);
+    ctx.fillStyle = '#b08a5c';
+    const inset = r * 0.16;
+    ctx.fillRect(-r * 0.9 + inset, -r * 0.5 + inset, r * 1.8 - inset * 2, r - inset * 2);
+    ctx.strokeStyle = withAlpha('#3a2c1c', 0.7);
+    ctx.lineWidth = 1;
+    for (let k = 0; k < 5; k++) {
+      const x = -r * 0.9 + inset + (k / 4) * (r * 1.8 - inset * 2);
+      ctx.beginPath(); ctx.moveTo(x, -r * 0.5); ctx.lineTo(x, -r * 0.5 + inset); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, r * 0.5 - inset); ctx.lineTo(x, r * 0.5); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** THE FLETCHER'S BUTT: a straw roundel on its stake — concentric rings and
+ *  a stuck shaft or two (position-seeded). */
+const targetButt: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    const h = settledHash(o.pos.x, o.pos.y);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.fillStyle = '#3a2c1c';
+    ctx.fillRect(-r * 0.08, 0, r * 0.16, r * 0.8);
+    ctx.fillStyle = '#c8b06a';
+    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.72, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8a744a';
+    ctx.lineWidth = Math.max(1, r * 0.07);
+    for (const f of [0.52, 0.32]) { ctx.beginPath(); ctx.arc(0, -r * 0.1, r * f, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.fillStyle = '#5a1e1e';
+    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    const shafts = h > 0.4 ? (h > 0.75 ? 2 : 1) : 0;
+    ctx.strokeStyle = '#2c241a';
+    ctx.lineWidth = Math.max(1, r * 0.06);
+    for (let k = 0; k < shafts; k++) {
+      const a = settledHash(o.pos.x, o.pos.y, 5 + k) * Math.PI * 2;
+      const px = Math.cos(a) * r * 0.3, py = -r * 0.1 + Math.sin(a) * r * 0.3;
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + r * 0.4, py - r * 0.3); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
+  wheatStalk, windmillTower, chimneyStack, hideRack, targetButt,
   trackGroove, shearDisc, rimeFlail, bumperDome, rollingStone, floorPlate, dartBolt,
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,
@@ -9174,9 +9320,74 @@ const lianaCurtain: CanopyPainter = (env, o, alpha, params) => {
   ctx.restore();
 };
 
+/** WHEAT TOPS: the crop crown (wheat gold or corn green, per params) — a
+ *  position-seeded spray of heads over the crown mass. Time-free on purpose:
+ *  a crop sea is DENSE, and CANOPY_STATIC bakes it like any forest roof.
+ *  Params: head, tassel, tall. */
+const wheatTops: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { head?: ColorSpec; tassel?: ColorSpec; tall?: number };
+  const { ctx, theme } = env;
+  const head = resolveColor(p.head, theme, '#c8a84a');
+  const tassel = resolveColor(p.tassel, theme, '#e0cc7a');
+  const r = o.radius * (1 + 0.22 * ((p.tall ?? 1) - 1));
+  const h = settledHash(o.pos.x, o.pos.y);
+  ctx.globalAlpha = alpha * 0.92;
+  ctx.fillStyle = head;
+  ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = tassel;
+  ctx.lineWidth = Math.max(1, r * 0.05);
+  const n = 9 + Math.floor(h * 5);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + h * 6.28;
+    const t = 0.55 + settledHash(o.pos.x, o.pos.y, i + 11) * 0.4;
+    const tx = o.pos.x + Math.cos(a) * r * t, ty = o.pos.y + Math.sin(a) * r * t;
+    ctx.beginPath();
+    ctx.moveTo(o.pos.x + Math.cos(a) * r * 0.25, o.pos.y + Math.sin(a) * r * 0.25);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.fillStyle = tassel;
+    ctx.beginPath(); ctx.arc(tx, ty, r * 0.06, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+};
+
+/** THE WINDMILL SAILS (LIVE — never baked): four lattice vanes wheeling on
+ *  the tower cap. A decoration is never a hazard: no track lane, no payload —
+ *  the turn is this painter reading time, and that is ALL it is. */
+const windmillSails: CanopyPainter = (env, o, alpha) => {
+  const { ctx, time } = env;
+  const rot = time * 0.4 + settledHash(o.pos.x, o.pos.y) * 6.28;
+  const len = o.radius * 2.3;
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  ctx.globalAlpha = alpha;
+  ctx.rotate(rot);
+  for (let i = 0; i < 4; i++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.strokeStyle = '#3a3228';
+    ctx.lineWidth = Math.max(2, o.radius * 0.12);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(len, 0); ctx.stroke();
+    ctx.fillStyle = withAlpha('#d8d0bc', 0.85);
+    ctx.fillRect(len * 0.25, -o.radius * 0.34, len * 0.62, o.radius * 0.3);
+    ctx.strokeStyle = withAlpha('#8a8272', 0.8);
+    ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) {
+      const x = len * (0.25 + 0.62 * (k / 5));
+      ctx.beginPath(); ctx.moveTo(x, -o.radius * 0.34); ctx.lineTo(x, -o.radius * 0.04); ctx.stroke();
+    }
+  }
+  ctx.rotate(Math.PI / 2);
+  ctx.fillStyle = '#241c12';
+  ctx.beginPath(); ctx.arc(0, 0, o.radius * 0.18, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+};
+
 export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
   bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
   kelpCrown, lianaCurtain, awningCloth, stoneCrown,
+  wheatTops, windmillSails,
 };
 
 /** Canopy painters whose pixels are a pure function of (radius, position
@@ -9201,6 +9412,10 @@ export const CANOPY_STATIC: Record<string, boolean> = {
   // stoneCrown is time-free by construction (fracture facets + fissures are
   // pure position-seed) — a sealed petrified weald bakes like any forest.
   stoneCrown: true,
+  // wheatTops is pure position-seed (the crop sea is the DENSEST canopy in
+  // the settled belt — baking it is the whole perf posture). windmillSails
+  // stays live by declaration (it turns).
+  wheatTops: true,
 };
 
 /** Stable small integer for a params object (registry defs are singletons) —

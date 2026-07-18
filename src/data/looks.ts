@@ -914,6 +914,33 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
   },
+  // --- THE CRIMP GANGS (the metropolis' press — one verb per silhouette) ------
+  /** The gutter shiv: a hood, a blade, and somewhere to put yours. */
+  gutter_shiv: {
+    parts: [
+      { kind: 'cape', scale: 0.9, role: 'cloth' },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+      { kind: 'daggers', params: { len: 0.45 } },
+    ],
+  },
+  /** The press-ganger: the pin verb wears its yoke (the mauler's tell,
+   *  city-dressed) — you can read the clinch coming from the board. */
+  press_ganger: {
+    parts: [
+      { kind: 'tatters', scale: 0.95, role: 'cloth' },
+      { kind: 'hood', x: 0.25 },
+      { kind: 'yoke', x: -0.15, scale: 0.9, role: 'wood' },
+    ],
+  },
+  /** The crimp captain: the press-bell IS the rank — he rings the lanes in. */
+  crimp_captain: {
+    parts: [
+      { kind: 'cape', scale: 1.0, role: 'cloth' },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+      { kind: 'sword', params: { len: 0.8 } },
+      { kind: 'bell', x: -0.4, y: 0.35, scale: 0.55, role: 'metal' },
+    ],
+  },
   /** The Speaker of the House of Dusk: the gavel is implied. */
   speaker_of_dusk: {
     parts: [

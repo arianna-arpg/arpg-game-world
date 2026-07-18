@@ -25138,6 +25138,14 @@ export class World {
       woundFrac: 1, radius: 0,
       toast: 'It rounds on you!', color: '#a5e3b4', size: 13,
     }),
+    // The settled belt's POSTED WATCH (village wardens — the sentry fabric's
+    // civil face): strike one and the local watch answers together; they
+    // forgive (NEUTRAL_RESET row registered beside the tag, data/settled.ts)
+    // once you break off — a watchman holds a grudge only as long as you do.
+    freehold_watch: () => ({
+      woundFrac: 1, radius: 300,
+      toast: 'The watch turns out!', color: '#d8c08a', size: 13,
+    }),
   };
 
   /** The rouse rule for the LIVE holdfast site's wardens (any guardian def —

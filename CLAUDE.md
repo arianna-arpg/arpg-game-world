@@ -249,6 +249,31 @@ changes.
   the mass passive cluster); bestiary prints a HEFT tier per def — dials
   in `MASS_CFG`, docs in `docs/engine/mass.md`, probe
   `balance/probe_mass.ts`.
+  THE MASSIF FABRIC (`engine/massif.ts` — open country that also says NO):
+  the MIXTURE layout archetype — wide-open zones studded with LARGE
+  impassable interior bodies, all data three registries deep (mass SHAPES
+  via `registerMassShape`, mass KINDS via `registerMassKind` → a
+  registered region row carries collision/shot/sight/price/look, the
+  'massif' recipe with every dial a layoutParam); `carveMassifs` is
+  exported for composition and `healMassifWeave` guarantees one walkable
+  weave — dials in `MASSIF_CFG`, docs in `docs/engine/massif.md`, probe
+  `balance/probe_massif.ts`.
+  THE SETTLED BELT (`engine/settled.ts` + `data/settled.ts` — farmland +
+  metropolis): the worked country as two recipes over the massif fabric —
+  'fields' (hedgerow bodies + REAL portal roads that punch field-gates
+  through the hedges; road kind/width/count all layoutParams) and
+  'district' (city faces under ONE generator: tenement/manor MASSING with
+  lit paved boulevards + courtyard kits, or PLANNED BLOCKS raising plan
+  structures from a weighted pool); crops are walk-through veil cover
+  (sight-eating wheat — the crop law), livestock/folk are the prey +
+  sentry fabrics composed (wolves raid the fold through hunger drives;
+  the village watch is a dormant `freehold_watch` sentry), the metropolis
+  is an ENCLAVE (every boundary crossing wears the `city_gate`), and
+  ASCENSION inverts the drop-cave: `city_stair`/`garret_stair` sidezones
+  mint procedural townhouse floors UP (chain capped by `noDeeper`, the
+  strip law) — incl. via `stairwell_hollow` pockets INSIDE building mass.
+  Dials in `SETTLED_CFG`, docs in `docs/engine/settled.md`, probe
+  `balance/probe_settled.ts`.
   THE PLY FABRIC (`engine/plies.ts` — hit-counted durability, the
   Pikmin/Overlord damage model): `MonsterDef.plies` bodies EAT N landed
   hits magnitude-blind (one ply per blow, no life moves; thud floor,

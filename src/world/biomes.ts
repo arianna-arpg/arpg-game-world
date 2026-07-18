@@ -116,7 +116,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
       ],
       massifCoverage: [0.12, 0.19],
     },
-    landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 }] },
+    landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 }],
+    // The warband shows NATIVE here: the hovel blueprint re-skinned as a
+    // staked warren camp in the deep green (the reskin doctrine's proof).
+    compositions: [{ composition: 'goblin_warren_camp', chance: 0.08 }] },
   // The FOREST proper — where the grove is open woodland, the forest is a
   // ROOF: the 'forest' recipe plants veiled canopy masses whose coverage
   // scales with biomeDepth (the region's heart runs near-sealed). Claims the
@@ -458,6 +461,43 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'lake', chance: 0.18 }, { landmark: 'lone_mountain', chance: 0.14 },
       { landmark: 'sinkhole', chance: 0.1 }, { landmark: 'valley', chance: 0.15 },
     ] },
+  // THE FARMLAND: the settled belt's WORKED half — crop seas, hedgerow bocage,
+  // croft walls, villages under their chapel smoke. Claims the mild belt's
+  // FERTILE side (the downs keep the dry sheep country) and gates wildness
+  // even lower: this is the land the roads were built FOR, thinning to
+  // nothing where the wilds begin. The 'fields' recipe (engine/settled.ts)
+  // lays real portal roads; the tileset faces stage outskirts → crop seas →
+  // harvest villages.
+  farmland: { patronFaction: 'chattel', mapColor: '#b7ac58', label: 'Farmland', spacing: 74,
+    climate: { temperature: 'mild', moisture: { from: 0.38, fadeIn: 0.14 }, wildness: { to: 0.42, fadeOut: 0.16 } },
+    allowedLayouts: { fields: 1 },
+    meld: 'farmland_meld',
+    layoutParams: {
+      massifMasses: [
+        { kind: 'hedge', weight: 3 }, { kind: 'croft', weight: 2 },
+        { kind: 'fold', weight: 1.5 }, { kind: 'ruincourt', weight: 0.5 },
+      ],
+      massifCoverage: [0.09, 0.15],
+      overgrowth: [0, 0.1],
+    },
+    structures: [{ structure: 'watchtower', chance: 0.2 }, { structure: 'wayside_camp', chance: 0.22 }],
+    landmarks: [{ landmark: 'lake', chance: 0.18 }, { landmark: 'valley', chance: 0.14 }] },
+  // THE METROPOLIS: the walled city — the settled web's dense core, and an
+  // ENCLAVE: every zone edge crossing its boundary erects the city gate
+  // (the Durance fabric worn in civic stone), so every approach reads as
+  // arriving at the capital. District faces ride ONE recipe ('district'):
+  // warrens massing, planned blocks, the high quarter's manor courts.
+  // Wildness-gated to the innermost ring; no climate taste beyond that — a
+  // city stands where the roads cross, whatever the weather.
+  metropolis: { patronFaction: 'hollowborn', mapColor: '#8f8f96', label: 'Metropolis', spacing: 58,
+    climate: { wildness: { to: 0.28, fadeOut: 0.12 } },
+    allowedLayouts: { district: 1 },
+    enclave: { gate: 'city_gate' },
+    meld: 'metropolis_meld',
+    layoutParams: {
+      massifMasses: [{ kind: 'tenement', weight: 3 }, { kind: 'manor', weight: 1 }],
+    },
+    landmarks: [] },
   marsh:    { patronFaction: 'undead', mapColor: '#4a6a52', label: 'Marsh', spacing: 58,
     climate: { moisture: 'wet' },
     allowedLayouts: { islands: 2, plains: 1 },
@@ -676,6 +716,15 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // enough seed weight to read as coherent walked country where its gate
   // holds, never crowding the woods out of the damp half.
   { biome: 'downs', weight: 1.4 },
+  // 1.6: the FARMLAND claims the settled belt's fertile half (the downs'
+  // damp mirror) — generous acreage so the approach to the city reads as
+  // whole worked country: shires, then crop seas, then the harvest towns.
+  { biome: 'farmland', weight: 1.6 },
+  // 0.9: the METROPOLIS is the belt's dense CORE — its wildness gate is the
+  // tightest in the game (innermost ring only), so a modest seed weight
+  // still reads as a rare, coherent walled city embedded in its farmland,
+  // never a city sprinkled through the wilds.
+  { biome: 'metropolis', weight: 0.9 },
   { biome: 'marsh', weight: 1.5 },
   { biome: 'flesh', weight: 1.25 }, // a four-faced country deserves the acreage
 

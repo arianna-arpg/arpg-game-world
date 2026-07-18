@@ -85,3 +85,69 @@ registerMassKind({
   crestChance: 0.16,
   crestSpacing: 96,
 });
+
+// --- THE SETTLED BELT (engine/settled.ts recipes) ------------------------------
+
+// THE TENEMENT — the stacked city block (the warrens' body): brick TRUE-WALL
+// masses whose leftover ground IS the alley map. 'block' silhouettes carry a
+// yard and a doorway (the rectangular court — every block someone still
+// lives in has a way in); slabs are the solid infill nobody enters. Refuse
+// and cast-off crates bank the foot; the CREST is the roofline — chimney
+// stacks reading as a skyline from the street.
+registerMassKind({
+  id: 'tenement',
+  region: 'tenement_wall',
+  shapes: [{ shape: 'block', weight: 2.5 }, { shape: 'slab', weight: 1.5 }, { shape: 'chain', weight: 0.6 }],
+  lobe: 0.12, // mortar sag, not geology — the blocks stay square-shouldered
+  mouths: [1, 1],
+  skirt: [
+    { kind: 'rubble', weight: 2, radius: [12, 20] },
+    { kind: 'broken_cart', weight: 1, radius: [15, 19] },
+    { kind: 'firewood_pile', weight: 1, radius: [10, 14] },
+  ],
+  skirtChance: 0.34,
+  skirtSpacing: 52,
+  crest: [{ kind: 'chimney_stack', weight: 1, radius: [9, 13] }],
+  crestChance: 0.3,
+  crestSpacing: 64,
+});
+
+// THE MANOR — the high quarter's walled house: pale dressed-stone blocks and
+// garden courts (bigger mouths — a gate, not a door), lamps and topiary at
+// the foot. The court interior is the GARDEN; the district recipe furnishes
+// it (fountains, or a whole townhouse where the plot is grand enough).
+registerMassKind({
+  id: 'manor',
+  region: 'manor_wall',
+  shapes: [{ shape: 'block', weight: 2 }, { shape: 'court', weight: 1.2 }, { shape: 'slab', weight: 0.6 }],
+  lobe: 0.1,
+  mouths: [1, 2],
+  skirt: [
+    { kind: 'dead_topiary', weight: 2, radius: [14, 20] },
+    { kind: 'street_lamp', weight: 1.5, radius: [9, 12] },
+    { kind: 'flowers', weight: 1, radius: [12, 18] },
+  ],
+  skirtChance: 0.3,
+  skirtSpacing: 60,
+  crest: [{ kind: 'chimney_stack', weight: 1, radius: [8, 12] }],
+  crestChance: 0.2,
+  crestSpacing: 84,
+});
+
+// THE CROFT — farmland's worked plot: a drystone-bound yard (the PARAPET
+// texture — you duel across a croft wall, then walk around to its stile).
+// Hay and the odd cart inside the read; wheat presses at the foot.
+registerMassKind({
+  id: 'croft',
+  region: 'drystone',
+  shapes: [{ shape: 'block', weight: 2 }, { shape: 'slab', weight: 0.8 }],
+  lobe: 0.14,
+  mouths: [1, 2],
+  skirt: [
+    { kind: 'wheat', weight: 2, radius: [24, 34] },
+    { kind: 'hay_bale', weight: 1.5, radius: [11, 15] },
+    { kind: 'grass', weight: 1, radius: [14, 24] },
+  ],
+  skirtChance: 0.36,
+  skirtSpacing: 54,
+});

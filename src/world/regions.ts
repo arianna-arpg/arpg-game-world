@@ -817,3 +817,20 @@ registerRegion({ id: 'window', walkable: false, blocks: true, label: 'the window
 registerRegion({ id: 'palisade', walkable: false, blocks: true, label: 'the palisade',
   blocksShot: true, blocksSight: true,
   visual: { fill: '#41301b', alpha: 1, edge: { color: '#7a6236', width: 4 } } });
+
+// --- THE SETTLED BELT (engine/settled.ts recipes; kinds in data/massifs.ts) ---
+// TENEMENT WALL: the stacked city block — brick over timber bones, coursed so
+// the ward reads BUILT street after street. A TRUE WALL (bodies, shots and
+// sight all stop): the warrens' whole conversation is which alley you can't
+// see down, and a wall you could shoot through would give the ghetto away.
+// Warm brick against the paved greys; pale mortar rim (the flesh-wall lesson).
+registerRegion({ id: 'tenement_wall', walkable: false, blocks: true, label: 'the tenements',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#4a3226', alpha: 1, masonry: true, edge: { color: '#8a6a4a', width: 4 } } });
+// MANOR WALL: the high quarter's dressed pale stone — finer coursing, cooler
+// tones (the same TRUE-WALL policy; nobility buys thicker walls, not kinder
+// ones). Distinct from rampart on purpose: a patrician terrace must never
+// read as a fortress curtain.
+registerRegion({ id: 'manor_wall', walkable: false, blocks: true, label: 'the manor walls',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#45483e', alpha: 1, masonry: true, edge: { color: '#9a9a84', width: 4 } } });

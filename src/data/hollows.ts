@@ -173,6 +173,21 @@ registerHollow({
   },
 });
 
+/** A STAIRWELL: the block was hiding a way UP — the settled belt's ascension
+ *  lane through the hollows fabric (a tenement's walled-off stair; the
+ *  garret_stair mouth mints the rooms above — data/sidezones.ts). The
+ *  massif-as-building payoff: crack the wall, climb what it hid.
+ *  STRUCTURAL: revives always. NOT flagged `descends` — it goes UP, and a
+ *  noDeeper pocket's mint already strips the mouth itself. */
+registerHollow({
+  id: 'stairwell_hollow',
+  blurb: 'The brick was a lid on a stair nobody finished walling away.',
+  reveal(c) {
+    c.addDoodad({ pos: c.center, radius: 13, kind: 'garret_stair' });
+    if (!c.revive) c.text(c.center, 'a stairwell climbs into the block…', '#d8c890');
+  },
+});
+
 /** A PASSAGE: the corridor IS the reward — a way through the mass the map
  *  never promised, sealed at both ends until either seam gives. */
 registerHollow({

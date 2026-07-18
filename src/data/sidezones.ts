@@ -290,3 +290,43 @@ registerSidezone({
   ledgerOnEnter: 'mausoleum_opened',
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'ossuary', { rollVariant: true }),
 });
+
+// --- THE TOWNHOUSE FLOORS (burgher ASCENSION) ----------------------------------
+// The gloam manor's climb, generalized to the whole settled belt: the cave
+// drop-in INVERTED. 'city_stair' (a townhouse structure's stair cell) dwells
+// UP into a PROCEDURAL floor — mintCave with the 'townhouse' interior tileset
+// (the ruin_gate pattern turned vertical: every house rolls its own rooms) —
+// and the floors themselves lay 'garret_stair' mouths, so a house can climb
+// ground → rooms → garret before noDeeper closes the ladder. caveStack
+// carries the way back down; caveDepth keeps every floor weather-sheltered
+// by derivation. Both stairs share ONE mint (the same house whichever rung
+// you're on): floor names are authored (never the strata fabric's 'Deep'
+// ladder — a second storey is not a cave, whatever the machinery says).
+const townhouseFloor = ({ parent, seed, id }: SidezoneMintCtx): ZoneDef => {
+  const flights = (parent.caveDepth ?? 0) + 1; // which rung this mint IS
+  return mintCave(parent, seed, id, 'townhouse', {
+    rollVariant: true,
+    name: flights >= 2 ? 'the Garret' : 'the Rooms Above',
+    objective: { kind: 'none', label: 'someone’s rooms' },
+    // Two flights of stairs is a HOUSE; the garret lays no third — mintCave's
+    // noDeeper strips every registered stair mouth from the top floor.
+    noDeeper: flights >= 2,
+  });
+};
+
+registerSidezone({
+  kind: 'city_stair',
+  dwell: 0.7,
+  indoorsOnly: true, // dwelled from the hall, never through the street wall
+  ledgerOnEnter: 'townhouse_climbed',
+  mint: townhouseFloor,
+});
+
+// The floor-to-garret rung the MINTED floors lay themselves (a townhouse
+// tileset layout row): indoors by construction — the whole floor is under
+// the roof (sheltered by caveDepth), so no roof test gates the dwell.
+registerSidezone({
+  kind: 'garret_stair',
+  dwell: 0.7,
+  mint: townhouseFloor,
+});

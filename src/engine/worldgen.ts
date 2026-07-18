@@ -827,6 +827,12 @@ export function placeZoneAt(
     // (rolled at LOAD on salted streams — never a generation concern).
     ...(tileset.puzzles ? { puzzles: tileset.puzzles } : {}),
     ...(tileset.scenery ? { scenery: tileset.scenery } : {}),
+    // SECRET HOLLOWS (the hollows fabric): the tileset's budget rides onto
+    // SURFACE mints too — mintCave carried it from day one, but this literal
+    // never did, so every authored surface budget (the downs' tor caches,
+    // the warrens' squats + stairwells) was silently inert. stampHollows
+    // runs LAST in generateLayout, so the bake shifts no earlier draw.
+    ...(tileset.hollows ? { hollows: tileset.hollows } : {}),
     packs: spec.packsOverride ?? tileset.packs,
     exits,
     map,
