@@ -199,6 +199,9 @@ export class UI {
   /** The Statistics tab open on the character sheet (persists across
    *  re-renders — a page stays where you left it). */
   private charTab = 'offense';
+  /** The Options menu's active tab (the character sheet's book-tab idiom —
+   *  the panel long outgrew "Customize Keybinds"). */
+  private optionsTab: 'controls' | 'controller' | 'interface' | 'visuals' = 'controls';
   /** "Show unused": list every seated stat on the active tab, base or not
    *  (generated families still surface only once touched — see sheet.ts). */
   private charShowAll = false;
@@ -4267,12 +4270,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
-          <button id="esc-keys">Customize Keybinds</button>
+          <button id="esc-keys">Options</button>
           <button id="esc-end">${this.isCoopClient() ? 'Leave Co-op' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close">Close Game</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
-      document.getElementById('esc-keys')!.addEventListener('click', () => this.renderKeybinds(root, showMain));
+      document.getElementById('esc-keys')!.addEventListener('click', () => this.renderOptions(root, showMain));
       document.getElementById('esc-end')!.addEventListener('click', () => {
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()
         // (it would corrupt the shell with no effect). Leave the session instead.
@@ -4325,7 +4328,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 
   /** Shared keybind rebind view, rendered into `root` (escape menu OR start
    *  menu). `onBack` returns to whichever menu opened it. */
-  private renderKeybinds(root: HTMLElement, onBack: () => void): void {
+  private renderOptions(root: HTMLElement, onBack: () => void): void {
     this.disarmRebind(); // drop any capture left armed by a prior render
     const s = this.getSettings();
     const kb = s.keybinds;
@@ -4342,10 +4345,32 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <span>${PAD_ACTION_LABELS[a]}</span>
         <button data-padrebind="${a}">${padDisplay(s.padBinds[a])}</button>
       </div>`).join('');
-    root.innerHTML = `
+    const tab = this.optionsTab;
+    const tabStrip = `<div class="book-tabs stat-tabs">${([
+      ['controls', 'Controls', 'Keyboard binds and input feel'],
+      ['controller', 'Controller', 'Pad binds and analog tuning'],
+      ['interface', 'Interface', 'Scale, cursor, markers, readouts'],
+      ['visuals', 'Visuals', 'Camera and battlefield presentation'],
+    ] as const).map(([id, label, blurb]) =>
+      `<button class="book-tab${tab === id ? ' active' : ''}" data-opttab="${id}" title="${blurb}">${label}</button>`).join('')}</div>`;
+    const controlsTab = `
       <h1>Keybinds</h1>
       <div class="acct-head">LMB / RMB drive skills 1 &amp; 2 (fixed). Click a key, then press a new one (Esc cancels).</div>
       <div class="rebind-list">${rows}</div>
+      <div class="rebind-row">
+        <span>Invert Movement</span>
+        <button id="opt-invertmove" title="Up walks down, left walks right — movement keys and the move stick alike (Swap Sticks trades WHICH stick moves; this flips WHICH WAY movement goes). Fair warning: the widdershins hex inverts controls too, so wearing it while this is ON plays standard for the duration — two turns make a true.">${s.invertMove ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Improvised Strike (empty slots swing)</span>
+        <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike — the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${s.improvisedStrike ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Gear Pickup</span>
+        <button id="opt-gearpickup">${s.gearPickup === 'key'
+          ? `PRESS ${keyDisplay(s.keybinds.pickup)}` : 'WALK OVER'}</button>
+      </div>`;
+    const controllerTab = `
       <h1>Controller</h1>
       <div class="acct-head">Left stick moves · right stick aims (tilt = reach) · MENU pauses.
         In menus the left stick drives a pointer: Ⓐ clicks, Ⓑ backs out.
@@ -4383,42 +4408,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       <div class="rebind-row">
         <span>Swap Sticks (southpaw)</span>
         <button id="opt-swapsticks">${s.pad.swapSticks ? 'ON' : 'OFF'}</button>
-      </div>
-      <h1>Options</h1>
+      </div>`;
+    const interfaceTabHead = `
       <div class="rebind-row">
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
           title="Grows the whole interface together — panels, tooltips, popups, and the on-screen HUD — so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
-      </div>
-      <div class="rebind-row">
-        <span>Camera</span>
-        <button id="opt-cameramode" title="${CAMERA_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}">${cameraModeOf(s.cameraMode).name}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Low-Life Screen Pulse</span>
-        <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Faintness Frame-Falter</span>
-        <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips — brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${this.getSettings().statusFalter ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Invert Movement</span>
-        <button id="opt-invertmove" title="Up walks down, left walks right — movement keys and the move stick alike (Swap Sticks trades WHICH stick moves; this flips WHICH WAY movement goes). Fair warning: the widdershins hex inverts controls too, so wearing it while this is ON plays standard for the duration — two turns make a true.">${this.getSettings().invertMove ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Improvised Strike (empty slots swing)</span>
-        <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike — the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${this.getSettings().improvisedStrike ? 'ON' : 'OFF'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Gear Pickup</span>
-        <button id="opt-gearpickup">${this.getSettings().gearPickup === 'key'
-          ? `PRESS ${keyDisplay(this.getSettings().keybinds.pickup)}` : 'WALK OVER'}</button>
-      </div>
-      <div class="rebind-row">
-        <span>Foresight (enemy cast markers)</span>
-        <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Map Zone Names</span>
@@ -4452,7 +4448,7 @@ SMART — around a recent change, or while dented on builds where the pool carri
 ON CHANGE — strictly around a recent change to the pool
 ALWAYS — pinned on (the min-maxer's steady readout)">${{
           smart: 'SMART', recent: 'ON CHANGE', always: 'ALWAYS',
-        }[this.getSettings().poolBars]}</button>
+        }[s.poolBars]}</button>
       </div>
       <h1>Cursor</h1>
       <div class="acct-head">One identity for the mouse cursor and the pad's aim reticle —
@@ -4469,84 +4465,122 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
           `<button data-cursor-color="${c.css}" title="${c.label}"
             style="margin-left:5px;width:26px;height:20px;vertical-align:middle;background:${c.css};
             border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
+      </div>`;
+    const visualsTab = `
+      <div class="rebind-row">
+        <span>Line-of-Sight Shade</span>
+        <span class="pad-opt"><input type="range" id="opt-veildark" min="0" max="100" step="5"
+          value="${Math.round(s.veilDarkness * 100)}"
+          title="How dark the sight veil paints what your hero cannot see — walls, trunks and roofs throw the same shadow shapes at any setting, and hidden nameplates dim with the pixels. 100% is the authored night; dim it to admire what the world builds atop its structures (spire gardens, canopy work). Purely visual: enemy eyes read the engine's own sightline, never this slider."> <b id="val-veildark">${s.veilDarkness <= 0 ? 'LIFTED' : `${Math.round(s.veilDarkness * 100)}%`}</b></span>
       </div>
+      <div class="rebind-row">
+        <span>Camera</span>
+        <button id="opt-cameramode" title="${CAMERA_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}">${cameraModeOf(s.cameraMode).name}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Low-Life Screen Pulse</span>
+        <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${s.lowLifePulse ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Faintness Frame-Falter</span>
+        <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips — brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${s.statusFalter ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Foresight (enemy cast markers)</span>
+        <button id="opt-foresight">${s.castTelegraphs ? 'ON' : 'OFF'}</button>
+      </div>`;
+    root.innerHTML = `
+      <h1>Options</h1>
+      ${tabStrip}
+      ${tab === 'controls' ? controlsTab
+        : tab === 'controller' ? controllerTab
+        : tab === 'visuals' ? visualsTab
+        : interfaceTabHead}
       <div class="esc-btns"><button id="esc-back">Back</button></div>`;
+    // Tab strip: remember the shelf, drop any armed capture, re-render.
+    root.querySelectorAll<HTMLElement>('[data-opttab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.optionsTab = btn.dataset.opttab as UI['optionsTab'];
+        this.disarmRebind();
+        this.renderOptions(root, onBack);
+      });
+    });
     // The severity-scaled edge pulse is a real build choice (1/1-life and
     // heavy-reservation heroes live "low" on purpose) — so it's a toggle.
-    root.querySelector<HTMLElement>('#opt-lowlife')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-lowlife')?.addEventListener('click', () => {
       const s = this.getSettings();
       s.lowLifePulse = !s.lowLifePulse;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // THE FALTER is deliberate fake lag (docs/render/falter.md) — a comfort
     // switch, never a graphics-quality one: OFF loses no information (the
     // pall carries the read), it only stops the simulated hitches.
-    root.querySelector<HTMLElement>('#opt-falter')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-falter')?.addEventListener('click', () => {
       const s = this.getSettings();
       s.statusFalter = !s.statusFalter;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // Movement inversion is a device-layer preference (main.ts flips the
     // assembled intent) — the widdershins hex composes over it as XOR.
-    root.querySelector<HTMLElement>('#opt-invertmove')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-invertmove')?.addEventListener('click', () => {
       const s = this.getSettings();
       s.invertMove = !s.invertMove;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // The unarmed floor is default-ON and found-not-taught; the OFF switch
     // exists so accidental empty-slot presses are the PLAYER's dial, not a
     // death the game chose for them (see settings.ts improvisedStrike).
-    root.querySelector<HTMLElement>('#opt-improvised')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-improvised')?.addEventListener('click', () => {
       const s = this.getSettings();
       s.improvisedStrike = !s.improvisedStrike;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // Gear pickup feel: hoover it like gems, or keep it a deliberate press.
-    root.querySelector<HTMLElement>('#opt-gearpickup')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-gearpickup')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.gearPickup = st.gearPickup === 'key' ? 'vacuum' : 'key';
       this.saveSettings();
       this.updateHintBar();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // FORESIGHT: enemy ground-casts mark their landing during the wind-up.
     // OFF is the read-the-animation purist mode.
-    root.querySelector<HTMLElement>('#opt-foresight')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-foresight')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.castTelegraphs = !st.castTelegraphs;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // MAP ZONE NAMES: cycle the label-mode registry (ui/mapConfig.ts) — hover-
     // revealed (clean chart) or always-on (classic). pinLabel kinds (towns)
     // ignore the dial by design, and cards never hit-test in any mode.
-    root.querySelector<HTMLElement>('#opt-maplabels')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-maplabels')?.addEventListener('click', () => {
       const st = this.getSettings();
       const i = MAP_LABEL_MODES.findIndex(m => m.id === st.mapLabels);
       st.mapLabels = MAP_LABEL_MODES[(i + 1) % MAP_LABEL_MODES.length].id;
       this.saveSettings();
       this.refreshMap(); // live behind the menu if the map is open (no-op otherwise)
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // REAWAKEN AFTER QUIT: where a relaunched save wakes (meta/worldstate.ts).
     // Player agency by default; a mode's `resume` pin outranks it at resume.
-    root.querySelector<HTMLElement>('#opt-resume')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-resume')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.resumeSpawn = st.resumeSpawn === 'town' ? 'exact' : 'town';
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // POISE/INSIGHT arcs: cycle the three view methodologies — smart hide
     // (change + build weight), strictly on-change, or always-on.
-    root.querySelector<HTMLElement>('#opt-poolbars')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-poolbars')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.poolBars = st.poolBars === 'smart' ? 'recent' : st.poolBars === 'recent' ? 'always' : 'smart';
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // Controller feel sliders: drag = immediate (padTuning reads Settings live
     // every frame), release = persist. Ranges live in the markup; loads re-clamp.
@@ -4574,13 +4608,21 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       const i = AIM_ASSIST_MODES.findIndex(m => m.id === st.pad.assistMode);
       st.pad.assistMode = AIM_ASSIST_MODES[(i + 1) % AIM_ASSIST_MODES.length].id;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // AIM TICK opacity: fades every facing pointer; 0 hides them outright
     // (the see-the-fight option). The renderer reads Settings live — the
     // drag shows on the battlefield behind the menu, next frame.
     slider('aimtick', v => { this.getSettings().aimTick.alpha = v / 100; },
       v => v <= 0 ? 'HIDDEN' : `${v}%`);
+    // LINE-OF-SIGHT SHADE: the player's dial over the sight veil's dark
+    // (Settings.veilDarkness → SightVeil.userMul — sheet, roof composites,
+    // label gating and hidden-actor fades all dim through the ONE number).
+    // The renderer reads Settings live, so the drag previews on the
+    // battlefield behind the menu, next frame. Purely aesthetic; the
+    // engine's own LoS ray never reads it.
+    slider('veildark', v => { this.getSettings().veilDarkness = v / 100; },
+      v => v <= 0 ? 'LIFTED' : `${v}%`);
     // UI SCALE: the accessibility dial (ui/uiScale.ts). Drag applies INSTANTLY —
     // the very panel under your hand grows (the honest preview) and the canvas
     // HUD follows next frame (the renderer reads Settings live); release persists.
@@ -4596,14 +4638,14 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       const i = CAMERA_MODES.findIndex(m => m.id === st.cameraMode);
       st.cameraMode = CAMERA_MODES[(i + 1) % CAMERA_MODES.length].id;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // AIM TICK style: one button per registry entry (line / dot / mods').
     root.querySelectorAll<HTMLElement>('[data-aimtick-style]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.getSettings().aimTick.style = btn.dataset.aimtickStyle!;
         this.saveSettings();
-        this.renderKeybinds(root, onBack);
+        this.renderOptions(root, onBack);
       });
     });
     // Cursor identity: style + tint apply INSTANTLY (applyCursor re-paints the
@@ -4614,7 +4656,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
         st.cursor.style = btn.dataset.cursorStyle!;
         this.saveSettings();
         applyCursor(st.cursor);
-        this.renderKeybinds(root, onBack);
+        this.renderOptions(root, onBack);
       });
     });
     root.querySelectorAll<HTMLElement>('[data-cursor-color]').forEach(btn => {
@@ -4623,14 +4665,14 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
         st.cursor.color = btn.dataset.cursorColor!;
         this.saveSettings();
         applyCursor(st.cursor);
-        this.renderKeybinds(root, onBack);
+        this.renderOptions(root, onBack);
       });
     });
-    root.querySelector<HTMLElement>('#opt-swapsticks')!.addEventListener('click', () => {
+    root.querySelector<HTMLElement>('#opt-swapsticks')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.pad.swapSticks = !st.pad.swapSticks;
       this.saveSettings();
-      this.renderKeybinds(root, onBack);
+      this.renderOptions(root, onBack);
     });
     // Pad rebind rows: arm the pad capture (main injects the bridge) — the
     // next button press binds. MENU/START is the pad's hardwired Escape, so
@@ -4652,14 +4694,14 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
             binds[action] = code;
             this.saveSettings();
           }
-          this.renderKeybinds(root, onBack);
+          this.renderOptions(root, onBack);
         });
         const onKey = (e: KeyboardEvent): void => {
           if (e.key !== 'Escape') return;
           e.preventDefault();
           e.stopImmediatePropagation();
           this.disarmRebind();
-          this.renderKeybinds(root, onBack);
+          this.renderOptions(root, onBack);
         };
         this.armedRebind = onKey;
         window.addEventListener('keydown', onKey, true);
@@ -4688,7 +4730,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
             this.saveSettings();
             this.updateHintBar();        // the strip mirrors whatever changed
           }
-          this.renderKeybinds(root, onBack); // re-render the (possibly updated) labels
+          this.renderOptions(root, onBack); // re-render the (possibly updated) labels
         };
         this.armedRebind = onKey;
         window.addEventListener('keydown', onKey, true);
@@ -4753,7 +4795,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
         ${rosterRows}
         <button id="sm-vault">Vault (Unlocks)</button>
-        <button id="sm-keys">Customize Keybinds</button>
+        <button id="sm-keys">Options</button>
         ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
       </div>`;
     document.getElementById('sm-start')!.addEventListener('click', () => {
@@ -4788,7 +4830,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     document.getElementById('sm-vault')!.addEventListener('click', () =>
       this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () =>
-      this.renderKeybinds(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
+      this.renderOptions(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     this.onStartMenuRender?.();
   }
 

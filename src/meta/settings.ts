@@ -147,6 +147,16 @@ export interface Settings {
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
    *  pin overrides this per-zone; boundless zones always free-follow. */
   cameraMode: CameraModeId;
+  /** LINE-OF-SIGHT SHADE (render/vis/sightVeil.ts SightVeil.userMul): one
+   *  multiplier on how DARK the sight veil paints its unseen-shadow — walls,
+   *  trunks and roofs throw the same shapes at any setting, and everything
+   *  that rides the veil (label gating, hidden-actor fades, roof composites)
+   *  scales through the same number, so pixels and text always agree. 1 is
+   *  the authored night; dim it to admire what the world builds atop its
+   *  structures (aetherial spires, the garden's canopies); 0 lifts the veil
+   *  entirely. Purely aesthetic — enemy eyes read the engine's own ray and
+   *  never this. */
+  veilDarkness: number;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -170,6 +180,7 @@ export interface SettingsSave {
   mapWash?: number;
   uiScale?: number;
   cameraMode?: CameraModeId;
+  veilDarkness?: number;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -282,6 +293,7 @@ export const makeSettings = (): Settings => ({
   mapWash: MAP_CFG.wash.default,
   uiScale: UI_SCALE_CFG.default,
   cameraMode: CAMERA_CFG.default,
+  veilDarkness: 1,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -303,6 +315,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   mapWash: s.mapWash,
   uiScale: s.uiScale,
   cameraMode: s.cameraMode,
+  veilDarkness: s.veilDarkness,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -364,5 +377,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,
+    // Re-clamped like every numeric option (0 = veil lifted, 1 = authored).
+    veilDarkness: clamp(s.veilDarkness ?? 1, 0, 1),
   };
 }

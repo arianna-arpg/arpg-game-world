@@ -212,6 +212,14 @@ export class SightVeil {
   private buf: HTMLCanvasElement | null = null;
   private bctx: CanvasRenderingContext2D | null = null;
 
+  /** THE PLAYER'S SHADE DIAL (Settings.veilDarkness — the renderer stamps it
+   *  each frame before update): one multiplier over BOTH shadow families, so
+   *  the sheet, the roof composites, label gating and hidden-actor fades all
+   *  dim together and pixels can never disagree with text. 1 = the authored
+   *  night; 0 lifts the veil (active goes false — the pass costs nothing).
+   *  Purely aesthetic: the engine's own LoS ray never reads it. */
+  userMul = 1;
+
   /** Live per-frame state (update() resolves; draw()/queries consume). */
   private active = false;
   private regionF = 0;   // hide-fraction of a true-wall shadow (0..1)
@@ -259,7 +267,7 @@ export class SightVeil {
     this.drew = false;
     const t = view.zone.theme?.sightVeil;
     const open = 1 - Math.min(1, confineFrac);
-    const mul = (t?.mul ?? 1) * open;
+    const mul = (t?.mul ?? 1) * open * Math.max(0, Math.min(1, this.userMul));
     this.regionF = Math.max(0, Math.min(1, cfg.regionStrength * (t?.regionMul ?? 1) * mul));
     this.doodadF = Math.max(0, Math.min(1, cfg.doodadStrength * (t?.doodadMul ?? 1) * mul));
     this.active = cfg.enabled && !VIS_ABLATE.has('sightveil')

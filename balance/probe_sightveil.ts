@@ -275,6 +275,19 @@ console.log('— B + drawn==tested: the live veil (cap, cull, graded query) —'
   const farStone = { x: 1700 + 200 * (800 / 825), y: 1000 - 200 * (200 / 825) };
   check('past the graded length: clear', veil.occludedAt(farStone) === 0);
 
+  // THE PLAYER'S SHADE DIAL (Settings.veilDarkness → userMul): the whole
+  // veil — sheet strengths and occludedAt alike — scales through one number,
+  // and 0 deactivates the pass outright.
+  veil.userMul = 0.5;
+  veil.update(view, 0, 1280, 800);
+  check('userMul 0.5 halves the query (drawn==tested through the dial)',
+    Math.abs(veil.occludedAt({ x: 900, y: 500 }) - rF * 0.5) < 1e-9);
+  veil.userMul = 0;
+  veil.update(view, 0, 1280, 800);
+  check('userMul 0 lifts the veil entirely', veil.occludedAt({ x: 900, y: 500 }) === 0);
+  veil.userMul = 1;
+  veil.update(view, 0, 1280, 800);
+
   // The far-cull mirror: the beyond-radius cliff hides nothing…
   const beyond = doodads[2];
   check('rig sanity: third solid sits beyond the veil radius',

@@ -473,6 +473,9 @@ export class Renderer {
       if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
       for (const r of st.roofs) this.hullRects.push(r);
     }
+    // The player's shade dial (Settings.veilDarkness) — read live, so the
+    // options slider previews on the battlefield behind the menu.
+    this.sightVeil.userMul = this.getSettings?.().veilDarkness ?? 1;
     this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
     this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
