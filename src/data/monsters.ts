@@ -4258,6 +4258,61 @@ export const MONSTERS: Record<string, MonsterDef> = {
     drops: 2,
   },
 
+  // --- THE MUMMERS -----------------------------------------------------------
+  // The mimicry fabric's teaching troupe (engine/mimic.ts): a traveling show
+  // that walks the settled country, every kit built of capturable arts and
+  // every SILHOUETTE its art's tell — the mask casts the visage, the glass
+  // coat dances the waltz, the bird shrieks the refrain, the caped duelist
+  // owns the third act. Studied FAST (low bestiaryKills): they are the first
+  // pages a blue mage fills, while the wider bestiary stays the long game.
+  // gemBias 'mimic': the troupe preferentially drops the Mimicry gem itself.
+
+  mockthrush: {
+    id: 'mockthrush', name: 'Mockthrush',
+    color: '#b89ad0', shape: 'circle', radius: 8, material: 'flesh', look: 'mockthrush',
+    base: { life: 45, moveSpeed: 195, accuracy: 105, evasion: 40, mana: 40, manaRegen: 5 },
+    skills: ['mocking_refrain', 'claw'],
+    xp: 12,
+    packSize: [3, 5],
+    brain: { type: 'swarm' },
+    bestiaryKills: 60,
+    gemBias: ['mimic'],
+  },
+
+  glasskin_aper: {
+    id: 'glasskin_aper', name: 'Glasskin Aper',
+    color: '#a8c8d8', shape: 'circle', radius: 12, material: 'crystal', look: 'glasskin_aper',
+    base: { life: 150, moveSpeed: 170, accuracy: 110, armor: 30, mana: 30, manaRegen: 4 },
+    skills: ['shard_waltz', 'heavy_strike'],
+    xp: 35,
+    bestiaryKills: 80,
+    gemBias: ['mimic'],
+  },
+
+  masque_haunt: {
+    id: 'masque_haunt', name: 'Masque Haunt',
+    color: '#c090e0', shape: 'circle', radius: 11, material: 'ethereal', look: 'masque_haunt',
+    base: { life: 90, es: 40, moveSpeed: 150, accuracy: 108, mana: 90, manaRegen: 8 },
+    skills: ['borrowed_visage', 'mocking_refrain'],
+    xp: 30,
+    bestiaryKills: 70,
+    gemBias: ['mimic'],
+  },
+
+  // The rare headliner: fights with the players' own catalog (Cape Feint is
+  // the Matador's — reuse, never a copy) plus the finisher worth stealing.
+  the_understudy: {
+    id: 'the_understudy', name: 'The Understudy',
+    color: '#e0c8a0', shape: 'circle', radius: 13, material: 'flesh', look: 'the_understudy',
+    base: { life: 320, moveSpeed: 180, accuracy: 120, evasion: 60, mana: 60, manaRegen: 6 },
+    skills: ['showstopper', 'shard_waltz', 'cape_feint'],
+    xp: 80,
+    bestiaryKills: 25,
+    gemBias: ['mimic'],
+    drops: 1,
+    wardPriority: 1,
+  },
+
   // --- Clutter & townsfolk ----------------------------------------------------
   // Breakables are passive "monsters": smash a barrel, drink what spills.
   barrel: {

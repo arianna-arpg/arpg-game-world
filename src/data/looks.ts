@@ -5171,6 +5171,56 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // --- THE MUMMERS (the mimicry troupe — engine/mimic.ts) -------------------
+  // Family read-at-a-glance law: each silhouette carries its capturable
+  // art's TELL and nothing borrowed from a neighbor — the wings shriek, the
+  // shards waltz, the mask throws faces, the cape owns the stage.
+
+  /** The mockthrush: a wrong-colored songbird — wings up, throat working.
+   *  The spots are the 'listen' tell: it learned your voice already. */
+  mockthrush: {
+    parts: [
+      { kind: 'wings', scale: 1.2 },
+      { kind: 'blob', scale: 0.85 },
+      { kind: 'spots', scale: 0.9, params: { n: 4 } },
+      { kind: 'snout', x: 0.4, scale: 0.6 },
+      { kind: 'eyes', params: { n: 2, spread: 0.5, size: 0.16 } },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The glasskin aper: an ape-shape armored in mirror-shard — the coat IS
+   *  the waltz: nothing else in the troupe carries standing glass. */
+  glasskin_aper: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'crystalGrowths', scale: 1.1, role: 'glow', alpha: 0.9 },
+      { kind: 'floatingShards', scale: 0.9, alpha: 0.8 },
+      { kind: 'claws', scale: 0.95 },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, size: 0.18 } },
+    ],
+  },
+  /** The masque haunt: a hollow robe under one BRIGHT held mask — the mask
+   *  forward like a lantern (it is the projectile's tell), rags trailing. */
+  masque_haunt: {
+    parts: [
+      { kind: 'robe', scale: 0.95, alpha: 0.8 },
+      { kind: 'tatters', scale: 1.0, alpha: 0.75 },
+      { kind: 'mask', x: 0.38, scale: 1.15, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.6,
+  },
+  /** The Understudy: the headliner — cape swept, mask worn HIGH (never
+   *  thrown: this one keeps the face), daggers ready for the third act. */
+  the_understudy: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'cape', scale: 1.15, role: 'cloth' },
+      { kind: 'mask', scale: 0.95, role: 'glow' },
+      { kind: 'daggers', scale: 1.0, role: 'metal' },
+    ],
+  },
+
   /** The dominion: marble made law — plates, the open book, the scales' chains. */
   dominion_scales: {
     parts: [

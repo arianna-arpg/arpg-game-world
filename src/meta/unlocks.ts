@@ -28,6 +28,7 @@ import { IMMORTAL_CFG } from './modes';
 import { CLASSES } from '../data/classes';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { bestiaryKey } from '../data/bestiary';
 import { PACKAGES, PACKAGE_BY_ID, unlockMet } from '../packages/registry';
 
 /** Fields every unlock shares. `requiresUnlock` is the GENERIC sequencing
@@ -514,6 +515,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — the Aureole',
     description: 'Gloriole, Colonnade, Gloria may drop. The circular judgement of the Seraph City: courts that convene on the accused.',
     payload: { skillIds: ['gloriole', 'colonnade', 'gloria'] } },
+  // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
+  // way the idea itself arrives — by killing ONE chest that pretended to be
+  // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so
+  // the knowledge discipline is unlocked by a first act of knowing.
+  { id: 'gem_skills_mimicry', kind: 'skill', cost: 200, reqLedgerCounts: { [bestiaryKey('mimic')]: 1 }, label: 'Skill Pool — Mimicry',
+    description: 'Mimicry may drop. The chest that bit you taught you something: a shape is only a habit, and habits can be stolen.',
+    payload: { skillIds: ['mimicry'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
@@ -549,6 +557,16 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_aureole', kind: 'support', cost: 140, reqLevel: 1, label: 'Support Pool — the Aureole',
     description: 'Aureate Writ and Sanctal Cautery may drop. The tribune\'s docket and the gilt fire that closes wounds shut.',
     payload: { supportIds: ['aureate_writ', 'sanctal_cautery'] } },
+  { id: 'sup_mimicry', kind: 'support', cost: 150, requiresUnlock: 'gem_skills_mimicry', label: 'Support Pool — Mimicry',
+    description: 'Keen Study and Understudy may drop. The eye that steals without the bruise, and the wings that hold more faces.',
+    payload: { supportIds: ['keen_study', 'understudy'] } },
+  // THE COUNTERPOINT (an orphan fix): Polyphony and Ostinato shipped with
+  // the combo grammar fully defined but joined NO pool row — obtainable
+  // only under the unlock-all dev feature. The validator's pool-orphan net
+  // (data/validate.ts) now guards this class of gap; this row is theirs.
+  { id: 'sup_counterpoint', kind: 'support', cost: 160, reqLevel: 1, label: 'Support Pool — Counterpoint',
+    description: 'Polyphony and Ostinato may drop. The grammar\'s payoffs: the varied hand, and the phrase insisted upon.',
+    payload: { supportIds: ['polyphony', 'ostinato'] } },
 
   // --- Town features (the roguelite town framework) ------------------------
   { id: 'feat_brandt_gems',     kind: 'feature', cost: 60,  reqLevel: 0, label: 'Brandt: +2 Wares',     description: 'Brandt stocks 6 gems instead of 4.',                   payload: { flag: FEATURE.BRANDT_EXTRA_GEMS } },

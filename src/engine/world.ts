@@ -64,6 +64,7 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraform
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { COMBO_CFG, comboRepeatedNow, comboStat, comboVariedNow, matchComboRule, type ComboRuleDef } from './sequence';
+import { mimicCapture, mimicPowerMods, mimicRefreshWatch, mimicSelect, mimicSelected } from './mimic';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
@@ -1257,6 +1258,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
     case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
+    case 'mimicSelect': return isStr(a.sid);
     case 'untameCompanion': return isIdx(a.actorId);
     case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
@@ -17391,6 +17393,7 @@ export class World {
       case 'learn': this.learnSkill(action.index, seat); break;
       case 'unlearn': this.unlearnSkill(action.skillId, seat); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
+      case 'mimicSelect': this.mimicSelectFor(action.sid, seat); break;
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
@@ -18029,6 +18032,12 @@ export class World {
    *  full Tame presents the Whistle) — else the skill itself. The renderer
    *  reads this so the button never lies about what a press will do. */
   slotFaceOf(caster: Actor, inst: SkillInstance): SkillDef {
+    // A mimic slot wears the SELECTED captured art's face (the source
+    // monster's chip rides the build flap — engine/mimic.ts).
+    if (inst.def.mimic) {
+      const sel = mimicSelected(caster, this.time);
+      if (sel && SKILLS[sel.sid]) return SKILLS[sel.sid];
+    }
     const conv = instanceConvert(inst); // innate OR a munition graft's reload
     return conv && SKILLS[conv.skillId] && convertRuleHolds(conv.when, caster, inst, this)
       ? SKILLS[conv.skillId]
@@ -18041,6 +18050,15 @@ export class World {
    *  canUse so an exhausted gun still gets pressed: the press is the
    *  reload, and the vulnerability window it opens is the design. */
   pressUsable(caster: Actor, inst: SkillInstance): boolean {
+    // A mimic slot presses as its selection — empty bank, dead button.
+    if (inst.def.mimic) {
+      const sel = mimicSelected(caster, this.time);
+      if (!sel || !SKILLS[sel.sid]) return false;
+      const minted = this.mintMetaInstance(caster, inst, sel.sid);
+      minted.sockets = inst.sockets;
+      minted.extraMods = mimicPowerMods(inst.def.mimic);
+      return caster.canUse(minted);
+    }
     const conv = instanceConvert(inst);
     if (conv && SKILLS[conv.skillId]
       && convertRuleHolds(conv.when, caster, inst, this)) {
@@ -19128,6 +19146,13 @@ export class World {
     return ok;
   }
 
+  /** Select a captured art on a seat's mimic bank (UI chips / co-op
+   *  intents — host-authoritative like every meta mutation; the bank
+   *  itself only ever fills through the capture gates). */
+  mimicSelectFor(sid: string, seat: Seat = this.localSeat): void {
+    mimicSelect(seat.actor, this.time, sid);
+  }
+
   /** Consume a skill's charge cost — the innate economy or a socketed
    *  SPENDER graft (Ravening / Embargo); returns the damage multiplier
    *  earned and the count consumed (perCharge effects scale with it). */
@@ -19224,6 +19249,23 @@ export class World {
         minted.sockets = inst.sockets;
         return this.useSkill(caster, minted, aim, seatPress);
       }
+    }
+    // THE MIMIC SLOT (SkillDef.mimic — engine/mimic.ts): the press IS the
+    // selected captured art, minted per host at the host's effective level
+    // (the convert idiom: shared sockets, hostSkillId stamped — the HUD
+    // already presented this face). The power factor rides as instance
+    // mods; the minted cast then runs the whole ordinary pipeline, so the
+    // ring records the art's REAL tags and its own cooldown paces it.
+    if (inst.def.mimic) {
+      const sel = mimicSelected(caster, this.time);
+      if (!sel || !SKILLS[sel.sid]) {
+        this.failNote(caster, inst.def.id + ':empty', 'no art captured');
+        return false;
+      }
+      const minted = this.mintMetaInstance(caster, inst, sel.sid);
+      minted.sockets = inst.sockets;
+      minted.extraMods = mimicPowerMods(inst.def.mimic);
+      return this.useSkill(caster, minted, aim, seatPress);
     }
     // PREREQUISITE GATES: an unmet gate is the ONE canUse refusal worth a
     // note — the player should learn "not ready", not wonder about mana.
@@ -22004,6 +22046,17 @@ export class World {
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
       }
+      // MIMIC SELECTION (the slot's meta press — engine/mimic.ts): step or
+      // jump the caster's selected captured art; the new face speaks.
+      if (fx.type === 'mimicSelect') {
+        const sel = mimicSelect(caster, this.time, fx.sid ?? fx.step ?? 1);
+        if (sel && SKILLS[sel.sid]) {
+          this.text(vec(caster.pos.x, caster.pos.y - 24),
+            SKILLS[sel.sid].name, SKILLS[sel.sid].color, 12);
+        } else if (!sel) {
+          this.failNote(caster, 'mimic:none', 'no art captured');
+        }
+      }
       // STATUS SIPHON (Draw Corruption — the martyr's draw): PULL the
       // afflictions off nearby flesh onto the CASTER, clocks still
       // running; each drawn wound pays a little healing. The vessel
@@ -22341,6 +22394,25 @@ export class World {
     // a cast the grammar may read; only what it BURNED never re-banks).
     if (!opts.noRepeat && !opts.noCooldown && !caster.construct) {
       this.recordCast(caster, def);
+    }
+    // THE WITNESS LANE (engine/mimic.ts mimicWitness): a completed enemy
+    // art may teach watching seats WITHOUT the blow — reach is each seat's
+    // cached witness radius (0 for every build without the lever) and
+    // SIGHT referees: an art cast behind a wall teaches nothing.
+    if (!opts.noRepeat && !opts.noCooldown && !caster.construct
+      && caster.team === 'enemy') {
+      for (const s of this.seats) {
+        const p = s.actor;
+        if (p.dead || p.kind !== 'player') continue;
+        mimicRefreshWatch(p, this.time);
+        if (!p.mimicWatch || p.mimicWitnessR <= 0) continue;
+        if (dist(p.pos, caster.pos) > p.mimicWitnessR) continue;
+        if (!this.lineOfSight(p.pos, caster.pos)) continue;
+        if (mimicCapture(this, p, caster, def)) {
+          this.text(vec(p.pos.x, p.pos.y - 30),
+            `ART WITNESSED: ${def.name}`, '#c8a0e8', 14);
+        }
+      }
     }
     // ECHO RIDERS (support grafts): a completed REAL use raises/refreshes
     // the ghosts. Channel pulses and scheduled repeats never mint them, and
@@ -25863,6 +25935,17 @@ export class World {
       if (result.immune) {
         this.text(target.pos, 'immune', '#9ab0c8', 12);
         return;
+      }
+      // THE MIMIC CAPTURE (engine/mimic.ts): a LANDED enemy art teaches a
+      // watching seat — policy, the bestiary study gate, dedupe and the
+      // bank cap all settle inside the fabric. Non-mimic builds pay one
+      // throttled cached boolean here (the comboWatch idiom).
+      if (target.kind === 'player' && caster.team === 'enemy') {
+        mimicRefreshWatch(target, this.time);
+        if (target.mimicWatch && mimicCapture(this, target, caster, def)) {
+          this.text(vec(target.pos.x, target.pos.y - 30),
+            `ART CAPTURED: ${def.name}`, '#c8a0e8', 14);
+        }
       }
       dealt = result.total;
       // DAMAGE POOLS: the hit's rolled amounts feed any pool skills on the

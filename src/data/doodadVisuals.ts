@@ -1632,6 +1632,18 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.4,
     params: { cloth: '#8a6a3e' },
   },
+  // THE MUMMERS' KIT (the mimicry troupe's camp — data/compositions.ts
+  // 'mummers_camp'): the show's colors and the practice glass. Both reuse
+  // standing painters — one data entry each, the visual-fabric law.
+  masque_banner: {
+    painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.4,
+    params: { cloth: '#8a5aa8' },
+  },
+  mirrorglass_shard: {
+    painter: 'aetherCrystal', order: 50, shadow: 0.3,
+    params: { body: '#ccd6de', deep: '#8a98a8', gleam: '#ffffff' },
+    light: { radius: -2.4, color: '#dbe6ee', intensity: 0.22, flicker: 0.7 },
+  },
   beehive: {
     painter: 'pod', order: 53, shadow: 0.5,
     params: { body: '#c8a24a', glow: '#e8cf7a', aspectY: 1.15, glowY: -0.2, glowR: 0.34, pulseRate: 1.4, bands: 3 },

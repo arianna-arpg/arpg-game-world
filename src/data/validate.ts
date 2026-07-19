@@ -37,7 +37,8 @@ import { SPAN_CFG } from '../engine/spans';
 import { hasBlendField } from '../engine/blend';
 import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
-import { STARTER_CLASSES } from '../meta/account';
+import { STARTER_CLASSES, STARTER_SKILLS, STARTER_SUPPORTS } from '../meta/account';
+import { skillMimicable } from '../engine/mimic';
 import { DEFAULT_MODE_ID, MODE_BY_ID, MODES } from '../meta/modes';
 import { MERC_CFG } from '../meta/mercs';
 import { MERC_TEMPLATES } from './mercenaries';
@@ -1601,6 +1602,21 @@ export function validateContent(): void {
         warn(`skill ${s.id}: convert rule '${s.convert.when}' is not in CONVERT_RULES`);
       }
     }
+    // THE MIMIC LANE (engine/mimic.ts): a slot redirects its whole press, so
+    // it can't share the button with another redirect discipline; a zero
+    // power factor is a dead cannon; an explicit allow that the structural
+    // refusals override is a lie in the data.
+    if (s.mimic) {
+      if (s.mimic.powerFactor !== undefined && s.mimic.powerFactor <= 0) {
+        warn(`skill ${s.id}: mimic.powerFactor must be positive`);
+      }
+      if (s.convert || s.comboChain) {
+        warn(`skill ${s.id}: a mimic slot cannot also convert/comboChain (one redirect per press)`);
+      }
+    }
+    if (s.mimicable === true && !skillMimicable(s)) {
+      warn(`skill ${s.id}: mimicable:true but structurally refused (mimic slot / invokes / throng / grimoire summon)`);
+    }
     // AMMUNITION honesty (SkillDef.useCharges lanes):
     //  - a MAGAZINE's cooldown IS its reload clock — cooldown 0 means the
     //    emptying press stamps nothing and the bank never refills;
@@ -1940,6 +1956,68 @@ export function validateContent(): void {
             warn(`class ${c.id}: bar skill '${sid}' missing from its class bundle (could never drop)`);
           }
         }
+      }
+    }
+  }
+
+  // THE POOL-ORPHAN NET (the Polyphony/Ostinato lesson): drops and vendor
+  // stock both gate on the account's unlocked-gem sets, and ONLY unlock
+  // payloads (plus the starter seeds) ever fill them — so a droppable gem
+  // that appears in NO unlock payload is defined, valid, minDropLevel'd…
+  // and unreachable forever, with nothing else that would say so. Forward
+  // checks (unlock → real gem) existed; this is the reverse.
+  {
+    const pooled = new Set<string>(STARTER_SKILLS);
+    const pooledSup = new Set<string>(STARTER_SUPPORTS);
+    for (const u of unlocks) {
+      if (u.kind === 'skill' || u.kind === 'class') for (const id of u.payload.skillIds) pooled.add(id);
+      if (u.kind === 'support' || u.kind === 'class') for (const id of u.payload.supportIds) pooledSup.add(id);
+    }
+    // Two grades of orphan, each ONE summary line so the counts are watched
+    // without drowning the log (the counts moving IS the tripwire — a new
+    // gem landing outside every pool bumps them):
+    //   AUTHORED INTENT — dropWeight/minDropLevel tuned on an unpooled gem:
+    //   someone balanced a drop that cannot happen (the Polyphony trap, at
+    //   family scale). LIMBO — no drop fields, no noDrop, no pool: standing
+    //   catalog debt. Pay both down per family: a pool/ledger row, a bundle
+    //   seat, or an honest noDrop. (Quest-gift lanes — Mireille's flasks —
+    //   still reach players without pools; the counts include them.)
+    const intentSkills: string[] = [];
+    const limboSkills: string[] = [];
+    for (const s of Object.values(SKILLS)) {
+      if (s.noDrop || pooled.has(s.id)) continue;
+      (s.dropWeight !== undefined || s.minDropLevel !== undefined ? intentSkills : limboSkills).push(s.id);
+    }
+    if (intentSkills.length) {
+      warn(`skill pool orphans (AUTHORED drop fields, no unlock pool row — cannot drop or vend): ${intentSkills.length} — ${intentSkills.slice(0, 10).join(', ')}${intentSkills.length > 10 ? ', …' : ''}`);
+    }
+    if (limboSkills.length) {
+      warn(`skill pool limbo (no drop fields, no noDrop, no pool row): ${limboSkills.length} — e.g. ${limboSkills.slice(0, 6).join(', ')}…`);
+    }
+    const intentSups: string[] = [];
+    const limboSups: string[] = [];
+    for (const sup of Object.values(SUPPORTS)) {
+      if (pooledSup.has(sup.id)) continue;
+      (sup.weight !== undefined || sup.minDropLevel !== undefined || sup.dropTags !== undefined ? intentSups : limboSups).push(sup.id);
+    }
+    if (intentSups.length) {
+      warn(`support pool orphans (AUTHORED drop fields, no unlock pool row — cannot drop or vend): ${intentSups.length} — ${intentSups.slice(0, 10).join(', ')}${intentSups.length > 10 ? ', …' : ''}`);
+    }
+    if (limboSups.length) {
+      warn(`support pool limbo (no drop fields, no pool row): ${limboSups.length} — e.g. ${limboSups.slice(0, 6).join(', ')}…`);
+    }
+  }
+
+  // THE MIMIC POOL is TAUGHT, never dropped: a mimicable art reaches the
+  // player only through a monster that actually casts it. An explicit
+  // mimicable:true on a skill NO kit carries is a dead allow — flag it
+  // (the tag-default lane is exempt: defaults describe policy, not intent).
+  {
+    const taught = new Set<string>();
+    for (const m of Object.values(MONSTERS)) for (const sid of m.skills) taught.add(sid);
+    for (const s of Object.values(SKILLS)) {
+      if (s.mimicable === true && !taught.has(s.id)) {
+        warn(`skill ${s.id}: mimicable:true but no monster kit teaches it (dead allow)`);
       }
     }
   }

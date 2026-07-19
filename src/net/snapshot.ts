@@ -89,6 +89,12 @@ export interface ActorW {
   /** COMBO GRAMMAR chips, host-computed like the boss bar (clients hold no
    *  ring): per equipped rule [id, lit, len, glow]. Players only. */
   cb?: [string, number, number, number][];
+  /** THE MIMIC BANK (players only, while filled — engine/mimic.ts): the
+   *  captured arts as [skillId, sourceMonsterId] pairs, oldest first, plus
+   *  the selection. The client's own build flap/bar draws the chips; the
+   *  bank itself only ever fills host-side through the capture gates. */
+  mk?: [string, string][];
+  ms?: string;
   // --- FX (all omitted when absent → renderer skips them gracefully) ---
   ab?: number;                 // absorb pool (white bar)
   st?: StatusW[];              // active statuses (pips + screen ailment FX)
@@ -411,6 +417,10 @@ function actorToW(a: Actor): ActorW {
     if (a.runes.length) w.rn = a.runes.slice();
     const cb = COMBO_HUD_OF(a);
     if (cb?.length) w.cb = cb;
+    if (a.mimicBank?.length) {
+      w.mk = a.mimicBank.map(e => [e.sid, e.src] as [string, string]);
+      if (a.mimicSel) w.ms = a.mimicSel;
+    }
   }
   if (a.absorb > 0) w.ab = Math.round(a.absorb);
   if (a.statuses.length) w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks }));
@@ -709,6 +719,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // as host-computed rows the renderer prefers over local derivation.
     a.runes = aw.rn ?? [];
     a.comboHud = aw.cb?.map(([id, lit, len, glow]) => ({ id, lit, len, glow }));
+    // Mimic bank mirror (render/UI only — capture clocks stay host-side,
+    // so mirrored entries carry at:0 and the client never prunes them).
+    a.mimicBank = aw.mk ? aw.mk.map(([sid, src]) => ({ sid, src, at: 0 })) : null;
+    a.mimicSel = aw.ms ?? null;
     a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;

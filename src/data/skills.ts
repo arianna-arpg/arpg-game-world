@@ -13,6 +13,105 @@ import type { SkillDef } from '../engine/skills';
 
 export const SKILLS: Record<string, SkillDef> = {
 
+  // ======================= Mimicry (the blue-mage lane) ====================
+  // THE SLOT and its cycle payload (engine/mimic.ts — capture is the
+  // fabric's business), plus the Mummers' TEACHING ARTS below the pair:
+  // the troupe's own kit, noDrop like every monster art. The only way to
+  // cast a teaching art is to capture it — which is the point.
+
+  mimicry: {
+    id: 'mimicry', name: 'Mimicry',
+    description: 'An empty vessel of a skill. Enemy arts that strike you are'
+      + ' captured — once their kind is studied to the ARTS tier of the'
+      + ' bestiary — and this slot casts the chosen one back, a shade'
+      + ' diminished. Shift-press to change forms. You can only steal what'
+      + ' you understand.',
+    tags: ['mimic'], color: '#c8a0e8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [],
+    mimic: {},
+    meta: { skillId: 'mimic_attune', label: 'Next form' },
+    minDropLevel: 3,
+    dropWeight: 60,
+  },
+
+  mimic_attune: {
+    id: 'mimic_attune', name: 'Change Form',
+    description: 'Turn the captured repertoire one step — the next stolen'
+      + ' art takes the slot.',
+    tags: ['mimic', 'instant'], color: '#c8a0e8',
+    manaCost: 0, cooldown: 0.25, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'mimicSelect', step: 1 }],
+    noDrop: true,
+  },
+
+  mocking_refrain: {
+    id: 'mocking_refrain', name: 'Mocking Refrain',
+    description: 'A shrieked echo of your own voice, wrong in every way that'
+      + ' matters. Nearby enemies are befuddled by the argument.',
+    tags: ['spell', 'aoe', 'physical'], color: '#d8b8e8',
+    manaCost: 6, cooldown: 5, useTime: 0.7,
+    baseDamage: { physical: [5, 8] },
+    delivery: { type: 'nova', radius: 95 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'befuddlement', chance: 0.5 },
+    ],
+    noDrop: true,
+    ai: { range: 85, weight: 3 },
+  },
+
+  shard_waltz: {
+    id: 'shard_waltz', name: 'Shard Waltz',
+    description: 'A whirling step in a coat of mirror-glass — the slivers'
+      + ' bite, and what they open stays open.',
+    tags: ['attack', 'melee', 'physical', 'cold'], color: '#b8d8e8',
+    manaCost: 5, cooldown: 3, useTime: 0.8,
+    baseDamage: { physical: [8, 12], cold: [3, 6] },
+    delivery: { type: 'melee', range: 58, arcDeg: 150 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'vulnerable', chance: 0.35 },
+    ],
+    noDrop: true,
+    ai: { range: 60, weight: 3 },
+  },
+
+  borrowed_visage: {
+    id: 'borrowed_visage', name: 'Borrowed Visage',
+    description: 'A face that is briefly, horribly yours, thrown like a'
+      + ' stone. Minds addle trying to meet it.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#c090e0',
+    manaCost: 7, cooldown: 2, useTime: 0.8,
+    baseDamage: { chaos: [9, 14] },
+    delivery: { type: 'projectile', speed: 360, radius: 8, range: 460 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'addled', chance: 0.35 },
+    ],
+    noDrop: true,
+    ai: { range: 380, weight: 3, keepDistance: 220 },
+  },
+
+  showstopper: {
+    id: 'showstopper', name: 'Showstopper',
+    description: 'The third act arrives whether the house is ready or not:'
+      + ' a sweeping flourish that knocks the audience off its feet.',
+    tags: ['attack', 'melee', 'aoe', 'physical'], color: '#e8c8a0',
+    manaCost: 10, cooldown: 7, useTime: 1.0,
+    baseDamage: { physical: [19, 28] },
+    delivery: { type: 'cone', range: 120, arcDeg: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 130 },
+      { type: 'status', status: 'stun', chance: 0.25 },
+    ],
+    noDrop: true,
+    ai: { range: 100, weight: 4 },
+  },
+
   // ======================= Warrior / melee =================================
 
   cleave: {

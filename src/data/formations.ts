@@ -475,6 +475,22 @@ registerFormation({
   ],
 });
 
+// THE MUMMERS' RING: a traveling show pitched for the night — the props cart
+// at the heart, benches ranked toward it, the troupe's colors up, practice
+// glass catching whatever light is left (the mimicry fabric's camp —
+// data/compositions 'mummers_camp' seats it; the players seat from the
+// tileset's own Mummers rows).
+registerFormation({
+  id: 'mummers_ring', arrange: 'ring', span: [72, 96], step: 38,
+  pieces: [
+    { kind: 'broken_cart', radius: [15, 19], count: [1, 1] },
+    { kind: 'crowd_row', radius: [13, 17], jitter: 8, rot: true },
+    { kind: 'masque_banner', radius: [8, 10], every: 2, jitter: 10 },
+    { kind: 'mirrorglass_shard', radius: [8, 12], every: 3, jitter: 14, rot: true },
+    { kind: 'campfire', radius: [11, 13], every: 4, jitter: 10 },
+  ],
+});
+
 // A FUNGAL PROCESSION: glow-caps filing through the dark, toadstools between.
 registerFormation({
   id: 'fungal_procession', arrange: 'meander', span: [260, 480], step: 42,

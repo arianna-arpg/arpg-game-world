@@ -333,7 +333,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   downs: {
     id: 'downs',
     forceLayout: 'massif',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.12 }],
+    compositions: [
+      { composition: 'stone_sanctum', chance: 0.12 },
+      // The Mummers pitch on the drover roads (the mimicry troupe's camp).
+      { composition: 'mummers_camp', chance: 0.1 },
+    ],
     nameFirst: ['Bracken', 'Harrow', 'Greywether', 'Wold', 'Mistle', 'Cairn', 'Whinny', 'Old Meadow', 'Shepherd’s', 'Thorn', 'Fallow', 'Drover’s', 'Weathered', 'Barrowman’s'],
     nameSecond: ['Downs', 'Moor', 'Wolds', 'Leas', 'Heath', 'Fells', 'Commons', 'Folds', 'Acres', 'Pastures', 'Rise', 'Balks'],
     theme: {
@@ -448,6 +452,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'basilisk', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 11, fadeIn: 5 } },
+        // THE MUMMERS (engine/mimic.ts): the teaching troupe walks the
+        // settled country — studied fast, their arts a blue mage's first.
+        { id: 'mockthrush', weight: 2, presence: { to: 14, fadeOut: 6 } },
+        { id: 'glasskin_aper', weight: 1, presence: { from: 4, fadeIn: 3 } },
+        { id: 'masque_haunt', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'the_understudy', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -3956,7 +3966,12 @@ export const TILESETS: Record<string, TilesetDef> = {
   // MEADOW — a gentle grove breather: grass, scattered trees, low-threat wilds.
   meadow: {
     id: 'meadow',
-    compositions: [{ composition: 'orchard_rows', chance: 0.4 }, { composition: 'war_camp', chance: 0.1 }],
+    compositions: [
+      { composition: 'orchard_rows', chance: 0.4 },
+      { composition: 'war_camp', chance: 0.1 },
+      // The Mummers play the lea (the mimicry troupe's wayside show).
+      { composition: 'mummers_camp', chance: 0.12 },
+    ],
     nameFirst: ['Sunlit', 'Wildflower', 'Greenhollow', 'Honeybrook', 'Dappled', 'Springmoor', 'Cloverhill', 'Larksong', 'Daisychain', 'Goldengrass', 'Breezy', 'Sweetgrass', 'Buttercup', 'Gentlebrook', 'Verdant', 'Mossglen', 'Petalfall', 'Hazysun'],
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
@@ -4042,6 +4057,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fen_hound', weight: 1 },
         { id: 'sylvan_sapling', weight: 1, presence: { to: 12, fadeOut: 5 } },
         { id: 'twig_snarl', weight: 1, presence: { from: 5, fadeIn: 3, to: 20, fadeOut: 8 } },
+        // THE MUMMERS (engine/mimic.ts): the troupe plays the lea too.
+        { id: 'mockthrush', weight: 2, presence: { to: 12, fadeOut: 5 } },
+        { id: 'masque_haunt', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'the_understudy', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',

@@ -3031,6 +3031,18 @@ export interface RestoreSkillChargesEffect {
   scope?: 'host' | 'all';
 }
 
+/** MIMIC SELECTION (engine/mimic.ts): step the caster's selected captured
+ *  art through the bank (the mimic slot's meta press — 'Next form'), or
+ *  jump to an explicit skill id. Rides the meta machinery like every
+ *  payload; a bank with nothing in it steps quietly to nowhere. */
+export interface MimicSelectEffect {
+  type: 'mimicSelect';
+  /** Cycle distance through the live bank (default +1). */
+  step?: number;
+  /** Jump straight to this captured skill id instead of stepping. */
+  sid?: string;
+}
+
 /** CHRONO (#19): shaves every OTHER learned skill's running cooldown —
  *  flat seconds and/or a fraction of what remains. Never its own (the
  *  clock that winds others can't wind itself). */
@@ -3441,7 +3453,7 @@ export type SkillEffect =
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
-  | GrabSeizeEffect | GrabThrowEffect;
+  | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect;
 
 // --- The skill definition ---------------------------------------------------
 
@@ -3805,6 +3817,25 @@ export interface SkillDef {
    *  `duration` seconds beside the attacker. The skill's own use banks
    *  the shards (gainCharge) — the orbiting promise of teeth. */
   retaliate?: { charge: string; monsterId: string; duration: number; max: number };
+
+  /** THE MIMIC SLOT (engine/mimic.ts — the blue-mage lane): pressing this
+   *  skill casts the caster's SELECTED captured enemy art instead, minted
+   *  at this slot's effective level with the power factor stamped as
+   *  instance mods (the convert/meta idiom — slotFaceOf presents the
+   *  captured face, the slot's sockets ride it under tag admission, and
+   *  the cast ring records the art's REAL tags). Capture itself is the
+   *  fabric's business: arts that HIT you — or, with the mimicWitness
+   *  lever, arts merely SEEN — enter the bank once their kind is studied
+   *  to MIMIC_CFG.studyGroup in the bestiary. `powerFactor` overrides the
+   *  config's global factor for this slot alone. */
+  mimic?: { powerFactor?: number };
+
+  /** MIMICRY POLICY — the explicit allow/deny lane over the MIMIC_CFG
+   *  tag/delivery/effect defaults: true opens an art the defaults refuse
+   *  (a deliberately stealable summon), false seals one they would admit.
+   *  Structural refusals (mimic slots, invocation banks, throng anchors)
+   *  hold even against an explicit allow. Unset = the defaults decide. */
+  mimicable?: boolean;
 }
 
 export interface SkillThreshold {

@@ -93,6 +93,18 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'hermits_rest', at: 'camp', count: [1, 1] }],
 });
 
+// THE MUMMERS' CAMP: a traveling show pitched at the wayside — cart, fire,
+// benches toward the boards, mirror-glass practice shards, the troupe's
+// colors up (the mimicry fabric's set-piece; the players themselves seat
+// from the tileset table's Mummers rows). Clearing 30–40 vs the ring span
+// 72–96: 72 − 14 = 58 ≥ 40 + 19 — the menhir numeric contract holds.
+registerComposition({
+  id: 'mummers_camp',
+  sites: [{ id: 'stage', radius: [105, 140] }],
+  pre: [{ kind: 'clearing', at: 'stage', count: [1, 1], radius: [30, 40] }],
+  post: [{ kind: 'formation', formation: 'mummers_ring', at: 'stage', count: [1, 1] }],
+});
+
 // A HIVE POCKET: the Seethe's brood ground — a stamped-flat court ringed by
 // waxed spires, the insect country showing its crown. Clearing 58–72 vs the
 // hive_ring orbit: 125·0.92−6 = 109 ≥ 72+22 — the menhir numeric contract.

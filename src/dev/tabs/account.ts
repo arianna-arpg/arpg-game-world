@@ -9,7 +9,8 @@
 
 import type { DevTabDef } from '../panel';
 import { DEV_UI, btn, css, hrow, section } from '../ui';
-import { bestiaryKey, bestiaryList, bestiaryThreshold } from '../../data/bestiary';
+import { BESTIARY_CFG, bestiaryKey, bestiaryList, bestiaryThreshold } from '../../data/bestiary';
+import { MIMIC_CFG } from '../../engine/mimic';
 import { CLASS_LEVEL_MILESTONES, classLevelLedgerKey } from '../../meta/account';
 import { discoveryLedgerKeys, discoveryLedgerNeeds } from '../../meta/unlocks';
 
@@ -38,6 +39,13 @@ export const accountTab: DevTabDef = {
     };
     row.append(
       btn('Sight all', () => apply('sighted', cur => Math.max(cur, 1))),
+      // THE MIMIC QA LEVER: stamp exactly the capture gate's study tier
+      // (MIMIC_CFG.studyGroup read against the live reveal ladder — the
+      // button can never drift from what engine/mimic.ts actually checks).
+      btn('Study all to arts', () => apply('arts-studied', (cur, need) => {
+        const tier = BESTIARY_CFG.revealTiers.find(t => t.group === MIMIC_CFG.studyGroup);
+        return Math.max(cur, Math.max(1, Math.ceil(need * (tier?.at ?? 0.35))));
+      })),
       btn('Half-study all', () => apply('half-studied', (cur, need) => Math.max(cur, Math.ceil(need / 2)))),
       btn('Master all', () => apply('mastered', (_cur, need) => need)),
       btn('Reset study', () => apply('reset', () => null)),

@@ -32,6 +32,7 @@ import {
   sellItemYield, sellSkillYield, sellSupportYield,
 } from '../engine/crafting';
 import { SKILLS } from '../data/skills';
+import { mimicEntries } from '../engine/mimic';
 import {
   BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
@@ -2614,6 +2615,27 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           <span style="color:#a8d8a0">Grimoire:</span> ${chip}
           <span style="color:#6a6478">— binds at the Tracker's book</span></div>`;
       }
+      // THE MIMIC REPERTOIRE (SkillDef.mimic — engine/mimic.ts): every
+      // captured art as a chip wearing its SOURCE monster's face (the
+      // grimoire-chip idiom); click takes that form (host-authoritative
+      // via the mimicSelect intent). An empty row is the fabric working —
+      // the bank is combat-transient and fills through the capture gates.
+      let mimicRow = '';
+      if (def.mimic) {
+        const sel = p.mimicSel;
+        const chips = mimicEntries(p, world.time).map(e => {
+          const art = SKILLS[e.sid]; const src = MONSTERS[e.src];
+          if (!art || !src) return '';
+          return `<button class="gem-chip" data-mimicsel="${e.sid}"
+            style="border-color:${e.sid === sel ? art.color : '#4a4458'}"
+            title="${art.name} — learned from the ${src.name}. Click to take this form (shift-press the slot cycles).">
+            ${this.monsterPortraitHtml(src, false, VIS_CFG.portrait.seats.spectreChip)} ${art.name}${e.sid === sel ? ' ◈' : ''}</button>`;
+        }).join('');
+        mimicRow = `<div style="margin-top:3px;font-size:10px">
+          <span style="color:#c8a0e8">Repertoire:</span>
+          ${chips || `<span style="color:#8a8678">no arts captured — take a studied kind's blow</span>`}
+        </div>`;
+      }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
       const graftRow = (inst.grafts?.length || this.liftedGraftKey) ? `
@@ -2646,6 +2668,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           <div class="sockets">${sockets}</div>
           ${graftRow}
           ${grimoire}
+          ${mimicRow}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Inventory (I) → Skill Gems tab.</div>';
   }
@@ -2660,6 +2683,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // back). The UI reconciles on the next snapshot either way.
     q<HTMLButtonElement>('button[data-bind]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.slot), skillId: btn.dataset.bind! });
+      refresh();
+    }));
+    // Mimic repertoire chips: pick the form this press wears.
+    q<HTMLButtonElement>('button[data-mimicsel]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'mimicSelect', sid: btn.dataset.mimicsel! });
       refresh();
     }));
     // (Grimoire attunement wires nowhere here anymore — binding is the

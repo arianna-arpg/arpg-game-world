@@ -2442,6 +2442,27 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // --- Mimicry (the blue-mage lane — socket into the mimic SLOT; the
+  // --- witness/bank stats are read off the slot, engine/mimic.ts) ---------
+
+  keen_study: {
+    id: 'keen_study', name: 'Keen Study',
+    description: 'The eye steals what the skin need not suffer: studied arts CAST near you are captured as if they had struck you.',
+    color: '#c8a0e8', requiresTags: ['mimic'],
+    mods: [mod('mimicWitness', 'flat', 1)],
+    perLevel: [mod('mimicWitness', 'flat', 0.15)],
+    weight: 8, minDropLevel: 6,
+  },
+
+  understudy: {
+    id: 'understudy', name: 'Understudy',
+    description: 'Room backstage for two more borrowed faces — and every borrowed art rehearsed a level truer.',
+    color: '#b088d8', requiresTags: ['mimic'],
+    mods: [mod('mimicBank', 'flat', 2)],
+    levelBonus: 1, levelBonusPer: 0.25,
+    weight: 8, minDropLevel: 6,
+  },
+
   // --- Minion investment gems ----------------------------------------------------
 
   vicious_brood: {

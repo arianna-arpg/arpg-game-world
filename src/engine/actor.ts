@@ -1002,6 +1002,20 @@ export class Actor {
   /** CO-OP MIRROR ONLY (net/snapshot.ts): host-computed combo HUD rows for
    *  the bar chip. Live worlds compute from the ring directly. */
   comboHud?: { id: string; lit: number; len: number; glow: number }[];
+  /** THE MIMIC BANK (engine/mimic.ts): captured enemy arts — the skill,
+   *  the kind that taught it, the capture clock. Ramp state exactly like
+   *  the castRing: null until the first capture, cold on a fresh session,
+   *  released when the slot leaves the bar. */
+  mimicBank: import('./mimic').MimicEntry[] | null = null;
+  /** The selected captured art (a skill id into mimicBank), self-healing
+   *  to the newest capture when stale (engine/mimic.ts mimicSelected). */
+  mimicSel: string | null = null;
+  /** Cached "a mimic slot rides the bar" + the witness-lane reach — the
+   *  comboWatch idiom: re-evaluated at most once per MIMIC_CFG.watchRefresh
+   *  at the capture sites, so non-mimic builds pay one boolean per hit. */
+  mimicWatch = false;
+  mimicWatchAt = 0;
+  mimicWitnessR = 0;
   /** Distance walked since the last 'move' charge-tap sweep (fed by
    *  World.moveActor; consumed in updateCharges). */
   moveAcc = 0;

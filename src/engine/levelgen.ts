@@ -128,6 +128,8 @@ export type KnownDoodadKind =
   | 'pot_cluster' // clay amphorae huddled together (crypts, markets)
   | 'rubble'    // walkable ruin-scatter (broken masonry underfoot)
   | 'banner_post' // a faction's cloth on a pole (camps, war roads)
+  | 'masque_banner' // the Mummers' troupe colors (the mimicry camp's standard)
+  | 'mirrorglass_shard' // practice glass at the Mummers' camp — sings apart when struck
   | 'beehive'   // a humming skep (grove flavor; future bee grudges)
   | 'bed'       // frame, mattress, someone's blanket — where a run wakes
   | 'hearth'    // a home's stone fire (standing warm light; always lit)
@@ -1847,6 +1849,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     surface: { hw: 0.95, hh: 0.34, orient: 'fixed' } }, // a wall-hugging board (wide, shallow)
   rug:       { overlap: 'ground', walkOnly: true },
   banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
+  // The Mummers' camp kit (the mimicry troupe — data/compositions.ts
+  // 'mummers_camp'): the standard flies like any banner; the practice
+  // glass is brittle scenery that SINGS when a blow finds it.
+  masque_banner: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
+  mirrorglass_shard: {
+    overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60, bodyScale: 0.5,
+    forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    brittle: { on: ['hit'], text: 'the glass sings apart', color: '#dbe6ee' },
+  },
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true, fuel: 'kindling' },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true,

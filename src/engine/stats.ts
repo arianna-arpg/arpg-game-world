@@ -83,6 +83,12 @@ export type SkillTag =
   // supports (authority, impact) never socket into a skill with no
   // catch to send.
   | 'throw'
+  // 'mimic' marks the mimicry slots themselves (SkillDef.mimic — the
+  // blue-mage lane, engine/mimic.ts) so mimic-scoped supports (witness
+  // levers, bank wideners, +levels to stolen arts) find the slot and
+  // never socket into a skill with nothing to steal. The CAPTURED cast
+  // keeps its own real tags — the grammar reads the art, not the theft.
+  | 'mimic'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -488,6 +494,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Scales the impact wounds your shoves inflict on arrest (wall slams
    *  and the bowling lane both — engine/mass.ts). Tag-filtered. */
   impactDamage:   { label: 'Impact Damage', base: 0, percent: true },
+  /** THE WITNESS LEVER (engine/mimic.ts): > 0 opens witnessed capture —
+   *  studied arts CAST within value × MIMIC_CFG.witnessRadius of you are
+   *  banked without the blow. Read off the mimic slot (supports socketed
+   *  there count), so the lane is an earned identity, never a freebie. */
+  mimicWitness:   { label: 'Witnessed Capture', base: 0 },
+  /** Extra captured arts the mimic bank holds beyond MIMIC_CFG.bankSize
+   *  (engine/mimic.ts) — the repertoire widener. */
+  mimicBank:      { label: 'Mimic Repertoire', base: 0 },
   /** THE GRAB FABRIC's holder-side lever (engine/grab.ts): opens the mass
    *  gate (holder weight × (1+gripPower) vs victim weight) and slows the
    *  held body's struggle. Tag-filtered through the seizing skill, so
