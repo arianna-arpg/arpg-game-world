@@ -1577,8 +1577,11 @@ const APPROACH_RADIUS = 150;     // node-units: a floating quest zone wires in w
                                  // charted zone lands this near (> WEAVE_RADIUS 96, so
                                  // the road draws while you're still ~1.5 steps out)
 const DWELL_IDLE_GRACE = 0.15;   // a dwell only builds once the player has been
-                                 // ACTION-free (no move/attack/cast) this long —
-                                 // so passing by or fighting never counts as dwelling
+                                 // INPUT-free (no move/attack/cast press) this long
+                                 // AND the body is quiescent (seatIdle's second
+                                 // clause — no cast/leap/shove still resolving), so
+                                 // passing by, fighting, or a cast that outlives its
+                                 // press never counts as dwelling
 const CORPSE_RADIUS = 110;       // how close to your old corpse to begin reclaiming
 const CORPSE_DWELL = 1.0;        // seconds dwelling to reclaim (recovering the dead is deliberate)
 // CO-OP REVIVE — an ally dwelling beside a DOWNED seat brings them back. Reuses
@@ -3033,10 +3036,18 @@ export class World {
     return { pips: 0, lit: 0, hl: false };
   }
 
-  /** Has this seat been idle long enough for a dwell to build? Per-seat so an
-   *  ally's reviving dwell and the local player's NPC dwell are independent. */
+  /** THE DWELL LAW — may this seat's dwell timers BUILD right now? Two facts,
+   *  both required: the seat has been INPUT-quiet for the grace (no fresh
+   *  move/cast press), AND the body itself is QUIESCENT (Actor.isQuiescent —
+   *  no cast bar, channel, dash, knockback, use-lockout, hard CC, or grip
+   *  still resolving). The second clause is what makes a dwell a deliberate
+   *  act: a cast that OUTLIVES its button press — a wind-up, a held channel,
+   *  a leap mid-air — holds every dwell at zero until the body is truly at
+   *  rest. Per-seat so an ally's reviving dwell and the local player's NPC
+   *  dwell are independent. */
   seatIdle(seat: Seat): boolean {
-    return this.time - seat.lastActedAt >= DWELL_IDLE_GRACE;
+    return this.time - seat.lastActedAt >= DWELL_IDLE_GRACE
+      && seat.actor.isQuiescent();
   }
 
   /** Mark a seat as having just acted (interrupts any dwell it owns). No-op for

@@ -1618,6 +1618,20 @@ export class Actor {
       && !this.dash && !this.casting;
   }
 
+  /** At REST in the action sense — NOTHING is occurring to or through this
+   *  body: no cast bar / channel / guard resolving, no dash or knockback
+   *  still in flight, no post-use lockout ticking, not hard-CC'd, not in
+   *  anything's grip. THE DWELL LAW reads this (World.seatIdle): a dwell may
+   *  only BUILD while the body is truly idle, so a cast that outlives its
+   *  button press — a long wind-up, a held channel, a leap mid-air — can
+   *  never overlap a dwell trigger. Distinct from canAct(): that asks "may
+   *  an action START"; this asks "is any action (or interruption) STILL
+   *  RUNNING". */
+  isQuiescent(): boolean {
+    return !this.casting && !this.dash && !this.push && this.useLock <= 0
+      && !this.isStunned() && this.heldBy === undefined;
+  }
+
   /** Apply an attribute spread as the 'attributes' modifier source. */
   setAttributes(attrs: Attributes): void {
     this.sheet.setSource('attributes', attributeModifiers(attrs));
