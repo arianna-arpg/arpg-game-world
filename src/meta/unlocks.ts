@@ -79,12 +79,24 @@ export type Unlockable =
  *  account-level gate of any kind. Trivially extended — works the same for 12
  *  or 40 classes. Costs are pure data; tune freely. */
 export const SLOT_TIERS: readonly { id: string; slots: number; cost: number }[] = [
-  { id: 'slot_tier_4', slots: 4, cost: 40 },
-  { id: 'slot_tier_5', slots: 5, cost: 80 },
-  { id: 'slot_tier_6', slots: 6, cost: 130 },
-  { id: 'slot_tier_7', slots: 7, cost: 200 },
-  { id: 'slot_tier_8', slots: 8, cost: 300 },
+  { id: 'slot_tier_4',  slots: 4,  cost: 40 },
+  { id: 'slot_tier_5',  slots: 5,  cost: 80 },
+  { id: 'slot_tier_6',  slots: 6,  cost: 130 },
+  { id: 'slot_tier_7',  slots: 7,  cost: 200 },
+  { id: 'slot_tier_8',  slots: 8,  cost: 300 },
+  { id: 'slot_tier_9',  slots: 9,  cost: 420 },
+  { id: 'slot_tier_10', slots: 10, cost: 560 },
+  { id: 'slot_tier_11', slots: 11, cost: 720 },
+  { id: 'slot_tier_12', slots: 12, cost: 900 },
 ];
+
+/** The ladder's TOP — the widest hand the Vault can sell, derived from the
+ *  tier data (never restated as a literal). Class select reads it to stop
+ *  teasing "buy more slots" once no such purchase exists: at the cap, the
+ *  beyond-hand pool simply waits for the next deal. */
+export function maxSlotCount(): number {
+  return SLOT_TIERS.reduce((m, t) => Math.max(m, t.slots), 0);
+}
 
 /** CLASS BUNDLES — one purchase, several unlocks that grow together:
  *    1. the class joins the RANDOM ROLL at character select (the pool the

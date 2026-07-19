@@ -63,7 +63,7 @@ import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
 import { HOLD_CLASSES } from '../data/harborholds';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
-import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, undiscoveredClassUnlocks } from '../meta/unlocks';
+import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks } from '../meta/unlocks';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
@@ -81,7 +81,7 @@ import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import { objectiveRead, objectiveSeals, type ZoneDef } from '../data/zones';
 import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
-import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
+import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS } from '../data/vendors';
 import { oracleRerollCost } from '../data/essences';
@@ -343,6 +343,15 @@ export class UI {
     bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
     bindTooltips(this.vendorMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    // THE VAULT reads compact — kind, name, price — and keeps each unlock's
+    // full story in the shared tooltip behind a HOVER-INTENT dwell: the wall
+    // of text speaks only once the cursor has settled on a card (interest,
+    // then detail). Content resolves from the LIVE catalog by id each hover,
+    // so purchases and re-renders can never strand stale copy.
+    bindTooltips(this.accountScreen, (el) =>
+      el.dataset.tip === 'unlock' ? this.unlockTooltip(el.dataset.unlockId!)
+        : el.dataset.tip === 'rumor' ? this.rumorTooltip(Number(el.dataset.rumorI)) : null,
+    { delayMs: TIP_CFG.intentMs });
     // Delegation works on SVG descendants too — tree nodes carry data-tip like
     // any DOM row, so mouse AND the pad pointer's synthetic hover both hit it.
     // PROXIMITY: zoomed out, nodes shrink toward pixels — the box anchors to
@@ -832,8 +841,12 @@ export class UI {
       // DISCOVERED locked classes (their Class bundle in the Vault does) —
       // each card names its remedy. Leftover teaser slots deal RUMORS from
       // the undiscovered (hint lines off their shrouded Vault entries).
+      // At the ladder's TOP (maxSlotCount, data-derived) there is no wider
+      // hand to sell, so beyond-hand pool classes stop teasing — they simply
+      // wait for the next deal. Never a dead lock, even at the cap.
+      const slotsRemedy = selectable < maxSlotCount();
       const teasers = [
-        ...shuffled.slice(picks.length).map(def => ({ def, reason: 'slots' as const })),
+        ...(slotsRemedy ? shuffled.slice(picks.length).map(def => ({ def, reason: 'slots' as const })) : []),
         ...shuffle([...discoveredLocked]).map(def => ({ def, reason: 'class' as const })),
       ].slice(0, TEASER_COUNT);
       const rumors = shuffle([...undiscovered])
@@ -1021,39 +1034,41 @@ export class UI {
         : avail.map(u => {
             // availableUnlocks() already excludes owned + un-gated entries,
             // so every card here is unowned — affordability is the only gate.
+            // COMPACT BY DESIGN: kind, name, price — the description lives in
+            // the hover-intent tooltip (the accountScreen bind), so the wall
+            // reads as a shelf, not a wall of text.
             const afford = acc.credits >= u.cost;
             return `
-            <div class="unlock-card">
+            <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="ukind">${u.kind}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
               <div class="uname">${u.label}</div>
-              <div class="udesc">${u.description}</div>
               <button data-unlock="${u.id}" ${afford ? '' : 'disabled'}>Unlock — ${u.cost}</button>
             </div>`;
           }).join('');
       const ownedCards = owned.map(u => `
-            <div class="unlock-card uowned">
+            <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="ukind">${u.kind}</div>
               <div class="uname">${u.label}</div>
-              <div class="udesc">${u.description}</div>
               <button disabled>✓ Owned</button>
             </div>`).join('');
       // THE RUMOR WALL (discovery web, meta/unlocks.ts): classes the account
       // has NOT yet discovered hang here shrouded — the hint whispers at the
       // deed, the name and price stay the world's secret until it is done.
+      // Hover-addressed by INDEX, not id: the catalog id spells the class
+      // name, and the DOM keeps the world's secrets too.
       const rumors = undiscoveredClassUnlocks(acc);
-      const rumorCards = rumors.map(u => `
-            <div class="unlock-card" style="opacity:.55">
+      const rumorCards = rumors.map((_u, i) => `
+            <div class="unlock-card" style="opacity:.55" data-tip="rumor" data-rumor-i="${i}">
               <div class="ukind">class · undiscovered</div>
               <div class="uname" style="letter-spacing:3px">? ? ?</div>
-              <div class="udesc" style="font-style:italic">“${(u.kind === 'class' ? u.payload.hint : undefined)
-                ?? 'The world has not introduced this one yet.'}”</div>
               <button disabled>Undiscovered</button>
             </div>`).join('');
       this.accountScreen.innerHTML = `
         <div class="vault-head">
           <h1>The Vault — Account Unlocks</h1>
           <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
-            <b>${acc.credits}</b> ${META_CURRENCY_LABEL} &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime</div>
+            <b>${acc.credits}</b> ${META_CURRENCY_LABEL} &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
+            &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">rest on a card for its full story</span></div>
         </div>
         <div class="vault-body">
           <h3 class="vault-sub">Available</h3>
@@ -1077,6 +1092,37 @@ export class UI {
     };
     render();
     this.accountScreen.classList.remove('hidden');
+  }
+
+  /** THE VAULT CARD's hover story: the full description the compact card no
+   *  longer prints, rebuilt from the live catalog by id (never cached DOM
+   *  copy). Serves Available and Owned alike — the meta line carries the
+   *  price or the ✓. */
+  private unlockTooltip(id: string): TooltipContent | null {
+    const u = allUnlockables().find(x => x.id === id);
+    if (!u) return null;
+    const acc = this.getAccount();
+    const owned = isUnlockOwned(acc, u);
+    const req = u.reqLevel ? ` · req account level ${u.reqLevel}` : '';
+    return {
+      title: u.label,
+      description: u.description,
+      meta: `${u.kind}${req} · ${owned ? '✓ owned' : `${u.cost} ${META_CURRENCY_LABEL}`}`,
+      wide: true,
+    };
+  }
+
+  /** A shrouded rumor's hover whisper — hint only, indexed off the live
+   *  undiscovered list so the DOM never carries the class's name. */
+  private rumorTooltip(index: number): TooltipContent | null {
+    const u = undiscoveredClassUnlocks(this.getAccount())[index];
+    if (!u || u.kind !== 'class') return null;
+    return {
+      title: '? ? ?',
+      description: `<i>“${u.payload.hint ?? 'The world has not introduced this one yet.'}”</i>`,
+      meta: 'class · undiscovered — the world teaches what the Vault cannot sell',
+      wide: true,
+    };
   }
 
   // --------------------------------------------------------- character sheet

@@ -328,15 +328,20 @@
     #account-screen h1 { color: var(--gold); font-size: 22px; letter-spacing: 2px; margin: 4px 0; }
     #account-screen .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }
     #account-screen .acct-head b { color: var(--gold); }
-    .unlock-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: left; }
+    /* COMPACT SHELF: cards carry kind + name + price only (the description
+       lives in the hover-intent tooltip), so the grid packs by width — a
+       wider panel or scale flows more columns with no count hardcoded. */
+    .unlock-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; text-align: left; }
     .unlock-card {
-      border: 1px solid var(--panel-border); border-radius: 6px; padding: 10px;
+      border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px 10px;
       background: rgba(255,255,255,0.02); display: flex; flex-direction: column;
+      cursor: help; transition: border-color 0.15s, background 0.15s;
     }
+    .unlock-card:hover { border-color: var(--gold); background: rgba(200,168,75,0.05); }
     .unlock-card.owned { opacity: 0.5; }
-    .unlock-card .uname { font-size: 13px; font-weight: bold; color: #fff; }
+    /* The name takes the row's slack so every button in a row sits level. */
+    .unlock-card .uname { font-size: 12px; font-weight: bold; color: #fff; flex: 1; margin: 2px 0 6px; }
     .unlock-card .ukind { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); }
-    .unlock-card .udesc { font-size: 11px; color: var(--text-dim); margin: 5px 0; flex: 1; }
     .unlock-card button {
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
       border-radius: 3px; padding: 4px 8px; font-size: 11px; cursor: pointer;
@@ -401,6 +406,9 @@
       padding: 9px 11px; font-size: 11px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,0.8);
     }
     .tooltip.hidden { display: none; }
+    /* WIDE content (TooltipContent.wide — the Vault's unlock stories): walls
+       of text get a page-like measure instead of a 280px ribbon. */
+    .tooltip.tt-wide { max-width: 380px; }
     .tt-title { color: var(--gold); font-weight: bold; margin-bottom: 5px; }
     .tt-desc { color: var(--text); }
     .tt-meta { color: var(--text-dim); font-size: 10px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--panel-border); }

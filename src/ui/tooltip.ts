@@ -20,6 +20,10 @@ export interface TooltipContent {
   title?: string;
   description: string;
   meta?: string;
+  /** WIDE content (opt-in per card): walls of text — the Vault's unlock
+   *  stories — read badly in the narrow box; this widens it (CSS .tt-wide)
+   *  for exactly this content and resets on the next card. */
+  wide?: boolean;
 }
 
 /** Shared tooltip tunables — one home, no magic numbers at call sites. */
@@ -30,6 +34,11 @@ export const TIP_CFG = {
    *  content with extended=true — the deeper card (gear comparison). Binds
    *  opt in via TooltipOpts.extend. */
   extendMs: 550,
+  /** HOVER INTENT: the standard "after a moment" reveal — binds that opt in
+   *  (TooltipOpts.delayMs) keep the box DOWN until the cursor has settled on
+   *  one anchor this long, so compact card walls (the Vault) stay quiet under
+   *  a passing cursor and speak only to actual interest. */
+  intentMs: 400,
 };
 
 export interface TooltipProximity {
@@ -52,6 +61,12 @@ export interface TooltipOpts {
    *  leave and return to reset to the compact card. Content that has no
    *  deeper form simply returns the same card. */
   extend?: boolean;
+  /** HOVER INTENT (opt-in per bind): the box only appears after the cursor
+   *  has RESTED on an anchor this long (ms — pass TIP_CFG.intentMs for the
+   *  house cadence). Moving to another anchor re-arms the clock; leaving
+   *  cancels it. Absent/0 = immediate, exactly as every panel behaves today.
+   *  Once shown, following and re-placing are undelayed. */
+  delayMs?: number;
 }
 
 export function bindTooltips(
@@ -84,12 +99,23 @@ export function bindTooltips(
       `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
       `<div class="tt-desc">${c.description}</div>` +
       `${c.meta ? `<div class="tt-meta">${c.meta}</div>` : ''}`;
+    // Toggled per card, so a wide wall never leaves the next panel's compact
+    // card rattling around an oversized box.
+    tip.classList.toggle('tt-wide', !!c.wide);
     tip.classList.remove('hidden');
     return true;
   };
 
   const disarmExtend = (): void => {
     if (extendTimer !== null) { window.clearTimeout(extendTimer); extendTimer = null; }
+  };
+
+  // ---- HOVER INTENT (opts.delayMs): the not-yet-shown anchor + its clock ---
+  let pendingEl: HTMLElement | null = null;
+  let intentTimer: number | null = null;
+  const disarmIntent = (): void => {
+    if (intentTimer !== null) { window.clearTimeout(intentTimer); intentTimer = null; }
+    pendingEl = null;
   };
 
   const armExtend = (el: HTMLElement): void => {
@@ -105,10 +131,21 @@ export function bindTooltips(
   };
 
   const hide = (): void => {
+    disarmIntent();
     disarmExtend();
     if (!cur) return;
     cur = null;
     tip.classList.add('hidden');
+  };
+
+  /** Actually raise the box on an anchor (the pre-intent show). */
+  const reveal = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
+    if (el !== cur) {
+      if (!render(el, false)) { hide(); return; }
+      cur = el;
+      armExtend(el);
+    }
+    place(e);
   };
 
   const show = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
@@ -117,12 +154,24 @@ export function bindTooltips(
     // target marks own the pointer's attention, and a card popping over the
     // drop path mid-carry is pure noise. No import — the class IS the seam.
     if (document.body.classList.contains('dnd-active')) { hide(); return; }
-    if (el !== cur) {
-      if (!render(el, false)) { hide(); return; }
-      cur = el;
-      armExtend(el);
-    }
-    place(e);
+    lastPt = { clientX: e.clientX, clientY: e.clientY };
+    // HOVER INTENT: with a delay bound, a NEW anchor only arms the dwell
+    // clock — the box rises when the cursor has settled, never for a
+    // drive-by. An anchor already showing keeps following undelayed.
+    const delay = opts?.delayMs ?? 0;
+    if (delay <= 0 || el === cur) { reveal(el, e); return; }
+    if (pendingEl === el) return; // clock already running on this anchor
+    disarmIntent();
+    pendingEl = el;
+    intentTimer = window.setTimeout(() => {
+      intentTimer = null;
+      const settled = pendingEl;
+      pendingEl = null;
+      // Torn out by a re-render, or a drag started mid-dwell? Stay down.
+      if (!settled || !settled.isConnected) return;
+      if (document.body.classList.contains('dnd-active')) return;
+      reveal(settled, lastPt);
+    }, delay);
   };
 
   // ---- PROXIMITY MODE: pointermove owns every show/hide decision ----------
@@ -174,6 +223,9 @@ export function bindTooltips(
     show(el, e);
   });
   container.addEventListener('mousemove', (e) => {
+    // Track the point even pre-reveal: a pending intent must rise where the
+    // cursor actually SETTLED, not where it first crossed the anchor's edge.
+    lastPt = { clientX: e.clientX, clientY: e.clientY };
     if (!cur) return;
     // The anchor was torn out by a re-render: hide rather than trail the cursor.
     // (The next mouseover re-shows it if the pointer is over the rebuilt target.)
@@ -183,6 +235,10 @@ export function bindTooltips(
   container.addEventListener('mouseout', (e) => {
     const to = e.relatedTarget as HTMLElement | null;
     if (cur && (!to || !cur.contains(to))) hide();
+    // A pending intent dies with the exit too — leaving the CONTAINER fires
+    // no in-container mouseover to catch it, and the clock must not pop the
+    // box over whatever the cursor went to instead.
+    else if (pendingEl && (!to || !pendingEl.contains(to))) disarmIntent();
   });
 }
 
