@@ -78,16 +78,10 @@ export const GLYPH_PARTS: Record<string, GlyphDef> = {
       { kind: 'disc', x: 0.3, y: 0, rx: 0.1, role: 'glow', shade: -0.25 },
     ],
   },
-  // EYESTALKS — the snail's periscopes: two soft stalks raked forward, a
-  // ball tip on each. Nothing else in the roster looks out on stems
-  // (antennae are whips, lure is ONE hooded lamp).
-  eyestalks: {
-    ops: [
-      { kind: 'path', pts: [[0.3, -0.14], [0.7, -0.34], [0.94, -0.4]], smooth: true, role: 'base', shade: 0.08, wR: 0.07, mirror: true },
-      { kind: 'disc', x: 0.98, y: -0.42, rx: 0.11, role: 'dark', outline: true, mirror: true },
-      { kind: 'disc', x: 1.0, y: -0.44, rx: 0.045, role: 'glow', alpha: 0.9, mirror: true },
-    ],
-  },
+  // (eyestalks lived here once — but parts.ts always had a hand-written
+  // `eyestalks` painter, so this glyph LOST the boot-time collision check
+  // every single boot and never drew a pixel. The painter serves the same
+  // brief — stalked eyes periscoping forward — so the dead row is gone.)
   // CORNICLES — the aphid's twin tail-spigots: two stubby tubes aft, drops
   // beading at the mouths (the herd's whole economy, worn as anatomy).
   cornicles: {

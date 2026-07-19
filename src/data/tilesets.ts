@@ -1446,6 +1446,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'hay_bale', count: [2, 4] },
         { kind: 'formation', count: [1, 2], formation: 'fence_line' },
         { kind: 'dead_tree', count: [2, 4] },
+        { kind: 'harvest_idol', count: [1, 3] },
       ] },
       // The bonfire rows: the Court's festival ground — totems marching,
       // the wicker patrons standing over the walk.
@@ -1454,6 +1455,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'lantern_totem', count: [2, 4] },
         { kind: 'wicker_effigy', count: [1, 2] },
         { kind: 'jack_o_lantern', count: [3, 6] },
+        { kind: 'harvest_idol', count: [1, 2] },
         { kind: 'rocks', count: [2, 4], radius: [16, 28] },
       ] },
     ],
@@ -1470,6 +1472,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'will_o_wisp', weight: 1, presence: { to: 12, fadeOut: 6 } },
         { id: 'lantern_sower', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'harvest_effigy', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'effigy_porter', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'feeding_thrall', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'night_hunter', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'carven_king', weight: 1, presence: { from: 13, fadeIn: 5 } },
@@ -4803,6 +4806,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'tide_skitter', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'reef_lurcher', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'tidewrack_shambler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'pavise_crab', weight: 1, presence: { from: 6, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -5236,6 +5240,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'kelp', count: [4, 6] },
         { kind: 'giant_kelp', count: [3, 5] },
         { kind: 'sea_rock', count: [2, 4] },
+        { kind: 'whelk_midden', count: [1, 3] },
       ] },
     ],
     packs: {
@@ -5246,6 +5251,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'reef_lurcher', weight: 2, presence: { from: 5 } },
         { id: 'deep_angler', weight: 2, presence: { from: 7 } },
         { id: 'tidewrack_shambler', weight: 2, presence: { from: 8 } },
+        // The anatomy gamut's shore wing: the crab behind its two boards,
+        // the snail under its gun (composite parts as ordinary spawns).
+        { id: 'pavise_crab', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'mortar_whelk', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'deep_tidecaller', weight: 1, presence: { from: 10 } },
         { id: 'tide_skitter', weight: 2, presence: { to: 16, fadeOut: 8 } },
         // The Coilborn wade out to meet their kin-tide.
@@ -6407,6 +6416,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'beastkin_impaler', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'siegeback_aurochs', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'beastlord_khan', weight: 1, presence: { from: 16, fadeIn: 6 } },
         { id: 'molting_behemoth', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'bulwark_scuttler', weight: 1, presence: { from: 9, fadeIn: 4 } },

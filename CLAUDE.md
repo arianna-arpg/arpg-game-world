@@ -490,9 +490,19 @@ changes.
   eventOnly weather dresses it — then reverts EXACTLY (engine reconcile
   stamps/reverts off the overlay's arcs; ZoneDef.quickened remembers home).
   Its SLAYER support lane (overmatch/giantsbane/regicide — vs higher-level /
-  far-heavier / empowered victims) folds once at mitigateTyped
+  far-heavier / empowered victims — plus limbreaver, vs a composite's
+  ANCHORED PARTS) folds once at mitigateTyped
   (`SLAYER_CFG`) as plain stats anything may grant. Docs
   `docs/engine/quickening.md`; probe `balance/probe_quickening.ts`.
+  THE ANATOMY GAMUT (data/monsters.ts) fields `MonsterDef.parts` composites
+  BELOW boss tier as ordinary spawn-table citizens — one break-lesson each
+  (crack the wall / silence the blessing / pick the riders / break the gun /
+  pop the sacs / choose the head / burst the idol) — beside trash-tier
+  hittable worms (marrow whip; coil matriarch retrofit). Every part is a
+  full MonsterDef (forge composables); probe `balance/probe_anatomy.ts`
+  also pins the repo-wide kit nets: every monster skill exists + carries an
+  ai hint + is affordable from the def's own mana pool, and every look part
+  kind resolves to a painter.
 - `src/sim/` — the browser-safe half of the balance harness: headless boot
   (`arena.ts`: shims + the quiet `sim_arena` zone), build injection through
   `world.adoptSavedMeta` (`builds.ts`), input-source pilots, the seeded

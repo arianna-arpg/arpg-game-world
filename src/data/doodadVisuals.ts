@@ -2583,6 +2583,22 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { earth: '#5c4c2e' },
   },
 
+  // --- THE ANATOMY WAYSIDE (rules + stamps in data/formations.ts): ground
+  // truth for the gamut's kin — every row a proven painter re-dressed.
+  // The whelks' grinding heaps: pale shell-shard litter on the tideline.
+  whelk_midden: { painter: 'bones', order: 51, params: { color: '#d8d0b8' } },
+  // The carven court's roadside gods: a gourd idol on its stake, UNLIT —
+  // the lantern_totem's watching cousin (same painter, the light withheld).
+  harvest_idol: {
+    painter: 'gourdTotem', order: 54, shadow: 0.45, longShadow: 1.4, bakeWhole: 'static',
+    params: { color: '#a86a2e', stake: '#443624', glow: '#6a5636' },
+  },
+  // Where a siege-mount fell: the beastkin's howdah, burned to its irons.
+  howdah_wreck: {
+    painter: 'coachWreck', order: 53, shadow: 0.5, longShadow: 0.9,
+    params: { char: '#2c2620', wood: '#4c3c28', iron: '#41403a' },
+  },
+
   // --- The QUICKENING kit (packages/defs/quickening.ts): the surge's own
   // dress, planted by the 'quickened_air' weather row while a zone runs
   // quick and evaporated as the window closes (the transience doctrine —

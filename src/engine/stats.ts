@@ -387,8 +387,8 @@ export const STAT_DEFS: Record<string, StatDef> = {
 
   // THE SLAYER LANE — attacker-side MORE multipliers that key off what the
   // VICTIM is relative to YOU, folded once at the mitigation chokepoint
-  // (damage.ts mitigateTyped — every source, no side path). Three orthogonal
-  // punch-up axes, each a plain stat any granter can feed (support gems today;
+  // (damage.ts mitigateTyped — every source, no side path). Four orthogonal
+  // axes, each a plain stat any granter can feed (support gems today;
   // affixes, passives, monster mods tomorrow): LEVEL (the quickened-ground /
   // outleveled-boss diet), WEIGHT (the mass fabric's heft read), RARITY (the
   // named and the crowned). All ship at 0 — the lane is built, never ambient.
@@ -399,6 +399,12 @@ export const STAT_DEFS: Record<string, StatDef> = {
   giantsbane:     { label: 'Damage vs Far Heavier Enemies', base: 0, min: 0, percent: true },
   /** MORE damage vs magic/rare/champion/crowned bodies — the headhunter's axis. */
   regicide:       { label: 'Damage vs Empowered Enemies', base: 0, min: 0, percent: true },
+  /** MORE damage vs a composite monster's ANCHORED PARTS (Actor.partLink) —
+   *  the limb-hunter's axis: the pavise, the censer, the mounted archer, the
+   *  bell. Structure, not a defense layer (that's the breaker suite) and not
+   *  what the victim is relative to you (the three above) — WHERE on the
+   *  creature you chose to spend the blow. */
+  limbreaver:     { label: 'Damage vs Monster Parts', base: 0, min: 0, percent: true },
 
   // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
   // opponent's body language and slipping the brunt. Reduction scales with

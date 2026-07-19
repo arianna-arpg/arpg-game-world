@@ -89,10 +89,14 @@ folded once at the mitigation chokepoint (`damage.ts mitigateTyped`,
 - `giantsbane` — MORE damage vs victims ≥ `giantsbaneRatio` × your effective
   weight (the mass fabric read as a blade).
 - `regicide` — MORE damage vs empowered rarities (magic/rare/champion/crowned).
+- `limbreaver` — MORE damage vs a composite monster's ANCHORED PARTS
+  (`Actor.partLink` — the anatomy gamut's boards, censers, riders, sacs).
+  The lane's fourth axis: not what the victim is relative to you, but WHERE
+  on its creature you chose to spend the blow.
 
-Support gems `overmatch` / `giantsbane` / `regicide` grant them today;
-affixes, passives and monster mods can grant the same stats whenever they
-want the lane — registries, never special cases.
+Support gems `overmatch` / `giantsbane` / `regicide` / `limbreaver` grant
+them today; affixes, passives and monster mods can grant the same stats
+whenever they want the lane — registries, never special cases.
 
 ## Findability
 

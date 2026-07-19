@@ -1412,3 +1412,28 @@ registerFormation({
     { kind: 'moonwell', radius: [14, 18], every: 4, jitter: 6 },
   ],
 });
+
+// =========================== THE ANATOMY WAYSIDE =============================
+// Ground-truth for the anatomy gamut's kin (rules + stamps beside the kinds,
+// the open registerDoodadRule seam — no levelgen edit): the shore's shell
+// middens where the whelks grind their salvage, the carven court's roadside
+// idols, and the wrecked howdah rigs the beastkin leave where a siege-mount
+// fell. Each is ONE visuals row on a proven painter + one rule + one stamp;
+// tilesets opt in with a layout line.
+registerDoodadRule('whelk_midden', {
+  overlap: 'ground', spacing: 40, walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('whelk_midden', stampSingle('whelk_midden', [14, 22]));
+registerDoodadRule('harvest_idol', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90,
+  bodyScale: 0.5, sightShadow: { minR: 10, mul: 0.5 },
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerStamp('harvest_idol', stampSingle('harvest_idol', [13, 17]));
+registerDoodadRule('howdah_wreck', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110,
+  surface: { hw: 1.05, hh: 0.7, orient: 'rot' },
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('howdah_wreck', stampSingle('howdah_wreck', [20, 26]));

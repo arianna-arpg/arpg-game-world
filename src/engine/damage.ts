@@ -28,8 +28,9 @@ import { SIM_TAP } from './tap';
 
 /** THE SLAYER LANE's fold rules (stats.ts: overmatch / giantsbane / regicide
  *  — attacker-side MORE multipliers keyed off what the victim is RELATIVE to
- *  you). One config, one fold site (mitigateTyped), every source mitigated
- *  identically — never a per-skill special case. */
+ *  you — plus limbreaver, keyed off WHERE the victim sits on its creature:
+ *  anchored composite parts). One config, one fold site (mitigateTyped),
+ *  every source mitigated identically — never a per-skill special case. */
 export const SLAYER_CFG = {
   /** giantsbane arms when victim effectiveWeight ≥ this × the attacker's. */
   giantsbaneRatio: 1.5,
@@ -307,6 +308,13 @@ export function mitigateTyped(
     }
     if (target.rarity && SLAYER_CFG.regicideRarities.includes(target.rarity)) {
       const v = atk.sheet.get('regicide', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
+    // The limb-hunter's axis: the victim IS an anchored composite part
+    // (Actor.partLink) — the pavise board, the censer, the mounted archer.
+    // Same lane law as the three above: base 0, folded here and only here.
+    if (target.partLink) {
+      const v = atk.sheet.get('limbreaver', opts.tags, opts.extra);
       if (v > 0) total *= 1 + v;
     }
   }

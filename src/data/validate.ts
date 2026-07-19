@@ -56,6 +56,8 @@ import { hasCommandKind } from '../engine/ai';
 import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS, LOOKS, SELF_DRESSING_KINDS } from './looks';
+import { PART_PAINTERS } from '../render/vis/parts';
+import './glyphParts'; // side-effect: the shipped glyph parts register before validation
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
@@ -680,6 +682,15 @@ export function validateContent(): void {
   ];
   for (const [src, id] of lookRefs) {
     if (id && !LOOKS[id]) warn(`${src}: look '${id}' is not a LOOKS entry`);
+  }
+  // DANGLING PART KINDS: every part a look composes must resolve to a painter
+  // (hand-written or a registered glyph) — the renderer's dispatch guard
+  // silently SKIPS unknown kinds, so the class that "carries knives" walks
+  // out bare-handed and nobody hears about it. Make it loud instead.
+  for (const [id, look] of Object.entries(LOOKS)) {
+    for (const p of [...look.parts, ...(look.live ?? [])]) {
+      if (!PART_PAINTERS[p.kind]) warn(`look ${id}: part kind '${p.kind}' has no painter (PART_PAINTERS + registered glyphs)`);
+    }
   }
 
   // WEATHER: every registered kind's cross-refs resolve (a strike names a real

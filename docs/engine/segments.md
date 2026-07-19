@@ -55,6 +55,15 @@ their shrunken truth); render-only tails show nothing — they carry no surface.
 - Pieces that must independently DIE are the **PARTS fabric**'s job
   (`MonsterDef.parts` — anchored actors with break effects). The two compose:
   Vhorun fields maw/coil break-parts at the head AND a hittable spine.
+  Neither fabric is boss-gated: THE ANATOMY GAMUT (data/monsters.ts) fields
+  ordinary spawn-table composites — the pavise crab's boards, the thurible
+  bearer's censer, the siegeback's riders, the mortar whelk's shell-gun, the
+  vat sow's sacs, the twinmaw's heads, the effigy porter's idol — each part
+  a full MonsterDef whose death IS the counterplay (break = silence, expose,
+  or enrage), priced by the `limbreaver` stat (the slayer lane's fourth
+  axis, damage.ts mitigateTyped). The marrow whip and the coil matriarch
+  run HITTABLE chains at trash tier — the retrofit is three data fields.
+  Probe: `balance/probe_anatomy.ts`.
 
 ## Hit plumbing (how a segment hit flows)
 

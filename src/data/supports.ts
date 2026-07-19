@@ -76,6 +76,18 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('regicide', 'flat', 0.015)],
     weight: 6,
   },
+  // The lane's fourth axis (engine/stats.ts limbreaver, same mitigateTyped
+  // fold): not what the victim is relative to you — WHERE on the creature
+  // you spend the blow. Anchored composite parts only (Actor.partLink):
+  // the pavise board, the swinging censer, the mounted archer, the bell.
+  limbreaver: {
+    id: 'limbreaver', name: 'Limbreaver',
+    description: 'This skill hits 35% harder against a composite monster\'s PARTS — the shield it hides behind, the censer that blesses its kin, the riders on its back. Nothing extra against the body that carries them: this gem decides where the blow lands, not how hard you swing.',
+    color: '#d8b04a', requiresTags: ['attack', 'spell'],
+    mods: [mod('limbreaver', 'flat', 0.35)],
+    perLevel: [mod('limbreaver', 'flat', 0.025)],
+    weight: 6,
+  },
 
   // THE GRAB FABRIC's pair (engine/grab.ts) — one gem per half of the art,
   // scoped by the grapple alphabet itself ('grab' / 'throw' tags), so

@@ -977,10 +977,41 @@ const axe: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
-/** Round or kite shield on the off-side. params: kite. */
+/** Round, kite or pavise shield on the off-side. params: kite, board.
+ *  `board: true` is the PAVISE — a tall planked wall of a shield spanning
+ *  the lateral axis, meant to be placed AHEAD of a body (or to BE a
+ *  composite part's whole silhouette): plank seams, a center boss ridge. */
 const shield: PartPainter = (ctx, r, spec, pal) => {
   const metal = rampFor(spec, pal, 'metal');
   place(ctx, r, spec, (c, R) => {
+    if (PB(spec, 'board', false)) {
+      // The pavise: a rounded-end slab across the body's lateral axis.
+      const wood = rampFor(spec, pal, 'wood');
+      const hw = R * 0.26, hh = R * 0.72;
+      const trace = (): void => {
+        c.beginPath();
+        c.moveTo(-hw, -hh + hw);
+        c.arc(0, -hh + hw, hw, Math.PI, 0);
+        c.lineTo(hw, hh - hw);
+        c.arc(0, hh - hw, hw, 0, Math.PI);
+        c.closePath();
+      };
+      trace(); c.fillStyle = wood.base; c.fill();
+      // Plank seams along the slab.
+      c.strokeStyle = withAlpha(wood.shadow, 0.8);
+      c.lineWidth = Math.max(1, R * 0.03);
+      for (const t of [-0.45, 0, 0.45]) {
+        c.beginPath(); c.moveTo(-hw * 0.85, hh * t - hw * 0.2); c.lineTo(hw * 0.85, hh * t + hw * 0.2); c.stroke();
+      }
+      // Center boss ridge in metal — the rim you brace behind.
+      c.strokeStyle = metal.base;
+      c.lineWidth = Math.max(1.4, R * 0.07);
+      c.beginPath(); c.moveTo(0, -hh * 0.8); c.lineTo(0, hh * 0.8); c.stroke();
+      c.fillStyle = metal.light;
+      c.beginPath(); c.arc(0, 0, R * 0.09, 0, Math.PI * 2); c.fill();
+      trace(); outlined(c, wood, 1.2);
+      return;
+    }
     const x = R * 0.28, y = -R * 0.7;
     if (PB(spec, 'kite', false)) {
       const trace = (): void => {
@@ -4551,6 +4582,75 @@ const gulletSac: PartPainter = (ctx, r, spec, pal, t) => {
   });
 };
 
+/** THE HOWDAH RIG — a railed war-platform lashed across a beast's back:
+ *  plank deck, corner rail posts, a girth strap over the spine. The
+ *  siege-mount's tell (anything carrying archer parts wants one). Sits
+ *  aft of center by default. params: w (deck half-width ÷ R), l (deck
+ *  half-length ÷ R). */
+const howdahRig: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  const metal = pal.metal;
+  const hw = P(spec, 'w', 0.62);
+  const hl = P(spec, 'l', 0.44);
+  place(ctx, r, spec, (c, R) => {
+    const W = R * hw, L = R * hl;
+    // Girth strap crossing the body under the deck.
+    c.strokeStyle = shade(metal.shadow, -0.1);
+    c.lineWidth = Math.max(1.6, R * 0.09);
+    c.beginPath(); c.moveTo(0, -R * 0.95); c.lineTo(0, R * 0.95); c.stroke();
+    // The deck: planked, slightly aft.
+    c.fillStyle = wood.base;
+    c.fillRect(-L, -W, L * 2, W * 2);
+    c.strokeStyle = withAlpha(wood.shadow, 0.85);
+    c.lineWidth = Math.max(1, R * 0.03);
+    for (const t of [-0.34, 0.02, 0.38]) {
+      c.beginPath(); c.moveTo(L * t * 2 - L * 0.3, -W); c.lineTo(L * t * 2 - L * 0.3, W); c.stroke();
+    }
+    c.strokeStyle = wood.outline;
+    c.lineWidth = 1.2;
+    c.strokeRect(-L, -W, L * 2, W * 2);
+    // Rail posts: corners + rail midpoints, read as studs from overhead.
+    c.fillStyle = shade(wood.base, -0.28);
+    for (const [px, py] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [0, -1], [0, 1]] as const) {
+      c.beginPath(); c.arc(L * px, W * py, Math.max(1.4, R * 0.06), 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** THE MORTAR MAW — a stubby bombard tube: thick barrel forward, breech
+ *  band at the root, a dark bore with a warning glow. The living-artillery
+ *  tell (the whelk's shell gun; any lobber that should read "stand off").
+ *  params: len (muzzle reach ÷ R), w (barrel half-width ÷ R), glow. */
+const mortarMaw: PartPainter = (ctx, r, spec, pal) => {
+  const metal = rampFor(spec, pal, 'metal');
+  const len = P(spec, 'len', 0.78);
+  const w = P(spec, 'w', 0.2);
+  const glow = PS(spec, 'glow') ?? pal.glow;
+  place(ctx, r, spec, (c, R) => {
+    const L = R * len, W = R * w;
+    // Barrel: a thick capsule from the body out along facing.
+    c.fillStyle = metal.base;
+    c.beginPath();
+    c.moveTo(R * 0.05, -W);
+    c.lineTo(L - W * 0.4, -W);
+    c.arc(L - W * 0.4, 0, W, -Math.PI / 2, Math.PI / 2);
+    c.lineTo(R * 0.05, W);
+    c.closePath();
+    c.fill();
+    outlined(c, metal, 1.2);
+    // Breech band at the root.
+    c.strokeStyle = shade(metal.base, -0.3);
+    c.lineWidth = Math.max(1.6, R * 0.08);
+    c.beginPath(); c.moveTo(R * 0.14, -W * 1.1); c.lineTo(R * 0.14, W * 1.1); c.stroke();
+    // The bore: dark mouth, an ember ring breathing inside.
+    c.fillStyle = '#16121c';
+    c.beginPath(); c.arc(L - W * 0.4, 0, W * 0.62, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha(glow, 0.85);
+    c.lineWidth = Math.max(1, R * 0.035);
+    c.beginPath(); c.arc(L - W * 0.4, 0, W * 0.4, 0, Math.PI * 2); c.stroke();
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -4586,6 +4686,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   anchor,
   grapnel, yoke, gulletSac,
   spiralEyes, mothWings,
+  howdahRig, mortarMaw,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

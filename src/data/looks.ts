@@ -1744,7 +1744,9 @@ export const LOOKS: Record<string, LookDef> = {
     parts: [
       { kind: 'torso' },
       { kind: 'hood', x: 0.3, scale: 0.85 },
-      { kind: 'knife', mirror: true },
+      // Paired short blades ('knife' never existed as a painter — the row
+      // silently drew nothing; daggers is the pair, drawn a hair shorter).
+      { kind: 'daggers', params: { len: 0.42 } },
     ],
   },
   class_firebrand: {
@@ -6006,6 +6008,223 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'wisps', x: -0.4, scale: 0.9, params: { n: 3 } },
     ],
     shadowScale: 0.55,
+  },
+
+  // =========================== THE ANATOMY GAMUT =============================
+  // The composite showcase kin (MonsterDef.parts below boss tier): every root
+  // and every breakable part is its own look, so the counterplay reads at a
+  // glance — the board you crack, the censer you silence, the riders you pick
+  // off, the shell that shoots. Parts ARE monster defs, so each of these is
+  // also a forge composable in its own right.
+
+  /** The pavise crab: a broad-backed shore hulk — the WALL is not on this
+   *  body; it walks behind two planted boards (pavise_board parts). */
+  pavise_crab: {
+    parts: [
+      { kind: 'carapace', scale: 1.08 },
+      { kind: 'legs', scale: 1.0, params: { n: 3 } },
+      { kind: 'pincers', scale: 0.95 },
+      { kind: 'eyestalks', scale: 0.85 },
+      { kind: 'barbs', scale: 0.7, y: -0.1, role: 'metal' },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The pavise board itself — a part whose WHOLE silhouette is the shield
+   *  painter's board face: plank seams, braced boss. Crack it and the crab
+   *  behind is just a crab. */
+  pavise_board: {
+    parts: [{ kind: 'shield', scale: 1.25, params: { board: true } }],
+    shadowScale: 0.6,
+  },
+  /** The thurible bearer: a grave-warden robed for procession — the censer
+   *  it swings is the swung_censer PART, not part of this body. */
+  thurible_bearer: {
+    parts: [
+      { kind: 'robe', role: 'cloth' },
+      { kind: 'hood', x: 0.26, scale: 0.9 },
+      { kind: 'pauldrons', scale: 0.8, role: 'metal' },
+      { kind: 'scythe', scale: 0.9 },
+    ],
+  },
+  /** The swung censer — chained thurible as a body: the blessing lives HERE.
+   *  Silence it first or fight the whole cortege inside its smoke. */
+  swung_censer: {
+    parts: [
+      { kind: 'censer', x: -0.35, scale: 1.5 },
+      { kind: 'chains', scale: 0.9, role: 'metal' },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.5,
+  },
+  /** The siegeback aurochs: a muzzled war-beast under a railed howdah —
+   *  the rig is THIS body's dress; the archers on it are parts with bows. */
+  siegeback_aurochs: {
+    parts: [
+      { kind: 'torso', scale: 1.15 },
+      { kind: 'hump', x: -0.15, scale: 0.9 },
+      { kind: 'horns', scale: 1.05, params: { curve: 0.7 } },
+      { kind: 'muzzle', scale: 0.9 },
+      { kind: 'saddlebags', x: -0.1, scale: 0.95 },
+      { kind: 'howdahRig', x: -0.35, scale: 0.95 },
+    ],
+    shadowScale: 1.15,
+  },
+  /** The howdah archer: small, hooded, all bow — a rider silhouette that
+   *  reads as "shoot me first" from the pit floor. */
+  howdah_archer: {
+    parts: [
+      { kind: 'torso', scale: 0.85, role: 'cloth' },
+      { kind: 'hood', x: 0.24, scale: 0.8 },
+      { kind: 'bow', scale: 0.95 },
+      { kind: 'quiver', scale: 0.85 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The mortar whelk: the snail under the gun — soft glisten, feeler eyes,
+   *  gill frill; the shell it lost its quiet life to is the whelk_mortar. */
+  mortar_whelk: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.18, seed: 311 } },
+      { kind: 'gills', scale: 0.85 },
+      { kind: 'eyestalks', scale: 0.95 },
+    ],
+    live: [{ kind: 'slimeTrail', params: { n: 3 } }],
+  },
+  /** The whelk mortar — the spiral shell re-bored as a bombard: the muzzle
+   *  glow is the stand-off warning. Break it and the artillery stops. */
+  whelk_mortar: {
+    parts: [
+      { kind: 'shellSpiral', scale: 1.15 },
+      { kind: 'mortarMaw', x: 0.15, scale: 1.0 },
+    ],
+    shadowScale: 0.8,
+  },
+  /** The vat sow: flesh-country brood engine — folds, seams and the two
+   *  birthing sacs it farrows from are SEPARATE bodies on its flanks. */
+  vat_sow: {
+    parts: [
+      { kind: 'fleshFolds', scale: 1.12 },
+      { kind: 'stitchSeams', scale: 0.95 },
+      { kind: 'maw', x: 0.42, scale: 0.5, params: { arc: 0.5 } },
+      { kind: 'eyeCluster', x: 0.2, y: -0.3, scale: 0.5, params: { n: 3 } },
+    ],
+    shadowScale: 1.15,
+  },
+  /** A birthing sac: taut egg-flesh webbed in veins — pop it to stop the
+   *  brood, and stand back when it goes. */
+  birthing_sac: {
+    parts: [
+      { kind: 'egg', scale: 1.1 },
+      { kind: 'veinweb', scale: 0.95, role: 'accent' },
+      { kind: 'bloatSacs', scale: 0.6, params: { n: 2 } },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The twinmaw ettin: a headless-reading hulk from above — the two heads
+   *  are PARTS riding the shoulders, one ember, one rime. */
+  twinmaw_ettin: {
+    parts: [
+      { kind: 'torso', scale: 1.18 },
+      { kind: 'armorPlates', scale: 0.9, params: { n: 3 } },
+      { kind: 'warpaint', scale: 0.9 },
+      { kind: 'pauldrons', scale: 1.0, role: 'metal' },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The ember head: muzzled snout, stub horns, a mane of small fires. */
+  ogre_maw_ember: {
+    parts: [
+      { kind: 'snout', scale: 0.95, params: { ears: false } },
+      { kind: 'horns', scale: 0.6 },
+      { kind: 'maw', x: 0.4, scale: 0.4, params: { arc: 0.45 } },
+    ],
+    live: [{ kind: 'flames', x: -0.2, scale: 0.55, params: { n: 2 } }],
+    shadowScale: 0.5,
+  },
+  /** The rime head: the same skull run cold — frost breath, icicle jaw. */
+  ogre_maw_rime: {
+    parts: [
+      { kind: 'snout', scale: 0.95, params: { ears: false } },
+      { kind: 'icicles', scale: 0.7, role: 'glow' },
+      { kind: 'maw', x: 0.4, scale: 0.4, params: { arc: 0.45 } },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.45, scale: 0.7 }],
+    shadowScale: 0.5,
+  },
+  /** The effigy porter: a wicker bearer harnessed to its burden — straw
+   *  limbs, a blank mask; the idol it carries is the carven_idol part. */
+  effigy_porter: {
+    parts: [
+      { kind: 'strawLimbs', scale: 1.05 },
+      { kind: 'torso', scale: 0.9, role: 'wood' },
+      { kind: 'harness', scale: 0.95 },
+      { kind: 'saddlebags', x: -0.15, scale: 0.85 },
+      { kind: 'mask', x: 0.3, scale: 0.5, role: 'bone' },
+    ],
+  },
+  /** The carven idol: gourd-head on a ringed post, horn-crowned, bearded
+   *  in husk — the thing doing the cursing from the porter's back. */
+  carven_idol: {
+    parts: [
+      { kind: 'totemPost', scale: 1.05 },
+      { kind: 'gourdHead', x: 0.1, scale: 0.7 },
+      { kind: 'crownOfHorns', x: 0.12, scale: 0.7 },
+      { kind: 'beard', x: 0.28, scale: 0.7, role: 'cloth' },
+    ],
+    live: [{ kind: 'runes', scale: 0.85, params: { n: 3 } }],
+    shadowScale: 0.7,
+  },
+  /** The marrow whip: a lashing bone-worm HEAD — the chain behind it is
+   *  real, hittable, and wound-keeping (the segment fabric below boss
+   *  tier). Skull fore, fringe of loose sinew. */
+  marrow_whip: {
+    parts: [
+      { kind: 'skull', scale: 0.95 },
+      { kind: 'fangJaw', x: 0.3, scale: 0.8 },
+      { kind: 'lashFringe', scale: 0.9, params: { n: 6 } },
+    ],
+  },
+  // ——— THE MARROW SEGMENT KIT (WormLookSpec, +X = spine-forward) ———
+  /** The ordinary vertebra link: ringed bone over marrow shine. */
+  marrow_links: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.08, seed: 401 }, role: 'bone' },
+      { kind: 'segmentRings', params: { n: 2 } },
+      { kind: 'ribs', scale: 0.55, role: 'bone' },
+    ],
+  },
+  /** The every-nth ridge vertebra: a raked dorsal spur — the wound you can
+   *  pick out mid-lash. */
+  marrow_ridge: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.08, seed: 401 }, role: 'bone' },
+      { kind: 'segmentRings', params: { n: 2 } },
+      { kind: 'dorsalRidge', scale: 0.95, role: 'bone' },
+    ],
+  },
+  /** The tail barb: the whip's business end. */
+  marrow_barb: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.1, seed: 401 }, role: 'bone' },
+      { kind: 'stinger', scale: 1.05, role: 'bone' },
+    ],
+  },
+  // ——— THE SERPENT COIL KIT (coil_matriarch's hittable retrofit) ———
+  /** The matriarch's body coil: scaled hide in a raised loop. */
+  serpent_coil: {
+    parts: [
+      { kind: 'blob', scale: 0.92, params: { irr: 0.1, seed: 419 } },
+      { kind: 'segmentRings', params: { n: 3 } },
+      { kind: 'coil', scale: 0.9 },
+    ],
+  },
+  /** The rattle tail: ringed keratin — the tempo you hear before the bite. */
+  serpent_rattle: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.1, seed: 419 } },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'tailClub', scale: 0.85, role: 'bone' },
+    ],
   },
 };
 
