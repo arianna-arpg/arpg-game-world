@@ -2182,6 +2182,21 @@ export class World {
   /** Haunts whose grief-anchor already stood up this visit (per haunt id). */
   private materializedHaunts = new Set<string>();
   private hauntStreamTimer = 0;
+  /** Strayings whose scene announced itself this visit (per call id). */
+  private materializedStrayings = new Set<string>();
+  /** THE STRAYING's live scene in the current zone (null between calls) —
+   *  the concrete half of packages/overlays/straying.ts: body refs + per-head
+   *  bell clocks. Zone-local and rebuilt on entry; the overlay owns the counts. */
+  private droveScene: {
+    id: string;
+    fold: Vec2; rally: Vec2;
+    strays: { a: Actor; state: 'loose' | 'homing'; bellLeft: number }[];
+    callers: Actor[];
+    thralls: Actor[];
+    /** Last overlay phase seen (transition edge detection). */
+    phase: string;
+    sweepAcc: number;
+  } | null = null;
   /** Feeding grounds whose parked coach already stood up this visit (per
    *  ground id) — the Long Night's twin of materializedHaunts. */
   private materializedLongNights = new Set<string>();
@@ -5056,6 +5071,12 @@ export class World {
         // reset a revisited haunt stood empty and unbreakable.
         id: 'haunting',
         reset: () => { this.materializedHaunts.clear(); this.hauntStreamTimer = 0; },
+      },
+      {
+        // The Straying's scene is zone-local body refs — a zone change drops
+        // them (the overlay keeps the head ledger; re-entry re-stages from it).
+        id: 'straying',
+        reset: () => { this.materializedStrayings.clear(); this.droveScene = null; },
       },
       {
         // Long Night grounds re-stand on re-entry (the parked coach — and a
@@ -13609,6 +13630,300 @@ export class World {
     let n = 0;
     for (const a of this.actors) if (!a.dead && a.team === 'enemy' && a.tag === 'haunt_spawn') n++;
     return n;
+  }
+
+  // ------------------------------------------------------- the straying
+  //
+  // THE FOLD'S TUG-OF-WAR, engine side: the pure StrayField owns the
+  // settle/phase/absent lifecycle and the head ledger; this runtime stages
+  // the concrete scene off strayingOn() — loose strays grazing where they
+  // wandered (each with a bell clock), the dormant bell-court posted at the
+  // rally FACING the farm — and reports every head's fate back through the
+  // note*() calls. All movement is the DUTY-POST fabric: a touched stray's
+  // post flips home and the post walk does the herding; a converted head's
+  // post is the rally and the changed body walks there still dormant; the
+  // roused march is the same flip aimed at the fold. No new AI anywhere.
+
+  /** Per-frame: THE STRAYING's presence in a called zone. */
+  private updateStrayingScene(dt: number): void {
+    const sf = this.sim.strayField;
+    if (!sf) { this.droveScene = null; return; }
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return;
+    const info = sf.strayingOn(this.zone.id);
+    if (!info) { this.droveScene = null; return; }
+    const cfg = sf.surge();
+    const lvl = Math.max(1, this.zone.level);
+
+    // THE MATERIALIZE BEAT (once per visit per call): the discovery line +
+    // the Vault-surfacing ledger, the haunting's exact pattern.
+    if (!this.materializedStrayings.has(info.id)) {
+      this.materializedStrayings.add(info.id);
+      bumpLedger(this.ledger, 'straying_seen');
+      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        info.phase === 'overrun'
+          ? `${this.zone.name} has gone feral — the fold is broken here.`
+          : `The fold has gone astray in ${this.zone.name} — a bell calls it away. Walk the strays home.`,
+        info.color, 18);
+    }
+
+    // A lost fold needs no scene — the ground just wears the feral hold
+    // (affectSpawns) until the land settles.
+    if (info.phase === 'overrun' && (!this.droveScene || this.droveScene.phase === 'overrun')) {
+      this.droveScene = null;
+      return;
+    }
+
+    // STAGE (fresh entry, or a new call after a resolved one): anchor the fold
+    // on the living pasture, seat the rally out past it, scatter the loose
+    // heads between, and post the still court. Idempotent under zone memory —
+    // court bodies are adopted back by tag before any top-up spawn.
+    if (!this.droveScene || this.droveScene.id !== info.id) {
+      const fold = this.strayingFoldAnchor();
+      const rally = this.strayingRallySeat(fold, cfg.rallyDist);
+      if (!info.staged) {
+        sf.noteStaged(info.id, randInt(cfg.strays[0], cfg.strays[1]), randInt(cfg.callers[0], cfg.callers[1]));
+      }
+      const live = sf.strayingOn(this.zone.id);
+      if (!live) { this.droveScene = null; return; }
+      const callers: Actor[] = this.actors.filter(a => !a.dead && a.tag === 'drove_call');
+      const thralls: Actor[] = this.actors.filter(a => !a.dead && a.tag === 'drove_thrall');
+      const callerLvl = Math.max(1, lvl + cfg.callerLevelBonus);
+      const ringN = Math.max(1, live.callersLeft);
+      for (let i = callers.length; i < live.callersLeft; i++) {
+        const ang = (i / ringN) * Math.PI * 2;
+        const at = this.findFreeSpot(this.clampPos(vec(rally.x + Math.cos(ang) * 58, rally.y + Math.sin(ang) * 58), 24), 14);
+        const id = this.weightedPick(cfg.callerTable, callerLvl);
+        if (!MONSTERS[id]) continue;
+        const m = this.createMonster(id, callerLvl, 'enemy');
+        m.tag = 'drove_call';
+        m.pos = at;
+        m.postSpec = { hold: true };
+        m.aiPost = vec(at.x, at.y);
+        m.aiPostFacing = Math.atan2(fold.y - at.y, fold.x - at.x); // it watches the farm
+        this.actors.push(m);
+        callers.push(m);
+      }
+      const strays: { a: Actor; state: 'loose' | 'homing'; bellLeft: number }[] = [];
+      for (let i = 0; i < live.straysLeft; i++) {
+        const id = this.weightedPick(cfg.strayTable, lvl);
+        if (!MONSTERS[id]) continue;
+        const t = rand(0.3, 0.8);
+        const at = this.findFreeSpot(this.clampPos(vec(
+          fold.x + (rally.x - fold.x) * t + rand(-150, 150),
+          fold.y + (rally.y - fold.y) * t + rand(-150, 150)), 24), 12);
+        const m = this.createMonster(id, lvl, 'enemy');
+        m.pos = at;
+        m.postSpec = { hold: false, slack: 60, pace: 0.5 }; // it grazes where it wandered
+        m.aiPost = vec(at.x, at.y);
+        this.actors.push(m);
+        strays.push({ a: m, state: 'loose', bellLeft: rand(cfg.bellPull[0], cfg.bellPull[1]) });
+      }
+      this.droveScene = { id: info.id, fold, rally, strays, callers, thralls, phase: info.phase, sweepAcc: 0 };
+    }
+    const sc = this.droveScene!;
+
+    // PHASE EDGES (the overlay flips, the engine performs):
+    if (info.phase !== sc.phase) {
+      if (info.phase === 'raid') {
+        // THE BELL TURNS: the whole court rouses as one and marches the fold
+        // (the wheel below carries the march; their own brains take over the
+        // moment the fight finds them).
+        for (const a of [...sc.callers, ...sc.thralls]) {
+          if (a.dead) continue;
+          a.aiAwakened = true;
+          a.postSpec = undefined;
+          a.aiPost = undefined;
+        }
+        this.flashes.push({ pos: vec(sc.rally.x, sc.rally.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          'THE BELL TURNS — the changed march on the steading!', info.color, 18);
+      } else if (info.phase === 'relieved') {
+        this.strayingRelief(sf, info.id, info.color, lvl, 'The call breaks — the strays remember themselves.');
+        return;
+      } else if (info.phase === 'overrun') {
+        // The raid pressed its whole ttl: the bell recedes with what it took.
+        for (const a of [...sc.callers, ...sc.thralls]) {
+          if (!a.dead) this.slipAway(a, '', info.color);
+        }
+        bumpLedger(this.ledger, 'strayings_overrun');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          'The bell recedes — the changed go with it. The fields run feral.', info.color, 18);
+        this.droveScene = null;
+        return;
+      }
+      sc.phase = info.phase;
+    }
+
+    // THE WHEEL (the migrant/procession precedent): the scene's treks are
+    // walked by the event tick itself — pathing on the zone's authority,
+    // straight where the line is clean — so a rescue runs however far the
+    // player ranges (the AI's activity scoping never stalls it). The duty
+    // post keeps only the PLANTED texture (the court's watch, graze orbits).
+    const wheel = (a: Actor, to: Vec2, pace: number): void => {
+      let goal = to;
+      const pf = this.pathField();
+      if (pf?.pathStep && !(pf.lineWalkable?.(a.pos, to) ?? false)) {
+        goal = pf.pathStep(a.pos, to) ?? to;
+      }
+      a.facing = angleTo(a.pos, goal);
+      this.moveActor(a, goal.x - a.pos.x, goal.y - a.pos.y, dt * pace);
+    };
+    for (const s of sc.strays) {
+      if (s.state === 'homing' && !s.a.dead && !s.a.heldBy) wheel(s.a, sc.fold, cfg.homePace);
+    }
+    if (info.phase === 'raid') {
+      for (const a of [...sc.callers, ...sc.thralls]) {
+        if (!a.dead && !a.aiTargetId && !a.heldBy) wheel(a, sc.fold, cfg.marchPace);
+      }
+    } else {
+      // The changed sleepwalk to the rally and PLANT there, facing the farm.
+      for (const a of sc.thralls) {
+        if (a.dead || a.heldBy || !isDormant(a)) continue;
+        if (dist(a.pos, sc.rally) > 34) wheel(a, sc.rally, cfg.thrallPace);
+        else if (!a.postSpec) {
+          a.postSpec = { hold: true };
+          a.aiPost = vec(a.pos.x, a.pos.y);
+          a.aiPostFacing = Math.atan2(sc.fold.y - a.pos.y, sc.fold.x - a.pos.x);
+        }
+      }
+    }
+
+    // BELL CLOCKS tick every frame (cheap — a handful of heads).
+    for (const s of sc.strays) if (s.state === 'loose' && !s.a.dead) s.bellLeft -= dt;
+
+    // THE SWEEP (throttled): proximity herding, arrivals, conversions, deaths.
+    sc.sweepAcc += dt;
+    if (sc.sweepAcc < 0.2) return;
+    sc.sweepAcc = 0;
+
+    for (let i = sc.strays.length - 1; i >= 0; i--) {
+      const s = sc.strays[i];
+      if (s.a.dead) {
+        // A head simply died out there (a wolf, a stray blade) — lost.
+        sf.noteStrayLost(info.id);
+        this.text(vec(s.a.pos.x, s.a.pos.y - 24), 'a head is lost…', '#c8b890', 12);
+        sc.strays.splice(i, 1);
+        continue;
+      }
+      if (s.state === 'loose') {
+        // A player's touch — or a farmhand's — turns it home. The duty post
+        // does the walking; the panic fabric may interrupt, the post resumes.
+        let touched = false;
+        for (const seat of this.seats) {
+          if (!seat.actor.dead && dist(seat.actor.pos, s.a.pos) <= cfg.herdRadius) { touched = true; break; }
+        }
+        if (!touched) {
+          for (const f of this.actors) {
+            if (f.dead || f.faction !== 'freehold' || isDormant(f)) continue;
+            if (dist(f.pos, s.a.pos) <= cfg.assistRadius) { touched = true; break; }
+          }
+        }
+        if (touched) {
+          // The wheel owns the trek home — the graze post lets go until the
+          // fold takes it back (arrival re-plants it as pasture).
+          s.state = 'homing';
+          s.a.postSpec = undefined;
+          s.a.aiPost = undefined;
+          this.text(vec(s.a.pos.x, s.a.pos.y - 24), `${s.a.name} remembers the fold`, info.color, 12);
+        } else if (s.bellLeft <= 0) {
+          // THE BELL'S WORK: the head turns where it stands — silent swap, no
+          // bounty, no corpse — and the changed body walks to the rally still
+          // dormant (the duty post carries it; the sight is the point).
+          const convId = cfg.convertTo[s.a.defId ?? ''] ?? cfg.convertFallback;
+          const at = vec(s.a.pos.x, s.a.pos.y);
+          const idx = this.actors.indexOf(s.a);
+          if (idx >= 0) this.actors.splice(idx, 1);
+          sc.strays.splice(i, 1);
+          if (MONSTERS[convId]) {
+            // No post yet — the wheel sleepwalks it to the rally, where it
+            // PLANTS (the still congregation growing one head at a time).
+            const m = this.createMonster(convId, lvl, 'enemy');
+            m.tag = 'drove_thrall';
+            m.pos = at;
+            this.actors.push(m);
+            sc.thralls.push(m);
+          }
+          this.flashes.push({ pos: at, radius: 44, color: info.color, life: 0.5, maxLife: 0.5 });
+          this.text(vec(at.x, at.y - 24), 'a head goes to the bell…', info.color, 13);
+          sf.noteConverted(info.id);
+        }
+      } else if (dist(s.a.pos, sc.fold) <= cfg.arriveRadius) {
+        // HOME SAFE: the head rejoins the pasture (a graze post at the fold)
+        // and the drovers pay by the head (the Drover tier counts the act).
+        sf.noteReturned(info.id);
+        bumpLedger(this.ledger, 'strays_returned');
+        this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl);
+        this.text(vec(s.a.pos.x, s.a.pos.y - 24), 'home safe', '#b8e890', 12);
+        s.a.postSpec = { hold: false, slack: 200 };
+        s.a.aiPost = vec(sc.fold.x, sc.fold.y);
+        sc.strays.splice(i, 1);
+      }
+    }
+
+    // Court losses: each fallen caller is a note (the LAST breaks the call).
+    for (let i = sc.callers.length - 1; i >= 0; i--) {
+      if (sc.callers[i].dead) { sc.callers.splice(i, 1); sf.noteCallerDown(info.id); }
+    }
+    for (let i = sc.thralls.length - 1; i >= 0; i--) {
+      if (sc.thralls[i].dead) sc.thralls.splice(i, 1);
+    }
+
+    // THE DEFENSE: a marching court broken to the last body holds the fold.
+    if (info.phase === 'raid' && sc.callers.length === 0 && sc.thralls.length === 0) {
+      this.strayingRelief(sf, info.id, info.color, lvl, 'The fold holds. The drovers breathe.');
+    }
+  }
+
+  /** The relief/defense beat: remaining loose heads drift back to the pasture,
+   *  any still court slinks off beaten, the drovers' purse pays, and the
+   *  overlay resolves (starting the reprieve). ONE path for both endings. */
+  private strayingRelief(sf: NonNullable<WorldSim['strayField']>, id: string, color: string, lvl: number, line: string): void {
+    const sc = this.droveScene;
+    if (sc) {
+      for (const s of sc.strays) {
+        if (s.a.dead) continue;
+        s.a.postSpec = { hold: false, slack: 200, pace: 0.8 };
+        s.a.aiPost = vec(sc.fold.x, sc.fold.y);
+      }
+      for (const a of [...sc.callers, ...sc.thralls]) {
+        if (!a.dead) this.slipAway(a, '', color);
+      }
+      const cfg = sf.surge();
+      this.grantXp(cfg.reward.reliefXpBase + cfg.reward.reliefXpPerLevel * lvl);
+      for (let i = 0; i < cfg.reward.reliefGems; i++) this.dropGemAt(vec(sc.fold.x, sc.fold.y));
+    }
+    bumpLedger(this.ledger, 'strayings_relieved');
+    this.text(vec(this.player.pos.x, this.player.pos.y - 92), line, color, 18);
+    sf.resolve(id);
+    this.droveScene = null;
+  }
+
+  /** The fold anchor: the living pasture's centroid (posted critter texture —
+   *  wool and feathers, not folk), else somewhere honestly far. */
+  private strayingFoldAnchor(): Vec2 {
+    let x = 0, y = 0, n = 0;
+    for (const a of this.actors) {
+      if (a.dead || a.team !== 'enemy') continue;
+      if (a.faction !== 'beast' || !a.defId || MONSTERS[a.defId]?.tag !== 'critter') continue;
+      x += a.pos.x; y += a.pos.y; n++;
+    }
+    if (n >= 2) return this.clampPos(vec(x / n, y / n), 60);
+    return this.clampPos(this.farPoint(420), 60);
+  }
+
+  /** Seat the rally OUT past the fold: of a ring of candidates at rallyDist,
+   *  the one farthest from the player (the walk out is the gameplay). */
+  private strayingRallySeat(fold: Vec2, rallyDist: number): Vec2 {
+    let best: Vec2 | null = null;
+    let bd = -1;
+    for (let i = 0; i < 8; i++) {
+      const ang = (i / 8) * Math.PI * 2;
+      const c = this.clampPos(vec(fold.x + Math.cos(ang) * rallyDist, fold.y + Math.sin(ang) * rallyDist), 60);
+      const d = Math.min(dist(c, this.player.pos), dist(c, fold));
+      if (d > bd) { bd = d; best = c; }
+    }
+    return this.findFreeSpot(best ?? this.clampPos(this.farPoint(rallyDist), 60), 20);
   }
 
   // ------------------------------------------------------- the long night
@@ -30247,6 +30562,7 @@ export class World {
     this.updateDemonStorm(dt);
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
+    this.updateStrayingScene(dt);
     this.updateWraithsailDock();
     this.updateLongNight(dt);
     this.updateNecropolis();

@@ -33,6 +33,7 @@ import { MIRRORKIN } from './defs/mirrorkin';
 import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
+import { STRAYING } from './defs/straying';
 import { SWARMING } from './defs/swarming';
 import { UNDERWORLD_WAR } from './defs/underworldWar';
 import { UNSEALING } from './defs/unsealing';
@@ -70,6 +71,7 @@ export const PACKAGES: ContentPackage[] = [
   HAUNTING,
   LONG_NIGHT,
   VERMINFALL,
+  STRAYING,
   MIRRORKIN,
   LONGCANDLE,
   GLOAMING,
@@ -112,6 +114,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   mycelia: 0x14ce,
   vendetta: 0x0e4d,
   verminfall: 0x2a75,
+  straying: 0x57a9,
   mirrorkin: 0x312a,
   longcandle: 0xca4d,
   long_night: 0x10c7,

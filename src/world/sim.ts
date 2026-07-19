@@ -29,6 +29,7 @@ import type { SwarmingField } from '../packages/overlays/swarming';
 import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
 import type { LongNightField } from '../packages/overlays/longNight';
+import type { StrayField } from '../packages/overlays/straying';
 import type { VerminfallField } from '../packages/overlays/verminfall';
 import type { LongCandleField } from '../packages/overlays/longcandle';
 import type { GloamingField } from '../packages/overlays/gloaming';
@@ -196,6 +197,12 @@ export class WorldSim {
    *  fauna; the kill rows call onNestBroken()/onKingSlain() back. It owns the claim
    *  + the nest ledger. */
   readonly verminfallField: VerminfallField | null;
+  /** The straying overlay if its package is in the manifest, else null — the
+   *  engine reads strayingOn() to stage the fold's tug-of-war (loose strays,
+   *  the dormant bell-court, the herding sweep) in a called zone and reports
+   *  back through the note*() calls; the field owns the settle/phase/absent
+   *  lifecycle and the head ledger. */
+  readonly strayField: StrayField | null;
   /** The long-candle overlay if its package is in the manifest, else null — the
    *  engine reads candleOn() to field the Wax Court's shrines/packs and the
    *  Umbral Parliament's shadows on a night-claimed ground (both when both
@@ -404,6 +411,7 @@ export class WorldSim {
     this.contagionField = surface<ContagionField>('contagion') ?? null;
     this.deepwinterField = surface<DeepwinterField>('deepwinter') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
+    this.strayField = surface<StrayField>('straying') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
     this.gloamingField = surface<GloamingField>('gloaming') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;

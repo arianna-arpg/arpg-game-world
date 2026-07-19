@@ -8145,6 +8145,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // THE BROKEN EWE: what a sheep becomes when the bell takes it (the Straying's
+  // convert lane, packages/defs/straying.ts) — the Bellwether's kin, minted so
+  // the fold's loss has a face. Rams like it remembers being bigger.
+  broken_ewe: {
+    id: 'broken_ewe', name: 'Broken Ewe',
+    color: '#ddd2b8', shape: 'oval', radius: 11, material: 'fur', look: 'the_bellwether',
+    base: { life: 30, moveSpeed: 150, accuracy: 92, mana: 0 },
+    skills: ['heavy_strike'],
+    xp: 7,
+    faction: 'chattel', tags: ['beast'],
+    detection: 0.9,
+    scaleVariance: [0.9, 1.1],
+    brain: {
+      type: 'basic',
+      move: { style: 'charge', commitRange: 220, chargeSpeed: 2.0 },
+    },
+  },
+
   // --- THE PASTURE (the living farm) ------------------------------------------
   // The Chattel's CALM cousins: real livestock for the farmland biome, spawned
   // as ambient fauna. All 'critter'-tagged (the prey lane — wolves' hunger
