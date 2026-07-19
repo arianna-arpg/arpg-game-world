@@ -24,6 +24,7 @@
 
 import { continentAt, continentSeedFrom } from './continents';
 import { climateAt, climateAffinity } from './climate';
+import { islandMulAt } from './seas';
 import { VOYAGE_ISLANDS, type VoyageIslandDef } from '../data/voyageIslands';
 
 export const VOYAGE_CFG = {
@@ -48,9 +49,8 @@ export const VOYAGE_CFG = {
   /** Landing suppression right after casting off (so the harbor you just left
    *  doesn't immediately reel you back in while you get underway). */
   castOffGrace: 2.5,
-  /** Node-units: landing within this of an existing zone LINKS there instead
-   *  of minting a twin (the same consolidation radius the ocean gate uses). */
-  dedupRadius: 55,
+  // (dedupRadius retired with free docking: landings resolve through the sea
+  //  fabric's planned port spots — world/seas.ts SEA_CFG.landingSlack.)
   /** The boat is quicker than boots — a move-speed multiplier while sailing
    *  (× the ship's own speed multiplier). */
   boatSpeedMul: 1.35,
@@ -72,8 +72,10 @@ export const ISLAND_FIELD = {
   /** Island macro-cell span in node units (< continent cellSpan — islands live
    *  in the water BETWEEN landmasses). */
   cellSpan: 420,
-  /** Chance an open-ocean cell hosts an island. */
-  chance: 0.3,
+  /** Chance an open-ocean cell hosts an island — scaled per SEA CLASS at the
+   *  roll (SeaClassDef.islandMul, world/seas.ts: bigger waters, thicker
+   *  archipelagos). */
+  chance: 0.42,
   /** Cell-center jitter (0..0.5 of span) — organic scatter, not a grid. */
   jitter: 0.4,
   /** The island's streamed SHORE blob radius range, node units. */
@@ -106,7 +108,6 @@ export function islandAtCell(gx: number, gy: number, fieldSeed: number): IslandS
   const seed = continentSeedFrom(fieldSeed);
   const span = ISLAND_FIELD.cellSpan;
   const h = hashCell(gx, gy, (seed ^ 0x15a4d) >>> 0);
-  if ((h / 0x100000000) >= ISLAND_FIELD.chance) return null;
   const jit = ISLAND_FIELD.jitter;
   const coord = {
     x: (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * 2 * jit) * span,
@@ -115,6 +116,10 @@ export function islandAtCell(gx: number, gy: number, fieldSeed: number): IslandS
   // Only OPEN WATER hosts a voyage island — a coord that lands on a continent
   // (or a bridge) is just coastline; the mainland already has its own zones.
   if (continentAt(coord, seed).kind !== 'ocean') return null;
+  // THE PER-CLASS ISLAND LEVER (world/seas.ts): the existence roll reads the
+  // hosting SEA's class multiplier — great waters grow thicker archipelagos.
+  // Pure + memoized; ordered after the ocean test so land cells pay nothing.
+  if ((h / 0x100000000) >= ISLAND_FIELD.chance * islandMulAt(coord, seed)) return null;
   const defs = Object.values(VOYAGE_ISLANDS);
   if (!defs.length) return null;
   // Weighted pick off a second hash (decoupled from the existence roll),

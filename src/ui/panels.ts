@@ -3206,13 +3206,22 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const world = this.getWorld();
     const acc = this.getAccount();
     const ports = world.sailMenuPorts();
+    // Grouped by WATER (the sea fabric): this sea's harbors first under its
+    // own name, farther shores after — the harbor thinks in seas now.
+    let lastSea: string | null | undefined;
     const rows = ports.length
-      ? ports.map(p => `<div class="skill-entry">
-          <div class="name">${esc(p.name)}${p.sailed ? ' <span class="tags">· route charted</span>' : ''}</div>
+      ? ports.map(p => {
+        const head = p.seaName !== lastSea
+          ? `<h3 style="margin:10px 0 2px 0">${esc(p.seaName ?? 'far waters')}</h3>` : '';
+        lastSea = p.seaName;
+        const tier = p.tier === 'haven' ? ' <span class="tags">· haven</span>' : '';
+        return `${head}<div class="skill-entry">
+          <div class="name">${esc(p.name)}${tier}${p.sailed ? ' <span class="tags">· route charted</span>' : ''}</div>
           <div class="desc">A harbor of level ${p.level}.</div>
           <div class="bind-btns"><button data-sail-port="${esc(p.id)}">Sail</button></div>
-        </div>`).join('')
-      : `<div class="skill-entry"><div class="desc">No other harbors charted — set out across the open sea.</div></div>`;
+        </div>`;
+      }).join('')
+      : `<div class="skill-entry"><div class="desc">No other harbors known on any water — set out and sight one.</div></div>`;
     // THE HEARSAY (world.harborHearsay — the omen fabric's far rumors): each
     // row is sailor's talk about something seated out in unknown country,
     // with a CHART for sale that surveys the seat onto the map. Reading is
@@ -3224,11 +3233,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           ${h.canChart ? `<div class="bind-btns"><button data-sail-hearsay="${esc(h.id)}"${acc.credits < h.price ? ' disabled' : ''}>Buy chart · ${h.price}</button></div>` : ''}
         </div>`).join('')
       : '';
-    this.sailMenu.innerHTML = `<h2>The Harbor</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"The sea takes you wherever there's a shore to take you in."</div>`
+    const hereSea = world.seaNameOf(world.zone);
+    const hereTier = world.zone.portTier === 'haven' ? 'the haven of ' : '';
+    this.sailMenu.innerHTML = `<h2>The Harbor${hereSea ? ` — ${esc(hereTier + hereSea)}` : ''}</h2>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Every water keeps its harbors, friend — and its harbors keep its secrets."</div>`
       + rows
       + `<div class="skill-entry"><div class="name">Chart a course</div>`
-      + `<div class="desc">Sail the open ocean until a new continent's shore.</div>`
+      + `<div class="desc">Sail blind for the far shore of this water.</div>`
       + `<div class="bind-btns"><button data-sail-chart>Set sail</button></div></div>`
       + hearsayRows
       + `<div class="bind-btns" style="margin-top:10px"><button data-sail-close>Close</button></div>`;
@@ -3906,7 +3917,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     if (world.discoveredWaypoints.has(zoneId)) {
       chips.push(`<span class="zi-chip" style="color:#5ad8d8;border-color:#3a7a7a">◆ waypoint${zoneId !== world.zone.id ? ' — click its node to travel' : ''}</span>`);
     }
-    if (revealed && zone!.port) chips.push(`<span class="zi-chip" style="color:#9ad0e8;border-color:#4a7a9a">⚓ port</span>`);
+    if (revealed && zone!.port) {
+      // The sea fabric's identity chip: which WATER this harbor serves, and
+      // whether it's the sea's haven (world.seaNameOf re-derives pure).
+      const seaName = world.seaNameOf(zone!);
+      const tier = zone!.portTier === 'haven' ? 'haven' : 'port';
+      chips.push(`<span class="zi-chip" style="color:#9ad0e8;border-color:#4a7a9a">⚓ ${tier}${seaName ? ` — ${esc(seaName)}` : ''}</span>`);
+    }
     const head = `<div class="zi-zone">${esc(name)}`
       + (pinned ? ` <span class="zi-pin" data-unpin="1">📌 unpin</span>` : '')
       + `</div>`

@@ -63,11 +63,15 @@ check('A: every veiled zone is INVISIBLE at the fog seam',
   veiled.every(z => !w.visible(z)), `${veiled.filter(z => w.visible(z)).length} leaks`);
 // Ring discipline: a mint projects ~86u past its source, and a FIELD zone
 // re-centres its node on the whole region's middle (fieldifyZone) — so the
-// rim is ragged by up to a field span where an expanse straddles it. The
-// guard is against RUNAWAY growth, not against honest field geometry.
-check('A: the halo respects the ring (+ field-span slack)',
-  veiled.every(z => coordDist(z.map, w.zone.map) <= FORECHART_CFG.ring + 700),
-  'every veiled zone within ring + a field span');
+// rim is ragged by up to a field span where an expanse straddles it. SEA
+// SYSTEMS are exempt by design (the foreordained law, world/seas.ts): a
+// frontier touching any water mints that sea's WHOLE port system, and its
+// far-side harbors stand wherever the water runs — the ring governs the
+// LAND sweep alone. The guard is against RUNAWAY growth, never honest
+// geometry.
+check('A: the halo respects the ring (+ field-span slack; sea systems exempt)',
+  veiled.filter(z => !z.seaId).every(z => coordDist(z.map, w.zone.map) <= FORECHART_CFG.ring + 700),
+  'every veiled LAND zone within ring + a field span');
 check('A: the budget holds', veiled.length <= FORECHART_CFG.maxVeiled,
   `${veiled.length} ≤ ${FORECHART_CFG.maxVeiled}`);
 check('A: town + hub stay visible',

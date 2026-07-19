@@ -303,12 +303,28 @@ changes.
   `registerOmenSource`) are the findability guarantee: whisper/reveal
   radii that AGE WIDER (`widenPerMin`) — bearings murmured near, seats
   surveyed close, nothing lost forever; the crusade alone swears silence.
-  THE HARBOR (`data/ports.ts`): ports as knowledge hubs — mint-time
-  shipping LANES (`routePortLanes`, wet-chord tested), the HARBOR BOARD
+  THE HARBOR (`data/ports.ts`): ports as knowledge hubs — the HARBOR BOARD
   doodad (dwell → the revived Sail panel: passage incl. lane-known veiled
   harbors, hearsay rows, purchasable CHARTS = survey pulses via the
   `harborChart` intent). Dials in `FORECHART_CFG`/`OMEN_CFG`/`PORT_CFG`;
   docs in `docs/engine/forechart.md`; probe `balance/probe_forechart.ts`.
+  THE SEA FABRIC (`world/seas.ts` + `data/seas.ts` — every water known
+  WHOLE; THE FOREORDAINED TENET: pure function of the seed, computed whole
+  at first touch, revealed only as found): any touched ocean water fills
+  its whole contiguous component (4-neighbour macro-lattice — sailing-true:
+  bridges split seas), classed by the `SEA_CLASSES` ascending ladder
+  (pond→lagoon→sea→great sea→ocean: port budgets, haven rights, island
+  muls, name pools), NAMED, and given explicit PORT SPOTS around its
+  coastline (greedy max-min ≥ `portMinSep`; spot 0 = THE HAVEN).
+  `World.ensureSeaPorts` mints the system veiled (`ZoneDef.seaId`/
+  `portTier`, noBackEdge, haven name + quay dressing) + rings the LANE LAW
+  (coastal ring + haven spokes; isles lane to the haven on sighting). THE
+  LANDING LAW kills free docking: quay beacons stream + reveal on sight
+  (the isles' mint-on-sight law); landings engage only at spots/isles/
+  grandfathered ports — the rest is breakers; `chartCourse` = this sea's
+  far harbor. First port found names the sea + stamps `first_port_found`/
+  `seas_found`. Dials in `SEA_CFG`; docs `docs/engine/seas.md`; probe
+  `balance/probe_seas.ts`.
   THE PLY FABRIC (`engine/plies.ts` — hit-counted durability, the
   Pikmin/Overlord damage model): `MonsterDef.plies` bodies EAT N landed
   hits magnitude-blind (one ply per blow, no life moves; thud floor,

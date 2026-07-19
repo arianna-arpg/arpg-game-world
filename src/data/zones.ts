@@ -797,6 +797,15 @@ export interface ZoneDef {
    *  chart-a-course landfalls). Frontiers never mint past a port into open
    *  ocean; the sea itself is the road. */
   port?: boolean;
+  /** THE SEA this port serves (world/seas.ts Sea.id) — baked at mint so the
+   *  sail menu, zone-info, and lane law read the sea without re-filling.
+   *  Islands carry their hosting sea too. Absent on legacy free-docked
+   *  ports (they grandfather into landings but join no ring). */
+  seaId?: string;
+  /** PORT TIER (the sea's deliberate system): 'haven' = the sea's hub
+   *  harbor (lane spokes converge, quay dressing at load); 'cove' = a
+   *  landing. Absent = a plain legacy port. */
+  portTier?: 'haven' | 'cove';
   /** Which DIMENSION this zone belongs to (default 'surface'). The map shows
    *  one dimension per tab; frontiers inherit their source's dimension. */
   dimension?: string;

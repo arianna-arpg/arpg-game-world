@@ -2159,6 +2159,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'beacon', order: 59,
     light: { radius: 120, color: '#7fd0ff', intensity: 0.4 },
   },
+  // THE QUAY BEACON (world/seas.ts port spots): a planned harborage sighted
+  // from the water — the sea fabric's landing-zone signage, warm against the
+  // isles' cool (a haven's beacon re-tints via the doodad's adorn).
+  quay_beacon: {
+    painter: 'beacon', order: 59,
+    light: { radius: 120, color: '#ffd898', intensity: 0.4 },
+  },
   // --- SURVEY SPIRES (the 'beacon' zone objective — data/beacons.ts) --------
   // One painter, two kinds: the engine swaps dormant → lit at full charge (a
   // pure KIND swap, so the bake cache and the light layer both follow the

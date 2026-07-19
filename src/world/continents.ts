@@ -78,34 +78,53 @@ export interface ContinentCell {
   kind: 'land' | 'ocean' | 'bridge';
 }
 
+/** The RAW kind of one macro cell by its lattice address — the SEA FABRIC's
+ *  fill substrate (world/seas.ts): continentCellAt answers "which cell wins
+ *  at a coordinate"; this answers "what is cell (gx,gy)". Identical rolls to
+ *  the winner path (one source of truth — continentCellAt delegates here).
+ *  A bridge counts as NOT-water for sailing: its span blocks the boat, so
+ *  two waters joined only under a bridge are separate SEAS. */
+export function cellKind(gx: number, gy: number, seed: number): 'land' | 'ocean' | 'bridge' {
+  if (cellIsLand(gx, gy, seed)) return 'land';
+  // Bridge test: an ocean cell with land on OPPOSITE sides (either axis) may
+  // firm into an isthmus — hashed per cell so the bridge is stable world-wide.
+  const flanked =
+    (cellIsLand(gx - 1, gy, seed) && cellIsLand(gx + 1, gy, seed))
+    || (cellIsLand(gx, gy - 1, seed) && cellIsLand(gx, gy + 1, seed));
+  if (flanked && (hashCell(gx, gy, (seed ^ 0x2545f491) >>> 0) / 0x100000000) < CONTINENT_CFG.bridgeChance) {
+    return 'bridge';
+  }
+  return 'ocean';
+}
+
+/** The JITTERED SITE of a macro cell (its Voronoi seed point) — exported so
+ *  the sea fabric's centroids/orderings share the exact geometry the winner
+ *  search uses. */
+export function cellSite(gx: number, gy: number, seed: number): MapCoord {
+  const span = CONTINENT_CFG.cellSpan, jit = CONTINENT_CFG.jitter;
+  const h = hashCell(gx, gy, seed);
+  return {
+    x: (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span,
+    y: (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span,
+  };
+}
+
 /** The landmass field's winning cell at a node-space coordinate. Same 3×3
  *  jittered-Voronoi search as biomeAt; the winning seed's land/ocean roll
- *  decides. An ocean winner wedged directly between two land seeds may firm
- *  into a BRIDGE. */
+ *  decides (cellKind — the one source of truth). */
 export function continentCellAt(coord: MapCoord, seed: number): ContinentCell {
-  const span = CONTINENT_CFG.cellSpan, jit = CONTINENT_CFG.jitter;
+  const span = CONTINENT_CFG.cellSpan;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
   let bestD = Infinity, bestGx = 0, bestGy = 0;
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       const gx = cx + dx, gy = cy + dy;
-      const h = hashCell(gx, gy, seed);
-      const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
-      const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
+      const s = cellSite(gx, gy, seed);
+      const d = (s.x - coord.x) ** 2 + (s.y - coord.y) ** 2;
       if (d < bestD) { bestD = d; bestGx = gx; bestGy = gy; }
     }
   }
-  if (cellIsLand(bestGx, bestGy, seed)) return { gx: bestGx, gy: bestGy, kind: 'land' };
-  // Bridge test: an ocean cell with land on OPPOSITE sides (either axis) may
-  // firm into an isthmus — hashed per cell so the bridge is stable world-wide.
-  const flanked =
-    (cellIsLand(bestGx - 1, bestGy, seed) && cellIsLand(bestGx + 1, bestGy, seed))
-    || (cellIsLand(bestGx, bestGy - 1, seed) && cellIsLand(bestGx, bestGy + 1, seed));
-  if (flanked && (hashCell(bestGx, bestGy, (seed ^ 0x2545f491) >>> 0) / 0x100000000) < CONTINENT_CFG.bridgeChance) {
-    return { gx: bestGx, gy: bestGy, kind: 'bridge' };
-  }
-  return { gx: bestGx, gy: bestGy, kind: 'ocean' };
+  return { gx: bestGx, gy: bestGy, kind: cellKind(bestGx, bestGy, seed) };
 }
 
 /** The landmass field at a node-space coordinate (label form of the cell). */

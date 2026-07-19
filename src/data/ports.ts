@@ -26,21 +26,9 @@
 // ---------------------------------------------------------------------------
 
 export const PORT_CFG = {
-  lanes: {
-    /** Node-unit reach of automatic coastal shipping lanes at port mint. */
-    range: 900,
-    /** Most lanes a fresh port routes at mint (nearest ports first). */
-    perPort: 2,
-    /** Route cap per port — a hub harbor eventually stops accepting lanes. */
-    maxPerPort: 4,
-    /** Lanes SHORTER than this skip the wet-chord test: adjacent harbors on
-     *  one shore sit INLAND of the shoreline (every mint is pulled ashore),
-     *  so their straight chords read land even though the run between them
-     *  is an honest coastal hop — ships follow the coast. Only lanes LONGER
-     *  than this must show open water on the chord (no lane straight across
-     *  a continent's interior). */
-    wetTestBeyond: 260,
-  },
+  // (The nearest-neighbour lane router retired: lanes are THE SEA'S OWN now —
+  //  world/seas.ts + SEA_CFG.lanes rung the coastal ring + haven spokes at
+  //  system mint, exact by construction, no wet-chord heuristics.)
   hearsay: {
     /** Omens at least this far (node units) from the harbor make the board —
      *  nearer ones are the land's own whisper business (world/omens.ts). */

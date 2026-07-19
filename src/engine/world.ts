@@ -137,7 +137,7 @@ import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec } from '../world/regions';
-import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
+import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
@@ -172,6 +172,8 @@ import { coordDist, type MapCoord } from '../world/coords';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach } from '../world/omens';
 import { PORT_CFG } from '../data/ports';
+import { SEA_CFG } from '../data/seas';
+import { seaAt, seaById, seaSpotsNear, type Sea, type SeaPortSpot } from '../world/seas';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
@@ -1881,6 +1883,9 @@ interface DashConjureStash {
 /** The live voyage's run state (named so a Wraithsail boarding can stash and
  *  restore it whole — see wraithsailSeaStash). */
 interface VoyageRun {
+  /** Next time (world clock) the BREAKERS refusal hint may murmur again —
+   *  the landing law says no, once per attempt spell, never spammed. */
+  breakerHintAt?: number;
   /** The harbor cast off from — the searoute records the crossing on landing. */
   fromPortId: string;
   /** Linger-at-shore accumulator (make landfall). */
@@ -2418,6 +2423,10 @@ export class World {
   /** THE HARBOR BOARD's linger-to-read gate (data/ports.ts — hearsay +
    *  passage + charts; the dock itself still CASTS OFF directly). */
   private harborGate = new Dwell();
+  /** Seas already counted toward the `seas_found` ledger THIS SESSION —
+   *  transient (a resumed run may recount a sea once; the ledger is unlock
+   *  fodder, not bookkeeping). */
+  private seasSeen = new Set<string>();
   /** ONE-SHOT: set when the player dwells at a port's harbor board. The main
    *  loop polls it and opens the harbor menu (the Caravanner indirection —
    *  World can't import the UI). */
@@ -3720,6 +3729,44 @@ export class World {
       // own law: dwelling THERE still casts off directly.
       const board = vec(dock.x - Math.cos(a) * 130, dock.y - Math.sin(a) * 130);
       this.doodads.push({ pos: this.clampPos(board, 16), radius: 16, kind: 'harbor_board' });
+      // THE HAVEN'S QUAY (ZoneDef.portTier — the sea's hub harbor wears its
+      // trade): lantern posts flanking the dock and cargo stacked along the
+      // quay line, seeded per zone — a haven READS as a haven from the pier.
+      if (def.portTier === 'haven') {
+        const qr = new Rng(((def.seed ?? 0) ^ 0x9a7b0) >>> 0);
+        const px = -Math.sin(a), py = Math.cos(a); // along-quay axis
+        for (const side of [-1, 1]) {
+          this.doodads.push({
+            pos: this.clampPos(vec(dock.x + px * side * 110, dock.y + py * side * 110), 10),
+            radius: 10, kind: 'lantern_post',
+          });
+        }
+        const stacks = qr.int(2, 4);
+        for (let i = 0; i < stacks; i++) {
+          const t = qr.range(-1.4, 1.4);
+          const inland = qr.range(60, 150);
+          this.doodads.push({
+            pos: this.clampPos(vec(
+              dock.x + px * t * 130 - Math.cos(a) * inland,
+              dock.y + py * t * 130 - Math.sin(a) * inland), 16),
+            radius: 16, kind: 'cargo_stack',
+          });
+        }
+      }
+      // THE FIRST PORT (once per account-run arc): finding your first harbor
+      // is finding THE SEA — name it, say what the dock means, and stamp the
+      // ledger (the meta hooks future shipwright/voyager unlocks read).
+      // seas_found counts each named water once per run session.
+      const seaName = this.seaNameOf(def);
+      if (!this.ledger.first_port_found) {
+        bumpLedger(this.ledger, 'first_port_found');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 128),
+          `you have found ${seaName ?? 'the sea'} — the dock casts off, the board knows the water`, '#7fd0ff', 16);
+      }
+      if (def.seaId && !this.seasSeen.has(def.seaId)) {
+        this.seasSeen.add(def.seaId);
+        bumpLedger(this.ledger, 'seas_found');
+      }
     }
     // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
     this.breachPos = null;
@@ -6530,32 +6577,30 @@ export class World {
     // Only the SURFACE has an ocean — other dimensions grow unbroken.
     if (!source.dimension && this.continentFor(target).kind === 'ocean') {
       if (source.port) return source;
-      // Pull the harbor back onto the LAST land coordinate along the approach,
-      // so the port node anchors on its continent's shore, not mid-sea.
-      let harbor = target;
-      for (let t = 0.8; t >= 0.2; t -= 0.2) {
-        const c = { x: source.map.x + (target.x - source.map.x) * t, y: source.map.y + (target.y - source.map.y) * t };
-        if (this.continentFor(c).kind !== 'ocean') { harbor = c; break; }
+      // THE SEA FABRIC (world/seas.ts): touching ANY water of a sea makes
+      // the WHOLE sea real — filled, classed, named, its deliberate port
+      // system minted veiled (ensureSeaPorts). The frontier then resolves
+      // to the system's NEAREST harbor: the road bends along the coast to
+      // where the quay was always going to stand, instead of minting one
+      // wherever the walker happened to hit brine. (The old free-mint path
+      // — and its one-per-60u dedup — is gone with free docking itself.)
+      const sea = seaAt(target, this.sim.biomeField.fieldSeed);
+      if (sea && sea.ports.length) {
+        const ports = this.ensureSeaPorts(sea);
+        let best = ports[0];
+        for (const p of ports) {
+          if (coordDist(p.map, source.map) < coordDist(best.map, source.map)) best = p;
+        }
+        this.linkBackTo(best, source);
+        // The land approach FOUND this harbor: if the walker already stands
+        // on charted ground beside it, lift its veil now (the ring-1 pass
+        // would next sweep anyway — this is the immediate courtesy).
+        if (this.visited.has(source.id)) best.veiled = false;
+        return best;
       }
-      // The 4-sample scan comes up ALL-ocean when the coastline hugs the
-      // source (every t lands past the shore) — the one mint path that could
-      // still raise a node at sea. The same spiral net every other mint path
-      // rides is the backstop (placeZoneAt's land-clamp needs verified land).
-      if (this.continentFor(harbor).kind === 'ocean') harbor = this.pullToLand(harbor);
-      // ONE harbor per stretch of coast: adjacent coastal zones' seaward
-      // frontiers LINK to an existing near port instead of minting a twin.
-      const near = Object.values(this.zoneMap).find(z => z.port && coordDist(z.map, harbor) < 60);
-      if (near) { this.linkBackTo(near, source); return near; }
-      const gen = placeZoneAt(harbor, source, this.zoneMap, this.nextGenId++, {
-        tileset: exitDef.tileset, biomeFor: this.biomeFor, levelFor: this.levelFor,
-        biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, port: true,
-        objective: { kind: 'clear' }, // never a gated harbor: sail-in arrivals carry no entryFrom
-      });
-      if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD — veiled harbors too
-      this.zoneMap[gen.id] = gen;
-      this.sim.onNodeCharted(gen, this.simView());
-      this.routePortLanes(gen);
-      return gen;
+      // Portless water (a pond whose coast refused every spot): the shore is
+      // just shore — consolidate the frontier back onto its source.
+      return source;
     }
     // Field regions are a SURFACE feature — a dimensioned source never joins one.
     const ext = source.dimension ? null : fieldRegionAt(target, seed);
@@ -6998,6 +7043,19 @@ export class World {
   /** DEV: how many far soundings are pending (the Events tab's board). */
   devForechartSoundings(): number { return this.soundings.length; }
 
+  /** DEV/QA: make the sea at a water coordinate REAL (the fabric fill + its
+   *  whole port system, exactly as a frontier touch would) and report it —
+   *  the probe's and the Events board's window into the foreordained water. */
+  devEnsureSea(at: MapCoord): { id: string; name: string; cls: string; cells: number; ports: { id: string; tier: string; veiled: boolean }[] } | null {
+    const sea = seaAt(at, this.sim.biomeField.fieldSeed);
+    if (!sea) return null;
+    const zones = this.ensureSeaPorts(sea);
+    return {
+      id: sea.id, name: sea.name, cls: sea.cls.id, cells: sea.cellCount,
+      ports: zones.map(z => ({ id: z.id, tier: z.portTier ?? 'cove', veiled: !!z.veiled })),
+    };
+  }
+
   /** PUBLIC far pre-chart: grow a veiled cluster of real zones around a far
    *  coordinate (events beyond the halo, harbor charts, dev QA). Deduped
    *  against pending soundings and against ground that already exists. */
@@ -7058,39 +7116,56 @@ export class World {
     }
   }
 
-  /** COASTAL SHIPPING LANES (data/ports.ts): a freshly-minted port routes
-   *  searoutes to its nearest standing ports — so the sea network PRE-EXISTS
-   *  the sailing of it (the forechart mints veiled harbors down the coast,
-   *  and by the time the player docks anywhere, the lanes are waiting).
-   *  Sampled against the continent field so a lane never implies sailing
-   *  straight through a landmass; the player's own sailed crossings still
-   *  append their routes exactly as before (landAshore/sailTo). */
-  private routePortLanes(fresh: ZoneDef): void {
-    if (!fresh.port || fresh.dimension) return;
-    const L = PORT_CFG.lanes;
-    const cands = Object.values(this.zoneMap)
-      .filter(z => z.port && z.id !== fresh.id && !z.dimension
-        && !z.searoutes?.includes(fresh.id)
-        && (z.searoutes?.length ?? 0) < L.maxPerPort)
-      .map(z => ({ z, d: coordDist(z.map, fresh.map) }))
-      .filter(c => c.d <= L.range)
-      .sort((a, b) => a.d - b.d);
-    let added = 0;
-    for (const { z, d } of cands) {
-      if (added >= L.perPort) break;
-      // The WET test — LONG lanes only: a short run is an honest coastal hop
-      // (harbor nodes sit inland of the shoreline, so same-shore chords read
-      // land); a long lane must show open water on the chord, so two harbors
-      // flanking a continent's interior never get a straight-line route.
-      const wet = d <= L.wetTestBeyond || [0.25, 0.5, 0.75].some(t => this.continentFor({
-        x: fresh.map.x + (z.map.x - fresh.map.x) * t,
-        y: fresh.map.y + (z.map.y - fresh.map.y) * t,
-      }).kind === 'ocean');
-      if (!wet) continue;
-      (fresh.searoutes ??= []).push(z.id);
-      (z.searoutes ??= []).push(fresh.id);
-      added++;
+  /** THE SEA'S PORT SYSTEM made real (world/seas.ts): mint every planned
+   *  spot of a sea as a VEILED, roadless-charted port zone (noBackEdge — the
+   *  land web weaves in as it grows; the sea lanes serve meanwhile), bake
+   *  the sea's identity on each def (seaId / portTier / the haven's name
+   *  suffix), and rung THE LANE LAW between them (SEA_CFG.lanes: the coastal
+   *  ring in angular order + spokes from every cove to the haven). This
+   *  replaced the old nearest-neighbour lane router: lanes are the SEA'S
+   *  OWN, exact by construction — no wet-chord heuristics. Idempotent per
+   *  spot id (a land approach, a sail sighting, and a chart purchase may
+   *  each ask first); the player's sailed crossings still append their own
+   *  routes on top. Returns the system's zones in plan order. */
+  private ensureSeaPorts(sea: Sea): ZoneDef[] {
+    const out: ZoneDef[] = [];
+    for (const spot of sea.ports) {
+      let z = this.zoneMap[spot.id];
+      if (!z) {
+        z = placeZoneAt(spot.coord, null, this.zoneMap, this.nextGenId++, {
+          id: spot.id,
+          biomeFor: this.biomeFor, levelFor: this.levelFor,
+          biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
+          fieldBiome: true, port: true,
+          objective: { kind: 'clear' }, // sail-in arrivals carry no entryFrom — never gated
+          seed: (this.manifest.seed ^ hashStr(spot.id)) >>> 0,
+          noBackEdge: true,             // roadless-charted: the land web weaves in as it grows
+        });
+        z.veiled = true;                // foreordained ground — found like all of it
+        z.seaId = sea.id;
+        z.portTier = spot.tier;
+        if (spot.tier === 'haven') z.name = `${z.name} Haven`;
+        this.zoneMap[z.id] = z;
+        this.sim.onNodeCharted(z, this.simView());
+      }
+      out.push(z);
     }
+    const lane = (a: ZoneDef, b: ZoneDef): void => {
+      if (a.id === b.id) return;
+      if (!(a.searoutes ??= []).includes(b.id)) a.searoutes.push(b.id);
+      if (!(b.searoutes ??= []).includes(a.id)) b.searoutes.push(a.id);
+    };
+    if (out.length > 1) {
+      const ring = [...out].sort((a, b) =>
+        Math.atan2(a.map.y - sea.centroid.y, a.map.x - sea.centroid.x)
+        - Math.atan2(b.map.y - sea.centroid.y, b.map.x - sea.centroid.x));
+      if (SEA_CFG.lanes.ring) {
+        for (let i = 0; i < ring.length; i++) lane(ring[i], ring[(i + 1) % ring.length]);
+      }
+      const haven = out.find(z => z.portTier === 'haven');
+      if (SEA_CFG.lanes.havenSpokes && haven) for (const z of out) lane(haven, z);
+    }
+    return out;
   }
 
   /** Grow each pending SOUNDING a step: seed a floating veiled anchor where
@@ -15263,16 +15338,29 @@ export class World {
   }
 
   /** Every OTHER discovered port (the Sail menu's destinations). */
-  sailMenuPorts(): { id: string; name: string; level: number; sailed: boolean }[] {
+  /** The name of a port's SEA ("the Mourning Sea"), re-derived pure from the
+   *  baked seaId — null for legacy free-docked ports. */
+  seaNameOf(z: ZoneDef): string | null {
+    if (!z.seaId) return null;
+    return seaById(z.seaId, this.sim.biomeField.fieldSeed)?.name ?? null;
+  }
+
+  sailMenuPorts(): { id: string; name: string; level: number; sailed: boolean; seaName: string | null; tier: string | null; sameSea: boolean }[] {
     if (!this.zone.port) return [];
     const routes = new Set(this.zone.searoutes ?? []);
     // The harbor lists what the WORLD knows plus what the HARBOR knows: every
     // found port, and any VEILED harbor a shipping lane already runs to (the
-    // forechart routes lanes at mint — "ships run there, friend; never been?").
-    // Sailing a lane into veiled country IS the discovery.
+    // sea fabric rings lanes at system mint — "ships run there, friend;
+    // never been?"). Sailing a lane into veiled country IS the discovery.
+    // Grouped for the panel: THIS water's harbors first, then farther shores.
     return Object.values(this.zoneMap)
       .filter(z => z.port && z.id !== this.zone.id && (!z.veiled || routes.has(z.id)))
-      .map(z => ({ id: z.id, name: z.name, level: z.level, sailed: routes.has(z.id) }));
+      .map(z => ({
+        id: z.id, name: z.name, level: z.level, sailed: routes.has(z.id),
+        seaName: this.seaNameOf(z), tier: z.portTier ?? null,
+        sameSea: !!z.seaId && z.seaId === this.zone.seaId,
+      }))
+      .sort((a, b) => Number(b.sameSea) - Number(a.sameSea) || (a.seaName ?? '').localeCompare(b.seaName ?? ''));
   }
 
   /** Can the party set sail RIGHT NOW? Mirrors startCaravan's discipline: the
@@ -15302,33 +15390,38 @@ export class World {
     this.loadZone(portId);
   }
 
-  /** CHART A COURSE: sail the open ocean along the oceanward bearing until a
-   *  NEW continent's shore — mint the landfall port there (connected to this
-   *  one by the crossing's graph edge = the sea route) and sail to it. */
+  /** CHART A COURSE: sail for THE FAR SHORE — resolve this port's whole sea
+   *  (the fabric knows its shape entire) and make for its FARTHEST harbor:
+   *  the classic blind crossing, landing at a quay that was always going to
+   *  be there. (Free landfall-minting is gone with free docking.) */
   chartCourse(): string | null {
     if (!this.canSail()) return null;
-    const seed = continentSeedFrom(this.sim.biomeField.fieldSeed);
-    const base = this.oceanBearing(this.zone.map);
-    for (const off of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1]) {
-      const landfall = landfallFrom(this.zone.map, base + off, seed);
-      if (!landfall) continue;
-      // An existing port already claims this stretch of coast? Sail there.
-      const near = Object.values(this.zoneMap).find(z =>
-        z.port && coordDist(z.map, landfall) < 60);
-      if (near) { this.sailTo(near.id); return near.id; }
-      const gen = placeZoneAt(landfall, this.zone, this.zoneMap, this.nextGenId++, {
-        biomeFor: this.biomeFor, levelFor: this.levelFor,
-        biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, port: true,
-        objective: { kind: 'clear' },
-      });
-      this.zoneMap[gen.id] = gen;
-      this.sim.onNodeCharted(gen, this.simView());
-      this.routePortLanes(gen); // the new continent's harbor joins the lane web
-      this.sailTo(gen.id);
-      return gen.id;
+    // The water this dock faces: march the oceanward bearing to the first
+    // open-ocean sample (the cast-off's own walk, reused).
+    const a = this.oceanBearing(this.zone.map);
+    let water: { x: number; y: number } | null = null;
+    for (let i = 1; i <= 16; i++) {
+      const c = { x: this.zone.map.x + Math.cos(a) * i * 12, y: this.zone.map.y + Math.sin(a) * i * 12 };
+      if (this.continentFor(c).kind === 'ocean') { water = c; break; }
     }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'no landfall on this heading', '#9ab8cc', 13);
-    return null;
+    const sea = water ? seaAt(water, this.sim.biomeField.fieldSeed) : null;
+    if (!sea || !sea.ports.length) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'no farther harbor on this water', '#9ab8cc', 13);
+      return null;
+    }
+    const ports = this.ensureSeaPorts(sea);
+    let far: ZoneDef | null = null;
+    for (const p of ports) {
+      if (p.id === this.zone.id) continue;
+      if (!far || coordDist(p.map, this.zone.map) > coordDist(far.map, this.zone.map)) far = p;
+    }
+    if (!far) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 30),
+        `${sea.name} keeps no other harbor`, '#9ab8cc', 13);
+      return null;
+    }
+    this.sailTo(far.id);
+    return far.id;
   }
 
   /** The landmass field for the MAP (the panels' ocean wash). */
@@ -15546,7 +15639,8 @@ export class World {
     run.lastStreamAt = vec(p.x, p.y);
     const stepN = VOYAGE_CFG.streamStep;
     const stepPx = stepN * VOYAGE_CFG.pxPerNode;
-    const keep: Doodad[] = this.doodads.filter(d => d.kind !== 'landmass' && d.kind !== 'isle_beacon');
+    const keep: Doodad[] = this.doodads.filter(d =>
+      d.kind !== 'landmass' && d.kind !== 'isle_beacon' && d.kind !== 'quay_beacon');
     const c0 = this.nodeFromSea(vec(p.x - R, p.y - R));
     const gx0 = Math.floor(c0.x / stepN), gy0 = Math.floor(c0.y / stepN);
     const cells = Math.ceil((R * 2) / stepPx) + 1;
@@ -15590,6 +15684,24 @@ export class World {
         label: zone.name, adorn: spot.def.color,
       });
     }
+    // THE QUAY BEACONS (world/seas.ts): every planned PORT SPOT in spyglass
+    // reach streams a beacon exactly like the isles — and SIGHTING one makes
+    // it real and KNOWN (the sea's system mints if it hasn't; the sighted
+    // spot's veil lifts + it surveys onto the map: seeing a harbor from the
+    // water IS finding it — the isles' own mint-on-sight law). Between these
+    // lights the shore is breakers: they ARE the landing zones.
+    for (const qs of seaSpotsNear(this.nodeFromSea(p), R / VOYAGE_CFG.pxPerNode + VOYAGE_CFG.islandSightPad, this.sim.biomeField.fieldSeed)) {
+      const qsea = seaAt(qs.shore, this.sim.biomeField.fieldSeed);
+      if (!qsea) continue;
+      this.ensureSeaPorts(qsea);
+      const pz = this.zoneMap[qs.id];
+      if (pz?.veiled) { pz.veiled = false; this.surveyed.add(pz.id); }
+      keep.push({
+        pos: this.seaFromNode(qs.shore), radius: 16, kind: 'quay_beacon',
+        label: pz?.name ?? 'a harborage',
+        adorn: qs.tier === 'haven' ? '#ffd898' : '#7fd0ff',
+      });
+    }
     this.doodads = keep;
   }
 
@@ -15618,6 +15730,20 @@ export class World {
     gen.floating = false;   // …and never drain-wired either (a dry strait is no road)
     if (def.structures?.length) gen.structures = [...(gen.structures ?? []), ...def.structures];
     if (def.landmarks?.length) gen.landmarks = [...(gen.landmarks ?? []), ...def.landmarks];
+    // THE ISLE'S SEA (world/seas.ts): bake the hosting water's identity and —
+    // per the lane law — run a route to its HAVEN on sighting: the harbor
+    // knows its isles, and the isles know the way home.
+    const isleSea = seaAt(spot.coord, this.sim.biomeField.fieldSeed);
+    if (isleSea) {
+      gen.seaId = isleSea.id;
+      if (SEA_CFG.lanes.islandToHaven && isleSea.ports.length) {
+        const haven = this.ensureSeaPorts(isleSea).find(z => z.portTier === 'haven');
+        if (haven && haven.id !== gen.id) {
+          if (!(gen.searoutes ??= []).includes(haven.id)) gen.searoutes.push(haven.id);
+          if (!(haven.searoutes ??= []).includes(gen.id)) haven.searoutes.push(gen.id);
+        }
+      }
+    }
     this.zoneMap[spot.id] = gen;
     this.sim.onNodeCharted(gen, this.simView());
     return gen;
@@ -15636,11 +15762,44 @@ export class World {
     const shore = this.nearestShore();
     const dwellNeed = VOYAGE_CFG.landingDwell * run.ship.landingMul;
     if (shore && shore.gap <= VOYAGE_CFG.landingProbe && run.grace <= 0 && this.playerIdle()) {
-      run.landDwell += dt;
-      if (run.landDwell >= dwellNeed) { this.landAshore(shore.d); return; }
+      // THE LANDING LAW (world/seas.ts): only a planned PORT SPOT, an
+      // island's shore, or a standing (grandfathered) port zone accepts a
+      // landing — everywhere else the coast is BREAKERS. Free docking (and
+      // its infinite-shore-zone mint) is gone: a sea's landings are its
+      // deliberate, finite port system.
+      if (this.landingSiteFor(shore.d)) {
+        run.landDwell += dt;
+        if (run.landDwell >= dwellNeed) { this.landAshore(shore.d); return; }
+      } else {
+        run.landDwell = 0;
+        if (this.time >= (run.breakerHintAt ?? 0)) {
+          run.breakerHintAt = this.time + SEA_CFG.breakerHintCooldown;
+          this.text(vec(this.player.pos.x, this.player.pos.y - 40),
+            'breakers — no landing along this shore; make for a lit harborage', '#9ab8cc', 13);
+        }
+      }
     } else {
       run.landDwell = 0;
     }
+  }
+
+  /** What (if anything) accepts a landing at the boat's position: an island's
+   *  tagged shore, a planned port SPOT within SEA_CFG.landingSlack, or a
+   *  standing port ZONE within the same slack (legacy free-docked harbors +
+   *  quest ports grandfather in). Null = breakers. */
+  private landingSiteFor(shore: Doodad): { islandId?: string; spot?: SeaPortSpot; portZone?: ZoneDef } | null {
+    if (shore.land?.islandId) return { islandId: shore.land.islandId };
+    const at = this.nodeFromSea(this.player.pos);
+    let best: SeaPortSpot | null = null;
+    let bd = SEA_CFG.landingSlack;
+    for (const s of seaSpotsNear(at, SEA_CFG.landingSlack + 80, this.sim.biomeField.fieldSeed)) {
+      const d = coordDist(s.shore, at);
+      if (d <= bd) { bd = d; best = s; }
+    }
+    if (best) return { spot: best };
+    const near = Object.values(this.zoneMap).find(z =>
+      z.port && !z.dimension && coordDist(z.map, at) <= SEA_CFG.landingSlack + 40);
+    return near ? { portZone: near } : null;
   }
 
   /** THE WRAITHSAIL AT SEA (host, sailing only): keep her GHOST HULL doodad
@@ -15781,10 +15940,11 @@ export class World {
   }
 
   /** MAKE LANDFALL: a VOYAGE ISLAND's shore routes to its own minted zone;
-   *  any other coast resolves by node coordinate — an existing zone within
-   *  the dedup radius takes the landing (ports and coasts alike, non-ports
-   *  becoming harbors), else a fresh PORT zone is minted there — charted, on
-   *  the graph, with its own dock to sail back out. */
+   *  any other landing resolves through THE LANDING LAW (landingSiteFor) —
+   *  a planned PORT SPOT's zone (minted with its whole sea system), or a
+   *  grandfathered standing port. The old free-mint ("every shore becomes a
+   *  harbor") is gone with free docking itself: a sea's landings are its
+   *  deliberate, finite port system, and the breakers own the rest. */
   private landAshore(shore: Doodad): void {
     const run = this.voyage;
     if (!run) return;
@@ -15801,31 +15961,21 @@ export class World {
       }
     }
     if (!dest) {
-      const landC = this.pullToLand(this.nodeFromSea(shore.pos));
-      dest = Object.values(this.zoneMap).find(z =>
-        !z.dimension && coordDist(z.map, landC) < VOYAGE_CFG.dedupRadius) ?? null;
-      // Landing at an existing NON-port zone makes it a harbor: def.port plants
-      // a dock on its oceanward edge at load — "a port effectively generated
-      // within the zone at its bounds", so every shore you land on can be left
-      // and returned to by sea.
-      if (dest && !dest.port) dest.port = true;
+      const site = this.landingSiteFor(shore);
+      if (site?.spot) {
+        const sea = seaAt(site.spot.shore, this.sim.biomeField.fieldSeed);
+        if (sea) this.ensureSeaPorts(sea);
+        dest = this.zoneMap[site.spot.id] ?? null;
+      } else if (site?.portZone) {
+        dest = site.portZone;
+      }
       if (!dest) {
-        const anchor = this.zoneMap[run.fromPortId] ?? null;
-        dest = placeZoneAt(landC, anchor, this.zoneMap, this.nextGenId++, {
-          biomeFor: this.biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor,
-          climateFor: this.climateFor,
-          fieldBiome: true, port: true, objective: { kind: 'clear' },
-          seed: (this.manifest.seed ^ hashStr(`landfall_${Math.round(landC.x)}_${Math.round(landC.y)}`)) >>> 0,
-          // FLOATING = no back-edge: an island's link to the world is its SEA
-          // ROUTE, never a land road across the water. The flag is cleared below
-          // so the floating drain can't later wire a wet road either — the route
-          // guard keeps opportunistic weaves dry for good measure.
-          floating: true,
-        });
-        dest.floating = false;
-        this.zoneMap[dest.id] = dest;
-        this.sim.onNodeCharted(dest, this.simView());
-        this.routePortLanes(dest); // a fresh landfall joins the lane web too
+        // Breakers (the dwell shouldn't have fired — a stream race): refuse
+        // honestly and sail on.
+        this.text(vec(this.player.pos.x, this.player.pos.y - 40),
+          'breakers — no landing here', '#9ab8cc', 13);
+        run.landDwell = 0;
+        return;
       }
     }
     // The crossing is charted: sea-route memory both ways (the map's sea lane).
