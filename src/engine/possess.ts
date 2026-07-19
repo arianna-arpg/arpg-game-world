@@ -207,6 +207,31 @@ export function possessRefusal(target: Actor, spec: PossessSpec | undefined): st
   return null;
 }
 
+/**
+ * May a NON-SEAT rider (a wisp, a spirit — monster-side possession) enter
+ * this body? The seam's THIRD consumer lane: the same structural law seats
+ * obey — nothing dwells in constructs/doors/worms, bonds and owners refuse,
+ * an explicit `possessable: false` (or a deny tag) refuses ALL riders, and
+ * the boss line stays shut unless `possessable: true` deliberately opens
+ * it — minus the weakened gate and the rarity policy: a wild rider picks
+ * its hosts by its OWN policy (the wisp wants the strongest), but what can
+ * be ENTERED is one law for every rider in the game. A body already ridden
+ * (by seat or spirit) and a vacated husk both refuse: one will per flesh.
+ */
+export function riderRefusal(target: Actor): string | null {
+  if (target.possession) return 'already ridden';
+  if (target.vacated) return 'a seat holds it';
+  const structural = possessStructuralWhy(target);
+  if (structural) return structural;
+  const def = target.defId ? MONSTERS[target.defId] : undefined;
+  const allow = def?.possessable;
+  if (allow === false) return 'the will inside refuses';
+  if (def && (def.bossBar ?? def.boss) && allow !== true) return 'the will inside refuses';
+  if (allow === true) return null;
+  if (def?.tags?.some(t => POSSESS_CFG.denyTags.includes(t))) return 'the will inside refuses';
+  return null;
+}
+
 /** The ride's damage factor as a sheet-source payload: worn on the BODY
  *  (its own instances scale), removed whole at eject. 1 = no source. */
 export function possessPowerFactor(spec: { powerFactor?: number } | undefined, kind: 'possess' | 'shift', statBonus = 0): number {

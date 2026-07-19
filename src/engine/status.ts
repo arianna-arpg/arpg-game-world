@@ -1007,6 +1007,36 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('detectionRange', 'more', -0.45), mod('detectability', 'more', -0.45)],
   },
 
+  // THE WISPLIGHT's flourish (packages/defs/wisplight.ts): pulsed onto every
+  // body near a kindled, wandering light. Beneficial ON PURPOSE — the light
+  // blesses the mire's own kin (the danger the event sells), and the same
+  // status marks a body as WISP-TOUCHED for the ride's strongest-host scoring
+  // (the seek weighs wearers heavier). Short-lived: it fades a few breaths
+  // after the light moves on.
+  emboldened: {
+    label: 'Emboldened', color: '#b8f0a0', duration: 4.5, beneficial: true,
+    mods: [mod('damage', 'increased', 0.18), mod('moveSpeed', 'increased', 0.1)],
+  },
+
+  // THE WISPLIGHT's ride marks — one per wisp KIND (the kind row names its
+  // status; a new kind is a new row here + one entry in the surge's kind
+  // table). Each is the host's TEXTURE half: percentages that scale whatever
+  // the ride's level-computed sheet source granted (the flat ES/armor lane),
+  // plus the visible mark the scene re-adopts hosts by. Long-lived on
+  // purpose — the ride ends by the blade, not the clock.
+  wisp_ridden_pale: {
+    label: 'Palelit', color: '#b8f0a0', duration: 900, beneficial: true,
+    mods: [mod('energyShield', 'increased', 0.5), mod('armor', 'increased', 0.35)],
+  },
+  wisp_ridden_flame: {
+    label: 'Flamewreathed', color: '#ffb547', duration: 900, beneficial: true,
+    mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'increased', 0.25)],
+  },
+  wisp_ridden_grave: {
+    label: 'Gravelit', color: '#9ae8ff', duration: 900, beneficial: true,
+    mods: [mod('damage', 'increased', 0.2), mod('evasion', 'increased', 0.3)],
+  },
+
   // HARRIED — the gnat-cloud's misdirection seed (THE THRONG's smallest
   // flavor, and any future biting-cloud kin): each stack is one more
   // maddening speck in the eyes. Never a blind (that ladder is claimed) —

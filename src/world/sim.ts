@@ -30,6 +30,7 @@ import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
 import type { LongNightField } from '../packages/overlays/longNight';
 import type { StrayField } from '../packages/overlays/straying';
+import type { WisplightField } from '../packages/overlays/wisplight';
 import type { VerminfallField } from '../packages/overlays/verminfall';
 import type { LongCandleField } from '../packages/overlays/longcandle';
 import type { GloamingField } from '../packages/overlays/gloaming';
@@ -203,6 +204,12 @@ export class WorldSim {
    *  back through the note*() calls; the field owns the settle/phase/absent
    *  lifecycle and the head ledger. */
   readonly strayField: StrayField | null;
+  /** The wisplight overlay if its package is in the manifest, else null — the
+   *  engine reads wisplightOn() to stage the marsh's gathering (standing
+   *  neutral lights, the kindled wander + flourish aura, the strongest-host
+   *  ride) and reports each light's fate back through the note*() calls; the
+   *  field owns the settle/slot/absent lifecycle. */
+  readonly wisplightField: WisplightField | null;
   /** The long-candle overlay if its package is in the manifest, else null — the
    *  engine reads candleOn() to field the Wax Court's shrines/packs and the
    *  Umbral Parliament's shadows on a night-claimed ground (both when both
@@ -412,6 +419,7 @@ export class WorldSim {
     this.deepwinterField = surface<DeepwinterField>('deepwinter') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.strayField = surface<StrayField>('straying') ?? null;
+    this.wisplightField = surface<WisplightField>('wisplight') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
     this.gloamingField = surface<GloamingField>('gloaming') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;

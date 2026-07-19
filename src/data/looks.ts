@@ -289,6 +289,19 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  /** The fen-light: THE WISPLIGHT's living marsh-lamp — barely a body at
+   *  all, a glow-core under a wide halo trailing its own little fires. One
+   *  look for every wisp KIND (the def's color carries the kind's hue). */
+  fen_light: {
+    parts: [
+      { kind: 'orb', scale: 0.85 },
+      { kind: 'halo', scale: 1.35, alpha: 0.7 },
+    ],
+    live: [
+      { kind: 'wisps', scale: 0.8, role: 'glow', params: { n: 3 } },
+    ],
+  },
+
   // =============================================================== DEMONS
   imp: {
     parts: [

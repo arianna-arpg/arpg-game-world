@@ -143,11 +143,35 @@ wicker painter UNLIT, `slumped_shell` = the scarecrow painter in dead
 violet) is their court. Faction 'vacant': neutral to every war, kin to
 each other — so a possessed shell walks the yard unbothered.
 
+## The rider lane (the seam's third consumer — monster-side possession)
+
+`riderRefusal(target)` exports the seam's ONE enterable-body law for
+NON-SEAT riders — a wisp, a spirit, any monster-side possessor: the same
+structural refusals seats obey (constructs/doors/worms/companions/owned/
+`driven`), the same `possessable: false` + deny-tag + boss-line refusals,
+and the same one-will-per-flesh rule (`possession`/`vacated` bodies
+refuse) — **minus** the weakened gate and the rarity policy. A wild rider
+picks its hosts by its OWN policy (THE WISPLIGHT's surge scores rarity ×
+level × wisp-touched, with `rarity: { crowned: 0 }` — the crowned keep
+their own seats, in the same words the player's ladder uses), but what
+can be ENTERED is one law for every rider in the game.
+
+Debut consumer: THE WISPLIGHT (`packages/defs/wisplight.ts` — the marsh's
+event). Its ride is a TRANSFORMATION, not an occupancy: the light's body
+is consumed and the host keeps no ride record — so there is no
+second-rider problem by construction, the player's own possession law
+applies to the ridden champion untouched (weakened-first and all), and a
+player who takes it wears the wisp's whole gift: the grafted skills are
+ordinary `SkillInstance[]` on the body, so the borrowed bar presents them
+with zero new code. Possess the Flamewreathed thing and you cast its
+ember darts.
+
 ## Future riders (the seam is ready, the consumers are not built)
 
 The Body Thief hard-mode fantasy (permanent theft = an eject policy that
 never fires), mounts (a ride whose guest slot is a whole second bar),
 capturable bosses (`possessable: true` on an authored pinnacle),
-enemy-side possession of YOUR minions (the same ride record, a brain for
-a seat). Co-op client HUD parity for a possessed seat is queued behind
+enemy-side possession of YOUR minions (a true seat-style ride record with
+a brain for a seat — the wisplight's transformation lane is the lighter
+cousin). Co-op client HUD parity for a possessed seat is queued behind
 the features-over-co-op standing.

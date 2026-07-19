@@ -9182,6 +9182,49 @@ export const MONSTERS: Record<string, MonsterDef> = {
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
   },
+  // THE WISPLIGHT KIN — the marsh's living lamps (packages/defs/wisplight.ts,
+  // the wisplight event). Neutral and bodiless: the scene mints them
+  // untargetable + invulnerable, walks them itself (the wheel — no brain to
+  // carry), and CONSUMES the body the moment the light finds a host — so the
+  // defs hold only the drift and the look. One def per wisp KIND (the surge's
+  // kind table binds each to its ride status, gifts, and grafts); the def
+  // color is the kind's hue through the one shared fen_light look.
+  pale_light: {
+    id: 'pale_light', name: 'Pale Light',
+    color: '#b8f0a0', shape: 'circle', radius: 7, material: 'ethereal', look: 'fen_light',
+    base: { life: 10, moveSpeed: 110, mana: 0 },
+    // No body, no shoulder: the light streams through the crowd (the
+    // separation pass's own phasing exemption — a body parked on a light
+    // must never pin its walk).
+    mods: [mod('phasing', 'flat', 1)],
+    skills: [], xp: 0, drops: 0,
+    faction: 'sylvan', tags: [],
+    flier: true, levitates: true, noNemesis: true,
+  },
+  fen_flame: {
+    id: 'fen_flame', name: 'Fen-Flame',
+    color: '#ffb547', shape: 'circle', radius: 7, material: 'ethereal', look: 'fen_light',
+    base: { life: 10, moveSpeed: 110, mana: 0 },
+    // No body, no shoulder: the light streams through the crowd (the
+    // separation pass's own phasing exemption — a body parked on a light
+    // must never pin its walk).
+    mods: [mod('phasing', 'flat', 1)],
+    skills: [], xp: 0, drops: 0,
+    faction: 'sylvan', tags: [],
+    flier: true, levitates: true, noNemesis: true,
+  },
+  grave_light: {
+    id: 'grave_light', name: 'Grave-Light',
+    color: '#9ae8ff', shape: 'circle', radius: 7, material: 'ethereal', look: 'fen_light',
+    base: { life: 10, moveSpeed: 110, mana: 0 },
+    // No body, no shoulder: the light streams through the crowd (the
+    // separation pass's own phasing exemption — a body parked on a light
+    // must never pin its walk).
+    mods: [mod('phasing', 'flat', 1)],
+    skills: [], xp: 0, drops: 0,
+    faction: 'sylvan', tags: [],
+    flier: true, levitates: true, noNemesis: true,
+  },
   // THE MAGMA LURKER — the pool with an appetite: bound to its lava (a
   // LIQUID now — wade in after it if you dare; the melt cooks the
   // uninsured and the heat wash licks the shore), mostly submerged until

@@ -161,9 +161,10 @@ import {
   type GrabSpec, type GrabThrowSpec, type GrabVerb,
 } from './grab';
 import {
-  POSSESS_CFG, possessPowerFactor, possessRefusal,
+  POSSESS_CFG, possessPowerFactor, possessRefusal, riderRefusal,
   type EjectReason, type PossessRide,
 } from './possess';
+import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import { plyCountOf, plyFloorOf } from './plies';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
@@ -1923,6 +1924,25 @@ interface VoyageRun {
   ship: ShipDef;
 }
 
+/** THE WISPLIGHT's zone-local scene rows (the overlay owns the durable slot
+ *  ledger; these are body refs + transient walk state, rebuilt on entry). */
+interface WispSceneWisp {
+  slot: number; a: Actor; kind: string;
+  state: 'standing' | 'kindled' | 'seeking';
+  route: Vec2[]; routeAt: number;
+  wanderLeft: number; seekLeft: number;
+  target: Actor | null;
+  bloomAcc: number; bloomsLeft: number; pulseAcc: number;
+  /** No-progress insurance on the current waypoint (route.stallSec). */
+  stallAcc: number; stallD: number;
+}
+interface WispScene {
+  id: string;
+  wisps: WispSceneWisp[];
+  hosts: { slot: number; a: Actor }[];
+  sweepAcc: number;
+}
+
 export class World {
   actors: Actor[] = [];
   /** THE TIMEFLOW FABRIC (engine/timeflow.ts): every bend on the sim's
@@ -2204,6 +2224,13 @@ export class World {
     phase: string;
     sweepAcc: number;
   } | null = null;
+  /** Gatherings whose scene announced itself this visit (per gathering id). */
+  private materializedWisplights = new Set<string>();
+  /** THE WISPLIGHT's live scene in the current zone (null between gatherings) —
+   *  the concrete half of packages/overlays/wisplight.ts: light bodies, their
+   *  pre-drawn routes + clocks, and the ridden hosts. Zone-local and rebuilt
+   *  on entry; the overlay owns the slot ledger. */
+  private wispScene: WispScene | null = null;
   /** Feeding grounds whose parked coach already stood up this visit (per
    *  ground id) — the Long Night's twin of materializedHaunts. */
   private materializedLongNights = new Set<string>();
@@ -5095,6 +5122,13 @@ export class World {
         // them (the overlay keeps the head ledger; re-entry re-stages from it).
         id: 'straying',
         reset: () => { this.materializedStrayings.clear(); this.droveScene = null; },
+      },
+      {
+        // The Wisplight's scene is zone-local body refs — a zone change drops
+        // them (the overlay keeps the slot ledger; re-entry re-stages from it,
+        // adopting a remembered ridden host by its ride mark).
+        id: 'wisplight',
+        reset: () => { this.materializedWisplights.clear(); this.wispScene = null; },
       },
       {
         // Long Night grounds re-stand on re-entry (the parked coach — and a
@@ -13969,6 +14003,362 @@ export class World {
       if (d > bd) { bd = d; best = c; }
     }
     return this.findFreeSpot(best ?? this.clampPos(this.farPoint(rallyDist), 60), 20);
+  }
+
+  // ------------------------------------------------------- the wisplight
+  //
+  // THE MARSH'S BECKONING LIGHTS, engine side: the pure WisplightField owns
+  // the settle/slot/absent lifecycle; this runtime stages the concrete scene
+  // off wisplightOn() — still, neutral, unkillable lamps waiting in the
+  // reeds — and plays out what a touch begins: the kindled WANDER along a
+  // pre-drawn route (the wheel walks it — no brain on the body), the
+  // FLOURISH pulsed around the glow + the bloom trail drying behind it
+  // (Doodad.evap), the strongest-host SEEK, and the RIDE — the possession
+  // seam's third consumer (riderRefusal: one law for what can be entered;
+  // the surge's own seek policy for what the light prefers). The ridden host
+  // is transformed by its light's KIND ROW: the kind's ride status, level-
+  // computed defense gifts worn as ONE sheet source, real skills grafted
+  // onto the kit (a player who later possesses the host inherits them on
+  // the borrowed bar — the seam's doing, not ours), an epithet, a full
+  // heal, a rousing. Every light's fate reports back through the note*()s.
+
+  /** Per-frame: THE WISPLIGHT's presence in a gathered zone. */
+  private updateWispScene(dt: number): void {
+    const wf = this.sim.wisplightField;
+    if (!wf) { this.wispScene = null; return; }
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return;
+    const info = wf.wisplightOn(this.zone.id);
+    if (!info) { this.wispScene = null; return; }
+    const cfg = wf.surge();
+    const lvl = Math.max(1, this.zone.level);
+    const col = cfg.color ?? '#b8f0a0';
+
+    // THE MATERIALIZE BEAT (once per visit per gathering): the discovery
+    // line + the Vault-surfacing ledger, the haunting's exact pattern.
+    if (!this.materializedWisplights.has(info.id)) {
+      this.materializedWisplights.add(info.id);
+      bumpLedger(this.ledger, 'wisplights_seen');
+      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: col, life: 0.7, maxLife: 0.7 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        info.ridden > 0 && info.standing === 0 && info.kindled === 0
+          ? `Something ridden waits in ${this.zone.name} — a light found a body here.`
+          : `Lights wait in the reeds of ${this.zone.name}. Touch one, and see.`,
+        col, 18);
+    }
+
+    // STAGE (fresh entry, or a fresh gathering): roll the kinds ONCE, stand
+    // the lights out where they must be walked to, and re-raise any ridden
+    // hosts. Idempotent under zone memory — a remembered host is adopted by
+    // its ride mark before any re-mint.
+    if (!this.wispScene || this.wispScene.id !== info.id) {
+      if (!info.staged) {
+        const n = randInt(cfg.wisps[0], cfg.wisps[1]);
+        const kinds: string[] = [];
+        for (let i = 0; i < n; i++) kinds.push(this.weightedPick(cfg.kinds, lvl));
+        wf.noteStaged(info.id, kinds.filter(k => cfg.kinds.some(x => x.id === k)));
+      }
+      const live = wf.wisplightOn(this.zone.id);
+      if (!live) { this.wispScene = null; return; }
+      const sc: WispScene = { id: live.id, wisps: [], hosts: [], sweepAcc: 0 };
+      live.slots.forEach((slot, i) => {
+        const kind = cfg.kinds.find(k => k.id === slot.kind);
+        if (!kind) return;
+        if (slot.state === 'standing' || slot.state === 'kindled') {
+          const m = this.mintWispBody(kind.monster, cfg.standMinDist);
+          if (!m) return;
+          const w: WispSceneWisp = {
+            slot: i, a: m, kind: kind.id, state: 'standing',
+            route: [], routeAt: 0, wanderLeft: 0, seekLeft: 0, target: null,
+            bloomAcc: 0, bloomsLeft: cfg.bloom?.max ?? 0, pulseAcc: 0,
+            stallAcc: 0, stallD: Infinity,
+          };
+          // A light left mid-walk resumes walking (fresh route — the walk
+          // is transient; the STATE is the overlay's).
+          if (slot.state === 'kindled') this.kindleWisp(w, cfg, false);
+          sc.wisps.push(w);
+        } else if (slot.state === 'ridden') {
+          let host = this.actors.find(a => !a.dead && a.defId === slot.hostDef
+            && a.statuses.some(s => s.id === kind.rideStatus));
+          if (!host) {
+            // Re-raise it — rolling the body from the zone's own fauna if
+            // the absent die left the def unnamed.
+            let defId = slot.hostDef;
+            if (!defId || !MONSTERS[defId]) {
+              defId = this.zone.packs?.table?.length
+                ? this.weightedPick(this.zone.packs.table, lvl) : undefined;
+            }
+            if (!defId || !MONSTERS[defId]) { wf.noteGuttered(live.id, i); return; }
+            const m = this.createMonster(defId, lvl, 'enemy');
+            m.pos = this.findFreeSpot(this.clampPos(this.farPoint(420), 60), m.radius);
+            this.actors.push(m);
+            this.applyWispRide(m, kind, cfg);
+            wf.noteRidden(live.id, i, defId);
+            host = m;
+          }
+          sc.hosts.push({ slot: i, a: host });
+        }
+      });
+      this.wispScene = sc;
+    }
+    const sc = this.wispScene!;
+
+    // THE GLIDE (the wheel's bodiless cousin): a light has no body and no
+    // brain — it drifts dead straight between its validated waypoints,
+    // over bog and brush alike. Direct integration + a BOUNDS-ONLY clamp:
+    // the walk grid and the mover contract are for things with feet (live
+    // QA watched a flying light pinned a whole wander at a pond's shore —
+    // clampPos resolves positions OUT of unwalkable cells, and half the
+    // marsh is honestly unwalkable). The scene drives it, so it wanders
+    // however far the player ranges.
+    const glide = (a: Actor, to: Vec2, pace: number): void => {
+      const d = dist(a.pos, to);
+      if (d <= 1) return;
+      const stepLen = Math.min(d, a.sheet.get('moveSpeed') * pace * dt);
+      a.facing = angleTo(a.pos, to);
+      a.pos.x = clamp(a.pos.x + Math.cos(a.facing) * stepLen, 8, this.arena.w - 8);
+      a.pos.y = clamp(a.pos.y + Math.sin(a.facing) * stepLen, 8, this.arena.h - 8);
+    };
+
+    for (let wi = sc.wisps.length - 1; wi >= 0; wi--) {
+      const w = sc.wisps[wi];
+      if (w.state === 'kindled') {
+        const goal = w.route[w.routeAt];
+        if (goal) {
+          const from = vec(w.a.pos.x, w.a.pos.y);
+          glide(w.a, goal, cfg.wanderPace);
+          w.bloomAcc += dist(from, w.a.pos);
+          const dNow = dist(w.a.pos, goal);
+          if (dNow <= 22) {
+            w.routeAt++;
+            w.stallAcc = 0;
+            w.stallD = Infinity;
+          } else if (dNow >= w.stallD - 1) {
+            // Gaining no ground (a border band, a confinement pass): the
+            // light loses interest and drifts for the next waypoint.
+            w.stallAcc += dt;
+            if (w.stallAcc >= cfg.route.stallSec) {
+              w.routeAt++;
+              w.stallAcc = 0;
+              w.stallD = Infinity;
+            }
+          } else {
+            w.stallAcc = 0;
+            w.stallD = dNow;
+          }
+        }
+        w.wanderLeft -= dt;
+        if (w.routeAt >= w.route.length || w.wanderLeft <= 0) {
+          // Route's end or the clock's — whichever comes first, the light
+          // turns purposeful.
+          w.state = 'seeking';
+          w.seekLeft = cfg.seekSec;
+          this.text(vec(w.a.pos.x, w.a.pos.y - 18), 'the light grows purposeful…', col, 13);
+        }
+        // THE FLOURISH: the blessing pulsed around the glow as it walks.
+        w.pulseAcc += dt;
+        if (w.pulseAcc >= cfg.aura.pulseSec) {
+          w.pulseAcc = 0;
+          for (const a of this.actors) {
+            if (a.dead || a.team !== 'enemy' || a.untargetable) continue;
+            if (dist(a.pos, w.a.pos) > cfg.aura.radius) continue;
+            a.applyStatus(cfg.aura.status, 0, 1, 'The Wisplight');
+          }
+        }
+        // THE BLOOM TRAIL: little lights bud where it walked, then dry on
+        // their own (Doodad.evap — the transience doctrine's own fabric).
+        if (cfg.bloom && w.bloomsLeft > 0 && w.bloomAcc >= cfg.bloom.every) {
+          w.bloomAcc = 0;
+          w.bloomsLeft--;
+          const b = cfg.bloom;
+          const d: Doodad = {
+            pos: this.clampPos(vec(w.a.pos.x + rand(-16, 16), w.a.pos.y + rand(-16, 16)), 8),
+            radius: rand(b.radius[0], b.radius[1]), kind: b.kind as Doodad['kind'],
+            evap: { t: rand(b.dwell[0], b.dwell[1]), rate: b.rate },
+          };
+          this.doodads.push(d);
+          this.evaporating.push(d);
+          this.markDoodadsChanged();
+        }
+      } else if (w.state === 'seeking') {
+        w.seekLeft -= dt;
+        if (w.target && (w.target.dead || riderRefusal(w.target) !== null)) w.target = null;
+        if (w.target) {
+          // THE DRAWL: the same glide, slower — and straight through the
+          // target's own body (no separation: it is going INSIDE).
+          const t = w.target;
+          glide(w.a, t.pos, cfg.seekPace);
+          if (dist(w.a.pos, t.pos) <= w.a.radius + t.radius + cfg.rideRadius) {
+            this.wispRideLands(sc, w, t, cfg);
+            sc.wisps.splice(wi, 1);
+            continue;
+          }
+        }
+        if (w.seekLeft <= 0) {
+          // Nothing worth blessing in reach: the light gutters out.
+          wf.noteGuttered(sc.id, w.slot);
+          this.slipAway(w.a, 'the light gutters out…', col);
+          sc.wisps.splice(wi, 1);
+        }
+      }
+    }
+
+    // THE SWEEP (throttled): touches, seek scans, the bounty watch.
+    sc.sweepAcc += dt;
+    if (sc.sweepAcc < 0.2) return;
+    sc.sweepAcc = 0;
+
+    // THE TOUCH: any seat brushing a standing light kindles it.
+    for (const w of sc.wisps) {
+      if (w.state !== 'standing') continue;
+      for (const seat of this.seats) {
+        if (seat.actor.dead) continue;
+        if (dist(seat.actor.pos, w.a.pos) <= cfg.kindleRadius + w.a.radius + seat.actor.radius) {
+          this.kindleWisp(w, cfg, true);
+          wf.noteKindled(sc.id, w.slot);
+          break;
+        }
+      }
+    }
+    // THE SEEK SCAN: the strongest eligible body in reach (re-checked while
+    // seeking — a better host wandering closer draws the light off).
+    for (const w of sc.wisps) {
+      if (w.state !== 'seeking' || w.target) continue;
+      w.target = this.wispSeekTarget(w.a, cfg);
+    }
+    // THE BOUNTY WATCH: a broken host spills the light's hoard.
+    for (let i = sc.hosts.length - 1; i >= 0; i--) {
+      const h = sc.hosts[i];
+      if (!h.a.dead) continue;
+      sc.hosts.splice(i, 1);
+      wf.noteHostSlain(sc.id, h.slot);
+      bumpLedger(this.ledger, 'wisplight_hosts_slain');
+      this.grantXp(cfg.reward.xpBase + cfg.reward.xpPerLevel * lvl);
+      for (let g = 0; g < cfg.reward.gems; g++) this.dropGemAt(vec(h.a.pos.x, h.a.pos.y));
+      this.flashes.push({ pos: vec(h.a.pos.x, h.a.pos.y), radius: 90, color: col, life: 0.6, maxLife: 0.6 });
+      this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'the light spills out…', col, 14);
+    }
+  }
+
+  /** Stand one light body: untargetable, invulnerable, brainless — neutral
+   *  scenery until touched, and the scene does all its walking. Placed out
+   *  where it must be stumbled across, never underfoot. */
+  private mintWispBody(defId: string, minDist: number): Actor | null {
+    if (!MONSTERS[defId]) return null;
+    const m = this.createMonster(defId, Math.max(1, this.zone.level), 'enemy');
+    m.untargetable = true;
+    m.invulnerable = true;
+    let at: Vec2 | null = null;
+    for (let i = 0; i < 24 && !at; i++) {
+      const c = this.clampPos(vec(rand(60, this.arena.w - 60), rand(60, this.arena.h - 60)), 40);
+      if (dist(c, this.player.pos) >= minDist) at = c;
+    }
+    m.pos = this.findFreeSpot(at ?? this.clampPos(this.farPoint(minDist + 120), 40), 10);
+    this.actors.push(m);
+    return m;
+  }
+
+  /** The touch wakes a light: roll its route and start its clock. The
+   *  announce flag separates a fresh kindle (ledger + pay + line) from a
+   *  re-entry resume (the overlay already counted it). */
+  private kindleWisp(w: WispSceneWisp, cfg: WisplightSurge, announce: boolean): void {
+    w.state = 'kindled';
+    w.route = this.wispRoute(w.a.pos, cfg);
+    w.routeAt = 0;
+    w.wanderLeft = rand(cfg.wanderSec[0], cfg.wanderSec[1]);
+    if (announce) {
+      bumpLedger(this.ledger, 'wisplights_kindled');
+      this.grantXp(cfg.reward.kindleXp);
+      this.flashes.push({ pos: vec(w.a.pos.x, w.a.pos.y), radius: 70, color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6 });
+      this.text(vec(w.a.pos.x, w.a.pos.y - 22), 'the light wakes — the mire stirs around it', cfg.color ?? '#b8f0a0', 14);
+    }
+  }
+
+  /** The pre-drawn patrol: a jittered heading walk of validated waypoints —
+   *  rolled ONCE at kindle, so the wander is a route, not a dice-drift. */
+  private wispRoute(from: Vec2, cfg: WisplightSurge): Vec2[] {
+    const pts: Vec2[] = [];
+    let heading = rand(0, Math.PI * 2);
+    let cur = vec(from.x, from.y);
+    const n = randInt(cfg.route.points[0], cfg.route.points[1]);
+    for (let i = 0; i < n; i++) {
+      heading += rand(-1, 1) * (cfg.route.jitterDeg * Math.PI / 180);
+      const seg = rand(cfg.route.segLen[0], cfg.route.segLen[1]);
+      // edgeMargin keeps the way off the arena's border band — a rim
+      // waypoint is an unreachable waypoint (the stall insurance would
+      // skip it, but a route that never flirts with the rim reads better).
+      cur = this.findFreeSpot(
+        this.clampPos(vec(cur.x + Math.cos(heading) * seg, cur.y + Math.sin(heading) * seg), cfg.route.edgeMargin), 10);
+      pts.push(vec(cur.x, cur.y));
+    }
+    return pts;
+  }
+
+  /** THE STRONGEST HOST: the seam's one enterable-body law (riderRefusal),
+   *  then the surge's own policy — rarity weights (0 refuses), a level lean,
+   *  the wisp-touched preference — scored over everything in reach. */
+  private wispSeekTarget(body: Actor, cfg: WisplightSurge): Actor | null {
+    let best: Actor | null = null;
+    let bestScore = 0;
+    for (const a of this.actors) {
+      if (a.dead || a.team !== 'enemy' || a.untargetable || a === body) continue;
+      const def = a.defId ? MONSTERS[a.defId] : undefined;
+      // The lights never ride each other — a light's body is consumed, not worn.
+      if (def && cfg.kinds.some(k => k.monster === def.id)) continue;
+      const dtags = def ? [def.tag, ...(def.tags ?? [])].filter((t): t is string => !!t) : [];
+      if (dtags.some(t => cfg.seek.denyTags.includes(t))) continue;
+      const rw = cfg.seek.rarity[a.rarity ?? 'normal'] ?? 1;
+      if (rw <= 0) continue;
+      if (dist(a.pos, body.pos) > cfg.seekRadius) continue;
+      if (riderRefusal(a) !== null) continue;
+      const touched = a.statuses.some(s => s.id === cfg.aura.status);
+      const score = rw * (1 + cfg.seek.levelWeight * a.level) * (touched ? cfg.seek.emboldenedMul : 1);
+      if (score > bestScore) { bestScore = score; best = a; }
+    }
+    return best;
+  }
+
+  /** THE RIDE LANDS: the light's body is CONSUMED — the ride is a
+   *  transformation, not an occupancy, so there is no second-rider problem
+   *  by construction: the player's own possession law applies to the host
+   *  untouched (weakened-first and all), and a possessing player inherits
+   *  the grafted kit on the borrowed bar. */
+  private wispRideLands(sc: WispScene, w: WispSceneWisp, host: Actor, cfg: WisplightSurge): void {
+    const kind = cfg.kinds.find(k => k.id === w.kind);
+    const wf = this.sim.wisplightField;
+    if (!kind || !wf) return;
+    const at = vec(host.pos.x, host.pos.y);
+    const idx = this.actors.indexOf(w.a);
+    if (idx >= 0) this.actors.splice(idx, 1);
+    this.applyWispRide(host, kind, cfg);
+    wf.noteRidden(sc.id, w.slot, host.defId ?? '');
+    bumpLedger(this.ledger, 'wisplights_ridden');
+    sc.hosts.push({ slot: w.slot, a: host });
+    this.flashes.push({ pos: at, radius: host.radius + 30, color: cfg.color ?? '#b8f0a0', life: 0.6, maxLife: 0.6 });
+    this.text(vec(at.x, at.y - host.radius - 14), kind.line, cfg.color ?? '#b8f0a0', 15);
+  }
+
+  /** The kind row, worn: the ride status (texture percentages + the
+   *  re-adoption mark), the level-computed FLAT gifts as ONE sheet source
+   *  (computed at the host's own level — the 'more'-source lesson: a
+   *  level-40 shield on a level-40 body, never a level-1 flat lost under
+   *  the scaler), the grafted skills, the epithet, the rousing. */
+  private applyWispRide(host: Actor, kind: WispKindRow, cfg: WisplightSurge): void {
+    host.applyStatus(kind.rideStatus, 0, 1, 'The Wisplight');
+    const mods: Modifier[] = [];
+    if (kind.grant?.es) mods.push(mod('energyShield', 'flat', kind.grant.es[0] + kind.grant.es[1] * host.level));
+    if (kind.grant?.armor) mods.push(mod('armor', 'flat', kind.grant.armor[0] + kind.grant.armor[1] * host.level));
+    if (mods.length) host.sheet.setSource('wisp_ride', mods);
+    const gl = Math.max(1, 1 + Math.floor((host.level - 1) / Math.max(1, cfg.grantSkillLevelDiv)));
+    for (const gid of kind.grantSkills ?? []) {
+      if (SKILLS[gid] && !host.skills.some(s => s?.def.id === gid)) {
+        host.skills.push(makeSkillInstance(SKILLS[gid], gl));
+      }
+    }
+    if (!host.name.startsWith(kind.epithet)) host.name = `${kind.epithet} ${host.name}`;
+    // The gift arrives whole: life topped, the new shield already up.
+    host.life = host.maxLife();
+    host.es = Math.max(host.es, host.sheet.get('energyShield'));
+    host.aiAwakened = true;
   }
 
   // ------------------------------------------------------- the long night
@@ -31244,6 +31634,7 @@ export class World {
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
     this.updateStrayingScene(dt);
+    this.updateWispScene(dt);
     this.updateWraithsailDock();
     this.updateLongNight(dt);
     this.updateNecropolis();

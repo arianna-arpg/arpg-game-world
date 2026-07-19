@@ -55,6 +55,7 @@ export const eventsTab: DevTabDef = {
       forceEvent('Mycelia (bloom here)', (w, v, z) => w.sim.myceliaField?.devIgnite(v, z) ?? false),
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),
       forceEvent('Straying (bell here)', (w, v, z) => w.sim.strayField?.devIgnite(v, z) ?? false),
+      forceEvent('Wisplight (lights here)', (w, v, z) => w.sim.wisplightField?.devIgnite(v, z) ?? false),
       forceEvent('Breach (tear here)', (w, v, z) => (w.sim.breachField?.devIgnite(v, z) ?? null) !== null),
       // BREACH FIELD: the IN-ZONE veiled ring itself, already open beside the
       // player — the map tear above is ambience; this is the fight. The fed

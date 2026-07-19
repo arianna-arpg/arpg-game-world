@@ -40,6 +40,7 @@ import { UNSEALING } from './defs/unsealing';
 import { VENDETTA } from './defs/vendetta';
 import { VERMINFALL } from './defs/verminfall';
 import { WARBANDS } from './defs/warbands';
+import { WISPLIGHT } from './defs/wisplight';
 import { WORLDBOSS } from './defs/worldboss';
 import { WRAITHSAIL } from './defs/wraithsail';
 import type { EncounterDef } from './encounters';
@@ -72,6 +73,7 @@ export const PACKAGES: ContentPackage[] = [
   LONG_NIGHT,
   VERMINFALL,
   STRAYING,
+  WISPLIGHT,
   MIRRORKIN,
   LONGCANDLE,
   GLOAMING,
@@ -115,6 +117,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   vendetta: 0x0e4d,
   verminfall: 0x2a75,
   straying: 0x57a9,
+  wisplight: 0x8157,
   mirrorkin: 0x312a,
   longcandle: 0xca4d,
   long_night: 0x10c7,
