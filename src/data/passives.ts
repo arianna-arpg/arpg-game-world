@@ -215,7 +215,9 @@ const nodes: PassiveNode[] = [
   { id: "cl_attr_p1", name: "Agility", description: "+5 Dexterity", kind: "small", x: 5412, y: 4074, attributes: { dexterity: 5 }, links: [] },
   { id: "cl_attr_p2", name: "Intellect", description: "+5 Intelligence", kind: "small", x: 5802, y: 3492, attributes: { intelligence: 5 }, links: [] },
   { id: "cl_attr_p3", name: "Endurance", description: "+5 Vitality", kind: "small", x: 5670, y: 3972, attributes: { vitality: 5 }, links: [] },
-  { id: "rng_pc1", name: "Multiplicity", description: "15% chance to fire an additional projectile with attack skills", kind: "small", x: 5442, y: 2532, mods: [mod("projectileCountChance", "flat", 0.15, ["attack"])], links: [] },
+  // Nudged off (5442, 2532): the layout validator caught it 21.6u from
+  // Transfusion (min 33) — two unrelated nodes reading as one blob.
+  { id: "rng_pc1", name: "Multiplicity", description: "15% chance to fire an additional projectile with attack skills", kind: "small", x: 5322, y: 2472, mods: [mod("projectileCountChance", "flat", 0.15, ["attack"])], links: [] },
   { id: "rng_pc2", name: "Volley", description: "25% chance to fire an additional projectile; 15% increased projectile speed", kind: "notable", x: 3960, y: 2574, mods: [mod("projectileCountChance", "flat", 0.25), mod("projectileSpeed", "increased", 0.15)], links: ["rng_s3"] },
   { id: "war_kb1", name: "Repulsion", description: "+50 knockback strength on melee hits", kind: "small", x: 3108, y: 4044, mods: [mod("knockback", "flat", 50, ["melee"])], links: ["war_s1"] },
   { id: "war_kb2", name: "Shockwave", description: "+120 knockback strength on melee hits; 15% increased melee damage", kind: "notable", x: 2538, y: 4548, mods: [mod("knockback", "flat", 120, ["melee"]), mod("damage", "increased", 0.15, ["melee"])], links: ["war_s3"] },

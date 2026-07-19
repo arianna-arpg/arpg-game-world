@@ -45,6 +45,12 @@ import '../src/engine/landmarkBuilders';
 import '../src/data/landmarks';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
+// The recipe-registering data kits (genqa's set): without these the layout
+// registry misses 'needles'/'fields'/'district' and the BIOMES
+// allowedLayouts validation cried wolf every run — masking real drift.
+import '../src/data/massifs';
+import '../src/data/settled';
+import '../src/data/garden';
 import '../src/data/compositions';
 // The living-terrain registries main.ts loads (fog banks, creep kinds): a def
 // validate() that checks FOG_BANKS/CREEPS must see the same game the player

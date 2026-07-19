@@ -2786,7 +2786,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
   cadence_maestro: {
     id: 'cadence_maestro', name: 'Cadence Maestro',
     color: '#b8a8e8', shape: 'octagon', radius: 15, look: 'cadence_maestro',
-    base: { life: 150, moveSpeed: 138, accuracy: 114, evasion: 52, insight: 40, mana: 120, manaRegen: 8, poise: 40 },
+    // ONE signature pool (the defense-texture doctrine: textures are
+    // identities, stacked only on boss showpieces — the audit flagged the
+    // old insight+poise pair). The maestro's identity is the DUELIST'S READ:
+    // insight stays, the anchor-poise goes to the yoke-shouldered kin.
+    base: { life: 150, moveSpeed: 138, accuracy: 114, evasion: 52, insight: 40, mana: 120, manaRegen: 8 },
     mods: [mod('combo_spellblade_weave', 'flat', 1)],
     skills: ['zanshin_cut', 'spark'],
     xp: 60,
@@ -9402,6 +9406,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', -0.25)],
     skills: ['lash_roots', 'root_grasp'], xp: 24, faction: 'sylvan',
     habitat: { kind: 'tree', grace: 32 },
+    // THE ROOT_WRAITH RULE, finally applied to its own namesake (the
+    // sheeted haunt cites it; the audit caught the wraith itself bare): a
+    // body confined to a BLOCKING doodad must never hold a clear objective
+    // shut — a build that cannot reach the trunk soft-locks the zone.
+    noObjective: true,
     ambush: { radius: 130, announce: 'the roots wake!' },
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
@@ -9984,7 +9993,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
   lode_thrall: {
     id: 'lode_thrall', name: 'Lode Thrall',
     color: '#6d7076', shape: 'hexagon', radius: 10, material: 'metal', look: 'lode_thrall',
-    base: { life: 95, moveSpeed: 58, accuracy: 100, armor: 70, poise: 25, evasion: 0, mana: 0 },
+    // Mana fuels the strike (heavy_strike costs 4): the audit's cannot-afford
+    // sweep caught a 0-pool thrall whose ONLY art was unaffordable — a
+    // statue, not a juggernaut.
+    base: { life: 95, moveSpeed: 58, accuracy: 100, armor: 70, poise: 25, evasion: 0, mana: 24, manaRegen: 3 },
     mods: [mod('lightningRes', 'flat', -0.3), mod('fireRes', 'flat', 0.35)],
     skills: ['heavy_strike'], xp: 34,
     faction: 'elemental',
@@ -10468,7 +10480,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#e06a2a', shape: 'star', radius: 38, material: 'ember', look: 'magma_lurker',
     base: { life: 950, moveSpeed: 62, accuracy: 135, armor: 55, mana: 320, manaRegen: 16 },
     mods: [mod('fireRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.4), mod('damage', 'increased', 0.4)],
-    skills: ['magma_glob', 'flame_wave', 'meteor_storm'],
+    // The KIT is what the generic picker may cast; magma_glob is CHOREOGRAPHY
+    // (the script's nova/ring beats mint it from the registry — aiActions
+    // mintInst) and has no ai hint, so listing it was dead weight the audit
+    // rightly flagged. The globs land exactly as before.
+    skills: ['flame_wave', 'meteor_storm'],
     xp: 800, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.4, levitates: true,
     scaling: { life: { incPerLevel: 0.15 } },
@@ -11116,7 +11132,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
   heat_double: {
     id: 'heat_double', name: 'Heat Double',
     color: '#f0e4c0', shape: 'triangle', radius: 10, material: 'ethereal', look: 'heat_double',
-    base: { life: 14, moveSpeed: 160, accuracy: 90, evasion: 40, mana: 0 },
+    // A starting pool of three knives (mirage_knife costs 4) — it lives a
+    // breath or two, and now actually fights for it (the cannot-afford fix).
+    base: { life: 14, moveSpeed: 160, accuracy: 90, evasion: 40, mana: 12, manaRegen: 2 },
     skills: ['mirage_knife'], xp: 2,
     faction: 'sirocco',
     noBestiary: true,
@@ -11128,7 +11146,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
   salt_husk: {
     id: 'salt_husk', name: 'Salt Husk',
     color: '#e8e0c8', shape: 'square', radius: 14, material: 'stone', look: 'salt_husk',
-    base: { life: 120, moveSpeed: 62, accuracy: 88, armor: 22, mana: 0, poise: 40 },
+    // Brine for the burst (salt_burst costs 10): the teaching-tier brute now
+    // actually teaches its area lesson every ~10s (the cannot-afford fix).
+    base: { life: 120, moveSpeed: 62, accuracy: 88, armor: 22, mana: 30, manaRegen: 3, poise: 40 },
     mods: [mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', -0.25)],
     skills: ['claw', 'salt_burst'], xp: 24,
     faction: 'sirocco',
