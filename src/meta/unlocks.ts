@@ -515,6 +515,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — the Aureole',
     description: 'Gloriole, Colonnade, Gloria may drop. The circular judgement of the Seraph City: courts that convene on the accused.',
     payload: { skillIds: ['gloriole', 'colonnade', 'gloria'] } },
+  // THE SCENTCRAFT — the Garden's pheromone-craft waits at the BOTTOM of
+  // the formicary (the nest_entered ledger the mound-gate bumps — dwelled
+  // into, not taught). The colony has been running the world's oldest
+  // instinct-lever seminar; entry is the tuition.
+  { id: 'gem_skills_scentcraft', kind: 'skill', cost: 190, reqLedger: 'nest_entered', label: 'Skill Pool — Scentcraft',
+    description: 'Prey Musk, Alarm Reek, Honeydew Lure, Moult may drop. The nest taught you what a smell can make a body do.',
+    payload: { skillIds: ['prey_musk', 'alarm_reek', 'honeydew_lure', 'moult'] } },
   // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
   // way the idea itself arrives — by killing ONE chest that pretended to be
   // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so
@@ -554,6 +561,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_harrowing', kind: 'support', cost: 140, reqLedger: 'manor_entered', label: 'Support Pool — the Harrowing',
     description: 'Unnerving and Haunted Service may drop.',
     payload: { supportIds: ['unnerving', 'haunted_service'] } },
+  { id: 'sup_scentcraft', kind: 'support', cost: 140, reqLedger: 'nest_entered', label: 'Support Pool — Scentcraft',
+    description: 'Heavy Musk, Candied Scent, Startling Reek may drop. What clings, what tempts, what routs.',
+    payload: { supportIds: ['heavy_musk', 'candied_scent', 'startling_reek'] } },
   { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool — Echoes',
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },

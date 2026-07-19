@@ -855,6 +855,23 @@ registerRegion({ id: 'drystone', walkable: false, blocks: true, label: 'the fiel
 registerRegion({ id: 'hedgewall', walkable: false, blocks: true, label: 'the hedgerow',
   blocksShot: false, blocksSight: true,
   visual: { fill: '#1e3610', alpha: 1, foliage: true, edge: { color: '#68a03c', width: 5 } } });
+// BED WALL: the Tender's raised planter bed at bug height — timber boards
+// shoring a rampart of worked soil (data/garden.ts rides it for the
+// planter_bed masses). A TRUE WALL: at this scale the boards stand a
+// building tall, so bodies, shots and sight all stop. Coursed like built
+// timber (it IS built), the pale plank rim reading carpentry against the
+// garden floor; the dark loam fill reads soil, not stone.
+registerRegion({ id: 'bed_wall', walkable: false, blocks: true, label: 'the planter boards',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#3a2c1c', alpha: 1, masonry: true, edge: { color: '#a08a5c', width: 5 } } });
+// NEST WALL: the formicary's worked earth — tunnel walls the colony chewed
+// and tamped (the garden country's interior, data/tilesets.ts 'formicary').
+// A TRUE WALL in packed loam: bodies, shots and sight stop; no masonry
+// coursing (nothing here was ever STACKED — it was excavated), the pale
+// rim reading dry-crumb earth against the gallery dark.
+registerRegion({ id: 'nest_wall', walkable: false, blocks: true, label: 'the worked earth',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#33261a', alpha: 1, edge: { color: '#8a6c48', width: 4 } } });
 
 // SUNKSTONE WALL: the buried vault's dressed sandstone — the negative space
 // of halls the desert swallowed (the ruin_wall contract in sand tones). A

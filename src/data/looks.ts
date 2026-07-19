@@ -4098,6 +4098,142 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.6,
   },
 
+  // --- THE GARDEN (the colony's working castes, the bloomkin, the soft) -----
+  /** The forager: a worker with the harvest ON it — the carried bundle is
+   *  the read (this one has your gem in its jaws). */
+  formic_forager: {
+    parts: [
+      { kind: 'carapace', scale: 0.85 },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'mandibles', scale: 0.55 },
+      { kind: 'egg', x: 0.68, y: 0, scale: 0.42, role: 'wood' },
+    ],
+  },
+  /** The tender: long feelers, saddle-marked — the herd-keeper's silhouette
+   *  (feelers for the herd, barely any jaw at all). */
+  formic_tender: {
+    parts: [
+      { kind: 'carapace', scale: 0.9 },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'antennae', scale: 1.15 },
+      { kind: 'mandibles', scale: 0.4 },
+      { kind: 'spots', scale: 0.8, params: { n: 2 } },
+    ],
+  },
+  /** The alate: the colony's wing — membrane pairs folded over the worker
+   *  body. Wings-first at a glance (the drone never has them). */
+  formic_alate: {
+    parts: [
+      { kind: 'carapace', scale: 0.9 },
+      { kind: 'wings', scale: 1.05, alpha: 0.85 },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.85 },
+      { kind: 'mandibles', scale: 0.7 },
+    ],
+  },
+  /** The Matriarch: plated bulk crowned and crested, feelers back, the
+   *  brood-swollen abdomen riding behind as the worm tail. */
+  formic_matriarch: {
+    parts: [
+      { kind: 'carapace', scale: 1.0 },
+      { kind: 'armorPlates', scale: 0.8 },
+      { kind: 'crest', scale: 0.9, role: 'accent' },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'mandibles', scale: 1.1 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+    ],
+  },
+  /** The burrow: a worked mouth of earth and root — eggs at the lip where
+   *  the tenders stage them. */
+  formic_burrow: {
+    parts: [
+      { kind: 'blob', scale: 0.95, role: 'wood', params: { irr: 0.2, seed: 151 } },
+      { kind: 'roots', scale: 0.8 },
+      { kind: 'egg', x: 0.3, y: 0.22, scale: 0.34 },
+      { kind: 'egg', x: 0.14, y: -0.28, scale: 0.3 },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The petal dancer: a whirl of blade-petals around almost nothing — the
+   *  corolla IS the fighter (petalRuff, the bloomkin signature). */
+  petal_dancer: {
+    parts: [
+      { kind: 'disc', scale: 0.55 },
+      { kind: 'petalRuff', scale: 0.95 },
+      { kind: 'eyes', color: '#f0e0a0', params: { spread: 0.5, dist: 0.55, size: 0.1 } },
+    ],
+  },
+  /** The sepal warden: a bud that walks — shell-whorl over folded petals,
+   *  root-toes gripping the path. */
+  sepal_warden: {
+    parts: [
+      { kind: 'roots', scale: 0.75 },
+      { kind: 'petalRuff', scale: 0.7, alpha: 0.9 },
+      { kind: 'shell', scale: 0.9 },
+    ],
+  },
+  /** The pollen sylph: a mote of body under a blossom cap, frond-limbed —
+   *  mostly light, dust, and opinion. */
+  pollen_sylph: {
+    parts: [
+      { kind: 'disc', scale: 0.55, alpha: 0.9 },
+      { kind: 'fronds', scale: 0.7 },
+      { kind: 'bloomCap', scale: 1.0 },
+    ],
+  },
+  /** The foxglove chorister: a robed stem under a bell-bloom hood — the
+   *  poison chime dressed for the recital. */
+  foxglove_chorister: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'fronds', scale: 0.6, y: 0.2 },
+      { kind: 'bloomCap', scale: 0.9, color: '#b87ae0' },
+    ],
+  },
+  /** The wool aphid: a soft banded drop on pin legs, twin spigots astern —
+   *  the herd the colony keeps (cornicles, the whole economy). */
+  wool_aphid: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.12, seed: 157 } },
+      { kind: 'segmentRings', params: { n: 3 } },
+      { kind: 'legs', scale: 0.7, params: { n: 4 } },
+      { kind: 'antennae', scale: 0.6 },
+      { kind: 'cornicles', scale: 0.9 },
+    ],
+  },
+  /** The garden snail: the keep on one foot — whorled shell, periscope
+   *  eyes, and the silver road it leaves behind. */
+  garden_snail: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.1, seed: 163 } },
+      { kind: 'shellSpiral', x: -0.2, scale: 0.95 },
+      { kind: 'eyestalks', scale: 0.95 },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#c8d8d0', params: { n: 3 } }],
+  },
+  /** The banded slug: the snail's keepless cousin — banded back, the same
+   *  eyes on stems, nothing to hide in and no plans to. */
+  banded_slug: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.14, seed: 167 } },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'stripes', scale: 0.8, params: { n: 3 } },
+      { kind: 'eyestalks', scale: 0.8 },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#b8c890', params: { n: 4 } }],
+  },
+  /** The skep bee: banded fuzz, glass wings, one honest sting. */
+  skep_bee: {
+    parts: [
+      { kind: 'blob', scale: 0.8, params: { irr: 0.08, seed: 173 } },
+      { kind: 'stripes', scale: 0.9, params: { n: 3 } },
+      { kind: 'wings', scale: 0.95, alpha: 0.8 },
+      { kind: 'stinger', scale: 0.8 },
+      { kind: 'antennae', scale: 0.7 },
+    ],
+  },
+
   // --- THE CHITIN (the Seethe: the deep desert's hive kin) ------------------
   /** A chitin drone: the seethe's coin — carapace, feelers, nothing wasted. */
   chitin_drone: {

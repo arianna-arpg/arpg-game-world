@@ -50,6 +50,52 @@ export const GLYPH_PARTS: Record<string, GlyphDef> = {
       { kind: 'disc', x: -0.06, y: 0.44, rx: 0.07, role: 'wood', shade: -0.1, outline: true },
     ],
   },
+
+  // --- The Garden set (the bug-high country's kin) --------------------------
+  // PETAL RUFF — a full skirt of blade-petals around the body: the bloomkin
+  // signature (a flower IS its corolla). Six lobes — front pair, side pair,
+  // back pair (mirror halves the authoring) — creased down the middle so
+  // the skirt reads petal, never sunburst. Reads instantly against frill
+  // (membrane fan) and fronds (hanging leaves).
+  petalRuff: {
+    ops: [
+      { kind: 'poly', pts: [[0.5, -0.12], [0.98, -0.3], [1.16, -0.02], [0.9, 0.12]], smooth: true, role: 'accent', shade: 0.06, outline: true, mirror: true },
+      { kind: 'poly', pts: [[0.08, -0.5], [0.3, -1.06], [-0.12, -1.12], [-0.3, -0.52]], smooth: true, role: 'accent', shade: -0.02, outline: true, mirror: true },
+      { kind: 'poly', pts: [[-0.5, -0.16], [-1.0, -0.42], [-1.18, -0.08], [-0.86, 0.1]], smooth: true, role: 'accent', shade: -0.1, outline: true, mirror: true },
+      { kind: 'path', pts: [[0.5, -0.16], [1.02, -0.18]], role: 'accent', shade: -0.3, wR: 0.02, mirror: true },
+      { kind: 'path', pts: [[0.02, -0.5], [0.08, -0.98]], role: 'accent', shade: -0.3, wR: 0.02, mirror: true },
+    ],
+  },
+  // BLOOM CAP — a flower worn as a head: a tight petal corolla forward of
+  // center with a bright floret heart. The pollen-caster's read-at-a-glance
+  // (capDome is a mushroom; THIS is a blossom).
+  bloomCap: {
+    ops: [
+      { kind: 'poly', pts: [[0.62, -0.06], [0.94, -0.26], [1.0, 0.04], [0.74, 0.12]], smooth: true, role: 'accent', shade: 0.08, outline: true, mirror: true },
+      { kind: 'poly', pts: [[0.32, -0.3], [0.4, -0.68], [0.08, -0.62], [0.1, -0.3]], smooth: true, role: 'accent', shade: -0.04, outline: true, mirror: true },
+      { kind: 'poly', pts: [[0.02, -0.34], [-0.3, -0.6], [-0.44, -0.3], [-0.16, -0.14]], smooth: true, role: 'accent', shade: -0.12, outline: true, mirror: true },
+      { kind: 'disc', x: 0.3, y: 0, rx: 0.22, role: 'glow', alpha: 0.95, outline: true },
+      { kind: 'disc', x: 0.3, y: 0, rx: 0.1, role: 'glow', shade: -0.25 },
+    ],
+  },
+  // EYESTALKS — the snail's periscopes: two soft stalks raked forward, a
+  // ball tip on each. Nothing else in the roster looks out on stems
+  // (antennae are whips, lure is ONE hooded lamp).
+  eyestalks: {
+    ops: [
+      { kind: 'path', pts: [[0.3, -0.14], [0.7, -0.34], [0.94, -0.4]], smooth: true, role: 'base', shade: 0.08, wR: 0.07, mirror: true },
+      { kind: 'disc', x: 0.98, y: -0.42, rx: 0.11, role: 'dark', outline: true, mirror: true },
+      { kind: 'disc', x: 1.0, y: -0.44, rx: 0.045, role: 'glow', alpha: 0.9, mirror: true },
+    ],
+  },
+  // CORNICLES — the aphid's twin tail-spigots: two stubby tubes aft, drops
+  // beading at the mouths (the herd's whole economy, worn as anatomy).
+  cornicles: {
+    ops: [
+      { kind: 'path', pts: [[-0.5, -0.16], [-0.88, -0.3]], role: 'dark', shade: 0.05, wR: 0.09, mirror: true },
+      { kind: 'disc', x: -0.94, y: -0.32, rx: 0.07, role: 'glow', alpha: 0.85, mirror: true },
+    ],
+  },
 };
 
 for (const [kind, glyph] of Object.entries(GLYPH_PARTS)) registerShippedGlyph(kind, glyph);

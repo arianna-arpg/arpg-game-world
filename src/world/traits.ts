@@ -134,6 +134,15 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // context; the roost defends its ground, and its only map-scale march is
   // the Swarming. Their fight is SOURCE WARFARE — kill the wells or drown.
   chitin: { roaming: 0.85, aggression: 1.05, warlordHome: 'origin', homeBiome: 'desert', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
+  // The Formic Colony — the Garden's patron: rooted in the plot it works
+  // (the nest is downstairs), foragers ranging the beds. CROWNLESS (the
+  // chitin precedent): no WARLORD_OF seat, no invasion gate — the
+  // Matriarch is the Brood Vault's boss and the colony's only map-scale
+  // ambition is the next granary.
+  formic: { roaming: 0.5, aggression: 0.95, warlordHome: 'origin', homeBiome: 'garden', eventRange: 160, contexts: ['baseline'], temper: 'territorial' },
+  // The Bloomkin — the beds' own kin: the most rooted green in the game
+  // (a flower defends exactly where it grows), crownless likewise.
+  bloomkin: { roaming: 0.2, aggression: 0.85, warlordHome: 'origin', homeBiome: 'garden', eventRange: 140, contexts: ['baseline'], temper: 'territorial' },
   // The Emberkin — the cinder country's tribe: rooted vent-tenders who barely
   // march but never, ever cede the calderas (the volcanic biome finally has a
   // native banner; its long war is with the Legion treating the fires as a door).

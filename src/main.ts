@@ -19,6 +19,7 @@ import './engine/layoutRecipes'; // side-effect: registers the composed layout r
 import './engine/interiorGen'; // side-effect: registers the interior layouts (dungeon/labyrinth/edifice) + room roles
 import './data/massifs'; // side-effect: registers the massif mass kinds (+ the 'massif' recipe via engine/massif)
 import './data/settled'; // side-effect: the settled-belt kit (+ the 'fields'/'district' recipes via engine/settled)
+import './data/garden'; // side-effect: the Garden country kit (kinds, formations, compositions, the nest role pool)
 import './data/compositions'; // side-effect: registers the whole-zone composition bundles
 import './data/fog'; // side-effect: registers the living fog bank kinds
 import './data/creeps'; // side-effect: registers the living creep kinds

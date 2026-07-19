@@ -833,6 +833,21 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
       announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
   ],
+  // THE GARDEN: the bug-high country's ambience — files of lesser ants on
+  // their own errands, a frog at the pond that is, at this scale, a
+  // LEVIATHAN of the margins, moths at dusk, and the scamp working the
+  // richest windfall floor there is.
+  garden: [
+    { id: 'ant_trail', chance: 0.6, count: [1, 3] },
+    { id: 'glow_moth', chance: 0.35, count: [2, 4] },
+    { id: 'squirrel', chance: 0.2, count: [1, 1] },
+    { id: 'reed_frog', chance: 0.3, count: [1, 2], near: 'water',
+      announce: 'something vast croaks at the water\'s edge…' },
+    { id: 'sand_scorpion', chance: 0.2, count: [1, 2] },
+    { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
+    { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
+      announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
+  ],
   // THE METROPOLIS: the city's gutter tier — rats and roaches under the
   // stalls, crows on the rooflines, escaped market birds, and the scamp
   // working the richest floors in the world.
@@ -8975,7 +8990,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'formic_worker', name: 'Formic Worker',
     color: '#a87848', shape: 'oval', radius: 10, material: 'chitin', look: 'formic_worker',
     base: { life: 30, moveSpeed: 150, accuracy: 90, armor: 25, mana: 0 },
-    skills: ['claw'], xp: 8,
+    // Homed at last: the Garden country is the colony's ground (the formics
+    // predate their biome — the showcase defs finally have an address).
+    skills: ['claw'], xp: 8, faction: 'formic',
     detection: 0.9,
     // A worker works: the task first, the intruder barely.
     aggro: { fixation: 2.2, fury: 0.4, waver: 1.5 },
@@ -8986,7 +9003,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'formic_soldier', name: 'Formic Soldier',
     color: '#8a5a38', shape: 'hexagon', radius: 13, material: 'chitin', look: 'formic_soldier',
     base: { life: 75, moveSpeed: 140, accuracy: 105, armor: 45, poise: 35, mana: 20, manaRegen: 3 },
-    skills: ['cleave'], xp: 18,
+    skills: ['cleave'], xp: 18, faction: 'formic',
     // The colony's SYNCHRONY: soldiers fight harder while a worker lives
     // near — burst the workers first and the line softens (the bond seam).
     bond: { kin: 'formic_worker', mods: [mod('damageTaken', 'more', -0.25)] },
@@ -9072,6 +9089,225 @@ export const MONSTERS: Record<string, MonsterDef> = {
     gemBias: ['summon', 'projectile'],
     detection: 1.2,
     brain: { type: 'pack', move: { style: 'skitter', dart: [0.35, 0.6], pause: [0.2, 0.5] } },
+  },
+
+  // --- THE GARDEN (the bug-high country: the colony, the bloomkin, and the
+  // soft-bodied things the mulch keeps) --------------------------------------
+  // The FORMIC COLONY claims the workers/soldiers above (they finally have a
+  // home ground) and fields the rest of a working nest: the forager that
+  // robs the floor, the tender that keeps the herd, the alate wing, and the
+  // Matriarch in the Brood Vault. CROWNLESS on the map (the chitin
+  // precedent — no WARLORD_OF seat, no marching invasions): the colony's
+  // war is the garden itself, and its throne is downstairs.
+  formic_forager: {
+    id: 'formic_forager', name: 'Formic Forager',
+    color: '#b08050', shape: 'oval', radius: 11, material: 'chitin', look: 'formic_forager',
+    base: { life: 40, moveSpeed: 160, accuracy: 95, armor: 25, mana: 0 },
+    skills: ['claw'], xp: 12, faction: 'formic',
+    // The floor belongs to the colony: it carries off unclaimed drops (the
+    // gilded-scamp contract — player-placed drops are never wanted) and
+    // spills the whole sack when it dies. Kill the porter, keep the pay.
+    looter: { kinds: ['skill', 'support'], reach: 28 },
+    aggro: { fixation: 2.0, fury: 0.5, waver: 1.3 },
+    temper: 'territorial',
+    detection: 1.0,
+    brain: {
+      type: 'basic',
+      move: { style: 'juke', hookEvery: [0.35, 0.8], hookArc: 1.1 },
+      // The nose for the harvest: idle, it walks at the nearest unclaimed drop.
+      behavior: { seek: { what: 'loot', pace: 0.9, range: 1200 } },
+      squad: { idle: { style: 'drill' }, formation: 'column' },
+    },
+  },
+  // The tender: the colony's herd-keeper — she stands among the wool-aphids
+  // and the line fights harder around her. Burst the shepherd, break the fold.
+  formic_tender: {
+    id: 'formic_tender', name: 'Formic Tender',
+    color: '#c09060', shape: 'oval', radius: 12, material: 'chitin', look: 'formic_tender',
+    base: { life: 65, moveSpeed: 130, accuracy: 95, armor: 30, mana: 120, manaRegen: 9 },
+    skills: ['stridulate', 'claw'], xp: 24, faction: 'formic',
+    wardPriority: 1,
+    bond: { kin: 'wool_aphid', mods: [mod('damageTaken', 'more', -0.2)] },
+    gemBias: ['buff', 'minion'],
+    detection: 1.0,
+    brain: {
+      type: 'strafer',
+      skillUse: { reserve: [{ skill: 'stridulate', when: { alliesWithin: { count: 2, radius: 280 } } }] },
+    },
+  },
+  // The alate: the colony's wing — a nuptial flight that never got to leave.
+  // Dives on the swarm grammar; on the ground it is just a big, mean ant.
+  formic_alate: {
+    id: 'formic_alate', name: 'Formic Alate',
+    color: '#9a6a48', shape: 'kite', radius: 13, material: 'chitin', look: 'formic_alate',
+    base: { life: 70, moveSpeed: 150, accuracy: 105, evasion: 45, mana: 40, manaRegen: 4 },
+    skills: ['locust_dive', 'claw'], xp: 26, faction: 'formic',
+    packSize: [2, 4],
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      behavior: { flock: { kin: 'faction', radius: 200, cohesion: 0.5, alignment: 0.6, separation: 1.1 } },
+    },
+  },
+  // THE MATRIARCH — the Brood Vault's owner: near-anchored bulk trailing a
+  // physogastric abdomen (the worm tail), laying as she fights. The nest's
+  // zone boss (the brood_stair mints her arena); never a map warlord.
+  formic_matriarch: {
+    id: 'formic_matriarch', name: 'the Formic Matriarch',
+    color: '#8a5a38', shape: 'star', radius: 19, material: 'chitin', look: 'formic_matriarch',
+    boss: true,
+    base: { life: 340, moveSpeed: 62, accuracy: 110, armor: 45, poise: 70, mana: 180, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['heavy_strike', 'lay_formic_clutch'], xp: 130, faction: 'formic',
+    presence: { from: 10 },
+    worm: { length: 5, spacing: 20, taper: 0.88 },
+    turnSpeed: 2.2,
+    gemBias: ['summon', 'minion'],
+    grabbable: false,
+    scaling: { life: { incPerLevel: 0.07 } },
+    detection: 0.9,
+    brain: {
+      type: 'juggernaut',
+      phases: [
+        {
+          atLifeFrac: 0.66, announce: 'The Matriarch drums the gallery walls!',
+          onEnter: [{ do: 'summon', monster: 'formic_worker', count: 3, ring: 130 }],
+        },
+        {
+          atLifeFrac: 0.33, announce: 'The brood answers her!',
+          mods: [mod('attackSpeed', 'increased', 0.2)],
+          onEnter: [{ do: 'summon', monster: 'formic_soldier', count: 2, ring: 140 }],
+        },
+      ],
+    },
+  },
+  // The burrow: the colony's door-in-the-floor — an anchored spawner mouth
+  // (the hive_node contract in garden earth). The 'spawners' objective's
+  // destructible across the whole country.
+  formic_burrow: {
+    id: 'formic_burrow', name: 'Formic Burrow',
+    color: '#8a6a46', shape: 'oval', radius: 15, look: 'formic_burrow',
+    base: { life: 90, moveSpeed: 0, armor: 25, mana: 0 },
+    skills: ['spew_formics'], xp: 20, faction: 'formic',
+    spawner: true,
+    detection: 0.6,
+  },
+
+  // THE BLOOMKIN — the garden's own kin: flowers that learned what the
+  // colony was doing to the beds and grew OPINIONS. Verdant flesh (grows
+  // back, never tires the way meat does), petal blades, pollen tricks.
+  petal_dancer: {
+    id: 'petal_dancer', name: 'Petal Dancer',
+    color: '#d888b8', shape: 'kite', radius: 11, material: 'verdant', look: 'petal_dancer',
+    base: { life: 50, moveSpeed: 175, accuracy: 110, evasion: 80, mana: 30, manaRegen: 4 },
+    skills: ['claw'], xp: 18, faction: 'bloomkin', tags: ['plant'],
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      move: { style: 'skitter', dart: [0.3, 0.55], pause: [0.15, 0.4] },
+      behavior: { dodge: { chance: 0.35, reaction: [0.15, 0.35], exit: 'lateral' } },
+    },
+  },
+  // The sepal warden: a bud that closes — a full whorl of shell-leaves it
+  // regrows between exchanges. Crack the guard fast or fight the bloom
+  // whole (the whelk's rhythm on a stem).
+  sepal_warden: {
+    id: 'sepal_warden', name: 'Sepal Warden',
+    color: '#6a9a54', shape: 'hexagon', radius: 15, material: 'verdant', look: 'sepal_warden',
+    base: { life: 130, moveSpeed: 95, accuracy: 100, armor: 20, poise: 55, mana: 20, manaRegen: 3 },
+    skills: ['heavy_strike'], xp: 28, faction: 'bloomkin', tags: ['plant'],
+    shellGuard: { side: 'all', max: 70, regenDelay: 4.5, regenRate: 16, color: '#8ac86a' },
+    turnSpeed: 3.0,
+    scaling: { armor: { flatPerLevel: 1.2 } },
+    detection: 0.9,
+    brain: { type: 'juggernaut' },
+  },
+  // The pollen sylph: glass built of light and dander — a caster whose
+  // shield is the only body it has. Its puff blinds the eye and addles the
+  // hand (the confusion family, dusted on).
+  pollen_sylph: {
+    id: 'pollen_sylph', name: 'Pollen Sylph',
+    color: '#e8d88a', shape: 'diamond', radius: 10, material: 'verdant', look: 'pollen_sylph',
+    base: { life: 30, energyShield: 90, moveSpeed: 135, mana: 140, manaRegen: 10 },
+    skills: ['pollen_puff'], xp: 26, faction: 'bloomkin', tags: ['plant'],
+    gemBias: ['curse', 'aoe'],
+    detection: 1.1,
+    brain: { type: 'strafer' },
+  },
+  // The foxglove chorister: the bell that poisons — venom on a slow chime,
+  // prettier than anything that lethal has a right to be.
+  foxglove_chorister: {
+    id: 'foxglove_chorister', name: 'Foxglove Chorister',
+    color: '#b87ae0', shape: 'pentagon', radius: 12, material: 'verdant', look: 'foxglove_chorister',
+    base: { life: 55, energyShield: 40, moveSpeed: 110, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['venom_bolt'], xp: 28, faction: 'bloomkin', tags: ['plant'],
+    gemBias: ['chaos', 'duration'],
+    detection: 1.0,
+    brain: { type: 'strafer' },
+  },
+
+  // THE SOFT-BODIED (unaffiliated garden lives) ------------------------------
+  // The wool aphid: the herd — a lite-tier crowd body the colony KEEPS
+  // (the tenders bond to it; the pens in the formicary pour it). One ply,
+  // barely a bite; the point of an aphid is how many there are.
+  wool_aphid: {
+    id: 'wool_aphid', name: 'Wool Aphid',
+    color: '#b8d8a0', shape: 'oval', radius: 5, material: 'chitin', look: 'wool_aphid',
+    base: { life: 6, moveSpeed: 120, evasion: 30, mana: 0 },
+    skills: ['claw'], xp: 1, faction: 'beast', tag: 'critter', tags: ['beast'],
+    drops: 0,
+    plies: { count: 1 },
+    lite: { contact: { damage: 1 }, aggro: 140, erratic: 1.2, separation: 1.0 },
+    scaleVariance: [0.85, 1.15],
+    detection: 0.3,
+    brain: { type: 'basic', move: { style: 'skitter' }, morale: { skittish: { radius: 110, duration: [1.0, 1.8] } } },
+  },
+  // The garden snail: a keep on one foot — the shell breathes back between
+  // exchanges, the track it lays stays slick behind it (the creep fabric's
+  // smallest membrane), and nothing about it hurries.
+  garden_snail: {
+    id: 'garden_snail', name: 'Garden Snail',
+    color: '#c8b088', shape: 'oval', radius: 14, material: 'slime', look: 'garden_snail',
+    base: { life: 110, moveSpeed: 42, accuracy: 90, armor: 20, poise: 40, mana: 0 },
+    skills: ['claw'], xp: 22, faction: 'beast', tags: ['beast'],
+    shellGuard: { side: 'all', max: 60, regenDelay: 5, regenRate: 12, color: '#d8c098' },
+    creepSource: { kind: 'snailslick', reach: [50, 90], bornFrac: 0.4 },
+    heft: 1.3,
+    turnSpeed: 2.0,
+    detection: 0.6,
+    brain: { type: 'juggernaut' },
+  },
+  // The banded slug: the snail's ill-tempered cousin — no keep, all acid.
+  // Its trail slicks the same lane; its death is a caustic argument.
+  banded_slug: {
+    id: 'banded_slug', name: 'Banded Slug',
+    color: '#a89048', shape: 'oval', radius: 12, material: 'slime', look: 'banded_slug',
+    base: { life: 70, moveSpeed: 70, accuracy: 95, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 16, faction: 'beast', tags: ['beast'],
+    creepSource: { kind: 'snailslick', reach: [40, 70], bornFrac: 0.3 },
+    deathBurst: { mode: 'implode', damageFrac: 0.7, coalesce: 0.6, damageType: 'chaos' },
+    scaleVariance: [0.85, 1.2],
+    detection: 0.7,
+    brain: { type: 'swarm' },
+  },
+  // The skep bee: the Tender's stock, still working the rows — and still
+  // remembering how the skep is defended. Poke the forager, meet the sting
+  // (volatile: TAKING a hit answers with one).
+  skep_bee: {
+    id: 'skep_bee', name: 'Skep Bee',
+    color: '#e0b048', shape: 'oval', radius: 8, material: 'chitin', look: 'skep_bee',
+    base: { life: 25, moveSpeed: 165, evasion: 60, mana: 0 },
+    skills: ['claw'], xp: 8, faction: 'beast', tags: ['beast'],
+    packSize: [3, 6],
+    habitat: { kind: 'beehive' },
+    volatile: { skillId: 'claw', chance: 0.5, icd: 0.8 },
+    detection: 0.8,
+    brain: {
+      type: 'swarm',
+      behavior: { flock: { kin: 'def', radius: 160, cohesion: 0.7, alignment: 0.6, separation: 1.2, weave: 1.3, erratic: 1.2 } },
+    },
   },
 
   // --- THE SMALL LIVES (ambient prey; the refuge seam's showcase) -----------
@@ -12044,6 +12280,15 @@ const RELATIONS: Record<string, FactionStance> = {
   'coilborn|deep': 'ally',
   'coilborn|sylvan': 'hostile',
   'coilborn|fungal': 'hostile',
+  // The Garden's turf war: the colony eats the beds, the beds grew teeth —
+  // wherever the faces meet, the two banners dispute the estate (and the
+  // grub-vermin raid the granaries of both). The colony FARMS fungus (the
+  // fungus gardens are literal), so the Bloom is kin the way rot is kin to
+  // roots; the bloomkin keep the sylvan courtesies — green speaks to green.
+  'formic|bloomkin': 'hostile',
+  'formic|vermin': 'hostile',
+  'formic|fungal': 'ally',
+  'bloomkin|sylvan': 'ally',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
@@ -12189,6 +12434,31 @@ export const FACTIONS: Record<string, {
     table: [
       { id: 'village_warden', weight: 3 },
       { id: 'crofter', weight: 1.5 },
+    ],
+  },
+  // The colony fields a WORKING nest: fodder that never thins (workers are
+  // the colony), the line behind it, the wing above it. CROWNLESS (the
+  // chitin precedent) — the Matriarch is the Brood Vault's boss, never a
+  // marching warlord, so the invasion gate stays shut by construction.
+  formic: {
+    name: 'the Formic Colony',
+    table: [
+      { id: 'formic_worker', weight: 3 },
+      { id: 'formic_soldier', weight: 3 },
+      { id: 'formic_forager', weight: 2 },
+      { id: 'formic_tender', weight: 1, presence: { from: 5, fadeIn: 3 } },
+      { id: 'formic_alate', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+  },
+  // The garden's own kin — the beds' answer to the colony chewing them.
+  // Crownless likewise: the bloomkin defend ground, they do not march.
+  bloomkin: {
+    name: 'the Bloomkin',
+    table: [
+      { id: 'petal_dancer', weight: 3 },
+      { id: 'sepal_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'pollen_sylph', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'foxglove_chorister', weight: 1, presence: { from: 7, fadeIn: 4 } },
     ],
   },
   // Born from fire — RESERVED (see RESERVED_KIN): the roster is complete and

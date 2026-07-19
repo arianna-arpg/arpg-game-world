@@ -226,6 +226,23 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     skyWeight: { day: 0.8, dusk: 1, night: 0.6 },
     birthGeo: { moisture: { max: 0.45 }, temperature: { max: 0.6 } },
   },
+  /** PETALFALL — the Garden's own weather: the great blooms letting go at
+   *  once, a pink-gold fall of petals drifting the whole sky. Born only
+   *  over the mild damp belt (the garden's climate gate), day-leaning,
+   *  barely dimming — the gentlest front in the registry, and the ground
+   *  dress it leaves (petal_drift, dissolving as it dries) is the whole
+   *  point: the country weathers in FLOWERS. */
+  petalfall: {
+    label: 'Petalfall', color: '#e8a8c8', countMul: 1,
+    factionMul: { bloomkin: 1.25 },
+    rampFrac: 0.45, wind: 0.35,
+    radiance: { mul: 0.95 },
+    skyWeight: { day: 1.2, dusk: 0.8 },
+    birthGeo: { moisture: { min: 0.45 }, temperature: { min: 0.35, max: 0.72 } },
+    dress: {
+      rows: [{ doodad: 'petal_drift', count: [3, 6], radius: [16, 26], minGap: 160 }],
+    },
+  },
   /** HEMORRHAGE — the flesh country bleeding into its own sky: a slow red
    *  rain born only over deep wild ground (the country's wildness band),
    *  drifting at a wounded crawl. Its teeth are what it FEEDS — the Glut

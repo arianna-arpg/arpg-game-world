@@ -19767,6 +19767,12 @@ export class World {
     if (!prey || !prey.length) return false;
     if (b.defId === a.defId) return false;
     if (a.squadId !== undefined && b.squadId === a.squadId) return false;
+    // THE SCENT LAW (StatusDef.smellsOfPrey — Scentcraft's mark): a body
+    // wearing prey-scent is FOOD to anything that already hunts. The list's
+    // CONTENTS stop mattering; its existence is the qualifier (a hunter's
+    // nose, fooled). The kin guards above still hold — nothing eats its
+    // own kind or its own squad, however it smells.
+    if (b.statuses.some(s => STATUS_DEFS[s.id]?.smellsOfPrey)) return true;
     return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
   }
 

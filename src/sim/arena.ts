@@ -23,10 +23,12 @@ import '../engine/layoutRecipes';
 import '../engine/interiorGen';
 import '../data/massifs';
 import '../data/settled';
+import '../data/garden';
 import '../data/compositions';
 import '../data/fog';
 import '../data/creeps';
 import '../data/traversals';
+import '../data/glyphParts'; // the shipped glyph part kinds (looks reference them)
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';
 import { buildManifest } from '../packages/manifest';

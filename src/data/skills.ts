@@ -7671,6 +7671,138 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 720, weight: 1 },
   },
 
+  // --- THE GARDEN'S MOUTHS (colony kit — monster-only) -----------------------
+  spew_formics: {
+    id: 'spew_formics', name: 'The Burrow Stirs', noDrop: true,
+    description: 'The worked earth gives up its shift.',
+    tags: ['spell', 'summon', 'minion'], color: '#a87848',
+    manaCost: 0, cooldown: 3.5, useTime: 1.2,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'formic_worker', weight: 3 },
+        { id: 'formic_soldier', weight: 1 },
+      ],
+      count: 1, maxActive: 5,
+    },
+    effects: [],
+    requirements: { willpower: 30 },
+    ai: { range: 720, weight: 1 },
+  },
+  // The Matriarch's clutch: the chitin egg-pod pattern in colony colors —
+  // stomp the eggs or meet the shift they were going to be.
+  lay_formic_clutch: {
+    id: 'lay_formic_clutch', name: 'Lay Formic Clutch',
+    description: 'Set a clutch of worked-earth eggs. Left alone they HATCH the next shift; broken, they are only loam.',
+    tags: ['spell', 'summon', 'minion', 'duration'], color: '#b09060',
+    manaCost: 16, cooldown: 11, useTime: 0.9,
+    delivery: {
+      type: 'construct', kind: 'pod', look: 'grub_egg',
+      range: 0, duration: 8, maxActive: 3, life: 50, placeRange: 110,
+      hatch: { skillId: 'egg_hatch_formics' },
+    },
+    effects: [],
+    requirements: { willpower: 18 },
+    ai: { range: 260, weight: 2, keepDistance: 160 },
+  },
+  egg_hatch_formics: {
+    id: 'egg_hatch_formics', name: 'The Clutch Hatches', noDrop: true,
+    description: 'The eggs split along their seams and the shift reports.',
+    tags: ['spell', 'summon', 'minion'], color: '#b09060',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'summon', monsterId: 'formic_worker', count: 2, maxActive: 8 },
+    effects: [],
+  },
+  // The sylph's puff: pollen in the eye, pollen in the plan.
+  pollen_puff: {
+    id: 'pollen_puff', name: 'Pollen Puff', noDrop: true,
+    description: 'A soft gold burst that blinds the eye and addles the hand.',
+    tags: ['spell', 'aoe', 'duration'], color: '#e8d88a',
+    manaCost: 14, cooldown: 6, useTime: 0.7,
+    baseDamage: { chaos: [3, 5] },
+    delivery: { type: 'nova', radius: 150 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'blind', chance: 0.8 },
+      { type: 'status', status: 'addled', chance: 0.5 },
+    ],
+    ai: { range: 130, weight: 2, keepDistance: 110 },
+  },
+
+  // ================== SCENTCRAFT (the Garden's pheromone-craft) =============
+  // The player-facing pool the formicary unlocks ('nest_entered' gates the
+  // Vault bundle — the ruin_entered pattern). The family identity is the
+  // INSTINCT LEVER: these verbs cast no fire and summon no servant — they
+  // bend what the world's own creatures already want. Mark a body as PREY
+  // and everything that hunts, hunts IT (the scent law in World.isPrey);
+  // panic a pack and the rout fabric does the rest; pour a sweet slick and
+  // watch feet argue with appetite. Emergent by construction: every payoff
+  // is another system keeping its own promise.
+
+  prey_musk: {
+    id: 'prey_musk', name: 'Prey Musk',
+    description: 'Dash a victim with the smell of the eaten. While it clings, everything that HUNTS reads them as food — packs converge, lurkers commit, and hunters smell them from far beyond sight. The marked take a little more from everyone; from predators they take the whole afternoon.',
+    tags: ['spell', 'curse', 'duration', 'aoe'], color: '#c8a86a',
+    manaCost: 10, cooldown: 3, useTime: 0.45,
+    targeting: { target: 'enemy', castRange: 480 },
+    delivery: { type: 'target' },
+    effects: [{ type: 'status', status: 'prey_marked', chance: 1 }],
+    requirements: { willpower: 12 },
+    dropWeight: 8, minDropLevel: 4,
+    ai: { range: 440, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  alarm_reek: {
+    id: 'alarm_reek', name: 'Alarm Reek',
+    description: 'Burst the colony\'s own danger-scent over them. Nerves BREAK — the pack bolts as one, and for a few long breaths the fight is running away from you. The rout fabric does the chasing math; you do the chasing.',
+    tags: ['spell', 'aoe', 'duration'], color: '#d8b84a',
+    manaCost: 16, cooldown: 12, useTime: 0.55,
+    delivery: { type: 'nova', radius: 190 },
+    effects: [{ type: 'status', status: 'bolted', chance: 1 }],
+    requirements: { willpower: 16 },
+    dropWeight: 6, minDropLevel: 6,
+    ai: { range: 160, weight: 2 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  honeydew_lure: {
+    id: 'honeydew_lure', name: 'Honeydew Lure',
+    description: 'Pour a slow gold pool of the herd\'s own sweetness. Everything near is DRAWN to it and mired in it — appetite as architecture. Set the table, then serve what comes.',
+    tags: ['spell', 'aoe', 'duration', 'chaos'], color: '#e8cf7a',
+    manaCost: 14, cooldown: 8, useTime: 0.6,
+    baseDamage: { chaos: [2, 4] },
+    delivery: {
+      type: 'ground', radius: 110, castRange: 380,
+      lingerDuration: 4.5, tickInterval: 0.4,
+      pull: 130, pullRadius: 250,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'mired', chance: 1 },
+    ],
+    requirements: { willpower: 14 },
+    dropWeight: 6, minDropLevel: 8,
+    ai: { range: 340, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  moult: {
+    id: 'moult', name: 'Moult',
+    description: 'Shed the skin the trouble is stuck to. Your newest afflictions come off WITH it, and for a breath you move like something freshly hatched. The insects have been winning fights this way for a hundred million years.',
+    tags: ['spell', 'buff', 'instant', 'duration'], color: '#b8d8a0',
+    manaCost: 12, cooldown: 14, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'cleanse', count: 4 },
+      { type: 'buff', id: 'fresh_moult', duration: 2.5, mods: [mod('moveSpeed', 'more', 0.2)] },
+    ],
+    requirements: { dexterity: 14 },
+    dropWeight: 6, minDropLevel: 10,
+    ai: { range: 0, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
   // --- THE HARROWING (the Gloamwood country's fear-craft) --------------------
   // The player-facing pool the haunted manor unlocks ('manor_entered' gates
   // the Vault bundle) plus the Carven Court's own verbs. The family identity

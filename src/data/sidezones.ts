@@ -291,6 +291,59 @@ registerSidezone({
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'ossuary', { rollVariant: true }),
 });
 
+// --- THE FORMICARY (the Garden's nest) -----------------------------------------
+// The colony's mound-gate spire (the formic_earthworks composition plants it)
+// dwells DOWN into the formicary — the ruin_gate pattern in worked earth,
+// each gate rolling its own face (galleries / deep combs / granary rows).
+// The 'nest_entered' ledger key is the colony's GATEWAY SEAM (the
+// ruin_entered pattern): the Scentcraft gem pools and any future package
+// simply name it. Gallery floors lay a 'brood_stair' of their own (the
+// formicary tileset's layout row — the garret_stair pattern pointed down),
+// so the nest descends gate → galleries → the Brood Vault, where noDeeper
+// closes the ladder and the Matriarch holds the bottom room.
+// The nest keeps its OWN small lives (authored fauna — the cellar's lane):
+// without it, minted pockets fall back to the plains wildlife table and the
+// Brood Vault grows meadow hares (live-QA witnessed; the tilesets.ts:5210
+// biome-tag lesson, answered at the mint).
+const NEST_FAUNA = [
+  { id: 'ant_trail', chance: 0.7, count: [1, 2] as [number, number] },
+  { id: 'glow_moth', chance: 0.4, count: [2, 3] as [number, number] },
+];
+
+registerSidezone({
+  kind: 'mound_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'nest_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'formicary', { rollVariant: true });
+    def.fauna = [...NEST_FAUNA];
+    return def;
+  },
+});
+
+// The floor-to-vault rung the MINTED galleries lay themselves. Two rungs of
+// worked earth is a NEST: the Vault seals the ladder (noDeeper strips any
+// deeper mouths from its layout) and seats the queen as a true boss arena
+// (OBJECTIVE_SEALS holds her doors until the brood is settled).
+registerSidezone({
+  kind: 'brood_stair',
+  dwell: 0.7,
+  mint: ({ parent, seed, id }: SidezoneMintCtx): ZoneDef => {
+    const rungs = (parent.caveDepth ?? 0) + 1; // which rung this mint IS
+    const vault = rungs >= 2;
+    const def = mintCave(parent, seed, id, 'formicary', {
+      rollVariant: true,
+      ...(vault ? {
+        name: 'the Brood Vault',
+        objective: { kind: 'boss', id: 'formic_matriarch' },
+        noDeeper: true,
+      } : {}),
+    });
+    def.fauna = [...NEST_FAUNA];
+    return def;
+  },
+});
+
 // --- THE TOWNHOUSE FLOORS (burgher ASCENSION) ----------------------------------
 // The gloam manor's climb, generalized to the whole settled belt: the cave
 // drop-in INVERTED. 'city_stair' (a townhouse structure's stair cell) dwells

@@ -141,3 +141,18 @@ registerMeld({
     { kind: 'hay_bale', count: [0, 1] },
   ],
 });
+
+// THE GARDEN'S REACH — the country ahead grows TALLER than country should:
+// blade-grass over your head, petals drifted out past the last stand, one
+// young bloom stalk scouting the verge like a sapling that got ideas.
+registerMeld({
+  id: 'garden_meld',
+  label: 'the blooms stand tall ahead',
+  rows: [
+    { kind: 'wildgrass_blade', count: [2, 4] },
+    { kind: 'petal_drift', count: [1, 3] },
+    { kind: 'bloom_stalk', count: [0, 1], radius: [22, 32] },
+    { kind: 'flowers', count: [1, 2] },
+    { kind: 'dew_bead', count: [0, 1] },
+  ],
+});

@@ -2463,4 +2463,110 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { hull: '#2c4a4e', sail: '#9adcd8', glow: '#7ad8d8' },
     light: { radius: -2.4, color: '#7ad8d8', intensity: 0.45, flicker: 3 },
   },
+
+  // --- The Garden kit (vis/paintersGarden.ts; kinds in data/garden.ts) ------
+  // The bug-high country's dressing: flower stands wear the tree contract
+  // exactly (trunk painter + a crown canopy — the crown is just PETALS), the
+  // wildgrass wears the wheat contract in feral green, and the Tender's
+  // relics say the scale out loud. Litter patches ride the liquid painter
+  // (the flowers-row precedent): one painter, two beds of colors.
+  bloom_stalk: {
+    painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.1,
+    params: { color: '#4e7a38', scale: 0.3, roots: 3 },
+    canopy: { painter: 'bloomCrown', params: { petal: '#e08ab8', heart: '#e8c84a' } },
+  },
+  sun_disc: {
+    painter: 'trunk', order: 52, shadow: 0.55, longShadow: 1.3,
+    params: { color: '#5a7a34', scale: 0.26, roots: 4 },
+    canopy: { painter: 'bloomCrown', params: { petal: '#e8c84a', petal2: '#d8a03a', heart: '#5c3e22', petals: 16, rows: 2 } },
+    light: { radius: -1.5, color: '#ffe8a0', intensity: 0.1 },
+  },
+  bellflower: {
+    painter: 'trunk', order: 52, shadow: 0.45, longShadow: 0.9,
+    params: { color: '#46743e', scale: 0.3, roots: 3 },
+    canopy: { painter: 'bloomCrown', params: { petal: '#7a96e0', heart: '#e8e8c0', petals: 5, notch: 1 } },
+  },
+  wildgrass_blade: {
+    painter: 'wheatStalk', order: 47, bakeWhole: 'static',
+    blend: { strength: 0.3, feather: 18, color: '#4a6a2c' },
+    params: { stalk: '#5a8a3c' },
+    canopy: { painter: 'wheatTops', params: { head: '#6aa04a', tassel: '#9ac86a', tall: 1.2 } },
+  },
+  petal_drift: {
+    painter: 'liquid', order: 45,
+    params: {
+      core: { color: '#a85480', alpha: 0.16 },
+      tufts: { color: '#e8a8c8' },
+    },
+  },
+  leaf_mulch: {
+    painter: 'liquid', order: 45,
+    params: {
+      core: { color: '#4a3a20', alpha: 0.22 },
+      tufts: { color: '#8a6a3a' },
+    },
+  },
+  // Pod params are the painter's FULL contract (glowY/glowR/pulseRate are
+  // required — an omitted glowR is a NaN gradient radius, the one throwing
+  // sink; live QA caught the crash on the mulch mint).
+  seed_pod: {
+    painter: 'pod', order: 53, shadow: 0.5,
+    params: { body: '#a8925a', glow: '#d8c88a', aspectY: 1.2, glowY: -0.15, glowR: 0.3, pulseRate: 0.9, bands: 4 },
+  },
+  bud_knot: {
+    painter: 'pod', order: 53, shadow: 0.45,
+    params: { body: '#5a8a44', glow: '#9ad86a', aspectY: 1.35, glowY: -0.2, glowR: 0.32, pulseRate: 1.1, bands: 2 },
+  },
+  dew_bead: {
+    painter: 'dewBead', order: 53, shadow: 0.28,
+    light: { radius: -3, color: '#bfe8ff', intensity: 0.1 },
+  },
+  watering_can: {
+    painter: 'gardenRelic', order: 54, shadow: 0.55, longShadow: 1.2, bakeWhole: 'static',
+    params: { form: 'can', metal: '#7a8a8e' },
+  },
+  bell_jar: {
+    painter: 'gardenRelic', order: 54, shadow: 0.3,
+    params: { form: 'jar', glass: '#cfe6e2' },
+  },
+  tender_idol: {
+    painter: 'gardenRelic', order: 53, shadow: 0.5, longShadow: 1.3, bakeWhole: 'static',
+    params: { form: 'idol', stone: '#9a9284' },
+  },
+  rusted_trowel: {
+    painter: 'gardenRelic', order: 52, shadow: 0.4, bakeWhole: 'static',
+    params: { form: 'trowel', metal: '#8a6a52' },
+  },
+  trellis_frame: {
+    painter: 'trellisFrame', order: 52, shadow: 0.4, longShadow: 0.8, bakeWhole: 'static',
+    params: { wood: '#8a6f46', vine: '#4a7a34' },
+  },
+  formic_mound: {
+    painter: 'moundSpire', order: 52, shadow: 0.5, longShadow: 0.9, bakeWhole: 'static',
+    params: { earth: '#8a6a46' },
+  },
+  formic_vent: {
+    painter: 'moundSpire', order: 50, shadow: 0.35, bakeWhole: 'static',
+    params: { earth: '#7a5e40' },
+  },
+  // The gate spire names itself close-up (labelRevealed) — never baked, the
+  // label is a live read.
+  mound_gate: {
+    painter: 'moundSpire', order: 53, shadow: 0.55, longShadow: 1.0,
+    params: { earth: '#916f4a', mouth: true, label: 'the Formicary' },
+  },
+  comb_wax: {
+    painter: 'waxComb', order: 44, bakeWhole: 'static',
+    params: { wax: '#c8a24a', cap: '#e8cf7a' },
+  },
+  // The formicary's way down — the cellar-hatch contract in colony earth
+  // (caveMouth painter, tumble + label: the pit_entrance precedent).
+  brood_stair: {
+    painter: 'caveMouth', order: 53, shadow: 0.45,
+    params: { tumble: 1, label: 'the brood run' },
+  },
+  compost_heap: {
+    painter: 'moundSpire', order: 52, shadow: 0.5, bakeWhole: 'static',
+    params: { earth: '#5c4c2e' },
+  },
 };

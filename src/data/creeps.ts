@@ -60,6 +60,25 @@ registerCreep({
   ],
 });
 
+/** SNAILSLICK — the gastropod road: a pearl film laid by the garden's
+ *  snails and slugs (MonsterDef.creepSource anchors it to the living body;
+ *  the membrane recoils when the layer dies). Slick underfoot for
+ *  everyone — the slippery status is the whole personality — and never
+ *  grown by zones: this skin exists only where something is laying it. */
+registerCreep({
+  id: 'snailslick',
+  color: '#3a4038', rim: '#b8c8c0', vein: '#8a9a90', glow: '#d8e8dc',
+  alpha: 0.34,
+  reach: [50, 90],
+  lobing: 0.22,
+  spread: 16,
+  pulse: 0.5,
+  veins: [2, 4],
+  nodes: 0.12,
+  skin: 'water',
+  grants: [{ status: 'slippery' }],
+});
+
 // --- THE ADVANCING FRONTS — the debut marching rows ------------------------
 
 /** THE FLOODCREST — a directional wall of water that breaks in from the

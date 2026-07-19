@@ -71,6 +71,27 @@ registerFogBank({
   ],
 });
 
+/** POLLEN HAZE — the Garden's gold weather-in-miniature: a drifting cloud
+ *  of shed pollen that gathers over the blooms themselves (haunt pulls the
+ *  anchors onto the flower stands) and hangs in slow, heavy lobes. A veil
+ *  like any fog — at bug height, pollen IS the mist. The sting textures
+ *  live on the kin (the sylph's blinding puff), never on the ambience. */
+registerFogBank({
+  id: 'pollen_haze',
+  color: '#d8c26a',
+  alpha: 0.3,
+  radius: [100, 180],
+  lobes: [5, 8],
+  drift: [4, 10],
+  meander: 0.26,
+  breathe: 0.2,
+  churn: 0.3,
+  life: [50, 100],
+  rampFrac: 0.3,
+  haunt: { kinds: ['bloom_stalk', 'sun_disc', 'bellflower', 'flowers'], pull: 0.85 },
+  grants: [{ status: 'fogveiled' }],
+});
+
 /** BLOOD MIST — the Sanguine face's red haze: a low, clinging aerosol that
  *  pools over open blood (haunt hugs the pools and the gore) and turns heads
  *  LIGHT — faintness climbs its vasovagal ladder on the grant's own cadence

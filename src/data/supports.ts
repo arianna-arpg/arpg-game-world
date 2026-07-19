@@ -3200,6 +3200,43 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 7,
   },
 
+  // --- The Scentcraft gems (the Garden's pheromone-craft; pooled behind
+  // 'nest_entered' — the formicary unlocks the discipline) -------------------
+  heavy_musk: {
+    id: 'heavy_musk', name: 'Heavy Musk',
+    description: 'The scent CLINGS: this skill\'s afflictions last 40% longer and reach 20% wider — and cost more breath to lay down.',
+    color: '#c8a86a', requiresTags: ['curse'],
+    mods: [
+      mod('effectDuration', 'increased', 0.4),
+      mod('aoeRadius', 'increased', 0.2),
+      mod('manaCost', 'increased', 0.2),
+    ],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 6,
+  },
+  candied_scent: {
+    id: 'candied_scent', name: 'Candied Scent',
+    description: 'The smell turns SWEET enough to argue with: hits from this skill have a 25% chance to TAUNT the victim onto you — appetite, redirected — and its effects linger a little longer.',
+    color: '#e8cf7a', requiresTags: ['duration'],
+    mods: [
+      mod('apply_taunted', 'flat', 0.25),
+      mod('effectDuration', 'increased', 0.15),
+    ],
+    perLevel: [mod('apply_taunted', 'flat', 0.04)],
+    weight: 5,
+  },
+  startling_reek: {
+    id: 'startling_reek', name: 'Startling Reek',
+    description: 'A sour edge under the blow: hits from this skill have a 20% chance to BOLT the victim outright (the rout fabric takes it from there), at the price of hitting 15% less hard.',
+    color: '#d8b84a', requiresTags: ['attack', 'spell'],
+    mods: [
+      mod('apply_bolted', 'flat', 0.2),
+      mod('damage', 'more', -0.15),
+    ],
+    perLevel: [mod('apply_bolted', 'flat', 0.03)],
+    weight: 5,
+  },
+
   malfeasance: {
     id: 'malfeasance', name: 'Malfeasance',
     description: 'Curses applied by this skill RUPTURE when they expire, dealing 250% of the curse\'s latent damage around the victim.',

@@ -67,6 +67,7 @@ import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
 import { validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
+import './garden'; // side-effect: the Garden kit's kinds register before validation
 import { validateCreep } from '../engine/creep';
 import './creeps'; // side-effect: the creep kind defs register before validation
 import { attunedStatus } from '../engine/tuning';

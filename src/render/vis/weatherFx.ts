@@ -54,6 +54,9 @@ export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
   gale:      { form: 'streak', count: 40, vel: [560, 40], len: 26, alpha: 0.14, color: '#c8d4d8', fadeIn: 5 },
   // Blood rain falls HEAVY and a little slow — fat red streaks, not a drizzle.
   hemorrhage: { form: 'streak', count: 70, vel: [-40, 430], len: 12, alpha: 0.4, color: '#c2404e', fadeIn: 6 },
+  // Petalfall drifts like fat warm snow — big soft flakes on a sidling wind
+  // (the flake painter in bloom pink; the garden's sky letting go).
+  petalfall: { form: 'flake', count: 70, vel: [-46, 44], size: 3.2, alpha: 0.55, color: '#f0b8d4', fadeIn: 6 },
   // Near-horizontal grit — the sky moving sideways. The wind fabric supplies
   // the shove; this supplies the reason you believe it.
   sandstorm: { form: 'streak', count: 110, vel: [-380, 90], len: 16, alpha: 0.4, color: '#d8b878', fadeIn: 2.5 },

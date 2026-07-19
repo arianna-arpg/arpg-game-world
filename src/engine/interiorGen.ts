@@ -39,6 +39,12 @@ const EDGE_CELLS = 2;
 
 export interface InteriorRoleDef {
   id: string;
+  /** Which ROLE POOL this row belongs to (default 'common'). A zone draws
+   *  the pools its `layoutParams.rolePools` names — default ['common'] — so
+   *  a themed interior (the formicary's 'nest') can carry its own room
+   *  vocabulary without crypt braziers leaking into the colony or colony
+   *  eggs into the crypts. Absent everywhere = exactly the classic sweep. */
+  pool?: string;
   /** How rooms are picked: 'deepest' = max BFS depth from the entry room,
    *  'deadend' = degree-1 rooms (deep first), 'any' = uniform rng picks. */
   pick: 'deepest' | 'deadend' | 'any';
@@ -346,7 +352,11 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
   }
   const assigned = new Set<number>();
   if (P('roles', true)) {
+    // The pool gate: a zone draws only the role pools it names (default the
+    // common pool), so themed interiors keep their own furniture vocabulary.
+    const pools = new Set<string>((P('rolePools', undefined) as string[] | undefined) ?? ['common']);
     for (const role of interiorRoleDefs()) {
+      if (!pools.has(role.pool ?? 'common')) continue;
       const eligible = rooms.map((_, i) => i)
         .filter(i => !rooms[i].portal && !assigned.has(i) && depth[i] >= 0);
       const max = role.max ?? 1;

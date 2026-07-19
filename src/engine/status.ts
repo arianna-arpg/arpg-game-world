@@ -68,6 +68,13 @@ export interface StatusDef {
    *  they wear only the status's ordinary mods. Checked by
    *  Actor.isPanicked — any status may declare it. */
   panic?: true;
+  /** THE SCENT LAW: while worn, the bearer reads as PREY to anything that
+   *  hunts at all — World.isPrey answers true for any brain with a live
+   *  prey list (kin guards still hold: same kind and same squad never eat
+   *  their own), so packs converge, lurkers commit, and seekPrey noses the
+   *  bearer from beyond sight. The Scentcraft mark's teeth; any future
+   *  status (a botched disguise, a blood-soaked curse) may declare it. */
+  smellsOfPrey?: true;
   /** SELECTIVE CC: while afflicted, the victim cannot USE skills carrying
    *  ANY of these tags (Actor.canUse is the one gate — player, monster,
    *  and minion alike). Silence forbids 'spell', Disarm forbids 'attack',
@@ -686,6 +693,21 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   taunted: {
     label: 'Taunted', color: '#e0763a', duration: 3,
     refreshCaster: true,
+  },
+  // PREY-MARKED (Scentcraft): the smell of the eaten, dashed on. The scent
+  // law (smellsOfPrey → World.isPrey) turns every hunter on the bearer;
+  // the damage lean makes the cast matter even on an empty field.
+  prey_marked: {
+    label: 'Prey-Marked', color: '#c8a86a', duration: 8,
+    smellsOfPrey: true,
+    mods: [mod('damageTaken', 'increased', 0.12)],
+  },
+  // BOLTED (Scentcraft): the colony's own alarm-scent, weaponized — a
+  // short, absolute rout (the panic flag; players wear only the mods).
+  bolted: {
+    label: 'Bolted', color: '#d8b84a', duration: 2.4,
+    panic: true,
+    mods: [mod('evasion', 'more', -0.2)],
   },
   // EXPOSED (#12): a weak spot painted on the health bar just below the
   // wound — hit them INTO the window for 40% more; punch through it and

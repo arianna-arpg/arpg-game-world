@@ -4100,6 +4100,670 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // ==========================================================================
+  // THE GARDEN COUNTRY — the bug-high biome: an enormous tended plot walked
+  // at seed scale. Four staged faces (petalfields rim → stalkwood heart →
+  // the tended rows → the mulch margin), the rootways strata below, and the
+  // formicary — the colony's nest — below THAT. A flower stalk is a tree
+  // (trunk + bloomCrown canopy, the full veil contract), blade-grass is the
+  // crop law gone feral, planter beds are massif ramparts, and the Tender's
+  // dropped tools are the landmarks. Kinds in data/garden.ts; painters in
+  // render/vis/paintersGarden.ts; the colony + bloomkin in data/monsters.ts.
+  // ==========================================================================
+
+  // PETALFIELDS — the country's first face: open blossom parkland, groves of
+  // flower stands with drifted petals between, the skeps still humming, and
+  // the first mounds of the colony working under it all.
+  petalfields: {
+    id: 'petalfields', biome: 'garden',
+    depthAffinity: { to: 0.35, fadeOut: 0.28 },
+    forceLayout: 'parkland',
+    layoutParams: {
+      parklandGroves: [5, 8], parklandGroveR: [130, 220],
+      parklandTrees: [
+        { kind: 'bloom_stalk', weight: 4, radius: [30, 46] },
+        { kind: 'sun_disc', weight: 1, radius: [46, 60] },
+        { kind: 'bellflower', weight: 2, radius: [22, 32] },
+      ],
+      // The stand hearts are the GRAND discs (never the default ancient_tree
+      // — no oak grew here; something bigger was planted).
+      parklandHearts: [{ kind: 'sun_disc', weight: 1, radius: [48, 62] }],
+      parklandHeartExtra: { kind: 'dew_bead', chance: 0.4, radius: [10, 15] },
+      parklandFloor: [
+        { kind: 'flowers', weight: 3, radius: [12, 18] },
+        { kind: 'wildgrass_blade', weight: 2, radius: [26, 38] },
+        { kind: 'petal_drift', weight: 2, radius: [16, 26] },
+        { kind: 'seed_pod', weight: 1, radius: [12, 17] },
+        { kind: 'bud_knot', weight: 1, radius: [10, 15] },
+      ],
+    },
+    compositions: [
+      { composition: 'skep_yard', chance: 0.25 },
+      { composition: 'tenders_rest', chance: 0.12 },
+      { composition: 'bell_jar_garden', chance: 0.1 },
+      { composition: 'formic_earthworks', chance: 0.12 },
+    ],
+    nameFirst: ['Petalwake', 'Overbloom', 'Nodding', 'Hundredbloom', 'Sunwide', 'Corolla', 'Tenderkept', 'Bright-Crown', 'Pollenfall', 'Wide-Open', 'Gold-Heart', 'Dewbright'],
+    nameSecond: ['Petalfields', 'Acre', 'Plot', 'Blooms', 'Stands', 'Swathe', 'Verge', 'Ground', 'Spread', 'Beds', 'Garden', 'Reach'],
+    theme: {
+      ground: {
+        palette: ['#15200d', '#203014', '#2c421b', '#3c5724', '#4c6a2e'], bias: 0.6, alpha: 0.5,
+        coast: { reach: 90, shift: -0.36 },
+        clearing: { reach: 130, lift: 0.2 },
+      },
+      dayLight: 1.18, nightDark: 0.62,
+      fog: { banks: [0, 2], kinds: [{ id: 'pollen_haze' }] },
+      ambientFx: [{ kind: 'motes', intensity: 0.5, color: '#e8d88a' }],
+      floor: '#101508', grid: '#1a2410', border: '#3f6030',
+      obstacle: '#2e4d24', obstacleEdge: '#4d7c38', accent: '#e8a8c8',
+      tree: '#4e7a38', grass: '#548038', mud: '#20301a', water: '#1a4a54',
+    },
+    sizeW: [2500, 3400], sizeH: [1700, 2400], ellipseChance: 0.2, sky: 'open',
+    layout: [
+      { kind: 'clearing', count: [1, 2], radius: [100, 160] },
+      { kind: 'water', count: [0, 1] },
+      { kind: 'flowers', count: [3, 6] },
+      { kind: 'grass', count: [4, 7] },
+      { kind: 'wildgrass_blade', count: [3, 6] },
+      { kind: 'petal_drift', count: [2, 5] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'dew_bead', count: [1, 3] },
+      { kind: 'beehive', count: [0, 2] },
+      { kind: 'formic_mound', count: [0, 2] },
+      { kind: 'rocks', count: [1, 3], radius: [14, 26] },
+      { kind: 'formation', count: [1, 2], formation: 'bloom_stand' },
+      { kind: 'formation', count: [0, 1], formation: 'dew_string' },
+      { kind: 'cave', count: [0, 1] },
+      { kind: 'haven_stone', count: [0, 1] },
+    ],
+    variants: [
+      // The deadheaded rows: the cutting the Tender never finished — crowns
+      // taken, pods left, petals drifted deep over everything.
+      {
+        name: 'the deadheaded rows',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [100, 160] },
+          { kind: 'flowers', count: [2, 4] },
+          { kind: 'grass', count: [4, 7] },
+          { kind: 'wildgrass_blade', count: [2, 4] },
+          { kind: 'petal_drift', count: [5, 9] },
+          { kind: 'seed_pod', count: [3, 6] },
+          { kind: 'bud_knot', count: [2, 4] },
+          { kind: 'rusted_trowel', count: [0, 1] },
+          { kind: 'rocks', count: [1, 3], radius: [14, 26] },
+          { kind: 'formation', count: [0, 1], formation: 'bloom_stand' },
+          { kind: 'cave', count: [0, 1] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        layoutParams: {
+          parklandGroves: [3, 5],
+          parklandFloor: [
+            { kind: 'petal_drift', weight: 3, radius: [16, 26] },
+            { kind: 'seed_pod', weight: 2, radius: [12, 17] },
+            { kind: 'flowers', weight: 1, radius: [12, 18] },
+          ],
+        },
+      },
+      // Dew-hung morning: the night's water still standing — bead strings
+      // everywhere, the pollen washed down, everything bright and heavy.
+      {
+        name: 'dew-hung morning',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [100, 160] },
+          { kind: 'water', count: [0, 1] },
+          { kind: 'flowers', count: [3, 5] },
+          { kind: 'grass', count: [4, 7] },
+          { kind: 'wildgrass_blade', count: [3, 5] },
+          { kind: 'dew_bead', count: [4, 8] },
+          { kind: 'petal_drift', count: [1, 3] },
+          { kind: 'formation', count: [1, 2], formation: 'dew_string' },
+          { kind: 'formation', count: [1, 1], formation: 'bloom_stand' },
+          { kind: 'cave', count: [0, 1] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        theme: { dayLight: 1.24, fog: { banks: [0, 1], kinds: [{ id: 'pollen_haze' }] } },
+      },
+    ],
+    packs: {
+      count: [5, 7], size: [2, 4],
+      table: [
+        { id: 'skep_bee', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'petal_dancer', weight: 3 },
+        { id: 'formic_worker', weight: 2 },
+        { id: 'formic_forager', weight: 1 },
+        { id: 'garden_snail', weight: 1 },
+        { id: 'bombardier_beetle', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'pollen_sylph', weight: 1, presence: { from: 5, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'formic_burrow',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'beacon', weight: 2 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+    ],
+  },
+
+  // STALKWOOD — the country's heart: a forest whose trees are flower stalks,
+  // the floor walled with blade-grass you part but cannot see through. The
+  // colony's forage columns run it; the weavers string it; the mantis waits
+  // in it. The canopy is petals; the claustrophobia is grass.
+  stalkwood: {
+    id: 'stalkwood', biome: 'garden',
+    depthAffinity: { from: 0.2, fadeIn: 0.15 },
+    forceLayout: 'forest',
+    layoutParams: {
+      // The sun disc is an EMERGENT (the canopy-colossus doctrine: "half a
+      // glade under one crown") — weight 0.35 keeps it a punctuation mark.
+      // Live QA re-proved the jungle lesson: at weight 4 the bolted acre
+      // mass-planted ~1000 giant crowns and the canopy pass would drown.
+      forestTrees: [
+        { kind: 'bloom_stalk', weight: 5, radius: [30, 48] },
+        { kind: 'sun_disc', weight: 0.35, radius: [46, 60] },
+        { kind: 'bellflower', weight: 2.5, radius: [22, 32] },
+        { kind: 'briarwood', weight: 1, radius: [18, 26] },
+      ],
+      forestCoverEdge: 0.45, forestCoverDeep: 0.85,
+      forestClearings: [2, 4],
+      overgrowth: [0.08, 0.3],
+    },
+    compositions: [
+      { composition: 'formic_earthworks', chance: 0.22 },
+      { composition: 'bell_jar_garden', chance: 0.08 },
+    ],
+    nameFirst: ['Stalkwood', 'Bolted', 'Understem', 'Tallgrown', 'Greenshaft', 'Swaying', 'Deepbloom', 'Shadowpetal', 'Cane-Dark', 'Rustling', 'Stemshade', 'Highstem'],
+    nameSecond: ['Stalks', 'Wood', 'Stems', 'Canes', 'Shade', 'Rows', 'Tangle', 'Deeps', 'Stand', 'Aisle', 'Thicket', 'Country'],
+    theme: {
+      ground: {
+        palette: ['#101a0b', '#182610', '#223417', '#2e451e', '#3a5626'], bias: 0.55, alpha: 0.5,
+        clearing: { reach: 110, lift: 0.16 },
+      },
+      dayLight: 0.95, nightDark: 0.72,
+      sightVeil: { mul: 1.1, regionMul: 1, doodadMul: 1.15 },
+      fog: { banks: [1, 2], kinds: [{ id: 'pollen_haze', weight: 2 }, { id: 'mist' }] },
+      lite: {
+        swarms: [{
+          monsterId: 'wool_aphid', pockets: [2, 4], size: [16, 30], chance: 0.85,
+          announce: 'the stems are lousy with aphids…', announceColor: '#b8d8a0',
+        }],
+      },
+      floor: '#0c1207', grid: '#151f0d', border: '#375528',
+      obstacle: '#28421e', obstacleEdge: '#456e34', accent: '#c88ad0',
+      tree: '#46743e', grass: '#4a7a34', mud: '#1c2a16', water: '#194a50',
+    },
+    sizeW: [2400, 3300], sizeH: [1700, 2400], ellipseChance: 0.15, sky: 'open',
+    layout: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+      { kind: 'wildgrass_blade', count: [7, 12] },
+      { kind: 'formation', count: [1, 3], formation: 'wildgrass_run' },
+      { kind: 'petal_drift', count: [2, 4] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'bud_knot', count: [1, 3] },
+      { kind: 'web', count: [0, 2] },
+      { kind: 'formic_mound', count: [0, 2] },
+      { kind: 'rocks', count: [1, 3], radius: [14, 24] },
+      { kind: 'cave', count: [0, 1] },
+      { kind: 'haven_stone', count: [0, 1] },
+    ],
+    variants: [
+      // The bolted acre: everything went to SEED — sun discs crowd the roof,
+      // pods hang heavy, the floor is husks and spent gold.
+      {
+        name: 'the bolted acre',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+          { kind: 'wildgrass_blade', count: [5, 9] },
+          { kind: 'seed_pod', count: [4, 8] },
+          { kind: 'petal_drift', count: [2, 4] },
+          { kind: 'formation', count: [1, 2], formation: 'wildgrass_run' },
+          { kind: 'formic_mound', count: [1, 2] },
+          { kind: 'cave', count: [0, 1] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        layoutParams: {
+          // Gone to seed = MORE discs than usual, still punctuation (the
+          // colossus doctrine holds in every wardrobe).
+          forestTrees: [
+            { kind: 'sun_disc', weight: 1, radius: [44, 58] },
+            { kind: 'bloom_stalk', weight: 4, radius: [30, 44] },
+            { kind: 'bellflower', weight: 1.5, radius: [22, 30] },
+          ],
+          forestCoverEdge: 0.4, forestCoverDeep: 0.75,
+        },
+      },
+      // The weaver runs: silk between the stems — the orb country, strung
+      // and patient. Walk the grass lanes; the lines cross overhead.
+      {
+        name: 'the weaver runs',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+          { kind: 'wildgrass_blade', count: [6, 10] },
+          { kind: 'web', count: [3, 6] },
+          { kind: 'petal_drift', count: [1, 3] },
+          { kind: 'formation', count: [1, 2], formation: 'wildgrass_run' },
+          { kind: 'formation', count: [0, 1], formation: 'dew_string' },
+          { kind: 'cave', count: [0, 1] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        theme: { nightDark: 0.76 },
+      },
+    ],
+    scenery: [{ monster: 'ant_trail', count: [1, 3] }],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'formic_worker', weight: 3, presence: { to: 18, fadeOut: 9 } },
+        { id: 'formic_soldier', weight: 2 },
+        { id: 'formic_forager', weight: 1.5 },
+        { id: 'orb_weaver', weight: 2 },
+        { id: 'widow_matron', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'emerald_mantis', weight: 1.5, presence: { from: 8, fadeIn: 4 } },
+        { id: 'petal_dancer', weight: 1.5 },
+        { id: 'pollen_sylph', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'banded_slug', weight: 1 },
+        { id: 'mazer_moth', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'formic_burrow',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // THE TENDERS' ROWS — the built face: planter-bed ramparts standing over
+  // the paths between them, trellis rows mid-mend, the relics where the
+  // giant set them down. The colony forages it; the bloomkin defend it;
+  // nobody tends it.
+  tendersrows: {
+    id: 'tendersrows', biome: 'garden',
+    depthAffinity: { from: 0.25, fadeIn: 0.12, to: 0.8, fadeOut: 0.15 },
+    forceLayout: 'massif',
+    layoutParams: {
+      massifMasses: [
+        { kind: 'planter_bed', weight: 3 },
+        { kind: 'hedge', weight: 1 },
+      ],
+      massifCoverage: [0.13, 0.19],
+    },
+    compositions: [
+      { composition: 'tenders_rest', chance: 0.3 },
+      { composition: 'bell_jar_garden', chance: 0.16 },
+      { composition: 'skep_yard', chance: 0.18 },
+      { composition: 'formic_earthworks', chance: 0.15 },
+    ],
+    nameFirst: ['Tenders', 'Trellised', 'Potted', 'Boarded', 'Kept', 'Rowbound', 'The Long', 'Espalier', 'Terracotta', 'Old-Work', 'Twine-Tied', 'Furrowed'],
+    nameSecond: ['Rows', 'Beds', 'Plots', 'Terraces', 'Frames', 'Planters', 'Walks', 'Yards', 'Allotment', 'Workings', 'Furrows', 'Ranks'],
+    theme: {
+      ground: {
+        palette: ['#171509', '#25200e', '#332c14', '#3f381c', '#4c4424'], bias: 0.55, alpha: 0.5,
+        clearing: { reach: 120, lift: 0.18 },
+      },
+      dayLight: 1.1, nightDark: 0.66,
+      ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#d8c88a' }],
+      floor: '#120f07', grid: '#1d180b', border: '#5c5030',
+      obstacle: '#3a2c1c', obstacleEdge: '#6a5a38', accent: '#e8b86a',
+      tree: '#4e7a38', grass: '#548038', mud: '#241c10', water: '#1a4a54',
+    },
+    sizeW: [2400, 3300], sizeH: [1700, 2300], ellipseChance: 0.15, sky: 'open',
+    layout: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 150] },
+      { kind: 'formation', count: [1, 2], formation: 'trellis_row' },
+      { kind: 'clay_pots', count: [1, 3] },
+      { kind: 'flowers', count: [2, 4] },
+      { kind: 'wildgrass_blade', count: [2, 5] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'petal_drift', count: [1, 3] },
+      { kind: 'beehive', count: [0, 1] },
+      { kind: 'dew_bead', count: [0, 2] },
+      { kind: 'rusted_trowel', count: [0, 1] },
+      { kind: 'cave', count: [0, 1] },
+      { kind: 'haven_stone', count: [0, 1] },
+    ],
+    variants: [
+      // The potting yard: the work-corner — pots by the hundredweight,
+      // stacked, cracked, and colonized.
+      {
+        name: 'the potting yard',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [90, 150] },
+          { kind: 'clay_pots', count: [4, 8] },
+          { kind: 'formation', count: [1, 1], formation: 'trellis_row' },
+          { kind: 'rusted_trowel', count: [0, 1] },
+          { kind: 'watering_can', count: [0, 1] },
+          { kind: 'wildgrass_blade', count: [2, 4] },
+          { kind: 'seed_pod', count: [1, 3] },
+          { kind: 'cave', count: [0, 1] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        layoutParams: { massifCoverage: [0.1, 0.15] },
+      },
+      // The glasshouse rows: bell jars down the beds — kept air, kept
+      // blooms, and things grown tall under glass nobody lifted.
+      {
+        name: 'the glasshouse rows',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [90, 150] },
+          { kind: 'bell_jar', count: [1, 3] },
+          { kind: 'bellflower', count: [1, 3] },
+          { kind: 'formation', count: [1, 2], formation: 'trellis_row' },
+          { kind: 'flowers', count: [2, 4] },
+          { kind: 'dew_bead', count: [1, 3] },
+          { kind: 'cave', count: [0, 1] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+      },
+    ],
+    scenery: [{ monster: 'ant_trail', count: [0, 2] }],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'formic_forager', weight: 3 },
+        { id: 'formic_soldier', weight: 2 },
+        { id: 'formic_tender', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'petal_dancer', weight: 2 },
+        { id: 'sepal_warden', weight: 1.5, presence: { from: 6, fadeIn: 3 } },
+        { id: 'foxglove_chorister', weight: 1, presence: { from: 7, fadeIn: 4 } },
+        { id: 'bronze_scarab', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'skep_bee', weight: 1, presence: { to: 16, fadeOut: 8 } },
+        { id: 'garden_snail', weight: 1 },
+      ],
+    },
+    spawnerId: 'formic_burrow',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'offering', weight: 1 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+    ],
+  },
+
+  // THE MULCH MARGIN — the country's deep face: the compost edge where the
+  // garden digests itself. Rot logs, turned earth, the slick trails of what
+  // eats it — and more ways DOWN than anywhere else in the plot.
+  mulchreach: {
+    id: 'mulchreach', biome: 'garden',
+    depthAffinity: { from: 0.55, fadeIn: 0.2 },
+    compositions: [
+      { composition: 'formic_earthworks', chance: 0.35 },
+      { composition: 'tenders_rest', chance: 0.08 },
+    ],
+    nameFirst: ['Mulchreach', 'Rotturn', 'The Turned', 'Wormrich', 'Blackloam', 'Heaped', 'Steaming', 'The Spent', 'Leafgrave', 'Castings', 'Old-Season', 'Sourgold'],
+    nameSecond: ['Mulch', 'Heaps', 'Margins', 'Middens', 'Loam', 'Beds', 'Leavings', 'Compost', 'Rot', 'Ground', 'Turnings', 'Verge'],
+    theme: {
+      ground: {
+        palette: ['#140f08', '#1f180c', '#2a2010', '#352a15', '#40331a'], bias: 0.5, alpha: 0.55,
+        coast: { reach: 80, shift: -0.3 },
+      },
+      dayLight: 0.9, nightDark: 0.74,
+      ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#a89058' }],
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      floor: '#0e0b06', grid: '#171209', border: '#4a3c24',
+      obstacle: '#2e2414', obstacleEdge: '#54452a', accent: '#a8c86a',
+      tree: '#4a6a30', grass: '#5a6a34', mud: '#241a0e', water: '#1a4048',
+    },
+    sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, sky: 'open',
+    layout: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+      { kind: 'compost_heap', count: [2, 4] },
+      { kind: 'leaf_mulch', count: [4, 8] },
+      { kind: 'sunken_log', count: [1, 3] },
+      { kind: 'toadstool', count: [1, 3] },
+      { kind: 'wildgrass_blade', count: [2, 4] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'formic_mound', count: [1, 3] },
+      { kind: 'formic_vent', count: [1, 3] },
+      { kind: 'mud', count: [1, 2] },
+      { kind: 'rocks', count: [1, 3], radius: [14, 24] },
+      { kind: 'cave', count: [1, 2] },
+      { kind: 'haven_stone', count: [0, 1] },
+    ],
+    variants: [
+      // The wet rot: the margin gone to soup — bog pools, slick trails,
+      // everything soft-bodied and thriving.
+      {
+        name: 'the wet rot',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+          { kind: 'bog', count: [1, 2] },
+          { kind: 'compost_heap', count: [1, 3] },
+          { kind: 'leaf_mulch', count: [4, 7] },
+          { kind: 'sunken_log', count: [2, 4] },
+          { kind: 'toadstool', count: [2, 4] },
+          { kind: 'mud', count: [1, 3] },
+          { kind: 'cave', count: [1, 2] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+        theme: { fog: { banks: [1, 2], kinds: [{ id: 'mist' }] } },
+      },
+      // The turned earth: the colony's diggings — mounds and vents in
+      // ranks, the ground worked from below until it reads plowed.
+      {
+        name: 'the turned earth',
+        layout: [
+          { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+          { kind: 'formic_mound', count: [3, 5] },
+          { kind: 'formic_vent', count: [2, 5] },
+          { kind: 'leaf_mulch', count: [3, 6] },
+          { kind: 'compost_heap', count: [1, 3] },
+          { kind: 'seed_pod', count: [1, 3] },
+          { kind: 'formation', count: [1, 1], formation: 'mound_warren' },
+          { kind: 'cave', count: [1, 2] },
+          { kind: 'haven_stone', count: [0, 1] },
+        ],
+      },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'garden_snail', weight: 2 },
+        { id: 'banded_slug', weight: 2 },
+        { id: 'giant_maggot', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'rockgrub', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'maggot_queen', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'formic_worker', weight: 1.5 },
+        { id: 'formic_soldier', weight: 1 },
+        { id: 'mushroomling', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'spore_drifter', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'bombardier_beetle', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'grub_clutch',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+    ],
+  },
+
+  // THE ROOTWAYS — the garden's understratum: burrows bored between the
+  // great taproots, worm-galleries and root-cellared dark. The unstructured
+  // half of the country's downstairs (the formicary is the built half) —
+  // reached by any garden cave mouth, and the colony tunnels through it.
+  rootways: {
+    id: 'rootways', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveFace: {
+      strata: { to: 2, fadeOut: 1, mul: 1.5 },
+      biomes: { garden: 8, grove: 0.5 },
+      variantChance: 0.45,
+    },
+    caveLayouts: { plains: 3, winding: 2.5, labyrinth: 1, rooms: 1 },
+    nameFirst: ['Root', 'Worm', 'Under', 'Loam', 'Tangle', 'Pale', 'Deep', 'Burrowed', 'Blind', 'Taproot'],
+    nameSecond: ['Ways', 'Runs', 'Galleries', 'Hollows', 'Warren', 'Reach', 'Dark', 'Cellars', 'Bores', 'Roots'],
+    theme: {
+      ambientDark: 0.42,
+      ground: {
+        palette: ['#170f08', '#211609', '#2b1d0d', '#352511', '#402d16'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#0e0a05', grid: '#160f08', border: '#4c3a22',
+      obstacle: '#33261a', obstacleEdge: '#5c4830', accent: '#c8a86a',
+      wall: '#3a2c1c', mud: '#20160c', water: '#173a42',
+      tree: '#4a5a2c', grass: '#4a5a2c',
+    },
+    sizeW: [2000, 2800], sizeH: [1500, 2100], ellipseChance: 0.2,
+    layout: [
+      { kind: 'strangler_root', count: [3, 6] },
+      { kind: 'leaf_mulch', count: [2, 5] },
+      { kind: 'toadstool', count: [1, 3] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'comb_wax', count: [0, 2] },
+      { kind: 'clay_pots', count: [0, 2] },
+      { kind: 'rocks', count: [2, 4], radius: [14, 26] },
+      { kind: 'water', count: [0, 1] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    variants: [
+      // The wormworks: bored and re-bored — grub country, soft walls,
+      // things still chewing.
+      {
+        name: 'the wormworks',
+        layout: [
+          { kind: 'strangler_root', count: [2, 4] },
+          { kind: 'leaf_mulch', count: [3, 6] },
+          { kind: 'seed_pod', count: [1, 2] },
+          { kind: 'toadstool', count: [1, 3] },
+          { kind: 'rocks', count: [1, 3], radius: [14, 24] },
+          { kind: 'cave', count: [0, 1] },
+        ],
+      },
+      // The root cellar: somebody's stores, root-swallowed — pots and
+      // seed-jars the taproots grew straight through.
+      {
+        name: 'the root cellar',
+        layout: [
+          { kind: 'strangler_root', count: [3, 5] },
+          { kind: 'clay_pots', count: [2, 5] },
+          { kind: 'seed_pod', count: [2, 4] },
+          { kind: 'leaf_mulch', count: [2, 4] },
+          { kind: 'rocks', count: [1, 3], radius: [14, 24] },
+          { kind: 'cave', count: [0, 1] },
+        ],
+      },
+    ],
+    scenery: [{ monster: 'ant_trail', count: [1, 2] }],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'rockgrub', weight: 3, presence: { to: 16, fadeOut: 8 } },
+        { id: 'giant_maggot', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'formic_worker', weight: 2 },
+        { id: 'formic_soldier', weight: 1 },
+        { id: 'banded_slug', weight: 1.5 },
+        { id: 'garden_snail', weight: 1 },
+        { id: 'widow_matron', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'glow_moth', weight: 1 },
+        { id: 'maggot_queen', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'grub_clutch',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // THE FORMICARY — the colony's nest: the built half of the downstairs,
+  // entered by the mound-gate spires (data/sidezones.ts) and descending
+  // gallery by gallery to the Brood Vault where the Matriarch sits. Rooms
+  // wear the 'nest' role pool (data/garden.ts): brood galleries, fungus
+  // gardens, the granary, the queen's vault at the bottom of the ladder.
+  formicary: {
+    id: 'formicary', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    // Dungeon = the worked galleries, labyrinth = the braided runs (the
+    // nest's own organic face). 'winding' stays out: it lays no layout
+    // rows, and a gallery floor that can't seat its brood run is a nest
+    // with no bottom (probe-pinned).
+    caveLayouts: { dungeon: 3, labyrinth: 2 },
+    layoutParams: {
+      rolePools: ['nest'],
+      interiorWall: 'nest_wall',
+      rooms: [7, 11],
+      doorChance: 0.2, doorBreakChance: 0.15,
+      corridorCells: 1.5, loopiness: 0.35,
+    },
+    nameFirst: ['Formic', 'Brood', 'Worked', 'Chambered', 'Waxen', 'Deep', 'Old', 'Tamped', 'The Queens', 'Six-Legged'],
+    nameSecond: ['Galleries', 'Combs', 'Halls', 'Works', 'Warren', 'Vaults', 'Spiral', 'Nurseries', 'Cells', 'Runs'],
+    theme: {
+      ambientDark: 0.48,
+      ground: {
+        palette: ['#190f07', '#231609', '#2e1e0c', '#392610', '#442e14'], bias: 0.5, alpha: 0.55,
+      },
+      lite: {
+        swarms: [{
+          monsterId: 'wool_aphid', pockets: [1, 3], size: [10, 22], chance: 0.8,
+          announce: 'the herd shifts in the dark…', announceColor: '#b8d8a0',
+        }],
+      },
+      floor: '#100a05', grid: '#181008', border: '#54402a',
+      obstacle: '#33261a', obstacleEdge: '#5c4830', accent: '#e8cf7a',
+      wall: '#33261a', mud: '#20160c', water: '#173a42',
+    },
+    sizeW: [1900, 2600], sizeH: [1400, 2000], ellipseChance: 0,
+    layout: [
+      { kind: 'comb_wax', count: [2, 5] },
+      { kind: 'egg_clutch', count: [1, 3] },
+      { kind: 'leaf_mulch', count: [2, 4] },
+      { kind: 'seed_pod', count: [1, 3] },
+      { kind: 'toadstool', count: [0, 2] },
+      { kind: 'brood_stair', count: [1, 1] },
+    ],
+    variants: [
+      // The deep combs: cell-work floor to ceiling — the colony's wax
+      // districts, waxlight over everything.
+      {
+        name: 'the deep combs',
+        layout: [
+          { kind: 'comb_wax', count: [5, 9] },
+          { kind: 'egg_clutch', count: [2, 4] },
+          { kind: 'seed_pod', count: [1, 2] },
+          { kind: 'brood_stair', count: [1, 1] },
+        ],
+      },
+      // The granary rows: the harvest that comes DOWN here — pods and
+      // stores ranked by a logic no granary-keeper taught them.
+      {
+        name: 'the granary rows',
+        layout: [
+          { kind: 'seed_pod', count: [4, 8] },
+          { kind: 'comb_wax', count: [2, 4] },
+          { kind: 'clay_pots', count: [1, 3] },
+          { kind: 'leaf_mulch', count: [1, 3] },
+          { kind: 'brood_stair', count: [1, 1] },
+        ],
+      },
+    ],
+    packs: {
+      count: [6, 9], size: [3, 6],
+      table: [
+        { id: 'formic_worker', weight: 4, presence: { to: 20, fadeOut: 10 } },
+        { id: 'formic_soldier', weight: 3 },
+        { id: 'formic_forager', weight: 2 },
+        { id: 'formic_tender', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'formic_alate', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'rockgrub', weight: 1, presence: { to: 12, fadeOut: 6 } },
+      ],
+    },
+    spawnerId: 'formic_burrow',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'escape', weight: 1 },
+    ],
+  },
+
   // PENINSULA — a near-round isle ringed by water: always an ellipse, all shore.
   peninsula: {
     id: 'peninsula',
@@ -8665,6 +9329,12 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   ossuary:        { title: 'The Ossuary',       blurb: 'A dark, matte bone-vault — pale mounds, shelf-rows and arches picked out by braziers and niche-candles down its long sightlines.' },
   beach:          { title: 'Coastline',         blurb: 'A sun-bleached coast of sand and wading shallows, palms leaning over scattered wilds where the open sea meets the edge of the map.' },
   meadow:         { title: 'Meadow',            blurb: 'A gentle grove breather — grass, scattered trees and low-threat wilds, a stretch where the world catches its breath.' },
+  petalfields:    { title: 'The Petalfields',   blurb: 'The Garden country\'s first face, walked at seed scale: blossom crowns the size of oaks, drifted petals deep as snow, skeps still humming — and the colony\'s first mounds working the ground beneath it all.' },
+  stalkwood:      { title: 'The Stalkwood',     blurb: 'A forest whose trees are flower stalks: petal canopy overhead, blade-grass walls below that part for bodies and stop every eye. The colony\'s forage columns run it; the weavers string it; the mantis waits in it.' },
+  tendersrows:    { title: 'The Tenders\' Rows', blurb: 'The built face of the Garden: planter-bed ramparts over the paths between them, trellises mid-mend, and the Tender\'s dropped tools standing as monuments. Nobody tends it now — the colony and the bloomkin dispute the estate.' },
+  mulchreach:     { title: 'The Mulch Margin',  blurb: 'The compost edge where the garden digests itself: rot logs and turned earth, slick trails cooling on the loam, and more ways down than anywhere else in the plot.' },
+  rootways:       { title: 'The Rootways',      blurb: 'The garden\'s understratum — burrows bored between taproots thick as towers, worm-galleries, root-swallowed cellars. The unstructured half of the country\'s downstairs; the colony tunnels through it.' },
+  formicary:      { title: 'The Formicary',     blurb: 'The colony\'s nest, gallery by descending gallery: brood chambers and fungus gardens, granaries ranked by no keeper\'s logic, wax cell-work over the worked earth — and the Brood Vault at the bottom, where the Matriarch sits.' },
   peninsula:      { title: 'Peninsula',         blurb: 'A near-round isle ringed entirely by water — all shore, nowhere to fall back to but the sea itself.' },
   strand:         { title: 'The Strand',        blurb: 'The littoral country\'s walkable rim: dune-grass, tide pools and the wrack line — the last dry footing before the land starts going under.' },
   brine_flats:    { title: 'Brine Flats',       blurb: 'The drained seabed between shore and Deep: salt pans in cracked mud, bleached reef heads, whale-fall arches — and caustic sinks where the sea still seeps back in.' },

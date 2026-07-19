@@ -210,6 +210,24 @@ export const BIOMES: Record<string, BiomeInfo> = {
       overgrowth: [0.12, 0.4],
     },
     landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.1 }] },
+  // THE GARDEN: the bug-high country — an enormous tended plot walked at
+  // seed scale (a flower stalk is a tree, a planter bed is a rampart, a
+  // watering can is a monument; the Tender who kept it is a giant nobody
+  // has seen since). Claims the mild-warm half of the damp belt, between
+  // the gloamwood's cool mists and the jungle's heat: four staged faces
+  // (petalfields rim → stalkwood heart → the tended rows → the mulch
+  // margin) and its own downstairs (the rootways strata, the formicary).
+  // PATRON: the FORMIC COLONY — whoever tended the garden is gone; the
+  // colony never stopped working it.
+  garden: { patronFaction: 'formic', mapColor: '#5a9a4e', label: 'the Garden', spacing: 58,
+    climate: { temperature: { from: 0.35, fadeIn: 0.1, to: 0.72, fadeOut: 0.12 }, moisture: { from: 0.45, fadeIn: 0.12 } },
+    meld: 'garden_meld',
+    // Un-forced faces fall to open flowerland; the faces themselves pin
+    // their recipes (parkland / forest / massif / plains).
+    allowedLayouts: { plains: 2.5, forest: 1, massif: 1 },
+    // A garden pond is this country's ocean — the sea fabric will class it
+    // a pond and quay it accordingly, which is exactly the scale joke.
+    landmarks: [{ landmark: 'lake', chance: 0.18 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)
   // and the odd lone watchtower among the tombs.
   // GRAVELANDS: plains, mausoleum-labyrinth bastions, and RUINED NECROPOLIS
@@ -716,6 +734,10 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'forest', weight: 1.3 },
   { biome: 'gloamwood', weight: 1.5 }, // the cool-damp woods: haunted where the forest ends — COUNTRY acreage now (three faces: hallowfield rim / heart wood / mournstead estates)
   { biome: 'jungle', weight: 1.6 },    // warm∧wet gate — high seed weight so its belt reads as one green throat
+  // 1.7: the GARDEN COUNTRY (four staged faces + a downstairs need the
+  // acreage) — its mild-warm∧damp gate contests the woods' belt, and where
+  // it wins it should read as one continuous plot, not a window box.
+  { biome: 'garden', weight: 1.7 },
 
   { biome: 'field', weight: 1.1 },
   { biome: 'grave', weight: 1.0 },
