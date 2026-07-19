@@ -95,6 +95,17 @@ EXACT polygons the sheet fills through the builders' structural PathSink):
   sail (`blocksShot: true, blocksSight: false` — the `arena_stands` debut:
   the colosseum's crowd annulus stops strays at the rail while the veil
   never buries the spectacle; `layoutParams.standRegion` re-aims it).
+- **THE HULL LAW + roofs wear the veil**: what a STANDING roof covers, the
+  outside veil treats as solid (`VIS_CFG.sightVeil.hullGate` — the renderer
+  feeds every standing roof's rects into the veil, extraction and
+  `occludedAt` alike), so an open doorway or arrow-slit never lances a
+  bright wedge across a concealed interior; the spill returns exactly as
+  the roof yields at the threshold. And drawRoofs re-composites the sheet
+  over its own pixels (`roofMul` × the roof's fade), so a structure
+  standing in shadow is dark ROOF AND ALL — one contiguous mass, not a
+  bright lid floating over its own shadow (0 restores the old
+  skyline-stays-lit doctrine). Light-layer glows still shine through by
+  doctrine: unseen is not unlit.
 
 ## The skill lever
 

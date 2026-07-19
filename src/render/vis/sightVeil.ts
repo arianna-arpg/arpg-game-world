@@ -231,16 +231,32 @@ export class SightVeil {
   private gridRef: GridWalkField | null = null;
   private gridBx = 1e9; private gridBy = 1e9; private gridV = -1; private gridR = 0;
 
+  /** THE HULL LAW: roof rects currently CONCEALING (standing roofs, fed by
+   *  the renderer each frame) — their cells read solid to the extraction
+   *  and to occludedAt alike, so an open doorway never lances a wedge
+   *  across a hidden interior. Key detects set changes (re-extract). */
+  private concealed: readonly { x: number; y: number; w: number; h: number }[] = [];
+  private concealKey = '';
+
+  /** The composite mapping draw() last used (compositeOver replays it so a
+   *  roof's veil blit lands pixel-identical to the main sheet). */
+  private drew = false;
+  private drewW = 0; private drewH = 0;
+
   /** Per-actor smoothed hide fades (WeakMap: dead actors collect themselves). */
   private shades = new WeakMap<object, { v: number; f: number }>();
 
   /** Resolve strengths + refresh occluder caches. Once per frame, before
    *  draw. confineFrac is the room veil's wrap (this pass yields to a
    *  confined frame); vw/vh the view extent in world units (the veil reach
-   *  derives from it). Per-body smoothing rides actorShade's own dt. */
-  update(view: SightView, confineFrac: number, vw: number, vh: number): void {
+   *  derives from it); `concealed` is THE HULL LAW's roof-rect list (roofs
+   *  standing this frame — their coverage reads solid from outside).
+   *  Per-body smoothing rides actorShade's own dt. */
+  update(view: SightView, confineFrac: number, vw: number, vh: number,
+    concealed: readonly { x: number; y: number; w: number; h: number }[] = []): void {
     const cfg = VIS_CFG.sightVeil;
     this.frame++;
+    this.drew = false;
     const t = view.zone.theme?.sightVeil;
     const open = 1 - Math.min(1, confineFrac);
     const mul = (t?.mul ?? 1) * open;
@@ -267,13 +283,22 @@ export class SightVeil {
       this.dooR = this.radius + GATHER_PAD;
     }
 
-    // Wall faces: re-extract when the hero crosses a GRID cell bucket or the
-    // grid repaints (doors, terraforms, hollows — GridWalkField.version).
+    // The hull set: a change (a roof lifting as the hero steps in, a fresh
+    // zone's structures) re-extracts — the concealed cells read solid below.
+    let ck = '';
+    for (const r of concealed) ck += `${r.x},${r.y},${r.w},${r.h};`;
+    const hullChanged = ck !== this.concealKey;
+    this.concealed = concealed;
+    this.concealKey = ck;
+
+    // Wall faces: re-extract when the hero crosses a GRID cell bucket, the
+    // grid repaints (doors, terraforms, hollows — GridWalkField.version),
+    // or the hull set changes.
     const g = view.walk instanceof GridWalkField ? view.walk : null;
     if (g) {
       const gbx = Math.floor(p.x / g.cellSize), gby = Math.floor(p.y / g.cellSize);
       if (g !== this.gridRef || gbx !== this.gridBx || gby !== this.gridBy
-        || g.version !== this.gridV || this.radius > this.gridR) {
+        || g.version !== this.gridV || this.radius > this.gridR || hullChanged) {
         this.extractEdges(g);
         this.gridRef = g; this.gridBx = gbx; this.gridBy = gby;
         this.gridV = g.version; this.gridR = this.radius + GATHER_PAD;
@@ -282,6 +307,15 @@ export class SightVeil {
       this.gridRef = null;
       this.edges.length = 0;
     }
+  }
+
+  /** Is this WORLD point under a standing roof (THE HULL LAW)? Solid to the
+   *  extraction and the query alike while the roof stands. */
+  private concealedAt(x: number, y: number): boolean {
+    for (const r of this.concealed) {
+      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return true;
+    }
+    return false;
   }
 
   /** Flatten every shadow-casting doodad in reach into discs/rects. */
@@ -350,7 +384,11 @@ export class SightVeil {
     const solid = new Uint8Array(w * h);
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
-        if (regionBlocksSight(g.regionAt((cx + 0.5) * cs, (cy + 0.5) * cs))) {
+        const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
+        // The hull law: cells under a standing roof read solid from outside
+        // — the structure is one opaque mass, and its doorways/slits spill
+        // only as the roof yields.
+        if (regionBlocksSight(g.regionAt(wx, wy)) || this.concealedAt(wx, wy)) {
           solid[(cy - y0) * w + (cx - x0)] = 1;
         }
       }
@@ -438,14 +476,19 @@ export class SightVeil {
       }
     }
     if (this.regionF > f && this.gridRef) {
-      // Half-cell march, start cell excused — the castRay grid idiom.
+      // Half-cell march, start cell excused — the castRay grid idiom. The
+      // hull law joins the march exactly as it joins the extraction.
       const g = this.gridRef;
       const len = Math.sqrt(len2);
       const step = g.cellSize / 2;
       const limit = Math.min(len, this.radius);
       for (let s = step; s < limit; s += step) {
         const t = s / len;
-        if (regionBlocksSight(g.regionAt(px + qx * t, py + qy * t))) { f = this.regionF; break; }
+        const wx = px + qx * t, wy = py + qy * t;
+        if (regionBlocksSight(g.regionAt(wx, wy)) || this.concealedAt(wx, wy)) {
+          f = this.regionF;
+          break;
+        }
       }
     }
     // The interactable reveals thin the answer exactly as they thin the
@@ -599,6 +642,28 @@ export class SightVeil {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(this.buf, 0, 0, bw, bh, 0, 0, w, h);
+    ctx.restore();
+    this.drew = true;
+    this.drewW = w; this.drewH = h;
+  }
+
+  /** ROOFS WEAR THE VEIL: re-composite this frame's sheet clipped to the
+   *  given WORLD-space rects (the caller's transform must be the world
+   *  transform — drawRoofs'). The blit replays the mapping draw() used, so
+   *  a roof's dark lands pixel-identical to the street's beside it and an
+   *  occluded structure reads as ONE contiguous mass instead of a bright
+   *  lid floating over its own shadow. Free when the sheet didn't draw. */
+  compositeOver(ctx: CanvasRenderingContext2D,
+    rects: readonly { x: number; y: number; w: number; h: number }[], alpha: number): void {
+    if (!this.drew || !this.buf || alpha <= 0.02 || !rects.length) return;
+    ctx.save();
+    ctx.beginPath();
+    for (const r of rects) ctx.rect(r.x, r.y, r.w, r.h);
+    ctx.clip();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(this.buf, 0, 0, this.buf.width, this.buf.height, 0, 0, this.drewW, this.drewH);
     ctx.restore();
   }
 }

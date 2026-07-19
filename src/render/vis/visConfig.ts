@@ -252,6 +252,21 @@ export const VIS_CFG = {
      *  falloff, so a nameplate at a door never argues with the pixels. */
     pierceRadius: 44,
     pierceStrength: 0.85,
+    /** THE HULL LAW: what a STANDING roof covers, the outside veil treats
+     *  as solid — an open doorway or arrow-slit must not lance a bright
+     *  wedge across a concealed interior (and across the roof drawn over
+     *  it: the campfire sighting — the cellar house's south door cut the
+     *  two joined houses' dark into ribbons). The renderer feeds the veil
+     *  every roof rect whose smoothed fade stands above this gate; as the
+     *  hero steps to the threshold the roof yields and the doorway spills
+     *  honestly. 0-gate = every roof conceals even mid-fade. */
+    hullGate: 0.5,
+    /** ROOFS WEAR THE VEIL: how fully a standing roof composites the
+     *  shadow sheet over its own pixels (× the roof's fade). 1 = a fully
+     *  occluded structure reads as ONE contiguous dark mass, roof included
+     *  (the "one big blackened section" expectation); 0 = the old
+     *  skyline-stays-lit doctrine (roofs float bright over the dark). */
+    roofMul: 1,
   },
 
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's

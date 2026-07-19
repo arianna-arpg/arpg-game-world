@@ -385,6 +385,57 @@ console.log('— B3. interactable reveals (veilPierce) + the stands row —');
     !!stands && stands.blocks === true && stands.blocksShot === true && !stands.blocksSight);
 }
 
+console.log('— B4. THE HULL LAW: a standing roof seals its doorways from outside —');
+{
+  const mkVeil = () => {
+    const veil = new SightVeil();
+    const walk = new GridWalkField(2400, 1600, 30);
+    walk.fillRect(0, 0, 2400, 1600, true);
+    // A "structure": wall ring 600..900 × 600..810 with an OPEN door gap in
+    // the south wall (the campfire sighting's lance). The gap is located by
+    // SCANNING the painted line — immune to fillRect boundary semantics.
+    walk.fillRect(600, 600, 900, 630, false);   // north wall
+    walk.fillRect(600, 780, 700, 810, false);   // south wall, west of door
+    walk.fillRect(770, 780, 900, 810, false);   // south wall, east of door
+    walk.fillRect(600, 600, 630, 810, false);   // west wall
+    walk.fillRect(870, 600, 900, 810, false);   // east wall
+    let gapLo = -1, gapHi = -1;
+    for (let x = 630; x < 870; x += 30) {
+      const open = walk.regionAt(x + 15, 795) !== 'wall';
+      if (open && x + 15 > 660 && x + 15 < 840) { if (gapLo < 0) gapLo = x; gapHi = x + 30; }
+    }
+    const doorX = (gapLo + gapHi) / 2;
+    const view = () => ({
+      player: { pos: { x: doorX, y: 1100 } },   // outside, due south of the door
+      walk, zone: {}, doodads: [] as Doodad[],
+      doodadsNear: () => [] as Doodad[], doodadRev: 1,
+    } as SightView);
+    return { veil, view, doorX, gapW: gapHi - gapLo };
+  };
+  const rF = VIS_CFG.sightVeil.regionStrength;
+  // Control: roof lifted (no hull) — the doorway honestly leaks a wedge.
+  {
+    const { veil, view, doorX, gapW } = mkVeil();
+    check('rig sanity: the scanned door gap is real', gapW >= 30, `gap ${gapW}px @${doorX}`);
+    veil.update(view(), 0, 1280, 800, []);
+    const leak = veil.occludedAt({ x: doorX, y: 700 });   // straight through the gap
+    const sealed = veil.occludedAt({ x: 655, y: 700 });   // behind the wall proper
+    check('control: with the roof lifted the doorway leaks (pressure)', leak < 0.01, `${leak}`);
+    check('control: the wall proper still hides', Math.abs(sealed - rF) < 1e-9, `${sealed}`);
+  }
+  // The law: roof standing — the hull swallows the doorway; nothing leaks.
+  {
+    const { veil, view, doorX } = mkVeil();
+    veil.update(view(), 0, 1280, 800, [{ x: 600, y: 600, w: 300, h: 210 }]);
+    const throughDoor = veil.occludedAt({ x: doorX, y: 700 });
+    const beyond = veil.occludedAt({ x: doorX, y: 500 });  // past the far wall
+    const outside = veil.occludedAt({ x: doorX, y: 900 }); // open street before the door
+    check('standing roof: the doorway wedge is sealed', Math.abs(throughDoor - rF) < 1e-9, `${throughDoor}`);
+    check('standing roof: the field beyond stays hidden', Math.abs(beyond - rF) < 1e-9);
+    check('standing roof: the street before the door stays clear', outside < 0.01, `${outside}`);
+  }
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail) process.exit(1);
 console.log('ALL PASS');

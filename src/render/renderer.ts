@@ -461,10 +461,19 @@ export class Renderer {
     // THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion — everything
     // the hero's eye cannot reach past a sight-blocking body veils dark with
     // the ground it stands on. OVER actors/projectiles (what a wall hides is
-    // hidden whole), UNDER canopies and roofs (a building's far side goes
-    // dark; the building — and the skyline — stays lit). Composites at
+    // hidden whole), UNDER canopies (crowns stay lit). Roofs join through
+    // THE HULL LAW: every STANDING roof's rects read solid to the veil (an
+    // open doorway must not lance a wedge across a concealed interior), and
+    // drawRoofs re-composites the sheet over its own pixels (roofMul) so an
+    // occluded structure reads as ONE contiguous dark mass. Composites at
     // identity through the same effective camera as the light layer.
-    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh);
+    this.hullRects.length = 0;
+    for (const st of world.structures) {
+      if (!st.roofs.length) continue;
+      if ((this.roofFade.get(st.id) ?? 1) <= VIS_CFG.sightVeil.hullGate) continue;
+      for (const r of st.roofs) this.hullRects.push(r);
+    }
+    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh, this.hullRects);
     this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
@@ -2462,6 +2471,9 @@ export class Renderer {
   // detached from any vision/light radius. Per-structure smoothed fade.
   private roofFade = new Map<string, number>();
   private roofFadeStructs: World['structures'] | null = null;
+  /** THE HULL LAW's per-frame roof-rect list (standing roofs — fed to the
+   *  sight veil so their coverage reads solid from outside). Reused. */
+  private hullRects: { x: number; y: number; w: number; h: number }[] = [];
 
   private drawRoofs(world: World): void {
     if (!world.structures.length) return;
@@ -2528,6 +2540,13 @@ export class Renderer {
         ctx.globalAlpha = fade;
       }
       ctx.globalAlpha = 1;
+      // ROOFS WEAR THE VEIL: the shadow sheet re-composites over this
+      // structure's roofing (× its fade), so a building standing in the
+      // dark is dark ROOF AND ALL — one contiguous mass, not a bright lid
+      // floating over its own shadow (VIS_CFG.sightVeil.roofMul; 0 restores
+      // the old skyline-stays-lit doctrine).
+      const roofVeil = VIS_CFG.sightVeil.roofMul * fade;
+      if (roofVeil > 0.02) this.sightVeil.compositeOver(ctx, st.roofs, roofVeil);
     }
   }
 
