@@ -301,6 +301,24 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'wisps', scale: 0.8, role: 'glow', params: { n: 3 } },
     ],
   },
+  // THE SURGE ECHO (the Quickening's face): a body worn by raw current —
+  // the Surge glyph set's debut (data/glyphParts.ts): the torso SPLIT by a
+  // glowing rift seam, arc spans bridging stud to stud on the flanks, a
+  // jagged bolt crest overhead. Floating shards + wisps keep it visibly
+  // charged in motion. Reads at a glance: lightning-fast, seam-lit, nothing
+  // else in the bestiary is JAGGED.
+  surge_echo: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'riftSeam', scale: 1.05 },
+      { kind: 'arcSpans', scale: 1.0 },
+      { kind: 'boltCrest', scale: 0.95 },
+    ],
+    live: [
+      { kind: 'floatingShards', scale: 0.9, params: { n: 4 } },
+      { kind: 'wisps', scale: 0.7, role: 'glow', params: { n: 2 } },
+    ],
+  },
 
   // =============================================================== DEMONS
   imp: {

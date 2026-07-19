@@ -2576,4 +2576,35 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'moundSpire', order: 52, shadow: 0.5, bakeWhole: 'static',
     params: { earth: '#5c4c2e' },
   },
+
+  // --- The QUICKENING kit (packages/defs/quickening.ts): the surge's own
+  // dress, planted by the 'quickened_air' weather row while a zone runs
+  // quick and evaporated as the window closes (the transience doctrine —
+  // the event flavors the land it borrows, never repaints it). Every kind
+  // reuses a proven painter with surge-gilt params: one data row each,
+  // country-agnostic on purpose (the surge visits ANY ground).
+  surge_stone: {
+    // A standing stone woken by the surge: the slab's obelisk lane wearing
+    // a charged gem (the rune_capacitor idiom, gilt).
+    painter: 'slab', order: 54, shadow: 0.6, longShadow: 1.3,
+    params: { shape: 'monolith', fill: '#4a4436', edge: '#1c1812', gem: { color: '#e8c86a' } },
+    light: { radius: -2.6, color: '#e8c86a', intensity: 0.26, flicker: 1.8 },
+  },
+  quick_spring: {
+    // Ground-light welling up where the surge pools (the marsh_wisp pod
+    // idiom, gilt — pod params are the painter's FULL contract: glowY/
+    // glowR/pulseRate omitted is the NaN-gradient throwing sink).
+    painter: 'pod', order: 49,
+    params: { body: '#2e2a1c', glow: '#f0d88a', aspectY: 0.8, glowY: -0.28, glowR: 0.6, pulseRate: 1.1 },
+    light: { radius: -3.2, color: '#f0d88a', intensity: 0.3, flicker: 2.6 },
+  },
+  risen_bloom: {
+    // Flowers stood up out of season wherever the surge feeds the roots —
+    // the garden trio's trunk+bloomCrown fabric, gilt (and BAKED, per the
+    // stalkwood law: every vegetation kind bakes).
+    painter: 'trunk', order: 52, shadow: 0.4, longShadow: 0.8, bakeWhole: 'static',
+    params: { color: '#6a6234', scale: 0.26, roots: 3 },
+    canopy: { painter: 'bloomCrown', params: { petal: '#e8c86a', petal2: '#f0e0a0', heart: '#5c4a22', petals: 7 } },
+    light: { radius: -1.6, color: '#ffe8a0', intensity: 0.12 },
+  },
 };

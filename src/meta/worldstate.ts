@@ -218,6 +218,20 @@ function sanitizeZoneDef(raw: unknown): ZoneDef | null {
   if (z.variantName && z.name.endsWith(` (${z.variantName})`)) {
     z.name = z.name.slice(0, z.name.length - (z.variantName.length + 3));
   }
+  // THE QUICKENING's stamp (ZoneDef.quickened): a mid-window save resumes
+  // stamped — the engine's reconcile sweep re-marries stamp and overlay arc
+  // (and reverts orphans) on the first beat. Here we only guarantee SHAPE:
+  // a malformed block restores the true level if it still knows it, then
+  // drops; a well-formed one rides through untouched.
+  if (z.quickened !== undefined) {
+    const q = z.quickened as unknown as { key?: unknown; baseLevel?: unknown; until?: unknown } | null;
+    if (!q || typeof q !== 'object' || typeof q.key !== 'string'
+      || !isFiniteNum(q.baseLevel) || !isFiniteNum(q.until)) {
+      if (q && isFiniteNum(q.baseLevel) && q.baseLevel >= 1) z.level = Math.round(q.baseLevel);
+      console.warn(`[worldstate] zone '${z.id}': malformed quickened stamp — dropped`);
+      delete z.quickened;
+    }
+  }
   // Registry scrubs: packs reference live monsters, a war needs both armies,
   // a spawner objective needs its spawner def, a layout family must exist.
   if (z.packs?.table) {

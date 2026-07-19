@@ -940,6 +940,17 @@ export interface ZoneDef {
    *  tables, per-monster hoards). Set at mint (a Holdfast pocket's earned haul,
    *  a future gilded event's field); serializes with the graph. */
   bounty?: number;
+  /** THE QUICKENING's stamp (packages/overlays/quickening.ts): while a surge
+   *  holds this ground, `level` above is the SURGED level and this block
+   *  remembers how to put it back. Written and reverted ONLY by the engine's
+   *  reconcile sweep (world.ts updateQuickening) off the overlay's live arcs
+   *  — never authored, never hand-edited — and it serializes with the graph
+   *  so a mid-window save resumes stamped (the overlay's own snapshot carries
+   *  the clock; the sweep re-marries the two and reverts orphans either way).
+   *  `key` = the owning arc's instance id; `baseLevel` = the true level the
+   *  fade restores; `until` = the world-clock second the window closes (a
+   *  display mirror — the overlay's clock is the authority). */
+  quickened?: { key: string; baseLevel: number; until: number };
   /** A PURCHASED-POCKET dead-end (a Holdfast's earned ground): its only road
    *  leads back through the gate that sold it. The world web treats it as a
    *  cul-de-sac — never weave-linked, never an eager-web link target, never an

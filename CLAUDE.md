@@ -482,7 +482,17 @@ changes.
   `fam()`), `uniques.ts`, `loottables.ts`, `vestiges.ts` (socketables +
   Epitaph words). Adding content here needs no engine changes.
 - `src/packages/` — optional per-run world-event overlays (Warbands, Breach,
-  Contagion, …).
+  Contagion, …). THE QUICKENING (defs+overlays/quickening.ts) is the
+  Terror-Zone lane: a WALKED, outgrown zone's ZoneDef.level surges to a band
+  around the hero's for one world-clock window — contents re-mint (zone-memory
+  drop at BOTH edges), event density + kill-path bounty fold live, kin wear
+  `quickborn`, a champion SURGE ECHO anchors it, the 'quickened_air'
+  eventOnly weather dresses it — then reverts EXACTLY (engine reconcile
+  stamps/reverts off the overlay's arcs; ZoneDef.quickened remembers home).
+  Its SLAYER support lane (overmatch/giantsbane/regicide — vs higher-level /
+  far-heavier / empowered victims) folds once at mitigateTyped
+  (`SLAYER_CFG`) as plain stats anything may grant. Docs
+  `docs/engine/quickening.md`; probe `balance/probe_quickening.ts`.
 - `src/sim/` — the browser-safe half of the balance harness: headless boot
   (`arena.ts`: shims + the quiet `sim_arena` zone), build injection through
   `world.adoptSavedMeta` (`builds.ts`), input-source pilots, the seeded

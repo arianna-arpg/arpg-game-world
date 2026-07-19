@@ -32,6 +32,7 @@ import { MIGRATION } from './defs/migration';
 import { MIRRORKIN } from './defs/mirrorkin';
 import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
+import { QUICKENING } from './defs/quickening';
 import { STORM_FRONTS } from './defs/stormFronts';
 import { STRAYING } from './defs/straying';
 import { SWARMING } from './defs/swarming';
@@ -74,6 +75,7 @@ export const PACKAGES: ContentPackage[] = [
   VERMINFALL,
   STRAYING,
   WISPLIGHT,
+  QUICKENING,
   MIRRORKIN,
   LONGCANDLE,
   GLOAMING,
@@ -118,6 +120,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   verminfall: 0x2a75,
   straying: 0x57a9,
   wisplight: 0x8157,
+  quickening: 0x901c,
   mirrorkin: 0x312a,
   longcandle: 0xca4d,
   long_night: 0x10c7,

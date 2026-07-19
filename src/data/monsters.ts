@@ -9470,6 +9470,27 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'sylvan', tags: [],
     flier: true, levitates: true, noNemesis: true,
   },
+  // THE SURGE ECHO — the Quickening's one named face (packages/defs/
+  // quickening.ts): once per quickened zone the surge knots itself into a
+  // walking body, champion-promoted by the scene at staging and paid by its
+  // own kill row (surge_echoes_slain). FACTIONLESS on purpose — a power
+  // surge belongs to no war — and noNemesis (it dissolves with its window;
+  // a remembered echo would be nonsense). Defense texture: an authored thin
+  // ES sheath over modest life (the surge IS its skin — defenses doctrine's
+  // authored-identity clause), light on its feet, lightning-fast hands; the
+  // danger is PACE, not mass (giantsbane gains nothing here; overmatch and
+  // regicide both do — the event's own support lane, taught by its face).
+  surge_echo: {
+    id: 'surge_echo', name: 'Surge Echo',
+    color: '#e8c86a', shape: 'diamond', radius: 13, material: 'ethereal', look: 'surge_echo',
+    base: { life: 70, es: 55, moveSpeed: 132, mana: 130, manaRegen: 9, weight: 0.7 },
+    mods: [mod('lightningRes', 'flat', 0.6), mod('castSpeed', 'increased', 0.2)],
+    skills: ['spark', 'claw'],
+    xp: 40,
+    tag: 'surge_echo', tags: [],
+    levitates: true, noNemesis: true,
+    brain: { type: 'caster' },
+  },
   // THE MAGMA LURKER — the pool with an appetite: bound to its lava (a
   // LIQUID now — wade in after it if you dare; the melt cooks the
   // uninsured and the heat wash licks the shore), mostly submerged until

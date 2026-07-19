@@ -361,10 +361,12 @@ export const PROCS: Record<string, ProcDef> = {
     effect: { type: 'heal', flat: 4, pctMax: 0.02 },
   },
 
-  // QUICKENING: an evade rolls straight into momentum — brief haste that
+  // QUICKSTEP: an evade rolls straight into momentum — brief haste that
   // feeds the insight loop (movement refills the pool; the weave sustains).
+  // (Display renamed from 'Quickening' when THE QUICKENING world event took
+  // the word — ids are contracts and stay put; names are presentation.)
   quickening: {
-    id: 'quickening', name: 'Quickening',
+    id: 'quickening', name: 'Quickstep',
     color: '#6ad8b8', trigger: 'evade', icd: 3,
     effect: {
       type: 'buff', buff: {

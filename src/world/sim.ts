@@ -31,6 +31,7 @@ import type { HauntField } from '../packages/overlays/haunting';
 import type { LongNightField } from '../packages/overlays/longNight';
 import type { StrayField } from '../packages/overlays/straying';
 import type { WisplightField } from '../packages/overlays/wisplight';
+import type { QuickeningField } from '../packages/overlays/quickening';
 import type { VerminfallField } from '../packages/overlays/verminfall';
 import type { LongCandleField } from '../packages/overlays/longcandle';
 import type { GloamingField } from '../packages/overlays/gloaming';
@@ -210,6 +211,13 @@ export class WorldSim {
    *  ride) and reports each light's fate back through the note*() calls; the
    *  field owns the settle/slot/absent lifecycle. */
   readonly wisplightField: WisplightField | null;
+  /** The quickening overlay if its package is in the manifest, else null — the
+   *  engine's reconcile sweep reads peek()/quickeningOn() to stamp + revert
+   *  ZoneDef.level (and drop zone memory at the window's edges), folds
+   *  eventMulAt()/bountyMulAt() into event density + the kill-path bounty,
+   *  and reports the materialize/echo beats back through the note*() calls;
+   *  the field owns the seat/clock/window lifecycle. */
+  readonly quickeningField: QuickeningField | null;
   /** The long-candle overlay if its package is in the manifest, else null — the
    *  engine reads candleOn() to field the Wax Court's shrines/packs and the
    *  Umbral Parliament's shadows on a night-claimed ground (both when both
@@ -420,6 +428,7 @@ export class WorldSim {
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.strayField = surface<StrayField>('straying') ?? null;
     this.wisplightField = surface<WisplightField>('wisplight') ?? null;
+    this.quickeningField = surface<QuickeningField>('quickening') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
     this.gloamingField = surface<GloamingField>('gloaming') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
@@ -683,6 +692,13 @@ export class WorldSim {
    *  sovereigns stand up in their own graph. */
   worldBossFieldsAll(): WorldBossField[] {
     return this.overlays.filter(o => o.id === 'worldboss') as WorldBossField[];
+  }
+
+  /** Every live quickening instance (all dimensions) — the engine's reconcile
+   *  sweep walks them all so each world-state's surges stamp their own graph
+   *  (surface-only today; one `dimensions` line on the package widens it). */
+  quickeningFieldsAll(): QuickeningField[] {
+    return this.overlays.filter(o => o.id === 'quickening') as QuickeningField[];
   }
 
   /** A zone's EVENT ACTIVITY from the living world: the sum of every overlay's

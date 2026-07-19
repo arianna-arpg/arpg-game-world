@@ -56,6 +56,11 @@ export const eventsTab: DevTabDef = {
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),
       forceEvent('Straying (bell here)', (w, v, z) => w.sim.strayField?.devIgnite(v, z) ?? false),
       forceEvent('Wisplight (lights here)', (w, v, z) => w.sim.wisplightField?.devIgnite(v, z) ?? false),
+      // THE QUICKENING pair: surge THIS zone (tuning waived — visited floor,
+      // outlevel law, cooldown; eligibility never), then close its window on
+      // the second press so stamp → refresh → revert QAs in one sitting.
+      forceEvent('Quickening (surge here)', (w, v, z) => w.sim.quickeningField?.devIgnite(v, z) ?? false),
+      forceEvent('Quickening (end here)', (w, _v, z) => w.sim.quickeningField?.devFade(z) ?? false),
       forceEvent('Breach (tear here)', (w, v, z) => (w.sim.breachField?.devIgnite(v, z) ?? null) !== null),
       // BREACH FIELD: the IN-ZONE veiled ring itself, already open beside the
       // player — the map tear above is ambience; this is the fight. The fed

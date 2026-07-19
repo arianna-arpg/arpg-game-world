@@ -26,6 +26,17 @@ import { STATUS_DEFS, TAUNT_CFG } from './status';
 import { feedWound, stampSegFlash } from './segments';
 import { SIM_TAP } from './tap';
 
+/** THE SLAYER LANE's fold rules (stats.ts: overmatch / giantsbane / regicide
+ *  — attacker-side MORE multipliers keyed off what the victim is RELATIVE to
+ *  you). One config, one fold site (mitigateTyped), every source mitigated
+ *  identically — never a per-skill special case. */
+export const SLAYER_CFG = {
+  /** giantsbane arms when victim effectiveWeight ≥ this × the attacker's. */
+  giantsbaneRatio: 1.5,
+  /** regicide arms against these Actor.rarity classes. */
+  regicideRarities: ['magic', 'rare', 'champion', 'crowned'] as readonly string[],
+} as const;
+
 export interface DamagePacket {
   amounts: Partial<Record<DamageType, number>>;
   crit: boolean;
@@ -278,6 +289,26 @@ export function mitigateTyped(
       dmg *= 1 - resistValue(target, type, pen);
     }
     total += dmg;
+  }
+  // THE SLAYER LANE (stats.ts): attacker-side punch-up MORE multipliers,
+  // armed by what the victim is relative to the attacker — level above,
+  // far heavier (the mass fabric's own read), or empowered rarity. Read
+  // tag-queried like every attacker stat here, so "overmatch with axes"
+  // stays a filter; base 0 ⇒ the whole block is a no-op until invested.
+  if (total > 0 && opts?.attacker) {
+    const atk = opts.attacker;
+    if (target.level > atk.level) {
+      const v = atk.sheet.get('overmatch', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
+    const gb = atk.sheet.get('giantsbane', opts.tags, opts.extra);
+    if (gb > 0 && target.effectiveWeight() >= atk.effectiveWeight() * SLAYER_CFG.giantsbaneRatio) {
+      total *= 1 + gb;
+    }
+    if (target.rarity && SLAYER_CFG.regicideRarities.includes(target.rarity)) {
+      const v = atk.sheet.get('regicide', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
   }
   total *= target.sheet.get('damageTaken');
   // INSIGHT (the Charisma pool): read the blow coming and slip the brunt —

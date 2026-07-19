@@ -96,6 +96,43 @@ export const GLYPH_PARTS: Record<string, GlyphDef> = {
       { kind: 'disc', x: -0.94, y: -0.32, rx: 0.07, role: 'glow', alpha: 0.85, mirror: true },
     ],
   },
+
+  // --- The Surge set (the Quickening's kin) ---------------------------------
+  // BOLT CREST — a jagged stroke of living lightning standing off the brow,
+  // forked at the tip. Nothing else in the roster is JAGGED overhead: crown
+  // is spiked metal, halo a closed ring, crest a smooth fin — this reads
+  // "charged" at a glance.
+  boltCrest: {
+    ops: [
+      { kind: 'path', pts: [[0.24, -0.42], [0.04, -0.72], [0.3, -0.68], [0.08, -1.08]], role: 'glow', alpha: 0.95, wR: 0.07 },
+      { kind: 'path', pts: [[0.04, -0.72], [-0.22, -0.94]], role: 'glow', alpha: 0.75, wR: 0.045 },
+      { kind: 'disc', x: 0.08, y: -1.08, rx: 0.07, role: 'glow', alpha: 0.95 },
+      { kind: 'disc', x: -0.22, y: -0.94, rx: 0.045, role: 'glow', alpha: 0.7 },
+    ],
+  },
+  // ARC SPANS — short lightning arcs bridging stud to stud across the
+  // flanks (mirror covers both sides), each anchored by a bright node: the
+  // body wears its current OUTSIDE. Distinct from lavaCracks (surface
+  // fissures) and runes (orbiting marks) — these BRIDGE, with endpoints.
+  arcSpans: {
+    ops: [
+      { kind: 'disc', x: 0.42, y: -0.5, rx: 0.06, role: 'metal', shade: 0.2, outline: true, mirror: true },
+      { kind: 'disc', x: -0.34, y: -0.62, rx: 0.06, role: 'metal', shade: 0.2, outline: true, mirror: true },
+      { kind: 'path', pts: [[0.42, -0.5], [0.12, -0.72], [-0.06, -0.58], [-0.34, -0.62]], role: 'glow', alpha: 0.9, wR: 0.035, mirror: true },
+    ],
+  },
+  // RIFT SEAM — the body split stem to stern by a crack of light: a dark
+  // wound under, the glow welling through, two hairline branches (mirror).
+  // Distinct from stitchSeams (sewn flesh) and veinweb (spread filaments):
+  // ONE great seam, glowing from inside.
+  riftSeam: {
+    ops: [
+      { kind: 'path', pts: [[0.62, 0.02], [0.3, -0.08], [-0.04, 0.06], [-0.36, -0.04], [-0.58, 0.02]], smooth: true, role: 'dark', shade: -0.2, wR: 0.09 },
+      { kind: 'path', pts: [[0.62, 0.02], [0.3, -0.08], [-0.04, 0.06], [-0.36, -0.04], [-0.58, 0.02]], smooth: true, role: 'glow', alpha: 0.95, wR: 0.045 },
+      { kind: 'path', pts: [[0.3, -0.08], [0.18, -0.34]], role: 'glow', alpha: 0.7, wR: 0.025, mirror: true },
+      { kind: 'path', pts: [[-0.36, -0.04], [-0.46, 0.26]], role: 'glow', alpha: 0.7, wR: 0.025 },
+    ],
+  },
 };
 
 for (const [kind, glyph] of Object.entries(GLYPH_PARTS)) registerShippedGlyph(kind, glyph);

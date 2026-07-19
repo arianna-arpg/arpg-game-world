@@ -45,6 +45,38 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // THE SLAYER LANE (engine/stats.ts overmatch/giantsbane/regicide; folded
+  // once at damage.ts mitigateTyped) — three orthogonal punch-UP axes, each
+  // a plain stat: gems here today, affixes and passives whenever they want
+  // the same lane. The quickened-ground diet (fighting above your level),
+  // the colossus diet (fighting above your weight class), the head-hunt
+  // (fighting the named). All conditional MORE — dead weight against
+  // ordinary same-level fodder ON PURPOSE: these gems choose your prey.
+  overmatch: {
+    id: 'overmatch', name: 'Overmatch',
+    description: 'This skill hits 30% harder against enemies of HIGHER LEVEL than you — and not one point harder against anything else. A gem for hunting up the ladder: quickened ground, sovereigns, everything the world says you are not ready for.',
+    color: '#e8c86a', requiresTags: ['attack', 'spell'],
+    mods: [mod('overmatch', 'flat', 0.3)],
+    perLevel: [mod('overmatch', 'flat', 0.02)],
+    weight: 6,
+  },
+  giantsbane: {
+    id: 'giantsbane', name: 'Giantsbane',
+    description: 'This skill hits 30% harder against bodies at least half again your own WEIGHT — the mass fabric read as a blade. Ogres, hulks, the anchored and the colossal; the light and the fleet gain you nothing.',
+    color: '#c8a068', requiresTags: ['attack', 'spell'],
+    mods: [mod('giantsbane', 'flat', 0.3)],
+    perLevel: [mod('giantsbane', 'flat', 0.02)],
+    weight: 6,
+  },
+  regicide: {
+    id: 'regicide', name: 'Regicide',
+    description: 'This skill hits 22% harder against EMPOWERED enemies — magic, rare, champion and crowned blood alike. The trash clears itself; this gem is for the ones wearing names.',
+    color: '#e64db4', requiresTags: ['attack', 'spell'],
+    mods: [mod('regicide', 'flat', 0.22)],
+    perLevel: [mod('regicide', 'flat', 0.015)],
+    weight: 6,
+  },
+
   // THE GRAB FABRIC's pair (engine/grab.ts) — one gem per half of the art,
   // scoped by the grapple alphabet itself ('grab' / 'throw' tags), so
   // neither can socket into a skill with no hold to deepen or no catch to

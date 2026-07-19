@@ -1040,6 +1040,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('damage', 'increased', 0.18), mod('moveSpeed', 'increased', 0.1)],
   },
 
+  // THE QUICKENING's mark (packages/defs/quickening.ts): worn by every enemy
+  // on quickened ground — the surge runs in the local kin, the danger half of
+  // the event's bargain (the reward half is the zone's raised level + bounty).
+  // Beneficial ON PURPOSE and enemy-worn: the gilt tint is the at-a-glance
+  // read "this body is surge-fed". Pulse-refreshed by the engine's scene
+  // sweep (duration a breath past the pulse), so late spawns join and the
+  // mark dies with the surge instead of lingering.
+  quickborn: {
+    label: 'Quickborn', color: '#e8c86a', duration: 7, beneficial: true,
+    mods: [mod('damage', 'increased', 0.14), mod('moveSpeed', 'increased', 0.08), mod('castSpeed', 'increased', 0.08)],
+  },
+
   // THE WISPLIGHT's ride marks — one per wisp KIND (the kind row names its
   // status; a new kind is a new row here + one entry in the surge's kind
   // table). Each is the host's TEXTURE half: percentages that scale whatever

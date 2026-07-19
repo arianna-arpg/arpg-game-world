@@ -165,6 +165,7 @@ import {
   type EjectReason, type PossessRide,
 } from './possess';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
+import type { QuickeningField } from '../packages/overlays/quickening';
 import { plyCountOf, plyFloorOf } from './plies';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
@@ -2230,6 +2231,13 @@ export class World {
   } | null = null;
   /** Gatherings whose scene announced itself this visit (per gathering id). */
   private materializedWisplights = new Set<string>();
+  /** THE QUICKENING's engine-side clocks: the graph reconcile cadence (stamps
+   *  follow the overlay's arcs) and the in-zone quickborn pulse. The arc's own
+   *  once-evers (seen / echoStaged) live ON the overlay so they persist.
+   *  sweepAcc starts PRIMED so the very first tick reconciles — a restored
+   *  save (or a dev surge underfoot) stamps before any presence beat runs. */
+  private quickenSweepAcc = 0.5;
+  private quickenPulseAcc = 0;
   /** THE WISPLIGHT's live scene in the current zone (null between gatherings) —
    *  the concrete half of packages/overlays/wisplight.ts: light bodies, their
    *  pre-drawn routes + clocks, and the ridden hosts. Zone-local and rebuilt
@@ -13385,9 +13393,12 @@ export class World {
 
   /** The composed EVENT-density multiplier for a zone: the per-zone (encounterDensity)
    *  + per-biome (eventDensityMul) levers × the live MYCELIA spore SUPPRESSION (1 = clear,
-   *  →floor = smothered). The one chokepoint every event-ignition gate reads. */
+   *  →floor = smothered) × the live QUICKENING surge (>1 while the ground runs quick —
+   *  trouble comes looking for trouble). The one chokepoint every event-ignition gate reads. */
   private eventDensityFor(def: ZoneDef): number {
-    return (def.encounterDensity ?? 1) * biomeEventDensity(def.biome) * (this.sim.myceliaField?.suppressionAt(def.id) ?? 1);
+    return (def.encounterDensity ?? 1) * biomeEventDensity(def.biome)
+      * (this.sim.myceliaField?.suppressionAt(def.id) ?? 1)
+      * (this.sim.overlayFor<QuickeningField>('quickening', def.dimension)?.eventMulAt(def.id) ?? 1);
   }
 
   // ------------------------------------------------------- mycelia bloom
@@ -14008,6 +14019,112 @@ export class World {
       if (d > bd) { bd = d; best = c; }
     }
     return this.findFreeSpot(best ?? this.clampPos(this.farPoint(rallyDist), 60), 20);
+  }
+
+  // ------------------------------------------------------- the quickening
+  //
+  // SPENT GROUND RUNS QUICK (packages/overlays/quickening.ts), engine side:
+  // the pure QuickeningField owns the seat, the clock and the window; this
+  // sweep is the ONE HAND that touches world state off the field's truth,
+  // and it reconciles in BOTH directions each beat (the deepwinter idiom),
+  // so it is self-healing against restores, prunes and stale saves:
+  //   arc without stamp → APPLY: remember the true level in
+  //     ZoneDef.quickened, stamp the surged level (EVERY consumer of
+  //     zone.level — spawn mints, xp formulas, quest math, the chip —
+  //     follows for free), and drop the zone's memory (refresh.onSurge) so
+  //     the next entry re-mints fresh at the new measure;
+  //   stamp without arc → REVERT: restore the true level, delete the stamp,
+  //     drop the memory again (refresh.onFade) — "exactly as it had been"
+  //     on the next load.
+  // A LIVE zone is never re-populated under the player's feet: memory drops
+  // shape the NEXT load only (that is what zone memory is), and live actors
+  // keep the level they were honestly minted at. In-zone, the sweep also
+  // runs the surge's presence: the materialize beat (ledger + line, once
+  // per arc — the flag rides the overlay so it persists), the quickborn
+  // pulse onto every living enemy, and the SURGE ECHO staging (once per
+  // arc, champion-promoted, paid by its kill row in the def file).
+
+  /** Per-frame: THE QUICKENING's stamps + its presence underfoot. */
+  private updateQuickening(dt: number): void {
+    const fields = this.sim.quickeningFieldsAll();
+    if (!fields.length) return;
+
+    // THE RECONCILE (0.5s cadence; a property walk over the graph — cheap).
+    this.quickenSweepAcc += dt;
+    if (this.quickenSweepAcc >= 0.5) {
+      this.quickenSweepAcc = 0;
+      const arcByZone = new Map<string, { id: string; level: number; until: number; onSurge: boolean; onFade: boolean }>();
+      for (const f of fields) {
+        const r = f.surge().refresh;
+        for (const a of f.peek()) {
+          arcByZone.set(a.zoneId, { id: a.id, level: a.level, until: a.until, onSurge: r.onSurge, onFade: r.onFade });
+        }
+      }
+      for (const z of Object.values(this.zoneMap)) {
+        const arc = arcByZone.get(z.id);
+        if (arc && z.quickened?.key !== arc.id) {
+          // APPLY (or adopt — a fresh arc over ground still wearing an old
+          // stamp keeps the ORIGINAL baseLevel: the only honest revert).
+          if (!z.quickened) z.quickened = { key: arc.id, baseLevel: z.level, until: arc.until };
+          else { z.quickened.key = arc.id; z.quickened.until = arc.until; }
+          z.level = Math.max(1, arc.level);
+          if (arc.onSurge) this.zoneMemory.delete(z.id);
+        } else if (!arc && z.quickened) {
+          // REVERT: the window closed (or its arc was pruned/lost).
+          z.level = Math.max(1, z.quickened.baseLevel);
+          delete z.quickened;
+          const r = fields[0].surge().refresh;
+          if (r.onFade) this.zoneMemory.delete(z.id);
+        }
+      }
+    }
+
+    // The surge's PRESENCE underfoot (caves are off-graph; authored specials
+    // never seat — the wisplight's own guard).
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return;
+    const f = fields.find(x => (x.dimension ?? 'surface') === (this.zone.dimension ?? 'surface'));
+    const info = f?.quickeningOn(this.zone.id);
+    if (!f || !info) { this.quickenPulseAcc = 0; return; }
+    const cfg = f.surge();
+
+    // THE MATERIALIZE BEAT (once per ARC, ever — the flag persists on the
+    // overlay): the discovery line + the Vault-surfacing ledger.
+    if (!info.seen) {
+      f.noteSeen(info.id);
+      bumpLedger(this.ledger, 'quickenings_seen');
+      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 140, color: cfg.color, life: 0.8, maxLife: 0.8 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        `The ground here runs QUICK — level ${info.level} while the window holds. Reap it.`,
+        cfg.color, 18);
+    }
+
+    // THE KIN PULSE: every living enemy on quick ground wears the mark.
+    // Pulse-refreshed (the status outlives the beat by a breath), so late
+    // spawns join on the next beat and the mark dies with the window.
+    this.quickenPulseAcc += dt;
+    if (this.quickenPulseAcc >= cfg.kin.pulseSec) {
+      this.quickenPulseAcc = 0;
+      for (const a of this.actors) {
+        if (a.dead || a.team !== 'enemy') continue;
+        a.applyStatus(cfg.kin.status, 0, 1, 'The Quickening');
+      }
+    }
+
+    // THE SURGE ECHO (once per arc): the window's one named face — minted at
+    // the zone's SURGED level + its own bonus, champion-promoted, standing
+    // far enough out that it is hunted, never handed over. Gated on the
+    // STAMP being down (key match) so the echo always stands at the surged
+    // measure, whatever order restore/dev seams arrive in.
+    if (cfg.echo && !info.echoStaged && this.zone.quickened?.key === info.id) {
+      f.noteEchoStaged(info.id);
+      const lvl = Math.max(1, this.zone.level + cfg.echo.levelBonus);
+      const m = this.createMonster(cfg.echo.monster, lvl, 'enemy');
+      m.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 60), m.radius);
+      this.promoteRarity(m, 'champion');
+      this.actors.push(m);
+      this.text(vec(this.player.pos.x, this.player.pos.y - 70),
+        cfg.echo.announce.replace('{zone}', this.zone.name), cfg.color, 16);
+    }
   }
 
   // ------------------------------------------------------- the wisplight
@@ -31509,8 +31626,12 @@ export class World {
     // RICH GROUND: the zone's BOUNTY lever (ZoneDef.bounty, default 1) scales
     // the kill-path CHANCE gates — never the guaranteed paths (boss tables,
     // per-monster hoards, elite bonus rolls). A Holdfast pocket's earned haul,
-    // a future gilded event's field — one zone-level multiplier, pure data.
-    const bounty = this.zone.bounty ?? 1;
+    // a gilded event's field — one zone-level multiplier, pure data. THE
+    // QUICKENING folds in LIVE (never stamped): quick ground pays richer for
+    // exactly as long as the window holds, and the def's own bounty survives
+    // untouched underneath.
+    const bounty = (this.zone.bounty ?? 1)
+      * (this.sim.overlayFor<QuickeningField>('quickening', this.zone.dimension)?.bountyMulAt(this.zone.id) ?? 1);
     const count = def?.drops ?? (def?.boss ? DROP_CFG.bossGemDrops : chance(DROP_CFG.killGemChance * bounty) ? 1 : 0);
     for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
@@ -31652,6 +31773,7 @@ export class World {
     this.updateHauntStream(dt);
     this.updateStrayingScene(dt);
     this.updateWispScene(dt);
+    this.updateQuickening(dt);
     this.updateWraithsailDock();
     this.updateLongNight(dt);
     this.updateNecropolis();

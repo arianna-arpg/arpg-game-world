@@ -385,6 +385,21 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  (DEFENSE_CFG.poise.overDecay). Natural recovery never overcharges. */
   poiseOvercharge:{ label: 'Maximum Poise Overcharge', base: 0, min: 0, percent: true },
 
+  // THE SLAYER LANE — attacker-side MORE multipliers that key off what the
+  // VICTIM is relative to YOU, folded once at the mitigation chokepoint
+  // (damage.ts mitigateTyped — every source, no side path). Three orthogonal
+  // punch-up axes, each a plain stat any granter can feed (support gems today;
+  // affixes, passives, monster mods tomorrow): LEVEL (the quickened-ground /
+  // outleveled-boss diet), WEIGHT (the mass fabric's heft read), RARITY (the
+  // named and the crowned). All ship at 0 — the lane is built, never ambient.
+  /** MORE damage vs enemies of HIGHER LEVEL than you (strictly above). */
+  overmatch:      { label: 'Damage vs Higher-Level Enemies', base: 0, min: 0, percent: true },
+  /** MORE damage vs enemies at least SLAYER_CFG.giantsbaneRatio × your
+   *  effective weight — the giant-feller's axis (POISE IS MASS, and so is this). */
+  giantsbane:     { label: 'Damage vs Far Heavier Enemies', base: 0, min: 0, percent: true },
+  /** MORE damage vs magic/rare/champion/crowned bodies — the headhunter's axis. */
+  regicide:       { label: 'Damage vs Empowered Enemies', base: 0, min: 0, percent: true },
+
   // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
   // opponent's body language and slipping the brunt. Reduction scales with
   // MOMENTUM (1 while moving, tapering to 0 over insightTaper seconds after
