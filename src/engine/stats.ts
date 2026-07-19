@@ -89,6 +89,13 @@ export type SkillTag =
   // never socket into a skill with nothing to steal. The CAPTURED cast
   // keeps its own real tags — the grammar reads the art, not the theft.
   | 'mimic'
+  // 'possession' marks the seat-to-body verbs (the possession seam,
+  // engine/possess.ts — the entry blow, the form gems, the return
+  // presses) so seam-scoped supports (duration, husk ward, possessed
+  // might) find their gem and never socket into a skill with no body
+  // to borrow. The BORROWED kit keeps its own real tags — the grammar
+  // reads the art, not the rider.
+  | 'possession'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -502,6 +509,17 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Extra captured arts the mimic bank holds beyond MIMIC_CFG.bankSize
    *  (engine/mimic.ts) — the repertoire widener. */
   mimicBank:      { label: 'Mimic Repertoire', base: 0 },
+  /** THE POSSESSION SEAM (engine/possess.ts): scales how long a possession
+   *  holds (× the spec/POSSESS_CFG duration). Read off the pressing gem at
+   *  embark (supports socketed there count), stamped onto the ride. */
+  possessDuration: { label: 'Possession Duration', base: 1, min: 0.25, percent: true },
+  /** ADDS to the borrowed body's power factor (the MORE-damage haircut a
+   *  ridden kit casts at) — +0.1 turns 0.8 into 0.9. Read off the gem. */
+  possessPower:   { label: 'Possessed Might', base: 0, percent: true },
+  /** LESS damage the vacated HUSK takes while its seat is away — the
+   *  trance-warding lever (fraction, 0.4 = 40% less). Read off the gem
+   *  at embark; the husk interrupt ladder gets honestly longer with it. */
+  huskGuard:      { label: 'Husk Ward', base: 0, min: 0, max: 0.9, percent: true },
   /** THE GRAB FABRIC's holder-side lever (engine/grab.ts): opens the mass
    *  gate (holder weight × (1+gripPower) vs victim weight) and slows the
    *  held body's struggle. Tag-filtered through the seizing skill, so

@@ -9950,6 +9950,86 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.04)] },
   },
 
+  // ==================== THE POSSESSION SEAM (engine/possess.ts) ============
+  // Seat-to-body verbs: the ENTRY BLOW moves your seat into a weakened
+  // enemy (its kit, its stats, its faction worn as a GUISE — while your own
+  // flesh stands entranced behind you: the husk is the price), and the FORM
+  // GEM mints a beast you have STUDIED and moves you in whole (the husk
+  // travels within, beyond reach — the form is the risk instead). Both gems
+  // ride the borrowed bar as the GUEST SLOT and present their ending verb
+  // there (ConvertSpec 'seatAway' — the button that began the ride ends
+  // it). The returns are noDrop utilities: nobody learns to leave; leaving
+  // comes with the door.
+
+  possession: {
+    id: 'possession', name: 'Possession',
+    description: 'Lay a hand on a WEAKENED enemy and step out of your own'
+      + ' flesh into theirs — their legs, their arts, their standing among'
+      + ' their kind — until the clock runs out, the body fails, or your'
+      + ' abandoned husk suffers enough to call you home. The husk stands'
+      + ' entranced and mortal the whole while: what you risk was never the'
+      + ' borrowed body. Press again to relinquish.',
+    tags: ['spell', 'possession'], color: '#b8a8e8',
+    manaCost: 30, cooldown: 10, useTime: 0.7,
+    delivery: { type: 'melee', range: 78, arcDeg: 40 },
+    effects: [{ type: 'possess' }],
+    convert: { when: 'seatAway', skillId: 'relinquish' },
+    requirements: { willpower: 16 },
+    minDropLevel: 8, dropWeight: 40,
+    leveling: { perLevel: [mod('possessDuration', 'increased', 0.08)] },
+  },
+  relinquish: {
+    id: 'relinquish', name: 'Relinquish', noDrop: true,
+    description: 'Let the borrowed flesh go. It remembers nothing kindly —'
+      + ' it staggers where you drop it, and you wake in your own body,'
+      + ' wherever you left that.',
+    tags: ['possession', 'instant'], color: '#b8a8e8',
+    manaCost: 0, cooldown: 0.5, useTime: 0.1,
+    delivery: { type: 'self' },
+    effects: [{ type: 'possessEnd' }],
+  },
+  form_of_the_dire_wolf: {
+    id: 'form_of_the_dire_wolf', name: 'Form of the Dire Wolf',
+    description: 'Wear the wolf you have studied: a minted body at your own'
+      + ' level — its legs, its rend, its hunger — while your flesh travels'
+      + ' WITHIN, beyond any reach. The form\'s death throws you back into'
+      + ' yourself, staggered. Press again to return.',
+    tags: ['spell', 'possession'], color: '#b8d8a8',
+    manaCost: 25, cooldown: 8, useTime: 0.5,
+    delivery: { type: 'self' },
+    effects: [{ type: 'shapeshift', shift: { form: 'dire_wolf' } }],
+    convert: { when: 'seatAway', skillId: 'return_to_flesh' },
+    requirements: { willpower: 14 },
+    minDropLevel: 10, dropWeight: 30,
+    leveling: { perLevel: [mod('possessPower', 'flat', 0.02)] },
+  },
+  return_to_flesh: {
+    id: 'return_to_flesh', name: 'Return to Flesh', noDrop: true,
+    description: 'Shed the form. It disperses like breath off a pane, and'
+      + ' your own body takes the next step as if it had walked here.',
+    tags: ['possession', 'instant'], color: '#b8d8a8',
+    manaCost: 0, cooldown: 0.5, useTime: 0.1,
+    delivery: { type: 'self' },
+    effects: [{ type: 'possessEnd' }],
+  },
+  // The VACANT kin's kit (the seam's teaching family — data/monsters.ts).
+  // One verb, one lesson: the usher shows you what a seat-slap feels like
+  // from the OTHER side. noDrop — the player lane is Possession itself.
+  ushers_lull: {
+    id: 'ushers_lull', name: 'Usher\'s Lull', noDrop: true,
+    description: 'A pale mote that settles behind the eyes: the struck sit'
+      + ' a half-step loose in their own seat — softer, slower to argue.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#b8a8e8',
+    manaCost: 8, cooldown: 4, useTime: 0.5,
+    baseDamage: { chaos: [4, 7] },
+    delivery: { type: 'projectile', speed: 420, radius: 8, range: 320 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'weaken', chance: 1 },
+    ],
+    ai: { range: 300, weight: 3, keepDistance: 200 },
+  },
+
   // ======================= THE GRAB FABRIC (engine/grab.ts) ================
   // Sustained bodily control as ordinary skill rows: SEIZE establishes the
   // hold (grabSeize — mass-gated, policy-tiered, struggled against), HEAVE

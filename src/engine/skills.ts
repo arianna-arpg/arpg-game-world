@@ -20,6 +20,7 @@ import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
 import type { ThrongSpec } from './throng';
 import type { GrabSpec } from './grab';
+import type { PossessSpec, ShiftSpec } from './possess';
 import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -3441,6 +3442,27 @@ export interface ThrongDirectEffect {
   linger?: number;
 }
 
+/** THE POSSESSION SEAM's entry blow (engine/possess.ts): a landed hit on a
+ *  WEAKENED enemy re-points the caster's SEAT into the struck body —
+ *  eligibility (life fraction × rarity policy, MonsterDef.possessable),
+ *  duration, guise and the husk ladder all ride the spec/POSSESS_CFG.
+ *  Refusals are quiet on monsters and a failNote on the local hero (the
+ *  grab fabric's teaching-refusal idiom). Seat casters only — a brain has
+ *  no seat to move. */
+export interface PossessEffect { type: 'possess'; spec?: PossessSpec; }
+
+/** Ends the caster's CURRENT embodiment (possession or form), seat home,
+ *  policies per POSSESS_CFG.eject — the Relinquish / Return to Flesh press
+ *  (reached via ConvertSpec 'seatAway' on the granting gem, so the button
+ *  that began it ends it). Quiet no-op when the caster is home. */
+export interface PossessEndEffect { type: 'possessEnd'; }
+
+/** THE SHAPESHIFT (engine/possess.ts): mint the spec'd form-body at the
+ *  caster's level through the ordinary createMonster path and re-point the
+ *  seat into it. The husk is CARRIED (withdrawn — the flesh is elsewhere);
+ *  the form's death ejects you staggered. Seat casters only. */
+export interface ShapeshiftEffect { type: 'shapeshift'; shift: ShiftSpec; }
+
 export type SkillEffect =
   | DamageEffect | StatusEffect | BuffEffect | KnockbackEffect
   | PullEffect | SpawnZoneEffect | GainChargeEffect | AbsorbEffect
@@ -3453,7 +3475,8 @@ export type SkillEffect =
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
-  | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect;
+  | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
+  | PossessEffect | PossessEndEffect | ShapeshiftEffect;
 
 // --- The skill definition ---------------------------------------------------
 

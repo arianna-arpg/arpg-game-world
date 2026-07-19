@@ -29,6 +29,12 @@ export interface GameEvents {
    *  packages that feed on deaths (Deadwake, a future Nemesis) can hook it
    *  without touching the death flow itself. */
   'player/modeDeath': { stage: string; earned: number };
+  /** THE POSSESSION SEAM (engine/possess.ts) — a seat moved into a foreign
+   *  body / came home. Announced so future content (a Body Thief mode,
+   *  mount fabrics, infiltration quests) hooks the swap without touching
+   *  the seam itself. */
+  'possess/embody': { seat: string; body: Actor; hero: Actor; kind: 'possess' | 'shift' };
+  'possess/eject': { seat: string; body: Actor; hero: Actor; reason: string };
   /** THE WORLD'S MEMORY (meta/nemesis.ts) — rare saga moments, announced so
    *  future content (assassin packages, bounty boards, contracts) hooks the
    *  records without touching the kill/death flows that write them. */

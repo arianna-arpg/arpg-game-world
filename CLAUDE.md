@@ -355,6 +355,30 @@ changes.
   (host-authoritative, self-healing); `npm run perf -- --lite=N` is the
   horde-stress forensics lever. Dials in `LITE_CFG`, docs in
   `docs/engine/lite.md`, probe `balance/probe_lite.ts`.
+  THE POSSESSION SEAM (`engine/possess.ts` — one seat-to-body indirection;
+  possession and shapeshifting are its CONSUMERS): `Seat.actor` is
+  re-pointable (`World.seatEmbody`/`seatEject`; `Seat.home` = the hero
+  body, `World.seatHero` = the build/save/XP truth) — camera, HUD, the
+  bar (a borrowed kit is ordinary `SkillInstance[]`), the AI seat-skip
+  and the zone carry all follow the POINTER free, while recalc/XP/saves
+  stay HOME. The 'possess' effect enters a WEAKENED enemy (lifeFrac ×
+  `POSSESS_CFG.policy` rarity ladder, `MonsterDef.possessable`
+  allow/deny, structural refusals; the husk stands `entranced` — the
+  risk valve: pain/seizure snap you home, its death is YOUR death, seat
+  home first, permadeath byte-honest); the 'shapeshift' effect mints the
+  form at hero level (husk CARRIED, form death = staggered eject). THE
+  GUISE: the ridden body's faction reads you as kin one-directionally in
+  `hostileTo` until the first authored harm. The pressing gem rides the
+  borrowed bar as the GUEST SLOT with a `'seatAway'` convert face
+  (Relinquish / Return to Flesh); every ending funnels through
+  `seatEject` (the kill() hook is the death law: a dying borrowed body
+  ejects its rider then dies a monster; a dying husk pulls the seat home
+  then wipes honestly). Stats `possessDuration`/`possessPower`/
+  `huskGuard` read off the gem; THE VACANT kin (the open-door
+  `vacant_shell` tutor + the refusing `seatless_usher`) + the
+  `vacant_yard` set-piece teach it at a glance. Dials in `POSSESS_CFG`,
+  docs in `docs/engine/possession.md`, probe
+  `balance/probe_possession.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST

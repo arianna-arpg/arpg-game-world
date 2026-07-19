@@ -322,7 +322,11 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
   // World.applyInputs (OS / scripted / remote intent), never the monster brain.
   // A DOWNED body (a felled companion awaiting revival) doesn't scheme either.
-  if (actor.dead || actor.downed || world.seatOf(actor)) return;
+  // A VACATED husk (the possession seam, engine/possess.ts) stands entranced:
+  // a seat's home body is seat-driven or nobody-driven, never brain-driven —
+  // without this line the brainless hero body would fall through to the
+  // DEFAULT_BRAIN approach-and-attack bundle the moment its seat left it.
+  if (actor.dead || actor.downed || world.seatOf(actor) || actor.vacated) return;
   // THE TIMEFLOW GATE (engine/timeflow.ts): a held body doesn't scheme —
   // stasis and a paused world skip the brain outright; fractional time
   // thinks (and so paces its cadences and kernels) in slow motion. Gated

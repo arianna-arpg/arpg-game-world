@@ -160,6 +160,10 @@ import {
   grabRefusal, grabSeatPos, LEDGER_SEIZED, struggleRate,
   type GrabSpec, type GrabThrowSpec, type GrabVerb,
 } from './grab';
+import {
+  POSSESS_CFG, possessPowerFactor, possessRefusal,
+  type EjectReason, type PossessRide,
+} from './possess';
 import { plyCountOf, plyFloorOf } from './plies';
 import { PUZZLES } from '../data/puzzles';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
@@ -1386,6 +1390,11 @@ export interface Seat {
   id: string;
   /** kind:'player' actor; the authority is world.actors, the seat just points. */
   actor: Actor;
+  /** THE POSSESSION SEAM (engine/possess.ts): set while this seat rides a
+   *  FOREIGN body — the hero body it left behind (its build/save/level
+   *  home, World.seatHero). `actor` above is always the CONTROLLED body;
+   *  unset = the seat is home and `actor` IS the hero. */
+  home?: Actor;
   /** This seat's character build + carry. */
   meta: PlayerMeta;
   /** Where this seat's per-frame intent comes from (OS / scripted / remote). */
@@ -1484,6 +1493,12 @@ registerConvertRule('companionsFull', (caster, inst, world) =>
 // way. Registered beside its sibling; the registry stays the open seam.
 registerConvertRule('chargesEmpty', (caster, inst) =>
   !!instanceUseCharges(inst) && caster.skillChargeBank(inst).count <= 0);
+// THE 'seatAway' CONVERSION RULE (the possession seam, engine/possess.ts):
+// while the PRESSING BODY's seat is riding away from home, the granting gem
+// presents its ending verb — Possession becomes Relinquish, a form gem
+// becomes Return to Flesh. The gem rides the borrowed bar as the GUEST
+// SLOT (seatEmbody), so the button that began the ride ends it.
+registerConvertRule('seatAway', (caster, _inst, world) => !!world.seatOf(caster)?.home);
 
 // THE SYMPATHY FABRIC's npc read (engine/sympathy.ts stays data-registry-free
 // — the registerConvertRule pattern): a friendly body with an authored
@@ -3057,6 +3072,266 @@ export class World {
     if (s) s.lastActedAt = this.time;
   }
 
+  // ----------------------------------------------- the possession seam ----
+  // ONE seat-to-body indirection (engine/possess.ts): a seat's controlled
+  // body is re-pointable. seatEmbody moves a seat into a foreign body,
+  // seatEject brings it home; possession and shapeshifting are consumers.
+  // Camera, HUD, applyInputs, the AI skip, dwells and survival meters all
+  // read the POINTER (seat.actor) and follow free; the build/save/XP
+  // surfaces read the HERO (seatHero) and stay home. The kill() hook is
+  // the death law: a dying borrowed body ejects its rider first, a dying
+  // husk pulls its seat home first — permadeath stays byte-honest.
+
+  /** The seat's HERO body — its build/save/level home. The controlled body
+   *  (seat.actor) and the hero are the same actor whenever the seat is home. */
+  seatHero(seat: Seat): Actor { return seat.home ?? seat.actor; }
+
+  /** Move a seat into a foreign body. The caller has settled policy
+   *  (possessRefusal / the shapeshift mint); this is the mechanical swap —
+   *  pointer, index, team/kind promotion, the husk stance, the guest slot,
+   *  and the power haircut, all restored whole by seatEject. */
+  private seatEmbody(
+    seat: Seat, body: Actor, ride: PossessRide,
+    powerFactor: number, huskGuard: number, gemInst: SkillInstance,
+  ): void {
+    const hero = seat.actor;
+    // The trance interrupts whatever the hands were doing (and the borrowed
+    // body forgets its own quarrel — it is nobody's brain now).
+    hero.casting = null;
+    body.casting = null;
+    body.aiTargetId = undefined;
+    hero.vacated = { seatId: seat.id };
+    seat.home = hero;
+    body.possession = ride;
+    body.team = 'player';
+    body.kind = 'player'; // the ROLE axis: seat-driven now (co-op ships the seat id off this)
+    seat.actor = body;
+    this.indexSeats();
+    // The power haircut rides the BODY as a source, so its own instances
+    // scale (the mimic powerFactor law, worn body-side).
+    if (powerFactor !== 1) {
+      body.sheet.setSource('possessed', [mod('damage', 'more', powerFactor - 1)]);
+    }
+    // THE GUEST SLOT: the pressing gem rides along on the borrowed bar —
+    // its ConvertSpec ('seatAway') presents the ending verb, so the button
+    // that began the ride ends it. Removed whole at eject.
+    ride.guestSlot = body.skills.length;
+    ride.gemId = gemInst.def.id;
+    body.skills.push(gemInst);
+    // THE HUSK STANCE: 'stands' leaves the flesh entranced where the seat
+    // left it (the possession risk valve — targetable, huskGuard-warded);
+    // 'carried' withdraws it from the world whole (the shapeshift law —
+    // the flesh IS elsewhere; it shadows the body for honest eject spots).
+    if (ride.huskMode === 'stands') {
+      hero.applyStatus('entranced', 0, 1, 'Possession');
+      if (huskGuard > 0) {
+        hero.sheet.setSource('vacated', [mod('damageTaken', 'more', -huskGuard)]);
+      }
+    } else {
+      const i = this.actors.indexOf(hero);
+      if (i >= 0) this.actors.splice(i, 1);
+    }
+    this.markMetaDirty(seat);
+    this.events.emit('possess/embody', { seat: seat.id, body, hero, kind: ride.kind });
+  }
+
+  /** Bring a seat home from wherever it rides. Safe to call when already
+   *  home (quiet no-op) — every ending (press, clock, either death, a zone
+   *  transit, a dev lever) funnels HERE, so the restoration is one truth. */
+  seatEject(seat: Seat, reason: EjectReason): void {
+    const hero = seat.home;
+    if (!hero) return;
+    const body = seat.actor;
+    const ride = body.possession;
+    seat.home = undefined;
+    seat.actor = hero;
+    hero.vacated = undefined;
+    this.indexSeats();
+    // The homecoming: a carried husk rejoins the world where the body
+    // stood; a standing husk simply wakes where it waited.
+    if (ride?.huskMode === 'carried') {
+      hero.pos = this.clampPos(vec(body.pos.x, body.pos.y), hero.radius);
+      if (!this.actors.includes(hero)) this.actors.push(hero);
+    }
+    for (let i = hero.statuses.length - 1; i >= 0; i--) {
+      if (hero.statuses[i].id !== 'entranced') continue;
+      hero.statuses.splice(i, 1);
+      hero.sheet.removeSource('status:entranced');
+    }
+    hero.sheet.removeSource('vacated');
+    // Restore the body whole — team, role, kit, haircut. What it suffered
+    // while ridden it keeps (you leave the flesh as you wore it).
+    if (ride) {
+      body.possession = undefined;
+      body.team = ride.prevTeam;
+      body.kind = ride.prevKind;
+      body.sheet.removeSource('possessed');
+      if (ride.guestSlot >= 0 && body.skills[ride.guestSlot]?.def.id === ride.gemId) {
+        body.skills.splice(ride.guestSlot, 1);
+      }
+      if (ride.mintedForm) {
+        // A form is a projection of its seat, not a creature the world
+        // keeps: it disperses at eject. A form dying under you (bodyDied)
+        // is already mid-kill() — let that death finish honestly.
+        if (!body.dead && reason !== 'bodyDied') {
+          body.dead = true;
+          this.flashes.push({
+            pos: vec(body.pos.x, body.pos.y), radius: body.radius + 10,
+            color: body.color, life: 0.35, maxLife: 0.35,
+          });
+        }
+      } else if (!body.dead && (reason === 'press' || reason === 'duration' || reason === 'travel')) {
+        // The vacated flesh staggers — your escape window, and the room's
+        // counterplay window when a monster is dropped mid-pack.
+        const stunBase = STATUS_DEFS['stun']?.duration ?? 1;
+        if (POSSESS_CFG.eject.bodyStun > 0) {
+          body.applyStatus('stun', 0, POSSESS_CFG.eject.bodyStun / stunBase, 'Relinquished');
+        }
+      }
+      // The re-possess pace: stamped on the pressing gem, at the HERO's
+      // hands (the skill's own cooldown field wins if longer).
+      if (POSSESS_CFG.eject.cooldown > 0 && ride.gemId) {
+        const cd = Math.max(hero.cooldowns.get(ride.gemId) ?? 0, POSSESS_CFG.eject.cooldown);
+        hero.cooldowns.set(ride.gemId, cd);
+        hero.cooldownTotals.set(ride.gemId, Math.max(hero.cooldownTotals.get(ride.gemId) ?? 0, cd));
+      }
+    }
+    // The backlash: an embodiment DYING under you staggers the returning
+    // flesh (the possession's own risk stays priced even when the husk
+    // stood safe).
+    if (reason === 'bodyDied' && POSSESS_CFG.eject.selfStun > 0 && !hero.dead) {
+      const stunBase = STATUS_DEFS['stun']?.duration ?? 1;
+      hero.applyStatus('stun', 0, POSSESS_CFG.eject.selfStun / stunBase, 'Backlash');
+    }
+    if (!hero.dead && reason !== 'travel') {
+      this.text(vec(hero.pos.x, hero.pos.y - hero.radius - 12),
+        reason === 'huskPain' ? 'the pain calls you home'
+          : reason === 'huskSeized' ? 'torn back to your flesh'
+            : reason === 'bodyDied' ? 'the body fails you'
+              : 'you return to yourself', '#b8a8e8', 12);
+    }
+    this.markMetaDirty(seat);
+    this.events.emit('possess/eject', { seat: seat.id, body, hero, reason });
+  }
+
+  /** THE ENTRY BLOW (the 'possess' effect): a landed hit tries to move the
+   *  caster's seat into the struck body — weakened gate × rarity policy ×
+   *  MonsterDef.possessable, refusals quiet on monsters and a failNote on
+   *  the local hero (the grab fabric's teaching-refusal idiom). */
+  private possessSeize(caster: Actor, inst: SkillInstance, target: Actor, spec: import('./possess').PossessSpec | undefined): void {
+    const seat = this.seatOf(caster);
+    if (!seat || seat.home) return;         // brains have no seat; away seats press the convert face
+    if (target.team !== 'enemy' || target.dead) return;
+    const why = possessRefusal(target, spec);
+    if (why) { this.failNote(caster, inst.def.id + ':possess', why); return; }
+    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const extra = instanceMods(inst);
+    const durMul = caster.sheet.get('possessDuration', tags, extra);
+    const powBonus = caster.sheet.get('possessPower', tags, extra);
+    const guard = caster.sheet.get('huskGuard', tags, extra);
+    const duration = (spec?.duration ?? POSSESS_CFG.duration) * durMul;
+    const ride: PossessRide = {
+      seatId: seat.id, kind: 'possess',
+      prevTeam: target.team, prevKind: target.kind,
+      guiseFaction: (spec?.guise ?? true) ? target.faction : undefined,
+      guiseBroken: false,
+      until: this.time + Math.max(1, duration),
+      huskLifeAt: caster.life,
+      huskLostFrac: spec?.huskLostFrac ?? POSSESS_CFG.endOn.huskLostFrac,
+      huskMode: spec?.husk ?? 'stands',
+      guestSlot: -1, gemId: inst.def.id,
+    };
+    this.seatEmbody(seat, target, ride, possessPowerFactor(spec, 'possess', powBonus), guard, inst);
+    this.text(vec(target.pos.x, target.pos.y - target.radius - 12), 'possessed!', '#b8a8e8', 14);
+    this.flashes.push({
+      pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
+      color: '#b8a8e8', life: 0.35, maxLife: 0.35,
+    });
+  }
+
+  /** THE SHAPESHIFT PRESS (the 'shapeshift' effect): mint the form at the
+   *  caster's level through the one createMonster path and move in. The
+   *  husk is CARRIED — the flesh is elsewhere; the form's death ejects
+   *  you staggered. */
+  private shapeshiftPress(caster: Actor, inst: SkillInstance, shift: import('./possess').ShiftSpec): void {
+    const seat = this.seatOf(caster);
+    if (!seat || seat.home) return;
+    const def = MONSTERS[shift.form];
+    if (!def) return;
+    const form = this.createMonster(shift.form, caster.level, 'player');
+    form.noBounty = true;   // a projection pays no bounty however it ends
+    form.pos = this.clampPos(vec(caster.pos.x, caster.pos.y), form.radius);
+    this.actors.push(form);
+    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const extra = instanceMods(inst);
+    const powBonus = caster.sheet.get('possessPower', tags, extra);
+    const durMul = caster.sheet.get('possessDuration', tags, extra);
+    const ride: PossessRide = {
+      seatId: seat.id, kind: 'shift',
+      prevTeam: 'player', prevKind: form.kind,
+      until: shift.duration ? this.time + shift.duration * durMul : undefined,
+      huskLifeAt: caster.life,
+      huskLostFrac: 0,
+      huskMode: 'carried',
+      guestSlot: -1, gemId: inst.def.id,
+      mintedForm: true,
+    };
+    this.seatEmbody(seat, form, ride, possessPowerFactor(shift, 'shift', powBonus), 0, inst);
+    this.text(vec(form.pos.x, form.pos.y - form.radius - 12), def.name + '!', '#b8d8a8', 14);
+    this.flashes.push({
+      pos: vec(form.pos.x, form.pos.y), radius: form.radius + 14,
+      color: '#b8d8a8', life: 0.35, maxLife: 0.35,
+    });
+  }
+
+  /** THE SEAM SWEEP: the ride clock, the husk ladder (pain snapback, the
+   *  seized leash), the trance re-stamp, and the carried husk's shadow.
+   *  Rides right behind the grab sweep so a fresh hold on the husk is
+   *  seen the frame it lands. */
+  private updatePossessions(dt: number): void {
+    void dt;
+    for (const seat of this.seats) {
+      const hero = seat.home;
+      if (!hero) continue;
+      const body = seat.actor;
+      const ride = body.possession;
+      if (!ride) { this.seatEject(seat, 'released'); continue; }   // self-heal: pointer without a record
+      if (body.dead) { this.seatEject(seat, 'released'); continue; } // safety net; kill() ejects first
+      if (ride.huskMode === 'stands') {
+        hero.applyStatus('entranced', 0, 1, 'Possession');
+        if (ride.huskLostFrac > 0
+          && hero.life <= ride.huskLifeAt - hero.maxLife() * ride.huskLostFrac) {
+          this.seatEject(seat, 'huskPain');
+          continue;
+        }
+        if (POSSESS_CFG.endOn.huskSeized && hero.heldBy !== undefined) {
+          this.seatEject(seat, 'huskSeized');
+          continue;
+        }
+      } else {
+        // The carried flesh shadows the body — eject always has an honest spot.
+        hero.pos.x = body.pos.x;
+        hero.pos.y = body.pos.y;
+      }
+      if (ride.until !== undefined && this.time >= ride.until) {
+        this.seatEject(seat, 'duration');
+      }
+    }
+  }
+
+  /** DEV LEVER (the Possess tab): force the local seat into a target —
+   *  policy-true (same refusal lane), returns the refusal for the tab. */
+  devPossess(target: Actor): string | null {
+    const seat = this.localSeat;
+    if (seat.home) return 'already away';
+    const inst = seat.actor.skills.find(s => s?.def.effects.some(f => f.type === 'possess'))
+      ?? makeSkillInstance(SKILLS['possession'], 1);
+    const why = possessRefusal(target, undefined);
+    if (why) return why;
+    this.possessSeize(seat.actor, inst, target, undefined);
+    return seat.home ? null : 'refused';
+  }
+
   /** THE UNARMED FLOOR's per-actor instance — minted lazily, held OUTSIDE
    *  knownSkills on purpose: never learnable, never socketable, never
    *  salvageable, never saved, never touched by recalcSeat's bonus-level
@@ -3205,7 +3480,9 @@ export class World {
     // A forfeit ends the WHOLE party run immediately — it must NOT route through
     // the down/revive seam (an ally being up would otherwise turn "End Run" into a
     // revivable downed state, and leave runEndReason stuck on 'forfeit' to mislabel
-    // a later genuine wipe). Mark every seat down and end the run directly.
+    // a later genuine wipe). Every seat comes HOME first (the possession
+    // seam — you forfeit in your own flesh), then mark and end directly.
+    for (const s of this.seats) if (s.home) this.seatEject(s, 'released');
     for (const s of this.seats) { s.actor.downed = false; s.actor.dead = true; }
     this.onRunEnded(this.runEndReason);
   }
@@ -3462,6 +3739,11 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    // THE POSSESSION SEAM: transit unwinds every embodiment FIRST — a
+    // borrowed body belongs to its zone (it stays, staggered, with its
+    // pack), a form disperses and re-presses cheap on the far side, and
+    // the carry filter below then moves exactly the true seat bodies.
+    for (const s of this.seats) if (s.home) this.seatEject(s, 'travel');
     // THE SURVIVOR TRIGGER: before the zone we're LEAVING is torn down, the
     // world may decide to remember a foe we bloodied and left standing.
     this.scanNemesisSurvivors();
@@ -14364,9 +14646,11 @@ export class World {
   recalcPlayer(): void { this.recalcSeat(this.localSeat); }
 
   /** Recompute a SEAT's actor stats from its build (class + attributes + tree +
-   *  level). Generalized from recalcPlayer so co-op ally seats recompute too. */
+   *  level). Generalized from recalcPlayer so co-op ally seats recompute too.
+   *  Always the HERO body (the possession seam): a build belongs to the
+   *  flesh that earned it, never to a borrowed one. */
   recalcSeat(seat: Seat): void {
-    const p = seat.actor;
+    const p = this.seatHero(seat);
     const m = seat.meta;
 
     // Effective attributes = class base + everything granted by the tree.
@@ -14497,10 +14781,12 @@ export class World {
   }
 
   /** Apply XP to one seat: bank it, level the seat up, and (for the LOCAL seat
-   *  only) trip the account-level ledger flag. */
+   *  only) trip the account-level ledger flag. Levels land on the HERO body
+   *  (the possession seam): a borrowed body's level is the monster's own —
+   *  attribution flows to the SEAT, never the flesh it happens to wear. */
   private grantSeatXp(seat: Seat, amount: number): void {
     const m = seat.meta;
-    const p = seat.actor;
+    const p = this.seatHero(seat);
     // Mireille's Traveller's Rest blessing boosts experience while it lasts.
     if (this.mireilleXpBuff > 0) amount = Math.round(amount * (1 + MIREILLE_XP_BUFF_MULT));
     m.xp += amount;
@@ -14517,7 +14803,9 @@ export class World {
       // A DOWNED seat banks XP and levels, but must NOT auto-heal off 0 — only an
       // ally's revive restores it (to REVIVE_LIFE_FRAC). Mirrors the regen guard.
       if (!p.downed) p.fillResources();
-      this.text(p.pos, 'LEVEL UP!', '#ffd700', 24);
+      // The toast lands where the PLAYER is looking (the controlled body) —
+      // the level itself landed on the hero above.
+      this.text(seat.actor.pos, 'LEVEL UP!', '#ffd700', 24);
       // LIVE PARITY: the patron levelled — re-normalize the hired blade.
       if (seat === this.localSeat) this.resyncMercenary();
     }
@@ -17534,7 +17822,10 @@ export class World {
    *  Toggles: re-binding a skill to the slot it already occupies clears that slot.
    *  Mirrors the skill-book bar handler, now seat-scoped for co-op routing. */
   bindSkill(slot: number, skillId: string | null, seat: Seat = this.localSeat): boolean {
-    const p = seat.actor;
+    // The BAR belongs to the hero body (the possession seam): re-binding
+    // while possessed edits the build you'll come home to, never the
+    // borrowed kit.
+    const p = this.seatHero(seat);
     if (slot < 0 || slot >= p.skills.length) return false;
     if (skillId === null) { p.skills[slot] = null; return true; }
     const inst = seat.meta.knownSkills.get(skillId);
@@ -18063,6 +18354,14 @@ export class World {
     // hostility stands and SIGHT mediates — the butte walls' blocksSight
     // already confine the fights to rims and spans, which is the fantasy.
     if ((a.tier ?? 0) !== (b.tier ?? 0) && !this.zone.tiers?.rimDuels) return false;
+    // THE GUISE (the possession seam, engine/possess.ts): a seat wearing a
+    // body of faction F reads as KIN to team-enemy bodies of F while the
+    // guise holds — ONE-directional in the one hostility gate (their
+    // targeting, swings, threat and stray zones all pass the rider by; the
+    // rider's own targeting asks the other direction and stays live). The
+    // first harm the rider authors tears it for good (resolveHit).
+    if (b.possession?.guiseFaction && !b.possession.guiseBroken
+      && a.team === 'enemy' && a.faction === b.possession.guiseFaction) return false;
     if (a.team !== b.team) return true;
     // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
     // whose side the food nominally stands on — and it's ONE-directional:
@@ -22620,6 +22919,17 @@ export class World {
         const dir = dist(aim, caster.pos) > 4 ? angleTo(caster.pos, aim) : caster.facing;
         this.grabThrowRelease(caster, fx.impulse, dir, inst, fx.damageMult);
       }
+      // THE RETURN (the possession seam): end the caster's current
+      // embodiment, seat home — the Relinquish / Return to Flesh press,
+      // reached via the granting gem's 'seatAway' convert face. Quiet
+      // no-op when the caster is already home.
+      if (fx.type === 'possessEnd') {
+        const s = this.seatOf(caster);
+        if (s?.home) this.seatEject(s, 'press');
+      }
+      // THE SHAPESHIFT (the possession seam): mint the form at the
+      // caster's level through the one createMonster path and move in.
+      if (fx.type === 'shapeshift') this.shapeshiftPress(caster, inst, fx.shift);
       // ORDER THE PACK (minionCast — Skeletal Strike, the Harvester's Reap):
       // every living minion of the HOST skill executes the order skill — at
       // the caster's mark, or each at its own nearest prey. The pack acts;
@@ -26675,6 +26985,15 @@ export class World {
       if (caster.team === 'enemy' && this.seatOf(target)) caster.grudgeMark = true;
       else if (target.team === 'enemy' && this.seatOf(caster)) target.grudgeMark = true;
     }
+    // THE BETRAYAL (the possession seam): the first harm a ridden body
+    // authors tears its guise for good — the pack knows its own blood.
+    // Any struck body counts (blood smells the same at a distance); the
+    // dial is the guise itself (PossessSpec.guise).
+    if (caster.possession?.guiseFaction && !caster.possession.guiseBroken && target !== caster) {
+      caster.possession.guiseBroken = true;
+      this.text(vec(caster.pos.x, caster.pos.y - caster.radius - 10),
+        'the guise breaks!', '#b8a8e8', 12);
+    }
     const extra = instanceMods(inst);
     // Status shatter (Absolute Zero): consume the listed statuses for a
     // MORE multiplier — chilled and frozen things break beautifully.
@@ -27511,6 +27830,12 @@ export class World {
         // tries to close the hold — mass law, policy and grace all gate
         // inside; a refusal notes only on the local hero.
         this.grabSeize(caster, inst, target, fx.grab);
+      } else if (fx.type === 'possess') {
+        // THE ENTRY BLOW (the possession seam, engine/possess.ts): the
+        // landed hit tries to move the caster's SEAT into the struck body
+        // — weakened gate, rarity policy and MonsterDef.possessable all
+        // settle inside; refusals note only on the local hero.
+        this.possessSeize(caster, inst, target, fx.spec);
       } else if (fx.type === 'pull') {
         // GET OVER HERE: one impulse sized to the gap yanks the target to
         // the caster's feet, riding the push physics — walls interrupt the
@@ -28895,6 +29220,19 @@ export class World {
     // retires the actor itself (splice) + repaints the doorway — nothing else
     // in the death ladder (loot/XP/bursts) applies to a doorway.
     if (actor.doorId) { this.setDoorState(actor.doorId, 'broken'); return; }
+    // THE POSSESSION SEAM's death law (engine/possess.ts): a dying BORROWED
+    // body ejects its rider FIRST — the monster then dies as a monster
+    // (killer credit intact; a body you merely wore never wipes the party).
+    // A dying HUSK pulls its seat home FIRST — you die in your own flesh,
+    // so the seat branch below runs the ordinary downed/permadeath seam
+    // byte-honest.
+    if (actor.possession) {
+      const s = this.seats.find(x => x.id === actor.possession!.seatId);
+      if (s && s.actor === actor) this.seatEject(s, 'bodyDied');
+    } else if (actor.vacated) {
+      const s = this.seats.find(x => x.id === actor.vacated!.seatId);
+      if (s && s.actor !== actor) this.seatEject(s, 'huskDying');
+    }
     // A TAMED COMPANION falls DOWNED, never dead (the Hunter's bond): the
     // body waits for a lingering ally or its keeper's whistle. Nothing in
     // the death ladder applies — no bounty, no rules, no corpse (it is not
@@ -30843,6 +31181,10 @@ export class World {
     // THE GRAB sweep rides right behind it (engine/grab.ts): the release
     // ladder, then the held body's seat wins ITS frame the same way.
     this.updateGrabs(dt);
+    // THE POSSESSION SEAM sweep rides behind the grabs (engine/possess.ts):
+    // the ride clock + the husk ladder — a hold landed on the husk THIS
+    // frame is seen this frame.
+    this.updatePossessions(dt);
 
     // Corpses decay
     for (let i = this.corpses.length - 1; i >= 0; i--) {

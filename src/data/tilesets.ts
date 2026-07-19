@@ -337,6 +337,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'stone_sanctum', chance: 0.12 },
       // The Mummers pitch on the drover roads (the mimicry troupe's camp).
       { composition: 'mummers_camp', chance: 0.1 },
+      // The Vacant keep a cold yard off the barrow paths (the possession
+      // seam's set-piece — engine/possess.ts).
+      { composition: 'vacant_yard', chance: 0.09 },
     ],
     nameFirst: ['Bracken', 'Harrow', 'Greywether', 'Wold', 'Mistle', 'Cairn', 'Whinny', 'Old Meadow', 'Shepherd’s', 'Thorn', 'Fallow', 'Drover’s', 'Weathered', 'Barrowman’s'],
     nameSecond: ['Downs', 'Moor', 'Wolds', 'Leas', 'Heath', 'Fells', 'Commons', 'Folds', 'Acres', 'Pastures', 'Rise', 'Balks'],
@@ -458,6 +461,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'glasskin_aper', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'masque_haunt', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'the_understudy', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // THE VACANT (engine/possess.ts): empty armor drifting the barrow
+        // paths — the possession seam's tutors, studied fast; the usher is
+        // the will that refuses.
+        { id: 'vacant_shell', weight: 2, presence: { to: 16, fadeOut: 7 } },
+        { id: 'seatless_usher', weight: 1, presence: { from: 5, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1497,6 +1505,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'manor_grounds', chance: 0.55 },
       { composition: 'family_plot', chance: 0.5 },
       { composition: 'hangmans_hill', chance: 0.15 },
+      // The estate's unworn armor keeps its own cold court (the possession
+      // seam's yard — engine/possess.ts).
+      { composition: 'vacant_yard', chance: 0.12 },
     ],
     nameFirst: ['Mournstead', 'Widowsworth', 'Blackbanner', 'Gravenholm', 'Ashenhall', 'Vigilkeep', 'Lachrymere', 'Sablecourt', 'Dimhallow', 'Palewick', 'Sorrowseat', 'Duskmanor'],
     nameSecond: ['Estate', 'Grounds', 'Parish', 'Demesne', 'Walk', 'Garden', 'Seat', 'Holding', 'Acre', 'Vigil', 'Rest', 'Keep'],
@@ -1599,6 +1610,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'pallbearer', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'dusk_rider', weight: 1, presence: { from: 12, fadeIn: 6 } },
         { id: 'gloom_coach', weight: 1, presence: { from: 14 } },
+        // THE VACANT (engine/possess.ts): the estate keeps unworn armor
+        // walking its grounds — deeper faces of the possession seam's kin.
+        { id: 'vacant_shell', weight: 1, presence: { to: 20, fadeOut: 9 } },
+        { id: 'seatless_usher', weight: 1, presence: { from: 7, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',

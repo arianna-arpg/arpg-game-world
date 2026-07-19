@@ -522,6 +522,21 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_mimicry', kind: 'skill', cost: 200, reqLedgerCounts: { [bestiaryKey('mimic')]: 1 }, label: 'Skill Pool — Mimicry',
     description: 'Mimicry may drop. The chest that bit you taught you something: a shape is only a habit, and habits can be stolen.',
     payload: { skillIds: ['mimicry'] } },
+  // THE POSSESSION SEAM (engine/possess.ts): surfaced by putting down ONE
+  // Vacant Shell — a body that walks with nobody home poses the question,
+  // and the discipline is its answer (the mimicry counted-ledger idiom).
+  { id: 'gem_skills_possession', kind: 'skill', cost: 220, reqLedgerCounts: { [bestiaryKey('vacant_shell')]: 1 }, label: 'Skill Pool — Possession',
+    description: 'Possession may drop. The shell you broke was empty the whole time — and an empty seat is an invitation.',
+    payload: { skillIds: ['possession'] } },
+  // THE FORM GEMS chain off the discipline AND the study of the beast
+  // itself (the knowledge-gets-teeth law: the count sits near the ARTS
+  // tier of a common kind's bestiary ladder — you can only wear what you
+  // understand). Future forms are one row each: a new bestiaryKey, a new
+  // payload — the seam itself never changes.
+  { id: 'gem_skills_wolfform', kind: 'skill', cost: 260, requiresUnlock: 'gem_skills_possession',
+    reqLedgerCounts: { [bestiaryKey('dire_wolf')]: 20 }, label: 'Skill Pool — the Wolf Form',
+    description: 'Form of the Dire Wolf may drop. Twenty wolves taught you how the shoulders roll; the twenty-first lesson is from inside.',
+    payload: { skillIds: ['form_of_the_dire_wolf'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
@@ -560,6 +575,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_mimicry', kind: 'support', cost: 150, requiresUnlock: 'gem_skills_mimicry', label: 'Support Pool — Mimicry',
     description: 'Keen Study and Understudy may drop. The eye that steals without the bruise, and the wings that hold more faces.',
     payload: { supportIds: ['keen_study', 'understudy'] } },
+  { id: 'sup_possession', kind: 'support', cost: 160, requiresUnlock: 'gem_skills_possession', label: 'Support Pool — Possession',
+    description: 'Iron Trance and Long Communion may drop. Armor for the body you leave, and patience for the one you take.',
+    payload: { supportIds: ['iron_trance', 'long_communion'] } },
   // THE COUNTERPOINT (an orphan fix): Polyphony and Ostinato shipped with
   // the combo grammar fully defined but joined NO pool row — obtainable
   // only under the unlock-all dev feature. The validator's pool-orphan net

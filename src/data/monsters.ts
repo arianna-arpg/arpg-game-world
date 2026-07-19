@@ -382,6 +382,14 @@ export interface MonsterDef {
    *  struggle-speed tier (2 = scrambles out double-quick). Omitted falls
    *  to GRAB_CFG.policy by rarity (uniques refuse, rares scramble). */
   grabbable?: boolean | number;
+  /** THE POSSESSION SEAM's body-side policy word (engine/possess.ts):
+   *  true = an open door — enterable at ANY life (and it opens even an
+   *  authored boss: a capturable pinnacle is a design lever, spend it
+   *  deliberately); false = the will inside refuses regardless of
+   *  weakening. Omitted falls to the weakened gate × POSSESS_CFG.policy
+   *  by rarity (uniques refuse). Structural refusals (constructs, doors,
+   *  composites, the driven, another's minions) hold regardless. */
+  possessable?: boolean;
   /** THE PLY FABRIC (engine/plies.ts): hit-counted durability — this kind
    *  EATS N landed hits (magnitude-blind) before its life pool is exposed.
    *  The life underneath stays live for DoTs and self-destruction. Any
@@ -4329,6 +4337,40 @@ export const MONSTERS: Record<string, MonsterDef> = {
     gemBias: ['mimic'],
     drops: 1,
     wardPriority: 1,
+  },
+
+  // --- THE VACANT (the possession seam's kin — engine/possess.ts) -----------
+  // The teaching family: bodies that pose the seam's question at a glance.
+  // Family read law: the tell is EMPTINESS — armor nobody wears, a single
+  // dark socket where living armor-kin burn two bright eyes; the one WILL
+  // among them wears too many. The SHELL is the open door (possessable at
+  // any life — the tutor flesh, and the discipline's unlock: put ONE down
+  // and the Vault surfaces Possession). The USHER is the counterexample —
+  // a will, pale and plural, that refuses to be worn, and slaps your seat
+  // with its lull instead. Low bestiaryKills (the teacher law): the first
+  // pages a possessor fills while the long studies simmer.
+  vacant_shell: {
+    id: 'vacant_shell', name: 'Vacant Shell',
+    color: '#7a7290', shape: 'hexagon', radius: 14, material: 'bone', look: 'vacant_shell',
+    base: { life: 90, moveSpeed: 70, accuracy: 95, armor: 30, mana: 0 },
+    skills: ['claw'], xp: 10, faction: 'vacant', tags: ['undead'],
+    possessable: true,   // the open door — enterable at ANY life; its whole point
+    bestiaryKills: 25,   // the tutor teaches quickly
+    gemBias: ['possession'],
+    detection: 0.5,      // nobody home to notice you sooner
+    packSize: [2, 4],
+    brain: { type: 'swarm', behavior: { reaction: [0.5, 1.0] } },
+  },
+  seatless_usher: {
+    id: 'seatless_usher', name: 'Seatless Usher',
+    color: '#b8a8e8', shape: 'circle', radius: 12, material: 'ethereal', look: 'seatless_usher',
+    base: { life: 55, moveSpeed: 110, accuracy: 105, evasion: 40, mana: 120, manaRegen: 8 },
+    skills: ['ushers_lull'], xp: 20, faction: 'vacant', tags: ['undead'],
+    possessable: false,  // the counterexample: a will that refuses outright
+    bestiaryKills: 30,
+    gemBias: ['possession'],
+    detection: 1.1,
+    brain: { type: 'skirmish', withdraw: 1.1 },
   },
 
   // --- Clutter & townsfolk ----------------------------------------------------

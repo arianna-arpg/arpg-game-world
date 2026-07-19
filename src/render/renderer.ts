@@ -5545,6 +5545,51 @@ export class Renderer {
       }
     }
 
+    // THE POSSESSION STRIP (the possession seam, engine/possess.ts): while
+    // the local seat rides a foreign body, one centered chip above the bar
+    // carries the whole contract — WHOSE flesh you wear, how long it holds,
+    // and (for a standing husk) the life of the body you left behind. The
+    // bars/slots/orbs above already show the BORROWED body (world.player
+    // follows the pointer); this chip is the tether home. Host/single only
+    // by construction: a co-op client's localSeat never sets `home`.
+    {
+      const home = world.localSeat.home;
+      const ride = home ? p.possession : undefined;
+      if (home && ride) {
+        const cy = by - 74;
+        const remain = ride.until !== undefined ? Math.max(0, ride.until - world.time) : null;
+        const title = ride.kind === 'shift'
+          ? `${p.name}` : `riding ${p.name}`;
+        const label = remain !== null ? `${title} — ${Math.ceil(remain)}s` : title;
+        ctx.font = 'bold 11px Verdana';
+        const lw = ctx.measureText(label).width;
+        const huskW = ride.huskMode === 'stands' ? 96 : 0;
+        const chipW = lw + 16 + (huskW ? huskW + 10 : 0);
+        const cx0 = w / 2 - chipW / 2;
+        ctx.fillStyle = 'rgba(10,8,16,0.85)';
+        ctx.fillRect(cx0, cy - 11, chipW, 20);
+        ctx.strokeStyle = '#b8a8e8';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx0, cy - 11, chipW, 20);
+        ctx.fillStyle = '#b8a8e8';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, cx0 + 8, cy + 4);
+        if (huskW) {
+          // The husk sliver: the flesh you answer for, wherever it stands.
+          const hx = cx0 + lw + 18;
+          const frac = home.maxLife() > 0 ? clamp(home.life / home.maxLife(), 0, 1) : 0;
+          ctx.font = '9px Verdana';
+          ctx.fillStyle = '#8a82a8';
+          ctx.fillText('YOUR FLESH', hx, cy - 1);
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillRect(hx, cy + 1, huskW, 5);
+          ctx.fillStyle = frac > 0.5 ? '#7ec87e' : frac > 0.25 ? '#d8b060' : '#d86060';
+          ctx.fillRect(hx, cy + 1, huskW * frac, 5);
+        }
+        ctx.textAlign = 'center';
+      }
+    }
+
     // XP bar — tucked between the key-label row above and the DOM hint bar
     // below (its box top sits at ~h-17; +16 keeps the bar fully clear of it).
     ctx.fillStyle = 'rgba(0,0,0,0.6)';

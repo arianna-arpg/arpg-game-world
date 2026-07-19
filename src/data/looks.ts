@@ -5221,6 +5221,37 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // --- THE VACANT (the possession seam's kin — engine/possess.ts) -----------
+  // Family read law: the tell is EMPTINESS. Living armor-kin burn a PAIR
+  // of bright eyes (hollow_vanguard); the Vacant have one dark socket — or
+  // too many. Every part an existing painter.
+
+  /** The vacant shell: a walking cuirass with nobody in it — rags where a
+   *  body should hang, empty hands (it only shoulders into you), and ONE
+   *  dim socket dead-center. The emptiness IS the invitation. */
+  vacant_shell: {
+    parts: [
+      { kind: 'torso', scale: 0.95, role: 'dark' },
+      { kind: 'pauldrons', scale: 1.0, role: 'metal' },
+      { kind: 'tatters', scale: 0.9, alpha: 0.7, role: 'dark' },
+      { kind: 'eyes', color: '#6a5a8a', params: { n: 1, spread: 0, dist: 0.4, size: 0.14 } },
+    ],
+    shadowScale: 0.85,
+  },
+  /** The seatless usher: a pale robe THREE eyes deep — too many riders and
+   *  no flesh of its own worth keeping. The lantern is for finding empty
+   *  chairs; the wisps behind it are the seats it has already worn out. */
+  seatless_usher: {
+    parts: [
+      { kind: 'robe', scale: 1.0, alpha: 0.85 },
+      { kind: 'shroudWrap', scale: 0.95, alpha: 0.7 },
+      { kind: 'lantern', x: 0.5, y: 0.35, scale: 0.8, color: '#b8a8e8' },
+      { kind: 'eyes', color: '#b8a8e8', params: { n: 3, spread: 0.55, dist: 0.35, size: 0.1 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 }, color: '#b8a8e8' }],
+    shadowScale: 0.7,
+  },
+
   /** The dominion: marble made law — plates, the open book, the scales' chains. */
   dominion_scales: {
     parts: [

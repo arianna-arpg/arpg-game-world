@@ -1291,6 +1291,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.4,
     params: { coat: '#a89058' },
   },
+  // --- THE VACANT's yard kit (the possession seam, engine/possess.ts —
+  // existing painters, new clothes): the cold effigy (the wicker painter
+  // UNLIT — the one dark patron in a country of lit ones) and the slumped
+  // shell (the scarecrow painter in dead violet: armor on a stake with
+  // nobody arriving).
+  still_effigy: {
+    painter: 'wickerEffigy', order: 55, shadow: 0.45, longShadow: 1.8, bakeWhole: 'static',
+    params: { withy: '#6a6478', bind: '#3c3846', lit: false },
+  },
+  slumped_shell: {
+    painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.4,
+    params: { coat: '#5a5470' },
+  },
   war_drum: {
     painter: 'potCluster', order: 53, shadow: 0.5,
     params: { clay: '#7a5638', lid: '#c8a878' },

@@ -25,6 +25,7 @@ import type { TuneSpec } from './tuning';
 import type { ClingSpec, ClingRide } from './cling';
 import type { CreepSource } from './creep';
 import type { GripHold } from './grab';
+import type { PossessRide, VacantMark } from './possess';
 import type { PlySpec } from './plies';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
@@ -1323,6 +1324,18 @@ export class Actor {
    *  0..1] host-computed (snapshot `gb`, the boss-bar idiom). The local
    *  hero reads its own live pair; a client mirror reads this. */
   grabHud?: [string, number];
+  // --- THE POSSESSION SEAM (engine/possess.ts) -----------------------------
+  /** THE RIDE — set on a body a SEAT currently wears (possession or a
+   *  shapeshift form). Carries the restoration ledger (prev team/kind),
+   *  the guise, the clock, and the husk interrupt terms; World.seatEject
+   *  unwinds it whole. seatOf(body) is the control truth — this record is
+   *  the policy truth. */
+  possession?: PossessRide;
+  /** THE VACANCY — set on a seat's HOME body while the seat is away.
+   *  updateAI skips vacated bodies outright (a seat's home is seat-driven
+   *  or nobody-driven, never brain-driven); the kill path reads it to
+   *  snap the seat home before a lethal blow lands (permadeath honesty). */
+  vacated?: VacantMark;
 
   /** A TAMED COMPANION (the Hunter's bond — World.tameCompanion): fights at
    *  its keeper's side like a minion, but DOWNS instead of dying — revived

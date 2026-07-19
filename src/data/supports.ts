@@ -2463,6 +2463,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 8, minDropLevel: 6,
   },
 
+  // --- The possession seam's gem-side levers (engine/possess.ts) ----------
+  iron_trance: {
+    id: 'iron_trance', name: 'Iron Trance',
+    description: 'The abandoned flesh sits behind iron while you ride: your husk takes far less harm, and so holds its tongue far longer before the pain calls you home.',
+    color: '#b8a8e8', requiresTags: ['possession'],
+    mods: [mod('huskGuard', 'flat', 0.3)],
+    perLevel: [mod('huskGuard', 'flat', 0.02)],
+    weight: 8, minDropLevel: 8,
+  },
+  long_communion: {
+    id: 'long_communion', name: 'Long Communion',
+    description: 'The seat settles deeper into the borrowed chair: possessions hold considerably longer before the flesh remembers whose it was.',
+    color: '#a890d8', requiresTags: ['possession'],
+    mods: [mod('possessDuration', 'increased', 0.4)],
+    perLevel: [mod('possessDuration', 'increased', 0.05)],
+    weight: 8, minDropLevel: 8,
+  },
+
   // --- Minion investment gems ----------------------------------------------------
 
   vicious_brood: {

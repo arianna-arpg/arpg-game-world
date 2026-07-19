@@ -143,6 +143,12 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
 
 export function serializeCharacter(world: World): CharacterSave {
   const m = world.meta;
+  // THE POSSESSION SEAM (engine/possess.ts): the save is the HERO's truth.
+  // Mid-possession, world.player is a borrowed monster body — the bar, the
+  // level, and every owner-linked scan below must read the seat's HOME
+  // body instead. Embodiment itself is combat-transient (the castRing law)
+  // and never saved: a resumed save wakes home, in its own flesh.
+  const hero = world.seatHero(world.localSeat);
   // The world half rides every character save (one atomic write — the build
   // and the ground it stood on can never tear apart). Its kept-zone set also
   // decides which objective clears persist: exactly the ground that does.
@@ -173,7 +179,7 @@ export function serializeCharacter(world: World): CharacterSave {
     offerings: m.offerings,
     companions: [
       ...world.actors
-        .filter(a => a.companion && !a.dead && a.owner === world.player && a.defId)
+        .filter(a => a.companion && !a.dead && a.owner === hero && a.defId)
         .map(a => ({
           defId: a.defId!, level: a.level,
           skillId: (a.sourceSkillId ?? '').replace('__companion:', ''),
@@ -184,8 +190,8 @@ export function serializeCharacter(world: World): CharacterSave {
       // stash on load since their skill isn't known.
       ...world.stashedCompanions.map(s => ({ ...s, downed: true as const })),
     ],
-    bar: world.player.skills.map(s => s ? s.def.id : null),
-    level: world.player.level,
+    bar: hero.skills.map(s => s ? s.def.id : null),
+    level: hero.level,
     expedition: world.manifest,
     ledger: { ...world.ledger },
     // Clears persist for exactly the ground the worldstate carries, plus the
@@ -201,7 +207,7 @@ export function serializeCharacter(world: World): CharacterSave {
     throng: (() => {
       const rows = new Map<string, { skillId: string; defId: string; level: number; count: number }>();
       for (const a of world.actors) {
-        if (a.dead || a.owner !== world.player || !a.defId) continue;
+        if (a.dead || a.owner !== hero || !a.defId) continue;
         if (!a.sourceSkillId?.startsWith('__throng:')) continue;
         const skillId = a.sourceSkillId.slice('__throng:'.length);
         const row = rows.get(skillId);
@@ -210,16 +216,16 @@ export function serializeCharacter(world: World): CharacterSave {
       }
       // THE LITE TIER (engine/lite.ts): a lite-tier anchor's pool rows join
       // its count — the roster resumes at full strength either way.
-      for (const s of world.player.skills) {
+      for (const s of hero.skills) {
         const spec = s?.def.throng;
         if (!spec || spec.tier !== 'lite') continue;
         const kindIdx = world.liteKindOf(spec.monsterId);
         if (kindIdx < 0) continue;
-        const n = world.lite.countOwned(world.player.id, kindIdx);
+        const n = world.lite.countOwned(hero.id, kindIdx);
         if (!n) continue;
         const row = rows.get(s!.def.id);
         if (row) row.count += n;
-        else rows.set(s!.def.id, { skillId: s!.def.id, defId: spec.monsterId, level: world.player.level, count: n });
+        else rows.set(s!.def.id, { skillId: s!.def.id, defId: spec.monsterId, level: hero.level, count: n });
       }
       return [...rows.values()];
     })(),
@@ -433,7 +439,7 @@ export function syncRosterEntry(account: Account, world: World): RosterEntry | n
   if (!entry) return null;
   entry.classId = world.meta.classDef.id;
   entry.name = world.meta.name;
-  entry.level = world.player.level;
+  entry.level = world.seatHero(world.localSeat).level;
   entry.stage = world.meta.modeStage;
   entry.savedAt = Date.now();
   return entry;

@@ -105,6 +105,17 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'mummers_ring', at: 'stage', count: [1, 1] }],
 });
 
+// THE VACANT YARD: a cold effigy court where the empty kin drift — the
+// possession seam's set-piece (data/formations 'vacant_ring'; the shells
+// themselves seat from the tileset table's Vacant rows). Clearing 28–36 vs
+// the ring span 76–100 per the menhir numeric contract on the formation.
+registerComposition({
+  id: 'vacant_yard',
+  sites: [{ id: 'yard', radius: [100, 135] }],
+  pre: [{ kind: 'clearing', at: 'yard', count: [1, 1], radius: [28, 36] }],
+  post: [{ kind: 'formation', formation: 'vacant_ring', at: 'yard', count: [1, 1] }],
+});
+
 // A HIVE POCKET: the Seethe's brood ground — a stamped-flat court ringed by
 // waxed spires, the insect country showing its crown. Clearing 58–72 vs the
 // hive_ring orbit: 125·0.92−6 = 109 ≥ 72+22 — the menhir numeric contract.

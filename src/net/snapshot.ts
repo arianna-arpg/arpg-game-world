@@ -204,11 +204,15 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   g: s.granted || undefined, eLv: s.essenceLevels || undefined,
 });
 
-/** Host: serialize one seat's build/progression for its owning client. */
+/** Host: serialize one seat's build/progression for its owning client.
+ *  Level + bar read the HERO body (the possession seam, engine/possess.ts):
+ *  a seat riding a borrowed body still ships ITS OWN build — the char
+ *  sheet never wears a monster's level. */
 export function serializeSeatMeta(seat: Seat): SeatMetaW {
   const m = seat.meta;
+  const hero = seat.home ?? seat.actor;
   return {
-    level: seat.actor.level,
+    level: hero.level,
     xp: m.xp, xpNeeded: m.xpNeeded,
     skillPoints: m.skillPoints, passivePoints: m.passivePoints, offerings: m.offerings,
     vocationPoints: m.vocationPoints,
@@ -221,7 +225,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
     inv: m.inventory.map(supW),
     skillInv: m.skillInv.map(skillInstW),
-    bar: seat.actor.skills.map(s => (s ? s.def.id : null)),
+    bar: hero.skills.map(s => (s ? s.def.id : null)),
     gear: {
       items: m.items.map(i => ({ ...i })),
       equipped: Object.fromEntries(

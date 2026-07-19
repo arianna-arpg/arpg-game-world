@@ -436,6 +436,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     // A rung bell reads nothing: insight momentum dies for the duration.
     mods: [mod('insightSap', 'flat', 1)],
   },
+  // THE POSSESSION SEAM's husk mark (engine/possess.ts): worn by a vacated
+  // hero body while its seat rides elsewhere — re-stamped by the sweep, so
+  // it lapses on its own moments after the seat returns. Presentation plus
+  // the lockdown reading (hardCC: break-bars and CC counters see a body
+  // that truly cannot answer). The DEFENSE dial is the huskGuard stat and
+  // the POSSESS_CFG husk ladder, never this row — the engine takes no side
+  // on how naked a trance should be.
+  entranced: {
+    label: 'Entranced', color: '#b8a8e8', duration: 2, hardCC: true,
+    // Vacant eyes read nothing: insight momentum dies while the seat is away.
+    mods: [mod('insightSap', 'flat', 1)],
+  },
   // CHRONOMANCY (StatusDef.timeScale → engine/timeflow.ts): the victim's own
   // clock, bent. Ordinary statuses in every other way — hard-cast them, proc
   // them (apply_stasis / apply_temporal_drag exist like every apply_), grant

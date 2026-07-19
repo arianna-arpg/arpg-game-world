@@ -491,6 +491,22 @@ registerFormation({
   ],
 });
 
+// THE VACANT RING (the possession seam's yard): shells slumped on stakes
+// around one COLD effigy — the unlit patron in a country of lit ones. The
+// walkers themselves seat from the tileset's own Vacant rows; the
+// discipline's first lesson is usually minted standing right here.
+// Clearing 28–36 vs span 76–100: 76 − 14 = 62 ≥ 36 + 16 — the menhir
+// numeric contract holds.
+registerFormation({
+  id: 'vacant_ring', arrange: 'ring', span: [76, 100], step: 36,
+  pieces: [
+    { kind: 'still_effigy', radius: [20, 26], count: [1, 1] },
+    { kind: 'slumped_shell', radius: [12, 15], jitter: 10, rot: true },
+    { kind: 'scarecrow', radius: [12, 16], every: 2, jitter: 12, rot: true },
+    { kind: 'hollow_log', radius: [11, 15], every: 3, jitter: 14, rot: true },
+  ],
+});
+
 // A FUNGAL PROCESSION: glow-caps filing through the dark, toadstools between.
 registerFormation({
   id: 'fungal_procession', arrange: 'meander', span: [260, 480], step: 42,
@@ -1251,6 +1267,20 @@ registerDoodadRule('manor_mirror', {
 });
 registerStamp('lantern_totem', stampSingle('lantern_totem', [12, 16]));
 registerStamp('wicker_effigy', stampSingle('wicker_effigy', [22, 30]));
+// --- THE VACANT'S YARD KIT (the possession seam, engine/possess.ts): the
+// ground the empty kin drift over — cold effigies and shells slumped on
+// stakes (visuals in data/doodadVisuals.ts, existing painters re-dressed).
+registerDoodadRule('still_effigy', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, bodyScale: 0.4,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('slumped_shell', {
+  overlap: 'solid', blocksMove: true, spacing: 40, bodyScale: 0.35,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], text: 'the shell folds—', color: '#7a7290' },
+});
+registerStamp('still_effigy', stampSingle('still_effigy', [20, 26]));
+registerStamp('slumped_shell', stampSingle('slumped_shell', [12, 15]));
 registerStamp('gourd_pile', stampSingle('gourd_pile', [12, 18]));
 registerStamp('dead_topiary', stampSingle('dead_topiary', [16, 24]));
 registerStamp('dust_sheet', stampSingle('dust_sheet', [14, 20]));
