@@ -156,9 +156,10 @@ registerSidezone({
     // A RESERVED name shape: every launch shelf is "<X> Crossing" — and only
     // shelves are (the aether web pools dropped 'Crossing'), so the map can
     // never confuse a transient crossing with realm country. Deterministic
-    // per shelf; the rolled variant face keeps its suffix.
+    // per shelf; the rolled face stays DATA (def.variantName — the
+    // bare-name law), surfaced by the map pane, never the walking name.
     const first = CROSSING_NAMES[(seed >>> 3) % CROSSING_NAMES.length];
-    def.name = `${first} Crossing${def.variantName ? ` (${def.variantName})` : ''}`;
+    def.name = `${first} Crossing`;
     return def;
   },
 });

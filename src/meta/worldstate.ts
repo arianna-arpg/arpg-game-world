@@ -211,6 +211,13 @@ function sanitizeZoneDef(raw: unknown): ZoneDef | null {
     console.warn(`[worldstate] zone '${z.id}': kind '${z.kind}' unregistered — dropped`);
     delete z.kind;
   }
+  // THE BARE-NAME LAW migration: mints used to bake the rolled face into the
+  // name ("Gorewood Downs (thicket)"); the face now rides variantName as data
+  // and the walking name stays bare. Strip EXACTLY the recorded face — never
+  // a guess, so authored parentheticals in hand-named zones survive intact.
+  if (z.variantName && z.name.endsWith(` (${z.variantName})`)) {
+    z.name = z.name.slice(0, z.name.length - (z.variantName.length + 3));
+  }
   // Registry scrubs: packs reference live monsters, a war needs both armies,
   // a spawner objective needs its spawner def, a layout family must exist.
   if (z.packs?.table) {

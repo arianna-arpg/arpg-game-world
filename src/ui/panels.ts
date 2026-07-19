@@ -3897,7 +3897,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     } else if (revealed) {
       // Plain level line — the ask itself (endless waves included) now lives
       // on the OBJECTIVE chip below, so the two never say the same thing.
-      chips.push(`<span class="zi-chip">${bi ? esc(bi.label) + ' · ' : ''}monster lv ${zone!.level}</span>`);
+      // The SUB-BIOME face (ZoneDef.variantName) surfaces HERE and only here
+      // — the bare-name law keeps it off the walking name; the map supplies
+      // the exact typing deliberately.
+      const face = zone!.variantName ? `${esc(zone!.variantName)} · ` : '';
+      chips.push(`<span class="zi-chip">${bi ? esc(bi.label) + ' · ' : ''}${face}monster lv ${zone!.level}</span>`);
     }
     // THE OBJECTIVE READ — "what this ground asks", straight from the data
     // vocabulary (objectiveRead / OBJECTIVE_READS, data/zones.ts). Same fog

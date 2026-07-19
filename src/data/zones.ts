@@ -898,7 +898,11 @@ export interface ZoneDef {
    *  regenerate identically. */
   aquatic?: boolean;
   /** Sub-biome variant rolled at generation — a flavour within the biome
-   *  (a jungle "clearing" vs "dense floor"). Cosmetic + layout, not faction. */
+   *  (a jungle "clearing" vs "dense floor"). Cosmetic + layout, not faction.
+   *  THE BARE-NAME LAW: this face is DATA, never baked into `name` — the
+   *  playing field (portals, banners, event lines) wears the bare name only;
+   *  the MAP pane's biome chip supplies this typing deliberately. The
+   *  worldstate sanitizer strips legacy "(face)" names on restore. */
   variantName?: string;
   /** Suppress waypoints on any OTHER zone minted within this node-unit radius — the
    *  anti-teleport gate around a boss arena (forces a multi-zone trek; survives a

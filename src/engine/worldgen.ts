@@ -584,9 +584,12 @@ export function placeZoneAt(
   const taken = new Set(Object.values(zoneMap).map(z => z.name));
   let name = spec.name ?? '';
   if (!name) {
+    // THE BARE-NAME LAW: the rolled face is DATA (ZoneDef.variantName, set
+    // below), never baked into the walking name — portals, banners and event
+    // lines stay clutter-free, and the MAP pane supplies the sub-biome
+    // typing deliberately (the zone box's biome chip).
     for (let tries = 0; tries < 12; tries++) {
-      const base = `${rng.pick(tileset.nameFirst)} ${rng.pick(tileset.nameSecond)}`;
-      name = variantName ? `${base} (${variantName})` : base;
+      name = `${rng.pick(tileset.nameFirst)} ${rng.pick(tileset.nameSecond)}`;
       if (!taken.has(name)) break;
     }
     if (taken.has(name)) name += ' II';
@@ -1136,7 +1139,10 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ? { ...baseTheme, ambientDark: darkFloor } : baseTheme;
   const def: ZoneDef = {
     id,
-    name: variantName ? `${baseName} (${variantName})` : baseName,
+    // THE BARE-NAME LAW (mirrors the surface mint): the rolled face rides
+    // ZoneDef.variantName as data — the walking name never wears it.
+    name: baseName,
+    ...(variantName ? { variantName } : {}),
     // The band's level STEP over the parent (strata data): the classic curve
     // at the Galleries (+0 then +1), a full rung per descent below them.
     level: parent.level + levelStepAt(depth),
