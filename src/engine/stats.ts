@@ -522,6 +522,18 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Scales the impact wounds your shoves inflict on arrest (wall slams
    *  and the bowling lane both — engine/mass.ts). Tag-filtered. */
   impactDamage:   { label: 'Impact Damage', base: 0, percent: true },
+  /** THE TRAMPLE LANE (engine/lite.ts): flat weight added to your
+   *  effectiveWeight FOR TRAMPLE CHECKS ONLY — moving through a swarm's
+   *  pool bodies disperses any kind whose trample gate your speed + mass
+   *  meet. Offense-only mass: it never changes how shovable YOU are (that
+   *  is `weight`), only what the small underfoot can survive. Monsters
+   *  wear it too (base.trample — the stampeding kinds scatter YOUR veil). */
+  trample:        { label: 'Trample Mass', base: 0, min: 0 },
+  /** THE EXTERMINATOR'S EDGE (engine/plies.ts + the lite carve): each
+   *  landed blow vs a PLIED body tears this many EXTRA plies (floored —
+   *  quanta, like the fabric it cuts). Tag-queried at the real ply gate;
+   *  the pool's carve reads the untagged lane. */
+  plyRend:        { label: 'Ply Rend', base: 0, min: 0 },
   /** THE WITNESS LEVER (engine/mimic.ts): > 0 opens witnessed capture —
    *  studied arts CAST within value × MIMIC_CFG.witnessRadius of you are
    *  banked without the blow. Read off the mimic slot (supports socketed

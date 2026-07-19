@@ -3201,6 +3201,27 @@ export interface KindleEffect {
   kind: string;
 }
 
+/** POURS A SWARM (engine/lite.ts — THE LITE TIER): pool bodies of a lite
+ *  kind called into being at the resolution point. The wave verb of the
+ *  colony fabric: a nest VENTS defenders when foes close, a shepherd calls
+ *  the tide mid-fight, a lobbed pod bursts into mites where it lands
+ *  (projectile delivery resolves at impact). A caster who anchors a colony
+ *  of the same kind pours INTO its pocket — the vent counts toward the
+ *  collective's cap. Bodies are rows, not Actors: near-zero cost at any
+ *  count (docs/engine/lite.md). */
+export interface LitePourEffect {
+  type: 'litePour';
+  /** The poured kind — must itself opt into MonsterDef.lite (validator). */
+  monsterId: string;
+  count: [number, number];
+  /** Scatter radius around the resolution point (default LITE_CFG.pour.scatter). */
+  scatter?: number;
+  /** The bodies are OWNED by the caster (they ring their keeper like a
+   *  gathered cloud) instead of wild. Wild is the nest's idiom; owned is
+   *  the bodyguard veil's. */
+  owned?: boolean;
+}
+
 /** Restores a resource immediately (Power Surge, resource orbs). Poise
  *  restores flow through gainPoise — they feed a broken bar's recovery
  *  climb and may crest past max into poiseOvercharge headroom. */
@@ -3476,7 +3497,7 @@ export type SkillEffect =
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
   | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
-  | PossessEffect | PossessEndEffect | ShapeshiftEffect;
+  | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect;
 
 // --- The skill definition ---------------------------------------------------
 

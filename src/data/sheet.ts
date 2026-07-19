@@ -149,7 +149,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'meleeSweep', 'sweepRange', 'sweepSpeed',
       // Impact & control
       'knockback', 'displaceForce', 'knockBuffet', 'shoveAuthority', 'impactDamage',
-      'gripPower', 'wriggle',
+      'gripPower', 'wriggle', 'trample', 'plyRend',
       // Areas & ground
       'aoeShape', 'aoeScatter', 'aoeCascade', 'cascadeStep', 'aoeSpin', 'pulseCount',
       'stormCount', 'stormImmediate', 'fissureCount', 'fissureBranches',
@@ -561,6 +561,8 @@ const STAT_BLURBS: Record<string, string> = {
   impactDamage: 'Scales the impact wounds your shoves inflict when the victim is arrested — by a wall, or by a body heavy enough to be one.',
   gripPower: 'Your holds close on heavier bodies and are struggled out of slower — the grab fabric\'s holder-side lever.',
   wriggle: 'You struggle out of holds faster — the grab fabric\'s victim-side lever.',
+  trample: 'Added mass for TRAMPLE checks only: moving through a swarm disperses pool bodies whose gate your speed and mass meet. The small die underfoot; your own shovability never changes.',
+  plyRend: 'Each landed blow against a PLIED body tears this many extra plies — the exterminator\'s edge against count-durable swarms.',
   displaceForce: 'Signed on-hit displacement — positive shoves the victim away, negative drags them in.',
   knockBuffet: 'Your knockbacks batter victims in RANDOM directions instead of shoving them away.',
   aoeShape: 'Overrides the geometry of your areas — circle, square, triangle.',

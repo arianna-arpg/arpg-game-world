@@ -110,6 +110,17 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('impactDamage', 'flat', 0.06)],
     weight: 6,
   },
+  // THE COLONY PASS's counterplay gem (engine/plies.ts plyRend, folded at
+  // the ply gate + the lite carve): the anti-SWARM blade. Count-durable
+  // bodies eat blows, not damage — this gem makes each blow count double.
+  exterminator: {
+    id: 'exterminator', name: 'Exterminator',
+    description: 'This skill\'s blows tear ONE EXTRA PLY from count-durable bodies — swarms, husks, everything that eats hits instead of wounds. Against anything with an honest life bar it adds nothing: this gem is for the crawl.',
+    color: '#d8d0b8', requiresTags: ['attack', 'spell'],
+    mods: [mod('plyRend', 'flat', 1)],
+    perLevel: [mod('plyRend', 'flat', 0.05)],
+    weight: 6,
+  },
 
   // --- The Wildcraft disciplines (the jungle's arts, bottled) ----------------
   serrated_edge: {

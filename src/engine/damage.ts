@@ -530,7 +530,12 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   // spec's 'worn open' status — the bracket seam's first rider.
   if (target.plies > 0) {
     if (total >= plyFloorOf(target)) {
-      target.plies--;
+      // PLY REND (the exterminator's stat, tag-queried like every attacker
+      // fold): one blow tears 1 + plyRend plies — the anti-swarm blade vs
+      // count-durable bodies. Never below one, never past what remains.
+      const rend = Math.max(0, Math.floor(
+        attacker.sheet.get('plyRend', packet.tags, packet.extra)));
+      target.plies = Math.max(0, target.plies - 1 - rend);
       if (target.plies === 0 && target.plySpec?.spentStatus) {
         target.applyStatus(target.plySpec.spentStatus, 0, 1, 'plies');
       }

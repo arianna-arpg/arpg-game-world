@@ -438,6 +438,21 @@ const PREFIXES: AffixDef[] = [
     stat: 'minionHaste', modKind: 'increased', top: 0.2, floor: 0.25, count: 4,
     baseTags: ['helmet', 'amulet', 'gloves'], weight: 50,
   }),
+  // THE COLONY PASS's wardrobe (engine/lite.ts): trample mass on the feet
+  // that do the crushing; ply rend on the hands that do the cutting. Both
+  // niche by design (swarm counterplay), weighted below the staples.
+  fam({
+    id: 'trample_mass', kind: 'suffix', themes: [MARTIAL],
+    names: ['of Trampling', 'of the Stampede'],
+    stat: 'trample', top: 1.2, floor: 0.25, count: 4,
+    baseTags: ['boots'], weight: 40,
+  }),
+  fam({
+    id: 'ply_rend', kind: 'suffix', themes: [MARTIAL],
+    names: ['of Culling', "of the Exterminator"],
+    stat: 'plyRend', top: 2, floor: 0.5, count: 2,
+    baseTags: ['gloves'], weight: 30,
+  }),
   // MONSTER-INFREQUENT lines — roll ONLY on mi_<theme> bases (the same tag
   // gate as everything else; see data/infrequents.ts). Each theme gets one
   // signature family, exquisite included: a magic Goblin Scrapper can carry

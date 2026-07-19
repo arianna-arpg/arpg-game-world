@@ -4553,6 +4553,90 @@ const yoke: PartPainter = (ctx, r, spec, pal) => {
  *  tell (gorge gulpers, pelican-things, any devourer that keeps what it
  *  takes). In live[] it works — a slow digestive squeeze; static bakes
  *  show it slack. params: bulge (sac radius ÷ body radius), rate. */
+/** THE WRITHE MASS — the colony pass's "I am MANY" tell: a carpet of
+ *  squirming grubs matted across the lower body. Nothing else in the
+ *  roster is a surface that CRAWLS — one glance says collective, not
+ *  creature. params: n (bodies), spread (lateral span, R frac), rise
+ *  (vertical seat, +down), size (each grub, R frac), rate (wriggle Hz). */
+const writheMass: PartPainter = (ctx, r, spec, pal, t) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 9));
+  const spread = P(spec, 'spread', 0.72);
+  const rise = P(spec, 'rise', 0.22);
+  const size = P(spec, 'size', 0.15);
+  const rate = P(spec, 'rate', 0.8);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      // Deterministic per-grub seat off the index (no rand in painters).
+      const h = Math.imul(i + 1, 0x9e3779b1) >>> 0;
+      const gx = (((h & 0xff) / 255) * 2 - 1) * R * spread;
+      const gy = R * rise + ((((h >>> 8) & 0xff) / 255) * 2 - 1) * R * 0.3;
+      const ga = (((h >>> 16) & 0xff) / 255) * Math.PI;
+      const wig = t === undefined ? 0
+        : Math.sin(t * Math.PI * 2 * rate + i * 2.39996) * 0.35;
+      const gr = R * size * (0.75 + ((h >>> 24) & 0xff) / 512);
+      c.save();
+      c.translate(gx, gy);
+      c.rotate(ga + wig);
+      c.fillStyle = i % 3 === 0 ? shade(ramp.base, 0.12) : shade(ramp.base, -0.1 - (i % 2) * 0.08);
+      c.beginPath();
+      c.ellipse(0, 0, gr, gr * 0.52, 0, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
+    // A few catching backs — the sheen that reads WET and ALIVE.
+    c.fillStyle = withAlpha(ramp.highlight, 0.5);
+    for (let i = 0; i < Math.min(3, n); i++) {
+      const h = Math.imul(i + 5, 0x85ebca6b) >>> 0;
+      const gx = (((h & 0xff) / 255) * 2 - 1) * R * spread * 0.8;
+      const gy = R * rise + ((((h >>> 8) & 0xff) / 255) * 2 - 1) * R * 0.24;
+      c.beginPath();
+      c.ellipse(gx, gy - R * 0.03, R * size * 0.45, R * size * 0.2, 0.4, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** THE HATCH PORES — the colony pass's "it POURS" tell: a rim of puckered
+ *  birth-holes, lips raised, breathing on offset clocks. Distinct from
+ *  sporeVents (chimney stacks that puff) — these are wet mouths in the
+ *  body itself. params: n, ring (radial seat, R frac), size (pore R frac),
+ *  arc (radians the rim spans, default full), rate (dilation Hz). */
+const hatchPores: PartPainter = (ctx, r, spec, pal, t) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 5));
+  const ring = P(spec, 'ring', 0.6);
+  const size = P(spec, 'size', 0.16);
+  const arc = P(spec, 'arc', Math.PI * 2);
+  const rate = P(spec, 'rate', 0.55);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = arc >= Math.PI * 2 - 0.01
+        ? (i / n) * Math.PI * 2
+        : -arc / 2 + (n === 1 ? 0 : (i / (n - 1)) * arc);
+      const px = Math.cos(a) * R * ring, py = Math.sin(a) * R * ring;
+      const breathe = t === undefined ? 0
+        : (Math.sin(t * Math.PI * 2 * rate + i * 1.7) * 0.5 + 0.5) * 0.3;
+      const pr = R * size * (0.85 + breathe);
+      // The raised lip, then the dark throat — depth in two strokes.
+      c.fillStyle = shade(ramp.base, 0.14);
+      c.beginPath();
+      c.ellipse(px, py, pr * 1.35, pr * 1.1, a, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = shade(ramp.shadow, -0.5);
+      c.beginPath();
+      c.ellipse(px, py, pr * 0.8, pr * 0.62, a, 0, Math.PI * 2);
+      c.fill();
+      // The wet ring where lip meets dark.
+      c.strokeStyle = withAlpha(ramp.highlight, 0.4);
+      c.lineWidth = Math.max(0.8, R * 0.02);
+      c.beginPath();
+      c.ellipse(px, py, pr * 0.95, pr * 0.76, a, -2.6, -0.4);
+      c.stroke();
+    }
+  });
+};
+
 const gulletSac: PartPainter = (ctx, r, spec, pal, t) => {
   const ramp = rampFor(spec, pal, 'base');
   const bulge = P(spec, 'bulge', 0.62);
@@ -4686,6 +4770,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   anchor,
   grapnel, yoke, gulletSac,
   spiralEyes, mothWings,
+  writheMass, hatchPores,
   howdahRig, mortarMaw,
 };
 

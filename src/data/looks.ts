@@ -892,6 +892,55 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ================================================== THE COLONY KIN
+  // (engine/lite.ts — the collective pass.) The shared visual grammar:
+  // writheMass = "I am MANY" (a surface that crawls — nothing else in the
+  // roster is), hatchPores = "I POUR" (wet birth-mouths in the body), and
+  // carrionFlies orbits mark the attended dead. One glance says colony.
+  /** The mites' nest: a gnawed heap that boils when kicked — jutting bone,
+   *  pocked hollows, and a crawling skin. */
+  marrow_midden: {
+    parts: [
+      { kind: 'spikes', color: '#d8d0b8', params: { n: 7, len: 0.5 } },
+      { kind: 'spots', role: 'dark', params: { n: 6 } },
+      { kind: 'skull', scale: 0.42, x: -0.25, y: -0.15, alpha: 0.9 },
+      { kind: 'hatchPores', params: { n: 3, ring: 0.55, arc: 2.4, size: 0.15 } },
+      { kind: 'writheMass', params: { n: 11, spread: 0.8, rise: 0.12 } },
+    ],
+  },
+  /** The strongbox that re-knits its keepers: an urn in verdigris, runes
+   *  faded, its own lockwork crawling the lid. */
+  tick_reliquary: {
+    parts: [
+      { kind: 'canopicJar', scale: 0.95 },
+      { kind: 'runes', color: '#a8d8c0', alpha: 0.55, params: { n: 4 } },
+      { kind: 'spots', role: 'dark', params: { n: 4, size: 0.06 } },
+      { kind: 'writheMass', color: '#7a9a8a', params: { n: 6, spread: 0.6, rise: -0.28, size: 0.12, rate: 0.5 } },
+    ],
+  },
+  /** The midden that WALKS: a hunched mass of grave-soil whose carpet
+   *  rides its back, flies in attendance. */
+  barrow_shambler: {
+    parts: [
+      { kind: 'hump', params: { rise: 0.5 } },
+      { kind: 'mossPatch', color: '#5a6248', params: { n: 3 } },
+      { kind: 'skull', scale: 0.4, x: 0.42, y: 0.05, alpha: 0.85 },
+      { kind: 'writheMass', params: { n: 9, spread: 0.7, rise: -0.2 } },
+      { kind: 'carrionFlies', params: { n: 5 } },
+    ],
+  },
+  /** The warren's shepherd: hooded, horn slung, a naked tail under the
+   *  coat hem — the showman the rats answer. */
+  vermin_piper: {
+    parts: [
+      { kind: 'robe', role: 'dark' },
+      { kind: 'hood' },
+      { kind: 'warhorn', scale: 0.85 },
+      { kind: 'tail', color: '#c8a090', params: { len: 0.9, taper: 0.5 } },
+      { kind: 'eyes', color: '#e8b06a', params: { n: 2, spread: 0.4, dist: 0.5, size: 0.09 } },
+    ],
+  },
+
   // ========================================================== THE MIRRORKIN
   /** The mirror husk: a blank where a face should be, lit from nowhere. */
   mirror_husk: {

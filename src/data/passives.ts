@@ -233,6 +233,11 @@ const nodes: PassiveNode[] = [
   { id: "grip_s1", name: "Wrestler's Hands", description: "+15% grip power, +15% wriggle", kind: "small", x: 2470, y: 5334, mods: [mod("gripPower", "flat", 0.15), mod("wriggle", "flat", 0.15)], links: ["mass_n1"] },
   { id: "grip_s2", name: "Eelskin", description: "+35% wriggle (struggle out of holds faster)", kind: "small", x: 2148, y: 5400, mods: [mod("wriggle", "flat", 0.35)], links: ["mass_n1"] },
   { id: "grip_n1", name: "Seizing Style", description: "+30% grip power; learn the Takedown measure (seize, then throw — blows land harder and the grip grows surer while the rhythm holds)", kind: "notable", x: 2622, y: 5472, mods: [mod("gripPower", "flat", 0.3), mod("combo_grapplers_rhythm", "flat", 1)], links: ["grip_s1"] },
+  // THE TRAMPLE BRANCH (engine/lite.ts — the collective pass): mass read as
+  // a verb underfoot. Trample is offense-only weight — the small die under
+  // your stride, your own shovability never changes.
+  { id: "mass_s3", name: "Surefoot Tread", description: "+0.4 trample mass (moving through a swarm crushes what your stride and mass overmatch)", kind: "small", x: 2028, y: 5268, mods: [mod("trample", "flat", 0.4)], links: ["mass_n1"] },
+  { id: "mass_n2", name: "Stampede", description: "+1 trample mass, +20% impact damage — the crawl parts or it dies; what the wall arrests, arrests harder", kind: "notable", x: 1926, y: 5430, mods: [mod("trample", "flat", 1), mod("impactDamage", "flat", 0.2)], links: ["mass_s3"] },
   { id: "sor_df1", name: "Force Wave", description: "+80 push force on spell hits (enemies driven back)", kind: "small", x: 156, y: 3324, mods: [mod("displaceForce", "flat", 80, ["spell"])], links: ["sor_df2"] },
   { id: "sor_df2", name: "Vortex Master", description: "+180 push force on spell hits; 12% increased spell damage", kind: "notable", x: 132, y: 3618, mods: [mod("displaceForce", "flat", 180, ["spell"]), mod("damage", "increased", 0.12, ["spell"])], links: [] },
   { id: "sor_df3", name: "Gravity Well", description: "-100 pull force on spell hits (enemies drawn toward you)", kind: "notable", x: 108, y: 2964, mods: [mod("displaceForce", "flat", -100, ["spell"])], links: [] },

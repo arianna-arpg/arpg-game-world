@@ -62,6 +62,56 @@ export interface LiteSpec {
   aggro?: number;
   /** Pool move speed override (default: the def's base.moveSpeed). */
   speed?: number;
+  /** THE TRAMPLE LANE (the Dynasty-Warriors verb): an OPPOSING actor moving
+   *  at ≥ minSpeed whose trample mass (effectiveWeight + the `trample` stat)
+   *  meets minWeight DISPERSES a body it overlaps — no swing, no cast, the
+   *  crossing itself is the kill (credited like any carve). Fliers are
+   *  structurally exempt (you cannot step on what isn't underfoot).
+   *  Defaults LITE_CFG.trample; opt in with `{}`. */
+  trample?: { minSpeed?: number; minWeight?: number };
+  /** THE COLLECTIVE'S REGROWTH (kind-level default): ambient pour pockets
+   *  of this kind slowly replenish to their poured cap while unmolested —
+   *  see LiteRegenSpec. A pour row's own `regen` overrides this. */
+  regen?: LiteRegenSpec;
+}
+
+/** THE REGROWTH LAW (pockets replenish while unmolested): a pour pocket or
+ *  colony remembers its cap and trickles new bodies toward it, but only while
+ *  the collective rests — every tear, kill, promotion or trample of its
+ *  bodies stamps a quiet clock (`quietSec`) that must fully elapse first,
+ *  and a hostile seat standing within `calmRadius` of the heart pauses the
+ *  regrowth outright (nothing breeds under a predator's shadow). An ambient
+ *  pocket wiped to ZERO is EXTERMINATED — nothing remains to breed back
+ *  (until the zone re-boots its salted stream); a BROOD pocket refills from
+ *  zero as long as its anchor lives — the nest is the survivor, kill the
+ *  nest to end it. All defaults LITE_CFG.regen. */
+export interface LiteRegenSpec {
+  /** Bodies regrown per second while calm. */
+  rate?: number;
+  /** Seconds of unbroken quiet after any disturbance before regrowth. */
+  quietSec?: number;
+  /** Hostile presence within this range of the heart pauses regrowth. */
+  calmRadius?: number;
+}
+
+/** THE COLONY (MonsterDef.colony) — the collective anchored on a LIVING
+ *  body: a nest, a hive, a lumbering carrier. The anchor maintains a pocket
+ *  of `monsterId` pool bodies around itself (heart FOLLOWS the anchor — a
+ *  walking colony carries its cloud's home with it), seeded at `seedFrac`
+ *  of cap when first seen and regrown under the regen law above. The
+ *  anchor's death ends the regrowth forever — the exterminator's true
+ *  target. The colony kind must itself opt into MonsterDef.lite
+ *  (validator-pinned). Named COLONY: `BroodSpec` is the skill fabric's
+ *  status-spawn clause ("your poisons brood") — ids are contracts. */
+export interface ColonySpec extends LiteRegenSpec {
+  monsterId: string;
+  /** The collective's size — regrowth ceases at this many live bodies. */
+  cap: number;
+  /** Scatter radius around the anchor (default LITE_CFG.pour.scatter). */
+  radius?: number;
+  /** Fraction of cap poured the moment the anchor enters play (default
+   *  LITE_CFG.regen.seedFrac) — the collective stands WITH its heart. */
+  seedFrac?: number;
 }
 
 // --- Ambient pours (ZoneTheme.lite) -----------------------------------------
@@ -74,9 +124,44 @@ export interface LiteSwarmRow {
   size: [number, number];
   /** Whether this zone pours at all (default 1). */
   chance?: number;
+  /** THE REGROWTH LAW for this row's pockets: `true` adopts the kind's own
+   *  LiteSpec.regen (or bare config defaults), a spec overrides it, absent
+   *  falls back to the kind's default. Pockets remember their poured size
+   *  as the cap and replenish toward it while unmolested. */
+  regen?: LiteRegenSpec | true;
   /** Arrival line on the first pour (the wildlife announce idiom). */
   announce?: string;
   announceColor?: string;
+}
+
+/** One live pocket of the regrowth law — an ambient pour heart, or a colony
+ *  anchor's WALKING home. World-side registry (zone-local, rebuilt at boot
+ *  and by anchor discovery); the executors live in world.ts's LITE block.
+ *  Pure data — the pool's `pocket` column indexes into it. */
+export interface LitePocket {
+  x: number;
+  y: number;
+  kindIdx: number;
+  /** Regrowth ceases at this many live bodies. */
+  cap: number;
+  rate: number;
+  quietSec: number;
+  calmRadius: number;
+  scatter: number;
+  /** Anchoring actor id (0 = ambient). The heart follows a living anchor;
+   *  its death extinguishes the pocket — the nest is the true target. */
+  anchorId: number;
+  disturbedUntil: number;
+  acc: number;
+  live: number;
+  /** Birth counter — the pocket's own integer-hash stream (regrowth draws
+   *  no global rand, so seeded runs stay byte-identical). */
+  births: number;
+  /** Ever held ≥1 body (guards the extermination read against pours that
+   *  refused at capacity). */
+  poured: boolean;
+  /** Wiped (ambient, live 0) or orphaned (anchor dead): regrows never. */
+  extinct: boolean;
 }
 
 export interface ZoneLiteSpec { swarms: LiteSwarmRow[] }
@@ -126,6 +211,24 @@ export const LITE_CFG = {
    *  demote sweep cadence for lite-tier throng bodies gone quiet. */
   promote: { latchPerSweep: 3 },
   demote: { every: 0.5 },
+  /** THE TRAMPLE LANE defaults (LiteSpec.trample): the mover's floor speed
+   *  (px/s — a walking hero qualifies, a shuffling one doesn't) and the
+   *  trample mass floor (effectiveWeight + the `trample` stat; 1 = a fresh
+   *  unburdened hero — armored kinds raise it so only the HEAVY crush them). */
+  trample: { minSpeed: 110, minWeight: 1 },
+  /** THE REGROWTH LAW defaults (LiteRegenSpec): sweep cadence, bodies per
+   *  second while calm, the quiet clock a disturbance stamps, the hostile-
+   *  presence pause radius, the colony's immediate seed fraction, and the
+   *  burrow doodad kind planted at an ambient regen pocket's heart (the
+   *  findability tell — it seals when the pocket is exterminated). */
+  regen: {
+    every: 0.75,
+    rate: 1.1,
+    quietSec: 6,
+    calmRadius: 170,
+    seedFrac: 0.65,
+    burrowKind: 'colony_burrow',
+  },
   /** Obliteration feedback: flashes per carve event before the one big ring
    *  takes over, and the '×N' text threshold. */
   fx: { flashes: 5, countTextAt: 3 },
@@ -176,6 +279,13 @@ export interface LiteKind {
   weave: number;
   erratic: number;
   separation: number;
+  /** Trample gates (Infinity speed = the kind is never trampled: no opt-in,
+   *  or a flier — you cannot step on what isn't underfoot). */
+  trampleMinSpeed: number;
+  trampleMinWeight: number;
+  /** The kind's default regrowth for ambient pour pockets (null = pours of
+   *  this kind never regrow unless their row says so). */
+  regen: LiteRegenSpec | null;
   color: string;
   shape: ActorShape;
   material?: string;
@@ -209,6 +319,10 @@ export function resolveLiteKind(
     weave: spec.weave ?? 1,
     erratic: spec.erratic ?? 1,
     separation: spec.separation ?? 1,
+    trampleMinSpeed: spec.trample && !def.flier
+      ? (spec.trample.minSpeed ?? LITE_CFG.trample.minSpeed) : Infinity,
+    trampleMinWeight: spec.trample?.minWeight ?? LITE_CFG.trample.minWeight,
+    regen: spec.regen ?? null,
     color: def.color,
     shape: def.shape,
     material: def.material,
@@ -284,6 +398,9 @@ export class LitePool {
   readonly owner: Int32Array;
   /** Per-row seat hash (ring seat + noise lane; re-salted per rebirth). */
   readonly seat: Uint32Array;
+  /** The row's pour-pocket index (the regrowth law's attribution; -1 =
+   *  belongs to no pocket — owned rows, dev pours, skill pours). */
+  readonly pocket: Int16Array;
   readonly alive: Uint8Array;
 
   used = 0;
@@ -312,6 +429,7 @@ export class LitePool {
     this.team = new Uint8Array(cap);
     this.owner = new Int32Array(cap);
     this.seat = new Uint32Array(cap);
+    this.pocket = new Int16Array(cap);
     this.alive = new Uint8Array(cap);
     this.freeList = new Int32Array(cap);
     this.nexts = new Int32Array(cap);
@@ -334,7 +452,10 @@ export class LitePool {
 
   /** Mint one row. Returns the row index, or -1 at capacity (spawns refuse
    *  gracefully — never overwrite a live body). */
-  spawn(kindIdx: number, x: number, y: number, team: 0 | 1, owner: number, plies: number): number {
+  spawn(
+    kindIdx: number, x: number, y: number, team: 0 | 1, owner: number,
+    plies: number, pocket = -1,
+  ): number {
     let i: number;
     if (this.freeTop > 0) i = this.freeList[--this.freeTop];
     else if (this.used < this.cap) i = this.used++;
@@ -348,6 +469,7 @@ export class LitePool {
     this.team[i] = team;
     this.owner[i] = owner;
     this.seat[i] = liteSeatHash(i, this.spawnSalt);
+    this.pocket[i] = pocket;
     this.phase[i] = ((this.seat[i] & 0xfff) / 0xfff) * Math.PI * 2;
     this.alive[i] = 1;
     this.liveCount++;

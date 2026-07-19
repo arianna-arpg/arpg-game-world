@@ -932,6 +932,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'verminkin_skulker', weight: 1.5, presence: { from: 4, fadeIn: 3 } },
         { id: 'verminkin_broodpriest', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'warren_nest', weight: 1 },
+        // The warren's shepherd (the colony pass): he calls the tide where
+        // he wants it — and what he called outlives him.
+        { id: 'vermin_piper', weight: 1, presence: { from: 3, fadeIn: 2 } },
         { id: 'gorge_gulper', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'umbral_footpad', weight: 0.8, presence: { from: 7, fadeIn: 3 } },
         { id: 'rat_king', weight: 0.6, presence: { from: 8, fadeIn: 4 } },
@@ -1914,6 +1917,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       heat: 0.95,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.5, color: '#ffd0a0' }],
       ground: { scale: 1.5, stretchX: 1.3, strength: 1.2, speckles: 0.8 },
+      // The colony pass: crawling cinders — stamp them out underfoot, or
+      // let the crawl press its burn. They rekindle if left to rest.
+      lite: { swarms: [{
+        monsterId: 'emberling', pockets: [1, 3], size: [12, 22], chance: 0.8,
+        announce: 'the ash stirs — embers on the move…', announceColor: '#ff8a3a',
+      }] },
       floor: '#150e0a', grid: '#221510', border: '#5c3824',
       obstacle: '#47291c', obstacleEdge: '#7a452c', accent: '#ff9650',
       mud: '#2b1d12', chasm: '#1b0703', wall: '#54382a',
@@ -2410,6 +2419,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         scale: 2.4, stretchX: 1.6, strength: 1.2, speckles: 0.5,
         palette: ['#241a10', '#3a2a16', '#523a1e', '#6a4c26', '#7e5c30'], bias: 0.52, alpha: 0.55,
       },
+      // The colony pass: the Seethe's crawl between the mounds — chitin
+      // texture (a heavier step to crush), poured by the pocket.
+      lite: { swarms: [{
+        monsterId: 'husk_swarmer', pockets: [1, 3], size: [10, 20], chance: 0.8,
+        announce: 'the sand itself is crawling…', announceColor: '#b89858',
+      }] },
       floor: '#1a140c', grid: '#2a2014', border: '#7a5c34',
       obstacle: '#5c3e22', obstacleEdge: '#8a6238', accent: '#e8a84a',
       mud: '#6a5630', water: '#2a6a7a', sand: '#c9a26a',
@@ -2541,6 +2556,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
       ambientDark: 0.36,
       ambientFx: [{ kind: 'motes', intensity: 0.4 }],
+      // The colony pass: crawling lockwork on the strongroom floors — two
+      // plies apiece, and a trample gate only the truly heavy meet.
+      lite: { swarms: [{
+        monsterId: 'vault_tick', pockets: [1, 2], size: [10, 18], chance: 0.75,
+        announce: 'the reliquary seals tick and shift…', announceColor: '#7a9a8a',
+      }] },
       floor: '#141008', grid: '#1c160c', border: '#5c4c2c',
       obstacle: '#3a2f1a', obstacleEdge: '#6a5834', accent: '#e8c060',
       wall: '#3a2f1a', sand: '#c9a86a', water: '#2a5a6a', mud: '#241c10',
@@ -2559,6 +2580,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 2 },
         { id: 'maggot_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        // The colony pass: the strongrooms re-knit their crawling lockwork.
+        { id: 'tick_reliquary', weight: 1, presence: { from: 4, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -3043,6 +3066,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The mire's fog ROLLS: river_mist anchors on the blackwater and
       // drifts its banks — walk with it and the veil holds.
       fog: { banks: [2, 4], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
+      // The colony pass: blood mites pour where the fen smells of iron —
+      // they scent a seat from far off and squish underfoot like anything
+      // their size.
+      lite: { swarms: [{
+        monsterId: 'blood_mite', pockets: [1, 3], size: [12, 24], chance: 0.75,
+        announce: 'a red shimmer spreads over the mud…', announceColor: '#c84848',
+      }] },
       floor: '#10140e', grid: '#18201a', border: '#3a4a38',
       obstacle: '#2a3a2c', obstacleEdge: '#46603e', accent: '#8ab060',
       mud: '#1c2a16', water: '#1a3a30', tree: '#2a4a2a',
@@ -3765,6 +3795,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       // Grave-mist pools among the headstones and FEEDS the dead (mistfed).
       fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
+      // THE GRAVE MITES (the colony pass): the crypt floor's skittering
+      // carpet — crunch it underfoot, and mind the middens it breeds from.
+      lite: { swarms: [{
+        monsterId: 'grave_mite', pockets: [1, 3], size: [14, 26], chance: 0.8,
+        announce: 'the bone dust begins to crawl…', announceColor: '#c8bfa8',
+      }] },
       floor: '#0d0d12', grid: '#16161f', border: '#3a3a52',
       obstacle: '#2e2e44', obstacleEdge: '#50506e', accent: '#b090d8',
       mud: '#1a1a24', water: '#1c2030',
@@ -3794,6 +3830,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'zombie', weight: 2, presence: { to: 22, fadeOut: 12 } },
         // The rival customer: it eats the bodies your detonations wanted.
         { id: 'charnel_ghoul', weight: 2 },
+        // THE COLONY KIN (the collective pass): the mites' nest and the
+        // midden that walks — kill the anchor or the carpet breeds back.
+        { id: 'marrow_midden', weight: 1 },
+        { id: 'barrow_shambler', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'bone_serpent', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'lich_marshal', weight: 1, presence: { from: 14, fadeIn: 6 } },
@@ -3838,6 +3878,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       ambientDark: 0.22,
       fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
+      // The colony pass: the galleries' own sweepings, poured (ossuary is a
+      // perfProbe row — the crawl rides the permanent gate like the sewers').
+      lite: { swarms: [{
+        monsterId: 'grave_mite', pockets: [2, 3], size: [16, 28], chance: 0.85,
+        announce: 'the niches shed their dust — it CRAWLS…', announceColor: '#c8bfa8',
+      }] },
       floor: '#171310', grid: '#201b16', border: '#5a5142',
       // Obstacle = BONE: the generic rock/cliff stamps reskin into pale
       // knuckle-rubble and bone bluffs with zero painter edits.
@@ -3903,6 +3949,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The Hollowborn — the galleries' interred iron walks its own rounds.
         { id: 'hollow_vanguard', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'blade_swarm', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        // THE COLONY KIN (the collective pass): the galleries breed their
+        // own sweepings — bone middens, and the iron's re-knitting urns.
+        { id: 'marrow_midden', weight: 1 },
+        { id: 'tick_reliquary', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'bone_serpent', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'barrow_wight', weight: 2, presence: { from: 10, fadeIn: 5 } },

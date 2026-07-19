@@ -249,6 +249,27 @@ export function validateContent(): void {
     };
     for (const t of Object.values(TILESETS)) lintLitePour(t.theme?.lite, `tileset ${t.id}`);
     for (const z of Object.values(ZONES)) lintLitePour(z.theme?.lite, `zone ${z.id}`);
+    // THE COLONY net (engine/lite.ts): an anchor whose kind never opted in
+    // breeds nothing — and a colony of a spawner-anchor pointing at itself
+    // would be a fixed-point absurdity worth naming.
+    for (const m of Object.values(MONSTERS)) {
+      const col = m.colony;
+      if (!col) continue;
+      if (!MONSTERS[col.monsterId]) warn(`colony: ${m.id} anchors unknown monster '${col.monsterId}'`);
+      else if (!MONSTERS[col.monsterId].lite) warn(`colony: ${m.id} anchors '${col.monsterId}' which has no MonsterDef.lite — nothing would breed`);
+      if (col.monsterId === m.id) warn(`colony: ${m.id} anchors ITSELF`);
+      if (col.cap < 1) warn(`colony: ${m.id} cap < 1`);
+    }
+    // THE POURED-SWARM net: a litePour of a kind that never opted in vents
+    // nothing (the vent skills' whole payload is the pool).
+    for (const s of Object.values(SKILLS)) {
+      for (const fx of s.effects ?? []) {
+        if (fx.type !== 'litePour') continue;
+        if (!MONSTERS[fx.monsterId]) warn(`litePour: skill ${s.id} pours unknown monster '${fx.monsterId}'`);
+        else if (!MONSTERS[fx.monsterId].lite) warn(`litePour: skill ${s.id} pours '${fx.monsterId}' which has no MonsterDef.lite — nothing would mint`);
+        if (fx.count[0] > fx.count[1]) warn(`litePour: skill ${s.id} count lo > hi`);
+      }
+    }
     if (!hasLandmark('glacial_heart')) warn(`deepwinter: 'glacial_heart' landmark unregistered — the heart graft would mint nothing`);
     if (!hasLandmarkBuilder('glacial_heart')) warn(`deepwinter: 'glacial_heart' builder unregistered`);
   }

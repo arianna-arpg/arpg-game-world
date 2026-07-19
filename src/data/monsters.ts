@@ -17,7 +17,7 @@ import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
 import type { ClingSpec } from '../engine/cling';
 import type { PlySpec } from '../engine/plies';
-import type { LiteSpec } from '../engine/lite';
+import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { PortraitTune } from '../render/vis/portrait';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
@@ -402,6 +402,13 @@ export interface MonsterDef {
    *  off this def, so a promoted body is the same creature. Opt-in only:
    *  nothing spawns pooled unless a pour/throng/dev lever says so. */
   lite?: LiteSpec;
+  /** THE COLONY (engine/lite.ts): this body ANCHORS a self-regrowing
+   *  collective of lite pool bodies — a nest, a hive, a lumbering carrier.
+   *  The pocket's heart follows the anchor, seeds when first seen, regrows
+   *  toward cap only while unmolested (the regrowth law), and dies with the
+   *  anchor — the exterminator's true target. The colony kind must itself
+   *  wear MonsterDef.lite (validator-pinned). */
+  colony?: ColonySpec;
   /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
    *  (world bosses, dragons, leviathans). Each part is a full monster def —
    *  it fights with its own skills and its death fires break effects on the
@@ -2042,6 +2049,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'swarm' },
     faction: 'wild',
     detection: 1.6, // tiny, but it smells blood from far off
+    // The colony pass: the mite also lives as a POURED CRAWL (mire/flesh
+    // tides) — it smells blood from far off in the pool too (wide aggro),
+    // and squishes underfoot like anything its size.
+    lite: { contact: { damage: 2 }, aggro: 380, erratic: 1.35, trample: {} },
   },
 
   husk_swarmer: {
@@ -2052,6 +2063,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 5,
     brain: { type: 'swarm' },
     faction: 'wild',
+    // The colony pass: the sands' crawl, poured by the pocket. CHITIN
+    // texture = a heavier step to crush (trample minWeight above the fresh
+    // hero — bring mass or a blade).
+    lite: { contact: { damage: 3 }, aggro: 300, trample: { minWeight: 1.6 } },
   },
 
   dune_stalker: {
@@ -3113,6 +3128,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['spew_flame'],
     xp: 50,
     spawner: true,
+    // THE COLONY (engine/lite.ts): cinders crawl off the tear and bank
+    // back to strength while it burns — close the rift to end them.
+    colony: { monsterId: 'emberling', cap: 10, radius: 60 },
   },
 
   // THE BREACH SCAR — the war-wound's own spawner (the wasteland's
@@ -6290,6 +6308,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['talon_rake'], xp: 6,
     flier: true, levitates: true,
     detection: 1.4,
+    // The colony pass: the roost's WHEELING CLOUD lives in the pool (a
+    // flier — structurally untrampleable; carve or ignore it). Promoted
+    // bodies dive with the real talon kit.
+    lite: { contact: { damage: 2 }, aggro: 340, weave: 1.5, erratic: 1.4 },
     brain: {
       type: 'swarm',
       move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2 },
@@ -6304,6 +6326,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 60, moveSpeed: 0, armor: 10, mana: 0 },
     skills: [], xp: 8, tag: 'predator',
     noNemesis: true, drops: 0,
+    // THE COLONY (engine/lite.ts): beside the summoned divers, a wheeling
+    // pooled cloud roosts here and breeds back while the bowl stands.
+    colony: { monsterId: 'cave_bat', cap: 9, radius: 70, calmRadius: 220 },
     brain: {
       type: 'basic',
       rules: [{
@@ -7753,8 +7778,118 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'vermin', tags: ['beast', 'vermin'],
     drops: 0,
     plies: { count: 1 },
-    lite: { contact: { damage: 2 }, aggro: 320, erratic: 1.25, separation: 1.1 },
+    // The colony pass retrofits: rats SQUISH underfoot at a walk (the
+    // Dynasty-Warriors wade made literal), and an unmolested pour breeds
+    // back toward its poured strength (the regrowth law's defaults).
+    lite: {
+      contact: { damage: 2 }, aggro: 320, erratic: 1.25, separation: 1.1,
+      trample: {}, regen: {},
+    },
     brain: { type: 'basic', move: { style: 'skitter' } },
+  },
+  // --------------------------------------------------------------------------
+  // THE COLONY KIN (engine/lite.ts — the collective pass): cross-family
+  // swarm CRAWLS plus the anchors that breed them. Every crawl is a lite
+  // pool kind (hundreds for the price of none); every anchor wears
+  // MonsterDef.colony — kill the anchor, or the collective breeds back
+  // under the regrowth law. Trample gates are the family texture: vermin
+  // and bone squish at a walk, chitin wants a heavier step, animate metal
+  // wants a JUGGERNAUT's — and fliers never crush at all (structural law).
+  // --------------------------------------------------------------------------
+  // THE GRAVE MITE — bone chips with appetite: the ossuaries' skittering
+  // carpet. One ply, a satisfying crunch underfoot, and it breeds back from
+  // its middens if the exterminator leaves survivors.
+  grave_mite: {
+    id: 'grave_mite', name: 'Grave Mite',
+    color: '#c8bfa8', shape: 'triangle', radius: 4, material: 'bone', look: 'mite',
+    base: { life: 5, moveSpeed: 150, accuracy: 60, mana: 0 },
+    skills: ['claw'], xp: 1,
+    faction: 'undead', tags: ['undead'],
+    drops: 0,
+    plies: { count: 1 },
+    lite: { contact: { damage: 2 }, aggro: 300, erratic: 1.2, trample: {}, regen: {} },
+    brain: { type: 'basic', move: { style: 'skitter' } },
+  },
+  // THE MARROW MIDDEN — the mites' nest: a heap of gnawed bone that boils
+  // when kicked. Spawner-flagged, so it joins any zone's clear-the-spawners
+  // objective the ordinary way.
+  marrow_midden: {
+    id: 'marrow_midden', name: 'Marrow Midden',
+    color: '#b0a488', shape: 'oval', radius: 14, material: 'bone', look: 'marrow_midden',
+    base: { life: 70, moveSpeed: 0, armor: 12, evasion: 0, mana: 999, manaRegen: 50 },
+    skills: ['vent_mites'], xp: 30,
+    faction: 'undead', tags: ['undead'],
+    vision: { arcDeg: 360, rearMul: 1 }, // a heap has no back
+    noNemesis: true, spawner: true,
+    colony: { monsterId: 'grave_mite', cap: 11, radius: 50 },
+  },
+  // THE BARROW SHAMBLER — the midden that WALKS: a hunched mass of grave-
+  // soil and bone whose colony's heart rides its back (the pocket follows
+  // the anchor — kill the carrier and the carpet stops coming back).
+  barrow_shambler: {
+    id: 'barrow_shambler', name: 'Barrow Shambler',
+    color: '#8a8270', shape: 'octagon', radius: 16, material: 'bone', look: 'barrow_shambler',
+    base: { life: 130, moveSpeed: 55, accuracy: 90, armor: 16, poise: 30, mana: 0 },
+    skills: ['claw'], xp: 32,
+    faction: 'undead', tags: ['undead'],
+    colony: { monsterId: 'grave_mite', cap: 7, radius: 55, rate: 0.8 },
+    brain: { type: 'juggernaut' },
+  },
+  // THE EMBERLING — a crawling cinder (NOT a flier: wisps float, cinders
+  // skitter). Stamp it out underfoot or let the crawl press its burn.
+  emberling: {
+    id: 'emberling', name: 'Emberling',
+    color: '#ff8a3a', shape: 'triangle', radius: 4, material: 'ember', look: 'smoulderling',
+    base: { life: 6, moveSpeed: 145, accuracy: 60, mana: 0 },
+    skills: ['claw'], xp: 1,
+    faction: 'demon', tags: ['demon'],
+    drops: 0,
+    plies: { count: 1 },
+    lite: { contact: { damage: 2, type: 'fire' }, aggro: 300, erratic: 1.4, trample: {}, regen: {} },
+    brain: { type: 'basic', move: { style: 'skitter' } },
+  },
+  // THE VAULT TICK — animate rivet-and-verdigris: the strongrooms' crawling
+  // lockwork. TWO plies (armored even for a crawl) and a trample gate only
+  // the truly heavy meet — bring mass or a blade.
+  vault_tick: {
+    id: 'vault_tick', name: 'Vault Tick',
+    color: '#7a9a8a', shape: 'pentagon', radius: 5, material: 'metal', look: 'roach',
+    base: { life: 9, moveSpeed: 120, accuracy: 65, mana: 0 },
+    skills: ['claw'], xp: 2,
+    faction: 'hollowborn', tags: ['construct'],
+    drops: 0,
+    plies: { count: 2 },
+    lite: {
+      contact: { damage: 3 }, aggro: 260, separation: 1.15,
+      trample: { minWeight: 2.4 }, regen: {},
+    },
+    brain: { type: 'basic', move: { style: 'skitter' } },
+  },
+  // THE TICK RELIQUARY — the strongbox that keeps re-knitting its keepers:
+  // an anchored urn whose colony regrows while it stands.
+  tick_reliquary: {
+    id: 'tick_reliquary', name: 'Tick Reliquary',
+    color: '#6a8a7c', shape: 'square', radius: 15, material: 'metal', look: 'tick_reliquary',
+    base: { life: 110, moveSpeed: 0, armor: 30, evasion: 0, mana: 999, manaRegen: 50 },
+    skills: ['vent_ticks'], xp: 34,
+    faction: 'hollowborn', tags: ['construct'],
+    vision: { arcDeg: 360, rearMul: 1 },
+    noNemesis: true, spawner: true,
+    colony: { monsterId: 'vault_tick', cap: 8, radius: 55, rate: 0.7 },
+  },
+  // THE VERMIN PIPER — the warren's shepherd: a piebald hornsman who calls
+  // the tide where he wants it. The lobbed bundle bursts into rats WHERE IT
+  // LANDS (litePour on a projectile resolves at impact) — kill the piper
+  // and the crawl he called still has to be dealt with.
+  vermin_piper: {
+    id: 'vermin_piper', name: 'Vermin Piper',
+    color: '#9a8a62', shape: 'triangle', radius: 11, material: 'fur', look: 'vermin_piper',
+    base: { life: 58, moveSpeed: 130, accuracy: 85, evasion: 45, mana: 90, manaRegen: 8 },
+    skills: ['hurl_swarmpod', 'vent_vermin'], xp: 26,
+    faction: 'vermin', tags: ['vermin'],
+    gemBias: ['summon', 'chaos'],
+    presence: { from: 4, fadeIn: 3 },
+    brain: { type: 'strafer' },
   },
   // THE GUTTER ROACH: what the rats leave, the roaches keep. Cellar-and-cavern
   // prey — near-blind, armored in the smallest way, gone the moment you move.
@@ -7860,6 +7995,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['spew_rats'], xp: 10, faction: 'vermin',
     vision: { arcDeg: 360, rearMul: 1 }, // a mound has no back
     noNemesis: true, drops: 0,
+    // THE COLONY (engine/lite.ts): beside its summoned fighters the mound
+    // breeds a wading CRAWL — the tide refills while the nest stands.
+    colony: { monsterId: 'vermin_tide', cap: 12, radius: 55 },
   },
   // THE RAT KING: the warren's one idea, crowned. Manifested over the last
   // split nest (the Verminfall kill row); also the faction's WARLORD, so a
@@ -11642,6 +11780,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['spew_brood'],
     xp: 45,
     spawner: true,
+    // THE COLONY (engine/lite.ts): the node keeps a crawling skirt of
+    // husk-swarmers that regrows while it stands.
+    colony: { monsterId: 'husk_swarmer', cap: 10, radius: 65 },
   },
 
   // --- THE SWARMING WING (the hive-cycle's flying castes) -------------------

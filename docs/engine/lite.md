@@ -132,6 +132,70 @@ loot, leave no corpses, feed no objectives, and never count as zone
 population — they are ambience with teeth (each one a deliberate deferral
 with a data seam if a design ever asks).
 
+## The regrowth law — the collective replenishes
+
+A pour pocket or colony remembers its heart and its CAP and trickles new
+bodies toward it (`LITE_CFG.regen` defaults; `LiteSpec.regen` kind default;
+`LiteSwarmRow.regen` per-row override, `true` = adopt the kind's) — but only
+while the collective RESTS:
+
+- Every tear, kill, promotion or trample of a pocket's bodies stamps a
+  quiet clock (`quietSec`) that must fully elapse before regrowth resumes.
+- A hostile seat standing within `calmRadius` of the heart pauses regrowth
+  outright — nothing breeds under a predator's shadow. (Together these
+  close the faucet-farm: killing stamps the clock, camping holds the pause.)
+- **The extermination law**: an ambient pocket wiped to ZERO is DONE —
+  nothing remains to breed back until the zone re-boots its salted stream.
+  A COLONY pocket (below) refills from zero as long as its anchor lives.
+- Regrowth draws NO global rand — births ride the pocket's own integer-hash
+  stream, so seeded runs stay byte-identical through every regrown body.
+
+Ambient regen hearts wear a **burrow tell** (`LITE_CFG.regen.burrowKind`, a
+walkable ground decal): the exterminator can SEE where the collective
+breeds, and the hole seals (evaporates) when the pocket dies.
+
+## The colony — the collective as an entity
+
+`MonsterDef.colony { monsterId, cap, rate?, quietSec?, calmRadius?, radius?,
+seedFrac? }` anchors a pocket on a LIVING body: a nest, a hive, a lumbering
+carrier. The anchor's pocket seeds at `seedFrac × cap` the first regen sweep
+that sees it (zone loads, summons and dev spawns all funnel through the one
+discovery), its heart FOLLOWS the anchor (a walking colony carries its
+cloud's home — the barrow shambler), and its death ends the regrowth
+forever: the nest is the exterminator's true target. Colony kinds must
+themselves wear `MonsterDef.lite` (validator-pinned). Debuts: the warren
+nest's crawl, the ember rift's cinders, the hive node's skirt, the bat
+roost's wheeling cloud, the marrow midden + barrow shambler, the tick
+reliquary.
+
+**The vent** is the colony's wave verb: the `litePour` skill effect
+`{ monsterId, count, scatter?, owned? }` pours pool bodies at the skill's
+resolution point (a projectile pours at IMPACT — the piper's lobbed
+bundle). A caster who anchors a colony of the same kind pours INTO its
+pocket, so the vent counts toward the collective's cap. `owned: true`
+instead rings the bodies around their caster like a gathered cloud.
+
+## The trample lane — the crossing is the kill
+
+`LiteSpec.trample { minSpeed?, minWeight? }` (defaults `LITE_CFG.trample`)
+opts a kind into dispersal underfoot: an OPPOSING actor moving at ≥
+`minSpeed` whose trample mass — `effectiveWeight() + the trample stat` —
+meets `minWeight` kills any body it overlaps (touching rims, no pad), plies
+notwithstanding: a boot crushes the beetle whole. Credited like any carve
+(xp, bestiary, pocket disturbance). The gates are the family texture:
+vermin and bone squish at a walk, chitin wants a heavier step
+(`minWeight 1.6`), animate metal wants a juggernaut's (`2.4`) — and FLIERS
+never resolve a finite gate (you cannot step on what isn't underfoot).
+Speed reads the behavior fabric's honest displacement estimate (`velEst`),
+so walks, dashes and launches all qualify; the lane costs nothing in zones
+where no resolved kind tramples. It is symmetric by construction: a
+stampeding monster (base.trample) scatters YOUR owned cloud.
+
+Player levers: the `trample` stat (offense-only mass — boots affix, the
+mass cluster's trample branch) and `plyRend` (extra plies torn per blow —
+the Exterminator support, folded tag-queried at the real ply gate and
+untagged at the pool carve).
+
 ## Steering — cheap, deterministic, alive
 
 One batched pass: spatial buckets rebuild (counting sort, O(n)); each body

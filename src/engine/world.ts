@@ -31,6 +31,7 @@ import {
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardBashSpec,
+  type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec, type ConduitSpec,
@@ -152,8 +153,8 @@ import {
 } from './throng';
 import { CLING_CFG, clingEligible, clingSeatPos, clingSeatsOf } from './cling';
 import {
-  LITE_CFG, LitePool, liteNoise, liteRingOffset, resolveLiteKind,
-  type LiteKind,
+  LITE_CFG, LitePool, liteNoise, liteRingOffset, liteSeatHash, resolveLiteKind,
+  type LiteKind, type LitePocket, type LiteRegenSpec, type LiteSwarmRow,
 } from './lite';
 import {
   GRAB_CFG, GRAB_MARKER, GRAB_VERB_LABEL, grabHolderMove, grabHoldBounds,
@@ -2714,6 +2715,22 @@ export class World {
   private litePromoteBudget = 0;
   /** Contact scratch (per-victim per-kind press counts). */
   private liteCounts = new Int32Array(16);
+  /** THE REGROWTH LAW (engine/lite.ts LitePocket): pour hearts + brood
+   *  anchors, zone-local; the pool's `pocket` column indexes here. Public
+   *  for probes/dev — the executors alone write it. */
+  litePockets: LitePocket[] = [];
+  /** Burrow doodads planted at ambient regen hearts (parallel to
+   *  litePockets; sealed via evap on extinction). */
+  private liteBurrows: (Doodad | undefined)[] = [];
+  private liteRegenClock = 0;
+  /** Colony anchors already registered (actor ids — an extinct pocket's
+   *  dead anchor never re-registers). */
+  private liteColonySeen = new Set<number>();
+  /** Any kind this zone resolves tramples (skips the lane when false),
+   *  and the cheapest gate among them — bodies slower than this skip the
+   *  mass fold entirely (the per-victim precompute stays ~free). */
+  private liteHasTrample = false;
+  private liteMinTrampleSpeed = Infinity;
   /** CLIENT half (co-op): the host's `lt` draw list, applied by snapshot —
    *  null on the host (the renderer reads the live pool instead). */
   liteWire: { k: string[]; b: number[] } | null = null;
@@ -20968,6 +20985,10 @@ export class World {
     if (kind) {
       this.liteKinds.push(kind);
       this.liteMaxR = Math.max(this.liteMaxR, kind.radius);
+      if (kind.trampleMinSpeed < Infinity) {
+        this.liteHasTrample = true;
+        this.liteMinTrampleSpeed = Math.min(this.liteMinTrampleSpeed, kind.trampleMinSpeed);
+      }
     }
     this.liteKindIdxMap.set(defId, idx);
     return idx;
@@ -21002,6 +21023,12 @@ export class World {
     this.liteXpAcc = 0;
     this.liteKills.clear();
     this.litePromoteBudget = 0;
+    this.litePockets = [];
+    this.liteBurrows = [];
+    this.liteColonySeen.clear();
+    this.liteRegenClock = 0;
+    this.liteHasTrample = false;
+    this.liteMinTrampleSpeed = Infinity;
     const spec = def.theme.lite;
     if (spec?.swarms.length) {
       const rng = new Rng((this.currentZoneSeed ^ LITE_CFG.salt) >>> 0);
@@ -21012,16 +21039,27 @@ export class World {
         for (let p = 0; p < pockets; p++) {
           const heart = this.interactSpot(pois, rng, LITE_CFG.pour.reach, LITE_CFG.pour.portalClear);
           const n = rng.int(row.size[0], row.size[1]);
+          // THE REGROWTH LAW: a regen-bearing row's pocket remembers this
+          // heart + rolled size as its cap (resolved once, no extra draws —
+          // the salted stream's fixed shape holds).
+          let pk = -1;
           for (let s = 0; s < n; s++) {
             const ang = rng.range(0, Math.PI * 2);
             const d = rng.range(4, LITE_CFG.pour.scatter);
             if (!has) continue;
             const kindIdx = this.liteKindOf(row.monsterId);
             if (kindIdx < 0) continue;
+            if (pk === -1) pk = this.litePocketEnsure(row, kindIdx, heart, n);
             const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;
             const open = this.liteOpenAt(bx, by);
             if (pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,
-              this.liteKinds[kindIdx].plies0) >= 0) poured = true;
+              this.liteKinds[kindIdx].plies0, pk >= 0 ? pk : -1) >= 0) {
+              poured = true;
+              if (pk >= 0) {
+                this.litePockets[pk].poured = true;
+                this.litePockets[pk].live++;
+              }
+            }
           }
         }
         if (poured && row.announce) {
@@ -21055,6 +21093,13 @@ export class World {
     if (this.liteDemoteClock <= 0) {
       this.liteDemoteClock = LITE_CFG.demote.every;
       this.liteDemoteSweep();
+    }
+    // THE REGROWTH SWEEP (primed at 0 — colony anchors seed their
+    // collective on the first tick after load, before the player blinks).
+    this.liteRegenClock -= dt;
+    if (this.liteRegenClock <= 0) {
+      this.liteRegenClock = LITE_CFG.regen.every;
+      this.liteRegenSweep();
     }
     if (this.lite.liveCount > 0) this.liteSteerAndBite(dt);
     if (this.liteXpAcc >= 1) {
@@ -21175,20 +21220,55 @@ export class World {
     const counts = this.liteCounts;
     counts.fill(0, 0, kinds.length);
     const vTeam = v.team === 'player' ? 1 : 0;
+    // THE TRAMPLE LANE (LiteSpec.trample): this actor's crossing SPEED (the
+    // behavior fabric's honest displacement estimate — walk, dash, launch
+    // alike) and trample MASS (effectiveWeight + the `trample` stat), read
+    // once; per-kind gates decide inside. Zero cost when no zone kind
+    // tramples: speed 0 never meets a real gate.
+    let trSpeed = 0, trMass = 0, tramples = 0, trX = 0, trY = 0;
+    if (this.liteHasTrample) {
+      trSpeed = Math.hypot(v.velEst.x, v.velEst.y);
+      if (trSpeed >= this.liteMinTrampleSpeed) {
+        trMass = v.effectiveWeight() + v.sheet.get('trample');
+      } else trSpeed = 0;
+    }
     let pressed = false, creditOwner = 0, latchIdx = -1, latchD = Infinity;
     pool.forEachIn(v.pos.x, v.pos.y, v.radius + this.liteMaxR + LITE_CFG.contact.pad, 0, i => {
       if (pool.team[i] === vTeam) return;
       const k = kinds[pool.kind[i]];
       if (!k) return;
       const dx = pool.x[i] - v.pos.x, dy = pool.y[i] - v.pos.y;
-      const rr = v.radius + k.radius + LITE_CFG.contact.pad;
       const dd = dx * dx + dy * dy;
+      // TRAMPLED: stepped ON (touching rims, no pad) by a qualified mover —
+      // the crossing itself is the kill, plies notwithstanding (a boot
+      // crushes the beetle whole). Fliers never resolve a finite gate.
+      if (trSpeed >= k.trampleMinSpeed && trMass >= k.trampleMinWeight) {
+        const crush = v.radius + k.radius;
+        if (dd <= crush * crush) {
+          tramples++;
+          trX += pool.x[i]; trY += pool.y[i];
+          if (tramples <= LITE_CFG.fx.flashes) {
+            this.flashes.push({
+              pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 5,
+              color: k.color, life: 0.2, maxLife: 0.2,
+            });
+          }
+          this.liteNoteDeath(k, pool.team[i], v);
+          this.litePocketDisturb(pool.pocket[i]);
+          pool.free(i);
+          return;
+        }
+      }
+      const rr = v.radius + k.radius + LITE_CFG.contact.pad;
       if (dd > rr * rr) return;
       counts[pool.kind[i]]++;
       pressed = true;
       if (!creditOwner && pool.owner[i]) creditOwner = pool.owner[i];
       if (k.clings && dd < latchD) { latchD = dd; latchIdx = i; }
     });
+    if (tramples >= LITE_CFG.fx.countTextAt) {
+      this.text(vec(trX / tramples, trY / tramples - 10), `×${tramples}`, '#d8c8a0', 13);
+    }
     if (!pressed) return;
     // THE LATCH BOUNDARY: a clinging kind at the rim stands up as a real
     // body (budgeted per sweep; free seats only — the coat law holds).
@@ -21274,6 +21354,10 @@ export class World {
     const carveTeam = striker ? (striker.team === 'player' ? 0 : 1) : -1;
     const pad = this.liteMaxR + 8;
     const rr = (reach + pad) * (reach + pad);
+    // PLY REND (the exterminator's stat): extra plies torn per carve — the
+    // striker's untagged fold (skill-scoped grants ride the real ply gate;
+    // the pool reads the global lane). Invariant per carve.
+    const tears = 1 + (striker ? Math.max(0, Math.floor(striker.sheet.get('plyRend'))) : 0);
     let torn = 0, fx = 0, cx = 0, cy = 0;
     for (let i = 0; i < pool.used; i++) {
       if (!pool.alive[i]) continue;
@@ -21286,8 +21370,11 @@ export class World {
       this.liteVec.y = pool.y[i];
       if (test) { if (!test(this.liteVec, k.radius)) continue; }
       else if (Math.sqrt(dx * dx + dy * dy) - k.radius > reach) continue;
-      if (pool.plies[i] > 1) {
-        pool.plies[i]--;
+      // Any carve is a DISTURBANCE — the regrowth law's quiet clock stamps
+      // whether the body tore or died (the collective noticed either way).
+      this.litePocketDisturb(pool.pocket[i]);
+      if (pool.plies[i] > tears) {
+        pool.plies[i] -= tears;
         if (fx < LITE_CFG.fx.flashes) {
           fx++;
           this.flashes.push({ pos: vec(pool.x[i], pool.y[i]), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
@@ -21345,13 +21432,15 @@ export class World {
     const kinds = this.liteKinds;
     const carveTeam = p.caster.team === 'player' ? 0 : 1;
     let stopped = false;
+    const rend = p.caster ? Math.max(0, Math.floor(p.caster.sheet.get('plyRend'))) : 0;
     pool.forEachAlong(x0, y0, p.pos.x, p.pos.y, this.liteMaxR + p.radius + 2, i => {
       if (pool.team[i] !== carveTeam) return;
       const k = kinds[pool.kind[i]];
       if (!k) return;
       const bx = pool.x[i], by = pool.y[i];
-      if (pool.plies[i] > 1) {
-        pool.plies[i]--;
+      this.litePocketDisturb(pool.pocket[i]);
+      if (pool.plies[i] > 1 + rend) {
+        pool.plies[i] -= 1 + rend;
         this.flashes.push({ pos: vec(bx, by), radius: k.radius + 3, color: '#ffffff', life: 0.1, maxLife: 0.1 });
       } else {
         this.flashes.push({ pos: vec(bx, by), radius: k.radius + 5, color: k.color, life: 0.18, maxLife: 0.18 });
@@ -21395,6 +21484,9 @@ export class World {
       this.actors.push(body);
     }
     if (body.pliesMax > 0) body.plies = Math.max(1, body.pliesMax - spent);
+    // A promotion is an INTERFERENCE (something reached into the collective)
+    // — the regrowth law's quiet clock stamps.
+    this.litePocketDisturb(pool.pocket[i]);
     pool.free(i);
     return body;
   }
@@ -21469,6 +21561,210 @@ export class World {
       pool.free(i);
       this.mintThrongHusk(k.defId, vec(hx, hy), { ttl: THRONG_CFG.motes.ttl * 2 });
     }
+  }
+
+  /** A pocket's disturbance stamp (THE REGROWTH LAW): every tear, kill,
+   *  promotion or trample of a pocket's bodies restarts its quiet clock —
+   *  the collective regrows only while truly unmolested. */
+  private litePocketDisturb(pk: number): void {
+    if (pk < 0) return;
+    const p = this.litePockets[pk];
+    if (!p || p.extinct) return;
+    p.disturbedUntil = Math.max(p.disturbedUntil, this.time + p.quietSec);
+  }
+
+  /** Resolve a pour row's regrowth (row override → kind default → none) and
+   *  register its pocket. Returns the pocket index, or -2 when this row's
+   *  pockets never regrow (the sentinel keeps bootLite's resolve single). */
+  private litePocketEnsure(row: LiteSwarmRow, kindIdx: number, heart: Vec2, cap: number): number {
+    const kindRegen = this.liteKinds[kindIdx].regen;
+    const regen = row.regen === true ? (kindRegen ?? {}) : (row.regen ?? kindRegen);
+    if (!regen) return -2;
+    const pk = this.litePockets.length;
+    this.litePocketPush(regen, kindIdx, heart.x, heart.y, cap, 0, undefined);
+    this.litePlantBurrow(pk, heart.x, heart.y);
+    return pk;
+  }
+
+  /** THE BURROW TELL: ambient regen hearts wear a findable mark — the
+   *  exterminator can SEE where the collective breeds, and the mark seals
+   *  (evaporates) when the pocket dies. Render-only dress; anchored
+   *  pockets never plant one (the anchor IS the tell). */
+  private litePlantBurrow(pk: number, x: number, y: number): void {
+    const bk = LITE_CFG.regen.burrowKind;
+    if (!bk) return;
+    const d: Doodad = { pos: vec(x, y), radius: 13, kind: bk as Doodad['kind'] };
+    this.doodads.push(d);
+    this.markDoodadsChanged();
+    this.liteBurrows[pk] = d;
+  }
+
+  /** Build + register one pocket (dials resolved against LITE_CFG.regen). */
+  private litePocketPush(
+    spec: LiteRegenSpec, kindIdx: number, x: number, y: number,
+    cap: number, anchorId: number, scatter: number | undefined,
+  ): LitePocket {
+    const p: LitePocket = {
+      x, y, kindIdx,
+      cap: Math.max(1, Math.min(255, Math.round(cap))),
+      rate: spec.rate ?? LITE_CFG.regen.rate,
+      quietSec: spec.quietSec ?? LITE_CFG.regen.quietSec,
+      calmRadius: spec.calmRadius ?? LITE_CFG.regen.calmRadius,
+      scatter: scatter ?? LITE_CFG.pour.scatter,
+      anchorId,
+      disturbedUntil: 0, acc: 0, live: 0, births: 0,
+      poured: false, extinct: false,
+    };
+    this.litePockets.push(p);
+    return p;
+  }
+
+  /** One birth at a pocket's heart. Positions ride the pocket's own
+   *  integer-hash stream — regrowth draws NO global rand (the pool's
+   *  byte-determinism law holds through every regrown body). */
+  private litePocketBirth(pk: number, p: LitePocket): void {
+    const h = liteSeatHash(p.births++ + pk * 8191, LITE_CFG.salt);
+    const ang = ((h & 0xffff) / 0xffff) * Math.PI * 2;
+    const d = 4 + ((h >>> 16) / 0xffff) * p.scatter;
+    const bx = p.x + Math.cos(ang) * d, by = p.y + Math.sin(ang) * d;
+    const open = this.liteOpenAt(bx, by);
+    if (this.lite.spawn(p.kindIdx, open ? bx : p.x, open ? by : p.y, 0, 0,
+      this.liteKinds[p.kindIdx].plies0, pk) >= 0) {
+      p.poured = true;
+      p.live++;
+    }
+  }
+
+  /** A pocket's end: the wipe (ambient, nothing left to breed) or the
+   *  anchor's death. The burrow tell seals via the evap fabric. */
+  private litePocketExtinct(pk: number, p: LitePocket): void {
+    p.extinct = true;
+    const burrow = this.liteBurrows[pk];
+    if (burrow && !burrow.gone && !burrow.evap) {
+      burrow.evap = { t: 0.4, rate: 22 };
+      this.evaporating.push(burrow);
+      this.markDoodadsChanged();
+    }
+    this.liteBurrows[pk] = undefined;
+  }
+
+  /** THE REGROWTH SWEEP (LITE_CFG.regen.every): colony anchors register
+   *  their collectives (once, seeded — zone loads, summons and dev spawns
+   *  all funnel through this one discovery), the census counts each
+   *  pocket's live rows, then every calm, unmolested pocket trickles
+   *  bodies back toward its cap. An ambient pocket wiped to ZERO is
+   *  exterminated; a colony pocket dies with its anchor — the nest is the
+   *  true target (docs/engine/lite.md). */
+  private liteRegenSweep(): void {
+    // Anchor discovery: any living body wearing MonsterDef.colony.
+    for (const a of this.actors) {
+      if (a.dead || !a.defId || this.liteColonySeen.has(a.id)) continue;
+      const spec = MONSTERS[a.defId]?.colony;
+      if (!spec) continue;
+      this.liteColonySeen.add(a.id);
+      const kindIdx = this.liteKindOf(spec.monsterId);
+      if (kindIdx < 0) continue;
+      const pk = this.litePockets.length;
+      const p = this.litePocketPush(spec, kindIdx, a.pos.x, a.pos.y, spec.cap, a.id, spec.radius);
+      const seed = Math.min(p.cap,
+        Math.round(p.cap * (spec.seedFrac ?? LITE_CFG.regen.seedFrac)));
+      for (let s = 0; s < seed; s++) this.litePocketBirth(pk, p);
+    }
+    const pks = this.litePockets;
+    if (!pks.length) return;
+    // Census — one pass over the pool.
+    for (const p of pks) p.live = 0;
+    const pool = this.lite;
+    for (let i = 0; i < pool.used; i++) {
+      if (!pool.alive[i]) continue;
+      const pk = pool.pocket[i];
+      if (pk >= 0 && pk < pks.length) pks[pk].live++;
+    }
+    for (let pk = 0; pk < pks.length; pk++) {
+      const p = pks[pk];
+      if (p.extinct) continue;
+      if (p.anchorId) {
+        const anchor = this.actorById(p.anchorId);
+        if (!anchor || anchor.dead) { this.litePocketExtinct(pk, p); continue; }
+        // The heart WALKS with a living anchor — a lumbering brood carries
+        // its collective's home on its back.
+        p.x = anchor.pos.x; p.y = anchor.pos.y;
+      } else if (p.poured && p.live === 0) {
+        // THE EXTERMINATION LAW: an ambient pocket wiped to zero has
+        // nothing left to breed back — the burrow seals.
+        this.litePocketExtinct(pk, p);
+        continue;
+      }
+      if (p.live >= p.cap) { p.acc = 0; continue; }
+      if (this.time < p.disturbedUntil) continue;
+      // The calm gate: nothing breeds under a predator's shadow.
+      let calm = true;
+      for (const seat of this.seats) {
+        const s = seat.actor;
+        if (s.dead) continue;
+        const dx = s.pos.x - p.x, dy = s.pos.y - p.y;
+        if (dx * dx + dy * dy <= p.calmRadius * p.calmRadius) { calm = false; break; }
+      }
+      if (!calm) continue;
+      p.acc += p.rate * LITE_CFG.regen.every;
+      let n = Math.floor(p.acc);
+      if (n <= 0) continue;
+      p.acc -= n;
+      n = Math.min(n, p.cap - p.live);
+      for (let s = 0; s < n; s++) this.litePocketBirth(pk, p);
+    }
+  }
+
+  /** THE POURED SWARM (the 'litePour' skill effect — engine/lite.ts): pool
+   *  bodies called into being at the resolution point. A colony anchor
+   *  pours INTO its own pocket (the vent counts toward the collective's
+   *  cap — the regrowth law sees what the horn called); a player-side
+   *  caster may pour an OWNED cloud that rings its keeper. Combat dice —
+   *  ordinary global rand, like every other cast roll. */
+  litePourAt(caster: Actor, fx: LitePourEffect, at: Vec2): number {
+    const kindIdx = this.liteKindOf(fx.monsterId);
+    if (kindIdx < 0) return 0;
+    const k = this.liteKinds[kindIdx];
+    const n = randInt(fx.count[0], fx.count[1]);
+    const team: 0 | 1 = caster.team === 'player' ? 1 : 0;
+    const owner = fx.owned ? caster.id : 0;
+    let pk = -1;
+    if (!fx.owned) {
+      for (let i = 0; i < this.litePockets.length; i++) {
+        const p = this.litePockets[i];
+        if (p.anchorId === caster.id && p.kindIdx === kindIdx && !p.extinct) { pk = i; break; }
+      }
+    }
+    const scatter = fx.scatter ?? LITE_CFG.pour.scatter;
+    let made = 0;
+    for (let s = 0; s < n; s++) {
+      const ang = rand(0, Math.PI * 2);
+      const d = rand(4, scatter);
+      const bx = at.x + Math.cos(ang) * d, by = at.y + Math.sin(ang) * d;
+      const open = this.liteOpenAt(bx, by);
+      if (this.lite.spawn(kindIdx, open ? bx : at.x, open ? by : at.y, team, owner,
+        k.plies0, pk) >= 0) {
+        made++;
+        if (pk >= 0) {
+          const p = this.litePockets[pk];
+          p.poured = true;
+          p.live++;
+        }
+      }
+    }
+    return made;
+  }
+
+  /** Dev/QA: register an ambient regen pocket at a point and pour it full
+   *  (probes + the dev tab; the regrowth law from a bare seam). */
+  devLitePocket(defId: string, at: Vec2, cap: number, regen?: LiteRegenSpec): number {
+    const kindIdx = this.liteKindOf(defId);
+    if (kindIdx < 0) return -1;
+    const pk = this.litePockets.length;
+    const p = this.litePocketPush(regen ?? {}, kindIdx, at.x, at.y, cap, 0, undefined);
+    this.litePlantBurrow(pk, at.x, at.y);
+    for (let s = 0; s < p.cap; s++) this.litePocketBirth(pk, p);
+    return pk;
   }
 
   /** Dev/QA: pour n bodies of a kind around a point (deterministic ring —
@@ -24918,6 +25214,13 @@ export class World {
       // resolved (ground deliveries plant at the target, in the case block).
       if (fx.type === 'kindle' && d.type !== 'ground') {
         this.plantKindle(caster, fx.kind, origin, aoeScale, durScale);
+      }
+      // A POURED SWARM (engine/lite.ts): pool bodies stand at the
+      // resolution point — the nest's vent, the shepherd's call. A
+      // PROJECTILE delivery pours at the FLIGHT'S END instead (the lobbed
+      // pod bursts where it lands — the projectile sweep's own hook).
+      if (fx.type === 'litePour' && d.type !== 'projectile') {
+        this.litePourAt(caster, fx, origin);
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -39525,6 +39828,15 @@ export class World {
                 flatBonus: p.flat,
               });
             }
+          }
+        }
+        // A POURED SWARM on a flight (the 'litePour' effect — engine/
+        // lite.ts): the pod bursts where the flight ENDED — every honest
+        // end (range spent, wall, the body that stopped it), never at the
+        // hand. Cast-time deliveries pour in executeSkill's chain instead.
+        if (!p.caster.dead) {
+          for (const fx of p.inst.def.effects) {
+            if (fx.type === 'litePour') this.litePourAt(p.caster, fx, p.pos);
           }
         }
         // PLANT ON LAND (#17): the spent projectile stands where it fell —

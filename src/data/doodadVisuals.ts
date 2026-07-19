@@ -1809,6 +1809,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'mawPit', order: 18,
     blend: { strength: 0.42, feather: 18, color: '#221828' },
   },
+  // THE COLONY BURROW (engine/lite.ts LITE_CFG.regen.burrowKind): the
+  // findability tell planted at an ambient regen pocket's heart — the
+  // exterminator can SEE where the collective breeds, and the hole SEALS
+  // (evaporates) when the pocket is wiped. Runtime-planted only, never in
+  // layouts; walkable ground decal by the default rule.
+  colony_burrow: {
+    painter: 'mawPit', order: 17,
+    blend: { strength: 0.3, feather: 12, color: '#241c12' },
+  },
   nerve_root: {
     painter: 'veins', order: 29,
     params: { vessel: '#382848', pulse: '#9a72c8', node: '#48305c' },

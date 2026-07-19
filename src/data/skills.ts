@@ -7933,6 +7933,49 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 720, weight: 1 },
   },
 
+  // --- THE COLONY VENTS (engine/lite.ts litePour — the collective pass) -----
+  // The wave verb of the colony fabric: pool bodies POURED mid-fight, not
+  // summoned actors — a nest defends itself with its own crawl, and the
+  // vent counts toward the anchor's colony cap (the regrowth law sees what
+  // the horn called). Near-zero cost at any count.
+  vent_vermin: {
+    id: 'vent_vermin', name: 'Seething Call', noDrop: true,
+    description: 'The piper calls and the floor ANSWERS — a crawl of vermin pours in around him.',
+    tags: ['spell'], color: '#8a7a5a',
+    manaCost: 0, cooldown: 7, useTime: 0.9,
+    delivery: { type: 'self' },
+    effects: [{ type: 'litePour', monsterId: 'vermin_tide', count: [5, 8], scatter: 60 }],
+    ai: { range: 300, weight: 2 },
+  },
+  hurl_swarmpod: {
+    id: 'hurl_swarmpod', name: 'Squirming Bundle', noDrop: true,
+    description: 'A thrown bundle that BURSTS where it lands — into teeth.',
+    tags: ['spell', 'projectile'], color: '#9a8a62',
+    manaCost: 4, cooldown: 5, useTime: 0.8,
+    baseDamage: { physical: [3, 5] },
+    delivery: { type: 'projectile', speed: 420, radius: 8, range: 400 },
+    effects: [{ type: 'damage' }, { type: 'litePour', monsterId: 'vermin_tide', count: [3, 5], scatter: 34 }],
+    ai: { range: 400, weight: 3 },
+  },
+  vent_mites: {
+    id: 'vent_mites', name: 'Marrow Boil', noDrop: true,
+    description: 'Kick the midden and the marrow BOILS — bone chips with appetite.',
+    tags: ['spell'], color: '#b0a488',
+    manaCost: 0, cooldown: 8, useTime: 1.0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'litePour', monsterId: 'grave_mite', count: [4, 6], scatter: 52 }],
+    ai: { range: 250, weight: 2 },
+  },
+  vent_ticks: {
+    id: 'vent_ticks', name: 'Reliquary Muster', noDrop: true,
+    description: 'The strongbox re-knits its keepers — lockwork pouring off the lid.',
+    tags: ['spell'], color: '#7a9a8a',
+    manaCost: 0, cooldown: 9, useTime: 1.1,
+    delivery: { type: 'self' },
+    effects: [{ type: 'litePour', monsterId: 'vault_tick', count: [3, 4], scatter: 48 }],
+    ai: { range: 250, weight: 2 },
+  },
+
   festering_bite: {
     id: 'festering_bite', name: 'Festering Bite', noDrop: true,
     description: 'A filthy bite that leaves the wound ROTTING.',
