@@ -418,6 +418,45 @@ registerCreep({
   ],
 });
 
+/** THE SOUL CURRENT — the River of Souls' running water (world/soulriver.ts).
+ *  The current IS the hazard: pale luminous bores riding the channel — the
+ *  vessel bore's grammar with the NEW `flow.channel` window, so the surge
+ *  follows its own SOUL-WATER between fully open banks (no walls needed) and
+ *  its grip stops at the waterline (confine over the same window). It drags
+ *  the living downstream while the riverbound ride free — crest-borne shades
+ *  surf the surges — and it stamps NO convert: the channel is standing
+ *  soul-water already; the bore is the flow made visible over it. */
+registerCreep({
+  id: 'soul_current',
+  color: '#1e4a66', rim: '#bfe8ff', glow: '#9fd8ec',
+  notAquatic: true,
+  alpha: 0.6,
+  // Sized to the channel, not the halls — swell supplies the length.
+  reach: [52, 76],
+  lobing: 0.14,
+  spread: 55,
+  recede: 140,
+  pulse: 2.2,
+  skin: 'water',
+  edge: { color: '#d8f4ff', style: 'foam', width: 5 },
+  front: {
+    speed: 150,
+    stretch: 1.5,
+    flow: { steer: 2.8, bounce: 0.4, confine: true, channel: ['soul_water'] },
+    travel: { range: [1700, 2800], taper: 0.3 },
+    swell: { max: 2.2, per: 1100 },
+    affinity: {
+      ground: { soul_water: 1.3 },
+      default: 0.5,
+    },
+    drag: { accel: 290, notFactions: ['riverbound'] },
+    riders: [{ monster: 'lorn_shade', count: [1, 2], chance: 0.55 }],
+  },
+  grants: [
+    { status: 'soulchill', notFactions: ['riverbound'] },
+  ],
+});
+
 // --- The fronts' remnant vocabulary (runtime-ruled kinds, the attunements
 // registerDoodadRule idiom — no KnownDoodadKind union edit needed) ----------
 

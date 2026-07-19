@@ -71,6 +71,32 @@ registerFogBank({
   ],
 });
 
+/** SOUL MIST — the River of Souls' pall: pale blue-white, slow as grief,
+ *  gathering over the funerary furniture (spirit gates, piers, cairns, the
+ *  candle rafts adrift on the water) and thickening toward the terminus
+ *  strand, where the dress stands densest — the gradient darkness that says
+ *  the end of the route is near without a word. The riverbound feed in it
+ *  the way the graveyard dead feed in theirs. */
+registerFogBank({
+  id: 'soul_mist',
+  color: '#bcd4de',
+  alpha: 0.38,
+  radius: [110, 200],
+  lobes: [6, 10],
+  drift: [3, 8],
+  meander: 0.28,
+  swirl: 0.05,
+  breathe: 0.16,
+  churn: 0.22,
+  life: [60, 120],
+  rampFrac: 0.24,
+  haunt: { kinds: ['soul_gate', 'bone_pier', 'candle_raft', 'drowned_cairn', 'sunken_statue'], pull: 0.9 },
+  grants: [
+    { status: 'fogveiled' },
+    { status: 'mistfed', factions: ['riverbound', 'undead'] },
+  ],
+});
+
 /** POLLEN HAZE — the Garden's gold weather-in-miniature: a drifting cloud
  *  of shed pollen that gathers over the blooms themselves (haunt pulls the
  *  anchors onto the flower stands) and hangs in slow, heavy lobes. A veil

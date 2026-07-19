@@ -200,9 +200,12 @@ export function validateContent(): void {
         warn(`track rider '${id}': payload damage type '${rdef.payload.hit.type}' unknown`);
       }
       if (rdef.surface.kind === 'rect' && vis) {
-        const bp = vis.params as { beamHw?: number; beamHh?: number } | undefined;
-        if (bp?.beamHw !== rdef.surface.hw || bp?.beamHh !== rdef.surface.hh) {
-          warn(`track rider '${id}': painter beam params (${bp?.beamHw}×${bp?.beamHh}) disagree with surface (${rdef.surface.hw}×${rdef.surface.hh}) — the drawn beam must BE the tested rect`);
+        // The agreement contract speaks two dialects: a hazard's BEAM and a
+        // carrier's DECK (soulFerry) — either pair must equal the surface.
+        const bp = vis.params as { beamHw?: number; beamHh?: number; deckHw?: number; deckHh?: number } | undefined;
+        const hw = bp?.beamHw ?? bp?.deckHw, hh = bp?.beamHh ?? bp?.deckHh;
+        if (hw !== rdef.surface.hw || hh !== rdef.surface.hh) {
+          warn(`track rider '${id}': painter beam/deck params (${hw}×${hh}) disagree with surface (${rdef.surface.hw}×${rdef.surface.hh}) — the drawn body must BE the tested rect`);
         }
       }
     }

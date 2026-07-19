@@ -36,6 +36,7 @@ import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
 } from './genkit';
 import { carveMassifs } from './massif';
+import { ferryLaneFor, soulriverPlan } from '../world/soulriver';
 
 /** The negative-space region a carved recipe leaves between its passages —
  *  'wall' reads as rock (true wall: blocks shots + sight); a biome may swap
@@ -545,6 +546,147 @@ function riverlandLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('riverland', riverlandLayout);
+
+// --- SOULRIVER (the River of Souls — the underworld's ferry-hub megazone) --------
+// One serpentine channel of soul-water crossing the whole arena west → east,
+// a DOCK at every meander apex (pier + apron + spirit gate, each standing
+// before its own zone exit), worn towpaths down both banks, and THE PALE
+// FERRY emitted as a carrier lane on the track fabric. All structural truth
+// comes from soulriverPlan (world/soulriver.ts — a pure function of the zone
+// seed + size), so the mint hook's dock exits, this carve, and the runtime
+// ferry can never disagree.
+
+/** Per-vertex perpendicular offset of a polyline (the towpath's line). */
+function offsetPolyline(pts: Vec2[], off: number): Vec2[] {
+  const out: Vec2[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+    out.push(vec(pts[i].x + nx * off, pts[i].y + ny * off));
+  }
+  return out;
+}
+
+function soulriverLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { arena } = ctx;
+  const grid = ensureGrid(ctx);
+  // The country deal is stamped onto layoutParams at mint (soulriverifyZone)
+  // so saved zones keep their promise if the realm's palette ever changes;
+  // the fallback list serves headless mints (genqa) the same seven shores.
+  const biomes = layoutParam(def, 'dockBiomes',
+    ['grave', 'rift', 'volcanic', 'steppes', 'flesh', 'caul', 'durance']) as string[];
+  const plan = soulriverPlan(def.seed ?? 0, arena.w, arena.h, biomes);
+
+  // THE CHANNEL — soul-water poured whole down the serpentine.
+  const channel = Mask.forRect(0, 0, arena.w, arena.h);
+  band(channel, plan.channel, plan.halfW);
+  paintLiquid(ctx, grid, channel, liquidOf('soul_water'));
+  // The sailing lane is the zone's artery: reserve it so the scatter never
+  // moors a boulder where the deck must pass (a carried body scraping past
+  // mid-channel stone would be wiped off the boards).
+  reserveArtery(ctx, plan.channel, plan.halfW * 0.55);
+
+  // THE TOWPATHS — worn desire paths down both banks (the dead walk them),
+  // reserved so the banks stay open country the whole course.
+  const towOff = plan.halfW + 56;
+  for (const sgn of [-1, 1]) {
+    layTraveledWay(ctx, offsetPolyline(plan.channel, towOff * sgn),
+      { kind: 'road', band: [13, 17], step: 34, reserve: true });
+  }
+
+  // THE DOCKS — per station: a plank pier reaching into the channel (water
+  // spliced from under it, the causeway discipline — the pier is truly clean
+  // footing), a spirit gate on the apron, wake-lanterns flanking it, and a
+  // reserved walk from the apron out to the station's own zone exit.
+  const liquidKind = liquidOf('soul_water').doodad;
+  for (const dock of plan.docks) {
+    const dx = dock.pier.x - dock.pos.x, dy = dock.pier.y - dock.pos.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist, uy = dy / dist;
+    // Pier planks: from the waterline toward the centerline, stopping short
+    // of the deck's own passage (the ferry noses alongside the tip).
+    const reach = Math.max(40, plan.halfW - 52);
+    const wl = dist - plan.halfW; // apron → waterline
+    for (let s = wl - 8; s <= wl + reach; s += 20) {
+      const px = dock.pos.x + ux * s, py = dock.pos.y + uy * s;
+      for (let k = ctx.doodads.length - 1; k >= 0; k--) {
+        const d = ctx.doodads[k];
+        if (d.kind === liquidKind && Math.hypot(d.pos.x - px, d.pos.y - py) < 30 + d.radius * 0.6) {
+          ctx.doodads.splice(k, 1);
+        }
+      }
+      ctx.doodads.push({ pos: vec(px, py), radius: 22, kind: 'bone_pier', dir: Math.atan2(uy, ux) });
+    }
+    reserveArtery(ctx, [dock.pos, vec(dock.pos.x + ux * (wl + reach), dock.pos.y + uy * (wl + reach))], 36);
+    // The apron: spirit gate astride the walk, lanterns at its posts.
+    const gx = dock.pos.x - ux * 26, gy = dock.pos.y - uy * 26;
+    ctx.doodads.push({ pos: vec(gx, gy), radius: 34, kind: 'soul_gate', dir: Math.atan2(uy, ux) });
+    const pxv = -uy, pyv = ux;
+    for (const s of [-52, 52]) {
+      ctx.doodads.push({ pos: vec(gx + pxv * s, gy + pyv * s), radius: 10, kind: 'wake_lantern' });
+    }
+    ctx.pois.push(vec(dock.pos.x, dock.pos.y));
+    // Keep the walk from the apron to this dock's own edge portal open.
+    const exitPos = dock.side === 'w' ? vec(30, arena.h * dock.at)
+      : dock.side === 'e' ? vec(arena.w - 30, arena.h * dock.at)
+        : dock.side === 'n' ? vec(arena.w * dock.at, 30) : vec(arena.w * dock.at, arena.h - 30);
+    reserveArtery(ctx, [dock.pos, exitPos], 40);
+  }
+
+  // Any portal the plan does not own (the discovery shore's back edge, later
+  // woven links) still gets a reserved walk to the nearest towpath point.
+  for (const e of ctx.exits.concat([ctx.entry])) {
+    let best: Vec2 | null = null; let bestD = Infinity;
+    for (const p of plan.channel) {
+      const towA = vec(p.x, p.y - towOff), towB = vec(p.x, p.y + towOff);
+      for (const t of [towA, towB]) {
+        const d2 = (t.x - e.x) ** 2 + (t.y - e.y) ** 2;
+        if (d2 < bestD) { bestD = d2; best = t; }
+      }
+    }
+    if (best) reserveArtery(ctx, [e, best], 36);
+  }
+
+  // THE TERMINUS GRADIENT — the end of the route announced without a word:
+  // funerary dress thickens down the last reach (soul_mist haunts these
+  // kinds, so the fog pools densest exactly where the ferry frays), and the
+  // FAR STRAND itself stands a silent crowd of statues and cairns around
+  // the deepest dock.
+  const prng = new Rng((def.seed ?? 0) ^ 0x7e21);
+  const term = plan.docks[plan.docks.length - 1];
+  for (let i = 0, n = prng.int(8, 12); i < n; i++) {
+    const t = 0.62 + prng.range(0, 0.36); // the last reach of the course
+    const idx = Math.min(plan.channel.length - 1, Math.round(t * (plan.channel.length - 1)));
+    const at = plan.channel[idx];
+    const sgn = prng.chance(0.5) ? 1 : -1;
+    const off = plan.halfW + prng.range(40, 200);
+    const kind = prng.chance(0.45) ? 'drowned_cairn' : prng.chance(0.5) ? 'sunken_statue' : 'dead_tree';
+    ctx.doodads.push({
+      pos: vec(at.x + prng.range(-40, 40), at.y + sgn * off),
+      radius: kind === 'sunken_statue' ? prng.range(16, 22) : prng.range(12, 18),
+      kind, rot: prng.range(-0.3, 0.3),
+    });
+  }
+  for (let i = 0, n = prng.int(4, 6); i < n; i++) {
+    const a = prng.range(0, Math.PI * 2);
+    const d = prng.range(70, 190);
+    ctx.doodads.push({
+      pos: vec(term.pos.x + Math.cos(a) * d, term.pos.y + Math.sin(a) * d),
+      radius: prng.range(14, 20),
+      kind: prng.chance(0.55) ? 'sunken_statue' : 'drowned_cairn',
+      rot: prng.range(-0.3, 0.3),
+    });
+  }
+  ctx.pois.push(vec(term.pos.x, term.pos.y));
+
+  // THE PALE FERRY — the carrier lane itself (loadZone's track plant reads
+  // layout.tracks; the pose runs on the world clock whether watched or not).
+  (ctx.tracks ??= []).push(ferryLaneFor(plan));
+
+  scatterDecoration(ctx, def);
+}
+registerLayout('soulriver', soulriverLayout);
 
 // --- EXPANSE (open country beyond the Field) --------------------------------------
 function expanseLayout(ctx: GenCtx, def: ZoneDef): void {

@@ -7975,6 +7975,15 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'litePour', monsterId: 'vault_tick', count: [3, 4], scatter: 48 }],
     ai: { range: 250, weight: 2 },
   },
+  vent_souls: {
+    id: 'vent_souls', name: 'The Unferried Rise', noDrop: true,
+    description: 'The pale water gives up its passengers — a shimmer of soul-motes pouring toward the warmth of the living.',
+    tags: ['spell', 'cold'], color: '#9fd8ec',
+    manaCost: 12, cooldown: 8, useTime: 0.9,
+    delivery: { type: 'self' },
+    effects: [{ type: 'litePour', monsterId: 'soul_mote', count: [5, 8], scatter: 64 }],
+    ai: { range: 300, weight: 2 },
+  },
 
   festering_bite: {
     id: 'festering_bite', name: 'Festering Bite', noDrop: true,

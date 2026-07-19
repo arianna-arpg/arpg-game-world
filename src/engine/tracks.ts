@@ -152,6 +152,25 @@ export interface TrackRiderDef {
   warnAhead?: number;
   /** Accent for the warn arc / debug reads (falls back to painter's own). */
   color?: string;
+  /** THE DECK LAW: this rider's surface is moving FOOTING, not a hazard —
+   *  every grounded body standing on it is CARRIED by the rider's own rigid
+   *  step each frame (World.updateCarriers: new pose ∘ old pose⁻¹ applied to
+   *  the body, so a turning deck swings its passengers with the bow; the
+   *  step lands through the swept clampPos, so carried bodies stay physical
+   *  and never pass through walls). Stateless and clock-pure like the pose
+   *  itself — seats, resumes and replays agree by construction. Airborne
+   *  bodies (flying/leap) hover free of the boards; latch/grab seats are
+   *  slaved elsewhere and keep their own law. A carry rider with an empty
+   *  payload is a pure platform (the ferry); payload rows still land as
+   *  usual for a deck that also bites. */
+  carry?: boolean;
+  /** THE EPHEMERAL TAIL: fraction of the lane's ARC (0..1, measured along
+   *  distance, so dock pauses never advance it) over which the drawn rider
+   *  FRAYS toward nothing at the far end — the ferry dissolving as the
+   *  terminus nears, the implicit "end of the route" read. Render-only
+   *  (trackArcFrac feeds the layer); the surface stays honest to the last
+   *  pixel of the pass. */
+  fadeTail?: number;
 }
 
 const TRACK_RIDERS: Record<string, TrackRiderDef> = {};
@@ -469,6 +488,30 @@ export function riderSurface(def: TrackRiderDef, pose: TrackPose): HitShape {
   return { kind: 'rect', hw: def.surface.hw, hh: def.surface.hh, rot: pose.rot };
 }
 
+/** How far along the lane's ARC a rider stands at this clock — 0 at the
+ *  cradle, 1 at the far end, measured by DISTANCE (a dock pause holds the
+ *  fraction still). Null while pending/cradled (pre-birth or a rearm rest).
+ *  Pure of the same clock as trackPose — the render fade (fadeTail), the
+ *  threat escalation of anything riding the lane, and the probes all read
+ *  the one number. */
+export function trackArcFrac(tr: PlacedTrack, timeSec: number, phase: number): number | null {
+  const pose = trackPose(tr, timeSec, phase);
+  if (pose.pending) return null;
+  const tl = timeSec - (tr.spec.bornAt ?? 0);
+  const period = Math.max(1e-3, tr.periodSec);
+  let t: number;
+  if (tr.spec.mode === 'once') {
+    t = (tr.spec.rearm ?? 0) > 0
+      ? (((tl + phase * period) % period) + period) % period
+      : Math.min(tl, tr.passSec);
+  } else {
+    t = (((tl + phase * period) % period) + period) % period;
+    if ((tr.spec.mode ?? 'loop') === 'pingpong' && t > tr.passSec) t = tr.periodSec - t;
+  }
+  const { s } = scheduleS(tr.schedule, Math.min(t, tr.passSec));
+  return tr.arc.total > 0 ? s / tr.arc.total : 0;
+}
+
 /** A 'once' lane whose single pass has fully run (local time past the far
  *  end) — the cull test World.updateTracks and the probe both read. Pure of
  *  the same clock as trackPose; cyclic lanes are never done, and a REARMED
@@ -546,7 +589,9 @@ export function validateTrackRiders(warn: (msg: string) => void): void {
     if (!(reach > 2) || reach > 220) warn(`track rider ${def.id}: surface reach ${reach.toFixed(0)}px outside (2,220]`);
     if (def.spin !== undefined && Math.abs(def.spin) > 24) warn(`track rider ${def.id}: spin ${def.spin} rad/s is a blender`);
     const p = def.payload;
-    if (!p.hit && !p.status && !p.impulse) warn(`track rider ${def.id}: payload does nothing`);
+    // A carry rider is a PLATFORM — an empty payload is its whole point.
+    if (!p.hit && !p.status && !p.impulse && !def.carry) warn(`track rider ${def.id}: payload does nothing`);
+    if (def.fadeTail !== undefined && !(def.fadeTail > 0 && def.fadeTail <= 1)) warn(`track rider ${def.id}: fadeTail ${def.fadeTail} outside (0,1]`);
     if (p.hit && (p.hit.base < 0 || p.hit.base > 400)) warn(`track rider ${def.id}: hit.base ${p.hit.base} outside [0,400]`);
     if (p.impulse !== undefined && (p.impulse < 0 || p.impulse > 900)) warn(`track rider ${def.id}: impulse ${p.impulse} outside [0,900]`);
     if (p.push && !p.impulse) warn(`track rider ${def.id}: push grain '${p.push}' without impulse — dead field`);

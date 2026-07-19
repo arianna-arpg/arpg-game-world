@@ -132,6 +132,7 @@ import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD
 import { boundaryGateOf } from '../data/boundaryGates';
 import { meldOf } from '../data/melds';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
+import { nearRiverSeat, riverSeat, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
@@ -143,7 +144,7 @@ import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
-import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
+import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
@@ -4156,6 +4157,13 @@ export class World {
         bumpLedger(this.ledger, 'seas_found');
       }
     }
+    // THE RIVER OF SOULS (world/soulriver.ts): finding the shore is finding
+    // the realm's whole index — stamp it once and say what the ferry means.
+    if (def.id === SOULRIVER_CFG.zoneId && !this.ledger.soul_river_found) {
+      bumpLedger(this.ledger, 'soul_river_found');
+      this.text(vec(this.player.pos.x, this.player.pos.y - 128),
+        'the River of Souls — board the Pale Ferry, and every country of the deep is one shore away', '#9fd8ec', 16);
+    }
     // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
     this.breachPos = null;
     if (def.breach) {
@@ -7024,6 +7032,19 @@ export class World {
       const existing = Object.values(this.zoneMap).find(z => z.field?.regionId === ext.regionId && z.id !== source.id);
       if (existing) { this.linkBackTo(existing, source); return existing; }
     }
+    // THE RIVER SEAT (world/soulriver.ts): the underworld's one great artery
+    // is a PLACE — a frontier landing in its catch basin always finds the
+    // same shore (the field-region mint-once law, below ground). The seat
+    // hangs a hashed heading off the dimension's gate, so every run's realm
+    // carries its river somewhere new and every seat agrees where.
+    if (source.dimension === SOULRIVER_CFG.dimension && source.id !== SOULRIVER_CFG.zoneId) {
+      const gate = this.zoneMap[dimensionDef(SOULRIVER_CFG.dimension)?.entry?.gate.id ?? ''];
+      if (gate && nearRiverSeat(target, gate.map, this.sim.biomeField.fieldSeed)) {
+        const river = this.zoneMap[SOULRIVER_CFG.zoneId];
+        if (river) { this.linkBackTo(river, source); return river; }
+        return this.mintSoulriverZone(source, gate.map);
+      }
+    }
     if (EAGER_WORLD_WEB) {
       const near = this.nearestLinkable(target, source, exitDef.side);
       if (near) { this.linkBackTo(near, source); return near; }
@@ -7721,6 +7742,65 @@ export class World {
     const probe = { exits: rebuilt, size: def.size };
     for (const side of ['n', 's', 'e', 'w'] as const) {
       for (const at of [0.3, 0.7]) rebuilt.push({ to: '?', side, at: spacedExitAt(probe, side, at), tileset });
+    }
+    def.exits.length = 0;
+    def.exits.push(...rebuilt);
+  }
+
+  /** THE RIVER OF SOULS — mint the underworld's ferry-hub megazone at its
+   *  foreordained seat (mint-once, stable id — the uw_gate idiom for a
+   *  PLACE), then dockify it. The discovering neighbor keeps the ordinary
+   *  back-edge: that road is the shore the walker found. */
+  private mintSoulriverZone(source: ZoneDef, gateCoord: MapCoord): ZoneDef {
+    const dimId = SOULRIVER_CFG.dimension;
+    const seat = riverSeat(gateCoord, this.sim.biomeField.fieldSeed);
+    const gen = placeZoneAt(seat, source, this.zoneMap, this.nextGenId++, {
+      id: SOULRIVER_CFG.zoneId,
+      name: 'The River of Souls',
+      tileset: SOULRIVER_CFG.tileset,
+      seed: (this.manifest.seed ^ 0x5001f) >>> 0,
+      // A place, not a task: the ferry is the ask, and docks never seal.
+      objective: { kind: 'none', label: 'the Pale Ferry calls at every shore' },
+      forceFrontiers: 0,
+      dimension: dimId,
+      biomeFor: this.dimensionBiomeFor(dimId),
+      levelFor: this.levelFor,
+      biomeDepthFor: this.dimensionBiomeDepthFor(dimId),
+      climateFor: this.climateFor,
+    });
+    gen.level += dimensionDef(dimId)?.levelBonus ?? 0;
+    this.soulriverifyZone(gen);
+    this.zoneMap[gen.id] = gen;
+    this.sim.onNodeCharted(gen, this.simView());
+    return gen;
+  }
+
+  /** Rewrite the river's frontiers to its DOCK PLAN (world/soulriver.ts):
+   *  one exit per station, each frontier PROMISING a different country of
+   *  the realm — side/at from the same pure plan the layout recipe carves
+   *  from, so portal and pier agree by construction. Real (non-'?') edges —
+   *  the discovery shore, later woven links — are kept untouched. Runs at
+   *  mint, before the zone is loaded, so rebuilding def.exits is safe (the
+   *  fieldifyZone contract). */
+  private soulriverifyZone(def: ZoneDef): void {
+    if (def.id !== SOULRIVER_CFG.zoneId) return;
+    const dimId = SOULRIVER_CFG.dimension;
+    const palette = (dimensionDef(dimId)?.biomes ?? []).map(b => b.biome);
+    // Stamp the deal the layout reads (layoutParam 'dockBiomes') — a saved
+    // river keeps its promised shores even if the realm's palette moves in
+    // a later version.
+    def.layoutParams = { ...def.layoutParams, dockBiomes: palette };
+    const plan = soulriverPlan(def.seed ?? 0, def.size.w, def.size.h, palette);
+    const reals = def.exits.filter(x => x.to !== '?');
+    const rng = new Rng(((def.seed ?? 0) ^ 0xd0c5) >>> 0);
+    const rebuilt: ZoneExitDef[] = [...reals];
+    const probe = { exits: rebuilt, size: def.size };
+    for (const dock of plan.docks) {
+      const tileset = pickTilesetForBiome(dock.biome, rng, undefined, dimId);
+      rebuilt.push({
+        to: '?', side: dock.side, at: spacedExitAt(probe, dock.side, dock.at),
+        ...(tileset ? { tileset } : {}),
+      });
     }
     def.exits.length = 0;
     def.exits.push(...rebuilt);
@@ -33235,6 +33315,7 @@ export class World {
     this.updateFlux(dt);
     this.updateSpans(dt);
     this.updateTracks(dt);
+    this.updateSoulriver(dt);
     this.updateTrapworks(dt);
     this.conjured?.update(dt, this.actors);
     this.updateShrines();
@@ -33270,6 +33351,10 @@ export class World {
     this.updateDrops(dt);
     this.updateOrbs(dt);
     this.updateRemnants(dt);
+    // THE DECK LAW rides just ahead of the seat slaves: a carrier surface
+    // (TrackRiderDef.carry — the ferry) moves its standing bodies first,
+    // then latch/grab seats re-slave on top and still win the frame.
+    this.updateCarriers(dt);
     // THE LATCH slave step LAST among movers — the seat wins the frame
     // (drawn == held; engine/cling.ts).
     this.updateClings();
@@ -36309,6 +36394,107 @@ export class World {
       const shape = hitSurfaceOf(c.d, 'move');
       this.sweepHazardSurface(c.d.pos.x, c.d.pos.y, shape, c.d.rot ?? 0, rule.contact, c.gate, undefined, this.actors);
     }
+  }
+
+  /** THE DECK LAW (TrackRiderDef.carry): a carrier rider's surface is moving
+   *  FOOTING — every grounded body standing on it rides the deck, moved each
+   *  frame by the rider's own rigid step (new pose ∘ old pose⁻¹ applied to
+   *  the body's position, so a turning deck swings its passengers with the
+   *  bow). Stateless: both poses are pure clock reads, and the summed steps
+   *  telescope to the pose difference regardless of frame slicing — seats,
+   *  resumes and replays agree by construction. Each step lands through the
+   *  swept clampPos (the undertow idiom), so carried bodies stay physical:
+   *  a deck scraping a bank wall wipes its passenger off rather than
+   *  pushing them through stone. Airborne bodies (flying/leap) hover free
+   *  of the boards; latch/grab seats are slaved elsewhere and keep their
+   *  own law (they run AFTER this pass and win the frame). */
+  private updateCarriers(dt: number): void {
+    if (!this.tracks.length || dt <= 0) return;
+    for (const tr of this.tracks) {
+      if (!tr.armed) continue;
+      for (const r of tr.riders) {
+        if (!r.def.carry) continue;
+        const pose = trackPose(tr, this.time, r.phase, r.def);
+        if (pose.pending) continue;             // cradle rest — no deck abroad
+        const prev = trackPose(tr, this.time - dt, r.phase, r.def);
+        if (prev.pending) continue;             // birth frame — no step yet
+        const dRot = Math.atan2(Math.sin(pose.rot - prev.rot), Math.cos(pose.rot - prev.rot));
+        const still = Math.abs(pose.x - prev.x) < 1e-6 && Math.abs(pose.y - prev.y) < 1e-6
+          && Math.abs(dRot) < 1e-6;
+        if (still) continue;                    // paused at a dock — nothing moves
+        const cos = Math.cos(dRot), sin = Math.sin(dRot);
+        const board = riderSurface(r.def, prev);
+        for (const a of this.actors) {
+          if (a.dead || a.flying || a.leap || a.clingTo || a.heldBy) continue;
+          if (a.pos.x < tr.bound.x0 - a.radius || a.pos.x > tr.bound.x1 + a.radius
+            || a.pos.y < tr.bound.y0 - a.radius || a.pos.y > tr.bound.y1 + a.radius) continue;
+          // Feet on the boards where the deck WAS: the center decides (a
+          // body straddling the rim keeps its own footing and is left
+          // behind — the honest gangplank moment).
+          if (!shapeContains(board, prev.x, prev.y, a.pos.x, a.pos.y, 0)) continue;
+          const lx = a.pos.x - prev.x, ly = a.pos.y - prev.y;
+          const nx = pose.x + lx * cos - ly * sin;
+          const ny = pose.y + lx * sin + ly * cos;
+          a.pos = this.clampPos(vec(nx, ny), a.radius, a.pos);
+        }
+      }
+    }
+  }
+
+  /** THE HUNGER (world/soulriver.ts — SOULRIVER_CFG.assault): while any
+   *  living player rides the Pale Ferry mid-journey, the river answers —
+   *  soul kin conjured from the pale water around the boards, pre-roused
+   *  (their lust for the living overpowering), capped live, escalating as
+   *  the terminus nears and slackening at every pier (dock pauses are
+   *  breathers). Spawns are ordinary actors — xp, loot, bestiary, the
+   *  current's own crest seats all treat them as citizens. */
+  private soulriverAcc = 0;
+  private updateSoulriver(dt: number): void {
+    if (this.zone.id !== SOULRIVER_CFG.zoneId) return;
+    this.soulriverAcc -= dt;
+    if (this.soulriverAcc > 0) return;
+    const cfg = SOULRIVER_CFG.assault;
+    this.soulriverAcc = cfg.everySec[0] + Math.random() * (cfg.everySec[1] - cfg.everySec[0]);
+    const lane = this.tracks.find(t => t.spec.tag === 'pale_ferry');
+    if (!lane || !lane.armed) return;
+    // Find a deck carrying a living player, and how deep its journey runs.
+    let deck: { x: number; y: number; dir: number; frac: number; paused: boolean } | null = null;
+    for (const r of lane.riders) {
+      if (!r.def.carry) continue;
+      const pose = trackPose(lane, this.time, r.phase, r.def);
+      if (pose.pending) continue;
+      const board = riderSurface(r.def, pose);
+      for (const p of this.actors) {
+        if (p.dead || p.team !== 'player' || p.kind === 'minion' || p.kind === 'mercenary') continue;
+        if (!shapeContains(board, pose.x, pose.y, p.pos.x, p.pos.y, 0)) continue;
+        const frac = trackArcFrac(lane, this.time, r.phase) ?? 0;
+        deck = { x: pose.x, y: pose.y, dir: pose.dir, frac, paused: pose.paused };
+        break;
+      }
+      if (deck) break;
+    }
+    if (!deck) return;
+    // Docked = a breather: the hunger slackens to a trickle at the piers.
+    if (deck.paused && Math.random() > cfg.lull) return;
+    const live = this.actors.reduce((n, a) => n + (!a.dead && a.tag === 'soulriver_assault' ? 1 : 0), 0);
+    // The cap breathes with the journey: deeper water, hungrier dead.
+    const cap = Math.round(cfg.cap * (1 + (cfg.escalate - 1) * deck.frac));
+    if (live >= cap) return;
+    // The deep water sends heavier company as the terminus nears.
+    const id = deck.frac > 0.6 && Math.random() < 0.25 ? 'banshee'
+      : deck.frac > 0.3 && Math.random() < 0.35 ? 'drowned_hauler'
+        : 'lorn_shade';
+    const m = this.createMonster(id, this.zone.level, 'enemy');
+    m.tag = 'soulriver_assault';
+    // Conjured from the water off the prow's quarter — never on the boards.
+    const side = Math.random() < 0.5 ? 1 : -1;
+    const ang = deck.dir + side * (Math.PI / 2) * (0.4 + Math.random() * 0.8);
+    const dist = cfg.fromWater * (0.8 + Math.random() * 0.7);
+    m.pos = vec(deck.x + Math.cos(ang) * dist, deck.y + Math.sin(ang) * dist);
+    m.aggroed = true;
+    // Finite horizon, never Infinity (the wave-frenzy JSON law).
+    m.alertUntil = this.time + 1e9;
+    this.actors.push(m);
   }
 
   /** Apply one hazard surface to every touchable body: typed damage through

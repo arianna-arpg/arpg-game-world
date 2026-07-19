@@ -22,7 +22,7 @@
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import type { Doodad } from '../../engine/levelgen';
-import { TRACK_CFG, trackDone, trackPending, trackPose, type PlacedTrack } from '../../engine/tracks';
+import { TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack } from '../../engine/tracks';
 import type { World } from '../../engine/world';
 import { withAlpha } from './color';
 import { PAINTERS, type PaintEnv } from './painters';
@@ -153,7 +153,26 @@ export function drawTrackRiders(ctx: CanvasRenderingContext2D, world: World,
       const reach = r.def.surface.kind === 'circle'
         ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
       const d: Doodad = { pos: { x: pose.x, y: pose.y }, radius: reach, kind: r.def.kind, rot: pose.rot };
-      painter(env, [d], def);
+      // THE EPHEMERAL TAIL (fadeTail): the rider frays toward nothing over
+      // the last fraction of its ARC — the ferry dissolving as the terminus
+      // nears. Render-only; the surface stays honest to the end of the pass
+      // (painters compose via withAlpha, so the multiplied globalAlpha
+      // carries through every brush).
+      let alpha = 1;
+      if (r.def.fadeTail) {
+        const frac = trackArcFrac(tr, world.time, r.phase);
+        if (frac !== null && frac > 1 - r.def.fadeTail) {
+          alpha = Math.max(0.05, (1 - frac) / r.def.fadeTail);
+        }
+      }
+      if (alpha < 1) {
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        painter(env, [d], def);
+        ctx.restore();
+      } else {
+        painter(env, [d], def);
+      }
     }
   }
 }

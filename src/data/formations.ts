@@ -868,6 +868,31 @@ registerFormation({
   ],
 });
 
+// --- THE RIVER-OF-SOULS GRAMMAR (the underworld's ferry hub — 'river_of_souls') --
+
+// THE DROWNED PROCESSION: cairns pacing a mourners' walk that never reached
+// the pier — bone heaped where the bearers set their burden down. Reads as
+// a funeral the river interrupted; all inert (the formation doctrine).
+registerFormation({
+  id: 'drowned_procession', arrange: 'meander', span: [300, 560], step: 70,
+  params: { wobble: 28 },
+  pieces: [
+    { kind: 'drowned_cairn', radius: [12, 17], jitter: 10, rot: true },
+    { kind: 'bone_pile', radius: [12, 16], every: 3, jitter: 18, rot: true },
+    { kind: 'candle_raft', radius: [8, 11], every: 4, jitter: 24 },
+  ],
+});
+
+// A LANTERN VIGIL: wake-lanterns ringed on the bank where someone still
+// waits for a boat that already passed — pale rushes gathering at the feet.
+registerFormation({
+  id: 'lantern_vigil', arrange: 'ring', span: [140, 220],
+  pieces: [
+    { kind: 'wake_lantern', radius: [9, 11], jitter: 8 },
+    { kind: 'pale_rushes', radius: [14, 20], every: 2, jitter: 16 },
+  ],
+});
+
 // --- THE LEYLINE + ABYSS GRAMMAR (fracture capstone arenas) -------------------
 
 // A LEY CURRENT: the leyline itself — conduit segments facing along a

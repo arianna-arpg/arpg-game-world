@@ -57,6 +57,28 @@ registerTrackRider({
   color: '#bfe8ff',
 });
 
+// --- THE PALE FERRY — the River of Souls' carrier ---------------------------
+// The first CARRY rider (TrackRiderDef.carry — THE DECK LAW): its rect
+// surface is moving FOOTING, not a hazard — an empty payload is the whole
+// point (the platform validator waiver). Bodies standing on the boards ride
+// the deck; the hull frays over the last stretch of every journey
+// (fadeTail) and dissolves at the terminus strand, reborn at the head on
+// the pure clock (the lane's once+rearm cycle — world/soulriver.ts). No
+// warn arc: a harmless surface telegraphs nothing. Deck half-extents are
+// pinned to the soulFerry painter's deckHw/deckHh (the flail's agreement
+// contract) AND to SOULRIVER_CFG.ferry.deck (the lane the plan builds).
+registerTrackRider({
+  id: 'pale_ferry',
+  kind: 'pale_ferry',
+  surface: { kind: 'rect', hw: 88, hh: 42 },
+  orient: 'lane',
+  payload: {},
+  carry: true,
+  fadeTail: 0.14,
+  warnAhead: 0,
+  color: '#9fd4e8',
+});
+
 // --- THE CARVED GROOVE — the lane made legible ------------------------------
 // Ground way discs laid under every gen-authored lane (layTraveledWay kind
 // 'track_groove'): walkable, never blocking, CLEARWAY-protected so scatter

@@ -2476,6 +2476,56 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'cargoStack', order: 50, shadow: 0.45,
     params: { wood: '#4c3a26', rope: '#8a7a56' },
   },
+  // --- THE SOULRIVER KIT (the River of Souls — the underworld's ferry hub) --
+  // SOUL-WATER: the one liquid in the roster that MIRRORS and glows from
+  // beneath — heart wells are the souls under the skin. Core takes the zone
+  // theme's water tint so the river tileset owns its exact pallor.
+  soul_water: {
+    painter: 'liquid', order: 10,
+    params: {
+      rim: { color: '#bfe8ff', alpha: 0.55, grow: 4 },
+      core: { color: 'theme:water|#16384e', alpha: 0.85 },
+      fords: { lighten: 0.3, alpha: 0.55 },
+      heart: { color: '#3f88ac', alpha: 0.32 },
+      sheen: { color: '#eafaff' },
+    },
+  },
+  bone_pier: { painter: 'bonePier', order: 44, params: { bone: '#cfc8b4', lash: '#5a5040' } },
+  // The banks' funerary furniture — proven painters in river dress: cairns
+  // raised for the unnamed, statues the water took back, rushes gone pale.
+  drowned_cairn: {
+    painter: 'cairn', order: 54, shadow: 0.5, longShadow: 0.9,
+    params: { color: '#5e6a74', edge: '#8a99a4' },
+  },
+  sunken_statue: {
+    painter: 'statue', order: 54, shadow: 0.55, longShadow: 1.4,
+    params: { stone: '#6a7680', moss: '#4a6a66' },
+  },
+  pale_rushes: { painter: 'kelp', order: 48, bakeWhole: 'sway', params: { color: '#9fb4b8', reed: true } },
+  soul_gate: {
+    painter: 'spiritGate', order: 56, shadow: 0.3,
+    light: { radius: 70, color: '#9fd8ec', intensity: 0.35, flicker: 2.5 },
+    params: { post: '#3a4650', lintel: '#54646e', glow: '#9fd8ec' },
+  },
+  // Mortal lanterns at the piers — the warm flame against the pale water is
+  // the point (the lanternPost painter verbatim; only the LIGHT goes pale).
+  wake_lantern: {
+    painter: 'lanternPost', order: 55, shadow: 0.3, longShadow: 1.2,
+    light: { radius: -9, color: '#9fd8ec', intensity: 0.5, flicker: 3 },
+  },
+  candle_raft: {
+    painter: 'candleRaft', order: 12,
+    light: { radius: 46, color: '#ffe0b0', intensity: 0.35, flicker: 5 },
+    params: { wood: '#4a4234', flame: '#ffd898', wax: '#e8e0cc' },
+  },
+  // THE PALE FERRY — a track RIDER look (never a placed doodad): the deck
+  // params ARE the rider's rect surface, so drawn == tested == carried
+  // (validate.ts pins the agreement like the flail's beam).
+  pale_ferry: {
+    painter: 'soulFerry', order: 46,
+    light: { radius: 110, color: '#9fd8ec', intensity: 0.4, flicker: 2 },
+    params: { deckHw: 88, deckHh: 42, hull: '#243640', boards: '#3c4c54', trim: '#cfc8b4', glow: '#9fd8ec', lantern: '#ffe0b0' },
+  },
   ghost_hull: {
     painter: 'ghostHull', order: 46,
     params: { hull: '#2c4a4e', sail: '#9adcd8', glow: '#7ad8d8' },

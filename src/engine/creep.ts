@@ -288,6 +288,13 @@ export interface FrontFlowSpec {
    *  a wall into the corridor next door. A gameplay honesty mask like
    *  hitFloor — the drawn splash may still lap the stone. */
   confine?: boolean;
+  /** THE CHANNEL: the current follows its own GROUND, not the walls — a
+   *  probe point counts as 'open' only where groundKindAt names one of
+   *  these kinds. Steering, confinement and spawn snap-in all read it, so
+   *  a river's current holds to its water between fully OPEN banks (the
+   *  River of Souls), a melt-flow can hold to its lava, a stampede to its
+   *  road. Absent = openAt (the wall-following bore, byte-identical). */
+  channel?: string[];
 }
 
 /** One crest-rider row (FrontSpec.riders). */
@@ -1115,9 +1122,9 @@ export class CreepField {
     // rim is solid wall in a carved map — marches along its bearing to the
     // first open point, so the bolus starts INSIDE the vessel it will
     // follow. Deterministic (no rolls); without openAt nothing moves.
-    if (fs?.flow && this.terrain?.openAt) {
-      const open = this.terrain.openAt;
-      if (!open(src.pos.x, src.pos.y)) {
+    if (fs?.flow) {
+      const open = this.flowOpen(src);
+      if (open && !open(src.pos.x, src.pos.y)) {
         const step = Math.max(24, src.cur * 0.5);
         const maxD = Math.min(this.w, this.h) * CREEP_CFG.front.flow.snapMaxFrac;
         for (let d = step; d <= maxD; d += step) {
@@ -1363,9 +1370,12 @@ export class CreepField {
       if (f >= 1) return 0;
       // VESSEL CONFINEMENT (flow.confine): the current exists only where
       // the vessel does — an open line back to the heart, or nothing. The
-      // wall between two corridors is a wall to the blood.
-      if (src.def.front?.flow?.confine && this.terrain?.openAt
-        && !this.openLine(src.pos.x, src.pos.y, x, y)) return 0;
+      // wall between two corridors is a wall to the blood (and to a
+      // CHANNEL row, the bank is a wall to the water).
+      if (src.def.front?.flow?.confine) {
+        const open = this.flowOpen(src);
+        if (open && !this.openLine(src.pos.x, src.pos.y, x, y, open)) return 0;
+      }
       const body = CREEP_CFG.bodyFrac;
       if (f <= body) return 1;
       const t = (1 - f) / (1 - body);
@@ -1381,11 +1391,13 @@ export class CreepField {
     return t * t * (3 - 2 * t);
   }
 
-  /** Is the straight line between two points open the whole way? (openAt
-   *  ray-march at flow.confineStep — the vessel-confinement wall test.
+  /** Is the straight line between two points open the whole way? (an
+   *  open-window ray-march at flow.confineStep — the vessel-confinement
+   *  wall test; `openFn` lets a CHANNEL row march its own ground window.
    *  Without a window everything is open: bare fields confine nothing.) */
-  private openLine(x0: number, y0: number, x1: number, y1: number): boolean {
-    const open = this.terrain?.openAt;
+  private openLine(x0: number, y0: number, x1: number, y1: number,
+    openFn?: (x: number, y: number) => boolean): boolean {
+    const open = openFn ?? this.terrain?.openAt;
     if (!open) return true;
     const dx = x1 - x0, dy = y1 - y0;
     const d = Math.sqrt(dx * dx + dy * dy);
@@ -1518,9 +1530,10 @@ export class CreepField {
     }
 
     // THE VESSEL FLOW: bend the bearing toward the deepest open channel
-    // before this tick's march — the current follows its bank. Rows
-    // without flow (or fields without an openAt window) skip entirely.
-    if (fs.flow && this.terrain?.openAt) this.steerFront(s, fs, run, dt);
+    // before this tick's march — the current follows its bank (or, for a
+    // CHANNEL row, its own ground). Rows without flow — or fields without
+    // the window their flow reads — skip entirely.
+    if (fs.flow && this.flowOpen(s)) this.steerFront(s, fs, run, dt);
 
     // Vigor breathes back (quench must outpace it); the stoke burns down.
     if (run.vigor < 1) run.vigor = Math.min(1, run.vigor + fd.vigorRegen * dt);
@@ -1684,10 +1697,23 @@ export class CreepField {
    *  burst turn rate, so the bolus visibly slaps the cap and rushes back
    *  out. Deterministic given the land; rimMulOf reads the live bearing,
    *  so the whole skin — drawn, tested, seated — turns with the current. */
+  /** The flow's own 'open' window: a CHANNEL row follows its GROUND (the
+   *  current holds to its water between open banks), everything else
+   *  follows the walls (openAt). Null = no window at all — bare harnesses
+   *  keep every legacy behavior. */
+  private flowOpen(src: CreepSource): ((x: number, y: number) => boolean) | null {
+    const ch = src.def.front?.flow?.channel;
+    if (ch && this.terrain?.groundKindAt) {
+      const t = this.terrain;
+      return (x, y) => ch.includes(t.groundKindAt(x, y) ?? '');
+    }
+    return this.terrain?.openAt ?? null;
+  }
+
   private steerFront(s: CreepSource, fs: FrontSpec, run: FrontRun, dt: number): void {
     const fd = CREEP_CFG.front.flow;
     const fl = fs.flow!;
-    const open = this.terrain!.openAt!;
+    const open = this.flowOpen(s)!;
     const nose = s.cur * run.elong;
     const P = Math.max(fd.probeMin, nose * (fl.probe ?? fd.probeFrac));
     const wAng = fl.whisker ?? fd.whiskerAng;

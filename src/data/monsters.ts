@@ -7200,6 +7200,77 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.9, brain: { type: 'juggernaut', enrage: 0.4 },
   },
 
+  // --- THE RIVERBOUND (faction 'riverbound': the unferried dead of the
+  // River of Souls — world/soulriver.ts). Coin-eyed and waterlogged, drawn
+  // to the warmth of living passengers; the current is their road (the
+  // soul_current's drag spares them), the mist their table (soul_mist feeds
+  // them), and the ferry's boards their one chance at the far shore. -------
+  // THE LORN SHADE — the river's bread kin: a gauze-wrapped nothing trailing
+  // wisps, phasing over water and gunwale alike to lay cold hands on the
+  // living and DRINK. Also the current's surfer (soul_current riders).
+  lorn_shade: {
+    id: 'lorn_shade', name: 'Lorn Shade',
+    color: '#9fc4d8', shape: 'pentagon', radius: 10, material: 'ethereal', look: 'lorn_shade',
+    base: { life: 30, moveSpeed: 160, evasion: 65, mana: 80, manaRegen: 7, phasing: 1 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.3)],
+    skills: ['essence_drain'], xp: 12, faction: 'riverbound', tags: ['undead'],
+    detection: 1.2,
+    brain: { type: 'swarm' },
+  },
+  // THE DROWNED HAULER — the gaff over the gunwale: a bloated wader whose
+  // barbed line DRAGS a passenger off the boards into the pale water (the
+  // grab fabric's drag verb — the wrangler's art, drowned). Heavy, patient,
+  // and happiest hip-deep where its catch lands.
+  drowned_hauler: {
+    id: 'drowned_hauler', name: 'Drowned Hauler',
+    color: '#6a8a96', shape: 'octagon', radius: 15, material: 'flesh', look: 'drowned_hauler',
+    base: { life: 150, moveSpeed: 95, accuracy: 105, armor: 20, poise: 40, mana: 60, manaRegen: 5 },
+    mods: [mod('coldRes', 'flat', 0.4)],
+    skills: ['gaff_cast', 'heavy_strike'], xp: 34, faction: 'riverbound', tags: ['undead'],
+    immuneGround: ['soul_water', 'water'],
+    detection: 1.1,
+    brain: { type: 'juggernaut' },
+  },
+  // THE SOUL WELLSPRING — where the unferried pool: a standing upwelling
+  // whose colony breathes soul-motes back to its cap while it stands (the
+  // colony law — extinguish the spring and that bank stays quiet), and a
+  // call of its own to pour them out when the living come close.
+  soul_wellspring: {
+    id: 'soul_wellspring', name: 'Soul Wellspring',
+    color: '#8ec8e0', shape: 'circle', radius: 14, material: 'ethereal', look: 'soul_wellspring',
+    base: { life: 90, moveSpeed: 0, evasion: 0, mana: 999, manaRegen: 50 },
+    skills: ['vent_souls'], xp: 30, faction: 'riverbound', tags: ['undead'],
+    vision: { arcDeg: 360, rearMul: 1 }, // an upwelling has no back
+    noNemesis: true, spawner: true,
+    colony: { monsterId: 'soul_mote', cap: 10, radius: 60, rate: 0.8 },
+  },
+  // THE SOUL MOTE — the pooled shimmer underfoot (the lite tier): one ply,
+  // a cold brush, and gone. A boot scatters one; the wellspring breathes
+  // them back while it stands.
+  soul_mote: {
+    id: 'soul_mote', name: 'Soul Mote',
+    color: '#bfe8ff', shape: 'circle', radius: 4, material: 'ethereal', look: 'will_o_wisp',
+    base: { life: 5, moveSpeed: 135, accuracy: 60, mana: 0 },
+    skills: ['claw'], xp: 1, faction: 'riverbound', tags: ['undead'],
+    drops: 0,
+    plies: { count: 1 },
+    lite: { contact: { damage: 2, type: 'cold' }, aggro: 300, erratic: 1.6, weave: 1.2, trample: {}, regen: {} },
+    brain: { type: 'basic', move: { style: 'skitter' } },
+  },
+  // THE FARSHORE WARDEN — the terminus strand's keeper: a tall shrouded
+  // sentence whose wail empties a deck, whose volley of hungry souls pays
+  // the fare back in kind, and who raises the water's own passengers when
+  // pressed. The deepest dock is hers to argue.
+  farshore_warden: {
+    id: 'farshore_warden', name: 'Farshore Warden',
+    color: '#d8e8f4', shape: 'star', radius: 16, material: 'ethereal', look: 'farshore_warden',
+    base: { life: 240, moveSpeed: 120, evasion: 55, armor: 15, mana: 220, manaRegen: 14, poise: 35 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.4)],
+    skills: ['keening_shriek', 'soul_volley', 'vent_souls'], xp: 70, faction: 'riverbound', tags: ['undead'],
+    gemBias: ['spell', 'cold'], wardPriority: 1,
+    detection: 1.3, brain: { type: 'artillery' },
+  },
+
   // --- THE NIGHT COURT (faction 'nightkin': the fed and their kept) ---------
   vampire_thrall: {
     id: 'vampire_thrall', name: 'Vampire Thrall',
@@ -12883,6 +12954,21 @@ export const FACTIONS: Record<string, {
       // keeps wounds (the segment fabric below boss tier).
       { id: 'thurible_bearer', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'marrow_whip', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    ],
+  },
+  // The unferried dead of the River of Souls (world/soulriver.ts) — fielded
+  // by the river's own packs and the current's crest seats; a roster row so
+  // contest/war machinery can muster them wherever an event asks. No
+  // RELATIONS row on purpose: they hunger for the LIVING and stand
+  // indifferent among the realm's other dead.
+  riverbound: {
+    name: 'the Riverbound',
+    table: [
+      { id: 'lorn_shade', weight: 3 },
+      { id: 'drowned_hauler', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'soul_wellspring', weight: 1 },
+      { id: 'banshee', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'farshore_warden', weight: 1, presence: { from: 16, fadeIn: 5 } },
     ],
   },
   // The armory that walks — every roster body CARRIES its drop (the

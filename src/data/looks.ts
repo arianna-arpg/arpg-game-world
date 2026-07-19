@@ -3906,6 +3906,70 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.45, scale: 0.9, params: { n: 3 } }],
   },
 
+  // --- THE RIVERBOUND (the River of Souls — coin-eyed, gauze-hung) ---------
+  // The family grammar at a glance: OBOL EYES (coins for a face — nothing
+  // else in the roster wears currency) + SOUL GAUZE (the one loose veil that
+  // never settles). Everything else composes proven parts.
+  /** The lorn shade: a hood over nothing, gauze streaming, two paid coins
+   *  where the eyes were. The river's bread kin. */
+  lorn_shade: {
+    parts: [
+      { kind: 'hood', scale: 1.0, role: 'dark' },
+      { kind: 'tatters', scale: 0.8, alpha: 0.75, role: 'dark' },
+      { kind: 'obolEyes', scale: 1.0, params: { spread: 0.42, dist: 0.5, size: 0.11 } },
+    ],
+    live: [
+      { kind: 'soulGauze', scale: 1.05 },
+      { kind: 'wisps', scale: 0.7, params: { n: 2 } },
+    ],
+  },
+  /** The drowned hauler: a waterlogged bulk under bound grave-cloth, the
+   *  barbed gaff racked across its back — the drag readable before the
+   *  throw. Coins over both eyes; it does not need to see you, only feel
+   *  the boards move. */
+  drowned_hauler: {
+    parts: [
+      { kind: 'torso', scale: 1.1, role: 'dark' },
+      { kind: 'hump', scale: 0.85 },
+      { kind: 'shroudWrap', scale: 1.0, alpha: 0.8 },
+      { kind: 'grapnel', x: 0.1, y: -0.42, scale: 1.05 },
+      { kind: 'obolEyes', scale: 1.0, params: { spread: 0.4, dist: 0.62, size: 0.1 } },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.9, params: { layers: 1 } }],
+  },
+  /** The soul wellspring: a dark pool standing upright — orb-hearted, halo
+   *  over the mouth, gauze breathing off the surface. The colony's heart:
+   *  what pours out of it is what it keeps breathing back. */
+  soul_wellspring: {
+    parts: [
+      { kind: 'disc', scale: 0.95, role: 'dark' },
+      { kind: 'orb', scale: 0.55, role: 'glow' },
+      { kind: 'halo', scale: 1.1, alpha: 0.5 },
+    ],
+    live: [
+      { kind: 'soulGauze', scale: 1.15 },
+      { kind: 'wisps', scale: 0.85, params: { n: 4 } },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The farshore warden: a tall shrouded sentence — full gauze over robe,
+   *  draped chains that never rattle, coins where her eyes were, and a halo
+   *  like a dock lamp seen through fog. The terminus strand's keeper. */
+  farshore_warden: {
+    parts: [
+      { kind: 'robe', scale: 1.15, role: 'dark' },
+      { kind: 'hood', x: 0.24, scale: 1.15, role: 'dark' },
+      { kind: 'chains', scale: 1.0, alpha: 0.85 },
+      { kind: 'obolEyes', scale: 1.0, params: { spread: 0.36, dist: 0.46, size: 0.09 } },
+      { kind: 'halo', scale: 1.25, alpha: 0.45 },
+    ],
+    live: [
+      { kind: 'soulGauze', scale: 1.25, params: { layers: 3 } },
+      { kind: 'veilSashes', scale: 0.9 },
+    ],
+    shadowScale: 1.1,
+  },
+
   // --- THE NIGHT COURT (vampires, weres — and their wolves) ----------------
   /** A thrall: bled pale, collared cape, its master's fangs. */
   vampire_thrall: {

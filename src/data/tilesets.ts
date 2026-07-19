@@ -3635,6 +3635,120 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE RIVER OF SOULS — the underworld's OTHER artery, and its ferry hub:
+  // ONE seated megazone (world/soulriver.ts — minted mint-once at a hashed
+  // seat off the Hellgate, never rolled from any pool), carved whole by the
+  // 'soulriver' recipe: a serpentine channel of soul-water, a dock at every
+  // meander apex whose exit PROMISES a different country of the realm, worn
+  // towpaths down both banks, and THE PALE FERRY on the track fabric —
+  // board it by stepping aboard, ride the preordained way, alight where you
+  // will; the hull frays as the terminus nears and dissolves at the far
+  // strand. The current of souls runs the channel (soul_current — the
+  // vessel bore holding to its own water), soul-mist pools on the funerary
+  // furniture, and the riverbound rise for the warmth of living passengers.
+  river_of_souls: {
+    id: 'river_of_souls', biome: 'soulway',
+    nameFirst: ['Pale', 'Sunless', 'Hollow', 'Silent', 'Grieving', 'Unferried', 'Lightless', 'Sorrowful', 'Moaning', 'Still'],
+    nameSecond: ['Reach', 'Meander', 'Crossing', 'Shallows', 'Bend', 'Narrows', 'Strand', 'Slack', 'Passage', 'Wake'],
+    theme: {
+      dayLight: 0.78, nightDark: 0.85, ambientDark: 0.3,
+      // The river lights itself the way the flame course does — but cold:
+      // drifting pale motes over the water, a faint breath of haze.
+      ambientFx: [
+        { kind: 'motes', intensity: 0.5, color: '#9fd8ec' },
+        { kind: 'motes', intensity: 0.2, color: '#eafaff' },
+      ],
+      ground: {
+        // Grave-silt banks: blue-grey slates, cold and waterworn.
+        palette: ['#101418', '#151a20', '#1a2128', '#1f2830', '#242f38'],
+        bias: 0.42, alpha: 0.5, stretchX: 1.3, speckles: 0.6, strength: 1.05,
+      },
+      floor: '#11151a', grid: '#1a2026', border: '#3e5468',
+      obstacle: '#232b33', obstacleEdge: '#4a5c6c', accent: '#9fd8ec',
+      wall: '#2e3a44', water: '#16384e', chasm: '#0a0d12', mud: '#20262c', sand: '#4a5058',
+      // The dead walk the towpaths: the road kind reads as pale trodden silt.
+      road: '#39424c',
+      fog: { banks: [2, 3], kinds: [{ id: 'soul_mist', weight: 2 }, { id: 'river_mist' }] },
+      creep: {
+        pockets: [0, 0], kinds: [{ id: 'soul_current' }],
+        // THE CURRENT: surge after surge born at the headwater, bearing east
+        // down the channel (the flow.channel window holds each bore to the
+        // soul-water between open banks). Announced the first time only by
+        // its own foam — the river needs no herald.
+        fronts: [{
+          id: 'soul_current', line: [1, 2], bearing: 0, delay: [6, 12], waves: [10, 18], chance: 0.95,
+        }],
+      },
+      // Soul motes adrift on the banks (the lite tier): a wading-through
+      // shimmer of the unferried, poured on pocket hearts near the water.
+      lite: { swarms: [{
+        monsterId: 'soul_mote', pockets: [2, 4], size: [16, 30], chance: 0.85,
+        announce: 'the pale water stirs…', announceColor: '#9fd8ec',
+      }] },
+    },
+    // The megazone band: a long rectangular run (the ferry wants a voyage,
+    // not a bowl). Never rolled from pools (frontier:false — the seat law
+    // mints it by id); perfProbe joins it to the sweep's permanent gate.
+    sizeW: [4600, 5100], sizeH: [2800, 3200], ellipseChance: 0,
+    frontier: false, realm: 'underworld', perfProbe: true,
+    layout: [
+      // Ground dress first (solids honour forbidOn), then the funerary
+      // furniture: rafts adrift near the water, cairns and stelae on the
+      // banks, reeds in the shallows.
+      { kind: 'candle_raft', count: [3, 6], where: { field: 'shore', max: 0.5, params: { kinds: ['soul_water'], reach: 120 } } },
+      { kind: 'drowned_cairn', count: [3, 6] },
+      { kind: 'sunken_statue', count: [2, 4], where: { field: 'shore', max: 0.6, params: { kinds: ['soul_water'], reach: 170 } } },
+      { kind: 'pale_rushes', count: [4, 8], where: { field: 'shore', max: 0.55, params: { kinds: ['soul_water'], reach: 150 } } },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'dead_tree', count: [2, 5] },
+      { kind: 'rocks', count: [5, 9], radius: [20, 40] },
+      { kind: 'formation', count: [1, 2], formation: 'drowned_procession' },
+      { kind: 'formation', count: [0, 1], formation: 'lantern_vigil' },
+    ],
+    variants: [
+      // STYGIAN VERDIGRIS: the older, greener water — the Hercules well of
+      // souls read. Same bones, the palette turned; the theme override rides
+      // the variant lever so both faces stay one tileset.
+      {
+        name: 'Stygian Verdigris',
+        theme: {
+          accent: '#8ce8c8', water: '#143e3a',
+          ambientFx: [
+            { kind: 'motes', intensity: 0.5, color: '#8ce8c8' },
+            { kind: 'motes', intensity: 0.2, color: '#eafff4' },
+          ],
+        },
+        layout: [
+          { kind: 'candle_raft', count: [2, 5], where: { field: 'shore', max: 0.5, params: { kinds: ['soul_water'], reach: 120 } } },
+          { kind: 'drowned_cairn', count: [4, 7] },
+          { kind: 'sunken_statue', count: [3, 5], where: { field: 'shore', max: 0.6, params: { kinds: ['soul_water'], reach: 170 } } },
+          { kind: 'pale_rushes', count: [6, 10], where: { field: 'shore', max: 0.55, params: { kinds: ['soul_water'], reach: 150 } } },
+          { kind: 'bone_pile', count: [3, 5] },
+          { kind: 'formation', count: [1, 2], formation: 'drowned_procession' },
+        ],
+      },
+    ],
+    packs: {
+      count: [7, 9], size: [2, 4],
+      table: [
+        // The river's own dead first; the graveyard's guests fill the banks.
+        { id: 'lorn_shade', weight: 4 },
+        { id: 'drowned_hauler', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'soul_wellspring', weight: 1 },
+        { id: 'gloomling', weight: 2 },
+        { id: 'poltergeist', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'banshee', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'barrow_wight', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'farshore_warden', weight: 1, presence: { from: 16, fadeIn: 5, mul: 2 } },
+      ],
+    },
+    spawnerId: 'soul_wellspring',
+    // The REAL mint pins {kind:'none'} in its spec (a place, not a task —
+    // docks never seal); this table only serves headless mints (genqa), and
+    // 'clear' is the quietest non-sealing kind the roll union carries.
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
   // THE DURANCE — the hate-citadel's interior (biome 'durance': hell's first
   // ENCLAVE — every crossing into or out of it wears the durance boundary
   // gate). Black coursed masonry on the dungeon/edifice room-graphs, tiled

@@ -434,6 +434,7 @@ registerLiquid('gore', { doodad: 'gore' });                       // viscera poo
 registerLiquid('mud', { doodad: 'mud' });
 registerLiquid('blood', { doodad: 'blood_pool' });                // the flesh country's open rivers (faintness on entry)
 registerLiquid('chyme', { doodad: 'chyme_pool' });                // digesting bile (typed chaos + queasy)
+registerLiquid('soul_water', { doodad: 'soul_water' });           // the River of Souls: wadeable, luminous, never still
 
 /** Pour a liquid over a mask: region liquids paint the grid; doodad liquids
  *  scatter merged blobs (one disc per Nth cell, radius > spacing so the fill

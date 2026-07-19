@@ -481,6 +481,83 @@ const eyes: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** OBOL EYES — the ferryman's fare, paid and kept: two dull COINS where
+ *  eyes should be. Deliberately the anti-'eyes': no glow, no white — a flat
+ *  metal disc with a struck rim and one slanting glint. The River of Souls'
+ *  family tell (nothing else in the roster wears currency for a face).
+ *  params: n, spread, dist, size. */
+const obolEyes: PartPainter = (ctx, r, spec, pal) => {
+  const n = Math.round(P(spec, 'n', 2));
+  const spread = P(spec, 'spread', 0.5);
+  const dist = P(spec, 'dist', 0.72);
+  const size = P(spec, 'size', 0.12);
+  const col = spec.color ?? '#c8b878';
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = n === 1 ? 0 : (i / (n - 1) - 0.5) * spread * 2;
+      const x = Math.cos(a) * R * dist, y = Math.sin(a) * R * dist;
+      const cr = R * size;
+      c.fillStyle = col;
+      c.beginPath(); c.arc(x, y, cr, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(shade(col, -0.35), 0.9);
+      c.lineWidth = Math.max(0.8, cr * 0.28);
+      c.stroke();
+      // The struck face: a bar of the old king's profile, unreadable now.
+      c.strokeStyle = withAlpha(shade(col, -0.2), 0.8);
+      c.lineWidth = Math.max(0.7, cr * 0.2);
+      c.beginPath(); c.moveTo(x - cr * 0.45, y + cr * 0.1); c.lineTo(x + cr * 0.4, y - cr * 0.15); c.stroke();
+      // One slanting glint — metal, not light.
+      c.strokeStyle = withAlpha('#f4ecd0', 0.75);
+      c.lineWidth = Math.max(0.6, cr * 0.14);
+      c.beginPath(); c.moveTo(x - cr * 0.35, y - cr * 0.45); c.lineTo(x + cr * 0.1, y - cr * 0.62); c.stroke();
+    }
+  });
+};
+
+/** SOUL GAUZE (LIVE) — the sheet that will not settle: a whole-body drape of
+ *  translucent grave-cloth billowing on its own slow clock, hem trailing
+ *  past the rim. Deliberately distinct from veilSashes (ribbons) and
+ *  shroudWrap (bound bands): this is ONE loose veil over everything —
+ *  the River of Souls' second family tell. params: layers. */
+const soulGauze: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? shade(pal.glow, 0.35);
+  const layers = Math.round(P(spec, 'layers', 2));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < layers; i++) {
+      const ph = t * (0.9 + i * 0.35) + i * 2.4;
+      const bx = Math.sin(ph) * R * 0.16;
+      const by = Math.cos(ph * 0.7) * R * 0.1;
+      const hem = R * (1.02 + 0.1 * Math.sin(ph * 1.3));
+      const g = c.createRadialGradient(bx, by, R * 0.1, bx, by, hem);
+      g.addColorStop(0, withAlpha(col, 0.26 - i * 0.07));
+      g.addColorStop(0.75, withAlpha(col, 0.16 - i * 0.05));
+      g.addColorStop(1, withAlpha(col, 0));
+      c.fillStyle = g;
+      c.beginPath();
+      // The hem: a soft pentagonal fall, corners drifting independently.
+      const pts = 5;
+      for (let k = 0; k <= pts; k++) {
+        const a = (k / pts) * Math.PI * 2;
+        const wob = 1 + 0.14 * Math.sin(ph + k * 1.9);
+        const px = bx + Math.cos(a) * hem * wob;
+        const py = by + Math.sin(a) * hem * wob * 0.92;
+        if (k === 0) c.moveTo(px, py); else c.lineTo(px, py);
+      }
+      c.closePath();
+      c.fill();
+      // The trailing corner: one hem-tail streaming aft.
+      c.strokeStyle = withAlpha(col, 0.22 - i * 0.06);
+      c.lineWidth = Math.max(1.5, R * 0.14);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(-R * 0.4, by);
+      c.quadraticCurveTo(-R * 0.9, by + bx * 0.5, -R * (1.25 + 0.12 * Math.sin(ph)), by + bx);
+      c.stroke();
+      c.lineCap = 'butt';
+    }
+  });
+};
+
 /** Open maw wedge with teeth at the front rim. params: teeth, arc. */
 const maw: PartPainter = (ctx, r, spec, pal) => {
   const arc = P(spec, 'arc', 0.62);
@@ -4739,9 +4816,9 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
   hood, tatters, pauldrons,
-  eyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
+  eyes, obolEyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
   claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow, musket,
-  halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes, veilSashes, glassFins,
+  halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes, veilSashes, soulGauze, glassFins,
   gourdHead, strawLimbs,
   shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
   barkPlates, branchArms, stalactites, nestTwigs,

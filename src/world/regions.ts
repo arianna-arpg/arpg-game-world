@@ -432,6 +432,15 @@ registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp',
 registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8,
   douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the water quenches…' } });
 registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true, pathCost: 1.25 });
+// SOUL-WATER — the River of Souls' own flow (engine/soulriver + the
+// soul_current creep kind): true water in every mechanical respect — wade,
+// swim, douse — but it MIRRORS (the dead look back), and the AI prices it
+// steeply so the living keep to banks, piers, and the ferry's boards. The
+// current's grip and the soulchill are the CREEP's grants, not the region's:
+// still soul-water is merely cold company.
+registerRegion({ id: 'soul_water', walkable: true, blocks: false, label: 'the pale water',
+  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 2.3,
+  douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the pale water quenches…' } });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5,
   // bog_rot, NOT combat 'poison': its own row carries the same level-scaled

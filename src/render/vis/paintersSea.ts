@@ -218,7 +218,265 @@ const ghostHull: GroupPainter = (env, group, def) => {
   }
 };
 
+/** THE SOUL FERRY — the Pale Ferry of the River of Souls, drawn whole from
+ *  above: a flat-bottomed funeral barge whose BOARDS are the track rider's
+ *  exact rect surface (params deckHw/deckHh — drawn == tested == carried),
+ *  low gunwales, a prow lantern, lashed coffin-freight amidships, and THE
+ *  FERRYMAN at the stern — a hooded nobody with a punt pole, part of the
+ *  vessel itself (the ferry cannot be destroyed, so neither can he).
+ *  Bow at +X (orient 'lane'). params: deckHw, deckHh, hull, boards, trim,
+ *  glow, lantern. */
+const soulFerry: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as {
+    deckHw?: number; deckHh?: number; hull?: ColorSpec; boards?: ColorSpec;
+    trim?: ColorSpec; glow?: ColorSpec; lantern?: ColorSpec;
+  };
+  const { ctx, theme } = env;
+  const hull = resolveColor(p.hull, theme, '#243640');
+  const boards = resolveColor(p.boards, theme, '#3c4c54');
+  const trim = resolveColor(p.trim, theme, '#cfc8b4');
+  const glow = resolveColor(p.glow, theme, '#9fd8ec');
+  const lantern = resolveColor(p.lantern, theme, '#ffe0b0');
+  for (const o of group) {
+    const hw = p.deckHw ?? o.radius;
+    const hh = p.deckHh ?? o.radius * 0.48;
+    const t = env.time ?? 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The pale wake: a luminous waterline ring the hull rides in.
+    ctx.strokeStyle = withAlpha(glow, 0.3);
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(hw + 16, 0);
+    ctx.quadraticCurveTo(hw * 0.5, -hh - 8, -hw - 10, -hh * 0.7);
+    ctx.quadraticCurveTo(-hw - 15, 0, -hw - 10, hh * 0.7);
+    ctx.quadraticCurveTo(hw * 0.5, hh + 8, hw + 16, 0);
+    ctx.stroke();
+    // The hull: deck rect swelled to a barge — pointed bow past +hw, squared
+    // stern transom. The DECK (the tested rect) sits wholly inside.
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(hw + 14, 0);
+    ctx.quadraticCurveTo(hw, -hh - 3, hw * 0.45, -hh - 3);
+    ctx.lineTo(-hw + 6, -hh - 3);
+    ctx.quadraticCurveTo(-hw - 8, -hh - 3, -hw - 8, 0);
+    ctx.quadraticCurveTo(-hw - 8, hh + 3, -hw + 6, hh + 3);
+    ctx.lineTo(hw * 0.45, hh + 3);
+    ctx.quadraticCurveTo(hw, hh + 3, hw + 14, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(glow, 0.75);
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    // The boards: long deck planks bow → stern, a shade lighter than the hull.
+    ctx.fillStyle = boards;
+    ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
+    ctx.strokeStyle = withAlpha(shade(boards, -0.3), 0.6);
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-hw + 4, i * hh * 0.4);
+      ctx.lineTo(hw - 4, i * hh * 0.4);
+      ctx.stroke();
+    }
+    // Gunwale trim: the bone-pale cap rail around the boards.
+    ctx.strokeStyle = withAlpha(trim, 0.8);
+    ctx.lineWidth = 2.2;
+    ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
+    // Lashed freight amidships: two coffin-shaped crates, roped down.
+    for (const s of [-1, 1]) {
+      const cx = -hw * 0.15 + (s > 0 ? hw * 0.28 : 0);
+      const cy = s * hh * 0.34;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(s * 0.08);
+      ctx.fillStyle = shade(hull, 0.22);
+      ctx.beginPath();
+      ctx.moveTo(-hw * 0.22, -hh * 0.2);
+      ctx.lineTo(hw * 0.18, -hh * 0.26);
+      ctx.lineTo(hw * 0.26, 0);
+      ctx.lineTo(hw * 0.18, hh * 0.26);
+      ctx.lineTo(-hw * 0.22, hh * 0.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(trim, 0.55);
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-hw * 0.02, -hh * 0.26); ctx.lineTo(-hw * 0.02, hh * 0.26); ctx.stroke();
+      ctx.restore();
+    }
+    // The prow lantern: a pole forward, the one warm point aboard.
+    ctx.strokeStyle = shade(hull, 0.35);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(hw * 0.78, 0); ctx.lineTo(hw + 6, 0); ctx.stroke();
+    ctx.fillStyle = withAlpha(lantern, 0.95);
+    ctx.beginPath(); ctx.arc(hw + 7, 0, 3.4 + Math.sin(t * 5) * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha(lantern, 0.35);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(hw + 7, 0, 6.5, 0, Math.PI * 2); ctx.stroke();
+    // THE FERRYMAN: hooded at the stern, his punt pole trailing aft — he
+    // leans into the stroke on a slow clock (the one living line aboard).
+    const lean = Math.sin(t * 0.9) * 0.18;
+    ctx.save();
+    ctx.translate(-hw * 0.72, 0);
+    ctx.rotate(lean);
+    ctx.strokeStyle = withAlpha(trim, 0.85);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(4, -3); ctx.lineTo(-hw * 0.38, hh * 0.75); ctx.stroke();
+    ctx.fillStyle = withAlpha(shade(hull, -0.35), 0.95);
+    ctx.beginPath(); ctx.ellipse(0, 0, 7.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = withAlpha(glow, 0.8);
+    ctx.beginPath(); ctx.arc(2.2, 0, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+};
+
+/** A SPIRIT GATE — the dock's arch, read from above as two heavy posts and a
+ *  double lintel athwart the walk, a pale glow strung between them: pass
+ *  beneath and you stand on ferry ground. params: post, lintel, glow. */
+const spiritGate: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { post?: ColorSpec; lintel?: ColorSpec; glow?: ColorSpec };
+  const { ctx, theme } = env;
+  const post = resolveColor(p.post, theme, '#3a4650');
+  const lintel = resolveColor(p.lintel, theme, '#54646e');
+  const glow = resolveColor(p.glow, theme, '#9fd8ec');
+  for (const o of group) {
+    const r = o.radius;
+    const t = env.time ?? 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((o.dir ?? o.rot ?? 0) + Math.PI / 2); // posts athwart the walk
+    // The strung glow: a faint breathing veil between the posts.
+    const breathe = 0.16 + 0.08 * Math.sin(t * 1.4 + o.pos.x * 0.01);
+    ctx.strokeStyle = withAlpha(glow, breathe);
+    ctx.lineWidth = r * 0.5;
+    ctx.beginPath(); ctx.moveTo(-r * 0.72, 0); ctx.lineTo(r * 0.72, 0); ctx.stroke();
+    // Double lintel: the upper beam sweeps wider (the torii read, flattened).
+    ctx.strokeStyle = lintel;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(2.5, r * 0.14);
+    ctx.beginPath(); ctx.moveTo(-r * 1.02, 0); ctx.lineTo(r * 1.02, 0); ctx.stroke();
+    ctx.strokeStyle = shade(lintel, -0.2);
+    ctx.lineWidth = Math.max(1.6, r * 0.09);
+    ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.2); ctx.lineTo(r * 0.8, r * 0.2); ctx.stroke();
+    // The posts: two ringed feet.
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = post;
+      ctx.beginPath(); ctx.arc(s * r * 0.78, 0, r * 0.2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(post, 0.35), 0.9);
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      // A pale flame cupped on each post head.
+      ctx.fillStyle = withAlpha(glow, 0.85);
+      ctx.beginPath(); ctx.arc(s * r * 0.78, 0, r * 0.07 + Math.sin(t * 4 + s) * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.lineCap = 'butt';
+    ctx.restore();
+  }
+};
+
+/** A CANDLE RAFT — a little woven float set adrift with its grave-candles
+ *  still burning: lashed reed planks, two or three wax stubs, one warm
+ *  gutter of flame. The river's own funerary litter. params: wood, wax,
+ *  flame. */
+const candleRaft: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; wax?: ColorSpec; flame?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#4a4234');
+  const wax = resolveColor(p.wax, theme, '#e8e0cc');
+  const flame = resolveColor(p.flame, theme, '#ffd898');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 23 + o.pos.y * 41) | 0) >>> 0;
+    const t = env.time ?? 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(hash01(seed, 1) * Math.PI * 2);
+    // A soft ripple ring where the raft sits the water.
+    ctx.strokeStyle = withAlpha(wax, 0.18);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.25, 0, Math.PI * 2); ctx.stroke();
+    // Lashed reed planks.
+    ctx.strokeStyle = wood;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(2, r * 0.3);
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.85, i * r * 0.34);
+      ctx.lineTo(r * 0.85, i * r * 0.34);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = withAlpha(shade(wood, 0.3), 0.7);
+    ctx.lineWidth = 1;
+    for (const s of [-0.5, 0.5]) {
+      ctx.beginPath(); ctx.moveTo(s * r, -r * 0.5); ctx.lineTo(s * r, r * 0.5); ctx.stroke();
+    }
+    // The candles: wax stubs + one live flame (the others guttered dark).
+    const n = 2 + (hash01(seed, 2) > 0.5 ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const a = hash01(seed, 3 + i) * Math.PI * 2;
+      const cx = Math.cos(a) * r * 0.35, cy = Math.sin(a) * r * 0.3;
+      ctx.fillStyle = wax;
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.16, 0, Math.PI * 2); ctx.fill();
+      if (i === 0) {
+        ctx.fillStyle = withAlpha(flame, 0.95);
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.09 + Math.sin(t * 6 + seed) * 0.4, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = withAlpha(shade(wood, -0.3), 0.9);
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.05, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.lineCap = 'butt';
+    ctx.restore();
+  }
+};
+
+/** A BONE PIER plank — pale weathered boards lashed over rib joists, laid
+ *  along the instance's dir (the causeway plank's funerary cousin).
+ *  params: bone, lash. */
+const bonePier: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bone?: ColorSpec; lash?: ColorSpec };
+  const { ctx, theme } = env;
+  const bone = resolveColor(p.bone, theme, '#cfc8b4');
+  const lash = resolveColor(p.lash, theme, '#5a5040');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 31 + o.pos.y * 13) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((o.dir ?? o.rot ?? 0) + Math.PI / 2); // boards across the walk
+    // Three boards, slightly staggered, a shade apart.
+    for (let i = -1; i <= 1; i++) {
+      const off = (hash01(seed, 4 + i) - 0.5) * r * 0.14;
+      ctx.strokeStyle = shade(bone, i * 0.08 - hash01(seed, 8 + i) * 0.12);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(3, r * 0.34);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.95 + off, i * r * 0.36);
+      ctx.lineTo(r * 0.95 + off, i * r * 0.36);
+      ctx.stroke();
+    }
+    // The rib joist peeking out both ends, and the lashings.
+    ctx.strokeStyle = withAlpha(shade(bone, -0.25), 0.8);
+    ctx.lineWidth = Math.max(1.6, r * 0.1);
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.6); ctx.lineTo(0, r * 0.6); ctx.stroke();
+    ctx.strokeStyle = withAlpha(lash, 0.75);
+    ctx.lineWidth = 1.2;
+    for (const s of [-0.55, 0.55]) {
+      ctx.beginPath(); ctx.moveTo(s * r, -r * 0.5); ctx.lineTo(s * r, r * 0.5); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    ctx.restore();
+  }
+};
+
 PAINTERS.shipMast = shipMast;
 PAINTERS.shipRail = shipRail;
 PAINTERS.cargoStack = cargoStack;
 PAINTERS.ghostHull = ghostHull;
+PAINTERS.soulFerry = soulFerry;
+PAINTERS.spiritGate = spiritGate;
+PAINTERS.candleRaft = candleRaft;
+PAINTERS.bonePier = bonePier;

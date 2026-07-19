@@ -305,6 +305,16 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'demon_pit', chance: 0.16 }, { landmark: 'abyssal_gulf', chance: 0.12 },
       { landmark: 'lava_coast', chance: 0.1 },
     ] },
+  // THE RIVER OF SOULS — the underworld's other artery, and the third mint
+  // idiom: not a Voronoi patch, not a course chain, but ONE SEATED PLACE
+  // (world/soulriver.ts) — a single ferry-hub MEGAZONE minted mint-once at a
+  // hashed seat off the Hellgate when a frontier lands in its catch basin.
+  // Seeded into NO palette and NO course: this biome exists exactly once per
+  // realm, worn by that zone alone (a course-only biome's stricter cousin —
+  // the zone-info attribution and the map label ride the tag).
+  soulway: { patronFaction: 'undead', mapColor: '#7fc4e8', label: 'River of Souls', spacing: 200,
+    washOpacity: 0.22,
+    allowedLayouts: { soulriver: 1 } },
   // THE DURANCE: the hate-citadel — hell's first ENCLAVE biome. Its Voronoi
   // regions read as ONE structure spanning zones: every edge crossing its
   // boundary wears the durance gate (data/boundaryGates.ts — the monumental

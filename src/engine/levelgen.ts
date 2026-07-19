@@ -173,6 +173,18 @@ export type KnownDoodadKind =
   | 'ship_rail'      // a bulwark segment: gunwale plank on stanchions (dressing, not the blocker)
   | 'cargo_stack'    // lashed crates + a barrel — freight cover the crew never unloaded
   | 'ghost_hull'     // the Wraithsail herself, sighted at open sea (non-blocking: sail into her shadow)
+  // The River of Souls kit (layoutRecipes 'soulriver' + world/soulriver.ts)
+  | 'soul_water'     // the pale flow: true water that MIRRORS and glows from beneath
+  | 'bone_pier'      // lashed bone boards over rib joists — the dock's footing
+  | 'soul_gate'      // the spirit arch astride every dock walk (walk-through dress)
+  | 'wake_lantern'   // a mortal lantern on the apron — warm flame, pale light
+  | 'candle_raft'    // a grave-candle float adrift on the flow
+  | 'drowned_cairn'  // a mourners' cairn in waterworn slate
+  | 'sunken_statue'  // a statue the water took back — may stand waist-deep
+  | 'pale_rushes'    // reeds gone pale at the waterline
+  // (pale_ferry is deliberately NOT here: the Pale Ferry is a track RIDER
+  // look — synthetic doodads through the painter registry — and never a
+  // placed doodad, so it needs no rule row and no union seat.)
   // Mycelia ("The Bloom") fungal biome doodads
   | 'giant_mushroom' // blocks both — a towering capped stalk (a tree of fungus)
   | 'spore_pod'      // blocks movement not shots — a bulbous sac that PUFFS a spore cloud
@@ -2062,6 +2074,28 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   ship_rail: { overlap: 'ground' },
   cargo_stack: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60 },
   ghost_hull: { overlap: 'ground' },
+  // THE SOULRIVER KIT (the River of Souls — layoutRecipes 'soulriver' +
+  // world/soulriver.ts). Soul-water is true water (pour + depth + ground
+  // sensing); the pier is footing like any bridge; the spirit gate and the
+  // candle rafts are walk-through dress (a gate must never bar its own
+  // dock); wake-lanterns are slim standing lights on the aprons.
+  soul_water: { overlap: 'ground', pour: { depthCore: true }, hazardGround: true },
+  bone_pier:  { overlap: 'ground', spans: true },
+  soul_gate:  { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'soul_water', 'lava', 'chasm'] },
+  wake_lantern: { overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.3,
+    forbidOn: ['water', 'soul_water', 'lava', 'chasm'] },
+  // Rafts + rushes carry NO habitat row on purpose: their tileset rows are
+  // always SHORE-BANDED (where: field 'shore' over soul_water), which is the
+  // stricter, placement-time water-adjacency law already.
+  candle_raft: { overlap: 'ground' },
+  drowned_cairn: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80,
+    forbidOn: ['water', 'soul_water', 'lava', 'chasm'] },
+  // The water took it back: no soul_water forbid ON PURPOSE — a statue may
+  // stand waist-deep in the shallows (the channel's sailing lane is kept
+  // clear by the recipe's own reservations, never by this rule).
+  sunken_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90,
+    forbidOn: ['lava', 'chasm'], surface: { hw: 1.0, hh: 1.0 } },
+  pale_rushes: { overlap: 'ground', walkOnly: true },
   // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
   // is an active puffer (blocks move not shots, like lava_vent); glow_cap/mycelial_mat are
   // walkable ground overlays (decoration + the spore carpet).
@@ -5783,6 +5817,12 @@ registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil
 registerStamp('soul_cage', stampSingle('soul_cage', [11, 15]));
 registerStamp('demon_banner', stampSingle('demon_banner', [11, 15]));
 registerStamp('pyre_heap', stampSingle('pyre_heap', [16, 24]));
+// The River of Souls' wayside kit (layoutRecipes 'soulriver' + the
+// river_of_souls tileset rows).
+registerStamp('drowned_cairn', stampSingle('drowned_cairn', [12, 17]));
+registerStamp('sunken_statue', stampSingle('sunken_statue', [16, 24]));
+registerStamp('candle_raft', stampSingle('candle_raft', [8, 12]));
+registerStamp('pale_rushes', (ctx, spec) => stampBlob(ctx, 'pale_rushes', spec.radius ?? [18, 34], [3, 6], false));
 // The boundary-gate + durance kit (arch/pylon are composable-pushed in
 // practice; their stamps keep them legal tileset rows).
 registerStamp('gate_arch', stampSingle('gate_arch', [60, 80]));

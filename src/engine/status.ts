@@ -1167,6 +1167,16 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     // off, never the mechanism.
     label: 'Crestborne', color: '#f08a96', duration: 0.5,
   },
+  // THE SOUL CURRENT'S GRIP (data/creeps.ts soul_current — the River of
+  // Souls): the pale water leaning on living limbs. A drag rides the creep
+  // fabric separately; this row is the felt COLD of it — slower steps,
+  // duller reads (insightSap: the river blunts the duelist's eye like the
+  // chill family does). Stacks WITH wading/swimming by design: the current
+  // is worse than still water.
+  soulchill: {
+    label: 'Soul-Chilled', color: '#9fd8ec', duration: 0.6,
+    mods: [mod('moveSpeed', 'more', -0.15), mod('insightSap', 'flat', 0.2)],
+  },
   swimming: {
     label: 'Swimming', color: '#2a6ab8', duration: 0.5,
     mods: [mod('moveSpeed', 'more', -0.6), mod('evasion', 'more', -0.3)],
