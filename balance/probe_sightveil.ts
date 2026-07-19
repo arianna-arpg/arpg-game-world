@@ -27,12 +27,13 @@
 
 import {
   SightVeil, SIGHT_VEIL_GEO, castLen,
-  edgeShadowPath, discShadowPath, rectShadowPath,
-  type PathSink, type SightView,
+  edgeShadowPath, edgeShadowForEye, discShadowPath, rectShadowPath,
+  type OccEdge, type PathSink, type SightView,
 } from '../src/render/vis/sightVeil';
 import { VIS_CFG } from '../src/render/vis/visConfig';
 import { sightShadowFrac, type Doodad } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
+import { regionKind } from '../src/world/regions';
 
 let pass = 0, fail = 0;
 function check(name: string, ok: boolean, detail = ''): void {
@@ -107,6 +108,65 @@ console.log('— A. wall-press: edge fan covers the deep field at every distance
   const oldFar = chordEdgePoly(-250, 0, 250, 0, 0, -300, FAR);
   check('control: OLD construction was fine when standing off (300px)',
     inside(oldFar, 0, 500));
+}
+
+console.log('— A1b. THE CORNER: the polygon never blinks; a free end peels honestly —');
+{
+  const FAR = 1600;
+  // The durance repro: wall face y=0 spanning x −250..250, eye pressed to
+  // 0.08px off the plane, SLIDING east across the endpoint at x=250. The
+  // old `la<1||lb<1` skip dropped the WHOLE polygon within 1px of the
+  // endpoint (a one-frame full-bright blink per corner passed, and a
+  // standing hole while parked in the pocket). The fix: raw directions to
+  // sub-px range — the polygon always exists; approaching the end keeps the
+  // deep field, and stepping PAST a free end reveals it fast (the honest
+  // corner peel — that part is real sight, not a bug).
+  const deep: P[] = [];
+  for (const y of [150, 400]) for (const x of [-150, 0, 150]) deep.push({ x, y });
+  let ok = true, worst = '';
+  for (const ex of [246, 248.6, 249.4, 249.96, 250.0]) {
+    const sink = new CollectSink();
+    const n = edgeShadowPath(sink, -250, 0, 250, 0, ex, -0.08, FAR, 0, 0, 1);
+    if (n !== 1) { ok = false; worst = `eye@x=${ex} dropped the polygon`; continue; }
+    for (const p of deep) {
+      if (!inside(sink.polys, p.x, p.y)) { ok = false; worst = `eye@x=${ex} missed (${p.x},${p.y})`; }
+    }
+  }
+  check('approaching/at the corner never drops coverage (incl. exact endpoint)', ok, worst);
+  // Past the free end: the polygon still exists (never a blink) and the far
+  // side has honestly peeled open.
+  const past = new CollectSink();
+  const n = edgeShadowPath(past, -250, 0, 250, 0, 250.5, -0.08, FAR, 0, 0, 1);
+  check('past a free end: polygon persists, deep field honestly revealed',
+    n === 1 && !inside(past.polys, 0, 400) && !inside(past.polys, -150, 150));
+  // Both endpoints at once (a one-cell stub the eye stands beside) still casts.
+  const stub = new CollectSink();
+  check('a short stub with the eye at its end still casts',
+    edgeShadowPath(stub, 0, 0, 26, 0, 0.3, -0.4, FAR, 0, 0, 1) === 1
+    && inside(stub.polys, 8, 200));
+}
+
+console.log('— A1c. THE FACING SLACK: the on-plane knife-edge draws, a real behind skips —');
+{
+  const FAR = 1600;
+  const E: OccEdge = { ax: -250, ay: 0, bx: 250, by: 0, nx: 0, ny: -1 };
+  // Outward −y: the OPEN side is y<0. dot = −py. Sweep the pressed band the
+  // collision actually produces (measured 0.00–0.7px, jitter both sides).
+  let ok = true, worst = '';
+  for (const py of [-0.7, -0.1, 0, 0.1, 1.0]) {
+    const sink = new CollectSink();
+    const n = edgeShadowForEye(sink, E, 0, py, FAR, 0, 0, 1);
+    const covered = n === 1 && inside(sink.polys, 0, 300) && inside(sink.polys, -150, 200);
+    const openSide = n === 1 && inside(sink.polys, 0, -40);
+    if (!covered) { ok = false; worst = `dot=${-py} lost the behind field`; }
+    if (openSide) { ok = false; worst = `dot=${-py} darkened the eye's own side`; }
+  }
+  check('the pressed band (dot −1.0..+0.7) always covers behind, never the open side', ok, worst);
+  const behind = new CollectSink();
+  check('a face the eye is honestly behind still skips (dot −2)',
+    edgeShadowForEye(behind, E, 0, 2, FAR, 0, 0, 1) === 0);
+  check('a thin wall\'s far face (a cell away) never draws (dot −26)',
+    edgeShadowForEye(new CollectSink(), E, 0, 26, FAR, 0, 0, 1) === 0);
 }
 
 console.log('— A2. disc wedge: fan + melt —');
@@ -288,6 +348,41 @@ console.log('— B2. the cap: real density never trips it; pathological trims ne
     check('the trim is nearest-first (max kept ≤ min dropped)',
       maxKept <= minDropped + 1e-6, `kept ${Math.round(maxKept)} vs dropped ${Math.round(minDropped)}`);
   }
+}
+
+console.log('— B3. interactable reveals (veilPierce) + the stands row —');
+{
+  const veil = new SightVeil();
+  const walk = new GridWalkField(2400, 1600, 30);
+  walk.fillRect(0, 0, 2400, 1600, true);
+  walk.fillRect(600, 700, 1200, 730, false);   // the wall run
+  const doorPos = { x: 900, y: 715 };           // a door ON the wall plane
+  const doodads: Doodad[] = [
+    { kind: 'door', radius: 15, pos: doorPos, door: {} } as unknown as Doodad,
+  ];
+  const view: SightView = {
+    player: { pos: { x: 900, y: 1200 } },
+    walk,
+    zone: {},
+    doodads,
+    doodadsNear: (x, y, reach) =>
+      doodads.filter(d => Math.hypot(d.pos.x - x, d.pos.y - y) <= reach + d.radius),
+    doodadRev: 1,
+  };
+  veil.update(view, 0, 1280, 800);
+  const rF = VIS_CFG.sightVeil.regionStrength;
+  const atDoor = veil.occludedAt(doorPos);
+  const offDoor = veil.occludedAt({ x: 900 + 120, y: 715 });
+  check('the door\'s threshold pierces the wall dark',
+    atDoor < rF * (1 - VIS_CFG.sightVeil.pierceStrength) + 0.02, `${atDoor}`);
+  check('the wall away from the door keeps its full dark',
+    Math.abs(offDoor - rF) < 1e-9, `${offDoor}`);
+  check('doors still cast no shadow of their own (the grid owns it)',
+    sightShadowFrac(doodads[0]) === 0);
+
+  const stands = regionKind('arena_stands');
+  check('arena_stands: feet and arrows stop, sight sails over',
+    !!stands && stands.blocks === true && stands.blocksShot === true && !stands.blocksSight);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

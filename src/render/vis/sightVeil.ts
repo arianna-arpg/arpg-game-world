@@ -90,7 +90,7 @@
 
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 import type { Doodad } from '../../engine/levelgen';
-import { sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
+import { doodadRuleOf, sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 
@@ -121,7 +121,11 @@ interface OccDisc { x: number; y: number; r: number; s: number }
 interface OccRect { x: number; y: number; hw: number; hh: number; rot: number; boundR: number; s: number }
 /** One cached wall FACE (a merged run of solid-cell edges), with the outward
  *  normal (away from the solid mass, toward the ground it faces). */
-interface OccEdge { ax: number; ay: number; bx: number; by: number; nx: number; ny: number }
+export interface OccEdge { ax: number; ay: number; bx: number; by: number; nx: number; ny: number }
+/** One cached INTERACTABLE reveal (DoodadRule.veilPierce): a feathered disc
+ *  punched out of the finished sheet so the object stays discernible through
+ *  any shadow — a door on the wall plane must never read as wall. */
+interface Pierce { x: number; y: number; r: number; s: number }
 
 /** Hero-bucket size for cache keys (px): crossing one triggers a re-gather. */
 const GATHER_BUCKET = 96;
@@ -150,6 +154,21 @@ export const SIGHT_VEIL_GEO = {
    *  half-plane. (The chord's sag toward the eye at wide spans was the
    *  wall-press "overview" inversion.) */
   arcStep: Math.PI / 6,
+  /** World px of ON-PLANE tolerance for a wall face's facing test. Grid
+   *  collision holds the eye's CENTER on the face line itself (measured
+   *  0.00–0.7px pressed), so a strict `dot <= 0` skip sat on a knife's
+   *  edge: sliding along a wall blinked the whole face's shadow off for a
+   *  frame at every jitter, and standing in a corner pocket held the
+   *  quadrant behind the perpendicular face (dot exactly 0) permanently
+   *  lit — the durance/flesh "changes abruptly, reverts, changes again"
+   *  and the corner that granted sight it must obscure. Within this band
+   *  the eye is clamped half a px onto the OPEN side for that face's
+   *  geometry instead of dropped (the sweep side of the far fan follows
+   *  the eye's side of the plane, so the clamp also keeps a sub-pixel
+   *  inside-the-line eye from fanning the wrong half-plane). Must stay
+   *  well under a wall cell's thickness so a thin wall's FAR face (a full
+   *  cell away) never draws. */
+  faceSlack: 1.5,
   /** A DOODAD shadow's LENGTH scales with its CASTER, never the screen:
    *  the wedge ends castLen(bodyR, s) = clamp(r × castFarR, ≥ castFarFloor)
    *  × s world px past the body (still capped by the veil's own far).
@@ -204,6 +223,7 @@ export class SightVeil {
   // --- occluder caches (rebuilt on hero-bucket / revision change) -----------
   private discs: OccDisc[] = [];
   private rects: OccRect[] = [];
+  private pierces: Pierce[] = [];
   private dooBx = 1e9; private dooBy = 1e9; private dooRev = -1;
   private dooArr: readonly Doodad[] | null = null; private dooLen = -1; private dooR = 0;
 
@@ -270,11 +290,23 @@ export class SightVeil {
     const reach = this.radius + GATHER_PAD;
     this.discs.length = 0;
     this.rects.length = 0;
+    this.pierces.length = 0;
     for (const d of view.doodadsNear(this.px, this.py, reach)) {
-      const sf = sightShadowFrac(d);
-      if (sf <= 0) continue;
       const dx = d.pos.x - this.px, dy = d.pos.y - this.py;
       if (dx * dx + dy * dy > reach * reach) continue;
+      // Interactable reveals gather regardless of shadow policy (doors cast
+      // nothing — the GRID owns their shadow — yet must pierce it).
+      const vp = doodadRuleOf(d.kind).veilPierce;
+      if (vp) {
+        const spec = vp === true ? undefined : vp;
+        this.pierces.push({
+          x: d.pos.x, y: d.pos.y,
+          r: spec?.radius ?? cfg.pierceRadius,
+          s: Math.max(0, Math.min(1, spec?.strength ?? cfg.pierceStrength)),
+        });
+      }
+      const sf = sightShadowFrac(d);
+      if (sf <= 0) continue;
       const s = hitSurfaceOf(d, 'shot');
       if (s.kind === 'circle') {
         if (s.r > 0.5) this.discs.push({ x: d.pos.x, y: d.pos.y, r: s.r, s: sf });
@@ -416,7 +448,24 @@ export class SightVeil {
         if (regionBlocksSight(g.regionAt(px + qx * t, py + qy * t))) { f = this.regionF; break; }
       }
     }
+    // The interactable reveals thin the answer exactly as they thin the
+    // sheet (drawn==tested at the door's threshold).
+    if (f > 0 && this.pierces.length) f *= 1 - this.pierceAt(pos.x, pos.y);
     return f;
+  }
+
+  /** The reveal fraction at a point (0 none .. 1 fully pierced) — the linear
+   *  falloff the punched radial gradient paints. */
+  private pierceAt(x: number, y: number): number {
+    let m = 0;
+    for (const q of this.pierces) {
+      const d = Math.hypot(q.x - x, q.y - y);
+      if (d < q.r) {
+        const v = q.s * (1 - d / q.r);
+        if (v > m) m = v;
+      }
+    }
+    return m;
   }
 
   /** A body's smoothed hide-fade (0 visible .. 1 gone): occludedAt chased at
@@ -472,14 +521,13 @@ export class SightVeil {
     let quads = 0;
     const layers: { path: Path2D; alpha: number }[] = [];
 
-    // True-wall shadows: one union path at the region strength.
+    // True-wall shadows: one union path at the region strength (the facing
+    // test + on-plane clamp live in edgeShadowForEye — see faceSlack).
     if (regionA > 0.02 && this.edges.length) {
       const path = new Path2D();
       let n = 0;
       for (const e of this.edges) {
-        // Outward normal side test: the hero must FACE this edge.
-        if (e.nx * (px - e.ax) + e.ny * (py - e.ay) <= 0) continue;
-        n += edgeShadowPath(path, e.ax, e.ay, e.bx, e.by, px, py, far, ox, oy, k);
+        n += edgeShadowForEye(path, e, px, py, far, ox, oy, k);
       }
       if (n) { layers.push({ path, alpha: regionA }); quads += n; }
     }
@@ -528,6 +576,23 @@ export class SightVeil {
       b.fill(L.path);
     }
     if (cfg.featherPx > 0) b.filter = 'none';
+
+    // THE INTERACTABLE REVEALS (DoodadRule.veilPierce): punch a feathered
+    // disc of visibility over each pierce doodad — a door must stay
+    // discernible from the wall plane it shares. After every layer, so the
+    // punch wins over any shadow family; occludedAt mirrors via pierceAt.
+    if (this.pierces.length) {
+      b.globalCompositeOperation = 'destination-out';
+      for (const q of this.pierces) {
+        const sx = (q.x - ox) * k, sy = (q.y - oy) * k, sr = q.r * k;
+        if (sx < -sr || sy < -sr || sx > bw + sr || sy > bh + sr) continue;
+        const grad = b.createRadialGradient(sx, sy, 0, sx, sy, sr);
+        grad.addColorStop(0, `rgba(0,0,0,${q.s})`);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        b.fillStyle = grad;
+        b.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+      }
+    }
     b.globalCompositeOperation = 'source-over';
 
     ctx.save();
@@ -556,17 +621,37 @@ function farArc(sink: PathSink, px: number, py: number, thFrom: number,
 }
 
 /** Append one edge-shadow polygon (A→B, far side swept as an eye-centered
- *  fan). Returns 1 when appended (degenerate eye-on-edge geometry skips).
- *  Exported for the headless probe — the sheet fills this exact geometry. */
+ *  fan). Exported for the headless probe — the sheet fills this exact
+ *  geometry. THE CORNER LIMIT: an eye standing ON an endpoint (pressed into
+ *  a wall corner — grid collision carries the eye to the face line, so
+ *  sliding along a wall crosses every run endpoint within a px) keeps the
+ *  face: the push direction's limit is the edge's own line, so that
+ *  direction is substituted instead of dropping the polygon. The old
+ *  `la < 1 → skip` blinked the ENTIRE wall shadow off for a frame at every
+ *  corner passed, and held it off while standing in the pocket — the
+ *  durance/flesh "changes abruptly, reverts, changes again", and the corner
+ *  that granted sight it must obscure. */
 export function edgeShadowPath(sink: PathSink, ax: number, ay: number,
   bx2: number, by2: number, px: number, py: number, far: number,
   ox: number, oy: number, k: number): number {
   const dax = ax - px, day = ay - py;
   const dbx = bx2 - px, dby = by2 - py;
-  const la = Math.hypot(dax, day), lb = Math.hypot(dbx, dby);
-  if (la < 1 || lb < 1) return 0;
-  const fax = ax + (dax / la) * far, fay = ay + (day / la) * far;
-  const fbx = bx2 + (dbx / lb) * far, fby = by2 + (dby / lb) * far;
+  const el = Math.hypot(bx2 - ax, by2 - ay);
+  if (el < 0.5) return 0;                        // zero-length edge
+  let la = Math.hypot(dax, day), lb = Math.hypot(dbx, dby);
+  // Raw directions are numerically sound down to fractions of a px — an eye
+  // rounding a free wall end honestly PEELS the far side fast (real corner
+  // peeking), and freezing the direction near the endpoint would snap it
+  // back in one frame instead. Only the measure-zero exact hit substitutes
+  // the along-edge limit (an inner corner's other face covers its side via
+  // faceSlack either way).
+  let uax: number, uay: number, ubx: number, uby: number;
+  if (la < 1e-4) { uax = (ax - bx2) / el; uay = (ay - by2) / el; la = 1e-4; }
+  else { uax = dax / la; uay = day / la; }
+  if (lb < 1e-4) { ubx = (bx2 - ax) / el; uby = (by2 - ay) / el; lb = 1e-4; }
+  else { ubx = dbx / lb; uby = dby / lb; }
+  const fax = ax + uax * far, fay = ay + uay * far;
+  const fbx = bx2 + ubx * far, fby = by2 + uby * far;
   sink.moveTo((ax - ox) * k, (ay - oy) * k);
   sink.lineTo((bx2 - ox) * k, (by2 - oy) * k);
   sink.lineTo((fbx - ox) * k, (fby - oy) * k);
@@ -574,10 +659,30 @@ export function edgeShadowPath(sink: PathSink, ax: number, ay: number,
   // dips inside them; overshoot beyond `far` is invisible (far already
   // clears the screen by farSlack).
   const R = (far + Math.max(la, lb)) / Math.cos(SIGHT_VEIL_GEO.arcStep / 2);
-  farArc(sink, px, py, Math.atan2(dby, dbx), Math.atan2(day, dax), R, ox, oy, k);
+  farArc(sink, px, py, Math.atan2(uby, ubx), Math.atan2(uay, uax), R, ox, oy, k);
   sink.lineTo((fax - ox) * k, (fay - oy) * k);
   sink.closePath();
   return 1;
+}
+
+/** Draw one wall FACE for a given eye — the facing law in one place, shared
+ *  by draw() and the probe. A face the eye is honestly behind is skipped;
+ *  an eye ON the plane (within faceSlack: pressed-collision jitter, corner
+ *  pockets where the perpendicular face reads dot 0.00) is clamped half a
+ *  px onto the OPEN side for this face's geometry instead of dropped — the
+ *  strict `dot <= 0` skip was a knife's edge that blinked whole wall
+ *  shadows frame to frame at contact. The clamp also pins the far fan's
+ *  sweep to the correct half-plane when collision leaves the eye a
+ *  sub-pixel INSIDE the face line. */
+export function edgeShadowForEye(sink: PathSink, e: OccEdge, px: number,
+  py: number, far: number, ox: number, oy: number, k: number): number {
+  const dot = e.nx * (px - e.ax) + e.ny * (py - e.ay);
+  if (dot <= -SIGHT_VEIL_GEO.faceSlack) return 0;
+  if (dot < 0.5) {
+    const push = 0.5 - dot;
+    px += e.nx * push; py += e.ny * push;
+  }
+  return edgeShadowPath(sink, e.ax, e.ay, e.bx, e.by, px, py, far, ox, oy, k);
 }
 
 /** Append a disc body's shadow wedge: tangent mouth, body-scaled reach

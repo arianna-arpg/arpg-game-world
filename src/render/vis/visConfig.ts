@@ -244,6 +244,14 @@ export const VIS_CFG = {
      *  regardless of this cache size, so the cap is a true pathological
      *  backstop, not a perf dial. */
     maxOccluders: 768,
+    /** INTERACTABLE REVEALS (DoodadRule.veilPierce — doors first): default
+     *  radius (world px) and strength of the feathered visibility disc
+     *  punched over a pierce doodad after every shadow layer, so the object
+     *  stays discernible from the wall plane it shares. A rule may override
+     *  both per kind ({ radius, strength }); occludedAt thins by the same
+     *  falloff, so a nameplate at a door never argues with the pixels. */
+    pierceRadius: 44,
+    pierceStrength: 0.85,
   },
 
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's

@@ -893,6 +893,17 @@ registerRegion({ id: 'rampart', walkable: false, blocks: true, label: 'the rampa
 // fire from a tower while staying unreachable (the Arreat-plateau imp fantasy).
 registerRegion({ id: 'parapet', walkable: false, blocks: true, label: 'the parapet',
   blocksShot: false, blocksSight: false, visual: { fill: '#4a4f5e', alpha: 0.9 } });
+// ARENA STANDS: a colosseum's crowd annulus — a TRUE barrier to feet AND
+// arrows (the fight stays in the pit; no stray shot thins the audience) that
+// the EYE sails over: the stands sit BELOW the rail and the crowd is the
+// whole point of the set-piece — the sight veil must never darken what a
+// colosseum exists to show. Distinct from parapet (see + SHOOT over) and
+// rampart (nothing passes): this is the third combination, see-but-never-
+// shoot. Warm stonework matching the grand arena's palette; any future
+// arena picks its own row via layoutParams.standRegion.
+registerRegion({ id: 'arena_stands', walkable: false, blocks: true, label: 'the stands',
+  blocksShot: true, blocksSight: false,
+  visual: { fill: '#7a6a4c', alpha: 1, masonry: true, edge: { color: '#9a8a64', width: 4 } } });
 // WINDOW: an arrow-slit in a rampart line. Same policy as parapet (see + shoot
 // through, never walk through) — a distinct id so blueprints, renders, and future
 // rules can tell a slit from a battlement.

@@ -1596,7 +1596,11 @@ function colosseumLayout(ctx: GenCtx, def: ZoneDef): void {
   }
   stands.subtract(pit);
   stands.subtract(mouths);
-  paintRegion(grid, stands, 'wall');
+  // The stands are ARENA_STANDS by default, not wall: feet and arrows stop
+  // at the rail, but sight sails over — the crowd is the spectacle, and the
+  // sight veil must never bury it (layoutParams.standRegion re-aims it for
+  // an arena that wants true blindness).
+  paintRegion(grid, stands, layoutParam(def, 'standRegion', 'arena_stands'));
   // Paint the WALKABLE back over the negative (paint-over order is the
   // recipe discipline): the pit floor, then every mouth stem + portal pocket.
   paintRegion(grid, pit, 'ground');

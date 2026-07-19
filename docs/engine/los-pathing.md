@@ -77,6 +77,24 @@ EXACT polygons the sheet fills through the builders' structural PathSink):
   cap bit inside the visible field (dense jungle at the old 288), every
   96px gather re-sort popped dozens of on-screen wedges in one frame — the
   "veil bouncing darker/lighter while walking" flicker.
+- **Corners never blink**: a wall face's polygon survives the eye standing
+  ON a run endpoint (raw directions to sub-px range; only the exact hit
+  substitutes the along-edge limit), and the facing test carries an
+  on-plane tolerance (`faceSlack`) that clamps a pressed eye half a px onto
+  the open side instead of dropping the face — the old strict skips blinked
+  whole wall shadows per corner passed and held a corner pocket's
+  perpendicular quadrant lit (grid collision parks the eye at dot 0.00).
+  Rounding a FREE wall end still peels the far side open fast — that part
+  is honest corner-peeking, not a pop.
+- **Interactables pierce** (`DoodadRule.veilPierce`, doors first): a
+  feathered visibility disc punches over the object after every shadow
+  layer (`VIS_CFG.sightVeil.pierceRadius`/`pierceStrength`, per-kind
+  overrides), and `occludedAt` thins by the same falloff — a door shares
+  the wall's plane and must never read as wall.
+- **See-over ground**: a region row may block feet and arrows yet let sight
+  sail (`blocksShot: true, blocksSight: false` — the `arena_stands` debut:
+  the colosseum's crowd annulus stops strays at the rail while the veil
+  never buries the spectacle; `layoutParams.standRegion` re-aims it).
 
 ## The skill lever
 

@@ -899,6 +899,13 @@ export interface DoodadRule {
    *  gather via sightShadowFrac — drawn and label-tested through the SAME
    *  number, so text can never disagree with pixels about a soft shadow. */
   sightShadow?: boolean | { minR?: number; softR?: number; mul?: number };
+  /** INTERACTABLE REVEAL (render/vis/sightVeil.ts): the sight veil punches a
+   *  feathered disc of visibility over this kind after every shadow layer,
+   *  so the object stays discernible through the dark — a door sits ON the
+   *  wall plane and must never read as wall. `true` takes the veil's
+   *  defaults (VIS_CFG.sightVeil.pierceRadius/pierceStrength); a row tunes
+   *  either. Render-only, like sightShadow — the engine ray never reads it. */
+  veilPierce?: boolean | { radius?: number; strength?: number };
   spacing?: number;
   forbidOn?: DoodadKind[];
   walkOnly?: boolean;
@@ -2068,7 +2075,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // Plan-structure furniture. A closed door blocks EVERYTHING; the derivations
   // below consult Doodad.door state, so opening/breaking it clears movement,
   // shots, and sight in one flip. A window passes shots + sight, never bodies.
-  door:   { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true },
+  // veilPierce: an INTERACTABLE must stay discernible through the sight
+  // veil — a door shares the wall's plane and otherwise reads as wall.
+  door:   { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, veilPierce: true },
   window: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
     surface: { hw: 0.7, hh: 0.28 } }, // the sill slab — flush with its wall run, no room-side bulge
   dock:   { overlap: 'trigger', spacing: 40 },
