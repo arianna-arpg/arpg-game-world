@@ -776,6 +776,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'wayfarer_hunter', chance: 0.2, count: [1, 2] },
     { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
+    // The free hunter over the meadow — the take-wing stooper (never poured).
+    { id: 'gore_hawk', chance: 0.12, count: [1, 1] },
     { id: 'ant_trail', chance: 0.35, count: [1, 2] },
     { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
     // The rare golden flicker at the meadow's edge — chase it.
@@ -915,6 +917,7 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'taiga_elk', chance: 0.45, count: [2, 3] },
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+    { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
   ],
   // THE BUTTELAND (the needle country — its own biome since the tier pass):
   // valley life below, and THE TOP-ONLY FLICKER — a scamp that dens where
@@ -923,6 +926,7 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'taiga_elk', chance: 0.4, count: [2, 3] },
     { id: 'meadow_hare', chance: 0.45, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+    { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
     { id: 'gilded_scamp', chance: 0.35, count: [1, 1], tier: 1,
       announce: 'a golden flicker crosses the tabletops above…' },
   ],
@@ -932,6 +936,7 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'glow_moth', chance: 0.35, count: [2, 4] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+    { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
   ],
   field: [
     { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
@@ -6142,23 +6147,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // --- THE CAVERN DWELLERS (unaffiliated — the dark keeps its own) ----------
-  // The bat: a wing-scrap that dives, rakes, and wheels away.
+  // The bat: a wing-scrap that dives, rakes, and wheels away winded. Roost-
+  // poured, so it swarms rather than vanishes (the rookery precision-tax
+  // law: no take_wing on perpetually-summoned bodies).
   cave_bat: {
     id: 'cave_bat', name: 'Cave Bat',
     color: '#6a5a70', shape: 'triangle', radius: 8, material: 'fur', look: 'cave_bat',
     base: { life: 16, moveSpeed: 210, accuracy: 90, evasion: 75, mana: 15, manaRegen: 3 },
-    skills: ['talon_rake', 'take_wing'], xp: 6,
+    skills: ['talon_rake'], xp: 6,
     flier: true, levitates: true,
     detection: 1.4,
     brain: {
-      type: 'skirmish', withdraw: 1.2,
-      rules: [
-        { when: { lifeAbove: 0.5, distUnder: 380 }, every: [5, 8], hold: [0.2, 0.4],
-          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
-        { when: { lifeBelow: 0.5 }, every: [5, 8], hold: [2.5, 4],
-          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
-          use: { move: { style: 'holdRange', hold: 380 } } },
-      ],
+      type: 'swarm',
+      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2 },
+      tempo: { kite: 2.0, windedFor: [0.7, 1.2] },
     },
   },
   // The roost (ambient rookery): keeps loosing bats until the bowl breaks.
@@ -6782,29 +6784,30 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // --- THE ROOKERIES & NEW FAUNA (faction 'beast', the ambient layer) -------
-  // The bloodwing: the D2 blood hawk itself — wheels, dives, rakes, and is
-  // gone. Hunts the meadow's own critters when you're not worth the stoop.
+  // THE PRECISION-TAX LAW: the take_wing vanish-leap (airborne = untargetable)
+  // never rides a PERPETUALLY-SUMMONED body — a nest/roost pouring evasive
+  // fliers taxes aim without counterplay. Poured kinds are SWARM CRITTERS
+  // (numbers, not evasion); the wing lives on free-standing fliers instead
+  // (gore_hawk, dune_vulture, carrion_shrike) and on fleeing prey birds.
+  // The bloodwing: the D2 blood hawk's own tide — small wing-scraps the nest
+  // keeps pouring. Dives, rakes, wheels off winded; dies to a stiff look.
   bloodwing: {
     id: 'bloodwing', name: 'Bloodwing',
-    color: '#b04a3a', shape: 'triangle', radius: 10, material: 'fur', look: 'bloodwing',
-    base: { life: 30, moveSpeed: 200, accuracy: 105, evasion: 70, mana: 15, manaRegen: 3 },
-    skills: ['talon_rake', 'take_wing'], xp: 12,
+    color: '#b04a3a', shape: 'triangle', radius: 8, material: 'fur', look: 'bloodwing',
+    base: { life: 16, moveSpeed: 215, accuracy: 100, evasion: 65, mana: 15, manaRegen: 3 },
+    skills: ['talon_rake'], xp: 6,
     tag: 'predator', faction: 'beast', tags: ['beast'],
     flier: true, levitates: true,
     detection: 1.5,
     brain: {
-      type: 'skirmish', withdraw: 1.3,
+      type: 'swarm',
       target: { prey: ['critter'] },
-      rules: [
-        { when: { lifeAbove: 0.5, distUnder: 400 }, every: [6, 9], hold: [0.2, 0.4],
-          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
-        { when: { lifeBelow: 0.5 }, every: [6, 9], hold: [3, 4.5],
-          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
-          use: { move: { style: 'holdRange', hold: 400 } } },
-      ],
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+      tempo: { kite: 2.2, windedFor: [0.8, 1.4] },
     },
   },
-  // The nest: while it stands, the sky keeps arriving one hawk at a time.
+  // The nest: while it stands, the sky keeps arriving two at a time — break
+  // the bowl or wade the flock (the swarm IS the fight; each bird is paper).
   bloodwing_nest: {
     id: 'bloodwing_nest', name: 'Bloodwing Nest',
     color: '#8a6a4a', shape: 'oval', radius: 12, look: 'bloodwing_nest',
@@ -6815,8 +6818,33 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'basic',
       rules: [{
         when: {}, every: [7, 11], hold: [0.1, 0.2],
-        actions: [{ do: 'summon', monster: 'bloodwing', count: 1, ring: 40, lifespan: 40, tag: 'predator' }],
+        actions: [{ do: 'summon', monster: 'bloodwing', count: 2, ring: 40, lifespan: 40, tag: 'predator' }],
       }],
+    },
+  },
+  // The gorehawk: the rookery's FREE hunter — the broad-winged stooper the
+  // nests answer to. Wheels, TAKES WING (leap = airborne + untargetable),
+  // drops on your back, and when bloodied flees the fight on the wing — the
+  // re-homed evasive-flight identity (never nest-poured; the law above).
+  gore_hawk: {
+    id: 'gore_hawk', name: 'Gorehawk',
+    color: '#8a3230', shape: 'kite', radius: 12, material: 'fur', look: 'bloodwing',
+    base: { life: 44, moveSpeed: 195, accuracy: 105, evasion: 70, mana: 15, manaRegen: 3 },
+    skills: ['talon_rake', 'take_wing'], xp: 16,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 1.5,
+    brain: {
+      type: 'skirmish', withdraw: 1.3,
+      target: { prey: ['critter'] },
+      rules: [
+        { when: { lifeAbove: 0.5, distUnder: 400 }, every: [6, 9], hold: [0.2, 0.4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
+        { when: { lifeBelow: 0.5 }, every: [6, 9], hold: [3, 4.5],
+          announce: 'It takes wing!',
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
+          use: { move: { style: 'holdRange', hold: 400 } } },
+      ],
     },
   },
   // A fat marsh toad: prey with a hop instead of a plan.
@@ -6836,13 +6864,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
   // The bog heron: stilt-legged fisher of toads — the marsh's own drama.
+  // Startle it and it LIFTS off the shallows (the fleeing-bird wing).
   bog_heron: {
     id: 'bog_heron', name: 'Bog Heron',
     color: '#9aa8b0', shape: 'kite', radius: 11, look: 'bog_heron',
     base: { life: 26, moveSpeed: 160, accuracy: 110, evasion: 55, mana: 0 },
-    skills: ['claw'], xp: 8, tag: 'predator', faction: 'beast', tags: ['beast'],
+    skills: ['claw', 'take_wing'], xp: 8, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.5,
-    brain: { type: 'skirmish', withdraw: 1.4, target: { prey: ['critter'] } },
+    brain: {
+      type: 'skirmish', withdraw: 1.4, target: { prey: ['critter'] },
+      rules: [
+        { when: { lifeBelow: 0.6 }, every: [6, 9], hold: [2.5, 4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
+          use: { move: { style: 'holdRange', hold: 380 } } },
+      ],
+    },
   },
   // A glow moth: the cavern's drifting lantern — texture, not threat.
   glow_moth: {
@@ -7034,19 +7070,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.5,
     brain: { type: 'juggernaut', enrage: 0.6, move: { style: 'charge', commitRange: 340, chargeSpeed: 2.5 } },
   },
+  // The Court's own wing-scrap — summon-fed (the vampire's bat-call caps at
+  // three but never stops), so the rookery precision-tax law holds here too:
+  // it swarms and rakes; the vanish-leap belongs to free fliers alone.
   crimson_bat: {
     id: 'crimson_bat', name: 'Crimson Bat',
     color: '#b04a5a', shape: 'triangle', radius: 9, material: 'fur', look: 'crimson_bat',
     base: { life: 22, moveSpeed: 215, accuracy: 95, evasion: 80, mana: 15, manaRegen: 3 },
-    skills: ['talon_rake', 'take_wing'], xp: 9, faction: 'nightkin',
+    skills: ['talon_rake'], xp: 9, faction: 'nightkin',
     flier: true, levitates: true,
     detection: 1.4,
     brain: {
-      type: 'skirmish', withdraw: 1.2,
-      rules: [
-        { when: { lifeAbove: 0.5, distUnder: 380 }, every: [5, 8], hold: [0.2, 0.4],
-          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
-      ],
+      type: 'swarm',
+      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2 },
+      tempo: { kite: 2.0, windedFor: [0.7, 1.2] },
     },
   },
 
@@ -7241,7 +7278,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'carrion_crow', name: 'Carrion Crow',
     color: '#2a2d34', shape: 'triangle', radius: 8, material: 'fur', look: 'carrion_crow',
     base: { life: 16, moveSpeed: 210, accuracy: 100, evasion: 85, mana: 10, manaRegen: 2 },
-    skills: ['talon_rake'], xp: 6, faction: 'wild', tags: ['beast'],
+    skills: ['talon_rake', 'take_wing'], xp: 6, faction: 'wild', tags: ['beast'],
     flier: true, levitates: true,
     detection: 1.6, // the watchers see FAR — the wood knows you came in
     // A carrion crow EATS carrion (the Verminfall ecology pass): it strips
@@ -7251,6 +7288,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'swarm',
       morale: { skittish: { radius: 90, duration: [0.6, 1.2] } },
       move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+      rules: [
+        // FLUSHED: hurt the murder and it LIFTS — prey-on-the-wing tech
+        // (take_wing at 'away' = escape flight, never the vanish-harass;
+        // the free-flier law lets fleeing birds wear the wing).
+        { when: { lifeBelow: 0.7 }, every: [5, 8], hold: [2, 3],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
+          use: { move: { style: 'holdRange', hold: 380 } } },
+      ],
     },
   },
   // The grave hag: the wood's crone — she curses from the second rank,
