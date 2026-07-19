@@ -1772,6 +1772,7 @@ export class Renderer {
     const c1 = Math.min(wf.cols, Math.ceil((this.cam.x + vw) / cell));
     const r0 = Math.max(0, Math.floor(this.cam.y / cell));
     const r1 = Math.min(wf.rows, Math.ceil((this.cam.y + vh) / cell));
+    let soulsFill: string | null = null;
     for (let cy = r0; cy < r1; cy++) {
       for (let cx = c0; cx < c1; cx++) {
         const id = wf.regionAt((cx + 0.5) * cell, (cy + 0.5) * cell);
@@ -1785,6 +1786,13 @@ export class Renderer {
         // itself is the warning, so it has to LIVE, not sit like paint.
         else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(performance.now() / 480 + (cx * 7 + cy * 13) * 0.53);
         else if (vis.animate === 'prism') alpha *= 0.72 + 0.28 * Math.sin(performance.now() / 700 + (cx * 5 + cy * 9) * 0.41);
+        // SOULS (the living water): the deep's own breath is SLOW and broad —
+        // cells swell together in drifting swathes, not a glitter (the
+        // under-surface figures draw in the overlay pass below).
+        else if (vis.animate === 'souls') {
+          alpha *= 0.9 + 0.1 * Math.sin(performance.now() / 2400 + cx * 0.11 + cy * 0.07);
+          soulsFill = vis.fill;
+        }
         ctx.globalAlpha = Math.max(0, alpha);
         // PRISM (the rainbow spans): the fill's hue walks the whole spectrum,
         // phase-offset per cell so a span reads as a banded arc, not a slab.
@@ -1797,6 +1805,87 @@ export class Renderer {
       }
     }
     ctx.globalAlpha = 1;
+    if (soulsFill) this.drawSoulsUnderSurface(wf);
+  }
+
+  /** THE UNDER-SURFACE (animate:'souls' — the River of Souls' living deep):
+   *  pale FIGURES adrift beneath the water — a face surfacing toward the
+   *  light, a reaching hand, a long soul-streak riding the current — each
+   *  seeded on a world-anchored lattice (no state, no churn: a figure lives
+   *  where its hash says, breathes on its own slow clock, and fades back
+   *  under). View-culled; a handful of path draws per frame. */
+  private drawSoulsUnderSurface(wf: GridWalkField): void {
+    const { ctx } = this;
+    const t = performance.now() / 1000;
+    const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+    const STEP = 150; // lattice pitch, world units
+    const gx0 = Math.floor(this.cam.x / STEP) - 1, gx1 = Math.ceil((this.cam.x + vw) / STEP) + 1;
+    const gy0 = Math.floor(this.cam.y / STEP) - 1, gy1 = Math.ceil((this.cam.y + vh) / STEP) + 1;
+    const hash = (a: number, b: number): number => {
+      let h = (a * 374761393 + b * 668265263) ^ 0x5f356495;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
+    };
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const h0 = hash(gx, gy);
+        if (h0 > 0.34) continue; // most lattice points hold no soul tonight
+        const x = (gx + 0.2 + hash(gx, gy + 7) * 0.6) * STEP + Math.sin(t * 0.21 + h0 * 9) * 26;
+        const y = (gy + 0.2 + hash(gx + 7, gy) * 0.6) * STEP + Math.cos(t * 0.17 + h0 * 7) * 18;
+        if (wf.regionAt(x, y) !== 'soul_water') continue; // souls live in the water alone
+        // The lifecycle: each figure rises and sinks on its own slow clock.
+        const phase = (t / (14 + h0 * 16) + h0 * 3) % 1;
+        const breath = Math.sin(phase * Math.PI);
+        if (breath <= 0.05) continue;
+        const kind = hash(gx + 13, gy + 3);
+        const s = 10 + hash(gx + 3, gy + 13) * 14; // figure scale
+        if (kind < 0.45) {
+          // A FACE surfacing toward the light: a pale oval, two dark hollows,
+          // an open mouth — gone again before it quite arrives.
+          const a = 0.1 * breath;
+          ctx.fillStyle = `rgba(216, 240, 252, ${a})`;
+          ctx.beginPath(); ctx.ellipse(x, y, s * 0.8, s, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(10, 24, 34, ${a * 1.6})`;
+          ctx.beginPath(); ctx.ellipse(x - s * 0.3, y - s * 0.24, s * 0.14, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(x + s * 0.3, y - s * 0.24, s * 0.14, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(x, y + s * 0.4, s * 0.18, s * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        } else if (kind < 0.72) {
+          // A REACHING HAND: a palm and four trailing fingers, grasping up.
+          const a = 0.09 * breath;
+          const ang = hash(gx + 5, gy + 5) * Math.PI * 2 + Math.sin(t * 0.3 + h0 * 5) * 0.2;
+          ctx.strokeStyle = `rgba(216, 240, 252, ${a})`;
+          ctx.fillStyle = `rgba(216, 240, 252, ${a})`;
+          ctx.save();
+          ctx.translate(x, y); ctx.rotate(ang);
+          ctx.beginPath(); ctx.ellipse(0, 0, s * 0.42, s * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.lineWidth = Math.max(1.4, s * 0.16);
+          for (let f = 0; f < 4; f++) {
+            const fa = -0.5 + f * 0.33;
+            ctx.beginPath();
+            ctx.moveTo(Math.sin(fa) * s * 0.3, -s * 0.4);
+            ctx.quadraticCurveTo(Math.sin(fa) * s * 0.7, -s * 0.95, Math.sin(fa) * s * (0.8 + 0.1 * Math.sin(t * 1.1 + f)), -s * (1.2 + 0.12 * Math.sin(t * 0.9 + f * 2)));
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else {
+          // A SOUL-STREAK riding the current: a long pale sinew slipping
+          // east with the flow, head brighter than tail.
+          const a = 0.08 * breath;
+          const drift = (t * 22 + h0 * 400) % 120 - 60;
+          ctx.strokeStyle = `rgba(191, 232, 255, ${a})`;
+          ctx.lineWidth = Math.max(1.5, s * 0.2);
+          ctx.beginPath();
+          ctx.moveTo(x + drift - s * 3, y + Math.sin(t * 0.8 + h0 * 6) * 5);
+          ctx.quadraticCurveTo(x + drift - s, y - s * 0.5, x + drift + s * 1.6, y);
+          ctx.stroke();
+          ctx.fillStyle = `rgba(216, 244, 255, ${a * 1.7})`;
+          ctx.beginPath(); ctx.arc(x + drift + s * 1.6, y, s * 0.22, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
   }
 
   /** Per-frame VIEW CULL over the zone's doodads, grouped by kind. The ground

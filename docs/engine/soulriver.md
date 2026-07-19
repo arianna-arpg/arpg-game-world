@@ -1,124 +1,126 @@
 # The River of Souls (`world/soulriver.ts` + the `soulriver` recipe)
 
-The underworld's ferry hub: ONE mint-once MEGAZONE (`soul_river`, the
-`uw_gate` stable-id idiom) seated a hashed reach off the Hellgate, carved
-whole by the `soulriver` layout recipe — a serpentine channel of SOUL-WATER
-crossing the arena west → east, a DOCK at every meander apex, worn towpaths
-down both banks — and THE PALE FERRY: a carrier rider on the track fabric
-that puts out from the headwaters, pauses at every pier, frays over the last
-reach, and dissolves at the far strand, reborn at the head on the pure clock.
-Every dock is an ordinary zone EXIT whose frontier PROMISES a different
-country of the realm, so the river is the deep's own index — the Fields hub
-law, below ground.
+The underworld's INLAND SEA — **the inversion**: the zone's ground IS the
+water. One colossal mint-once megazone (`soul_river`, the `uw_gate`
+stable-id idiom) whose whole arena is SOUL-WATER (a grid region), and land
+exists only as the exception — a dock islet at every ferry station, one thin
+causeway stub from each portal to its dock (the only walked paths in the
+zone), and scattered strand-islets adrift in the expanse. THE SOUL-SHIP —
+the Pale Ferry grown to a traversible near-landmass (420×192 of boards, a
+whole fighting ground) — is the honest way across: the water itself drains
+THE SOUL TETHER, so you ride, fight on the deck, and go ashore where the
+ferryman pauses. You are using the environment, and entirely at his whim.
 
-## The Foreordained Tenet, again
+## The Foreordained Tenet
 
 Everything is a pure function of the seed, computed whole at first touch,
-never persisted (the seas doctrine):
+revealed as found, never persisted:
 
-- **The seat** — `riverSeat(gate, fieldSeed)`: a hashed heading + reach off
-  the dimension gate (`SOULRIVER_CFG.seat`). `chartFrontier` funnels any
-  underworld frontier landing in the catch basin to the same shore
-  (mint-once; later finds `linkBackTo` — the field-region law dimensioned).
-- **The plan** — `soulriverPlan(seed, w, h, biomes)`: channel polyline
-  (half-integer serpentine, so head and terminus meet their edges square),
-  half-width, and the DOCK stations — headwater (west), one per apex
-  (alternating south/north), terminus (east) — each with its apron, pier,
-  exit side/`at`, and dealt COUNTRY. The mint hook (`soulriverifyZone`),
-  the layout recipe, and the probes all call the same function; nothing is
-  stored, so nothing can disagree. The country deal is stamped onto
-  `layoutParams.dockBiomes` so a saved river keeps its promised shores.
-- **The lane** — `ferryLaneFor(plan)`: a `once`+`rearm` TrackSpec down the
-  whole channel — boarding hold at the head, a pause at every pier, an
-  alighting pause at the terminus, then the cradle rest (the dissolved
-  window). `SOULRIVER_CFG.ferry.count` ferries ride a phase apart, so a
-  missed boat is never a full cycle's wait.
+- **The soulway** — `SOULWAY_COURSE` (declared in `world/dimensions.ts`,
+  beside its sibling the River of Flame; both spring at the Hellgate): a
+  REAL course on the underworld's chart, so the map wash ribbons an inland
+  SEA across the hell tab for free. `feather 0` on purpose: everywhere the
+  course paints is exactly the corridor `chartFrontier` funnels — any
+  frontier landing on the ribbon finds the same river (the field-region
+  mint-once law over an AREA), so no ordinary soulway zone can ever mint.
+  The biome is a PLACE; one zone wears it.
+- **The seat** — `riverSeat(gate, fieldSeed)`: the course midpoint (the
+  sea's heart is the zone's map node).
+- **The plan** — `soulriverPlan(seed, w, h, biomes)`: the ship's serpentine
+  route, the dock ISLETS (headwater west, one per meander apex alternating
+  south/north, terminus east — each with its outcrop, pier line, exit
+  side/`at`, and dealt COUNTRY), and the STRAND-ISLETS (refusal-sampled
+  clear of the sailing lane and every dock — nothing moors in the ship's
+  way). The mint hook, the recipe, and the probes all call the same
+  function; nothing is stored, so nothing can disagree.
+- **The ports** — `soulriverPorts` (the `ensureSeaPorts` idiom on a
+  course): every dock's DESTINATION mints as a real zone at a spread
+  coordinate along the ribbon (`dockDestCoords` — true world-map
+  geography, not ring-one neighbors), VEILED until found, wearing its
+  promised country's tileset; the river's exits become REAL edges to them,
+  and `searoutes` chain the ports so the map draws the dashed lane down
+  the ribbon. Riding past a pier with a living passenger UNVEILS that
+  dock's destination (the call at the pier — the landing-law reveal).
 
-## THE DECK LAW (`TrackRiderDef.carry`)
+## THE DECK LAW (`TrackRiderDef.carry`) + THE BOARDS SHIELD
 
-The first CARRIER rider: a track rider whose rect surface is moving FOOTING,
-not a hazard. `World.updateCarriers` (just before the latch/grab seat
-slaves) moves every grounded body standing on the boards by the rider's own
-rigid step — `pose(t) ∘ pose(t−dt)⁻¹` applied to the body, so a turning
-deck swings its passengers with the bow, and the summed steps telescope to
-the pose difference regardless of frame slicing (stateless, clock-pure:
-seats, resumes and replays agree by construction). Each step lands through
-the swept `clampPos` (the undertow idiom) — carried bodies stay physical.
-Spares: dead, `flying`/`leap` (you cannot ride boards you float above),
-`clingTo`/`heldBy` (their seats are slaved elsewhere and win the frame).
+The Soul-Ship is a CARRIER rider on the track fabric: a rect surface that
+is moving FOOTING. `World.updateCarriers` (just before the latch/grab seat
+slaves) moves every grounded body standing on the boards by the rider's
+rigid step — `pose(t) ∘ pose(t−dt)⁻¹`, so a turning deck swings its
+passengers with the bow, corner seats included (probe-pinned at a 150,−70
+deck-local seat through a full bend) — landing through the swept
+`clampPos`. Spares: dead, `flying`/`leap`, and `clingTo`/`heldBy` bodies
+(their seats run after and win the frame). Carry riders get their own
+honest lint band (reach ≤ 340; hazard bodies stay ≤ 220), and the rect
+agreement contract speaks a second dialect (`deckHw`/`deckHh`).
 
-A carry rider with an empty payload is a pure platform (the validator
-waiver); payload rows still land as usual for a deck that also bites. The
-harmless lane telegraphs nothing (warn arcs and the rake already gate on
-harmful payloads). `TrackRiderDef.fadeTail` frays the DRAWN hull over the
-last fraction of the ARC (`trackArcFrac` — distance-measured, so dock
-pauses never advance it); the surface stays honest to the last pixel, and
-the rest-edge burst fires at the strand: the implicit "end of the route"
-read. The ferry cannot be destroyed because there is nothing to destroy —
-a rider is a pose, not a body.
+**THE BOARDS SHIELD**: any body whose feet are on a carrier deck (paused or
+sailing) is stamped `Actor.deckUntil`, and the terrain sweep treats it as
+INSURED against the ground beneath — no wading slow on the ferry, no soul
+drain through the hull, no douse — while the survival REGEN tail still
+runs, so the tether breathes back as you ride. The lane is `once`+`rearm`
+(the journey cycle: boarding hold, a pause at every pier, the alighting
+hold, dissolution at the strand, the cradle rest, reborn on the pure
+clock); `fadeTail` frays the drawn hull over the last arc-reach and the
+rest-edge burst fires where it dissolves. Two ships ride a phase apart.
 
-## The water, the current, the mist
+## The water: hazard, current, look
 
-- **`soul_water`** (region + liquid + visuals row): true water in every
-  mechanical respect — wade, swim, douse — but it MIRRORS, glows from
-  beneath (heart wells), and the AI prices it steeply (`pathCost 2.3`), so
-  the living keep to banks, piers, and the boards.
-- **`soul_current`** (`data/creeps.ts`): the vessel bore with the NEW
-  `FrontFlowSpec.channel` window — steering, confinement and spawn snap-in
-  read `groundKindAt ∈ channel` instead of `openAt`, so the surge follows
-  its own WATER between fully open banks (no walls needed) and its grip
-  stops at the waterline. Drag asks every living body DOWNSTREAM
-  (weight-scaled); the riverbound are waived and SURF the crests
-  (`lorn_shade` riders). Legacy rows without `channel` are byte-identical
-  (probe_front's fingerprint pins it).
-- **`soul_mist`** (`data/fog.ts`): pools on the funerary furniture
-  (spirit gates, piers, cairns, rafts, statues) and feeds the riverbound —
-  and because the terminus strand stands the DENSEST dress (the recipe's
-  gradient), the fog thickens exactly where the ferry frays.
+- **`soul_water`** (region row): walkable true water — wade, swim, douse,
+  mirror — that **drains THE SOUL TETHER**: `survival: {resource:'soul',
+  drain:1}` against the new `SURVIVAL_RESOURCES.soul` row (the light-bar
+  fabric repurposed — max 10, regen 2.5 ashore/aboard, and an underflow
+  ramp crueler than drowning: 6%→30% max life/sec over 8s as the river
+  draws the soul out). Player seats only, like every survival meter; the
+  HUD draws the bar for free (it loops the table).
+- **`soul_current`** (creep): the vessel bore with `flow.channel:
+  ['soul_water']` — steering, confinement and snap-in read
+  `groundKindAt ∈ channel`, and the world's terrain window now folds GRID
+  regions into `groundKindAt` (doodad grounds first; bare cells still
+  null), so the surges ROAM the whole sea, part around the islets, drag
+  the living downstream, and carry crest-surfing shades. Legacy fronts are
+  byte-identical (probe_front's fingerprint pins it).
+- **The LIVING look** — `RegionVisualSpec.animate: 'souls'`: the region's
+  fill breathes in slow broad swathes (the per-cell animated pass), and a
+  dedicated under-surface overlay drifts pale FIGURES through the water —
+  a face surfacing toward the light, a reaching hand, a soul-streak riding
+  the current — seeded on a world-anchored lattice (stateless, view-culled,
+  a handful of path draws per frame). Alive, on the very precipice of
+  death. The pale-silt floor bake beneath IS the land read: the islets are
+  simply where the water isn't.
 
-## THE HUNGER (`World.updateSoulriver`)
+## THE HUNGER + the Riverbound
 
-While any living player rides mid-journey, souls conjure from the pale
-water around the boards — pre-roused, capped live, the cap breathing with
-`trackArcFrac` (deeper water, hungrier dead: `assault.escalate`), heavier
-company past the midway (haulers, then banshees), and a lull at every pier
-(dock pauses are breathers). Spawns are ordinary actors: xp, loot,
-bestiary, nemesis names, the current's crest seats all treat them as
-citizens. The drowned hauler's `gaff_cast` DRAGS a passenger off the
-boards into the water — the grab fabric's drag verb, drowned.
-
-## The Riverbound (faction `riverbound`)
-
-Coin-eyed and gauze-hung — the family grammar at a glance is two NEW part
-painters: **obolEyes** (currency for a face; deliberately the anti-`eyes`:
-no glow, one metal glint) and **soulGauze** (one loose whole-body veil that
-never settles — distinct from veilSashes' ribbons and shroudWrap's bands).
-`lorn_shade` (bread kin, drinks with `essence_drain`, surfs the current),
-`drowned_hauler` (the gaff over the gunwale), `soul_wellspring` (a colony
-anchor breathing `soul_mote`s back to cap — extinguish the spring and that
-bank stays quiet; its `vent_souls` pours the pool mid-fight), `soul_mote`
-(the lite tier's wading-through shimmer, one ply), `farshore_warden` (the
-terminus keeper: shriek, soul volley, and the water's own passengers).
-Graveyard guests (gloomling, poltergeist, banshee, barrow wight) fill the
-banks — leverage before invention.
+While any living player rides mid-journey, souls conjure from the water
+around the boards — pre-roused, capped live (the cap breathes with
+`trackArcFrac` toward ×2 at the terminus), heavier company past midway
+(haulers, then banshees), a lull at every pier. The deck is the arena: a
+melee line flanks around freight and masts on 420×192 of boards. Faction
+`riverbound` (obolEyes + soulGauze — the coin-eyed, gauze-hung family
+grammar): `lorn_shade`, `drowned_hauler` (gaff-drags passengers off the
+boards), `soul_wellspring` (colony anchor + `vent_souls`), `soul_mote`
+(lite), `farshore_warden`; graveyard guests fill the water between.
 
 ## Dials
 
-`SOULRIVER_CFG` (seat / plan / ferry / assault) in `world/soulriver.ts`;
-the tileset (`river_of_souls`, biome `soulway`, `frontier:false`,
-`realm:'underworld'`, `perfProbe`) owns dress, packs, fog, current lanes
-and the lite pours; `TRACK_CFG` unchanged. The Stygian Verdigris variant
-turns the palette green (the variant `theme` lever) — the well of souls'
-other face.
+`SOULRIVER_CFG` (plan / ferry / assault / ports) in `world/soulriver.ts`;
+`SOULWAY_COURSE` in `world/dimensions.ts`; the tileset
+(`river_of_souls`, biome `soulway`, `frontier:false`, `realm:'underworld'`,
+`perfProbe`) owns theme, packs, fog, current lanes and lite pours — its
+stamp rows are EMPTY on purpose (the scatter's ground gates speak doodad
+grounds, not grid regions, so all land dress is recipe-placed on the plan's
+own masks). The Stygian Verdigris variant turns the palette green.
 
 ## Probes
 
-`balance/probe_soulriver.ts` (52 checks): plan purity + station laws +
-the deal, seat laws, lane schedule + the rearm cycle + arc-frac, THE DECK
-LAW live (rigid seats through bends, paused-deck stillness, off-board
-release, the aloft spare, byte-determinism of carried positions), dockify
-(exits rewritten, real edges kept, promised tilesets resolving), and the
-channel window (turns with the water across open banks; confined undertow;
-the riverbound waived). `probe_front` pins legacy creep byte-identity;
-`probe_tracks`, `probe_bore`, `probe_anatomy`, `probe_lite`, `probe_swarm`
-stand unregressed beside it; genqa sweeps both river faces.
+`balance/probe_soulriver.ts` (54 checks): plan purity + station laws + the
+deal + THE ISLET LAWS (clear of the sailing lane), the course seat +
+corridor funnel + spread port coordinates, lane schedule + the rearm cycle
++ arc-frac, THE DECK LAW live (a corner seat rigid through bends on the
+near-landmass deck), THE BOARDS SHIELD + THE SOUL TETHER live (grid water
+drains; the deck suspends; ashore refills), byte-determinism of carried
+positions, the ports mint (veiled + spread + real edges + the searoute
+chain + idempotence), and the channel window (turns with the water across
+open banks; confined undertow; the riverbound waived). `probe_front`'s
+fingerprint pins legacy creep; genqa sweeps both faces of the sea.

@@ -586,7 +586,11 @@ export function validateTrackRiders(warn: (msg: string) => void): void {
   for (const def of Object.values(TRACK_RIDERS)) {
     const s = def.surface;
     const reach = s.kind === 'circle' ? s.r : Math.hypot(s.hw, s.hh);
-    if (!(reach > 2) || reach > 220) warn(`track rider ${def.id}: surface reach ${reach.toFixed(0)}px outside (2,220]`);
+    // Hazard bodies stay blade-scale; a CARRIER is a deck — a traversible
+    // near-landmass gets its own honest band (the Soul-Ship's whole
+    // fighting ground rides one rect).
+    const reachCap = def.carry ? 340 : 220;
+    if (!(reach > 2) || reach > reachCap) warn(`track rider ${def.id}: surface reach ${reach.toFixed(0)}px outside (2,${reachCap}]`);
     if (def.spin !== undefined && Math.abs(def.spin) > 24) warn(`track rider ${def.id}: spin ${def.spin} rad/s is a blender`);
     const p = def.payload;
     // A carry rider is a PLATFORM — an empty payload is its whole point.

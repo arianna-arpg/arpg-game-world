@@ -2523,8 +2523,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // (validate.ts pins the agreement like the flail's beam).
   pale_ferry: {
     painter: 'soulFerry', order: 46,
-    light: { radius: 110, color: '#9fd8ec', intensity: 0.4, flicker: 2 },
-    params: { deckHw: 88, deckHh: 42, hull: '#243640', boards: '#3c4c54', trim: '#cfc8b4', glow: '#9fd8ec', lantern: '#ffe0b0' },
+    light: { radius: 200, color: '#9fd8ec', intensity: 0.4, flicker: 2 },
+    params: { deckHw: 210, deckHh: 96, hull: '#243640', boards: '#3c4c54', trim: '#cfc8b4', glow: '#9fd8ec', lantern: '#ffe0b0' },
   },
   ghost_hull: {
     painter: 'ghostHull', order: 46,

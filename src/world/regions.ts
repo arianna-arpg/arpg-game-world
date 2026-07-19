@@ -95,8 +95,12 @@ export interface RegionVisualSpec {
   alpha?: number;
   /** A gentle animated shimmer/pulse (renderer interprets). 'prism' walks
    *  the fill's hue around the whole spectrum, phase-offset per cell — the
-   *  rainbow-span grammar (the declared fill becomes the fallback only). */
-  animate?: 'shimmer' | 'pulse' | 'drift' | 'prism';
+   *  rainbow-span grammar (the declared fill becomes the fallback only).
+   *  'souls' is the LIVING WATER (the River of Souls): the deep's fill
+   *  breathes slow, and the renderer drifts pale under-surface FIGURES —
+   *  faces, reaching hands, long streaks — through the covered cells
+   *  (alive, on the very precipice of death). */
+  animate?: 'shimmer' | 'pulse' | 'drift' | 'prism' | 'souls';
   /** BOUNDARY EDGE: painted on every side facing walkable ground so the
    *  region's rim READS at a glance — a flesh wall's pale membrane, the
    *  mycelium's luminous weave. Bakes with the ground chunks; `width` in
@@ -304,6 +308,14 @@ export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
   // drowning: same ramp shape, the panic of the unlit. The HUD survival readout
   // draws this meter for free (it loops this table).
   light: { id: 'light', label: 'Light', max: 100, regen: 0, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, underflowText: 'the dark gnaws!', underflowTextColor: '#a89ad0', color: '#ffe08a' },
+  // THE SOUL TETHER — the River of Souls' meter (world/soulriver.ts): the
+  // pale water's dead GRASP at the living. Drains while soul-water is the
+  // ground under your feet (the region row names it); refills fast ashore
+  // and on the Soul-Ship's boards (THE BOARDS SHIELD suspends the ground
+  // entirely). Underflow is the river DRAWING THE SOUL OUT — the drowning
+  // ramp's shape, crueler: linger and it takes you whole. The HUD readout
+  // draws this meter for free (it loops this table).
+  soul: { id: 'soul', label: 'Soul', max: 10, regen: 2.5, underflowPctLifePerSec: 0.06, underflowRampTo: 0.3, underflowRampSecs: 8, underflowText: 'the river takes hold!', underflowTextColor: '#9fd8ec', color: '#9fd8ec' },
 };
 
 export function survivalResource(id: string): SurvivalResourceDef | undefined { return SURVIVAL_RESOURCES[id]; }
@@ -432,14 +444,20 @@ registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp',
 registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8,
   douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the water quenches…' } });
 registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true, pathCost: 1.25 });
-// SOUL-WATER — the River of Souls' own flow (engine/soulriver + the
-// soul_current creep kind): true water in every mechanical respect — wade,
-// swim, douse — but it MIRRORS (the dead look back), and the AI prices it
-// steeply so the living keep to banks, piers, and the ferry's boards. The
-// current's grip and the soulchill are the CREEP's grants, not the region's:
-// still soul-water is merely cold company.
+// SOUL-WATER — the River of Souls' whole GROUND (the inversion:
+// world/soulriver.ts pours it over the entire arena as a GRID region; land
+// is the exception). True water in every mechanical respect — wade, swim,
+// douse — but it MIRRORS (the dead look back), it is ALIVE (the renderer's
+// 'souls' pass: the deep breathes, and pale figures drift beneath the
+// surface), and it DRINKS: standing in it drains THE SOUL TETHER (the
+// survival fabric — 'soul' row above), so the living ride the Soul-Ship or
+// hop the strand-islets, and swimming is a spent resource, never a stroll.
+// The AI prices it steeply; the current's push and the soulchill are the
+// CREEP's grants on top.
 registerRegion({ id: 'soul_water', walkable: true, blocks: false, label: 'the pale water',
-  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 2.3,
+  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 2.6,
+  survival: { resource: 'soul', drain: 1 },
+  visual: { fill: '#0e2e40', alpha: 0.86, animate: 'souls' },
   douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the pale water quenches…' } });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5,

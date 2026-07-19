@@ -3659,24 +3659,25 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'motes', intensity: 0.2, color: '#eafaff' },
       ],
       ground: {
-        // Grave-silt banks: blue-grey slates, cold and waterworn.
-        palette: ['#101418', '#151a20', '#1a2128', '#1f2830', '#242f38'],
+        // THE INVERSION wears two skins: the FLOOR bakes as pale bone-silt
+        // (the islets' land read), and the soul_water region's LIVING wash
+        // (animate 'souls', alpha .86) drowns it everywhere the sea runs —
+        // so land is simply where the water isn't.
+        palette: ['#59635d', '#616c66', '#69746e', '#718077', '#7a8a80'],
         bias: 0.42, alpha: 0.5, stretchX: 1.3, speckles: 0.6, strength: 1.05,
       },
-      floor: '#11151a', grid: '#1a2026', border: '#3e5468',
+      floor: '#66716b', grid: '#5a655f', border: '#3e5468',
       obstacle: '#232b33', obstacleEdge: '#4a5c6c', accent: '#9fd8ec',
       wall: '#2e3a44', water: '#16384e', chasm: '#0a0d12', mud: '#20262c', sand: '#4a5058',
-      // The dead walk the towpaths: the road kind reads as pale trodden silt.
-      road: '#39424c',
       fog: { banks: [2, 3], kinds: [{ id: 'soul_mist', weight: 2 }, { id: 'river_mist' }] },
       creep: {
         pockets: [0, 0], kinds: [{ id: 'soul_current' }],
-        // THE CURRENT: surge after surge born at the headwater, bearing east
-        // down the channel (the flow.channel window holds each bore to the
-        // soul-water between open banks). Announced the first time only by
-        // its own foam — the river needs no herald.
+        // THE CURRENT: surge after surge born at the west reach, bearing
+        // east across the open sea (the flow.channel window holds each bore
+        // to soul-water — which is now the whole expanse: the currents ROAM,
+        // and the strand-islets part them). Announced only by its own foam.
         fronts: [{
-          id: 'soul_current', line: [1, 2], bearing: 0, delay: [6, 12], waves: [10, 18], chance: 0.95,
+          id: 'soul_current', line: [2, 3], bearing: 0, delay: [6, 12], waves: [10, 18], chance: 0.95,
         }],
       },
       // Soul motes adrift on the banks (the lite tier): a wading-through
@@ -3691,41 +3692,31 @@ export const TILESETS: Record<string, TilesetDef> = {
     // mints it by id); perfProbe joins it to the sweep's permanent gate.
     sizeW: [4600, 5100], sizeH: [2800, 3200], ellipseChance: 0,
     frontier: false, realm: 'underworld', perfProbe: true,
-    layout: [
-      // Ground dress first (solids honour forbidOn), then the funerary
-      // furniture: rafts adrift near the water, cairns and stelae on the
-      // banks, reeds in the shallows.
-      { kind: 'candle_raft', count: [3, 6], where: { field: 'shore', max: 0.5, params: { kinds: ['soul_water'], reach: 120 } } },
-      { kind: 'drowned_cairn', count: [3, 6] },
-      { kind: 'sunken_statue', count: [2, 4], where: { field: 'shore', max: 0.6, params: { kinds: ['soul_water'], reach: 170 } } },
-      { kind: 'pale_rushes', count: [4, 8], where: { field: 'shore', max: 0.55, params: { kinds: ['soul_water'], reach: 150 } } },
-      { kind: 'bone_pile', count: [2, 4] },
-      { kind: 'dead_tree', count: [2, 5] },
-      { kind: 'rocks', count: [5, 9], radius: [20, 40] },
-      { kind: 'formation', count: [1, 2], formation: 'drowned_procession' },
-      { kind: 'formation', count: [0, 1], formation: 'lantern_vigil' },
-    ],
+    // NO stamp rows ON PURPOSE (the inversion): the whole arena is water,
+    // and the scatter's ground gates (forbidOn/walkOnly) speak doodad
+    // grounds, not grid regions — so every piece of land dress is placed by
+    // the RECIPE on its own land masks (dock islets, strand-islets, the
+    // wading statues of the last reach). The zone's furniture lives in
+    // layoutRecipes.soulriverLayout, seeded from the same plan stream.
+    layout: [],
     variants: [
-      // STYGIAN VERDIGRIS: the older, greener water — the Hercules well of
-      // souls read. Same bones, the palette turned; the theme override rides
-      // the variant lever so both faces stay one tileset.
+      // STYGIAN VERDIGRIS: the older, greener water — the well-of-souls'
+      // other face. Same bones, the palette turned; the theme override
+      // rides the variant lever so both faces stay one tileset. (The water
+      // region's own fill stays data on the region row — the variant turns
+      // the LAND, the motes, and the accent; the deep reads greener through
+      // its tinted theme.water + the accent light.)
       {
         name: 'Stygian Verdigris',
         theme: {
           accent: '#8ce8c8', water: '#143e3a',
+          floor: '#647065', grid: '#586459',
           ambientFx: [
             { kind: 'motes', intensity: 0.5, color: '#8ce8c8' },
             { kind: 'motes', intensity: 0.2, color: '#eafff4' },
           ],
         },
-        layout: [
-          { kind: 'candle_raft', count: [2, 5], where: { field: 'shore', max: 0.5, params: { kinds: ['soul_water'], reach: 120 } } },
-          { kind: 'drowned_cairn', count: [4, 7] },
-          { kind: 'sunken_statue', count: [3, 5], where: { field: 'shore', max: 0.6, params: { kinds: ['soul_water'], reach: 170 } } },
-          { kind: 'pale_rushes', count: [6, 10], where: { field: 'shore', max: 0.55, params: { kinds: ['soul_water'], reach: 150 } } },
-          { kind: 'bone_pile', count: [3, 5] },
-          { kind: 'formation', count: [1, 2], formation: 'drowned_procession' },
-        ],
+        layout: [],
       },
     ],
     packs: {
@@ -9393,10 +9384,13 @@ export function pickTilesetForBiome(
   return c[c.length - 1];
 }
 
-/** Boot check: which BIOME_FIELD biomes have NO frontier tileset (would fall back
- *  to the inherited line — the coverage gap). */
+/** Boot check: which BIOME_FIELD biomes have NO tileset AT ALL (would fall
+ *  back to the inherited line — the coverage gap). REALM-owned tilesets
+ *  count as coverage: a realm course biome minted through its dimension's
+ *  own pool (the soulway's funnel-minted sea) is covered, not a gap. */
 export function biomesWithoutTileset(fieldBiomes: string[]): string[] {
-  return fieldBiomes.filter(b => !(TILESETS_BY_BIOME[b]?.length));
+  return fieldBiomes.filter(b => !(TILESETS_BY_BIOME[b]?.length)
+    && !Object.values(REALM_TILESETS_BY_BIOME).some(pool => pool[b]?.length));
 }
 
 /** The tileset a PORT mints as, inside `biome`: DOCK-WEIGHTED faces only

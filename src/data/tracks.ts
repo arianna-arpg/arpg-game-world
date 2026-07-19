@@ -70,11 +70,13 @@ registerTrackRider({
 registerTrackRider({
   id: 'pale_ferry',
   kind: 'pale_ferry',
-  surface: { kind: 'rect', hw: 88, hh: 42 },
+  // THE SOUL-SHIP: a traversible near-landmass — the whole deck a fighting
+  // ground (a melee line can flank, kite, and hold lanes ON the boards).
+  surface: { kind: 'rect', hw: 210, hh: 96 },
   orient: 'lane',
   payload: {},
   carry: true,
-  fadeTail: 0.14,
+  fadeTail: 0.12,
   warnAhead: 0,
   color: '#9fd4e8',
 });

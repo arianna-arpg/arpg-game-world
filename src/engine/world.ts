@@ -132,7 +132,7 @@ import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD
 import { boundaryGateOf } from '../data/boundaryGates';
 import { meldOf } from '../data/melds';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
-import { nearRiverSeat, riverSeat, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
+import { dockDestCoords, nearRiverSeat, riverSeat, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
@@ -7747,10 +7747,11 @@ export class World {
     def.exits.push(...rebuilt);
   }
 
-  /** THE RIVER OF SOULS — mint the underworld's ferry-hub megazone at its
+  /** THE RIVER OF SOULS — mint the underworld's inland sea at its
    *  foreordained seat (mint-once, stable id — the uw_gate idiom for a
-   *  PLACE), then dockify it. The discovering neighbor keeps the ordinary
-   *  back-edge: that road is the shore the walker found. */
+   *  PLACE: the soulway course's midpoint), then mint its PORTS. The
+   *  discovering neighbor keeps the ordinary back-edge: that road is the
+   *  shore the walker found. */
   private mintSoulriverZone(source: ZoneDef, gateCoord: MapCoord): ZoneDef {
     const dimId = SOULRIVER_CFG.dimension;
     const seat = riverSeat(gateCoord, this.sim.biomeField.fieldSeed);
@@ -7759,8 +7760,8 @@ export class World {
       name: 'The River of Souls',
       tileset: SOULRIVER_CFG.tileset,
       seed: (this.manifest.seed ^ 0x5001f) >>> 0,
-      // A place, not a task: the ferry is the ask, and docks never seal.
-      objective: { kind: 'none', label: 'the Pale Ferry calls at every shore' },
+      // A place, not a task: the ship is the ask, and docks never seal.
+      objective: { kind: 'none', label: 'the Soul-Ship calls at every shore' },
       forceFrontiers: 0,
       dimension: dimId,
       biomeFor: this.dimensionBiomeFor(dimId),
@@ -7769,41 +7770,69 @@ export class World {
       climateFor: this.climateFor,
     });
     gen.level += dimensionDef(dimId)?.levelBonus ?? 0;
-    this.soulriverifyZone(gen);
     this.zoneMap[gen.id] = gen;
+    this.soulriverPorts(gen, gateCoord);
     this.sim.onNodeCharted(gen, this.simView());
     return gen;
   }
 
-  /** Rewrite the river's frontiers to its DOCK PLAN (world/soulriver.ts):
-   *  one exit per station, each frontier PROMISING a different country of
-   *  the realm — side/at from the same pure plan the layout recipe carves
-   *  from, so portal and pier agree by construction. Real (non-'?') edges —
-   *  the discovery shore, later woven links — are kept untouched. Runs at
-   *  mint, before the zone is loaded, so rebuilding def.exits is safe (the
-   *  fieldifyZone contract). */
-  private soulriverifyZone(def: ZoneDef): void {
-    if (def.id !== SOULRIVER_CFG.zoneId) return;
+  /** THE PORTS OF THE INLAND SEA (the ensureSeaPorts idiom on a course):
+   *  every dock's DESTINATION mints as a real zone at a spread coordinate
+   *  along the soulway ribbon (dockDestCoords — the world map's own
+   *  geography, not ring-one neighbors), VEILED until found, wearing its
+   *  promised country's tileset. The river's own exits become REAL edges to
+   *  them — side/at from the same pure plan the recipe pours, so portal and
+   *  pier agree by construction — and searoutes chain the ports so the map
+   *  draws the lane down the ribbon. Real (non-'?') edges — the discovery
+   *  shore, later woven links — are kept untouched. Idempotent per port. */
+  private soulriverPorts(river: ZoneDef, gateCoord: MapCoord): void {
+    if (river.id !== SOULRIVER_CFG.zoneId) return;
     const dimId = SOULRIVER_CFG.dimension;
     const palette = (dimensionDef(dimId)?.biomes ?? []).map(b => b.biome);
     // Stamp the deal the layout reads (layoutParam 'dockBiomes') — a saved
-    // river keeps its promised shores even if the realm's palette moves in
-    // a later version.
-    def.layoutParams = { ...def.layoutParams, dockBiomes: palette };
-    const plan = soulriverPlan(def.seed ?? 0, def.size.w, def.size.h, palette);
-    const reals = def.exits.filter(x => x.to !== '?');
-    const rng = new Rng(((def.seed ?? 0) ^ 0xd0c5) >>> 0);
+    // river keeps its promised shores even if the realm's palette moves.
+    river.layoutParams = { ...river.layoutParams, dockBiomes: palette };
+    const plan = soulriverPlan(river.seed ?? 0, river.size.w, river.size.h, palette);
+    const coords = dockDestCoords(gateCoord, this.sim.biomeField.fieldSeed, plan.docks.length);
+    const rng = new Rng(((river.seed ?? 0) ^ 0xd0c5) >>> 0);
+    // Real edges that are NOT ours (the discovery shore, later woven links)
+    // survive; our own dock edges rebuild from the plan every call, so the
+    // ensure is idempotent (the re-run doubles nothing).
+    const reals = river.exits.filter(x => x.to !== '?' && !x.to.startsWith('soul_dock_'));
     const rebuilt: ZoneExitDef[] = [...reals];
-    const probe = { exits: rebuilt, size: def.size };
+    const probe = { exits: rebuilt, size: river.size };
+    let prevId: string | undefined;
     for (const dock of plan.docks) {
-      const tileset = pickTilesetForBiome(dock.biome, rng, undefined, dimId);
-      rebuilt.push({
-        to: '?', side: dock.side, at: spacedExitAt(probe, dock.side, dock.at),
-        ...(tileset ? { tileset } : {}),
-      });
+      const id = `soul_dock_${dock.i}`;
+      let dest = this.zoneMap[id];
+      if (!dest) {
+        const tileset = pickTilesetForBiome(dock.biome, rng, undefined, dimId);
+        dest = placeZoneAt(coords[dock.i] ?? river.map, river, this.zoneMap, this.nextGenId++, {
+          id,
+          ...(tileset ? { tileset } : {}),
+          seed: (this.manifest.seed ^ hashStr(id)) >>> 0,
+          dimension: dimId,
+          biomeFor: this.dimensionBiomeFor(dimId),
+          levelFor: this.levelFor,
+          biomeDepthFor: this.dimensionBiomeDepthFor(dimId),
+          climateFor: this.climateFor,
+        });
+        dest.level += dimensionDef(dimId)?.levelBonus ?? 0;
+        dest.veiled = true; // the sea's ports reveal as found (ride past, or walk in)
+        this.zoneMap[id] = dest;
+        this.sim.onNodeCharted(dest, this.simView());
+      }
+      rebuilt.push({ to: id, side: dock.side, at: spacedExitAt(probe, dock.side, dock.at) });
+      // THE LANE LAW: chain the ports so the hell map draws the dashed way
+      // down the ribbon (both ends veil-gated — the lane reveals as found).
+      if (prevId) {
+        const prev = this.zoneMap[prevId];
+        if (prev && !(prev.searoutes ?? []).includes(id)) (prev.searoutes ??= []).push(id);
+      }
+      prevId = id;
     }
-    def.exits.length = 0;
-    def.exits.push(...rebuilt);
+    river.exits.length = 0;
+    river.exits.push(...rebuilt);
   }
 
   /** A SURFACE anchor for directed event mints whose nearestNode search came up
@@ -36419,19 +36448,27 @@ export class World {
         const prev = trackPose(tr, this.time - dt, r.phase, r.def);
         if (prev.pending) continue;             // birth frame — no step yet
         const dRot = Math.atan2(Math.sin(pose.rot - prev.rot), Math.cos(pose.rot - prev.rot));
+        // A paused deck moves nobody — but its SHIELD still stamps (the
+        // boards are between you and the water whether or not they move).
         const still = Math.abs(pose.x - prev.x) < 1e-6 && Math.abs(pose.y - prev.y) < 1e-6
           && Math.abs(dRot) < 1e-6;
-        if (still) continue;                    // paused at a dock — nothing moves
         const cos = Math.cos(dRot), sin = Math.sin(dRot);
         const board = riderSurface(r.def, prev);
         for (const a of this.actors) {
-          if (a.dead || a.flying || a.leap || a.clingTo || a.heldBy) continue;
+          if (a.dead || a.flying || a.leap) continue;
           if (a.pos.x < tr.bound.x0 - a.radius || a.pos.x > tr.bound.x1 + a.radius
             || a.pos.y < tr.bound.y0 - a.radius || a.pos.y > tr.bound.y1 + a.radius) continue;
           // Feet on the boards where the deck WAS: the center decides (a
           // body straddling the rim keeps its own footing and is left
           // behind — the honest gangplank moment).
           if (!shapeContains(board, prev.x, prev.y, a.pos.x, a.pos.y, 0)) continue;
+          // THE BOARDS SHIELD: a deckborne body stands INSURED against the
+          // ground beneath (the terrain sweep skips it — no wading slow on
+          // the ferry, no soul-tether drain over the pale water; the boards
+          // are between you and the river). Stamped even while the deck is
+          // paused or the body's seat is slaved elsewhere.
+          a.deckUntil = this.time + 0.3;
+          if (still || a.clingTo || a.heldBy) continue; // no step / seats win the frame
           const lx = a.pos.x - prev.x, ly = a.pos.y - prev.y;
           const nx = pose.x + lx * cos - ly * sin;
           const ny = pose.y + lx * sin + ly * cos;
@@ -36474,6 +36511,22 @@ export class World {
       if (deck) break;
     }
     if (!deck) return;
+    // THE CALL AT THE PIER: pausing at a dock with a living passenger
+    // aboard REVEALS that dock's destination on the chart (the landing-law
+    // reveal — riding the sea surveys its ports).
+    if (deck.paused) {
+      const palette = (this.zone.layoutParams as { dockBiomes?: string[] } | undefined)?.dockBiomes ?? [];
+      const plan = soulriverPlan(this.zone.seed ?? 0, this.zone.size.w, this.zone.size.h, palette);
+      const atDock = plan.docks.find(d => Math.hypot(d.pier.x - deck!.x, d.pier.y - deck!.y) < 70);
+      if (atDock) {
+        const dest = this.zoneMap[`soul_dock_${atDock.i}`];
+        if (dest?.veiled) {
+          dest.veiled = false;
+          this.surveyed.add(dest.id);
+          this.text(vec(deck.x, deck.y - 90), `the ship calls at ${dest.name}`, '#9fd8ec', 15);
+        }
+      }
+    }
     // Docked = a breather: the hunger slackens to a trickle at the piers.
     if (deck.paused && Math.random() > cfg.lull) return;
     const live = this.actors.reduce((n, a) => n + (!a.dead && a.tag === 'soulriver_assault' ? 1 : 0), 0);
@@ -36595,7 +36648,10 @@ export class World {
     }
     field.setWays(ways);
     field.setTerrain({
-      groundKindAt: (x, y) => this.groundAt(vec(x, y))?.kind ?? null,
+      // Doodad grounds first, then GRID regions (the soulriver's inland sea
+      // is a region, not discs — the current's flow.channel window must see
+      // it). Bare cells still answer null: legacy fronts read identically.
+      groundKindAt: (x, y) => this.groundAt(vec(x, y))?.kind ?? this.walk?.regionAt?.(x, y) ?? null,
       eachFuelNear: (x, y, r, fn) => {
         for (const d of this.doodadsNear(x, y, r)) {
           if (d.gone || d.keep || d.door) continue;
@@ -37051,6 +37107,19 @@ export class World {
     for (const a of this.actors) {
       if (a.dead || a.construct || a.leap) { a.groundKind = undefined; a.gridRegion = undefined; continue; }
       drained.clear();
+      // DECKBORNE bodies stand insured against the ground beneath (THE
+      // BOARDS SHIELD — updateCarriers stamps deckUntil): the boards are
+      // between them and the water, so no stand status, no survival drain,
+      // no douse reaches up through the hull — but the tail of this loop
+      // still runs, so the SOUL TETHER (and breath, and every meter)
+      // breathes back while you ride. Falls through with both region reads
+      // cleared and nothing drained.
+      if ((a.deckUntil ?? 0) > this.time) {
+        a.groundKind = undefined; a.gridRegion = undefined;
+        this.douseSweep(a, dt);
+        this.regenSurvival(a, drained, dt);
+        continue;
+      }
       // VEIL cover (canopy patches): standing under a member crown wears the
       // veil's standStatus — the fogveiled pattern, detectability as data.
       // ONE bucket query per actor; statuses/AI read the rest from the sheet.
@@ -37079,20 +37148,25 @@ export class World {
       // region sources freshly stamped, the refuge lane sheds what the
       // row under this body names.
       this.douseSweep(a, dt);
-      // Survival regen for every resource NOT drained this frame (breath refills
-      // out of the water). Only actors that ever entered a draining region carry a map.
-      // External holds count too: a fabric draining from OUTSIDE this sweep
-      // (the flood front's drown lane) stamps survivalHeldAt — no refilling
-      // against a head held under.
-      if (a.survival) {
-        for (const [res, val] of a.survival) {
-          if (drained.has(res)) continue;
-          const held = a.survivalHeldAt?.[res];
-          if (held !== undefined && this.time - held < 0.12) continue;
-          const sd = survivalResource(res);
-          if (sd && val < sd.max) a.survival.set(res, Math.min(sd.max, val + sd.regen * dt));
-        }
-      }
+      this.regenSurvival(a, drained, dt);
+    }
+  }
+
+  /** Survival regen for every resource NOT drained this frame (breath refills
+   *  out of the water; the soul tether breathes back ashore AND on the
+   *  Soul-Ship's boards — the deckborne branch above calls this too). Only
+   *  actors that ever entered a draining region carry a map. External holds
+   *  count: a fabric draining from OUTSIDE this sweep (the flood front's
+   *  drown lane) stamps survivalHeldAt — no refilling against a head held
+   *  under. */
+  private regenSurvival(a: Actor, drained: Set<string>, dt: number): void {
+    if (!a.survival) return;
+    for (const [res, val] of a.survival) {
+      if (drained.has(res)) continue;
+      const held = a.survivalHeldAt?.[res];
+      if (held !== undefined && this.time - held < 0.12) continue;
+      const sd = survivalResource(res);
+      if (sd && val < sd.max) a.survival.set(res, Math.min(sd.max, val + sd.regen * dt));
     }
   }
 

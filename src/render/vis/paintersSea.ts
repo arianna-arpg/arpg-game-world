@@ -269,65 +269,109 @@ const soulFerry: GroupPainter = (env, group, def) => {
     ctx.strokeStyle = withAlpha(glow, 0.75);
     ctx.lineWidth = 1.6;
     ctx.stroke();
-    // The boards: long deck planks bow → stern, a shade lighter than the hull.
+    // The boards: long deck planks bow → stern, a shade lighter than the
+    // hull, seamed at the beam-joints so the great deck reads BUILT.
     ctx.fillStyle = boards;
     ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
     ctx.strokeStyle = withAlpha(shade(boards, -0.3), 0.6);
     ctx.lineWidth = 1;
-    for (let i = -2; i <= 2; i++) {
+    for (let i = -4; i <= 4; i++) {
       ctx.beginPath();
-      ctx.moveTo(-hw + 4, i * hh * 0.4);
-      ctx.lineTo(hw - 4, i * hh * 0.4);
+      ctx.moveTo(-hw + 4, i * hh * 0.22);
+      ctx.lineTo(hw - 4, i * hh * 0.22);
       ctx.stroke();
     }
-    // Gunwale trim: the bone-pale cap rail around the boards.
+    ctx.strokeStyle = withAlpha(shade(boards, -0.4), 0.45);
+    for (let i = -3; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * hw * 0.28, -hh + 3);
+      ctx.lineTo(i * hw * 0.28, hh - 3);
+      ctx.stroke();
+    }
+    // Gunwale trim with BOARDING GAPS amidship on both rails — the gangway
+    // breaks where the piers meet her (the rail tells you where to step).
     ctx.strokeStyle = withAlpha(trim, 0.8);
-    ctx.lineWidth = 2.2;
-    ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
-    // Lashed freight amidships: two coffin-shaped crates, roped down.
+    ctx.lineWidth = 2.6;
+    const gapC = -hw * 0.05, gapW = hw * 0.16;
     for (const s of [-1, 1]) {
-      const cx = -hw * 0.15 + (s > 0 ? hw * 0.28 : 0);
-      const cy = s * hh * 0.34;
+      ctx.beginPath(); ctx.moveTo(-hw, s * hh); ctx.lineTo(gapC - gapW, s * hh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gapC + gapW, s * hh); ctx.lineTo(hw, s * hh); ctx.stroke();
+      // Gap posts: a pale stanchion at either side of each gangway break.
+      ctx.fillStyle = trim;
+      ctx.beginPath(); ctx.arc(gapC - gapW, s * hh, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(gapC + gapW, s * hh, 2.6, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.beginPath(); ctx.moveTo(-hw, -hh); ctx.lineTo(-hw, hh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hw, -hh); ctx.lineTo(hw, hh); ctx.stroke();
+    // THE WHEELHOUSE astern: a low cabin with a pale-lit window — the
+    // ferryman's post stands before it.
+    ctx.fillStyle = shade(hull, 0.12);
+    ctx.fillRect(-hw * 0.86, -hh * 0.42, hw * 0.3, hh * 0.84);
+    ctx.strokeStyle = withAlpha(trim, 0.6);
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(-hw * 0.86, -hh * 0.42, hw * 0.3, hh * 0.84);
+    ctx.fillStyle = withAlpha(glow, 0.5 + 0.1 * Math.sin(t * 2.2));
+    ctx.fillRect(-hw * 0.78, -hh * 0.12, hw * 0.1, hh * 0.24);
+    // TWO LANTERN MASTS on the centerline: ringed feet, pale lamps aloft.
+    for (const mx of [hw * 0.34, -hw * 0.28]) {
+      ctx.fillStyle = shade(hull, 0.3);
+      ctx.beginPath(); ctx.arc(mx, 0, 6.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha(trim, 0.7);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(mx, 0, 6.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = withAlpha(glow, 0.85);
+      ctx.beginPath(); ctx.arc(mx, 0, 2.6 + Math.sin(t * 4 + mx) * 0.5, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha(glow, 0.25);
+      ctx.beginPath(); ctx.arc(mx, 0, 11, 0, Math.PI * 2); ctx.stroke();
+    }
+    // LASHED FREIGHT in four stations — coffin-crates and a barrel ring,
+    // the cover a fighting line works around.
+    const freight = [
+      { x: hw * 0.58, y: -hh * 0.42, r: 0.06 }, { x: hw * 0.12, y: hh * 0.44, r: -0.1 },
+      { x: -hw * 0.12, y: -hh * 0.46, r: 0.12 }, { x: -hw * 0.5, y: hh * 0.4, r: -0.06 },
+    ];
+    for (const f of freight) {
       ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(s * 0.08);
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.r);
       ctx.fillStyle = shade(hull, 0.22);
       ctx.beginPath();
-      ctx.moveTo(-hw * 0.22, -hh * 0.2);
-      ctx.lineTo(hw * 0.18, -hh * 0.26);
-      ctx.lineTo(hw * 0.26, 0);
-      ctx.lineTo(hw * 0.18, hh * 0.26);
-      ctx.lineTo(-hw * 0.22, hh * 0.2);
+      ctx.moveTo(-hw * 0.1, -hh * 0.14);
+      ctx.lineTo(hw * 0.08, -hh * 0.18);
+      ctx.lineTo(hw * 0.12, 0);
+      ctx.lineTo(hw * 0.08, hh * 0.18);
+      ctx.lineTo(-hw * 0.1, hh * 0.14);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = withAlpha(trim, 0.55);
       ctx.lineWidth = 1.1;
       ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(-hw * 0.02, -hh * 0.26); ctx.lineTo(-hw * 0.02, hh * 0.26); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -hh * 0.18); ctx.lineTo(0, hh * 0.18); ctx.stroke();
       ctx.restore();
     }
-    // The prow lantern: a pole forward, the one warm point aboard.
+    // The prow lantern: the one warm point aboard, out past the stem.
     ctx.strokeStyle = shade(hull, 0.35);
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(hw * 0.78, 0); ctx.lineTo(hw + 6, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(hw * 0.86, 0); ctx.lineTo(hw + 8, 0); ctx.stroke();
     ctx.fillStyle = withAlpha(lantern, 0.95);
-    ctx.beginPath(); ctx.arc(hw + 7, 0, 3.4 + Math.sin(t * 5) * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(hw + 9, 0, 3.8 + Math.sin(t * 5) * 0.5, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = withAlpha(lantern, 0.35);
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(hw + 7, 0, 6.5, 0, Math.PI * 2); ctx.stroke();
-    // THE FERRYMAN: hooded at the stern, his punt pole trailing aft — he
-    // leans into the stroke on a slow clock (the one living line aboard).
-    const lean = Math.sin(t * 0.9) * 0.18;
+    ctx.beginPath(); ctx.arc(hw + 9, 0, 7, 0, Math.PI * 2); ctx.stroke();
+    // THE FERRYMAN: hooded before the wheelhouse, his punt pole trailing
+    // aft — he leans into the stroke on a slow clock (the one living line
+    // aboard; part of the vessel, indestructible because he is not a body).
+    const lean = Math.sin(t * 0.9) * 0.16;
     ctx.save();
-    ctx.translate(-hw * 0.72, 0);
+    ctx.translate(-hw * 0.64, 0);
     ctx.rotate(lean);
     ctx.strokeStyle = withAlpha(trim, 0.85);
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(4, -3); ctx.lineTo(-hw * 0.38, hh * 0.75); ctx.stroke();
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(5, -3); ctx.lineTo(-hw * 0.3, hh * 0.85); ctx.stroke();
     ctx.fillStyle = withAlpha(shade(hull, -0.35), 0.95);
-    ctx.beginPath(); ctx.ellipse(0, 0, 7.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 0, 9, 7.2, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = withAlpha(glow, 0.8);
-    ctx.beginPath(); ctx.arc(2.2, 0, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(2.6, 0, 1.8, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     ctx.restore();
   }

@@ -14,6 +14,23 @@ import { BIOME_FIELD_CFG, fieldBiomePick } from './biomes';
 import { registerDimensionClimate, type DimensionAxisOverride } from './climate';
 import type { CourseSpec } from './courses';
 
+/** THE SOULWAY — hell's OTHER river, sharing the flame's spring (two rivers
+ *  from one door; fire and souls part ways at the Hellgate). A broad, SHORT
+ *  ribbon: this course paints the map's wash — the inland sea on the hell
+ *  tab — but never chains zones: chartFrontier funnels every frontier
+ *  landing in its corridor to the ONE mint-once megazone (world/soulriver.ts
+ *  — feather 0 keeps paint and funnel exactly equal, so no ordinary soulway
+ *  zone can ever mint; the biome is a PLACE, one zone wears it). Declared
+ *  HERE (a leaf both dimensions and the soulriver module may import — the
+ *  soulriver leaf pulls it for its corridor/seat/port math). */
+export const SOULWAY_COURSE: CourseSpec = {
+  id: 'soulway', biome: 'soulway', anchor: 'gate',
+  length: 980, halfWidth: 84, feather: 0, strength: 1,
+  waves: 1.1, sweep: 150, wobble: 34,
+  seedSalt: 0x50f7a,
+  label: 'The River of Souls',
+};
+
 /** How a dimension is ENTERED — data, not a bespoke function. 'cave_breach' =
  *  delving minDepth caves deep tears a breach whose realm gate mints the
  *  dimension's GATE ZONE (the Underworld's ladder). New entry KINDS are engine
@@ -205,7 +222,8 @@ registerDimension({
     length: 2200, halfWidth: 150, feather: 80, seedSalt: 0xf1a8e,
     label: 'The River of Flame',
     terminus: { radius: 260, compositions: [{ composition: 'hellforge_landing', chance: 1 }] },
-  }],
+  },
+  SOULWAY_COURSE],
   // Entered by delving: a surface cave ladder FIVE deep — down through the
   // Galleries and the whole sunless Depths band (world/strata.ts) to the
   // Brink — tears a breach whose realm gate mints The Hellgate (the one

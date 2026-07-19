@@ -467,6 +467,13 @@ export class Actor {
    *  hard-CC or a grab, or a shove past CREEP_CFG.front.rider.dismountPush.
    *  Never serializes — creep is transient and riders are zone-local. */
   surf?: { src: CreepSource; ang: number };
+  /** DECKBORNE (TrackRiderDef.carry — World.updateCarriers): stamped while
+   *  this body stands on a carrier deck; until it lapses the terrain sweep
+   *  treats the body as INSURED against the ground beneath (THE BOARDS
+   *  SHIELD — no wading on the ferry, no soul-tether drain over the pale
+   *  water). A rolling horizon, never persisted — the stamp re-arrives
+   *  every frame the feet stay on the boards. */
+  deckUntil?: number;
   /** Bomber fuse: armed countdown to self-detonation (renderer flashes it). */
   fuse?: number;
   /** Airborne leap in flight. */
