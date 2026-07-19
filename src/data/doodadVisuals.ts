@@ -2106,6 +2106,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
     light: { radius: 75, color: '#ffb464', intensity: 0.3, flicker: 2.4 },
   },
+  // THE BOUNTY BOARD (data/harborholds.ts service row): the plaza's writ
+  // board — parchment-warm reading light, the harbor board's own idiom.
+  bounty_board: {
+    painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
+    light: { radius: 55, color: '#e8a84a', intensity: 0.22, flicker: 1.4 },
+  },
   campfire: {
     painter: 'campfire', order: 53,
     light: { radius: -5, color: '#ffae52', intensity: 0.6, flicker: 6 },

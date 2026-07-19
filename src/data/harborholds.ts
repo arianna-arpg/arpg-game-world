@@ -60,6 +60,9 @@ export interface HarborholdState {
    *  this world time, the hold falls on its own. Absent on a first-found or
    *  freshly-rebuilt hold — an unfound harbor is never punished. */
   fallAt?: number;
+  /** THE BOUNTY BOARD's next posting window (world time) — the plaza posts
+   *  writs on the coast's living foes, then rests (HARBORHOLD_CFG.writs). */
+  writsAt?: number;
 }
 
 /** One activatable town SERVICE — an open registry row. `id` keys any engine
@@ -115,6 +118,11 @@ export interface HoldSiegeSpec {
   // --- THE GATE-WARD (the defended heart at the sealed gate) ----------------
   wardLife: number;
   wardLifePerLevel: number;
+  /** THE CAMP WATCH: dormant besiegers PLANTED at the siege camp while the
+   *  hold stands besieged (the sentry fabric — texture that wakes: roused by
+   *  wounds, mustered into wave 1 when the horn sounds). Drawn from the
+   *  class's own tide table at zone level. */
+  campWatch: number;
 }
 
 /** WHAT A HOLD IS — one row per kind of harbor town (ascending in weight,
@@ -186,8 +194,13 @@ const SERVICES_CORE: HoldServiceRow[] = [
   { id: 'harbormaster', at: 0, npc: 'townsfolk_harbormaster', seat: '4' },
   { id: 'board', at: 0, doodad: 'harbor_board', seat: '1' },
   { id: 'chandler', at: 1, npc: 'townsfolk_chandler', seat: '2' },
+  { id: 'bounty_board', at: 1, doodad: 'bounty_board', seat: '5' },
   { id: 'mercs', at: 2, npc: 'merc_captain', seat: '3' },
 ];
+
+/** The rows a LANDING is too small to keep (no captain's post, no writ
+ *  board — one street, one counter). */
+const LANDING_EXCLUDES = new Set(['mercs', 'bounty_board']);
 
 // --- THE FIXATION GRAFT (shared numbers — the extraction idiom) --------------
 
@@ -207,11 +220,12 @@ export const HOLD_CLASSES: Record<string, HoldClassDef> = {
       table: [...TIDE_SHALLOWS],
       mixNative: 0.25, ...FIXATION,
       wardLife: 240, wardLifePerLevel: 26,
+      campWatch: 2,
     },
     rebuildSec: 420, siegeEverySec: [900, 1500], fallAfterSec: 600,
     restoreCostBase: 90, restoreCostPerLevel: 8,
     prosperityCap: 3,
-    services: SERVICES_CORE.filter(s => s.id !== 'mercs'),
+    services: SERVICES_CORE.filter(s => !LANDING_EXCLUDES.has(s.id)),
     reward: { xpBase: 30, xpPerLevel: 8, caches: 2 },
     mercOffers: [0, 0],
   },
@@ -225,6 +239,7 @@ export const HOLD_CLASSES: Record<string, HoldClassDef> = {
       table: [...TIDE_SHALLOWS, ...TIDE_COURT],
       mixNative: 0.25, ...FIXATION,
       wardLife: 320, wardLifePerLevel: 30,
+      campWatch: 3,
     },
     rebuildSec: 600, siegeEverySec: [1100, 1800], fallAfterSec: 720,
     restoreCostBase: 140, restoreCostPerLevel: 10,
@@ -243,6 +258,7 @@ export const HOLD_CLASSES: Record<string, HoldClassDef> = {
       table: [...TIDE_SHALLOWS, ...TIDE_COURT, ...TIDE_DEEPS],
       mixNative: 0.2, ...FIXATION,
       wardLife: 420, wardLifePerLevel: 34,
+      campWatch: 4,
     },
     rebuildSec: 780, siegeEverySec: [1400, 2200], fallAfterSec: 900,
     restoreCostBase: 220, restoreCostPerLevel: 12,
@@ -329,6 +345,34 @@ export const HARBORHOLD_CFG = {
   /** Port merc sheet reroll cadence (world-seconds) — the captain finds new
    *  blades while you sail. */
   mercRerollSec: 600,
+
+  /** THE BOUNTY BOARD (service 'bounty_board'): a dwell at the plaza board
+   *  posts writs on the coast's LIVING foes — named, rarity-promoted marks
+   *  paying the standard writ claim (the bounty fabric's tag-keyed kill
+   *  row + bounty_writs_claimed). Then the board rests. */
+  writs: { count: [2, 3] as [number, number], cooldownSec: 420, rarity: 'rare', stacks: 1 },
+
+  /** THE LOCAL TIDE (per-biome seasoning rows folded into every siege table
+   *  when the port stands on that coast — a gloaming shore sends gloamborn;
+   *  weights lean LIGHT: the sea's kin stay the tide's spine). Extensible:
+   *  a new coast is one row; dimension seasoning can join the same map. */
+  tideBiomes: {
+    gloamwood: [
+      { id: 'gloomling', weight: 2 }, { id: 'murk_prowler', weight: 1, presence: { from: 8, fadeIn: 3 } },
+    ],
+    tundra: [
+      { id: 'frost_witch', weight: 1, presence: { from: 8, fadeIn: 3 } }, { id: 'ice_golem', weight: 1, presence: { from: 12, fadeIn: 4 } },
+    ],
+    taiga: [
+      { id: 'plains_wolf', weight: 2 }, { id: 'frost_elemental', weight: 1, presence: { from: 9, fadeIn: 3 } },
+    ],
+    desert: [
+      { id: 'dune_stalker', weight: 2 }, { id: 'sand_skitterer', weight: 2 }, { id: 'dune_vulture', weight: 1 },
+    ],
+    marsh: [
+      { id: 'fen_hound', weight: 2 }, { id: 'marsh_toad', weight: 1 },
+    ],
+  } as Record<string, PresenceEntry[]>,
 } as const;
 
 // --- PURE HELPERS (data-side; no engine imports — the leaf stays a leaf) -----
@@ -379,5 +423,6 @@ export function sanitizeHoldState(raw: unknown): HarborholdState | null {
     ...(num(r.rebuildAt) !== undefined ? { rebuildAt: num(r.rebuildAt) } : {}),
     ...(num(r.siegeAt) !== undefined ? { siegeAt: num(r.siegeAt) } : {}),
     ...(num(r.fallAt) !== undefined ? { fallAt: num(r.fallAt) } : {}),
+    ...(num(r.writsAt) !== undefined ? { writsAt: num(r.writsAt) } : {}),
   };
 }

@@ -4595,7 +4595,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   townsfolk_chandler: {
     id: 'townsfolk_chandler', name: 'Cormac the Chandler',
-    color: '#c8b06e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'vendor',
+    color: '#c8b06e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'chandler',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -4724,6 +4724,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
   stonefather_menhir: {
     id: 'stonefather_menhir', name: 'the Stonefather',
     color: '#b0a890', shape: 'octagon', radius: 16, material: 'stone', look: 'menhir',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
+  // THE MOORING STONE — the Harborwarden secret vocation's shrine
+  // (data/harborholds.ts): a rope-worn bollard on the quay of every port
+  // town whose siege was BROKEN. Open-discovery (any class hears it — the
+  // deed gates, not the blood); same shrine shape as the rest.
+  mooring_stone: {
+    id: 'mooring_stone', name: 'the Mooring Stone',
+    color: '#7fb0c8', shape: 'octagon', radius: 15, material: 'stone', look: 'menhir',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,

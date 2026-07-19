@@ -80,6 +80,10 @@ function stepQuest(v: VocationDef, stepIndex: number): QuestDef {
     vocation: v.id,
     offerAtLevel: v.quest.offerAtLevel ?? VOCATION_CFG.offerAtLevel,
     gate: stepGate(v, stepIndex),
+    // A step may additionally gate on a DEED (run-OR-account — the standard
+    // QuestDef.requiresLedger check): the Harborwarden opens for siege-
+    // breakers, not passers-by.
+    ...(step.requiresLedger ? { requiresLedger: step.requiresLedger } : {}),
     zone: step.zone,
     reward: {
       xp: step.xp,

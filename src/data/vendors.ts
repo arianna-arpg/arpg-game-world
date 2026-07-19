@@ -34,7 +34,7 @@ export interface VendorDef {
   stock(w: World): VendorEntry[];
   priceOf(w: World, entry: VendorEntry): VendorPrice;
   /** Which META intent buys stock index N. */
-  buyT: 'buyVendor' | 'buyDelver';
+  buyT: 'buyVendor' | 'buyChandler' | 'buyDelver';
   /** This counter also buys scrap (the SELL lane: anything → coarse essence)
    *  — WHEN the predicate holds. A gate as data: Brandt's opens with the
    *  Vault's Salvage Station; a future fence could open on reputation. */
@@ -57,6 +57,17 @@ export const VENDORS: VendorDef[] = [
     // account owns the Salvage Station: one Vault purchase opens both doors.
     salvage: w => w.salvageUnlocked(),
     salvageLocked: 'Brandt eyes your scrap, shrugs — the Vault\'s SALVAGE STATION would teach him its worth.',
+    headline: w => `restock ${Math.max(0, Math.ceil(w.vendorRestockAt - w.time))}s`,
+  },
+  {
+    // THE CHANDLER (data/harborholds.ts service row): a harborhold's port
+    // counter — its OWN stock on the shared restock clock, essence-priced
+    // like Brandt's. Stands only in an OPEN town at prosperity ≥ its rung.
+    id: 'chandler', label: "CORMAC'S CHANDLERY", accent: '#c8b06e', bg: 'rgba(200,176,110,0.05)',
+    near: (w, seat) => w.nearChandler(seat),
+    stock: w => w.chandlerStock,
+    priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
+    buyT: 'buyChandler',
     headline: w => `restock ${Math.max(0, Math.ceil(w.vendorRestockAt - w.time))}s`,
   },
   {

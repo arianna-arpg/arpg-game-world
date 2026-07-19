@@ -184,6 +184,7 @@ export type KnownDoodadKind =
   | 'window'  // an arrow-slit frame: blocks movement, passes shots + sight
   | 'dock'    // a port's harbor planks — dwell to cast off (the Voyage)
   | 'muster_horn' // a harborhold's horn post at the gate — dwell to open the hold panel (muster/restore)
+  | 'bounty_board' // a harborhold plaza's writ board — dwell to post bounty writs on the coast's living foes
   | 'breach'  // the torn way into the Underworld (bottom of the cave ladder)
   | 'landmass'    // the Voyage's streamed COASTLINE (a shore-collision blob)
   | 'isle_beacon' // a Voyage Island's guiding light + name (pure signage)
@@ -2082,6 +2083,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     surface: { hw: 0.7, hh: 0.28 } }, // the sill slab — flush with its wall run, no room-side bulge
   dock:   { overlap: 'trigger', spacing: 40 },
   muster_horn: { overlap: 'trigger', spacing: 30 }, // the harborhold's gate post — a dwell ring, not a wall
+  bounty_board: { overlap: 'trigger', spacing: 30 }, // the plaza's writ board — same law
   breach: { overlap: 'trigger', spacing: 60 },
   // The Voyage's streamed coastline: the boat can't drive ashore, but a
   // shot arcs over the shallows (sight too — you can see the beach you round).

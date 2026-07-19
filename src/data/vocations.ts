@@ -77,6 +77,11 @@ export interface VocationSiteFilter {
   layouts?: string[];
   /** Minimum zone level. */
   minLevel?: number;
+  /** THE HARBORHOLD AXIS (data/harborholds.ts): only port-town zones — true
+   *  = any hold, or exactly the named state ('open' = a standing town: the
+   *  Harborwarden's Mooring Stone waits on won ground). Composable with
+   *  every other axis like the rest. */
+  harborhold?: true | 'besieged' | 'open' | 'fallen';
 }
 
 /** A SECRET vocation (the PoE2 Abyssal-Lich shape): never offered in town
@@ -137,6 +142,10 @@ export interface VocationQuestStep {
   vocationPoints?: number;
   /** Return-to-giver bulletin once the field objective clears. */
   turnInPrompt?: string;
+  /** A ledger key (run OR account — the QuestDef.requiresLedger contract)
+   *  this step additionally gates on. The Harborwarden's chain opens only
+   *  for those who have BROKEN A SIEGE (ports_defended) — deeds, not walks. */
+  requiresLedger?: string;
 }
 
 export interface VocationDef {
@@ -1313,6 +1322,98 @@ const STONEWROUGHT: VocationDef = {
   },
 };
 
+/** HARBORWARDEN — the harbor's SECRET calling (data/harborholds.ts): a
+ *  MOORING STONE stands on the quay of every port town whose siege was
+ *  BROKEN — and it weighs anyone, whatever their class (the Stillmind's
+ *  open-discovery law): the deed is the gate, not the blood. The chain
+ *  opens only for those who have defended a harbor (ports_defended — run
+ *  or account), and the tree is THE COMPANY: hired blades cheaper, hardier,
+ *  lighter on the world's scales (mercEase — the true solo curve with your
+ *  blades beside you), and at the keystone a SECOND contract fielded
+ *  (mercRetinue — the one hire pipeline, twice). Veterans and retirement
+ *  stay the wilds' rite — the warden commands blades; the wilds make them. */
+const HARBORWARDEN_LAYOUT = fan(28); // spine → cha_start's quarter (offset from the Bannerlord's 10)
+const HARBORWARDEN: VocationDef = {
+  id: 'harborwarden', name: 'Harborwarden',
+  blurb: 'A harbor is a promise kept against the tide. Keep enough of them and the blades start keeping you.',
+  color: '#7fb0c8',
+  classId: 'warlord',
+  secret: {
+    site: {
+      npc: 'mooring_stone',
+      filter: { harborhold: 'open' },
+      chance: 1, // every STANDING town keeps its stone — the siege was the roll
+      doodads: [
+        { kind: 'cargo_stack', count: 3, radius: 70, size: [13, 17] },
+        { kind: 'lantern_post', count: 2, radius: 46, size: [9, 11] },
+      ],
+    },
+    classLockedDiscovery: false, // any class may hear it — the DEED gates, not the blood
+    unlockedOffer: 'menu',
+    offerFlavor: 'The mooring stone is worn smooth by ten thousand ropes. "Ships hold because something holds them," it says. "Show me you can hold more than one."',
+    discoveryText: 'The mooring stone takes your measure — it remembers every siege this quay has outlived.',
+  },
+  tree: [
+    { id: 's1', name: 'Dockside Ledger', description: 'Hires cost 10% less', kind: 'small', ...HARBORWARDEN_LAYOUT.s1, mods: [mod('mercHireDiscount', 'flat', 0.10)], links: ['root'] },
+    { id: 's2', name: 'Sea Legs', description: '+25 maximum life', kind: 'small', ...HARBORWARDEN_LAYOUT.s2, mods: [mod('life', 'flat', 25)], links: ['root'] },
+    { id: 's3', name: 'Harbor Watch', description: '12% increased armor', kind: 'small', ...HARBORWARDEN_LAYOUT.s3, mods: [mod('armor', 'increased', 0.12)], links: ['root'] },
+    { id: 'n1', name: 'Fair Company', description: 'Your hired blades no longer harden the world — enemies scale as if you stood alone, company and all', kind: 'notable', ...HARBORWARDEN_LAYOUT.n1, mods: [mod('mercEase', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Iron Company', description: 'Your hired blades gain 20% increased life and damage', kind: 'notable', ...HARBORWARDEN_LAYOUT.n2, mods: [mod('mercVigor', 'flat', 0.2)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Shared Purse', description: 'Hires cost a further 15% less; 10% increased armor', kind: 'notable', ...HARBORWARDEN_LAYOUT.n3, mods: [mod('mercHireDiscount', 'flat', 0.15), mod('armor', 'increased', 0.1)], links: ['s3', 's2'] },
+    { id: 'n4', name: "Warden's Table", description: '+30 maximum life; +2 life regeneration per second — the harbor feeds its warden', kind: 'notable', ...HARBORWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 30), mod('lifeRegen', 'flat', 2)], links: ['s2'] },
+    { id: 'k1', name: 'The Free Company', description: 'Field a SECOND blade under contract — one more seat in your company, hired through the same muster', kind: 'keystone', ...HARBORWARDEN_LAYOUT.k1, mods: [mod('mercRetinue', 'flat', 1)], links: ['n1', 'n2'] },
+  ],
+  quest: {
+    offerAtLevel: 12, // the harbor band — sieges are early-world content
+    steps: [
+      {
+        offerLabel: 'Sweep the drowned shore before the next tide',
+        requiresLedger: 'ports_defended',
+        zone: {
+          tileset: 'marsh', direction: 'e', distance: 1, level: 'character', anchor: 'accept',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'drowned_oarsman', weight: 3 }, { id: 'tidewrack_shambler', weight: 2 },
+              { id: 'shore_crab', weight: 2 }, { id: 'barnacle_knight', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 500, gems: 3,
+        turnInPrompt: 'The shore is swept — return to the mooring stone.',
+      },
+      {
+        offerLabel: 'Break the corsair muster on the downs',
+        zone: {
+          tileset: 'downs', direction: 'e', distance: 2, level: 'character', anchor: 'accept',
+          objective: { kind: 'waves', waves: 5 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_bruiser', weight: 2 },
+              { id: 'bandit_matchlock', weight: 2 }, { id: 'bulwark_thane', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 900, gems: 4,
+        turnInPrompt: 'Their muster is broken; yours holds — return to the stone.',
+      },
+      {
+        offerLabel: 'Fell the Tidebound Regent',
+        zone: {
+          tileset: 'marsh', direction: 'e', distance: 2, level: 'character', anchor: 'accept',
+          objective: { kind: 'boss', id: 'tidebound_regent', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 1600, gems: 6,
+        turnInPrompt: 'The Regent is unbound; the harbors hold — return, Harborwarden.',
+      },
+    ],
+  },
+};
+
 // --- THE COVERAGE PASS: every class carries a vocation line ------------------
 // Fourteen chains (the thirteen vocation-less classes + the Hivecaller's),
 // each leaning on its class's OWN fabric (grab, trapworks, mass, song,
@@ -1961,6 +2062,8 @@ export const VOCATIONS: Record<string, VocationDef> = {
   [CHRONARCH.id]: CHRONARCH,
   [STILLMIND.id]: STILLMIND,
   [SWARMLORD.id]: SWARMLORD,
+  // The harborhold's calling (data/harborholds.ts — the deed-gated stone).
+  [HARBORWARDEN.id]: HARBORWARDEN,
 };
 
 export const VOCATION_LIST: VocationDef[] = Object.values(VOCATIONS);

@@ -132,10 +132,16 @@ export const MERC_CFG = {
     respectGearLevelReq: true,
   },
 
-  /** THE CO-OP LEVERS: does a hired blade count toward enemy party scaling,
-   *  and may a living retainer dwell-revive its downed patron (the same
-   *  revive rails a human ally uses)? */
-  partyScale: false,
+  /** THE CO-OP LEVERS. partyScaleWeight: how much of a PLAYER a hired blade
+   *  counts as toward enemy party scaling (data/coop.ts coopScale — the
+   *  formula is linear, so fractional seats compose exactly). 0 = a blade is
+   *  free power (the old partyScale:false); 1 = a full co-op seat; the
+   *  default 0.5 makes a contract a considered trade — and the Harborwarden
+   *  vocation's Fair Company node (the mercEase stat) buys the weight back
+   *  DOWN toward the true solo curve (world.partyScaleCount folds
+   *  weight × (1 − mercEase)). mercsCanRevive: may a living retainer
+   *  dwell-revive its downed patron (the same rails a human ally uses)? */
+  partyScaleWeight: 0.5,
   mercsCanRevive: true,
 } as const;
 

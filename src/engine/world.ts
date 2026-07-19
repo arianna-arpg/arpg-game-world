@@ -699,6 +699,7 @@ export const AMBIENT_TAGS = new Set([
   'fallen_star',   // the impact heart is an OPTIONAL break (it pays a gem)
   'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
   'wayfarer',      // neutral human travelers — minding their own way
+  'hold_camp',     // a harborhold's dormant siege-camp watch — texture the MUSTER drafts
 ]);
 
 /** Every tag the HAUNTING stamps on what it stands up — the one set the engine
@@ -1268,7 +1269,7 @@ const isLane = (l: unknown): l is 'break' | 'sell' | undefined =>
  *  are additionally neutralized at the registry lookups, e.g. allocateNode.) */
 function isValidMetaAction(a: MetaAction): boolean {
   switch (a.t) {
-    case 'learn': case 'sacrifice': case 'buyVendor': case 'buyDelver':
+    case 'learn': case 'sacrifice': case 'buyVendor': case 'buyChandler': case 'buyDelver':
     case 'levelSupportInv': case 'dropSkill': case 'dropSupport':
       return isIdx(a.index);
     case 'socket': return isIdx(a.index) && isStr(a.skillId);
@@ -2807,8 +2808,12 @@ export class World {
   private mercHintAt = -999;
   /** The captain's parley dwell completed — main.ts opens the outpost menu. */
   mercOutpostRequested = false;
-  /** The blade currently under contract (rides the character save). */
-  hiredMerc: { seat: Seat; name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string } | null = null;
+  /** THE COMPANY — every blade currently under contract (rides the character
+   *  save). Capacity = floor(MERC_CFG.maxHired + the patron's mercRetinue
+   *  stat) — the Harborwarden's Free Company keystone fields a second blade
+   *  through the same pipeline (one hire path, one normalization, one save
+   *  shape; the quanta law: whole blades, never fractions). */
+  hiredMercs: { seat: Seat; name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }[] = [];
   /** The merc's power was last normalized to this patron level (resync guard). */
   private mercSyncedLevel = 0;
   /** World time of the last blow landed by/on the player's side — the
@@ -3500,12 +3505,17 @@ export class World {
     }
   }
 
-  /** Party size for ENEMY SCALING purposes. Human seats always count; a hired
-   *  mercenary counts only when the MERC_CFG.partyScale lever is on — the
-   *  co-op-scaling-for-hirelings knob, pulled in one place. */
+  /** Party size for ENEMY SCALING purposes — FRACTIONAL by design (coopScale
+   *  is linear in the extra-player count, so partial seats compose exactly).
+   *  Human seats count 1; a hired blade counts MERC_CFG.partyScaleWeight ×
+   *  (1 − the patron's mercEase stat) — the Harborwarden's Fair Company node
+   *  buys the weight down to the TRUE SOLO CURVE with the blades beside you.
+   *  The one place hirelings touch difficulty, and every term is a dial. */
   private partyScaleCount(): number {
+    const ease = Math.min(1, Math.max(0, this.player.sheet.get('mercEase')));
+    const mercWeight = MERC_CFG.partyScaleWeight * (1 - ease);
     return Math.max(1, this.seats.reduce((n, s) =>
-      n + (s.actor.dead || (s.merc && !MERC_CFG.partyScale) ? 0 : 1), 0));
+      n + (s.actor.dead ? 0 : s.merc ? mercWeight : 1), 0));
   }
 
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
@@ -3679,10 +3689,10 @@ export class World {
     if (stage.metaProgression) mergeLedger(this.account.ledger, this.ledger);
     if (stage.countsAccountDeath) bumpLedger(this.account.ledger, LEDGER_ACCOUNT_DEATHS);
     this.accountDirty = true;
-    // 3. THE CONTRACT: a survived death still concludes the retainer's hire —
-    //    the blade returns to the world's pool (never destroyed; an Undying
+    // 3. THE CONTRACTS: a survived death still concludes the company's hire —
+    //    the blades return to the world's pool (never destroyed; an Undying
     //    patron must engage the mortal economy again to afford the next one).
-    if (this.hiredMerc) this.dismissMercenary();
+    if (this.hiredMercs.length) this.dismissMercenary();
     // 4. THE CORPSE: captured BEFORE the carry is stripped, routed by the
     //    DYING stage's ring (the immortalizing corpse is already self-only).
     this.recordDeath();
@@ -16816,6 +16826,33 @@ export class World {
     }
     this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
     this.markDoodadsChanged();
+    // THE CAMP WATCH (the sentry fabric): dormant besiegers planted at the
+    // camp while besieged — texture that wakes (a wound rouses the camp;
+    // the muster drafts it into wave 1). Retired quietly on any other state.
+    const standing = this.actors.filter(a => a.tag === 'hold_camp' && !a.dead);
+    if (hold.state !== 'besieged') {
+      for (const a of standing) a.dead = true;
+    } else if (gate && standing.length < cls.siege.campWatch) {
+      const crng = new Rng(((def.seed ?? 0) ^ HARBORHOLD_CFG.dressSalt ^ 0xca38) >>> 0);
+      const lvl = Math.max(1, def.level + cls.siege.levelBonus);
+      const at0 = holdGateApron(gate, 120);
+      for (let i = standing.length; i < cls.siege.campWatch; i++) {
+        const type = this.weightedPick(cls.siege.table, lvl);
+        const m = this.createMonster(type, lvl, 'enemy');
+        const s = (i - (cls.siege.campWatch - 1) / 2) * 52;
+        const at = vec(
+          at0.x - gate.normal.y * s + crng.range(-14, 14),
+          at0.y + gate.normal.x * s + crng.range(-14, 14));
+        m.pos = this.clampPos(at, m.radius);
+        m.tag = 'hold_camp';
+        m.eventKey = `harborhold:${def.id}`;
+        m.postSpec = { hold: true };
+        m.aiPost = vec(m.pos.x, m.pos.y);
+        m.aiPostFacing = Math.atan2(gate.pos.y - m.pos.y, gate.pos.x - m.pos.x); // it watches the gate it besieges
+        m.facing = m.aiPostFacing;
+        this.actors.push(m);
+      }
+    }
   }
 
   /** Dress placement truth: inside the arena, never under a roof, never on
@@ -16863,26 +16900,33 @@ export class World {
         if (s.id === 'mercs' && this.mercOutpost?.port) this.mercOutpost = null;
       }
     }
-    // The BOARD: planted at its plaza anchor while active; the default
-    // outside-the-dock plant is suppressed for harborhold zones (loadZone).
-    const boardRow = cls.services.find(s => s.id === 'board');
-    const board = this.doodads.find(d => d.kind === 'harbor_board');
-    if (boardRow && wants.has('board') && !board) {
-      const seat = holdSeatPos(ps, boardRow.seat);
-      if (seat) {
-        this.doodads.push({ pos: this.clampPos(vec(seat.x, seat.y), 16), radius: 16, kind: 'harbor_board' });
+    // SERVICE DOODADS, generically: every row carrying a doodad plants at
+    // its plaza anchor while active and lifts when the rung (or the town)
+    // closes — the harbor board (its outside-the-dock default plant is
+    // suppressed for hold zones in loadZone), the bounty board, and any
+    // future row with a `doodad` field, one loop for all of them.
+    for (const s of cls.services) {
+      if (!s.doodad) continue;
+      const standing = this.doodads.find(d => d.kind === s.doodad);
+      if (wants.has(s.id) && !standing) {
+        const seat = holdSeatPos(ps, s.seat);
+        if (seat) {
+          this.doodads.push({ pos: this.clampPos(vec(seat.x, seat.y), 16), radius: 16, kind: s.doodad });
+          this.markDoodadsChanged();
+        }
+      } else if (standing && !wants.has(s.id)) {
+        this.doodads.splice(this.doodads.indexOf(standing), 1);
         this.markDoodadsChanged();
       }
-    } else if (board && !wants.has('board')) {
-      this.doodads.splice(this.doodads.indexOf(board), 1);
-      this.markDoodadsChanged();
     }
-    // Vendor stock arms off role presence exactly like the town smith (the
-    // chandler shares the one stock pipeline; per-port stock is a queued
-    // follow-up on VendorDef).
-    if (wants.has('chandler') && !this.vendorStock.length) {
-      this.vendorStock = this.buildVendorStock();
-      this.vendorRestockAt = this.time + this.restockSeconds();
+    // THE CHANDLER'S COUNTER: its OWN stock + the shared restock clock
+    // (VendorDef row 'chandler' + the buyChandler intent — a real second
+    // counter, not Brandt's shadow).
+    if (wants.has('chandler')) {
+      if (!this.chandlerStock.length) this.chandlerStock = this.buildVendorStock();
+      if (!this.vendorRestockAt) this.vendorRestockAt = this.time + this.restockSeconds();
+    } else if (this.chandlerStock.length) {
+      this.chandlerStock = [];
     }
   }
 
@@ -16927,6 +16971,72 @@ export class World {
       && this.dwellReachable(this.player.pos, horn.pos);
     if (!this.holdGate.fire(engaged && this.playerIdle(), engaged, dt, M.dwellSec)) return;
     this.holdDwellRequested = true;
+  }
+
+  private writGate = new Dwell();
+
+  /** THE BOUNTY BOARD (service 'bounty_board'): a dwell at the plaza board
+   *  posts writs on the coast's LIVING foes — the bounty fabric's own
+   *  grammar (rarity promotion + a minted name + the 'bounty_mark' tag,
+   *  paying the standard per-kill claim) — then the board rests
+   *  (HARBORHOLD_CFG.writs.cooldownSec, persisted on the hold state). */
+  private updateWritBoard(dt: number): void {
+    if (this.gameOver || this.clientActionHook) return;
+    const hold = this.zone.harborhold;
+    if (!hold || hold.state !== 'open') return;
+    const board = this.doodads.find(d => d.kind === 'bounty_board');
+    if (!board) return;
+    const M = HARBORHOLD_CFG.muster;
+    const engaged = dist(this.player.pos, board.pos) <= M.radius
+      && this.dwellReachable(this.player.pos, board.pos);
+    if (!this.writGate.fire(engaged && this.playerIdle(), engaged, dt, M.dwellSec)) return;
+    this.postHoldWrits();
+  }
+
+  /** Post the writs: up to writs.count living, normal-rarity, counted foes
+   *  in this zone each become a NAMED, promoted mark. No eligible quarry =
+   *  an honest refusal that spends no cooldown. */
+  private postHoldWrits(): void {
+    const hold = this.zone.harborhold;
+    if (!hold) return;
+    const W = HARBORHOLD_CFG.writs;
+    if (hold.writsAt !== undefined && this.time < hold.writsAt) {
+      const left = Math.ceil((hold.writsAt - this.time) / 60);
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        `the board rests — fresh writs in ${left} minute${left === 1 ? '' : 's'}`, '#c8b048', 13);
+      return;
+    }
+    const eligible = this.countedEnemies().filter(a =>
+      a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal' && !a.owner);
+    if (!eligible.length) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        'the coast is quiet — no quarry worth a writ', '#c8b048', 13);
+      return;
+    }
+    const n = Math.min(eligible.length, this.encRng.int(W.count[0], W.count[1]));
+    let posted = 0;
+    for (let i = 0; i < n; i++) {
+      // Farthest-first: writs send you OUT into the zone, never at your boots.
+      eligible.sort((a, b) => dist(b.pos, this.player.pos) - dist(a.pos, this.player.pos));
+      const m = eligible.shift();
+      if (!m) break;
+      this.promoteRarityStacked(m, W.rarity as MonsterRarity, W.stacks);
+      const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
+      let name = mintNemesisName(fac, () => this.encRng.range(0, 1));
+      for (let tries = 0; tries < 4
+        && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
+        name = mintNemesisName(fac, () => this.encRng.range(0, 1));
+      }
+      m.name = name;
+      m.tag = 'bounty_mark';
+      posted++;
+    }
+    if (!posted) return;
+    hold.writsAt = this.time + W.cooldownSec;
+    this.charDirty = true;
+    this.text(vec(this.player.pos.x, this.player.pos.y - 84),
+      `${posted} writ${posted === 1 ? '' : 's'} posted — the coast wants clearing`, '#e8a84a', 15);
+    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 90, color: '#e8a84a', life: 0.5, maxLife: 0.5 });
   }
 
   /** The hold panel's ONE read (ui/panels.ts): state, the ladder, prices,
@@ -17031,6 +17141,28 @@ export class World {
         // The arming shield drops with the first wave — the fight is real now.
         ward.untargetable = false;
         ward.invulnerable = false;
+        if (d.wave === 1) {
+          // THE DRAFT: the sleeping camp watch stands with its tide — every
+          // dormant silhouette wakes into wave 1, grafted like the rest.
+          for (const a of this.actors) {
+            if (a.tag !== 'hold_camp' || a.dead) continue;
+            a.aiAwakened = true;
+            a.postSpec = undefined;
+            a.aiPost = undefined;
+            const ag = a.defId ? MONSTERS[a.defId]?.aggro : undefined;
+            a.aiTuning = {
+              target: {
+                prefer: 'highestThreat', relentless: true, stickiness: cls.siege.stickiness,
+                threat: { damage: ag?.fury ?? 1, decay: cls.siege.decay * (ag?.waver ?? 1) },
+              },
+            };
+            a.addThreat(ward.id, cls.siege.seedThreat * (ag?.fixation ?? 1));
+            a.aiTargetId = ward.id;
+            a.aggroed = true;
+            a.tag = 'hold_siege';
+            d.alive.add(a.id);
+          }
+        }
         this.text(vec(ward.pos.x, ward.pos.y - 52),
           `wave ${d.wave} of ${cls.siege.waves} — hold the gate!`, '#e85050', 16);
       }
@@ -17055,7 +17187,10 @@ export class World {
   private spawnHoldBesieger(cls: HoldClassDef, ward: Actor): void {
     const s = cls.siege;
     const lvl = Math.max(1, this.zone.level + s.levelBonus);
-    let table: { id: string; weight: number }[] = s.table;
+    // THE LOCAL TIDE: the class table seasoned by the coast it breaks on
+    // (HARBORHOLD_CFG.tideBiomes — light rows; the sea's kin stay the spine).
+    const biomeRows = this.zone.biome ? HARBORHOLD_CFG.tideBiomes[this.zone.biome] ?? [] : [];
+    let table: { id: string; weight: number }[] = biomeRows.length ? [...s.table, ...biomeRows] : s.table;
     if (s.mixNative > 0 && this.encRng.chance(s.mixNative)) {
       const native = this.effectiveSpawn(this.zone, this.baseTable(this.zone)).table;
       if (native.length) table = native;
@@ -17117,6 +17252,10 @@ export class World {
       }
       bumpLedger(this.ledger, 'ports_defended');
       if (def.portTier === 'haven') bumpLedger(this.ledger, 'havens_defended');
+      // The town's SECRET SITES re-roll the moment it stands (the Mooring
+      // Stone seats on OPEN holds — the calling should land with the win,
+      // not on the next visit; placeVocationSites is idempotent per site).
+      this.placeVocationSites(def);
       const first = !this.ledger.first_hold_opened;
       if (first) bumpLedger(this.ledger, 'first_hold_opened');
       this.text(vec(at.x, at.y - 76),
@@ -18029,11 +18168,14 @@ export class World {
       : Math.max(1, this.player.level);
   }
 
-  /** Live hire price for an offer (tracks the patron's level; veterans premium). */
+  /** Live hire price for an offer (tracks the patron's level; veterans
+   *  premium; the mercHireDiscount stat — the Harborwarden's purse —
+   *  forgives up to 90%, floored so a contract is never free). */
   mercHireCost(o: MercOffer): number {
     const L = this.mercTargetLevel();
     const base = MERC_CFG.hireCostBase + MERC_CFG.hireCostPerLevel * L;
-    return Math.round(base * (o.kind === 'retired' ? MERC_CFG.retiredCostMult : 1));
+    const discount = Math.min(0.9, Math.max(0, this.player.sheet.get('mercHireDiscount')));
+    return Math.max(1, Math.round(base * (o.kind === 'retired' ? MERC_CFG.retiredCostMult : 1) * (1 - discount)));
   }
 
   /** May the CURRENT character retire here? (Stage policy — mortal loop only.) */
@@ -18147,6 +18289,15 @@ export class World {
     a.level = targetLevel;
     a.skills = padBar(snapshot.bar.map(id => (id ? meta.knownSkills.get(id) ?? null : null)));
     this.recalcSeat(seat);
+    // THE PATRON'S HAND (the mercVigor stat — Iron Company): the patron's
+    // investment rides the blade's own sheet as one named source, re-stamped
+    // on every resync exactly like the normalization it follows.
+    const vigor = Math.max(0, this.player.sheet.get('mercVigor'));
+    if (vigor > 0) {
+      a.sheet.setSource('patron', [mod('life', 'increased', vigor), mod('damage', 'increased', vigor)]);
+    } else {
+      a.sheet.removeSource('patron');
+    }
     if (firstSpawn) a.fillResources();
     else {
       a.life = Math.max(1, a.maxLife() * Math.min(1, frac));
@@ -18157,12 +18308,19 @@ export class World {
     return true;
   }
 
-  /** LIVE PARITY: re-normalize the hired blade when the patron's level moves
-   *  (grantSeatXp hook; MERC_CFG.scale.trackLevel). Cheap no-op otherwise. */
+  /** LIVE PARITY: re-normalize every hired blade when the patron's level
+   *  moves (grantSeatXp hook; MERC_CFG.scale.trackLevel). Cheap no-op
+   *  otherwise (the synced-level guard is shared — one target, one check). */
   resyncMercenary(): void {
-    if (!this.hiredMerc || !MERC_CFG.scale.trackLevel) return;
+    if (!this.hiredMercs.length || !MERC_CFG.scale.trackLevel) return;
     if (this.mercTargetLevel() === this.mercSyncedLevel) return;
-    this.applyMercNormalization(this.hiredMerc.seat, this.hiredMerc.snapshot, false);
+    for (const hm of this.hiredMercs) this.applyMercNormalization(hm.seat, hm.snapshot, false);
+  }
+
+  /** Retainers the patron may field at once: the config base + the
+   *  mercRetinue stat (vocation nodes, future gear) — whole blades only. */
+  mercHireCap(): number {
+    return Math.max(1, Math.floor(MERC_CFG.maxHired + this.player.sheet.get('mercRetinue')));
   }
 
   // --- hire / restore / dismiss / retire ------------------------------------
@@ -18195,7 +18353,11 @@ export class World {
   ): Seat | null {
     const classDef = CLASSES.find(c => c.id === snapshot.classId);
     if (!classDef) return null;
-    const seat = this.addSeat('m0', classDef, new MercInput());
+    // First free m-index: a company of blades seats 'm0','m1',… — ids stay
+    // unique across hires and mid-run dismissals.
+    let mi = 0;
+    while (this.seats.some(s => s.id === `m${mi}`)) mi++;
+    const seat = this.addSeat(`m${mi}`, classDef, new MercInput());
     seat.merc = { name, ...ref };
     seat.actor.name = name;
     if (!this.applyMercNormalization(seat, snapshot, true)) {
@@ -18211,8 +18373,9 @@ export class World {
     const post = this.mercOutpost;
     const offer = post?.offers[index];
     if (!post || !offer) return false;
-    if (this.hiredMerc) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'One retainer at a time.', '#c8b048', 13);
+    if (this.hiredMercs.length >= this.mercHireCap()) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 30),
+        this.mercHireCap() > 1 ? 'Your company is full.' : 'One retainer at a time.', '#c8b048', 13);
       return false;
     }
     const cost = this.mercHireCost(offer);
@@ -18231,8 +18394,8 @@ export class World {
     this.account.credits -= cost;
     if (offer.kind === 'retired') engageMerc(this.account, offer.refId, this.meta.charId);
     this.accountDirty = true;
-    this.hiredMerc = { seat, name: offer.name, snapshot, ...ref };
-    this.charDirty = true;   // the contract rides the character save
+    this.hiredMercs.push({ seat, name: offer.name, snapshot, ...ref });
+    this.charDirty = true;   // the contracts ride the character save
     post.offers.splice(index, 1);
     this.text(vec(this.player.pos.x, this.player.pos.y - 34),
       `${offer.name} takes your coin.`, '#c8b048', 15);
@@ -18240,23 +18403,37 @@ export class World {
   }
 
   /** Re-field a saved engagement on resume (applySavedCharacter). No cost,
-   *  no pool mutation — the contract was already paid and marked. */
+   *  no pool mutation — the contract was already paid and marked. Called
+   *  once per saved contract (the loader loops the company). */
   restoreHiredMerc(m: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }): void {
     const seat = this.spawnMercSeat(m.snapshot, m.name,
       m.mercId ? { mercId: m.mercId } : { templateId: m.templateId });
-    if (seat) this.hiredMerc = { seat, name: m.name, snapshot: m.snapshot, mercId: m.mercId, templateId: m.templateId };
+    if (seat) this.hiredMercs.push({ seat, name: m.name, snapshot: m.snapshot, mercId: m.mercId, templateId: m.templateId });
   }
 
-  /** The contract ends (patron death, forfeit, retirement, an Undying fall):
-   *  the blade leaves the field and a VETERAN returns to the pool — never
-   *  destroyed, only waiting for some future outpost to offer them again. */
-  dismissMercenary(note?: string): void {
-    const hm = this.hiredMerc;
-    if (!hm) return;
-    releaseMercsOf(this.account, this.meta.charId);
+  /** The contracts end (patron death, forfeit, retirement, an Undying fall):
+   *  every blade leaves the field and the VETERANS return to the pool —
+   *  never destroyed, only waiting for some future outpost to offer them
+   *  again. Pass an index to strike ONE contract (the menu's per-blade
+   *  dismissal); absent = the whole company (the run-end paths). */
+  dismissMercenary(note?: string, index?: number): void {
+    if (!this.hiredMercs.length) return;
+    const struck = index !== undefined ? this.hiredMercs.splice(index, 1) : this.hiredMercs.splice(0);
+    if (!struck.length) return;
+    if (index !== undefined) {
+      // One blade: release only ITS roster engagement (the pool heals the
+      // rest on the next healMercEngagements sweep if refs ever drift).
+      for (const hm of struck) {
+        if (hm.mercId) {
+          const r = this.account.mercRoster.find(x => x.mercId === hm.mercId);
+          if (r && r.engagedBy === this.meta.charId) delete r.engagedBy;
+        }
+      }
+    } else {
+      releaseMercsOf(this.account, this.meta.charId);
+    }
     this.accountDirty = true;
-    this.removeSeat(hm.seat.id);
-    this.hiredMerc = null;
+    for (const hm of struck) this.removeSeat(hm.seat.id);
     this.charDirty = true;
     if (note) this.text(vec(this.player.pos.x, this.player.pos.y - 48), note, '#c8b048', 13);
   }
@@ -18268,8 +18445,8 @@ export class World {
   retireCharacter(): boolean {
     if (this.player.dead || this.gameOver || this.pendingRespawn) return false;
     if (!this.canRetireHere()) return false;
-    // The retiree's own retainer is released first (back to the pool).
-    if (this.hiredMerc) this.dismissMercenary();
+    // The retiree's own company is released first (back to the pool).
+    if (this.hiredMercs.length) this.dismissMercenary();
     const m = this.meta;
     const entry: MercRosterEntry = {
       schema: MERC_SCHEMA,
@@ -18312,8 +18489,11 @@ export class World {
    *  grudges into her patron's run). */
   private watchedSagas(): { name: string; role: 'self' | 'merc' }[] {
     const out: { name: string; role: 'self' | 'merc' }[] = [{ name: this.meta.name, role: 'self' }];
-    if (this.hiredMerc && sagaKey(this.hiredMerc.name) !== sagaKey(this.meta.name)) {
-      out.push({ name: this.hiredMerc.name, role: 'merc' });
+    for (const hm of this.hiredMercs) {
+      if (sagaKey(hm.name) !== sagaKey(this.meta.name)
+        && !out.some(w => sagaKey(w.name) === sagaKey(hm.name))) {
+        out.push({ name: hm.name, role: 'merc' });
+      }
     }
     return out;
   }
@@ -18780,6 +18960,14 @@ export class World {
       if (!own.faction || !own.owned || !filter.controllingFactions.includes(own.faction)) return false;
     }
     if (filter.layouts && !(def.layoutType && filter.layouts.includes(def.layoutType))) return false;
+    if (filter.harborhold !== undefined) {
+      // THE HARBORHOLD AXIS (data/harborholds.ts): port-town ground only —
+      // true = any hold, else exactly the named state (the Mooring Stone
+      // stands on WON quays; a burned or besieged town keeps no counsel).
+      const h = def.harborhold;
+      if (!h) return false;
+      if (filter.harborhold !== true && h.state !== filter.harborhold) return false;
+    }
     return true;
   }
 
@@ -18789,6 +18977,9 @@ export class World {
   private placeVocationSites(def: ZoneDef): void {
     for (const v of Object.values(VOCATIONS)) {
       if (!v.secret) continue;
+      // Idempotent per site: a mid-session re-roll (a harborhold opening —
+      // resolveHoldDefense) never doubles a shrine that already stands.
+      if (this.vocationSites.some(s => s.vocId === v.id && !s.npc.dead)) continue;
       if (!this.zoneMatchesSiteFilter(def, v.secret.site.filter)) continue;
       const rng = new Rng((this.manifest.seed ^ hashStr(`vocsite_${v.id}_${def.id}`)) >>> 0);
       if (rng.range(0, 1) >= v.secret.site.chance) continue;
@@ -19260,6 +19451,21 @@ export class World {
     }
     m.allocated.add(nodeId);
     this.recalcSeat(seat);
+    // THE COMPANY FOLLOWS THE TREE: an allocation may have moved the patron
+    // stats the merc seams read (mercEase → enemy party scale; mercVigor →
+    // the blades' own sheets). Both refreshes are cheap and idempotent —
+    // and only run while a company is actually fielded.
+    if (this.hiredMercs.length && seat === this.localSeat) {
+      this.rescaleEnemies();
+      const vigor = Math.max(0, this.player.sheet.get('mercVigor'));
+      for (const hm of this.hiredMercs) {
+        if (vigor > 0) {
+          hm.seat.actor.sheet.setSource('patron', [mod('life', 'increased', vigor), mod('damage', 'increased', vigor)]);
+        } else {
+          hm.seat.actor.sheet.removeSource('patron');
+        }
+      }
+    }
     return true;
   }
 
@@ -19380,6 +19586,7 @@ export class World {
       case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
+      case 'buyChandler': this.buyChandlerGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
       case 'levelSkill': this.levelUpSkill(action.skillId, seat, action.pay ?? 'points'); break;
       case 'levelSupportInv': {
@@ -28379,6 +28586,13 @@ export class World {
       woundFrac: 1, radius: 300,
       toast: 'The watch turns out!', color: '#d8c08a', size: 13,
     }),
+    // The harborhold's SIEGE-CAMP WATCH (world/harborholds.ts): strike one
+    // and the camp answers together — texture with teeth, not the muster
+    // itself (the horn stays the event; these are its sleeping edge).
+    hold_camp: () => ({
+      woundFrac: 1, radius: 240,
+      toast: 'The camp stirs!', color: '#e8a050', size: 13,
+    }),
   };
 
   /** The rouse rule for the LIVE holdfast site's wardens (any guardian def —
@@ -31613,12 +31827,61 @@ export class World {
     return out;
   }
 
-  /** Restock now and arm the next restock on the world clock. */
+  /** Restock now and arm the next restock on the world clock. The CHANDLER's
+   *  counter (a harborhold service) restocks on the same beat when one
+   *  stands — one clock, every counter. */
   restockVendor(): void {
     this.vendorStock = this.buildVendorStock();
     this.vendorRestockAt = this.time + this.restockSeconds();
     const smith = this.actors.find(a => this.hasNpcRole(a, 'vendor'));
     this.text(smith?.pos ?? this.player.pos, `${smith?.name ?? 'The vendor'} restocks the wares.`, '#e8c87a', 13);
+    if (this.chandlerStock.length && this.actors.some(a => this.hasNpcRole(a, 'chandler') && !a.dead)) {
+      this.chandlerStock = this.buildVendorStock();
+    }
+  }
+
+  // --- THE CHANDLER'S COUNTER (a harborhold service — data/harborholds.ts) ---
+  /** The port counter's wares (armed by refreshHoldServices while the town
+   *  stands and the chandler rung is bought; the ordinary stock builder —
+   *  per-port flavor is a queued lean on the builder's tables). */
+  chandlerStock: VendorEntry[] = [];
+
+  /** Is this seat at the chandler's counter? (The VendorDef row's gate.) */
+  nearChandler(seat: Seat = this.localSeat): boolean {
+    const c = this.actors.find(a => this.hasNpcRole(a, 'chandler') && !a.dead);
+    return !!c && dist(seat.actor.pos, c.pos) <= 96 && this.dwellReachable(seat.actor.pos, c.pos);
+  }
+
+  /** Buy one of the chandler's wares — buyVendorGem's exact contract on the
+   *  port counter's own stock (affordability → bag fit → the spend). */
+  buyChandlerGem(index: number, seat: Seat = this.localSeat): boolean {
+    const m = seat.meta;
+    const entry = this.chandlerStock[index];
+    if (!entry || !this.nearChandler(seat)) return false;
+    const price = this.vendorPrice(entry);
+    const short = price.find(c => !this.canAffordEssence(seat, c));
+    if (short) {
+      this.failNote(seat.actor, 'chandler:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
+      return false;
+    }
+    if (entry.kind === 'item' && !autoPlace(m.items, entry.item)) {
+      this.failNote(seat.actor, 'bagfull', 'inventory full');
+      return false;
+    }
+    for (const c of price) m.essences[c.essence] -= c.count;
+    this.chandlerStock.splice(index, 1);
+    if (entry.kind === 'skill') {
+      m.skillInv.push(entry.inst);
+      this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
+    } else if (entry.kind === 'support') {
+      m.inventory.push(entry.gem);
+      this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#e8c87a', 13);
+    } else {
+      this.text(seat.actor.pos, `bought ${entry.item.name}`, ITEM_RARITIES[entry.item.rarity].color, 13);
+    }
+    this.markMetaDirty(seat);
+    if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+    return true;
   }
 
   private rollDrops(actor: Actor): void {
@@ -31716,9 +31979,11 @@ export class World {
     this.updateSail(dt);
     // The harbor board's linger-to-read (hearsay + passage + charts).
     this.updateHarborBoard(dt);
-    // The harborhold: the muster horn's linger, the live defense, and the
-    // world-wide lifecycle sweep (rebuilds, recurring sieges, deadlines).
+    // The harborhold: the muster horn's linger, the plaza writ board, the
+    // live defense, and the world-wide lifecycle sweep (rebuilds, recurring
+    // sieges, deadlines).
     this.updateMusterHorn(dt);
+    this.updateWritBoard(dt);
     this.updateHoldDefense(dt);
     this.updateHarborholds();
     // The quartermaster hands you a hunt for lingering (auto-accept on dwell).

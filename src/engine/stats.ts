@@ -997,6 +997,21 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Extra CASCADE placements for ground skills — displaced repeats rippling
    *  from the impact (adds to any innate/grafted GroundCascadeSpec). */
   aoeCascade:     { label: 'Cascade Placements', base: 0, min: 0 },
+  // --- THE COMPANY LANE (meta/mercs.ts — the Harborwarden vocation's levers;
+  // grantable by anything: vocation nodes today, gear/passives tomorrow) -----
+  /** Extra retainers fielded at once, over MERC_CFG.maxHired (the hire gate
+   *  reads floor(maxHired + mercRetinue) — the quanta law: whole blades). */
+  mercRetinue:    { label: 'Retinue', base: 0, min: 0 },
+  /** How much of a hired blade's party-scale weight is FORGIVEN (0..1):
+   *  world.partyScaleCount folds partyScaleWeight × (1 − mercEase), so 1 =
+   *  your company never hardens the world — the true solo curve with the
+   *  blades beside you. Clamped at the read. */
+  mercEase:       { label: 'Company Ease', base: 0, min: 0, percent: true },
+  /** Hire-price forgiveness (0..0.9 at the read): the captain knows you. */
+  mercHireDiscount: { label: 'Hire Discount', base: 0, min: 0, percent: true },
+  /** Increased life + damage granted to your hired blades (the 'patron'
+   *  source applyMercNormalization stamps on the merc's own sheet). */
+  mercVigor:      { label: 'Company Vigor', base: 0, min: 0, percent: true },
   /** ZONE REVOLUTION, rad/s: faced zones (crescents, triangles) SPIN
    *  (innate GroundDelivery.rotate seeds the query — Whirling Sigil). */
   aoeSpin:        { label: 'Area Revolution', base: 0 },

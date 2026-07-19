@@ -2489,8 +2489,9 @@ export class UI {
       const [vid, idx] = btn.dataset.vbuy!.split(':');
       const vendor = VENDORS.find(v => v.id === vid);
       if (!vendor) return;
-      if (vendor.buyT === 'buyVendor') world.requestMeta({ t: 'buyVendor', index: Number(idx) });
-      else world.requestMeta({ t: 'buyDelver', index: Number(idx) });
+      // buyT IS the intent literal — pass it through (a new counter's intent
+      // needs no dispatch edit here, only its union arm + world handler).
+      world.requestMeta({ t: vendor.buyT, index: Number(idx) });
       refresh();
     }));
     q<HTMLButtonElement>('button[data-scrapmode]').forEach(btn => btn.addEventListener('click', () => {
@@ -3406,7 +3407,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const post = world.mercOutpost;
     if (!post) { this.closeMercMenu(); return; }
     const L = world.mercTargetLevel();
-    const hired = world.hiredMerc;
+    const company = world.hiredMercs;
+    const cap = world.mercHireCap();
+    const full = company.length >= cap;
     const rows = post.offers.length
       ? post.offers.map((o, i) => {
         const cost = world.mercHireCost(o);
@@ -3422,16 +3425,23 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
             ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN — retired at level ${o.retiredLevel}</span>` : ''}</span></div>
           <div class="desc">${esc(o.blurb)}</div>
           <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}) — a blade is fitted to its patron.</div>
-          <div class="bind-btns"><button data-merc-hire="${i}" ${hired || !afford ? 'disabled' : ''}>
+          <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford ? 'disabled' : ''}>
             Hire — ${cost} ${META_CURRENCY_LABEL}</button>
-            ${!afford && !hired ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
+            ${!afford && !full ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
         </div>`;
       }).join('')
       : `<div class="skill-entry"><div class="desc">The sign-board hangs empty — every blade is spoken for.</div></div>`;
-    const contract = hired
-      ? `<div class="skill-entry"><div class="name" style="color:#c8b048">Under contract: ${esc(hired.name)}</div>
-          <div class="desc">Their hire ends when your run does — however it does.</div></div>`
-      : '';
+    // THE COMPANY: one line per contract (the retinue cap shows when >1 is
+    // possible — the Harborwarden's ledger made this a roster, not a slot).
+    const contract = company.length
+      ? `<div class="skill-entry"><div class="name" style="color:#c8b048">Under contract${cap > 1 ? ` (${company.length}/${cap})` : ''}:
+            ${esc(company.map(hm => hm.name).join(', '))}</div>
+          <div class="desc">Their hire ends when your run does — however it does.</div>
+          <div class="bind-btns">${company.map((hm, i) =>
+            `<button data-merc-dismiss="${i}">Dismiss ${esc(hm.name)}</button>`).join(' ')}</div></div>`
+      : cap > 1
+        ? `<div class="skill-entry"><div class="desc">Your company musters up to ${cap} blades.</div></div>`
+        : '';
     const retire = world.canRetireHere()
       ? `<div class="skill-entry" style="border-top:1px solid #3a3644;margin-top:10px;padding-top:10px">
           <div class="name" style="color:#b8a0e0">Retire from the wake</div>
@@ -3451,6 +3461,15 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       btn.addEventListener('click', () => {
         world.hireMercenary(Number(btn.dataset.mercHire));
         this.refreshMercMenu(); // re-render: the offer struck, the contract line, the purse
+      });
+    });
+    this.mercMenu.querySelectorAll<HTMLButtonElement>('button[data-merc-dismiss]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.dataset.mercDismiss);
+        const name = world.hiredMercs[i]?.name ?? 'the blade';
+        if (!window.confirm(`Dismiss ${name}? The contract ends; a veteran returns to the pool.`)) return;
+        world.dismissMercenary(`${name} takes their leave.`, i);
+        this.refreshMercMenu();
       });
     });
     this.mercMenu.querySelector<HTMLButtonElement>('button[data-merc-retire]')?.addEventListener('click', () => {

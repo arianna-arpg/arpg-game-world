@@ -121,9 +121,14 @@ export interface CharacterSave {
    *  falls live HERE — inside its own save — so no other character can ever
    *  see or loot them. Same per-record schema tolerance as the account ring. */
   deaths?: DeathRecord[];
-  /** THE HIRED BLADE (meta/mercs.ts): the contract rides the patron's save —
-   *  snapshot INLINE (resilient to roster churn), refs for pool release. */
+  /** THE HIRED BLADE (meta/mercs.ts) — LEGACY single-contract field: old
+   *  saves carry one; the loader folds it into the company. Never written
+   *  by current builds (see `mercenaries`). */
   mercenary?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string };
+  /** THE COMPANY (meta/mercs.ts): every contract rides the patron's save —
+   *  snapshots INLINE (resilient to roster churn), refs for pool release.
+   *  The Harborwarden's retinue makes this a list; one blade = one entry. */
+  mercenaries?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }[];
   /** THE WAKEFUL WORLD (meta/worldstate.ts): the world half of the run — the
    *  minted zone graph, discovery, the clock, zone memory, quests, the spot
    *  the character stood on, and per-overlay snapshots. Optional → a save
@@ -235,13 +240,13 @@ export function serializeCharacter(world: World): CharacterSave {
     charId: m.charId,
     deaths: world.charDeaths.map(d => ({ ...d })),
     world: ws,
-    ...(world.hiredMerc ? {
-      mercenary: {
-        name: world.hiredMerc.name,
-        snapshot: world.hiredMerc.snapshot,
-        ...(world.hiredMerc.mercId ? { mercId: world.hiredMerc.mercId } : {}),
-        ...(world.hiredMerc.templateId ? { templateId: world.hiredMerc.templateId } : {}),
-      },
+    ...(world.hiredMercs.length ? {
+      mercenaries: world.hiredMercs.map(hm => ({
+        name: hm.name,
+        snapshot: hm.snapshot,
+        ...(hm.mercId ? { mercId: hm.mercId } : {}),
+        ...(hm.templateId ? { templateId: hm.templateId } : {}),
+      })),
     } : {}),
   };
 }
@@ -328,8 +333,11 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   // The character's own corpse ring (same per-record tolerance as the account's).
   world.charDeaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
   world.adoptSavedMeta(meta, save.bar, save.level);
-  // Re-field a saved mercenary contract (already paid + pool-marked).
-  if (save.mercenary?.snapshot) world.restoreHiredMerc(save.mercenary);
+  // Re-field the saved COMPANY (already paid + pool-marked). The legacy
+  // single-contract field folds in as a one-blade company (old saves).
+  for (const m of save.mercenaries ?? (save.mercenary?.snapshot ? [save.mercenary] : [])) {
+    if (m?.snapshot) world.restoreHiredMerc(m);
+  }
   // Re-field tamed companions beside the keeper (downed state included).
   if (save.companions?.length) world.restoreCompanions(save.companions);
   // THE THRONG: the claim ledger first (pocket finiteness), then the

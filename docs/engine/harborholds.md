@@ -105,6 +105,60 @@ with `port: true`: **template-only offers** (the baseline archetypes — the
 refuses ports), and wild outposts got scarcer (`MERC_CFG.outpost.chance`
 0.14 → 0.08) — the port is the surefire counter, the wilds are the rite.
 
+## The Company Lane + THE HARBORWARDEN
+
+Hiring is a considered trade now: a blade weighs
+`MERC_CFG.partyScaleWeight` (0.5) of a player toward enemy party scaling —
+`partyScaleCount()` is FRACTIONAL (coopScale is linear, so partial seats
+compose exactly). Four plain stats (grantable by anything) are the levers:
+
+- `mercEase` (0..1) — forgives the blade's scale weight; 1 = the TRUE SOLO
+  CURVE with the company beside you.
+- `mercRetinue` — extra contracts over `MERC_CFG.maxHired` (the hire gate
+  finally reads it; `World.hiredMercs` is a LIST — seats `m0`,`m1`…, the
+  save carries `mercenaries[]` with the legacy single field folding in).
+- `mercHireDiscount` — price forgiveness (≤90%, never free).
+- `mercVigor` — increased life+damage stamped on each blade's own sheet as
+  the `'patron'` source at normalization/resync/allocation.
+
+**THE HARBORWARDEN** (`data/vocations.ts`) is the fabric's discovery-web
+consumer: a SECRET vocation whose **Mooring Stone** shrine seats on every
+OPEN hold (`VocationSiteFilter.harborhold` — the new axis), heard by ANY
+class (the Stillmind law), its chain deed-gated on `ports_defended`
+(`VocationQuestStep.requiresLedger`). Tree: hire-discount/life/armor
+smalls; notables **Fair Company** (mercEase 1), **Iron Company** (mercVigor
+0.2), Shared Purse, Warden's Table; keystone **The Free Company**
+(mercRetinue 1 — the second blade). Probe:
+`npx tsx balance/probe_harborwarden.ts`.
+
+## The plaza services (the ladder's later rungs)
+
+- **THE BOUNTY BOARD** (service `bounty_board`, rung 1; landings are too
+  small): dwell to post `HARBORHOLD_CFG.writs.count` writs on the coast's
+  LIVING foes — the bounty fabric's own grammar (rarity promotion + minted
+  nemesis names + the `bounty_mark` tag paying the standard per-kill
+  claim + `bounty_writs_claimed`), farthest-first so writs send you OUT.
+  Then the board rests (`writsAt` on the persisted state).
+- **THE CHANDLER'S COUNTER** (service `chandler`, rung 1): a REAL second
+  vendor — `VendorDef` row `'chandler'` (its own section + title), its own
+  `chandlerStock` on the shared restock clock, its own `buyChandler`
+  intent. npcRole `'chandler'` keeps Brandt's counter from co-opening.
+
+## The camp watch + the local tide + the badge
+
+- **THE CAMP WATCH** (`siege.campWatch` per class): dormant besiegers
+  PLANTED at the siege camp (sentry fabric — tag `hold_camp`, ambient to
+  objectives, posts facing the gate, wound-roused as a camp) and DRAFTED
+  into wave 1 by the muster (awakened + grafted + counted). Reconciled
+  with the state dress; retired quietly when the town stands.
+- **THE LOCAL TIDE** (`HARBORHOLD_CFG.tideBiomes`): per-biome seasoning
+  rows folded into every siege draw on that coast — a gloaming shore sends
+  gloamborn; weights lean light (the sea's kin stay the spine). A new
+  coast is one row.
+- **THE MAP BADGE**: a `registerMarkerSource` row in `world/harborholds.ts`
+  — every KNOWN hold wears ⚔/🔥/⚑ beside its ⚓ (fog `'charted'`), zero
+  map-panel edits.
+
 ## Findability
 
 A hold under a DEADLINE siege registers an omen (`HARBORHOLD_CFG.omen`,

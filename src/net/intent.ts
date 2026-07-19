@@ -62,6 +62,7 @@ export type MetaAction =
   | { t: 'unlearn'; skillId: string }                          // known → skillInv
   | { t: 'sacrifice'; index: number }                          // skillInv idx → font
   | { t: 'buyVendor'; index: number }                          // vendorStock idx
+  | { t: 'buyChandler'; index: number }                        // chandlerStock idx (a harborhold's port counter)
   | { t: 'buyDelver'; index: number }                          // descentStock idx (Echoes)
   | { t: 'levelSkill'; skillId: string; pay?: 'points' | 'essence' }
   | { t: 'levelSupportInv'; index: number; pay?: 'points' | 'essence' } // loose support gem

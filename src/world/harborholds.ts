@@ -14,10 +14,12 @@
 // ---------------------------------------------------------------------------
 
 import type { Rng } from '../core/rng';
-import { HARBORHOLD_CFG, type HoldDressRow } from '../data/harborholds';
+import { HARBORHOLD_CFG, HOLD_CLASSES, type HoldDressRow } from '../data/harborholds';
 import { STRUCTURES, type StructureDef } from '../data/structures';
+import { registerDormantTag } from '../engine/ai';
 import type { PlacedDoor, PlacedStructure } from '../engine/levelgen';
 import type { World } from '../engine/world';
+import { registerMarkerSource, type MapMarker } from './mapMarkers';
 import type { Omen } from './omens';
 import { registerOmenSource } from './omens';
 
@@ -140,3 +142,49 @@ export function holdStructureIn(structures: readonly PlacedStructure[], structur
 // holds stay silent: an unfound harbor never nags (the crusade's discipline,
 // softened — the deadline is the one moment the world genuinely needs you).
 registerOmenSource((world: World): Omen[] => world.harborholdOmens());
+
+// --- THE CAMP WATCH (the sentry fabric) --------------------------------------
+// Dormant besiegers PLANTED at a besieged hold's camp: texture that wakes —
+// a wound rouses them (the world's rouse rule), the muster drafts them into
+// wave 1. The reset rule lets a chased-off watch settle back to stillness.
+registerDormantTag('hold_camp', { coolDownSecs: 8, disengageDist: 380 });
+
+// --- THE MAP BADGE -----------------------------------------------------------
+// Every KNOWN hold wears its standing beside the ⚓ (the marker registry —
+// no map-panel edits): besieged ⚔ red, burned 🔥 ember, open ⚑ with the
+// prosperity rung. fog 'charted' keeps unfound harbors unspoiled.
+registerMarkerSource((world: World): MapMarker[] => {
+  const out: MapMarker[] = [];
+  for (const def of Object.values(world.zoneMap)) {
+    const h = def.harborhold;
+    if (!h) continue;
+    const label = HOLD_CLASSES[h.cls]?.label ?? h.cls;
+    const at = { x: def.map.x + 16, y: def.map.y + 10 };
+    if (h.state === 'besieged') {
+      out.push({
+        id: `hold:${def.id}`, coord: at, glyph: '⚔', r: 7,
+        fill: '#33131a', stroke: '#9a4a4a', text: '#e88a8a',
+        title: `${def.name} — a ${label} besieged`,
+        detail: 'Sound the horn at the gate to break the siege.',
+        fog: 'charted', z: 18, dimension: def.dimension,
+      });
+    } else if (h.state === 'fallen') {
+      out.push({
+        id: `hold:${def.id}`, coord: at, glyph: '🔥', r: 7,
+        fill: '#2a1a10', stroke: '#9a6a3a', text: '#e8b07a',
+        title: `${def.name} — a ${label} burned`,
+        detail: 'It rebuilds on its own clock — or Mortal Essence raises it today.',
+        fog: 'charted', z: 18, dimension: def.dimension,
+      });
+    } else {
+      out.push({
+        id: `hold:${def.id}`, coord: at, glyph: '⚑', r: 7,
+        fill: '#102030', stroke: '#4a7a9a', text: '#9ad0e8',
+        title: `${def.name} — a ${label} standing (prosperity ${h.prosperity})`,
+        detail: 'Defended sieges raise its standing; a lost one burns it.',
+        fog: 'charted', z: 18, dimension: def.dimension,
+      });
+    }
+  }
+  return out;
+});

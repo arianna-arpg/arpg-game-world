@@ -29,7 +29,9 @@ import {
   HARBORHOLD_CFG, HOLD_CLASSES, holdActiveServices, holdClassFor, holdRestoreCost,
   mintHoldState, sanitizeHoldState,
 } from '../src/data/harborholds';
+import { MONSTERS } from '../src/data/monsters';
 import { STRUCTURES } from '../src/data/structures';
+import { collectMarkers } from '../src/world/mapMarkers';
 import { holdGateDoor, holdSeatCell, holdStructureIn } from '../src/world/harborholds';
 import { cellKind, continentSeedFrom } from '../src/world/continents';
 import { clearSeaMemo, seaOfCell, type Sea } from '../src/world/seas';
@@ -282,7 +284,77 @@ seedGlobalRandom(0x40b0);
         w.account.credits = cost + 11;
         const hired = w.hireMercenary(0);
         check('C: a port hire lands through the one pipeline (exact charge, seat filled)',
-          hired === true && w.account.credits === 11 && !!w.hiredMerc);
+          hired === true && w.account.credits === 11 && w.hiredMercs.length === 1);
+
+        // --- D. the plaza services + the camp + the local tide + the badge ---
+        const wAny = w as unknown as {
+          postHoldWrits(): void;
+          spawnHoldBesieger(cls: unknown, ward: unknown): void;
+          kill(a: unknown, silent?: boolean, killer?: unknown): void;
+        };
+        // THE WRIT BOARD: planted at rung 1+, posts named promoted marks,
+        // then rests on its persisted clock.
+        check('D: the writ board stands in the open town', w.doodads.some(d => d.kind === 'bounty_board'));
+        const foesBefore = w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length;
+        wAny.postHoldWrits();
+        const marks = w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead);
+        const hold2 = hz.harborhold!;
+        check('D: writs post onto living foes (named, promoted, tagged)',
+          marks.length > foesBefore && marks.every(m => (m.rarity ?? 'normal') !== 'normal' && !!m.name),
+          `${marks.length} marks`);
+        check('D: the board rests (writsAt persisted on the state)', hold2.writsAt !== undefined && hold2.writsAt > w.time);
+        const markCount = marks.length;
+        wAny.postHoldWrits();
+        check('D: a resting board refuses a second posting',
+          w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length === markCount);
+        if (marks[0]) {
+          const before = w.ledger.bounty_writs_claimed ?? 0;
+          wAny.kill(marks[0], false, w.player);
+          check('D: a claimed writ pays the standard ledger row',
+            (w.ledger.bounty_writs_claimed ?? 0) === before + 1);
+        }
+        // THE CAMP WATCH: besieged plants the dormant watch at its posts;
+        // reopening retires it quietly.
+        w.devSetHoldState(hz.id, 'besieged');
+        const cls2 = HOLD_CLASSES[hold2.cls];
+        const camp = w.actors.filter(a => a.tag === 'hold_camp' && !a.dead);
+        check('D: the camp watch plants dormant at its posts',
+          camp.length === cls2.siege.campWatch
+          && camp.every(a => !a.aiAwakened && !!a.postSpec && a.aiPost !== undefined),
+          `${camp.length}/${cls2.siege.campWatch}`);
+        // THE DRAFT: the muster wakes the watch into wave 1's tide.
+        w.beginHoldMuster();
+        step(w, 0.1, Math.ceil((cls2.siege.armSec + 2) / 0.1));
+        const drafted = w.actors.filter(a => a.tag === 'hold_siege' && !a.dead && a.aiAwakened);
+        check('D: the muster DRAFTS the watch (dormant → wave 1, grafted)',
+          drafted.length >= camp.length && !w.actors.some(a => a.tag === 'hold_camp' && !a.dead));
+        w.devResolveHoldDefense(true);
+        check('D: reopening retires the camp', !w.actors.some(a => a.tag === 'hold_camp' && !a.dead));
+        // THE LOCAL TIDE: a desert coast seasons the siege table (the fold is
+        // read per spawn — poke the biome, pour a wave's worth, census kinds).
+        const oldBiome = hz.biome;
+        hz.biome = 'desert';
+        w.devSetHoldState(hz.id, 'besieged');
+        w.beginHoldMuster();
+        const ward2 = w.actors.find(a => a.tag === 'hold_ward' && !a.dead);
+        const desertIds = new Set(HARBORHOLD_CFG.tideBiomes.desert.map(r => r.id));
+        let seasoned = 0;
+        for (let i = 0; i < 60 && ward2; i++) {
+          wAny.spawnHoldBesieger(cls2, ward2);
+        }
+        for (const a of w.actors) {
+          if (a.tag === 'hold_siege' && !a.dead && a.defId && desertIds.has(a.defId)) seasoned++;
+        }
+        check('D: the LOCAL TIDE seasons the siege (desert kin in the pour)', seasoned > 0, `${seasoned}/60+`);
+        check('D: every tideBiomes id resolves', Object.values(HARBORHOLD_CFG.tideBiomes)
+          .every(rows => rows.every(r => !!MONSTERS[r.id])));
+        hz.biome = oldBiome;
+        w.devResolveHoldDefense(false);
+        // THE MAP BADGE: the marker registry wears the standing.
+        const badges = collectMarkers(w).filter(m => m.id.startsWith('hold:'));
+        check('D: every known hold wears a map badge', badges.length >= 1
+          && badges.some(m => m.id === `hold:${hz.id}` && m.glyph === '🔥'),
+          `${badges.length} badges`);
       }
     }
   }
