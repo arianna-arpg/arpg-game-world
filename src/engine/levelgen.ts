@@ -881,8 +881,17 @@ export interface DoodadRule {
    *  arrows and eyes is solid to LOOK past (trunks, boulders, masonry piers);
    *  see-through or walk-through kinds (window frames, kelp, the hearth)
    *  never shadow. Purely visual — engine LoS keeps its own honest ray; this
-   *  row only shapes the drawn horizon. Override either way per kind. */
-  sightShadow?: boolean;
+   *  row only shapes the drawn horizon. Override either way per kind.
+   *
+   *  The GRADED row is for LOW-PROFILE kinds — bodies a standing eye honestly
+   *  sees OVER (fire-ring stones, headstones): strength AND shadow length
+   *  scale by `clamp((radius − minR) / (softR − minR)) × mul`, so a knee-high
+   *  prop breathes a short faint gloom while the same KIND at boulder size
+   *  (past softR) keeps its full dark. A graded row is an explicit opt-in;
+   *  {} alone means full strength (all defaults). Resolved once per occluder
+   *  gather via sightShadowFrac — drawn and label-tested through the SAME
+   *  number, so text can never disagree with pixels about a soft shadow. */
+  sightShadow?: boolean | { minR?: number; softR?: number; mul?: number };
   spacing?: number;
   forbidOn?: DoodadKind[];
   walkOnly?: boolean;
@@ -1540,7 +1549,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // same seed roll the boulder painter draws — mono stands honest at its
   // wobbled mass, splits block as two lobes, outcrops as shoulder+satellites.
   // Cluster chances mirror what the painter always rolled for these kinds.
-  rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, mutable: true, rockForm: { cluster: 0.45 } },
+  // rock is EVERY size from fire-ring stone to tor boulder: the graded
+  // sightShadow scales its drawn vision shadow with the body (see-over
+  // pebbles breathe faint gloom; past softR the boulder keeps full dark).
+  rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, mutable: true, rockForm: { cluster: 0.45 }, sightShadow: { softR: 26 } },
   cliff:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, mutable: true },
   wall:      { overlap: 'solid', blocksMove: true, blocksShot: true, mutable: true },
   // THE BRITTLE KIT — lifeless breakables (DoodadRule.brittle; World.popBrittle).
@@ -1861,7 +1873,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true, fuel: 'kindling' },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true,
-    surface: { hw: 0.65, hh: 0.34 } }, // the headstone slab (arch face 1.3r wide; thin depth)
+    surface: { hw: 0.65, hh: 0.34 }, // the headstone slab (arch face 1.3r wide; thin depth)
+    sightShadow: { mul: 0.35 } },    // waist-high: a soft short gloom, never a rampart's night
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
   // read as distinct shards/vents (crystal bumped 30→60 so two never near-touch).
   crystal:   { overlap: 'solid', blocksMove: true, blocksShot: true,  spacing: 60, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -2005,7 +2018,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     habitat: { near: ['water', 'tide_pool', 'brine_sink'] } },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30,
     habitat: { near: ['water', 'tide_pool', 'brine_sink'] } },
-  sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, rockForm: { cluster: 0.3 } },
+  sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, rockForm: { cluster: 0.3 }, sightShadow: { softR: 26 } },
   // The littoral kit. The mangrove is a TREE (canopy, veil, walk-under);
   // pools are ground overlays sensed by kind (world/regions.ts rows); the
   // brine sink POURS like water so neighbouring sinks weld into one body
@@ -2379,15 +2392,31 @@ export function pitRegionOf(d: Doodad): string | null {
   return rule?.region ?? null;
 }
 
-/** Casts a DRAWN vision shadow (the sight veil): solid to both arrows and
- *  eyes unless the rule says otherwise (DoodadRule.sightShadow). Doors never
- *  cast — a closed door's cells are sealed into the walk grid as rampart
- *  (the GRID throws that shadow, and reopens it the moment the door does),
- *  and an open breach must read exactly as open. */
-export function castsSightShadow(d: Doodad): boolean {
-  if (d.door) return false;
+/** DRAWN vision-shadow STRENGTH for a body (0 none .. 1 full) — the sight
+ *  veil's one per-kind read (DoodadRule.sightShadow). Doors never cast — a
+ *  closed door's cells are sealed into the walk grid as rampart (the GRID
+ *  throws that shadow, and reopens it the moment the door does), and an open
+ *  breach must read exactly as open. A boolean rule is all-or-nothing at the
+ *  blocksShot && blocksSight default; a GRADED rule scales by the body's own
+ *  authored radius (low-profile kinds: the fire-ring stone you see over
+ *  breathes faint gloom, the boulder-sized rock keeps its night). */
+export function sightShadowFrac(d: Doodad): number {
+  if (d.door) return 0;
   const r = doodadRule(d.kind);
-  return r.sightShadow ?? (!!r.blocksShot && (r.blocksSight ?? !!r.blocksShot));
+  const s = r.sightShadow;
+  const solid = !!r.blocksShot && (r.blocksSight ?? !!r.blocksShot);
+  if (s === undefined) return solid ? 1 : 0;
+  if (typeof s === 'boolean') return s ? 1 : 0;
+  const minR = s.minR ?? 0, softR = s.softR ?? 0;
+  let f = 1;
+  if (softR > minR) f = Math.max(0, Math.min(1, (d.radius - minR) / (softR - minR)));
+  else if (d.radius < minR) f = 0;
+  return f * (s.mul ?? 1);
+}
+
+/** Casts a DRAWN vision shadow at all (sightShadowFrac > 0). */
+export function castsSightShadow(d: Doodad): boolean {
+  return sightShadowFrac(d) > 0;
 }
 
 /** A solid doodad rejects placement overlapping other solids (but not ground). */

@@ -15,10 +15,14 @@
 //   DOODADS — solid bodies via the hit-surface fabric at their SHOT surface
 //             (hitSurfaceOf 'shot': the TRUNK — you fight under the leaves
 //             and hide behind the bole; the crown's own pixels + the canopy
-//             veil already own what's beneath the leaves). Gated by
-//             castsSightShadow (DoodadRule.sightShadow, defaulting to
-//             blocksShot && blocksSight): windows, kelp and the hearth never
-//             shadow; boulders, trunks and masonry piers do.
+//             veil already own what's beneath the leaves). Gated + GRADED by
+//             sightShadowFrac (DoodadRule.sightShadow — boolean or the
+//             low-profile ladder {minR, softR, mul}): windows, kelp and the
+//             hearth never shadow; boulders, trunks and masonry piers throw
+//             full dark; a fire-ring stone or headstone the eye honestly
+//             sees OVER breathes a SHORT, FAINT gloom (strength and length
+//             both scale with the body — the southern-Lastlight lesson:
+//             knee-high props must never read as rampart cover).
 //
 // RENDER-ONLY BY DOCTRINE. Engine LoS keeps its own ray — AI perception is
 // blinded WIDER than this veil draws (crowns block sight at full radius);
@@ -32,22 +36,45 @@
 // PERF SHAPE (smoothness is the crux): occluder GATHERING is cached against
 // (hero bucket × doodad-list rev × grid version) — a walk rebuilds a few
 // times a second, microseconds each; per FRAME the work is one facing test
-// per cached edge, one tangent wedge per cached disc, two union fills into a
-// downscaled sheet (overlapping shadows never stack dark), and ONE composite.
+// per cached edge, one tangent wedge per cached disc, a handful of layered
+// fills into a downscaled sheet, and ONE composite. Bodies whose whole
+// shadow lies beyond the veil radius are culled per frame (mirrored in
+// occludedAt, so drawn and tested agree about the rim), which keeps the
+// maxOccluders cap a true pathological backstop — the cap must NEVER bite
+// inside the visible field: when it did (dense jungle at 288), every
+// 96px gather re-sort swapped dozens of ON-SCREEN wedges in one frame (the
+// "veil bouncing between darker and lighter" flicker sighting).
 // Zones with nothing to occlude skip the sheet entirely. The room veil owns
 // a fully wrapped frame: this pass fades itself out as confinement wraps.
 // Ablate pass name: 'sightveil'.
 //
+// UNION IS ABSOLUTE (the max-blend contract): overlapping shadows never
+// stack — not within a family, not ACROSS families or strength tiers. Every
+// layer is one Path2D filled twice: first punched out of the sheet
+// (destination-out), then painted at its own alpha, ascending weak→strong —
+// so any pixel wears exactly the STRONGEST shadow that covers it. (Two
+// same-shape fills share one blur, so feathered fringes compose cleanly.)
+// Before this, the region fill over the doodad fill summed to 0.94 where
+// 0.8 was authored — moving bands of double-dark in any trunk-plus-wall
+// country (the jungle's shifting two-tone patches).
+//
 // GEOMETRIC SMOOTHNESS (the no-pop contract): every cutoff a moving eye can
-// cross MELTS instead of snapping (SIGHT_VEIL_GEO). A caster's shadow reach
-// fades to nothing across the last few px before the eye enters its body —
-// ordinary movement never gets that close (collision holds the eye a body
-// radius off every surface), but displacement does: phasing walks, pulls and
-// knockbacks carry the eye THROUGH solids, and the old hard skips (eye-in-
-// disc, silhouette-span ≥ π) flipped a near-fullscreen wedge off/on in one
-// frame at that boundary — the abrupt-shift class the coast QA pass hunted.
-// Wall-edge facing flips need no feather: their quads are area-continuous
-// through the plane (the sliver degenerates to zero as the eye aligns).
+// cross MELTS instead of snapping (SIGHT_VEIL_GEO), and every shadow's far
+// boundary is an ARC FAN swept from the eye — never a straight chord
+// between pushed endpoints. The chord was the "sight hack": pressing the
+// eye against a long wall or slab drives the silhouette span toward π, the
+// pushed endpoints run nearly PARALLEL to the face, and the chord between
+// them sags to a sliver hugging the wall — everything deep behind lights
+// up in an inverted "overview" while occludedAt still reports hidden
+// (grid collision lets the eye reach the face line itself, so no feather
+// can absorb it; live-measured buffer alpha 0 with occ 1.0). The fan
+// subdivides the far boundary every SIGHT_VEIL_GEO.arcStep radians, so a
+// pressed eye's near-π wedge honestly covers the half-plane. Melts remain
+// for displacement THROUGH a body: a disc's reach fades across the last
+// few px of SURFACE distance, and a slab's the same way (surfaceFeather —
+// span-based melting is gone: it engaged at ordinary press distance on any
+// long slab, hw·tan(feather) px off the face). Wall-edge facing flips need
+// no feather: their quads are area-continuous through the plane.
 // And a DOODAD's shadow is BOUNDED BY ITS CASTER (castLen): the wedge ends
 // a body-scaled length past the body, never at the screen rim — unbounded,
 // a knee-high rock banded the whole zone in dark from off-screen (the
@@ -56,12 +83,14 @@
 //
 // The vis-layer doctrine holds: no World import — the pass reads a structural
 // view (World satisfies it) plus the same pure terrain-data helpers the LoS
-// ray itself resolves through.
+// ray itself resolves through. The path builders speak to a structural
+// PathSink (Path2D and 2D contexts both satisfy it), so the headless probe
+// (balance/probe_sightveil.ts) walks the EXACT polygons the sheet fills.
 // ---------------------------------------------------------------------------
 
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 import type { Doodad } from '../../engine/levelgen';
-import { castsSightShadow, hitSurfaceOf } from '../../engine/levelgen';
+import { sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 
@@ -77,9 +106,19 @@ export interface SightView {
   doodadRev: number;
 }
 
-/** One cached solid-body silhouette (flattened from its HitShape). */
-interface OccDisc { x: number; y: number; r: number }
-interface OccRect { x: number; y: number; hw: number; hh: number; rot: number; boundR: number }
+/** The path surface the shadow builders draw into. Path2D and canvas
+ *  contexts both satisfy it structurally — the probe passes a collector and
+ *  walks the EXACT geometry the sheet fills (drawn==tested at the polygon). */
+export interface PathSink {
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  closePath(): void;
+}
+
+/** One cached solid-body silhouette (flattened from its HitShape). `s` is the
+ *  kind's graded shadow strength (sightShadowFrac — scales alpha AND length). */
+interface OccDisc { x: number; y: number; r: number; s: number }
+interface OccRect { x: number; y: number; hw: number; hh: number; rot: number; boundR: number; s: number }
 /** One cached wall FACE (a merged run of solid-cell edges), with the outward
  *  normal (away from the solid mass, toward the ground it faces). */
 interface OccEdge { ax: number; ay: number; bx: number; by: number; nx: number; ny: number }
@@ -90,32 +129,40 @@ const GATHER_BUCKET = 96;
  *  to re-gather for occluders that were just out of the last sweep. */
 const GATHER_PAD = 160;
 
-/** Geometric smoothness feathers (module defaults — the BLEND_CFG idiom:
- *  the fabric's own dials live with the fabric). Both are ZERO-COST and
- *  invisible in normal movement — collision keeps the eye outside every
- *  caster — and exist so displacement (phasing, pulls, knockback-through)
- *  melts a shadow instead of snapping it (see GEOMETRIC SMOOTHNESS above). */
+/** Geometric smoothness dials (module defaults — the BLEND_CFG idiom:
+ *  the fabric's own dials live with the fabric). The feather is ZERO-COST
+ *  and invisible in normal movement — doodad collision keeps the eye a body
+ *  radius off every solid surface — and exists so displacement (phasing,
+ *  pulls, knockback-through) melts a shadow instead of snapping it (see
+ *  GEOMETRIC SMOOTHNESS above). */
 export const SIGHT_VEIL_GEO = {
-  /** World px from a disc caster's SURFACE across which its wedge's reach
-   *  melts to nothing as the eye presses in (melt = (d − r) / this). */
-  discFeather: 10,
-  /** Radians short of the π silhouette span across which a slab's quad
-   *  melts as the eye reaches its face (melt = (π − span) / this). At
-   *  0.24 rad the melt begins ~hw·tan(feather/2) ≈ 3 px off the face —
-   *  strictly inside the collision envelope. */
-  rectFeather: 0.24,
+  /** World px of SURFACE distance across which a body's shadow melts to
+   *  nothing as a displaced eye presses through it — discs measure from the
+   *  rim (d − r), slabs from the oriented face. Grid EDGES never melt (their
+   *  quads are area-continuous through the facing plane, and grid collision
+   *  can carry the eye to the face line itself — a melt there would BE the
+   *  sight hack). */
+  surfaceFeather: 10,
+  /** Far-boundary fan pitch (radians): every shadow's far side is swept as
+   *  an eye-centered arc in steps of at most this, never closed with one
+   *  straight chord. Distant casters span less than one step and pay zero
+   *  extra points; a pressed eye's near-π silhouette gets the honest
+   *  half-plane. (The chord's sag toward the eye at wide spans was the
+   *  wall-press "overview" inversion.) */
+  arcStep: Math.PI / 6,
   /** A DOODAD shadow's LENGTH scales with its CASTER, never the screen:
-   *  the wedge ends castLen(bodyR) = clamp(r × castFarR, ≥ castFarFloor)
-   *  world px past the body (still capped by the veil's own far). Without
-   *  the cap a knee-high rock threw its wedge the full view diagonal — a
-   *  razor-edged dark band crossing the whole zone from a caster standing
-   *  OFF-SCREEN, read in playtests as "two differently shaded sections
-   *  split by a straight line" (the Sundered Point sighting; the swing of
-   *  that band as the hero moved was the older "abrupt shader shift"
-   *  report). Bodies shade like bodies: a trunk throws a tree-length
-   *  shadow, a boulder a boulder's. WALL runs (OccEdge) keep the full far
-   *  on purpose — a rampart's far side is honestly unseen, and the wall
-   *  itself is a visible cause standing at the shadow's root. */
+   *  the wedge ends castLen(bodyR, s) = clamp(r × castFarR, ≥ castFarFloor)
+   *  × s world px past the body (still capped by the veil's own far).
+   *  Without the cap a knee-high rock threw its wedge the full view
+   *  diagonal — a razor-edged dark band crossing the whole zone from a
+   *  caster standing OFF-SCREEN, read in playtests as "two differently
+   *  shaded sections split by a straight line" (the Sundered Point
+   *  sighting). Bodies shade like bodies: a trunk throws a tree-length
+   *  shadow, a boulder a boulder's — and a GRADED low-profile kind a
+   *  fraction of that (s: the same number that fades its alpha). WALL runs
+   *  (OccEdge) keep the full far on purpose — a rampart's far side is
+   *  honestly unseen, and the wall itself is a visible cause standing at
+   *  the shadow's root. */
   castFarR: 13,
   /** Shadow-length floor (world px) so saplings still read as cover. */
   castFarFloor: 160,
@@ -123,9 +170,10 @@ export const SIGHT_VEIL_GEO = {
 
 /** THE ONE doodad-shadow length resolver (world px past the body) — draw()
  *  and occludedAt() both ride it, so drawn and tested can never disagree
- *  about where a shadow ends. */
-function castLen(bodyR: number): number {
-  return Math.max(SIGHT_VEIL_GEO.castFarFloor, bodyR * SIGHT_VEIL_GEO.castFarR);
+ *  about where a shadow ends. `s` is the body's graded strength: a soft
+ *  shadow is a SHORT shadow too. */
+export function castLen(bodyR: number, s = 1): number {
+  return Math.max(SIGHT_VEIL_GEO.castFarFloor, bodyR * SIGHT_VEIL_GEO.castFarR) * s;
 }
 
 /** blocksSight per region id, memoized (regionAt returns strings at cell
@@ -141,13 +189,14 @@ function regionBlocksSight(id: string): boolean {
 }
 
 export class SightVeil {
-  private buf = document.createElement('canvas');
-  private bctx = this.buf.getContext('2d')!;
+  /** The shadow sheet (lazy: headless probes construct + query with no DOM). */
+  private buf: HTMLCanvasElement | null = null;
+  private bctx: CanvasRenderingContext2D | null = null;
 
   /** Live per-frame state (update() resolves; draw()/queries consume). */
   private active = false;
   private regionF = 0;   // hide-fraction of a true-wall shadow (0..1)
-  private doodadF = 0;   // hide-fraction of a solid-body shadow (0..1)
+  private doodadF = 0;   // hide-fraction of a full-strength body shadow (0..1)
   private px = 0; private py = 0;
   private radius = 0;
   private frame = 0;
@@ -222,25 +271,29 @@ export class SightVeil {
     this.discs.length = 0;
     this.rects.length = 0;
     for (const d of view.doodadsNear(this.px, this.py, reach)) {
-      if (!castsSightShadow(d)) continue;
+      const sf = sightShadowFrac(d);
+      if (sf <= 0) continue;
       const dx = d.pos.x - this.px, dy = d.pos.y - this.py;
       if (dx * dx + dy * dy > reach * reach) continue;
       const s = hitSurfaceOf(d, 'shot');
       if (s.kind === 'circle') {
-        if (s.r > 0.5) this.discs.push({ x: d.pos.x, y: d.pos.y, r: s.r });
+        if (s.r > 0.5) this.discs.push({ x: d.pos.x, y: d.pos.y, r: s.r, s: sf });
       } else if (s.kind === 'multi') {
         for (const q of s.parts) {
-          if (q.r > 0.5) this.discs.push({ x: d.pos.x + q.dx, y: d.pos.y + q.dy, r: q.r });
+          if (q.r > 0.5) this.discs.push({ x: d.pos.x + q.dx, y: d.pos.y + q.dy, r: q.r, s: sf });
         }
       } else {
         this.rects.push({
           x: d.pos.x, y: d.pos.y, hw: s.hw, hh: s.hh, rot: s.rot ?? 0,
-          boundR: Math.hypot(s.hw, s.hh),
+          boundR: Math.hypot(s.hw, s.hh), s: sf,
         });
       }
     }
     // Backstop for pathological groves: keep the NEAREST bodies (the far
-    // ones matter least — their wedges start near the screen edge anyway).
+    // ones matter least — the per-frame far cull already skips any body
+    // whose whole shadow lies past the veil radius, so by construction the
+    // cap only ever drops OFF-SCREEN casters unless a grove packs more than
+    // maxOccluders inside one screen).
     if (this.discs.length > cfg.maxOccluders) {
       const px = this.px, py = this.py;
       this.discs.sort((a, b) =>
@@ -313,7 +366,8 @@ export class SightVeil {
   /** How occluded a WORLD point is from the hero's eye (0 clear .. 1 fully
    *  hidden) — the label pass multiplies its reveal through this, exactly
    *  the roomVeil.veiledAt contract. Tested against the SAME cached
-   *  occluders the sheet draws, so text and pixels can never disagree. */
+   *  occluders — same graded strengths, same far cull, same shadow lengths —
+   *  the sheet draws, so text and pixels can never disagree. */
   occludedAt(pos: Pt): number {
     if (!this.active) return 0;
     const px = this.px, py = this.py;
@@ -322,17 +376,32 @@ export class SightVeil {
     if (len2 < 1) return 0;
     let f = 0;
     if (this.doodadF > 0) {
-      // Reach guard mirrors the drawn wedge exactly (castLen, eye-relative):
-      // a point past a body's shadow length reads clear of THAT body.
       const len = Math.sqrt(len2);
       for (const c of this.discs) {
-        if (len > Math.hypot(c.x - px, c.y - py) + castLen(c.r)) continue;
-        if (segHitsCircle(px, py, qx, qy, len2, c.x, c.y, c.r)) { f = this.doodadF; break; }
+        const v = this.doodadF * c.s;
+        if (v <= f) continue;
+        const bd = Math.hypot(c.x - px, c.y - py);
+        // The drawn pass's own guards, mirrored exactly: a body whose whole
+        // shadow lies past the veil radius casts nothing; a point past a
+        // body's shadow length reads clear of THAT body.
+        if (bd - c.r > this.radius) continue;
+        if (len > bd + castLen(c.r, c.s)) continue;
+        if (segHitsCircle(px, py, qx, qy, len2, c.x, c.y, c.r)) {
+          f = v;
+          if (f >= this.doodadF) break;
+        }
       }
       if (f < this.doodadF) {
         for (const r of this.rects) {
-          if (len > Math.hypot(r.x - px, r.y - py) + castLen(r.boundR)) continue;
-          if (segHitsCircle(px, py, qx, qy, len2, r.x, r.y, r.boundR)) { f = this.doodadF; break; }
+          const v = this.doodadF * r.s;
+          if (v <= f) continue;
+          const bd = Math.hypot(r.x - px, r.y - py);
+          if (bd - r.boundR > this.radius) continue;
+          if (len > bd + castLen(r.boundR, r.s)) continue;
+          if (segHitsCircle(px, py, qx, qy, len2, r.x, r.y, r.boundR)) {
+            f = v;
+            if (f >= this.doodadF) break;
+          }
         }
       }
     }
@@ -380,79 +449,86 @@ export class SightVeil {
     const px = this.px, py = this.py;
     const far = this.radius * cfg.farSlack;
 
-    // Facing selection happens per frame (the caches hold BOTH facings so a
-    // mid-cell hero move never pops a stale shadow).
-    let quads = 0;
     const scale = cfg.scale;
     const bw = Math.max(2, Math.ceil(w * scale)), bh = Math.max(2, Math.ceil(h * scale));
+    if (!this.buf) {
+      this.buf = document.createElement('canvas');
+      this.bctx = this.buf.getContext('2d');
+    }
+    const b = this.bctx;
+    if (!b) return;
     if (this.buf.width !== bw || this.buf.height !== bh) {
       this.buf.width = bw; this.buf.height = bh;
     }
-    const b = this.bctx;
     b.setTransform(1, 0, 0, 1, 0, 0);
+    b.globalCompositeOperation = 'source-over';
     b.clearRect(0, 0, bw, bh);
     const k = zoom * scale;
     const ox = camX, oy = camY;
-    const t = cfg.tint;
-    if (cfg.featherPx > 0) b.filter = `blur(${cfg.featherPx}px)`;
 
-    // --- true-wall shadows (one union fill: overlap never stacks) -----------
+    // --- build the shadow LAYERS (one Path2D per strength tier) -------------
+    // Facing selection happens per frame (the caches hold BOTH facings so a
+    // mid-cell hero move never pops a stale shadow).
+    let quads = 0;
+    const layers: { path: Path2D; alpha: number }[] = [];
+
+    // True-wall shadows: one union path at the region strength.
     if (regionA > 0.02 && this.edges.length) {
-      b.beginPath();
+      const path = new Path2D();
+      let n = 0;
       for (const e of this.edges) {
         // Outward normal side test: the hero must FACE this edge.
         if (e.nx * (px - e.ax) + e.ny * (py - e.ay) <= 0) continue;
-        quads += quadPath(b, e.ax, e.ay, e.bx, e.by, px, py, far, ox, oy, k);
+        n += edgeShadowPath(path, e.ax, e.ay, e.bx, e.by, px, py, far, ox, oy, k);
       }
-      if (quads) {
-        b.fillStyle = `rgba(${t.r},${t.g},${t.b},${regionA.toFixed(3)})`;
-        b.fill();
-      }
+      if (n) { layers.push({ path, alpha: regionA }); quads += n; }
     }
 
-    // --- solid-body shadows (tangent wedges; one union fill) ----------------
+    // Solid-body shadows: tangent wedges bucketed by their graded strength
+    // (sightShadowFrac quantized upward to eighths — a zone of full-strength
+    // bodies stays ONE layer; a town's soft props add one or two more).
     if (doodadA > 0.02 && (this.discs.length || this.rects.length)) {
-      let dquads = 0;
-      b.beginPath();
+      const buckets = new Map<number, { path: Path2D; n: number }>();
+      const bucketOf = (s: number): { path: Path2D; n: number } => {
+        const q = Math.min(1, Math.ceil(s * 8) / 8);
+        let bk = buckets.get(q);
+        if (!bk) { bk = { path: new Path2D(), n: 0 }; buckets.set(q, bk); }
+        return bk;
+      };
       for (const c of this.discs) {
-        const dx = c.x - px, dy = c.y - py;
-        const d2 = dx * dx + dy * dy;
-        if (d2 <= c.r * c.r + 1) continue;   // the eye is inside the body
-        const d = Math.sqrt(d2);
-        // MELT: reach fades out across the last few px before the surface,
-        // so a displaced eye entering the body never pops the wedge — as
-        // d → r the tangent mouth (L = d·cos → 0) and the reach both
-        // collapse, and the inside skip above is met at zero area.
-        const melt = Math.min(1, (d - c.r) / SIGHT_VEIL_GEO.discFeather);
-        if (melt <= 0) continue;
-        // The wedge ends a body-scaled length past the caster (castLen) —
-        // never at the screen rim. Both distances run eye-relative.
-        const reach = Math.min(far, d + castLen(c.r)) * melt;
-        const sin = c.r / d, cos = Math.sqrt(Math.max(0, 1 - sin * sin));
-        const ux = dx / d, uy = dy / d;
-        const t1x = ux * cos - uy * sin, t1y = ux * sin + uy * cos;
-        const t2x = ux * cos + uy * sin, t2y = -ux * sin + uy * cos;
-        const L = d * cos;
-        b.moveTo((px + t1x * L - ox) * k, (py + t1y * L - oy) * k);
-        b.lineTo((px + t2x * L - ox) * k, (py + t2y * L - oy) * k);
-        b.lineTo((px + t2x * reach - ox) * k, (py + t2y * reach - oy) * k);
-        b.lineTo((px + t1x * reach - ox) * k, (py + t1y * reach - oy) * k);
-        b.closePath();
-        dquads++;
+        const bd = Math.hypot(c.x - px, c.y - py);
+        // Far cull (mirrored in occludedAt): the whole wedge starts at the
+        // body's silhouette — beyond the veil radius it can't touch a pixel.
+        if (bd - c.r > this.radius) continue;
+        const bk = bucketOf(c.s);
+        bk.n += discShadowPath(bk.path, c.x, c.y, c.r, c.s, px, py, far, ox, oy, k);
       }
       for (const r of this.rects) {
-        // Same body-scaled reach as the discs (castLen, eye-relative).
-        const reach = Math.min(far, Math.hypot(r.x - px, r.y - py) + castLen(r.boundR));
-        dquads += rectShadowPath(b, r, px, py, reach, ox, oy, k);
+        const bd = Math.hypot(r.x - px, r.y - py);
+        if (bd - r.boundR > this.radius) continue;
+        const bk = bucketOf(r.s);
+        bk.n += rectShadowPath(bk.path, r, px, py, far, ox, oy, k);
       }
-      if (dquads) {
-        b.fillStyle = `rgba(${t.r},${t.g},${t.b},${doodadA.toFixed(3)})`;
-        b.fill();
+      for (const [q, bk] of buckets) {
+        if (bk.n) { layers.push({ path: bk.path, alpha: doodadA * q }); quads += bk.n; }
       }
-      quads += dquads;
+    }
+    if (!quads) return;
+
+    // --- fill ascending weak → strong: punch, then paint (max, never sum) ---
+    layers.sort((a, b) => a.alpha - b.alpha);
+    const t = cfg.tint;
+    if (cfg.featherPx > 0) b.filter = `blur(${cfg.featherPx}px)`;
+    for (const L of layers) {
+      b.globalCompositeOperation = 'destination-out';
+      b.fillStyle = 'rgba(0,0,0,1)';
+      b.fill(L.path);
+      b.globalCompositeOperation = 'source-over';
+      b.fillStyle = `rgba(${t.r},${t.g},${t.b},${L.alpha.toFixed(3)})`;
+      b.fill(L.path);
     }
     if (cfg.featherPx > 0) b.filter = 'none';
-    if (!quads) return;
+    b.globalCompositeOperation = 'source-over';
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -462,9 +538,27 @@ export class SightVeil {
   }
 }
 
-/** Append one edge-shadow quad (A→B, then both pushed to FAR from the eye).
- *  Returns 1 when appended (degenerate eye-on-edge geometry skips). */
-function quadPath(b: CanvasRenderingContext2D, ax: number, ay: number,
+/** Append the far-boundary ARC between two eye-relative bearings (short way,
+ *  θfrom → θto), one point per ≤ arcStep radians at radius R from the eye.
+ *  This is what keeps a wide silhouette honest: a chord between the extreme
+ *  far points sags toward the eye as the span approaches π (the wall-press
+ *  inversion); the fan holds the boundary at full reach the whole way. */
+function farArc(sink: PathSink, px: number, py: number, thFrom: number,
+  thTo: number, R: number, ox: number, oy: number, k: number): void {
+  let d = thTo - thFrom;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  const n = Math.ceil(Math.abs(d) / SIGHT_VEIL_GEO.arcStep);
+  for (let i = 1; i < n; i++) {
+    const th = thFrom + d * (i / n);
+    sink.lineTo((px + Math.cos(th) * R - ox) * k, (py + Math.sin(th) * R - oy) * k);
+  }
+}
+
+/** Append one edge-shadow polygon (A→B, far side swept as an eye-centered
+ *  fan). Returns 1 when appended (degenerate eye-on-edge geometry skips).
+ *  Exported for the headless probe — the sheet fills this exact geometry. */
+export function edgeShadowPath(sink: PathSink, ax: number, ay: number,
   bx2: number, by2: number, px: number, py: number, far: number,
   ox: number, oy: number, k: number): number {
   const dax = ax - px, day = ay - py;
@@ -473,19 +567,64 @@ function quadPath(b: CanvasRenderingContext2D, ax: number, ay: number,
   if (la < 1 || lb < 1) return 0;
   const fax = ax + (dax / la) * far, fay = ay + (day / la) * far;
   const fbx = bx2 + (dbx / lb) * far, fby = by2 + (dby / lb) * far;
-  b.moveTo((ax - ox) * k, (ay - oy) * k);
-  b.lineTo((bx2 - ox) * k, (by2 - oy) * k);
-  b.lineTo((fbx - ox) * k, (fby - oy) * k);
-  b.lineTo((fax - ox) * k, (fay - oy) * k);
-  b.closePath();
+  sink.moveTo((ax - ox) * k, (ay - oy) * k);
+  sink.lineTo((bx2 - ox) * k, (by2 - oy) * k);
+  sink.lineTo((fbx - ox) * k, (fby - oy) * k);
+  // Fan radius rides past both endpoint anchors so the swept boundary never
+  // dips inside them; overshoot beyond `far` is invisible (far already
+  // clears the screen by farSlack).
+  const R = (far + Math.max(la, lb)) / Math.cos(SIGHT_VEIL_GEO.arcStep / 2);
+  farArc(sink, px, py, Math.atan2(dby, dbx), Math.atan2(day, dax), R, ox, oy, k);
+  sink.lineTo((fax - ox) * k, (fay - oy) * k);
+  sink.closePath();
+  return 1;
+}
+
+/** Append a disc body's shadow wedge: tangent mouth, body-scaled reach
+ *  (castLen × the graded strength), far side fanned at the reach arc. MELT:
+ *  reach fades across the last few px of surface distance, so a displaced
+ *  eye entering the body never pops the wedge — as d → r the tangent mouth
+ *  and the reach both collapse. Exported for the headless probe. */
+export function discShadowPath(sink: PathSink, cx: number, cy: number,
+  r: number, s: number, px: number, py: number, far: number,
+  ox: number, oy: number, k: number): number {
+  const dx = cx - px, dy = cy - py;
+  const d2 = dx * dx + dy * dy;
+  if (d2 <= r * r + 1) return 0;   // the eye is inside the body
+  const d = Math.sqrt(d2);
+  const melt = Math.min(1, (d - r) / SIGHT_VEIL_GEO.surfaceFeather);
+  if (melt <= 0) return 0;
+  const reach = Math.min(far, d + castLen(r, s)) * melt;
+  const sin = r / d, cos = Math.sqrt(Math.max(0, 1 - sin * sin));
+  const L = d * cos;
+  if (reach <= L + 0.5) return 0;  // fully melted: the wedge has no length left
+  const ux = dx / d, uy = dy / d;
+  const t1x = ux * cos - uy * sin, t1y = ux * sin + uy * cos;
+  const t2x = ux * cos + uy * sin, t2y = -ux * sin + uy * cos;
+  sink.moveTo((px + t1x * L - ox) * k, (py + t1y * L - oy) * k);
+  sink.lineTo((px + t2x * L - ox) * k, (py + t2y * L - oy) * k);
+  sink.lineTo((px + t2x * reach - ox) * k, (py + t2y * reach - oy) * k);
+  farArc(sink, px, py, Math.atan2(t2y, t2x), Math.atan2(t1y, t1x), reach, ox, oy, k);
+  sink.lineTo((px + t1x * reach - ox) * k, (py + t1y * reach - oy) * k);
+  sink.closePath();
   return 1;
 }
 
 /** Append an oriented-rect body's shadow: the two bearing-extreme corners
- *  from the eye, pushed to FAR — the silhouette quad. */
-function rectShadowPath(b: CanvasRenderingContext2D, r: OccRect,
+ *  from the eye pushed to a body-scaled reach, far side fanned. MELT rides
+ *  the eye's distance to the slab's SURFACE (the disc rule, oriented) — the
+ *  old span-based melt engaged hw·tan(feather) px off any LONG face, i.e.
+ *  at ordinary press distance against a wall slab. Exported for the probe. */
+export function rectShadowPath(sink: PathSink, r: OccRectLike,
   px: number, py: number, far: number, ox: number, oy: number, k: number): number {
   const cos = Math.cos(r.rot), sin = Math.sin(r.rot);
+  // Surface distance in the slab's local frame (0 inside).
+  const rx = px - r.x, ry = py - r.y;
+  const lx = rx * cos + ry * sin, ly = -rx * sin + ry * cos;
+  const ddx = Math.max(0, Math.abs(lx) - r.hw), ddy = Math.max(0, Math.abs(ly) - r.hh);
+  const sd = Math.hypot(ddx, ddy);
+  const melt = Math.min(1, sd / SIGHT_VEIL_GEO.surfaceFeather);
+  if (melt <= 0) return 0;         // the eye is inside (or on) the slab
   const base = Math.atan2(r.y - py, r.x - px);
   let minD = Infinity, maxD = -Infinity;
   let minX = 0, minY = 0, maxX = 0, maxY = 0;
@@ -498,15 +637,14 @@ function rectShadowPath(b: CanvasRenderingContext2D, r: OccRect,
     if (d < minD) { minD = d; minX = cx; minY = cy; }
     if (d > maxD) { maxD = d; maxX = cx; maxY = cy; }
   }
-  const span = maxD - minD;
-  if (span >= Math.PI) return 0;   // the eye is inside the slab (convex: an
-  // external eye always spans < π, so ordinary movement never reaches this)
-  // MELT: the quad's reach fades as the silhouette span closes on π — a
-  // displaced eye pressing through the face sees the shadow shrink to
-  // nothing instead of a half-plane flipping off in one frame.
-  const melt = Math.min(1, (Math.PI - span) / SIGHT_VEIL_GEO.rectFeather);
-  if (melt <= 0) return 0;
-  return quadPath(b, minX, minY, maxX, maxY, px, py, far * melt, ox, oy, k);
+  if (maxD - minD >= Math.PI) return 0;   // degenerate (eye on a face plane)
+  const reach = Math.min(far, Math.hypot(r.x - px, r.y - py) + castLen(r.boundR, r.s)) * melt;
+  return edgeShadowPath(sink, minX, minY, maxX, maxY, px, py, reach, ox, oy, k);
+}
+
+/** The rect fields the shadow builder needs (structural, for the probe). */
+export interface OccRectLike {
+  x: number; y: number; hw: number; hh: number; rot: number; boundR: number; s: number;
 }
 
 /** Does the segment (P → P+Q, squared length len2) cross the circle? The

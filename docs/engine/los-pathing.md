@@ -45,7 +45,38 @@ gate through the same test the sheet draws from, and the room veil
 `VIS_CFG.sightVeil` (strengths, tint, resolution, feather),
 `ZoneTheme.sightVeil` multipliers (per-zone art direction),
 `DoodadRule.sightShadow` (per-kind override; default `blocksShot &&
-blocksSight`). Forensics: `npm run perf -- --ablate=sightveil`.
+blocksSight` — a boolean, or the LOW-PROFILE ladder `{minR, softR, mul}`:
+strength AND shadow length scale with the body's own radius, so a fire-ring
+stone or headstone the eye honestly sees over breathes a short faint gloom
+while the same kind at boulder size keeps its full dark; `occludedAt`
+reports the same graded number the sheet paints, so labels can never
+disagree with pixels). Forensics: `npm run perf -- --ablate=sightveil`.
+
+Geometry contracts (probe: `balance/probe_sightveil.ts`, which walks the
+EXACT polygons the sheet fills through the builders' structural PathSink):
+
+- **The far side of every shadow is an eye-centered ARC FAN**
+  (`SIGHT_VEIL_GEO.arcStep`), never a straight chord between the pushed
+  endpoints. The chord was the wall-press "sight hack": with the eye at the
+  face (grid collision carries it to the face line itself), the silhouette
+  span nears π, the endpoint rays run parallel to the wall, and the chord
+  sags to a sliver — everything deep behind lit up in an inverted
+  "overview" while `occludedAt` still said hidden.
+- **Melts ride SURFACE distance** (`surfaceFeather`, discs and slabs
+  alike): only displacement through a body (phasing, pulls, knockback) can
+  cross the last few px, so shadows melt for displacement and never flinch
+  at ordinary collision contact. (The old angular-span melt on slabs
+  engaged at press distance against any long face.)
+- **Union is absolute**: every strength layer is punched out of the sheet
+  before it paints (ascending weak → strong), so overlap wears exactly the
+  strongest shadow — never a stacked double-dark band where trunk wedges
+  cross wall shadows.
+- **The occluder cap never bites on screen**: bodies whose whole shadow
+  lies past the veil radius are culled per frame (drawn and tested alike),
+  so `VIS_CFG.sightVeil.maxOccluders` is a pathological backstop. When the
+  cap bit inside the visible field (dense jungle at the old 288), every
+  96px gather re-sort popped dozens of on-screen wedges in one frame — the
+  "veil bouncing darker/lighter while walking" flicker.
 
 ## The skill lever
 

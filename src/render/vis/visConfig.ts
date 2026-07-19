@@ -232,9 +232,18 @@ export const VIS_CFG = {
     /** Shadow quad length as a fraction of the veil reach (past the screen
      *  edge, so no shadow ever ends visibly short). */
     farSlack: 1.35,
-    /** Occluder-count ceiling per family per frame (a pathological grove
-     *  degrades gracefully: nearest buckets win by construction). */
-    maxOccluders: 288,
+    /** Occluder-count ceiling (a pathological grove degrades gracefully:
+     *  nearest bodies win by construction). MUST comfortably exceed the
+     *  densest biome's on-screen caster count — when the cap bites inside
+     *  the visible field, every 96px gather re-sort swaps a churn of
+     *  ON-SCREEN wedges in one frame (dense jungle at 288 measured 17–40
+     *  visible shadows popping per bucket crossing — the "veil bouncing
+     *  darker/lighter while walking" flicker; a denser mint saturated 512
+     *  with the cutoff a mere 21px past the visible rim). The per-frame far
+     *  cull keeps the DRAWN cost bounded by what's actually near the screen
+     *  regardless of this cache size, so the cap is a true pathological
+     *  backstop, not a perf dial. */
+    maxOccluders: 768,
   },
 
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's
