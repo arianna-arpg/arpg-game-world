@@ -183,6 +183,7 @@ export type KnownDoodadKind =
   | 'door'    // blocks everything while closed; open/broken = walk/shoot/see through
   | 'window'  // an arrow-slit frame: blocks movement, passes shots + sight
   | 'dock'    // a port's harbor planks — dwell to cast off (the Voyage)
+  | 'muster_horn' // a harborhold's horn post at the gate — dwell to open the hold panel (muster/restore)
   | 'breach'  // the torn way into the Underworld (bottom of the cave ladder)
   | 'landmass'    // the Voyage's streamed COASTLINE (a shore-collision blob)
   | 'isle_beacon' // a Voyage Island's guiding light + name (pure signage)
@@ -476,6 +477,12 @@ export interface Doodad {
    *  presence from these tags, and hands the piece to `evap` the beat its
    *  front stops covering the zone. Never persisted, never in layouts. */
   weatherDress?: string;
+  /** HARBORHOLD DRESS tag (world/harborholds.ts): state dressing on a port
+   *  town — the wreckage fires of a fallen hold, the siege camp of a
+   *  besieged one. Same law as weatherDress: runtime-only, presence derived
+   *  from the tag, replanted deterministically per load, dissolved (evap)
+   *  on a state change. Never persisted, never in layouts. */
+  holdDress?: boolean;
   /** THE TIER FABRIC (engine/tiers.ts): the walkable LAYER this doodad lives
    *  on (absent = 0, the ground truth). Tier-tagged pieces are laid by the
    *  tier carvers (a duct's own webs, a butte-top cache): ground sensing,
@@ -2057,6 +2064,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   window: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
     surface: { hw: 0.7, hh: 0.28 } }, // the sill slab — flush with its wall run, no room-side bulge
   dock:   { overlap: 'trigger', spacing: 40 },
+  muster_horn: { overlap: 'trigger', spacing: 30 }, // the harborhold's gate post — a dwell ring, not a wall
   breach: { overlap: 'trigger', spacing: 60 },
   // The Voyage's streamed coastline: the boat can't drive ashore, but a
   // shot arcs over the shallows (sight too — you can see the beach you round).

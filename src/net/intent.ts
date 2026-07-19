@@ -79,6 +79,8 @@ export type MetaAction =
   | { t: 'dropSupport'; index: number }                        // inventory idx → world
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'harborChart'; omen: string }                         // Harbor board: buy the chart of a rumored seat (credits → survey pulse)
+  | { t: 'holdMuster' }                                        // Harborhold: sound the horn — arm the standing zone's siege defense
+  | { t: 'holdRestore' }                                       // Harborhold: pay the Mortal Essence restoration at a fallen hold's wreckage
   | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)
   | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
   // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).

@@ -174,10 +174,15 @@ import { traversalDef, type TraversalCapture, type TraversalState } from './trav
 import { castRay, LOS_CFG } from './los';
 import { coordDist, type MapCoord } from '../world/coords';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
-import { OMEN_CFG, collectOmens, omenLine, omenReach } from '../world/omens';
+import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
 import { PORT_CFG } from '../data/ports';
 import { SEA_CFG } from '../data/seas';
 import { seaAt, seaById, seaSpotsNear, type Sea, type SeaPortSpot } from '../world/seas';
+import {
+  HARBORHOLD_CFG, holdActiveServices, holdClassFor, holdClassOf, holdRestoreCost,
+  mintHoldState, sanitizeHoldState, type HoldClassDef,
+} from '../data/harborholds';
+import { holdGateApron, holdGateDoor, holdSeatPos, holdStructureIn, rollHoldDressPieces } from '../world/harborholds';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
@@ -1277,6 +1282,8 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
+    case 'holdMuster': return true;  // the standing zone's harborhold — no payload
+    case 'holdRestore': return true; // ditto (price re-derived host-side from data)
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
     // GEAR intents — uids/cells are untrusted client numbers, ids plain strings.
     case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
@@ -2752,8 +2759,10 @@ export class World {
   /** Essence paid by the most recent mode death (the wake-text receipt). */
   private lastRespawnPayout = 0;
   // --- the MERCENARY MARKET (meta/mercs.ts) --------------------------------
-  /** This zone's outpost, if one seeded here (per-zone-load transient). */
-  mercOutpost: { captain: Actor; offers: MercOffer[] } | null = null;
+  /** This zone's outpost, if one seeded here (per-zone-load transient).
+   *  `port: true` = a HARBORHOLD's captain (template-only sheet, no
+   *  retirement — the wilds keep the veterans and the rite). */
+  mercOutpost: { captain: Actor; offers: MercOffer[]; port?: boolean } | null = null;
   private mercDwell = 0;
   private mercDwellFired = false;
   private mercHintAt = -999;
@@ -4034,9 +4043,13 @@ export class World {
       // THE HARBOR BOARD (data/ports.ts): planted a step INLAND of the dock —
       // dwell to read the hearsay (far omens as rumor rows), hire passage down
       // the shipping lanes, or buy a chart of a far seat. The dock keeps its
-      // own law: dwelling THERE still casts off directly.
-      const board = vec(dock.x - Math.cos(a) * 130, dock.y - Math.sin(a) * 130);
-      this.doodads.push({ pos: this.clampPos(board, 16), radius: 16, kind: 'harbor_board' });
+      // own law: dwelling THERE still casts off directly. HARBORHOLD zones
+      // suppress this plant — their board is a TOWN SERVICE seated inside the
+      // walls (the knowledge network is the town's reward; bootHarborhold).
+      if (!def.harborhold) {
+        const board = vec(dock.x - Math.cos(a) * 130, dock.y - Math.sin(a) * 130);
+        this.doodads.push({ pos: this.clampPos(board, 16), radius: 16, kind: 'harbor_board' });
+      }
       // THE HAVEN'S QUAY (ZoneDef.portTier — the sea's hub harbor wears its
       // trade): lantern posts flanking the dock and cargo stacked along the
       // quay line, seeded per zone — a haven READS as a haven from the pier.
@@ -4236,6 +4249,11 @@ export class World {
         this.setDoorState(d.door!.id, 'open', { silent: true });
       }
     }
+    // THE HARBORHOLD boot — after the door replays above on purpose: the
+    // persisted hold state is AUTHORITATIVE over remembered opens (the town
+    // may have fallen or rebuilt while you sailed; the gate must match the
+    // state, not the memory).
+    if (def.harborhold) this.bootHarborhold(def);
     // Remembered HOLLOWS re-open (the hollows fabric): the layout regenerated
     // them sealed above; re-carve each remembered id through the shared
     // openHollow path — revive mode furnishes STRUCTURE (the crevice shaft,
@@ -5090,6 +5108,13 @@ export class World {
         // fabric), but standing DISPERSAL ORDERS are zone-local state.
         id: 'extraction',
         reset: () => { this.extractionDepartures.length = 0; },
+      },
+      {
+        // Harborhold: the hold STATE rides the def (persisted); the LIVE
+        // defense is zone-local and transient by design — a resume or a
+        // walk-away folds the fight back to 'besieged' (the transience law).
+        id: 'harborhold',
+        reset: () => { this.holdDefense = null; this.holdDwellRequested = false; },
       },
       {
         // Borough: the settlement re-rolls with the zone (encounter fabric),
@@ -7459,6 +7484,17 @@ export class World {
         z.seaId = sea.id;
         z.portTier = spot.tier;
         if (spot.tier === 'haven') z.name = `${z.name} Haven`;
+        // THE HARBORHOLD (data/harborholds.ts): mainland spots raise walled
+        // quay-towns — state minted BESIEGED (the discovery beat), the town
+        // composition baked at chance 1 so the ordinary composition pipeline
+        // seats the walls. Sea class × tier decides the hold class; a tier
+        // without a row keeps the bare quay. Islands never pass through here
+        // (mintIslandZone is their own path) — isles stay small locales.
+        const holdCls = holdClassFor(sea.cls.id, spot.tier);
+        if (holdCls) {
+          z.harborhold = mintHoldState(holdCls);
+          (z.compositions ??= []).push({ composition: `harborhold_${holdCls.id}`, chance: 1 });
+        }
         this.zoneMap[z.id] = z;
         this.sim.onNodeCharted(z, this.simView());
       }
@@ -12093,6 +12129,15 @@ export class World {
     const healed = sanitizeWorldZones(ws.zones, claimed);
     if (!healed) return false;
     this.zoneMap = healed;
+    // HARBORHOLD state rides the defs verbatim — sanitize each (foreign
+    // saves, hand edits, renamed classes): a malformed state drops to a
+    // bare quay, valid ones clamp to the data ladder. Never a crash.
+    for (const z of Object.values(healed)) {
+      if (z.harborhold === undefined) continue;
+      const s = sanitizeHoldState(z.harborhold);
+      if (s) z.harborhold = s;
+      else delete z.harborhold;
+    }
     // The mint counter resumes past every persisted gen_<n> id (belt: scan
     // them too, so a hand-edited save can never mint a colliding id).
     this.nextGenId = Math.max(1, Math.floor(ws.nextGenId) || 1);
@@ -16139,6 +16184,626 @@ export class World {
       'The chart is inked — far country is marked on your map.', '#7fd0ff', 15);
   }
 
+  // --- THE HARBORHOLD (data/harborholds.ts + world/harborholds.ts) ------------
+  //
+  // Mainland ports are walled quay-towns with a SIEGE LIFECYCLE persisted on
+  // ZoneDef.harborhold: found BESIEGED (camp at the walls, the gate sealed),
+  // OPENED by breaking the siege — THE MUSTER, discrete waves poured through
+  // the extraction swarm director's grammar and fixated on the QUAY WARD at
+  // the gate — and FELLED by losing one (fires, sealed gates, a rebuild
+  // clock, or a Mortal Essence restoration at the wreckage). PROSPERITY
+  // climbs with each defended siege and gates the service rows (the
+  // patronage ladder: finding a harbor opens the map, defending it opens
+  // the town). The LIVE defense is transient by design — never persisted,
+  // reset with the zone (the transience law); only the state object rides
+  // the save. Islands and legacy ports never carry the state: bare quays.
+
+  /** The LIVE defense (transient; the reset registry folds it with the zone). */
+  private holdDefense: {
+    zoneId: string; phase: 'arming' | 'wave' | 'breather'; wave: number;
+    phaseAt: number; wardId: number | null; alive: Set<number>;
+    toSpawn: number; spawnAt: number; pulseAt: number;
+  } | null = null;
+  private holdGate = new Dwell();
+  /** ONE-SHOT: the muster-horn dwell completed — main.ts opens the hold panel. */
+  holdDwellRequested = false;
+  private holdSweepAt = 0;
+  private holdMissingWarned = new Set<string>();
+
+  /** Zone-load boot for a harborhold port (loadZone calls it AFTER zone
+   *  memory replays door states — the persisted hold state is authoritative:
+   *  the town may have fallen or rebuilt while you sailed). */
+  private bootHarborhold(def: ZoneDef): void {
+    const hold = def.harborhold;
+    if (!hold) return;
+    const cls = holdClassOf(hold);
+    const ps = holdStructureIn(this.structures, cls.structure);
+    if (!ps) {
+      // The zone couldn't seat its town (a tight arena) — degrade to the
+      // pre-fabric bare quay on this ground; dock and cast-off still work.
+      if (!this.holdMissingWarned.has(def.id)) {
+        this.holdMissingWarned.add(def.id);
+        console.warn(`[harborhold] ${def.id} seated no '${cls.structure}' — bare-quay degrade`);
+      }
+      return;
+    }
+    const gate = holdGateDoor(ps);
+    if (gate) {
+      if (hold.state === 'open') this.setDoorState(gate.door.id, 'open', { silent: true });
+      else this.resealDoor(gate.door.id);
+      // THE MUSTER HORN — the hold's one interaction post, on the gate apron.
+      const at = holdGateApron(gate, 64);
+      this.doodads.push({ pos: this.findFreeSpot(vec(at.x, at.y), 14), radius: 14, kind: 'muster_horn' });
+      this.markDoodadsChanged();
+    }
+    // THE QUAY BELT: the dock's fixed oceanward formula and the town's
+    // findSpot seat are independent rolls — on the rare layout where the
+    // dock lands INSIDE the walls, walk it out past the gate apron (an
+    // arrival must never wake behind a sealed gate).
+    const dock = this.doodads.find(d => d.kind === 'dock');
+    if (dock && dock.pos.x > ps.rect.x && dock.pos.x < ps.rect.x + ps.rect.w
+      && dock.pos.y > ps.rect.y && dock.pos.y < ps.rect.y + ps.rect.h) {
+      const out = gate ? holdGateApron(gate, 140)
+        : { x: ps.rect.x + ps.rect.w / 2, y: ps.rect.y + ps.rect.h + 120 };
+      dock.pos = this.clampPos(vec(out.x, out.y), dock.radius);
+      this.markDoodadsChanged();
+    }
+    this.refreshHoldDress(def);
+    this.refreshHoldServices(def);
+    // The discovery beat: the first meeting with a besieged harbor says so.
+    if (hold.state === 'besieged' && !hold.defenses && !hold.falls) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 106),
+        `${def.name} stands besieged — sound the horn at the gate to break it`, '#e8a050', 15);
+    }
+  }
+
+  /** The inverse of setDoorState('open') — the harborhold's RE-SEAL (a hold
+   *  that fell while you were away shuts its gate again). Broken doors stay
+   *  broken (splinters don't unsplinter); the grid repaints to rampart and
+   *  every cache self-heals off the doodad rev. */
+  private resealDoor(id: string): void {
+    const d = this.doodads.find(x => x.door?.id === id);
+    if (!d?.door || d.door.broken || !d.door.open) return;
+    d.door.open = false;
+    if (this.walk instanceof GridWalkField && d.door.cells) {
+      const c = d.door.cells;
+      this.walk.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
+    }
+    this.markDoodadsChanged();
+  }
+
+  /** Reconcile the hold's STATE DRESSING — the wreckage fires of a fallen
+   *  hold, the siege camp of a besieged one. Idempotent (presence derived
+   *  from the holdDress tag), deterministic (zone seed ^ dressSalt ^ state),
+   *  and diegetic on change: old dress dissolves via evap, never blinks. */
+  private refreshHoldDress(def: ZoneDef): void {
+    if (this.zone.id !== def.id) return;
+    const hold = def.harborhold;
+    if (!hold) return;
+    for (const d of this.doodads) {
+      if (d.holdDress && !d.evap) { d.evap = { t: 0.2, rate: 40 }; this.evaporating.push(d); }
+    }
+    const rows = hold.state === 'fallen' ? HARBORHOLD_CFG.ruinDress
+      : hold.state === 'besieged' ? HARBORHOLD_CFG.siegeDress : null;
+    if (!rows) { this.markDoodadsChanged(); return; }
+    const cls = holdClassOf(hold);
+    const ps = holdStructureIn(this.structures, cls.structure);
+    if (!ps) return;
+    const gate = holdGateDoor(ps);
+    const rng = new Rng(((def.seed ?? 0) ^ HARBORHOLD_CFG.dressSalt
+      ^ (hold.state === 'fallen' ? 0x5 : 0x9)) >>> 0);
+    const horn = this.doodads.find(x => x.kind === 'muster_horn');
+    const pieces = rollHoldDressPieces(rng, rows, ps,
+      gate ? { pos: gate.pos, normal: gate.normal } : null,
+      (x, y, r) => this.holdDressSpotOk(x, y, r, ps, horn));
+    for (const p of pieces) {
+      const nd: Doodad = { pos: vec(p.x, p.y), radius: p.r, kind: p.kind, holdDress: true };
+      const rEff = doodadRuleOf(nd.kind).effect;
+      if (rEff) nd.effect = { ...rEff, cd: rand(0, rEff.interval) };
+      this.doodads.push(nd);
+    }
+    this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
+    this.markDoodadsChanged();
+  }
+
+  /** Dress placement truth: inside the arena, never under a roof, never on
+   *  a portal apron, the dock, or the muster horn. */
+  private holdDressSpotOk(x: number, y: number, r: number, ps: PlacedStructure, horn?: Doodad): boolean {
+    if (x < r || y < r || x > this.arena.w - r || y > this.arena.h - r) return false;
+    for (const roof of ps.roofs) {
+      if (x > roof.x - r && x < roof.x + roof.w + r && y > roof.y - r && y < roof.y + roof.h + r) return false;
+    }
+    for (const e of this.exits) if (dist(vec(x, y), e.pos) < 140 + r) return false;
+    const dock = this.doodads.find(d => d.kind === 'dock');
+    if (dock && dist(vec(x, y), dock.pos) < 90 + r) return false;
+    if (horn && dist(vec(x, y), horn.pos) < 46 + r) return false;
+    return true;
+  }
+
+  /** Reconcile the town's SERVICE presence with state + prosperity: keeper
+   *  folk at their plan anchors while open (the rows gate by rung), the
+   *  harbor board INSIDE the walls (the knowledge network is the town's
+   *  reward), the merc captain arming the PORT market. Live transitions (a
+   *  defense won mid-session) call this directly — no reload needed. */
+  private refreshHoldServices(def: ZoneDef): void {
+    if (this.zone.id !== def.id) return;
+    const hold = def.harborhold;
+    if (!hold) return;
+    const cls = holdClassOf(hold);
+    const ps = holdStructureIn(this.structures, cls.structure);
+    if (!ps) return;
+    const open = hold.state === 'open';
+    const wants = new Set((open ? holdActiveServices(cls, hold.prosperity) : []).map(s => s.id));
+    for (const s of cls.services) {
+      if (!s.npc) continue;
+      const seat = holdSeatPos(ps, s.seat);
+      if (!seat) continue;
+      const tag = `hold_svc:${s.id}`;
+      const standing = this.actors.find(a => !a.dead && a.tag === tag);
+      if (wants.has(s.id) && !standing) {
+        const n = this.createMonster(s.npc, 1, 'player');
+        n.pos = this.clampPos(vec(seat.x, seat.y), n.radius);
+        n.tag = tag;
+        this.actors.push(n);
+        if (s.id === 'mercs') this.armPortMercs(n);
+      } else if (!wants.has(s.id) && standing) {
+        standing.dead = true; // the per-frame sweep retires the body quietly
+        if (s.id === 'mercs' && this.mercOutpost?.port) this.mercOutpost = null;
+      }
+    }
+    // The BOARD: planted at its plaza anchor while active; the default
+    // outside-the-dock plant is suppressed for harborhold zones (loadZone).
+    const boardRow = cls.services.find(s => s.id === 'board');
+    const board = this.doodads.find(d => d.kind === 'harbor_board');
+    if (boardRow && wants.has('board') && !board) {
+      const seat = holdSeatPos(ps, boardRow.seat);
+      if (seat) {
+        this.doodads.push({ pos: this.clampPos(vec(seat.x, seat.y), 16), radius: 16, kind: 'harbor_board' });
+        this.markDoodadsChanged();
+      }
+    } else if (board && !wants.has('board')) {
+      this.doodads.splice(this.doodads.indexOf(board), 1);
+      this.markDoodadsChanged();
+    }
+    // Vendor stock arms off role presence exactly like the town smith (the
+    // chandler shares the one stock pipeline; per-port stock is a queued
+    // follow-up on VendorDef).
+    if (wants.has('chandler') && !this.vendorStock.length) {
+      this.vendorStock = this.buildVendorStock();
+      this.vendorRestockAt = this.time + this.restockSeconds();
+    }
+  }
+
+  /** The PORT merc market: TEMPLATE-ONLY offers (the lower tier that
+   *  survives the normalization contract), sheet reseeded per reroll window
+   *  — veterans and RETIREMENT stay a wilds-outpost exclusive. Reuses the
+   *  whole outpost pipeline: one state, one panel, one hire path. */
+  private armPortMercs(captain: Actor): void {
+    const hold = this.zone.harborhold;
+    if (!hold) return;
+    const cls = holdClassOf(hold);
+    if (cls.mercOffers[1] <= 0) return;
+    const window = Math.floor(this.time / HARBORHOLD_CFG.mercRerollSec);
+    const rng = new Rng((this.manifest.seed ^ hashStr(`portmercs:${this.zone.id}:${window}`)) >>> 0);
+    const count = rng.int(cls.mercOffers[0], cls.mercOffers[1]);
+    const templates = [...MERC_TEMPLATES];
+    for (let i = templates.length - 1; i > 0; i--) {
+      const j = Math.floor(rng.range(0, i + 1));
+      [templates[i], templates[j]] = [templates[j], templates[i]];
+    }
+    const offers: MercOffer[] = [];
+    for (let i = 0; offers.length < count && i < templates.length; i++) {
+      const t = templates[i];
+      offers.push({
+        kind: 'template', refId: t.id,
+        name: t.names[Math.floor(rng.range(0, t.names.length))] ?? t.id,
+        classId: t.classId, blurb: t.blurb,
+      });
+    }
+    this.mercOutpost = { captain, offers, port: true };
+  }
+
+  /** The muster-horn dwell (the caravanner latch discipline): completes into
+   *  the hold panel via the polled one-shot. Host-side only — panel actions
+   *  route back through intents, so clients stay authoritative-clean. */
+  private updateMusterHorn(dt: number): void {
+    if (this.gameOver || this.clientActionHook || !this.zone.harborhold) return;
+    const horn = this.doodads.find(d => d.kind === 'muster_horn');
+    if (!horn) return;
+    const M = HARBORHOLD_CFG.muster;
+    const engaged = dist(this.player.pos, horn.pos) <= M.radius
+      && this.dwellReachable(this.player.pos, horn.pos);
+    if (!this.holdGate.fire(engaged && this.playerIdle(), engaged, dt, M.dwellSec)) return;
+    this.holdDwellRequested = true;
+  }
+
+  /** The hold panel's ONE read (ui/panels.ts): state, the ladder, prices,
+   *  the muster preview. Null when the standing zone is no harborhold. */
+  holdPanelInfo(): {
+    name: string; clsLabel: string; state: 'besieged' | 'open' | 'fallen';
+    prosperity: number; prosperityCap: number; defenses: number; falls: number;
+    waves: number; restoreCost: number; canMuster: boolean; canRestore: boolean;
+    rebuildLeft: number; fallLeft: number; defenseLive: boolean;
+    services: { id: string; at: number; active: boolean }[];
+  } | null {
+    const hold = this.zone.harborhold;
+    if (!hold) return null;
+    const cls = holdClassOf(hold);
+    const restoreCost = holdRestoreCost(cls, Math.max(1, this.zone.level));
+    return {
+      name: this.zone.name, clsLabel: cls.label, state: hold.state,
+      prosperity: hold.prosperity, prosperityCap: cls.prosperityCap,
+      defenses: hold.defenses, falls: hold.falls,
+      waves: cls.siege.waves, restoreCost,
+      canMuster: hold.state === 'besieged' && !this.holdDefense,
+      canRestore: hold.state === 'fallen' && this.account.credits >= restoreCost,
+      rebuildLeft: hold.state === 'fallen' && hold.rebuildAt !== undefined ? Math.max(0, hold.rebuildAt - this.time) : 0,
+      fallLeft: hold.state === 'besieged' && hold.fallAt !== undefined ? Math.max(0, hold.fallAt - this.time) : 0,
+      defenseLive: !!this.holdDefense,
+      services: cls.services.map(s => ({ id: s.id, at: s.at, active: hold.state === 'open' && hold.prosperity >= s.at })),
+    };
+  }
+
+  /** THE MUSTER (the 'holdMuster' intent): the Quay Ward plants on the gate
+   *  apron, the horn counts down, and the tide answers. */
+  beginHoldMuster(): void {
+    const def = this.zone;
+    const hold = def.harborhold;
+    if (!hold || hold.state !== 'besieged' || this.holdDefense || this.gameOver) return;
+    const cls = holdClassOf(hold);
+    const ps = holdStructureIn(this.structures, cls.structure);
+    const gate = ps ? holdGateDoor(ps) : null;
+    if (!ps || !gate) return;
+    const lvl = Math.max(1, def.level);
+    const at = holdGateApron(gate, 96);
+    const ward = this.createMonster('quay_ward', lvl, 'player');
+    const target = Math.round(cls.siege.wardLife + cls.siege.wardLifePerLevel * lvl);
+    // The pool is the CLASS CURVE exactly: one 'more' source scales whatever
+    // the def + level scaler produced onto the target — exact by construction
+    // wherever flat mods sit in the layer stack (a flat here would ride UNDER
+    // the level multiplier and miss high).
+    const bare = ward.maxLife();
+    if (bare > 0) ward.sheet.setSource('hold_ward', [{ stat: 'life', kind: 'more', value: target / bare - 1 }]);
+    ward.life = ward.maxLife();
+    ward.pos = this.clampPos(vec(at.x, at.y), ward.radius);
+    ward.tag = 'hold_ward';
+    ward.eventKey = `harborhold:${def.id}`;
+    // THE ARMING SHIELD (the extraction-node discipline): scenery until the
+    // first wave lands — the zone's own roamers must not chew the ward while
+    // the horn still echoes. Cleared when wave 1 opens; from then on ambient
+    // locals joining the tide is the coast's honest flavor.
+    ward.untargetable = true;
+    ward.invulnerable = true;
+    this.actors.push(ward);
+    hold.fallAt = undefined; // the muster pauses the deadline — the fight decides now
+    this.holdDefense = {
+      zoneId: def.id, phase: 'arming', wave: 0, phaseAt: this.time + cls.siege.armSec,
+      wardId: ward.id, alive: new Set(), toSpawn: 0, spawnAt: 0,
+      pulseAt: this.time + cls.siege.beaconSec,
+    };
+    this.text(vec(at.x, at.y - 44), `the horn sounds — the tide answers in ${cls.siege.armSec}s`, '#e8a050', 16);
+    this.flashes.push({ pos: vec(at.x, at.y), radius: 110, color: '#e8a050', life: 0.6, maxLife: 0.6 });
+  }
+
+  /** Per-frame defense driver: the arming countdown, discrete waves poured
+   *  cap-honest through the swarm grammar, the fixation pulse (extraction's
+   *  beacon law), and the two resolutions — ward dead = the hold FALLS;
+   *  every wave broken = the hold OPENS. */
+  private updateHoldDefense(dt: number): void {
+    void dt;
+    const d = this.holdDefense;
+    if (!d || this.gameOver) return;
+    if (this.zone.id !== d.zoneId) { this.holdDefense = null; return; } // belt — the reset registry is the law
+    const hold = this.zone.harborhold;
+    if (!hold) { this.holdDefense = null; return; }
+    const cls = holdClassOf(hold);
+    const ward = d.wardId !== null ? this.actorById(d.wardId) : null;
+    if (!ward || ward.dead) { this.resolveHoldDefense(false); return; }
+    if (this.time >= d.pulseAt) {
+      d.pulseAt = this.time + cls.siege.beaconSec;
+      for (const id of d.alive) {
+        const a = this.actorById(id);
+        if (a && !a.dead) a.addThreat(ward.id, cls.siege.pulseThreat);
+      }
+    }
+    for (const id of [...d.alive]) {
+      const a = this.actorById(id);
+      if (!a || a.dead) d.alive.delete(id);
+    }
+    if (d.phase === 'arming' || d.phase === 'breather') {
+      if (this.time >= d.phaseAt) {
+        d.wave++;
+        d.toSpawn = this.encRng.int(cls.siege.batch[0], cls.siege.batch[1]) + cls.siege.perWave * (d.wave - 1);
+        d.phase = 'wave';
+        d.spawnAt = this.time;
+        // The arming shield drops with the first wave — the fight is real now.
+        ward.untargetable = false;
+        ward.invulnerable = false;
+        this.text(vec(ward.pos.x, ward.pos.y - 52),
+          `wave ${d.wave} of ${cls.siege.waves} — hold the gate!`, '#e85050', 16);
+      }
+      return;
+    }
+    if (d.toSpawn > 0 && this.time >= d.spawnAt && d.alive.size < cls.siege.fieldCap) {
+      d.toSpawn--;
+      d.spawnAt = this.time + 0.55;
+      this.spawnHoldBesieger(cls, ward);
+    }
+    if (d.toSpawn <= 0 && d.alive.size === 0) {
+      if (d.wave >= cls.siege.waves) { this.resolveHoldDefense(true); return; }
+      d.phase = 'breather';
+      d.phaseAt = this.time + this.encRng.range(cls.siege.breatherSec[0], cls.siege.breatherSec[1]);
+      this.text(vec(ward.pos.x, ward.pos.y - 52), 'the tide gathers again…', '#e8a050', 14);
+    }
+  }
+
+  /** One besieger off the tide: the class table (or, at mixNative, the
+   *  zone's own conquest-aware population — the local coast joins its sea's
+   *  siege), rim-entered, grafted to fixate on the ward. */
+  private spawnHoldBesieger(cls: HoldClassDef, ward: Actor): void {
+    const s = cls.siege;
+    const lvl = Math.max(1, this.zone.level + s.levelBonus);
+    let table: { id: string; weight: number }[] = s.table;
+    if (s.mixNative > 0 && this.encRng.chance(s.mixNative)) {
+      const native = this.effectiveSpawn(this.zone, this.baseTable(this.zone)).table;
+      if (native.length) table = native;
+    }
+    if (!table.length) return;
+    const type = this.weightedPick(table, lvl);
+    const m = this.createMonster(type, lvl, 'enemy');
+    m.tag = 'hold_siege';
+    m.eventKey = `harborhold:${this.zone.id}`;
+    const at = this.swarmEntryPoint(ward.pos, s.entryRadius);
+    m.pos = this.clampPos(vec(at.x + rand(-26, 26), at.y + rand(-26, 26)), m.radius);
+    const ag = m.defId ? MONSTERS[m.defId]?.aggro : undefined;
+    m.aiTuning = {
+      target: {
+        prefer: 'highestThreat', relentless: true, stickiness: s.stickiness,
+        threat: { damage: ag?.fury ?? 1, decay: s.decay * (ag?.waver ?? 1) },
+      },
+    };
+    m.addThreat(ward.id, s.seedThreat * (ag?.fixation ?? 1));
+    m.aiTargetId = ward.id;
+    m.aggroed = true;
+    this.holdDefense!.alive.add(m.id);
+    this.actors.push(m);
+  }
+
+  /** The resolution, either way. A win opens the gates, climbs the ladder,
+   *  schedules the next siege, and pays the spoils; a loss fells the hold
+   *  and lets the victors hold the ground a while (the dispersal fabric). */
+  private resolveHoldDefense(won: boolean): void {
+    const d = this.holdDefense;
+    if (!d) return;
+    this.holdDefense = null;
+    const def = this.zone;
+    const hold = def.harborhold;
+    if (!hold || def.id !== d.zoneId) return;
+    const cls = holdClassOf(hold);
+    const ward = d.wardId !== null ? this.actorById(d.wardId) : null;
+    const at = ward ? vec(ward.pos.x, ward.pos.y) : vec(this.player.pos.x, this.player.pos.y);
+    if (won) {
+      hold.state = 'open';
+      hold.prosperity = Math.min(cls.prosperityCap, hold.prosperity + 1);
+      hold.defenses++;
+      hold.fallAt = undefined;
+      hold.rebuildAt = undefined;
+      hold.siegeAt = this.time + HARBORHOLD_CFG.graceAfterOpenSec
+        + this.encRng.range(cls.siegeEverySec[0], cls.siegeEverySec[1]);
+      if (ward && !ward.dead) ward.dead = true; // stands down quietly (no corpse path)
+      const ps = holdStructureIn(this.structures, cls.structure);
+      const gate = ps ? holdGateDoor(ps) : null;
+      if (gate) this.setDoorState(gate.door.id, 'open');
+      this.refreshHoldDress(def);
+      this.refreshHoldServices(def);
+      const lvl = Math.max(1, def.level);
+      this.grantXp(Math.round(cls.reward.xpBase + cls.reward.xpPerLevel * lvl));
+      for (let i = 0; i < cls.reward.caches; i++) {
+        const c = this.createMonster('harbor_cache', lvl, 'enemy');
+        c.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-50, 50)), c.radius);
+        this.actors.push(c);
+      }
+      bumpLedger(this.ledger, 'ports_defended');
+      if (def.portTier === 'haven') bumpLedger(this.ledger, 'havens_defended');
+      const first = !this.ledger.first_hold_opened;
+      if (first) bumpLedger(this.ledger, 'first_hold_opened');
+      this.text(vec(at.x, at.y - 76),
+        first ? `the siege breaks — ${def.name} opens its gates to you` : `the siege breaks — ${def.name} stands`,
+        '#7fd0ff', first ? 17 : 16);
+      this.flashes.push({ pos: at, radius: 150, color: '#7fd0ff', life: 0.8, maxLife: 0.8 });
+    } else {
+      bumpLedger(this.ledger, 'ports_lost');
+      this.fellHold(def, 'the ward is broken — the harbor burns');
+      this.disperseSwarmBodies(d.alive, new Map(), at, 320, { lingerSec: [8, 18], arriveDist: 60 });
+    }
+  }
+
+  /** Fell a hold (a lost defense, an unattended deadline): fires, sealed
+   *  gates, the rebuild clock. In-zone the change is live; far coasts just
+   *  flip state and dress on the next visit. */
+  private fellHold(def: ZoneDef, msg: string | null): void {
+    const hold = def.harborhold;
+    if (!hold) return;
+    const cls = holdClassOf(hold);
+    hold.state = 'fallen';
+    hold.falls++;
+    hold.prosperity = Math.max(0, hold.prosperity - HARBORHOLD_CFG.fallPenalty);
+    hold.fallAt = undefined;
+    hold.siegeAt = undefined;
+    hold.rebuildAt = this.time + cls.rebuildSec;
+    if (def.id === this.zone.id) {
+      const ps = holdStructureIn(this.structures, cls.structure);
+      const gate = ps ? holdGateDoor(ps) : null;
+      if (gate) this.resealDoor(gate.door.id);
+      this.refreshHoldDress(def);
+      this.refreshHoldServices(def);
+      if (msg) this.text(vec(this.player.pos.x, this.player.pos.y - 84), msg, '#e85050', 16);
+    }
+  }
+
+  /** THE RESTORATION (the 'holdRestore' intent): Mortal Essence buys the
+   *  rebuild forward — masons, pitch and pilings, paid at the wreckage. The
+   *  hold stands back up BESIEGED: the coast's foes crept in while it
+   *  burned, and the defense is still yours to win. */
+  buyHoldRestore(): void {
+    const def = this.zone;
+    const hold = def.harborhold;
+    if (!hold || hold.state !== 'fallen') return;
+    const cls = holdClassOf(hold);
+    const price = holdRestoreCost(cls, Math.max(1, def.level));
+    if (this.account.credits < price) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        `the restoration is ${price} ${META_CURRENCY_LABEL} — beyond your purse`, '#e8a050', 14);
+      return;
+    }
+    this.account.credits -= price;
+    this.accountDirty = true;
+    hold.state = 'besieged';
+    hold.rebuildAt = undefined;
+    this.refreshHoldDress(def);
+    this.refreshHoldServices(def);
+    this.text(vec(this.player.pos.x, this.player.pos.y - 84),
+      `${def.name} is raised from its ashes — break the siege to open its gates`, '#7fd0ff', 15);
+  }
+
+  /** THE LIFECYCLE SWEEP — every hold in the minted world ticks on world
+   *  time (rebuild clocks run while you sail; sieges land on far coasts):
+   *  rebuild expiry, recurring-siege scheduling, the unattended deadline
+   *  fall. Gate re-seals apply on the NEXT load of a zone — never under the
+   *  player's feet (no lock-ins; services still shut at once). */
+  private updateHarborholds(): void {
+    if (this.gameOver || this.time < this.holdSweepAt) return;
+    this.holdSweepAt = this.time + HARBORHOLD_CFG.sweepSec;
+    for (const def of Object.values(this.zoneMap)) {
+      const hold = def.harborhold;
+      if (!hold) continue;
+      const cls = holdClassOf(hold);
+      if (hold.state === 'fallen' && hold.rebuildAt !== undefined && this.time >= hold.rebuildAt) {
+        hold.state = HARBORHOLD_CFG.rebuildTo;
+        hold.rebuildAt = undefined;
+        if (def.id === this.zone.id) {
+          this.refreshHoldDress(def);
+          this.refreshHoldServices(def);
+          this.text(vec(this.player.pos.x, this.player.pos.y - 84),
+            `${def.name} stands rebuilt — and besieged anew`, '#e8a050', 14);
+        }
+        continue;
+      }
+      if (hold.state === 'open') {
+        if (hold.siegeAt === undefined) {
+          hold.siegeAt = this.time + HARBORHOLD_CFG.graceAfterOpenSec
+            + this.encRng.range(cls.siegeEverySec[0], cls.siegeEverySec[1]);
+        } else if (this.time >= hold.siegeAt) {
+          hold.state = 'besieged';
+          hold.siegeAt = undefined;
+          if (cls.fallAfterSec > 0) hold.fallAt = this.time + cls.fallAfterSec;
+          if (def.id === this.zone.id) {
+            this.refreshHoldDress(def);
+            this.refreshHoldServices(def);
+            this.text(vec(this.player.pos.x, this.player.pos.y - 84),
+              `${def.name} is besieged — sound the horn!`, '#e85050', 16);
+          } else if (this.visible(def)) {
+            this.text(vec(this.player.pos.x, this.player.pos.y - 108),
+              `word comes: ${def.name} is under siege`, '#e8a050', 14);
+          }
+        }
+        continue;
+      }
+      if (hold.state === 'besieged' && hold.fallAt !== undefined && this.time >= hold.fallAt) {
+        if (this.holdDefense?.zoneId === def.id) continue; // the muster paused it (belt)
+        this.fellHold(def, def.id === this.zone.id ? 'the siege overruns the walls — the harbor burns' : null);
+        if (def.id !== this.zone.id && this.visible(def)) {
+          this.text(vec(this.player.pos.x, this.player.pos.y - 108),
+            `${def.name} has fallen to the tide`, '#e85050', 14);
+        }
+      }
+    }
+  }
+
+  /** DEV/QA (the Holds tab + balance/probe_harborholds.ts): every minted
+   *  hold's standing at a glance. */
+  devHoldsInfo(): {
+    id: string; name: string; cls: string; state: string; prosperity: number;
+    defenses: number; falls: number; rebuildLeft: number; siegeIn: number;
+    fallLeft: number; here: boolean; veiled: boolean;
+  }[] {
+    const out = [];
+    for (const def of Object.values(this.zoneMap)) {
+      const h = def.harborhold;
+      if (!h) continue;
+      out.push({
+        id: def.id, name: def.name, cls: h.cls, state: h.state,
+        prosperity: h.prosperity, defenses: h.defenses, falls: h.falls,
+        rebuildLeft: h.rebuildAt !== undefined ? Math.max(0, h.rebuildAt - this.time) : 0,
+        siegeIn: h.siegeAt !== undefined ? Math.max(0, h.siegeAt - this.time) : 0,
+        fallLeft: h.fallAt !== undefined ? Math.max(0, h.fallAt - this.time) : 0,
+        here: def.id === this.zone.id, veiled: !!def.veiled,
+      });
+    }
+    return out;
+  }
+
+  /** DEV/QA: force a hold's state with the CANONICAL timers the real
+   *  transitions would set (a forced 'fallen' really rebuilds; a forced
+   *  'open' really re-sieges), then reconcile live if it's this zone. */
+  devSetHoldState(zoneId: string, state: 'besieged' | 'open' | 'fallen'): boolean {
+    const def = this.zoneMap[zoneId];
+    const hold = def?.harborhold;
+    if (!def || !hold) return false;
+    const cls = holdClassOf(hold);
+    if (this.holdDefense?.zoneId === zoneId) this.holdDefense = null;
+    hold.state = state;
+    hold.rebuildAt = state === 'fallen' ? this.time + cls.rebuildSec : undefined;
+    hold.siegeAt = state === 'open'
+      ? this.time + HARBORHOLD_CFG.graceAfterOpenSec + this.encRng.range(cls.siegeEverySec[0], cls.siegeEverySec[1])
+      : undefined;
+    hold.fallAt = undefined;
+    if (def.id === this.zone.id) {
+      const ps = holdStructureIn(this.structures, cls.structure);
+      const gate = ps ? holdGateDoor(ps) : null;
+      if (gate) {
+        if (state === 'open') this.setDoorState(gate.door.id, 'open', { silent: true });
+        else this.resealDoor(gate.door.id);
+      }
+      this.refreshHoldDress(def);
+      this.refreshHoldServices(def);
+    }
+    return true;
+  }
+
+  /** DEV/QA: resolve a live defense immediately (true = the win path with
+   *  its full spoils; false = the fall). */
+  devResolveHoldDefense(won: boolean): boolean {
+    if (!this.holdDefense) return false;
+    for (const id of this.holdDefense.alive) {
+      const a = this.actorById(id);
+      if (a && !a.dead && won) a.dead = true;
+    }
+    this.resolveHoldDefense(won);
+    return true;
+  }
+
+  /** The omen fabric's read (world/harborholds.ts registers the source):
+   *  holds under a DEADLINE siege murmur — and age louder — until found or
+   *  fallen. First-found besieged holds stay silent (an unfound harbor is
+   *  never punished, so it never nags either). */
+  harborholdOmens(): Omen[] {
+    const out: Omen[] = [];
+    const O = HARBORHOLD_CFG.omen;
+    for (const def of Object.values(this.zoneMap)) {
+      const hold = def.harborhold;
+      if (!hold || hold.state !== 'besieged' || hold.fallAt === undefined) continue;
+      const cls = holdClassOf(hold);
+      out.push({
+        id: `harborhold:${def.id}`, at: def.map, zoneId: def.id, color: '#e8a050',
+        lines: [...O.lines], whisper: O.whisper, reveal: O.reveal,
+        widenPerMin: O.widenPerMin,
+        age: Math.max(0, this.time - (hold.fallAt - cls.fallAfterSec)),
+      });
+    }
+    return out;
+  }
+
   // --- THE VOYAGE (the boat on the open sea) ----------------------------------
   //
   // The first TRAVERSAL CONTEXT on the pattern the Descent proved: a boundless
@@ -16750,6 +17415,9 @@ export class World {
   /** Seeded outpost roll for this zone (loadZone tail; wilds only). */
   private placeMercOutpost(def: ZoneDef): void {
     const cfg = MERC_CFG.outpost;
+    // A harborhold port provides its own captain (the town's merc service) —
+    // the wild-outpost roll stands down on this ground.
+    if (def.harborhold) return;
     if (!this.zoneMatchesSiteFilter(def, cfg.filter)) return;
     if (!MONSTERS['merc_captain']) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
@@ -16858,7 +17526,10 @@ export class World {
 
   /** May the CURRENT character retire here? (Stage policy — mortal loop only.) */
   canRetireHere(): boolean {
-    return (this.modeStageDef().canRetire ?? false) && !!this.mercOutpost && !this.mercOutpost.captain.dead;
+    // Retirement is a WILDS rite: the port captain hires blades but never
+    // takes them in (data law — see data/harborholds.ts merc notes).
+    return (this.modeStageDef().canRetire ?? false) && !!this.mercOutpost
+      && !this.mercOutpost.captain.dead && !this.mercOutpost.port;
   }
 
   // --- power normalization (THE anti-steamroll contract) --------------------
@@ -18172,7 +18843,10 @@ export class World {
       // vocationQuest MINTS a quest zone into the world map, and harborChart
       // runs a SURVEY PULSE (mints + reveals graph ground). Forward only; the
       // host's authoritative snapshot/zone broadcast moves the client.
-      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart') {
+      // holdMuster/holdRestore likewise: they spawn actors, flip door grids
+      // and charge the account — host-only, snapshot moves the client.
+      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest' && action.t !== 'harborChart'
+        && action.t !== 'holdMuster' && action.t !== 'holdRestore') {
         this.applyAction(this.localSeat, action);
       }
     } else {
@@ -18222,6 +18896,8 @@ export class World {
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'harborChart': this.buyHarborChart(action.omen); break;
+      case 'holdMuster': this.beginHoldMuster(); break;
+      case 'holdRestore': this.buyHoldRestore(); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
@@ -30512,6 +31188,11 @@ export class World {
     this.updateSail(dt);
     // The harbor board's linger-to-read (hearsay + passage + charts).
     this.updateHarborBoard(dt);
+    // The harborhold: the muster horn's linger, the live defense, and the
+    // world-wide lifecycle sweep (rebuilds, recurring sieges, deadlines).
+    this.updateMusterHorn(dt);
+    this.updateHoldDefense(dt);
+    this.updateHarborholds();
     // The quartermaster hands you a hunt for lingering (auto-accept on dwell).
     this.updateQuestGiver(dt);
     this.updateVocationSites();

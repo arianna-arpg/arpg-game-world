@@ -393,6 +393,101 @@ export const STRUCTURES: Record<string, StructureDef> = {
     npcs: [{ id: 'townsfolk_questgiver', x: 0, y: 10 }],
   },
 
+  // --- THE HARBORHOLDS (data/harborholds.ts) — walled quay-towns raised in
+  // mainland port zones, found besieged and OPENED by breaking the siege.
+  // Shared grammar: a rampart ring with ONE sealed land gate ('g' — no dwell
+  // ever opens it; the harborhold runtime flips it via setDoorState on a
+  // defended siege), roofed service buildings around an open plaza, and PLAN
+  // ANCHOR digits ('1' the harbor board, '2' the chandler's counter, '3' the
+  // captain's post, '4' the harbormaster) that the service rows seat at —
+  // the plan is the single source of placement truth (world/harborholds.ts
+  // scans it; coordinates are never authored twice). Yard clutter chars are
+  // re-legended to courtyard so roofs:'auto' never roofs the plaza.
+
+  // A LANDING — the palisade hamlet: one hut, one lamp, a horn at the gate.
+  harborhold_landing: {
+    id: 'harborhold_landing', halfW: 195, halfH: 150, cellSize: 30,
+    plan: [
+      '#####PPP#####',
+      '#________L__#',
+      '#_#######_4_#',
+      '#_#..z.p#_1_#',
+      '#_#2....#___#',
+      '#_###D###___#',
+      '#_C___H____L#',
+      '#___F_______#',
+      '#___________#',
+      '#####ggg#####',
+    ],
+    legend: {
+      g: { door: { mode: 'sealed' }, courtyard: true },
+      C: { breakable: 'crate', courtyard: true },
+      '1': { courtyard: true }, '2': { interior: true },
+      '3': { courtyard: true }, '4': { courtyard: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards', courtyardFloorStyle: 'cobble',
+  },
+
+  // A HARBOR TOWN — the working port: two buildings, a market stall, the
+  // plaza the board stands in.
+  harborhold_town: {
+    id: 'harborhold_town', halfW: 255, halfH: 180, cellSize: 30,
+    plan: [
+      '######PPPPP######',
+      '#_______________#',
+      '#_########__###_#',
+      '#_#..z..2#__#p#_#',
+      '#_#......#__#.#_#',
+      '#_##D#####__#D#_#',
+      '#_________4_____#',
+      '#_M__1__________#',
+      '#_C____F___H__L_#',
+      '#_3_____________#',
+      '#_______________#',
+      '######ggg########',
+    ],
+    legend: {
+      g: { door: { mode: 'sealed' }, courtyard: true },
+      C: { breakable: 'crate', courtyard: true },
+      '1': { courtyard: true }, '2': { interior: true },
+      '3': { courtyard: true }, '4': { courtyard: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards', courtyardFloorStyle: 'cobble',
+  },
+
+  // A FREEPORT — the ocean haven's crown: four buildings on two streets,
+  // lamps down the way, the deepest walls on the ladder.
+  harborhold_freeport: {
+    id: 'harborhold_freeport', halfW: 315, halfH: 210, cellSize: 30,
+    plan: [
+      '#######PPPPPPP#######',
+      '#___________________#',
+      '#_#########__#####_L#',
+      '#_#..z...2#__#..p#__#',
+      '#_#.......#__#...#__#',
+      '#_###D#####__##D##__#',
+      '#_________________M_#',
+      '#_M__1____4_________#',
+      '#_########__######__#',
+      '#_#..p...#__#.z..#__#',
+      '#_##D#####__###D##__#',
+      '#_C__F__3___H___f_L_#',
+      '#___________________#',
+      '#######ggg###########',
+    ],
+    legend: {
+      g: { door: { mode: 'sealed' }, courtyard: true },
+      C: { breakable: 'crate', courtyard: true },
+      f: { doodad: { kind: 'firewood_pile', radius: 13 }, courtyard: true },
+      '1': { courtyard: true }, '2': { interior: true },
+      '3': { courtyard: true }, '4': { courtyard: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards', courtyardFloorStyle: 'cobble',
+  },
+
   // The Caravan: an open camp (no walls) — a fire, pack-rocks, and stores, with the
   // Caravanner waiting by it. Composed from existing doodad kinds (no wagon kind).
   caravan: {

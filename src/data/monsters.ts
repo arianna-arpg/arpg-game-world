@@ -4560,6 +4560,62 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
+  // HARBORHOLD FOLK (data/harborholds.ts) — the port town's keepers, spawned
+  // by the hold runtime only while the town stands OPEN (service rows gate
+  // them by prosperity). Same passive+invulnerable scenery shape; the
+  // chandler staffs the vendor counter via npcRole exactly like Brandt.
+  townsfolk_harbormaster: {
+    id: 'townsfolk_harbormaster', name: 'Odette the Harbormaster',
+    color: '#7fb0c8', shape: 'circle', radius: 13, look: 'npc_captain', npcRole: 'harbormaster',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
+  townsfolk_chandler: {
+    id: 'townsfolk_chandler', name: 'Cormac the Chandler',
+    color: '#c8b06e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'vendor',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
+  // THE QUAY WARD — the harborhold defense's heart: a warded gate-charm the
+  // siege tide fixates on (the extraction-node shape: driven, no brain, the
+  // hold runtime owns its life pool and reads its death as the loss). Team
+  // is set at spawn ('player'); life is stamped from the hold class curve.
+  // Never bestiary/nemesis material: it's a PLACE, not a creature.
+  quay_ward: {
+    id: 'quay_ward', name: 'Quay Ward',
+    color: '#8a6b42', shape: 'octagon', radius: 20, material: 'wood', look: 'menhir',
+    // Life NOMINAL (the extraction-node discipline): the muster stamps the
+    // real pool from the hold class curve — never the level scaler.
+    base: { life: 40, moveSpeed: 0, mana: 0, armor: 10 },
+    skills: [],
+    xp: 0,
+    driven: true,
+    noObjective: true,
+    wardPriority: 3, // protectors post themselves on the gate above all else
+  },
+
+  // THE HARBOR CACHE — a broken siege's spoils, stacked at the gate: crack
+  // it open like any chest-kin (the gem_cache shape; drops roll the ordinary
+  // kill path, count set per hold class at spawn via rarity promotion).
+  harbor_cache: {
+    id: 'harbor_cache', name: 'Harbor Cache',
+    color: '#c8a84b', shape: 'square', radius: 13, material: 'wood', look: 'gem_cache',
+    base: { life: 60, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    skills: [],
+    xp: 8,
+    passive: true,
+    noObjective: true,
+    drops: 2,
+  },
+
   // BOROUGH FOLK — the defended villagers (packages/defs/borough.ts). The
   // deliberate INVERSE of the town scenery above: real moveSpeed (never
   // anchored), no passive, no invulnerable — the horde can perceive, chase,

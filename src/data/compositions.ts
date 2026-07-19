@@ -116,6 +116,33 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'vacant_ring', at: 'yard', count: [1, 1] }],
 });
 
+// --- THE HARBORHOLDS (data/harborholds.ts) ----------------------------------
+// The walled quay-towns raised in mainland port zones: ensureSeaPorts bakes
+// the matching composition onto the port def at chance 1, so the town rides
+// the ordinary composition pipeline (shared site, clearing reservation first,
+// the plan structure seated ON the site) — and the genqa matrix forces every
+// row like any other composition. Site probes are sized to the structure's
+// half-diagonal + apron margin; a zone too tight to seat one degrades to a
+// bare quay (the runtime treats a missing town as the pre-fabric port).
+registerComposition({
+  id: 'harborhold_landing',
+  sites: [{ id: 'town', radius: [260, 290] }],
+  pre: [{ kind: 'clearing', at: 'town', count: [1, 1], radius: [200, 220] }],
+  post: [{ kind: 'structure', structure: 'harborhold_landing', at: 'town', count: [1, 1] }],
+});
+registerComposition({
+  id: 'harborhold_harbortown',
+  sites: [{ id: 'town', radius: [320, 350] }],
+  pre: [{ kind: 'clearing', at: 'town', count: [1, 1], radius: [260, 280] }],
+  post: [{ kind: 'structure', structure: 'harborhold_town', at: 'town', count: [1, 1] }],
+});
+registerComposition({
+  id: 'harborhold_freeport',
+  sites: [{ id: 'town', radius: [385, 415] }],
+  pre: [{ kind: 'clearing', at: 'town', count: [1, 1], radius: [320, 340] }],
+  post: [{ kind: 'structure', structure: 'harborhold_freeport', at: 'town', count: [1, 1] }],
+});
+
 // A HIVE POCKET: the Seethe's brood ground — a stamped-flat court ringed by
 // waxed spires, the insect country showing its crown. Clearing 58–72 vs the
 // hive_ring orbit: 125·0.92−6 = 109 ≥ 72+22 — the menhir numeric contract.

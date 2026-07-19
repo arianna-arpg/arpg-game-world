@@ -27,6 +27,7 @@ import type { TrapworkSpec } from '../engine/trapworks';
 import type { ZoneLiteSpec } from '../engine/lite';
 import { dimensionDef } from '../world/dimensions';
 import type { WildlifeRow } from './monsters';
+import type { HarborholdState } from './harborholds';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
  *  a weight-vs-level envelope — or a named band — deciding how present this
@@ -806,6 +807,14 @@ export interface ZoneDef {
    *  harbor (lane spokes converge, quay dressing at load); 'cove' = a
    *  landing. Absent = a plain legacy port. */
   portTier?: 'haven' | 'cove';
+  /** THE HARBORHOLD (data/harborholds.ts): this mainland port is a walled
+   *  quay-town with a siege lifecycle — found besieged, opened by breaking
+   *  the siege, burned by losing one. The MUTABLE state rides here (pure
+   *  JSON — persists with the zones array verbatim); identity (class row,
+   *  services, timers) re-derives from data every read. Stamped only by
+   *  ensureSeaPorts on sea spots — islands and legacy ports never carry it
+   *  (bare quays by design). */
+  harborhold?: HarborholdState;
   /** Which DIMENSION this zone belongs to (default 'surface'). The map shows
    *  one dimension per tab; frontiers inherit their source's dimension. */
   dimension?: string;

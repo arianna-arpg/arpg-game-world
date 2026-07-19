@@ -61,6 +61,7 @@ import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
+import { HOLD_CLASSES } from '../data/harborholds';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, undiscoveredClassUnlocks } from '../meta/unlocks';
 import {
@@ -137,6 +138,7 @@ export class UI {
   private vendorMenu = document.getElementById('vendor-menu')!;
   private boroughMenu = document.getElementById('borough-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
+  private holdMenu = document.getElementById('hold-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
   private mercMenu = document.getElementById('merc-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
@@ -251,6 +253,7 @@ export class UI {
   /** A minigame overlay is running — the panels beneath hold still. */
   private minigameActive = false;
   sailOpen = false;
+  holdOpen = false;
   vocationOpen = false;
   /** World-map zoom (1 = fit-all; >1 = zoomed in) + pan offset (user-units from
    *  the fitted centre). Persist across opens; reset via the map's % button. As
@@ -726,7 +729,7 @@ export class UI {
   uiBlocking(): boolean {
     return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
       || this.caravanOpen || this.mercOpen || this.salvageOpen
-      || this.oracleOpen || this.vendorOpen || this.sailOpen || this.vocationOpen
+      || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
       || this.bestiaryOpen || this.boroughOpen
       || !this.startMenu.classList.contains('hidden');
   }
@@ -3215,8 +3218,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           ? `<h3 style="margin:10px 0 2px 0">${esc(p.seaName ?? 'far waters')}</h3>` : '';
         lastSea = p.seaName;
         const tier = p.tier === 'haven' ? ' <span class="tags">· haven</span>' : '';
+        // The harborhold's standing rides the row (the def is the truth):
+        // sailing to a besieged or burned port lands at the pier as ever —
+        // the tag just tells you what waits past the breakers.
+        const hz = world.zoneMap[p.id]?.harborhold;
+        const holdTag = hz?.state === 'besieged' ? ' <span class="tags" style="color:#e85050">· besieged</span>'
+          : hz?.state === 'fallen' ? ' <span class="tags" style="color:#e8a050">· burned</span>' : '';
         return `${head}<div class="skill-entry">
-          <div class="name">${esc(p.name)}${tier}${p.sailed ? ' <span class="tags">· route charted</span>' : ''}</div>
+          <div class="name">${esc(p.name)}${tier}${holdTag}${p.sailed ? ' <span class="tags">· route charted</span>' : ''}</div>
           <div class="desc">A harbor of level ${p.level}.</div>
           <div class="bind-btns"><button data-sail-port="${esc(p.id)}">Sail</button></div>
         </div>`;
@@ -3260,6 +3269,80 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       });
     });
     this.sailMenu.querySelector<HTMLButtonElement>('button[data-sail-close]')?.addEventListener('click', () => this.closeSail());
+  }
+
+  // ----------------------------------------------------------- harborhold panel
+
+  /** Open the HARBORHOLD panel (the muster horn's dwell asked): the town's
+   *  standing, the patronage ladder, and the state action — muster a
+   *  defense, or pay the restoration at the wreckage. */
+  showHold(): void {
+    this.hideAll();
+    this.holdOpen = true;
+    this.holdMenu.classList.remove('hidden');
+    this.refreshHold();
+  }
+
+  closeHold(): void {
+    this.holdOpen = false;
+    this.holdMenu.classList.add('hidden');
+  }
+
+  refreshHold(): void {
+    if (!this.holdOpen) return;
+    const world = this.getWorld();
+    const acc = this.getAccount();
+    const h = world.holdPanelInfo();
+    if (!h) { this.closeHold(); return; }
+    const mins = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    // THE STANDING — state line + the patronage pips (filled to prosperity).
+    const pips = Array.from({ length: h.prosperityCap }, (_, i) =>
+      `<span style="color:${i < h.prosperity ? '#c8b048' : '#4a4654'}">●</span>`).join(' ');
+    const stateLine = h.state === 'open'
+      ? `<span style="color:#7fd0ff">OPEN</span> — the town stands and trades`
+      : h.state === 'besieged'
+        ? `<span style="color:#e85050">BESIEGED</span> — the gates are shut against the tide`
+          + (h.fallLeft > 0 ? ` <span class="tags">· falls unbroken in ${mins(h.fallLeft)}</span>` : '')
+        : `<span style="color:#e8a050">FALLEN</span> — the harbor burns`
+          + (h.rebuildLeft > 0 ? ` <span class="tags">· rebuilds in ${mins(h.rebuildLeft)}</span>` : '');
+    // THE LADDER — every service row, its rung, and whether it stands.
+    const svcName: Record<string, string> = {
+      harbormaster: 'the Harbormaster', board: 'the Harbor Board',
+      chandler: "the Chandler's counter", mercs: "the Captain's muster",
+    };
+    const services = h.services.map(s =>
+      `<div class="desc" style="color:${s.active ? '#9ad09a' : '#8a8694'}">`
+      + `${s.active ? '◆' : '◇'} ${esc(svcName[s.id] ?? s.id)} <span class="tags">· standing ${s.at}</span></div>`).join('');
+    // THE ACTION — one honest button per state.
+    const action = h.state === 'besieged'
+      ? `<div class="skill-entry"><div class="name">Sound the muster horn</div>
+          <div class="desc">Break the siege: hold the Quay Ward at the gate through ${h.waves} wave${h.waves === 1 ? '' : 's'} of the tide.
+            If the ward falls, the harbor burns.</div>
+          <div class="bind-btns"><button data-hold-muster ${h.canMuster ? '' : 'disabled'}>${h.defenseLive ? 'The defense is joined' : 'Muster the defense'}</button></div>
+        </div>`
+      : h.state === 'fallen'
+        ? `<div class="skill-entry"><div class="name">Raise it from the ashes</div>
+            <div class="desc">Masons, pitch and pilings — paid now, the walls stand today (besieged still: the defense is yours to win).</div>
+            <div class="bind-btns"><button data-hold-restore ${h.canRestore ? '' : 'disabled'}>Restore — ${h.restoreCost} ${META_CURRENCY_LABEL}</button>
+              ${!h.canRestore ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
+          </div>`
+        : `<div class="skill-entry"><div class="desc">The town keeps its own peace — walk in. Defended sieges raise its standing; a lost one burns it.</div></div>`;
+    this.holdMenu.innerHTML = `<h2>${esc(h.name)} <span class="tags">· ${esc(h.clsLabel)}</span></h2>`
+      + `<div class="desc" style="margin:-4px 0 6px 0">${stateLine}</div>`
+      + `<div class="desc" style="margin:0 0 8px 0">Standing: ${pips}`
+      + ` <span class="tags">· ${h.defenses} defended · ${h.falls} lost</span></div>`
+      + services
+      + action
+      + `<div class="bind-btns" style="margin-top:10px"><button data-hold-close>Close</button></div>`;
+    this.holdMenu.querySelector<HTMLButtonElement>('button[data-hold-muster]')?.addEventListener('click', () => {
+      world.requestMeta({ t: 'holdMuster' });
+      this.closeHold(); // the horn sounds — the fight is outside, not in a menu
+    });
+    this.holdMenu.querySelector<HTMLButtonElement>('button[data-hold-restore]')?.addEventListener('click', () => {
+      world.requestMeta({ t: 'holdRestore' });
+      this.refreshHold(); // the purse and the state line both moved
+    });
+    this.holdMenu.querySelector<HTMLButtonElement>('button[data-hold-close]')?.addEventListener('click', () => this.closeHold());
   }
 
   /** Render the Caravanner's routes — one NAMED destination per unlocked band (the
@@ -3355,8 +3438,10 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           <div class="bind-btns"><button data-merc-retire>Retire this character</button></div>
         </div>`
       : '';
-    this.mercMenu.innerHTML = `<h2>The Mercenary Outpost</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Every blade here has a story. Buy one — or become one."</div>`
+    this.mercMenu.innerHTML = `<h2>${post.port ? 'The Harbor Muster' : 'The Mercenary Outpost'}</h2>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${post.port
+        ? '"Green blades, fair rates, no questions off the boat. The veterans keep to the wilds — so does the retiring."'
+        : '"Every blade here has a story. Buy one — or become one."'}</div>`
       + contract + rows + retire
       + `<div class="bind-btns" style="margin-top:10px"><button data-merc-close>Close</button></div>`;
     this.mercMenu.querySelectorAll<HTMLButtonElement>('button[data-merc-hire]').forEach(btn => {
@@ -3927,6 +4012,17 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       const seaName = world.seaNameOf(zone!);
       const tier = zone!.portTier === 'haven' ? 'haven' : 'port';
       chips.push(`<span class="zi-chip" style="color:#9ad0e8;border-color:#4a7a9a">⚓ ${tier}${seaName ? ` — ${esc(seaName)}` : ''}</span>`);
+      // The harborhold's standing chip (data/harborholds.ts): the town's
+      // state at a glance — besieged red, burned ember, open harbor-blue.
+      const hh = zone!.harborhold;
+      if (hh) {
+        const label = HOLD_CLASSES[hh.cls]?.label ?? hh.cls;
+        chips.push(hh.state === 'besieged'
+          ? `<span class="zi-chip" style="color:#e88a8a;border-color:#9a4a4a">⚔ ${esc(label)} — besieged</span>`
+          : hh.state === 'fallen'
+            ? `<span class="zi-chip" style="color:#e8b07a;border-color:#9a6a3a">🔥 ${esc(label)} — burned</span>`
+            : `<span class="zi-chip" style="color:#9ad0e8;border-color:#4a7a9a">⚑ ${esc(label)} — open · standing ${hh.prosperity}</span>`);
+      }
     }
     const head = `<div class="zi-zone">${esc(name)}`
       + (pinned ? ` <span class="zi-pin" data-unpin="1">📌 unpin</span>` : '')
@@ -4896,6 +4992,8 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.mercOpen = false;
     this.mercMenu.classList.add('hidden');
     this.sailOpen = false;
+    this.holdOpen = false;
+    this.holdMenu.classList.add('hidden');
     this.vocationOpen = false;
     this.classSelect.classList.add('hidden');
     this.charSheet.classList.add('hidden');

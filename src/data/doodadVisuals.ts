@@ -2095,6 +2095,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
     light: { radius: 60, color: '#ffd898', intensity: 0.2, flicker: 1.6 },
   },
+  // THE MUSTER HORN (data/harborholds.ts): the harborhold's horn post on the
+  // gate apron — dwell to open the hold panel (arm the defense, pay the
+  // restoration, read the town's standing). The signpost painter under an
+  // ember-warm watch light: visible from the shore road at dusk.
+  muster_horn: {
+    painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4,
+    light: { radius: 75, color: '#ffb464', intensity: 0.3, flicker: 2.4 },
+  },
   campfire: {
     painter: 'campfire', order: 53,
     light: { radius: -5, color: '#ffae52', intensity: 0.6, flicker: 6 },

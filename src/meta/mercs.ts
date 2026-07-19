@@ -83,9 +83,12 @@ export const MERC_CFG = {
   rosterCap: 50,
 
   /** OUTPOST seeding — generated wilds only, deterministic per zone + run
-   *  seed (the vocation-site pattern; the filter is the same reusable shape). */
+   *  seed (the vocation-site pattern; the filter is the same reusable shape).
+   *  Chance sits LOWER since the harborhold pass: opened port towns are the
+   *  surefire hiring surface now (template blades, no retirement), so wild
+   *  outposts lean scarce — the places veterans muster and blades retire. */
   outpost: {
-    chance: 0.14,
+    chance: 0.08,
     filter: { minLevel: 2 } as VocationSiteFilter,
     /** Parley dwell: within radius, idle, zone objective done, no live enemy
      *  within enemyRadius, and no combat for calmSec. */

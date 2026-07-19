@@ -325,6 +325,24 @@ changes.
   far harbor. First port found names the sea + stamps `first_port_found`/
   `seas_found`. Dials in `SEA_CFG`; docs `docs/engine/seas.md`; probe
   `balance/probe_seas.ts`.
+  THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
+  mainland ports as BESIEGED RESIDENCES): every sea spot wears a walled
+  quay-town (`harborhold_*` compositions → plan structures with a SEALED
+  gate) with a persisted lifecycle on `ZoneDef.harborhold` — found
+  `besieged` (camp at the walls, muster horn on the apron), OPENED by THE
+  MUSTER (discrete waves through the extraction swarm director's fixation
+  grammar at the QUAY WARD; ward dead = the hold falls, waves broken = the
+  town opens), FELLED into fires + a rebuild clock (or a Mortal Essence
+  restoration), re-besieged by the sweep on `siegeEverySec` with an omened
+  `fallAt` deadline. PROSPERITY (+1 per defense) gates `HoldServiceRow`s —
+  harbormaster/board at 0, chandler at 1, the merc captain at 2
+  (TEMPLATE-ONLY hires; veterans + RETIREMENT stay wilds-outpost exclusive,
+  and wild outposts got scarcer). The board seats INSIDE the walls (the
+  knowledge network is the town's reward); dock + cast-off never brick.
+  Islands/legacy ports stay bare quays by construction. `HOLD_CLASSES`
+  ladder + `HARBORHOLD_CFG.assign` decide everything; docs
+  `docs/engine/harborholds.md`; probe `balance/probe_harborholds.ts`; dev
+  tab 'Holds'.
   THE PLY FABRIC (`engine/plies.ts` — hit-counted durability, the
   Pikmin/Overlord damage model): `MonsterDef.plies` bodies EAT N landed
   hits magnitude-blind (one ply per blow, no life moves; thud floor,

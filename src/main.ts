@@ -861,6 +861,12 @@ function tick(now: number): void {
         world.harborDwellRequested = false;
         if (!ui.sailOpen) ui.showSail();
       }
+      // The MUSTER HORN dwell (a harborhold's gate post) asks to open the
+      // hold panel — the town's standing, the muster, the restoration.
+      if (world.holdDwellRequested && !ui.escapeMenuOpen) {
+        world.holdDwellRequested = false;
+        if (!ui.holdOpen) ui.showHold();
+      }
       // The Oracle-stone dwell asks to open the communion menu.
       if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
         world.oracleDwellRequested = false;
