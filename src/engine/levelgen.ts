@@ -1086,8 +1086,16 @@ export interface BrittleSpec {
    *  the same flash style in a later pass. */
   pop?: { haze?: number; radius?: number; life?: number };
   /** One-shot flavor the first time a dwell clock STARTS ticking — the creak
-   *  before the drop, the hollow knock behind the stone. */
+   *  before the drop, the hollow knock behind the stone. THROTTLED per warn
+   *  LINE, not per doodad (World.brittleAccrue): a span is MANY planks, and
+   *  every board speaking its own first tread would stack the same words
+   *  into unreadable spam — one line speaks at most once per `warnEvery`
+   *  while the clocks accrue silently underneath. */
   warn?: string;
+  /** Seconds between repeats of this spec's warn line (default
+   *  BRITTLE_WARN_EVERY, world.ts). A long slow hazard can murmur oftener
+   *  or rarer by dialing this — data, never a code change. */
+  warnEvery?: number;
   /** Break exhales a FUME: a lingering hazard cloud minted from the named
    *  ground skill (default the reference fume, toxic_cloud) at the wreck.
    *  Radius/linger/damage ride this data; the cloud runs the normal ground-

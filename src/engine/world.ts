@@ -1607,6 +1607,10 @@ const DWELL_IDLE_GRACE = 0.15;   // a dwell only builds once the player has been
                                  // press never counts as dwelling
 const CORPSE_RADIUS = 110;       // how close to your old corpse to begin reclaiming
 const CORPSE_DWELL = 1.0;        // seconds dwelling to reclaim (recovering the dead is deliberate)
+const BRITTLE_WARN_EVERY = 4;    // seconds between repeats of ONE brittle warn line
+                                 // (a rotten span is MANY planks — each board's first
+                                 // tread must not stack the same creak into unreadable
+                                 // spam; BrittleSpec.warnEvery overrides per spec)
 // CO-OP REVIVE — an ally dwelling beside a DOWNED seat brings them back. Reuses
 // the corpse radius/dwell feel; revived heroes return at a fraction of life with
 // NO grace window (you must clear space before reviving — see Phase 3 design).
@@ -3849,6 +3853,7 @@ export class World {
     this.caveDwellIdx = -1; // dwell-to-enter-a-cave resets too (entrances rebuild)
     this.realmDwellKey = ''; // dwell-to-enter-a-realm-gate resets too
     this.doorDwellId = '';  // dwell-to-open-a-door resets too (doors rebuild)
+    this.brittleWarnAt.clear(); // a fresh zone's spans get their first creak at once
     this.arenaWard = null;  // a ward ritual is zone-local (re-raised on realm entry)
     this.wardDwellSeal = null;
     this.arenaCrowd = null; // the stands are zone-local too
@@ -39753,6 +39758,11 @@ export class World {
   /** Dwell clocks for dwell-gated brittle nears (secret walls give to a
    *  lingering press). WeakMap: popped/regenerated doodads just fall out. */
   private brittleDwell = new WeakMap<Doodad, number>();
+  /** THE CREAK THROTTLE — world time each brittle warn LINE last spoke, keyed
+   *  by the text itself (kinds sharing flavor share the throttle: a bridge of
+   *  forty planks is one creak, not forty). Cleared per zone load so a fresh
+   *  span always gets its first word. */
+  private brittleWarnAt = new Map<string, number>();
   /** Last toll time per resonant stone (World.resonate's cooldown ledger). */
   private resonanceRang = new WeakMap<Doodad, number>();
 
@@ -39800,11 +39810,18 @@ export class World {
   /** One tick of dwell against a brittle doodad's clock — shared by 'near'
    *  and 'touch' triggers. The clock never decays (a bridge REMEMBERS every
    *  crossing), and the first accrual speaks the spec's `warn` — the creak
-   *  before the drop, the hollow knock behind the stone. */
+   *  before the drop, the hollow knock behind the stone — THROTTLED per warn
+   *  line (brittleWarnAt): every plank of a span carries its own clock, but
+   *  the same words speak at most once per warnEvery window, so the player
+   *  can actually read them. Clocks accrue silently either way. */
   private brittleAccrue(d: Doodad, br: BrittleSpec, dt: number): void {
     const prev = this.brittleDwell.get(d);
     if (prev === undefined && br.warn) {
-      this.text(vec(d.pos.x, d.pos.y - 12), br.warn, br.color ?? '#c8b89a', 11);
+      const last = this.brittleWarnAt.get(br.warn) ?? -Infinity;
+      if (this.time - last >= (br.warnEvery ?? BRITTLE_WARN_EVERY)) {
+        this.brittleWarnAt.set(br.warn, this.time);
+        this.text(vec(d.pos.x, d.pos.y - 12), br.warn, br.color ?? '#c8b89a', 11);
+      }
     }
     const t = (prev ?? 0) + dt;
     if (t >= (br.dwell ?? 0)) { this.brittleDwell.delete(d); this.popBrittle(d); }
