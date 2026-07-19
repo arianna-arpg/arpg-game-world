@@ -28576,6 +28576,12 @@ export class World {
       // early-returns, so a fully-absorbed swing doesn't count — only a landed hit is "live".
       caster.lastCombatAt = this.time;
       target.lastCombatAt = this.time;
+      // Victim-side strike ledger: a blow from someone OTHER than the held
+      // lock pulls the brain's roster rescan forward to next tick (the
+      // flank gets noticed now, not at the cadence clock) — ai.ts
+      // acquireTarget.
+      target.aiHitAt = this.time;
+      target.aiHitById = caster.id;
       // THE STING and THE TASTE (BrainDef.drives): a landed hit jumps both
       // sides' wants — chip damage stokes a troll's wrath long before its
       // life bar would (free early-outs for the driveless majority).

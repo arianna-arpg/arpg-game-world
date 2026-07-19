@@ -508,15 +508,18 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // not the waterline's.
   mirage_bastion: { painter: 'mirageGhost', order: 56, params: { form: 'bastion' } },
   mirage_caravan: { painter: 'mirageGhost', order: 56, params: { form: 'caravan' } },
+  // deadTree is pure position-seed (no time reads) — bakeWhole blits it;
+  // variant hash keeps neighboring snags distinct. Un-baked, the 1.5k
+  // 'tree' bodies of a briar forest live-stroked gnarled limbs per frame.
   dead_tree: {
-    painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
+    painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0, bakeWhole: 'static',
     params: { color: '#4a4038' },
   },
   // CHARRED SNAG — what the wildfire front leaves of timber: the dead
   // tree's silhouette in charcoal (painter REUSED; the swap is one kind
   // write + one visuals row, exactly the vocabulary doctrine).
   charred_snag: {
-    painter: 'deadTree', order: 54, shadow: 0.5, longShadow: 1.0,
+    painter: 'deadTree', order: 54, shadow: 0.5, longShadow: 1.0, bakeWhole: 'static',
     params: { color: '#26211e' },
   },
   stump: {
@@ -2470,19 +2473,23 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // wildgrass wears the wheat contract in feral green, and the Tender's
   // relics say the scale out loud. Litter patches ride the liquid painter
   // (the flowers-row precedent): one painter, two beds of colors.
+  // The stalk trees bake like every other forest trunk (bakeWhole — the
+  // crowns already flatten via CANOPY_STATIC.bloomCrown): un-baked, a
+  // 0.85-cover stalkwood live-painted ~2.7k trunks per frame and the face
+  // gated at 45ms. The sway stays where it was designed: the canopy fade.
   bloom_stalk: {
-    painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.1,
+    painter: 'trunk', order: 52, shadow: 0.5, longShadow: 1.1, bakeWhole: 'static',
     params: { color: '#4e7a38', scale: 0.3, roots: 3 },
     canopy: { painter: 'bloomCrown', params: { petal: '#e08ab8', heart: '#e8c84a' } },
   },
   sun_disc: {
-    painter: 'trunk', order: 52, shadow: 0.55, longShadow: 1.3,
+    painter: 'trunk', order: 52, shadow: 0.55, longShadow: 1.3, bakeWhole: 'static',
     params: { color: '#5a7a34', scale: 0.26, roots: 4 },
     canopy: { painter: 'bloomCrown', params: { petal: '#e8c84a', petal2: '#d8a03a', heart: '#5c3e22', petals: 16, rows: 2 } },
     light: { radius: -1.5, color: '#ffe8a0', intensity: 0.1 },
   },
   bellflower: {
-    painter: 'trunk', order: 52, shadow: 0.45, longShadow: 0.9,
+    painter: 'trunk', order: 52, shadow: 0.45, longShadow: 0.9, bakeWhole: 'static',
     params: { color: '#46743e', scale: 0.3, roots: 3 },
     canopy: { painter: 'bloomCrown', params: { petal: '#7a96e0', heart: '#e8e8c0', petals: 5, notch: 1 } },
   },

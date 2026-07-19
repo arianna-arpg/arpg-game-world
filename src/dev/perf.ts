@@ -111,6 +111,20 @@ export interface PerfSweepReport {
 
 const PERF_SPREAD_BASE = 11; // staggers mint coordinates across the sweep
 
+/** ID-STABLE mint seed: fold the tileset id (FNV-1a) into mintSeed, so a
+ *  row's mint can NEVER re-roll because the registry grew or reordered.
+ *  The old index-derived seed re-rolled every later row each time a pass
+ *  inserted a tileset — variant roulette silently swapped sandsea's judged
+ *  face from 'whaleback swell' (sim-heavy, breaching) to a light face and
+ *  crypt's from 'plague pit' between sweeps (2026-07-19). One-time re-roll
+ *  of every row on adoption; insertion-proof forever after. Coordinates
+ *  keep the index spread — a forced seed owns all content rolls. */
+function mintSeedFor(base: number, id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (base + (h >>> 0)) >>> 0;
+}
+
 type FrameDump = { gap: number[]; sim: number[]; ren: number[] };
 
 function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
@@ -247,11 +261,19 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];
     const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + idx, 8, {
       ...(pin?.seed !== undefined ? { seed: pin.seed }
-        : opts.mintSeed !== undefined ? { seed: opts.mintSeed + idx } : {}),
+        : opts.mintSeed !== undefined ? { seed: mintSeedFor(opts.mintSeed, id) } : {}),
       ...(pin?.variant ? { variant: pin.variant } : {}),
       ...(pin?.layout ? { layoutType: pin.layout } : {}),
     });
     if (!zid) { skipped.push(id); continue; }
+    if (g.world().zone.id !== zid) {
+      // The mint minted but the LOAD fell back (spread-coordinate collision,
+      // refused layout): without this guard the row samples whatever zone
+      // the walker is still standing in and wears its numbers as a pass —
+      // snowcrown wore the TOWN's row (2026-07-19).
+      skipped.push(`${id} (load fell back to '${g.world().zone.name}')`);
+      continue;
+    }
     pinWeather(); // re-pin on the fresh zone's own node
     zones.push(await sampleCurrentZone(id));
   }

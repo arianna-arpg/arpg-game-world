@@ -384,6 +384,14 @@ export const BEHAVIOR_CFG = {
   detourWithinMul: 2.6,
   /** Spacing: repulsion gain at zero distance (falls off linearly). */
   spacingGain: 0.9,
+  /** Retarget: how often a brain re-walks the FULL candidate roster (secs) —
+   *  the walk is O(actors) per caller, so this cadence is what keeps a
+   *  170-body erg linear; `alertSec` is the tighter hunt cadence (also caps
+   *  the wait when an alert lands mid-window), `jitter` the id-hashed
+   *  per-actor stagger so a spawned pack never scans in phase. Lock loss, a
+   *  blow from a NEW assailant, and taunt/stickiness refereeing all live at
+   *  scan time — ai.ts acquireTarget. */
+  retarget: { sec: 0.25, alertSec: 0.1, jitter: 0.4 },
   /** Stalk: default watched-cone width (degrees, full width) and the
    *  closing-step multiplier while watched (0 = the statue). */
   stalkArc: 70,
@@ -487,6 +495,10 @@ export interface TargetSpec {
   ignoreTaunt?: boolean;
   /** Detection-range multiplier while this tuning holds (swarm's 1.4). */
   detectMul?: number;
+  /** Roster-rescan cadence override (secs) — how often this brain re-walks
+   *  the full candidate roster while its held lock (or empty watch) stands
+   *  (default BEHAVIOR_CFG.retarget.sec; alerted minds use alertSec). */
+  rescanSec?: number;
   /** Score multipliers by unit kind — a minion-hating brute biases 'minion',
    *  an assassin biases 'player' (default 1 each; 'companion' = tamed pets). */
   kindBias?: Partial<Record<'player' | 'minion' | 'mercenary' | 'monster' | 'companion', number>>;

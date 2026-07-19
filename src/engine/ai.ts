@@ -1276,6 +1276,65 @@ function acquireTarget(
   // through anything. Rays ride the world's memo so this stays event-rate.
   const losGated = LOS_CFG.perception && per?.xray !== true;
 
+  // THE RESCAN CADENCE (BEHAVIOR_CFG.retarget + TargetSpec.rescanSec): the
+  // roster walk below is O(actors) per caller, per tick — across a crowded
+  // erg it WAS the sim's quadratic half (~170 bodies ≈ 21ms median frames,
+  // most of them unaggroed wildlife confirming "still nothing" sixty times
+  // a second). The walk now runs on a staggered clock: a VALID held lock
+  // re-validates alone between clocks (O(1), seen-ledger still refreshed),
+  // an empty watch simply waits, and three things pull the walk forward —
+  // the clock, an ALERT landing mid-window (the hunt cadence caps that
+  // wait), and a blow from a NEW assailant (aiHitById ≠ the lock: the
+  // flank snaps heads next tick; a 1v1 brawl never re-walks for its own
+  // exchange). Preference, stickiness and taunts referee at scan time
+  // only; between scans the lock simply holds — stickiness made locks
+  // sticky long before this clock existed, and a mid-window taunt waits
+  // at most the hunt cadence.
+  const rc = BEHAVIOR_CFG.retarget;
+  const scanDue = world.time >= actor.aiRescanAt
+    || (alerted && world.time >= actor.aiLastScanAt + rc.alertSec)
+    || (actor.aiHitAt >= actor.aiLastScanAt && actor.aiHitById !== (actor.aiTargetId ?? -1));
+  if (!scanDue && !dazed) {
+    if (actor.aiTargetId === undefined) return { target: null, d: Infinity };
+    const e = actor.aiTargetRef;
+    if (e && e.id === actor.aiTargetId
+      && !e.dead && !e.untargetable && !e.downed && !e.passive
+      && (world.hostileTo(actor, e)
+        || (e.construct?.breakable !== undefined && e.owner === actor))
+      && !(e.sheet.get('invisible') > 0)) {
+      const d = segsHittable(e)
+        ? dist(actor.pos, nearestBody(e, actor.pos).pos)
+        : dist(actor.pos, e.pos);
+      let reach = detect * e.sheet.get('detectability');
+      if ((e.charges.get('stealth') ?? 0) > 0) reach *= STEALTH_DETECT_MUL;
+      if (alerted) reach *= 1.5;
+      else if (Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) > arcHalf) reach *= rearMul;
+      if (d <= reach) {
+        const seen = !losGated || world.losCached(actor, e);
+        let ok = seen;
+        if (!seen) {
+          if (tuning.target?.relentless && actor.aggroed) ok = true;
+          else {
+            const holdFor = Math.max(per?.memory ?? 0, LOS_CFG.chaseMemory);
+            ok = world.time - actor.aiLosSeenAt <= holdFor;
+          }
+        }
+        if (ok) {
+          if (seen) {
+            actor.aiLosSeenAt = world.time;
+            if (actor.aiLastSeen) { actor.aiLastSeen.x = e.pos.x; actor.aiLastSeen.y = e.pos.y; }
+            else actor.aiLastSeen = vec(e.pos.x, e.pos.y);
+          }
+          if (tuning.target?.relentless) actor.aggroed = true;
+          actor.lastProgress = undefined;
+          return { target: e, d };
+        }
+      }
+    }
+    // The held thread failed a gate mid-window — walk the roster NOW; the
+    // scan owns the loss bookkeeping (memory stalk, the shrug back).
+  }
+
   let target: Actor | null = null;
   let bestScore = -Infinity;
   let bestD = Infinity;
@@ -1384,6 +1443,15 @@ function acquireTarget(
       actor.alertFrom = vec(actor.aiLastSeen.x, actor.aiLastSeen.y);
     }
   }
+  // Cadence bookkeeping for the fast path above: mirror the FINAL lock as a
+  // direct reference (spares the O(actors) id lookup) and arm the next-walk
+  // clock — tuning rescanSec, else the alerted hunt cadence, else the
+  // ambient default, staggered by an id hash so packs never scan in phase.
+  actor.aiTargetRef = target ?? undefined;
+  actor.aiLastScanAt = world.time;
+  const cadence = tuning.target?.rescanSec ?? (alerted ? rc.alertSec : rc.sec);
+  actor.aiRescanAt = world.time
+    + cadence * (1 - rc.jitter * ((((actor.id * 2654435761) >>> 13) & 1023) / 1023));
   return { target, d: bestD };
 }
 

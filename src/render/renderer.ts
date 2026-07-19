@@ -2082,7 +2082,14 @@ export class Renderer {
    */
   private drawDoodads(world: World): void {
     const { ctx } = this;
-    const env: PaintEnv = { ctx, theme: world.zone.theme, time: world.time, world };
+    const env: PaintEnv = {
+      ctx, theme: world.zone.theme, time: world.time, world,
+      // The frame's shadow allowance (VIS_CFG.shadows): z-order spends it.
+      shadowGate: {
+        left: VIS_CFG.shadows.budget,
+        minR: VIS_CFG.shadows.minRadiusPx / this.zoom,
+      },
+    };
     type Grp = { kind: string; list: readonly Doodad[]; def: DoodadVisualDef | undefined };
     const groups: Grp[] = [];
     // THE TIER FABRIC, covered exposure: the other layer's furniture is
@@ -2111,8 +2118,13 @@ export class Renderer {
         PAINTERS.fallback(env, g.list, { painter: 'fallback', order: 50 });
         continue;
       }
-      if (sun && g.def.longShadow) {
+      if (sun && g.def.longShadow && !VIS_ABLATE.has('shadows')) {
+        const gate = env.shadowGate;
         for (const d of g.list) {
+          if (gate) {
+            if (gate.left <= 0 || d.radius < gate.minR) continue;
+            gate.left--;
+          }
           drawLongShadow(ctx, d.pos.x, d.pos.y, d.radius * g.def.longShadow,
             sun.dir, sun.len, sun.alpha);
         }
@@ -2123,7 +2135,7 @@ export class Renderer {
       if (g.def.blend && (g.def.blend.live || !VIS_CFG.ground.bakeBlend)) {
         paintBlendUnderlay(env, g.list, g.def);
       }
-      if (g.def.shadow) paintGroupShadows(env, g.list, g.def.shadow);
+      if (g.def.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, g.list, g.def.shadow);
       // bakeWhole kinds (brush clumps, ferns) blit variant sprites through
       // their own painter's bake — the understory half of the forest fix.
       if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, g.list, g.def);

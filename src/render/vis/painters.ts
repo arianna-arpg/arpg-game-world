@@ -28,6 +28,11 @@ export interface PaintEnv {
   /** The sim clock (deterministic anims; never performance.now()). */
   time: number;
   world: World;
+  /** THE SHADOW GOVERNOR (VIS_CFG.shadows): per-frame draw allowance shared
+   *  by every shadow family — painters that cast decrement `left` and skip
+   *  bodies under `minR` (world units, screen threshold pre-divided by
+   *  zoom). Absent = ungoverned (bakes, portraits, forges). */
+  shadowGate?: { left: number; minR: number };
 }
 
 /** CANOPY EYES spec (DoodadVisualDef.canopy.eyes → vis/canopyEyes.ts): the
@@ -7266,7 +7271,14 @@ const hatch: GroupPainter = (env, group, def) => {
 
 /** Standing-object contact shadows, driven by DoodadVisualDef.shadow. */
 export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alphaMul: number): void {
-  for (const d of group) drawShadow(env.ctx, d.pos.x, d.pos.y, d.radius, alphaMul);
+  const gate = env.shadowGate;
+  for (const d of group) {
+    if (gate) {
+      if (gate.left <= 0 || d.radius < gate.minR) continue;
+      gate.left--;
+    }
+    drawShadow(env.ctx, d.pos.x, d.pos.y, d.radius, alphaMul);
+  }
 }
 
 /** A WEATHERED STATUE: square plinth, the figure's shoulder-and-head mass

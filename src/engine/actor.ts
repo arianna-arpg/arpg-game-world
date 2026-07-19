@@ -529,6 +529,20 @@ export class Actor {
   aiAttendUntil = 0;
   aiDazeUntil = 0;
   aiDazeFrom = 0;
+  /** RESCAN CADENCE (ai.ts acquireTarget): next world-time this brain walks
+   *  the full roster; between clocks a valid held lock re-validates alone
+   *  and an empty watch simply waits. The victim-side strike stamps
+   *  (world.ts applyHit) pull the walk forward when a NEW assailant lands
+   *  a blow. */
+  aiRescanAt = 0;
+  aiLastScanAt = -1;
+  aiHitAt = -1;
+  aiHitById = -1;
+  /** Held-lock reference (transient — never wired, never saved): spares the
+   *  cadence fast path an O(actors) id lookup; validated against
+   *  aiTargetId and death on every use, so a stale ref self-heals into a
+   *  scan. */
+  aiTargetRef?: Actor;
   /** SCRIPT FSM: current phase index (-1 = not entered), entry time, and the
    *  per-cadence next-fire clocks (shared by script and ladder phases). */
   aiScriptIdx = -1;

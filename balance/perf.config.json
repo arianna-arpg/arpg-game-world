@@ -1,12 +1,17 @@
 {
   "_doc": "Budgets for `npm run perf` (the frame-cost gate). The gate is DATA: relative.* caps judge each zone against the SAME run's town control (machine-independent — a slow laptop slows both sides); absolute.* are generous backstops for outright hitching. gapP50Mul/gapP99Mul multiply the town control's percentile, slackMs adds flat headroom so a tiny control (fast machine, vsync floor) never divides into an impossible cap. Hitch rates are per minute of steady-state walking; hitchGraceCount is the quantization guard — a rate breach additionally needs MORE than this many offending frames in the window, because an 8s window can only express 0 or ≥7.5/min and a single stray OS/driver frame is not 'outright hitching' (a pattern still is: two 70ms frames in 8s = 15/min breaches). entryWorstGapMs caps the zone-load burst.",
-  "_docDeterminism": "The gate rolls NO dice: `weather` pins the sky (a CLI --weather overrides it and flips the run to non-gating forensics), `mintSeed` seeds each tileset's mint from Rng(mintSeed + its FULL-matrix index — filter-stable, so --filter runs reproduce the full sweep's zones), and `mintPins` forces a tileset's variant and/or layout generator so multi-modal tilesets are judged on their committed WORST CASE instead of whatever the dice serve — heavy scenes are usually a LAYOUT roll (jungle × the sealed-forest roof), not a variant. A pin may also carry `seed` (outranks mintSeed+index) — the worst-case lever for tilesets whose heavy scene is a COUNT roll, not a face; hunt one with the CLI `--seed=<n> --filter=<id>` forensics pair. The matrix itself is registry-derived: frontier-eligible tilesets in registry order, then `perfProbe: true` opt-ins (caves, minted interiors) APPENDED so frontier rows' mint seeds never shift. `relative.controlFloorMs` stops a fast town roll (vsync-off 4.2ms pacing) from halving every cap — the control normalizes the machine, never gambles the headroom.",
+  "_docDeterminism": "The gate rolls NO dice: `weather` pins the sky (a CLI --weather overrides it and flips the run to non-gating forensics), `mintSeed` seeds each tileset's mint from mintSeed + FNV-1a(tileset id) — ID-STABLE, so a row's mint never re-rolls because the registry grew or reordered, and --filter runs reproduce the full sweep's zones by construction. (Until 2026-07-19 seeds derived from the FULL-matrix INDEX; every tileset insertion re-rolled all later rows — the roulette silently swapped sandsea's judged face off 'whaleback swell' and crypt's off 'plague pit'. Adopting id-hash seeds re-rolled every row ONCE; the pins below hold the evidenced heavy faces regardless.) `mintPins` forces a tileset's variant and/or layout generator so multi-modal tilesets are judged on their committed WORST CASE instead of whatever the dice serve — heavy scenes are usually a LAYOUT roll (jungle × the sealed-forest roof), not a variant. A pin may also carry `seed` (outranks the id-hash) — the worst-case lever for tilesets whose heavy scene is a COUNT roll, not a face; hunt one with the CLI `--seed=<n> --filter=<id>` forensics pair. The matrix itself is registry-derived: frontier-eligible tilesets in registry order, then `perfProbe: true` opt-ins (caves, minted interiors) appended. `relative.controlFloorMs` stops a fast town roll (vsync-off 4.2ms pacing) from halving every cap — the control normalizes the machine, never gambles the headroom.",
   "sampleSeconds": 8,
   "settleSeconds": 1.5,
   "weather": "clear",
   "controlSickMs": 40,
   "mintSeed": 1113,
-  "mintPins": { "jungle": { "variant": "strangler court", "layout": "forest" } },
+  "mintPins": {
+    "jungle": { "variant": "strangler court", "layout": "forest" },
+    "sandsea": { "variant": "whaleback swell" },
+    "crypt": { "variant": "plague pit" },
+    "mournstead": { "variant": "the kept rows" }
+  },
   "relative": { "gapP50Mul": 2.5, "gapP99Mul": 3.5, "slackMs": 8, "controlFloorMs": 8 },
   "absolute": {
     "gapMaxMs": 150,

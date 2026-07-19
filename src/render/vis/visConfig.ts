@@ -368,6 +368,17 @@ export const VIS_CFG = {
     bedsDirtyMax: 96,
   },
 
+  /** DOODAD SHADOWS (the long directional casts + the soft contact blobs).
+   *  Both draw per visible doodad per frame — in a 4-5k-doodad gloam forest,
+   *  or over tundra's snow wash, the alpha-ellipse fill alone crossed the
+   *  GPU knee (2026-07-19: tundra 37.6ms p50 / 82 hitches bare, 16.8 with
+   *  shadows ablated). The governor bounds the bill: at most `budget`
+   *  shadow draws per frame (painter z-order spends it, so the large
+   *  standing kinds that read as grounded keep theirs) and bodies whose
+   *  cast would land under `minRadiusPx` on screen skip — a subpixel
+   *  shadow is noise. Ablate pass name: 'shadows'. */
+  shadows: { budget: 500, minRadiusPx: 4 },
+
   /** Dynamic light layer. */
   lights: {
     /** Lightmap resolution as a fraction of the screen. */
