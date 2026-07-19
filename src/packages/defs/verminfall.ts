@@ -1,13 +1,17 @@
 // ---------------------------------------------------------------------------
-// THE VERMINFALL — rats, roaches, and the warren in the town's shadow.
+// THE VERMINFALL — rats, roaches, and the warren under the granary floor.
 //
-// The first faction whose target is your HOME GROUND. Infestations claim
-// charted zones CLOSE to town (the inverse of the Contagion's far-flung
-// seeding) and stand there festering: warren nests to break, vermin packs to
-// wade, and — when the last nest splits — the RAT KING, whose fall alone
-// clears the ground. While a warren festers past its grace, the town's own
-// ambient vermin MULTIPLY (VerminfallField.townPressure → spawnWildlife):
-// growth carries risk, and the town says so in rats under the benches.
+// The first faction whose target is your HOME GROUND. Infestations claim the
+// FARMLAND — the worked belt that feeds the town (claimBiomes, the inverse
+// of the Contagion's far-flung seeding; the shires are guaranteed ground,
+// world/biomes.ts civic rings) — and stand there festering: warren nests to
+// break, vermin packs to wade, and — when the last nest splits — the RAT
+// KING, whose fall alone clears the ground. Seating the warrens in the
+// crofts keeps the event OFF the town's doorstep ring, so a fresh hero
+// meets it out in the worked country, on their own terms. While a warren
+// festers past its grace, the town's own ambient vermin MULTIPLY
+// (VerminfallField.townPressure → spawnWildlife): growth carries risk, and
+// the town says so in rats under the benches.
 //
 // The family also lives OUTSIDE the event: gutter rats and roaches ride the
 // WILDLIFE prey rows (wolves hunt them, hungry packs migrate toward them),
@@ -30,12 +34,18 @@ const VERMIN_COLOR = '#b39a5a';
 const VERMIN_SURGE: VerminfallSurge = {
   igniteChance: 0.014,   // per 0.5s step — patient, but nearer than you'd like
   maxConcurrent: 1,      // one warren at a time reads cleanest (a knob)
-  // The seat lean (world/seats.ts): the town-hem envelope + closeness law are
-  // the overlay's own; this tips the pick toward the near ring you HAVEN'T
+  // The seat lean (world/seats.ts): the farmland envelope + closeness law are
+  // the overlay's own; this tips the pick toward the crofts you HAVEN'T
   // walked — vermin dig where nobody's been looking (townPressure tells on
   // them either way: the swelling gutter fauna is their announcement).
   seat: { unknownMul: 1.6, veiledMul: 1.15 },
-  seedMaxDist: 260,      // claims only the town's near ring — the warren wants what the town keeps
+  // THE FARMLAND LAW: warrens dig under the crofts — the belt biomes.ts
+  // guarantees every world (shire ring + settled belt). A biome list, not a
+  // hardcode: a harsher tuning could add 'metropolis' cellars or 'downs'.
+  claimBiomes: ['farmland'],
+  seedMaxDist: 620,      // spans the whole worked country (shire ring ~180..400,
+                         // belt to ~570); the closeness weigh still digs the
+                         // NEAR shires first — the warren wants what the town eats
   levelMax: 12,          // the soft ground; a harder tuning can send them deeper
   nests: [2, 4],         // warren nests per claim (the clear condition)
   packCount: [1, 3],     // vermin packs per visit (lerped by standing nests)
@@ -128,13 +138,13 @@ export const VERMINFALL: ContentPackage = {
   id: 'verminfall',
   label: 'The Verminfall',
   color: VERMIN_COLOR,
-  blurb: 'Everything the town builds, something smaller wants. Warrens claim the near ground — never the far wilds, always the soft ring you cross every day — and stand there festering: nests seething with rats, verminkin skulking the hedgerows, and under it all a King. Leave it be and nothing is taken from you, exactly; the rats simply MULTIPLY, in the gutters, under the benches, down in the cellar, until the town feels like it belongs to them. Break every nest and the warren answers — the Rat King rises over the splinters, and only his fall clears the ground. The wolves, at least, approve of all this: more rats than the meadow has ever carried, and every one of them catchable.',
+  blurb: 'Everything the town grows, something smaller wants. Warrens claim the farmland — never the far wilds, always the crofts and granaries that feed the town — and stand there festering: nests seething with rats, verminkin skulking the hedgerows, and under it all a King. Leave it be and nothing is taken from you, exactly; the rats simply MULTIPLY, in the gutters, under the benches, down in the cellar, until the town feels like it belongs to them. Break every nest and the warren answers — the Rat King rises over the splinters, and only his fall clears the ground. The wolves, at least, approve of all this: more rats than the shires have ever carried, and every one of them catchable.',
   cost: 110,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once the player has walked into a claimed zone.
   unlock: {
     id: 'verminfall_unlock',
-    label: 'Walk a claimed warren-ground (infestations claim the near ring)',
+    label: 'Walk a claimed warren-ground (infestations claim the farmland)',
     test: (ctx) => (ctx.ledger.infestation_seen ?? 0) >= 1,
   },
   tiers: [

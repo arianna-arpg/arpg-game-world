@@ -2,12 +2,14 @@
 // VERMINFALL FIELD — the warrens in the town's shadow (pure overlay).
 //
 // The Verminfall is the world's smallest lives organizing against its largest
-// idea: HOME. On a slow tick an INFESTATION ignites in some charted zone close
-// to town — never far ground, always the near ring, because the warren wants
-// what the town keeps — and stands there festering until answered. The claimed
-// zone grows WARREN NESTS (destructible, rift_maw-shaped bodies the engine
-// materializes on entry) and vermin packs to defend them; breaking the LAST
-// nest calls up the RAT KING, and only his fall clears the ground.
+// idea: HOME. On a slow tick an INFESTATION ignites in the town's LARDER —
+// the surge's claimBiomes ground (the farmland belt: granaries, folds,
+// crofts), never the far wilds and never the town's own doorstep, because
+// the warren wants what the town EATS — and stands there festering until
+// answered. The claimed zone grows WARREN NESTS (destructible, rift_maw-
+// shaped bodies the engine materializes on entry) and vermin packs to defend
+// them; breaking the LAST nest calls up the RAT KING, and only his fall
+// clears the ground.
 //
 // THE TOWN FEELS IT (townPressure): while any infestation festers, the town's
 // own ambient vermin MULTIPLY — gutter rats thick under the benches, roaches
@@ -47,9 +49,18 @@ export interface VerminfallSurge {
    *  envelope + closeness falloff stay verminfall's own law (the overlay's
    *  filter/weigh); this row adds the known/unknown lean over it. */
   seat: SeatTuning;
+  /** THE GROUND LAW — biomes a warren may claim (ZoneDef.biome). The rats
+   *  dig where the food is: ['farmland'] seats every infestation in the
+   *  worked belt (granaries, folds, crofts), so the event introduces itself
+   *  IN the shires — never on the town's own doorstep, where a fresh hero
+   *  can't yet answer it. Absent/empty = any biome (the old near-ring law). */
+  claimBiomes?: string[];
   /** Max node-distance from town a warren may claim — the INVERSE of the
-   *  Contagion's seedMinDist: vermin nest in the town's shadow, never the
-   *  far wilds. */
+   *  Contagion's seedMinDist: vermin dig in the town's larder-shadow, never
+   *  the far wilds. Sized to reach the whole worked country the civic rings
+   *  guarantee (world/biomes.ts: shire ring ~180..400, settled belt to
+   *  ~570) — the closeness weigh below still tips claims toward the near
+   *  shires inside it. */
   seedMaxDist: number;
   /** Zone level ceiling on claims (warrens want the soft near ring; a knob
    *  so a harder tuning can send them deeper). */
@@ -150,7 +161,11 @@ export class VerminfallField implements WorldOverlay {
     for (const inf of this.infestations) {
       if (inf.dead) continue;
       const n = this.nodesById[inf.zoneId];
-      if (!n) continue;
+      // Never a ring at HIDDEN coordinates: a warren claimed on veiled or
+      // concealed ground (the forechart halo) keeps festering unseen — its
+      // townPressure still announces it — and the ring appears the moment
+      // the ground is found (the one fog seam, honored here too).
+      if (!n || n.veiled || n.concealed) continue;
       const s = clamp(1 - inf.nestsBroken / Math.max(1, inf.nestsTotal), 0, 1);
       const cx = n.map.x.toFixed(1), cy = n.map.y.toFixed(1);
       under += `<circle cx="${cx}" cy="${cy}" r="${(15 + 5 * s).toFixed(1)}" `
@@ -280,9 +295,12 @@ export class VerminfallField implements WorldOverlay {
   // --- internals -------------------------------------------------------------
 
   /** May the warren claim a zone? Streamable per the shared policy, never the
-   *  town itself, and only the soft near ring (level cap). */
+   *  town itself, only the soft ground (level cap), and only the claim
+   *  biomes when the surge names them (the farmland law). */
   private claimable(z: ZoneDef): boolean {
     return z.id !== START_ZONE && z.level >= 1 && z.level <= this.cfg.levelMax
+      && (!this.cfg.claimBiomes?.length
+        || (!!z.biome && this.cfg.claimBiomes.includes(z.biome)))
       && eventTargetable(this.id, z);
   }
 
@@ -295,8 +313,9 @@ export class VerminfallField implements WorldOverlay {
     };
   }
 
-  /** Pick a claimable charted zone NEAR town (closeness-weighted — the warren
-   *  wants what the town keeps), then claim it. */
+  /** Pick a claimable zone in the town's larder-shadow (claim-biome-gated +
+   *  closeness-weighted — the warren digs under the nearest crofts first),
+   *  then claim it. */
   private maybeIgnite(view: OverlayView): void {
     const g = this.gate();
     if (this.infestations.filter(i => !i.dead).length >= scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)) return;

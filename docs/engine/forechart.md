@@ -91,9 +91,11 @@ Retrofitted this pass (each with tuned data on its def):
   estates louder).
 - **longcandle** — tight + known-leaning *by tuning* (dawn clears claims;
   far dark ground would waste the candle) — the choice is data, not a wall.
-- **verminfall** — keeps its town-hem law via `filter`/`weigh`; the
-  visited gate is gone (warrens dig where nobody's been looking; the
-  swelling town fauna still tells on them).
+- **verminfall** — the town-larder law via `filter`/`weigh`: claims gate
+  on `VerminfallSurge.claimBiomes` (the FARMLAND belt — never the town's
+  doorstep ring) with closeness-weighted digs inside it; the visited gate
+  is gone (warrens dig where nobody's been looking; the swelling town
+  fauna still tells on them).
 - **brigands** — the raid *descends* known-leaning; the column *musters*
   unknown-heavy and far-tilted, marching in across the map's edge.
 - **crusade** — the seed seat is far-tilted + unknown-heavy with no outer
