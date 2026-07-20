@@ -45,6 +45,8 @@ import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { massKindOf, massShapeIds } from '../src/engine/massif';
 import { BIOMES, BIOME_FIELD, BIOME_FIELD_BANDS, biomeAt } from '../src/world/biomes';
+import { setClimateAnchor } from '../src/world/climate';
+import { CIVIC_CFG, installCapitalPole } from '../src/world/civics';
 import { boundaryGateOf } from '../src/data/boundaryGates';
 import { TILESETS } from '../src/data/tilesets';
 import { MONSTERS, WILDLIFE } from '../src/data/monsters';
@@ -272,38 +274,69 @@ const regionCells = (grid: GridWalkField, id: string): number => {
   }
 }
 
-// --- RIG H: THE BELT GUARANTEE ---------------------------------------------------
-// The structural promise the field bands exist for: EVERY world seed has its
-// capital and its worked land near home — never boom-or-bust. (Pre-band, the
-// ~4-cell settled ring lost the roll outright in whole worlds: the live bug
-// this rig pins. Downs is moisture-conditional by design — it must claim the
-// belt in a healthy share of worlds, not all of them.)
+// --- RIG H: THE CAPITAL GUARANTEE ------------------------------------------------
+// The structural promise the field bands NOW keep: every world seats its
+// capital and worked approach country AT THE PER-SEED POLE — and the ring
+// around home goes back to the world's dice (the old civic rings walled
+// every start inside the same city belt: the inundation this rig pins
+// AGAINST). Existence is a guarantee; the address is the roll. Farmland vs
+// downs stays moisture-conditional by design (a dry capital keeps honest
+// sheep country), so the hard guarantee is WORKED LAND, the soft one crops.
 {
-  check('H1 field bands registered (civic core + settled belt)',
-    BIOME_FIELD_BANDS.some(b => b.id === 'civic_core') && BIOME_FIELD_BANDS.some(b => b.id === 'settled_belt'));
-  let worldsWithFarm = 0, worldsWithMetro = 0, worldsWithDowns = 0;
+  check('H1 field bands registered (capital seat/core/ring + home tilt)',
+    ['capital_seat', 'capital_core', 'capital_ring', 'home_shire']
+      .every(id => BIOME_FIELD_BANDS.some(b => b.id === id)));
   const SEEDS_H = [11, 22, 33, 44, 55, 66, 77, 88, 99, 110];
+  let worldsWithMetro = 0, worldsWithWorked = 0, worldsWithFarm = 0, worldsWithDowns = 0;
+  let cityFreeStarts = 0, worstHomeMetro = 0;
   for (const seed of SEEDS_H) {
-    let farm = 0, metro = 0, downs = 0;
-    for (let r = 60; r <= 640; r += 60) {
-      for (let a = 0; a < Math.PI * 2; a += 0.2) {
-        const b = biomeAt({ x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) }, seed);
-        if (b === 'farmland') farm++;
-        else if (b === 'metropolis') metro++;
+    const pole = installCapitalPole(seed);
+    const dHome = Math.hypot(pole.x, pole.y);
+    check(`H2 pole stands OFF-home on land (seed ${seed})`,
+      dHome >= CIVIC_CFG.poleDist[0] * 0.5 && biomeAt(pole, seed) !== 'ocean',
+      `d=${Math.round(dHome)}`);
+    // The capital country: seat + core + approach ring around the pole.
+    let metro = 0, farm = 0, downs = 0;
+    for (let r = 0; r <= 500; r += 50) {
+      for (let a = 0; a < Math.PI * 2; a += 0.25) {
+        const b = biomeAt({ x: Math.round(pole.x + Math.cos(a) * r), y: Math.round(pole.y + Math.sin(a) * r) }, seed);
+        if (b === 'metropolis') metro++;
+        else if (b === 'farmland') farm++;
         else if (b === 'downs') downs++;
       }
     }
-    if (farm > 0) worldsWithFarm++;
     if (metro > 0) worldsWithMetro++;
+    if (farm + downs > 0) worldsWithWorked++;
+    if (farm > 0) worldsWithFarm++;
     if (downs > 0) worldsWithDowns++;
-    note(`seed ${seed}: farmland ${farm} · metropolis ${metro} · downs ${downs}`);
+    // The home ring: the anti-inundation read (r ≤ 300 of the origin).
+    let hMetro = 0, hN = 0;
+    for (let r = 60; r <= 300; r += 40) {
+      for (let a = 0; a < Math.PI * 2; a += 0.25) {
+        const b = biomeAt({ x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) }, seed);
+        hN++;
+        if (b === 'metropolis') hMetro++;
+      }
+    }
+    if (hMetro === 0) cityFreeStarts++;
+    worstHomeMetro = Math.max(worstHomeMetro, hMetro / hN);
+    note(`seed ${seed}: pole ${pole.x},${pole.y} · pole-country metro ${metro} farm ${farm} downs ${downs} · home metro ${(100 * hMetro / hN).toFixed(0)}%`);
   }
-  check('H2 EVERY world grows farmland near home (the shire ring forces it)',
-    worldsWithFarm === SEEDS_H.length, `${worldsWithFarm}/${SEEDS_H.length}`);
-  check('H3 EVERY world raises its capital (the civic core forces it)',
+  check('H3 EVERY world raises its capital AT THE POLE (the seat forces it)',
     worldsWithMetro === SEEDS_H.length, `${worldsWithMetro}/${SEEDS_H.length}`);
-  check('H4 the downs claim their share of worlds (dry-conditional by design)',
-    worldsWithDowns >= 5, `${worldsWithDowns}/${SEEDS_H.length}`);
+  check('H4 EVERY world grows the capital\'s worked country (farm or downs)',
+    worldsWithWorked === SEEDS_H.length, `${worldsWithWorked}/${SEEDS_H.length}`);
+  check('H5 farmland claims most capitals (dry worlds may keep sheep country)',
+    worldsWithFarm >= 7, `${worldsWithFarm}/${SEEDS_H.length}`);
+  check('H6 the downs claim their share of worlds (dry-conditional by design)',
+    worldsWithDowns >= 4, `${worldsWithDowns}/${SEEDS_H.length}`);
+  check('H7 HOME IS FREE AGAIN (no world walls the start in city)',
+    worstHomeMetro <= 0.5, `worst home metro share ${(100 * worstHomeMetro).toFixed(0)}%`);
+  check('H8 city-free starts EXIST (the opening ring is real dice)',
+    cityFreeStarts >= 3, `${cityFreeStarts}/${SEEDS_H.length}`);
+  // Leave no pole behind for the sim rigs below (the booted sim installs its
+  // own from its run seed — this just keeps the probe order-independent).
+  setClimateAnchor('capital', null);
 }
 
 // --- SIM RIGS (the live world) -----------------------------------------------------

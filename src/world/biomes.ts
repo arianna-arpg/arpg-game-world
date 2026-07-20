@@ -19,7 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { continentAt, continentSeedFrom } from './continents';
-import { climateAt, climateAffinity, validateClimateSpecs, type ClimateSpec } from './climate';
+import { climateAt, climateAffinity, registerClimateInvalidation, validateClimateSpecs, type ClimateSpec } from './climate';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 import type { MapCoord } from './coords';
 
@@ -541,7 +541,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // Wildness-gated to the innermost ring; no climate taste beyond that — a
   // city stands where the roads cross, whatever the weather.
   metropolis: { patronFaction: 'hollowborn', mapColor: '#8f8f96', label: 'Metropolis', spacing: 58,
-    climate: { wildness: { to: 0.28, fadeOut: 0.12 } },
+    // Wildness-gated to tamed ground — and HEARTH-gated off the doorstep:
+    // metropolis carries no temperature/moisture taste, so near home (calm
+    // wildness) the global die would otherwise seat it as the filler wherever
+    // hostile local climate kills its competitors — the surprise-city-start
+    // inundation in dice form. From ~320 units out the die lives again
+    // (tamed mid-corridor pockets may grow a walled quarter); the CAPITAL
+    // seat never rides this die at all — its single-entry band forces
+    // through the all-zero fallback, affinity-proof by design.
+    climate: { wildness: { to: 0.28, fadeOut: 0.12 }, hearth: { from: 0.5, fadeIn: 0.25 } },
     allowedLayouts: { district: 1 },
     enclave: { gate: 'city_gate' },
     meld: 'metropolis_meld',
@@ -786,14 +794,15 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // enough seed weight to read as coherent walked country where its gate
   // holds, never crowding the woods out of the damp half.
   { biome: 'downs', weight: 1.4 },
-  // 1.6: the FARMLAND claims the settled belt's fertile half (the downs'
-  // damp mirror) — generous acreage so the approach to the city reads as
-  // whole worked country: shires, then crop seas, then the harvest towns.
+  // 1.6: the FARMLAND claims civilization's fertile half (the downs' damp
+  // mirror) — its wildness gate confines it to the tamed hearts (home's calm
+  // and the capital's basin), where this weight makes worked country common;
+  // the capital's approach ring adds its structural mass (the bands below).
   { biome: 'farmland', weight: 1.6 },
-  // 0.9: the METROPOLIS is the belt's dense CORE — its wildness gate is the
-  // tightest in the game (innermost ring only), so a modest seed weight
-  // still reads as a rare, coherent walled city embedded in its farmland,
-  // never a city sprinkled through the wilds.
+  // 0.9: the METROPOLIS carries the tightest wildness gate in the game, so
+  // the global dice can only seat it in the tamed hearts — the odd surprise
+  // city neighborhood near home or the capital. Its STRUCTURAL seat is the
+  // capital pole's banded seat/core (below): existence never rides this die.
   { biome: 'metropolis', weight: 0.9 },
   { biome: 'marsh', weight: 1.5 },
   { biome: 'flesh', weight: 1.25 }, // a four-faced country deserves the acreage
@@ -804,25 +813,35 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
 ];
 
 // --- CLIMATE-BANDED FIELD TABLES ----------------------------------------------
-// THE STRUCTURAL FIX for band-bound countries: the settled ring (wildness ≤
-// ~0.42) spans only THREE-TO-FIVE Voronoi cells per world, and under the one
-// global table those few cells are contested by every mild-climate biome —
-// so a given world frequently rolled NO farmland, NO metropolis, NO downs at
-// all (boom-or-bust the share probes' cross-seed averages hid). A FIELD BAND
-// claims a climate stratum for its OWN table: cells whose site value holds
-// the band's envelope (presenceMul ≥ 0.5 — the first matching band wins)
-// pick from the band table instead of the global one, with every biome's own
-// climate affinity still multiplying INSIDE it (a dry world's belt goes to
-// the downs, a wet world's to the farmland — the moisture split decides who
-// dominates, never whether the belt exists; fieldBiomePick's all-zero
-// fallback to raw weights is the guarantee's floor). Generic on purpose: a
-// future 'maritime' band could claim archipelago rings the same way.
-// SURFACE-only (dimension palettes keep their own tables whole).
+// THE STRUCTURAL SEAM for band-bound countries. The underlying scarcity: a
+// wildness-gated biome's eligible ground is a small disc (a handful of
+// Voronoi cells), and under the one global table those few cells are
+// contested by every mild-climate biome — so a world could roll NO farmland,
+// NO metropolis at all (boom-or-bust the share probes' cross-seed averages
+// hid). A FIELD BAND claims a climate stratum: cells whose site value holds
+// the band's envelope (presenceMul ≥ 0.5 — first matching band wins) pick
+// from the band's candidates instead of the global table ('replace'), or
+// from the global table with the band's weights folded in ('tilt'), with
+// every biome's own climate affinity still multiplying INSIDE it (a dry
+// belt goes to the downs, a wet one to the farmland — the moisture split
+// decides who dominates, never whether the belt exists; fieldBiomePick's
+// all-zero fallback to raw weights is the guarantee's floor). The capital
+// bands below anchor that structure on the PER-SEED pole (world/civics.ts)
+// rather than around home — existence guaranteed, address diced. Generic on
+// purpose: a future 'maritime' band could claim archipelago rings the same
+// way. SURFACE-only (dimension palettes keep their own tables whole).
 export interface BiomeFieldBand {
   id: string;
   /** The climate stratum this band claims: an axis + envelope over its 0..1
    *  value at the CELL SITE (bands resolve in registration order). */
   when: { axis: string; env: LevelEnvelope };
+  /** 'replace' (default): the band's table IS the cell's candidate list —
+   *  structure. 'tilt': the band MULTIPLIES matching global-table weights by
+   *  its rows' weights (rows naming absent biomes append as new candidates)
+   *  — a thumb on the scales that keeps every start's own climate character
+   *  alive: a frigid origin keeps its taiga doorstep, a scorched one its
+   *  dunes, the tilted rows are merely LIKELIER. */
+  mode?: 'replace' | 'tilt';
   table: BiomeSeedDef[];
 }
 
@@ -838,46 +857,94 @@ export function registerFieldBand(band: BiomeFieldBand): void {
 
 /** The first band whose stratum holds at this climate reading (surface pick
  *  path only), or null for the global table. */
-function bandTableFor(climate: Record<string, number>): readonly BiomeSeedDef[] | null {
+function bandFor(climate: Record<string, number>): BiomeFieldBand | null {
   for (const b of BIOME_FIELD_BANDS) {
     const v = climate[b.when.axis];
-    if (v !== undefined && presenceMul(b.when.env, v) >= 0.5) return b.table;
+    if (v !== undefined && presenceMul(b.when.env, v) >= 0.5) return b;
   }
   return null;
 }
 
-// THE CIVIC RINGS (a single-entry table FORCES — the all-zero fallback picks
-// it whatever the cell's climate rolled, so the force is affinity-proof):
-// the cells nearest home ARE the capital, the ring around them IS the first
-// worked land — every world stages the layered approach (city → shires →
-// belt → wilds) as STRUCTURE, never as a lottery. Keyed on the noise-free
-// HEARTH axis: ring radii are true geometry, sized to the field's 260-unit
-// cell pitch so each ring always contains cell sites (the origin cell's
-// jittered site sits within ~165 units — inside the core by construction).
+/** Resolve a band against the global table per its mode: 'replace' hands the
+ *  band's own table over; 'tilt' multiplies matching global weights by the
+ *  band rows' weights (absent biomes append as new candidates). */
+function bandCandidates(band: BiomeFieldBand, table: readonly BiomeSeedDef[]): readonly BiomeSeedDef[] {
+  if ((band.mode ?? 'replace') === 'replace') return band.table;
+  const mul = new Map(band.table.map(r => [r.biome, r.weight ?? 1]));
+  const out: BiomeSeedDef[] = table.map(r => {
+    const m = mul.get(r.biome);
+    if (m === undefined) return r;
+    mul.delete(r.biome);
+    return { biome: r.biome, weight: (r.weight ?? 1) * m };
+  });
+  for (const [biome, weight] of mul) out.push({ biome, weight });
+  return out;
+}
+
+// THE CAPITAL POLE (world/civics.ts): civilization's structure WITHOUT the
+// fixed start. The old civic rings forced metropolis/farmland around HOME —
+// every run opened walled inside the same city belt. The same layered
+// geometry (seat → core → approach ring) now anchors on the PER-SEED capital
+// pole, 600–1050 units out at a rolled bearing: the city is a DESTINATION
+// approached through its worked country, and the first steps out of town are
+// the world's own dice again. Radii are true geometry (the 'civic' axis is
+// noise-free, span 640, and reads 1 everywhere until the pole installs — so
+// these bands are inert in anchor-less contexts by construction), sized to
+// the 260-unit cell pitch: the seat's reach always covers the pole cell's
+// jittered site (worst case ~266 units), so EXISTENCE stays a guarantee —
+// only the ADDRESS is the dice. The single-entry seat still FORCES via the
+// all-zero fallback (affinity-proof): the ONE structural cell per world.
 registerFieldBand({
-  id: 'civic_core',
-  when: { axis: 'hearth', env: { to: 0.27, fadeOut: 0.02 } }, // r ≲ 180
+  id: 'capital_seat',
+  when: { axis: 'civic', env: { to: 0.42, fadeOut: 0.02 } }, // d ≲ 275 of the pole
   table: [{ biome: 'metropolis', weight: 1 }],
 });
+// The city's edge past the seat — heavily metro but DICED (a capital with
+// worked pockets reads grown, not stamped). The wildness basin keeps the
+// metropolis affinity itself alive only ~365 out, so the core stages
+// city-center → outskirts on its own: past metro's reach the farmland and
+// downs rows win the fade.
 registerFieldBand({
-  id: 'shire_ring',
-  when: { axis: 'hearth', env: { from: 0.27, fadeIn: 0.02, to: 0.6, fadeOut: 0.04 } }, // r ~180..400
-  table: [{ biome: 'farmland', weight: 1 }],
-});
-// THE SETTLED BELT: the diced fringe of the tamed ring (r ~400..570) —
-// farmland spreads on, the downs claim the dry cells (their own moisture
-// affinities decide), the old mild biomes keep minority seats so the belt
-// never reads as one crop. Metropolis keeps a token outer-borough seat.
-registerFieldBand({
-  id: 'settled_belt',
-  when: { axis: 'hearth', env: { from: 0.6, fadeIn: 0.04, to: 0.85, fadeOut: 0.08 } },
+  id: 'capital_core',
+  when: { axis: 'civic', env: { from: 0.42, fadeIn: 0.02, to: 0.58, fadeOut: 0.03 } }, // ~275..370
   table: [
-    { biome: 'farmland', weight: 2 },
-    { biome: 'downs', weight: 1.8 },
-    { biome: 'field', weight: 1 },
-    { biome: 'grove', weight: 0.8 },
-    { biome: 'grave', weight: 0.4 },
-    { biome: 'metropolis', weight: 0.4 },
+    { biome: 'metropolis', weight: 2.2 },
+    { biome: 'farmland', weight: 1 },
+    { biome: 'downs', weight: 0.5 },
+    { biome: 'grave', weight: 0.25 },
+  ],
+});
+// THE APPROACH RING: the capital's worked country — farmland-led, the downs
+// claiming the dry cells (their own moisture affinities decide: a dry-belt
+// capital is honest sheep country, the belt doctrine), thinning into
+// whatever the wilds grow past the basin's reach (dead affinities cede to
+// the live locals through the fade — no hard edge).
+registerFieldBand({
+  id: 'capital_ring',
+  when: { axis: 'civic', env: { from: 0.58, fadeIn: 0.03, to: 0.8, fadeOut: 0.08 } }, // ~370..510, fading to ~565
+  table: [
+    { biome: 'farmland', weight: 2.2 },
+    { biome: 'downs', weight: 1.1 },
+    { biome: 'field', weight: 0.8 },
+    { biome: 'grove', weight: 0.6 },
+    { biome: 'grave', weight: 0.35 },
+    { biome: 'metropolis', weight: 0.3 },
+  ],
+});
+// THE HOME SHIRE — a TILT, not a table: near home every global candidate
+// still stands with a mild thumb on the worked-land rows, so old walked
+// country is LIKELIER at the door, never the law. Registered AFTER the
+// capital bands (first match wins): a near-rolled pole keeps its city where
+// the two overlap. This is the whole remaining near-home structure — the
+// run's opening ring belongs to the world's dice.
+registerFieldBand({
+  id: 'home_shire',
+  when: { axis: 'hearth', env: { to: 0.55, fadeOut: 0.08 } }, // r ≲ 350 of home
+  mode: 'tilt',
+  table: [
+    { biome: 'farmland', weight: 1.5 },
+    { biome: 'downs', weight: 1.35 },
+    { biome: 'field', weight: 1.2 },
   ],
 });
 
@@ -960,6 +1027,12 @@ const PICK_MEMO_CAP = 16384;
  *  climate-origin change could otherwise carry across runs. */
 export function resetFieldPickMemo(): void { pickMemo.clear(); }
 
+// A pick bakes the climate GEOMETRY of its moment (bands read the origin +
+// anchors through climateAt) — so any re-anchor (the capital pole install,
+// an origin move, probes cycling seeds) must flush it, or a re-anchored
+// world serves picks computed under the old geometry.
+registerClimateInvalidation(resetFieldPickMemo);
+
 /** Weighted biome for a Voronoi cell: seed weight × CLIMATE AFFINITY sampled
  *  at the cell's SITE (one climate reading per blob — regions stay coherent).
  *  THE shared pick for the surface field and every dimension palette. A cell
@@ -973,10 +1046,11 @@ export function fieldBiomePick(
   const hit = pickMemo.get(memoKey);
   if (hit !== undefined) return hit;
   const climate = climateAt(site, fieldSeed, dimension);
-  // FIELD BANDS (surface only): a claimed climate stratum swaps in its own
-  // candidate table — the settled ring's guarantee. Biome affinities still
-  // multiply inside the band; the all-zero fallback below floors it.
-  const src = dimension === 'surface' ? (bandTableFor(climate) ?? table) : table;
+  // FIELD BANDS (surface only): a claimed climate stratum swaps in (or
+  // tilts) the candidate table — the capital's structure. Biome affinities
+  // still multiply inside the band; the all-zero fallback below floors it.
+  const band = dimension === 'surface' ? bandFor(climate) : null;
+  const src = band ? bandCandidates(band, table) : table;
   const weights: number[] = new Array(src.length);
   let total = 0;
   for (let i = 0; i < src.length; i++) {

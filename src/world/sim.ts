@@ -59,6 +59,7 @@ import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate
 import { boundaryGateIds } from '../data/boundaryGates';
 import { POCKET_FORMS } from '../data/pocketForms';
 import { setClimateOrigin } from './climate';
+import { installCapitalPole } from './civics';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
 import { LevelField, validateLevelField } from './levelField';
@@ -323,6 +324,12 @@ export class WorldSim {
     // Climate radial layers (wildness) anchor on the same static home coord —
     // static data, so host and clients agree without replication.
     setClimateOrigin(ZONES[START_ZONE].map);
+    // THE CAPITAL POLE (world/civics.ts): pure seed math off the shared run
+    // seed — host/clients/reloads agree like the origin above. Installed
+    // before anything samples the field (the BiomeField ctor above only
+    // resets memos; first sampling happens after construction), and AFTER
+    // the origin (the pole is home-relative).
+    installCapitalPole(seed);
     this.incursionField = new IncursionField(new Rng((seed ^ 0x1ec0) >>> 0));
     // Build the package→world routing from the manifest, and instantiate any
     // NET-NEW package overlays (migrated features route pressure into the shared

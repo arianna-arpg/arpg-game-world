@@ -35,10 +35,18 @@ export type ClimateLayer =
    *  feature size in node units; `salt` decorrelates two noise layers on the
    *  same axis. */
   | { kind: 'noise'; cell: number; amp: number; salt?: number }
-  /** Radial gradient from the world origin (home): 0 inside `innerRadius`,
-   *  rising to +amp over `span`. The "danger geography" tie — the same shape
-   *  as the level field's floor. */
-  | { kind: 'radial'; innerRadius: number; span: number; amp: number }
+  /** Radial gradient from a NAMED anchor (default: the world origin, home):
+   *  0 inside `innerRadius`, rising to +amp over `span`. The "danger
+   *  geography" tie — the same shape as the level field's floor. An anchor
+   *  that is not (yet) installed reads FAR — the layer contributes its full
+   *  amp — so an axis like 'civic' safely means "no capital anywhere" until
+   *  the pole is derived at world boot, instead of misfiring at (0,0). */
+  | { kind: 'radial'; innerRadius: number; span: number; amp: number; anchor?: string }
+  /** Radial DEPRESSION around a named anchor: subtracts up to `amp` at the
+   *  anchor, fading to 0 over `span` — how a SECOND heart of civilization
+   *  tames its surroundings without moving home's own gradient (the capital
+   *  pole rides this on wildness). Missing anchor = no contribution. */
+  | { kind: 'basin'; anchor: string; span: number; amp: number; innerRadius?: number }
   /** Ocean adjacency: probes the continent field around the point; contributes
    *  up to +amp when the sea is near (1 when ON open water — islands read as
    *  fully maritime). `probe` is the sampling reach in node units. */
@@ -96,6 +104,20 @@ registerClimateAxis({
   id: 'wildness', label: 'Wildness', base: 0.12,
   layers: [
     { kind: 'radial', innerRadius: 100, span: 520, amp: 0.85 },
+    // THE CAPITAL TAMES ITS COUNTRY: a second heart of civilization presses
+    // wildness back down around the capital pole (world/civics.ts derives it
+    // per seed; the sim installs the 'capital' anchor at boot). Sized against
+    // the radial above: at the pole the far-wilds ~0.97 dips to ~0 — so the
+    // settled biomes' own wildness affinities (metropolis ≤~0.4, farmland
+    // ≤~0.58, downs ≤~0.82) LIVE there and stage city → crofts → sheep downs
+    // → wilds outward with no extra machinery: at span 850 the city rows die
+    // ~365 out, crops ~520, downs ~700 — the capital ring's worked country
+    // gets real acreage before the wilds resume. A near-rolled pole's basin
+    // can overlap home's calm and read as one settled vale; a far roll
+    // leaves a wild march between — deliberate per-seed world character. No
+    // anchor (menus, pole-less contexts) = no basin: the old field,
+    // byte-identical.
+    { kind: 'basin', anchor: 'capital', span: 850, amp: 1.0 },
     { kind: 'noise', cell: 800, amp: 0.15, salt: 0x5abd },
   ],
 });
@@ -112,24 +134,62 @@ registerClimateAxis({
   // noise with ~800-unit features, so a whole world's near-home readings
   // shift together — any absolute wildness threshold is seed-shifty. The
   // hearth axis is the deterministic geometry lever for anything that must
-  // hold at home in EVERY world (the civic field bands ride it; future
+  // hold at home in EVERY world (the home-shire field tilt rides it; future
   // near-home event gates can too). 0 at the town, 1 by ~640 map units.
   id: 'hearth', label: 'Hearth', base: 0,
   layers: [
     { kind: 'radial', innerRadius: 0, span: 640, amp: 1 },
   ],
 });
+registerClimateAxis({
+  // Distance-from-the-CAPITAL: hearth's civic twin — 0 at the capital pole
+  // (world/civics.ts derives it per seed; the sim installs the anchor at
+  // boot), 1 by ~640 units out, and 1 EVERYWHERE while no pole is installed
+  // (an absent anchor reads far, so the capital field bands go inert instead
+  // of misfiring at the world origin). Noise-free for hearth's reason: band
+  // radii must be true geometry in every world.
+  id: 'civic', label: 'Civic', base: 0,
+  layers: [
+    { kind: 'radial', anchor: 'capital', innerRadius: 0, span: 640, amp: 1 },
+  ],
+});
 
-/** Structural tunables. `origin` anchors radial layers (home = the town's
- *  canonical map coord — the world grows outward from it). */
-export const CLIMATE_CFG = { origin: { x: 0, y: 0 } as MapCoord };
+/** Structural tunables. `origin` anchors un-named radial layers (home = the
+ *  town's canonical map coord — the world grows outward from it); `anchors`
+ *  are NAMED points radial/basin layers key on by `anchor` (the capital pole
+ *  installs 'capital' at world boot). */
+export const CLIMATE_CFG = {
+  origin: { x: 0, y: 0 } as MapCoord,
+  anchors: {} as Record<string, MapCoord | null>,
+};
+
+/** Downstream caches keyed on climate readings (the biome field's cell-pick
+ *  memo) register here; any origin/anchor change flushes them. Boot-time
+ *  events only — the cost is a rare re-fill, the win is that a re-anchored
+ *  world can never serve picks computed under the old geometry. */
+const invalidationListeners: (() => void)[] = [];
+export function registerClimateInvalidation(cb: () => void): void {
+  invalidationListeners.push(cb);
+}
+function invalidateClimate(): void {
+  homeCellMemo = null; // the home landmass derives from the origin — re-resolve
+  for (const cb of invalidationListeners) cb();
+}
 
 /** Anchor radial layers on home. Called once at boot by WorldSim with the
  *  town's STATIC canonical map coord (the level field's exact pattern) —
  *  static data, so host and clients agree without any replication. */
 export function setClimateOrigin(c: MapCoord): void {
   CLIMATE_CFG.origin = { x: c.x, y: c.y };
-  homeCellMemo = null; // the home landmass derives from the origin — re-resolve
+  invalidateClimate();
+}
+
+/** Install (or clear) a NAMED anchor for radial/basin layers. Same law as the
+ *  origin: derived from static/seed data only — never replicated, so host,
+ *  clients and reloads agree by construction. */
+export function setClimateAnchor(name: string, c: MapCoord | null): void {
+  CLIMATE_CFG.anchors[name] = c ? { x: c.x, y: c.y } : null;
+  invalidateClimate();
 }
 
 // --- bands ------------------------------------------------------------------
@@ -256,9 +316,18 @@ function layerValue(
     case 'noise':
       return (valueNoise(coord.x, coord.y, layer.cell, (seed ^ salt ^ (layer.salt ?? 0)) >>> 0) - 0.5) * 2 * layer.amp;
     case 'radial': {
-      const dx = coord.x - CLIMATE_CFG.origin.x, dy = coord.y - CLIMATE_CFG.origin.y;
+      const at = layer.anchor !== undefined ? CLIMATE_CFG.anchors[layer.anchor] : CLIMATE_CFG.origin;
+      if (!at) return layer.amp; // uninstalled anchor reads FAR — full contribution
+      const dx = coord.x - at.x, dy = coord.y - at.y;
       const d = Math.sqrt(dx * dx + dy * dy);
       return clamp01((d - layer.innerRadius) / layer.span) * layer.amp;
+    }
+    case 'basin': {
+      const at = CLIMATE_CFG.anchors[layer.anchor];
+      if (!at) return 0; // no anchor installed — the basin doesn't exist
+      const dx = coord.x - at.x, dy = coord.y - at.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      return -(1 - clamp01((d - (layer.innerRadius ?? 0)) / layer.span)) * layer.amp;
     }
     case 'coastal': {
       const cache = (probe.coastal ??= new Map<number, number>());

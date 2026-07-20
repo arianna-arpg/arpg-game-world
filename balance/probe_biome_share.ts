@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { biomeAt, OCEAN_BIOME } from '../src/world/biomes';
+import { installCapitalPole } from '../src/world/civics';
 
 const argv = process.argv.slice(2);
 const num = (flag: string, dflt: number): number => {
@@ -28,6 +29,9 @@ const landPerBand = BANDS.map(() => 0);
 
 for (let s = 0; s < SEEDS; s++) {
   const seed = (0x9e3779b9 ^ (s * 0x85ebca6b)) >>> 0;
+  // The live field carries a capital pole (world/civics.ts — sim installs it
+  // at boot); the share read must measure the same world the mints see.
+  installCapitalPole(seed);
   for (let x = -EXTENT; x <= EXTENT; x += STEP) {
     for (let y = -EXTENT; y <= EXTENT; y += STEP) {
       const r = Math.hypot(x, y);

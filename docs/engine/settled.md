@@ -11,6 +11,40 @@ Everything is a registry row on an existing fabric. The pass added exactly
 one new engine module (`engine/settled.ts` — two recipes + one mass shape),
 one rouse row, and a render fix; the rest is data.
 
+## Where the belt grows — THE CAPITAL POLE
+
+**Existence is a guarantee; the address is the dice.** Every world seats ONE
+capital — at a per-seed pole (`world/civics.ts`: bearing + distance rolled
+from the world seed, walked ashore onto land WALK-JOINED to home, standoff
+floor + bearing re-rolls in `CIVIC_CFG`), never around the start. The pole
+installs the `'capital'` climate anchor at sim boot (pure seed math — host,
+clients and reloads agree; `setClimateAnchor`), and two seams read it:
+
+- **The `'civic'` axis** (climate.ts): noise-free distance-to-the-pole,
+  reading FAR everywhere until the anchor installs — so the capital field
+  bands (`world/biomes.ts`) are inert in anchor-less contexts by
+  construction. The bands stage the city as true geometry: `capital_seat`
+  (the ONE forced cell — single-entry table through the all-zero fallback,
+  affinity-proof), `capital_core` (diced, metro-led), `capital_ring`
+  (farmland-led worked country; the downs claim dry cells — a dry-belt
+  capital is honest sheep country).
+- **The wildness BASIN** (a `basin` layer on the wildness axis): the capital
+  TAMES its surroundings, so the settled biomes' own affinities live there
+  and stage city → crofts → downs → wilds outward on their own. A near
+  pole's basin can kiss home's calm (one settled vale); a far pole leaves a
+  wild march — per-seed world character.
+
+Near home the only remaining structure is the **`home_shire` TILT** (mode
+`'tilt'`: band weights MULTIPLY the global table instead of replacing it) —
+worked land is likelier at the door, never the law, and every climate keeps
+its own doorstep (a frigid origin keeps its taiga). Metropolis additionally
+carries a `hearth` affinity gate so the global die can't seat a surprise
+city AT the door (it wakes ~320 units out; the capital seat never rides
+that die). Any origin/anchor change flushes the field-pick memo
+(`registerClimateInvalidation` — re-anchored worlds can never serve stale
+picks). Probes: `balance/probe_civics.ts` (pole/seat/basin/free-start laws)
+and `probe_settled.ts` RIG H (the capital guarantee).
+
 ## The pieces (where each lever lives)
 
 ### Generation
