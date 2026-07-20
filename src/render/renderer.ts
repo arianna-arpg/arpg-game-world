@@ -2274,19 +2274,31 @@ export class Renderer {
     }
   }
 
-  // --- ACTOR-ANCHORED TEXT LABELS ---------------------------------------------
-  // NPC names, overhead prompts, and nameplates queue here during the actor
-  // pass and draw AFTER the canopy/roof fades — text near the player never
-  // drowns under a crown. The trade is honesty: each label is gated on the
-  // SAME smoothed fades the player's eyes get, so an actor the fades still
-  // hide leaks not one glyph (the text half of the canopy's ambush rule).
-  private labels: { a: Actor; text: string; color: string; dy: number; font: string; stroke: boolean }[] = [];
+  // --- WORLD-ANCHORED TEXT LABELS ---------------------------------------------
+  // NPC names, overhead prompts, nameplates — and any other line the player
+  // is meant to READ (portal names, dimension-gate marks) — queue here during
+  // the world pass and draw AFTER the veils and fades: text never drowns
+  // under a crown, a roof, or the sight veil's dark. The trade is honesty:
+  // each label is gated on the SAME concealment the player's eyes get
+  // (labelRevealAt), so an anchor the world still hides leaks not one glyph
+  // (the text half of the canopy's ambush rule).
+  private labels: { key: object; probe: Vec2; x: number; y: number; text: string; color: string; font: string; stroke: boolean }[] = [];
 
   /** Queue one line above an actor's head for the post-fade text pass.
    *  dy stacks lines: 8 hugs the scalp (names), 22 rides above the bars. */
   private queueLabel(a: Actor, text: string, color: string, dy: number,
     opts?: { font?: string; stroke?: boolean }): void {
-    this.labels.push({ a, text: this.resolveText(text), color, dy, font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
+    this.queueLabelAt(a, a.pos, a.pos.x, a.pos.y - a.radius - dy, text, color, opts);
+  }
+
+  /** Queue a WORLD-anchored line (portal names, gate marks, future ground
+   *  text): drawn at (x, y), revealed by whatever covers `probe` — one gate
+   *  for every word on the field. `key` dedups the per-frame reveal lookup
+   *  (an anchor usually wears 1-2 lines). */
+  private queueLabelAt(key: object, probe: Vec2, x: number, y: number, text: string,
+    color: string, opts?: { font?: string; stroke?: boolean }): void {
+    this.labels.push({ key, probe, x, y, text: this.resolveText(text), color,
+      font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
   }
 
   /** THE TIER VEIL (engine/tiers.ts, 'covered' exposure): while the local
@@ -2411,38 +2423,43 @@ export class Renderer {
       reveal = Math.min(reveal, clamp((L.hideAt - fade) / (L.hideAt - L.showAt), 0, 1));
       if (reveal <= 0) return 0;
     }
-    // THE ROOM VEIL: a confined hero's world ends at the room — text beyond
-    // it hides with the ground it stands on (same contract as the fades).
-    const veiled = this.roomVeil.veiledAt(pos);
-    if (veiled > 0) reveal = Math.min(reveal, 1 - veiled);
-    // THE SIGHT VEIL: same contract — text never leaks what an occlusion
-    // shadow conceals (tested against the very occluders the sheet drew).
-    const shadowed = this.sightVeil.occludedAt(pos);
-    if (shadowed > 0) reveal = Math.min(reveal, 1 - shadowed);
+    // THE POSITIONAL VEILS (room veil + sight veil) gate text through THE
+    // LEGIBILITY KNEE (VIS_CFG.labels.veilLegible/veilConceal), not a linear
+    // dimmer. A wall's half-shadow is a STANDING state — unlike the canopy/
+    // roof fades above, which animate open in under a second — and a line
+    // held at 50% alpha over the dark is the worst of both worlds: illegible
+    // AND leaking. Below the knee the words draw WHOLE (the stroke keeps
+    // bright ink readable over any dark); past it not one glyph survives
+    // (the no-leak contract unchanged); between them one narrow smoothstep
+    // band so a walking eye fades the line, never strobes it.
+    const conceal = Math.max(this.roomVeil.veiledAt(pos), this.sightVeil.occludedAt(pos));
+    if (conceal > 0) {
+      const t = clamp((conceal - L.veilLegible) / (L.veilConceal - L.veilLegible), 0, 1);
+      reveal = Math.min(reveal, 1 - t * t * (3 - 2 * t));
+    }
     return reveal;
   }
 
   private drawLabels(world: World): void {
     if (!this.labels.length) return;
     const { ctx } = this;
-    // One reveal per anchor per frame — an actor usually wears 1-2 lines.
-    const reveals = new Map<Actor, number>();
+    // One reveal per anchor per frame — an anchor usually wears 1-2 lines.
+    const reveals = new Map<object, number>();
     ctx.save();
     ctx.textAlign = 'center';
     for (const L of this.labels) {
-      let r = reveals.get(L.a);
-      if (r === undefined) { r = this.labelRevealAt(world, L.a.pos); reveals.set(L.a, r); }
+      let r = reveals.get(L.key);
+      if (r === undefined) { r = this.labelRevealAt(world, L.probe); reveals.set(L.key, r); }
       if (r <= 0.02) continue;
       ctx.globalAlpha = r;
       ctx.font = L.font;
-      const x = L.a.pos.x, y = L.a.pos.y - L.a.radius - L.dy;
       if (L.stroke) {
         ctx.strokeStyle = 'rgba(0,0,0,0.85)';
         ctx.lineWidth = 3;
-        ctx.strokeText(L.text, x, y);
+        ctx.strokeText(L.text, L.x, L.y);
       }
       ctx.fillStyle = L.color;
-      ctx.fillText(L.text, x, y);
+      ctx.fillText(L.text, L.x, L.y);
     }
     ctx.restore();
     this.labels.length = 0;
@@ -2928,15 +2945,13 @@ export class Renderer {
       ctx.arc(e.pos.x, e.pos.y, e.radius * 0.62 * pulse, t, t + Math.PI * 1.4);
       ctx.stroke();
       ctx.globalAlpha = 1;
-      // Destination label
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 12px Verdana';
-      ctx.fillStyle = accent;
-      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-      ctx.lineWidth = 3;
+      // Destination label — queued into the post-veil label pass: a name the
+      // player is entitled to read draws WHOLE above the sight veil (never a
+      // half-dimmed ghost), and one the world still conceals stays concealed
+      // to the last glyph (labelRevealAt, the legibility knee).
       const label = locked ? `${e.label} — sealed` : e.label;
-      ctx.strokeText(label, e.pos.x, e.pos.y + e.radius + 20);
-      ctx.fillText(label, e.pos.x, e.pos.y + e.radius + 20);
+      this.queueLabelAt(e, e.pos, e.pos.x, e.pos.y + e.radius + 20, label, accent,
+        { font: 'bold 12px Verdana' });
       if (locked) {
         // A simple padlock glyph over the disc.
         ctx.strokeStyle = '#9a9aa2';
@@ -2963,13 +2978,8 @@ export class Renderer {
     // under the arch — so the ascendant gate reads as "an exit to the
     // Firmament", never anonymous decor. The doodad painter keeps the art.
     for (const g of world.dimGatesView()) {
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 12px Verdana';
-      ctx.fillStyle = g.accent;
-      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-      ctx.lineWidth = 3;
-      ctx.strokeText(g.label, g.pos.x, g.pos.y + g.radius + 20);
-      ctx.fillText(g.label, g.pos.x, g.pos.y + g.radius + 20);
+      this.queueLabelAt(g, g.pos, g.pos.x, g.pos.y + g.radius + 20, g.label, g.accent,
+        { font: 'bold 12px Verdana' });
     }
     // Dwell progress rings — every "linger to act" family (exit portals, cave
     // mouths, realm gates, doors, toll keepers, descent platforms, …) feeds ONE

@@ -104,15 +104,11 @@
 
     /* Character-sheet statistics tabs — the book-tabs shape at stat grain
        (six tabs share a 320px panel). `.bare` = nothing to show under the
-       current mode; `.n` = the invested-row badge ("where my build lives"). */
+       current mode; invested counts live in each tab's hover title (bare
+       faces — the clutter-free doctrine). */
     .stat-tabs { gap: 2px; margin-bottom: 6px; }
     .stat-tabs button { font-size: 10px; padding: 4px 1px; min-width: 0; white-space: nowrap; }
     .stat-tabs button.bare:not(.active) { opacity: 0.5; }
-    .stat-tabs button .n {
-      color: #8a8678; font-size: 9px; margin-left: 3px;
-      background: #2a2a3e; border-radius: 6px; padding: 0 3px;
-    }
-    .stat-tabs button.active .n { color: var(--gold); }
 
     /* TUTORIAL GLOW — the class a live lesson pins on its NEXT CLICK (today:
        the Skill Gems tab while Mireille's gift waits unlearned; the BUILD

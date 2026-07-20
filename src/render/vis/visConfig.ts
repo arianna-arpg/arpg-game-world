@@ -113,6 +113,17 @@ export const VIS_CFG = {
   labels: {
     hideAt: 0.55,
     showAt: 0.35,
+    /** THE LEGIBILITY KNEE — the POSITIONAL veils (sight veil, room veil)
+     *  gate text as a STEP with one narrow fade band, never a linear dimmer:
+     *  anchor concealment below `veilLegible` draws the line WHOLE (the
+     *  black stroke keeps bright ink readable over any dark), past
+     *  `veilConceal` not a glyph survives (the no-leak contract), and the
+     *  smoothstep between them keeps a walking eye from strobing the words.
+     *  The canopy/roof fades above keep their smooth ramps — those animate
+     *  open in under a second, while a wall's half-shadow STANDS, and text
+     *  held at half alpha is illegible clutter that still leaks. */
+    veilLegible: 0.45,
+    veilConceal: 0.7,
   },
 
   /** GROUND DROPS (renderer drawDrops) — gem/gear diamond half-sizes, glow

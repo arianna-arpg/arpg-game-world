@@ -26,6 +26,9 @@
 // ---------------------------------------------------------------------------
 
 import { collectMarkers } from './mapMarkers';
+import { BIOMES } from './biomes';
+import { boundaryGateOf } from '../data/boundaryGates';
+import { meldOf } from '../data/melds';
 import type { World } from '../engine/world';
 
 /** Where a row sits in the box: prominent events first, then modifiers, then the
@@ -98,6 +101,31 @@ export function zoneInfoFor(world: World, zoneId: string): ZoneInfoEntry[] {
   // CONDITIONS — ambient biome / time / weather / territory, charted ground only
   // (reuses the HUD's composition so the box and the HUD never diverge).
   if (charted) out.push(...world.sim.zoneConditions(zone, world.time));
+
+  // THE THRESHOLD BREATH — an enclave's gate line and a biome's edge-meld
+  // words, moved here OFF the field's portal labels (the clutter-free field
+  // law): in the field the stamped meld band and the gate's arch glyph are
+  // the telegraph — the terrain speaks for itself — while the chart carries
+  // the words. Derived from the zone's own biome row, so any future enclave
+  // or meld surfaces here with zero edits. Charted ground only, like every
+  // condition (the fog keeps its secrets).
+  if (charted && zone.biome) {
+    const bi = BIOMES[zone.biome];
+    const gate = bi?.enclave ? boundaryGateOf(bi.enclave.gate) : undefined;
+    if (gate?.label) {
+      out.push({
+        kind: 'condition', icon: '∩', color: gate.accent, label: gate.label,
+        detail: 'an enclave — every crossing passes its gate', z: -1,
+      });
+    }
+    const meld = bi?.meld ? meldOf(bi.meld) : undefined;
+    if (meld?.label) {
+      out.push({
+        kind: 'condition', icon: '❧', label: meld.label,
+        detail: 'its edges dress the neighboring approaches', z: -1,
+      });
+    }
+  }
 
   // Group order (events → modifiers → conditions), highest z first within a group.
   return out.sort((a, b) =>

@@ -130,7 +130,6 @@ import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } fr
 import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
-import { meldOf } from '../data/melds';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
 import { dockDestCoords, nearRiverSeat, riverSeat, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
 import { EAGER_WORLD_WEB } from '../config';
@@ -7902,13 +7901,13 @@ export class World {
     // frontier already knows what looms behind it. Streams to clients like
     // the label; the layout pipeline reads the same ids off def.exitBoundaries.
     const boundary = this.boundaryGateFor(e);
-    const bgLabel = boundaryGateOf(boundary)?.label;
     // BIOME MELD: does a DIFFERENT biome past this edge declare an edge
     // dressing? Same prediction seam; the layout pipeline grows the band off
-    // def.exitMelds, and the label wears the meld's breath so the terrain
-    // and the words agree ("the green presses close").
+    // def.exitMelds. THE WORDS stay off the field label (the clutter-free
+    // field law): the stamped band and the gate's arch glyph ARE the field's
+    // telegraph — terrain speaks for itself — and the breath lives on the
+    // chart instead (world/zoneInfo.ts threshold rows).
     const meld = this.meldFor(e);
-    const meldLabel = meldOf(meld)?.label;
     if (e.to === '?') {
       // A frontier: the zone behind it doesn't exist yet. PREVIEW its danger by
       // sampling the difficulty field at the SAME coordinate the mint will use
@@ -7919,7 +7918,7 @@ export class World {
       const lv = this.levelFor(projectCoord(this.zone.map, e.side));
       return {
         pos, radius: PORTAL_RADIUS, to: '?', defIndex,
-        label: `Uncharted · Lv ${lv}${bgLabel ? ` · ${bgLabel}` : ''}${meldLabel ? ` · ${meldLabel}` : ''}`,
+        label: `Uncharted · Lv ${lv}`,
         ...(boundary ? { boundary } : {}),
         ...(meld ? { meld } : {}),
       };
@@ -7939,14 +7938,16 @@ export class World {
     if (dest.veiled) {
       return {
         pos, radius: PORTAL_RADIUS, to: e.to, defIndex,
-        label: `Uncharted · Lv ${dest.level}${bgLabel ? ` · ${bgLabel}` : ''}${meldLabel ? ` · ${meldLabel}` : ''}`,
+        label: `Uncharted · Lv ${dest.level}`,
         ...(boundary ? { boundary } : {}),
         ...(meld ? { meld } : {}),
       };
     }
     const sub = dest.objective.kind === 'waves' && dest.objective.waves === 0
       ? 'endless' : `Lv ${dest.level}`;
-    const label = `${this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`}${bgLabel ? ` · ${bgLabel}` : ''}${meldLabel ? ` · ${meldLabel}` : ''}`;
+    // THE BARE-NAME LAW, portal edition: the field label is the destination's
+    // NAME and its danger read, nothing else — no meld breath, no gate prose.
+    const label = this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`;
     return {
       pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label,
       ...(boundary ? { boundary } : {}),

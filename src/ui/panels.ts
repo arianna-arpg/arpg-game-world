@@ -294,6 +294,20 @@ export class UI {
    *  old node) and misfire the click-to-pin guard. This INSTANCE flag survives the
    *  swap so refreshMap can skip it mid-gesture. */
   private mapDragging = false;
+  /** THE PRESS GUARD — panels currently holding a live pointer press (armed in
+   *  the ctor on every 0.5s-refreshed panel). The auto-refresh must never
+   *  rebuild a panel BETWEEN a pointer's press and its release: the click dies
+   *  with the torn-out button (mousedown lands on the old node, mouseup on its
+   *  replacement — no click fires anywhere), which read as "tabs need two
+   *  clicks". While a press is in flight the refresh defers; the next 0.5s
+   *  tick catches up. Self-healing like the pan fabric: ANY pointer release,
+   *  cancel, or window blur clears the hold, so a drag released off-panel can
+   *  never wedge the refresh shut. */
+  private pressHeld = new Set<HTMLElement>();
+  /** Last markup written per live-refreshed panel (setPanelHtml): an UNCHANGED
+   *  rebuild is skipped whole — no teardown under the cursor, no tooltip
+   *  anchor torn mid-read, no listener re-wiring, no GC churn, twice a second. */
+  private panelHtml = new WeakMap<HTMLElement, string>();
   /** Passive-tree zoom/pan — same model as the map, so the tree stays legible AND
    *  extensible: the fitted box is the node bounds (auto-fits any layout), and you
    *  zoom/drag to navigate as more nodes are added. Persist across opens. */
@@ -394,6 +408,38 @@ export class UI {
       },
     });
     this.installGearDnd();
+
+    // THE PRESS GUARD (see the field): armed on every panel the 0.5s
+    // auto-refresh rebuilds, capture-phase so no child handler can hide a
+    // press from it. Release listens on the WINDOW — pointer captures retarget
+    // events but every path still runs through here — so the hold always ends.
+    for (const el of [this.charSheet, this.worldMap]) {
+      el.addEventListener('pointerdown', () => { this.pressHeld.add(el); }, { capture: true });
+    }
+    const releasePress = (): void => { this.pressHeld.clear(); };
+    window.addEventListener('pointerup', releasePress, { capture: true });
+    window.addEventListener('pointercancel', releasePress, { capture: true });
+    window.addEventListener('blur', releasePress);
+    // A press released OUTSIDE the window delivers no pointerup at all — the
+    // pan fabric's chord-release rule, applied here: any button-less move
+    // inside the window proves the press ended, so the hold self-heals on
+    // the first re-entry twitch instead of wedging the refresh shut.
+    window.addEventListener('pointermove', (e) => {
+      if (this.pressHeld.size && e.buttons === 0) releasePress();
+    }, { capture: true });
+  }
+
+  /** Write a live-refreshed panel's markup only when it CHANGED since the
+   *  last write. The 0.5s auto-refresh rebuilds from live data every tick,
+   *  but most ticks nothing moved — skipping the identical write keeps the
+   *  standing DOM (hover states, tooltip anchors, wired listeners) instead
+   *  of tearing it out under the cursor. Returns whether the DOM was
+   *  (re)built, so callers re-wire handlers exactly when new nodes exist. */
+  private setPanelHtml(el: HTMLElement, html: string): boolean {
+    if (this.panelHtml.get(el) === html && el.childElementCount > 0) return false;
+    this.panelHtml.set(el, html);
+    el.innerHTML = html;
+    return true;
   }
 
   // --- THE GEAR LANES (ui/dnd.ts) --------------------------------------------
@@ -1136,6 +1182,11 @@ export class UI {
 
   refreshCharSheet(): void {
     if (!this.charSheetOpen) return;
+    // A press is in flight inside this panel — rebuilding now would swallow
+    // its click (THE PRESS GUARD). Clicks fire after release, so every
+    // deliberate refresh (tab flips, toggles) still lands; the timer catches
+    // up within half a second.
+    if (this.pressHeld.has(this.charSheet)) return;
     const world = this.getWorld();
     const p = world.player;
     const m = world.meta;
@@ -1178,10 +1229,13 @@ export class UI {
     const tabModels = sheetTabs(id => p.sheet.get(id), this.charShowAll);
     if (!tabModels.some(t => t.cat === this.charTab)) this.charTab = tabModels[0]?.cat ?? 'offense';
     const active = tabModels.find(t => t.cat === this.charTab);
+    // Tab faces stay BARE — the invested count rides the hover title instead
+    // of an always-on badge (the clutter-free doctrine: the label is the
+    // read, the number is detail for whoever asks).
     const tabStrip = `<div class="book-tabs stat-tabs">${tabModels.map(t =>
       `<button class="book-tab${t.cat === this.charTab ? ' active' : ''}${t.rows.length === 0 ? ' bare' : ''}"
-        data-stattab="${t.cat}" title="${esc(t.def.blurb)}">${t.def.label}${
-        t.invested > 0 ? `<span class="n">${t.invested}</span>` : ''}</button>`).join('')}</div>`;
+        data-stattab="${t.cat}" title="${esc(t.def.blurb)}${t.invested > 0
+          ? ` — ${t.invested} invested stat${t.invested === 1 ? '' : 's'} live here` : ''}">${t.def.label}</button>`).join('')}</div>`;
     const vitalRows = SHEET_VITALS.map(statRowHtml).join('');
     const statRows = active ? active.rows.map(statRowHtml).join('') : '';
     const tabNotes = !active ? ''
@@ -1214,7 +1268,7 @@ export class UI {
     // Same-scroll restore (the golden rule — a re-render must never yank
     // the sheet mid-read; gear swaps and tab flips land where you were).
     const prevScroll = this.charSheet.scrollTop;
-    this.charSheet.innerHTML = `
+    const html = `
       <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
         margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
         <h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:help;border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
@@ -1239,6 +1293,8 @@ export class UI {
         Tag-scaled stats (damage, speed) shown without skill context — each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
+    // Unchanged since the last write? Keep the standing DOM (and its wiring).
+    if (!this.setPanelHtml(this.charSheet, html)) return;
     this.charSheet.scrollTop = prevScroll;
     this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-reacquire]').forEach(btn =>
       btn.addEventListener('click', () => {
@@ -3594,8 +3650,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // The 0.5s auto-refresh must NOT tear out the SVG mid drag-pan (it would kill
     // the gesture and misfire the pin guard) — skip the rebuild while dragging; the
     // selection/box don't change during a pan anyway. Same courtesy for the wash
-    // slider: a rebuild would replace the very element under the pointer.
-    if (this.mapDragging || this.mapWashDragging) return;
+    // slider: a rebuild would replace the very element under the pointer. And the
+    // same courtesy for ANY held press (THE PRESS GUARD) — a rebuild between a
+    // tab's mousedown and mouseup swallows the click ("dimension tabs need two
+    // clicks"); deliberate refreshes fire on click, after release, unharmed.
+    if (this.mapDragging || this.mapWashDragging || this.pressHeld.has(this.worldMap)) return;
     const world = this.getWorld();
     if (this.mapTab === 'quests') { this.renderQuestsTab(world); return; }
     const visited = world.visited;
@@ -3875,7 +3934,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // hit-test over a zone or pop a native tooltip, with zero per-overlay
     // audits (an overlay-authored <title> inside a transparent group is inert
     // markup: no hit target, no tooltip).
-    this.worldMap.innerHTML = `
+    const html = `
       <h2>World Map
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           <span class="map-zoom-grp">
@@ -3892,6 +3951,8 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none"><g pointer-events="none">${ocean}${simUnder}${edges}${stubs}</g>${nodes}<g pointer-events="none">${markers}${simOver}${cards}</g></svg>
         <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
       </div>`;
+    // Unchanged since the last write? Keep the standing SVG + its wiring.
+    if (!this.setPanelHtml(this.worldMap, html)) return;
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
     if (aside) aside.scrollTop = prevAsideScroll;
 
@@ -4004,7 +4065,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // Preserve scroll across the 0.5s auto-refresh (else a scrolled journal snaps to
     // the top twice a second) — same pattern as the map's #map-aside.
     const prevScroll = this.worldMap.querySelector<HTMLElement>('#quest-scroll')?.scrollTop ?? 0;
-    this.worldMap.innerHTML = `
+    const html = `
       <h2>Quest Journal</h2>
       ${this.mapTabsHtml()}
       <div id="quest-scroll" style="overflow-y:auto;max-height:64vh;padding:2px 4px 8px 2px">
@@ -4013,6 +4074,8 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <h3 style="font-size:12px;color:#8a8678;margin:14px 0 6px 0">Completed (${log.completed.length})</h3>
         ${doneHtml}
       </div>`;
+    // Same skip-if-unchanged discipline as the map view (setPanelHtml).
+    if (!this.setPanelHtml(this.worldMap, html)) return;
     const qs = this.worldMap.querySelector<HTMLElement>('#quest-scroll');
     if (qs) qs.scrollTop = prevScroll;
     this.wireMapTabs();
