@@ -21,7 +21,8 @@ import { compileBlendField, type BlendSampler } from '../../engine/blend';
 import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
-import { regionKind } from '../../world/regions';
+import { regionKind, type RegionVisualSpec } from '../../world/regions';
+import { linkSpanOf, tierElevOf, tierFloorAt } from '../../engine/tiers';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
 import { wallEyeSockets } from './wallEyes';
 import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVisualDef } from './painters';
@@ -873,15 +874,31 @@ export class GroundRenderer {
               if (vis.foliage) this.bakeFoliage(ctx, x, y, cell, ox, oy, vis.fill, vDark, vLit);
               if (vis.eyes) this.bakeWallEyes(ctx, x, y, cell, ox, oy, vis.fill, vDark, vLit);
             }
+            // THE STEPPED WAY (RegionVisualSpec.steps): a FLOOR texture —
+            // it bakes on walkable link rows too (ramps and spans are
+            // floors), unlike the wall dressings above.
+            if (vis.steps) this.bakeSteps(ctx, x, y, cell, ox, oy, gx, gy, idAt, vis, id);
           }
           // BOUNDARY EDGE (RegionVisualSpec.edge): a bright rim on every side
           // facing walkable ground, so a wall in its floor's own tones still
           // reads as a wall (the flesh biome taught us). Bakes even for
-          // animated fills — the rim itself is static.
+          // animated fills — the rim itself is static. CLIFF rows swap in
+          // tier honesty: the rim paints only toward LOWER floors, and any
+          // side meeting a floor of this row's own story (a ramp, a span,
+          // the same bench) sits FLUSH — the way up reads hewn from the
+          // rock, never pasted over it.
           if (vis.edge && !def?.walkable) {
             const ew = vis.edge.width ?? 4;
-            const open = (nx: number, ny: number): boolean =>
-              !!regionKind(idAt(nx, ny))?.walkable;
+            const myTier = def?.tier ?? 0;
+            const open = vis.cliff && myTier >= 1
+              ? (nx: number, ny: number): boolean => {
+                const nid = idAt(nx, ny);
+                if (tierFloorAt(nid, myTier)) return false;   // flush: same story
+                const el = tierElevOf(nid);
+                return el !== null && el < myTier;            // rim toward lower floors only
+              }
+              : (nx: number, ny: number): boolean =>
+                !!regionKind(idAt(nx, ny))?.walkable;
             ctx.fillStyle = vis.edge.color;
             ctx.globalAlpha = 0.9;
             if (open(gx, gy - 1)) ctx.fillRect(x, y, cell + 0.6, ew);
@@ -956,6 +973,158 @@ export class GroundRenderer {
         if (openW) ao(x - aoDepth, y, aoDepth, cell, x, 0, x - aoDepth, 0);
       }
     }
+    // THE CLIFF READ (RegionVisualSpec.cliff, third pass): elevated tier
+    // rows cast an ELEVATION shadow onto every lower floor they rim — the
+    // height read from below, scaled by the drop (a summit bench looms
+    // deeper than a butte lip), the south throw longest (the bevel pass's
+    // own light), plus a crevice seam hugging the boundary's foot. A pass
+    // of its own so no later fill overpaints the throw. Opt-in per row —
+    // covered layers (bored galleries, ducts) keep their faces unbroken.
+    for (let gy = r0; gy <= r1; gy++) {
+      for (let gx = c0; gx <= c1; gx++) {
+        const id = idAt(gx, gy);
+        const def = regionKind(id);
+        const vis = def?.visual;
+        if (!vis?.cliff || !def || def.walkable || def.tierLink || (def.tier ?? 0) < 1) continue;
+        const myTier = def.tier!;
+        const x = gx * cell - ox, y = gy * cell - oy;
+        const dropAt = (nx: number, ny: number): number => {
+          const nid = idAt(nx, ny);
+          if (tierFloorAt(nid, myTier)) return 0;          // flush: same story
+          const el = tierElevOf(nid);
+          if (el === null || el >= myTier) return 0;       // wall or higher: no throw
+          return myTier - el;
+        };
+        const cast = (drop: number, south: boolean,
+          fx: number, fy: number, fw: number, fh: number,
+          lx0: number, ly0: number, lx1: number, ly1: number): void => {
+          const a = Math.min(0.34, (0.14 + 0.06 * drop) * (south ? 1.3 : 1));
+          const g = ctx.createLinearGradient(lx0, ly0, lx1, ly1);
+          g.addColorStop(0, withAlpha('#000000', a));
+          g.addColorStop(1, withAlpha('#000000', 0));
+          ctx.fillStyle = g;
+          ctx.fillRect(fx, fy, fw, fh);
+        };
+        const reachOf = (drop: number, south: boolean): number =>
+          cell * (0.45 + 0.22 * Math.min(3, drop)) * (south ? 1.5 : 1);
+        let d = dropAt(gx, gy + 1);
+        if (d) { const rr = reachOf(d, true); cast(d, true, x, y + cell, cell, rr, 0, y + cell, 0, y + cell + rr); }
+        d = dropAt(gx, gy - 1);
+        if (d) { const rr = reachOf(d, false); cast(d, false, x, y - rr, cell, rr, 0, y, 0, y - rr); }
+        d = dropAt(gx + 1, gy);
+        if (d) { const rr = reachOf(d, false); cast(d, false, x + cell, y, rr, cell, x + cell, 0, x + cell + rr, 0); }
+        d = dropAt(gx - 1, gy);
+        if (d) { const rr = reachOf(d, false); cast(d, false, x - rr, y, rr, cell, x, 0, x - rr, 0); }
+        ctx.fillStyle = withAlpha('#000000', 0.3);
+        if (dropAt(gx, gy + 1)) ctx.fillRect(x, y + cell, cell + 0.6, 1.4);
+        if (dropAt(gx, gy - 1)) ctx.fillRect(x, y - 1.4, cell + 0.6, 1.4);
+        if (dropAt(gx + 1, gy)) ctx.fillRect(x + cell, y, 1.4, cell + 0.6);
+        if (dropAt(gx - 1, gy)) ctx.fillRect(x - 1.4, y, 1.4, cell + 0.6);
+      }
+    }
+  }
+
+  /** THE STEPPED WAY (RegionVisualSpec.steps): one link/deck cell's carved
+   *  treads, clipped to the cell. The ascent direction derives from the
+   *  NEIGHBORING floors' tier elevations (uphill = toward higher stories);
+   *  a flat run (a span deck) falls back to its own long axis, which turns
+   *  the same flag into bridge PLANKS. Tread lines key on WORLD-projected
+   *  distance so the stair climbs unbroken across cells and chunk seams;
+   *  flank rails shade the sides the way is cut through (higher rock) and
+   *  lip the sides it hangs over (open drops). Colors ramp from the row's
+   *  own fill — the stair is the ground's stone, worked. */
+  private bakeSteps(ctx: CanvasRenderingContext2D, x: number, y: number,
+    cell: number, ox: number, oy: number, gxi: number, gyi: number,
+    idAt: (gx: number, gy: number) => string, vis: RegionVisualSpec, id: string): void {
+    const spacing = typeof vis.steps === 'object' && vis.steps.spacing ? vis.steps.spacing : 10;
+    const riser = mix(vis.fill, '#000000', 0.42);
+    const treadLit = mix(vis.fill, '#ffffff', 0.3);
+    const rail = mix(vis.fill, '#000000', 0.52);
+    const rk = regionKind(id);
+    const myEl = rk?.tierLink
+      ? (linkSpanOf(rk)[0] + linkSpanOf(rk)[1]) / 2
+      : (tierElevOf(id) ?? 0);
+    // ASCENT GRADIENT over two neighbor rings: floors above pull, floors
+    // below push; walls and the way's own run say nothing.
+    let vx = 0, vy = 0;
+    for (let r = 1; r <= 2; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const nid = idAt(gxi + dx, gyi + dy);
+          if (nid === id) continue;
+          const el = tierElevOf(nid);
+          if (el === null) continue;
+          const dl = Math.hypot(dx, dy) || 1;
+          const w = (el - myEl) / r;
+          vx += (dx / dl) * w; vy += (dy / dl) * w;
+        }
+      }
+    }
+    let ux: number, uy: number; // the tread NORMAL (points uphill)
+    const vlen = Math.hypot(vx, vy);
+    if (vlen > 0.12) { ux = vx / vlen; uy = vy / vlen; }
+    else {
+      // FLAT WAY: principal axis of the same-kind run, folded to a
+      // half-plane so opposite arms reinforce — treads lie ACROSS it.
+      let ax = 0, ay = 0;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (!dx && !dy) continue;
+          if (idAt(gxi + dx, gyi + dy) !== id) continue;
+          const dl = Math.hypot(dx, dy);
+          let sx = dx / dl, sy = dy / dl;
+          if (sx < 0 || (sx === 0 && sy < 0)) { sx = -sx; sy = -sy; }
+          ax += sx; ay += sy;
+        }
+      }
+      const al = Math.hypot(ax, ay);
+      if (al > 0.01) { ux = ax / al; uy = ay / al; } else { ux = 1; uy = 0; }
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, cell + 0.6, cell + 0.6);
+    ctx.clip();
+    // Tread pairs at world-aligned intervals along the ascent: a shadowed
+    // riser lip with a lit tread edge just uphill of it.
+    const wcx = ox + x + cell / 2, wcy = oy + y + cell / 2;
+    const c0 = wcx * ux + wcy * uy;
+    const half = cell * 1.5;
+    const pxp = -uy, pyp = ux;
+    const i0 = Math.floor((c0 - half) / spacing), i1 = Math.ceil((c0 + half) / spacing);
+    for (let i = i0; i <= i1; i++) {
+      const t = i * spacing + (hash01(i, 7, this.seed + 173) - 0.5) * spacing * 0.22;
+      const px = (x + cell / 2) + (t - c0) * ux, py = (y + cell / 2) + (t - c0) * uy;
+      ctx.strokeStyle = withAlpha(riser, 0.5);
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(px - pxp * half, py - pyp * half);
+      ctx.lineTo(px + pxp * half, py + pyp * half);
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha(treadLit, 0.42);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(px + ux * 1.7 - pxp * half, py + uy * 1.7 - pyp * half);
+      ctx.lineTo(px + ux * 1.7 + pxp * half, py + uy * 1.7 + pyp * half);
+      ctx.stroke();
+    }
+    // FLANK RAILS: the cut's walls and the causeway's lips.
+    const sides: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [sdx, sdy] of sides) {
+      const nid = idAt(gxi + sdx, gyi + sdy);
+      if (nid === id) continue;
+      const el = tierElevOf(nid);
+      const throughRock = el === null || el > myEl + 0.4; // the rock the stair cuts through
+      const overDrop = el !== null && el < myEl - 0.6;    // open air beside the way
+      if (!throughRock && !overDrop) continue;
+      ctx.fillStyle = throughRock ? withAlpha(rail, 0.5) : withAlpha(riser, 0.6);
+      const rw = throughRock ? 3.2 : 2.2;
+      if (sdx === 1) ctx.fillRect(x + cell - rw, y, rw, cell + 0.6);
+      else if (sdx === -1) ctx.fillRect(x, y, rw, cell + 0.6);
+      else if (sdy === 1) ctx.fillRect(x, y + cell - rw, cell + 0.6, rw);
+      else ctx.fillRect(x, y, cell + 0.6, rw);
+    }
+    ctx.restore();
   }
 
   /** One rampart cell's dressed-stone coursework, clipped to the cell. Blocks

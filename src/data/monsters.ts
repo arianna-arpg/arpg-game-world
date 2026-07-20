@@ -772,10 +772,12 @@ export interface WildlifeRow {
   near?: string;
   /** Floated at the heroes when this row spawns — the "something stirs" beat. */
   announce?: string;
-  /** THE TIER FABRIC: this fauna lives on the SECOND layer (scamps atop the
-   *  buttes, gutter life in the drains). Zones without a tier layer skip the
-   *  row — the same graceful no-op as `near` without its doodad. */
-  tier?: 1;
+  /** THE TIER FABRIC: this fauna lives on an ELEVATED layer (scamps atop
+   *  the buttes, gutter life in the drains, roosts on a summit bench).
+   *  Zones without a tier layer skip the row — the same graceful no-op as
+   *  `near` without its doodad; a story the zone doesn't stack clamps to
+   *  the highest one it does. */
+  tier?: number;
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls

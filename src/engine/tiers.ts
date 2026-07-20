@@ -1,32 +1,38 @@
 // ---------------------------------------------------------------------------
-// THE TIER FABRIC — a second walkable LAYER inside the same zone.
+// THE TIER FABRIC — extra walkable LAYERS inside the same zone.
 //
 // True verticality without a second zone: the region map itself declares the
-// upper (or under) layer — `RegionKind.tier: 1` marks a row as FLOOR on the
-// second tier (a butte top is wall to the valley and ground to the summit;
-// a sewer duct under a tenement is wall to the street and tunnel below it),
-// `walkable` keeps meaning the tier-0 truth (a row carrying BOTH is a bridge:
-// the valley walks under while the deck walks over — one cell, two floors),
-// and `tierLink` rows (ramps, culvert wells) are the CROSSINGS — walkable on
-// both tiers, flipping a body's tier when it steps off toward ground only
-// the other tier owns.
+// upper (or under) layers — `RegionKind.tier: k` marks a row as FLOOR on the
+// k-th story (a butte top is wall to the valley and ground to the summit; a
+// sewer duct under a tenement is wall to the street and tunnel below it; a
+// switchback terrace is wall to every story beneath it), `walkable` keeps
+// meaning the tier-0 truth (a row carrying BOTH is a bridge: the valley
+// walks under while the deck walks over — one cell, two floors), and
+// `tierLink` rows (ramps, culvert wells, the stepped switchbacks) are the
+// CROSSINGS — floor on both tiers of their SPAN (linkSpanOf), flipping a
+// body's tier when it steps off toward ground only the other end owns.
 //
 // Everything derives from the live region map — no second grid to build,
 // dirty-track, or persist: the TIER VIEW below is a stateless adapter over
-// GridWalkField whose walkability predicate reads tier flags, so carves
-// (hollows, corridors) self-heal on both layers by construction.
+// GridWalkField whose walkability predicate reads tier flags (one view per
+// story), so carves (hollows, corridors) self-heal on every layer by
+// construction.
 //
 // THE LAW (enforced at the one mover contract + the hit gates in world.ts):
 //   · movement — a body confines against ITS tier's floor; walking never
 //     drops off a rim (the rim is a wall to feet), but a SHOVE past a rim is
-//     a FALL: the body lands on tier 0 where the valley stands (the bowling
-//     lane's new toy — knock them off the butte).
+//     a FALL: the body lands on the highest floor standing beneath it (the
+//     bowling lane's toy — knock them off the butte, or down one terrace of
+//     the mountain at a time).
 //   · combat — hostility, projectiles and ground zones are SAME-TIER ONLY
-//     (a deck duel and a valley duel share a screen, never a fight); the
-//     zone's exposure decides what the RENDERER shows ('open' = both layers
-//     visible — buttes; 'covered' = the active layer only — sewers).
-//   · AI — monsters spawn per tier (ZoneTiers.packSplit) and stay on their
-//     tier (crossing links is the player's craft this pass — documented).
+//     (a deck duel and a valley duel share a screen, never a fight) unless
+//     the zone declares RIM DUELS; flights sail over any floor at or below
+//     their own story. The zone's exposure decides what the RENDERER shows
+//     ('open' = every layer visible — buttes, summits; 'covered' = the
+//     active layer only — sewers).
+//   · AI — monsters spawn per tier (ZoneTiers.packSplit dealt across the
+//     levels) and stay on their tier (crossing links is the player's craft;
+//     the chase ledger walks pursuers through stairs their quarry took).
 //
 // Docs: docs/engine/tiers.md · Probe: balance/probe_tiers.ts
 // ---------------------------------------------------------------------------
@@ -34,7 +40,7 @@
 import { vec, type Vec2 } from '../core/math';
 import type { ZoneDef, ZoneTiers } from '../data/zones';
 import type { GridWalkField } from '../world/gridWalk';
-import { regionKind } from '../world/regions';
+import { regionKind, type RegionKind } from '../world/regions';
 import {
   ensureGrid, layoutParam, registerLayout, scatterDecoration,
   type GenCtx,
@@ -42,6 +48,11 @@ import {
 import { carveMassifs } from './massif';
 
 export type { ZoneTiers };
+
+/** The highest story any body can stand — the terrace region family
+ *  (world/regions.ts peak_terrace_k / peak_ramp_k) registers exactly this
+ *  many rows, and recipes clamp their level rolls to it. */
+export const MAX_TIER = 6;
 
 // --- CONFIG ------------------------------------------------------------------
 
@@ -60,20 +71,87 @@ export const TIER_CFG = {
   ductHalfW: 32,
   /** Fraction of a tiered zone's packs seeded on tier 1 (ZoneTiers override). */
   packSplit: 0.4,
+  /** switchback: THE SUMMIT ASCENT recipe's dials (every one a layoutParam). */
+  switchback: {
+    /** Terrace stories rolled per summit (clamped to MAX_TIER and to what
+     *  the arena honestly fits — a bench too thin to fight on never ships). */
+    levels: [3, 5] as const,
+    /** Terrace band width, [inner, outer] (px): the foot benches run broad,
+     *  the high benches tighten toward the crown. */
+    bandW: [150, 230] as const,
+    /** Summit plateau radius band (px). */
+    peakR: [180, 250] as const,
+    /** Stepped-way half width (px). */
+    rampHalfW: 32,
+    /** Clearance every portal keeps from the outermost rim (px) — the
+     *  valley skirt stays contiguous by budget, never by hope. */
+    portalMargin: 300,
+    /** Rim wobble amplitude band (in cells) — terraces breathe, never trace
+     *  compass circles. */
+    wobble: [0.6, 1.4] as const,
+    /** Switchback bearing swing between consecutive stairs (radians): climb,
+     *  round the bench most of the way, find the next stair. */
+    swing: [2.0, 3.1] as const,
+    /** Elevated-pack share for summit zones (ZoneTiers.packSplit default). */
+    packSplit: 0.5,
+  },
 } as const;
 
 // --- THE TIER PREDICATES -------------------------------------------------------
 
-/** Is this region floor for tier-1 bodies? (Links are floor on BOTH.) */
-export function tierFloorOf(kindId: string | undefined): boolean {
-  const rk = kindId ? regionKind(kindId) : undefined;
-  return !!rk && (rk.tier === 1 || !!rk.tierLink);
+/** A crossing's SPAN — the two tiers a link joins, lowest first. Explicit
+ *  via RegionKind.linkTiers; derived otherwise: a walkable link touches the
+ *  ground floor ([0, tier]), an elevated one joins the story below
+ *  ([tier-1, tier]) — the classic ramps and wells need no new field. */
+export function linkSpanOf(rk: RegionKind): [number, number] {
+  if (rk.linkTiers) return rk.linkTiers;
+  const hi = Math.max(1, rk.tier ?? 1);
+  return [rk.walkable ? 0 : hi - 1, hi];
 }
 
-/** Is this region a crossing between the tiers? */
+/** Is this region floor for a body standing on tier `t`? (t=0 is the
+ *  walkable truth; links are floor on BOTH tiers of their span.) */
+export function tierFloorAt(kindId: string | undefined, t: number): boolean {
+  const rk = kindId ? regionKind(kindId) : undefined;
+  if (!rk) return false;
+  if (rk.tierLink) {
+    const [a, b] = linkSpanOf(rk);
+    if (t === a || t === b) return true;
+  }
+  return t <= 0 ? !!rk.walkable : rk.tier === t;
+}
+
+/** Is this region floor on ANY elevated story? (Links count.) The spawn
+ *  seats, the rim march and the span gate ask only that the layer exists. */
+export function tierFloorOf(kindId: string | undefined): boolean {
+  const rk = kindId ? regionKind(kindId) : undefined;
+  return !!rk && ((rk.tier ?? 0) >= 1 || !!rk.tierLink);
+}
+
+/** The ELEVATION a region's floor sits at — for flights and for the ground
+ *  baker's ascent gradients: 0 = plain ground, k = a tier-k floor (links
+ *  answer their span's top), null = a true wall (floor for no one). */
+export function tierElevOf(kindId: string | undefined): number | null {
+  const rk = kindId ? regionKind(kindId) : undefined;
+  if (!rk) return null;
+  if (rk.tierLink) return linkSpanOf(rk)[1];
+  if ((rk.tier ?? 0) >= 1) return rk.tier as number;
+  return rk.walkable ? 0 : null;
+}
+
+/** Is this region a crossing between tiers? */
 export function tierLinkOf(kindId: string | undefined): boolean {
   const rk = kindId ? regionKind(kindId) : undefined;
   return !!rk && !!rk.tierLink;
+}
+
+/** THE LADDER TOGGLE's flip: entering a link carries a body to the OTHER
+ *  end of the link's span (culverts: 0↔1; a high stair: k-1↔k). */
+export function linkFlipTier(kindId: string | undefined, tier: number): number {
+  const rk = kindId ? regionKind(kindId) : undefined;
+  if (!rk?.tierLink) return tier;
+  const [a, b] = linkSpanOf(rk);
+  return tier === b ? a : b;
 }
 
 /** The narrow face of GridWalkField the mover contract consults — the tier
@@ -93,12 +171,12 @@ export interface RegionWalk {
   cellSize?: number;
 }
 
-/** A stateless tier-1 view over the zone's live grid: walkable where the
- *  region map says tier floor, everything else read-through. Carves and
- *  repaints self-heal on both layers because nothing here is cached. */
-export function makeTierView(grid: RegionWalk): WalkView {
+/** A stateless per-story view over the zone's live grid: walkable where the
+ *  region map says tier-`tier` floor, everything else read-through. Carves
+ *  and repaints self-heal on every layer because nothing here is cached. */
+export function makeTierView(grid: RegionWalk, tier = 1): WalkView {
   const cs: number = grid.cell ?? grid.cellSize ?? 30;
-  const walkAt = (x: number, y: number): boolean => tierFloorOf(grid.regionAt?.(x, y));
+  const walkAt = (x: number, y: number): boolean => tierFloorAt(grid.regionAt?.(x, y), tier);
   return {
     isWalkable: walkAt,
     regionAt: (x, y) => grid.regionAt?.(x, y) ?? 'ground',
@@ -117,20 +195,22 @@ export function makeTierView(grid: RegionWalk): WalkView {
 }
 
 /** TIER CROSSING (the link law), resolved at the mover: a body standing on a
- *  link may step toward ground only the OTHER tier owns — flip it. Pure read:
- *  returns the tier the move should be judged on. */
+ *  link may step toward ground only the OTHER end of the link's span owns —
+ *  flip it. Pure read: returns the tier the move should be judged on. */
 export function resolveTierCrossing(
   grid: RegionWalk | null, tier: number, from: Vec2, toward: Vec2,
 ): number {
   if (!grid?.regionAt) return tier;
-  if (!tierLinkOf(grid.regionAt(from.x, from.y))) return tier;
+  const fromRk = regionKind(grid.regionAt(from.x, from.y) ?? '');
+  if (!fromRk?.tierLink) return tier;
   const destK = grid.regionAt(toward.x, toward.y);
   const rk = destK ? regionKind(destK) : undefined;
   if (!rk || rk.tierLink) return tier;             // link-to-link: keep
-  const destTier1 = rk.tier === 1;
-  const destTier0 = !!rk.walkable;
-  if (tier === 0 && destTier1 && !destTier0) return 1;
-  if (tier === 1 && destTier0 && !destTier1) return 0;
+  const [a, b] = linkSpanOf(fromRk);
+  const destA = tierFloorAt(destK, a);
+  const destB = tierFloorAt(destK, b);
+  if (tier === a && destB && !destA) return b;
+  if (tier === b && destA && !destB) return a;
   return tier;
 }
 
@@ -148,6 +228,7 @@ export interface TierKitRow { kind: string; count: [number, number]; radius?: [n
 export function layTierKit(
   ctx: GenCtx, grid: GridWalkField, rows: TierKitRow[],
   cellFilter: (kind: string | undefined) => boolean,
+  tierOf?: (kind: string | undefined) => number,
 ): void {
   const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
   const cells: Vec2[] = [];
@@ -167,7 +248,11 @@ export function layTierKit(
       ctx.doodads.push({
         pos: vec(c.x + ctx.rng.range(-cs * 0.3, cs * 0.3), c.y + ctx.rng.range(-cs * 0.3, cs * 0.3)),
         radius: ctx.rng.range(r[0], r[1]), kind: row.kind,
-        rot: ctx.rng.range(0, Math.PI * 2), tier: 1,
+        rot: ctx.rng.range(0, Math.PI * 2),
+        // Furniture belongs to its STORY (clampPos gates collision per tier;
+        // covered zones filter draw lists) — a multi-story kit reads the
+        // seat's own region for the stamp; classic callers stay literal 1.
+        tier: tierOf ? tierOf(grid.regionAt?.(c.x, c.y)) : 1,
       });
     }
   }
@@ -247,6 +332,202 @@ function needlesLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 
 registerLayout('needles', needlesLayout);
+
+// --- 'switchback' — THE SUMMIT ASCENT RECIPE --------------------------------------
+// The mountain's crescendo on the N-story tier fabric: concentric terrace
+// rings — full cones standing mid-zone, or half-cones set against one arena
+// edge — climbing to a peak plateau, every rim cut by ONE stepped way swung
+// a switchback's walk around the face from the last. The ascent is thereby
+// DELIBERATE: climb, round the bench, find the next stair, climb again,
+// summit. Open exposure + rim duels: the mountain is one long conversation
+// of arrows traded across the rims, and a shove settles a duel one story
+// down at a time (the generalized rim fall). Region rows are the
+// peak_terrace_k / peak_ramp_k family (world/regions.ts); every dial is a
+// layoutParam; wobbled rims keep the cones honest country, never compasses.
+
+function switchbackLayout(ctx: GenCtx, def: ZoneDef): void {
+  const grid = ensureGrid(ctx);
+  const cs: number = (grid as unknown as { cell?: number }).cell ?? 30;
+  const SB = TIER_CFG.switchback;
+  const levelBand = layoutParam<readonly [number, number]>(def, 'peakLevels', SB.levels);
+  const arcMode = String(layoutParam<string>(def, 'peakArc', 'auto'));
+  const bandW = layoutParam<readonly [number, number]>(def, 'peakBandW', SB.bandW);
+  const peakRBand = layoutParam<readonly [number, number]>(def, 'peakRadius', SB.peakR);
+  // Portal clearance SCALES with the arena — a QA pocket or a cave-scale
+  // mint keeps a real lane without demanding a frontier zone's acreage.
+  const margin = Math.min(
+    layoutParam<number>(def, 'peakPortalMargin', SB.portalMargin),
+    Math.min(ctx.arena.w, ctx.arena.h) * 0.14,
+  );
+  const rampHalfW = layoutParam<number>(def, 'peakRampHalfW', SB.rampHalfW);
+  const swingBand = layoutParam<readonly [number, number]>(def, 'peakSwing', SB.swing);
+
+  let levels = Math.max(1, Math.min(MAX_TIER, ctx.rng.int(levelBand[0], levelBand[1])));
+  let arc: 'full' | 'half' =
+    arcMode === 'auto' ? (ctx.rng.chance(0.5) ? 'full' : 'half')
+      : arcMode === 'half' ? 'half' : 'full';
+
+  // THE SEAT: score candidate centers by the radius they can honestly
+  // afford — every portal keeps `margin` clearance from the outermost rim,
+  // and half-cones keep a shoulder lane along their own edge — so the
+  // valley skirt stays ONE country by BUDGET, never by carve-through
+  // rescue. Full cones also try the quadrant points (a portal-crowded
+  // arena still finds a pocket); if the rolled arc truly can't stand
+  // here, the other face is tried before giving up.
+  const ports = [ctx.entry, ...ctx.exits];
+  const lane = cs * 11, inset = cs * 1.5;
+  const candsFor = (a: 'full' | 'half'): { c: Vec2; n?: Vec2; cap: number }[] => {
+    if (a === 'full') {
+      const quad = (fx: number, fy: number): { c: Vec2; cap: number } => {
+        const c = vec(ctx.arena.w * fx, ctx.arena.h * fy);
+        return { c, cap: Math.min(c.x, c.y, ctx.arena.w - c.x, ctx.arena.h - c.y) - cs * 4 };
+      };
+      return [
+        { c: vec(ctx.arena.w / 2, ctx.arena.h / 2), cap: Math.min(ctx.arena.w, ctx.arena.h) / 2 - cs * 11 },
+        quad(0.32, 0.32), quad(0.68, 0.32), quad(0.32, 0.68), quad(0.68, 0.68),
+      ];
+    }
+    return [
+      { c: vec(ctx.arena.w / 2, inset), n: vec(0, 1), cap: Math.min(ctx.arena.w / 2 - lane, ctx.arena.h - lane) },
+      { c: vec(ctx.arena.w / 2, ctx.arena.h - inset), n: vec(0, -1), cap: Math.min(ctx.arena.w / 2 - lane, ctx.arena.h - lane) },
+      { c: vec(inset, ctx.arena.h / 2), n: vec(1, 0), cap: Math.min(ctx.arena.h / 2 - lane, ctx.arena.w - lane) },
+      { c: vec(ctx.arena.w - inset, ctx.arena.h / 2), n: vec(-1, 0), cap: Math.min(ctx.arena.h / 2 - lane, ctx.arena.w - lane) },
+    ];
+  };
+  const score = (cands: { c: Vec2; n?: Vec2; cap: number }[]): { seat: { c: Vec2; n?: Vec2; cap: number }; maxR: number } => {
+    let seat = cands[0], maxR = -Infinity;
+    for (const cand of cands) {
+      let d = cand.cap;
+      for (const p of ports) d = Math.min(d, Math.hypot(p.x - cand.c.x, p.y - cand.c.y) - margin);
+      if (d > maxR) { maxR = d; seat = cand; }
+    }
+    return { seat, maxR };
+  };
+  let { seat, maxR } = score(candsFor(arc));
+  if (maxR < cs * 6) {
+    const other: 'full' | 'half' = arc === 'full' ? 'half' : 'full';
+    const alt = score(candsFor(other));
+    if (alt.maxR > maxR) { arc = other; seat = alt.seat; maxR = alt.maxR; }
+  }
+
+  // FIT: crown + bands must sit inside maxR — slim the bands toward the
+  // floor first, then shed stories. minBand keeps every bench wide enough
+  // to fight on AND keeps consecutive stairs radially disjoint.
+  const minBand = cs * 5;
+  let peakR = ctx.rng.range(peakRBand[0], peakRBand[1]);
+  let outer: number[] | null = null;
+  while (!outer) {
+    const ws: number[] = [];
+    for (let k = 1; k <= levels - 1; k++) {
+      const f = levels <= 2 ? 1 : (k - 1) / (levels - 2); // foot → just under the crown
+      ws.push(bandW[1] + (bandW[0] - bandW[1]) * f);
+    }
+    const sum = ws.reduce((a, b) => a + b, 0);
+    const room = maxR - peakR;
+    const scale = sum > 0 ? Math.min(1, room / sum) : 1;
+    if (room >= 0 && (sum === 0 || scale * Math.min(...ws) >= minBand)) {
+      const o: number[] = new Array(levels + 1).fill(0);
+      o[levels] = peakR;
+      for (let k = levels - 1; k >= 1; k--) o[k] = o[k + 1] + ws[k - 1] * scale;
+      outer = o;
+      break;
+    }
+    if (levels > 1) { levels--; continue; }
+    peakR = Math.min(peakR, maxR);
+    if (!(peakR >= cs * 6)) {
+      // ATTEMPT-HONEST: no mountain fits this arena — declare nothing.
+      def.tiers = undefined;
+      scatterDecoration(ctx, def);
+      return;
+    }
+    outer = [0, peakR];
+  }
+
+  // THE RINGS: per-cell radial assignment under a slow angular wobble —
+  // the same wobble the stairs sample, so a stair always spans ITS rim.
+  const amp = cs * ctx.rng.range(SB.wobble[0], SB.wobble[1]);
+  const w1 = ctx.rng.range(0, Math.PI * 2), w2 = ctx.rng.range(0, Math.PI * 2), w3 = ctx.rng.range(0, Math.PI * 2);
+  const wob = (th: number): number =>
+    amp * (Math.sin(th * 3 + w1) * 0.55 + Math.sin(th * 7 + w2) * 0.3 + Math.sin(th * 13 + w3) * 0.15);
+  const c = seat.c, clipN = seat.n ?? null;
+  const tierAtR = (rr: number): number => {
+    for (let k = levels; k >= 1; k--) if (rr < outer![k]) return k;
+    return 0;
+  };
+  const R = outer[1];
+  const cols = Math.floor(ctx.arena.w / cs), rows = Math.floor(ctx.arena.h / cs);
+  const gx0 = Math.max(1, Math.floor((c.x - R - amp - cs) / cs));
+  const gx1 = Math.min(cols - 2, Math.ceil((c.x + R + amp + cs) / cs));
+  const gy0 = Math.max(1, Math.floor((c.y - R - amp - cs) / cs));
+  const gy1 = Math.min(rows - 2, Math.ceil((c.y + R + amp + cs) / cs));
+  for (let gy = gy0; gy <= gy1; gy++) {
+    for (let gx = gx0; gx <= gx1; gx++) {
+      const x = gx * cs + cs / 2, y = gy * cs + cs / 2;
+      const dx = x - c.x, dy = y - c.y;
+      if (clipN && dx * clipN.x + dy * clipN.y < -cs * 0.5) continue; // behind the half-cone's diameter
+      const t = tierAtR(Math.hypot(dx, dy) - wob(Math.atan2(dy, dx)));
+      if (t >= 1) grid.fillRegion(x - cs * 0.45, y - cs * 0.45, x + cs * 0.45, y + cs * 0.45, `peak_terrace_${t}`);
+    }
+  }
+
+  // THE STAIRS: one stepped way per rim, each swung a switchback's walk
+  // around the face from the last (half-cones bounce inside their open
+  // face). Radial overshoot on both ends lands every stair on its own two
+  // floors regardless of wobble — the crossing law does the rest.
+  const nAng = clipN ? Math.atan2(clipN.y, clipN.x) : 0;
+  const halfLim = Math.PI / 2 - 0.42;
+  const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  let th = clipN ? nAng + ctx.rng.range(-halfLim * 0.8, halfLim * 0.8) : ctx.rng.range(0, Math.PI * 2);
+  let sign = ctx.rng.chance(0.5) ? 1 : -1;
+  for (let k = 1; k <= levels; k++) {
+    if (k > 1) {
+      let next = th + sign * ctx.rng.range(swingBand[0], swingBand[1]);
+      if (clipN && Math.abs(wrap(next - nAng)) > halfLim) {
+        sign = -sign;
+        next = th + sign * ctx.rng.range(swingBand[0], swingBand[1]);
+        if (Math.abs(wrap(next - nAng)) > halfLim) next = nAng + Math.sign(wrap(next - nAng)) * halfLim * 0.85;
+      }
+      th = next;
+    }
+    const rim = outer[k] + wob(th);
+    const rOut = rim + cs * 2.4;
+    const rIn = Math.max(cs * 1.5, rim - cs * 2.4);
+    paintStrip(grid, vec(c.x + Math.cos(th) * rOut, c.y + Math.sin(th) * rOut),
+      vec(c.x + Math.cos(th) * rIn, c.y + Math.sin(th) * rIn), rampHalfW, `peak_ramp_${k}`);
+  }
+
+  for (const e of ctx.exits) {
+    if (!grid.reachable(ctx.entry, e)) grid.carveCorridor(ctx.entry.x, ctx.entry.y, e.x, e.y, 34);
+  }
+
+  def.tiers = {
+    kind: 'over', exposure: 'open',
+    label: levels > 1 ? 'the terraces' : 'the plateau',
+    levels,
+    packSplit: layoutParam(def, 'tierPackSplit', SB.packSplit),
+    rimDuels: layoutParam(def, 'rimDuels', true),
+  };
+
+  // Every bench grows its OWN furniture (stamped with its story), and THE
+  // CROWN keeps the reward the valley can see and must earn.
+  const top = `peak_terrace_${levels}`;
+  const tierOfKind = (k: string | undefined): number => Math.max(1, (k ? regionKind(k)?.tier ?? 1 : 1));
+  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'tierKit', [
+    { kind: 'rock', count: [4, 8], radius: [12, 22] },
+    { kind: 'scree', count: [3, 6], radius: [16, 26] },
+    { kind: 'brush', count: [1, 3], radius: [12, 18] },
+    { kind: 'cairn', count: [0, 2], radius: [10, 14] },
+  ]), k => !!k && k.startsWith('peak_terrace_') && k !== top, tierOfKind);
+  layTierKit(ctx, grid, layoutParam<TierKitRow[]>(def, 'peakKit', [
+    { kind: 'cairn', count: [1, 2], radius: [11, 15] },
+    { kind: 'standing_stone', count: [1, 3], radius: [12, 20] },
+    { kind: 'spelunker_pack', count: [1, 1], radius: [10, 12] },
+    { kind: 'rock', count: [1, 3], radius: [12, 20] },
+  ]), k => k === top, tierOfKind);
+  scatterDecoration(ctx, def);
+}
+
+registerLayout('switchback', switchbackLayout);
 
 /** Paint a straight strip of region `kindId` between two points (inclusive),
  *  optionally gated per-cell on the CURRENT kind. */

@@ -128,6 +128,22 @@ export interface RegionVisualSpec {
    *  hole. `fill` becomes the no-understory fallback tint only; the `edge`
    *  rim still bakes — a cloud lip around every gap. */
   window?: boolean;
+  /** THE STEPPED WAY (tier-link rows): the cell bakes carved stair TREADS —
+   *  world-aligned riser/tread lines laid perpendicular to the ascent (the
+   *  baker derives the uphill direction from the neighboring floors' tier
+   *  elevations; a flat span falls back to its own long axis, which turns
+   *  the same flag into bridge PLANKS), plus shaded flank rails where the
+   *  way is cut through higher rock. Colors ramp from `fill` — the stair is
+   *  the ground's own stone, worked. `spacing` in world units (default 10). */
+  steps?: boolean | { spacing?: number };
+  /** THE CLIFF READ (elevated tier rows, opt-in): rims facing LOWER floors
+   *  bake an elevation shadow onto the ground below plus a crevice line —
+   *  the height read from the valley — and the boundary `edge` learns tier
+   *  honesty: sides meeting a floor that includes this row's own tier
+   *  (ramps, spans, a same-height bench) sit FLUSH instead of ringing every
+   *  junction. Opt-in because covered layers (bored galleries, ducts) must
+   *  keep their surface faces unbroken — a shadow would leak the secret. */
+  cliff?: boolean;
 }
 
 /** A once-on-enter status (bog poison, tentacle stun). amount scales with zone
@@ -239,15 +255,24 @@ export interface RegionKind {
    *  through but never walk through. */
   blocksSight?: boolean;
   /** THE TIER FABRIC (engine/tiers.ts): this region is FLOOR on the zone's
-   *  SECOND walkable layer. Composes with `walkable` (the tier-0 truth):
-   *  {walkable:false, tier:1} = a butte top / a duct under a building —
-   *  wall to one layer, ground to the other; {walkable:true, tier:1} = a
-   *  bridge deck / a duct under the street — one cell, two floors. */
-  tier?: 1;
-  /** A CROSSING between the tiers (ramps, stairwell wells, culverts):
-   *  walkable on BOTH layers; a body stepping off it toward ground only the
-   *  other tier owns FLIPS its tier (resolveTierCrossing). Implies tier. */
+   *  k-th walkable layer (1 = the classic second layer; higher = the
+   *  switchback terraces stacked toward a summit, up to MAX_TIER stories).
+   *  Composes with `walkable` (the tier-0 truth): {walkable:false, tier:1}
+   *  = a butte top / a duct under a building — wall to one layer, ground to
+   *  the other; {walkable:true, tier:1} = a bridge deck / a duct under the
+   *  street — one cell, two floors. A tier-k row is a TRUE WALL to every
+   *  story below it and open air to every story above. */
+  tier?: number;
+  /** A CROSSING between two tiers (ramps, stairwell wells, culverts):
+   *  floor on BOTH tiers of its span; a body stepping off it toward ground
+   *  only the other end owns FLIPS its tier (resolveTierCrossing). Implies
+   *  tier. The span defaults by derivation — a walkable link touches the
+   *  ground floor ([0, tier]), an elevated one joins the story below
+   *  ([tier-1, tier]) — so only exotic crossings need `linkTiers`. */
   tierLink?: boolean;
+  /** Explicit link span override ([lo, hi]) for crossings whose derivation
+   *  would lie (a future two-story ladder skipping a floor). */
+  linkTiers?: [number, number];
   /** What the SECOND layer looks like where a covered zone reveals it (the
    *  sewer view): drawn live by the tier veil for the local under-player.
    *  Open-exposure rows skip it — their ordinary visual serves both reads. */
@@ -974,18 +999,24 @@ registerRegion({ id: 'sewer_wall', walkable: false, blocks: true, label: 'the se
 // The plateau fill + pale rim carry the height read from below.
 registerRegion({ id: 'butte_top', walkable: false, blocks: true, label: 'the butte top',
   blocksShot: true, blocksSight: true, tier: 1,
-  visual: { fill: '#57503c', alpha: 1, edge: { color: '#a89a72', width: 6 } } });
+  visual: { fill: '#57503c', alpha: 1, cliff: true, edge: { color: '#a89a72', width: 6 } } });
 // BUTTE SPAN: a rope-and-plank deck strung between summits — the valley
 // walks UNDER it, the tops walk OVER it (walkable on both tiers). Shots and
-// sight pass (open air both above and below the planks).
+// sight pass (open air both above and below the planks). The steps bake
+// reads its flat gradient as the long axis — the same flag that carves
+// stairs lays the deck's PLANKS.
 registerRegion({ id: 'butte_span', walkable: true, blocks: false, label: 'the span',
   tier: 1,
-  visual: { fill: '#6a5638', alpha: 0.85, edge: { color: '#8a744e', width: 3 } } });
-// TIER RAMP: the switchback cut up a butte's rim — THE crossing (walkable on
-// both tiers; stepping off it onto ground only one tier owns flips you).
+  visual: { fill: '#6a5638', alpha: 0.85, steps: { spacing: 12 }, edge: { color: '#8a744e', width: 3 } } });
+// TIER RAMP: the stepped way cut up a butte's rim — THE crossing (walkable
+// on both tiers; stepping off it onto ground only one tier owns flips you).
+// STEPS bake the read: carved treads climbing the cut, flank rails where
+// the stair passes through the rock — and the butte's own rim edge sits
+// FLUSH against it (the cliff read's tier honesty), so the way up looks
+// hewn from the table, never pasted on it.
 registerRegion({ id: 'tier_ramp', walkable: true, blocks: false, label: 'the ramp',
   tier: 1, tierLink: true,
-  visual: { fill: '#7a6a48', alpha: 0.9, edge: { color: '#a89a72', width: 3 } } });
+  visual: { fill: '#6d6042', alpha: 1, steps: true } });
 // SEWER DUCT: the drain under the street — the street above keeps its own
 // face (no visual: the cell draws as ordinary ground), the duct below shows
 // only through the tier veil when you're down there.
@@ -1016,11 +1047,38 @@ registerRegion({ id: 'tor_gallery', walkable: false, blocks: true, label: 'the t
   tierVisual: { fill: '#16181c', edge: '#7a828c' } });
 // TOR MOUTH: the cut stair into the hillside — the crossing between the
 // open slope and the gallery (the culvert well's granite twin: walkable
-// both tiers, flips on the ladder toggle).
+// both tiers, flips on the ladder toggle). Steps bake the descent's read.
 registerRegion({ id: 'tor_mouth', walkable: true, blocks: false, label: 'the tor mouth',
   tier: 1, tierLink: true,
-  visual: { fill: '#2e2b24', alpha: 0.95, edge: { color: '#93886d', width: 4 } },
+  visual: { fill: '#2e2b24', alpha: 0.95, steps: true, edge: { color: '#93886d', width: 4 } },
   tierVisual: { fill: '#1c1f24', edge: '#8a8f98' } });
+
+// --- THE SWITCHBACK SUMMITS (engine/tiers.ts 'switchback' recipe) -------------
+// One family, MAX_TIER stories: terrace k is a TRUE WALL to every story
+// below it and FLOOR to whoever stands its bench; ramp k is the stepped way
+// joining story k-1 to story k (k=1 touches the valley and stays walkable;
+// higher stairs are cliff-face to everyone not on their span). The palette
+// climbs from valley granite toward the pale, wind-scoured crown — the
+// ascent reads at a glance from the zone's front door. Registered as a data
+// loop so the family retunes in one place; recipes clamp their level rolls
+// to the rows that exist (MAX_TIER in engine/tiers.ts).
+{
+  const TERRACE_FILL = ['#4c4a3e', '#5a594b', '#6b6c5d', '#7f8274', '#98a094', '#b6c2ba'];
+  const TERRACE_EDGE = ['#8e876a', '#9a9478', '#a8a68a', '#b8baa0', '#ccd2c2', '#e0e8e0'];
+  const RAMP_FILL = ['#5f5c4c', '#6d6c5c', '#7e7f6e', '#939686', '#aab2a4', '#c6d0c8'];
+  for (let k = 1; k <= 6; k++) {
+    registerRegion({
+      id: `peak_terrace_${k}`, walkable: false, blocks: true, label: 'the terrace',
+      blocksShot: true, blocksSight: true, tier: k,
+      visual: { fill: TERRACE_FILL[k - 1], alpha: 1, cliff: true, edge: { color: TERRACE_EDGE[k - 1], width: 5 } },
+    });
+    registerRegion({
+      id: `peak_ramp_${k}`, walkable: k === 1, blocks: k > 1, label: 'the switchback',
+      tier: k, tierLink: true,
+      visual: { fill: RAMP_FILL[k - 1], alpha: 1, steps: true },
+    });
+  }
+}
 
 // --- THE HIGH BASTION (aether_bastion; kinds in data/massifs.ts) -------------
 // BASTION WALL: the Host's citadel curtain — glossy silver coursing under a

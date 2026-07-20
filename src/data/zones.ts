@@ -677,9 +677,16 @@ export interface ZoneTiers {
   /** 'open' = both layers visible at once (buttes); 'covered' = only the
    *  ACTIVE layer draws (sewers, future stacked floors). */
   exposure: 'open' | 'covered';
+  /** How many elevated stories the zone carries (default 1 — the classic
+   *  second layer). The switchback summits stack several: terrace k rows
+   *  are floor for tier-k bodies, and the world builds one walk view per
+   *  story. Never above the registered terrace family (engine MAX_TIER). */
+  levels?: number;
   /** HUD label for tier 1 ("the butte tops", "the drains"). */
   label?: string;
-  /** Fraction of ambient packs seeded on tier 1 (default TIER_CFG.packSplit). */
+  /** Fraction of ambient packs seeded on the elevated stories (default
+   *  TIER_CFG.packSplit; multi-story zones deal the elevated share across
+   *  their levels). */
   packSplit?: number;
   /** RIM DUELS (open exposure): cross-tier hostility is ALLOWED — sight and
    *  the region map mediate instead (butte walls block eyes and arrows, so

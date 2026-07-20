@@ -7064,6 +7064,90 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'bounty', weight: 2 }, { kind: 'beacon', weight: 2 }, { kind: 'spawners', weight: 1 }],
   },
 
+  // THE PINNACLE — the range's LAST ASCENT (the face above the crowns; the
+  // tier fabric's multi-story debut): the whole zone is ONE mountain on the
+  // 'switchback' recipe — concentric terrace benches stacked toward a
+  // summit plateau, every rim cut by a single stepped way swung a
+  // switchback's walk around the face from the last. Climb, round the
+  // bench, find the stair, climb again: the peak is a place you
+  // DELIBERATELY reach, and the crown's cache is visible from the valley
+  // the whole way up. Rim duels referee the climb; a shove settles a duel
+  // one story down at a time. No geo lock on purpose — every range PEAKS;
+  // the crowns below keep the white-vs-bare range identity, and snow
+  // arrives here only when a cold range's own weather brings it.
+  pinnacle: {
+    id: 'pinnacle', biome: 'highland',
+    depthAffinity: { from: 0.8, fadeIn: 0.14 },
+    forceLayout: 'switchback',
+    nameFirst: ['Skyreach', 'Worldcrown', 'Last', 'Highmost', 'Stairhewn', 'Cloudcrown', 'Eagle’s', 'Thunderhead', 'Pilgrim’s', 'Windworn'],
+    nameSecond: ['Pinnacle', 'Peak', 'Ascent', 'Spire', 'Summit', 'Stair', 'Aerie', 'Horn', 'Apex', 'Reach'],
+    theme: {
+      windchill: 0.9,
+      dayLight: 1.25,
+      nightDark: 0.6,
+      pitfall: { kind: 'descend' },
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
+      ground: {
+        scale: 1.7, strength: 0.95, speckles: 0.7,
+        palette: ['#191913', '#26251d', '#343329', '#454436', '#585747'], bias: 0.52, alpha: 0.5,
+      },
+      floor: '#12110c', grid: '#1d1c15', border: '#9a9a84',
+      obstacle: '#4c4a3e', obstacleEdge: '#8e876a', accent: '#d8e6f2',
+      tree: '#24423a', mud: '#3a3828',
+    },
+    sizeW: [2600, 3400], sizeH: [2000, 2700], ellipseChance: 0, sky: 'open',
+    // The valley skirt's furniture only — the benches grow their own kit
+    // (the recipe's tierKit/peakKit rows, every piece stamped to its story).
+    layout: [
+      { kind: 'rocks', count: [4, 7], radius: [18, 40] },
+      { kind: 'scree', count: [3, 5] },
+      { kind: 'conifers', count: [1, 3] },
+      { kind: 'boulder_field', count: [0, 1] },
+      { kind: 'stormglass_shard', count: [0, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'pine_stand' },
+      { kind: 'haven_stone', count: [0, 1] },
+    ],
+    common: [
+      { kind: 'cairn', count: [1, 3] },
+    ],
+    variants: [
+      // The free-standing cone: the full ring stack, seen whole.
+      { name: 'the great cone', layout: [
+        { kind: 'rocks', count: [4, 7], radius: [18, 40] },
+        { kind: 'scree', count: [3, 5] },
+        { kind: 'conifers', count: [1, 2] },
+        { kind: 'stormglass_shard', count: [0, 2] },
+        { kind: 'haven_stone', count: [0, 1] },
+      ], layoutParams: { peakArc: 'full', peakLevels: [4, 5] } },
+      // The shoulder road: a half-mountain set against one edge — the
+      // ascent hugs the face, the skirt wraps the open side.
+      { name: 'the shoulder road', layout: [
+        { kind: 'rocks', count: [5, 8], radius: [18, 42] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'conifers', count: [2, 4] },
+        { kind: 'boulder_field', count: [0, 1] },
+        { kind: 'formation', count: [0, 1], formation: 'pine_stand' },
+        { kind: 'haven_stone', count: [0, 1] },
+      ], layoutParams: { peakArc: 'half', peakLevels: [3, 4] } },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'crag_condor', weight: 3 },
+        { id: 'sarsen_ram', weight: 2 },
+        { id: 'gale_elemental', weight: 2 },
+        { id: 'boulderback', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'beastkin_horncaller', weight: 1.5, presence: { from: 8, fadeIn: 4 } },
+        { id: 'stone_sentinel', weight: 1.5, presence: { from: 10, fadeIn: 5 } },
+        { id: 'troll_mauler', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'beastkin_ritualist', weight: 1, presence: { from: 11, fadeIn: 5 } },
+      ],
+    },
+    caveLayouts: { rooms: 2, plains: 1 },
+    spawnerId: 'rime_stone',
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'beacon', weight: 2 }, { kind: 'bounty', weight: 1.5 }, { kind: 'offering', weight: 1 }],
+  },
+
   // MARSH — fetid wetland (biome 'marsh', → islands layout = boggy islets between
   // sluggish water and mire).
   marsh: {
@@ -9530,6 +9614,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   overpass:       { title: 'The Overpass',      blurb: 'The precarious crossing: broad ledge shelves hanging over the gorge, narrow worn corridors between them, boulders on the roll and a mountainside that sometimes lets go entirely.' },
   snowcrown:      { title: 'The Snowcrown',     blurb: 'A cold range\'s summit — standing snow, walking drifts, auroras and avalanche weather. In the open you are freezing or you are warming; the waystation fires are the road.' },
   stonecrown:     { title: 'The Stonecrown',    blurb: 'A warm range\'s bald summit — wind-bitten fell, krummholz pine and standing stones, the Horned Tribes throned on the roof of their world. No snow, ever; the gale is the tax.' },
+  pinnacle:       { title: 'The Pinnacle',      blurb: 'The range\'s last ascent: one mountain of stacked terrace benches, each rim cut by a single stepped way a switchback\'s walk from the last. The crown\'s cache is visible from the valley — climb, round the bench, find the stair, and mind the rims: up here every shove is a story down.' },
   needles:        { title: 'The Highlands',     blurb: 'Butte country: red tables standing over dry savannah, their summits a second land — ramps cut the rims, rope spans string the tops, and a shove settles arguments the long way down.' },
   marsh:          { title: 'Marsh',             blurb: 'Fetid wetland of boggy islets strung between sluggish water and sucking mire, every step a negotiation with the ground.' },
   flesh:          { title: 'Flesh Warrens',     blurb: 'The flesh country\'s wound-rim: a writhing, pulsing warren — chambers that throb around you, sparse organic clutter, and an aberrant swarm that belongs to the walls.' },

@@ -1,6 +1,8 @@
-// THE TIER FABRIC PROBE — the second walkable layer pinned structurally
-// (engine/tiers.ts): the region rows, the crossing law, both debut carves
-// (needles decks + sewer ducts), deck reachability, and determinism.
+// THE TIER FABRIC PROBE — the walkable layers pinned structurally
+// (engine/tiers.ts): the region rows (including the N-story terrace/ramp
+// families), the crossing law across arbitrary spans, all three carves
+// (needles decks + sewer ducts + the switchback summits), per-story deck
+// reachability, THE ASCENT LAW (entry → summit on foot), and determinism.
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -19,7 +21,10 @@ import { generateLayout, hasLayout, type GeneratedLayout } from '../src/engine/l
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { massKindOf } from '../src/engine/massif';
-import { makeTierView, resolveTierCrossing, tierFloorOf, tierLinkOf } from '../src/engine/tiers';
+import {
+  linkFlipTier, linkSpanOf, makeTierView, MAX_TIER, resolveTierCrossing,
+  tierElevOf, tierFloorAt, tierFloorOf, tierLinkOf,
+} from '../src/engine/tiers';
 import { TILESETS } from '../src/data/tilesets';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
 
@@ -56,6 +61,53 @@ const check = (name: string, ok: boolean, detail = ''): void => {
   check('B4 predicates', tierFloorOf('butte_top') && tierFloorOf('tier_ramp') && tierLinkOf('culvert_well') && !tierFloorOf('ground'));
 }
 
+// --- RIG B′: the N-STORY laws (pure) --------------------------------------------------
+{
+  // The terrace/ramp family stands, story by story.
+  let family = true;
+  for (let k = 1; k <= MAX_TIER; k++) {
+    const t = regionKind(`peak_terrace_${k}`), r = regionKind(`peak_ramp_${k}`);
+    family = family && !!t && !t.walkable && !!t.blocks && t.tier === k && !!t.blocksShot && !!t.blocksSight
+      && !!r && !!r.tierLink && r.tier === k && (k === 1 ? !!r.walkable : !r.walkable && !!r.blocks);
+  }
+  check(`B5 the family stands to MAX_TIER (${MAX_TIER})`, family);
+  // Span derivation: walkable links touch the ground floor; high stairs
+  // join the story below — no new field needed anywhere.
+  const spans = (id: string): string => linkSpanOf(regionKind(id)!).join(':');
+  check('B6 span derivation', spans('tier_ramp') === '0:1' && spans('culvert_well') === '0:1'
+    && spans('peak_ramp_1') === '0:1' && spans('peak_ramp_2') === '1:2' && spans(`peak_ramp_${MAX_TIER}`) === `${MAX_TIER - 1}:${MAX_TIER}`);
+  // The crossing law across a high span.
+  const cell: Record<string, string> = { '0,0': 'peak_ramp_2', '1,0': 'peak_terrace_2', '-1,0': 'peak_terrace_1' };
+  const grid = { regionAt: (x: number, y: number) => cell[`${Math.round(x / 30)},${Math.round(y / 30)}`] ?? 'ground', cell: 30 };
+  check('B7 high stair → upper bench flips 1→2',
+    resolveTierCrossing(grid, 1, vec(0, 0), vec(30, 0)) === 2);
+  check('B8 high stair → lower bench flips 2→1',
+    resolveTierCrossing(grid, 2, vec(0, 0), vec(-30, 0)) === 1);
+  check('B9 the ladder toggle flips to the span\'s other end',
+    linkFlipTier('peak_ramp_2', 2) === 1 && linkFlipTier('peak_ramp_2', 1) === 2
+    && linkFlipTier('culvert_well', 0) === 1 && linkFlipTier('culvert_well', 1) === 0);
+  check('B10 per-story floors', tierFloorAt('peak_terrace_3', 3) && !tierFloorAt('peak_terrace_3', 2)
+    && !tierFloorAt('peak_terrace_3', 0) && tierFloorAt('peak_ramp_3', 2) && tierFloorAt('peak_ramp_3', 3)
+    && !tierFloorAt('peak_ramp_3', 0) && tierFloorAt('tier_ramp', 0) && tierFloorAt('tier_ramp', 1));
+  check('B11 elevations for flights', tierElevOf('ground') === 0 && tierElevOf('wall') === null
+    && tierElevOf('butte_top') === 1 && tierElevOf('peak_terrace_4') === 4 && tierElevOf('peak_ramp_4') === 4);
+}
+
+// --- RIG F: the drawn-read data (steps + cliff flags) ---------------------------------
+{
+  const steps = (id: string): boolean => !!regionKind(id)?.visual?.steps;
+  const cliff = (id: string): boolean => !!regionKind(id)?.visual?.cliff;
+  let rampSteps = true;
+  for (let k = 1; k <= MAX_TIER; k++) rampSteps = rampSteps && steps(`peak_ramp_${k}`);
+  check('F1 every stepped way declares its treads',
+    steps('tier_ramp') && steps('butte_span') && steps('tor_mouth') && rampSteps);
+  let terrCliff = true;
+  for (let k = 1; k <= MAX_TIER; k++) terrCliff = terrCliff && cliff(`peak_terrace_${k}`);
+  check('F2 the open rims declare the cliff read', cliff('butte_top') && terrCliff);
+  check('F3 covered layers stay unbroken (no cliff leak)',
+    !cliff('tor_gallery') && !cliff('sewer_under_wall') && !cliff('sewer_duct'));
+}
+
 // --- Layout harness ------------------------------------------------------------------
 const arena = { w: 3400, h: 2500 };
 const entry = vec(150, arena.h / 2);
@@ -70,44 +122,92 @@ function gen(id: string, layoutType: string, layout: StampSpec[], layoutParams: 
   const out = generateLayout(def, arena, new Rng(seed), entry, exits);
   return { out, def };
 }
-/** Census + deck-reachability over the tier layer: BFS the tier grid from
- *  every LINK cell; every tier-1 floor cell must be reached (no orphan deck). */
-function tierStats(out: GeneratedLayout): { tierCells: number; linkCells: number; orphan: number } | null {
+/** Census + deck-reachability over the tier layers: per STORY, BFS that
+ *  story's floor from every link whose span touches it; every floor cell of
+ *  the story must be reached (no orphan deck, no orphan bench). */
+function tierStats(out: GeneratedLayout, levels = 1): { tierCells: number; linkCells: number; orphan: number } | null {
   const grid = out.walk;
   if (!(grid instanceof GridWalkField)) return null;
   const view = makeTierView(grid);
   const cs = grid.cell;
   const cols = grid.cols, rows = grid.rows;
   const at = (gx: number, gy: number): string => grid.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
-  let tierCells = 0, linkCells = 0;
+  let tierCells = 0, linkCells = 0, orphan = 0;
   const idx = (gx: number, gy: number): number => gy * cols + gx;
-  const seen = new Uint8Array(cols * rows);
-  const q: number[] = [];
   for (let gy = 0; gy < rows; gy++) {
     for (let gx = 0; gx < cols; gx++) {
       const k = at(gx, gy);
       if (tierFloorOf(k)) tierCells++;
-      if (tierLinkOf(k)) { linkCells++; if (!seen[idx(gx, gy)]) { seen[idx(gx, gy)] = 1; q.push(idx(gx, gy)); } }
+      if (tierLinkOf(k)) linkCells++;
     }
   }
-  for (let h = 0; h < q.length; h++) {
-    const c = q[h], cx = c % cols, cy = Math.floor(c / cols);
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-      const nx = cx + dx, ny = cy + dy;
-      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-      const n = idx(nx, ny);
-      if (seen[n] || !tierFloorOf(at(nx, ny))) continue;
-      seen[n] = 1; q.push(n);
+  for (let t = 1; t <= levels; t++) {
+    const seen = new Uint8Array(cols * rows);
+    const q: number[] = [];
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        const k = at(gx, gy);
+        if (!tierLinkOf(k)) continue;
+        const [a, b] = linkSpanOf(regionKind(k)!);
+        if (a !== t && b !== t) continue;
+        const n = idx(gx, gy);
+        if (!seen[n]) { seen[n] = 1; q.push(n); }
+      }
     }
-  }
-  let orphan = 0;
-  for (let gy = 0; gy < rows; gy++) {
-    for (let gx = 0; gx < cols; gx++) {
-      if (tierFloorOf(at(gx, gy)) && !seen[idx(gx, gy)]) orphan++;
+    for (let h = 0; h < q.length; h++) {
+      const c = q[h], cx = c % cols, cy = Math.floor(c / cols);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const n = idx(nx, ny);
+        if (seen[n] || !tierFloorAt(at(nx, ny), t)) continue;
+        seen[n] = 1; q.push(n);
+      }
+    }
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        const k = at(gx, gy);
+        if (tierFloorAt(k, t) && !tierLinkOf(k) && !seen[idx(gx, gy)]) orphan++;
+      }
     }
   }
   void view;
   return { tierCells, linkCells, orphan };
+}
+
+/** THE ASCENT LAW: BFS over (cell, story) states from the valley entry —
+ *  same-story steps on that story's floor, story flips on link cells (the
+ *  crossing law's graph form). True iff the TOP bench is stood upon. */
+function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top: number): boolean {
+  const cs = grid.cell, cols = grid.cols, rows = grid.rows;
+  const at = (gx: number, gy: number): string => grid.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+  const idx = (gx: number, gy: number, t: number): number => (t * rows + gy) * cols + gx;
+  const seen = new Uint8Array(cols * rows * (top + 1));
+  const q: [number, number, number][] = [];
+  const g0x = Math.min(cols - 1, Math.max(0, Math.floor(from.x / cs)));
+  const g0y = Math.min(rows - 1, Math.max(0, Math.floor(from.y / cs)));
+  if (!tierFloorAt(at(g0x, g0y), 0)) return false;
+  seen[idx(g0x, g0y, 0)] = 1; q.push([g0x, g0y, 0]);
+  for (let h = 0; h < q.length; h++) {
+    const [cx, cy, t] = q[h];
+    const kHere = at(cx, cy);
+    const rkHere = regionKind(kHere);
+    if (t === top && rkHere?.tier === top && !rkHere.tierLink) return true;
+    if (rkHere?.tierLink) {
+      const [a, b] = linkSpanOf(rkHere);
+      const other = t === a ? b : t === b ? a : -1;
+      if (other >= 0 && other <= top && !seen[idx(cx, cy, other)]) {
+        seen[idx(cx, cy, other)] = 1; q.push([cx, cy, other]);
+      }
+    }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      if (seen[idx(nx, ny, t)] || !tierFloorAt(at(nx, ny), t)) continue;
+      seen[idx(nx, ny, t)] = 1; q.push([nx, ny, t]);
+    }
+  }
+  return false;
 }
 
 // --- RIG C: the needles (open exposure) ---------------------------------------------
@@ -147,6 +247,59 @@ function tierStats(out: GeneratedLayout): { tierCells: number; linkCells: number
   check('D1 the duct web carves in most warrens', carved >= 4, `${carved}/${tried}`);
   check('D2 no orphan duct anywhere', orphans === 0, `orphans=${orphans}`);
   check('D3 carved zones DECLARE covered/under', declared === carved, `${declared}/${carved}`);
+}
+
+// --- RIG E: the switchback summit (the multi-story debut) ------------------------------
+{
+  const ts = TILESETS.pinnacle;
+  check('E0 pinnacle rides the switchback above the crowns',
+    ts?.biome === 'highland' && ts?.forceLayout === 'switchback' && hasLayout('switchback')
+    && !!ts.depthAffinity && !ts.geoAffinity);
+  const runCase = (name: string, params: Record<string, unknown>, seed: number): void => {
+    const { out, def } = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams, ...params }, seed);
+    const grid = out.walk;
+    if (!(grid instanceof GridWalkField)) { check(`${name}: grid stands`, false); return; }
+    const lv = def.tiers?.levels ?? 0;
+    check(`${name}: the zone declares its stack`,
+      def.tiers?.kind === 'over' && def.tiers?.exposure === 'open' && !!def.tiers?.rimDuels && lv >= 2,
+      `levels=${lv}`);
+    if (lv < 1) return;
+    const cs = grid.cell, cols = grid.cols, rows = grid.rows;
+    const at = (gx: number, gy: number): string => grid.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    const terr = new Array(lv + 1).fill(0), ramps = new Array(lv + 1).fill(0);
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        const k = at(gx, gy);
+        let m = /^peak_terrace_(\d+)$/.exec(k);
+        if (m) { if (+m[1] <= lv) terr[+m[1]]++; continue; }
+        m = /^peak_ramp_(\d+)$/.exec(k);
+        if (m && +m[1] <= lv) ramps[+m[1]]++;
+      }
+    }
+    const all = (arr: number[]): boolean => { for (let t = 1; t <= lv; t++) if (arr[t] <= 0) return false; return true; };
+    check(`${name}: every bench STANDS`, all(terr), JSON.stringify(terr.slice(1)));
+    check(`${name}: every rim is CUT`, all(ramps), JSON.stringify(ramps.slice(1)));
+    const st = tierStats(out, lv);
+    check(`${name}: no orphan bench on any story`, !!st && st.orphan === 0, `orphans=${st?.orphan}`);
+    check(`${name}: THE ASCENT LAW — the peak is reached on foot`, ascentReaches(grid, entry, lv));
+    check(`${name}: the valley skirt carries every exit`, exits.every(e => grid.reachable(entry, e)));
+    // The crown keeps a reward: peakKit furniture stamped to the TOP story.
+    const topKit = out.doodads.filter(d => (d as { tier?: number }).tier === lv);
+    check(`${name}: the crown is DRESSED (story-stamped kit)`, topKit.length >= 1, `top-tier doodads=${topKit.length}`);
+  };
+  runCase('E1 the great cone', { peakArc: 'full', peakLevels: [4, 5] }, 717001);
+  runCase('E2 the shoulder road', { peakArc: 'half', peakLevels: [3, 4] }, 717002);
+  runCase('E3 the rolled face', {}, 717003);
+  // Determinism: same seed, byte-equal furniture AND byte-equal ground.
+  const fpr = (o: GeneratedLayout): string => {
+    const g = o.walk as GridWalkField;
+    let s = o.doodads.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).join('|');
+    for (let gy = 0; gy < g.rows; gy += 2) for (let gx = 0; gx < g.cols; gx += 2) s += g.regionAt(gx * g.cell + 15, gy * g.cell + 15).length;
+    return s;
+  };
+  const a = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams }, 717009);
+  const b = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams }, 717009);
+  check('E4 the summit is byte-deterministic', fpr(a.out) === fpr(b.out));
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

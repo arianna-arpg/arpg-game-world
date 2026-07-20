@@ -81,7 +81,7 @@ import {
   type ResonanceSpec,
 } from './levelgen';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { makeTierView, resolveTierCrossing, tierFloorOf, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { linkFlipTier, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
@@ -2614,9 +2614,11 @@ export class World {
    *  the spawn samplers take the untouched convex path (zero regression). When
    *  present, they consult it so actors stay on walkable ground and AI paths. */
   walk: WalkField | null = null;
-  /** THE TIER FABRIC (engine/tiers.ts): the second layer's stateless walk
-   *  view over the SAME grid (null in flat/convex zones). */
-  private tierView: WalkView | null = null;
+  /** THE TIER FABRIC (engine/tiers.ts): one stateless walk view per elevated
+   *  STORY over the SAME grid (index k = tier k; [0] unused; null in
+   *  flat/convex zones). Multi-story summits carry several; the classic
+   *  butte/duct zones carry exactly one. */
+  private tierViews: WalkView[] | null = null;
   /** THE CHASE-MEMORY LEDGER (the tier chase's second half): recent link
    *  crossings, so a pursuer who picks up the trail AFTER the quarry went
    *  down still learns which stair it took (ring-buffered, age-pruned at
@@ -4091,10 +4093,16 @@ export class World {
     this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
     this.walk = layout.walk ?? null; // a non-convex layout's walkability (else convex)
-    // THE TIER FABRIC (engine/tiers.ts): the second layer's walk view — a
-    // stateless adapter over the SAME grid (tier flags on region rows), so
-    // carves and repaints self-heal on both layers by construction.
-    this.tierView = this.walk ? makeTierView(this.walk) : null;
+    // THE TIER FABRIC (engine/tiers.ts): one walk view per elevated story —
+    // stateless adapters over the SAME grid (tier flags on region rows), so
+    // carves and repaints self-heal on every layer by construction. Reads
+    // `def.tiers` (generateLayout just stamped it), never this.zone (stale
+    // until the assignment below).
+    if (this.walk) {
+      const lv = Math.max(1, def.tiers?.levels ?? 1);
+      this.tierViews = [];
+      for (let t = 1; t <= lv; t++) this.tierViews[t] = makeTierView(this.walk, t);
+    } else this.tierViews = null;
     this.tierCrossings.length = 0; // the chase ledger is zone-local
     this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
     this.structures = layout.structures ?? []; // plan structures (rects/roofs/doors/slots)
@@ -8219,10 +8227,30 @@ export class World {
       // fire, formations, leader-death reactions) all key off these stamps.
       const squadId = this.nextSquadId();
       // THE TIER SPLIT (engine/tiers.ts): a tiered zone seeds a share of its
-      // packs on the second layer — the deck duel and the valley duel are
-      // different packs. Rolled per PACK so squads never straddle a rim.
-      const tierPack = !!def.tiers && this.tierView !== null
-        && Math.random() < (def.tiers.packSplit ?? TIER_CFG.packSplit);
+      // packs on the elevated stories — the deck duel and the valley duel
+      // are different packs. Rolled per PACK so squads never straddle a rim;
+      // multi-story summits deal the elevated share uniformly across their
+      // levels (a roll whose bench refuses falls DOWN the stories). The
+      // BENCH picks the anchor (the wildlife rig's proven sampling): a
+      // valley anchor usually stands beyond any snap radius of the layer,
+      // so an elevated pack rolls its own seat instead of quietly staying
+      // grounded (the old near-`at` snap under-filled every deck).
+      const tierLevels = def.tiers && this.tierViews ? Math.max(1, def.tiers.levels ?? 1) : 0;
+      const tierPack = tierLevels > 0
+        && Math.random() < (def.tiers!.packSplit ?? TIER_CFG.packSplit);
+      let tierAnchor: Vec2 | null = null;
+      let tierAnchorAt = 0;
+      if (tierPack && this.walk) {
+        const first = tierLevels > 1 ? 1 + Math.floor(Math.random() * tierLevels) : 1;
+        for (let t = first; t >= 1 && !tierAnchor; t--) {
+          const view = this.tierViews?.[t];
+          if (!view) continue;
+          for (let s = 0; s < 8; s++) {
+            const q = view.snapToWalkable(vec(rand(200, this.arena.w - 200), rand(200, this.arena.h - 200)));
+            if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), t)) { tierAnchor = vec(q.x, q.y); tierAnchorAt = t; break; }
+          }
+        }
+      }
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(type, def.level, 'enemy');
         // TERRAIN-BOUND (MonsterDef.habitat): the body exists only on its
@@ -8237,9 +8265,11 @@ export class World {
           // blob that clampPos's passes can't escape — a monster BORN embedded
           // pingpongs against the collision resolve forever (cost + nonsense).
           m.pos = this.findFreeSpot(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
-          if (tierPack && this.tierView && this.walk) {
-            const q = this.tierView.snapToWalkable(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)));
-            if (tierFloorOf(this.walk.regionAt?.(q.x, q.y))) { m.pos = vec(q.x, q.y); m.tier = 1; }
+          if (tierAnchor && this.walk && this.tierViews?.[tierAnchorAt]) {
+            const q = this.tierViews[tierAnchorAt]!.snapToWalkable(
+              vec(tierAnchor.x + rand(-90, 90), tierAnchor.y + rand(-90, 90)));
+            if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), tierAnchorAt)) { m.pos = vec(q.x, q.y); m.tier = tierAnchorAt; }
+            else { m.pos = vec(tierAnchor.x, tierAnchor.y); m.tier = tierAnchorAt; }
           }
         }
         this.actors.push(m);
@@ -8406,22 +8436,27 @@ export class World {
       if (Math.random() >= chance) continue;
       const n = randInt(w.count[0], w.count[1]);
       // TIER ROW (WildlifeRow.tier — the tier fabric): fauna that lives on
-      // the SECOND layer (scamps atop the buttes, rats in the drains). A
-      // zone without a tier layer simply skips the row — the same graceful
-      // no-op as `near` without its doodad.
-      if (w.tier === 1 && (!def.tiers || !this.tierView)) continue;
+      // an ELEVATED layer (scamps atop the buttes, rats in the drains,
+      // condor roosts on a summit bench). A zone without a tier layer
+      // simply skips the row — the same graceful no-op as `near` without
+      // its doodad; a row asking for a story the zone doesn't stack clamps
+      // to the highest one it does.
+      const wTier = (w.tier ?? 0) >= 1 && def.tiers && this.tierViews
+        ? Math.min(w.tier ?? 1, Math.max(1, def.tiers.levels ?? 1)) : 0;
+      if ((w.tier ?? 0) >= 1 && wTier === 0) continue;
       // PLACEMENT HINT (row.near): the band spawns on the RIM of a matching
       // doodad — frogs at the water's edge, not the meadow's middle. A zone
       // without one simply skips the row (no pond, no frogs).
       let at = this.farPoint(700);
-      if (w.tier === 1 && this.tierView && this.walk) {
+      if (wTier >= 1 && this.tierViews?.[wTier] && this.walk) {
         // Sample the LAYER for a seat (several tries — a lone random point
         // often lands a valley away from any deck; one miss must not eat
         // the row's whole chance).
+        const view = this.tierViews[wTier]!;
         let seat: Vec2 | null = null;
         for (let s = 0; s < 8 && !seat; s++) {
-          const q = this.tierView.snapToWalkable(vec(rand(200, this.arena.w - 200), rand(200, this.arena.h - 200)));
-          if (tierFloorOf(this.walk.regionAt?.(q.x, q.y))) seat = vec(q.x, q.y);
+          const q = view.snapToWalkable(vec(rand(200, this.arena.w - 200), rand(200, this.arena.h - 200)));
+          if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), wTier)) seat = vec(q.x, q.y);
         }
         if (!seat) continue; // the layer truly has no floor — skip, never strand
         at = seat;
@@ -8440,12 +8475,12 @@ export class World {
         m.squadId = squadId;
         m.squadLeader = k === 0;
         if (!m.habitat) {
-          if (w.tier === 1 && this.tierView && this.walk) {
+          if (wTier >= 1 && this.tierViews?.[wTier] && this.walk) {
             // Tier fauna seats on its OWN floor (the jittered snap keeps the
             // band together without wandering off the deck).
-            const q = this.tierView.snapToWalkable(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)));
-            if (tierFloorOf(this.walk.regionAt?.(q.x, q.y))) { m.pos = vec(q.x, q.y); m.tier = 1; }
-            else { m.pos = vec(at.x, at.y); m.tier = 1; }
+            const q = this.tierViews[wTier]!.snapToWalkable(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)));
+            if (tierFloorAt(this.walk.regionAt?.(q.x, q.y), wTier)) { m.pos = vec(q.x, q.y); m.tier = wTier; }
+            else { m.pos = vec(at.x, at.y); m.tier = wTier; }
           } else {
             m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
           }
@@ -33281,18 +33316,25 @@ export class World {
         // routing pays the shover for it (walkers merely arrested at a rim
         // by their own steering are held, never dropped).
         if (hit === 'void') this.resolveBoundary(a, sc, from, true);
-        // THE RIM FALL (engine/tiers.ts): a tier-1 body SHOVED past its
-        // layer's rim — where the deck's floor ends but the valley below
-        // stands — FALLS: it lands on tier 0 at the overshoot, staggered.
-        // Walking never drops (the rim is a wall to feet); only force does.
-        if (hit === 'wall' && a.tier === 1 && this.walk && this.zone.tiers) {
+        // THE RIM FALL (engine/tiers.ts): an elevated body SHOVED past its
+        // layer's rim — where its floor ends but a LOWER floor stands —
+        // FALLS: it lands on the HIGHEST standing story beneath the
+        // overshoot, staggered. Off a butte that's the valley; off a summit
+        // terrace it's the bench below — the mountain is descended one
+        // shove at a time. Walking never drops (the rim is a wall to feet).
+        if (hit === 'wall' && a.tier >= 1 && this.walk && this.zone.tiers) {
           const rawX = from.x + p.vx * dt, rawY = from.y + p.vy * dt;
-          if (!tierFloorOf(this.walk.regionAt?.(rawX, rawY)) && this.walk.isWalkable(rawX, rawY)) {
-            a.tier = 0;
-            a.pos = this.clampPos(vec(rawX, rawY), a.radius, undefined, { mover: a });
-            a.applyStatus('stun', 0, TIER_CFG.fallStunSec, 'the fall');
-            this.text(vec(a.pos.x, a.pos.y - 20), 'over the edge!', '#c8b8a0', 13);
-            p.vx *= 0.4; p.vy *= 0.4;
+          const kRaw = this.walk.regionAt?.(rawX, rawY);
+          if (!tierFloorAt(kRaw, a.tier)) {
+            let land = -1;
+            for (let t = a.tier - 1; t >= 0; t--) { if (tierFloorAt(kRaw, t)) { land = t; break; } }
+            if (land >= 0) {
+              a.tier = land;
+              a.pos = this.clampPos(vec(rawX, rawY), a.radius, undefined, { mover: a });
+              a.applyStatus('stun', 0, TIER_CFG.fallStunSec, 'the fall');
+              this.text(vec(a.pos.x, a.pos.y - 20), 'over the edge!', '#c8b8a0', 13);
+              p.vx *= 0.4; p.vy *= 0.4;
+            }
           }
         }
         if ((hit === 'wall' || hit === 'void') && !p.collided && p.caster && p.inst && !p.caster.dead) {
@@ -39539,10 +39581,13 @@ export class World {
           const sx = prev.x + sdx * (i / n), sy = prev.y + sdy * (i / n);
           const kId = this.walk.regionAt(sx, sy);
           const k = regionKind(kId);
-          // Tier-1 flights cross deck-height air: a row that is tier FLOOR
-          // (a butte top, a span) is open ground under the arrow, never a
-          // wall — while true earth (a duct's surroundings) still stops it.
-          if (k?.blocksShot && !((p.tier ?? 0) === 1 && tierFloorOf(kId))) {
+          // Elevated flights cross deck-height air: any floor AT OR BELOW
+          // the flight's own story (a butte top, a span, a lower terrace) is
+          // open ground under the arrow, never a wall — while true earth (a
+          // duct's surroundings) and HIGHER stories (the next terrace's
+          // cliff) still stop it. tierElevOf answers null for true walls.
+          const shotElev = tierElevOf(kId);
+          if (k?.blocksShot && !((p.tier ?? 0) >= 1 && shotElev !== null && shotElev <= (p.tier ?? 0))) {
             this.flashes.push({ pos: vec(sx, sy), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
@@ -42035,14 +42080,18 @@ export class World {
     }
     const b1 = clampToBounds(out, radius, this.arena);
     out.x = b1.x; out.y = b1.y;
-    // THE TIER SWAP (engine/tiers.ts): a tier-1 mover confines against ITS
-    // layer's floor — the tier view is scoped over this.walk for exactly the
-    // confine block below (synchronous, never re-entrant: walkResolve/
-    // walkSweep read this.walk, so the swap reaches every sample without
-    // threading a param through four layers). Restored in the finally.
+    // THE TIER SWAP (engine/tiers.ts): an elevated mover confines against
+    // ITS story's floor — that story's view is scoped over this.walk for
+    // exactly the confine block below (synchronous, never re-entrant:
+    // walkResolve/walkSweep read this.walk, so the swap reaches every
+    // sample without threading a param through four layers). Restored in
+    // the finally. A stale tier beyond the zone's stack clamps to the top.
     const moverTier = mvTier;
-    const tierSwap = moverTier === 1 && this.tierView && this.walk ? this.walk : null;
-    if (tierSwap) this.walk = this.tierView as unknown as GridWalkField;
+    let tierSwap: WalkField | null = null;
+    if (moverTier >= 1 && this.tierViews && this.walk) {
+      const view = this.tierViews[Math.min(moverTier, this.tierViews.length - 1)];
+      if (view) { tierSwap = this.walk; this.walk = view as unknown as GridWalkField; }
+    }
     try {
     // NON-CONVEX zones (Phase 2/3): keep the actor on walkable ground, but ASK THE
     // REGION POLICY (not a bare bool) — walls confine, void is enter-then-resolve,
@@ -42096,9 +42145,9 @@ export class World {
     // walks it like floor. Zones without pits pay one empty-list check.
     {
       const pits = this.zonePits();
-      // Tier-1 movers pass over pit mouths (a deck spans the world's floor
-      // features — the rim fall is their only way down).
-      if (pits.length && moverTier !== 1 && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
+      // Elevated movers pass over pit mouths (a deck or bench spans the
+      // world's floor features — the rim fall is their only way down).
+      if (pits.length && moverTier === 0 && !opts?.disp?.ignoreConfine && !opts?.disp?.ignoreFall) {
         const grasp = radius * WALK_CFG.ledgeGrasp;
         const home = this.pitHomeKinds(opts?.mover, pits);
         if (from) {
@@ -42282,9 +42331,10 @@ export class World {
     // culvert IS descending; reaching a well from the duct IS surfacing.
     // Ramps self-correct through the exit rule above either way.
     if (this.zone.tiers && this.walk?.regionAt) {
-      const onLink = tierLinkOf(this.walk.regionAt(a.pos.x, a.pos.y));
+      const linkK = this.walk.regionAt(a.pos.x, a.pos.y);
+      const onLink = tierLinkOf(linkK);
       if (onLink && !a.onTierLink) {
-        a.tier = a.tier === 1 ? 0 : 1;
+        a.tier = linkFlipTier(linkK, a.tier);
         a.aiTierGoal = undefined; // crossed — any chase goal is spent
         // THE PURSUIT STAMP (the tier chase): whoever was hunting THIS body
         // watched it take the stair — hand every engaged pursuer in earshot
