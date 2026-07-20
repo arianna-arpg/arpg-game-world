@@ -72,8 +72,25 @@ export interface CourseSpec {
   id: string;
   /** The biome painted along the corridor (must exist in BIOMES). A biome that
    *  appears in NO field palette exists ONLY along its course — the "a place,
-   *  not patches" lever (the River of Flame idiom). */
+   *  not patches" lever (the River of Flame idiom). A NON-painting course
+   *  (paints: false) still names a registered biome for attribution/wash
+   *  identity, but never writes it into the field. */
   biome: string;
+  /** false = the course does NOT override the biome field: the throughline
+   *  crosses whatever country it crosses (a surface river through tundra is
+   *  tundra-with-a-river), carrying only its mint hints (recipe knobs,
+   *  orientation, continuation, hug). Default true (the flame idiom). */
+  paints?: boolean;
+  /** Registered POLYLINE TRACER id (registerCourseTracer) — the course's
+   *  shape comes from the tracer (terrain-following rivers descend the
+   *  elevation field) instead of the closed-form serpentine. For traced
+   *  specs `length` is the REACH BOUND (the strewn pad + continuation math
+   *  read it), not an exact arc. */
+  tracer?: string;
+  /** Force this LAYOUT RECIPE on zones minted ON the course (the riverland
+   *  carve on whatever local tileset the zone wears) — slots between the
+   *  mint spec and the tileset's own forceLayout pin. */
+  forceLayout?: string;
   /** Where the course springs from. 'gate' = the dimension's minted gate zone
    *  (the one coordinate every client agrees on); 'strewn' = untethered
    *  instances dealt across the chart (see StrewSpec — `strew` required).
@@ -159,6 +176,26 @@ export const COURSE_DEFAULTS = {
 /** Strewn-deal fallbacks (see StrewSpec). */
 export const STREW_DEFAULTS = { jitter: 0.5, salt: 0x57e3 } as const;
 
+/** THE ONE course-field seed salt: world.courseMintFor / dimensionBiomeFor
+ *  and every map-side course reader derive their course seed as
+ *  (fieldSeed ^ COURSE_FIELD_SALT) — one exported constant, so what the
+ *  mints see and what the map draws can never drift apart. */
+export const COURSE_FIELD_SALT = 0xd1a0;
+
+/** A registered POLYLINE TRACER: a course whose shape follows the WORLD
+ *  (terrain-descending rivers) instead of the closed-form serpentine.
+ *  Receives the spec, the resolved anchor, and the course seed; returns the
+ *  polyline (empty = a dormant instance — a spring that rolled dry ground).
+ *  Tracers must be PURE per (spec, anchor, boot-installed world state) —
+ *  the polyline memo assumes it. */
+export type CourseTracer = (spec: CourseSpec, anchor: MapCoord, cseed: number) => MapCoord[];
+
+const COURSE_TRACERS: Record<string, CourseTracer> = {};
+
+export function registerCourseTracer(id: string, fn: CourseTracer): void {
+  COURSE_TRACERS[id] = fn;
+}
+
 /** Integer hash (Rng's family) → deterministic across host / client / reload.
  *  Deliberately duplicated per world-leaf (biomes/dimensions/climate idiom). */
 function hashCell(a: number, b: number, seed: number): number {
@@ -207,6 +244,20 @@ export function strewnCellInstance(spec: CourseSpec, cx: number, cy: number, see
   };
 }
 
+/** The strewn presence coin for one lattice cell (shared by the near- and
+ *  rect-window queries — ONE formula, no drift). */
+function strewnPresent(cx: number, cy: number, s: number, chance: number): boolean {
+  return hash01(cx * 2 + 11, cy * 2 + 7, s) < chance;
+}
+
+/** A strewn spec's full REACH: how far any part of an instance's course can
+ *  lie from its lattice cell (length + sweep + wobble + corridor + jitter). */
+function strewnReach(spec: CourseSpec, span: number): number {
+  const sweep = spec.sweep ?? spec.length * COURSE_DEFAULTS.sweepFrac;
+  return spec.length + sweep + (spec.wobble ?? COURSE_DEFAULTS.wobble)
+    + spec.halfWidth + (spec.feather ?? 0) + ((spec.strew?.jitter ?? STREW_DEFAULTS.jitter) * span);
+}
+
 /** Every strewn instance of `spec` whose course could touch `coord`: the
  *  presence coin per lattice cell over a pad wide enough for the course's
  *  full reach (length + sweep + wobble + corridor). Stable cy→cx order, so
@@ -218,15 +269,35 @@ export function strewnInstancesNear(spec: CourseSpec, coord: MapCoord, seed: num
   const span = Math.max(1, st.span);
   const salt = ((st.salt ?? STREW_DEFAULTS.salt) ^ spec.seedSalt) >>> 0;
   const s = (seed ^ salt) >>> 0;
-  const sweep = spec.sweep ?? spec.length * COURSE_DEFAULTS.sweepFrac;
-  const reach = spec.length + sweep + (spec.wobble ?? COURSE_DEFAULTS.wobble)
-    + spec.halfWidth + (spec.feather ?? 0) + (st.jitter ?? STREW_DEFAULTS.jitter) * span;
-  const pad = Math.max(1, Math.ceil(reach / span));
+  const pad = Math.max(1, Math.ceil(strewnReach(spec, span) / span));
   const c0x = Math.floor(coord.x / span), c0y = Math.floor(coord.y / span);
   const out: CourseInstance[] = [];
   for (let cy = c0y - pad; cy <= c0y + pad; cy++) {
     for (let cx = c0x - pad; cx <= c0x + pad; cx++) {
-      if (hash01(cx * 2 + 11, cy * 2 + 7, s) >= st.chance) continue;
+      if (!strewnPresent(cx, cy, s, st.chance)) continue;
+      out.push(strewnCellInstance(spec, cx, cy, seed));
+    }
+  }
+  return out;
+}
+
+/** Every strewn instance whose course could touch a RECT — the map-draw
+ *  window's query (same coin, same reach math as the near-query). */
+export function strewnInstancesInRect(
+  spec: CourseSpec, min: MapCoord, max: MapCoord, seed: number,
+): CourseInstance[] {
+  const st = spec.strew;
+  if (!st || spec.anchor !== 'strewn') return [];
+  const span = Math.max(1, st.span);
+  const salt = ((st.salt ?? STREW_DEFAULTS.salt) ^ spec.seedSalt) >>> 0;
+  const s = (seed ^ salt) >>> 0;
+  const reach = strewnReach(spec, span);
+  const c0x = Math.floor((min.x - reach) / span), c1x = Math.floor((max.x + reach) / span);
+  const c0y = Math.floor((min.y - reach) / span), c1y = Math.floor((max.y + reach) / span);
+  const out: CourseInstance[] = [];
+  for (let cy = c0y; cy <= c1y; cy++) {
+    for (let cx = c0x; cx <= c1x; cx++) {
+      if (!strewnPresent(cx, cy, s, st.chance)) continue;
       out.push(strewnCellInstance(spec, cx, cy, seed));
     }
   }
@@ -242,6 +313,14 @@ export function coursePolyline(spec: CourseSpec, anchor: MapCoord, seed: number)
   const key = `${spec.id}|${cseed}|${Math.round(anchor.x)}|${Math.round(anchor.y)}`;
   const hit = polyMemo.get(key);
   if (hit) return hit;
+  // A TRACED course asks its registered tracer for the shape (terrain
+  // descent); the serpentine below is the classic closed-form default.
+  if (spec.tracer) {
+    const traced = COURSE_TRACERS[spec.tracer]?.(spec, anchor, cseed) ?? [];
+    if (polyMemo.size >= POLY_MEMO_CAP) polyMemo.clear();
+    polyMemo.set(key, traced);
+    return traced;
+  }
   const step = spec.step ?? COURSE_DEFAULTS.step;
   const wobble = spec.wobble ?? COURSE_DEFAULTS.wobble;
   const waves = spec.waves ?? COURSE_DEFAULTS.waves;
@@ -277,6 +356,10 @@ export interface CourseHit {
   tx: number; ty: number;
   /** The nearest centerline point itself (the hug-pull's aim). */
   qx: number; qy: number;
+  /** The polyline's REAL total arc — a traced course's true length (its
+   *  spec.length is only a reach bound; the serpentine keeps spec.length as
+   *  its declared arc contract for byte-stable continuation math). */
+  total: number;
 }
 
 /** Nearest-point test against one course (segment-exact). Returns null beyond
@@ -304,7 +387,7 @@ export function courseHit(spec: CourseSpec, anchor: MapCoord, coord: MapCoord, s
   if (!best) return null;
   const dist = Math.sqrt(best.d2);
   if (dist > reach) return null;
-  return { spec, dist, t: best.t, tx: best.tx, ty: best.ty, qx: best.qx, qy: best.qy };
+  return { spec, dist, t: best.t, tx: best.tx, ty: best.ty, qx: best.qx, qy: best.qy, total };
 }
 
 /** The composed course override at a coordinate, or null where no course
@@ -317,6 +400,7 @@ export function courseBiomeAt(
   specs: readonly CourseSpec[], anchor: MapCoord, coord: MapCoord, seed: number,
 ): string | null {
   for (const spec of specs) {
+    if (spec.paints === false) continue; // a non-painting course never touches the field
     const hit = courseHit(spec, anchor, coord, seed);
     if (!hit) continue;
     const strength = spec.strength ?? 1;
@@ -341,18 +425,33 @@ function tangentSide(tx: number, ty: number): Dir {
 export function courseMintHints(
   specs: readonly CourseSpec[], anchor: MapCoord, coord: MapCoord, seed: number,
 ): CourseMintHints | null {
+  // Which course serves this coordinate: a PAINTING course must actually
+  // have painted it (hints and heat map never disagree — the feather-band
+  // dither rules), while a NON-painting course serves hints across its hard
+  // corridor (it never touches the map, so no disagreement is possible).
+  let spec: CourseSpec | undefined;
+  let hit: CourseHit | null = null;
   const painted = courseBiomeAt(specs, anchor, coord, seed);
-  if (!painted) return null;
-  const spec = specs.find(s => s.biome === painted);
-  if (!spec) return null;
-  const hit = courseHit(spec, anchor, coord, seed);
-  if (!hit) return null;
+  if (painted) {
+    spec = specs.find(s => s.biome === painted && s.paints !== false);
+    hit = spec ? courseHit(spec, anchor, coord, seed) : null;
+  } else {
+    for (const s of specs) {
+      if (s.paints !== false) continue;
+      const h = courseHit(s, anchor, coord, seed);
+      if (h && h.dist <= s.halfWidth) { spec = s; hit = h; break; }
+    }
+  }
+  if (!spec || !hit) return null;
   const down = tangentSide(hit.tx, hit.ty);
   const up = OPP_DIR[down];
   const minArc = (spec.step ?? COURSE_DEFAULTS.step) * COURSE_DEFAULTS.continueMinFrac;
+  // Continuation reads the REAL arc for traced courses (spec.length is only
+  // their reach bound); the serpentine keeps its declared-length contract.
+  const arcLen = spec.tracer ? hit.total : spec.length;
   const continueSides: Dir[] = [];
-  if (hit.t * spec.length > minArc) continueSides.push(up);
-  if ((1 - hit.t) * spec.length > minArc) continueSides.push(down);
+  if (hit.t * arcLen > minArc) continueSides.push(up);
+  if ((1 - hit.t) * arcLen > minArc) continueSides.push(down);
   const pts = coursePolyline(spec, anchor, seed);
   const end = pts[pts.length - 1];
   const terminus = Math.hypot(coord.x - end.x, coord.y - end.y)
@@ -381,6 +480,9 @@ export function validateCourses(
   for (const d of dims) {
     for (const c of d.courses ?? []) {
       if (!BIOMES[c.biome]) bad.push(`${d.id}/${c.id}: ${c.biome}`);
+      // A traced course whose tracer never registered would silently produce
+      // EMPTY polylines everywhere — a whole river network stillborn.
+      if (c.tracer && !COURSE_TRACERS[c.tracer]) bad.push(`${d.id}/${c.id}: tracer '${c.tracer}'`);
     }
   }
   return bad;

@@ -23,6 +23,7 @@
 import type { ZoneDef } from '../data/zones';
 import { BIOMES, BIOME_FIELD_CFG, OCEAN_BIOME, biomeAt, biomeDepth, fieldNoise, resetFieldPickMemo, type BiomeFieldModifier } from './biomes';
 import { resetCourseMemo } from './courses';
+import { riverPathsInRect } from './relief';
 import { coordDist, type MapCoord } from './coords';
 import { NO_BIAS, type MapLayer, type SpawnBias, type WorldOverlay } from './overlay';
 import { registerZoneInfoSource } from './zoneInfo';
@@ -114,7 +115,22 @@ export class BiomeField implements WorldOverlay {
         }
       }
     }
-    return { under, over: '' };
+    // THE RIVERS (world/relief.ts): drawn as living blue threads OVER the
+    // wash — the same envelope the wash covers (the map's knowledge
+    // philosophy: faint macro truth near charted ground), from the same
+    // foreordained polylines the mints ride. Simplified every other vertex;
+    // the SVG viewport clips what runs past the window.
+    let over = '';
+    for (const pts of riverPathsInRect({ x: minX, y: minY }, { x: maxX, y: maxY }, this.seed)) {
+      if (pts.length < 3) continue;
+      let d = `M ${pts[0].x.toFixed(0)} ${pts[0].y.toFixed(0)}`;
+      for (let i = 1; i < pts.length; i += 2) d += ` L ${pts[i].x.toFixed(0)} ${pts[i].y.toFixed(0)}`;
+      const last = pts[pts.length - 1];
+      d += ` L ${last.x.toFixed(0)} ${last.y.toFixed(0)}`;
+      over += `<path d="${d}" fill="none" stroke="${BIOMES.river?.mapColor ?? '#5b9fd4'}" `
+        + 'stroke-opacity="0.42" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+    return { under, over };
   }
 
   /** KEYED warp (replace-or-push): the ONE way ground turns. An owner re-pushes

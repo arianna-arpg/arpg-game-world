@@ -60,6 +60,7 @@ import { boundaryGateIds } from '../data/boundaryGates';
 import { POCKET_FORMS } from '../data/pocketForms';
 import { setClimateOrigin } from './climate';
 import { installCapitalPole } from './civics';
+import { setReliefSeed } from './relief';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
 import { LevelField, validateLevelField } from './levelField';
@@ -330,6 +331,10 @@ export class WorldSim {
     // resets memos; first sampling happens after construction), and AFTER
     // the origin (the pole is home-relative).
     installCapitalPole(seed);
+    // THE RELIEF SEED (world/relief.ts): the river tracers descend the SAME
+    // elevation field every other sampler reads — installed here because
+    // course-instance seeds are hash descendants that cannot recover it.
+    setReliefSeed(seed);
     this.incursionField = new IncursionField(new Rng((seed ^ 0x1ec0) >>> 0));
     // Build the package→world routing from the manifest, and instantiate any
     // NET-NEW package overlays (migrated features route pressure into the shared
@@ -388,7 +393,9 @@ export class WorldSim {
     const dims = dimensionIds().map(dimensionDef);
     const badCo = validateCourses(dims);
     if (badCo.length) console.warn('[courses] course(s) reference unknown biome(s):', badCo);
-    const badCoT = biomesWithoutTileset(dims.flatMap(d => (d.courses ?? []).map(c => c.biome)));
+    // NON-painting courses (the rivers) are exempt: their biome is identity
+    // only — no zone ever wears it, so it needs no tileset behind it.
+    const badCoT = biomesWithoutTileset(dims.flatMap(d => (d.courses ?? []).filter(c => c.paints !== false).map(c => c.biome)));
     if (badCoT.length) console.warn('[courses] course biomes with NO frontier tileset (fall back to inherited):', badCoT);
     // ENCLAVE biomes must name a REGISTERED boundary gate (a typo'd id would
     // silently mint plain portals — the wall would just... not be there).

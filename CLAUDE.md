@@ -340,6 +340,27 @@ changes.
   far harbor. First port found names the sea + stamps `first_port_found`/
   `seas_found`. Dials in `SEA_CFG`; docs `docs/engine/seas.md`; probe
   `balance/probe_seas.ts`.
+  THE RELIEF FABRIC (`world/relief.ts` + the 'elevation' climate axis — the
+  land's vertical truth; THE FOREORDAINED TENET applied to terrain: pure
+  f(seed), every feature computed WHOLE at first touch, no horizon — the
+  fringe is just the untouched remainder): elevation = a lazy seam-free
+  axis (noise + the new 'ridge' layer kind for range spines + negative
+  coastal falloff so land dips to every shore), claimed by biomes as
+  ordinary affinities (Mountains/Highlands stand on real heights, marsh
+  pools low, farmland stays off peaks); RIVERS = ONE strewn course row
+  (`SURFACE_RIVERS`) wearing the three new course levers — `tracer:
+  'downhill'` (registerCourseTracer: springs walk steepest-descent with
+  momentum to a mouth/basin), `paints: false` (the river crosses countries
+  and repaints none — tundra keeps its frozen river via its own freezeAt),
+  `forceLayout: 'riverland'` (on-river zones carve the riverland recipe in
+  LOCAL dress, flow-oriented, onward exits guaranteed, centerline hug) —
+  registered onto the surface dimension via `registerDimensionCourse` (the
+  registerDimensionClimate pattern); `setReliefSeed` at sim boot is the ONE
+  installed truth (course-instance seeds can't recover the field seed);
+  the map draws rivers from the same polylines the mints ride
+  (`riverPathsInRect`, COURSE_FIELD_SALT the shared derivation). Dials in
+  `RELIEF_CFG`; docs in `docs/engine/relief.md`; probe
+  `balance/probe_relief.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
   mainland ports as BESIEGED RESIDENCES): every sea spot wears a walled
   quay-town (`harborhold_*` compositions → plan structures with a SEALED

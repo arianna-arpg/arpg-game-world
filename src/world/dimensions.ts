@@ -156,6 +156,16 @@ export function registerDimension(def: DimensionDef): void {
   if (def.climate) registerDimensionClimate(def.id, def.climate);
 }
 
+/** Add a COURSE to an already-registered dimension — the seam a sibling
+ *  fabric registers its arteries through (the relief fabric's surface
+ *  rivers), mirroring registerDimensionClimate: the fabric imports the
+ *  dimension registry, never the reverse, so the leaf web stays acyclic. */
+export function registerDimensionCourse(dimId: string, spec: CourseSpec): void {
+  const def = DIMENSIONS[dimId];
+  if (!def) { console.warn(`[dimensions] course '${spec.id}' names unknown dimension '${dimId}'`); return; }
+  (def.courses ??= []).push(spec);
+}
+
 export function dimensionDef(id: string | undefined): DimensionDef {
   return DIMENSIONS[id ?? 'surface'] ?? DIMENSIONS.surface;
 }
@@ -179,6 +189,9 @@ export function isRoadlessGateHub(z: { id: string; dimension?: string }): boolea
   return !!ent && ent.road === false && ent.gate.id === z.id;
 }
 
+// THE RIVERS (world/relief.ts) join the surface row via
+// registerDimensionCourse at the relief fabric's module tail — the fabric
+// imports this registry, never the reverse (the acyclic-leaf law).
 registerDimension({ id: 'surface', label: 'The Surface', color: '#8fb86a' });
 registerDimension({
   id: 'underworld', label: 'The Underworld', color: '#d84a2a',

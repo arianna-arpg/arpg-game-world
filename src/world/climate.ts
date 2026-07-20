@@ -35,6 +35,10 @@ export type ClimateLayer =
    *  feature size in node units; `salt` decorrelates two noise layers on the
    *  same axis. */
   | { kind: 'noise'; cell: number; amp: number; salt?: number }
+  /** RIDGED noise: (1 − |2n − 1|)², 0..1 — sharp crests along the noise
+   *  lattice's mid-lines (mountain-range spines, not blobs). Contributes
+   *  0..+amp. The elevation axis' backbone. */
+  | { kind: 'ridge'; cell: number; amp: number; salt?: number }
   /** Radial gradient from a NAMED anchor (default: the world origin, home):
    *  0 inside `innerRadius`, rising to +amp over `span`. The "danger
    *  geography" tie — the same shape as the level field's floor. An anchor
@@ -139,6 +143,21 @@ registerClimateAxis({
   id: 'hearth', label: 'Hearth', base: 0,
   layers: [
     { kind: 'radial', innerRadius: 0, span: 640, amp: 1 },
+  ],
+});
+registerClimateAxis({
+  // THE LAND'S VERTICAL TRUTH — the relief fabric's backbone (world/relief.ts
+  // traces rivers DOWN this field; mountain biomes claim its heights, marsh
+  // its hollows). Seam-free and lazy like every axis: ridged crests give
+  // ranges their spines, the coastal layer pulls the land DOWN toward every
+  // shore (rivers seek the sea for free), and the noise octaves break the
+  // slopes. Sampled hot via climateAxisAt — keep this stack lean.
+  id: 'elevation', label: 'Elevation', base: 0.52,
+  layers: [
+    { kind: 'noise', cell: 1700, amp: 0.3, salt: 0xe1e1 },
+    { kind: 'noise', cell: 560, amp: 0.1, salt: 0xe1e2 },
+    { kind: 'ridge', cell: 980, amp: 0.26, salt: 0xe1e3 },
+    { kind: 'coastal', probe: 700, amp: -0.55 },
   ],
 });
 registerClimateAxis({
@@ -315,6 +334,11 @@ function layerValue(
   switch (layer.kind) {
     case 'noise':
       return (valueNoise(coord.x, coord.y, layer.cell, (seed ^ salt ^ (layer.salt ?? 0)) >>> 0) - 0.5) * 2 * layer.amp;
+    case 'ridge': {
+      const n = valueNoise(coord.x, coord.y, layer.cell, (seed ^ salt ^ (layer.salt ?? 0)) >>> 0);
+      const crest = 1 - Math.abs(2 * n - 1);
+      return crest * crest * layer.amp;
+    }
     case 'radial': {
       const at = layer.anchor !== undefined ? CLIMATE_CFG.anchors[layer.anchor] : CLIMATE_CFG.origin;
       if (!at) return layer.amp; // uninstalled anchor reads FAR — full contribution
@@ -368,6 +392,23 @@ function layerValue(
 // The coastal/landmass layers read the CONTINENT field (seed derived once via
 // continentSeedFrom); noise/radial layers use the biome-field seed directly.
 
+/** One axis' composed value (the shared core of climateAt / climateAxisAt). */
+function axisValueAt(
+  axis: ClimateAxisDef, ov: DimensionAxisOverride | undefined,
+  coord: MapCoord, fieldSeed: number, contSeed: number, probe: ContinentProbe,
+): number {
+  let v = ov?.base ?? axis.base;
+  const salt = axisSalt(axis.id);
+  for (const layer of ov?.layers ?? axis.layers) {
+    v += layerValue(
+      layer, coord,
+      layer.kind === 'coastal' || layer.kind === 'landmass' ? contSeed : fieldSeed,
+      salt, probe,
+    );
+  }
+  return clamp01(v);
+}
+
 /** Every axis sampled at a coordinate, honoring the dimension's overrides.
  *  Pure + deterministic per (coord, fieldSeed, dimension). */
 export function climateAt(
@@ -378,19 +419,24 @@ export function climateAt(
   const contSeed = continentSeedFrom(fieldSeed);
   const probe: ContinentProbe = { cell: null, coastal: null };
   for (const axis of Object.values(CLIMATE_AXES)) {
-    const ov = overrides?.[axis.id];
-    let v = ov?.base ?? axis.base;
-    const salt = axisSalt(axis.id);
-    for (const layer of ov?.layers ?? axis.layers) {
-      v += layerValue(
-        layer, coord,
-        layer.kind === 'coastal' || layer.kind === 'landmass' ? contSeed : fieldSeed,
-        salt, probe,
-      );
-    }
-    out[axis.id] = clamp01(v);
+    out[axis.id] = axisValueAt(axis, overrides?.[axis.id], coord, fieldSeed, contSeed, probe);
   }
   return out;
+}
+
+/** ONE axis sampled at a coordinate — the cheap lane for hot loops that need
+ *  a single field (the relief tracer descends 'elevation' hundreds of times
+ *  per river; paying for six axes per probe would be pure waste). Identical
+ *  value to climateAt(...)[axisId] by construction (same core). */
+export function climateAxisAt(
+  coord: MapCoord, fieldSeed: number, axisId: string, dimension = 'surface',
+): number {
+  const axis = CLIMATE_AXES[axisId];
+  if (!axis) return 0;
+  const probe: ContinentProbe = { cell: null, coastal: null };
+  return axisValueAt(
+    axis, DIMENSION_CLIMATE[dimension]?.[axisId], coord, fieldSeed, continentSeedFrom(fieldSeed), probe,
+  );
 }
 
 // --- affinity ----------------------------------------------------------------

@@ -453,7 +453,12 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // belongs to the butte country below.)
   highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Mountains', spacing: 88,
     meld: 'mountain_meld',
-    climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry' },
+    // ELEVATION-claimed (the relief fabric): the ranges now stand where the
+    // land actually RISES — ridge spines on the elevation axis — instead of
+    // anywhere cold-and-dry rolled. Wide fade so foothill country still
+    // seeds on the shoulders.
+    climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry',
+      elevation: { from: 0.6, fadeIn: 0.15 } },
     // rooms = the mountain-pass maze; labyrinth = the stone warren the old
     // folk cut (a full-zone maze, braided so it fights instead of frustrates).
     allowedLayouts: { rooms: 3, bastion: 1, labyrinth: 0.5 },
@@ -474,7 +479,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // warmed); the Mountains hold the cold half of dry, the Highlands the
   // warm half past the desert's deep-dry claim.
   butteland: { patronFaction: 'wild', mapColor: '#b0854a', label: 'Highlands', spacing: 96,
-    climate: { temperature: { from: 0.42, fadeIn: 0.12 }, moisture: 'dry', wildness: { from: 0.2, fadeIn: 0.15 } },
+    // Elevation-claimed like the Mountains (the tables are RAISED land) —
+    // gentler floor: mesas stand on the ranges' warm shoulders.
+    climate: { temperature: { from: 0.42, fadeIn: 0.12 }, moisture: 'dry', wildness: { from: 0.2, fadeIn: 0.15 },
+      elevation: { from: 0.56, fadeIn: 0.15 } },
     allowedLayouts: { needles: 1 },
     landmarks: [{ landmark: 'canyon', chance: 0.2 }, { landmark: 'lone_mountain', chance: 0.1 }] },
   // THE KARST COUNTRY: wind-cut limestone in the wild dry midlands — TWO
@@ -519,8 +527,12 @@ export const BIOMES: Record<string, BiomeInfo> = {
   farmland: { patronFaction: 'chattel', mapColor: '#b7ac58', label: 'Farmland', spacing: 74,
     // No temperature taste ON PURPOSE (cool shires grow oats): a frigid- or
     // scorched-origin world must never starve the belt. Moisture splits the
-    // settled band with the downs (wet half here, dry half theirs).
-    climate: { moisture: { from: 0.38, fadeIn: 0.14 }, wildness: { to: 0.42, fadeOut: 0.16 } },
+    // settled band with the downs (wet half here, dry half theirs). The
+    // elevation CAP (relief fabric) keeps crops off true peaks — a
+    // mountain-seated capital honestly keeps sheep fells (downs carry no
+    // elevation gate) instead of terraced miracle wheat.
+    climate: { moisture: { from: 0.38, fadeIn: 0.14 }, wildness: { to: 0.42, fadeOut: 0.16 },
+      elevation: { to: 0.68, fadeOut: 0.14 } },
     allowedLayouts: { fields: 1 },
     meld: 'farmland_meld',
     layoutParams: {
@@ -558,7 +570,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     },
     landmarks: [] },
   marsh:    { patronFaction: 'undead', mapColor: '#4a6a52', label: 'Marsh', spacing: 58,
-    climate: { moisture: 'wet' },
+    // The wet HOLLOWS (the relief fabric): bogs pool where the land lies
+    // low — never up a mountainside.
+    climate: { moisture: 'wet', elevation: { to: 0.5, fadeOut: 0.14 } },
     allowedLayouts: { islands: 2, plains: 1 },
     landmarks: [{ landmark: 'bog_shore', chance: 0.3 }, { landmark: 'swamp_hill', chance: 0.22 }, { landmark: 'tar_pool', chance: 0.25 }] },
   // Exotic hazard biomes (each is a distinct framework instance):
@@ -616,6 +630,14 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // a tint over a land heat-map that isn't there.
   ocean: { patronFaction: 'wild', mapColor: '#142e47', label: 'Open Sea',
     virtual: true, washOpacity: 0.62 },
+  // THE RIVER — the relief fabric's course identity (world/relief.ts): worn
+  // by NO zone (SURFACE_RIVERS is a non-painting course — a river crosses
+  // whatever country it crosses and repaints none of it) and seeded into NO
+  // palette. This row exists so the course validates, the map wash has the
+  // water's color, and any future attribution names the artery. Virtual:
+  // never rolled, never a faction's home ground.
+  river: { patronFaction: 'wild', mapColor: '#5b9fd4', label: 'River',
+    virtual: true },
   // THE AETHER — the Aetherial dimension's cloud shelves (dimension-palette-
   // only: no climate gate, no surface field entry — the realm above mints it
   // from its own weighted palette, the durance/steppes pattern). Every zone

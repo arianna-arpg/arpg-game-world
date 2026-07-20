@@ -195,7 +195,7 @@ import { holdGateApron, holdGateDoor, holdSeatPos, holdStructureIn, rollHoldDres
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
-import { courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
+import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
@@ -7252,7 +7252,7 @@ export class World {
    *  Seraphal heart). Same seed expression as dimensionBiomeFor: the two
    *  samplers must read the same cells. */
   private dimensionBiomeDepthFor(dimId: string): (c: { x: number; y: number }) => number {
-    const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
+    const seed = (this.sim.biomeField.fieldSeed ^ COURSE_FIELD_SALT) >>> 0;
     return (c) => dimensionBiomeDepth(dimId, c, seed);
   }
 
@@ -7261,7 +7261,7 @@ export class World {
    *  corridors (world/courses.ts). A course whose gate has not torn open yet
    *  stays dormant (nothing in that dimension has minted either). */
   private dimensionBiomeFor(dimId: string): (c: { x: number; y: number }) => string {
-    const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
+    const seed = (this.sim.biomeField.fieldSeed ^ COURSE_FIELD_SALT) >>> 0;
     const courses = this.liveCourses(dimId);
     if (!courses.length) return (c) => dimensionBiomeAt(dimId, c, seed);
     return (c) => {
@@ -7320,12 +7320,12 @@ export class World {
 
   /** Mint-hint sampler for a dimension's courses (ZoneSpec.courseFor — the
    *  same closure idiom as biomeFor). Undefined when the dimension declares
-   *  none, so every other mint path pays nothing. */
+   *  none, so every other mint path pays nothing. The SURFACE is a dimension
+   *  row like any other (undefined resolves to it) — its rivers arrive here. */
   private courseMintFor(dimId: string | undefined): ((c: { x: number; y: number }) => CourseMintHints | null) | undefined {
-    if (!dimId) return undefined;
-    const courses = this.liveCourses(dimId);
+    const courses = this.liveCourses(dimId ?? 'surface');
     if (!courses.length) return undefined;
-    const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
+    const seed = (this.sim.biomeField.fieldSeed ^ COURSE_FIELD_SALT) >>> 0;
     return (c) => {
       for (const { spec, anchor } of courses) {
         if (spec.anchor === 'strewn') {

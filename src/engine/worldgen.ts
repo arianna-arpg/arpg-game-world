@@ -613,9 +613,13 @@ export function placeZoneAt(
   // COURSE hints — does this mint ride a declared throughline? Gated on
   // fieldBiome (the winding-bend discipline) and CROSS-CHECKED against the
   // sampled biome: a feather-band coord whose dither fell OFF the course gets
-  // no artery dressing, so hints and heat map never disagree.
+  // no artery dressing, so hints and heat map never disagree. A NON-painting
+  // course (rivers) crosses whatever country it crosses — it never touched
+  // the heat map, so there is nothing to disagree with.
   const courseHints = spec.fieldBiome ? spec.courseFor?.(target) ?? null : null;
-  const onCourse = courseHints && courseHints.spec.biome === zoneBiome ? courseHints : null;
+  const onCourse = courseHints
+    && (courseHints.spec.paints === false || courseHints.spec.biome === zoneBiome)
+    ? courseHints : null;
 
   // Map node: start at the target, then PUSH AWAY from any crowding neighbour until it
   // clears the biome's spacing — a deterministic-ish push (toward the gap, not a random
@@ -736,13 +740,15 @@ export function placeZoneAt(
   // heat-map FIELD fills it. The biome then dictates which LAYOUT GENERATOR shapes the
   // zone (default 'plains'), stored on the def so revisits replay the topology.
   const biome = zoneBiome;
-  // An authored set-piece arena forces its layout; a tileset FACE may pin its
-  // recipe (forceLayout — how a multi-face country couples each face to its
-  // own generator: the chasm-maze reach vs the stone-forest weald); otherwise
-  // the biome rolls from allowedLayouts. The pin branches BEFORE the roll, so
-  // the rng stream shifts only for pinned tilesets — every existing mint's
-  // draw order is untouched (the cave-mint forceLayout contract, mirrored).
-  const layoutType = spec.layoutType ?? tileset.forceLayout ?? pickLayout(biome, target, genRng, spec.biomeFor);
+  // An authored set-piece arena forces its layout; a COURSE may force its
+  // recipe on the zones riding it (the river's riverland carve in whatever
+  // local dress the tileset wears); a tileset FACE may pin its own (the
+  // chasm-maze reach vs the stone-forest weald); otherwise the biome rolls
+  // from allowedLayouts. Pins branch BEFORE the roll, so the rng stream
+  // shifts only for pinned mints — every existing mint's draw order is
+  // untouched (the cave-mint forceLayout contract, mirrored).
+  const layoutType = spec.layoutType ?? onCourse?.spec.forceLayout ?? tileset.forceLayout
+    ?? pickLayout(biome, target, genRng, spec.biomeFor);
   // generateLayout degrades an unregistered layout id to 'plains' silently —
   // say so at mint, where the authoring slip (a quest def's layoutType typo)
   // is one hop away. Biome allowedLayouts are boot-validated; this covers the
