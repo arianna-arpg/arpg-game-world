@@ -7482,6 +7482,10 @@ export class World {
       if (!this.surveyed.has(z.id) && !this.visited.has(z.id)) news++;
       this.surveyed.add(z.id);
     }
+    // The doors answer the pulse at once: a survey that just named this
+    // zone's neighbours renames the standing portals too (the entry law) —
+    // the flare buys the name AND the door admits it.
+    this.refreshExitLabels();
     return news;
   }
 
@@ -8028,12 +8032,18 @@ export class World {
       this.warnCrossDim(this.zone.exits[defIndex] ?? (e as ZoneExitDef), dest);
       return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label: 'a sealed rift' };
     }
-    // THE VEIL AT THE DOOR (the forechart): a portal into veiled country reads
-    // as uncharted — the zone EXISTS (minted ahead), but its name is the
-    // walk's to earn. The level preview stays exact (it IS the real level).
-    // Normally unreachable (the ring-1 unveil lifts every standing neighbour
-    // at entry) — the belt for dev travel and freshly-wired sounding ground.
-    if (dest.veiled) {
+    // THE ENTRY LAW (the uncharted doctrine): a destination's NAME is earned —
+    // by walking its ground (visited) or by deliberate recon (surveyed: spire
+    // pulses, bought charts, omen out-scries, quay sightings) — never granted
+    // free at the door. Until earned, every way out reads the same: what it
+    // costs to walk in, never what it is (the danger preview stays exact — it
+    // IS the real level; even the endless-waves tell waits for entry). The
+    // forechart's veil is the same rule's outer ring (minted ahead, unfound).
+    // Cave floors live OFF the chart (caveMap — visited never tracks them),
+    // so a cave's own doors keep their names: the law governs the chart, and
+    // only the chart.
+    if (dest.veiled
+      || (!!this.zoneMap[e.to] && !this.visited.has(e.to) && !this.surveyed.has(e.to))) {
       return {
         pos, radius: PORTAL_RADIUS, to: e.to, defIndex,
         label: `Uncharted · Lv ${dest.level}`,
@@ -8051,6 +8061,18 @@ export class World {
       ...(boundary ? { boundary } : {}),
       ...(meld ? { meld } : {}),
     };
+  }
+
+  /** Re-speak the standing portals' labels from LIVE knowledge (the entry
+   *  law): a survey pulse that just named this zone's neighbours must rename
+   *  the doors NOW — waiting for the next zone load would be an honesty lag.
+   *  Labels only: positions never move under the player's feet. (Co-op
+   *  clients catch up with the next zone message, like every label.) */
+  private refreshExitLabels(): void {
+    for (const ex of this.exits) {
+      const d = this.zone.exits[ex.defIndex];
+      if (d) ex.label = this.placeExit(d, ex.defIndex).label;
+    }
   }
 
   /** The boundary-gate treatment an exit wears, or undefined for a plain
