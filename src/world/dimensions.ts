@@ -14,17 +14,22 @@ import { BIOME_FIELD_CFG, fieldBiomePick } from './biomes';
 import { registerDimensionClimate, type DimensionAxisOverride } from './climate';
 import type { CourseSpec } from './courses';
 
-/** THE SOULWAY — hell's OTHER river, sharing the flame's spring (two rivers
- *  from one door; fire and souls part ways at the Hellgate). A broad, SHORT
- *  ribbon: this course paints the map's wash — the inland sea on the hell
- *  tab — but never chains zones: chartFrontier funnels every frontier
- *  landing in its corridor to the ONE mint-once megazone (world/soulriver.ts
- *  — feather 0 keeps paint and funnel exactly equal, so no ordinary soulway
- *  zone can ever mint; the biome is a PLACE, one zone wears it). Declared
- *  HERE (a leaf both dimensions and the soulriver module may import — the
- *  soulriver leaf pulls it for its corridor/seat/port math). */
+/** THE SOULWAY — the River of Souls, UNTETHERED: the souls are bound to no
+ *  gate, so the river answers to none (anchor 'strewn' — the course fabric's
+ *  strewn law deals instances across the whole underworld chart, pure
+ *  f(seed); one may happen to wind past the Hellgate, most will not). Each
+ *  instance is a broad, SHORT ribbon: it paints the map's wash — an inland
+ *  sea on the hell tab — but never chains zones: chartFrontier funnels every
+ *  frontier landing in a corridor to that instance's ONE mint-once megazone
+ *  (world/soulriver.ts — feather 0 keeps paint and funnel exactly equal, so
+ *  no ordinary soulway zone can ever mint; the biome is a PLACE, each
+ *  instance one zone). The flame keeps its spring at the gate; the souls
+ *  wander. Declared HERE (a leaf both dimensions and the soulriver module
+ *  may import — the soulriver leaf pulls it for its corridor/seat/port
+ *  math). */
 export const SOULWAY_COURSE: CourseSpec = {
-  id: 'soulway', biome: 'soulway', anchor: 'gate',
+  id: 'soulway', biome: 'soulway', anchor: 'strewn',
+  strew: { span: 1400, chance: 0.55 },
   length: 980, halfWidth: 84, feather: 0, strength: 1,
   waves: 1.1, sweep: 150, wobble: 34,
   seedSalt: 0x50f7a,

@@ -131,7 +131,10 @@ import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
-import { dockDestCoords, nearRiverSeat, riverSeat, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
+import {
+  channelFracOf, dockDestCoordsFor, ferryLaneFor, isSoulriverId, ribbonCoordAt, riverSeatOf,
+  riverZoneId, soulriverInstanceOf, soulriverKeyOf, soulriverPlan, soulwayCatchAt, SOULRIVER_CFG,
+} from '../world/soulriver';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
@@ -189,7 +192,7 @@ import { holdGateApron, holdGateDoor, holdSeatPos, holdStructureIn, rollHoldDres
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
-import { courseBiomeAt, courseMintHints, type CourseMintHints, type CourseSpec } from '../world/courses';
+import { courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
@@ -4164,12 +4167,13 @@ export class World {
         bumpLedger(this.ledger, 'seas_found');
       }
     }
-    // THE RIVER OF SOULS (world/soulriver.ts): finding the shore is finding
-    // the realm's whole index — stamp it once and say what the ferry means.
-    if (def.id === SOULRIVER_CFG.zoneId && !this.ledger.soul_river_found) {
+    // THE RIVER OF SOULS (world/soulriver.ts): finding ANY of its strewn
+    // shores stamps the one ledger mark and says what the ferry means (the
+    // untethered river is one river, met again — the first meeting speaks).
+    if (isSoulriverId(def.id) && !this.ledger.soul_river_found) {
       bumpLedger(this.ledger, 'soul_river_found');
       this.text(vec(this.player.pos.x, this.player.pos.y - 128),
-        'the River of Souls — board the Pale Ferry, and every country of the deep is one shore away', '#9fd8ec', 16);
+        'the River of Souls — board the Pale Ferry; the dead pour this way through every country of the deep', '#9fd8ec', 16);
     }
     // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
     this.breachPos = null;
@@ -7039,17 +7043,18 @@ export class World {
       const existing = Object.values(this.zoneMap).find(z => z.field?.regionId === ext.regionId && z.id !== source.id);
       if (existing) { this.linkBackTo(existing, source); return existing; }
     }
-    // THE RIVER SEAT (world/soulriver.ts): the underworld's one great artery
-    // is a PLACE — a frontier landing in its catch basin always finds the
-    // same shore (the field-region mint-once law, below ground). The seat
-    // hangs a hashed heading off the dimension's gate, so every run's realm
-    // carries its river somewhere new and every seat agrees where.
-    if (source.dimension === SOULRIVER_CFG.dimension && source.id !== SOULRIVER_CFG.zoneId) {
-      const gate = this.zoneMap[dimensionDef(SOULRIVER_CFG.dimension)?.entry?.gate.id ?? ''];
-      if (gate && nearRiverSeat(target, gate.map, this.sim.biomeField.fieldSeed)) {
-        const river = this.zoneMap[SOULRIVER_CFG.zoneId];
+    // THE RIVERS OF SOULS (world/soulriver.ts): each strewn soulway instance
+    // is a PLACE — a frontier landing in an instance's corridor always finds
+    // THAT instance's shore (the field-region mint-once law, below ground,
+    // dealt plural). The rivers hang off no gate: the strewn law deals them
+    // across the realm's whole chart, so every run meets its rivers where
+    // the dice poured them — beside the Hellgate only if it happens so.
+    if (source.dimension === SOULRIVER_CFG.dimension && !isSoulriverId(source.id)) {
+      const inst = soulwayCatchAt(target, this.sim.biomeField.fieldSeed);
+      if (inst) {
+        const river = this.zoneMap[riverZoneId(inst.key)];
         if (river) { this.linkBackTo(river, source); return river; }
-        return this.mintSoulriverZone(source, gate.map);
+        return this.mintSoulriverZone(source, inst);
       }
     }
     if (EAGER_WORLD_WEB) {
@@ -7103,6 +7108,18 @@ export class World {
     if (!courses.length) return (c) => dimensionBiomeAt(dimId, c, seed);
     return (c) => {
       for (const { spec, anchor } of courses) {
+        // A STREWN course paints per dealt instance (each with its OWN
+        // seed — heading and meander all its own); the sample walks the
+        // instances near this coordinate in stable order, first covering
+        // wins. Gate courses keep the one-anchor path byte-identical.
+        if (spec.anchor === 'strewn') {
+          for (const inst of strewnInstancesNear(spec, c, seed)) {
+            const b = courseBiomeAt([spec], inst.anchor, c, inst.iseed);
+            if (b) return b;
+          }
+          continue;
+        }
+        if (!anchor) continue;
         const b = courseBiomeAt([spec], anchor, c, seed);
         if (b) return b;
       }
@@ -7127,12 +7144,16 @@ export class World {
     return undefined;
   }
 
-  /** Every course of a dimension whose anchor is LIVE (resolved). */
-  private liveCourses(dimId: string): { spec: CourseSpec; anchor: { x: number; y: number } }[] {
+  /** Every course of a dimension whose anchor is LIVE. Gate courses resolve
+   *  to their one coordinate; STREWN courses are live by construction (the
+   *  deal exists the moment the dimension does — anchor stays undefined and
+   *  the samplers expand instances per coordinate). */
+  private liveCourses(dimId: string): { spec: CourseSpec; anchor?: { x: number; y: number } }[] {
     const specs = dimensionDef(dimId).courses;
     if (!specs?.length) return [];
-    const out: { spec: CourseSpec; anchor: { x: number; y: number } }[] = [];
+    const out: { spec: CourseSpec; anchor?: { x: number; y: number } }[] = [];
     for (const spec of specs) {
+      if (spec.anchor === 'strewn') { out.push({ spec }); continue; }
       const anchor = this.courseAnchor(dimId, spec);
       if (anchor) out.push({ spec, anchor });
     }
@@ -7149,6 +7170,14 @@ export class World {
     const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
     return (c) => {
       for (const { spec, anchor } of courses) {
+        if (spec.anchor === 'strewn') {
+          for (const inst of strewnInstancesNear(spec, c, seed)) {
+            const h = courseMintHints([spec], inst.anchor, c, inst.iseed);
+            if (h) return h;
+          }
+          continue;
+        }
+        if (!anchor) continue;
         const h = courseMintHints([spec], anchor, c, seed);
         if (h) return h;
       }
@@ -7754,19 +7783,20 @@ export class World {
     def.exits.push(...rebuilt);
   }
 
-  /** THE RIVER OF SOULS — mint the underworld's inland sea at its
-   *  foreordained seat (mint-once, stable id — the uw_gate idiom for a
-   *  PLACE: the soulway course's midpoint), then mint its PORTS. The
-   *  discovering neighbor keeps the ordinary back-edge: that road is the
-   *  shore the walker found. */
-  private mintSoulriverZone(source: ZoneDef, gateCoord: MapCoord): ZoneDef {
+  /** A RIVER OF SOULS — mint one strewn instance's inland sea at its
+   *  foreordained seat (mint-once, stable per-instance id — the uw_gate
+   *  idiom dealt plural: each instance's course midpoint), then mint its
+   *  PORTS. The discovering neighbor keeps the ordinary back-edge: that
+   *  road is the shore the walker found. */
+  private mintSoulriverZone(source: ZoneDef, inst: CourseInstance): ZoneDef {
     const dimId = SOULRIVER_CFG.dimension;
-    const seat = riverSeat(gateCoord, this.sim.biomeField.fieldSeed);
+    const seat = riverSeatOf(inst);
     const gen = placeZoneAt(seat, source, this.zoneMap, this.nextGenId++, {
-      id: SOULRIVER_CFG.zoneId,
+      id: riverZoneId(inst.key),
+      // Every instance wears the one name: it is ONE river, met again.
       name: 'The River of Souls',
       tileset: SOULRIVER_CFG.tileset,
-      seed: (this.manifest.seed ^ 0x5001f) >>> 0,
+      seed: (this.manifest.seed ^ 0x5001f ^ hashStr(inst.key)) >>> 0,
       // A place, not a task: the ship is the ask, and docks never seal.
       objective: { kind: 'none', label: 'the Soul-Ship calls at every shore' },
       forceFrontiers: 0,
@@ -7777,44 +7807,60 @@ export class World {
       climateFor: this.climateFor,
     });
     gen.level += dimensionDef(dimId)?.levelBonus ?? 0;
+    // The sea-node identity (data/zoneKinds.ts): ring + ship glyph on the
+    // chart, lane-styled roads — the node reads as water, not ground.
+    gen.kind = 'soulriver';
+    // A forechart sweep mints AHEAD of the walker — the sea keeps its veil
+    // like any other ahead-minted ground (the one fog seam).
+    if (this.mintVeil) gen.veiled = true;
     this.zoneMap[gen.id] = gen;
-    this.soulriverPorts(gen, gateCoord);
+    this.soulriverPorts(gen);
     this.sim.onNodeCharted(gen, this.simView());
     return gen;
   }
 
   /** THE PORTS OF THE INLAND SEA (the ensureSeaPorts idiom on a course):
-   *  every dock's DESTINATION mints as a real zone at a spread coordinate
-   *  along the soulway ribbon (dockDestCoords — the world map's own
-   *  geography, not ring-one neighbors), VEILED until found, wearing its
-   *  promised country's tileset. The river's own exits become REAL edges to
-   *  them — side/at from the same pure plan the recipe pours, so portal and
-   *  pier agree by construction — and searoutes chain the ports so the map
-   *  draws the lane down the ribbon. Real (non-'?') edges — the discovery
-   *  shore, later woven links — are kept untouched. Idempotent per port. */
-  private soulriverPorts(river: ZoneDef, gateCoord: MapCoord): void {
-    if (river.id !== SOULRIVER_CFG.zoneId) return;
+   *  each LANDING's destination mints as a real zone at a spread coordinate
+   *  along its instance's ribbon (dockDestCoordsFor — the world map's own
+   *  geography at the landing's own course fraction, not ring-one
+   *  neighbors), VEILED until found, wearing its promised country's
+   *  tileset. The river's own exits become REAL edges to them — side/at
+   *  from the same pure plan the recipe pours, so portal and pier agree by
+   *  construction — and searoutes chain the ports so the map draws the lane
+   *  down the ribbon. Wild-strand stations mint NOTHING: the ferry calls,
+   *  the shore leads nowhere (the culled-exits law). Real (non-'?') edges —
+   *  the discovery shore, later woven links — are kept untouched.
+   *  Idempotent per port. */
+  private soulriverPorts(river: ZoneDef): void {
+    if (!isSoulriverId(river.id)) return;
+    const inst = soulriverInstanceOf(river.id, this.sim.biomeField.fieldSeed);
+    // A legacy bare-id river (pre-untethering save) keeps the shape it
+    // saved with — no instance to re-derive, nothing to rebuild.
+    if (!inst) return;
     const dimId = SOULRIVER_CFG.dimension;
     const palette = (dimensionDef(dimId)?.biomes ?? []).map(b => b.biome);
     // Stamp the deal the layout reads (layoutParam 'dockBiomes') — a saved
     // river keeps its promised shores even if the realm's palette moves.
     river.layoutParams = { ...river.layoutParams, dockBiomes: palette };
     const plan = soulriverPlan(river.seed ?? 0, river.size.w, river.size.h, palette);
-    const coords = dockDestCoords(gateCoord, this.sim.biomeField.fieldSeed, plan.docks.length);
+    const chMax = Math.max(1, plan.channel.length - 1);
+    const coords = dockDestCoordsFor(inst, plan.landings.map(d => d.chIdx / chMax));
     const rng = new Rng(((river.seed ?? 0) ^ 0xd0c5) >>> 0);
     // Real edges that are NOT ours (the discovery shore, later woven links)
     // survive; our own dock edges rebuild from the plan every call, so the
     // ensure is idempotent (the re-run doubles nothing).
-    const reals = river.exits.filter(x => x.to !== '?' && !x.to.startsWith('soul_dock_'));
+    const dockPre = `${SOULRIVER_CFG.dockIdBase}_`;
+    const reals = river.exits.filter(x => x.to !== '?' && !x.to.startsWith(dockPre));
     const rebuilt: ZoneExitDef[] = [...reals];
     const probe = { exits: rebuilt, size: river.size };
     let prevId: string | undefined;
-    for (const dock of plan.docks) {
-      const id = `soul_dock_${dock.i}`;
+    for (let k = 0; k < plan.landings.length; k++) {
+      const dock = plan.landings[k];
+      const id = `${dockPre}${inst.key}_${dock.i}`;
       let dest = this.zoneMap[id];
       if (!dest) {
         const tileset = pickTilesetForBiome(dock.biome, rng, undefined, dimId);
-        dest = placeZoneAt(coords[dock.i] ?? river.map, river, this.zoneMap, this.nextGenId++, {
+        dest = placeZoneAt(coords[k] ?? river.map, river, this.zoneMap, this.nextGenId++, {
           id,
           ...(tileset ? { tileset } : {}),
           seed: (this.manifest.seed ^ hashStr(id)) >>> 0,
@@ -7840,6 +7886,50 @@ export class World {
     }
     river.exits.length = 0;
     river.exits.push(...rebuilt);
+  }
+
+  /** THE SOUL-SHIPS ON THE CHART (the voyage-boat idiom, dealt to ferries):
+   *  for every CHARTED river instance, project each abroad ferry's pure
+   *  pose (the same clock the loaded zone rides) onto the instance's map
+   *  ribbon — the chart shows the crossing underway, wherever you stand.
+   *  Cradled/dissolved ships are honestly absent. */
+  soulriverShipCoords(): { x: number; y: number; paused: boolean; dimension: string }[] {
+    const out: { x: number; y: number; paused: boolean; dimension: string }[] = [];
+    const fieldSeed = this.sim.biomeField.fieldSeed;
+    for (const z of Object.values(this.zoneMap)) {
+      if (!isSoulriverId(z.id) || z.veiled || !this.visited.has(z.id)) continue;
+      const inst = soulriverInstanceOf(z.id, fieldSeed);
+      if (!inst) continue;
+      const lane = this.soulriverLane(z);
+      if (!lane) continue;
+      const palette = (z.layoutParams as { dockBiomes?: string[] } | undefined)?.dockBiomes ?? [];
+      const plan = soulriverPlan(z.seed ?? 0, z.size.w, z.size.h, palette);
+      for (const r of lane.riders) {
+        const pose = trackPose(lane, this.time, r.phase, r.def);
+        if (pose.pending) continue;
+        const at = ribbonCoordAt(inst, channelFracOf(plan, pose.x, pose.y));
+        out.push({ x: at.x, y: at.y, paused: pose.paused, dimension: z.dimension ?? 'surface' });
+      }
+    }
+    return out;
+  }
+
+  /** A river zone's ferry lane, placed PURE from its plan (never added to
+   *  the zone's live track list — the chart reads poses off it with the
+   *  same clock the loaded zone uses, so the marker and the deck agree by
+   *  construction). Memoized per zone id + seed. */
+  private soulriverLaneMemo = new Map<string, PlacedTrack | null>();
+  private soulriverLane(z: ZoneDef): PlacedTrack | null {
+    const key = `${z.id}|${z.seed ?? 0}`;
+    const hit = this.soulriverLaneMemo.get(key);
+    if (hit !== undefined) return hit;
+    let placed: PlacedTrack | null = null;
+    try {
+      const palette = (z.layoutParams as { dockBiomes?: string[] } | undefined)?.dockBiomes ?? [];
+      placed = placeTrack(ferryLaneFor(soulriverPlan(z.seed ?? 0, z.size.w, z.size.h, palette)));
+    } catch { placed = null; }
+    this.soulriverLaneMemo.set(key, placed);
+    return placed;
   }
 
   /** A SURFACE anchor for directed event mints whose nearestNode search came up
@@ -36530,7 +36620,7 @@ export class World {
    *  current's own crest seats all treat them as citizens. */
   private soulriverAcc = 0;
   private updateSoulriver(dt: number): void {
-    if (this.zone.id !== SOULRIVER_CFG.zoneId) return;
+    if (!isSoulriverId(this.zone.id)) return;
     this.soulriverAcc -= dt;
     if (this.soulriverAcc > 0) return;
     const cfg = SOULRIVER_CFG.assault;
@@ -36554,15 +36644,17 @@ export class World {
       if (deck) break;
     }
     if (!deck) return;
-    // THE CALL AT THE PIER: pausing at a dock with a living passenger
-    // aboard REVEALS that dock's destination on the chart (the landing-law
-    // reveal — riding the sea surveys its ports).
+    // THE CALL AT THE PIER: pausing at a LANDING with a living passenger
+    // aboard REVEALS that landing's destination on the chart (the
+    // landing-law reveal — riding the sea surveys its ports). Wild strands
+    // have no destination to call: the pause is just the pause.
     if (deck.paused) {
       const palette = (this.zone.layoutParams as { dockBiomes?: string[] } | undefined)?.dockBiomes ?? [];
       const plan = soulriverPlan(this.zone.seed ?? 0, this.zone.size.w, this.zone.size.h, palette);
       const atDock = plan.docks.find(d => Math.hypot(d.pier.x - deck!.x, d.pier.y - deck!.y) < 70);
-      if (atDock) {
-        const dest = this.zoneMap[`soul_dock_${atDock.i}`];
+      const key = soulriverKeyOf(this.zone.id);
+      if (atDock?.landing && key) {
+        const dest = this.zoneMap[`${SOULRIVER_CFG.dockIdBase}_${key}_${atDock.i}`];
         if (dest?.veiled) {
           dest.veiled = false;
           this.surveyed.add(dest.id);

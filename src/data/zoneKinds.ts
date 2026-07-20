@@ -30,6 +30,13 @@ export interface ZoneKindDef {
   glyph?: { char: string; color: string; size?: number; dy?: number };
   /** Name-card text tint (else the charted default). */
   labelColor?: string;
+  /** ROADS touching a zone of this kind draw in the SEA-LANE stroke (dashed,
+   *  the naval blue) — the crossing is water, not ground. Any water-hub kind
+   *  opts in with one word; `color` overrides the naval default. */
+  lanes?: { color?: string };
+  /** Keep the biome line's monster-level on the name card (kinded zones
+   *  usually replace it — a sea is still dangerous ground). */
+  keepLevel?: boolean;
 }
 
 export const ZONE_KINDS: Record<string, ZoneKindDef> = {
@@ -41,6 +48,20 @@ export const ZONE_KINDS: Record<string, ZoneKindDef> = {
     ring: { color: '#ffd700' },
     glyph: { char: '⌂', color: '#241c06' },
     labelColor: '#ffe9a8',
+  },
+  // THE INLAND SEA (world/soulriver.ts): every strewn River of Souls wears
+  // this — the node reads as WATER on the chart (ship glyph, pale ring,
+  // lane-styled roads), the sea-fabric read below ground. The live ferry
+  // markers ride mapMarkers' soul-ship source; the ribbon is the biome wash.
+  soulriver: {
+    id: 'soulriver',
+    label: 'Inland Sea',
+    subLabel: 'the Soul-Ship calls at every shore',
+    ring: { color: '#4a8ab0' },
+    glyph: { char: '⛴', color: '#0e2233' },
+    labelColor: '#9fd8ec',
+    lanes: {},
+    keepLevel: true,
   },
 };
 

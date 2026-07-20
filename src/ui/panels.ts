@@ -3697,6 +3697,16 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         if (drawn.has(key)) continue;
         drawn.add(key);
         const known = visited.has(z.id) || visited.has(e.to);
+        // A road touching a LANES-kinded zone (data/zoneKinds.ts — the
+        // inland sea) is a water crossing: it wears the sea-lane stroke,
+        // not the land road's, so the chart reads the ferry's ways exactly
+        // like the surface's naval lanes.
+        const laneKind = zoneKindOf(z)?.lanes ?? zoneKindOf(b)?.lanes;
+        if (laneKind) {
+          edges += `<line x1="${z.map.x}" y1="${z.map.y}" x2="${b.map.x}" y2="${b.map.y}"
+            stroke="${laneKind.color ?? '#4a8ac8'}" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="${known ? 0.8 : 0.45}"/>`;
+          continue;
+        }
         // A road crossing an ENCLAVE biome's wall wears the gate's accent —
         // the map telegraphs "that way lies the Durance" the same way the
         // portal itself does (derived inline: both endpoint defs are in hand).
@@ -3759,7 +3769,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       const kd = known || scouted ? zoneKindOf(z) : undefined;
       const lvText = z.objective.kind === 'waves' && z.objective.waves === 0
         ? 'endless waves' : `monster lv ${z.level}`;
-      const sub = kd ? `${kd.label}${kd.subLabel ? ` — ${kd.subLabel}` : ''}`
+      const sub = kd ? `${kd.label}${kd.subLabel ? ` — ${kd.subLabel}` : ''}${kd.keepLevel ? ` · ${lvText}` : ''}`
         : bi ? `${bi.label} · ${lvText}` : lvText;
       // Each node is one <g data-zone> so a delegated hover handler can identify
       // the zone with no geometry math (the browser hit-tests the SVG for us); the

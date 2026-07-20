@@ -240,6 +240,19 @@ export interface TrackSpec {
    *  'once' lanes only (with rearm it makes the recurring gauntlet whose
    *  stones die unpredictably — the Bob-omb read). */
   shatter?: [number, number];
+  /** THE COIN AT THE CRADLE: chance (0..1] that a given RELEASE of a 'once'
+   *  lane runs the path REVERSED — springing from the far end and retiring
+   *  at the authored cradle. Rolled per release on the same pure-hash family
+   *  as `shatter` (lane length, bornAt, rider phase, release ordinal — its
+   *  own salt, so the coin and the stamina roll never correlate): no state,
+   *  no rng stream, every seat and every resume agree. The reversed pass
+   *  rides a mirrored arc + schedule built once at placement — pauses
+   *  re-key to the SAME physical waypoints (index n−1−at), so a ferry
+   *  calls at every pier whichever way the water carries it. With `rearm`
+   *  this is the shuttling journey whose direction is dealt fresh each
+   *  cycle (the Soul-Ship sailing upstream as often as down); on a plain
+   *  once-lane it deals the single pass's direction at birth. */
+  reversal?: number;
   /** Initial armed state (default true). A DISARMED lane retracts whole:
    *  riders undrawn, unswept, unthreatening — only a gen-carved groove
    *  remains as the tell. Flipped live via World.setTracksArmed(tag) — the
@@ -266,6 +279,12 @@ export interface PlacedTrack {
   arc: ArcTable;
   /** Travel+pause schedule over one one-way pass. */
   schedule: ScheduleSpan[];
+  /** The REVERSED pass (spec.reversal lanes only): the same physical lane
+   *  walked far-end → cradle, pauses re-keyed to the same waypoints. Built
+   *  once at placement; passSec is identical by construction (same segment
+   *  lengths, same pause seconds), so phase/period math never forks. */
+  arcR?: ArcTable;
+  scheduleR?: ScheduleSpan[];
   /** Seconds for one one-way pass (travel + pauses). */
   passSec: number;
   /** Full cycle: loop = passSec; pingpong = 2·passSec; once = passSec. */
@@ -368,7 +387,24 @@ export function placeTrack(spec: TrackSpec): PlacedTrack {
     x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
   }
   const bound = { x0: x0 - maxReach, y0: y0 - maxReach, x1: x1 + maxReach, y1: y1 + maxReach };
-  return { spec, arc, schedule: spans, passSec, periodSec, riders, bound, armed: spec.armed ?? true };
+  // THE COIN AT THE CRADLE (spec.reversal): pre-build the mirrored pass so
+  // the pure resolver just picks a table per release — pauses re-key to the
+  // SAME physical waypoints, so the reversed schedule dwells at the same
+  // piers with the same seconds (passSec provably equal: same segments, same
+  // pause sum). Zero cost for every lane that never flips the coin.
+  let arcR: ArcTable | undefined;
+  let scheduleR: ScheduleSpan[] | undefined;
+  if ((spec.reversal ?? 0) > 0 && spec.mode === 'once') {
+    const n = spec.path.length;
+    const rSpec: TrackSpec = {
+      ...spec,
+      path: [...spec.path].reverse(),
+      pauses: (spec.pauses ?? []).map(p => ({ at: n - 1 - p.at, sec: p.sec })),
+    };
+    arcR = buildArc(rSpec.path, false);
+    scheduleR = buildSchedule(arcR, rSpec).spans;
+  }
+  return { spec, arc, schedule: spans, arcR, scheduleR, passSec, periodSec, riders, bound, armed: spec.armed ?? true };
 }
 
 // --- the pure resolver -----------------------------------------------------
@@ -387,11 +423,31 @@ export function rideCapOf(tr: PlacedTrack, phase: number, k: number): number {
   return sh[0] + (h / 4294967296) * (sh[1] - sh[0]);
 }
 
+/** THE COIN (see TrackSpec.reversal): does release ordinal `k` run the lane
+ *  REVERSED? A pure integer hash of the rideCapOf family with its own salt —
+ *  the pose resolver, the arc-frac read, the cradle, and every seat at any
+ *  clock agree. False the moment the lever is unset (legacy lanes pay one
+ *  truthy test, nothing more). */
+export function releaseReversed(tr: PlacedTrack, phase: number, k: number): boolean {
+  const rev = tr.spec.reversal ?? 0;
+  if (!(rev > 0) || !tr.arcR) return false;
+  let h = Math.imul(k + 1, 0x9e3779b1) >>> 0;
+  h = (h ^ ((tr.arc.total * 89) | 0) ^ (((tr.spec.bornAt ?? 0) * 151) | 0) ^ ((phase * 4093) | 0)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  return h / 4294967296 < rev;
+}
+
 /** The start-of-lane holding pose — pre-birth AND a rearm lane's cradle rest
- *  share it: parked, harmless, unspun (the pending grammar's one look). */
-function cradlePose(tr: PlacedTrack, rider?: TrackRiderDef): TrackPose {
-  const { s } = scheduleS(tr.schedule, 0);
-  const p = pointAt(tr.arc, s);
+ *  share it: parked, harmless, unspun (the pending grammar's one look).
+ *  `rev` seats the cradle at the release's OWN spring (a reversed journey
+ *  rests at the far strand it will depart from — the parked hull is an
+ *  honest tell of where the next crossing begins). */
+function cradlePose(tr: PlacedTrack, rider?: TrackRiderDef, rev = false): TrackPose {
+  const sched = rev && tr.scheduleR ? tr.scheduleR : tr.schedule;
+  const arc = rev && tr.arcR ? tr.arcR : tr.arc;
+  const { s } = scheduleS(sched, 0);
+  const p = pointAt(arc, s);
   const base = rider?.surface.kind === 'rect'
     ? p.dir + (rider.orient === 'radial' ? -Math.PI / 2 : 0)
     : p.dir;
@@ -436,10 +492,11 @@ function scheduleS(spans: ScheduleSpan[], t: number): { s: number; paused: boole
  *  local time == the clock — existing lanes are numerics-identical. */
 export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider?: TrackRiderDef): TrackPose {
   const tl = timeSec - (tr.spec.bornAt ?? 0);
-  if (tl < 0) return cradlePose(tr, rider);
+  if (tl < 0) return cradlePose(tr, rider, releaseReversed(tr, phase, 0));
   const period = Math.max(1e-3, tr.periodSec);
   let t: number;
   let reversed = false;
+  let rev = false; // whole-release reversal (THE COIN — its own mirrored tables)
   let spinT = tl;
   if (tr.spec.mode === 'once') {
     if ((tr.spec.rearm ?? 0) > 0) {
@@ -452,12 +509,18 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
       const shifted = tl + phase * period;
       const tc = (shifted % period + period) % period;
       const k = Math.floor(shifted / period);
-      if (tc > Math.min(tr.passSec, rideCapOf(tr, phase, k))) return cradlePose(tr, rider);
+      // The rest window cradles at the NEXT release's spring (k+1's coin) —
+      // the parked hull already waits where that journey will begin.
+      if (tc > Math.min(tr.passSec, rideCapOf(tr, phase, k))) {
+        return cradlePose(tr, rider, releaseReversed(tr, phase, k + 1));
+      }
+      rev = releaseReversed(tr, phase, k);
       t = tc;
       spinT = tc; // each release spins fresh from the cradle
     } else {
       // Single pass — clamp at the far end (or at the shatter point: the
       // retire burst then fires exactly where the stone gave out).
+      rev = releaseReversed(tr, phase, 0);
       t = Math.min(tl, tr.passSec, rideCapOf(tr, phase, 0));
     }
   } else {
@@ -467,8 +530,10 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
       reversed = true;
     }
   }
-  const { s, paused } = scheduleS(tr.schedule, t);
-  const p = pointAt(tr.arc, s);
+  const sched = rev && tr.scheduleR ? tr.scheduleR : tr.schedule;
+  const arcT = rev && tr.arcR ? tr.arcR : tr.arc;
+  const { s, paused } = scheduleS(sched, t);
+  const p = pointAt(arcT, s);
   const dir = reversed ? p.dir + Math.PI : p.dir;
   const spin = (rider?.spin ?? 0) * spinT;
   // 'radial' turns the rect across the lane; on a CCW ring the −π/2 turn
@@ -500,16 +565,24 @@ export function trackArcFrac(tr: PlacedTrack, timeSec: number, phase: number): n
   const tl = timeSec - (tr.spec.bornAt ?? 0);
   const period = Math.max(1e-3, tr.periodSec);
   let t: number;
+  let rev = false; // the release's coin (JOURNEY-relative: 0 at its own spring)
   if (tr.spec.mode === 'once') {
-    t = (tr.spec.rearm ?? 0) > 0
-      ? (((tl + phase * period) % period) + period) % period
-      : Math.min(tl, tr.passSec);
+    if ((tr.spec.rearm ?? 0) > 0) {
+      const shifted = tl + phase * period;
+      t = ((shifted % period) + period) % period;
+      rev = releaseReversed(tr, phase, Math.floor(shifted / period));
+    } else {
+      t = Math.min(tl, tr.passSec);
+      rev = releaseReversed(tr, phase, 0);
+    }
   } else {
     t = (((tl + phase * period) % period) + period) % period;
     if ((tr.spec.mode ?? 'loop') === 'pingpong' && t > tr.passSec) t = tr.periodSec - t;
   }
-  const { s } = scheduleS(tr.schedule, Math.min(t, tr.passSec));
-  return tr.arc.total > 0 ? s / tr.arc.total : 0;
+  const sched = rev && tr.scheduleR ? tr.scheduleR : tr.schedule;
+  const arcT = rev && tr.arcR ? tr.arcR : tr.arc;
+  const { s } = scheduleS(sched, Math.min(t, tr.passSec));
+  return arcT.total > 0 ? s / arcT.total : 0;
 }
 
 /** A 'once' lane whose single pass has fully run (local time past the far
@@ -567,6 +640,10 @@ export function lintTrackSpec(spec: TrackSpec, where: string): string[] {
     if (spec.mode !== 'once') out.push(`${where}: shatter rides 'once' lanes only`);
     const [lo, hi] = spec.shatter;
     if (!(lo >= 0.5) || !(hi >= lo) || hi > 120) out.push(`${where}: shatter [${lo},${hi}] outside [0.5,120] lo≤hi`);
+  }
+  if (spec.reversal !== undefined) {
+    if (spec.mode !== 'once') out.push(`${where}: reversal rides 'once' lanes only (cyclic modes already return)`);
+    if (!(spec.reversal > 0) || spec.reversal > 1) out.push(`${where}: reversal ${spec.reversal} outside (0,1]`);
   }
   if (!(spec.speed > 0) || spec.speed > 600) out.push(`${where}: speed ${spec.speed} outside (0,600] px/s`);
   if (!spec.riders?.length) out.push(`${where}: lane with no riders`);

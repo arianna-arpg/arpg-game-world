@@ -484,6 +484,17 @@ registerRegion({ id: 'soul_water', walkable: true, blocks: false, label: 'the pa
   survival: { resource: 'soul', drain: 1 },
   visual: { fill: '#0e2e40', alpha: 0.86, animate: 'souls' },
   douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the pale water quenches…' } });
+// BOARDWALK — a deck of planks laid OVER whatever the grid held (the River
+// of Souls' dock aprons + pier runs; any future bridge deck or jetty). The
+// pour REPLACES the cell, so the cell IS boards: no stand status, no
+// survival drain, no douse ever reaches a body on the platform — the static
+// sibling of THE BOARDS SHIELD, the same law with zero clocks. Cheap to
+// walk (the AI takes the pier over the swim); the doodad dress on top
+// (bone_pier planks and the like) carries the drawn read, this row carries
+// the truth.
+registerRegion({ id: 'boardwalk', walkable: true, blocks: false, label: 'the boards',
+  pathCost: 1,
+  visual: { fill: '#261f19', alpha: 0.88, edge: { color: '#3d3126', width: 3 } } });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5,
   // bog_rot, NOT combat 'poison': its own row carries the same level-scaled

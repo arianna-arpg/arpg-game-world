@@ -39,6 +39,34 @@ export interface CourseTerminus {
   landmarks?: { landmark: string; chance: number; count?: [number, number] }[];
 }
 
+/** THE STREWN LAW (anchor: 'strewn'): a course UNTETHERED from any gate —
+ *  instances dealt across the dimension's whole chart on a jittered lattice,
+ *  pure f(seed). Each `span`-sized cell flips a presence coin (`chance`),
+ *  and a present cell births ONE instance: a jittered anchor plus its OWN
+ *  derived seed, so every instance winds its own way (heading, meander,
+ *  wobble all its own). Nothing resolves an anchor for these — they exist
+ *  the moment the dimension does, near a gate only if the dice put them
+ *  there. */
+export interface StrewSpec {
+  /** Lattice cell size, node-space units (how far apart instances deal). */
+  span: number;
+  /** 0..1 presence chance per lattice cell. */
+  chance: number;
+  /** Anchor jitter as a fraction of span (default STREW_DEFAULTS.jitter). */
+  jitter?: number;
+  /** Lattice hash salt (composed with the spec's seedSalt). */
+  salt?: number;
+}
+
+/** One dealt instance of a strewn course: a stable lattice key, the anchor
+ *  coordinate, and the instance's own derived seed (pass it wherever the
+ *  polyline/hit math asks for `seed` — heading and meander are ITS OWN). */
+export interface CourseInstance {
+  key: string;
+  anchor: MapCoord;
+  iseed: number;
+}
+
 export interface CourseSpec {
   /** Stable id — memo key + attribution. */
   id: string;
@@ -47,9 +75,13 @@ export interface CourseSpec {
    *  not patches" lever (the River of Flame idiom). */
   biome: string;
   /** Where the course springs from. 'gate' = the dimension's minted gate zone
-   *  (the one coordinate every client agrees on). New anchor kinds are data
-   *  waiting on a resolver — the caller maps kind → coordinate. */
-  anchor: 'gate' | (string & {});
+   *  (the one coordinate every client agrees on); 'strewn' = untethered
+   *  instances dealt across the chart (see StrewSpec — `strew` required).
+   *  New anchor kinds are data waiting on a resolver — the caller maps
+   *  kind → coordinate. */
+  anchor: 'gate' | 'strewn' | (string & {});
+  /** The strewn deal (anchor 'strewn' only). */
+  strew?: StrewSpec;
   /** Total run length in node-space units (cellSpan is 260; a cardinal hop is
    *  ~78-86 — a 2400 course is a many-zone trek). */
   length: number;
@@ -124,6 +156,9 @@ export const COURSE_DEFAULTS = {
   hug: 44,
 } as const;
 
+/** Strewn-deal fallbacks (see StrewSpec). */
+export const STREW_DEFAULTS = { jitter: 0.5, salt: 0x57e3 } as const;
+
 /** Integer hash (Rng's family) → deterministic across host / client / reload.
  *  Deliberately duplicated per world-leaf (biomes/dimensions/climate idiom). */
 function hashCell(a: number, b: number, seed: number): number {
@@ -142,11 +177,61 @@ function hash01(a: number, b: number, seed: number): number {
 // field's pick memo (a re-derive is ~20 sin calls; correctness never depends
 // on the cache, only the map wash's hammering does).
 const polyMemo = new Map<string, MapCoord[]>();
-const POLY_MEMO_CAP = 32;
+// Strewn courses hold several live instances in one map view — the cap wants
+// headroom over the old single-artery world (a re-derive is still cheap).
+const POLY_MEMO_CAP = 64;
 
 /** Drop every memoized polyline (a fresh world = a fresh field; mirrors
  *  resetFieldPickMemo, called from the same construction site). */
 export function resetCourseMemo(): void { polyMemo.clear(); }
+
+// --- the strewn deal --------------------------------------------------------
+
+/** One lattice cell's instance, presence UNCHECKED (re-resolution from a
+ *  stable key: the zone already exists, so the coin already came up). Pure
+ *  of (spec, cell, seed) — the anchor jitters inside the cell, and the
+ *  instance seed folds the cell in so every river winds its own way. */
+export function strewnCellInstance(spec: CourseSpec, cx: number, cy: number, seed: number): CourseInstance {
+  const st = spec.strew;
+  const span = Math.max(1, st?.span ?? 1);
+  const jit = (st?.jitter ?? STREW_DEFAULTS.jitter) * span;
+  const salt = ((st?.salt ?? STREW_DEFAULTS.salt) ^ spec.seedSalt) >>> 0;
+  const s = (seed ^ salt) >>> 0;
+  return {
+    key: `${cx}_${cy}`,
+    anchor: {
+      x: (cx + 0.5) * span + (hash01(cx * 5 + 1, cy * 3 + 2, s) - 0.5) * jit,
+      y: (cy + 0.5) * span + (hash01(cx * 3 + 4, cy * 5 + 3, s) - 0.5) * jit,
+    },
+    iseed: (seed ^ hashCell(cx, cy, salt)) >>> 0,
+  };
+}
+
+/** Every strewn instance of `spec` whose course could touch `coord`: the
+ *  presence coin per lattice cell over a pad wide enough for the course's
+ *  full reach (length + sweep + wobble + corridor). Stable cy→cx order, so
+ *  first-covering-instance sampling is deterministic on every seat. Empty
+ *  for non-strewn specs — callers may ask blindly. */
+export function strewnInstancesNear(spec: CourseSpec, coord: MapCoord, seed: number): CourseInstance[] {
+  const st = spec.strew;
+  if (!st || spec.anchor !== 'strewn') return [];
+  const span = Math.max(1, st.span);
+  const salt = ((st.salt ?? STREW_DEFAULTS.salt) ^ spec.seedSalt) >>> 0;
+  const s = (seed ^ salt) >>> 0;
+  const sweep = spec.sweep ?? spec.length * COURSE_DEFAULTS.sweepFrac;
+  const reach = spec.length + sweep + (spec.wobble ?? COURSE_DEFAULTS.wobble)
+    + spec.halfWidth + (spec.feather ?? 0) + (st.jitter ?? STREW_DEFAULTS.jitter) * span;
+  const pad = Math.max(1, Math.ceil(reach / span));
+  const c0x = Math.floor(coord.x / span), c0y = Math.floor(coord.y / span);
+  const out: CourseInstance[] = [];
+  for (let cy = c0y - pad; cy <= c0y + pad; cy++) {
+    for (let cx = c0x - pad; cx <= c0x + pad; cx++) {
+      if (hash01(cx * 2 + 11, cy * 2 + 7, s) >= st.chance) continue;
+      out.push(strewnCellInstance(spec, cx, cy, seed));
+    }
+  }
+  return out;
+}
 
 /** The course's polyline, springing at `anchor`: a hash-seeded heading, a
  *  serpentine meander (sin over `waves`), per-vertex wobble. Closed-form pure —

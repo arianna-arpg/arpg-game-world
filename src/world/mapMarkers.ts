@@ -114,6 +114,22 @@ registerMarkerSource((world): MapMarker[] => {
   }];
 });
 
+/** THE SOUL-SHIPS — the voyage-boat idiom dealt to the ferryman: every
+ *  CHARTED River of Souls shows its abroad ferries riding the ribbon at
+ *  their true positions (World.soulriverShipCoords — the pure track clock
+ *  projected onto the course, so the chart and the deck agree). Gating
+ *  lives in the source (a coord marker can't lean on fog:'charted'); a
+ *  cradled, dissolved ship is honestly absent. */
+registerMarkerSource((world): MapMarker[] => {
+  return world.soulriverShipCoords().map((s, i) => ({
+    id: `soulship-${i}`, coord: { x: s.x, y: s.y },
+    glyph: '⛴', fill: '#0b1c28', stroke: '#4a8ab0', text: '#9fd8ec', r: 9,
+    title: s.paused ? 'The Soul-Ship — called at a pier' : 'The Soul-Ship — abroad on the pale water',
+    detail: 'board from a pier apron; the ferryman calls at every shore',
+    fog: 'always', z: 26, dimension: s.dimension,
+  }));
+});
+
 /** A skull on the charted node holding each unreclaimed corpse (fog:'charted' —
  *  no spoilers; only visited ground reveals where you fell). Reads the
  *  character's interaction-scoped ring (corpseRecords): the shared account

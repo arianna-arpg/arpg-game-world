@@ -46,6 +46,21 @@ undrawn, unthreatening while off); `ownerId` = actor-id kill credit (the
 presser who loosed the boulder — players wear no tags). Purity holds
 everywhere: local time = clock − bornAt, still the one synced clock.
 
+**THE COIN AT THE CRADLE** (`TrackSpec.reversal`, 'once' lanes only): chance
+(0..1] that a given RELEASE runs the path REVERSED — springing at the far
+end, retiring at the authored cradle. Dealt per release on the `shatter`
+pure-hash family (lane length, bornAt, rider phase, release ordinal — its
+own salt), so every seat and every resume agree with zero state. Placement
+pre-builds a mirrored arc + schedule (pauses re-key to the SAME physical
+waypoints; passSec is provably identical), the resolver just picks a table,
+`trackArcFrac` stays JOURNEY-relative (0 at the release's own spring — the
+`fadeTail` fray and any escalation riding the fraction follow the journey,
+not the geography), and the cradle rest parks the rider at the NEXT
+release's spring — the waiting hull is an honest tell of where the crossing
+will begin. With `rearm` this is the shuttling ferry whose direction is
+dealt fresh each cycle (the Soul-Ship sails upstream as often as down);
+lever unset = the legacy byte-path, no tables built, no hash rolled.
+
 Three authoring surfaces, one runtime:
 
 1. **Generation** — a landmark builder or recipe pushes `(ctx.tracks ??= [])`

@@ -593,25 +593,47 @@ function soulriverLayout(ctx: GenCtx, def: ZoneDef): void {
   }
   paintRegion(grid, land, 'ground');
 
+  // THE PIERS AS BRIDGES (the boardwalk law): every pier run + its waiting
+  // apron pours as a BOARDWALK grid strip OVER the water — a deck between
+  // you and the river, the static Boards Shield — so waiting for the ship
+  // never wades, never drains the soul, never douses. The plan's own apron
+  // point is the strip's far end (gangway short of the hull), so pour,
+  // planks, probe and ferry all agree by construction.
+  const pierW = layoutParam(def, 'pierWidth', SOULRIVER_CFG.plan.pierW) as number;
+  const apronR = layoutParam(def, 'apronRadius', SOULRIVER_CFG.plan.apronR) as number;
+  const boards = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const dock of plan.docks) {
+    const dx = dock.apron.x - dock.pos.x, dy = dock.apron.y - dock.pos.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const ux = dx / dist, uy = dy / dist;
+    const rim = vec(dock.pos.x + ux * (dock.outcropR - 10), dock.pos.y + uy * (dock.outcropR - 10));
+    band(boards, [rim, vec(dock.apron.x, dock.apron.y)], pierW);
+    disc(boards, dock.apron.x, dock.apron.y, apronR);
+  }
+  paintRegion(grid, boards, 'boardwalk');
+
   // THE DOCKS — per station: a plank pier reaching from the islet toward
   // the ship's pause point (stopping a gangway short of the deck's beam),
-  // the spirit gate astride the islet, wake-lanterns at its posts.
-  const deckHh = SOULRIVER_CFG.ferry.deck.hh;
-  const plankGap = SOULRIVER_CFG.plan.plankGap;
+  // wake-lanterns at its posts; a LANDING additionally raises the spirit
+  // gate (the arch is the promise of a country — wild strands promise
+  // nothing, and their shore leads nowhere).
   for (const dock of plan.docks) {
     const dx = dock.pier.x - dock.pos.x, dy = dock.pier.y - dock.pos.y;
     const dist = Math.hypot(dx, dy) || 1;
     const ux = dx / dist, uy = dy / dist;
-    // Planks: islet rim → just short of the hull's flank.
-    const s0 = dock.outcropR - 10, s1 = dist - deckHh - plankGap;
+    // Planks: islet rim → the apron (the drawn read of the boardwalk pour).
+    const s0 = dock.outcropR - 10;
+    const s1 = Math.hypot(dock.apron.x - dock.pos.x, dock.apron.y - dock.pos.y);
     for (let s = s0; s <= s1; s += 20) {
       ctx.doodads.push({
         pos: vec(dock.pos.x + ux * s, dock.pos.y + uy * s),
         radius: 22, kind: 'bone_pier', dir: Math.atan2(uy, ux),
       });
     }
-    // The spirit gate on the islet, facing the pier walk.
-    ctx.doodads.push({ pos: vec(dock.pos.x, dock.pos.y), radius: 36, kind: 'soul_gate', dir: Math.atan2(uy, ux) });
+    // The spirit gate on a LANDING's islet, facing the pier walk.
+    if (dock.landing) {
+      ctx.doodads.push({ pos: vec(dock.pos.x, dock.pos.y), radius: 36, kind: 'soul_gate', dir: Math.atan2(uy, ux) });
+    }
     const pxv = -uy, pyv = ux;
     for (const s of [-56, 56]) {
       ctx.doodads.push({ pos: vec(dock.pos.x + pxv * s, dock.pos.y + pyv * s), radius: 10, kind: 'wake_lantern' });
