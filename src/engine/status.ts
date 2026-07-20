@@ -101,6 +101,14 @@ export interface StatusDef {
    *  untargetable, but that is the grab sweep's doing, not this flag's).
    *  Ships to co-op clients on the ordinary status wire. */
   conceals?: true;
+  /** GHOSTING AS A STATE: while worn, the bearer DRAWS at this alpha (the
+   *  minimum across worn statuses wins) — the soft sibling of `conceals`
+   *  for bodies that should read present-but-inside (a burrowed parasite
+   *  cresting its victim's rim, a half-submerged lurker). Pure
+   *  presentation like conceals: targeting, collision and statuses keep
+   *  their own truths, and it ships to co-op clients on the ordinary
+   *  status wire. */
+  ghostAlpha?: number;
   /** IMPALE personality: the status's banked `rupture` DISCHARGES into
    *  the bearer's NEXT qualifying top-level hit as its own separate
    *  mitigated blow (then the status is spent) — instead of waiting for
@@ -1099,6 +1107,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Swallowed', color: '#b46a8a', duration: 0.5,
     conceals: true,
     mods: [mod('insightSap', 'flat', 1)],
+  },
+  // THE BURROW MARKER (engine/cling.ts): worn by a rider sunk INSIDE the
+  // body it rides — pure legibility (the ghost read + a pip + the co-op
+  // status wire); the gameplay truth is the ride state and the one-
+  // directional hostility gate, never this status. Refreshed on the ride
+  // clock, stripped by the release; beneficial (it is the parasite's own
+  // advantage — never an affliction, never eaten by a friendly cleanse).
+  burrowed: {
+    label: 'Burrowed', color: '#c8a878', duration: 1.0,
+    beneficial: true,
+    ghostAlpha: 0.45,
   },
 
   living_bomb: {

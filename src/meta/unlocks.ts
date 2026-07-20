@@ -369,7 +369,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   { classId: 'hivecaller', cost: 300,
     blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering — and one pointed word the whole chorus obeys.',
     skillIds: ['summon_swarmlings', 'raise_gnatveil', 'command_assault',
-      'beckon_palewisps'],
+      'beckon_palewisps', 'loose_marrowgrubs'],
     supportIds: ['broodclutch', 'vicious_brood', 'hiveborn'],
     discover: { ledger: 'broodmothers_slain',
       hint: 'Kill a mother of broods and listen: the humming does not stop. It waits to be told where to go.' } },

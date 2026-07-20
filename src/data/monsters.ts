@@ -1374,6 +1374,37 @@ export const MONSTERS: Record<string, MonsterDef> = {
       behavior: { flock: { kin: 'def', cohesion: 1.1, separation: 0.9, alignment: 0.8, weave: 1.6, erratic: 1.2 } },
     },
   },
+  // THE BURROWING flavor (ClingSpec.gnaw + burrow — the Pikmin purple):
+  // grubs latch and sink INSIDE the body they ride, and the host cannot
+  // strike its own parasites (the one-directional hostility gate) — its
+  // answer is the SHAKE, which scatters them into a real vulnerability
+  // window before they can reach the flesh again. While they ride they
+  // cast nothing: the chew IS the kit (a steady credited gnaw through the
+  // swallow-digest grammar), so the damage never whiffs with the carry.
+  // Unlatched they scrabble with an ordinary claw. Battle-fed like the
+  // cinderkin (the latch doctrine): corpses give up grubs, traded blows
+  // fatten the gauge.
+  marrowgrub: {
+    id: 'marrowgrub', name: 'Marrowgrub',
+    color: '#d8c8a8', shape: 'oval', radius: 6, material: 'flesh', look: 'swarm_bug',
+    base: { life: 10, moveSpeed: 185, accuracy: 75, evasion: 50, mana: 0 },
+    skills: ['claw'],
+    xp: 0,
+    cling: {
+      // Shorter rides than the perch kinds: protected uptime is PAID for
+      // in shake cadence — the host answers often, the window is real.
+      shakeSec: [2.8, 4.2],
+      // ~cinder_bite's curve (avg 5.5/0.85s) priced slightly under for
+      // the unmissable, host-proof delivery.
+      gnaw: { dps: 5.5, type: 'physical' },
+      burrow: {},
+    },
+    // Two chews of armor: untouchable by the HOST while burrowed, brittle
+    // in the shaken window — a host that shakes and swings clears its
+    // skin fast, and everyone else scrapes riders off as ever.
+    plies: { count: 2 },
+    brain: { type: 'swarm' },
+  },
 
   mender_sprite: {
     id: 'mender_sprite', name: 'Mender Sprite',

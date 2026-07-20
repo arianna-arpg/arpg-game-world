@@ -102,6 +102,45 @@ held), and keeps casting its own kit through the one pipeline. Levers:
   gnats' stacking `harried` (aim + attention spoiled, 6-stack ceiling).
 - The mover contract refuses latched bodies (`moveActor` early-out): no
   pit checks, no wall slides for a body riding another.
+- THE LATCHED HAND: while a ride holds, a rider's cast bars track the
+  victim's LIVE body (`updateCasting` re-stamps `cs.aim` each frame) — an
+  aim frozen at press used to go stale as the seat moved with the carry,
+  and the bite whiffed at where the body STOOD. Seats exempt (a possessed
+  clinger aims with its rider's hands).
+
+### The two ride tempers (optional, pure `ClingSpec` data)
+
+**THE GNAW** (`cling.gnaw: { dps, type?, every? }`) — the DoT latch: the
+ride's damage is a steady CHEW dealt on its own bite clock through the one
+mitigation ladder (typed, rider-credited, no evade/block/crit — the
+swallow-digest grammar; like every DoT it pierces plies straight to life,
+and `kill()` stays sovereign). Magnitude = `dps × every ×
+sheet.get('damage', [type])` on the RIDER's own folded sheet, so the
+monster level curve and the keeper's batch-tempered minion investment
+arrive with no gnaw-specific stat (probe-pinned: +100% minionDamage moves
+bites by exactly `1 + 1/batch`). While the ride holds, `useSkill` REFUSES
+the body's casts the way `moveActor` refuses its steps — the teeth are the
+kit (seats exempt; cast-kit clingers without gnaw keep whacking, now with
+the tracked aim above). First bite lands one full beat after the attach —
+a brush-past latch never spikes.
+
+**THE BURROW** (`cling.burrow: { sink?, grace?, toss? }`) — host-blind
+riding, the Pikmin shake-off loop: the rider sinks INSIDE the body it
+rides (deeper seat sink — drawn == held), and while burrowed the HOST
+cannot find its own parasite: a ONE-directional early-false in
+`World.hostileTo` (the possession GUISE's pattern) blinds the host's
+targeting, swings, novas and stray zones to it, while the rider's teeth
+stay live and every OTHER combatant scrapes riders off exactly as before.
+The host's honest answer is its SHAKE clock: the pop-out
+(`clingRelease('shake')`) SCATTERS the rider (`toss`, random bearing) into
+a LONGER re-latch wait (`grace` — the vulnerability window where shaking
+finally pays), then the loop closes as the grub walks back in and burrows
+again. Legibility: the rider wears the `burrowed` marker status (refresh-
+driven, stripped on release) whose `StatusDef.ghostAlpha` fades the drawn
+body — the NEW generic render lever (any status can ghost its bearer;
+ships on the ordinary co-op status wire). Named for the latch fabric —
+distinct from the `{do:'burrow'}` brain verb (underground TERRAIN travel);
+this burrow goes into a BODY. Dials in `CLING_CFG.gnaw` / `CLING_CFG.burrow`.
 
 **THE OPEN SEAM — GRAPPLE** (deliberately unbuilt, shaped for): the inverse
 latch, where the rider DRAGS the ridden — a future GrappleSpec rides the
@@ -153,13 +192,30 @@ its scarcity can afford to be geographic. Every kind wears THE PLY FABRIC
 | Stoke the Cinderkin (`gather_cinderkin`) | `cinderkin` (imp, r8, latch + fire bites, 4 plies) | onKill + gauge | the battle-stoked vanguard — attrition feeds replenishment |
 | Gather the Palewisps (`beckon_palewisps`) | `palewisp` (spirit, r7, phasing zaps, flier, 2 plies) | pocket | the finite haunting — hoard, spend, mourn |
 | Raise the Gnatveil (`raise_gnatveil`) | `gnatling` (r4, flock, latch + `harried`, 1 ply) | motes (mixed) | the harrying cloud — misdirection, not murder |
+| Loose the Marrowgrubs (`loose_marrowgrubs`) | `marrowgrub` (r6, latch + GNAW + BURROW, 2 plies) | onKill + gauge | the Pikmin purple — sunk host-proof chewers the enemy must SHAKE into the open |
+
+## Objectives: husks never gate a clear
+
+Husks are minted on team `'enemy'` wearing ACTOR-level scenery armor
+(`passive + untargetable + invulnerable`) on an ordinary combat kind —
+def-level `passive`/`noObjective` can't see them. `countedEnemies()`
+exempts the armored pair (`a.passive && a.untargetable`) as the same
+soft-lock guard one layer down: a planted body no build can even FIGHT
+never walls a `clear` (the Hivecaller's own unclaimed pockets and mote
+husks were doing exactly that). A merely-untargetable body (a phased boss)
+still counts and still gates — the exemption is deliberately the full pair.
 
 ## Verification
 
-- `balance/probe_throng.ts` — 34 checks: sight, walk-claims, the batch LAW,
+- `balance/probe_throng.ts` — 63 checks: sight, walk-claims, the batch LAW,
   cap fold, sweep orders + pin + linger, latch attach/slave/whack/shake,
   seat scaling, gauge mint, onKill raising, meta delegation, disband,
-  restore, key/salt purity.
+  restore, key/salt purity — plus THE GNAW (quelled kit, castless bleed,
+  batch-fold bite scaling, sovereign kill), THE BURROW (one-directional
+  hostility, host blows pass through, bystander scrape holds, marker +
+  deep sink, shake-out toss/grace/strip, the re-burrow loop, perch-kind
+  purity) and THE CLEAR LAW (husks alone complete; a live combatant still
+  gates; death clears with husks standing).
 - Live-verified in the pane (dev tab levers): claims by walking, the heel
   cloud, 2-seat zombie carrying exactly 2 riders, harried at its 6-stack
   ceiling, disband re-wilding, and the sight gate BOTH directions by pixel

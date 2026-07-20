@@ -3629,14 +3629,24 @@ export class Renderer {
     if (a.burrow) return;
 
     // CONCEALMENT AS A STATE (StatusDef.conceals): a body worn INSIDE
-    // another — the grab fabric's swallowed, any future burrow-status —
-    // is not drawn at all; the holder's working gulletsack is the read.
-    // Ships on the ordinary status wire, so co-op clients skip it too.
-    // The LOCAL hero keeps their struggle meter even unseen: swallowed
-    // is a predicament, not a blackout.
-    if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) {
-      if (a === world.player) this.drawGrabMeter(a, world);
-      return;
+    // another — the grab fabric's swallowed — is not drawn at all; the
+    // holder's working gulletsack is the read. GHOSTING AS A STATE
+    // (StatusDef.ghostAlpha) is the soft sibling collected in the same
+    // pass: present-but-inside bodies (the latch fabric's burrowed
+    // parasite) draw faded instead of vanishing — you see your grubs
+    // wriggling in the flesh. Both ship on the ordinary status wire, so
+    // co-op clients read them too. The LOCAL hero keeps their struggle
+    // meter even unseen: swallowed is a predicament, not a blackout.
+    let statusGhost = 1;
+    for (const s of a.statuses) {
+      const sd = STATUS_DEFS[s.id];
+      if (sd?.conceals) {
+        if (a === world.player) this.drawGrabMeter(a, world);
+        return;
+      }
+      if (sd?.ghostAlpha !== undefined && sd.ghostAlpha < statusGhost) {
+        statusGhost = sd.ghostAlpha;
+      }
     }
 
     // THE TIER FABRIC (engine/tiers.ts), COVERED exposure: the other layer
@@ -3709,6 +3719,11 @@ export class Renderer {
     if (tpose) ctx.globalAlpha = 1; // a traversal's rise stays solid — cinema, not stealth
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;
     else if (a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;
+    // GHOSTING AS A STATE (StatusDef.ghostAlpha, collected above): the
+    // deepest worn ghost FLOORS whatever the other fade lanes chose (min
+    // — never stacks, never brightens; the traversal's cinema stays
+    // solid, its own law).
+    if (!tpose && statusGhost < ctx.globalAlpha) ctx.globalAlpha = statusGhost;
     // THE SIGHT VEIL hides bodies the hero's eye cannot reach (smoothed, so
     // a cover-slip reads as slipping behind the bole, never a pop). The
     // local hero IS the eye — never self-veiled.

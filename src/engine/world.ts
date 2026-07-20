@@ -157,7 +157,9 @@ import {
   batchScaleOf, isThrongBody, THRONG_CFG, throngMarkerOf, throngPocketKey,
   throngSkillSalt, throngSpecsOn, type ThrongSourceRow, type ThrongSpec,
 } from './throng';
-import { CLING_CFG, clingEligible, clingSeatPos, clingSeatsOf } from './cling';
+import {
+  CLING_CFG, clingBurrowed, clingEligible, clingSeatPos, clingSeatsOf, gnawTags,
+} from './cling';
 import {
   LITE_CFG, LitePool, liteNoise, liteRingOffset, liteSeatHash, resolveLiteKind,
   type LiteKind, type LitePocket, type LiteRegenSpec, type LiteSwarmRow,
@@ -20627,6 +20629,15 @@ export class World {
     // first harm the rider authors tears it for good (resolveHit).
     if (b.possession?.guiseFaction && !b.possession.guiseBroken
       && a.team === 'enemy' && a.faction === b.possession.guiseFaction) return false;
+    // THE BURROW (the latch fabric, engine/cling.ts): a rider sunk INSIDE
+    // the body it rides cannot be found BY that body — sitting in the one
+    // hostility gate, the host's targeting, swings, novas and stray zones
+    // all pass its own parasite by for free. ONE-directional like the
+    // guise: the rider's teeth ask the other direction and stay live, and
+    // every OTHER combatant still scrapes riders off normally. The host's
+    // honest answer is its shake clock — the pop-out (clingRelease
+    // 'shake') scatters the rider into a real vulnerability window.
+    if (b.clingTo?.id === a.id && clingBurrowed(b)) return false;
     if (a.team !== b.team) return true;
     // PREDATION (TargetSpec.prey): a hunter is hostile to its FOOD no matter
     // whose side the food nominally stands on — and it's ONE-directional:
@@ -22354,17 +22365,52 @@ export class World {
         // rider off (the direct channel re-throws your own riders).
         const redirected = cmd !== undefined && cmd.targetId !== ride.id
           && dist(cmd.pos, v?.pos ?? cmd.pos) > (cmd.radius ?? COMMAND_CFG.markRadius);
-        if (!v || v.dead || this.time >= ride.until || redirected) {
+        if (!v || v.dead || redirected) {
           this.clingRelease(a);
+          continue;
+        }
+        // THE SHAKE: the ride ends on its own rolled clock — the victim's
+        // earned answer. A burrow-tempered rider pops out SCATTERED into
+        // its vulnerability window (clingRelease knows the cause).
+        if (this.time >= ride.until) {
+          this.clingRelease(a, 'shake');
           continue;
         }
         clingSeatPos(v, a, ride.ang, a.pos);
         a.facing = ride.ang + Math.PI;
         a.aiTargetId = ride.id; // the ride IS the fight — acquire churn never wanders
         const spec = a.cling;
-        if (spec?.rideStatus && this.time >= ride.statusAt) {
+        if (this.time >= ride.statusAt) {
           ride.statusAt = this.time + CLING_CFG.rideStatusEvery;
-          v.applyStatus(spec.rideStatus, 0, 1, 'cling');
+          if (spec?.rideStatus) v.applyStatus(spec.rideStatus, 0, 1, 'cling');
+          // THE BURROW MARKER: pure legibility for the sunk rider (the
+          // renderer's ghost read + the co-op status wire) — refresh-
+          // driven like the grab markers, stripped by the release.
+          if (spec?.burrow) a.applyStatus('burrowed', 0, 1, 'cling');
+        }
+        // THE GNAW (ClingSpec.gnaw): the DoT latch — one typed, mitigated,
+        // rider-credited chew per beat through the swallow-digest grammar
+        // (bodily damage: no evade, no block, no crit — and like every
+        // DoT it pierces plies straight to life; kill() stays sovereign).
+        // The rider's own damage sheet scales it, so the monster level
+        // curve and the keeper's batch-tempered minion folds arrive free.
+        const g = spec?.gnaw;
+        if (g && this.time >= ride.gnawAt) {
+          const every = g.every ?? CLING_CFG.gnaw.every;
+          ride.gnawAt = this.time + every;
+          if (!v.invulnerable) {
+            const type = g.type ?? 'physical';
+            const amt = g.dps * every * a.sheet.get('damage', gnawTags(type));
+            const taken = mitigateTyped(v, { [type]: amt });
+            if (taken > 0) {
+              v.life -= taken;
+              v.hitFlash = 0.12;
+              if (taken >= 1) {
+                this.text(v.pos, Math.round(taken).toString(), DAMAGE_COLOR[type], 11);
+              }
+              if (v.life <= 0 && !v.dead) this.kill(v, false, a);
+            }
+          }
         }
         continue;
       }
@@ -22390,20 +22436,46 @@ export class World {
         ang: angleTo(v.pos, a.pos) + rand(-0.5, 0.5),
         until: this.time + rand(shake[0], shake[1]),
         statusAt: this.time,
+        // The gnaw arms one full beat out — a brush-past latch never
+        // spikes (the lite pool's stagger doctrine).
+        gnawAt: this.time + (a.cling.gnaw?.every ?? CLING_CFG.gnaw.every),
       };
       a.aiTargetId = v.id;
     }
   }
 
-  /** Hop a rider off (shake, death, redirect, knockback) + re-latch grace. */
-  private clingRelease(a: Actor): void {
+  /** Hop a rider off (shake, death, redirect, knockback) + re-latch grace.
+   *  A SHAKE on a burrow-tempered rider is THE POP-OUT: scattered farther
+   *  (burrow.toss, random bearing) into a LONGER grace (burrow.grace) —
+   *  the vulnerability window the host earned by shaking. Every other
+   *  cause — and every plain-perch rider — keeps the classic short hop. */
+  private clingRelease(a: Actor, cause: 'shake' | 'drop' = 'drop'): void {
     const ride = a.clingTo;
     a.clingTo = undefined;
-    a.clingCooldownUntil = this.time + CLING_CFG.reattachGrace;
+    const bur = cause === 'shake' ? a.cling?.burrow : undefined;
+    a.clingCooldownUntil = this.time
+      + (bur ? bur.grace ?? CLING_CFG.burrow.grace : CLING_CFG.reattachGrace);
+    // The burrow marker dies with the ride (refresh-driven, but a half-
+    // second of ghost body would be a lie — the grab-release law).
+    for (let i = a.statuses.length - 1; i >= 0; i--) {
+      if (a.statuses[i].id === 'burrowed') {
+        a.statuses.splice(i, 1);
+        a.sheet.removeSource('status:burrowed');
+      }
+    }
     if (!ride) return;
+    const ang = bur ? rand(0, Math.PI * 2) : ride.ang;
+    const hop = bur ? bur.toss ?? CLING_CFG.burrow.toss : CLING_CFG.detachHop;
     a.pos = this.clampPos(vec(
-      a.pos.x + Math.cos(ride.ang) * CLING_CFG.detachHop,
-      a.pos.y + Math.sin(ride.ang) * CLING_CFG.detachHop), a.radius);
+      a.pos.x + Math.cos(ang) * hop,
+      a.pos.y + Math.sin(ang) * hop), a.radius);
+    if (bur) {
+      // The pop-out reads: a body flung clear of the flesh it was inside.
+      this.flashes.push({
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
+        color: a.color, life: 0.22, maxLife: 0.22,
+      });
+    }
   }
 
   // -------------------------------------------------------------- the grab --
@@ -22850,6 +22922,13 @@ export class World {
       this.failNote(caster, 'grab:held', 'held fast — struggle!');
       return false;
     }
+    // THE GNAW's quiet kit (engine/cling.ts): while a gnaw-tempered body
+    // holds a ride, its ONLY blow is its teeth — the one pipeline refuses
+    // casts exactly like the mover contract refuses steps (moveActor's
+    // latched early-out). The chew itself lands in the latch sweep. Seats
+    // exempt: a possessed body answers to its rider's hands, not its
+    // temper; cast-kit clingers (no gnaw) keep whacking untouched.
+    if (caster.clingTo && caster.cling?.gnaw && !this.seatOf(caster)) return false;
     // An overdrive toggle with debt outstanding is LOCKED ON — canUse would
     // refuse silently; this supplies the why.
     {
@@ -37919,6 +37998,17 @@ export class World {
       this.text(a.pos, 'interrupted', '#d05050', 11);
       return;
     }
+    // THE LATCHED HAND (engine/cling.ts): a rider casts FROM a seat that
+    // moves with its victim — an aim stamped at press goes stale the
+    // moment the carried fight turns, and the bite whiffs at the ghost of
+    // where the body stood. While the ride holds, every bar tracks the
+    // victim's LIVE body instead (the ride IS the fight — updateClings
+    // pins aiTargetId to the ridden id, so this is the same law). Seats
+    // exempt: a possessed clinger aims with its rider's hands.
+    if (a.clingTo && !this.seatOf(a)) {
+      const rv = this.actorById(a.clingTo.id);
+      if (rv && !rv.dead) { cs.aim.x = rv.pos.x; cs.aim.y = rv.pos.y; }
+    }
     const def = cs.inst.def;
     const targetInfo = cs.targetInfo as ResolvedTarget | undefined;
 
@@ -41572,6 +41662,15 @@ export class World {
   private countedEnemies(): Actor[] {
     return this.actors.filter(a => a.team === 'enemy' && !a.dead
       && !this.isAmbientTag(a.tag)
+      // ACTOR-level scenery armor is the same soft-lock guard one layer
+      // down: a planted body no build can even FIGHT — a throng husk
+      // waiting to be claimed, an extraction node — must never gate a
+      // clear (the Hivecaller's own unclaimed husks were walling the
+      // objective). Def-level passive/noObjective below covers KINDS;
+      // this covers the armor stamped onto ordinary kinds at plant time.
+      // Deliberately the full pair — a merely-untargetable body (a phased
+      // boss, a warded heart) still counts and still gates.
+      && !(a.passive && a.untargetable)
       && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective)));
   }
 

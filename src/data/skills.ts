@@ -4646,6 +4646,33 @@ export const SKILLS: Record<string, SkillDef> = {
     minDropLevel: 5,
   },
 
+  // The BURROWING flavor (ClingSpec.gnaw + burrow): the Pikmin purple.
+  // Grubs sink INSIDE what they catch — the host cannot strike its own
+  // parasites; it must SHAKE them into the open (the vulnerability
+  // window) and answer them on the ground. The chew is the kit: a steady
+  // credited gnaw that never whiffs with the carry (casts refused while
+  // riding — the useSkill gate). Battle-fed per the latch doctrine.
+  loose_marrowgrubs: {
+    id: 'loose_marrowgrubs', name: 'Loose the Marrowgrubs',
+    description: 'Corpses give up their grubs, and blows traded — yours and your court\'s — fatten a gauge that births more; walk through one to take it in. What they catch they BURROW INTO: inside the body its own blows cannot find them, and it must SHAKE them loose — scattered, briefly bare — before they wriggle back to the flesh. While they ride they CHEW, a steady gnaw that never misses. HOLD to sweep the brood at the cursor.',
+    tags: ['spell', 'minion', 'summon', 'physical'], color: '#d8c8a8',
+    manaCost: 2, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: { interval: 0.25, move: 'slowed', moveFactor: 0.8 },
+    delivery: { type: 'self' },
+    effects: [{ type: 'throngDirect' }],
+    throng: {
+      monsterId: 'marrowgrub', cap: 8,
+      sources: [
+        { kind: 'onKill', chance: 0.4 },
+        { kind: 'gauge', per: 'both', fill: 3, yield: [1, 2] },
+      ],
+    },
+    requirements: { willpower: 13 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.1), mod('minionLife', 'increased', 0.1)] },
+    minDropLevel: 7,
+  },
+
   summon_swarmlings: {
     id: 'summon_swarmlings', name: 'Hivecall',
     description: 'TOGGLE a hive contract: mana stays reserved while up to five swarmlings scurry for you, reknitting themselves whenever they fall. SHIFT-press the slot to ENRAGE the horde — a pressed wave of speed and spite.',

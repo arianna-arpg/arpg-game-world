@@ -31,6 +31,20 @@
 //     detaches on the next latch sweep — the throng's direct channel
 //     peels your own riders off one mark and throws them at another.
 //
+// TWO OPTIONAL TEMPERS refine the ride, both pure ClingSpec data:
+//   - THE GNAW (spec.gnaw): the ride's damage IS a steady chew — typed,
+//     mitigated, rider-credited bites on the ride clock (the swallow-digest
+//     grammar) instead of casts that go stale while the seat moves with the
+//     victim. While a gnaw-tempered body holds a ride, useSkill refuses it
+//     exactly like moveActor refuses its steps: the teeth are the kit.
+//   - THE BURROW (spec.burrow): the rider sinks INSIDE the body it rides —
+//     the HOST cannot find its own parasite (a one-directional early-false
+//     in World.hostileTo, the possession GUISE's pattern), so its swings,
+//     novas and targeting pass the rider by while every OTHER combatant
+//     still scrapes normally. The host's honest answer is the SHAKE: the
+//     pop-out scatters the rider (toss) into a real vulnerability window
+//     (grace) before it may burrow again — the Pikmin shake-off loop.
+//
 // THE OPEN SEAM (deliberately unbuilt, shaped for it): GRAPPLE — the inverse
 // latch, where the RIDER drags the ridden. A future GrappleSpec rides the
 // same Actor.clingTo state with force transferred along the slave step
@@ -39,6 +53,52 @@
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
+import type { DamageType, SkillTag } from './stats';
+
+/** THE GNAW — the DoT latch (ClingSpec.gnaw): while the ride holds, the
+ *  rider's damage is a steady CHEW on the body it rides, dealt on its own
+ *  bite clock through the one mitigation ladder (typed, rider-credited,
+ *  no evade/block/crit — the swallow-digest / pooled-bite grammar, and
+ *  like every DoT it pierces plies straight to life). Magnitude reads the
+ *  rider's OWN folded damage sheet, so the monster level curve and the
+ *  keeper's batch-tempered minion investment arrive with no gnaw-specific
+ *  stat. While it holds a ride, the body casts NOTHING — useSkill refuses
+ *  it the way moveActor refuses its steps (the teeth are the kit; seats
+ *  are exempt, a possessed body answers to hands). Unlatched, the body
+ *  fights through its ordinary skills. Cast-kit clingers (no gnaw) keep
+ *  whacking exactly as before. */
+export interface GnawSpec {
+  /** Damage per second at the rider's sheet-neutral baseline (level 1,
+   *  no investment); every fold above rides sheet.get('damage', [type]). */
+  dps: number;
+  /** Bite damage type (default physical). */
+  type?: DamageType;
+  /** Bite cadence in seconds (default CLING_CFG.gnaw.every). The first
+   *  bite lands one full beat after the attach — no brush-past spikes. */
+  every?: number;
+}
+
+/** THE BURROW — host-blind riding (ClingSpec.burrow): the rider sinks
+ *  INSIDE the body it rides (a deeper seat sink — drawn == held, so the
+ *  body reads mostly swallowed). While burrowed, the HOST cannot find it:
+ *  one-directional early-false in World.hostileTo (the possession GUISE
+ *  pattern) blinds the host's targeting, swings, novas and stray zones to
+ *  its own parasites — while the rider's teeth stay live and every OTHER
+ *  combatant scrapes riders off normally. The host's answer is its SHAKE
+ *  clock: the pop-out SCATTERS the rider (toss, random bearing) into a
+ *  LONGER re-latch wait (grace) — the vulnerability window where shaking
+ *  finally pays. Kill them on the ground, or carry them forever. */
+export interface BurrowSpec {
+  /** Seat sink while burrowed (default CLING_CFG.burrow.sink; the base
+   *  perch is CLING_CFG.sink). */
+  sink?: number;
+  /** Re-latch wait after a SHAKE pop-out (default CLING_CFG.burrow.grace).
+   *  Other releases (redirect, knockback, a dead victim) keep the classic
+   *  short reattachGrace — the window is the host's earned answer only. */
+  grace?: number;
+  /** Shake pop-out scatter distance (default CLING_CFG.burrow.toss). */
+  toss?: number;
+}
 
 /** A latch temper worn by a monster kind (MonsterDef.cling → Actor.cling).
  *  All fields optional — an empty spec latches with the CLING_CFG defaults. */
@@ -56,6 +116,12 @@ export interface ClingSpec {
    *  riding (default CLING_CFG.victimMinRatio) — an imp doesn't ride a
    *  roach; a gnat rides anything. */
   victimMinRatio?: number;
+  /** THE GNAW: the ride's damage is a steady credited chew, and the kit
+   *  goes quiet while the ride holds (see GnawSpec). */
+  gnaw?: GnawSpec;
+  /** THE BURROW: sunk host-blind riding with the shake-out window (see
+   *  BurrowSpec). An empty object opts in at the CLING_CFG.burrow dials. */
+  burrow?: BurrowSpec;
 }
 
 /** A live ride (Actor.clingTo). `ang` is the seat bearing in WORLD space —
@@ -70,6 +136,9 @@ export interface ClingRide {
   until: number;
   /** Next rideStatus refresh (internal clock). */
   statusAt: number;
+  /** Next gnaw bite (internal clock; armed one beat past the attach so a
+   *  brush-past latch never spikes — the lite pool's stagger doctrine). */
+  gnawAt: number;
 }
 
 /** THE LATCH FABRIC's modular thresholds — tune HERE, never inline. */
@@ -100,6 +169,12 @@ export const CLING_CFG = {
   rideStatusEvery: 0.5,
   /** Default victim-size floor as a ratio of the rider's own radius. */
   victimMinRatio: 0.9,
+  /** THE GNAW's default bite cadence (seconds per chew). */
+  gnaw: { every: 0.5 },
+  /** THE BURROW's dials: seat sink while burrowed (the base perch is
+   *  `sink` above), the shake pop-out scatter distance, and the re-burrow
+   *  wait — the vulnerability window the shaking host earns. */
+  burrow: { sink: 0.92, grace: 2.2, toss: 54 },
 } as const;
 
 /** Seats a victim's body offers (size-scaled, capped). */
@@ -119,13 +194,47 @@ export function clingEligible(rider: Actor, victim: Actor): boolean {
   return victim.radius >= rider.radius * ratio;
 }
 
+/** Cached per-type tag sets for the gnaw's damage read (bites are event-
+ *  rate but riders are many — never allocate per chew). The typed tag
+ *  lets ordinary tag-filtered investment — "increased fire damage" — reach
+ *  a cinder-flavored chew honestly through the one stat engine. */
+const GNAW_TAG_SETS = new Map<DamageType, ReadonlySet<SkillTag>>();
+export function gnawTags(type: DamageType): ReadonlySet<SkillTag> {
+  let s = GNAW_TAG_SETS.get(type);
+  if (!s) {
+    s = new Set<SkillTag>([type]);
+    GNAW_TAG_SETS.set(type, s);
+  }
+  return s;
+}
+
+/** Is this body riding INSIDE its victim right now — burrow-tempered AND
+ *  latched? The ONE question the hostility gate, the renderer's ghost
+ *  read and the probes all ask; the answer can never drift from the ride
+ *  state because it IS the ride state. (Named for the LATCH fabric —
+ *  distinct from Actor.burrow, the {do:'burrow'} verb's underground
+ *  TERRAIN travel; this burrow goes into a BODY.) */
+export function clingBurrowed(a: Actor): boolean {
+  return a.clingTo !== undefined && !!a.cling?.burrow;
+}
+
+/** The seat sink for THIS rider: burrowed rides sink deeper (mostly
+ *  swallowed by the victim's silhouette), plain rides keep the perch. */
+export function clingSinkOf(rider: Actor): number {
+  return clingBurrowed(rider)
+    ? rider.cling!.burrow!.sink ?? CLING_CFG.burrow.sink
+    : CLING_CFG.sink;
+}
+
 /** The seat's world-space anchor for a ride: on the victim's rim, sunk by
- *  CLING_CFG.sink of the rider's own radius. One function so the slave
- *  step and any renderer inspection can never disagree. */
+ *  the rider's own sink (clingSinkOf — burrowed rides sit deeper) of the
+ *  rider's radius. One function so the slave step and any renderer
+ *  inspection can never disagree — drawn == held at every depth. */
 export function clingSeatPos(
   victim: Actor, rider: Actor, ang: number, out: { x: number; y: number },
 ): void {
-  const d = victim.radius + rider.radius * (1 - CLING_CFG.sink) - rider.radius * CLING_CFG.sink;
+  const sink = clingSinkOf(rider);
+  const d = victim.radius + rider.radius * (1 - sink) - rider.radius * sink;
   out.x = victim.pos.x + Math.cos(ang) * Math.max(2, d);
   out.y = victim.pos.y + Math.sin(ang) * Math.max(2, d);
 }

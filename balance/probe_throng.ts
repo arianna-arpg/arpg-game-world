@@ -21,7 +21,7 @@ import {
   batchScaleOf, THRONG_CFG, throngHeelOffset, throngMarkerOf, throngPocketKey,
   throngSightSet, throngSkillSalt, throngSpecsOn,
 } from '../src/engine/throng';
-import { CLING_CFG, clingSeatsOf } from '../src/engine/cling';
+import { CLING_CFG, clingBurrowed, clingSeatsOf } from '../src/engine/cling';
 import { STATUS_DEFS } from '../src/engine/status';
 import { mod } from '../src/engine/stats';
 import { vec, dist } from '../src/core/math';
@@ -62,6 +62,18 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
     && !SKILLS.beckon_palewisps.throng!.sources.some(r => r.kind === 'gauge'));
   check('registry: the three kinds exist (cinderkin latches, gnat rides harried)',
     !!MONSTERS.cinderkin?.cling && !!MONSTERS.palewisp && MONSTERS.gnatling?.cling?.rideStatus === 'harried');
+  // THE BURROWING flavor: gnaw + burrow together on the grub, battle-fed
+  // per the latch doctrine, and the marker status carries the ghost read.
+  check('registry: the marrowgrub is the gnaw+burrow flavor',
+    !!SKILLS.loose_marrowgrubs?.throng
+    && SKILLS.loose_marrowgrubs.throng!.monsterId === 'marrowgrub'
+    && !!MONSTERS.marrowgrub?.cling?.gnaw && !!MONSTERS.marrowgrub?.cling?.burrow);
+  check('doctrine: the burrowing flavor is battle-fed too',
+    SKILLS.loose_marrowgrubs.throng!.sources.some(r => r.kind === 'onKill')
+    && SKILLS.loose_marrowgrubs.throng!.sources.some(r => r.kind === 'gauge'));
+  check('registry: the burrowed marker ghosts (render lever as data)',
+    STATUS_DEFS.burrowed?.ghostAlpha !== undefined
+    && STATUS_DEFS.burrowed.ghostAlpha! < 1 && STATUS_DEFS.burrowed.beneficial === true);
   check('registry: harried is a stacking status', STATUS_DEFS.harried?.stacking === true);
   check('helpers: batch scale = 1/batch (default and override)',
     batchScaleOf(SKILLS.gather_cinderkin.throng!) === 1 / THRONG_CFG.batch
@@ -282,6 +294,198 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   w.throngClaimed.add(throngPocketKey('z', 'gather_cinderkin', 0, 0));
   check('finiteness: the claim ledger holds run-long keys',
     w.throngClaimed.has(throngPocketKey('z', 'gather_cinderkin', 0, 0)));
+}
+
+// --- 6) THE GNAW: the DoT latch --------------------------------------------
+{
+  const w = makeSimWorld('summoner', 0x6aa1);
+  const p = w.player;
+  w.devThrongGrant('loose_marrowgrubs');
+  w.devThrongMint('loose_marrowgrubs', 2);
+  const grubs = w.throngBodiesOf(p, 'loose_marrowgrubs');
+  check('gnaw setup: two grubs stand', grubs.length === 2);
+  const host = w.createMonster('zombie', 8, 'enemy');
+  host.pos = vec(p.pos.x + 200, p.pos.y);
+  w.actors.push(host);
+  // Pin the rides by hand (AI-free — the rig proves the CHEW, not the walk).
+  for (const [i, r] of grubs.entries()) {
+    r.clingTo = {
+      id: host.id, ang: i * 2, until: w.time + 999,
+      statusAt: w.time, gnawAt: w.time + 0.5,
+    };
+  }
+  const claw = makeSkillInstance(SKILLS.claw, 1);
+  check('gnaw quell: useSkill refuses a latched gnawer (the teeth are the kit)',
+    !w.useSkill(grubs[0], claw, vec(host.pos.x, host.pos.y)));
+  const life0 = host.life;
+  let everCast = false;
+  for (let t = 0; t < 4; t += DT) {
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+    if (grubs.some(g => g.casting)) everCast = true;
+  }
+  check('gnaw: the ridden host bleeds with NO casts from the riders',
+    host.life < life0 - 1 && !everCast,
+    `life ${life0.toFixed(0)} → ${host.life.toFixed(0)}${everCast ? ' (a rider CAST)' : ''}`);
+  check('gnaw: rides survived the window (the chew never detaches)',
+    grubs.every(g => g.clingTo?.id === host.id));
+  // Owner investment reaches the chew through the ordinary batch fold:
+  // same seed, same rig, +100% minion damage ⇒ bites grow by the tempered
+  // fold (1 + 1.0/batch), never the classic whole fold.
+  const w2 = makeSimWorld('summoner', 0x6aa1);
+  const p2 = w2.player;
+  p2.sheet.setSource('probe', [mod('minionDamage', 'increased', 1.0)]);
+  w2.devThrongGrant('loose_marrowgrubs');
+  w2.devThrongMint('loose_marrowgrubs', 2);
+  const grubs2 = w2.throngBodiesOf(p2, 'loose_marrowgrubs');
+  const host2 = w2.createMonster('zombie', 8, 'enemy');
+  host2.pos = vec(p2.pos.x + 200, p2.pos.y);
+  w2.actors.push(host2);
+  for (const [i, r] of grubs2.entries()) {
+    r.clingTo = {
+      id: host2.id, ang: i * 2, until: w2.time + 999,
+      statusAt: w2.time, gnawAt: w2.time + 0.5,
+    };
+  }
+  for (let t = 0; t < 4; t += DT) {
+    for (const a of w2.actors) updateAI(a, w2, DT);
+    w2.update(DT);
+  }
+  const bit1 = life0 - host.life;
+  const bit2 = host2.maxLife() - host2.life;
+  const batch = SKILLS.loose_marrowgrubs.throng!.batch ?? THRONG_CFG.batch;
+  const want = 1 + 1.0 / batch;
+  check('gnaw: owner minion investment scales bites at the BATCH fold',
+    Math.abs(bit2 / bit1 - want) < 0.05,
+    `×${(bit2 / bit1).toFixed(3)} (want ×${want.toFixed(3)})`);
+  // The gnaw kills with the rider's credit (the swallow grammar): a
+  // near-dead host dies to the chew alone, no pipeline cast anywhere.
+  host.life = 2;
+  for (let t = 0; t < 2 && !host.dead; t += DT) w.update(DT);
+  check('gnaw: the chew alone finishes a host (kill stays sovereign)', host.dead);
+}
+
+// --- 7) THE BURROW: host-blind riding + the shake-out window ----------------
+{
+  const w = makeSimWorld('summoner', 0x8b0b);
+  const p = w.player;
+  w.devThrongGrant('loose_marrowgrubs');
+  w.devThrongMint('loose_marrowgrubs', 1);
+  const grub = w.throngBodiesOf(p, 'loose_marrowgrubs')[0];
+  const host = w.createMonster('zombie', 8, 'enemy');
+  host.pos = vec(p.pos.x + 220, p.pos.y);
+  w.actors.push(host);
+  // A third combatant: the scrape law must keep working for everyone else.
+  const bystander = w.createMonster('zombie', 8, 'enemy');
+  bystander.pos = vec(p.pos.x + 400, p.pos.y);
+  w.actors.push(bystander);
+  grub.clingTo = {
+    id: host.id, ang: 0, until: w.time + 999,
+    statusAt: w.time, gnawAt: w.time + 999, // silence the chew — this rig is the SHIELD
+  };
+  w.update(DT); // one slave step: seat + marker clocks arm
+  check('burrow: the helper reads the ride state', clingBurrowed(grub)
+    && !clingBurrowed(host));
+  check('burrow: one-directional hostility — the host cannot find its parasite',
+    !w.hostileTo(host, grub) && w.hostileTo(grub, host)
+    && w.hostileTo(bystander, grub) && w.hostileTo(grub, bystander));
+  check('burrow: the host\'s hostile pool excludes its rider (every damage path)',
+    !w.enemiesOf(host).some(e => e.id === grub.id)
+    && w.enemiesOf(bystander).some(e => e.id === grub.id));
+  // The host swings THROUGH its own parasite: a claw aimed dead at the
+  // seat tears nothing. The bystander's same claw tears a ply.
+  const plies0 = grub.plies;
+  const claw = makeSkillInstance(SKILLS.claw, 1);
+  host.facing = Math.atan2(grub.pos.y - host.pos.y, grub.pos.x - host.pos.x);
+  w.executeSkill(host, claw, vec(grub.pos.x, grub.pos.y));
+  check('burrow: the host\'s own blow passes through the rider',
+    grub.plies === plies0 && !grub.dead, `plies ${plies0} → ${grub.plies}`);
+  bystander.pos = vec(grub.pos.x + 20, grub.pos.y);
+  bystander.facing = Math.PI;
+  w.executeSkill(bystander, makeSkillInstance(SKILLS.claw, 1), vec(grub.pos.x, grub.pos.y));
+  check('burrow: every OTHER combatant still scrapes riders off',
+    grub.plies < plies0, `plies ${plies0} → ${grub.plies}`);
+  // Legibility: the marker rides the status clock (ghost read + co-op wire).
+  let sawMarker = false;
+  for (let t = 0; t < 1.2; t += DT) {
+    w.update(DT);
+    if (grub.statuses.some(s => s.id === 'burrowed')) { sawMarker = true; break; }
+  }
+  check('burrow: the rider wears the burrowed marker while sunk', sawMarker);
+  const seatD = dist(grub.pos, host.pos);
+  check('burrow: the seat sinks deeper than the plain perch (drawn == held)',
+    seatD < host.radius, `d ${seatD.toFixed(1)} vs host r ${host.radius}`);
+  // THE SHAKE-OUT: the clock pops the rider into its vulnerability window
+  // — scattered farther than a plain hop, waiting longer than the plain
+  // grace, marker stripped the same frame.
+  const at = vec(grub.pos.x, grub.pos.y);
+  grub.clingTo!.until = w.time;
+  w.update(DT);
+  const bur = MONSTERS.marrowgrub.cling!.burrow!;
+  const wantGrace = bur.grace ?? CLING_CFG.burrow.grace;
+  check('shake-out: the pop releases into the LONG grace (the window is real)',
+    !grub.clingTo && grub.clingCooldownUntil - w.time > CLING_CFG.reattachGrace
+    && grub.clingCooldownUntil - w.time <= wantGrace + 1e-6);
+  check('shake-out: the rider is SCATTERED (toss, not the plain hop)',
+    dist(grub.pos, at) > CLING_CFG.detachHop + 4,
+    `flew ${dist(grub.pos, at).toFixed(1)} (plain hop ${CLING_CFG.detachHop})`);
+  check('shake-out: the marker dies with the ride',
+    !grub.statuses.some(s => s.id === 'burrowed'));
+  check('shake-out: unburrowed, the host can find it again',
+    w.hostileTo(host, grub) && w.enemiesOf(host).some(e => e.id === grub.id));
+  // The loop closes: past the grace, the grub walks back in and burrows
+  // again on its own (the Pikmin cycle — no button, no script).
+  grub.invulnerable = true; // isolate the re-latch from host retaliation
+  grub.aiCommand = {
+    kind: 'assault', pos: vec(host.pos.x, host.pos.y),
+    targetId: host.id, until: w.time + 30, ownerId: p.id,
+  } as typeof grub.aiCommand;
+  step(w, wantGrace + 3);
+  check('re-burrow: the shaken grub reached the flesh again',
+    grub.clingTo?.id === host.id && clingBurrowed(grub));
+  // Purity: a PERCH kind (no burrow) never trips the host-blind gate —
+  // the scrape law is the gnatveil's whole counterplay contract.
+  const gnat = w.createMonster('gnatling', 8, p.team, p);
+  w.actors.push(gnat);
+  gnat.clingTo = {
+    id: host.id, ang: 1, until: w.time + 99, statusAt: w.time, gnawAt: w.time + 99,
+  };
+  check('purity: a plain-perch rider stays fully scrapeable by its host',
+    w.hostileTo(host, gnat) && !clingBurrowed(gnat));
+}
+
+// --- 8) THE CLEAR LAW: husks never gate the objective -----------------------
+{
+  const w = makeSimWorld('summoner', 0xc1ea);
+  const p = w.player;
+  w.devThrongGrant('gather_cinderkin');
+  w.zone.objective = { kind: 'clear' };
+  w.objectiveDone = false;
+  // Husks are planted with ACTOR-level armor on an ordinary combat kind —
+  // exactly the shape countedEnemies must exempt (def-level flags can't).
+  check('clear law: the husk kind itself is NOT def-passive (the trap)',
+    !MONSTERS.cinderkin.passive && !MONSTERS.cinderkin.noObjective);
+  w.devThrongPocketHere('gather_cinderkin', 3);
+  const husks = w.actors.filter(a => a.throngWild === 'cinderkin');
+  check('clear law: three husks stand on team enemy, armored',
+    husks.length === 3 && husks.every(h => h.team === 'enemy' && h.passive && h.untargetable));
+  w.update(DT);
+  check('clear law: husks alone COMPLETE the clear (they never counted)',
+    w.objectiveDone);
+  // A REAL enemy still gates: reset the latch, stand a zombie up, and the
+  // straggler pointer names exactly it — never the husks beside it.
+  w.objectiveDone = false;
+  const mob = w.createMonster('zombie', 3, 'enemy');
+  mob.pos = vec(p.pos.x + 300, p.pos.y);
+  w.actors.push(mob);
+  w.update(DT);
+  const view = w.objectiveStragglersView();
+  check('clear law: a live combatant still gates, and the pointer names it alone',
+    !w.objectiveDone && view?.kind === 'clear' && view.points.length === 1);
+  w.kill(mob, true);
+  w.update(DT);
+  check('clear law: the combatant\'s death clears with husks still standing',
+    w.objectiveDone && w.actors.filter(a => a.throngWild === 'cinderkin' && !a.dead).length === 3);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

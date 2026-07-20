@@ -217,8 +217,21 @@ changes.
   proof), nearest-1 meta delegation, unslot = disband-to-husks; THE LATCH
   (`MonsterDef.cling`): bodies that ride a victim's rim and whack through
   their own kit — size-scaled seats, shake clocks, `rideStatus`, knockback
-  scrape; grapple is the shaped open seam — docs in
-  `docs/engine/throng.md`; probe `balance/probe_throng.ts`),
+  scrape, cast bars that TRACK the carried victim (the latched hand), and
+  two optional ride tempers as pure spec data: THE GNAW (`cling.gnaw` —
+  the ride's damage is a steady credited chew through the swallow-digest
+  grammar, scaled by the rider's own folded sheet; useSkill refuses casts
+  while riding — the teeth are the kit) and THE BURROW (`cling.burrow` —
+  the rider sinks INSIDE the body it rides: a one-directional hostileTo
+  early-false blinds the HOST to its own parasites while everyone else
+  still scrapes; the shake pops it out SCATTERED into a real vulnerability
+  window before it may re-burrow — the Pikmin loop; `burrowed` marker +
+  `StatusDef.ghostAlpha`, the generic draw-faded render lever; debut
+  `marrowgrub`/`loose_marrowgrubs`); husks never gate a clear
+  (`countedEnemies` exempts actor-level passive+untargetable scenery
+  armor — the Hivecaller's pockets no longer wall the objective); grapple
+  is the shaped open seam — docs in `docs/engine/throng.md`; probe
+  `balance/probe_throng.ts`),
   `sequence.ts` (THE COMBO GRAMMAR — ONE sequence matcher for every cast
   grammar: `matchSeqRule`/`resolveSeqRules` serve both the invocation
   rune-weave (`data/invocations.ts` delegates; parity fuzz-pinned) and
