@@ -218,6 +218,15 @@ wrong; baselines express "don't move things by accident" and are exact.
   corpses, incoming damage), solo vs escort rigs (`ESCORT_HOST_RULES` — a
   curse shows its worth through the escort's hits; trigger gems fire off its
   events). A pair's report row names the shape that measured it.
+- THE DEFENSIVE-STAT LANE: a gem whose mods touch mitigation, avoidance,
+  pools, recovery, or sustain (`LIVE_PROBE_SUPPORT_STATS`) routes to the
+  wounding LIVE probe — the dummy never swings back, so those payloads used
+  to read false-INERT. Fraction-valued fingerprint channels (life/mana
+  floors) carry their own noise floor (`CHANNEL_NOISE_ABS`: 2% of the bar)
+  so pool/regen/leech effects register at all. Residuals, stated honestly:
+  the pack leans physical (pure elemental-resist readings are guarded by a
+  blindness rule), and weak sustain (a 2% leech) may read NEGLIGIBLE until
+  escalated — that is a magnitude finding, not a probe gap.
 - Reading INERT rows: the row often carries a static annotation
   (`data/graftReadSites.ts` — "'trail' is read only at spawnProjectile"),
   which is the fix-it trail. An inert pair resolves ONE of two ways, both

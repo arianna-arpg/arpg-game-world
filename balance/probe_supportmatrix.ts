@@ -32,8 +32,8 @@ import { mod } from '../src/engine/stats';
 import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
   ablationUnits, compatCensus, deepProbePair, explainFit, explainPair,
-  makeProbeSession, pairKey, maskSupportUnit, probeOrder, probePair,
-  runCompatMatrix, soloSupportUnit,
+  makeProbeSession, pairKey, maskSupportUnit, probeKindFor, probeOrder,
+  probePair, runCompatMatrix, soloSupportUnit,
   type CensusResult, type CensusRow, type PairDeepResult, type PairProbeResult,
   type PairVerdictKind, type UnitProbeResult,
 } from '../src/sim/compat';
@@ -322,7 +322,7 @@ const synth = (id: string, mods: SupportDef['mods']): SupportDef => ({
 try {
   SUPPORTS[BLANK_ID] = synth(BLANK_ID, []);
   SUPPORTS[TWOUNIT_ID] = synth(TWOUNIT_ID, [mod('damage', 'increased', 0.5), mod('moveTrail', 'flat', 40)]);
-  SUPPORTS[MIXED_ID] = synth(MIXED_ID, [mod('damage', 'increased', 0.5), mod('lifeLeech', 'flat', 0.05)]);
+  SUPPORTS[MIXED_ID] = synth(MIXED_ID, [mod('damage', 'increased', 0.5), mod('ambushBonus', 'flat', 0.3)]);
   const host: SkillDef = SKILLS.firebolt;
   check('E0 fixture host exists (firebolt, projectile spell)', !!host && host.delivery.type === 'projectile');
 
@@ -354,18 +354,38 @@ try {
     partialDefects.length === 1 && partialDefects[0].kind === 'partial'
     && (partialDefects[0].units ?? []).join(',') === 'mods[1]');
 
-  // E7 — blind guards at both levels: leech-at-dummy is UNMEASURED, not dead.
-  const mixed = probePair(sess, rowOf(MIXED_ID));
-  check('E7 mixed gem reads EFFECTIVE (damage half carries)', mixed.result.verdict === 'effective', mixed.result.verdict);
-  const deepMixed = deepProbePair(sess, rowOf(MIXED_ID), mixed);
-  const uLeech = deepMixed.units.find(u => u.unit.key === 'mods[1]');
-  check('E8 deep: leech row is unmeasured-blind in isolation, never a false dead',
-    uLeech?.verdict === 'unmeasured' && (uLeech?.note ?? '').includes('blind'), `${uLeech?.verdict}: ${uLeech?.note ?? ''}`);
-  const leechOnly = synth('__probe_leech__', [mod('lifeLeech', 'flat', 0.05)]);
-  SUPPORTS['__probe_leech__'] = leechOnly;
+  // E7–E9 — THE DEFENSIVE-STAT LANE: gems whose worth shows only under
+  // incoming wounds route LIVE and MEASURE there (they used to read
+  // false-INERT/blind against a dummy that never swings back), while the
+  // genuinely unmeasurable classes keep their guards at both levels.
+  const armorGem = synth('__probe_armor__', [mod('armor', 'flat', 1500)]);
+  SUPPORTS['__probe_armor__'] = armorGem;
+  const leechGem = synth('__probe_leech__', [mod('lifeLeech', 'flat', 0.05)]);
+  SUPPORTS['__probe_leech__'] = leechGem;
+  const armorKind = probeKindFor(host, armorGem);
+  check('E7 defensive/sustain stats route the probe LIVE, naming the stat',
+    armorKind.kind === 'live' && (armorKind.why ?? '').includes('armor')
+    && probeKindFor(host, leechGem).kind === 'live', armorKind.why ?? '');
+  const armor = probePair(sess, rowOf('__probe_armor__'));
+  check('E8 an armor-only gem measures EFFECTIVE under the wounding pack (was false-inert at the dummy)',
+    armor.result.verdict === 'effective' && armor.result.probe === 'live',
+    `${armor.result.verdict}; top moved: ${armor.result.moved[0]?.key ?? '—'}`);
   const leech = probePair(sess, rowOf('__probe_leech__'));
-  check('E9 leech-only gem reads BLIND at pair level (never a false inert)',
-    leech.result.verdict === 'blind', leech.result.verdict);
+  check('E9 a leech-only gem measures EFFECTIVE live (the fraction channels see it now)',
+    leech.result.verdict === 'effective' && leech.result.probe === 'live',
+    `${leech.result.verdict}; top moved: ${leech.result.moved[0]?.key ?? '—'}`);
+  const mixed = probePair(sess, rowOf(MIXED_ID));
+  check('E9b mixed damage+ambush gem reads EFFECTIVE (damage half carries)',
+    mixed.result.verdict === 'effective', mixed.result.verdict);
+  const deepMixed = deepProbePair(sess, rowOf(MIXED_ID), mixed);
+  const uAmbush = deepMixed.units.find(u => u.unit.key === 'mods[1]');
+  check('E9c deep: the ambush row is unmeasured-blind in isolation, never a false dead',
+    uAmbush?.verdict === 'unmeasured' && (uAmbush?.note ?? '').includes('blind'), `${uAmbush?.verdict}: ${uAmbush?.note ?? ''}`);
+  const ambushOnly = synth('__probe_ambush__', [mod('ambushBonus', 'flat', 0.3)]);
+  SUPPORTS['__probe_ambush__'] = ambushOnly;
+  const ambush = probePair(sess, rowOf('__probe_ambush__'));
+  check('E9d an ambush-only gem reads BLIND at pair level (never a false inert)',
+    ambush.result.verdict === 'blind', ambush.result.verdict);
 
   // E10 — determinism: fresh sessions, byte-identical results.
   const d1 = probePair(makeProbeSession({ seeds: 1 }), rowOf(TWOUNIT_ID));
@@ -393,7 +413,9 @@ try {
   delete SUPPORTS[BLANK_ID];
   delete SUPPORTS[TWOUNIT_ID];
   delete SUPPORTS[MIXED_ID];
+  delete SUPPORTS['__probe_armor__'];
   delete SUPPORTS['__probe_leech__'];
+  delete SUPPORTS['__probe_ambush__'];
 }
 check('E14 synthetic fixtures cleaned out of the registry',
   !Object.keys(SUPPORTS).some(k => k.startsWith('__probe_') || k.startsWith('__mask__') || k.startsWith('__chk__') || k.startsWith('__solo__')));

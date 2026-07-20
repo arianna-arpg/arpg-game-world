@@ -83,7 +83,10 @@ export const COMPAT_CFG = {
    *  enough that a multi-corpse appetite (corpseBatch) has a pile to
    *  distinguish itself on. */
   corpseFeed: { everySec: 1.5, count: 2 },
-  /** A channel "moved" when |Δ| > noiseAbs AND |Δ|/max(|bare|,1) > noiseRel. */
+  /** A channel "moved" when |Δ| > noiseAbs AND |Δ|/max(|bare|,1) > noiseRel.
+   *  Fraction-valued channels carry their own abs floor (CHANNEL_NOISE_ABS)
+   *  — the global one is sized for raw damage/count lanes and would squash
+   *  a [0,1] channel entirely. */
   noiseRel: 0.02,
   noiseAbs: 0.5,
   /** Default per-run episode budget (bare baselines + pair probes). The
@@ -264,12 +267,36 @@ export const LIVE_PROBE_SUPPORT_FIELDS: (keyof SupportDef)[] = [
   'contagion', 'madden', 'healField', 'resonance',
 ];
 
+/** THE DEFENSIVE/SUSTAIN STAT LANE — the dummy never swings back, so a gem
+ *  whose mods touch these stats can only show its worth under INCOMING
+ *  wounds: the probe routes LIVE (the wounding pack's levelBonus exists
+ *  exactly to land real damage through the pinned-40s mitigation). Open
+ *  set, grouped by how each family reaches the fingerprint. The pack leans
+ *  physical, so pure elemental-resist readings are guarded by a blindness
+ *  rule below instead of minting false inerts. */
+export const LIVE_PROBE_SUPPORT_STATS: ReadonlySet<string> = new Set([
+  // mitigation + avoidance → dmg_in / evades_in / blocks_in
+  'armor', 'evasion', 'blockChance', 'blockValue', 'blockPower',
+  // pools + recovery → life_floor / life_end (the fractions move under wounds)
+  'life', 'lifeRegen', 'lifeRegenPct',
+  'energyShield', 'esRechargeRate', 'esRechargeDelay', 'esRechargeSteadfast',
+  'wardGain', 'wardDecay', 'wardLeech',
+  // the poise read: damage reduction + stagger continuity
+  'poise', 'poiseDR', 'poiseRegenPct', 'poiseCcAvoid',
+  // sustain: refills need something missing; thorns answers the attacker
+  'lifeLeech', 'manaLeech', 'lifeOnHit', 'thorns',
+  // resists (see the physical-leaning-pack blindness rule)
+  'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
+]);
+
 export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' | 'live'; why?: string } {
   const hostRule = LIVE_PROBE_HOST_RULES.find(r => r.when(def));
   if (hostRule) return { kind: 'live', why: hostRule.why };
   if (sup) {
     const f = LIVE_PROBE_SUPPORT_FIELDS.find(k => sup[k] !== undefined);
     if (f) return { kind: 'live', why: `support payload '${String(f)}' needs live bodies` };
+    const m = [...sup.mods, ...(sup.perLevel ?? [])].find(x => LIVE_PROBE_SUPPORT_STATS.has(x.stat));
+    if (m) return { kind: 'live', why: `defensive/sustain stat '${m.stat}' shows only under incoming wounds` };
   }
   return { kind: 'dummy' };
 }
@@ -401,6 +428,16 @@ export function probeScenario(
 
 // -------------------------------------------------------- classification --
 
+/** Per-channel absolute noise floors. Fraction-valued channels live on
+ *  [0,1] — the global noiseAbs (0.5) would demand HALF THE BAR move before
+ *  registering, which silently blinded every regen/leech/pool payload the
+ *  defensive-stat lane routes live. 0.02 = 2% of the bar, and the relative
+ *  gate coincides there (bare ≤ 1 ⇒ rel == |Δ|), so one number is the
+ *  whole threshold. Open registry beside CHANNEL_LANES. */
+export const CHANNEL_NOISE_ABS: Record<string, number> = {
+  life_floor: 0.02, life_end: 0.02, mana_floor: 0.02,
+};
+
 /** Which lane a fingerprint channel argues in. Open registry: a new collector
  *  channel needs one entry here (or it is ignored by classification and only
  *  participates in hash equality). */
@@ -459,6 +496,14 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
   {
     note: 'leech is unobservable at full vitals against a passive target (nothing to refill)',
     when: (def, sup) => supModsStat(sup, ['lifeLeech', 'manaLeech']) && probeKindFor(def, sup).kind === 'dummy',
+  },
+  {
+    // The wounding pack leans PHYSICAL: a pure resistance payload may meet
+    // none of its element in the whole episode. Guards only inert-looking
+    // readings (the pair-level blind application) — a resist gem that
+    // measures effective is never touched by this row.
+    note: 'elemental/chaos resistance vs the physical-leaning probe pack — the element may never arrive',
+    when: (_def, sup) => supModsStat(sup, ['fireRes', 'coldRes', 'lightningRes', 'chaosRes']),
   },
   {
     note: 'ambush/stealth bonus — no pilot performs the stealth verb',
@@ -621,7 +666,7 @@ export function classifyPair(
     const pm = pair.slice(0, n).reduce((s, e) => s + fpNum(e.fingerprint, k), 0) / n;
     const d = pm - bm;
     const rel = Math.abs(d) / Math.max(Math.abs(bm), 1);
-    if (Math.abs(d) > COMPAT_CFG.noiseAbs && rel > COMPAT_CFG.noiseRel) {
+    if (Math.abs(d) > (CHANNEL_NOISE_ABS[k] ?? COMPAT_CFG.noiseAbs) && rel > COMPAT_CFG.noiseRel) {
       moved.push({ key: k, bare: bm, pair: pm, rel });
       const lane = CHANNEL_LANES[k];
       if (lane === 'output' || lane === 'defense') effective = true;
