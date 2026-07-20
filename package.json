@@ -17,6 +17,7 @@
     "sim": "tsx balance/cli.ts",
     "genqa": "tsx balance/genqa.ts",
     "eventqa": "tsx balance/eventqa.ts",
+    "review:context": "node scripts/ai-review-context.mjs",
     "export-web-data": "tsx scripts/export-web-data.ts",
     "game": "electron .",
     "game:play": "electron . --play",
