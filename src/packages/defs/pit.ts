@@ -14,6 +14,11 @@
 // not an event, so it never joins the weight budget or dilutes the mix. No
 // sliders either; the purchase itself is the unlock (defaultEnabled false +
 // isConfigured = it enters the manifest ON once bought, toggleable per run).
+//
+// THE TRADE IS THE DESIGN: level-scaled endless XP, ZERO spoils (ZoneDef.
+// spoils: 'none' — the spoils law, docs/engine/spoils.md). The Pit is where
+// you go to GROW, never to gear; a hero who never leaves the cellar levels
+// into gear hunger the charted world alone can feed.
 // ---------------------------------------------------------------------------
 
 import { registerSidezone } from '../../data/sidezones';
@@ -49,6 +54,13 @@ function mintPit(parent: ZoneDef, seed: number, id: string, level: number): Zone
     // Endless waves; the lord every 5th. No packs — spawnWave escalates from
     // the flat WAVE_TABLE, and the wave rework reads zone.level (the hero's).
     objective: { kind: 'waves', waves: 0, bossEveryWaves: PIT_ARENA.bossEveryWaves, bossId: PIT_ARENA.bossId },
+    // THE SPOILS LAW (ZoneDef.spoils): the Pit pays in experience ALONE —
+    // an endless arena that re-scales to the hero AND paid gear would
+    // out-farm the whole charted world from one cellar. Sealed at the drop
+    // primitives (no kill gems/gear, no boss tables, no wave payouts, no
+    // essence sheds); XP, orbs, quest pay and corpse reclaims untouched.
+    // Exploration keeps the loot; the Pit keeps the levels.
+    spoils: 'none',
     exits: [{ to: parent.id, side: 'n' }], // the ONLY way out — back up to the cellar
     map: { x: parent.map.x, y: parent.map.y }, // off-graph; type-required
     seed,
@@ -73,7 +85,7 @@ registerSidezone({
 export const PIT: ContentPackage = {
   id: 'pit',
   label: 'The Pit',
-  blurb: 'Break open the cellar floor. Below it waits the old arena — endless waves that hunt as one pack, scaled to whoever dares them, the Pit Lord every fifth. Nothing of the world above follows you down; the only way out is the way in.',
+  blurb: 'Break open the cellar floor. Below it waits the old arena — endless waves that hunt as one pack, scaled to whoever dares them, the Pit Lord every fifth. Nothing of the world above follows you down; the only way out is the way in. The Pit keeps no spoils: it pays in experience alone, and the world above keeps the gear.',
   color: '#c8a84b',
   cost: 140,
   // DISCOVERY: finding the cellar surfaces the purchase (the delvers_seen

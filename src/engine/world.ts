@@ -4466,6 +4466,13 @@ export class World {
       a.casting = null;
       a.pos = this.clampPos(vec(landing.x + rand(-80, 80), landing.y + rand(-80, 80)), a.radius);
     }
+    // THE SPOILS LAW says so at the door (ZoneDef.spoils): ground that mints
+    // nothing announces itself on every entry — an hour farmed here must
+    // read as the bargain it is, never as a broken drop table.
+    if (def.spoils === 'none') {
+      this.text(vec(p.pos.x, p.pos.y - 96),
+        'this ground keeps no spoils — it pays in experience alone', '#c8b070', 14);
+    }
 
     // Remembered DOOR STATES re-apply first (an opened gate stays open across the
     // memory's life): the layout regenerated pristine doors above; the shared
@@ -11085,6 +11092,7 @@ export class World {
   /** Drop a chosen part's guaranteed, themed spoil (an exact gem) at a point, plus
    *  its extra random gems — the loot the player BUILT by choosing the part. */
   private dropAmalgamPart(af: NonNullable<World['sim']['amalgamationField']>, partId: string, at: Vec2): void {
+    if (this.spoilsSealed()) return; // THE SPOILS LAW — a part's built spoil is a mint too
     const part = af.partById(partId);
     if (!part) return;
     const lvl = Math.max(1, 1 + Math.floor(this.zone.level / 4));
@@ -16399,6 +16407,7 @@ export class World {
   /** Shed an essence packet on the ground (the spill fabric) — vacuumed on
    *  touch like a vestige; scatter keeps a trail readable at a glance. */
   dropEssenceAt(at: Vec2, gain: EssenceCost): void {
+    if (this.spoilsSealed()) return; // THE SPOILS LAW — spilled essence is minted wealth
     if (gain.count <= 0) return;
     const s = ESSENCE_SPILL_CFG.scatter;
     const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10);
@@ -19694,7 +19703,9 @@ export class World {
     const q = QUESTS[aq.questId];
     if (q) {
       if (q.reward.xp) this.grantXp(q.reward.xp);
-      for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(this.player.pos);
+      // OWED pay: a quest's gems are earned of the writ, not of the ground
+      // underfoot — they land even where THE SPOILS LAW seals local mints.
+      for (let i = 0; i < (q.reward.gems ?? 0); i++) this.dropGemAt(this.player.pos, undefined, true);
       if (q.reward.passivePoints) {
         this.meta.passivePoints += q.reward.passivePoints;
         this.text(vec(this.player.pos.x, this.player.pos.y - 64),
@@ -19823,8 +19834,10 @@ export class World {
     if (it.kind === 'gear') {
       // The EXACT worn item — same uid, same rolls; rebuildItem re-validates
       // against live registries (a patched-out base simply stays lost).
+      // OWED: reclaiming what death took is the player's own property coming
+      // home — it lands even where THE SPOILS LAW seals local mints.
       const item = rebuildItem(it.item);
-      if (item) this.dropGearAt(at, item);
+      if (item) this.dropGearAt(at, item, undefined, true);
       return;
     }
     if (it.kind === 'skill') {
@@ -32104,8 +32117,11 @@ export class World {
       // THE PURSE PAYS IN FULL (essenceSpill.deathBurst): whatever the chase
       // didn't shake loose lands in one pile — trail + pile always sum the
       // fixed budget, regardless of who landed the kill or how.
+      // (Sealed ground skips the whole burst — the packets would refuse at
+      // dropEssenceAt anyway, and "the purse bursts!" must never announce
+      // wealth that cannot land. THE SPOILS LAW stays honest at the float.)
       const spillDef = actor.defId ? MONSTERS[actor.defId]?.essenceSpill : undefined;
-      if (spillDef && spillDef.deathBurst !== false) {
+      if (spillDef && spillDef.deathBurst !== false && !this.spoilsSealed()) {
         const owed = spillBudget(spillDef) - actor.essenceSpilled;
         for (let k = 0; k < owed; k++) this.dropEssenceAt(actor.pos, rollSpillPacket(actor.level, spillDef));
         if (owed > 0) {
@@ -32231,7 +32247,10 @@ export class World {
 
   /** Drop one random gem (skill or support) at a point — gated by account
    *  unlocks; `bias` is the killer's gemBias (the shaman-drops-caster rule). */
-  dropGemAt(at: Vec2, bias?: SkillTag[]): void {
+  dropGemAt(at: Vec2, bias?: SkillTag[], owed = false): void {
+    // THE SPOILS LAW: sealed ground refuses the mint — except OWED pay
+    // (a quest's payout is earned of the writ, not of this ground).
+    if (!owed && this.spoilsSealed()) return;
     const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10);
     const dropSkill = (): void => {
       const inst = this.rollSkillGem(bias);
@@ -32398,8 +32417,13 @@ export class World {
   }
 
   /** Mint a ground gear drop. Kill loot announces itself; player discards
-   *  carry the same grace/dropper guards as discarded gems. */
-  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string): void {
+   *  carry the same grace/dropper guards as discarded gems. `owed` marks
+   *  gear the player is OWED (a corpse reclaim, a dev conjure) — owned
+   *  property, exempt from the spoils law like any discard. */
+  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string, owed = false): void {
+    // THE SPOILS LAW: minted gear refuses on sealed ground; a player's own
+    // discards (droppedBy) and owed returns are movement and always land.
+    if (!droppedBy && !owed && this.spoilsSealed()) return;
     const pos = this.clampPos(vec(at.x + rand(-16, 16), at.y + rand(-16, 16)), 10);
     delete item.x;
     delete item.y;
@@ -32423,6 +32447,7 @@ export class World {
 
   /** Shed a vestige on the ground (kill path / tables) — vacuumed on touch. */
   dropVestigeAt(at: Vec2, id: string, count = 1): void {
+    if (this.spoilsSealed()) return; // THE SPOILS LAW — vestiges are minted wealth
     if (!VESTIGES[id]) return;
     const pos = this.clampPos(vec(at.x + rand(-14, 14), at.y + rand(-14, 14)), 10);
     this.drops.push({ pos, item: { kind: 'vestige', id, count }, bob: rand(0, Math.PI * 2) });
@@ -32712,7 +32737,22 @@ export class World {
     return true;
   }
 
+  /** THE SPOILS LAW (ZoneDef.spoils): true while the CURRENT ground refuses
+   *  new loot mints. Every mint primitive consults it (gems, gear, vestiges,
+   *  essence packets — so kill paths, boss tables, wave/objective/event
+   *  payouts and breakables all seal through the one read); movement of what
+   *  a player already owns (discards, corpse reclaims, a looter's snatched
+   *  sack, zone-memory restores) NEVER consults it. XP and sustain orbs are
+   *  not spoils and flow untouched. */
+  private spoilsSealed(): boolean {
+    return this.zone.spoils === 'none';
+  }
+
   private rollDrops(actor: Actor): void {
+    // THE SPOILS LAW: sealed ground mints nothing — no tables, no gem
+    // trickle, no vestige shed (XP + orbs were already paid upstream in
+    // kill(); the primitives below each re-check, this is the cheap out).
+    if (this.spoilsSealed()) return;
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
     // RICH GROUND: the zone's BOUNTY lever (ZoneDef.bounty, default 1) scales
     // the kill-path CHANCE gates — never the guaranteed paths (boss tables,

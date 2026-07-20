@@ -970,6 +970,16 @@ export interface ZoneDef {
    *  tables, per-monster hoards). Set at mint (a Holdfast pocket's earned haul,
    *  a future gilded event's field); serializes with the graph. */
   bounty?: number;
+  /** THE SPOILS LAW — what this ground may MINT. 'none' seals every ground
+   *  mint at the drop primitives (kill gems/gear/vestiges, boss tables, wave
+   *  + objective + event payouts, breakables, essence sheds) while XP and
+   *  sustain orbs flow untouched — ground that pays in experience alone,
+   *  never a gear farm. OWED pay and OWNED property always pass: quest
+   *  payouts, corpse reclaims, player discards, and a looter's snatched sack
+   *  are movement, not mints (World.spoilsSealed is the one read). Absent =
+   *  'full'. Debut: The Pit (packages/defs/pit.ts) — a level-scaled XP arena
+   *  must not also out-farm the charted world's gear from one cellar. */
+  spoils?: 'full' | 'none';
   /** THE QUICKENING's stamp (packages/overlays/quickening.ts): while a surge
    *  holds this ground, `level` above is the SURGED level and this block
    *  remembers how to put it back. Written and reverted ONLY by the engine's

@@ -531,7 +531,14 @@ changes.
   in `docs/engine/puzzles.md`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
-  `loot.ts` (nestable loot tables + DROP_CFG kill-path levers).
+  `loot.ts` (nestable loot tables + DROP_CFG kill-path levers). THE SPOILS
+  LAW (`ZoneDef.spoils: 'none'`): a zone that MINTS no loot — every drop
+  primitive (gems/gear/vestiges/essences) seals through
+  `World.spoilsSealed()` while XP + orbs flow; OWED pay (quest payouts,
+  corpse reclaims — the `owed` flag) and OWNED movement (discards, looter
+  sacks, memory restores) always pass; the Pit is the debut (a level-scaled
+  XP arena, deliberately not a gear farm) — docs in `docs/engine/spoils.md`,
+  probe `balance/probe_spoils.ts`.
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
   `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`,
   `beacons.ts` (survey-spire objective tuning); items:

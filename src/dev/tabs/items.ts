@@ -116,7 +116,8 @@ export const itemsTab: DevTabDef = {
         if (!w) { flash('start a run first'); return; }
         const item = rollItem({ ilvl: ilvlOf() });
         if (!item) { flash('roll failed (empty pool?)'); return; }
-        w.dropGearAt(w.player.pos, item);
+        // owed: a dev conjure lands even where THE SPOILS LAW seals mints.
+        w.dropGearAt(w.player.pos, item, undefined, true);
         flash(`dropped ${item.name} (${item.rarity}, ilvl ${item.ilvl}) — the kill-path lottery`);
       }),
     );
@@ -295,7 +296,8 @@ export const itemsTab: DevTabDef = {
       for (let i = 0; i < n; i++) {
         const item = mint();
         if (!item) break;
-        w.dropGearAt(w.player.pos, item);
+        // owed: a dev conjure lands even where THE SPOILS LAW seals mints.
+        w.dropGearAt(w.player.pos, item, undefined, true);
         last = item.name; made++;
       }
       flash(made ? `dropped ${made > 1 ? made + '× — last: ' : ''}${last}` : 'forge failed (see preview)');
