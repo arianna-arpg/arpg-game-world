@@ -6849,6 +6849,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Whitecrowned', 'Howling', 'Glacial', 'Snowblind', 'Auroral', 'Icebound', 'Wind-Scoured', 'Frostveiled', 'Silent', 'Cloudpiercing'],
     nameSecond: ['Crown', 'Summit', 'Peak', 'Cap', 'Fields', 'Cornice', 'Heights', 'Roof', 'Shoulder', 'Spire'],
     theme: {
+      // THE WHITEOUT: blizzard light is diffuse — few hard casts, and the
+      // faint ones washed (the shadow governor's per-zone lever; also what
+      // keeps the summit off the vsync knee its snow wash rode).
+      shadows: { budgetMul: 0.3, alphaMul: 0.6 },
       heat: 0.02,
       windchill: 1,
       dayLight: 1.3,

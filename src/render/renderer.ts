@@ -2183,11 +2183,15 @@ export class Renderer {
    */
   private drawDoodads(world: World): void {
     const { ctx } = this;
+    // Per-zone shadow art direction (ZoneTheme.shadows) folds over the
+    // governor's globals — the whiteout lever (budgetMul 0 = shadowless).
+    const shTheme = world.zone.theme.shadows;
+    const shAlphaMul = shTheme?.alphaMul ?? 1;
     const env: PaintEnv = {
       ctx, theme: world.zone.theme, time: world.time, world,
       // The frame's shadow allowance (VIS_CFG.shadows): z-order spends it.
       shadowGate: {
-        left: VIS_CFG.shadows.budget,
+        left: Math.round(VIS_CFG.shadows.budget * (shTheme?.budgetMul ?? 1)),
         minR: VIS_CFG.shadows.minRadiusPx / this.zoom,
       },
     };
@@ -2227,7 +2231,7 @@ export class Renderer {
             gate.left--;
           }
           drawLongShadow(ctx, d.pos.x, d.pos.y, d.radius * g.def.longShadow,
-            sun.dir, sun.len, sun.alpha);
+            sun.dir, sun.len, sun.alpha * shAlphaMul);
         }
       }
       // Ground kinds bed into the terrain before their own detail pass —
@@ -2236,7 +2240,7 @@ export class Renderer {
       if (g.def.blend && (g.def.blend.live || !VIS_CFG.ground.bakeBlend)) {
         paintBlendUnderlay(env, g.list, g.def);
       }
-      if (g.def.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, g.list, g.def.shadow);
+      if (g.def.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, g.list, g.def.shadow * shAlphaMul);
       // bakeWhole kinds (brush clumps, ferns) blit variant sprites through
       // their own painter's bake — the understory half of the forest fix.
       if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, g.list, g.def);

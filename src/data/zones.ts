@@ -493,6 +493,15 @@ export interface ZoneTheme {
    *  standing stones). 0 disables a family for the zone; omitted = 1. Art
    *  direction only — the engine's LoS ray never reads this. */
   sightVeil?: { mul?: number; regionMul?: number; doodadMul?: number };
+  /** DOODAD-SHADOW tuning (renderer drawDoodads over VIS_CFG.shadows):
+   *  per-zone art direction on the shadow governor — `budgetMul` scales the
+   *  per-frame draw allowance, `alphaMul` washes both families' darkness
+   *  (long casts + contact blobs). The whiteout lever: a blizzard summit's
+   *  diffuse light genuinely casts no hard shadow, and the same stack that
+   *  reads as depth in a gloam forest reads as noise over snow wash — and
+   *  rode the vsync knee (snowcrown 2026-07-20, 29.2ms vs cap 29.0).
+   *  Omitted = 1; render-only, nothing tested reads it. */
+  shadows?: { budgetMul?: number; alphaMul?: number };
   /** LIVING FOG (the fog fabric, engine/fog.ts): which fog KINDS this zone
    *  breathes and how many banks roll per visit. Banks drift, coil, breathe
    *  and dissipate; standing in live fog grants the kind's statuses — the

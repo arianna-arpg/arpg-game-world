@@ -81,10 +81,14 @@ export interface PerfZoneStats {
   frames: number;
   /** rAF-gap percentiles/extreme (ms) — the pacing the player feels. */
   gapP50: number; gapP95: number; gapP99: number; gapMax: number;
-  /** Sim (input + AI + world.update) percentiles (ms). */
-  simP50: number; simP99: number;
-  /** Render (renderer.render, JS side) percentiles (ms). */
-  renP50: number; renP99: number;
+  /** Sim (input + AI + world.update) percentiles (ms) + the window MAX —
+   *  a SINGLE synchronous stall frame hides from any percentile (479 clean
+   *  frames bury one 7-second fill at p99; the 2026-07-20 strand stall), so
+   *  the max is what attributes a gapMax catastrophe to sim vs render vs
+   *  the compositor. */
+  simP50: number; simP99: number; simMax: number;
+  /** Render (renderer.render, JS side) percentiles (ms) + window max. */
+  renP50: number; renP99: number; renMax: number;
   /** Frames over 40 / 70 ms in the steady window (hitches). */
   hitch40: number; hitch70: number;
   /** Worst rAF gap inside the ENTRY window (zone-load burst). */
@@ -141,7 +145,9 @@ function reduceFrames(f: FrameDump, entryWorstGap: number, meta: {
     gapP50: q(gap, 0.5), gapP95: q(gap, 0.95), gapP99: q(gap, 0.99),
     gapMax: gap.length ? +gap[gap.length - 1].toFixed(1) : 0,
     simP50: q(sim, 0.5), simP99: q(sim, 0.99),
+    simMax: sim.length ? +sim[sim.length - 1].toFixed(1) : 0,
     renP50: q(ren, 0.5), renP99: q(ren, 0.99),
+    renMax: ren.length ? +ren[ren.length - 1].toFixed(1) : 0,
     hitch40: f.gap.filter(g => g > 40).length,
     hitch70: f.gap.filter(g => g > 70).length,
     entryWorstGap: +entryWorstGap.toFixed(1),
