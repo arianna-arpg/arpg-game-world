@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('launcher', {
   onLog: (/** @type {(line: string) => void} */ cb) => {
     ipcRenderer.on('launcher:log', (_e, line) => cb(String(line)));
   },
+  /** Direct-update download progress ({ pct, gotMb, totalMb, tag }). */
+  onProgress: (/** @type {(p: any) => void} */ cb) => {
+    ipcRenderer.on('launcher:progress', (_e, p) => cb(p));
+  },
   /** Main-process state pushes (e.g. the game window closed → launcher reshown). */
   onState: (/** @type {(state: any) => void} */ cb) => {
     ipcRenderer.on('launcher:state', (_e, state) => cb(state));

@@ -9,7 +9,8 @@
   },
   "updates": {
     "checkOnLaunch": true,
-    "mode": "auto"
+    "mode": "auto",
+    "directInstall": true
   },
   "window": {
     "width": 1600,

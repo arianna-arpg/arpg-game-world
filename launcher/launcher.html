@@ -118,11 +118,15 @@
         (s.subject ? ` — “${s.subject}”` : '') +
         (s.dirty ? ' <span class="dirty">(modified locally)</span>' : '');
       // PACKAGED install (no repo, no toolchain): the rebuild button is
-      // meaningless, and Update means "open the newest GitHub Release".
+      // meaningless, and Update means "download from GitHub Releases and
+      // install it in place" (directInstall=false keeps the old open-the-
+      // release-page behavior).
       if (s.packaged) {
         $('rebuild').classList.add('hidden');
-        $('update-btn').textContent = '⬇  Get Update (opens browser)';
-        $('hint').textContent = 'Playing is fully offline. Updates come from GitHub Releases.';
+        $('update-btn').textContent = s.directInstall ? '⬇  Update & Restart' : '⬇  Get Update (opens browser)';
+        $('hint').textContent = s.directInstall
+          ? 'Playing is fully offline. Updates download from GitHub Releases and install themselves.'
+          : 'Playing is fully offline. Updates come from GitHub Releases.';
       }
       if (s.updateMode === 'none') $('check').classList.add('hidden');
     }
@@ -182,8 +186,17 @@
       try {
         const r = await window.launcher.update();
         if (!r.ok) { appendLog('UPDATE FAILED: ' + (r.error || 'unknown error')); return; }
-        // Release mode opened the download page — this install stays as-is
-        // until the player runs the new one; don't auto-play the old build.
+        // Direct release update: the new version is installing and will
+        // relaunch itself — this process is about to exit.
+        if (r.installing) {
+          const st = $('update-status');
+          st.className = 'avail';
+          st.textContent = 'Update installed — restarting…';
+          appendLog('The launcher closes while the update applies; the game reopens updated.');
+          return;
+        }
+        // Release-page fallback — this install stays as-is until the player
+        // runs the new one; don't auto-play the old build.
         if (r.opened) { appendLog('Download page opened — install the new version, then relaunch.'); return; }
         await refresh();
         renderCheck({ ok: true, behind: 0, ahead: 0, changes: [] });
@@ -211,6 +224,12 @@
     window.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('play').disabled) doPlay(); });
 
     window.launcher.onLog(appendLog);
+    window.launcher.onProgress((p) => {
+      const st = $('update-status');
+      st.className = 'avail';
+      st.textContent = `Downloading ${p.tag || 'update'} — ${p.pct}%` +
+        (p.totalMb ? ` (${Math.round(p.gotMb)} / ${Math.round(p.totalMb)} MB)` : '');
+    });
     window.launcher.onState(async (s) => { if (s && s.t === 'game-closed') { await refresh(); } });
 
     (async () => {

@@ -16,7 +16,12 @@ and the player, monsters, and minions all act through a single skill pipeline
 - `npm run game` — the DESKTOP APP: Electron launcher window (shows installed
   version, checks the GitHub remote for updates, one-click pull → install →
   build) then the game in its own window. `Launch Game.bat` is the double-click
-  wrapper; `npm run game:play` skips the launcher.
+  wrapper; `npm run game:play` skips the launcher. PACKAGED installs
+  self-update instead: the launcher streams the new installer/AppImage from
+  GitHub Releases with live progress, installs silently (NSIS `/S
+  --force-run` on Windows, in-place AppImage swap on Linux/Steam Deck) and
+  relaunches itself — the release page opens only as the fallback
+  (`updates.directInstall=false` restores the old behavior).
 - `npx tsc --noEmit` — fast type-check with no output. Primary correctness gate.
 - `npm run check` — type-checks the game AND the launcher (`tsconfig.launcher.json`
   runs strict checkJs over `launcher/*.cjs`).
@@ -566,7 +571,9 @@ changes.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
-  `tsconfig.launcher.json`): `main.cjs` (windows, git update flow, build
+  `tsconfig.launcher.json`): `main.cjs` (windows, git update flow + the
+  packaged DIRECT UPDATE (GitHub-Releases download → silent install →
+  relaunch), build
   stamping, IPC, smoke modes, and the full-reset wipe: `saves/` + Chromium
   storage behind a native confirm), `server.cjs` (loopback HTTP server for `dist/`
   that re-implements the Vite disk-save `/__save/:slot` endpoints — SAME

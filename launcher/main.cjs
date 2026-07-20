@@ -17,8 +17,12 @@
 //
 // PACKAGED (npm run dist → NSIS installer / Linux AppImage): the SAME trio,
 // minus the repo. dist/ + the committed config ship as extraResources beside
-// the exe, saves move to userData, and updates become a GitHub-Releases
-// version probe with a download link (a package can't rebuild itself). Every
+// the exe, saves move to userData, and updates become THE DIRECT UPDATE —
+// probe GitHub Releases, stream this platform's artifact down with live
+// progress, then swap it in place (silent NSIS re-run on Windows, AppImage
+// overwrite-and-relaunch on Linux/Steam Deck). No browser, no hand-install;
+// opening the release page survives only as the fallback when the direct
+// path fails (updates.directInstall=false restores it outright). Every
 // path resolves through the PACKAGED/REPO/BASE seam below — nothing else
 // changes, and the smoke modes run against a packaged exe unmodified.
 //
@@ -84,7 +88,7 @@ const BUILD_INFO = PACKAGED ? readJson(path.join(BASE, 'build-info.json')) : nul
 const CONFIG_DEFAULTS = {
   game: { title: 'Hollow Wake' },
   repo: { remote: 'origin', branch: 'main', github: 'arianna-arpg/arpg-game-world' },
-  updates: { checkOnLaunch: true, mode: 'auto' },
+  updates: { checkOnLaunch: true, mode: 'auto', directInstall: true },
   window: { width: 1600, height: 900, maximized: true, fullscreen: 'auto', devtools: true, zoom: 1 },
   server: { host: '127.0.0.1', port: 0 },
   launcher: { width: 700, height: 680, returnToLauncher: true, autoPlayOnGamescope: true },
@@ -286,6 +290,7 @@ async function repoStatus() {
       checkOnLaunch: !!cfg.updates.checkOnLaunch,
       repo: { remote: cfg.repo.remote, branch: cfg.repo.branch },
       packaged: true, updateMode: UPDATE_MODE, savesDir: SAVES,
+      directInstall: cfg.updates.directInstall !== false,
     };
   }
   const pkg = readJson(path.join(/** @type {string} */ (REPO), 'package.json')) ?? {};
@@ -327,9 +332,28 @@ async function checkGitUpdates() {
 
 // ----------------------------------------------- release-mode update checks
 
-/** The newest release's page URL, remembered by the last successful check so
- *  the Update button can open exactly what it announced. */
-/** @type {string | null} */ let latestReleaseUrl = null;
+/** What the last successful check found: the release page (the fallback
+ *  surface), the tag, and THIS platform's installer asset — the direct-update
+ *  payload — so the Update button acts on exactly what it announced. */
+/** @type {{ url: string | null, tag: string | null, asset: { name: string, url: string, size: number } | null }} */
+let latestRelease = { url: null, tag: null, asset: null };
+
+/** This platform's installable artifact in a release's asset list — the NSIS
+ *  installer on Windows, the AppImage (the Steam Deck artifact) on Linux.
+ *  @param {any} assets @returns {{ name: string, url: string, size: number } | null} */
+function pickReleaseAsset(assets) {
+  const list = Array.isArray(assets) ? assets : [];
+  const want = process.platform === 'win32' ? '.exe'
+    : process.platform === 'linux' ? '.appimage' : null;
+  if (!want) return null;
+  for (const a of list) {
+    const name = (a && typeof a.name === 'string') ? a.name : '';
+    if (!name.toLowerCase().endsWith(want)) continue;
+    if (!a || typeof a.browser_download_url !== 'string') continue;
+    return { name, url: a.browser_download_url, size: Number(a.size) || 0 };
+  }
+  return null;
+}
 
 /** @param {unknown} s @returns {number[] | null} */
 function parseVer(s) {
@@ -361,7 +385,11 @@ async function checkReleaseUpdates() {
     }
     if (!res.ok) return { ok: false, error: `GitHub API answered HTTP ${res.status}.` };
     const rel = /** @type {any} */ (await res.json());
-    latestReleaseUrl = typeof rel.html_url === 'string' ? rel.html_url : null;
+    latestRelease = {
+      url: typeof rel.html_url === 'string' ? rel.html_url : null,
+      tag: typeof rel.tag_name === 'string' ? rel.tag_name : null,
+      asset: pickReleaseAsset(rel.assets),
+    };
     const current = parseVer(app.getVersion());
     const latest = parseVer(rel.tag_name);
     const behind = current && latest && newerVersion(latest, current) ? 1 : 0;
@@ -382,6 +410,127 @@ async function checkUpdates() {
   if (UPDATE_MODE === 'none') return { ok: true, behind: 0, ahead: 0, changes: [], mode: 'none' };
   if (UPDATE_MODE === 'release') return checkReleaseUpdates();
   return checkGitUpdates();
+}
+
+// ------------------------------------------------------ direct release update
+
+/** Download progress pushed to the launcher page ({pct, gotMb, totalMb, tag}).
+ *  @param {{ pct: number, gotMb: number, totalMb: number, tag: string }} p */
+function sendProgress(p) {
+  if (launcherWin && !launcherWin.isDestroyed()) launcherWin.webContents.send('launcher:progress', p);
+}
+
+/**
+ * Stream a release asset to disk, reporting progress to the page (every
+ * percent) and the log (every ten). Verifies the byte count against
+ * content-length so a truncated download can never be executed.
+ * @param {string} url @param {string} dest @param {number} sizeHint @param {string} tag
+ * @returns {Promise<number>} bytes written
+ */
+async function downloadAsset(url, dest, sizeHint, tag) {
+  const res = await fetch(url, {
+    headers: { accept: 'application/octet-stream', 'user-agent': 'hollow-wake-launcher' },
+    signal: AbortSignal.timeout(30 * 60_000), // a whole-download ceiling, not a stall timer
+  });
+  if (!res.ok || !res.body) throw new Error(`download answered HTTP ${res.status}`);
+  const total = Number(res.headers.get('content-length')) || sizeHint || 0;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  const file = fs.createWriteStream(dest);
+  const reader = res.body.getReader();
+  let got = 0, lastPct = -1, lastLogPct = -10;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      got += value.byteLength;
+      if (!file.write(value)) await new Promise(r => file.once('drain', r));
+      if (total > 0) {
+        const pct = Math.min(100, Math.floor((got / total) * 100));
+        if (pct !== lastPct) {
+          lastPct = pct;
+          sendProgress({ pct, gotMb: got / 1048576, totalMb: total / 1048576, tag });
+          if (pct - lastLogPct >= 10) {
+            lastLogPct = pct;
+            log(`Downloading ${tag}… ${pct}% (${Math.round(got / 1048576)} / ${Math.round(total / 1048576)} MB)`);
+          }
+        }
+      }
+    }
+  } finally {
+    await new Promise(r => file.end(r));
+  }
+  if (total > 0 && got < total) throw new Error(`download truncated at ${got} of ${total} bytes`);
+  return got;
+}
+
+/**
+ * THE DIRECT UPDATE — a packaged install replaces ITSELF from GitHub
+ * Releases; no browser, no hand-install:
+ *   Windows: stream the new NSIS installer to temp and run it silently
+ *            (`/S --updated --force-run` — electron-builder's installer
+ *            template relaunches the app itself after a silent update),
+ *            then quit so the files are free to replace.
+ *   Linux:   stream the new AppImage BESIDE the running one (same
+ *            filesystem), mark it executable, rename it over the SAME path
+ *            (a Steam/desktop entry pointing at the file — the Deck flow —
+ *            stays valid), relaunch, quit. The mount of the old image holds
+ *            its inode, so swapping under a running app is safe.
+ * Saves live in userData and are untouched by either path. Any failure is
+ * thrown to the caller, which falls back to opening the release page — the
+ * player is never stranded, merely returned to the old manual flow.
+ * @returns {Promise<{ ok: boolean, installing: true }>}
+ */
+async function directReleaseUpdate() {
+  // The Update button only shows after a successful check, but be safe:
+  // refresh the remembered asset if a stale page raced one in.
+  if (!latestRelease.asset) await checkReleaseUpdates();
+  const asset = latestRelease.asset;
+  const label = latestRelease.tag ?? 'the update';
+  if (!asset) {
+    throw new Error(process.platform === 'win32' ? 'the latest release has no Windows installer attached'
+      : process.platform === 'linux' ? 'the latest release has no AppImage attached'
+        : `no direct-update artifact exists for platform '${process.platform}'`);
+  }
+
+  if (process.platform === 'win32') {
+    const dest = path.join(app.getPath('temp'), asset.name);
+    log(`Downloading ${label} (${asset.name})…`);
+    await downloadAsset(asset.url, dest, asset.size, label);
+    log('Download complete — installing silently; the game will restart itself.');
+    boot(`direct update: spawning installer ${dest}`);
+    const child = spawn(dest, ['/S', '--updated', '--force-run'], { detached: true, stdio: 'ignore' });
+    child.unref();
+    setTimeout(() => app.quit(), 400); // let the log line land before we go
+    return { ok: true, installing: true };
+  }
+
+  if (process.platform === 'linux') {
+    const self = process.env.APPIMAGE;
+    if (!self || !fs.existsSync(self)) {
+      throw new Error('not running from an AppImage (APPIMAGE unset) — nothing to swap in place');
+    }
+    const dir = path.dirname(self);
+    fs.accessSync(dir, fs.constants.W_OK); // throws when the folder is read-only
+    const staged = path.join(dir, `.${asset.name}.downloading`);
+    log(`Downloading ${label} (${asset.name})…`);
+    try {
+      await downloadAsset(asset.url, staged, asset.size, label);
+      fs.chmodSync(staged, 0o755);
+      fs.renameSync(staged, self);
+    } catch (e) {
+      try { fs.rmSync(staged, { force: true }); } catch { /* best-effort tidy */ }
+      throw e;
+    }
+    log('Update installed over this AppImage — restarting.');
+    boot(`direct update: swapped ${self}, relaunching`);
+    const child = spawn(self, [], { detached: true, stdio: 'ignore' });
+    child.unref();
+    setTimeout(() => app.quit(), 400);
+    return { ok: true, installing: true };
+  }
+
+  throw new Error(`no direct-update path for platform '${process.platform}'`);
 }
 
 /** The build stamp: HEAD + a digest of what's uncommitted. Any pull or local
@@ -430,9 +579,17 @@ async function ensureBuilt(force) {
 
 async function update() {
   if (UPDATE_MODE === 'release') {
-    // No self-mutation in a packaged install — hand the player the download.
+    // THE DIRECT UPDATE first — download + install + relaunch, no browser.
+    if (cfg.updates.directInstall !== false) {
+      try { return await directReleaseUpdate(); }
+      catch (e) {
+        const msg = (e && /** @type {any} */ (e).message) ? /** @type {any} */ (e).message : String(e);
+        log(`Direct update failed — ${msg}`);
+        log('Falling back to the release page.');
+      }
+    }
     const gh = String(cfg.repo.github ?? '');
-    const url = latestReleaseUrl ?? (gh ? `https://github.com/${gh}/releases/latest` : null);
+    const url = latestRelease.url ?? (gh ? `https://github.com/${gh}/releases/latest` : null);
     if (!url) return { ok: false, error: 'No release URL known — set repo.github in launcher.config.json.' };
     log('Opening the latest release in your browser — install it, then relaunch.');
     shell.openExternal(url);
