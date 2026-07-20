@@ -99,3 +99,58 @@ export function placeCamera(
     y: followAxis(mode, focus.y, vh, arena.h),
   };
 }
+
+// ---------------------------------------------------------------------------
+// THE COUCH FRAME (data/couch.ts COUCH_CFG.camera) — one shared screen serving
+// several local heroes. Pure math, separate from placeCamera on purpose: this
+// solves WHAT the frame must hold (focus + how far zoom may fall); placeCamera
+// then frames that focus under whatever camera mode governs, unchanged. The
+// probe (balance/probe_couch.ts) pins these laws headlessly.
+// ---------------------------------------------------------------------------
+
+export interface CouchCamSpec {
+  /** World-unit breathing room kept around each hero inside the frame. */
+  fitMarginWu: number;
+  /** The stretch cap: zoom may fall to base × this and no further. */
+  maxStretch: number;
+  /** World-unit inset from the frame edge the EDGE LAW confines heroes to. */
+  confineMarginWu: number;
+}
+
+/** Solve the shared frame for a set of local heroes: the focus is their
+ *  bounding box's center; `stretch` is the zoom multiplier (≤1) that fits the
+ *  box + margins on screen, floored at the cap — past the cap the frame stops
+ *  answering and the edge law (couchConfineRect) holds the runners. One hero
+ *  degenerates to {focus: hero, stretch: 1} — the solo frame, exactly. */
+export function couchFit(
+  eyes: ReadonlyArray<{ x: number; y: number }>,
+  screenW: number, screenH: number, baseZoom: number, spec: CouchCamSpec,
+): { focus: { x: number; y: number }; stretch: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const e of eyes) {
+    if (e.x < minX) minX = e.x;
+    if (e.y < minY) minY = e.y;
+    if (e.x > maxX) maxX = e.x;
+    if (e.y > maxY) maxY = e.y;
+  }
+  const focus = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  const needW = (maxX - minX) + 2 * spec.fitMarginWu;
+  const needH = (maxY - minY) + 2 * spec.fitMarginWu;
+  // The zoom that would exactly fit the need on each axis; the tighter axis
+  // governs. At or above base (heroes close together) the frame stays solo.
+  const zFit = Math.min(screenW / Math.max(1, needW), screenH / Math.max(1, needH));
+  const stretch = Math.max(spec.maxStretch, Math.min(1, zFit / baseZoom));
+  return { focus, stretch };
+}
+
+/** THE EDGE LAW's rect: where couch heroes may STAND, derived from the frame
+ *  actually drawn this frame (camera top-left + view dims), inset by the
+ *  confine margin. Drawn == confined by construction: the engine clamps couch
+ *  heroes into exactly the rect the renderer published (world.couchConfine),
+ *  so "the screen's edge" and "the movement wall" can never disagree. */
+export function couchConfineRect(
+  cam: { x: number; y: number }, vw: number, vh: number, spec: CouchCamSpec,
+): { x: number; y: number; w: number; h: number } {
+  const m = spec.confineMarginWu;
+  return { x: cam.x + m, y: cam.y + m, w: Math.max(1, vw - 2 * m), h: Math.max(1, vh - 2 * m) };
+}

@@ -219,6 +219,11 @@ export class SightVeil {
    *  night; 0 lifts the veil (active goes false — the pass costs nothing).
    *  Purely aesthetic: the engine's own LoS ray never reads it. */
   userMul = 1;
+  /** THE COUCH SUSPEND (data/couch.ts COUCH_CFG.render): this veil is a
+   *  single-eye fabric — under a shared couch frame the renderer parks it
+   *  here. Folds into `active`, so every consumer (occludedAt, actorShade,
+   *  draw) degrades to CLEAR through its own existing inactive path. */
+  suspend = false;
 
   /** Live per-frame state (update() resolves; draw()/queries consume). */
   private active = false;
@@ -270,7 +275,7 @@ export class SightVeil {
     const mul = (t?.mul ?? 1) * open * Math.max(0, Math.min(1, this.userMul));
     this.regionF = Math.max(0, Math.min(1, cfg.regionStrength * (t?.regionMul ?? 1) * mul));
     this.doodadF = Math.max(0, Math.min(1, cfg.doodadStrength * (t?.doodadMul ?? 1) * mul));
-    this.active = cfg.enabled && !VIS_ABLATE.has('sightveil')
+    this.active = cfg.enabled && !VIS_ABLATE.has('sightveil') && !this.suspend
       && (this.regionF > 0.01 || this.doodadF > 0.01);
     if (!this.active) return;
 

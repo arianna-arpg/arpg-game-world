@@ -170,9 +170,14 @@ export class LightLayer {
     // MOVERS FIRST: the hero's lantern, combat flashes and projectiles must
     // never be starved out of the cap by a field of emissive terrain (a lava
     // carpet used to eat all 72 slots before the lantern got its turn).
-    if (this.ambient > 0.1 && !world.player.dead) {
-      push(world.player.pos.x, world.player.pos.y, VIS_CFG.lights.heroRadius,
-        '#ffe8c0', Math.min(0.9, this.ambient + 0.15));
+    // COUCH: every local hero carries the lantern (couchHeroes degenerates to
+    // [player] outside couch play — the solo path is byte-identical).
+    if (this.ambient > 0.1) {
+      for (const hero of (world.couchActive() ? world.couchHeroes() : [world.player])) {
+        if (hero.dead) continue;
+        push(hero.pos.x, hero.pos.y, VIS_CFG.lights.heroRadius,
+          '#ffe8c0', Math.min(0.9, this.ambient + 0.15));
+      }
     }
     for (const f of world.flashes) {
       if (f.haze) continue; // refraction, not emission — a haze ring casts no glow

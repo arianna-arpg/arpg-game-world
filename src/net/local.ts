@@ -56,4 +56,10 @@ export class LocalTransport implements NetTransport {
       this.peerList.push({ ...info, isHost: false });
     }
   }
+
+  /** Unregister a stand-in peer (a couch guest left) + drop any staged intent. */
+  removeLocalSeat(id: PlayerId): void {
+    this.peerList = this.peerList.filter(p => p.id !== id);
+    this.pending.delete(id);
+  }
 }

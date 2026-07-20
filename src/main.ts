@@ -5,6 +5,9 @@
 
 import { Input } from './core/input';
 import { PAD_CFG, PadState, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
+import { COUCH_CFG } from './data/couch';
+import { PadClaimScanner, PadSeatInput } from './net/couch';
+import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui/couchJoin';
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
@@ -26,7 +29,7 @@ import './data/creeps'; // side-effect: registers the living creep kinds
 import './data/traversals'; // side-effect: registers the vertical-crossing kinds (sky launch/fall)
 import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
 import { updateAI } from './engine/ai';
-import { World } from './engine/world';
+import { World, type Seat } from './engine/world';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
@@ -56,10 +59,11 @@ import {
 import {
   applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
   loadRosterSave, persistRun, persistRunDurable,
+  rebuildSavedMeta, saveCouchGuest,
   type CharacterSave,
 } from './meta/character';
 import { resolveResumeSpawn } from './meta/worldstate';
-import { freeRosterSlot, mintCharId, modeById, type RosterEntry } from './meta/modes';
+import { freeRosterSlot, mintCharId, modeById, rosterCapacity, type RosterEntry } from './meta/modes';
 import { healMercEngagements, releaseMercsOf } from './meta/mercs';
 import type { Settings } from './meta/settings';
 
@@ -225,7 +229,9 @@ function coopActive(): boolean {
  *  this machine owns the one real sim AND no live peer shares it (a co-op
  *  world is never one player's to stop; a client render-shell never holds). */
 function adoptWorld(w: World): World {
-  w.timeflow.allowHold = () => net.isHost && !coopActive();
+  // (Couch guests count as live players too — a shared screen is never one
+  // player's to stop, so a seated guest waives the menu hold like a peer.)
+  w.timeflow.allowHold = () => net.isHost && !coopActive() && !w.couchActive();
   return w;
 }
 
@@ -260,6 +266,7 @@ let uiRefreshTimer = 0;
 let autosaveTimer = 0;
 
 function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string): void {
+  couchReset(); // a new world seats no ghosts — guests re-join from the menu
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
@@ -337,6 +344,7 @@ function restoreWorldState(world: World, save: CharacterSave): void {
  *  the entry stays listed, deletion is only ever the player's deliberate call. */
 function resumeRosterChar(entry: RosterEntry): void {
   void (async (): Promise<void> => {
+    couchReset();
     const save = await loadRosterSave(entry.slot);
     const classDef = save && CLASSES.find(c => c.id === save.classId);
     if (!save || !classDef) {
@@ -366,6 +374,7 @@ function resumeRosterChar(entry: RosterEntry): void {
 /** Resume the saved in-progress character, or fall back to the start menu.
  *  `preloaded` is the disk/local save fetched at boot; without it we read sync. */
 function resumeGame(preloaded?: CharacterSave | null): void {
+  couchReset();
   const save = preloaded ?? loadCharacter();
   const classDef = save && CLASSES.find(c => c.id === save.classId);
   // A saved character is always resumable — resume must NOT depend on the
@@ -695,6 +704,15 @@ function handleLocalPanels(): void {
   if (input.justPressed('escape')) {
     if (ui.minigameRunning()) return;
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
+    // The couch join overlay dismisses like any dialog — one press, gone.
+    if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+    // COUCH: the hero's Esc walks ITS OWN cascade — a guest's open panels
+    // are the guest's business (their Ⓑ walks theirs). Solo falls through
+    // to the classic global cascade below, byte-identically.
+    if (couchActive()) {
+      if (!ui.escCascadeFor(world.localSeat.id)) ui.showEscapeMenu();
+      return;
+    }
     if (ui.caravanOpen) { ui.closeCaravan(); return; }
     if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
@@ -741,6 +759,274 @@ function spawnCoopAlly(): void {
   // move/cast in one tab); otherwise it's a scripted follow-and-fight ally.
   world.addSeat(id, cls, COOP_HUMAN ? new LocalCoopInput(input.keys) : new ScriptedInput());
 }
+
+// ---------------------------------------------------------------------------
+// THE COUCH SESSION (data/couch.ts) — a second LOCAL player on this screen.
+// A guest is an ordinary Seat: its intent is a PadSeatInput on a claimed pad,
+// its panels dock to its flank, its vessel (immortal lane) persists to its
+// own roster slot. Everything here short-circuits to nothing with no guests
+// seated — the solo invariant. main.ts owns the session (the world owns only
+// the seats), exactly as it owns the net transport.
+// ---------------------------------------------------------------------------
+interface CouchGuestCtx {
+  seatId: string;
+  padIdx: number;
+  gpad: PadState;
+  source: PadSeatInput;
+  pointer: PadPointer;
+  /** Immortal-lane vessel context: the roster slot + the join-time save
+   *  (its dormant menagerie rides back out verbatim at persist). */
+  vessel?: { slot: number; save: CharacterSave };
+}
+const couchGuests = new Map<string, CouchGuestCtx>();
+const couchPadSet = new Set<number>();
+const couchScanner = new PadClaimScanner();
+const couchOverlay = new CouchJoinOverlay();
+let couchClaimPad: number | null = null;
+let couchSeatSerial = 0;
+
+function couchActive(): boolean { return couchGuests.size > 0; }
+
+// The hero's merged pad read skips claimed guest pads (null = byte-identical
+// classic read while no guest is seated).
+pad.padExclude = () => (couchPadSet.size ? couchPadSet : null);
+
+/** A guest's gameplay parks while a global surface is up or its own pointer
+ *  owns its pad (its panels are open) — the guest twin of P1's padLive gate. */
+function couchGuestSuspended(id: string): boolean {
+  const g = couchGuests.get(id);
+  return !g || ui.escapeMenuOpen || ui.couchJoinOpen || g.pointer.active;
+}
+
+/** The join overlay's claim exclusions: pads already claimed + the hero's own
+ *  LIVE pad (recently spoken) — a pad P1 is actively holding never joins. */
+function couchClaimExcluded(): ReadonlySet<number> {
+  const out = new Set(couchPadSet);
+  if (pad.sourceIndex !== null && pad.activeRecently(performance.now() / 1000)) {
+    out.add(pad.sourceIndex);
+  }
+  return out;
+}
+
+/** THE LANE LAW: the guest joins the run's OWN lane — an immortal run seats
+ *  another vessel from this account's roster (a second immortal slot must be
+ *  unlocked); a mortal run seats a fresh, disposable hero (the net join's
+ *  Tier-0 idiom). */
+function couchLaneImmortal(): boolean { return modeById(world.meta.modeId).save === 'roster'; }
+
+function couchChoices(): CouchJoinChoice[] {
+  if (!couchLaneImmortal()) {
+    return CLASSES.filter(c => isClassUnlocked(account, c.id)).map(c => ({
+      key: 'class:' + c.id, title: c.name, sub: c.description, color: c.color,
+    }));
+  }
+  const mode = modeById(world.meta.modeId);
+  if (rosterCapacity(account, mode) < COUCH_CFG.join.immortalSlotsNeeded) {
+    return [{
+      key: 'none', title: 'A second Immortal slot is required', color: '#8a8678', sub: '',
+      disabled: 'Unlock another Immortal vessel slot in the Vault to bring a second vessel to the couch.',
+    }];
+  }
+  const rows = account.roster.filter(r => r.modeId === mode.id && r.charId !== world.meta.charId);
+  if (!rows.length) {
+    return [{
+      key: 'none', title: 'No second vessel sworn', color: '#8a8678', sub: '',
+      disabled: 'Swear another Immortal from the start menu first — the couch seats an existing vessel.',
+    }];
+  }
+  return rows.map(r => ({
+    key: 'vessel:' + r.charId,
+    title: `${r.name} — Level ${r.level}`,
+    sub: `${CLASSES.find(c => c.id === r.classId)?.name ?? r.classId} · ${mode.name}`,
+    color: mode.color,
+  }));
+}
+
+function couchJoinView(): CouchJoinView {
+  const lane = couchLaneImmortal()
+    ? 'Immortal run — a second VESSEL from this account joins.'
+    : 'Mortal run — a fresh hero joins for this run (the run is the character).';
+  return couchClaimPad === null
+    ? {
+      phase: 'claim', lane,
+      message: 'Press Ⓐ on the JOINING controller to claim it.',
+      choices: [], onPick: () => { /* no choices yet */ }, onCancel: closeCouchJoin,
+    }
+    : {
+      phase: 'pick', lane,
+      message: `Controller ${couchClaimPad + 1} claimed — choose who joins.`,
+      choices: couchChoices(), onPick: couchJoin, onCancel: closeCouchJoin,
+    };
+}
+
+function openCouchJoin(): void {
+  if (!running || !net.isHost || !(net instanceof LocalTransport)) return;
+  if (world.couchSeats().length >= COUCH_CFG.join.maxLocal - 1) return;
+  couchClaimPad = null;
+  couchScanner.reset();
+  ui.couchJoinOpen = true;
+  couchOverlay.show(couchJoinView());
+}
+
+function closeCouchJoin(): void {
+  ui.couchJoinOpen = false;
+  couchClaimPad = null;
+  couchOverlay.hide();
+}
+
+/** Mint the guest seat: transport peer + PadState bound to the claimed pad +
+ *  the PadSeatInput source + a pointer of its own, flank-tagged. */
+function mintCouchSeat(padIdx: number, cls: ClassDef, vessel?: CouchGuestCtx['vessel']): Seat | null {
+  if (!(net instanceof LocalTransport)) return null;
+  const id = 'c' + (++couchSeatSerial);
+  net.addLocalSeat({ id, name: vessel?.save.name ?? cls.name, classId: cls.id });
+  const gpad = new PadState(padTuning);
+  gpad.padIndex = padIdx;
+  const source = new PadSeatInput(gpad, {
+    tuning: padTuning,
+    binds: () => settings.padBinds,
+    assist: () => ({ mode: settings.pad.assistMode, strength: settings.pad.aimAssist }),
+    improvisedStrike: () => settings.improvisedStrike,
+    invertMove: () => settings.invertMove,
+    suspended: () => couchGuestSuspended(id),
+  });
+  const seat = world.addSeat(id, cls, source);
+  const side = COUCH_CFG.join.sides[
+    Math.min(COUCH_CFG.join.sides.length - 1, world.couchSeats().length + 1)] ?? 'right';
+  seat.couch = { pad: padIdx, side };
+  const pointer = new PadPointer(gpad, padTuning);
+  pointer.onCancel = () => couchGuestCancel(id);
+  couchGuests.set(id, { seatId: id, padIdx, gpad, source, pointer, vessel });
+  couchPadSet.add(padIdx);
+  return seat;
+}
+
+/** The pick handler: 'class:<id>' seats a fresh mortal-lane hero; 'vessel:
+ *  <charId>' loads + grafts the roster vessel (async disk-first read). */
+function couchJoin(pick: string): void {
+  if (couchClaimPad === null) return;
+  const padIdx = couchClaimPad;
+  if (pick.startsWith('class:')) {
+    const cls = CLASSES.find(c => c.id === pick.slice('class:'.length));
+    if (cls) mintCouchSeat(padIdx, cls);
+    closeCouchJoin();
+    return;
+  }
+  if (!pick.startsWith('vessel:')) return;
+  const charId = pick.slice('vessel:'.length);
+  const entry = account.roster.find(r => r.charId === charId);
+  if (!entry) { closeCouchJoin(); return; }
+  void (async (): Promise<void> => {
+    const save = await loadRosterSave(entry.slot);
+    const built = save && rebuildSavedMeta(save);
+    const cls = save && CLASSES.find(c => c.id === save.classId);
+    if (!save || !built || !cls) { closeCouchJoin(); return; }
+    const seat = mintCouchSeat(padIdx, cls, { slot: entry.slot, save });
+    if (seat) {
+      world.adoptSeatMeta(seat, built.meta, save.bar, save.level);
+      seat.couchDeaths = built.deaths;
+      if (!seat.meta.charId) seat.meta.charId = entry.charId;
+      seat.couch!.charId = seat.meta.charId;
+      seat.couch!.rosterSlot = entry.slot;
+    }
+    closeCouchJoin();
+  })();
+}
+
+/** Persist every seated guest VESSEL to its own roster slot (the persistRun
+ *  sibling; disposable mortal-lane guests carry nothing to save). */
+function persistCouchGuests(durable = false): void {
+  for (const g of couchGuests.values()) {
+    if (!g.vessel) continue;
+    const seat = world.seats.find(s => s.id === g.seatId);
+    if (!seat) continue;
+    saveCouchGuest(account, world, seat, g.vessel.slot, g.vessel.save, durable);
+  }
+}
+
+/** A guest leaves mid-run (the escape row): vessel saved, seat removed, pad
+ *  released — the frame narrows back to the hero on its own smoothing. */
+function couchLeave(id: string): void {
+  const g = couchGuests.get(id);
+  if (!g) return;
+  persistCouchGuests();
+  world.removeSeat(id);
+  if (net instanceof LocalTransport) net.removeLocalSeat(id);
+  g.pointer.dispose();
+  couchGuests.delete(id);
+  couchPadSet.delete(g.padIdx);
+  renderer.couchAims = [];
+}
+
+/** Tear the whole couch session down (run end / menu). Persistence is the
+ *  CALLER's duty first — this only drops the session machinery. */
+function couchReset(): void {
+  for (const g of couchGuests.values()) g.pointer.dispose();
+  couchGuests.clear();
+  couchPadSet.clear();
+  renderer.couchAims = [];
+  if (ui.couchJoinOpen) closeCouchJoin();
+}
+
+/** The guest's Ⓑ/cancel cascade — their panels first, then the shared pause. */
+function couchGuestCancel(id: string): void {
+  if (ui.couchJoinOpen) { closeCouchJoin(); return; }
+  if (ui.escCascadeFor(id)) return;
+  synthEscape();
+}
+
+/** Per-frame couch work, right after the hero's own device poll: guest pads
+ *  poll on the same wall clock, guest pointers wake on THEIR OWN blocking
+ *  surfaces, the join overlay runs its claim scan, and the renderer gets the
+ *  guests' reticles in their class tints. No guests = nothing. */
+function couchTick(dt: number, nowSec: number): void {
+  for (const g of couchGuests.values()) {
+    g.gpad.poll(nowSec);
+    g.pointer.update(dt, ui.blockingFor(g.seatId) || !running, nowSec);
+    // Guest START = the shared pause (either player may pause the couch).
+    if (g.gpad.justPressed(PAD_CFG.escapeButton)) synthEscape();
+  }
+  if (ui.couchJoinOpen) {
+    if (couchClaimPad === null) {
+      const hit = couchScanner.scan(COUCH_CFG.join.claimButton, couchClaimExcluded());
+      if (hit !== null) couchClaimPad = hit;
+    }
+    couchOverlay.update(couchJoinView());
+  }
+  if (couchGuests.size) {
+    renderer.couchAims = [...couchGuests.values()].flatMap(g => {
+      const seat = world.seats.find(s => s.id === g.seatId);
+      const a = g.source.aimView();
+      return seat && a && !seat.actor.dead && !seat.actor.downed
+        ? [{ x: a.x, y: a.y, lockId: a.lockId, color: seat.meta.classDef.color }] : [];
+    });
+  }
+}
+
+/** Guest panel toggles + pickup, off the guest's OWN pad binds — the couch
+ *  twin of handleLocalPanels (host branch only; guests exist only there). */
+function handleCouchPanels(): void {
+  if (ui.escapeMenuOpen || ui.couchJoinOpen) return;
+  const pb = settings.padBinds;
+  for (const g of couchGuests.values()) {
+    const seat = world.seats.find(s => s.id === g.seatId);
+    if (!seat || seat.actor.dead || seat.actor.downed) continue;
+    if (g.gpad.justPressed(pb.panelChar)) ui.toggleCharSheet(g.seatId);
+    if (g.gpad.justPressed(pb.panelTree)) ui.toggleTree(g.seatId);
+    if (g.gpad.justPressed(pb.panelMap)) ui.toggleMap();
+    if (g.gpad.justPressed(pb.panelInv)) ui.toggleInventory(g.seatId);
+    if (g.gpad.justPressed(pb.pickup)) {
+      world.applyAction(seat, { t: 'pickupItem' });
+      if (ui.inventoryOpen) ui.refreshInventory();
+    }
+  }
+}
+
+// The pause-menu row (panels.ts gates it on pads + a free guest seat).
+ui.onCouchJoin = openCouchJoin;
+ui.onCouchLeave = () => {
+  for (const id of [...couchGuests.keys()]) couchLeave(id);
+};
 
 // --- FRAME TELEMETRY (always on; read via __game.perfFrames) -----------------
 // Three fixed ring buffers of per-frame wall-clock samples: the rAF GAP (true
@@ -814,15 +1100,22 @@ function tick(now: number): void {
   // Any live aim-stick deflection reclaims the reticle for the pad (and ends
   // any mouse handoff — the pad's sticky cursor is absolute again).
   if (pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
-  padPointer.update(dt, ui.uiBlocking() || !running, nowSec);
+  // COUCH: the hero's pointer wakes only on surfaces that block THE HERO'S
+  // hands (a guest's open bag must not flip P1 into menu mode); solo keeps
+  // the classic any-surface gate byte-identically.
+  padPointer.update(dt,
+    (couchActive() ? ui.blockingFor(world.localSeat.id) : ui.uiBlocking()) || !running, nowSec);
+  couchTick(dt, nowSec);
   if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
 
   if (running) {
     if (net.isHost) {
       // ---- HOST (and single-player / local co-op): run the one real sim. ----
       const perfSimT0 = performance.now();
-      // 1. Local UI (pause menu, panels) — never gameplay intent.
+      // 1. Local UI (pause menu, panels) — never gameplay intent. The couch
+      //    guests' panel toggles ride their own pads right behind.
       handleLocalPanels();
+      handleCouchPanels();
       // 2. Gather this frame's per-seat intent into the transport. The local seat
       //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
       //    A REMOTE seat's intent arrives through the transport's own pump.
@@ -857,7 +1150,7 @@ function tick(now: number): void {
       // The salvage-bench dwell asks to open the break/craft menu.
       if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
         world.salvageDwellRequested = false;
-        if (!ui.salvageOpen) ui.showSalvage();
+        if (!ui.salvageOpen) ui.showSalvage(world.salvageDwellSeatId);
       }
       // The HARBOR BOARD dwell (a port's notice board) asks to open the
       // harbor menu — hearsay, passage down the lanes, charts. (The dock
@@ -875,17 +1168,17 @@ function tick(now: number): void {
       // The Oracle-stone dwell asks to open the communion menu.
       if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
         world.oracleDwellRequested = false;
-        if (!ui.oracleOpen) ui.showOracle();
+        if (!ui.oracleOpen) ui.showOracle(world.oracleDwellSeatId);
       }
       // The Tracker's-fire dwell asks to open the Bestiary.
       if (world.trackerDwellRequested && !ui.escapeMenuOpen) {
         world.trackerDwellRequested = false;
-        if (!ui.bestiaryOpen) ui.showBestiary();
+        if (!ui.bestiaryOpen) ui.showBestiary(world.trackerDwellSeatId);
       }
       // A stocked vendor counter's dwell asks to open the Vendor screen.
       if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
         world.vendorDwellRequested = false;
-        if (!ui.vendorOpen) ui.showVendor();
+        if (!ui.vendorOpen) ui.showVendor(world.vendorDwellSeatId);
       }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
@@ -988,7 +1281,7 @@ function hostTail(dt: number): void {
   // and keeps the roster index card fresh alongside it.
   if (!world.gameOver) {
     autosaveTimer -= dt;
-    if (autosaveTimer <= 0) { autosaveTimer = 20; persistRun(account, world); }
+    if (autosaveTimer <= 0) { autosaveTimer = 20; persistRun(account, world); persistCouchGuests(); }
   }
 
   // The sim mutated character save-state OUTSIDE the autosave cadence — a mode
@@ -998,12 +1291,19 @@ function hostTail(dt: number): void {
     world.charDirty = false;
     persistRun(account, world);
   }
+  // A couch guest's vessel banked something (the guest covenant on a wipe,
+  // a meta mutation) — persist it with charDirty's promptness.
+  if (world.couchDirty) {
+    world.couchDirty = false;
+    persistCouchGuests();
+  }
 
   // A roster-saved character chose Save & Main Menu (their "End Run" — the
   // vessel persists; only a deliberate roster deletion ever discards it).
   if (world.menuExitRequested) {
     world.menuExitRequested = false;
     persistRun(account, world);
+    persistCouchGuests();
     toStartMenu();
   }
 
@@ -1012,6 +1312,10 @@ function hostTail(dt: number): void {
     // CO-OP: tell connected clients the run ended so they leave their (now-frozen)
     // render shell and offer a fresh class pick — no reload, the session lives on.
     if (coopActive()) net.sendSession({ t: 'runEnd' });
+    // COUCH: guest vessels ride home before the world is torn down (mortal-
+    // lane guests carry nothing); the session machinery drops with the run.
+    persistCouchGuests();
+    couchReset();
     ui.hideAll();
     // PERMADEATH: award account credits from how far the run got — at the
     // dying stage's payout rate (mortal = ×1, byte-identical; a future
@@ -1306,6 +1610,7 @@ function openLobby(): void {
  *  getters, but it never simulates — the frame loop's client branch applies the
  *  host's snapshots and renders. clientSeatId anchors the camera on OUR hero. */
 function startAsClient(classDef: ClassDef, selfSeat: string): void {
+  couchReset(); // a render shell hosts no couch — the pads are free again
   world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
   world.createPlayer(classDef);   // a local shell (getters/camera/HUD) — not the authority
   world.clientSeatId = selfSeat;
@@ -1338,6 +1643,7 @@ function resetToLocal(): void {
  *  a co-op host's death or a client's Leave can't strand a stale WebRtcTransport. */
 function toStartMenu(): void {
   resetToLocal();
+  couchReset(); // guest seats die with the world; the pads are free again
   running = false;
   ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
 }
@@ -1361,6 +1667,7 @@ function quitFlush(): void {
   if (now - lastQuitFlush < 1000) return;
   lastQuitFlush = now;
   persistRunDurable(account, world);
+  persistCouchGuests(true); // guest vessels ride the same closing beacon
 }
 window.addEventListener('pagehide', quitFlush);
 window.addEventListener('beforeunload', quitFlush);

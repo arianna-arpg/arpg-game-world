@@ -163,7 +163,12 @@ export interface FakePad {
 }
 
 declare global {
-  interface Window { __fakePad?: FakePad | null }
+  interface Window {
+    __fakePad?: FakePad | null;
+    /** Indexed fakes (couch tests): __fakePads[i] serves pad slot i exactly as
+     *  a physical pad at that index would — connection census included. */
+    __fakePads?: (FakePad | null | undefined)[];
+  }
 }
 
 interface PadSource {
@@ -171,15 +176,71 @@ interface PadSource {
   buttons: ReadonlyArray<number | { pressed?: boolean; value?: number }>;
 }
 
-/** Fake pad wins; else the most recently active connected physical pad. */
-function readPadSource(): PadSource | null {
-  if (window.__fakePad) return window.__fakePad;
+/** Read one specific pad slot (couch seats bind by index). Fakes win. */
+function readPadAt(index: number): PadSource | null {
+  const fake = window.__fakePads?.[index];
+  if (fake) return fake;
+  if (window.__fakePads) return null; // an indexed fake rig owns the whole census
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+  const p = navigator.getGamepads()[index];
+  return p && p.connected ? p : null;
+}
+
+/** The device read behind PadState.poll. Bound to a slot when `index` is set
+ *  (a couch seat's claimed pad); otherwise the classic solo read — the most
+ *  recently active connected pad — SKIPPING any slots in `exclude` (pads
+ *  claimed by couch guests must never steer the hero's merged input). With
+ *  no index and no exclusions this is byte-identical to the original read.
+ *  Returns the winning SLOT too (null for the legacy any-pad fake) — the
+ *  couch join scan excludes the hero's live pad through it. */
+function readPadSource(index?: number, exclude?: ReadonlySet<number>):
+  { src: PadSource; index: number | null } | null {
+  if (index !== undefined) {
+    const src = readPadAt(index);
+    return src ? { src, index } : null;
+  }
+  if (window.__fakePads) {
+    // Indexed fake rig: the "any pad" read scans the fake census like the
+    // physical scan below (first unexcluded connected slot — fakes carry no
+    // activity timestamps, so claim order is the tiebreak).
+    for (let i = 0; i < window.__fakePads.length; i++) {
+      if (exclude?.has(i)) continue;
+      const f = window.__fakePads[i];
+      if (f) return { src: f, index: i };
+    }
+    return null;
+  }
+  if (window.__fakePad) return { src: window.__fakePad, index: null };
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
   let best: Gamepad | null = null;
   for (const p of navigator.getGamepads()) {
-    if (p && p.connected && (!best || p.timestamp > best.timestamp)) best = p;
+    if (p && p.connected && !exclude?.has(p.index) && (!best || p.timestamp > best.timestamp)) best = p;
   }
-  return best;
+  return best ? { src: best, index: best.index } : null;
+}
+
+/** Connected pad slots (couch join census). Fake rigs count their fakes. */
+export function connectedPadIndices(): number[] {
+  if (window.__fakePads) {
+    const out: number[] = [];
+    for (let i = 0; i < window.__fakePads.length; i++) if (window.__fakePads[i]) out.push(i);
+    return out;
+  }
+  if (window.__fakePad) return [0];
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return [];
+  const out: number[] = [];
+  for (const p of navigator.getGamepads()) if (p && p.connected) out.push(p.index);
+  return out;
+}
+
+/** Raw pressed-state of one button on one pad slot — the couch join panel's
+ *  claim scan ("press Ⓐ on the joining controller") polls this per frame and
+ *  edge-detects itself; gameplay reads stay on PadState. */
+export function padButtonDown(index: number, button: PadButton): boolean {
+  const src = readPadAt(index);
+  if (!src) return false;
+  const i = PAD_BUTTON_ORDER.indexOf(button);
+  return buttonValue(src.buttons[i]) >= 0.5;
 }
 
 const buttonValue = (b: number | { pressed?: boolean; value?: number } | undefined): number => {
@@ -214,6 +275,15 @@ export function synthEscape(): void {
  *  edge set cleared in endFrame(), justPressed() consumes. */
 export class PadState {
   connected = false;
+  /** Bind this state to ONE physical pad slot (a couch guest's claimed pad).
+   *  null = the classic solo read (most recently active pad). */
+  padIndex: number | null = null;
+  /** Slots the unbound read must skip — the couch guests' claims. Solo (no
+   *  claims) supplies null and the read is byte-identical to the original. */
+  padExclude: (() => ReadonlySet<number> | null) | null = null;
+  /** The slot the last poll actually read (null = none / the legacy any-pad
+   *  fake) — the couch join scan treats a recently-active hero pad as taken. */
+  sourceIndex: number | null = null;
   /** Shaped MOVE stick (left unless swapped): unit direction × curved magnitude. */
   move = { x: 0, y: 0 };
   moveMag = 0;
@@ -251,7 +321,9 @@ export class PadState {
     // a first frame or a long tab-freeze can't produce a degenerate rate.
     const dt = Math.min(0.1, Math.max(1e-3, nowSec - this.lastPollSec));
     this.lastPollSec = nowSec;
-    const src = readPadSource();
+    const read = readPadSource(this.padIndex ?? undefined, this.padExclude?.() ?? undefined);
+    const src = read?.src;
+    this.sourceIndex = read?.index ?? null;
     if (!src) {
       if (this.connected) { this.down.clear(); this.pressed.clear(); }
       this.connected = false;

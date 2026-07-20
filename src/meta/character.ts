@@ -22,11 +22,11 @@ import {
 import { rebuildItem } from '../engine/itemgen';
 import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
-import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
+import { emptyEssences, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
-import { DEFAULT_MODE_ID, mintCharId, modeById, type RosterEntry } from './modes';
+import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEntry } from './modes';
 import type { WorldStateSave } from './worldstate';
 import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
@@ -270,11 +270,14 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   return inst;
 }
 
-/** Rebuild meta from a save and graft it onto an already-created World/player.
- *  Returns false only if the class id is gone (run is unresumable). */
-export function applySavedCharacter(world: World, save: CharacterSave): boolean {
+/** Rebuild the CHARACTER half of a save — the PlayerMeta + its own corpse
+ *  ring — touching NO world state. applySavedCharacter (the local resume)
+ *  layers the world writes on top; the COUCH JOIN (a guest vessel grafting
+ *  onto its own seat) uses exactly this and nothing more. Null only if the
+ *  class id is gone (the save is unresumable). */
+export function rebuildSavedMeta(save: CharacterSave): { meta: PlayerMeta; deaths: DeathRecord[] } | null {
   const classDef = CLASSES.find(c => c.id === save.classId);
-  if (!classDef) return false;
+  if (!classDef) return null;
 
   const knownSkills = new Map<string, SkillInstance>();
   for (const ss of save.knownSkills) {
@@ -308,7 +311,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     classDef,
     name: save.name?.trim() || classDef.name,
     baseAttrs: { ...save.baseAttrs },
-    attrs: { ...save.baseAttrs }, // recomputed by recalcPlayer() inside adoptSavedMeta
+    attrs: { ...save.baseAttrs }, // recomputed by recalcSeat inside the adopt
     xp: save.xp, xpNeeded: save.xpNeeded,
     skillPoints: save.skillPoints, passivePoints: save.passivePoints,
     allocated,
@@ -328,11 +331,20 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     modeStage: save.modeStage ?? 0,
     charId: save.charId || mintCharId(),
   };
+  // The character's own corpse ring (same per-record tolerance as the account's).
+  const deaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
+  return { meta, deaths };
+}
+
+/** Rebuild meta from a save and graft it onto an already-created World/player.
+ *  Returns false only if the class id is gone (run is unresumable). */
+export function applySavedCharacter(world: World, save: CharacterSave): boolean {
+  const built = rebuildSavedMeta(save);
+  if (!built) return false;
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);
-  // The character's own corpse ring (same per-record tolerance as the account's).
-  world.charDeaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
-  world.adoptSavedMeta(meta, save.bar, save.level);
+  world.charDeaths = built.deaths;
+  world.adoptSavedMeta(built.meta, save.bar, save.level);
   // Re-field the saved COMPANY (already paid + pool-marked). The legacy
   // single-contract field folds in as a one-blade company (old saves).
   for (const m of save.mercenaries ?? (save.mercenary?.snapshot ? [save.mercenary] : [])) {
@@ -470,5 +482,86 @@ export function persistRunDurable(account: Account, world: World): void {
   saveCharacterDurable(world);
   if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
     saveAccountDurable(account);
+  }
+}
+
+// --- THE COUCH GUESTS (data/couch.ts — a second local vessel's persistence) --
+
+/** Serialize a couch GUEST's vessel: the seat's build/carry/mode truth + its
+ *  own corpse ring — WITHOUT the world half (the ground belongs to the host
+ *  character's save; the vessel's next solo run deals its own fresh ground).
+ *  `dormant` carries the vessel's sleeping menagerie THROUGH the couch
+ *  session verbatim (companions/throng are not fielded beside a guest yet —
+ *  they must not be lost to a session they slept through). */
+export function serializeCouchGuest(
+  world: World, seat: Seat,
+  dormant: Pick<CharacterSave, 'companions' | 'throng' | 'throngClaimed'>,
+): CharacterSave {
+  const m = seat.meta;
+  const hero = world.seatHero(seat);
+  return {
+    schemaVersion: CHAR_SCHEMA_VERSION,
+    classId: m.classDef.id,
+    name: m.name,
+    baseAttrs: { ...m.baseAttrs },
+    xp: m.xp, xpNeeded: m.xpNeeded,
+    skillPoints: m.skillPoints, passivePoints: m.passivePoints,
+    allocated: [...m.allocated],
+    choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
+    realmPoints: { ...m.realmPoints },
+    grafts: { ...m.grafts },
+    vocations: [...m.vocations],
+    vocationPoints: m.vocationPoints,
+    knownSkills: [...m.knownSkills.values()].map(saveSkill),
+    skillInv: m.skillInv.map(saveSkill),
+    inventory: m.inventory.map(s => ({ supportId: s.def.id, level: s.level })),
+    items: m.items.map(i => ({ ...i })),
+    equipped: Object.fromEntries(
+      Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
+    ),
+    essences: { ...m.essences },
+    vestiges: { ...m.vestiges },
+    offerings: m.offerings,
+    companions: [...(dormant.companions ?? [])],
+    bar: hero.skills.map(s => s ? s.def.id : null),
+    level: hero.level,
+    expedition: world.manifest,
+    // The shared run's trigger counters are this vessel's lived experience
+    // too (it was there); its next solo resume starts from them like any.
+    ledger: { ...world.ledger },
+    completedObjectives: [],
+    throng: [...(dormant.throng ?? [])],
+    throngClaimed: [...(dormant.throngClaimed ?? [])],
+    modeId: m.modeId,
+    modeStage: m.modeStage,
+    charId: m.charId,
+    deaths: (seat.couchDeaths ?? []).map(d => ({ ...d })),
+    // world: deliberately absent — a guest save carries no ground.
+  };
+}
+
+/** Persist one couch guest vessel to its roster slot + refresh its index
+ *  card. The durable twin rides the same body over sendBeacon (quit flush).
+ *  Slot routing is the caller's (main.ts holds the join-time context —
+ *  never guessed here, so a lost card can never clobber a wrong slot). */
+export function saveCouchGuest(
+  account: Account, world: World, seat: Seat, slot: number,
+  dormant: Pick<CharacterSave, 'companions' | 'throng' | 'throngClaimed'>,
+  durable = false,
+): void {
+  if (slot < ROSTER_SLOT_BASE) return; // guests only ever write roster slots
+  let body: string;
+  try { body = JSON.stringify(serializeCouchGuest(world, seat, dormant)); }
+  catch { return; }
+  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  if (durable) diskBeacon(slot, body); else diskPut(slot, body);
+  const entry = account.roster.find(r => r.charId === seat.meta.charId);
+  if (entry) {
+    entry.classId = seat.meta.classDef.id;
+    entry.name = seat.meta.name;
+    entry.level = world.seatHero(seat).level;
+    entry.stage = seat.meta.modeStage;
+    entry.savedAt = Date.now();
+    if (durable) saveAccountDurable(account); else saveAccount(account);
   }
 }

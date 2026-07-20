@@ -56,6 +56,7 @@ import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
+import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
@@ -1419,6 +1420,15 @@ export interface Seat {
    *  Gates XP grants (mercs track the patron's level, never earn their own),
    *  the party-scale lever, and the rescue-count policy. */
   merc?: { name: string; mercId?: string; templateId?: string };
+  /** THE COUCH FABRIC (data/couch.ts): set on a local shared-screen GUEST —
+   *  which physical pad drives it, which screen flank its UI claims, and (on
+   *  the immortal lane) which roster vessel it persists as. Absent everywhere
+   *  else; its absence IS the solo invariant. */
+  couch?: CouchSeatTag;
+  /** A persistent couch guest's OWN corpse ring (rides its roster save, the
+   *  way charDeaths rides the local save) — seeded at join, appended by a
+   *  party wipe, written back by the guest persist. */
+  couchDeaths?: DeathRecord[];
   /** World time of this seat's last deliberate action — its private dwell clock. */
   lastActedAt: number;
   /** Revive progress while this seat is DOWNED: ally seat id → seconds dwelt. */
@@ -2532,6 +2542,14 @@ export class World {
   /** ONE-SHOT: the Tracker's-fire dwell — opens the BESTIARY (same idiom). */
   trackerDwellRequested = false;
   private trackerGate = new Dwell();
+  /** WHO dwelt (the couch fabric): the personal-economy stations — vendor,
+   *  bench, stone, fire — record the LOCAL seat whose linger fired the ask,
+   *  so the screen opens that seat's panel on that seat's flank. Always 'p0'
+   *  outside couch play (the scan checks the local hero first). */
+  vendorDwellSeatId = 'p0';
+  salvageDwellSeatId = 'p0';
+  oracleDwellSeatId = 'p0';
+  trackerDwellSeatId = 'p0';
   /** STASHED BONDS: companions whose skill was UNLEARNED (the pet dies with
    *  the bond — no slot-juggling exploit) — remembered here so RELEARNING
    *  the same skill returns them DOWNED, owed a revival. Serialized with
@@ -3082,16 +3100,27 @@ export class World {
    *  skills, inventory) and bar bindings, and resumes in the sanctuary. Bar
    *  rebinding tolerates a saved id no longer in knownSkills → an empty slot. */
   adoptSavedMeta(meta: PlayerMeta, bar: (string | null)[], level: number): void {
-    this.localSeat.meta = meta;
-    this.player.name = meta.name;   // the save's name is the actor's name
-    this.player.level = level;
-    this.player.skills = padBar(bar.map(id => (id ? this.meta.knownSkills.get(id) ?? null : null)));
-    this.recalcPlayer();
-    this.player.fillResources();
+    this.adoptSeatMeta(this.localSeat, meta, bar, level);
     // The graft may have CHANGED the corpse ring (mode stage + own-ring
     // records land here, after createPlayer's loadZone already spawned from
     // fresh-character defaults) — re-spawn this zone's corpses from the truth.
     this.spawnPlayerCorpses(this.zone);
+  }
+
+  /** The seat-general half of the resume graft: any seat (the local hero
+   *  above; a couch guest's vessel at join) takes a saved character's meta,
+   *  bar, and level. Corpse-ring respawning stays the LOCAL resume's concern
+   *  — a guest's ring rides its own save (Seat.couchDeaths), never this zone
+   *  spawn. Levels land on the HERO body (the possession seam). */
+  adoptSeatMeta(seat: Seat, meta: PlayerMeta, bar: (string | null)[], level: number): void {
+    seat.meta = meta;
+    const hero = this.seatHero(seat);
+    hero.name = meta.name;   // the save's name is the actor's name
+    hero.level = level;
+    hero.skills = padBar(bar.map(id => (id ? meta.knownSkills.get(id) ?? null : null)));
+    this.recalcSeat(seat);
+    hero.fillResources();
+    this.markMetaDirty(seat);
   }
 
   // --------------------------------------------------------------- seats ----
@@ -3110,6 +3139,67 @@ export class World {
    *  while someone is down. Floors at 1 so single-player math never divides oddly. */
   playerCount(): number {
     return Math.max(1, this.seats.reduce((n, s) => n + (s.actor.dead ? 0 : 1), 0));
+  }
+
+  // ------------------------------------------------------------- couch -----
+  // THE COUCH FABRIC (data/couch.ts): local shared-screen guests. Everything
+  // here short-circuits to nothing with no couch seats — the solo invariant.
+
+  /** THE EDGE LAW's rect (world coords): where local heroes may STAND while
+   *  the shared couch frame is at its stretch cap. Published by the renderer
+   *  each frame from the frame it actually drew (drawn == confined); null
+   *  outside couch play and across zone changes (stale frames never yank). */
+  couchConfine: { x: number; y: number; w: number; h: number } | null = null;
+  /** A couch guest's persistent state changed (vessel XP banked a death,
+   *  meta mutated) — main.ts persists guest saves promptly, like charDirty. */
+  couchDirty = false;
+
+  /** The local shared-screen guest seats (never the local hero's own seat). */
+  couchSeats(): Seat[] { return this.seats.filter(s => s.couch); }
+
+  /** Couch play is live — a guest seat exists on this screen. */
+  couchActive(): boolean { return this.seats.some(s => s.couch); }
+
+  /** Every hero the shared couch frame must hold: the local hero + guests,
+   *  by CONTROLLED body (the possession seam's pointer — the camera follows
+   *  what you ride, exactly as solo does). */
+  couchHeroes(): Actor[] {
+    const out = [this.localSeat.actor];
+    for (const s of this.seats) if (s.couch && !s.actor.dead) out.push(s.actor);
+    return out;
+  }
+
+  /** Does this seat's progression feed THIS machine's account? The local
+   *  hero always; a couch guest too — both characters belong to the one
+   *  account sitting on the couch. Remote/merc seats never. */
+  accountSeat(seat: Seat): boolean { return seat === this.localSeat || !!seat.couch; }
+
+  /** The seats whose hands are on THIS machine: the local hero + couch
+   *  guests, local hero first (station dwells check in this order, so solo
+   *  behavior is order-identical). */
+  localHumanSeats(): Seat[] { return this.seats.filter(s => s === this.localSeat || s.couch); }
+
+  /** A seat's life-contract, seat-general (modeDef/modeStageDef read the
+   *  LOCAL hero's) — the HUD badge and the guest covenant read the guest's
+   *  own ladder through these. */
+  seatModeDef(seat: Seat): CharacterModeDef { return modeById(seat.meta.modeId); }
+  seatStageDef(seat: Seat): ModeStageDef { return stageOf(seat.meta.modeId, seat.meta.modeStage); }
+
+  /** THE COUCH EDGE LAW: at the frame's stretch cap the world stops giving —
+   *  local heroes are held inside the published confine rect (you keep
+   *  running; the screen refuses to leave your partner behind). Runs after
+   *  every mover including the slave steps; a body honestly HELD (grabbed /
+   *  swallowed) is exempt — its seat wins the frame, the frame catches up. */
+  private applyCouchConfine(): void {
+    const r = this.couchConfine;
+    if (!r) return;
+    for (const s of this.seats) {
+      if (!s.couch && s !== this.localSeat) continue;
+      const a = s.actor;
+      if (a.dead || a.heldBy) continue;
+      a.pos.x = Math.max(r.x, Math.min(r.x + r.w, a.pos.x));
+      a.pos.y = Math.max(r.y, Math.min(r.y + r.h, a.pos.y));
+    }
   }
 
   /** THE BOSS BAR read (see BOSS_BAR_CFG): non-null iff this body owns the
@@ -3728,6 +3818,10 @@ export class World {
       this.meta.modeStage = Math.min(this.meta.modeStage + 1, this.modeDef().stages.length - 1);
     }
     this.charDirty = true;
+    // 6.5. THE GUEST COVENANT: every couch vessel at the wipe pays its own
+    //      way (corpse + strip + stage) — the account-level writes above are
+    //      never repeated (one account, one payment).
+    this.bankCouchWipe();
     // 7. The dark takes the screen; update() wakes the character once it's full.
     this.pendingRespawn = { phase: 'out', t: 0 };
     this.events.emit('player/modeDeath', { stage: stage.id, earned });
@@ -3737,8 +3831,12 @@ export class World {
    *  materials + font offerings), mirroring exactly what a mortal wipe loses —
    *  minus what recordDeath just banked onto the corpse. The BUILD (learned
    *  skills with their sockets, bar, passives, vocations, level) is untouched. */
-  private stripCarryOnDeath(): void {
-    const m = this.meta;
+  private stripCarryOnDeath(): void { this.stripCarryOf(this.localSeat); }
+
+  /** The seat-general strip (the local wipe above; a couch guest's vessel
+   *  paying its own covenant on a party wipe). */
+  private stripCarryOf(seat: Seat): void {
+    const m = seat.meta;
     m.items = [];
     m.equipped = {};
     m.skillInv = [];
@@ -3746,8 +3844,8 @@ export class World {
     m.essences = emptyEssences();
     m.vestiges = {};
     m.offerings = 0;
-    this.recalcPlayer(); // the doll's gear sources vanish from the sheet
-    this.markMetaDirty(this.localSeat);
+    this.recalcSeat(seat); // the doll's gear sources vanish from the sheet
+    this.markMetaDirty(seat);
   }
 
   /** Drive an in-flight mode respawn: fade out → wake in town → fade in. */
@@ -3828,6 +3926,51 @@ export class World {
     if (own) this.charDirty = true; // rides the character save, not the account
   }
 
+  /** A couch GUEST's corpse — same capture as recordDeath, routed by the
+   *  GUEST's own stage ring: 'own' lands on Seat.couchDeaths (riding the
+   *  vessel's roster save; those corpses spawn when that vessel is next
+   *  played as the hero), 'account' lands on the shared account ring. */
+  private recordSeatDeath(seat: Seat): void {
+    if (this.inCave) return;
+    const loot = captureLoot(seat.meta);
+    if (loot.items.length === 0) return;
+    const hero = this.seatHero(seat);
+    const rec: DeathRecord = {
+      schema: DEATH_SCHEMA,
+      mapX: this.zone.map.x, mapY: this.zone.map.y,
+      pos: { x: hero.pos.x, y: hero.pos.y },
+      zoneId: this.zone.id,
+      loot,
+      classId: seat.meta.classDef.id, charLevel: hero.level, zoneName: this.zone.name,
+      owner: seat.id,
+      timestamp: Date.now(),
+    };
+    const stage = stageOf(seat.meta.modeId, seat.meta.modeStage);
+    const ring = stage.corpseRing === 'own' ? (seat.couchDeaths ??= []) : this.account.deaths;
+    ring.push(rec);
+    while (ring.length > MAX_DEATH_RECORDS) ring.shift();
+  }
+
+  /** THE GUEST COVENANT (data/couch.ts lane law): a party wipe costs a couch
+   *  guest's persistent vessel exactly what dying at home would — its own
+   *  corpse, the carry strip, the stage advance — so the couch is never a
+   *  cheaper way to die. Account-level writes (the tithe, the ledger merge,
+   *  the death tally) are NOT repeated: one account, one run, one payment —
+   *  the host character's banking already made them. Disposable mortal-lane
+   *  guests carry no vessel and bank nothing. */
+  private bankCouchWipe(): void {
+    for (const s of this.seats) {
+      if (!s.couch?.charId) continue;
+      const stage = stageOf(s.meta.modeId, s.meta.modeStage);
+      this.recordSeatDeath(s);
+      this.stripCarryOf(s);
+      if (stage.onDeath === 'advance') {
+        s.meta.modeStage = Math.min(s.meta.modeStage + 1, modeById(s.meta.modeId).stages.length - 1);
+      }
+      this.couchDirty = true; // main.ts persists the vessel promptly
+    }
+  }
+
   // ---------------------------------------------------------------- zones ---
 
   /**
@@ -3841,6 +3984,10 @@ export class World {
     // pack), a form disperses and re-presses cheap on the far side, and
     // the carry filter below then moves exactly the true seat bodies.
     for (const s of this.seats) if (s.home) this.seatEject(s, 'travel');
+    // THE COUCH EDGE LAW never crosses a zone seam: the published confine
+    // rect belongs to the OLD zone's frame — drop it, the renderer republishes
+    // from the first frame it actually draws here.
+    this.couchConfine = null;
     // THE SURVIVOR TRIGGER: before the zone we're LEAVING is torn down, the
     // world may decide to remember a foe we bloodied and left standing.
     this.scanNemesisSurvivors();
@@ -16059,20 +16206,21 @@ export class World {
       if (seat === this.localSeat) this.resyncMercenary();
     }
     // Reaching character level 5 surfaces the Quest Package in the Vault next run.
-    // Account-level progression belongs to the LOCAL hero only (it's the host's
-    // own character that persists). The ledger flag merges in on death.
-    if (seat === this.localSeat && p.level >= 5 && !this.ledger.reached_level_5) {
+    // Account-level progression belongs to THIS MACHINE's account — the local
+    // hero always, and a couch guest too (both characters are the account's
+    // own; remote peers and mercs never). The ledger flag merges in on death.
+    if (this.accountSeat(seat) && p.level >= 5 && !this.ledger.reached_level_5) {
       bumpLedger(this.ledger, 'reached_level_5');
     }
     // Reaching the level cap (100) surfaces the META-META global event-frequency
     // crank in the Vault. Same once-per-run flag shape as reached_level_5 (merges
     // in on death; the unlock predicate tests >= 1).
-    if (seat === this.localSeat && p.level >= 100 && !this.ledger.reached_level_100) {
+    if (this.accountSeat(seat) && p.level >= 100 && !this.ledger.reached_level_100) {
       bumpLedger(this.ledger, 'reached_level_100');
     }
     // Every 10-level milestone — the Caravan tiers (and future unlocks) gate on these.
-    // Same once-per-run, local-seat-only shape; merges into account.ledger on death.
-    if (seat === this.localSeat) {
+    // Same once-per-run, account-seat shape; merges into account.ledger on death.
+    if (this.accountSeat(seat)) {
       for (let m10 = 10; m10 <= 90; m10 += 10) {
         const key = `reached_level_${m10}`;
         if (p.level >= m10 && !this.ledger[key]) bumpLedger(this.ledger, key);
@@ -16081,8 +16229,8 @@ export class World {
     // PER-CLASS milestones — the DISCOVERY WEB's raw material (account.ts
     // CLASS_LEVEL_MILESTONES → unlocks.ts ClassBundleDef.discover): playing a
     // class deep is how the account learns that class's kin exist. Same
-    // once-per-run, local-seat-only, merge-on-death shape as the sweep above.
-    if (seat === this.localSeat) {
+    // once-per-run, account-seat, merge-on-death shape as the sweep above.
+    if (this.accountSeat(seat)) {
       for (const ms of CLASS_LEVEL_MILESTONES) {
         const key = classLevelLedgerKey(m.classDef.id, ms);
         if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
@@ -16685,9 +16833,14 @@ export class World {
    *  ONE ask per approach: standing at the bench holds the latch; only
    *  stepping out of range re-arms it. */
   private updateSalvage(dt: number): void {
-    const engaged = !this.player.dead && !this.player.downed && this.nearSalvage();
-    if (!this.salvageGate.fire(engaged && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
+    // Any LOCAL hand at the bench holds the latch; the first idle one fires
+    // (local hero checked first — solo is order-identical, see localHumanSeats).
+    const near = this.localHumanSeats().filter(s =>
+      !s.actor.dead && !s.actor.downed && this.nearSalvage(s));
+    const ready = near.find(s => this.seatIdle(s));
+    if (!this.salvageGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
     this.salvageDwellRequested = true;
+    this.salvageDwellSeatId = ready!.id;
   }
 
   /** The bench's prompt while the player is near (renderer), or null. */
@@ -16709,9 +16862,12 @@ export class World {
   /** Linger by the fire → open the BESTIARY (flag → main loop). One ask per
    *  approach (see Dwell). */
   private updateTracker(dt: number): void {
-    const engaged = !this.player.dead && !this.player.downed && this.nearTracker();
-    if (!this.trackerGate.fire(engaged && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
+    const near = this.localHumanSeats().filter(s =>
+      !s.actor.dead && !s.actor.downed && this.nearTracker(s));
+    const ready = near.find(s => this.seatIdle(s));
+    if (!this.trackerGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
     this.trackerDwellRequested = true;
+    this.trackerDwellSeatId = ready!.id;
   }
 
   /** The camp's prompt while the player is near (renderer), or null. */
@@ -16731,9 +16887,12 @@ export class World {
   }
 
   private updateOracle(dt: number): void {
-    const engaged = !this.player.dead && !this.player.downed && this.nearOracle();
-    if (!this.oracleGate.fire(engaged && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
+    const near = this.localHumanSeats().filter(s =>
+      !s.actor.dead && !s.actor.downed && this.nearOracle(s));
+    const ready = near.find(s => this.seatIdle(s));
+    if (!this.oracleGate.fire(!!ready, near.length > 0, dt, SALVAGE_CFG.stationDwell)) return;
     this.oracleDwellRequested = true;
+    this.oracleDwellSeatId = ready!.id;
   }
 
   oracleHint(): { pos: Vec2; text: string } | null {
@@ -16765,16 +16924,20 @@ export class World {
    *  fresh shelves — only stepping out of range re-arms the ask. Stock still
    *  gates the BUILD: an empty counter never opens a bare screen. */
   private updateVendors(dt: number): void {
-    let engaged = false, stocked = false;
-    if (!this.player.dead && !this.player.downed) {
+    let engaged = false;
+    let ready: Seat | null = null;
+    for (const s of this.localHumanSeats()) {
+      if (s.actor.dead || s.actor.downed) continue;
       for (const v of VENDORS) {
-        if (!v.near(this, this.localSeat)) continue;
+        if (!v.near(this, s)) continue;
         engaged = true;
-        if (v.stock(this).length > 0) { stocked = true; break; }
+        if (v.stock(this).length > 0 && this.seatIdle(s)) { ready = s; break; }
       }
+      if (ready) break;
     }
-    if (!this.vendorGate.fire(engaged && stocked && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
+    if (!this.vendorGate.fire(!!ready, engaged, dt, SALVAGE_CFG.stationDwell)) return;
     this.vendorDwellRequested = true;
+    this.vendorDwellSeatId = ready!.id;
   }
 
   /** COMMUNE: reroll ONE natural affix on a bag/worn item, then SEAL it —
@@ -19911,11 +20074,23 @@ export class World {
 
   // ---------------------------------------------- co-op meta routing ---------
 
+  /** THE COUCH ACTION LATCH (data/couch.ts): while a guest-owned panel's DOM
+   *  event dispatches, the UI stamps the owning seat's id here (capture
+   *  phase, cleared on a microtask) — every requestMeta that handler fires
+   *  routes to the GUEST's seat without touching a single call site. Null
+   *  everywhere else: solo and net-client flows are byte-identical. */
+  uiActionSeatId: string | null = null;
+
   /** Route a player's meta mutation. On a render-shell CLIENT it's shipped to the
    *  host as an intent (the host owns every mutation); on the host / single-player
    *  it applies immediately to the LOCAL seat. UI code calls this uniformly and
    *  stays oblivious to networking. (clientActionHook is set only on a client.) */
   requestMeta(action: MetaAction): void {
+    // A couch guest's panel action goes straight to ITS seat (host-side by
+    // construction — couch play never exists on a render-shell client).
+    const couchSeat = this.uiActionSeatId
+      ? this.seats.find(s => s.couch && s.id === this.uiActionSeatId) : undefined;
+    if (couchSeat) { this.applyAction(couchSeat, action); return; }
     if (this.clientActionHook) {
       // CLIENT: ship the intent to the host (the authority) AND apply it locally
       // as an OPTIMISTIC prediction — the panel responds immediately, and rapid
@@ -33642,6 +33817,10 @@ export class World {
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
     this.updatePossessions(dt);
+    // THE COUCH EDGE LAW dead last among movers: whatever moved a local hero
+    // this frame — intent, dash, shove, carrier — the shared frame's wall
+    // answers it (no-op outside couch play; see couchConfine).
+    this.applyCouchConfine();
 
     // Corpses decay
     for (let i = this.corpses.length - 1; i >= 0; i--) {

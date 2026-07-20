@@ -397,6 +397,27 @@ changes.
   `vacant_yard` set-piece teach it at a glance. Dials in `POSSESS_CFG`,
   docs in `docs/engine/possession.md`, probe
   `balance/probe_possession.ts`.
+  THE COUCH FABRIC (`data/couch.ts` + `net/couch.ts` — local shared-screen
+  co-op, Diablo-couch style): a second player on this machine is an ordinary
+  SEAT driven by a second physical pad (`PadSeatInput` mirrors the hero's
+  pad half exactly; `PadState` binds per pad slot, the hero's merged read
+  excludes claimed pads) — XP share, loot, downed/revive, enemy scaling and
+  zone travel are the standing co-op fabrics verbatim. THE COUCH FRAME
+  (`couchFit` in render/camera.ts): the shared view widens to hold every
+  local hero up to a hard stretch cap, then THE EDGE LAW
+  (`world.couchConfine`, published from the frame actually drawn — drawn ==
+  confined) holds the runners at the screen's edge. UI: the canvas HUD
+  cluster mirrors onto each seat's flank; DOM panels remember their OPENER
+  (THE COUCH LENS) and dock to its side; mutations route by THE ACTION
+  LATCH (`world.uiActionSeatId` → the seat-scoped `applyAction`); the
+  personal-economy stations attribute dwells per local seat. THE LANE LAW:
+  a mortal run seats a fresh disposable hero; an IMMORTAL run seats another
+  roster vessel (gated on a second immortal slot) which persists to its own
+  slot and PAYS ITS OWN COVENANT on a wipe (own-ring corpse + carry strip +
+  stage advance — never a cheaper death). THE SOLO INVARIANT: with no couch
+  seats every branch short-circuits — solo is byte-identical, and the pause
+  menu grows the join row only with ≥2 controllers connected. Dials in
+  `COUCH_CFG`; docs `docs/engine/couch.md`; probe `balance/probe_couch.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST

@@ -51,6 +51,11 @@ export class PadPointer {
   /** Fractional wheel notches banked by the zoom stick between frames. */
   private zoomAcc = 0;
 
+  /** Ⓑ's meaning while this pointer is active. The default is the hardwired
+   *  global Escape; a COUCH GUEST's pointer (data/couch.ts) overrides it to
+   *  close the guest's own panels first — their cancel, their cascade. */
+  onCancel: () => void = synthEscape;
+
   constructor(private pad: PadState, private tuning: () => PadTuning) {
     this.ring = document.createElement('div');
     // Self-contained styling — no stylesheet dependency, renders over any panel.
@@ -126,7 +131,15 @@ export class PadPointer {
     } else this.zoomAcc = 0;
 
     // --- hardwired cancel (consume the edge so gameplay never sees it) ---
-    if (this.pad.justPressed(PAD_CFG.pointer.cancel)) synthEscape();
+    if (this.pad.justPressed(PAD_CFG.pointer.cancel)) this.onCancel();
+  }
+
+  /** Tear the pointer down for good (a couch guest left): retire any live
+   *  drag/hover and remove the ring from the DOM. */
+  dispose(): void {
+    this.retire();
+    this.active = false;
+    this.ring.remove();
   }
 
   private place(x: number, y: number): void {

@@ -60,7 +60,8 @@ import { boundaryGateOf } from '../data/boundaryGates';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
-import type { World } from '../engine/world';
+import type { Seat, World } from '../engine/world';
+import { COUCH_CFG } from '../data/couch';
 import { HOLD_CLASSES } from '../data/harborholds';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks } from '../meta/unlocks';
@@ -68,7 +69,7 @@ import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
-import { PAD_CFG, padDisplay, AIM_ASSIST_MODES } from '../core/gamepad';
+import { PAD_CFG, padDisplay, AIM_ASSIST_MODES, connectedPadIndices } from '../core/gamepad';
 import { wipeRosterSlot, type CharacterSave } from '../meta/character';
 import {
   availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
@@ -308,6 +309,18 @@ export class UI {
    *  rebuild is skipped whole — no teardown under the cursor, no tooltip
    *  anchor torn mid-read, no listener re-wiring, no GC churn, twice a second. */
   private panelHtml = new WeakMap<HTMLElement, string>();
+  /** THE COUCH LENS (data/couch.ts): per-player panels remember which LOCAL
+   *  seat opened them — the refresh renders THAT seat's data and the panel
+   *  docks to that seat's flank. No entry = the local hero, and solo play
+   *  never writes one that matters (panelSeat falls back to the local seat). */
+  private panelSeatIds = new Map<HTMLElement, string>();
+  /** True while the couch JOIN overlay is up (main.ts owns the claim scan). */
+  couchJoinOpen = false;
+  /** Wired by main.ts when a couch session is possible at all — opens the
+   *  join flow. Unset (solo build / net client) = no menu row exists. */
+  onCouchJoin?: () => void;
+  /** Wired beside it: every seated guest leaves (vessels saved first). */
+  onCouchLeave?: () => void;
   /** Passive-tree zoom/pan — same model as the map, so the tree stays legible AND
    *  extensible: the fitted box is the node bounds (auto-fits any layout), and you
    *  zoom/drag to navigate as more nodes are added. Persist across opens. */
@@ -349,13 +362,13 @@ export class UI {
     // the extended flag only ever reaches itemTooltip — other cards have no
     // deeper form and simply re-serve themselves.
     bindTooltips(this.inventory, (el, ext) =>
-      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext)
+      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
-    bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
-    bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
-    bindTooltips(this.vendorMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
+    bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.salvageMenu)) : null, { extend: true });
+    bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.oracleMenu)) : null, { extend: true });
+    bindTooltips(this.vendorMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.vendorMenu)) : null, { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     // THE VAULT reads compact — kind, name, price — and keeps each unlock's
     // full story in the shared tooltip behind a HOVER-INTENT dwell: the wall
@@ -427,6 +440,58 @@ export class UI {
     window.addEventListener('pointermove', (e) => {
       if (this.pressHeld.size && e.buttons === 0) releasePress();
     }, { capture: true });
+
+    // THE COUCH DOCK styles (data/couch.ts COUCH_CFG.panels): a guest-owned
+    // panel claims its opener's flank instead of the centered classic.
+    // Injected like the UI-scale sheet — no index.html edit, one source.
+    const couchCss = document.createElement('style');
+    couchCss.textContent = `
+      .panel.couch-left { left: 12px !important; right: auto !important;
+        transform: none !important; max-width: ${Math.round(COUCH_CFG.panels.sideWidthFrac * 100)}vw !important; }
+      .panel.couch-right { right: 12px !important; left: auto !important;
+        transform: none !important; max-width: ${Math.round(COUCH_CFG.panels.sideWidthFrac * 100)}vw !important; }`;
+    document.head.appendChild(couchCss);
+
+    // THE COUCH ACTION LATCH: while a DOM interaction inside a guest-owned
+    // panel dispatches, world.uiActionSeatId names that guest — so every
+    // requestMeta the handler fires routes to the GUEST's seat with zero
+    // per-call-site edits. A pointerdown inside an owned panel also stamps
+    // the GESTURE, so a drag that ends outside the panel (drop to ground)
+    // still resolves as its owner. Cleared on a microtask after each
+    // dispatch — the frame loop never sees a stale latch.
+    let gestureSeat: string | null = null;
+    const couchOwnerOf = (t: EventTarget | null): string | null => {
+      if (!(t instanceof Node)) return null;
+      for (const el of [this.charSheet, this.inventory, this.passiveTree, this.vendorMenu,
+        this.salvageMenu, this.oracleMenu, this.bestiaryMenu]) {
+        if (el.contains(t)) {
+          const id = this.panelSeatIds.get(el);
+          return id && id !== this.getWorld().localSeat.id ? id : null;
+        }
+      }
+      return null;
+    };
+    // uiActionSeatId lives ONLY for the duration of one dispatch (microtask-
+    // cleared) — the frame loop between events always sees null, so a
+    // mid-drag frame can never misroute the hero's own keyed actions. The
+    // gesture memory (which seat's press this drag belongs to) is UI-local
+    // and survives through the trailing click, then expires on a timeout.
+    const stamp = (id: string | null): void => {
+      if (id === null) return;
+      const w = this.getWorld();
+      w.uiActionSeatId = id;
+      queueMicrotask(() => { w.uiActionSeatId = null; });
+    };
+    window.addEventListener('pointerdown', (e) => {
+      gestureSeat = couchOwnerOf(e.target);
+      stamp(gestureSeat);
+    }, { capture: true });
+    window.addEventListener('pointerup', (e) => {
+      stamp(couchOwnerOf(e.target) ?? gestureSeat);
+      setTimeout(() => { gestureSeat = null; }, 0); // outlive the trailing click
+    }, { capture: true });
+    window.addEventListener('click', (e) => stamp(couchOwnerOf(e.target) ?? gestureSeat), { capture: true });
+    window.addEventListener('change', (e) => stamp(couchOwnerOf(e.target)), { capture: true });
   }
 
   /** Write a live-refreshed panel's markup only when it CHANGED since the
@@ -442,6 +507,94 @@ export class UI {
     return true;
   }
 
+  // --- THE COUCH LENS (data/couch.ts) ---------------------------------------
+
+  /** Resolve a seat id to a LIVE local seat — a couch guest by id, else the
+   *  local hero. The fallback IS the solo path: no id, no guests, no change. */
+  private couchSeatFor(seatId?: string): Seat {
+    const w = this.getWorld();
+    return (seatId && w.seats.find(s => s.couch && s.id === seatId)) || w.localSeat;
+  }
+
+  /** The seat a panel is currently showing (its opener; local hero when unowned). */
+  private panelSeat(el: HTMLElement): Seat {
+    return this.couchSeatFor(this.panelSeatIds.get(el));
+  }
+
+  /** Stamp a panel's owner + dock it to that owner's flank. The local hero
+   *  clears the dock — the classic centered layout, byte-identical solo. */
+  private ownPanel(el: HTMLElement, seat: Seat): void {
+    this.panelSeatIds.set(el, seat.id);
+    el.classList.toggle('couch-left', seat.couch?.side === 'left');
+    el.classList.toggle('couch-right', seat.couch?.side === 'right');
+  }
+
+  /** Is a blocking surface up FOR THIS SEAT'S HANDS? Global surfaces (pause,
+   *  minigame, the join overlay, dwell dialogs, start menu) gate everyone;
+   *  the per-player panels gate only the seat that owns them — one player's
+   *  open bag must never flip the other's pad into pointer mode. */
+  blockingFor(seatId: string): boolean {
+    if (this.escapeMenuOpen || this.minigameActive || this.couchJoinOpen
+      || this.caravanOpen || this.mercOpen || this.sailOpen || this.holdOpen
+      || this.vocationOpen || this.boroughOpen
+      || !this.startMenu.classList.contains('hidden')) return true;
+    const owned = (el: HTMLElement, open: boolean): boolean =>
+      open && (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
+    return owned(this.charSheet, this.charSheetOpen)
+      || owned(this.inventory, this.inventoryOpen)
+      || owned(this.passiveTree, this.treeOpen)
+      || owned(this.worldMap, this.mapOpen)
+      || owned(this.vendorMenu, this.vendorOpen)
+      || owned(this.salvageMenu, this.salvageOpen)
+      || owned(this.oracleMenu, this.oracleOpen)
+      || owned(this.bestiaryMenu, this.bestiaryOpen);
+  }
+
+  /** Seat-scoped panel census + close (the couch escape cascade): only the
+   *  named seat's owned panels count/close — hideAll() stays the full clear. */
+  anyPanelOpenFor(seatId: string): boolean {
+    const owned = (el: HTMLElement, open: boolean): boolean =>
+      open && (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
+    return owned(this.charSheet, this.charSheetOpen)
+      || owned(this.inventory, this.inventoryOpen)
+      || owned(this.passiveTree, this.treeOpen)
+      || owned(this.worldMap, this.mapOpen);
+  }
+  hideAllFor(seatId: string): void {
+    const owned = (el: HTMLElement): boolean =>
+      (this.panelSeatIds.get(el) ?? this.getWorld().localSeat.id) === seatId;
+    if (this.charSheetOpen && owned(this.charSheet)) this.toggleCharSheet(seatId);
+    if (this.inventoryOpen && owned(this.inventory)) this.toggleInventory(seatId);
+    if (this.treeOpen && owned(this.passiveTree)) this.toggleTree(seatId);
+    if (this.mapOpen && owned(this.worldMap)) this.toggleMap();
+    if (this.vendorOpen && owned(this.vendorMenu)) this.closeVendor();
+    if (this.salvageOpen && owned(this.salvageMenu)) this.closeSalvage();
+    if (this.oracleOpen && owned(this.oracleMenu)) this.closeOracle();
+    if (this.bestiaryOpen && owned(this.bestiaryMenu)) this.closeBestiary();
+  }
+
+  /** The couch escape cascade for ONE seat: dismiss its topmost surface —
+   *  an owned station dialog first (a close carries semantics), then all of
+   *  its ordinary panels. Host-global dialogs (caravan, sail, hold, merc,
+   *  borough, vocation) belong to the local hero. True = press consumed. */
+  escCascadeFor(seatId: string): boolean {
+    const w = this.getWorld();
+    const mine = (el: HTMLElement): boolean =>
+      (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
+    const hostOwned = seatId === w.localSeat.id;
+    if (hostOwned && this.caravanOpen) { this.closeCaravan(); return true; }
+    if (this.vendorOpen && mine(this.vendorMenu)) { this.closeVendor(); return true; }
+    if (this.salvageOpen && mine(this.salvageMenu)) { this.closeSalvage(); return true; }
+    if (this.oracleOpen && mine(this.oracleMenu)) { this.closeOracle(); return true; }
+    if (this.bestiaryOpen && mine(this.bestiaryMenu)) { this.closeBestiary(); return true; }
+    if (hostOwned && this.sailOpen) { this.closeSail(); return true; }
+    if (hostOwned && this.mercOpen) { this.closeMercMenu(); return true; }
+    if (hostOwned && this.boroughOpen) { this.closeBorough(); return true; }
+    if (hostOwned && this.vocationOpen) { this.closeVocationMenu(); return true; }
+    if (this.anyPanelOpenFor(seatId)) { this.hideAllFor(seatId); return true; }
+    return false;
+  }
+
   // --- THE GEAR LANES (ui/dnd.ts) --------------------------------------------
   // The whole inventory speaks the ONE drag fabric — the same twin gestures
   // (press-drag / click-lift) the grimoire taught. Sources mint payloads,
@@ -455,9 +608,10 @@ export class UI {
     return d?.from ?? 'bag';
   }
 
-  /** Resolve a gearItem payload's live item (bag or doll — never stale). */
+  /** Resolve a gearItem payload's live item (bag or doll — never stale).
+   *  Reads the INVENTORY PANEL's owner — gear gestures lift from that bag. */
   private payloadGear(p: { arg: string }): ItemInstance | undefined {
-    const m = this.getWorld().meta;
+    const m = this.panelSeat(this.inventory).meta;
     const uid = Number(p.arg);
     return m.items.find(i => i.uid === uid)
       ?? Object.values(m.equipped).find(i => i?.uid === uid);
@@ -681,7 +835,8 @@ export class UI {
    *  in learned order — the book's binding slots, one per instance. */
   private grimoireSkills(): SkillInstance[] {
     const out: SkillInstance[] = [];
-    for (const inst of this.getWorld().meta.knownSkills.values()) {
+    // The grimoire strip lives on the BESTIARY panel — its owner's book.
+    for (const inst of this.panelSeat(this.bestiaryMenu).meta.knownSkills.values()) {
       const d = inst.def.delivery;
       if (d.type === 'summon' && d.grimoire) out.push(inst);
     }
@@ -690,7 +845,7 @@ export class UI {
 
   /** Tooltip for the class label in the character sheet. */
   private classTooltip(): TooltipContent {
-    const c = this.getWorld().meta.classDef;
+    const c = this.panelSeat(this.charSheet).meta.classDef;
     return {
       title: c.name, description: c.description,
       meta: `${c.innateText ? `Innate: ${c.innateText} — ` : ''}A class is only a starting point; you can allocate any attributes and bind any skill you qualify for.`,
@@ -723,7 +878,7 @@ export class UI {
 
   /** Tooltip for a learned skill row (full description + key stats). */
   private skillTooltip(id: string): TooltipContent | null {
-    const inst = this.getWorld().meta.knownSkills.get(id);
+    const inst = this.panelSeat(this.inventory).meta.knownSkills.get(id);
     if (!inst) return null;
     const d = inst.def;
     return {
@@ -739,18 +894,20 @@ export class UI {
     return `<span style="color:${e.color}" title="${e.label}">${cost.count}${e.glyph}</span>`;
   }
 
-  /** The essence-pay Level Up button (skills + supports share the curve). */
+  /** The essence-pay Level Up button (skills + supports share the curve).
+   *  Affordability reads the INVENTORY panel's owner (the build drawer's home). */
   private essLevelBtn(attr: string, level: number, atMax: boolean): string {
     const cost = skillLevelEssenceCost(level + 1);
-    const afford = this.getWorld().canAffordEssence(this.getWorld().localSeat, cost);
+    const afford = this.getWorld().canAffordEssence(this.panelSeat(this.inventory), cost);
     return `<button ${attr} ${!afford || atMax ? 'disabled' : ''}
       title="Level up by spending ${cost.count}× ${ESSENCES[cost.essence].label}">
       Level Up (${this.essCostText(cost)})</button>`;
   }
 
-  /** The seat's essence wallet as colored chips (sheet + station headers). */
-  private essWallet(): string {
-    const m = this.getWorld().meta;
+  /** The seat's essence wallet as colored chips (sheet + station headers).
+   *  Seat-explicit: the stations pass their panel's owner (couch lens). */
+  private essWallet(seat: Seat = this.getWorld().localSeat): string {
+    const m = seat.meta;
     return ESSENCE_IDS.map(id => {
       const e = ESSENCES[id];
       return `<span style="color:${e.color};margin-right:10px" title="${e.label}">${e.glyph} ${m.essences[id] ?? 0}</span>`;
@@ -1173,11 +1330,21 @@ export class UI {
 
   // --------------------------------------------------------- character sheet
 
-  toggleCharSheet(): void {
+  toggleCharSheet(seatId?: string): void {
+    const seat = this.couchSeatFor(seatId);
+    // Open for ANOTHER local seat → take ownership (re-dock + re-render) —
+    // the couch's one-instance contention rule, visible and predictable.
+    if (this.charSheetOpen && this.panelSeat(this.charSheet) !== seat) {
+      this.ownPanel(this.charSheet, seat);
+      this.refreshCharSheet();
+      return;
+    }
     this.charSheetOpen = !this.charSheetOpen;
     this.charSheet.classList.toggle('hidden', !this.charSheetOpen);
-    if (this.charSheetOpen) this.refreshCharSheet();
-    else hideTooltip();
+    if (this.charSheetOpen) {
+      this.ownPanel(this.charSheet, seat);
+      this.refreshCharSheet();
+    } else hideTooltip();
   }
 
   refreshCharSheet(): void {
@@ -1188,8 +1355,9 @@ export class UI {
     // up within half a second.
     if (this.pressHeld.has(this.charSheet)) return;
     const world = this.getWorld();
-    const p = world.player;
-    const m = world.meta;
+    const seat = this.panelSeat(this.charSheet);
+    const p = seat.actor;
+    const m = seat.meta;
 
     const attrRows = ATTRIBUTE_IDS.map(id => {
       const total = m.attrs[id] ?? 0;
@@ -1327,7 +1495,7 @@ export class UI {
    *  gems into exactly these bags. */
   private gemInventoryHtml(kind: 'skills' | 'gems'): string {
     const world = this.getWorld();
-    const m = world.meta;
+    const m = this.panelSeat(this.inventory).meta;
     if (kind === 'gems') {
       return m.inventory.map((gem, idx) => {
         // Crew-aware targets: a gem may board a summon skill purely for what
@@ -1429,8 +1597,16 @@ export class UI {
     }));
   }
 
-  toggleInventory(): void {
+  toggleInventory(seatId?: string): void {
+    const seat = this.couchSeatFor(seatId);
+    // Open for ANOTHER local seat → take ownership (the couch contention rule).
+    if (this.inventoryOpen && this.panelSeat(this.inventory) !== seat) {
+      this.ownPanel(this.inventory, seat);
+      this.refreshInventory();
+      return;
+    }
     this.inventoryOpen = !this.inventoryOpen;
+    if (this.inventoryOpen) this.ownPanel(this.inventory, seat);
     // THE LESSON'S HAND ON THE TAB: while Mireille's gift sits carried and
     // unlearned, the inventory OPENS on the Skill Gems tab — the very step
     // her directions name — instead of wherever the player last browsed.
@@ -1442,10 +1618,12 @@ export class UI {
     else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
 
-  /** An item anywhere on this seat — bag or doll (tooltips serve both). */
-  private findItem(uid: number): ItemInstance | undefined {
+  /** An item anywhere on a LOCAL seat — bag or doll (tooltips serve both).
+   *  Seat-explicit for the couch lens; item uids are globally unique, so a
+   *  wrong-seat miss is a null, never a mistaken identity. */
+  private findItem(uid: number, seat: Seat = this.getWorld().localSeat): ItemInstance | undefined {
     const w = this.getWorld();
-    const m = w.meta;
+    const m = seat.meta;
     return m.items.find(i => i.uid === uid)
       ?? Object.values(m.equipped).find(i => i?.uid === uid)
       // Brandt's shelf: counter gear carries the same rich tooltip (and the
@@ -1456,8 +1634,8 @@ export class UI {
   /** The candidate slots an UNWORN item could swap into that hold something
    *  today — the comparison targets. Worn items (and empty targets) compare
    *  against nothing: the plain card already reads as the whole story. */
-  private compareTargets(item: ItemInstance): { label: string; worn: ItemInstance }[] {
-    const m = this.getWorld().meta;
+  private compareTargets(item: ItemInstance, seat: Seat = this.getWorld().localSeat): { label: string; worn: ItemInstance }[] {
+    const m = seat.meta;
     if (Object.values(m.equipped).some(i => i?.uid === item.uid)) return [];
     const base = ITEM_BASES[item.baseId];
     if (!base) return [];
@@ -1470,8 +1648,8 @@ export class UI {
    *  each slot it could take (both rings, when both are worn). Rows derive
    *  from compareItemMods — the stat sheet's own folding — never from
    *  re-parsing tooltip text. */
-  private compareHtml(item: ItemInstance): string | null {
-    const targets = this.compareTargets(item);
+  private compareHtml(item: ItemInstance, seat: Seat = this.getWorld().localSeat): string | null {
+    const targets = this.compareTargets(item, seat);
     if (!targets.length) return null;
     const row = (r: ModCompareRow): string => {
       switch (r.kind) {
@@ -1500,8 +1678,8 @@ export class UI {
   /** Rich item card — every line derives live from the instance's rolls, so
    *  a data retune re-prices the tooltip the same instant it re-prices play.
    *  DWELLING (extended hover) grows the card with the ON-SWAP comparison. */
-  private itemTooltip(uid: number, extended?: boolean): TooltipContent | null {
-    const item = this.findItem(uid);
+  private itemTooltip(uid: number, extended?: boolean, seat: Seat = this.getWorld().localSeat): TooltipContent | null {
+    const item = this.findItem(uid, seat);
     if (!item) return null;
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
@@ -1530,9 +1708,9 @@ export class UI {
     // advertises the dwell whenever a comparison exists to grow into.
     let compareHint = '';
     if (extended) {
-      const cmp = this.compareHtml(item);
+      const cmp = this.compareHtml(item, seat);
       if (cmp) lines.push(cmp);
-    } else if (this.compareTargets(item).length) {
+    } else if (this.compareTargets(item, seat).length) {
       compareHint = ' · <span style="color:#c8a84b">hold to compare</span>';
     }
     return {
@@ -1562,7 +1740,8 @@ export class UI {
     // (No mid-drag freeze: the fabric's gestures ride data attributes that
     // survive innerHTML rebuilds — a re-render mid-carry re-earns its marks
     // on the next beat. The old native drag needed the world to hold still.)
-    const m = this.getWorld().meta;
+    const invSeat = this.panelSeat(this.inventory);
+    const m = invSeat.meta;
     const CELL = 34;
     const W = ITEM_CFG.inventory.w;
     const H = ITEM_CFG.inventory.h;
@@ -1827,7 +2006,8 @@ export class UI {
 
   // ---------------------------------------------------------- salvage station
 
-  showSalvage(): void {
+  showSalvage(seatId?: string): void {
+    this.ownPanel(this.salvageMenu, this.couchSeatFor(seatId));
     this.salvageOpen = true;
     this.salvageMenu.classList.remove('hidden');
     this.refreshSalvage();
@@ -1843,7 +2023,8 @@ export class UI {
   refreshSalvage(): void {
     if (!this.salvageOpen) return;
     const world = this.getWorld();
-    const m = world.meta;
+    const seat = this.panelSeat(this.salvageMenu);
+    const m = seat.meta;
     const acc = this.getAccount();
 
     const tabs = `<div class="bind-btns" style="margin-bottom:8px">
@@ -1874,7 +2055,7 @@ export class UI {
           <div class="bind-btns"><button data-salv-sup="${idx}">Break down (${this.essCostText(y)})</button></div>
         </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">No loose support gems.</div>';
-      body = `<div style="margin-bottom:6px">${this.essWallet()}</div>
+      body = `<div style="margin-bottom:6px">${this.essWallet(seat)}</div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
           Breaking gear pays Essence by its quality — and STUDIES each affix on it (expertise, on the account, survives death).
         </div>
@@ -1894,7 +2075,7 @@ export class UI {
         const cap = socketCap(ITEM_BASES[target.baseId]?.category ?? 'ring');
         const have = target.sockets?.length ?? 0;
         const chiselable = cap > 0 && have < cap && craftedCount(target) < world.craftSlots();
-        const affordChisel = world.canAffordEssence(world.localSeat, CRAFT_CFG.socketCost);
+        const affordChisel = world.canAffordEssence(seat, CRAFT_CFG.socketCost);
         chisel = cap > 0 ? `
           <div class="bind-btns" style="margin:4px 0 8px">
             <button data-chisel="${target.uid}" ${chiselable && affordChisel ? '' : 'disabled'}>
@@ -1908,7 +2089,7 @@ export class UI {
           const options = craftableAffixesFor(target, acc.craftLore);
           affixRows = options.map(o => {
             const cost = CRAFT_CFG.cost(o.rank);
-            const afford = world.canAffordEssence(world.localSeat, cost);
+            const afford = world.canAffordEssence(seat, cost);
             return `<div class="skill-entry">
               <div class="name">${o.def.names[o.def.names.length - 1]}
                 <span style="color:#c8a84b;font-size:10px">expertise rank ${o.rank}</span></div>
@@ -1926,7 +2107,7 @@ export class UI {
           return `<div class="stat-row"><span>${fam}</span>
             <span class="val">${rank > 0 ? `rank ${rank}` : 'unstudied'}${need > 0 ? ` · ${have}/${need}` : ' · MAX'}</span></div>`;
         }).join('') || '<div style="color:#8a8678;font-size:11px">Salvage affixed gear to begin studying.</div>';
-      body = `<div style="margin-bottom:6px">${this.essWallet()}</div>
+      body = `<div style="margin-bottom:6px">${this.essWallet(seat)}</div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
           One crafted line per piece${world.craftSlots() > 1 ? ` (yours: ${world.craftSlots()})` : ''}; expertise raises the roll CEILING — the roll itself stays wild.
         </div>
@@ -1989,7 +2170,8 @@ export class UI {
   /** The open entry's live-portrait animation frame (0 = none running). */
   private bestiaryAnim = 0;
 
-  showBestiary(): void {
+  showBestiary(seatId?: string): void {
+    this.ownPanel(this.bestiaryMenu, this.couchSeatFor(seatId));
     this.bestiaryOpen = true;
     this.bestiaryMenu.classList.remove('hidden');
     this.refreshBestiary();
@@ -2239,8 +2421,10 @@ export class UI {
 
     // The RELEASE counter: bonded companions present themselves at the fire
     // (the only place a bond may be undone — the whistle never unbinds).
+    // Couch: the fire shows the OPENER's bonds (the seat that dwelt here).
     const world = this.getWorld();
-    const companions = world.actors.filter(a => a.companion && !a.dead && a.owner === world.player);
+    const bestiarySeat = this.panelSeat(this.bestiaryMenu);
+    const companions = world.actors.filter(a => a.companion && !a.dead && a.owner === world.seatHero(bestiarySeat));
     const release = companions.length ? `
       <div style="border-top:1px solid #2a2a3a;margin-top:8px;padding-top:6px">
         <div style="color:#a8c87a;font-size:11px;margin-bottom:4px">Bonded companions</div>
@@ -2321,7 +2505,8 @@ export class UI {
 
   // ------------------------------------------------------------ oracle stone
 
-  showOracle(): void {
+  showOracle(seatId?: string): void {
+    this.ownPanel(this.oracleMenu, this.couchSeatFor(seatId));
     this.oracleOpen = true;
     this.oracleMenu.classList.remove('hidden');
     this.refreshOracle();
@@ -2337,7 +2522,8 @@ export class UI {
   refreshOracle(): void {
     if (!this.oracleOpen) return;
     const world = this.getWorld();
-    const m = world.meta;
+    const seat = this.panelSeat(this.oracleMenu);
+    const m = seat.meta;
     const targets = [...m.items, ...Object.values(m.equipped).filter((x): x is ItemInstance => !!x)]
       .filter(i => i.affixes.some(a => !a.crafted));
     const targetRows = targets.map(i =>
@@ -2400,7 +2586,8 @@ export class UI {
 
   // ---------------------------------------------------------- vendor screen
 
-  showVendor(): void {
+  showVendor(seatId?: string): void {
+    this.ownPanel(this.vendorMenu, this.couchSeatFor(seatId));
     this.vendorOpen = true;
     this.vendorMenu.classList.remove('hidden');
     this.refreshVendor();
@@ -2416,9 +2603,10 @@ export class UI {
 
   /** The player's things as scrap-wheel targets — the SELL lane. Prices are
    *  the sell yields (everything converts to COARSE by quality × rarity
-   *  rate); the bench's break yields live on the station screen instead. */
+   *  rate); the bench's break yields live on the station screen instead.
+   *  Reads the VENDOR panel's owner (the seat working the wheel). */
   private scrapListHtml(): string {
-    const m = this.getWorld().meta;
+    const m = this.panelSeat(this.vendorMenu).meta;
     const chip = (attr: string, color: string, label: string, yieldHtml: string): string =>
       `<button ${attr} style="margin:2px 4px 2px 0;border-color:${color};color:${color}">
         ${label} <span style="color:#8a8678">→ ${yieldHtml}</span></button>`;
@@ -2519,7 +2707,8 @@ export class UI {
   refreshVendor(): void {
     if (!this.vendorOpen) return;
     const world = this.getWorld();
-    const near = VENDORS.filter(v => v.near(world, world.localSeat));
+    const seat = this.panelSeat(this.vendorMenu);
+    const near = VENDORS.filter(v => v.near(world, seat));
 
     const sections = near.map(v => {
       const rows = v.stock(world).map((e, idx) => {
@@ -2540,7 +2729,7 @@ export class UI {
         const tipAttrs = e.kind === 'item' ? ` data-tip="item" data-item-uid="${e.item.uid}"` : '';
         const price = v.priceOf(world, e);
         const afford = price.essences
-          ? price.essences.every(c => world.canAffordEssence(world.localSeat, c))
+          ? price.essences.every(c => world.canAffordEssence(seat, c))
           : world.descentEchoes >= (price.echoes ?? 0);
         const priceHtml = price.essences
           ? price.essences.map(c => this.essCostText(c)).join(' + ')
@@ -2633,8 +2822,9 @@ export class UI {
    *  vantages; every button works in both). */
   private learnedListHtml(): string {
     const world = this.getWorld();
-    const p = world.player;
-    const m = world.meta;
+    const seat = this.panelSeat(this.inventory);
+    const p = seat.actor;
+    const m = seat.meta;
     // THE GRAFT BANK (data/passiveChoices.ts GraftSpec): every bindable
     // power the tree has granted — bound chips name their carrier, unbound
     // ones lift on click and land on the next skill row clicked. Same
@@ -2700,7 +2890,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}" ${m.skillPoints < 1 || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}>+</button>
           <button data-gemlvl-ess="${def.id}:${i}"
-            ${!this.getWorld().canAffordEssence(this.getWorld().localSeat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
+            ${!this.getWorld().canAffordEssence(seat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
             title="Level up for ${skillLevelEssenceCost(s.level + 1).count}× ${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].label}">+${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].glyph}</button>
           <button data-unsocket="${def.id}:${i}">✕</button>
         </span>` : `<span class="gem-chip empty">empty socket</span>`).join('');
@@ -2854,11 +3044,21 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 
   // ------------------------------------------------------------ passive tree
 
-  toggleTree(): void {
+  toggleTree(seatId?: string): void {
+    const seat = this.couchSeatFor(seatId);
+    // Open for ANOTHER local seat → take ownership (the couch contention rule).
+    if (this.treeOpen && this.panelSeat(this.passiveTree) !== seat) {
+      this.ownPanel(this.passiveTree, seat);
+      this.closeChoicePopup();
+      this.centerTreeOnStart();
+      this.refreshTree();
+      return;
+    }
     this.treeOpen = !this.treeOpen;
     this.closeChoicePopup(); // a popup never outlives its panel
     this.passiveTree.classList.toggle('hidden', !this.treeOpen);
     if (this.treeOpen) {
+      this.ownPanel(this.passiveTree, seat);
       this.centerTreeOnStart();
       this.refreshTree();
     }
@@ -2886,7 +3086,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     // Realm tabs open FIT-TO-CONSTELLATION (small stars read whole); only
     // the main star centres on the class start at a readable zoom.
     if (this.treeRealm !== MAIN_REALM) { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; return; }
-    const start = PASSIVE_NODES[classStartNode(this.getWorld().meta.classDef.id)];
+    const start = PASSIVE_NODES[classStartNode(this.panelSeat(this.passiveTree).meta.classDef.id)];
     if (!start) return;
     const b = this.treeBox;
     const VIEW = 1200;
@@ -2902,7 +3102,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     this.closeChoicePopup();
     if (!this.treeOpen) return;
     const world = this.getWorld();
-    const m = world.meta;
+    const m = this.panelSeat(this.passiveTree).meta;
 
     // REALM TABS (data/passiveRealms.ts): resolve the open set, snap the
     // active tab back to the star if its realm closed, seed root crests.
@@ -3147,7 +3347,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
   private openChoicePopup(node: PassiveNode, el: SVGCircleElement): void {
     this.closeChoicePopup();
     const world = this.getWorld();
-    const m = world.meta;
+    const m = this.panelSeat(this.passiveTree).meta;
     const group = choiceGroupOf(node);
     if (!group) return;
     const chosen = chosenOf(m.choices, node.id);
@@ -3219,7 +3419,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
   private passiveNodeTooltip(nodeId: string): TooltipContent | null {
     const node = PASSIVE_NODES[nodeId];
     if (!node) return null;
-    const m = this.getWorld().meta;
+    const m = this.panelSeat(this.passiveTree).meta;
     const KIND_LABELS: Record<PassiveNode['kind'], string> = {
       start: 'class start', small: 'passive', notable: 'notable',
       keystone: 'keystone', attr: 'attribute', vocation: 'vocation',
@@ -4431,15 +4631,35 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // "End Run" is Save & Main Menu (world.endRun reroutes there too). Only
       // run-saved mortals get the bank-and-permadeath forfeit.
       const rosterMode = !this.isCoopClient() && modeById(this.getWorld().meta.modeId).save === 'roster';
+      // THE COUCH ROWS (data/couch.ts): exist ONLY when a couch session is
+      // even possible — main.ts wired the flow, enough controllers are
+      // connected, and a guest seat is free (or filled, for Leave). Solo
+      // machines never see either.
+      const couchSeated = this.getWorld().couchSeats().length;
+      const couchRow = this.onCouchJoin && !this.isCoopClient()
+        && connectedPadIndices().length >= COUCH_CFG.join.minPads
+        && couchSeated < COUCH_CFG.join.maxLocal - 1
+        ? '<button id="esc-couch">Local Co-op — Player Joins</button>' : '';
+      const couchLeaveRow = this.onCouchLeave && couchSeated > 0
+        ? '<button id="esc-couch-leave">Local Co-op — Guest Leaves</button>' : '';
       root.innerHTML = `
         <h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
+          ${couchRow}${couchLeaveRow}
           <button id="esc-keys">Options</button>
           <button id="esc-end">${this.isCoopClient() ? 'Leave Co-op' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close">Close Game</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
+      document.getElementById('esc-couch')?.addEventListener('click', () => {
+        this.hideEscapeMenu();
+        this.onCouchJoin!();
+      });
+      document.getElementById('esc-couch-leave')?.addEventListener('click', () => {
+        this.hideEscapeMenu();
+        this.onCouchLeave!();
+      });
       document.getElementById('esc-keys')!.addEventListener('click', () => this.renderOptions(root, showMain));
       document.getElementById('esc-end')!.addEventListener('click', () => {
         // CLIENT: world is a render SHELL — never run host-authoritative endRun()

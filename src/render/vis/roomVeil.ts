@@ -103,13 +103,17 @@ export class RoomVeil {
   /** The volume the veil wraps — held while fading out so leaving a room
    *  releases the dark around the room you LEFT, not around nothing. */
   private vol: VisionVolume | null = null;
+  /** THE COUCH SUSPEND (data/couch.ts COUCH_CFG.render): confinement is a
+   *  one-hero question — under a shared couch frame the renderer parks the
+   *  veil here; the fade opens the room back up on its own ramp. */
+  suspend = false;
 
   /** Resolve the hero's confinement + advance the fade. Once per frame,
    *  before draw — render-clock (frameDt), like every other smoothed fade. */
   update(world: RoomView, dt: number): void {
     const cfg = VIS_CFG.roomVeil;
     let target = 0;
-    if (cfg.enabled) {
+    if (cfg.enabled && !this.suspend) {
       const st = world.roofedStructureAt(world.player.pos);
       if (st?.confineVision === 'rooms') {
         // PER-ROOM confinement: only the ENCLOSED room the hero stands in

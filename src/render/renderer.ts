@@ -23,7 +23,7 @@ import { RUNE_INFO } from '../data/invocations';
 import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { COMBO_CFG, comboProgress, comboStat } from '../engine/sequence';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
-import type { World } from '../engine/world';
+import type { Seat, World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
@@ -77,7 +77,8 @@ import { drawTrackLanes, drawTrackRiders, drawTrackWarnArcs } from './vis/trackL
 import { drawTrapworkTells } from './vis/trapLayer';
 import { riderSurface as trackRiderSurface, trackPose } from '../engine/tracks';
 import { UnderstoryLayer } from './vis/understory';
-import { cameraModeOf, placeCamera } from './camera';
+import { cameraModeOf, couchConfineRect, couchFit, placeCamera } from './camera';
+import { COUCH_CFG } from '../data/couch';
 import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
@@ -149,8 +150,18 @@ export class Renderer {
    *  Doubles as "where is the cursor, really" for aim-anchored affordances
    *  (the elite nameplate hover follows it). */
   padAim: { x: number; y: number; lockId: number | null } | null = null;
-  /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping. */
-  private readonly zoom = 1.3;
+  /** COUCH GUEST reticles (data/couch.ts): each guest's live assisted aim +
+   *  soft-lock, fed by main each frame in the guest's class tint — two
+   *  cursors on one screen need two identities. Empty outside couch play. */
+  couchAims: { x: number; y: number; lockId: number | null; color: string }[] = [];
+  /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping.
+   *  BASE is the classic constant; the COUCH FRAME (data/couch.ts) widens the
+   *  live value by couchStretch — smoothed toward couchFit each frame, hard-
+   *  floored at the stretch cap. Solo keeps couchStretch pinned at exactly 1,
+   *  so every consumer of `zoom` reads the byte-identical classic 1.3. */
+  private readonly baseZoom = 1.3;
+  private couchStretch = 1;
+  private get zoom(): number { return this.baseZoom * this.couchStretch; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
   private lastRenderTime = 0;
@@ -202,11 +213,12 @@ export class Renderer {
 
   /** Bar-slot labels, derived from the live binds: the pad map (RT/LT/Ⓐ…)
    *  while the controller is active, else the keybinds (slots 0/1 fixed to
-   *  mouse). Falls back to the defaults if no settings are wired in. */
-  private slotKeys(): string[] {
+   *  mouse). Falls back to the defaults if no settings are wired in.
+   *  `forcePad` — a couch guest IS a pad; its bar always reads pad glyphs. */
+  private slotKeys(forcePad = false): string[] {
     const s = this.getSettings?.();
     if (!s) return SLOT_KEYS;
-    if (this.getPadActive?.()) {
+    if (forcePad || this.getPadActive?.()) {
       const pb = s.padBinds;
       return [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
         pb.skillSlot4, pb.skillSlot5, pb.skillSlot6, pb.skillSlot7].map(padDisplay);
@@ -335,12 +347,42 @@ export class Renderer {
     // frames the hero — a ZoneDef.camera pin wins, then the player's Options
     // pick, then the fabric default. Boundless zones (the Descent abyss)
     // free-follow inside placeCamera regardless of mode: no frame to clamp to.
+    //
+    // THE COUCH FRAME rides in front: with guests seated, the frame's focus
+    // is the heroes' shared center and the zoom BREATHES down toward the fit
+    // (couchFit — smoothed, floored at the stretch cap); the frame actually
+    // drawn is then published back as THE EDGE LAW's rect (world.couchConfine)
+    // so drawn == confined by construction. Solo: stretch pins to 1, focus is
+    // the hero, the rect is null — byte-identical to the classic frame.
+    const couchEyes = world.couchActive() ? world.couchHeroes() : null;
+    const couchOn = !!couchEyes && couchEyes.length > 1;
+    // A DEGENERATE viewport (a minimized window, a zero-size boot frame)
+    // must never drive the fit — a 0-wide screen would slam the stretch to
+    // the cap and shrink the edge law's rect to a point-prison. Hold the
+    // frame where it stands and publish NO confine until pixels return.
+    const viewOk = w >= 64 && h >= 64;
+    let focus: { x: number; y: number } = world.player.pos;
+    if (couchOn && viewOk) {
+      const fit = couchFit(couchEyes.map(a => a.pos), w, h, this.baseZoom, COUCH_CFG.camera);
+      this.couchStretch += (fit.stretch - this.couchStretch)
+        * Math.min(1, this.frameDt * COUCH_CFG.camera.zoomLerp);
+      focus = fit.focus;
+    } else if (!couchOn) {
+      this.couchStretch = 1; // solo: pinned exactly — the classic frame
+    } // else: couch play under a degenerate view — hold the stretch as-is
+    // The positional veils are single-eye fabrics — under a shared couch
+    // frame they suspend per COUCH_CFG.render (both players see what the
+    // camera sees); each veil's own fade handles the transition gracefully.
+    this.sightVeil.suspend = couchOn && COUCH_CFG.render.sightVeil === 'off';
+    this.roomVeil.suspend = couchOn && COUCH_CFG.render.roomVeil === 'off';
     const z = this.zoom, vw = w / z, vh = h / z;
     const az = world.arena;
     const camMode = cameraModeOf(world.zone.camera ?? this.getSettings?.().cameraMode);
-    const camAt = placeCamera(camMode, world.player.pos, vw, vh, az);
+    const camAt = placeCamera(camMode, focus, vw, vh, az);
     this.cam.x = camAt.x;
     this.cam.y = camAt.y;
+    world.couchConfine = couchOn && viewOk
+      ? couchConfineRect(camAt, vw, vh, COUCH_CFG.camera) : null;
 
     // The clear IS the void: theme-tinted abyss ink (vis/voidFrame.ts), so
     // whatever the frame exposes past the rim already wears the zone's dark.
@@ -584,6 +626,14 @@ export class Renderer {
    *  Drawn as the last world-space pass so canopy/roof fades never swallow
    *  the player's aim. */
   private drawPadReticle(world: World): void {
+    // Couch guests' reticles first (each in its seat's own tint), then the
+    // hero's — the hero's aim stays the top-most read, exactly as solo.
+    for (const ga of this.couchAims) {
+      const gheld = ga.lockId !== null ? world.actorById(ga.lockId) : undefined;
+      const glock = gheld && !gheld.dead
+        ? { x: gheld.pos.x, y: gheld.pos.y, r: gheld.radius } : undefined;
+      drawAimReticle(this.ctx, ga.x, ga.y, ga.color, world.time, glock);
+    }
     const pa = this.padAim;
     if (!pa) return;
     const held = pa.lockId !== null ? world.actorById(pa.lockId) : undefined;
@@ -5134,12 +5184,36 @@ export class Renderer {
   }
 
   private drawHud(world: World): void {
+    // THE COUCH DISPATCH (data/couch.ts): solo draws the one classic centered
+    // cluster — byte-identical. With guests seated, each local seat's cluster
+    // anchors to its own flank (guest bars read pad glyphs, guest identity
+    // docks to its side of the top edge); the world-level tail — wave banner,
+    // boss bar — draws once either way.
+    if (!world.couchActive()) {
+      this.drawHudCluster(world, world.localSeat, 'center', false);
+      this.drawHudStatus(world, world.localSeat, 16, 'left', true);
+    } else {
+      this.drawHudCluster(world, world.localSeat, COUCH_CFG.join.sides[0], false);
+      this.drawHudStatus(world, world.localSeat, 16, 'left', true);
+      for (const s of world.couchSeats()) {
+        this.drawHudCluster(world, s, s.couch!.side, true);
+        this.drawHudStatus(world, s, this.uiW - 16, 'right', false);
+      }
+    }
+    this.drawHudTail(world);
+  }
+
+  /** ONE seat's HUD cluster — orbs, arcs, bar, pips, buffs, grammar rows,
+   *  possession chip, XP — anchored center (the solo classic) or docked to a
+   *  couch flank. Every widget below derives from bx/by/p, so the anchor is
+   *  the whole difference. */
+  private drawHudCluster(world: World, seat: Seat, anchor: 'center' | 'left' | 'right', padLabels: boolean): void {
     const { ctx } = this;
     // Virtual dims — the whole method runs inside the UI-scale sub-pass, so
     // every widget below grows with the player's dial for free.
     const w = this.uiW, h = this.uiH;
-    const p = world.player;
-    const m = world.meta;
+    const p = seat.actor;
+    const m = seat.meta;
 
     // Skill-bar geometry — computed FIRST so the resource orbs can flank it.
     // The cluster sits high enough that its three text strips stay distinct:
@@ -5147,12 +5221,15 @@ export class Renderer {
     // bar hugging the bottom edge — at by = h-78 all three overlapped.
     const slot = 54, gap = 6;
     const totalW = p.skills.length * slot + (p.skills.length - 1) * gap;
-    const bx = w / 2 - totalW / 2, by = h - 92;
+    const orbR = 46, orbGap = 12; // hoisted: the flank anchors reserve orb room
+    const by = h - 92;
+    const bx = anchor === 'center' ? w / 2 - totalW / 2
+      : anchor === 'left' ? COUCH_CFG.hud.sideInset + orbR * 2 + orbGap
+        : w - COUCH_CFG.hud.sideInset - totalW - orbGap - orbR * 2;
 
     // Resource orbs FLANK the centered bar (life just-left, mana just-right) so
     // life / mana / skills read as ONE central cluster — vital info isn't shoved
     // into the screen corners anymore. Arcs key off each orb's new center.
-    const orbR = 46, orbGap = 12;
     const lifeX = clamp(bx - orbGap - orbR, orbR + 8, w - orbR - 8);
     const manaX = clamp(bx + totalW + orbGap + orbR, orbR + 8, w - orbR - 8);
     const orbY = by + slot / 2;
@@ -5285,7 +5362,7 @@ export class Renderer {
 
     // Skill bar
     ctx.textAlign = 'center';
-    const keyLabels = this.slotKeys();
+    const keyLabels = this.slotKeys(padLabels);
     for (let i = 0; i < p.skills.length; i++) {
       const x = bx + i * (slot + gap);
       const inst = p.skills[i];
@@ -5691,7 +5768,7 @@ export class Renderer {
     // follows the pointer); this chip is the tether home. Host/single only
     // by construction: a co-op client's localSeat never sets `home`.
     {
-      const home = world.localSeat.home;
+      const home = seat.home;
       const ride = home ? p.possession : undefined;
       if (home && ride) {
         const cy = by - 74;
@@ -5703,7 +5780,9 @@ export class Renderer {
         const lw = ctx.measureText(label).width;
         const huskW = ride.huskMode === 'stands' ? 96 : 0;
         const chipW = lw + 16 + (huskW ? huskW + 10 : 0);
-        const cx0 = w / 2 - chipW / 2;
+        // Centered over THIS cluster's bar (solo bar is screen-centered, so
+        // the classic w/2 placement falls out exactly).
+        const cx0 = bx + totalW / 2 - chipW / 2;
         ctx.fillStyle = 'rgba(10,8,16,0.85)';
         ctx.fillRect(cx0, cy - 11, chipW, 20);
         ctx.strokeStyle = '#b8a8e8';
@@ -5734,9 +5813,22 @@ export class Renderer {
     ctx.fillRect(bx, by + slot + 16, totalW, 5);
     ctx.fillStyle = '#b8a0e0';
     ctx.fillRect(bx, by + slot + 16, totalW * clamp(m.xp / m.xpNeeded, 0, 1), 5);
+  }
 
-    // Top-left status block
-    ctx.textAlign = 'left';
+  /** ONE seat's top-edge status block: the identity line + mode badge +
+   *  unspent-point nudges, docked left (the solo classic, byte-identical) or
+   *  right (a couch guest, mirrored). `worldInfo` rides only the FIRST
+   *  block: zone banner, living-world line, objective, XP blessing,
+   *  reputation, the font hint — world-level facts drawn exactly once. */
+  private drawHudStatus(world: World, seat: Seat, x: number, align: 'left' | 'right', worldInfo: boolean): void {
+    const { ctx } = this;
+    const p = seat.actor;
+    const m = seat.meta;
+    // A guest's hints name PAD glyphs (a couch guest IS a pad); the classic
+    // block keeps the live keyboard/pad arbitration it always had.
+    const hintKey = (id: 'panelTree' | 'panelInv'): string =>
+      worldInfo ? this.actionKey(id) : padDisplay(this.getSettings?.().padBinds[id] ?? '');
+    ctx.textAlign = align;
     ctx.font = 'bold 14px Verdana';
     ctx.fillStyle = '#c8a84b';
     // THE NAME leads; the class rides along only when they differ (an unnamed
@@ -5744,71 +5836,85 @@ export class Renderer {
     const titleLine = m.name !== m.classDef.name
       ? `${m.name}  —  Level ${p.level} ${m.classDef.name}`
       : `${m.classDef.name}  —  Level ${p.level}`;
-    ctx.fillText(titleLine, 16, 26);
+    ctx.fillText(titleLine, x, 26);
     // CHARACTER-MODE chip (data-driven — any stage that declares a badge shows
     // one): the Immortal's SWORN → UNDYING standing, at a glance, in mode color.
-    const stage = world.modeStageDef();
+    const stage = world.seatStageDef(seat);
     if (stage.badge) {
       const titleW = ctx.measureText(titleLine).width;
       ctx.font = 'bold 10px Verdana';
       const bw = ctx.measureText(stage.badge).width + 12;
-      const chipX = 16 + titleW + 12;
-      const col = world.modeDef().color;
+      const chipX = align === 'left' ? x + titleW + 12 : x - titleW - 12 - bw;
+      const col = world.seatModeDef(seat).color;
       ctx.fillStyle = '#16121c';
       ctx.fillRect(chipX, 14, bw, 15);
       ctx.strokeStyle = col;
       ctx.lineWidth = 1;
       ctx.strokeRect(chipX, 14, bw, 15);
       ctx.fillStyle = col;
+      ctx.textAlign = 'left'; // the badge keeps its own left edge inside the chip
       ctx.fillText(stage.badge, chipX + 6, 25);
+      ctx.textAlign = align;
     }
-    ctx.font = '12px Verdana';
-    ctx.fillStyle = world.zone.theme.accent;
-    const lvText = world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
-    // Underground, the banner names the BAND (the strata fabric): where you
-    // are on the world's vertical ladder, read from caveDepth.
-    const stratText = world.zone.caveDepth != null
-      ? ` · ${stratumOf(world.zone.caveDepth).name}` : '';
-    ctx.fillText(`${world.zone.name}${lvText}${stratText}`, 16, 46);
-    // Living-world status: time of day · weather · who holds this ground.
-    ctx.font = '11px Verdana';
-    ctx.fillStyle = '#9ab0c8';
-    ctx.fillText(world.sim.hudLine(world.zone, world.time), 16, 64);
-    ctx.font = '12px Verdana';
-    ctx.fillStyle = world.objectiveDone ? '#ffd700' : '#9a96b8';
-    ctx.fillText(world.objectiveText(), 16, 82);
+    let hintY = worldInfo ? 100 : 46; // a guest's hints start right under its title
+    if (worldInfo) {
+      ctx.font = '12px Verdana';
+      ctx.fillStyle = world.zone.theme.accent;
+      const lvText = world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
+      // Underground, the banner names the BAND (the strata fabric): where you
+      // are on the world's vertical ladder, read from caveDepth.
+      const stratText = world.zone.caveDepth != null
+        ? ` · ${stratumOf(world.zone.caveDepth).name}` : '';
+      ctx.fillText(`${world.zone.name}${lvText}${stratText}`, x, 46);
+      // Living-world status: time of day · weather · who holds this ground.
+      ctx.font = '11px Verdana';
+      ctx.fillStyle = '#9ab0c8';
+      ctx.fillText(world.sim.hudLine(world.zone, world.time), x, 64);
+      ctx.font = '12px Verdana';
+      ctx.fillStyle = world.objectiveDone ? '#ffd700' : '#9a96b8';
+      ctx.fillText(world.objectiveText(), x, 82);
+    }
     // The kill counter is RUN-END information (credits math, the death
     // screen) — mid-run it's clutter, so the HUD no longer carries it.
     // Unspent-point nudges only — carried-gem COUNTS retired (the refreshed
     // inventory owns that bookkeeping; a tally here was clutter, and its hint
     // key had already drifted from the binds). Keys read live from settings.
-    let hintY = 100;
+    ctx.font = '12px Verdana';
     if (m.passivePoints > 0) {
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${this.actionKey('panelTree')}`, 16, hintY);
+      ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${hintKey('panelTree')}`, x, hintY);
       hintY += 18;
     }
     if (m.skillPoints > 0) {
       ctx.fillStyle = '#7ec8a0';
-      ctx.fillText(`${m.skillPoints} skill point${m.skillPoints > 1 ? 's' : ''} — press ${this.actionKey('panelInv')}`, 16, hintY);
+      ctx.fillText(`${m.skillPoints} skill point${m.skillPoints > 1 ? 's' : ''} — press ${hintKey('panelInv')}`, x, hintY);
       hintY += 18;
     }
-    if (world.mireilleXpBuff > 0) {
+    if (worldInfo && world.mireilleXpBuff > 0) {
       const t = Math.ceil(world.mireilleXpBuff);
       ctx.fillStyle = '#a0d8a0';
-      ctx.fillText(`✦ +5% XP blessing — ${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`, 16, hintY);
+      ctx.fillText(`✦ +5% XP blessing — ${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')}`, x, hintY);
       hintY += 18;
     }
-    const rep = world.sim.reputation.hud();
-    if (rep) {
-      ctx.fillStyle = '#e8c87a';
-      ctx.fillText(rep, 16, hintY);
-      hintY += 18;
+    if (worldInfo) {
+      const rep = world.sim.reputation.hud();
+      if (rep) {
+        ctx.fillStyle = '#e8c87a';
+        ctx.fillText(rep, x, hintY);
+        hintY += 18;
+      }
+      if (world.nearFont()) {
+        ctx.fillStyle = '#b06bd4';
+        ctx.fillText(`Sacrificial Font — offer skill gems in the Build drawer (${this.actionKey('panelInv')}) · ${m.offerings}/${OFFERINGS_PER_POINT}`, x, hintY);
+      }
     }
-    if (world.nearFont()) {
-      ctx.fillStyle = '#b06bd4';
-      ctx.fillText(`Sacrificial Font — offer skill gems in the Build drawer (${this.actionKey('panelInv')}) · ${m.offerings}/${OFFERINGS_PER_POINT}`, 16, hintY);
-    }
+  }
+
+  /** The world-level HUD tail — the wave banner + the boss-bar stack. Drawn
+   *  ONCE regardless of how many local clusters are up. */
+  private drawHudTail(world: World): void {
+    const { ctx } = this;
+    const w = this.uiW;
     if (world.zone.objective.kind === 'waves' && !world.objectiveDone
       && !world.waveActive && !world.gameOver) {
       ctx.textAlign = 'center';
