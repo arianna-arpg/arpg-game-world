@@ -21,6 +21,8 @@ npm run sim -- sweep skills --level 5     # every attack/spell skill, solo, rank
 npm run sim -- sweep skills --level 5 --vs panel:textures_l8   # skill × enemy-texture matrix
 npm run sim -- sweep matchups --build player_my_char --panel textures_l8  # one build across the poles
 npm run sim -- sweep supports --support splitting      # skill × support no-op matrix (see below)
+npm run sim -- matrix check --support splitting        # the no-op UNIT-TEST gate (exit 2 on NEW no-ops)
+npm run sim -- matrix explain fireball splitting       # one pair: why it works / doesn't / should it
 npm run sim -- sweep progression --geared # the power curve + gear-value column per class
 npm run sim -- run --suite gearvalue --seeds 10        # bare↔geared twins at the bands
 npm run sim -- audit monsters             # stat curves per level band
@@ -95,6 +97,7 @@ human table). Baselines live in `balance/baselines/` and are **committed**.
 | L2 arena | `ttk_parity_*`, `pressure_*`, `duel_*`, `matchup_*`, `gearvalue` suites | Clear feel, survival, per-monster threat, gear value | ~0.2s/episode |
 | L2 matrix | `sweep matchups`, `sweep skills --vs panel:…` | Build/skill × enemy-texture interaction grid | rows × cols × seeds episodes |
 | L2 matrix | `sweep supports` | Skill × support FUNCTION matrix (works / inert / cost-only) | ~0.1–0.3s/pair |
+| L2 gate | `matrix check [--deep]` | Did any pair REGRESS vs the adjudicated ledger? Do working gems hide dead payload lines? | as `sweep supports` (+units × seeds when deep) |
 | L2 curve | `sweep progression [--geared]` | Player power per level band; the gear-value multiplier | classes × levels × 4 × seeds |
 | L3 economy | `audit affixes`, `audit drops` | Item-gen distributions, dead affixes/stats, loot yields per kill | ~ms/item |
 | L3 (future) | zone/XP sims | XP tempo, event pressure, travel economy | seconds |
@@ -221,9 +224,68 @@ wrong; baselines express "don't move things by accident" and are exact.
   legitimate: make it WORK (engine read-site or data payload) or make it
   REFUSE honestly (tags/excludeTags) — a socket that takes the gem and does
   nothing is the only wrong answer.
-- Cost: full coverage is ~55k episodes (hours). Slice with `--support`
+- Cost: full coverage is ~90k episodes (hours). Slice with `--support`
   (one gem catalog-wide) or `--filter` (one skill family), and use
   `--budget N` for breadth-first coverage that states what it skipped.
+- EVERY RUN STREAMS `verdicts.jsonl` (one line per finished pair): a killed
+  run resumes with `--resume <dir>` (same rig only — the flags that change
+  episode content are signature-checked), and concurrent runners split the
+  work with `--shard i/n` (deterministic stride over the shared probe order:
+  disjoint, union-total, each shard still covering every support). `matrix
+  merge <dirA> <dirB> …` unions shard runs into one self-contained coverage
+  picture; verdict conflicts under one rig mean mixed code and exit 2.
+
+**The matrix as a UNIT TEST** (`matrix check` + the committed ledger) — the
+no-op hunt with a ratchet, so it can run like a regression suite:
+- `balance/baselines/support_matrix.json` is THE LEDGER: every known defect
+  pair (`inert` / `cost_only` / `partial`) and every known census suspect,
+  each with a status — `open` (known backlog; presence expected) or
+  `intended` (adjudicated deliberate, note required). It is committed, like
+  the baselines, and rewritten only deliberately.
+- `matrix check [slicing flags]` runs the matrix and diffs: a defect the
+  ledger doesn't know is a NEW finding → exit 2. Known-open rows pass (they
+  are the backlog, not a regression); rows measuring healthy print as
+  RESOLVED; kind changes print as DRIFT. Coverage is honest by construction:
+  a sliced/budgeted check judges only pairs it probed, `partial` rows verify
+  only when the deep lane ran, and rows outside the slice ride through
+  untouched.
+- `matrix check --reconcile` rewrites the ledger from the run (the
+  `baseline write` analog — same commit as the fix, always): new defects
+  enter as `open` with an autonote, resolved rows retire, drifted kinds
+  refresh with status/note/since preserved.
+- `matrix adjudicate <skill> <support> --status intended --note "…"` attaches
+  the DECISION to an observed row ("should this work?" answered in writing);
+  `--status open` re-opens it. Rows are minted by reconcile, never by hand.
+- `matrix ledger` prints the backlog at a glance (kind × status counts,
+  oldest open rows, referential lint against the live registries).
+- `matrix check --known-only` re-probes exactly the ledger's rows — the fast
+  "did anything I know about move?" pass after a data change.
+
+**The deep lane** (`--deep` on `sweep supports`/`matrix check`, always on in
+`matrix explain`) — dead lines hiding inside WORKING gems:
+- Every payload UNIT of a gem (each `mods`/`perLevel` row, each graft field —
+  derived from the engine's compile-checked SupportDef field partition, so a
+  new field is a unit the moment it ships) is masked one-out and re-probed
+  under the full gem's exact probe shape. Masked ≡ full ⇒ that unit did
+  NOTHING on this host: an `effective` pair with dead units is a `partial`
+  defect — "flagged as working, partly doesn't".
+- The blindness rules re-screen each unit IN ISOLATION: leech riding a
+  damage gem reads `unmeasured (blind)`, never a false `dead`. Composition
+  levers (`grantsTags`, `resonance`) are listed but never defect material —
+  they act through other gems by design. `perLevel` rows are invisible at
+  support level 1 (they scale by level−1) — re-run with `--support-level 2+`.
+- Verdict per unit: `dead` / `contributing` / `sole_carrier` (masking it
+  reduces the gem to nothing) / `unmeasured`.
+
+**The forensics lane** (`matrix explain <skill> <support>`) — one pair, the
+whole story, ~1s: the socket-gate trace clause by clause (cross-checked
+against the real gate — `agrees: ✗` means the explainer drifted and the
+probe fails), the crew-boarding picture, the static paper contract
+(effective level, mod fold, threshold unlocks through the real instance
+machinery), unread-payload annotations, blindness rules, the probe shape
+and its reasons, the A/B verdict with moved channels, per-unit attribution,
+and PRESCRIPTIONS — data rules (`PRESCRIPTION_RULES`) mapping each finding
+shape to its legitimate exits. Writes `explain.json` for tooling.
 
 **Actual player builds** — two refs, one seam (`applySavedCharacter`, the
 game's own resume path — exact rolled gear, gem levels, companions):
@@ -277,6 +339,9 @@ a result — you have a coin flip; add seeds instead of arguing.
 | a fingerprint channel | `src/sim/metrics.ts` (`fingerprint()` key) + its lane in `src/sim/compat.ts` `CHANNEL_LANES` |
 | a support-payload read-site | `src/data/graftReadSites.ts` (one row — the validator and the matrix both read it) |
 | a probe shape rule | `src/sim/compat.ts` (`LIVE_PROBE_*`, `ESCORT_HOST_RULES`, `MECHANIC_EVIDENCE`) |
+| a matrix blindness rule | `src/sim/compat.ts` (`BLINDNESS_RULES` — pair AND per-unit screens read it) |
+| a pair-forensics prescription | `src/sim/compat.ts` (`PRESCRIPTION_RULES`) |
+| a matrix defect adjudication | `matrix adjudicate` → `balance/baselines/support_matrix.json` (rows minted by `matrix check --reconcile`, never by hand) |
 | a geared-tier wardrobe | `src/sim/data/builds.ts` (`GEARED_CFG`, or a build with explicit `GearSpec`s) |
 | an economy audit knob | `src/sim/economy.ts` (`ECONOMY_CFG`) |
 | an observation point | `src/engine/tap.ts` (type) + one `SIM_TAP.current?.…` line at the chokepoint — keep the header list honest |

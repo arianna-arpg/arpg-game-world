@@ -4485,6 +4485,13 @@ type AssertAllSupportFieldsClassified<T extends never> = T;
 export type _SupportFieldPartitionCheck =
   AssertAllSupportFieldsClassified<Exclude<keyof SupportDef, ClassifiedSupportField>>;
 
+/** Every payload-bearing SupportDef key — the identity complement, derived
+ *  from the same compile-checked partition above, so a new field joins the
+ *  set the moment it is classified. Observe-only: the support-matrix
+ *  ablation lane (src/sim/compat.ts) derives its mask units from this. */
+export const SUPPORT_PAYLOAD_FIELDS: ReadonlySet<string> =
+  new Set<string>([...MINION_SEAT_BOUND_FIELD_LIST, ...MINION_RIDABLE_FIELD_LIST]);
+
 /** Payload fields on `sup` that demand the player's seat — empty = rides. */
 export function minionSeatBoundFields(sup: SupportDef): string[] {
   return Object.entries(sup)

@@ -45,8 +45,18 @@ and the player, monsters, and minions all act through a single skill pipeline
   `run --suite smoke` after any `src/data/` change; `sweep skills` ranks every
   attack/spell skill at equal investment; `sweep supports` is the SKILL ×
   SUPPORT NO-OP MATRIX (census through the real socket gate + same-seed A/B
-  probes — byte-identical fingerprint = definitive INERT; run a
-  `--support <gem>` slice after any supports.ts change); `sweep progression
+  probes — byte-identical fingerprint = definitive INERT); `matrix check` is
+  that matrix as a UNIT TEST — gated against the committed, adjudicated
+  defect ledger `balance/baselines/support_matrix.json` (exit 2 on no-ops
+  the ledger doesn't know; `--reconcile` rewrites it deliberately;
+  `--shard i/n` + `--resume <dir>` + `matrix merge` let cheap concurrent
+  runners split the ~85k-pair space; `--deep` mask-one-out-ablates payload
+  units inside WORKING gems — dead lines are `partial` defects) and
+  `matrix explain <skill> <gem>` is the per-pair forensics lane (gate
+  trace, static contract, A/B verdict, per-unit attribution, prescriptions);
+  run a `matrix check --support <gem>` slice after any supports.ts change
+  (probe `balance/probe_supportmatrix.ts`, custodian recipe in
+  `.claude/agents/matrix-custodian.md`); `sweep progression
   --geared` prints the per-class power curve with the gear-value column;
   `audit affixes` / `audit drops` are the ECONOMY AUDITS (dead-affix +
   dead-stat detectors, loot yields vs DROP_CFG); `baseline check --suite

@@ -58,7 +58,9 @@ the contract.
 1. ORIENT      npm run sim -- manifest                 # what exists (JSON)
                npm run sim -- audit textures           # which defensive poles are populated
                npm run sim -- sweep supports --static-only   # the compatibility census (free)
+               npm run sim -- matrix ledger            # the adjudicated no-op backlog
 2. HEALTH      npm run sim -- baseline check --suite smoke   # exit 2 = repo already moved; stop and report
+               npm run sim -- matrix check --known-only      # exit 2 = a known pair moved; same
 3. MEASURE     npm run sim -- run --suite <nearest> --seeds 10
                npm run sim -- sweep skills --level <band> --seeds 5 [--filter x]
                npm run sim -- sweep skills --level <band> --vs panel:textures_l8 [--filter x]
@@ -77,19 +79,61 @@ the contract.
 ## The support-matrix pass (the no-op hunt, end to end)
 
 The `sweep supports` matrix answers three questions at once — run it and
-follow up on each bucket differently:
+follow up on each bucket differently. Since the LEDGER landed
+(`balance/baselines/support_matrix.json` — see README "The matrix as a UNIT
+TEST"), the pass has a memory: `matrix check` fails (exit 2) only on
+findings the ledger doesn't know, so the loop below converges instead of
+re-litigating the backlog every run.
 
 **How to run it.**
-- Dev-loop slice: `sweep supports --support <gem>` (one gem × every skill,
-  seconds) or `--filter <skill>` (one skill family × every gem).
-- The full pass: `sweep supports --budget 70000 --out balance/reports/<name>`
-  — ~55k episodes, HOURS; run it in the background (append `> log 2>&1 &`)
-  and read `compat.json`/`report.md` when it lands. Budget-capped runs
-  round-robin across supports and print exactly what they skipped: coverage
-  claims must match the run, never the intention.
-- Everything is deterministic: same seed ⇒ same verdicts. Re-run a single
+- Dev-loop gate (after ANY supports.ts / skills.ts / graftReadSites.ts
+  change): `matrix check --support <gem>` or `--filter <skill>` — seconds,
+  exit 2 = you minted a NEW no-op (or fixed one; RESOLVED rows want a
+  `--reconcile` in the same commit as the fix).
+- Fast standing-backlog recheck: `matrix check --known-only` (probes exactly
+  the ledger's rows).
+- Dev-loop slice without the gate: `sweep supports --support <gem>` /
+  `--filter <skill>` — same probes, triage print, no exit-2.
+- The full pass: hours of episodes — run it SHARDED and RESUMABLE:
+  every run streams `verdicts.jsonl`, so a killed run continues with
+  `--resume <dir>` instead of restarting, and N concurrent runners take
+  `--shard 1/N … N/N` then `matrix merge <dirs…> --check [--reconcile]`.
+  Budget-capped runs round-robin across supports and print exactly what
+  they skipped: coverage claims must match the run, never the intention.
+- Everything is deterministic: same rig (level/seeds/base-seed/durations —
+  the signature resume and merge enforce) ⇒ same verdicts. Re-run a single
   pair after a fix with `--support X --filter Y` and the verdict flip is
   the proof.
+- Per-pair forensics: `matrix explain <skill> <support>` — the gate trace,
+  the static paper contract, the A/B verdict, per-unit ablation, and a
+  PRESCRIPTION naming the legitimate exits. Run it on every new defect
+  before proposing anything.
+- The deep lane (`--deep`): mask-one-out ablation inside EFFECTIVE pairs —
+  dead payload units are `partial` defects ("flagged as working, partly
+  doesn't"). Costs ~units × seeds extra per divergent pair; run it on
+  slices, not the full catalog, until you need it.
+
+**The custodian loop (a cheap-model recipe — Haiku-class is enough).**
+The matrix is deliberately mechanical so an inexpensive agent can hold the
+line concurrently while heavier work happens elsewhere; see also
+`.claude/agents/matrix-custodian.md`:
+```
+1. npm run sim -- matrix ledger                      # the standing backlog
+2. npm run sim -- matrix check --shard i/n --budget <N> --out balance/reports/cust_<i>
+   (or --resume balance/reports/cust_<i> to continue yesterday's shard)
+3. exit 0 → report "clean, coverage X/Y" and stop.
+4. exit 2 → for EACH new defect:
+     npm run sim -- matrix explain <skill> <support>
+     — follow its PRESCRIPTIONS: tag fixes (requiresTags/excludeTags in
+       src/data/supports.ts, honest tags in src/data/skills.ts) are in
+       remit; engine read-site work is NOT — record it instead.
+5. Re-run the exact slice; verdict flips prove fixes. Then
+   matrix check --reconcile (same commit as any fix), and propose
+   adjudications — status 'intended' is a HUMAN sign-off: submit the note,
+   never self-approve it.
+6. Report: coverage, new/resolved/drift counts, fixes applied, sign-offs
+   requested — with the exact commands that reproduce each claim.
+```
 
 **How to follow up (per bucket, in priority order):**
 1. **INERT** (socketed, byte-identical episodes) — a real defect, one of:
@@ -120,6 +164,14 @@ follow up on each bucket differently:
 - An INERT verdict is definitive FOR THAT PROBE — say "inert under the
   dummy/solo probe", not "broken everywhere", unless the static annotation
   proves delivery-scoped death.
+- LEDGER DISCIPLINE: never hand-delete a ledger row to pass a gate — rows
+  retire only through `--reconcile` after the pair measures healthy, in the
+  same commit as the fix. `--status intended` is a human sign-off: propose
+  the note, don't self-approve. A `partial` claim needs the deep lane's
+  evidence (`--deep` / `matrix explain`) — a plain probe can't see units.
+- Rig honesty: verdicts from different rigs (level, seeds, base seed,
+  durations, support level) never mix — resume/merge enforce the signature;
+  don't `--force` past it in a pass you intend to cite.
 - Crew-fit pairs are probed WITH the resonance key; a keyless dormant gem
   is the lever working as designed, never a finding.
 - `raise_spectre`/`revive`-style UNKNOWABLE crews verdict per-episode-body

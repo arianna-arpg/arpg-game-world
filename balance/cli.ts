@@ -28,7 +28,15 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { entryClassId, entryLabel, entryLevel } from '../src/sim/builds';
 import { BUILDS } from '../src/sim/data/builds';
 import { PANELS, expandPanel, type ResolvedTarget } from '../src/sim/data/panels';
-import { COMPAT_CFG, compatCensus, runCompatMatrix, type MatrixResult, type PairProbeResult } from '../src/sim/compat';
+import {
+  COMPAT_CFG, compatCensus, explainPair, makeProbeSession, pairKey, runCompatMatrix,
+  type MatrixOpts, type MatrixResult, type PairDeepResult, type PairExplain, type PairProbeResult,
+} from '../src/sim/compat';
+import {
+  adjudicate, checkLedger, emptyLedger, ledgerToJson, mergeProbed, reconcileLedger,
+  rigMismatches, rigSignatureOf, validateLedger,
+  type LedgerStatus, type ObservedMatrix, type RigSignature, type SupportLedger,
+} from '../src/sim/ledger';
 import { ECONOMY_CFG, auditAffixes, auditLoot, killDropExpectations, unreachableAffixes } from '../src/sim/economy';
 import { gearedBuild, starterBuild } from '../src/sim/data/builds';
 import { STARTER_CLASSES } from '../src/meta/account';
@@ -481,56 +489,175 @@ function sweepSkills(args: Args): void {
   console.log(`\nReport: ${dir}`);
 }
 
-/** THE SKILL × SUPPORT MATRIX (src/sim/compat.ts): census every pair through
- *  the real socket gate, then A/B-probe fitting pairs — bare vs socketed at
- *  the same seed — and classify: effective / cost_only / negligible / INERT
- *  (byte-identical fingerprint). The triage report is the deliverable. */
-function sweepSupports(args: Args): void {
-  const opts = {
+// ------------------------------------------------- the support matrix runs --
+
+/** One option parser for every matrix surface (sweep supports, matrix check)
+ *  — the flags are the vocabulary, shared verbatim. */
+function matrixOptsFrom(args: Args): MatrixOpts {
+  const opts: MatrixOpts = {
     skillFilter: str(args.flags.filter, ''),
     supportFilter: str(args.flags.support, ''),
     level: num(args.flags.level, COMPAT_CFG.level),
-    gemLevel: typeof args.flags['gem-level'] === 'string' ? num(args.flags['gem-level'], 1) : undefined,
     supportLevel: num(args.flags['support-level'], COMPAT_CFG.supportLevel),
-    duration: typeof args.flags.duration === 'string' ? num(args.flags.duration, COMPAT_CFG.dummyDuration) : undefined,
     seeds: num(args.flags.seeds, 1),
     baseSeed: num(args.flags['base-seed'], 0xc0ffee),
     budget: num(args.flags.budget, COMPAT_CFG.budgetEpisodes),
     staticOnly: !!args.flags['static-only'],
+    deep: !!args.flags.deep,
   };
+  if (typeof args.flags['gem-level'] === 'string') opts.gemLevel = num(args.flags['gem-level'], 1);
+  if (typeof args.flags.duration === 'string') opts.duration = num(args.flags.duration, COMPAT_CFG.dummyDuration);
+  const shard = str(args.flags.shard, '');
+  if (shard) {
+    const m = /^(\d+)\/(\d+)$/.exec(shard);
+    if (!m) throw new Error(`--shard wants i/n (e.g. 2/5), got '${shard}'`);
+    opts.shard = { index: Number(m[1]), of: Number(m[2]) };
+  }
+  return opts;
+}
+
+/** The serializable half of MatrixOpts (callbacks and sets stripped) —
+ *  stored in every artifact so a run explains its own rig. */
+function matrixOptsOut(opts: MatrixOpts): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...opts };
+  delete out.onPair;
+  delete out.onDeep;
+  delete out.skipPairs;
+  out.pairs = opts.pairs?.length;
+  return out;
+}
+
+interface ResumeData { rig: RigSignature | null; pairs: PairProbeResult[]; deep: PairDeepResult[] }
+
+/** Read a prior run's verdicts (verdicts.jsonl preferred; compat.json
+ *  fallback) — the resume/merge input. Tolerant line parse: a truncated
+ *  final line (killed run) is exactly the case this exists for. */
+function readRunDir(ref: string): ResumeData {
+  const dir = path.resolve(ref);
+  const jsonl = fs.statSync(dir).isDirectory() ? path.join(dir, 'verdicts.jsonl') : dir;
+  const out: ResumeData = { rig: null, pairs: [], deep: [] };
+  if (fs.existsSync(jsonl)) {
+    for (const line of fs.readFileSync(jsonl, 'utf8').split('\n')) {
+      if (!line.trim()) continue;
+      let row: { kind?: string } & Record<string, unknown>;
+      try { row = JSON.parse(line); } catch { continue; } // truncated tail line
+      if (row.kind === 'header') out.rig = row.rig as RigSignature;
+      else if (row.kind === 'pair') out.pairs.push(row.pair as PairProbeResult);
+      else if (row.kind === 'deep') out.deep.push(row.deep as PairDeepResult);
+    }
+    return out;
+  }
+  const compatJson = path.join(dir, 'compat.json');
+  if (fs.existsSync(compatJson)) {
+    const data = JSON.parse(fs.readFileSync(compatJson, 'utf8')) as {
+      rig?: RigSignature; probed?: PairProbeResult[]; deep?: PairDeepResult[];
+    };
+    out.rig = data.rig ?? null;
+    out.pairs = data.probed ?? [];
+    out.deep = data.deep ?? [];
+    return out;
+  }
+  throw new Error(`no verdicts.jsonl or compat.json under '${ref}'`);
+}
+
+/** Rig guard: verdicts only merge/resume across IDENTICAL probe rigs —
+ *  different rigs answer different questions. --force overrides, loudly. */
+function guardRig(args: Args, mine: RigSignature, theirs: RigSignature | null, what: string): void {
+  if (!theirs) {
+    console.log(`  note: ${what} carries no rig signature (old artifact) — proceeding on trust`);
+    return;
+  }
+  const bad = rigMismatches(mine, theirs);
+  if (!bad.length) return;
+  const msg = `${what} was run under a different rig (${bad.map(k => `${k}: ${String(theirs[k])} vs ${String(mine[k])}`).join(', ')})`;
+  if (args.flags.force) console.log(`  WARNING: ${msg} — --force mixes them anyway`);
+  else throw new Error(`${msg} — match the flags or pass --force`);
+}
+
+interface MatrixRunOut {
+  result: MatrixResult;
+  opts: MatrixOpts;
+  dir: string;
+  /** Fresh + resumed verdicts (what checks and reports consume). */
+  probedAll: PairProbeResult[];
+  deepAll: PairDeepResult[];
+}
+
+/** The one matrix runner: census preview, resume fold-in, incremental
+ *  verdicts.jsonl (every finished pair lands on disk — a killed run resumes
+ *  instead of restarting), artifacts, coverage-honest summary line. */
+function runMatrixToDir(args: Args, opts: MatrixOpts, namePrefix: string): MatrixRunOut {
+  const rig = rigSignatureOf(opts);
+  // Resume: prior verdicts skip re-probing and re-emit into THIS run's
+  // artifacts, so every run directory is self-contained and chain-resumable.
+  const resumeRef = str(args.flags.resume, '');
+  const resumed: ResumeData = resumeRef ? readRunDir(resumeRef) : { rig: null, pairs: [], deep: [] };
+  if (resumeRef) {
+    guardRig(args, rig, resumed.rig, `--resume ${resumeRef}`);
+    console.log(`Resuming: ${resumed.pairs.length} pair verdict(s) + ${resumed.deep.length} deep result(s) carried from ${resumeRef}`);
+    opts.skipPairs = new Set(resumed.pairs.map(p => pairKey(p.skillId, p.supportId)));
+  }
 
   // The census is free — print its shape and the probe bill before running.
-  const census = compatCensus(opts.skillFilter, opts.supportFilter);
+  const census = compatCensus(opts.skillFilter ?? '', opts.supportFilter ?? '');
   const eligible = census.rows.filter(r => r.fit !== 'refused').length;
   console.log(`Census: ${census.skills.length} droppable skill(s) × ${census.supports.length} support(s) = ${census.rows.length} pair(s)`);
   console.log(`  fits host lane: ${census.counts.host} · via crew only: ${census.counts.crew} · refused: ${census.counts.refused}`);
   console.log(`  refused-but-mechanically-affine (tag-hygiene suspects): ${census.counts.suspects}`);
   console.log(`  fitting pairs carrying an unread delivery-scoped payload: ${census.counts.unreadPairs}`);
   if (!opts.staticOnly) {
-    const worst = eligible * opts.seeds + census.skills.length * opts.seeds;
-    console.log(`Probing up to ${eligible} pair(s) × ${opts.seeds} seed(s) (+${census.skills.length} bare baselines) — worst case ${worst} episode(s), budget ${opts.budget}.`);
-    if (worst > opts.budget) {
-      console.log(`  budget covers ~${Math.round((opts.budget / worst) * 100)}% — probes round-robin across supports; narrow with --filter/--support or raise --budget for full coverage.`);
+    const seeds = opts.seeds ?? 1;
+    const scopeGuess = opts.shard ? Math.ceil(eligible / opts.shard.of) : eligible;
+    const worst = scopeGuess * seeds + census.skills.length * seeds;
+    console.log(`Probing up to ${scopeGuess} pair(s)${opts.shard ? ` (shard ${opts.shard.index}/${opts.shard.of})` : ''} × ${seeds} seed(s) (+bare baselines) — worst case ~${worst} episode(s), budget ${opts.budget}.`);
+    if (worst > (opts.budget ?? Infinity)) {
+      console.log(`  budget covers ~${Math.round(((opts.budget ?? 0) / worst) * 100)}% — probes round-robin across supports; narrow with --filter/--support, shard with --shard i/n, or raise --budget.`);
     }
+    if (opts.deep) console.log(`  deep lane ON: divergent pairs additionally bill ~units × seeds episodes each.`);
   }
+
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `${namePrefix}_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const jsonl = path.join(dir, 'verdicts.jsonl');
+  fs.writeFileSync(jsonl, JSON.stringify({ kind: 'header', rig, opts: matrixOptsOut(opts) }) + '\n');
+  for (const p of resumed.pairs) fs.appendFileSync(jsonl, JSON.stringify({ kind: 'pair', pair: p }) + '\n');
+  for (const d of resumed.deep) fs.appendFileSync(jsonl, JSON.stringify({ kind: 'deep', deep: d }) + '\n');
+  opts.onPair = p => fs.appendFileSync(jsonl, JSON.stringify({ kind: 'pair', pair: p }) + '\n');
+  opts.onDeep = d => fs.appendFileSync(jsonl, JSON.stringify({ kind: 'deep', deep: d }) + '\n');
 
   const t0 = Date.now();
   const result = runCompatMatrix(opts, msg => console.log(msg));
   const secs = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`Matrix done in ${secs}s: ${result.probed.length}/${result.eligible} pair(s) probed, ${result.episodesRun} episode(s), ${result.skipped} skipped (budget).`);
+  const merged = mergeProbed([result.probed, resumed.pairs]);
+  if (merged.conflicts.length) {
+    console.error(`  WARNING: ${merged.conflicts.length} verdict conflict(s) between this run and the resume — mixed code or rigs?`);
+  }
+  const probedAll = merged.probed;
+  const deepAll = [...(result.deep ?? []), ...resumed.deep];
+  console.log(`Matrix done in ${secs}s: ${result.probed.length} pair(s) probed fresh + ${result.resumed} resumed`
+    + ` (scope ${result.scope} of ${result.eligible} eligible), ${result.episodesRun} episode(s),`
+    + ` ${result.skipped} budget-skipped${opts.deep ? `, deep ${deepAll.length} pair(s) (+${result.deepSkipped} unaffordable)` : ''}.`);
 
-  // ---- write artifacts ------------------------------------------------------
-  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `compat_supports_${stamp()}`);
-  fs.mkdirSync(dir, { recursive: true });
+  writeMatrixArtifacts(dir, result, opts, rig, probedAll, deepAll);
+  return { result, opts, dir, probedAll, deepAll };
+}
+
+function writeMatrixArtifacts(
+  dir: string, result: MatrixResult, opts: MatrixOpts, rig: RigSignature,
+  probedAll: PairProbeResult[], deepAll: PairDeepResult[],
+): void {
   fs.writeFileSync(path.join(dir, 'compat.json'), JSON.stringify({
-    cfg: result.cfg, opts, counts: result.census.counts,
-    eligible: result.eligible, episodesRun: result.episodesRun, skipped: result.skipped,
-    probed: result.probed,
+    cfg: result.cfg, opts: matrixOptsOut(opts), rig, counts: result.census.counts,
+    eligible: result.eligible, scope: result.scope, resumed: result.resumed,
+    episodesRun: result.episodesRun, skipped: result.skipped, deepSkipped: result.deepSkipped,
+    probed: probedAll,
+    deep: deepAll.length ? deepAll : undefined,
     suspects: result.census.rows.filter(r => r.suspect),
   }, null, 2));
+  const byKey = new Map(probedAll.map(p => [pairKey(p.skillId, p.supportId), p]));
   const csv = ['skill,support,fit,verdict,probe,identical_seeds,d_output_rel,top_moved,unread',
     ...result.census.rows.map(r => {
-      const p = result.probed.find(x => x.skillId === r.skillId && x.supportId === r.supportId);
+      const p = byKey.get(pairKey(r.skillId, r.supportId));
       return [r.skillId, r.supportId, r.fit,
         p?.verdict ?? (r.fit === 'refused' ? (r.suspect ? 'refused_suspect' : 'refused') : 'unprobed'),
         p?.probe ?? '', p ? `${p.identicalSeeds}/${p.seeds}` : '',
@@ -538,14 +665,22 @@ function sweepSupports(args: Args): void {
         (r.unread ?? []).map(u => u.key).join('+')].join(',');
     })].join('\n');
   fs.writeFileSync(path.join(dir, 'census.csv'), csv);
-  fs.writeFileSync(path.join(dir, 'report.md'), compatMarkdown(result));
+  fs.writeFileSync(path.join(dir, 'report.md'), compatMarkdown(result, probedAll, deepAll));
+}
+
+/** THE SKILL × SUPPORT MATRIX (src/sim/compat.ts): census every pair through
+ *  the real socket gate, then A/B-probe fitting pairs — bare vs socketed at
+ *  the same seed — and classify: effective / cost_only / negligible / INERT
+ *  (byte-identical fingerprint). The triage report is the deliverable; the
+ *  LEDGER GATE over the same run is `matrix check`. */
+function sweepSupports(args: Args): void {
+  const opts = matrixOptsFrom(args);
+  const { result, dir, probedAll, deepAll } = runMatrixToDir(args, opts, 'compat_supports');
 
   // ---- console triage -------------------------------------------------------
-  const inert = result.probed.filter(p => p.verdict === 'inert');
-  const costOnly = result.probed.filter(p => p.verdict === 'cost_only');
-  const negligible = result.probed.filter(p => p.verdict === 'negligible');
-  const blind = result.probed.filter(p => p.verdict === 'blind');
-  console.log(`\nVerdicts: effective ${result.probed.filter(p => p.verdict === 'effective').length} · inert ${inert.length} · cost_only ${costOnly.length} · negligible ${negligible.length} · blind ${blind.length}`);
+  const by = (v: string): PairProbeResult[] => probedAll.filter(p => p.verdict === v);
+  const inert = by('inert'), costOnly = by('cost_only');
+  console.log(`\nVerdicts: effective ${by('effective').length} · inert ${inert.length} · cost_only ${costOnly.length} · negligible ${by('negligible').length} · blind ${by('blind').length}`);
   if (inert.length) {
     console.log(`\nINERT pairs (socket accepted, byte-identical episodes — the bug list):`);
     for (const p of inert.slice(0, 25)) {
@@ -558,6 +693,15 @@ function sweepSupports(args: Args): void {
     console.log(`\nCOST-ONLY pairs (tax moved, no observed function — partial no-ops):`);
     for (const p of costOnly.slice(0, 15)) console.log(`  ${p.skillId} + ${p.supportId} (${p.moved[0]?.key ?? '?'} moved)`);
     if (costOnly.length > 15) console.log(`  … ${costOnly.length - 15} more in report.md`);
+  }
+  const partial = deepAll.filter(d => d.units.some(u => u.verdict === 'dead' && !u.unit.compositional));
+  if (partial.length) {
+    console.log(`\nPARTIAL pairs (effective overall, dead unit(s) inside — the deep lane's catch):`);
+    for (const d of partial.slice(0, 15)) {
+      const dead = d.units.filter(u => u.verdict === 'dead' && !u.unit.compositional).map(u => u.unit.key);
+      console.log(`  ${d.skillId} + ${d.supportId} — dead: ${dead.join(', ')}`);
+    }
+    if (partial.length > 15) console.log(`  … ${partial.length - 15} more in report.md`);
   }
   const suspects = result.census.rows.filter(r => r.suspect);
   if (suspects.length) {
@@ -573,17 +717,19 @@ function sweepSupports(args: Args): void {
     }
   }
   console.log(`\nReport: ${dir}`);
+  console.log(`Gate this run against the ledger: npm run sim -- matrix check [same flags]`);
 }
 
-function compatMarkdown(result: MatrixResult): string {
+function compatMarkdown(result: MatrixResult, probedAll: PairProbeResult[], deepAll: PairDeepResult[]): string {
   const L: string[] = [];
-  const probedBy = (v: string) => result.probed.filter(p => p.verdict === v);
+  const probedBy = (v: string) => probedAll.filter(p => p.verdict === v);
   L.push(`# Skill × support interaction matrix`);
   L.push('');
   L.push(`- pairs: ${result.census.rows.length} (${result.census.skills.length} skills × ${result.census.supports.length} supports)`);
   L.push(`- fits: host ${result.census.counts.host} · crew ${result.census.counts.crew} · refused ${result.census.counts.refused} (suspects ${result.census.counts.suspects})`);
-  L.push(`- probed: ${result.probed.length}/${result.eligible} eligible (${result.episodesRun} episodes; ${result.skipped} skipped by budget)`);
-  L.push(`- verdicts: effective ${probedBy('effective').length} · inert ${probedBy('inert').length} · cost_only ${probedBy('cost_only').length} · negligible ${probedBy('negligible').length}`);
+  L.push(`- coverage: ${probedAll.length} verdict(s) held (${result.probed.length} fresh + ${result.resumed} resumed) over scope ${result.scope} of ${result.eligible} eligible — ${result.episodesRun} episodes; ${result.skipped} budget-skipped`);
+  L.push(`- verdicts: effective ${probedBy('effective').length} · inert ${probedBy('inert').length} · cost_only ${probedBy('cost_only').length} · negligible ${probedBy('negligible').length} · blind ${probedBy('blind').length}`);
+  if (deepAll.length) L.push(`- deep lane: ${deepAll.length} pair(s) unit-attributed (${result.deepSkipped} unaffordable)`);
   L.push('');
   const section = (title: string, rows: PairProbeResult[], fmt: (p: PairProbeResult) => string): void => {
     if (!rows.length) return;
@@ -598,6 +744,16 @@ function compatMarkdown(result: MatrixResult): string {
   section('COST-ONLY — tax moved, no observed function (partial no-ops)',
     probedBy('cost_only') as PairProbeResult[],
     p => `- \`${p.skillId}\` + \`${p.supportId}\` — moved: ${p.moved.map(m => m.key).join(', ')}`);
+  const partial = deepAll.filter(d => d.units.some(u => u.verdict === 'dead' && !u.unit.compositional));
+  if (partial.length) {
+    L.push(`## PARTIAL — effective overall, dead payload unit(s) inside (deep lane) (${partial.length})`);
+    L.push('');
+    for (const d of partial) {
+      const dead = d.units.filter(u => u.verdict === 'dead' && !u.unit.compositional);
+      L.push(`- \`${d.skillId}\` + \`${d.supportId}\` — dead: ${dead.map(u => `${u.unit.key} (${u.unit.describe})`).join('; ')}`);
+    }
+    L.push('');
+  }
   section('NEGLIGIBLE — diverged under noise (escalate seeds/duration before claiming)',
     probedBy('negligible') as PairProbeResult[],
     p => `- \`${p.skillId}\` + \`${p.supportId}\``);
@@ -625,6 +781,302 @@ function compatMarkdown(result: MatrixResult): string {
     L.push('');
   }
   return L.join('\n');
+}
+
+// ---------------------------------------------- the matrix ledger commands --
+//
+// The skill × support no-op hunt as a UNIT TEST (src/sim/ledger.ts): the
+// committed ledger holds every ADJUDICATED defect; `matrix check` re-runs a
+// slice and fails (exit 2) on findings not in the ledger; `--reconcile`
+// rewrites the ledger deliberately (the baseline-write analog); `explain`
+// is the per-pair forensics lane; `merge` unions concurrent shard runs.
+
+function ledgerPathFrom(args: Args): string {
+  const flag = str(args.flags.ledger, '');
+  return flag ? path.resolve(flag) : path.join(BASELINES_DIR, 'support_matrix.json');
+}
+
+function loadLedger(p: string, announceMissing: boolean): { ledger: SupportLedger; existed: boolean } {
+  if (!fs.existsSync(p)) {
+    if (announceMissing) console.log(`No ledger at ${p} — every observed defect reads NEW; seed it with --reconcile.`);
+    return { ledger: emptyLedger(), existed: false };
+  }
+  const ledger = JSON.parse(fs.readFileSync(p, 'utf8')) as SupportLedger;
+  const issues = validateLedger(ledger, {
+    skills: new Set(Object.keys(SKILLS)), supports: new Set(Object.keys(SUPPORTS)),
+  });
+  for (const i of issues) console.log(`  ledger lint: ${i}`);
+  return { ledger, existed: true };
+}
+
+function saveLedger(p: string, ledger: SupportLedger): void {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, ledgerToJson(ledger));
+}
+
+function today(): string { return new Date().toISOString().slice(0, 10); }
+
+function cmdMatrix(args: Args): void {
+  const what = args._[1] ?? '';
+  if (what === 'check') matrixCheck(args);
+  else if (what === 'explain') matrixExplain(args);
+  else if (what === 'adjudicate') matrixAdjudicate(args);
+  else if (what === 'merge') matrixMerge(args);
+  else if (what === 'ledger') matrixLedger(args);
+  else throw new Error(`matrix supports 'check', 'explain', 'adjudicate', 'merge' or 'ledger' (got '${what || '∅'}')`);
+}
+
+/** THE GATE: run the matrix (same flags as `sweep supports`), diff against
+ *  the committed ledger, exit 2 on findings the ledger doesn't know. */
+function matrixCheck(args: Args): void {
+  const ledgerPath = ledgerPathFrom(args);
+  const opts = matrixOptsFrom(args);
+  if (args.flags['known-only']) {
+    const { ledger, existed } = loadLedger(ledgerPath, true);
+    if (!existed) throw new Error(`--known-only needs a ledger — seed one with 'matrix check --reconcile' first`);
+    opts.pairs = ledger.pairs.map(r => ({ skill: r.skill, support: r.support }));
+    console.log(`--known-only: probing exactly the ledger's ${opts.pairs.length} defect pair(s).`);
+    if (!opts.deep && ledger.pairs.some(r => r.kind === 'partial')) {
+      console.log(`  note: ledger holds 'partial' rows — without --deep they stay unverified this run.`);
+    }
+  }
+  const run = runMatrixToDir(args, opts, 'matrix_check');
+  const observed: ObservedMatrix = {
+    probed: run.probedAll, census: run.result.census,
+    ...(run.deepAll.length ? { deep: run.deepAll } : {}),
+  };
+  gateAgainstLedger(args, observed, ledgerPath);
+  console.log(`\nReport: ${run.dir}`);
+}
+
+function gateAgainstLedger(args: Args, observed: ObservedMatrix, ledgerPath: string): void {
+  const { ledger, existed } = loadLedger(ledgerPath, true);
+  const check = checkLedger(ledger, observed);
+  console.log(`\nLedger gate — ${existed ? ledgerPath : '(empty baseline, no file yet)'}`);
+  if (check.newDefects.length) {
+    console.log(`NEW DEFECTS (${check.newDefects.length}) — not in the ledger:`);
+    for (const d of check.newDefects.slice(0, 25)) {
+      console.log(`  ${d.kind.padEnd(9)} ${d.skill} + ${d.support} (${d.probe} probe) — ${d.detail}`);
+    }
+    if (check.newDefects.length > 25) console.log(`  … ${check.newDefects.length - 25} more in compat.json`);
+  }
+  if (check.newSuspects.length) {
+    console.log(`NEW SUSPECTS (${check.newSuspects.length}) — refused but mechanically affine, not in the ledger:`);
+    for (const s of check.newSuspects.slice(0, 15)) {
+      console.log(`  ${s.skillId} + ${s.supportId} — ${(s.suspect ?? []).map(x => `wants '${x.tag}' (${x.evidence})`).join('; ')}`);
+    }
+    if (check.newSuspects.length > 15) console.log(`  … ${check.newSuspects.length - 15} more`);
+  }
+  if (check.resolved.length) {
+    console.log(`RESOLVED (${check.resolved.length}) — ledger rows measuring healthy now (retire via --reconcile):`);
+    for (const r of check.resolved.slice(0, 15)) console.log(`  ${r.kind.padEnd(9)} ${r.skill} + ${r.support}`);
+  }
+  if (check.driftedKind.length) {
+    console.log(`KIND DRIFT (${check.driftedKind.length}) — still defective, class moved (refresh via --reconcile):`);
+    for (const d of check.driftedKind.slice(0, 15)) console.log(`  ${d.row.skill} + ${d.row.support}: ${d.row.kind} → ${d.now.kind}`);
+  }
+  console.log(`Known re-confirmed: ${check.knownOpen.length} open · ${check.knownIntended.length} intended`
+    + ` — unverified this run: ${check.unverified.length}`
+    + (check.outOfScope.length ? ` — outside this slice: ${check.outOfScope.length}` : ''));
+  console.log(`Suspects: ${check.newSuspects.length} new · ${check.knownSuspects.length} known · ${check.resolvedSuspects.length} resolved`
+    + (check.outOfScopeSuspects.length ? ` · outside this slice: ${check.outOfScopeSuspects.length}` : ''));
+
+  if (args.flags.reconcile) {
+    const rec = reconcileLedger(ledger, observed, today(), {
+      skills: new Set(Object.keys(SKILLS)), supports: new Set(Object.keys(SUPPORTS)),
+    });
+    saveLedger(ledgerPath, rec.ledger);
+    console.log(`\nLedger reconciled → ${ledgerPath}`);
+    console.log(`  pairs: +${rec.added.length} (open) · −${rec.removed.length} resolved · ~${rec.updated.length} kind-refreshed · total ${rec.ledger.pairs.length}`);
+    console.log(`  suspects: +${rec.addedSuspects.length} · −${rec.removedSuspects.length} · total ${rec.ledger.suspects.length}`);
+    if (rec.added.length) {
+      console.log(`  new rows enter as 'open' — adjudicate deliberate ones:`);
+      console.log(`    npm run sim -- matrix adjudicate <skill> <support> --status intended --note "…"`);
+    }
+  } else if (check.breach) {
+    console.error(`\nGATE: ${check.newDefects.length} new defect(s) + ${check.newSuspects.length} new suspect(s) — exit 2.`);
+    console.error(`  Fix the pairing (or its tags), or record it deliberately: matrix check --reconcile, then adjudicate.`);
+    process.exitCode = 2;
+  } else {
+    console.log(`\nGATE: clean — no new defects, no new suspects.`);
+  }
+}
+
+/** THE FORENSICS LANE: one pair, the whole story — gate trace, static
+ *  expectations, probe shape, A/B verdict, per-unit ablation, prescriptions. */
+function matrixExplain(args: Args): void {
+  const [, , skill, support] = args._;
+  if (!skill || !support) throw new Error(`matrix explain <skill> <support> [--seeds N] [--support-level N] [--duration N] [--static] [--no-deep]`);
+  const probeOpts = {
+    level: num(args.flags.level, COMPAT_CFG.level),
+    supportLevel: num(args.flags['support-level'], COMPAT_CFG.supportLevel),
+    seeds: num(args.flags.seeds, 2),
+    baseSeed: num(args.flags['base-seed'], 0xc0ffee),
+    ...(typeof args.flags['gem-level'] === 'string' ? { gemLevel: num(args.flags['gem-level'], 1) } : {}),
+    ...(typeof args.flags.duration === 'string' ? { duration: num(args.flags.duration, COMPAT_CFG.dummyDuration) } : {}),
+  };
+  const sess = makeProbeSession(probeOpts);
+  const probes = !args.flags.static;
+  const t0 = Date.now();
+  const x = explainPair(sess, skill, support, { probes, deep: probes && !args.flags['no-deep'] });
+  printExplain(x);
+  if (probes) console.log(`\n(${sess.episodesRun} episode(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, ''))
+    : path.join(REPORTS_DIR, `matrix_explain_${idSafe(skill)}__${idSafe(support)}_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'explain.json'), JSON.stringify({ opts: probeOpts, explain: x }, null, 2));
+  console.log(`Dossier: ${dir}`);
+}
+
+function printExplain(x: PairExplain): void {
+  console.log(`\n── ${x.skillId} + ${x.supportId} ${'─'.repeat(Math.max(4, 60 - x.skillId.length - x.supportId.length))}`);
+  const req = x.fit.requires.length
+    ? x.fit.requires.map(r => `${r.tag}${r.present ? '✓' : '✗'}`).join(' ')
+    : (x.fit.openGate ? '(open gate — no requiresTags)' : '—');
+  console.log(`FIT: ${x.fit.fit.toUpperCase()} — requires: ${req} · excludes hit: ${x.fit.excluded.join(',') || '—'} · decomposition agrees: ${x.fit.agrees ? '✓' : '✗ DRIFT — explainer out of sync with the engine gate'}`);
+  const crew = x.fit.crew;
+  if (crew.kind === 'not-rider') console.log(`  crew: gem never rides minions (seat-bound: ${crew.seatBound.join(', ')})`);
+  else if (crew.kind === 'unknowable') console.log(`  crew: unknowable (corpse-raised) — boards anything; fit resolves per-body at raise`);
+  else if (crew.kind === 'skills') console.log(`  crew: serves [${crew.served.join(', ') || '—'}]${crew.refused.length ? ` · refuses [${crew.refused.join(', ')}]` : ''}`);
+  if (x.suspect?.length) {
+    console.log(`  SUSPECT: ${x.suspect.map(s => `skill provably has '${s.tag}' (${s.evidence})`).join('; ')}`);
+  }
+  if (x.staticDelta) {
+    const d = x.staticDelta;
+    console.log(`STATIC: effective level ${d.effLevelBare} → ${d.effLevelSocketed}`
+      + (d.unlockedThresholds.length ? ` — unlocks: ${d.unlockedThresholds.join('; ')}` : ''));
+    for (const m of d.gemMods) console.log(`  · ${m}`);
+  }
+  if (x.unread.length) {
+    console.log(`UNREAD payloads on this delivery (static inert expectation):`);
+    for (const u of x.unread) console.log(`  · '${u.key}' read only at ${u.site}`);
+  }
+  if (x.blindRules.length) {
+    console.log(`BLINDNESS rules matching this pair:`);
+    for (const b of x.blindRules) console.log(`  · ${b}`);
+  }
+  if (x.shape) {
+    console.log(`SHAPE: ${x.shape.probe} probe${x.shape.probeWhy ? ` (${x.shape.probeWhy})` : ''}, ${x.shape.rig} rig${x.shape.rigWhy ? ` (${x.shape.rigWhy})` : ''}${x.shape.withKey ? ', resonance-keyed' : ''}`);
+  }
+  if (x.probe) {
+    console.log(`PROBE: ${x.probe.verdict.toUpperCase()} — ${x.probe.identicalSeeds}/${x.probe.seeds} seed(s) byte-identical, Δoutput ${(100 * x.probe.dOutputRel).toFixed(1)}%`);
+    for (const m of x.probe.moved.slice(0, 6)) {
+      console.log(`  moved: ${m.key}  ${String(typeof m.bare === 'number' ? Math.round((m.bare as number) * 100) / 100 : m.bare)} → ${String(typeof m.pair === 'number' ? Math.round((m.pair as number) * 100) / 100 : m.pair)}`);
+    }
+    if (x.probe.warnings.length) console.log(`  warnings: ${x.probe.warnings.join(' | ')}`);
+  }
+  if (x.deep) {
+    console.log(`DEEP (unit attribution, mask-one-out):`);
+    for (const u of x.deep.units) {
+      const tag = u.verdict === 'dead' ? 'DEAD       ' : u.verdict === 'sole_carrier' ? 'SOLE-CARRY '
+        : u.verdict === 'contributing' ? 'contributes' : 'unmeasured ';
+      console.log(`  ${tag} ${u.unit.key} — ${u.unit.describe}${u.note ? ` (${u.note})` : ''}`);
+    }
+  }
+  if (x.prescriptions.length) {
+    console.log(`PRESCRIPTIONS:`);
+    x.prescriptions.forEach((p, i) => console.log(`  ${i + 1}. ${p}`));
+  }
+}
+
+/** Attach a DECISION to an observed finding (rows are minted by reconcile). */
+function matrixAdjudicate(args: Args): void {
+  const [, , skill, support] = args._;
+  if (!skill || !support) throw new Error(`matrix adjudicate <skill> <support> --status open|intended [--note "…"]`);
+  const status = str(args.flags.status, '');
+  if (status !== 'open' && status !== 'intended') {
+    throw new Error(`--status must be open|intended (got '${status || '∅'}')`);
+  }
+  const p = ledgerPathFrom(args);
+  const { ledger, existed } = loadLedger(p, false);
+  if (!existed) throw new Error(`no ledger at ${p} — seed one with 'matrix check --reconcile' first`);
+  const note = typeof args.flags.note === 'string' ? args.flags.note : undefined;
+  const res = adjudicate(ledger, { skill, support },
+    { status: status as LedgerStatus, ...(note !== undefined ? { note } : {}) });
+  if ('error' in res) throw new Error(res.error);
+  saveLedger(p, ledger);
+  console.log(`Adjudicated (${res.where}): ${skill} + ${support} → ${status}${note ? ` — "${note}"` : ''}`);
+  console.log(`Ledger: ${p}`);
+}
+
+/** Union concurrent shard runs into one coverage picture (and optionally
+ *  gate it). Verdict conflicts under one rig mean mixed code — exit 2. */
+function matrixMerge(args: Args): void {
+  const dirs = args._.slice(2);
+  if (!dirs.length) throw new Error(`matrix merge <runDirA> [runDirB…] [--out dir] [--check] [--reconcile]`);
+  const runs = dirs.map(ref => {
+    if (!fs.existsSync(path.resolve(ref))) throw new Error(`no such run dir: ${ref}`);
+    return { ref, data: readRunDir(ref) };
+  });
+  const baseRig = runs.find(r => r.data.rig)?.data.rig ?? null;
+  if (baseRig) for (const r of runs) guardRig(args, baseRig, r.data.rig, r.ref);
+  const merged = mergeProbed(runs.map(r => r.data.pairs));
+  if (merged.conflicts.length) {
+    console.error(`${merged.conflicts.length} verdict conflict(s) across inputs (one rig should be deterministic — mixed code?):`);
+    for (const c of merged.conflicts.slice(0, 10)) console.error(`  ${c.skill} + ${c.support}: ${c.verdicts.join(' vs ')}`);
+    if (!args.flags.force) process.exitCode = 2;
+  }
+  const seenDeep = new Set<string>();
+  const deepAll: PairDeepResult[] = [];
+  for (const d of runs.flatMap(r => r.data.deep)) {
+    const k = pairKey(d.skillId, d.supportId);
+    if (!seenDeep.has(k)) { seenDeep.add(k); deepAll.push(d); }
+  }
+
+  const census = compatCensus(str(args.flags.filter, ''), str(args.flags.support, ''));
+  const eligible = census.rows.filter(r => r.fit !== 'refused').length;
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `matrix_merge_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const jsonl = path.join(dir, 'verdicts.jsonl');
+  fs.writeFileSync(jsonl, JSON.stringify({ kind: 'header', rig: baseRig, mergedFrom: dirs }) + '\n');
+  for (const p of merged.probed) fs.appendFileSync(jsonl, JSON.stringify({ kind: 'pair', pair: p }) + '\n');
+  for (const d of deepAll) fs.appendFileSync(jsonl, JSON.stringify({ kind: 'deep', deep: d }) + '\n');
+  const result: MatrixResult = {
+    census, probed: merged.probed, eligible, scope: merged.probed.length,
+    resumed: merged.probed.length, episodesRun: 0, skipped: 0, deepSkipped: 0, cfg: COMPAT_CFG,
+  };
+  writeMatrixArtifacts(dir, result, {}, baseRig ?? rigSignatureOf({}), merged.probed, deepAll);
+  console.log(`Merged ${dirs.length} run(s): ${merged.probed.length} pair verdict(s) (${merged.dupes} duplicate(s) folded), ${deepAll.length} deep result(s) — coverage ${merged.probed.length}/${eligible} eligible.`);
+  console.log(`Merged report: ${dir} (self-contained — resumable and re-mergeable)`);
+
+  if (args.flags.check || args.flags.reconcile) {
+    const observed: ObservedMatrix = {
+      probed: merged.probed, census, ...(deepAll.length ? { deep: deepAll } : {}),
+    };
+    gateAgainstLedger(args, observed, ledgerPathFrom(args));
+  }
+}
+
+/** The ledger at a glance: counts by kind × status, oldest open rows, lint. */
+function matrixLedger(args: Args): void {
+  const p = ledgerPathFrom(args);
+  const { ledger, existed } = loadLedger(p, false);
+  if (!existed) { console.log(`No ledger at ${p} yet — seed with 'matrix check --reconcile'.`); return; }
+  if (args.flags.json) { console.log(JSON.stringify(ledger, null, 2)); return; }
+  console.log(`Support-matrix ledger — ${p}`);
+  console.log(`  pair rows: ${ledger.pairs.length}`);
+  for (const k of ['inert', 'cost_only', 'partial'] as const) {
+    const open = ledger.pairs.filter(r => r.kind === k && r.status === 'open').length;
+    const intended = ledger.pairs.filter(r => r.kind === k && r.status === 'intended').length;
+    if (open || intended) console.log(`    ${k.padEnd(10)} ${String(open).padStart(5)} open · ${intended} intended`);
+  }
+  const susOpen = ledger.suspects.filter(r => r.status === 'open').length;
+  console.log(`  suspects:  ${ledger.suspects.length} (${susOpen} open · ${ledger.suspects.length - susOpen} intended)`);
+  const oldest = ledger.pairs.filter(r => r.status === 'open' && r.since)
+    .sort((a, b) => (a.since! < b.since! ? -1 : 1));
+  if (oldest.length) {
+    console.log(`  oldest open:`);
+    for (const r of oldest.slice(0, 5)) console.log(`    ${r.since}  ${r.kind.padEnd(9)} ${r.skill} + ${r.support}`);
+  }
+  const issues = validateLedger(ledger, {
+    skills: new Set(Object.keys(SKILLS)), supports: new Set(Object.keys(SUPPORTS)),
+  });
+  if (issues.length) {
+    console.log(`  lint (${issues.length}):`);
+    for (const i of issues.slice(0, 10)) console.log(`    - ${i}`);
+  } else {
+    console.log(`  lint: clean`);
+  }
 }
 
 function sweepMatchups(args: Args): void {
@@ -959,7 +1411,18 @@ const HELP = `Hollow Wake balance harness
   sweep     matchups --build <id|save:ref> (--panel <id> | --targets id[:lvl],…)
             [--level N] [--seeds N] [--duration N]    (one build across a target panel)
   sweep     supports [--filter skill] [--support substr] [--seeds N] [--budget N]
-            [--static-only] [--level N]               (skill × support no-op matrix)
+            [--static-only] [--level N] [--deep] [--shard i/n] [--resume dir]
+            (skill × support no-op matrix; verdicts.jsonl streams — resumable)
+  matrix    check    [sweep-supports flags] [--known-only] [--reconcile] [--ledger p]
+            (the no-op UNIT-TEST gate: exit 2 on defects the ledger doesn't know;
+             --reconcile rewrites balance/baselines/support_matrix.json deliberately)
+  matrix    explain  <skill> <support> [--seeds N] [--support-level N] [--static] [--no-deep]
+            (one pair, the whole story: gate trace, A/B verdict, per-unit ablation,
+             prescriptions — the "why doesn't this work / should it" lane)
+  matrix    adjudicate <skill> <support> --status open|intended [--note text]
+  matrix    merge    <runDirA> [runDirB…] [--out dir] [--check] [--reconcile]
+            (union concurrent shard runs into one coverage picture)
+  matrix    ledger   [--json]               (the committed defect backlog at a glance)
   sweep     progression [--classes a,b] [--levels 1,5,10,20] [--geared] [--seeds N]
             (power curve per class; --geared adds the gear-value column)
   audit     monsters [--levels 1,5,10,20,40] [--filter substr]
@@ -985,6 +1448,7 @@ function main(): void {
     registerPlayerBuilds();
     if (cmd === 'run') cmdRun(args);
     else if (cmd === 'sweep') cmdSweep(args);
+    else if (cmd === 'matrix') cmdMatrix(args);
     else if (cmd === 'audit') cmdAudit(args);
     else if (cmd === 'manifest') cmdManifest();
     else if (cmd === 'compare') cmdCompare(args);

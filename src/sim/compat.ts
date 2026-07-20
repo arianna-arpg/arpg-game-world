@@ -39,10 +39,11 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { unreadPayloadRows } from '../data/graftReadSites';
 import {
-  crewSkillsServed, makeSkillInstance, summonCrewOf, supportFitsInst,
+  SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel, makeSkillInstance,
+  minionSeatBoundFields, summonCrewOf, supportFitsInst, supportRidesMinions,
   type SkillDef, type SupportDef,
 } from '../engine/skills';
-import type { SkillTag } from '../engine/stats';
+import type { Modifier, SkillTag } from '../engine/stats';
 import { CLASSES } from '../data/classes';
 import { gemLevelAt } from './data/builds';
 import { runScenario } from './runner';
@@ -143,6 +144,23 @@ export interface CensusResult {
 
 const skillLookup = (id: string): SkillDef | undefined => SKILLS[id];
 
+/** The canonical pair key every matrix surface shares (ledger, resume files,
+ *  shard bookkeeping): `skill|support`. */
+export const pairKey = (skill: string, support: string): string => `${skill}|${support}`;
+
+/** Refused-pair mechanical-affinity screen. Exclusion-tag refusals are
+ *  deliberate design; only tag-ABSENCE refusals with mechanical proof are
+ *  suspects. Shared by the census and the pair dossier — one truth. */
+export function suspectEvidence(def: SkillDef, sup: SupportDef): { tag: string; evidence: string }[] | undefined {
+  const suspect: { tag: string; evidence: string }[] = [];
+  for (const t of sup.requiresTags ?? []) {
+    const ev = MECHANIC_EVIDENCE.find(e => e.tag === t && e.has(def));
+    if (ev) suspect.push({ tag: t, evidence: ev.evidence });
+  }
+  const excluded = (sup.excludeTags ?? []).some(t => def.tags.includes(t));
+  return suspect.length && !excluded ? suspect : undefined;
+}
+
 /** The whole catalog through the real gate. `skillFilter`/`supportFilter`
  *  narrow by substring (the CLI's --filter/--support). */
 export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult {
@@ -168,15 +186,8 @@ export function compatCensus(skillFilter = '', supportFilter = ''): CensusResult
       const row: CensusRow = { skillId, supportId, fit: host ? 'host' : viaCrew ? 'crew' : 'refused' };
       if (row.fit === 'refused') {
         counts.refused++;
-        const suspect: { tag: string; evidence: string }[] = [];
-        for (const t of sup.requiresTags ?? []) {
-          const ev = MECHANIC_EVIDENCE.find(e => e.tag === t && e.has(def));
-          if (ev) suspect.push({ tag: t, evidence: ev.evidence });
-        }
-        // Exclusion-tag refusals are deliberate design; only tag-ABSENCE
-        // refusals with mechanical proof are suspects.
-        const excluded = (sup.excludeTags ?? []).some(t => def.tags.includes(t));
-        if (suspect.length && !excluded) { row.suspect = suspect; counts.suspects++; }
+        const suspect = suspectEvidence(def, sup);
+        if (suspect) { row.suspect = suspect; counts.suspects++; }
       } else {
         counts[row.fit]++;
         const unread = unreadPayloadRows(sup, def, skillLookup)
@@ -567,6 +578,16 @@ const outputDamage = (fp: Record<string, number | string>): number =>
  *  collector, so JSON.stringify is already canonical). */
 const fpKey = (fp: Record<string, number | string>): string => JSON.stringify(fp);
 
+/** Seed-wise fingerprint equality — the deep lane's masked-vs-full and
+ *  masked-vs-bare oracles ride the same hash the pair verdict does. */
+const identicalEps = (a: EpisodeResult[], b: EpisodeResult[]): boolean => {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    if (fpKey(a[i].fingerprint) !== fpKey(b[i].fingerprint)) return false;
+  }
+  return true;
+};
+
 export function classifyPair(
   bare: EpisodeResult[], pair: EpisodeResult[],
 ): Pick<PairProbeResult, 'verdict' | 'identicalSeeds' | 'moved' | 'dOutputRel'> {
@@ -623,36 +644,51 @@ export interface MatrixOpts extends ProbeOpts {
   budget?: number;
   /** Skip runtime probes entirely (census only). */
   staticOnly?: boolean;
+  /** 1-based deterministic stride over the probe order: this run takes pairs
+   *  where (orderIndex % of) === (index − 1). Shards are disjoint and union
+   *  to the whole order — the lane for cheap concurrent runners. */
+  shard?: { index: number; of: number };
+  /** Pair keys (pairKey) whose verdicts a resume already carries — skipped
+   *  here; the CLI folds the carried verdicts back into the artifacts. */
+  skipPairs?: ReadonlySet<string>;
+  /** Explicit allow-list (ledger rechecks): only these pairs probe. */
+  pairs?: { skill: string; support: string }[];
+  /** THE DEEP LANE: ablation-probe every EFFECTIVE/COST_ONLY pair's payload
+   *  units (mask-one-out) to catch dead lines hiding inside working gems. */
+  deep?: boolean;
+  /** Per-pair hook — the CLI streams verdicts to verdicts.jsonl so a killed
+   *  run resumes instead of restarting. */
+  onPair?: (p: PairProbeResult) => void;
+  onDeep?: (d: PairDeepResult) => void;
 }
 
 export interface MatrixResult {
   census: CensusResult;
   probed: PairProbeResult[];
-  /** Pairs eligible for probing (fit host|crew) vs actually probed. */
+  /** Deep (ablation) results — present only when the deep lane ran. */
+  deep?: PairDeepResult[];
+  /** Census-wide eligible pairs (fit host|crew) — the catalog truth. */
   eligible: number;
+  /** Pairs THIS run was responsible for after pairs/shard slicing. */
+  scope: number;
+  /** Scope pairs skipped because a resume already carried their verdicts. */
+  resumed: number;
   episodesRun: number;
+  /** Scope pairs left unprobed by the budget. */
   skipped: number;
+  /** Divergent pairs the deep lane could not afford under the budget. */
+  deepSkipped: number;
   cfg: typeof COMPAT_CFG;
 }
 
-/** Run the matrix: census always; probes round-robin across supports until
- *  the budget spends. `onProgress` narrates (the CLI passes console.log). */
-export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => void): MatrixResult {
-  const census = compatCensus(opts.skillFilter ?? '', opts.supportFilter ?? '');
-  const seeds = Math.max(1, opts.seeds ?? 1);
-  const baseSeed = opts.baseSeed ?? 0xc0ffee;
-  const budget = opts.budget ?? COMPAT_CFG.budgetEpisodes;
-
-  const eligibleRows = census.rows.filter(r => r.fit !== 'refused');
-  const result: MatrixResult = {
-    census, probed: [], eligible: eligibleRows.length, episodesRun: 0, skipped: 0, cfg: COMPAT_CFG,
-  };
-  if (opts.staticOnly) { result.skipped = eligibleRows.length; return result; }
-
-  // Round-robin across supports so a budget slice still covers every support
-  // with SOME skills, rather than exhausting the alphabet's head.
+/** The budget-fair probe order: round-robin across supports so a budget or
+ *  shard slice still covers every support with SOME skills, rather than
+ *  exhausting the alphabet's head. Pure function of the census — every
+ *  shard derives the SAME order, which is what makes stride-sharding sound. */
+export function probeOrder(census: CensusResult): CensusRow[] {
   const bySupport = new Map<string, CensusRow[]>();
-  for (const r of eligibleRows) {
+  for (const r of census.rows) {
+    if (r.fit === 'refused') continue;
     const list = bySupport.get(r.supportId) ?? [];
     list.push(r);
     bySupport.set(r.supportId, list);
@@ -662,68 +698,552 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
   for (let i = 0; queues.some(q => i < q.length); i++) {
     for (const q of queues) if (i < q.length) ordered.push(q[i]);
   }
+  return ordered;
+}
 
-  // Bare baselines are shared per (skill × probe shape) — cached on first
-  // need, keyed so a support-forced live/escort pair diffs against a bare
-  // of the SAME shape (resonance-keyed crew probes included).
-  const bareCache = new Map<string, EpisodeResult[]>();
-  const bareFor = (skillId: string, probe: 'dummy' | 'live', rig: 'solo' | 'escort', withKey: boolean): EpisodeResult[] => {
-    const key = `${skillId}:${probe}:${rig}:${withKey ? 'keyed' : 'bare'}`;
-    let eps = bareCache.get(key);
-    if (!eps) {
-      const scen = probeScenario(skillId, null, opts, { probe, rig, withKey });
-      eps = runScenario(scen, { seeds, baseSeed }).episodes;
-      result.episodesRun += eps.length;
-      bareCache.set(key, eps);
-    }
-    return eps;
+/** Mutable probe-run state shared by the matrix loop, the deep lane, and the
+ *  pair dossier: option resolution, the episode meter, and the bare-baseline
+ *  cache (keyed by skill × probe shape so a forced-shape pair diffs against
+ *  a bare of the SAME shape). */
+export interface ProbeSession {
+  opts: ProbeOpts;
+  seeds: number;
+  baseSeed: number;
+  supportLevel: number;
+  episodesRun: number;
+  bareCache: Map<string, EpisodeResult[]>;
+}
+
+export function makeProbeSession(opts: ProbeOpts): ProbeSession {
+  return {
+    opts,
+    seeds: Math.max(1, opts.seeds ?? 1),
+    baseSeed: opts.baseSeed ?? 0xc0ffee,
+    supportLevel: opts.supportLevel ?? COMPAT_CFG.supportLevel,
+    episodesRun: 0,
+    bareCache: new Map(),
   };
+}
+
+export function bareEpisodesFor(
+  sess: ProbeSession, skillId: string,
+  probe: 'dummy' | 'live', rig: 'solo' | 'escort', withKey: boolean,
+): EpisodeResult[] {
+  const key = `${skillId}:${probe}:${rig}:${withKey ? 'keyed' : 'bare'}`;
+  let eps = sess.bareCache.get(key);
+  if (!eps) {
+    const scen = probeScenario(skillId, null, sess.opts, { probe, rig, withKey });
+    eps = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed }).episodes;
+    sess.episodesRun += eps.length;
+    sess.bareCache.set(key, eps);
+  }
+  return eps;
+}
+
+/** The shape a pair probes under — derived once, quoted in reports, and
+ *  PINNED across the deep lane's masked variants so every run compares. */
+export interface PairShape {
+  probe: 'dummy' | 'live';
+  probeWhy?: string;
+  rig: 'solo' | 'escort';
+  rigWhy?: string;
+  withKey: boolean;
+}
+
+export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew'): PairShape {
+  const probe = probeKindFor(def, sup);
+  const rig = rigModeFor(def, sup);
+  // Crew-fit pairs test the BOARDED behavior: the resonance key rides both
+  // runs (gated boarding is the shipping mode), so the delta is the gem's
+  // crew contribution — a keyless dormant gem is design, not a finding.
+  const withKey = fit === 'crew' && !!resonanceKeyId() && !sup.resonance;
+  const shape: PairShape = { probe: probe.kind, rig: rig.mode, withKey };
+  if (probe.why) shape.probeWhy = probe.why;
+  if (rig.why) shape.rigWhy = rig.why;
+  return shape;
+}
+
+export interface PairProbeRun {
+  result: PairProbeResult;
+  bareEps: EpisodeResult[];
+  pairEps: EpisodeResult[];
+  shape: PairShape;
+}
+
+/** One pair, end to end: shape, shape-matched bare baseline, socketed run,
+ *  classification, blindness screen. The matrix loop, the deep lane and the
+ *  dossier all call THIS — one probe path, three consumers. */
+export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
+  if (row.fit === 'refused') {
+    throw new Error(`compat: probePair on refused pair ${row.skillId} + ${row.supportId}`);
+  }
+  const def = SKILLS[row.skillId];
+  const sup = SUPPORTS[row.supportId];
+  const shape = pairShapeFor(def, sup, row.fit);
+  const bareEps = bareEpisodesFor(sess, row.skillId, shape.probe, shape.rig, shape.withKey);
+  const pairScen = probeScenario(row.skillId,
+    { id: row.supportId, level: sess.supportLevel }, sess.opts, { withKey: shape.withKey });
+  const { episodes: pairEps } = runScenario(pairScen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
+  sess.episodesRun += pairEps.length;
+  const cls = classifyPair(bareEps, pairEps);
+  // A known-blind pairing may LOOK inert/negligible under this probe —
+  // report it as unmeasured instead of minting a false bug.
+  const blind = BLINDNESS_RULES.find(r => r.when(def, sup));
+  if (blind && (cls.verdict === 'inert' || cls.verdict === 'negligible')) {
+    cls.verdict = 'blind';
+  }
+  const warnings = [...new Set([...bareEps, ...pairEps].flatMap(e => e.warnings))];
+  const result: PairProbeResult = {
+    skillId: row.skillId,
+    supportId: row.supportId,
+    fit: row.fit,
+    probe: shape.probe,
+    keyed: shape.withKey || undefined,
+    verdict: cls.verdict,
+    identicalSeeds: cls.identicalSeeds,
+    seeds: sess.seeds,
+    moved: cls.moved,
+    dOutputRel: Math.round(cls.dOutputRel * 1000) / 1000,
+    unread: row.unread,
+    warnings,
+  };
+  return { result, bareEps, pairEps, shape };
+}
+
+/** Run the matrix: census always; probes in the shared probe order until the
+ *  budget spends. `onProgress` narrates (the CLI passes console.log). */
+export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => void): MatrixResult {
+  const census = compatCensus(opts.skillFilter ?? '', opts.supportFilter ?? '');
+  const sess = makeProbeSession(opts);
+  const budget = opts.budget ?? COMPAT_CFG.budgetEpisodes;
+  const eligible = census.rows.filter(r => r.fit !== 'refused').length;
+
+  let ordered = probeOrder(census);
+  if (opts.pairs) {
+    const allow = new Set(opts.pairs.map(p => pairKey(p.skill, p.support)));
+    ordered = ordered.filter(r => allow.has(pairKey(r.skillId, r.supportId)));
+  }
+  if (opts.shard) {
+    const { index, of } = opts.shard;
+    if (!(Number.isInteger(index) && Number.isInteger(of) && of >= 1 && index >= 1 && index <= of)) {
+      throw new Error(`compat: bad shard ${index}/${of} — want a 1-based index ≤ of`);
+    }
+    ordered = ordered.filter((_, i) => i % of === index - 1);
+  }
+
+  const deepResults: PairDeepResult[] = [];
+  const result: MatrixResult = {
+    census, probed: [], eligible, scope: ordered.length, resumed: 0,
+    episodesRun: 0, skipped: 0, deepSkipped: 0, cfg: COMPAT_CFG,
+  };
+  if (opts.staticOnly) { result.skipped = ordered.length; return result; }
 
   let lastNote = 0;
   for (const row of ordered) {
+    if (opts.skipPairs?.has(pairKey(row.skillId, row.supportId))) { result.resumed++; continue; }
     // Budget check BEFORE starting a pair (a bare baseline may also bill).
-    const worstCase = seeds * 2;
-    if (result.episodesRun + worstCase > budget) { result.skipped++; continue; }
-    const def = SKILLS[row.skillId];
-    const sup = SUPPORTS[row.supportId];
-    const probe = probeKindFor(def, sup);
-    const rig = rigModeFor(def, sup);
-    // Crew-fit pairs test the BOARDED behavior: the resonance key rides both
-    // runs (gated boarding is the shipping mode), so the delta is the gem's
-    // crew contribution — a keyless dormant gem is design, not a finding.
-    const withKey = row.fit === 'crew' && !!resonanceKeyId() && !sup.resonance;
-    const bare = bareFor(row.skillId, probe.kind, rig.mode, withKey);
-    const pairScen = probeScenario(row.skillId,
-      { id: row.supportId, level: opts.supportLevel ?? COMPAT_CFG.supportLevel }, opts, { withKey });
-    const { episodes: pairEps } = runScenario(pairScen, { seeds, baseSeed });
-    result.episodesRun += pairEps.length;
-    const cls = classifyPair(bare, pairEps);
-    // A known-blind pairing may LOOK inert/negligible under this probe —
-    // report it as unmeasured instead of minting a false bug.
-    const blind = BLINDNESS_RULES.find(r => r.when(def, sup));
-    if (blind && (cls.verdict === 'inert' || cls.verdict === 'negligible')) {
-      cls.verdict = 'blind';
+    const worstCase = sess.seeds * 2;
+    if (sess.episodesRun + worstCase > budget) { result.skipped++; continue; }
+    const run = probePair(sess, row);
+    result.probed.push(run.result);
+    opts.onPair?.(run.result);
+    // THE DEEP LANE rides the same loop: divergent pairs get their payload
+    // units attributed while the full-gem episodes are still in hand.
+    if (opts.deep && (run.result.verdict === 'effective' || run.result.verdict === 'cost_only')) {
+      const runnable = ablationUnits(SUPPORTS[row.supportId])
+        .filter(u => !(unitLevelScaled(u) && sess.supportLevel <= 1)).length;
+      if (sess.episodesRun + runnable * sess.seeds > budget) {
+        result.deepSkipped++;
+      } else {
+        const d = deepProbePair(sess, row, run);
+        deepResults.push(d);
+        opts.onDeep?.(d);
+      }
     }
-    const warnings = [...new Set([...bare, ...pairEps].flatMap(e => e.warnings))];
-    result.probed.push({
-      skillId: row.skillId,
-      supportId: row.supportId,
-      fit: row.fit as 'host' | 'crew',
-      probe: probe.kind,
-      keyed: withKey || undefined,
-      verdict: cls.verdict,
-      identicalSeeds: cls.identicalSeeds,
-      seeds,
-      moved: cls.moved,
-      dOutputRel: Math.round(cls.dOutputRel * 1000) / 1000,
-      unread: row.unread,
-      warnings,
-    });
-    if (onProgress && result.episodesRun - lastNote >= 250) {
-      lastNote = result.episodesRun;
-      onProgress(`  … ${result.probed.length}/${eligibleRows.length} pairs probed (${result.episodesRun} episodes)`);
+    if (onProgress && sess.episodesRun - lastNote >= 250) {
+      lastNote = sess.episodesRun;
+      onProgress(`  … ${result.probed.length}/${result.scope} pairs probed (${sess.episodesRun} episodes)`);
     }
   }
-  result.skipped = eligibleRows.length - result.probed.length;
+  result.episodesRun = sess.episodesRun;
+  if (opts.deep) result.deep = deepResults;
   return result;
+}
+
+// -------------------------------------------------------- the fit explainer --
+
+export interface FitTagCheck { tag: string; present: boolean }
+
+/** WHY a pair fits or refuses, clause by clause. The verdicts themselves come
+ *  from the REAL gate functions; the decomposition reads the same def fields
+ *  the gate reads, and `agrees` re-derives the boolean from the decomposition
+ *  as a drift tripwire — if the engine gate ever grows a clause this module
+ *  doesn't narrate, `agrees` goes false and the probe fails loudly. */
+export interface FitExplain {
+  fit: 'host' | 'crew' | 'refused';
+  /** requiresTags vs the BARE instance's tags (census scope: no composed gems). */
+  requires: FitTagCheck[];
+  /** excludeTags that HIT (any hit refuses). */
+  excluded: string[];
+  /** No requiresTags at all — the gem fits anything not excluded. */
+  openGate: boolean;
+  crew:
+    | { kind: 'none' }
+    | { kind: 'not-rider'; seatBound: string[] }
+    | { kind: 'unknowable' }
+    | { kind: 'skills'; served: string[]; refused: string[] };
+  agrees: boolean;
+}
+
+export function explainFit(def: SkillDef, sup: SupportDef): FitExplain {
+  const inst = makeSkillInstance(def, 1, 3);
+  const host = supportFitsInst(sup, inst);
+  const tags = def.tags as readonly string[];
+  const requires = (sup.requiresTags ?? []).map(t => ({ tag: t as string, present: tags.includes(t) }));
+  const excluded = (sup.excludeTags ?? []).filter(t => tags.includes(t)).map(t => t as string);
+  const openGate = !(sup.requiresTags?.length);
+
+  const crewOf = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
+    id => MONSTERS[id], id => SKILLS[id]);
+  let crew: FitExplain['crew'] = { kind: 'none' };
+  let crewFits = false;
+  if (crewOf) {
+    if (!supportRidesMinions(sup)) {
+      crew = { kind: 'not-rider', seatBound: minionSeatBoundFields(sup) };
+    } else {
+      const served = crewSkillsServed(sup, inst, crewOf);
+      crewFits = served !== null;
+      if (served === 'unknowable') crew = { kind: 'unknowable' };
+      else if (crewOf === 'unknowable') crew = { kind: 'unknowable' };
+      else {
+        const servedIds = (served ?? []).map(d => d.id);
+        crew = {
+          kind: 'skills',
+          served: servedIds,
+          refused: crewOf.map(d => d.id).filter(id => !servedIds.includes(id)),
+        };
+      }
+    }
+  }
+  const fit: FitExplain['fit'] = host ? 'host' : crewFits ? 'crew' : 'refused';
+  // Drift tripwire: re-derive the host verdict from the decomposition.
+  const expectHost = excluded.length ? false : (openGate || requires.some(r => r.present));
+  return { fit, requires, excluded, openGate, crew, agrees: expectHost === host };
+}
+
+// --------------------------------------------------------- the ablation lane --
+
+/** One maskable PAYLOAD UNIT of a support: a mods row, a perLevel row, or a
+ *  structured graft field. Derived from the engine's own compile-checked
+ *  field partition (SUPPORT_PAYLOAD_FIELDS) — a new SupportDef field becomes
+ *  a unit the moment the partition classifies it, no registry here to tend. */
+export interface AblationUnit {
+  key: string;                        // 'mods[0]' | 'perLevel[1]' | field name
+  kind: 'mod' | 'perLevel' | 'field';
+  idx?: number;                       // mods/perLevel row index
+  /** Loadout-time composition levers (grantsTags, resonance): they act
+   *  through OTHER gems, so single-gem deadness is design, not defect —
+   *  excluded from partial-defect derivation, still listed for the dossier. */
+  compositional?: boolean;
+  describe: string;
+}
+
+export const ABLATION_COMPOSITIONAL_FIELDS: ReadonlySet<string> = new Set(['grantsTags', 'resonance']);
+
+/** Units whose whole magnitude scales with (support level − 1) — invisible
+ *  at the probe's default gem level 1; the dossier says how to see them. */
+export const unitLevelScaled = (u: AblationUnit): boolean =>
+  u.kind === 'perLevel' || u.key === 'levelBonusPer';
+
+const describeMod = (m: Modifier): string =>
+  `${m.kind} ${m.value} ${m.stat}`
+  + (m.fromStat ? ` from ${m.fromStat}` : '')
+  + (m.gauge ? ` per '${m.gauge}'` : '')
+  + (m.when ? ` when '${m.when}'` : '')
+  + (m.tags?.length ? ` [${m.tags.join(',')}]` : '');
+
+export function ablationUnits(sup: SupportDef): AblationUnit[] {
+  const units: AblationUnit[] = [];
+  sup.mods.forEach((m, i) =>
+    units.push({ key: `mods[${i}]`, kind: 'mod', idx: i, describe: describeMod(m) }));
+  (sup.perLevel ?? []).forEach((m, i) =>
+    units.push({ key: `perLevel[${i}]`, kind: 'perLevel', idx: i, describe: describeMod(m) }));
+  for (const k of Object.keys(sup)) {
+    if (k === 'mods' || k === 'perLevel' || !SUPPORT_PAYLOAD_FIELDS.has(k)) continue;
+    if ((sup as unknown as Record<string, unknown>)[k] === undefined) continue;
+    units.push({
+      key: k, kind: 'field',
+      ...(ABLATION_COMPOSITIONAL_FIELDS.has(k) ? { compositional: true } : {}),
+      describe: `graft field '${k}'`,
+    });
+  }
+  return units;
+}
+
+/** The support MINUS one unit — never mutates the original. Identity and
+ *  socket-gate fields always survive, so every variant fits exactly where
+ *  the real gem fits. */
+export function maskSupportUnit(sup: SupportDef, unit: AblationUnit, id: string): SupportDef {
+  const clone: SupportDef = { ...sup, id, mods: [...sup.mods] };
+  if (sup.perLevel) clone.perLevel = [...sup.perLevel];
+  if (unit.kind === 'mod') clone.mods = sup.mods.filter((_, i) => i !== unit.idx);
+  else if (unit.kind === 'perLevel') clone.perLevel = (sup.perLevel ?? []).filter((_, i) => i !== unit.idx);
+  else delete (clone as unknown as Record<string, unknown>)[unit.key];
+  return clone;
+}
+
+/** Identity + exactly ONE unit — the blindness screen re-evaluates each unit
+ *  in isolation through the same BLINDNESS_RULES the pair verdict uses. */
+export function soloSupportUnit(sup: SupportDef, unit: AblationUnit, id: string): SupportDef {
+  const solo: SupportDef = {
+    id, name: sup.name, description: sup.description, color: sup.color,
+    weight: sup.weight, mods: [],
+  };
+  if (sup.requiresTags) solo.requiresTags = sup.requiresTags;
+  if (sup.excludeTags) solo.excludeTags = sup.excludeTags;
+  if (unit.kind === 'mod') solo.mods = [sup.mods[unit.idx!]];
+  else if (unit.kind === 'perLevel') solo.perLevel = [(sup.perLevel ?? [])[unit.idx!]];
+  else (solo as unknown as Record<string, unknown>)[unit.key] = (sup as unknown as Record<string, unknown>)[unit.key];
+  return solo;
+}
+
+export interface UnitProbeResult {
+  unit: AblationUnit;
+  /** dead: masked ≡ full — removing it changed nothing on this host.
+   *  sole_carrier: masked ≡ bare — this unit IS the gem's whole function.
+   *  contributing: masked differs from both.
+   *  unmeasured: level-scaled at level 1, blind in isolation, or the pair
+   *  itself never diverged — attribution has nothing to attribute. */
+  verdict: 'dead' | 'contributing' | 'sole_carrier' | 'unmeasured';
+  note?: string;
+  /** Channels separating the masked run from the FULL run — the unit's
+   *  measured contribution (empty for dead/unmeasured). */
+  movedVsFull: ChannelDelta[];
+}
+
+export interface PairDeepResult {
+  skillId: string;
+  supportId: string;
+  fit: 'host' | 'crew';
+  probe: 'dummy' | 'live';
+  keyed?: true;
+  seeds: number;
+  pairVerdict: PairVerdictKind;
+  dOutputRel: number;
+  units: UnitProbeResult[];
+  /** Masked-variant episodes billed by THIS deep dive (pair/bare billed by
+   *  the probe that produced `base`). */
+  episodesRun: number;
+  warnings: string[];
+}
+
+/** THE DEEP DIVE — mask-one-out ablation over a pair's payload units, every
+ *  variant PINNED to the full gem's probe shape so all runs compare. This is
+ *  the "flagged as working but partly doesn't" detector: an effective pair
+ *  whose masked run is byte-identical to the full run carries a unit that
+ *  did nothing on this host. Synthetic defs register under __mask__ ids for
+ *  the duration of their episodes and are always cleaned up. */
+export function deepProbePair(sess: ProbeSession, row: CensusRow, base?: PairProbeRun): PairDeepResult {
+  const run = base ?? probePair(sess, row);
+  const def = SKILLS[row.skillId];
+  const sup = SUPPORTS[row.supportId];
+  const out: PairDeepResult = {
+    skillId: row.skillId, supportId: row.supportId, fit: run.result.fit,
+    probe: run.result.probe, keyed: run.result.keyed, seeds: sess.seeds,
+    pairVerdict: run.result.verdict, dOutputRel: run.result.dOutputRel,
+    units: [], episodesRun: 0, warnings: [...run.result.warnings],
+  };
+  const divergent = run.result.verdict === 'effective' || run.result.verdict === 'cost_only';
+  const before = sess.episodesRun;
+  for (const [i, unit] of ablationUnits(sup).entries()) {
+    if (!divergent) {
+      out.units.push({
+        unit, verdict: 'unmeasured', movedVsFull: [],
+        note: `pair verdict '${run.result.verdict}' — unit attribution needs a diverging pair`,
+      });
+      continue;
+    }
+    if (unitLevelScaled(unit) && sess.supportLevel <= 1) {
+      out.units.push({
+        unit, verdict: 'unmeasured', movedVsFull: [],
+        note: 'scales with (support level − 1): zero at level 1 — re-run with --support-level 2+',
+      });
+      continue;
+    }
+    const maskedId = `__mask__${sup.id}__${i}`;
+    SUPPORTS[maskedId] = maskSupportUnit(sup, unit, maskedId);
+    try {
+      const scen = probeScenario(row.skillId, { id: maskedId, level: sess.supportLevel }, sess.opts,
+        { probe: run.shape.probe, rig: run.shape.rig, withKey: run.shape.withKey });
+      const { episodes: maskedEps } = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
+      sess.episodesRun += maskedEps.length;
+      for (const w of new Set(maskedEps.flatMap(e => e.warnings))) {
+        if (!out.warnings.includes(w)) out.warnings.push(w);
+      }
+      if (identicalEps(maskedEps, run.pairEps)) {
+        // Nothing changed without it. Blind-in-isolation units report as
+        // unmeasured — the probe can't raise their condition, so deadness
+        // would be a false claim (the pair-verdict blindness stance, per unit).
+        const blind = BLINDNESS_RULES.find(r => r.when(def, soloSupportUnit(sup, unit, `${maskedId}_solo`)));
+        out.units.push(blind
+          ? { unit, verdict: 'unmeasured', note: `blind in isolation: ${blind.note}`, movedVsFull: [] }
+          : { unit, verdict: 'dead', movedVsFull: [] });
+      } else if (identicalEps(maskedEps, run.bareEps)) {
+        out.units.push({ unit, verdict: 'sole_carrier', movedVsFull: classifyPair(maskedEps, run.pairEps).moved });
+      } else {
+        out.units.push({ unit, verdict: 'contributing', movedVsFull: classifyPair(maskedEps, run.pairEps).moved });
+      }
+    } finally {
+      delete SUPPORTS[maskedId];
+    }
+  }
+  out.episodesRun = sess.episodesRun - before;
+  return out;
+}
+
+// --------------------------------------------------------- the pair dossier --
+
+/** Everything the harness knows about ONE pair, assembled for `matrix
+ *  explain`: the gate trace, static expectations, the probe shape, the
+ *  A/B verdict, per-unit attribution, and data-driven prescriptions. */
+export interface PairExplain {
+  skillId: string;
+  supportId: string;
+  fit: FitExplain;
+  /** Refused pairs: the census's mechanical-affinity screen. */
+  suspect?: { tag: string; evidence: string }[];
+  unread: { key: string; site: string }[];
+  /** Pair-level blindness rules that match (notes). */
+  blindRules: string[];
+  shape?: PairShape;
+  /** What the gem does to the instance ON PAPER (the lane router honored:
+   *  a refused gem contributes nothing here — that IS the finding). */
+  staticDelta?: {
+    effLevelBare: number;
+    effLevelSocketed: number;
+    gemMods: string[];
+    unlockedThresholds: string[];
+  };
+  probe?: PairProbeResult;
+  deep?: PairDeepResult;
+  prescriptions: string[];
+}
+
+/** Open prescription rules: finding shapes → the legitimate exits. Extend
+ *  here, never in the CLI printer. */
+export const PRESCRIPTION_RULES: { when: (x: PairExplain) => boolean; say: (x: PairExplain) => string }[] = [
+  {
+    when: x => x.fit.fit === 'refused' && !!x.suspect?.length,
+    say: x => `TAG HYGIENE: the skill provably has ${x.suspect!.map(s => `'${s.tag}' (${s.evidence})`).join(', ')} `
+      + `but the tag list refuses the gem — either add the honest tag in src/data/skills.ts (the gem then boards `
+      + `everywhere the tag promises) or make the refusal deliberate with excludeTags in src/data/supports.ts, `
+      + `then adjudicate the suspect row in the ledger.`,
+  },
+  {
+    when: x => x.fit.fit === 'refused' && !x.suspect?.length,
+    say: () => `HONEST REFUSAL: the tag gate refuses and no mechanical evidence contradicts it — no action.`,
+  },
+  {
+    when: x => x.probe?.verdict === 'inert' && !!x.unread.length,
+    say: x => `INERT with a static explanation: ${x.unread.map(u => `'${u.key}' is read only at ${u.site}`).join('; ')}. `
+      + `Two legitimate exits — make it WORK (extend the engine read-site; human sign-off) or make it REFUSE `
+      + `honestly (requiresTags/excludeTags in src/data/supports.ts). A socket that takes the gem and does `
+      + `nothing is the only wrong answer.`,
+  },
+  {
+    when: x => x.probe?.verdict === 'inert' && !x.unread.length && !x.blindRules.length,
+    say: () => `INERT with NO static explanation on file: the payload's read-site is undocumented — investigate, `
+      + `then either add a data/graftReadSites.ts row (making the expectation static and boot-audited) or a `
+      + `BLINDNESS_RULES row in src/sim/compat.ts if the probe simply cannot raise the condition.`,
+  },
+  {
+    when: x => x.probe?.verdict === 'cost_only',
+    say: () => `COST-ONLY: the tax bills (gate/chargeCost/cost mods) but no function was observed — usually a `
+      + `partially-dead payload. Same two exits as INERT; or escalate --seeds 5 --duration 30 if the function `
+      + `is condition-rare.`,
+  },
+  {
+    when: x => x.probe?.verdict === 'blind' || (!!x.blindRules.length && !x.probe),
+    say: x => `BLIND under the standard probes: ${x.blindRules.join('; ') || 'see BLINDNESS_RULES'} — unmeasured, `
+      + `NOT evidence of breakage. Teaching the probe the missing verb (src/sim/compat.ts) and deleting the rule `
+      + `re-enters the whole class into measurement.`,
+  },
+  {
+    when: x => !!x.deep?.units.some(u => u.verdict === 'dead' && !u.unit.compositional),
+    say: x => `PARTIAL: dead payload unit(s) on this host — ${x.deep!.units
+      .filter(u => u.verdict === 'dead' && !u.unit.compositional)
+      .map(u => `${u.unit.key} (${u.unit.describe})`).join('; ')}. Split the gem, extend the read-site, or `
+      + `adjudicate as host-conditional in the ledger.`,
+  },
+  {
+    when: x => !!x.deep?.units.some(u => u.verdict === 'unmeasured' && unitLevelScaled(u.unit)),
+    say: () => `Level-scaled rows are unmeasured at support level 1 — re-run with --support-level 2+ to exercise `
+      + `perLevel/levelBonusPer growth.`,
+  },
+  {
+    when: x => x.probe?.verdict === 'effective'
+      && !x.deep?.units.some(u => u.verdict === 'dead' && !u.unit.compositional),
+    say: x => `HEALTHY: effective (Δoutput ${(100 * x.probe!.dOutputRel).toFixed(1)}%)`
+      + (x.deep ? ` with every measurable unit contributing.` : ` — run with deep attribution to verify per-unit.`),
+  },
+  {
+    when: x => x.probe?.verdict === 'negligible',
+    say: () => `NEGLIGIBLE: diverged under noise — a coin flip, not a finding. Escalate this pair alone with `
+      + `--seeds 5 --duration 30 before claiming anything.`,
+  },
+];
+
+/** Assemble the dossier. `run.probes` prices in 2×seeds episodes (+ deep's
+ *  units×seeds when asked); pure census callers pass { probes: false }. */
+export function explainPair(
+  sess: ProbeSession, skillId: string, supportId: string,
+  run: { probes: boolean; deep: boolean },
+): PairExplain {
+  const def = SKILLS[skillId];
+  if (!def) throw new Error(`compat: unknown skill '${skillId}'`);
+  const sup = SUPPORTS[supportId];
+  if (!sup) throw new Error(`compat: unknown support '${supportId}'`);
+
+  const fit = explainFit(def, sup);
+  const unread = unreadPayloadRows(sup, def, skillLookup).map(r => ({ key: String(r.key), site: r.site }));
+  const blindRules = BLINDNESS_RULES.filter(r => r.when(def, sup)).map(r => r.note);
+  const x: PairExplain = { skillId, supportId, fit, unread, blindRules, prescriptions: [] };
+  const suspect = fit.fit === 'refused' ? suspectEvidence(def, sup) : undefined;
+  if (suspect) x.suspect = suspect;
+
+  if (fit.fit !== 'refused') {
+    x.shape = pairShapeFor(def, sup, fit.fit);
+    // The paper contract: what socketing the gem does to the instance's
+    // effective level, its mod fold, and its threshold unlocks — through
+    // the REAL instance machinery (lane router included).
+    const gemLevel = sess.opts.gemLevel ?? gemLevelAt(sess.opts.level ?? COMPAT_CFG.level);
+    const bare = makeSkillInstance(def, gemLevel, 3);
+    const sock = makeSkillInstance(def, gemLevel, 3);
+    sock.sockets[0] = { def: sup, level: sess.supportLevel };
+    const effBare = effectiveSkillLevel(bare);
+    const effSock = effectiveSkillLevel(sock);
+    const lvl = sess.supportLevel;
+    x.staticDelta = {
+      effLevelBare: effBare,
+      effLevelSocketed: effSock,
+      gemMods: [
+        ...sup.mods.map(describeMod),
+        ...(lvl > 1
+          ? (sup.perLevel ?? []).map(m => `${describeMod(m)} ×${lvl - 1} (perLevel)`)
+          : (sup.perLevel?.length ? [`(${sup.perLevel.length} perLevel row(s) dormant at support level 1)`] : [])),
+      ],
+      unlockedThresholds: (def.thresholds ?? [])
+        .filter(t => t.level > effBare && t.level <= effSock)
+        .map(t => `Lv ${t.level} — ${t.label}`),
+    };
+    if (run.probes) {
+      const row: CensusRow = { skillId, supportId, fit: fit.fit };
+      if (unread.length) row.unread = unread;
+      const probeRun = probePair(sess, row);
+      x.probe = probeRun.result;
+      if (run.deep) x.deep = deepProbePair(sess, row, probeRun);
+    }
+  }
+  x.prescriptions = PRESCRIPTION_RULES.filter(r => r.when(x)).map(r => r.say(x));
+  return x;
 }
