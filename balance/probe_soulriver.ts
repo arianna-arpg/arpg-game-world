@@ -109,12 +109,22 @@ const findInstance = (fieldSeed: number): CourseInstance => {
     dealt === [...PALETTE].sort().join(','), dealt);
 
   // THE LANDING DEAL: the culled few — exits are scarce, the ride is the
-  // content. Count in the authored band, well-spread along the route, and
-  // every landing wears a DISTINCT country (the shuffled deal guarantees it
-  // while the palette outnumbers the landings).
-  check(`plan: landings dealt inside the band [${cfg.landings[0]},${cfg.landings[1]}]`,
-    a.landings.length >= cfg.landings[0] && a.landings.length <= cfg.landings[1],
-    `${a.landings.length} of ${a.docks.length} stations`);
+  // content. The COUNT is the sea-port law (one door per landingEvery of
+  // route, clamped to the band — doors proportional to coastline), the
+  // spread is max-min, and every landing wears a DISTINCT country.
+  let routeLen = 0;
+  for (let i = 1; i < a.channel.length; i++) {
+    routeLen += Math.hypot(a.channel[i].x - a.channel[i - 1].x, a.channel[i].y - a.channel[i - 1].y);
+  }
+  const wantLand = Math.min(a.docks.length, Math.max(cfg.landingBand[0],
+    Math.min(cfg.landingBand[1], Math.round(routeLen / cfg.landingEvery))));
+  check('plan: landings SCALE with the river (one per landingEvery of route, clamped)',
+    a.landings.length === wantLand,
+    `${a.landings.length} landings for ${routeLen.toFixed(0)}u of route`);
+  const small = soulriverPlan(1234, 3200, 2300, PALETTE);
+  check('plan: a smaller sea earns no more doors than a greater one',
+    small.landings.length <= a.landings.length,
+    `${small.landings.length} vs ${a.landings.length}`);
   check('plan: landings are a strict SUBSET — wild strands remain',
     a.landings.length < a.docks.length
     && a.landings.every(d => d.landing)
@@ -463,7 +473,7 @@ const findInstance = (fieldSeed: number): CourseInstance => {
     maxD === 0, `maxΔ=${maxD}`);
 }
 
-// --- 6) THE PORTS MINT: landing destinations only, veiled, chained ---------
+// --- 6) THE PORTS MINT: landings only, sealed shores, berths, the notary ---
 {
   const world = makeSimWorld('warrior', 9103);
   const fs = world.sim.biomeField.fieldSeed;
@@ -471,6 +481,7 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   const seat = riverSeatOf(inst);
   const river = {
     id: riverZoneId(inst.key), name: 'The River of Souls', level: 14,
+    kind: 'soulriver',
     seed: 5150, size: { w: 4900, h: 4400 }, map: { x: seat.x, y: seat.y },
     dimension: 'underworld',
     exits: [{ to: 'uw_shore_1', side: 'w', at: 0.22 }],
@@ -482,13 +493,19 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   check('ports: the country deal is stamped for the layout to read', palette.length > 0);
   const plan = soulriverPlan(5150, 4900, 4400, palette);
   const dockPre = `${SOULRIVER_CFG.dockIdBase}_`;
-  const reals = river.exits.filter(x => x.to !== '?' && !x.to.startsWith(dockPre));
-  check('ports: the discovery shore (real edge) is kept untouched',
-    reals.length === 1 && reals[0].to === 'uw_shore_1');
+  // THE SEALED REBUILD: the un-notarized discovery road is web accretion —
+  // it heals away; the river's doors are its landings, nothing else.
+  check('sealed: the un-notarized discovery road healed away (no wall of doors)',
+    !river.exits.some(x => x.to === 'uw_shore_1'));
   const dockExits = river.exits.filter(x => x.to.startsWith(dockPre));
-  check('ports: exits for the LANDINGS ONLY (the culled few — no wall of doors)',
-    dockExits.length === plan.landings.length && river.exits.every(x => x.to !== '?'),
+  check('ports: exits for the LANDINGS ONLY (one door per landing islet)',
+    dockExits.length === plan.landings.length && river.exits.length === plan.landings.length
+    && river.exits.every(x => x.to !== '?'),
     `${dockExits.length} exits vs ${plan.landings.length} landings of ${plan.docks.length} stations`);
+  // THE BERTHS: one river mouth per landing, stamped ON the ribbon.
+  check('berths: one per landing, each on its own ribbon (the mouths of the one zone)',
+    (river.berths?.length ?? 0) === plan.landings.length
+    && (river.berths ?? []).every(p => soulwayCatchAt(p, fs) !== null));
   const dests = plan.landings.map(d => world.zoneMap[`${dockPre}${inst.key}_${d.i}`]).filter(Boolean);
   check('ports: every landing destination MINTED on the map', dests.length === plan.landings.length);
   const wildIds = plan.docks.filter(d => !d.landing).map(d => `${dockPre}${inst.key}_${d.i}`);
@@ -514,6 +531,68 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   check('ports: idempotent (a second call mints nothing, doubles nothing)',
     river.exits.length === rerun
     && plan.landings.every((d, k) => world.zoneMap[`${dockPre}${inst.key}_${d.i}`] === dests[k]));
+
+  // THE SEALED SHORES, live: the web may not forge a road in; the NOTARY
+  // may; a corridor frontier resolves to the nearest PORT; a stale one-way
+  // road heals to the port at reconcile — and the deed survives it.
+  const neighbor = {
+    id: 'uw_probe_n', name: 'probe shore', level: 12, seed: 7, size: { w: 2000, h: 1500 },
+    map: { x: river.map.x + 120, y: river.map.y + 40 }, dimension: 'underworld',
+    exits: [], layoutParams: {},
+  } as unknown as ZoneDef;
+  world.zoneMap[neighbor.id] = neighbor;
+  const sealedBefore = river.exits.length;
+  (world as unknown as { linkBackTo(t: ZoneDef, s: ZoneDef): void }).linkBackTo(river, neighbor);
+  check('sealed: the web may not forge a road into the river (linkBackTo refused)',
+    river.exits.length === sealedBefore && !river.exits.some(e => e.to === neighbor.id));
+  world.notarizeRoad(river, neighbor);
+  check('sealed: the NOTARY cuts a deliberate shore (two-way, deed stamped)',
+    river.exits.some(e => e.to === neighbor.id && e.notarized === true)
+    && neighbor.exits.some(e => e.to === river.id && e.notarized === true));
+  // A corridor frontier from a new zone resolves to the nearest PORT (the
+  // sea-harbor law) — the river's own edge set never moves.
+  const rpts = coursePolyline(SOULWAY_COURSE, inst.anchor, inst.iseed);
+  let srcSeat: { x: number; y: number } | null = null;
+  for (let k = Math.floor(rpts.length * 0.25); k < rpts.length - 1; k++) {
+    if (soulwayCatchAt(rpts[k], fs)?.key === inst.key) { srcSeat = rpts[k]; break; }
+  }
+  check('sealed: a corridor point of OUR instance exists to probe from', !!srcSeat);
+  if (srcSeat) {
+    const src2 = {
+      id: 'uw_probe_src', name: 'probe src', level: 12, seed: 8, size: { w: 2000, h: 1500 },
+      map: { x: srcSeat.x - 86, y: srcSeat.y }, dimension: 'underworld',
+      exits: [{ to: '?', side: 'e', at: 0.5 }], layoutParams: {},
+    } as unknown as ZoneDef;
+    world.zoneMap[src2.id] = src2;
+    const exitsBefore2 = river.exits.length;
+    const got = (world as unknown as {
+      chartFrontier(s: ZoneDef, e: { to: string; side: 'n' | 's' | 'e' | 'w'; at?: number }): ZoneDef;
+    }).chartFrontier(src2, { to: '?', side: 'e', at: 0.5 });
+    check('sealed: a corridor frontier resolves to the NEAREST PORT, never the water',
+      !!got && got.id.startsWith(`${SOULRIVER_CFG.dockIdBase}_`), got?.id ?? 'null');
+    check('sealed: the river gained no edge from the crossing',
+      river.exits.length === exitsBefore2);
+    check('sealed: the port took the road (the harbor answers)',
+      !!got && got.exits.some(e => e.to === src2.id));
+  }
+  // THE RECONCILE HEAL: a stale one-way road (an old save's accretion)
+  // rewires to the nearest port; the notarized deed survives the rebuild.
+  const stale = {
+    id: 'uw_probe_stale', name: 'probe stale', level: 12, seed: 9, size: { w: 2000, h: 1500 },
+    map: { x: river.map.x - 150, y: river.map.y - 60 }, dimension: 'underworld',
+    exits: [{ to: river.id, side: 'e', at: 0.4 }], layoutParams: {},
+  } as unknown as ZoneDef;
+  world.zoneMap[stale.id] = stale;
+  world.reconcileSoulrivers();
+  check('heal: a stale one-way road into the river REWIRES to the nearest port',
+    !stale.exits.some(e => e.to === river.id)
+    && stale.exits.some(e => e.to.startsWith(`${SOULRIVER_CFG.dockIdBase}_`)));
+  check('heal: the notarized shore survives the reconcile (the deed holds)',
+    river.exits.some(e => e.to === neighbor.id && e.notarized === true)
+    && neighbor.exits.some(e => e.to === river.id));
+  check('heal: the reconcile stays landings + deeds, nothing else',
+    river.exits.filter(e => !e.to.startsWith(`${SOULRIVER_CFG.dockIdBase}_`)).every(e => e.notarized === true));
+
   // THE CHART'S SHIPS: with the river charted, the pure ferry pose projects
   // onto the ribbon (the voyage-boat idiom) — coordinates land ON the
   // course corridor.
@@ -607,6 +686,8 @@ const findInstance = (fieldSeed: number): CourseInstance => {
     && SOULWAY_COURSE.strew.chance > 0 && SOULWAY_COURSE.strew.span > SOULWAY_COURSE.halfWidth * 2);
   check('kit: the sea-node identity stands (zone kind — lanes + level kept)',
     !!ZONE_KINDS['soulriver'] && !!ZONE_KINDS['soulriver'].lanes && ZONE_KINDS['soulriver'].keepLevel === true);
+  check('kit: the shores are SEALED by registry (ZoneKindDef.staticExits)',
+    ZONE_KINDS['soulriver'].staticExits === true);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

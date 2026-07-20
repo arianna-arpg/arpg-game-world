@@ -60,6 +60,10 @@ release's spring — the waiting hull is an honest tell of where the crossing
 will begin. With `rearm` this is the shuttling ferry whose direction is
 dealt fresh each cycle (the Soul-Ship sails upstream as often as down);
 lever unset = the legacy byte-path, no tables built, no hash rolled.
+Draw note: a CRADLED rider wearing `fadeTail` is skipped by the track
+layer (the dissolved window shows nothing — a parked ephemeral hull would
+read as boardable footing it isn't); cradled stones without fadeTail keep
+the classic visible-in-the-cradle read.
 
 Three authoring surfaces, one runtime:
 

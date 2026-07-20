@@ -3669,6 +3669,19 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 
     // Roads between zones (each connection drawn once). Routes out of
     // unvisited territory stay dim — you know a road exists, not where it leads.
+    // BERTH SNAP (ZoneDef.berths — one zone, several mouths): an edge meets a
+    // many-mouthed zone at its NEAREST anchor (primary node or berth), so a
+    // long zone's roads land at their true geography instead of converging
+    // on one dot. Zones without berths resolve to their node untouched.
+    const anchorOf = (za: ZoneDef, toward: { x: number; y: number }): { x: number; y: number } => {
+      let ax = za.map.x, ay = za.map.y;
+      let bd = (toward.x - ax) ** 2 + (toward.y - ay) ** 2;
+      for (const p of za.berths ?? []) {
+        const d = (toward.x - p.x) ** 2 + (toward.y - p.y) ** 2;
+        if (d < bd) { bd = d; ax = p.x; ay = p.y; }
+      }
+      return { x: ax, y: ay };
+    };
     const drawn = new Set<string>();
     let edges = '';
     let stubs = '';
@@ -3697,13 +3710,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         if (drawn.has(key)) continue;
         drawn.add(key);
         const known = visited.has(z.id) || visited.has(e.to);
+        const za = anchorOf(z, b.map), bb = anchorOf(b, z.map);
         // A road touching a LANES-kinded zone (data/zoneKinds.ts — the
         // inland sea) is a water crossing: it wears the sea-lane stroke,
         // not the land road's, so the chart reads the ferry's ways exactly
         // like the surface's naval lanes.
         const laneKind = zoneKindOf(z)?.lanes ?? zoneKindOf(b)?.lanes;
         if (laneKind) {
-          edges += `<line x1="${z.map.x}" y1="${z.map.y}" x2="${b.map.x}" y2="${b.map.y}"
+          edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
             stroke="${laneKind.color ?? '#4a8ac8'}" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="${known ? 0.8 : 0.45}"/>`;
           continue;
         }
@@ -3715,7 +3729,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           : (BIOMES[z.biome ?? '']?.enclave && !BIOMES[b.biome ?? '']?.enclave)
             ? BIOMES[z.biome ?? '']?.enclave : undefined;
         const enAccent = enGate ? boundaryGateOf(enGate.gate)?.accent : undefined;
-        edges += `<line x1="${z.map.x}" y1="${z.map.y}" x2="${b.map.x}" y2="${b.map.y}"
+        edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
           stroke="${enAccent && known ? enAccent : known ? '#5a5a72' : '#2c2c3a'}" stroke-width="${enAccent && known ? 2.6 : 2}"
           ${known ? '' : 'stroke-dasharray="4 5"'}${enAccent && known ? ' stroke-opacity="0.75"' : ''}/>`;
       }
@@ -3730,7 +3744,8 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         const key = 'sea:' + (z.id < to ? z.id + '|' + to : to + '|' + z.id);
         if (drawn.has(key)) continue;
         drawn.add(key);
-        edges += `<line x1="${z.map.x}" y1="${z.map.y}" x2="${b.map.x}" y2="${b.map.y}"
+        const za = anchorOf(z, b.map), bb = anchorOf(b, z.map);
+        edges += `<line x1="${za.x}" y1="${za.y}" x2="${bb.x}" y2="${bb.y}"
           stroke="#4a8ac8" stroke-width="2" stroke-dasharray="6 5" stroke-opacity="0.8"/>`;
       }
     }
@@ -3798,6 +3813,18 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           font-size="11" fill="#9ad0e8" pointer-events="none">⚓</text>` : ''}
         ${current ? `<text x="${z.map.x}" y="${z.map.y - 18}" text-anchor="middle"
           font-size="9" fill="#ffd700" pointer-events="none">YOU ARE HERE</text>` : ''}</g>`;
+
+      // BERTHS (ZoneDef.berths): the zone's other MOUTHS — small discs of
+      // the SAME zone at their true chart positions (the river's landings
+      // along its ribbon). Same data-zone id, so hover/click/travel behave
+      // exactly like the node; one sitting on the primary node is skipped.
+      for (const p of z.berths ?? []) {
+        if (Math.hypot(p.x - z.map.x, p.y - z.map.y) < 26) continue;
+        nodes += `<g data-zone="${z.id}" style="cursor:help">
+          <circle cx="${p.x}" cy="${p.y}" r="${MAP_CFG.nodeHitR * 0.7}" fill="none" pointer-events="all"${travelAttrs}/>
+          <circle cx="${p.x}" cy="${p.y}" r="5.5" fill="${fill}" fill-opacity="${known ? 0.8 : scouted ? 0.5 : 0.9}"
+            stroke="${kd?.ring?.color ?? (known ? '#d8d4c8' : '#4a4a5e')}" stroke-width="1.3"${travelAttrs}/></g>`;
+      }
 
       // The NAME CARD: fixed (always-mode / pinLabel kind / pinned / you-are-
       // here), else hover-revealed by wireMapControls flipping `display` — no

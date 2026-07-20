@@ -195,6 +195,12 @@ function sanitizeZoneDef(raw: unknown): ZoneDef | null {
   z.exits = z.exits.filter(e =>
     e && typeof e.to === 'string' && SIDES.has(e.side as string)
     && (e.at === undefined || isFiniteNum(e.at)));
+  // BERTHS (secondary map nodes) ride the save like map coords do — scrub
+  // to finite pairs; the owning fabric re-stamps them at reconcile anyway.
+  if (z.berths !== undefined) {
+    if (!Array.isArray(z.berths)) delete z.berths;
+    else z.berths = z.berths.filter(p => p && isFiniteNum(p.x) && isFiniteNum(p.y));
+  }
   // Transient annotations — re-derived every zone load; never persisted.
   delete z.exitBoundaries;
   delete z.exitRoads;

@@ -61,7 +61,36 @@ revealed as found, never persisted:
   dashed lane down the ribbon. **Wild strands mint nothing** — the ferry
   calls, the islet stands, the shore leads nowhere: you ride deeper
   instead. Riding past a LANDING with a living passenger UNVEILS its
-  destination (the call at the pier — the landing-law reveal).
+  destination (the call at the pier — the landing-law reveal). Landing
+  COUNT is the sea-port scaling law: one per `plan.landingEvery` units of
+  route length, clamped to `plan.landingBand` — doors proportional to
+  coastline, one exit per landing islet, never a wall of them.
+
+## THE SEALED SHORES (the sea-harbor law, below ground)
+
+The river's edge set is EXACTLY its dealt landings, forever. The kind row
+(`ZONE_KINDS.soulriver.staticExits` — registry-driven like the roadless
+gate hub, so saves heal by construction) makes the whole world web refuse
+it: `linkBackTo` won't forge a road in, `nearestLinkable` skips it, and a
+corridor frontier from ANY neighboring zone resolves to **the nearest
+landing PORT** instead of the water (`chartFrontier` → `nearestRiverPort` —
+exactly the surface's ocean→nearest-harbor branch). Ports are ordinary
+country zones: they take the roads; the pier takes you the rest of the way.
+The one open door is **THE NOTARY** — `World.notarizeRoad(target, source)`:
+a quest or event that MEANS to cut a new shore says so in code, and the
+deed (`ZoneExitDef.notarized`) survives every reconcile. `World.
+reconcileSoulrivers()` (run at save restore) rebuilds every keyed river's
+exits to landings + deeds, re-stamps kind and berths, and REWIRES stale
+one-way roads from older saves to the nearest port — accretion heals,
+connectivity keeps.
+
+**THE BERTHS** (`ZoneDef.berths` — one zone, several mouths): each landing
+stamps a small secondary map node ON the ribbon at its own course fraction
+(`berthCoordsFor`), and the chart snaps roads to a zone's NEAREST anchor
+(primary node or berth) — so every entry into the river meets the water at
+its true geography instead of converging on the midpoint dot. Generic:
+any future many-mouthed zone (a canyon, a great wall) rides the same
+field; berths draw as small same-zone discs (hover/click identical).
 
 ## THE DECK LAW (`TrackRiderDef.carry`) + THE BOARDS SHIELD
 
@@ -100,9 +129,12 @@ the end holds are symmetric (`boardSec` both ends) so boarding reads the
 same both ways; `trackArcFrac` stays journey-relative, so the `fadeTail`
 fray and THE HUNGER's escalation follow the journey, not the compass. The
 lane is `once`+`rearm` (the journey cycle), and the cradle rest parks the
-dissolved hull at the NEXT journey's spring — an honest tell of where the
-crossing will begin. Two ships ride a phase apart, each dealing its own
-coin.
+dissolved hull at the NEXT journey's spring. Two ships ride a phase apart,
+each dealing its own coin. **THE DISSOLVED WINDOW DRAWS NOTHING**: a
+cradled `fadeTail` rider is skipped by the track layer outright — a parked
+hull with no Boards Shield would be a GHOST SHIP (boardable-looking, feet
+honestly in the water); dissolved means dissolved, and the ship exists
+again only when its next journey springs.
 
 ## The water: hazard, current, look
 

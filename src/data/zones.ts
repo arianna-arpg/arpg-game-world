@@ -447,6 +447,12 @@ export interface ZoneExitDef {
    *  gate mint (ZoneSpec.gateCross). An unmarked cross-edge is a bug: placeExit
    *  refuses to open it and warns, so a bad save self-heals visibly. */
   crossDim?: true;
+  /** THE NOTARY'S DEED (the sealed-shores law): this road into a
+   *  static-exits zone was cut DELIBERATELY (World.notarizeRoad — a quest,
+   *  an event) and survives the zone's exit reconciles; an unmarked road
+   *  into sealed shores is web accretion and heals away. Set only by the
+   *  notary, persisted with the exit. */
+  notarized?: true;
 }
 
 export interface ZoneTheme {
@@ -873,6 +879,14 @@ export interface ZoneDef {
   /** Sea routes sailed FROM this port (port zone ids) — map styling + the
    *  Sail menu's memory of established crossings. */
   searoutes?: string[];
+  /** SECONDARY MAP NODES (one zone, several mouths): extra chart positions
+   *  drawn as small discs of this same zone, with roads snapping to the
+   *  NEAREST anchor (primary node or berth) — a long zone's entries read at
+   *  their true geography instead of converging on one dot. The River of
+   *  Souls stamps one berth per landing along its ribbon; any future
+   *  many-mouthed zone (a canyon, a great wall) rides the same field.
+   *  Stamped at mint + re-derived by the owning fabric's reconcile. */
+  berths?: { x: number; y: number }[];
   /** BOUNDARY-GATE annotations, index-aligned with `exits` — the treatment id
    *  each exit wears where it crosses an ENCLAVE biome's boundary (data/
    *  boundaryGates.ts). TRANSIENT: the World re-derives it at every zone load

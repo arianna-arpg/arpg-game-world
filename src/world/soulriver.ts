@@ -86,10 +86,12 @@ export const SOULRIVER_CFG = {
    *  gap;  plankLen — gangplank length;  stubW — entry-causeway half-width
    *  (the ONLY land paths in the zone);  islets — strand-islet count band
    *  (the land 'doodads' of the inversion);  isletR — their radius band;
-   *  landings — how many stations carry an EXIT + a minted port (dealt
-   *  well-spread along the route; the rest are wild strands the ferry
-   *  still calls at);  pierW — pier-run boardwalk half-width;  apronR —
-   *  the waiting head's boardwalk disc at the water end of the pier. */
+   *  landingEvery/landingBand — LANDINGS (stations carrying an EXIT + a
+   *  minted port) scale with the river: one per `landingEvery` units of
+   *  route length, clamped to the band — a longer sea earns more doors,
+   *  never a wall of them (the rest are wild strands the ferry still
+   *  calls at);  pierW — pier-run boardwalk half-width;  apronR — the
+   *  waiting head's boardwalk disc at the water end of the pier. */
   plan: {
     salt: 0x11f7c, pts: 60, waves: 2.5,
     margin: 300, laneClear: 150,
@@ -97,7 +99,7 @@ export const SOULRIVER_CFG = {
     plankGap: 12, plankLen: 56, stubW: 34,
     islets: [9, 14] as [number, number],
     isletR: [34, 86] as [number, number],
-    landings: [2, 3] as [number, number],
+    landingEvery: 2600, landingBand: [2, 4] as [number, number],
     pierW: 24, apronR: 46,
   },
   /** The Soul-Ship (a carry rider on the track fabric): deck half-extents
@@ -220,6 +222,14 @@ export function dockDestCoordsFor(inst: CourseInstance, fracs: number[]): MapCoo
     ribbonCoordAt(inst, 0.06 + Math.min(1, Math.max(0, t)) * 0.88, off, i % 2 === 0 ? 1 : -1));
 }
 
+/** The BERTH coordinates for an instance: the river's own map mouths, one
+ *  per landing ON the ribbon centerline at the same course fractions its
+ *  ports use (ZoneDef.berths — one zone, several mouths: the chart draws a
+ *  small river node beside each port, and roads snap to the nearest). */
+export function berthCoordsFor(inst: CourseInstance, fracs: number[]): MapCoord[] {
+  return fracs.map(t => ribbonCoordAt(inst, 0.06 + Math.min(1, Math.max(0, t)) * 0.88));
+}
+
 // --- the plan ---------------------------------------------------------------
 
 export interface SoulriverDock {
@@ -335,9 +345,16 @@ export function soulriverPlan(seed: number, w: number, h: number, biomes: readon
   }
   // THE LANDING DEAL: only a dealt, well-spread few stations carry an exit
   // + a port — the rest are wild strands (the ferry still calls; the shore
-  // leads nowhere). Greedy max-min spread over route position, seeded on
-  // the plan stream: the ride stays long, the doors stay scarce.
-  const nLand = Math.min(docks.length, rng.int(cfg.landings[0], cfg.landings[1]));
+  // leads nowhere). The COUNT scales with the river itself (one landing
+  // per landingEvery units of route, clamped to the band — the sea-port
+  // idiom: doors proportional to coastline, never a wall of them); the
+  // SPREAD is greedy max-min over route position.
+  let routeLen = 0;
+  for (let i = 1; i < channel.length; i++) {
+    routeLen += Math.hypot(channel[i].x - channel[i - 1].x, channel[i].y - channel[i - 1].y);
+  }
+  const nLand = Math.min(docks.length, Math.max(cfg.landingBand[0],
+    Math.min(cfg.landingBand[1], Math.round(routeLen / cfg.landingEvery))));
   const chosen: number[] = [rng.int(0, docks.length - 1)];
   while (chosen.length < nLand) {
     let best = -1, bestD = -1;

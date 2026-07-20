@@ -150,6 +150,12 @@ export function drawTrackRiders(ctx: CanvasRenderingContext2D, world: World,
       const painter = def ? PAINTERS[def.painter] : undefined;
       if (!def || !painter) continue;
       const pose = trackPose(tr, world.time, r.phase, r.def);
+      // THE DISSOLVED WINDOW: an EPHEMERAL rider (fadeTail — it frays to
+      // nothing at the end of its pass) draws NOTHING while cradled. A
+      // parked hull with no Boards Shield is a ghost ship — it looks
+      // boardable while your feet are honestly in the water. Stones
+      // without fadeTail keep the classic visible-in-the-cradle read.
+      if (pose.pending && r.def.fadeTail) continue;
       const reach = r.def.surface.kind === 'circle'
         ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
       const d: Doodad = { pos: { x: pose.x, y: pose.y }, radius: reach, kind: r.def.kind, rot: pose.rot };

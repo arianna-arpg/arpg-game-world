@@ -132,9 +132,11 @@ import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD
 import { boundaryGateOf } from '../data/boundaryGates';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
 import {
-  channelFracOf, dockDestCoordsFor, ferryLaneFor, isSoulriverId, ribbonCoordAt, riverSeatOf,
-  riverZoneId, soulriverInstanceOf, soulriverKeyOf, soulriverPlan, soulwayCatchAt, SOULRIVER_CFG,
+  berthCoordsFor, channelFracOf, dockDestCoordsFor, ferryLaneFor, isSoulriverId, ribbonCoordAt,
+  riverSeatOf, riverZoneId, soulriverInstanceOf, soulriverKeyOf, soulriverPlan, soulwayCatchAt,
+  SOULRIVER_CFG,
 } from '../world/soulriver';
+import { zoneKindOf } from '../data/zoneKinds';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
@@ -7052,9 +7054,18 @@ export class World {
     if (source.dimension === SOULRIVER_CFG.dimension && !isSoulriverId(source.id)) {
       const inst = soulwayCatchAt(target, this.sim.biomeField.fieldSeed);
       if (inst) {
-        const river = this.zoneMap[riverZoneId(inst.key)];
-        if (river) { this.linkBackTo(river, source); return river; }
-        return this.mintSoulriverZone(source, inst);
+        // THE SEALED SHORES (the sea-harbor law, below ground): the river's
+        // edge set is exactly its dealt landings — a corridor frontier
+        // resolves to the NEAREST LANDING PORT, never to the water itself
+        // (the surface's ocean→nearest-harbor branch, mirrored). The port
+        // is an ordinary country zone: it takes the road, the pier takes
+        // you the rest of the way.
+        const river = this.zoneMap[riverZoneId(inst.key)] ?? this.mintSoulriverZone(source, inst);
+        const port = this.nearestRiverPort(inst.key, target);
+        if (port) { this.linkBackTo(port, source); return port; }
+        // A legacy river with no minted ports keeps the old shore-finding.
+        this.linkBackTo(river, source, true);
+        return river;
       }
     }
     if (EAGER_WORLD_WEB) {
@@ -7388,6 +7399,10 @@ export class World {
       // zone flags, and existing saves heal by construction (link decisions
       // consult the live registry, never persisted edges).
       if (this.roadlessGateHub(z)) continue;
+      // THE SEALED SHORES (ZoneKindDef.staticExits — the river): a kind
+      // whose edge set is its dealt exits never accretes web links either;
+      // same registry-driven healing as the roadless hub above.
+      if (zoneKindOf(z)?.staticExits) continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
       // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
       // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
@@ -7848,14 +7863,20 @@ export class World {
     river.layoutParams = { ...river.layoutParams, dockBiomes: palette };
     const plan = soulriverPlan(river.seed ?? 0, river.size.w, river.size.h, palette);
     const chMax = Math.max(1, plan.channel.length - 1);
-    const coords = dockDestCoordsFor(inst, plan.landings.map(d => d.chIdx / chMax));
+    const landingFracs = plan.landings.map(d => d.chIdx / chMax);
+    const coords = dockDestCoordsFor(inst, landingFracs);
+    // THE BERTHS (ZoneDef.berths — one zone, several mouths): a small river
+    // node on the ribbon at every landing, so the chart's roads meet the
+    // water at their true geography. Re-stamped on every reconcile.
+    river.berths = berthCoordsFor(inst, landingFracs);
     const rng = new Rng(((river.seed ?? 0) ^ 0xd0c5) >>> 0);
-    // Real edges that are NOT ours (the discovery shore, later woven links)
-    // survive; our own dock edges rebuild from the plan every call, so the
-    // ensure is idempotent (the re-run doubles nothing).
+    // THE SEALED SHORES: a keyed river's edge set is EXACTLY its landings
+    // plus any NOTARIZED deeds — nothing else survives the rebuild (an old
+    // save's accumulated discovery roads heal away right here; the world
+    // web routes new arrivals to the ports instead). Idempotent per call.
     const dockPre = `${SOULRIVER_CFG.dockIdBase}_`;
-    const reals = river.exits.filter(x => x.to !== '?' && !x.to.startsWith(dockPre));
-    const rebuilt: ZoneExitDef[] = [...reals];
+    const rebuilt: ZoneExitDef[] = river.exits.filter(e =>
+      e.to !== '?' && e.notarized === true && !e.to.startsWith(dockPre));
     const probe = { exits: rebuilt, size: river.size };
     let prevId: string | undefined;
     for (let k = 0; k < plan.landings.length; k++) {
@@ -7890,6 +7911,45 @@ export class World {
     }
     river.exits.length = 0;
     river.exits.push(...rebuilt);
+  }
+
+  /** RESTORE RECONCILE (called from restoreWorldState): every keyed river
+   *  re-runs its ports pass — exits rebuilt to the dealt landings ONLY (an
+   *  older save's accumulated discovery roads heal away), berths and the
+   *  country deal re-stamped, missing ports re-minted, the searoute chain
+   *  re-guaranteed. Pure of the seed; idempotent; legacy bare-id rivers
+   *  keep the shape they saved with. */
+  reconcileSoulrivers(): void {
+    for (const z of Object.values(this.zoneMap)) {
+      if (!isSoulriverId(z.id)) continue;
+      // Identity re-assert (the sanitizer's authored-zone idiom): a keyed
+      // river ALWAYS wears the kind — the sealed-shores law rides it.
+      if (soulriverKeyOf(z.id)) z.kind = 'soulriver';
+      this.soulriverPorts(z);
+    }
+    // Heal stale ONE-WAY roads: a neighbor still pointing at a sealed river
+    // (an older save's accumulated discovery edges) REWIRES to the nearest
+    // landing port — the sea-harbor law applied retroactively, connectivity
+    // kept, the wall of doors gone. A reciprocal edge is a true pier (the
+    // port pairs) and stays; legacy bare-id rivers are untouched.
+    for (const z of Object.values(this.zoneMap)) {
+      if (isSoulriverId(z.id)) continue;
+      for (let i = z.exits.length - 1; i >= 0; i--) {
+        const e = z.exits[i];
+        if (e.to === '?' || !isSoulriverId(e.to)) continue;
+        const river = this.zoneMap[e.to];
+        const key = soulriverKeyOf(e.to);
+        if (!river || !key) continue;
+        if (river.exits.some(x => x.to === z.id)) continue;
+        const port = this.nearestRiverPort(key, z.map);
+        if (port && port.id !== z.id && !z.exits.some(x => x.to === port.id)) {
+          e.to = port.id;
+          this.linkBackTo(port, z);
+        } else {
+          z.exits.splice(i, 1);
+        }
+      }
+    }
   }
 
   /** THE SOUL-SHIPS ON THE CHART (the voyage-boat idiom, dealt to ferries):
@@ -7947,9 +8007,14 @@ export class World {
   private warpSweepAcc = 0;
 
   /** Forge a reciprocal road from `target` back to `source` if one is missing, so a
-   *  mint-once Field link stays two-way (you can leave the expanse the way you came). */
-  private linkBackTo(target: ZoneDef, source: ZoneDef): void {
+   *  mint-once Field link stays two-way (you can leave the expanse the way you came).
+   *  A STATIC-EXITS kind (data/zoneKinds.ts — the sealed-shores law) refuses the
+   *  forge outright unless `notarized`: its edge set is its dealt exits, forever,
+   *  and only a deliberate caller (World.notarizeRoad; a legacy portless river)
+   *  may cut a new shore. */
+  private linkBackTo(target: ZoneDef, source: ZoneDef, notarized = false): void {
     if (target.id === source.id || target.exits.some(e => e.to === source.id)) return;
+    if (!notarized && zoneKindOf(target)?.staticExits) return;
     // Dimensions are sealed — a LINKER may never forge a cross-dimension road
     // (the gate's marked back-edge is MINTED by enterDimension, never linked).
     if ((target.dimension ?? 'surface') !== (source.dimension ?? 'surface')) {
@@ -7961,6 +8026,34 @@ export class World {
     // Claim a SPACED `at` via the shared worldgen guard (corner-aware, pixel-true) —
     // the old per-side fractional scan couldn't see an n@~0 vs w@~0 corner stack.
     target.exits.push({ to: source.id, side, at: spacedExitAt(target, side) });
+  }
+
+  /** THE NOTARY (the sealed-shores law's one open door): deliberately cut a
+   *  new two-way road into a static-exits zone — the lever a quest, event,
+   *  or future fabric pulls when it MEANS to open a shore. Never called by
+   *  the ambient world web. The DEED (ZoneExitDef.notarized) rides both
+   *  edges so exit reconciles keep the shore while healing accretion. */
+  notarizeRoad(target: ZoneDef, source: ZoneDef): void {
+    this.linkBackTo(target, source, true);
+    this.linkBackTo(source, target, true);
+    const a = target.exits.find(e => e.to === source.id);
+    if (a) a.notarized = true;
+    const b = source.exits.find(e => e.to === target.id);
+    if (b) b.notarized = true;
+  }
+
+  /** The nearest minted LANDING PORT of a river instance to a coordinate —
+   *  the sealed-shores law's resolution target (ports are the river's whole
+   *  public interface, exactly as harbors are a sea's). */
+  private nearestRiverPort(instKey: string, at: MapCoord): ZoneDef | null {
+    const pre = `${SOULRIVER_CFG.dockIdBase}_${instKey}_`;
+    let best: ZoneDef | null = null, bd = Infinity;
+    for (const z of Object.values(this.zoneMap)) {
+      if (!z.id.startsWith(pre)) continue;
+      const d = (z.map.x - at.x) ** 2 + (z.map.y - at.y) ** 2;
+      if (d < bd) { bd = d; best = z; }
+    }
+    return best;
   }
 
   /** A FIELD zone's exit portal: march inward from the rect edge along the side's axis

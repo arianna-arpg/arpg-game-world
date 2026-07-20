@@ -324,6 +324,10 @@ function restoreWorldState(world: World, save: CharacterSave): void {
     world.scrubStaleObjectives(); // fresh reroll — createPlayer already stood us in town
     return;
   }
+  // THE SEALED SHORES reconcile: restored rivers rebuild their exits to the
+  // dealt landings only and re-stamp their berths (an older save's
+  // accumulated discovery roads rewire to the nearest port and heal away).
+  world.reconcileSoulrivers();
   const mode = modeById(world.meta.modeId);
   world.resumeSpawn(resolveResumeSpawn(mode.resume, settings.resumeSpawn), save.world.player);
 }

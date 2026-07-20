@@ -37,6 +37,15 @@ export interface ZoneKindDef {
   /** Keep the biome line's monster-level on the name card (kinded zones
    *  usually replace it — a sea is still dangerous ground). */
   keepLevel?: boolean;
+  /** STATIC EXITS (the sealed-shores law): this kind's edge set is exactly
+   *  its dealt exits, FOREVER — the world web may never forge new roads into
+   *  it (linkBackTo refuses, nearestLinkable skips; frontiers that would
+   *  have reached it resolve to its port interface instead — the sea-harbor
+   *  law). Registry-driven like the roadless gate hub: no per-zone flag,
+   *  existing saves heal by construction. The one door left open is the
+   *  explicit World.notarizeRoad seam — a quest or event that MEANS to cut
+   *  a new shore says so in code, never by accident. */
+  staticExits?: boolean;
 }
 
 export const ZONE_KINDS: Record<string, ZoneKindDef> = {
@@ -62,6 +71,10 @@ export const ZONE_KINDS: Record<string, ZoneKindDef> = {
     labelColor: '#9fd8ec',
     lanes: {},
     keepLevel: true,
+    // The sealed-shores law: the river's doors are its dealt landings —
+    // the web routes corridor frontiers to the nearest PORT instead
+    // (chartFrontier), and nothing links in uninvited.
+    staticExits: true,
   },
 };
 
