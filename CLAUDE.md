@@ -344,15 +344,28 @@ changes.
   (pond→lagoon→sea→great sea→ocean: port budgets, haven rights, island
   muls, name pools), NAMED, and given explicit PORT SPOTS around its
   coastline (greedy max-min ≥ `portMinSep`; spot 0 = THE HAVEN).
-  `World.ensureSeaPorts` mints the system veiled (`ZoneDef.seaId`/
-  `portTier`, noBackEdge, haven name + quay dressing) + rings the LANE LAW
-  (coastal ring + haven spokes; isles lane to the haven on sighting). THE
-  LANDING LAW kills free docking: quay beacons stream + reveal on sight
-  (the isles' mint-on-sight law); landings engage only at spots/isles/
-  grandfathered ports — the rest is breakers; `chartCourse` = this sea's
-  far harbor. First port found names the sea + stamps `first_port_found`/
-  `seas_found`. Dials in `SEA_CFG`; docs `docs/engine/seas.md`; probe
-  `balance/probe_seas.ts`.
+  `World.ensureSeaPorts` mints each spot as a veiled HARBOR PAIR
+  (`SEA_CFG.pair`): a mainland HOLD ANCHOR (`<spot>_hold` — ordinary
+  country wearing the walled harborhold, the siege, and the state) + the
+  PORT zone proper offshore (kind 'port' = SEALED SHORES by registry;
+  `ZoneDef.seaId`/`portTier`, haven name; the harborcove recipe carves
+  deep water + the quay outcrop aligned home + the planked pier whose
+  BERTH is the cast-off dock-location), joined by ONE notarized causeway
+  whose anchor-side exit wears `lock: 'harborhold'` — the muster win
+  opens the road (and unveils the port); the sail-in pier never bricks.
+  THE DRY-ROAD LAW (`SEA_CFG.dryRoad`): no auto-forged land road crosses
+  ocean — ONE chord test (`World.landRoute`) behind the mint weave,
+  nearestLinkable, linkBackTo, and the ocean-frontier resolution (which
+  bends coast roads to a SAME-SHORE anchor in snap range, else
+  consolidates — crossing a sea is a VOYAGE, never a lucky link);
+  `World.reconcileSeaPorts` heals old saves' wet accretion on restore.
+  + rings the LANE LAW (coastal ring + haven spokes; isles lane to the
+  haven on sighting). THE LANDING LAW kills free docking: quay beacons
+  stream + reveal on sight (the isles' mint-on-sight law); landings
+  engage only at spots/isles/grandfathered ports — the rest is breakers;
+  `chartCourse` = this sea's far harbor. First port found names the sea
+  + stamps `first_port_found`/`seas_found`. Dials in `SEA_CFG`; docs
+  `docs/engine/seas.md`; probe `balance/probe_seas.ts`.
   THE RELIEF FABRIC (`world/relief.ts` + the 'elevation' climate axis — the
   land's vertical truth; THE FOREORDAINED TENET applied to terrain: pure
   f(seed), every feature computed WHOLE at first touch, no horizon — the
@@ -375,23 +388,27 @@ changes.
   `RELIEF_CFG`; docs in `docs/engine/relief.md`; probe
   `balance/probe_relief.ts`.
   THE HARBORHOLD FABRIC (`data/harborholds.ts` + `world/harborholds.ts` —
-  mainland ports as BESIEGED RESIDENCES): every sea spot wears a walled
-  quay-town (`harborhold_*` compositions → plan structures with a SEALED
-  gate) with a persisted lifecycle on `ZoneDef.harborhold` — found
-  `besieged` (camp at the walls, muster horn on the apron), OPENED by THE
-  MUSTER (discrete waves through the extraction swarm director's fixation
-  grammar at the QUAY WARD; ward dead = the hold falls, waves broken = the
-  town opens), FELLED into fires + a rebuild clock (or a Mortal Essence
-  restoration), re-besieged by the sweep on `siegeEverySec` with an omened
-  `fallAt` deadline. PROSPERITY (+1 per defense) gates `HoldServiceRow`s —
+  mainland ports as BESIEGED RESIDENCES): every sea spot's HOLD ANCHOR
+  wears the walled town (`harborhold_*` compositions → plan structures
+  with a SEALED gate) with a persisted lifecycle on `ZoneDef.harborhold` —
+  found `besieged` (camp at the walls, muster horn on the apron, the quay
+  causeway LOCKED), OPENED by THE MUSTER (discrete waves through the
+  extraction swarm director's fixation grammar at the QUAY WARD; ward dead
+  = the hold falls, waves broken = the town opens AND the causeway to the
+  paired PORT zone unbars — `lock: 'harborhold'` reads live state), FELLED
+  into fires + a rebuild clock (or a Mortal Essence restoration),
+  re-besieged by the sweep on `siegeEverySec` with an omened `fallAt`
+  deadline. PROSPERITY (+1 per defense) gates `HoldServiceRow`s —
   harbormaster/board at 0, chandler at 1, the merc captain at 2
   (TEMPLATE-ONLY hires; veterans + RETIREMENT stay wilds-outpost exclusive,
-  and wild outposts got scarcer). The board seats INSIDE the walls (the
-  knowledge network is the town's reward); dock + cast-off never brick.
-  Islands/legacy ports stay bare quays by construction. `HOLD_CLASSES`
-  ladder + `HARBORHOLD_CFG.assign` decide everything; docs
-  `docs/engine/harborholds.md`; probe `balance/probe_harborholds.ts`; dev
-  tab 'Holds'.
+  and wild outposts stand down on BOTH halves of a pair). Services seat at
+  THE QUAY VILLAGE in the PORT zone (`HARBORHOLD_CFG.quay`, plan
+  `quay_village` — the port reads the anchor's ladder via
+  `ZoneDef.holdAnchor`); the knowledge network is the hold's reward; dock
+  + cast-off never brick. Islands/legacy ports stay bare quays by
+  construction. `HOLD_CLASSES` ladder + `HARBORHOLD_CFG.assign` decide
+  everything; docs `docs/engine/harborholds.md`; probe
+  `balance/probe_harborholds.ts`; dev tab 'Holds'.
   THE PLY FABRIC (`engine/plies.ts` — hit-counted durability, the
   Pikmin/Overlord damage model): `MonsterDef.plies` bodies EAT N landed
   hits magnitude-blind (one ply per blow, no life moves; thud floor,

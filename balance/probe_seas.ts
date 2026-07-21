@@ -14,12 +14,19 @@
 //   - THE LANDING LAW's pure half: a shore point resolves through
 //     seaSpotsNear within landingSlack; open coast far from every spot
 //     resolves to nothing (breakers),
-//   - LIVE (real World): devEnsureSea mints the whole system VEILED with
-//     seaId/portTier baked + the haven's name suffix; lanes ring the coast
-//     and spoke to the haven; entering a spot unveils it, stamps
-//     first_port_found + seas_found, and the sail menu groups this water's
-//     harbors (veiled lane-known included); chartCourse crosses to the far
-//     harbor; worldstate round-trips the system intact.
+//   - LIVE (real World): devEnsureSea mints the whole system VEILED as
+//     HARBOR PAIRS (SEA_CFG.pair) — a kind-'port' sealed-shores quay zone
+//     per spot + a mainland HOLD ANCHOR behind it, one notarized causeway
+//     between them, the anchor's side wearing the 'harborhold' lock; lanes
+//     ring the ports and spoke to the haven; entering a port unveils it,
+//     stamps first_port_found + seas_found, seats the recipe's dock-location
+//     (berth + planks, no fallback doubling), and the sail menu groups this
+//     water's harbors; chartCourse crosses to the far harbor; worldstate
+//     round-trips the system intact,
+//   - THE DRY-ROAD LAW: a water-touching frontier bends to a SAME-SHORE
+//     hold anchor in snap range and CONSOLIDATES everywhere else (no
+//     cross-sea links, no harbor hub sprawl); the restore reconcile strips
+//     un-notarized port roads + wet accretion while the causeway survives.
 // Run: npx tsx balance/probe_seas.ts
 // ---------------------------------------------------------------------------
 
@@ -212,9 +219,26 @@ seedGlobalRandom(0x5ea50);
       const zones = info.ports.map(p => w.zoneMap[p.id]);
       check('E: every port zone stands, VEILED, identity baked',
         zones.every(z => !!z && z.veiled && z.seaId === info.id && !!z.portTier));
+      // THE HARBOR PAIR: sealed-shores kind, a mainland hold anchor behind
+      // every quay, ONE notarized causeway, the anchor's side lock-worded.
+      const pairs = zones.map(z => ({ port: z!, anchor: z!.holdAnchor ? w.zoneMap[z!.holdAnchor] : undefined }));
+      check('E: every port wears the sealed-shores kind', zones.every(z => z!.kind === 'port'));
+      check('E: every port hangs on a hold anchor, paired both ways',
+        pairs.every(p => !!p.anchor && p.anchor.holdPort === p.port.id && p.anchor.seaId === info.id && !!p.anchor.veiled));
+      check('E: the anchor stands on LAND, a short causeway from its quay',
+        pairs.every(p => w.continentAtMap(p.anchor!.map).kind !== 'ocean'
+          && Math.hypot(p.anchor!.map.x - p.port.map.x, p.anchor!.map.y - p.port.map.y) <= 520));
+      check('E: the port keeps exactly ONE land door — the notarized causeway',
+        pairs.every(p => p.port.exits.length === 1
+          && p.port.exits[0].to === p.anchor!.id && p.port.exits[0].notarized === true));
+      check("E: the anchor's causeway edge wears the 'harborhold' lock",
+        pairs.every(p => {
+          const e = p.anchor!.exits.find(x => x.to === p.port.id);
+          return !!e && e.notarized === true && e.lock === 'harborhold';
+        }));
       const haven = zones.find(z => z?.portTier === 'haven');
       if (haven) {
-        check('E: the haven wears its name', haven.name.endsWith(' Haven'), haven.name);
+        check('E: the haven wears its name', haven.name.endsWith(SEA_CFG.pair.havenSuffix), haven.name);
         check('E: the lane law — spokes reach the haven',
           zones.filter(z => z && z.id !== haven.id).every(z => z!.searoutes?.includes(haven.id)));
       }
@@ -222,12 +246,16 @@ seedGlobalRandom(0x5ea50);
         check('E: the lane law — every port is rung (≥1 route)',
           zones.every(z => (z!.searoutes?.length ?? 0) >= 1));
       }
-      // ENTER a spot: unveil + the first-port beat + the sail menu's seas.
+      // ENTER a port: unveil + the first-port beat + the dock-location.
       const first = zones[0]!;
       w.loadZone(first.id);
-      check('E: entering a spot unveils it', !first.veiled);
+      check('E: entering a port unveils it', !first.veiled);
       check('E: first_port_found + seas_found stamp', (w.ledger.first_port_found ?? 0) >= 1 && (w.ledger.seas_found ?? 0) >= 1,
         `first=${w.ledger.first_port_found} seas=${w.ledger.seas_found}`);
+      check('E: the quay is a dock-LOCATION (one recipe berth, planked pier — no fallback doubling)',
+        w.doodads.filter(d => d.kind === 'dock').length === 1
+        && w.doodads.some(d => d.kind === 'bridge'),
+        `${w.doodads.filter(d => d.kind === 'dock').length} docks`);
       const menu = w.sailMenuPorts();
       check('E: the sail menu knows this WATER (same-sea harbors listed, veiled lane-known included)',
         zones.length < 2 || menu.some(p => p.sameSea),
@@ -246,8 +274,76 @@ seedGlobalRandom(0x5ea50);
       const ok = w2.adoptWorldState(state);
       check('E: the system survives the save', ok === true
         && info.ports.every(p => !!w2.zoneMap[p.id] && w2.zoneMap[p.id].seaId === info.id));
+
+      // ---------------------------------------- F. the dry-road law, live
+      const wAny = w as unknown as {
+        chartFrontier(source: unknown, e: unknown): { id: string };
+        roadIsWet(a: { x: number; y: number }, b: { x: number; y: number }): boolean;
+      };
+      const skel = (id: string, map: { x: number; y: number }): Record<string, unknown> => ({
+        id, name: id, level: 1, size: { w: 1600, h: 1400 }, biome: 'plains',
+        theme: first.theme, layout: [], objective: { kind: 'clear' },
+        exits: [], map: { x: map.x, y: map.y }, seed: 1,
+      });
+      // A source standing right beside a hold anchor, frontier into the
+      // water: the road bends to THE ANCHOR (never the port itself).
+      {
+        const a0 = pairs[0].anchor!;
+        const seaC = sea!.centroid;
+        const toSea = Math.atan2(seaC.y - a0.map.y, seaC.x - a0.map.x);
+        const side = Math.abs(Math.cos(toSea)) >= Math.abs(Math.sin(toSea))
+          ? (Math.cos(toSea) > 0 ? 'e' : 'w') : (Math.sin(toSea) > 0 ? 's' : 'n');
+        const src = skel('qa_dry_src', { x: a0.map.x + Math.cos(toSea + Math.PI) * 40, y: a0.map.y + Math.sin(toSea + Math.PI) * 40 });
+        w.zoneMap['qa_dry_src'] = src as never;
+        const got = wAny.chartFrontier(src, { to: '?', side });
+        const hit = got.id === a0.id || got.id === 'qa_dry_src';
+        check('F: a shoreside frontier bends to the HOLD ANCHOR (or honestly consolidates) — never the port',
+          hit || !zones.some(z => z!.id === got.id),
+          `→ ${got.id}`);
+        delete w.zoneMap['qa_dry_src'];
+        for (let i = a0.exits.length - 1; i >= 0; i--) {
+          if (a0.exits[i].to === 'qa_dry_src') a0.exits.splice(i, 1);
+        }
+      }
+      // A wet chord between two anchors of this water (opposite shores):
+      // the predicate says wet, and the reconcile strips a forged crossing.
+      {
+        let wet: [ZoneLike, ZoneLike] | null = null;
+        const anchors = pairs.map(p => p.anchor!).filter(Boolean);
+        for (let i = 0; i < anchors.length && !wet; i++) {
+          for (let j = i + 1; j < anchors.length && !wet; j++) {
+            if (wAny.roadIsWet(anchors[i].map, anchors[j].map)) wet = [anchors[i], anchors[j]];
+          }
+        }
+        if (!wet) {
+          check('F: a wet anchor pair stands for the heal rig', true, 'one-shore geometry — skipped honestly');
+        } else {
+          const [wa, wb] = wet;
+          wa.exits.push({ to: wb.id, side: 'e' });
+          wb.exits.push({ to: wa.id, side: 'w' });
+          const port0 = pairs[0].port;
+          port0.exits.push({ to: wa.id, side: 'n' }); // un-notarized sprawl into the port
+          w.reconcileSeaPorts();
+          check('F: the reconcile strips the forged sea-crossing (both sides)',
+            !wa.exits.some(x => x.to === wb.id) && !wb.exits.some(x => x.to === wa.id));
+          check('F: the reconcile strips un-notarized port roads, keeps the causeway + lock',
+            port0.exits.length === 1 && port0.exits[0].notarized === true
+            && pairs[0].anchor!.exits.some(x => x.to === port0.id && x.lock === 'harborhold'));
+          const snapA = JSON.stringify(port0.exits) + JSON.stringify(pairs[0].anchor!.exits);
+          w.reconcileSeaPorts();
+          const snapB = JSON.stringify(port0.exits) + JSON.stringify(pairs[0].anchor!.exits);
+          check('F: the reconcile is idempotent', snapA === snapB);
+        }
+      }
     }
   }
+}
+
+/** The slice of ZoneDef the F-rig touches (probe-local shape). */
+interface ZoneLike {
+  id: string;
+  map: { x: number; y: number };
+  exits: { to: string; side: 'n' | 's' | 'e' | 'w'; at?: number; notarized?: true; lock?: string }[];
 }
 
 function firstSeaWithPorts(fs: number, min = 1): Sea | null {

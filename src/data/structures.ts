@@ -488,6 +488,34 @@ export const STRUCTURES: Record<string, StructureDef> = {
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards', courtyardFloorStyle: 'cobble',
   },
 
+  // THE QUAY VILLAGE — the harbor pair's PORT half (HARBORHOLD_CFG.quay):
+  // the unwalled hamlet on the port zone's outcrop. No gate, no war — the
+  // walls and the siege stand with the HOLD ANCHOR on the mainland; this is
+  // what they protect. Service seats '1'-'5' mirror the harborhold plans
+  // (the plan is the single source of placement truth — world/harborholds.ts
+  // scans it), activated off the ANCHOR's state + prosperity ladder.
+  quay_village: {
+    id: 'quay_village', halfW: 225, halfH: 135, cellSize: 30,
+    plan: [
+      '__L_________L__',
+      '_######__####__',
+      '_#..z.2#_#p.#__',
+      '_#.....D_#..#__',
+      '_##D####_##D#__',
+      '_____4____1____',
+      '_M________5__C_',
+      '_3___H_______L_',
+      '_______________',
+    ],
+    legend: {
+      C: { breakable: 'crate', courtyard: true },
+      '1': { courtyard: true }, '2': { interior: true },
+      '3': { courtyard: true }, '4': { courtyard: true }, '5': { courtyard: true },
+    },
+    confineVision: 'rooms',
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards', courtyardFloorStyle: 'boards',
+  },
+
   // The Caravan: an open camp (no walls) — a fire, pack-rocks, and stores, with the
   // Caravanner waiting by it. Composed from existing doodad kinds (no wagon kind).
   caravan: {

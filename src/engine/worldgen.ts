@@ -22,6 +22,7 @@ import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
 import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
+import { zoneKindOf } from '../data/zoneKinds';
 import type { CourseMintHints } from '../world/courses';
 
 // The node-space coordinate vocabulary (Dir, MapCoord, MAP_DIR, projectCoord) now
@@ -86,6 +87,10 @@ export function nearestNode(
     // A POCKET is never an anchor: wiring anything to a purchased cul-de-sac
     // would forge the second road its contract forbids.
     if (z.pocket) continue;
+    // SEALED SHORES: a static-exits kind (a port, the river) is never an
+    // anchor either — a directed mint wired to it would forge the exact
+    // road the registry forbids (linkBack/back-edge accretion).
+    if (zoneKindOf(z)?.staticExits) continue;
     // Anchors never cross dimensions: a surface quest/caravan/float must not
     // wire itself to a hell node that happens to share the coordinate plane.
     if ((z.dimension ?? 'surface') !== dim) continue;
@@ -111,6 +116,10 @@ export interface ZoneSpec {
    *  for hand-authored set-piece arenas no biome's allowedLayouts would ever roll.
    *  Absent = pickLayout decides from the biome (the default). */
   layoutType?: string;
+  /** ZONE KIND (data/zoneKinds.ts) stamped ON the def INSIDE the mint — so a
+   *  registry law the kind carries (staticExits: the sealed shores) already
+   *  binds while placeZoneAt's own weave runs, never a frame later. */
+  kind?: string;
   /** Suppress waypoints on any OTHER zone minted within this node-unit radius (the
    *  anti-teleport gate around a boss arena → forces a multi-zone trek to reach it,
    *  Mephisto-run style). Carried onto the minted def so the rule persists. */
@@ -356,6 +365,11 @@ function fitSide(
  *  an existing exit. Strictly append-only; both ends pushed together;
  *  deterministic (seeded rng). Skips town/source/caves/safe/dups/over-degree. */
 function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng: Rng): void {
+  // SEALED SHORES (ZoneKindDef.staticExits): a kind whose edge set is its
+  // dealt exits neither weaves nor is woven into — the registry law binds
+  // at mint time because the kind rides ZoneSpec.kind onto the def BEFORE
+  // this runs (a port never opportunistically grows a road, full stop).
+  if (zoneKindOf(fresh)?.staticExits) return;
   const source = fresh.exits[0]?.to; // the back-edge is always pushed first
   const cands = Object.values(zoneMap)
     .filter(z =>
@@ -364,6 +378,7 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
       z.objective.kind !== 'safe' &&            // never link a sanctuary
       z.caveDepth == null &&                    // caves live off-graph anyway
       !z.pocket &&                              // a purchased cul-de-sac keeps its one road
+      !zoneKindOf(z)?.staticExits &&            // sealed shores: never woven INTO either
       !isRoadlessGateHub(z) &&                  // a roadless gate hub's edges are EXACTLY its minted
                                                // frontiers — the weave was the one linker still forging
                                                // inbound roads (the "exit back to the Firmament" loop;
@@ -486,7 +501,15 @@ export function placeZoneAt(
   target: MapCoord, anchor: ZoneDef | null,
   zoneMap: Record<string, ZoneDef>, genIndex: number, spec: ZoneSpec,
 ): ZoneDef {
-  const src = anchor ?? nearestNode(zoneMap, target, undefined, spec.dimension); // town always exists ⇒ non-null in practice
+  // Anchor pick (null = directed mints: quests, events, soundings): PREFER a
+  // node whose chord home stays DRY (the dry-road law's soft half — the
+  // connectFloatingZone idiom); fall back to the plain nearest when no dry
+  // anchor exists — reachability trumps, and the wet back-edge below is
+  // then stamped a NOTARIZED deed (deliberate by contract, so the census
+  // and the restore heal read it as such, never as accretion).
+  const src = anchor
+    ?? nearestNode(zoneMap, target, undefined, spec.dimension, (z) => routeOk(target, z.map))
+    ?? nearestNode(zoneMap, target, undefined, spec.dimension); // town always exists ⇒ non-null in practice
   const srcMap = src?.map ?? target;
   const rng = new Rng(spec.seed ?? rollSeed());
   // THE IDENTITY SUB-STREAM: an EXPLICITLY seeded mint resolves the zone's
@@ -692,9 +715,14 @@ export function placeZoneAt(
   const backSide: Dir = src ? sideToward(map, srcMap) : 's';
   const srcDim = src?.dimension ?? 'surface';
   const myDim = spec.dimension ?? 'surface';
+  // An UNAVOIDABLY wet back-edge (no dry anchor existed) is a deliberate
+  // reachability deed — notarize it so the dry-road law's heal and census
+  // recognize the intent (surface only; other planes have no ocean).
+  const wetDeed = src && myDim === 'surface' && srcDim === 'surface'
+    && !routeOk(map, srcMap) ? { notarized: true as const } : {};
   let backEdge: ZoneExitDef[] = [];
   if (src && !spec.floating && !spec.noBackEdge) {
-    if (srcDim === myDim) backEdge = [{ to: src.id, side: backSide }];
+    if (srcDim === myDim) backEdge = [{ to: src.id, side: backSide, ...wetDeed }];
     else if (spec.gateCross) backEdge = [{ to: src.id, side: backSide, crossDim: true }];
     else {
       console.warn(`[worldgen] refused cross-dimension back-edge ${spec.id ?? `gen_${genIndex}`} (${myDim}) → ${src.id} (${srcDim}) — only a declared gate may cross`);
@@ -863,6 +891,7 @@ export function placeZoneAt(
     // stands down — durable on the def, one classifier (isAquaticBiome).
     ...(isAquaticBiome(biome) ? { aquatic: true } : {}),
     ...(Object.keys(layoutParams).length ? { layoutParams } : {}),
+    ...(spec.kind ? { kind: spec.kind } : {}),
     ...(spec.port ? { port: true } : {}),
     ...(spec.dimension ? { dimension: spec.dimension } : {}),
     ...(spec.pocket ? { pocket: true } : {}),
@@ -886,7 +915,7 @@ export function placeZoneAt(
     if (spec.linkBack && src && srcDim === myDim && !isRoadlessGateHub(src)) {
       const recSide = OPP_DIR[backSide];
       const at = findNonCollidingAt(recSide, src.exits, rng, src.size) ?? bestSpacedAt(recSide, src.exits, src.size);
-      src.exits.push({ to: def.id, side: recSide, at });
+      src.exits.push({ to: def.id, side: recSide, at, ...wetDeed });
     } else if (spec.linkBack && src && srcDim !== myDim) {
       console.warn(`[worldgen] refused cross-dimension linkBack ${src.id} (${srcDim}) → ${def.id} (${myDim})`);
     } else if (spec.linkBack && src && isRoadlessGateHub(src)) {
@@ -918,10 +947,15 @@ export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, Zone
     ?? nearestNode(zoneMap, fresh.map, exclude, fresh.dimension, (z) => !isRoadlessGateHub(z));
   if (!anchor) return;
   const backSide = sideToward(fresh.map, anchor.map);
-  fresh.exits.unshift({ to: anchor.id, side: backSide });
+  // The routeOk fallback may have yielded a WET anchor (reachability
+  // trumps): the pair is then a deliberate deed — notarized, so the
+  // dry-road heal and census read intent, never accretion.
+  const wetDeed = !(fresh.dimension ?? anchor.dimension) && !routeOk(fresh.map, anchor.map)
+    ? { notarized: true as const } : {};
+  fresh.exits.unshift({ to: anchor.id, side: backSide, ...wetDeed });
   const recSide = OPP_DIR[backSide];
   const at = findNonCollidingAt(recSide, anchor.exits, rng, anchor.size) ?? bestSpacedAt(recSide, anchor.exits, anchor.size);
-  anchor.exits.push({ to: fresh.id, side: recSide, at });
+  anchor.exits.push({ to: fresh.id, side: recSide, at, ...wetDeed });
   fresh.floating = false;
   fresh.concealed = false; // a road has formed — the player has found it; reveal it
   fresh.veiled = false;    // …and the forechart's veil lifts the same way

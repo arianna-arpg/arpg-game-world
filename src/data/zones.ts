@@ -892,6 +892,17 @@ export interface ZoneDef {
   /** Sea routes sailed FROM this port (port zone ids) — map styling + the
    *  Sail menu's memory of established crossings. */
   searoutes?: string[];
+  /** THE HARBOR PAIR (the sea fabric's two-zone port law): a HOLD ANCHOR
+   *  zone — the mainland holdfast standing over a quay — names the PORT zone
+   *  its gate opens onto. The anchor keeps the walls, the siege, and the
+   *  state (`harborhold`); its exit to the port wears `lock: 'harborhold'`
+   *  (sealed until the hold stands open). Stamped by ensureSeaPorts;
+   *  legacy single-zone ports carry neither field and keep the old shape. */
+  holdPort?: string;
+  /** The PORT half of the pair: which zone's `harborhold` state governs this
+   *  quay (services activate off the ANCHOR's state + prosperity — the port
+   *  itself holds no state of its own). Inverse of `holdPort`. */
+  holdAnchor?: string;
   /** SECONDARY MAP NODES (one zone, several mouths): extra chart positions
    *  drawn as small discs of this same zone, with roads snapping to the
    *  NEAREST anchor (primary node or berth) — a long zone's entries read at

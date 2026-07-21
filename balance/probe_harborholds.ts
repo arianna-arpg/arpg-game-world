@@ -3,19 +3,25 @@
 // world/harborholds.ts + the World runtime; docs/engine/harborholds.md). Pins:
 //   - THE ASSIGN LAW: every sea class × tier resolves to a registered hold
 //     class (or an honest bare quay); every assigned class names a REGISTERED
-//     structure whose plan carries the sealed gate + every service seat char,
+//     structure whose plan carries the sealed gate; THE QUAY VILLAGE plan
+//     (HARBORHOLD_CFG.quay.structure) carries EVERY class's service seats and
+//     no sealed gate (the war lives at the anchor; the counters at the quay),
 //   - the data helpers: mint state, restore pricing, the prosperity gate,
 //     and the TOLERANT sanitizer (foreign saves degrade, never crash),
-//   - THE MINT LAW (live): ensureSeaPorts stamps harborhold + the town
-//     composition on MAINLAND spots only — anything holding a state has a
-//     portTier by construction (islands/legacy stay bare quays),
-//   - THE LIFECYCLE (live): boot seals the gate + pitches the siege camp +
-//     suppresses the board; the MUSTER plants a formula-true ward and wave 1
-//     pours fixated besiegers; a lost defense FELLS the hold (fires, penalty,
-//     rebuild clock, ports_lost); the RESTORATION charges exact Mortal
-//     Essence and re-stands it besieged; a won defense OPENS it (gate door
-//     open, prosperity +1, services seated by rung, caches + ledgers);
-//     recurring sieges schedule + land + deadline-fall via the sweep; the
+//   - THE PAIR MINT LAW (live): ensureSeaPorts raises a HOLD ANCHOR (state +
+//     walled-town composition, mainland) behind every kind-'port' quay zone;
+//     anything holding a state has a portTier (legacy towns) or a holdPort
+//     (anchors) by construction — islands stay bare quays,
+//   - THE LIFECYCLE (live, at the ANCHOR): boot seals the gate + pitches the
+//     siege camp; the causeway exit is LOCKED while besieged; the MUSTER
+//     plants a formula-true ward and wave 1 pours fixated besiegers; a lost
+//     defense FELLS the hold; the RESTORATION charges exact Mortal Essence;
+//     a won defense OPENS it — gate door open, the causeway UNLOCKS, the
+//     paired port unveils, prosperity climbs, caches + ledgers stamp,
+//   - THE QUAY SERVICES (live, at the PORT): keeper folk + boards seat at the
+//     quay village's plan anchors off the ANCHOR's state + rungs; the merc
+//     captain arms a TEMPLATE-ONLY sheet; no retirement at a port,
+//   - recurring sieges schedule + land + deadline-fall via the sweep; the
 //     rebuilt hold returns besieged; omens speak only under a deadline,
 //   - PERSISTENCE: hold states ride WorldStateSave.zones byte-faithful; a
 //     corrupted state drops to a bare quay on adopt.
@@ -36,6 +42,7 @@ import { holdGateDoor, holdSeatCell, holdStructureIn } from '../src/world/harbor
 import { cellKind, continentSeedFrom } from '../src/world/continents';
 import { clearSeaMemo, seaOfCell, type Sea } from '../src/world/seas';
 import type { World } from '../src/engine/world';
+import type { ZoneDef } from '../src/data/zones';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -61,16 +68,25 @@ seedGlobalRandom(0x40b0);
       if (!s?.plan) { structOk = false; details.push(`${cls.id}→${cls.structure} missing`); continue; }
       // The sealed gate char stands somewhere in the plan.
       if (!s.plan.some(row => row.includes('g'))) gateOk = false;
-      // Every service row's seat char is IN the plan (placement truth).
-      for (const svc of cls.services) {
-        if (holdSeatCell(s, svc.seat) === null) { seatOk = false; details.push(`${cls.id}:${svc.id}@'${svc.seat}'`); }
-      }
     }
   }
   check('A: the assign map resolves every sea class × tier', assignOk);
   check('A: every hold class names a registered plan structure', structOk, details.join(', '));
   check('A: every town plan carries its sealed gate', gateOk);
-  check('A: every service seat char stands in its plan', seatOk, details.join(', '));
+  // THE QUAY VILLAGE (the pair's port half): the one plan every class's
+  // services seat in — placement truth for refreshHoldServices at the quay.
+  const quay = STRUCTURES[HARBORHOLD_CFG.quay.structure];
+  check('A: the quay village plan is registered', !!quay?.plan, HARBORHOLD_CFG.quay.structure);
+  if (quay?.plan) {
+    for (const cls of Object.values(HOLD_CLASSES)) {
+      for (const svc of cls.services) {
+        if (holdSeatCell(quay, svc.seat) === null) { seatOk = false; details.push(`quay:${cls.id}:${svc.id}@'${svc.seat}'`); }
+      }
+    }
+    check('A: every service seat char stands in the QUAY plan', seatOk, details.join(', '));
+    check('A: the quay village keeps no sealed gate (the war lives at the anchor)',
+      !quay.plan.some(row => row.includes('g')));
+  }
 
   const cls = HOLD_CLASSES.harbortown;
   const st = mintHoldState(cls);
@@ -109,43 +125,51 @@ seedGlobalRandom(0x40b0);
   check('B: a multi-port sea stands for the rig', !!sea, sea ? `${sea.ports.length} ports (${sea.cls.id})` : 'none');
   if (sea) {
     const info = w.devEnsureSea(sea.ports[0].shore)!;
-    const zones = info.ports.map(p => w.zoneMap[p.id]);
-    // THE MINT LAW: every mainland spot wears its assigned state + the baked
-    // town composition; the discriminator holds world-wide.
-    const stampOk = zones.every(z => {
-      const cls = holdClassFor(info.cls, (z.portTier ?? 'cove') as 'haven' | 'cove');
-      if (!cls) return z.harborhold === undefined;
-      return z.harborhold?.state === 'besieged' && z.harborhold.cls === cls.id
-        && (z.compositions ?? []).some(c => c.composition === `harborhold_${cls.id}` && c.chance === 1);
+    const ports = info.ports.map(p => w.zoneMap[p.id]);
+    const pairs = ports.map(p => ({ port: p, anchor: p.holdAnchor ? w.zoneMap[p.holdAnchor] : undefined }));
+    // THE PAIR MINT LAW: every anchor besieged with the town composition
+    // baked; every port kind-worded and back-paired.
+    const stampOk = pairs.every(({ port, anchor }) => {
+      const cls = holdClassFor(info.cls, (port.portTier ?? 'cove') as 'haven' | 'cove');
+      if (!cls) return !anchor?.harborhold;
+      return !!anchor && anchor.harborhold?.state === 'besieged' && anchor.harborhold.cls === cls.id
+        && (anchor.compositions ?? []).some(c => c.composition === `harborhold_${cls.id}` && c.chance === 1)
+        && port.kind === 'port' && anchor.holdPort === port.id;
     });
-    check('B: mainland spots mint besieged with the town composition baked', stampOk,
-      zones.map(z => `${z.portTier}:${z.harborhold?.cls ?? 'quay'}`).join(' '));
-    check('B: only portTier ground ever holds a state (islands/legacy exempt by construction)',
-      Object.values(w.zoneMap).every(z => !z.harborhold || !!z.portTier));
+    check('B: anchors mint besieged with the town composition; ports pair back', stampOk,
+      pairs.map(p => `${p.port.portTier}:${p.anchor?.harborhold?.cls ?? 'quay'}`).join(' '));
+    check('B: only anchors (holdPort) or legacy towns (portTier) ever hold a state',
+      Object.values(w.zoneMap).every(z => !z.harborhold || !!z.portTier || !!z.holdPort));
 
-    // Choose a hold port that actually seated its town (a tight arena may
+    // Choose a pair whose ANCHOR actually seated its town (a tight arena may
     // honestly degrade — but a 2+-port sea must seat at least one).
-    let hz = null as (typeof zones)[number] | null;
-    for (const z of zones) {
-      if (!z.harborhold) continue;
-      w.loadZone(z.id);
-      if (holdStructureIn(w.structures, HOLD_CLASSES[z.harborhold.cls].structure)) { hz = z; break; }
+    let az: ZoneDef | null = null, pz: ZoneDef | null = null;
+    for (const { port, anchor } of pairs) {
+      if (!anchor?.harborhold) continue;
+      w.loadZone(anchor.id);
+      if (holdStructureIn(w.structures, HOLD_CLASSES[anchor.harborhold.cls].structure)) {
+        az = anchor; pz = port; break;
+      }
     }
-    check('B: at least one spot seats its walled town', !!hz);
-    if (hz) {
-      const hold = hz.harborhold!;
+    check('B: at least one anchor seats its walled town', !!az);
+    if (az && pz) {
+      const hold = az.harborhold!;
       const cls = HOLD_CLASSES[hold.cls];
       const ps = holdStructureIn(w.structures, cls.structure)!;
       const gate = holdGateDoor(ps);
       check('B: the town gate stands SEALED while besieged', !!gate && !gate.door.open && !gate.door.broken);
       check('B: the muster horn stands on the apron', w.doodads.some(d => d.kind === 'muster_horn'));
-      check('B: the harbor board is NOT planted while shut', !w.doodads.some(d => d.kind === 'harbor_board'));
+      check('B: no counters at the anchor (the board lives at the quay)', !w.doodads.some(d => d.kind === 'harbor_board'));
       check('B: the siege camp dresses the gate', w.doodads.some(d => d.holdDress));
+      // THE CAUSEWAY LOCK: the live exit to the paired port refuses travel.
+      const liveGate = w.exits.find(x => x.to === pz!.id);
+      check('B: the causeway to the quay is SEALED while besieged',
+        !!liveGate && w.isExitLocked(liveGate) === true);
 
       // THE MUSTER: the ward plants formula-true; wave 1 pours fixated.
       w.beginHoldMuster();
       const ward = w.actors.find(a => a.tag === 'hold_ward' && !a.dead);
-      const lvl = Math.max(1, hz.level);
+      const lvl = Math.max(1, az.level);
       const wantLife = Math.round(cls.siege.wardLife + cls.siege.wardLifePerLevel * lvl);
       check('B: the ward plants at the gate, formula-true', !!ward
         && ward.team === 'player' && Math.abs(ward.maxLife() - wantLife) <= 1,
@@ -166,15 +190,17 @@ seedGlobalRandom(0x40b0);
       const gate2 = holdGateDoor(holdStructureIn(w.structures, cls.structure)!);
       check('B: the gate re-seals on the fall', !!gate2 && !gate2.door.open);
       check('B: the wreckage burns (ruin dress)', w.doodads.some(d => d.holdDress));
+      check('B: the causeway stays sealed over the ashes',
+        !!liveGate && w.isExitLocked(liveGate) === true);
 
       // THE RESTORATION: exact price, back to besieged.
-      const price = holdRestoreCost(cls, Math.max(1, hz.level));
+      const price = holdRestoreCost(cls, Math.max(1, az.level));
       w.account.credits = price + 37;
       w.buyHoldRestore();
       check('B: the restoration charges EXACT Mortal Essence and re-stands it besieged',
         hold.state === 'besieged' && w.account.credits === 37 && hold.rebuildAt === undefined);
 
-      // A WON defense opens the town.
+      // A WON defense opens the town — and the causeway, and the chart.
       w.beginHoldMuster();
       step(w, 0.1, 5);
       w.devResolveHoldDefense(true);
@@ -182,37 +208,54 @@ seedGlobalRandom(0x40b0);
         && hold.defenses === 1 && hold.siegeAt !== undefined);
       const gate3 = holdGateDoor(holdStructureIn(w.structures, cls.structure)!);
       check('B: the gate door swings open', !!gate3 && gate3.door.open === true);
-      check('B: rung-0 services seat (harbormaster), rung-1 seats at prosperity 1 (chandler), rung-2 waits',
-        w.actors.some(a => a.tag === 'hold_svc:harbormaster' && !a.dead)
-        && (cls.services.some(s => s.id === 'chandler') === w.actors.some(a => a.tag === 'hold_svc:chandler' && !a.dead))
-        && !w.actors.some(a => a.tag === 'hold_svc:mercs' && !a.dead));
-      check('B: the board seats INSIDE the walls', w.doodads.some(d => d.kind === 'harbor_board'));
+      check('B: the causeway UNLOCKS with the win', !!liveGate && w.isExitLocked(liveGate) === false);
+      check('B: the paired port unveils onto the chart', pz.veiled === false);
       check('B: the spoils stack (caches)', w.actors.filter(a => a.defId === 'harbor_cache' && !a.dead).length === cls.reward.caches);
       check('B: ports_defended + first_hold_opened stamp',
         (w.ledger.ports_defended ?? 0) === 1 && (w.ledger.first_hold_opened ?? 0) === 1);
+      check('B: no counters seat at the anchor even open',
+        !w.actors.some(a => !a.dead && typeof a.tag === 'string' && a.tag.startsWith('hold_svc:')));
 
-      // THE PORT MERC MARKET at rung 2: template-only, no retirement.
-      hold.prosperity = Math.min(cls.prosperityCap, Math.max(2, hold.prosperity));
-      w.devSetHoldState(hz.id, 'open');
-      if (cls.services.some(s => s.id === 'mercs')) {
-        check('B: the captain arms a TEMPLATE-ONLY sheet', !!w.mercOutpost?.port
-          && w.mercOutpost.offers.length > 0 && w.mercOutpost.offers.every(o => o.kind === 'template'),
-          `${w.mercOutpost?.offers.length ?? 0} offers`);
-        check('B: no retirement at a port', w.canRetireHere() === false);
-      } else {
-        check('B: a landing fields no captain (class law)', !w.mercOutpost?.port);
-        check('B: no retirement at a port (vacuous on a landing)', w.canRetireHere() === false);
+      // THE QUAY SERVICES: walk the causeway — keeper folk seat at the
+      // village plan off the ANCHOR's rungs (harbormaster at 0, chandler at
+      // 1, the captain waits for 2).
+      w.loadZone(pz.id);
+      const quayPs = holdStructureIn(w.structures, HARBORHOLD_CFG.quay.structure);
+      check('B: the quay village stands in the port zone', !!quayPs);
+      if (quayPs) {
+        check('B: rung-0/1 services seat at the QUAY, rung-2 waits',
+          w.actors.some(a => a.tag === 'hold_svc:harbormaster' && !a.dead)
+          && (cls.services.some(s => s.id === 'chandler') === w.actors.some(a => a.tag === 'hold_svc:chandler' && !a.dead))
+          && !w.actors.some(a => a.tag === 'hold_svc:mercs' && !a.dead));
+        check('B: the board seats at the quay', w.doodads.some(d => d.kind === 'harbor_board'));
       }
+      check('B: the quay keeps its dock-location (one recipe dock)',
+        w.doodads.filter(d => d.kind === 'dock').length === 1);
 
-      // THE RECURRING SIEGE: schedule → land (deadline armed) → omen speaks.
+      // PERSISTENCE: byte-faithful ride + the corrupted-state degrade.
+      const save = w.serializeWorldState();
+      const w2 = makeSimWorld('warrior', 0x40b790);
+      check('B: the save adopts', w2.adoptWorldState(save) === true);
+      check('B: hold states ride the save byte-faithful',
+        JSON.stringify(w2.zoneMap[az.id]?.harborhold) === JSON.stringify(hold));
+      check('B: the pair fields ride the save',
+        w2.zoneMap[pz.id]?.holdAnchor === az.id && w2.zoneMap[az.id]?.holdPort === pz.id);
+      const save2 = JSON.parse(JSON.stringify(save));
+      const zz = save2.zones.find((z: { id: string }) => z.id === az!.id);
+      zz.harborhold = { cls: 'atlantis', state: 'open' };
+      const w3 = makeSimWorld('warrior', 0x40b791);
+      check('B: a corrupted state degrades to a bare quay on adopt',
+        w3.adoptWorldState(save2) === true && w3.zoneMap[az.id]?.harborhold === undefined);
+
+      // THE RECURRING SIEGE (state-machine, at the anchor): schedule → land
+      // (deadline armed) → omen speaks → deadline fall → rebuild.
+      w.loadZone(az.id);
       hold.siegeAt = w.time - 1;
       step(w, 0.5, Math.ceil((HARBORHOLD_CFG.sweepSec + 1) / 0.5));
       check('B: the siege returns through the sweep', hold.state === 'besieged'
         && (cls.fallAfterSec <= 0 || hold.fallAt !== undefined));
       check('B: a deadline siege murmurs (the omen source)',
-        cls.fallAfterSec <= 0 || w.harborholdOmens().some(o => o.zoneId === hz!.id));
-
-      // THE DEADLINE FALL — unattended, the hold burns on its own.
+        cls.fallAfterSec <= 0 || w.harborholdOmens().some(o => o.zoneId === az!.id));
       if (hold.fallAt !== undefined) {
         hold.fallAt = w.time - 1;
         step(w, 0.5, Math.ceil((HARBORHOLD_CFG.sweepSec + 1) / 0.5));
@@ -220,33 +263,19 @@ seedGlobalRandom(0x40b0);
       } else {
         check('B: an unbroken deadline fells the hold (class runs no deadline)', true, 'fallAfterSec 0');
       }
-
-      // THE REBUILD: the clock expires into a fresh siege.
       hold.rebuildAt = w.time - 1;
       step(w, 0.5, Math.ceil((HARBORHOLD_CFG.sweepSec + 1) / 0.5));
       check('B: the rebuilt hold returns besieged', hold.state === HARBORHOLD_CFG.rebuildTo);
-
-      // PERSISTENCE: byte-faithful ride + the corrupted-state degrade.
-      const save = w.serializeWorldState();
-      const w2 = makeSimWorld('warrior', 0x40b790);
-      check('B: the save adopts', w2.adoptWorldState(save) === true);
-      check('B: hold states ride the save byte-faithful',
-        JSON.stringify(w2.zoneMap[hz.id]?.harborhold) === JSON.stringify(hold));
-      const save2 = JSON.parse(JSON.stringify(save));
-      const zz = save2.zones.find((z: { id: string }) => z.id === hz!.id);
-      zz.harborhold = { cls: 'atlantis', state: 'open' };
-      const w3 = makeSimWorld('warrior', 0x40b791);
-      check('B: a corrupted state degrades to a bare quay on adopt',
-        w3.adoptWorldState(save2) === true && w3.zoneMap[hz.id]?.harborhold === undefined);
     }
   }
 }
 
-// ------------------------------------------------ C. the haven rig (mercs)
+// ------------------------------------------------ C. the haven rig (mercs + plaza)
 // The template-only market is the user contract ("surefire lower-tier
 // hires, no retirement") — pin it on a HAVEN sea where the class fields a
 // captain, across a wider seed hunt (an honest skip only if no haven sea
-// stands anywhere in the budget).
+// stands anywhere in the budget). Services live at the QUAY; the war and
+// the camp live at the ANCHOR — the rig walks both sides of the causeway.
 {
   let w: World | null = null;
   let sea: Sea | null = null;
@@ -260,18 +289,21 @@ seedGlobalRandom(0x40b0);
   if (w && sea) {
     const info = w.devEnsureSea(sea.ports[0].shore)!;
     const havenId = info.ports.find(p => p.tier === 'haven')?.id;
-    const hz = havenId ? w.zoneMap[havenId] : undefined;
-    check('C: the haven wears a captained class', !!hz?.harborhold
-      && HOLD_CLASSES[hz.harborhold.cls].services.some(s => s.id === 'mercs'),
-      hz?.harborhold?.cls);
-    if (hz?.harborhold) {
-      const cls = HOLD_CLASSES[hz.harborhold.cls];
-      w.loadZone(hz.id);
+    const pz = havenId ? w.zoneMap[havenId] : undefined;
+    const az = pz?.holdAnchor ? w.zoneMap[pz.holdAnchor] : undefined;
+    check('C: the haven wears a captained class (on its anchor)', !!az?.harborhold
+      && HOLD_CLASSES[az.harborhold.cls].services.some(s => s.id === 'mercs'),
+      az?.harborhold?.cls);
+    if (pz && az?.harborhold) {
+      const cls = HOLD_CLASSES[az.harborhold.cls];
+      w.loadZone(az.id);
       if (!holdStructureIn(w.structures, cls.structure)) {
-        check('C: the haven seats its town', false, 'no structure — arena too tight');
+        check('C: the haven anchor seats its town', false, 'no structure — arena too tight');
       } else {
-        hz.harborhold.prosperity = cls.prosperityCap;
-        w.devSetHoldState(hz.id, 'open');
+        az.harborhold.prosperity = cls.prosperityCap;
+        w.devSetHoldState(az.id, 'open');
+        // Cross to the quay: the captain's counter arms on load.
+        w.loadZone(pz.id);
         check('C: the captain arms a TEMPLATE-ONLY sheet within the class band',
           !!w.mercOutpost?.port
           && w.mercOutpost.offers.length >= cls.mercOffers[0]
@@ -291,31 +323,41 @@ seedGlobalRandom(0x40b0);
           postHoldWrits(): void;
           spawnHoldBesieger(cls: unknown, ward: unknown): void;
           kill(a: unknown, silent?: boolean, killer?: unknown): void;
+          countedEnemies(): { tag?: string; rarity?: string; owner?: unknown }[];
         };
-        // THE WRIT BOARD: planted at rung 1+, posts named promoted marks,
-        // then rests on its persisted clock.
-        check('D: the writ board stands in the open town', w.doodads.some(d => d.kind === 'bounty_board'));
-        const foesBefore = w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length;
+        // THE WRIT BOARD: planted at rung 1+ at the quay; posts named
+        // promoted marks on the cove's living foes, then rests — or refuses
+        // honestly when the water keeps no quarry.
+        check('D: the writ board stands at the open quay', w.doodads.some(d => d.kind === 'bounty_board'));
+        const hold2 = az.harborhold!;
+        const quarry = wAny.countedEnemies().filter(a =>
+          a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal' && !a.owner).length;
         wAny.postHoldWrits();
         const marks = w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead);
-        const hold2 = hz.harborhold!;
-        check('D: writs post onto living foes (named, promoted, tagged)',
-          marks.length > foesBefore && marks.every(m => (m.rarity ?? 'normal') !== 'normal' && !!m.name),
-          `${marks.length} marks`);
-        check('D: the board rests (writsAt persisted on the state)', hold2.writsAt !== undefined && hold2.writsAt > w.time);
-        const markCount = marks.length;
-        wAny.postHoldWrits();
-        check('D: a resting board refuses a second posting',
-          w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length === markCount);
-        if (marks[0]) {
-          const before = w.ledger.bounty_writs_claimed ?? 0;
-          wAny.kill(marks[0], false, w.player);
-          check('D: a claimed writ pays the standard ledger row',
-            (w.ledger.bounty_writs_claimed ?? 0) === before + 1);
+        if (quarry > 0) {
+          check('D: writs post onto living foes (named, promoted, tagged)',
+            marks.length > 0 && marks.every(m => (m.rarity ?? 'normal') !== 'normal' && !!m.name),
+            `${marks.length} marks over ${quarry} quarry`);
+          check('D: the board rests (writsAt persisted on the anchor state)',
+            hold2.writsAt !== undefined && hold2.writsAt > w.time);
+          const markCount = marks.length;
+          wAny.postHoldWrits();
+          check('D: a resting board refuses a second posting',
+            w.actors.filter(a => a.tag === 'bounty_mark' && !a.dead).length === markCount);
+          if (marks[0]) {
+            const before = w.ledger.bounty_writs_claimed ?? 0;
+            wAny.kill(marks[0], false, w.player);
+            check('D: a claimed writ pays the standard ledger row',
+              (w.ledger.bounty_writs_claimed ?? 0) === before + 1);
+          }
+        } else {
+          check('D: a quiet cove refuses writs honestly (no cooldown spent)',
+            marks.length === 0 && hold2.writsAt === undefined, 'no quarry in the cove');
         }
-        // THE CAMP WATCH: besieged plants the dormant watch at its posts;
-        // reopening retires it quietly.
-        w.devSetHoldState(hz.id, 'besieged');
+        // THE CAMP WATCH (at the anchor): besieged plants the dormant watch
+        // at its posts; reopening retires it quietly.
+        w.loadZone(az.id);
+        w.devSetHoldState(az.id, 'besieged');
         const cls2 = HOLD_CLASSES[hold2.cls];
         const camp = w.actors.filter(a => a.tag === 'hold_camp' && !a.dead);
         check('D: the camp watch plants dormant at its posts',
@@ -332,9 +374,9 @@ seedGlobalRandom(0x40b0);
         check('D: reopening retires the camp', !w.actors.some(a => a.tag === 'hold_camp' && !a.dead));
         // THE LOCAL TIDE: a desert coast seasons the siege table (the fold is
         // read per spawn — poke the biome, pour a wave's worth, census kinds).
-        const oldBiome = hz.biome;
-        hz.biome = 'desert';
-        w.devSetHoldState(hz.id, 'besieged');
+        const oldBiome = az.biome;
+        az.biome = 'desert';
+        w.devSetHoldState(az.id, 'besieged');
         w.beginHoldMuster();
         const ward2 = w.actors.find(a => a.tag === 'hold_ward' && !a.dead);
         const desertIds = new Set(HARBORHOLD_CFG.tideBiomes.desert.map(r => r.id));
@@ -348,12 +390,13 @@ seedGlobalRandom(0x40b0);
         check('D: the LOCAL TIDE seasons the siege (desert kin in the pour)', seasoned > 0, `${seasoned}/60+`);
         check('D: every tideBiomes id resolves', Object.values(HARBORHOLD_CFG.tideBiomes)
           .every(rows => rows.every(r => !!MONSTERS[r.id])));
-        hz.biome = oldBiome;
+        az.biome = oldBiome;
         w.devResolveHoldDefense(false);
-        // THE MAP BADGE: the marker registry wears the standing.
+        // THE MAP BADGE: the marker registry wears the standing (on the
+        // ANCHOR — the hold is the thing that stands or burns).
         const badges = collectMarkers(w).filter(m => m.id.startsWith('hold:'));
         check('D: every known hold wears a map badge', badges.length >= 1
-          && badges.some(m => m.id === `hold:${hz.id}` && m.glyph === '🔥'),
+          && badges.some(m => m.id === `hold:${az.id}` && m.glyph === '🔥'),
           `${badges.length} badges`);
       }
     }

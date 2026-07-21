@@ -37,6 +37,8 @@ import {
 } from './genkit';
 import { carveMassifs } from './massif';
 import { ferryLaneFor, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
+import { HARBORHOLD_CFG } from '../data/harborholds';
+import { STRUCTURES } from '../data/structures';
 
 /** The negative-space region a carved recipe leaves between its passages —
  *  'wall' reads as rock (true wall: blocks shots + sight); a biome may swap
@@ -712,6 +714,136 @@ function soulriverLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('soulriver', soulriverLayout);
+
+// --- HARBORCOVE (the sea fabric's PORT zone — the harbor pair's water half) --------
+// THE INVERSION brought to brine (the soulriver inland-sea idiom): the whole
+// arena is the SEA — deep water wall to wall — and LAND is the exception: one
+// OUTCROP pressed against the landward edge (aligned with the hold anchor the
+// causeway comes from), a shallow skirt along its strand, a stub of strand
+// under every portal (genqa may deal exits on any rim), and THE PIER — a
+// planked dock-location walking seaward to the BERTH where the voyage casts
+// off. The QUAY VILLAGE (HARBORHOLD_CFG.quay.structure) stands on the outcrop;
+// its plan anchors seat the hold services off the ANCHOR's prosperity ladder.
+// Every knob is a layoutParam; unstamped mints (dev, the genqa sweep) derive a
+// facing from the entry portal so the ground still lands under the door.
+function harborcoveLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  // FACING: radians pointing LANDWARD (toward the mainland hold). The mint
+  // stamps the spot's own shore normal (layoutParams.quayFacing).
+  const stamped = layoutParam<number | undefined>(def, 'quayFacing', undefined);
+  const facing = stamped !== undefined ? stamped
+    : Math.atan2(ctx.entry.y - arena.h / 2, ctx.entry.x - arena.w / 2);
+  const fx = Math.cos(facing), fy = Math.sin(facing);
+
+  // 1) THE COVE: deep water everywhere (region liquid — swim + breath drain;
+  //    the sea is real). Land carves REPLACE cells below, so pour first.
+  const cove = Mask.forRect(0, 0, arena.w, arena.h);
+  cove.invert();
+  paintLiquid(ctx, grid, cove, liquidOf(layoutParam(def, 'coveLiquid', 'deep_water')));
+
+  // 2) THE OUTCROP + STRAND STUBS, built as GEOMETRY first so the land mask
+  //    and its shallow skirt band the same shapes at two widths.
+  const cx = arena.w / 2, cy = arena.h / 2;
+  const half = Math.min(arena.w, arena.h) / 2;
+  const oR = (layoutParam(def, 'outcropRadius', 0) as number) || Math.max(300, half * 0.5);
+  const oC = vec(cx + fx * (half - oR * 0.74), cy + fy * (half - oR * 0.74));
+  const lobes: { x: number; y: number; r: number }[] = [{ x: oC.x, y: oC.y, r: oR }];
+  for (let i = 0; i < 3; i++) {
+    const a = facing + rng.range(-1.5, 1.5);
+    lobes.push({
+      x: oC.x + Math.cos(a) * oR * 0.7, y: oC.y + Math.sin(a) * oR * 0.7,
+      r: oR * rng.range(0.35, 0.55),
+    });
+  }
+  const stubs: Vec2[][] = [];
+  for (const p of [ctx.entry, ...ctx.exits]) {
+    stubs.push(wanderPath(rng, p, oC, { step: 150, wobble: 40, bowFrac: 0.12 }));
+  }
+  const skirtW = layoutParam(def, 'skirtWidth', 66) as number;
+  const land = Mask.forRect(0, 0, arena.w, arena.h);
+  const skirt = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const l of lobes) { disc(land, l.x, l.y, l.r); disc(skirt, l.x, l.y, l.r + skirtW); }
+  for (let i = 0; i < stubs.length; i++) {
+    band(land, stubs[i], 62); band(skirt, stubs[i], 62 + skirtW);
+    const p = i === 0 ? ctx.entry : ctx.exits[i - 1];
+    disc(land, p.x, p.y, 110); disc(skirt, p.x, p.y, 110 + skirtW);
+  }
+  skirt.subtract(land);
+  // The skirt is SHALLOWS (wadeable doodad water — scatter's forbidOn sees
+  // doodad grounds, so the shoreline reads to every placement law), the land
+  // plain ground over the deep pour.
+  paintLiquid(ctx, grid, skirt, liquidOf(layoutParam(def, 'skirtLiquid', 'shallows')));
+  paintRegion(grid, skirt, 'water');
+  paintRegion(grid, land, 'ground');
+
+  // 3) THE PIER: from the outcrop's seaward rim, boards walk out over the
+  //    deep to the BERTH — the dock-location the voyage casts off from.
+  const pierLen = (layoutParam(def, 'pierLength', 0) as number)
+    || Math.min(half * 0.62, 320);
+  const margin = 120;
+  const root = vec(oC.x - fx * oR * 0.82, oC.y - fy * oR * 0.82);
+  const berth = vec(
+    Math.max(margin, Math.min(arena.w - margin, root.x - fx * pierLen)),
+    Math.max(margin, Math.min(arena.h - margin, root.y - fy * pierLen)));
+  const pier = Mask.forRect(0, 0, arena.w, arena.h);
+  band(pier, [root, berth], 30);
+  disc(pier, berth.x, berth.y, 54);
+  paintRegion(grid, pier, 'boardwalk');
+  // Planks for the drawn read (the riverland causeway idiom), lanterns at
+  // the root and the berth, and the artery reserved against all scatter.
+  const pn = Math.max(2, Math.ceil(Math.hypot(berth.x - root.x, berth.y - root.y) / 34));
+  for (let s = 0; s <= pn; s++) {
+    ctx.doodads.push({
+      pos: vec(root.x + (berth.x - root.x) * (s / pn), root.y + (berth.y - root.y) * (s / pn)),
+      radius: 26, kind: 'bridge', dir: facing + Math.PI / 2,
+    });
+  }
+  const px = -fy, py = fx; // along-quay axis
+  for (const side of [-1, 1]) {
+    ctx.doodads.push({ pos: vec(root.x + px * side * 52, root.y + py * side * 52), radius: 10, kind: 'lantern_post' });
+  }
+  ctx.doodads.push({ pos: vec(berth.x + px * 40, berth.y + py * 40), radius: 10, kind: 'lantern_post' });
+  // THE DOCK at the berth: the voyage's own cast-off doodad, seated by the
+  // recipe (loadZone's oceanward fallback stands down when a layout already
+  // placed one — the dock-location law).
+  ctx.doodads.push({ pos: vec(berth.x, berth.y), radius: 26, kind: 'dock' });
+  reserveArtery(ctx, [root, berth], 60);
+  ctx.pois.push(vec(berth.x, berth.y));
+
+  // 4) THE QUAY VILLAGE on the outcrop's landward half — service seats live
+  //    in its plan (world/harborholds.ts scans the placed structure). The
+  //    seat CLAMPS so the whole footprint stays inside the arena whatever
+  //    the facing axis (an east-facing cove must not poke its long side
+  //    past the rim and lose the village to the placement refusal).
+  const vDef = STRUCTURES[HARBORHOLD_CFG.quay.structure];
+  const vhw = (vDef?.halfW ?? 225) + 40, vhh = (vDef?.halfH ?? 135) + 40;
+  raiseStructure(ctx, HARBORHOLD_CFG.quay.structure, vec(
+    Math.max(vhw, Math.min(arena.w - vhw, oC.x + fx * oR * 0.22)),
+    Math.max(vhh, Math.min(arena.h - vhh, oC.y + fy * oR * 0.22))));
+
+  // 5) WATERFRONT DRESS: cargo along the quay line between village and pier.
+  for (let i = 0, n = rng.int(2, 4); i < n; i++) {
+    const t = rng.range(-1.2, 1.2);
+    const inland = rng.range(50, 130);
+    const at = vec(root.x + px * t * 120 + fx * inland, root.y + py * t * 120 + fy * inland);
+    ctx.doodads.push({ pos: at, radius: 16, kind: rng.chance(0.7) ? 'cargo_stack' : 'crate' });
+  }
+
+  // 6) Tileset dress on the strand — then PURGE THE DROWNED: scatter's
+  //    forbidOn speaks doodad grounds, not grid regions (the soulriver trap),
+  //    so the recipe closes the seam itself: anything the scatter set down on
+  //    the open deep (outside land + skirt) leaves. The pier stays sovereign
+  //    (reserved above); recipe-placed pieces sit before the mark.
+  const mark = ctx.doodads.length;
+  scatterDecoration(ctx, def);
+  for (let k = ctx.doodads.length - 1; k >= mark; k--) {
+    const d = ctx.doodads[k];
+    const mx = land.cx(d.pos.x), my = land.cy(d.pos.y);
+    if (!land.get(mx, my) && !skirt.get(mx, my)) ctx.doodads.splice(k, 1);
+  }
+}
+registerLayout('harborcove', harborcoveLayout);
 
 // --- EXPANSE (open country beyond the Field) --------------------------------------
 function expanseLayout(ctx: GenCtx, def: ZoneDef): void {

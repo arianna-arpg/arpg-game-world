@@ -336,6 +336,10 @@ function restoreWorldState(world: World, save: CharacterSave): void {
   // dealt landings only and re-stamp their berths (an older save's
   // accumulated discovery roads rewire to the nearest port and heal away).
   world.reconcileSoulrivers();
+  // …and the SURFACE waters: port zones rebuild to notarized deeds, hold
+  // anchors re-seal their causeway locks, and the DRY-ROAD heal drops any
+  // saved road that walks across the sea (the voyage is the only crossing).
+  world.reconcileSeaPorts();
   const mode = modeById(world.meta.modeId);
   world.resumeSpawn(resolveResumeSpawn(mode.resume, settings.resumeSpawn), save.world.player);
 }

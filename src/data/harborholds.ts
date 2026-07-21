@@ -297,6 +297,19 @@ export const HARBORHOLD_CFG = {
    *  latch discipline). Planted on the gate apron at load. */
   muster: { radius: 96, dwellSec: 0.9 },
 
+  /** THE QUAY (the harbor pair's port half — SEA_CFG.pair): the unwalled
+   *  harbor village raised in the PORT zone by the harborcove recipe.
+   *  Service seats live in ITS plan (the anchor's walled town keeps the war
+   *  and the state); the causeway exit on the ANCHOR side wears
+   *  `lock: 'harborhold'` and surfaces these hints while sealed. */
+  quay: {
+    structure: 'quay_village',
+    lockHint: {
+      besieged: 'the quay causeway is barred — break the siege at the hold',
+      fallen: 'the hold lies in ashes — the causeway waits for its rebuild',
+    },
+  },
+
   /** Lifecycle sweep cadence (seconds) — rebuild clocks, siege scheduling,
    *  deadline enforcement. */
   sweepSec: 5,

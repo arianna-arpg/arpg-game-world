@@ -95,4 +95,37 @@ export const SEA_CFG = {
   /** The breakers refusal hint's cooldown (seconds) — said once per attempt
    *  spell, never spammed. */
   breakerHintCooldown: 6,
+
+  /** THE DRY-ROAD LAW: no auto-forged land road may cross ocean water. Every
+   *  road-former (the mint weave, nearestLinkable, linkBackTo, the frontier
+   *  resolution, the restore heal) answers to ONE chord test — World's
+   *  landRoute — sampling the straight line between two nodes at
+   *  `sampleStep` node-units against the continent lattice; any ocean
+   *  sample refuses the link. The notary's deliberate deeds are exempt (a
+   *  bridge or causeway that MEANS to cross says so in code). Kills both
+   *  far-shore link sprawl and the walk-across-the-sea teleport. */
+  dryRoad: { enabled: true, sampleStep: 40 },
+
+  /** THE HARBOR PAIR (ensureSeaPorts): every mainland spot mints TWO zones —
+   *  a HOLD ANCHOR on the land coord (ordinary country wearing the walled
+   *  holdfast, the siege, and the state) and the PORT zone proper standing
+   *  `offshore` node-units out on the water (kind 'port', sealed shores,
+   *  the quay + dock + services), joined by one notarized causeway whose
+   *  anchor-side exit is sealed until the hold stands open. */
+  pair: {
+    /** How far seaward of the spot's shore sample the port NODE sits. */
+    offshore: 84,
+    /** The port zone's footprint band (px) — a harbor locale, deliberately
+     *  smaller than open country. */
+    sizeW: [1500, 1740] as [number, number],
+    sizeH: [1300, 1540] as [number, number],
+    /** An OCEAN frontier resolves to the nearest hold anchor within this
+     *  range whose road home is DRY (the coast road bends to the gate);
+     *  farther water is just shore — the frontier consolidates. */
+    anchorSnapRange: 640,
+    /** Name dress: the anchor wears the hold suffix, a haven port keeps the
+     *  haven suffix. */
+    holdSuffix: ' Hold',
+    havenSuffix: ' Haven',
+  },
 };

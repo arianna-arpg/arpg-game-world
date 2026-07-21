@@ -34,20 +34,50 @@ Each sea gets, from the `SEA_CLASSES` ascending ladder (all data):
   under-budget on tiny coasts), each snapped to a land anchor. Spot 0 is
   **the HAVEN** where the class rates one; the rest are coves.
 
-## The port system made real
+## The port system made real — THE HARBOR PAIR
 
 `World.ensureSeaPorts(sea)` — idempotent, invoked by any first touch (a land
 frontier reaching the water, a quay sighted from the boat, a chart) — mints
-every spot as a **veiled**, roadless-charted port zone (`noBackEdge`: the
-land web weaves in as it grows), bakes `seaId`/`portTier`, names the haven
-("… Haven"), and rings **the lane law** (`SEA_CFG.lanes`): the coastal ring
-in angular order + spokes from every cove to the haven. Islands lane to the
-haven on sighting. The old nearest-neighbour lane router and its wet-chord
-heuristics are gone — lanes are the sea's own, exact by construction.
+every spot as a **veiled HARBOR PAIR** (`SEA_CFG.pair`):
 
-A land frontier that touches water now resolves to the system's **nearest
-harbor** (the road bends along the coast to where the quay was always going
-to stand) instead of minting one wherever the walker hit brine.
+- **THE HOLD ANCHOR** (`<spot>_hold`, at the spot's land coord): ordinary
+  coastal country wearing the walled **harborhold** — the state, the siege,
+  the camp, the muster (docs/engine/harborholds.md). It joins the land web
+  like any zone; the ocean-frontier resolution bends nearby coast roads to
+  it (same-shore, in `anchorSnapRange`, dry chord only).
+- **THE PORT** (the spot id itself, standing `offshore` on the water): kind
+  `'port'` — **sealed shores by registry** (`ZoneKindDef.staticExits`) —
+  carved by the **harborcove** recipe: deep water wall to wall, one outcrop
+  aligned back toward the anchor (`layoutParams.quayFacing`), the planked
+  pier walking out to the **berth** (the dock-location the voyage casts off
+  from), and the **quay village** whose plan seats the hold services. It
+  bakes `seaId`/`portTier`, wears the haven suffix, and lists on every
+  sailing surface (landing law, beacons, lanes, the Sail panel).
+
+One **notarized causeway** joins the pair; the anchor's side wears
+`lock: 'harborhold'` — sealed until the hold stands open, so entering the
+port **by land is earned at the muster**, while the sail-in pier never
+bricks. The win unbars the road live (the lock reads state) and unveils the
+port onto the chart. Legacy single-zone ports (older saves) are
+grandfathered whole.
+
+**The lane law** (`SEA_CFG.lanes`) rings the PORT zones: the coastal ring in
+angular order + spokes from every cove to the haven. Islands lane to the
+haven on sighting.
+
+## THE DRY-ROAD LAW
+
+No auto-forged land road may cross ocean water — **crossing a sea is a
+voyage, never a lucky link**. Every road-former answers to ONE chord test
+(`World.landRoute`, sampling at `SEA_CFG.dryRoad.sampleStep`): the mint
+weave (its long-standing guard), `nearestLinkable`, `linkBackTo`, the
+ocean-frontier resolution, and the restore heal. The notary's deliberate
+deeds are exempt (the causeway; a future quest bridge says so in code).
+A water-touching frontier that finds no same-shore anchor in snap range
+simply consolidates — the shore is just shore. `World.reconcileSeaPorts`
+(restoreWorldState) applies the law retroactively: un-notarized port roads
+and wet accretion heal away on load, with a marooning belt (a zone's last
+road is never severed).
 
 ## The landing law
 
@@ -65,11 +95,14 @@ Free docking is dead — with it, the infinite-shore-zone mint. While sailing:
 
 ## Ports themselves
 
-`ZoneDef.seaId` + `ZoneDef.portTier` ride the def. Havens dress their quay
-at load (lantern posts flanking the dock, seeded cargo stacks along the quay
-line) and read as hubs (the lane spokes). The zone pane's chip names the
-water ("⚓ haven — the Mourning Sea"); the Sail panel titles itself with it
-and groups harbors **by sea**, this water first — veiled harbors a lane
+`ZoneDef.seaId` + `ZoneDef.portTier` ride the port def; the pair wiring is
+`ZoneDef.holdAnchor` (port → anchor) / `ZoneDef.holdPort` (anchor → port).
+The harborcove recipe owns the whole quay — pier planks, the berth's dock
+doodad, lanterns, cargo — and loadZone's oceanward dock fallback stands
+down whenever a layout already placed one (**the dock-location law**;
+legacy ports keep the old formula byte-true). The zone pane's chip names
+the water ("⚓ haven — the Mourning Sea"); the Sail panel titles itself with
+it and groups harbors **by sea**, this water first — veiled harbors a lane
 already runs to included ("ships run there, friend": sailing a lane into
 the veil IS the discovery).
 

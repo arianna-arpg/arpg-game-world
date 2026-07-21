@@ -191,7 +191,7 @@ import { SEA_CFG } from '../data/seas';
 import { seaAt, seaById, seaSpotsNear, type Sea, type SeaPortSpot } from '../world/seas';
 import {
   HARBORHOLD_CFG, holdActiveServices, holdClassFor, holdClassOf, holdRestoreCost,
-  mintHoldState, sanitizeHoldState, type HoldClassDef,
+  mintHoldState, sanitizeHoldState, type HarborholdState, type HoldClassDef,
 } from '../data/harborholds';
 import { holdGateApron, holdGateDoor, holdSeatPos, holdStructureIn, rollHoldDressPieces } from '../world/harborholds';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
@@ -2983,10 +2983,13 @@ export class World {
   }
 
   /** Does a straight land route survive between two map coords (no open-ocean
-   *  crossing)? Samples the segment at ~40-node steps; bridges pass. */
+   *  crossing)? Samples the segment at SEA_CFG.dryRoad.sampleStep node-units
+   *  (bridges pass — they aren't ocean). THE ONE ROAD-WATER PREDICATE: the
+   *  weave guard, the dry-road law's linkers, and the restore heal all read
+   *  this same chord test. */
   private landRoute(a: { x: number; y: number }, b: { x: number; y: number }): boolean {
     const d = Math.hypot(b.x - a.x, b.y - a.y);
-    const steps = Math.max(3, Math.ceil(d / 40));
+    const steps = Math.max(3, Math.ceil(d / Math.max(20, SEA_CFG.dryRoad.sampleStep)));
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
       if (this.continentFor({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }).kind === 'ocean') return false;
@@ -4267,7 +4270,12 @@ export class World {
     // A PORT's DOCK: planted on the oceanward arena edge (the coast landmark's
     // liquid pools that side too, since both read the same bearing convention).
     // Dwell at it to open the Sail menu.
-    if (def.port) {
+    // THE DOCK-LOCATION LAW: a layout that placed its own dock (the
+    // harborcove pier's BERTH) owns the whole quay — this oceanward formula
+    // plant and its dressing stand down, so a recipe's dock is a real PLACE
+    // (piers, planks, lanterns), never doubled by the fallback. Legacy
+    // ports without one keep the old shape byte-true.
+    if (def.port && !this.doodads.some(d => d.kind === 'dock')) {
       const a = this.oceanBearing(def.map);
       const dock = vec(
         this.arena.w / 2 + Math.cos(a) * (this.arena.w / 2 - 150),
@@ -4276,10 +4284,11 @@ export class World {
       // THE HARBOR BOARD (data/ports.ts): planted a step INLAND of the dock —
       // dwell to read the hearsay (far omens as rumor rows), hire passage down
       // the shipping lanes, or buy a chart of a far seat. The dock keeps its
-      // own law: dwelling THERE still casts off directly. HARBORHOLD zones
-      // suppress this plant — their board is a TOWN SERVICE seated inside the
-      // walls (the knowledge network is the town's reward; bootHarborhold).
-      if (!def.harborhold) {
+      // own law: dwelling THERE still casts off directly. HARBORHOLD ground
+      // (a legacy town, or a paired quay reading its anchor's ladder)
+      // suppresses this plant — the board is a SERVICE seated at its plan
+      // anchor (the knowledge network is the hold's reward; refreshHoldServices).
+      if (!def.harborhold && !def.holdAnchor) {
         const board = vec(dock.x - Math.cos(a) * 130, dock.y - Math.sin(a) * 130);
         this.doodads.push({ pos: this.clampPos(board, 16), radius: 16, kind: 'harbor_board' });
       }
@@ -4307,6 +4316,8 @@ export class World {
           });
         }
       }
+    }
+    if (def.port) {
       // THE FIRST PORT (once per account-run arc): finding your first harbor
       // is finding THE SEA — name it, say what the dock means, and stamp the
       // ledger (the meta hooks future shipwright/voyager unlocks read).
@@ -4502,6 +4513,7 @@ export class World {
     // may have fallen or rebuilt while you sailed; the gate must match the
     // state, not the memory).
     if (def.harborhold) this.bootHarborhold(def);
+    else if (def.holdAnchor) this.bootQuay(def);
     // Remembered HOLLOWS re-open (the hollows fabric): the layout regenerated
     // them sealed above; re-carve each remembered id through the shared
     // openHollow path — revive mode furnishes STRUCTURE (the crevice shaft,
@@ -5061,8 +5073,16 @@ export class World {
     this.placeVocationSites(def);
 
     // MERCENARY OUTPOST: a qualifying wild zone may host the market's camp
-    // (same deterministic per-zone/run roll as the shrine sites).
-    this.mercOutpost = null;
+    // (same deterministic per-zone/run roll as the shrine sites). The reset
+    // SPARES a PORT sheet whose captain stands in THIS zone's actor list —
+    // the hold boot armed it a step earlier (refreshHoldServices), and the
+    // unconditional null used to stomp it (an open town's captain woke
+    // inert until the next live state transition — the quay boot made the
+    // latent stomp load-bearing). A stale sheet from the previous zone
+    // still clears: its captain is not among the fresh actors.
+    if (!(this.mercOutpost?.port && this.actors.includes(this.mercOutpost.captain))) {
+      this.mercOutpost = null;
+    }
     this.mercDwell = 0;
     this.mercDwellFired = false;
     if (!isCave) this.placeMercOutpost(def);
@@ -7173,26 +7193,40 @@ export class World {
       if (source.port) return source;
       // THE SEA FABRIC (world/seas.ts): touching ANY water of a sea makes
       // the WHOLE sea real — filled, classed, named, its deliberate port
-      // system minted veiled (ensureSeaPorts). The frontier then resolves
-      // to the system's NEAREST harbor: the road bends along the coast to
-      // where the quay was always going to stand, instead of minting one
-      // wherever the walker happened to hit brine. (The old free-mint path
-      // — and its one-per-60u dedup — is gone with free docking itself.)
+      // system minted veiled (ensureSeaPorts: hold-anchor + port pairs).
+      // THE DRY-ROAD RESOLUTION: the frontier bends along the coast to the
+      // nearest HOLD ANCHOR — the mainland gate over the quay — but only
+      // one on THIS shore (the chord home must be dry) and only within
+      // SEA_CFG.pair.anchorSnapRange. The old law linked every water touch
+      // to the nearest harbor by raw distance, which made each port a
+      // many-spoked hub and, across a narrow water, a walkable teleport —
+      // the exact sprawl the sealed shores killed on the river. Farther
+      // brine is just shore: the frontier consolidates onto its source,
+      // and the sea stays a thing you SAIL.
       const sea = seaAt(target, this.sim.biomeField.fieldSeed);
       if (sea && sea.ports.length) {
         const ports = this.ensureSeaPorts(sea);
-        let best = ports[0];
+        let best: ZoneDef | null = null, bd = SEA_CFG.pair.anchorSnapRange;
         for (const p of ports) {
-          if (coordDist(p.map, source.map) < coordDist(best.map, source.map)) best = p;
+          // The land-facing half of each pair: the anchor for new-format
+          // ports, the grandfathered town itself for legacy single-zone
+          // ports (old saves keep their shape).
+          const a = p.holdAnchor ? this.zoneMap[p.holdAnchor] : p;
+          if (!a || a.id === source.id) continue;
+          const d = coordDist(a.map, source.map);
+          if (d >= bd) continue;
+          if (this.roadIsWet(a.map, source.map)) continue;
+          bd = d; best = a;
         }
-        this.linkBackTo(best, source);
-        // The land approach FOUND this harbor: if the walker already stands
-        // on charted ground beside it, lift its veil now (the ring-1 pass
-        // would next sweep anyway — this is the immediate courtesy).
-        if (this.visited.has(source.id)) best.veiled = false;
-        return best;
+        if (best) {
+          this.linkBackTo(best, source);
+          // The land approach FOUND this harbor's gate: if the walker
+          // already stands on charted ground beside it, lift its veil now.
+          if (this.visited.has(source.id)) best.veiled = false;
+          return best;
+        }
       }
-      // Portless water (a pond whose coast refused every spot): the shore is
+      // Portless water, a far shore, or no dry way to a gate: the shore is
       // just shore — consolidate the frontier back onto its source.
       return source;
     }
@@ -7203,7 +7237,12 @@ export class World {
       // return source so eagerChartNeighbors drops it (never mint a twin of our own region).
       if (source.field?.regionId === ext.regionId) return source;
       const existing = Object.values(this.zoneMap).find(z => z.field?.regionId === ext.regionId && z.id !== source.id);
-      if (existing) { this.linkBackTo(existing, source); return existing; }
+      if (existing) {
+        // THE DRY-ROAD LAW: a region met across a corner of brine is not a
+        // neighbour — consolidate rather than forge a one-way wet edge.
+        if (this.roadIsWet(existing.map, source.map)) return source;
+        this.linkBackTo(existing, source); return existing;
+      }
     }
     // THE RIVERS OF SOULS (world/soulriver.ts): each strewn soulway instance
     // is a PLACE — a frontier landing in an instance's corridor always finds
@@ -7563,6 +7602,9 @@ export class World {
       // whose edge set is its dealt exits never accretes web links either;
       // same registry-driven healing as the roadless hub above.
       if (zoneKindOf(z)?.staticExits) continue;
+      // THE DRY-ROAD LAW: a candidate across the water is no neighbour —
+      // the web walks, it never swims (the far shore is a voyage away).
+      if (!source.dimension && this.roadIsWet(source.map, z.map)) continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
       // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
       // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
@@ -7766,47 +7808,100 @@ export class World {
   }
 
   /** THE SEA'S PORT SYSTEM made real (world/seas.ts): mint every planned
-   *  spot of a sea as a VEILED, roadless-charted port zone (noBackEdge — the
-   *  land web weaves in as it grows; the sea lanes serve meanwhile), bake
-   *  the sea's identity on each def (seaId / portTier / the haven's name
-   *  suffix), and rung THE LANE LAW between them (SEA_CFG.lanes: the coastal
-   *  ring in angular order + spokes from every cove to the haven). This
-   *  replaced the old nearest-neighbour lane router: lanes are the SEA'S
-   *  OWN, exact by construction — no wet-chord heuristics. Idempotent per
-   *  spot id (a land approach, a sail sighting, and a chart purchase may
-   *  each ask first); the player's sailed crossings still append their own
-   *  routes on top. Returns the system's zones in plan order. */
+   *  spot of a sea as a VEILED HARBOR PAIR (SEA_CFG.pair) —
+   *
+   *    THE HOLD ANCHOR (`<spot>_hold`, at the spot's LAND coord): ordinary
+   *    coastal country wearing the walled HOLDFAST — the harborhold state,
+   *    the siege, the camp, the muster (data/harborholds.ts, unchanged).
+   *    It joins the land web like any zone (frontiers + dry accretion; the
+   *    ocean-frontier resolution bends nearby coast roads to it).
+   *
+   *    THE PORT (`<spot>` itself, standing OFFSHORE on the water): kind
+   *    'port' — sealed shores by registry — carved by the harborcove
+   *    recipe (deep water, the outcrop, the pier, the berth, the quay
+   *    village whose plan seats the hold services). The sea's identity
+   *    (seaId / portTier / the haven suffix) rides this def; every sailing
+   *    surface (landing law, beacons, lanes, the Sail panel) resolves the
+   *    spot id straight to it.
+   *
+   *  One NOTARIZED causeway joins the pair; the ANCHOR-side exit wears
+   *  `lock: 'harborhold'` — sealed until the hold stands open, so entering
+   *  the port by land is EARNED at the muster while the sail-in pier never
+   *  bricks. Legacy single-zone ports (an older save's town at the spot id)
+   *  are grandfathered whole: no pair mints over them, and every consumer
+   *  reads them exactly as before. Idempotent per spot id. THE LANE LAW
+   *  rungs the returned PORT zones (the coastal ring + haven spokes).
+   *  Returns the system's port zones in plan order. */
   private ensureSeaPorts(sea: Sea): ZoneDef[] {
     const out: ZoneDef[] = [];
     for (const spot of sea.ports) {
       let z = this.zoneMap[spot.id];
       if (!z) {
-        z = placeZoneAt(spot.coord, null, this.zoneMap, this.nextGenId++, {
+        const P = SEA_CFG.pair;
+        // The spot's LANDWARD normal (shore sample → land anchor): the
+        // port node stands offshore along its inverse; the harborcove
+        // recipe aligns its outcrop back along it (quayFacing).
+        const ln = Math.hypot(spot.coord.x - spot.shore.x, spot.coord.y - spot.shore.y) || 1;
+        const lx = (spot.coord.x - spot.shore.x) / ln, ly = (spot.coord.y - spot.shore.y) / ln;
+        // — THE HOLD ANCHOR: the mainland gate over the quay. Reused when a
+        //   half-minted pair resumes (a save cut between the two mints). —
+        const anchorId = `${spot.id}_hold`;
+        let anchor = this.zoneMap[anchorId];
+        if (!anchor) {
+          anchor = placeZoneAt(spot.coord, null, this.zoneMap, this.nextGenId++, {
+            id: anchorId,
+            biomeFor: this.biomeFor, levelFor: this.levelFor,
+            biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
+            fieldBiome: true,
+            objective: { kind: 'clear' },
+            seed: (this.manifest.seed ^ hashStr(anchorId)) >>> 0,
+            noBackEdge: true,           // roadless-charted: the land web weaves in (dry) as it grows
+          });
+          anchor.veiled = true;         // foreordained ground — found like all of it
+          anchor.seaId = sea.id;
+          anchor.name = `${anchor.name}${P.holdSuffix}`;
+          // THE HARBORHOLD (data/harborholds.ts): the anchor raises the walled
+          // town — state minted BESIEGED (the discovery beat), the composition
+          // baked at chance 1 so the ordinary pipeline seats the walls. Sea
+          // class × tier decides the hold class; islands never pass through
+          // here (mintIslandZone is their own path) — isles stay small locales.
+          const holdCls = holdClassFor(sea.cls.id, spot.tier);
+          if (holdCls) {
+            anchor.harborhold = mintHoldState(holdCls);
+            (anchor.compositions ??= []).push({ composition: `harborhold_${holdCls.id}`, chance: 1 });
+          }
+          this.zoneMap[anchor.id] = anchor;
+          this.sim.onNodeCharted(anchor, this.simView());
+        }
+        // — THE PORT: the quay zone on the water. —
+        const at = { x: spot.shore.x - lx * P.offshore, y: spot.shore.y - ly * P.offshore };
+        z = placeZoneAt(at, anchor, this.zoneMap, this.nextGenId++, {
           id: spot.id,
           biomeFor: this.biomeFor, levelFor: this.levelFor,
           biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
           fieldBiome: true, port: true,
+          kind: 'port',                 // sealed shores bind INSIDE the mint (the weave already honors it)
+          layoutType: 'harborcove',
+          layoutParams: { quayFacing: Math.atan2(ly, lx) },
+          sizeBand: { w: P.sizeW, h: P.sizeH },
           objective: { kind: 'clear' }, // sail-in arrivals carry no entryFrom — never gated
+          forceFrontiers: 0,            // sealed shores: no '?' roads, ever
           seed: (this.manifest.seed ^ hashStr(spot.id)) >>> 0,
-          noBackEdge: true,             // roadless-charted: the land web weaves in as it grows
+          noBackEdge: true,             // the causeway below is the one land door
         });
-        z.veiled = true;                // foreordained ground — found like all of it
+        z.veiled = true;
         z.seaId = sea.id;
         z.portTier = spot.tier;
-        if (spot.tier === 'haven') z.name = `${z.name} Haven`;
-        // THE HARBORHOLD (data/harborholds.ts): mainland spots raise walled
-        // quay-towns — state minted BESIEGED (the discovery beat), the town
-        // composition baked at chance 1 so the ordinary composition pipeline
-        // seats the walls. Sea class × tier decides the hold class; a tier
-        // without a row keeps the bare quay. Islands never pass through here
-        // (mintIslandZone is their own path) — isles stay small locales.
-        const holdCls = holdClassFor(sea.cls.id, spot.tier);
-        if (holdCls) {
-          z.harborhold = mintHoldState(holdCls);
-          (z.compositions ??= []).push({ composition: `harborhold_${holdCls.id}`, chance: 1 });
-        }
+        if (spot.tier === 'haven') z.name = `${z.name}${P.havenSuffix}`;
+        z.holdAnchor = anchor.id;
+        anchor.holdPort = z.id;
         this.zoneMap[z.id] = z;
         this.sim.onNodeCharted(z, this.simView());
+        // — THE CAUSEWAY: one notarized deed joins the pair; the anchor's
+        //   side seals behind the hold's own state until the muster wins. —
+        this.notarizeRoad(z, anchor);
+        const gateEdge = anchor.exits.find(e => e.to === z.id);
+        if (gateEdge) gateEdge.lock = 'harborhold';
       }
       out.push(z);
     }
@@ -8112,6 +8207,62 @@ export class World {
     }
   }
 
+  /** RESTORE RECONCILE, surface waters (called from restoreWorldState): the
+   *  sealed-shores discipline applied to the SEA — idempotent, registry-
+   *  driven, tolerant of every save era.
+   *  - kind 'port' zones re-assert the kind + pair wiring and rebuild their
+   *    exit set to NOTARIZED deeds only (an older save's accreted discovery
+   *    roads heal away; the causeway and any deliberate deed stay).
+   *  - hold ANCHORS re-assert the causeway's 'harborhold' lock (a save
+   *    minted before the lock word still seals its gate on load).
+   *  - THE DRY-ROAD HEAL: un-notarized surface roads whose chord crosses
+   *    ocean water fall away both ways — the law applied retroactively, so
+   *    an old save's walk-across-the-sea teleports die on load. One belt:
+   *    a zone's LAST road is never severed (marooning a node is worse than
+   *    tolerating one wet edge).
+   *  Legacy single-zone ports (no pair fields, no kind) are grandfathered
+   *  whole; their wet accretion heals with everyone else's. */
+  reconcileSeaPorts(): void {
+    for (const z of Object.values(this.zoneMap)) {
+      if (z.dimension) continue;
+      if (z.holdAnchor && z.port) {
+        z.kind = 'port'; // identity re-assert (the sanitizer's authored-zone idiom)
+        const a = this.zoneMap[z.holdAnchor];
+        if (a && a.holdPort !== z.id) a.holdPort = z.id;
+      }
+      if (z.holdPort) {
+        const gate = z.exits.find(x => x.to === z.holdPort);
+        if (gate && gate.lock !== 'harborhold') gate.lock = 'harborhold';
+      }
+      if (z.kind === 'port' && zoneKindOf(z)?.staticExits) {
+        for (let i = z.exits.length - 1; i >= 0; i--) {
+          const e = z.exits[i];
+          if (e.to !== '?' && e.notarized !== true) z.exits.splice(i, 1);
+        }
+      }
+    }
+    for (const z of Object.values(this.zoneMap)) {
+      if (z.dimension) continue;
+      for (let i = z.exits.length - 1; i >= 0; i--) {
+        const e = z.exits[i];
+        if (e.to === '?' || e.notarized === true) continue;
+        const dest = this.zoneMap[e.to];
+        if (!dest || dest.dimension) continue;
+        // THE DEED RIDES EITHER SIDE: a frontier child's unavoidable wet
+        // back-edge is notarized at mint, but its source's forward edge is
+        // a mutated '?' that carries no mark — one deed protects the road.
+        if (dest.exits.some(x => x.to === z.id && x.notarized === true)) continue;
+        if (!this.roadIsWet(z.map, dest.map)) continue;
+        if (z.exits.filter(x => x.to !== '?').length <= 1) continue; // the belt
+        z.exits.splice(i, 1);
+        const back = dest.exits.findIndex(x => x.to === z.id && x.notarized !== true);
+        if (back >= 0 && dest.exits.filter(x => x.to !== '?').length > 1) {
+          dest.exits.splice(back, 1);
+        }
+      }
+    }
+  }
+
   /** THE SOUL-SHIPS ON THE CHART (the voyage-boat idiom, dealt to ferries):
    *  for every CHARTED river instance, project each abroad ferry's pure
    *  pose (the same clock the loaded zone rides) onto the instance's map
@@ -8175,6 +8326,12 @@ export class World {
   private linkBackTo(target: ZoneDef, source: ZoneDef, notarized = false): void {
     if (target.id === source.id || target.exits.some(e => e.to === source.id)) return;
     if (!notarized && zoneKindOf(target)?.staticExits) return;
+    // THE DRY-ROAD LAW (SEA_CFG.dryRoad): no auto-forged land road may cross
+    // ocean water — a strait is crossed by VOYAGE, never by a lucky link.
+    // Notarized deeds are exempt (a causeway that MEANS to cross says so in
+    // code); only the surface has an ocean, so dimension links pay nothing.
+    if (!notarized && !target.dimension && !source.dimension
+      && this.roadIsWet(target.map, source.map)) return;
     // Dimensions are sealed — a LINKER may never forge a cross-dimension road
     // (the gate's marked back-edge is MINTED by enterDimension, never linked).
     if ((target.dimension ?? 'surface') !== (source.dimension ?? 'surface')) {
@@ -8186,6 +8343,16 @@ export class World {
     // Claim a SPACED `at` via the shared worldgen guard (corner-aware, pixel-true) —
     // the old per-side fractional scan couldn't see an n@~0 vs w@~0 corner stack.
     target.exits.push({ to: source.id, side, at: spacedExitAt(target, side) });
+  }
+
+  /** THE DRY-ROAD PREDICATE (the law's shared read): does the straight chord
+   *  between two map nodes cross OCEAN water? Delegates to landRoute — the
+   *  SAME sampler the weave guard has always used, so every road-former in
+   *  the game answers to one rule. Surface-only by convention (callers gate
+   *  on dimension; other planes grow unbroken landmass). */
+  private roadIsWet(a: MapCoord, b: MapCoord): boolean {
+    if (!SEA_CFG.dryRoad.enabled) return false;
+    return !this.landRoute(a, b);
   }
 
   /** THE NOTARY (the sealed-shores law's one open door): deliberately cut a
@@ -17116,7 +17283,10 @@ export class World {
   }
 
   /** Sail to a discovered port: record the sea route both ways (the map's
-   *  memory of the crossing) and make landfall. Host-authoritative. */
+   *  memory of the crossing) and make landfall. Host-authoritative. The
+   *  party steps ashore AT the destination's pier (the landAshore idiom —
+   *  you came by SEA), with the sail gate consumed so a pier-side arrival
+   *  never bounces straight back onto the boat. */
   sailTo(portId: string): void {
     if (!this.canSail()) return;
     const dest = this.zoneMap[portId];
@@ -17125,6 +17295,16 @@ export class World {
     (here.searoutes ??= []).includes(portId) || here.searoutes!.push(portId);
     (dest.searoutes ??= []).includes(here.id) || dest.searoutes!.push(here.id);
     this.loadZone(portId);
+    this.sailGate.consume();
+    const dock = this.portDock();
+    if (dock) {
+      this.player.pos = this.clampPos(vec(dock.pos.x, dock.pos.y + 34), this.player.radius);
+      const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+      for (const ac of this.actors) {
+        if (ac === this.player || !seatActors.has(ac)) continue;
+        ac.pos = this.clampPos(vec(dock.pos.x + rand(-60, 60), dock.pos.y + rand(30, 80)), ac.radius);
+      }
+    }
   }
 
   /** CHART A COURSE: sail for THE FAR SHORE — resolve this port's whole sea
@@ -17291,6 +17471,34 @@ export class World {
   /** Zone-load boot for a harborhold port (loadZone calls it AFTER zone
    *  memory replays door states — the persisted hold state is authoritative:
    *  the town may have fallen or rebuilt while you sailed). */
+  /** The hold STATE governing a zone: its own (`harborhold` — hold anchors
+   *  and legacy single-zone towns) or its anchor's (`holdAnchor` — the port
+   *  half of a harbor pair reads the mainland's ledger). Null off-fabric. */
+  private holdStateFor(def: ZoneDef): HarborholdState | null {
+    if (def.harborhold) return def.harborhold;
+    if (def.holdAnchor) return this.zoneMap[def.holdAnchor]?.harborhold ?? null;
+    return null;
+  }
+
+  /** THE QUAY BOOT (the harbor pair's port half): seat the hold services at
+   *  the quay village off the ANCHOR's state + prosperity ladder, and say
+   *  what the hold's standing means from the water side. The dock itself is
+   *  the recipe's (the dock-location law) and NEVER bricks — a sail-in at a
+   *  besieged or burned hold still lands, trades nothing, and may walk the
+   *  causeway inland to fight for the counters. */
+  private bootQuay(def: ZoneDef): void {
+    const hold = this.holdStateFor(def);
+    if (!hold) return;
+    this.refreshHoldServices(def);
+    if (hold.state === 'besieged') {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 106),
+        `${def.name} waits under a besieged hold — break the siege at the gate to open its counters`, '#e8a050', 14);
+    } else if (hold.state === 'fallen') {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 106),
+        `the hold above ${def.name} lies burned — its counters stand shut`, '#e8a050', 14);
+    }
+  }
+
   private bootHarborhold(def: ZoneDef): void {
     const hold = def.harborhold;
     if (!hold) return;
@@ -17432,10 +17640,16 @@ export class World {
    *  defense won mid-session) call this directly — no reload needed. */
   private refreshHoldServices(def: ZoneDef): void {
     if (this.zone.id !== def.id) return;
-    const hold = def.harborhold;
+    // THE PAIR SPLIT: an anchor with a paired port keeps NO counters — the
+    // walls hold the war; the services live at the quay (the port zone's
+    // own boot re-seats them off this anchor's state). Legacy single-zone
+    // towns (no pair fields) keep every counter inside the walls as ever.
+    if (def.harborhold && def.holdPort) return;
+    const hold = this.holdStateFor(def);
     if (!hold) return;
     const cls = holdClassOf(hold);
-    const ps = holdStructureIn(this.structures, cls.structure);
+    const ps = holdStructureIn(this.structures,
+      def.holdAnchor ? HARBORHOLD_CFG.quay.structure : cls.structure);
     if (!ps) return;
     const open = hold.state === 'open';
     const wants = new Set((open ? holdActiveServices(cls, hold.prosperity) : []).map(s => s.id));
@@ -17491,7 +17705,7 @@ export class World {
    *  — veterans and RETIREMENT stay a wilds-outpost exclusive. Reuses the
    *  whole outpost pipeline: one state, one panel, one hire path. */
   private armPortMercs(captain: Actor): void {
-    const hold = this.zone.harborhold;
+    const hold = this.holdStateFor(this.zone);
     if (!hold) return;
     const cls = holdClassOf(hold);
     if (cls.mercOffers[1] <= 0) return;
@@ -17538,7 +17752,7 @@ export class World {
    *  (HARBORHOLD_CFG.writs.cooldownSec, persisted on the hold state). */
   private updateWritBoard(dt: number): void {
     if (this.gameOver || this.clientActionHook) return;
-    const hold = this.zone.harborhold;
+    const hold = this.holdStateFor(this.zone);
     if (!hold || hold.state !== 'open') return;
     const board = this.doodads.find(d => d.kind === 'bounty_board');
     if (!board) return;
@@ -17553,7 +17767,7 @@ export class World {
    *  in this zone each become a NAMED, promoted mark. No eligible quarry =
    *  an honest refusal that spends no cooldown. */
   private postHoldWrits(): void {
-    const hold = this.zone.harborhold;
+    const hold = this.holdStateFor(this.zone);
     if (!hold) return;
     const W = HARBORHOLD_CFG.writs;
     if (hold.writsAt !== undefined && this.time < hold.writsAt) {
@@ -17812,6 +18026,19 @@ export class World {
       // Stone seats on OPEN holds — the calling should land with the win,
       // not on the next visit; placeVocationSites is idempotent per site).
       this.placeVocationSites(def);
+      // THE CAUSEWAY OPENS (the harbor pair): the win unbars the quay road
+      // (the 'harborhold' lock reads live state — nothing to flip) and
+      // shows the port on the chart: the harbor is the hold's reward, and
+      // the map says so the moment the siege breaks.
+      if (def.holdPort) {
+        const port = this.zoneMap[def.holdPort];
+        if (port) {
+          port.veiled = false;
+          this.surveyed.add(port.id);
+          this.text(vec(at.x, at.y - 100),
+            `the quay causeway stands open — ${port.name} waits through the gate`, '#9fd8ec', 14);
+        }
+      }
       const first = !this.ledger.first_hold_opened;
       if (first) bumpLedger(this.ledger, 'first_hold_opened');
       this.text(vec(at.x, at.y - 76),
@@ -18622,9 +18849,11 @@ export class World {
   /** Seeded outpost roll for this zone (loadZone tail; wilds only). */
   private placeMercOutpost(def: ZoneDef): void {
     const cfg = MERC_CFG.outpost;
-    // A harborhold port provides its own captain (the town's merc service) —
-    // the wild-outpost roll stands down on this ground.
-    if (def.harborhold) return;
+    // Harborhold ground provides its own captain (the hold's merc service —
+    // template-only, seated at the quay): the wild-outpost roll stands down
+    // on a legacy town AND on both halves of a harbor pair. Veterans and
+    // retirement stay a true-wilds exclusive.
+    if (def.harborhold || def.holdAnchor) return;
     if (!this.zoneMatchesSiteFilter(def, cfg.filter)) return;
     if (!MONSTERS['merc_captain']) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
@@ -34348,8 +34577,15 @@ export class World {
         const led = this.zone.exits[lockedExit.defIndex];
         const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
         const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
+        // The harborhold causeway names its own ask (break the siege / raise
+        // the ruin) — the quay beyond is the hold's reward, and the door
+        // says so (HARBORHOLD_CFG.quay.lockHint).
+        const holdHint = led?.lock === 'harborhold' && this.zone.harborhold
+          ? (this.zone.harborhold.state === 'fallen'
+            ? HARBORHOLD_CFG.quay.lockHint.fallen : HARBORHOLD_CFG.quay.lockHint.besieged)
+          : null;
         this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40),
-          eb ? eb.reason : gdef ? gdef.sealedHint : 'sealed — finish the objective',
+          eb ? eb.reason : holdHint ?? (gdef ? gdef.sealedHint : 'sealed — finish the objective'),
           eb?.color ?? '#d05050', 13);
       }
       // Dwell builds only while standing idle AND not being KNOCKED — a knockback
@@ -34738,6 +34974,14 @@ export class World {
     // of the zone objective (checked BEFORE the objectiveDone early-out, so clearing the
     // zone never opens the gate). Resolved against the durable HoldfastField lock state.
     const ed = this.zone.exits[e.defIndex];
+    // THE HARBORHOLD GATE (the harbor pair's causeway): an exit locked with
+    // the one word `'harborhold'` answers to ITS OWN zone's hold state —
+    // sealed unless the hold stands open. Data-driven and zone-local (any
+    // zone carrying a harborhold state may seal any exit this way), checked
+    // before the holdfast overlay so the two lock families never collide.
+    if (ed?.lock === 'harborhold') {
+      return !!this.zone.harborhold && this.zone.harborhold.state !== 'open';
+    }
     if (ed?.lock && this.sim.holdfastField?.isLocked(this.zone.id, ed.lock)) return true;
     // DIMENSION SEAL: an exit that crosses dimensions WITHOUT the declared gate
     // marker is a defect (a pre-fix save, a bad mint) — it stays sealed forever,

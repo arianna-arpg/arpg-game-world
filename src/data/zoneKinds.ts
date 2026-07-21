@@ -58,6 +58,24 @@ export const ZONE_KINDS: Record<string, ZoneKindDef> = {
     glyph: { char: '⌂', color: '#241c06' },
     labelColor: '#ffe9a8',
   },
+  // THE PORT (world/seas.ts + ensureSeaPorts): the sea fabric's quay zone —
+  // a small harbor locale standing OFF the coast, entered through its hold
+  // anchor's gate (ZoneExitDef.lock 'harborhold') or by sail. Sealed shores
+  // by registry: the world web may never accrete a road into a port — its
+  // edge set is its notarized causeway plus whatever the notary cuts, so
+  // crossing a sea is a VOYAGE, never a lucky link. Roads touching it draw
+  // in the lane stroke (the causeway is a water crossing).
+  port: {
+    id: 'port',
+    label: 'Port',
+    subLabel: 'harbor',
+    ring: { color: '#4a8ab0' },
+    glyph: { char: '⚓', color: '#0e2233' },
+    labelColor: '#9fd8ec',
+    lanes: {},
+    keepLevel: true,
+    staticExits: true,
+  },
   // THE INLAND SEA (world/soulriver.ts): every strewn River of Souls wears
   // this — the node reads as WATER on the chart (ship glyph, pale ring,
   // lane-styled roads), the sea-fabric read below ground. The live ferry

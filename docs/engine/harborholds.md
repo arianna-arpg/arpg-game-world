@@ -7,12 +7,20 @@ Probe: `npx tsx balance/probe_harborholds.ts`. Dev lens: the **Holds** tab.
 ## What a harborhold is
 
 A mainland port is no longer a dock and a board on an empty shore. Every sea
-spot minted by `ensureSeaPorts` wears a **HARBORHOLD**: a walled quay-town
-raised by the ordinary composition pipeline (`harborhold_*` compositions →
-plan structures with a **sealed gate**), found **BESIEGED**, opened by
-breaking the siege, burned by losing one. Islands and legacy free-docked
-ports never carry the state — the isles stay small locales with bare quays,
-by design and by construction (they mint outside the sea-spot path).
+spot minted by `ensureSeaPorts` is a **HARBOR PAIR** (`SEA_CFG.pair`,
+docs/engine/seas.md): the **HOLD ANCHOR** — ordinary coastal country wearing
+the walled **HARBORHOLD** raised by the composition pipeline (`harborhold_*`
+compositions → plan structures with a **sealed gate**), found **BESIEGED**,
+opened by breaking the siege, burned by losing one — and, through ONE
+notarized causeway whose anchor-side exit wears `lock: 'harborhold'`, the
+**PORT zone** proper: a kind-`'port'` sealed-shores cove (the harborcove
+recipe — deep water, the outcrop, the planked pier, the berth) where the
+QUAY VILLAGE holds the dock, the services, and the folk the walls protect.
+The state lives on the anchor (`ZoneDef.harborhold`); the port reads it
+through `ZoneDef.holdAnchor`. Islands and legacy free-docked ports never
+carry the state — the isles stay small locales with bare quays, by design
+and by construction (they mint outside the sea-spot path). Legacy saves'
+single-zone towns are grandfathered whole.
 
 Two data ladders decide everything:
 
