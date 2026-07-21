@@ -30,6 +30,7 @@ import type { ZoneDef } from '../src/data/zones';
 import { HUB_ZONE, START_ZONE } from '../src/data/zones';
 import { Rng } from '../src/core/rng';
 import { FORECHART_CFG } from '../src/world/forechart';
+import { SEA_CLASSES } from '../src/data/seas';
 import { pickSeat, seatCandidates } from '../src/world/seats';
 import { bearingWord, distWord, omenLine, omenReach, registerOmenSource, type Omen } from '../src/world/omens';
 import type { OverlayView } from '../src/world/overlay';
@@ -72,8 +73,16 @@ check('A: every veiled zone is INVISIBLE at the fog seam',
 check('A: the halo respects the ring (+ field-span slack; sea systems exempt)',
   veiled.filter(z => !z.seaId).every(z => coordDist(z.map, w.zone.map) <= FORECHART_CFG.ring + 700),
   'every veiled LAND zone within ring + a field span');
-check('A: the budget holds', veiled.length <= FORECHART_CFG.maxVeiled,
-  `${veiled.length} ≤ ${FORECHART_CFG.maxVeiled}`);
+// maxVeiled is SOFT backpressure (checked at sweep start): one sweep's
+// hustled batch — or an ATOMIC sea-system mint (the foreordained law: a
+// whole harbor-pair set at one water touch) — may land past it before the
+// gate closes. Slack = a hustled sweep + the largest sea's pair set, both
+// derived from live data, so the guard still catches RUNAWAY growth.
+const SOFT_SLACK = Math.ceil(FORECHART_CFG.perSweep * FORECHART_CFG.hustleMul)
+  + Math.max(...SEA_CLASSES.map(c => c.ports[1])) * 2;
+check('A: the budget holds (soft cap + one atomic batch)',
+  veiled.length <= FORECHART_CFG.maxVeiled + SOFT_SLACK,
+  `${veiled.length} ≤ ${FORECHART_CFG.maxVeiled} + ${SOFT_SLACK}`);
 check('A: town + hub stay visible',
   w.visible(w.zoneMap[START_ZONE]) && w.visible(w.zoneMap[HUB_ZONE]));
 check('A: THE VEIL INVARIANT — no veiled zone borders visited ground',

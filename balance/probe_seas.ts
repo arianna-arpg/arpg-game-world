@@ -236,6 +236,9 @@ seedGlobalRandom(0x5ea50);
           const e = p.anchor!.exits.find(x => x.to === p.port.id);
           return !!e && e.notarized === true && e.lock === 'harborhold';
         }));
+      check('E: the quay asks nothing (objective none, sparse ambient dial, no war)',
+        zones.every(z => z!.objective.kind === 'none'
+          && z!.packDensity === SEA_CFG.pair.portPackDensity && !z!.factionWar));
       const haven = zones.find(z => z?.portTier === 'haven');
       if (haven) {
         check('E: the haven wears its name', haven.name.endsWith(SEA_CFG.pair.havenSuffix), haven.name);
@@ -333,6 +336,36 @@ seedGlobalRandom(0x5ea50);
           w.reconcileSeaPorts();
           const snapB = JSON.stringify(port0.exits) + JSON.stringify(pairs[0].anchor!.exits);
           check('F: the reconcile is idempotent', snapA === snapB);
+        }
+      }
+      // THE DEGREE TRIM: forge spokes past the cap onto an anchor (the
+      // pre-cap hub leak's saved shape); the reconcile sheds the farthest
+      // back to budget while the notarized causeway survives.
+      {
+        const a0 = pairs[0].anchor! as unknown as ZoneLike;
+        const port0 = pairs[0].port;
+        const fake: string[] = [];
+        w.zoneMap['qa_spoke_hub'] = skel('qa_spoke_hub',
+          { x: a0.map.x + 400, y: a0.map.y + 200 }) as never;
+        for (let i = 0; i < 8; i++) {
+          const id = `qa_spoke_${i}`;
+          const zz = skel(id, { x: a0.map.x + 60 + i * 30, y: a0.map.y + 40 });
+          (zz.exits as { to: string; side: string }[]).push(
+            { to: a0.id, side: 'w' }, { to: 'qa_spoke_hub', side: 'e' });
+          w.zoneMap[id] = zz as never;
+          a0.exits.push({ to: id, side: 'e' });
+          fake.push(id);
+        }
+        w.reconcileSeaPorts();
+        const after = a0.exits.filter(x => x.to !== '?').length;
+        check('F: the reconcile trims an over-degree anchor to the cap (causeway kept)',
+          after <= SEA_CFG.pair.anchorMaxRoads
+          && a0.exits.some(x => x.to === port0.id && x.notarized === true),
+          `→ ${after} roads (cap ${SEA_CFG.pair.anchorMaxRoads})`);
+        for (const id of fake) delete w.zoneMap[id];
+        delete w.zoneMap['qa_spoke_hub'];
+        for (let i = a0.exits.length - 1; i >= 0; i--) {
+          if (a0.exits[i].to.startsWith('qa_spoke')) a0.exits.splice(i, 1);
         }
       }
     }

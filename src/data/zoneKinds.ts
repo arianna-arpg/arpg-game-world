@@ -46,6 +46,11 @@ export interface ZoneKindDef {
    *  explicit World.notarizeRoad seam — a quest or event that MEANS to cut
    *  a new shore says so in code, never by accident. */
   staticExits?: boolean;
+  /** EVENT-QUIET (world/zonePolicy.ts): world events never SEAT on this
+   *  kind — the ground is a locale, not a battleground (the quay's
+   *  near-sanctuary read). Ambient life and the zone's own fabrics are
+   *  untouched; only the event-target predicate refuses. */
+  eventQuiet?: boolean;
 }
 
 export const ZONE_KINDS: Record<string, ZoneKindDef> = {
@@ -75,6 +80,7 @@ export const ZONE_KINDS: Record<string, ZoneKindDef> = {
     lanes: {},
     keepLevel: true,
     staticExits: true,
+    eventQuiet: true, // the quay is a locale, never an event's battleground
   },
   // THE INLAND SEA (world/soulriver.ts): every strewn River of Souls wears
   // this — the node reads as WATER on the chart (ship glyph, pale ring,

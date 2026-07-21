@@ -165,6 +165,13 @@ seedGlobalRandom(0x40b0);
       const liveGate = w.exits.find(x => x.to === pz!.id);
       check('B: the causeway to the quay is SEALED while besieged',
         !!liveGate && w.isExitLocked(liveGate) === true);
+      // THE GATEWORK LAW: the live causeway portal stands INSIDE the
+      // holdfast walls, on the plan's own court seat — the fort doesn't
+      // guard a road to the door, it CONTAINS the door.
+      check('B: the causeway portal stands INSIDE the holdfast walls',
+        !!liveGate && liveGate.pos.x > ps.rect.x && liveGate.pos.x < ps.rect.x + ps.rect.w
+        && liveGate.pos.y > ps.rect.y && liveGate.pos.y < ps.rect.y + ps.rect.h,
+        liveGate ? `portal (${Math.round(liveGate.pos.x)},${Math.round(liveGate.pos.y)}) vs rect` : 'no live exit');
 
       // THE MUSTER: the ward plants formula-true; wave 1 pours fixated.
       w.beginHoldMuster();
@@ -231,6 +238,30 @@ seedGlobalRandom(0x40b0);
       }
       check('B: the quay keeps its dock-location (one recipe dock)',
         w.doodads.filter(d => d.kind === 'dock').length === 1);
+      check('B: the quay asks nothing (objective none, sparse ambient dial)',
+        pz.objective.kind === 'none' && pz.packDensity !== undefined && pz.packDensity < 1);
+
+      // THE ARRIVAL LAW: walking the causeway inland lands at the court
+      // portal while the hold stands OPEN; a sea arrival under a live
+      // siege SKIRTS to the apron outside the walls (never sealed inside
+      // a hostile ring — and the muster horn stands right there).
+      w.loadZone(az.id, pz.id);
+      {
+        const psA = holdStructureIn(w.structures, cls.structure)!;
+        const inA = w.player.pos.x > psA.rect.x && w.player.pos.x < psA.rect.x + psA.rect.w
+          && w.player.pos.y > psA.rect.y && w.player.pos.y < psA.rect.y + psA.rect.h;
+        check('B: an OPEN causeway arrival lands at the court portal', inA);
+      }
+      w.devSetHoldState(az.id, 'besieged');
+      w.loadZone(pz.id);
+      w.loadZone(az.id, pz.id);
+      {
+        const psB = holdStructureIn(w.structures, cls.structure)!;
+        const inB = w.player.pos.x > psB.rect.x && w.player.pos.x < psB.rect.x + psB.rect.w
+          && w.player.pos.y > psB.rect.y && w.player.pos.y < psB.rect.y + psB.rect.h;
+        check('B: a besieged sea-arrival skirts OUTSIDE the walls', !inB);
+      }
+      w.devSetHoldState(az.id, 'open');
 
       // PERSISTENCE: byte-faithful ride + the corrupted-state degrade.
       const save = w.serializeWorldState();

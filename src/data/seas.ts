@@ -123,6 +123,23 @@ export const SEA_CFG = {
      *  range whose road home is DRY (the coast road bends to the gate);
      *  farther water is just shore — the frontier consolidates. */
     anchorSnapRange: 640,
+    /** THE DEGREE CAP: an anchor at this many real roads takes no more
+     *  spokes from the frontier snap, and the restore reconcile TRIMS a
+     *  saved anchor back down to it (farthest un-notarized roads first).
+     *  Matches worldgen's MAX_DEGREE — the budget every zone lives under. */
+    anchorMaxRoads: 5,
+    /** The quay is NEAR-SANCTUARY ground (the Lastlight read, not the
+     *  cave read): the port zone's packDensity — 0 opts it out of ambient
+     *  wild packs entirely (the engine's explicit-zero law); raise it if a
+     *  wilder waterfront is ever wanted. */
+    portPackDensity: 0,
+    /** The quay's AUTHORED shore texture (ZoneDef.fauna — replaces the
+     *  biome fallback): a pinch of strand life, never a fight. Rows are
+     *  ordinary WildlifeRow data; edit freely. */
+    quayFauna: [
+      { id: 'shore_crab', chance: 0.4, count: [1, 2] as [number, number] },
+      { id: 'tide_skitter', chance: 0.25, count: [1, 2] as [number, number] },
+    ],
     /** Name dress: the anchor wears the hold suffix, a haven port keeps the
      *  haven suffix. */
     holdSuffix: ' Hold',

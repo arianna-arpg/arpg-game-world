@@ -304,6 +304,12 @@ export const HARBORHOLD_CFG = {
    *  `lock: 'harborhold'` and surfaces these hints while sealed. */
   quay: {
     structure: 'quay_village',
+    /** THE GATEWORK SEAT: the plan char (every harborhold_* plan carries
+     *  it, inside the walls) the anchor's causeway PORTAL repositions onto
+     *  at boot — the holdfast doesn't guard a road to the door, it
+     *  CONTAINS the door: break the siege, walk through the fort, board
+     *  the quay (the city-gate read). */
+    gateSeat: 'q',
     lockHint: {
       besieged: 'the quay causeway is barred — break the siege at the hold',
       fallen: 'the hold lies in ashes — the causeway waits for its rebuild',

@@ -42,9 +42,15 @@ every spot as a **veiled HARBOR PAIR** (`SEA_CFG.pair`):
 
 - **THE HOLD ANCHOR** (`<spot>_hold`, at the spot's land coord): ordinary
   coastal country wearing the walled **harborhold** — the state, the siege,
-  the camp, the muster (docs/engine/harborholds.md). It joins the land web
-  like any zone; the ocean-frontier resolution bends nearby coast roads to
-  it (same-shore, in `anchorSnapRange`, dry chord only).
+  the camp, the muster (docs/engine/harborholds.md), and, INSIDE its walls,
+  the causeway portal itself (the gatework law). It joins the land web like
+  any zone; the ocean-frontier resolution bends nearby coast roads to it
+  (same-shore, in `anchorSnapRange`, dry chord only) — **capped at
+  `anchorMaxRoads`** (worldgen's MAX_DEGREE, now shared by every
+  road-former: nearestLinkable and the snap both stop at the budget, and
+  the restore reconcile TRIMS a saved anchor's excess spokes farthest-
+  first, causeway and last-roads kept), so the anchor never becomes the
+  hub the port used to be.
 - **THE PORT** (the spot id itself, standing `offshore` on the water): kind
   `'port'` — **sealed shores by registry** (`ZoneKindDef.staticExits`) —
   carved by the **harborcove** recipe: deep water wall to wall, one outcrop
@@ -52,7 +58,12 @@ every spot as a **veiled HARBOR PAIR** (`SEA_CFG.pair`):
   pier walking out to the **berth** (the dock-location the voyage casts off
   from), and the **quay village** whose plan seats the hold services. It
   bakes `seaId`/`portTier`, wears the haven suffix, and lists on every
-  sailing surface (landing law, beacons, lanes, the Sail panel).
+  sailing surface (landing law, beacons, lanes, the Sail panel). The quay
+  is **near-sanctuary ground** (the Lastlight read): objective `'none'`,
+  no faction war, a sparse ambient dial (`packDensity` =
+  `pair.portPackDensity` — folded into pack budgets AND fauna chances),
+  and `ZoneKindDef.eventQuiet` keeps world events from ever seating on it
+  (zonePolicy's target predicate).
 
 One **notarized causeway** joins the pair; the anchor's side wears
 `lock: 'harborhold'` — sealed until the hold stands open, so entering the

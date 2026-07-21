@@ -106,7 +106,7 @@ import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
 import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
-import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
+import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MAX_DEGREE, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
@@ -7213,6 +7213,11 @@ export class World {
           // ports (old saves keep their shape).
           const a = p.holdAnchor ? this.zoneMap[p.holdAnchor] : p;
           if (!a || a.id === source.id) continue;
+          // THE DEGREE CAP: an anchor at its road budget takes no more
+          // spokes — the coast keeps consolidating instead. Without this,
+          // every halo frontier along the shore snapped in and the anchor
+          // became the hub the port used to be (a dozen doors deep).
+          if (countRoads(a) >= SEA_CFG.pair.anchorMaxRoads) continue;
           const d = coordDist(a.map, source.map);
           if (d >= bd) continue;
           if (this.roadIsWet(a.map, source.map)) continue;
@@ -7605,6 +7610,10 @@ export class World {
       // THE DRY-ROAD LAW: a candidate across the water is no neighbour —
       // the web walks, it never swims (the far shore is a voyage away).
       if (!source.dimension && this.roadIsWet(source.map, z.map)) continue;
+      // THE DEGREE CAP (the weave's own budget, finally shared): a node at
+      // MAX_DEGREE takes no opportunistic link — nearestLinkable was the
+      // one road-former still stacking spokes past it.
+      if (countRoads(z) >= MAX_DEGREE) continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
       // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
       // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
@@ -7773,7 +7782,13 @@ export class World {
     if (all.length >= WORLDSTATE_CFG.zoneCap - FORECHART_CFG.capHeadroom) return;
     let veiled = 0;
     for (const z of all) if (z.veiled) veiled++;
-    if (veiled >= FORECHART_CFG.maxVeiled) return;
+    // maxVeiled is SOFT backpressure on the AMBIENT halo alone — an atomic
+    // sea-system mint (the foreordained law: a whole pair set at one touch)
+    // may overshoot it by a batch, and SOUNDINGS keep breathing regardless:
+    // they are REQUESTED ground (an event's need for a far seat), bounded
+    // by their own cluster size + per-sweep budget, and a saturated halo
+    // must never starve them (the zoneCap headroom above still rules all).
+    const haloBlocked = veiled >= FORECHART_CFG.maxVeiled;
     // The halo centers on the STANDING zone (a cave sweeps around its surface
     // anchor coordinate — def.map carries the parent's). Same-dimension only.
     const dim = this.zone.dimension ?? 'surface';
@@ -7781,12 +7796,14 @@ export class World {
     let budget = FORECHART_CFG.perSweep
       * (veiled < FORECHART_CFG.hustleBelow ? FORECHART_CFG.hustleMul : 1);
     const cands: { z: ZoneDef; d: number }[] = [];
-    for (const z of all) {
-      if (!forechartSource(z, dim) || z.id === this.zone.id) continue;
-      const d = coordDist(z.map, origin);
-      if (d <= FORECHART_CFG.ring) cands.push({ z, d });
+    if (!haloBlocked) {
+      for (const z of all) {
+        if (!forechartSource(z, dim) || z.id === this.zone.id) continue;
+        const d = coordDist(z.map, origin);
+        if (d <= FORECHART_CFG.ring) cands.push({ z, d });
+      }
+      cands.sort((a, b) => a.d - b.d); // grow evenly outward: close gaps first
     }
-    cands.sort((a, b) => a.d - b.d); // grow evenly outward: close gaps first
     this.mintVeil = true;
     try {
       for (const { z } of cands) {
@@ -7884,7 +7901,11 @@ export class World {
           layoutType: 'harborcove',
           layoutParams: { quayFacing: Math.atan2(ly, lx) },
           sizeBand: { w: P.sizeW, h: P.sizeH },
-          objective: { kind: 'clear' }, // sail-in arrivals carry no entryFrom — never gated
+          // NEAR-SANCTUARY: the quay asks nothing (no objective to clear,
+          // no faction war over the pier) — the Lastlight read, not the
+          // cave read. The hold's WAR lives at the anchor.
+          objective: { kind: 'none', label: 'a harbor' },
+          noFactionWar: true,
           forceFrontiers: 0,            // sealed shores: no '?' roads, ever
           seed: (this.manifest.seed ^ hashStr(spot.id)) >>> 0,
           noBackEdge: true,             // the causeway below is the one land door
@@ -7892,6 +7913,8 @@ export class World {
         z.veiled = true;
         z.seaId = sea.id;
         z.portTier = spot.tier;
+        z.packDensity = P.portPackDensity; // 0 = no wild packs at the quay (explicit-zero law)
+        z.fauna = P.quayFauna.map(f => ({ ...f })); // authored strand texture, dialed in data
         if (spot.tier === 'haven') z.name = `${z.name}${P.havenSuffix}`;
         z.holdAnchor = anchor.id;
         anchor.holdPort = z.id;
@@ -8227,12 +8250,43 @@ export class World {
       if (z.dimension) continue;
       if (z.holdAnchor && z.port) {
         z.kind = 'port'; // identity re-assert (the sanitizer's authored-zone idiom)
+        // The quay's NEAR-SANCTUARY face is registry truth too: an older
+        // save's 'clear' port re-reads as the objective-less harbor, and
+        // the sparse-texture dial re-stamps at the live value.
+        if (z.objective.kind !== 'none') z.objective = { kind: 'none', label: 'a harbor' };
+        z.packDensity = SEA_CFG.pair.portPackDensity;
+        if (!z.fauna) z.fauna = SEA_CFG.pair.quayFauna.map(f => ({ ...f }));
         const a = this.zoneMap[z.holdAnchor];
         if (a && a.holdPort !== z.id) a.holdPort = z.id;
       }
       if (z.holdPort) {
         const gate = z.exits.find(x => x.to === z.holdPort);
         if (gate && gate.lock !== 'harborhold') gate.lock = 'harborhold';
+        // THE DEGREE TRIM: a saved anchor that collected spokes past the
+        // cap (the pre-cap hub leak) sheds its FARTHEST un-notarized dry
+        // roads back down to budget — reciprocals healed, the belt kept
+        // (never a neighbour's last road, never the causeway).
+        const cap = SEA_CFG.pair.anchorMaxRoads;
+        const shed = (): boolean => {
+          const real = z.exits.filter(x => x.to !== '?');
+          if (real.length <= cap) return false;
+          const cands = real
+            .filter(x => x.notarized !== true && x.to !== z.holdPort)
+            .map(x => ({ x, d: this.zoneMap[x.to] ? coordDist(this.zoneMap[x.to].map, z.map) : 0 }))
+            .sort((a2, b2) => b2.d - a2.d);
+          for (const c of cands) {
+            const dest = this.zoneMap[c.x.to];
+            if (!dest) { z.exits.splice(z.exits.indexOf(c.x), 1); return true; }
+            if (dest.exits.some(x2 => x2.to === z.id && x2.notarized === true)) continue;
+            if (dest.exits.filter(x2 => x2.to !== '?').length <= 1) continue; // the belt
+            z.exits.splice(z.exits.indexOf(c.x), 1);
+            const back = dest.exits.findIndex(x2 => x2.to === z.id);
+            if (back >= 0) dest.exits.splice(back, 1);
+            return true;
+          }
+          return false;
+        };
+        for (let guard = 0; guard < 16 && shed(); guard++) { /* trims to cap */ }
       }
       if (z.kind === 'port' && zoneKindOf(z)?.staticExits) {
         for (let i = z.exits.length - 1; i >= 0; i--) {
@@ -8706,6 +8760,11 @@ export class World {
   private spawnPacks(def: ZoneDef, factor = 1, table?: PackTableEntry[]): void {
     const spec = def.packs;
     if (!spec) return;
+    // EXPLICIT ZERO opts a zone out of ambient packs entirely (the quay's
+    // near-sanctuary read) — the max(1,…) floor below would otherwise force
+    // one pack through any density. Authored fauna still breathes (its own
+    // lane); staged spawns (events, sieges, contests) never route here.
+    if (def.packDensity === 0) return;
     const picks = table && table.length ? table : spec.table;
     // Bigger zones hold more packs — count tracks the LINEAR span (sqrt of area), so
     // density (and net xp/zone) stays roughly flat. A FIELD mega-zone is mostly walkable
@@ -8966,8 +9025,13 @@ export class World {
       // but it must never crash a zone's gen. Skip it; the warning is the fix.
       if (!MONSTERS[w.id]) continue;
       const pressed = authored && MONSTERS[w.id]?.tags?.includes('vermin') ? vermMul : 1;
+      // packDensity is the zone's ONE ambient-density dial: it has always
+      // scaled the pack budget; BIOME-FALLBACK fauna chances breathe with
+      // it too. AUTHORED rows are exempt — explicit authorship is a
+      // deliberate population (the cellar's roaches, the quay's crabs),
+      // never ambience to be dialed away.
       const chance = w.chance * pressed * presenceMul(w.presence, lvl)
-        * presenceMul(MONSTERS[w.id]?.presence, lvl);
+        * presenceMul(MONSTERS[w.id]?.presence, lvl) * (authored ? 1 : (def.packDensity ?? 1));
       if (Math.random() >= chance) continue;
       const n = randInt(w.count[0], w.count[1]);
       // TIER ROW (WildlifeRow.tier — the tier fabric): fauna that lives on
@@ -17521,6 +17585,43 @@ export class World {
       const at = holdGateApron(gate, 64);
       this.doodads.push({ pos: this.findFreeSpot(vec(at.x, at.y), 14), radius: 14, kind: 'muster_horn' });
       this.markDoodadsChanged();
+    }
+    // THE GATEWORK IS THE GATE (the harbor pair): the causeway portal to
+    // the paired PORT repositions INSIDE the walls, onto the plan's own
+    // court seat (HARBORHOLD_CFG.quay.gateSeat) — the holdfast doesn't
+    // guard a road to a door somewhere else, it CONTAINS the door: break
+    // the siege, walk through the fort, board the quay (the city-gate
+    // read). Live-exit move only — the def keeps its side/at, so the map
+    // road and genqa's rim-portal invariants are untouched; a bare-quay
+    // degrade never reaches here (no `ps`) and keeps the rim portal, the
+    // 'harborhold' lock still gating it.
+    if (def.holdPort) {
+      const qSeat = holdSeatPos(ps, HARBORHOLD_CFG.quay.gateSeat);
+      const gateIdx = def.exits.findIndex(e => e.to === def.holdPort);
+      const live = gateIdx >= 0 ? this.exits.find(e => e.defIndex === gateIdx) : undefined;
+      if (qSeat && live) {
+        live.pos = vec(qSeat.x, qSeat.y);
+        // ARRIVALS FROM THE QUAY land where the walk says they should: at
+        // the court portal while the hold stands OPEN; SKIRTED to the gate
+        // apron outside the walls while it doesn't (the strand path around
+        // the fort) — a sea arrival is never sealed inside a hostile ring,
+        // and the muster horn stands right there.
+        if (this.entryFrom === def.holdPort) {
+          const at = hold.state === 'open' || !gate
+            ? vec(qSeat.x, qSeat.y + 40)
+            : holdGateApron(gate, 150);
+          this.player.pos = this.clampPos(vec(at.x, at.y), this.player.radius);
+          const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+          for (const ac of this.actors) {
+            if (ac === this.player || !seatActors.has(ac)) continue;
+            ac.pos = this.clampPos(vec(at.x + rand(-40, 40), at.y + rand(20, 60)), ac.radius);
+          }
+          if (hold.state !== 'open') {
+            this.text(vec(at.x, at.y - 44),
+              'the garrison bars the causeway behind you — sound the horn to break the siege', '#e8a050', 13);
+          }
+        }
+      }
     }
     // THE QUAY BELT: the dock's fixed oceanward formula and the town's
     // findSpot seat are independent rolls — on the rare layout where the

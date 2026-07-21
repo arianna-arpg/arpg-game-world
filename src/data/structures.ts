@@ -409,7 +409,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'harborhold_landing', halfW: 195, halfH: 150, cellSize: 30,
     plan: [
       '#####PPP#####',
-      '#________L__#',
+      '#___q____L__#',
       '#_#######_4_#',
       '#_#..z.p#_1_#',
       '#_#2....#___#',
@@ -422,6 +422,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     legend: {
       g: { door: { mode: 'sealed' }, courtyard: true },
       C: { breakable: 'crate', courtyard: true },
+      q: { courtyard: true }, // the causeway portal's court seat (the gatework law)
       '1': { courtyard: true }, '2': { interior: true },
       '3': { courtyard: true }, '4': { courtyard: true },
     },
@@ -435,13 +436,13 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'harborhold_town', halfW: 255, halfH: 180, cellSize: 30,
     plan: [
       '######PPPPP######',
-      '#_______________#',
+      '#______q________#',
       '#_########__###_#',
       '#_#..z..2#__#p#_#',
       '#_#......#__#.#_#',
       '#_##D#####__#D#_#',
       '#_________4_____#',
-      '#_M__1______5___#',
+      '#_G__1______5___#',
       '#_C____F___H__L_#',
       '#_3_____________#',
       '#_______________#',
@@ -450,6 +451,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     legend: {
       g: { door: { mode: 'sealed' }, courtyard: true },
       C: { breakable: 'crate', courtyard: true },
+      q: { courtyard: true }, // the causeway portal's court seat (the gatework law)
       '1': { courtyard: true }, '2': { interior: true },
       '3': { courtyard: true }, '4': { courtyard: true }, '5': { courtyard: true },
     },
@@ -463,13 +465,13 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'harborhold_freeport', halfW: 315, halfH: 210, cellSize: 30,
     plan: [
       '#######PPPPPPP#######',
-      '#___________________#',
+      '#_________q_________#',
       '#_#########__#####_L#',
       '#_#..z...2#__#..p#__#',
       '#_#.......#__#...#__#',
       '#_###D#####__##D##__#',
-      '#_________________M_#',
-      '#_M__1____4______5__#',
+      '#_________________G_#',
+      '#_G__1____4______5__#',
       '#_########__######__#',
       '#_#..p...#__#.z..#__#',
       '#_##D#####__###D##__#',
@@ -481,6 +483,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       g: { door: { mode: 'sealed' }, courtyard: true },
       C: { breakable: 'crate', courtyard: true },
       f: { doodad: { kind: 'firewood_pile', radius: 13 }, courtyard: true },
+      q: { courtyard: true }, // the causeway portal's court seat (the gatework law)
       '1': { courtyard: true }, '2': { interior: true },
       '3': { courtyard: true }, '4': { courtyard: true }, '5': { courtyard: true },
     },

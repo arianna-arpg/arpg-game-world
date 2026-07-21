@@ -255,7 +255,11 @@ let routeGuard: RouteGuard | null = null;
 export function setRouteGuard(g: RouteGuard | null): void { routeGuard = g; }
 function routeOk(a: MapCoord, b: MapCoord): boolean { return !routeGuard || routeGuard(a, b); }
 const WEAVE_RADIUS = 96;   // node-units: past the 52 anti-crowd floor + a MAP_DIR step (~78-86)
-const MAX_DEGREE = 5;      // total real roads a zone may hold (4 sides + multi-exit slack)
+/** Total real roads a zone may hold (4 sides + multi-exit slack). Exported:
+ *  the weave enforced it from day one, but the OTHER road-formers
+ *  (nearestLinkable, the ocean-frontier anchor snap) never did — the exact
+ *  leak that let a hold anchor collect a dozen spokes. One cap, every path. */
+export const MAX_DEGREE = 5;
 const MAX_NEW_LINKS = 3;   // extra roads a single fresh node weaves at most
 const AT_CANDIDATES = [0.2, 0.35, 0.5, 0.65, 0.8] as const; // portal slots along a side
 // PORTAL GEOMETRY — SHARED with world.ts placeExit so the gen-time spacing test uses
@@ -317,8 +321,9 @@ function sideToward(from: { x: number; y: number }, to: { x: number; y: number }
   return Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 'e' : 'w') : (dy >= 0 ? 's' : 'n');
 }
 
-/** Real (charted) roads out of a zone — '?' frontiers don't count toward degree. */
-function countRoads(z: ZoneDef): number {
+/** Real (charted) roads out of a zone — '?' frontiers don't count toward degree.
+ *  Exported beside MAX_DEGREE: every road-former reads the same ledger. */
+export function countRoads(z: ZoneDef): number {
   return z.exits.filter(e => e.to !== '?').length;
 }
 

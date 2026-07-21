@@ -346,13 +346,22 @@ changes.
   coastline (greedy max-min ≥ `portMinSep`; spot 0 = THE HAVEN).
   `World.ensureSeaPorts` mints each spot as a veiled HARBOR PAIR
   (`SEA_CFG.pair`): a mainland HOLD ANCHOR (`<spot>_hold` — ordinary
-  country wearing the walled harborhold, the siege, and the state) + the
-  PORT zone proper offshore (kind 'port' = SEALED SHORES by registry;
-  `ZoneDef.seaId`/`portTier`, haven name; the harborcove recipe carves
-  deep water + the quay outcrop aligned home + the planked pier whose
-  BERTH is the cast-off dock-location), joined by ONE notarized causeway
-  whose anchor-side exit wears `lock: 'harborhold'` — the muster win
-  opens the road (and unveils the port); the sail-in pier never bricks.
+  country wearing the walled harborhold, the siege, and the state, with
+  the causeway PORTAL repositioned INSIDE its walls at boot — the
+  gatework law, `HARBORHOLD_CFG.quay.gateSeat`: the fort CONTAINS the
+  door to the port; a besieged sea-arrival skirts to the apron outside)
+  + the PORT zone proper offshore (kind 'port' = SEALED SHORES by
+  registry + eventQuiet — NEAR-SANCTUARY: objective 'none', no faction
+  war, `packDensity` sparse ambience; `ZoneDef.seaId`/`portTier`, haven
+  name; the harborcove recipe carves deep water + the quay outcrop
+  aligned home + the planked pier whose BERTH is the cast-off
+  dock-location), joined by ONE notarized causeway whose anchor-side
+  exit wears `lock: 'harborhold'` — the muster win opens the road (and
+  unveils the port); the sail-in pier never bricks. THE DEGREE CAP:
+  every road-former now honors worldgen's MAX_DEGREE (the frontier
+  snap + nearestLinkable stop at `pair.anchorMaxRoads`; the restore
+  reconcile TRIMS a saved anchor's excess spokes) — no hub sprawl on
+  either half of the pair.
   THE DRY-ROAD LAW (`SEA_CFG.dryRoad`): no auto-forged land road crosses
   ocean — ONE chord test (`World.landRoute`) behind the mint weave,
   nearestLinkable, linkBackTo, and the ocean-frontier resolution (which

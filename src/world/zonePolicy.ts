@@ -15,11 +15,15 @@
 // ---------------------------------------------------------------------------
 
 import { BIOMES } from './biomes';
+import { zoneKindOf } from '../data/zoneKinds';
 
 /** The minimal zone shape the policy reads (so this never pulls in ZoneDef). */
 export interface PolicyZone {
   biome?: string;
   layoutType?: string;
+  /** ZONE KIND id (data/zoneKinds.ts) — a kind may opt whole classes of
+   *  ground out of event seating (ZoneKindDef.eventQuiet: the port). */
+  kind?: string;
 }
 
 /** The structural shape eventTargetable reads on top of PolicyZone — every
@@ -85,6 +89,10 @@ export function eventTargetable(eventId: string, zone: TargetableZone): boolean 
   // (marches, roving fronts, epicenter growth all assume roads onward).
   if (zone.caveDepth != null || zone.floating || zone.eventOwned || zone.special || zone.pocket) return false;
   if (zone.objective && zone.objective.kind === 'safe') return false;
+  // EVENT-QUIET KINDS (ZoneKindDef.eventQuiet — registry-driven): the quay
+  // is a locale, never a battleground; a sealed-shores dead end can't
+  // honor event traffic any better than a pocket can.
+  if (zoneKindOf(zone)?.eventQuiet) return false;
   return eventAllowed(eventId, zone);
 }
 

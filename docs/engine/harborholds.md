@@ -95,6 +95,19 @@ ground a while (the shared dispersal fabric), then drift.
   Boot runs AFTER zone-memory door replay — the persisted state is
   authoritative over remembered opens. Live sieges never seal under your
   feet: services shut at once, the gate re-seals on the next load.
+- **THE GATEWORK IS THE GATE** (the harbor pair): the causeway portal to
+  the paired PORT repositions at boot onto the plan's own court seat
+  (`HARBORHOLD_CFG.quay.gateSeat` — the `q` char every `harborhold_*`
+  plan carries, inside the walls). The fort doesn't guard a road to a
+  door somewhere else; it CONTAINS the door — break the siege, walk
+  through the fort, board the quay (the city-gate read). Live-exit move
+  only: the def keeps side/at (map roads + genqa rim invariants
+  untouched); a bare-quay degrade keeps the rim portal, still sealed by
+  the `'harborhold'` lock. **The arrival law**: walking the causeway
+  inland lands at the court portal while the hold stands OPEN; a sea
+  arrival under a live siege SKIRTS to the gate apron outside the walls
+  (the strand path around the fort — never sealed inside a hostile
+  ring, and the muster horn stands right there).
 - **State dress** rides the weather-dress law: presence derived from the
   `Doodad.holdDress` tag, replanted deterministically (zone seed ^
   `dressSalt` ^ state), dissolved via `evap` on change. Fire kinds arm
