@@ -15,6 +15,14 @@
 //     unique 'character'        → PoE-style masteries: an option taken at ANY
 //                                 node sharing the group is spent for all of
 //                                 them — each doctrine exists once per hero.
+//   * many nodes, deal 'sole'   → a mutually exclusive CLUSTER: the first
+//                                 node picked at claims the group — sibling
+//                                 nodes can never be allocated (WHERE you
+//                                 swear is the build decision).
+//   * many nodes, deal 'first'  → SHORTCUT nodes: only the first node taken
+//                                 deals; siblings stay allocatable at full
+//                                 cost but grant nothing — paid pathing
+//                                 across the tree, pure opportunity cost.
 //
 // Options carry the SAME payload surface as tree nodes (attributes, the new
 // attributesPct percent lever, ordinary mods — gauge/link/proc included), so
@@ -79,6 +87,19 @@ export interface PassiveChoiceGroup {
    *  group may take the same option. 'character': each option once PER
    *  CHARACTER across every node sharing the group (the mastery rule). */
   unique?: 'node' | 'character';
+  /** THE DEAL LAW — how ONE group's deal spreads across the several NODES
+   *  that share it (the cross-NODE axis; `unique` is the cross-OPTION one):
+   *    'each' (default) — every node deals the group independently.
+   *    'sole'  — a mutually exclusive CLUSTER: the first node to record a
+   *              pick claims the whole group, and its sibling nodes can
+   *              never be ALLOCATED (choiceLockReason refuses every option,
+   *              and a choice node never allocates blind).
+   *    'first' — only the first node DEALS: siblings stay allocatable at
+   *              full cost but the popup never opens and nothing is granted
+   *              — SHORTCUT nodes, pure pathing bought at opportunity cost.
+   *              (A sibling's own baked node.mods, if authored, still apply
+   *              — only the DEAL dies; choice nodes usually carry none.) */
+  deal?: 'each' | 'sole' | 'first';
 }
 
 /** What a PassiveNode.choice field holds — a group reference plus overrides.
@@ -141,6 +162,44 @@ export function nodeChoiceOpen(node: NodeLike, choices: ChoiceState): boolean {
   return !!node.choice && chosenOf(choices, node.id).length < choicePickLimit(node);
 }
 
+/** THE DEAL LAW resolver: the OTHER node that already CLAIMED this node's
+ *  'sole'/'first' group — null when the deal is live here ('each' groups
+ *  always are, and a node's own picks never claim against itself). Needs the
+ *  registry to know which recorded picks share the group. */
+export function choiceDealClaimant(
+  node: NodeLike, choices: ChoiceState,
+  nodes: Record<string, NodeLike | undefined>,
+): string | null {
+  const group = choiceGroupOf(node);
+  if (!group || (group.deal ?? 'each') === 'each') return null;
+  for (const [otherId, picked] of Object.entries(choices)) {
+    if (otherId === node.id || !picked.length) continue;
+    if (nodes[otherId]?.choice?.group === group.id) return otherId;
+  }
+  return null;
+}
+
+/** 'sole' groups: is this NODE locked out of ALLOCATION because a sibling
+ *  claimed the cluster? (allocateNode needs no branch of its own — every
+ *  option refuses through choiceLockReason and a choice node never
+ *  allocates blind — but the UI reads this to kill the glow and say why.) */
+export function choiceNodeLocked(
+  node: NodeLike, choices: ChoiceState,
+  nodes: Record<string, NodeLike | undefined>,
+): boolean {
+  return choiceGroupOf(node)?.deal === 'sole' && choiceDealClaimant(node, choices, nodes) !== null;
+}
+
+/** 'first' groups: has the deal been SPENT at a sibling — leaving this node
+ *  allocatable as a grant-less SHORTCUT (plain pathing at full cost)?
+ *  allocateNode and the popup gate both read this one rule. */
+export function choiceDealSpent(
+  node: NodeLike, choices: ChoiceState,
+  nodes: Record<string, NodeLike | undefined>,
+): boolean {
+  return choiceGroupOf(node)?.deal === 'first' && choiceDealClaimant(node, choices, nodes) !== null;
+}
+
 /** Why can't `optionId` be picked at `node` right now — or null when it CAN.
  *  The single legality rule: world.allocateNode enforces it, the popup renders
  *  it (lock labels), and the sim build auditor replays it. `nodes` resolves
@@ -154,6 +213,18 @@ export function choiceLockReason(
   if (!node.choice || !group) return 'not a choice node';
   const opt = group.options.find(o => o.id === optionId);
   if (!opt) return 'no such option';
+  // THE DEAL LAW: a 'sole' cluster claimed at a sibling refuses EVERY option
+  // here (which is what locks the node out of allocation entirely); a 'first'
+  // deal spent at a sibling likewise deals nothing more — the node survives
+  // only as plain pathing (allocateNode's spent-shortcut branch).
+  if (nodes) {
+    const claimant = choiceDealClaimant(node, choices, nodes);
+    if (claimant !== null) {
+      const other = nodes[claimant];
+      const who = other && 'name' in other ? (other as { name?: string }).name ?? claimant : claimant;
+      return group.deal === 'sole' ? `cluster claimed at ${who}` : `deal spent at ${who}`;
+    }
+  }
   const chosen = chosenOf(choices, node.id);
   if (chosen.includes(optionId)) return 'already chosen here';
   if (chosen.length >= choicePickLimit(node)) return 'all picks made';
@@ -213,6 +284,7 @@ export function validatePassiveChoices(
     }
   }
   const dealtPicks: Record<string, number> = {};
+  const dealNodes: Record<string, number> = {};
   for (const n of Object.values(nodes)) {
     if (!n) continue;
     if (n.kind === 'choice' && !n.choice) warn(`passive ${n.id}: kind 'choice' but no choice deal`);
@@ -224,11 +296,18 @@ export function validatePassiveChoices(
       warn(`passive ${n.id}: pick ${limit} exceeds group '${g.id}' pool (${g.options.length} options)`);
     }
     dealtPicks[g.id] = (dealtPicks[g.id] ?? 0) + limit;
+    dealNodes[g.id] = (dealNodes[g.id] ?? 0) + 1;
   }
   for (const [gid, total] of Object.entries(dealtPicks)) {
     const g = CHOICE_GROUPS[gid];
     if (g?.unique === 'character' && total > g.options.length) {
       warn(`choice group ${gid}: character-unique but nodes deal ${total} picks over ${g.options.length} options (surplus nodes go dead)`);
+    }
+    // THE DEAL LAW is a rule about SIBLINGS — a 'sole'/'first' group dealt by
+    // one lone node behaves exactly like 'each' (the law is inert; either the
+    // deal field or the missing sibling nodes are a mistake).
+    if (g?.deal && g.deal !== 'each' && dealNodes[gid] === 1) {
+      warn(`choice group ${gid}: deal '${g.deal}' but only one node deals it (the law is inert)`);
     }
   }
 }
@@ -308,10 +387,17 @@ export function sanitizeChoices(
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   if (!raw) return out;
+  // THE DEAL LAW on load: a 'sole'/'first' group holds picks at ONE node —
+  // a save minted before the group turned exclusive keeps its FIRST claimant
+  // (record order) and later siblings' picks drop like any other stale pick.
+  const claimed: Record<string, string> = {};
   for (const [nodeId, picked] of Object.entries(raw)) {
     if (!Object.prototype.hasOwnProperty.call(nodes, nodeId)) continue;
     const node = nodes[nodeId];
     if (!node?.choice || !Array.isArray(picked)) continue;
+    const group = choiceGroupOf(node);
+    const exclusive = group !== undefined && (group.deal ?? 'each') !== 'each';
+    if (exclusive && claimed[group.id] !== undefined && claimed[group.id] !== nodeId) continue;
     const kept: string[] = [];
     for (const oid of picked) {
       if (typeof oid !== 'string' || kept.includes(oid)) continue;
@@ -319,7 +405,10 @@ export function sanitizeChoices(
       if (kept.length >= choicePickLimit(node)) break;
       kept.push(oid);
     }
-    if (kept.length) out[nodeId] = kept;
+    if (kept.length) {
+      out[nodeId] = kept;
+      if (exclusive) claimed[group.id] = nodeId;
+    }
   }
   return out;
 }
@@ -500,5 +589,34 @@ registerChoiceGroup({
     { id: 'refrain_shroud', name: 'Refrain of the Shroud', description: 'For each Wakeflame you hold: 4% increased armor and 1% less damage taken', mods: [gaugeMod('armor', 'increased', 0.04, 'charge:wakeflame'), gaugeMod('damageTaken', 'more', -0.01, 'charge:wakeflame')] },
     { id: 'refrain_host', name: 'Refrain of the Host', description: 'For each Wakeflame you hold: minions deal 4% increased damage', mods: [gaugeMod('minionDamage', 'increased', 0.04, 'charge:wakeflame')] },
     { id: 'refrain_tide', name: 'Refrain of the Tide', description: 'For each Wakeflame you hold: +0.4 life and +0.25 mana regeneration per second', mods: [gaugeMod('lifeRegen', 'flat', 0.4, 'charge:wakeflame'), gaugeMod('manaRegen', 'flat', 0.25, 'charge:wakeflame')] },
+  ],
+});
+
+// --- THE DEAL LAW DEBUTS -------------------------------------------------------
+// OATHS ('sole') — oath-stones may stand across several branches of the tree,
+// but an oath is sworn ONCE: the first stone claimed seals its siblings shut.
+// WHERE you swear is as much the build decision as WHAT you swear.
+registerChoiceGroup({
+  id: 'road_oaths',
+  name: 'Oath of the Road',
+  deal: 'sole',
+  options: [
+    { id: 'oath_stride', name: 'Oath of the Stride', description: '6% increased movement speed', mods: [mod('moveSpeed', 'increased', 0.06)] },
+    { id: 'oath_stone', name: 'Oath of Stone', description: '+30 armor', mods: [mod('armor', 'flat', 30)] },
+    { id: 'oath_spring', name: 'Oath of the Spring', description: '+0.6 life regeneration per second', mods: [mod('lifeRegen', 'flat', 0.6)] },
+  ],
+});
+
+// WAYPOSTS ('first') — the shortcut lane: the FIRST waypost taken deals its
+// blessing; every later sibling still allocates (full point) but grants
+// nothing — a paid shortcut into another branch, pure opportunity cost.
+registerChoiceGroup({
+  id: 'wayposts',
+  name: 'The Waypost',
+  deal: 'first',
+  options: [
+    { id: 'post_stride', name: "Wayfarer's Stride", description: '4% increased movement speed', mods: [mod('moveSpeed', 'increased', 0.04)] },
+    { id: 'post_pack', name: "Wayfarer's Pack", description: '+12 maximum life', mods: [mod('life', 'flat', 12)] },
+    { id: 'post_lantern', name: "Wayfarer's Lantern", description: '+8 maximum mana', mods: [mod('mana', 'flat', 8)] },
   ],
 });

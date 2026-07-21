@@ -59,7 +59,7 @@ import { coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
-import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
+import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceDealSpent, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
 import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
@@ -19941,9 +19941,10 @@ export class World {
    *  CHOICE NODES (node.choice) additionally require `optionId`: the FIRST
    *  pick IS the allocation; later picks (multi-pick deals) re-pay the pool
    *  with no fresh adjacency walk. Pick legality — taken options, pick
-   *  limits, character-unique groups — is the ONE rule in
-   *  data/passiveChoices.ts (choiceLockReason); the popup renders exactly the
-   *  verdicts enforced here. */
+   *  limits, character-unique groups, THE DEAL LAW's 'sole' clusters — is
+   *  the ONE rule in data/passiveChoices.ts (choiceLockReason); the popup
+   *  renders exactly the verdicts enforced here. A 'first' group spent at a
+   *  sibling degrades this node to a plain SHORTCUT (choiceDealSpent). */
   allocateNode(nodeId: string, seat: Seat = this.localSeat, optionId?: string): boolean {
     const m = seat.meta;
     // hasOwnProperty guard: a prototype-chain key ('__proto__', 'constructor', …)
@@ -19961,12 +19962,17 @@ export class World {
     if (realm) this.ensureRealmRoots(seat, realm);
     const already = m.allocated.has(nodeId);
     let cost = 1;
-    if (node.choice) {
+    // THE DEAL LAW (PassiveChoiceGroup.deal): a 'first' group SPENT at a
+    // sibling leaves this node a grant-less SHORTCUT — it allocates through
+    // the plain branch below (no option, no pick recorded, cost 1). A 'sole'
+    // group claimed at a sibling needs no branch of its own: choiceLockReason
+    // refuses every option here, and a choice node never allocates blind.
+    if (node.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) {
       if (optionId === undefined) return false; // a choice node never allocates blind
       if (choiceLockReason(node, optionId, m.choices, PASSIVE_NODES) !== null) return false;
       cost = PASSIVE_CHOICE_CFG.pickCost;
     } else if (already || optionId !== undefined) {
-      return false; // plain nodes: one allocation, no options
+      return false; // plain nodes (and spent-deal shortcuts): one allocation, no options
     }
     // Pathing: the FIRST touch of any node needs an allocated neighbour —
     // except in a 'free'-adjacency realm (Pantheon shrines stand alone);

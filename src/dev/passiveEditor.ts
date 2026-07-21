@@ -224,7 +224,8 @@ export function mountPassiveEditor(ui: UI): void {
       for (const g of Object.values(CHOICE_GROUPS)) {
         const o = document.createElement('option'); o.value = g.id;
         o.textContent = `${g.id} — ${g.name} (${g.options.length} opts`
-          + `${g.pick !== undefined ? `, pick ${g.pick}` : ''}${g.unique === 'character' ? ', char-unique' : ''})`;
+          + `${g.pick !== undefined ? `, pick ${g.pick}` : ''}${g.unique === 'character' ? ', char-unique' : ''}`
+          + `${g.deal && g.deal !== 'each' ? `, deal ${g.deal}` : ''})`;
         if (g.id === n.choice?.group) o.selected = true;
         grpSel.append(o);
       }

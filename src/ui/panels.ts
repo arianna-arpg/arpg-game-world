@@ -51,7 +51,7 @@ import {
 import { VIS_CFG } from '../render/vis/visConfig';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
-import { PASSIVE_CHOICE_CFG, choiceGroupOf, choiceLockReason, choiceOptionOf, choicePickLimit, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
+import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
 import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
 import { SUPPORTS } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -3190,6 +3190,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // Vocation nodes spend the VOCATION pool behind the (toggleable) gate;
       // everything else spends normal passive points. Same adjacency walk —
       // the ONE rule lives in nodeAllocatable (the node tooltip reads it too).
+      // THE DEAL LAW legibility: a 'first' sibling whose deal is spent drops
+      // the dashed deal ring (it IS plain pathing now); a 'sole'-locked
+      // sibling dims — the cluster reads as claimed at a glance.
+      const dealClaimed = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
+      const dealSpent = dealClaimed !== null && choiceGroupOf(node)?.deal === 'first';
+      const clusterLocked = dealClaimed !== null && choiceGroupOf(node)?.deal === 'sole';
       const available = this.nodeAllocatable(node, m);
       const fill = allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
         : node.kind === 'keystone' ? '#5a2a3a'
@@ -3210,7 +3216,8 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // pad pointer's synthetic hover.
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
-        ${node.kind === 'choice' ? 'stroke-dasharray="4 3"' : ''}
+        ${node.kind === 'choice' && !dealSpent ? 'stroke-dasharray="4 3"' : ''}
+        ${clusterLocked ? 'opacity="0.45"' : ''}
         data-node="${node.id}" data-tip="pnode" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
     }
 
@@ -3269,7 +3276,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           const node = PASSIVE_NODES[el.dataset.node!];
           // CHOICE NODES deal their options in a popup instead of allocating
           // blind — the pick itself is dispatched from the popup's buttons.
-          if (node?.choice) { this.openChoicePopup(node, el); return; }
+          // THE DEAL LAW: a 'first' group spent at a sibling leaves this a
+          // grant-less shortcut — no popup, the plain allocate intent below.
+          if (node?.choice && !choiceDealSpent(node, m.choices, PASSIVE_NODES)) { this.openChoicePopup(node, el); return; }
           world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
           this.refreshTree();
           this.refreshCharSheet();
@@ -3346,10 +3355,15 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const realm = realmOf(node);
     if (!realmOpen(realm, this.getWorld().ledger)) return false;
     const already = m.allocated.has(node.id);
-    if (already && !(node.choice && nodeChoiceOpen(node, m.choices))) return false;
+    // THE DEAL LAW: a 'sole' cluster claimed at a sibling locks this node out
+    // entirely; a 'first' deal spent elsewhere degrades it to plain pathing
+    // (allocatable once, deals nothing — the shortcut lane).
+    if (node.choice && choiceNodeLocked(node, m.choices, PASSIVE_NODES)) return false;
+    const dealSpent = node.choice !== undefined && choiceDealSpent(node, m.choices, PASSIVE_NODES);
+    if (already && !(node.choice && !dealSpent && nodeChoiceOpen(node, m.choices))) return false;
     if (!already && realm?.adjacency !== 'free'
       && !PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
-    const cost = node.choice ? PASSIVE_CHOICE_CFG.pickCost : 1;
+    const cost = node.choice && !dealSpent ? PASSIVE_CHOICE_CFG.pickCost : 1;
     if (node.vocation !== undefined) {
       return m.vocationPoints >= cost && vocationGateOpen(m.allocated, node.vocation);
     }
@@ -3388,7 +3402,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     pop.className = 'choice-popup';
     pop.innerHTML = `
       <div class="choice-head">${group.name}
-        <span class="choice-count">${chosen.length}/${limit} chosen${group.unique === 'character' ? ' · once per character' : ''}</span></div>
+        <span class="choice-count">${chosen.length}/${limit} chosen${group.unique === 'character' ? ' · once per character' : ''}${
+          group.deal === 'sole' ? ' · claims its whole cluster — sibling nodes lock'
+          : group.deal === 'first' ? ' · only the first node deals — siblings become plain paths' : ''}</span></div>
       ${group.options.map(o => {
         const taken = chosen.includes(o.id);
         const why = taken ? null : choiceLockReason(node, o.id, m.choices, PASSIVE_NODES);
@@ -3462,27 +3478,38 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       attrText += '<br>' + Object.entries(node.attributesPct).map(([a, v]) =>
         `${Math.round(v * 100)}% increased ${ATTRIBUTES[a as AttributeId].label}`).join(', ');
     }
-    // CHOICE NODES: the deal (group, pick count, uniqueness) + what this
-    // character has already picked here, each with its granted line.
+    // CHOICE NODES: the deal (group, pick count, uniqueness, deal law) + what
+    // this character has already picked here, each with its granted line.
     let choiceText = '';
     const group = choiceGroupOf(node);
+    const dealClaimant = node.choice ? choiceDealClaimant(node, m.choices, PASSIVE_NODES) : null;
+    const dealSpent = dealClaimant !== null && group?.deal === 'first';
     if (node.choice && group) {
       const limit = choicePickLimit(node);
       const chosen = chosenOf(m.choices, node.id);
       choiceText = `<br><span style="color:#b8a2e8">${group.name}</span>`
         + ` — pick ${limit} of ${group.options.length}`
-        + (group.unique === 'character' ? ' (each option once per character)' : '');
+        + (group.unique === 'character' ? ' (each option once per character)' : '')
+        + (group.deal === 'sole' ? ' — ONE node of this cluster, ever'
+          : group.deal === 'first' ? ' — only the first node taken deals; the rest become plain paths'
+          : '');
+      if (dealClaimant !== null) {
+        const cName = PASSIVE_NODES[dealClaimant]?.name ?? dealClaimant;
+        choiceText += group.deal === 'sole'
+          ? `<br><span style="color:#e88a8a">cluster claimed at ${cName} — this node can no longer be taken</span>`
+          : `<br><span style="color:#8a8678">deal spent at ${cName} — allocates as a plain path (no grant)</span>`;
+      }
       for (const oid of chosen) {
         const opt = choiceOptionOf(node, oid);
         if (opt) choiceText += `<br><span style="color:#e6d8ff">✓ ${opt.name}</span> — ${opt.description}`;
       }
     }
-    const openPicks = node.choice && group
+    const openPicks = node.choice && group && !dealSpent
       ? ` — ${chosenOf(m.choices, node.id).length}/${choicePickLimit(node)} picked`
       : '';
     let meta = m.allocated.has(node.id)
       ? `${KIND_LABELS[node.kind]} — allocated${openPicks}${this.nodeAllocatable(node, m) ? ' — click to choose' : ''}`
-      : this.nodeAllocatable(node, m) ? `${KIND_LABELS[node.kind]} — click to ${node.choice ? 'choose' : 'allocate'}`
+      : this.nodeAllocatable(node, m) ? `${KIND_LABELS[node.kind]} — click to ${node.choice && !dealSpent ? 'choose' : 'allocate'}`
       : KIND_LABELS[node.kind];
     if (node.vocation !== undefined) {
       const voc = VOCATIONS[node.vocation];
