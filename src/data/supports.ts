@@ -1098,6 +1098,23 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('statusMagnitude', 'increased', 0.06, ['fire'])],
     weight: 6,
   },
+  // THE DEFENSIVE GEARING AXIS debut (GLOBAL_SUPPORT_STATS — engine/skills):
+  // the first gem that armors the CHARACTER, not the cast. Its mods ride
+  // the equip-global fold while the host sits on the bar — socket it into
+  // an aura and forget it; socket it into a summon and the forwarded copy
+  // armors the court (each minion's own equip fold reads it).
+  warding_flesh: {
+    id: 'warding_flesh', name: 'Warding Flesh',
+    description: 'While this gem sits in ANY skill on your bar, the body itself thickens: +40 armor and 3 life regenerated per second, worn GLOBALLY — the first support that guards the character, not the cast. Socketed into a summon, the court wears it too.',
+    color: '#b8a888',
+    mods: [
+      mod('armor', 'flat', 40),
+      mod('lifeRegen', 'flat', 3),
+    ],
+    perLevel: [mod('armor', 'flat', 12), mod('lifeRegen', 'flat', 0.8)],
+    weight: 6,
+  },
+
   monolith: {
     id: 'monolith', name: 'Monolith',
     description: 'The heavy trade: 30% increased area, 25% more area damage — 30% less attack and cast speed.',
@@ -1597,8 +1614,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   abundant_harvest: {
     id: 'abundant_harvest', name: 'Abundant Harvest',
-    description: 'Supported skill sheds RICHER: 30% increased orb shed chance of every kind — life, mana, shield and Wakeflame alike.',
+    description: 'Supported skill sheds RICHER: 30% increased orb shed chance of every kind — and where no shed exists at all, the harvest UNLOCKS it: kills gain a small base chance to shed life and mana orbs (grown by shed passives and gear, never by this gem\'s own bonus).',
     color: '#c8e87a', requiresTags: ['attack', 'spell'],
+    // The mechanism unlock (orbShedGraft): a LOW floor by design — other
+    // orbShedRate sources build on it; the gem's own rate mod multiplies
+    // only INNATE shed lanes (no self-compounding, rollKillOrbs law).
+    orbShedGraft: { chance: 0.04, orbs: ['life', 'mana'] },
     mods: [mod('orbShedRate', 'increased', 0.3)],
     perLevel: [mod('orbShedRate', 'increased', 0.05)],
     weight: 6,
@@ -3262,7 +3283,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unleash: {
     id: 'unleash', name: 'Unleash',
-    description: 'The skill banks a Seal every 1.4s while not being used (up to 2). Casting it fires one extra time per banked Seal in a rapid salvo.',
+    description: 'The skill banks a Seal every 1.4s of TRUE REST (up to 2) — the cast bar itself banks nothing. Casting fires one extra time per banked Seal in a rapid salvo: the tradeoff is genuine idleness, paid before the press.',
     color: '#b8d858', excludeTags: ['channel', 'movement', 'summon', 'aura', 'totem'],
     mods: [
       mod('unleashMax', 'flat', 2),
@@ -3512,8 +3533,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   alacrity: {
     id: 'alacrity', name: 'Alacrity',
-    description: 'The supported skill\'s cooldown recovers 30% faster — the melee counterpart to faster casting finally gets its clock back.',
+    description: 'The supported skill\'s cooldown recovers 30% faster — the melee counterpart to faster casting finally gets its clock back. Needs a clock to serve: refuses a cooldown-less skill until ANY source stands one up (a levy gem, a granted magazine).',
     color: '#8ae0e8',
+    // The golden rule's debut: the refusal is STRUCTURAL (the 'cooldown'
+    // mechanism predicate over the live instance), never a skill list —
+    // socket Austerity beside it and the door opens by construction.
+    requiresMechanisms: ['cooldown'],
     mods: [mod('cooldownRecovery', 'increased', 0.3)],
     perLevel: [mod('cooldownRecovery', 'increased', 0.08)],
     weight: 8,
@@ -3748,7 +3773,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   colossus_stance: {
     id: 'colossus_stance', name: 'Colossus Stance',
-    description: 'PLANT your feet (0.5s still — a ground ring marks the set stance) and the supported skill hits 28% HARDER over a wider area; swing within a step (0.15s) and it hits 10% less. The mountain does not chase.',
+    description: 'PLANT your feet — a FULL SECOND set before the press, the ground ring marking the commitment — and the supported skill hits 28% HARDER over a wider area; swing within a step (0.15s) and it hits 10% less. Starting a cast does not count as planting: the mountain sets its feet FIRST. Once planted, casting holds the stance.',
     color: '#c8b088',
     // Summon/aura/buff sockets are traps: minions and toggles never route
     // their hits through the host instance's conditional mods (the

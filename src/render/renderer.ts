@@ -3204,7 +3204,11 @@ export class Renderer {
           const half = (z.arcRad ?? 110 * Math.PI / 180) / 2;
           ctx.arc(z.pos.x, z.pos.y, mid, z.facing - half, z.facing + half);
         } else {
-          ctx.arc(z.pos.x, z.pos.y, mid, 0, Math.PI * 2);
+          // SHAPE-TRUE band (the Pillar of Flame QA): a square cage closes
+          // as a square, a triangle as a triangle — the band strokes the
+          // zone's own shape at the closing scale, matching the engine's
+          // zoneHoleSpares test (drawn == tested, both directions).
+          this.traceAoe(z.pos.x, z.pos.y, mid, z.shape, z.facing, z.arcRad);
         }
         ctx.stroke();
         ctx.globalAlpha = 0.5;
@@ -3959,7 +3963,7 @@ export class Renderer {
     // invisible ±28% swings without a cue — SHOW the plant. The ring fades
     // in as the feet set and locks solid (with root-spikes) once planted.
     if (a.isPlayerKind() && a.hasConditionalMods('stationary')) {
-      const frac = Math.min(1, a.idleFor / STANCE_PLANT_TIME);
+      const frac = Math.min(1, a.plantFor / STANCE_PLANT_TIME);
       if (frac > 0.25) {
         const r = a.radius + 7;
         ctx.strokeStyle = '#c8b088';

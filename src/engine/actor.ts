@@ -14,7 +14,8 @@ import {
 import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
-  instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, CONDUIT_CFG, REFLEX_CFG,
+  instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, supportGlobalMods,
+  CONDUIT_CFG, REFLEX_CFG,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec, type ConduitSpec,
   type ConduitPool, type GateSpec,
@@ -180,8 +181,13 @@ export function shellArcFactor(
 
 /** Stance windows for the `stationary`/`moving` conditions: planted after
  *  standing this long, "on the move" within a step's breath. The renderer
- *  reads PLANT_TIME to fade the stance ring in as the feet set. */
-export const STANCE_PLANT_TIME = 0.5;
+ *  reads PLANT_TIME to fade the stance ring in as the feet set.
+ *  THE COMMITMENT (2026-07-21): the plant is a FULL SECOND, and the plant
+ *  clock (Actor.plantFor) PAUSES while a cast bar runs uncommitted — the
+ *  stance must be SET before the press, so a half-second cast can never
+ *  ride its own bar into the bonus. Once planted, casting sustains the
+ *  stance (rooted casting is the fantasy); moving still breaks it. */
+export const STANCE_PLANT_TIME = 1.0;
 export const STANCE_MOVE_WINDOW = 0.15;
 /** Seconds a staggered wound takes to finish landing (staggerFrac /
  *  Mortis Seal) — the drain re-levels to clear on this schedule. */
@@ -801,6 +807,12 @@ export class Actor {
   reservedLife = 0;
   /** Seconds since the last step (the stationary/moving conditions). */
   idleFor = 0;
+  /** THE PLANT CLOCK (the stationary condition's own meter, split from
+   *  idleFor so insight grace and dwells keep their step semantics):
+   *  zeroed wherever idleFor zeroes, accrues while standing — but PAUSED
+   *  while a cast bar runs before the plant commits (STANCE_PLANT_TIME).
+   *  The commitment must precede the press. */
+  plantFor = 0;
   /** Seconds since last TAKING damage (GateSpec.recentDamage — the
    *  counter-blow's license; zeroed at both damage seams). */
   recentHurt = 999;
@@ -2192,10 +2204,13 @@ export class Actor {
     if (this.poiseBroken) mask |= 512;                                 // poiseBroken
     // The ES recharge is FLOWING — "while recharging" mods ride the stream.
     if (this.esRecharging) mask |= 1024;                               // esRecharging
-    // Planted vs on the move (Colossus Stance): idleFor accrues in
-    // updateTimers and is zeroed by every deliberate step. Between the two
-    // windows sits a NEUTRAL transition band — neither bonus nor malus.
-    if (this.idleFor > STANCE_PLANT_TIME) mask |= 2048;                // stationary
+    // Planted vs on the move (Colossus Stance): the PLANT CLOCK accrues in
+    // updateTimers (paused while an uncommitted cast bar runs — the
+    // commitment precedes the press) and is zeroed by every deliberate
+    // step. Between the two windows sits a NEUTRAL transition band —
+    // neither bonus nor malus. 'moving' keeps reading raw idleFor: a
+    // cast does not make you fleet-footed.
+    if (this.plantFor > STANCE_PLANT_TIME) mask |= 2048;               // stationary
     else if (this.idleFor < STANCE_MOVE_WINDOW) mask |= 4096;          // moving
     // THE COMBO GRAMMAR's starter conditions — bits stamped at the record
     // site, held on the countdown, and read ONLY while comboWatch: an
@@ -2522,13 +2537,19 @@ export class Actor {
       }
     }
 
-    // EQUIP MODS (SkillDef.equipMods): worn while the skill sits on the
-    // bar. Fingerprint the loadout so the sheet source (and its cache
-    // flush) only moves when the bar actually changed.
+    // EQUIP MODS (SkillDef.equipMods) + THE GLOBAL SOCKET LANE
+    // (supportGlobalMods — the defensive gearing axis): worn while the
+    // skill sits on the bar. Fingerprint the loadout so the sheet source
+    // (and its cache flush) only moves when the bar actually changed —
+    // sockets carrying global-lane mods join the key.
     {
       let key = '';
       for (const inst of this.skills) {
-        if (inst?.def.equipMods) key += inst.def.id + ':' + inst.level + ';';
+        if (!inst) continue;
+        if (inst.def.equipMods) key += inst.def.id + ':' + inst.level + ';';
+        for (const s of hostSockets(inst)) {
+          if (supportGlobalMods(s).length) key += '+' + s.def.id + ':' + s.level + ';';
+        }
       }
       if (key !== this.equipKey) {
         this.equipKey = key;
@@ -2537,7 +2558,9 @@ export class Actor {
         } else {
           const merged: Modifier[] = [];
           for (const inst of this.skills) {
-            if (inst?.def.equipMods) merged.push(...inst.def.equipMods);
+            if (!inst) continue;
+            if (inst.def.equipMods) merged.push(...inst.def.equipMods);
+            for (const s of hostSockets(inst)) merged.push(...supportGlobalMods(s));
           }
           this.sheet.setSource('equipped', merged);
         }
@@ -2550,8 +2573,15 @@ export class Actor {
     if (this.dash || this.leap
       || (this.push && Math.hypot(this.push.vx, this.push.vy) > 40)) {
       this.idleFor = 0;
+      this.plantFor = 0;
     } else {
       this.idleFor += dt;
+      // The plant clock: an UNCOMMITTED cast freezes it (the stance must
+      // be set before the press); once past the plant line, casting
+      // sustains it. Movement zeroes both (moveActor + the branch above).
+      if (!(this.casting && this.plantFor < STANCE_PLANT_TIME)) {
+        this.plantFor += dt;
+      }
     }
 
     // Regeneration (mana caps at what reservations leave available).

@@ -200,7 +200,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['hammer_of_judgment', 'aegis_ward', 'rallying_howl',
       'iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link',
       'stone_communion'],
-    supportIds: ['stoneblood_conduit', 'bulwarks_tithe'],
+    supportIds: ['stoneblood_conduit', 'bulwarks_tithe', 'warding_flesh'],
     discover: { ledger: classLevelLedgerKey('warrior', 15),
       hint: 'Veterans of the Warrior\'s road tell of a way of standing that armies name like a wall.' } },
   { classId: 'summoner', cost: 260,

@@ -40,8 +40,9 @@ import { SUPPORTS } from '../data/supports';
 import { PROCS } from '../data/procs';
 import { unreadPayloadRows } from '../data/graftReadSites';
 import {
-  SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel, makeSkillInstance,
-  minionSeatBoundFields, summonCrewOf, supportFitsInst, supportRidesMinions,
+  SUPPORT_MECHANISMS, SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel,
+  makeSkillInstance, minionSeatBoundFields, summonCrewOf, supportFitsInst,
+  supportRidesMinions,
   type SkillDef, type SupportDef,
 } from '../engine/skills';
 import type { Modifier, SkillTag } from '../engine/stats';
@@ -750,13 +751,9 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: 'remnant shards drop at kills but the SCOOP is a walk — no pilot detours over shards',
     when: (_def, sup) => [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat.startsWith('remnantDrop_')),
   },
-  {
-    // Verified vs engine: rollKillOrbs multiplies orbShedRate over the
-    // orbOnKill_<id> base chances, and every base is 0 on a bare rig
-    // (real characters carry bases from flask equipMods/passives).
-    note: 'orb-shed rate is a MULTIPLIER over orbOnKill_* base chances — the bare probe rig carries none, so it multiplies zero',
-    when: (_def, sup) => supModsStat(sup, ['orbShedRate']),
-  },
+  // (orbShedRate carries NO row anymore: the orbShedGraft floor stands the
+  //  shed lane up on a bare rig — fodder-routed kills shed orbs, and the
+  //  scooped pours reach the mana/life fingerprint channels.)
   {
     note: 'damage-vs-poisoned (damageVs_poison) needs a POISONED victim — this host applies no poison and the solo rig fields no second source',
     when: (def, sup) => supModsStat(sup, ['damageVs_poison'])
@@ -766,14 +763,37 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: 'strike-timing window (grafted golden tail) needs a DISCIPLINED press — the spam pilot presses early on every bar',
     when: (_def, sup) => sup.strikeTiming !== undefined,
   },
+  // (cooldownRecovery on COOLDOWN-LESS hosts carries no row: the 'cooldown'
+  //  mechanism gate — requiresMechanisms, the golden rule — refuses those
+  //  STRUCTURALLY at the census. The row below covers the opposite end.)
   {
-    // Verified vs engine (2026-07-21): the recovery ratio folds ADDED
-    // cooldowns too (world.ts skillCooldown — the austerity precedent), so
-    // the gem genuinely serves any cooldown-SOURCE beside it. The socket
-    // stays open by doctrine; only the single-gem probe cannot arm it.
-    note: 'companion gem: cooldown investment on a host with no cooldown from ANY source — a levy gem (Austerity / Apotheosis) or a granted magazine beside it arms the clock; the single-gem probe fields none',
+    // Verified by hand (absolute_zero cd 7, ±30% recovery, 10s window: two
+    // casts either way): cast COUNT is what fingerprints, and long clocks
+    // cannot fit an extra cast inside the episode.
+    note: 'cooldown-granular payload on a LONG clock — the episode window quantizes cast counts, and a cooldown past ~2/3 of the window gains no extra cast to show',
     when: (def, sup) => supModsStat(sup, ['cooldownRecovery'])
-      && (def.cooldown ?? 0) <= 0 && def.useCharges === undefined,
+      && def.cooldown >= COMPAT_CFG.dummyDuration * 0.65,
+  },
+  // ---- THE TRADEOFF-HONESTY classes (2026-07-21 R3): the commitment fixes
+  // made these gems demand a PRICE the probe pilots never pay. Each payload
+  // is deterministically verified working in balance/probe_supportfabric.ts;
+  // when a resting/walking pilot ships, delete these rows and the classes
+  // re-enter measurement automatically.
+  {
+    note: 'orb sheds land at the KILL SITE — the ranged pilot never walks the scoop (melee hosts measure the harvest); the shed itself is pinned working in probe_supportfabric',
+    when: (def, sup) => (sup.orbShedGraft !== undefined
+      || [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+        m.stat === 'orbShedRate' || m.stat.startsWith('orbOnKill_')))
+      && soloPilotFor(def).kind === 'caster',
+  },
+  {
+    note: 'the plant COMMITMENT needs feet set before the press — the spam pilot chains cast bars with one-frame gaps and never commits (instant-swing hosts measure); the clock is pinned in probe_supportfabric',
+    when: (def, sup) => supHasOnlyCondPayload(sup, ['stationary', 'moving'])
+      && def.useTime >= 0.3,
+  },
+  {
+    note: 'the seal bank needs TRUE REST — the spam pilot re-presses the frame the bar clears, so no seal ever banks; the rest law is pinned in probe_supportfabric',
+    when: (_def, sup) => supModsStat(sup, ['unleashMax']),
   },
 ];
 
@@ -1142,6 +1162,10 @@ export interface FitExplain {
   excluded: string[];
   /** No requiresTags at all — the gem fits anything not excluded. */
   openGate: boolean;
+  /** requiresMechanisms vs the BARE instance (the golden rule's structural
+   *  gate — census scope: no composed gems, so a mechanism another socket
+   *  would supply reads absent here, exactly like composed tags). */
+  mechanisms: { mechanism: string; present: boolean }[];
   crew:
     | { kind: 'none' }
     | { kind: 'not-rider'; seatBound: string[] }
@@ -1157,6 +1181,10 @@ export function explainFit(def: SkillDef, sup: SupportDef): FitExplain {
   const requires = (sup.requiresTags ?? []).map(t => ({ tag: t as string, present: tags.includes(t) }));
   const excluded = (sup.excludeTags ?? []).filter(t => tags.includes(t)).map(t => t as string);
   const openGate = !(sup.requiresTags?.length);
+  const mechanisms = (sup.requiresMechanisms ?? []).map(m => ({
+    mechanism: m,
+    present: SUPPORT_MECHANISMS[m] ? SUPPORT_MECHANISMS[m](inst) : true,
+  }));
 
   const crewOf = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
     id => MONSTERS[id], id => SKILLS[id]);
@@ -1181,9 +1209,12 @@ export function explainFit(def: SkillDef, sup: SupportDef): FitExplain {
     }
   }
   const fit: FitExplain['fit'] = host ? 'host' : crewFits ? 'crew' : 'refused';
-  // Drift tripwire: re-derive the host verdict from the decomposition.
-  const expectHost = excluded.length ? false : (openGate || requires.some(r => r.present));
-  return { fit, requires, excluded, openGate, crew, agrees: expectHost === host };
+  // Drift tripwire: re-derive the host verdict from the decomposition —
+  // tags AND the mechanism gate.
+  const expectHost = excluded.length ? false
+    : !(openGate || requires.some(r => r.present)) ? false
+    : mechanisms.every(m => m.present);
+  return { fit, requires, excluded, openGate, mechanisms, crew, agrees: expectHost === host };
 }
 
 // --------------------------------------------------------- the ablation lane --

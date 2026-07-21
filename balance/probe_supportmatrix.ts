@@ -29,6 +29,7 @@ import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { unreadPayloadRows } from '../src/data/graftReadSites';
 import { mod } from '../src/engine/stats';
+import { SUPPORT_PAYLOAD_FIELDS } from '../src/engine/skills';
 import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
   ablationUnits, compatCensus, deepProbePair, explainFit, explainPair,
@@ -68,8 +69,15 @@ bootSimEngine();
 // === RIG B — ablation-unit laws over every support ==========================
 
 {
-  const IDENTITY = new Set(['id', 'name', 'description', 'color', 'requiresTags',
-    'excludeTags', 'maxLevel', 'weight', 'minDropLevel', 'dropTags']);
+  // Identity = the complement of the engine's OWN payload partition — no
+  // duplicated list to drift (a new identity field like requiresMechanisms
+  // joins here the moment the partition classifies it).
+  const IDENTITY = new Set<string>();
+  for (const sup of Object.values(SUPPORTS)) {
+    for (const k of Object.keys(sup)) {
+      if (k !== 'mods' && k !== 'perLevel' && !SUPPORT_PAYLOAD_FIELDS.has(k)) IDENTITY.add(k);
+    }
+  }
   let coverage = 0, identityLeak = 0, dupKeys = 0, mutated = 0, badMask = 0, badSolo = 0;
   for (const sup of Object.values(SUPPORTS)) {
     const units = ablationUnits(sup);
@@ -368,23 +376,19 @@ try {
     && probeKindFor(host, leechGem).kind === 'live', armorKind.why ?? '');
   // Wound-DEPENDENT fixtures ride the SHIPPING rig's seed count. HISTORY
   // (2026-07-21, the order-law fix): under polluted actor ids every
-  // bare-vs-pair diverged spuriously, and E8 "passed" by measuring that
-  // noise as armor value. The id-clean rig exposed the truth these pins
-  // now record:
-  //  · E8 — a SOCKETED armor-only gem is byte-DEAD: support mods are
-  //    skill-local (instanceMods extra), and global defense queries
-  //    (mitigation's victim.sheet.get('armor')) never see them. THE
-  //    DEFENSIVE-SOCKET GAP — real gems on this shape (colossus_stance,
-  //    untouched_might, monolith's armor half) sit honestly inert in the
-  //    ledger until the design call lands (equip-global fold vs refusal).
-  //    When that fold ships, flip this pin back to 'effective'.
-  //  · E9 — leech DOES read skill-locally (the packet carries instance
-  //    mods to attacker-side hit reactions), so its pair genuinely
-  //    diverges — negligible-or-better, never byte-dead.
+  // bare-vs-pair diverged spuriously, and E8's old form "passed" by
+  // measuring that noise as armor value; the id-clean rig then exposed
+  // the DEFENSIVE-SOCKET GAP (skill-local mods never reached global
+  // defense queries). THE EQUIP-GLOBAL FOLD (GLOBAL_SUPPORT_STATS +
+  // supportGlobalMods, same day) closed it — a socketed armor gem now
+  // genuinely armors the wearer, so E8 pins the LANE WORKING:
+  //  · E9 — leech reads skill-locally (the packet carries instance mods
+  //    to attacker-side hit reactions) — negligible-or-better, never
+  //    byte-dead.
   const woundSess = makeProbeSession({ seeds: 2 });
   const armor = probePair(woundSess, rowOf('__probe_armor__'));
-  check('E8 the DEFENSIVE-SOCKET GAP stands recorded: a socketed armor-only gem reads byte-DEAD (skill-local mods never reach global defense queries)',
-    armor.result.verdict === 'inert' && armor.result.probe === 'live',
+  check('E8 a socketed armor-only gem armors the WEARER (the equip-global fold) — effective under the wounding pack',
+    armor.result.verdict === 'effective' && armor.result.probe === 'live',
     `${armor.result.verdict}; top moved: ${armor.result.moved[0]?.key ?? '—'}`);
   const leech = probePair(woundSess, rowOf('__probe_leech__'));
   check('E9 a leech-only gem READS through the packet\'s skill-local lane (diverges live — negligible-or-better, never byte-dead)',

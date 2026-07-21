@@ -392,6 +392,20 @@ function cloneZones(): Record<string, ZoneDef> {
 const CRESCENT_INNER = 0.55;
 const CRESCENT_ARC = 110 * Math.PI / 180;
 
+/** THE SHAPE-TRUE HOLE (2026-07-21, the Pillar of Flame QA): a fill-in
+ *  zone's hollow center spares only what sits FULLY inside the closing
+ *  band — and the hole must wear the ZONE'S OWN SHAPE (a square cage
+ *  closes as a square; the old radial test filled every sigil from a
+ *  circle — drawn ≠ tested). "Fully inside" is inAoe with the victim's
+ *  radius NEGATED (the same grace math, shrinking instead of growing). */
+export function zoneHoleSpares(
+  z: { pos: Vec2; radius: number; shape?: AoeShape; facing?: number; edge?: number },
+  p: Vec2, pr: number,
+): boolean {
+  if (!z.edge) return false;
+  return inAoe(z.pos, z.radius * z.edge, z.shape ?? 0, z.facing ?? 0, p, -pr);
+}
+
 export function inAoe(center: Vec2, radius: number, shape: AoeShape, facing: number, target: Vec2, targetRadius: number, arcRad?: number): boolean {
   if (shape >= 3) {
     // Crescent: an annular SECTOR aimed along facing — the band between
@@ -21207,8 +21221,17 @@ export class World {
     const max = Math.round(caster.sheet.get('unleashMax',
       skillContextTags(inst.def), instanceMods(inst)));
     if (max <= 0) return null;
-    const rested = this.time - (inst.state?.lastUseAt ?? -999);
-    return { count: Math.min(max, Math.floor(rested / UNLEASH_CFG.interval)), max };
+    // Mid-cast the bank FREEZES at the press (the HUD shows exactly what
+    // the release will spend — the bar banks nothing).
+    const restEnd = this.casterMidCastOf(caster, inst)
+      ? (inst.state?.pressAt ?? this.time) : this.time;
+    const rested = restEnd - (inst.state?.lastUseAt ?? -999);
+    return { count: Math.min(max, Math.max(0, Math.floor(rested / UNLEASH_CFG.interval))), max };
+  }
+
+  /** Is this actor mid-cast on THIS instance? (The Unleash HUD freeze.) */
+  private casterMidCastOf(caster: Actor, inst: SkillInstance): boolean {
+    return caster.casting?.inst === inst;
   }
 
   /** Refund a just-stamped cooldown (a whistle with no bond must never burn
@@ -23891,6 +23914,9 @@ export class World {
     // The honesty datum for resource-as-damage: constructs' payments are
     // ceremonial (999-mana pools), so their casts carry no paidCost.
     const paid = caster.construct ? undefined : cost;
+    // UNLEASH HONESTY: the seal bank's rest window ENDS at the PRESS —
+    // stamped here so the cast bar's own runtime never banks its seals.
+    (inst.state ??= {}).pressAt = this.time;
     const cc = this.consumeChargeCost(caster, inst);
     const baseMult = cc.mult * roundMult;
 
@@ -24805,14 +24831,24 @@ export class World {
           * caster.sheet.get('meleeReach', tags, extra);
         const arcRad = Math.min(Math.PI * 2,
           (d.arcDeg * Math.PI / 180) * Math.sqrt(aoeScale) * arcScale);
+        // THE SIGIL ON THE SWING (2026-07-21): a shape override re-geometries
+        // the arc itself — a square sigil turns the swing into a surround
+        // slam that covers the corners, a triangle into the pointed wedge
+        // along the facing (inAoe's own geometry; the crescent/sector kinds
+        // keep the classic arc test — shape 0 is byte-identical bare).
+        const swingShape = caster.sheet.get('aoeShape', tags, extra);
         const struck = new Set<number>();
         for (const enemy of this.enemiesOf(caster)) {
           // SEGMENT FABRIC: the swing connects with the NEAREST hittable
           // body — the coil beside you, not only the head across the room.
           // Plain monsters: nearest body IS the head, byte-identical.
           const nb = nearestBody(enemy, caster.pos);
-          if (dist(caster.pos, nb.pos) - nb.r > reach) continue;
-          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+          if (swingShape >= 1 && swingShape <= 2) {
+            if (!inAoe(caster.pos, reach, swingShape, caster.facing, nb.pos, nb.r)) continue;
+          } else {
+            if (dist(caster.pos, nb.pos) - nb.r > reach) continue;
+            if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+          }
           struck.add(enemy.id);
           noteBodyHit(enemy, nb.seg);
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
@@ -24831,14 +24867,24 @@ export class World {
           this.resolveHit(caster, inst, next, useMult, 0, flatBonus);
           this.flashes.push({ pos: vec(next.pos.x, next.pos.y), radius: 18, color: def.color, life: 0.15, maxLife: 0.15 });
         }
-        this.flashes.push({
-          pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
-          life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad },
-        });
+        // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
+        // classic swing keeps its arc sweep.
+        this.flashes.push(swingShape >= 1 && swingShape <= 2
+          ? {
+            pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
+            life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing,
+          }
+          : {
+            pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
+            life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad },
+          });
         // Melee 'aoe' swings have an area too (Cleave + No Man's Land
-        // scorches where the blade passed) — the arc's centroid.
-        fieldAt = vec(caster.pos.x + Math.cos(caster.facing) * reach * 0.6,
-                      caster.pos.y + Math.sin(caster.facing) * reach * 0.6);
+        // scorches where the blade passed) — the arc's centroid; a
+        // surround slam centers on the caster.
+        fieldAt = swingShape === 1
+          ? vec(caster.pos.x, caster.pos.y)
+          : vec(caster.pos.x + Math.cos(caster.facing) * reach * 0.6,
+                caster.pos.y + Math.sin(caster.facing) * reach * 0.6);
         // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
         // allies standing in it — one swing, both congregations.
         this.healAlliesInArea(caster, inst, a =>
@@ -26625,8 +26671,12 @@ export class World {
       const unleashMax = caster.sheet.get('unleashMax', tags, extra);
       if (unleashMax > 0) {
         const st = (inst.state ??= {});
-        repeats += Math.min(Math.round(unleashMax),
-          Math.floor((this.time - (st.lastUseAt ?? -999)) / UNLEASH_CFG.interval));
+        // The rest window runs from the LAST COMPLETION to the PRESS that
+        // began this use — the bar itself banks nothing (a long cast must
+        // never self-seal; the tradeoff is true idleness).
+        const restEnd = st.pressAt ?? this.time;
+        repeats += Math.min(Math.round(unleashMax), Math.max(0,
+          Math.floor((restEnd - (st.lastUseAt ?? -999)) / UNLEASH_CFG.interval)));
         st.lastUseAt = this.time;
       }
       if (repeats > 0) {
@@ -29026,7 +29076,7 @@ export class World {
       (at !== undefined || radius !== undefined
         ? inAoe(cAt, r, z.shape, z.facing, p, pr, z.arcRad)
         : this.zoneHas(z, p, pr))
-      && !(z.edge && dist(z.pos, p) + pr < z.radius * z.edge)
+      && !zoneHoleSpares(z, p, pr)
       && this.zoneSees(z, p),
       useStruck ? z.struck : undefined);
   }
@@ -31455,8 +31505,23 @@ export class World {
     const tags = skillContextTags(inst.def, grantedTags(inst));
     const extra = instanceMods(inst);
     const rate = caster.sheet.get('orbShedRate', tags, extra);
+    // THE GRANTED SHED (orbShedGraft — Abundant Harvest's mechanism
+    // unlock): where an orb kind has NO base at all, the graft's low
+    // floor stands the lane up — multiplied by GLOBAL orbShedRate
+    // sources only (the gem's own skill-local rate bonus deliberately
+    // never compounds its own floor). Kinds WITH a base keep the innate
+    // lane: floor added flat, every rate source multiplying as ever.
+    const graft = hostSockets(inst).map(s => s.def.orbShedGraft).find(g => g);
+    // No tags/extra on the floor's rate read: skill-local mods (the
+    // granting gem's own +rate) live in `extra`, so omitting it IS the
+    // no-self-compounding law — global passives/gear still multiply.
+    const globalRate = graft ? caster.sheet.get('orbShedRate') : 0;
     for (const id of Object.keys(ORB_DEFS)) {
-      const c = caster.sheet.get(orbOnKillStat(id), tags, extra) * rate;
+      const base = caster.sheet.get(orbOnKillStat(id), tags, extra);
+      const grafted = graft?.orbs.includes(id) ? graft.chance : 0;
+      const c = base > 0
+        ? (base + grafted) * rate
+        : grafted * globalRate;
       if (c > 0 && chance(Math.min(0.75, c))) {
         this.shedOrb(id, victim.pos, { scatter: 26 });
       }
@@ -41360,8 +41425,9 @@ export class World {
             // — and over the ROOFED (Zone.spareRoofed): the same shelter the
             // wind honors (underRoofAt). The thatch takes the bolt.
             if (z.spareRoofed && this.underRoofAt(victim.pos)) continue;
-            // Fill-in zones: the hollow center is (briefly) safe.
-            if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
+            // Fill-in zones: the hollow center is (briefly) safe — and the
+            // hole wears the zone's own shape (zoneHoleSpares).
+            if (zoneHoleSpares(z, victim.pos, victim.radius)) continue;
             // Walls shield (occlusion): a victim walled off from the
             // placement is spared its blast.
             if (!this.zoneSees(z, victim)) continue;
@@ -41545,7 +41611,7 @@ export class World {
               (z.seg
                 ? this.zoneHas(z, bp, br)
                 : inAoe(z.pos, pr, z.shape, z.facing, bp, br, z.arcRad))
-              && !(z.edge && dist(z.pos, bp) + br < z.radius * z.edge));
+              && !zoneHoleSpares(z, bp, br));
             if (!nb) continue;
             if (!this.zoneSees(z, v)) continue;
             noteBodyHit(v, nb.seg);
@@ -43934,6 +44000,7 @@ export class World {
     const traction = clamp(a.sheet.get('traction'), 0.05, 1);
     a.lastMoveAt = this.time;
     a.idleFor = 0; // a deliberate step breaks the 'stationary' stance
+    a.plantFor = 0; // …and the plant clock with it (the commitment resets)
     // The 'move' charge-tap odometer (Galvanic Reserve) — intended stride,
     // consumed by Actor.updateCharges on its own meters.
     a.moveAcc += speed * dt;

@@ -47,11 +47,15 @@ export const defCarriesStat = (def: SkillDef, stat: string): boolean =>
 export const GRAFT_READ_SITES: GraftReadRow[] = [
   {
     kind: 'stat', key: 'aoeShape',
-    deliveries: ['nova', 'ground', 'storm', 'aura', 'detonateProjectile'],
+    // 2026-07-21 (the sigil-on-the-swing pass): MELEE joined the read —
+    // the plain swing re-geometries through inAoe when a sigil overrides
+    // the shape (square = the surround slam covering corners, triangle =
+    // the pointed wedge; whirling's spin still refuses melee by tags).
+    deliveries: ['nova', 'ground', 'storm', 'aura', 'detonateProjectile', 'melee'],
     defReads: def => (def.delivery.type === 'construct' && !!def.delivery.aura)
       || def.effects.some(e => e.type === 'spawnZone')
       || defCarriesStat(def, 'lingerField'),
-    site: 'area-shape queries (novas, ground zones, storms, auras, linger fields)',
+    site: 'area-shape queries (novas, ground zones, storms, auras, linger fields, melee swings)',
   },
   {
     kind: 'stat', key: 'aoeScatter',

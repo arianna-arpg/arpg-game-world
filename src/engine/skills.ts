@@ -3955,6 +3955,17 @@ export interface SupportDef {
   requiresTags?: SkillTag[];
   /** Never socketable into skills having ANY of these tags. */
   excludeTags?: SkillTag[];
+  /** THE MECHANISM GATE (the golden rule, 2026-07-21): structural fit
+   *  requirements resolved against the LIVE INSTANCE — every named
+   *  mechanism (SUPPORT_MECHANISMS registry) must be PRESENT for the
+   *  socket to open. Extensibility is the ultimate truth and an honesty
+   *  refusal only penultimate: the predicate reads what the instance
+   *  mechanically HAS from ANY source (its def, its other sockets, their
+   *  grants), so the refusal self-lifts the moment the mechanism arrives
+   *  — Alacrity refuses a cooldown-less skill, and fits the same skill
+   *  the instant Austerity's levy or a granted magazine stands a clock
+   *  up beside it. Never express a refusal as a bespoke skill list. */
+  requiresMechanisms?: string[];
   /** Skill-local modifiers granted at level 1. */
   mods: Modifier[];
   /** "Added levels to <tag> skills" (the tag gate is requiresTags). Raises
@@ -3995,6 +4006,15 @@ export interface SupportDef {
    *  `grantsTags: ['munition']` lets the family's gems and tag-filtered
    *  investment compose onto the chambered host. */
   munition?: { rounds: number; reloadSkillId?: string };
+  /** A GRANTED orb-shed economy (Abundant Harvest, 2026-07-21 — "unlock
+   *  the mechanism if it is missing"): kills by the host SHED the listed
+   *  orbs at a low flat floor WHERE NO INNATE SHED EXISTS — the floor
+   *  rides GLOBAL orbShedRate sources (passives, gear) but deliberately
+   *  NOT the granting gem's own skill-local rate bonus (no
+   *  self-compounding); a host that already sheds keeps its innate lane
+   *  (floor added flat, the gem's rate bonus multiplying as ever). Read
+   *  at World.rollKillOrbs. */
+  orbShedGraft?: { chance: number; orbs: string[] };
   /** A GRANTED use-charge economy (Deep Reserves, 2026-07-21 — "the
    *  capacity gem builds the bank it deepens"): on a host with NO native
    *  bank, the graft STANDS ONE UP, shaped by the host's own clock —
@@ -4413,6 +4433,10 @@ export interface SkillInstance {
   state?: {
     markPos?: { x: number; y: number } | null;
     lastUseAt?: number;
+    /** The PRESS moment of the current/last use (stamped in useSkill's
+     *  main path) — the Unleash bank's rest window ENDS here, so a cast
+     *  bar's own runtime never banks its own seals. */
+    pressAt?: number;
     /** COMBO CHAIN cursor: the step the NEXT press casts (0 = base) and
      *  when the last press landed (the window clock). */
     comboIdx?: number;
@@ -4472,6 +4496,7 @@ export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
  *  drop plumbing. Everything else on a def is a payload of some kind. */
 const SUPPORT_IDENTITY_FIELD_LIST = [
   'id', 'name', 'description', 'color', 'requiresTags', 'excludeTags',
+  'requiresMechanisms',
   'maxLevel', 'weight', 'minDropLevel', 'dropTags',
 ] as const satisfies readonly (keyof SupportDef)[];
 
@@ -4489,6 +4514,11 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   // A GRANTED use-charge bank is a press economy (dry-press refusal would
   // BRICK an autonomous caster — the chargeCost doctrine, capacity form).
   'useChargeGraft',
+  // The granted shed is the KEEPER's orb economy (rollKillOrbs reads the
+  // slaying hero's sockets) — a forwarded copy would open an un-normalized
+  // minion orb fountain; the court-carry question is a deliberate later
+  // pass, not a default.
+  'orbShedGraft',
   // Not seat-bound in spirit — it's the crew gate's KEY itself (Resonance).
   // Listed here so the key never forwards a copy of itself aboard: it
   // serves the host lane, opening the door for the cargo beside it.
@@ -4589,13 +4619,67 @@ export function grantedTags(inst: SkillInstance): SkillTag[] {
   return out;
 }
 
+/** THE GLOBAL-LANE STATS (the defensive gearing axis, 2026-07-21): a
+ *  socketed support's mods on these stats fold EQUIP-GLOBALLY — onto the
+ *  ACTOR wearing the bar — because their read-sites (mitigation, pools,
+ *  regen ticks) query the sheet with no skill context and would otherwise
+ *  never see a skill-local gem (the defensive-socket gap, probe E8).
+ *  Worn while the host sits on the bar, through the same fingerprinted
+ *  'equipped' source as SkillDef.equipMods; forwarded aboard minions the
+ *  fold armors THE MINION (its own equip fold reads its own instances —
+ *  socket Warding Flesh into the summon and the court wears it). Open
+ *  set — extending the defensive axis is one entry, never a new lane. */
+export const GLOBAL_SUPPORT_STATS: ReadonlySet<string> = new Set([
+  'armor', 'evasion', 'life', 'lifeRegen', 'lifeRegenPct', 'energyShield',
+]);
+
+/** A socketed gem's GLOBAL-lane modifiers (level-scaled), for the equip
+ *  fold. Empty for every gem without global-stat mods — the common case
+ *  costs one filter. */
+export function supportGlobalMods(socket: SupportInstance): Modifier[] {
+  const out: Modifier[] = [];
+  for (const m of socket.def.mods) {
+    if (GLOBAL_SUPPORT_STATS.has(m.stat)) out.push(m);
+  }
+  const sl = socket.level - 1;
+  if (sl > 0) {
+    for (const m of socket.def.perLevel ?? []) {
+      if (GLOBAL_SUPPORT_STATS.has(m.stat)) out.push({ ...m, value: m.value * sl });
+    }
+  }
+  return out;
+}
+
+/** THE MECHANISM REGISTRY (SupportDef.requiresMechanisms — the golden
+ *  rule's predicates): each entry answers "does this LIVE instance carry
+ *  the mechanism, from ANY source?" Open registry — a new gate is one
+ *  named predicate here, never a skill list in data. */
+export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance) => boolean> = {
+  /** A COOLDOWN from any source: the def's own clock, a socketed levy
+   *  (addedCooldown mods — Austerity / Apotheosis / Measured Blows), or a
+   *  granted magazine (useChargeGraft on a cooldown host reloads on that
+   *  same clock). Recharge-lane banks pace by skillChargeRate instead and
+   *  deliberately do NOT count — cooldown investment has nothing to serve
+   *  there. */
+  cooldown: inst =>
+    inst.def.cooldown > 0
+    || hostSockets(inst).some(s =>
+      [...s.def.mods, ...(s.def.perLevel ?? [])].some(m => m.stat === 'addedCooldown' && m.value > 0)),
+};
+
 /**
  * Instance-aware support gating: supports compose with supports. A Dive
  * Bomb socketed into Dash grants 'aoe', and No Man's Land — which demands
- * 'aoe' — now fits in the next socket.
+ * 'aoe' — now fits in the next socket; Austerity's levy stands a cooldown
+ * up and Alacrity — which demands 'cooldown' — fits beside it.
  */
 export function supportFitsInst(sup: SupportDef, inst: SkillInstance): boolean {
-  return supportFitsTags(sup, [...inst.def.tags, ...grantedTags(inst)]);
+  if (!supportFitsTags(sup, [...inst.def.tags, ...grantedTags(inst)])) return false;
+  for (const m of sup.requiresMechanisms ?? []) {
+    const pred = SUPPORT_MECHANISMS[m];
+    if (pred && !pred(inst)) return false;
+  }
+  return true;
 }
 
 /** What a summon skill's CREW is known to cast at socket time: the minted
