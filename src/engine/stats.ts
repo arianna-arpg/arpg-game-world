@@ -158,6 +158,13 @@ export const STAT_TRADES: StatTrade[] = [
   { from: 'evasion', to: 'armor', rateStat: 'evasionToArmor', forgoStat: 'evasionForgone' },
   // The bonewright lane: the mage-shield renounced for footing.
   { from: 'energyShield', to: 'poise', rateStat: 'esToPoise', forgoStat: 'esForgone' },
+  // The duelist's-read lane: footwork re-read as the fencer's insight pool
+  // (the defense-texture doctrine kept: insight ships EMPTY — a trade IS
+  // deliberate authored investment). NOTE the row-scoped forgo dial: forgo
+  // dials are per-ROW, never shared — the forgo loop applies every row
+  // whose `from` matches, so a shared dial would compound (squared
+  // renunciation). Each new lane mints its own pair.
+  { from: 'evasion', to: 'insight', rateStat: 'evasionToInsight', forgoStat: 'evasionToInsightForgo' },
 ];
 
 // --- THE CONDITION LINES — the fractions of max at which the pool-state
@@ -709,6 +716,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   esToPoise:      { label: 'Energy Shield Read as Poise', base: 0, min: 0 },
   /** Fraction of energy shield RENOUNCED (1 = the whole lattice). */
   esForgone:      { label: 'Energy Shield Forgone', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of evasion's baseline READ AS maximum insight (the
+   *  duelist's-read lane). Grant it ALONE for a pure additive echo —
+   *  evasion kept whole — or beside its forgo dial for a true trade;
+   *  the split IS the balance lever, authored per grantor. */
+  evasionToInsight: { label: 'Evasion Read as Insight', base: 0, min: 0 },
+  /** Fraction of evasion RENOUNCED by the insight read (this lane's own
+   *  dial — row-scoped, never shared across trades). */
+  evasionToInsightForgo: { label: 'Evasion Forgone (Insight Read)', base: 0, min: 0, max: 1, percent: true },
 
   // Thorns — the retaliation suite (#14). All victim-side.
   /** Flat damage returned to ANY attacker whose hit lands on you —
@@ -1309,6 +1324,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  shell. 0 = no trade. Threshold semantics: two sources SUM thresholds
    *  (a weaker trade), so stacking is self-limiting by construction. */
   minionLifePlyTrade: { label: 'Minion Life-to-Ply Threshold', base: 0, min: 0 },
+  /** THE MARROWBOUND ECHO (the trade's additive sibling): every this-much
+   *  of the owner's minion-life increase grants +1 ply IN ADDITION — the
+   *  life is KEPT whole. Both threshold lanes read the SAME single
+   *  pre-trade baseline in one bake pass (the stat-link golden rule's
+   *  shape: granted plies can never feed back into the life that grants
+   *  them — loop-free by construction, not by tuning). Priced above the
+   *  trade's threshold precisely because it renounces nothing. */
+  minionLifePlyEcho: { label: 'Minion Life-per-Ply Echo', base: 0, min: 0 },
   /** Seconds a slain minion clings to unlife after death effects fire. */
   minionUndying:  { label: 'Minion Undying Duration', base: 0 },
   // THE THRONG FIND LEVERS (engine/throng.ts — read on the KEEPER with the

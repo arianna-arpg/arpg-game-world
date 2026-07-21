@@ -42,6 +42,25 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'fireRes', kind: 'flat', range: [0.1, 0.15] },
     ],
   },
+  // THE DUELIST'S-READ anchor (the STAT_TRADES conversion fabric): footwork
+  // re-read as the fencer's insight pool. BOTH dials ride as ordinary
+  // lines — the rate deliberately outweighs the row-scoped forgo (this
+  // item's texture is net-positive; a keystone could invert that), the
+  // local evasion feeds its own trade, and the insight-increased line
+  // scales the granted base (trades join the BASE layer — the fabric's
+  // own law, worn as proof).
+  {
+    id: 'duelists_ledger', name: "The Duelist's Ledger", baseId: 'chest_evasion', weight: 70,
+    minIlvl: 8,
+    flavor: 'Every step she ever dodged is written somewhere in the weave.',
+    lines: [
+      { stat: 'evasionToInsight', kind: 'flat', range: [0.22, 0.3] },
+      // The trade's price — its own separable line, sized under the rate.
+      { stat: 'evasionToInsightForgo', kind: 'flat', range: [0.15, 0.22] },
+      { stat: 'evasion', kind: 'increased', range: [0.3, 0.45], local: true },
+      { stat: 'insight', kind: 'increased', range: [0.1, 0.15] },
+    ],
+  },
   // THE FUSE BUILD's anchor: shorter fuses, far harder verdicts — worn by
   // anyone running Time Fuse / Doomsayer's arrears (the gather family).
   {

@@ -27645,19 +27645,33 @@ export class World {
     // THE CALCIFIED TRADE (minionLifePlyTrade): every <threshold> of the
     // OWNER's minion-life increase converts into +1 ply instead,
     // CONSUMING the increase — life investment become hit-counted shell.
-    // The trade reads the PRE-batch investment (the quanta law's
-    // symmetry: plies never batch-scale, so the life that becomes them
-    // is never batch-diluted either — a throng body and a classic summon
-    // calcify at the same price, and armor stays linear in count); the
+    // THE MARROWBOUND ECHO (minionLifePlyEcho) is its additive sibling:
+    // every <threshold> grants +1 ply with the life KEPT whole. Both
+    // read the SAME pre-trade baseline (lifeInc0 — the stat-link golden
+    // rule's shape: one source read, grants never feed further grants),
+    // and only the TRADE consumes from the life that folds below; the
+    // whole computation is one bake pass, so plies can never feed back
+    // into the life that granted them — loop-free by construction.
+    // Both read the PRE-batch investment (the quanta law's symmetry:
+    // plies never batch-scale, so the life that becomes them is never
+    // batch-diluted either — a throng body and a classic summon calcify
+    // at the same price, and armor stays linear in count); the trade's
     // REMAINDER then folds through the ordinary batch scale below.
-    // Un-invested or negative life trades nothing.
-    let lifeInc = caster.sheet.get('minionLife', tags, extra) - 1;
+    // Un-invested or negative life trades and echoes nothing.
+    // (The epsilon rides every threshold division: IEEE puts 1.9 − 1 a
+    // hair under 0.9, and a player who buys EXACTLY the threshold must
+    // never be robbed of the ply by the 53rd bit.)
+    const lifeInc0 = caster.sheet.get('minionLife', tags, extra) - 1;
+    let lifeInc = lifeInc0;
     const tradeAt = caster.sheet.get('minionLifePlyTrade', tags, extra);
     let tradedPlies = 0;
-    if (tradeAt > 0 && lifeInc > 0) {
-      tradedPlies = Math.floor(lifeInc / tradeAt);
-      lifeInc -= tradedPlies * tradeAt;
+    if (tradeAt > 0 && lifeInc0 > 0) {
+      tradedPlies = Math.floor(lifeInc0 / tradeAt + 1e-9);
+      lifeInc = Math.max(0, lifeInc0 - tradedPlies * tradeAt);
     }
+    const echoAt = caster.sheet.get('minionLifePlyEcho', tags, extra);
+    const echoPlies = echoAt > 0 && lifeInc0 > 0
+      ? Math.floor(lifeInc0 / echoAt + 1e-9) : 0;
     const ownerMods = [
       mod('damage', 'more', (caster.sheet.get('minionDamage', tags, extra) - 1) * s),
       mod('life', 'more', lifeInc * s),
@@ -27691,7 +27705,7 @@ export class World {
     // summon, never a birthright of the throng kinds). Re-derived from
     // the def each bake (idempotent under the live rebake); current
     // plies clamp, never refill.
-    const plyBonus = tradedPlies
+    const plyBonus = tradedPlies + echoPlies
       + Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
     if (minion.plySpec || plyBonus > 0) {
       if (!minion.plySpec) minion.plySpec = { count: 0 };

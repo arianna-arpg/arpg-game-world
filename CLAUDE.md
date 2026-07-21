@@ -288,6 +288,20 @@ changes.
   and the `insightSap` stat lets
   chill/freeze/stun bind the duelist's read — docs in
   `docs/engine/defenses.md`, probe `balance/probe_defenses.ts`.
+  THE CONVERSION FABRIC (engine/stats.ts — "read A as B" as open data):
+  STAT_TRADES rows carry TWO separable ordinary-stat dials per lane
+  (rateStat gain + row-scoped forgoStat price — rate alone is a pure
+  additive ECHO, both together a true trade; the dials themselves take
+  modifiers) beside free-form stat LINKS (`linkMod` — "gain X% of A as
+  B" anywhere a modifier goes); THE GOLDEN RULE makes every grant read
+  its source at the links-and-trades-disabled PRE-FORGO baseline —
+  single-hop, no chains, no A→B→A compounding, full forgo still
+  converts the whole pool (Iron-Reflexes math), infinities impossible
+  BY CONSTRUCTION. Lanes: evasion→armor, ES→poise, evasion→insight
+  (The Duelist's Ledger unique carries both dials). Threshold quanta
+  conversions (minionLifePlyTrade / the additive minionLifePlyEcho at
+  the minion bake) follow the same one-baseline shape. Probe
+  `balance/probe_conversions.ts`.
   THE MASS & AUTHORITY FABRIC (`engine/mass.ts` — who moves whom): the
   heavy both RESIST shoves and SHOVE HARDER — `pushActor` folds the
   pusher's `effectiveWeight^pow` (clamped, exactly 1 at weight 1 so every

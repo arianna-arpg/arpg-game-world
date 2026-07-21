@@ -613,20 +613,48 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   check('plies: a plied-LESS summon grows its first ply (the fabric stands up)',
     bare.pliesMax === 0 && shelled.pliesMax === 1 && shelled.plies === 1,
     `bare ${bare.pliesMax}, shelled ${shelled.pliesMax}`);
+  // THE RETUNE (user-directed): the trade's threshold is 0.5 — the gem's
+  // own +70% grant calcifies ONE ply with a 0.2 remainder staying life.
   const calc = mk('calcified_vigor');
-  check('trade: 70% granted life became exactly one ply — life unmoved',
-    calc.pliesMax === 1 && Math.abs(calc.maxLife() - bare.maxLife()) < 0.5,
-    `plies ${calc.pliesMax}, life ${calc.maxLife().toFixed(0)} vs bare ${bare.maxLife().toFixed(0)}`);
-  // Trade + Hardy Brood: 1.2 total increase → one ply + a 0.5 remainder.
+  check('trade: each 50% of granted life becomes a ply, remainder stays life',
+    calc.pliesMax === 1
+    && Math.abs(calc.maxLife() / bare.maxLife() - 1.2) < 0.02,
+    `plies ${calc.pliesMax}, life ×${(calc.maxLife() / bare.maxLife()).toFixed(2)}`);
+  // Trade + Hardy Brood: 1.2 total increase → floor(1.2/0.5) = 2 plies
+  // + a 0.2 remainder.
   const inst2 = makeSkillInstance(SKILLS.summon_skeleton, 1);
   inst2.sockets[0] = { def: SUPPORTS.calcified_vigor, level: 1 };
   inst2.sockets[1] = { def: SUPPORTS.hardy_brood, level: 1 };
-  const before2 = w.actors.length;
   w.executeSkill(p, inst2, vec(p.pos.x + 60, p.pos.y));
-  const both = w.actors[before2] ?? w.actors[w.actors.length - 1];
-  check('trade: the remainder past the threshold stays LIFE',
-    both.pliesMax === 1 && both.maxLife() > bare.maxLife() * 1.4,
-    `life ×${(both.maxLife() / bare.maxLife()).toFixed(2)}`);
+  const mine2 = w.actors.filter(a => a.owner === p && a.kind === 'minion');
+  const both = mine2[mine2.length - 1];
+  check('trade: deeper investment keeps calcifying, remainder stays LIFE',
+    both.pliesMax === 2 && Math.abs(both.maxLife() / bare.maxLife() - 1.2) < 0.02,
+    `plies ${both.pliesMax}, life ×${(both.maxLife() / bare.maxLife()).toFixed(2)}`);
+  // THE MARROWBOUND ECHO (the additive sibling — the user's exact example):
+  // +90% life AND a ply per 90% — the life KEPT whole beside the shell.
+  const echo = mk('marrowbound_vigor');
+  check('echo: 90% granted life stands whole AND sets a ply beside it',
+    echo.pliesMax === 1 && Math.abs(echo.maxLife() / bare.maxLife() - 1.9) < 0.02,
+    `plies ${echo.pliesMax}, life ×${(echo.maxLife() / bare.maxLife()).toFixed(2)}`);
+  // COMPOSITION: both gems read ONE pre-trade baseline (1.6 total) —
+  // trade floor(1.6/0.5)=3, echo floor(1.6/0.9)=1, remainder 0.1 life.
+  const inst3 = makeSkillInstance(SKILLS.summon_skeleton, 1);
+  inst3.sockets[0] = { def: SUPPORTS.calcified_vigor, level: 1 };
+  inst3.sockets[1] = { def: SUPPORTS.marrowbound_vigor, level: 1 };
+  w.executeSkill(p, inst3, vec(p.pos.x + 80, p.pos.y));
+  const mine3 = w.actors.filter(a => a.owner === p && a.kind === 'minion');
+  const composed = mine3[mine3.length - 1];
+  check('echo+trade compose on one baseline (loop-free by construction)',
+    composed.pliesMax === 4
+    && Math.abs(composed.maxLife() / bare.maxLife() - 1.1) < 0.02,
+    `plies ${composed.pliesMax}, life ×${(composed.maxLife() / bare.maxLife()).toFixed(2)}`);
+  // Idempotence: the live rebake re-derives — plies and life never creep.
+  w.bakeMinionOwnerStats(composed, p, inst3);
+  w.bakeMinionOwnerStats(composed, p, inst3);
+  check('echo+trade: the rebake is idempotent (no perpetual accrual)',
+    composed.pliesMax === 4
+    && Math.abs(composed.maxLife() / bare.maxLife() - 1.1) < 0.02);
 
   // Batch symmetry (the quanta law): the trade reads PRE-batch investment,
   // so a throng body calcifies at the same price as a classic summon —

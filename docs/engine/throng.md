@@ -80,11 +80,26 @@ instance, and throng bodies take no forwarded gems anyway.
   choice on any court (`chitinous_brood`).
 - **`minionLifePlyTrade`** (threshold): every this-much of the owner's
   minion-life INCREASE becomes +1 ply instead, consuming the increase
-  (`calcified_vigor`: +70% life, threshold 0.7 — its own grant calcifies
-  whole). The trade reads PRE-batch investment (the quanta law's symmetry:
-  plies never batch-scale, so the life becoming them is never
-  batch-diluted — a throng body calcifies at the classic price); the
-  remainder folds through the ordinary batch scale.
+  (`calcified_vigor`: +70% life, threshold 0.5 — one ply and a 0.2
+  remainder out of the box, sharper per-ply because the renouncing pays).
+  The trade reads PRE-batch investment (the quanta law's symmetry: plies
+  never batch-scale, so the life becoming them is never batch-diluted —
+  a throng body calcifies at the classic price); the remainder folds
+  through the ordinary batch scale.
+- **`minionLifePlyEcho`** (threshold — the trade's ADDITIVE sibling):
+  every this-much of the increase ALSO sets a ply with the life KEPT
+  whole (`marrowbound_vigor`: +90% life, threshold 0.9 — the full 90%
+  stands AND a ply grows beside it). Priced above the trade's threshold
+  precisely because nothing is renounced — scale one avenue hard, or two
+  at once at the gentler rate. LOOP-FREE BY CONSTRUCTION: both threshold
+  lanes read ONE pre-trade baseline in a single bake pass (the stat-link
+  golden rule's shape), only the trade consumes, and plies never feed
+  back into the life that granted them; the live rebake re-derives from
+  the def, so nothing accrues (probe-pinned idempotent). Threshold
+  divisions carry a 1e-9 epsilon — buying EXACTLY the threshold is never
+  robbed by the 53rd bit. The sheet-stat siblings of these threshold
+  lanes are the CONVERSION FABRIC's trades and links —
+  `docs/engine/defenses.md`.
 
 ## Husks, claims, finiteness
 

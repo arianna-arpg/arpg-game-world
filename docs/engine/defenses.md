@@ -75,6 +75,42 @@ runner); `tempo: null` — preserved through `mergeTuning` for exactly this
 read — still means "never pauses, never winds" (the wave frenzy's
 pledge). Bone, stone, ember and ghost-stuff never tire unless opted in.
 
+## THE CONVERSION FABRIC — stat trades and stat links
+
+The one open surface for "read A as B" builds, two grammars deep, both
+living in `engine/stats.ts` and both reachable by anything that writes a
+modifier (gear affixes, uniques, passives, supports, monster mods):
+
+- **STAT TRADES** (`STAT_TRADES` rows): `{from, to, rateStat, forgoStat}`
+  — the GAIN dial (`to` += rate × from's baseline) and the FORGO dial
+  (`from` ×= 1 − forgo) are TWO SEPARATE ordinary stats. Grant the rate
+  alone for a pure additive ECHO (source kept whole); grant both for a
+  true trade; the split is authored per grantor — the forgo is its own
+  detached, separable balance lever. The dials themselves take ordinary
+  modifiers ("20% increased Evasion Read as Insight" genuinely works).
+  Shipped lanes: evasion→armor (iron reflexes), energyShield→poise
+  (bonewright), evasion→insight (the duelist's read — The Duelist's
+  Ledger unique carries both dials as lines). A new lane = ONE row +
+  its two dial stats; forgo dials are ROW-SCOPED, never shared (the
+  forgo loop applies every matching row — a shared dial would square).
+- **STAT LINKS** (`linkMod(stat, fromStat, ratio)`): "gain ratio × A as
+  B" as a single modifier anywhere — the free-form additive grammar.
+- **THE GOLDEN RULE** (both grammars, `StatSheet.compute`): every grant
+  reads its source at the links-and-trades-disabled, PRE-FORGO baseline
+  — strictly single-hop. A→B→C chains read nothing granted, A→B→A
+  cycles settle at one hop each way, a full forgo still converts the
+  whole pre-forgo pool (Iron-Reflexes math), and no dial combination
+  can loop to infinity — BY CONSTRUCTION, not by tuning. Grants join
+  the target's BASE layer (its own increased/more scale them); registry
+  clamps apply after everything.
+- **Threshold conversions** outside the sheet (quanta targets like
+  minion PLIES) follow the same shape at their fold point: ONE source
+  read per bake, trade (consuming) and echo (additive) both against the
+  pre-trade baseline — see the throng doc's ply levers
+  (`minionLifePlyTrade` / `minionLifePlyEcho`).
+- Validator: every endpoint/dial must be a registered stat and no dial
+  may itself be a trade endpoint (`validate.ts`).
+
 ## Verification
 
 `npx tsx balance/probe_defenses.ts` (42 pins): empty-base doctrine,
@@ -84,3 +120,7 @@ burst window armed-vs-broken, the sap ladder (1 / 0.6 / 0 momentum with
 mitigation 60/70/110 on one def), refill stall, default-kite stamping,
 and the ES soak/recharge/interrupt loop. `sim run --suite smoke` +
 `audit textures` grade the fleet-level result.
+`npx tsx balance/probe_conversions.ts` pins the conversion fabric: lane
+registry hygiene, the pure echo, the separable forgo, full-forgo
+Iron-Reflexes math, dial modifiability, base-layer join, and the golden
+rule's no-cycle / no-chain guarantees.

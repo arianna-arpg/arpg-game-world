@@ -2603,9 +2603,21 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   calcified_vigor: {
     id: 'calcified_vigor', name: 'Calcified Vigor',
-    description: 'The flesh you grow sets like shell: minions from this skill gain 70% increased life, and every 70% of your granted life-increase becomes a PLY instead — vigor traded for blows eaten whole.',
+    description: 'The flesh you grow sets like shell: minions from this skill gain 70% increased life, and every 50% of your granted life-increase becomes a PLY instead — vigor traded for blows eaten whole, at the sharper rate the renouncing buys.',
     color: '#c0b8a0', requiresTags: ['summon'],
-    mods: [mod('minionLife', 'increased', 0.7), mod('minionLifePlyTrade', 'flat', 0.7)],
+    mods: [mod('minionLife', 'increased', 0.7), mod('minionLifePlyTrade', 'flat', 0.5)],
+    perLevel: [mod('minionLife', 'increased', 0.08)],
+    weight: 5,
+  },
+  // The trade's ADDITIVE sibling (minionLifePlyEcho): nothing renounced,
+  // so the threshold sits deliberately above the trade's — scale one
+  // avenue hard or two at once at the gentler rate; both gems compose
+  // (each reads the same pre-trade baseline, one bake pass, loop-free).
+  marrowbound_vigor: {
+    id: 'marrowbound_vigor', name: 'Marrowbound Vigor',
+    description: 'The marrow remembers every feeding: minions from this skill gain 90% increased life, and every 90% of your granted life-increase ALSO sets a PLY — the life kept whole, the shell grown beside it.',
+    color: '#d0c0b0', requiresTags: ['summon'],
+    mods: [mod('minionLife', 'increased', 0.9), mod('minionLifePlyEcho', 'flat', 0.9)],
     perLevel: [mod('minionLife', 'increased', 0.08)],
     weight: 5,
   },

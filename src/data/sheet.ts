@@ -95,6 +95,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'weight', 'phasing',
       // The stat-trade dials
       'evasionToArmor', 'evasionForgone', 'esToPoise', 'esForgone',
+      'evasionToInsight', 'evasionToInsightForgo',
       // Retaliation
       'thorns', 'thornsReflect', 'thornsToHit', 'channelThorns', 'minionShare',
     ],
@@ -180,7 +181,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     used: [
       'minionDamage', 'minionLife', 'minionMaxCount', 'minionDamageTaken',
       'minionSize', 'minionMoveSpeed', 'minionHaste', 'minionRegen', 'minionRegenPct',
-      'minionPlies', 'minionLifePlyTrade', 'throngPockets', 'throngYield',
+      'minionPlies', 'minionLifePlyTrade', 'minionLifePlyEcho', 'throngPockets', 'throngYield',
       'minionDetectionRange', 'minionDecayRate', 'minionRespawnTime', 'minionUndying',
       'minionGuard', 'minionDeathHeal', 'minionDeathHealFlat', 'minionExpiryIsDeath',
       'minionExplodeDeath', 'minionExplodeLowLife',
@@ -464,6 +465,8 @@ const STAT_BLURBS: Record<string, string> = {
   evasionForgone: 'This fraction of your evasion is renounced outright — the swap\'s forgo dial.',
   esToPoise: 'This fraction of your energy shield is read again as maximum poise — the swap\'s gain dial.',
   esForgone: 'This fraction of your energy shield is renounced outright — the swap\'s forgo dial.',
+  evasionToInsight: 'This fraction of your evasion is read again as maximum insight — the duelist\'s-read gain dial; granted alone it is a pure echo, beside its forgo a true trade.',
+  evasionToInsightForgo: 'This fraction of your evasion is renounced by the insight read — this lane\'s own separable price.',
   thorns: 'Flat damage returned to any attacker whose hit lands on you.',
   thornsReflect: 'A fraction of the damage you take is returned to the attacker.',
   thornsToHit: 'A fraction of your flat thorns rides your own hits as added physical damage.',
@@ -634,6 +637,7 @@ const STAT_BLURBS: Record<string, string> = {
   minionHaste: 'Speeds everything your minions do.',
   minionPlies: 'Extra PLIES on your minions — each ply eats one landed blow whole, however hard it struck; a body with none grows its first.',
   minionLifePlyTrade: 'Every this-much of your granted minion life-increase becomes a PLY instead — vigor traded for blows eaten whole.',
+  minionLifePlyEcho: 'Every this-much of your granted minion life-increase ALSO sets a PLY — the life kept whole, the shell grown beside it.',
   throngPockets: 'Additional throng husk pockets rolled per zone, appended after the world\'s own.',
   throngYield: 'How many bodies every throng find yields — pockets, gauges, motes, raisings — rounded, never below one.',
   minionRegen: 'Flat life your minions regenerate each second.',

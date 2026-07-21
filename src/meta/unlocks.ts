@@ -207,7 +207,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     blurb: 'The shepherd of monsters, with the Hive\'s swarm and the voice that commands it.',
     skillIds: ['venom_bolt', 'summon_skeleton', 'summon_skeleton_archer',
       'summon_swarmlings', 'command_assault', 'gather_cinderkin'],
-    supportIds: ['chitinous_brood', 'calcified_vigor'],
+    supportIds: ['chitinous_brood', 'calcified_vigor', 'marrowbound_vigor'],
     discover: { classes: 'necromancer',
       hint: 'The Necromancer raises what fell. A gentler shepherd asks the living to follow too.' } },
   { classId: 'swashbuckler', cost: 240,
