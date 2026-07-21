@@ -30469,6 +30469,26 @@ export class World {
         packet.amounts[t]! *= dmgMult;
       }
     }
+    // THE SEPTIC BARGAIN (hitToAffliction): a fraction of the hit's BITE
+    // is FORGONE — carved off the packet before it lands — and returns
+    // through the damaging afflictions this hit produces, amplified by
+    // afflictionYield (the status derivation below reads the carry). At
+    // full conversion the hit is a pure carrier: the wound is the weapon.
+    let afflictionCarry = 0;
+    {
+      const f = Math.min(1, Math.max(0,
+        caster.sheet.get('hitToAffliction', skillContextTags(def, grantedTags(inst)), extra)));
+      if (f > 0) {
+        let forgone = 0;
+        for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
+          const cut = packet.amounts[t]! * f;
+          packet.amounts[t]! -= cut;
+          forgone += cut;
+        }
+        afflictionCarry = forgone
+          * caster.sheet.get('afflictionYield', skillContextTags(def, grantedTags(inst)), extra);
+      }
+    }
     // Guard stance: a raised shield in the threat's direction eats the
     // whole hit — damage, statuses, knockback, everything.
     const raw = Object.values(packet.amounts).reduce((s, v) => s + (v ?? 0), 0);
@@ -31153,7 +31173,9 @@ export class World {
           // Hit-derived dps, FLOORED by the status's caster-less baseline (a
           // feeble hit still ignites like an ignite), × the potency crank —
           // × the linked-hex swell (Malediction: each hex fattens the debuff).
-          const derived = (fx.magnitude ?? 0) * dealt;
+          // The septic bargain's return: the forgone bite rides the
+          // affliction as if the blow had landed (carry) harder.
+          const derived = (fx.magnitude ?? 0) * (dealt + afflictionCarry);
           const floor = fx.magnitude ? baselineStatusDps(fx.status, this.zone.level) : 0;
           const dps = Math.max(derived, floor) * potencyFor(fx.status) * hexDmg
             / Math.max(0.5, durScale);

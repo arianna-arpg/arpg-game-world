@@ -55,6 +55,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'armorPen', 'firePen', 'coldPen', 'lightningPen', 'chaosPen', 'insightPen', 'esShred',
       // Ailments & curses
       'statusChance', 'statusMagnitude', 'ailmentStacks', 'dotPropagates',
+      'dotCrit', 'hitToAffliction', 'afflictionYield',
       'curseRupture', 'dotRupture', 'doomDot', 'hedonism',
       // The breaker's lane
       'poiseDamage', 'sunderDuration', 'impalePower',
@@ -392,6 +393,8 @@ const STAT_BLURBS: Record<string, string> = {
   cullThreshold: 'Your hits EXECUTE enemies at or below this fraction of their life.',
   killProcOnHit: 'Your on-kill effects may also fire on plain hits against elite prey.',
   dotCrit: 'The fraction of your critical chance that applies when a damaging ailment lands — a critical affliction ticks at your full critical multiplier for its whole life.',
+  hitToAffliction: 'This fraction of every hit\'s damage is FORGONE — and returns through the damaging afflictions the hit produces, at your Affliction Yield.',
+  afflictionYield: 'The forgone bite\'s return rate through the affliction — the septic bargain\'s premium.',
   damageSpread: 'Widens every damage roll around its midpoint — same average, fatter tails.',
   luckyChance: 'Chance to roll damage twice and keep the higher.',
   unluckyChance: 'Chance to roll damage twice and keep the LOWER — the jinxed hand.',

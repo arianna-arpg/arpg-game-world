@@ -336,5 +336,57 @@ bootSimEngine();
     `host ${burnSkill.id}: ${mkPlainRef.toFixed(1)} -> ${critted.toFixed(1)} (×${(critted / Math.max(0.01, mkPlainRef)).toFixed(2)}, critMulti ${cm}, cm² ${(cm * cm).toFixed(2)})`);
 }
 
+// === RIG H — the septic bargain (hit-to-DoT conversion) ====================
+
+{
+  // Full conversion: the hit's bite goes to ~zero while the affliction
+  // festers HARDER than the plain twin (dealt + forgone × yield). Gate:
+  // the 'affliction' mechanism refuses a dot-less host and admits it the
+  // moment an apply_ gem stands beside it.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const burnSkill = Object.values(SKILLS).find(s =>
+    ['melee', 'nova', 'target'].includes(s.delivery.type)
+    && s.effects.some(e => e.type === 'status' && e.status === 'burn' && (e.magnitude ?? 0) > 0))!;
+  const dotless = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'melee' && s.tags.includes('attack')
+    && !s.effects.some(e => e.type === 'status'))!;
+  check('H1 the affliction MECHANISM refuses a dot-less host',
+    !supportFitsInst(SUPPORTS.septic_bargain, makeSkillInstance(dotless, 1, 3)),
+    dotless.id);
+  const dInst = makeSkillInstance(dotless, 1, 3);
+  const applyGem = Object.values(SUPPORTS).find(s =>
+    s.mods.some(m => m.stat.startsWith('apply_')))!;
+  dInst.sockets[0] = { def: applyGem, level: 1 };
+  check('H2 an apply_ gem beside it opens the door (the composition law, mechanism form)',
+    supportFitsInst(SUPPORTS.septic_bargain, dInst), applyGem.id);
+  const run = (bargain: boolean): { hit: number; dps: number } => {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const dummy = world.createMonster('target_dummy', 7, 'enemy');
+      dummy.pos = { x: hero.pos.x + 40, y: hero.pos.y };
+      world.actors.push(dummy);
+      const inst = makeSkillInstance(burnSkill, 1, 3);
+      if (bargain) inst.sockets[0] = { def: SUPPORTS.septic_bargain, level: 1 };
+      const lifeBefore = dummy.life;
+      for (let i = 0; i < 20 && !dummy.statuses.some(s => s.id === 'burn'); i++) {
+        world.executeSkill(hero, inst, dummy.pos);
+      }
+      const hit = lifeBefore - dummy.life;
+      const dps = dummy.statuses.find(s => s.id === 'burn')?.dps ?? 0;
+      world.actors.splice(world.actors.indexOf(dummy), 1);
+      if (dps > 0) return { hit, dps };
+    }
+    return { hit: 0, dps: 0 };
+  };
+  const plain = run(false);
+  const bargained = run(true);
+  check('H3 the bargained hit BITES nothing (full conversion carves the packet)',
+    plain.hit > 0 && bargained.hit < plain.hit * 0.1,
+    `hit dmg ${plain.hit.toFixed(1)} -> ${bargained.hit.toFixed(1)}`);
+  check('H4 the affliction festers HARDER than the plain twin (the forgone bite returns at yield)',
+    bargained.dps > plain.dps * 1.1,
+    `burn dps ${plain.dps.toFixed(1)} -> ${bargained.dps.toFixed(1)}`);
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

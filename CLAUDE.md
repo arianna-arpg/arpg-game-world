@@ -302,6 +302,36 @@ changes.
   conversions (minionLifePlyTrade / the additive minionLifePlyEcho at
   the minion bake) follow the same one-baseline shape. Probe
   `balance/probe_conversions.ts`.
+  THE SUPPORT-FABRIC LAWS (2026-07-21, probe
+  `balance/probe_supportfabric.ts` — the golden rule: EXTENSIBILITY is
+  the ultimate truth; an honesty refusal is PENULTIMATE, structural,
+  and self-lifting — never a bespoke list):
+  `SupportDef.requiresMechanisms` + the `SUPPORT_MECHANISMS` registry
+  (engine/skills.ts) gate sockets on live-instance predicates
+  ('cooldown' from any source, standing 'engagement', 'affliction')
+  that COMPOSE — Austerity's levy opens Alacrity, Spirit Totem's
+  grantsTags opens Shatterrite, an apply_ gem opens Septic Bargain,
+  each refusal returning when its enabler leaves. MECHANISM GRANTS
+  unlock what is missing: `useChargeGraft` (Deep Reserves — a MAGAZINE
+  on cooldown hosts, the EMPOWER bank on free skills:
+  `useCharges.empower` rounds are OPTIONAL fuel, dry casts plain),
+  `orbShedGraft` (Abundant Harvest's no-self-compounding floor), and
+  `GLOBAL_SUPPORT_STATS` + the actor equip fold (Warding Flesh — worn
+  defense on standing workings, engagement-gated; forwarded courts
+  wear it too). THE AFTERMATH MINTER (`World.mintAftermath`) takes
+  pulse/cascade/cadence beyond ground (nova/melee/detonateProjectile
+  sequels as zones; the cadence gems are companions to a beat source).
+  THE COURT-CREDIT LAWS: minionCarry procs divide by living court size
+  on hit-frequency rolls (true kills stay whole), and kill charge-taps
+  + orb/remnant sheds carry to the keeper via the summoning instance.
+  Crits reach afflictions (`dotCrit`, rolled once at application — the
+  Malignant Precision notable) and mends (THE LUCKY POUR: every
+  heal/flask pour rolls the instance's own critChance);
+  `hitToAffliction`/`afflictionYield` (Septic Bargain) forgo the hit's
+  bite into the festering wound. `SkillDef.cooldownAt`
+  'press'|'complete' picks the clock's start per skill. SIM LAWS: the
+  ORDER LAW (actor ids reset per episode — probe E10b) and the FODDER
+  LANE (kill-scoped payloads probe against killable bodies).
   THE MASS & AUTHORITY FABRIC (`engine/mass.ts` — who moves whom): the
   heavy both RESIST shoves and SHOVE HARDER — `pushActor` folds the
   pusher's `effectiveWeight^pow` (clamped, exactly 1 at weight 1 so every

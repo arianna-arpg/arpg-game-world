@@ -335,6 +335,17 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  from the same dps). Base 0: an UNLOCK (passive node / gem grant),
    *  never ambience — the crit-dot build is a deliberate investment. */
   dotCrit:        { label: 'Ailment Critical Rate', base: 0, min: 0, max: 1, percent: true },
+  /** THE SEPTIC BARGAIN (hit-to-DoT conversion, 2026-07-21): this fraction
+   *  of every hit's BITE is FORGONE — carved off the packet before it
+   *  lands — and returns through the damaging afflictions the hit
+   *  produces, as if the blow had landed (forgone × afflictionYield)
+   *  harder. Build to 1 and hits become pure carriers: the wound is the
+   *  weapon. Base 0: an unlock, never ambience. */
+  hitToAffliction: { label: 'Hit Damage Forgone to Afflictions', base: 0, min: 0, max: 1, percent: true },
+  /** The forgone chunk's return rate through the affliction (the septic
+   *  bargain's premium — base 1 = even trade; the gem's +0.5 pays half
+   *  again). */
+  afflictionYield: { label: 'Affliction Yield', base: 1, min: 0 },
   /** Generic damage multiplier bucket — always queried with context tags. */
   damage:         { label: 'Damage', base: 1, min: 0 },
   // Flat added damage buckets (also tag-filtered, e.g. "adds fire damage to attacks").

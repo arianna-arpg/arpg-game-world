@@ -1282,6 +1282,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // THE HIT-TO-DOT CONVERSION AXIS (hitToAffliction — the wound is the
+  // weapon): the blow forgoes its bite and the affliction drinks it back
+  // amplified. Gated on the 'affliction' MECHANISM (the golden rule): the
+  // host must fester — innately, or through an apply_<dot> gem beside it,
+  // the door opening and closing with the composition.
+  septic_bargain: {
+    id: 'septic_bargain', name: 'Septic Bargain',
+    description: 'The blow FORGOES its bite: this skill\'s hits deal no damage — and every damaging affliction they produce festers as if the blow had landed HALF AGAIN as hard. The wound is the weapon; needs an affliction to carry it.',
+    color: '#8aa050', requiresTags: ['attack', 'spell'],
+    requiresMechanisms: ['affliction'],
+    mods: [
+      mod('hitToAffliction', 'flat', 1),
+      mod('afflictionYield', 'flat', 0.5),
+    ],
+    perLevel: [mod('afflictionYield', 'flat', 0.08)],
+    weight: 5,
+  },
+
   // THE INTERACTION FABRIC, gem form: attacker-side per-stack scaling vs an
   // afflicted target (the generated damageVs_<status> family) — skill-local,
   // so only the socketed skill hunts the poisoned.

@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
+import { STATUS_DEFS } from './status';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
@@ -4696,6 +4697,17 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance) => boolean
     || inst.def.delivery.type === 'summon'
     || inst.def.castMode === 'guard'
     || inst.def.tags.includes('minion'),
+  /** A DAMAGING AFFLICTION source: the host itself festers (a dot-typed
+   *  status with hit-derived magnitude) or a socketed gem grants an
+   *  apply_<dot> chance beside it — the gate for gems whose worth flows
+   *  through the wound, not the blow (the septic bargain). Composes: a
+   *  poison-chance gem beside it opens the door, and the refusal returns
+   *  when it leaves. */
+  affliction: inst =>
+    inst.def.effects.some(e => e.type === 'status'
+      && (e.magnitude ?? 0) > 0 && !!STATUS_DEFS[e.status]?.dotType)
+    || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
+      .some(m => m.stat.startsWith('apply_'))),
 };
 
 /**
