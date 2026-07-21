@@ -37,6 +37,7 @@
 import { MONSTERS } from '../data/monsters';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { PROCS } from '../data/procs';
 import { unreadPayloadRows } from '../data/graftReadSites';
 import {
   SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel, makeSkillInstance,
@@ -289,6 +290,44 @@ export const LIVE_PROBE_SUPPORT_STATS: ReadonlySet<string> = new Set([
   'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
 ]);
 
+/** KILL-SCOPED & MULTI-BODY payload rules (2026-07-21 backlog triage): the
+ *  immortal dummy never dies and sits centered in every shape, so payloads
+ *  that fire on KILLS (kill-trigger procs, on-kill charge taps, orb/remnant
+ *  sheds), that need HIGHER-LEVEL victims (the pack's levelBonus stands
+ *  above the rig), or that read only at AREA EDGES / on displaced bodies
+ *  (aoe geometry, knockback) route LIVE. Open registry — one entry per
+ *  reason, each naming itself for reports. */
+export const LIVE_PROBE_SUPPORT_RULES: { why: string; when: (sup: SupportDef) => boolean }[] = [
+  {
+    why: 'kill-trigger proc payload needs kills — the dummy never dies',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat.startsWith('proc_') && PROCS[m.stat.slice('proc_'.length)]?.trigger === 'kill'),
+  },
+  {
+    why: 'on-kill/on-death charge tap needs deaths in the arena',
+    when: sup => (sup.chargeGain ?? []).some(cg => cg.on === 'kill' || cg.on === 'enemyDeath'),
+  },
+  {
+    why: 'kill-shed payload (orb/remnant families) needs kills',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat === 'orbShedRate' || m.stat.startsWith('orbOnKill_') || m.stat.startsWith('remnantDrop_')),
+  },
+  {
+    why: "'overmatch' needs higher-level victims — the live pack's levelBonus stands above the rig",
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat === 'overmatch'),
+  },
+  {
+    why: 'area-geometry payload (radius/shape/spin/scatter) reads at area EDGES and across bodies — the centered dummy sits inside every shape',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      ['aoeRadius', 'aoeShape', 'aoeSpin', 'aoeScatter'].includes(m.stat)),
+  },
+  {
+    why: 'knockback payload moves bodies — displacement only matters against bodies that can be displaced and re-hit',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat === 'knockback' || m.stat === 'knockBuffet'),
+  },
+];
+
 export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' | 'live'; why?: string } {
   const hostRule = LIVE_PROBE_HOST_RULES.find(r => r.when(def));
   if (hostRule) return { kind: 'live', why: hostRule.why };
@@ -297,6 +336,8 @@ export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' |
     if (f) return { kind: 'live', why: `support payload '${String(f)}' needs live bodies` };
     const m = [...sup.mods, ...(sup.perLevel ?? [])].find(x => LIVE_PROBE_SUPPORT_STATS.has(x.stat));
     if (m) return { kind: 'live', why: `defensive/sustain stat '${m.stat}' shows only under incoming wounds` };
+    const rule = LIVE_PROBE_SUPPORT_RULES.find(r => r.when(sup));
+    if (rule) return { kind: 'live', why: rule.why };
   }
   return { kind: 'dummy' };
 }
@@ -465,6 +506,28 @@ export type PairVerdictKind = 'effective' | 'cost_only' | 'negligible' | 'inert'
 const supModsStat = (sup: SupportDef, stats: string[]): boolean =>
   [...sup.mods, ...(sup.perLevel ?? [])].some(m => stats.includes(m.stat));
 
+/** COST-FUNCTION stats: lanes where moving the tax IS the gem's function
+ *  (Efficiency's cheaper cast, Austerity's long clock, Alacrity's faster
+ *  recovery). A support whose ENTIRE payload lives on these stats is a
+ *  cost-shaped gem — a cost_only verdict on it means WORKING, not billing
+ *  without function; the defect distiller consults this. Open set. */
+export const COST_FUNCTION_STATS: ReadonlySet<string> = new Set([
+  'manaCost', 'addedManaCost', 'addedCooldown', 'cooldownRecovery',
+]);
+
+/** Is this gem cost-shaped — every mod on a cost-function stat and no graft
+ *  field beside them? (Mana Feeder fails: costDamage_mana is output payload;
+ *  Buried Charge fails: the pulse field is the function.) */
+export function costFunctionSupport(sup: SupportDef): boolean {
+  const all = [...sup.mods, ...(sup.perLevel ?? [])];
+  if (!all.length || !all.every(m => COST_FUNCTION_STATS.has(m.stat))) return false;
+  for (const k of Object.keys(sup)) {
+    if (k === 'mods' || k === 'perLevel' || !SUPPORT_PAYLOAD_FIELDS.has(k)) continue;
+    if ((sup as unknown as Record<string, unknown>)[k] !== undefined) return false;
+  }
+  return true;
+}
+
 export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: SupportDef) => boolean }[] = [
   {
     // A cursor-origin flight aimed AT the foe travels ~0px, so flight-
@@ -586,7 +649,115 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
       && supModsStat(sup, ['thirstless', 'restorePower', 'restorePctMax', 'effectDuration'])
       && sup.followUp === undefined && sup.chargeGain === undefined,
   },
+  // ---- BACKLOG-SWEEP classes (2026-07-21 triage of the 24k-row ledger):
+  // condition/environment gaps the standard probes cannot arm, each verified
+  // by hand against the engine read-site before earning its row. Same
+  // self-deleting rule as above: when a probe learns the condition, delete
+  // the row and the class re-enters measurement automatically.
+  {
+    // The cloudborne precedent, already noted beside the gem defs (Clamor /
+    // Quiet Hand): resolveHit's threat booking is live, but a chart with one
+    // name on it has nothing to re-order.
+    note: 'threat re-weighting (threatGen) needs RIVALS on the chart — probe arenas field one candidate target',
+    when: (_def, sup) => supModsStat(sup, ['threatGen']),
+  },
+  {
+    note: 'companion gem: trigger-permit lifts the cast-time gate of a TRIGGER GEM riding beside it — no trigger gem present in a single-gem probe',
+    when: (_def, sup) => sup.triggerPermit !== undefined,
+  },
+  {
+    note: 'reserved-mana payload (reservedDamage) reads a RESERVATION the probe rigs never hold — no aura/hex toggle burns in a solo probe',
+    when: (_def, sup) => supModsStat(sup, ['reservedDamage']),
+  },
+  {
+    // Verified vs engine: fullEs is strict (Actor.conditionMask requires
+    // maxEs > 0) and the rig ships ES-less per the defense-texture doctrine.
+    note: "condition 'fullEs' is unarmable — the probe rig carries no energy shield (pools ship EMPTY by doctrine), and fullEs is strict at maxEs 0",
+    when: (_def, sup) => supHasOnlyCondPayload(sup, ['fullEs']),
+  },
+  {
+    note: "condition 'lowLife' is unarmable — the dummy never wounds, and the pack seldom presses the rig past its low-life line",
+    when: (_def, sup) => supHasOnlyCondPayload(sup, ['lowLife']),
+  },
+  {
+    note: 'combo-cadence conditions (comboVaried/comboRepeated) need a MIXED cast diet — the solo probe casts one skill forever',
+    when: (_def, sup) => supHasOnlyCondPayload(sup, ['comboVaried', 'comboRepeated']),
+  },
+  {
+    note: 'movement-speed payload is POSITIONAL — the parked duel fingerprint reads combat channels only',
+    when: (_def, sup) => supModsStat(sup, ['castMobility'])
+      || (sup.selfStack !== undefined && sup.selfStack.mods.every(m => m.stat === 'moveSpeed')),
+  },
+  {
+    // Ravening's shape: the graft drinks a charge the rig never banks.
+    // Slow Brew self-banks (chargeGain beside its chargeCost) and stays
+    // measurable on bar-cast hosts.
+    note: 'spender graft (chargeCost) with no in-rig SOURCE of its charge — neither the gem nor the host banks it, so the pot is forever empty',
+    when: (def, sup) => sup.chargeCost !== undefined
+      && !(sup.chargeGain ?? []).some(cg => cg.charge === sup.chargeCost!.charge)
+      && !(def.chargeGain ?? []).some(cg => cg.charge === sup.chargeCost!.charge),
+  },
+  {
+    // Verified live (diag 2026-07-21): the bank ticks and the entry drink
+    // fires, but the probe holds ONE unbroken channel from an empty pot.
+    // Real play re-enters the channel and drinks the accrued bank.
+    note: 'spender graft on a CHANNEL host — a held channel drinks only at entry, and the probe holds one unbroken channel from an empty pot',
+    when: (def, sup) => sup.chargeCost !== undefined && def.castMode === 'channel',
+  },
+  {
+    note: 'ply-rend needs COUNT-DURABLE (plied) bodies — the probe fields none',
+    when: (_def, sup) => supModsStat(sup, ['plyRend']),
+  },
+  {
+    note: "'regicide' needs EMPOWERED victims (magic/rare/champion/crowned) — the probe pack spawns unpromoted",
+    when: (_def, sup) => supModsStat(sup, ['regicide']),
+  },
+  {
+    note: "'giantsbane' needs victims at least half again the rig's WEIGHT — the probe pack is light",
+    when: (_def, sup) => supModsStat(sup, ['giantsbane']),
+  },
+  {
+    note: "'limbreaver' reads a composite monster's PARTS — no composite spawns in probes",
+    when: (_def, sup) => supModsStat(sup, ['limbreaver']),
+  },
+  {
+    note: 'remnant shards drop at kills but the SCOOP is a walk — no pilot detours over shards',
+    when: (_def, sup) => [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat.startsWith('remnantDrop_')),
+  },
+  {
+    // Verified vs engine: rollKillOrbs multiplies orbShedRate over the
+    // orbOnKill_<id> base chances, and every base is 0 on a bare rig
+    // (real characters carry bases from flask equipMods/passives).
+    note: 'orb-shed rate is a MULTIPLIER over orbOnKill_* base chances — the bare probe rig carries none, so it multiplies zero',
+    when: (_def, sup) => supModsStat(sup, ['orbShedRate']),
+  },
+  {
+    note: 'damage-vs-poisoned (damageVs_poison) needs a POISONED victim — this host applies no poison and the solo rig fields no second source',
+    when: (def, sup) => supModsStat(sup, ['damageVs_poison'])
+      && !(def.effects ?? []).some(e => e.type === 'status' && e.status === 'poison'),
+  },
+  {
+    note: 'strike-timing window (grafted golden tail) needs a DISCIPLINED press — the spam pilot presses early on every bar',
+    when: (_def, sup) => sup.strikeTiming !== undefined,
+  },
 ];
+
+/** Every payload-bearing lane of the gem is condition-gated on the given
+ *  conds (cost-lane mods exempt — the tax billing is not the function):
+ *  the conditional-blindness rows key on this. */
+function supHasOnlyCondPayload(sup: SupportDef, conds: string[]): boolean {
+  const all = [...sup.mods, ...(sup.perLevel ?? [])];
+  const payload = all.filter(m => !COST_FUNCTION_STATS.has(m.stat));
+  if (!payload.length) return false;
+  if (!payload.some(m => m.when && conds.includes(m.when))) return false;
+  if (!payload.every(m => m.when && conds.includes(m.when))) return false;
+  // A graft FIELD beside the mods is unconditioned payload — not this class.
+  for (const k of Object.keys(sup)) {
+    if (k === 'mods' || k === 'perLevel' || !SUPPORT_PAYLOAD_FIELDS.has(k)) continue;
+    if ((sup as unknown as Record<string, unknown>)[k] !== undefined) return false;
+  }
+  return true;
+}
 
 export interface ChannelDelta { key: string; bare: number | string; pair: number | string; rel: number }
 

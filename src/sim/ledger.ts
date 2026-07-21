@@ -20,7 +20,8 @@
 // file IO stays in balance/cli.ts.
 // ---------------------------------------------------------------------------
 
-import { pairKey } from './compat';
+import { costFunctionSupport, pairKey } from './compat';
+import { SUPPORTS } from '../data/supports';
 import type {
   CensusResult, CensusRow, PairDeepResult, PairProbeResult, ProbeOpts,
 } from './compat';
@@ -114,6 +115,11 @@ export function observedDefects(o: ObservedMatrix): ObservedDefect[] {
           : `no static explanation on file — run \`matrix explain ${p.skillId} ${p.supportId}\``,
       });
     } else if (p.verdict === 'cost_only') {
+      // COST-SHAPED gems (Efficiency, Austerity, Alacrity — every mod on a
+      // cost-function stat): moving the tax IS the function, so cost_only
+      // on them is the gem WORKING, never a defect.
+      const sup = SUPPORTS[p.supportId];
+      if (sup && costFunctionSupport(sup)) continue;
       out.push({
         skill: p.skillId, support: p.supportId, kind: 'cost_only', probe: p.probe,
         detail: `tax moved (${p.moved.map(m => m.key).join(', ') || '?'}) — no observed function`,

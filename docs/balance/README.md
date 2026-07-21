@@ -204,13 +204,29 @@ wrong; baselines express "don't move things by accident" and are exact.
   a support-power table); cost alone = **cost_only** (a tax with no observed
   function — the partial-no-op bucket); nothing beyond noise =
   **negligible** (indeterminate — escalate seeds/duration, never cite as-is).
+- THE COST-FUNCTION LAW: a gem whose ENTIRE payload lives on cost-function
+  stats (`COST_FUNCTION_STATS` — manaCost, addedCooldown, cooldownRecovery…)
+  is cost-SHAPED: moving the tax IS its function (Efficiency's cheaper cast,
+  Austerity's long clock). The defect distiller (`observedDefects`) never
+  mints a cost_only defect for a cost-shaped gem — its cost_only verdict
+  means WORKING. A cost-shaped gem reading fully INERT (a free skill it
+  cannot cheapen) is still a finding.
 - **blind** = the standard probes cannot raise this pairing's condition
   (`BLINDNESS_RULES`, data): cursor-origin travel payloads, companion gems
-  without their mechanism (fuse/tether riders), death-dependent payloads vs
-  the immortal dummy, leech at full vitals, stealth verbs and shift-metas no
-  pilot performs. Blind is UNMEASURED, never evidence of breakage — and
-  teaching a probe the missing verb (then deleting the row) re-enters the
-  whole class into measurement.
+  without their mechanism (fuse/tether riders, trigger-permits with no
+  trigger gem beside them), death-dependent payloads vs the immortal dummy,
+  leech at full vitals, stealth verbs and shift-metas no pilot performs,
+  threat re-weighting on a one-name chart, conditions the rig cannot arm
+  (fullEs on an ES-less rig, lowLife, combo-cadence on a one-skill diet),
+  reservation reads with no toggle burning, positional movement payloads,
+  spender grafts with no charge source (or on a single unbroken channel
+  hold), slayer conditions the pack cannot wear (empowered/heavy/composite
+  victims), remnant scoops no pilot walks, and orb-shed rates multiplying a
+  bare rig's zero bases. Blind is UNMEASURED, never evidence of breakage —
+  and teaching a probe the missing verb (then deleting the row) re-enters
+  the whole class into measurement. Blindness only ever OVERRIDES an
+  inert/negligible reading — a pair that measures effective keeps its
+  verdict even when a rule matches.
 - Crew-fit pairs probe KEYED: the resonance gem rides both runs, so the
   verdict is about the boarded behavior, not the (by-design) dormant
   keyless socket.
@@ -218,6 +234,11 @@ wrong; baselines express "don't move things by accident" and are exact.
   corpses, incoming damage), solo vs escort rigs (`ESCORT_HOST_RULES` — a
   curse shows its worth through the escort's hits; trigger gems fire off its
   events). A pair's report row names the shape that measured it.
+  KILL-SCOPED payloads route LIVE by rule (`LIVE_PROBE_SUPPORT_RULES`):
+  kill-trigger procs, on-kill/on-death charge taps, orb/remnant kill-sheds,
+  'overmatch' (the pack's levelBonus stands above the rig), and area-geometry
+  / knockback payloads that read only at edges or across displaced bodies —
+  the immortal, centered dummy can arm none of those.
 - THE DEFENSIVE-STAT LANE: a gem whose mods touch mitigation, avoidance,
   pools, recovery, or sustain (`LIVE_PROBE_SUPPORT_STATS`) routes to the
   wounding LIVE probe — the dummy never swings back, so those payloads used
