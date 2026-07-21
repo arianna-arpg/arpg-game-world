@@ -321,6 +321,20 @@ changes.
   wear it too). THE AFTERMATH MINTER (`World.mintAftermath`) takes
   pulse/cascade/cadence beyond ground (nova/melee/detonateProjectile
   sequels as zones; the cadence gems are companions to a beat source).
+  THE KINDRED RULE + THE INHERITANCE LAW (2026-07-21,
+  `instanceCascadePlan`/`instancePulsePlan` — graft-wins is DEAD): the
+  native lane wins the slot and the gem DEEPENS it — a same-direction
+  cascade gem ELONGATES the innate march (Seismic March makes Sunder
+  walk six shocks), pulse gems APPEND beats in their own character
+  (Buried Charge answers Earthquake's 2.4× quake, never replaces it),
+  and a different-direction cascade gem opens the RE-CAST lane: its
+  displaced points each play the host's FULL native cast (the
+  primary's clone — linger, quake, march walking on, EDGE BAND ring
+  eyes via `Zone.edgeFrac`, drawn == tested) but never other grafts
+  (graft → native → terminal; recursion impossible by construction).
+  The near-copy overwrite this replaced was INVISIBLE to the no-op
+  matrix (numeric divergence, design no-op) — the coming interaction
+  sweep needs its own kindred metric.
   THE COURT-CREDIT LAWS: minionCarry procs divide by living court size
   on hit-frequency rolls (true kills stay whole), and kill charge-taps
   + orb/remnant sheds carry to the keeper via the summoning instance.

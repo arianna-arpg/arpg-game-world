@@ -689,11 +689,41 @@ export interface GroundCascadeSpec {
   intervalStep?: number;
 }
 
-/** The cascade a ground placement obeys: a socketed support's graft wins
- *  over the skill's own; the aoeCascade stat adds placements to either. */
-export function instanceCascade(inst: SkillInstance): GroundCascadeSpec | undefined {
-  for (const s of hostSockets(inst)) if (s.def.cascade) return s.def.cascade;
-  return inst.def.delivery.type === 'ground' ? inst.def.delivery.cascade : undefined;
+/** THE CASCADE PLAN (the kindred rule, 2026-07-21 — the native lane wins
+ *  the slot; the gem deepens it): the innate spec IS the native march —
+ *  a socketed cascade gem never replaces it. A gem whose direction
+ *  matches the native walk is KINDRED and ELONGATES it (its count
+ *  appends continuation beats on the native walk's own knobs — Seismic
+ *  March makes Sunder march six shocks, not a different three); a gem
+ *  whose direction differs opens the RE-CAST lane (its displaced points
+ *  each play the host's full native cast — Sunder, still cast as
+ *  Sunder, from a scattered cascade of locations). Re-casts carry
+ *  native mechanics but never other grafts: graft → native → terminal,
+ *  recursion impossible by construction. On an innate-less host the
+ *  first gem stands the native lane up (the grant precedent), and the
+ *  aoeCascade stat elongates whichever native stands. `defaultDir` is
+ *  the consumer's context default ('axis' for placements, 'forward'
+ *  for instantaneous strikes) — dir comparison resolves through it. */
+export interface CascadePlan {
+  native?: GroundCascadeSpec;
+  recasts: GroundCascadeSpec[];
+}
+export function instanceCascadePlan(
+  inst: SkillInstance, defaultDir: NonNullable<GroundCascadeSpec['dir']>,
+): CascadePlan {
+  const innate = inst.def.delivery.type === 'ground' ? inst.def.delivery.cascade : undefined;
+  const plan: CascadePlan = { native: innate ? { ...innate } : undefined, recasts: [] };
+  for (const s of hostSockets(inst)) {
+    const g = s.def.cascade;
+    if (!g) continue;
+    if (!plan.native) { plan.native = { ...g }; continue; }
+    if ((g.dir ?? defaultDir) === (plan.native.dir ?? defaultDir)) {
+      plan.native.count += g.count;   // kindred: the walk elongates
+    } else {
+      plan.recasts.push(g);           // re-cast: new points, native cast
+    }
+  }
+  return plan;
 }
 
 /**
@@ -735,11 +765,28 @@ export interface GroundPulseSpec {
   radiusStep?: number;
 }
 
-/** The pulse a ground placement obeys: a socketed support's graft wins
- *  over the skill's own; the pulseCount stat adds beats to either. */
-export function instancePulse(inst: SkillInstance): GroundPulseSpec | undefined {
-  for (const s of hostSockets(inst)) if (s.def.pulse) return s.def.pulse;
-  return inst.def.delivery.type === 'ground' ? inst.def.delivery.pulse : undefined;
+/** THE PULSE PLAN (the kindred rule, 2026-07-21): pulses have no
+ *  direction, so every graft is kindred by construction — the innate
+ *  spec (or the first gem on an innate-less host) is the NATIVE rhythm
+ *  and later gems APPEND their beats in their own authored character
+ *  (delay, dmgMult, radiusMult), after the native sequence finishes.
+ *  Buried Charge on Earthquake no longer replaces the 2.4× quake with
+ *  a plain one — the quake tolls, then the buried charge answers. The
+ *  pulseCount stat deepens the native rhythm. */
+export interface PulsePlan {
+  native?: GroundPulseSpec;
+  appended: GroundPulseSpec[];
+}
+export function instancePulsePlan(inst: SkillInstance): PulsePlan {
+  const innate = inst.def.delivery.type === 'ground' ? inst.def.delivery.pulse : undefined;
+  const plan: PulsePlan = { native: innate ? { ...innate } : undefined, appended: [] };
+  for (const s of hostSockets(inst)) {
+    const g = s.def.pulse;
+    if (!g) continue;
+    if (!plan.native) plan.native = { ...g };
+    else plan.appended.push(g);
+  }
+  return plan;
 }
 
 /**

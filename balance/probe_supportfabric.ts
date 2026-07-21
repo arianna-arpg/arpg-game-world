@@ -33,6 +33,7 @@ import {
   supportGlobalMods, supportRidesMinions, hostSockets,
 } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
+import { dist } from '../src/core/math';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -386,6 +387,105 @@ bootSimEngine();
   check('H4 the affliction festers HARDER than the plain twin (the forgone bite returns at yield)',
     bargained.dps > plain.dps * 1.1,
     `burn dps ${plain.dps.toFixed(1)} -> ${bargained.dps.toFixed(1)}`);
+}
+
+// === RIG I — the kindred rule + the inheritance law ========================
+// (2026-07-21: graft-wins is dead — the native lane wins the slot and the
+// gem deepens it; different-direction gems RE-CAST the native cast at
+// displaced points; sequels wear the strike's true surface, edge band
+// included. Zone-count algebra pins the composition exactly: recursion
+// between grafts is impossible by construction.)
+
+{
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const sunder = SKILLS.sunder;
+  const aim = { x: hero.pos.x + 50, y: hero.pos.y };
+  const cast = (...gems: (keyof typeof SUPPORTS)[]): number => {
+    const before = world.zones.length;
+    const inst = makeSkillInstance(sunder, 1, 3);
+    gems.forEach((g, i) => { inst.sockets[i] = { def: SUPPORTS[g], level: 1 }; });
+    world.executeSkill(hero, inst, aim);
+    const minted = world.zones.length - before;
+    world.zones.length = before;   // sweep the table for the next hand
+    return minted;
+  };
+  const bare = cast();
+  check('I0 bare Sunder mints its native march unchanged (1 primary + 3 ripples — the refactor regression pin)',
+    bare === 4, `${bare} zones`);
+  const kindred = cast('seismic_march');
+  check('I1 Seismic March ELONGATES the march it matches (6 shocks, one walk — the kindred rule)',
+    kindred === 7, `${kindred} zones (want 1 primary + 6 march)`);
+  const recast = cast('spell_cascade');
+  check('I2 Spell Cascade RE-CASTS Sunder from its axis points (each point a full marching Sunder)',
+    recast === 12, `${recast} zones (want 1+3 primary cast + 2 points × (1+3))`);
+  const stacked = cast('seismic_march', 'spell_cascade');
+  check('I3 stacked: the re-cast points play the ELONGATED native march, never each other (graft → native → terminal)',
+    stacked === 21, `${stacked} zones (want 1+6 + 2 × (1+6))`);
+  const scattered = cast('spell_cascade', 'scattered_cascade');
+  check('I4 two re-cast gems each open their own lane and neither recurses the other',
+    scattered === 20, `${scattered} zones (want 1+3 + 2×(1+3) + 2×(1+3))`);
+}
+
+{
+  // THE UN-NERF: Buried Charge on Earthquake APPENDS its full-effect beat
+  // after the native 2.4× quake — the native rhythm intact, the charge
+  // answering in its own character through the queue.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const quake = SKILLS.earthquake;
+  const inst = makeSkillInstance(quake, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.buried_charge, level: 1 };
+  const before = world.zones.length;
+  world.executeSkill(hero, inst, { x: hero.pos.x + 40, y: hero.pos.y });
+  const prime = world.zones.slice(before).find(z => z.pulse);
+  check('I5 Earthquake keeps its native 2.4× quake with Buried Charge socketed (the kindred append, not the old replace)',
+    !!prime?.pulse && Math.abs(prime.pulse.dmgMult - 2.4) < 1e-9
+    && prime.pulse.left === 1 && prime.pulse.queue?.length === 1
+    && Math.abs((prime.pulse.queue?.[0].dmgMult ?? 0) - 1) < 1e-9,
+    prime?.pulse ? `native ${prime.pulse.dmgMult}× left ${prime.pulse.left}, queue ${JSON.stringify(prime.pulse.queue)}` : 'no pulse zone');
+  world.zones.length = before;
+}
+
+{
+  // THE RING-TRUE SEQUEL: Shock Nova's cascades wear the nova's own edge
+  // band — the eye is SPARED at the sequel exactly as at the strike
+  // (drawn == tested: the flash carries the same edgeFrac).
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const nova = SKILLS.shock_nova;
+  const inst = makeSkillInstance(nova, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.spell_cascade, level: 1 };
+  const before = world.zones.length;
+  world.executeSkill(hero, inst, { x: hero.pos.x, y: hero.pos.y });
+  const sequels = world.zones.slice(before);
+  const band = nova.delivery.type === 'nova' ? nova.delivery.edgeOnly : undefined;
+  check('I6 every Shock Nova sequel carries the nova\'s edge band (the inheritance law\'s geometry hand-off)',
+    sequels.length > 0 && band !== undefined && sequels.every(z => z.edgeFrac === band),
+    `${sequels.length} sequels, edgeFrac ${sequels.map(z => z.edgeFrac).join(',')} (want ${band})`);
+  // The functional spare: a body at a sequel's EYE takes nothing when it
+  // detonates; a body on the RIM takes the ring.
+  const seq = sequels.find(z => !z.exploded && dist(z.pos, hero.pos) > 1);
+  check('I7 a telegraphing sequel stands off the origin (the axis point)', !!seq);
+  if (seq) {
+    const eye = world.createMonster('target_dummy', 7, 'enemy');
+    eye.pos = { x: seq.pos.x, y: seq.pos.y };
+    const rim = world.createMonster('target_dummy', 7, 'enemy');
+    rim.pos = { x: seq.pos.x + seq.radius * ((1 + (seq.edgeFrac ?? 0)) / 2), y: seq.pos.y };
+    world.actors.push(eye, rim);
+    const eye0 = eye.life, rim0 = rim.life;
+    // The town post REGENERATES between frames — track the trough, not
+    // the end state (the detonation's bite is a one-frame dip).
+    let eyeMin = eye0, rimMin = rim0;
+    for (let i = 0; i < 30; i++) {
+      world.update(1 / 20);
+      eyeMin = Math.min(eyeMin, eye.life);
+      rimMin = Math.min(rimMin, rim.life);
+    }
+    check('I8 the sequel\'s ring bites the rim and SPARES the eye (drawn == tested at the detonation)',
+      eyeMin === eye0 && rimMin < rim0,
+      `eye trough ${eye0.toFixed(0)}->${eyeMin.toFixed(0)}, rim trough ${rim0.toFixed(0)}->${rimMin.toFixed(1)}`);
+  }
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

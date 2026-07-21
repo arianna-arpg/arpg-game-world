@@ -3191,9 +3191,21 @@ export class Renderer {
         ctx.globalAlpha = 0.7;
         ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = z.color;
-        ctx.fill();
+        if (z.edgeFrac) {
+          // EDGE BAND (the inheritance law): only the ring that will
+          // bite washes — the safe eye stays clean at the telegraph,
+          // matching the detonation's spare test (drawn == tested).
+          const mid = z.radius * (1 + z.edgeFrac) / 2;
+          ctx.globalAlpha = 0.15;
+          ctx.lineWidth = Math.max(2, z.radius * (1 - z.edgeFrac));
+          ctx.beginPath();
+          this.traceAoe(z.pos.x, z.pos.y, mid, z.shape, z.facing, z.arcRad);
+          ctx.stroke();
+        } else {
+          ctx.globalAlpha = 0.15;
+          ctx.fillStyle = z.color;
+          ctx.fill();
+        }
       } else if (z.edge && z.edge > 0.02) {
         // Fill-in cage (Pillar of Flame / Wildfire Sweep): only the closing
         // band burns — CLIPPED to the zone's faced shape, so a crescent

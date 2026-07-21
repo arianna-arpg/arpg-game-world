@@ -1908,9 +1908,10 @@ export const SUPPORTS: Record<string, SupportDef> = {
     description: 'Ground placements BURY a charge beneath themselves: one second after the impact, the same ground detonates AGAIN at full effect. Grants the pulse tag — Unsettled Earth seats beside it, the way Faultfinder seats the crack gems.',
     color: '#d8a858', requiresTags: ['aoe'],
     grantsTags: ['pulse'],
-    // The graft-wins rule (instancePulse): socketed into a skill that
-    // already pulses, THIS spec replaces the innate one — Buried Charge
-    // is for ground that only ever blew once.
+    // The kindred rule (instancePulsePlan): on a skill that already
+    // pulses, this beat APPENDS after the native rhythm in its own
+    // character — Earthquake's 2.4× quake tolls, then the buried charge
+    // answers at full effect. On pulse-less ground it stands the lane up.
     pulse: { delay: 1.0 },
     mods: [mod('manaCost', 'more', 0.25)],
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -2914,7 +2915,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   spell_cascade: {
     id: 'spell_cascade', name: 'Spell Cascade',
-    description: 'The placement CASCADES along the cast line — one ripple beyond your mark, one short of it — at 25% less area. The storm walks.',
+    description: 'The placement CASCADES along the cast line — the skill\'s own cast played again one step beyond your mark and one short of it, at 25% less area. The storm walks.',
     color: '#a8a0e0', requiresTags: ['aoe'],
     mods: [mod('aoeRadius', 'more', -0.25)],
     cascade: { count: 2, dir: 'axis', dmgStep: 0.8 },
@@ -2923,7 +2924,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   scattered_cascade: {
     id: 'scattered_cascade', name: 'Scattered Cascade',
-    description: 'The placement SCATTERS: two extra strikes at random ground around your mark, each 15% less. Chaos theory, weaponized.',
+    description: 'The placement SCATTERS: the skill\'s own cast played twice more at random ground around your mark, each 15% less. Chaos theory, weaponized.',
     color: '#b8a0d0', requiresTags: ['aoe'],
     mods: [mod('damage', 'more', -0.15)],
     cascade: { count: 2, dir: 'random', dmgStep: 0.85 },
@@ -2932,7 +2933,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   seismic_march: {
     id: 'seismic_march', name: 'Seismic March',
-    description: 'The placement MARCHES: three ripples stride out from the impact on a beat, each a step farther and a shade weaker — any ground skill learns the Sunder walk.',
+    description: 'The placement MARCHES: three ripples stride out from the impact on a beat, each a step farther and a shade weaker — any ground skill learns the Sunder walk, and a skill that already marches marches three shocks FARTHER.',
     color: '#c0a878', requiresTags: ['aoe'],
     mods: [],
     cascade: { count: 3, dir: 'forward', scaleStep: 0.9, dmgStep: 0.8, interval: 0.14 },

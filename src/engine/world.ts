@@ -26,11 +26,11 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
-  type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardBashSpec,
+  type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
   type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
@@ -1048,7 +1048,17 @@ interface Zone {
     delay: number; interval: number; intervalStep: number;
     dmgMult: number; dmgStep: number; radiusMult: number; radiusStep: number;
     left: number; next: number;
+    /** APPENDED BEATS (the kindred rule): further pulse gems' beats in
+     *  their own authored character, fed to the live fields as the
+     *  native rhythm exhausts — the quake tolls, then the buried charge
+     *  answers. Delays are gap-from-previous-beat, cadence-bent at mint. */
+    queue?: { delay: number; dmgMult: number; radiusMult: number }[];
   };
+  /** EDGE BAND (NovaDelivery/ConeDelivery.edgeOnly, inherited by the
+   *  strike's SEQUELS — the inheritance law): victims fully inside
+   *  radius × edgeFrac stand in the safe eye, exactly as at the
+   *  original strike. Drawn == tested: the flash carries it too. */
+  edgeFrac?: number;
   /** LINGERING FUME (GroundDelivery.exposure): per-occupant CONTINUOUS
    *  dwell, seconds — ticks bite only past `after`; leaving clears the
    *  lungs (the madden dwell pattern, frame-accurate). */
@@ -1113,6 +1123,31 @@ interface Flash {
    *  scales the wobble (0..1]. The light layer skips haze flashes
    *  (refraction, not emission). */
   haze?: number;
+}
+
+/** THE APPENDED-BEAT FLATTENER (the kindred rule): further pulse gems'
+ *  beats expand to a queue in each gem's own authored character — its
+ *  delay opens its sequence, its interval/steps walk it (cadence
+ *  overrides its intervalStep, the one-knob-every-clock rule). Entries
+ *  are gap-from-previous-beat; payloads are absolute. A queue implies a
+ *  standing native rhythm: the first pulse source always seats native. */
+function flattenPulseQueue(
+  appended: GroundPulseSpec[], cadence: number | undefined,
+): { delay: number; dmgMult: number; radiusMult: number }[] {
+  const queue: { delay: number; dmgMult: number; radiusMult: number }[] = [];
+  for (const g of appended) {
+    const gStep = cadence ?? g.intervalStep ?? 1;
+    let gDelay = g.delay;
+    let gDmg = g.dmgMult ?? 1;
+    let gRad = g.radiusMult ?? 1;
+    for (let k = 0; k < Math.max(1, g.count ?? 1); k++) {
+      queue.push({ delay: Math.max(0.05, gDelay), dmgMult: gDmg, radiusMult: gRad });
+      gDelay = Math.max(0.05, (g.interval ?? g.delay) * Math.pow(gStep, k));
+      gDmg *= g.dmgStep ?? 1;
+      gRad *= g.radiusStep ?? 1;
+    }
+  }
+  return queue;
 }
 
 /** Summons still emerging from a "scattered in sequence" cast — or arriving
@@ -24990,9 +25025,11 @@ export class World {
         });
         this.spawnAftershocks(caster, inst, origin, radius, shape);
         // The cascade family beyond ground: the burst's sequels (armed
-        // second detonations, marching ripples) mint off the strike area.
+        // second detonations, marching ripples) mint off the strike area
+        // — EDGE BAND included (the inheritance law): a Shock Nova sequel
+        // is a ring with the same safe eye the nova itself keeps.
         this.mintAftermath(caster, inst, origin, radius, shape,
-          caster.facing, useMult, tags, extra);
+          caster.facing, useMult, tags, extra, undefined, d.edgeOnly);
         fieldAt = vec(origin.x, origin.y);
         // Enemy-facing novas with a mend side (Radiant Nova): allies in the
         // burst are healed. Ally/'all' novas already resolved them above.
@@ -25259,18 +25296,25 @@ export class World {
         // the placement keeps — pulse gaps, cascade skips, emitter salvos
         // — overriding each spec's own intervalStep. One knob, every clock.
         const cadence = socketSpec(inst, 'cadence')?.intervalStep;
-        const pSpec = instancePulse(inst);
+        // THE PULSE PLAN (kindred rule): the native rhythm (innate spec,
+        // deepened by the pulseCount stat) plays first; appended gems'
+        // beats follow in their own authored character via the queue —
+        // the quake tolls, then the buried charge answers.
+        const pPlan = instancePulsePlan(inst);
+        const pSpec = pPlan.native;
         const pulseN = Math.max(0, (pSpec ? (pSpec.count ?? 1) : 0)
           + Math.round(caster.sheet.get('pulseCount', tags, extra)));
         const pDelay = pSpec?.delay ?? 1;
         const pInterval = pSpec?.interval ?? pDelay;
         const pStep = cadence ?? pSpec?.intervalStep ?? 1;
+        const pQueue = flattenPulseQueue(pPlan.appended, cadence);
         const mintPulse = (telegraph: number): Zone['pulse'] => pulseN > 0
           ? {
             delay: pDelay, interval: pInterval, intervalStep: pStep,
             dmgMult: pSpec?.dmgMult ?? 1, dmgStep: pSpec?.dmgStep ?? 1,
             radiusMult: pSpec?.radiusMult ?? 1, radiusStep: pSpec?.radiusStep ?? 1,
             left: pulseN, next: this.time + Math.max(0, telegraph) + pDelay,
+            queue: pQueue.length ? [...pQueue] : undefined,
           } : undefined;
         // The pulse clock is FIXED (an armed charge, not a duration) — the
         // imposed linger is exactly the beats + a settling breath, and an
@@ -25285,6 +25329,7 @@ export class World {
             pulseSpan += gap;
             gap = Math.max(0.05, gap * pStep);
           }
+          for (const q of pQueue) pulseSpan += q.delay;
         }
         const pulseLinger = (secs: number): number => Math.max(secs, pulseSpan);
         const ownLinger = (d.lingerDuration ?? 0) > 0;
@@ -25469,6 +25514,10 @@ export class World {
           anchor: zoneAnchor,
           flatBonus,
         });
+        // The primary placement — captured for the CLAP's twin and the
+        // re-cast lane's clones alike (the inheritance law: a re-cast
+        // point plays THIS cast, displaced).
+        const prime = this.zones[this.zones.length - 1];
         // THE CLAP (GroundDelivery.sweep.converge): the mirrored RIGHT
         // hand closes from the other wing onto the same bearing — fresh
         // hit ledger and fresh clocks, no emitter/domain (the cascade-
@@ -25476,7 +25525,6 @@ export class World {
         // meeting line takes BOTH hands; convergence is the crunch, by
         // design. Two hands, one cost.
         if (d.sweep?.converge) {
-          const prime = this.zones[this.zones.length - 1];
           this.zones.push({
             ...prime,
             pos: vec(prime.pos.x, prime.pos.y),
@@ -25496,60 +25544,78 @@ export class World {
             exposure: mintExposure(),
           });
         }
-        // GROUND CASCADE (innate, support-grafted, or purely stat-granted):
-        // the placement REPEATS at displaced points — rippling out from the
-        // impact like a skipped stone. Ripples echo weaker (dmgStep) and
-        // land on a beat when interval > 0 (they ride the zones' ordinary
-        // telegraph delays). Composes with temporal repeats: a Crescendo'd
-        // Storm Call cascades per echo — the crescendoing, cascading storm.
+        // GROUND CASCADE (the kindred rule + the inheritance law,
+        // 2026-07-21): the NATIVE march — the innate spec, ELONGATED by
+        // kindred same-direction gems and the aoeCascade stat — ripples
+        // out from the impact like a skipped stone, each shock echoing
+        // weaker (dmgStep) on a beat (interval). Different-direction
+        // cascade gems open the RE-CAST lane instead: their displaced
+        // points each play the host's FULL native cast — the primary's
+        // clone (linger, ticks, quake, fill) plus the native march
+        // walking on from that point — never other grafts (graft →
+        // native → terminal: recursion impossible by construction).
+        // Composes with temporal repeats: a Crescendo'd Storm Call
+        // cascades per echo — the crescendoing, cascading storm.
         {
-          const spec = instanceCascade(inst);
+          const plan = instanceCascadePlan(inst, 'axis');
           const extraCasc = Math.round(caster.sheet.get('aoeCascade', tags, extra));
-          const count = (spec?.count ?? 0) + extraCasc;
-          if (count > 0) {
+          const nativeCount = (plan.native?.count ?? 0) + extraCasc;
+          // castRange-0 skills (Reap) place AT the caster — angleTo of a
+          // zero vector is due EAST; the FACING is the honest axis there.
+          const axisAng = dist(caster.pos, at) < 1 ? caster.facing : angleTo(caster.pos, at);
+          const stepScale = caster.sheet.get('cascadeStep', tags, extra);
+          // One walk serves every lane: the spec's dir draws the points,
+          // the BOUNCING BALL (intervalStep / a socketed cadence — each
+          // later gap × step, floored so a deep taper never divides by
+          // the frame) paces the beats.
+          const walkPoints = (
+            spec: GroundCascadeSpec | undefined, count: number, from: Vec2,
+          ): { x: number; y: number; beatAt: number; k: number }[] => {
+            const pts: { x: number; y: number; beatAt: number; k: number }[] = [];
+            if (count <= 0) return pts;
             const dir = spec?.dir ?? 'axis';
-            const stepLen = (spec?.step ?? d.radius * 1.4)
-              * caster.sheet.get('cascadeStep', tags, extra);
-            const scaleStep = spec?.scaleStep ?? 1;
-            const dmgStep = spec?.dmgStep ?? 0.75;
-            const beat = spec?.interval ?? 0;
-            // The BOUNCING BALL (intervalStep / a socketed cadence): each
-            // later skip's gap × step — <1 patters the shocks together as
-            // the stone settles, >1 stretches the tolls apart. beatAt
-            // accumulates the geometric walk (floored so a deep taper
-            // never divides by the frame).
+            const stepLen = (spec?.step ?? d.radius * 1.4) * stepScale;
             const beatStep = cadence ?? spec?.intervalStep ?? 1;
             let beatAt = 0;
-            let beatGap = beat;
-            // castRange-0 skills (Reap) place AT the caster — angleTo of a
-            // zero vector is due EAST; the FACING is the honest axis there.
-            const axisAng = dist(caster.pos, at) < 1 ? caster.facing : angleTo(caster.pos, at);
+            let beatGap = spec?.interval ?? 0;
             for (let k = 1; k <= count; k++) {
               beatAt += beatGap;
               beatGap = Math.max(0.02, beatGap * beatStep);
-              let px2: number, py2: number;
               if (dir === 'random') {
                 const ra = rand(0, Math.PI * 2);
                 const rd = stepLen * rand(0.5, 1.5);
-                px2 = at.x + Math.cos(ra) * rd; py2 = at.y + Math.sin(ra) * rd;
+                pts.push({ x: from.x + Math.cos(ra) * rd, y: from.y + Math.sin(ra) * rd, beatAt, k });
               } else {
                 const sign = dir === 'forward' ? 1 : dir === 'backward' ? -1
                   : (k % 2 === 1 ? 1 : -1);            // 'axis' alternates beyond/short
                 const reach = dir === 'axis' ? Math.ceil(k / 2) * stepLen : k * stepLen;
-                px2 = at.x + Math.cos(axisAng) * reach * sign;
-                py2 = at.y + Math.sin(axisAng) * reach * sign;
+                pts.push({
+                  x: from.x + Math.cos(axisAng) * reach * sign,
+                  y: from.y + Math.sin(axisAng) * reach * sign, beatAt, k,
+                });
               }
+            }
+            return pts;
+          };
+          // THE NATIVE MARCH from a base point at a base multiplier — the
+          // primary's own walk, and each re-cast point's (the march IS
+          // part of the native cast a re-cast replicates).
+          const mintMarch = (from: Vec2, baseMult: number, delayBase: number): void => {
+            const spec = plan.native;
+            const scaleStep = spec?.scaleStep ?? 1;
+            const dmgStep = spec?.dmgStep ?? 0.75;
+            for (const p of walkPoints(spec, nativeCount, from)) {
               this.zones.push({
-                pos: vec(px2, py2),
-                radius: d.radius * aoeScale * Math.pow(scaleStep, k) * (sizeOver?.from ?? 1),
+                pos: vec(p.x, p.y),
+                radius: d.radius * aoeScale * Math.pow(scaleStep, p.k) * (sizeOver?.from ?? 1),
                 caster, inst, color: def.color,
-                delay: (d.delay ?? 0) + beatAt, exploded: false,
+                delay: delayBase + p.beatAt, exploded: false,
                 linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
                 linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
                 tickInterval: groundTick, tickTimer: groundTick0,
                 shape: groundShape,
                 facing: axisAng,
-                dmgMult: useMult * Math.pow(dmgStep, k), depth: 0,
+                dmgMult: baseMult * Math.pow(dmgStep, p.k), depth: 0,
                 curseAllies,
                 pull: d.pull,
                 drift: d.drift,
@@ -25557,10 +25623,10 @@ export class World {
                 // Ripples breathe too — each on the same walk from its own
                 // (scaleStep-shrunk) birth radius.
                 sizeOver,
-                radius0: sizeOver ? d.radius * aoeScale * Math.pow(scaleStep, k) : undefined,
+                radius0: sizeOver ? d.radius * aoeScale * Math.pow(scaleStep, p.k) : undefined,
                 // Ripples quake too — each on its own displaced clock, its
                 // pulse damage riding the ripple's own dmgStep falloff.
-                pulse: mintPulse((d.delay ?? 0) + beatAt),
+                pulse: mintPulse(delayBase + p.beatAt),
                 exposure: mintExposure(),
                 // Ripples inherit the sweep vocabulary — each with a FRESH
                 // struck set (per-zone crossing semantics).
@@ -25570,6 +25636,44 @@ export class World {
                 struck: d.hitOnce ? new Set() : undefined,
                 flatBonus,
               });
+            }
+          };
+          mintMarch(at, useMult, d.delay ?? 0);
+          // THE RE-CAST LANE: each different-direction gem's points play
+          // the primary's clone — the CLAP's one-source-per-cast strip
+          // (no emitter, no domain, no marker) with fresh ledgers and
+          // clocks — then march the native walk on from there. The
+          // gem's own dmgStep decays its points; its skill-local mods
+          // (Spell Cascade's area shrink) already ride the instance.
+          for (const r of plan.recasts) {
+            const rDmgStep = r.dmgStep ?? 0.75;
+            const rScaleStep = r.scaleStep ?? 1;
+            for (const p of walkPoints(r, r.count, at)) {
+              const mult = useMult * Math.pow(rDmgStep, p.k);
+              const delayBase = (d.delay ?? 0) + p.beatAt;
+              const scale = Math.pow(rScaleStep, p.k);
+              this.zones.push({
+                ...prime,
+                pos: vec(p.x, p.y),
+                radius: prime.radius * scale,
+                radius0: prime.radius0 !== undefined ? prime.radius0 * scale : undefined,
+                delay: delayBase, exploded: !!d.noImpact,
+                linger: prime.linger0 ?? prime.linger,
+                linger0: prime.linger0,
+                tickInterval: groundTick, tickTimer: groundTick0,
+                dmgMult: mult,
+                struck: d.hitOnce ? new Set() : undefined,
+                madden: prime.madden
+                  ? { after: prime.madden.after, dwell: new Map<number, number>() } : undefined,
+                exposure: mintExposure(),
+                pulse: mintPulse(delayBase),
+                emit: undefined, emitTimer: undefined, emitInst: undefined,
+                emitInterval: undefined, emitStep: undefined,
+                domain: undefined, domainKey: undefined, domainAffected: undefined,
+                exposureDomain: undefined,
+                marker: undefined, onImpact: undefined,
+              });
+              mintMarch(vec(p.x, p.y), mult, delayBase);
             }
           }
         }
@@ -29634,87 +29738,136 @@ export class World {
    * so Phoenix Dive's touchdown scorches the ground like anything else.
    */
   /** THE AFTERMATH MINTER (2026-07-21, the cascade family beyond ground —
-   *  afford, don't constrain): an INSTANTANEOUS area delivery (nova, melee
-   *  swing, detonated burst) hands its strike area here and the socketed
-   *  ground disciplines mint their SEQUELS as zones — Buried Charge's
-   *  second detonation on the same spot, the cascade's marching ripples
-   *  (Seismic March quaking forward out of a slam), the cadence gems
-   *  bending both beats — through the very machinery the ground branch
-   *  runs (armed pulses, telegraph delays, dmgStep decay). The primary
-   *  aftermath zone mints EXPLODED (the delivery already struck; it
-   *  exists only for its beats); ripples telegraph fresh at displaced
-   *  points — the skipped stone. Shape-true: a sigiled swing's sequels
-   *  wear the sigil, a classic swing's wear its own sector. */
+   *  afford, don't constrain; the kindred rule + the inheritance law):
+   *  an INSTANTANEOUS area delivery (nova, melee swing, detonated burst)
+   *  hands its strike area here and the socketed ground disciplines mint
+   *  their SEQUELS as zones — the composed pulse plan's beats on the
+   *  armed primary (native rhythm, then appended gems' beats in their
+   *  own character), the NATIVE march's ripples (innate walk elongated
+   *  by kindred gems), and the RE-CAST lane's points each re-striking
+   *  the delivery's TRUE surface (shape, sector, EDGE BAND — a Shock
+   *  Nova sequel is a ring with a safe eye) with the armed pulse aboard
+   *  and the native march walking on from there — never other grafts
+   *  (graft → native → terminal). The primary aftermath zone mints
+   *  EXPLODED (the delivery already struck; it exists only for its
+   *  beats); ripples telegraph fresh at displaced points — the skipped
+   *  stone. Native march beats stay plain strike-echoes (the R5 shape);
+   *  ground's ripples quake — a standing asymmetry, noted honestly. */
   private mintAftermath(
     caster: Actor, inst: SkillInstance, at: Vec2, radius: number,
     shape: AoeShape, facing: number, useMult: number,
-    tags: Set<SkillTag>, extra: Modifier[], arcRad?: number,
+    tags: Set<SkillTag>, extra: Modifier[], arcRad?: number, edgeFrac?: number,
   ): void {
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
-    const pSpec = instancePulse(inst);
+    const pPlan = instancePulsePlan(inst);
+    const pSpec = pPlan.native;
     const pulseN = Math.max(0, (pSpec ? (pSpec.count ?? 1) : 0)
       + Math.round(caster.sheet.get('pulseCount', tags, extra)));
+    const pDelay = pSpec?.delay ?? 1;
+    const pInterval = pSpec?.interval ?? pDelay;
+    const pStep = cadence ?? pSpec?.intervalStep ?? 1;
+    const pQueue = flattenPulseQueue(pPlan.appended, cadence);
+    // The armed charge's whole life is the geometric beat walk + a breath.
+    let pulseSpan = 0;
     if (pulseN > 0) {
-      const pDelay = pSpec?.delay ?? 1;
-      const pInterval = pSpec?.interval ?? pDelay;
-      const pStep = cadence ?? pSpec?.intervalStep ?? 1;
-      // The armed charge's whole life is the geometric beat walk + a breath.
-      let span = pDelay + 0.1;
+      pulseSpan = pDelay + 0.1;
       let gap = pInterval;
-      for (let k = 1; k < pulseN; k++) { span += gap; gap = Math.max(0.05, gap * pStep); }
+      for (let k = 1; k < pulseN; k++) { pulseSpan += gap; gap = Math.max(0.05, gap * pStep); }
+      for (const q of pQueue) pulseSpan += q.delay;
+    }
+    const pulseFor = (extraDelay: number): Zone['pulse'] => pulseN > 0
+      ? {
+        delay: pDelay, interval: pInterval, intervalStep: pStep,
+        dmgMult: pSpec?.dmgMult ?? 1, dmgStep: pSpec?.dmgStep ?? 1,
+        radiusMult: pSpec?.radiusMult ?? 1, radiusStep: pSpec?.radiusStep ?? 1,
+        left: pulseN, next: this.time + extraDelay + pDelay,
+        queue: pQueue.length ? [...pQueue] : undefined,
+      } : undefined;
+    if (pulseN > 0) {
       this.zones.push({
         pos: vec(at.x, at.y), radius, caster, inst, color: inst.def.color,
         delay: 0, exploded: true,
-        linger: span, linger0: span,
+        linger: pulseSpan, linger0: pulseSpan,
         tickInterval: Infinity, tickTimer: Infinity,
-        shape, facing, arcRad,
+        shape, facing, arcRad, edgeFrac,
         dmgMult: useMult, depth: 0,
-        pulse: {
-          delay: pDelay, interval: pInterval, intervalStep: pStep,
-          dmgMult: pSpec?.dmgMult ?? 1, dmgStep: pSpec?.dmgStep ?? 1,
-          radiusMult: pSpec?.radiusMult ?? 1, radiusStep: pSpec?.radiusStep ?? 1,
-          left: pulseN, next: this.time + pDelay,
-        },
+        pulse: pulseFor(0),
       });
     }
-    const cSpec = instanceCascade(inst);
-    const count = (cSpec?.count ?? 0)
+    const plan = instanceCascadePlan(inst, 'forward');
+    const nativeCount = (plan.native?.count ?? 0)
       + Math.round(caster.sheet.get('aoeCascade', tags, extra));
-    if (count > 0) {
-      // 'forward' default (unlike ground's 'axis'): an instantaneous
-      // strike has an honest facing, and the marching quake is the read.
-      const dir = cSpec?.dir ?? 'forward';
-      const stepLen = (cSpec?.step ?? radius * 1.4)
-        * caster.sheet.get('cascadeStep', tags, extra);
-      const scaleStep = cSpec?.scaleStep ?? 1;
-      const dmgStep = cSpec?.dmgStep ?? 0.75;
-      const beat = cSpec?.interval ?? 0;
-      const beatStep = cadence ?? cSpec?.intervalStep ?? 1;
+    const stepScale = caster.sheet.get('cascadeStep', tags, extra);
+    // 'forward' default (unlike ground's 'axis'): an instantaneous
+    // strike has an honest facing, and the marching quake is the read.
+    const walkPoints = (
+      spec: GroundCascadeSpec | undefined, count: number, from: Vec2,
+    ): { x: number; y: number; beatAt: number; k: number }[] => {
+      const pts: { x: number; y: number; beatAt: number; k: number }[] = [];
+      if (count <= 0) return pts;
+      const dir = spec?.dir ?? 'forward';
+      const stepLen = (spec?.step ?? radius * 1.4) * stepScale;
+      const beatStep = cadence ?? spec?.intervalStep ?? 1;
       let beatAt = 0;
-      let beatGap = beat;
+      let beatGap = spec?.interval ?? 0;
       for (let k = 1; k <= count; k++) {
         beatAt += beatGap;
         beatGap = Math.max(0.02, beatGap * beatStep);
-        let px: number, py: number;
         if (dir === 'random') {
           const ra = rand(0, Math.PI * 2);
           const rd = stepLen * rand(0.5, 1.5);
-          px = at.x + Math.cos(ra) * rd; py = at.y + Math.sin(ra) * rd;
+          pts.push({ x: from.x + Math.cos(ra) * rd, y: from.y + Math.sin(ra) * rd, beatAt, k });
         } else {
           const sign = dir === 'backward' ? -1 : dir === 'axis' ? (k % 2 === 1 ? 1 : -1) : 1;
           const reach = dir === 'axis' ? Math.ceil(k / 2) * stepLen : k * stepLen;
-          px = at.x + Math.cos(facing) * reach * sign;
-          py = at.y + Math.sin(facing) * reach * sign;
+          pts.push({
+            x: from.x + Math.cos(facing) * reach * sign,
+            y: from.y + Math.sin(facing) * reach * sign, beatAt, k,
+          });
         }
+      }
+      return pts;
+    };
+    // THE NATIVE MARCH: strike-echo beats along the walk (shape-true —
+    // sigil, sector, edge band all ride).
+    const mintMarch = (from: Vec2, baseMult: number, delayBase: number): void => {
+      const spec = plan.native;
+      const scaleStep = spec?.scaleStep ?? 1;
+      const dmgStep = spec?.dmgStep ?? 0.75;
+      for (const p of walkPoints(spec, nativeCount, from)) {
         this.zones.push({
-          pos: vec(px, py), radius: radius * Math.pow(scaleStep, k),
+          pos: vec(p.x, p.y), radius: radius * Math.pow(scaleStep, p.k),
           caster, inst, color: inst.def.color,
-          delay: 0.12 + beatAt, exploded: false,
+          delay: delayBase + p.beatAt, exploded: false,
           linger: 0, linger0: 0,
           tickInterval: Infinity, tickTimer: 0,
-          shape, facing, arcRad,
-          dmgMult: useMult * Math.pow(dmgStep, k), depth: 0,
+          shape, facing, arcRad, edgeFrac,
+          dmgMult: baseMult * Math.pow(dmgStep, p.k), depth: 0,
         });
+      }
+    };
+    mintMarch(at, useMult, 0.12);
+    // THE RE-CAST LANE: each different-direction gem's points re-strike
+    // the delivery's true surface — armed pulse aboard, native march
+    // walking on — never other grafts.
+    for (const r of plan.recasts) {
+      const rDmgStep = r.dmgStep ?? 0.75;
+      const rScaleStep = r.scaleStep ?? 1;
+      for (const p of walkPoints(r, r.count, at)) {
+        const mult = useMult * Math.pow(rDmgStep, p.k);
+        const delayBase = 0.12 + p.beatAt;
+        const quakes = pulseN > 0;
+        this.zones.push({
+          pos: vec(p.x, p.y), radius: radius * Math.pow(rScaleStep, p.k),
+          caster, inst, color: inst.def.color,
+          delay: delayBase, exploded: false,
+          linger: quakes ? pulseSpan : 0, linger0: quakes ? pulseSpan : 0,
+          tickInterval: Infinity, tickTimer: quakes ? Infinity : 0,
+          shape, facing, arcRad, edgeFrac,
+          dmgMult: mult, depth: 0,
+          pulse: pulseFor(delayBase),
+        });
+        mintMarch(vec(p.x, p.y), mult, delayBase);
       }
     }
   }
@@ -41604,6 +41757,9 @@ export class World {
           if (z.pulse) z.pulse.next = this.time + z.pulse.delay;
           for (const victim of this.zoneVictims(z)) {
             if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
+            // EDGE BAND (the inheritance law): a sequel wearing the
+            // strike's edgeOnly spares the eye exactly as the strike did.
+            if (z.edgeFrac && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edgeFrac) continue;
             // The sky's wrath passes over the unroused (Zone.spareDormant).
             if (z.spareDormant && isDormant(victim)) continue;
             // — and over the ROOFED (Zone.spareRoofed): the same shelter the
@@ -41628,6 +41784,7 @@ export class World {
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: z.radius, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+            edgeFrac: z.edgeFrac,
             bolt: z.hitAll && !z.meteor, meteor: z.meteor,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
@@ -41795,6 +41952,8 @@ export class World {
               (z.seg
                 ? this.zoneHas(z, bp, br)
                 : inAoe(z.pos, pr, z.shape, z.facing, bp, br, z.arcRad))
+              // EDGE BAND (the inheritance law): the quake keeps the eye.
+              && !(z.edgeFrac && dist(z.pos, bp) + br < pr * z.edgeFrac)
               && !zoneHoleSpares(z, bp, br));
             if (!nb) continue;
             if (!this.zoneSees(z, v)) continue;
@@ -41810,10 +41969,21 @@ export class World {
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+            edgeFrac: z.edgeFrac,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
           z.pulse.dmgMult *= z.pulse.dmgStep;
           z.pulse.radiusMult *= z.pulse.radiusStep;
+          // THE QUEUE HAND-OFF (kindred rule): the native rhythm spent,
+          // appended gems' beats load in their own authored character —
+          // absolute payloads, gap-from-this-beat clocks.
+          if (z.pulse.left === 0 && z.pulse.queue?.length) {
+            const q = z.pulse.queue.shift()!;
+            z.pulse.left = 1;
+            z.pulse.next = this.time + q.delay;
+            z.pulse.dmgMult = q.dmgMult;
+            z.pulse.radiusMult = q.radiusMult;
+          }
         }
         // Revolving zones sweep their facing around (Cinderwhirl's flame
         // hand) — faced shapes only feel it; discs spin invisibly.

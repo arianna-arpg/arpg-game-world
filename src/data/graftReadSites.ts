@@ -70,8 +70,8 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   // 2026-07-21 (the aftermath minter — the cascade family beyond ground):
   // instantaneous area deliveries mint their sequels as zones off the
   // strike area, so the ground disciplines read on bursts and swings too.
-  { kind: 'graft', key: 'cascade', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instanceCascade (ground placements + the aftermath minter on bursts/swings)' },
-  { kind: 'graft', key: 'pulse', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instancePulse (ground placements + the aftermath minter on bursts/swings)' },
+  { kind: 'graft', key: 'cascade', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instanceCascadePlan (ground placements + the aftermath minter on bursts/swings; kindred gems elongate the native march, different-direction gems re-cast it)' },
+  { kind: 'graft', key: 'pulse', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instancePulsePlan (ground placements + the aftermath minter on bursts/swings; appended gems\' beats follow the native rhythm)' },
   { kind: 'graft', key: 'zoneFollow', deliveries: ['ground'], site: 'the ground placement follow mint (lingering placements only)' },
   { kind: 'graft', key: 'cadence', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'the beat mints (pulse gaps, cascade skips, emitter salvos — ground and aftermath alike)' },
   { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
