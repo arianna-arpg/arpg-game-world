@@ -413,6 +413,44 @@ const CAM = COUCH_CFG.camera;
   h2.poll(30.0);
   check('claim pin: timestamp-less fakes keep the classic first-slot roam',
     h2.sourceIndex === 0);
+
+  // THE DEAD-CLAIM GUARD — the keyboard-and-one-controller household
+  // (minPads dialed to 1 / ?couchpads=1): the hero was JUST playing on the
+  // only pad; pinning it would leave NOTHING to claim, so the pin falls to
+  // none and the sole pad itself may join (Ⓐ hands it to the guest, the
+  // hero plays on keys).
+  pads.length = 0;
+  pads[0] = { axes: [0.5, 0, 0, 0], buttons: zeros(), timestamp: 100, id: 'onlyPad' };
+  const solo = new PadState(() => TUNE);
+  solo.poll(40.0); // live on the sole pad
+  const soloSession = new CouchClaimSession(solo);
+  soloSession.arm();
+  check('dead-claim guard: the sole-pad household arms to none (never a dead claim)',
+    soloSession.armed && soloSession.heroSlot === null && solo.padPin === 'none');
+  pads[0] = { axes: [0, 0, 0, 0], buttons: aDown(), timestamp: 200, id: 'onlyPad' };
+  check('dead-claim guard: the sole pad itself claims (the hero falls to keys)',
+    soloSession.scan('a', new Set()) === 0);
+
+  // With a FREE second pad standing, the live slot pins exactly as before.
+  pads[0] = { axes: [0.5, 0, 0, 0], buttons: zeros(), timestamp: 300, id: 'onlyPad' };
+  pads[1] = { axes: [0, 0, 0, 0], buttons: zeros(), timestamp: 50, id: 'padB' };
+  const duo = new PadState(() => TUNE);
+  duo.poll(41.0);
+  const duoSession = new CouchClaimSession(duo);
+  duoSession.arm();
+  check('dead-claim guard: a free second pad keeps the classic pin',
+    duoSession.heroSlot === 0 && duo.padPin === 0);
+  duoSession.release();
+
+  // A second pad that is CLAIMED by a seat does not avert the guard.
+  pads[0] = { axes: [0.5, 0, 0, 0], buttons: zeros(), timestamp: 400, id: 'onlyPad' };
+  const trio = new PadState(() => TUNE);
+  trio.poll(42.0);
+  const trioSession = new CouchClaimSession(trio);
+  trioSession.arm(new Set([1]));
+  check('dead-claim guard: a claimed second pad does not avert it',
+    trioSession.heroSlot === null && trio.padPin === 'none');
+  trioSession.release();
   delete W.__fakePads;
 }
 

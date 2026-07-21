@@ -908,7 +908,7 @@ function openCouchJoin(): void {
   // Freeze the hero's roaming read where it stands: the claim scan and the
   // roam must never race for the joining pad's first press (the Deck bug —
   // the roam adopted the press and the scan then excluded it, forever).
-  couchClaim.arm();
+  couchClaim.arm(couchPadSet);
   ui.couchJoinOpen = true;
   // The ceremony is a menu: solo holds the world (the allowHold policy — a
   // live couch keeps running, exactly like the pause law).

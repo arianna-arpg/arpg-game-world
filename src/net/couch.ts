@@ -197,11 +197,22 @@ export class CouchClaimSession {
 
   /** Arm at overlay open: freeze the hero's read where it stands. Clock-free
    *  — "recently active" is judged on the pad's own poll clock, so harness
-   *  time and wall time can never disagree about the pin. */
-  arm(): void {
-    this.hold = this.heroPad.sourceIndex !== null && this.heroPad.activeAtLastPoll()
+   *  time and wall time can never disagree about the pin. THE DEAD-CLAIM
+   *  GUARD: the ceremony must never arm into a claim nothing can answer —
+   *  if pinning the hero's live slot would leave ZERO claimable pads (the
+   *  keyboard-and-one-controller household, minPads dialed to 1), the pin
+   *  falls to 'none' and the hero's own pad becomes the joiner: pressing Ⓐ
+   *  hands it to the guest and the hero plays on keys — exactly that
+   *  household's intended shape. */
+  arm(claimed: ReadonlySet<number> = new Set()): void {
+    let hold: number | 'none' = this.heroPad.sourceIndex !== null && this.heroPad.activeAtLastPoll()
       ? this.heroPad.sourceIndex : 'none';
-    this.heroPad.padPin = this.hold;
+    if (typeof hold === 'number') {
+      const h = hold;
+      if (!connectedPadIndices().some(i => i !== h && !claimed.has(i))) hold = 'none';
+    }
+    this.hold = hold;
+    this.heroPad.padPin = hold;
     this.scanner.reset();
   }
 

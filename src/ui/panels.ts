@@ -61,7 +61,7 @@ import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { Seat, World } from '../engine/world';
-import { COUCH_CFG } from '../data/couch';
+import { COUCH_CFG, couchMinPads } from '../data/couch';
 import { HOLD_CLASSES } from '../data/harborholds';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks } from '../meta/unlocks';
@@ -4711,11 +4711,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // the browser until its first button press (the gamepad privacy gate),
       // so the disabled row names the unlock — and the census watcher
       // (main.ts couchTick → refreshEscapeCouchRow) enables it live the
-      // moment that press lands.
+      // moment that press lands. couchMinPads() = the dial, or the
+      // ?couchpads dev lever (the KB-hero + one-pad-guest couch).
+      const needPads = couchMinPads();
       const couchRow = !couchPossible ? ''
-        : connectedPadIndices().length >= COUCH_CFG.join.minPads
+        : connectedPadIndices().length >= needPads
           ? '<button id="esc-couch">Local Co-op — Player Joins</button>'
-          : '<button id="esc-couch" disabled>Local Co-op — press any button on a 2nd controller</button>';
+          : `<button id="esc-couch" disabled>Local Co-op — press any button on ${needPads > 1 ? 'a 2nd controller' : 'a controller'}</button>`;
       const couchLeaveRow = this.onCouchLeave && couchSeated > 0
         ? '<button id="esc-couch-leave">Local Co-op — Guest Leaves</button>' : '';
       root.innerHTML = `

@@ -106,3 +106,17 @@ export const COUCH_CFG = {
     roomVeil: 'off' as 'off' | 'p1',
   },
 } as const;
+
+/** The LIVE minPads read (ui/panels.ts row gate): the shipped dial, unless
+ *  the dev/test lever `?couchpads=N` overrides it for this page load (the
+ *  `?coophuman` precedent) — `?couchpads=1` serves the KEYBOARD-HERO +
+ *  ONE-PAD-GUEST couch on a machine with a single controller, without
+ *  touching the fabric's home default. Clamped ≥1 (a zero would offer a
+ *  couch no pad could ever claim); non-browser callers (probes) get the
+ *  dial. The queued Settings surface for COUCH_CFG supersedes this someday. */
+export function couchMinPads(): number {
+  if (typeof location === 'undefined') return COUCH_CFG.join.minPads;
+  const q = new URLSearchParams(location.search).get('couchpads');
+  const n = q === null ? NaN : parseInt(q, 10);
+  return Number.isFinite(n) ? Math.max(1, n) : COUCH_CFG.join.minPads;
+}

@@ -154,6 +154,19 @@ sim baseline gate (no gated metric moved), and the live rig.
   leave play for the ceremony: `readLocalInput` nulls and `uiBlocking()`
   counts the overlay, so P1's pad drives the pointer over the veil, never a
   sword beneath it.
+- THE KEYBOARD-HERO COUCH (`couchMinPads()` + the `?couchpads=N` dev lever,
+  the `?coophuman` precedent): the row gate reads `couchMinPads()` — the
+  shipped `minPads` dial unless the query lever overrides it for the page
+  load; `?couchpads=1` serves the KB+M-hero + one-pad-guest couch on a
+  single-controller machine without touching the home default (the queued
+  Settings surface supersedes the lever someday). Beside it stands THE
+  DEAD-CLAIM GUARD in `CouchClaimSession.arm(claimed)`: the ceremony must
+  never arm into a claim nothing can answer — if pinning the hero's live
+  slot would leave ZERO claimable pads (the sole-controller household), the
+  pin falls to `'none'` and the hero's own pad becomes the joiner: Ⓐ hands
+  it to the guest and the hero plays on keys, exactly that household's
+  intended shape. WHICH pad is P1's is behavioral (recently-active at arm),
+  never positional — "the first controller connected" holds no rank.
 - MORTAL run → a fresh disposable hero (the net join's Tier-0 idiom; nothing
   persists). IMMORTAL run → another VESSEL from this account's roster —
   requires `immortalSlotsNeeded` (2) immortal slots unlocked
