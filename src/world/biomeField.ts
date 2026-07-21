@@ -23,7 +23,7 @@
 import type { ZoneDef } from '../data/zones';
 import { BIOMES, BIOME_FIELD_CFG, OCEAN_BIOME, biomeAt, biomeDepth, fieldNoise, resetFieldPickMemo, type BiomeFieldModifier } from './biomes';
 import { resetCourseMemo } from './courses';
-import { riverPathsInRect } from './relief';
+import { elevationAt, riverPathsInRect } from './relief';
 import { coordDist, type MapCoord } from './coords';
 import { NO_BIAS, type MapLayer, type SpawnBias, type WorldOverlay } from './overlay';
 import { registerZoneInfoSource } from './zoneInfo';
@@ -104,6 +104,23 @@ export class BiomeField implements WorldOverlay {
         // there is no land lattice under the ocean to peek at.
         under += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" `
           + `width="${(step + 0.6).toFixed(1)}" height="${(step + 0.6).toFixed(1)}" fill="${info.mapColor}" fill-opacity="${(info.washOpacity ?? 0.10).toFixed(2)}"/>`;
+        // HILLSHADE (the relief fabric made visible): land cells tilt light
+        // or dark by the elevation gradient — lit from the NW — plus a peak
+        // brightening, so ridge chains and river valleys read as TERRAIN
+        // whatever biome tints them. The sea keeps its flat heavy wash.
+        if (s.biome !== OCEAN_BIOME) {
+          const hs = BIOME_FIELD_CFG.hillshade;
+          const off = step * 0.3;
+          const eNW = elevationAt({ x: x + step / 2 - off, y: y + step / 2 - off }, this.seed);
+          const eSE = elevationAt({ x: x + step / 2 + off, y: y + step / 2 + off }, this.seed);
+          const v = (eNW - eSE) * hs.gain + Math.max(0, (eNW + eSE) / 2 - hs.peakFrom) * hs.peakGain;
+          if (Math.abs(v) > 0.02) {
+            const tone = v > 0 ? '#ffffff' : '#000000';
+            const op = Math.min(hs.max, Math.abs(v));
+            under += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" `
+              + `width="${(step + 0.6).toFixed(1)}" height="${(step + 0.6).toFixed(1)}" fill="${tone}" fill-opacity="${op.toFixed(2)}"/>`;
+          }
+        }
         // WARPED land pulses: a live event is turning this ground's LOOK
         // (Mycelia, an incursion's blight). The breathing outline ATTRIBUTES
         // the change — the heat map never silently recolors.

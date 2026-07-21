@@ -738,6 +738,17 @@ export interface ZoneDef {
    *  cellar's roaches — texture the zone asked for by name), so the validator
    *  requires safe-zone rows to be 'critter'-tagged. Absent = the biome list. */
   fauna?: WildlifeRow[];
+  /** THE COHORT LAW — 'authored': this zone's entity MEMBERSHIP is closed.
+   *  Its authored packs (+ authored fauna, if any) are the whole cohort:
+   *  the ambient injection lanes skip it — no faction-contest rosters, no
+   *  invasion-host contingents, no conquest/crusade table swaps, no biome
+   *  wildlife fallback. Native reweighs still breathe (day/night and
+   *  weather scale WHAT IS AUTHORED — counts and weights, never members),
+   *  and world EVENTS remain sovereign (announced, optional, and governed
+   *  by their own seat/policy lanes — the transience doctrine). The lever
+   *  for curated ground: the gentle first hub, quest-staged cohorts, any
+   *  zone whose population is a design statement rather than an ecology. */
+  cohort?: 'authored';
   exits: ZoneExitDef[];
   /** Layout position on the world map panel (M). */
   map: { x: number; y: number };
@@ -1177,6 +1188,12 @@ export const ZONES: Record<string, ZoneDef> = {
         { id: 'skeleton_warrior', weight: 2 },
       ],
     },
+    // THE COHORT LAW: the first real zone is a CURATED fight — whatever
+    // factions come to hold the surrounding country (their influence
+    // diffuses down the roads and once staged full contest rosters here),
+    // the hub fields exactly its authored dead and nothing else. The world
+    // politics stay visible on the map; the tutorial ground stays a tutorial.
+    cohort: 'authored',
     exits: [
       // FOUR ways and no more: home behind you, three uncharted roads ahead.
       // randomizeStarterWeb re-deals these sides each run (the back-edge takes

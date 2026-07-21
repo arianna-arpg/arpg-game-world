@@ -41,13 +41,15 @@ import { registerDimensionCourse } from './dimensions';
 export const RELIEF_CFG = {
   /** The springs deal (mirrored into SURFACE_RIVERS.strew): lattice span,
    *  presence chance per cell, and the elevation a spring needs to flow —
-   *  a spring dealt onto low ground stays dormant (an empty polyline). */
-  springs: { span: 2600, chance: 0.6, minElevation: 0.66 },
+   *  a spring dealt onto low ground stays dormant (an empty polyline).
+   *  Tuned so an early map window (the visited envelope, ±~600 units) has a
+   *  real chance of meeting a river without every screen carrying one. */
+  springs: { span: 2200, chance: 0.6, minElevation: 0.58 },
   /** The downhill trace: sample stride, step count bound (step × maxSteps =
    *  the reach bound SURFACE_RIVERS.length must cover), probe bearings per
    *  step, momentum blend (0 = pure steepest-descent, 1 = never turns), and
    *  the rise tolerance that ends a run in a basin (the lake law). */
-  trace: { step: 100, maxSteps: 40, probes: 9, momentum: 0.45, riseEps: 0.004 },
+  trace: { step: 100, maxSteps: 55, probes: 9, momentum: 0.45, riseEps: 0.004 },
   /** The river corridor: mint-hint half-width and centerline hug. */
   river: { halfWidth: 58, hug: 46 },
 } as const;

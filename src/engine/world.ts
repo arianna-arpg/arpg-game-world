@@ -8782,6 +8782,9 @@ export class World {
     // WAVES arenas are sealed stages too: nothing wanders into The Pit —
     // no grazing hares, no passing hunters, only what the wave brings.
     if (!authored && (def.objective.kind === 'safe' || def.objective.kind === 'waves' || def.special)) return;
+    // THE COHORT LAW: a closed-membership zone hosts no biome fallback fauna
+    // — its authored rows (if any) are the whole ambient cohort too.
+    if (!authored && def.cohort === 'authored') return;
     const table = authored ?? WILDLIFE[def.biome ?? 'plains'];
     if (!table?.length) return;
     // TOWN PRESSURE (the Verminfall's threat-as-texture): while warrens fester
@@ -9508,13 +9511,21 @@ export class World {
     // result — if the deny would empty the roster, fall back to the resolved table.
     const allowed = r.table.filter(e => factionAllowed(MONSTERS[e.id]?.faction ?? '', zone));
     const table = allowed.length ? allowed : r.table;
-    return { table, countMul: clamp(r.countMul, 0.5, 2.5), inject: r.injectFactions };
+    // THE COHORT LAW (ZoneDef.cohort 'authored'): membership is closed —
+    // injected contest/invasion rosters never stage here. The reweighs above
+    // (day/night, weather, territory tilts on the AUTHORED members) stand.
+    const inject = zone.cohort === 'authored' ? [] : r.injectFactions;
+    return { table, countMul: clamp(r.countMul, 0.5, 2.5), inject };
   }
 
   /** The roster a zone spawns from: a conqueror's host if the zone has fallen
    *  to an invasion, otherwise its own authored pack table. This is what makes
    *  a converted zone re-open full of its new ruler's monsters. */
   private baseTable(def: ZoneDef): PackTableEntry[] {
+    // THE COHORT LAW: a closed-membership zone NEVER swaps its table — not
+    // for a conqueror, a crusade's grip, or a hell lord's heartland. The
+    // authored cohort is the population, whoever's banner flies on the map.
+    if (def.cohort === 'authored') return def.packs?.table ?? [];
     // A Crusade that's TIGHTENED its grip (entrenched / converted) floods the zone
     // with its own faction, the rivals gone — the population IS the crusade's.
     const cru = this.sim.crusadeField?.crusadeOn(def.id);

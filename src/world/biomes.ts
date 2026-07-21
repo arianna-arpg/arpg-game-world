@@ -457,11 +457,14 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // belongs to the butte country below.)
   highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Mountains', spacing: 88,
     meld: 'mountain_meld',
-    // ELEVATION-claimed (the relief fabric): the ranges now stand where the
-    // land actually RISES — ridge spines on the elevation axis — instead of
-    // anywhere cold-and-dry rolled. Wide fade so foothill country still
-    // seeds on the shoulders.
-    climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry',
+    // ELEVATION-claimed (the relief fabric): the ranges stand where the land
+    // actually RISES — ridge spines on the elevation axis — instead of
+    // anywhere cold-and-dry rolled. The old moisture 'dry' gate is DROPPED:
+    // it cut range chains into fragments wherever a ridge crossed the damp
+    // belts (the scattered-patches read). Elevation is the claim now; the
+    // cool-half temperature taste keeps the warm dry tables for the
+    // Highlands (butteland). Wide fade so foothills seed on the shoulders.
+    climate: { temperature: { to: 0.55, fadeOut: 0.2 },
       elevation: { from: 0.6, fadeIn: 0.15 } },
     // rooms = the mountain-pass maze; labyrinth = the stone warren the old
     // folk cut (a full-zone maze, braided so it fights instead of frustrates).
@@ -983,6 +986,12 @@ registerFieldBand({
  *  instead of shallow isles/coast (the user's "deep into the biome → deep sea"). */
 export const BIOME_FIELD_CFG = {
   cellSpan: 260, jitter: 0.45, renderCell: 52, deepThreshold: 0.5,
+  /** HILLSHADE on the map wash (the relief fabric made visible): each land
+   *  cell tilts light/dark by the elevation gradient (lit from the NW) plus
+   *  a peak brightening above `peakFrom` — ridge chains and river valleys
+   *  read as TERRAIN on the map whatever biome sits on them. `max` caps the
+   *  overlay's opacity so the biome tint stays legible under the shading. */
+  hillshade: { gain: 1.7, peakFrom: 0.62, peakGain: 0.5, max: 0.26 },
   /** Strength lost per second by a RELEASED warp (BiomeField.release) — the
    *  "volcano cooling off" dial: an ended event's wash heals gradually over
    *  ~strength/rate seconds instead of snapping, and a re-push mid-fade

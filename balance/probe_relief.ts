@@ -124,10 +124,14 @@ const RECT = { min: { x: -4200, y: -4200 }, max: { x: 4200, y: 4200 } };
       const opp: Record<string, string> = { n: 's', s: 'n', e: 'w', w: 'e' };
       if (h && h.spec.forceLayout === 'riverland' && sides && opp[sides[0]] === sides[1]
         && h.continueSides.length >= 1 && h.hug === SURFACE_RIVERS.hug) sound++;
-      // Ground far off the corridor must serve nothing.
+      // Ground PROVABLY clear of every river (not just this one — a denser
+      // deal can put a sibling's corridor anywhere) must serve nothing
+      // against THIS instance.
       const off = { x: mid.x + 500, y: mid.y + 500 };
-      const hOff = courseMintHints([SURFACE_RIVERS], inst.anchor, off, inst.iseed);
-      if (hOff && hOff.hug > 0 && Math.hypot(500, 500) > SURFACE_RIVERS.halfWidth * 2) offClean = false;
+      const clearOfAll = riverPathsInRect(
+        { x: off.x - 5000, y: off.y - 5000 }, { x: off.x + 5000, y: off.y + 5000 }, seed,
+      ).every(p => p.every(v => Math.hypot(v.x - off.x, v.y - off.y) > SURFACE_RIVERS.halfWidth * 2));
+      if (clearOfAll && courseMintHints([SURFACE_RIVERS], inst.anchor, off, inst.iseed)) offClean = false;
       if (sampled >= 24) break;
     }
     if (sampled >= 24) break;
