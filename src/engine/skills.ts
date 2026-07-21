@@ -2754,7 +2754,7 @@ export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] 
     if (g) {
       return inst.def.cooldown > 0
         ? { max: g.rounds, magazine: true }
-        : { max: g.rounds, recharge: g.recharge };
+        : { max: g.rounds, recharge: g.recharge, empower: g.empower };
     }
   }
   return undefined;
@@ -3587,6 +3587,15 @@ export interface SkillDef {
     recharge?: number;
     stepsFromBank?: boolean;
     magazine?: { refill?: number } | true;
+    /** THE EMPOWER BANK (the hybrid family, 2026-07-21): rounds are
+     *  OPTIONAL FUEL, never ammunition — a press with a round in the pot
+     *  DRINKS it for ×(1+empower) MORE on that use; a dry press casts
+     *  plain (canUse never refuses, the 'chargesEmpty' convert face never
+     *  presents). The spammable keeps its whole cadence and gains a
+     *  watchable beat — the pseudo-cooldown that rewards patience without
+     *  demanding it. Pairs naturally with `recharge`; authorable natively
+     *  here or granted by a gem (useChargeGraft on a cooldown-less host). */
+    empower?: number;
   };
   /** Combo resource consumption: requires and spends charges on use.
    *  'all' consumes everything (min `minimum`); damagePerCharge is a
@@ -4021,12 +4030,15 @@ export interface SupportDef {
    *   · cooldown > 0  → a MAGAZINE on that cooldown (rounds spend freely,
    *     the last press stamps the skill's cooldown as the reload; the
    *     cooldownRecovery/alacrity axis invests in it),
-   *   · cooldown 0    → the RECHARGE trickle at `recharge` seconds/round
-   *     (÷ skillChargeRate) — burst-then-trickle, never manual-dry.
+   *   · cooldown 0    → an EMPOWER bank on the `recharge` trickle
+   *     (÷ skillChargeRate): rounds are OPTIONAL fuel — a charged press
+   *     drinks one for ×(1+empower) MORE, a dry press casts plain. The
+   *     spam skill keeps its whole cadence and gains a watchable beat —
+   *     never a conversion, never a gate.
    *  Native banks and munition conversions win (one economy per slot,
    *  instanceUseCharges' first-wins order); the gem's ordinary mods
    *  (skillCharges / skillChargeRate) then deepen WHATEVER bank stands. */
-  useChargeGraft?: { rounds: number; recharge: number };
+  useChargeGraft?: { rounds: number; recharge: number; empower: number };
   /** A DEVOUR graft (Ravenous Pact): minions of the host skill EAT the
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
@@ -4511,9 +4523,6 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   'trigger', 'triggerPermit', 'overcharge', 'meta', 'strikeTiming',
   'curseOnHit', 'curseField', 'auraDuration', 'reserveLife',
   'gate', 'chargeCost',
-  // A GRANTED use-charge bank is a press economy (dry-press refusal would
-  // BRICK an autonomous caster — the chargeCost doctrine, capacity form).
-  'useChargeGraft',
   // The granted shed is the KEEPER's orb economy (rollKillOrbs reads the
   // slaying hero's sockets) — a forwarded copy would open an un-normalized
   // minion orb fountain; the court-carry question is a deliberate later
@@ -4575,6 +4584,11 @@ const MINION_RIDABLE_FIELD_LIST = [
   // stance-holder is casting — a forwarded shieldbearer's wall answers on
   // release exactly like the keeper's (same resolver, same stat levers).
   'guardBash',
+  // A GRANTED bank RIDES (2026-07-21 R4): the empower shape never refuses
+  // a press (dry casts plain — no brick), and the magazine shape reloads
+  // through the skill's own cooldown, which minion AI paces natively. A
+  // forwarded court drinks its own trickle — empowered beats aboard.
+  'useChargeGraft',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every
@@ -4665,6 +4679,16 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance) => boolean
     inst.def.cooldown > 0
     || hostSockets(inst).some(s =>
       [...s.def.mods, ...(s.def.perLevel ?? [])].some(m => m.stat === 'addedCooldown' && m.value > 0)),
+  /** A STANDING ENGAGEMENT: the host holds a presence — an aura's toggle
+   *  burns, a summon's contract stands, a guard stance is held. The gate
+   *  for gems whose worth is WORN rather than cast (the equip-global
+   *  defensive lane's premier hosts): supports stay modifiers, never pure
+   *  stat sticks on any throwaway bar slot. */
+  engagement: inst =>
+    inst.def.delivery.type === 'aura'
+    || inst.def.delivery.type === 'summon'
+    || inst.def.castMode === 'guard'
+    || inst.def.tags.includes('minion'),
 };
 
 /**

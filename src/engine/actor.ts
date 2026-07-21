@@ -3069,7 +3069,12 @@ export class Actor {
     // USE-CHARGES: an empty bank is the dry spell (recovery ticks it back) —
     // graft-aware, so a chambered cast runs dry exactly like a native gun
     // (the PRESS still converts to the reload upstream of this refusal).
-    if (instanceUseCharges(inst) && this.skillChargeBank(inst).count <= 0) return false;
+    // EMPOWER banks are exempt BY LAW: rounds are optional fuel, and a dry
+    // press casts plain (the hybrid family never gates).
+    {
+      const uc = instanceUseCharges(inst);
+      if (uc && uc.empower === undefined && this.skillChargeBank(inst).count <= 0) return false;
+    }
     // INVOCATION: nothing woven, nothing to release.
     if (inst.def.invokes && this.runes.length === 0) return false;
     const cost = this.skillCost(inst);

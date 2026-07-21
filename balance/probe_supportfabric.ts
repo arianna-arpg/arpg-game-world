@@ -29,7 +29,8 @@ import {
   STANCE_PLANT_TIME, type Actor,
 } from '../src/engine/actor';
 import {
-  makeSkillInstance, supportFitsInst, supportGlobalMods, hostSockets,
+  instanceUseCharges, makeSkillInstance, supportFitsInst, supportGlobalMods,
+  hostSockets,
 } from '../src/engine/skills';
 
 let failed = 0;
@@ -59,6 +60,19 @@ bootSimEngine();
   const cdSkill = Object.values(SKILLS).find(s => s.cooldown > 0)!;
   check('A4 an innate cooldown host always fits',
     supportFitsInst(alacrity, makeSkillInstance(cdSkill, 1, 3)), cdSkill.id);
+
+  // The user's universal example, pinned: Cleave refuses Shatterrite bare
+  // (no totem anywhere), and Spirit Totem's grantsTags opens the door —
+  // the SAME composition law, tag form (mechanism form is A1–A3).
+  const cleave = SKILLS.cleave;
+  const shatterrite = SUPPORTS.shatterrite;
+  const totemGem = SUPPORTS.spirit_totem;
+  const cInst = makeSkillInstance(cleave, 1, 3);
+  check('A5 cleave refuses shatterrite bare (no totem mechanism anywhere)',
+    !supportFitsInst(shatterrite, cInst));
+  cInst.sockets[0] = { def: totemGem, level: 1 };
+  check('A6 Spirit Totem beside it grants \'totem\' and shatterrite fits — the composition law, tag form',
+    supportFitsInst(shatterrite, cInst));
 }
 
 // === RIG B — the equip-global fold =========================================
@@ -81,6 +95,17 @@ bootSimEngine();
   check('B3 supportGlobalMods filters to the global lane only',
     supportGlobalMods({ def: SUPPORTS.warding_flesh, level: 1 }).length === 2
     && supportGlobalMods({ def: SUPPORTS.monolith, level: 1 }).length === 0);
+  // THE ENGAGEMENT GATE: the worn gem demands a STANDING host — a plain
+  // strike refuses it, an aura/summon admits it (the lever is the
+  // 'engagement' mechanism on the gem, droppable as data).
+  const plainStrike = SKILLS.cleave;
+  const standingHost = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'aura' || s.delivery.type === 'summon')!;
+  check('B4 warding_flesh refuses a plain strike (the engagement gate)',
+    !supportFitsInst(SUPPORTS.warding_flesh, makeSkillInstance(plainStrike, 1, 3)));
+  check('B5 warding_flesh fits a standing working (aura/summon)',
+    supportFitsInst(SUPPORTS.warding_flesh, makeSkillInstance(standingHost, 1, 3)),
+    standingHost.id);
 }
 
 // === RIG C — the plant commitment ==========================================
@@ -166,6 +191,41 @@ bootSimEngine();
     Math.abs(globalRate - 1) < 1e-9, `global ${globalRate}`);
   check('E3 no innate shed on the bare hero (the floor is the only lane standing)',
     hero.sheet.get('orbOnKill_life') === 0 && hero.sheet.get('orbOnKill_mana') === 0);
+}
+
+// === RIG F — the empower bank (the hybrid family) ==========================
+
+{
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const host = hero.skills.find(s => s !== null && s.def.cooldown === 0)!;
+  host.sockets[0] = { def: SUPPORTS.deep_reserves, level: 1 };
+  const uc = instanceUseCharges(host);
+  check('F1 a cooldown-less host with Deep Reserves wears an EMPOWER bank (fuel, not ammunition)',
+    !!uc && uc.empower === 0.2 && uc.recharge === 4 && uc.magazine === undefined,
+    JSON.stringify(uc));
+  const bank = hero.skillChargeBank(host);
+  bank.count = 0;
+  check('F2 a DRY empower bank never refuses the press (canUse stands open)',
+    hero.canUse(host));
+  bank.count = 1;
+  const target = world.createMonster('target_dummy', 7, 'enemy');
+  target.pos = { x: hero.pos.x + 40, y: hero.pos.y };
+  world.actors.push(target);
+  const okCharged = world.useSkill(hero, host, target.pos);
+  check('F3 a charged press CASTS and DRINKS the round (the beat rewarded)',
+    okCharged && hero.skillChargeBank(host).count === 0,
+    `cast ${okCharged}, bank ${hero.skillChargeBank(host).count}`);
+  hero.casting = null; hero.useLock = 0; hero.cooldowns.clear();
+  const okDry = world.useSkill(hero, host, target.pos);
+  check('F4 the NEXT press casts plain off the empty pot (cadence untouched — no gate, no conversion)',
+    okDry && hero.skillChargeBank(host).count === 0, `cast ${okDry}`);
+  const cdHost = Object.values(SKILLS).find(s => s.cooldown > 0 && (s.tags.includes('attack') || s.tags.includes('spell')))!;
+  const cdInst = makeSkillInstance(cdHost, 1, 3);
+  cdInst.sockets[0] = { def: SUPPORTS.deep_reserves, level: 1 };
+  const cdUc = instanceUseCharges(cdInst);
+  check('F5 a cooldown host keeps the MAGAZINE shape (empower is the free skill\'s lane)',
+    !!cdUc && cdUc.magazine === true && cdUc.empower === undefined, JSON.stringify(cdUc));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

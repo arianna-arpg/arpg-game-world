@@ -353,7 +353,7 @@ export const SKILLS: Record<string, SkillDef> = {
   heat_split: {
     id: 'heat_split', name: 'Heat Split',
     description: 'Step SIDEWAYS through the shimmer and leave a double of hot air standing in the argument — it holds a blade, for a while.',
-    tags: ['spell', 'summon', 'fire'], color: '#f0d8b0',
+    tags: ['spell', 'summon', 'fire', 'minion'], color: '#f0d8b0',
     manaCost: 14, cooldown: 9, useTime: 0.4,
     delivery: { type: 'summon', monsterId: 'heat_double', count: 1, maxActive: 2, duration: 12 },
     effects: [],
@@ -2806,7 +2806,7 @@ export const SKILLS: Record<string, SkillDef> = {
   frost_trap: {
     id: 'frost_trap', name: 'Frost Trap',
     description: 'Conceal a trap at the target spot. When an enemy steps close, it erupts in a Frost Nova.',
-    tags: ['spell', 'trap', 'cold', 'aoe', 'duration'], color: '#9ad4e8',
+    tags: ['spell', 'trap', 'cold', 'aoe', 'duration', 'totem'], color: '#9ad4e8',
     manaCost: 10, cooldown: 2.5, useTime: 0.6,
     delivery: {
       type: 'construct', kind: 'trap', castSkillId: 'frost_nova',
@@ -2821,7 +2821,7 @@ export const SKILLS: Record<string, SkillDef> = {
   fire_mine: {
     id: 'fire_mine', name: 'Fire Mine',
     description: 'Lay a dormant mine at the target spot. It waits — SHIFT-press the slot to detonate the field (or bind Detonate Mines itself for the dedicated finger).',
-    tags: ['spell', 'mine', 'fire', 'aoe', 'duration'], color: '#e8624a',
+    tags: ['spell', 'mine', 'fire', 'aoe', 'duration', 'totem'], color: '#e8624a',
     manaCost: 8, cooldown: 0.8, useTime: 0.5,
     delivery: {
       type: 'construct', kind: 'mine', castSkillId: 'immolation_blast',
@@ -3232,7 +3232,7 @@ export const SKILLS: Record<string, SkillDef> = {
   lodestone: {
     id: 'lodestone', name: 'Lodestone',
     description: 'Plant a humming stone that WANTS to be hit: every eye nearby prefers it to any living thing (the decoy pull). It is REAL — wound it and it hums on; break it and the spell is spent. The pack-splitter, the trap-baiter, the seam-defender\'s second body.',
-    tags: ['spell', 'construct', 'duration'], color: '#a5e3b4',
+    tags: ['spell', 'construct', 'duration', 'totem'], color: '#a5e3b4',
     manaCost: 26, cooldown: 11, useTime: 0.5,
     delivery: {
       type: 'construct', kind: 'totem', taunt: true, aims: false,
@@ -3522,7 +3522,7 @@ export const SKILLS: Record<string, SkillDef> = {
   bone_prison: {
     id: 'bone_prison', name: 'Bone Prison',
     description: 'Erupt a ring of bone walls at the target point — what is inside stays inside until the bone breaks. Martyrdom and Unstable Flesh make the bars themselves explosive.',
-    tags: ['spell', 'summon', 'minion', 'physical', 'duration'], color: '#d8d0b8',
+    tags: ['spell', 'summon', 'minion', 'physical', 'duration', 'totem'], color: '#d8d0b8',
     manaCost: 22, cooldown: 8, useTime: 0.8,
     // The wall never strikes ON CAST (nothing resolves hits at plant time) —
     // this roll + damage effect exist for CONSTRUCT-FX readers: Pulsing
@@ -3544,7 +3544,7 @@ export const SKILLS: Record<string, SkillDef> = {
   bone_cage: {
     id: 'bone_cage', name: 'Bone Cage',
     description: 'Slam a tight cage of bone shut around a single enemy. Smaller, meaner, personal.',
-    tags: ['spell', 'summon', 'minion', 'physical', 'duration'], color: '#c8bca0',
+    tags: ['spell', 'summon', 'minion', 'physical', 'duration', 'totem'], color: '#c8bca0',
     manaCost: 16, cooldown: 6, useTime: 0.6,
     targeting: { target: 'enemy', castRange: 320 },
     // Construct-fx fodder like bone_prison (roll + damage effect for the
@@ -3606,7 +3606,7 @@ export const SKILLS: Record<string, SkillDef> = {
   stone_rampart: {
     id: 'stone_rampart', name: 'Stone Rampart',
     description: 'Raise a wall of three stone segments across your facing. Enemies must shoot it, hack through it, or go around.',
-    tags: ['spell', 'guard', 'duration'], color: '#a8a090',
+    tags: ['spell', 'guard', 'duration', 'totem'], color: '#a8a090',
     manaCost: 18, cooldown: 8, useTime: 0.6,
     // Construct-fx fodder (see bone_prison — roll + damage effect for the
     // grafted hit pipeline): stone hits harder per segment, but only three.
@@ -3625,7 +3625,7 @@ export const SKILLS: Record<string, SkillDef> = {
   sanctuary: {
     id: 'sanctuary', name: 'Sanctuary',
     description: 'Conjure a dome of protection: enemy projectiles crossing it dissolve into nothing. Stand inside and let them waste their quivers.',
-    tags: ['spell', 'guard', 'aoe', 'duration'], color: '#9ad8c8',
+    tags: ['spell', 'guard', 'aoe', 'duration', 'totem'], color: '#9ad8c8',
     manaCost: 26, cooldown: 14, useTime: 0.7,
     delivery: {
       type: 'construct', kind: 'dome',
@@ -4588,7 +4588,7 @@ export const SKILLS: Record<string, SkillDef> = {
   gather_cinderkin: {
     id: 'gather_cinderkin', name: 'Stoke the Cinderkin',
     description: 'The fight itself STOKES them: kills may kindle a cinderkin husk at the corpse, and BLOWS TRADED — yours and your court\'s — heat a gauge that coughs up embers even from bosses who bring no court of their own. Walk through a kindled husk to claim it; they LATCH to what they reach and bite while it carries them. HOLD to sweep the horde at the cursor.',
-    tags: ['spell', 'minion', 'summon', 'fire'], color: '#e08848',
+    tags: ['spell', 'minion', 'summon', 'fire', 'channel'], color: '#e08848',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
     channel: { interval: 0.25, move: 'slowed', moveFactor: 0.8 },
@@ -4609,7 +4609,7 @@ export const SKILLS: Record<string, SkillDef> = {
   beckon_palewisps: {
     id: 'beckon_palewisps', name: 'Gather the Palewisps',
     description: 'ATTUNE to the quiet dead: their haunts glimmer for your eye alone, and walking among them makes them YOURS — a finite gathering the world does not regrow. They keep their distance and their zaps PHASE through stone. HOLD to sweep the host at the cursor; release, and they linger on the task, then heel.',
-    tags: ['spell', 'minion', 'summon', 'cold'], color: '#b8d8e8',
+    tags: ['spell', 'minion', 'summon', 'cold', 'channel'], color: '#b8d8e8',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
     channel: { interval: 0.25, move: 'slowed', moveFactor: 0.8 },
@@ -4627,7 +4627,7 @@ export const SKILLS: Record<string, SkillDef> = {
   raise_gnatveil: {
     id: 'raise_gnatveil', name: 'Raise the Gnatveil',
     description: 'Gnats condense out of the air on their own clock — sometimes at your heels, sometimes a walk away — and evaporate if left unclaimed. Each is nearly nothing; the CLOUD is the weapon: riders stack HARRIED on whatever carries them, spoiling aim and attention. HOLD to sweep the veil at the cursor.',
-    tags: ['spell', 'minion', 'summon', 'physical'], color: '#a8b860',
+    tags: ['spell', 'minion', 'summon', 'physical', 'channel'], color: '#a8b860',
     manaCost: 1, cooldown: 0, useTime: 0,
     castMode: 'channel',
     channel: { interval: 0.25, move: 'slowed', moveFactor: 0.85 },
@@ -4655,7 +4655,7 @@ export const SKILLS: Record<string, SkillDef> = {
   loose_marrowgrubs: {
     id: 'loose_marrowgrubs', name: 'Loose the Marrowgrubs',
     description: 'Corpses give up their grubs, and blows traded — yours and your court\'s — fatten a gauge that births more; walk through one to take it in. What they catch they BURROW INTO: inside the body its own blows cannot find them, and it must SHAKE them loose — scattered, briefly bare — before they wriggle back to the flesh. While they ride they CHEW, a steady gnaw that never misses. HOLD to sweep the brood at the cursor.',
-    tags: ['spell', 'minion', 'summon', 'physical'], color: '#d8c8a8',
+    tags: ['spell', 'minion', 'summon', 'physical', 'channel'], color: '#d8c8a8',
     manaCost: 2, cooldown: 0, useTime: 0,
     castMode: 'channel',
     channel: { interval: 0.25, move: 'slowed', moveFactor: 0.8 },
@@ -5920,7 +5920,7 @@ export const SKILLS: Record<string, SkillDef> = {
   lay_brood_egg: {
     id: 'lay_brood_egg', name: 'Lay Brood Egg',
     description: 'Deposit a swollen egg sac. Seven seconds later it SPLITS and the brood boils out — unless someone stamps it first.',
-    tags: ['spell', 'summon', 'minion', 'duration'], color: '#c8c0a0',
+    tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#c8c0a0',
     manaCost: 14, cooldown: 9, useTime: 0.8,
     delivery: {
       type: 'construct', kind: 'pod', look: 'brood_egg',
@@ -5942,7 +5942,7 @@ export const SKILLS: Record<string, SkillDef> = {
   lay_chitin_clutch: {
     id: 'lay_chitin_clutch', name: 'Lay Chitin Clutch',
     description: 'Seal a clutch of eggs in resin. Left alone it SPLITS and the seethe boils out — unless someone stamps it first.',
-    tags: ['spell', 'summon', 'minion', 'duration'], color: '#d8b06a',
+    tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#d8b06a',
     manaCost: 14, cooldown: 9, useTime: 0.8,
     delivery: {
       type: 'construct', kind: 'pod', look: 'chitin_clutch',
@@ -6045,7 +6045,7 @@ export const SKILLS: Record<string, SkillDef> = {
   lay_grub_clutch: {
     id: 'lay_grub_clutch', name: 'Lay Grub Clutch',
     description: 'Bury a clutch of pale eggs. Left alone they HATCH a wave of maggots; broken, they are only a smear.',
-    tags: ['spell', 'summon', 'minion', 'duration'], color: '#d0c8a8',
+    tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#d0c8a8',
     manaCost: 14, cooldown: 10, useTime: 0.9,
     delivery: {
       type: 'construct', kind: 'pod', look: 'grub_egg',
@@ -6357,7 +6357,7 @@ export const SKILLS: Record<string, SkillDef> = {
   mirage_archer: {
     id: 'mirage_archer', name: 'Mirage Archer',
     description: 'Conjure a mirage of yourself that hovers at your shoulder, loosing spectral arrows at nearby foes on its own clock. It is a ghost: untouchable, tireless, and thinner than you.',
-    tags: ['attack', 'projectile', 'mirage', 'duration'], color: '#8fd4c8',
+    tags: ['attack', 'projectile', 'mirage', 'duration', 'totem'], color: '#8fd4c8',
     manaCost: 22, cooldown: 5, useTime: 0.5,
     delivery: {
       type: 'construct', kind: 'echo', castSkillId: 'mirage_shot',
@@ -6393,7 +6393,7 @@ export const SKILLS: Record<string, SkillDef> = {
   shadow_clone: {
     id: 'shadow_clone', name: 'Shadow Clone',
     description: 'Substitution: step back in smoke, leaving a shadow of yourself standing your ground. For its brief life it MIRRORS your strikes from where it stands, at a fraction of your power, on a throttled beat — two ninjas, one kill. It can be cut down.',
-    tags: ['spell', 'clone', 'duration'], color: '#6f5f9e',
+    tags: ['spell', 'clone', 'duration', 'totem'], color: '#6f5f9e',
     manaCost: 32, cooldown: 10, useTime: 0.4,
     delivery: {
       type: 'construct', kind: 'echo', range: 0, duration: 8, maxActive: 1,
@@ -7721,7 +7721,7 @@ export const SKILLS: Record<string, SkillDef> = {
   lay_formic_clutch: {
     id: 'lay_formic_clutch', name: 'Lay Formic Clutch',
     description: 'Set a clutch of worked-earth eggs. Left alone they HATCH the next shift; broken, they are only loam.',
-    tags: ['spell', 'summon', 'minion', 'duration'], color: '#b09060',
+    tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#b09060',
     manaCost: 16, cooldown: 11, useTime: 0.9,
     delivery: {
       type: 'construct', kind: 'pod', look: 'grub_egg',
@@ -9840,7 +9840,7 @@ export const SKILLS: Record<string, SkillDef> = {
   cinderwhirl_trap: {
     id: 'cinderwhirl_trap', name: 'Cinderwhirl Trap',
     description: 'Lay a trap that, sprung, spins up a REVOLVING tongue of flame — a burning clock-hand sweeping the ground around it, over and over, until the fire dies.',
-    tags: ['spell', 'fire', 'trap', 'aoe', 'duration'], color: '#ff8a3a',
+    tags: ['spell', 'fire', 'trap', 'aoe', 'duration', 'totem'], color: '#ff8a3a',
     manaCost: 10, cooldown: 3, useTime: 0.45,
     baseDamage: { fire: [8, 13] },
     delivery: {
@@ -9895,7 +9895,7 @@ export const SKILLS: Record<string, SkillDef> = {
   aftershock_snare: {
     id: 'aftershock_snare', name: 'Aftershock Snare',
     description: 'A trap whose spring is only the FIRST word: the blast scatters into aftershocks rippling out around the victim — the packaged Aftershocks support, buried under a tripplate.',
-    tags: ['spell', 'physical', 'trap', 'aoe'], color: '#c8a878',
+    tags: ['spell', 'physical', 'trap', 'aoe', 'totem'], color: '#c8a878',
     manaCost: 9, cooldown: 2.5, useTime: 0.45,
     baseDamage: { physical: [10, 16] },
     delivery: {
@@ -10252,7 +10252,7 @@ export const SKILLS: Record<string, SkillDef> = {
       + ' abandoned husk suffers enough to call you home. The husk stands'
       + ' entranced and mortal the whole while: what you risk was never the'
       + ' borrowed body. Press again to relinquish.',
-    tags: ['spell', 'possession'], color: '#b8a8e8',
+    tags: ['spell', 'possession', 'melee'], color: '#b8a8e8',
     manaCost: 30, cooldown: 10, useTime: 0.7,
     delivery: { type: 'melee', range: 78, arcDeg: 40 },
     effects: [{ type: 'possess' }],
@@ -11850,7 +11850,7 @@ export const SKILLS: Record<string, SkillDef> = {
   broodpod: {
     id: 'broodpod', name: 'Broodpod',
     description: 'Plant a gravid POD and hold the line while it swells: five seconds of incubation, then it HATCHES a brood of skittering hunters at the spot. Broken early, it dies quietly — the defense is the price of the birth.',
-    tags: ['spell', 'summon', 'minion', 'duration'], color: '#a8c860',
+    tags: ['spell', 'summon', 'minion', 'duration', 'totem'], color: '#a8c860',
     manaCost: 16, cooldown: 6, useTime: 0.6,
     delivery: {
       type: 'construct', kind: 'pod',
@@ -11878,7 +11878,7 @@ export const SKILLS: Record<string, SkillDef> = {
   nitrocask: {
     id: 'nitrocask', name: 'Nitrocask',
     description: 'Set down a cask of blasting powder on a SHORT fuse. It goes up when the fuse does — or the moment anything BREAKS it, yours included. Place it, bait them onto it, or shoot it yourself: powder honors no plan.',
-    tags: ['spell', 'fire', 'aoe', 'duration'], color: '#e07838',
+    tags: ['spell', 'fire', 'aoe', 'duration', 'totem'], color: '#e07838',
     manaCost: 10, cooldown: 3, useTime: 0.45,
     delivery: {
       type: 'construct', kind: 'pod', look: 'construct_cask',
@@ -12379,7 +12379,7 @@ export const SKILLS: Record<string, SkillDef> = {
   starcall: {
     id: 'starcall', name: 'Starcall',
     description: 'Ask the night for one of its own: a long breath later a star arrives where you pointed, and the ground remembers it. The Vesperlands\' keepers call them down like punctuation.',
-    tags: ['spell', 'fire', 'physical', 'aoe'], color: '#ffd9a0',
+    tags: ['spell', 'fire', 'physical', 'aoe', 'duration'], color: '#ffd9a0',
     manaCost: 24, cooldown: 5, useTime: 0.7,
     baseDamage: { fire: [9, 14], physical: [7, 12] },
     delivery: {
@@ -12629,7 +12629,7 @@ export const SKILLS: Record<string, SkillDef> = {
   updraft_burst: {
     id: 'updraft_burst', name: 'Updraft Burst',
     description: 'Name a patch of sky-floor and the high air REMEMBERS the geyser: a heartbeat later a column of rising vapor detonates there, hurling bodies aside and stealing the wind from their knees.',
-    tags: ['spell', 'cold', 'physical', 'aoe'], color: '#cfe8f8',
+    tags: ['spell', 'cold', 'physical', 'aoe', 'duration'], color: '#cfe8f8',
     manaCost: 16, cooldown: 2.5, useTime: 0.65,
     baseDamage: { cold: [8, 13], physical: [6, 10] },
     delivery: {

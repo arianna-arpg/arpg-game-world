@@ -1533,8 +1533,12 @@ registerConvertRule('companionsFull', (caster, inst, world) =>
 // becomes its own reload; a restoreSkillCharges payload turns it back).
 // Graft-aware (instanceUseCharges), so a CHAMBERED cast runs dry the same
 // way. Registered beside its sibling; the registry stays the open seam.
-registerConvertRule('chargesEmpty', (caster, inst) =>
-  !!instanceUseCharges(inst) && caster.skillChargeBank(inst).count <= 0);
+registerConvertRule('chargesEmpty', (caster, inst) => {
+  const uc = instanceUseCharges(inst);
+  // Empower banks never present the reload face: a dry press casts PLAIN
+  // (the hybrid family's whole point — fuel, not ammunition).
+  return !!uc && uc.empower === undefined && caster.skillChargeBank(inst).count <= 0;
+});
 // THE 'seatAway' CONVERSION RULE (the possession seam, engine/possess.ts):
 // while the PRESSING BODY's seat is riding away from home, the granting gem
 // presents its ending verb — Possession becomes Relinquish, a form gem
@@ -23818,7 +23822,16 @@ export class World {
     // presses never touch it; executeSkill skips magazine stamps entirely),
     // flagging the bank so expiry pours the refill in updateTimers.
     let roundMult = 1;
-    if (useCharges) {
+    if (useCharges?.empower !== undefined) {
+      // THE EMPOWER BANK: a round in the pot is DRUNK for MORE on this
+      // use; a dry press casts plain — never refused, never converted,
+      // never finalRoundDamage (that lever belongs to true ammunition).
+      // The spammable keeps its cadence and gains a watchable beat.
+      if (caster.skillChargeBank(inst).count > 0) {
+        caster.spendSkillCharge(inst);
+        roundMult = 1 + useCharges.empower;
+      }
+    } else if (useCharges) {
       caster.spendSkillCharge(inst);
       const bank = caster.skillChargeBank(inst);
       if (bank.count <= 0) {

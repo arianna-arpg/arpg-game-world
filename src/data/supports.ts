@@ -1105,8 +1105,14 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // armors the court (each minion's own equip fold reads it).
   warding_flesh: {
     id: 'warding_flesh', name: 'Warding Flesh',
-    description: 'While this gem sits in ANY skill on your bar, the body itself thickens: +40 armor and 3 life regenerated per second, worn GLOBALLY — the first support that guards the character, not the cast. Socketed into a summon, the court wears it too.',
+    description: 'Socketed into a STANDING working — an aura you keep lit, a court you keep raised, a stance you hold — the body itself thickens: +40 armor and 3 life regenerated per second, worn GLOBALLY while the engagement stands. Socketed into a summon, the court wears it too.',
     color: '#b8a888',
+    // THE ENGAGEMENT GATE (requiresMechanisms — a lever, not a law): the
+    // worn value demands a host the player actually keeps LIT (aura /
+    // summon / guard / minion), so global gems stay MODIFIERS on real
+    // commitments, never free stat sticks in a dead bar slot. Loosen or
+    // drop the mechanism here if the axis should ever open wider.
+    requiresMechanisms: ['engagement'],
     mods: [
       mod('armor', 'flat', 40),
       mod('lifeRegen', 'flat', 3),
@@ -3849,12 +3855,13 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   deep_reserves: {
     id: 'deep_reserves', name: 'Deep Reserves',
-    description: '+1 use-charge on the socketed skill and 25% faster charge recovery — and a skill with NO bank GROWS one: cooldown skills store their uses as a magazine on their own clock, free skills bank a burst that trickles back. The capacity gem builds the bank it deepens.',
+    description: '+1 use-charge on the socketed skill and 25% faster charge recovery — and a skill with NO bank GROWS one: cooldown skills store their uses as a magazine on their own clock, and a free skill gains an EMPOWER bank — a round banks every few seconds, and a cast that finds one in the pot drinks it for 20% MORE. Spam exactly as ever; the pot rewards the beat.',
     color: '#d8c86a',
     // The GRANT (useChargeGraft): chargeless hosts stand a 2-round bank up
     // (3 with this gem's own +1) — magazine on the host's cooldown, or the
-    // 4s trickle where no clock exists. Native banks/munitions win.
-    useChargeGraft: { rounds: 2, recharge: 4 },
+    // EMPOWER bank (optional fuel: never a gate, never a conversion) on
+    // the 4s trickle where no clock exists. Native banks/munitions win.
+    useChargeGraft: { rounds: 2, recharge: 4, empower: 0.2 },
     mods: [
       mod('skillCharges', 'flat', 1),
       mod('skillChargeRate', 'increased', 0.25),
