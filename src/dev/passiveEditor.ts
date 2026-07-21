@@ -6,7 +6,12 @@
 //   • drag a node         → move it (its links follow live)
 //   • dbl-click a node     → with one selected, ADD/REMOVE the link between them
 //   • dbl-click empty space→ CREATE a new blank node there (selected)
-//   • side panel           → edit name / kind / description / attributes / mods,
+//   • scroll / drag space  → ZOOM and PAN (the play-mode lens, shared via
+//                            wireTreeControls — node-drags and pans are
+//                            disjoint: pans ignore '.tree-node' targets)
+//   • the pane itself      → RESIZABLE (native corner handle, editor-only CSS)
+//   • side panel           → edit name / kind / description / attributes / mods
+//                            (incl. the CHOICE deal: group ref + pick override),
 //                            or delete the node
 //   • Save Tree to File    → serialize the WHOLE tree back to src/data/passives.ts
 //                            (the dev server backs the old file up to passives.ts.bak)
@@ -24,14 +29,36 @@ import {
 import {
   ATTRIBUTE_IDS, STAT_DEFS, mod, type AttributeId, type ModKind, type Modifier,
 } from '../engine/stats';
+import { CHOICE_GROUPS } from '../data/passiveChoices';
 
-const KINDS: NodeKind[] = ['start', 'small', 'notable', 'keystone', 'attr'];
+// 'vocation' is deliberately absent — those nodes are GENERATED from
+// data/vocations.ts at load and never serialized (edit the VocationDef).
+const KINDS: NodeKind[] = ['start', 'small', 'notable', 'keystone', 'attr', 'choice'];
 const MOD_KINDS: ModKind[] = ['flat', 'increased', 'more', 'override'];
 const J = (s: string): string => JSON.stringify(s);
 
 export function mountPassiveEditor(ui: UI): void {
   const css = (el: HTMLElement, s: Partial<CSSStyleDeclaration>): void => { Object.assign(el.style, s); };
   let selectedId: string | null = null;
+
+  // --- RESIZABLE TREE PANE (editor-only style; shipped CSS untouched) -------
+  // The panel becomes a flex column with a native resize handle and the SVG
+  // fills whatever the handle grants (letterboxed to the viewBox aspect —
+  // the letterbox is still the SVG, so pan/zoom gestures work everywhere).
+  // `:not(.hidden)` leaves the display toggle alone, and a user's resize drag
+  // writes inline width/height that outrank these rules.
+  const style = document.createElement('style');
+  style.textContent = `
+    #passive-tree:not(.hidden) {
+      display: flex; flex-direction: column;
+      resize: both; overflow: hidden;
+      height: calc(88vh / var(--ui-scale));
+      max-width: 98vw; max-height: 98vh;
+      min-width: 340px; min-height: 260px;
+    }
+    #passive-tree:not(.hidden) svg { flex: 1 1 0; min-height: 0; }
+  `;
+  document.head.append(style);
 
   // --- side panel ----------------------------------------------------------
   const panel = document.createElement('div');
@@ -177,8 +204,51 @@ export function mountPassiveEditor(ui: UI): void {
     panel.append(label('kind'));
     const kindSel = document.createElement('select'); inputStyle(kindSel);
     for (const k of KINDS) { const o = document.createElement('option'); o.value = k; o.textContent = k; if (k === n.kind) o.selected = true; kindSel.append(o); }
-    kindSel.addEventListener('change', () => { n.kind = kindSel.value as NodeKind; ui.refreshTree(); });
+    kindSel.addEventListener('change', () => {
+      n.kind = kindSel.value as NodeKind;
+      // Kind and deal move together: BECOMING a choice node seeds a group ref
+      // (first registered group); LEAVING drops it — play mode deals the popup
+      // off n.choice presence, so a stale ref on a small node would still deal.
+      if (n.kind === 'choice' && !n.choice) n.choice = { group: Object.keys(CHOICE_GROUPS)[0] ?? '' };
+      if (n.kind !== 'choice' && n.choice) delete n.choice;
+      ui.refreshTree();
+    });
     panel.append(kindSel);
+
+    // CHOICE DEAL — the group reference this node deals from. The options
+    // themselves live in data/passiveChoices.ts (safely outside the editor's
+    // overwrite of passives.ts); here we only pick WHICH pool and how many.
+    if (n.kind === 'choice' || n.choice) {
+      panel.append(label('choice group (options live in data/passiveChoices.ts)'));
+      const grpSel = document.createElement('select'); inputStyle(grpSel);
+      for (const g of Object.values(CHOICE_GROUPS)) {
+        const o = document.createElement('option'); o.value = g.id;
+        o.textContent = `${g.id} — ${g.name} (${g.options.length} opts`
+          + `${g.pick !== undefined ? `, pick ${g.pick}` : ''}${g.unique === 'character' ? ', char-unique' : ''})`;
+        if (g.id === n.choice?.group) o.selected = true;
+        grpSel.append(o);
+      }
+      // A ref to a group that no longer exists must stay visible (and picked),
+      // not silently snap to the first registered group.
+      if (n.choice && !CHOICE_GROUPS[n.choice.group]) {
+        const o = document.createElement('option'); o.value = n.choice.group;
+        o.textContent = `${n.choice.group} — (unknown group!)`; o.selected = true;
+        grpSel.append(o);
+      }
+      grpSel.addEventListener('change', () => { n.choice = { ...n.choice, group: grpSel.value }; });
+      panel.append(grpSel);
+
+      panel.append(label('pick override (blank = group default)'));
+      const pick = document.createElement('input'); pick.type = 'number'; pick.min = '1'; pick.step = '1';
+      pick.value = n.choice?.pick !== undefined ? String(n.choice.pick) : '';
+      pick.placeholder = 'group default'; inputStyle(pick);
+      pick.addEventListener('change', () => {
+        if (!n.choice) return;
+        const v = parseInt(pick.value, 10);
+        if (Number.isFinite(v) && v >= 1) n.choice.pick = v; else delete n.choice.pick;
+      });
+      panel.append(pick);
+    }
 
     panel.append(label('description'));
     const desc = document.createElement('input'); desc.value = n.description; inputStyle(desc);

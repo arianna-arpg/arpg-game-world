@@ -3068,13 +3068,31 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
    *  reference frame. Each realm tab auto-fits its own constellation. */
   private computeTreeBox(): void {
     const allNodes = Object.values(PASSIVE_NODES).filter(n => realmIdOf(n) === this.treeRealm);
-    if (!allNodes.length) { this.treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 }; return; }
-    const PAD = 45;
-    const bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
-    const bMaxX = Math.max(...allNodes.map(n => n.x)) + PAD;
-    const bMinY = Math.min(...allNodes.map(n => n.y)) - PAD;
-    const bMaxY = Math.max(...allNodes.map(n => n.y)) + PAD;
-    this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: bMaxY - bMinY };
+    if (!allNodes.length) { this.treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 }; }
+    else {
+      const PAD = 45;
+      const bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
+      const bMaxX = Math.max(...allNodes.map(n => n.x)) + PAD;
+      const bMinY = Math.min(...allNodes.map(n => n.y)) - PAD;
+      const bMaxY = Math.max(...allNodes.map(n => n.y)) + PAD;
+      this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: bMaxY - bMinY };
+    }
+    // EDITOR: keep the whole authoring space reachable, not just the fitted
+    // nodes — the main star unions with the raw 6000×6000 canvas (the editor's
+    // old fixed viewBox), realm constellations pad outward so new nodes have
+    // empty room to grow into. Pan clamps then honour the expanded box.
+    if (DEV.passiveTreeEditor) {
+      let { minX, minY } = this.treeBox;
+      let maxX = minX + this.treeBox.w, maxY = minY + this.treeBox.h;
+      if (this.treeRealm === MAIN_REALM) {
+        minX = Math.min(minX, 0); minY = Math.min(minY, 0);
+        maxX = Math.max(maxX, 6000); maxY = Math.max(maxY, 6000);
+      } else {
+        const GROW = 300;
+        minX -= GROW; minY -= GROW; maxX += GROW; maxY += GROW;
+      }
+      this.treeBox = { minX, minY, w: maxX - minX, h: maxY - minY };
+    }
   }
 
   /** DEFAULT VIEW on open: centred on this class's START NODE at a readable
@@ -3083,6 +3101,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
    *  reset to survey everything; pan clamps keep the window on the tree. */
   private centerTreeOnStart(): void {
     this.computeTreeBox();
+    // The EDITOR opens surveying the whole authoring canvas (its old fixed
+    // viewBox framing) — zoom/pan navigate in from there.
+    if (DEV.passiveTreeEditor) { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; return; }
     // Realm tabs open FIT-TO-CONSTELLATION (small stars read whole); only
     // the main star centres on the class start at a readable zoom.
     if (this.treeRealm !== MAIN_REALM) { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; return; }
@@ -3193,9 +3214,10 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         data-node="${node.id}" data-tip="pnode" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
     }
 
-    // The DEV editor works in the raw 6000×6000 coordinate space;
-    // play mode uses the auto-fit + zoom/pan viewBox.
-    const viewBox = DEV.passiveTreeEditor ? '0 0 6000 6000' : this.treeViewBox();
+    // Both modes ride the auto-fit + zoom/pan viewBox — the EDITOR's box is
+    // expanded to the whole authoring canvas in computeTreeBox, so its old
+    // fixed '0 0 6000 6000' framing is the zoomed-out end of the same lens.
+    const viewBox = this.treeViewBox();
     const zPct = Math.round(this.treeZoom * 100);
     // Vocation header chip: the separate point pool, plus a "path to the gate"
     // nudge while the spending gate is still closed.
@@ -3221,11 +3243,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       ${realmTabs}
       <h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
-          ${DEV.passiveTreeEditor ? '' : `<span class="tree-zoom-grp">
+          <span class="tree-zoom-grp">
             <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
             <button class="tree-zoom" data-tz="reset" title="reset zoom">${zPct}%</button>
             <button class="tree-zoom" data-tz="in" title="zoom in">＋</button>
-          </span> &nbsp;`}${m.allocated.size} allocated · click to allocate${DEV.passiveTreeEditor ? '' : ' · scroll to zoom, drag to pan'}</span></h2>
+          </span> &nbsp;${DEV.passiveTreeEditor
+            ? 'EDITOR · scroll to zoom · drag empty space to pan'
+            : `${m.allocated.size} allocated · click to allocate · scroll to zoom, drag to pan`}</span></h2>
       <svg viewBox="${viewBox}" id="tree-svg" style="cursor:grab;touch-action:none">${edges}${circles}</svg>`;
 
     // In EDITOR mode, clicks SELECT nodes (the editor wires that up) — skip the
@@ -3251,8 +3275,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           this.refreshCharSheet();
         });
       });
-      this.wireTreeControls();   // wheel-zoom + drag-pan + zoom buttons (play mode)
     }
+    // Wheel-zoom + drag-pan + zoom buttons — BOTH modes. In editor mode the
+    // pan and the editor's node-drag are disjoint by construction: pans
+    // ignore '.tree-node' targets, node-drags start only on them.
+    this.wireTreeControls();
     // Let the DEV passive-tree editor re-attach its handlers to the new SVG.
     this.onTreeRender?.();
   }
@@ -3261,7 +3288,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
    *  pan so the window can't slide off the tree. Mirrors mapViewBox. */
   private treeViewBox(): string {
     const b = this.treeBox;
-    const z = clamp(this.treeZoom, 1, 8);   // deeper than the map — the tree is dense
+    // Deeper than the map — the tree is dense; deeper still for the EDITOR,
+    // whose box spans the whole 6000-unit authoring canvas.
+    const z = clamp(this.treeZoom, 1, DEV.passiveTreeEditor ? 16 : 8);
     this.treeZoom = z;
     const vw = b.w / z, vh = b.h / z;
     const maxPanX = Math.max(0, (b.w - vw) / 2), maxPanY = Math.max(0, (b.h - vh) / 2);
