@@ -40,6 +40,8 @@ import { COUCH_CFG } from '../src/data/couch';
 import { couchFit, couchConfineRect } from '../src/render/camera';
 import { rebuildSavedMeta, serializeCharacter, serializeCouchGuest } from '../src/meta/character';
 import { rollItem } from '../src/engine/itemgen';
+import { PadState, type FakePad, type PadTuning } from '../src/core/gamepad';
+import { CouchClaimSession, findRebindSlot } from '../src/net/couch';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -323,6 +325,125 @@ const CAM = COUCH_CFG.camera;
   check('xp law: a guest crossing level 5 stamps the run ledger',
     guest.actor.level >= 5 && (w.ledger.reached_level_5 ?? 0) >= 1,
     `guest level ${guest.actor.level}`);
+}
+
+// ---------------------- THE CLAIM PIN (the Steam Deck deadlock, pinned dead)
+// Real pads compete for the hero's unbound read by TIMESTAMP (freshest wins).
+// Pre-fix, the joining pad's very first Ⓐ press made it the hero's own pad
+// in the same frame — and the claim scan, excluding the hero's live pad,
+// could then never see it: the claim was structurally impossible on real
+// hardware. Timestamped fakes reproduce hardware; the pin kills the race.
+{
+  // The pad layer reads window.* — stand a minimal one up for node.
+  const G = globalThis as unknown as { window?: unknown };
+  G.window ??= globalThis;
+  const W = G.window as { __fakePads?: (FakePad | null | undefined)[] };
+  const TUNE: PadTuning = {
+    deadzone: 0.18, stickCurve: 1.5, aimCurve: 1.5, triggerThreshold: 0.35,
+    aimMinRadius: 70, aimMaxRadius: 460, pointerSpeed: 1100, swapSticks: false,
+  };
+  const zeros = (): number[] => Array.from({ length: 17 }, () => 0);
+  const aDown = (): number[] => { const b = zeros(); b[0] = 1; return b; };
+  const pads: (FakePad | null | undefined)[] = [];
+  W.__fakePads = pads;
+
+  // The stage: P1's pad lives at slot 0 (stick chatter = fresh timestamps);
+  // the joiner sits idle at slot 1 with an older stamp.
+  pads[0] = { axes: [0.6, 0, 0, 0], buttons: zeros(), timestamp: 1000, id: 'padA' };
+  pads[1] = { axes: [0, 0, 0, 0], buttons: zeros(), timestamp: 400, id: 'padB' };
+  const hero = new PadState(() => TUNE);
+  hero.poll(10.0);
+  check('claim pin: the roam adopts the freshest pad (hardware semantics now IN the rig)',
+    hero.connected && hero.sourceIndex === 0);
+
+  const session = new CouchClaimSession(hero);
+  session.arm();
+  check('claim pin: arming freezes the hero read at its live slot',
+    session.armed && session.heroSlot === 0 && hero.padPin === 0);
+
+  // THE DECK MOMENT: the joining pad presses Ⓐ — now the freshest device on
+  // the machine. The pinned hero read must not adopt or edge it.
+  pads[0] = { axes: [0, 0, 0, 0], buttons: zeros(), timestamp: 1000, id: 'padA' };
+  pads[1] = { axes: [0, 0, 0, 0], buttons: aDown(), timestamp: 2000, id: 'padB' };
+  hero.poll(10.1);
+  check('claim pin: the pinned hero read never adopts the joining press',
+    hero.sourceIndex === 0 && !hero.pressed.has('pad:a') && !hero.isDown('pad:a'));
+  const hit = session.scan('a', new Set());
+  check('claim pin: THE CLAIM LANDS on the freshest-timestamp joiner (the Deck deadlock)',
+    hit === 1, `hit ${hit}`);
+  check('claim pin: the claim lifts the pin (the claimed pad must drive the pick pointer)',
+    hero.padPin === null && !session.armed);
+
+  // The adoption frame: the roam takes the claimed pad MID-HOLD — the very
+  // press that claimed must not re-edge into the hero read (a stray pointer
+  // click would pick a class nobody chose).
+  hero.poll(10.2);
+  check('claim pin: post-claim the roam adopts the claimed pad for the pick phase',
+    hero.sourceIndex === 1);
+  check('claim pin: the claiming press is swallowed on adoption (held, never an edge)',
+    hero.isDown('pad:a') && !hero.pressed.has('pad:a'));
+  pads[1] = { axes: [0, 0, 0, 0], buttons: zeros(), timestamp: 2100, id: 'padB' };
+  hero.poll(10.3); // release clears the swallow on a stable read
+  pads[1] = { axes: [0, 0, 0, 0], buttons: aDown(), timestamp: 2200, id: 'padB' };
+  hero.poll(10.4);
+  check('claim pin: the NEXT deliberate press edges normally (the pick click flows)',
+    hero.pressed.has('pad:a'));
+
+  // A keyboard hero (no recent pad activity) pins to NOTHING — every pad is
+  // a joiner, and the hero's pad read stays dead while the scan is armed.
+  const kb = new PadState(() => TUNE);
+  const kbSession = new CouchClaimSession(kb);
+  kbSession.arm();
+  check('claim pin: a keyboard hero pins to none',
+    kbSession.armed && kbSession.heroSlot === null && kb.padPin === 'none');
+  kb.poll(20.1);
+  check('claim pin: the none-pinned read reads no pad at all',
+    !kb.connected && kb.sourceIndex === null);
+  pads[0] = { axes: [0, 0, 0, 0], buttons: aDown(), timestamp: 3000, id: 'padA' };
+  check('claim pin: with none pinned EVERY pad is a claimer',
+    kbSession.scan('a', new Set()) === 0);
+  kbSession.release();
+
+  // The fallback law older probes rely on: no timestamps anywhere → the
+  // first connected slot wins the roam, exactly the classic rig read.
+  pads.length = 0;
+  pads[0] = { axes: [0, 0, 0, 0], buttons: zeros() };
+  pads[1] = { axes: [0.9, 0, 0, 0], buttons: zeros() };
+  const h2 = new PadState(() => TUNE);
+  h2.poll(30.0);
+  check('claim pin: timestamp-less fakes keep the classic first-slot roam',
+    h2.sourceIndex === 0);
+  delete W.__fakePads;
+}
+
+// -------------------------- THE IDENTITY RE-BIND (the Bluetooth sleep law)
+// A claimed pad that vanishes may re-bind ONLY to a slot wearing the same
+// device id that appeared AFTER the loss (the newcomer rule) — a standing
+// pad, the hero's included, can never be stolen, even an identical twin.
+{
+  const W = (globalThis as unknown as { window: { __fakePads?: (FakePad | null | undefined)[] } }).window;
+  const zeros = (): number[] => Array.from({ length: 17 }, () => 0);
+  const pads: (FakePad | null | undefined)[] = [];
+  W.__fakePads = pads;
+  pads[0] = { axes: [0, 0, 0, 0], buttons: zeros(), id: 'padA' }; // the hero's, standing
+  pads[1] = undefined; // the guest's claimed device just slept
+  const lostSeen = new Set([0]); // the loss-frame census — the newcomer fence
+
+  check('re-bind: nothing to adopt while only fenced strangers stand',
+    findRebindSlot('padB', lostSeen, new Set()) === null);
+  check('re-bind: a STANDING identical twin is never stolen (the newcomer rule)',
+    findRebindSlot('padA', lostSeen, new Set()) === null);
+
+  pads[2] = { axes: [0, 0, 0, 0], buttons: zeros(), id: 'padB' }; // the device returns
+  check('re-bind: the returning identity re-binds at its newcomer slot',
+    findRebindSlot('padB', lostSeen, new Set()) === 2);
+  check('re-bind: a slot claimed by another seat is fenced',
+    findRebindSlot('padB', lostSeen, new Set([2])) === null);
+  check('re-bind: identity is the key — a stranger newcomer never matches',
+    findRebindSlot('padC', lostSeen, new Set()) === null);
+  check('re-bind: an unknown identity re-binds nowhere (parked, never a hijack)',
+    findRebindSlot(null, lostSeen, new Set()) === null);
+  delete W.__fakePads;
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

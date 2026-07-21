@@ -41,12 +41,37 @@ sim baseline gate (no gated metric moved), and the live rig.
 ## Input — one pad per player
 
 - `core/gamepad.ts`: `readPadSource(index?, exclude?)` binds a `PadState` to
-  ONE pad slot (`PadState.padIndex`) or runs the classic most-recent scan
-  SKIPPING claimed slots (`PadState.padExclude` — the hero's merged read can
-  never be steered by a guest's pad). `PadState.sourceIndex` records the slot
-  the last poll read (the claim scan treats a recently-active hero pad as
-  taken). `connectedPadIndices()` + `padButtonDown()` serve the join census;
-  `window.__fakePads[]` is the indexed test rig beside the legacy `__fakePad`.
+  ONE pad slot (`PadState.padIndex`) or runs the classic ROAM — the
+  freshest-`timestamp` connected pad wins — SKIPPING claimed slots
+  (`PadState.padExclude`: the hero's read can never be steered by a guest's
+  pad). `PadState.sourceIndex` records the slot the last poll read.
+  `connectedPadIndices()` + `padButtonDown()` + `padIdAt()` serve the join
+  census and the identity law; `window.__fakePads[]` is the indexed test rig
+  beside the legacy `__fakePad` — fakes may carry `timestamp` + `id` to get
+  HARDWARE semantics (timestamp-less fakes keep first-slot-wins, which every
+  older probe was written against).
+- **THE CLAIM PIN** (`PadState.padPin` + `net/couch.ts CouchClaimSession`):
+  while the join overlay's claim scan is armed, the hero's roaming read is
+  FROZEN where it stood at overlay open — its recently-active slot (judged
+  on the pad's OWN poll clock, `activeAtLastPoll`), else no pad at all.
+  Without the pin the joining pad's very first Ⓐ press became "the hero's
+  pad" in that same frame and the scan (excluding the hero's live pad) could
+  never see it — the claim was structurally impossible on real hardware (the
+  Steam Deck report; timestamp-less fakes hid it from the rig). The pin
+  LIFTS at the claim so the claimed pad may drive the pick pointer, and the
+  claiming press itself is one-shot SWALLOWED (`suppressNextEdge`) so the
+  roam's mid-hold adoption can't mint a stray click into the pick overlay.
+- **THE IDENTITY RE-BIND** (`CouchGuestCtx.padId` + `findRebindSlot` + the
+  per-frame `couchGuestPadSweep`): a claimed pad that vanishes (Bluetooth
+  sleep, Steam Input device churn) releases its slot back to the hero's pool
+  and PARKS the seat — `Renderer.couchPadLost` says so on the guest's flank
+  ("CONTROLLER DISCONNECTED") — and a pad wearing the SAME device id
+  re-binds the seat automatically, but only at a NEWCOMER slot (one that was
+  not connected when the loss was noticed): a standing pad, the hero's idle
+  one included, can never be stolen, even by an identical twin (the Gamepad
+  API exposes no serials; the newcomer rule is the honest disambiguator).
+  A stranger pad appearing while a seat is parked joins the HERO's roam,
+  never the seat.
 - `net/couch.ts PadSeatInput` mirrors `readLocalInput`'s pad half exactly —
   analog move fold, deflection-scaled world-space aim, the soft assist with
   sticky write-back, the dt≤0 twin guard, held/edge/meta slot grammar, the
@@ -114,9 +139,21 @@ sim baseline gate (no gated metric moved), and the live rig.
 
 - The pause menu grows "Local Co-op — Player Joins" ONLY when main.ts wired
   the flow, ≥ `minPads` controllers are connected, and a guest seat is free
-  (LocalTransport host only — never on a net client). The overlay
+  (LocalTransport host only — never on a net client). Below the census the
+  row still TEACHES, disabled: "press any button on a 2nd controller" — the
+  browser's gamepad privacy gate hides a pad until its first press — and the
+  census watcher (`couchTick` → `refreshEscapeCouchRow`) enables it LIVE the
+  moment that press lands (the options subview is never yanked). The overlay
   (`ui/couchJoin.ts`, lobby idiom) runs "press Ⓐ on the JOINING controller"
-  (raw-scan `PadClaimScanner`, hero's live pad excluded), then the pick.
+  through `CouchClaimSession` (the claim pin above; exclusions = claimed
+  slots + the pinned hero slot, frozen for the phase), then the pick.
+- THE JOIN CEREMONY HOLDS: `couchJoinOpen` is a `'menu'`-kind timeflow
+  surface (`TIME_CFG.surfaces['menu:couchJoin']`) — solo, the world freezes
+  under the claim veil exactly like the pause menu (a live couch keeps
+  running through the allowHold policy, same as the pause). The hero's hands
+  leave play for the ceremony: `readLocalInput` nulls and `uiBlocking()`
+  counts the overlay, so P1's pad drives the pointer over the veil, never a
+  sword beneath it.
 - MORTAL run → a fresh disposable hero (the net join's Tier-0 idiom; nothing
   persists). IMMORTAL run → another VESSEL from this account's roster —
   requires `immortalSlotsNeeded` (2) immortal slots unlocked

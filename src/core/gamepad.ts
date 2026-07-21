@@ -160,6 +160,13 @@ export interface PadTuning {
 export interface FakePad {
   axes: number[];
   buttons: Array<number | { pressed?: boolean; value?: number }>;
+  /** Hardware-semantics knobs (couch rigs). timestamp lets indexed fakes
+   *  compete for the ROAMING read exactly like real pads (freshest wins —
+   *  the couch claim deadlock lived in this rig-vs-hardware divergence);
+   *  id is the device identity the couch re-bind matches on. Both optional:
+   *  a rig that sets neither keeps the classic first-slot-wins read. */
+  timestamp?: number;
+  id?: string;
 }
 
 declare global {
@@ -200,15 +207,19 @@ function readPadSource(index?: number, exclude?: ReadonlySet<number>):
     return src ? { src, index } : null;
   }
   if (window.__fakePads) {
-    // Indexed fake rig: the "any pad" read scans the fake census like the
-    // physical scan below (first unexcluded connected slot — fakes carry no
-    // activity timestamps, so claim order is the tiebreak).
+    // Indexed fake rig: compete by timestamp exactly like the physical scan
+    // below — the freshest-wins roam is REAL pad behavior, and hiding it from
+    // the rig is how the couch claim deadlock shipped. Fakes without
+    // timestamps all tie at 0 and the first connected slot wins, preserving
+    // the classic rig semantics every older probe was written against.
+    let bestF: { src: PadSource; index: number } | null = null;
+    let bestTs = -Infinity;
     for (let i = 0; i < window.__fakePads.length; i++) {
       if (exclude?.has(i)) continue;
       const f = window.__fakePads[i];
-      if (f) return { src: f, index: i };
+      if (f && (f.timestamp ?? 0) > bestTs) { bestF = { src: f, index: i }; bestTs = f.timestamp ?? 0; }
     }
-    return null;
+    return bestF;
   }
   if (window.__fakePad) return { src: window.__fakePad, index: null };
   if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
@@ -231,6 +242,20 @@ export function connectedPadIndices(): number[] {
   const out: number[] = [];
   for (const p of navigator.getGamepads()) if (p && p.connected) out.push(p.index);
   return out;
+}
+
+/** Device identity of a pad slot (the couch re-bind's match key; null =
+ *  nothing connected there). Real pads report the browser's id string;
+ *  indexed fakes may carry one ('fake:<slot>' when unset). NOTE the Gamepad
+ *  API exposes no serials — identical twin controllers share an id, which
+ *  is why the re-bind's newcomer rule exists (net/couch.ts). */
+export function padIdAt(index: number): string | null {
+  const fake = window.__fakePads?.[index];
+  if (fake) return fake.id ?? `fake:${index}`;
+  if (window.__fakePads) return null;
+  if (typeof navigator === 'undefined' || !navigator.getGamepads) return null;
+  const p = navigator.getGamepads()[index];
+  return p && p.connected ? p.id : null;
 }
 
 /** Raw pressed-state of one button on one pad slot — the couch join panel's
@@ -281,6 +306,15 @@ export class PadState {
   /** Slots the unbound read must skip — the couch guests' claims. Solo (no
    *  claims) supplies null and the read is byte-identical to the original. */
   padExclude: (() => ReadonlySet<number> | null) | null = null;
+  /** THE CLAIM PIN (net/couch.ts CouchClaimSession): while a join overlay's
+   *  raw claim scan is armed, the unbound ROAMING read freezes — a slot
+   *  number pins it to exactly that pad, 'none' reads no pad at all (a
+   *  keyboard hero) — so a joining pad's first press is never adopted by
+   *  the hero's own freshest-timestamp roam (which would exclude it from
+   *  the claim scan: the Steam Deck deadlock) and never drives the hero's
+   *  pointer as a stray click. null = the classic roam. Bound reads
+   *  (padIndex) ignore it. */
+  padPin: number | 'none' | null = null;
   /** The slot the last poll actually read (null = none / the legacy any-pad
    *  fake) — the couch join scan treats a recently-active hero pad as taken. */
   sourceIndex: number | null = null;
@@ -309,6 +343,14 @@ export class PadState {
   /** Armed rebind capture: the NEXT button edge is swallowed (never reaches
    *  gameplay) and delivered to the callback as a binding code. */
   private capture: ((code: string) => void) | null = null;
+  /** One-shot edge swallows: codes whose NEXT press-edge must not fire. The
+   *  couch claim hands the claimed pad to the roam MID-HOLD — the very press
+   *  that claimed would otherwise re-edge on the adoption frame and click
+   *  the pick overlay. An entry survives device switches and clears when its
+   *  button is seen UP on a stable read (a release before adoption frees it
+   *  — genuine later presses always flow). Empty outside the claim moment. */
+  private swallowEdge = new Set<string>();
+  suppressNextEdge(code: string): void { this.swallowEdge.add(code); }
 
   constructor(private tuning: () => PadTuning) {}
 
@@ -321,8 +363,12 @@ export class PadState {
     // a first frame or a long tab-freeze can't produce a degenerate rate.
     const dt = Math.min(0.1, Math.max(1e-3, nowSec - this.lastPollSec));
     this.lastPollSec = nowSec;
-    const read = readPadSource(this.padIndex ?? undefined, this.padExclude?.() ?? undefined);
+    const pin = this.padIndex === null ? this.padPin : null;
+    const read = pin === 'none' ? null
+      : readPadSource(this.padIndex ?? (typeof pin === 'number' ? pin : undefined),
+        this.padExclude?.() ?? undefined);
     const src = read?.src;
+    const prevSource = this.sourceIndex;
     this.sourceIndex = read?.index ?? null;
     if (!src) {
       if (this.connected) { this.down.clear(); this.pressed.clear(); }
@@ -351,11 +397,17 @@ export class PadState {
           const cb = this.capture;
           this.capture = null;
           cb(code);
-        } else {
+        } else if (!this.swallowEdge.delete(code)) {
           this.pressed.add(code);
         }
         this.lastActive = nowSec;
       }
+    }
+    // Swallow hygiene: an armed swallow whose button is UP on a STABLE read
+    // was released before adoption — clear it so real presses flow. (An
+    // adoption frame skips the prune: the held claim press is the target.)
+    if (prevSource === this.sourceIndex) {
+      for (const c of this.swallowEdge) if (!this.down.has(c)) this.swallowEdge.delete(c);
     }
     if (this.down.size > 0) this.lastActive = nowSec;
 
@@ -413,6 +465,13 @@ export class PadState {
   /** The pad has spoken recently — it owns pad-flavored UX (pointer mode). */
   activeRecently(nowSec: number): boolean {
     return this.connected && nowSec - this.lastActive <= PAD_CFG.activeWindow;
+  }
+
+  /** activeRecently as of this pad's OWN last poll — clock-free for callers
+   *  (the couch claim arm): a harness driving synthetic time and a caller
+   *  sampling the wall clock must never disagree about "recent". */
+  activeAtLastPoll(): boolean {
+    return this.activeRecently(this.lastPollSec);
   }
 
   /** Aim reach in world units for a given deflection magnitude (0..1). */

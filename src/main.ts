@@ -4,9 +4,9 @@
 // ---------------------------------------------------------------------------
 
 import { Input } from './core/input';
-import { PAD_CFG, PadState, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
+import { PAD_CFG, PadState, connectedPadIndices, padIdAt, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { COUCH_CFG } from './data/couch';
-import { PadClaimScanner, PadSeatInput } from './net/couch';
+import { CouchClaimSession, findRebindSlot, PadSeatInput } from './net/couch';
 import { CouchJoinOverlay, type CouchJoinChoice, type CouchJoinView } from './ui/couchJoin';
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
@@ -541,7 +541,9 @@ void (async (): Promise<void> => {
 function readLocalInput(dt: number): PlayerInput | null {
   const p = world.player;
   if (p.dead || p.downed) return null;
-  if (ui.escapeMenuOpen) return null;
+  // The pause menu AND the couch join ceremony both take the hero's hands
+  // out of play (the world holds under either, solo — the timeflow law).
+  if (ui.escapeMenuOpen || ui.couchJoinOpen) return null;
 
   const kb = settings.keybinds;
   const pb = settings.padBinds;
@@ -775,7 +777,14 @@ function spawnCoopAlly(): void {
 // ---------------------------------------------------------------------------
 interface CouchGuestCtx {
   seatId: string;
+  /** The claimed pad slot; -1 while the device is LOST (identity sweep). */
   padIdx: number;
+  /** Device identity captured at claim — the re-bind's match key. */
+  padId: string | null;
+  /** Census snapshot from the frame the bound pad vanished: slots already
+   *  standing then may never be adopted (findRebindSlot's newcomer rule).
+   *  Undefined while the pad is alive. */
+  lostSeen?: Set<number>;
   gpad: PadState;
   source: PadSeatInput;
   pointer: PadPointer;
@@ -785,10 +794,14 @@ interface CouchGuestCtx {
 }
 const couchGuests = new Map<string, CouchGuestCtx>();
 const couchPadSet = new Set<number>();
-const couchScanner = new PadClaimScanner();
+const couchClaim = new CouchClaimSession(pad);
 const couchOverlay = new CouchJoinOverlay();
 let couchClaimPad: number | null = null;
 let couchSeatSerial = 0;
+/** Last frame's connected-pad census — the pause menu's couch row re-renders
+ *  the moment it moves (a controller is invisible to the browser until its
+ *  first button press; the row asks for that press, so it must reward it). */
+let couchPadCensus = -1;
 
 function couchActive(): boolean { return couchGuests.size > 0; }
 
@@ -803,14 +816,38 @@ function couchGuestSuspended(id: string): boolean {
   return !g || ui.escapeMenuOpen || ui.couchJoinOpen || g.pointer.active;
 }
 
-/** The join overlay's claim exclusions: pads already claimed + the hero's own
- *  LIVE pad (recently spoken) — a pad P1 is actively holding never joins. */
-function couchClaimExcluded(): ReadonlySet<number> {
-  const out = new Set(couchPadSet);
-  if (pad.sourceIndex !== null && pad.activeRecently(performance.now() / 1000)) {
-    out.add(pad.sourceIndex);
+/** THE IDENTITY RE-BIND (per guest, per frame): a claimed pad that vanishes
+ *  (Bluetooth sleep, Steam Input device churn) releases its slot back to the
+ *  hero's pool and parks the seat — the flank HUD says so — and when a pad
+ *  wearing the SAME device id arrives at a NEWCOMER slot, the seat follows
+ *  it there by itself (net/couch.ts findRebindSlot owns the match law). */
+function couchGuestPadSweep(g: CouchGuestCtx): void {
+  const atBound = g.padIdx >= 0 ? padIdAt(g.padIdx) : null;
+  if (atBound !== null && (g.padId === null || atBound === g.padId)) {
+    g.lostSeen = undefined; // the claimed device stands where we left it
+    return;
   }
-  return out;
+  if (g.padIdx >= 0) {
+    // First frame of loss — or a STRANGER at the bound slot (that slot may
+    // be P1's own controller returning; the hero's roam must be free to
+    // take it). Release the claim and snapshot the census: only a slot
+    // appearing AFTER this moment may re-bind.
+    couchPadSet.delete(g.padIdx);
+    g.padIdx = -1;
+    g.gpad.padIndex = -1; // a bound read at -1 reads nothing — the seat parks
+    const seat = world.seats.find(s => s.id === g.seatId);
+    if (seat?.couch) seat.couch.pad = -1;
+    g.lostSeen = new Set(connectedPadIndices());
+  }
+  const slot = findRebindSlot(g.padId, g.lostSeen ?? new Set(), couchPadSet);
+  if (slot !== null) {
+    g.padIdx = slot;
+    g.gpad.padIndex = slot;
+    couchPadSet.add(slot);
+    const seat = world.seats.find(s => s.id === g.seatId);
+    if (seat?.couch) seat.couch.pad = slot;
+    g.lostSeen = undefined;
+  }
 }
 
 /** THE LANE LAW: the guest joins the run's OWN lane — an immortal run seats
@@ -868,14 +905,22 @@ function openCouchJoin(): void {
   if (!running || !net.isHost || !(net instanceof LocalTransport)) return;
   if (world.couchSeats().length >= COUCH_CFG.join.maxLocal - 1) return;
   couchClaimPad = null;
-  couchScanner.reset();
+  // Freeze the hero's roaming read where it stands: the claim scan and the
+  // roam must never race for the joining pad's first press (the Deck bug —
+  // the roam adopted the press and the scan then excluded it, forever).
+  couchClaim.arm();
   ui.couchJoinOpen = true;
+  // The ceremony is a menu: solo holds the world (the allowHold policy — a
+  // live couch keeps running, exactly like the pause law).
+  world.timeflow.holdSurface('menu:couchJoin');
   couchOverlay.show(couchJoinView());
 }
 
 function closeCouchJoin(): void {
   ui.couchJoinOpen = false;
   couchClaimPad = null;
+  couchClaim.release();
+  world.timeflow.release('menu:couchJoin');
   couchOverlay.hide();
 }
 
@@ -901,7 +946,7 @@ function mintCouchSeat(padIdx: number, cls: ClassDef, vessel?: CouchGuestCtx['ve
   seat.couch = { pad: padIdx, side };
   const pointer = new PadPointer(gpad, padTuning);
   pointer.onCancel = () => couchGuestCancel(id);
-  couchGuests.set(id, { seatId: id, padIdx, gpad, source, pointer, vessel });
+  couchGuests.set(id, { seatId: id, padIdx, padId: padIdAt(padIdx), gpad, source, pointer, vessel });
   couchPadSet.add(padIdx);
   return seat;
 }
@@ -961,6 +1006,7 @@ function couchLeave(id: string): void {
   couchGuests.delete(id);
   couchPadSet.delete(g.padIdx);
   renderer.couchAims = [];
+  renderer.couchPadLost = [];
 }
 
 /** Tear the whole couch session down (run end / menu). Persistence is the
@@ -970,6 +1016,7 @@ function couchReset(): void {
   couchGuests.clear();
   couchPadSet.clear();
   renderer.couchAims = [];
+  renderer.couchPadLost = [];
   if (ui.couchJoinOpen) closeCouchJoin();
 }
 
@@ -986,19 +1033,32 @@ function couchGuestCancel(id: string): void {
  *  guests' reticles in their class tints. No guests = nothing. */
 function couchTick(dt: number, nowSec: number): void {
   for (const g of couchGuests.values()) {
+    couchGuestPadSweep(g);
     g.gpad.poll(nowSec);
     g.pointer.update(dt, ui.blockingFor(g.seatId) || !running, nowSec);
     // Guest START = the shared pause (either player may pause the couch).
     if (g.gpad.justPressed(PAD_CFG.escapeButton)) synthEscape();
   }
+  // The pause menu's couch row gates on the pad census — re-render it live
+  // as controllers announce themselves (a pad is invisible to the browser
+  // until its first button press; the disabled row asks for exactly that
+  // press, so the press must enable the row while the menu still shows).
+  const census = connectedPadIndices().length;
+  if (census !== couchPadCensus) {
+    couchPadCensus = census;
+    if (ui.escapeMenuOpen) ui.refreshEscapeCouchRow();
+  }
   if (ui.couchJoinOpen) {
     if (couchClaimPad === null) {
-      const hit = couchScanner.scan(COUCH_CFG.join.claimButton, couchClaimExcluded());
+      const hit = couchClaim.scan(COUCH_CFG.join.claimButton, couchPadSet);
       if (hit !== null) couchClaimPad = hit;
     }
     couchOverlay.update(couchJoinView());
   }
   if (couchGuests.size) {
+    // The flank banner: seats whose CONTROLLER left (identity sweep above).
+    renderer.couchPadLost = [...couchGuests.values()]
+      .filter(g => g.padIdx < 0).map(g => g.seatId);
     renderer.couchAims = [...couchGuests.values()].flatMap(g => {
       const seat = world.seats.find(s => s.id === g.seatId);
       const a = g.source.aimView();

@@ -18,7 +18,7 @@
 // ---------------------------------------------------------------------------
 
 import {
-  AIM_ASSIST_MODES, connectedPadIndices, padButtonDown,
+  AIM_ASSIST_MODES, connectedPadIndices, padButtonDown, padCode, padIdAt,
   type AimAssistMode, type PadButton, type PadState, type PadTuning,
 } from '../core/gamepad';
 import { AIM_ASSIST, assistAim } from '../engine/aimassist';
@@ -164,4 +164,89 @@ export class PadClaimScanner {
     return hit;
   }
   reset(): void { this.prev.clear(); }
+}
+
+/** THE CLAIM SESSION — the join overlay's whole pad policy in one object.
+ *
+ *  The deadlock it exists to kill (found live on the Steam Deck): the hero's
+ *  unbound read ROAMS to the freshest-timestamp pad, so the joining pad's
+ *  very first Ⓐ press was adopted as "the hero's pad" in the same frame —
+ *  and the claim scan, excluding the hero's recently-active slot, could then
+ *  never see it. Every press re-sealed the exclusion; the claim was
+ *  structurally impossible on real hardware. (Indexed fakes carried no
+ *  timestamps, so the browser rig's first-slot-wins roam pinned the flow
+ *  green while hardware deadlocked — FakePad.timestamp now closes that gap.)
+ *
+ *  The law: while the claim scan is ARMED, the hero's roaming read is PINNED
+ *  where it stood when the overlay opened — its recently-active slot, else
+ *  no pad at all (a keyboard hero) — so the scan and the roam can never race
+ *  for the same press, and a joining press can never click through the
+ *  hero's pointer. The pin LIFTS the moment a pad claims: the claimed pad
+ *  must be free to drive the pick phase's pointer (the joining player
+ *  chooses their own hero), and it leaves the hero's pool for good only at
+ *  seat mint. */
+export class CouchClaimSession {
+  private scanner = new PadClaimScanner();
+  private hold: number | 'none' | null = null;
+  constructor(private readonly heroPad: PadState) {}
+
+  /** Armed = the claim phase is live (the pin is standing). */
+  get armed(): boolean { return this.hold !== null; }
+  /** The pinned hero slot (null while unarmed, or a keyboard hero). */
+  get heroSlot(): number | null { return typeof this.hold === 'number' ? this.hold : null; }
+
+  /** Arm at overlay open: freeze the hero's read where it stands. Clock-free
+   *  — "recently active" is judged on the pad's own poll clock, so harness
+   *  time and wall time can never disagree about the pin. */
+  arm(): void {
+    this.hold = this.heroPad.sourceIndex !== null && this.heroPad.activeAtLastPoll()
+      ? this.heroPad.sourceIndex : 'none';
+    this.heroPad.padPin = this.hold;
+    this.scanner.reset();
+  }
+
+  /** Per-frame while the overlay says "press Ⓐ": which unclaimed pad freshly
+   *  pressed? A hit releases the pin and returns the claimed slot. The
+   *  claiming press itself is swallowed from the hero's next read — the
+   *  roam adopts the claimed pad MID-HOLD, and that press must not also
+   *  click the pick overlay through the hero's pointer. */
+  scan(button: PadButton, claimed: ReadonlySet<number>): number | null {
+    if (this.hold === null) return null;
+    const exclude = typeof this.hold === 'number'
+      ? new Set([...claimed, this.hold]) : claimed;
+    const hit = this.scanner.scan(button, exclude);
+    if (hit !== null) {
+      this.heroPad.suppressNextEdge(padCode(button));
+      this.release();
+    }
+    return hit;
+  }
+
+  /** Disarm + unpin — claim landed, overlay closed, or session torn down.
+   *  Idempotent; the one door every exit path funnels through. */
+  release(): void {
+    this.hold = null;
+    this.heroPad.padPin = null;
+    this.scanner.reset();
+  }
+}
+
+/** THE IDENTITY RE-BIND's match (main.ts couch sweep): a lost guest pad may
+ *  re-bind only to a slot that (a) wears the SAME device identity, (b) is
+ *  not claimed by any seat, and (c) was NOT already connected when the loss
+ *  was noticed (lostSeen) — the returning device arrives as a NEWCOMER, so a
+ *  standing pad (the hero's, even an idle one) can never be stolen.
+ *  Identical twin controllers share an id string; the newcomer rule is the
+ *  best identity the Gamepad API allows (no serials are exposed). */
+export function findRebindSlot(
+  padId: string | null,
+  lostSeen: ReadonlySet<number>,
+  claimed: ReadonlySet<number>,
+): number | null {
+  if (!padId) return null;
+  for (const i of connectedPadIndices()) {
+    if (claimed.has(i) || lostSeen.has(i)) continue;
+    if (padIdAt(i) === padId) return i;
+  }
+  return null;
 }

@@ -114,6 +114,11 @@ export const TIME_CFG = {
    *  default) and are auto-released if a co-op peer joins mid-hold. */
   surfaces: {
     'menu:escape': { scale: 0, kind: 'menu' },
+    // The couch join ceremony (main.ts) — the claim veil is a modal; the
+    // world must not fight the hero while a second player picks up a pad.
+    // Solo-only like every 'menu' hold: a LIVE couch keeps the world
+    // running through the allowHold policy, exactly as the pause does.
+    'menu:couchJoin': { scale: 0, kind: 'menu' },
     // The in-run vocation offer — an Ultimatum-style "decide at leisure"
     // freeze. Delete this line to let the world breathe during the choice.
     'menu:vocation': {

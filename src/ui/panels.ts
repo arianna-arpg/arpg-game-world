@@ -316,6 +316,18 @@ export class UI {
   private panelSeatIds = new Map<HTMLElement, string>();
   /** True while the couch JOIN overlay is up (main.ts owns the claim scan). */
   couchJoinOpen = false;
+  /** The escape menu's MAIN view re-renderer, live only while the menu is up
+   *  (showEscapeMenu sets it, hideEscapeMenu clears it) — the couch census
+   *  watcher re-runs it so the join row enables the moment a second
+   *  controller first speaks. */
+  private escRefresh: (() => void) | null = null;
+  /** Re-render the pause menu's MAIN view in place (couch census change).
+   *  Subviews are left alone — esc-resume standing in the DOM marks the
+   *  main view; options/keybinds replace it and must not be yanked. */
+  refreshEscapeCouchRow(): void {
+    if (this.escapeMenuOpen && this.escRefresh
+      && document.getElementById('esc-resume')) this.escRefresh();
+  }
   /** Wired by main.ts when a couch session is possible at all — opens the
    *  join flow. Unset (solo build / net client) = no menu row exists. */
   onCouchJoin?: () => void;
@@ -943,6 +955,7 @@ export class UI {
    *  surfaces join here and every input layer follows for free. */
   uiBlocking(): boolean {
     return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
+      || this.couchJoinOpen
       || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.holdOpen || this.vocationOpen
       || this.bestiaryOpen || this.boroughOpen
@@ -4692,10 +4705,17 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // connected, and a guest seat is free (or filled, for Leave). Solo
       // machines never see either.
       const couchSeated = this.getWorld().couchSeats().length;
-      const couchRow = this.onCouchJoin && !this.isCoopClient()
-        && connectedPadIndices().length >= COUCH_CFG.join.minPads
-        && couchSeated < COUCH_CFG.join.maxLocal - 1
-        ? '<button id="esc-couch">Local Co-op — Player Joins</button>' : '';
+      const couchPossible = this.onCouchJoin && !this.isCoopClient()
+        && couchSeated < COUCH_CFG.join.maxLocal - 1;
+      // Below the census the row still TEACHES: a controller is invisible to
+      // the browser until its first button press (the gamepad privacy gate),
+      // so the disabled row names the unlock — and the census watcher
+      // (main.ts couchTick → refreshEscapeCouchRow) enables it live the
+      // moment that press lands.
+      const couchRow = !couchPossible ? ''
+        : connectedPadIndices().length >= COUCH_CFG.join.minPads
+          ? '<button id="esc-couch">Local Co-op — Player Joins</button>'
+          : '<button id="esc-couch" disabled>Local Co-op — press any button on a 2nd controller</button>';
       const couchLeaveRow = this.onCouchLeave && couchSeated > 0
         ? '<button id="esc-couch-leave">Local Co-op — Guest Leaves</button>' : '';
       root.innerHTML = `
@@ -4745,12 +4765,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       });
     };
 
+    this.escRefresh = showMain; // the couch census watcher may re-render main
     showMain();
     root.classList.remove('hidden');
   }
 
   hideEscapeMenu(): void {
     this.escapeMenuOpen = false;
+    this.escRefresh = null;
     this.getWorld().timeflow.release('menu:escape'); // the world breathes again
     this.disarmRebind(); // Esc-dismissal can close the keybind sub-view mid-arm
     this.escapeMenu.classList.add('hidden');

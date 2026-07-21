@@ -155,6 +155,9 @@ export class Renderer {
    *  soft-lock, fed by main each frame in the guest's class tint — two
    *  cursors on one screen need two identities. Empty outside couch play. */
   couchAims: { x: number; y: number; lockId: number | null; color: string }[] = [];
+  /** Couch guest seats whose CONTROLLER is currently lost (main.ts identity
+   *  sweep publishes per frame) — their flank HUD says so. Empty solo. */
+  couchPadLost: string[] = [];
   /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping.
    *  BASE is the classic constant; the COUCH FRAME (data/couch.ts) widens the
    *  live value by couchStretch — smoothed toward couchFit each frame, hard-
@@ -5877,6 +5880,15 @@ export class Renderer {
       ctx.textAlign = align;
     }
     let hintY = worldInfo ? 100 : 46; // a guest's hints start right under its title
+    // A guest whose CONTROLLER left (Bluetooth sleep, device churn): the
+    // flank says so where the hints would sit. Reconnecting the same device
+    // re-binds the seat by itself (the identity sweep) and clears this.
+    if (!worldInfo && this.couchPadLost.includes(seat.id)) {
+      ctx.font = 'bold 12px Verdana';
+      ctx.fillStyle = '#e8685a';
+      ctx.fillText('CONTROLLER DISCONNECTED — reconnect to rejoin', x, hintY);
+      hintY += 18;
+    }
     if (worldInfo) {
       ctx.font = '12px Verdana';
       ctx.fillStyle = world.zone.theme.accent;
