@@ -23,6 +23,7 @@ import './engine/interiorGen'; // side-effect: registers the interior layouts (d
 import './data/massifs'; // side-effect: registers the massif mass kinds (+ the 'massif' recipe via engine/massif)
 import './data/settled'; // side-effect: the settled-belt kit (+ the 'fields'/'district' recipes via engine/settled)
 import './data/garden'; // side-effect: the Garden country kit (kinds, formations, compositions, the nest role pool)
+import './data/grove'; // side-effect: the Grove country kit (lantern flora, the hollow way down)
 import './data/compositions'; // side-effect: registers the whole-zone composition bundles
 import './data/fog'; // side-effect: registers the living fog bank kinds
 import './data/creeps'; // side-effect: registers the living creep kinds

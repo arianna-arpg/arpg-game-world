@@ -24,6 +24,7 @@ import '../engine/interiorGen';
 import '../data/massifs';
 import '../data/settled';
 import '../data/garden';
+import '../data/grove';
 import '../data/compositions';
 import '../data/fog';
 import '../data/creeps';

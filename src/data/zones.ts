@@ -488,10 +488,12 @@ export interface ZoneTheme {
   ambientDark?: number;
   /** AMBIENT FX — the zone's standing sensory weather (render/vis/ambientFx):
    *  underwater caustics + bubble splays, desert heat haze, drifting motes,
-   *  the winter AURORA, drifting fungal SPORES, and OVERCLOUDS — higher
-   *  cloud streaming OVER the scene at camera parallax (the sky countries'
-   *  verticality read). Screen-space, stateless, data-extensible. */
-  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds'; intensity?: number; color?: string }[];
+   *  the winter AURORA, drifting fungal SPORES, OVERCLOUDS — higher cloud
+   *  streaming OVER the scene at camera parallax (the sky countries'
+   *  verticality read) — and FIREFLIES, the grove's night writing (self-
+   *  gated on the dark like the aurora: by day the row is silent).
+   *  Screen-space, stateless, data-extensible. */
+  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies'; intensity?: number; color?: string }[];
   /** SIGHT-VEIL tuning (render/vis/sightVeil.ts): per-zone multipliers over
    *  the pass's global strengths (VIS_CFG.sightVeil) — `mul` scales both
    *  shadow families, `regionMul` the true-wall shadows (rampart, verdure,

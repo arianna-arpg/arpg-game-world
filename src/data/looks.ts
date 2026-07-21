@@ -3767,6 +3767,71 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
   },
+
+  // --- THE GLIMMERKIN (the grove country's fireflies) ----------------------
+  /** A glimmerling: hardly a body at all — a mote of cold fire with wings
+   *  you infer. The night tide's own pixel. */
+  glimmerling: {
+    parts: [
+      { kind: 'disc', scale: 0.5, role: 'glow' },
+      { kind: 'halo', scale: 1.0, alpha: 0.6 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, params: { n: 2 } }],
+  },
+  /** The glimmer courtier: soft wings around a lantern abdomen — the
+   *  courtship blinker itself, writing its one word over and over. */
+  glimmer_courtier: {
+    parts: [
+      { kind: 'featherWings', scale: 0.95, alpha: 0.8 },
+      { kind: 'disc', scale: 0.5, role: 'glow' },
+      { kind: 'antennae', scale: 0.9 },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 0.55, params: { n: 2 } }],
+  },
+  /** The duskveil dancer: a veiled flame — dusk-tatters around the light
+   *  that holds your eye, which is the point of her. */
+  duskveil_dancer: {
+    parts: [
+      { kind: 'tatters', scale: 0.85, role: 'dark', params: { n: 4 } },
+      { kind: 'disc', scale: 0.55, role: 'glow' },
+      { kind: 'halo', scale: 1.05, alpha: 0.7 },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
+  },
+  /** The glowworm grub: an armored larva dragging its own lamp — banded,
+   *  low, patient. The lamp is honest; the silk under it is not. */
+  glowworm_grub: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.18, seed: 271 } },
+      { kind: 'disc', scale: 0.4, x: -0.35, role: 'glow' },
+      { kind: 'eyes', color: '#d8f078', params: { spread: 0.4, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The lampwright: the synchronist — a courtier grown ceremonial, sign-
+   *  marks orbiting the lamp and beat pips keeping the chorus's time. */
+  lampwright: {
+    parts: [
+      { kind: 'featherWings', scale: 0.9, alpha: 0.75 },
+      { kind: 'disc', scale: 0.55, role: 'glow' },
+      { kind: 'runes', scale: 0.8, params: { n: 3 } },
+      { kind: 'antennae', scale: 0.9 },
+    ],
+    live: [{ kind: 'beatPips', x: -0.6, color: '#d8f078', params: { n: 3 } }],
+  },
+  /** THE FALSE SOVEREIGN: a darkness wearing a stolen lamp — the void
+   *  angler's grammar in the grove's own colors. The light is bait; the
+   *  crown never existed. */
+  false_sovereign: {
+    parts: [
+      { kind: 'tatters', scale: 1.05, role: 'dark', params: { n: 6 } },
+      { kind: 'blob', scale: 0.9, role: 'dark', params: { irr: 0.26, seed: 977 } },
+      { kind: 'disc', scale: 0.5, x: 0.3, role: 'glow' },
+      { kind: 'halo', scale: 1.1, alpha: 0.8 },
+      { kind: 'eyes', color: '#e8f8b0', params: { spread: 0.4, dist: 0.45, size: 0.1 } },
+    ],
+    live: [{ kind: 'wisps', x: 0.3, scale: 0.8, params: { n: 3 } }],
+  },
   /** A gloomling: a scrap of dark with eyes, trailing off to nothing. */
   gloomling: {
     parts: [

@@ -116,6 +116,19 @@ export interface ColonySpec extends LiteRegenSpec {
 
 // --- Ambient pours (ZoneTheme.lite) -----------------------------------------
 
+/** THE POUR'S HOUR (LiteSwarmRow.when) — a structural twin of the radiance
+ *  fabric's RadianceCond (world/radiance.ts; the creep FrontCond precedent —
+ *  the engine leaf keeps its zero-import doctrine, the World evaluates it
+ *  through its own radianceCondHeld). All present clauses AND together. */
+export interface LiteCond {
+  /** Hold while the sky's radiance sits inside [from, to]. */
+  radiance?: { from?: number; to?: number };
+  /** Hold while the live sky front's kind is one of these. */
+  weather?: string[];
+  /** Hold during these day phases. */
+  phases?: ('dawn' | 'day' | 'dusk' | 'night')[];
+}
+
 /** One pour row: `pockets` clusters of `size` bodies each, seated on the
  *  leftover-POI stream (the scenery/puzzle/throng boot discipline). */
 export interface LiteSwarmRow {
@@ -124,6 +137,17 @@ export interface LiteSwarmRow {
   size: [number, number];
   /** Whether this zone pours at all (default 1). */
   chance?: number;
+  /** THE CONDITIONED POUR — this row's bodies stand only while the
+   *  condition holds. Pockets still SEAT at boot (same salted draws, held
+   *  or not — the stream's shape is sacred); out of its hour a pocket
+   *  pours nothing, breeds nothing, and gently RECEDES toward empty, then
+   *  the regrowth law raises the tide again when the hour comes back
+   *  (a conditioned row without `regen` adopts the defaults — a tide that
+   *  could never rise would be a dead dial). The hour is weather, not
+   *  violence: a pocket drained by its own clock is never marked
+   *  exterminated. Debut: the grove's firefly tides, `phases:
+   *  ['dusk','night']`. */
+  when?: LiteCond;
   /** THE REGROWTH LAW for this row's pockets: `true` adopts the kind's own
    *  LiteSpec.regen (or bare config defaults), a spec overrides it, absent
    *  falls back to the kind's default. Pockets remember their poured size
@@ -151,6 +175,9 @@ export interface LitePocket {
   /** Anchoring actor id (0 = ambient). The heart follows a living anchor;
    *  its death extinguishes the pocket — the nest is the true target. */
   anchorId: number;
+  /** THE POUR'S HOUR carried onto the pocket (LiteSwarmRow.when): the
+   *  regrowth sweep breeds only while held and recedes while not. */
+  when?: LiteCond;
   disturbedUntil: number;
   acc: number;
   live: number;

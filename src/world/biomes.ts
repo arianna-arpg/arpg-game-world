@@ -107,6 +107,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // desert/tundra/highland/volcanic/coast = spacious, legible branching).
   grove:  { patronFaction: 'sylvan', mapColor: '#3f8a3a', label: 'Grove', spacing: 56,
     climate: { temperature: 'mild', moisture: { from: 0.3, fadeIn: 0.2 } },
+    // THE GROVE COUNTRY's edge dressing: neighbors see the green pressing
+    // close — and, crossed at the right hour, the first small lights of
+    // the wood's night (data/melds.ts).
+    meld: 'grove_meld',
     // Mostly the classic open woodland scatter; the odd BOCAGE face (the
     // massif fabric) — grown hedge-lines and a walled fold among the trees,
     // the pastoral mixture archetype in the grove's own green.
@@ -770,7 +774,10 @@ export interface BiomeSeedDef {
  *  confetti), and it simply doesn't exist elsewhere. Broad-gate biomes keep
  *  modest weights. Grave is the unconditioned filler that can appear anywhere. */
 export const BIOME_FIELD: BiomeSeedDef[] = [
-  { biome: 'grove', weight: 1.2 },
+  // 1.55: the GROVE COUNTRY (four staged faces + the gleamhollow den need
+  // the acreage) — the starter wood reads as one coherent country now, its
+  // mild-dry gate still keeping it out of the forest's damp half.
+  { biome: 'grove', weight: 1.55 },
   { biome: 'forest', weight: 1.3 },
   { biome: 'gloamwood', weight: 1.5 }, // the cool-damp woods: haunted where the forest ends — COUNTRY acreage now (three faces: hallowfield rim / heart wood / mournstead estates)
   { biome: 'jungle', weight: 1.6 },    // warm∧wet gate — high seed weight so its belt reads as one green throat

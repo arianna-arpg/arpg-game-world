@@ -156,3 +156,17 @@ registerMeld({
     { kind: 'dew_bead', count: [0, 1] },
   ],
 });
+
+// The Grove country's edge: green shade pressing close, and — if you cross
+// at the right hour — the first few small lights of the wood's night.
+registerMeld({
+  id: 'grove_meld',
+  label: 'small lights drift between the trees ahead',
+  rows: [
+    { kind: 'trees', count: [1, 2] },
+    { kind: 'brush', count: [1, 2] },
+    { kind: 'fern', count: [1, 2] },
+    { kind: 'glow_cap', count: [1, 2] },
+    { kind: 'lantern_bloom', count: [0, 1] },
+  ],
+});

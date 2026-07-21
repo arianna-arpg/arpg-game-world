@@ -2642,6 +2642,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { earth: '#5c4c2e' },
   },
 
+  // --- The Grove kit (vis/paintersGrove.ts; kinds in data/grove.ts) ---------
+  // THE LANTERN BLOOM: a paper-lantern flower on the pod painter (FULL pod
+  // params — glowY/glowR/pulseRate are the contract, an omitted glowR is
+  // the NaN-gradient crash) whose real glow is the LIGHT LAYER row:
+  // radiance { at1: 0.05 } — noon all but puts it out, dusk opens it, and
+  // under shelter the cave twilight keeps it half-lit (bioluminescence for
+  // free). Drawn pulse and light flicker breathe at cousin rates.
+  lantern_bloom: {
+    painter: 'pod', order: 53, shadow: 0.4,
+    params: { body: '#4a6a3a', glow: '#d8f078', aspectY: 1.15, glowY: -0.1, glowR: 0.42, pulseRate: 0.7, bands: 3 },
+    light: { radius: 95, color: '#d8f078', intensity: 0.55, flicker: 1.1, radiance: { at0: 1, at1: 0.05 } },
+  },
+  // The hollow bole names itself close-up (labelRevealed) — never baked,
+  // the label is a live read (the mound_gate contract in dead wood). Its
+  // mouth-gleam dims by day but never fully sleeps: the den below keeps
+  // its own hours.
+  hollow_bole: {
+    painter: 'hollowBole', order: 53, shadow: 0.55, longShadow: 1.0,
+    params: { bark: '#4a3a26', gleam: '#b8e88f', label: 'the Gleamhollow' },
+    light: { radius: 70, color: '#b8e88f', intensity: 0.35, radiance: { at1: 0.3 } },
+  },
+
   // --- THE ANATOMY WAYSIDE (rules + stamps in data/formations.ts): ground
   // truth for the gamut's kin — every row a proven painter re-dressed.
   // The whelks' grinding heaps: pale shell-shard litter on the tideline.

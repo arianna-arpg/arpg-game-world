@@ -534,6 +534,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_scentcraft', kind: 'skill', cost: 190, reqLedger: 'nest_entered', label: 'Skill Pool — Scentcraft',
     description: 'Prey Musk, Alarm Reek, Honeydew Lure, Moult may drop. The nest taught you what a smell can make a body do.',
     payload: { skillIds: ['prey_musk', 'alarm_reek', 'honeydew_lure', 'moult'] } },
+  // THE GLIMMERCRAFT — the Grove's light-lure art waits under the hollow
+  // bole (the 'gleam_entered' ledger the den's door bumps — dwelled into,
+  // not taught). The False Sovereign has been running the wood's oldest
+  // bait-and-lantern con; walking into her parlor is the tuition.
+  { id: 'gem_skills_glimmer', kind: 'skill', cost: 160, reqLedger: 'gleam_entered', label: 'Skill Pool — Glimmercraft',
+    description: 'Lure Lantern may drop. Something in the grove taught you what a light can make a body do.',
+    payload: { skillIds: ['lure_lantern'] } },
   // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
   // way the idea itself arrives — by killing ONE chest that pretended to be
   // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so

@@ -18,6 +18,7 @@ import type { TuneSpec } from '../engine/tuning';
 import type { ClingSpec } from '../engine/cling';
 import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
+import type { LightSpec } from '../render/vis/painters';
 import type { PortraitTune } from '../render/vis/portrait';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
@@ -373,6 +374,15 @@ export interface MonsterDef {
    *  facing, pose clock, worm-trail length for this kind's composed portrait
    *  in the bestiary and the website. Omitted = the fabric's measured fit. */
   portrait?: PortraitTune;
+  /** THE CARRIED LAMP (the firefly fabric): this kind contributes a real
+   *  light to the dynamic light layer — a mover, live-marched like the
+   *  hero's lantern (render/vis/lights.ts). Same LightSpec as doodads:
+   *  negative radius = × body radius, flicker breathes, and `radiance`
+   *  lerps the lamp on the sky (nocturnal kin `{ at1: 0 }` go dark at
+   *  noon). Dead bodies shed nothing; a concealed body keeps its light
+   *  swallowed with it. Reserve for KIN THAT MEAN IT — a light is a tell,
+   *  and the layer's cap is shared. */
+  light?: LightSpec;
   /** THE LATCH (engine/cling.ts): this kind LATCHES onto its quarry on
    *  contact — riding the silhouette, whacking through its own kit, shaken
    *  off on the spec's clock. The Pikmin blow; any monster can wear it. */
@@ -820,6 +830,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'ant_trail', chance: 0.3, count: [1, 2] },
     { id: 'reed_frog', chance: 0.45, count: [2, 3], near: 'water' },
     { id: 'dire_wolf', chance: 0.2, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
+    // Moths among the fireflies — the grove's own drifting lanterns.
+    { id: 'glow_moth', chance: 0.4, count: [2, 4] },
     { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
     { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
       announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
@@ -9585,6 +9597,143 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // ==========================================================================
+  // THE GLIMMERKIN (faction 'glimmerkin') — the Grove country's fireflies:
+  // the night's own society, out dancing from dusk to dawn. Their hours are
+  // the fabric, not the flavor: PHASE_BIAS (world/daynight.ts) all but
+  // empties them by day and doubles them at night, `nocturne` wears their
+  // night-strength, and MonsterDef.light makes every one of them a real
+  // lamp on the light layer (the tell IS the body). Crownless BY BIOLOGY —
+  // fireflies have no queen, and the biggest light in the wood is a LIE
+  // (the False Sovereign below is no kin of theirs; she eats the ones who
+  // answer her flash). Green speaks to green: allies of the sylvan, at war
+  // with the dark that eats lights.
+  // ==========================================================================
+  // The glimmerling: the tide itself — a mote of cold fire poured by the
+  // hundred (ZoneTheme.lite, `when: {phases:['dusk','night']}` — the
+  // conditioned pour's debut wearer). NO contact spec: the swarm is
+  // harmless ambience you wade through, killable, revengeless — texture
+  // with a body count, exactly as a firefly ought to be.
+  glimmerling: {
+    id: 'glimmerling', name: 'Glimmerling',
+    color: '#d8f078', shape: 'oval', radius: 5, material: 'chitin', look: 'glimmerling',
+    base: { life: 4, moveSpeed: 110, evasion: 40, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'glimmerkin', tags: ['beast'],
+    drops: 0,
+    flier: true, levitates: true,
+    plies: { count: 1 },
+    lite: { aggro: 200, weave: 1.6, erratic: 1.3, separation: 0.9 },
+    light: { radius: -3.5, color: '#d8f078', intensity: 0.3, flicker: 2.6, radiance: { at1: 0.1 } },
+    scaleVariance: [0.8, 1.15],
+    detection: 0.2,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 120, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.3, 0.7], hookArc: 1.2, freezeChance: 0.25, freeze: [0.2, 0.5] },
+    },
+  },
+  // The glimmer courtier: the courtship blinker — a flock flier writing its
+  // one word of light over and over at whatever watches. By day the few
+  // that fly are dim and slow; the dusk turns them ON (nocturne).
+  glimmer_courtier: {
+    id: 'glimmer_courtier', name: 'Glimmer Courtier',
+    color: '#d8f078', shape: 'kite', radius: 9, material: 'chitin', look: 'glimmer_courtier',
+    base: { life: 26, moveSpeed: 175, evasion: 70, mana: 60, manaRegen: 6 },
+    skills: ['glimmer_pulse'], xp: 12, faction: 'glimmerkin', tags: ['beast'],
+    flier: true, levitates: true,
+    packSize: [3, 6],
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('evasion', 'increased', 0.35), mod('moveSpeed', 'increased', 0.15),
+      mod('damage', 'increased', 0.25),
+    ] },
+    light: { radius: -4, color: '#d8f078', intensity: 0.5, flicker: 2.2, radiance: { at1: 0 } },
+    detection: 0.9,
+    brain: {
+      type: 'swarm',
+      behavior: { flock: { kin: 'def', radius: 170, cohesion: 0.8, alignment: 0.7, separation: 1.1, weave: 1.5, erratic: 1.1 } },
+    },
+  },
+  // The duskveil dancer: the ES-glass charmer — a veiled flame that holds
+  // your eye (transfixed: THE ADDLED HAND) while the wood closes in. Her
+  // lamp runs violet-white; you learn the hue the hard way.
+  duskveil_dancer: {
+    id: 'duskveil_dancer', name: 'Duskveil Dancer',
+    color: '#e8d8f8', shape: 'diamond', radius: 11, material: 'chitin', look: 'duskveil_dancer',
+    base: { life: 30, energyShield: 80, moveSpeed: 150, evasion: 55, mana: 120, manaRegen: 9 },
+    skills: ['beguiling_glow', 'glimmer_pulse'], xp: 24, faction: 'glimmerkin', tags: ['beast'],
+    gemBias: ['duration', 'aoe'],
+    flier: true, levitates: true,
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('evasion', 'increased', 0.3), mod('moveSpeed', 'increased', 0.15),
+    ] },
+    light: { radius: -4, color: '#e8d8f8', intensity: 0.5, flicker: 1.4, radiance: { at1: 0 } },
+    detection: 1.0,
+    brain: { type: 'strafer' },
+  },
+  // The glowworm grub: the larva under the lamps — armor + poise where its
+  // cousins are all evasion, slow as patience, and the silk it spits ROOTS
+  // whoever trusted the floor. Grotto-born; night brings a few up top.
+  glowworm_grub: {
+    id: 'glowworm_grub', name: 'Glowworm Grub',
+    color: '#b8e88f', shape: 'oval', radius: 12, material: 'chitin', look: 'glowworm_grub',
+    base: { life: 85, moveSpeed: 55, accuracy: 95, armor: 30, poise: 40, mana: 40, manaRegen: 5 },
+    skills: ['silk_snare'], xp: 18, faction: 'glimmerkin', tags: ['beast'],
+    heft: 1.2,
+    turnSpeed: 2.2,
+    light: { radius: -2.6, color: '#b8e88f', intensity: 0.4, radiance: { at1: 0.25 } },
+    detection: 0.5,
+    brain: { type: 'juggernaut' },
+  },
+  // The lampwright: THE SYNCHRONIST — the cadenced-kin law in firefly
+  // dress. It drums the Glimmer Chorus grammar players can earn
+  // (combo_glimmer_chorus, data/combos.ts): the same sign three times
+  // running and the chorus answers — watch the beat pips, learn the
+  // measure, steal it for your own storm.
+  lampwright: {
+    id: 'lampwright', name: 'Lampwright',
+    color: '#e8e8a0', shape: 'pentagon', radius: 10, material: 'chitin', look: 'lampwright',
+    base: { life: 40, energyShield: 30, moveSpeed: 140, mana: 110, manaRegen: 10 },
+    mods: [mod('combo_glimmer_chorus', 'flat', 1)],
+    skills: ['glimmer_pulse'], xp: 26, faction: 'glimmerkin', tags: ['beast'],
+    gemBias: ['lightning', 'spell'],
+    flier: true, levitates: true,
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('castSpeed', 'increased', 0.2), mod('damage', 'increased', 0.2),
+    ] },
+    light: { radius: -4.5, color: '#e8e8a0', intensity: 0.6, flicker: 1.8, radiance: { at1: 0 } },
+    detection: 1.0,
+    brain: { type: 'strafer' },
+  },
+  // THE FALSE SOVEREIGN — the lie at the top of the light. Fireflies have
+  // no queen; she counts on nobody knowing that. A predator wearing a
+  // stolen signal (faction 'wild', NOT glimmerkin — the kin she draws are
+  // dinner, not court): her mimic_flash LURES the unaware to her lamp
+  // (the planted-lure fabric's monster debut) and holds whoever sees her
+  // truly; her den under the hollow bole keeps a milling court of little
+  // lights that were never her subjects. Her lamp wears no radiance lerp —
+  // it never sleeps, because it is BAIT.
+  false_sovereign: {
+    id: 'false_sovereign', name: 'the False Sovereign',
+    color: '#e8f8b0', shape: 'diamond', radius: 16, material: 'chitin', look: 'false_sovereign',
+    base: { life: 420, energyShield: 120, moveSpeed: 160, evasion: 60, accuracy: 115, mana: 160, manaRegen: 12 },
+    skills: ['mimic_flash', 'glimmer_pulse', 'beguiling_glow'], xp: 140,
+    faction: 'wild', tags: ['beast'],
+    boss: true, drops: 2,
+    ambush: { radius: 150, announce: 'the light was never kin…' },
+    light: { radius: -5, color: '#e8f8b0', intensity: 0.7, flicker: 1.6 },
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.15,
+      phases: [
+        { atLifeFrac: 0.66, announce: 'She flashes the gathering-sign — and they come.',
+          onEnter: [{ do: 'summon', monster: 'glimmerling', count: 8, ring: 90 }] },
+        { atLifeFrac: 0.33, announce: 'The stolen light burns desperate-bright!',
+          mods: [mod('castSpeed', 'increased', 0.25), mod('moveSpeed', 'increased', 0.15)],
+          onEnter: [{ do: 'summon', monster: 'glimmerling', count: 10, ring: 110 }] },
+      ],
+    },
+  },
+
   // --- THE SMALL LIVES (ambient prey; the refuge seam's showcase) -----------
   // A squirrel: all tail — and when spooked it makes FOR the nearest tree
   // and is simply gone up it (refuge).
@@ -12868,6 +13017,14 @@ const RELATIONS: Record<string, FactionStance> = {
   'formic|vermin': 'hostile',
   'formic|fungal': 'ally',
   'bloomkin|sylvan': 'ally',
+  // THE GLIMMERKIN hold the grove's nights: green lights are green's kin
+  // (the sylvan courtesies extend to anything that pollinates), and the
+  // little lights war with the dark that EATS lights — the Night Court
+  // and the walking dead both read a lit grove as an insult to put out.
+  // Deepwood after dusk is a three-way brawl by construction.
+  'glimmerkin|sylvan': 'ally',
+  'glimmerkin|nightkin': 'hostile',
+  'glimmerkin|undead': 'hostile',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
@@ -13058,6 +13215,19 @@ export const FACTIONS: Record<string, {
       { id: 'sepal_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'pollen_sylph', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'foxglove_chorister', weight: 1, presence: { from: 7, fadeIn: 4 } },
+    ],
+  },
+  // The grove's fireflies — crownless BY BIOLOGY (no queen ever existed;
+  // the one who claims otherwise is dinner theater, see false_sovereign).
+  // Their real discipline is the CLOCK, not the table: PHASE_BIAS thins
+  // them to a rumor by day and doubles them at night.
+  glimmerkin: {
+    name: 'the Glimmerkin',
+    table: [
+      { id: 'glimmer_courtier', weight: 3 },
+      { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'glowworm_grub', weight: 2 },
+      { id: 'lampwright', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   // Born from fire — RESERVED (see RESERVED_KIN): the roster is complete and

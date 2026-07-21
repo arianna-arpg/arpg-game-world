@@ -110,6 +110,25 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
     },
   },
 
+  // THE GLIMMER CHORUS — the firefly's measure (the grove country): the
+  // same sign flashed three times running, and the wood answers in kind.
+  // The lampwrights drum it monster-side (mods-granted — the cadenced-kin
+  // law: watching one fight IS the tutorial), and any build that earns the
+  // stat joins the chorus — storm-callers keeping firefly time.
+  glimmer_chorus: {
+    id: 'glimmer_chorus', name: 'Glimmer Chorus', color: '#d8f078',
+    blurb: 'Cast the SAME spell three times running to close the sign: the chorus answers — lightning damage and cast speed surge while the light holds.',
+    repeat: { n: 3 },
+    gate: { anyTags: ['spell'] },
+    within: 6, icd: 0.5,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'lantern_chorus', duration: 5, maxStacks: 2,
+        mods: [mod('damage', 'increased', 0.35, ['lightning']), mod('castSpeed', 'increased', 0.12)],
+      },
+    },
+  },
+
 };
 
 export const COMBO_LIST: ComboRuleDef[] = Object.values(COMBO_RULES);

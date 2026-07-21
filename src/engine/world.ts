@@ -162,7 +162,7 @@ import {
 } from './cling';
 import {
   LITE_CFG, LitePool, liteNoise, liteRingOffset, liteSeatHash, resolveLiteKind,
-  type LiteKind, type LitePocket, type LiteRegenSpec, type LiteSwarmRow,
+  type LiteCond, type LiteKind, type LitePocket, type LiteRegenSpec, type LiteSwarmRow,
 } from './lite';
 import {
   GRAB_CFG, GRAB_MARKER, GRAB_VERB_LABEL, grabHolderMove, grabHoldBounds,
@@ -2749,6 +2749,10 @@ export class World {
   /** Burrow doodads planted at ambient regen hearts (parallel to
    *  litePockets; sealed via evap on extinction). */
   private liteBurrows: (Doodad | undefined)[] = [];
+  /** Conditioned pour rows (LiteSwarmRow.when) whose hour hadn't come at
+   *  boot: the announce waits with the tide — fired once, at the first
+   *  regrowth sweep that finds the hour held. Zone-local. */
+  private liteWhenAnnounces: { when: LiteCond; text: string; color?: string }[] = [];
   private liteRegenClock = 0;
   /** Colony anchors already registered (actor ids — an extinct pocket's
    *  dead anchor never re-registers). */
@@ -21580,6 +21584,7 @@ export class World {
     this.litePromoteBudget = 0;
     this.litePockets = [];
     this.liteBurrows = [];
+    this.liteWhenAnnounces = [];
     this.liteColonySeen.clear();
     this.liteRegenClock = 0;
     this.liteHasTrample = false;
@@ -21590,6 +21595,12 @@ export class World {
       for (const row of spec.swarms) {
         const has = rng.next() < (row.chance ?? 1);
         const pockets = rng.int(row.pockets[0], row.pockets[1]);
+        // THE CONDITIONED POUR (LiteSwarmRow.when): an out-of-hour row still
+        // rolls its whole shape and SEATS its pockets (the salted stream's
+        // draws are sacred — held or not, every roll happens), but pours no
+        // bodies yet; the regrowth sweep raises the tide when the hour
+        // comes, and the announce waits with it (liteWhenAnnounces).
+        const held = !row.when || this.radianceCondHeld(row.when);
         let poured = false;
         for (let p = 0; p < pockets; p++) {
           const heart = this.interactSpot(pois, rng, LITE_CFG.pour.reach, LITE_CFG.pour.portalClear);
@@ -21605,6 +21616,7 @@ export class World {
             const kindIdx = this.liteKindOf(row.monsterId);
             if (kindIdx < 0) continue;
             if (pk === -1) pk = this.litePocketEnsure(row, kindIdx, heart, n);
+            if (!held) continue; // the seats stand; the bodies wait for the hour
             const bx = heart.x + Math.cos(ang) * d, by = heart.y + Math.sin(ang) * d;
             const open = this.liteOpenAt(bx, by);
             if (pool.spawn(kindIdx, open ? bx : heart.x, open ? by : heart.y, 0, 0,
@@ -21622,6 +21634,8 @@ export class World {
             this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), row.announce,
               row.announceColor ?? '#c8a878', 13);
           }
+        } else if (has && !held && row.when && row.announce) {
+          this.liteWhenAnnounces.push({ when: row.when, text: row.announce, color: row.announceColor });
         }
       }
     }
@@ -22133,10 +22147,15 @@ export class World {
    *  pockets never regrow (the sentinel keeps bootLite's resolve single). */
   private litePocketEnsure(row: LiteSwarmRow, kindIdx: number, heart: Vec2, cap: number): number {
     const kindRegen = this.liteKinds[kindIdx].regen;
-    const regen = row.regen === true ? (kindRegen ?? {}) : (row.regen ?? kindRegen);
+    // A CONDITIONED row (row.when) breathes by the regrowth law even when
+    // it never asked for regen — without a rate the tide could never rise
+    // after an out-of-hour boot. Explicit specs still win.
+    const regen = row.regen === true ? (kindRegen ?? {})
+      : (row.regen ?? kindRegen ?? (row.when ? {} : undefined));
     if (!regen) return -2;
     const pk = this.litePockets.length;
-    this.litePocketPush(regen, kindIdx, heart.x, heart.y, cap, 0, undefined);
+    const p = this.litePocketPush(regen, kindIdx, heart.x, heart.y, cap, 0, undefined);
+    if (row.when) p.when = row.when;
     this.litePlantBurrow(pk, heart.x, heart.y);
     return pk;
   }
@@ -22172,6 +22191,30 @@ export class World {
     };
     this.litePockets.push(p);
     return p;
+  }
+
+  /** THE RECEDING TIDE (LiteSwarmRow.when): cull a conditioned pocket's
+   *  bodies toward empty while its hour is out — the regrowth law run
+   *  backward at the same rate. Bodies simply disperse (pool.free — no
+   *  credit, no burrow seal, no disturbance stamp); owned or promoted
+   *  bodies are someone's business and the tide leaves them standing.
+   *  A pocket the hour FULLY reclaims un-marks `poured`: the next held
+   *  sweep must read clean seats, never a wipe — without this, the first
+   *  dusk after a full recession would meet `poured && live === 0` with
+   *  the hour held and exterminate the tide forever (probe-pinned). A
+   *  player wipe DURING the hour keeps `poured` and dies by the standing
+   *  law: violence is remembered, weather is not. */
+  private litePocketRecede(pk: number, p: LitePocket): void {
+    let n = Math.max(1, Math.round(p.rate * LITE_CFG.regen.every + 0.5));
+    const pool = this.lite;
+    for (let i = 0; i < pool.used && n > 0; i++) {
+      if (!pool.alive[i] || pool.pocket[i] !== pk) continue;
+      if (pool.owner[i]) continue;
+      pool.free(i);
+      p.live--;
+      n--;
+    }
+    if (p.live <= 0) p.poured = false;
   }
 
   /** One birth at a pocket's heart. Positions ride the pocket's own
@@ -22211,6 +22254,19 @@ export class World {
    *  exterminated; a colony pocket dies with its anchor — the nest is the
    *  true target (docs/engine/lite.md). */
   private liteRegenSweep(): void {
+    // The waiting announces (conditioned rows booted out of hour): the
+    // first sweep that finds an hour held cries that arrival once.
+    if (this.liteWhenAnnounces.length) {
+      const still: { when: LiteCond; text: string; color?: string }[] = [];
+      for (const an of this.liteWhenAnnounces) {
+        if (this.radianceCondHeld(an.when)) {
+          for (const s of this.seats) {
+            this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), an.text, an.color ?? '#c8a878', 13);
+          }
+        } else still.push(an);
+      }
+      this.liteWhenAnnounces = still;
+    }
     // Anchor discovery: any living body wearing MonsterDef.colony.
     for (const a of this.actors) {
       if (a.dead || !a.defId || this.liteColonySeen.has(a.id)) continue;
@@ -22238,6 +22294,9 @@ export class World {
     for (let pk = 0; pk < pks.length; pk++) {
       const p = pks[pk];
       if (p.extinct) continue;
+      // THE POUR'S HOUR (LiteSwarmRow.when → LitePocket.when): resolved
+      // once per pocket per sweep — everything below branches on it.
+      const held = !p.when || this.radianceCondHeld(p.when);
       if (p.anchorId) {
         const anchor = this.actorById(p.anchorId);
         if (!anchor || anchor.dead) { this.litePocketExtinct(pk, p); continue; }
@@ -22246,8 +22305,22 @@ export class World {
         p.x = anchor.pos.x; p.y = anchor.pos.y;
       } else if (p.poured && p.live === 0) {
         // THE EXTERMINATION LAW: an ambient pocket wiped to zero has
-        // nothing left to breed back — the burrow seals.
-        this.litePocketExtinct(pk, p);
+        // nothing left to breed back — the burrow seals. A CONDITIONED
+        // pocket out of its hour is exempt: a tide that receded at dawn
+        // drained itself, and what the hour took the hour returns.
+        if (held) {
+          this.litePocketExtinct(pk, p);
+          continue;
+        }
+      }
+      if (!held) {
+        // THE RECEDING TIDE: out of its hour a conditioned pocket stops
+        // breeding and gently culls toward empty — at its own regrowth
+        // rate, so the dusk that raises a tide in minutes is the dawn
+        // that lowers it in minutes. No disturbance stamp, no extinction:
+        // the hour is weather, not violence.
+        p.acc = 0;
+        if (p.live > 0) this.litePocketRecede(pk, p);
         continue;
       }
       if (p.live >= p.cap) { p.acc = 0; continue; }
@@ -25844,6 +25917,16 @@ export class World {
       // pod bursts where it lands — the projectile sweep's own hook).
       if (fx.type === 'litePour' && d.type !== 'projectile') {
         this.litePourAt(caster, fx, origin);
+      }
+      // A PLANTED LURE (World.setLure — the beacon fabric's bait lane,
+      // finally wearing a skill): a false attraction standing at the
+      // resolution point for its seconds. Draws only the UNAWARE — idle,
+      // enemy-team, non-passive — never overriding combat, orders or fear;
+      // the moths were never a threat and stay none. Projectile deliveries
+      // plant at the flight's end (the litePour hook's twin).
+      if (fx.type === 'lure' && d.type !== 'projectile') {
+        this.setLure(`skill#${caster.id}#${inst.def.id}`, origin, fx.radius,
+          fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec);
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -40665,6 +40748,12 @@ export class World {
         if (!p.caster.dead) {
           for (const fx of p.inst.def.effects) {
             if (fx.type === 'litePour') this.litePourAt(p.caster, fx, p.pos);
+            // A PLANTED LURE on a flight: the false light stands where the
+            // flight ENDED (the litePour hook's twin — bait you can throw).
+            if (fx.type === 'lure') {
+              this.setLure(`skill#${p.caster.id}#${p.inst.def.id}`, p.pos, fx.radius,
+                fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec);
+            }
           }
         }
         // PLANT ON LAND (#17): the spent projectile stands where it fell —

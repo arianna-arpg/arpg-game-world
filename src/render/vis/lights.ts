@@ -16,7 +16,9 @@ import { dayCycle } from '../../world/daynight';
 import type { Doodad } from '../../engine/levelgen';
 import { lightReach, wellDimScale } from '../../engine/lightwells';
 import { GridWalkField } from '../../world/gridWalk';
+import { STATUS_DEFS } from '../../engine/status';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import { MONSTERS } from '../../data/monsters';
 import { ORB_DEFS } from '../../data/orbs';
 import { courtLord } from '../../packages/courts';
 import { withAlpha } from './color';
@@ -48,6 +50,9 @@ interface PolyCacheEntry { v: number; poly: { x: number; y: number }[] | null }
 interface LightCluster {
   x: number; y: number; r: number;
   color: string; intensity: number; flicker?: number;
+  /** THE BREATHING LIGHT (LightSpec.radiance) carried onto the cluster —
+   *  applied at collect, never baked, so lamps swell and die with the sky. */
+  radiance?: { at0?: number; at1?: number };
 }
 
 export class LightLayer {
@@ -81,7 +86,8 @@ export class LightLayer {
     this.clustersRev = world.doodadsVersion();
     const bin = VIS_CFG.lights.clusterBin;
     type Acc = { sx: number; sy: number; n: number; members: { x: number; y: number; lr: number }[];
-      color: string; intensity: number; flicker?: number };
+      color: string; intensity: number; flicker?: number;
+      radiance?: { at0?: number; at1?: number } };
     const bins = new Map<string, Acc>();
     for (const d of world.doodads) {
       const spec = DOODAD_VISUALS[d.kind]?.light;
@@ -96,7 +102,7 @@ export class LightLayer {
       if (!acc) {
         acc = { sx: 0, sy: 0, n: 0, members: [],
           color: resolveColor(spec.color, world.zone.theme),
-          intensity: spec.intensity, flicker: spec.flicker };
+          intensity: spec.intensity, flicker: spec.flicker, radiance: spec.radiance };
         bins.set(key, acc);
       }
       acc.sx += d.pos.x; acc.sy += d.pos.y; acc.n++;
@@ -109,7 +115,8 @@ export class LightLayer {
       for (const m of acc.members) {
         r = Math.max(r, Math.hypot(m.x - cx, m.y - cy) + m.lr);
       }
-      this.clusters.push({ x: cx, y: cy, r, color: acc.color, intensity: acc.intensity, flicker: acc.flicker });
+      this.clusters.push({ x: cx, y: cy, r, color: acc.color, intensity: acc.intensity,
+        flicker: acc.flicker, radiance: acc.radiance });
     }
     return this.clusters;
   }
@@ -148,6 +155,14 @@ export class LightLayer {
     // Fully lit scene → only bloom draws (intensity ≥ 0.25); dimmer lights
     // can't render at all this frame, so don't collect (or march rays for) them.
     const minIntensity = this.ambient <= 0.02 ? 0.25 : 0.01;
+    // THE BREATHING LIGHT (LightSpec.radiance): reach + punch lerped on the
+    // sky's radiance — nocturnal lamps swell as the light dies, diurnal
+    // gleams the other way; under shelter the flat cave twilight holds them
+    // half-lit. One sky sample a frame; composes with flicker exactly as
+    // flicker composes with the base. A fully-breathed-out lamp skips.
+    const skyRad = world.radiance();
+    const breathe = (rz?: { at0?: number; at1?: number }): number =>
+      rz ? (rz.at0 ?? 1) + ((rz.at1 ?? 1) - (rz.at0 ?? 1)) * skyRad : 1;
     const inView = (x: number, y: number, r: number): boolean =>
       x + r > camX && x - r < camX + vw && y + r > camY && y - r < camY + vh;
     const push = (x: number, y: number, r: number, color: string, intensity: number,
@@ -195,6 +210,24 @@ export class LightLayer {
       push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
         0.4 * Math.min(1, o.life / 2));
     }
+    // GLOWING BODIES (MonsterDef.light — the firefly fabric): kin that
+    // carry their own lamp join the layer as MOVERS, live-marched like the
+    // hero's lantern and pushed here so terrain emissives can never starve
+    // them out of the cap. Dead bodies shed nothing; a concealed body
+    // (StatusDef.conceals — the swallowed) keeps its light swallowed too.
+    for (const a of world.actors) {
+      if (a.dead || !a.defId) continue;
+      const spec = MONSTERS[a.defId]?.light;
+      if (!spec) continue;
+      const br = breathe(spec.radiance);
+      if (br <= 0.02) continue;
+      if (a.statuses.some(s => STATUS_DEFS[s.id]?.conceals)) continue;
+      const flick = spec.flicker
+        ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + a.id * 0.61) : 1;
+      const r = (spec.radius < 0 ? -spec.radius * a.radius : spec.radius) * flick * br;
+      push(a.pos.x, a.pos.y, r, resolveColor(spec.color, world.zone.theme),
+        spec.intensity * flick * br);
+    }
 
     // POOLED LIGHTWELLS (engine/lightwells.ts) — survival infrastructure,
     // pushed right after the movers so terrain emissives can never starve
@@ -210,11 +243,13 @@ export class LightLayer {
       const reach = lightReach(d);
       if (reach === null || reach <= 0) continue;
       const dim = wellDimScale(d);
+      const br = breathe(spec.radiance);
+      if (br <= 0.02) continue;
       const flick = spec.flicker
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + d.pos.x * 0.13) : 1;
       const baseR = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
-      push(d.pos.x, d.pos.y, reach * flick, resolveColor(spec.color, world.zone.theme),
-        spec.intensity * dim * flick, d, baseR);
+      push(d.pos.x, d.pos.y, reach * flick * br, resolveColor(spec.color, world.zone.theme),
+        spec.intensity * dim * flick * br, d, baseR);
     }
 
     // Zone exits breathe their accent so the way out reads in the dark.
@@ -244,22 +279,27 @@ export class LightLayer {
     const t = world.time;
     if (VIS_CFG.lights.cluster) {
       for (const c of this.zoneClusters(world)) {
+        const br = breathe(c.radiance);
+        if (br <= 0.02) continue;
         const flick = c.flicker
           ? 0.82 + 0.18 * Math.sin(t * c.flicker + c.x * 0.13) : 1;
-        // The occlusion poly caches at the UN-flickered reach (its widest);
-        // the flicker animates brightness + blit size, not the ray march.
-        push(c.x, c.y, c.r * flick, c.color, c.intensity * flick, c, c.r);
+        // The occlusion poly caches at the UN-flickered, UN-breathed reach
+        // (its widest); flicker + breath animate brightness + blit size,
+        // never the ray march.
+        push(c.x, c.y, c.r * flick * br, c.color, c.intensity * flick * br, c, c.r);
       }
     } else {
       for (const [kind, list] of culled) {
         const spec = DOODAD_VISUALS[kind]?.light;
         if (!spec) continue;
+        const br = breathe(spec.radiance);
+        if (br <= 0.02) continue;
         const color = resolveColor(spec.color, world.zone.theme);
         for (const d of list) {
           const r = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
           const flick = spec.flicker
             ? 0.82 + 0.18 * Math.sin(t * spec.flicker + d.pos.x * 0.13) : 1;
-          push(d.pos.x, d.pos.y, r * flick, color, spec.intensity * flick, d, r);
+          push(d.pos.x, d.pos.y, r * flick * br, color, spec.intensity * flick * br, d, r);
         }
       }
     }

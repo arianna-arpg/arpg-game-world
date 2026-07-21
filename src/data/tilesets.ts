@@ -234,11 +234,29 @@ export const TILESETS: Record<string, TilesetDef> = {
       // LIVING FOG (engine/fog.ts): roaming banks replace the old static
       // fog_bank doodads — the same veil, but now it moves and you move with it.
       fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
+      // THE GROVE'S NIGHTS KINDLE (the firefly fabric): ambient fireflies
+      // over the whole wood after dusk (vis/ambientFx.ts — hidden by day),
+      // and a real WADE-THROUGH tide of glimmerlings poured on the night's
+      // own hours (the conditioned pour, engine/lite.ts — the tide rises at
+      // dusk and recedes at dawn wherever you're standing when it turns).
+      ambientFx: [{ kind: 'fireflies', intensity: 0.7 }],
+      lite: {
+        swarms: [{
+          monsterId: 'glimmerling', pockets: [1, 3], size: [8, 16], chance: 0.7,
+          when: { phases: ['dusk', 'night'] },
+          announce: 'the wood kindles — small lights rise from the bracken…',
+          announceColor: '#d8f078',
+        }],
+      },
       floor: '#0d150c', grid: '#142112', border: '#2a452a',
       obstacle: '#223c1c', obstacleEdge: '#3a6030', accent: '#8ed45e',
       mud: '#1b2914', chasm: '#030703', water: '#173a4a', wall: '#46371f',
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
+    // THE COUNTRY STAGING (the garden/desert model): deepwood is the grove's
+    // broad middle wood — it thins toward the heart, where the heartwood
+    // takes over (and the glimmervale dells thread the band between).
+    depthAffinity: { to: 0.75, fadeOut: 0.15 },
     layout: [
       { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] }, { kind: 'mushroom_ring', count: [0, 1] },
       { kind: 'charcoal_mound', count: [0, 1] },
@@ -304,6 +322,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
         // Some of the trees are wearing something.
         { id: 'root_wraith', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        // THE GLIMMERKIN after dusk (PHASE_BIAS keeps their hours — by day
+        // these rows are near-rumors; at night the wood is half theirs,
+        // and the undead rows above make deepwood dark a three-way brawl).
+        { id: 'glimmer_courtier', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'duskveil_dancer', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'lampwright', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -4163,11 +4187,25 @@ export const TILESETS: Record<string, TilesetDef> = {
         clearing: { reach: 120, lift: 0.18 },
       },
       dayLight: 1.15, nightDark: 0.6,
+      // The lea's own gentle share of the grove's night (the firefly
+      // fabric): a soft field twinkle and the occasional small tide.
+      ambientFx: [{ kind: 'fireflies', intensity: 0.4 }],
+      lite: {
+        swarms: [{
+          monsterId: 'glimmerling', pockets: [1, 2], size: [6, 12], chance: 0.5,
+          when: { phases: ['dusk', 'night'] },
+          announce: 'fireflies rise over the lea…',
+          announceColor: '#d8f078',
+        }],
+      },
       floor: '#0e130c', grid: '#172013', border: '#3a5a2c',
       obstacle: '#2c4a22', obstacleEdge: '#477534', accent: '#9ed060',
       tree: '#3a7a34', grass: '#4e7a34', mud: '#1d2b16', water: '#1a4a54',
     },
     sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, biome: 'grove',
+    // THE COUNTRY STAGING: the meadow is the doorstep breather — the rim of
+    // the grove country, thinning fast once the wood properly begins.
+    depthAffinity: { to: 0.34, fadeOut: 0.12 },
     layout: [
       // A kept lawn at the heart of the lea — negative space first.
       { kind: 'clearing', count: [1, 2], radius: [100, 170] },
@@ -4237,6 +4275,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fen_hound', weight: 1 },
         { id: 'sylvan_sapling', weight: 1, presence: { to: 12, fadeOut: 5 } },
         { id: 'twig_snarl', weight: 1, presence: { from: 5, fadeIn: 3, to: 20, fadeOut: 8 } },
+        // A few courting lights stray over the lea after dusk.
+        { id: 'glimmer_courtier', weight: 1, presence: { to: 10, fadeOut: 4 } },
         // THE MUMMERS (engine/mimic.ts): the troupe plays the lea too.
         { id: 'mockthrush', weight: 2, presence: { to: 12, fadeOut: 5 } },
         { id: 'masque_haunt', weight: 1, presence: { from: 5, fadeIn: 3 } },
@@ -4255,6 +4295,319 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     structures: [
       { structure: 'walled_manor', chance: 0.3 },
+    ],
+  },
+
+  // ==========================================================================
+  // THE GROVE COUNTRY — the FIRST country: the starter wood, staged rim →
+  // heart (meadow doorstep → deepwood middle → the heartwood's sealed old
+  // growth, with the glimmervale dells threading the band between) and
+  // built on ONE thesis: the DAY/NIGHT INVERSION. By day a gentle sunlit
+  // wood; at dusk it KINDLES — firefly tides pour (the conditioned-pour
+  // lever), lantern-flora opens (the radiance-breathing light lever), the
+  // glimmerkin come out dancing (PHASE_BIAS + nocturne), and down under
+  // the vale one light LIES (the gleamhollow den + the False Sovereign).
+  // Kit in data/grove.ts; kin in data/monsters.ts (faction 'glimmerkin');
+  // docs in docs/engine/grove.md.
+  // ==========================================================================
+
+  // THE GLIMMERVALE — the firefly dells: low misty bottoms threading the
+  // grove's middle band, where the night tide runs THICKEST. Lantern
+  // blooms light the ways after dark, the lantern glade is the commons,
+  // and the hollow bole in the glowworm hollow is the way DOWN.
+  glimmervale: {
+    id: 'glimmervale',
+    compositions: [
+      { composition: 'lantern_glade', chance: 0.5 },
+      { composition: 'glowworm_hollow', chance: 0.38 },
+      { composition: 'fairy_court', chance: 0.18 },
+    ],
+    nameFirst: ['Glimmer', 'Lantern', 'Firefly', 'Duskglow', 'Everlight', 'Winkfield', 'Shimmermoss', 'Nightbloom', 'Gleamwillow', 'Softlight', 'Sparkfen', 'Emberfly'],
+    nameSecond: ['Vale', 'Dell', 'Hollow', 'Glade', 'Bottoms', 'Meads', 'Dingle', 'Combe', 'Nook', 'Run'],
+    theme: {
+      // Mossy low country: cool greens that darken wet at every mere and
+      // lift where the glades open. Its nights stay READABLE on purpose —
+      // the dark is the canvas the light show is painted on.
+      ground: {
+        palette: ['#0f1e10', '#16301a', '#1f4222', '#2a542c', '#356436'], bias: 0.56, alpha: 0.55,
+        coast: { reach: 90, shift: -0.36, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
+        clearing: { reach: 125, lift: 0.26 },
+      },
+      nightDark: 0.76,
+      fog: { banks: [0, 1], kinds: [{ id: 'mist' }] },
+      // THE VALE IS THE FIREFLY HEART: the densest ambient show in the
+      // country, and the biggest conditioned tide (engine/lite.ts when-
+      // pour — dusk raises it, dawn recedes it, dawn never wipes it).
+      ambientFx: [{ kind: 'fireflies', intensity: 1.15 }],
+      lite: {
+        swarms: [{
+          monsterId: 'glimmerling', pockets: [2, 4], size: [12, 22], chance: 0.95,
+          when: { phases: ['dusk', 'night'] },
+          announce: 'the vale kindles — the glimmerkin rise…',
+          announceColor: '#d8f078',
+        }],
+      },
+      floor: '#0c140d', grid: '#132112', border: '#2c4a2c',
+      obstacle: '#20401e', obstacleEdge: '#386434', accent: '#a8e068',
+      mud: '#1a2a15', water: '#164450', wall: '#443620',
+    },
+    sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.25, biome: 'grove',
+    depthAffinity: { from: 0.22, fadeIn: 0.12, to: 0.85, fadeOut: 0.1 },
+    layout: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 150] },
+      { kind: 'mist_pool', count: [2, 4] },
+      { kind: 'water', count: [0, 1] },
+      { kind: 'log', count: [1, 3] }, { kind: 'stump', count: [1, 2] },
+      { kind: 'ancient_tree', count: [0, 2] },
+      { kind: 'trees', count: [10, 16] },
+      { kind: 'grove', count: [2, 3] },
+      { kind: 'brush', count: [2, 4] },
+      { kind: 'fern', count: [2, 4] },
+      { kind: 'grass', count: [4, 7] },
+      { kind: 'flowers', count: [3, 6], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 19 } } },
+      { kind: 'glow_cap', count: [3, 6] },
+      { kind: 'lantern_bloom', count: [4, 7] },
+      { kind: 'rocks', count: [3, 6], radius: [16, 32] },
+      { kind: 'berry_bush', count: [1, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'lantern_ring' },
+      { kind: 'hollow_bole', count: [0, 1] },
+      { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      // Glimmerkin-led (their hours ride PHASE_BIAS — a day crossing meets
+      // the wood's ordinary teeth; a night crossing meets the court), the
+      // sylvan holding the ground floor, and the silk-kin down both lanes.
+      table: [
+        { id: 'glimmer_courtier', weight: 3 },
+        { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'glowworm_grub', weight: 2 },
+        { id: 'lampwright', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'thorn_sprite', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'sylvan_warden', weight: 1 },
+        { id: 'sylvan_sapling', weight: 1, presence: { to: 12, fadeOut: 5 } },
+        { id: 'twig_snarl', weight: 1, presence: { from: 4, fadeIn: 2, to: 22, fadeOut: 9 } },
+        { id: 'fen_hound', weight: 1, presence: { to: 16, fadeOut: 8 } },
+        { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'moon_howler', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'root_wraith', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'puzzle', weight: 2 },
+    ],
+    puzzles: [
+      { id: 'glimmer_refrain', chance: 0.4 },
+      { id: 'singing_refrain', chance: 0.15 },
+    ],
+  },
+
+  // THE HEARTWOOD — the grove's sealed old-growth heart: the forest recipe
+  // under the grove's own greens (a TRUE roof where the country runs
+  // deepest), the treant line thick, and the Grove Singer FINALLY seated
+  // in the wood that crowns him (the sylvan warlord's native ground).
+  heartwood: {
+    id: 'heartwood',
+    compositions: [
+      { composition: 'fairy_court', chance: 0.3 },
+      { composition: 'lantern_glade', chance: 0.15 },
+    ],
+    nameFirst: ['Heartwood', 'Eldergrove', 'Oldenbough', 'Deeproot', 'Wardenwood', 'Mossheart', 'Ancientshade', 'Rootfast', 'Hallowbough', 'Rootsong', 'Firstgrown', 'Elderhush'],
+    nameSecond: ['Heart', 'Fastness', 'Sanctum', 'Deeps', 'Court', 'Shade', 'Stand', 'Cradle', 'Keep', 'Hush'],
+    forceLayout: 'forest',
+    layoutParams: {
+      // The deep heart wins back more of its ways than the fringe (the
+      // clearway overgrowth lever, forest's own dial deepened a notch).
+      overgrowth: [0.04, 0.22],
+    },
+    theme: {
+      ground: {
+        palette: ['#0c190b', '#122811', '#1a3a17', '#24491e', '#2e5926'], bias: 0.6, alpha: 0.58,
+        coast: { reach: 85, shift: -0.34, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
+        clearing: { reach: 120, lift: 0.32 },
+      },
+      nightDark: 0.82,
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
+      // Sparser lights under the old roof — the heart keeps its dark, and
+      // what glimmers here climbs the boughs instead of the bracken.
+      ambientFx: [{ kind: 'fireflies', intensity: 0.85 }],
+      lite: {
+        swarms: [{
+          monsterId: 'glimmerling', pockets: [1, 2], size: [8, 16], chance: 0.7,
+          when: { phases: ['dusk', 'night'] },
+          announce: 'small lights climb through the old boughs…',
+          announceColor: '#d8f078',
+        }],
+      },
+      floor: '#0a1209', grid: '#111d0f', border: '#274427',
+      obstacle: '#1e3a1a', obstacleEdge: '#345c2c', accent: '#8ed45e',
+      mud: '#182613', chasm: '#030703', water: '#143846', wall: '#40331d',
+    },
+    sizeW: [2400, 3400], sizeH: [1700, 2400], ellipseChance: 0.25, biome: 'grove',
+    depthAffinity: { from: 0.55, fadeIn: 0.2 },
+    // Furniture-only rows: the forest recipe plants the roof itself (the
+    // climate-veil law — cover scales with biomeDepth, so the heartwood's
+    // deep mints run near-sealed).
+    layout: [
+      { kind: 'log', count: [1, 3] }, { kind: 'stump', count: [1, 2] },
+      { kind: 'mushroom_ring', count: [0, 1] },
+      { kind: 'rocks', count: [3, 6], radius: [18, 34] },
+      { kind: 'ruin', count: [0, 1] },
+      { kind: 'glow_cap', count: [1, 3] },
+      { kind: 'lantern_bloom', count: [1, 3] },
+      { kind: 'briarwood', count: [1, 2] },
+      { kind: 'fern', count: [2, 4] },
+      { kind: 'berry_bush', count: [0, 2] },
+    ],
+    variants: [
+      // Sun-shaft cathedral: the roof grants its clearings — lighter
+      // floor dress, flowers in the wells of light.
+      { name: 'sunshaft cathedral', layout: [
+        { kind: 'log', count: [1, 2] }, { kind: 'mushroom_ring', count: [0, 1] },
+        { kind: 'flowers', count: [2, 4], where: { field: 'noise', max: 0.4, params: { scale: 380, seed: 13 } } },
+        { kind: 'glow_cap', count: [1, 2] },
+        { kind: 'lantern_bloom', count: [1, 2] },
+        { kind: 'fern', count: [2, 4] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 30] },
+      ], theme: { dayLight: 1.08, nightDark: 0.78 } },
+      // Rootbound dark: the heart at its most opinionated — briar and
+      // burst-rot below, and precious little light of any kind.
+      { name: 'rootbound dark', layout: [
+        { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] },
+        { kind: 'briarwood', count: [2, 4] },
+        { kind: 'burst_sac', count: [1, 3] },
+        { kind: 'puffcap_cluster', count: [1, 2] },
+        { kind: 'fern', count: [1, 3] },
+        { kind: 'glow_cap', count: [1, 2] },
+        { kind: 'rocks', count: [3, 6], radius: [18, 34] },
+      ], theme: { nightDark: 0.85 } },
+    ],
+    packs: {
+      count: [5, 8], size: [3, 5],
+      // The sylvan court at home: the treant line thick, the wraiths in
+      // the trees, and THE GROVE SINGER — the sylvan warlord — finally
+      // spawning in the wood that names him.
+      table: [
+        { id: 'sylvan_warden', weight: 2 },
+        { id: 'grove_singer', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'treant_warden', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'twig_snarl', weight: 2, presence: { to: 22, fadeOut: 9 } },
+        { id: 'sylvan_sapling', weight: 2, presence: { to: 12, fadeOut: 5 } },
+        { id: 'root_snarl', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'root_wraith', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        { id: 'elder_treant', weight: 1, presence: { from: 16, fadeIn: 7 } },
+        { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'thorn_sprite', weight: 2, presence: { to: 20, fadeOut: 10 } },
+        { id: 'hex_weaver', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'dire_wolf', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'moon_howler', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        // The kin thread even the old dark — thinner here than the vale.
+        { id: 'glimmer_courtier', weight: 1, presence: { to: 16, fadeOut: 8 } },
+        { id: 'lampwright', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'offering', weight: 2 },
+      { kind: 'procession', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'puzzle', weight: 1 },
+    ],
+    puzzles: [
+      { id: 'singing_refrain', chance: 0.3 },
+      { id: 'glimmer_refrain', chance: 0.15 },
+    ],
+  },
+
+  // THE GLEAMHOLLOW — the den under the vale (frontier:false — minted only
+  // by the hollow_bole door, data/sidezones.ts): a root-warren lit by
+  // glowworm silk and cold small fires, ONE rung deep by design (fireflies
+  // dig no galleries — the den IS the vault), where the False Sovereign
+  // keeps a milling court of little lights that were never her subjects.
+  gleamhollow: {
+    id: 'gleamhollow', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { labyrinth: 3, dungeon: 1 },
+    layoutParams: {
+      rooms: [5, 8],
+      doorChance: 0.1, doorBreakChance: 0.1,
+      corridorCells: 1.5, loopiness: 0.4,
+    },
+    compositions: [
+      { composition: 'glowworm_grotto', chance: 0.5 },
+    ],
+    nameFirst: ['Gleam', 'Glowworm', 'Lantern', 'Root', 'Silk', 'Softglow', 'Understar', 'Coldfire'],
+    nameSecond: ['Hollow', 'Den', 'Grot', 'Warrens', 'Gallery', 'Cradle', 'Parlor', 'Reach'],
+    theme: {
+      ambientDark: 0.52,
+      ground: {
+        palette: ['#120e07', '#1a150a', '#231d0e', '#2c2412', '#352c16'], bias: 0.5, alpha: 0.55,
+      },
+      // The den's tide keeps NO hours (no `when`): under shelter the sky's
+      // clock means nothing, and the little lights are always home.
+      lite: {
+        swarms: [{
+          monsterId: 'glimmerling', pockets: [2, 3], size: [10, 18], chance: 1,
+          announce: 'the hollow is full of small lights…',
+          announceColor: '#d8f078',
+        }],
+      },
+      floor: '#0d0a05', grid: '#141008', border: '#4a3c24',
+      obstacle: '#2c2416', obstacleEdge: '#4c3f28', accent: '#b8e88f',
+      wall: '#2c2416', mud: '#1c160c', water: '#12343c',
+    },
+    sizeW: [1800, 2500], sizeH: [1300, 1900], ellipseChance: 0,
+    layout: [
+      { kind: 'glowworm_veil', count: [4, 8] },
+      { kind: 'glow_cap', count: [3, 6] },
+      { kind: 'toadstool', count: [1, 3] },
+      { kind: 'water', count: [1, 2] },
+      { kind: 'briarwood', count: [0, 2] },
+      { kind: 'rocks', count: [2, 4], radius: [16, 30] },
+    ],
+    variants: [
+      // The silk gallery: the ceiling's colonies at their thickest — the
+      // named face of the Sovereign's larder.
+      { name: 'the silk gallery', layout: [
+        { kind: 'glowworm_veil', count: [7, 12] },
+        { kind: 'glow_cap', count: [2, 4] },
+        { kind: 'toadstool', count: [1, 2] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 30] },
+      ] },
+      // The still meres: black water and its reflections — more light in
+      // the floor than the ceiling, none of it warm.
+      { name: 'the still meres', layout: [
+        { kind: 'water', count: [2, 4] },
+        { kind: 'glowworm_veil', count: [3, 5] },
+        { kind: 'glow_cap', count: [4, 8] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 30] },
+      ] },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      table: [
+        { id: 'glowworm_grub', weight: 3 },
+        { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'glimmer_courtier', weight: 1 },
+        { id: 'lampwright', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'orb_weaver', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'root_snarl', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 1 },
     ],
   },
 
@@ -9585,6 +9938,9 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   ossuary:        { title: 'The Ossuary',       blurb: 'A dark, matte bone-vault — pale mounds, shelf-rows and arches picked out by braziers and niche-candles down its long sightlines.' },
   beach:          { title: 'Coastline',         blurb: 'A sun-bleached coast of sand and wading shallows, palms leaning over scattered wilds where the open sea meets the edge of the map.' },
   meadow:         { title: 'Meadow',            blurb: 'A gentle grove breather — grass, scattered trees and low-threat wilds, a stretch where the world catches its breath.' },
+  glimmervale:    { title: 'Glimmervale',       blurb: 'Firefly dells in the grove\'s low country — mist pools by day, and at dusk the whole vale kindles: courting lights, lantern-blooms, and one light down in the hollow that lies.' },
+  heartwood:      { title: 'The Heartwood',     blurb: 'The grove\'s sealed old-growth heart — the treant line thick under a true roof of crowns, and the Grove Singer holding court in the wood that names him.' },
+  gleamhollow:    { title: 'The Gleamhollow',   blurb: 'A root-den under the vale lit by glowworm silk and cold small fires — ruled, so the little lights believe, by a sovereign who was never a firefly at all.' },
   petalfields:    { title: 'The Petalfields',   blurb: 'The Garden country\'s first face, walked at seed scale: blossom crowns the size of oaks, drifted petals deep as snow, skeps still humming — and the colony\'s first mounds working the ground beneath it all.' },
   stalkwood:      { title: 'The Stalkwood',     blurb: 'A forest whose trees are flower stalks: petal canopy overhead, blade-grass walls below that part for bodies and stop every eye. The colony\'s forage columns run it; the weavers string it; the mantis waits in it.' },
   tendersrows:    { title: 'The Tenders\' Rows', blurb: 'The built face of the Garden: planter-bed ramparts over the paths between them, trellises mid-mend, and the Tender\'s dropped tools standing as monuments. Nobody tends it now — the colony and the bloomkin dispute the estate.' },

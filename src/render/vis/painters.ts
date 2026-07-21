@@ -93,6 +93,16 @@ export interface LightSpec {
   intensity: number;
   /** Flicker speed (campfires); 0/undefined = steady. */
   flicker?: number;
+  /** THE BREATHING LIGHT — reach + intensity multiplier lerped on the sky's
+   *  radiance (World.radiance()): `at0` applies in full dark, `at1` at high
+   *  noon; an absent end defaults to 1, absent whole = steady. A NOCTURNAL
+   *  lamp is `{ at1: 0 }` (lantern-blooms that open at dusk); a diurnal
+   *  gleam is `{ at0: 0 }`. Under shelter radiance reads the flat cave
+   *  twilight, so bioluminescence keeps glowing underground by
+   *  construction. Composes with flicker exactly as flicker composes with
+   *  the base (multiplied at collect; occlusion stays cached at the
+   *  un-breathed widest reach). */
+  radiance?: { at0?: number; at1?: number };
 }
 
 export interface DoodadVisualDef {

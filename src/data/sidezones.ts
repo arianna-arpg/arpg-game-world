@@ -344,6 +344,37 @@ registerSidezone({
   },
 });
 
+// --- THE GLEAMHOLLOW (the Grove country's den) ---------------------------------
+// A hollow bole (the glowworm_hollow composition plants it) dwells DOWN into
+// the gleamhollow — the glowworm-lit root-den under the grove, ONE rung deep
+// by design: fireflies dig no galleries, so the den IS the vault. The False
+// Sovereign holds the bottom of the light (objective boss) and noDeeper
+// seals the ladder. The 'gleam_entered' ledger key is the grove's GATEWAY
+// SEAM (the nest_entered pattern): the Glimmercraft gem pool and any future
+// package simply name it. The den keeps its OWN small lives (authored
+// fauna — the cellar's lane): without it, minted pockets fall back to the
+// plains wildlife table and the Sovereign's parlor grows meadow hares.
+const GLEAM_FAUNA = [
+  { id: 'glow_moth', chance: 0.6, count: [2, 4] as [number, number] },
+  { id: 'ant_trail', chance: 0.3, count: [1, 1] as [number, number] },
+];
+
+registerSidezone({
+  kind: 'hollow_bole',
+  dwell: 0.7,
+  ledgerOnEnter: 'gleam_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'gleamhollow', {
+      rollVariant: true,
+      name: 'the Gleamhollow',
+      objective: { kind: 'boss', id: 'false_sovereign' },
+      noDeeper: true,
+    });
+    def.fauna = [...GLEAM_FAUNA];
+    return def;
+  },
+});
+
 // --- THE TOWNHOUSE FLOORS (burgher ASCENSION) ----------------------------------
 // The gloam manor's climb, generalized to the whole settled belt: the cave
 // drop-in INVERTED. 'city_stair' (a townhouse structure's stair cell) dwells

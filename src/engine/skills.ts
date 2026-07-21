@@ -3209,6 +3209,26 @@ export interface KindleEffect {
  *  of the same kind pours INTO its pocket — the vent counts toward the
  *  collective's cap. Bodies are rows, not Actors: near-zero cost at any
  *  count (docs/engine/lite.md). */
+/** A PLANTED LURE (World.setLure — the beacon fabric's bait lane): a false
+ *  attraction at the resolution point for `sec` seconds. Draws only the
+ *  UNAWARE (idle, enemy-team, non-passive bodies — ambient critters
+ *  included: moths to the light) toward the point at a mill-around
+ *  standoff; it never overrides combat, orders, or fear. Ground/point
+ *  deliveries plant where the skill resolves; projectile deliveries plant
+ *  at the flight's end — bait you can throw. The false sovereign's
+ *  mimic-flash and the player's lure lantern are the debut wearers. */
+export interface LureEffect {
+  type: 'lure';
+  /** Pull radius (world units). */
+  radius: number;
+  /** How long the lure stands. */
+  sec: number;
+  /** Approach pace fraction while drawn (default 0.5 — the beacon's). */
+  pace?: number;
+  /** Milling standoff at the light (default 90). */
+  standoff?: number;
+}
+
 export interface LitePourEffect {
   type: 'litePour';
   /** The poured kind — must itself opt into MonsterDef.lite (validator). */
@@ -3497,7 +3517,8 @@ export type SkillEffect =
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
   | RestoreSkillChargesEffect | ConjureEffect | KindleEffect | ThrongDirectEffect
   | GrabSeizeEffect | GrabThrowEffect | MimicSelectEffect
-  | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect;
+  | PossessEffect | PossessEndEffect | ShapeshiftEffect | LitePourEffect
+  | LureEffect;
 
 // --- The skill definition ---------------------------------------------------
 

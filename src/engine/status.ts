@@ -1037,6 +1037,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('detectionRange', 'more', -0.45), mod('detectability', 'more', -0.45)],
   },
 
+  // THE GLIMMERKIN's hold (the grove country): a light too interesting to
+  // look away from. The held walk as through honey and sometimes press the
+  // wrong hand entirely (THE ADDLED HAND — scrambleChance), which is fair
+  // play in both directions: the duskveil dancer transfixes you, and any
+  // future player light can transfix the wood right back.
+  transfixed: {
+    label: 'Transfixed', color: '#d8f078', duration: 1.6,
+    mods: [mod('moveSpeed', 'more', -0.35)],
+    scrambleChance: 0.25,
+  },
+
   // THE WISPLIGHT's flourish (packages/defs/wisplight.ts): pulsed onto every
   // body near a kindled, wandering light. Beneficial ON PURPOSE — the light
   // blesses the mire's own kin (the danger the event sells), and the same

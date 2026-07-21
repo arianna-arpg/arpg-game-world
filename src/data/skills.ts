@@ -7756,6 +7756,78 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 130, weight: 2, keepDistance: 110 },
   },
 
+  // ================== GLIMMERCRAFT (the Grove's firefly arts) ===============
+  // The glimmerkin's whole argument is LIGHT AS LANGUAGE: a pulse is a word,
+  // a held glow is a sentence, and a false light is a lie something dies
+  // believing. Monster-side verbs first (the kin teach by fighting); the
+  // lure lantern below is the player's half, learned at the hollow's door.
+
+  glimmer_pulse: {
+    id: 'glimmer_pulse', name: 'Glimmer Pulse', noDrop: true,
+    description: 'One word of cold light, thrown. It stings more than it says — and a bright enough word leaves an afterimage where your eyes were.',
+    tags: ['spell', 'projectile', 'lightning'], color: '#d8f078',
+    manaCost: 5, cooldown: 0, useTime: 0.6,
+    baseDamage: { lightning: [5, 9] },
+    delivery: { type: 'projectile', speed: 300, radius: 7, range: 420 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'blind', chance: 0.2 },
+    ],
+    ai: { range: 380, weight: 2, keepDistance: 200 },
+  },
+
+  beguiling_glow: {
+    id: 'beguiling_glow', name: 'Beguiling Glow', noDrop: true,
+    description: 'The dancer\'s hold: a light too interesting to look away from. The held walk as through honey and sometimes press the wrong hand entirely.',
+    tags: ['spell', 'aoe', 'duration'], color: '#e8d8f8',
+    manaCost: 12, cooldown: 7, useTime: 0.7,
+    delivery: { type: 'nova', radius: 150 },
+    effects: [
+      { type: 'status', status: 'transfixed', chance: 0.85 },
+    ],
+    ai: { range: 130, weight: 2, keepDistance: 120 },
+  },
+
+  silk_snare: {
+    id: 'silk_snare', name: 'Silk Snare', noDrop: true,
+    description: 'The glowworm\'s patience, spat: a lattice of sticky strands that knots the ground and ROOTS whoever trusted it. The lamp above was never the trap. The floor was the trap.',
+    tags: ['spell', 'physical', 'aoe', 'duration'], color: '#e8f0d8',
+    manaCost: 9, cooldown: 6, useTime: 0.8,
+    baseDamage: { physical: [4, 7] },
+    delivery: { type: 'ground', radius: 70, castRange: 340, delay: 0.6 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'rooted', chance: 0.6 },
+    ],
+    ai: { range: 320, weight: 3, keepDistance: 200 },
+  },
+
+  mimic_flash: {
+    id: 'mimic_flash', name: 'Mimic Flash', noDrop: true,
+    description: 'A stolen signal flashed in a stolen voice. Everything unaware drifts toward the light — and everything close enough to see the truth of it is held by the seeing.',
+    tags: ['spell', 'aoe', 'duration'], color: '#e8f8b0',
+    manaCost: 16, cooldown: 10, useTime: 0.9,
+    delivery: { type: 'nova', radius: 170 },
+    effects: [
+      { type: 'status', status: 'transfixed', chance: 0.7 },
+      { type: 'lure', radius: 620, sec: 6, standoff: 60 },
+    ],
+    ai: { range: 150, weight: 2 },
+  },
+
+  lure_lantern: {
+    id: 'lure_lantern', name: 'Lure Lantern',
+    description: 'Throw a false light. Where it lands it stands and LIES for a while — the unaware drift to it, mill about it, wait at it. Gather the wood\'s attention somewhere you are not, then greet it properly. Learned from something in the grove that was doing exactly this to you.',
+    tags: ['spell', 'projectile', 'duration'], color: '#d8f078',
+    manaCost: 12, cooldown: 12, useTime: 0.6,
+    delivery: { type: 'projectile', speed: 260, radius: 8, range: 480 },
+    effects: [
+      { type: 'lure', radius: 560, sec: 8, standoff: 80 },
+    ],
+    requirements: { willpower: 12 },
+    dropWeight: 6, minDropLevel: 6,
+  },
+
   // ================== SCENTCRAFT (the Garden's pheromone-craft) =============
   // The player-facing pool the formicary unlocks ('nest_entered' gates the
   // Vault bundle — the ruin_entered pattern). The family identity is the

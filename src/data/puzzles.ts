@@ -56,6 +56,14 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     label: 'the singing refrain',
     reward: { gems: 2, washFor: 20 },
   },
+  // THE GLIMMER REFRAIN — the grove country's version of the same patience:
+  // the ring flashes a firefly sign; you answer it back. The lampwrights
+  // have been running this call-and-answer since before anyone walked here.
+  glimmer_refrain: {
+    kind: 'refrain',
+    label: 'the glimmer refrain',
+    reward: { gems: 2, washFor: 20 },
+  },
 };
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);

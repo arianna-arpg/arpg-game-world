@@ -12,7 +12,7 @@ import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift' | 'overclouds' | 'fireflies';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
@@ -37,7 +37,49 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'spores': return spores(ctx, w, h, t, k, spec.color ?? '#b8e88f');
     case 'sandDrift': return sandDrift(ctx, w, h, t, k, spec.color ?? '#d8c090');
     case 'overclouds': return overclouds(ctx, w, h, t, k, spec.color ?? '#ffffff', camX, camY);
+    case 'fireflies': return fireflies(ctx, w, h, t, k, spec.color ?? '#d8f078');
   }
+}
+
+/** FIREFLIES — the wood's night writing: drifting sparks that FLASH in slow
+ *  signals of their own, each on its own period and phase, true dark between
+ *  pulses (a clamped sine raised to a power — the J-stroke, not a lamp).
+ *  Hidden entirely by day and thickening as the dark comes down (the
+ *  aurora's gate); a lazy two-frequency wander stands in for wingbeats.
+ *  Deterministic from (i, t) like every ambient — zero particle state, no
+ *  gradients (soft halo = one faint wide disc under the hot core). */
+function fireflies(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string): void {
+  const night = 1 - dayCycle(t).light;
+  if (night < 0.4) return; // daylight hides them — dusk raises them
+  const strength = Math.min(1, (night - 0.4) / 0.5);
+  const n = Math.round(26 * k * strength);
+  ctx.save();
+  ctx.fillStyle = color;
+  for (let i = 0; i < n; i++) {
+    // The wander: a home cell + two incommensurate sways + a slow lateral
+    // drift — reads as purposeful little flights, never as static on loop.
+    const sp = 0.25 + hash01(i, 57) * 0.5;
+    const x = (hash01(i, 51) * w + Math.sin(t * sp + i * 2.4) * 60
+      + Math.cos(t * sp * 0.63 + i * 1.1) * 34 + t * 3 + w) % w;
+    const y = (hash01(i, 53) * h + Math.sin(t * sp * 0.8 + i * 1.7) * 44
+      + Math.cos(t * sp * 0.41 + i) * 18 + h) % h;
+    // The FLASH: per-fly period + phase; most of each period is dark.
+    const period = 1.6 + hash01(i, 61) * 2.6;
+    const flash = Math.max(0, Math.sin((t / period) * Math.PI * 2 + hash01(i, 67) * Math.PI * 2)) ** 5;
+    if (flash < 0.03) continue;
+    const r = 1.1 + hash01(i, 71) * 1.2;
+    ctx.globalAlpha = 0.1 * k * strength * flash;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.85 * strength * flash;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 /** CLOUDS OVER THE CLOUDS — soft veils drifting ABOVE the scene (the sky

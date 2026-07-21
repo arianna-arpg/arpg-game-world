@@ -42,11 +42,15 @@ export const PHASE_WHEEL: ReadonlyArray<{ phase: DayPhase; until: number }> = [
 // Reweights are by FACTION and only touch monsters already native to a zone.
 // The Night Court keeps the strictest hours of anyone: it swells with the
 // dark, thins at first light, and by day only its kept bodies stand watch.
+// The GLIMMERKIN (the grove's fireflies) keep hours stricter still — but
+// inverted in spirit: they are not the dark, they are what the dark is FOR.
+// By day they are almost a rumor; the dusk raises them; the deep night is
+// their whole society out dancing.
 const PHASE_BIAS: Record<DayPhase, SpawnBias> = {
-  day: { countMul: 0.9, factionMul: { undead: 0.85, nightkin: 0.75 }, injectFactions: [] },
-  dusk: { countMul: 1.05, factionMul: { undead: 1.2, gnoll: 1.1, nightkin: 1.2 }, injectFactions: [] },
-  night: { countMul: 1.4, factionMul: { undead: 1.7, wild: 1.25, gnoll: 1.15, nightkin: 1.5 }, injectFactions: [] },
-  dawn: { countMul: 1.0, factionMul: { undead: 0.8, sylvan: 1.15, nightkin: 0.7 }, injectFactions: [] },
+  day: { countMul: 0.9, factionMul: { undead: 0.85, nightkin: 0.75, glimmerkin: 0.25 }, injectFactions: [] },
+  dusk: { countMul: 1.05, factionMul: { undead: 1.2, gnoll: 1.1, nightkin: 1.2, glimmerkin: 1.6 }, injectFactions: [] },
+  night: { countMul: 1.4, factionMul: { undead: 1.7, wild: 1.25, gnoll: 1.15, nightkin: 1.5, glimmerkin: 2.0 }, injectFactions: [] },
+  dawn: { countMul: 1.0, factionMul: { undead: 0.8, sylvan: 1.15, nightkin: 0.7, glimmerkin: 0.7 }, injectFactions: [] },
 };
 
 /** Resolve the clock at a given world time. */

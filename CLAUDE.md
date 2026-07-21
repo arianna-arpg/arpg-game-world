@@ -410,7 +410,13 @@ changes.
   speed/plies/cling/look all read off the def), `ThrongSpec.tier: 'lite'`
   seats a gathered roster in the pool, and `ZoneTheme.lite` pours ambient
   tides on a salted stream (the sewerworks' wade-through VERMIN TIDE is
-  the debut). Damage IN rides TWO hooks — the `strikeSurfaces` seam
+  the debut; THE CONDITIONED POUR `LiteSwarmRow.when` — a structural
+  RadianceCond twin — stands a pour only while its hour holds: pockets
+  SEAT at boot regardless, breed while held, gently RECEDE while not,
+  and a fully-reclaimed pocket un-marks `poured` so only violence, never
+  weather, meets the extermination law; debut = the GROVE COUNTRY's
+  dusk-to-dawn firefly tides — docs in `docs/engine/grove.md`, probe
+  `balance/probe_grove.ts`). Damage IN rides TWO hooks — the `strikeSurfaces` seam
   (every area verb's exact drawn geometry carves the pool) and the
   projectile step (pierce-budget honest); a lite body IS its ply count
   (one carve, one tear, magnitude-blind). Damage OUT is THE POOLED BITE:
@@ -594,7 +600,13 @@ changes.
   cache, baked actor bodies, ground texture chunks, the doodad painter
   library (kinds map to painters via `src/data/doodadVisuals.ts` — a new
   doodad kind needs ONE data entry, no renderer edits), the dynamic light
-  layer (doodad `light` specs as data), and weather particles. Session
+  layer (doodad `light` specs as data; THE BREATHING LIGHT
+  `LightSpec.radiance` lerps any lamp on the sky's radiance — lantern
+  flora opens at dusk, cave twilight half-lights it under shelter — and
+  THE CARRIED LAMP `MonsterDef.light` puts glowing BODIES on the layer
+  as live-marched movers; both debut in the grove country's firefly
+  fabric with the `'fireflies'` ambientFx kind, docs in
+  `docs/engine/grove.md`), and weather particles. Session
   hygiene rides THE CACHE STEWARD (`render/vis/caches.ts` — every render
   cache registers; zone/run boundaries trim + release), full-screen washes
   ride the baked EDGE-OVERLAY fabric (`render/vis/overlays.ts`), and

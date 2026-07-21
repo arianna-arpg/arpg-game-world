@@ -58,6 +58,7 @@ import '../src/engine/interiorGen';
 import '../src/data/massifs';
 import '../src/data/settled';
 import '../src/data/garden';
+import '../src/data/grove';
 import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
