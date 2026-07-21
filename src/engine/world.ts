@@ -23930,6 +23930,13 @@ export class World {
     // UNLEASH HONESTY: the seal bank's rest window ENDS at the PRESS —
     // stamped here so the cast bar's own runtime never banks its seals.
     (inst.state ??= {}).pressAt = this.time;
+    // THE CLOCK-AT-PRESS LEVER (SkillDef.cooldownAt 'press'): the
+    // commitment starts the cooldown — the bar's runtime counts against
+    // its own clock, and an interrupted cast still pays it.
+    if (def.cooldown > 0 && def.cooldownAt === 'press'
+      && !instanceUseCharges(inst)?.magazine) {
+      this.stampSkillCooldown(caster, inst, def.cooldown);
+    }
     const cc = this.consumeChargeCost(caster, inst);
     const baseMult = cc.mult * roundMult;
 
@@ -24531,8 +24538,10 @@ export class World {
     // by cooldownRecovery (an imposed cooldown stays a reducible one).
     // MAGAZINE skills never stamp here: their cooldown IS the reload cycle,
     // stamped by the press that spends the last round (useSkill) — a
-    // mid-mag use must never touch the clock.
-    if (!opts.noCooldown && !instanceUseCharges(inst)?.magazine) {
+    // mid-mag use must never touch the clock. cooldownAt 'press' skills
+    // stamped at the press already (the clock-at lever).
+    if (!opts.noCooldown && !instanceUseCharges(inst)?.magazine
+      && def.cooldownAt !== 'press') {
       this.stampSkillCooldown(caster, inst, def.cooldown);
     }
 
@@ -24898,6 +24907,15 @@ export class World {
           ? vec(caster.pos.x, caster.pos.y)
           : vec(caster.pos.x + Math.cos(caster.facing) * reach * 0.6,
                 caster.pos.y + Math.sin(caster.facing) * reach * 0.6);
+        // The cascade family beyond ground: the swing's sequels — the
+        // same slam detonating again, Seismic March quaking forward out
+        // of it — mint off the swing's own geometry (sigil shapes true;
+        // the classic swing re-strikes as its own SECTOR).
+        this.mintAftermath(caster, inst, vec(caster.pos.x, caster.pos.y),
+          reach,
+          swingShape >= 1 && swingShape <= 2 ? swingShape : AOE_SHAPE.sector,
+          caster.facing, useMult, tags, extra,
+          swingShape >= 1 && swingShape <= 2 ? undefined : arcRad);
         // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
         // allies standing in it — one swing, both congregations.
         this.healAlliesInArea(caster, inst, a =>
@@ -24971,6 +24989,10 @@ export class World {
           edgeFrac: d.edgeOnly,
         });
         this.spawnAftershocks(caster, inst, origin, radius, shape);
+        // The cascade family beyond ground: the burst's sequels (armed
+        // second detonations, marching ripples) mint off the strike area.
+        this.mintAftermath(caster, inst, origin, radius, shape,
+          caster.facing, useMult, tags, extra);
         fieldAt = vec(origin.x, origin.y);
         // Enemy-facing novas with a mend side (Radiant Nova): allies in the
         // burst are healed. Ally/'all' novas already resolved them above.
@@ -26059,6 +26081,9 @@ export class World {
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
         });
         this.spawnAftershocks(caster, inst, at, radius, shape);
+        // The cascade family beyond ground: the pop's sequels mint here.
+        this.mintAftermath(caster, inst, at, radius, shape,
+          caster.facing, useMult, tags, extra);
         fieldAt = at;
         break;
       }
@@ -29608,6 +29633,92 @@ export class World {
    * behind. Shared by deliveries AND async resolutions (leap landings),
    * so Phoenix Dive's touchdown scorches the ground like anything else.
    */
+  /** THE AFTERMATH MINTER (2026-07-21, the cascade family beyond ground —
+   *  afford, don't constrain): an INSTANTANEOUS area delivery (nova, melee
+   *  swing, detonated burst) hands its strike area here and the socketed
+   *  ground disciplines mint their SEQUELS as zones — Buried Charge's
+   *  second detonation on the same spot, the cascade's marching ripples
+   *  (Seismic March quaking forward out of a slam), the cadence gems
+   *  bending both beats — through the very machinery the ground branch
+   *  runs (armed pulses, telegraph delays, dmgStep decay). The primary
+   *  aftermath zone mints EXPLODED (the delivery already struck; it
+   *  exists only for its beats); ripples telegraph fresh at displaced
+   *  points — the skipped stone. Shape-true: a sigiled swing's sequels
+   *  wear the sigil, a classic swing's wear its own sector. */
+  private mintAftermath(
+    caster: Actor, inst: SkillInstance, at: Vec2, radius: number,
+    shape: AoeShape, facing: number, useMult: number,
+    tags: Set<SkillTag>, extra: Modifier[], arcRad?: number,
+  ): void {
+    const cadence = socketSpec(inst, 'cadence')?.intervalStep;
+    const pSpec = instancePulse(inst);
+    const pulseN = Math.max(0, (pSpec ? (pSpec.count ?? 1) : 0)
+      + Math.round(caster.sheet.get('pulseCount', tags, extra)));
+    if (pulseN > 0) {
+      const pDelay = pSpec?.delay ?? 1;
+      const pInterval = pSpec?.interval ?? pDelay;
+      const pStep = cadence ?? pSpec?.intervalStep ?? 1;
+      // The armed charge's whole life is the geometric beat walk + a breath.
+      let span = pDelay + 0.1;
+      let gap = pInterval;
+      for (let k = 1; k < pulseN; k++) { span += gap; gap = Math.max(0.05, gap * pStep); }
+      this.zones.push({
+        pos: vec(at.x, at.y), radius, caster, inst, color: inst.def.color,
+        delay: 0, exploded: true,
+        linger: span, linger0: span,
+        tickInterval: Infinity, tickTimer: Infinity,
+        shape, facing, arcRad,
+        dmgMult: useMult, depth: 0,
+        pulse: {
+          delay: pDelay, interval: pInterval, intervalStep: pStep,
+          dmgMult: pSpec?.dmgMult ?? 1, dmgStep: pSpec?.dmgStep ?? 1,
+          radiusMult: pSpec?.radiusMult ?? 1, radiusStep: pSpec?.radiusStep ?? 1,
+          left: pulseN, next: this.time + pDelay,
+        },
+      });
+    }
+    const cSpec = instanceCascade(inst);
+    const count = (cSpec?.count ?? 0)
+      + Math.round(caster.sheet.get('aoeCascade', tags, extra));
+    if (count > 0) {
+      // 'forward' default (unlike ground's 'axis'): an instantaneous
+      // strike has an honest facing, and the marching quake is the read.
+      const dir = cSpec?.dir ?? 'forward';
+      const stepLen = (cSpec?.step ?? radius * 1.4)
+        * caster.sheet.get('cascadeStep', tags, extra);
+      const scaleStep = cSpec?.scaleStep ?? 1;
+      const dmgStep = cSpec?.dmgStep ?? 0.75;
+      const beat = cSpec?.interval ?? 0;
+      const beatStep = cadence ?? cSpec?.intervalStep ?? 1;
+      let beatAt = 0;
+      let beatGap = beat;
+      for (let k = 1; k <= count; k++) {
+        beatAt += beatGap;
+        beatGap = Math.max(0.02, beatGap * beatStep);
+        let px: number, py: number;
+        if (dir === 'random') {
+          const ra = rand(0, Math.PI * 2);
+          const rd = stepLen * rand(0.5, 1.5);
+          px = at.x + Math.cos(ra) * rd; py = at.y + Math.sin(ra) * rd;
+        } else {
+          const sign = dir === 'backward' ? -1 : dir === 'axis' ? (k % 2 === 1 ? 1 : -1) : 1;
+          const reach = dir === 'axis' ? Math.ceil(k / 2) * stepLen : k * stepLen;
+          px = at.x + Math.cos(facing) * reach * sign;
+          py = at.y + Math.sin(facing) * reach * sign;
+        }
+        this.zones.push({
+          pos: vec(px, py), radius: radius * Math.pow(scaleStep, k),
+          caster, inst, color: inst.def.color,
+          delay: 0.12 + beatAt, exploded: false,
+          linger: 0, linger0: 0,
+          tickInterval: Infinity, tickTimer: 0,
+          shape, facing, arcRad,
+          dmgMult: useMult * Math.pow(dmgStep, k), depth: 0,
+        });
+      }
+    }
+  }
+
   private dropLingerField(caster: Actor, inst: SkillInstance, at: Vec2, useMult = 1): void {
     const tags = skillContextTags(inst.def, grantedTags(inst));
     const extra = instanceMods(inst);
@@ -29708,7 +29819,10 @@ export class World {
       + (fx.amountPerLevel ?? 0) * Math.max(0, effectiveSkillLevel(inst) - 1)
       + pct * maxPool;
     const total = base * (fx.perCharge ? Math.max(1, chargesSpent) : 1)
-      * caster.sheet.get('restorePower', tags, extra);
+      * caster.sheet.get('restorePower', tags, extra)
+      // THE LUCKY POUR: the whole stream may crit at the pour (a flask
+      // with Deadly Precision socketed pours deeper on its crits).
+      * this.critMendMult(caster, inst, target.pos);
     if (total <= 0) return;
     const dur = Math.max(0.2, fx.duration
       * caster.sheet.get('effectDuration', tags, extra));
@@ -29734,6 +29848,20 @@ export class World {
    * harden into an absorption ward (the overheal stat — Overmend). Returns
    * what landed. `quiet` suppresses the float text for tick-rate sources.
    */
+  /** THE LUCKY POUR (2026-07-21, mends can crit): every heal and restore
+   *  pour rolls the INSTANCE's own critical chance once — a socketed
+   *  Deadly Precision genuinely sharpens a flask — and a crit multiplies
+   *  the whole mend by the standard critical multiplier. One roll per
+   *  pour/mend (streams roll at the pour, never per sip). */
+  private critMendMult(caster: Actor, inst: SkillInstance, at?: Vec2): number {
+    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const extra = instanceMods(inst);
+    if (!chance(caster.sheet.get('critChance', tags, extra))) return 1;
+    const mult = caster.sheet.get('critMulti', tags, extra);
+    if (at) this.text(vec(at.x, at.y - 12), 'crit mend!', '#ffd24a', 12);
+    return mult;
+  }
+
   private applyHeal(
     caster: Actor, inst: SkillInstance, target: Actor,
     fx: { amount?: number; pctMax?: number }, mult = 1, quiet = false,
@@ -29742,7 +29870,8 @@ export class World {
     const tags = skillContextTags(inst.def, grantedTags(inst));
     const extra = instanceMods(inst);
     const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
-      * caster.sheet.get('healPower', tags, extra) * mult;
+      * caster.sheet.get('healPower', tags, extra) * mult
+      * this.critMendMult(caster, inst, quiet ? undefined : target.pos);
     if (raw <= 0) return 0;
     // HEAL-OVER-TIME conversion (Mending Echoes): the direct mend POURS
     // instead — total × factor over the graft's seconds, riding the
@@ -31068,6 +31197,19 @@ export class World {
               }
             }
           }
+          // THE MALIGNANT LANE (dotCrit): a damaging ailment may CRIT at
+          // application — rolled ONCE (dotCrit × critChance), the burn
+          // ticking at the full critical multiplier for its whole life;
+          // the armed keg scales with it, deriving from the same dps.
+          if (dpsOut > 0) {
+            const dc = caster.sheet.get('dotCrit', tags, extra);
+            if (dc > 0 && chance(dc * caster.sheet.get('critChance', tags, extra))) {
+              const cm = caster.sheet.get('critMulti', tags, extra);
+              dpsOut *= cm;
+              if (rupture !== undefined) rupture *= cm;
+              this.text(vec(target.pos.x, target.pos.y - 16), 'crit affliction!', '#ffd24a', 12);
+            }
+          }
           // durationOverride: a FIXED clock (Flash Freeze's unscalable
           // freeze) — expressed as a scale on the def's base duration so
           // applyStatus needs no new path. Linked hexes stretch it.
@@ -31444,6 +31586,13 @@ export class World {
             if (spec.chance !== undefined && !chance(spec.chance)) continue;
             owner.gainCharge(spec.charge, spec.amount, spec.max, carryInst);
           }
+          // THE COURT'S SHED CARRY (2026-07-21 R5): the court's true kills
+          // roll the KEEPER's kill-sheds through the summoning instance —
+          // orbs and remnants alike. Kills are exclusive events (one death,
+          // court-size-blind), so no normalization; caps and shed rates on
+          // the owner's sheet govern as ever.
+          this.rollKillOrbs(owner, carryInst, target);
+          this.rollKillRemnants(owner, carryInst, target.pos);
         }
       }
     }

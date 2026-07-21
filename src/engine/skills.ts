@@ -3621,6 +3621,13 @@ export interface SkillDef {
    *  No valid target = the cast fails and costs nothing. */
   targeting?: TargetingSpec;
   cooldown: number;       // seconds, 0 = limited only by cast time
+  /** WHEN the cooldown clock starts (2026-07-21, the clock-at lever):
+   *  'complete' (default) stamps as the delivery executes — the classic
+   *  law; 'press' stamps the moment the press commits, so a long bar's
+   *  runtime counts against its own clock (and an interrupted cast still
+   *  pays it — the commitment IS the price). Data per skill, never a
+   *  global rule. */
+  cooldownAt?: 'press' | 'complete';
   /** Base CAST TIME in seconds; divided by attackSpeed or castSpeed (by
    *  tag). 0 = instant. Skills resolve when the cast bar completes. */
   useTime: number;

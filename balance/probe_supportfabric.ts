@@ -29,9 +29,10 @@ import {
   STANCE_PLANT_TIME, type Actor,
 } from '../src/engine/actor';
 import {
-  instanceUseCharges, makeSkillInstance, supportFitsInst, supportGlobalMods,
-  hostSockets,
+  SUPPORT_MECHANISMS, instanceUseCharges, makeSkillInstance, supportFitsInst,
+  supportGlobalMods, supportRidesMinions, hostSockets,
 } from '../src/engine/skills';
+import { mod } from '../src/engine/stats';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -226,6 +227,113 @@ bootSimEngine();
   const cdUc = instanceUseCharges(cdInst);
   check('F5 a cooldown host keeps the MAGAZINE shape (empower is the free skill\'s lane)',
     !!cdUc && cdUc.magazine === true && cdUc.empower === undefined, JSON.stringify(cdUc));
+}
+
+// === RIG G — apotheosis composition, the aftermath minter, the crit lanes ==
+
+{
+  // The Apotheosis answers, pinned: (a) beside Deep Reserves on a free
+  // skill the EMPOWER bank stands (the graft reads the DEF's own clock;
+  // the levy composes independently — every levy-paced press finds a
+  // full pot, the user's synergy); (b) the levy arms the 'cooldown'
+  // MECHANISM (alacrity fits beside apotheosis); (c) the gem RIDES
+  // minions whole (mods-only): the court swings 90% harder on the 10s
+  // clock — nothing missing.
+  const fb = Object.values(SKILLS).find(s =>
+    s.cooldown === 0 && s.useTime > 0 && s.tags.includes('spell') && s.delivery.type === 'projectile')!;
+  const inst = makeSkillInstance(fb, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.apotheosis, level: 1 };
+  inst.sockets[1] = { def: SUPPORTS.deep_reserves, level: 1 };
+  const uc = instanceUseCharges(inst);
+  check('G1 apotheosis beside Deep Reserves on a free skill keeps the EMPOWER bank (the levy composes independently)',
+    !!uc && uc.empower !== undefined && uc.magazine === undefined,
+    `host ${fb.id}: ${JSON.stringify(uc)}`);
+  check('G2 the levy arms the cooldown MECHANISM (alacrity fits beside apotheosis)',
+    SUPPORT_MECHANISMS.cooldown(inst));
+  check('G3 apotheosis RIDES minions whole (mods-only — the court gets the 90% AND the clock)',
+    supportRidesMinions(SUPPORTS.apotheosis));
+}
+
+{
+  // THE AFTERMATH MINTER: the ground disciplines mint sequels off
+  // instantaneous areas — buried_charge's armed second detonation on a
+  // nova, the cascade's marching ripples out of a melee swing.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const nova = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'nova' && s.tags.includes('aoe'))!;
+  const nInst = makeSkillInstance(nova, 1, 3);
+  nInst.sockets[0] = { def: SUPPORTS.buried_charge, level: 1 };
+  const zBefore = world.zones.length;
+  world.executeSkill(hero, nInst, { x: hero.pos.x, y: hero.pos.y });
+  const pulseZones = world.zones.slice(zBefore).filter(z => z.pulse && z.pulse.left > 0);
+  check('G4 buried_charge on a NOVA mints the armed second detonation (the aftermath pulse zone)',
+    pulseZones.length === 1, `host ${nova.id}: ${pulseZones.length} armed`);
+  const swing = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'melee' && s.tags.includes('aoe'))!;
+  const mInst = makeSkillInstance(swing, 1, 3);
+  mInst.sockets[0] = { def: SUPPORTS.seismic_march, level: 1 };
+  const z2 = world.zones.length;
+  world.executeSkill(hero, mInst, { x: hero.pos.x + 60, y: hero.pos.y });
+  const ripples = world.zones.slice(z2).filter(z => !z.exploded && z.delay > 0);
+  check('G5 seismic_march on a MELEE swing mints marching ripples (the quake walks out of the slam)',
+    ripples.length >= 2, `host ${swing.id}: ${ripples.length} ripples`);
+}
+
+{
+  // THE MALIGNANT LANE, deterministic at chance 1: with dotCrit 1 and
+  // critChance 1, an applied burn's dps carries the FULL critical
+  // multiplier vs an uninvested twin — rolled once, worn for life.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  // A DIRECT-hit burn applier (melee/nova/target) — projectile flights
+  // would need stepped frames to land their status.
+  const burnSkill = Object.values(SKILLS).find(s =>
+    ['melee', 'nova', 'target'].includes(s.delivery.type)
+    && s.effects.some(e => e.type === 'status' && e.status === 'burn' && (e.magnitude ?? 0) > 0))!;
+  const mk = (crit: boolean): number => {
+    // The 0.95-capped roll: fresh dummies until the burn stands (the crit
+    // run may whiff its 5%; the plain run applies on the first try).
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const dummy = world.createMonster('target_dummy', 7, 'enemy');
+      dummy.pos = { x: hero.pos.x + 40, y: hero.pos.y };
+      world.actors.push(dummy);
+      hero.sheet.setSource('probe_crit', crit
+        ? [mod('dotCrit', 'flat', 1), mod('critChance', 'flat', 1)]
+        : []);
+      const inst = makeSkillInstance(burnSkill, 1, 0);
+      for (let i = 0; i < 20 && !dummy.statuses.some(s => s.id === 'burn'); i++) {
+        world.executeSkill(hero, inst, dummy.pos);
+      }
+      const dps = dummy.statuses.find(s => s.id === 'burn')?.dps ?? 0;
+      world.actors.splice(world.actors.indexOf(dummy), 1);
+      if (dps > 0 && !crit) return dps;
+      if (crit && dps > 0) {
+        // Keep only a CRITTED burn (the whiffed 5% re-rolls a fresh body).
+        const plainRef = mkPlainRef;
+        if (dps > plainRef * 1.15) return dps;
+      }
+    }
+    return 0;
+  };
+  // Averaged over several bodies to settle the damage dice. THE DOUBLE
+  // CRANK is the honest expectation at critChance 1: the applying HIT
+  // itself crits (derived dps rides the dealt damage — the pre-existing
+  // hit-crit carry) AND the affliction's own dotCrit roll multiplies
+  // again — ratio ≈ critMulti², flagged for the balance sweep.
+  let mkPlainRef = 0;
+  const avg = (crit: boolean, n: number): number => {
+    let s = 0, c = 0;
+    for (let i = 0; i < n; i++) { const v = mk(crit); if (v > 0) { s += v; c++; } }
+    return c ? s / c : 0;
+  };
+  mkPlainRef = avg(false, 3);
+  const critted = avg(true, 3);
+  const cm = hero.sheet.get('critMulti');
+  check('G6 a critical affliction carries the crit crank for its whole life (double-crank at critChance 1: hit-crit carry × dotCrit, ≈critMulti²)',
+    mkPlainRef > 0 && critted > mkPlainRef * (cm * 1.05)
+    && critted < mkPlainRef * (cm * cm * 1.3),
+    `host ${burnSkill.id}: ${mkPlainRef.toFixed(1)} -> ${critted.toFixed(1)} (×${(critted / Math.max(0.01, mkPlainRef)).toFixed(2)}, critMulti ${cm}, cm² ${(cm * cm).toFixed(2)})`);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

@@ -795,6 +795,15 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: 'the seal bank needs TRUE REST — the spam pilot re-presses the frame the bar clears, so no seal ever banks; the rest law is pinned in probe_supportfabric',
     when: (_def, sup) => supModsStat(sup, ['unleashMax']),
   },
+  {
+    // Accelerando / Ritardando: pure beat-benders — companions to a beat
+    // SOURCE (an innate ground pulse/cascade, or a pulse/cascade gem
+    // beside them). Hosts carrying their own beats measure; the rest
+    // cannot in a single-gem probe.
+    note: 'companion gem: a cadence bends beats something else must MINT — no innate pulse/cascade on this host and no beat gem beside it in a single-gem probe',
+    when: (def, sup) => sup.cadence !== undefined
+      && !(def.delivery.type === 'ground' && (def.delivery.pulse !== undefined || def.delivery.cascade !== undefined)),
+  },
 ];
 
 /** Every payload-bearing lane of the gem is condition-gated on the given

@@ -391,6 +391,7 @@ const STAT_BLURBS: Record<string, string> = {
   proximityDamage: 'Up to this much more damage at touch range, fading with distance.',
   cullThreshold: 'Your hits EXECUTE enemies at or below this fraction of their life.',
   killProcOnHit: 'Your on-kill effects may also fire on plain hits against elite prey.',
+  dotCrit: 'The fraction of your critical chance that applies when a damaging ailment lands — a critical affliction ticks at your full critical multiplier for its whole life.',
   damageSpread: 'Widens every damage roll around its midpoint — same average, fatter tails.',
   luckyChance: 'Chance to roll damage twice and keep the higher.',
   unluckyChance: 'Chance to roll damage twice and keep the LOWER — the jinxed hand.',

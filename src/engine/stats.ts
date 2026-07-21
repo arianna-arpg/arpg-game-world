@@ -328,6 +328,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
   accuracy:       { label: 'Accuracy Rating', base: 80, min: 1 },
   critChance:     { label: 'Critical Strike Chance', base: 0.03, min: 0, max: 0.95, percent: true },
   critMulti:      { label: 'Critical Strike Multiplier', base: 1.3, min: 1 },
+  /** THE MALIGNANT LANE (DoTs can crit, 2026-07-21): the fraction of your
+   *  critical chance that applies when a DAMAGING AILMENT lands — rolled
+   *  ONCE at application, and a critical burn ticks at the full critical
+   *  multiplier for its whole life (the armed keg scales with it, deriving
+   *  from the same dps). Base 0: an UNLOCK (passive node / gem grant),
+   *  never ambience — the crit-dot build is a deliberate investment. */
+  dotCrit:        { label: 'Ailment Critical Rate', base: 0, min: 0, max: 1, percent: true },
   /** Generic damage multiplier bucket — always queried with context tags. */
   damage:         { label: 'Damage', base: 1, min: 0 },
   // Flat added damage buckets (also tag-filtered, e.g. "adds fire damage to attacks").
