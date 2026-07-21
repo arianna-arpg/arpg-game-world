@@ -2747,6 +2747,16 @@ export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] 
   for (const s of hostSockets(inst)) {
     if (s.def.munition) return { max: s.def.munition.rounds };
   }
+  // GRANTED banks (useChargeGraft — Deep Reserves): the host's own clock
+  // picks the shape (see the SupportDef field's doc).
+  for (const s of hostSockets(inst)) {
+    const g = s.def.useChargeGraft;
+    if (g) {
+      return inst.def.cooldown > 0
+        ? { max: g.rounds, magazine: true }
+        : { max: g.rounds, recharge: g.recharge };
+    }
+  }
   return undefined;
 }
 
@@ -3985,6 +3995,18 @@ export interface SupportDef {
    *  `grantsTags: ['munition']` lets the family's gems and tag-filtered
    *  investment compose onto the chambered host. */
   munition?: { rounds: number; reloadSkillId?: string };
+  /** A GRANTED use-charge economy (Deep Reserves, 2026-07-21 — "the
+   *  capacity gem builds the bank it deepens"): on a host with NO native
+   *  bank, the graft STANDS ONE UP, shaped by the host's own clock —
+   *   · cooldown > 0  → a MAGAZINE on that cooldown (rounds spend freely,
+   *     the last press stamps the skill's cooldown as the reload; the
+   *     cooldownRecovery/alacrity axis invests in it),
+   *   · cooldown 0    → the RECHARGE trickle at `recharge` seconds/round
+   *     (÷ skillChargeRate) — burst-then-trickle, never manual-dry.
+   *  Native banks and munition conversions win (one economy per slot,
+   *  instanceUseCharges' first-wins order); the gem's ordinary mods
+   *  (skillCharges / skillChargeRate) then deepen WHATEVER bank stands. */
+  useChargeGraft?: { rounds: number; recharge: number };
   /** A DEVOUR graft (Ravenous Pact): minions of the host skill EAT the
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
@@ -4464,6 +4486,9 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   'trigger', 'triggerPermit', 'overcharge', 'meta', 'strikeTiming',
   'curseOnHit', 'curseField', 'auraDuration', 'reserveLife',
   'gate', 'chargeCost',
+  // A GRANTED use-charge bank is a press economy (dry-press refusal would
+  // BRICK an autonomous caster — the chargeCost doctrine, capacity form).
+  'useChargeGraft',
   // Not seat-bound in spirit — it's the crew gate's KEY itself (Resonance).
   // Listed here so the key never forwards a copy of itself aboard: it
   // serves the host lane, opening the door for the cargo beside it.

@@ -366,13 +366,29 @@ try {
   check('E7 defensive/sustain stats route the probe LIVE, naming the stat',
     armorKind.kind === 'live' && (armorKind.why ?? '').includes('armor')
     && probeKindFor(host, leechGem).kind === 'live', armorKind.why ?? '');
-  const armor = probePair(sess, rowOf('__probe_armor__'));
-  check('E8 an armor-only gem measures EFFECTIVE under the wounding pack (was false-inert at the dummy)',
-    armor.result.verdict === 'effective' && armor.result.probe === 'live',
+  // Wound-DEPENDENT fixtures ride the SHIPPING rig's seed count. HISTORY
+  // (2026-07-21, the order-law fix): under polluted actor ids every
+  // bare-vs-pair diverged spuriously, and E8 "passed" by measuring that
+  // noise as armor value. The id-clean rig exposed the truth these pins
+  // now record:
+  //  · E8 — a SOCKETED armor-only gem is byte-DEAD: support mods are
+  //    skill-local (instanceMods extra), and global defense queries
+  //    (mitigation's victim.sheet.get('armor')) never see them. THE
+  //    DEFENSIVE-SOCKET GAP — real gems on this shape (colossus_stance,
+  //    untouched_might, monolith's armor half) sit honestly inert in the
+  //    ledger until the design call lands (equip-global fold vs refusal).
+  //    When that fold ships, flip this pin back to 'effective'.
+  //  · E9 — leech DOES read skill-locally (the packet carries instance
+  //    mods to attacker-side hit reactions), so its pair genuinely
+  //    diverges — negligible-or-better, never byte-dead.
+  const woundSess = makeProbeSession({ seeds: 2 });
+  const armor = probePair(woundSess, rowOf('__probe_armor__'));
+  check('E8 the DEFENSIVE-SOCKET GAP stands recorded: a socketed armor-only gem reads byte-DEAD (skill-local mods never reach global defense queries)',
+    armor.result.verdict === 'inert' && armor.result.probe === 'live',
     `${armor.result.verdict}; top moved: ${armor.result.moved[0]?.key ?? '—'}`);
-  const leech = probePair(sess, rowOf('__probe_leech__'));
-  check('E9 a leech-only gem measures EFFECTIVE live (the fraction channels see it now)',
-    leech.result.verdict === 'effective' && leech.result.probe === 'live',
+  const leech = probePair(woundSess, rowOf('__probe_leech__'));
+  check('E9 a leech-only gem READS through the packet\'s skill-local lane (diverges live — negligible-or-better, never byte-dead)',
+    leech.result.verdict !== 'inert' && leech.result.verdict !== 'blind' && leech.result.probe === 'live',
     `${leech.result.verdict}; top moved: ${leech.result.moved[0]?.key ?? '—'}`);
   const mixed = probePair(sess, rowOf(MIXED_ID));
   check('E9b mixed damage+ambush gem reads EFFECTIVE (damage half carries)',
@@ -392,6 +408,21 @@ try {
   const d2 = probePair(makeProbeSession({ seeds: 1 }), rowOf(TWOUNIT_ID));
   check('E10 verdicts are byte-deterministic across fresh sessions',
     JSON.stringify(d1.result) === JSON.stringify(d2.result));
+
+  // E10b — THE ORDER LAW (2026-07-21): verdicts are byte-deterministic
+  // WITHIN a session regardless of probe order. Actor ids feed per-body
+  // variety salts (ai.ts cadence jitter), so without the episode id reset
+  // (runner.ts resetActorIdCounter) the Nth probe of a session diverged
+  // from the 1st at the same seed and marginal pairs flipped with order.
+  {
+    const sess = makeProbeSession({ seeds: 1 });
+    const o1 = probePair(sess, rowOf(TWOUNIT_ID));
+    probePair(sess, rowOf(BLANK_ID));
+    probePair(sess, rowOf(MIXED_ID));
+    const o2 = probePair(sess, rowOf(TWOUNIT_ID));
+    check('E10b verdicts are order-independent within one session',
+      JSON.stringify(o1.result) === JSON.stringify(o2.result));
+  }
 
   // E11 — matrix bookkeeping: pairs allow-list, then a resume skip.
   const pairsOpt = [{ skill: 'firebolt', support: BLANK_ID }, { skill: 'firebolt', support: TWOUNIT_ID }];

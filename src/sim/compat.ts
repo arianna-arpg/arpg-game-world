@@ -71,6 +71,12 @@ export const COMPAT_CFG = {
    *  landed 9 hits for dmg_in 0 — a woundless "under damage" probe blinds
    *  every wound-conditioned host: thirst-gated drinks, guard value, heals). */
   livePack: { id: 'zombie', count: 2, everySec: 8, levelBonus: 6 },
+  /** FODDER pack (the kill lane, 2026-07-21): kill-scoped payloads need
+   *  bodies that actually DIE — the wounding pack's levelBonus makes it
+   *  too tanky for modest-dps hosts to kill inside the episode (measured:
+   *  frost_nova, 0 kills in 20s), which read every kill-proc falsely
+   *  inert. Below-parity, faster-cycling bodies keep kills flowing. */
+  fodderPack: { id: 'zombie', count: 3, everySec: 5, levelBonus: -4 },
   /** Probe target stand-off (px) for the dummy. */
   dummyDistance: 70,
   /** Live-pack spawn distance (px): CLOSE, so the fight is joined within
@@ -297,18 +303,26 @@ export const LIVE_PROBE_SUPPORT_STATS: ReadonlySet<string> = new Set([
  *  above the rig), or that read only at AREA EDGES / on displaced bodies
  *  (aoe geometry, knockback) route LIVE. Open registry — one entry per
  *  reason, each naming itself for reports. */
-export const LIVE_PROBE_SUPPORT_RULES: { why: string; when: (sup: SupportDef) => boolean }[] = [
+export const LIVE_PROBE_SUPPORT_RULES: {
+  why: string; when: (sup: SupportDef) => boolean;
+  /** 'fodder' routes to the below-parity KILLABLE pack (COMPAT_CFG.fodderPack)
+   *  — kill-scoped payloads need kill THROUGHPUT, not wounding tankiness. */
+  pack?: 'fodder';
+}[] = [
   {
-    why: 'kill-trigger proc payload needs kills — the dummy never dies',
+    why: 'kill-trigger proc payload needs kills — the fodder pack keeps them flowing',
+    pack: 'fodder',
     when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
       m.stat.startsWith('proc_') && PROCS[m.stat.slice('proc_'.length)]?.trigger === 'kill'),
   },
   {
-    why: 'on-kill/on-death charge tap needs deaths in the arena',
+    why: 'on-kill/on-death charge tap needs deaths in the arena — the fodder pack supplies them',
+    pack: 'fodder',
     when: sup => (sup.chargeGain ?? []).some(cg => cg.on === 'kill' || cg.on === 'enemyDeath'),
   },
   {
-    why: 'kill-shed payload (orb/remnant families) needs kills',
+    why: 'kill-shed payload (orb/remnant families) needs kills — the fodder pack supplies them',
+    pack: 'fodder',
     when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
       m.stat === 'orbShedRate' || m.stat.startsWith('orbOnKill_') || m.stat.startsWith('remnantDrop_')),
   },
@@ -326,9 +340,17 @@ export const LIVE_PROBE_SUPPORT_RULES: { why: string; when: (sup: SupportDef) =>
     when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
       m.stat === 'knockback' || m.stat === 'knockBuffet'),
   },
+  {
+    // The power lane (2026-07-21): non-damaging ailment potency reads
+    // through victim BEHAVIOR — a deeper chill closes slower, a stun stops
+    // the blows — which the anchored, passive dummy can never express.
+    why: 'ailment-potency payload (statusMagnitude) reads through victim behavior — moving, striking live bodies express slows and locks the anchored dummy cannot',
+    when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat === 'statusMagnitude' || m.stat === 'ailmentStacks'),
+  },
 ];
 
-export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' | 'live'; why?: string } {
+export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' | 'live'; why?: string; pack?: 'fodder' } {
   const hostRule = LIVE_PROBE_HOST_RULES.find(r => r.when(def));
   if (hostRule) return { kind: 'live', why: hostRule.why };
   if (sup) {
@@ -337,7 +359,7 @@ export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' |
     const m = [...sup.mods, ...(sup.perLevel ?? [])].find(x => LIVE_PROBE_SUPPORT_STATS.has(x.stat));
     if (m) return { kind: 'live', why: `defensive/sustain stat '${m.stat}' shows only under incoming wounds` };
     const rule = LIVE_PROBE_SUPPORT_RULES.find(r => r.when(sup));
-    if (rule) return { kind: 'live', why: rule.why };
+    if (rule) return { kind: 'live', why: rule.why, ...(rule.pack ? { pack: rule.pack } : {}) };
   }
   return { kind: 'dummy' };
 }
@@ -427,13 +449,15 @@ export function probeScenario(
    *  pins a pair's BARE baseline to the same shape the socketed run uses
    *  (a trigger-forced escort pair diffs against an escort bare; a crew-fit
    *  pair diffs key-vs-key so the boarding door is open in both runs). */
-  forced?: { probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean },
+  forced?: { probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder' },
 ): ScenarioDef {
   const def = SKILLS[skillId];
   if (!def) throw new Error(`compat: unknown skill '${skillId}'`);
   if (support && !SUPPORTS[support.id]) throw new Error(`compat: unknown support '${support.id}'`);
   const sup = support ? SUPPORTS[support.id] : undefined;
-  const probe = forced?.probe ? { kind: forced.probe } as ReturnType<typeof probeKindFor> : probeKindFor(def, sup);
+  const probe = forced?.probe
+    ? { kind: forced.probe, ...(forced.pack ? { pack: forced.pack } : {}) } as ReturnType<typeof probeKindFor>
+    : probeKindFor(def, sup);
   const rig = forced?.rig ? { mode: forced.rig } as ReturnType<typeof rigModeFor> : rigModeFor(def, sup);
   const supports: { id: string; level: number }[] = [];
   const keyId = forced?.withKey ? resonanceKeyId() : null;
@@ -443,8 +467,11 @@ export function probeScenario(
   const build = probeBuild(skillId, supports, label, rig.mode, opts);
   const live = probe.kind === 'live';
   const escorted = rig.mode === 'escort' && build.skills.length > 1;
+  // The live wave: the standard WOUNDING pack, or the KILLABLE fodder pack
+  // for kill-scoped payloads (probe.pack 'fodder' — kills must flow).
+  const pack = probe.pack === 'fodder' ? COMPAT_CFG.fodderPack : COMPAT_CFG.livePack;
   return {
-    id: `${build.id}__${probe.kind}_${rig.mode}`,
+    id: `${build.id}__${probe.kind}${probe.pack ? '_' + probe.pack : ''}_${rig.mode}`,
     label: build.label,
     build,
     pilot: escorted ? { kind: 'pair', hostSlot: 0, refSlot: 1 } : soloPilotFor(def),
@@ -452,10 +479,10 @@ export function probeScenario(
     waves: live
       ? [{
         monsters: [{
-          id: COMPAT_CFG.livePack.id, count: COMPAT_CFG.livePack.count,
-          level: (opts.level ?? COMPAT_CFG.level) + COMPAT_CFG.livePack.levelBonus,
+          id: pack.id, count: pack.count,
+          level: Math.max(1, (opts.level ?? COMPAT_CFG.level) + pack.levelBonus),
         }],
-        repeatEvery: COMPAT_CFG.livePack.everySec, distance: COMPAT_CFG.liveDistance,
+        repeatEvery: pack.everySec, distance: COMPAT_CFG.liveDistance,
       }]
       : [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: COMPAT_CFG.dummyDistance }],
     // Corpse-consuming hosts get the feeder — without it the host never
@@ -712,10 +739,9 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: "'regicide' needs EMPOWERED victims (magic/rare/champion/crowned) — the probe pack spawns unpromoted",
     when: (_def, sup) => supModsStat(sup, ['regicide']),
   },
-  {
-    note: "'giantsbane' needs victims at least half again the rig's WEIGHT — the probe pack is light",
-    when: (_def, sup) => supModsStat(sup, ['giantsbane']),
-  },
+  // (giantsbane carries NO row: the training dummy's body math — radius 18,
+  // wood density, ~1.63 effective weight — stands above the 1.5× ratio, so
+  // the dummy probe arms it; its inert rows are non-hitting hosts, honest.)
   {
     note: "'limbreaver' reads a composite monster's PARTS — no composite spawns in probes",
     when: (_def, sup) => supModsStat(sup, ['limbreaver']),
@@ -739,6 +765,15 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
   {
     note: 'strike-timing window (grafted golden tail) needs a DISCIPLINED press — the spam pilot presses early on every bar',
     when: (_def, sup) => sup.strikeTiming !== undefined,
+  },
+  {
+    // Verified vs engine (2026-07-21): the recovery ratio folds ADDED
+    // cooldowns too (world.ts skillCooldown — the austerity precedent), so
+    // the gem genuinely serves any cooldown-SOURCE beside it. The socket
+    // stays open by doctrine; only the single-gem probe cannot arm it.
+    note: 'companion gem: cooldown investment on a host with no cooldown from ANY source — a levy gem (Austerity / Apotheosis) or a granted magazine beside it arms the clock; the single-gem probe fields none',
+    when: (def, sup) => supModsStat(sup, ['cooldownRecovery'])
+      && (def.cooldown ?? 0) <= 0 && def.useCharges === undefined,
   },
 ];
 
@@ -944,11 +979,12 @@ export function makeProbeSession(opts: ProbeOpts): ProbeSession {
 export function bareEpisodesFor(
   sess: ProbeSession, skillId: string,
   probe: 'dummy' | 'live', rig: 'solo' | 'escort', withKey: boolean,
+  pack?: 'fodder',
 ): EpisodeResult[] {
-  const key = `${skillId}:${probe}:${rig}:${withKey ? 'keyed' : 'bare'}`;
+  const key = `${skillId}:${probe}${pack ? ':' + pack : ''}:${rig}:${withKey ? 'keyed' : 'bare'}`;
   let eps = sess.bareCache.get(key);
   if (!eps) {
-    const scen = probeScenario(skillId, null, sess.opts, { probe, rig, withKey });
+    const scen = probeScenario(skillId, null, sess.opts, { probe, rig, withKey, pack });
     eps = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed }).episodes;
     sess.episodesRun += eps.length;
     sess.bareCache.set(key, eps);
@@ -961,6 +997,8 @@ export function bareEpisodesFor(
 export interface PairShape {
   probe: 'dummy' | 'live';
   probeWhy?: string;
+  /** Live-pack flavor: 'fodder' = the killable below-parity pack. */
+  pack?: 'fodder';
   rig: 'solo' | 'escort';
   rigWhy?: string;
   withKey: boolean;
@@ -975,6 +1013,7 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
   const withKey = fit === 'crew' && !!resonanceKeyId() && !sup.resonance;
   const shape: PairShape = { probe: probe.kind, rig: rig.mode, withKey };
   if (probe.why) shape.probeWhy = probe.why;
+  if (probe.pack) shape.pack = probe.pack;
   if (rig.why) shape.rigWhy = rig.why;
   return shape;
 }
@@ -996,7 +1035,7 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
   const def = SKILLS[row.skillId];
   const sup = SUPPORTS[row.supportId];
   const shape = pairShapeFor(def, sup, row.fit);
-  const bareEps = bareEpisodesFor(sess, row.skillId, shape.probe, shape.rig, shape.withKey);
+  const bareEps = bareEpisodesFor(sess, row.skillId, shape.probe, shape.rig, shape.withKey, shape.pack);
   const pairScen = probeScenario(row.skillId,
     { id: row.supportId, level: sess.supportLevel }, sess.opts, { withKey: shape.withKey });
   const { episodes: pairEps } = runScenario(pairScen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
@@ -1290,7 +1329,7 @@ export function deepProbePair(sess: ProbeSession, row: CensusRow, base?: PairPro
     SUPPORTS[maskedId] = maskSupportUnit(sup, unit, maskedId);
     try {
       const scen = probeScenario(row.skillId, { id: maskedId, level: sess.supportLevel }, sess.opts,
-        { probe: run.shape.probe, rig: run.shape.rig, withKey: run.shape.withKey });
+        { probe: run.shape.probe, rig: run.shape.rig, withKey: run.shape.withKey, pack: run.shape.pack });
       const { episodes: maskedEps } = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
       sess.episodesRun += maskedEps.length;
       for (const w of new Set(maskedEps.flatMap(e => e.warnings))) {

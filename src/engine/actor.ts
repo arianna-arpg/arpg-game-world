@@ -406,6 +406,19 @@ export interface ActiveBuff {
 
 let nextActorId = 1;
 
+/** SIM-ONLY (the harness determinism law, 2026-07-21): reset the actor id
+ *  counter so an episode's bodies get the SAME ids at the same seed
+ *  regardless of what ran earlier in the process. Actor ids feed per-body
+ *  variety salts (attack-cadence jitter, weave phases — ai.ts), so without
+ *  this a session's Nth episode diverges from its 1st at the same seed and
+ *  marginal A/B verdicts flip with probe ORDER. The live game NEVER calls
+ *  this — a running world's ids stay unique for its whole life (saves,
+ *  co-op refs, bonds); only the episode runner, which builds one fresh
+ *  World per episode and discards it, may re-zero between worlds. */
+export function resetActorIdCounter(to = 1): void {
+  nextActorId = to;
+}
+
 export class Actor {
   id = nextActorId++;
   name: string;
@@ -1990,6 +2003,10 @@ export class Actor {
       /** POP scaling from the applier (the popPower_<id> stat) — additive to
        *  the StatusDef.pop fraction's implicit 1× (0.5 = 50% bigger pops). */
       popBonus?: number;
+      /** Applier-side ailment POTENCY for non-damaging statuses (see
+       *  ActiveStatus.power): multiplies the def's mods as they fold onto
+       *  this sheet. Callers pass their statusMagnitude read; omitted = 1. */
+      power?: number;
     },
   ): void {
     const def = STATUS_DEFS[id];
@@ -2020,23 +2037,23 @@ export class Actor {
     // The stacking cap is INVESTABLE: the applier's ailmentStacks stat rides
     // in via opts (chill's freeze-buildup threshold moves with it too).
     const cap = (def.maxStacks ?? 99) + (opts?.stacksBonus ?? 0);
+    // THE POWER LANE: the applier's ailment potency for this application
+    // (see ActiveStatus.power). Folded into the mods refold at the tail —
+    // per-stack and flat mods alike scale by the strongest crank landed.
+    const power = Math.max(0, opts?.power ?? 1);
     if (existing && def.stacking) {
       if (existing.stacks < cap) existing.stacks++;
       if (!fixedFuse) existing.remaining = duration;
       existing.dps = Math.max(existing.dps, dps);
-      // Per-stack mods (Vulnerable): each stack opens the victim wider.
-      if (def.modsPerStack && def.mods) {
-        this.sheet.setSource('status:' + id,
-          def.mods.map(m => ({ ...m, value: m.value * existing.stacks })));
-      }
+      // (Per-stack mods — Vulnerable — refold at the tail, power-aware.)
       // BUILDUP (chill → frozen): at peak intensity the stacks are consumed
       // into the declared successor status. Any stacking status can declare
-      // a buildup — the ladder is data, not code.
+      // a buildup — the ladder is data, not code. The crank rides the rung.
       if (def.buildup && existing.stacks >= cap) {
         const i = this.statuses.indexOf(existing);
         if (i !== -1) this.statuses.splice(i, 1);
         this.sheet.removeSource('status:' + id);
-        this.applyStatus(def.buildup.into, 0, durationScale, sourceName);
+        this.applyStatus(def.buildup.into, 0, durationScale, sourceName, { power });
       }
     } else if (existing && def.stackPolicy === 'strongest' && !fixedFuse) {
       // STRONGEST-WINS (ignite): a mightier application seizes the ailment
@@ -2063,6 +2080,7 @@ export class Actor {
     } else {
       this.statuses.push({
         id, remaining: duration, stacks: 1, dps, sourceName,
+        power: power !== 1 ? power : undefined,
         propagates: opts?.propagates || def.propagateOnDeath,
         rupture: opts?.rupture,
         ruptureType: opts?.ruptureType,
@@ -2077,7 +2095,11 @@ export class Actor {
           return { hi, lo: Math.max(0, hi - def.weakSpot.size) };
         })() : undefined,
       });
-      if (def.mods) this.sheet.setSource('status:' + id, def.mods);
+      if (def.mods) {
+        this.sheet.setSource('status:' + id, power !== 1
+          ? def.mods.map(m => ({ ...m, value: m.value * power }))
+          : def.mods);
+      }
       return;
     }
     if (existing && opts) {
@@ -2094,6 +2116,20 @@ export class Actor {
         : existing.casterId ?? opts.casterId;
       existing.brood = existing.brood ?? opts.brood;
       if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
+    }
+    // THE POWER REFOLD (one site for every existing-status path): the
+    // strongest crank landed so far scales the folded mods — per-stack
+    // (Vulnerable's widening) and flat (shock's taken, chill's slow) alike.
+    // Guarded on the status still standing: a buildup consume above already
+    // removed the source, and re-laying it would haunt the sheet.
+    if (existing && this.statuses.includes(existing)) {
+      existing.power = Math.max(existing.power ?? 1, power);
+      if (def.mods) {
+        const mult = (def.modsPerStack ? existing.stacks : 1) * (existing.power ?? 1);
+        this.sheet.setSource('status:' + id, mult !== 1
+          ? def.mods.map(m => ({ ...m, value: m.value * mult }))
+          : def.mods);
+      }
     }
   }
 

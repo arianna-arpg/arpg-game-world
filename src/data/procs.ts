@@ -243,7 +243,10 @@ export const PROCS: Record<string, ProcDef> = {
 
   corpsefire: {
     id: 'corpsefire', name: 'Corpsefire',
-    color: '#ff5a2a', trigger: 'kill',
+    // minionCarry (2026-07-21, the court-credit law): socketed into a SUMMON
+    // skill, the court's kills erupt FOR THE OWNER — true kills whole, the
+    // elite-hit lane normalized by living court size (world.ts carry loop).
+    color: '#ff5a2a', trigger: 'kill', minionCarry: true,
     effect: { type: 'explosion', damageScale: 0.8, radius: 90 },
   },
 
@@ -633,7 +636,9 @@ export const PROCS: Record<string, ProcDef> = {
   // where nothing dies until the end.
   sainted_ash: {
     id: 'sainted_ash', name: 'Sainted Ash',
-    color: '#ffe8b0', trigger: 'kill',
+    // minionCarry: a consecrating court — the flock's kills bloom for the
+    // shepherd (same court-credit law as Corpsefire).
+    color: '#ffe8b0', trigger: 'kill', minionCarry: true,
     effect: {
       type: 'delayedBurst', delay: 0.35, radius: 110, at: 'target',
       damage: { type: 'fire', base: 10, perLevel: 2 },

@@ -1341,6 +1341,13 @@ export interface ActiveStatus {
   stacks: number;
   /** DoT damage per second per stack (locked in at application time). */
   dps: number;
+  /** THE POWER LANE (2026-07-21, "scale ALL ailments"): the applier's ailment
+   *  potency (statusMagnitude) for NON-damaging statuses — multiplies the
+   *  StatusDef.mods values as they fold onto the victim's sheet (a 30%-
+   *  stronger shock takes 30% more; a deeper chill slows harder). DoT
+   *  statuses carry their potency in `dps` instead and keep power 1 — one
+   *  crank, never double-dipped. Strongest application wins on refresh. */
+  power?: number;
   sourceName: string;
   /** Spreads to the victim's nearby allies if it dies while afflicted. */
   propagates?: boolean;

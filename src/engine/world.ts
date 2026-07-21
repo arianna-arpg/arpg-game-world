@@ -30902,8 +30902,10 @@ export class World {
             ? baselineStatusDps(rider.status, this.zone.level)
               * (rider.statusScale ?? 1.5) * potencyFor(rider.status)
             : 0;
-          target.applyStatus(rider.status, dps, durScale, caster.name,
-            { casterId: caster.id, stacksBonus: stacksBonusFor(rider.status) });
+          target.applyStatus(rider.status, dps, durScale, caster.name, {
+            casterId: caster.id, stacksBonus: stacksBonusFor(rider.status),
+            power: sdef?.dotType ? undefined : potencyFor(rider.status),
+          });
         }
         if (rider.addedDamage && !target.invulnerable) {
           const landed = mitigateTyped(target, { ...rider.addedDamage },
@@ -31020,6 +31022,10 @@ export class World {
             brood: instanceBrood(inst),
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
             popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
+            // NON-damaging ailments carry the potency crank as POWER (the
+            // mods fold scales — a stronger shock takes more, a deeper
+            // chill slows harder); DoTs carry theirs in dps already.
+            power: STATUS_DEFS[fx.status]?.dotType ? undefined : potencyFor(fx.status),
           });
           // Applying a status is a trigger (Bloodletter's Rhythm).
           this.rollStatusProcs(caster, inst, target, fx.status, tags, extra, depth);
@@ -31335,6 +31341,14 @@ export class World {
         const cExtra = instanceMods(carryInst);
         const ownerElite = elite
           ? owner.sheet.get('killProcOnHit', cTags, cExtra) : 0;
+        // THE COURT NORMALIZER (2026-07-21): HIT-frequency carry rolls —
+        // plain 'hit' triggers and kill-procs riding the elite hit lane —
+        // divide by the skill's LIVING COURT, so hits multiplying with
+        // minion count never multiply proc throughput (the
+        // bakeMinionOwnerStats 1/batch doctrine, proc form). TRUE kills
+        // stay whole (a body dies once, court-size-blind), and a proc
+        // bringing its own clock (ppm/icd) keeps its authored pacing.
+        const court = Math.max(1, this.minionsOfSkill(owner, carryInst.def.id).length);
         for (const proc of PROC_LIST) {
           if (!proc.minionCarry) continue;
           if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
@@ -31347,9 +31361,26 @@ export class World {
             if (ownerElite <= 0) continue;
             cc *= ownerElite;
           }
+          if (!proc.ppm && proc.icd === undefined
+            && !(proc.trigger === 'kill' && lethal)) {
+            cc /= court;
+          }
           if (cc <= 0 || !chance(cc)) continue;
           if (!this.procReady(owner, proc)) continue;
           this.executeProc(proc, owner, carryInst, target, depth);
+        }
+        // THE COURT'S KILL TAPS: a minion's TRUE kill fires the on-kill
+        // charge taps riding the SUMMONING instance — Victor's Tempo
+        // socketed in the contract feeds the keeper's tempo off the
+        // court's kills. Kills are exclusive events (one death,
+        // court-size-blind), so no normalization; the owner's own caps
+        // and decay govern the bank as ever.
+        if (lethal) {
+          for (const spec of instanceChargeGain(carryInst)) {
+            if (spec.on !== 'kill') continue;
+            if (spec.chance !== undefined && !chance(spec.chance)) continue;
+            owner.gainCharge(spec.charge, spec.amount, spec.max, carryInst);
+          }
         }
       }
     }
@@ -31863,6 +31894,8 @@ export class World {
             casterId: caster.id,
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
             popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
+            power: sdef.dotType ? undefined
+              : caster.sheet.get('statusMagnitude', tags, extra),
           });
         break;
       }

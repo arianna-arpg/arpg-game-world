@@ -1252,7 +1252,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // prey at a fraction, so the gem still matters when nothing dies.
   sainted_ash: {
     id: 'sainted_ash', name: 'Sainted Ash',
-    description: 'Kills with this skill bloom after a beat — healing allies and burning enemies in the circle. Also rolls on hits against rare and boss enemies.',
+    description: 'Kills with this skill bloom after a beat — healing allies and burning enemies in the circle. Also rolls on hits against rare and boss enemies, and a summoned flock\'s kills bloom for the shepherd.',
     color: '#ffe8b0',
     mods: [mod('proc_sainted_ash', 'flat', 0.4)],
     perLevel: [mod('proc_sainted_ash', 'flat', 0.06)],
@@ -1587,7 +1587,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   victors_tempo: {
     id: 'victors_tempo', name: "Victor's Tempo",
-    description: 'Kills with the supported skill kindle your tempo: 60% chance to gain a Frenzy charge (up to 3) — a Reckoning that feeds your speed, a nova that quickens your feet.',
+    description: 'Kills with the supported skill kindle your tempo: 60% chance to gain a Frenzy charge (up to 3) — a Reckoning that feeds your speed, a nova that quickens your feet. Socketed in a summon, the court\'s kills kindle their keeper.',
     color: '#8ae06a', requiresTags: ['attack', 'spell'],
     mods: [],
     perLevel: [mod('chargeCap', 'flat', 0.34)],
@@ -2014,7 +2014,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   corpsefire: {
     id: 'corpsefire', name: 'Corpsefire',
-    description: '50% chance for kills to trigger Corpsefire — the corpse erupts at 80% damage.',
+    description: '50% chance for kills to trigger Corpsefire — the corpse erupts at 80% damage. Also rolls on plain hits against rare and boss enemies, and a summoned court\'s kills erupt for their keeper.',
     color: '#ff5a2a',
     mods: [mod('proc_corpsefire', 'flat', 0.5)],
     perLevel: [mod('proc_corpsefire', 'flat', 0.12)],
@@ -3824,8 +3824,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   deep_reserves: {
     id: 'deep_reserves', name: 'Deep Reserves',
-    description: '+1 use-charge on the socketed skill and 25% faster charge recovery — the cadence family\'s capacity gem.',
+    description: '+1 use-charge on the socketed skill and 25% faster charge recovery — and a skill with NO bank GROWS one: cooldown skills store their uses as a magazine on their own clock, free skills bank a burst that trickles back. The capacity gem builds the bank it deepens.',
     color: '#d8c86a',
+    // The GRANT (useChargeGraft): chargeless hosts stand a 2-round bank up
+    // (3 with this gem's own +1) — magazine on the host's cooldown, or the
+    // 4s trickle where no clock exists. Native banks/munitions win.
+    useChargeGraft: { rounds: 2, recharge: 4 },
     mods: [
       mod('skillCharges', 'flat', 1),
       mod('skillChargeRate', 'increased', 0.25),

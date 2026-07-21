@@ -199,6 +199,14 @@ wrong; baselines express "don't move things by accident" and are exact.
   DEFINITIVE **inert** verdict (the gem changed nothing — not damage, not
   statuses, not minions, not even a mana float). No statistics needed at one
   seed; that's what makes 50k-pair coverage affordable.
+- THE ORDER LAW (2026-07-21): episodes are a pure function of the seed
+  REGARDLESS of what ran earlier in the process — the runner re-zeroes the
+  actor id counter per episode (`resetActorIdCounter`, sim-only), because
+  id-derived per-body variety (attack-cadence jitter, weave phases) would
+  otherwise make a session's Nth episode diverge from its 1st and flip
+  marginal verdicts with probe ORDER. Pinned by probe_supportmatrix E10b.
+  Verdicts minted before this law (ledger history ≤ 2026-07-21) carried
+  order noise on marginal live pairs; re-probes self-correct them.
 - Divergent pairs classify by which channel lanes moved (`CHANNEL_LANES`):
   output/defense beyond noise = **effective** (the Δoutput column doubles as
   a support-power table); cost alone = **cost_only** (a tax with no observed
@@ -238,7 +246,13 @@ wrong; baselines express "don't move things by accident" and are exact.
   kill-trigger procs, on-kill/on-death charge taps, orb/remnant kill-sheds,
   'overmatch' (the pack's levelBonus stands above the rig), and area-geometry
   / knockback payloads that read only at edges or across displaced bodies —
-  the immortal, centered dummy can arm none of those.
+  the immortal, centered dummy can arm none of those. Kill-scoped rules
+  route to THE FODDER PACK (`COMPAT_CFG.fodderPack`, below-parity and
+  fast-cycling): the wounding pack's levelBonus makes it too tanky for
+  modest-dps hosts to kill inside an episode (measured: frost_nova, 0 kills
+  in 20s), so kill payloads need kill THROUGHPUT, not tankiness — the bare
+  baseline and the deep lane's masked variants ride the same pack flavor
+  (`PairShape.pack` — shape-matched A/B, always).
 - THE DEFENSIVE-STAT LANE: a gem whose mods touch mitigation, avoidance,
   pools, recovery, or sustain (`LIVE_PROBE_SUPPORT_STATS`) routes to the
   wounding LIVE probe — the dummy never swings back, so those payloads used

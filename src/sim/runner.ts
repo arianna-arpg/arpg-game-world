@@ -13,6 +13,7 @@
 
 import { vec } from '../core/math';
 import { updateAI } from '../engine/ai';
+import { resetActorIdCounter } from '../engine/actor';
 import type { Actor } from '../engine/actor';
 import { setSimTap } from '../engine/tap';
 import { CORPSE_CFG } from '../engine/world';
@@ -69,6 +70,11 @@ function spawnWave(world: World, wave: WaveSpec, parityLevel: number, warnings: 
 
 export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
   const restoreRandom = seedGlobalRandom(seed);
+  // THE EPISODE ID LAW: actor ids restart per episode, so id-derived
+  // per-body variety (attack-cadence jitter, weave phases) is a pure
+  // function of the seed — the Nth episode of a session is byte-identical
+  // to the same episode run first. Sim-only; see resetActorIdCounter.
+  resetActorIdCounter();
   const warnings: string[] = [];
   let world: World | null = null;
   try {

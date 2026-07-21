@@ -4495,14 +4495,23 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // ignored by other AI). It takes damage + shows numbers/ailments + a health
   // bar that regenerates, but the kill() path resets it to full instead of
   // letting it die, so it's an immortal target to test effects + modifiers.
+  // BOSS by classification (2026-07-21, the on-X testability law): elite-
+  // conditioned lanes — killProcOnHit's elite-hit rolls, crowd-empower
+  // weight, giantsbane's heft read — all ARM against the dummy, so every
+  // "on-kill/vs-elite" build is testable at the post (and measurable by the
+  // sim probes, which target this same def). bossBar:false keeps the town
+  // marquee quiet; explicit poise 0 declines the boss poise default so the
+  // damage math stays byte-identical to the pre-boss dummy.
   target_dummy: {
     id: 'target_dummy', name: 'Training Dummy',
     color: '#b08850', shape: 'rectangle', radius: 18, material: 'wood', look: 'training_dummy',
-    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0, poise: 0 },
     skills: [],
     xp: 0,
     passive: true,
     immortal: true,
+    boss: true,
+    bossBar: false,
   },
 
   // --- ATTUNEMENT FIXTURES (engine/tuning.ts + engine/puzzles.ts) -----------

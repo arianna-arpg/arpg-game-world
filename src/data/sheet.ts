@@ -377,7 +377,7 @@ const STAT_BLURBS: Record<string, string> = {
   insightPen: 'Your blows land too true to read — this fraction of the victim\'s insight slip is denied.',
   esShred: 'How hard your hits strip energy shields — above one drains the pool faster per point of damage.',
   statusChance: 'Chance your hits inflict their ailments.',
-  statusMagnitude: 'The potency of every ailment you apply — ticking damage scales with it.',
+  statusMagnitude: 'The potency of every ailment you apply — ticking damage, and the strength of non-damaging afflictions (deeper chills, harder shocks), scale with it.',
   ailmentStacks: 'Raises how many stacks of an ailment you can keep on a victim.',
   dotPropagates: 'Chance a damage-over-time you applied spreads when its victim dies.',
   curseRupture: 'Your curses rupture at expiry, dealing a burst scaled by this.',
