@@ -14,7 +14,11 @@
 //                            (incl. the CHOICE deal: group ref + pick override),
 //                            or delete the node
 //   • Save Tree to File    → serialize the WHOLE tree back to src/data/passives.ts
-//                            (the dev server backs the old file up to passives.ts.bak)
+//                            (the dev server backs the old file up to passives.ts.bak).
+//                            Where /__dev/passives is absent (the desktop app,
+//                            static hosts) the save falls back to THE RESCUE
+//                            DUMP: saves/save_passives_editor.json via the
+//                            standing /__save lane — .src IS the file content.
 //
 // It mutates the live PASSIVE_NODES + PASSIVE_ADJACENCY (so the in-game tree
 // reflects edits immediately) and re-attaches to the SVG after every refreshTree
@@ -548,11 +552,34 @@ export function vocationGateOpen(allocated: ReadonlySet<string>, vocId: string):
 
   async function save(): Promise<void> {
     flash('saving…', '#e8d44a');
+    const src = serializeTree();
     try {
-      const res = await fetch('/__dev/passives', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: serializeTree() });
+      const res = await fetch('/__dev/passives', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: src });
       const j = await res.json().catch(() => ({ ok: false }));
-      if (res.ok && j.ok) flash(`saved ${Object.keys(PASSIVE_NODES).length} nodes → src/data/passives.ts`, '#7ec850');
-      else flash(`save failed: ${j.error ?? res.status}`, '#e85050');
+      if (res.ok && j.ok) { flash(`saved ${Object.keys(PASSIVE_NODES).length} nodes → src/data/passives.ts`, '#7ec850'); return; }
+      // 404/405 = no /__dev endpoint here (the desktop app's embedded server,
+      // or a static host) — fall back to the RESCUE DUMP below rather than
+      // losing the work. Other statuses (400 sanity guard, 500) are real
+      // dev-server verdicts — surface them.
+      if (res.status === 404 || res.status === 405) { await dumpFallback(src); return; }
+      flash(`save failed: ${j.error ?? res.status}`, '#e85050');
+    } catch { await dumpFallback(src); } // no server reachable at all
+  }
+
+  /** THE RESCUE DUMP: only the Vite dev server can write SOURCE, but every
+   *  host of the game (dev, preview, the desktop app's server.cjs) speaks the
+   *  /__save/:slot disk-save lane — so when /__dev/passives is absent, the
+   *  serialized tree is smuggled out as saves/save_passives_editor.json
+   *  ({ savedAt, src } — the .src field IS the passives.ts content) instead
+   *  of evaporating with the window. */
+  async function dumpFallback(src: string): Promise<void> {
+    try {
+      const res = await fetch('/__save/passives_editor', { method: 'POST', body: JSON.stringify({ savedAt: Date.now(), src }) });
+      if (res.ok) {
+        flash('no source-write here (desktop app?) — tree RESCUED to saves/save_passives_editor.json (.src = passives.ts); edit under npm run dev to save directly', '#e8d44a');
+      } else {
+        flash(`save failed (${res.status}) — the editor writes source only under npm run dev (Play Game.bat)`, '#e85050');
+      }
     } catch (e) { flash(`save failed (dev server only): ${String(e)}`, '#e85050'); }
   }
 
