@@ -24,7 +24,21 @@
 //   - 'gauge'   — hits (yours / your minions' / both) fill a per-instance
 //                 gauge that mints a batch at full — THE ADD-LESS BOSS
 //                 FALLBACK: rares and lone bosses still feed the throng.
+//   - 'trickle' — the RECURRING BROOD: one body per everySec below cap —
+//                 a husk at your feet ('near') or straight into the
+//                 roster ('roster'); disarmed at cap, full wait to re-arm.
 // New source kinds = one union row + one branch in the world executor.
+//
+// SOURCES ARE GRAFTABLE (SupportDef.throngSource): a socketed gem ADDS a
+// source row to its anchor — the world-found Palewisps GAIN a battle gauge
+// by socket choice, any anchor gains a trickle. Effective rows resolve as
+// authored-first + grafts-after (World.throngSources), so authored pocket
+// indices — and their run-long claim keys — can never shift under a gem.
+// THE FIND LEVERS (stats, read on the keeper with the anchor's context):
+// `throngPockets` appends flat extra pockets per zone AFTER the authored
+// rolls; `throngYield` multiplies the BODY COUNT of every mint event
+// (cluster, gauge yield, mote, trickle, crit/kill raisings) — quanta-
+// rounded, never below 1.
 //
 // BALANCE DOCTRINE (the quadratic killer): throng bodies are ordinary
 // minions in every pipeline — supports, statuses, commands — but the
@@ -93,8 +107,24 @@ export interface ThrongGaugeRow {
   yield: [number, number];
 }
 
+/** THE RECURRING BROOD: one body per `everySec` seconds while the anchor
+ *  is slotted and the roster stands below cap — the reknitting-hive
+ *  texture as a SOURCE row, so any anchor (or any graft gem) can wear it.
+ *  `at` picks the grain: 'near' (default) condenses a HUSK at the
+ *  keeper's feet — a stoop, the collection thesis kept — while 'roster'
+ *  replenishes the roster DIRECTLY, no walk (the truest "X per second").
+ *  At cap the clock stands DISARMED and re-arms with a full wait when a
+ *  body is lost — the brood takes time, never banks it. ONE trickle row
+ *  per anchor (the first wins — the motes one-clock law). */
+export interface ThrongTrickleRow {
+  kind: 'trickle';
+  everySec: number;
+  at?: 'near' | 'roster';
+}
+
 export type ThrongSourceRow =
-  | ThrongPocketRow | ThrongMoteRow | ThrongCritRow | ThrongKillRow | ThrongGaugeRow;
+  | ThrongPocketRow | ThrongMoteRow | ThrongCritRow | ThrongKillRow
+  | ThrongGaugeRow | ThrongTrickleRow;
 
 // --- The spec ---------------------------------------------------------------
 

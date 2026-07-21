@@ -26,7 +26,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -21526,40 +21526,94 @@ export class World {
     }
   }
 
+  /** THE EFFECTIVE SOURCES for an anchor: the authored rows FIRST (their
+   *  pocket indices — and run-long claim keys — can never shift under a
+   *  gem), then every socket-grafted row (SupportDef.throngSource) in
+   *  slot order. Every source consumer asks HERE, so the world-found
+   *  flavor gains a battle gauge — or any brood a trickle — by socket
+   *  choice alone. */
+  private throngSources(inst: SkillInstance, spec: ThrongSpec): ThrongSourceRow[] {
+    const grafts = instanceThrongSources(inst);
+    return grafts.length ? [...spec.sources, ...grafts] : spec.sources;
+  }
+
+  /** THE FIND-SIZE FOLD (the throngYield stat): bodies per mint event,
+   *  quanta-rounded and never below one — pocket clusters, gauge yields,
+   *  mote condensations, trickle drops and crit/kill raisings all ask
+   *  here, so a new source kind scales for free and no fold can ever
+   *  fraction a body. */
+  private throngYieldCount(keeper: Actor, inst: SkillInstance, base: number): number {
+    return Math.max(1, Math.round(base * keeper.sheet.get(
+      'throngYield', skillContextTags(inst.def), instanceMods(inst))));
+  }
+
+  /** One pocket's mint: the HEART draws from the anchor's main salted
+   *  stream (order fixed — authored spots never move), while cluster size
+   *  and seat scatter ride a per-pocket FORKED stream, so a yield-grown
+   *  cluster can never shift the NEXT pocket's heart: the find levers
+   *  change COUNTS, never maps. */
+  private mintThrongPocket(
+    rng: Rng, pois: Vec2[], skillId: string, row: Extract<ThrongSourceRow, { kind: 'pocket' }>,
+    pocket: number, has: boolean, monsterId: string, yieldMul: number,
+  ): void {
+    const heart = this.interactSpot(pois, rng, THRONG_CFG.pocket.reach, THRONG_CFG.pocket.portalClear);
+    const fork = new Rng((((this.currentZoneSeed ^ THRONG_CFG.salt) ^ throngSkillSalt(skillId))
+      + Math.imul(pocket + 1, 0x9e3779b9)) >>> 0);
+    const cluster = Math.max(1, Math.round(fork.int(row.cluster[0], row.cluster[1]) * yieldMul));
+    for (let s = 0; s < cluster; s++) {
+      const ang = fork.range(0, Math.PI * 2);
+      const d = fork.range(6, THRONG_CFG.pocket.scatter);
+      const key = throngPocketKey(this.zone.id, skillId, pocket, s);
+      if (!has || this.throngClaimed.has(key)) continue;
+      this.mintThrongHusk(monsterId, vec(
+        heart.x + Math.cos(ang) * d, heart.y + Math.sin(ang) * d), { pocketKey: key });
+    }
+  }
+
   /** THE POCKET BOOT (loadZone): each anchor skill's finite finds roll on
    *  their OWN salted stream (zoneSeed ^ THRONG_CFG.salt ^ skill salt) —
    *  slotting another throng skill can never shift this one's spots, so
    *  the run-long claim keys stay honest. The stream's SHAPE is fixed
-   *  (every draw happens whether or not a mint is due) for the same
-   *  reason. Placement rides the leftover-POI stream like puzzles and
-   *  scenery — never a generation concern. */
+   *  (every heart draw happens whether or not a mint is due; cluster and
+   *  scatter ride per-pocket forks) for the same reason. THE POCKET
+   *  LEVER (throngPockets): flat extra pockets are APPENDED after every
+   *  authored roll — authored indices never shift, the zone's own
+   *  scarcity chance still gates, and the FIRST pocket row (authored or
+   *  grafted) supplies the shape. Placement rides the leftover-POI
+   *  stream like puzzles and scenery — never a generation concern. */
   private bootThrong(pois: Vec2[]): void {
-    const anchors = new Map<string, ThrongSpec>();
+    const anchors = new Map<string, { inst: SkillInstance; spec: ThrongSpec; keeper: Actor }>();
     for (const seat of this.seats) {
       for (const { inst, spec } of throngSpecsOn(seat.actor.skills)) {
-        if (spec.sources.some(r => r.kind === 'pocket')) anchors.set(inst.def.id, spec);
+        if (anchors.has(inst.def.id)) continue; // first seat's anchor wins
+        if (this.throngSources(inst, spec).some(r => r.kind === 'pocket')) {
+          anchors.set(inst.def.id, { inst, spec, keeper: seat.actor });
+        }
       }
     }
     if (!anchors.size) return;
     for (const skillId of [...anchors.keys()].sort()) {
-      const spec = anchors.get(skillId)!;
+      const { inst, spec, keeper } = anchors.get(skillId)!;
+      const tags = skillContextTags(inst.def);
+      const extra = instanceMods(inst);
+      const yieldMul = keeper.sheet.get('throngYield', tags, extra);
       const rng = new Rng(((this.currentZoneSeed ^ THRONG_CFG.salt) ^ throngSkillSalt(skillId)) >>> 0);
       let pocket = 0;
-      for (const row of spec.sources) {
+      let firstRow: Extract<ThrongSourceRow, { kind: 'pocket' }> | undefined;
+      let firstHas = false;
+      for (const row of this.throngSources(inst, spec)) {
         if (row.kind !== 'pocket') continue;
         const has = row.chance === undefined || rng.next() < row.chance;
+        if (!firstRow) { firstRow = row; firstHas = has; }
         const n = rng.int(row.perZone[0], row.perZone[1]);
         for (let p = 0; p < n; p++, pocket++) {
-          const heart = this.interactSpot(pois, rng, THRONG_CFG.pocket.reach, THRONG_CFG.pocket.portalClear);
-          const cluster = rng.int(row.cluster[0], row.cluster[1]);
-          for (let s = 0; s < cluster; s++) {
-            const ang = rng.range(0, Math.PI * 2);
-            const d = rng.range(6, THRONG_CFG.pocket.scatter);
-            const key = throngPocketKey(this.zone.id, skillId, pocket, s);
-            if (!has || this.throngClaimed.has(key)) continue;
-            this.mintThrongHusk(spec.monsterId, vec(
-              heart.x + Math.cos(ang) * d, heart.y + Math.sin(ang) * d), { pocketKey: key });
-          }
+          this.mintThrongPocket(rng, pois, skillId, row, pocket, has, spec.monsterId, yieldMul);
+        }
+      }
+      if (firstRow) {
+        const bonus = Math.max(0, Math.round(keeper.sheet.get('throngPockets', tags, extra)));
+        for (let p = 0; p < bonus; p++, pocket++) {
+          this.mintThrongPocket(rng, pois, skillId, firstRow, pocket, firstHas, spec.monsterId, yieldMul);
         }
       }
     }
@@ -21668,7 +21722,9 @@ export class World {
         }
         // MOTE SCHEDULING (one motes row per skill — the first wins; a
         // second row is a validator warning, never a silent double-clock).
-        const moteRow = spec.sources.find((r): r is Extract<ThrongSourceRow, { kind: 'motes' }> => r.kind === 'motes');
+        // Grafted rows resolve through throngSources like every consumer.
+        const rows = this.throngSources(inst, spec);
+        const moteRow = rows.find((r): r is Extract<ThrongSourceRow, { kind: 'motes' }> => r.kind === 'motes');
         if (moteRow) {
           const st = inst.state ??= {};
           if (st.throngMoteAt === undefined) {
@@ -21677,8 +21733,48 @@ export class World {
             st.throngMoteAt = t + rand(moteRow.every[0], moteRow.every[1]);
             const pos = this.throngMoteSpot(keeper, moteRow.at);
             if (pos) {
-              this.mintThrongHusk(spec.monsterId, pos,
-                { ttl: moteRow.ttl ?? THRONG_CFG.motes.ttl });
+              // THE FIND-SIZE FOLD: a grown yield condenses a CLUTCH at
+              // the spot — the first mote exactly there (byte-identical
+              // at yield 1), the rest scattered beside it.
+              const n = this.throngYieldCount(keeper, inst, 1);
+              for (let i = 0; i < n; i++) {
+                this.mintThrongHusk(spec.monsterId,
+                  i === 0 ? pos : this.throngStandNear(pos),
+                  { ttl: moteRow.ttl ?? THRONG_CFG.motes.ttl });
+              }
+            }
+          }
+        }
+        // THE RECURRING BROOD (trickle — one row per skill, first wins):
+        // one body per everySec while the roster stands below cap. 'near'
+        // condenses a claimable husk at the keeper's feet (the collection
+        // thesis kept — a stoop, not a button); 'roster' replenishes
+        // DIRECTLY. At cap the clock stands DISARMED and re-arms with a
+        // full wait when a body is lost — the brood never banks time.
+        const trickleRow = rows.find((r): r is Extract<ThrongSourceRow, { kind: 'trickle' }> => r.kind === 'trickle');
+        if (trickleRow) {
+          const st = inst.state ??= {};
+          if (roster >= cap) {
+            st.throngTrickleAt = undefined;
+          } else if (st.throngTrickleAt === undefined) {
+            st.throngTrickleAt = t + trickleRow.everySec;
+          } else if (t >= st.throngTrickleAt) {
+            st.throngTrickleAt = t + trickleRow.everySec;
+            let n = this.throngYieldCount(keeper, inst, 1);
+            if ((trickleRow.at ?? 'near') === 'roster') {
+              n = Math.min(n, cap - roster);
+              for (let i = 0; i < n; i++) {
+                const b = this.mintThrongBody(keeper, inst,
+                  this.throngStandNear(keeper.pos), keeper.level);
+                this.text(vec(b.pos.x, b.pos.y - 14), '+1', THRONG_CFG.joinColor, 11);
+                roster++;
+              }
+              if (n > 0) this.charDirty = true;
+            } else {
+              for (let i = 0; i < n; i++) {
+                this.mintThrongHusk(spec.monsterId,
+                  this.throngStandNear(keeper.pos), { ttl: THRONG_CFG.motes.ttl });
+              }
             }
           }
         }
@@ -21697,13 +21793,16 @@ export class World {
     if (lethal) this.throngLastKill.set(lord.id, vec(target.pos.x, target.pos.y));
     for (const { inst, spec } of throngSpecsOn(lord.skills)) {
       const st = inst.state ??= {};
-      for (const row of spec.sources) {
+      for (const row of this.throngSources(inst, spec)) {
         if (row.kind === 'onCrit') {
           if (!wasCrit || caster !== lord) continue;
           if (this.time < (st.throngCritAt ?? 0) || !chance(row.chance)) continue;
           st.throngCritAt = this.time + (row.icd ?? THRONG_CFG.critIcd);
-          this.mintThrongHusk(spec.monsterId, this.throngStandNear(target.pos),
-            { ttl: THRONG_CFG.motes.ttl });
+          const n = this.throngYieldCount(lord, inst, 1);
+          for (let i = 0; i < n; i++) {
+            this.mintThrongHusk(spec.monsterId, this.throngStandNear(target.pos),
+              { ttl: THRONG_CFG.motes.ttl });
+          }
         } else if (row.kind === 'gauge') {
           const fromMinion = caster !== lord;
           const counts = row.per === 'both' || (row.per === 'minionHit' ? fromMinion : !fromMinion);
@@ -21711,7 +21810,8 @@ export class World {
           st.throngGauge = (st.throngGauge ?? 0) + row.fill;
           if (st.throngGauge >= 100) {
             st.throngGauge = 0;
-            const n = Math.round(rand(row.yield[0], row.yield[1]));
+            const n = this.throngYieldCount(lord, inst,
+              Math.round(rand(row.yield[0], row.yield[1])));
             for (let i = 0; i < n; i++) {
               this.mintThrongHusk(spec.monsterId, this.throngStandNear(lord.pos),
                 { ttl: THRONG_CFG.motes.ttl });
@@ -21732,11 +21832,14 @@ export class World {
     let lord = killer;
     while (lord.owner) lord = lord.owner;
     if (lord.kind !== 'player') return;
-    for (const { spec } of throngSpecsOn(lord.skills)) {
-      for (const row of spec.sources) {
+    for (const { inst, spec } of throngSpecsOn(lord.skills)) {
+      for (const row of this.throngSources(inst, spec)) {
         if (row.kind !== 'onKill' || !chance(row.chance)) continue;
-        this.mintThrongHusk(spec.monsterId, this.throngStandNear(victim.pos),
-          { ttl: THRONG_CFG.motes.ttl });
+        const n = this.throngYieldCount(lord, inst, 1);
+        for (let i = 0; i < n; i++) {
+          this.mintThrongHusk(spec.monsterId, this.throngStandNear(victim.pos),
+            { ttl: THRONG_CFG.motes.ttl });
+        }
       }
     }
   }
@@ -27539,9 +27642,25 @@ export class World {
     minion.radius = Math.max(5, minion.radius * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);
     const s = scale;
+    // THE CALCIFIED TRADE (minionLifePlyTrade): every <threshold> of the
+    // OWNER's minion-life increase converts into +1 ply instead,
+    // CONSUMING the increase — life investment become hit-counted shell.
+    // The trade reads the PRE-batch investment (the quanta law's
+    // symmetry: plies never batch-scale, so the life that becomes them
+    // is never batch-diluted either — a throng body and a classic summon
+    // calcify at the same price, and armor stays linear in count); the
+    // REMAINDER then folds through the ordinary batch scale below.
+    // Un-invested or negative life trades nothing.
+    let lifeInc = caster.sheet.get('minionLife', tags, extra) - 1;
+    const tradeAt = caster.sheet.get('minionLifePlyTrade', tags, extra);
+    let tradedPlies = 0;
+    if (tradeAt > 0 && lifeInc > 0) {
+      tradedPlies = Math.floor(lifeInc / tradeAt);
+      lifeInc -= tradedPlies * tradeAt;
+    }
     const ownerMods = [
       mod('damage', 'more', (caster.sheet.get('minionDamage', tags, extra) - 1) * s),
-      mod('life', 'more', (caster.sheet.get('minionLife', tags, extra) - 1) * s),
+      mod('life', 'more', lifeInc * s),
       mod('damageTaken', 'more', (caster.sheet.get('minionDamageTaken', tags, extra) - 1) * s),
       mod('moveSpeed', 'more', (caster.sheet.get('minionMoveSpeed', tags, extra) * haste - 1) * s),
       mod('attackSpeed', 'more', (haste - 1) * s),
@@ -27564,15 +27683,20 @@ export class World {
     minion.sheet.setSource('owner', ownerMods);
     // Meat Shield: guarded minions keep a short leash and fight defensively.
     minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
-    // THE PLY FABRIC's owner lever (minionPlies): flat extra plies on a
-    // plied body. QUANTA LAW: never fractioned, never batch-scaled (+1 ply
+    // THE PLY FABRIC's owner levers (minionPlies + the calcified trade
+    // above). QUANTA LAW: never fractioned, never batch-scaled (+1 ply
     // is one more real hit eaten on EVERY body — linear in count, never
-    // quadratic). Re-derived from the def each bake (idempotent under the
-    // live rebake); current plies clamp, never refill.
-    if (minion.plySpec) {
-      const bonus = Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
+    // quadratic). A grant on a plied-LESS body STANDS THE FABRIC UP (a
+    // zero-count spec, so hit-counted armor is a build choice on ANY
+    // summon, never a birthright of the throng kinds). Re-derived from
+    // the def each bake (idempotent under the live rebake); current
+    // plies clamp, never refill.
+    const plyBonus = tradedPlies
+      + Math.max(0, Math.round(caster.sheet.get('minionPlies', tags, extra)));
+    if (minion.plySpec || plyBonus > 0) {
+      if (!minion.plySpec) minion.plySpec = { count: 0 };
       const spent = Math.max(0, minion.pliesMax - minion.plies);
-      minion.pliesMax = plyCountOf(minion.plySpec, minion.level) + bonus;
+      minion.pliesMax = plyCountOf(minion.plySpec, minion.level) + plyBonus;
       minion.plies = Math.max(0, minion.pliesMax - spent);
     }
   }

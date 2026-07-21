@@ -13001,4 +13001,13 @@ for (const def of Object.values(SKILLS)) {
   if (callsCloud && !def.tags.includes('conjure')) def.tags.push('conjure');
 }
 
+// THE THRONG CAPABILITY FOLD (the construct fold's sibling): every anchor
+// carrying a ThrongSpec IS 'throng'-capable by construction — a new gather
+// skill can never forget the word, and throng-scoped supports (source
+// grafts, the find levers) plus tag-filtered investment gate on it
+// honestly, never socketing into a skill with no roster to grow.
+for (const def of Object.values(SKILLS)) {
+  if (def.throng && !def.tags.includes('throng')) def.tags.push('throng');
+}
+
 export const SKILL_LIST: SkillDef[] = Object.values(SKILLS);

@@ -15,8 +15,9 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { setSimTap } from '../src/engine/tap';
 import { SKILLS } from '../src/data/skills';
+import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
-import { makeSkillInstance, type SkillDef } from '../src/engine/skills';
+import { makeSkillInstance, supportFits, type SkillDef } from '../src/engine/skills';
 import {
   batchScaleOf, THRONG_CFG, throngHeelOffset, throngMarkerOf, throngPocketKey,
   throngSightSet, throngSkillSalt, throngSpecsOn,
@@ -24,7 +25,7 @@ import {
 import { CLING_CFG, clingBurrowed, clingSeatsOf } from '../src/engine/cling';
 import { STATUS_DEFS } from '../src/engine/status';
 import { mod } from '../src/engine/stats';
-import { vec, dist } from '../src/core/math';
+import { vec, dist, type Vec2 } from '../src/core/math';
 import { updateAI } from '../src/engine/ai';
 import type { Actor } from '../src/engine/actor';
 
@@ -486,6 +487,168 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   w.update(DT);
   check('clear law: the combatant\'s death clears with husks still standing',
     w.objectiveDone && w.actors.filter(a => a.throngWild === 'cinderkin' && !a.dead).length === 3);
+}
+
+// --- 9) THE LEVER GEMS: grafted sources, trickle, the find levers ------------
+{
+  // Registry + gating: the 'throng' capability word is FOLDED at load onto
+  // every anchor, and the graft gems gate on it — never a plain summon.
+  check('levers: the throng tag folds onto every anchor at registry load',
+    ['gather_cinderkin', 'beckon_palewisps', 'raise_gnatveil', 'loose_marrowgrubs']
+      .every(id => SKILLS[id].tags.includes('throng'))
+    && !SKILLS.summon_skeleton.tags.includes('throng'));
+  check('levers: source-graft gems fit anchors and REFUSE plain summons',
+    supportFits(SUPPORTS.patient_brood, SKILLS.beckon_palewisps)
+    && supportFits(SUPPORTS.hidden_reserves, SKILLS.beckon_palewisps)
+    && !supportFits(SUPPORTS.patient_brood, SKILLS.summon_skeleton)
+    && supportFits(SUPPORTS.chitinous_brood, SKILLS.summon_skeleton));
+
+  // THE GAUGE GRAFT (the user's exact ask): the world-found Palewisps
+  // learn the battle-fed grammar by socket choice — authored spec untouched.
+  const w = makeSimWorld('summoner', 0x9aff);
+  const p = w.player;
+  p.sheet.setSource('probeacc', [mod('accuracy', 'increased', 8)]);
+  w.devThrongGrant('beckon_palewisps');
+  const inst = p.skills.find(s => s?.def.id === 'beckon_palewisps')!;
+  inst.sockets[0] = { def: SUPPORTS.hidden_reserves, level: 1 };
+  w.devThrongFillGauge('beckon_palewisps');
+  const prey = w.createMonster('zombie', 8, 'enemy');
+  prey.pos = vec(p.pos.x + 40, p.pos.y);
+  w.actors.push(prey);
+  // Two landed blows: 96 primed + fill 3 + fill 3 crosses the 100 brim.
+  w.executeSkill(p, makeSkillInstance(SKILLS.claw, 1), vec(prey.pos.x, prey.pos.y));
+  w.executeSkill(p, makeSkillInstance(SKILLS.claw, 1), vec(prey.pos.x, prey.pos.y));
+  check('graft: a socketed gauge births husks for the POCKET flavor',
+    w.actors.filter(a => a.throngWild === 'palewisp').length >= 1,
+    `${w.actors.filter(a => a.throngWild === 'palewisp').length} husks`);
+  check('graft: the AUTHORED sources never mutate (doctrine pin survives)',
+    !SKILLS.beckon_palewisps.throng!.sources.some(r => r.kind === 'gauge'));
+
+  // THE TRICKLE ('roster'): a synthetic anchor replenishes straight into
+  // the roster below cap, stands DISARMED at cap, and re-arms on loss.
+  const trickleDef = {
+    id: 'probe_trickle', name: 'Probe Trickle', noDrop: true, description: '',
+    tags: ['spell', 'minion', 'summon', 'throng'], color: '#fff',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    castMode: 'channel', channel: { interval: 0.25 },
+    delivery: { type: 'self' },
+    effects: [{ type: 'throngDirect' }],
+    throng: { monsterId: 'palewisp', cap: 2, sources: [{ kind: 'trickle', everySec: 1, at: 'roster' }] },
+  } as SkillDef;
+  const slot = p.skills.findIndex(s => !s);
+  p.skills[slot] = makeSkillInstance(trickleDef, 1);
+  step(w, 1.4);
+  const roster1 = w.throngBodiesOf(p, 'probe_trickle').length;
+  check('trickle: the brood replenishes the ROSTER directly', roster1 >= 1, `${roster1} after 1.4s`);
+  step(w, 3);
+  check('trickle: the clock respects the cap',
+    w.throngBodiesOf(p, 'probe_trickle').length === 2);
+  const lost = w.throngBodiesOf(p, 'probe_trickle')[0];
+  w.kill(lost, true);
+  step(w, 0.4);
+  check('trickle: at-cap stands DISARMED — a loss re-arms with a FULL wait',
+    w.throngBodiesOf(p, 'probe_trickle').length === 1);
+  step(w, 1.4);
+  check('trickle: the re-armed clock refills the loss',
+    w.throngBodiesOf(p, 'probe_trickle').length === 2);
+
+  // THE FIND-SIZE FOLD (throngYield): the same trickle under +100% yield
+  // mints TWO bodies per beat — quanta-rounded, cap-clamped.
+  const w2 = makeSimWorld('summoner', 0x9aff);
+  const p2 = w2.player;
+  p2.sheet.setSource('probe', [mod('throngYield', 'increased', 1.0)]);
+  const t2 = {
+    ...trickleDef, id: 'probe_trickle2',
+    throng: { monsterId: 'palewisp', cap: 6, sources: [{ kind: 'trickle', everySec: 1, at: 'roster' }] },
+  } as SkillDef;
+  p2.skills[p2.skills.findIndex(s => !s)] = makeSkillInstance(t2, 1);
+  step(w2, 1.4);
+  check('yield: +100% find size doubles the trickle drop (quanta, never fractions)',
+    w2.throngBodiesOf(p2, 'probe_trickle2').length === 2,
+    `${w2.throngBodiesOf(p2, 'probe_trickle2').length} after one beat`);
+
+  // THE POCKET LEVER at the boot itself: same seed twice — the stats
+  // world APPENDS pockets and grows clusters, while every AUTHORED
+  // first-pocket seat stands EXACTLY where the bare world put it (the
+  // append law: find levers change counts, never maps).
+  // interactSpot SPLICES its poi list (one POI, one occupant) — each boot
+  // gets its own fresh copy or the second world reads a shorter map.
+  const poiList = (): Vec2[] => [vec(600, 500), vec(900, 700), vec(500, 900), vec(1100, 500)];
+  const bare = makeSimWorld('summoner', 0xb007);
+  bare.devThrongGrant('beckon_palewisps');
+  (bare as unknown as { bootThrong(p: Vec2[]): void }).bootThrong(poiList());
+  const bareHusks = bare.actors.filter(a => a.throngWild === 'palewisp');
+  const rich = makeSimWorld('summoner', 0xb007);
+  rich.devThrongGrant('beckon_palewisps');
+  rich.player.sheet.setSource('probe', [
+    mod('throngPockets', 'flat', 2), mod('throngYield', 'increased', 1.0)]);
+  const richInst = rich.player.skills.find(s => s?.def.id === 'beckon_palewisps')!;
+  richInst.sockets[0] = { def: SUPPORTS.teeming_warrens, level: 1 }; // +1 more pocket, +50% more yield
+  (rich as unknown as { bootThrong(p: Vec2[]): void }).bootThrong(poiList());
+  const richHusks = rich.actors.filter(a => a.throngWild === 'palewisp');
+  check('pockets: the levers grow the zone\'s finds',
+    richHusks.length > bareHusks.length, `${bareHusks.length} → ${richHusks.length}`);
+  const keyPos = (ws: typeof bare, k: string): string => {
+    const h = ws.actors.find(a => a.throngPocketKey === k);
+    return h ? `${Math.round(h.pos.x)},${Math.round(h.pos.y)}` : 'gone';
+  };
+  const firstKeys = bareHusks.map(h => h.throngPocketKey!).filter(k => k.includes('#0.'));
+  check('pockets: authored seats never move under the levers (the append law)',
+    firstKeys.length > 0 && firstKeys.every(k => keyPos(bare, k) === keyPos(rich, k)));
+}
+
+// --- 10) THE PLY LEVERS: flat plies + the calcified trade --------------------
+{
+  const w = makeSimWorld('summoner', 0xab1e);
+  const p = w.player;
+  const mk = (gem?: string): Actor => {
+    const inst = makeSkillInstance(SKILLS.summon_skeleton, 1);
+    if (gem) inst.sockets[0] = { def: SUPPORTS[gem], level: 1 };
+    w.executeSkill(p, inst, vec(p.pos.x + 40, p.pos.y));
+    const mine = w.actors.filter(a => a.owner === p && a.kind === 'minion');
+    return mine[mine.length - 1];
+  };
+  const bare = mk();
+  const shelled = mk('chitinous_brood');
+  check('plies: a plied-LESS summon grows its first ply (the fabric stands up)',
+    bare.pliesMax === 0 && shelled.pliesMax === 1 && shelled.plies === 1,
+    `bare ${bare.pliesMax}, shelled ${shelled.pliesMax}`);
+  const calc = mk('calcified_vigor');
+  check('trade: 70% granted life became exactly one ply — life unmoved',
+    calc.pliesMax === 1 && Math.abs(calc.maxLife() - bare.maxLife()) < 0.5,
+    `plies ${calc.pliesMax}, life ${calc.maxLife().toFixed(0)} vs bare ${bare.maxLife().toFixed(0)}`);
+  // Trade + Hardy Brood: 1.2 total increase → one ply + a 0.5 remainder.
+  const inst2 = makeSkillInstance(SKILLS.summon_skeleton, 1);
+  inst2.sockets[0] = { def: SUPPORTS.calcified_vigor, level: 1 };
+  inst2.sockets[1] = { def: SUPPORTS.hardy_brood, level: 1 };
+  const before2 = w.actors.length;
+  w.executeSkill(p, inst2, vec(p.pos.x + 60, p.pos.y));
+  const both = w.actors[before2] ?? w.actors[w.actors.length - 1];
+  check('trade: the remainder past the threshold stays LIFE',
+    both.pliesMax === 1 && both.maxLife() > bare.maxLife() * 1.4,
+    `life ×${(both.maxLife() / bare.maxLife()).toFixed(2)}`);
+
+  // Batch symmetry (the quanta law): the trade reads PRE-batch investment,
+  // so a throng body calcifies at the same price as a classic summon —
+  // def plies 2 + 1 traded, life back at the un-gemmed fold.
+  w.devThrongGrant('loose_marrowgrubs');
+  const anchor = p.skills.find(s => s?.def.id === 'loose_marrowgrubs')!;
+  w.devThrongMint('loose_marrowgrubs', 1);
+  const plain = w.throngBodiesOf(p, 'loose_marrowgrubs')[0];
+  const plainLife = plain.maxLife();
+  anchor.sockets[0] = { def: SUPPORTS.calcified_vigor, level: 1 };
+  w.devThrongMint('loose_marrowgrubs', 1);
+  const calcGrub = w.throngBodiesOf(p, 'loose_marrowgrubs')[1];
+  check('trade: batch symmetry — a throng body calcifies at the classic price',
+    plain.pliesMax === 2 && calcGrub.pliesMax === 3
+    && Math.abs(calcGrub.maxLife() - plainLife) < 0.5,
+    `plies ${plain.pliesMax} → ${calcGrub.pliesMax}, life ${calcGrub.maxLife().toFixed(0)} vs ${plainLife.toFixed(0)}`);
+  // Flat minionPlies on an already-plied kind stacks atop the def count.
+  p.sheet.setSource('probeply', [mod('minionPlies', 'flat', 1)]);
+  w.devThrongMint('loose_marrowgrubs', 1);
+  const stacked = w.throngBodiesOf(p, 'loose_marrowgrubs')[2];
+  check('plies: flat minionPlies stacks atop a def\'s own count (quanta)',
+    stacked.pliesMax === 4, `pliesMax ${stacked.pliesMax}`);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

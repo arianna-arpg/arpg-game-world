@@ -40,9 +40,51 @@ cursor. Tags `['minion', 'summon', …]` admit minion supports on the HOST lane.
 | `onCrit` | `chance`, `icd` | the executioner's court: your best blows shake bodies loose |
 | `onKill` | `chance` | the reaper's wake: corpses give up their husks |
 | `gauge` | `per: hit/minionHit/both`, `fill`, `yield` | THE ADD-LESS BOSS FALLBACK: traded blows fill a gauge that mints at 100 |
+| `trickle` | `everySec`, `at: near/roster` | THE RECURRING BROOD: one body per clock below cap — a husk at your feet ('near', the stoop kept) or straight into the roster ('roster', the true replenish-per-second); DISARMED at cap, re-arms with a full wait on a loss |
 
 A new source kind = one union row + one branch in the world executors.
-One `motes` row per skill (the first wins — validator warns on more).
+One `motes` row per skill and one `trickle` row per skill (the first wins).
+
+### Graftable sources (`SupportDef.throngSource`)
+
+A socketed gem ADDS a source row to its anchor — the world-found Palewisps
+learn a battle gauge (`hidden_reserves`), any brood learns to trickle
+(`patient_brood`). Every consumer resolves rows through
+`World.throngSources`: AUTHORED rows first — their pocket indices, and the
+run-long claim keys built on them, can never shift under a gem — then
+grafts in slot order. Graft gems gate on the `'throng'` capability tag,
+FOLDED at registry load onto every anchor (the construct fold's sibling),
+so they never socket into a skill with no roster to grow. The graft is
+seat-bound (the tameMod precedent): source executors read the KEEPER's bar
+instance, and throng bodies take no forwarded gems anyway.
+
+### The find levers (stats — gems, passives, affixes all reach)
+
+- **`throngPockets`** (flat): extra pockets APPENDED per zone after the
+  authored rolls — the first pocket row (authored or grafted) supplies the
+  shape, the zone's own scarcity `chance` still gates, and authored spots
+  never move (probe-pinned: the append law).
+- **`throngYield`** (multiplier): bodies per MINT EVENT — pocket clusters,
+  gauge yields, mote clutches, trickle drops, crit/kill raisings — through
+  ONE fold (`throngYieldCount`), quanta-rounded, never below 1.
+- Boot-stream discipline: pocket HEARTS draw from the anchor's main salted
+  stream in fixed order; cluster size and seat scatter ride a per-pocket
+  FORKED stream, so a yield-grown cluster can never shift the next
+  pocket's heart. Find levers change counts, never maps.
+
+### The ply levers (the whole summon family, not just throngs)
+
+- **`minionPlies`** (flat, quanta — never batch-scaled): extra plies at the
+  bake; a plied-LESS body (a skeleton) GROWS ITS FIRST — the bake stands
+  the fabric up with a zero-count spec, so hit-counted armor is a build
+  choice on any court (`chitinous_brood`).
+- **`minionLifePlyTrade`** (threshold): every this-much of the owner's
+  minion-life INCREASE becomes +1 ply instead, consuming the increase
+  (`calcified_vigor`: +70% life, threshold 0.7 — its own grant calcifies
+  whole). The trade reads PRE-batch investment (the quanta law's symmetry:
+  plies never batch-scale, so the life becoming them is never
+  batch-diluted — a throng body calcifies at the classic price); the
+  remainder folds through the ordinary batch scale.
 
 ## Husks, claims, finiteness
 
@@ -207,15 +249,24 @@ still counts and still gates — the exemption is deliberately the full pair.
 
 ## Verification
 
-- `balance/probe_throng.ts` — 63 checks: sight, walk-claims, the batch LAW,
+- `balance/probe_throng.ts` — 78 checks: sight, walk-claims, the batch LAW,
   cap fold, sweep orders + pin + linger, latch attach/slave/whack/shake,
   seat scaling, gauge mint, onKill raising, meta delegation, disband,
   restore, key/salt purity — plus THE GNAW (quelled kit, castless bleed,
   batch-fold bite scaling, sovereign kill), THE BURROW (one-directional
   hostility, host blows pass through, bystander scrape holds, marker +
   deep sink, shake-out toss/grace/strip, the re-burrow loop, perch-kind
-  purity) and THE CLEAR LAW (husks alone complete; a live combatant still
-  gates; death clears with husks standing).
+  purity), THE CLEAR LAW (husks alone complete; a live combatant still
+  gates; death clears with husks standing), THE LEVER GEMS (tag fold +
+  fit gates, the gauge graft on the pocket flavor with the authored spec
+  untouched, roster trickle + cap discipline + re-arm, yield quanta
+  doubling, the pocket append law live at the boot) and THE PLY LEVERS
+  (the fabric standing up on a plied-less summon, the calcified trade's
+  exact threshold + remainder + batch symmetry, flat stacking).
+- Matrix hygiene: all five lever gems gated through `matrix check
+  --support <gem>` — inert-by-scenario pairs (husk mints are invisible to
+  the episode fingerprint; no-bearer summon episodes) adjudicated
+  `intended` in the committed ledger with reasons.
 - Live-verified in the pane (dev tab levers): claims by walking, the heel
   cloud, 2-seat zombie carrying exactly 2 riders, harried at its 6-stack
   ceiling, disband re-wilding, and the sight gate BOTH directions by pixel

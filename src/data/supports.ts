@@ -2556,6 +2556,60 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 7,
   },
 
+  // === THE THRONG LEVER GEMS (engine/throng.ts) ============================
+  // Source GRAFTS gate on the registry-folded 'throng' capability word —
+  // they add a ThrongSourceRow to the anchor (authored rows keep their
+  // pocket indices; the one-clock laws arbitrate duplicates), so the
+  // world-found flavor learns the battle-fed grammar by socket choice.
+  // The find levers (throngPockets / throngYield) and the ply levers
+  // (minionPlies / the calcified trade) are ordinary stats any passive or
+  // affix could also grant — the gems are just their first grantors.
+  patient_brood: {
+    id: 'patient_brood', name: 'Patient Brood',
+    description: 'The brood reknits on its own clock: while the roster stands below cap, a claimable husk condenses at your feet every 7 seconds. The swarm you forgot to feed, feeding itself.',
+    color: '#a8c878', requiresTags: ['throng'],
+    throngSource: { kind: 'trickle', everySec: 7, at: 'near' },
+    mods: [mod('minionLife', 'increased', 0.1)],
+    perLevel: [mod('minionLife', 'increased', 0.05)],
+    weight: 5,
+  },
+  hidden_reserves: {
+    id: 'hidden_reserves', name: 'Hidden Reserves',
+    description: 'Blows traded — yours and your court\'s — fill a hidden gauge that births husks beside you at the brim. Even a boss with no court of its own feeds the throng.',
+    color: '#c8b060', requiresTags: ['throng'],
+    throngSource: { kind: 'gauge', per: 'both', fill: 3, yield: [1, 2] },
+    mods: [mod('minionDamage', 'increased', 0.08)],
+    perLevel: [mod('minionDamage', 'increased', 0.04)],
+    weight: 5,
+  },
+  teeming_warrens: {
+    id: 'teeming_warrens', name: 'Teeming Warrens',
+    description: 'The world runs richer for this kind: one more husk pocket per zone, and every find — pockets, gauges, motes, raisings — yields half again as many bodies.',
+    color: '#b09868', requiresTags: ['throng'],
+    mods: [mod('throngPockets', 'flat', 1), mod('throngYield', 'increased', 0.5)],
+    perLevel: [mod('throngYield', 'increased', 0.06)],
+    weight: 5,
+  },
+  // The ply levers ride the whole SUMMON family (a body with no plies
+  // grows its first — the bake stands the fabric up), so hit-counted
+  // armor is a build choice on any court, never a throng birthright.
+  chitinous_brood: {
+    id: 'chitinous_brood', name: 'Chitinous Brood',
+    description: 'Minions from this skill wear one extra PLY — one more landed blow eaten whole, however hard it struck. Bodies with no plies grow their first.',
+    color: '#98a878', requiresTags: ['summon'],
+    mods: [mod('minionPlies', 'flat', 1)],
+    perLevel: [mod('minionPlies', 'flat', 0.15)],
+    weight: 6,
+  },
+  calcified_vigor: {
+    id: 'calcified_vigor', name: 'Calcified Vigor',
+    description: 'The flesh you grow sets like shell: minions from this skill gain 70% increased life, and every 70% of your granted life-increase becomes a PLY instead — vigor traded for blows eaten whole.',
+    color: '#c0b8a0', requiresTags: ['summon'],
+    mods: [mod('minionLife', 'increased', 0.7), mod('minionLifePlyTrade', 'flat', 0.7)],
+    perLevel: [mod('minionLife', 'increased', 0.08)],
+    weight: 5,
+  },
+
   meat_shield: {
     id: 'meat_shield', name: 'Meat Shield',
     description: 'Minions from this skill take 30% less damage but deal 25% less — and fight DEFENSIVELY, holding a short leash at your flank instead of chasing across the field.',

@@ -96,6 +96,13 @@ export type SkillTag =
   // to borrow. The BORROWED kit keeps its own real tags — the grammar
   // reads the art, not the rider.
   | 'possession'
+  // 'throng' marks the gather-anchor skills themselves (SkillDef.throng —
+  // the throng fabric, engine/throng.ts) — FOLDED ON at registry load
+  // (data/skills.ts, the construct fold's sibling), never hand-authored,
+  // so throng-scoped supports (source grafts, find levers) and
+  // tag-filtered investment find every anchor and never socket into a
+  // skill with no roster to grow.
+  | 'throng'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -1290,11 +1297,30 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // More minion shaping (baked at summon time)
   minionDetectionRange: { label: 'Minion Detection Range', base: 1, min: 0.2 },
   minionHaste:    { label: 'Minion Action Speed', base: 1, min: 0.2 },
-  /** THE PLY FABRIC (engine/plies.ts): flat extra plies on plied minions.
-   *  Quanta — rounded at the bake, never batch-scaled. */
+  /** THE PLY FABRIC (engine/plies.ts): flat extra plies on plied minions —
+   *  and on plied-LESS ones, where any grant STANDS THE FABRIC UP (a
+   *  default spec at the bake): hit-counted armor is a build choice on any
+   *  summon, not a birthright of the throng kinds. Quanta — rounded at
+   *  the bake, never batch-scaled. */
   minionPlies:    { label: 'Minion Plies', base: 0, min: 0 },
+  /** THE CALCIFIED TRADE (bakeMinionOwnerStats): every this-much of the
+   *  body's GRANTED life increase (post batch-scale) converts into +1 ply
+   *  instead, CONSUMING the increase — life investment become hit-counted
+   *  shell. 0 = no trade. Threshold semantics: two sources SUM thresholds
+   *  (a weaker trade), so stacking is self-limiting by construction. */
+  minionLifePlyTrade: { label: 'Minion Life-to-Ply Threshold', base: 0, min: 0 },
   /** Seconds a slain minion clings to unlife after death effects fire. */
   minionUndying:  { label: 'Minion Undying Duration', base: 0 },
+  // THE THRONG FIND LEVERS (engine/throng.ts — read on the KEEPER with the
+  // anchor skill's context, so gems and tag-filtered passives split freely).
+  /** Flat extra husk POCKETS rolled per zone (appended after the authored
+   *  rolls — authored spots never shift; the zone's own scarcity chance
+   *  still gates). */
+  throngPockets:  { label: 'Additional Throng Pockets', base: 0, min: 0 },
+  /** Multiplies the BODY COUNT of every throng mint event — pocket
+   *  clusters, gauge yields, mote condensations, trickle drops, crit/kill
+   *  raisings. Quanta: rounded per event, never below 1. */
+  throngYield:    { label: 'Throng Find Size', base: 1, min: 0.1 },
 };
 
 // Damage conversion stats: convert_<from>_<to> = fraction of <from> damage

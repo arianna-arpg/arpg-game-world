@@ -211,7 +211,20 @@ changes.
   Pikmin/Overlord playstyle as data: `SkillDef.throng` anchors a roster of
   sight-gated wild husks CLAIMED by walking through them, acquisition as
   open `ThrongSourceRow`s (finite pockets / timed motes / crit + kill
-  triggers / a hit-fed gauge for add-less bosses), the held channel's
+  triggers / a hit-fed gauge for add-less bosses / the RECURRING BROOD
+  trickle — one body per clock below cap, husk-at-feet or straight-to-
+  roster, disarmed at cap), sources GRAFTABLE by gems
+  (`SupportDef.throngSource` — the world-found flavor learns a battle
+  gauge by socket choice; authored rows resolve FIRST so pocket claim
+  keys never shift; gems gate on the registry-folded 'throng' tag), THE
+  FIND LEVERS as plain stats (`throngPockets` appends zone pockets after
+  the authored rolls; `throngYield` scales every mint event's body count
+  through ONE quanta-rounded fold; pocket hearts on the main salted
+  stream, cluster/scatter on per-pocket forks — levers change counts,
+  never maps), THE PLY LEVERS on the whole summon family (`minionPlies`
+  stands the fabric UP on plied-less bodies; `minionLifePlyTrade`
+  converts life-increase into plies at a threshold, read PRE-batch — the
+  quanta law's symmetry), the held channel's
   `throngDirect` sweep riding assault orders, owner minion investment
   folded at 1/batch (`bakeMinionOwnerStats` — the ONE fold, quadratic-
   proof), nearest-1 meta delegation, unslot = disband-to-husks; THE LATCH

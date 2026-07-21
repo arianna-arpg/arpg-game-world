@@ -18,7 +18,7 @@ import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
-import type { ThrongSpec } from './throng';
+import type { ThrongSourceRow, ThrongSpec } from './throng';
 import type { GrabSpec } from './grab';
 import type { PossessSpec, ShiftSpec } from './possess';
 import type { PartSpec } from '../render/vis/parts';
@@ -405,6 +405,18 @@ export function instanceTameMod(inst: SkillInstance): Required<TameModSpec> {
 export function instanceBrood(inst: SkillInstance): BroodSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.brood) return s.def.brood;
   return undefined;
+}
+
+/** Every THRONG SOURCE row grafted onto an instance by its sockets, in
+ *  slot order (engine/throng.ts — the graftable-sources law). ALL grafts
+ *  collect (two gems, two rows); the consumers' own one-clock laws
+ *  (first motes row wins, first trickle row wins) arbitrate duplicates. */
+export function instanceThrongSources(inst: SkillInstance): ThrongSourceRow[] {
+  const out: ThrongSourceRow[] = [];
+  for (const s of hostSockets(inst)) {
+    if (s.def.throngSource) out.push(s.def.throngSource);
+  }
+  return out;
 }
 
 /** A status-tick SPAWN clause (Broodclutch): while a status carrying it
@@ -3977,6 +3989,13 @@ export interface SupportDef {
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
   devour?: DevourSpec;
+  /** A THRONG SOURCE graft (engine/throng.ts): the host anchor GAINS this
+   *  source row — the world-found flavor learns a battle gauge, any brood
+   *  learns to trickle. Resolved authored-first + grafts-after
+   *  (World.throngSources) so authored pocket claim keys never shift;
+   *  gate on requiresTags ['throng'] (the registry-folded capability
+   *  word) so the gem never sockets into a skill with no roster to feed. */
+  throngSource?: ThrongSourceRow;
   /** FISSURE VOLATILITY: lingering fissure segments randomly RE-LIGHT —
    *  every `interval` seconds each live segment has `chance` to erupt
    *  again at `damageScale` of the roll (the volcanic crag hazard). */
@@ -4399,12 +4418,15 @@ export interface SkillInstance {
      *  the whole lineage — the wave only travels outward). */
     contagion?: { gen: number; seen: Set<number> };
     /** THE THRONG (transient source clocks, reset on load): the hit-fed
-     *  gauge (0..100), the next mote condensation time, and the onCrit
-     *  icd stamp. Gauge fill survives zone hops (it rides the instance),
-     *  never the session — a fresh boot starts cold, like every ramp. */
+     *  gauge (0..100), the next mote condensation time, the onCrit icd
+     *  stamp, and the trickle brood's next-body time (undefined = the
+     *  clock stands DISARMED at cap). Gauge fill survives zone hops (it
+     *  rides the instance), never the session — a fresh boot starts
+     *  cold, like every ramp. */
     throngGauge?: number;
     throngMoteAt?: number;
     throngCritAt?: number;
+    throngTrickleAt?: number;
   };
 }
 
@@ -4454,6 +4476,12 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   // The CLAIM is the keeper's verb: tryTame and the bond cap read it on
   // the casting seat — a forwarded copy aboard a beast would be dead weight.
   'tameMod',
+  // The GATHER is the keeper's verb too (tameMod's throng sibling): the
+  // source executors (pocket boot, the sweep clocks, the hit/kill hooks)
+  // read grafted rows off the KEEPER's bar instance — a copy aboard a
+  // throng body would be dead weight, and throng bodies take no forwarded
+  // gems anyway (the no-crew-forwarding law).
+  'throngSource',
 ] as const satisfies readonly (keyof SupportDef)[];
 export const MINION_SEAT_BOUND_SUPPORT_FIELDS: ReadonlySet<string> =
   new Set(MINION_SEAT_BOUND_FIELD_LIST);
