@@ -2953,6 +2953,184 @@ function cathedralLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('cathedral', cathedralLayout);
 
+// --- CIVITAS (the true angelic city) ---------------------------------------------
+// The Cathedral proved the architecture; the city is MORE of it: several
+// great cloud PLATFORMS dealt across the sky, INTERLINKED by wide gleamway
+// bridges, each platform bearing colossal ENTERABLE buildings from the
+// civitas pool (the cathedral generator's own family — real naves, real
+// doors, real rooms) with paved causeways, statue dress and frail rims.
+// The massif bastion belt outside is sculpture; HERE the marble opens.
+// Knobs: platforms, platformR, civitasPool, gleamWidth, processionalWidth,
+// fringeWidth.
+function civitasLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const M = 130;
+  // THE PLATFORMS: the heart cloud plus a ring of great wards, each lobed,
+  // recorded for the fringe echo and the bridge weave.
+  const platN = layoutParam(def, 'platforms', [3, 5]) as [number, number];
+  const prBand = layoutParam(def, 'platformR', [340, 460]) as [number, number];
+  const plats: { x: number; y: number; r: number }[] = [];
+  const cx = arena.w / 2 + rng.range(-arena.w * 0.03, arena.w * 0.03);
+  const cy = arena.h / 2 + rng.range(-arena.h * 0.03, arena.h * 0.03);
+  plats.push({ x: cx, y: cy, r: rng.range(prBand[0], prBand[1]) * 1.15 });
+  for (let i = 0, n = rng.int(platN[0], platN[1]) - 1; i < n; i++) {
+    for (let tries = 0; tries < 18; tries++) {
+      const a = rng.range(0, Math.PI * 2);
+      const d = rng.range(760, 1040);
+      const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+      const r = rng.range(prBand[0], prBand[1]);
+      if (px < M + r * 0.6 || py < M + r * 0.6 || px > arena.w - M - r * 0.6 || py > arena.h - M - r * 0.6) continue;
+      if (plats.some(p => Math.hypot(p.x - px, p.y - py) < p.r + r + 170)) continue;
+      plats.push({ x: px, y: py, r });
+      ctx.pois.push(vec(px, py));
+      break;
+    }
+  }
+  const fw = layoutParam(def, 'fringeWidth', 56) as number;
+  const fringe = Mask.forRect(0, 0, arena.w, arena.h);
+  const carve = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const p of plats) {
+    disc(fringe, p.x, p.y, p.r + fw); disc(carve, p.x, p.y, p.r);
+    for (let i = 0, n = rng.int(3, 5); i < n; i++) {
+      const a = rng.range(0, Math.PI * 2), d = p.r * rng.range(0.5, 0.85);
+      const lr = p.r * rng.range(0.35, 0.5);
+      const lx = p.x + Math.cos(a) * d, ly = p.y + Math.sin(a) * d;
+      disc(fringe, lx, ly, lr + fw); disc(carve, lx, ly, lr);
+    }
+  }
+
+  // Portal aprons chained to the NEAREST platform (carved causeways; the
+  // off-cloud stretches reserved — the bastion law).
+  const cwW = layoutParam(def, 'processionalWidth', [52, 66]) as [number, number];
+  const chainPts: Vec2[][] = [];
+  const landings: Vec2[] = [];
+  // Where a way CROSSES a platform's rim — the mouth a building must never
+  // squat (a center point would wrongly veto the ward's own heart).
+  const rimLanding = (pts: Vec2[], plat: { x: number; y: number; r: number }, fromStart: boolean): Vec2 => {
+    const seq = fromStart ? pts : [...pts].reverse();
+    for (const q of seq) if (Math.hypot(q.x - plat.x, q.y - plat.y) > plat.r * 0.85) return q;
+    return seq[seq.length - 1];
+  };
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    disc(carve, pt.x, pt.y, 130);
+    disc(fringe, pt.x, pt.y, 130 + fw * 0.5);
+    let near = plats[0];
+    for (const p of plats) if (Math.hypot(p.x - pt.x, p.y - pt.y) < Math.hypot(near.x - pt.x, near.y - pt.y)) near = p;
+    const pts = wanderPath(rng, vec(near.x, near.y), vec(pt.x, pt.y), { step: 110, wobble: 20, bowFrac: 0.08 });
+    const halfW = rng.range(cwW[0], cwW[1]) / 2;
+    const overSky = pts.map(q => !carve.has(q.x, q.y));
+    band(carve, pts, halfW);
+    band(fringe, pts, halfW + fw * 0.4);
+    const off = pts.filter((_, i) => overSky[i]);
+    if (off.length) reserveArtery(ctx, off, halfW);
+    chainPts.push(pts);
+    landings.push(rimLanding(pts, near, true));
+  }
+
+  // THE INTERLINKS: every ward bridged to the heart's web — each platform
+  // links to its nearest already-linked neighbour by a WIDE gleamway. The
+  // bridge ENDPOINTS are recorded as LANDINGS: ground a building must
+  // never squat (a nave across the only bridge mouth severs the city).
+  const gleamW = layoutParam(def, 'gleamWidth', [50, 64]) as [number, number];
+  const lampPts: Vec2[] = [];
+  const linked: { x: number; y: number; r: number }[] = [plats[0]];
+  const spanMask = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const p of plats.slice(1)) {
+    let near = linked[0];
+    for (const q of linked) if (Math.hypot(q.x - p.x, q.y - p.y) < Math.hypot(near.x - p.x, near.y - p.y)) near = q;
+    const pts = wanderPath(rng, vec(near.x, near.y), vec(p.x, p.y), { step: 95, wobble: 10, bowFrac: 0.05 });
+    band(spanMask, pts, rng.range(gleamW[0], gleamW[1]) / 2);
+    for (let i = 1; i < pts.length - 1; i += 2) lampPts.push(pts[i]);
+    landings.push(rimLanding(pts, near, true), rimLanding(pts, p, false));
+    linked.push(p);
+  }
+
+  paintRegion(grid, fringe, 'cloud_frail');
+  paintRegion(grid, spanMask, 'span_gleam');
+  paintRegion(grid, carve, 'ground');
+
+  // THE BUILDINGS: each platform raises from the civitas pool — the heart
+  // takes two (a great church and its hall), the wards one or two by size.
+  const pool = layoutParam(def, 'civitasPool', [
+    { structure: 'great_basilica', weight: 3 },
+    { structure: 'marble_monastery', weight: 2 },
+    { structure: 'choir_hall', weight: 4 },
+  ]) as { structure: string; weight: number }[];
+  const pick = (): string => {
+    const tot = pool.reduce((s, r) => s + r.weight, 0);
+    let roll = rng.range(0, tot);
+    for (const r of pool) { roll -= r.weight; if (roll <= 0) return r.structure; }
+    return pool[pool.length - 1].structure;
+  };
+  // Seats are tried, never forced: a candidate whose footprint would crowd
+  // a bridge landing / causeway mouth (severing the city's one way across)
+  // or overhang the platform rim is refused, and the next angle rolls. A
+  // ward that refuses every try simply stands unbuilt — attempt-honest.
+  for (let i = 0; i < plats.length; i++) {
+    const p = plats[i];
+    const n = i === 0 ? 2 : p.r > 420 ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      const id = pick();
+      const sd = STRUCTURES[id];
+      const halfDiag = sd ? Math.hypot(sd.halfW, sd.halfH) : 500;
+      for (let tries = 0; tries < 10; tries++) {
+        const a = rng.range(0, Math.PI * 2);
+        const d = (k === 0 ? p.r * 0.1 : p.r * 0.5) * rng.range(0.8, 1.15);
+        const sx = p.x + Math.cos(a) * d, sy = p.y + Math.sin(a) * d;
+        if (d + halfDiag * 0.72 > p.r + fw * 0.5) continue;
+        if (landings.some(l => Math.hypot(l.x - sx, l.y - sy) < halfDiag * 0.72 + 150)) continue;
+        raiseStructure(ctx, id, vec(sx, sy));
+        break;
+      }
+    }
+  }
+
+  // THE PAVING + DRESS: causeways paved (the wall-honesty roller clips at
+  // every raised wall), lamps pacing the bridges, the honor guard on the
+  // first approach, braziers at each ward's heart.
+  for (const pts of chainPts) layTraveledWay(ctx, pts, { kind: 'processional_way', band: [18, 24] });
+  const seatIfGround = (x: number, y: number, radius: number, kind: DoodadKind): void => {
+    if (grid.isWalkable(x, y)) ctx.doodads.push({ pos: vec(x, y), radius, kind });
+  };
+  for (const l of lampPts) ctx.doodads.push({ pos: vec(l.x, l.y), radius: rng.range(8, 10), kind: 'gleam_lamp' });
+  const way = chainPts[0] ?? [];
+  for (let i = 2; i < way.length - 1; i += 3) {
+    const a = way[i], b = way[i + 1] ?? way[i - 1];
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    const side = i % 6 === 2 ? 1 : -1;
+    seatIfGround(a.x - dy / len * 62 * side, a.y + dx / len * 62 * side, rng.range(12, 15),
+      i % 9 === 2 ? 'gilded_seraph' : 'saint_effigy');
+  }
+  // Each ward's reach-point + brazier seat on OPEN ground outside every
+  // footprint (a platform's center may sit under a raised nave, and a
+  // sealed interior must never hold a mustReach promise).
+  const inStruct = (x: number, y: number): boolean =>
+    (ctx.structures ?? []).some(s => x >= s.rect.x - 24 && x <= s.rect.x + s.rect.w + 24
+      && y >= s.rect.y - 24 && y <= s.rect.y + s.rect.h + 24);
+  for (const p of plats) {
+    let seat: Vec2 | null = null;
+    outer: for (const frac of [0.5, 0.68, 0.3, 0.82]) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2 + 0.4;
+        const x = p.x + Math.cos(a) * p.r * frac, y = p.y + Math.sin(a) * p.r * frac;
+        if (grid.isWalkable(x, y) && !inStruct(x, y)) { seat = vec(x, y); break outer; }
+      }
+    }
+    if (seat) {
+      (ctx.mustReach ??= []).push(vec(seat.x, seat.y));
+      ctx.doodads.push({ pos: vec(seat.x, seat.y), radius: rng.range(9, 11), kind: 'aureate_brazier' });
+    }
+  }
+
+  scatterDecoration(ctx, def);
+}
+registerLayout('civitas', civitasLayout);
+
 // --- SHIP DECK (the Wraithsail's boards) -----------------------------------------
 // A HULL as a zone: one long pointed form — bow to the north portal, stern to
 // the south — walled by the dark beyond the bulwark. The SAME recipe serves

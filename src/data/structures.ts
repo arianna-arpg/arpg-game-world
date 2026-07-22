@@ -285,6 +285,29 @@ const HOVEL_PLAN = [
   '##X##',
 ];
 
+/** ONE marble legend for the CIVITAS building family (grand_cathedral +
+ *  great_basilica + marble_monastery + choir_hall): the shared-const law —
+ *  the city's plans can never drift apart. Every def spreads this and adds
+ *  only what is truly its own (the Cathedral's lesson doors). */
+const CIVITAS_LEGEND: Record<string, CellSpec> = {
+  '#': { region: 'cathedral_wall' },
+  I: { doodad: { kind: 'pantheon_column', radius: 12 }, interior: true },
+  w: { doodad: { kind: 'cathedral_pew', radius: 11 }, interior: true },
+  q: { doodad: { kind: 'choir_stall', radius: 12 }, interior: true },
+  A: { doodad: { kind: 'high_altar', radius: 16 }, interior: true },
+  Q: { doodad: { kind: 'empty_throne', radius: 15 }, interior: true },
+  O: { doodad: { kind: 'pipe_organ', radius: 15 }, interior: true },
+  v: { doodad: { kind: 'votive_bank', radius: 12 }, interior: true },
+  R: { doodad: { kind: 'reliquary_shrine', radius: 13 }, interior: true },
+  E: { doodad: { kind: 'saint_effigy', radius: 12 }, interior: true },
+  U: { doodad: { kind: 'font_of_light', radius: 14 }, interior: true },
+  g: { region: 'glass_floor', courtyard: true },
+  d: { door: { mode: 'dwell' }, interior: true },
+  // Ordinary west doors by default: only the TRUE Cathedral overrides 'D'
+  // with the gateway lesson — a basilica's doors teach nothing but the way in.
+  D: { door: { mode: 'dwell' }, interior: true },
+};
+
 export const STRUCTURES: Record<string, StructureDef> = {
 
   // A one-room cottage — a PLAN now: boarded floor, a dwell-open door, a
@@ -1223,6 +1246,60 @@ export const STRUCTURES: Record<string, StructureDef> = {
     roofs: 'auto', roofStyle: 'timber',
   },
 
+  // --- THE CIVITAS FAMILY (the true angelic city's enterable architecture) --
+  // The cathedral generator proved the grammar; the city is MORE of it: a
+  // weighted pool of marble buildings the 'civitas' recipe raises across its
+  // linked platforms. One shared legend (CIVITAS_LEGEND) so the family's
+  // plans can never drift; only the TRUE Cathedral's west doors carry the
+  // gateway lesson.
+
+  // A GREAT BASILICA: the cathedral grammar at parish scale — shorter nave,
+  // shallower apse, towers sometimes; a city block's worth of church.
+  great_basilica: {
+    id: 'great_basilica', halfW: 560, halfH: 520,
+    generator: 'cathedral', cellSize: 32,
+    genParams: {
+      naveLen: [8, 11], apse: [4, 5], transeptExt: [2, 3], transeptW: [5, 5],
+      choir: [3, 3], narthex: [2, 2], chapels: [1, 2],
+      towerChance: 0.4, cloisterChance: 0.35, chapterChance: 0.25, ambulatoryChance: 0.6,
+    },
+    legend: { ...CIVITAS_LEGEND },
+    confineVision: 'rooms', confineAlpha: 0.72,
+    roofs: 'auto', roofStyle: 'basilica', floorStyle: 'marble',
+    garrison: 'seraphic', garrisonSize: [3, 5],
+  },
+
+  // A MARBLE MONASTERY: the cloister-hearted face — garth and chapter house
+  // GUARANTEED, no belfries; the contemplative block.
+  marble_monastery: {
+    id: 'marble_monastery', halfW: 560, halfH: 500,
+    generator: 'cathedral', cellSize: 30,
+    genParams: {
+      naveLen: [7, 9], vesselHalf: [3, 3], aisle: [2, 2], apse: [4, 5],
+      transeptExt: [2, 2], transeptW: [5, 5], choir: [3, 3], narthex: [2, 2],
+      chapels: [1, 1], cloisterChance: 1, chapterChance: 1, towerChance: 0,
+      ambulatoryChance: 0.3, cloisterSpan: [7, 7], chapterW: [9, 11], chapterH: [8, 9],
+    },
+    legend: { ...CIVITAS_LEGEND },
+    confineVision: 'rooms', confineAlpha: 0.72,
+    roofs: 'auto', roofStyle: 'basilica', floorStyle: 'marble',
+  },
+
+  // A CHOIR HALL: the compound composer vested in marble — the city's
+  // guildhall-scale rooms between the great churches.
+  choir_hall: {
+    id: 'choir_hall', halfW: 300, halfH: 240,
+    generator: 'compound', cellSize: 30,
+    genParams: {
+      w: [12, 17], h: [9, 13], courtyardChance: 0.2, windows: 4,
+      doorChar: 'd', gateChar: 'd', loops: [1, 3], clutterPer100: [2, 4],
+    },
+    legend: { ...CIVITAS_LEGEND },
+    confineVision: 'rooms', confineAlpha: 0.72,
+    roofs: 'auto', roofStyle: 'basilica', floorStyle: 'marble',
+    garrison: 'seraphic', garrisonSize: [2, 4],
+  },
+
   // --- THE GREAT CHURCH (the Aetherial's crown; engine/structureGen 'cathedral')
   // "This is the truest seat of God as envisioned from the height of Faith."
   // A rolled cruciform basilica — narthex, columned nave, transepts, choir,
@@ -1239,19 +1316,9 @@ export const STRUCTURES: Record<string, StructureDef> = {
     generator: 'cathedral', cellSize: 34,
     genParams: {},
     legend: {
-      '#': { region: 'cathedral_wall' },
-      I: { doodad: { kind: 'pantheon_column', radius: 12 }, interior: true },
-      w: { doodad: { kind: 'cathedral_pew', radius: 11 }, interior: true },
-      q: { doodad: { kind: 'choir_stall', radius: 12 }, interior: true },
-      A: { doodad: { kind: 'high_altar', radius: 16 }, interior: true },
-      Q: { doodad: { kind: 'empty_throne', radius: 15 }, interior: true },
-      O: { doodad: { kind: 'pipe_organ', radius: 15 }, interior: true },
-      v: { doodad: { kind: 'votive_bank', radius: 12 }, interior: true },
-      R: { doodad: { kind: 'reliquary_shrine', radius: 13 }, interior: true },
-      E: { doodad: { kind: 'saint_effigy', radius: 12 }, interior: true },
-      U: { doodad: { kind: 'font_of_light', radius: 14 }, interior: true },
-      g: { region: 'glass_floor', courtyard: true },
-      d: { door: { mode: 'dwell' }, interior: true },
+      ...CIVITAS_LEGEND,
+      // The ONE override that is truly the Cathedral's own: its west doors
+      // teach the gateway ledger; every sibling's are ordinary dwells.
       D: { door: { mode: 'dwell', lesson: 'cathedral_door_opened' }, interior: true },
     },
     // Room-by-room confinement where rooms seal (chapels, the chapter house);

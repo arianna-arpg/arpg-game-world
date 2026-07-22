@@ -9916,6 +9916,103 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
   },
 
+  // THE CIVITAS — the TRUE angelic city (its own biome at the realm's warm
+  // pole; the bastion massif belt RINGS it — the farmland-to-metropolis
+  // law in the sky): several great cloud platforms interlinked by wide
+  // gleamways, each bearing colossal ENTERABLE marble architecture from
+  // the cathedral generator's own family (real naves, real doors, real
+  // rooms — where the belt outside is sculpture), paved causeways, statue
+  // guard, frail rims, the cloudsea below and the overclouds above. The
+  // Cathedral of the Highest crowns THIS biome's deepest hearts.
+  aether_civitas: {
+    id: 'aether_civitas',
+    frontier: false, realm: 'aetherial',
+    perfProbe: true, // multiple colossal plan structures per zone — sweep it
+    biome: 'aether_civitas',
+    depthAffinity: { to: 0.88, fadeOut: 0.06 },
+    nameFirst: ['Civitas', 'Empyrean', 'Aurelian', 'Deiform', 'Hallowed', 'Sovereign'],
+    nameSecond: ['Wards', 'Terraces', 'Quarter', 'Precinct', 'Rise', 'Concourse'],
+    theme: {
+      floor: '#f0ebde', grid: '#d8d2c0', border: '#aa9f82',
+      obstacle: '#f5f1e6', obstacleEdge: '#c4bca2', accent: '#ffd97a',
+      wall: '#e6dfcb', water: '#9fd8e8', road: '#e6ddc4',
+      dayLight: 1.46, nightDark: 0.4, heat: 0.44,
+      ground: {
+        palette: ['#dbd4c0', '#e6e0ce', '#efeadb', '#f7f4e9', '#fefcf4'],
+        bias: 0.65, alpha: 0.5, scale: 1.85, strength: 0.8, speckles: 0.25, evenness: 0.42,
+      },
+      ambientFx: [
+        { kind: 'overclouds', color: '#fff4e0', intensity: 0.95 },
+        { kind: 'motes', color: '#ffecba', intensity: 1 },
+        { kind: 'aurora', color: '#ffd97a', intensity: 0.45 },
+      ],
+      fog: { banks: [0, 1], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+      collapse: {
+        region: 'cloud_void',
+        melts: ['cloud_frail'],
+        crumble: 1.2,
+        contact: { delay: 2.2, radius: 12 },
+        fall: { kind: 'below', damageFrac: 0.05, grace: 0.4 },
+        portalClear: 95,
+      },
+    },
+    sizeW: [3000, 3800], sizeH: [2200, 2900], ellipseChance: 0,
+    forceLayout: 'civitas',
+    layoutParams: {
+      platforms: [3, 5],
+      platformR: [340, 460],
+      gleamWidth: [50, 64],
+      processionalWidth: [52, 66],
+      fringeWidth: 56,
+    },
+    layout: [
+      { kind: 'gonfalon', count: [3, 6] },
+      { kind: 'saint_effigy', count: [2, 4] },
+      { kind: 'laurel_topiary', count: [3, 6] },
+      { kind: 'mosaic_medallion', count: [2, 5] },
+      { kind: 'votive_bank', count: [1, 3] },
+      { kind: 'prayer_bell', count: [1, 3] },
+      { kind: 'aureate_brazier', count: [2, 4] },
+      { kind: 'cloud_billow', count: [2, 4] },
+      { kind: 'flowers', count: [2, 4] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [100, 140] },
+    ],
+    puzzles: [
+      { id: 'singing_refrain', chance: 0.25 },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'power_of_the_bastion', weight: 3, presence: { from: 11, fadeIn: 3 } },
+        { id: 'chorister_of_the_veil', weight: 2.6, presence: { from: 12, fadeIn: 3 } },
+        { id: 'censer_warden', weight: 2.6, presence: { from: 12, fadeIn: 3 } },
+        { id: 'aureole_tribune', weight: 2.5, presence: { from: 12, fadeIn: 3 } },
+        { id: 'gloria_cantor', weight: 2.2, presence: { from: 13, fadeIn: 3 } },
+        { id: 'herald_of_the_choir', weight: 2.2, presence: { from: 12, fadeIn: 4 } },
+        { id: 'seraphal_lyrist', weight: 2, presence: { from: 13, fadeIn: 3 } },
+        { id: 'reliquary_ark', weight: 1.8, presence: { from: 13, fadeIn: 4 } },
+        { id: 'virtue_lance', weight: 2 },
+        { id: 'ophan_wheel', weight: 1.8 },
+        { id: 'cherub_wisp', weight: 1.6 },
+        { id: 'principality_of_dawn', weight: 1.1, presence: { from: 14, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.3 },
+      { composition: 'vault_of_dawn', chance: 0.3 },
+    ],
+  },
+
   // THE CATHEDRAL OF THE HIGHEST — the country's CROWN (deepest hearts only):
   // one great cloud foundation bearing a GENERATED cruciform basilica (the
   // 'cathedral' structure generator — a structure generator that runs another
@@ -9929,7 +10026,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'aether_cathedral',
     frontier: false, realm: 'aetherial',
     perfProbe: true, // colossal plan structure + glass + collapse: the new worst case
-    biome: 'aether_bastion', // the country's shared biome — its deepest stage
+    biome: 'aether_civitas', // the TRUE city's crown — the See rules the Civitas
     depthAffinity: { from: 0.86, fadeIn: 0.06 },
     nameFirst: ['Cathedral', 'Basilica', 'See', 'Sanctum'],
     nameSecond: ['of the Highest', 'of First Light', 'of the Ninth Choir', 'Ascendant', 'of the Empty Throne'],

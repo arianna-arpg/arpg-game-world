@@ -282,10 +282,17 @@ registerDimension({
     // (the span fabric + radiance-gated comet lanes). Its climate gate
     // pools it in the realm's coldest reaches — the auroral belt.
     { biome: 'aether_vesper', weight: 0.9 },
-    // THE HIGH BASTION — the citadel country: the Host's seat (enormous
+    // THE HIGH BASTION — the citadel BELT: the Host's outskirts (enormous
     // silver-and-gold massif architecture, permanent gleamways, clouds
-    // over the clouds). Permanence at altitude — the shelves' opposite.
+    // over the clouds). Permanence at altitude — the shelves' opposite —
+    // and now the ring AROUND the true city (its warm gate caps where the
+    // Civitas' begins: the farmland-to-metropolis law in the sky).
     { biome: 'aether_bastion', weight: 0.9 },
+    // THE CIVITAS — the TRUE angelic city at the warm pole: interlinked
+    // cloud platforms bearing colossal ENTERABLE architecture (the
+    // cathedral generator's family as a whole city), crowned by the
+    // Cathedral of the Highest itself.
+    { biome: 'aether_civitas', weight: 0.75 },
   ],
   levelBonus: 4,
   // The high air: cold, thin, and bone-dry — no seas above the sky. The

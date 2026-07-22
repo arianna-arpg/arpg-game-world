@@ -34,7 +34,9 @@ seedGlobalRandom(0x5ee01);
 // --- §1 THE REGISTRY WEAVE ---------------------------------------------------
 const ts = TILESETS.aether_cathedral;
 check('tileset: aether_cathedral registered', !!ts);
-check('tileset: crowns the bastion country', ts?.biome === 'aether_bastion' && ts?.realm === 'aetherial' && ts?.frontier === false);
+check('tileset: crowns the CIVITAS (the true city\'s own biome)', ts?.biome === 'aether_civitas' && ts?.realm === 'aetherial' && ts?.frontier === false);
+check('tileset: the city itself is registered beneath it',
+  TILESETS.aether_civitas?.biome === 'aether_civitas' && TILESETS.aether_civitas?.forceLayout === 'civitas');
 check('tileset: deepest-hearts staging', (ts?.depthAffinity?.from ?? 0) >= 0.8);
 check('tileset: forces the cathedral recipe', ts?.forceLayout === 'cathedral' && hasLayout('cathedral'));
 check('generator: cathedral registered', hasStructureGen('cathedral'));
@@ -126,20 +128,25 @@ check('generator: two seeds, two Sees', p1.join('\n') !== p2.join('\n'));
 
 // --- §3 THE DEPTH STAGING ----------------------------------------------------
 {
-  const tally = (depth: number): Record<string, number> => {
+  const tally = (biome: string, depth: number): Record<string, number> => {
     const t: Record<string, number> = {};
     for (let s = 0; s < 300; s++) {
-      const id = pickTilesetForBiome('aether_bastion', new Rng(0xbead + s * 31), depth, 'aetherial');
+      const id = pickTilesetForBiome(biome, new Rng(0xbead + s * 31), depth, 'aetherial');
       if (id) t[id] = (t[id] ?? 0) + 1;
     }
     return t;
   };
-  const shallow = tally(0.3), mid = tally(0.7), deep = tally(0.95);
-  check('staging: no See in the rims', (shallow.aether_cathedral ?? 0) === 0,
-    `rim draws: ${JSON.stringify(shallow)}`);
-  check('staging: the city holds the mids', (mid.aether_seraphal ?? 0) > 0 && (mid.aether_cathedral ?? 0) === 0);
-  check('staging: the See claims the deepest hearts', (deep.aether_cathedral ?? 0) > 30,
-    `deep draws: cathedral ${deep.aether_cathedral ?? 0} / seraphal ${deep.aether_seraphal ?? 0}`);
+  // The bastion BELT keeps its own three faces — the See left it for the city.
+  const beltDeep = tally('aether_bastion', 0.95);
+  check('staging: the belt keeps no See (the biome split holds)',
+    (beltDeep.aether_cathedral ?? 0) === 0 && (beltDeep.aether_seraphal ?? 0) > 0);
+  // The CIVITAS: the city holds its own ground, the See its deepest hearts.
+  const cityShallow = tally('aether_civitas', 0.4), cityDeep = tally('aether_civitas', 0.95);
+  check('staging: the city holds its wards (no See in the shallows)',
+    (cityShallow.aether_civitas ?? 0) > 250 && (cityShallow.aether_cathedral ?? 0) === 0,
+    `shallow draws: ${JSON.stringify(cityShallow)}`);
+  check('staging: the See claims the city\'s deepest hearts', (cityDeep.aether_cathedral ?? 0) > 30,
+    `deep draws: cathedral ${cityDeep.aether_cathedral ?? 0} / civitas ${cityDeep.aether_civitas ?? 0}`);
 }
 
 // --- §4 THE LIVE MINT --------------------------------------------------------

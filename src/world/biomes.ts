@@ -703,9 +703,25 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // lords (three faces share this biome id — the mountain-country pattern,
   // relocated to the sky). Pools in the realm's WARMEST reaches — the
   // sunlit belt, the vesper cold's counterpart.
+  // THE HIGH BASTION — now the PENULTIMATE belt: the citadel outskirts that
+  // RING the true city (the farmland-to-metropolis relationship, relocated
+  // to the sky). Its warm gate gains a ceiling so the warm POLE belongs to
+  // the Civitas: walk the sunlit belt inward through bastion massif country
+  // and the buildings become REAL.
   aether_bastion: { patronFaction: 'seraphic', mapColor: '#e8d9a0', label: 'High Bastion', spacing: 92,
-    climate: { temperature: { from: 0.38, fadeIn: 0.1 } },
+    climate: { temperature: { from: 0.38, fadeIn: 0.1, to: 0.68, fadeOut: 0.1 } },
     allowedLayouts: { aether_bastion: 1 },
+    eventDensityMul: 0.4,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE CIVITAS — the TRUE angelic city (the user's read made law: the
+  // Cathedral proved the architecture; the city is MORE of it): multiple
+  // cloud platforms interlinked by gleamways, each bearing colossal
+  // ENTERABLE plan-structures from the cathedral generator's own family —
+  // real naves, real doors, real rooms — where the bastion belt outside is
+  // massif sculpture. Holds the realm's warm POLE; the bastion rings it.
+  aether_civitas: { patronFaction: 'seraphic', mapColor: '#f4e2b0', label: 'The Civitas', spacing: 92,
+    climate: { temperature: { from: 0.62, fadeIn: 0.08 } },
+    allowedLayouts: { civitas: 1 },
     eventDensityMul: 0.4,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
   // THE GALESTREAM — the Aetherial's ARTERY (a course-only biome, the River
