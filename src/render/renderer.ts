@@ -3400,13 +3400,19 @@ export class Renderer {
     }
     ctx.globalAlpha = t * 0.5;
     ctx.fillStyle = f.color;
-    // Edge-band AoE: render only the rim, as a thick stroked ring/arc.
+    // Edge-band AoE: render only the rim, as a thick stroked ring/arc —
+    // and a SIGILED band strokes the sigil's own figure at the band's mid
+    // scale (2026-07-22: a square Shock Nova sequel detonates as a SQUARE
+    // band, never reverting to the baseline ring — drawn == tested, the
+    // same mapping the zone telegraph runs).
     if (f.edgeFrac) {
       const mid = f.radius * (1 + f.edgeFrac) / 2;
       ctx.strokeStyle = f.color;
       ctx.lineWidth = Math.max(3, f.radius * (1 - f.edgeFrac));
       ctx.beginPath();
-      if (f.arc) {
+      if (f.shape && f.shape >= 1 && f.shape <= 2) {
+        this.traceAoe(f.pos.x, f.pos.y, mid, f.shape, f.facing ?? 0);
+      } else if (f.arc) {
         ctx.arc(f.pos.x, f.pos.y, mid, f.arc.facing - f.arc.arcRad / 2, f.arc.facing + f.arc.arcRad / 2);
       } else {
         ctx.arc(f.pos.x, f.pos.y, mid, 0, Math.PI * 2);

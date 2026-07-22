@@ -1243,7 +1243,10 @@ export const SKILLS: Record<string, SkillDef> = {
   versicle: {
     id: 'versicle', name: 'Versicle',
     description: 'The CALL: a spoken verse loosed as a dart of dawn-light — quick, cheap, and half of something. Answer it with a different song (Antiphon) and the Responsory closes the measure.',
-    tags: ['spell', 'song', 'lightning', 'instant'], color: '#ffefc2',
+    // 2026-07-22 tag hygiene: the verse IS a flight (projectile delivery) —
+    // the tag the mechanics prove, so the projectile support family (arcing,
+    // chaining, forking, …) boards the dart as it always mechanically fit.
+    tags: ['spell', 'song', 'lightning', 'projectile', 'instant'], color: '#ffefc2',
     manaCost: 7, cooldown: 0, useTime: 0.3,
     baseDamage: { lightning: [5, 9], fire: [3, 6] },
     delivery: { type: 'projectile', speed: 520, radius: 10, range: 480 },
