@@ -5084,6 +5084,21 @@ export class World {
           vec(TRAINING_YARD.x + 52 * (i + 1), TRAINING_YARD.y), sib.radius);
         this.actors.push(sib);
       }
+      // THE GAUNTLET (the flight range's town twin): three plain dummies
+      // spaced down a fire line east of the rack — watch a chain hop, a
+      // pierce bore through, a fork find the flanks — closed by a masonry
+      // stub for ricochet banks and unspent-end shrapnel blooms. Same
+      // unlock, same defs the sim's range formation targets.
+      for (let i = 0; i < 3; i++) {
+        const g = this.createMonster('target_dummy', Math.max(1, this.player.level), 'enemy');
+        g.pos = this.clampPos(
+          vec(TRAINING_YARD.x + 340 + 130 * i, TRAINING_YARD.y), g.radius);
+        this.actors.push(g);
+      }
+      this.doodads.push(
+        { pos: this.clampPos(vec(TRAINING_YARD.x + 690, TRAINING_YARD.y - 16), 26), radius: 26, kind: 'rock' },
+        { pos: this.clampPos(vec(TRAINING_YARD.x + 690, TRAINING_YARD.y + 18), 26), radius: 26, kind: 'rock' },
+      );
     }
     // THE TRACKER: the Bestiary's keeper camps at the west edge once his
     // Vault feature is bought (townBuild raised his fire; the body and the
@@ -41448,6 +41463,25 @@ export class World {
     return p.radius * projFormNose(p.shape);
   }
 
+  /** THE FLIGHT'S PARTING SHARDS (returnShrapnel — Shredding Return): a
+   *  ring of shards from the flight's END POINT. Fired at the homecoming
+   *  catch of a return, and at any UNSPENT end (range spent, aged out,
+   *  masonry) — a flight that dies on a body spends itself in the blow
+   *  instead. Returns true when shards actually flew. */
+  private shedFlightShrapnel(p: Projectile): boolean {
+    if (p.caster.dead || p.depth >= PROJ_CHILD_DEPTH_MAX || !SKILLS[SHRAPNEL_SKILL]) return false;
+    const shed = Math.round(p.caster.sheet.get('returnShrapnel',
+      skillContextTags(p.inst.def), instanceMods(p.inst)));
+    if (shed <= 0) return false;
+    for (let s = 0; s < shed; s++) {
+      this.spawnProjectile(p.caster,
+        makeSkillInstance(SKILLS[SHRAPNEL_SKILL], effectiveSkillLevel(p.inst)),
+        vec(p.pos.x, p.pos.y), (s / shed) * Math.PI * 2,
+        { depth: p.depth + 1, mult: p.mult * 0.7 });
+    }
+    return true;
+  }
+
   private updateProjectiles(dt: number): void {
     const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
@@ -41500,6 +41534,9 @@ export class World {
       // than spend itself (range, walls, arrivals)? The SequelSpec
       // 'hit'|'expire' lever reads this at the death payout below.
       let diedOnBody = false;
+      // The return-arrival splinter already fired this frame (guards the
+      // unspent-end bloom below against double payment).
+      let shrapnelBloomed = false;
       // Spent projectiles that return get a second life instead of dying.
       if (dead && this.enterReturn(p)) dead = false;
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
@@ -41515,16 +41552,7 @@ export class World {
         }
         // SHREDDING RETURN (returnShrapnel stat): the homecoming splinters
         // — shards ring OUTWARD from the catch point.
-        const shed = Math.round(p.caster.sheet.get('returnShrapnel',
-          skillContextTags(p.inst.def), instanceMods(p.inst)));
-        if (shed > 0 && p.depth < PROJ_CHILD_DEPTH_MAX && SKILLS[SHRAPNEL_SKILL]) {
-          for (let s = 0; s < shed; s++) {
-            this.spawnProjectile(p.caster,
-              makeSkillInstance(SKILLS[SHRAPNEL_SKILL], effectiveSkillLevel(p.inst)),
-              vec(p.pos.x, p.pos.y), (s / shed) * Math.PI * 2,
-              { depth: p.depth + 1, mult: p.mult * 0.7 });
-          }
-        }
+        if (this.shedFlightShrapnel(p)) shrapnelBloomed = true;
         dead = true;
       }
       // ARC-TO arrival: the hook lands on the mark and DETONATES there.
@@ -42055,6 +42083,15 @@ export class World {
       }
       if (dead) {
         this.explodeProjectile(p, p.lastHitId);
+        // SHREDDING RETURN, THE UNSPENT END (2026-07-22): a flight that
+        // ends WITHOUT dying on a body — range spent, aged out, stopped by
+        // masonry, out of bounds — splinters where its road ends, exactly
+        // like the homecoming catch. A body-death SPENDS the flight (the
+        // blow was the payoff); returns already bloomed at the catch;
+        // dissolved flights (dome-eaten) leave nothing, as everywhere.
+        if (!diedOnBody && !shrapnelBloomed && !p.dissolved) {
+          this.shedFlightShrapnel(p);
+        }
         // SUFFUSION delivery: the carried field re-blooms at the terminus.
         if (p.suffuse && !p.dissolved) {
           this.zones.push({

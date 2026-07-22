@@ -64,6 +64,8 @@ class Pilot implements PlayerInputSource {
   private opened = new Set<number>();
   private heldLast: boolean[] = [];
   private rotationCursor = 0;
+  /** Fixed aim point (caster aimOffset), latched off the spawn spot. */
+  private aimAnchor: { x: number; y: number } | null = null;
 
   constructor(private spec: Extract<PilotSpec, { kind: 'turret' | 'brawler' | 'caster' }>) {}
 
@@ -74,7 +76,20 @@ class Pilot implements PlayerInputSource {
     if (this.heldLast.length !== n) this.heldLast = new Array(n).fill(false);
 
     const foe = nearestFoe(world, actor);
-    const aim = foe ? { x: foe.pos.x, y: foe.pos.y } : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 };
+    // Fixed-aim override (caster aimOffset — the fire-into-the-canyon
+    // lever): aim pins to a hero-relative point; the band still holds off
+    // the nearest foe below. Anchored to the SPAWN spot, not the live
+    // position, so kiting never drags the wall shot off its mark.
+    if (this.spec.kind === 'caster' && this.spec.aimOffset && !this.aimAnchor) {
+      const o = this.spec.aimOffset;
+      const ang = o.deg * Math.PI / 180;
+      this.aimAnchor = {
+        x: actor.pos.x + Math.cos(ang) * o.dist,
+        y: actor.pos.y + Math.sin(ang) * o.dist,
+      };
+    }
+    const aim = this.aimAnchor
+      ?? (foe ? { x: foe.pos.x, y: foe.pos.y } : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 });
 
     // ---- movement -----------------------------------------------------------
     let dx = 0, dy = 0;
@@ -197,9 +212,18 @@ class PairPilot implements PlayerInputSource {
     const aim = foe ? { x: foe.pos.x, y: foe.pos.y } : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 };
     let dx = 0, dy = 0;
     if (foe) {
-      const want = actor.radius + foe.radius + (this.spec.engage ?? PILOT_CFG.meleeGap);
-      if (dist(actor.pos, foe.pos) > want) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
-      if (dist(actor.pos, foe.pos) <= want + PILOT_CFG.pairWakeSlack) this.joined = true;
+      const gap = dist(actor.pos, foe.pos);
+      if (this.spec.band !== undefined) {
+        // FIELD-ESCORT stance: hold the caster band — a flight host must
+        // fly its road, not stab over the escort's shoulder.
+        if (gap > this.spec.band * PILOT_CFG.bandHigh) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
+        else if (gap < this.spec.band * PILOT_CFG.bandLow) { dx = actor.pos.x - foe.pos.x; dy = actor.pos.y - foe.pos.y; }
+        if (gap <= this.spec.band * PILOT_CFG.bandHigh + PILOT_CFG.pairWakeSlack) this.joined = true;
+      } else {
+        const want = actor.radius + foe.radius + (this.spec.engage ?? PILOT_CFG.meleeGap);
+        if (gap > want) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
+        if (gap <= want + PILOT_CFG.pairWakeSlack) this.joined = true;
+      }
     }
 
     const host = actor.skills[this.spec.hostSlot];

@@ -49,6 +49,7 @@ import type { Modifier, SkillTag } from '../engine/stats';
 import { CLASSES } from '../data/classes';
 import { gemLevelAt } from './data/builds';
 import { runScenario } from './runner';
+import { PILOT_CFG } from './pilots';
 import type { BuildSpec, EpisodeResult, ScenarioDef } from './types';
 
 // ------------------------------------------------------------------ config --
@@ -101,6 +102,16 @@ export const COMPAT_CFG = {
    *  census always covers everything; probes cover what the budget allows,
    *  round-robin across supports, and the report states coverage honestly. */
   budgetEpisodes: 4000,
+  /** THE FLIGHT RANGE (2026-07-22, menu 2a): geometry for flight-branch
+   *  probes. A collinear trio down the +x fire line (chain hops, pierce
+   *  bores, forks find flanks), one lateral offset body (homing bends,
+   *  breathing radii clip), and a two-rock masonry stub OFF the fire line
+   *  (ricochet banks, unspent flights die and bloom) that wall-scoped
+   *  payloads aim at directly. */
+  range: {
+    standoff: 200, spacing: 130, offsetDeg: 24,
+    wall: { bearingDeg: -35, distance: 260, radius: 26 },
+  },
 };
 
 // ------------------------------------------------------------- the census --
@@ -402,6 +413,58 @@ export function rackDummyFor(sup: SupportDef | undefined): { id: string; why: st
   return undefined;
 }
 
+/** THE FLIGHT RANGE ROUTES (menu 2a): flight-branch payloads need ROAD —
+ *  neighbors to hop to, air to steer through, masonry to bank off — and
+ *  the single centered stand-off dummy supplies none of it. Payloads on
+ *  these stats swap the dummy wave for the range formation; WALL-scoped
+ *  payloads additionally aim at the rocks (fire into the canyon): the
+ *  bank and the unspent-end bloom both need the flight to MEET stone. */
+export const RANGE_RIG_STATS = [
+  'chainCount', 'projBounce', 'pierceCount', 'forkCount', 'homingPower',
+  'guidePower', 'projPulse', 'projReShatter', 'returnShrapnel', 'projInherit',
+];
+/** Wall-scoped range payloads fire INTO the masonry: the bank and the
+ *  unspent-end bloom need the flight to meet stone, and a homing flight
+ *  needs an aim ERROR to correct (it self-acquires the nearest body —
+ *  fired at the rocks, it bends into the trio; fired at a dummy, it flies
+ *  as straight as the bare shot). */
+export const RANGE_AIM_WALL_STATS = ['projBounce', 'returnShrapnel', 'homingPower'];
+
+export function rangeRigFor(sup: SupportDef | undefined): { aimWall: boolean } | undefined {
+  if (!sup || !supModsStat(sup, RANGE_RIG_STATS)) return undefined;
+  return { aimWall: supModsStat(sup, RANGE_AIM_WALL_STATS) };
+}
+
+/** THE FIELD ESCORT (menu 2b): suffusion/conduction are CROSS-SKILL by
+ *  design — the flight must cross another skill's standing field (no
+ *  self-loops), which no single-gem probe can raise. Their pairs ride an
+ *  escort whose reference is a FIELD-LAYING ground skill on the metronome
+ *  (the corpse-feeder stance: supply the fuel, measure the verb) while
+ *  the flight host fills from the caster band. */
+export const FIELD_ESCORT_STATS = ['suffusion', 'conduction'];
+
+export function fieldEscortFor(sup: SupportDef | undefined): boolean {
+  return !!sup && supModsStat(sup, FIELD_ESCORT_STATS);
+}
+
+/** The field reference skill, derived (never a hardcoded id): the first
+ *  droppable plain-cast elemental GROUND skill with a real linger, in id
+ *  order — deterministic under content growth, loudly absent if the
+ *  catalog ever loses the class entirely. */
+export function fieldReferenceId(): string | null {
+  const ids = Object.keys(SKILLS).sort();
+  for (const id of ids) {
+    const d = SKILLS[id];
+    if (d.noDrop || d.castMode || d.channel) continue;
+    if (d.delivery.type !== 'ground') continue;
+    if ((d.delivery.lingerDuration ?? 0) < 2) continue;
+    if (!(['fire', 'cold', 'lightning'] as const).some(t => d.tags.includes(t))) continue;
+    if (d.manaCost > 30) continue;
+    return id;
+  }
+  return null;
+}
+
 /** PROBE POLICIES — per-payload measurement escalation, as data. A small-
  *  chance payload (crit, lucky) is real but its window is coin-flip narrow
  *  at standard length: two seeds of a 10s episode may roll nothing into a
@@ -469,6 +532,9 @@ export function resonanceKeyId(): string | null {
 export function probeBuild(
   skillId: string, supports: { id: string; level: number }[], label: string,
   mode: 'solo' | 'escort', opts: ProbeOpts,
+  /** Escort reference override — the FIELD escort's derived ground-layer
+   *  rides here in place of the reference attack. */
+  refIdOverride?: string,
 ): BuildSpec {
   const def = SKILLS[skillId];
   const level = opts.level ?? COMPAT_CFG.level;
@@ -478,7 +544,7 @@ export function probeBuild(
   const skills: BuildSpec['skills'] = [
     { id: skillId, level: gemLevel, rarity: 'rare', supports: supports.length ? supports : undefined },
   ];
-  const ref = referenceAttackId();
+  const ref = refIdOverride ?? referenceAttackId();
   if (mode === 'escort' && skillId !== ref) skills.push({ id: ref, level: gemLevel });
   // FOUNT SEEDING (BuildSpec.charges): orbPickup-banked economies never fill
   // in a probe — no orb ever falls in the arena — so a drink-shaped host
@@ -512,7 +578,10 @@ export function probeScenario(
    *  (a trigger-forced escort pair diffs against an escort bare; a crew-fit
    *  pair diffs key-vs-key so the boarding door is open in both runs; a
    *  rack-routed pair diffs against a bare aimed at the SAME rack dummy). */
-  forced?: { probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder'; dummyId?: string; bled?: boolean },
+  forced?: {
+    probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder';
+    dummyId?: string; bled?: boolean; range?: boolean; aimWall?: boolean; fieldRef?: boolean;
+  },
 ): ScenarioDef {
   const def = SKILLS[skillId];
   if (!def) throw new Error(`compat: unknown skill '${skillId}'`);
@@ -521,28 +590,69 @@ export function probeScenario(
   const probe = forced?.probe
     ? { kind: forced.probe, ...(forced.pack ? { pack: forced.pack } : {}) } as ReturnType<typeof probeKindFor>
     : probeKindFor(def, sup);
-  const rig = forced?.rig ? { mode: forced.rig } as ReturnType<typeof rigModeFor> : rigModeFor(def, sup);
+  const fieldRef = forced?.fieldRef ?? fieldEscortFor(sup);
+  const rig = forced?.rig ? { mode: forced.rig } as ReturnType<typeof rigModeFor>
+    : fieldRef ? { mode: 'escort' } as ReturnType<typeof rigModeFor>
+      : rigModeFor(def, sup);
   const dummyId = forced?.dummyId ?? rackDummyFor(sup)?.id ?? 'target_dummy';
   const bled = forced?.bled ?? (sup ? supModsStat(sup, BLED_RIG_STATS) : false);
+  const rr = forced?.range !== undefined
+    ? { range: !!forced.range, aimWall: !!forced.aimWall }
+    : (() => {
+      const r = probe.kind === 'dummy' ? rangeRigFor(sup) : undefined;
+      return { range: !!r, aimWall: !!r?.aimWall };
+    })();
   const supports: { id: string; level: number }[] = [];
   const keyId = forced?.withKey ? resonanceKeyId() : null;
   if (keyId && keyId !== support?.id) supports.push({ id: keyId, level: 1 });
   if (support) supports.push(support);
   const label = supports.map(s => s.id).join('+') || 'bare';
-  const build = probeBuild(skillId, supports, label, rig.mode, opts);
+  const build = probeBuild(skillId, supports, label, rig.mode, opts,
+    fieldRef ? fieldReferenceId() ?? undefined : undefined);
   const live = probe.kind === 'live';
   const escorted = rig.mode === 'escort' && build.skills.length > 1;
   // The live wave: the standard WOUNDING pack, or the KILLABLE fodder pack
   // for kill-scoped payloads (probe.pack 'fodder' — kills must flow).
   const pack = probe.pack === 'fodder' ? COMPAT_CFG.fodderPack : COMPAT_CFG.livePack;
   if (bled) build.bled = { lifeFrac: 0.5, manaFrac: 0.5 };
+  const R = COMPAT_CFG.range;
+  // The dummy-lane wave set: the range formation (collinear trio down the
+  // fire line + one lateral offset body) or the classic single stand-off.
+  const dummyWaves: ScenarioDef['waves'] = rr.range
+    ? [
+      ...[0, 1, 2].map(i => ({
+        monsters: [{ id: dummyId, level: 1 }],
+        distance: R.standoff + i * R.spacing, bearingDeg: 0,
+      })),
+      {
+        monsters: [{ id: dummyId, level: 1 }],
+        distance: R.standoff + R.spacing, bearingDeg: R.offsetDeg,
+      },
+    ]
+    : [{ monsters: [{ id: dummyId, level: 1 }], distance: COMPAT_CFG.dummyDistance }];
+  // The solo pilot, with the canyon shot when the payload is wall-scoped.
+  const soloPilot = ((): ScenarioDef['pilot'] => {
+    const p = soloPilotFor(def);
+    return rr.aimWall && p.kind === 'caster'
+      ? { ...p, aimOffset: { deg: R.wall.bearingDeg, dist: R.wall.distance } }
+      : p;
+  })();
   return {
     id: `${build.id}__${probe.kind}${probe.pack ? '_' + probe.pack : ''}_${rig.mode}`
       + (dummyId !== 'target_dummy' ? `_${dummyId.replace('target_dummy_', '')}` : '')
-      + (bled ? '_bled' : ''),
+      + (bled ? '_bled' : '')
+      + (rr.range ? (rr.aimWall ? '_rangewall' : '_range') : '')
+      + (fieldRef ? '_fieldref' : ''),
     label: build.label,
     build,
-    pilot: escorted ? { kind: 'pair', hostSlot: 0, refSlot: 1 } : soloPilotFor(def),
+    // THE FIELD ESCORT inverts the metronome: the FIELD skill (slot 1) is
+    // the upkeep tap, the measured flight (slot 0) is the held filler, and
+    // the mover holds the caster band so the flight has road to fly.
+    pilot: escorted
+      ? (fieldRef
+        ? { kind: 'pair', hostSlot: 1, refSlot: 0, band: PILOT_CFG.casterRange }
+        : { kind: 'pair', hostSlot: 0, refSlot: 1 })
+      : soloPilot,
     parityLevel: opts.level ?? COMPAT_CFG.level,
     waves: live
       ? [{
@@ -552,7 +662,17 @@ export function probeScenario(
         }],
         repeatEvery: pack.everySec, distance: COMPAT_CFG.liveDistance,
       }]
-      : [{ monsters: [{ id: dummyId, level: 1 }], distance: COMPAT_CFG.dummyDistance }],
+      : dummyWaves,
+    // THE MASONRY (range formation): two overlapping rocks off the fire
+    // line — the bank face and the unspent flight's gravestone.
+    ...(rr.range && !live ? {
+      terrain: {
+        rocks: [
+          { bearingDeg: R.wall.bearingDeg - 4, distance: R.wall.distance, radius: R.wall.radius },
+          { bearingDeg: R.wall.bearingDeg + 4, distance: R.wall.distance, radius: R.wall.radius },
+        ],
+      },
+    } : {}),
     // Corpse-consuming hosts get the feeder — without it the host never
     // casts, every pairing reads byte-identical, and the column is blind.
     ...(def.tags.includes('corpse') ? { corpseFeed: COMPAT_CFG.corpseFeed } : {}),
@@ -674,6 +794,13 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
   {
     note: 'ambush/stealth bonus — no pilot performs the stealth verb',
     when: (_def, sup) => supModsStat(sup, ['ambushBonus', 'stealthRegen']),
+  },
+  {
+    // Homing self-acquires (the wall-aim lane measures it); GUIDED flight
+    // steers toward the LIVE cursor, and every probe aim is static — there
+    // is nothing to steer. Delete when a cursor-steering pilot ships.
+    note: 'guided flight (guidePower) follows the moving cursor — probe aims are static, so the steering never happens',
+    when: (_def, sup) => supModsStat(sup, ['guidePower']),
   },
   {
     note: 'granted META action — pilots never shift-press, so the grant goes unexercised',
@@ -1087,23 +1214,24 @@ export function makeProbeSession(opts: ProbeOpts): ProbeSession {
   };
 }
 
+/** The shape-matched bare baseline, cached per (skill × full shape ×
+ *  policy): every lever that changes episode content — probe kind, pack,
+ *  rig, key, rack dummy, bled vitals, range formation, wall aim, field
+ *  escort, policy escalation — joins the key, so a forced-shape pair
+ *  always diffs against a bare of the SAME world. */
 export function bareEpisodesFor(
-  sess: ProbeSession, skillId: string,
-  probe: 'dummy' | 'live', rig: 'solo' | 'escort', withKey: boolean,
-  pack?: 'fodder',
-  /** Rack-routed dummy + probe-policy escalation + the bled rig: the bare
-   *  baseline must aim at the SAME target, run the SAME length, and start
-   *  at the SAME vitals as the socketed run — all three join the cache key. */
-  dummyId?: string,
+  sess: ProbeSession, skillId: string, shape: PairShape,
   policy?: { name: string; seeds: number; duration?: number },
-  bled?: boolean,
 ): EpisodeResult[] {
-  const key = `${skillId}:${probe}${pack ? ':' + pack : ''}:${rig}:${withKey ? 'keyed' : 'bare'}`
-    + (dummyId ? `:${dummyId}` : '') + (policy ? `:${policy.name}` : '') + (bled ? ':bled' : '');
+  const key = `${skillId}:${shapeCacheKey(shape)}` + (policy ? `:${policy.name}` : '');
   let eps = sess.bareCache.get(key);
   if (!eps) {
     const opts = policy?.duration !== undefined ? { ...sess.opts, duration: policy.duration } : sess.opts;
-    const scen = probeScenario(skillId, null, opts, { probe, rig, withKey, pack, dummyId, bled: bled ?? false });
+    const scen = probeScenario(skillId, null, opts, {
+      probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
+      dummyId: shape.dummyId, bled: !!shape.bled,
+      range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef,
+    });
     eps = runScenario(scen, { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed }).episodes;
     sess.episodesRun += eps.length;
     sess.bareCache.set(key, eps);
@@ -1129,6 +1257,14 @@ export interface PairShape {
    *  a kiting pilot may never be wounded by the pack. The deficit is
    *  identical bare and socketed, so the delta is the gem's pour. */
   bled?: true;
+  /** THE FLIGHT RANGE: the dummy wave becomes the range formation —
+   *  collinear trio + lateral offset body + the masonry stub. */
+  range?: true;
+  /** Wall-scoped range payloads (bank, unspent-end bloom) aim AT the rocks. */
+  aimWall?: true;
+  /** THE FIELD ESCORT: the escort reference is the derived field-layer on
+   *  the metronome; the flight host fills from the caster band. */
+  fieldRef?: true;
 }
 
 /** The census-comparable shape signature: probe kind + pack + rig + key.
@@ -1155,10 +1291,32 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
       shape.dummyId = rack.id;
       shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${rack.why}` : rack.why;
     }
+    const rr = rangeRigFor(sup);
+    if (rr) {
+      shape.range = true;
+      if (rr.aimWall) shape.aimWall = true;
+      const why = rr.aimWall
+        ? 'flight-branch payload — the range formation, fired into the masonry (bank/bloom)'
+        : 'flight-branch payload — the range formation (collinear trio + offset + masonry)';
+      shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${why}` : why;
+    }
   }
   if (supModsStat(sup, BLED_RIG_STATS)) shape.bled = true;
+  if (fieldEscortFor(sup)) {
+    shape.rig = 'escort';
+    shape.fieldRef = true;
+    shape.rigWhy = 'cross-skill field payload — the field escort lays the ground the flight must cross';
+  }
   return shape;
 }
+
+/** The bare-baseline cache key half of a shape — every lever that changes
+ *  episode content joins it, so a forced-shape pair always diffs against a
+ *  bare of the SAME world. */
+export const shapeCacheKey = (s: PairShape): string => [
+  s.probe, s.pack ?? '', s.rig, s.withKey ? 'k' : '', s.dummyId ?? '',
+  s.bled ? 'b' : '', s.range ? 'r' : '', s.aimWall ? 'w' : '', s.fieldRef ? 'f' : '',
+].join(':');
 
 /** Sustain stats that need HEADROOM to express — their pairs run the bled
  *  rig (BuildSpec.bled, half vitals both runs). ES/ward leeches stay out:
@@ -1192,12 +1350,14 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
     seeds: Math.max(sess.seeds, rawPolicy.seeds ?? sess.seeds),
     duration: rawPolicy.durationMult ? baseDuration * rawPolicy.durationMult : undefined,
   } : undefined;
-  const bareEps = bareEpisodesFor(sess, row.skillId,
-    shape.probe, shape.rig, shape.withKey, shape.pack, shape.dummyId, policy, shape.bled);
+  const bareEps = bareEpisodesFor(sess, row.skillId, shape, policy);
   const pairOpts = policy?.duration !== undefined ? { ...sess.opts, duration: policy.duration } : sess.opts;
   const pairScen = probeScenario(row.skillId,
-    { id: row.supportId, level: sess.supportLevel }, pairOpts,
-    { withKey: shape.withKey, dummyId: shape.dummyId ?? 'target_dummy', bled: shape.bled ?? false });
+    { id: row.supportId, level: sess.supportLevel }, pairOpts, {
+      probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
+      dummyId: shape.dummyId ?? 'target_dummy', bled: !!shape.bled,
+      range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef,
+    });
   const { episodes: pairEps } = runScenario(pairScen,
     { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed });
   sess.episodesRun += pairEps.length;
@@ -1411,7 +1571,7 @@ export function hostExpressionCensus(
       probe: probe.kind, rig: rig.mode, withKey: false,
       ...(probe.pack ? { pack: probe.pack } : {}),
     };
-    const eps = bareEpisodesFor(sess, id, shape.probe, shape.rig, false, shape.pack);
+    const eps = bareEpisodesFor(sess, id, shape);
     const n = Math.max(1, eps.length);
     const mean = (k: string): number => r2(eps.reduce((s, e) => s + fpNum(e.fingerprint, k), 0) / n);
     const facts: HostExpressionFacts = {

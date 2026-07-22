@@ -4746,6 +4746,15 @@ export function supportGlobalMods(socket: SupportInstance): Modifier[] {
  *  mints damage events (the featureset seam, documented not hardcoded). */
 export const STRIKE_GRANTING_GRAFTS: (keyof SupportDef)[] = ['constructFx', 'zoneEmit', 'tether'];
 
+/** Stats whose grant means the flight MINTS CHILDREN mid-air (fork counts,
+ *  chain-leg shatters, shrapnel blooms) — the 'flight:children' mechanism's
+ *  socketed half; the native half is the delivery's own shatter/emit/fork
+ *  specs. Deliberately excludes projectileCount (parallel SIBLINGS at cast,
+ *  not children born of the flight). */
+export const CHILD_GRANTING_FLIGHT_STATS: readonly string[] = [
+  'forkCount', 'projReShatter', 'returnShrapnel', 'projShrapnel',
+];
+
 export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: string) => boolean> = {
   /** A COOLDOWN from any source: the def's own clock, a socketed levy
    *  (addedCooldown mods — Austerity / Apotheosis / Measured Blows), or a
@@ -4806,6 +4815,20 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
     !!inst.def.baseDamage
     || inst.def.effects.some(e => e.type === 'damage')
     || hostSockets(inst).some(s => STRIKE_GRANTING_GRAFTS.some(k => s.def[k] !== undefined)),
+  /** FLIGHT LINEAGE ('flight:children', 2026-07-22): the instance MINTS
+   *  CHILD FLIGHTS mid-air — its own delivery carries a shatter/emit/fork
+   *  spec, or a socketed graft grows them (fork counts, chain-leg
+   *  shatters, shrapnel blooms). The gate for gems whose payload rides
+   *  the CHILDREN themselves (Lineage's inheritance): a childless flight
+   *  refuses honestly, and the refusal self-lifts the moment Forking or a
+   *  shrapnel graft stands beside it. */
+  flight: (inst, param) => {
+    if (param !== 'children') return true; // unknown params pass open (the registry is the authority)
+    const d = inst.def.delivery as { forks?: number; shatter?: unknown; emit?: unknown };
+    if ((d.forks ?? 0) > 0 || d.shatter !== undefined || d.emit !== undefined) return true;
+    return hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
+      .some(m => CHILD_GRANTING_FLIGHT_STATS.includes(m.stat)));
+  },
   /** A STATUS source of any kind — the affliction gate's broader sibling
    *  (potency's power lane serves non-damaging ailments too). Reads the
    *  instance's hostile status applications (its own status effects +

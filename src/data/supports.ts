@@ -2448,8 +2448,9 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   lineage: {
     id: 'lineage', name: 'Lineage',
-    description: 'Shards and emitted projectiles INHERIT half of the parent\'s flight pattern — a seeking spear rakes seeking shards. Each level passes more down.',
+    description: 'Shards and emitted projectiles INHERIT half of the parent\'s flight pattern — a seeking spear rakes seeking shards. Each level passes more down. Fits only where children exist: native shatters and emitters, or a fork/shrapnel gem beside it.',
     color: '#d8c8e8', requiresTags: ['projectile'],
+    requiresMechanisms: ['flight:children'],
     mods: [mod('projInherit', 'flat', 0.5)],
     perLevel: [mod('projInherit', 'flat', 0.125)],
     weight: 5,
@@ -4052,7 +4053,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   shredding_return: {
     id: 'shredding_return', name: 'Shredding Return',
-    description: 'Returning projectiles SPLINTER as they arrive home: 4 shards ring outward from the catch. Pairs with Returning, Boomerang, or anything that flies back on its own.',
+    description: 'Your flights SPLINTER where their road ends: 4 shards ring outward from a return\'s catch — or from any UNSPENT end (range flown out, masonry met). A flight that dies on a body spends itself in the blow; pierce through and outfly the field to shatter at the far end. Pairs beautifully with Returning and Boomerang.',
     color: '#c8c0a8', requiresTags: ['projectile'],
     mods: [mod('returnShrapnel', 'flat', 4)],
     perLevel: [mod('returnShrapnel', 'flat', 1)],

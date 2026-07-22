@@ -58,7 +58,11 @@ function spawnWave(world: World, wave: WaveSpec, parityLevel: number, warnings: 
       return;
     }
     const a = world.createMonster(m.id, Math.max(1, m.level ?? parityLevel), 'enemy');
-    const ang = (i / Math.max(1, entries.length)) * Math.PI * 2 + Math.random() * 0.4;
+    // Authored bearing (WaveSpec.bearingDeg — the flight range's collinear
+    // trio): exact placement, no ring, no jitter draw.
+    const ang = wave.bearingDeg !== undefined
+      ? wave.bearingDeg * Math.PI / 180
+      : (i / Math.max(1, entries.length)) * Math.PI * 2 + Math.random() * 0.4;
     a.pos = world.clampPos(
       vec(hero.pos.x + Math.cos(ang) * ring, hero.pos.y + Math.sin(ang) * ring), a.radius);
     world.actors.push(a);
@@ -85,6 +89,17 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
     // measured. xpNeeded is per-seat data, so a data-sized freeze suffices.
     if (scenario.freezeXp !== false) world.meta.xpNeeded = Number.MAX_SAFE_INTEGER;
     world.localSeat.input = makePilot(scenario.pilot);
+    // AUTHORED TERRAIN (ScenarioDef.terrain): solid rock planted hero-
+    // relative — the flight range's masonry. Pushed rows self-heal into
+    // the doodad spatial index (the lazy rebuild chokepoint).
+    for (const r of scenario.terrain?.rocks ?? []) {
+      const ang = r.bearingDeg * Math.PI / 180;
+      world.doodads.push({
+        pos: vec(world.player.pos.x + Math.cos(ang) * r.distance,
+          world.player.pos.y + Math.sin(ang) * r.distance),
+        radius: r.radius ?? 26, kind: 'rock',
+      });
+    }
     // The injected hero's sheet at spawn — a report should explain its own
     // survivability numbers without anyone re-deriving the build by hand.
     const heroMaxLife = world.player.maxLife();

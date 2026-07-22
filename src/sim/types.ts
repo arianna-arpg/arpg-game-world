@@ -119,15 +119,21 @@ export type PilotSpec =
   | { kind: 'turret'; rotation?: number[]; openers?: number[] }
   /** Close to melee gap, then work the rotation. */
   | { kind: 'brawler'; engage?: number; rotation?: number[]; openers?: number[] }
-  /** Hold a range band (kite in/out), work the rotation. */
-  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[] }
+  /** Hold a range band (kite in/out), work the rotation. `aimOffset` pins
+   *  the AIM to a fixed point relative to the hero's spawn heading (deg
+   *  clockwise from +x, dist px) INSTEAD of the nearest foe — the flight
+   *  range's fire-into-the-canyon lever (ricochet's wall, the unspent-end
+   *  shrapnel bloom). Movement still holds the band off the nearest foe. */
+  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[]; aimOffset?: { deg: number; dist: number } }
   /** THE ESCORT RIG (support-matrix probes): hold `refSlot` as the steady
    *  filler (constant hits — trigger events, curse exploitation, buff
    *  beneficiary) and TAP `hostSlot` once per `hostPeriod` seconds when
    *  usable. Latch-shaped hosts (trigger-armed, drawn curses, toggled
    *  auras) are edged ONCE and left standing. Deliberately metronomic:
-   *  a probe wants a reproducible cadence, not optimal play. */
-  | { kind: 'pair'; hostSlot: number; refSlot: number; engage?: number; hostPeriod?: number };
+   *  a probe wants a reproducible cadence, not optimal play. `band` holds
+   *  the caster band instead of closing to melee (the FIELD escort: a
+   *  flight host must fly, not stab). */
+  | { kind: 'pair'; hostSlot: number; refSlot: number; engage?: number; hostPeriod?: number; band?: number };
 
 // --------------------------------------------------------------- scenarios --
 
@@ -137,6 +143,11 @@ export interface WaveSpec {
   at?: number;
   /** Spawn distance from the hero (default 260 px), evenly ringed. */
   distance?: number;
+  /** Exact spawn bearing (degrees clockwise from +x, hero-relative) — the
+   *  authored-formation lever (the flight range's collinear trio). When
+   *  set, the even ring and its jitter stand down; every monster in the
+   *  wave lands on this bearing at `distance`. */
+  bearingDeg?: number;
   monsters: {
     id: string;
     /** Absolute monster level, or omit to use the scenario's parityLevel. */
@@ -191,6 +202,11 @@ export interface ScenarioDef {
   waves: WaveSpec[];
   /** Lay corpses on a clock (see CorpseFeedSpec) — the corpse family's fuel. */
   corpseFeed?: CorpseFeedSpec;
+  /** AUTHORED TERRAIN: solid rock doodads planted hero-relative at episode
+   *  start (bearing deg clockwise from +x, distance px). The flight range's
+   *  masonry — ricochet banks off it, unspent flights die on it and bloom.
+   *  Kind 'rock' blocks shots by registry; the doodad index self-heals. */
+  terrain?: { rocks: { bearingDeg: number; distance: number; radius?: number }[] };
   /** Sim-seconds cap. */
   duration: number;
   stop?: StopRule;

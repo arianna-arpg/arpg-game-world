@@ -30,13 +30,13 @@ import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { unreadPayloadRows } from '../src/data/graftReadSites';
 import { mod } from '../src/engine/stats';
-import { SUPPORT_PAYLOAD_FIELDS } from '../src/engine/skills';
+import { SUPPORT_PAYLOAD_FIELDS, makeSkillInstance, mechanismHolds, supportFitsInst } from '../src/engine/skills';
 import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
   RESIST_DUMMY_BY_TYPE, ablationUnits, classifyExpression, compatCensus, costFunctionSupport,
-  deepProbePair, explainFit, explainPair, hostExpressionCensus,
+  deepProbePair, explainFit, explainPair, fieldReferenceId, hostExpressionCensus,
   makeProbeSession, pairKey, pairShapeFor, maskSupportUnit, probeKindFor, probeOrder,
-  probePair, probePolicyFor, probeScenario, rackDummyFor, runCompatMatrix, shapeKey,
+  probePair, probePolicyFor, probeScenario, rackDummyFor, rangeRigFor, runCompatMatrix, shapeKey,
   soloSupportUnit,
   type CensusResult, type CensusRow, type HostExpressionBaseline, type PairDeepResult,
   type PairProbeResult, type PairVerdictKind, type UnitProbeResult,
@@ -582,6 +582,102 @@ check('E14 synthetic fixtures cleaned out of the registry',
   check('F13 expression signature stamps the rig and mismatches name it',
     expressionSignatureOf(hx) === 'v1:1h:1m'
     && rigMismatches(sigOn, sigOff).join(',') === 'expression');
+}
+
+// === RIG G — the flight range, the companion gate, the field escort ========
+// (2026-07-22, menu 2a/2b on the user's calls): flights get ROAD — a trio
+// to hop, masonry to bank off and bloom on, a field to carry — and Lineage
+// refuses childless hosts until a child-minting graft stands beside it.
+
+{
+  // G1 — routing law: chain-class payloads take the range; wall-scoped ones
+  // (bank / unspent bloom / homing's aim-error) also fire into the masonry.
+  check('G1 range routing: chains take the range, bank/bloom/homing aim at the wall, plain damage stays home',
+    rangeRigFor(SUPPORTS.cascade_of_knives)?.aimWall === false
+    && rangeRigFor(SUPPORTS.ricochet)?.aimWall === true
+    && rangeRigFor(SUPPORTS.shredding_return)?.aimWall === true
+    && rangeRigFor(SUPPORTS.seeker)?.aimWall === true
+    && rangeRigFor(SUPPORTS.brutality) === undefined);
+
+  // G2 — the shapes carry the rig: range/aimWall on dummy-lane flight pairs,
+  // the field escort on cross-skill field payloads.
+  const chainShape = pairShapeFor(SKILLS.arquebus, SUPPORTS.cascade_of_knives, 'host');
+  const bankShape = pairShapeFor(SKILLS.arquebus, SUPPORTS.ricochet, 'host');
+  const fieldShape = pairShapeFor(SKILLS.arquebus, SUPPORTS.suffusion, 'host');
+  check('G2 shapes: range set, aimWall only where wall-scoped, field escort forced for suffusion',
+    chainShape.range === true && chainShape.aimWall === undefined
+    && bankShape.range === true && bankShape.aimWall === true
+    && fieldShape.fieldRef === true && fieldShape.rig === 'escort');
+
+  // G3 — the range scenario law: collinear trio + one offset body, two
+  // rocks, and the canyon aim only on wall-scoped pairs.
+  const rangeScen = probeScenario('arquebus', { id: 'cascade_of_knives', level: 1 }, {},
+    { range: true, aimWall: false });
+  const wallScen = probeScenario('arquebus', { id: 'ricochet', level: 1 }, {},
+    { range: true, aimWall: true });
+  const bearings = rangeScen.waves.map(w => w.bearingDeg ?? null);
+  check('G3a the range formation: four dummy waves — three collinear on the fire line, one offset',
+    rangeScen.waves.length === 4 && bearings.filter(b => b === 0).length === 3
+    && bearings.filter(b => b !== 0 && b !== null).length === 1
+    && (rangeScen.terrain?.rocks.length ?? 0) === 2);
+  const wallPilot = wallScen.pilot as { kind: string; aimOffset?: { deg: number; dist: number } };
+  const plainPilot = rangeScen.pilot as { kind: string; aimOffset?: { deg: number; dist: number } };
+  check('G3b the canyon shot: wall-scoped pairs aim at the rocks, chain pairs aim at the bodies',
+    wallPilot.kind === 'caster' && wallPilot.aimOffset !== undefined
+    && plainPilot.aimOffset === undefined);
+
+  // G4 — the field reference derives (never hardcoded): a droppable
+  // plain-cast elemental ground skill with a real linger.
+  const fieldId = fieldReferenceId();
+  const fieldDef = fieldId ? SKILLS[fieldId] : undefined;
+  check(`G4 field reference derives (${fieldId ?? 'NONE'}) — ground, lingering, elemental, plain-cast`,
+    !!fieldDef && fieldDef.delivery.type === 'ground'
+    && ((fieldDef.delivery as { lingerDuration?: number }).lingerDuration ?? 0) >= 2
+    && !fieldDef.castMode);
+  const fieldScen = probeScenario('arquebus', { id: 'suffusion', level: 1 }, {}, { fieldRef: true, rig: 'escort' });
+  const fieldPilot = fieldScen.pilot as { kind: string; hostSlot?: number; refSlot?: number; band?: number };
+  const fieldBuild = fieldScen.build as { skills: { id: string }[] };
+  check('G4b the field escort inverts the metronome: field on the tap, flight as the banded filler',
+    fieldPilot.kind === 'pair' && fieldPilot.hostSlot === 1 && fieldPilot.refSlot === 0
+    && fieldPilot.band !== undefined && fieldBuild.skills[1]?.id === fieldId);
+
+  // G5–G8 — the live pipeline on real shipped pairs, all byte-dead before
+  // this pass. Chain hops the trio (real hits, real damage); the bank and
+  // the unspent-end bloom read through the flight census (samples); the
+  // carried field re-blooms (zones); the native catch still splinters.
+  const gSess = makeProbeSession({ seeds: 2 });
+  const chain = probePair(gSess, { skillId: 'arquebus', supportId: 'cascade_of_knives', fit: 'host' });
+  check('G5 chains hop the trio (hits + damage move)',
+    chain.result.verdict === 'effective' && chain.result.moved.some(m => m.key === 'hits_out'),
+    `${chain.result.verdict}; moved: ${chain.result.moved.map(m => m.key).join(',')}`);
+  const bank = probePair(gSess, { skillId: 'arquebus', supportId: 'ricochet', fit: 'host' });
+  check('G6 the bank: a wall-aimed flight bounces and lives (flight census moves)',
+    bank.result.verdict === 'effective' && bank.result.moved.some(m => m.key === 'projectile_samples'),
+    `${bank.result.verdict}`);
+  const bloom = probePair(gSess, { skillId: 'arquebus', supportId: 'shredding_return', fit: 'host' });
+  const catchBloom = probePair(gSess, { skillId: 'gyreblade', supportId: 'shredding_return', fit: 'host' });
+  check('G7 the parting shards: unspent ends bloom at the masonry AND the native catch still splinters',
+    bloom.result.verdict === 'effective' && catchBloom.result.verdict === 'effective',
+    `${bloom.result.verdict} / ${catchBloom.result.verdict}`);
+  const suffuse = probePair(gSess, { skillId: 'arquebus', supportId: 'suffusion', fit: 'host' });
+  check('G8 the carried field re-blooms downrange (field escort; zones move)',
+    suffuse.result.verdict === 'effective' && suffuse.result.moved.some(m => m.key === 'zone_samples'),
+    `${suffuse.result.verdict}; moved: ${suffuse.result.moved.map(m => m.key).join(',')}`);
+
+  // G9 — THE COMPANION GATE (flight:children): childless flights refuse
+  // Lineage; a fork graft beside it SELF-LIFTS the refusal; native
+  // shatter/emit hosts fit directly.
+  const bareInst = makeSkillInstance(SKILLS.arquebus, 1, 3);
+  check('G9a lineage refuses a childless flight', supportFitsInst(SUPPORTS.lineage, bareInst) === false);
+  bareInst.sockets[0] = { def: SUPPORTS.forking, level: 1 };
+  check('G9b a fork graft beside it self-lifts the refusal',
+    mechanismHolds('flight:children', bareInst) === true
+    && supportFitsInst(SUPPORTS.lineage, bareInst) === true);
+  const nativeChildHost = Object.values(SKILLS).find(s =>
+    !s.noDrop && ((s.delivery as { shatter?: unknown; emit?: unknown }).shatter !== undefined
+      || (s.delivery as { shatter?: unknown; emit?: unknown }).emit !== undefined));
+  check(`G9c native shatter/emit hosts fit directly (${nativeChildHost?.id ?? 'NONE'})`,
+    !!nativeChildHost && mechanismHolds('flight:children', makeSkillInstance(nativeChildHost, 1, 3)));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
