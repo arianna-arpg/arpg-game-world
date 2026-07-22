@@ -30,7 +30,7 @@ import {
 } from '../src/engine/actor';
 import {
   SUPPORT_MECHANISMS, instanceUseCharges, makeSkillInstance, supportFitsInst,
-  supportGlobalMods, supportRidesMinions, hostSockets,
+  supportFitsInstOrCrew, supportGlobalMods, supportRidesMinions, hostSockets,
 } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
 import { dist } from '../src/core/math';
@@ -486,6 +486,92 @@ bootSimEngine();
       eyeMin === eye0 && rimMin < rim0,
       `eye trough ${eye0.toFixed(0)}->${eyeMin.toFixed(0)}, rim trough ${rim0.toFixed(0)}->${rimMin.toFixed(1)}`);
   }
+}
+
+// === RIG J — THE STRIKES FLOOR (the hit-rider class's structural refusal) =
+// (2026-07-21: hit-rider gems refuse never-hitting hosts honestly; the
+// refusal self-lifts through strike-granting grafts and the crew hop.)
+
+{
+  const berserk = SKILLS.berserk;
+  const cleave = SKILLS.cleave;
+  const pc = SUPPORTS.poison_chance;
+  check('J1 poison_chance REFUSES an aura that never hits (the strikes floor)',
+    !supportFitsInst(pc, makeSkillInstance(berserk, 1, 3)),
+    `host ${berserk.id} (${berserk.delivery.type})`);
+  check('J2 poison_chance fits a striking host (the floor opens on real hits)',
+    supportFitsInst(pc, makeSkillInstance(cleave, 1, 3)));
+  // (Damaging curses — agony's token chaos packet — genuinely STRIKE and
+  // rightly fit; the floor refuses only the truly hit-less.)
+  check('J3 the hit-less mark and the trigger utility refuse (no packet anywhere)',
+    !supportFitsInst(pc, makeSkillInstance(SKILLS.mark, 1, 3))
+    && !supportFitsInst(pc, makeSkillInstance(SKILLS.detonation, 1, 3)),
+    'hosts mark (mark), detonation (self)');
+  // The SELF-LIFTING half: a strike-granting graft (constructFx — the
+  // pulsing cage) stands a hit up on a construct host that itself deals
+  // no damage, and every hit-rider opens beside it.
+  const cage = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'construct' && !s.baseDamage
+    && !s.effects.some(e => e.type === 'damage'))!;
+  const cInst = makeSkillInstance(cage, 1, 3);
+  const fxGem = Object.values(SUPPORTS).find(s => s.constructFx)!;
+  check('J4 a damage-less construct refuses the hit-riders bare',
+    !supportFitsInst(pc, cInst), `host ${cage.id}`);
+  cInst.sockets[0] = { def: fxGem, level: 1 };
+  check('J5 a strike-granting graft beside it LIFTS the floor (the cage that cooks can poison)',
+    supportFitsInst(pc, cInst), `graft ${fxGem.id}`);
+  cInst.sockets[0] = null;
+  check('J6 the refusal returns when the graft leaves (live re-evaluation)',
+    !supportFitsInst(pc, cInst));
+  // THE CREW HOP: a summon whose crew strikes serves the gem aboard the
+  // court — the mechanism resolves against the crew skill as the minion
+  // casts it, not against the keeper's own no-hit summon cast.
+  const world = makeSimWorld('warrior', 7);
+  const raise = SKILLS.raise_dead;
+  const rInst = makeSkillInstance(raise, 1, 3);
+  const crew = world.summonCrewSkills(rInst);
+  check('J7 the summon host itself never strikes (the keeper cast is not the hit)',
+    !supportFitsInst(pc, rInst));
+  check('J8 the gem fits VIA THE STRIKING CREW (the mechanism hop aboard the court)',
+    supportFitsInstOrCrew(pc, rInst, crew),
+    `crew ${Array.isArray(crew) ? crew.map(c => c.id).join('/') : crew}`);
+}
+
+// === RIG K — the parameterized gates (affliction:X / status:X) ============
+
+{
+  const cleave = SKILLS.cleave;
+  const sf = SUPPORTS.sanguine_feast;
+  const cInst = makeSkillInstance(cleave, 1, 3);
+  check('K1 sanguine_feast refuses a host that cannot bleed (affliction:bleed, no tag gate)',
+    !supportFitsInst(sf, cInst));
+  cInst.sockets[0] = { def: SUPPORTS.bleed_chance, level: 1 };
+  check('K2 a bleed-chance gem beside it opens the door (the live-instance read — conversions will ride the same seam)',
+    supportFitsInst(sf, cInst));
+  cInst.sockets[0] = { def: SUPPORTS.poison_chance, level: 1 };
+  check('K3 a POISON chance does NOT open the bleed gate (the param names the wound)',
+    !supportFitsInst(sf, cInst));
+  // status:power — the binary exemption: a host whose only application
+  // is taunt (you cannot taunt HARDER) refuses potency; a chilling host
+  // fits (chill folds mods the power lane scales).
+  const potency = SUPPORTS.potency;
+  const taunter = Object.values(SKILLS).find(s =>
+    s.effects.some(e => e.type === 'status' && e.status === 'taunted')
+    && !s.effects.some(e => e.type === 'status' && e.status !== 'taunted'))!;
+  check('K4 potency refuses a pure taunter (powerInert — the binary exemption)',
+    !supportFitsInst(potency, makeSkillInstance(taunter, 1, 3)),
+    `host ${taunter.id}`);
+  const chiller = Object.values(SKILLS).find(s =>
+    s.effects.some(e => e.type === 'status' && e.status === 'chill'))!;
+  check('K5 potency fits a chilling host (folded mods scale — the power lane)',
+    supportFitsInst(potency, makeSkillInstance(chiller, 1, 3)),
+    `host ${chiller.id}`);
+  // status:stacking — suppuration's cap needs stacks to raise.
+  const supp = SUPPORTS.suppuration;
+  check('K6 suppuration fits a stacking-ailment host and refuses a stack-less one',
+    supportFitsInst(supp, makeSkillInstance(chiller, 1, 3))
+    && !supportFitsInst(supp, makeSkillInstance(taunter, 1, 3)),
+    `chill stacks, taunt does not`);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

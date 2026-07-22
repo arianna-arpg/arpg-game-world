@@ -23647,7 +23647,10 @@ export class World {
     if (def.tags.includes('attack') || def.tags.includes('spell')) {
       for (const s of caster.statuses) {
         const sd = STATUS_DEFS[s.id];
-        if (sd?.interruptChance && chance(sd.interruptChance)) {
+        // THE POWER LANE reaches the knob (the ailment audit): a harder-
+        // applied befuddlement fumbles MORE — chance × the application's
+        // power, capped under certainty (a hex is a risk, never a lock).
+        if (sd?.interruptChance && chance(Math.min(0.9, sd.interruptChance * (s.power ?? 1)))) {
           caster.applyStatus('stun', 0, 0.75, sd.label);
           this.text(caster.pos, 'befuddled!', '#c878b8', 12);
           return false;
@@ -23667,7 +23670,9 @@ export class World {
       && !def.reflex && (def.tags.includes('attack') || def.tags.includes('spell'))) {
       for (const s of caster.statuses) {
         const sd = STATUS_DEFS[s.id];
-        if (!sd?.scrambleChance || !chance(sd.scrambleChance)) continue;
+        // The power lane reaches this knob too (the ailment audit) —
+        // same certainty cap as the interrupt.
+        if (!sd?.scrambleChance || !chance(Math.min(0.9, sd.scrambleChance * (s.power ?? 1)))) continue;
         const pool: SkillInstance[] = [];
         const admit = (k: SkillInstance | null | undefined): void => {
           if (!k || k === inst || k.def.id === def.id || k.def.reflex) return;

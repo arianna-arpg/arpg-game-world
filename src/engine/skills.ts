@@ -4723,7 +4723,14 @@ export function supportGlobalMods(socket: SupportInstance): Modifier[] {
  *  rule's predicates): each entry answers "does this LIVE instance carry
  *  the mechanism, from ANY source?" Open registry — a new gate is one
  *  named predicate here, never a skill list in data. */
-export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance) => boolean> = {
+/** Graft keys whose payload gives a non-striking host a STRIKE of its
+ *  own — the self-lifting half of the 'strikes' mechanism: Pulsing
+ *  Ramparts' standing pulse turns a passive cage into a striker, and
+ *  every hit-rider gem opens beside it. Extend when a new graft kind
+ *  mints damage events (the featureset seam, documented not hardcoded). */
+export const STRIKE_GRANTING_GRAFTS: (keyof SupportDef)[] = ['constructFx', 'zoneEmit', 'tether'];
+
+export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: string) => boolean> = {
   /** A COOLDOWN from any source: the def's own clock, a socketed levy
    *  (addedCooldown mods — Austerity / Apotheosis / Measured Blows), or a
    *  granted magazine (useChargeGraft on a cooldown host reloads on that
@@ -4749,13 +4756,89 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance) => boolean
    *  apply_<dot> chance beside it — the gate for gems whose worth flows
    *  through the wound, not the blow (the septic bargain). Composes: a
    *  poison-chance gem beside it opens the door, and the refusal returns
-   *  when it leaves. */
-  affliction: inst =>
-    inst.def.effects.some(e => e.type === 'status'
-      && (e.magnitude ?? 0) > 0 && !!STATUS_DEFS[e.status]?.dotType)
-    || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
-      .some(m => m.stat.startsWith('apply_'))),
+   *  when it leaves. PARAMETERIZED ('affliction:bleed'): the wound must
+   *  be of the named dotType — resolved against the LIVE instance's
+   *  effective applications (its own status effects + every socketed
+   *  apply_ grant), so a host that GAINS a bleed chance from any gem
+   *  opens Sanguine Feast, and a future ailment-conversion fabric plugs
+   *  into this same read the day it exists. */
+  affliction: (inst, param) => {
+    const dotOf = (id: string): string | undefined => STATUS_DEFS[id]?.dotType;
+    // The param names a STATUS ('affliction:bleed') or a damage TYPE
+    // ('affliction:fire') — either way the match must still be a dot.
+    const fits = (id: string): boolean =>
+      param ? !!dotOf(id) && (id === param || dotOf(id) === param) : !!dotOf(id);
+    return inst.def.effects.some(e => e.type === 'status'
+      && (e.magnitude ?? 0) > 0 && fits(e.status))
+      || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
+        .some(m => m.stat.startsWith('apply_') && fits(m.stat.slice(6))));
+  },
+  /** THE STRIKES FLOOR (2026-07-21, the hit-rider class's structural
+   *  refusal): the instance can LAND HITS — its def carries damage (a
+   *  'damage' effect or baseDamage) or a socketed graft gives it a
+   *  strike of its own (STRIKE_GRANTING_GRAFTS — Pulsing Ramparts on a
+   *  passive cage). The floor under every gem whose payload rides
+   *  resolveHit (apply_ chances, hit/kill procs, orb-on-hit, added
+   *  damage, crit, leech, knockback): auras, curses, marks, movement
+   *  and trigger utilities refuse HONESTLY — and the refusal self-lifts
+   *  the moment anything makes the host strike. Summon hosts fit via
+   *  their striking CREW (the crew-fit mechanism hop). Read-site
+   *  extensions (aura-carried afflictions, mark-counted hits) are the
+   *  promotion path — each lifts its family off this floor by making
+   *  the host GENUINELY strike, never by faking the predicate. */
+  strikes: inst =>
+    !!inst.def.baseDamage
+    || inst.def.effects.some(e => e.type === 'damage')
+    || hostSockets(inst).some(s => STRIKE_GRANTING_GRAFTS.some(k => s.def[k] !== undefined)),
+  /** A STATUS source of any kind — the affliction gate's broader sibling
+   *  (potency's power lane serves non-damaging ailments too). Reads the
+   *  instance's hostile status applications (its own status effects +
+   *  socketed apply_ grants; buffs are a different effect type and never
+   *  count). PARAMETERIZED: 'status:power' demands at least one POWER-
+   *  SCALABLE application (a dot, folded mods, a buildup ladder, or a
+   *  wired chance knob — never a powerInert binary state: you cannot
+   *  taunt HARDER); 'status:stacking' demands at least one STACKING
+   *  application (suppuration's cap has nothing to raise on refresh-only
+   *  ailments); any other param names a STATUS ID ('status:doom' —
+   *  Lingering Doom demands the doom itself, from any source). */
+  status: (inst, param) => {
+    const qualifies = (id: string): boolean => {
+      const sd = STATUS_DEFS[id];
+      if (!sd) return false;
+      if (param === 'power') {
+        return !sd.powerInert && (!!sd.dotType || !!sd.mods?.length
+          || !!sd.buildup || !!sd.interruptChance || !!sd.scrambleChance);
+      }
+      if (param === 'stacking') return !!sd.stacking;
+      if (param) return id === param;
+      return true;
+    };
+    return inst.def.effects.some(e => e.type === 'status' && qualifies(e.status))
+      || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
+        .some(m => m.stat.startsWith('apply_') && qualifies(m.stat.slice(6))));
+  },
 };
+
+/** Resolve one requiresMechanisms entry — 'name' or 'name:param' (the
+ *  parameterized form: 'affliction:bleed', 'status:power'). Unknown
+ *  names pass open (the registry is the authority; a stale save's
+ *  unknown mechanism must not brick a socket). */
+export function mechanismHolds(m: string, inst: SkillInstance): boolean {
+  const sep = m.indexOf(':');
+  const base = sep === -1 ? m : m.slice(0, sep);
+  const param = sep === -1 ? undefined : m.slice(sep + 1);
+  const pred = SUPPORT_MECHANISMS[base];
+  return pred ? pred(inst, param) : true;
+}
+
+/** The mechanism half of the socket gate, shared by the host lane and
+ *  the crew hop. */
+export function supportMechanismsFit(sup: SupportDef, inst: SkillInstance): boolean {
+  for (const m of sup.requiresMechanisms ?? []) {
+    if (!mechanismHolds(m, inst)) return false;
+  }
+  return true;
+}
 
 /**
  * Instance-aware support gating: supports compose with supports. A Dive
@@ -4765,11 +4848,7 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance) => boolean
  */
 export function supportFitsInst(sup: SupportDef, inst: SkillInstance): boolean {
   if (!supportFitsTags(sup, [...inst.def.tags, ...grantedTags(inst)])) return false;
-  for (const m of sup.requiresMechanisms ?? []) {
-    const pred = SUPPORT_MECHANISMS[m];
-    if (pred && !pred(inst)) return false;
-  }
-  return true;
+  return supportMechanismsFit(sup, inst);
 }
 
 /** What a summon skill's CREW is known to cast at socket time: the minted
@@ -4844,7 +4923,21 @@ export function crewSkillsServed(sup: SupportDef, inst: SkillInstance, crew: Sum
         if (g.def.grantsTags) { pool.push(...g.def.grantsTags); grew = true; }
       }
     }
-    return supportFitsTags(sup, pool);
+    if (!supportFitsTags(sup, pool)) return false;
+    // THE MECHANISM HOP (2026-07-21 — the crew-fit half of the golden
+    // rule): requiresMechanisms resolves against the crew skill AS THE
+    // MINION WILL CAST IT — a pseudo-instance of the crew def wearing
+    // the admitted riders — so Septic Bargain refuses a court whose
+    // crew cannot fester and fits the moment a poison gem rides beside
+    // it (the H1 pin, aboard the court), and the strikes floor opens
+    // through a crew that genuinely hits.
+    if (sup.requiresMechanisms?.length) {
+      const ci = makeSkillInstance(cd, 1, Math.max(1, admitted.size));
+      let slot = 0;
+      for (const g of admitted) ci.sockets[slot++] = g;
+      if (!supportMechanismsFit(sup, ci)) return false;
+    }
+    return true;
   });
   return served.length ? served : null;
 }

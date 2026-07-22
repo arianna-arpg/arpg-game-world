@@ -125,6 +125,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The Wildcraft disciplines (the jungle's arts, bottled) ----------------
   serrated_edge: {
     id: 'serrated_edge', name: 'Serrated Edge',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s edge is TOOTHED: hits bleed far more readily, and cut a little deeper besides.',
     color: '#a8563c', requiresTags: ['melee'],
     mods: [mod('apply_bleed', 'flat', 0.35), mod('damage', 'increased', 0.1)],
@@ -133,6 +134,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   envenomed_tips: {
     id: 'envenomed_tips', name: 'Envenomed Tips',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s projectiles fly DIPPED: hits poison far more readily, and the toxin outstays its welcome.',
     color: '#7ec850', requiresTags: ['projectile'],
     mods: [mod('apply_poison', 'flat', 0.3), mod('effectDuration', 'increased', 0.15)],
@@ -152,6 +154,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   smothering_spores: {
     id: 'smothering_spores', name: 'Smothering Spores',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s lingering work hangs THICKER: wider, longer, and laced with a poison that finds idle lungs.',
     color: '#a8d05a', requiresTags: ['duration'],
     mods: [mod('aoeRadius', 'increased', 0.15), mod('effectDuration', 'increased', 0.2), mod('apply_poison', 'flat', 0.15)],
@@ -162,6 +165,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The Unmaking graft pair (the war-wound's arts) -----------------------
   loose_thread: {
     id: 'loose_thread', name: 'Loose Thread',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill find the LOOSE THREAD: a 25% chance to set the victim unravelling — a compounding rot that spreads from the dead.',
     // attack|spell: the hit-capable gate (tag hygiene — the census flags a
     // universal applier as inert on every flask/banner/ward it would fit).
@@ -172,6 +176,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   entropic_bloom: {
     id: 'entropic_bloom', name: 'Entropic Bloom',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s lingering work comes apart at the seams: wider, longer, and everything inside it unravels a little.',
     color: '#5ee88a', requiresTags: ['duration'],
     mods: [mod('aoeRadius', 'increased', 0.12), mod('effectDuration', 'increased', 0.18), mod('apply_unravelling', 'flat', 0.15)],
@@ -182,6 +187,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The Symbiote grafts (the Caul arts' support pair) --------------------
   grasping_tendrils: {
     id: 'grasping_tendrils', name: 'Grasping Tendrils',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s edge grows BARBS of living cord: hits snare far more readily, and the grip squeezes a little extra hurt out of whatever it holds.',
     color: '#8a6ab0', requiresTags: ['melee'],
     mods: [mod('apply_ensnared', 'flat', 0.2), mod('damage', 'increased', 0.08)],
@@ -190,6 +196,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   parasitic_pact: {
     id: 'parasitic_pact', name: 'Parasitic Pact',
+    requiresMechanisms: ['strikes'],
     description: 'Socket a hungry passenger: every landed hit lets it SIP (a small heal, briefly rationed) — and it sharpens its host out of pure self-interest.',
     color: '#9a72c8', requiresTags: ['attack'],
     mods: [mod('proc_parasite_sip', 'flat', 1), mod('damage', 'increased', 0.06)],
@@ -274,6 +281,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   fortunes_favor: {
     id: 'fortunes_favor', name: "Fortune's Favor",
+    requiresMechanisms: ['strikes'],
     description: '25% of this skill\'s uses roll damage TWICE and keep the higher — the gambler\'s edge.',
     color: '#e8d44a',
     mods: [mod('luckyChance', 'flat', 0.25)],
@@ -282,6 +290,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   jinxing_touch: {
     id: 'jinxing_touch', name: 'Jinxing Touch',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill have a 20% chance to JINX the victim: their own damage rolls twice and keeps the lower for 5 seconds.',
     color: '#8a78a8',
     mods: [mod('apply_jinxed', 'flat', 0.2)],
@@ -306,6 +315,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   loaded_dice: {
     id: 'loaded_dice', name: 'Loaded Dice',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s damage dice WIDEN by 40% around the same average — jackpots jack higher, fizzles fizzle lower. Feeds anything that reads the top of the roll.',
     color: '#e8c04a',
     mods: [mod('damageSpread', 'flat', 0.4)],
@@ -314,6 +324,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   overload: {
     id: 'overload', name: 'Overload',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill that roll in the top 12% of their dice ARC — leaping to up to three nearby enemies at 50% damage. Wider dice and wider windows both feed it.',
     color: '#7af0ff', requiresTags: ['lightning'],
     mods: [mod('proc_overload_arc', 'flat', 1)],
@@ -354,6 +365,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // (the school-specific lane). One mechanism, two scopes: tag filters.
   umbral_power: {
     id: 'umbral_power', name: 'Umbral Power',
+    requiresMechanisms: ['strikes'],
     description: 'Adds 3 chaos damage to this skill, whatever it is — the universal lane.',
     color: '#b06bd4',
     mods: [mod('addedChaos', 'flat', 3)],
@@ -380,6 +392,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   tormentors_glee: {
     id: 'tormentors_glee', name: "Tormentor's Glee",
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill have a 25% chance to TORMENT (a necrotic gnaw that drags at the feet) — and the skill deals 25% increased damage to the tormented.',
     color: '#8a5ac8', requiresTags: ['chaos', 'curse'],
     mods: [mod('apply_torment', 'flat', 0.25), mod('damageVs_torment', 'increased', 0.25)],
@@ -398,6 +411,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The wildwood & carrion gifts (the bestiary expansion's gem lane) ------
   putrefaction: {
     id: 'putrefaction', name: 'Putrefaction',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill have a 20% chance to start the ROT (decay), and the skill deals 20% increased damage to the decaying — sickness begets appetite.',
     color: '#9ab83a', requiresTags: ['chaos'],
     mods: [mod('apply_decay', 'flat', 0.2), mod('damageVs_decay', 'increased', 0.2)],
@@ -408,6 +422,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // physical skill can build toward the statue, and profit from one.
   calcifying: {
     id: 'calcifying', name: 'Calcifying',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill settle WEIGHT into the victim: 10% chance to build petrifying, and the skill deals 15% increased damage to the petrified — stone remembers every blow.',
     color: '#9a948a', requiresTags: ['physical'],
     mods: [mod('apply_petrifying', 'flat', 0.1), mod('damageVs_petrified', 'increased', 0.15)],
@@ -423,6 +438,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // refracted mace tunes crystals to whichever color your build feeds.
   refraction: {
     id: 'refraction', name: 'Refraction',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills REFRACT: 10% of physical damage becomes each element, and the skill deals 12% increased elemental damage — every blow a spectrum.',
     color: '#cfe8ff',
     // The socket gate IS the no-op audit (ANY-of): only skills with
@@ -446,6 +462,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   barbed_snare: {
     id: 'barbed_snare', name: 'Barbed Snare',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s projectiles trail hooked lines: 8% chance to ROOT the victim outright (movement skills forbidden while held).',
     color: '#8a9a4a', requiresTags: ['projectile'],
     mods: [mod('apply_rooted', 'flat', 0.08)],
@@ -462,6 +479,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   wound_worrier: {
     id: 'wound_worrier', name: 'Wound-Worrier',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill have a 15% chance to open a HEMORRHAGE — and the skill deals 20% increased damage to the hemorrhaging. Worry the wound; reopen it for the pop.',
     color: '#e04858', requiresTags: ['attack', 'physical'],
     mods: [mod('apply_hemorrhage', 'flat', 0.15), mod('damageVs_hemorrhage', 'increased', 0.2)],
@@ -473,7 +491,11 @@ export const SUPPORTS: Record<string, SupportDef> = {
   sanguine_feast: {
     id: 'sanguine_feast', name: 'Sanguine Feast',
     description: 'Bleeds this skill inflicts LEECH: 5% of their tick damage flows back to you as life.',
-    color: '#b03030', requiresTags: ['physical', 'attack'],
+    // The mechanism IS the gate (no tag gate — 2026-07-21): any host that
+    // BLEEDS fits, from its own effects or a bleed-chance gem beside it —
+    // and the day an ailment-conversion turns a poison host into a
+    // bleeder, the door opens by itself (the live-instance read).
+    color: '#b03030', requiresMechanisms: ['affliction:bleed'],
     mods: [mod('dotLeech_bleed', 'flat', 0.05)],
     perLevel: [mod('dotLeech_bleed', 'flat', 0.01)],
     weight: 5,
@@ -758,6 +780,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The status-puppeteer gems ------------------------------------------------
   carrier_strain: {
     id: 'carrier_strain', name: 'Carrier Strain',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill have a 30% chance to CARRY one random affliction off the victim to its nearest untouched neighbor — three-quarter strength, clocks still running. Every swing a vector.',
     color: '#a0c878',
     spreadOnHit: { chance: 0.3, radius: 200, strengthScale: 0.75, duration: 'remaining' },
@@ -767,6 +790,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   final_bloom: {
     id: 'final_bloom', name: 'Final Bloom',
+    requiresMechanisms: ['affliction'],
     description: 'DoTs this skill lays have a 60% chance to PROPAGATE: when the afflicted die still carrying them, the rot jumps to their nearby kin — and keeps jumping, death after death.',
     color: '#78c878',
     mods: [mod('dotPropagates', 'flat', 0.6)],
@@ -1056,6 +1080,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   archons_wellspring: {
     id: 'archons_wellspring', name: "Archon's Wellspring",
+    requiresMechanisms: ['strikes'],
     description: 'This skill gains flat damage per point of your MAXIMUM mana.',
     color: '#4a78d8', requiresTags: ['spell'],
     mods: [mod('maxManaDamage', 'flat', 0.04)],
@@ -1092,6 +1117,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   hallowed_flames: {
     id: 'hallowed_flames', name: 'Hallowed Flames',
+    requiresMechanisms: ['strikes'],
     description: 'Melee hits with this skill have a 30% chance to SCORCH — a short searing burn, refreshed on hit, independent of ignite.',
     color: '#ffb056', requiresTags: ['melee'],
     mods: [mod('apply_scorch', 'flat', 0.3, ['melee'])],
@@ -1160,6 +1186,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The chaos & doom suite -----------------------------------------------------
   withering_agony: {
     id: 'withering_agony', name: 'Withering Agony',
+    requiresMechanisms: ['strikes'],
     description: 'Chaos hits with this skill have a 40% chance to inflict Withering Agony — a rot that opens as a whisper and ENDS as a scream (ramping damage over time).',
     color: '#8a5ad8', requiresTags: ['chaos'],
     mods: [mod('apply_wither_agony', 'flat', 0.4, ['chaos'])],
@@ -1168,6 +1195,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   creeping_doom: {
     id: 'creeping_doom', name: 'Creeping Doom',
+    requiresMechanisms: ['strikes'],
     description: 'Chaos hits with this skill have a 15% chance to apply a weak DOOM — the armed keg pumps with repetition and culls at lethal.',
     color: '#7a48c8', requiresTags: ['chaos'],
     mods: [mod('apply_doom', 'flat', 0.15, ['chaos'])],
@@ -1176,6 +1204,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   lingering_doom: {
     id: 'lingering_doom', name: 'Lingering Doom',
+    requiresMechanisms: ['status:doom'],
     description: 'Your Dooms also TICK: 35% of the armed payload burns as chaos damage over time while the fuse runs — and the keg still culls at lethal.',
     color: '#a848a8', requiresTags: ['chaos'],
     mods: [mod('doomDot', 'flat', 0.35)],
@@ -1188,6 +1217,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // are distinct dice, by construction).
   wrathful_edge: {
     id: 'wrathful_edge', name: 'Wrathful Edge',
+    requiresMechanisms: ['strikes'],
     description: 'Critical hits with this skill grant a Rage charge (50% chance).',
     color: '#e04030', requiresTags: ['attack'],
     mods: [mod('proc_crimson_edge', 'flat', 0.5)],
@@ -1224,6 +1254,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // spender graft can burn the bank for its payoff. Front-line summoning.
   communion_of_flesh: {
     id: 'communion_of_flesh', name: 'Communion of Flesh',
+    requiresMechanisms: ['strikes'],
     description: 'This skill\'s minions bank a Communion charge on you when their blows land (35% chance) — each charge empowers you AND the flock.',
     color: '#b06bd4', requiresTags: ['summon'],
     mods: [mod('proc_communion_tithe', 'flat', 0.35)],
@@ -1262,6 +1293,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // for their owner (proc minionCarry — the minion-support seam).
   summon_phantasm: {
     id: 'summon_phantasm', name: 'Summon Phantasm',
+    requiresMechanisms: ['strikes'],
     description: 'Hits with this skill summon a brief phantasm (~10/minute, up to 5). In a summon skill, your minions\' hits conjure them for you.',
     color: '#9ad8e8',
     mods: [mod('proc_summon_phantasm', 'flat', 1)],
@@ -1275,6 +1307,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // prey at a fraction, so the gem still matters when nothing dies.
   sainted_ash: {
     id: 'sainted_ash', name: 'Sainted Ash',
+    requiresMechanisms: ['strikes'],
     description: 'Kills with this skill bloom after a beat — healing allies and burning enemies in the circle. Also rolls on hits against rare and boss enemies, and a summoned flock\'s kills bloom for the shepherd.',
     color: '#ffe8b0',
     mods: [mod('proc_sainted_ash', 'flat', 0.4)],
@@ -1305,6 +1338,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // so only the socketed skill hunts the poisoned.
   opportunist: {
     id: 'opportunist', name: 'Opportunist',
+    requiresMechanisms: ['strikes'],
     description: 'This skill deals 3% increased damage per stack of poison on the target.',
     color: '#7ec850',
     mods: [mod('damageVs_poison', 'flat', 0.03)],
@@ -1478,6 +1512,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   powderkeg: {
     id: 'powderkeg', name: 'Powderkeg',
+    requiresMechanisms: ['affliction:burn'],
     description: 'Ignites applied by this skill deal NO damage over time — instead the victim DETONATES for the burn\'s full payload when it expires, searing everything beside them.',
     color: '#ff5a3a', requiresTags: ['fire'],
     mods: [mod('igniteToBomb', 'flat', 1)],
@@ -1541,6 +1576,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   desperation: {
     id: 'desperation', name: 'Desperation',
+    requiresMechanisms: ['strikes'],
     description: '40% MORE damage while on low life. Glass, meet cannon.',
     color: '#d04848', requiresTags: ['attack', 'spell'],
     mods: [mod('damage', 'more', 0.4, undefined, 'lowLife')],
@@ -1559,6 +1595,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   untouched_might: {
     id: 'untouched_might', name: 'Untouched Might',
+    requiresMechanisms: ['strikes'],
     description: '25% MORE damage while on full life. Pairs with everything that keeps the hits off your skin.',
     color: '#e8c848', requiresTags: ['attack', 'spell'],
     mods: [mod('damage', 'more', 0.25, undefined, 'fullLife')],
@@ -1586,6 +1623,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   crimson_harvest: {
     id: 'crimson_harvest', name: 'Crimson Harvest',
+    requiresMechanisms: ['strikes'],
     description: 'Hits have an 8% chance to knock loose a life orb — run it over to drink it.',
     color: '#d04848', requiresTags: ['attack', 'spell'],
     mods: [mod('orbOnHit_life', 'flat', 0.08)],
@@ -1595,6 +1633,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   azure_harvest: {
     id: 'azure_harvest', name: 'Azure Harvest',
+    requiresMechanisms: ['strikes'],
     description: 'Hits have an 8% chance to knock loose a mana orb.',
     color: '#4a78d8', requiresTags: ['attack', 'spell'],
     mods: [mod('orbOnHit_mana', 'flat', 0.08)],
@@ -1604,6 +1643,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   lambent_harvest: {
     id: 'lambent_harvest', name: 'Lambent Harvest',
+    requiresMechanisms: ['strikes'],
     description: 'Hits have an 8% chance to knock loose an energy shield orb — picking one up also kicks off your recharge.',
     color: '#5ad8d8', requiresTags: ['attack', 'spell'],
     mods: [mod('orbOnHit_es', 'flat', 0.08)],
@@ -1619,6 +1659,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // trading a support slot for a second skill's worth of generation.
   kindled_wake: {
     id: 'kindled_wake', name: 'Kindled Wake',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skill keeps the wake: its hits have a 6% chance — kills a 25% chance — to shake a Wakeflame orb loose.',
     color: '#ffd98a', requiresTags: ['attack', 'spell'],
     mods: [mod('orbOnHit_wakeflame', 'flat', 0.06), mod('orbOnKill_wakeflame', 'flat', 0.25)],
@@ -1628,6 +1669,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   victors_tempo: {
     id: 'victors_tempo', name: "Victor's Tempo",
+    requiresMechanisms: ['strikes'],
     description: 'Kills with the supported skill kindle your tempo: 60% chance to gain a Frenzy charge (up to 3) — a Reckoning that feeds your speed, a nova that quickens your feet. Socketed in a summon, the court\'s kills kindle their keeper.',
     color: '#8ae06a', requiresTags: ['attack', 'spell'],
     mods: [],
@@ -1638,6 +1680,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   abundant_harvest: {
     id: 'abundant_harvest', name: 'Abundant Harvest',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skill sheds RICHER: 30% increased orb shed chance of every kind — and where no shed exists at all, the harvest UNLOCKS it: kills gain a small base chance to shed life and mana orbs (grown by shed passives and gear, never by this gem\'s own bonus).',
     color: '#c8e87a', requiresTags: ['attack', 'spell'],
     // The mechanism unlock (orbShedGraft): a LOW floor by design — other
@@ -1828,6 +1871,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   vampiric: {
     id: 'vampiric', name: 'Vampiric Touch',
+    requiresMechanisms: ['strikes'],
     description: '2% of damage leeched as life.',
     color: '#c04060',
     mods: [mod('lifeLeech', 'flat', 0.02)],
@@ -1837,6 +1881,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   precision: {
     id: 'precision', name: 'Deadly Precision',
+    requiresMechanisms: ['strikes'],
     description: '+6% critical strike chance, +15% critical strike multiplier.',
     color: '#ffd24a',
     mods: [
@@ -1875,6 +1920,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   brutal_strikes: {
     id: 'brutal_strikes', name: 'Brutal Strikes',
+    requiresMechanisms: ['strikes'],
     description: '25% chance for melee hits to trigger Brutal Strike — an extra hit at 60% damage.',
     color: '#ff8a4a', requiresTags: ['melee'],
     mods: [mod('proc_brutal_strike', 'flat', 0.25)],
@@ -2060,6 +2106,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   corpsefire: {
     id: 'corpsefire', name: 'Corpsefire',
+    requiresMechanisms: ['strikes'],
     description: '50% chance for kills to trigger Corpsefire — the corpse erupts at 80% damage. Also rolls on plain hits against rare and boss enemies, and a summoned court\'s kills erupt for their keeper.',
     color: '#ff5a2a',
     mods: [mod('proc_corpsefire', 'flat', 0.5)],
@@ -2203,6 +2250,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // so nothing here can go matrix-INERT on a fitting host.
   sunbaked_edge: {
     id: 'sunbaked_edge', name: 'Sunbaked Edge',
+    requiresMechanisms: ['strikes'],
     description: 'The skill fights on the desert\'s side: hits BAKE their victims (sunscorch — the fire-res erosion the noon sun charges), and the already-baked take more from it.',
     color: '#ffb64a', requiresTags: ['fire'],
     mods: [mod('apply_sunscorched', 'flat', 0.3), mod('damageVs_sunscorched', 'increased', 0.2)],
@@ -2211,6 +2259,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   noonglass: {
     id: 'noonglass', name: 'Noonglass',
+    requiresMechanisms: ['strikes'],
     description: 'Focus the skill through a lens of pan-glass: it burns a shade harder, and part of its heat arrives as IGNITION.',
     color: '#ff8a3a', requiresTags: ['fire'],
     mods: [mod('apply_ignite', 'flat', 0.25), mod('damage', 'increased', 0.08)],
@@ -2241,6 +2290,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   updraft: {
     id: 'updraft', name: 'Updraft',
+    requiresMechanisms: ['strikes'],
     description: 'Every blow carries LIFT: struck bodies lose their footing to a rising shove (winded), and your follow-through hits the staggered harder. On shifting ground, a body with no footing is halfway to falling.',
     color: '#cfe4f0', requiresTags: ['attack'],
     mods: [
@@ -2848,6 +2898,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   turbulence: {
     id: 'turbulence', name: 'Turbulence',
+    requiresMechanisms: ['strikes'],
     description: 'Your knockbacks BUFFET — every shove goes a random way, battering enemies around inside your storms instead of pushing them out of reach.',
     color: '#b8d8c8',
     mods: [
@@ -3101,6 +3152,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   suppuration: {
     id: 'suppuration', name: 'Suppuration',
+    requiresMechanisms: ['status:stacking'],
     description: 'Stacking ailments you apply hold 2 additional stacks — poisons past eight, wounds past five, chills past the freeze.',
     color: '#9ac86a',
     mods: [mod('ailmentStacks', 'flat', 2)],
@@ -3131,6 +3183,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   ignite_chance: {
     id: 'ignite_chance', name: 'Chance to Ignite',
+    requiresMechanisms: ['strikes'],
     description: '20% chance for hits to IGNITE — the burn feeds on the hit\'s damage, whatever its element.',
     color: '#ff7a2a',
     mods: [mod('apply_burn', 'flat', 0.2)],
@@ -3140,6 +3193,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   bleed_chance: {
     id: 'bleed_chance', name: 'Chance to Bleed',
+    requiresMechanisms: ['strikes'],
     description: '25% chance for hits to open a stacking BLEED, fed by the hit\'s damage.',
     color: '#b03030',
     mods: [mod('apply_bleed', 'flat', 0.25)],
@@ -3149,6 +3203,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   poison_chance: {
     id: 'poison_chance', name: 'Chance to Poison',
+    requiresMechanisms: ['strikes'],
     description: '25% chance for hits to inject a stacking POISON, fed by the hit\'s damage.',
     color: '#7ec850',
     mods: [mod('apply_poison', 'flat', 0.25)],
@@ -3158,6 +3213,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   chill_chance: {
     id: 'chill_chance', name: 'Chance to Chill',
+    requiresMechanisms: ['strikes'],
     description: '25% chance for hits to CHILL — stacks build toward the freeze like any other chill.',
     color: '#7ad4ff',
     mods: [mod('apply_chill', 'flat', 0.25)],
@@ -3167,6 +3223,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   shock_chance: {
     id: 'shock_chance', name: 'Chance to Shock',
+    requiresMechanisms: ['strikes'],
     description: '20% chance for hits to SHOCK, amplifying every hit that follows.',
     color: '#ffe14a',
     mods: [mod('apply_shock', 'flat', 0.2)],
@@ -3176,6 +3233,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   stun_chance: {
     id: 'stun_chance', name: 'Chance to Stun',
+    requiresMechanisms: ['strikes'],
     description: '12% chance for hits to STUN outright. Hard control comes rare.',
     color: '#cccccc',
     mods: [mod('apply_stun', 'flat', 0.12)],
@@ -3185,6 +3243,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   freeze_chance: {
     id: 'freeze_chance', name: 'Chance to Freeze',
+    requiresMechanisms: ['strikes'],
     description: '6% chance for hits to FREEZE solid — no buildup, straight to ice. Rare, and it feels it.',
     color: '#d8f4ff',
     mods: [mod('apply_frozen', 'flat', 0.06)],
@@ -3194,6 +3253,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   provocation: {
     id: 'provocation', name: 'Provocation',
+    requiresMechanisms: ['strikes'],
     description: '35% chance for hits to TAUNT: the struck thing forgets its plans — its blade turns to YOU, and everything it swings at anyone ELSE lands soft. The tank\'s opening argument; the un-cheesable refuse the turn but still pull their punches.',
     color: '#e0763a',
     mods: [mod('apply_taunted', 'flat', 0.35)],
@@ -3206,6 +3266,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // REPOSITIONS: build stacks, break nerve, fight the rout.
   unnerving: {
     id: 'unnerving', name: 'Unnerving',
+    requiresMechanisms: ['strikes'],
     description: '30% chance for hits to build HARROWING — trembling hands, backward feet — toward the broken-nerve rout. Your hits land 12% harder per stack already worn.',
     color: '#b8a4d8',
     mods: [mod('apply_harrowing', 'flat', 0.3), mod('damageVs_harrowing', 'flat', 0.12)],
@@ -3224,6 +3285,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   potency: {
     id: 'potency', name: 'Potency',
+    requiresMechanisms: ['status:power'],
     description: 'Ailments you apply are 30% stronger — hit-fed and baseline alike, skill-native and chance-granted alike. The crank.',
     color: '#c88ad0',
     mods: [mod('statusMagnitude', 'increased', 0.3)],
@@ -3233,6 +3295,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   conflagrant: {
     id: 'conflagrant', name: 'Conflagrant',
+    requiresMechanisms: ['status:power'],
     description: '35% MORE fire-ailment magnitude — potency invested in ONE family, multiplying past every increase.',
     color: '#ff6a3a', requiresTags: ['fire'],
     mods: [mod('statusMagnitude', 'more', 0.35, ['fire'])],
@@ -3244,6 +3307,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   flameforged: {
     id: 'flameforged', name: 'Flameforged',
+    requiresMechanisms: ['strikes'],
     description: '50% of the skill\'s physical damage is dealt as fire instead — fully fire at maximum level. Conversion stats also work from passives.',
     color: '#e87838', requiresTags: ['physical'],
     mods: [mod('convert_physical_fire', 'flat', 0.5)],
@@ -3342,6 +3406,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   virulence: {
     id: 'virulence', name: 'Virulence',
+    requiresMechanisms: ['affliction'],
     description: 'Damage-over-time effects applied by this skill propagate to nearby enemies when their victim dies — chaining across deaths.',
     color: '#78c878',
     mods: [mod('dotPropagates', 'override', 1)],
@@ -3383,6 +3448,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   candied_scent: {
     id: 'candied_scent', name: 'Candied Scent',
+    requiresMechanisms: ['strikes'],
     description: 'The smell turns SWEET enough to argue with: hits from this skill have a 25% chance to TAUNT the victim onto you — appetite, redirected — and its effects linger a little longer.',
     color: '#e8cf7a', requiresTags: ['duration'],
     mods: [
@@ -3394,6 +3460,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   startling_reek: {
     id: 'startling_reek', name: 'Startling Reek',
+    requiresMechanisms: ['strikes'],
     description: 'A sour edge under the blow: hits from this skill have a 20% chance to BOLT the victim outright (the rout fabric takes it from there), at the price of hitting 15% less hard.',
     color: '#d8b84a', requiresTags: ['attack', 'spell'],
     mods: [
@@ -3415,6 +3482,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   malpractice: {
     id: 'malpractice', name: 'Malpractice',
+    requiresMechanisms: ['affliction'],
     description: 'Damage-over-time effects applied by this skill rupture at the end of their duration, dealing 80% of their total damage at once.',
     color: '#a85878',
     mods: [mod('dotRupture', 'flat', 0.8)],
@@ -3689,6 +3757,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   bloodletters_rhythm: {
     id: 'bloodletters_rhythm', name: "Bloodletter's Rhythm",
+    requiresMechanisms: ['strikes'],
     description: 'Wounds keep the beat: the supported skill gains bleed chance, and every bleed it APPLIES has a chance to bank a Fury charge.',
     color: '#c03030',
     requiresTags: ['attack'],
@@ -3699,6 +3768,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   exposure: {
     id: 'exposure', name: 'Exposure',
+    requiresMechanisms: ['strikes'],
     description: '30% chance for this skill\'s hits to leave the target VULNERABLE (stacking: 8% more damage taken per stack, to five) — the opener half of the Execution economy. Minion skills pass it to the horde.',
     color: '#d878b0',
     mods: [mod('apply_vulnerable', 'flat', 0.3)],
@@ -3788,6 +3858,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   metronome: {
     id: 'metronome', name: 'Metronome',
+    requiresMechanisms: ['strikes'],
     description: 'Every landed hit builds TEMPO (attack and cast speed, to 8 stacks) — and ONE hit taken wipes the whole spin. Glass rhythm.',
     color: '#7ae0c8',
     requiresTags: ['attack', 'spell'],
@@ -4468,6 +4539,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // knives back through their own kits.
   concussive_blows: {
     id: 'concussive_blows', name: 'Concussive Blows',
+    requiresMechanisms: ['strikes'],
     description: 'The bar-breaker: 15% less damage, but DOUBLE poise damage — and the break you earn is worth more: Sundered lasts 50% longer and your hits land 20% harder on the sundered. Crack the stance, then spend the window.',
     color: '#c8a058',
     mods: [
@@ -4481,6 +4553,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   flowbreaker: {
     id: 'flowbreaker', name: 'Flowbreaker',
+    requiresMechanisms: ['strikes'],
     description: 'The anti-dodge: hits land TOO TRUE TO READ — half the target\'s insight slip is denied outright, accuracy climbs 25%, and 35% of hits leave the target REELING (insight stops replenishing). The runner\'s rhythm, taken away.',
     color: '#c8a8e8',
     mods: [
@@ -4493,6 +4566,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   voidrend: {
     id: 'voidrend', name: 'Voidrend',
+    requiresMechanisms: ['strikes'],
     description: 'The ward-eater: every point the target\'s energy shield soaks is SHREDDED for 1.8 — the pool strips fast and cheap — and 30% of hits leave it VOIDED (recharge stops cold). Made for the glass and the glimmering.',
     color: '#9a8ae8',
     mods: [
@@ -4525,6 +4599,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The EMPYREAN gems (the Aetherial's arts, rentable) --------------------
   lightbrand: {
     id: 'lightbrand', name: 'Lightbrand',
+    requiresMechanisms: ['strikes'],
     description: 'Hits BRAND with judgement: 10% chance to shock — and every stack of shock on the victim feeds THIS skill 7% increased damage. Not the storm\'s scatter; the exploiter\'s ledger.',
     color: '#ffe9a8', requiresTags: ['lightning'],
     mods: [
@@ -4561,6 +4636,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The CIRRUS gem (the high air, rentable) -------------------------------
   rarefy: {
     id: 'rarefy', name: 'Rarefy',
+    requiresMechanisms: ['strikes'],
     description: 'The skill is worked in HIGH THIN AIR: 50% of its physical damage arrives as cold instead — fully cold at maximum level. The Flameforged conversion\'s pale sibling; the mountain\'s answer to the forge.',
     color: '#cfe8f8', requiresTags: ['physical'],
     mods: [mod('convert_physical_cold', 'flat', 0.5)],
@@ -4573,6 +4649,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // non-hitting-host INERT tails in the no-op matrix). ----------------------
   pallid_touch: {
     id: 'pallid_touch', name: 'Pallid Touch',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills turn heads LIGHT: 35% of hits build faintness. Pale the room and let the ladder work — at the cap they SWOON (a white-out drag, never a stun), and Syncope lands harder the paler they get.',
     color: '#d8ccd8', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_faintness', 'flat', 0.35)],
@@ -4581,6 +4658,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   sickening: {
     id: 'sickening', name: 'Sickening',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills turn STOMACHS: 35% of hits build queasy. Five deep and the target is RETCHING — begun attacks and spells keep fizzling. The channel-breaker you apply instead of time.',
     color: '#a8b86a', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_queasy', 'flat', 0.35)],
@@ -4589,6 +4667,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   unblinking: {
     id: 'unblinking', name: 'Unblinking',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills WATCH: 30% of hits build beheld, and damage against the SEEN (the ladder\'s cap — marked meat) is amplified. The Ocular\'s regard, socketed: keep looking and the mark writes itself.',
     color: '#d8b04a', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_beheld', 'flat', 0.3), mod('damageVs_seen', 'flat', 0.12)],
@@ -4600,6 +4679,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // flesh-country siblings above, and both work on ANY hitting kit.
   maddering: {
     id: 'maddering', name: 'Maddering',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills ring in the INNER EAR: 30% of hits build disoriented. Five deep and they turn WIDDERSHINS — every step contrary to its own brain — and a turned enemy is a HERDED one: ring them off ledges, out of formation, into the ground you laid.',
     color: '#9ad8d0', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_disoriented', 'flat', 0.3)],
@@ -4608,6 +4688,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   addling: {
     id: 'addling', name: 'Addling',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills CROSS THE WIRES: 20% of hits leave the target addled — its casts may fire the wrong button entirely, burning cooldowns at your convenience. A control economy, not a damage one: what a boss wastes, you did not have to survive.',
     color: '#e0b464', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_addled', 'flat', 0.2)],
@@ -4620,6 +4701,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // beheld precedents: zero new machinery, alive on ANY hitting kit. ---
   aureate_writ: {
     id: 'aureate_writ', name: 'Aureate Writ',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills READ THE FLAW ALOUD: 22% of hits leave the victim EXPOSED — a weak spot painted on the health bar, 40% more through the window — and the bearer prosecutes what it publishes: hits land 12% harder against the exposed. The tribune\'s whole docket in one stone: paint the spot, then hit it.',
     color: '#f0d890', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_exposed', 'flat', 0.22), mod('damageVs_exposed', 'flat', 0.12)],
@@ -4628,6 +4710,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   sanctal_cautery: {
     id: 'sanctal_cautery', name: 'Sanctal Cautery',
+    requiresMechanisms: ['strikes'],
     description: 'Supported skills close the ledger AND the wound: 25% of hits SEAR — gilt fire cauterizes, and for its span every heal the victim drinks is HALVED (regen, leech, mending bonds alike). The kata\'s answer to whatever refuses to stay judged: menders, drinkers, the self-repairing.',
     color: '#f8d8a0', requiresTags: ['attack', 'spell'],
     mods: [mod('apply_sear', 'flat', 0.25)],

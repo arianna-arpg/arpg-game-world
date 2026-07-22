@@ -31,6 +31,15 @@ export interface StatusDef {
   /** Scale `mods` by the CURRENT stack count (Vulnerable: 8% per stack).
    *  Opt-in — chill keeps its flat slow while its stacks build the freeze. */
   modsPerStack?: true;
+  /** THE BINARY EXEMPTION (the ailment audit, 2026-07-21): this status is
+   *  a pure state the POWER lane cannot deepen — you cannot taunt HARDER,
+   *  silence LOUDER, or invert a walk twice. statusMagnitude leaves it
+   *  untouched and the 'status:power' mechanism skips it, so potency-
+   *  family gems refuse hosts whose only applications are exempt. Marked
+   *  per-status, never per-family: an ailment that GROWS a scalable knob
+   *  (a chance, a buildup, folded mods) drops the mark and rejoins the
+   *  lane. */
+  powerInert?: true;
   /** If the victim dies while afflicted, the status spreads to its nearby
    *  allies (Contagion) — chains across multiple deaths. */
   propagateOnDeath?: boolean;
@@ -474,6 +483,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     // stasis; the engine takes no side). hardCC so break-bars, CC counters
     // and stun-family interactions all treat it as the lockdown it is.
     label: 'Stasis', color: '#a8ecf0', duration: 1.2,
+    powerInert: true,
     timeScale: 0, hardCC: true,
   },
   temporal_drag: {
@@ -481,6 +491,9 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     // DoTs and feet alike), distinct from chill's move-speed bite. Its own
     // duration burns on unbent seconds (see StatusDef.timeScale).
     label: 'Temporal Drag', color: '#7ea8c8', duration: 3,
+    // timeScale COULD deepen with power one day — the timeflow wiring is
+    // its own pass; binary until then.
+    powerInert: true,
     timeScale: 0.5,
   },
   // THE PETRIFY LADDER (the Karst Country's gaze): stone creeps up the body —
@@ -542,10 +555,12 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   silence: {
     label: 'Silenced', color: '#b8b8e8', duration: 3,
     forbidsTags: ['spell'],
+    powerInert: true,
   },
   disarm: {
     label: 'Disarmed', color: '#e8c8a0', duration: 3,
     forbidsTags: ['attack'],
+    powerInert: true,
   },
   rooted: {
     label: 'Rooted', color: '#8a9a4a', duration: 2,
@@ -701,6 +716,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   taunted: {
     label: 'Taunted', color: '#e0763a', duration: 3,
     refreshCaster: true,
+    powerInert: true,
   },
   // PREY-MARKED (Scentcraft): the smell of the eaten, dashed on. The scent
   // law (smellsOfPrey → World.isPrey) turns every hunter on the bearer;
@@ -723,6 +739,9 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   exposed: {
     label: 'Exposed', color: '#f0c8d8', duration: 8,
     weakSpot: { size: 0.18, gap: 0.04, bonus: 0.4 },
+    // The weak spot could plausibly WIDEN with power one day — until that
+    // read exists, the state is binary.
+    powerInert: true,
   },
   // Cauterized wounds (Eruption): incoming healing is HALVED while it
   // burns — regen, leech, restores, mending bonds alike (healTaken gates
@@ -807,6 +826,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   widdershins: {
     label: 'Widdershins', color: '#5ecec0', duration: 3.5,
     invertMove: true,
+    powerInert: true,
   },
   /** The direct hex on the casting hand (StatusDef.scrambleChance —
    *  World.useSkill is the one seam): pressed buttons may fire the kit's
@@ -1133,6 +1153,9 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
 
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,
+    // The payload is baked at application (a rupture) — power reaches it
+    // THERE, through the applier's magnitude; the marker itself is binary.
+    powerInert: true,
     // No DoT — the payload arrives all at once when the timer runs out
     // (the skill bakes a rupture at application).
   },
@@ -1152,6 +1175,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // answers first (kill() fires armed ruptures).
   doombrand: {
     label: 'Doombrand', color: '#a848a8', duration: 4,
+    powerInert: true,
   },
 
   // POWDER CHARGE (#1): an armed keg RIDING THE TARGET — it moves with
@@ -1159,6 +1183,7 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   // payloads add on the fixed fuse), and it blows where they stand.
   powder_charge: {
     label: 'Powder Charge', color: '#e8a24a', duration: 2.2,
+    powerInert: true,
     element: 'fire',
   },
 

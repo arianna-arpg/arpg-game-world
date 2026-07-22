@@ -44,6 +44,16 @@ export const defCarriesStat = (def: SkillDef, stat: string): boolean =>
   || (def.leveling?.perLevel ?? []).some(m => m.stat === stat)
   || (def.thresholds ?? []).some(t => t.mods.some(m => m.stat === stat));
 
+// THE HIT-RIDER FAMILIES (apply_* chances, hit/kill procs, orbOnHit_*,
+// added damage, crit, leech, knockback) read at ONE site — resolveHit —
+// and are gated by the 'strikes' MECHANISM (SUPPORT_MECHANISMS, the
+// structural floor: never-hitting hosts refuse honestly, and the refusal
+// self-lifts when any strike-granting graft stands a hit up). They carry
+// no rows here BECAUSE the floor already keeps their fit census honest;
+// the PROMOTION CATALOG (each family's read-site extension — aura-carried
+// afflictions pulsing their socketed chances, mark-counted hits crediting
+// the curse, detonator mods riding the detonated packet) lives with the
+// mechanism's doc and lands family by family as designed features.
 export const GRAFT_READ_SITES: GraftReadRow[] = [
   {
     kind: 'stat', key: 'aoeShape',

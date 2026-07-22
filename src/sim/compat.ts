@@ -40,7 +40,7 @@ import { SUPPORTS } from '../data/supports';
 import { PROCS } from '../data/procs';
 import { unreadPayloadRows } from '../data/graftReadSites';
 import {
-  SUPPORT_MECHANISMS, SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel,
+  SUPPORT_PAYLOAD_FIELDS, crewSkillsServed, effectiveSkillLevel, mechanismHolds,
   makeSkillInstance, minionSeatBoundFields, summonCrewOf, supportFitsInst,
   supportRidesMinions,
   type SkillDef, type SupportDef,
@@ -165,6 +165,12 @@ export const pairKey = (skill: string, support: string): string => `${skill}|${s
 export function suspectEvidence(def: SkillDef, sup: SupportDef): { tag: string; evidence: string }[] | undefined {
   const suspect: { tag: string; evidence: string }[] = [];
   for (const t of sup.requiresTags ?? []) {
+    // Only ABSENT tags can be hygiene suspects — a pair whose tags all
+    // stand was refused by a MECHANISM (a deliberate structural gate,
+    // the strikes floor et al.), and there is no tag to teach. (Latent
+    // until the mechanism gates grew: tag-only refusals always had an
+    // absent tag by construction.)
+    if (def.tags.includes(t)) continue;
     const ev = MECHANIC_EVIDENCE.find(e => e.tag === t && e.has(def));
     if (ev) suspect.push({ tag: t, evidence: ev.evidence });
   }
@@ -1192,7 +1198,9 @@ export function explainFit(def: SkillDef, sup: SupportDef): FitExplain {
   const openGate = !(sup.requiresTags?.length);
   const mechanisms = (sup.requiresMechanisms ?? []).map(m => ({
     mechanism: m,
-    present: SUPPORT_MECHANISMS[m] ? SUPPORT_MECHANISMS[m](inst) : true,
+    // The parameterized resolver ('affliction:bleed', 'status:power') —
+    // the same truth the socket gate runs.
+    present: mechanismHolds(m, inst),
   }));
 
   const crewOf = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
