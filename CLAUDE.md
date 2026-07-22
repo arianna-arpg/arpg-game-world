@@ -308,7 +308,14 @@ changes.
   and self-lifting — never a bespoke list):
   `SupportDef.requiresMechanisms` + the `SUPPORT_MECHANISMS` registry
   (engine/skills.ts) gate sockets on live-instance predicates
-  ('cooldown' from any source, standing 'engagement', 'affliction')
+  ('cooldown' from any source, standing 'engagement', 'affliction',
+  the 71-gem 'strikes' FLOOR — hit-rider gems refuse never-hitting
+  hosts, self-lifting via STRIKE_GRANTING_GRAFTS and the CREW HOP
+  (crewSkillsServed runs the gate per crew skill wearing the riders) —
+  and the PARAMETERIZED forms via `mechanismHolds`: 'affliction:bleed'
+  names the wound, 'status:power'/'status:stacking'/'status:<id>' name
+  the application; `StatusDef.powerInert` = the binary exemption, and
+  interruptChance/scrambleChance scale by application power)
   that COMPOSE — Austerity's levy opens Alacrity, Spirit Totem's
   grantsTags opens Shatterrite, an apply_ gem opens Septic Bargain,
   each refusal returning when its enabler leaves. MECHANISM GRANTS
@@ -385,6 +392,19 @@ changes.
   strip law) — incl. via `stairwell_hollow` pockets INSIDE building mass.
   Dials in `SETTLED_CFG`, docs in `docs/engine/settled.md`, probe
   `balance/probe_settled.ts`.
+  THE CATHEDRAL OF THE HIGHEST (the Aetherial's crown — the divinity seat):
+  the `cathedral` STRUCTURE GENERATOR (engine/structureGen.ts) rolls whole
+  cruciform basilicas — nave/transepts/choir/apse + chapels/cloister, its
+  chapter house a NESTED 'compound' generation (a structure generator inside
+  a structure generator) — raised by the `cathedral` zone recipe on a cloud
+  foundation with a contact-melt frail fringe, span-held prayer isles, a
+  `glass_floor` WALKABLE-WINDOW promenade (the cloudsea under your feet) and
+  a statue-flanked processional; `aether_cathedral` stages `{from:.86}` atop
+  the bastion country and its GREAT WEST DOORS stamp the
+  'cathedral_door_opened' gateway ledger (the Aureole vault rows read it).
+  THE CITY CLIMBS: `gallery_hollow` → `basilica_stair` → three minted
+  gallery floors (aether_seraphal hollows; the townhouse lane in marble).
+  Docs `docs/engine/cathedral.md`; probe `balance/probe_cathedral.ts`.
   THE FORECHART (`world/forechart.ts` + the World sweep — the world charted
   AHEAD of the walker): a budgeted background sweep keeps a VEILED HALO of
   fully-minted zones around the player (the real chartFrontier path,
