@@ -160,7 +160,11 @@ const bolt = {
   MONSTERS.probe_plywall = {
     id: 'probe_plywall', name: 'Probe Plywall', color: '#fff', shape: 'circle',
     radius: 12, base: { life: 100, moveSpeed: 0, mana: 0 }, skills: [], xp: 0,
-    plies: { count: 3 },
+    // Plies sized past the window's worst-case beat count: the tide's beat
+    // stagger is a seeded-stream phase, and a 3-ply wall could legally be
+    // SPENT by a 4th beat inside the 2s window — after which the dual pool
+    // bites LIFE by design and the never-moves pin read as a defect.
+    plies: { count: 8 },
   };
   const at = vec(p.pos.x + 780, p.pos.y); // out of the tide's seat-aggro
   const soak = w.createMonster('probe_soak', 1, 'player');
@@ -189,8 +193,8 @@ const bolt = {
   const wallLife = wall.life;
   for (let t = 0; t < 2; t += dt) { w.applyInputs(new Map(), dt); w.update(dt); }
   check('ply law: a plied victim eats ONE TEAR per beat — life never moves',
-    wall.plies < 3 && wall.plies >= 0 && wall.life === wallLife,
-    `plies 3 → ${wall.plies}, life ${wall.life}/${wallLife}`);
+    wall.plies < 8 && wall.plies >= 0 && wall.life === wallLife,
+    `plies 8 → ${wall.plies}, life ${wall.life}/${wallLife}`);
   delete MONSTERS.probe_soak;
   delete MONSTERS.probe_plywall;
 }

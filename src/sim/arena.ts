@@ -13,6 +13,7 @@
 // ---------------------------------------------------------------------------
 
 import { installHeadlessShims } from './shims';
+import { resetActorIdCounter } from '../engine/actor';
 // The same side-effect registrations main.ts performs — a World without them
 // is missing stamps/landmarks/layouts and zone generation would be wrong.
 import '../data/clusters';
@@ -99,6 +100,13 @@ export function classById(id: string): ClassDef {
  *  the given class (the build injector then reshapes that hero wholesale). */
 export function makeSimWorld(classId: string, seed: number): World {
   bootSimEngine();
+  // THE HERMETIC-WORLD LAW (the episode runner's id re-zero, extended to
+  // every sim world): actor ids feed per-body variety salts, so without
+  // this a probe file's SECOND world inherits the id watermark of its
+  // first — and every downstream section's seeded assertions ride the
+  // upstream sections' dynamics (edit rig 2, break rig 5). A fresh
+  // throwaway world starts a fresh id space, by construction.
+  resetActorIdCounter();
   const account = makeAccount();
   // Sims may probe any class — unlock the full roster on the throwaway account.
   for (const c of CLASSES) account.unlockedClasses.add(c.id);

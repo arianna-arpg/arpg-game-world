@@ -213,14 +213,18 @@ const step = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
 {
   const w = makeSimWorld('summoner', 0xd00d);
   const p = w.player;
-  // The gauge cares about LANDED hits — pin accuracy so the assertions
-  // never ride an evasion roll. (Post-swap: the LATCHING cinderkin carry
-  // the combat sources — melee attrition demands mid-fight replenishment.)
-  p.sheet.setSource('probeacc', [mod('accuracy', 'increased', 8)]);
+  // The gauge cares about LANDED hits — pin BOTH sides of the hit roll so
+  // the assertions never ride it: the old ×1.08 accuracy nudge lost to an
+  // evasive prey ROLL when an upstream section's draw count shifted (the
+  // file shares ONE seeded stream; sections are coupled by construction).
+  // (Post-swap: the LATCHING cinderkin carry the combat sources — melee
+  // attrition demands mid-fight replenishment.)
+  p.sheet.setSource('probeacc', [mod('accuracy', 'increased', 50)]);
   w.devThrongGrant('gather_cinderkin');
   const inst = p.skills.find(s => s?.def.id === 'gather_cinderkin')!;
   w.devThrongFillGauge('gather_cinderkin');
   const prey = w.createMonster('zombie', 8, 'enemy');
+  prey.sheet.setBase('evasion', 0);
   prey.pos = vec(p.pos.x + 40, p.pos.y);
   w.actors.push(prey);
   const claw = makeSkillInstance(SKILLS.claw, 1);

@@ -235,5 +235,69 @@ function rigComposite(id: string, dx = 340): Actor {
       .every(id => MONSTERS[id]?.remains === false));
 }
 
+// ============================================================ THE DRIFT LAW
+// A composite must STAND STILL when its brain does. Parts are position-
+// slaved into the root's facing frame every tick (updateParts), so any
+// root↔part overlap re-arms every frame — if the shoulder pass treats the
+// pair as strangers, the anchored part hands the mobile root its FULL share
+// each tick and the creature surfs its own hitboxes at overlap × 60 px/s
+// (the Gloamwood fly-by: an effigy porter thrown forward by the idol on its
+// back, the idol casting the whole way). Pinned GENERICALLY over every
+// registry composite — a new parts[] def joins the law with no probe edit —
+// and stood up FREE: the old rig's root.anchored park is exactly what
+// masked this (both-fixed pairs skip the sweep).
+{
+  const composites = Object.values(MONSTERS).filter(d => d.parts?.length);
+  const drifted: string[] = [];
+  let stood = 0;
+  for (const def of composites) {
+    const root = world.createMonster(def.id, 8, 'enemy');
+    root.pos = vec(1250, 600);
+    root.facing = 0;
+    root.aiCooldown = 99999;              // brain parked — but the body FREE
+    root.sheet.setBase('moveSpeed', 0);   // belt: no idle stroll reads as drift
+    world.actors.push(root);
+    step(2);                              // parts lazy-attach + first sweep
+    if (root.partActors?.length) {
+      stood++;
+      const x0 = root.pos.x, y0 = root.pos.y;
+      step(120);                          // two parked seconds
+      const moved = Math.hypot(root.pos.x - x0, root.pos.y - y0);
+      if (moved > 2) drifted.push(`${def.id} ${moved.toFixed(0)}px`);
+    }
+    // Sweep the rig slot clean — dead bodies leave the shoulder pass.
+    root.dead = true;
+    for (const part of root.partActors ?? []) part.dead = true;
+  }
+  check(`drift law: no composite is propelled by its own parts (${stood} stood)`,
+    stood > 0 && drifted.length === 0, drifted.join('; '));
+}
+
+{
+  // The exemption is KINSHIP-scoped, never a solid-body leak: a STRANGER
+  // overlapping an anchored part is still shouldered out of it.
+  const porter = world.createMonster('effigy_porter', 8, 'enemy');
+  porter.pos = vec(500, 900);
+  porter.facing = 0;
+  porter.aiCooldown = 99999;
+  porter.sheet.setBase('moveSpeed', 0);
+  world.actors.push(porter);
+  step(2);
+  const idol = porter.partActors?.[0];
+  const stranger = world.createMonster('verminkin_skulker', 8, 'enemy');
+  stranger.aiCooldown = 99999;
+  stranger.sheet.setBase('moveSpeed', 0);
+  world.actors.push(stranger);
+  if (idol) stranger.pos = vec(idol.pos.x, idol.pos.y + 2);
+  step(30);
+  const parted = idol ? Math.hypot(stranger.pos.x - idol.pos.x, stranger.pos.y - idol.pos.y) : 0;
+  check('strangers still shoulder off an anchored part (no over-exemption)',
+    !!idol && parted >= idol.radius + stranger.radius - 1,
+    idol ? `ended ${parted.toFixed(1)}px vs rims ${(idol.radius + stranger.radius).toFixed(0)}px` : 'no idol attached');
+  porter.dead = true;
+  stranger.dead = true;
+  for (const part of porter.partActors ?? []) part.dead = true;
+}
+
 console.log(failed === 0 ? '\nprobe_anatomy: ALL GREEN' : `\nprobe_anatomy: ${failed} FAILURE(S)`);
 process.exit(failed === 0 ? 0 : 1);

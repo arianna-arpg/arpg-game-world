@@ -42642,6 +42642,23 @@ export class World {
           // its own luggage. Third parties still shoulder both; the
           // slave step re-seats the held AFTER this pass regardless.
           if (a.heldBy === b.id || b.heldBy === a.id) continue;
+          // ONE CREATURE never shoulders itself (the grab-pair law made
+          // structural): a composite part is position-slaved into its
+          // root's facing frame every tick (updateParts), and a latched
+          // rider onto its victim's rim (clingSeatPos) — the overlap
+          // those seats DESIGN IN re-arms every frame, so this pass can
+          // never resolve it, only convert it into a thruster: an
+          // anchored part hands its mobile root the FULL share each tick
+          // (the effigy porter surfed its own idol at ~640 px/s, casting
+          // all the way), and a ridden body walks out from under its
+          // riders. Kinship IS the partLink/clingTo state — root↔part,
+          // part↔sibling, rider↔ridden, rider↔co-rider; a future
+          // pos-slaved fabric joins by adding its clause here. Third
+          // parties still shoulder every body of the assembly.
+          if (a.partLink?.root === b || b.partLink?.root === a) continue;
+          if (a.partLink && a.partLink.root === b.partLink?.root) continue;
+          if (a.clingTo?.id === b.id || b.clingTo?.id === a.id) continue;
+          if (a.clingTo && a.clingTo.id === b.clingTo?.id) continue;
           // PHASING: no body, no shoulder — a phasing actor passes through
           // the crowd (and it through them). Hits/targeting are untouched.
           if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;

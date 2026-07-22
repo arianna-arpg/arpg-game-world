@@ -419,8 +419,9 @@ let nextActorId = 1;
  *  this a session's Nth episode diverges from its 1st at the same seed and
  *  marginal A/B verdicts flip with probe ORDER. The live game NEVER calls
  *  this — a running world's ids stay unique for its whole life (saves,
- *  co-op refs, bonds); only the episode runner, which builds one fresh
- *  World per episode and discards it, may re-zero between worlds. */
+ *  co-op refs, bonds); only the episode runner and the sim world factory
+ *  (makeSimWorld — so a probe file's Nth rig world is hermetic to its
+ *  first), each building one fresh throwaway World, may re-zero. */
 export function resetActorIdCounter(to = 1): void {
   nextActorId = to;
 }
