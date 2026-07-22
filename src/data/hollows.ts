@@ -188,6 +188,19 @@ registerHollow({
   },
 });
 
+/** A GALLERY: the seraph city's marble hid a stair — the ascension lane
+ *  through the colossal angelic masses (basilica_stair mints the gallery
+ *  floors; three rungs to the belfry). The city that climbs, entered by
+ *  cracking what it is made of. STRUCTURAL: revives always. */
+registerHollow({
+  id: 'gallery_hollow',
+  blurb: 'Behind the marble, a stair — the building goes UP forever.',
+  reveal(c) {
+    c.addDoodad({ pos: c.center, radius: 13, kind: 'basilica_stair' });
+    if (!c.revive) c.text(c.center, 'a gallery stair climbs into the marble…', '#e8d8a8');
+  },
+});
+
 /** A PASSAGE: the corridor IS the reward — a way through the mass the map
  *  never promised, sealed at both ends until either seam gives. */
 registerHollow({

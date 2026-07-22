@@ -11502,6 +11502,99 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'strafer' },
   },
 
+  // --- THE CATHEDRAL CLERGY (aether_cathedral — the See's own orders) --------
+  // The Host keeps the realm; the CLERGY keep the church. Same faction, a
+  // liturgical wardrobe: every silhouette carries its office's tell — the
+  // hymnal, the swung censer, the carried ark, the trumpet — so the nave
+  // reads like a service you interrupted. Which you did.
+
+  /** The chorister: the sung ward — a channelled column of light that mends
+   *  the choir and scours the intruder. The hymnal held open is the tell;
+   *  the veil-sashes are the office. Break the song, break the line. */
+  chorister_of_the_veil: {
+    id: 'chorister_of_the_veil', name: 'Chorister of the Veil',
+    color: '#f6ecd2', shape: 'oval', radius: 12, material: 'ethereal', look: 'chorister_veil',
+    base: { life: 90, moveSpeed: 92, mana: 220, manaRegen: 11, energyShield: 40 },
+    skills: ['choir_of_light', 'talon_rake'], xp: 30, faction: 'seraphic',
+    levitates: true,
+    presence: { from: 12, fadeIn: 3 },
+    gemBias: ['channel', 'heal'],
+    brain: { type: 'caster' },
+  },
+
+  /** The censer-warden: the aisle's keeper — consecrated ground swung out of
+   *  a chained thurible, and the walk never hurries. The THIRD deliberate
+   *  walker of the Host (the aisles are its beat; a warden borne by wings
+   *  would not pace them). Fight it inside its own blessing or pull it out. */
+  censer_warden: {
+    id: 'censer_warden', name: 'Censer-Warden',
+    color: '#e8dcbe', shape: 'pentagon', radius: 13, material: 'ethereal', look: 'censer_warden',
+    base: { life: 120, moveSpeed: 95, armor: 20, mana: 160, manaRegen: 8 },
+    skills: ['consecration', 'talon_rake'], xp: 32, faction: 'seraphic',
+    presence: { from: 12, fadeIn: 3 },
+    gemBias: ['duration', 'aura'],
+    brain: { type: 'protector' },
+  },
+
+  /** The ark: a reliquary that WALKS — gilded, sealed, furious. Rings of
+   *  dawn off the casket's lid; break it and the relics answer, a shower of
+   *  burning votive orbs. Heavy enough to shrug the shove that would save
+   *  you. */
+  reliquary_ark: {
+    id: 'reliquary_ark', name: 'Reliquary Ark',
+    color: '#e2c98a', shape: 'trapezoid', radius: 16, material: 'metal', look: 'reliquary_ark',
+    base: { life: 260, moveSpeed: 55, armor: 55, poise: 70, mana: 120, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['aureole'], xp: 52, faction: 'seraphic',
+    heft: 1.5,
+    deathBurst: { mode: 'orb', damageFrac: 0.8, damageType: 'fire', coalesce: 0.5, orbDuration: 2.6, orbSpeed: 115, orbTurn: 2.0, radius: 84 },
+    presence: { from: 13, fadeIn: 4 },
+    gemBias: ['aoe', 'fire'],
+    brain: { type: 'juggernaut' },
+  },
+
+  /** The cantor: the Aureole kata worn by the Host itself (the player's
+   *  circular-judgement school, sung back at them) — a colonnade court
+   *  raised around the accused, then the gloria CLOSING on its own stage.
+   *  Stand nowhere it has sung. */
+  gloria_cantor: {
+    id: 'gloria_cantor', name: 'Gloria Cantor',
+    color: '#ffe9b0', shape: 'oval', radius: 13, material: 'ethereal', look: 'gloria_cantor',
+    base: { life: 100, moveSpeed: 100, mana: 240, manaRegen: 12, energyShield: 50 },
+    skills: ['gloria', 'colonnade'], xp: 40, faction: 'seraphic',
+    flier: true, levitates: true,
+    presence: { from: 13, fadeIn: 3 },
+    gemBias: ['aoe', 'spell'],
+    brain: { type: 'artillery' },
+  },
+
+  /** The Voice: the See's own herald-archon — what speaks FOR the empty
+   *  throne. Trumpet, verdict pillars, the closing gloria, and choirs of
+   *  wisps called down mid-psalm. The deepest table's anchor: the Cathedral
+   *  of the Highest is its liturgy, and you are the reading. */
+  voice_of_the_throne: {
+    id: 'voice_of_the_throne', name: 'Voice of the Throne',
+    color: '#fff0c2', shape: 'star', radius: 20, material: 'ethereal', look: 'voice_throne',
+    base: { life: 460, moveSpeed: 100, armor: 25, mana: 260, manaRegen: 11, energyShield: 160 },
+    mods: [mod('lightningRes', 'flat', 0.5), mod('fireRes', 'flat', 0.3)],
+    skills: ['trumpet_peal', 'judgement_pillar', 'gloria'], xp: 155, faction: 'seraphic',
+    flier: true, levitates: true,
+    presence: { from: 15, fadeIn: 5 },
+    gemBias: ['lightning', 'aoe'],
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 560 }, every: [14, 20], hold: [0.4, 0.6],
+        announce: 'The Voice calls the choir down!',
+        actions: [{ do: 'summon', monster: 'cherub_wisp', count: 3, ring: 140 }],
+      }],
+      phases: [
+        { atLifeFrac: 0.6, mods: [mod('castSpeed', 'increased', 0.2)] },
+        { atLifeFrac: 0.3, mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'increased', 0.15)] },
+      ],
+    },
+  },
+
   // ==========================================================================
   // THE GALEKIN — the Driftways' own weather-fauna (faction registered by
   // the ascent package beside the Host: realm content, contexts aetherial).

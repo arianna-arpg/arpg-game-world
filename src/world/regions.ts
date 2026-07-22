@@ -1125,3 +1125,23 @@ registerRegion({ id: 'pantheon_wall', walkable: false, blocks: true, label: 'the
 registerRegion({ id: 'colonnade', walkable: false, blocks: true, label: 'the colonnade',
   blocksShot: false, blocksSight: false,
   visual: { fill: '#d8d2be', alpha: 0.92, masonry: true, edge: { color: '#f8f2de', width: 4 } } });
+// --- THE CATHEDRAL (aether_cathedral; the See's own masonry) -----------------
+// CATHEDRAL WALL: consecrated alabaster — the See is built PALER than the
+// city below it (the pale-fill masonry law, third verse: bastion silver →
+// pantheon marble → cathedral alabaster), coursed under a deep auric rim so
+// nave and city can never be mistaken mid-fight. A TRUE wall: the house of
+// the Highest stops bodies, shots and sight alike.
+registerRegion({ id: 'cathedral_wall', walkable: false, blocks: true, label: 'the cathedral wall',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#efe8d8', alpha: 1, masonry: true, edge: { color: '#e8b64e', width: 6 } } });
+// GLASS FLOOR: the crystal pavement — WALKABLE WINDOW. The ground baker
+// clears these cells like any window kind, so the world far below (the
+// cloudsea, the city under the See) shows through the pane you are STANDING
+// ON — the floating cathedral's boldest sentence. Physics is plain ground
+// (no fall, no policy: the pane HOLDS — transparency is not frailty; the
+// frail fringe outside keeps that lesson); only the faint leading between
+// panes is painted, since the view below is the floor's whole art.
+registerRegion({
+  id: 'glass_floor', walkable: true, blocks: false, label: 'the crystal floor',
+  visual: { fill: '#141827', alpha: 1, window: true, edge: { color: '#d8e6f8', width: 3 } },
+});

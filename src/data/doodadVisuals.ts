@@ -2458,6 +2458,72 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { color: '#b89b55' },
   },
 
+  // --- The Cathedral kit (aether_cathedral; the See's dressing) -------------
+  // The reskin doctrine again: eleven kinds, three genuinely new painters
+  // (votiveBank / emptyThrone / pipeOrgan in vis/paintersAether.ts) — the
+  // rest are shipped painters vested in alabaster and gold. Candle kinds
+  // breathe on the radiance lerp: full glory at dusk, embers of it at noon.
+  processional_way: {
+    painter: 'gravelPath', order: 21,
+    blend: { mode: 'path', strength: 0.32, feather: 12, color: '#cfc4a2' },
+    params: { color: '#e2d8ba' },
+  },
+  votive_bank: {
+    painter: 'votiveBank', order: 54, shadow: 0.35,
+    params: { wax: '#f4ecd8', frame: '#7a6844', flame: '#ffd890' },
+    light: { radius: -4.6, color: '#ffd890', intensity: 0.42, flicker: 3.4, radiance: { at1: 0.3 } },
+  },
+  cathedral_pew: { painter: 'bench', order: 53, shadow: 0.4, params: { color: '#6d5a3c' } },
+  choir_stall: { painter: 'bench', order: 53, shadow: 0.45, params: { color: '#5e4c34' } },
+  high_altar: {
+    painter: 'slab', order: 55, shadow: 0.5,
+    params: { color: '#efe9da', edge: '#c9b878' },
+    light: { radius: -3.4, color: '#ffe9b8', intensity: 0.35 },
+  },
+  empty_throne: {
+    painter: 'emptyThrone', order: 56, shadow: 0.5, longShadow: 1.6,
+    params: { stone: '#f4efe2', gold: '#ffd97a', shade: '#b8a878' },
+    light: { radius: -5.2, color: '#fff2cc', intensity: 0.5 },
+  },
+  pipe_organ: {
+    painter: 'pipeOrgan', order: 55, shadow: 0.5,
+    params: { pipes: '#d8ccae', chest: '#584430', gold: '#c8a44a' },
+  },
+  font_of_light: {
+    painter: 'fountain', order: 54, shadow: 0.5,
+    params: { stone: '#e8e0cc', water: '#ffefc2' },
+    light: { radius: -3.0, color: '#ffefc2', intensity: 0.4, flicker: 1.2 },
+  },
+  reliquary_shrine: {
+    painter: 'wayshrine', order: 55, shadow: 0.45, longShadow: 0.9,
+    params: { stone: '#e4dcc6', roof: '#b89b55', flame: '#ffe6a8' },
+    light: { radius: -4.2, color: '#ffe6a8', intensity: 0.42, flicker: 2.6, radiance: { at1: 0.35 } },
+  },
+  saint_effigy: {
+    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5,
+    params: { stone: '#efe9da', moss: '#c9b878' },
+  },
+  gonfalon: {
+    painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.4,
+    params: { cloth: '#f4ead0' },
+  },
+  glory_arch: {
+    painter: 'gateArch', order: 56, shadow: 0.35, longShadow: 1.4,
+    params: { stone: '#efe8d8', edge: '#c6bda4', glow: '#ffd97a' },
+    light: { radius: -1.8, color: '#ffe2a0', intensity: 0.3, flicker: 0.8 },
+  },
+  bell_spire: {
+    painter: 'prayerBell', order: 55, shadow: 0.45, longShadow: 1.8,
+    params: { bronze: '#d8b56a', marble: '#efe9da', cord: '#e8d8a8' },
+    light: { radius: -2.2, color: '#ffe2a0', intensity: 0.2 },
+  },
+  // The seraph city's ascension rung: the stairFlight painter in marble and
+  // gold runner — the climb INTO the colossal buildings (gallery floors).
+  basilica_stair: {
+    painter: 'stairFlight', order: 54, shadow: 0.4,
+    params: { wood: '#d8d0bc', dark: '#8a8270', runner: '#c8a44a', label: 'the Gallery Above' },
+  },
+
   // --- The ship-deck kit (vis/paintersSea.ts): the Wraithsail's boards ------
   // Masts carry a cold masthead light (the ghost ship sails lit); rails and
   // cargo are honest weathered timber. The ghost hull is the ship SIGHTED at

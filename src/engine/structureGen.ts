@@ -349,6 +349,252 @@ registerStructureGen('compound', (rng, p) => {
   return g.out();
 });
 
+// --- CATHEDRAL ------------------------------------------------------------------
+// THE GREAT CHURCH COMPOSER — a cruciform basilica rolled whole: narthex →
+// columned nave with flanking aisles → crossing + transept arms → choir →
+// semicircular apse holding the sanctuary, with side CHAPELS budding off the
+// aisles, an optional CLOISTER garth, belfry towers at the west front — and a
+// CHAPTER HOUSE that is literally a structure generator inside a structure
+// generator: the 'compound' BSP composer runs as a sub-generation and its
+// plan is pasted onto this one, sharing a wall, joined by one punched door.
+// Every proportion is rolled (or pinned via genParams), so no two Sees mint
+// alike; the char vocabulary is the def's own legend (see data/structures.ts
+// grand_cathedral) — this emitter stays furniture-blind data like every
+// other generator. South (the last rows) is the WEST FRONT by convention:
+// the great doors face the approach the recipe lays.
+//
+//   vesselHalf     nave central-vessel half-width   [3, 4]
+//   aisle          flanking aisle width             [2, 3]
+//   naveLen        nave length in cells             [11, 16]
+//   narthex        entrance-hall depth              [2, 3]
+//   transeptW/Ext  arm thickness / reach            [5, 6] / [3, 5]
+//   choir          chancel depth                    [3, 4]
+//   apse           apse cap depth                   [5, 7]
+//   chapels        side chapels per free flank      [1, 3]
+//   chapelDepth    chapel bulge                     [3, 4]
+//   cloisterChance / cloisterSpan / chapterChance   0.6 / [6, 7] / 0.55
+//   towerChance    west belfries                    0.65
+//   ambulatoryChance  crystal-floor ring behind the sanctuary  0.75
+//   windows / columnEvery / sideDoors               [3, 4] / [2, 3] / [1, 2]
+registerStructureGen('cathedral', (rng, p) => {
+  // Every die is cast up front — the paint below is pure arithmetic, so the
+  // build order can never skew a later roll.
+  const vh = roll(rng, p.vesselHalf, [3, 4]);
+  const ah = roll(rng, p.aisle, [2, 3]);
+  const naveLen = roll(rng, p.naveLen, [11, 16]);
+  const narthexH = roll(rng, p.narthex, [2, 3]);
+  const transW = roll(rng, p.transeptW, [5, 6]);
+  const transExt = roll(rng, p.transeptExt, [3, 5]);
+  const choirH = roll(rng, p.choir, [3, 4]);
+  const apseD = roll(rng, p.apse, [5, 7]);
+  const chD = roll(rng, p.chapelDepth, [3, 4]);
+  const chapelN = roll(rng, p.chapels, [1, 3]);
+  const cloister = rng.chance(typeof p.cloisterChance === 'number' ? p.cloisterChance : 0.6);
+  const cloisterSide = rng.chance(0.5) ? -1 : 1;
+  const cloisterW = Math.min(7, roll(rng, p.cloisterSpan, [6, 7]));
+  const chapter = cloister && rng.chance(typeof p.chapterChance === 'number' ? p.chapterChance : 0.55);
+  const chW = roll(rng, p.chapterW, [8, 10]);
+  const chH = roll(rng, p.chapterH, [7, 9]);
+  const towers = rng.chance(typeof p.towerChance === 'number' ? p.towerChance : 0.65);
+  const ambulatory = rng.chance(typeof p.ambulatoryChance === 'number' ? p.ambulatoryChance : 0.75);
+  const organSide = rng.chance(0.5) ? -1 : 1;
+  const sideDoors = roll(rng, p.sideDoors, [1, 2]);
+  const winStep = roll(rng, p.windows, [3, 4]);
+  const colStep = roll(rng, p.columnEvery, [2, 3]);
+  const furnish: string[] = [];
+  for (let i = 0; i < 6; i++) furnish.push((['R', 'E', 'v', 'z'] as const)[rng.int(0, 3)]);
+
+  const W2 = vh + ah + 1;            // interior half-span: vessel + column line + aisle
+  const wallX = W2 + 1;              // outer nave wall offset from the centerline
+  const TE = wallX + transExt;       // transept interior half-reach
+  const extBase = Math.max(TE + 1, wallX + chD + 1, wallX + 3);
+  const extCloi = cloister
+    ? Math.max(extBase, wallX + cloisterW + 1 + (chapter ? chW - 1 : 0))
+    : extBase;
+  const extLeft = cloisterSide < 0 ? extCloi : extBase;
+  const extRight = cloisterSide > 0 ? extCloi : extBase;
+  const w = extLeft + extRight + 1;
+  const h = 1 + apseD + choirH + transW + naveLen + narthexH + 1;
+  const cx = extLeft;
+  const g = new PlanGrid(w, h);
+
+  // Row bands, accumulated from the south (west-front) edge upward.
+  const yS = h - 1;                        // south wall + great doors
+  const yNave1 = yS - narthexH - 1;        // southmost nave row (narthex above the wall)
+  const yNave0 = yNave1 - naveLen + 1;
+  const yTBot = yNave0 - 1;                // transept band
+  const yTTop = yTBot - transW + 1;
+  const yChoir1 = yTTop - 1;               // chancel band
+  const yChoir0 = yChoir1 - choirH + 1;
+
+  // THE BODY: one open vessel from chancel to narthex, walled either side,
+  // sealed south with the GREAT WEST DOORS (3 cells — one grand breach).
+  g.rect(cx - W2, yChoir0, cx + W2, yS - 1, '.');
+  g.rect(cx - wallX, yChoir0, cx - wallX, yS, '#');
+  g.rect(cx + wallX, yChoir0, cx + wallX, yS, '#');
+  g.rect(cx - wallX, yS, cx + wallX, yS, '#');
+  for (const dx of [-1, 0, 1]) g.set(cx + dx, yS, 'D');
+
+  // Narthex furniture: the font of light on the threshold axis, votive banks
+  // where the candles meet you before the nave does.
+  g.set(cx, yS - 2, 'U');
+  g.set(cx - vh, yS - 2, 'v');
+  g.set(cx + vh, yS - 2, 'v');
+
+  // NAVE: column lines pacing the vessel/aisle seam, pew rows filling the
+  // southern half (the center aisle stays processionally clear), lancet
+  // windows pacing the outer walls.
+  for (let yy = yNave0; yy <= yNave1; yy++) {
+    const k = yNave1 - yy;
+    if (k % colStep === 0) { g.set(cx - vh - 1, yy, 'I'); g.set(cx + vh + 1, yy, 'I'); }
+    if (yy > yNave0 + Math.floor(naveLen * 0.4) && k % 2 === 0 && k % 8 !== 0) {
+      for (let dx = 1; dx <= vh - 1; dx++) { g.set(cx - dx, yy, 'w'); g.set(cx + dx, yy, 'w'); }
+    }
+    if (k % winStep === 1) {
+      if (g.get(cx - wallX, yy) === '#') g.set(cx - wallX, yy, 'W');
+      if (g.get(cx + wallX, yy) === '#') g.set(cx + wallX, yy, 'W');
+    }
+  }
+
+  // TRANSEPT: the arms frame over the nave walls, then the vessel passage is
+  // re-opened through the frame — the crossing is one continuous floor.
+  g.ring(cx - TE - 1, yTTop - 1, cx + TE + 1, yTBot + 1, '#');
+  g.rect(cx - TE, yTTop, cx + TE, yTBot, '.');
+  g.rect(cx - W2, yTTop - 1, cx + W2, yTTop - 1, '.');
+  g.rect(cx - W2, yTBot + 1, cx + W2, yTBot + 1, '.');
+  const tMid = Math.floor((yTTop + yTBot) / 2);
+  g.set(cx - TE - 1, tMid, sideDoors >= 1 ? 'd' : 'W');
+  g.set(cx + TE + 1, tMid, sideDoors >= 2 ? 'd' : 'W');
+  g.set(cx - TE - 1, tMid - 2, 'W'); g.set(cx - TE - 1, tMid + 2, 'W');
+  g.set(cx + TE + 1, tMid - 2, 'W'); g.set(cx + TE + 1, tMid + 2, 'W');
+
+  // CHOIR: stalls flank the chancel; the great organ stands against a rolled
+  // aisle wall, two cells of it.
+  for (let yy = yChoir0; yy <= yChoir1; yy++) {
+    if ((yChoir1 - yy) % 2 === 0) { g.set(cx - vh, yy, 'q'); g.set(cx + vh, yy, 'q'); }
+  }
+  g.set(cx + organSide * (W2 - 1), yChoir0, 'O');
+  g.set(cx + organSide * (W2 - 1), yChoir0 + 1, 'O');
+
+  // APSE: an elliptical cap rasterized disc-then-ring (gap-proof at every
+  // proportion), holding the sanctuary. The AMBULATORY — the crystal-floor
+  // ring behind the altar — is unroofed GLASS: open to heaven above, the
+  // cloudsea below your feet (region 'glass_floor' via the 'g' legend char).
+  const ery = apseD + 0.4, erx = W2 + 0.6;
+  const acy = yChoir0 - 0.5;
+  for (let yy = Math.max(0, yChoir0 - apseD - 2); yy < yChoir0; yy++) {
+    for (let xx = cx - wallX - 1; xx <= cx + wallX + 1; xx++) {
+      const nx = (xx - cx) / erx, ny = (yy - acy) / ery;
+      const r2 = nx * nx + ny * ny;
+      if (r2 <= 1) {
+        const rr = Math.sqrt(r2);
+        g.set(xx, yy, ambulatory && rr >= 0.66 && rr <= 0.97 ? 'g' : '.');
+      } else if (r2 <= 1.6) {
+        g.set(xx, yy, '#');
+      }
+    }
+  }
+  // The sanctuary: the high altar at the chancel step, the EMPTY THRONE at
+  // the apse focus — the truest seat, kept vacant — flanked by braziers.
+  g.set(cx, yChoir0 - 1, 'A');
+  const yThrone = yChoir0 - apseD + 2;
+  g.set(cx, yThrone, 'Q');
+  g.set(cx - 2, yThrone, 'z');
+  g.set(cx + 2, yThrone, 'z');
+
+  // SIDE CHAPELS bud off the free flank(s) — each a walled cell with its own
+  // door and a rolled devotion (reliquary / effigy / votives / brazier). The
+  // cloister's flank keeps its wall for the garth instead.
+  const chapelSides = cloister ? [-cloisterSide] : [-1, 1];
+  let fi = 0;
+  for (const s of chapelSides) {
+    // Pitch 5 = a 4-row chapel + the shared ring row: neighbours share ONE
+    // wall row instead of carving into each other (an overlapping ring would
+    // slice a finished chapel's interior and orphan the far half).
+    const nMax = Math.max(0, Math.floor((naveLen - 2) / 5));
+    for (let i = 0; i < Math.min(chapelN, nMax); i++) {
+      const r0 = yNave0 + 1 + i * 5;
+      const r1 = r0 + 3;
+      if (r1 + 1 >= yNave1) continue;
+      const outerX = cx + s * wallX;
+      const farX = cx + s * (wallX + chD + 1);
+      g.ring(Math.min(outerX, farX), r0 - 1, Math.max(outerX, farX), r1 + 1, '#');
+      g.rect(Math.min(outerX, farX) + 1, r0, Math.max(outerX, farX) - 1, r1, '.');
+      const mid = Math.floor((r0 + r1) / 2);
+      g.set(outerX, mid, 'd');
+      g.set(farX, mid, 'W');
+      g.set(cx + s * (wallX + 1 + Math.ceil(chD / 2)), mid, furnish[fi++ % furnish.length]);
+    }
+  }
+
+  // CLOISTER: a garth off the southern nave — ring walk around open ground,
+  // arcade pillars at the corners, one door from the aisle.
+  if (cloister) {
+    const s = cloisterSide;
+    const rC1 = yNave1 - 1;
+    const rC0 = Math.max(yNave0 + 1, rC1 - cloisterW + 1);
+    const outerX = cx + s * wallX;
+    const farX = cx + s * (wallX + cloisterW + 1);
+    g.ring(Math.min(outerX, farX), rC0 - 1, Math.max(outerX, farX), rC1 + 1, '#');
+    g.rect(Math.min(outerX, farX) + 1, rC0, Math.max(outerX, farX) - 1, rC1, '.');
+    const gx0 = Math.min(outerX, farX) + 3, gx1 = Math.max(outerX, farX) - 3;
+    const gy0 = rC0 + 2, gy1 = rC1 - 2;
+    if (gx1 >= gx0 && gy1 >= gy0) {
+      g.rect(gx0, gy0, gx1, gy1, '_');
+      g.set(gx0, gy0, 'I'); g.set(gx1, gy0, 'I');
+      g.set(gx0, gy1, 'I'); g.set(gx1, gy1, 'I');
+    }
+    g.set(outerX, Math.floor((rC0 + rC1) / 2), 'd');
+
+    // THE CHAPTER HOUSE — the nested generation: the compound composer rolls
+    // a whole sub-building, pasted flush so its wall IS the cloister's far
+    // wall, joined by one punched door. Recursion as data, not new grammar.
+    if (chapter) {
+      const sub = runStructureGen('compound', rng, {
+        w: chW, h: chH, gates: 0, doorChar: 'd',
+        courtyardChance: 0.1, windows: 4, towers: false,
+        clutterPer100: [1, 3], loops: [1, 2],
+      });
+      if (sub) {
+        const px = s > 0 ? farX : farX - chW + 1;
+        const py = Math.max(1, Math.floor((rC0 + rC1) / 2) - Math.floor(chH / 2));
+        for (let sy = 0; sy < sub.length; sy++) {
+          for (let sx = 0; sx < sub[sy].length; sx++) {
+            const c = sub[sy][sx];
+            if (c !== ' ') g.set(px + sx, py + sy, c);
+          }
+        }
+        // Punch the joining door where BOTH flanks are open floor — the
+        // compound's own BSP may have run a partition against the shared
+        // wall exactly at mid-height, and a door into a wall cell would
+        // orphan the whole chapter house. Scan out from the middle.
+        const midRow = py + Math.floor(chH / 2);
+        for (let off = 0; off < chH; off++) {
+          const cand = midRow + (off % 2 === 0 ? off / 2 : -Math.ceil(off / 2));
+          if (cand <= Math.max(rC0 - 1, py) || cand >= Math.min(rC1 + 1, py + chH - 1)) continue;
+          const inner = g.get(farX - s, cand);   // cloister-corridor side
+          const outer = g.get(farX + s, cand);   // chapter-interior side
+          if ((inner === '.' || inner === '_') && (outer === '.' || outer === '_')) {
+            g.set(farX, cand, 'd');
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // WEST BELFRIES: parapet towers seizing the front corners, a garrison
+  // perch in each — the skyline the approach reads first.
+  if (towers) {
+    for (const s of [-1, 1]) {
+      const x0 = cx + s * wallX, x1 = cx + s * (wallX + 2);
+      g.rect(Math.min(x0, x1), yS - 2, Math.max(x0, x1), yS, 'P');
+      g.set(cx + s * (wallX + 1), yS - 1, 'T');
+    }
+  }
+  return g.out();
+});
+
 // --- WATCHTOWER -----------------------------------------------------------------
 // A single free-standing tower: parapet ring, slot core, one door — the minimal
 // garrison structure (roadside outposts, siege camps, D2 Arreat-plateau towers).

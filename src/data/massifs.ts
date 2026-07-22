@@ -324,6 +324,60 @@ registerStamp('laurel_topiary', stampSingle('laurel_topiary', [13, 19]));
 registerStamp('pantheon_column', stampSingle('pantheon_column', [10, 14]));
 registerStamp('mosaic_medallion', stampSingle('mosaic_medallion', [26, 40]));
 
+// THE CATHEDRAL KIT (aether_cathedral — the See's own dressing). Interior
+// kinds are planted by the 'cathedral' structure generator's legend chars
+// (data/structures.ts grand_cathedral) so they carry rules only; the three
+// the tileset also scatters as layout rows carry stamps beside them (the
+// registry law). Visuals in data/doodadVisuals.ts; the three genuinely new
+// painters live in render/vis/paintersAether.ts.
+registerDoodadRule('processional_way', {
+  overlap: 'ground', walkOnly: true,
+  clearway: {
+    decks: ['water', 'tide_pool', 'mud', 'bog', 'swamp', 'ice'],
+    yieldsTo: ['lava', 'magma_core', 'cinder', 'gore', 'chasm'],
+  },
+});
+registerDoodadRule('votive_bank', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60, bodyScale: 0.6,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerStamp('votive_bank', stampSingle('votive_bank', [10, 13]));
+registerDoodadRule('cathedral_pew', { overlap: 'solid', blocksMove: true, blocksShot: false, bodyScale: 0.85 });
+registerDoodadRule('choir_stall', { overlap: 'solid', blocksMove: true, blocksShot: false, bodyScale: 0.85 });
+// Chest-high sanctuary furniture: bodies stop, shots and sight carry — the
+// sanctum is a duel floor, never a maze.
+registerDoodadRule('high_altar', { overlap: 'solid', blocksMove: true, blocksShot: false });
+registerDoodadRule('empty_throne', { overlap: 'solid', blocksMove: true, blocksShot: true });
+registerDoodadRule('pipe_organ', { overlap: 'solid', blocksMove: true, blocksShot: true });
+registerDoodadRule('font_of_light', { overlap: 'solid', blocksMove: true, blocksShot: false });
+registerDoodadRule('reliquary_shrine', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('saint_effigy', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerStamp('saint_effigy', stampSingle('saint_effigy', [12, 16]));
+registerDoodadRule('gonfalon', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70, bodyScale: 0.3,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('gonfalon', stampSingle('gonfalon', [9, 12]));
+// The arch is a THRESHOLD, not a blocker: the parade walks under it.
+registerDoodadRule('glory_arch', { overlap: 'ground' });
+registerDoodadRule('bell_spire', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, bodyScale: 0.5,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+// THE CITY THAT CLIMBS: 'basilica_stair' is the seraph city's ascension rung
+// (the city_stair pattern vested in marble) — cracked out of a pantheon's
+// mass by the gallery_hollow, dwelled UP into minted gallery floors that lay
+// the next rung themselves (data/sidezones.ts). Trigger rule only; the
+// stamp serves the floors' own layout rows.
+registerDoodadRule('basilica_stair', { overlap: 'trigger', spacing: 20 });
+registerStamp('basilica_stair', stampSingle('basilica_stair', [11, 14]));
+
 // THE PANTHEON — the dome itself: a near-perfect round mass (lobe barely
 // breathes), gold statuary crowning the drum. The city's gravest silhouette.
 registerMassKind({

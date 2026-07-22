@@ -9691,6 +9691,179 @@ export const TILESETS: Record<string, TilesetDef> = {
     compositions: [
       { composition: 'choir_ring', chance: 0.3 },
     ],
+    // THE CITY THAT CLIMBS: the colossal masses hide gallery stairs — crack
+    // the marble (gallery_hollow → basilica_stair → three minted flights to
+    // the belfry) and the skyline becomes floors. Caches keep the other
+    // hollows honest: not every wall is a ladder.
+    hollows: {
+      count: [1, 2],
+      table: { gallery_hollow: 3, cache_hollow: 2 },
+    },
+  },
+
+  // THE CATHEDRAL OF THE HIGHEST — the country's CROWN (deepest hearts only):
+  // one great cloud foundation bearing a GENERATED cruciform basilica (the
+  // 'cathedral' structure generator — a structure generator that runs another
+  // structure generator for its chapter house; no two Sees alike), a frail
+  // fringe where heaven's rim still lets go underfoot, prayer isles the SKY
+  // decides the bridges to, and a crystal promenade over the open void. The
+  // GREAT WEST DOORS are the account's 'cathedral_door_opened' lesson — the
+  // gateway ledger the Aureole vault rows wait on. The truest seat of the
+  // Highest — and the seat itself stands EMPTY, guarded by the Host.
+  aether_cathedral: {
+    id: 'aether_cathedral',
+    frontier: false, realm: 'aetherial',
+    perfProbe: true, // colossal plan structure + glass + collapse: the new worst case
+    biome: 'aether_bastion', // the country's shared biome — its deepest stage
+    depthAffinity: { from: 0.86, fadeIn: 0.06 },
+    nameFirst: ['Cathedral', 'Basilica', 'See', 'Sanctum'],
+    nameSecond: ['of the Highest', 'of First Light', 'of the Ninth Choir', 'Ascendant', 'of the Empty Throne'],
+    theme: {
+      floor: '#f2ede0', grid: '#dbd5c2', border: '#ac9f80',
+      obstacle: '#f7f3e8', obstacleEdge: '#c6bda4', accent: '#ffd97a',
+      wall: '#e8e1cd', water: '#9fd8e8', road: '#e6ddc4',
+      // The realm's brightest hour lives here; even its night is candle-gold.
+      dayLight: 1.5, nightDark: 0.38, heat: 0.44,
+      ground: {
+        palette: ['#ddd6c2', '#e8e2d0', '#f1ecdd', '#f8f5ea', '#fffdf6'],
+        bias: 0.66, alpha: 0.5, scale: 1.9, strength: 0.8, speckles: 0.24, evenness: 0.42,
+      },
+      ambientFx: [
+        { kind: 'overclouds', color: '#fff6e4', intensity: 1 },
+        { kind: 'motes', color: '#ffedbc', intensity: 1.1 },
+        { kind: 'aurora', color: '#ffd97a', intensity: 0.5 },
+      ],
+      fog: { banks: [0, 1], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+      // The transient law at permanence's door: ONLY the fringe melts, only
+      // underfoot, and the See itself is never in the list.
+      collapse: {
+        region: 'cloud_void',
+        melts: ['cloud_frail'],
+        crumble: 1.2,
+        contact: { delay: 2.2, radius: 12 },
+        fall: { kind: 'below', damageFrac: 0.05, grace: 0.4 },
+        portalClear: 95,
+      },
+      // The sky holds the prayer-isle bridges: sunward by day, vigil by night.
+      spans: [
+        { region: 'span_sun', when: { radiance: { from: 0.55 } } },
+        { region: 'span_star', when: { radiance: { to: 0.35 } } },
+      ],
+    },
+    sizeW: [3000, 3800], sizeH: [2200, 2900], ellipseChance: 0,
+    forceLayout: 'cathedral',
+    layoutParams: {
+      continentFrac: 0.37,
+      fringeWidth: 64,
+      prayerIsles: [2, 3],
+      processionalWidth: [56, 72],
+      promenade: 0.85,
+    },
+    layout: [
+      { kind: 'gonfalon', count: [3, 6] },
+      { kind: 'saint_effigy', count: [2, 4] },
+      { kind: 'laurel_topiary', count: [2, 5] },
+      { kind: 'mosaic_medallion', count: [2, 4] },
+      { kind: 'votive_bank', count: [1, 3] },
+      { kind: 'prayer_bell', count: [1, 3] },
+      { kind: 'aureate_brazier', count: [2, 4] },
+      { kind: 'cloud_billow', count: [2, 4] },
+      { kind: 'flowers', count: [2, 4] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [110, 150] },
+    ],
+    puzzles: [
+      { id: 'singing_refrain', chance: 0.35 },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'chorister_of_the_veil', weight: 3, presence: { from: 12, fadeIn: 3 } },
+        { id: 'censer_warden', weight: 2.8, presence: { from: 12, fadeIn: 3 } },
+        { id: 'reliquary_ark', weight: 2.2, presence: { from: 13, fadeIn: 4 } },
+        { id: 'gloria_cantor', weight: 2.4, presence: { from: 13, fadeIn: 3 } },
+        { id: 'throne_of_the_law', weight: 2.4, presence: { from: 13, fadeIn: 4 } },
+        { id: 'herald_of_the_choir', weight: 2.2, presence: { from: 12, fadeIn: 4 } },
+        { id: 'power_of_the_bastion', weight: 2.2, presence: { from: 11, fadeIn: 3 } },
+        { id: 'lampad_of_the_vigil', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'virtue_lance', weight: 2 },
+        { id: 'ophan_wheel', weight: 1.8 },
+        { id: 'cherub_wisp', weight: 1.6 },
+        { id: 'voice_of_the_throne', weight: 1.1, presence: { from: 15, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'puzzle', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.35 },
+      { composition: 'vault_of_dawn', chance: 0.4 },
+    ],
+  },
+
+  // THE GALLERY FLOORS — what the basilica_stair mints (frontier:false): the
+  // seraph city's colossal masses are CLIMBABLE, and these are the rooms the
+  // marble was hiding — bright halls on the interior recipe, pantheon-walled,
+  // marble-floored, laying the NEXT rung themselves until the belfry closes
+  // the ladder (three flights; data/sidezones.ts basilicaFloor). The city
+  // that ascends into its own cloudbase, one landing at a time.
+  basilica_floor: {
+    id: 'basilica_floor',
+    nameFirst: ['Aurelian', 'Sunlit', 'Echoing', 'Gilded', 'Hushed', 'Veiled'],
+    nameSecond: ['Gallery', 'Landing', 'Loggia', 'Choirloft', 'Archive'],
+    theme: {
+      ambientDark: 0.1,
+      ground: {
+        scale: 1.4, strength: 0.7, speckles: 0.18,
+        palette: ['#cfc8b6', '#dcd6c6', '#e8e3d4', '#f2eee1', '#faf7ec'], bias: 0.6, alpha: 0.5,
+      },
+      floor: '#e8e3d4', grid: '#d4cebc', border: '#a89f86',
+      obstacle: '#f2eee1', obstacleEdge: '#c2bba6', accent: '#ffd97a',
+      tree: '#c9b878', wall: '#e0dac8',
+    },
+    sizeW: [1100, 1500], sizeH: [850, 1150], ellipseChance: 0, biome: 'aether_bastion', sky: 'sheltered',
+    frontier: false, perfProbe: true,
+    layoutParams: { floorStyle: 'marble', interiorWall: 'pantheon_wall', rooms: [3, 6], doorChance: 0.6 },
+    layout: [
+      { kind: 'basilica_stair', count: [0, 1] },
+      { kind: 'candelabra', count: [1, 3] },
+      { kind: 'votive_bank', count: [0, 2] },
+      { kind: 'mosaic_medallion', count: [0, 2] },
+    ],
+    variants: [
+      // The lit gallery: the vigil never left — candles, effigies, order.
+      { name: 'the lit gallery', layout: [
+        { kind: 'basilica_stair', count: [0, 1] },
+        { kind: 'candelabra', count: [2, 4] },
+        { kind: 'saint_effigy', count: [1, 2] },
+        { kind: 'votive_bank', count: [1, 2] },
+      ] },
+      // The shuttered loft: dust sheets over the glory, webs in the gold.
+      { name: 'the shuttered loft', layout: [
+        { kind: 'basilica_stair', count: [0, 1] },
+        { kind: 'dust_sheet', count: [1, 3] },
+        { kind: 'web', count: [1, 3] },
+        { kind: 'gonfalon', count: [0, 2] },
+      ] },
+    ],
+    packs: {
+      count: [2, 3], size: [2, 3],
+      table: [
+        { id: 'cherub_wisp', weight: 3 },
+        { id: 'watcher_unblinking', weight: 2 },
+        { id: 'chorister_of_the_veil', weight: 1.5, presence: { from: 12, fadeIn: 3 } },
+        { id: 'censer_warden', weight: 1.2, presence: { from: 12, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
+    caveLayouts: { rooms: 1 },
   },
 
   // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset

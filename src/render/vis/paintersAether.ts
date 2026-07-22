@@ -732,6 +732,133 @@ const spireOfGales: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A VOTIVE BANK — tiers of offered candles: a dark frame holding ranked
+ *  wax lights, each flame swaying on its own clock. The light layer carries
+ *  the true glow (DOODAD_VISUALS.light rides the radiance lerp); this paint
+ *  is the furniture and the honest little fires. */
+const votiveBank: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wax?: ColorSpec; frame?: ColorSpec; flame?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const wax = resolveColor(p.wax, theme, '#f4ecd8');
+  const frame = resolveColor(p.frame, theme, '#7a6844');
+  const flame = resolveColor(p.flame, theme, '#ffd890');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 19 + o.pos.y * 11) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The rack: two shallow tiers, the rear one raised.
+    ctx.fillStyle = frame;
+    ctx.fillRect(-r, -r * 0.16, r * 2, r * 0.5);
+    ctx.fillStyle = shade(frame, -0.18);
+    ctx.fillRect(-r * 0.92, -r * 0.52, r * 1.84, r * 0.34);
+    // Candles: ranked stubs of uneven burn, a flame atop each.
+    for (let tier = 0; tier < 2; tier++) {
+      const n = 4 + Math.floor(hash01(seed, tier) * 3);
+      const ty = tier === 0 ? -r * 0.02 : -r * 0.42;
+      for (let i = 0; i < n; i++) {
+        const cxp = -r * 0.8 + (i + 0.5) * (r * 1.6 / n);
+        const hgt = r * (0.22 + hash01(seed, 7 + tier * 9 + i) * 0.26);
+        ctx.fillStyle = shade(wax, -0.04 + hash01(seed, 20 + i) * 0.08);
+        ctx.fillRect(cxp - r * 0.05, ty - hgt, r * 0.1, hgt);
+        const sway = Math.sin(time * (2.4 + hash01(seed, 30 + i) * 1.8) + i * 1.7) * r * 0.03;
+        ctx.fillStyle = withAlpha(flame, 0.9);
+        ctx.beginPath();
+        ctx.ellipse(cxp + sway, ty - hgt - r * 0.07, r * 0.045, r * 0.09, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+};
+
+/** THE EMPTY THRONE — the truest seat, unoccupied: a stepped dais, a tall
+ *  gold-rimmed back, arms squared — and nothing seated in it. The vacancy IS
+ *  the statement; a soft column of light (the light layer) stands where the
+ *  occupant will not. */
+const emptyThrone: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stone?: ColorSpec; gold?: ColorSpec; shade?: ColorSpec };
+  const { ctx, theme } = env;
+  const stone = resolveColor(p.stone, theme, '#f4efe2');
+  const gold = resolveColor(p.gold, theme, '#ffd97a');
+  const dark = resolveColor(p.shade, theme, '#b8a878');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Dais: two worn steps.
+    ctx.fillStyle = withAlpha(dark, 0.55);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.34, r * 1.25, r * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = withAlpha(shade(stone, -0.08), 0.9);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.28, r * 1.0, r * 0.48, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The high back: a tall tapered slab, gold-rimmed.
+    ctx.fillStyle = shade(stone, 0.04);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.52, r * 0.05);
+    ctx.lineTo(-r * 0.4, -r * 1.35);
+    ctx.quadraticCurveTo(0, -r * 1.62, r * 0.4, -r * 1.35);
+    ctx.lineTo(r * 0.52, r * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(gold, 0.9);
+    ctx.lineWidth = Math.max(1.6, r * 0.07);
+    ctx.stroke();
+    // The seat and its arms — squared, waiting.
+    ctx.fillStyle = shade(stone, -0.12);
+    ctx.fillRect(-r * 0.42, -r * 0.12, r * 0.84, r * 0.34);
+    ctx.fillStyle = shade(stone, -0.02);
+    ctx.fillRect(-r * 0.56, -r * 0.2, r * 0.16, r * 0.5);
+    ctx.fillRect(r * 0.4, -r * 0.2, r * 0.16, r * 0.5);
+    // The gold sun-disc where a head would rest — over nobody.
+    ctx.strokeStyle = withAlpha(gold, 0.8);
+    ctx.lineWidth = Math.max(1.2, r * 0.05);
+    ctx.beginPath();
+    ctx.arc(0, -r * 1.02, r * 0.26, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A PIPE ORGAN — the choir's engine: a dark wind-chest under ranked pale
+ *  pipes rising to the center, every mouth ringed gold. Static; the singing
+ *  is the zone's own (puzzle refrains, the lyrist's aura). */
+const pipeOrgan: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { pipes?: ColorSpec; chest?: ColorSpec; gold?: ColorSpec };
+  const { ctx, theme } = env;
+  const pipes = resolveColor(p.pipes, theme, '#d8ccae');
+  const chest = resolveColor(p.chest, theme, '#584430');
+  const gold = resolveColor(p.gold, theme, '#c8a44a');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 29) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The wind-chest: a stout case with a gold keyline.
+    ctx.fillStyle = chest;
+    ctx.fillRect(-r, -r * 0.1, r * 2, r * 0.62);
+    ctx.strokeStyle = withAlpha(gold, 0.7);
+    ctx.lineWidth = Math.max(1.2, r * 0.05);
+    ctx.strokeRect(-r * 0.94, -r * 0.04, r * 1.88, r * 0.5);
+    // Ranked pipes: tallest at center, mouths ringed gold.
+    const n = 7 + (seed % 2) * 2;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const cxp = -r * 0.86 + t * r * 1.72;
+      const hgt = r * (0.7 + Math.sin(Math.PI * t) * 0.85 + hash01(seed, 4 + i) * 0.08);
+      const w = r * 0.16;
+      ctx.fillStyle = shade(pipes, -0.06 + Math.sin(Math.PI * t) * 0.1);
+      ctx.fillRect(cxp - w / 2, -r * 0.1 - hgt, w, hgt);
+      ctx.fillStyle = withAlpha(gold, 0.85);
+      ctx.fillRect(cxp - w / 2, -r * 0.1 - hgt, w, r * 0.06);
+    }
+    ctx.restore();
+  }
+};
+
 PAINTERS.spireOfDawn = spireOfDawn;
 PAINTERS.cloudBillow = cloudBillow;
 PAINTERS.aetherCrystal = aetherCrystal;
@@ -746,3 +873,6 @@ PAINTERS.chimeStand = chimeStand;
 PAINTERS.galeVane = galeVane;
 PAINTERS.cloudCoral = cloudCoral;
 PAINTERS.spireOfGales = spireOfGales;
+PAINTERS.votiveBank = votiveBank;
+PAINTERS.emptyThrone = emptyThrone;
+PAINTERS.pipeOrgan = pipeOrgan;

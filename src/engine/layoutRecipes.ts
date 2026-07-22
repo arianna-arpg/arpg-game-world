@@ -2785,6 +2785,174 @@ function aetherBastionLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('aether_bastion', aetherBastionLayout);
 
+// --- CATHEDRAL (the Seat of the Highest) -----------------------------------------
+// The Aetherial's crown zone: ONE great cloud foundation ringed by a FRAIL
+// FRINGE (the transient law kept at the very door of permanence: the rim of
+// heaven still lets go underfoot — contact-melt only, the courts stand
+// forever), bearing THE GREAT CHURCH — a generated cruciform basilica
+// (engine/structureGen 'cathedral': nested sub-generation, no two alike) —
+// with a PROCESSIONAL approach laid from every portal to its west doors,
+// statue-flanked and arch-crowned; PRAYER ISLES off the rim reached by
+// permanent gleamways and sky-conditional spans (a sunward isle held by day,
+// a vigil isle held only by night — the See answers the sky both ways); and
+// a CRYSTAL PROMENADE arcing the rim, glass floor over the open sky.
+// Knobs are layoutParams: continentFrac, fringeWidth, prayerIsles,
+// vigilIsles, processionalWidth, promenade.
+function cathedralLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const M = 120;
+  // THE FOUNDATION: the great cloud, recorded lobe by lobe so the frail
+  // fringe can echo the exact silhouette a step wider.
+  const cx = arena.w / 2 + rng.range(-arena.w * 0.03, arena.w * 0.03);
+  const cy = arena.h / 2 + rng.range(-arena.h * 0.02, arena.h * 0.02);
+  const baseR = Math.min(arena.w, arena.h) * (layoutParam(def, 'continentFrac', 0.37) as number);
+  const lobes: { x: number; y: number; r: number }[] = [{ x: cx, y: cy, r: baseR }];
+  for (let i = 0, n = rng.int(5, 8); i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rng.range(-0.3, 0.3);
+    const d = baseR * rng.range(0.5, 0.9);
+    lobes.push({ x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d, r: baseR * rng.range(0.4, 0.62) });
+  }
+  const fw = layoutParam(def, 'fringeWidth', 64) as number;
+  const fringe = Mask.forRect(0, 0, arena.w, arena.h);
+  const carve = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const L of lobes) { disc(fringe, L.x, L.y, L.r + fw); disc(carve, L.x, L.y, L.r); }
+
+  // Portal aprons + causeway chains to the PARADE (south of the heart — the
+  // church faces its approach); off-continent stretches are reserved sky
+  // causeways, the bastion law verbatim.
+  const parade = vec(cx, cy + baseR * 0.42);
+  const cwW = layoutParam(def, 'processionalWidth', [56, 72]) as [number, number];
+  const anchors: Vec2[] = [];
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    disc(carve, pt.x, pt.y, 130);
+    disc(fringe, pt.x, pt.y, 130 + fw * 0.5);
+    anchors.push(vec(pt.x, pt.y));
+  }
+  const chainPts: Vec2[][] = [];
+  for (const p of anchors) {
+    const pts = wanderPath(rng, parade, p, { step: 110, wobble: 22, bowFrac: 0.1 });
+    const halfW = rng.range(cwW[0], cwW[1]) / 2;
+    const overSky = pts.map(pt => !carve.has(pt.x, pt.y));
+    band(carve, pts, halfW);
+    band(fringe, pts, halfW + fw * 0.4);
+    const off = pts.filter((_, i) => overSky[i]);
+    if (off.length) reserveArtery(ctx, off, halfW);
+    chainPts.push(pts);
+  }
+
+  // PRAYER ISLES: a gleamway isle (permanent bridge), a SUNWARD isle whose
+  // span stands by day, and optionally a VIGIL isle whose span is starlight —
+  // held only by night. The sky decides which devotions are open.
+  const satN = layoutParam(def, 'prayerIsles', [2, 3]) as [number, number];
+  const sats: { p: Vec2; span: 'span_gleam' | 'span_sun' | 'span_star' }[] = [];
+  const spanKinds: ('span_gleam' | 'span_sun' | 'span_star')[] = ['span_gleam', 'span_sun', 'span_star'];
+  for (let i = 0, n = rng.int(satN[0], satN[1]); i < n; i++) {
+    for (let tries = 0; tries < 16; tries++) {
+      const a = rng.range(0, Math.PI * 2);
+      const d = baseR + rng.range(300, 520);
+      const px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d;
+      if (px < M + 140 || py < M + 140 || px > arena.w - M - 140 || py > arena.h - M - 140) continue;
+      if (sats.some(s => Math.hypot(s.p.x - px, s.p.y - py) < 470)) continue;
+      const r = rng.range(120, 160);
+      disc(carve, px, py, r);
+      disc(carve, px + rng.range(-r, r) * 0.5, py + rng.range(-r, r) * 0.5, r * rng.range(0.4, 0.55));
+      sats.push({ p: vec(px, py), span: spanKinds[Math.min(i, spanKinds.length - 1)] });
+      ctx.pois.push(vec(px, py));
+      break;
+    }
+  }
+
+  // Paint: fringe first (frail), spans next (mouths dock flush), ground last
+  // (the solid cloud wins every overlap).
+  paintRegion(grid, fringe, 'cloud_frail');
+  for (const s of sats) {
+    const pts = wanderPath(rng, vec(cx + (s.p.x - cx) * (baseR / Math.hypot(s.p.x - cx, s.p.y - cy) || 0) * 0.92,
+      cy + (s.p.y - cy) * (baseR / Math.hypot(s.p.x - cx, s.p.y - cy) || 0) * 0.92), s.p,
+      { step: 90, wobble: 10, bowFrac: 0.06 });
+    const m = Mask.forRect(0, 0, arena.w, arena.h);
+    band(m, pts, rng.range(24, 29));
+    paintRegion(grid, m, s.span);
+  }
+  paintRegion(grid, carve, 'ground');
+
+  // THE CRYSTAL PROMENADE: an arc of glass floor near the rim — the See's
+  // boldest walk, the cloudsea under your feet where the ground itself is
+  // honest pavement. Painted OVER ground and sky alike: where it leaves the
+  // cloud it is a crystal balcony over the void.
+  if (rng.chance(layoutParam(def, 'promenade', 0.85) as number)) {
+    const a0 = rng.range(0, Math.PI * 2);
+    const sweep = rng.range(1.1, 2.0);
+    const pts: Vec2[] = [];
+    for (let t = 0; t <= 1.001; t += 0.06) {
+      const a = a0 + t * sweep;
+      pts.push(vec(cx + Math.cos(a) * baseR * 0.84, cy + Math.sin(a) * baseR * 0.84));
+    }
+    const m = Mask.forRect(0, 0, arena.w, arena.h);
+    band(m, pts, rng.range(24, 30));
+    paintRegion(grid, m, 'glass_floor');
+  }
+
+  // THE GREAT CHURCH: raised north of the heart so its west doors face the
+  // parade. The generator rolls the whole edifice; we read the LESSON door
+  // back off the placed record to aim the processional exactly at it.
+  const seat = vec(cx, cy - baseR * 0.2);
+  raiseStructure(ctx, 'grand_cathedral', seat);
+  const placed = ctx.structures?.[ctx.structures.length - 1];
+  const west = placed?.doors.find(d => d.door.lesson) ?? placed?.doors[0];
+  const terminus = west
+    ? vec(west.pos.x + west.normal.x * 96, west.pos.y + west.normal.y * 96)
+    : parade;
+  (ctx.mustReach ??= []).push(vec(terminus.x, terminus.y));
+  ctx.pois.push(vec(terminus.x, terminus.y));
+
+  // THE PROCESSIONAL: the paved approach — the doors to the parade, then
+  // the parade out along the EXACT causeway chains the foundation was
+  // carved with (a way that wandered its own route drew pavement over the
+  // open sky; genqa's floating-doodad net caught it). Flanked by the See's
+  // honor guard of statuary, crowned by glory arches, belled at the front.
+  const spine = wanderPath(rng, terminus, parade, { step: 96, wobble: 8, bowFrac: 0.04 });
+  layTraveledWay(ctx, spine, { kind: 'processional_way', band: [20, 26] });
+  for (const pts of chainPts) {
+    layTraveledWay(ctx, pts, { kind: 'processional_way', band: [20, 26] });
+  }
+  const wayPts: Vec2[] = [...spine, ...(chainPts[0] ?? [])];
+  const seatIfGround = (x: number, y: number, radius: number, kind: DoodadKind, rot?: number): void => {
+    if (grid.isWalkable(x, y)) ctx.doodads.push({ pos: vec(x, y), radius, kind, ...(rot !== undefined ? { rot } : {}) });
+  };
+  for (let i = 2; i < wayPts.length - 1; i += 2) {
+    const a = wayPts[i], b = wayPts[i + 1] ?? wayPts[i - 1];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const side = i % 4 === 2 ? 1 : -1;
+    const kind: DoodadKind = i % 8 === 2 ? 'gilded_seraph' : 'saint_effigy';
+    seatIfGround(a.x + nx * 64 * side, a.y + ny * 64 * side, rng.range(13, 16), kind);
+    if (i % 6 === 4) seatIfGround(a.x, a.y, rng.range(30, 34), 'glory_arch', Math.atan2(dy, dx));
+  }
+  if (west) {
+    const px = -west.normal.y, py = west.normal.x;
+    seatIfGround(terminus.x + px * 230, terminus.y + py * 230, rng.range(16, 19), 'bell_spire');
+    seatIfGround(terminus.x - px * 230, terminus.y - py * 230, rng.range(16, 19), 'bell_spire');
+    seatIfGround(terminus.x + px * 120, terminus.y + py * 120, rng.range(11, 13), 'votive_bank');
+    seatIfGround(terminus.x - px * 120, terminus.y - py * 120, rng.range(11, 13), 'votive_bank');
+  }
+
+  // Prayer-isle devotions: each isle keeps a shrine and a lit brazier — the
+  // reward for crossing whatever bridge the sky is holding open.
+  for (const s of sats) {
+    seatIfGround(s.p.x, s.p.y, rng.range(12, 14), 'reliquary_shrine');
+    seatIfGround(s.p.x + rng.range(-70, 70), s.p.y + rng.range(-70, 70), rng.range(9, 11), 'aureate_brazier');
+  }
+
+  scatterDecoration(ctx, def);
+}
+registerLayout('cathedral', cathedralLayout);
+
 // --- SHIP DECK (the Wraithsail's boards) -----------------------------------------
 // A HULL as a zone: one long pointed form — bow to the north portal, stern to
 // the south — walled by the dark beyond the bulwark. The SAME recipe serves

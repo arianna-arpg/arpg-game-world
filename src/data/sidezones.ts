@@ -415,6 +415,30 @@ registerSidezone({
   mint: townhouseFloor,
 });
 
+// --- THE SERAPH CITY'S GALLERIES (the townhouse lane vested in marble) ------
+// The colossal angelic buildings are CLIMBABLE: the gallery_hollow cracks a
+// basilica_stair out of a pantheon's mass (data/hollows.ts), and the stair
+// dwells UP into minted GALLERY floors — three rungs (gallery → high gallery
+// → belfry) before noDeeper closes the ladder, one more than any townhouse:
+// the city of angels ascends into its own cloudbase, and the climb should
+// feel it. Floors lay the next rung themselves (basilica_floor layout rows).
+const basilicaFloor = ({ parent, seed, id }: SidezoneMintCtx): ZoneDef => {
+  const flights = (parent.caveDepth ?? 0) + 1;
+  return mintCave(parent, seed, id, 'basilica_floor', {
+    rollVariant: true,
+    name: flights >= 3 ? 'the Belfry' : flights === 2 ? 'the High Gallery' : 'the Gallery Above',
+    objective: { kind: 'none', label: 'the galleries' },
+    noDeeper: flights >= 3,
+  });
+};
+
+registerSidezone({
+  kind: 'basilica_stair',
+  dwell: 0.7,
+  ledgerOnEnter: 'basilica_climbed',
+  mint: basilicaFloor,
+});
+
 // --- THE SEWERS (the city's underdark — the descend lane's civic door) ----------
 // A street grate dwells DOWN into the minted SEWERWORKS: the ruin_gate
 // pattern under the boulevards. Every grate keeps its own drains forever

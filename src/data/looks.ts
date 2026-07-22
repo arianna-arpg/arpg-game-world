@@ -5518,6 +5518,70 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // --- THE CATHEDRAL CLERGY (aether_cathedral) ------------------------------
+  // The liturgical wardrobe law: one OFFICE-TELL per silhouette — hymnal,
+  // censer, casket, sunburst, trumpet — and nothing borrowed between them.
+
+  /** The chorister: veils and an open hymnal — the song you should stop. */
+  chorister_veil: {
+    parts: [
+      { kind: 'veilSashes', scale: 1.05, role: 'cloth', alpha: 0.9 },
+      { kind: 'robe', scale: 0.92 },
+      { kind: 'book', x: 0.4, scale: 1.1 },
+      { kind: 'halo', scale: 0.75, alpha: 0.4 },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 2 } }],
+  },
+  /** The censer-warden: hooded, the thurible swung well forward — smoke
+   *  before sword. */
+  censer_warden: {
+    parts: [
+      { kind: 'robe', scale: 1.0 },
+      { kind: 'hood', scale: 0.95, role: 'cloth' },
+      { kind: 'censer', x: 0.5, y: 0.15, scale: 1.35 },
+      { kind: 'bell', x: -0.35, y: 0.3, scale: 0.6, role: 'metal' },
+    ],
+    live: [{ kind: 'puffMotes', x: 0.45, scale: 0.8 }],
+  },
+  /** The ark: a gilded casket on the march — chains, plate, a crown of
+   *  drifting shards where a bearer's head should be. */
+  reliquary_ark: {
+    parts: [
+      { kind: 'crateBox', scale: 1.15, role: 'metal' },
+      { kind: 'armorPlates', scale: 0.95, role: 'metal' },
+      { kind: 'chains', scale: 1.0, role: 'dark' },
+      { kind: 'floatingShards', y: -0.5, scale: 0.9, role: 'glow', alpha: 0.85 },
+      { kind: 'halo', y: -0.55, scale: 0.7, alpha: 0.35 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.8, alpha: 0.6 }],
+    shadowScale: 0.85,
+  },
+  /** The cantor: the sunburst worn like a vestment — the kata's own school
+   *  colors, sung from the Host's side of the nave. */
+  gloria_cantor: {
+    parts: [
+      { kind: 'sunburst', scale: 1.2, alpha: 0.4, role: 'glow' },
+      { kind: 'featherWings', scale: 0.9, role: 'cloth', alpha: 0.9 },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'orb', x: 0.4, scale: 0.95, role: 'glow' },
+      { kind: 'laurelCrown', scale: 0.85 },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 0.8, params: { n: 2 } }],
+  },
+  /** The Voice: the biggest wings in the roster under the brightest burst —
+   *  and the warhorn that speaks for the seat nobody sits. */
+  voice_throne: {
+    parts: [
+      { kind: 'sunburst', scale: 1.6, alpha: 0.5, role: 'glow' },
+      { kind: 'featherWings', scale: 1.4, role: 'glow' },
+      { kind: 'robe', scale: 1.05 },
+      { kind: 'warhorn', x: 0.42, scale: 1.2, role: 'metal' },
+      { kind: 'crown', scale: 0.9, role: 'metal' },
+      { kind: 'halo', scale: 1.2, alpha: 0.6 },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 1.0, params: { n: 3 } }],
+  },
+
   // --- THE MUMMERS (the mimicry troupe — engine/mimic.ts) -------------------
   // Family read-at-a-glance law: each silhouette carries its capturable
   // art's TELL and nothing borrowed from a neighbor — the wings shriek, the

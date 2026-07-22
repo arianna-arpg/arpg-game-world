@@ -227,6 +227,10 @@ export function hasRoofStyle(id: string): boolean { return id in ROOF_STYLES; }
 registerRoofStyle({ id: 'timber', fill: '#4a3a28', edge: '#2e2418', alpha: 0.96, pattern: 'planks' });
 registerRoofStyle({ id: 'slate', fill: '#39404e', edge: '#232833', alpha: 0.96, pattern: 'shingles' });
 registerRoofStyle({ id: 'stone', fill: '#474b52', edge: '#2c2f35', alpha: 0.96, pattern: 'stone' });
+// The See's leading: pale consecrated stone under a gilt ridge — the same
+// stone painter, vested. Reads bright against every timber/slate roofline
+// so the great church owns its skyline at a glance.
+registerRoofStyle({ id: 'basilica', fill: '#cfc7b4', edge: '#8a6f34', alpha: 0.96, pattern: 'stone' });
 // Straw over a home: the same plank painter in cut-hay tones — a roof that
 // reads warm from the square (a new pattern would be a renderer verb; a new
 // palette is one data row — the cheaper lever wins until thatch needs more).
@@ -267,6 +271,9 @@ registerFloorStyle({ id: 'cobble', fill: '#565048', seam: '#38332c', pattern: 'c
 registerFloorStyle({ id: 'flagstone', fill: '#4e4a42', seam: '#322f28', pattern: 'flagstone', unit: 24 });
 registerFloorStyle({ id: 'tile', fill: '#5a5248', seam: '#3c362e', pattern: 'tile', unit: 16 });
 registerFloorStyle({ id: 'packed', fill: '#3a3022', seam: '#2c2418', pattern: 'packed', unit: 20 });
+// Polished marble slabs — the cathedral pavement (large pale tiles, warm
+// seams). Bright by the same law as the pale walls it runs beneath.
+registerFloorStyle({ id: 'marble', fill: '#d5cec0', seam: '#a89f8c', pattern: 'tile', unit: 22 });
 
 /** ONE blueprint, two countries (the reskin doctrine): the hovel and the
  *  goblin_hut share these exact rows — only legend/roof/garrison differ.
@@ -1214,5 +1221,45 @@ export const STRUCTURES: Record<string, StructureDef> = {
       courtyardChance: 0.55, windows: 0, gates: [2, 3], clutterPer100: [8, 14],
     },
     roofs: 'auto', roofStyle: 'timber',
+  },
+
+  // --- THE GREAT CHURCH (the Aetherial's crown; engine/structureGen 'cathedral')
+  // "This is the truest seat of God as envisioned from the height of Faith."
+  // A rolled cruciform basilica — narthex, columned nave, transepts, choir,
+  // apse — whose chapter house is a NESTED 'compound' generation (a structure
+  // generator inside a structure generator), so no two Sees mint alike. The
+  // sanctuary holds the HIGH ALTAR and the EMPTY THRONE — the seat itself is
+  // vacant, guarded, never sat. The apse ambulatory is unroofed GLASS FLOOR:
+  // open to heaven above, the cloudsea under your feet. The GREAT WEST DOORS
+  // are a lesson door: the first dwell-open stamps 'cathedral_door_opened'
+  // on the account (the gateway ledger the Aureole vault rows wait on), and
+  // a graduated account finds them standing open forever after.
+  grand_cathedral: {
+    id: 'grand_cathedral', halfW: 700, halfH: 640,
+    generator: 'cathedral', cellSize: 34,
+    genParams: {},
+    legend: {
+      '#': { region: 'cathedral_wall' },
+      I: { doodad: { kind: 'pantheon_column', radius: 12 }, interior: true },
+      w: { doodad: { kind: 'cathedral_pew', radius: 11 }, interior: true },
+      q: { doodad: { kind: 'choir_stall', radius: 12 }, interior: true },
+      A: { doodad: { kind: 'high_altar', radius: 16 }, interior: true },
+      Q: { doodad: { kind: 'empty_throne', radius: 15 }, interior: true },
+      O: { doodad: { kind: 'pipe_organ', radius: 15 }, interior: true },
+      v: { doodad: { kind: 'votive_bank', radius: 12 }, interior: true },
+      R: { doodad: { kind: 'reliquary_shrine', radius: 13 }, interior: true },
+      E: { doodad: { kind: 'saint_effigy', radius: 12 }, interior: true },
+      U: { doodad: { kind: 'font_of_light', radius: 14 }, interior: true },
+      g: { region: 'glass_floor', courtyard: true },
+      d: { door: { mode: 'dwell' }, interior: true },
+      D: { door: { mode: 'dwell', lesson: 'cathedral_door_opened' }, interior: true },
+    },
+    // Room-by-room confinement where rooms seal (chapels, the chapter house);
+    // the great vessel itself reads open through its own glass and lancets.
+    // confineAlpha lifted: candle-lit stone, never a cellar's dark.
+    confineVision: 'rooms', confineAlpha: 0.72,
+    roofs: 'auto', roofStyle: 'basilica',
+    floorStyle: 'marble',
+    garrison: 'seraphic', garrisonSize: [4, 6],
   },
 };
