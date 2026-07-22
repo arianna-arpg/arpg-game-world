@@ -263,6 +263,9 @@ export interface ConstructState {
    *  Flaw graft, stamped at spawn): the OWNER's hits demolish this object
    *  at ownerMult × damage (affinity tags harder still). */
   breakable?: { ownerMult: number; affinityTags?: SkillTag[]; affinityMult?: number };
+  /** MASSED (the Unmoored graft, stamped at spawn): this body is a mass-
+   *  fabric citizen — pushActor's construct anchor stands down for it. */
+  massed?: boolean;
   /** DEATH BURST (ConstructDelivery.deathBurst): the object detonates
    *  however it ends — fired once through the kill artery. */
   deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
@@ -1068,6 +1071,9 @@ export class Actor {
   /** Distance walked since the last 'move' charge-tap sweep (fed by
    *  World.moveActor; consumed in updateCharges). */
   moveAcc = 0;
+  /** Ambient orb-trickle meter (orbTrickle_<id> equip stats — Requiem's
+   *  standalone lane; ticked in the World actor sweep). Transient. */
+  orbTrickleT = 0;
   /** Fingerprint of the last-synced equipMods loadout (skip no-op syncs —
    *  setSource clears the stat cache). */
   private equipKey = '';
@@ -2533,13 +2539,18 @@ export class Actor {
       if (st.count >= cap) { st.timer = 0; continue; }
       // THE DRIP RELOAD (magazine {drip} — Deep Reserves' one-per-clock
       // law): below cap the reload cycles on the host's own cooldown,
-      // scaled by cooldownRecovery (alacrity invests in the reload),
-      // on the BANK's timer — the cooldown map stays untouched, so
-      // rounds in the pot spend freely the whole while.
+      // scaled by cooldownRecovery (alacrity invests in the reload) AND
+      // skillChargeRate (2026-07-22: the rate stat reads on EVERY bank
+      // clock, not just the trickle lane — "of Wind" gear speeds magazines,
+      // and Deep Reserves' own inverted rate prices the drip too), on the
+      // BANK's timer — the cooldown map stays untouched, so rounds in the
+      // pot spend freely the whole while.
       const mag = uc.magazine;
       if (mag && mag !== true && mag.drip && !st.reloading && inst!.def.cooldown > 0) {
         st.timer += dt * this.sheet.get('cooldownRecovery',
-          skillContextTags(inst!.def), instanceMods(inst!));
+          skillContextTags(inst!.def), instanceMods(inst!))
+          * this.sheet.get('skillChargeRate',
+            skillContextTags(inst!.def), instanceMods(inst!));
         if (st.timer >= inst!.def.cooldown) {
           st.timer -= inst!.def.cooldown;
           st.count = Math.min(cap, st.count + (mag.refill ?? 1));

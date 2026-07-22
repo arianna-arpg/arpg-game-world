@@ -77,6 +77,11 @@ export const ORB_DEFS: Record<string, OrbDef> = {
 /** Hard ceiling on live orbs in a zone — every shed path respects it. */
 export const ORB_CAP = 40;
 
+/** THE AMBIENT TRICKLE clock (orbTrickle_<id>): seconds per roll, and how
+ *  far from the carrier the orb lands (a spot you WALK to — the scoop is
+ *  the play, never a hand-out). */
+export const ORB_TRICKLE = { everySec: 4, scatter: 90 };
+
 /** An orb's rolled restore amount at a zone level. */
 export function orbAmount(def: OrbDef, level: number): number {
   return Math.round(def.amount.base + (def.amount.perLevel ?? 0) * level);
@@ -99,6 +104,9 @@ for (const [id, def] of Object.entries(ORB_DEFS)) {
   STAT_DEFS['orbRefund_' + id] = {
     label: `Cooldown Refund per ${def.label} Orb`, base: 0, min: 0,
   };
+  STAT_DEFS['orbTrickle_' + id] = {
+    label: `${def.label} Orb Trickle`, base: 0, min: 0, max: 1, percent: true,
+  };
 }
 
 /** Stat ids for a kind's shed chances and pickup refund. */
@@ -106,3 +114,6 @@ export function orbOnHitStat(id: string): string { return 'orbOnHit_' + id; }
 export function orbOnKillStat(id: string): string { return 'orbOnKill_' + id; }
 export function orbOnHurtStat(id: string): string { return 'orbOnHurt_' + id; }
 export function orbRefundStat(id: string): string { return 'orbRefund_' + id; }
+/** Ambient shed chance per ORB_TRICKLE.everySec while carried (equipMods —
+ *  Requiem's standalone lane: the vigil sheds its own sparks). */
+export function orbTrickleStat(id: string): string { return 'orbTrickle_' + id; }

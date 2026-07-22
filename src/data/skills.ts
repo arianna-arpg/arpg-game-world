@@ -6815,11 +6815,16 @@ export const SKILLS: Record<string, SkillDef> = {
 
   soul_harvest: {
     id: 'soul_harvest', name: 'Soul Harvest',
-    description: 'A reliquary that DRINKS the dying: anything that falls nearby yields a SOUL (they seep away if hoarded). Release consumes every soul for a nova of grave-cold — 35% more per soul burned. The soul-collector, baked into one gem.',
+    description: 'A reliquary that DRINKS the dying: anything that falls nearby yields a SOUL (they seep away if hoarded), and the WORTHY — rare and greater — yield one on every landed blow while they still stand. Release consumes every soul for a nova of grave-cold — 35% more per soul burned. The soul-collector, baked into one gem.',
     tags: ['spell', 'chaos', 'cold', 'aoe'], color: '#9a86e8',
     manaCost: 10, cooldown: 2, useTime: 0.6,
-    // The passive IS the skill: deaths near you bank fuel while it's equipped.
-    chargeGain: [{ charge: 'soul', amount: 1, max: 12, on: 'enemyDeath', radius: 420 }],
+    // The passive IS the skill: deaths near you bank fuel while it's equipped
+    // — and elite bodies pay per landed blow (the boss lane: a fight with
+    // nothing dying still feeds the reliquary).
+    chargeGain: [
+      { charge: 'soul', amount: 1, max: 12, on: 'enemyDeath', radius: 420 },
+      { charge: 'soul', amount: 1, max: 12, on: 'hit', eliteVictim: true },
+    ],
     chargeCost: { charge: 'soul', amount: 'all', minimum: 1, damagePerCharge: 0.35 },
     baseDamage: { chaos: [8, 13], cold: [4, 7] },
     delivery: { type: 'nova', radius: 130 },
@@ -8743,14 +8748,20 @@ export const SKILLS: Record<string, SkillDef> = {
 
   requiem: {
     id: 'requiem', name: 'Requiem',
-    description: 'Speak the last words: consume EVERY banked Wakeflame for a mourning nova — 40% more damage per flame consumed. Each Wakeflame orb you scoop refunds 1.5s of the rite\'s long cooldown, and carried on the bar your hits occasionally shake one loose.',
+    description: 'Speak the last words: consume EVERY banked Wakeflame for a mourning nova — 40% more damage per flame consumed. Each Wakeflame orb you scoop refunds 1.5s of the rite\'s long cooldown; carried on the bar your hits occasionally shake one loose, and the vigil itself sheds a stray flame nearby every so often — the rite mourns alone if it must.',
     tags: ['spell', 'fire', 'aoe'], color: '#f0c060',
     manaCost: 20, cooldown: 14, useTime: 0.7,
     baseDamage: { fire: [16, 26] },
     delivery: { type: 'nova', radius: 150 },
     chargeCost: { charge: 'wakeflame', amount: 'all', minimum: 1, damagePerCharge: 0.4 },
     innateMods: [mod('orbRefund_wakeflame', 'flat', 1.5)],
-    equipMods: [mod('orbOnHit_wakeflame', 'flat', 0.07)],
+    equipMods: [
+      mod('orbOnHit_wakeflame', 'flat', 0.07),
+      // THE STANDALONE LANE: a low ambient trickle (chance per 4s tick,
+      // shed at a walk-to spot) keeps the rite functional with no other
+      // wakeflame ability on the bar — the scoop stays the play.
+      mod('orbTrickle_wakeflame', 'flat', 0.25),
+    ],
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'burn', chance: 0.35 },

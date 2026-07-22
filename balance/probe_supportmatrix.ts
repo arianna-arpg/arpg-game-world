@@ -24,13 +24,18 @@
 // Run: npx tsx balance/probe_supportmatrix.ts
 // ---------------------------------------------------------------------------
 
-import { bootSimEngine } from '../src/sim/arena';
+import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { applyBuild } from '../src/sim/builds';
+import type { BuildSpec } from '../src/sim/types';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { MONSTERS } from '../src/data/monsters';
 import { unreadPayloadRows } from '../src/data/graftReadSites';
 import { mod } from '../src/engine/stats';
-import { SUPPORT_PAYLOAD_FIELDS, makeSkillInstance, mechanismHolds, supportFitsInst } from '../src/engine/skills';
+import {
+  SUPPORT_PAYLOAD_FIELDS, instanceMods, makeSkillInstance, mechanismHolds,
+  skillContextTags, supportFitsInst,
+} from '../src/engine/skills';
 import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
   RESIST_DUMMY_BY_TYPE, ablationUnits, classifyExpression, compatCensus, costFunctionSupport,
@@ -740,6 +745,207 @@ check('E14 synthetic fixtures cleaned out of the registry',
   check('H8b a breathing flight reads EFFECTIVE at the graze lane (the swell clips what the base misses)',
     breathe.result.verdict === 'effective',
     `${breathe.result.verdict}; moved: ${breathe.result.moved.map(m => m.key).join(',')}`);
+}
+
+// === RIG I — the R8 famine passes + the unit rules (2026-07-22) =============
+// The user's calls landed whole: Soul Harvest's boss lane (elite hits feed
+// the reliquary), Requiem's ambient trickle (standalone-functional), Deep
+// Reserves' INVERTED rate wired into the drip clock, THE MALUS TOTALITY
+// RULE (socketed damage multipliers reach minions — the one descendant on
+// its own sheet), THE FEEDER LOCALITY (strikes floor + the unpaid train),
+// the DISPLACEMENT GATE with the true re-lunge, and the Unmoored mass
+// graft (anchored-until-massed).
+
+{
+  type SimWorld = ReturnType<typeof makeSimWorld>;
+  const step = (w: SimWorld, s: number): void => {
+    for (let t = 0; t < s; t += 1 / 60) w.update(1 / 60);
+  };
+
+  // I1 — THE BOSS LANE: a normal victim feeds nothing on hit; a rare one
+  // pays a soul per landed blow (the reliquary drinks the worthy standing).
+  // The victim is a HIGH-LEVEL zombie so the swing can never kill it — a
+  // death would feed the enemyDeath tap and muddy the hit-lane read.
+  {
+    const w = makeSimWorld('juggernaut', 0x1a01);
+    applyBuild(w, {
+      id: 'rig_i1', classId: 'juggernaut', level: 16,
+      skills: [{ id: 'cleave', level: 3 }, { id: 'soul_harvest', level: 3 }],
+    } as BuildSpec, 7);
+    const p = w.player;
+    const cleave = p.skills.find(s => s?.def.id === 'cleave')!;
+    const z = w.createMonster('zombie', 30, 'enemy');
+    z.pos = { x: p.pos.x + 40, y: p.pos.y };
+    w.actors.push(z);
+    w.executeSkill(p, cleave, z.pos); step(w, 0.4);
+    const normalSouls = p.charges.get('soul') ?? 0;
+    z.rarity = 'rare';
+    p.mana = p.maxMana();
+    w.executeSkill(p, cleave, z.pos); step(w, 0.4);
+    check('I1 the boss lane: a normal victim feeds no soul on hit, a rare victim pays per blow',
+      normalSouls === 0 && (p.charges.get('soul') ?? 0) > 0 && !z.dead,
+      `normal=${normalSouls}, elite=${p.charges.get('soul') ?? 0}, dead=${z.dead}`);
+    // The training dummy wears def-level boss BY DESIGN (the rack's boss
+    // stand-in) — the elite gate reads it as worthy, so the reliquary is
+    // MEASURABLE at the plain rack dummy. Pinned so the quirk stays chosen.
+    const w2 = makeSimWorld('juggernaut', 0x1a11);
+    applyBuild(w2, {
+      id: 'rig_i1b', classId: 'juggernaut', level: 16,
+      skills: [{ id: 'cleave', level: 3 }, { id: 'soul_harvest', level: 3 }],
+    } as BuildSpec, 7);
+    const p2 = w2.player;
+    const cleave2 = p2.skills.find(s => s?.def.id === 'cleave')!;
+    const dummy = w2.createMonster('target_dummy', 7, 'enemy');
+    dummy.pos = { x: p2.pos.x + 40, y: p2.pos.y };
+    w2.actors.push(dummy);
+    w2.executeSkill(p2, cleave2, dummy.pos); step(w2, 0.4);
+    check('I1b the rack dummy counts as the boss it stands in for (soul per blow at the yard)',
+      (p2.charges.get('soul') ?? 0) > 0, `souls=${p2.charges.get('soul') ?? 0}`);
+  }
+
+  // I2 — THE AMBIENT TRICKLE: Requiem carried on the bar sheds stray
+  // wakeflames nearby on its own clock; the magnet scoops them into the
+  // bank — the rite mourns alone. (Seeded: deterministic per seed.)
+  {
+    const w = makeSimWorld('juggernaut', 0x1a02);
+    applyBuild(w, {
+      id: 'rig_i2', classId: 'juggernaut', level: 12,
+      skills: [{ id: 'requiem', level: 3 }],
+    } as BuildSpec, 7);
+    step(w, 60);
+    const banked = w.player.charges.get('wakeflame') ?? 0;
+    check('I2 the ambient trickle: a carried Requiem banks wakeflame with no other source',
+      banked > 0, `banked=${banked} after 60s`);
+  }
+
+  // I3 — THE INVERTED RATE: Deep Reserves' specialization price lands in
+  // the host instance's own context (the drip clock multiplies it in — the
+  // line the deep lane proved dead 26/26 now prices every bank).
+  {
+    const w = makeSimWorld('juggernaut', 0x1a03);
+    applyBuild(w, {
+      id: 'rig_i3', classId: 'juggernaut', level: 12,
+      skills: [{ id: 'cindershell', level: 3, supports: [{ id: 'deep_reserves', level: 1 }] }],
+    } as BuildSpec, 7);
+    const p = w.player;
+    const inst = p.skills.find(s => s?.def.id === 'cindershell')!;
+    const rate = p.sheet.get('skillChargeRate', skillContextTags(inst.def), instanceMods(inst));
+    check('I3 the inverted rate: Deep Reserves prices the bank at 0.85 in-context',
+      Math.abs(rate - 0.85) < 1e-6, `rate=${rate.toFixed(3)}`);
+  }
+
+  // I4 — THE MALUS TOTALITY RULE: a socketed less-damage multiplier boards
+  // the MINION's own sheet through the owner bake (constructs, children and
+  // sequels inherit through the instance roll already).
+  {
+    const w = makeSimWorld('juggernaut', 0x1a04);
+    const malus = {
+      id: '__probe_malus__', name: '__probe_malus__', description: 'probe fixture',
+      color: '#fff', mods: [mod('damage', 'more', -0.3)], weight: 0,
+    } as (typeof SUPPORTS)[string];
+    const inst = makeSkillInstance(SKILLS.wisp_call, 1, 3);
+    inst.sockets[0] = { def: malus, level: 1 };
+    const bare = makeSkillInstance(SKILLS.wisp_call, 1, 3);
+    const m1 = w.createMonster('zombie', 5, 'enemy');
+    const m0 = w.createMonster('zombie', 5, 'enemy');
+    w.bakeMinionOwnerStats(m1, w.player, inst, 1);
+    w.bakeMinionOwnerStats(m0, w.player, bare, 1);
+    const withMalus = m1.sheet.get('damage');
+    const bareDmg = m0.sheet.get('damage');
+    check('I4 malus totality: the socketed −30% more reaches the minion sheet',
+      Math.abs(withMalus / bareDmg - 0.7) < 1e-6,
+      `bare=${bareDmg.toFixed(3)}, socketed=${withMalus.toFixed(3)}`);
+  }
+
+  // I5 — THE FEEDER LOCALITY: the strikes floor replaces the tag ban (a
+  // never-striking stealth veil refuses structurally; a striking swing
+  // fits), and the paid press genuinely mints cost-as-damage.
+  {
+    check('I5a mana_feeder refuses the never-striking (cloak), fits the striking (cleave)',
+      supportFitsInst(SUPPORTS.mana_feeder, makeSkillInstance(SKILLS.cloak, 1, 3)) === false
+      && supportFitsInst(SUPPORTS.mana_feeder, makeSkillInstance(SKILLS.cleave, 1, 3)) === true);
+    const sess = makeProbeSession({ seeds: 2 });
+    const feeder = probePair(sess, { skillId: 'cleave', supportId: 'mana_feeder', fit: 'host' });
+    check('I5b the paid press mints cost-as-damage (cleave+mana_feeder reads EFFECTIVE)',
+      feeder.result.verdict === 'effective',
+      `${feeder.result.verdict}; moved: ${feeder.result.moved.map(m => m.key).join(',')}`);
+  }
+
+  // I6 — THE DISPLACEMENT GATE + THE TRUE RE-LUNGE: dash fits, the stealth
+  // veil and the planted mark refuse; and with the graft socketed a dash
+  // aimed PAST a flanking body bends to it — press-lunge and retargeted
+  // echo both (the y-drift only the auto-aim can produce).
+  {
+    check('I6a closing_instinct fits dash, refuses cloak and mark (displaces gate)',
+      supportFitsInst(SUPPORTS.closing_instinct, makeSkillInstance(SKILLS.dash, 1, 3)) === true
+      && supportFitsInst(SUPPORTS.closing_instinct, makeSkillInstance(SKILLS.cloak, 1, 3)) === false
+      && supportFitsInst(SUPPORTS.closing_instinct, makeSkillInstance(SKILLS.mark, 1, 3)) === false);
+    const lunge = (withGem: boolean): number => {
+      const w = makeSimWorld('juggernaut', 0x1a06);
+      applyBuild(w, {
+        id: 'rig_i6', classId: 'juggernaut', level: 12,
+        skills: [{
+          id: 'dash', level: 3,
+          ...(withGem ? { supports: [{ id: 'closing_instinct', level: 1 }] } : {}),
+        }],
+      } as BuildSpec, 7);
+      const p = w.player;
+      const z = w.createMonster('zombie', 5, 'enemy');
+      z.pos = { x: p.pos.x + 180, y: p.pos.y + 120 };
+      w.actors.push(z);
+      const inst = p.skills.find(s => s?.def.id === 'dash')!;
+      const y0 = p.pos.y;
+      w.useSkill(p, inst, { x: p.pos.x + 200, y: p.pos.y });
+      step(w, 1.2);
+      return Math.abs(p.pos.y - y0);
+    };
+    const bareDrift = lunge(false);
+    const gemDrift = lunge(true);
+    check('I6b the lunge bends to the flanking body only with the graft (press + echo)',
+      bareDrift < 8 && gemDrift > 40,
+      `bare y-drift=${bareDrift.toFixed(1)}, socketed=${gemDrift.toFixed(1)}`);
+  }
+
+  // I7 — THE UNMOORED GRAFT: the bare wall is the anchor it always was;
+  // the grafted wall wears real weight and the mass fabric moves it.
+  {
+    const raise = (withGem: boolean): { moved: number; weight: number } => {
+      const w = makeSimWorld('sorcerer', 0x1a07);
+      applyBuild(w, {
+        id: 'rig_i7', classId: 'sorcerer', level: 12,
+        skills: [{
+          id: 'frost_wall', level: 3,
+          ...(withGem ? { supports: [{ id: 'unmoored', level: 1 }] } : {}),
+        }],
+      } as BuildSpec, 7);
+      const p = w.player;
+      const inst = p.skills.find(s => s?.def.id === 'frost_wall')!;
+      w.useSkill(p, inst, { x: p.pos.x + 80, y: p.pos.y });
+      step(w, 1.2);
+      const wall = w.actors.find(a => a.construct && a.sourceSkillId === 'frost_wall');
+      if (!wall) return { moved: -1, weight: -1 };
+      const x0 = wall.pos.x, y0 = wall.pos.y;
+      w.pushActor(wall, 0, 400, p, inst);
+      step(w, 0.8);
+      return {
+        moved: Math.hypot(wall.pos.x - x0, wall.pos.y - y0),
+        weight: wall.effectiveWeight(),
+      };
+    };
+    const bare = raise(false);
+    const massed = raise(true);
+    check('I7a the bare wall never moves (the anchor holds)',
+      bare.moved >= 0 && bare.moved < 0.5, `moved=${bare.moved.toFixed(1)}`);
+    check('I7b the unmoored wall wears weight 6 and a real shove moves it',
+      massed.moved > 4 && Math.abs(massed.weight - 6) < 0.6,
+      `moved=${massed.moved.toFixed(1)}, weight=${massed.weight.toFixed(2)}`);
+    const wallInst = makeSkillInstance(SKILLS.frost_wall, 1, 3);
+    check('I7c construct:massed holds only with the graft beside (self-lifting gate)',
+      mechanismHolds('construct:massed', wallInst) === false
+      && (wallInst.sockets[0] = { def: SUPPORTS.unmoored, level: 1 },
+        mechanismHolds('construct:massed', wallInst)) === true
+      && supportFitsInst(SUPPORTS.unmoored, makeSkillInstance(SKILLS.cleave, 1, 3)) === false);
+  }
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

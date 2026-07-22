@@ -918,6 +918,10 @@ export interface ChargeGainSpec {
   everySeconds?: number;
   /** orbPickup: only orbs of this ORB_DEFS kind feed the tap (omit = any). */
   orbKind?: string;
+  /** hit / takeHit / kill: only an ELITE counterpart feeds the tap —
+   *  rare-or-better rarity or a def-level boss (Soul Harvest's boss lane:
+   *  the reliquary drinks the worthy while they still stand). */
+  eliteVictim?: boolean;
   /** Chance per trigger (default 1). */
   chance?: number;
   /** Only taps while THIS skill is toggled active (its aura is on / its
@@ -4199,6 +4203,13 @@ export interface SupportDef {
     ownerMult: number;
     deathBurst: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
   };
+  /** THE MASS GRAFT (Unmoored): the host skill's constructs stand FREE of
+   *  the earth — the body gains real WEIGHT (the mass fabric's citizen:
+   *  shoves move it, the bowling lane carries it, walls wound it) instead
+   *  of the anchored default. Omit `weight` to derive it from the body's
+   *  radius like any monster. Double-edged by design: your wall can be
+   *  pushed out of the lane too. */
+  massGraft?: { weight?: number };
   /** CORPSE SPAWN (Hiveborn): corpses this skill CONSUMES crawl back out —
    *  `perCorpse` births one per body eaten; `count` instead births a fixed
    *  brood per use (the ghost variant pairs it with an imposed cooldown
@@ -4634,7 +4645,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'tether', 'aim', 'constructFx', 'devour',
   'fissureVolatile', 'fissureAftershock', 'fissureRoulette',
   'fissureReclose', 'fissurePath', 'meleeFissure',
-  'spreadOnHit', 'breakableGraft', 'corpseSpawn', 'minionAuraPool',
+  'spreadOnHit', 'breakableGraft', 'massGraft', 'corpseSpawn', 'minionAuraPool',
   'dominate', 'sacrifice', 'healField', 'spawnBuff', 'zoneEmit', 'madden',
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
@@ -4842,6 +4853,24 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
       return !d.rehit && !d.noImpact;
     }
     return true; // unknown params pass open (the registry is the authority)
+  },
+  /** A DISPLACING host — the cast bodily moves the caster (dash/blink/
+   *  leap deliveries). The auto-target family (Closing Instinct) demands
+   *  it: a lunge needs a road; a stealth veil or a planted mark has no
+   *  displacement to re-aim, and forcing one would pervert the skill
+   *  (the user's stealth ruling — refuse, never contort). */
+  displaces: inst => inst.def.delivery.type === 'dash'
+    || inst.def.delivery.type === 'blink' || inst.def.delivery.type === 'leap',
+  /** A CONSTRUCT host — bare 'construct' is the delivery itself;
+   *  'construct:massed' additionally demands the body be a mass-fabric
+   *  citizen (the Unmoored graft beside it — the self-lifting gate for
+   *  collision-payload gems: a wall that cannot move cannot collide). */
+  construct: (inst, param) => {
+    if (inst.def.delivery.type !== 'construct') return false;
+    if (param === 'massed') {
+      return hostSockets(inst).some(s => s.def.massGraft !== undefined);
+    }
+    return true;
   },
   /** A STATUS source of any kind — the affliction gate's broader sibling
    *  (potency's power lane serves non-damaging ailments too). Reads the

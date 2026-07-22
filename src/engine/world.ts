@@ -253,7 +253,7 @@ import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
 import {
   ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
-  orbRefundStat,
+  orbRefundStat, orbTrickleStat, ORB_TRICKLE,
 } from '../data/orbs';
 import { chooseEvent, ZONE_EVENT_CFG, type EventContext, type EventReward } from './events';
 import { ActiveZoneEvent } from './zoneEvent';
@@ -2958,13 +2958,15 @@ export class World {
   /** World-clock stamp of the last zone load — the renderer's spawn-in
    *  exemption (load-time population never "grows in", arrivals do). */
   zoneEnteredAt = 0;
-  /** Scheduled re-executions (Multistrike, Spell Echo, Cascade, Unleash). */
+  /** Scheduled re-executions (Multistrike, Spell Echo, Cascade, Unleash).
+   *  THE FEEDER LOCALITY (2026-07-22): repeats carry NO paidCost — the
+   *  press's payment mints cost-as-damage ONCE, on the pressed cast; the
+   *  echoes are unpaid and earn nothing (the law the costDamage read
+   *  always stated, now true of the train too). */
   pendingRepeats: {
     caster: Actor; inst: SkillInstance; aim: Vec2;
     n: number; k: number; timer: number; interval: number;
     dmgMult: number; aoeMult: number; scaleStep: number; retarget: boolean;
-    /** The originating press's payment (resource-as-damage rides the train). */
-    paidCost?: { mana: number; life: number };
   }[] = [];
   /** Scheduled SEQUENCE steps (AimSpec.sequence): each carries its ABSOLUTE
    *  strike bearing, baked at cast time — the figure holds even as the
@@ -24679,7 +24681,6 @@ export class World {
           dmgMult: useMult, aoeMult: opts.aoeMult ?? 1,
           scaleStep: caster.sheet.get('repeatScale', tags, extra),
           retarget: caster.sheet.get('repeatRetarget', tags, extra) > 0,
-          paidCost: opts.paidCost,
         });
         return this.executeSkill(caster, inst, aim, { ...opts, repeat: 1 });
       }
@@ -27198,9 +27199,10 @@ export class World {
           dmgMult: useMult, aoeMult: opts.aoeMult ?? 1,
           scaleStep: caster.sheet.get('repeatScale', tags, extra),
           retarget: caster.sheet.get('repeatRetarget', tags, extra) > 0,
-          // One payment, its whole train carries it (repeatScale tempers
-          // the packet — flat included — so repeats are never privileged).
-          paidCost: opts.paidCost,
+          // THE FEEDER LOCALITY (2026-07-22, the user's ruling): the train
+          // carries NO payment — cost-as-damage mints once, on the pressed
+          // cast, as if the skill wore the feeder alone. Echo riders were
+          // always unpaid; now the multistrike/unleash train is too.
         });
         if (caster.sheet.get('repeatLock', tags, extra) > 0) {
           caster.useLock = Math.max(caster.useLock, repeats * interval + 0.1);
@@ -28270,6 +28272,18 @@ export class World {
       mod('lifeRegen', 'flat', caster.sheet.get('minionRegen', tags, extra) * s),
       mod('lifeRegenPct', 'flat', caster.sheet.get('minionRegenPct', tags, extra) * s),
     ];
+    // THE MALUS TOTALITY RULE (2026-07-22, the user's ruling): a socketed
+    // more/less damage multiplier applies to ANYTHING descending from the
+    // skill. Constructs, children and sequels inherit through the instance
+    // roll (rollSkillDamage folds instanceMods); minions are the one
+    // descendant rolling on their OWN sheet, so the instance's plain
+    // 'damage' mods board here — batch-scaled like every owner investment
+    // (the 1/batch quadratic-proof law holds for maluses and buffs alike;
+    // overrides pass whole, a scaled override is a corrupted one).
+    for (const m of extra) {
+      if (m.stat !== 'damage') continue;
+      ownerMods.push(m.kind === 'override' ? m : { ...m, value: m.value * s });
+    }
     // MINION STATUS CARRY: the owner's minionApply_<status> investment becomes
     // the minion's own apply_<status> chance — "minions poison on hit" is one
     // modifier anywhere on the owner (gem, passive, vocation node). Generated
@@ -28855,6 +28869,19 @@ export class World {
       const burst = d.deathBurst ?? flaw?.deathBurst;
       if (breakable) c.construct.breakable = breakable;
       if (burst) c.construct.deathBurst = burst;
+    }
+    // THE MASS GRAFT (Unmoored): the working stands FREE — a real weight on
+    // the sheet (explicit, or derived from the body like any monster) and
+    // the massed flag pushActor's construct anchor yields to. The mass
+    // fabric owns everything after: shove authority, the bowling lane,
+    // arrested-momentum wounds, crowd shoulders.
+    {
+      const massed = socketSpec(sourceInst, 'massGraft');
+      if (massed) {
+        c.sheet.setBase('weight', massed.weight
+          ?? Math.pow(c.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow));
+        c.construct.massed = true;
+      }
     }
 
     // Placement: at the cursor (clamped to placeRange), facing the aim —
@@ -29901,8 +29928,11 @@ export class World {
     }): void {
     // Planted things stay put — and a DORMANT un-roused neutral is planted:
     // stray splash knockback must not scatter a sleeping band (the hit that
-    // ROUSES it restores physics the same tick aiAwakened latches).
-    if (target.construct || target.anchored || target.leap || isDormant(target)) return;
+    // ROUSES it restores physics the same tick aiAwakened latches). A
+    // MASSED construct (the Unmoored graft) is deliberately NOT planted —
+    // its weight is its only anchor now.
+    if ((target.construct && !target.construct.massed)
+      || target.anchored || target.leap || isDormant(target)) return;
     // A HELD body eats the shove INTO the grip (the grab fabric): the
     // impulse jostles the break meter instead of moving the pair — the
     // hold, not the body, absorbs the blow.
@@ -31252,10 +31282,11 @@ export class World {
       }
       // PASSIVE CHARGE TAPS (chargeGain): landed blows feed the attacker's
       // 'hit' taps and the victim's 'takeHit' taps. Depth-0 only — proc'd
-      // and splashed sub-hits never double-tap (the proc discipline).
+      // and splashed sub-hits never double-tap (the proc discipline). The
+      // victim rides along for elite-gated taps (Soul Harvest's boss lane).
       if (depth === 0) {
-        this.tapCharges(caster, 'hit');
-        this.tapCharges(target, 'takeHit');
+        this.tapCharges(caster, 'hit', undefined, undefined, target);
+        this.tapCharges(target, 'takeHit', undefined, undefined, caster);
         // BRUISED-LOOSE orbs (orbOnHurt_<id>): a landed blow TAKEN can shake
         // a registry orb out of the victim's own gear — the defensive shed
         // valve (no skill context; the wound is the roll).
@@ -32263,9 +32294,10 @@ export class World {
 
   /** Fire every equipped chargeGain tap matching this trigger on the actor
    *  (see ChargeGainSpec — the passive-baked-into-a-skill seam). `at` is
-   *  the triggering event's position for radius-gated taps (enemyDeath). */
+   *  the triggering event's position for radius-gated taps (enemyDeath);
+   *  `victim` is the struck/slain body for victim-gated taps (eliteVictim). */
   private tapCharges(a: Actor, on: NonNullable<SkillDef['chargeGain']>[number]['on'],
-    at?: Vec2, orbKind?: string): void {
+    at?: Vec2, orbKind?: string, victim?: Actor): void {
     for (const inst of a.skills) {
       if (!inst) continue;
       // instanceChargeGain, not def.chargeGain: SOCKETED taps (Answering
@@ -32278,10 +32310,21 @@ export class World {
         if (on === 'enemyDeath' && at && dist(a.pos, at) > (spec.radius ?? 360)) continue;
         // Fount taps filter by orb kind (a Life Flask ignores mana orbs).
         if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) continue;
+        // Elite-gated taps (Soul Harvest's boss lane): only a rare-or-better
+        // (or def-level boss) victim feeds the bank. No victim = no bank.
+        if (spec.eliteVictim && !(victim && this.isEliteVictim(victim))) continue;
         if (spec.chance !== undefined && !chance(spec.chance)) continue;
         a.gainCharge(spec.charge, spec.amount, spec.max, inst);
       }
     }
+  }
+
+  /** The canonical ELITE predicate for victim-gated payloads: rare-or-better
+   *  rarity, or a def-level boss. (The same shape lives inline at the slayer
+   *  and bounty folds — one named home for new consumers.) */
+  private isEliteVictim(a: Actor): boolean {
+    return a.rarity === 'rare' || a.rarity === 'champion' || a.rarity === 'crowned'
+      || !!(a.defId && MONSTERS[a.defId]?.boss);
   }
 
   /** Shed registry ORBS at a credited kill (orbOnKill_<id> stat family,
@@ -34826,6 +34869,23 @@ export class World {
           // (explosions, death heals, allyDeath taps) fires on schedule.
           this.kill(a, !a.expiryTriggersDeath);
           continue;
+        }
+      }
+      // THE AMBIENT TRICKLE (orbTrickle_<id>, equip-carried — Requiem's
+      // standalone lane): every ORB_TRICKLE.everySec, each carried trickle
+      // stat rolls its chance to shed that orb at a walk-to spot nearby.
+      // Stat-gated before the registry loop so trickle-less actors pay one
+      // meter tick and nothing else.
+      a.orbTrickleT += dt;
+      if (a.orbTrickleT >= ORB_TRICKLE.everySec) {
+        a.orbTrickleT -= ORB_TRICKLE.everySec;
+        if (this.orbs.length < ORB_CAP) {
+          for (const id of Object.keys(ORB_DEFS)) {
+            const c = a.sheet.get(orbTrickleStat(id));
+            if (c > 0 && chance(Math.min(0.75, c))) {
+              this.shedOrb(id, a.pos, { scatter: ORB_TRICKLE.scatter });
+            }
+          }
         }
       }
       const dot = a.updateTimers(dt, rawDt);
@@ -40294,21 +40354,36 @@ export class World {
       if (r.timer > 0) continue;
       r.timer += r.interval;
       // Multistrike re-aims each strike at the nearest enemy in reach.
+      // THE TRUE RE-LUNGE (2026-07-22): where the instance carries a
+      // targeting spec (Closing Instinct's graft, Shadow Step's innate),
+      // the repeat resolves through it — castRange/searchRadius/fallback
+      // honored — and hands the resolved BODY onward, so the movement
+      // snap re-aims the echo exactly like the press. The bare-stat lane
+      // (repeatRetarget with no spec) keeps the nearest-in-220 scan.
       let aim = r.aim;
+      let targetInfo: ResolvedTarget | undefined;
       if (r.retarget) {
-        let best: Actor | null = null, bd = 220;
-        for (const e of this.enemiesOf(r.caster)) {
-          const dd = dist(r.caster.pos, e.pos);
-          if (dd < bd) { bd = dd; best = e; }
+        const spec = instanceTargeting(r.inst);
+        const resolved = spec && spec.target !== 'corpse'
+          ? this.resolveTargeting(r.caster, r.inst, r.aim) : null;
+        if (resolved?.actor && !resolved.actor.dead) {
+          aim = vec(resolved.actor.pos.x, resolved.actor.pos.y);
+          targetInfo = resolved;
+        } else {
+          let best: Actor | null = null, bd = 220;
+          for (const e of this.enemiesOf(r.caster)) {
+            const dd = dist(r.caster.pos, e.pos);
+            if (dd < bd) { bd = dd; best = e; }
+          }
+          if (best) aim = best.pos;
         }
-        if (best) aim = best.pos;
       }
       const factor = Math.max(0.2, 1 + r.scaleStep * r.k);
       this.executeSkill(r.caster, r.inst, aim, {
         dmgMult: r.dmgMult * factor,
         aoeMult: r.aoeMult * factor,
         noCooldown: true, noRepeat: true,
-        paidCost: r.paidCost,
+        targetInfo,
       });
       r.k++;
       if (--r.n <= 0) this.pendingRepeats.splice(i, 1);

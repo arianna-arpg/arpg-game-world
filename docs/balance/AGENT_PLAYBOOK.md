@@ -164,6 +164,13 @@ line concurrently while heavier work happens elsewhere; see also
 - An INERT verdict is definitive FOR THAT PROBE — say "inert under the
   dummy/solo probe", not "broken everywhere", unless the static annotation
   proves delivery-scoped death.
+- THE THEME FLOOR (order of resort, below every other exit): extend >
+  structurally refuse > document > intended-by-theme. When a shape CAN be
+  extended but every extension would cost the skill its theme, theme wins —
+  propose the intended note (human sign-off as ever) citing the theme.
+  Exemplar: soul_glut keeps its curse-gated touch ("curse wide, then feast")
+  while soul_harvest/requiem, whose famines were incidental to their themes,
+  grew generators instead.
 - LEDGER DISCIPLINE: never hand-delete a ledger row to pass a gate — rows
   retire only through `--reconcile` after the pair measures healthy, in the
   same commit as the fix. `--status intended` is a human sign-off: propose

@@ -948,15 +948,15 @@
    "facts": {
     "presses": 3,
     "repeats": 3,
-    "hits": 30,
-    "hitAttempts": 36,
-    "dmgOut": 595.3,
+    "hits": 26,
+    "hitAttempts": 30,
+    "dmgOut": 615.52,
     "statusSamples": 0,
-    "minionSamples": 324.5,
+    "minionSamples": 322,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
-    "lifeGain": 28.55
+    "lifeGain": 28.82
    },
    "mute": "expressive"
   },
@@ -2737,13 +2737,13 @@
    "facts": {
     "presses": 1,
     "repeats": 0,
-    "hits": 2.5,
-    "hitAttempts": 2.5,
-    "dmgOut": 123.07,
+    "hits": 3.5,
+    "hitAttempts": 3.5,
+    "dmgOut": 209.25,
     "statusSamples": 0,
     "minionSamples": 60,
     "zoneSamples": 0,
-    "projectileSamples": 78.5,
+    "projectileSamples": 78,
     "orbsShed": 0,
     "lifeGain": 29.59
    },
@@ -4741,7 +4741,7 @@
     "repeats": 2,
     "hits": 1.5,
     "hitAttempts": 2,
-    "dmgOut": 29.37,
+    "dmgOut": 35.4,
     "statusSamples": 0,
     "minionSamples": 111,
     "zoneSamples": 0,
@@ -4759,7 +4759,7 @@
     "repeats": 2,
     "hits": 8.5,
     "hitAttempts": 10,
-    "dmgOut": 166.11,
+    "dmgOut": 200.19,
     "statusSamples": 0,
     "minionSamples": 145.5,
     "zoneSamples": 0,
@@ -4777,7 +4777,7 @@
     "repeats": 1,
     "hits": 6,
     "hitAttempts": 7.5,
-    "dmgOut": 122.64,
+    "dmgOut": 147.79,
     "statusSamples": 0,
     "minionSamples": 139,
     "zoneSamples": 0,
@@ -4793,11 +4793,11 @@
    "facts": {
     "presses": 2,
     "repeats": 1,
-    "hits": 12.5,
-    "hitAttempts": 14,
-    "dmgOut": 261.11,
+    "hits": 11.5,
+    "hitAttempts": 13,
+    "dmgOut": 284.38,
     "statusSamples": 0,
-    "minionSamples": 163,
+    "minionSamples": 160,
     "zoneSamples": 0,
     "projectileSamples": 0,
     "orbsShed": 0,
@@ -7605,7 +7605,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "charge famine — the press demands banked 'soul' and the bare rig never banks it (generators: enemyDeath); needs a primed-bank lever or a fodder-fed rig"
+   "why": "charge famine — the press demands banked 'soul' and the bare rig never banks it (generators: enemyDeath/hit); needs a primed-bank lever or a fodder-fed rig"
   },
   "soul_link": {
    "skillId": "soul_link",

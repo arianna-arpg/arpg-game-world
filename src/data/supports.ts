@@ -815,6 +815,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  unmoored: {
+    id: 'unmoored', name: 'Unmoored',
+    description: 'This skill\'s constructs stand FREE of the earth: the body gains true WEIGHT and joins the mass fabric — shoves move it, the bowling lane carries it, walls wound it. Push your own wall into the fray as a traveling vanguard; know that anything strong enough can push it back out. The anchor was a choice. So is this.',
+    // THE MASS GRAFT (2026-07-22, the user's construct-mass design): the
+    // baseline construct stays anchored with NO mass-like stat — this
+    // graft is the ONE door into the mass fabric, and 'construct:massed'
+    // (SUPPORT_MECHANISMS) lets future collision-payload gems refuse until
+    // it stands beside them (self-lifting, the Forking-lifts-Lineage
+    // shape). Weight 6: the player's ~1 shoves it barely; invested
+    // shoveAuthority/heft moves it with intent; a colossus bowls it.
+    color: '#a89078', requiresTags: ['construct'],
+    dropTags: ['totem', 'trap', 'mine'],
+    massGraft: { weight: 6 },
+    mods: [],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 5,
+  },
+
   // --- The impale gems ------------------------------------------------------------
   skewering_blows: {
     id: 'skewering_blows', name: 'Skewering Blows',
@@ -3377,11 +3395,11 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unleash: {
     id: 'unleash', name: 'Unleash',
-    description: 'The skill banks a Seal every 1.4s of TRUE REST (up to 2) — the cast bar itself banks nothing. Casting fires one extra time per banked Seal in a rapid salvo: the tradeoff is genuine idleness, paid before the press.',
+    description: 'The skill banks a Seal every 1.4s of TRUE REST (up to 2) — the cast bar itself banks nothing. Casting fires one extra time per banked Seal in a rapid salvo: the tradeoff is genuine idleness, paid before the press — and a heavier hand, 25% less damage on everything the skill sends out.',
     color: '#b8d858', excludeTags: ['channel', 'movement', 'summon', 'aura', 'totem'],
     mods: [
       mod('unleashMax', 'flat', 2),
-      mod('damage', 'more', -0.1),
+      mod('damage', 'more', -0.25),
     ],
     perLevel: [mod('unleashMax', 'flat', 0.5)],
     weight: 6,
@@ -3724,10 +3742,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   mana_feeder: {
     id: 'mana_feeder', name: 'Mana Feeder',
-    description: 'The skill FEEDS: it costs 50% more mana (+5 flat), but every point of mana spent on a use returns as added damage of the skill\'s own types. Cost multipliers become damage multipliers — if you can sustain the appetite.',
+    description: 'The skill FEEDS: it costs 50% more mana (+5 flat), but every point of mana spent on a use returns as added damage on the PRIMARY strike — the cast itself, never its echoes or aftershocks. Cost multipliers become damage multipliers — if you can sustain the appetite.',
     color: '#5a8ae8',
-    // No hit to receive the bonus = a trap socket.
-    excludeTags: ['summon', 'minion', 'aura', 'movement', 'buff', 'warcry'],
+    // THE FEEDER LOCALITY (2026-07-22): the strikes floor replaces the old
+    // hand-rolled tag ban — never-striking hosts refuse structurally and the
+    // refusal self-lifts beside a strike-granting graft. Summon/minion stay
+    // tag-banned deliberately: locality pays the PRIMARY cast, and a
+    // summon's primary never strikes (the crew hop must not re-open the
+    // trap socket).
+    requiresMechanisms: ['strikes'],
+    excludeTags: ['summon', 'minion'],
     mods: [
       mod('manaCost', 'more', 0.5),
       mod('addedManaCost', 'flat', 5),
@@ -3950,18 +3974,23 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   deep_reserves: {
     id: 'deep_reserves', name: 'Deep Reserves',
-    description: 'A skill with NO bank GROWS a 2-round one — 3 all told with this gem\'s own +1 — and recovers rounds 25% faster: cooldown skills store their uses as a magazine on their own clock, free skills gain an EMPOWER bank whose banked round is drunk for 20% MORE. The bank clock is a REST clock: any cast restarts it, so the rounds are earned by deliberately holding fire. Spam exactly as ever; the pot rewards the beat.',
+    description: 'A skill with NO bank GROWS a 2-round one — 3 all told with this gem\'s own +1 — but the pot fills 15% SLOWER: cooldown skills store their uses as a magazine on their own clock, free skills gain an EMPOWER bank whose banked round is drunk for 20% MORE. The bank clock is a REST clock: any cast restarts it, so the rounds are earned by deliberately holding fire. Deep pockets, patient hands.',
     color: '#d8c86a',
     // The GRANT (useChargeGraft): chargeless hosts stand a 2-round bank up
     // (3 with this gem's own +1) — magazine on the host's cooldown, or the
     // EMPOWER bank (optional fuel: never a gate, never a conversion) on
     // the 4s trickle where no clock exists. Native banks/munitions win.
+    // THE INVERTED RATE (2026-07-22, the specialization price): the old
+    // +25% skillChargeRate line was DEAD on cooldown hosts (the drip lane
+    // read only cooldownRecovery — deep-lane ablation, 26/26). The drip
+    // now reads the rate stat too, so ONE inverted line prices every bank
+    // this graft stands up; the malus softens 1%/gem-level.
     useChargeGraft: { rounds: 2, recharge: 4, empower: 0.2 },
     mods: [
       mod('skillCharges', 'flat', 1),
-      mod('skillChargeRate', 'increased', 0.25),
+      mod('skillChargeRate', 'increased', -0.15),
     ],
-    perLevel: [mod('skillChargeRate', 'increased', 0.08)],
+    perLevel: [mod('skillChargeRate', 'increased', 0.01)],
     weight: 6,
   },
 
@@ -4269,7 +4298,11 @@ export const SUPPORTS: Record<string, SupportDef> = {
   closing_instinct: {
     id: 'closing_instinct', name: 'Closing Instinct',
     description: 'The movement skill PICKS ITS OWN prey — auto-lunging at the nearest enemy near your aim — and the instinct STRIKES TWICE: one extra re-targeted repeat rides every use. On Closing Fang itself (already a hunter) the second lunge IS the gift. An empty field never refuses the button.',
-    color: '#c8a068', requiresTags: ['movement'],
+    // THE DISPLACEMENT GATE (2026-07-22): the instinct demands a real
+    // lunge — dash/blink/leap hosts fit; a stealth veil (cloak) or a
+    // planted mark refuses structurally rather than wear a counter-
+    // intuitive auto-aim (the user's stealth ruling).
+    color: '#c8a068', requiresTags: ['movement'], requiresMechanisms: ['displaces'],
     targeting: { target: 'enemy', castRange: 420, searchRadius: 220, fallback: 'aim' },
     mods: [
       mod('repeatCount', 'flat', 1),

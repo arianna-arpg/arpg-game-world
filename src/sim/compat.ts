@@ -1569,7 +1569,17 @@ export function classifyExpression(f: HostExpressionFacts): HostMuteClass {
 /** The static WHY ladder for mute hosts — heuristics off the def's own
  *  shape, each naming the pilot/rig capability that would unlock it. The
  *  fall-through is the ANOMALY lane: a host this ladder cannot explain is
- *  exactly what hand adjudication (route c) is reserved for. */
+ *  exactly what hand adjudication (route c) is reserved for.
+ *
+ *  THE THEME FLOOR (2026-07-22, the user's ruling under the ladder): when a
+ *  named shape CAN be extended but every extension would cost the skill its
+ *  theme, theme wins — the residue adjudicates INTENDED-BY-THEME in the
+ *  established intended-row grammar (mechanism + live-verification citation
+ *  + why the fingerprint is blind). Exemplar: soul_glut's gated touch is the
+ *  skill ("curse wide, then feast") — it keeps its gate untouched while
+ *  soul_harvest/requiem, whose famines were incidental, grew generators.
+ *  Order of resort stays: extend > structurally refuse > document > and only
+ *  where theme forbids all three, intended-by-theme. */
 export function muteWhy(def: SkillDef): string {
   if (def.gate) {
     return `gated cast (${Object.keys(def.gate).join('+')}) — the probe arena never meets the gate; needs a gate-raising rig (e.g. self-bruise for recentDamage)`;

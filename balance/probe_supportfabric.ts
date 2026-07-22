@@ -30,7 +30,8 @@ import {
   STANCE_PLANT_TIME, type Actor,
 } from '../src/engine/actor';
 import {
-  SUPPORT_MECHANISMS, instanceUseCharges, makeSkillInstance, supportFitsInst,
+  SUPPORT_MECHANISMS, instanceMods, instanceUseCharges, makeSkillInstance,
+  skillContextTags, supportFitsInst,
   supportFitsInstOrCrew, supportGlobalMods, supportRidesMinions, hostSockets,
 } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
@@ -800,7 +801,12 @@ bootSimEngine();
   hero.skills[0] = inst;
   const bank = hero.skillChargeBank(inst);
   bank.count = 0; bank.timer = 0;
-  const halfSteps = Math.ceil((cdHost.cooldown / 2) * 20);
+  // The cycle runs at cooldownRecovery × skillChargeRate — Deep Reserves'
+  // INVERTED rate (2026-07-22) prices the drip 15% slower, so the pin
+  // measures one-per-cycle at the PRICED clock, not the raw cooldown.
+  const clockRate = hero.sheet.get('cooldownRecovery', skillContextTags(cdHost), instanceMods(inst))
+    * hero.sheet.get('skillChargeRate', skillContextTags(cdHost), instanceMods(inst));
+  const halfSteps = Math.ceil((cdHost.cooldown / clockRate / 2) * 20);
   for (let i = 0; i < halfSteps + 2; i++) world.update(1 / 20);
   const atHalf = bank.count;
   for (let i = 0; i < halfSteps + 4; i++) world.update(1 / 20);
