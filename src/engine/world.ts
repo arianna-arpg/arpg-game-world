@@ -3060,6 +3060,10 @@ export class World {
    *  lives OUTSIDE the stock arrays so leaving town (which empties them)
    *  never sheds a reservation. */
   vendorHolds: Record<string, VendorHold> = {};
+  /** NET CLIENT only: the HOST account's reserve capacity, mirrored off the
+   *  snapshot (the counter's true ledger — a client's own Vault does not
+   *  govern the host's counters). Undefined on host/solo/couch. */
+  netVendorCap?: number;
   /** Seconds the player has lingered in Mireille's radius (proximity heal). */
   private mireilleDwell = 0;
   /** Cooldown before Mireille will heal again (persists across zones). */
@@ -4678,9 +4682,11 @@ export class World {
       this.actors.push(c);
     }
     // Where there's a smith, there's a stock — armed on a restock timer that
-    // ticks on the world clock in update(), not on re-entering town.
+    // ticks on the world clock in update(), not on re-entering town. The arm
+    // resolves THE STANDING ORDER's away beats and re-seats reserved rows
+    // (the hold outlives the stock array by design).
     if (layout.npcs.some(n => MONSTERS[n.id]?.npcRole === 'vendor')) {
-      this.vendorStock = this.buildVendorStock();
+      this.vendorStock = this.armVendorStock('brandt');
       this.vendorRestockAt = this.time + this.restockSeconds();
     } else {
       this.vendorStock = [];
@@ -11522,11 +11528,13 @@ export class World {
       const inst = makeSkillInstance(SKILLS[part.drop.skill], lvl, SKILL_RARITIES.rare.sockets);
       inst.rarity = 'rare';
       const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+      this.noteGemDrop(inst.def.id); // a BUILT spoil is a genuine mint too — the drop index sees it
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES.rare.color, 15);
     }
     if (part.drop.support && SUPPORTS[part.drop.support]) {
       const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+      this.noteGemDrop(part.drop.support);
       this.drops.push({ pos, item: { kind: 'support', gem: { def: SUPPORTS[part.drop.support], level: 1 } }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${SUPPORTS[part.drop.support].name}!`, SUPPORTS[part.drop.support].color, 14);
     }
@@ -11870,6 +11878,7 @@ export class World {
     if (!this.nearDelver(seat) || this.descentEchoes < DELVER_WARE_COST) return false;
     this.descentEchoes -= DELVER_WARE_COST;
     this.descentStock.splice(index, 1);
+    this.vendorBought('delver', entry, seat, this.descentStock); // holdless — the market stamp alone
     if (entry.kind === 'skill') { m.skillInv.push(entry.inst); this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#7fe0d8', 13); }
     else { m.inventory.push(entry.gem); this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#7fe0d8', 13); }
     if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
@@ -13108,6 +13117,9 @@ export class World {
       mercSheets: Object.fromEntries(Object.entries(this.mercSheets)
         .filter(([zid]) => kept.has(zid))
         .map(([zid, sheet]) => [zid, sheet.map(o => ({ ...o }))])),
+      // THE PATRON'S HOLD: reserved counter rows + standing orders (absent
+      // when no hold carries state — the JSON layer drops the undefined).
+      vendorHolds: this.serializeVendorHolds(),
     };
   }
 
@@ -13223,6 +13235,10 @@ export class World {
     // The next arm's supply reconcile squares veteran rows with the LIVE
     // roster; nothing rerolls here or ever.
     this.mercSheets = sanitizeMercSheets(ws.mercSheets, healed);
+    // THE PATRON'S HOLD stands back up beside the muster roll (the same
+    // tolerance doctrine: a hold row whose gem left the registry drops, a
+    // site-scoped hold drops with its ground, nothing rerolls here).
+    this.vendorHolds = this.rebuildVendorHolds(sanitizeVendorHolds(ws.vendorHolds, healed));
     // Objective clears survive only for ground that actually persisted: event
     // overlays re-seed DETERMINISTICALLY (same run seed ⇒ same crusade/demon
     // zone keys), so a stale clear-key would pre-clear the freshly re-rolled
@@ -16916,6 +16932,7 @@ export class World {
     }
     for (const c of price) m.essences[c.essence] -= c.count;
     this.vendorStock.splice(index, 1);
+    this.vendorBought('brandt', entry, seat, this.vendorStock);
     if (entry.kind === 'skill') {
       m.skillInv.push(entry.inst);
       this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
@@ -17979,7 +17996,7 @@ export class World {
     // (VendorDef row 'chandler' + the buyChandler intent — a real second
     // counter, not Brandt's shadow).
     if (wants.has('chandler')) {
-      if (!this.chandlerStock.length) this.chandlerStock = this.buildVendorStock();
+      if (!this.chandlerStock.length) this.chandlerStock = this.armVendorStock('chandler');
       if (!this.vendorRestockAt) this.vendorRestockAt = this.time + this.restockSeconds();
     } else if (this.chandlerStock.length) {
       this.chandlerStock = [];
@@ -20788,6 +20805,8 @@ export class World {
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
       case 'buyChandler': this.buyChandlerGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
+      case 'vendorLock': this.setVendorLock(action.vendor, action.index, action.on, seat); break;
+      case 'vendorCommission': this.setVendorCommission(action.vendor, action.gem, seat); break;
       case 'levelSkill': this.levelUpSkill(action.skillId, seat, action.pay ?? 'points'); break;
       case 'levelSupportInv': {
         const gem = seat.meta.inventory[action.index];
@@ -33866,15 +33885,27 @@ export class World {
     return pool[pool.length - 1];
   }
 
-  rollSkillGem(bias?: SkillTag[]): SkillInstance {
-    // Only UNLOCKED skills may drop (account gating), inside their level
-    // BRACKET (minDropLevel vs the zone). The fallback STILL respects
-    // gating — STARTER_SKILLS are always unlocked, so it can never leak
-    // a LOCKED gem even if the unlocked set were somehow emptied; it only keeps
-    // the contract (a non-empty pool, since no starter is noDrop).
+  /** The skill-gem drop POOL at a bracket: unlocked (account gating), inside
+   *  minDropLevel, never noDrop. The fallback STILL respects gating —
+   *  STARTER_SKILLS are always unlocked, so it can never leak a LOCKED gem
+   *  even if the unlocked set were somehow emptied; it only keeps the
+   *  contract (a non-empty pool, since no starter is noDrop). ONE filter
+   *  serves the roller and THE STANDING ORDER's odds. */
+  private skillDropPool(atLevel: number): SkillDef[] {
     let pool = SKILL_LIST.filter(s => !s.noDrop && isSkillUnlockedForDrop(this.account, s.id)
-      && (s.minDropLevel ?? 0) <= this.zone.level);
+      && (s.minDropLevel ?? 0) <= atLevel);
     if (pool.length === 0) pool = SKILL_LIST.filter(s => !s.noDrop && STARTER_SKILLS.includes(s.id));
+    return pool;
+  }
+
+  /** The support-gem drop POOL at a bracket (may be empty — nothing unlocked). */
+  private supportDropPool(atLevel: number): SupportDef[] {
+    return SUPPORT_LIST.filter(d => isSupportUnlockedForDrop(this.account, d.id)
+      && (d.minDropLevel ?? 0) <= atLevel);
+  }
+
+  rollSkillGem(bias?: SkillTag[], atLevel = this.zone.level): SkillInstance {
+    const pool = this.skillDropPool(atLevel);
     const owned = this.carriedGemIds().skills;
     const skillDef = this.pickGem(pool, s => s.tags, s => s.dropWeight ?? 100, bias,
       s => owned.has(s.id)) ?? pick(pool);
@@ -33890,9 +33921,8 @@ export class World {
 
   /** Pick a support gem from the UNLOCKED pool (weighted, bracketed,
    *  bias-aware — dropTags default to what the gem sockets into), or null. */
-  private rollSupportDropGated(bias?: SkillTag[]): SupportDef | null {
-    const pool = SUPPORT_LIST.filter(d => isSupportUnlockedForDrop(this.account, d.id)
-      && (d.minDropLevel ?? 0) <= this.zone.level);
+  private rollSupportDropGated(bias?: SkillTag[], atLevel = this.zone.level): SupportDef | null {
+    const pool = this.supportDropPool(atLevel);
     const owned = this.carriedGemIds().supports;
     return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, bias,
       d => owned.has(d.id));
@@ -33917,6 +33947,23 @@ export class World {
     return { skills, supports };
   }
 
+  /** THE DROP INDEX (meta/account.ts gemDropKey — the bestiary's sibling):
+   *  stamp the account the moment a gem is genuinely MINTED into the world.
+   *  Called ONLY at mint sites (dropGemAt + the Bonewright's fixed spoils) —
+   *  discards, corpse reclaims, looter spills and counter sales move owned
+   *  goods and never route here, so the index is abuse-proof at the source.
+   *  Immortal runs read but never feed (the bestiary's own guard); the
+   *  flush lands exactly when a gem crosses the commission threshold (ride
+   *  the next scheduled save otherwise — the bestiary's cadence). */
+  private noteGemDrop(gemId: string): void {
+    if (!this.metaProgressionActive()) return;
+    const key = gemDropKey(gemId);
+    const after = (this.account.ledger[key] ?? 0) + 1;
+    this.account.ledger[key] = after;
+    this.account.ledger[LEDGER_GEMDROP_TOTAL] = (this.account.ledger[LEDGER_GEMDROP_TOTAL] ?? 0) + 1;
+    if (after === VENDOR_CFG.commission.need) this.accountDirty = true;
+  }
+
   /** Drop one random gem (skill or support) at a point — gated by account
    *  unlocks; `bias` is the killer's gemBias (the shaman-drops-caster rule). */
   dropGemAt(at: Vec2, bias?: SkillTag[], owed = false): void {
@@ -33926,12 +33973,14 @@ export class World {
     const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10);
     const dropSkill = (): void => {
       const inst = this.rollSkillGem(bias);
+      this.noteGemDrop(inst.def.id);
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15);
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
     const gemDef = this.rollSupportDropGated(bias);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
+    this.noteGemDrop(gemDef.id);
     this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: rand(0, Math.PI * 2) });
     this.text(at, `${gemDef.name}!`, gemDef.color, 14);
   }
@@ -34323,18 +34372,106 @@ export class World {
     return featureEnabled(this.account, FEATURE.BRANDT_FAST_RESTOCK) ? 15 : 30;
   }
 
+  // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG) -----------------------
+  // Reserved shelf rows + THE STANDING ORDER, persisted per counter in the
+  // world save (the muster-roll law's shape: STATE, not weather). The hold
+  // OWNS its rows; stock arrays are projections that stand down when their
+  // counter does — leaving town never sheds a reservation.
+
+  /** The gem BRACKET a counter rolls at (VENDOR_CFG.gemBracket): the gear
+   *  shelf's own "at the buyer's level" anchoring, or the bare ground.
+   *  World drops never read this. */
+  private vendorGemLevel(): number {
+    return VENDOR_CFG.gemBracket === 'shopper'
+      ? Math.max(this.zone.level, this.player.level)
+      : this.zone.level;
+  }
+
+  /** The restock BEAT the world clock stands at — the standing order's
+   *  resolution lattice. Pure f(time), so beats that passed while the
+   *  counter stood unattended are countable at any later arm, and a
+   *  resolved beat can never come around again. */
+  private restockOrdinal(): number {
+    return Math.floor(this.time / this.restockSeconds());
+  }
+
+  /** Reserve capacity at every holding counter: one slot per owned ladder
+   *  rung (VENDOR_CFG.lock.ladder — appending a flag + its Vault row raises
+   *  the ceiling; nothing anywhere counts to three). */
+  vendorLockCap(): number {
+    let cap = 0;
+    for (const r of VENDOR_CFG.lock.ladder) if (featureEnabled(this.account, r.flag)) cap++;
+    return cap;
+  }
+
+  /** The counter's persisted hold key (VendorDef.holdKey ?? the vendor id). */
+  vendorHoldKey(v: VendorDef): string {
+    return v.holdKey?.(this) ?? v.id;
+  }
+
+  private vendorHoldFor(key: string): VendorHold {
+    return this.vendorHolds[key] ??= { locks: [], ordinal: this.restockOrdinal() };
+  }
+
+  /** The reserved row a live stock entry belongs to, if any — object
+   *  identity against the hold (the entry IS the held object; one truth,
+   *  no marker field to drift). */
+  vendorEntryHold(key: string, entry: VendorEntry): VendorHoldRow | undefined {
+    return this.vendorHolds[key]?.locks.find(r => r.entry === entry);
+  }
+
+  /** Re-anchor each held row's slot to where its entry ACTUALLY sits — after
+   *  any stock splice, before any rebuild. A stood-down counter's rows keep
+   *  their last-known seats. */
+  private syncHoldIdx(key: string, stock: VendorEntry[]): void {
+    const hold = this.vendorHolds[key];
+    if (!hold) return;
+    for (const row of hold.locks) {
+      const at = stock.indexOf(row.entry);
+      if (at >= 0) row.idx = at;
+    }
+  }
+
+  /** Seat the hold's reserved rows over a freshly-rolled shelf — each at its
+   *  remembered slot (clamped to the shelf; a collision probes to the
+   *  nearest free seat). The overlay is the ONE way held rows reach a stock
+   *  array. */
+  private overlayHold(key: string, out: VendorEntry[]): VendorEntry[] {
+    const hold = this.vendorHolds[key];
+    if (!hold?.locks.length) return out;
+    const used = new Set<number>();
+    for (const row of [...hold.locks].sort((a, b) => a.idx - b.idx)) {
+      let at = Math.min(Math.max(0, Math.floor(row.idx)), Math.max(0, out.length - 1));
+      while (used.has(at) && at < out.length - 1) at++;
+      while (used.has(at) && at > 0) at--;
+      used.add(at);
+      row.idx = at;
+      out[at] = row.entry;
+    }
+    return out;
+  }
+
+  /** Arm/refresh ONE counter: resolve the standing order's elapsed beats,
+   *  roll a fresh shelf at the counter's bracket, seat the reserved rows.
+   *  Every arm site and the restock walk through here — one builder. */
+  armVendorStock(key: string): VendorEntry[] {
+    this.resolveCommission(key);
+    return this.overlayHold(key, this.buildVendorStock());
+  }
+
   /** Roll a fresh counter: skill gems, support gems once that's unlocked —
    *  and the TRUE-VENDOR SHELF: rolled gear at the buyer's level, rarity
    *  weighted per VENDOR_ITEM_CFG, priced by quality in mixed essence. */
   buildVendorStock(): VendorEntry[] {
     const out: VendorEntry[] = [];
     const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+    const lvl = this.vendorGemLevel();
     for (let i = 0; i < this.vendorSize(); i++) {
-      if (sellSupports && Math.random() < 0.25) {
-        const sd = this.rollSupportDropGated();
+      if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
+        const sd = this.rollSupportDropGated(undefined, lvl);
         if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
       }
-      out.push({ kind: 'skill', inst: this.rollSkillGem() });
+      out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
     }
     // The gear shelf shares Brandt's expanded-wares feature: bigger counter,
     // bigger shelf. Rolls anchor to the LOCAL hero's level (the shopper).
@@ -34354,15 +34491,272 @@ export class World {
 
   /** Restock now and arm the next restock on the world clock. The CHANDLER's
    *  counter (a harborhold service) restocks on the same beat when one
-   *  stands — one clock, every counter. */
+   *  stands — one clock, every counter. Reserved rows ride through; only
+   *  free slots re-roll. */
   restockVendor(): void {
-    this.vendorStock = this.buildVendorStock();
+    this.syncHoldIdx('brandt', this.vendorStock);
+    this.vendorStock = this.armVendorStock('brandt');
     this.vendorRestockAt = this.time + this.restockSeconds();
     const smith = this.actors.find(a => this.hasNpcRole(a, 'vendor'));
     this.text(smith?.pos ?? this.player.pos, `${smith?.name ?? 'The vendor'} restocks the wares.`, '#e8c87a', 13);
     if (this.chandlerStock.length && this.actors.some(a => this.hasNpcRole(a, 'chandler') && !a.dead)) {
-      this.chandlerStock = this.buildVendorStock();
+      this.syncHoldIdx('chandler', this.chandlerStock);
+      this.chandlerStock = this.armVendorStock('chandler');
     }
+  }
+
+  /** THE STANDING ORDER — resolve every restock beat since the counter last
+   *  looked. Each beat rolls ONE seeded chance that the shelf's true
+   *  distribution would have surfaced the commissioned gem (odds from the
+   *  same pools + weights the roller draws — the simulation and the shelf
+   *  can never disagree). World seed × counter × gem × beat is the WHOLE
+   *  roll, so reloading can never re-flip a beat, and the find itself mints
+   *  on the beat's own stream (no rarity scumming). A hit seats the gem as
+   *  a reserved row wearing the commission mark and stops the watch — the
+   *  order stands fulfilled-pending-purchase; releasing the find unbought
+   *  resumes the watch (you turned down the find, not the order). */
+  private resolveCommission(key: string): void {
+    const hold = this.vendorHolds[key];
+    if (!hold) return;
+    const now = this.restockOrdinal();
+    const c = hold.commission;
+    if (!c || hold.locks.some(r => r.commission)) { hold.ordinal = now; return; }
+    const from = Math.max(hold.ordinal + 1, now - VENDOR_CFG.commission.maxCatchup);
+    const p = this.commissionOdds(c);
+    for (let o = from; o <= now && p > 0; o++) {
+      const rng = new Rng((this.manifest.seed ^ hashStr(`vendorhold:${key}:${c.kind}:${c.id}:${o}`)) >>> 0);
+      if (rng.next() >= p) continue;
+      const entry = this.mintCommissionEntry(c, rng);
+      if (!entry) break; // the registry lost the gem — the sanitizer owns the rest
+      const used = new Set(hold.locks.map(r => r.idx));
+      let idx = 0;
+      while (used.has(idx)) idx++;
+      hold.locks.push({ entry, idx, commission: true });
+      this.charDirty = true;
+      break;
+    }
+    hold.ordinal = now;
+  }
+
+  /** P(one restock beat surfaces the gem): the slot's kind share × the gem's
+   *  weight share of ITS pool (the roller's own filter + weights at the
+   *  counter's bracket), folded over the counter's gem slots —
+   *  1-(1-p)^slots — then the config kindness dial. 0 = this counter cannot
+   *  roll it here (locked pool, out of bracket, supports not yet sold);
+   *  the panel prints the same number the resolver rolls. */
+  commissionOdds(c: { kind: 'skill' | 'support'; id: string }): number {
+    const lvl = this.vendorGemLevel();
+    const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+    const carried = this.carriedGemIds();
+    let share: number;
+    let frac = 0;
+    if (c.kind === 'skill') {
+      share = sellSupports ? 1 - VENDOR_CFG.supportShare : 1;
+      const pool = this.skillDropPool(lvl);
+      const i = pool.findIndex(s => s.id === c.id);
+      if (i >= 0) {
+        const w = this.gemWeights(pool, s => s.tags, s => s.dropWeight ?? 100, undefined,
+          s => carried.skills.has(s.id));
+        const total = w.reduce((s, x) => s + x, 0);
+        frac = total > 0 ? w[i] / total : 0;
+      }
+    } else {
+      share = sellSupports ? VENDOR_CFG.supportShare : 0;
+      const pool = this.supportDropPool(lvl);
+      const i = pool.findIndex(d => d.id === c.id);
+      if (i >= 0) {
+        const w = this.gemWeights(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, undefined,
+          d => carried.supports.has(d.id));
+        const total = w.reduce((s, x) => s + x, 0);
+        frac = total > 0 ? w[i] / total : 0;
+      }
+    }
+    const pSlot = share * frac;
+    if (pSlot <= 0) return 0;
+    const pBeat = 1 - Math.pow(1 - pSlot, this.vendorSize());
+    return Math.min(1, pBeat * VENDOR_CFG.commission.oddsMult);
+  }
+
+  /** Mint the standing order's find on the hit beat's own stream — the
+   *  roller's own mint (rarity → sockets), the beat as its die. The counter
+   *  takes no deep-zone pre-level: the ground is the ground. */
+  private mintCommissionEntry(c: { kind: 'skill' | 'support'; id: string }, rng: Rng): VendorEntry | null {
+    if (c.kind === 'skill') {
+      const def = SKILLS[c.id];
+      if (!def) return null;
+      const rarity = rollSkillRarity(rng.next());
+      const inst = makeSkillInstance(def, 1, SKILL_RARITIES[rarity].sockets);
+      inst.rarity = rarity;
+      return { kind: 'skill', inst };
+    }
+    const def = SUPPORTS[c.id];
+    if (!def) return null;
+    return { kind: 'support', gem: { def, level: 1 } };
+  }
+
+  /** Toggle a reserve on one shelf row (the vendorLock intent, validated).
+   *  ON reserves within the ladder's capacity; OFF releases — the row stays
+   *  on the shelf until the next restock re-rolls its slot. */
+  setVendorLock(vendorId: string, index: number, on: boolean, seat: Seat = this.localSeat): boolean {
+    const v = VENDORS.find(x => x.id === vendorId);
+    if (!v?.holds?.locks || !v.near(this, seat)) return false;
+    const stock = v.stock(this);
+    const entry = stock[index];
+    if (!entry) return false;
+    const key = this.vendorHoldKey(v);
+    const hold = this.vendorHoldFor(key);
+    const at = hold.locks.findIndex(r => r.entry === entry);
+    if (on === (at >= 0)) return false;
+    if (on) {
+      const cap = this.vendorLockCap();
+      if (hold.locks.filter(r => !r.commission).length >= cap) {
+        this.failNote(seat.actor, 'vlock:' + key, cap > 0
+          ? `the ledger holds ${cap} — release one first`
+          : 'the Vault has not opened the reserve ledger');
+        return false;
+      }
+      hold.locks.push({ entry, idx: index });
+    } else {
+      hold.locks.splice(at, 1);
+    }
+    this.charDirty = true;
+    return true;
+  }
+
+  /** Place / release THE STANDING ORDER (the vendorCommission intent,
+   *  validated). Placing demands: the counter takes commissions, the Vault
+   *  rung is owned, the gem is real, account-unlocked, KNOWN to the drop
+   *  index (VENDOR_CFG.commission.need genuine mints), and rollable at this
+   *  counter (odds > 0 — an out-of-bracket or not-yet-sold gem refuses WITH
+   *  the reason, never a silently dead order). Placing anew releases a
+   *  prior unbought find; null releases order and find both. */
+  setVendorCommission(
+    vendorId: string, gem: { kind: 'skill' | 'support'; id: string } | null,
+    seat: Seat = this.localSeat,
+  ): boolean {
+    const v = VENDORS.find(x => x.id === vendorId);
+    if (!v?.holds?.commission || !v.near(this, seat)) return false;
+    if (!featureEnabled(this.account, FEATURE.VENDOR_COMMISSION)) return false;
+    const key = this.vendorHoldKey(v);
+    const hold = this.vendorHoldFor(key);
+    if (!gem) {
+      if (!hold.commission && !hold.locks.some(r => r.commission)) return false;
+      hold.commission = undefined;
+      hold.locks = hold.locks.filter(r => !r.commission);
+      this.charDirty = true;
+      return true;
+    }
+    const def = gem.kind === 'skill' ? SKILLS[gem.id] : SUPPORTS[gem.id];
+    if (!def) return false;
+    const unlocked = gem.kind === 'skill'
+      ? isSkillUnlockedForDrop(this.account, gem.id)
+      : isSupportUnlockedForDrop(this.account, gem.id);
+    if (!unlocked) return false;
+    if ((this.account.ledger[gemDropKey(gem.id)] ?? 0) < VENDOR_CFG.commission.need) {
+      this.failNote(seat.actor, 'vcomm:' + key,
+        `the drop index knows too few (${VENDOR_CFG.commission.need} finds needed)`);
+      return false;
+    }
+    if (this.commissionOdds(gem) <= 0) {
+      this.failNote(seat.actor, 'vcomm:' + key, 'this counter cannot roll that gem yet');
+      return false;
+    }
+    hold.commission = { kind: gem.kind, id: gem.id };
+    hold.locks = hold.locks.filter(r => !r.commission);
+    hold.ordinal = this.restockOrdinal(); // the watch starts NOW — no retroactive beats
+    this.charDirty = true;
+    this.text(seat.actor.pos, `standing order: ${def.name}`, '#e8c87a', 13);
+    return true;
+  }
+
+  /** One spelling of "a shelf entry, saved": the corpse-loot union (death.ts
+   *  SavedLoot — gear rides verbatim, gems by id+level+sockets; rebuilt
+   *  through the same tolerant path the corpse reclaim walks). */
+  private vendorEntryToLoot(e: VendorEntry): SavedLoot {
+    if (e.kind === 'skill') return skillToLoot(e.inst);
+    if (e.kind === 'support') return { kind: 'support', supportId: e.gem.def.id, level: e.gem.level };
+    const { x: _x, y: _y, ...item } = e.item; // a shelf item has no bag cell
+    return { kind: 'gear', item };
+  }
+
+  private vendorLootToEntry(it: SavedLoot): VendorEntry | null {
+    if (it.kind === 'skill') {
+      const inst = rebuildSkill(it);
+      return inst ? { kind: 'skill', inst } : null;
+    }
+    if (it.kind === 'support') {
+      const def = SUPPORTS[it.supportId];
+      return def ? { kind: 'support', gem: { def, level: it.level } } : null;
+    }
+    const item = rebuildItem(it.item);
+    return item ? { kind: 'item', item } : null;
+  }
+
+  /** The holds, save-shaped: live entries packed to the loot union, seats
+   *  re-anchored where a counter stands. Holds carrying nothing are not
+   *  written — empty is NOT load-bearing here (the shelf simply re-rolls),
+   *  unlike a sold-out muster sheet. */
+  private serializeVendorHolds(): Record<string, VendorHoldSave> | undefined {
+    this.syncHoldIdx('brandt', this.vendorStock);
+    this.syncHoldIdx('chandler', this.chandlerStock);
+    const out: Record<string, VendorHoldSave> = {};
+    for (const [key, hold] of Object.entries(this.vendorHolds)) {
+      if (!hold.locks.length && !hold.commission) continue;
+      out[key] = {
+        locks: hold.locks.map(r => ({
+          idx: r.idx, loot: this.vendorEntryToLoot(r.entry),
+          ...(r.commission ? { commission: true as const } : {}),
+        })),
+        ...(hold.commission ? { commission: { ...hold.commission } } : {}),
+        ordinal: hold.ordinal,
+      };
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  /** Stand the sanitized holds back up as LIVE rows (registry-tolerant — a
+   *  row whose gem can't rebuild drops silently; the next arm re-seats
+   *  whatever stands). */
+  private rebuildVendorHolds(saved: Record<string, VendorHoldSave>): Record<string, VendorHold> {
+    const out: Record<string, VendorHold> = {};
+    for (const [key, h] of Object.entries(saved)) {
+      const locks: VendorHoldRow[] = [];
+      for (const r of h.locks) {
+        const entry = this.vendorLootToEntry(r.loot);
+        if (entry) locks.push({ entry, idx: r.idx, ...(r.commission ? { commission: true } : {}) });
+      }
+      out[key] = {
+        locks,
+        ...(h.commission ? { commission: { ...h.commission } } : {}),
+        // Absent ordinal (a foreign/hand-edited save): the watch starts at
+        // the CURRENT beat — never a retroactive windfall.
+        ordinal: h.ordinal ?? this.restockOrdinal(),
+      };
+    }
+    return out;
+  }
+
+  /** Every counter purchase routes here (Brandt / chandler / delver): the
+   *  account's market stamp (LEDGER_VENDOR_BOUGHT — the Vault's discovery
+   *  rows read it; Immortal runs read but never feed), then the hold
+   *  bookkeeping — a bought reserve releases its row, a bought commission
+   *  find FULFILLS the standing order. */
+  private vendorBought(key: string, entry: VendorEntry, seat: Seat, stock: VendorEntry[]): void {
+    if (this.metaProgressionActive()) {
+      this.account.ledger[LEDGER_VENDOR_BOUGHT] = (this.account.ledger[LEDGER_VENDOR_BOUGHT] ?? 0) + 1;
+      this.accountDirty = true;
+    }
+    const hold = this.vendorHolds[key];
+    if (!hold) return;
+    const at = hold.locks.findIndex(r => r.entry === entry);
+    if (at < 0) return;
+    const [row] = hold.locks.splice(at, 1);
+    if (row.commission && hold.commission) {
+      this.text(seat.actor.pos, 'the standing order is fulfilled', '#e8c87a', 13);
+      hold.commission = undefined;
+    }
+    this.syncHoldIdx(key, stock);
+    this.charDirty = true;
   }
 
   // --- THE CHANDLER'S COUNTER (a harborhold service — data/harborholds.ts) ---
@@ -34395,6 +34789,7 @@ export class World {
     }
     for (const c of price) m.essences[c.essence] -= c.count;
     this.chandlerStock.splice(index, 1);
+    this.vendorBought('chandler', entry, seat, this.chandlerStock);
     if (entry.kind === 'skill') {
       m.skillInv.push(entry.inst);
       this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);

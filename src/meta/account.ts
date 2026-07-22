@@ -111,6 +111,20 @@ export const FEATURE = {
   IMMORTAL: 'immortal_mode',
   IMMORTAL_SLOT_2: 'immortal_slot_2',
   IMMORTAL_SLOT_3: 'immortal_slot_3',
+  /** THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG.lock.ladder): each owned
+   *  rung reserves one more shelf slot at every counter — a reserved row
+   *  rides the world save and never re-rolls until bought or released. The
+   *  CAP is the count of owned rungs, so raising the ceiling is appending a
+   *  flag here and a row to the ladder — never editing a literal. */
+  VENDOR_LOCK_1: 'vendor_lock_1',
+  VENDOR_LOCK_2: 'vendor_lock_2',
+  VENDOR_LOCK_3: 'vendor_lock_3',
+  /** THE STANDING ORDER (World.resolveCommission): pre-select one gem the
+   *  account KNOWS (drop index ≥ VENDOR_CFG.commission.need) and the counter
+   *  watches its own restock beats for it — every beat that passed while you
+   *  were away resolves at the true shelf odds, seeded so a reload can never
+   *  re-flip a find. */
+  VENDOR_COMMISSION: 'vendor_commission',
 } as const;
 
 /** Account-ledger key: lifetime deaths across every character (bumped by the
@@ -132,6 +146,25 @@ export const LEDGER_ACCOUNT_DEATHS = 'account_deaths';
  *  and the lesson LATCH (World.mireilleGiftLesson) keeps every teaching
  *  surface quiet on this account forever: completed never re-opens. */
 export const LEDGER_FLASK_LESSON = 'mireille_flasks_filled';
+
+/** THE DROP INDEX (the bestiary's sibling, same ledger, same doctrine): one
+ *  lifetime counter per gem id, bumped ONLY where a gem is genuinely MINTED
+ *  into the world as loot (World.dropGemAt + the Bonewright's fixed spoils).
+ *  Discards, corpse reclaims, looter spills and counter purchases never
+ *  route through a mint, so the index is abuse-proof at the source — it
+ *  accrues through play, never through juggling. A CROSS-FILE CONTRACT like
+ *  every ledger key: unlock predicates may gate on it verbatim
+ *  (reqLedgerCounts), and THE STANDING ORDER's eligibility reads it. */
+export const gemDropKey = (gemId: string): string => `gemdrop:${gemId}`;
+
+/** Account-ledger key: lifetime genuine gem mints, all ids folded — the
+ *  "how much loot has this line seen" gate (the commission row reads it). */
+export const LEDGER_GEMDROP_TOTAL = 'gemdrops_total';
+
+/** Account-ledger key: lifetime purchases at any registered counter — the
+ *  discovery stamp for the Vault's counter-service rows (you can only buy
+ *  what you know exists: the merc market's own doctrine). */
+export const LEDGER_VENDOR_BOUGHT = 'vendor_bought';
 
 /** PER-CLASS play milestones, stamped into the RUN ledger as
  *  `class_<classId>_level_<m>` (world.ts grantSeatXp — local seat only,

@@ -97,8 +97,10 @@ export interface DeathRecord {
 }
 
 /** Pack one learned/inventory skill instance into a SavedLoot 'skill' (the exact
- *  shape character.ts already serializes — socketed supports ride in sockets[]). */
-function skillToLoot(inst: SkillInstance): SavedLoot {
+ *  shape character.ts already serializes — socketed supports ride in sockets[]).
+ *  Exported: THE PATRON'S HOLD serializes reserved counter rows through the
+ *  same one packer (one spelling of "a skill, saved"). */
+export function skillToLoot(inst: SkillInstance): SavedLoot {
   return {
     kind: 'skill', skillId: inst.def.id, level: inst.level, rarity: inst.rarity ?? 'common',
     sockets: inst.sockets.map(s => s ? { supportId: s.def.id, level: s.level } : null),

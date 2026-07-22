@@ -18,7 +18,11 @@
 //   balance/probe_unlocks.ts proves the web reachable + the laws honest.
 // ---------------------------------------------------------------------------
 
-import { FEATURE, LEDGER_ACCOUNT_DEATHS, classLevelLedgerKey, type Account } from './account';
+import {
+  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
+  classLevelLedgerKey, type Account,
+} from './account';
+import { VENDOR_CFG } from '../data/vendors';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
 // Pure fabric leaves (no engine cycle): the HARD-LESSON ledger keys the
 // discovery web reads — seized by a grip, sprung a trap with your own feet.
@@ -637,6 +641,32 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // fed and watered, her huntsman friend pitches camp. Unlocks the BESTIARY
   // (data/bestiary.ts): account-wide kill knowledge, studied into power.
   { id: 'feat_tracker', kind: 'feature', cost: 90, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Weslan the Tracker', description: 'A huntsman camps at the town\'s west edge. Dwell by his fire to open the BESTIARY — every kind your line has slain, studied into knowledge that outlives every death.', payload: { flag: FEATURE.TRACKER } },
+
+  // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG): the reserve ladder,
+  //     DERIVED from the config's own list — appending a rung there grows
+  //     this catalog and every counter's capacity together; nothing here
+  //     counts to three. Surfaces once the account has BOUGHT at any
+  //     counter (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
+  //     you've traded in); each rung requires the last. ---------------------
+  ...VENDOR_CFG.lock.ladder.map((rung, i): Unlockable => ({
+    id: `feat_vendor_lock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+    ...(i === 0 ? { reqLedger: LEDGER_VENDOR_BOUGHT } : { requiresUnlock: `feat_vendor_lock_${i}` }),
+    label: `Reserved Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
+    description: i === 0
+      ? 'Every counter learns THE PATRON\'S HOLD: tick a ware to RESERVE its shelf slot — it rides every restock, every reload, untouched, until bought or released. One slot, shared law at every counter.'
+      : `The counters hold ${i + 1} reserved slots for you.`,
+    payload: { flag: rung.flag },
+  })),
+  // THE STANDING ORDER: commission one KNOWN gem (the drop index —
+  // gemdrop:<id> ledger counts, genuine loot mints only) and the counter
+  // resolves every restock you missed at its true shelf odds; a hit waits
+  // reserved on the shelf. Gated on the index having seen real loot.
+  { id: 'feat_vendor_commission', kind: 'feature', cost: VENDOR_CFG.commission.cost, reqLevel: 0,
+    requiresUnlock: 'feat_vendor_lock_1',
+    reqLedgerCounts: { [LEDGER_GEMDROP_TOTAL]: VENDOR_CFG.commission.discoverTotal },
+    label: 'The Standing Order — Commission',
+    description: `Name a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index — only true finds count) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's honest odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
+    payload: { flag: FEATURE.VENDOR_COMMISSION } },
 
   // --- Town-building: the Quest Package (surfaces once any character reaches L5)
   { id: 'feat_quest_giver', kind: 'feature', cost: 100, reqLevel: 0, reqLedger: 'reached_level_5',

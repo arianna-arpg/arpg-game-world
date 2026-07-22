@@ -16,6 +16,67 @@
 
 import type { EssenceCost } from './essences';
 import type { Seat, VendorEntry, World } from '../engine/world';
+import { FEATURE } from '../meta/account';
+
+/** THE PATRON'S HOLD — every counter-hold tunable in one place (the MERC_CFG
+ *  stance: the law lives beside the registry it governs, world.ts reads it).
+ *  Holds are per-counter state persisted in WorldStateSave.vendorHolds under
+ *  the counter's hold key. */
+export const VENDOR_CFG = {
+  /** Which level BRACKET the counters' GEM rolls read (the minDropLevel
+   *  gate): 'shopper' = max(the counter's ground, the local hero) — the
+   *  gear shelf's own anchoring ("rolls at the buyer's level"), so the gem
+   *  half of the counter grows with the shopper instead of staying
+   *  starter-bracket forever; 'zone' = the ground alone (the pre-hold
+   *  behavior, verbatim). World DROPS never read this — it brackets only
+   *  the shelves and THE STANDING ORDER's odds (one bracket, one truth). */
+  gemBracket: 'shopper' as 'shopper' | 'zone',
+  /** The support-gem share of each gem slot once Brandt sells supports
+   *  (FEATURE.BRANDT_SELL_SUPPORTS) — the shelf builder's roll AND the
+   *  standing order's odds read this ONE number (they can never disagree). */
+  supportShare: 0.25,
+  lock: {
+    /** The reserve LADDER: each owned Vault rung grants one more lockable
+     *  slot at every holding counter (the cap = owned rungs, counted across
+     *  that counter's whole shelf). Raising the ceiling to N is appending a
+     *  row here — unlocks.ts DERIVES its catalog rows (ids, chaining, these
+     *  costs) from THIS list, and World.vendorLockCap folds it; no literal
+     *  anywhere counts to three. */
+    ladder: [
+      { flag: FEATURE.VENDOR_LOCK_1, cost: 80 },
+      { flag: FEATURE.VENDOR_LOCK_2, cost: 160 },
+      { flag: FEATURE.VENDOR_LOCK_3, cost: 280 },
+    ] as readonly { flag: string; cost: number }[],
+  },
+  commission: {
+    /** The Vault price of THE STANDING ORDER's rung (the catalog row is
+     *  derived, like the ladder's). */
+    cost: 240,
+    /** Genuine mints of a gem the DROP INDEX must have witnessed before the
+     *  account may commission it (gemDropKey — knowledge earned in the
+     *  field, the bestiary's own doctrine). */
+    need: 3,
+    /** Lifetime genuine mints, ALL gems folded (LEDGER_GEMDROP_TOTAL), the
+     *  rung's discovery gate — an index must have seen loot to mean much. */
+    discoverTotal: 25,
+    /** Multiplier over the counter's TRUE per-restock odds (1 = the honest
+     *  shelf distribution; a kindness dial, never a different distribution). */
+    oddsMult: 1,
+    /** Longest away-catchup resolved per arming, in restock beats — a
+     *  bound on the beat loop, generous past any real session. */
+    maxCatchup: 4000,
+  },
+} as const;
+
+/** Which hold services a counter offers (absent = a plain counter). Pure
+ *  capability data: the delver's per-descent shelf opts out of persistence
+ *  by simply not wearing the flags. */
+export interface VendorHoldCaps {
+  /** Shelf rows may be RESERVED (the lock checkbox; capacity = the ladder). */
+  locks?: boolean;
+  /** THE STANDING ORDER: one pre-selected gem watched for across restocks. */
+  commission?: boolean;
+}
 
 export interface VendorPrice {
   /** Essence costs, ALL required (a one-tint price is a list of one) — the
@@ -44,6 +105,13 @@ export interface VendorDef {
   salvageLocked?: string;
   /** Contextual header line (restock countdown, held echoes …). */
   headline?(w: World): string;
+  /** THE PATRON'S HOLD capabilities (absent = plain counter, nothing persists). */
+  holds?: VendorHoldCaps;
+  /** The persisted hold's key — default the vendor id (town singletons). A
+   *  per-site counter (a future delver hold) would scope itself
+   *  `${id}@${w.zone.id}`; the worldstate sanitizer already tolerates both
+   *  spellings. */
+  holdKey?(w: World): string;
 }
 
 export const VENDORS: VendorDef[] = [
@@ -58,6 +126,7 @@ export const VENDORS: VendorDef[] = [
     salvage: w => w.salvageUnlocked(),
     salvageLocked: 'Brandt eyes your scrap, shrugs — the Vault\'s SALVAGE STATION would teach him its worth.',
     headline: w => `restock ${Math.max(0, Math.ceil(w.vendorRestockAt - w.time))}s`,
+    holds: { locks: true, commission: true },
   },
   {
     // THE CHANDLER (data/harborholds.ts service row): a harborhold's port
@@ -69,6 +138,7 @@ export const VENDORS: VendorDef[] = [
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyChandler',
     headline: w => `restock ${Math.max(0, Math.ceil(w.vendorRestockAt - w.time))}s`,
+    holds: { locks: true, commission: true },
   },
   {
     id: 'delver', label: "THE DELVER'S WARES", accent: '#7fe0d8', bg: 'rgba(127,224,216,0.06)',

@@ -64,6 +64,10 @@ export type MetaAction =
   | { t: 'buyVendor'; index: number }                          // vendorStock idx
   | { t: 'buyChandler'; index: number }                        // chandlerStock idx (a harborhold's port counter)
   | { t: 'buyDelver'; index: number }                          // descentStock idx (Echoes)
+  // THE PATRON'S HOLD (data/vendors.ts): reserve/release one shelf row;
+  // place/release the standing gem commission (null = release).
+  | { t: 'vendorLock'; vendor: string; index: number; on: boolean }
+  | { t: 'vendorCommission'; vendor: string; gem: { kind: 'skill' | 'support'; id: string } | null }
   | { t: 'levelSkill'; skillId: string; pay?: 'points' | 'essence' }
   | { t: 'levelSupportInv'; index: number; pay?: 'points' | 'essence' } // loose support gem
   | { t: 'levelSupportSocket'; skillId: string; socket: number; pay?: 'points' | 'essence' } // socketed support

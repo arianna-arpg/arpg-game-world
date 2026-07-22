@@ -31,7 +31,7 @@ import {
   salvageItemYield, salvageSkillYield, salvageSupportYield,
   sellItemYield, sellSkillYield, sellSupportYield,
 } from '../engine/crafting';
-import { SKILLS } from '../data/skills';
+import { SKILLS, SKILL_LIST } from '../data/skills';
 import { mimicEntries } from '../engine/mimic';
 import {
   BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
@@ -53,7 +53,7 @@ import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { PASSIVE_CHOICE_CFG, choiceDealClaimant, choiceDealSpent, choiceGroupOf, choiceLockReason, choiceNodeLocked, choiceOptionOf, choicePickLimit, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
 import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
-import { SUPPORTS } from '../data/supports';
+import { SUPPORTS, SUPPORT_LIST } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
@@ -63,7 +63,10 @@ import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { Seat, World } from '../engine/world';
 import { COUCH_CFG, couchMinPads } from '../data/couch';
 import { HOLD_CLASSES } from '../data/harborholds';
-import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
+import {
+  featureEnabled, FEATURE, isClassUnlocked, isSkillUnlockedForDrop, isSupportUnlockedForDrop,
+  gemDropKey, META_CURRENCY_LABEL, selectableSlotCount, type Account,
+} from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks } from '../meta/unlocks';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
@@ -84,7 +87,7 @@ import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
-import { VENDORS } from '../data/vendors';
+import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
@@ -260,6 +263,12 @@ export class UI {
   /** The scrap wheel: while ON, the vendor screen's sell-half is live and
    *  clicks BREAK your things for essence. Reset on close — never sticky. */
   private scrapMode = false;
+  /** THE STANDING ORDER picker: which counter's pane is open + its filter. */
+  private vendorCommOpen: string | null = null;
+  private vendorCommQuery = '';
+  /** The vendor screen's live ticker (countdown in place; repaint on restock). */
+  private vendorTicker: number | null = null;
+  private vendorTickerRestockAt = 0;
   /** A minigame overlay is running — the panels beneath hold still. */
   private minigameActive = false;
   sailOpen = false;
@@ -2643,11 +2652,29 @@ export class UI {
     this.vendorOpen = true;
     this.vendorMenu.classList.remove('hidden');
     this.refreshVendor();
+    // THE LIVE COUNTER: tick the restock countdown IN PLACE (no rebuild —
+    // hovers, tooltips and the order-search box all survive); when a restock
+    // actually lands the shelves changed, so THAT repaints whole (the search
+    // box's focus is preserved through the rebuild).
+    if (this.vendorTicker === null) {
+      this.vendorTicker = window.setInterval(() => {
+        if (!this.vendorOpen) return;
+        const world = this.getWorld();
+        if (world.vendorRestockAt !== this.vendorTickerRestockAt) { this.refreshVendor(); return; }
+        for (const el of this.vendorMenu.querySelectorAll<HTMLElement>('[data-vheadline]')) {
+          const v = VENDORS.find(x => x.id === el.dataset.vheadline);
+          if (v?.headline) el.textContent = `· ${v.headline(world)}`;
+        }
+      }, 500);
+    }
   }
 
   closeVendor(): void {
     this.vendorOpen = false;
     this.scrapMode = false;
+    this.vendorCommOpen = null;
+    this.vendorCommQuery = '';
+    if (this.vendorTicker !== null) { window.clearInterval(this.vendorTicker); this.vendorTicker = null; }
     this.vendorMenu.style.cursor = '';
     this.vendorMenu.classList.add('hidden');
     hideTooltip();
@@ -2756,13 +2783,87 @@ export class UI {
       btn.addEventListener('click', () => this.closeBorough()));
   }
 
+  /** THE STANDING ORDER's picker: one row per gem the DROP INDEX has SEEN
+   *  (unlocked for drops + at least one genuine mint on the ledger).
+   *  Eligible rows (count ≥ need, rollable here) commission; the rest show
+   *  their progress — the bestiary's fill-bar doctrine on the gem shelf. */
+  private commissionPickerHtml(world: World, v: VendorDef): string {
+    const need = VENDOR_CFG.commission.need;
+    const acc = world.account;
+    const query = this.vendorCommQuery.trim().toLowerCase();
+    interface PickRow {
+      kind: 'skill' | 'support'; id: string; name: string; color: string;
+      count: number; odds: number;
+    }
+    const rows: PickRow[] = [];
+    for (const s of SKILL_LIST) {
+      if (s.noDrop || !isSkillUnlockedForDrop(acc, s.id)) continue;
+      const count = acc.ledger[gemDropKey(s.id)] ?? 0;
+      if (!count) continue; // the index has never seen it — not yet a name to give
+      if (query && !s.name.toLowerCase().includes(query)) continue;
+      rows.push({ kind: 'skill', id: s.id, name: s.name, color: s.color,
+        count, odds: world.commissionOdds({ kind: 'skill', id: s.id }) });
+    }
+    for (const d of SUPPORT_LIST) {
+      if (!isSupportUnlockedForDrop(acc, d.id)) continue;
+      const count = acc.ledger[gemDropKey(d.id)] ?? 0;
+      if (!count) continue;
+      if (query && !d.name.toLowerCase().includes(query)) continue;
+      rows.push({ kind: 'support', id: d.id, name: d.name, color: d.color,
+        count, odds: world.commissionOdds({ kind: 'support', id: d.id }) });
+    }
+    rows.sort((a, b) =>
+      (b.count >= need ? 1 : 0) - (a.count >= need ? 1 : 0)
+      || b.count - a.count || a.name.localeCompare(b.name));
+    const CAP = 40;
+    const shown = rows.slice(0, CAP);
+    const oddsText = (p: number): string => p < 0.01 ? '<1%' : `~${Math.round(p * 100)}%`;
+    const line = (r: PickRow): string => {
+      const ready = r.count >= need && r.odds > 0;
+      const why = r.count < need ? `${r.count}/${need} found`
+        : r.odds <= 0 ? 'not rollable here yet'
+        : `${oddsText(r.odds)} each restock`;
+      return `<div style="display:flex;align-items:center;gap:6px;margin:1px 0;${ready ? '' : 'opacity:0.55'}">
+        <span style="color:${r.color};flex:1">${esc(r.name)}</span>
+        <span style="font-size:10px;color:#8a8678">${r.kind === 'skill' ? 'skill' : 'support'} · ${why}</span>
+        <button data-vcomm-pick="${v.id}:${r.kind}:${r.id}" ${ready ? '' : 'disabled'}>Commission</button>
+      </div>`;
+    };
+    return `
+      <div style="margin-top:6px;border:1px dashed ${v.accent}55;border-radius:4px;padding:6px">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+          <input data-vcomm-search type="text" placeholder="Search the drop index…" value="${esc(this.vendorCommQuery)}"
+            style="flex:1;background:#141210;border:1px solid #3a352c;color:#d8d4c8;padding:3px 6px;font:inherit;font-size:11px">
+          <button data-vcomm-close>Close</button>
+        </div>
+        <div style="max-height:180px;overflow-y:auto">
+          ${shown.map(line).join('') || `<div style="color:#8a8678;font-size:11px">The index knows nothing by that name — gems are indexed as they genuinely DROP (${need} finds name one).</div>`}
+        </div>
+        ${rows.length > CAP ? `<div style="color:#8a8678;font-size:10px;margin-top:3px">…${rows.length - CAP} more — refine the search.</div>` : ''}
+      </div>`;
+  }
+
   refreshVendor(): void {
     if (!this.vendorOpen) return;
     const world = this.getWorld();
     const seat = this.panelSeat(this.vendorMenu);
     const near = VENDORS.filter(v => v.near(world, seat));
+    // The order-search box must survive the rebuild (the ticker, a buy, a
+    // keystroke all repaint) — capture focus + caret, restore after.
+    const prevSearch = this.vendorMenu.querySelector<HTMLInputElement>('input[data-vcomm-search]');
+    const searchFocused = !!prevSearch && document.activeElement === prevSearch;
+    const caret = searchFocused ? prevSearch.selectionStart : null;
+    this.vendorTickerRestockAt = world.vendorRestockAt;
+    const isClient = !!world.clientActionHook;
 
     const sections = near.map(v => {
+      // THE PATRON'S HOLD, drawn: the hold key + capacity (a NET client draws
+      // against the HOST's ledger, mirrored off the snapshot).
+      const holdKey = world.vendorHoldKey(v);
+      const canLock = !!v.holds?.locks;
+      const lockCap = isClient ? (world.netVendorCap ?? 0) : world.vendorLockCap();
+      const hold = world.vendorHolds[holdKey];
+      const lockedCount = hold?.locks.filter(r => !r.commission).length ?? 0;
       const rows = v.stock(world).map((e, idx) => {
         // The three counter shapes: gems read as gems; rolled GEAR reads as
         // an item row (rarity color + the ilvl badge) and carries the full
@@ -2786,16 +2887,61 @@ export class UI {
         const priceHtml = price.essences
           ? price.essences.map(c => this.essCostText(c)).join(' + ')
           : `${price.echoes} ◈`;
+        // The reserve toggle: shown once the ladder has ANY rung (or on an
+        // already-held row, so releasing never needs capacity); a full
+        // ledger disables further ticks with the reason in the title.
+        const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
+        const badge = heldRow
+          ? (heldRow.commission
+            ? '<span style="color:#7fe0d8;font-size:9px;border:1px solid #7fe0d866;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle">STANDING ORDER</span>'
+            : `<span style="color:${v.accent};font-size:9px;border:1px solid ${v.accent}66;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle">RESERVED</span>`)
+          : '';
+        const atCap = !heldRow && lockedCount >= lockCap;
+        const lockBtn = canLock && (lockCap > 0 || heldRow)
+          ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} style="min-width:30px"
+              title="${heldRow
+                ? (heldRow.commission
+                  ? 'Release the standing order\'s find (the watch resumes; the slot re-rolls next restock)'
+                  : 'Release this reserve — the slot re-rolls on the next restock')
+                : atCap ? `The reserve ledger holds ${lockCap} — release one first`
+                : 'Reserve this slot — it will not re-roll until bought or released'}">${heldRow ? '🔒' : '🔓'}</button>`
+          : '';
         return `
-          <div class="skill-entry" style="border-left:3px solid ${col}"${tipAttrs}>
-            <div class="name" style="${e.kind === 'item' ? `color:${col}` : ''}">${name} ${lvHtml} ${tag}</div>
+          <div class="skill-entry" style="border-left:3px solid ${col}${heldRow ? `;background:${v.accent}12` : ''}"${tipAttrs}>
+            <div class="name" style="${e.kind === 'item' ? `color:${col}` : ''}">${name} ${lvHtml} ${tag}${badge}</div>
             <div class="tags">${tags}</div>
             <div class="bind-btns">
+              ${lockBtn}
               <button data-vbuy="${v.id}:${idx}" ${afford ? '' : 'disabled'}>
                 Buy (${priceHtml})${afford ? '' : ' — not enough'}</button>
             </div>
           </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out — come back after the restock.</div>';
+
+      // THE STANDING ORDER strip (feature-gated; the Vault sells discovery,
+      // so an un-bought rung shows nothing). A NET client's panel stays
+      // quiet here — the order reads the KEEPER's account (host-side).
+      const commStrip = ((): string => {
+        if (!v.holds?.commission || isClient) return '';
+        if (!featureEnabled(world.account, FEATURE.VENDOR_COMMISSION)) return '';
+        const c = hold?.commission;
+        const found = hold?.locks.find(r => r.commission);
+        const cDef = c ? (c.kind === 'skill' ? SKILLS[c.id] : SUPPORTS[c.id]) : undefined;
+        const cName = c ? (cDef?.name ?? c.id) : null;
+        const status = !c ? '<span style="color:#8a8678">none placed</span>'
+          : found ? `<b style="color:${cDef?.color ?? '#7fe0d8'}">${esc(cName!)}</b> — <span style="color:#7fe0d8">found; it waits reserved on the shelf</span>`
+          : `<b style="color:${cDef?.color ?? '#d8d4c8'}">${esc(cName!)}</b> — the counter watches (${((): string => {
+            const p = world.commissionOdds(c);
+            return p < 0.01 ? '<1%' : `~${Math.round(p * 100)}%`;
+          })()} each restock)`;
+        return `
+          <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;font-size:11px">
+            ✒ Standing order: ${status}
+            ${c ? `<button data-vcomm-cancel="${v.id}" style="margin-left:6px">Withdraw</button>` : ''}
+            <button data-vcomm-open="${v.id}" style="margin-left:6px">${c ? 'Change…' : 'Place an order…'}</button>
+            ${this.vendorCommOpen === v.id ? this.commissionPickerHtml(world, v) : ''}
+          </div>`;
+      })();
 
       // The SELL lane: counters whose scrap gate is OPEN offer the wheel
       // (everything → Coarse, by quality). A gated-shut counter explains
@@ -2809,11 +2955,15 @@ export class UI {
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;color:#8a8678;font-size:11px">
           🔒 ${v.salvageLocked}</div>` : '');
 
+      const reserveBadge = canLock && lockCap > 0
+        ? ` <span style="opacity:0.8;font-size:10px;font-weight:normal">· 🔒 ${lockedCount}/${lockCap} reserved</span>`
+        : '';
       return `
         <div style="border:1px solid ${v.accent}44;border-radius:4px;padding:8px;margin-bottom:10px;background:${v.bg}">
           <div style="color:${v.accent};font-weight:bold;font-size:12px;margin-bottom:4px">
-            ${v.label}${v.headline ? ` <span style="opacity:0.7;font-size:10px;font-weight:normal">· ${v.headline(world)}</span>` : ''}</div>
+            ${v.label}${v.headline ? ` <span data-vheadline="${v.id}" style="opacity:0.7;font-size:10px;font-weight:normal">· ${v.headline(world)}</span>` : ''}${reserveBadge}</div>
           ${rows}
+          ${commStrip}
           ${scrap}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand — find a vendor and linger.</div>';
@@ -2837,6 +2987,49 @@ export class UI {
       world.requestMeta({ t: vendor.buyT, index: Number(idx) });
       refresh();
     }));
+    // THE PATRON'S HOLD: the toggle reads the row's CURRENT held state and
+    // asks for the flip — the world validates capacity/nearness (host-side
+    // in co-op; the client's optimistic repaint self-heals off the snapshot).
+    q<HTMLButtonElement>('button[data-vlock]').forEach(btn => btn.addEventListener('click', () => {
+      const [vid, idx] = btn.dataset.vlock!.split(':');
+      const vendor = VENDORS.find(x => x.id === vid);
+      if (!vendor) return;
+      const entry = vendor.stock(world)[Number(idx)];
+      const on = !(entry && world.vendorEntryHold(world.vendorHoldKey(vendor), entry));
+      world.requestMeta({ t: 'vendorLock', vendor: vid, index: Number(idx), on });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-vcomm-open]').forEach(btn => btn.addEventListener('click', () => {
+      this.vendorCommOpen = btn.dataset.vcommOpen!;
+      this.vendorCommQuery = '';
+      this.refreshVendor();
+    }));
+    q<HTMLButtonElement>('button[data-vcomm-close]').forEach(btn => btn.addEventListener('click', () => {
+      this.vendorCommOpen = null;
+      this.refreshVendor();
+    }));
+    q<HTMLButtonElement>('button[data-vcomm-cancel]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'vendorCommission', vendor: btn.dataset.vcommCancel!, gem: null });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-vcomm-pick]').forEach(btn => btn.addEventListener('click', () => {
+      const [vid, kind, ...rest] = btn.dataset.vcommPick!.split(':');
+      world.requestMeta({
+        t: 'vendorCommission', vendor: vid,
+        gem: { kind: kind as 'skill' | 'support', id: rest.join(':') },
+      });
+      this.vendorCommOpen = null;
+      refresh();
+    }));
+    const search = this.vendorMenu.querySelector<HTMLInputElement>('input[data-vcomm-search]');
+    search?.addEventListener('input', () => {
+      this.vendorCommQuery = search.value;
+      this.refreshVendor();
+    });
+    if (searchFocused && search) {
+      search.focus();
+      if (caret !== null) search.setSelectionRange(caret, caret);
+    }
     q<HTMLButtonElement>('button[data-scrapmode]').forEach(btn => btn.addEventListener('click', () => {
       this.scrapMode = !this.scrapMode;
       this.refreshVendor();

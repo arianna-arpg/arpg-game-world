@@ -32,6 +32,11 @@ import { hasLayout } from '../engine/levelgen';
 import { CLASSES } from '../data/classes';
 import { MERC_TEMPLATE_BY_ID } from '../data/mercenaries';
 import type { MercOffer } from './mercs';
+import { VENDORS } from '../data/vendors';
+import { SKILLS } from '../data/skills';
+import { SUPPORTS } from '../data/supports';
+import { SKILL_RARITIES } from '../engine/skills';
+import type { SavedLoot } from './death';
 
 export const WORLD_SCHEMA_VERSION = 1;
 
@@ -176,6 +181,33 @@ export interface WorldStateSave {
    *  consumed by hires, never rerolled. An EMPTY sheet is load-bearing
    *  state (sold out stays sold out), so entries persist at length 0. */
   mercSheets?: Record<string, MercOffer[]>;
+  /** THE PATRON'S HOLD (World.vendorHolds): per-counter reserved shelf rows
+   *  + the standing gem commission, keyed by the counter's hold key
+   *  (VendorDef.holdKey — the vendor id, or `id@zoneId` for a per-site
+   *  counter). Only holds CARRYING state are written (a lockless, orderless
+   *  hold is nothing — unlike a sold-out merc sheet, empty here is not
+   *  load-bearing). */
+  vendorHolds?: Record<string, VendorHoldSave>;
+}
+
+/** One reserved shelf row: WHERE it sits (the slot index the overlay
+ *  re-seats it at) and WHAT it is (the corpse-loot union verbatim —
+ *  ItemInstance is pure JSON; gems rebuild via the same tolerant path the
+ *  reclaim walks). `commission: true` marks the standing order's find:
+ *  buying it fulfills the order instead of merely releasing a lock. */
+export interface VendorHoldRowSave {
+  idx: number;
+  loot: SavedLoot;
+  commission?: boolean;
+}
+
+export interface VendorHoldSave {
+  locks: VendorHoldRowSave[];
+  /** THE STANDING ORDER: the pre-selected gem the counter watches for. */
+  commission?: { kind: 'skill' | 'support'; id: string };
+  /** Highest restock beat (floor(worldTime / restockSeconds)) the order has
+   *  resolved through — the away-catchup resumes exactly here. */
+  ordinal?: number;
 }
 
 // --- sanitizers (registry-tolerant, never throw) ------------------------------
@@ -335,6 +367,74 @@ export function sanitizeMercSheets(
       });
     }
     out[zid] = sheet;
+  }
+  return out;
+}
+
+/** Structural + registry scrub of one saved hold row's loot arm. Gear rides
+ *  on shape alone — rebuildItem owns its registry tolerance at stand-up,
+ *  exactly like a corpse's ring. */
+function sanitizeHoldLoot(raw: unknown): SavedLoot | null {
+  const l = raw as SavedLoot | null;
+  if (!l || typeof l !== 'object') return null;
+  if (l.kind === 'skill') {
+    if (typeof l.skillId !== 'string' || !SKILLS[l.skillId]) return null;
+    if (!isFiniteNum(l.level) || !Array.isArray(l.sockets)) return null;
+    return {
+      kind: 'skill', skillId: l.skillId, level: Math.max(1, Math.floor(l.level)),
+      rarity: SKILL_RARITIES[l.rarity] ? l.rarity : 'common', sockets: l.sockets.map(s =>
+        s && typeof s === 'object' && typeof s.supportId === 'string' && isFiniteNum(s.level)
+          ? { supportId: s.supportId, level: Math.max(1, Math.floor(s.level)) } : null),
+    };
+  }
+  if (l.kind === 'support') {
+    if (typeof l.supportId !== 'string' || !SUPPORTS[l.supportId]) return null;
+    if (!isFiniteNum(l.level)) return null;
+    return { kind: 'support', supportId: l.supportId, level: Math.max(1, Math.floor(l.level)) };
+  }
+  if (l.kind === 'gear') {
+    return l.item && typeof l.item === 'object' ? { kind: 'gear', item: l.item } : null;
+  }
+  return null;
+}
+
+/** Stand THE PATRON'S HOLD back up (registry-tolerant, never throws). A key
+ *  must name a registered counter — bare (`brandt`) or site-scoped
+ *  (`brandt@gen_12`, whose zone must have survived the cull); a row whose
+ *  gem left the registry drops (its ware could never stand on a shelf); a
+ *  standing order for a de-registered gem is released. A hold left carrying
+ *  nothing drops whole — empty is NOT load-bearing here (the shelf simply
+ *  re-rolls), unlike a sold-out muster sheet. */
+export function sanitizeVendorHolds(
+  raw: unknown, zones: Record<string, ZoneDef>,
+): Record<string, VendorHoldSave> {
+  const out: Record<string, VendorHoldSave> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [key, h] of Object.entries(raw as Record<string, unknown>)) {
+    const at = key.indexOf('@');
+    const vendorId = at < 0 ? key : key.slice(0, at);
+    if (!VENDORS.some(v => v.id === vendorId)) continue;
+    if (at >= 0 && !zones[key.slice(at + 1)]) continue; // a site-scoped hold drops with its ground
+    const hold = h as VendorHoldSave | null;
+    if (!hold || typeof hold !== 'object' || !Array.isArray(hold.locks)) continue;
+    const locks: VendorHoldRowSave[] = [];
+    for (const r of hold.locks) {
+      if (!r || typeof r !== 'object' || !isFiniteNum(r.idx) || r.idx < 0) continue;
+      const loot = sanitizeHoldLoot(r.loot);
+      if (!loot) continue;
+      locks.push({ idx: Math.floor(r.idx), loot, ...(r.commission === true ? { commission: true } : {}) });
+    }
+    const c = hold.commission;
+    const commission = c && typeof c === 'object'
+      && (c.kind === 'skill' || c.kind === 'support') && typeof c.id === 'string'
+      && (c.kind === 'skill' ? !!SKILLS[c.id] : !!SUPPORTS[c.id])
+      ? { kind: c.kind, id: c.id } : undefined;
+    if (!locks.length && !commission) continue;
+    out[key] = {
+      locks,
+      ...(commission ? { commission } : {}),
+      ...(isFiniteNum(hold.ordinal) ? { ordinal: Math.max(0, Math.floor(hold.ordinal)) } : {}),
+    };
   }
   return out;
 }

@@ -258,17 +258,28 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
 // its local stock would diverge — and a buyVendor intent addresses stock by INDEX.
 // Replicate the host's stock so the client renders the authoritative list + its
 // indices line up. Reuses the skill/support instance wire shapes (defId only).
-export type VendorEntryW =
+export type VendorEntryW = (
   | { kind: 'skill'; s: SkillInstW }
   | { kind: 'support'; g: SupportInstW }
   // Rolled GEAR rides as the full instance (already pure JSON — the same
   // stance as seat gear); rebuildItem re-validates on the client.
-  | { kind: 'item'; i: ItemInstance };
+  | { kind: 'item'; i: ItemInstance }
+) & {
+  /** THE PATRON'S HOLD, on the wire: 1 = reserved row, 2 = the standing
+   *  order's find. Rides ON the entry (never a parallel array — a row that
+   *  fails rehydrate must take its flag down with it). */
+  lk?: 1 | 2;
+};
 
-const vendorEntryW = (e: VendorEntry): VendorEntryW =>
-  e.kind === 'skill' ? { kind: 'skill', s: skillInstW(e.inst) }
-    : e.kind === 'support' ? { kind: 'support', g: supW(e.gem) }
-    : { kind: 'item', i: { ...e.item } };
+const vendorEntryW = (e: VendorEntry, world: World): VendorEntryW => {
+  const base: VendorEntryW =
+    e.kind === 'skill' ? { kind: 'skill', s: skillInstW(e.inst) }
+      : e.kind === 'support' ? { kind: 'support', g: supW(e.gem) }
+      : { kind: 'item', i: { ...e.item } };
+  const row = world.vendorEntryHold('brandt', e);
+  if (row) base.lk = row.commission ? 2 : 1;
+  return base;
+};
 
 const rehydrateVendor = (w: VendorEntryW): VendorEntry | null => {
   if (w.kind === 'skill') { const inst = rehydrateSkill(w.s); return inst ? { kind: 'skill', inst } : null; }
@@ -329,6 +340,9 @@ export interface StateSnapshot {
    *  client renders the SAME list the host will resolve a buyVendor index against. */
   vendor: VendorEntryW[];
   vendorRestockAt: number;
+  /** The HOST account's reserve capacity (World.vendorLockCap) — the client
+   *  panel draws toggles against the counter's true ledger, not its own. */
+  vendorCap?: number;
   actors: ActorW[];
   projectiles: ProjW[];
   tethers: TetherW[];
@@ -522,7 +536,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     tick, time: world.time, zoneId: world.zone.id,
     arena: { w: world.arena.w, h: world.arena.h },
     seats, seatMeta,
-    vendor: world.vendorStock.map(vendorEntryW), vendorRestockAt: world.vendorRestockAt,
+    vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
+    vendorCap: world.vendorLockCap(),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(actorToW),
     projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age })),
     tethers: world.tethers.map(t => ({
@@ -858,8 +873,22 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   // Mirror the host's authoritative vendor stock so the smith panel renders the
   // real wares and a buyVendor index resolves against the SAME list host-side.
   if (snap.vendor) {
-    world.vendorStock = snap.vendor.map(rehydrateVendor).filter((e): e is VendorEntry => !!e);
+    const locks: { entry: VendorEntry; idx: number; commission?: boolean }[] = [];
+    world.vendorStock = snap.vendor
+      .map((w, i) => {
+        const e = rehydrateVendor(w);
+        if (e && w.lk) locks.push({ entry: e, idx: i, ...(w.lk === 2 ? { commission: true } : {}) });
+        return e;
+      })
+      .filter((e): e is VendorEntry => !!e);
+    // Re-anchor after the null-filter so lock seats match the drawn list.
+    for (const r of locks) r.idx = world.vendorStock.indexOf(r.entry);
+    // A PROJECTION hold (host-authoritative flags, self-healing at 20 Hz):
+    // the panel's one read path (vendorEntryHold) now answers identically
+    // on host and client. The client never resolves or persists it.
+    world.vendorHolds['brandt'] = { locks, ordinal: 0 };
     world.vendorRestockAt = snap.vendorRestockAt;
+    world.netVendorCap = snap.vendorCap;
   }
 
   // The client's OWN hero arrives as a POOLED actor (in world.actors). Make

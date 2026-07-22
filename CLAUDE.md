@@ -703,6 +703,22 @@ changes.
   sacks, memory restores) always pass; the Pit is the debut (a level-scaled
   XP arena, deliberately not a gear farm) — docs in `docs/engine/spoils.md`,
   probe `balance/probe_spoils.ts`.
+  THE PATRON'S HOLD (`data/vendors.ts` VENDOR_CFG + `World.vendorHolds` —
+  counter state, not weather): reserved shelf slots as a Vault ladder
+  (capacity = owned rungs of `VENDOR_CFG.lock.ladder`; the catalog rows are
+  DERIVED from that list) — a reserved ware rides every restock/reload as
+  the same object until bought or released; THE STANDING ORDER commissions
+  one KNOWN gem per counter (the DROP INDEX: `account.ledger['gemdrop:<id>']`
+  bumped ONLY at genuine mint sites — dropGemAt + the Bonewright's fixed
+  spoils; discards/reclaims/purchases never count — the bestiary's doctrine
+  on the gem shelf) and resolves every away restock beat at the shelf's TRUE
+  odds (`commissionOdds` reads the roller's own pools/weights; seeded
+  worldSeed × counter × gem × beat, so reloads replay the identical find);
+  `VENDOR_CFG.gemBracket` 'shopper' anchors gem rolls to the buyer like the
+  gear shelf ('zone' = the old starter-bracket). Holds persist in
+  `WorldStateSave.vendorHolds` (keep-what-stands sanitizer; empty is NOT
+  load-bearing) — docs in `docs/engine/vendors.md`, probe
+  `balance/probe_vendorlocker.ts`.
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
   `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`,
   `beacons.ts` (survey-spire objective tuning); items:
