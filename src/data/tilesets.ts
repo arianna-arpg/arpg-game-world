@@ -8969,6 +8969,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cloud_coral', count: [3, 6] },
       { kind: 'aether_crystal', count: [2, 5] },
       { kind: 'flowers', count: [1, 2] },
+      // The den door (data/sidezones.ts): a thunderhead's mouth — dwell in
+      // and the Storm-Throat mints below. Every face carries the roll
+      // (variants replace base layout wholesale).
+      { kind: 'storm_funnel', count: [0, 1] },
     ],
     common: [
       { kind: 'clearing', count: [1, 2], radius: [80, 120] },
@@ -8984,6 +8988,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'chime_stand', count: [4, 7] },
           { kind: 'cloud_coral', count: [4, 7] },
           { kind: 'flowers', count: [2, 4] },
+          { kind: 'storm_funnel', count: [0, 1] },
         ],
         theme: {
           accent: '#ffd88a', dayLight: 1.32,
@@ -9010,6 +9015,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'gale_vane', count: [3, 6] },
           { kind: 'chime_stand', count: [3, 5] },
           { kind: 'aether_crystal', count: [3, 6] },
+          { kind: 'storm_funnel', count: [0, 1] },
         ],
         theme: {
           accent: '#8fe0d8', dayLight: 1.1,
@@ -9037,6 +9043,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'gale_vane', count: [3, 5] },
           { kind: 'cloud_coral', count: [4, 8] },
           { kind: 'aether_crystal', count: [4, 7] },
+          { kind: 'storm_funnel', count: [0, 1] },
         ],
         theme: {
           floor: '#c6cce0', accent: '#b8a8f0', dayLight: 0.95, nightDark: 0.62,
@@ -9163,6 +9170,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'sundial_gnomon', count: [1, 3] },
       { kind: 'orrery_stand', count: [1, 3] },
       { kind: 'aether_crystal', count: [2, 4] },
+      // The den door (data/sidezones.ts): the crescent arch into the Wane —
+      // every face carries the roll (variants replace base layout wholesale).
+      { kind: 'wane_arch', count: [0, 1] },
     ],
     common: [
       { kind: 'clearing', count: [1, 2], radius: [80, 120] },
@@ -9187,6 +9197,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'orrery_stand', count: [2, 4] },
           { kind: 'moonwell', count: [1, 2] },
           { kind: 'flowers', count: [1, 3] },
+          { kind: 'wane_arch', count: [0, 1] },
         ],
         theme: {
           accent: '#ffd9a0', dayLight: 1.3, nightDark: 0.66,
@@ -9212,6 +9223,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'nightbloom_tuft', count: [7, 12] },
           { kind: 'comet_shard', count: [5, 9] },
           { kind: 'moonwell', count: [1, 3] },
+          { kind: 'wane_arch', count: [0, 1] },
         ],
         theme: {
           accent: '#a8b8f0', dayLight: 1.05, nightDark: 0.78,
@@ -9253,6 +9265,7 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'moonwell', count: [2, 3] },
           { kind: 'aether_crystal', count: [3, 6] },
           { kind: 'flowers', count: [1, 2] },
+          { kind: 'wane_arch', count: [0, 1] },
         ],
         layoutParams: {
           spanKinds: [
@@ -9297,6 +9310,208 @@ export const TILESETS: Record<string, TilesetDef> = {
     compositions: [
       { composition: 'choir_ring', chance: 0.2 },
     ],
+  },
+
+  // THE GALESTREAM — the realm's ARTERY (dimensions.ts courses: a course-only
+  // biome, minted ONLY along the jetstream's meander): the Driftways' flux
+  // fabric with somewhere to be — the current has a heading, the rafts run
+  // it FAST, the gusts shove like traffic, and the galekin ride their own
+  // highway. Follow the chain far enough and the Vault of Dawn stands at the
+  // wind's end (the course terminus law).
+  galestream: {
+    id: 'galestream',
+    frontier: false, realm: 'aetherial',
+    perfProbe: true, // the realm's fastest flux — sweep the racing worst case
+    biome: 'aether_stream',
+    nameFirst: ['Galestream', 'Jetstream', 'Shearwind', 'Tailwind', 'Aurelian', 'Racing'],
+    nameSecond: ['Reach', 'Run', 'Straits', 'Current', 'Passage', 'Mile'],
+    theme: {
+      floor: '#d8e8f0', grid: '#b8d2e2', border: '#7fa8c4',
+      obstacle: '#e2eef6', obstacleEdge: '#9cc0d4', accent: '#8fe0e8',
+      wall: '#bcd4e4', water: '#9fd8e8',
+      dayLight: 1.22, nightDark: 0.5, heat: 0.28,
+      ground: {
+        palette: ['#a8cadc', '#bcd6e4', '#d0e2ec', '#e2eef4', '#f2f9fc'],
+        bias: 0.56, alpha: 0.55, scale: 1.5, strength: 0.95, speckles: 0.34, evenness: 0.26,
+        stretchX: 1.7, // the mottle itself streams — the wind combed the floor
+      },
+      ambientFx: [
+        { kind: 'motes', color: '#e0f4fc', intensity: 1.4 },
+        { kind: 'aurora', color: '#8fe0e8', intensity: 0.4 },
+      ],
+      fog: { banks: [1, 2], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+      // The stream's flux: quick stands, the realm's FASTEST rafts, gusts on
+      // a commuter's schedule. Crossing the artery is riding it.
+      flux: {
+        phase: { period: 8, solidFrac: 0.54, form: 1.7, fray: 2.1 },
+        carrier: { radius: [46, 60], speed: [72, 96], dwell: 0.9, per: 340 },
+        gusts: { every: [18, 28], warn: 1.6, hold: 2.8, push: 135 },
+        fall: { kind: 'below', damageFrac: 0.05, grace: 0.4 },
+        warmup: 6,
+        look: { body: '#e2ecf8', crest: '#ffffff', fray: '#88a4c2' },
+      },
+    },
+    sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
+    forceLayout: 'aether_drift',
+    layout: [
+      { kind: 'cloud_billow', count: [6, 10] },
+      { kind: 'gale_vane', count: [4, 7] },
+      { kind: 'zephyr_totem', count: [3, 6] },
+      { kind: 'chime_stand', count: [2, 4] },
+      { kind: 'cloud_coral', count: [3, 6] },
+      { kind: 'aether_crystal', count: [2, 4] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [80, 120] },
+    ],
+    // The stream is the galekin's highway: speedsters in numbers, the
+    // vesper hounds coursing through, the tyrant where the weather stacks.
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 4, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 2, size: [1, 2] },
+      ],
+      table: [
+        { id: 'zephyr_eel', weight: 4 },
+        { id: 'cirrus_fingerling', weight: 3 },
+        { id: 'drift_ray', weight: 3 },
+        { id: 'comet_hound', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'gale_djinn', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
+        { id: 'mistwing_shrike', weight: 1.5, presence: { from: 9, fadeIn: 4 } },
+        { id: 'thunderhead_tyrant', weight: 0.8, presence: { from: 14, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    objectives: [{ kind: 'clear', weight: 2 }, { kind: 'escape', weight: 2 }],
+    compositions: [
+      { composition: 'vane_court', chance: 0.35 },
+      { composition: 'chime_gallery', chance: 0.25 },
+    ],
+  },
+
+  // THE WANE — the Vesperlands' DEN (frontier:false — minted only by the
+  // wane_arch door): the noctarch's vault under the meadows, a midnight
+  // interior where the instruments went when the sky stopped answering.
+  // The den component the country checklist owes every country.
+  wane_vault: {
+    id: 'wane_vault',
+    frontier: false, perfProbe: true, sky: 'sheltered',
+    biome: 'aether_vesper',
+    nameFirst: ['Waning', 'Last-Quarter', 'Eclipsed', 'Occluded'],
+    nameSecond: ['Vault', 'Undercroft', 'Observatory', 'Reliquary'],
+    theme: {
+      ambientDark: 0.5,
+      ground: {
+        scale: 1.2, strength: 0.85, speckles: 0.3,
+        palette: ['#12142a', '#1c1e38', '#282a48', '#343658', '#42446a'], bias: 0.48, alpha: 0.55,
+      },
+      floor: '#1c1e38', grid: '#282a48', border: '#5a5c88',
+      obstacle: '#343658', obstacleEdge: '#6a6c9a', accent: '#a8b8f0',
+      tree: '#343658', wall: '#343658',
+      ambientFx: [
+        { kind: 'motes', color: '#a8b8f0', intensity: 0.7 },
+      ],
+    },
+    sizeW: [1500, 2000], sizeH: [1100, 1500], ellipseChance: 0,
+    layout: [
+      { kind: 'star_lantern', count: [3, 6] },
+      { kind: 'moonwell', count: [1, 3] },
+      { kind: 'comet_shard', count: [2, 5] },
+      { kind: 'orrery_stand', count: [1, 3] },
+      { kind: 'nightbloom_tuft', count: [3, 6] },
+    ],
+    variants: [
+      // The kept vault: the keepers still wind the works.
+      { name: 'the kept vault', layout: [
+        { kind: 'star_lantern', count: [4, 7] },
+        { kind: 'orrery_stand', count: [2, 4] },
+        { kind: 'sundial_gnomon', count: [1, 3] },
+        { kind: 'moonwell', count: [1, 2] },
+      ] },
+      // The occluded halls: dust on the glass, the dark keeping itself.
+      { name: 'the occluded halls', layout: [
+        { kind: 'star_lantern', count: [2, 4] },
+        { kind: 'comet_shard', count: [3, 7] },
+        { kind: 'nightbloom_tuft', count: [5, 9] },
+        { kind: 'web', count: [1, 3] },
+      ] },
+    ],
+    packs: {
+      count: [3, 4], size: [2, 4],
+      table: [
+        { id: 'lumen_moth', weight: 3 },
+        { id: 'star_grazer', weight: 2 },
+        { id: 'comet_hound', weight: 2.5, presence: { from: 9, fadeIn: 3 } },
+        { id: 'void_angler', weight: 2, presence: { from: 10, fadeIn: 4 } },
+        { id: 'orrery_keeper', weight: 2, presence: { from: 11, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
+    caveLayouts: { dungeon: 2, labyrinth: 1 },
+  },
+
+  // THE STORM-THROAT — the Driftways' DEN (frontier:false — minted only by
+  // the storm_funnel): the inside of a thunderhead, charged and close; the
+  // tyrant nests where the weather is made.
+  storm_throat: {
+    id: 'storm_throat',
+    frontier: false, perfProbe: true, sky: 'sheltered',
+    biome: 'aether_drift',
+    nameFirst: ['Thunderhead', 'Anvil', 'Charged', 'Rolling'],
+    nameSecond: ['Throat', 'Gullet', 'Chambers', 'Heart'],
+    theme: {
+      ambientDark: 0.44,
+      ground: {
+        scale: 1.3, strength: 0.9, speckles: 0.36,
+        palette: ['#1e2234', '#2a2e44', '#383c56', '#484c68', '#5a5e7c'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#2a2e44', grid: '#383c56', border: '#6a6e92',
+      obstacle: '#383c56', obstacleEdge: '#7a7ea4', accent: '#9fe0e8',
+      tree: '#383c56', wall: '#383c56',
+      ambientFx: [
+        { kind: 'motes', color: '#bcd8ec', intensity: 1.1 },
+      ],
+    },
+    sizeW: [1500, 2000], sizeH: [1100, 1500], ellipseChance: 0,
+    layout: [
+      { kind: 'charged_crystal', count: [3, 6] },
+      { kind: 'storm_glass', count: [2, 5] },
+      { kind: 'fulgurite', count: [2, 4] },
+      { kind: 'cloud_coral', count: [2, 4] },
+      { kind: 'static_bloom', count: [1, 3] },
+    ],
+    variants: [
+      // The live cell: the storm still building — everything crackles.
+      { name: 'the live cell', layout: [
+        { kind: 'charged_crystal', count: [4, 8] },
+        { kind: 'static_bloom', count: [2, 5] },
+        { kind: 'storm_glass', count: [2, 4] },
+      ] },
+      // The spent anvil: the charge gone to ground, the glass left behind.
+      { name: 'the spent anvil', layout: [
+        { kind: 'fulgurite', count: [4, 7] },
+        { kind: 'storm_glass', count: [3, 6] },
+        { kind: 'spent_cell', count: [1, 3] },
+      ] },
+    ],
+    packs: {
+      count: [3, 4], size: [2, 4],
+      table: [
+        { id: 'cirrus_fingerling', weight: 3 },
+        { id: 'zephyr_eel', weight: 3, presence: { from: 10, fadeIn: 3 } },
+        { id: 'gale_djinn', weight: 2.5, presence: { from: 11, fadeIn: 3 } },
+        { id: 'drift_ray', weight: 2 },
+        { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
+    caveLayouts: { cavern: 2, rooms: 1 },
   },
 
   // THE HIGH BASTION — the Aetherial's citadel face: the Host's SEAT. One

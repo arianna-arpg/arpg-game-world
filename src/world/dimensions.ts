@@ -300,6 +300,21 @@ registerDimension({
   // The Host keeps its own weather: world events run at HALF tempo above
   // the clouds (and the aether biome's own denies gate the worst offenders).
   events: { densityMul: 0.5 },
+  // THE GALESTREAM — the realm's artery (the wind-river throughline the
+  // shelves foretold; the River of Flame's mirror above the sky): a
+  // jetstream springing at the Firmament's doorstep, painting the
+  // course-only 'aether_stream' biome down a ~2000-unit meander of racing
+  // flux — carrier rafts on the current, gusts with somewhere to be. Zones
+  // minted on it chain into one followable stream, and the VAULT OF DAWN
+  // stands guaranteed where the wind ends — the reward for riding the
+  // whole artery. All shape numbers are course data.
+  courses: [{
+    id: 'galestream', biome: 'aether_stream', anchor: 'gate',
+    length: 2000, halfWidth: 140, feather: 60, seedSalt: 0x9a1e57,
+    waves: 1.7, sweep: 300,
+    label: 'The Galestream',
+    terminus: { radius: 240, compositions: [{ composition: 'vault_of_dawn', chance: 1 }] },
+  }],
   // NO WAYPOINTS above the clouds: the realm is crossed (geyser up, gate
   // through, fall out) — never teleported into. A waypoint on a shelf whose
   // ground dissolves is a rubberband loop waiting to happen; the Firmament

@@ -708,6 +708,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { aether_bastion: 1 },
     eventDensityMul: 0.4,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE GALESTREAM — the Aetherial's ARTERY (a course-only biome, the River
+  // of Flame idiom above the sky): a jetstream you can find and then FOLLOW,
+  // springing at the Firmament's doorstep and meandering the realm — never
+  // in the frontier palette; the wind is a place, not patches. Patroned by
+  // the GALEKIN: the stream is their highway.
+  aether_stream: { patronFaction: 'galekin', mapColor: '#8fe0e8', label: 'The Galestream', spacing: 88,
+    allowedLayouts: { aether_drift: 1 },
+    eventDensityMul: 0.3,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */

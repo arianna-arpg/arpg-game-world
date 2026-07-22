@@ -2523,6 +2523,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'stairFlight', order: 54, shadow: 0.4,
     params: { wood: '#d8d0bc', dark: '#8a8270', runner: '#c8a44a', label: 'the Gallery Above' },
   },
+  // The country dens' doors: the Wane's crescent arch (the gateArch painter
+  // after dark — its star-glow wakes with the night) and the Storm-Throat's
+  // thunderhead mouth (the vent painter storming).
+  wane_arch: {
+    painter: 'gateArch', order: 56, shadow: 0.4, longShadow: 1.2,
+    params: { stone: '#2a2c50', edge: '#6a6c9a', glow: '#a8b8f0' },
+    light: { radius: -2.0, color: '#a8b8f0', intensity: 0.3, flicker: 1.2, radiance: { at1: 0.35 } },
+  },
+  storm_funnel: {
+    painter: 'vent', order: 46,
+    params: { rim: '#3a3e5c', throat: '#23263c', hot: '#8fd8ec', core: '#e8fbff' },
+    light: { radius: -2.6, color: '#9fe0f4', intensity: 0.3, flicker: 3.5 },
+  },
 
   // --- The ship-deck kit (vis/paintersSea.ts): the Wraithsail's boards ------
   // Masts carry a cold masthead light (the ghost ship sails lit); rails and

@@ -375,6 +375,37 @@ registerSidezone({
   },
 });
 
+// --- THE AETHERIAL COUNTRY DENS (the checklist's den component) -------------
+// THE WANE: the Vesperlands' vault under the meadows — the noctarch's seat,
+// where the instruments went when the sky stopped answering. The crescent
+// arch is the door; 'wane_entered' is the country's gateway seam.
+registerSidezone({
+  kind: 'wane_arch',
+  dwell: 0.7,
+  ledgerOnEnter: 'wane_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'wane_vault', {
+    rollVariant: true,
+    name: 'the Wane',
+    objective: { kind: 'boss', id: 'noctarch_of_the_wane' },
+    noDeeper: true,
+  }),
+});
+
+// THE STORM-THROAT: the Driftways' den — the inside of a thunderhead, the
+// tyrant nesting where the weather is made. 'stormthroat_entered' is the
+// wind country's gateway seam.
+registerSidezone({
+  kind: 'storm_funnel',
+  dwell: 0.7,
+  ledgerOnEnter: 'stormthroat_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'storm_throat', {
+    rollVariant: true,
+    name: 'the Storm-Throat',
+    objective: { kind: 'boss', id: 'thunderhead_tyrant' },
+    noDeeper: true,
+  }),
+});
+
 // --- THE TOWNHOUSE FLOORS (burgher ASCENSION) ----------------------------------
 // The gloam manor's climb, generalized to the whole settled belt: the cave
 // drop-in INVERTED. 'city_stair' (a townhouse structure's stair cell) dwells

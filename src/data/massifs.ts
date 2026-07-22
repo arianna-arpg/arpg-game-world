@@ -378,6 +378,25 @@ registerDoodadRule('bell_spire', {
 registerDoodadRule('basilica_stair', { overlap: 'trigger', spacing: 20 });
 registerStamp('basilica_stair', stampSingle('basilica_stair', [11, 14]));
 
+// THE COUNTRY DENS' DOORS (mints in data/sidezones.ts): the Vesperlands'
+// crescent arch into the Wane, and the Driftways' thunderhead mouth into
+// the Storm-Throat — each country's checklist den, rolled on every face's
+// layout rows. Wide spacing: one door per meadow, if any.
+registerDoodadRule('wane_arch', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 200, bodyScale: 0.55,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('wane_arch', stampSingle('wane_arch', [20, 26]));
+registerDoodadRule('storm_funnel', {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 200, bodyScale: 0.6,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+registerStamp('storm_funnel', stampSingle('storm_funnel', [22, 28]));
+// spent_cell pre-exists (rule + visual with the charge-cell kit) but had no
+// layout stamp — the Storm-Throat's 'spent anvil' face is its first scatter
+// consumer (genqa's registry net caught the gap).
+registerStamp('spent_cell', stampSingle('spent_cell', [9, 12]));
+
 // THE PANTHEON — the dome itself: a near-perfect round mass (lobe barely
 // breathes), gold statuary crowning the drum. The city's gravest silhouette.
 registerMassKind({
