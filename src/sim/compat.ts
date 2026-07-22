@@ -1581,6 +1581,41 @@ export function muteWhy(def: SkillDef): string {
   if (def.castMode === 'guard') return 'guard stance — needs a stance-holding pilot under incoming hits';
   if (def.castMode) return `castMode '${def.castMode}' — unexercised by the probe pilots`;
   if (def.requiresGuard) return 'requires a raised guard — no probe pilot holds one';
+  // THE CHARGE FAMINE (R8 forensics, live-fired clean): a hard chargeCost
+  // refuses the press until the bank can pay, and the bare rig never banks
+  // it — the def's own generators (enemyDeath/move/takeHit/…) cannot run
+  // against a parked pilot and a passive dummy, or the charge is fed from
+  // outside the bar entirely (orb scoops, equip taps). Engine verified
+  // honest: primed banks fire, scale, and empty. Needs a primed-bank lever
+  // or a fodder-fed rig.
+  {
+    const cc = def.chargeCost;
+    if (cc && !cc.optional && !(def.chargeGain ?? []).some(cg =>
+      cg.charge === cc.charge && (cg.on === 'second' || cg.on === 'use'))) {
+      const gens = (def.chargeGain ?? []).filter(cg => cg.charge === cc.charge)
+        .map(cg => cg.on);
+      return `charge famine — the press demands banked '${cc.charge}' and the bare rig never banks it `
+        + `(${gens.length ? `generators: ${gens.join('/')}` : 'no on-def generator — fed by orbs/kit in real play'}); `
+        + 'needs a primed-bank lever or a fodder-fed rig';
+    }
+  }
+  // THE GATED TOUCH (R8 forensics): the delivery (or targeting) touches
+  // only victims already wearing a listed status — the probe dummy wears
+  // none, so every press finds nothing. Filter verified exact live.
+  {
+    const reqs = (def.delivery as { requiresStatus?: string[] }).requiresStatus
+      ?? (typeof def.targeting?.requiresStatus === 'string'
+        ? [def.targeting.requiresStatus] : def.targeting?.requiresStatus);
+    if (reqs?.length) {
+      return `gated touch — only victims wearing ${reqs.slice(0, 3).join('/')}${reqs.length > 3 ? '/…' : ''} `
+        + 'are touched, and the probe dummy wears none; needs a pre-statused target';
+    }
+  }
+  // THE UNMEASURED PRODUCE (R8 forensics): the cast plants a lightwell —
+  // real produce (a live light pool) that no census channel measures.
+  if ((def.effects ?? []).some(e => e.type === 'kindle')) {
+    return 'plants a lightwell — live produce no census channel measures; needs a wells channel or adjudication';
+  }
   if (def.tags.includes('curse')) return 'curse host — its mark expresses through victims/exploiters the rig may not field';
   if (def.delivery.type === 'melee') {
     return 'melee delivery — the pilot band may stand outside swing reach (whiff band); needs a closing brawler check';

@@ -1590,7 +1590,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "'target' delivery — the aim/validity condition may never be met at the probe target"
+   "why": "gated touch — only victims wearing burn are touched, and the probe dummy wears none; needs a pre-statused target"
   },
   "command_assault": {
    "skillId": "command_assault",
@@ -2457,7 +2457,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "'target' delivery — the aim/validity condition may never be met at the probe target"
+   "why": "gated touch — only victims wearing bleed are touched, and the probe dummy wears none; needs a pre-statused target"
   },
   "execution": {
    "skillId": "execution",
@@ -2530,7 +2530,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "'target' delivery — the aim/validity condition may never be met at the probe target"
+   "why": "gated touch — only victims wearing poison are touched, and the probe dummy wears none; needs a pre-statused target"
   },
   "eye_of_the_storm": {
    "skillId": "eye_of_the_storm",
@@ -2874,7 +2874,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "'target' delivery — the aim/validity condition may never be met at the probe target"
+   "why": "gated touch — only victims wearing chill/frozen are touched, and the probe dummy wears none; needs a pre-statused target"
   },
   "fleshspur": {
    "skillId": "fleshspur",
@@ -3307,7 +3307,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "why": "charge famine — the press demands banked 'static' and the bare rig never banks it (generators: move/takeHit); needs a primed-bank lever or a fodder-fed rig"
   },
   "galvanize": {
    "skillId": "galvanize",
@@ -3840,7 +3840,7 @@
     "hits": 4,
     "hitAttempts": 4,
     "dmgOut": 128.65,
-    "statusSamples": 14,
+    "statusSamples": 13,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 98,
@@ -4659,7 +4659,7 @@
     "lifeGain": 0
    },
    "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "why": "plants a lightwell — live produce no census channel measures; needs a wells channel or adjudication"
   },
   "kindled_ruin": {
    "skillId": "kindled_ruin",
@@ -5065,10 +5065,10 @@
    "facts": {
     "presses": 2,
     "repeats": 0,
-    "hits": 3,
-    "hitAttempts": 3,
-    "dmgOut": 39.55,
-    "statusSamples": 18.5,
+    "hits": 6,
+    "hitAttempts": 6,
+    "dmgOut": 71.45,
+    "statusSamples": 22,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 38,
@@ -5697,9 +5697,9 @@
    "facts": {
     "presses": 4,
     "repeats": 0,
-    "hits": 1,
-    "hitAttempts": 1,
-    "dmgOut": 18.51,
+    "hits": 4,
+    "hitAttempts": 4,
+    "dmgOut": 68.56,
     "statusSamples": 0,
     "minionSamples": 0,
     "zoneSamples": 0,
@@ -6574,7 +6574,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "why": "charge famine — the press demands banked 'wakeflame' and the bare rig never banks it (no on-def generator — fed by orbs/kit in real play); needs a primed-bank lever or a fodder-fed rig"
   },
   "restless_earth": {
    "skillId": "restless_earth",
@@ -7586,7 +7586,7 @@
     "lifeGain": 0
    },
    "mute": "cast-only",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "why": "gated touch — only victims wearing despair/agony/indecision/… are touched, and the probe dummy wears none; needs a pre-statused target"
   },
   "soul_harvest": {
    "skillId": "soul_harvest",
@@ -7605,7 +7605,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "unexplained — the anomaly lane: hand-adjudicate or extend a pilot"
+   "why": "charge famine — the press demands banked 'soul' and the bare rig never banks it (generators: enemyDeath); needs a primed-bank lever or a fodder-fed rig"
   },
   "soul_link": {
    "skillId": "soul_link",
@@ -9717,7 +9717,7 @@
     "lifeGain": 0
    },
    "mute": "full",
-   "why": "melee delivery — the pilot band may stand outside swing reach (whiff band); needs a closing brawler check"
+   "why": "gated touch — only victims wearing sundered are touched, and the probe dummy wears none; needs a pre-statused target"
   },
   "verdict_release": {
    "skillId": "verdict_release",
@@ -9853,10 +9853,10 @@
    "facts": {
     "presses": 3,
     "repeats": 0,
-    "hits": 10,
-    "hitAttempts": 10,
-    "dmgOut": 160.81,
-    "statusSamples": 35,
+    "hits": 20,
+    "hitAttempts": 20,
+    "dmgOut": 299.79,
+    "statusSamples": 41,
     "minionSamples": 0,
     "zoneSamples": 0,
     "projectileSamples": 64,
