@@ -77,6 +77,12 @@ export const FEATURE = {
    *  screen (a level-100 reward — turn the whole world's event volume up/down).
    *  See packages/frequency.ts. */
   GLOBAL_FREQUENCY: 'global_frequency',
+  /** THE MERCENARY RECRUITER: the Vault's officer takes a table in
+   *  Lastlight — hire-only (no retirement: the port policy at the town's
+   *  own counter) with a SINGLE-SERVE sheet dealt once per world and locked
+   *  by THE MUSTER-ROLL LAW (meta/mercs.ts). Early blades without walking
+   *  to a port; surfaces once the account has met the market anywhere. */
+  MERC_RECRUITER: 'merc_recruiter',
   /** THE CARAVAN: a travelling Caravanner camps in Lastlight (base tier) and escorts
    *  the player to level-band zones minted in their proper difficulty band. Four broad
    *  tiers open progressively wider bands; the far tiers also require the Unmade slain.

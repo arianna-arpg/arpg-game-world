@@ -153,7 +153,8 @@ export interface HoldClassDef {
   /** Port merc hiring (the 'mercs' service): offer count band. Offers are
    *  TEMPLATE-ONLY — the baseline archetypes, the "lower tier" that survives
    *  the level-normalization contract. Veterans and RETIREMENT stay a wilds
-   *  exclusive (meta/mercs.ts outposts). */
+   *  exclusive (meta/mercs.ts outposts). The sheet is dealt ONCE per world
+   *  at the captain's first arm and locked — THE MUSTER-ROLL LAW. */
   mercOffers: [number, number];
 }
 
@@ -361,9 +362,8 @@ export const HARBORHOLD_CFG = {
     whisper: 700, reveal: 260, widenPerMin: 30,
   },
 
-  /** Port merc sheet reroll cadence (world-seconds) — the captain finds new
-   *  blades while you sail. */
-  mercRerollSec: 600,
+  // (The old mercRerollSec window is DEAD: port sheets are dealt once per
+  // world and locked — THE MUSTER-ROLL LAW, meta/mercs.ts.)
 
   /** THE BOUNTY BOARD (service 'bounty_board'): a dwell at the plaza board
    *  posts writs on the coast's LIVING foes — named, rarity-promoted marks

@@ -29,6 +29,9 @@ import { FACTIONS, MONSTERS } from '../data/monsters';
 import { START_ZONE, ZONES, type ZoneDef } from '../data/zones';
 import { ZONE_KINDS } from '../data/zoneKinds';
 import { hasLayout } from '../engine/levelgen';
+import { CLASSES } from '../data/classes';
+import { MERC_TEMPLATE_BY_ID } from '../data/mercenaries';
+import type { MercOffer } from './mercs';
 
 export const WORLD_SCHEMA_VERSION = 1;
 
@@ -168,6 +171,11 @@ export interface WorldStateSave {
   /** Per-overlay snapshot bag (WorldSim.snapshotOverlays — open, keyed by
    *  overlay id[@dimension], ':'-prefixed keys reserved for sim ledgers). */
   overlays?: Record<string, unknown>;
+  /** THE MUSTER-ROLL LAW (World.mercSheetFor): every merc officer's LOCKED
+   *  offer sheet, keyed by zone id — dealt once per world at first arm,
+   *  consumed by hires, never rerolled. An EMPTY sheet is load-bearing
+   *  state (sold out stays sold out), so entries persist at length 0. */
+  mercSheets?: Record<string, MercOffer[]>;
 }
 
 // --- sanitizers (registry-tolerant, never throw) ------------------------------
@@ -298,4 +306,35 @@ export function sanitizeEnemyMemo(raw: unknown): SavedEnemyMemo | null {
   if (!e || typeof e !== 'object' || typeof e.defId !== 'string') return null;
   if (![e.level, e.x, e.y, e.life].every(isFiniteNum)) return null;
   return e;
+}
+
+/** Stand the locked merc sheets back up (THE MUSTER-ROLL LAW). Structural +
+ *  registry scrub per row: a sheet for a culled zone drops with its zone, a
+ *  template row whose archetype left the registry drops, a row whose class
+ *  no longer exists drops (its blade could never be fielded). RETIRED rows
+ *  ride through on shape alone — the roster is LIVE account state, so the
+ *  arm-time supply reconcile owns that half. Empty sheets are kept: a sold-
+ *  out officer must never re-mint. */
+export function sanitizeMercSheets(
+  raw: unknown, zones: Record<string, ZoneDef>,
+): Record<string, MercOffer[]> {
+  const out: Record<string, MercOffer[]> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [zid, rows] of Object.entries(raw as Record<string, unknown>)) {
+    if (!zones[zid] || !Array.isArray(rows)) continue;
+    const sheet: MercOffer[] = [];
+    for (const r of rows as (MercOffer | null)[]) {
+      if (!r || typeof r !== 'object') continue;
+      if (r.kind !== 'template' && r.kind !== 'retired') continue;
+      if ([r.refId, r.name, r.classId, r.blurb].some(s => typeof s !== 'string')) continue;
+      if (r.kind === 'template' && !MERC_TEMPLATE_BY_ID[r.refId]) continue;
+      if (!CLASSES.some(c => c.id === r.classId)) continue;
+      sheet.push({
+        kind: r.kind, refId: r.refId, name: r.name, classId: r.classId, blurb: r.blurb,
+        ...(isFiniteNum(r.retiredLevel) ? { retiredLevel: r.retiredLevel } : {}),
+      });
+    }
+    out[zid] = sheet;
+  }
+  return out;
 }

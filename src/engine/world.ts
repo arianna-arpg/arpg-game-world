@@ -110,7 +110,7 @@ import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, p
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE } from '../data/townBuild';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE, RECRUITER_SITE } from '../data/townBuild';
 // Also a side-effect import: pulling these registers the bestiary's recording
 // kill-rule at boot (the knowledge accrues whether or not the book is read).
 import { BESTIARY_CFG, bestiaryEligible, bestiaryKey, bestiaryKills, bestiaryThreshold, spectreAttunable } from '../data/bestiary';
@@ -267,9 +267,10 @@ import {
   type CharacterModeDef, type ModeStageDef,
 } from '../meta/modes';
 import {
+  LEDGER_MERC_MARKET_MET, LEDGER_MERC_OUTPOST_FOUND,
   MERC_CFG, MERC_SCHEMA, addRetiredMerc, availableRetired, engageMerc, mintMercId,
   releaseMercsOf, retiredShare, snapshotBuild,
-  type MercRosterEntry, type MercSnapshot,
+  type MercOffer, type MercRosterEntry, type MercSnapshot,
 } from '../meta/mercs';
 import { MERC_TEMPLATES, MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
 import { MercInput } from './mercbrain';
@@ -284,7 +285,8 @@ import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { SIM_TAP } from './tap';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
 import {
-  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeProcessionMemo, sanitizeWorldZones,
+  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeMercSheets, sanitizeProcessionMemo,
+  sanitizeWorldZones,
   type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type WorldStateSave,
 } from '../meta/worldstate';
 
@@ -1731,19 +1733,10 @@ interface PlayerCorpse {
   reclaimed: boolean;
 }
 
-/** One blade on an outpost's offer sheet (meta/mercs.ts): a baseline template
- *  or a player-retired VETERAN. Cost is computed live at menu time (it tracks
- *  the patron's level); the sheet itself is seeded per zone + run. */
-export interface MercOffer {
-  kind: 'template' | 'retired';
-  /** templateId or mercId, per kind. */
-  refId: string;
-  name: string;
-  classId: string;
-  blurb: string;
-  /** Veterans: the level they retired at (card flavor — power normalizes). */
-  retiredLevel?: number;
-}
+// (MercOffer — one blade on an officer's sheet — lives in meta/mercs.ts now,
+// beside the market it belongs to: the shape rides WorldStateSave.mercSheets
+// verbatim under THE MUSTER-ROLL LAW, and worldstate.ts must never import
+// this module.)
 
 /** Resolve a zone's playable bounds. Shape comes from the def if authored,
  *  else a stable hash of the id gives ~a quarter of plain static zones an
@@ -2113,7 +2106,7 @@ export class World {
   zoneHollows: HollowSpec[] = [];
   openedHollows = new Set<string>();
   /** Set while underground: where to drop the player when they climb back out. */
-  private caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string } | null = null;
+  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
    *  pushes the current return here; climbing out pops it back — so a mid-
    *  ladder retreat stands in the outer cave WITH its way home intact (the
@@ -2903,7 +2896,20 @@ export class World {
   /** This zone's outpost, if one seeded here (per-zone-load transient).
    *  `port: true` = a HARBORHOLD's captain (template-only sheet, no
    *  retirement — the wilds keep the veterans and the rite). */
-  mercOutpost: { captain: Actor; offers: MercOffer[]; port?: boolean } | null = null;
+  mercOutpost: {
+    captain: Actor; offers: MercOffer[];
+    /** The PORT POLICY flag: hire-only, never retirement (harbor musters
+     *  and the Lastlight recruiter both wear it). */
+    port?: boolean;
+    /** Panel dressing for officers with their own voice (the recruiter);
+     *  absent = the outpost/muster defaults. */
+    title?: string; pitch?: string;
+  } | null = null;
+  /** THE MUSTER-ROLL LAW (meta/mercs.ts): every officer's LOCKED offer
+   *  sheet, keyed by zone id (one officer per zone by construction) —
+   *  dealt once at first arm, struck by hires, persisted in the world
+   *  save. Never rerolled while this world stands. */
+  mercSheets: Record<string, MercOffer[]> = {};
   private mercDwell = 0;
   private mercDwellFired = false;
   private mercHintAt = -999;
@@ -5060,6 +5066,24 @@ export class World {
       t.pos = this.clampPos(vec(TRACKER_SITE.x + 26, TRACKER_SITE.y - 20), t.radius);
       this.actors.push(t);
     }
+    // THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer
+    // sets up in the east quarter — a PORT-identical counter (template
+    // blades, no retirement) whose single-serve sheet is dealt once per
+    // world and locked (THE MUSTER-ROLL LAW; armLastlightRecruiter). The
+    // merc-state reset further down SPARES an armed port counter whose
+    // captain stands in this zone's actors — this one, exactly like the
+    // quay boot's.
+    if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.MERC_RECRUITER)) {
+      const officer = this.createMonster('merc_captain', 1, 'player');
+      officer.name = 'the Recruiting Officer';
+      officer.pos = this.clampPos(vec(RECRUITER_SITE.x + 24, RECRUITER_SITE.y - 18), officer.radius);
+      this.actors.push(officer);
+      this.doodads.push({
+        pos: this.clampPos(vec(RECRUITER_SITE.x - 20, RECRUITER_SITE.y + 14), 10),
+        radius: 9, kind: 'merc_banner', rot: 0,
+      });
+      this.armLastlightRecruiter(officer, def.id);
+    }
     this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
     // If a warband is storming this ground as you arrive, you'll know it.
     const invader = this.sim.zoneStatus(def).invadedBy;
@@ -5139,11 +5163,12 @@ export class World {
 
     // MERCENARY OUTPOST: a qualifying wild zone may host the market's camp
     // (same deterministic per-zone/run roll as the shrine sites). The reset
-    // SPARES a PORT sheet whose captain stands in THIS zone's actor list —
-    // the hold boot armed it a step earlier (refreshHoldServices), and the
-    // unconditional null used to stomp it (an open town's captain woke
+    // SPARES a PORT-POLICY counter whose captain stands in THIS zone's
+    // actor list — the hold boot armed the quay's a step earlier
+    // (refreshHoldServices), the town boot the recruiter's table, and the
+    // unconditional null used to stomp them (an open town's captain woke
     // inert until the next live state transition — the quay boot made the
-    // latent stomp load-bearing). A stale sheet from the previous zone
+    // latent stomp load-bearing). A stale counter from the previous zone
     // still clears: its captain is not among the fresh actors.
     if (!(this.mercOutpost?.port && this.actors.includes(this.mercOutpost.captain))) {
       this.mercOutpost = null;
@@ -6426,7 +6451,7 @@ export class World {
   /** The shared rim-entry roll every in-zone swarm uses (extraction seams,
    *  borough assaults): a ring band off `at`, re-rolled up to five times to
    *  land 170+ px from a camping hero. */
-  private swarmEntryPoint(at: Vec2, band: [number, number]): Vec2 {
+  swarmEntryPoint(at: Vec2, band: [number, number]): Vec2 {
     let last = vec(at.x, at.y);
     for (let tries = 0; tries < 5; tries++) {
       const ang = this.encRng.range(0, Math.PI * 2);
@@ -12993,6 +13018,12 @@ export class World {
         },
       } : {}),
       overlays,
+      // THE MUSTER-ROLL LAW: locked officer sheets ride the save verbatim —
+      // EMPTY sheets included (sold out must stay sold out). A sheet whose
+      // zone was scrubbed above drops with its ground.
+      mercSheets: Object.fromEntries(Object.entries(this.mercSheets)
+        .filter(([zid]) => kept.has(zid))
+        .map(([zid, sheet]) => [zid, sheet.map(o => ({ ...o }))])),
     };
   }
 
@@ -13103,6 +13134,11 @@ export class World {
       .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone }));
     this.completedQuests = new Set(
       (ws.quests?.completed ?? []).filter((id): id is string => typeof id === 'string'));
+    // THE MUSTER-ROLL LAW: the locked officer sheets stand back up (registry-
+    // tolerant; empty sheets survive — a sold-out officer never re-mints).
+    // The next arm's supply reconcile squares veteran rows with the LIVE
+    // roster; nothing rerolls here or ever.
+    this.mercSheets = sanitizeMercSheets(ws.mercSheets, healed);
     // Objective clears survive only for ground that actually persisted: event
     // overlays re-seed DETERMINISTICALLY (same run seed ⇒ same crusade/demon
     // zone keys), so a stale clear-key would pre-clear the freshly re-rolled
@@ -17867,32 +17903,41 @@ export class World {
   }
 
   /** The PORT merc market: TEMPLATE-ONLY offers (the lower tier that
-   *  survives the normalization contract), sheet reseeded per reroll window
-   *  — veterans and RETIREMENT stay a wilds-outpost exclusive. Reuses the
-   *  whole outpost pipeline: one state, one panel, one hire path. */
+   *  survives the normalization contract), dealt ONCE per world at the
+   *  captain's first arm and LOCKED (THE MUSTER-ROLL LAW — the old reroll
+   *  window is dead) — veterans and RETIREMENT stay a wilds-outpost
+   *  exclusive. Reuses the whole outpost pipeline: one state, one panel,
+   *  one hire path. */
   private armPortMercs(captain: Actor): void {
     const hold = this.holdStateFor(this.zone);
     if (!hold) return;
     const cls = holdClassOf(hold);
     if (cls.mercOffers[1] <= 0) return;
-    const window = Math.floor(this.time / HARBORHOLD_CFG.mercRerollSec);
-    const rng = new Rng((this.manifest.seed ^ hashStr(`portmercs:${this.zone.id}:${window}`)) >>> 0);
-    const count = rng.int(cls.mercOffers[0], cls.mercOffers[1]);
-    const templates = [...MERC_TEMPLATES];
-    for (let i = templates.length - 1; i > 0; i--) {
-      const j = Math.floor(rng.range(0, i + 1));
-      [templates[i], templates[j]] = [templates[j], templates[i]];
-    }
-    const offers: MercOffer[] = [];
-    for (let i = 0; offers.length < count && i < templates.length; i++) {
-      const t = templates[i];
-      offers.push({
-        kind: 'template', refId: t.id,
-        name: t.names[Math.floor(rng.range(0, t.names.length))] ?? t.id,
-        classId: t.classId, blurb: t.blurb,
-      });
-    }
+    const offers = this.mercSheetFor(this.zone.id, () => {
+      const rng = new Rng((this.manifest.seed ^ hashStr(`portmercs:${this.zone.id}`)) >>> 0);
+      return this.dealTemplateOffers(rng, rng.int(cls.mercOffers[0], cls.mercOffers[1]));
+    });
     this.mercOutpost = { captain, offers, port: true };
+  }
+
+  /** THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER): the Vault's officer at
+   *  Lastlight's east quarter — the port market's exact policy (template
+   *  blades, no retirement: the port flag IS the policy) at the town's own
+   *  counter. The sheet is SINGLE-SERVE: entirely-random blades dealt once
+   *  per world off the world's own seed, locked by THE MUSTER-ROLL LAW,
+   *  spent by hiring, refreshed by nothing — reloads, re-rolls and town
+   *  refreshes change nothing until the world itself is made anew. */
+  private armLastlightRecruiter(officer: Actor, zoneId: string): void {
+    const offers = this.mercSheetFor(zoneId, () => {
+      const rng = new Rng((this.manifest.seed ^ hashStr(`recruiter:${zoneId}`)) >>> 0);
+      const [lo, hi] = MERC_CFG.recruiter.offers;
+      return this.dealTemplateOffers(rng, rng.int(lo, hi));
+    });
+    this.mercOutpost = {
+      captain: officer, offers, port: true,
+      title: "The Recruiter's Table",
+      pitch: '"The Vault pays my table\'s rent, so I\'ll be plain: these blades, this world, no others. Choose."',
+    };
   }
 
   /** The muster-horn dwell (the caravanner latch discipline): completes into
@@ -19011,16 +19056,37 @@ export class World {
   // share growing with roster fill) and, to mortal-loop characters, RETIREMENT:
   // end the run as a death that pays the tithe but counts no death and leaves
   // no corpse — the character walks into the world's supply instead.
+  //
+  // Two laws govern every officer (wilds camp, port muster, town recruiter):
+  // THE WILDS COMMISSION — wild camps stand down below the unlock level until
+  // the account's first wilds parley graduates it (the stamp in
+  // updateMercOutpost; ports and the recruiter are the early market) — and
+  // THE MUSTER-ROLL LAW — every sheet is dealt once per world and LOCKED
+  // (mercSheetFor; persisted via WorldStateSave.mercSheets), hires strike
+  // rows for good, and nothing short of a new world deals new blades.
 
   /** Seeded outpost roll for this zone (loadZone tail; wilds only). */
   private placeMercOutpost(def: ZoneDef): void {
     const cfg = MERC_CFG.outpost;
+    // ONE OFFICER PER ZONE, by construction: an already-armed counter (the
+    // quay boot's captain, the town recruiter's table) holds the ground —
+    // the wild roll never stacks a second market into the same zone.
+    if (this.mercOutpost) return;
     // Harborhold ground provides its own captain (the hold's merc service —
     // template-only, seated at the quay): the wild-outpost roll stands down
     // on a legacy town AND on both halves of a harbor pair. Veterans and
     // retirement stay a true-wilds exclusive.
     if (def.harborhold || def.holdAnchor) return;
     if (!this.zoneMatchesSiteFilter(def, cfg.filter)) return;
+    // THE WILDS COMMISSION: the free companies pitch no camp for an
+    // unproven line. Until the CURRENT hero stands at the unlock level —
+    // or forever after the account's first wilds parley stamped the
+    // graduation (LEDGER_MERC_OUTPOST_FOUND) — the wild roll stands down.
+    // Ports and the Lastlight recruiter stay the early market on purpose,
+    // and the roll itself is untouched: a graduated account meets camps at
+    // whatever the current chance/filter schema says.
+    if (this.player.level < cfg.unlockLevel
+      && !(this.account.ledger[LEDGER_MERC_OUTPOST_FOUND] ?? 0)) return;
     if (!MONSTERS['merc_captain']) return;
     const rng = new Rng((this.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
     if (rng.range(0, 1) >= cfg.chance) return;
@@ -19039,11 +19105,75 @@ export class World {
         radius: rng.range(11, 15), kind: 'merc_bedroll', rot: rng.range(0, Math.PI * 2),
       });
     }
-    this.mercOutpost = { captain, offers: this.buildMercOffers(rng) };
+    this.mercOutpost = {
+      captain,
+      offers: this.mercSheetFor(def.id, () => this.buildMercOffers(rng)),
+    };
   }
 
-  /** Deal this outpost's offer sheet: seeded count, the roster-fill-scaled
-   *  veteran share (drawn from POOLED veterans only), baselines for the rest. */
+  /** THE MUSTER-ROLL LAW — one locked sheet per officer per world. The
+   *  first arm MINTS the sheet (and the world save carries it from birth);
+   *  every later arm re-reads it verbatim: no reroll on re-entry, reload,
+   *  roster drift, town refresh, or any clock — hires strike rows for good,
+   *  and only a NEW world (or a newly found officer) ever deals new blades.
+   *  The one live edit is the SUPPLY RECONCILE: a veteran row whose retiree
+   *  left the roster for good (cap replacement) is struck — that life is
+   *  gone from the world's supply — while an engaged-elsewhere veteran
+   *  KEEPS the row (they return to the pool when released) and the hire
+   *  gate speaks instead (mercOfferBlocked). */
+  private mercSheetFor(zoneId: string, mint: () => MercOffer[]): MercOffer[] {
+    let sheet = this.mercSheets[zoneId];
+    if (!sheet) {
+      sheet = this.mercSheets[zoneId] = mint();
+      this.charDirty = true; // world-save state from the moment it's dealt
+    }
+    for (let i = sheet.length - 1; i >= 0; i--) {
+      const o = sheet[i];
+      if (o.kind === 'retired' && !this.account.mercRoster.some(r => r.mercId === o.refId)) {
+        sheet.splice(i, 1);
+        this.charDirty = true;
+      }
+    }
+    return sheet;
+  }
+
+  /** Why this offer refuses a hire RIGHT NOW (null = hireable). Locked
+   *  sheets keep their rows (THE MUSTER-ROLL LAW) while availability stays
+   *  LIVE: an engaged veteran is spoken for until their patron's run
+   *  concludes; the panel disables the row and the hire path speaks the
+   *  same words (drawn == tested — one check serves both). */
+  mercOfferBlocked(o: MercOffer): string | null {
+    if (o.kind !== 'retired') return null;
+    const r = this.account.mercRoster.find(x => x.mercId === o.refId);
+    if (!r) return 'Gone from the wake.';
+    if (r.engagedBy === this.meta.charId) return 'Already rides with you.';
+    if (r.engagedBy) return 'Spoken for — sworn to another patron.';
+    return null;
+  }
+
+  /** Deal COUNT baseline-template offers into `into` (shuffled archetype
+   *  pool, seeded names) — the shared tail of every officer's mint: the
+   *  wilds sheet after its veterans, the port muster, the town recruiter. */
+  private dealTemplateOffers(rng: Rng, count: number, into: MercOffer[] = []): MercOffer[] {
+    const templates = [...MERC_TEMPLATES];
+    for (let i = templates.length - 1; i > 0; i--) {
+      const j = Math.floor(rng.range(0, i + 1));
+      [templates[i], templates[j]] = [templates[j], templates[i]];
+    }
+    for (let i = 0; into.length < count && i < templates.length; i++) {
+      const t = templates[i];
+      into.push({
+        kind: 'template', refId: t.id,
+        name: t.names[Math.floor(rng.range(0, t.names.length))] ?? t.id,
+        classId: t.classId, blurb: t.blurb,
+      });
+    }
+    return into;
+  }
+
+  /** MINT this outpost's offer sheet (once — mercSheetFor locks it): seeded
+   *  count, the roster-fill-scaled veteran share (drawn from POOLED veterans
+   *  only), baselines for the rest. */
   private buildMercOffers(rng: Rng): MercOffer[] {
     const { min, max } = MERC_CFG.offers;
     const count = min + Math.floor(rng.range(0, max - min + 1));
@@ -19065,15 +19195,7 @@ export class World {
         retiredLevel: v.retiredLevel,
       });
     }
-    const templates = shuffle([...MERC_TEMPLATES]);
-    for (let i = 0; offers.length < count && i < templates.length; i++) {
-      const t = templates[i];
-      offers.push({
-        kind: 'template', refId: t.id,
-        name: t.names[Math.floor(rng.range(0, t.names.length))] ?? t.id,
-        classId: t.classId, blurb: t.blurb,
-      });
-    }
+    this.dealTemplateOffers(rng, count, offers);
     return shuffle(offers);
   }
 
@@ -19109,6 +19231,19 @@ export class World {
       this.mercDwell = 0;
       this.mercDwellFired = true;   // consumed until the player steps away
       this.mercOutpostRequested = true;
+      // THE INTRODUCTIONS LEDGER: meeting ANY officer once teaches the
+      // account the market exists (the Vault's recruiter card reads it);
+      // a WILDS parley additionally GRADUATES the account past the level
+      // gate (THE WILDS COMMISSION) — camps thereafter follow the ordinary
+      // schema on every run, at any level. Presence flags, stamped once.
+      if (!(this.account.ledger[LEDGER_MERC_MARKET_MET] ?? 0)) {
+        this.account.ledger[LEDGER_MERC_MARKET_MET] = 1;
+        this.accountDirty = true;
+      }
+      if (!post.port && !(this.account.ledger[LEDGER_MERC_OUTPOST_FOUND] ?? 0)) {
+        this.account.ledger[LEDGER_MERC_OUTPOST_FOUND] = 1;
+        this.accountDirty = true;
+      }
     }
   }
 
@@ -19324,6 +19459,14 @@ export class World {
     const post = this.mercOutpost;
     const offer = post?.offers[index];
     if (!post || !offer) return false;
+    // THE LIVE-AVAILABILITY GATE: a locked sheet keeps its veteran rows
+    // while their retiree rides with another patron — the row refuses with
+    // the same words the panel shows (one check serves both faces).
+    const blocked = this.mercOfferBlocked(offer);
+    if (blocked) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 30), blocked, '#c8b048', 13);
+      return false;
+    }
     if (this.hiredMercs.length >= this.mercHireCap()) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 30),
         this.mercHireCap() > 1 ? 'Your company is full.' : 'One retainer at a time.', '#c8b048', 13);
@@ -43456,7 +43599,7 @@ export class World {
    *  FRESH merged brain per instance — the def's SHARED brain object is never
    *  mutated (normalizeBrain caches per object identity; touching def.brain
    *  would frenzy every monster of that def everywhere, forever). */
-  private applyWaveFrenzy(m: Actor, fz: WaveFrenzySpec): void {
+  applyWaveFrenzy(m: Actor, fz: WaveFrenzySpec): void {
     m.aggroed = true; // came here for you — with relentless below, detection is ∞ from frame one
     // A huge FINITE horizon, not Infinity: every other alert writer uses
     // time + duration, and a JSON round-trip (snapshots, future saves) turns

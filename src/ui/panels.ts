@@ -96,6 +96,11 @@ import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
 
+/** The bottom keybind strip's one switch — retired by default since the
+ *  prologue drill + Waking House tutorial took over teaching the binds
+ *  (updateHintBar). Flip true to restore the standing crib sheet. */
+const HINT_BAR_ENABLED = false;
+
 /** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
  *  one vocabulary (a lifted thing looks like the tile it left). */
 const CATEGORY_GLYPHS: Record<string, string> = {
@@ -143,6 +148,7 @@ export class UI {
   private vocationMenu = document.getElementById('vocation-menu')!;
   private mercMenu = document.getElementById('merc-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
+  private storyCard = document.getElementById('story-card')!;
   private accountScreen = document.getElementById('account-screen')!;
   private escapeMenu = document.getElementById('escape-menu')!;
   private startMenu = document.getElementById('start-menu')!;
@@ -971,6 +977,12 @@ export class UI {
   updateHintBar(): void {
     const el = document.getElementById('hint-bar');
     if (!el) return;
+    // RETIRED BY DEFAULT (the visual-clutter law): the prologue's drill and
+    // the Waking House teach the binds now — the standing strip is off. The
+    // machinery stays whole behind this one lever for anyone who wants the
+    // crib sheet back (a future Settings row can expose it).
+    if (!HINT_BAR_ENABLED) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
     const kb = this.getSettings().keybinds;
     const k = (a: ActionId): string => esc(keyDisplay(kb[a]));
     const move = (['moveUp', 'moveLeft', 'moveDown', 'moveRight'] as const).map(k).join('');
@@ -979,6 +991,33 @@ export class UI {
       + `[${k('panelInv')}] inventory &nbsp; `
       + (this.getSettings().gearPickup === 'key' ? `[${k('pickup')}] pick up &nbsp; ` : '')
       + `[${k('panelTree')}] passive tree &nbsp; [${k('panelMap')}] world map &nbsp; [Esc] menu`;
+  }
+
+  // ----------------------------------------------------------- story card
+  // THE SCENE FABRIC's narration surface (engine/scenes.ts): a full-screen
+  // card over the director's black — title, prose, one continue. The DOM
+  // shows what the engine holds pending (World.scene.card); the continue
+  // ACKS back through the callback (sceneCardAck), so headless probes walk
+  // the same stages with no DOM at all.
+
+  storyCardOpen(): boolean { return !this.storyCard.classList.contains('hidden'); }
+
+  showStoryCard(card: { title: string; lines: string[]; button?: string }, onContinue: () => void): void {
+    this.storyCard.innerHTML = `
+      <h1>${esc(card.title)}</h1>
+      ${card.lines.map(l => `<p>${esc(l)}</p>`).join('')}
+      <button id="story-continue">${esc(card.button ?? 'Continue')}</button>`;
+    this.storyCard.classList.remove('hidden');
+    const btn = document.getElementById('story-continue') as HTMLButtonElement | null;
+    if (btn) {
+      btn.onclick = () => { this.hideStoryCard(); onContinue(); };
+      btn.focus(); // Enter/Space continue for free
+    }
+  }
+
+  hideStoryCard(): void {
+    this.storyCard.classList.add('hidden');
+    this.storyCard.innerHTML = '';
   }
 
   // ---------------------------------------------------------- class select
@@ -3786,6 +3825,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         const cost = world.mercHireCost(o);
         const afford = acc.credits >= cost;
         const vet = o.kind === 'retired';
+        // THE LIVE-AVAILABILITY GATE (world.mercOfferBlocked): a locked
+        // sheet keeps its veteran rows while their retiree rides with
+        // another patron — the row shows the same words the hire path
+        // would refuse with (drawn == tested).
+        const blocked = world.mercOfferBlocked(o);
         // The blade's own face: its class-look hero body (the portrait
         // fabric's class seat) — an offer sheet you read at a glance.
         const cls = CLASSES.find(c => c.id === o.classId);
@@ -3796,12 +3840,13 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
             ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN — retired at level ${o.retiredLevel}</span>` : ''}</span></div>
           <div class="desc">${esc(o.blurb)}</div>
           <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}) — a blade is fitted to its patron.</div>
-          <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford ? 'disabled' : ''}>
+          <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford || blocked ? 'disabled' : ''}>
             Hire — ${cost} ${META_CURRENCY_LABEL}</button>
-            ${!afford && !full ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
+            ${blocked ? `<span class="tags" style="color:#b8a0e0">${esc(blocked)}</span>`
+              : !afford && !full ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
         </div>`;
       }).join('')
-      : `<div class="skill-entry"><div class="desc">The sign-board hangs empty — every blade is spoken for.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">The sign-board hangs empty — every blade this post will ever deal has been taken.</div></div>`;
     // THE COMPANY: one line per contract (the retinue cap shows when >1 is
     // possible — the Harborwarden's ledger made this a roster, not a slot).
     const contract = company.length
@@ -3822,10 +3867,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           <div class="bind-btns"><button data-merc-retire>Retire this character</button></div>
         </div>`
       : '';
-    this.mercMenu.innerHTML = `<h2>${post.port ? 'The Harbor Muster' : 'The Mercenary Outpost'}</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${post.port
-        ? '"Green blades, fair rates, no questions off the boat. The veterans keep to the wilds — so does the retiring."'
-        : '"Every blade here has a story. Buy one — or become one."'}</div>`
+    // An officer with its own voice (the recruiter's table) speaks it;
+    // otherwise the muster/outpost defaults, derived from the port policy.
+    const title = post.title ?? (post.port ? 'The Harbor Muster' : 'The Mercenary Outpost');
+    const pitch = post.pitch ?? (post.port
+      ? '"Green blades, fair rates, no questions off the boat. The veterans keep to the wilds — so does the retiring."'
+      : '"Every blade here has a story. Buy one — or become one."');
+    this.mercMenu.innerHTML = `<h2>${esc(title)}</h2>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(pitch)}</div>`
       + contract + rows + retire
       + `<div class="bind-btns" style="margin-top:10px"><button data-merc-close>Close</button></div>`;
     this.mercMenu.querySelectorAll<HTMLButtonElement>('button[data-merc-hire]').forEach(btn => {

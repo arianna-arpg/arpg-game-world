@@ -120,11 +120,37 @@ ground a while (the shared dispersal fabric), then drift.
 
 The port captain (service `mercs`, prosperity-gated) arms `mercOutpost`
 with `port: true`: **template-only offers** (the baseline archetypes — the
-"lower tier" that survives the level-normalization contract), reseeded per
-`mercRerollSec` window, hired through the one pipeline at the same pricing.
+"lower tier" that survives the level-normalization contract), hired through
+the one pipeline at the same pricing.
 **Veterans and RETIREMENT stay a wilds-outpost exclusive** (`canRetireHere`
 refuses ports), and wild outposts got scarcer (`MERC_CFG.outpost.chance`
 0.14 → 0.08) — the port is the surefire counter, the wilds are the rite.
+
+Three laws sit on top (meta/mercs.ts owns the doctrine):
+
+- **THE MUSTER-ROLL LAW** (`World.mercSheetFor`; persisted as
+  `WorldStateSave.mercSheets`, keyed by zone id): every officer's sheet —
+  port muster, wilds camp, town recruiter — is dealt ONCE per world at its
+  first arm and **locked into the save**: reloads, re-entries, roster
+  drift, town refreshes and every reroll clock change nothing (the old
+  `mercRerollSec` window is dead). Hires strike rows permanently —
+  single-serve supply, the Mortal Essence scarcity face — and only a new
+  world, or a newly found officer, deals new blades. The one live edit is
+  the supply reconcile: a veteran whose retiree left the roster for good
+  is struck; an engaged one keeps the row and `mercOfferBlocked` speaks
+  ("spoken for") on both the panel and the hire path.
+- **THE WILDS COMMISSION** (`MERC_CFG.outpost.unlockLevel`, 30): the wild
+  roll stands down until the hero reaches the unlock level — or forever
+  after the account's first wilds parley stamps
+  `LEDGER_MERC_OUTPOST_FOUND` (graduation: from then on camps follow the
+  ordinary chance/filter schema on every run, at any level). Ports and
+  the recruiter keep low-level hiring alive on purpose.
+- **THE RECRUITER'S TABLE** (`FEATURE.MERC_RECRUITER`, Vault row
+  `feat_merc_recruiter`, gated on `LEDGER_MERC_MARKET_MET` — meeting any
+  officer once): a port-policy officer (hire-only, no retirement) at
+  Lastlight's `RECRUITER_SITE`, whose single-serve `MERC_CFG.recruiter`
+  sheet is entirely random, dealt once per world, and locked like every
+  other.
 
 ## The Company Lane + THE HARBORWARDEN
 

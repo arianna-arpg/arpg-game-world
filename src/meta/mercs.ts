@@ -26,6 +26,22 @@
 // forfeit, retirement, an Undying fall — releases them back to the pool. A
 // veteran is never destroyed by play; only roster replacement retires the
 // retiree for good.
+//
+// THE MUSTER-ROLL LAW (World.mercSheetFor; sheets ride WorldStateSave):
+// every officer's offer sheet is dealt ONCE per world and LOCKED — baked into
+// the save, immune to reloads, re-entries, roster drift, town refreshes and
+// every reroll clock. Hires strike rows permanently (single-serve supply);
+// only a NEW world, or a newly found officer, ever deals new blades. The one
+// live edit is the supply reconcile: a veteran whose retiree left the roster
+// for good is struck; an engaged one keeps the row and the hire gate speaks.
+//
+// THE WILDS COMMISSION (MERC_CFG.outpost.unlockLevel): wild camps first
+// appear once the hero stands at the unlock level — or at ANY level once the
+// account has parleyed with one (LEDGER_MERC_OUTPOST_FOUND graduates the
+// account; thereafter the ordinary chance/filter schema governs every run).
+// Port captains — and the Vault's Lastlight recruiter (FEATURE.MERC_RECRUITER,
+// the same hire-only port policy at the town's own table) — are the early
+// market, deliberately: blades for coin, retirement wilds-only.
 // ---------------------------------------------------------------------------
 
 import type { SkillInstance, SkillRarity } from '../engine/skills';
@@ -36,6 +52,33 @@ import type { VocationSiteFilter } from '../data/vocations';
 import type { Account } from './account';
 
 export const MERC_SCHEMA = 1;
+
+/** One blade on an officer's offer sheet: a baseline template or a player-
+ *  retired VETERAN. Cost is computed live at menu time (it tracks the
+ *  patron's level); the sheet itself is dealt once and LOCKED per officer
+ *  per world (THE MUSTER-ROLL LAW above). Plain JSON by design — it rides
+ *  WorldStateSave.mercSheets verbatim. */
+export interface MercOffer {
+  kind: 'template' | 'retired';
+  /** templateId or mercId, per kind. */
+  refId: string;
+  name: string;
+  classId: string;
+  blurb: string;
+  /** Veterans: the level they retired at (card flavor — power normalizes). */
+  retiredLevel?: number;
+}
+
+/** Account-ledger key: the account has MET the mercenary market — any
+ *  officer's menu opened once (port muster, wilds parley, or the town
+ *  table). The Vault's recruiter card reads it: you can only buy what you
+ *  know exists (the discovery-web law). */
+export const LEDGER_MERC_MARKET_MET = 'merc_market_met';
+
+/** Account-ledger key: the account has parleyed at a WILDS outpost once —
+ *  THE WILDS COMMISSION's graduation stamp. From that meeting on, wild
+ *  camps follow the ordinary schema on every run at any level. */
+export const LEDGER_MERC_OUTPOST_FOUND = 'merc_outpost_found';
 
 /** A socketed support, captured by id+level (character.ts shape). */
 export interface MercSavedSocket { supportId: string; level: number; }
@@ -90,6 +133,12 @@ export const MERC_CFG = {
   outpost: {
     chance: 0.08,
     filter: { minLevel: 2 } as VocationSiteFilter,
+    /** THE WILDS COMMISSION: the free companies pitch no camp for an
+     *  unproven line — the wild roll stands down until the CURRENT hero
+     *  reaches this level, or forever after the account's first wilds
+     *  parley (LEDGER_MERC_OUTPOST_FOUND: graduation is met, not bought).
+     *  Ports and the town recruiter stay the early market on purpose. */
+    unlockLevel: 30,
     /** Parley dwell: within radius, idle, zone objective done, no live enemy
      *  within enemyRadius, and no combat for calmSec. */
     radius: 130,
@@ -102,6 +151,14 @@ export const MERC_CFG = {
    *  veteran share growing with roster fill — an empty roster deals almost
    *  all baseline blades; a full one deals veterans in force. */
   offers: { min: 3, max: 5, retiredShareMin: 0.2, retiredShareMax: 0.6 },
+
+  /** THE RECRUITER'S TABLE (FEATURE.MERC_RECRUITER — the Vault's town
+   *  officer): a port-identical counter in Lastlight — template blades
+   *  only, no retirement — whose SINGLE-SERVE sheet deals this band of
+   *  entirely-random blades once per world. THE MUSTER-ROLL LAW holds it
+   *  for as long as the world stands: what the table offers is all it
+   *  will ever offer. */
+  recruiter: { offers: [2, 3] as [number, number] },
 
   /** Hire pricing (Mortal Essence): base + perLevel × the patron's level;
    *  veterans of the wake carry a premium. Spending is open to every mode —

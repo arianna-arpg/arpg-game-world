@@ -47,6 +47,12 @@ export const TRACKER_SITE = { x: 230, y: 600 };
  *  magic happens at the town's quiet edge. */
 export const ORACLE_SITE = { x: 1080, y: 1010 };
 
+/** Where the Mercenary Recruiter's table stands — the east quarter, on the
+ *  coin-changing side of town between the Caravan camp and the quartermaster.
+ *  Shared by the World's officer spawn + banner (no structure of its own:
+ *  a table, a banner, a body). */
+export const RECRUITER_SITE = { x: 1350, y: 560 };
+
 export const TOWN_ADDITIONS: TownAddition[] = [
   // The Quest Package: a quartermaster's house raised in the town's expanded
   // south-east quarter (clear of the original cottages so it never walls one in).
@@ -95,6 +101,14 @@ export const TOWN_ADDITIONS: TownAddition[] = [
   {
     feature: FEATURE.ORACLE_STONE,
     fixtures: [{ structure: 'oracle_site', x: ORACLE_SITE.x, y: ORACLE_SITE.y }],
+    grow: { w: 1700, h: 1200 },
+  },
+  // The Mercenary Recruiter — the east quarter. No structure of his own
+  // (the World seats the officer + banner at RECRUITER_SITE and arms the
+  // locked market); the town GROWS so his corner exists.
+  {
+    feature: FEATURE.MERC_RECRUITER,
+    fixtures: [],
     grow: { w: 1700, h: 1200 },
   },
 ];

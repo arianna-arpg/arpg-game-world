@@ -24,6 +24,7 @@ import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
 // discovery web reads — seized by a grip, sprung a trap with your own feet.
 import { LEDGER_SEIZED } from '../engine/grab';
 import { LEDGER_TRAP_SPRUNG } from '../engine/trapworks';
+import { LEDGER_MERC_MARKET_MET } from './mercs';
 import { IMMORTAL_CFG } from './modes';
 import { CLASSES } from '../data/classes';
 import { SKILLS } from '../data/skills';
@@ -672,6 +673,17 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Oracle Stone — Town',
     description: 'Standing stones rise in Lastlight. Commune over an item (trace the runes — precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
     payload: { flag: FEATURE.ORACLE_STONE } },
+
+  // --- The Mercenary Recruiter (meta/mercs.ts): surfaces once the account
+  //     has MET the market anywhere — a port muster, a wilds parley, any
+  //     officer's menu (LEDGER_MERC_MARKET_MET): you can only buy what you
+  //     know exists. The officer runs the PORT policy at the town's table
+  //     (hire-only, never retirement), and his single-serve sheet is dealt
+  //     once per world and locked (THE MUSTER-ROLL LAW). ---------------------
+  { id: 'feat_merc_recruiter', kind: 'feature', cost: 120, reqLevel: 0, reqLedger: LEDGER_MERC_MARKET_MET,
+    label: 'Mercenary Recruiter — Town',
+    description: 'A recruiting officer takes a table in Lastlight\'s east quarter. Hire a blade the moment a run begins — port rules: baseline sellswords fitted to your level, and NO retiring at his table. His sheet is dealt ONCE for each world and never refreshed: what he offers is all he will ever offer, until the world itself is made anew.',
+    payload: { flag: FEATURE.MERC_RECRUITER } },
 
   // --- THE IMMORTAL COVENANT (meta/modes.ts): a character MODE, not a town
   //     feature — earned by dying. Surfaces once the account has fallen
