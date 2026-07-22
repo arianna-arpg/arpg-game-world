@@ -832,5 +832,35 @@ bootSimEngine();
   world.zones.length = zb;
 }
 
+{
+  // M6 — THE REST LAW (2026-07-22, the user's call): the bank's second
+  // clock is a REST clock — every true press RESTARTS it, so a near-done
+  // drip can never complete across a cast (no waiting the clock to 90%,
+  // casting the ready press, and pocketing the round a beat later). The
+  // round is earned only by deliberately holding fire.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const cdHost = Object.values(SKILLS).find(s =>
+    s.cooldown >= 2 && s.cooldown <= 6 && s.manaCost <= 10
+    && (s.tags.includes('attack') || s.tags.includes('spell')))!;
+  const inst = makeSkillInstance(cdHost, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.deep_reserves, level: 1 };
+  hero.skills[0] = inst;
+  const bank = hero.skillChargeBank(inst);
+  bank.count = 2; bank.timer = 0; // below cap (3), so the drip runs
+  const step = 1 / 20;
+  for (let i = 0; i < Math.ceil(cdHost.cooldown * 0.9 * 20); i++) world.update(step);
+  const timerBefore = bank.timer;
+  const cast = world.useSkill(hero, inst, { x: hero.pos.x + 60, y: hero.pos.y });
+  const timerAfter = bank.timer;
+  for (let i = 0; i < Math.ceil(cdHost.cooldown * 0.3 * 20); i++) world.update(step);
+  const mintedInOldWindow = bank.count; // spent to 1 by the press; the old clock's tail must mint nothing
+  for (let i = 0; i < Math.ceil(cdHost.cooldown * 1.1 * 20); i++) world.update(step);
+  check('M6 THE REST LAW: a press resets the bank clock — the old drip\'s tail mints nothing, a full held clock still pays',
+    cast && timerBefore > cdHost.cooldown * 0.5 && timerAfter === 0
+    && mintedInOldWindow === 1 && bank.count === 2,
+    `host ${cdHost.id} cd ${cdHost.cooldown}: timer ${timerBefore.toFixed(2)}→${timerAfter}, after-tail ${mintedInOldWindow}, after-full-rest ${bank.count}`);
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

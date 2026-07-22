@@ -680,5 +680,32 @@ check('E14 synthetic fixtures cleaned out of the registry',
     !!nativeChildHost && mechanismHolds('flight:children', makeSkillInstance(nativeChildHost, 1, 3)));
 }
 
+// === RIG H — kindred flights + the drifter jailbreak (2026-07-22) ==========
+// Native lanes own their grammar, gems deepen it: a return gem on a native
+// returner buys a SECOND pass (never re-aims the catch), ricochet on a
+// carom volley plants MORE anchors (never wall-bounces on top) — and a
+// chain socketed into a re-hitting drifter JAILBREAKS it (the user's
+// override call: the orb leaves its victim and hunts the next as itself).
+
+{
+  const hSess = makeProbeSession({ seeds: 2 });
+  const rethrow = probePair(hSess, { skillId: 'gyreblade', supportId: 'returning', fit: 'host' });
+  check('H1 a return gem on a native returner reads EFFECTIVE (the second pass flies)',
+    rethrow.result.verdict === 'effective',
+    `${rethrow.result.verdict}; moved: ${rethrow.result.moved.map(m => m.key).join(',')}`);
+  const anchors = probePair(hSess, { skillId: 'caroms', supportId: 'ricochet', fit: 'host' });
+  check('H2 ricochet on a carom volley reads EFFECTIVE (the anchor line deepens)',
+    anchors.result.verdict === 'effective',
+    `${anchors.result.verdict}; moved: ${anchors.result.moved.map(m => m.key).join(',')}`);
+  const hop = probePair(hSess, { skillId: 'ball_lightning', supportId: 'chaining', fit: 'host' });
+  check('H3 the jailbreak: a chained drifter hops victims in its own slow body',
+    hop.result.verdict === 'effective',
+    `${hop.result.verdict}; moved: ${hop.result.moved.map(m => m.key).join(',')}`);
+  const detach = probePair(hSess, { skillId: 'orbital_blades', supportId: 'cascade_of_knives', fit: 'host' });
+  check('H4 the jailbreak: a chained orbiter breaks its tether and hunts',
+    detach.result.verdict === 'effective',
+    `${detach.result.verdict}; moved: ${detach.result.moved.map(m => m.key).join(',')}`);
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

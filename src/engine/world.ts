@@ -784,8 +784,15 @@ interface Projectile {
   forks: number;
   /** 0 none / 1 fly back to the cast point / 2 track the moving caster. */
   returnMode: number;
+  /** Full out-and-back passes remaining (kindred returns: a socketed
+   *  return gem on a native returner buys a SECOND pass — the catch
+   *  re-throws; the true catch pays at the final homecoming). */
+  returnPasses?: number;
   returnPhase: boolean;
-  origin: Vec2;          // immutable cast point (return target, mode 1)
+  /** The out-leg range as spawned — restored for each re-thrown pass
+   *  (enterReturn overwrites `range` with its homeward safety net). */
+  range0?: number;
+  origin: Vec2;          // cast point (return target, mode 1; re-anchored per pass)
   // Trajectory ATTRIBUTES — per-axis strengths resolved once at spawn from
   // the delivery's innate baselines + the caster's stats (0 = axis inert).
   homing: number;        // turn rate toward enemies, rad/s
@@ -24080,6 +24087,14 @@ export class World {
         }
       }
     }
+    // THE REST LAW (2026-07-22, the user's call): the bank's second clock
+    // is a REST clock — every true press restarts it, so a drip or trickle
+    // never completes ACROSS a cast. No waiting a near-done clock out,
+    // casting the ready press, and pocketing the round a beat later: the
+    // round is earned by deliberately NOT casting (Unleash's true-rest
+    // covenant, applied to the whole use-charge axis). Re-fires (echoes,
+    // salvos) never pass through this press site, so one press resets once.
+    if (useCharges) caster.skillChargeBank(inst).timer = 0;
 
     // A committed BASE press arms the combo chain's first step.
     if (def.comboChain?.skills.length) {
@@ -24908,6 +24923,13 @@ export class World {
         // CAROMS: presses PLANT anchors at the cursor; the final press
         // releases the volley, which shuttles anchor-to-anchor for its
         // whole flight (patrol + rehit = the ping-pong killing line).
+        // KINDRED CAROMS (2026-07-22): projBounce deepens the NATIVE knob
+        // — a ricochet gem on a carom volley plants MORE anchors (a longer
+        // killing line), and the patrol claims the stat whole: the shuttle
+        // never wall-bounces on top (see spawnProjectile's bounce read).
+        const caromCap = d.caroms
+          ? d.caroms.anchors + Math.max(0, Math.round(caster.sheet.get('projBounce', tags, extra)))
+          : 0;
         if (d.caroms?.hang) {
           // HANGING VOLLEY: presses hang PASSIVE ETHEREAL ARROWS (embed
           // constructs — visible, waiting) instead of bare anchors. A full
@@ -24922,12 +24944,12 @@ export class World {
           const arrow = this.spawnConstruct(caster, inst, {
             type: 'construct', kind: 'embed',
             range: 0, duration: d.caroms.hang.duration ?? 24,
-            maxActive: d.caroms.anchors, invulnerable: true,
+            maxActive: caromCap, invulnerable: true,
             placeRange: 9999,
           }, aim, undefined, this.clampPos(vec(aim.x, aim.y), 10));
           const arrows = this.minionsOfSkill(caster, def.id)
             .filter(a => a.construct?.kind === 'embed');
-          if (arrow && arrows.length >= d.caroms.anchors) {
+          if (arrow && arrows.length >= caromCap) {
             this.pendingAmbushes.push({
               caster, inst,
               points: arrows.map(a2 => vec(a2.pos.x, a2.pos.y)),
@@ -24937,7 +24959,7 @@ export class World {
             });
             this.text(arrow.pos, 'armed', def.color, 12);
           } else if (arrow) {
-            this.text(arrow.pos, `arrow ${arrows.length}/${d.caroms.anchors}`, def.color, 11);
+            this.text(arrow.pos, `arrow ${arrows.length}/${caromCap}`, def.color, 11);
           }
           fieldAt = vec(aim.x, aim.y);
           break;
@@ -24951,8 +24973,8 @@ export class World {
           const anchorAt = this.clampPos(vec(aim.x, aim.y), 10);
           st.anchors.push({ x: anchorAt.x, y: anchorAt.y });
           this.flashes.push({ pos: vec(anchorAt.x, anchorAt.y), radius: 16, color: def.color, life: 0.35, maxLife: 0.35 });
-          if (st.anchors.length < d.caroms.anchors) {
-            this.text(anchorAt, `anchor ${st.anchors.length}/${d.caroms.anchors}`, def.color, 11);
+          if (st.anchors.length < caromCap) {
+            this.text(anchorAt, `anchor ${st.anchors.length}/${caromCap}`, def.color, 11);
             break;
           }
           const pts = st.anchors.map(a2 => vec(a2.x, a2.y));
@@ -27500,6 +27522,11 @@ export class World {
     // and shrinks around the base on a fixed rhythm (a living missile;
     // expansion-and-contraction as a projectile modifier).
     const pulse = caster.sheet.get('projPulse', tags, extra);
+    // Kindred returns (see the literal below): native mode vs the gems'
+    // granted mode read separately — never one folded read, so a granted
+    // override can no longer re-aim a native catch.
+    const nativeReturn = d.returns === 'origin' ? 1 : d.returns === 'caster' ? 2 : 0;
+    const grantedReturn = Math.round(caster.sheet.get('projReturn', tags, extra));
 
     this.projectiles.push({
       pos: vec(origin.x, origin.y),
@@ -27524,8 +27551,14 @@ export class World {
       rehit: d.rehit,
       conductive: caster.sheet.get('conduction', tags, extra) > 0,
       forks: (d.forks ?? 0) + Math.round(caster.sheet.get('forkCount', tags, extra)),
-      returnMode: Math.round(caster.sheet.get('projReturn', tags, extra,
-        d.returns === 'origin' ? 1 : d.returns === 'caster' ? 2 : 0)),
+      // KINDRED RETURNS (2026-07-22): the native lane owns the homeward
+      // TARGET — a socketed return gem on a native returner never re-aims
+      // the catch (the override-wins accident this replaces); it buys a
+      // SECOND full pass instead (the catch becomes a re-throw). On
+      // returnless hosts the gem grants the mode its own value names
+      // (Returning → origin, Boomerang → caster).
+      returnMode: nativeReturn > 0 ? nativeReturn : Math.min(2, Math.max(0, grantedReturn)),
+      returnPasses: nativeReturn > 0 && grantedReturn > 0 ? 2 : 1,
       returnPhase: false,
       origin: vec(origin.x, origin.y),
       anchor: vec(origin.x, origin.y),
@@ -27562,7 +27595,10 @@ export class World {
       zig: t?.zigzag ? { timer: t.zigzag.interval, sign: chance(0.5) ? 1 : -1 } : undefined,
       // Bounce and recurve are STAT AXES like the flight patterns: innate
       // spec values seed the queries, so gems create them from nothing.
-      bounces: Math.round(caster.sheet.get('projBounce', tags, extra, t?.bounce ?? 0)) || undefined,
+      // Patrol shuttles (caroms) claim projBounce whole at the anchor cap
+      // — a shuttling flight never wall-bounces on top of its own weave.
+      bounces: opts?.patrol?.length ? undefined
+        : Math.round(caster.sheet.get('projBounce', tags, extra, t?.bounce ?? 0)) || undefined,
       // PHASING (occlusion 'free' / the phasing stat, support-graftable):
       // terrain never stops this flight.
       phase: this.skillOcclusion(caster, inst) === 'free' || undefined,
@@ -40867,6 +40903,7 @@ export class World {
     p.returnPhase = true;
     p.hits.clear();      // it can strike everyone again on the way back
     p.traveled = 0;
+    p.range0 ??= p.range; // keep the out-leg's road for a re-thrown pass
     p.range = 4000;      // safety net; it dies on arrival
     return true;
   }
@@ -41542,18 +41579,34 @@ export class World {
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
       // in the catcher's hand before fading.
       if (!dead && p.returnPhase && dist(p.pos, this.returnTarget(p)) < 26) {
-        const ct = (p.inst.def.delivery as ProjectileDelivery).catch;
-        if (ct && !p.caster.dead) {
-          p.caster.gainCharge(ct.charge, ct.amount, ct.max, p.inst);
-          this.flashes.push({
-            pos: vec(p.caster.pos.x, p.caster.pos.y), radius: p.caster.radius + 8,
-            color: p.color, life: 0.2, maxLife: 0.2,
-          });
+        if ((p.returnPasses ?? 1) > 1) {
+          // THE RE-THROW (kindred returns): a socketed return on a native
+          // returner deepens the flight to a SECOND full pass — the blade
+          // turns at the hand and flies its whole road again, onward along
+          // its current heading; the TRUE catch (charge, shrapnel) pays at
+          // the final homecoming only. The ordinary enterReturn machinery
+          // brings this fresh out-leg home again by itself.
+          p.returnPasses = (p.returnPasses ?? 1) - 1;
+          p.returnPhase = false;
+          p.traveled = 0;
+          p.range = p.range0 ?? p.range;
+          p.origin = vec(p.pos.x, p.pos.y);
+          p.hits.clear();
+          this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.18, maxLife: 0.18 });
+        } else {
+          const ct = (p.inst.def.delivery as ProjectileDelivery).catch;
+          if (ct && !p.caster.dead) {
+            p.caster.gainCharge(ct.charge, ct.amount, ct.max, p.inst);
+            this.flashes.push({
+              pos: vec(p.caster.pos.x, p.caster.pos.y), radius: p.caster.radius + 8,
+              color: p.color, life: 0.2, maxLife: 0.2,
+            });
+          }
+          // SHREDDING RETURN (returnShrapnel stat): the homecoming splinters
+          // — shards ring OUTWARD from the catch point.
+          if (this.shedFlightShrapnel(p)) shrapnelBloomed = true;
+          dead = true;
         }
-        // SHREDDING RETURN (returnShrapnel stat): the homecoming splinters
-        // — shards ring OUTWARD from the catch point.
-        if (this.shedFlightShrapnel(p)) shrapnelBloomed = true;
-        dead = true;
       }
       // ARC-TO arrival: the hook lands on the mark and DETONATES there.
       if (!dead && p.destAt && p.arcRate && dist(p.pos, p.destAt) < 16) dead = true;
@@ -41968,6 +42021,43 @@ export class World {
             // chain — not just where the flight ends (which still bursts).
             if (p.rehit) {
               if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
+              // THE DRIFTER JAILBREAK (2026-07-22, the user's override
+              // call): a CHAIN socketed into a re-hitting flight CONVERTS
+              // its road — the orb leaves this victim and hunts the next
+              // in its own slow body (ball lightning that chains, at its
+              // own comically deliberate pace; an orbiter BREAKS ITS
+              // TETHER to do it). Socketing the chain is the choice; the
+              // rehit ledger still locks the victim it leaves, so every
+              // hop is a real departure. Same reach and firing-line law
+              // as the terminal chain ladder below — one hop grammar.
+              if (p.chains > 0) {
+                let next: Actor | null = null;
+                let bestD = 280;
+                for (const cand of this.enemiesOf(p.caster)) {
+                  if (cand === enemy || cand.dead) continue;
+                  const until = p.hits.get(cand.id);
+                  if (until !== undefined && p.age < until) continue;
+                  const dd = dist(p.pos, cand.pos);
+                  if (dd >= bestD) continue;
+                  if (!p.phase && !this.lineOfFire(p.pos, cand.pos)) continue;
+                  bestD = dd; next = cand;
+                }
+                if (next) {
+                  p.chains--;
+                  if (p.orbit > 0 || p.spiral > 0) {
+                    // The tether snaps: the blade stops circling anyone
+                    // and flies as its own hunter from where it stands.
+                    p.orbit = 0; p.spiral = 0;
+                    p.orbRadius = 0; p.orbitR0 = 0;
+                    p.anchor = vec(p.pos.x, p.pos.y);
+                    p.guided = p.spin > 0 || p.weave > 0;
+                  }
+                  p.dir = p.guideDir = angleTo(p.pos, next.pos);
+                  p.traveled = 0;
+                  // Cascade of Knives: the shatter RE-ARMS for the next leg.
+                  if (p.reShatter) p.shattered = false;
+                }
+              }
               break; // re-hitting projectiles sail on through
             }
             if (p.pierce > 0) {

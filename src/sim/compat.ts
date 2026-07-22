@@ -600,7 +600,8 @@ export function probeScenario(
     ? { range: !!forced.range, aimWall: !!forced.aimWall }
     : (() => {
       const r = probe.kind === 'dummy' ? rangeRigFor(sup) : undefined;
-      return { range: !!r, aimWall: !!r?.aimWall };
+      const caroms = (def.delivery as { caroms?: unknown }).caroms !== undefined;
+      return { range: !!r, aimWall: !!r?.aimWall && !caroms };
     })();
   const supports: { id: string; level: number }[] = [];
   const keyId = forced?.withKey ? resonanceKeyId() : null;
@@ -632,6 +633,11 @@ export function probeScenario(
     : [{ monsters: [{ id: dummyId, level: 1 }], distance: COMPAT_CFG.dummyDistance }];
   // The solo pilot, with the canyon shot when the payload is wall-scoped.
   const soloPilot = ((): ScenarioDef['pilot'] => {
+    // A tethered ORBITER grinds its wheel at the body — the caster band
+    // would hold its blades a hundred pixels short of everything (a
+    // host-shape truth: bare and socketed close in alike).
+    const traj = (def.delivery as { trajectory?: { orbit?: number } }).trajectory;
+    if ((traj?.orbit ?? 0) > 0) return { kind: 'brawler' };
     const p = soloPilotFor(def);
     return rr.aimWall && p.kind === 'caster'
       ? { ...p, aimOffset: { deg: R.wall.bearingDeg, dist: R.wall.distance } }
@@ -1294,8 +1300,12 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
     const rr = rangeRigFor(sup);
     if (rr) {
       shape.range = true;
-      if (rr.aimWall) shape.aimWall = true;
-      const why = rr.aimWall
+      // The canyon shot — EXCEPT on carom hosts: their native lane claims
+      // projBounce whole (anchors, not wall banks), so the aim stays on
+      // flesh and the deepened line shuttles through bodies.
+      const caroms = (def.delivery as { caroms?: unknown }).caroms !== undefined;
+      if (rr.aimWall && !caroms) shape.aimWall = true;
+      const why = shape.aimWall
         ? 'flight-branch payload — the range formation, fired into the masonry (bank/bloom)'
         : 'flight-branch payload — the range formation (collinear trio + offset + masonry)';
       shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${why}` : why;

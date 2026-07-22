@@ -5578,15 +5578,26 @@ export class Renderer {
           const seals = world.unleashSealsOf(p, inst);
           if (seals) {
             for (let c = 0; c < Math.min(seals.max, 8); c++) {
-              const sx = x + 9 + c * 8, sy = by + slot - 8;
+              const sx = x + 10 + c * 10, sy = by + slot - 8;
+              // A dark under-diamond first, so both states read against
+              // any slot art (the charge pips' hairline-rim treatment) —
+              // the WINDING state was a 0.45-alpha hairline before, which
+              // in combat (seals bank on REST, so a spamming hand only
+              // ever sees the hollow face) read as no counter at all.
               ctx.beginPath();
-              ctx.moveTo(sx, sy - 3.4); ctx.lineTo(sx + 3.4, sy);
-              ctx.lineTo(sx, sy + 3.4); ctx.lineTo(sx - 3.4, sy);
+              ctx.moveTo(sx, sy - 5.2); ctx.lineTo(sx + 5.2, sy);
+              ctx.lineTo(sx, sy + 5.2); ctx.lineTo(sx - 5.2, sy);
+              ctx.closePath();
+              ctx.fillStyle = 'rgba(8,8,12,0.85)';
+              ctx.fill();
+              ctx.beginPath();
+              ctx.moveTo(sx, sy - 4.2); ctx.lineTo(sx + 4.2, sy);
+              ctx.lineTo(sx, sy + 4.2); ctx.lineTo(sx - 4.2, sy);
               ctx.closePath();
               if (c < seals.count) { ctx.fillStyle = '#b8d858'; ctx.fill(); }
               else {
-                ctx.strokeStyle = 'rgba(184,216,88,0.45)';
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = 'rgba(184,216,88,0.85)';
+                ctx.lineWidth = 1.5;
                 ctx.stroke();
               }
             }

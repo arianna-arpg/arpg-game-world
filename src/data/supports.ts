@@ -3946,7 +3946,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   deep_reserves: {
     id: 'deep_reserves', name: 'Deep Reserves',
-    description: '+1 use-charge on the socketed skill and 25% faster charge recovery — and a skill with NO bank GROWS one: cooldown skills store their uses as a magazine on their own clock, and a free skill gains an EMPOWER bank — a round banks every few seconds, and a cast that finds one in the pot drinks it for 20% MORE. Spam exactly as ever; the pot rewards the beat.',
+    description: 'A skill with NO bank GROWS a 2-round one — 3 all told with this gem\'s own +1 — and recovers rounds 25% faster: cooldown skills store their uses as a magazine on their own clock, free skills gain an EMPOWER bank whose banked round is drunk for 20% MORE. The bank clock is a REST clock: any cast restarts it, so the rounds are earned by deliberately holding fire. Spam exactly as ever; the pot rewards the beat.',
     color: '#d8c86a',
     // The GRANT (useChargeGraft): chargeless hosts stand a 2-round bank up
     // (3 with this gem's own +1) — magazine on the host's cooldown, or the
