@@ -10817,7 +10817,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     noNemesis: true,
     base: { life: 70, moveSpeed: 0, accuracy: 105, mana: 60, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', 0.5)],
-    skills: ['spew_flame'], xp: 0, drops: 0, faction: 'wild',
+    skills: ['ember_breath'], xp: 0, drops: 0, faction: 'wild',
     brain: { type: 'artillery' },
   },
   // The rime head: the cold answer.
@@ -10827,7 +10827,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     noNemesis: true,
     base: { life: 70, moveSpeed: 0, accuracy: 105, mana: 60, manaRegen: 6 },
     mods: [mod('coldRes', 'flat', 0.5)],
-    skills: ['spew_rime'], xp: 0, drops: 0, faction: 'wild',
+    skills: ['rime_breath'], xp: 0, drops: 0, faction: 'wild',
     brain: { type: 'artillery' },
   },
 

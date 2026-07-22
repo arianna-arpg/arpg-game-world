@@ -22,6 +22,7 @@
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { updateAI } from '../src/engine/ai';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
@@ -297,6 +298,87 @@ function rigComposite(id: string, dx = 340): Actor {
   porter.dead = true;
   stranger.dead = true;
   for (const part of porter.partActors ?? []) part.dead = true;
+}
+
+// ========================================================== THE SPOKEN VERB
+// A carried caster part lives its whole life below holdRange's panic band
+// (the MOUNT picks the range), where the kernel once held fire forever —
+// the gamut's ranged threats were dead verbs: the idol never once cursed,
+// the howdah archers never loosed, the censer never blessed a fight.
+// retreatMove's rooted-truth refusal + the panic fall-through make the
+// archetype's own promise real: what cannot run PLANTS AND FIRES. Pinned
+// GENERICALLY: every non-boss composite part carrying skills + a mana pool
+// must SPEND in a melee scrum — a future caster part joins by existing.
+// THE BRAIN LOOP LIVES IN THE DRIVER (main.ts rAF / sim runner.ts), never
+// in World.update — a rig that wants live conduct drums updateAI itself.
+{
+  const casterKits: { rootId: string; parts: string[] }[] = [];
+  for (const def of Object.values(MONSTERS)) {
+    if (!def.parts?.length || def.boss) continue;
+    const parts = def.parts
+      .map(pd => pd.monster)
+      .filter(id => (MONSTERS[id]?.skills?.length ?? 0) > 0 && (MONSTERS[id]?.base?.mana ?? 0) > 0);
+    if (parts.length) casterKits.push({ rootId: def.id, parts });
+  }
+  check('spoken verb: caster parts stand to pin (the idol among them)',
+    casterKits.length >= 4 && casterKits.some(k => k.rootId === 'effigy_porter'),
+    casterKits.map(k => k.rootId).join(', '));
+
+  const mute: string[] = [];
+  let idolCursed = false;
+  for (let ki = 0; ki < casterKits.length; ki++) {
+    const kit = casterKits[ki];
+    const w2 = makeSimWorld('warrior', 0xa11ce ^ ki);
+    const hero = w2.player;
+    hero.sheet.setBase('life', 90000); hero.life = 90000; // outlives the scrum
+    const root2 = w2.createMonster(kit.rootId, 8, 'enemy');
+    root2.pos = vec(hero.pos.x + 40, hero.pos.y);         // MELEE: the live regime
+    root2.facing = Math.PI;
+    w2.actors.push(root2);
+    const drum = (n: number): void => {
+      for (let i = 0; i < n; i++) {
+        for (const a of w2.actors) updateAI(a, w2, 1 / 60);
+        w2.update(1 / 60);
+      }
+    };
+    drum(2); // parts lazy-attach; sight opens the fight — no wound needed
+    const watch = (root2.partActors ?? []).filter(pa => kit.parts.includes(pa.defId ?? ''));
+    if (watch.length !== kit.parts.length) {
+      mute.push(`${kit.rootId}: ${watch.length}/${kit.parts.length} caster parts attached`);
+      continue;
+    }
+    // SPOKE = a cast-bar EDGE (catches 0-cost verbs — the sacs' brood, the
+    // maws' breath) or cumulative mana spend (catches instant spends the
+    // bar-sample could miss). Tracking opens before the first full second
+    // so a long-cooldown verb (the censer's 12s) can't hide its only cast
+    // in an untracked warmup.
+    const spoke = new Map(watch.map(pa => [pa.id, 0]));
+    const prev = new Map(watch.map(pa => [pa.id, pa.mana]));
+    const wasCasting = new Map(watch.map(pa => [pa.id, false]));
+    const wantCurse = kit.rootId === 'effigy_porter';
+    for (let i = 0; i < 720; i++) {
+      const unspoken = watch.some(pa => (spoke.get(pa.id) ?? 0) <= 0);
+      if (!unspoken && !(wantCurse && !idolCursed)) break;
+      drum(1);
+      for (const pa of watch) {
+        const was = prev.get(pa.id) ?? pa.mana;
+        if (pa.mana < was) spoke.set(pa.id, (spoke.get(pa.id) ?? 0) + (was - pa.mana));
+        prev.set(pa.id, pa.mana);
+        const now = !!pa.casting;
+        if (now && !wasCasting.get(pa.id)) spoke.set(pa.id, (spoke.get(pa.id) ?? 0) + 1);
+        wasCasting.set(pa.id, now);
+      }
+      if (wantCurse && hero.statuses.some(s => ((s as any).def?.id ?? s.id) === 'bewilder')) {
+        idolCursed = true;
+      }
+    }
+    for (const pa of watch) {
+      if ((spoke.get(pa.id) ?? 0) <= 0) mute.push(`${kit.rootId}/${pa.defId}`);
+    }
+  }
+  check('spoken verb: every caster part SPENDS in the melee scrum (plant-and-fire)',
+    mute.length === 0, mute.join('; '));
+  check("spoken verb: the idol's curse LANDS on the hero (bewilder worn)", idolCursed);
 }
 
 console.log(failed === 0 ? '\nprobe_anatomy: ALL GREEN' : `\nprobe_anatomy: ${failed} FAILURE(S)`);

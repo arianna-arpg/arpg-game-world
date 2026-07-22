@@ -1952,6 +1952,14 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
  *  is what turns kiters from an exercise in futility into a rhythm: chase,
  *  wind them, capitalize. Returns true when movement actually happened. */
 function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: number): boolean {
+  // THE ROOTED TRUTH: a body with no legs cannot retreat AT ALL — rooted
+  // guns (moveSpeed 0), anchored bodies, and mounted composite parts live
+  // permanently at whatever range their carrier or planter picked. Refuse
+  // INSTANTLY, with no winded bookkeeping (legs never had can't tire, and
+  // a statue must not float 'winded!'), so every retreat consumer reads
+  // the truth and falls through to its standing conduct — for artillery,
+  // the plant-and-fire promise below.
+  if (actor.anchored || actor.partLink || actor.sheet.get('moveSpeed') <= 0) return false;
   if (actor.aiWindedUntil > world.time) return false; // the legs gave out
   const ks = actor.aiKiteSpec;
   if (ks && dt > 0) {
@@ -1969,8 +1977,10 @@ function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: num
   return true;
 }
 
-function moveAway(actor: Actor, world: World, from: { x: number; y: number }, dt: number): void {
-  retreatMove(actor, world, actor.pos.x - from.x, actor.pos.y - from.y, dt);
+/** Retreat straight away from a point. Returns retreatMove's verdict — true
+ *  only when legs actually answered — so kernels can honor refusals. */
+function moveAway(actor: Actor, world: World, from: { x: number; y: number }, dt: number): boolean {
+  return retreatMove(actor, world, actor.pos.x - from.x, actor.pos.y - from.y, dt);
 }
 
 /** The thrown-off-the-scent flight: run FROM a point while HOOKING the
@@ -2531,10 +2541,16 @@ function holdRangeKernel(ctx: KernelCtx): void {
   const [panicF, approachF] = spec.band ?? [0.75, 1.4];
   // The panic band OUTRANKS the sight-line: cornered artillery flees first —
   // circling a blocker at the player's feet is the opposite of its contract.
+  // But when the legs REFUSE — winded, rooted, or a carried composite part
+  // whose mount chose this range — the archetype's own promise takes over:
+  // it PLANTS AND FIRES ("still deadly"). The mute alternative was the
+  // anatomy gamut's dead voice: every carried caster part (the idol, the
+  // censer, the howdah pair, the ogre maws, the whelk gun) lived below the
+  // panic band its whole life and never spoke its verb.
   if (d < hold * panicF) {
-    moveAway(a, world, target.pos, dt);
     a.facing = angleTo(a.pos, target.pos);
-    return;
+    if (moveAway(a, world, target.pos, dt)) return;
+    // fall through: plant and fire from where it stands.
   }
   // Artillery behind castle masonry repositions too (implicit in grid zones).
   if (losStrafe(ctx)) return;

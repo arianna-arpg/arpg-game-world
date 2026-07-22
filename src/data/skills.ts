@@ -4475,6 +4475,41 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 2, keepDistance: 280 },
   },
 
+  // The twinmaw ettin's heads (anatomy gamut): BREATH, not rifts — the kit
+  // pass had wired 'spew_flame'/'spew_rime' here by name, but those are the
+  // fire-rift's SPAWNER verbs ("the rift spits burning things"): an ogre
+  // head summoning cultists out of its mouth, where the def's own record
+  // reads "the ember head breathes fire, the rime head frost". Face verbs:
+  // short cones, no keepDistance (a mounted head fights at the range its
+  // body picks — the plant-and-fire law), clocks offset so the two heads
+  // alternate and a flanked hero never eats both in one swallow.
+  ember_breath: {
+    id: 'ember_breath', name: 'Ember Breath', noDrop: true,
+    description: 'The ember head empties its furnace lungs — a rolling gout of flame, and the burn stays.',
+    tags: ['spell', 'fire', 'aoe'], color: '#ff8a3a',
+    manaCost: 9, cooldown: 3.2, useTime: 0.9,
+    baseDamage: { fire: [9, 14] },
+    delivery: { type: 'cone', range: 160, arcDeg: 60 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.5, magnitude: 0.35 },
+    ],
+    ai: { range: 150, weight: 2 },
+  },
+  rime_breath: {
+    id: 'rime_breath', name: 'Rime Breath', noDrop: true,
+    description: 'The rime head exhales a winter that argues with your joints — the cold answer, on its own clock.',
+    tags: ['spell', 'cold', 'aoe'], color: '#8ac8e8',
+    manaCost: 9, cooldown: 3.8, useTime: 1.0,
+    baseDamage: { cold: [8, 12] },
+    delivery: { type: 'cone', range: 160, arcDeg: 60 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.7 },
+    ],
+    ai: { range: 150, weight: 2 },
+  },
+
   time_dilation: {
     id: 'time_dilation', name: 'Time Dilation',
     description: 'Pinch the clockwork: every OTHER skill\'s running cooldown sheds 2 seconds and a quarter of what remains. Its own long clock is the price — the winder cannot wind itself (#19).',
