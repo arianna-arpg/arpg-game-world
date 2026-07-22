@@ -26,7 +26,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -25533,8 +25533,11 @@ export class World {
         if (turret && (d.lingerDuration ?? 0) > 0 && SKILLS[turret.castSkillId]) {
           const turretCast = makeSkillInstance(SKILLS[turret.castSkillId], effectiveSkillLevel(inst));
           // The sub-cast board (the construct-flight synergy): the risen
-          // turret's payload wears the host's rideable gems too.
-          this.forwardSummonSockets(inst, [turretCast]);
+          // turret's payload wears the host's rideable gems too — priced
+          // at the totem lane's dial (it rises as kind 'totem' below).
+          this.forwardSummonSockets(inst, [turretCast], {
+            scale: CONSTRUCT_FORWARD_CFG.scale['totem'] ?? CONSTRUCT_FORWARD_CFG.scaleDefault,
+          });
           const built = this.spawnConstruct(caster, inst, {
             type: 'construct', kind: 'totem',
             range: d.radius * aoeScale,
@@ -26475,8 +26478,14 @@ export class World {
         // through the standard fit-gated fixpoint — a Scorched Wake in
         // the ballista burns behind every bolt. The construct BODY still
         // receives no forwarding (the resync rule); only what it CASTS
-        // wears the sockets.
-        if (castInst) this.forwardSummonSockets(inst, [castInst]);
+        // wears the sockets. THE FORWARD PRICE (the user's construct-deck
+        // ruling): the forwarded copies fold at the kind's dial — the
+        // balance lever over "go ham with it".
+        if (castInst) {
+          this.forwardSummonSockets(inst, [castInst], {
+            scale: CONSTRUCT_FORWARD_CFG.scale[d.kind ?? ''] ?? CONSTRUCT_FORWARD_CFG.scaleDefault,
+          });
+        }
         // ECHO RIDERS (Mirage Archer, Shadow Clone): ghosts, not furniture —
         // count/refresh/eviction ride the mirageCount economy.
         if (d.kind === 'echo' && d.echo) {
@@ -28136,7 +28145,13 @@ export class World {
    *   fire summon) the gem honestly serves both.
    * Pure given stable socket order — no RNG, co-op-replication friendly.
    */
-  private forwardSummonSockets(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[]): void {
+  private forwardSummonSockets(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[],
+    opts?: {
+      /** THE FORWARD PRICE (construct lanes): stamp this scale on every
+       *  forwarded copy — its numeric mods fold ×scale (instanceMods).
+       *  Minion-crew forwards pass none: Resonance's socket is their price. */
+      scale?: number;
+    }): void {
     if (!summonInst) return;
     // THE RESONANCE GATE (CREW_CFG.boarding 'gated'): summon-delivery
     // crews demand a resonance key riding the host before anything boards
@@ -28163,7 +28178,10 @@ export class World {
         for (const sk of skills) {
           if (!sk || sk.sockets.some(x => x?.def.id === socket.def.id)) continue;
           if (!supportFitsInst(socket.def, sk)) continue;
-          sk.sockets.push({ def: socket.def, level: socket.level, forwarded: true });
+          sk.sockets.push({
+            def: socket.def, level: socket.level, forwarded: true,
+            ...(opts?.scale !== undefined && opts.scale !== 1 ? { forwardScale: opts.scale } : {}),
+          });
           grew = true;
         }
       }
@@ -28841,8 +28859,12 @@ export class World {
     // When the construct casts the DEPLOYING instance itself (Spirit Totem,
     // echo grafts), its casts already query instanceMods(castInst) — feeding
     // the same mods through the sheet would DOUBLE-APPLY every gem, perLevel
-    // growth, and threshold. Catalog sub-skills (mirage_shot) keep the graft.
-    c.sheet.setSource('parentSkill', castInst === sourceInst ? [] : extra);
+    // growth, and threshold. Catalog sub-skills (mirage_shot) keep the graft
+    // — INNATE-ONLY (2026-07-22): socketed gems reach the payload solely as
+    // forwarded sockets (fit-gated, forward-priced); the old full-instanceMods
+    // source leaked a SECOND unpriced copy of every rideable gem's numbers.
+    c.sheet.setSource('parentSkill',
+      castInst === sourceInst ? [] : instanceInnateMods(sourceInst));
     c.sheet.setSource('owner', [
       mod('damage', 'more', caster.sheet.get('minionDamage', tags, extra) - 1),
       mod('life', 'more', caster.sheet.get('minionLife', tags, extra) - 1),

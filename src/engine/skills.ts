@@ -234,6 +234,21 @@ export const CREW_CFG = {
   boarding: 'gated' as 'gated' | 'free',
 };
 
+/** THE CONSTRUCT FORWARD PRICE (2026-07-22, the user's construct-deck
+ *  ruling: allow-and-forward, with a lever) — constructs board host gems
+ *  NATIVELY (no Resonance key: the summonHost branch never gates them; the
+ *  differentiation from minions is structural), and the forwarded copy is
+ *  PRICED: its numeric mod values scale by the construct kind's dial
+ *  (deliveryKnock's config shape — grade per lane, identity passthrough
+ *  for one-shot devices whose payload IS the skill). Stamped onto the
+ *  forwarded socket at forward time, folded once in instanceMods —
+ *  Resonance-boarded MINION gems carry no scale (their price is the key's
+ *  socket). Tune freely: "go ham with it" ships at 0.7. */
+export const CONSTRUCT_FORWARD_CFG = {
+  scale: { trap: 1, mine: 1, barrier: 1 } as Record<string, number>,
+  scaleDefault: 0.7,
+};
+
 /** Is this instance's crew door OPEN — do riding gems actually board?
  *  Free mode: always. Gated: a resonance key must be HOST-SERVING (a key
  *  that doesn't fit the skill opens nothing — the ordinary lane rules
@@ -4452,6 +4467,10 @@ export interface SupportInstance {
    *  the summon's sockets change. Never appears on a player-owned instance,
    *  never saved (minions are transient). */
   forwarded?: true;
+  /** THE FORWARD PRICE (construct lanes only): numeric mod values of this
+   *  forwarded copy fold at ×scale (CONSTRUCT_FORWARD_CFG per kind).
+   *  Absent on minion-crew forwards — Resonance's socket is their price. */
+  forwardScale?: number;
 }
 
 /** Default socket count for instances not minted as drops (monster kits). */
@@ -5053,11 +5072,14 @@ export function effectiveSkillLevel(inst: SkillInstance): number {
 }
 
 /**
- * All skill-local modifiers a skill instance carries: its own level growth
- * (at the EFFECTIVE level), threshold unlocks it has reached, plus everything
- * from socketed supports. Fed into StatSheet.get as `extra`.
+ * The instance's OWN modifiers — innate, minting-context extras, level
+ * growth (at the EFFECTIVE level) and reached thresholds — WITHOUT socket
+ * contributions. The construct `parentSkill` sheet source feeds a
+ * castSkillId payload through this (2026-07-22): socketed gems reach the
+ * payload ONLY as forwarded sockets (fit-gated, forward-priced), never as
+ * a second leaked copy — the double-count is dead by construction.
  */
-export function instanceMods(inst: SkillInstance): Modifier[] {
+export function instanceInnateMods(inst: SkillInstance): Modifier[] {
   const out: Modifier[] = [];
   if (inst.def.innateMods) out.push(...inst.def.innateMods);
   if (inst.extraMods) out.push(...inst.extraMods);
@@ -5068,13 +5090,31 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
   if (inst.def.thresholds) {
     for (const t of inst.def.thresholds) if (eff >= t.level) out.push(...t.mods);
   }
+  return out;
+}
+
+/**
+ * All skill-local modifiers a skill instance carries: its own level growth
+ * (at the EFFECTIVE level), threshold unlocks it has reached, plus everything
+ * from socketed supports. Fed into StatSheet.get as `extra`.
+ */
+export function instanceMods(inst: SkillInstance): Modifier[] {
+  const out: Modifier[] = instanceInnateMods(inst);
   // Lane-routed: only host-serving gems shape this cast's numbers...
+  // THE FORWARD PRICE (2026-07-22): a construct-forwarded copy folds its
+  // numeric values ×forwardScale (overrides pass whole — a scaled override
+  // is a corrupted one; the malus-totality precedent).
   const serving = hostSockets(inst);
   for (const socket of serving) {
-    out.push(...socket.def.mods);
+    const fs = socket.forwardScale ?? 1;
+    for (const m of socket.def.mods) {
+      out.push(fs === 1 || m.kind === 'override' ? m : { ...m, value: m.value * fs });
+    }
     const sl = socket.level - 1;
     if (sl > 0 && socket.def.perLevel) {
-      for (const m of socket.def.perLevel) out.push({ ...m, value: m.value * sl });
+      for (const m of socket.def.perLevel) {
+        out.push({ ...m, value: m.value * sl * (m.kind === 'override' ? 1 : fs) });
+      }
     }
   }
   // SELF-STACKS (SkillDef.selfStack / a Building Rhythm graft): the pile

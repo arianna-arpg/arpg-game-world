@@ -948,5 +948,64 @@ check('E14 synthetic fixtures cleaned out of the registry',
   }
 }
 
+// === RIG J — the construct forward price (2026-07-22, the deck ruling) =====
+// Constructs board host gems NATIVELY (the Resonance gate is summon-only —
+// the differentiation is structural); the forwarded copy is PRICED by the
+// kind's dial (CONSTRUCT_FORWARD_CFG), and the old parentSkill leak (a
+// SECOND unpriced copy of every rideable gem riding the sheet into the
+// castSkillId payload) is dead — forwarded sockets are the ONE road.
+
+{
+  type SimWorld = ReturnType<typeof makeSimWorld>;
+  const step = (w: SimWorld, s: number): void => {
+    for (let t = 0; t < s; t += 1 / 60) w.update(1 / 60);
+  };
+  const GEM_ID = '__probe_fwd__';
+  SUPPORTS[GEM_ID] = {
+    id: GEM_ID, name: GEM_ID, description: 'probe fixture', color: '#fff',
+    requiresTags: ['spell'], mods: [mod('damage', 'more', 1.0)], weight: 0,
+  } as (typeof SUPPORTS)[string];
+  try {
+    const raise = (withGem: boolean): { dealt: number; scale?: number; leak: boolean } => {
+      const w = makeSimWorld('sorcerer', 0x1b01);
+      applyBuild(w, {
+        id: 'rig_j', classId: 'sorcerer', level: 12,
+        skills: [{
+          id: 'flame_totem', level: 3,
+          ...(withGem ? { supports: [{ id: GEM_ID, level: 1 }] } : {}),
+        }],
+      } as BuildSpec, 7);
+      const p = w.player;
+      // A tanky regen-less victim — the training dummy's 1500/s regen pins
+      // its life at max and poisons any life-delta read (the trough trap).
+      const z = w.createMonster('zombie', 40, 'enemy');
+      z.pos = { x: p.pos.x + 150, y: p.pos.y };
+      w.actors.push(z);
+      const inst = p.skills.find(s => s?.def.id === 'flame_totem')!;
+      w.useSkill(p, inst, z.pos);
+      step(w, 0.9);
+      const totem = w.actors.find(a => a.construct && a.sourceSkillId === 'flame_totem');
+      const fwd = totem?.construct?.castInst?.sockets.find(s => s?.def.id === GEM_ID);
+      const parentMods = totem?.sheet.getSourceMods('parentSkill') ?? [];
+      const leak = parentMods.some(m => m.stat === 'damage' && m.kind === 'more');
+      const l0 = z.life;
+      step(w, 6);
+      return { dealt: l0 - z.life, scale: fwd?.forwardScale, leak };
+    };
+    const bare = raise(false);
+    const gem = raise(true);
+    check('J1 the forwarded copy wears the kind\'s price (totem lane 0.7)',
+      gem.scale !== undefined && Math.abs(gem.scale - 0.7) < 1e-9, `scale=${gem.scale}`);
+    check('J2 the parentSkill leak is dead (no second unpriced damage copy on the sheet)',
+      !gem.leak);
+    const ratio = gem.dealt / Math.max(1, bare.dealt);
+    check('J3 the priced forward folds ONCE: +100% more lands as ~×1.7, never the old double-fold',
+      ratio > 1.45 && ratio < 1.95, `bare=${bare.dealt.toFixed(0)}, gem=${gem.dealt.toFixed(0)}, ×${ratio.toFixed(2)}`);
+  } finally {
+    delete SUPPORTS[GEM_ID];
+  }
+  check('J4 fixtures cleaned', !SUPPORTS[GEM_ID]);
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);
