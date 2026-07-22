@@ -2528,6 +2528,22 @@ export class Actor {
         st.count = Math.min(cap, st.count + refill);
       }
       if (st.count >= cap) { st.timer = 0; continue; }
+      // THE DRIP RELOAD (magazine {drip} — Deep Reserves' one-per-clock
+      // law): below cap the reload cycles on the host's own cooldown,
+      // scaled by cooldownRecovery (alacrity invests in the reload),
+      // on the BANK's timer — the cooldown map stays untouched, so
+      // rounds in the pot spend freely the whole while.
+      const mag = uc.magazine;
+      if (mag && mag !== true && mag.drip && !st.reloading && inst!.def.cooldown > 0) {
+        st.timer += dt * this.sheet.get('cooldownRecovery',
+          skillContextTags(inst!.def), instanceMods(inst!));
+        if (st.timer >= inst!.def.cooldown) {
+          st.timer -= inst!.def.cooldown;
+          st.count = Math.min(cap, st.count + (mag.refill ?? 1));
+          if (st.count >= cap) st.timer = 0;
+        }
+        continue;
+      }
       if (!uc.recharge) continue;
       st.timer += dt * this.sheet.get('skillChargeRate',
         skillContextTags(inst!.def), instanceMods(inst!));

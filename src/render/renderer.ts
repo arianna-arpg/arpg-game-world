@@ -5465,6 +5465,22 @@ export class Renderer {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
           }
+          // THE RECHARGE LINE (2026-07-22 — the second clock, visibly its
+          // own): a below-cap bank's trickle/drip rides a thin bright
+          // line CLIMBING the slot — never the cooldown's darkening
+          // shade — so both clocks can run at once and read apart.
+          {
+            const uc = instanceUseCharges(inst)!;
+            const mag = uc.magazine;
+            const period = uc.recharge
+              ?? (mag && mag !== true && mag.drip ? face.cooldown : 0);
+            if (bank.count < cap && period > 0 && bank.timer > 0) {
+              const rfrac = clamp(bank.timer / period, 0, 1);
+              const ly = by + slot - 4 - (slot - 8) * rfrac;
+              ctx.fillStyle = 'rgba(255,232,106,0.85)';
+              ctx.fillRect(x + 4, ly, slot - 8, 1.5);
+            }
+          }
           for (let c = 0; c < Math.min(cap, 8); c++) {
             ctx.fillStyle = c < bank.count ? '#ffe86a' : 'rgba(90,90,110,0.8)';
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);

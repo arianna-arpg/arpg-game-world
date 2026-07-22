@@ -2801,7 +2801,10 @@ export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] 
     const g = s.def.useChargeGraft;
     if (g) {
       return inst.def.cooldown > 0
-        ? { max: g.rounds, magazine: true }
+        // The DRIP magazine (the user's one-per-clock call): each cycle of
+        // the host's own cooldown returns ONE round — bankable for a
+        // burst, never an override of a long clock.
+        ? { max: g.rounds, magazine: { refill: 1, drip: true } }
         : { max: g.rounds, recharge: g.recharge, empower: g.empower };
     }
   }
@@ -3640,7 +3643,14 @@ export interface SkillDef {
     max: number;
     recharge?: number;
     stepsFromBank?: boolean;
-    magazine?: { refill?: number } | true;
+    /** magazine {drip}: THE DRIP RELOAD (2026-07-22 — Deep Reserves'
+     *  one-per-clock law): below cap the reload keeps CYCLING on the
+     *  host's own cooldown (scaled by cooldownRecovery — alacrity
+     *  invests in it) via the bank's own timer, never the cooldown map —
+     *  rounds in the pot spend freely throughout, idle time BANKS the
+     *  burst, and the sustained rate can never outrun the clock. The
+     *  emptying press still stamps the visible reload as ever. */
+    magazine?: { refill?: number; drip?: true } | true;
     /** THE EMPOWER BANK (the hybrid family, 2026-07-21): rounds are
      *  OPTIONAL FUEL, never ammunition — a press with a round in the pot
      *  DRINKS it for ×(1+empower) MORE on that use; a dry press casts

@@ -61,8 +61,14 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
     // the plain swing re-geometries through inAoe when a sigil overrides
     // the shape (square = the surround slam covering corners, triangle =
     // the pointed wedge; whirling's spin still refuses melee by tags).
-    deliveries: ['nova', 'ground', 'storm', 'aura', 'detonateProjectile', 'melee'],
+    // 2026-07-22 (minter round 2): CONES joined with INVERTED figures
+    // (square = the near-corner-filled rectangle, triangle = widest at
+    // the caster's feet), LEAPS wear the slam grammar at the landing,
+    // and exploding PROJECTILE bursts orient the sigil along the flight
+    // (the defReads escape — plain flights read nothing).
+    deliveries: ['nova', 'ground', 'storm', 'aura', 'detonateProjectile', 'melee', 'cone', 'leap'],
     defReads: def => (def.delivery.type === 'construct' && !!def.delivery.aura)
+      || (def.delivery.type === 'projectile' && !!def.delivery.explode)
       || def.effects.some(e => e.type === 'spawnZone')
       || defCarriesStat(def, 'lingerField'),
     site: 'area-shape queries (novas, ground zones, storms, auras, linger fields, melee swings)',
@@ -84,8 +90,8 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   // 2026-07-21 (the aftermath minter — the cascade family beyond ground):
   // instantaneous area deliveries mint their sequels as zones off the
   // strike area, so the ground disciplines read on bursts and swings too.
-  { kind: 'graft', key: 'cascade', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instanceCascadePlan (ground placements + the aftermath minter on bursts/swings; kindred gems elongate the native march, different-direction gems re-cast it)' },
-  { kind: 'graft', key: 'pulse', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instancePulsePlan (ground placements + the aftermath minter on bursts/swings; appended gems\' beats follow the native rhythm)' },
+  { kind: 'graft', key: 'cascade', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile', 'cone', 'leap'], site: 'instanceCascadePlan (ground placements + the aftermath minter on bursts/swings/waves/skyfalls; kindred gems elongate the native march, different-direction gems re-cast it; storms deliberately unwired — a scatter has no bearing to march)' },
+  { kind: 'graft', key: 'pulse', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile', 'cone', 'leap', 'storm'], site: 'instancePulsePlan (ground placements + the aftermath minter on bursts/swings/waves/skyfalls + THE BURIED STRIKE: every storm strike arms the composed plan)' },
   { kind: 'graft', key: 'zoneFollow', deliveries: ['ground'], site: 'the ground placement follow mint (lingering placements only)' },
   { kind: 'graft', key: 'cadence', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'the beat mints (pulse gaps, cascade skips, emitter salvos — ground and aftermath alike)' },
   { kind: 'graft', key: 'trail', deliveries: ['projectile', 'construct'], site: 'spawnProjectile (flights + construct sub-casts via the sub-cast board; storm-spawned shots still unread — arrowfall flagged)' },

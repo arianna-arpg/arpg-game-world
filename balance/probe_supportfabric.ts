@@ -227,8 +227,9 @@ bootSimEngine();
   const cdInst = makeSkillInstance(cdHost, 1, 3);
   cdInst.sockets[0] = { def: SUPPORTS.deep_reserves, level: 1 };
   const cdUc = instanceUseCharges(cdInst);
-  check('F5 a cooldown host keeps the MAGAZINE shape (empower is the free skill\'s lane)',
-    !!cdUc && cdUc.magazine === true && cdUc.empower === undefined, JSON.stringify(cdUc));
+  check('F5 a cooldown host wears the DRIP magazine (one round per clock — empower is the free skill\'s lane)',
+    !!cdUc && typeof cdUc.magazine === 'object' && cdUc.magazine.drip === true
+    && cdUc.magazine.refill === 1 && cdUc.empower === undefined, JSON.stringify(cdUc));
 }
 
 // === RIG G — apotheosis composition, the aftermath minter, the crit lanes ==
@@ -711,6 +712,124 @@ bootSimEngine();
   }
   check('L10 Aegis of Dawn holds its stance again (the restored castMode — the guard that never raised)',
     SKILLS.aegis_of_dawn.castMode === 'guard');
+}
+
+// === RIG M — minter round 2 ================================================
+// (2026-07-22: inverted cone sigils, beats on waves and skyfalls, the
+// buried strike on storms, the drip reload, the fissure tick law.)
+
+{
+  // M1 — THE INVERTED TRIANGLE: a sigiled cone is WIDEST AT THE FEET —
+  // a flanker beside the caster (outside the wedge's angle) is struck;
+  // a body at the far rim's flank (inside the bare wedge's widest part)
+  // is spared. The bare wedge reads the opposite. Static geometry pin
+  // through the same inAoe the cast runs.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const cone = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'cone' && !!s.baseDamage
+    && !(s.delivery as { edgeOnly?: number }).edgeOnly)!;
+  const d = cone.delivery as { range: number; arcDeg: number };
+  const inst = makeSkillInstance(cone, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.triangle_sigil, level: 1 };
+  const kind = Object.keys(MONSTERS).find(id =>
+    !MONSTERS[id].immortal && !MONSTERS[id].parts
+    && (MONSTERS[id].base?.life ?? 0) > 0)!;
+  hero.facing = 0;
+  // The flanker: beside the caster's feet, well outside the wedge angle.
+  const flank = world.createMonster(kind, 7, 'enemy');
+  flank.pos = { x: hero.pos.x + 14, y: hero.pos.y + d.range * 0.5 };
+  world.actors.push(flank);
+  const f0 = flank.life;
+  let fMin = f0;
+  world.executeSkill(hero, inst, { x: hero.pos.x + 60, y: hero.pos.y });
+  for (let i = 0; i < 4; i++) { world.update(1 / 20); fMin = Math.min(fMin, flank.life); }
+  check('M1 the inverted triangle bites the FLANK AT THE FEET (widest at the caster — the melee-ish figure)',
+    fMin < f0, `host ${cone.id} vs ${kind}: ${f0.toFixed(0)} -> trough ${fMin.toFixed(1)}`);
+}
+
+{
+  // M2 — beats on the WAVE: a cone with Seismic March mints marching
+  // sequels off its figure (the minter reached cones).
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const cone = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'cone' && !!s.baseDamage)!;
+  const inst = makeSkillInstance(cone, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.seismic_march, level: 1 };
+  const zb = world.zones.length;
+  world.executeSkill(hero, inst, { x: hero.pos.x + 60, y: hero.pos.y });
+  const ripples = world.zones.slice(zb).filter(z => !z.exploded && z.delay > 0);
+  check('M2 Seismic March quakes forward out of a CONE (the minter reached the wave)',
+    ripples.length >= 3, `host ${cone.id}: ${ripples.length} marching sequels`);
+  world.zones.length = zb;
+}
+
+{
+  // M3 — THE BURIED STRIKE: every storm strike arms the composed pulse
+  // (Buried Charge re-detonates each strike's ground) — and the armed
+  // afterlife carries NO ordinary ticks (the imposed-surface law).
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const storm = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'storm' && !!s.baseDamage
+    && (s.delivery as { awaitRelease?: unknown }).awaitRelease === undefined)!;
+  const inst = makeSkillInstance(storm, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.buried_charge, level: 1 };
+  const zb = world.zones.length;
+  world.executeSkill(hero, inst, { x: hero.pos.x + 100, y: hero.pos.y });
+  const strikesArmed = world.zones.slice(zb).filter(z => z.pulse && z.pulse.left > 0);
+  const noTicks = world.zones.slice(zb).every(z => !z.pulse || z.tickInterval === Infinity);
+  check('M3 every storm strike carries the BURIED CHARGE (armed pulse per strike, tick-free afterlife)',
+    strikesArmed.length >= 2 && noTicks,
+    `host ${storm.id}: ${strikesArmed.length} armed, tick-free ${noTicks}`);
+  world.zones.length = zb;
+}
+
+{
+  // M4 — THE DRIP RELOAD: Deep Reserves on a cooldown host returns ONE
+  // round per cycle of the host's own clock — bankable, never an
+  // override (the user's one-per-clock law).
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const cdHost = Object.values(SKILLS).find(s =>
+    s.cooldown >= 2 && s.cooldown <= 6
+    && (s.tags.includes('attack') || s.tags.includes('spell')))!;
+  const inst = makeSkillInstance(cdHost, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.deep_reserves, level: 1 };
+  hero.skills[0] = inst;
+  const bank = hero.skillChargeBank(inst);
+  bank.count = 0; bank.timer = 0;
+  const halfSteps = Math.ceil((cdHost.cooldown / 2) * 20);
+  for (let i = 0; i < halfSteps + 2; i++) world.update(1 / 20);
+  const atHalf = bank.count;
+  for (let i = 0; i < halfSteps + 4; i++) world.update(1 / 20);
+  const atFull = bank.count;
+  for (let i = 0; i < halfSteps * 2 + 6; i++) world.update(1 / 20);
+  check('M4 the drip returns ONE round per clock cycle, then banks the burst (never a full-mag override)',
+    atHalf === 0 && atFull === 1 && bank.count === 2,
+    `host ${cdHost.id} cd ${cdHost.cooldown}: half ${atHalf}, one-cycle ${atFull}, banked ${bank.count}`);
+}
+
+{
+  // M5 — THE FISSURE TICK LAW (the Volcanic Heart audit): a texture-
+  // imposed linger carries NO ordinary ticks — the armed crack deals
+  // nothing between re-lights.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const fissure = Object.values(SKILLS).find(s =>
+    s.tags.includes('fissure') && !(s.delivery as { lingerDuration?: number }).lingerDuration)!;
+  const inst = makeSkillInstance(fissure, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.volcanic_heart, level: 1 };
+  const zb = world.zones.length;
+  world.executeSkill(hero, inst, { x: hero.pos.x + 80, y: hero.pos.y });
+  const segs = world.zones.slice(zb).filter(z => z.seg);
+  const lingering = segs.filter(z => z.linger > 0);
+  check('M5 a texture-IMPOSED fissure linger carries no ordinary ticks (the imposed-surface law — re-lights are the crack\'s whole life)',
+    lingering.length > 0 && segs.every(z => z.tickInterval === Infinity)
+    && lingering.every(z => z.volatile),
+    `host ${fissure.id}: ${segs.length} segments (${lingering.length} lingering, all tick-free)`);
+  world.zones.length = zb;
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

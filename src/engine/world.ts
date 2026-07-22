@@ -25135,6 +25135,31 @@ export class World {
           * caster.sheet.get('meleeReach', tags, extra);
         const arcRad = Math.min(Math.PI * 2,
           (d.arcDeg * Math.PI / 180) * arcScale);
+        // THE INVERTED SIGILS (2026-07-22, minter round 2): a sigiled cone
+        // abandons the wedge for the sigil's own figure — SQUARE fills the
+        // wedge's near corners into a caster-anchored square of the cone's
+        // reach (centered half-range ahead); TRIANGLE INVERTS the read:
+        // the standard zone wedge stood at the FAR point facing home, so
+        // the cast is WIDEST AT THE CASTER'S FEET and comes to a point at
+        // range — the melee-ish figure, deliberately distinct from the
+        // cone it replaces. The sigil replaces the wedge's WHOLE geometry
+        // (edge bands included); drawn == tested through one mapping.
+        const coneSigil = Math.round(caster.sheet.get('aoeShape', tags, extra));
+        const sigiled = coneSigil === 1 || coneSigil === 2;
+        // Triangle: inAoe's equilateral (apex toward facing, circumradius
+        // = R×1.25) mapped so the APEX lands exactly at range and the
+        // BASE SIDE passes through the caster's feet — center a third of
+        // the way out, circumradius 2/3·range (radius = range×8/15). The
+        // inversion is the MAPPING, not a flipped facing: base at the
+        // feet, point at the far end. Square: the same axis-aligned box
+        // every square sigil tests, centered half-range ahead.
+        const sigilC = coneSigil === 2
+          ? vec(caster.pos.x + Math.cos(caster.facing) * range / 3,
+                caster.pos.y + Math.sin(caster.facing) * range / 3)
+          : vec(caster.pos.x + Math.cos(caster.facing) * range / 2,
+                caster.pos.y + Math.sin(caster.facing) * range / 2);
+        const sigilR = coneSigil === 2 ? range * (8 / 15) : range / 2;
+        const sigilF = caster.facing;
         // WALLS EAT RAYS (occlusion): victims without a firing line from the
         // origin are spared — the wedge licks around corners it can SEE past,
         // never through stone. A phasing use burns through everything.
@@ -25144,11 +25169,15 @@ export class World {
           // line against the NEAREST hittable body (head for everything
           // plain — the classic test, byte-identical).
           const nb = nearestBody(enemy, caster.pos);
-          const dd = dist(caster.pos, nb.pos);
-          if (dd - nb.r > range) continue;
-          // Edge-band cones (Surgical Strike): only the far rim cuts.
-          if (d.edgeOnly && dd + nb.r < range * d.edgeOnly) continue;
-          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+          if (sigiled) {
+            if (!inAoe(sigilC, sigilR, coneSigil, sigilF, nb.pos, nb.r)) continue;
+          } else {
+            const dd = dist(caster.pos, nb.pos);
+            if (dd - nb.r > range) continue;
+            // Edge-band cones (Surgical Strike): only the far rim cuts.
+            if (d.edgeOnly && dd + nb.r < range * d.edgeOnly) continue;
+            if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+          }
           if (!phase && !this.lineOfFire(caster.pos, nb.pos)) continue;
           noteBodyHit(enemy, nb.seg);
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
@@ -25164,6 +25193,12 @@ export class World {
             pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: def.color,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
           });
+        } else if (sigiled) {
+          // The sigil's figure IS the flash (drawn == tested).
+          this.flashes.push({
+            pos: vec(sigilC.x, sigilC.y), radius: sigilR, color: def.color,
+            life: 0.25, maxLife: 0.25, shape: coneSigil, facing: sigilF,
+          });
         } else {
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: range, color: def.color,
@@ -25171,11 +25206,16 @@ export class World {
             edgeFrac: d.edgeOnly,
           });
         }
-        // A cone's area is the wedge — the field settles on its centroid.
-        fieldAt = vec(caster.pos.x + Math.cos(caster.facing) * range * 0.55,
-                      caster.pos.y + Math.sin(caster.facing) * range * 0.55);
+        // A cone's area is the wedge — the field settles on its centroid
+        // (a sigiled figure settles on its own).
+        fieldAt = sigiled && coneSigil === 2
+          ? vec(caster.pos.x + Math.cos(caster.facing) * range * 0.33,
+                caster.pos.y + Math.sin(caster.facing) * range * 0.33)
+          : vec(caster.pos.x + Math.cos(caster.facing) * range * 0.55,
+                caster.pos.y + Math.sin(caster.facing) * range * 0.55);
         // The wedge's mend side (channelled healing streams wash allies).
         this.healAlliesInArea(caster, inst, a => {
+          if (sigiled) return inAoe(sigilC, sigilR, coneSigil, sigilF, a.pos, a.radius);
           const dd = dist(caster.pos, a.pos);
           return dd - a.radius <= range
             && !(d.edgeOnly && dd + a.radius < range * d.edgeOnly)
@@ -25186,12 +25226,30 @@ export class World {
         // beamFx cones included: the laser is a mallet too).
         this.frontSplash(caster, inst, caster.pos, range);
         this.strikeSurfaces(caster, caster.pos, range, (p, r) => {
+          if (sigiled) {
+            return inAoe(sigilC, sigilR, coneSigil, sigilF, p, r)
+              && (phase || this.lineOfFire(caster.pos, p));
+          }
           const dd = dist(caster.pos, p);
           return dd - r <= range
             && !(d.edgeOnly && dd + r < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2
             && (phase || this.lineOfFire(caster.pos, p));
         });
+        // The cascade family reaches the WAVE (minter round 2): the cone's
+        // sequels mint off its true figure — the sigiled square/inverted
+        // triangle or the classic wedge as its own sector — with the walk
+        // still marching the CAST bearing (an inverted sigil faces home;
+        // the quake does not).
+        this.mintAftermath(caster, inst,
+          sigiled ? sigilC : vec(caster.pos.x, caster.pos.y),
+          sigiled ? sigilR : range,
+          sigiled ? coneSigil : AOE_SHAPE.sector,
+          sigiled ? sigilF : caster.facing,
+          useMult, tags, extra,
+          sigiled ? undefined : arcRad,
+          sigiled ? undefined : d.edgeOnly,
+          caster.facing);
         break;
       }
 
@@ -25921,6 +25979,28 @@ export class World {
         const arming = d.awaitRelease !== undefined
           && caster.casting?.mode === 'channel'
           && caster.casting.inst.def.id === def.id;
+        // THE BURIED STRIKE (minter round 2): each storm strike arms the
+        // composed pulse plan — Buried Charge re-detonates EVERY strike's
+        // ground on the armed beat. The cascade/cadence walks stay OFF
+        // storms (a scatter has no bearing to march — deliberately
+        // unwired); the imposed afterlife carries NO ordinary ticks (the
+        // imposed-surface law: the pulse is the strike's whole linger).
+        const stCad = socketSpec(inst, 'cadence')?.intervalStep;
+        const stPlan = instancePulsePlan(inst);
+        const stSpec = stPlan.native;
+        const stN = Math.max(0, (stSpec ? (stSpec.count ?? 1) : 0)
+          + Math.round(caster.sheet.get('pulseCount', tags, extra)));
+        const stDelay = stSpec?.delay ?? 1;
+        const stInterval = stSpec?.interval ?? stDelay;
+        const stStep = stCad ?? stSpec?.intervalStep ?? 1;
+        const stQueue = flattenPulseQueue(stPlan.appended, stCad);
+        let stSpan = 0;
+        if (stN > 0) {
+          stSpan = stDelay + 0.1;
+          let gap = stInterval;
+          for (let k = 1; k < stN; k++) { stSpan += gap; gap = Math.max(0.05, gap * stStep); }
+          for (const q of stQueue) stSpan += q.delay;
+        }
         for (let i = 0; i < strikes; i++) {
           const ang = rand(0, Math.PI * 2);
           const r = Math.sqrt(Math.random()) * d.areaRadius * aoeScale;
@@ -25934,10 +26014,21 @@ export class World {
               : fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval),
             armed: arming || undefined,
             armSeq: arming ? this.sparkSeq++ : undefined,
-            exploded: false, linger: 0, tickInterval: 0.5, tickTimer: 0,
+            exploded: false,
+            linger: stN > 0 ? stSpan : 0,
+            tickInterval: stN > 0 ? Infinity : 0.5,
+            tickTimer: stN > 0 ? Infinity : 0,
             shape, facing: ang,
             dmgMult: useMult, depth: 0, // storms compose with Aftershocks etc.
             flatBonus,
+            pulse: stN > 0
+              ? {
+                delay: stDelay, interval: stInterval, intervalStep: stStep,
+                dmgMult: stSpec?.dmgMult ?? 1, dmgStep: stSpec?.dmgStep ?? 1,
+                radiusMult: stSpec?.radiusMult ?? 1, radiusStep: stSpec?.radiusStep ?? 1,
+                left: stN, next: 0, // re-stamped at the strike's detonation
+                queue: stQueue.length ? [...stQueue] : undefined,
+              } : undefined,
           });
         }
         // The storm's AREA is its scatter disc: No Man's Land settles at
@@ -27561,6 +27652,13 @@ export class World {
     const roulette = socketSpec(inst, 'fissureRoulette');
     const segLinger = (secs: number): number =>
       (volatile || aftershock || roulette) ? Math.max(secs, 5) : secs;
+    // THE IMPOSED-SURFACE LAW, fissure edition (2026-07-22 — the Volcanic
+    // Heart audit): a linger the texture gems IMPOSED carries NO ordinary
+    // ticks — the texture (re-lights, armed detonations, dealt steps) is
+    // the crack's whole life. A skill's OWN linger keeps its burning
+    // ticks as authored. Without this, an armed-but-quiet stretch dealt
+    // steady contact damage and the re-light read as noise on top.
+    const ownFizLinger = (d.lingerDuration ?? 0) > 0;
     // Each placement is a true LINE SEGMENT (a capsule the width of the
     // crack) — the fracture IS the hitbox, laid tangent-wise at its path
     // point. Branches and the closing passes carry their own bearings.
@@ -27579,7 +27677,9 @@ export class World {
         },
         caster, inst, color: inst.def.color,
         delay, exploded: false,
-        linger, tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
+        linger,
+        tickInterval: ownFizLinger ? (d.tickInterval ?? 0.5) : Infinity,
+        tickTimer: ownFizLinger ? 0 : Infinity,
         linger0: linger,
         sizeOver: fizSizeOver,
         radius0: fizSizeOver ? d.radius * aoeScale : undefined,
@@ -29826,6 +29926,7 @@ export class World {
     caster: Actor, inst: SkillInstance, at: Vec2, radius: number,
     shape: AoeShape, facing: number, useMult: number,
     tags: Set<SkillTag>, extra: Modifier[], arcRad?: number, edgeFrac?: number,
+    walkFacing?: number,
   ): void {
     const cadence = socketSpec(inst, 'cadence')?.intervalStep;
     const pPlan = instancePulsePlan(inst);
@@ -29869,6 +29970,9 @@ export class World {
     const stepScale = caster.sheet.get('cascadeStep', tags, extra);
     // 'forward' default (unlike ground's 'axis'): an instantaneous
     // strike has an honest facing, and the marching quake is the read.
+    // The walk marches the CAST bearing (walkFacing) — an inverted
+    // sigil's shape faces home, but the quake still strides away.
+    const walkF = walkFacing ?? facing;
     const walkPoints = (
       spec: GroundCascadeSpec | undefined, count: number, from: Vec2,
     ): { x: number; y: number; beatAt: number; k: number }[] => {
@@ -29890,8 +29994,8 @@ export class World {
           const sign = dir === 'backward' ? -1 : dir === 'axis' ? (k % 2 === 1 ? 1 : -1) : 1;
           const reach = dir === 'axis' ? Math.ceil(k / 2) * stepLen : k * stepLen;
           pts.push({
-            x: from.x + Math.cos(facing) * reach * sign,
-            y: from.y + Math.sin(facing) * reach * sign, beatAt, k,
+            x: from.x + Math.cos(walkF) * reach * sign,
+            y: from.y + Math.sin(walkF) * reach * sign, beatAt, k,
           });
         }
       }
@@ -37085,8 +37189,17 @@ export class World {
       a.pos = vec(L.dest.x, L.dest.y);
       a.untargetable = L.wasUntargetable;
       a.leap = undefined;
+      // THE SIGIL ON THE SLAM (minter round 2): the landing wears the
+      // melee grammar — square covers the crater's corners, triangle
+      // drives a pointed wedge along the landing facing. Drawn == tested.
+      const lTags = skillContextTags(L.inst.def, grantedTags(L.inst));
+      const lMods = instanceMods(L.inst);
+      const lSigil = Math.round(a.sheet.get('aoeShape', lTags, lMods));
+      const lShape = lSigil === 1 || lSigil === 2 ? lSigil : 0;
       for (const e of this.enemiesOf(a)) {
-        if (dist(a.pos, e.pos) - e.radius <= L.radius) {
+        if (lShape
+          ? inAoe(a.pos, L.radius, lShape, a.facing, e.pos, e.radius)
+          : dist(a.pos, e.pos) - e.radius <= L.radius) {
           this.resolveHit(a, L.inst, e, L.dmgMult);
         }
       }
@@ -37096,7 +37209,13 @@ export class World {
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: L.radius,
         color: L.inst.def.color, life: 0.3, maxLife: 0.3,
+        shape: lShape, facing: a.facing,
       });
+      // The cascade family reaches the SKYFALL: the landing's sequels
+      // mint off the slam's true figure (sigils riding), the march
+      // striding the landing facing.
+      this.mintAftermath(a, L.inst, a.pos, L.radius, lShape, a.facing,
+        L.dmgMult, lTags, lMods);
       // The landing is the skill's area: No Man's Land fields drop here
       // (Phoenix Dive scorches its crater), and Dive Bomb double-dips.
       this.moveBlast(a, L.inst, a.pos);
@@ -41079,14 +41198,24 @@ export class World {
     const extra = instanceMods(p.inst);
     const radius = d.explode.radius * p.caster.sheet.get('aoeRadius', tags, extra);
     const scale = d.explode.damageScale ?? 0.6;
+    // THE SIGIL ON THE BURST (minter round 2): the impact wears the sigil
+    // — square/triangle bursts oriented along the flight's bearing, the
+    // same inheritance the swings and slams learned. Beat gems stay OFF
+    // flights DELIBERATELY: cast speed and Unleash already pace that
+    // cadence; the beats belong to ground and slams.
+    const bSigil = Math.round(p.caster.sheet.get('aoeShape', tags, extra));
+    const bShape = bSigil === 1 || bSigil === 2 ? bSigil : 0;
     for (const e of this.enemiesOf(p.caster)) {
       if (e.id === exceptId) continue; // the direct hit already landed
-      if (dist(p.pos, e.pos) - e.radius > radius) continue;
+      if (bShape
+        ? !inAoe(p.pos, radius, bShape, p.dir, e.pos, e.radius)
+        : dist(p.pos, e.pos) - e.radius > radius) continue;
       this.resolveHit(p.caster, p.inst, e, scale * p.mult, 1);
     }
     this.flashes.push({
       pos: vec(p.pos.x, p.pos.y), radius, color: p.inst.def.color,
       life: 0.3, maxLife: 0.3,
+      shape: bShape, facing: p.dir,
     });
   }
 
