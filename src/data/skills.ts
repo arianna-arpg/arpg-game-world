@@ -1172,6 +1172,11 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'Raise a consecrated guard: while you hold it, allies near you heal steadily. The wall that keeps the line alive.',
     tags: ['guard', 'heal', 'duration'], color: '#f8e8c8',
     manaCost: 6, cooldown: 3, useTime: 0,
+    // 2026-07-22: the guard spec demands the stance ("while you HOLD it")
+    // — the missing castMode meant the shield never actually raised (the
+    // strikes-floor sweep's find). Held now, it joins the release-bash
+    // family natively.
+    castMode: 'guard',
     delivery: { type: 'self' },
     guard: { shieldLife: 70, arcDeg: 150, moveFactor: 0.35 },
     innateMods: [mod('guardMend', 'flat', 9)],

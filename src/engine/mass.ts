@@ -63,6 +63,19 @@ export const MASS_CFG = {
     max: 2.75,
   },
 
+  /** THE DELIVERY-AUTHORITY LEVER (2026-07-22 — worn knockback on EVERY
+   *  landed hit): the knockback stat folds at resolveHit scaled by the
+   *  delivery's shove authority — a melee blow carries its full weight, a
+   *  flight's sting a fraction (the switch-like gem: Turbulence works on
+   *  a bow, weaker than on a maul). Melee-TAGGED packets always read 1
+   *  (the invested-melee identity) regardless of delivery. Values are the
+   *  balance pass's dials — graded generous, afford-don't-constrain. */
+  deliveryKnock: {
+    melee: 1, cone: 0.75, target: 0.6, nova: 0.5, detonateProjectile: 0.5,
+    ground: 0.4, storm: 0.35, projectile: 0.2,
+  } as Record<string, number>,
+  deliveryKnockDefault: 0.3,
+
   /** IMPACT — momentum made damage at a wall/void-lip arrest.
    *  momentum = arrest speed (px/s) × the MOVING body's effective weight;
    *  damage = clamp(baseFrac × momentum / refMomentum, 0, maxFrac) of the

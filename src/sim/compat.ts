@@ -331,7 +331,8 @@ export const LIVE_PROBE_SUPPORT_RULES: {
     why: 'kill-shed payload (orb/remnant families) needs kills — the fodder pack supplies them',
     pack: 'fodder',
     when: sup => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
-      m.stat === 'orbShedRate' || m.stat.startsWith('orbOnKill_') || m.stat.startsWith('remnantDrop_')),
+      m.stat === 'orbShedRate' || m.stat.startsWith('orbOnKill_') || m.stat.startsWith('remnantDrop_')
+      || m.stat === 'remnantChance' || m.stat === 'remnantOnCast'),
   },
   {
     why: "'overmatch' needs higher-level victims — the live pack's levelBonus stands above the rig",
@@ -755,7 +756,11 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
   },
   {
     note: 'remnant shards drop at kills but the SCOOP is a walk — no pilot detours over shards',
-    when: (_def, sup) => [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat.startsWith('remnantDrop_')),
+    // The WHOLE remnant-mint family (2026-07-22): the kill-shed lanes
+    // (remnantDrop_*) AND the elemental hit/cast mints (remnantChance,
+    // remnantOnCast) — every one ends at the same unscooped shard.
+    when: (_def, sup) => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat.startsWith('remnantDrop_') || m.stat === 'remnantChance' || m.stat === 'remnantOnCast'),
   },
   // (orbShedRate carries NO row anymore: the orbShedGraft floor stands the
   //  shed lane up on a bare rig — fodder-routed kills shed orbs, and the

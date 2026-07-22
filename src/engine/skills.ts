@@ -2837,6 +2837,12 @@ export const BASH_CFG = {
   /** Bar fraction at/above which a release converts into the bash
    *  (inverted stances arm at/below the mirrored line, 1 − floor). */
   releaseFloor: 0.25,
+  /** THE POOLLESS STAND-IN (2026-07-22 — the answering charge/leap):
+   *  guard-tagged workings with NO shield pool of their own (a charge's
+   *  arrival, a leap's landing) pay the bash from this stand-in pool ×
+   *  the caster's guardStrength fold, through the same mult × bashPower
+   *  pipe a stance pays. A typical guard's shieldLife — tune freely. */
+  poollessShield: 70,
 };
 
 /** GUARDED CASTING tuning (the DELIBERATE cast-while-guarding lane —

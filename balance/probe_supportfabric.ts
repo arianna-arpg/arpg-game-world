@@ -25,6 +25,7 @@ import { bootSimEngine } from '../src/sim/arena';
 import { makeSimWorld } from '../src/sim/arena';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
+import { MONSTERS } from '../src/data/monsters';
 import {
   STANCE_PLANT_TIME, type Actor,
 } from '../src/engine/actor';
@@ -572,6 +573,144 @@ bootSimEngine();
     supportFitsInst(supp, makeSkillInstance(chiller, 1, 3))
     && !supportFitsInst(supp, makeSkillInstance(taunter, 1, 3)),
     `chill stacks, taunt does not`);
+}
+
+// === RIG L — the read-site package =========================================
+// (2026-07-22: worn knockback on every delivery at graded authority; the
+// moveTrail fabric beyond dashes; the construct sub-cast board; the
+// answering family — guardBash at charge arrival / construct break.)
+
+{
+  // L1 — the delivery-authority lever: worn knockback now shoves off a
+  // NOVA hit (was byte-dead beyond melee), at its graded fraction.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const nova = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'nova' && !!s.baseDamage
+    && !(s.delivery as { edgeOnly?: number }).edgeOnly)!;
+  const kind = Object.keys(MONSTERS).find(id =>
+    !MONSTERS[id].immortal && !MONSTERS[id].parts
+    && (MONSTERS[id].base?.life ?? 0) > 0)!;
+  const foe = world.createMonster(kind, 7, 'enemy');
+  foe.pos = { x: hero.pos.x + 60, y: hero.pos.y };
+  world.actors.push(foe);
+  const inst = makeSkillInstance(nova, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.turbulence, level: 1 };
+  const p0 = { x: foe.pos.x, y: foe.pos.y };
+  world.executeSkill(hero, inst, { x: hero.pos.x, y: hero.pos.y });
+  for (let i = 0; i < 10; i++) world.update(1 / 20);
+  const moved = dist(p0, foe.pos);
+  check('L1 worn knockback shoves off a NOVA hit (the delivery-authority lever — was melee-only)',
+    moved > 4, `host ${nova.id} vs ${kind}: moved ${moved.toFixed(1)}px`);
+}
+
+{
+  // L2/L3 — the moveTrail fabric beyond dashes: a blink drops its two
+  // truths; a leap scorches launch and landing.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const blink = Object.values(SKILLS).find(s =>
+    s.delivery.type === 'blink' && !s.noDrop)!;
+  const bInst = makeSkillInstance(blink, 1, 3);
+  bInst.sockets[0] = { def: SUPPORTS.fire_walker, level: 1 };
+  const zb = world.zones.length;
+  world.executeSkill(hero, bInst, { x: hero.pos.x + 200, y: hero.pos.y });
+  const patches = world.zones.slice(zb).filter(z => z.exploded && z.linger > 0);
+  check('L2 a BLINK with Fire Walker drops departure AND arrival patches',
+    patches.length >= 2, `host ${blink.id}: ${patches.length} patches`);
+  const leap = Object.values(SKILLS).find(s => s.delivery.type === 'leap')!;
+  const lInst = makeSkillInstance(leap, 1, 3);
+  lInst.sockets[0] = { def: SUPPORTS.fire_walker, level: 1 };
+  const zl = world.zones.length;
+  world.executeSkill(hero, lInst, { x: hero.pos.x + 200, y: hero.pos.y });
+  const launchPatches = world.zones.slice(zl).filter(z => z.exploded && z.linger > 0).length;
+  for (let i = 0; i < 40; i++) world.update(1 / 20);
+  const bothPatches = world.zones.slice(zl).filter(z => z.exploded && z.linger > 0).length
+    + world.zones.slice(zl).filter(z => !z.linger).length * 0; // landing patch joins after flight
+  check('L3 a LEAP with Fire Walker scorches launch then landing',
+    launchPatches >= 1 && bothPatches >= 2,
+    `host ${leap.id}: launch ${launchPatches}, after flight ${bothPatches}`);
+}
+
+{
+  // L4 — the walking trail: a movement BUFF with Fire Walker drops fire
+  // behind the runner while it holds, and the trail dies with it.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const buff = SKILLS.stealth ?? Object.values(SKILLS).find(s =>
+    s.delivery.type === 'self' && s.tags.includes('movement'))!;
+  const inst = makeSkillInstance(buff, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.fire_walker, level: 1 };
+  world.executeSkill(hero, inst, { x: hero.pos.x, y: hero.pos.y });
+  const zb = world.zones.length;
+  for (let i = 0; i < 8; i++) {
+    hero.pos = { x: hero.pos.x + 30, y: hero.pos.y };
+    world.update(1 / 20);
+  }
+  const dropped = world.zones.length - zb;
+  check('L4 the sprinting buff drops trail patches behind the runner (the walking trail)',
+    dropped >= 3, `host ${buff.id}: ${dropped} patches over 240px`);
+  const wtState = (hero as { walkTrail?: unknown }).walkTrail;
+  check('L5 the walking trail is a STAMPED working (state stands while the buff holds)',
+    wtState !== undefined);
+}
+
+{
+  // L6 — the construct sub-cast board: the ballista's fired payload wears
+  // the host's rideable gems (Scorched Wake burns behind every bolt).
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const host = SKILLS.ballista_sentry;
+  const inst = makeSkillInstance(host, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.scorched_wake, level: 1 };
+  world.executeSkill(hero, inst, { x: hero.pos.x + 80, y: hero.pos.y });
+  const built = world.actors.find(a => a.construct && a.summonInst === inst);
+  const fired = (built?.construct as { castInst?: { sockets: ({ def: { id: string }; forwarded?: boolean } | null)[] } } | undefined)?.castInst;
+  const boarded = fired?.sockets.some(x => x?.def.id === 'scorched_wake' && x.forwarded);
+  check('L6 the construct\'s FIRED payload boards the host\'s trail gem (the sub-cast board)',
+    !!built && !!boarded,
+    built ? `construct ${built.name}, boarded ${boarded}` : 'no construct minted');
+}
+
+{
+  // L7 — the answering family: a guard-tagged charge bashes at ARRIVAL;
+  // a bash-carrying construct answers when it BREAKS.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  const charge = SKILLS.shield_charge;
+  const cInst = makeSkillInstance(charge, 1, 3);
+  cInst.sockets[0] = { def: SUPPORTS.answering_wall, level: 1 };
+  const kind = Object.keys(MONSTERS).find(id =>
+    !MONSTERS[id].immortal && !MONSTERS[id].parts
+    && (MONSTERS[id].base?.life ?? 0) > 0)!;
+  const mark = world.createMonster(kind, 7, 'enemy');
+  mark.pos = { x: hero.pos.x + 290, y: hero.pos.y };
+  world.actors.push(mark);
+  const m0 = mark.life;
+  let mMin = m0;
+  world.executeSkill(hero, cInst, { x: hero.pos.x + 260, y: hero.pos.y });
+  for (let i = 0; i < 30; i++) { world.update(1 / 20); mMin = Math.min(mMin, mark.life); }
+  check('L7 the guard-tagged charge ANSWERS at arrival (the poolless bash)',
+    mMin < m0, `${kind} at the stop: ${m0.toFixed(0)} -> trough ${mMin.toFixed(1)}`);
+  const rampart = SKILLS.stone_rampart;
+  const rInst = makeSkillInstance(rampart, 1, 3);
+  rInst.sockets[0] = { def: SUPPORTS.answering_wall, level: 1 };
+  world.executeSkill(hero, rInst, { x: hero.pos.x + 60, y: hero.pos.y });
+  const pillar = world.actors.find(a => a.construct && a.summonInst === rInst);
+  check('L8 the rampart mints its pillar (rig sanity)', !!pillar);
+  if (pillar) {
+    const foe2 = world.createMonster(kind, 7, 'enemy');
+    foe2.pos = { x: pillar.pos.x + 40, y: pillar.pos.y };
+    world.actors.push(foe2);
+    const f0 = foe2.life;
+    let fMin = f0;
+    world.kill(pillar, false, foe2);
+    for (let i = 0; i < 6; i++) { world.update(1 / 20); fMin = Math.min(fMin, foe2.life); }
+    check('L9 the broken wall ANSWERS HARDEST (construct death bash pays maxLife, full circle)',
+      fMin < f0, `breaker: ${f0.toFixed(0)} -> trough ${fMin.toFixed(1)}`);
+  }
+  check('L10 Aegis of Dawn holds its stance again (the restored castMode — the guard that never raised)',
+    SKILLS.aegis_of_dawn.castMode === 'guard');
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

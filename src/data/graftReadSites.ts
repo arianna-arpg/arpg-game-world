@@ -74,8 +74,12 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   },
   {
     kind: 'stat', key: 'moveTrail',
-    deliveries: ['dash'],
-    site: 'the dash branch only (blinks and leaps travel without a wake)',
+    deliveries: ['dash', 'blink', 'leap', 'self'],
+    // 2026-07-22: dash odometers, blink departure+arrival, leap launch+
+    // landing, and the WALKING trail on self movement buffs (stealth's
+    // burning wake — dies with the buff). Residue: movement-tagged
+    // constructs/marks (temporal_pad, mark) travel nothing themselves.
+    site: 'the travel grammars (dash odometer, blink ends, leap footprints, the walking trail on movement buffs)',
   },
   // 2026-07-21 (the aftermath minter — the cascade family beyond ground):
   // instantaneous area deliveries mint their sequels as zones off the
@@ -84,8 +88,8 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   { kind: 'graft', key: 'pulse', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'instancePulsePlan (ground placements + the aftermath minter on bursts/swings; appended gems\' beats follow the native rhythm)' },
   { kind: 'graft', key: 'zoneFollow', deliveries: ['ground'], site: 'the ground placement follow mint (lingering placements only)' },
   { kind: 'graft', key: 'cadence', deliveries: ['ground', 'nova', 'melee', 'detonateProjectile'], site: 'the beat mints (pulse gaps, cascade skips, emitter salvos — ground and aftermath alike)' },
-  { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
-  { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
+  { kind: 'graft', key: 'trail', deliveries: ['projectile', 'construct'], site: 'spawnProjectile (flights + construct sub-casts via the sub-cast board; storm-spawned shots still unread — arrowfall flagged)' },
+  { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile', 'construct'], site: 'spawnProjectile (flights + construct sub-casts via the sub-cast board; storm-spawned shots still unread — arrowfall flagged)' },
   {
     kind: 'graft', key: 'tameMod',
     deliveries: ['target'],
@@ -94,11 +98,15 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   },
   {
     kind: 'graft', key: 'guardBash',
-    // Guard STANCES are a castMode, not a delivery — the 'guard' TAG also
-    // rides charges, auras and wards whose release never consults a bash.
-    deliveries: [],
+    // The answering family (2026-07-22): stance release/break (castMode
+    // guard — aegis_of_dawn rejoined via its restored castMode), a
+    // guard-tagged charge's arrival, a leap's landing, a construct's
+    // death/expiry (full circle, break pays maxLife), and a toggled
+    // shell's drop (remaining pool). Poolless workings pay
+    // BASH_CFG.poollessShield × guardStrength.
+    deliveries: ['dash', 'leap', 'construct', 'aura'],
     defReads: def => def.castMode === 'guard',
-    site: 'guardBashSpec (guard stance release/break — castMode guard only)',
+    site: 'guardBashSpec (stance release/break + the answering family: charge arrival, leap landing, construct death/expiry, shell drop)',
   },
   // exposure / zoneGrow / zoneSizeOver stay unrowed on purpose: their gems
   // gate on 'duration' the way madden/zoneEmit do — broad by design, and a

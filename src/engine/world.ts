@@ -25254,6 +25254,9 @@ export class World {
         const turret = instanceTurret(inst);
         if (turret && (d.lingerDuration ?? 0) > 0 && SKILLS[turret.castSkillId]) {
           const turretCast = makeSkillInstance(SKILLS[turret.castSkillId], effectiveSkillLevel(inst));
+          // The sub-cast board (the construct-flight synergy): the risen
+          // turret's payload wears the host's rideable gems too.
+          this.forwardSummonSockets(inst, [turretCast]);
           const built = this.spawnConstruct(caster, inst, {
             type: 'construct', kind: 'totem',
             range: d.radius * aoeScale,
@@ -25701,6 +25704,33 @@ export class World {
       }
 
       case 'self':
+        // FIRE WALKER'S SPRINT (the moveTrail fabric on a movement BUFF —
+        // stealth's burning wake): while the working holds, the runner
+        // drops trail patches behind every stride, and the trail dies
+        // with the buff — unstealthed feet leave no fire. The window is
+        // the skill's own primary effect duration (its buff or status,
+        // × effectDuration), else the default walk.
+        {
+          const mtWalk = caster.sheet.get('moveTrail', tags, extra);
+          if (mtWalk > 0) {
+            let dur = 0;
+            for (const fx of def.effects) {
+              if (fx.type === 'buff' && fx.duration) dur = Math.max(dur, fx.duration);
+              else if (fx.type === 'status') {
+                dur = Math.max(dur, STATUS_DEFS[fx.status]?.duration ?? 0);
+              }
+            }
+            const hold = (dur > 0 ? dur : 4)
+              * caster.sheet.get('effectDuration', tags, extra);
+            const wt = caster as Actor & {
+              walkTrail?: { spec: DropZoneSpec; until: number; inst: SkillInstance };
+              walkTrailPrev?: Vec2; walkTrailOdo?: number;
+            };
+            wt.walkTrail = { spec: this.statTrailSpec(mtWalk), until: this.time + hold, inst };
+            wt.walkTrailPrev = vec(caster.pos.x, caster.pos.y);
+            wt.walkTrailOdo = 0;
+          }
+        }
         // THE AMALGAM: each channel pulse CONSUMES one nearby minion —
         // the mass banks on the casting state; the release fuses it.
         // (Through Ritual Ground, the channeler consumes its OWNER's pack.)
@@ -26012,6 +26042,16 @@ export class World {
             st.radius + ctB * st.radiusPer, st.hold + ctB * st.holdPer,
             { caster, grants: this.conjureGrantsFor(caster, tags, extra) });
         }
+        // Fire Walker on a BLINK (the moveTrail fabric beyond dashes): the
+        // travel is instantaneous, so the trail is its two truths — a
+        // patch where you vanish and one where you arrive (a delayed warp
+        // pre-marks the arrival: the fire calls where you land).
+        const mtBlink = caster.sheet.get('moveTrail', tags, extra);
+        if (mtBlink > 0) {
+          const spec = this.statTrailSpec(mtBlink);
+          this.mintTrailPatch(caster, inst, spec, caster.pos, caster.facing);
+          this.mintTrailPatch(caster, inst, spec, dest, caster.facing);
+        }
         // Dive Bomb: erupt where you vanish...
         this.moveBlast(caster, inst, caster.pos);
         if (d.delay && d.delay > 0) {
@@ -26076,6 +26116,13 @@ export class World {
             st.radius + ctL * st.radiusPer, st.hold + ctL * st.holdPer,
             { caster, grants: this.conjureGrantsFor(caster, tags, extra) });
         }
+        // Fire Walker on a LEAP: the launch point scorches now, the
+        // landing scorches on arrival (updateLeaps) — the two footprints
+        // of a flight that touches ground exactly twice.
+        const mtLeap = caster.sheet.get('moveTrail', tags, extra);
+        if (mtLeap > 0) {
+          this.mintTrailPatch(caster, inst, this.statTrailSpec(mtLeap), caster.pos, caster.facing);
+        }
         // Dive Bomb: the take-off point erupts.
         this.moveBlast(caster, inst, caster.pos);
         break;
@@ -26112,6 +26159,13 @@ export class World {
         const castInst = d.castSkillId
           ? makeSkillInstance(SKILLS[d.castSkillId], effectiveSkillLevel(inst))
           : undefined;
+        // THE SUB-CAST BOARD (2026-07-22 — the construct-flight synergy):
+        // the host's rideable gems board the construct's FIRED payload
+        // through the standard fit-gated fixpoint — a Scorched Wake in
+        // the ballista burns behind every bolt. The construct BODY still
+        // receives no forwarding (the resync rule); only what it CASTS
+        // wears the sockets.
+        if (castInst) this.forwardSummonSockets(inst, [castInst]);
         // ECHO RIDERS (Mirage Archer, Shadow Clone): ghosts, not furniture —
         // count/refresh/eviction ride the mirageCount economy.
         if (d.kind === 'echo' && d.echo) {
@@ -28726,7 +28780,17 @@ export class World {
     if (!aura) return;
     // A toggle-installed rear-guard shell drops with its toggle (a shell
     // worn as ANATOMY — MonsterDef.shellGuard — has no fromAura and stays).
-    if (bearer.shellGuard?.fromAura === skillId) bearer.shellGuard = undefined;
+    if (bearer.shellGuard?.fromAura === skillId) {
+      // THE ANSWERING SHELL (guardBash beyond the stance, 2026-07-22):
+      // the dropped rear-guard answers with its REMAINING pool — an
+      // unspent shell detonates whole, a battered one with what it held,
+      // a broken one already did its work.
+      const pool = bearer.shellGuard.broken ? 0 : bearer.shellGuard.pool;
+      bearer.shellGuard = undefined;
+      const sInst = bearer.skills.find(k => k?.def.id === skillId);
+      const sBash = sInst ? guardBashSpec(sInst) : undefined;
+      if (sInst && sBash && pool > 0) this.guardBash(bearer, sInst, sBash, pool);
+    }
     // Strip this aura's modifiers from everyone it touched.
     const sourceName = 'aura:' + skillId + ':' + bearer.id;
     for (const a of this.actors) {
@@ -29910,6 +29974,37 @@ export class World {
    * Pure stat (`moveExplode`), so the support composes with everything —
    * including No Man's Land, which drops its field at the blast point.
    */
+  /** ONE TRAIL PATCH (Fire Walker's ground fire — the moveTrail fabric
+   *  beyond dashes, 2026-07-22): the standing burn a traveler leaves.
+   *  Dash corridors drop them on an odometer, blinks mark departure and
+   *  arrival, leaps scorch launch and landing, and a movement BUFF
+   *  (stealth's sprint) drops them behind the runner while it holds —
+   *  one mint, every grammar. */
+  private mintTrailPatch(
+    a: Actor, inst: SkillInstance, spec: DropZoneSpec, at: Vec2,
+    facing: number, linger?: number,
+  ): void {
+    const dso = resolveSizeOver(spec.sizeOver);
+    const hold = linger ?? spec.duration;
+    this.zones.push({
+      pos: vec(at.x, at.y), radius: spec.radius * (dso?.from ?? 1),
+      caster: a, inst, color: inst.def.color,
+      delay: 0, exploded: true,
+      linger: hold, linger0: hold,
+      tickInterval: spec.tickInterval ?? 0.4, tickTimer: 0.2,
+      shape: 0, facing,
+      dmgMult: spec.damageScale ?? 0.5, depth: 1,
+      sizeOver: dso,
+      radius0: dso ? spec.radius : undefined,
+    });
+  }
+
+  /** The stat-minted trail patch shape (the moveTrail stat with no
+   *  delivery spec of its own — one default, every movement grammar). */
+  private statTrailSpec(mt: number): DropZoneSpec {
+    return { radius: 32, duration: 2.2, tickInterval: 0.4, damageScale: mt };
+  }
+
   private moveBlast(caster: Actor, inst: SkillInstance, at: Vec2): void {
     const tags = skillContextTags(inst.def, grantedTags(inst));
     const extra = instanceMods(inst);
@@ -31185,13 +31280,27 @@ export class World {
       }
     }
 
-    // Melee knockback + signed displacement, scaled by stats, on a landed hit.
+    // Worn knockback + signed displacement, scaled by stats, on a landed hit.
     // `target` is always an enemy of `caster` (every resolveHit caller iterates
     // enemiesOf), and pushActor no-ops on construct/anchored/leap — no friendly fire.
+    // THE DELIVERY-AUTHORITY LEVER (2026-07-22): the knockback stat folds on
+    // EVERY delivery now — melee-tagged packets at full weight, everything
+    // else at MASS_CFG.deliveryKnock's graded authority (a flight's sting is
+    // a fraction of a maul's heave — the switch-like gem, balance later).
+    // The knockBuffet stat keeps its identity everywhere the stat folds:
+    // Turbulence batters victims a RANDOM way, never ejects them.
     if (dealt > 0) {
-      if (packet.tags.has('melee')) {
+      {
         const kb = caster.sheet.get('knockback', packet.tags, extra);
-        if (kb > 0) this.pushActor(target, angleTo(caster.pos, target.pos), kb, caster, inst);
+        if (kb > 0) {
+          const auth = packet.tags.has('melee') ? 1
+            : MASS_CFG.deliveryKnock[inst.def.delivery.type] ?? MASS_CFG.deliveryKnockDefault;
+          if (auth > 0) {
+            const ang = caster.sheet.get('knockBuffet', packet.tags, extra) > 0
+              ? rand(0, Math.PI * 2) : angleTo(caster.pos, target.pos);
+            this.pushActor(target, ang, kb * auth, caster, inst);
+          }
+        }
       }
       const force = caster.sheet.get('displaceForce', packet.tags, extra);
       if (force !== 0) {
@@ -32869,6 +32978,18 @@ export class World {
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
+    // THE ANSWERING WALL BREAKS (guardBash beyond the stance, 2026-07-22):
+    // a construct minted by a bash-carrying working answers when it DIES —
+    // and a broken wall answers HARDEST: violent deaths pay the whole
+    // stone (maxLife), quiet ends pay what still stood. Full circle: a
+    // shattering pillar has no facing to honor.
+    if (actor.construct && actor.summonInst) {
+      const cBash = guardBashSpec(actor.summonInst);
+      if (cBash) {
+        this.guardBash(actor, actor.summonInst, { ...cBash, arcDeg: 360 },
+          killer ? actor.maxLife() : Math.max(0, actor.life));
+      }
+    }
     // IMMORTAL fixtures (MonsterDef.immortal — the Training Dummy): show the
     // hit, then snap back to full instead of dying — no credit, no loot, no
     // death FX. A flag, not a def-id gate: any practice target opts in.
@@ -34345,6 +34466,15 @@ export class World {
           if (a.construct && a.explodeOnDeath > 0) {
             this.explodeActor(a, a.explodeOnDeath);
           }
+          // THE ANSWERING WALL EXPIRES (guardBash beyond the stance): a
+          // quiet end answers with what still stood — the standing life
+          // pays the bash the break would have paid in full.
+          if (a.construct && a.summonInst) {
+            const eBash = guardBashSpec(a.summonInst);
+            if (eBash && a.life > 0) {
+              this.guardBash(a, a.summonInst, { ...eBash, arcDeg: 360 }, a.life);
+            }
+          }
           // MATURITY: a pod's expiry IS the incubation completing — the
           // payload hatches before the shell is swept away.
           if (a.construct?.hatch) this.hatchPod(a);
@@ -34730,20 +34860,8 @@ export class World {
           carrier.trailDist = (carrier.trailDist ?? 99) + step;
           if (carrier.trailDist >= 42) {
             carrier.trailDist = 0;
-            const dso = resolveSizeOver(trail.sizeOver);
-            const dLinger = trail.duration
-              * speedLingerMul(trail.durationBySpeed, a.dash.speed);
-            this.zones.push({
-              pos: vec(a.pos.x, a.pos.y), radius: trail.radius * (dso?.from ?? 1),
-              caster: a, inst, color: inst.def.color,
-              delay: 0, exploded: true,
-              linger: dLinger, linger0: dLinger,
-              tickInterval: trail.tickInterval ?? 0.4, tickTimer: 0.2,
-              shape: 0, facing: a.dash.dir,
-              dmgMult: trail.damageScale ?? 0.5, depth: 1,
-              sizeOver: dso,
-              radius0: dso ? trail.radius : undefined,
-            });
+            this.mintTrailPatch(a, inst, trail, a.pos, a.dash.dir,
+              trail.duration * speedLingerMul(trail.durationBySpeed, a.dash.speed));
           }
         }
         a.dash.remaining -= dt;
@@ -34753,6 +34871,16 @@ export class World {
           if (inst) {
             this.moveBlast(a, inst, a.pos);
             this.dropLingerField(a, inst, a.pos);
+            // THE ANSWERING CHARGE (guardBash beyond the stance,
+            // 2026-07-22): a guard-tagged dash with a bash spec answers
+            // at ARRIVAL — the shield that battered the corridor swings
+            // once more at the stop, paying the poolless stand-in.
+            const dBash = guardBashSpec(inst);
+            if (dBash) {
+              this.guardBash(a, inst, dBash, BASH_CFG.poollessShield
+                * a.sheet.get('guardStrength',
+                  skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst)));
+            }
           }
         }
       }
@@ -34763,6 +34891,32 @@ export class World {
       // envelopes, exposure grace, telegraphs and Foresight all ride. A
       // hidden ambusher or burrower (untargetable) sheds nothing, and a
       // stationary body never leaks: the trail IS the travel.
+      // FIRE WALKER'S SPRINT (the walking trail — moveTrail while a
+      // movement buff holds): the same odometer grammar as the body
+      // wake, expiring with the working. One drop per beat, however far
+      // a frame jumped — a teleport writes one patch, not a rope.
+      {
+        const wt = a as Actor & {
+          walkTrail?: { spec: DropZoneSpec; until: number; inst: SkillInstance };
+          walkTrailPrev?: Vec2; walkTrailOdo?: number;
+        };
+        if (wt.walkTrail && !a.dead) {
+          if (this.time >= wt.walkTrail.until) {
+            wt.walkTrail = undefined;
+            wt.walkTrailPrev = undefined;
+          } else {
+            const prev = wt.walkTrailPrev;
+            wt.walkTrailPrev = vec(a.pos.x, a.pos.y);
+            if (prev) {
+              wt.walkTrailOdo = (wt.walkTrailOdo ?? 0) + dist(prev, a.pos);
+              if (wt.walkTrailOdo >= 42) {
+                wt.walkTrailOdo = 0;
+                this.mintTrailPatch(a, wt.walkTrail.inst, wt.walkTrail.spec, a.pos, a.facing);
+              }
+            }
+          }
+        }
+      }
       if (a.wake && !a.dead && !a.untargetable) {
         const prev = a.wakePrev;
         a.wakePrev = vec(a.pos.x, a.pos.y);
@@ -36947,6 +37101,20 @@ export class World {
       // (Phoenix Dive scorches its crater), and Dive Bomb double-dips.
       this.moveBlast(a, L.inst, a.pos);
       this.dropLingerField(a, L.inst, a.pos);
+      // Fire Walker's second footprint (the launch dropped the first).
+      const mtLand = a.sheet.get('moveTrail',
+        skillContextTags(L.inst.def, grantedTags(L.inst)), instanceMods(L.inst));
+      if (mtLand > 0) {
+        this.mintTrailPatch(a, L.inst, this.statTrailSpec(mtLand), a.pos, a.facing);
+      }
+      // THE ANSWERING LEAP (guardBash beyond the stance): a guard-tagged
+      // leap with a bash spec answers at the landing — through the same
+      // poolless stand-in the charge pays.
+      const lBash = guardBashSpec(L.inst);
+      if (lBash) {
+        this.guardBash(a, L.inst, lBash, BASH_CFG.poollessShield
+          * a.sheet.get('guardStrength', skillContextTags(L.inst.def, grantedTags(L.inst)), instanceMods(L.inst)));
+      }
     }
   }
 
