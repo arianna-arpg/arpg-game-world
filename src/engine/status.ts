@@ -955,6 +955,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Kindled', color: '#ffe9a8', duration: 1,
     beneficial: true,
   },
+  // CONSECRATED — the standing blessing made a CENTRAL status (the See's
+  // liturgy pass): until now every "blessed" was an ad-hoc inline buff;
+  // this row gives sanctity one name the whole fabric can reach — the
+  // generated apply_/damageVs_ lanes open with it, kin and gems and procs
+  // grant it identically, and the liturgy's responsory pours it. A mend
+  // that keeps mending and a little more bite while the blessing holds.
+  consecrated: {
+    label: 'Consecrated', color: '#ffe9b8', duration: 6,
+    beneficial: true,
+    mods: [mod('lifeRegen', 'flat', 3), mod('damage', 'increased', 0.06)],
+  },
   // PHASING: the bearer has no BODY for a while — walks through the pack
   // and the pack through it (crowd separation skips phasing actors; hits
   // and targeting are untouched). One stat, so movement skills, potions,

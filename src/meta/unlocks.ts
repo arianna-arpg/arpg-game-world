@@ -529,6 +529,12 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLedger: 'cathedral_door_opened', label: 'Skill Pool — the Aureole',
     description: 'Gloriole, Colonnade, Gloria may drop. The circular judgement of the Seraph City: courts that convene on the accused.',
     payload: { skillIds: ['gloriole', 'colonnade', 'gloria'] } },
+  // THE LITURGY — the Cathedral's own art, taught by the same doors: call
+  // and response (Versicle/Antiphon close the Responsory measure) and the
+  // second player-allied angel (Invoke Lampad).
+  { id: 'gem_skills_liturgy', kind: 'skill', cost: 170, reqLedger: 'cathedral_door_opened', label: 'Skill Pool — the Liturgy',
+    description: 'Versicle, Antiphon, Invoke Lampad may drop. Call and response: the See\'s own measure, and the candle-borne warden who holds your line.',
+    payload: { skillIds: ['versicle', 'antiphon', 'invoke_lampad'] } },
   // THE SCENTCRAFT — the Garden's pheromone-craft waits at the BOTTOM of
   // the formicary (the nest_entered ledger the mound-gate bumps — dwelled
   // into, not taught). The colony has been running the world's oldest

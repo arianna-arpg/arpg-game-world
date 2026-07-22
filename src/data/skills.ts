@@ -1222,6 +1222,65 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('minionLife', 'increased', 0.15), mod('effectDuration', 'increased', 0.08)] },
   },
 
+  // ======================= THE LITURGY =====================================
+  // The Cathedral of the Highest's own art (the See teaches it: the pool row
+  // reads the 'cathedral_door_opened' gateway ledger) — CALL AND RESPONSE as
+  // a cast grammar. Versicle is the call, Antiphon the response; two
+  // DIFFERENT song-casts back-to-back close the measure and the RESPONSORY
+  // answers (data/combos.ts — a radiant burst that harms the court and
+  // mends the congregation in one circle). Antiphon's equipMods GRANT the
+  // grammar (a skill teaching its own liturgy — the combo fabric's
+  // any-ordinary-source law), so the family self-contains: no tree node
+  // required, and every future song-tagged cast (trumpets, chants, the
+  // lyrist's arts if they ever go player-side) extends the liturgy free.
+
+  // THE CALL: quick, cheap, bright — the verse that opens the measure.
+  versicle: {
+    id: 'versicle', name: 'Versicle',
+    description: 'The CALL: a spoken verse loosed as a dart of dawn-light — quick, cheap, and half of something. Answer it with a different song (Antiphon) and the Responsory closes the measure.',
+    tags: ['spell', 'song', 'lightning', 'instant'], color: '#ffefc2',
+    manaCost: 7, cooldown: 0, useTime: 0.3,
+    baseDamage: { lightning: [5, 9], fire: [3, 6] },
+    delivery: { type: 'projectile', speed: 520, radius: 10, range: 480 },
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 12 },
+    minDropLevel: 11,
+    ai: { range: 440, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  // THE RESPONSE: the answering wave — and the measure's TEACHER (its
+  // equipMods grant the liturgy grammar while it is socketed anywhere).
+  antiphon: {
+    id: 'antiphon', name: 'Antiphon',
+    description: 'The RESPONSE: the answering verse breaks over everything near you as a ring of gilt fire. Equipping it TEACHES the liturgy — sing two different songs back-to-back and the Responsory answers: a radiant burst that scours the court and mends the congregation.',
+    tags: ['spell', 'song', 'fire', 'aoe'], color: '#ffd97a',
+    manaCost: 13, cooldown: 0, useTime: 0.55,
+    baseDamage: { fire: [7, 12], lightning: [4, 8] },
+    delivery: { type: 'nova', radius: 150 },
+    effects: [{ type: 'damage' }],
+    equipMods: [mod('combo_liturgy', 'flat', 1)],
+    requirements: { willpower: 14 },
+    minDropLevel: 11,
+    ai: { range: 140, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeScale', 'increased', 0.03)] },
+  },
+
+  // THE CHORISTER: a player-allied angel beyond the cherub — the lampad's
+  // office lent to the congregation. She wards and rakes; her keeper sings.
+  invoke_lampad: {
+    id: 'invoke_lampad', name: 'Invoke Lampad',
+    description: 'Call a lampad chorister down for a while: a candle-borne warden whose votive flame shields and mends whoever fights inside it. The second angel a mortal may hold — the cherub carries the wounded; the lampad carries the LINE.',
+    tags: ['spell', 'summon', 'minion', 'song', 'duration'], color: '#ffd9a0',
+    manaCost: 32, cooldown: 12, useTime: 0.8,
+    delivery: { type: 'summon', monsterId: 'lampad_chorister', count: 1, maxActive: 1, duration: 40 },
+    effects: [],
+    requirements: { willpower: 20, charisma: 8 },
+    minDropLevel: 12,
+    ai: { range: 400, weight: 2, keepDistance: 280 },
+    leveling: { perLevel: [mod('minionLife', 'increased', 0.14), mod('effectDuration', 'increased', 0.06)] },
+  },
+
   // THE SHAMAN'S ANSWER (and the grave_shaman's whole kit): raise the
   // fallen FROM THEIR CORPSE — the risen is whatever died there. Obliterate
   // the bodies or kill the caller, or the war never ends.

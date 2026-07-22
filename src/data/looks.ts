@@ -5539,7 +5539,7 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'robe', scale: 1.0 },
       { kind: 'hood', scale: 0.95, role: 'cloth' },
       { kind: 'censer', x: 0.5, y: 0.15, scale: 1.35 },
-      { kind: 'bell', x: -0.35, y: 0.3, scale: 0.6, role: 'metal' },
+      { kind: 'crossedKeys', x: -0.3, y: 0.28, scale: 0.55, role: 'metal' },
     ],
     live: [{ kind: 'puffMotes', x: 0.45, scale: 0.8 }],
   },

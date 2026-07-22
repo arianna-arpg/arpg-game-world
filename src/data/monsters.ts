@@ -1435,6 +1435,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['soothing_touch'],
     xp: 0,
   },
+  // THE LAMPAD CHORISTER — the second player-allied angel (Invoke Lampad):
+  // the Vigil's candle-bearer office lent to a mortal's congregation. She
+  // wears the lampad's own look (reuse before mint) and works the lampad's
+  // own trade: the votive ward over the line, talons when pressed.
+  lampad_chorister: {
+    id: 'lampad_chorister', name: 'Lampad Chorister',
+    color: '#ffd9a0', shape: 'oval', radius: 11, material: 'ethereal', look: 'lampad_vigil',
+    base: { life: 55, moveSpeed: 105, mana: 999, manaRegen: 14, weight: 0.5 },
+    skills: ['votive_ward', 'talon_rake'],
+    levitates: true,
+    xp: 0,
+  },
   // THE QUIET SIBYL — selective CC from the other side: her sparks SILENCE
   // (no spells for the struck) — swap verbs or close the distance.
   quiet_sibyl: {

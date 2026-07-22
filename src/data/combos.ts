@@ -92,6 +92,26 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
     },
   },
 
+  // THE RESPONSORY — the Cathedral's liturgy (versicle, then antiphon —
+  // call and RESPONSE): two DIFFERENT song-casts back-to-back close the
+  // measure, and the church answers — a radiant burst at the singer that
+  // scours the court AND mends the congregation in one circle (the
+  // delayedBurst proc shape doing exactly what it was documented for).
+  // Granted by Antiphon's own equipMods (a skill that teaches its measure);
+  // any future song-tagged cast joins the liturgy with no edits here.
+  liturgy: {
+    id: 'liturgy', name: 'The Responsory', color: '#ffe9b8',
+    blurb: 'Call and response: sing two DIFFERENT songs back-to-back and the Responsory answers — a radiant burst that harms the court and heals the congregation in one circle.',
+    vary: { n: 2, by: 'skill' },
+    gate: { anyTags: ['song'] },
+    within: 5,
+    effect: {
+      type: 'delayedBurst', delay: 0.4, radius: 140, at: 'self',
+      damage: { type: 'fire', base: 11, perLevel: 1.6 },
+      healAllies: { base: 9, perLevel: 1.2 },
+    },
+  },
+
   // DRUMBEAT — the same blow, three times running, lands heavier: damage
   // and poise damage that stack as the drum keeps time. The repetition
   // grammar (fresh trios re-form by design — the consume rule makes every

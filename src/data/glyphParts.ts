@@ -51,6 +51,21 @@ export const GLYPH_PARTS: Record<string, GlyphDef> = {
     ],
   },
 
+  // CROSSED KEYS — the See's warden emblem: two great keys crossed in an X,
+  // ring-bows up, wards down. Worn at the belt it reads OFFICE (who may
+  // open the doors), instantly distinct from sword-cross silhouettes: the
+  // bows are the tell. Debuts on the censer-warden.
+  crossedKeys: {
+    ops: [
+      { kind: 'path', pts: [[-0.4, -0.5], [0.44, 0.52]], role: 'metal', shade: 0.1, wR: 0.07 },
+      { kind: 'path', pts: [[0.4, -0.5], [-0.44, 0.52]], role: 'metal', shade: -0.05, wR: 0.07 },
+      { kind: 'ring', x: -0.48, y: -0.58, rx: 0.16, role: 'metal', shade: 0.15, wR: 0.06 },
+      { kind: 'ring', x: 0.48, y: -0.58, rx: 0.16, role: 'metal', shade: 0.05, wR: 0.06 },
+      { kind: 'path', pts: [[0.44, 0.52], [0.58, 0.42]], role: 'metal', shade: 0.1, wR: 0.06 },
+      { kind: 'path', pts: [[-0.44, 0.52], [-0.58, 0.42]], role: 'metal', shade: -0.05, wR: 0.06 },
+    ],
+  },
+
   // --- The Garden set (the bug-high country's kin) --------------------------
   // PETAL RUFF — a full skirt of blade-petals around the body: the bloomkin
   // signature (a flower IS its corolla). Six lobes — front pair, side pair,
