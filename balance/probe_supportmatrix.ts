@@ -725,6 +725,21 @@ check('E14 synthetic fixtures cleaned out of the registry',
     supportFitsInst(SUPPORTS.piercing, drifterInst) === false
     && supportFitsInst(SUPPORTS.piercing, spenderInst) === true
     && supportFitsInst(SUPPORTS.fulminate, drifterInst) === true);
+  // H8 — THE GRAZE LANE (projPulse): the formation parks a body one swell
+  // outside the flight's base touch and pins the aim dead-ahead — the
+  // resting radius misses it, the swollen phase clips it (and spends the
+  // shot early: the breath costs the road). Scenario law + live E2E.
+  const grazeScen = probeScenario('arquebus', { id: 'pulsating_missiles', level: 1 }, {},
+    { range: true, aimWall: false, graze: true });
+  const gPilot = grazeScen.pilot as { kind: string; aimOffset?: { deg: number } };
+  const offBearings = grazeScen.waves.filter(w => (w.bearingDeg ?? 0) !== 0);
+  check('H8a the graze scenario: five dummy waves (trio + offset + graze) and the pinned-ahead shot',
+    grazeScen.waves.length === 5 && offBearings.length === 2
+    && gPilot.kind === 'caster' && gPilot.aimOffset?.deg === 0);
+  const breathe = probePair(hSess, { skillId: 'arquebus', supportId: 'pulsating_missiles', fit: 'host' });
+  check('H8b a breathing flight reads EFFECTIVE at the graze lane (the swell clips what the base misses)',
+    breathe.result.verdict === 'effective',
+    `${breathe.result.verdict}; moved: ${breathe.result.moved.map(m => m.key).join(',')}`);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

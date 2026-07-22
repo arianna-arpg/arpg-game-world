@@ -111,6 +111,13 @@ export const COMPAT_CFG = {
   range: {
     standoff: 200, spacing: 130, offsetDeg: 24,
     wall: { bearingDeg: -35, distance: 260, radius: 26 },
+    /** THE GRAZE LANE (projPulse): a body parked ONE SWELL outside the
+     *  flight's base touch, beside the fire line at `along` px — the base
+     *  radius misses it, the swollen phase clips it. `gapFrac` sets the
+     *  gap as a fraction of the flight's radius (must sit inside the
+     *  pulse amplitude, ±40%). `along` is chosen INSIDE the caster band
+     *  so the pilot stands still (a nearer body would trigger the kite). */
+    graze: { along: 170, gapFrac: 0.2 },
   },
 };
 
@@ -429,10 +436,18 @@ export const RANGE_RIG_STATS = [
  *  fired at the rocks, it bends into the trio; fired at a dummy, it flies
  *  as straight as the bare shot). */
 export const RANGE_AIM_WALL_STATS = ['projBounce', 'returnShrapnel', 'homingPower'];
+/** Breathing-radius payloads take THE GRAZE LANE: the whole function is a
+ *  clip the base radius cannot make, so the formation grows the parked
+ *  graze body and the aim pins dead-ahead (a re-targeting pilot would
+ *  fire AT the graze body and hit it in both runs). */
+export const RANGE_GRAZE_STATS = ['projPulse'];
 
-export function rangeRigFor(sup: SupportDef | undefined): { aimWall: boolean } | undefined {
+export function rangeRigFor(sup: SupportDef | undefined): { aimWall: boolean; graze: boolean } | undefined {
   if (!sup || !supModsStat(sup, RANGE_RIG_STATS)) return undefined;
-  return { aimWall: supModsStat(sup, RANGE_AIM_WALL_STATS) };
+  return {
+    aimWall: supModsStat(sup, RANGE_AIM_WALL_STATS),
+    graze: supModsStat(sup, RANGE_GRAZE_STATS),
+  };
 }
 
 /** THE FIELD ESCORT (menu 2b): suffusion/conduction are CROSS-SKILL by
@@ -581,6 +596,7 @@ export function probeScenario(
   forced?: {
     probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder';
     dummyId?: string; bled?: boolean; range?: boolean; aimWall?: boolean; fieldRef?: boolean;
+    graze?: boolean;
   },
 ): ScenarioDef {
   const def = SKILLS[skillId];
@@ -597,11 +613,11 @@ export function probeScenario(
   const dummyId = forced?.dummyId ?? rackDummyFor(sup)?.id ?? 'target_dummy';
   const bled = forced?.bled ?? (sup ? supModsStat(sup, BLED_RIG_STATS) : false);
   const rr = forced?.range !== undefined
-    ? { range: !!forced.range, aimWall: !!forced.aimWall }
+    ? { range: !!forced.range, aimWall: !!forced.aimWall, graze: !!forced.graze }
     : (() => {
       const r = probe.kind === 'dummy' ? rangeRigFor(sup) : undefined;
       const caroms = (def.delivery as { caroms?: unknown }).caroms !== undefined;
-      return { range: !!r, aimWall: !!r?.aimWall && !caroms };
+      return { range: !!r, aimWall: !!r?.aimWall && !caroms, graze: !!r?.graze };
     })();
   const supports: { id: string; level: number }[] = [];
   const keyId = forced?.withKey ? resonanceKeyId() : null;
@@ -617,6 +633,12 @@ export function probeScenario(
   const pack = probe.pack === 'fodder' ? COMPAT_CFG.fodderPack : COMPAT_CFG.livePack;
   if (bled) build.bled = { lifeFrac: 0.5, manaFrac: 0.5 };
   const R = COMPAT_CFG.range;
+  // THE GRAZE BODY (projPulse): parked one swell outside the flight's
+  // BASE touch, beside the fire line — the resting radius misses it, the
+  // swollen phase clips it. Sized off the host's own def and the dummy's
+  // body, so every flight gets a true near-miss lane.
+  const grazeLat = (MONSTERS[dummyId]?.radius ?? 18)
+    + ((def.delivery as { radius?: number }).radius ?? 8) * (1 + R.graze.gapFrac);
   // The dummy-lane wave set: the range formation (collinear trio down the
   // fire line + one lateral offset body) or the classic single stand-off.
   const dummyWaves: ScenarioDef['waves'] = rr.range
@@ -629,9 +651,16 @@ export function probeScenario(
         monsters: [{ id: dummyId, level: 1 }],
         distance: R.standoff + R.spacing, bearingDeg: R.offsetDeg,
       },
+      ...(rr.graze ? [{
+        monsters: [{ id: dummyId, level: 1 }],
+        distance: Math.hypot(R.graze.along, grazeLat),
+        bearingDeg: Math.atan2(grazeLat, R.graze.along) * 180 / Math.PI,
+      }] : []),
     ]
     : [{ monsters: [{ id: dummyId, level: 1 }], distance: COMPAT_CFG.dummyDistance }];
-  // The solo pilot, with the canyon shot when the payload is wall-scoped.
+  // The solo pilot, with the canyon shot when the payload is wall-scoped
+  // and the pinned-ahead shot on the graze lane (a re-targeting pilot
+  // would aim AT the graze body and hit it dead-on in both runs).
   const soloPilot = ((): ScenarioDef['pilot'] => {
     // A tethered ORBITER grinds its wheel at the body — the caster band
     // would hold its blades a hundred pixels short of everything (a
@@ -639,15 +668,16 @@ export function probeScenario(
     const traj = (def.delivery as { trajectory?: { orbit?: number } }).trajectory;
     if ((traj?.orbit ?? 0) > 0) return { kind: 'brawler' };
     const p = soloPilotFor(def);
-    return rr.aimWall && p.kind === 'caster'
-      ? { ...p, aimOffset: { deg: R.wall.bearingDeg, dist: R.wall.distance } }
-      : p;
+    if (p.kind !== 'caster') return p;
+    if (rr.aimWall) return { ...p, aimOffset: { deg: R.wall.bearingDeg, dist: R.wall.distance } };
+    if (rr.graze) return { ...p, aimOffset: { deg: 0, dist: R.standoff + 2 * R.spacing + 140 } };
+    return p;
   })();
   return {
     id: `${build.id}__${probe.kind}${probe.pack ? '_' + probe.pack : ''}_${rig.mode}`
       + (dummyId !== 'target_dummy' ? `_${dummyId.replace('target_dummy_', '')}` : '')
       + (bled ? '_bled' : '')
-      + (rr.range ? (rr.aimWall ? '_rangewall' : '_range') : '')
+      + (rr.range ? (rr.aimWall ? '_rangewall' : rr.graze ? '_rangegraze' : '_range') : '')
       + (fieldRef ? '_fieldref' : ''),
     label: build.label,
     build,
@@ -1236,7 +1266,7 @@ export function bareEpisodesFor(
     const scen = probeScenario(skillId, null, opts, {
       probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
       dummyId: shape.dummyId, bled: !!shape.bled,
-      range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef,
+      range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef, graze: !!shape.graze,
     });
     eps = runScenario(scen, { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed }).episodes;
     sess.episodesRun += eps.length;
@@ -1268,6 +1298,9 @@ export interface PairShape {
   range?: true;
   /** Wall-scoped range payloads (bank, unspent-end bloom) aim AT the rocks. */
   aimWall?: true;
+  /** THE GRAZE LANE (projPulse): the formation grows a body parked one
+   *  swell outside the flight's base touch; the aim pins dead-ahead. */
+  graze?: true;
   /** THE FIELD ESCORT: the escort reference is the derived field-layer on
    *  the metronome; the flight host fills from the caster band. */
   fieldRef?: true;
@@ -1305,9 +1338,12 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
       // flesh and the deepened line shuttles through bodies.
       const caroms = (def.delivery as { caroms?: unknown }).caroms !== undefined;
       if (rr.aimWall && !caroms) shape.aimWall = true;
+      if (rr.graze) shape.graze = true;
       const why = shape.aimWall
         ? 'flight-branch payload — the range formation, fired into the masonry (bank/bloom)'
-        : 'flight-branch payload — the range formation (collinear trio + offset + masonry)';
+        : shape.graze
+          ? 'breathing-radius payload — the graze lane (a body one swell outside base touch, aim pinned dead-ahead)'
+          : 'flight-branch payload — the range formation (collinear trio + offset + masonry)';
       shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${why}` : why;
     }
   }
@@ -1326,6 +1362,7 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
 export const shapeCacheKey = (s: PairShape): string => [
   s.probe, s.pack ?? '', s.rig, s.withKey ? 'k' : '', s.dummyId ?? '',
   s.bled ? 'b' : '', s.range ? 'r' : '', s.aimWall ? 'w' : '', s.fieldRef ? 'f' : '',
+  s.graze ? 'g' : '',
 ].join(':');
 
 /** Sustain stats that need HEADROOM to express — their pairs run the bled
@@ -1366,7 +1403,7 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
     { id: row.supportId, level: sess.supportLevel }, pairOpts, {
       probe: shape.probe, rig: shape.rig, withKey: shape.withKey, pack: shape.pack,
       dummyId: shape.dummyId ?? 'target_dummy', bled: !!shape.bled,
-      range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef,
+      range: !!shape.range, aimWall: !!shape.aimWall, fieldRef: !!shape.fieldRef, graze: !!shape.graze,
     });
   const { episodes: pairEps } = runScenario(pairScen,
     { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed });
