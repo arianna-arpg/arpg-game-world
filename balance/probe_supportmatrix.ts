@@ -1056,5 +1056,57 @@ check('E14 synthetic fixtures cleaned out of the registry',
     `${rep.result.verdict}; moved: ${rep.result.moved.map(m => m.key).join(',')}`);
 }
 
+// === RIG L — THE STANDING-SURFACE LAW (2026-07-22, zone grammar) ===========
+// Time-evolution gems (breath/growth/spin/swing/emit) demand a surface
+// that PERSISTS — native ground, or a surface-granting graft beside (the
+// self-lift). The lift is HONEST: dropLingerField stamps the evolution
+// payloads onto the granted field, so what the gate admits genuinely rides.
+
+{
+  type SimWorld = ReturnType<typeof makeSimWorld>;
+  const step = (w: SimWorld, s: number): void => {
+    for (let t = 0; t < s; t += 1 / 60) w.update(1 / 60);
+  };
+  const wail = makeSkillInstance(SKILLS.harrowing_wail, 1, 3);
+  const groundHost = makeSkillInstance(SKILLS.befuddlement, 1, 3);
+  check('L1 the surface mechanism: ground holds, a cone refuses, the granter lifts',
+    mechanismHolds('surface', groundHost) === true
+    && mechanismHolds('surface', wail) === false
+    && (wail.sockets[0] = { def: SUPPORTS.no_mans_land, level: 1 },
+      mechanismHolds('surface', wail)) === true);
+  check('L2 tidal_ground refuses the bare cone, fits beside the granter, fits ground natively',
+    supportFitsInst(SUPPORTS.tidal_ground, makeSkillInstance(SKILLS.harrowing_wail, 1, 3)) === false
+    && supportFitsInst(SUPPORTS.tidal_ground, wail) === true
+    && supportFitsInst(SUPPORTS.tidal_ground, groundHost) === true);
+
+  // L3 — THE HONEST LIFT, live: a cone + No Man's Land + Tidal Ground
+  // drops a field that BREATHES (radius walks the tide, 0.5 → 1.5 → home).
+  {
+    const w = makeSimWorld('juggernaut', 0x1c03);
+    applyBuild(w, {
+      id: 'rig_l3', classId: 'juggernaut', level: 16,
+      skills: [{
+        id: 'harrowing_wail', level: 3,
+        supports: [{ id: 'no_mans_land', level: 1 }, { id: 'tidal_ground', level: 1 }],
+      }],
+    } as BuildSpec, 7);
+    const p = w.player;
+    const dummy = w.createMonster('target_dummy', 7, 'enemy');
+    dummy.pos = { x: p.pos.x + 90, y: p.pos.y };
+    w.actors.push(dummy);
+    const inst = p.skills.find(s => s?.def.id === 'harrowing_wail')!;
+    const z0 = w.zones.length;
+    w.executeSkill(p, inst, dummy.pos);
+    step(w, 0.4);
+    const field = w.zones.slice(z0).find(z => (z.linger ?? 0) > 0 && z.sizeOver);
+    const r1 = field?.radius ?? 0;
+    step(w, 1.2);
+    const r2 = field?.radius ?? 0;
+    check('L3 the lifted field genuinely breathes (radius walks the tide)',
+      !!field && r1 > 0 && Math.abs(r2 - r1) / r1 > 0.08,
+      field ? `r ${r1.toFixed(1)} → ${r2.toFixed(1)}` : 'no lifted field with sizeOver found');
+  }
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

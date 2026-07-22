@@ -48,7 +48,7 @@ import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, soc
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId } from './loot';
 import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
-import { VENDORS } from '../data/vendors';
+import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
@@ -261,7 +261,8 @@ import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
   STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
   LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
-  classLevelLedgerKey, type Account,
+  classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
+  type Account,
 } from '../meta/account';
 import {
   modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
@@ -284,11 +285,11 @@ import { NEMESIS_RANKS } from '../data/nemesis';
 import { saveCharacter, rebuildSkill } from '../meta/character';
 import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { SIM_TAP } from './tap';
-import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
+import { captureLoot, skillToLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
 import {
   WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeMercSheets, sanitizeProcessionMemo,
-  sanitizeWorldZones,
-  type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type WorldStateSave,
+  sanitizeVendorHolds, sanitizeWorldZones,
+  type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type VendorHoldSave, type WorldStateSave,
 } from '../meta/worldstate';
 
 export type { Doodad } from './levelgen';
@@ -1355,6 +1356,12 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'harborChart': return isStr(a.omen); // the rumored seat's omen id
     case 'holdMuster': return true;  // the standing zone's harborhold — no payload
     case 'holdRestore': return true; // ditto (price re-derived host-side from data)
+    // THE PATRON'S HOLD: vendor is a registry id, index an untrusted shelf
+    // position; the commission's gem is null (release) or a kind+id pair.
+    case 'vendorLock': return isStr(a.vendor) && isIdx(a.index) && typeof a.on === 'boolean';
+    case 'vendorCommission': return isStr(a.vendor) && (a.gem === null
+      || (!!a.gem && typeof a.gem === 'object'
+        && (a.gem.kind === 'skill' || a.gem.kind === 'support') && isStr(a.gem.id)));
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
     // GEAR intents — uids/cells are untrusted client numbers, ids plain strings.
     case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
@@ -1503,6 +1510,26 @@ export type VendorEntry =
   | { kind: 'skill'; inst: SkillInstance }
   | { kind: 'support'; gem: SupportInstance }
   | { kind: 'item'; item: ItemInstance };
+
+/** THE PATRON'S HOLD — one reserved shelf row: the LIVE entry (the very
+ *  object sitting in the counter's stock while it stands) and the slot the
+ *  overlay re-seats it at across restocks, re-entries, and resumes.
+ *  `commission` marks THE STANDING ORDER's find — buying it fulfills the
+ *  order; releasing it releases the find unbought. */
+export interface VendorHoldRow {
+  entry: VendorEntry;
+  idx: number;
+  commission?: boolean;
+}
+
+/** One counter's persisted hold (WorldStateSave.vendorHolds, the muster-roll
+ *  law's shape: STATE, not weather): the reserved rows, the standing gem
+ *  commission, and the highest restock beat the order has resolved through. */
+export interface VendorHold {
+  locks: VendorHoldRow[];
+  commission?: { kind: 'skill' | 'support'; id: string };
+  ordinal: number;
+}
 
 // --- the world ---------------------------------------------------------------
 
@@ -3027,6 +3054,12 @@ export class World {
   readonly account: Account;
   /** World-clock time (seconds) at which Brandt next restocks (town only). */
   vendorRestockAt = 0;
+  /** THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG): per-counter reserved
+   *  rows + the standing commission, keyed by the counter's hold key
+   *  (VendorDef.holdKey ?? id). Persisted in WorldStateSave.vendorHolds;
+   *  lives OUTSIDE the stock arrays so leaving town (which empties them)
+   *  never sheds a reservation. */
+  vendorHolds: Record<string, VendorHold> = {};
   /** Seconds the player has lingered in Mireille's radius (proximity heal). */
   private mireilleDwell = 0;
   /** Cooldown before Mireille will heal again (persists across zones). */
@@ -30338,13 +30371,24 @@ export class World {
     if (fieldSecs <= 0 && !healField) return;
     const zoneEmit = socketSpec(inst, 'zoneEmit');
     const madden = socketSpec(inst, 'madden');
+    // THE HONEST LIFT (2026-07-22, the standing-surface law): the granted
+    // field carries the time-evolution payloads exactly like a native
+    // ground mint — the 'surface' gate admits Tidal Ground beside No Man's
+    // Land only because the lifted field genuinely BREATHES (and spins,
+    // grows, swings). A gate that admits what cannot ride is a lie.
+    const sizeOver = resolveSizeOver(instanceSizeOver(inst));
+    const grow = socketSpec(inst, 'zoneGrow');
+    const rotate = caster.sheet.get('aoeSpin', tags, extra, 0);
+    const pend = hostSockets(inst).find(s => s.def.pendulum)?.def.pendulum;
+    const radius = 80 * caster.sheet.get('aoeRadius', tags, extra);
+    const linger = Math.max(fieldSecs, healField ? 4 : 0)
+      * caster.sheet.get('effectDuration', tags, extra);
     this.zones.push({
       pos: vec(at.x, at.y),
-      radius: 80 * caster.sheet.get('aoeRadius', tags, extra),
+      radius,
       caster, inst, color: healField ? '#8ae0a8' : inst.def.color,
       delay: 0, exploded: true,
-      linger: Math.max(fieldSecs, healField ? 4 : 0)
-        * caster.sheet.get('effectDuration', tags, extra),
+      linger,
       tickInterval: 0.5, tickTimer: 0.5,
       shape: caster.sheet.get('aoeShape', tags, extra),
       facing: caster.facing,
@@ -30355,6 +30399,14 @@ export class World {
       forceDamage: !healField,
       emit: zoneEmit ? { skillId: zoneEmit.skillId, interval: zoneEmit.interval, at: zoneEmit.at } : undefined,
       madden: madden ? { after: madden.after, dwell: new Map() } : undefined,
+      sizeOver,
+      radius0: sizeOver ? radius : undefined,
+      linger0: sizeOver ? linger : undefined,
+      grow,
+      rotate: rotate !== 0 ? rotate : undefined,
+      pendulum: pend
+        ? { arc: pend.arcDeg * Math.PI / 180, period: pend.period, base: caster.facing }
+        : undefined,
     });
   }
 
@@ -33782,18 +33834,28 @@ export class World {
   /** Weighted gem pick — the drop-POLICY composition point: per-def weight
    *  × global tag multipliers × the killer's bias (GEM_DROP_CFG). One
    *  helper serves skills and supports so the policy can never fork. */
-  private pickGem<T>(
+  /** The drop-policy WEIGHTS, alone — split from the pick so THE STANDING
+   *  ORDER's odds read the exact numbers the roller draws from (one policy,
+   *  never a parallel formula). */
+  private gemWeights<T>(
     pool: T[], tagsOf: (x: T) => readonly SkillTag[], weightOf: (x: T) => number,
     bias?: SkillTag[], carried?: (x: T) => boolean,
-  ): T | null {
-    if (pool.length === 0) return null;
-    const weights = pool.map(x => {
+  ): number[] {
+    return pool.map(x => {
       let w = weightOf(x);
       for (const t of tagsOf(x)) w *= GEM_DROP_CFG.tagWeights[t] ?? 1;
       if (bias && tagsOf(x).some(t => bias.includes(t))) w *= GEM_DROP_CFG.biasMult;
       if (carried?.(x)) w *= GEM_DROP_CFG.carriedMult;
       return Math.max(0, w);
     });
+  }
+
+  private pickGem<T>(
+    pool: T[], tagsOf: (x: T) => readonly SkillTag[], weightOf: (x: T) => number,
+    bias?: SkillTag[], carried?: (x: T) => boolean,
+  ): T | null {
+    if (pool.length === 0) return null;
+    const weights = this.gemWeights(pool, tagsOf, weightOf, bias, carried);
     const total = weights.reduce((s, w) => s + w, 0);
     if (total <= 0) return pool[0];
     let r = Math.random() * total;

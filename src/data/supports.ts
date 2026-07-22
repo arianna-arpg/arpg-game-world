@@ -996,7 +996,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   pulsing_hex: {
     id: 'pulsing_hex', name: 'Pulsing Hex',
     description: 'This skill\'s lingering ground SNAPS a hex pulse every second across itself.',
-    color: '#b06bd4', requiresTags: ['duration'],
+    color: '#b06bd4', requiresTags: ['duration'], requiresMechanisms: ['surface'],
     zoneEmit: { skillId: 'hex_pulse', interval: 1 },
     mods: [],
     perLevel: [mod('damage', 'increased', 0.05)],
@@ -1014,7 +1014,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   overgrowth: {
     id: 'overgrowth', name: 'Overgrowth',
     description: 'This skill\'s lingering ground GROWS while it lives — 30 radius a second, the patch becoming a field becoming a problem (cascade ripples swell too). 15% less damage; the trade is acreage.',
-    color: '#6aa84a', requiresTags: ['duration'],
+    color: '#6aa84a', requiresTags: ['duration'], requiresMechanisms: ['surface'],
     zoneGrow: 30,
     mods: [mod('damage', 'more', -0.15)],
     perLevel: [mod('aoeRadius', 'increased', 0.04)],
@@ -1027,7 +1027,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   ebbing_ground: {
     id: 'ebbing_ground', name: 'Ebbing Ground',
     description: 'This skill\'s lingering ground opens 30% WIDE and then CLOSES like a throat — holding its promise, collapsing late, gone exactly as the duration dies. What it still covers it works 25% harder: the noose concentrates. Duration mods set the pace of the closing.',
-    color: '#7a9a52', requiresTags: ['duration'],
+    color: '#7a9a52', requiresTags: ['duration'], requiresMechanisms: ['surface'],
     zoneSizeOver: { from: 1.3, to: 0, curve: 'quadIn' },
     mods: [mod('damage', 'more', 0.25)],
     perLevel: [mod('effectDuration', 'increased', 0.04)],
@@ -1036,7 +1036,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   blooming_ground: {
     id: 'blooming_ground', name: 'Blooming Ground',
     description: 'This skill\'s lingering ground begins as a SEED — a quarter of its reach — and blooms fast past full to 140% by the end. 15% less damage; patience buys the acreage, and whatever bursts as it expires bursts at FULL spread.',
-    color: '#8ab86a', requiresTags: ['duration'],
+    color: '#8ab86a', requiresTags: ['duration'], requiresMechanisms: ['surface'],
     zoneSizeOver: { from: 0.25, to: 1.4, curve: 'quadOut' },
     mods: [mod('damage', 'more', -0.15)],
     perLevel: [mod('aoeRadius', 'increased', 0.04)],
@@ -1045,7 +1045,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   tidal_ground: {
     id: 'tidal_ground', name: 'Tidal Ground',
     description: 'This skill\'s lingering ground breathes ONE FULL TIDE per life: out from half its reach to half again past it at mid-duration, and home again by the end. Stand where the water was and wait — it comes back.',
-    color: '#6a9a8a', requiresTags: ['duration'],
+    color: '#6a9a8a', requiresTags: ['duration'], requiresMechanisms: ['surface'],
     zoneSizeOver: { from: 0.5, to: 1.5, curve: 'breath' },
     mods: [],
     perLevel: [mod('effectDuration', 'increased', 0.05)],
@@ -4149,7 +4149,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
   whirling_sigil: {
     id: 'whirling_sigil', name: 'Whirling Sigil',
     description: 'FACED ground areas (crescents, wedges, triangles) REVOLVE — the standing sweep becomes a clock-hand that keeps cutting. Melee swings refuse it (Sweeping Blow is the swing-to-sweep conversion); spin belongs to what LINGERS.',
-    color: '#d8b8e8', requiresTags: ['aoe'],
+    color: '#d8b8e8', requiresTags: ['aoe'], requiresMechanisms: ['surface'],
     excludeTags: ['melee'],
     mods: [mod('aoeSpin', 'flat', 2.4)],
     perLevel: [mod('aoeSpin', 'flat', 0.5)],
@@ -4440,7 +4440,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'return_stroke', name: 'Return Stroke',
     description: 'Lingering ground areas learn the RETURN STROKE: their facing swings out-and-back, over and over — the exact back-and-forth Reaver\'s Sweep retired when it committed to one pass. Faced shapes feel it; the blade keeps time.',
     color: '#b06ad8', requiresTags: ['aoe'],
-    excludeTags: ['melee'],
+    excludeTags: ['melee'], requiresMechanisms: ['surface'],
     pendulum: { arcDeg: 160, period: 1.5 },
     mods: [mod('effectDuration', 'increased', 0.25)],
     perLevel: [mod('effectDuration', 'increased', 0.08)],

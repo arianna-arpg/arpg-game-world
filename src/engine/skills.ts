@@ -4776,6 +4776,13 @@ export function supportGlobalMods(socket: SupportInstance): Modifier[] {
  *  mints damage events (the featureset seam, documented not hardcoded). */
 export const STRIKE_GRANTING_GRAFTS: (keyof SupportDef)[] = ['constructFx', 'zoneEmit', 'tether'];
 
+/** Stats whose grant STANDS A SURFACE UP on an instantaneous host — the
+ *  'surface' mechanism's self-lifting half (No Man's Land's lingerField;
+ *  healField rides as a graft field beside). dropLingerField mints the
+ *  real ticking zone AND stamps the evolution payloads onto it, so the
+ *  lift is honest end to end. */
+export const SURFACE_GRANTING_STATS: string[] = ['lingerField'];
+
 /** Stats whose grant means the flight MINTS CHILDREN mid-air (fork counts,
  *  chain-leg shatters, shrapnel blooms) — the 'flight:children' mechanism's
  *  socketed half; the native half is the delivery's own shatter/emit/fork
@@ -4880,6 +4887,21 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  (the user's stealth ruling — refuse, never contort). */
   displaces: inst => inst.def.delivery.type === 'dash'
     || inst.def.delivery.type === 'blink' || inst.def.delivery.type === 'leap',
+  /** THE STANDING SURFACE (2026-07-22, the zone-grammar law): the
+   *  time-evolution gems — breath (zoneSizeOver), growth (zoneGrow), spin
+   *  (aoeSpin), the metronome swing (pendulum), the emitter (zoneEmit) —
+   *  demand a surface that PERSISTS: a flash has no time to breathe.
+   *  Native: the ground delivery (the one mint that walks the standing-
+   *  zone update). SELF-LIFTING: a surface-granting graft beside (No
+   *  Man's Land's lingerField, a healField consecration) stands a real
+   *  ticking field up on any AoE host — and dropLingerField stamps the
+   *  evolution payloads onto that field, so the lift is HONEST (the gate
+   *  never admits what cannot ride). Storms stay out by the imposed-
+   *  surface law: strike craters are transient, never breathing ground. */
+  surface: inst => inst.def.delivery.type === 'ground'
+    || hostSockets(inst).some(s => s.def.healField !== undefined
+      || [...s.def.mods, ...(s.def.perLevel ?? [])]
+        .some(m => SURFACE_GRANTING_STATS.includes(m.stat) && m.value > 0)),
   /** A CONSTRUCT host — bare 'construct' is the delivery itself;
    *  'construct:massed' additionally demands the body be a mass-fabric
    *  citizen (the Unmoored graft beside it — the self-lifting gate for
