@@ -6416,6 +6416,45 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'runes', scale: 0.85, params: { n: 3 } }],
     shadowScale: 0.7,
   },
+  /** The Hordefather: the goblin colossus — a mountain of green muscle
+   *  under scavenged plate and chain, tusked, war-painted, horn-crowned.
+   *  The warhorn and idol it carries are PARTS riding its shoulders. */
+  goblin_colossus: {
+    parts: [
+      { kind: 'torso', scale: 1.3 },
+      { kind: 'armorPlates', scale: 1.0, params: { n: 3 } },
+      { kind: 'chains', scale: 1.05, role: 'metal' },
+      { kind: 'warpaint', scale: 1.0 },
+      { kind: 'pauldrons', scale: 1.15, role: 'metal' },
+      { kind: 'ears', scale: 1.2 },
+      { kind: 'tusks', x: 0.42, scale: 1.1, role: 'bone' },
+      { kind: 'crownOfHorns', x: 0.05, scale: 0.9 },
+      { kind: 'eyes', params: { spread: 0.34, dist: 0.5, size: 0.07 } },
+    ],
+    shadowScale: 1.25,
+  },
+  /** The Warhorn Unending: a great cracked tusk-horn in a bone cradle,
+   *  lashed to the father's shoulder — the tide's voice. */
+  hordefather_warhorn: {
+    parts: [
+      { kind: 'disc', scale: 0.8, role: 'bone' },
+      { kind: 'warhorn', x: 0.1, scale: 1.35 },
+      { kind: 'harness', scale: 0.8, role: 'cloth' },
+    ],
+    shadowScale: 0.55,
+  },
+  /** The Skewered Idol: the warrens' luck on a standard pole — gourd-grin,
+   *  goblin-green banner rags, a live flicker of painted runes. */
+  hordefather_idol: {
+    parts: [
+      { kind: 'totemPost', scale: 1.0 },
+      { kind: 'banner', x: -0.1, scale: 0.85, role: 'cloth' },
+      { kind: 'gourdHead', x: 0.15, scale: 0.65 },
+      { kind: 'spikes', scale: 0.6, role: 'bone' },
+    ],
+    live: [{ kind: 'runes', scale: 0.8, params: { n: 3 } }],
+    shadowScale: 0.6,
+  },
   /** The marrow whip: a lashing bone-worm HEAD — the chain behind it is
    *  real, hittable, and wound-keeping (the segment fabric below boss
    *  tier). Skull fore, fringe of loose sinew. */

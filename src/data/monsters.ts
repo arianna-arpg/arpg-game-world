@@ -10939,6 +10939,57 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'skirmish' },
   },
 
+  // --- THE HORDEFATHER (the goblinkin's ending argument) --------------------
+  // The goblin colossus: a war-idol of muscle and scavenged iron the warrens
+  // raise when a road has been walked too far. Two carried parts run the
+  // horde's whole grammar — the WARHORN that keeps the tide coming, the
+  // IDOL that keeps it brave — and each breaks off it like any anatomy
+  // lesson: crack the horn and the Reckoning is SILENCED (breakDisables —
+  // the muster needs its voice), gut the idol and the father loses heart.
+  // Wears `boss` but joins NO spawn table: it debuts as the scene fabric's
+  // prologue reckoning (engine/scenes.ts) and waits for the Odyssey road to
+  // stand it up for a fight the player is finally owed a fair shot at.
+  goblin_colossus: {
+    id: 'goblin_colossus', name: 'Ghorvane, the Hordefather',
+    color: '#6f8f3e', shape: 'octagon', radius: 46, material: 'flesh', look: 'goblin_colossus',
+    boss: true,
+    base: { life: 2600, moveSpeed: 62, accuracy: 118, armor: 90, poise: 220, mana: 160, manaRegen: 8 },
+    skills: ['heavy_strike', 'sunder', 'hordefathers_reckoning'],
+    xp: 800, faction: 'goblin', tags: ['giant'],
+    heft: 2.2, turnSpeed: 1.6,
+    parts: [
+      {
+        monster: 'hordefather_warhorn', dx: -0.55, dy: 0.55, lifeFrac: 0.22, breakDamage: 0.06,
+        breakDisables: ['hordefathers_reckoning'],
+      },
+      {
+        monster: 'hordefather_idol', dx: -0.55, dy: -0.55, lifeFrac: 0.22, breakDamage: 0.06,
+        breakMods: [mod('damage', 'more', -0.15)],
+      },
+    ],
+    brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+  // The horn: the tide's voice, lashed to the father's shoulder. Its howls
+  // keep the horde bold — and the Reckoning cannot be drawn without it.
+  hordefather_warhorn: {
+    id: 'hordefather_warhorn', name: 'the Warhorn Unending',
+    color: '#c8a860', shape: 'circle', radius: 11, material: 'bone', look: 'hordefather_warhorn',
+    noNemesis: true,
+    base: { life: 90, moveSpeed: 0, accuracy: 105, mana: 130, manaRegen: 8 },
+    skills: ['rallying_howl'], xp: 0, drops: 0, faction: 'goblin',
+    brain: { type: 'artillery' },
+  },
+  // The idol: the warrens' luck, skewered on a standard pole. It unmans the
+  // enemy from on high; broken, it takes the father's heart with it.
+  hordefather_idol: {
+    id: 'hordefather_idol', name: 'the Skewered Idol',
+    color: '#8f6f3e', shape: 'circle', radius: 10, material: 'wood', look: 'hordefather_idol',
+    noNemesis: true, remains: false,
+    base: { life: 80, moveSpeed: 0, armor: 20, mana: 100, manaRegen: 9 },
+    skills: ['bewilder'], xp: 0, drops: 0, faction: 'goblin',
+    brain: { type: 'artillery' },
+  },
+
   // ==========================================================================
   // THE PRIMEVAL — the world-boss sovereigns (packages/defs/worldboss.ts).
   // Rare forces of nature outside every war: contexts:['worldboss'] keeps the

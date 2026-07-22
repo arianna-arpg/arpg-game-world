@@ -192,6 +192,28 @@ export const SKILLS: Record<string, SkillDef> = {
     selfCleanse: { stacksPortion: 0.34 },
   },
 
+  // --- THE HORDEFATHER's verb (goblin_colossus — the scene fabric's
+  // prologue reckoning; the Odyssey road's ending argument) ------------------
+  // A muster measured in HELD BREATHS: the longest honest wind-up in the
+  // catalog, then the whole field is unmade at once. `affects: 'all'` is the
+  // point — the Hordefather spends its own horde as gladly as its enemies
+  // (the detonation is an ARGUMENT, not an attack), and `occlusion: 'free'`
+  // lets no tree save what the horn has already claimed.
+  hordefathers_reckoning: {
+    id: 'hordefathers_reckoning', name: "Hordefather's Reckoning",
+    description: 'The colossus plants its feet and DRAWS — sky, breath, the horde\'s own clamour — and lets it all back out at once. Nothing near survives. Nothing near was meant to.',
+    noDrop: true,
+    tags: ['spell', 'aoe', 'fire', 'physical'], color: '#9fdc6a',
+    manaCost: 0, cooldown: 45, useTime: 4.6,
+    baseDamage: { physical: [340, 480], fire: [280, 420] },
+    delivery: { type: 'nova', radius: 2600, affects: 'all', occlusion: 'free' },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 720 },
+    ],
+    ai: { range: 900, weight: 0.4 },
+  },
+
   war_cry: {
     id: 'war_cry', name: 'War Cry',
     description: 'Bellow a battle cry, rallying yourself for greater damage.',

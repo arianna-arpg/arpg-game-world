@@ -270,7 +270,12 @@ export function resolveBindTokens(text: string, s: Settings, padActive: boolean)
     if (pad === undefined && key === undefined) return token; // unknown action: stay legible
     if (padActive && pad) return padDisplay(pad);
     if (key) return keyDisplay(key);
-    return pad ? padDisplay(pad) : '—'; // pad-only actions (slots 0/1) off-pad
+    // Slots 0/1 have no keybind row — off-pad their truth is the mouse
+    // (exactly what the bar's slot labels print), never a pad glyph the
+    // player may not even have plugged in.
+    if (id === 'skillSlot0') return 'LMB';
+    if (id === 'skillSlot1') return 'RMB';
+    return pad ? padDisplay(pad) : '—'; // other pad-only actions off-pad
   });
 }
 

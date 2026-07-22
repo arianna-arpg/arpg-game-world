@@ -4754,7 +4754,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // connected, and a guest seat is free (or filled, for Leave). Solo
       // machines never see either.
       const couchSeated = this.getWorld().couchSeats().length;
+      // …and never mid-SCENE (engine/scenes.ts): a cinematic's holds, fell
+      // covenant and staged spawns are authored for the one hero living the
+      // introduction — the join row returns the moment the scene ends.
       const couchPossible = this.onCouchJoin && !this.isCoopClient()
+        && !this.getWorld().scene
         && couchSeated < COUCH_CFG.join.maxLocal - 1;
       // Below the census the row still TEACHES: a controller is invisible to
       // the browser until its first button press (the gamepad privacy gate),

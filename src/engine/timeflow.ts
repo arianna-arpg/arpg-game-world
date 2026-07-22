@@ -172,6 +172,12 @@ export class Timeflow {
     this.refold();
   }
 
+  /** Any live hold of this kind? — how a fabric yields to another's freeze
+   *  (the scene director stands down while a 'menu' pause is up). */
+  heldBy(kind: string): boolean {
+    return this.holds.some(h => h.kind === kind);
+  }
+
   /** Drop every hold of a kind — how a co-op join sweeps 'menu' pauses. */
   releaseKind(kind: string): void {
     if (!this.holds.length) return;

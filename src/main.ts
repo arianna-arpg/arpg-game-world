@@ -31,6 +31,7 @@ import './data/traversals'; // side-effect: registers the vertical-crossing kind
 import './data/glyphParts'; // side-effect: registers the shipped hand-drawn part kinds (the glyph roster)
 import { updateAI } from './engine/ai';
 import { World, type Seat } from './engine/world';
+import { sceneBegin, sceneCardAck, sceneDue } from './engine/scenes';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
@@ -268,6 +269,14 @@ let autosaveTimer = 0;
 
 function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string): void {
   couchReset(); // a new world seats no ghosts — guests re-join from the menu
+  // THE PROLOGUE GATE (engine/scenes.ts), read FIRST — before a roster mode
+  // pushes its vessel and muddies the virgin-account test: an account that
+  // has never played walks the one-time opening scene; everyone else starts
+  // at the bedside as always. `?prologue` re-runs it deliberately for this
+  // page load (the ?couchpads lever precedent) — a veteran re-watching the
+  // opening, or a dev testing it, without touching the account gate.
+  const prologueDue = sceneDue(account, 'prologue')
+    || new URLSearchParams(location.search).has('prologue');
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
@@ -312,6 +321,11 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   if (mode.save !== 'roster') ui.setContinueSave(null);
   ui.resetRunView();        // a new world must not inherit the old run's map zoom/tabs/pin
   deathShown = false;
+  // THE PROLOGUE (after the baseline save, so the snapshot is a clean
+  // bedside start): the scene stamps its ledger key the moment it begins —
+  // played once, ever — and its staging ground lives off-graph, so even a
+  // mid-scene autosave resumes at the ordinary wake.
+  if (prologueDue) sceneBegin(world, 'prologue');
   running = true;
 }
 
@@ -1266,6 +1280,14 @@ function tick(now: number): void {
       if (world.accountDirty) {
         world.accountDirty = false;
         saveAccount(account);
+      }
+      // THE STORY CARD (engine/scenes.ts): the DOM shows whatever card the
+      // scene director holds pending, and the continue ACKS back into the
+      // engine — the DOM is a window on engine state, never the state.
+      if (world.scene?.card && !ui.storyCardOpen()) {
+        ui.showStoryCard(world.scene.card, () => sceneCardAck(world));
+      } else if (!world.scene?.card && ui.storyCardOpen()) {
+        ui.hideStoryCard();
       }
       // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
       if (world.caravanReturnRequested) {

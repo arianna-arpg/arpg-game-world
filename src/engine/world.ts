@@ -54,6 +54,7 @@ import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
+import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import type { CouchSeatTag } from '../data/couch';
@@ -2890,6 +2891,11 @@ export class World {
   pendingRespawn: { phase: 'out' | 'in'; t: number } | null = null;
   /** Full-screen black overlay 0..1 (renderer drawScreenFade). */
   screenFade = 0;
+  /** THE SCENE FABRIC (engine/scenes.ts): the one running cinematic scene,
+   *  or null. Its runtime carries the HUD channels the renderer reads (bar,
+   *  prompt, camera focus, pending story card) — drawn state IS director
+   *  state. While set, the scene owns screenFade and the fall covenant. */
+  scene: SceneRuntime | null = null;
   /** Essence paid by the most recent mode death (the wake-text receipt). */
   private lastRespawnPayout = 0;
   // --- the MERCENARY MARKET (meta/mercs.ts) --------------------------------
@@ -3657,12 +3663,14 @@ export class World {
           // opt-out is LOCAL: Settings.improvisedStrike zeroes empty-slot
           // intent at the client (main.ts), so a declined floor never even
           // arrives here.
-          if (inp.held[i] && this.useSkill(a, this.improvisedFor(a), aim, true)
-            && !this.improvisedHinted.has(a)) {
-            // Found, not taught: the first swing names itself once.
-            this.improvisedHinted.add(a);
-            this.text(vec(a.pos.x, a.pos.y - 46),
-              'Bare hands answer an empty slot (Options can quiet them)', '#b8b0a0', 13);
+          if (inp.held[i] && this.useSkill(a, this.improvisedFor(a), aim, true)) {
+            if (a === this.player) sceneNoteCast(this);
+            if (!this.improvisedHinted.has(a)) {
+              // Found, not taught: the first swing names itself once.
+              this.improvisedHinted.add(a);
+              this.text(vec(a.pos.x, a.pos.y - 46),
+                'Bare hands answer an empty slot (Options can quiet them)', '#b8b0a0', 13);
+            }
           }
           continue;
         }
@@ -3679,7 +3687,9 @@ export class World {
         if (inp.metaEdge?.[i] && instanceMeta(inst)) {
           this.useMetaSkill(a, inst, aim);
         } else if (toggle ? inp.edge[i] : inp.held[i]) {
-          this.useSkill(a, inst, aim, true);
+          // The drill's count (engine/scenes.ts): the local hero's own
+          // seat-pressed casts, at the one artery they all flow through.
+          if (this.useSkill(a, inst, aim, true) && a === this.player) sceneNoteCast(this);
         }
       }
       // Face the cursor/target while able, so swings read right.
@@ -3748,6 +3758,10 @@ export class World {
    *  standing): no ally alive → the run ends immediately, byte-identical to the
    *  original behavior (the corpse is recorded by main.ts). */
   protected onPlayerDown(actor: Actor, killer?: Actor): void {
+    // THE SCENE COVENANT (engine/scenes.ts): on scripted ground a player
+    // seat's lethal blow FELLS, never kills — the scene claims the fall
+    // whole (no downed state, no wipe, no mode respawn).
+    if (this.scene && sceneInterceptFall(this, actor)) return;
     // A standing ally converts this to a revivable DOWNED state. A hired
     // MERC counts as that ally only while the revive lever is on — else a
     // merc who can't kneel would strand its downed patron forever.
@@ -34274,6 +34288,11 @@ export class World {
     // drawing); it just stops mutating, wholesale and drift-free.
     const rawDt = dt;
     dt *= this.timeflow.beginFrame(rawDt);
+    // THE SCENE DIRECTOR (engine/scenes.ts) breathes on the RAW clock,
+    // BEFORE the hold gate below — scenes own their freezes (a story card
+    // stops the sim under itself; the reckoning frees one actor) and must
+    // keep sequencing through them. It yields to 'menu' holds internally.
+    if (this.scene) updateScene(this, rawDt);
     if (dt <= 0) return;
     this.time += dt;
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call

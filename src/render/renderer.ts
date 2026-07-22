@@ -365,7 +365,10 @@ export class Renderer {
     // the cap and shrink the edge law's rect to a point-prison. Hold the
     // frame where it stands and publish NO confine until pixels return.
     const viewOk = w >= 64 && h >= 64;
-    let focus: { x: number; y: number } = world.player.pos;
+    // THE CINEMATIC EYE (engine/scenes.ts): a running scene may hand the
+    // camera a focus of its own — the reckoning's pan is the director
+    // lerping this point, so drawn == scripted with no easing forked here.
+    let focus: { x: number; y: number } = world.scene?.focus ?? world.player.pos;
     if (couchOn && viewOk) {
       const fit = couchFit(couchEyes.map(a => a.pos), w, h, this.baseZoom, COUCH_CFG.camera);
       this.couchStretch += (fit.stretch - this.couchStretch)
@@ -571,6 +574,7 @@ export class Renderer {
       this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
       this.drawEncounterHud(world); // breach timer bar (screen-space)
       this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
+      this.drawSceneHud(world);     // scene fabric: drill/assault bar + prompt (screen-space)
     });
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
@@ -1110,6 +1114,37 @@ export class Renderer {
     ctx.fillRect(bx, by, bw * frac, bh);
     ctx.strokeStyle = '#0a0a0e'; ctx.lineWidth = 1;
     ctx.strokeRect(bx, by, bw, bh);
+  }
+
+  /** THE SCENE FABRIC's HUD channel (engine/scenes.ts): a labeled top bar
+   *  (the drill's fill, the assault's climbing clock) + a prompt line whose
+   *  '{bind:…}' tokens resolve against the LIVE binds — the tutorial can
+   *  never name a key the player rebound away. Same seat as the encounter
+   *  bar (a scene and an encounter never share ground). */
+  private drawSceneHud(world: World): void {
+    const sc = world.scene;
+    if (!sc || (!sc.bar && !sc.prompt)) return;
+    const { ctx } = this;
+    const w = this.uiW;
+    const oy = world.party.strip.length > 1 ? 20 : 0;
+    const bw = 320, bh = 14, bx = w / 2 - bw / 2, by = 74 + oy;
+    ctx.textAlign = 'center';
+    if (sc.bar) {
+      ctx.font = 'bold 13px Verdana';
+      ctx.fillStyle = '#e8d8a8';
+      ctx.fillText(sc.bar.label, w / 2, by - 6);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#c8a852';
+      ctx.fillRect(bx, by, bw * clamp(sc.bar.frac, 0, 1), bh);
+      ctx.strokeStyle = '#0a0a0e'; ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, bw, bh);
+    }
+    if (sc.prompt) {
+      ctx.font = '13px Verdana';
+      ctx.fillStyle = '#e8e0c8';
+      ctx.fillText(this.resolveText(sc.prompt), w / 2, by + (sc.bar ? bh + 16 : 0));
+    }
   }
 
   /** FRACTURES — the volatile object (dormant), the crawling fissure crack + head,

@@ -457,6 +457,25 @@
     #expedition-setup #exped-begin { background: #2c3a2c; border-color: #6fc06f; color: #b6f0b6; }
     #expedition-setup #exped-begin:hover { background: #3a4f3a; }
 
+    /* Story card (the scene fabric's full-screen narration — engine/scenes.ts) */
+    #story-card {
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      text-align: center; padding: 34px 54px; max-width: 640px;
+      background: #050508; border-color: #2a2a3e;
+    }
+    #story-card h1 {
+      color: #d8c890; letter-spacing: 6px; font-size: 22px; margin-bottom: 18px;
+    }
+    #story-card p {
+      color: #c8c2b2; font-family: Georgia, 'Times New Roman', serif;
+      font-size: 15px; line-height: 1.55; margin: 0 0 12px; text-align: center;
+    }
+    #story-card button {
+      background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
+      border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: pointer; margin-top: 14px;
+    }
+    #story-card button:hover { background: #3a3a55; }
+
     /* Death screen */
     #death-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -525,12 +544,13 @@
   <div id="vendor-menu" class="panel hidden"></div>
   <div id="borough-menu" class="panel hidden"></div>
   <div id="death-screen" class="panel hidden"></div>
+  <div id="story-card" class="panel hidden"></div>
   <div id="account-screen" class="panel hidden"></div>
   <div id="escape-menu" class="panel hidden"></div>
   <div id="start-menu" class="panel hidden"></div>
   <div id="expedition-setup" class="panel hidden"></div>
   <div id="tooltip" class="tooltip hidden"></div>
-  <div id="hint-bar">[WASD] move &nbsp; [LMB/RMB/1-6] skills &nbsp; [C] character &nbsp; [I] inventory &nbsp; [P] passive tree &nbsp; [M] world map &nbsp; [Esc] menu</div>
+  <div id="hint-bar" class="hidden"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

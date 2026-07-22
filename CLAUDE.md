@@ -590,6 +590,28 @@ changes.
   seats every branch short-circuits — solo is byte-identical, and the pause
   menu grows the join row only with ≥2 controllers connected. Dials in
   `COUCH_CFG`; docs `docs/engine/couch.md`; probe `balance/probe_couch.ts`.
+  THE SCENE FABRIC (`engine/scenes.ts` + `data/scenes.ts` — one-time
+  cinematic sequences as data): account-gated stage lists (open registry
+  `registerSceneStage`: card/drill/clash/assault/reckoning/home) played on
+  OFF-GRAPH staging ground (mintCave into caveMap — never serialized, torn
+  down whole at 'home'; THE EMPTY-FIELD LAW sweeps every non-party actor at
+  the door), rewardless by construction (every scene spawn `noBounty` on
+  spoils-'none' ground), under THE COVENANT (onPlayerDown asks
+  `sceneInterceptFall` first — on scripted ground a lethal blow FELLS,
+  never kills). The director hooks World.update on the RAW clock before the
+  timeflow gate (scenes own their holds; 'menu' still wins), owns
+  screenFade, and feeds the renderer's scene HUD channels (bar/prompt +
+  `scene.focus` = THE CINEMATIC EYE, the one camera override). Gate =
+  `sceneDue` (virgin account + unstamped ledger key; stamped at START so a
+  mid-scene quit resumes at the ordinary wake and never re-fires;
+  `?prologue` re-runs deliberately). Debut: THE PROLOGUE ("The Last Mile")
+  — drill → goblin waves (wave-frenzy grammar) → Ghorvane the Hordefather
+  (anatomy-gamut composite, Odyssey-held: break the Warhorn and the
+  Reckoning is SILENCED) musters `hordefathers_reckoning` (nova
+  `affects: 'all'` + `occlusion: 'free'` — it spends its own horde) → the
+  Waking House wake. The bottom keybind strip is retired behind
+  `HINT_BAR_ENABLED` (ui/panels.ts). Docs `docs/engine/scenes.md`; probe
+  `balance/probe_scenes.ts`.
   THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
   the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
   user's own casts/dashes/recovery without disturbing them; the THIRST
