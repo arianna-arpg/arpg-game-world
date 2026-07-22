@@ -27,6 +27,9 @@
 //                                     mechanical re-casts stay separable)
 //   - world.ts   shedOrb   → onOrbShed (a resource orb enters the world)
 //   - world.ts   pourOrb   → onOrbPickup (an orb scooped — after it poured)
+//   - actor.ts   healBy    → onHeal (post-gate landed life healing — leech,
+//                                     on-hit sustain, flask pours, mends alike;
+//                                     the sustain fingerprint channel's feed)
 //   - world.ts   updateProjectiles / clampGroundTarget → onOccluded (terrain
 //                                     ate a shot / clipped a placement)
 // ---------------------------------------------------------------------------
@@ -48,6 +51,9 @@ export interface SimTap {
   /** A skill EXECUTION (not a bar press — triggers, echoes and totem casts land
    *  here too). scheduledRepeat marks mechanical re-fires of one press. */
   onCast?(caster: Actor, inst: SkillInstance, scheduledRepeat: boolean): void;
+  /** Landed life healing through the healBy gate (what actually raised the
+   *  pool, after healTaken scaling and ceiling/seal caps). */
+  onHeal?(target: Actor, landed: number): void;
   /** A resource orb entered the world (ORB_DEFS kind). */
   onOrbShed?(kind: string): void;
   /** An orb was scooped and poured into an actor. */

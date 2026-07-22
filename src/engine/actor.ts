@@ -12,6 +12,7 @@ import {
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { DEFENSE_CFG } from './defense';
+import { SIM_TAP } from './tap';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
   instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, supportGlobalMods,
@@ -1594,7 +1595,9 @@ export class Actor {
       : this.lifeCeiling();
     this.life = Math.min(cap,
       this.life + amount * this.sheet.get('healTaken'));
-    return this.life - before;
+    const landed = this.life - before;
+    if (landed > 0) SIM_TAP.current?.onHeal?.(this, landed);
+    return landed;
   }
 
   /** THE one gate ward flows through: × the wardGain stat. The pool is

@@ -4526,6 +4526,64 @@ export const MONSTERS: Record<string, MonsterDef> = {
     bossBar: false,
   },
 
+  // THE TRAINING RACK (2026-07-22, the uniform-dummy measurement pass): the
+  // dummy's color-coded siblings, standing beside it at the yard. Each wears
+  // ONE contrast the plain dummy lacks — a hard single-type resistance (so a
+  // conversion visibly changes what lands: hit the Pyre Dummy with converted
+  // fire and watch the number drop) or real HEFT (so vs-heavier reads like
+  // giantsbane arm against it). Same law as the post: passive, immortal,
+  // boss-classed, never counted, never paying — test fixtures, not prey.
+  // The sim's support-matrix probes route typed pairs at these same defs
+  // (sim/compat.ts RESIST_DUMMY_BY_TYPE), so the town rack and the harness
+  // measure ONE truth. Add/remove rack members freely as testing needs grow.
+  target_dummy_pyre: {
+    id: 'target_dummy_pyre', name: 'Pyre Dummy',
+    color: '#e06038', shape: 'rectangle', radius: 18, material: 'wood', look: 'training_dummy',
+    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0, poise: 0 },
+    mods: [mod('fireRes', 'flat', 0.75)],
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, boss: true, bossBar: false,
+  },
+  target_dummy_rime: {
+    id: 'target_dummy_rime', name: 'Rime Dummy',
+    color: '#66aadd', shape: 'rectangle', radius: 18, material: 'wood', look: 'training_dummy',
+    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0, poise: 0 },
+    mods: [mod('coldRes', 'flat', 0.75)],
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, boss: true, bossBar: false,
+  },
+  target_dummy_storm: {
+    id: 'target_dummy_storm', name: 'Storm Dummy',
+    color: '#e8d44a', shape: 'rectangle', radius: 18, material: 'wood', look: 'training_dummy',
+    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0, poise: 0 },
+    mods: [mod('lightningRes', 'flat', 0.75)],
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, boss: true, bossBar: false,
+  },
+  target_dummy_void: {
+    id: 'target_dummy_void', name: 'Void Dummy',
+    color: '#9a5ad8', shape: 'rectangle', radius: 18, material: 'wood', look: 'training_dummy',
+    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0, poise: 0 },
+    mods: [mod('chaosRes', 'flat', 0.75)],
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, boss: true, bossBar: false,
+  },
+  // The heavy brother: explicit weight (never derived) so the giantsbane
+  // ratio (SLAYER_CFG.giantsbaneRatio × attacker weight) arms against it
+  // for any ordinary hero — the vs-heavier lane's honest test surface.
+  target_dummy_colossus: {
+    id: 'target_dummy_colossus', name: 'Colossal Dummy',
+    color: '#8a8a92', shape: 'rectangle', radius: 30, material: 'stone', look: 'training_dummy',
+    base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0, poise: 0, weight: 12 },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, boss: true, bossBar: false,
+  },
+
   // --- ATTUNEMENT FIXTURES (engine/tuning.ts + engine/puzzles.ts) -----------
   // Struck-crystal world objects on the dummy/barrel pattern — REAL actors,
   // so every delivery in the game plays them (arcs, arrows, novas, minions).

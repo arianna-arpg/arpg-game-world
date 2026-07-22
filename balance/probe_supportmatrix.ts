@@ -27,20 +27,23 @@
 import { bootSimEngine } from '../src/sim/arena';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
+import { MONSTERS } from '../src/data/monsters';
 import { unreadPayloadRows } from '../src/data/graftReadSites';
 import { mod } from '../src/engine/stats';
 import { SUPPORT_PAYLOAD_FIELDS } from '../src/engine/skills';
 import type { SkillDef, SupportDef } from '../src/engine/skills';
 import {
-  ablationUnits, compatCensus, deepProbePair, explainFit, explainPair,
-  makeProbeSession, pairKey, maskSupportUnit, probeKindFor, probeOrder,
-  probePair, runCompatMatrix, soloSupportUnit,
-  type CensusResult, type CensusRow, type PairDeepResult, type PairProbeResult,
-  type PairVerdictKind, type UnitProbeResult,
+  RESIST_DUMMY_BY_TYPE, ablationUnits, classifyExpression, compatCensus, costFunctionSupport,
+  deepProbePair, explainFit, explainPair, hostExpressionCensus,
+  makeProbeSession, pairKey, pairShapeFor, maskSupportUnit, probeKindFor, probeOrder,
+  probePair, probePolicyFor, probeScenario, rackDummyFor, runCompatMatrix, shapeKey,
+  soloSupportUnit,
+  type CensusResult, type CensusRow, type HostExpressionBaseline, type PairDeepResult,
+  type PairProbeResult, type PairVerdictKind, type UnitProbeResult,
 } from '../src/sim/compat';
 import {
-  adjudicate, checkLedger, emptyLedger, ledgerToJson, mergeProbed, observedDefects,
-  reconcileLedger, rigMismatches, rigSignatureOf, validateLedger,
+  adjudicate, checkLedger, emptyLedger, expressionSignatureOf, ledgerToJson, mergeProbed,
+  observedDefects, reconcileLedger, rigMismatches, rigSignatureOf, validateLedger,
   type SupportLedger,
 } from '../src/sim/ledger';
 
@@ -454,6 +457,132 @@ try {
 }
 check('E14 synthetic fixtures cleaned out of the registry',
   !Object.keys(SUPPORTS).some(k => k.startsWith('__probe_') || k.startsWith('__mask__') || k.startsWith('__chk__') || k.startsWith('__solo__')));
+
+// === RIG F — the uniform-dummy channels + the host lens (2026-07-22) ========
+// The training rack (typed-resist + colossus routing), the probe policies,
+// the bled rig, the type/orb/sustain fingerprint channels, and the
+// host-expression census with its mute-host blindness screen.
+
+{
+  // F1–F3 — the rack: every routed fixture exists and wears the dummy law.
+  const rackIds = [...Object.values(RESIST_DUMMY_BY_TYPE), 'target_dummy_colossus'];
+  check(`F1 the training rack stands (${rackIds.length} fixtures wearing the dummy law: passive+immortal+boss, xp 0)`,
+    rackIds.every(id => {
+      const d = MONSTERS[id];
+      return !!d && d.passive === true && d.immortal === true && d.boss === true && d.xp === 0;
+    }));
+  check('F2 each typed dummy wears its own hard ward (≥50% of its one resistance)',
+    Object.entries(RESIST_DUMMY_BY_TYPE).every(([type, id]) =>
+      (MONSTERS[id]?.mods ?? []).some(m => m.stat === `${type}Res` && m.value >= 0.5)));
+  check('F3 the colossus carries explicit heft past the giantsbane ratio for an ordinary rig',
+    (MONSTERS.target_dummy_colossus?.base.weight ?? 0) >= 6);
+
+  // F4–F5 — rack routing resolves off the payload's own stat names, and the
+  // resolved dummy rides the pair SHAPE (dummy-lane only).
+  check('F4 rack routing: flameforged→pyre, rarefy→rime, giantsbane→colossus, plain damage→none',
+    rackDummyFor(SUPPORTS.flameforged)?.id === 'target_dummy_pyre'
+    && rackDummyFor(SUPPORTS.rarefy)?.id === 'target_dummy_rime'
+    && rackDummyFor(SUPPORTS.giantsbane)?.id === 'target_dummy_colossus'
+    && rackDummyFor(SUPPORTS.brutality) === undefined);
+  const convShape = pairShapeFor(SKILLS.arquebus, SUPPORTS.flameforged, 'host');
+  const liveShape = pairShapeFor(SKILLS.bone_cage, SUPPORTS.giantsbane, 'host');
+  check('F5 shape carries the rack target on dummy pairs only (live pairs unrouted)',
+    convShape.probe === 'dummy' && convShape.dummyId === 'target_dummy_pyre'
+    && liveShape.probe === 'live' && liveShape.dummyId === undefined);
+
+  // F6 — probe policy: small-chance payloads escalate seeds; the result
+  // reports the escalated count (and the bare baseline cached under it).
+  check('F6a the small-chance policy claims precision and nothing claims brutality',
+    probePolicyFor(SUPPORTS.precision)?.name === 'small_chance'
+    && probePolicyFor(SUPPORTS.brutality) === undefined);
+  const polSess = makeProbeSession({ seeds: 2, duration: 2 });
+  const pol = probePair(polSess, { skillId: 'firebolt', supportId: 'precision', fit: 'host' });
+  check('F6b a policy pair runs at the escalated seed count', pol.result.seeds === 5, String(pol.result.seeds));
+
+  // F7 — the bled rig: sustain payloads probe at half vitals in BOTH runs.
+  check('F7a vampiric pairs wear the bled shape',
+    pairShapeFor(SKILLS.cleave, SUPPORTS.vampiric, 'host').bled === true
+    && pairShapeFor(SKILLS.cleave, SUPPORTS.brutality, 'host').bled === undefined);
+  const bledScen = probeScenario('cleave', { id: 'vampiric', level: 1 }, {}, { bled: true });
+  const bledBuild = bledScen.build as { bled?: { lifeFrac?: number; manaFrac?: number } };
+  check('F7b the bled scenario starts the build at half vitals',
+    bledBuild.bled?.lifeFrac === 0.5 && bledBuild.bled?.manaFrac === 0.5);
+
+  // F8 — the channels end to end, on real shipped pairs that were byte-dead
+  // before this pass: a conversion visibly RESISTED at its ward, leech
+  // visibly POURED through the sustain channel.
+  const chanSess = makeProbeSession({ seeds: 2 });
+  const conv = probePair(chanSess, { skillId: 'arquebus', supportId: 'flameforged', fit: 'host' });
+  check('F8a flameforged reads EFFECTIVE at the pyre ward, type ledger moving',
+    conv.result.verdict === 'effective'
+    && conv.result.moved.some(m => m.key === 'dmg_out_fire')
+    && conv.result.moved.some(m => m.key === 'dmg_dummy'),
+    `${conv.result.verdict}; moved: ${conv.result.moved.map(m => m.key).join(',')}`);
+  const sust = probePair(chanSess, { skillId: 'cleave', supportId: 'vampiric', fit: 'host' });
+  check('F8b vampiric reads EFFECTIVE under the bled rig, the sustain channel moving',
+    sust.result.verdict === 'effective' && sust.result.moved.some(m => m.key === 'life_gain'),
+    `${sust.result.verdict}; moved: ${sust.result.moved.map(m => m.key).join(',')}`);
+
+  // F9 — census classification corners (pure).
+  const facts = (over: Partial<Parameters<typeof classifyExpression>[0]>): Parameters<typeof classifyExpression>[0] => ({
+    presses: 0, repeats: 0, hits: 0, hitAttempts: 0, dmgOut: 0, statusSamples: 0,
+    minionSamples: 0, zoneSamples: 0, projectileSamples: 0, orbsShed: 0, lifeGain: 0, ...over,
+  });
+  check('F9 expression classes: full / cast-only / partial / expressive',
+    classifyExpression(facts({})) === 'full'
+    && classifyExpression(facts({ presses: 5 })) === 'cast-only'
+    && classifyExpression(facts({ presses: 5, statusSamples: 3 })) === 'partial'
+    && classifyExpression(facts({ presses: 5, hits: 3, dmgOut: 40 })) === 'expressive');
+
+  // F10 — the census lane live on one host (a whiffing swing reads mute,
+  // its why names the band).
+  const cen = hostExpressionCensus({ skillFilter: 'buckler_strike', seeds: 1 });
+  check('F10 the census reads a whiffing melee host as mute with the band named',
+    cen.rows.length === 1 && (cen.rows[0].mute === 'cast-only' || cen.rows[0].mute === 'full')
+    && (cen.rows[0].why ?? '').includes('melee'),
+    `${cen.rows[0]?.mute}: ${cen.rows[0]?.why ?? ''}`);
+
+  // F11–F12 — the mute-host screen: an identity gem on a censused-mute host
+  // flips inert→blind with the census quoted; a cost-shaped gem on a
+  // cast-only host KEEPS measuring (the tax still fingerprints).
+  const bucklerShape = pairShapeFor(SKILLS.buckler_strike, SUPPORTS.brutality, 'host');
+  const hx: HostExpressionBaseline = {
+    version: 1,
+    cfg: { seeds: 1, dummyDuration: 10, liveDuration: 20 },
+    hosts: {
+      buckler_strike: {
+        skillId: 'buckler_strike', shape: shapeKey(bucklerShape),
+        facts: facts({ presses: 5, hitAttempts: 5 }), mute: 'cast-only',
+        why: 'probe fixture claim',
+      },
+    },
+  };
+  const IDENT_ID = '__probe_ident_f__';
+  SUPPORTS[IDENT_ID] = {
+    id: IDENT_ID, name: IDENT_ID, description: 'probe fixture', color: '#fff', mods: [], weight: 0,
+  };
+  try {
+    const scrSess = makeProbeSession({ seeds: 1, hostExpression: hx });
+    const scr = probePair(scrSess, { skillId: 'buckler_strike', supportId: IDENT_ID, fit: 'host' });
+    check('F11 the screen: inert on a censused-mute host reads BLIND with the census quoted',
+      scr.result.verdict === 'blind' && (scr.result.blindWhy ?? '').includes('census'),
+      `${scr.result.verdict}: ${scr.result.blindWhy ?? ''}`);
+    check('F12a efficiency is cost-shaped (the exemption lane is live)',
+      costFunctionSupport(SUPPORTS.efficiency) === true);
+    const cost = probePair(scrSess, { skillId: 'buckler_strike', supportId: 'efficiency', fit: 'host' });
+    check('F12b a cost-shaped gem on a cast-only host is never census-blinded',
+      cost.result.verdict !== 'blind', cost.result.verdict);
+  } finally {
+    delete SUPPORTS[IDENT_ID];
+  }
+
+  // F13 — the rig signature refuses mixing census-armed and unarmed runs.
+  const sigOn = rigSignatureOf({ seeds: 1, hostExpression: hx });
+  const sigOff = rigSignatureOf({ seeds: 1 });
+  check('F13 expression signature stamps the rig and mismatches name it',
+    expressionSignatureOf(hx) === 'v1:1h:1m'
+    && rigMismatches(sigOn, sigOff).join(',') === 'expression');
+}
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

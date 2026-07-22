@@ -256,6 +256,17 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
   for (const [id, n] of Object.entries(spec.charges ?? {})) {
     if (n > 0) world.player.gainCharge(id, n, n);
   }
+  // THE BLED RIG (BuildSpec.bled): a deterministic standing wound — sustain
+  // payloads need headroom to pour into (healBy/mana clips at full pools).
+  if (spec.bled) {
+    const p = world.player;
+    if (spec.bled.lifeFrac !== undefined) {
+      p.life = Math.max(1, p.maxLife() * spec.bled.lifeFrac);
+    }
+    if (spec.bled.manaFrac !== undefined) {
+      p.mana = Math.max(0, p.availableMaxMana() * spec.bled.manaFrac);
+    }
+  }
   return warnings;
 }
 

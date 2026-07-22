@@ -14,6 +14,7 @@
 import type { Actor } from '../engine/actor';
 import type { DamagePacket, HitResult } from '../engine/damage';
 import type { SkillInstance } from '../engine/skills';
+import { DAMAGE_TYPES, type DamageType } from '../engine/stats';
 import type { SimTap } from '../engine/tap';
 import type { World } from '../engine/world';
 import type { MetricRecord, MetricSummary } from './types';
@@ -30,6 +31,19 @@ export class Collector implements SimTap {
   hitAttemptsOut = 0;   // includes evaded/blocked/immune exits
   hitAttemptsIn = 0;
   hitsIn = 0; evadesIn = 0; blocksIn = 0;
+  // -- the TYPE ledger (2026-07-22, the uniform-dummy measurement pass):
+  //    player-side outgoing damage split by rolled type. Hits count the
+  //    PACKET's post-conversion mix (what the build actually threw — a
+  //    conversion gem moves this even when uniform mitigation hides it
+  //    from the totals); DoT drains count by their tick's type. --
+  typeDmgOut: Record<DamageType, number> =
+    Object.fromEntries(DAMAGE_TYPES.map(t => [t, 0])) as Record<DamageType, number>;
+  // -- resource orbs + sustain (the economy/sustain channels: orbOnHit
+  //    harvests shed at the strike, leech pours through healBy — both
+  //    invisible to damage totals, both the gem's whole function) --
+  orbsShed = 0;
+  orbsScooped = 0;
+  lifeGainHero = 0;     // landed healBy healing on the hero seat
   // -- lifecycle --
   kills = 0;
   deaths: { t: number; who: string; team: string; killer?: string }[] = [];
@@ -64,17 +78,23 @@ export class Collector implements SimTap {
 
   private hero(): Actor { return this.world.player; }
 
-  onHit(attacker: Actor, target: Actor, result: HitResult, _packet: DamagePacket): void {
+  onHit(attacker: Actor, target: Actor, result: HitResult, packet: DamagePacket): void {
     const heroSide = attacker.team === 'player';
     if (heroSide && target.team === 'enemy') {
       this.hitAttemptsOut++;
       if (result.total > 0 || (!result.evaded && !result.immune && !result.blocked)) {
         this.hitsOut++;
         if (result.crit) this.critsOut++;
+        // The type ledger reads the thrown packet's mix, not the landed
+        // total — conversion is visible even where mitigation is uniform.
+        for (const t of DAMAGE_TYPES) {
+          const amt = packet.amounts[t];
+          if (amt) this.typeDmgOut[t] += amt;
+        }
       }
       if (attacker === this.hero()) this.dmgHeroOut += result.total;
       else this.dmgMinionOut += result.total;
-      if (target.defId === 'target_dummy') this.dmgDummy += result.total;
+      if (target.defId?.startsWith('target_dummy')) this.dmgDummy += result.total;
     } else if (attacker.team === 'enemy' && target === this.hero()) {
       this.hitAttemptsIn++;
       if (result.evaded) this.evadesIn++;
@@ -84,13 +104,23 @@ export class Collector implements SimTap {
     }
   }
 
-  onDot(target: Actor, landed: number): void {
+  onDot(target: Actor, landed: number, type?: DamageType): void {
     if (target.team === 'enemy') {
       this.dotOut += landed;
-      if (target.defId === 'target_dummy') this.dmgDummy += landed;
+      if (type) this.typeDmgOut[type] += landed;
+      if (target.defId?.startsWith('target_dummy')) this.dmgDummy += landed;
     } else if (target === this.hero()) {
       this.dotIn += landed;
     }
+  }
+
+  onHeal(target: Actor, landed: number): void {
+    if (target === this.hero()) this.lifeGainHero += landed;
+  }
+
+  onOrbShed(): void { this.orbsShed++; }
+  onOrbPickup(_kind: string, into: Actor): void {
+    if (into.team === 'player') this.orbsScooped++;
   }
 
   onDeath(actor: Actor, killer?: Actor): void {
@@ -168,11 +198,17 @@ export class Collector implements SimTap {
       projectile_samples: this.projectileSamples,
       zone_samples: this.zoneSamples,
       corpse_samples: this.corpseSamples,
+      // The type ledger — fixed DAMAGE_TYPES order keeps the key sequence
+      // canonical for hash equality.
+      ...Object.fromEntries(DAMAGE_TYPES.map(t => [`dmg_out_${t}`, this.typeDmgOut[t]])),
+      orbs_shed: this.orbsShed,
+      orbs_scooped: this.orbsScooped,
       dmg_in: this.dmgIn,
       dot_in: this.dotIn,
       hit_attempts_in: this.hitAttemptsIn,
       evades_in: this.evadesIn,
       blocks_in: this.blocksIn,
+      life_gain: this.lifeGainHero,
       life_floor: this.lifeFloor,
       mana_floor: this.manaFloor,
       life_end: this.lifeEnd,

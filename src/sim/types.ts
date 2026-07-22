@@ -85,6 +85,12 @@ export interface BuildSpec {
    *  never "does the economy fill" — the attribute-pinning stance, applied
    *  to charges. Suite/reference builds omit it and are untouched. */
   charges?: Record<string, number>;
+  /** THE BLED RIG (2026-07-22): start the hero at partial vitals — the
+   *  deterministic wound for sustain payloads (leech/on-hit refills clip to
+   *  ZERO landed at full pools, so a kiting pilot that never gets hit reads
+   *  every leech gem falsely inert). Applied after adoption; identical in a
+   *  probe pair's bare and socketed runs, so the deficit itself cancels. */
+  bled?: { lifeFrac?: number; manaFrac?: number };
 }
 
 /** An ACTUAL player character, verbatim: the CharacterSave a real save slot

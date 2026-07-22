@@ -372,6 +372,55 @@ export function probeKindFor(def: SkillDef, sup?: SupportDef): { kind: 'dummy' |
   return { kind: 'dummy' };
 }
 
+/** THE TRAINING RACK ROUTES (2026-07-22, the uniform-dummy measurement
+ *  pass): payloads whose function is a CONTRAST the plain dummy cannot
+ *  show probe against a rack sibling instead — conversions aim at the
+ *  ward matching their DESTINATION type (the converted share visibly
+ *  resisted, so the totals move), the vs-heavier lane aims at the
+ *  colossus (the heft read arms). The rack stands in Lastlight's training
+ *  yard off the same defs, so the town fixture and the harness measure
+ *  ONE truth. A new damage type needs one row here + one rack def. */
+export const RESIST_DUMMY_BY_TYPE: Record<string, string> = {
+  fire: 'target_dummy_pyre', cold: 'target_dummy_rime',
+  lightning: 'target_dummy_storm', chaos: 'target_dummy_void',
+};
+
+export function rackDummyFor(sup: SupportDef | undefined): { id: string; why: string } | undefined {
+  if (!sup) return undefined;
+  for (const m of [...sup.mods, ...(sup.perLevel ?? [])]) {
+    const conv = /^convert_[a-z]+_([a-z]+)$/.exec(m.stat);
+    if (conv && RESIST_DUMMY_BY_TYPE[conv[1]]) {
+      return {
+        id: RESIST_DUMMY_BY_TYPE[conv[1]],
+        why: `conversion payload '${m.stat}' — the ${conv[1]}-warded rack dummy resists the converted share`,
+      };
+    }
+    if (m.stat === 'giantsbane') {
+      return { id: 'target_dummy_colossus', why: "'giantsbane' needs a HEAVIER victim — the colossus outweighs the rig" };
+    }
+  }
+  return undefined;
+}
+
+/** PROBE POLICIES — per-payload measurement escalation, as data. A small-
+ *  chance payload (crit, lucky) is real but its window is coin-flip narrow
+ *  at standard length: two seeds of a 10s episode may roll nothing into a
+ *  6% band. Policy pairs run wider and longer so the window gets ROLLS;
+ *  the bare baseline runs the SAME escalation (cache-keyed by policy). */
+export const PROBE_POLICIES: {
+  name: string; when: (sup: SupportDef) => boolean;
+  seeds?: number; durationMult?: number;
+}[] = [
+  {
+    name: 'small_chance',
+    when: sup => supModsStat(sup, ['critChance', 'critMulti', 'luckyChance', 'dotCrit']),
+    seeds: 5, durationMult: 3,
+  },
+];
+export function probePolicyFor(sup: SupportDef | undefined): (typeof PROBE_POLICIES)[number] | undefined {
+  return sup ? PROBE_POLICIES.find(p => p.when(sup)) : undefined;
+}
+
 /** Probe rig attributes: all ten pinned high so requirement gates never
  *  confound the pairing measurement (the sweep rig's documented stance). */
 export const PROBE_ATTRIBUTES: Record<string, number> = {
@@ -399,6 +448,11 @@ export interface ProbeOpts {
   duration?: number;       // override BOTH probe kinds' durations
   seeds?: number;
   baseSeed?: number;
+  /** The committed host-expression census (balance/baselines/
+   *  host_expression.json), when the caller loaded one — probePair's
+   *  mute-host blindness screen reads it. Node-side loading only; compat
+   *  itself stays browser-safe. */
+  hostExpression?: HostExpressionBaseline;
 }
 
 /** The registry's resonance key (CREW_CFG 'gated' boarding): crew-fit
@@ -456,8 +510,9 @@ export function probeScenario(
   /** Force probe shape / socket a resonance key beside the gem — the matrix
    *  pins a pair's BARE baseline to the same shape the socketed run uses
    *  (a trigger-forced escort pair diffs against an escort bare; a crew-fit
-   *  pair diffs key-vs-key so the boarding door is open in both runs). */
-  forced?: { probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder' },
+   *  pair diffs key-vs-key so the boarding door is open in both runs; a
+   *  rack-routed pair diffs against a bare aimed at the SAME rack dummy). */
+  forced?: { probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder'; dummyId?: string; bled?: boolean },
 ): ScenarioDef {
   const def = SKILLS[skillId];
   if (!def) throw new Error(`compat: unknown skill '${skillId}'`);
@@ -467,6 +522,8 @@ export function probeScenario(
     ? { kind: forced.probe, ...(forced.pack ? { pack: forced.pack } : {}) } as ReturnType<typeof probeKindFor>
     : probeKindFor(def, sup);
   const rig = forced?.rig ? { mode: forced.rig } as ReturnType<typeof rigModeFor> : rigModeFor(def, sup);
+  const dummyId = forced?.dummyId ?? rackDummyFor(sup)?.id ?? 'target_dummy';
+  const bled = forced?.bled ?? (sup ? supModsStat(sup, BLED_RIG_STATS) : false);
   const supports: { id: string; level: number }[] = [];
   const keyId = forced?.withKey ? resonanceKeyId() : null;
   if (keyId && keyId !== support?.id) supports.push({ id: keyId, level: 1 });
@@ -478,8 +535,11 @@ export function probeScenario(
   // The live wave: the standard WOUNDING pack, or the KILLABLE fodder pack
   // for kill-scoped payloads (probe.pack 'fodder' — kills must flow).
   const pack = probe.pack === 'fodder' ? COMPAT_CFG.fodderPack : COMPAT_CFG.livePack;
+  if (bled) build.bled = { lifeFrac: 0.5, manaFrac: 0.5 };
   return {
-    id: `${build.id}__${probe.kind}${probe.pack ? '_' + probe.pack : ''}_${rig.mode}`,
+    id: `${build.id}__${probe.kind}${probe.pack ? '_' + probe.pack : ''}_${rig.mode}`
+      + (dummyId !== 'target_dummy' ? `_${dummyId.replace('target_dummy_', '')}` : '')
+      + (bled ? '_bled' : ''),
     label: build.label,
     build,
     pilot: escorted ? { kind: 'pair', hostSlot: 0, refSlot: 1 } : soloPilotFor(def),
@@ -492,7 +552,7 @@ export function probeScenario(
         }],
         repeatEvery: pack.everySec, distance: COMPAT_CFG.liveDistance,
       }]
-      : [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: COMPAT_CFG.dummyDistance }],
+      : [{ monsters: [{ id: dummyId, level: 1 }], distance: COMPAT_CFG.dummyDistance }],
     // Corpse-consuming hosts get the feeder — without it the host never
     // casts, every pairing reads byte-identical, and the column is blind.
     ...(def.tags.includes('corpse') ? { corpseFeed: COMPAT_CFG.corpseFeed } : {}),
@@ -524,8 +584,16 @@ export const CHANNEL_LANES: Record<string, 'output' | 'defense' | 'cost'> = {
   enemy_status_samples: 'output', hero_status_samples: 'output',
   minion_samples: 'output', minion_peak: 'output',
   projectile_samples: 'output', zone_samples: 'output', corpse_samples: 'output',
+  // The type ledger (2026-07-22): outgoing damage split by rolled type —
+  // a conversion's whole function is moving amounts BETWEEN these keys.
+  dmg_out_physical: 'output', dmg_out_fire: 'output', dmg_out_cold: 'output',
+  dmg_out_lightning: 'output', dmg_out_chaos: 'output',
+  // Resource-orb economy (orbOnHit/orbShed families): sheds ARE the payload.
+  orbs_shed: 'output', orbs_scooped: 'output',
   dmg_in: 'defense', dot_in: 'defense', hit_attempts_in: 'defense',
   evades_in: 'defense', blocks_in: 'defense',
+  // Sustain (healBy-landed healing on the hero): leech/on-hit/mend function.
+  life_gain: 'defense',
   life_floor: 'defense', life_end: 'defense',
   mana_floor: 'cost', presses: 'cost', repeats: 'cost',
 };
@@ -854,6 +922,9 @@ export interface PairProbeResult {
   dOutputRel: number;
   /** Static read-site annotations (why an inert verdict was predictable). */
   unread?: { key: string; site: string }[];
+  /** Why a 'blind' verdict is blind (the matched rule's note, or the
+   *  host-expression census claim). */
+  blindWhy?: string;
   warnings: string[];
 }
 
@@ -1020,12 +1091,20 @@ export function bareEpisodesFor(
   sess: ProbeSession, skillId: string,
   probe: 'dummy' | 'live', rig: 'solo' | 'escort', withKey: boolean,
   pack?: 'fodder',
+  /** Rack-routed dummy + probe-policy escalation + the bled rig: the bare
+   *  baseline must aim at the SAME target, run the SAME length, and start
+   *  at the SAME vitals as the socketed run — all three join the cache key. */
+  dummyId?: string,
+  policy?: { name: string; seeds: number; duration?: number },
+  bled?: boolean,
 ): EpisodeResult[] {
-  const key = `${skillId}:${probe}${pack ? ':' + pack : ''}:${rig}:${withKey ? 'keyed' : 'bare'}`;
+  const key = `${skillId}:${probe}${pack ? ':' + pack : ''}:${rig}:${withKey ? 'keyed' : 'bare'}`
+    + (dummyId ? `:${dummyId}` : '') + (policy ? `:${policy.name}` : '') + (bled ? ':bled' : '');
   let eps = sess.bareCache.get(key);
   if (!eps) {
-    const scen = probeScenario(skillId, null, sess.opts, { probe, rig, withKey, pack });
-    eps = runScenario(scen, { seeds: sess.seeds, baseSeed: sess.baseSeed }).episodes;
+    const opts = policy?.duration !== undefined ? { ...sess.opts, duration: policy.duration } : sess.opts;
+    const scen = probeScenario(skillId, null, opts, { probe, rig, withKey, pack, dummyId, bled: bled ?? false });
+    eps = runScenario(scen, { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed }).episodes;
     sess.episodesRun += eps.length;
     sess.bareCache.set(key, eps);
   }
@@ -1042,7 +1121,22 @@ export interface PairShape {
   rig: 'solo' | 'escort';
   rigWhy?: string;
   withKey: boolean;
+  /** Rack-routed dummy target (RESIST_DUMMY_BY_TYPE / the colossus) — the
+   *  bare baseline aims at the SAME sibling so the delta is the gem. */
+  dummyId?: string;
+  /** THE BLED RIG: sustain payloads (leech / on-hit refills) probe at HALF
+   *  vitals in BOTH runs — a full pool clips every pour to zero landed, and
+   *  a kiting pilot may never be wounded by the pack. The deficit is
+   *  identical bare and socketed, so the delta is the gem's pour. */
+  bled?: true;
 }
+
+/** The census-comparable shape signature: probe kind + pack + rig + key.
+ *  Deliberately EXCLUDES the rack dummy — a host mute at one dummy is mute
+ *  at its siblings (same passive fixture), so census claims carry across
+ *  rack routing. */
+export const shapeKey = (s: Pick<PairShape, 'probe' | 'pack' | 'rig' | 'withKey'>): string =>
+  `${s.probe}${s.pack ? '+' + s.pack : ''}:${s.rig}${s.withKey ? ':keyed' : ''}`;
 
 export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew'): PairShape {
   const probe = probeKindFor(def, sup);
@@ -1055,8 +1149,21 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
   if (probe.why) shape.probeWhy = probe.why;
   if (probe.pack) shape.pack = probe.pack;
   if (rig.why) shape.rigWhy = rig.why;
+  if (probe.kind === 'dummy') {
+    const rack = rackDummyFor(sup);
+    if (rack) {
+      shape.dummyId = rack.id;
+      shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${rack.why}` : rack.why;
+    }
+  }
+  if (supModsStat(sup, BLED_RIG_STATS)) shape.bled = true;
   return shape;
 }
+
+/** Sustain stats that need HEADROOM to express — their pairs run the bled
+ *  rig (BuildSpec.bled, half vitals both runs). ES/ward leeches stay out:
+ *  those pools ship EMPTY by doctrine and gate on their own bases. */
+export const BLED_RIG_STATS = ['lifeLeech', 'lifeOnHit', 'manaLeech'];
 
 export interface PairProbeRun {
   result: PairProbeResult;
@@ -1075,17 +1182,47 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
   const def = SKILLS[row.skillId];
   const sup = SUPPORTS[row.supportId];
   const shape = pairShapeFor(def, sup, row.fit);
-  const bareEps = bareEpisodesFor(sess, row.skillId, shape.probe, shape.rig, shape.withKey, shape.pack);
+  // PROBE-POLICY escalation (small-chance payloads): both runs stretch the
+  // same way — the bare baseline caches under the policy's name.
+  const rawPolicy = probePolicyFor(sup);
+  const baseDuration = sess.opts.duration
+    ?? (shape.probe === 'live' ? COMPAT_CFG.liveDuration : COMPAT_CFG.dummyDuration);
+  const policy = rawPolicy ? {
+    name: rawPolicy.name,
+    seeds: Math.max(sess.seeds, rawPolicy.seeds ?? sess.seeds),
+    duration: rawPolicy.durationMult ? baseDuration * rawPolicy.durationMult : undefined,
+  } : undefined;
+  const bareEps = bareEpisodesFor(sess, row.skillId,
+    shape.probe, shape.rig, shape.withKey, shape.pack, shape.dummyId, policy, shape.bled);
+  const pairOpts = policy?.duration !== undefined ? { ...sess.opts, duration: policy.duration } : sess.opts;
   const pairScen = probeScenario(row.skillId,
-    { id: row.supportId, level: sess.supportLevel }, sess.opts, { withKey: shape.withKey });
-  const { episodes: pairEps } = runScenario(pairScen, { seeds: sess.seeds, baseSeed: sess.baseSeed });
+    { id: row.supportId, level: sess.supportLevel }, pairOpts,
+    { withKey: shape.withKey, dummyId: shape.dummyId ?? 'target_dummy', bled: shape.bled ?? false });
+  const { episodes: pairEps } = runScenario(pairScen,
+    { seeds: policy?.seeds ?? sess.seeds, baseSeed: sess.baseSeed });
   sess.episodesRun += pairEps.length;
   const cls = classifyPair(bareEps, pairEps);
   // A known-blind pairing may LOOK inert/negligible under this probe —
   // report it as unmeasured instead of minting a false bug.
   const blind = BLINDNESS_RULES.find(r => r.when(def, sup));
+  let blindWhy: string | undefined;
   if (blind && (cls.verdict === 'inert' || cls.verdict === 'negligible')) {
     cls.verdict = 'blind';
+    blindWhy = blind.note;
+  } else if (cls.verdict === 'inert' || cls.verdict === 'negligible') {
+    // THE HOST-EXPRESSION SCREEN (2026-07-22): the committed census knows
+    // which hosts express NOTHING under their own probe shape — a mute
+    // host's inert-looking pairs are one host fact wearing many gem names,
+    // unmeasured rather than defective. Cost-shaped gems keep measuring on
+    // cast-only hosts (the moved tax still fingerprints); anything the
+    // census contradicts stays open for the hand-rule anomaly lane.
+    const hx = sess.opts.hostExpression?.hosts[row.skillId];
+    if (hx && hx.shape === shapeKey(shape)
+      && (hx.mute === 'full' || (hx.mute === 'cast-only' && !costFunctionSupport(sup)))) {
+      cls.verdict = 'blind';
+      blindWhy = `host-expression census: ${hx.mute === 'full'
+        ? 'the host never casts' : 'the host casts but expresses nothing'} under this probe shape — ${hx.why ?? 'unexplained'}`;
+    }
   }
   const warnings = [...new Set([...bareEps, ...pairEps].flatMap(e => e.warnings))];
   const result: PairProbeResult = {
@@ -1096,10 +1233,11 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
     keyed: shape.withKey || undefined,
     verdict: cls.verdict,
     identicalSeeds: cls.identicalSeeds,
-    seeds: sess.seeds,
+    seeds: policy?.seeds ?? sess.seeds,
     moved: cls.moved,
     dOutputRel: Math.round(cls.dOutputRel * 1000) / 1000,
     unread: row.unread,
+    blindWhy,
     warnings,
   };
   return { result, bareEps, pairEps, shape };
@@ -1163,6 +1301,146 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
   result.episodesRun = sess.episodesRun;
   if (opts.deep) result.deep = deepResults;
   return result;
+}
+
+// ---------------------------------------------- host-expression census --
+// THE HOST LENS (2026-07-22): before any gem is blamed, measure what the
+// HOST does bare. A plain melee host byte-identical with 65 different gems
+// is not 65 defects — it is one host that never expresses under the probe
+// pilot, wearing 65 names. One bare episode per host at its own probe
+// shape records the expression facts; `matrix expression --write` commits
+// them; probePair's mute-host screen (above) turns the mute hosts' inert-
+// looking pairs into structural 'blind' verdicts, and the printed report
+// is the PILOT BACKLOG: which capability would unlock which host class.
+
+/** Per-host expression facts — seed-meaned fingerprint reads off a BARE
+ *  run. What the host DID with nothing socketed. */
+export interface HostExpressionFacts {
+  presses: number; repeats: number;
+  hits: number; hitAttempts: number;
+  dmgOut: number;
+  statusSamples: number;
+  minionSamples: number; zoneSamples: number; projectileSamples: number;
+  orbsShed: number; lifeGain: number;
+}
+
+/** How mute the host is, worst first:
+ *  'full'       — never even casts (gate refused, castMode unexercised);
+ *  'cast-only'  — casts, but nothing observable comes out;
+ *  'partial'    — expresses SOMETHING (statuses, bodies, zones, flights)
+ *                 but never lands a hit nor deals damage — hit-riding gems
+ *                 on it are a DESIGN question, never census-blinded;
+ *  'expressive' — hits and/or damages; gems measure honestly. */
+export type HostMuteClass = 'full' | 'cast-only' | 'partial' | 'expressive';
+
+export interface HostExpressionRow {
+  skillId: string;
+  /** shapeKey() of the host's own bare shape — the screen only claims
+   *  pairs probing at this same shape. */
+  shape: string;
+  facts: HostExpressionFacts;
+  mute: HostMuteClass;
+  /** Static WHY heuristic for mute hosts — the pilot-backlog grouping. */
+  why?: string;
+}
+
+export interface HostExpressionBaseline {
+  version: 1;
+  cfg: { seeds: number; dummyDuration: number; liveDuration: number };
+  hosts: Record<string, HostExpressionRow>;
+}
+
+export function classifyExpression(f: HostExpressionFacts): HostMuteClass {
+  if (f.presses <= 0 && f.repeats <= 0) return 'full';
+  const expresses = f.dmgOut > 0 || f.statusSamples > 0 || f.minionSamples > 0
+    || f.zoneSamples > 0 || f.projectileSamples > 0 || f.orbsShed > 0 || f.lifeGain > 0;
+  if (!expresses && f.hits <= 0) return 'cast-only';
+  if (f.hits <= 0 && f.dmgOut <= 0) return 'partial';
+  return 'expressive';
+}
+
+/** The static WHY ladder for mute hosts — heuristics off the def's own
+ *  shape, each naming the pilot/rig capability that would unlock it. The
+ *  fall-through is the ANOMALY lane: a host this ladder cannot explain is
+ *  exactly what hand adjudication (route c) is reserved for. */
+export function muteWhy(def: SkillDef): string {
+  if (def.gate) {
+    return `gated cast (${Object.keys(def.gate).join('+')}) — the probe arena never meets the gate; needs a gate-raising rig (e.g. self-bruise for recentDamage)`;
+  }
+  if (def.castMode === 'channel' || def.channel) {
+    return 'channel host — needs a channel-holding pilot that sustains the beam to expression';
+  }
+  if (def.castMode === 'charge') return 'charge-hold cast — needs a hold-and-release pilot';
+  if (def.castMode === 'guard') return 'guard stance — needs a stance-holding pilot under incoming hits';
+  if (def.castMode) return `castMode '${def.castMode}' — unexercised by the probe pilots`;
+  if (def.requiresGuard) return 'requires a raised guard — no probe pilot holds one';
+  if (def.tags.includes('curse')) return 'curse host — its mark expresses through victims/exploiters the rig may not field';
+  if (def.delivery.type === 'melee') {
+    return 'melee delivery — the pilot band may stand outside swing reach (whiff band); needs a closing brawler check';
+  }
+  if (def.delivery.type === 'target') return "'target' delivery — the aim/validity condition may never be met at the probe target";
+  return 'unexplained — the anomaly lane: hand-adjudicate or extend a pilot';
+}
+
+export interface ExpressionCensusResult {
+  rows: HostExpressionRow[];
+  baseline: HostExpressionBaseline;
+  episodesRun: number;
+}
+
+/** One bare run per host at its OWN default probe shape (the shape its
+ *  pairs overwhelmingly probe under). Escort-rigged hosts carry the
+ *  reference attack's expression in their facts — they read 'expressive'
+ *  and are simply never census-blinded (conservative by construction). */
+export function hostExpressionCensus(
+  opts: ProbeOpts & { skillFilter?: string },
+  onProgress?: (msg: string) => void,
+): ExpressionCensusResult {
+  const r2 = (x: number): number => Math.round(x * 100) / 100;
+  const skills = Object.values(SKILLS)
+    .filter(s => !s.noDrop && (!opts.skillFilter || s.id.includes(opts.skillFilter)))
+    .map(s => s.id).sort();
+  const sess = makeProbeSession({ ...opts, seeds: opts.seeds ?? 2 });
+  const rows: HostExpressionRow[] = [];
+  for (let i = 0; i < skills.length; i++) {
+    const id = skills[i];
+    const def = SKILLS[id];
+    const probe = probeKindFor(def);
+    const rig = rigModeFor(def);
+    const shape: PairShape = {
+      probe: probe.kind, rig: rig.mode, withKey: false,
+      ...(probe.pack ? { pack: probe.pack } : {}),
+    };
+    const eps = bareEpisodesFor(sess, id, shape.probe, shape.rig, false, shape.pack);
+    const n = Math.max(1, eps.length);
+    const mean = (k: string): number => r2(eps.reduce((s, e) => s + fpNum(e.fingerprint, k), 0) / n);
+    const facts: HostExpressionFacts = {
+      presses: mean('presses'), repeats: mean('repeats'),
+      hits: mean('hits_out'), hitAttempts: mean('hit_attempts_out'),
+      dmgOut: r2(eps.reduce((s, e) => s + outputDamage(e.fingerprint), 0) / n),
+      statusSamples: mean('enemy_status_samples'),
+      minionSamples: mean('minion_samples'), zoneSamples: mean('zone_samples'),
+      projectileSamples: mean('projectile_samples'),
+      orbsShed: mean('orbs_shed'), lifeGain: mean('life_gain'),
+    };
+    const mute = classifyExpression(facts);
+    const row: HostExpressionRow = { skillId: id, shape: shapeKey(shape), facts, mute };
+    if (mute === 'full' || mute === 'cast-only') row.why = muteWhy(def);
+    rows.push(row);
+    if (onProgress && (i + 1) % 50 === 0) onProgress(`  ${i + 1}/${skills.length} hosts censused…`);
+  }
+  const hosts: Record<string, HostExpressionRow> = {};
+  for (const r of rows) hosts[r.skillId] = r;
+  const baseline: HostExpressionBaseline = {
+    version: 1,
+    cfg: {
+      seeds: sess.seeds,
+      dummyDuration: opts.duration ?? COMPAT_CFG.dummyDuration,
+      liveDuration: opts.duration ?? COMPAT_CFG.liveDuration,
+    },
+    hosts,
+  };
+  return { rows, baseline, episodesRun: sess.episodesRun };
 }
 
 // -------------------------------------------------------- the fit explainer --
@@ -1472,9 +1750,9 @@ export const PRESCRIPTION_RULES: { when: (x: PairExplain) => boolean; say: (x: P
   },
   {
     when: x => x.probe?.verdict === 'blind' || (!!x.blindRules.length && !x.probe),
-    say: x => `BLIND under the standard probes: ${x.blindRules.join('; ') || 'see BLINDNESS_RULES'} — unmeasured, `
-      + `NOT evidence of breakage. Teaching the probe the missing verb (src/sim/compat.ts) and deleting the rule `
-      + `re-enters the whole class into measurement.`,
+    say: x => `BLIND under the standard probes: ${x.blindRules.join('; ') || x.probe?.blindWhy || 'see BLINDNESS_RULES'} — unmeasured, `
+      + `NOT evidence of breakage. Teaching the probe the missing verb (src/sim/compat.ts — a pilot capability, `
+      + `or re-running 'matrix expression --write' after the host changes) re-enters the class into measurement.`,
   },
   {
     when: x => !!x.deep?.units.some(u => u.verdict === 'dead' && !u.unit.compositional),

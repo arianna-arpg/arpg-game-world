@@ -5039,6 +5039,18 @@ export class World {
       const dummy = this.createMonster('target_dummy', Math.max(1, this.player.level), 'enemy');
       dummy.pos = this.clampPos(vec(TRAINING_YARD.x, TRAINING_YARD.y), dummy.radius);
       this.actors.push(dummy);
+      // THE TRAINING RACK: the color-coded siblings stand in a row east of
+      // the post — one hard resistance each (watch a conversion change the
+      // number) and the heavy brother (watch vs-heavier arm). One unlock
+      // raises the whole rack; the sim probes target these same defs.
+      const rack = ['target_dummy_pyre', 'target_dummy_rime', 'target_dummy_storm',
+        'target_dummy_void', 'target_dummy_colossus'];
+      for (let i = 0; i < rack.length; i++) {
+        const sib = this.createMonster(rack[i], Math.max(1, this.player.level), 'enemy');
+        sib.pos = this.clampPos(
+          vec(TRAINING_YARD.x + 52 * (i + 1), TRAINING_YARD.y), sib.radius);
+        this.actors.push(sib);
+      }
     }
     // THE TRACKER: the Bestiary's keeper camps at the west edge once his
     // Vault feature is bought (townBuild raised his fire; the body and the

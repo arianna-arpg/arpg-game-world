@@ -29,12 +29,14 @@ import { entryClassId, entryLabel, entryLevel } from '../src/sim/builds';
 import { BUILDS } from '../src/sim/data/builds';
 import { PANELS, expandPanel, type ResolvedTarget } from '../src/sim/data/panels';
 import {
-  COMPAT_CFG, compatCensus, explainPair, makeProbeSession, pairKey, runCompatMatrix,
+  COMPAT_CFG, compatCensus, explainPair, hostExpressionCensus, makeProbeSession, pairKey,
+  runCompatMatrix,
+  type HostExpressionBaseline, type HostMuteClass,
   type MatrixOpts, type MatrixResult, type PairDeepResult, type PairExplain, type PairProbeResult,
 } from '../src/sim/compat';
 import {
-  adjudicate, checkLedger, emptyLedger, ledgerToJson, mergeProbed, reconcileLedger,
-  rigMismatches, rigSignatureOf, validateLedger,
+  adjudicate, checkLedger, emptyLedger, expressionSignatureOf, ledgerToJson, mergeProbed,
+  reconcileLedger, rigMismatches, rigSignatureOf, validateLedger,
   type LedgerStatus, type ObservedMatrix, type RigSignature, type SupportLedger,
 } from '../src/sim/ledger';
 import { ECONOMY_CFG, auditAffixes, auditLoot, killDropExpectations, unreachableAffixes } from '../src/sim/economy';
@@ -491,6 +493,33 @@ function sweepSkills(args: Args): void {
 
 // ------------------------------------------------- the support matrix runs --
 
+/** The committed host-expression census, when one exists — matrix runs and
+ *  dossiers consult it for the mute-host blindness screen; `--no-expression`
+ *  opts a run out (e.g. to re-observe what the screen would hide). */
+function loadHostExpression(): HostExpressionBaseline | null {
+  const p = path.join(BASELINES_DIR, 'host_expression.json');
+  if (!fs.existsSync(p)) return null;
+  const data = JSON.parse(fs.readFileSync(p, 'utf8')) as HostExpressionBaseline;
+  if (data.version !== 1 || !data.hosts) {
+    throw new Error(`unrecognized host-expression baseline at ${p} (want version 1)`);
+  }
+  return data;
+}
+
+function attachHostExpression<T extends { hostExpression?: HostExpressionBaseline }>(
+  args: Args, opts: T, announce = true,
+): T {
+  if (args.flags['no-expression']) return opts;
+  const hx = loadHostExpression();
+  if (hx) {
+    opts.hostExpression = hx;
+    if (announce) {
+      console.log(`Host-expression screen armed: ${expressionSignatureOf(hx)} (balance/baselines/host_expression.json; --no-expression opts out).`);
+    }
+  }
+  return opts;
+}
+
 /** One option parser for every matrix surface (sweep supports, matrix check)
  *  — the flags are the vocabulary, shared verbatim. */
 function matrixOptsFrom(args: Args): MatrixOpts {
@@ -513,7 +542,7 @@ function matrixOptsFrom(args: Args): MatrixOpts {
     if (!m) throw new Error(`--shard wants i/n (e.g. 2/5), got '${shard}'`);
     opts.shard = { index: Number(m[1]), of: Number(m[2]) };
   }
-  return opts;
+  return attachHostExpression(args, opts);
 }
 
 /** The serializable half of MatrixOpts (callbacks and sets stripped) —
@@ -524,6 +553,9 @@ function matrixOptsOut(opts: MatrixOpts): Record<string, unknown> {
   delete out.onDeep;
   delete out.skipPairs;
   out.pairs = opts.pairs?.length;
+  // The baseline itself is bulky — artifacts carry its signature only.
+  delete out.hostExpression;
+  out.expression = expressionSignatureOf(opts.hostExpression);
   return out;
 }
 
@@ -820,10 +852,88 @@ function cmdMatrix(args: Args): void {
   const what = args._[1] ?? '';
   if (what === 'check') matrixCheck(args);
   else if (what === 'explain') matrixExplain(args);
+  else if (what === 'expression') matrixExpression(args);
   else if (what === 'adjudicate') matrixAdjudicate(args);
   else if (what === 'merge') matrixMerge(args);
   else if (what === 'ledger') matrixLedger(args);
-  else throw new Error(`matrix supports 'check', 'explain', 'adjudicate', 'merge' or 'ledger' (got '${what || '∅'}')`);
+  else throw new Error(`matrix supports 'check', 'explain', 'expression', 'adjudicate', 'merge' or 'ledger' (got '${what || '∅'}')`);
+}
+
+/** THE HOST-EXPRESSION CENSUS (2026-07-22): one BARE episode per host at its
+ *  own probe shape — what does the host DO with nothing socketed? The printed
+ *  report is the PILOT BACKLOG (mute hosts grouped by the capability that
+ *  would unlock them, with the open-ledger rows they carry); `--write`
+ *  commits the baseline that arms probePair's mute-host blindness screen. */
+function matrixExpression(args: Args): void {
+  const skillFilter = str(args.flags.filter, '');
+  if (args.flags.write && skillFilter) {
+    throw new Error(`--write refuses --filter: a partial census would stomp the full baseline`);
+  }
+  const opts: Parameters<typeof hostExpressionCensus>[0] = {
+    skillFilter,
+    level: num(args.flags.level, COMPAT_CFG.level),
+    seeds: num(args.flags.seeds, 2),
+    baseSeed: num(args.flags['base-seed'], 0xc0ffee),
+  };
+  if (typeof args.flags.duration === 'string') opts.duration = num(args.flags.duration, COMPAT_CFG.dummyDuration);
+  console.log(`Host-expression census over the matrix skill universe${skillFilter ? ` (filter '${skillFilter}')` : ''}…`);
+  const t0 = Date.now();
+  const res = hostExpressionCensus(opts, console.log);
+  const rows = res.rows;
+  const by = (m: HostMuteClass): typeof rows => rows.filter(r => r.mute === m);
+  console.log(`\n${rows.length} host(s) censused — ${res.episodesRun} episode(s) in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+  console.log(`  full-mute ${by('full').length} · cast-only ${by('cast-only').length} · partial ${by('partial').length} · expressive ${by('expressive').length}`);
+
+  // The ledger join: how many open rows each mute host carries — the value
+  // of unlocking it, read straight off the committed backlog.
+  const { ledger } = loadLedger(ledgerPathFrom(args), true);
+  const openByHost = new Map<string, number>();
+  for (const p of ledger.pairs) {
+    if (p.status === 'open') openByHost.set(p.skill, (openByHost.get(p.skill) ?? 0) + 1);
+  }
+  const muteRows = [...by('full'), ...by('cast-only')];
+  const groups = new Map<string, { hosts: string[]; open: number }>();
+  for (const r of muteRows) {
+    const why = r.why ?? 'unexplained';
+    const g = groups.get(why) ?? { hosts: [], open: 0 };
+    g.hosts.push(r.skillId);
+    g.open += openByHost.get(r.skillId) ?? 0;
+    groups.set(why, g);
+  }
+  if (groups.size) {
+    console.log(`\nTHE PILOT BACKLOG — mute hosts by missing capability (open ledger rows carried):`);
+    for (const [why, g] of [...groups.entries()].sort((a, b) => b[1].open - a[1].open)) {
+      console.log(`\n  [${g.hosts.length} host(s) · ${g.open} open row(s)] ${why}`);
+      console.log(`    ${g.hosts.slice(0, 10).join(', ')}${g.hosts.length > 10 ? ` (+${g.hosts.length - 10} more)` : ''}`);
+    }
+  }
+  const partial = by('partial');
+  if (partial.length) {
+    const open = partial.reduce((s, r) => s + (openByHost.get(r.skillId) ?? 0), 0);
+    console.log(`\nPARTIAL hosts — express statuses/bodies/zones/flights but never land a hit: ${partial.length} host(s) · ${open} open row(s).`);
+    console.log(`  Hit-riding gems on these are DESIGN questions (extend/refuse), never census-blinded:`);
+    console.log(`  ${partial.slice(0, 12).map(r => r.skillId).join(', ')}${partial.length > 12 ? ` (+${partial.length - 12} more)` : ''}`);
+  }
+
+  // Artifacts: per-host CSV for forensics; the baseline only on --write.
+  const dir = path.join(REPORTS_DIR, `matrix_expression_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const csv = ['skill,shape,mute,presses,repeats,hits,hit_attempts,dmg_out,status_samples,minion_samples,zone_samples,projectile_samples,orbs_shed,life_gain,open_rows,why',
+    ...rows.map(r => [r.skillId, r.shape, r.mute,
+      r.facts.presses, r.facts.repeats, r.facts.hits, r.facts.hitAttempts, r.facts.dmgOut,
+      r.facts.statusSamples, r.facts.minionSamples, r.facts.zoneSamples, r.facts.projectileSamples,
+      r.facts.orbsShed, r.facts.lifeGain,
+      openByHost.get(r.skillId) ?? 0, JSON.stringify(r.why ?? '')].join(','))].join('\n');
+  fs.writeFileSync(path.join(dir, 'expression.csv'), csv);
+  console.log(`\nReport: ${dir}`);
+  const outPath = path.join(BASELINES_DIR, 'host_expression.json');
+  if (args.flags.write) {
+    fs.mkdirSync(BASELINES_DIR, { recursive: true });
+    fs.writeFileSync(outPath, JSON.stringify(res.baseline, null, 1));
+    console.log(`Baseline written: ${outPath} (${expressionSignatureOf(res.baseline)}) — matrix runs now consult it; --no-expression opts out.`);
+  } else {
+    console.log(`Dry run (no --write): baseline NOT saved. Arm the screen with: npm run sim -- matrix expression --write`);
+  }
 }
 
 /** THE GATE: run the matrix (same flags as `sweep supports`), diff against
@@ -907,14 +1017,14 @@ function gateAgainstLedger(args: Args, observed: ObservedMatrix, ledgerPath: str
 function matrixExplain(args: Args): void {
   const [, , skill, support] = args._;
   if (!skill || !support) throw new Error(`matrix explain <skill> <support> [--seeds N] [--support-level N] [--duration N] [--static] [--no-deep]`);
-  const probeOpts = {
+  const probeOpts = attachHostExpression(args, {
     level: num(args.flags.level, COMPAT_CFG.level),
     supportLevel: num(args.flags['support-level'], COMPAT_CFG.supportLevel),
     seeds: num(args.flags.seeds, 2),
     baseSeed: num(args.flags['base-seed'], 0xc0ffee),
     ...(typeof args.flags['gem-level'] === 'string' ? { gemLevel: num(args.flags['gem-level'], 1) } : {}),
     ...(typeof args.flags.duration === 'string' ? { duration: num(args.flags.duration, COMPAT_CFG.dummyDuration) } : {}),
-  };
+  } as MatrixOpts, false);
   const sess = makeProbeSession(probeOpts);
   const probes = !args.flags.static;
   const t0 = Date.now();
@@ -956,10 +1066,11 @@ function printExplain(x: PairExplain): void {
     for (const b of x.blindRules) console.log(`  · ${b}`);
   }
   if (x.shape) {
-    console.log(`SHAPE: ${x.shape.probe} probe${x.shape.probeWhy ? ` (${x.shape.probeWhy})` : ''}, ${x.shape.rig} rig${x.shape.rigWhy ? ` (${x.shape.rigWhy})` : ''}${x.shape.withKey ? ', resonance-keyed' : ''}`);
+    console.log(`SHAPE: ${x.shape.probe} probe${x.shape.probeWhy ? ` (${x.shape.probeWhy})` : ''}, ${x.shape.rig} rig${x.shape.rigWhy ? ` (${x.shape.rigWhy})` : ''}${x.shape.withKey ? ', resonance-keyed' : ''}${x.shape.dummyId ? `, target: ${x.shape.dummyId}` : ''}${x.shape.bled ? ', bled rig (half vitals)' : ''}`);
   }
   if (x.probe) {
     console.log(`PROBE: ${x.probe.verdict.toUpperCase()} — ${x.probe.identicalSeeds}/${x.probe.seeds} seed(s) byte-identical, Δoutput ${(100 * x.probe.dOutputRel).toFixed(1)}%`);
+    if (x.probe.blindWhy) console.log(`  blind: ${x.probe.blindWhy}`);
     for (const m of x.probe.moved.slice(0, 6)) {
       console.log(`  moved: ${m.key}  ${String(typeof m.bare === 'number' ? Math.round((m.bare as number) * 100) / 100 : m.bare)} → ${String(typeof m.pair === 'number' ? Math.round((m.pair as number) * 100) / 100 : m.pair)}`);
     }

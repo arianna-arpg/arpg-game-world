@@ -23,7 +23,7 @@
 import { costFunctionSupport, pairKey } from './compat';
 import { SUPPORTS } from '../data/supports';
 import type {
-  CensusResult, CensusRow, PairDeepResult, PairProbeResult, ProbeOpts,
+  CensusResult, CensusRow, HostExpressionBaseline, PairDeepResult, PairProbeResult, ProbeOpts,
 } from './compat';
 
 export { pairKey };
@@ -415,7 +415,10 @@ export function validateLedger(
 
 /** The knobs that make two probe runs COMPARABLE — resume and merge refuse
  *  to mix runs whose signatures differ (their verdicts answer different
- *  questions). Kept to the fields that change episode content. */
+ *  questions). Kept to the fields that change episode content — plus the
+ *  host-expression census signature, which changes CLASSIFICATION (a run
+ *  with the mute-host screen armed answers a different question than one
+ *  without). */
 export interface RigSignature {
   level: number | undefined;
   gemLevel: number | undefined;
@@ -423,12 +426,24 @@ export interface RigSignature {
   duration: number | undefined;
   seeds: number | undefined;
   baseSeed: number | undefined;
+  expression: string | undefined;
+}
+
+/** Short content signature of a loaded host-expression baseline — enough to
+ *  refuse mixing runs screened by DIFFERENT censuses, cheap enough to sit
+ *  in every artifact header. */
+export function expressionSignatureOf(hx: HostExpressionBaseline | undefined): string | undefined {
+  if (!hx) return undefined;
+  const rows = Object.values(hx.hosts);
+  const mute = rows.filter(r => r.mute === 'full' || r.mute === 'cast-only').length;
+  return `v${hx.version}:${rows.length}h:${mute}m`;
 }
 
 export function rigSignatureOf(opts: ProbeOpts): RigSignature {
   return {
     level: opts.level, gemLevel: opts.gemLevel, supportLevel: opts.supportLevel,
     duration: opts.duration, seeds: opts.seeds, baseSeed: opts.baseSeed,
+    expression: expressionSignatureOf(opts.hostExpression),
   };
 }
 
