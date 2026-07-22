@@ -20,8 +20,8 @@
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
-import { sceneDue, sceneBegin, sceneCardAck, sceneNoteCast } from '../src/engine/scenes';
-import { PROLOGUE_SCENE, SCENE_CFG } from '../src/data/scenes';
+import { sceneDue, sceneBegin, sceneBegunKey, sceneCardAck, sceneNoteCast } from '../src/engine/scenes';
+import { PROLOGUE_SCENE } from '../src/data/scenes';
 import { START_ZONE } from '../src/data/zones';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
@@ -71,6 +71,17 @@ bootSimEngine();
   const E = makeSimWorld('warrior', 31005);
   E.account.ledger['mireille_flasks_filled'] = 1;
   check('A6: flask graduation grandfathers the account', !sceneDue(E.account, 'prologue'));
+  // THE ABORT LAW: an account that BEGAN the scene stays due whatever the
+  // aborted attempt drifted onto it (a roster vessel, a stray credit) —
+  // only completion closes the door.
+  const F = makeSimWorld('warrior', 31006);
+  F.account.ledger[sceneBegunKey(PROLOGUE_SCENE)] = 1;
+  F.account.roster.push({} as never);
+  F.account.lifetimeCredits = 12;
+  check('A7: a BEGUN-but-aborted scene stays due through any account drift',
+    sceneDue(F.account, 'prologue'));
+  F.account.ledger[PROLOGUE_SCENE.ledger] = 1;
+  check('A7b: completion closes the door for good', !sceneDue(F.account, 'prologue'));
 }
 
 // === B) BEGIN: the off-graph stage under black ==============================
@@ -79,13 +90,17 @@ const p = w.player;
 const xp0 = w.meta.xp;
 check('B0: the fresh sim account is due', sceneDue(w.account, 'prologue'));
 check('B1: sceneBegin takes', sceneBegin(w, 'prologue'));
-check('B2: the gate stamps at START (a mid-scene quit can never re-fire it)',
-  (w.account.ledger[PROLOGUE_SCENE.ledger] ?? 0) >= 1 && !sceneDue(w.account, 'prologue'));
+check('B2: begin stamps the BEGUN mark only — the scene does not COUNT yet, so an abort stays due',
+  (w.account.ledger[sceneBegunKey(PROLOGUE_SCENE)] ?? 0) >= 1
+  && !(w.account.ledger[PROLOGUE_SCENE.ledger] ?? 0)
+  && sceneDue(w.account, 'prologue'));
 check('B3: the staging ground is CURRENT and OFF-GRAPH (caveMap, not the graph)',
   w.zone.id === ZID && !!w.caveMap[ZID] && !w.zoneMap[ZID]);
 check('B4: the mint is sealed — spoils none, no ambient packs, no exits, authored cohort',
   w.zone.spoils === 'none' && w.zone.packDensity === 0
   && w.zone.cohort === 'authored' && w.zone.exits.length === 0);
+check('B4b: the last mile has no edge — the stage arena is BOUNDLESS',
+  w.arena.boundless === true);
 check('B5: scripted ground holds NO uninvited hostiles',
   w.actors.every(a => a.team !== 'enemy'));
 check('B6: born under black, first card pending after the hold',
@@ -111,10 +126,15 @@ check('C1: the continue releases the hold into the drill',
   stageKind(w) === 'drill' && !w.timeflow.heldBy('cinematic'));
 check('C2: the drill prompts (bind tokens resolve at the draw surface)',
   (w.scene?.prompt ?? '').includes('{bind:'));
-// Footwork: the count is the hero's own displacement.
-for (let i = 0; i < 10; i++) { p.pos.x += 60; w.update(DT); }
+check('C2b: the teaching rides at the hero\'s eye (the drill takes the hero seat)',
+  w.scene?.barAt === 'hero');
+// Footwork: the count is the hero's own displacement — run EAST, for real,
+// far past the authored span: the boundless ground never says no.
+for (let i = 0; i < 60 * 14; i++) { w.moveActor(p, 1, 0, DT); w.update(DT); }
 check('C3: footwork fills the first goal (bar past its share)',
   (w.scene?.bar?.frac ?? 0) >= 0.5, `frac=${w.scene?.bar?.frac?.toFixed(2)}`);
+check('C3b: the runner is far past the authored span and still on ground (no edge, no clamp)',
+  p.pos.x > w.arena.w + 400, `x=${p.pos.x.toFixed(0)} span=${w.arena.w}`);
 // Strikes: the input artery's note, five times.
 for (let i = 0; i < 5; i++) sceneNoteCast(w);
 step(w, 0.2);
@@ -147,6 +167,8 @@ check('E1: the first wave pours on its clock (4 skirmishers)',
   `alive=${wave1.length}`);
 check('E2: the whole tide is rewardless', wave1.every(a => a.noBounty));
 check('E3: the survival bar climbs', (w.scene?.bar?.frac ?? 0) > 0);
+check('E3b: the dawn clock hangs over the field (the assault takes the top seat)',
+  w.scene?.barAt === 'top');
 
 // === F) THE COVENANT: a lethal blow fells, never kills ======================
 p.life = 0;
@@ -193,8 +215,21 @@ check('H3: the scene is over and the screen is clear',
   w.scene === null && w.screenFade <= 0.01);
 check('H4: the hero wakes whole — guards off, vitals full',
   !p.invulnerable && !p.untargetable && p.life === p.maxLife());
-check('H5: the account is graduated — the prologue never plays again',
+// THE BLINK LAW at the wake (the reported wall-wedge): the parting blast's
+// knockback must never ride home — the hero stands on open ground with no
+// carried impulse and can WALK.
+{
+  const at = { x: p.pos.x, y: p.pos.y };
+  for (let i = 0; i < 30; i++) w.moveActor(p, 1, 0, DT);
+  const moved = Math.hypot(p.pos.x - at.x, p.pos.y - at.y);
+  p.pos.x = at.x; p.pos.y = at.y;
+  check('H4b: no impulse crosses the zone door — the woken hero walks free',
+    p.push === null && moved > 20, `moved=${moved.toFixed(0)}px push=${String(!!p.push)}`);
+}
+check('H5: COMPLETION stamps the gate — the prologue never plays again',
   (w.account.ledger[PROLOGUE_SCENE.ledger] ?? 0) >= 1 && !sceneDue(w.account, 'prologue'));
+check('H5b: the run begins at the wake — its first save is booked (charDirty)',
+  w.charDirty === true);
 check('H6: no scene body followed us home', sceneBodies(w).length === 0);
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');

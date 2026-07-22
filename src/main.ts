@@ -315,7 +315,10 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   world.dealVeteranFlasks();
   lastSentZone = '';        // force a fresh terrain broadcast for (re)joining clients
   if (COOP_ALLY) spawnCoopAlly();
-  persistRun(account, world); // baseline snapshot so a fresh run is resumable
+  // The baseline snapshot — EXCEPT under a due scene: the tutorial is not a
+  // run, so nothing persists until its 'home' stage writes the true first
+  // save at the bedside wake (a mid-tutorial quit = start a new game).
+  if (!prologueDue) persistRun(account, world); // baseline so a fresh run is resumable
   // A roster character never touches the shared run slot — the mortal
   // Continue stays valid beside it (the vessels are additional lives).
   if (mode.save !== 'roster') ui.setContinueSave(null);
@@ -1366,7 +1369,10 @@ function hostTail(dt: number): void {
   // or an abrupt close). Skipped once dead (the run save is wiped on death).
   // persistRun routes the write to the character's slot (run vs roster vessel)
   // and keeps the roster index card fresh alongside it.
-  if (!world.gameOver) {
+  // …and never while a SCENE plays (engine/scenes.ts): the tutorial is not
+  // a run — its ground never serializes and its abort must leave no save.
+  // The run's first write lands at the scene's 'home' stage via charDirty.
+  if (!world.gameOver && !world.scene) {
     autosaveTimer -= dt;
     if (autosaveTimer <= 0) { autosaveTimer = 20; persistRun(account, world); persistCouchGuests(); }
   }
@@ -1389,8 +1395,9 @@ function hostTail(dt: number): void {
   // vessel persists; only a deliberate roster deletion ever discards it).
   if (world.menuExitRequested) {
     world.menuExitRequested = false;
-    persistRun(account, world);
-    persistCouchGuests();
+    // A mid-scene exit is an ABANDON, not a save-and-quit: nothing persists,
+    // and the next New Game re-launches the scene from its first card.
+    if (!world.scene) { persistRun(account, world); persistCouchGuests(); }
     toStartMenu();
   }
 
@@ -1749,7 +1756,9 @@ function leaveCoop(): void { toStartMenu(); }
 // so a short debounce keeps it to one beacon.
 let lastQuitFlush = -Infinity;
 function quitFlush(): void {
-  if (!running || world.gameOver || !net.isHost) return;
+  // A quit mid-SCENE writes nothing: the tutorial is not a run (the account's
+  // begun-key already re-arms it; a stale pre-scene save must not be minted).
+  if (!running || world.gameOver || !net.isHost || world.scene) return;
   const now = performance.now();
   if (now - lastQuitFlush < 1000) return;
   lastQuitFlush = now;

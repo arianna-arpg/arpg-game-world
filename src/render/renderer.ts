@@ -538,6 +538,7 @@ export class Renderer {
     this.drawLabels(world);        // actor text (names/prompts) — above the fades, visibility-gated
     this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
     this.drawTexts(world);
+    this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
     if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
     this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
 
@@ -1116,14 +1117,50 @@ export class Renderer {
     ctx.strokeRect(bx, by, bw, bh);
   }
 
-  /** THE SCENE FABRIC's HUD channel (engine/scenes.ts): a labeled top bar
-   *  (the drill's fill, the assault's climbing clock) + a prompt line whose
-   *  '{bind:…}' tokens resolve against the LIVE binds — the tutorial can
-   *  never name a key the player rebound away. Same seat as the encounter
-   *  bar (a scene and an encounter never share ground). */
+  /** THE SCENE FABRIC's hero-seated teaching channel (engine/scenes.ts,
+   *  SceneHudSeat 'hero'): the drill's bar + prompt float just above the
+   *  player's head in WORLD space — unmissable, and the eye is trained
+   *  upward toward the objectives to come. '{bind:…}' tokens resolve
+   *  against the LIVE binds here exactly as at the top seat. */
+  private drawSceneHeroHud(world: World): void {
+    const sc = world.scene;
+    if (!sc || sc.barAt !== 'hero' || (!sc.bar && !sc.prompt)) return;
+    const p = world.player;
+    const { ctx } = this;
+    const cx = p.pos.x;
+    const top = p.pos.y - p.radius - 24;
+    ctx.textAlign = 'center';
+    if (sc.prompt) {
+      const text = this.resolveText(sc.prompt);
+      ctx.font = 'bold 13px Verdana';
+      // A ground-shadow stroke so the line reads on sunlit grass and in
+      // the gloam alike (the floating-text idiom, held steady).
+      ctx.strokeStyle = 'rgba(8,8,12,0.8)';
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(text, cx, top - 12);
+      ctx.fillStyle = '#f0e8cc';
+      ctx.fillText(text, cx, top - 12);
+    }
+    if (sc.bar) {
+      const bw = 120, bh = 7, bx = cx - bw / 2, by = top - 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#c8a852';
+      ctx.fillRect(bx, by, bw * clamp(sc.bar.frac, 0, 1), bh);
+      ctx.strokeStyle = '#0a0a0e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by, bw, bh);
+    }
+  }
+
+  /** THE SCENE FABRIC's top HUD seat (engine/scenes.ts, SceneHudSeat
+   *  'top'): a labeled screen-space bar — the assault's dawn clock hangs
+   *  over the whole field in the encounter bar's own chair (a scene and an
+   *  encounter never share ground). */
   private drawSceneHud(world: World): void {
     const sc = world.scene;
-    if (!sc || (!sc.bar && !sc.prompt)) return;
+    if (!sc || sc.barAt !== 'top' || (!sc.bar && !sc.prompt)) return;
     const { ctx } = this;
     const w = this.uiW;
     const oy = world.party.strip.length > 1 ? 20 : 0;

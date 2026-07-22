@@ -12,18 +12,28 @@ account, ever** — the flask-lesson graduation pattern applied to narrative.
 Everything is data: the stages, the cards' prose, the waves, the executioner
 and its verb, every timing dial (`SCENE_CFG`).
 
-## The gate (`sceneDue`)
+## The gate (`sceneDue`) — a scene only counts once LIVED
 
-Due only while the scene's `ledger` key is unstamped in `account.ledger`
-**and** the account is virgin — no roster vessels, no recorded deaths, no
-lifetime credits, no flask graduation. Veterans predating a newly-added scene
-are grandfathered by their own history: no migration write exists or is
-needed. The key stamps **at scene START** (idempotently again at completion),
-so a mid-scene quit can never re-fire or loop it; only a full account reset
-(a fresh, virgin account) brings a scene back. `?prologue` on the URL re-runs
-the debut scene for one page load without touching the gate (the `?couchpads`
-lever precedent). Hooked at `startGame` (`src/main.ts`) — the due test reads
-BEFORE a roster mode pushes its vessel.
+A scene is **not a run**. The completion key (`SceneDef.ledger`) stamps at
+the `'home'` stage — until then the scene stays due: for a virgin account
+(no roster vessels, no recorded deaths, no lifetime credits, no flask
+graduation), or for **any** account that BEGAN it and aborted (the
+begun-mark `<ledger>_begun`, stamped at start, survives whatever the
+aborted attempt drifted onto the account). Quit mid-tutorial and the next
+New Game re-launches it from the first card. Veterans predating a
+newly-added scene are grandfathered by their own history: no migration
+write exists or is needed; only a full account reset brings a scene back.
+`?prologue` on the URL re-runs the debut for one page load without touching
+the gate (the `?couchpads` lever precedent). Hooked at `startGame`
+(`src/main.ts`) — the due test reads BEFORE a roster mode pushes its vessel.
+
+**The run begins at the wake.** While a scene plays, the shell writes no
+run save: `startGame`'s baseline persist, the 20s autosave, the menu-exit
+persist and the `quitFlush` beacon all stand down, and `World.endRun`
+refuses the forfeit ceremony (no banked death, no corpse — a plain walk to
+the menu). The run's FIRST save is booked at `'home'` via `charDirty`, at
+the bedside. An abort therefore leaves nothing to resume — starting a new
+game is the one road, and it re-launches the scene.
 
 ## The staging ground (off-graph by construction)
 
@@ -40,6 +50,14 @@ center; the script alone decides when you leave), hollows/puzzles/scenery
 stripped. **THE EMPTY-FIELD LAW**: after the load, every non-player actor is
 swept — whatever a tileset's dress rows mint (the lea's gem cache), the
 scene owns every body on its stage.
+
+**Perpetual ground** (`SceneZoneSpec.boundless` — the Descent-abyss
+methodology): the arena streams under the walker with no rim and no
+reachable edge — dash any direction forever and the world keeps coming
+(the prologue's Last Mile wears it: the road is longer than you). The
+authored dress stays near the heart; every scene spawn already rings off
+the hero's LIVE position (`swarmEntryPoint`), so the waves and the
+reckoning follow wherever the runner goes.
 
 Teardown (`'home'` stage): one surface `loadZone(START_ZONE)` (unwinds the
 cave-return state, discards the stage's actors, lands at the bedside
@@ -60,8 +78,12 @@ The director (`updateScene`) hooks `World.update` **on the raw clock,
 before the timeflow gate's early return** — scenes own their holds and must
 breathe through them; it yields only to `'menu'` holds (the true pause).
 While a scene runs it owns `world.screenFade`, and the renderer reads its
-HUD channels: `scene.bar` + `scene.prompt` (encounter-style top bar;
-`{bind:…}` tokens resolve against live binds) and `scene.focus` (**the
+HUD channels: `scene.bar` + `scene.prompt` with a **seat** per stage
+(`SceneHudSeat` — `'hero'` floats the bar + prompt just above the player's
+head in world space, unmissable and training the eye upward: the drill and
+the clash default there; `'top'` takes the encounter bar's screen chair:
+the assault's dawn clock hangs over the whole field; `{bind:…}` tokens
+resolve against live binds at either seat) and `scene.focus` (**the
 cinematic eye** — the one camera-override lever, `renderer.ts` follows it
 in place of the hero while set; the pan is the director lerping the point,
 so drawn == scripted).

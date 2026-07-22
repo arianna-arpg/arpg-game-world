@@ -3737,6 +3737,11 @@ export class World {
    *  as a real death would — no duplicated credit logic. */
   endRun(): void {
     if (this.player.dead || this.gameOver) return;
+    // Mid-SCENE there is no run to end (engine/scenes.ts — the run begins
+    // at the wake): no forfeit ceremony, no banked death, no corpse — just
+    // the plain walk back to the menu. The shell's exit persist stands down
+    // too, so the abort leaves nothing behind and the scene stays due.
+    if (this.scene) { this.menuExitRequested = true; return; }
     // A roster-saved character (an Immortal vessel) has no run to forfeit —
     // its whole point is persisting. Route to Save & Main Menu instead; DELETING
     // a vessel is a deliberate roster action on the start menu, never this path.
@@ -4550,10 +4555,18 @@ export class World {
     // player's bedroom would be the wrong kind of tutorial).
     const landing = !back && layout.spawnAt ? layout.spawnAt : entry;
     p.pos = this.clampPos(vec(landing.x, landing.y), p.radius);
+    // THE BLINK LAW at the zone door (the teleport precedent: "an in-flight
+    // shove must not carry through the blink"): transient MOTION dies at the
+    // threshold. A knockback taken on one ground must never integrate on the
+    // next — the prologue's parting blast once rode the wake home and wedged
+    // the hero clean through the bedroom wall.
+    p.push = null;
+    p.dash = null;
     for (const a of this.actors) {
       if (a === p) continue;
       a.dash = null;
       a.casting = null;
+      a.push = null;
       a.pos = this.clampPos(vec(landing.x + rand(-80, 80), landing.y + rand(-80, 80)), a.radius);
     }
     // THE SPOILS LAW says so at the door (ZoneDef.spoils): ground that mints

@@ -29,11 +29,14 @@
 //   • home      — teardown: back to the start-zone bedside, the staging
 //                 zone deleted from the off-graph map, completion stamped.
 //
-// THE GATE: scenes stamp their `ledger` key into account.ledger the moment
-// they BEGIN (idempotently again at completion) — a scene can never re-fire
-// or loop, and only a full account reset brings it back. Veteran accounts
-// (any prior play) never see a newly-added scene: the due test requires a
-// virgin account (engine/scenes.ts `sceneDue`).
+// THE GATE: a scene only COUNTS once lived to the end — the `ledger` key
+// stamps at the 'home' stage, while a begun-mark (`<ledger>_begun`) laid at
+// START keeps an ABORTED scene due: quit mid-tutorial and the next New Game
+// re-launches it from the first card. While a scene plays the shell writes
+// NO run save (the tutorial is not a run; the run begins at the wake), so
+// an abort leaves nothing to resume. Veteran accounts (any prior play)
+// never see a newly-added scene: the due test requires a virgin account
+// (engine/scenes.ts `sceneDue`); only a full account reset brings one back.
 //
 // Pure data leaf: no engine imports. Every number is a knob.
 // ---------------------------------------------------------------------------
@@ -93,16 +96,30 @@ export interface SceneZoneSpec {
   objectiveLabel?: string;
   /** Mint seed (fixed — a scene's ground is not a roll). */
   seed: number;
+  /** PERPETUAL GROUND (the Descent-abyss methodology): the arena streams
+   *  under the walker with no rim and no reachable edge — dash any
+   *  direction forever and the world keeps coming. The authored dress
+   *  stays near the heart; every scene spawn rings off the hero's LIVE
+   *  position anyway, so the script follows wherever they run. */
+  boundless?: boolean;
 }
 
 // --- stage specs (the open union: core kinds typed, the registry may grow) --
 export interface SceneStageBase { kind: string; }
 export interface SceneCardStage extends SceneStageBase { kind: 'card'; card: SceneCardSpec; }
+/** Where a stage's bar + prompt sit: 'hero' rides just above the player's
+ *  head (world-anchored — unmissable, and it trains the eye UPWARD toward
+ *  the objectives to come), 'top' takes the encounter bar's screen seat
+ *  (the assault's dawn clock). Each stage kind picks its own default. */
+export type SceneHudSeat = 'hero' | 'top';
+
 export interface SceneDrillStage extends SceneStageBase {
   kind: 'drill';
   goals: SceneDrillGoal[];
   /** Bar label while the drill runs. */
   label: string;
+  /** HUD seat (default 'hero' — teaching lives at the player's eye). */
+  hud?: SceneHudSeat;
 }
 export interface SceneClashStage extends SceneStageBase {
   kind: 'clash';
@@ -113,6 +130,8 @@ export interface SceneClashStage extends SceneStageBase {
   pauseSec: number;
   /** Bar label while the clash stands (progress = bodies downed). */
   label?: string;
+  /** HUD seat (default 'hero' — the first blood is a lesson too). */
+  hud?: SceneHudSeat;
 }
 export interface SceneAssaultStage extends SceneStageBase {
   kind: 'assault';
@@ -125,6 +144,8 @@ export interface SceneAssaultStage extends SceneStageBase {
   surviveSec: number;
   /** Bar label; the bar runs the survival clock. */
   label?: string;
+  /** HUD seat (default 'top' — the dawn clock hangs over the whole field). */
+  hud?: SceneHudSeat;
 }
 export interface SceneReckoningStage extends SceneStageBase {
   kind: 'reckoning';
@@ -153,8 +174,9 @@ export type SceneStage =
 
 export interface SceneDef {
   id: string;
-  /** Account-ledger key: stamped at scene START (never re-fires even on a
-   *  mid-scene quit) and again at completion. */
+  /** Account-ledger key: stamped at COMPLETION (the 'home' stage) — the
+   *  scene only counts once lived whole. A begun-mark (`<ledger>_begun`)
+   *  stamps at start so an aborted scene stays due and re-launches. */
   ledger: string;
   zone: SceneZoneSpec;
   stages: SceneStage[];
@@ -195,6 +217,7 @@ export const PROLOGUE_SCENE: SceneDef = {
     level: 1,
     objectiveLabel: 'Reach Lastlight by dawn',
     seed: 0x1a57,
+    boundless: true, // the last mile has no edge — the road is longer than you
   },
   stages: [
     {

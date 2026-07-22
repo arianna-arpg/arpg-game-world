@@ -600,11 +600,17 @@ changes.
   `sceneInterceptFall` first — on scripted ground a lethal blow FELLS,
   never kills). The director hooks World.update on the RAW clock before the
   timeflow gate (scenes own their holds; 'menu' still wins), owns
-  screenFade, and feeds the renderer's scene HUD channels (bar/prompt +
-  `scene.focus` = THE CINEMATIC EYE, the one camera override). Gate =
-  `sceneDue` (virgin account + unstamped ledger key; stamped at START so a
-  mid-scene quit resumes at the ordinary wake and never re-fires;
-  `?prologue` re-runs deliberately). Debut: THE PROLOGUE ("The Last Mile")
+  screenFade, and feeds the renderer's scene HUD channels (bar/prompt with
+  a SEAT per stage — 'hero' floats above the player's head, 'top' is the
+  assault's dawn clock — + `scene.focus` = THE CINEMATIC EYE, the one
+  camera override). A SCENE IS NOT A RUN: the ledger key stamps at
+  COMPLETION ('home'), a begun-mark keeps an aborted scene due (quit
+  mid-tutorial → the next New Game re-launches it), and while one plays
+  the shell writes NO run save (baseline/autosave/menu-exit/quitFlush all
+  stand down; World.endRun refuses the forfeit) — the run's first save
+  lands at the bedside wake. `SceneZoneSpec.boundless` streams the stage
+  with no reachable edge (the Last Mile wears it). `?prologue` re-runs
+  deliberately. Debut: THE PROLOGUE ("The Last Mile")
   — drill → goblin waves (wave-frenzy grammar) → Ghorvane the Hordefather
   (anatomy-gamut composite, Odyssey-held: break the Warhorn and the
   Reckoning is SILENCED) musters `hordefathers_reckoning` (nova

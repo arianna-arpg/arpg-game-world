@@ -23,6 +23,13 @@
 // never killed. And nothing on scripted ground pays: every scene spawn is
 // stamped noBounty (no xp, loot, gems, or orbs) on rewardless 'none'-spoils
 // ground — introductions are the whole reward.
+//
+// THE RUN BEGINS AFTER: a scene is not a run. While one plays, the shell
+// writes no run save (startGame's baseline, the autosave cadence, the menu
+// exit and the quit flush all stand down), World.endRun refuses the forfeit
+// ceremony, and the completion stamp + the run's FIRST save both land at
+// the 'home' stage — so an abort leaves nothing to resume and the next New
+// Game re-launches the scene (the begun-key keeps it due).
 // ---------------------------------------------------------------------------
 
 import type { World } from './world';
@@ -60,10 +67,14 @@ export interface SceneRuntime {
   fell: boolean;
   /** Lifetime seat-pressed casts (the drill reads deltas). */
   casts: number;
-  /** Scene HUD bar (label + 0..1) — drawn encounter-style, top-center. */
+  /** Scene HUD bar (label + 0..1). */
   bar: { label: string; frac: number } | null;
   /** Scene HUD prompt line ('{bind:…}' tokens resolve at draw). */
   prompt: string | null;
+  /** Where the bar + prompt sit: 'hero' floats just above the player's
+   *  head (teaching at the eye), 'top' takes the encounter bar's screen
+   *  seat (the assault's dawn clock). Stage handlers set it per beat. */
+  barAt: 'hero' | 'top';
   /** Cinematic camera override — the renderer follows this instead of the
    *  hero while set. */
   focus: Vec2 | null;
@@ -93,14 +104,23 @@ export function registerSceneStage(kind: string, h: SceneStageHandler): void {
 
 // ------------------------------------------------------------ gate + begin --
 
-/** Is this scene DUE for the account? True only while the key is unstamped
- *  AND the account has never played — a veteran predating a newly-added
- *  scene is grandfathered by their own history, no migration write needed.
- *  (A full account reset births a virgin account: scenes return with it.) */
+/** The 'walked in but never walked out' key: stamped at scene START, it
+ *  keeps an ABORTED scene due — quitting mid-tutorial and starting a new
+ *  game re-launches it, whatever the aborted attempt drifted on the account
+ *  (a roster vessel, a stray credit). Only completion closes the door. */
+export const sceneBegunKey = (def: SceneDef): string => `${def.ledger}_begun`;
+
+/** Is this scene DUE for the account? The scene only COUNTS once completed
+ *  (its `ledger` key stamps at the 'home' stage): until then it stays due
+ *  for a virgin account — or for any account that BEGAN it and aborted.
+ *  Veterans predating a newly-added scene are grandfathered by their own
+ *  history, no migration write needed. (A full account reset births a
+ *  virgin account: scenes return with it.) */
 export function sceneDue(account: Account, id: string): boolean {
   const def = SCENES[id];
   if (!def) return false;
   if (account.ledger[def.ledger] ?? 0) return false;
+  if (account.ledger[sceneBegunKey(def)] ?? 0) return true;
   return account.roster.length === 0 && account.deaths.length === 0
     && account.lifetimeCredits === 0
     && !(account.ledger[LEDGER_FLASK_LESSON] ?? 0);
@@ -112,10 +132,13 @@ export function sceneDue(account: Account, id: string): boolean {
 export function sceneBegin(w: World, id: string): boolean {
   const def = SCENES[id];
   if (!def || w.scene) return false;
-  // Stamped AT START, on purpose: a mid-scene quit resumes at the ordinary
-  // bedside wake and the scene never re-fires — it plays once, ever.
-  if (!(w.account.ledger[def.ledger] ?? 0)) {
-    bumpLedger(w.account.ledger, def.ledger);
+  // The BEGUN mark (never the completion key): the scene doesn't COUNT
+  // until it is lived to the end — an abort re-launches it on the next New
+  // Game. While a scene runs, the shell suppresses every run save (the
+  // tutorial is not a run; the run begins at 'home'), so a mid-scene quit
+  // leaves nothing to resume into.
+  if (!(w.account.ledger[sceneBegunKey(def)] ?? 0)) {
+    bumpLedger(w.account.ledger, sceneBegunKey(def));
     w.accountDirty = true;
   }
   const zid = `scene_${id}`;
@@ -131,8 +154,9 @@ export function sceneBegin(w: World, id: string): boolean {
   w.caveMap[zid] = z;
   w.scene = {
     def, zoneId: zid, stageIx: 0, stageT: 0, begun: false, state: {},
-    fell: false, casts: 0, bar: null, prompt: null, focus: null,
-    card: null, cardAck: false, fadeTarget: 1, eventKey: `scene:${id}`,
+    fell: false, casts: 0, bar: null, prompt: null, barAt: 'top',
+    focus: null, card: null, cardAck: false, fadeTarget: 1,
+    eventKey: `scene:${id}`,
   };
   // Born under black — the first card owns the reveal.
   w.screenFade = 1;
@@ -163,6 +187,7 @@ function sealStageZone(z: ZoneDef, def: SceneDef): void {
   z.cohort = 'authored';
   z.packs = { count: [0, 0], size: [0, 0], table: [] };
   z.exits = [];
+  if (def.zone.boundless) z.boundless = true;
   delete z.hollows;
   delete z.puzzles;
   delete z.scenery;
@@ -318,9 +343,10 @@ registerSceneStage('card', {
 
 registerSceneStage('drill', {
   onFell: 'skip',
-  begin(w, sc) {
+  begin(w, sc, spec) {
     w.timeflow.release(SCENE_CFG.holdId);
     sc.fadeTarget = 0;
+    sc.barAt = (spec as SceneDrillStage).hud ?? 'hero';
     sc.state.goalIx = 0;
     sc.state.acc = 0;
     sc.state.castBase = sc.casts;
@@ -359,6 +385,7 @@ registerSceneStage('clash', {
   onFell: 'skip',
   begin(w, sc, spec) {
     const s = spec as SceneClashStage;
+    sc.barAt = s.hud ?? 'hero';
     const ids: number[] = [];
     pourRows(w, sc, s.spawns, ids);
     sc.state.ids = ids;
@@ -381,7 +408,8 @@ registerSceneStage('clash', {
 
 registerSceneStage('assault', {
   onFell: 'skip',
-  begin(_w, sc) {
+  begin(_w, sc, spec) {
+    sc.barAt = (spec as SceneAssaultStage).hud ?? 'top';
     sc.state.next = 0;
     sc.state.lastPour = 0;
     sc.state.ids = [];
@@ -492,8 +520,12 @@ registerSceneStage('home', {
     p.fillResources();
     w.loadZone(START_ZONE);
     delete w.caveMap[sc.zoneId];
+    // COMPLETION is the only stamp that counts: the scene never plays again,
+    // and the RUN begins here — its first save (charDirty → the shell's
+    // prompt persist) is this bedside wake, never a scene beat.
     if (!(w.account.ledger[sc.def.ledger] ?? 0)) bumpLedger(w.account.ledger, sc.def.ledger);
     w.accountDirty = true;
+    w.charDirty = true;
     sc.fadeTarget = 0;
   },
   update(w, sc) {
