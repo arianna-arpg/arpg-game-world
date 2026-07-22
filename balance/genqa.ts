@@ -157,6 +157,21 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
     }
     if (floating.size) fails.push(`${name}: doodad(s) floating over void (${[...floating].join(', ')})`);
   }
+  // THE WALL-HONESTY inverse (wayRoller's refusal): a WAY disc — any kind
+  // whose rule carries `clearway`, the traveled-way class marker — never
+  // sits with its center on a movement-BLOCKING cell: pavement over masonry
+  // reads walkable and lies (the metropolis' gravel drew straight through
+  // tenement walls before the roller learned to refuse). Registry-derived:
+  // new way kinds join this net the moment they declare their clearway.
+  if (layout.walk instanceof GridWalkField) {
+    const paved = new Set<string>();
+    for (const d of doodads) {
+      if (!doodadRuleOf(d.kind).clearway) continue;
+      const rk = regionKind(layout.walk.regionAt(d.pos.x, d.pos.y));
+      if (rk?.blocks) paved.add(`${d.kind}@${rk.id}`);
+    }
+    if (paved.size) fails.push(`${name}: way paved over wall (${[...paved].join(', ')})`);
+  }
   // Portal clears: CONVEX zones only — the splice contract. Grid layouts'
   // promise is reachability (asserted below); their blockers may legally
   // neighbor a portal the flow-field routes around. The exemption set here

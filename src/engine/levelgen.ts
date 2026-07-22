@@ -5966,11 +5966,24 @@ export function wayRoller(ctx: GenCtx, overgrowth = ctx.overgrowth ?? 0):
   const startQ = og >= 1 ? 1 : Math.min(1, og / (meanRun * (1 - og)));
   let wildLeft = 0;
   return (pos, radius, kind) => {
+    // THE WALL-HONESTY LAW: a way never paves THROUGH architecture. A disc
+    // whose center lands on a movement-BLOCKING region (a rampart, a marble
+    // wall, a hedgerow) is refused whole — pavement must never promise a
+    // passage the wall denies (exit roads and worn-path stamps land after
+    // structures raise, so without this the gravel drew straight over the
+    // masonry and read walkable). Liquids and voids stay payable on
+    // purpose: decking water is the clearway fabric's own lane, and the
+    // floating-doodad net owns the void case — only BLOCKING ground
+    // refuses. The rng below still draws exactly as before a refusal
+    // (wild-run bookkeeping runs first), so a clipped way keeps its
+    // downstream rolls stable.
     let wild = false;
     if (og > 0) {
       if (wildLeft > 0) { wild = true; wildLeft--; }
       else if (ctx.rng.chance(startQ)) { wild = true; wildLeft = ctx.rng.int(runLo, runHi) - 1; }
     }
+    const grid = ctx.walk;
+    if (grid instanceof GridWalkField && regionKind(grid.regionAt(pos.x, pos.y))?.blocks) return;
     ctx.doodads.push({ pos, radius, kind, ...(wild ? { wild: true } : {}) });
     // The land reclaiming its ground: walkable flora sprouting through the
     // gravel — the overgrown stretch READS distinct before a single tree
