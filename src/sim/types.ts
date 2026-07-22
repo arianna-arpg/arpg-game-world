@@ -133,7 +133,14 @@ export type PilotSpec =
    *  a probe wants a reproducible cadence, not optimal play. `band` holds
    *  the caster band instead of closing to melee (the FIELD escort: a
    *  flight host must fly, not stab). */
-  | { kind: 'pair'; hostSlot: number; refSlot: number; engage?: number; hostPeriod?: number; band?: number };
+  | { kind: 'pair'; hostSlot: number; refSlot: number; engage?: number; hostPeriod?: number; band?: number }
+  /** THE MIXED-DIET RIG (combo-cadence probes, 2026-07-22): strict
+   *  round-robin over `slots` — one press per usable beat, the cursor
+   *  advancing past blocked slots, no held primary — so the cast ring
+   *  sees A,B,C,A,… and rolling 3-windows go DISTINCT (comboVaried's
+   *  conditionRun). Movement is the brawler's close: the diet's derived
+   *  fillers swing at melee reach. */
+  | { kind: 'combo'; slots: number[]; engage?: number };
 
 // --------------------------------------------------------------- scenarios --
 

@@ -250,9 +250,53 @@ class PairPilot implements PlayerInputSource {
   }
 }
 
+/** THE MIXED-DIET RIG — see PilotSpec 'combo'. A strict round-robin over
+ *  the diet slots: press the cursor's skill when usable, advance past a
+ *  blocked slot to keep the beat (a host on cooldown degrades the window
+ *  to the fillers' 2-distinct — honest: the condition re-arms the moment
+ *  the host rejoins the round). No held primary; movement is the
+ *  brawler's close so every filler lands. */
+class ComboPilot implements PlayerInputSource {
+  private cursor = 0;
+  private joined = false;
+
+  constructor(private spec: Extract<PilotSpec, { kind: 'combo' }>) {}
+
+  poll(actor: Actor, world: World, _dt: number): PlayerInput | null {
+    const n = actor.skills.length;
+    const held: boolean[] = new Array(n).fill(false);
+    const edge: boolean[] = new Array(n).fill(false);
+
+    const foe = nearestFoe(world, actor);
+    const aim = foe ? { x: foe.pos.x, y: foe.pos.y }
+      : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 };
+    let dx = 0, dy = 0;
+    if (foe) {
+      const gap = dist(actor.pos, foe.pos);
+      const want = actor.radius + foe.radius + (this.spec.engage ?? PILOT_CFG.meleeGap);
+      if (gap > want) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
+      if (gap <= want + PILOT_CFG.pairWakeSlack) this.joined = true;
+    }
+
+    if (foe && this.joined) {
+      const k = this.spec.slots.length;
+      for (let i = 0; i < k; i++) {
+        const slot = this.spec.slots[(this.cursor + i) % k];
+        const inst = actor.skills[slot];
+        if (!inst || !actor.canUse(inst)) continue;
+        edge[slot] = true; held[slot] = true;
+        this.cursor = (this.cursor + i + 1) % k;
+        break;
+      }
+    }
+    return { dx, dy, aim, held, edge };
+  }
+}
+
 export function makePilot(spec: PilotSpec | undefined): PlayerInputSource {
   const s = spec ?? { kind: 'brawler' };
   if (s.kind === 'idle') return new IdlePilot();
   if (s.kind === 'pair') return new PairPilot(s);
+  if (s.kind === 'combo') return new ComboPilot(s);
   return new Pilot(s);
 }

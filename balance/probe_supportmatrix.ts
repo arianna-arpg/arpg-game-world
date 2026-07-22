@@ -777,12 +777,21 @@ check('E14 synthetic fixtures cleaned out of the registry',
     const z = w.createMonster('zombie', 30, 'enemy');
     z.pos = { x: p.pos.x + 40, y: p.pos.y };
     w.actors.push(z);
-    w.executeSkill(p, cleave, z.pos); step(w, 0.4);
+    // PRESS LOOPS, not single presses: the level-30 victim can EVADE a
+    // swing (global-RNG-stream order sensitivity — the flake this pin
+    // wore), and crowd shoulders drift bodies; re-park and re-press.
+    const swing = (times: number): void => {
+      for (let i = 0; i < times && !z.dead; i++) {
+        p.mana = p.maxMana();
+        z.pos = { x: p.pos.x + 40, y: p.pos.y };
+        w.executeSkill(p, cleave, z.pos); step(w, 0.35);
+      }
+    };
+    swing(5);
     const normalSouls = p.charges.get('soul') ?? 0;
     z.rarity = 'rare';
-    p.mana = p.maxMana();
-    w.executeSkill(p, cleave, z.pos); step(w, 0.4);
-    check('I1 the boss lane: a normal victim feeds no soul on hit, a rare victim pays per blow',
+    swing(5);
+    check('I1 the boss lane: normal blows feed no soul, rare blows pay',
       normalSouls === 0 && (p.charges.get('soul') ?? 0) > 0 && !z.dead,
       `normal=${normalSouls}, elite=${p.charges.get('soul') ?? 0}, dead=${z.dead}`);
     // The training dummy wears def-level boss BY DESIGN (the rack's boss
@@ -1005,6 +1014,46 @@ check('E14 synthetic fixtures cleaned out of the registry',
     delete SUPPORTS[GEM_ID];
   }
   check('J4 fixtures cleaned', !SUPPORTS[GEM_ID]);
+}
+
+// === RIG K — the charge/cost economy instruments (2026-07-22, the user's
+// (A)+(B) calls) ============================================================
+// (A) THE MIXED-DIET RIG: comboVaried can never arm on a mono-skill bar
+// (conditionRun demands three DISTINCT casts) — polyphony pairs field two
+// derived fillers under the round-robin combo pilot. comboRepeated needed
+// nothing: the solo mono-diet IS "all-same" (pinned so it stays true).
+// (B) THE BLED HEAL HOST: a full pool clips every pour to zero landed —
+// heal-tagged hosts probe at half vitals so their own pours price through
+// life_gain (the unleash-salvo-of-mends class).
+
+{
+  check('K1a polyphony wears the mixed-diet shape (ostinato deliberately not)',
+    pairShapeFor(SKILLS.firebolt, SUPPORTS.polyphony, 'host').comboDiet === true
+    && pairShapeFor(SKILLS.firebolt, SUPPORTS.ostinato, 'host').comboDiet === undefined);
+  const dietScen = probeScenario('firebolt', { id: 'polyphony', level: 1 }, {});
+  const dietIds = (dietScen.build as BuildSpec).skills.map(s => s.id);
+  check('K1b the diet scenario fields three distinct skills under the combo pilot',
+    new Set(dietIds).size >= 3 && (dietScen.pilot as { kind: string }).kind === 'combo',
+    dietIds.join(','));
+  const kSess = makeProbeSession({ seeds: 2 });
+  const varied = probePair(kSess, { skillId: 'firebolt', supportId: 'polyphony', fit: 'host' });
+  check('K2 polyphony reads EFFECTIVE under the mixed diet (the variety arms on the host press)',
+    varied.result.verdict === 'effective',
+    `${varied.result.verdict}; moved: ${varied.result.moved.map(m => m.key).join(',')}`);
+  check('K3a heal-tagged hosts wear the bled shape',
+    pairShapeFor(SKILLS.mend, SUPPORTS.unleash, 'host').bled === true);
+  // The lever is STRUCTURAL: the shape + the half-vitals build are what
+  // (B) adds; WHICH heal hosts flip is the sweep's per-host empirical
+  // answer (a big pour clips the whole deficit in both runs — honestly
+  // inert there; streams and salvos price where headroom persists).
+  const healScen = probeScenario('mend', { id: 'intensive_care', level: 1 }, {});
+  check('K3b the heal-host scenario runs at half vitals, both runs (the bled world)',
+    (healScen.build as BuildSpec).bled?.lifeFrac === 0.5 && healScen.id.includes('_bled'),
+    healScen.id);
+  const rep = probePair(kSess, { skillId: 'firebolt', supportId: 'ostinato', fit: 'host' });
+  check('K4 ostinato reads EFFECTIVE under the solo mono-diet (repeated was always armed)',
+    rep.result.verdict === 'effective',
+    `${rep.result.verdict}; moved: ${rep.result.moved.map(m => m.key).join(',')}`);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

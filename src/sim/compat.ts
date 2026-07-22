@@ -519,6 +519,30 @@ export function referenceAttackId(): string {
   return first;
 }
 
+/** THE MIXED-DIET FILLERS (comboVaried probes): two derived plain attacks
+ *  ≠ the host — the reference attack plus catalog-scanned no-cooldown,
+ *  no-castMode strikers — so the bar carries THREE distinct ids and the
+ *  cast ring's rolling 3-window can go fully varied (COMBO_CFG
+ *  conditionRun). Derived, never hardcoded. */
+export function dietFillerIds(hostId: string): [string, string] {
+  const picks: string[] = [];
+  const consider = (id: string): void => {
+    if (picks.length >= 2 || id === hostId || picks.includes(id)) return;
+    picks.push(id);
+  };
+  const ref = referenceAttackId();
+  if (SKILLS[ref]) consider(ref);
+  for (const s of Object.values(SKILLS)) {
+    if (picks.length >= 2) break;
+    if (s.noDrop || s.cooldown > 0 || s.castMode || !s.baseDamage) continue;
+    if (!(s.tags as readonly string[]).includes('attack')) continue;
+    if (s.delivery.type !== 'melee') continue;
+    consider(s.id);
+  }
+  if (picks.length < 2) throw new Error('compat: mixed-diet fillers underivable');
+  return [picks[0], picks[1]];
+}
+
 export interface ProbeOpts {
   level?: number;
   gemLevel?: number;
@@ -596,7 +620,7 @@ export function probeScenario(
   forced?: {
     probe?: 'dummy' | 'live'; rig?: 'solo' | 'escort'; withKey?: boolean; pack?: 'fodder';
     dummyId?: string; bled?: boolean; range?: boolean; aimWall?: boolean; fieldRef?: boolean;
-    graze?: boolean;
+    graze?: boolean; comboDiet?: boolean;
   },
 ): ScenarioDef {
   const def = SKILLS[skillId];
@@ -611,7 +635,10 @@ export function probeScenario(
     : fieldRef ? { mode: 'escort' } as ReturnType<typeof rigModeFor>
       : rigModeFor(def, sup);
   const dummyId = forced?.dummyId ?? rackDummyFor(sup)?.id ?? 'target_dummy';
-  const bled = forced?.bled ?? (sup ? supModsStat(sup, BLED_RIG_STATS) : false);
+  const bled = forced?.bled
+    ?? ((sup ? supModsStat(sup, BLED_RIG_STATS) : false) || def.tags.includes('heal'));
+  const comboDiet = forced?.comboDiet
+    ?? (sup ? [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.when === 'comboVaried') : false);
   const rr = forced?.range !== undefined
     ? { range: !!forced.range, aimWall: !!forced.aimWall, graze: !!forced.graze }
     : (() => {
@@ -632,6 +659,19 @@ export function probeScenario(
   // for kill-scoped payloads (probe.pack 'fodder' — kills must flow).
   const pack = probe.pack === 'fodder' ? COMPAT_CFG.fodderPack : COMPAT_CFG.livePack;
   if (bled) build.bled = { lifeFrac: 0.5, manaFrac: 0.5 };
+  // THE MIXED-DIET RIG: two derived fillers join the bar (both runs — the
+  // shape-keyed bare shares the world) and the combo pilot round-robins
+  // host + fillers so comboVaried can arm on the host's own press.
+  if (comboDiet) {
+    const [f1, f2] = dietFillerIds(skillId);
+    const gl = opts.gemLevel ?? gemLevelAt(opts.level ?? COMPAT_CFG.level);
+    for (const fid of [f1, f2]) {
+      if (!build.skills.some(s => s.id === fid)) {
+        build.skills.push({ id: fid, level: gl });
+        build.bar?.push(fid);
+      }
+    }
+  }
   const R = COMPAT_CFG.range;
   // THE GRAZE BODY (projPulse): parked one swell outside the flight's
   // BASE touch, beside the fire line — the resting radius misses it, the
@@ -678,17 +718,20 @@ export function probeScenario(
       + (dummyId !== 'target_dummy' ? `_${dummyId.replace('target_dummy_', '')}` : '')
       + (bled ? '_bled' : '')
       + (rr.range ? (rr.aimWall ? '_rangewall' : rr.graze ? '_rangegraze' : '_range') : '')
-      + (fieldRef ? '_fieldref' : ''),
+      + (fieldRef ? '_fieldref' : '')
+      + (comboDiet ? '_combodiet' : ''),
     label: build.label,
     build,
     // THE FIELD ESCORT inverts the metronome: the FIELD skill (slot 1) is
     // the upkeep tap, the measured flight (slot 0) is the held filler, and
     // the mover holds the caster band so the flight has road to fly.
-    pilot: escorted
-      ? (fieldRef
-        ? { kind: 'pair', hostSlot: 1, refSlot: 0, band: PILOT_CFG.casterRange }
-        : { kind: 'pair', hostSlot: 0, refSlot: 1 })
-      : soloPilot,
+    pilot: comboDiet
+      ? { kind: 'combo', slots: build.skills.map((_, i) => i) }
+      : escorted
+        ? (fieldRef
+          ? { kind: 'pair', hostSlot: 1, refSlot: 0, band: PILOT_CFG.casterRange }
+          : { kind: 'pair', hostSlot: 0, refSlot: 1 })
+        : soloPilot,
     parityLevel: opts.level ?? COMPAT_CFG.level,
     waves: live
       ? [{
@@ -945,10 +988,9 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: "condition 'lowLife' is unarmable — the dummy never wounds, and the pack seldom presses the rig past its low-life line",
     when: (_def, sup) => supHasOnlyCondPayload(sup, ['lowLife']),
   },
-  {
-    note: 'combo-cadence conditions (comboVaried/comboRepeated) need a MIXED cast diet — the solo probe casts one skill forever',
-    when: (_def, sup) => supHasOnlyCondPayload(sup, ['comboVaried', 'comboRepeated']),
-  },
+  // (2026-07-22, the user's (A) call: the combo-cadence blindness row is
+  // RETIRED — comboVaried pairs ride the mixed-diet rig now, and
+  // comboRepeated always armed under the mono-diet solo pilot.)
   {
     note: 'movement-speed payload is POSITIONAL — the parked duel fingerprint reads combat channels only',
     when: (_def, sup) => supModsStat(sup, ['castMobility'])
@@ -1304,6 +1346,10 @@ export interface PairShape {
   /** THE FIELD ESCORT: the escort reference is the derived field-layer on
    *  the metronome; the flight host fills from the caster band. */
   fieldRef?: true;
+  /** THE MIXED-DIET RIG (comboVaried payloads): two derived fillers join
+   *  the bar and the combo pilot round-robins all three — the cast ring's
+   *  3-window goes distinct, the condition arms on the host's own press. */
+  comboDiet?: true;
 }
 
 /** The census-comparable shape signature: probe kind + pack + rig + key.
@@ -1347,7 +1393,21 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
       shape.probeWhy = shape.probeWhy ? `${shape.probeWhy}; ${why}` : why;
     }
   }
-  if (supModsStat(sup, BLED_RIG_STATS)) shape.bled = true;
+  // THE BLED RIG: sustain gems as ever — and HEAL-TAGGED HOSTS (2026-07-22,
+  // the user's (B) call): a full pool clips every pour to zero landed, so a
+  // salvo of mends read as a false no-op; half vitals give the pour
+  // headroom and the host's own heals price through life_gain.
+  if (supModsStat(sup, BLED_RIG_STATS) || def.tags.includes('heal')) shape.bled = true;
+  // THE MIXED-DIET RIG (2026-07-22, the user's (A) call): a comboVaried
+  // payload can never arm on a mono-skill bar (conditionRun demands three
+  // DISTINCT casts) — the diet rig fields two derived fillers and the
+  // round-robin pilot.
+  if ([...sup.mods, ...(sup.perLevel ?? [])].some(m => m.when === 'comboVaried')) {
+    shape.comboDiet = true;
+    shape.rigWhy = shape.rigWhy
+      ? `${shape.rigWhy}; mixed-diet rig (comboVaried needs three distinct casts)`
+      : 'mixed-diet rig (comboVaried needs three distinct casts)';
+  }
   if (fieldEscortFor(sup)) {
     shape.rig = 'escort';
     shape.fieldRef = true;
@@ -1362,7 +1422,7 @@ export function pairShapeFor(def: SkillDef, sup: SupportDef, fit: 'host' | 'crew
 export const shapeCacheKey = (s: PairShape): string => [
   s.probe, s.pack ?? '', s.rig, s.withKey ? 'k' : '', s.dummyId ?? '',
   s.bled ? 'b' : '', s.range ? 'r' : '', s.aimWall ? 'w' : '', s.fieldRef ? 'f' : '',
-  s.graze ? 'g' : '',
+  s.graze ? 'g' : '', s.comboDiet ? 'c' : '',
 ].join(':');
 
 /** Sustain stats that need HEADROOM to express — their pairs run the bled
