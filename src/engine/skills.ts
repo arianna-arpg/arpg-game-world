@@ -4823,11 +4823,25 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
    *  refuses honestly, and the refusal self-lifts the moment Forking or a
    *  shrapnel graft stands beside it. */
   flight: (inst, param) => {
-    if (param !== 'children') return true; // unknown params pass open (the registry is the authority)
-    const d = inst.def.delivery as { forks?: number; shatter?: unknown; emit?: unknown };
-    if ((d.forks ?? 0) > 0 || d.shatter !== undefined || d.emit !== undefined) return true;
-    return hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
-      .some(m => CHILD_GRANTING_FLIGHT_STATS.includes(m.stat)));
+    if (param === 'children') {
+      const d = inst.def.delivery as { forks?: number; shatter?: unknown; emit?: unknown };
+      if ((d.forks ?? 0) > 0 || d.shatter !== undefined || d.emit !== undefined) return true;
+      return hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
+        .some(m => CHILD_GRANTING_FLIGHT_STATS.includes(m.stat)));
+    }
+    if (param === 'spends') {
+      // THE SPENDING FLIGHT ('flight:spends', 2026-07-22 — the pierce
+      // gate): pierce means surviving an impact that would otherwise END
+      // the flight — a re-hitting drifter already passes through
+      // everything, so there is nothing to grant and the gem REFUSES
+      // rather than ride inert (the user's call: eliminate the no-op from
+      // the vocabulary, never flag it). Non-projectile deliveries pass
+      // open — their sub-flights' natures are theirs to judge.
+      const d = inst.def.delivery as { type?: string; rehit?: number; noImpact?: boolean };
+      if (d.type !== 'projectile') return true;
+      return !d.rehit && !d.noImpact;
+    }
+    return true; // unknown params pass open (the registry is the authority)
   },
   /** A STATUS source of any kind — the affliction gate's broader sibling
    *  (potency's power lane serves non-damaging ailments too). Reads the

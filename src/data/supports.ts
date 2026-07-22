@@ -1775,8 +1775,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   piercing: {
     id: 'piercing', name: 'Piercing',
-    description: 'Projectiles pierce 2 additional targets.',
+    description: 'Projectiles pierce 2 additional targets. Refuses flights that already pass through everything — a drifting orb has nothing left to pierce.',
     color: '#b8d8a0', requiresTags: ['projectile'],
+    // THE SPENDING GATE: pierce is survival past an impact that would end
+    // the flight — re-hitting drifters never spend, so the socket refuses
+    // honestly instead of riding inert (engine/skills.ts 'flight:spends').
+    requiresMechanisms: ['flight:spends'],
     mods: [mod('pierceCount', 'flat', 2)],
     perLevel: [mod('pierceCount', 'flat', 1)],
     weight: 10,

@@ -705,6 +705,26 @@ check('E14 synthetic fixtures cleaned out of the registry',
   check('H4 the jailbreak: a chained orbiter breaks its tether and hunts',
     detach.result.verdict === 'effective',
     `${detach.result.verdict}; moved: ${detach.result.moved.map(m => m.key).join(',')}`);
+  // H5–H7 — the jailbreak FAMILY complete (the user's calls): fork splits
+  // the orb into drifting children, return gives the drifter a homecoming
+  // (the expiry lane already owned it — pinned so it stays owned), and
+  // pierce REFUSES drifters outright ('flight:spends') — a flight that
+  // passes through everything has nothing left to pierce, so the no-op
+  // leaves the vocabulary instead of riding inert.
+  const split = probePair(hSess, { skillId: 'ball_lightning', supportId: 'forking', fit: 'host' });
+  check('H5 the fork jailbreak: the orb divides into drifting children that deal',
+    split.result.verdict === 'effective' && split.result.moved.some(m => m.key === 'hits_out'),
+    `${split.result.verdict}; moved: ${split.result.moved.map(m => m.key).join(',')}`);
+  const home = probePair(hSess, { skillId: 'ball_lightning', supportId: 'returning', fit: 'host' });
+  check('H6 the return jailbreak: the drifter flies home striking (the expiry lane owns it)',
+    home.result.verdict === 'effective',
+    `${home.result.verdict}; moved: ${home.result.moved.map(m => m.key).join(',')}`);
+  const drifterInst = makeSkillInstance(SKILLS.ball_lightning, 1, 3);
+  const spenderInst = makeSkillInstance(SKILLS.arquebus, 1, 3);
+  check('H7 the spending gate: piercing refuses a re-hitting drifter, fits a spending flight, and fulminate (detonate half lives) stays welcome',
+    supportFitsInst(SUPPORTS.piercing, drifterInst) === false
+    && supportFitsInst(SUPPORTS.piercing, spenderInst) === true
+    && supportFitsInst(SUPPORTS.fulminate, drifterInst) === true);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

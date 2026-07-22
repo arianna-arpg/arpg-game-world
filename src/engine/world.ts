@@ -42057,6 +42057,16 @@ export class World {
                   // Cascade of Knives: the shatter RE-ARMS for the next leg.
                   if (p.reShatter) p.shattered = false;
                 }
+              } else if (p.forks > 0) {
+                // THE SPLIT (the fork jailbreak): the orb DIVIDES on the
+                // body — two children drift onward as THEMSELVES (rehit,
+                // pace and all; forkProjectile hands down forks−1 and the
+                // victim locks), the parent spent in the division. Chain
+                // hops first when both are socketed — the terminal
+                // ladder's own precedence, worn by the drifter.
+                this.forkProjectile(p);
+                dead = true;
+                diedOnBody = true;
               }
               break; // re-hitting projectiles sail on through
             }
