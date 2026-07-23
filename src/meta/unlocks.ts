@@ -1208,19 +1208,26 @@ export function vaultKindOrder(): UnlockKind[] {
 }
 
 /** THE GROWING STORE — the shelving dials (mutable data, probe-dialable;
- *  never literals in the UI). The tab strip is FURNITURE THE ACCOUNT EARNS:
- *  until the account has CLAIMED at least `stripMinOwned` unlocks AND the
- *  store visibly spans at least `stripMinShelves` shelves, the Vault renders
- *  as one flat wall — the young store. The shelving raises itself exactly
- *  when the single room outgrows itself, so the store's furniture grows
- *  with the player's own knowledge of the game. Ownership never regresses
- *  and the Owned shelf stands forever after the first claim, so the raise
- *  is monotone in practice; if late-game stock ever dries below the span,
+ *  never literals in the UI). The tab strip is FURNITURE THE ACCOUNT EARNS,
+ *  and there are TWO roads to earning it — either suffices, both under the
+ *  same span floor (`stripMinShelves` would-be shelves visible):
+ *    THE CLAIMED ROAD — `stripMinOwned` unlocks bought (the collection
+ *    needs organizing);
+ *    THE SEEN ROAD — `stripMinStock` purchasables on display at once (an
+ *    account that PLAYS before buying floods the wall with earned stock —
+ *    quest package, dummy, campfire, oracle at level 5 — and a wall that
+ *    big without furniture is the exact clutter the shelves exist to
+ *    solve; "come across or seen or unlocked", the ask verbatim).
+ *  Below both, the Vault renders as one flat wall — the young store; the
+ *  raise is monotone in practice (ownership never regresses, and stock
+ *  only grows until buying starts — at which point the claimed road is
+ *  nearly walked anyway). If late-game stock ever dries below every dial,
  *  the flat wall still shows EVERYTHING visible — nothing is ever lost to
  *  the furniture either way. */
 export const VAULT_SHELF_CFG = {
   stripMinShelves: 2,
   stripMinOwned: 3,
+  stripMinStock: 6,
 };
 
 /** One shelf's live census — the ONE visibility truth the UI and the probe
@@ -1263,8 +1270,10 @@ export function vaultShelfCensus(a: Account): VaultShelfCensus[] {
  *  a prebuilt census so callers never pay the walk twice. */
 export function vaultStripVisible(a: Account, census: VaultShelfCensus[] = vaultShelfCensus(a)): boolean {
   const ownedTotal = census.find(c => c.tab.owned)?.owned.length ?? 0;
+  const stockTotal = census.reduce((n, c) => n + c.stock.length, 0);
   const span = census.filter(c => c.visible).length;
-  return span >= VAULT_SHELF_CFG.stripMinShelves && ownedTotal >= VAULT_SHELF_CFG.stripMinOwned;
+  return span >= VAULT_SHELF_CFG.stripMinShelves
+    && (ownedTotal >= VAULT_SHELF_CFG.stripMinOwned || stockTotal >= VAULT_SHELF_CFG.stripMinStock);
 }
 
 /** Spend credits to apply an unlock. Mutates the account; returns false if

@@ -270,10 +270,15 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
 
   check('store: a fresh account gets the flat young store (no shelving yet, default dials)',
     !vaultStripVisible(fresh));
-  // THE DIALS LIVE: zeroed thresholds raise the shelving for anyone…
+  // THE DIALS LIVE: zeroed thresholds raise the shelving for anyone — each
+  // road proven alone (the other dialed out of reach).
   const saved = { ...VAULT_SHELF_CFG };
   VAULT_SHELF_CFG.stripMinShelves = 0; VAULT_SHELF_CFG.stripMinOwned = 0;
-  check('store: dials live — zeroed thresholds raise the shelving even fresh',
+  VAULT_SHELF_CFG.stripMinStock = Number.MAX_SAFE_INTEGER;
+  check('store: dials live — the CLAIMED road alone raises the shelving',
+    vaultStripVisible(fresh));
+  VAULT_SHELF_CFG.stripMinOwned = Number.MAX_SAFE_INTEGER; VAULT_SHELF_CFG.stripMinStock = 0;
+  check('store: dials live — the SEEN road alone raises the shelving',
     vaultStripVisible(fresh));
   Object.assign(VAULT_SHELF_CFG, saved);
   check('store: dials restored, the young store returns', !vaultStripVisible(fresh));
@@ -282,6 +287,11 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
   // couple of purchases before the world must teach it more — the mystery
   // doctrine working), stamp the next real deed a new player would cross
   // (the flask lesson, then the level-5 milestone) and keep claiming.
+  // (The seen road is dialed out for this walk so the claimed road is
+  // proven ALONE — a deed stamp that floods the wall would otherwise
+  // raise the strip before the third claim as catalogs grow.)
+  const savedStock = VAULT_SHELF_CFG.stripMinStock;
+  VAULT_SHELF_CFG.stripMinStock = Number.MAX_SAFE_INTEGER;
   const a = makeAccount();
   a.credits = 100000;
   const deeds = [LEDGER_FLASK_LESSON, 'reached_level_5'];
@@ -299,6 +309,24 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     bought >= VAULT_SHELF_CFG.stripMinOwned);
   check('store: the Owned shelf stands once anything is claimed',
     vaultShelfCensus(a).find(c => c.tab.owned)!.visible);
+  VAULT_SHELF_CFG.stripMinStock = savedStock;
+
+  // THE SEEN ROAD, walked honestly: an account that PLAYS before buying —
+  // deeds stamped, never a purchase — floods the wall with earned stock
+  // until the stock dial trips, and the shelving rises with NOTHING owned
+  // (the user's own report: quest package, dummy, campfire and oracle all
+  // offered at level 5 on an unspent account is a wall that needs shelves).
+  const b = makeAccount();
+  const seenDeeds = ['reached_level_5', LEDGER_FLASK_LESSON];
+  const stockOf = (): number => vaultShelfCensus(b).reduce((n, c) => n + c.stock.length, 0);
+  let stamped = 0;
+  while (stockOf() < VAULT_SHELF_CFG.stripMinStock && stamped < seenDeeds.length) {
+    b.ledger[seenDeeds[stamped++]] = 1;
+  }
+  check('store: THE SEEN ROAD — played deeds alone flood the wall past the stock dial',
+    stockOf() >= VAULT_SHELF_CFG.stripMinStock, `stock ${stockOf()} after ${stamped} deed(s)`);
+  check('store: the seen road raises the shelving with NOTHING owned',
+    vaultStripVisible(b) && vaultShelfCensus(b).find(c => c.tab.owned)!.owned.length === 0);
 }
 
 // --- 3c) THE INTRODUCTION LAW + catalog parity nets --------------------------
