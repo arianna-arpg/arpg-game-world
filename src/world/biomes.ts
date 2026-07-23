@@ -51,6 +51,13 @@ export interface BiomeInfo {
    *  (open desert/tundra); smaller = a TIGHTER interwoven web (dense grove/marsh).
    *  Omitted = DEFAULT_NODE_SEP. The user's "forest tight, desert spacious" lever. */
   spacing?: number;
+  /** THE ROAD BUDGET — total charted roads a zone of this biome may hold (the
+   *  per-biome face of worldgen.MAX_DEGREE, read through roadBudgetOf by EVERY
+   *  road-former: the weave, the proximity linker, the frontier-resolution
+   *  gate, the mega-zone inbound snap, and the restore heal). Above the world
+   *  default = a HUB or a claustrophobic tangle (the Fields' expanse, the
+   *  Jungle's press); below it = sparse lonely country. Omitted = MAX_DEGREE. */
+  maxRoads?: number;
   /** Overlay-EVENT frequency multiplier for this biome's zones (default 1) — the
    *  per-biome lever an overlay reads at its gate (eventDensityFor). >1 makes events
    *  ignite more often here (a Field is a wide-open opportunity hub), <1 suppresses.
@@ -179,6 +186,11 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // tightest node web in the game: the green packs against itself.
   jungle: { patronFaction: 'junglekin', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
     climate: { temperature: 'warm', moisture: 'wet' },
+    // THE PRESS: one extra road past the world cap — with the game's tightest
+    // spacing, the deep green reads as a TANGLE (ways in every direction,
+    // denser the further in) while every other country keeps the legible cap.
+    // The same maxRoads lever the Fields' hub uses, tuned the other way.
+    maxRoads: 6,
     meld: 'jungle_meld',
     // Four moods, one country: the THROAT (thicket), the CATHEDRAL
     // (gallery — the thicket family's open face), the ROOF (forest in
@@ -416,6 +428,11 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // hub of opportunity). See levelgen fieldLayout + world fieldifyZone.
   field:    { patronFaction: 'wild',   mapColor: '#6fae3f', label: 'Fields', spacing: 132,
     climate: { temperature: 'mild', moisture: { to: 0.62, fadeOut: 0.2 } },
+    // THE HUB BUDGET: an expanse is a deliberate exploration hub — more doors
+    // than ordinary country, but BOUNDED (the boundary spread claims most of
+    // them; inbound rim accretion consolidates once the budget stands). The
+    // uncapped hub used to collect 14-16 spokes off the forechart halo.
+    maxRoads: 8,
     allowedLayouts: { field: 1 }, eventDensityMul: 1.4,
     // Open country: a lone watchtower on the expanse (structures roll layout-
     // agnostically, so the Field's blob rasterizer gets them too).

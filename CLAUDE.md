@@ -669,6 +669,21 @@ changes.
   `S` → `GeneratedLayout.spawnAt`: no-back-portal arrivals wake there).
   The Waking House in Lastlight composes all four (bedside run start).
   `levelgen.ts`, `worldgen.ts`.
+  THE WORLD-WEB LAWS (the map's link graph kept legible — docs in
+  `docs/engine/worldweb.md`, probe `balance/probe_webqa.ts`): THE ROAD
+  BUDGET (`BiomeInfo.maxRoads` → `roadBudgetOf`, ONE read for the weave /
+  proximity linker / expanse inbound snap / the frontier-RESOLUTION gate in
+  `chartNeighborsOf` — '?' promises finally answer the degree cap; field=8
+  the bounded HUB, jungle=6 THE PRESS), THE HUB LAW + LANDINGS
+  (`FIELD_GEN.hubSpread` boundary doors + `ZoneDef.berths` so expanse roads
+  land on the region edge, `ZoneSpec.noWeave`), THE SHARD LAW
+  (`FIELD_GEN.maxSpanCells` macro-window flood — mega-blobs mint as CHAINED
+  expanses, entry-independent per shard; old mega-regions grandfathered by
+  core-rect containment), THE FOOTPRINT LAW (`footprintBars` +
+  `fieldCoreRect`: spacing measured to the expanse RECT, no both-ends-outside
+  road across it, mint-time sever + restore heal `reconcileWebLaws`), and
+  THE BYPASS/CLEARWAY dials (`WEB_CFG`: no road through a third node's disc,
+  no mint standing on a road's line).
   THE COHERENCE FABRIC (generation composition stays intentional — docs in
   `docs/engine/coherence.md`): traveled ways hold right-of-way as data
   (`DoodadRule.clearway` + the one way-layer `layTraveledWay`/`wayRoller` —

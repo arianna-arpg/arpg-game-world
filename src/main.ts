@@ -357,6 +357,10 @@ function restoreWorldState(world: World, save: CharacterSave): void {
   // anchors re-seal their causeway locks, and the DRY-ROAD heal drops any
   // saved road that walks across the sea (the voyage is the only crossing).
   world.reconcileSeaPorts();
+  // …and THE WEB LAWS: a pre-budget save's Field expanses stamp their map
+  // berths and shed hub spokes past the biome road budget (the degree trim
+  // precedent, applied to the land's own hubs).
+  world.reconcileWebLaws();
   const mode = modeById(world.meta.modeId);
   world.resumeSpawn(resolveResumeSpawn(mode.resume, settings.resumeSpawn), save.world.player);
 }

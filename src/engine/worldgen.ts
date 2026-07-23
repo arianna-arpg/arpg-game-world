@@ -21,6 +21,7 @@ import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
+import { fieldCoreRect } from '../world/fieldRegion';
 import { dimensionDef, dimensionsEnteredBy, isRoadlessGateHub } from '../world/dimensions';
 import { zoneKindOf } from '../data/zoneKinds';
 import type { CourseMintHints } from '../world/courses';
@@ -223,6 +224,11 @@ export interface ZoneSpec {
    *  only by World.enterDimension — any other cross-dimension back-edge is
    *  refused with a warning (the anchor footgun, closed). */
   gateCross?: boolean;
+  /** Skip the opportunistic weave for this mint. A FIELD expanse wears it:
+   *  its edge set is the HUB LAW's own dealt spread (fieldifyZone) plus
+   *  budgeted inbound links — weave roads forged at the discovering corner
+   *  would cluster the hub's doors there and eat its spread budget. */
+  noWeave?: boolean;
 }
 
 // CONNECTION QA — when a freshly-charted node lands near already-charted nodes,
@@ -261,6 +267,88 @@ const WEAVE_RADIUS = 96;   // node-units: past the 52 anti-crowd floor + a MAP_D
  *  leak that let a hold anchor collect a dozen spokes. One cap, every path. */
 export const MAX_DEGREE = 5;
 const MAX_NEW_LINKS = 3;   // extra roads a single fresh node weaves at most
+
+/** THE ROAD BUDGET — a zone's total charted-road allowance: its biome's
+ *  maxRoads (world/biomes.ts — the Fields' hub, the Jungle's press) or the
+ *  world cap. ONE read for every road-former AND the frontier-resolution gate
+ *  (world.chartNeighborsOf): '?' frontiers never counted toward degree, so
+ *  the weave filled a node to cap and the forechart halo then cashed its
+ *  promises anyway — 6-7 roads everywhere, 14+ on an expanse. */
+export function roadBudgetOf(z: ZoneDef): number {
+  return (z.biome ? BIOMES[z.biome]?.maxRoads : undefined) ?? MAX_DEGREE;
+}
+
+/** THE WEB DIALS — the map-legibility geometry the road-formers keep. */
+export const WEB_CFG = {
+  /** THE BYPASS RULE: an OPPORTUNISTIC road (weave / proximity link) whose
+   *  straight chord passes within this of a third node's point is refused —
+   *  drawn, it would run through that node's map disc; the web reaches the far
+   *  zone through its neighbour instead. Back-edges/directed mints are exempt
+   *  (reachability trumps prettiness). Node discs draw ~16-18 map units. */
+  chordNodeClear: 22,
+  /** THE MAP CLEARWAY: a fresh mint pushes off any standing ROAD chord until
+   *  its node stands at least this clear — a node minted ON a road's line
+   *  reads as a junction that doesn't exist. */
+  mintRoadClear: 26,
+} as const;
+
+/** Distance from point `c` to the segment a→b (map units). */
+function segPointDist(a: MapCoord, b: MapCoord, c: MapCoord): number {
+  const abx = b.x - a.x, aby = b.y - a.y;
+  const l2 = abx * abx + aby * aby;
+  if (l2 === 0) return Math.hypot(c.x - a.x, c.y - a.y);
+  const t = clamp(((c.x - a.x) * abx + (c.y - a.y) * aby) / l2, 0, 1);
+  return Math.hypot(c.x - (a.x + t * abx), c.y - (a.y + t * aby));
+}
+
+/** THE BYPASS RULE's predicate: does the chord a→b stay clear of every OTHER
+ *  same-dimension node's disc? (Endpoint zones passed in `skip`.) Exported
+ *  beside MAX_DEGREE/countRoads: every opportunistic road-former reads it. */
+export function chordClearsNodes(
+  a: MapCoord, b: MapCoord, zoneMap: Record<string, ZoneDef>,
+  dimension: string | undefined, skip: ReadonlySet<string>,
+): boolean {
+  for (const z of Object.values(zoneMap)) {
+    if (skip.has(z.id) || z.caveDepth != null) continue;
+    if ((z.dimension ?? 'surface') !== (dimension ?? 'surface')) continue;
+    if (segPointDist(a, b, z.map) < WEB_CFG.chordNodeClear) return false;
+  }
+  return true;
+}
+
+/** Does the segment a→b properly cross the axis-aligned rect (either endpoint
+ *  inside counts as a crossing for the caller to interpret)? */
+function segCrossesRect(a: MapCoord, b: MapCoord, r: { x0: number; y0: number; x1: number; y1: number }): boolean {
+  const inside = (p: MapCoord): boolean => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
+  if (inside(a) || inside(b)) return true;
+  const cross = (p1: MapCoord, p2: MapCoord, p3: MapCoord, p4: MapCoord): boolean => {
+    const d = (u: MapCoord, v: MapCoord, w: MapCoord): number => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
+    const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  };
+  const c1 = { x: r.x0, y: r.y0 }, c2 = { x: r.x1, y: r.y0 }, c3 = { x: r.x1, y: r.y1 }, c4 = { x: r.x0, y: r.y1 };
+  return cross(a, b, c1, c2) || cross(a, b, c2, c3) || cross(a, b, c3, c4) || cross(a, b, c4, c1);
+}
+
+/** THE FOOTPRINT LAW — no road whose BOTH ends stand outside an expanse may
+ *  cut across its core rect (the shortcut over the meadow). A road with an end
+ *  INSIDE the rect is that zone's own spoke (or a bay-pocket's honest way out)
+ *  and passes. One predicate for the route guard, the proximity linker, the
+ *  reciprocal forge, and the probe. Surface-only in practice (fields are a
+ *  surface feature); dimension filtering is the caller's gate. */
+export function footprintBars(
+  a: MapCoord, b: MapCoord, zoneMap: Record<string, ZoneDef>, skip?: ReadonlySet<string>,
+): boolean {
+  for (const z of Object.values(zoneMap)) {
+    if (!z.field || z.dimension || (skip && skip.has(z.id))) continue;
+    const r = fieldCoreRect(z.field, z.size);
+    if (r.x1 <= r.x0 || r.y1 <= r.y0) continue;
+    const inside = (p: MapCoord): boolean => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
+    if (inside(a) || inside(b)) continue; // an incident spoke / a bay pocket's road
+    if (segCrossesRect(a, b, r)) return true;
+  }
+  return false;
+}
 const AT_CANDIDATES = [0.2, 0.35, 0.5, 0.65, 0.8] as const; // portal slots along a side
 // PORTAL GEOMETRY — SHARED with world.ts placeExit so the gen-time spacing test uses
 // the EXACT live portal positions (drift here would let two portals overlap, which
@@ -403,7 +491,11 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
   let added = 0;
   for (const { z } of cands) {
     if (added >= MAX_NEW_LINKS) break;
-    if (countRoads(fresh) >= MAX_DEGREE || countRoads(z) >= MAX_DEGREE) continue;
+    // THE ROAD BUDGET (per-biome): the weave respects each END's own budget.
+    if (countRoads(fresh) >= roadBudgetOf(fresh) || countRoads(z) >= roadBudgetOf(z)) continue;
+    // THE BYPASS RULE: never weave a road that would draw through a third
+    // node's disc — the web reaches that country through the neighbour.
+    if (!chordClearsNodes(fresh.map, z.map, zoneMap, fresh.dimension, new Set([fresh.id, z.id]))) continue;
 
     // Primary axis: the dominant side toward the neighbour. Secondary: the
     // perpendicular side, signed by the minor delta — a fallback when the
@@ -678,21 +770,62 @@ export function placeZoneAt(
   // Find the nearest neighbour inside the spacing radius; push directly away from it
   // by the deficit (+ a hair), with a small seeded angle jitter so two coincident
   // mints don't push along the same axis forever. Iterate to settle multi-crowding.
+  // THE FOOTPRINT LAW (spacing half): a FIELD expanse is its whole core rect,
+  // not a point — the crowding distance is point-to-rect, so mints keep the
+  // spacing from the meadow's EDGE and can never stand on the expanse itself.
   for (let tries = 0; tries < 20; tries++) {
-    let near: ZoneDef | null = null, nd = Infinity;
+    let nearPt: { x: number; y: number } | null = null, nd = Infinity;
     for (const z of Object.values(zoneMap)) {
       if (z.id === id) continue;
       // Other-dimension nodes share the coordinate plane but render on their
       // own map tab — hell must not shove surface zones around (or vice versa).
       if ((z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
-      const d = Math.hypot(z.map.x - map.x, z.map.y - map.y);
-      if (d < nodeSep && d < nd) { nd = d; near = z; }
+      let px = z.map.x, py = z.map.y;
+      if (z.field) {
+        const r = fieldCoreRect(z.field, z.size);
+        if (r.x1 > r.x0 && r.y1 > r.y0) {
+          px = clamp(map.x, r.x0, r.x1); py = clamp(map.y, r.y0, r.y1);
+          // Standing INSIDE the rect: push from the rect's centre instead
+          // (the clamp degenerates to the point itself — no direction).
+          if (px === map.x && py === map.y) { px = (r.x0 + r.x1) / 2; py = (r.y0 + r.y1) / 2; }
+        }
+      }
+      const d = Math.hypot(px - map.x, py - map.y);
+      if (d < nodeSep && d < nd) { nd = d; nearPt = { x: px, y: py }; }
     }
-    if (!near) break;
-    const away = Math.atan2(map.y - near.map.y, map.x - near.map.x) + rng.range(-0.35, 0.35);
+    if (!nearPt) break;
+    const away = Math.atan2(map.y - nearPt.y, map.x - nearPt.x) + rng.range(-0.35, 0.35);
     const push = (nodeSep - nd) + 8;
     map.x += Math.cos(away) * push;
     map.y += Math.sin(away) * push;
+  }
+  // THE MAP CLEARWAY (WEB_CFG.mintRoadClear): a fresh node must not stand ON a
+  // standing road's line — it would read as a junction that doesn't exist.
+  // Push perpendicular off the nearest offending chord until clear.
+  // Deterministic (no rng): the push side is the side the node already leans
+  // toward, so replays and co-op clients re-derive the same nudge.
+  for (let tries = 0; tries < 12; tries++) {
+    let bestD: number = WEB_CFG.mintRoadClear;
+    let push: { x: number; y: number } | null = null;
+    for (const z of Object.values(zoneMap)) {
+      if (z.id === id || (z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
+      for (const e of z.exits) {
+        if (e.to === '?' || e.crossDim || z.id > e.to) continue; // each chord once
+        const dst = zoneMap[e.to];
+        if (!dst || (dst.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
+        const d = segPointDist(z.map, dst.map, map);
+        if (d >= bestD) continue;
+        const abx = dst.map.x - z.map.x, aby = dst.map.y - z.map.y;
+        const l = Math.hypot(abx, aby) || 1;
+        const side = Math.sign(abx * (map.y - z.map.y) - aby * (map.x - z.map.x)) || 1;
+        const mag = (WEB_CFG.mintRoadClear - d) + 4;
+        push = { x: (-aby / l) * side * mag, y: (abx / l) * side * mag };
+        bestD = d;
+      }
+    }
+    if (!push) break;
+    map.x += push.x;
+    map.y += push.y;
   }
   // LAND CLAMP: the placement jitter, the winding bend, and the anti-crowd
   // push must not shove a node into the sea — the ocean is a BIOME now, so
@@ -930,7 +1063,8 @@ export function placeZoneAt(
       console.warn(`[worldgen] refused linkBack onto roadless gate hub ${src.id} ← ${def.id}`);
     }
     // Weave opportunistic roads into already-charted neighbours (density).
-    weaveConnections(def, zoneMap, rng);
+    // A noWeave mint (the FIELD expanse) links by its own hub law instead.
+    if (!spec.noWeave) weaveConnections(def, zoneMap, rng);
   }
   return def;
 }

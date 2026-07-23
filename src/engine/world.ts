@@ -108,7 +108,7 @@ import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
 import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
-import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MAX_DEGREE, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
+import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, chordClearsNodes, footprintBars, roadBudgetOf, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
@@ -133,7 +133,7 @@ import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } fr
 import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
-import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
+import { fieldRegionAt, isFieldPixel, fieldCoreRect, FIELD_BIOME, FIELD_GEN, type FieldExtent } from '../world/fieldRegion';
 import {
   berthCoordsFor, channelFracOf, dockDestCoordsFor, ferryLaneFor, isSoulriverId, ribbonCoordAt,
   riverSeatOf, riverZoneId, soulriverInstanceOf, soulriverKeyOf, soulriverPlan, soulwayCatchAt,
@@ -3148,8 +3148,10 @@ export class World {
     this.events.on('party/leave', () => this.rescaleEnemies());
     // THE ROAD-WATER RULE: opportunistic road weaving samples this world's
     // landmass field — no land road ever spans open ocean (islands are reached
-    // by SAIL; their searoutes draw the crossing).
-    setRouteGuard((a, b) => this.landRoute(a, b));
+    // by SAIL; their searoutes draw the crossing). THE FOOTPRINT LAW rides the
+    // same guard: no woven road may cut ACROSS a Field expanse's core rect
+    // (both-ends-outside — an incident spoke or a bay pocket's road passes).
+    setRouteGuard((a, b) => !footprintBars(a, b, this.zoneMap) && this.landRoute(a, b));
   }
 
   /** Does a straight land route survive between two map coords (no open-ocean
@@ -7509,11 +7511,25 @@ export class World {
       // A frontier that still lands in our OWN region (a concave blob edge) is redundant —
       // return source so eagerChartNeighbors drops it (never mint a twin of our own region).
       if (source.field?.regionId === ext.regionId) return source;
-      const existing = Object.values(this.zoneMap).find(z => z.field?.regionId === ext.regionId && z.id !== source.id);
+      // Mint-once: match the shard's canonical id — or CONTAINMENT in an older
+      // zone's core rect (a save minted before the shard law keeps its whole
+      // mega-region; a twin must never mint inside standing expanse ground).
+      const existing = Object.values(this.zoneMap).find(z => z.id !== source.id && z.field
+        && (z.field.regionId === ext.regionId || (() => {
+          const r = fieldCoreRect(z.field!, z.size);
+          return target.x >= r.x0 && target.x <= r.x1 && target.y >= r.y0 && target.y <= r.y1;
+        })()));
       if (existing) {
+        // Already joined both ways is a plain resolve, never a new spoke.
+        if (existing.exits.some(x => x.to === source.id)) return existing;
         // THE DRY-ROAD LAW: a region met across a corner of brine is not a
         // neighbour — consolidate rather than forge a one-way wet edge.
         if (this.roadIsWet(existing.map, source.map)) return source;
+        // THE HUB BUDGET (the sea-anchor degree law, on land): an expanse at
+        // its road budget takes no more spokes — the rim consolidates instead.
+        // Uncapped, the forechart halo walked the whole perimeter and the one
+        // node collected 14-16 doors (the "enormous Fields" disease).
+        if (countRoads(existing) >= roadBudgetOf(existing)) return source;
         this.linkBackTo(existing, source); return existing;
       }
     }
@@ -7554,11 +7570,19 @@ export class World {
     // dimension whose biomes declare no envelopes is byte-identical (the
     // envelope algebra ignores the datum).
     const depthFor = source.dimension ? this.dimensionBiomeDepthFor(source.dimension) : this.biomeDepthFor;
-    const gen = source.field
+    // An EXPANSE mint (ext: the target stands on Field ground) skips the
+    // opportunistic weave — its doors are the HUB LAW's dealt spread plus
+    // budgeted inbound links (fieldifyZone), never a cluster at the
+    // discovering corner. Everything else about the mint is the ordinary
+    // frontier pipeline (same spec fields generateZone forwards).
+    const gen = ext
       ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
-        { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
-      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor,
-        this.courseMintFor(source.dimension));
+        { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension, courseFor: this.courseMintFor(source.dimension), noWeave: true })
+      : source.field
+        ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
+          { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
+        : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor,
+          this.courseMintFor(source.dimension));
     this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD of the walker
@@ -7878,11 +7902,19 @@ export class World {
       // THE DRY-ROAD LAW: a candidate across the water is no neighbour —
       // the web walks, it never swims (the far shore is a voyage away).
       if (!source.dimension && this.roadIsWet(source.map, z.map)) continue;
-      // THE DEGREE CAP (the weave's own budget, finally shared): a node at
-      // MAX_DEGREE takes no opportunistic link — nearestLinkable was the
-      // one road-former still stacking spokes past it.
-      if (countRoads(z) >= MAX_DEGREE) continue;
+      // THE FOOTPRINT LAW: a link whose chord cuts across a Field expanse's
+      // core rect is a shortcut over the meadow — refused (spokes exempt:
+      // an endpoint inside the rect passes inside footprintBars itself).
+      if (!source.dimension && footprintBars(source.map, z.map, this.zoneMap)) continue;
+      // THE ROAD BUDGET (per-biome, worldgen.roadBudgetOf): a node at its
+      // budget takes no opportunistic link — nearestLinkable was the one
+      // road-former still stacking spokes past the cap.
+      if (countRoads(z) >= roadBudgetOf(z)) continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
+      // THE BYPASS RULE: never link along a chord that would draw through a
+      // third node's disc — the web reaches that country through the
+      // neighbour instead (one shared predicate with the weave).
+      if (!chordClearsNodes(source.map, z.map, this.zoneMap, source.dimension, new Set([source.id, z.id]))) continue;
       // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
       // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
       // would draw a road in the wrong direction and break the map's directional read).
@@ -7926,6 +7958,14 @@ export class World {
     const frontiers = zone.exits.filter(x => x.to === '?');
     const drop = new Set<ZoneExitDef>();
     for (const e of frontiers) {
+      // THE ROAD BUDGET at resolution (worldgen.roadBudgetOf): '?' promises
+      // never counted toward degree, so a weave-filled node still cashed
+      // every frontier when the halo swept it — 6-7 roads on ordinary
+      // country, sometimes more. Once the zone's charted roads reach its
+      // biome budget, the remaining frontiers CONSOLIDATE (the world keeps
+      // growing from its under-budget rim). A LOCKED frontier is a bought
+      // deed (the Holdfast's pocket) — never dropped.
+      if (!e.lock && countRoads(zone) >= roadBudgetOf(zone)) { drop.add(e); continue; }
       const gen = this.chartFrontier(zone, e);
       // COLLAPSE redundant frontiers: if the zone already connects to the resolved
       // neighbour (e.g. one big Field region borders this zone on several sides, or two
@@ -8330,10 +8370,12 @@ export class World {
     // off to one side). Neighbours sit OUTSIDE the region, so re-centring never overlaps them.
     def.map = { x: e.originX + e.nodeW / 2, y: e.originY + e.nodeH / 2 };
     // MANY EXITS: a Field expanse is an exploration HUB — replace the default 1-2 frontiers
-    // with a SPREAD of boundary frontiers (2 per side) so neighbours radiate from the
-    // region's edges/corners (chartFrontier projects each OUT past the blob boundary). Keep
-    // the back-edge + any real weave roads (non-'?') — they're already wired. This runs at
-    // mint, before the zone is loaded, so rebuilding def.exits in place is safe.
+    // with a SPREAD of boundary frontiers (FIELD_GEN.hubSpread per side) so neighbours
+    // radiate from the region's edges/corners (chartFrontier projects each OUT past the
+    // blob boundary). Keep the back-edge + any real roads (non-'?') — they're already
+    // wired. This runs at mint, before the zone is loaded, so rebuilding def.exits in
+    // place is safe. The TOTAL door count answers the biome's ROAD BUDGET at frontier
+    // resolution (chartNeighborsOf) — the spread deals the doors, the budget seats them.
     const tileset = def.exits.find(x => x.tileset)?.tileset;
     const reals = def.exits.filter(x => x.to !== '?');
     // Each spread frontier claims a SPACED slot against everything already in
@@ -8342,10 +8384,55 @@ export class World {
     const rebuilt: ZoneExitDef[] = [...reals];
     const probe = { exits: rebuilt, size: def.size };
     for (const side of ['n', 's', 'e', 'w'] as const) {
-      for (const at of [0.3, 0.7]) rebuilt.push({ to: '?', side, at: spacedExitAt(probe, side, at), tileset });
+      for (const at of FIELD_GEN.hubSpread) rebuilt.push({ to: '?', side, at: spacedExitAt(probe, side, at), tileset });
     }
     def.exits.length = 0;
     def.exits.push(...rebuilt);
+    // THE LANDINGS (ZoneDef.berths — the soulriver's many-mouthed law): a map
+    // BERTH at each spread stop on the region's boundary, so every road into
+    // the expanse lands at its true edge instead of converging on the centre
+    // dot (panels' anchorOf snaps each edge to its nearest berth). Node-space
+    // rect edge = the drawn region boundary; persisted with the def.
+    def.berths = [];
+    for (const at of FIELD_GEN.hubSpread) {
+      def.berths.push(
+        { x: e.originX + e.nodeW * at, y: e.originY },            // n
+        { x: e.originX + e.nodeW * at, y: e.originY + e.nodeH },  // s
+        { x: e.originX, y: e.originY + e.nodeH * at },            // w
+        { x: e.originX + e.nodeW, y: e.originY + e.nodeH * at },  // e
+      );
+    }
+    // THE FOOTPRINT LAW, retroactive half: roads forged BEFORE this expanse
+    // stood (the halo weaves the approach ring first) may cut across the
+    // just-claimed core rect — sever them now, while they are still veiled
+    // rim country nobody has walked.
+    this.severFootprintCrossers(def);
+  }
+
+  /** Sever every standing road that cuts ACROSS a Field zone's core rect with
+   *  BOTH ends outside it (footprintBars' own test — spokes and bay pockets
+   *  pass by construction). The shed keeps the belt (never a zone's last
+   *  road) and every notarized deed. Runs at expanse mint (fieldifyZone) and
+   *  from the restore reconcile (reconcileWebLaws). */
+  private severFootprintCrossers(fieldZone: ZoneDef): void {
+    if (!fieldZone.field) return;
+    const lone = { [fieldZone.id]: fieldZone } as Record<string, ZoneDef>;
+    for (const z of Object.values(this.zoneMap)) {
+      if (z.dimension || z.caveDepth != null || z.id === fieldZone.id) continue;
+      for (let i = z.exits.length - 1; i >= 0; i--) {
+        const e = z.exits[i];
+        if (e.to === '?' || e.crossDim || e.notarized === true || e.to === fieldZone.id) continue;
+        const dest = this.zoneMap[e.to];
+        if (!dest || dest.dimension) continue;
+        if (dest.exits.some(x => x.to === z.id && x.notarized === true)) continue;
+        if (!footprintBars(z.map, dest.map, lone)) continue;
+        if (z.exits.filter(x => x.to !== '?').length <= 1) continue;        // the belt…
+        if (dest.exits.filter(x => x.to !== '?').length <= 1) continue;     // …both ends
+        z.exits.splice(i, 1);
+        const back = dest.exits.findIndex(x => x.to === z.id && x.notarized !== true);
+        if (back >= 0) dest.exits.splice(back, 1);
+      }
+    }
   }
 
   /** A RIVER OF SOULS — mint one strewn instance's inland sea at its
@@ -8585,6 +8672,68 @@ export class World {
     }
   }
 
+  /** THE WEB LAWS applied retroactively (main.ts restoreWorldState, beside the
+   *  sea/river reconciles): a saved world minted before the road-budget and
+   *  landing laws heals on load —
+   *    FIELD BERTHS: an expanse without its landings stamps them from its own
+   *    stored region (the fieldifyZone shape, re-derived — pure data).
+   *    THE DEGREE SHED: an expanse past its biome road budget sheds its
+   *    FARTHEST un-notarized spokes back down (the sea-anchor trim, shared
+   *    belt: never a neighbour's last road), and stray '?' frontiers past the
+   *    budget fold away with it.
+   *  Ordinary over-budget country (the 6-7-road halo leak) is left standing —
+   *  the resolution gate stops NEW leaks, and trimming a walked web's roads
+   *  out from under a player is worse than tolerating its history. */
+  reconcileWebLaws(): void {
+    for (const z of Object.values(this.zoneMap)) {
+      if (z.dimension || !z.field) continue;
+      const f = z.field;
+      if (!z.berths?.length && f.nodeW && f.nodeH) {
+        z.berths = [];
+        for (const at of FIELD_GEN.hubSpread) {
+          z.berths.push(
+            { x: f.originX + f.nodeW * at, y: f.originY },
+            { x: f.originX + f.nodeW * at, y: f.originY + f.nodeH },
+            { x: f.originX, y: f.originY + f.nodeH * at },
+            { x: f.originX + f.nodeW, y: f.originY + f.nodeH * at },
+          );
+        }
+      }
+      const cap = roadBudgetOf(z);
+      const shed = (): boolean => {
+        const real = z.exits.filter(x => x.to !== '?');
+        if (real.length <= cap) return false;
+        const cands = real
+          .filter(x => x.notarized !== true)
+          .map(x => ({ x, d: this.zoneMap[x.to] ? coordDist(this.zoneMap[x.to].map, z.map) : 0 }))
+          .sort((a, b) => b.d - a.d);
+        for (const c of cands) {
+          const dest = this.zoneMap[c.x.to];
+          if (!dest) { z.exits.splice(z.exits.indexOf(c.x), 1); return true; }
+          if (dest.exits.some(x2 => x2.to === z.id && x2.notarized === true)) continue;
+          if (dest.exits.filter(x2 => x2.to !== '?').length <= 1) continue; // the belt
+          z.exits.splice(z.exits.indexOf(c.x), 1);
+          const back = dest.exits.findIndex(x2 => x2.to === z.id);
+          if (back >= 0) dest.exits.splice(back, 1);
+          return true;
+        }
+        return false;
+      };
+      for (let guard = 0; guard < 24 && shed(); guard++) { /* trims to budget */ }
+      // Fold surplus promises too: at/over budget, an unlocked '?' will only
+      // be dropped by the resolution gate later — clear the clutter now.
+      if (countRoads(z) >= cap) {
+        for (let i = z.exits.length - 1; i >= 0; i--) {
+          const e = z.exits[i];
+          if (e.to === '?' && !e.lock) z.exits.splice(i, 1);
+        }
+      }
+      // …and the FOOTPRINT sweep: saved roads cutting across the expanse
+      // (forged before the law, or before this expanse minted) heal away.
+      this.severFootprintCrossers(z);
+    }
+  }
+
   /** THE SOUL-SHIPS ON THE CHART (the voyage-boat idiom, dealt to ferries):
    *  for every CHARTED river instance, project each abroad ferry's pure
    *  pose (the same clock the loaded zone rides) onto the instance's map
@@ -8654,6 +8803,11 @@ export class World {
     // code); only the surface has an ocean, so dimension links pay nothing.
     if (!notarized && !target.dimension && !source.dimension
       && this.roadIsWet(target.map, source.map)) return;
+    // THE FOOTPRINT LAW: nor may one cut ACROSS a Field expanse's core rect
+    // (both-ends-outside; a spoke into the expanse itself passes — its own
+    // endpoint stands inside the rect, which footprintBars exempts).
+    if (!notarized && !target.dimension && !source.dimension
+      && footprintBars(target.map, source.map, this.zoneMap)) return;
     // Dimensions are sealed — a LINKER may never forge a cross-dimension road
     // (the gate's marked back-edge is MINTED by enterDimension, never linked).
     if ((target.dimension ?? 'surface') !== (source.dimension ?? 'surface')) {

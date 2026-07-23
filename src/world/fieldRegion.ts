@@ -38,6 +38,22 @@ export const FIELD_GEN = {
    *  20000 ≈ a 26×26-Voronoi-cell mega-region — never reached in practice, so the only effect
    *  is a hard ceiling on a pathological flood; the ARENA size is capped separately (above). */
   maxCells: 20000,
+  /** THE SHARD LAW — the most lattice cells ONE expanse zone may span per axis.
+   *  A merged multi-Voronoi mega-blob used to become a single node claiming an
+   *  absurd stretch of the chart (an "enormous" Fields swallowing whole
+   *  countries of map). The flood now runs inside a fixed world-anchored MACRO
+   *  WINDOW of this many cells (12 × step 35 = 420 node units ≈ 5 cardinal
+   *  steps): a blob bigger than the window becomes a CHAIN of adjoining
+   *  expanse zones — each shard's flood is still entry-independent (any entry
+   *  cell inside the same window floods the same constrained component), so
+   *  mint-once holds per shard, and neighbouring shards meet through the
+   *  ordinary boundary-frontier law (the expanses link like country). */
+  maxSpanCells: 12,
+  /** THE HUB SPREAD — the boundary frontier fractions a Field zone deals per
+   *  side (world.fieldifyZone): 2 per cardinal side at these 'at' stops, and a
+   *  map BERTH stamped at each so roads land on the blob's edge (the
+   *  soulriver's many-mouthed law) instead of converging on the node's dot. */
+  hubSpread: [0.3, 0.7],
   /** Target render size (px) of the FIELD's long axis, and the scale clamp. A small
    *  sliver gets scaled UP toward this (so it still reads as a big expanse); a large
    *  contiguous region keeps more heat-map boundary detail at a lower scale. */
@@ -86,11 +102,21 @@ export function fieldRegionAt(coord: MapCoord, seed: number): FieldExtent | null
   // ragged region edge) — else there's no Field region here.
   if (!cellIsField(sgx, sgy) && biomeAt(coord, seed) !== FIELD_BIOME) return null;
 
+  // THE SHARD WINDOW (maxSpanCells): the flood is confined to the fixed macro
+  // cell the START cell sits in — world-anchored, so every entry inside the
+  // same window floods the same constrained component (entry-independent per
+  // shard; a mega-blob becomes a CHAIN of window-sized expanses).
+  const MS = FIELD_GEN.maxSpanCells;
+  const wx0 = Math.floor(sgx / MS) * MS, wy0 = Math.floor(sgy / MS) * MS;
+  const inWindow = (gx: number, gy: number): boolean =>
+    gx >= wx0 && gx < wx0 + MS && gy >= wy0 && gy < wy0 + MS;
+
   const seen = new Set<string>([`${sgx},${sgy}`]);
   const queue: { gx: number; gy: number }[] = [{ gx: sgx, gy: sgy }];
   let minX = sgx, maxX = sgx, minY = sgy, maxY = sgy, count = 0;
   while (queue.length && count < FIELD_GEN.maxCells) {
     const c = queue.shift()!;
+    if (!inWindow(c.gx, c.gy)) continue;    // beyond the shard window — the next shard's ground
     if (!cellIsField(c.gx, c.gy)) continue; // boundary cell — don't count or expand
     count++;
     if (c.gx < minX) minX = c.gx; if (c.gx > maxX) maxX = c.gx;
@@ -132,4 +158,22 @@ export function fieldBiomeAtPixel(f: FieldRegion, px: number, py: number): strin
 /** Is an in-zone pixel inside the Field blob (a walkable Field cell)? */
 export function isFieldPixel(f: FieldRegion, px: number, py: number): boolean {
   return fieldBiomeAtPixel(f, px, py) === FIELD_BIOME;
+}
+
+/** THE CORE RECT — a Field zone's node-space footprint with the pixel hedge
+ *  frame stripped back off (the pad is arena dressing, not claimed country).
+ *  This is the rect the FOOTPRINT LAW reads: mints keep their spacing from it,
+ *  no both-ends-outside road may cut across it, and the mint-once containment
+ *  fallback (old saves whose regionId predates the shard law) matches inside
+ *  it. `size` backstops a pre-nodeW save (nodeW = size.w / scale). Pure. */
+export function fieldCoreRect(
+  f: FieldRegion, size: { w: number; h: number },
+): { x0: number; y0: number; x1: number; y1: number } {
+  const nodeW = f.nodeW ?? size.w / f.scale;
+  const nodeH = f.nodeH ?? size.h / f.scale;
+  const pad = FIELD_GEN.padPx / f.scale;
+  return {
+    x0: f.originX + pad, y0: f.originY + pad,
+    x1: f.originX + nodeW - pad, y1: f.originY + nodeH - pad,
+  };
 }
