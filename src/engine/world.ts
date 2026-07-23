@@ -109,7 +109,7 @@ import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
 import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
-import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, chordClearsNodes, footprintBars, roadBudgetOf, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
+import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, chordClearsNodes, footprintBars, roadBudgetOf, settleWeb, WEB_CFG, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
@@ -7600,6 +7600,16 @@ export class World {
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     if (this.mintVeil) gen.veiled = true; // a forechart sweep mints AHEAD of the walker
     this.zoneMap[gen.id] = gen;
+    // THE SETTLING for expanses: fieldifyZone re-centred this node onto its
+    // region's middle AFTER placeZoneAt's own settle ran — if the centre
+    // landed near standing nodes, the ring gives way now (the expanse itself
+    // is immovable by the settle's own law: its map point IS the blob).
+    if (gen.field) {
+      settleWeb(this.zoneMap, null, {
+        around: gen.map,
+        canStand: (z, pt) => (z.dimension ? true : this.biomeFor(pt) !== OCEAN_BIOME),
+      });
+    }
     // Chart into the sim — it ROUTES to the overlays of the node's dimension
     // (sim.onNodeCharted): surface mints feed the surface systems, hell mints
     // feed hell's own overlay instances. Parallel world-states, one graph.
@@ -8043,6 +8053,21 @@ export class World {
   // forked), each mint stamped ZoneDef.veiled so no player surface shows it
   // until found. World events thereby choose homes from a world that already
   // exists many steps out — and the player stumbles onto them.
+
+  /** THE SETTLE SWEEP's clock (WEB_CFG.settle.sweepSec). */
+  private webSettleNextAt = 0;
+
+  /** The slow whole-chart settling beat: local mint-time settles can chain a
+   *  displacement across their pool edge (a pushed neighbour crowding a node
+   *  the pool never paired it with) — this pass re-relaxes any violating
+   *  clusters chart-wide. Cheap when clean: one distance scan, zero moves. */
+  private updateWebSettle(): void {
+    if (this.time < this.webSettleNextAt) return;
+    this.webSettleNextAt = this.time + WEB_CFG.settle.sweepSec;
+    settleWeb(this.zoneMap, null, {
+      canStand: (z, pt) => (z.dimension ? true : this.biomeFor(pt) !== OCEAN_BIOME),
+    });
+  }
 
   /** Sweep context: while true, chartFrontier stamps its mints `veiled`.
    *  Set/cleared ONLY inside updateForechart's try/finally — every other
@@ -8745,6 +8770,14 @@ export class World {
       // (forged before the law, or before this expanse minted) heal away.
       this.severFootprintCrossers(z);
     }
+    // THE SETTLING, retroactive: a saved chart's overlapping nodes (pre-law
+    // directed mints, field re-centres, event drops) relax to the hover
+    // floor — the same bounded force-directed pass every fresh mint rides,
+    // run once over the whole graph (the cheap no-violation gate exits fast
+    // on a clean chart).
+    settleWeb(this.zoneMap, null, {
+      canStand: (z, pt) => (z.dimension ? true : this.biomeFor(pt) !== OCEAN_BIOME),
+    });
   }
 
   /** THE SOUL-SHIPS ON THE CHART (the voyage-boat idiom, dealt to ferries):
@@ -19560,7 +19593,10 @@ export class World {
     // caravan zone (else picking bands out of order would start the trail deep in the
     // wilds with descending waystation levels + cross-band roads).
     const exclude = new Set(Object.keys(this.zoneMap).filter(id => id.startsWith('caravan_')));
-    let anchor: ZoneDef = nearestNode(this.zoneMap, target, exclude) ?? this.zoneMap[START_ZONE];
+    // Same anchor sanity as the quest mint: the trail must start on the
+    // CONNECTED graph, never on a floating island or a hidden epicenter.
+    let anchor: ZoneDef = nearestNode(this.zoneMap, target, exclude, undefined,
+      (z) => !z.floating && !z.concealed && !isRoadlessGateHub(z)) ?? this.zoneMap[START_ZONE];
     const baseLevel = anchor.level;
     // The trail LENGTHENS with the band (a longer escorted journey to farther lands —
     // and more avenues to explore): ~band×3 zones total (lvl10→3, lvl20→6, lvl30→9…),
@@ -20753,7 +20789,16 @@ export class World {
     const target = (q.zone.bandPlacement && typeof q.zone.level === 'number')
       ? this.findBandCoord(q.zone.level, questSeed)
       : projectCoord(from.map, q.zone.direction, q.zone.distance ?? 1);
-    const anchor = nearestNode(this.zoneMap, target) ?? this.surfaceAnchor();
+    // THE QUEST ANCHOR must stand on the CONNECTED graph: a floating or
+    // concealed node is an island — a quest wired to one would mint
+    // unreachable-by-road (nearestNode already refuses ports/pockets/caves).
+    // Prefer dry chords so the road survives the sea heal without needing
+    // its deed; fall back in steps — a quest must always mint.
+    const saneAnchor = (z: ZoneDef): boolean => !z.floating && !z.concealed && !isRoadlessGateHub(z);
+    const anchor = nearestNode(this.zoneMap, target, undefined, undefined,
+      (z) => saneAnchor(z) && !this.roadIsWet(target, z.map))
+      ?? nearestNode(this.zoneMap, target, undefined, undefined, saneAnchor)
+      ?? this.surfaceAnchor();
     // 'character' quests now obey the radial field at the quest's coord (the standard
     // ruleset) instead of flat-locking to the player's level; an authored number wins.
     const lvl = q.zone.level === 'character' ? this.eventLevel(target) : q.zone.level;
@@ -20778,6 +20823,19 @@ export class World {
       // its territory to connectFloatingZone on approach (charting it now would corrupt
       // the off-graph territory sim). A connected mint seeds its territory immediately.
       if (!q.zone.floating) this.sim.onNodeCharted(def, this.simView());
+      // THE QUEST DEED: the quest's road is story ground — notarize BOTH
+      // edges so no ambient heal (the dry-road strip, the footprint sever,
+      // an expanse's mint-time sweep) may ever cut the way to the arena.
+      // (Floating quests earn theirs at connectFloatingZone, which
+      // notarizes every wire-in as a deed.)
+      if (!q.zone.floating) {
+        this.notarizeRoad(anchor, def);
+        // The quest TELLS you the way ("head south") — the anchor it wired
+        // to is named knowledge now. A veiled halo anchor would swallow the
+        // drawn road (both ends must be visible), leaving the quest node
+        // floating on the chart with no way marked; the accept lifts it.
+        if (anchor.veiled) anchor.veiled = false;
+      }
     }
     this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false });
     bumpLedger(this.ledger, 'quests_accepted');

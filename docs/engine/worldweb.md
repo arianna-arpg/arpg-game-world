@@ -99,12 +99,61 @@ pre-law saves is left standing: the resolution gate stops new leaks, and
 trimming a walked web's roads out from under a player is worse than
 tolerating its history.
 
+## THE SETTLING (`settleWeb` + `WEB_CFG.hoverClear`/`settle`)
+
+Two node discs closer than `hoverClear` are unreadable on the chart (neither
+hovers cleanly). The settling is a **bounded, deterministic, rng-free
+force-directed relaxation** (the portal `spacedExitAt` law lifted to nodes;
+the passive tree's layout idea, scoped): violating pairs push apart, movable
+ends yielding, each zone drifting at most `settle.maxShift` from where it
+stood. **Immovables pin the layout**: sanctuaries, Field expanses (their map
+point IS the blob's centre), ports + hold anchors, sealed kinds, roadless
+hubs (`settleMovable`). A moved zone must still stand on legal ground
+(caller's `canStand` — ocean refusal), must not rest inside an expanse
+footprint, and must keep every non-notarized road dry and footprint-legal —
+violators revert and pin. It runs:
+
+- at `placeZoneAt`'s tail — EVERY mint family (frontier, quest, event,
+  sounding, holdfast, sea anchor) inherits it, and a directed mint dropped
+  exactly on a standing node settles apart before its roads forge (the
+  back-edge re-faces if the dominant axis flipped);
+- after an expanse mint (the field re-centre can land near standing nodes —
+  the ring gives way, the expanse never moves);
+- as **THE SETTLE SWEEP** (`World.updateWebSettle`, every `settle.sweepSec`):
+  local settles can chain a displacement across their pool edge — the slow
+  whole-chart pass re-relaxes violating clusters (a clean chart pays one
+  distance scan, no moves);
+- in `reconcileWebLaws` on restore (saved overlap heals on load).
+
+## QUEST DEEDS (directed mints never lock out)
+
+The story's mints (`acceptQuest` → `placeZoneAt`; the Odyssey rides these)
+are hardened four ways:
+
+- **anchor sanity**: the quest/caravan anchor must stand on the CONNECTED
+  graph — never floating, concealed, or a roadless hub (`nearestNode`
+  already refuses ports/pockets/caves); dry chords preferred;
+- **the deed**: the quest road is notarized BOTH ways (`notarizeRoad`) — no
+  ambient heal (dry-road strip, footprint sever, port reconcile) may ever
+  cut the way to the arena; `connectFloatingZone` notarizes every wire-in
+  the same way (a float's road is deliberate by definition);
+- **the reveal**: accepting a quest lifts its anchor's forechart veil (and a
+  float wire-in lifts its anchor's) — a road into a veiled node doesn't
+  draw, which left quest nodes floating wayless on the chart;
+- **the meadow refusal**: a directed target inside an expanse's core rect
+  reads clearance ZERO (not distance-to-centre) and is walked out by the
+  anti-crowd + settle.
+
 ## Probe
 
 `npx tsx balance/probe_webqa.ts` — grows real webs headless (3 seeds × 11
 resolution rounds ≈ 600 zones) and pins: the budget law (0 over-budget), hub
-berths + budget, the shard span + entry-independence, 0 footprint crossers,
-0 one-way / duplicate edges, crossing/node-hit/crowding ceilings (the "messy
-interlinks" gauge — 0.34 crossings/edge vs 0.89 pre-law), and the restore
-heal end to end. `--report` prints per-expanse detail; `--seeds/--rounds`
-scale the sweep.
+berths + budget, the shard span + entry-independence, footprint crossers held
+to the back-edge residue (reachability is sacred; the belt refuses to cut a
+fresh mint's only road — was 106 pre-law), 0 one-way / duplicate edges,
+crossing/node-hit/crowding ceilings, QUEST MINTS end to end (the level-5
+exemplar in a saturated web: mint, two-way notarized link, sane anchor,
+reachable, readable, heal-proof, twin-proof; the floating relic + the Unmade
+wire-ins; identical-spot and mid-meadow stress), and THE SETTLING (floor,
+determinism, sanctuary/expanse pinning, road preservation, restore heal).
+`--report` prints per-expanse detail; `--seeds/--rounds` scale the sweep.

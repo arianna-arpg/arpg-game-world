@@ -705,9 +705,17 @@ changes.
   expanses, entry-independent per shard; old mega-regions grandfathered by
   core-rect containment), THE FOOTPRINT LAW (`footprintBars` +
   `fieldCoreRect`: spacing measured to the expanse RECT, no both-ends-outside
-  road across it, mint-time sever + restore heal `reconcileWebLaws`), and
+  road across it, mint-time sever + restore heal `reconcileWebLaws`),
   THE BYPASS/CLEARWAY dials (`WEB_CFG`: no road through a third node's disc,
-  no mint standing on a road's line).
+  no mint standing on a road's line), THE SETTLING (`settleWeb` — bounded
+  deterministic force-directed relaxation to `WEB_CFG.hoverClear`; runs at
+  every placeZoneAt mint, after expanse re-centres, on the slow
+  `updateWebSettle` sweep, and in the restore heal; immovables pin the
+  layout: sanctuaries/expanses/ports/sealed kinds), and QUEST DEEDS
+  (acceptQuest anchors only CONNECTED sane ground, notarizes the quest road
+  both ways, and lifts the anchor's veil so the way DRAWS;
+  connectFloatingZone wire-ins likewise — directed story mints can never be
+  locked out, stranded, healed away, or left unreadable).
   THE COHERENCE FABRIC (generation composition stays intentional — docs in
   `docs/engine/coherence.md`): traveled ways hold right-of-way as data
   (`DoodadRule.clearway` + the one way-layer `layTraveledWay`/`wayRoller` —

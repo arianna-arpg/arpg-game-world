@@ -290,6 +290,30 @@ export const WEB_CFG = {
    *  its node stands at least this clear — a node minted ON a road's line
    *  reads as a junction that doesn't exist. */
   mintRoadClear: 26,
+  /** THE HOVER FLOOR: two node discs closer than this are unreadable on the
+   *  chart (neither can be hovered/clicked cleanly). The SETTLING relaxes any
+   *  violating pair to at least this — it is a SAFETY NET below the biome
+   *  spacing (the mint-time law), not a second spacing system. */
+  hoverClear: 44,
+  /** THE SETTLING — the bounded force-directed relaxation (the portal
+   *  spacedExitAt law, lifted to nodes): when a mint cannot clear its
+   *  neighbours (a directed quest landing in saturated ring-1; a Field
+   *  re-centre onto a standing node), the NEIGHBOURHOOD gives way. */
+  settle: {
+    /** Most total map-units any single zone may drift in one settle call —
+     *  keeps the relaxation local (never a map-wide churn). */
+    maxShift: 48,
+    /** Relaxation iterations (converges in a handful for local overlaps). */
+    iters: 24,
+    /** Neighbourhood radius considered around the disturbance. */
+    radius: 170,
+    /** THE SETTLE SWEEP (World.update): seconds between whole-chart passes.
+     *  Mint-time settles are LOCAL — a chained displacement can nudge a pair
+     *  that straddles the pool's edge past the floor unseen; the sweep's
+     *  cluster-scoped global pass self-heals any residue within a beat. The
+     *  clean-chart cost is one distance scan (a few ms at halo scale). */
+    sweepSec: 8,
+  },
 } as const;
 
 /** Distance from point `c` to the segment a→b (map units). */
@@ -348,6 +372,142 @@ export function footprintBars(
     if (segCrossesRect(a, b, r)) return true;
   }
   return false;
+}
+
+/** Is a point inside ANY expanse's claimed core rect (excluding `skipId`)?
+ *  The settling and the placement guards share it — a settled node must not
+ *  come to rest ON a meadow any more than a mint may stand there. */
+export function insideFieldFootprint(pt: MapCoord, zoneMap: Record<string, ZoneDef>, skipId?: string): boolean {
+  for (const z of Object.values(zoneMap)) {
+    if (!z.field || z.dimension || z.id === skipId) continue;
+    const r = fieldCoreRect(z.field, z.size);
+    if (pt.x >= r.x0 && pt.x <= r.x1 && pt.y >= r.y0 && pt.y <= r.y1) return true;
+  }
+  return false;
+}
+
+/** May the SETTLING move this zone? Authored geography holds its ground:
+ *  sanctuaries (the town), Field expanses (region-anchored — their map point
+ *  IS the blob's centre), ports + hold anchors (coastline spots), sealed
+ *  static-exits kinds, roadless gate hubs, and off-graph caves. Everything
+ *  else — ordinary country, veiled halo mints, quest zones — may give way. */
+export function settleMovable(z: ZoneDef): boolean {
+  return z.objective.kind !== 'safe' && !z.field && !z.port && !z.holdAnchor
+    && z.caveDepth == null && !zoneKindOf(z)?.staticExits && !isRoadlessGateHub(z);
+}
+
+/** THE SETTLING — a bounded, deterministic force-directed relaxation (the
+ *  portal spacedExitAt law lifted to NODES; the passive tree's layout idea,
+ *  scoped to a neighbourhood): any same-dimension pair closer than
+ *  WEB_CFG.hoverClear pushes apart, movable ends yielding (immovables pin the
+ *  layout), each zone drifting at most settle.maxShift from where it stood.
+ *  No rng — replays, saves and co-op re-derive identical positions. A moved
+ *  zone must still STAND (caller's canStand: ocean/biome refusals), must not
+ *  come to rest inside an expanse footprint, and must keep every real road
+ *  DRY (routeOk) — violators revert and pin. `extra` lets the placement
+ *  primitive settle a mint BEFORE it enters the zoneMap. Returns the count of
+ *  pairs still violating (0 = fully settled). */
+export function settleWeb(
+  zoneMap: Record<string, ZoneDef>, extra: ZoneDef | null,
+  opts?: { around?: MapCoord; radius?: number; canStand?: (z: ZoneDef, pt: MapCoord) => boolean },
+): number {
+  const floor = WEB_CFG.hoverClear;
+  const all = extra ? [...Object.values(zoneMap), extra] : Object.values(zoneMap);
+  let pool = all.filter(z => z.caveDepth == null
+    && (!opts?.around || Math.hypot(z.map.x - opts.around.x, z.map.y - opts.around.y) <= (opts.radius ?? WEB_CFG.settle.radius)));
+  if (pool.length < 2) return 0;
+  // Cheap gate: no violating pair → nothing to do (the common frontier mint).
+  // A GLOBAL call (no `around` — the restore heal) shrinks the working pool
+  // to the violating CLUSTERS' neighbourhoods, so a big clean chart pays one
+  // scan and a big dirty one iterates only where it hurts.
+  const violates = (a: ZoneDef, b: ZoneDef): boolean =>
+    (a.dimension ?? 'surface') === (b.dimension ?? 'surface')
+    && Math.hypot(a.map.x - b.map.x, a.map.y - b.map.y) < floor;
+  const hot: MapCoord[] = [];
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) {
+      if (violates(pool[i], pool[j])) {
+        hot.push({ x: (pool[i].map.x + pool[j].map.x) / 2, y: (pool[i].map.y + pool[j].map.y) / 2 });
+      }
+    }
+  }
+  if (!hot.length) return 0;
+  if (!opts?.around) {
+    const r = opts?.radius ?? WEB_CFG.settle.radius;
+    pool = pool.filter(z => hot.some(h => Math.hypot(z.map.x - h.x, z.map.y - h.y) <= r));
+  }
+  pool.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0); // deterministic order
+  const home = new Map(pool.map(z => [z.id, { x: z.map.x, y: z.map.y }] as const));
+  const pinned = new Set<string>(pool.filter(z => !settleMovable(z)).map(z => z.id));
+  const clampShift = (z: ZoneDef): void => {
+    const h = home.get(z.id)!;
+    const dx = z.map.x - h.x, dy = z.map.y - h.y;
+    const d = Math.hypot(dx, dy);
+    if (d > WEB_CFG.settle.maxShift) {
+      const f = WEB_CFG.settle.maxShift / d;
+      z.map.x = h.x + dx * f; z.map.y = h.y + dy * f;
+    }
+  };
+  for (let it = 0; it < WEB_CFG.settle.iters; it++) {
+    let moved = false;
+    for (let i = 0; i < pool.length; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        const a = pool[i], b = pool[j];
+        if ((a.dimension ?? 'surface') !== (b.dimension ?? 'surface')) continue;
+        let dx = b.map.x - a.map.x, dy = b.map.y - a.map.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= floor) continue;
+        if (d < 0.01) {
+          // Coincident: a deterministic direction from the pair's ids (no rng).
+          let h = 0;
+          for (const ch of a.id + b.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+          const ang = (h % 360) * Math.PI / 180;
+          dx = Math.cos(ang); dy = Math.sin(ang); d = 1;
+        }
+        const ux = dx / d, uy = dy / d;
+        // Target a hair PAST the floor (×1.05): pure relaxation converges
+        // asymptotically, and a pair parked at 43.98 of a 44 floor is still
+        // a violation — the overshoot lands every settled pair clear of it.
+        const deficit = (floor * 1.05 - Math.min(d, floor * 1.05)) * 0.62;
+        const aMoves = !pinned.has(a.id), bMoves = !pinned.has(b.id);
+        if (!aMoves && !bMoves) continue; // authored geography on both ends — tolerated
+        const aShare = aMoves && bMoves ? 0.5 : aMoves ? 1 : 0;
+        if (aMoves) { a.map.x -= ux * deficit * aShare; a.map.y -= uy * deficit * aShare; clampShift(a); }
+        if (bMoves) { b.map.x += ux * deficit * (1 - aShare); b.map.y += uy * deficit * (1 - aShare); clampShift(b); }
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  // THE STANDING GUARDS: a settled zone must still stand on legal ground and
+  // keep every real road dry. Violators revert home and PIN (their neighbours
+  // absorbed what they could under the shift cap).
+  for (const z of pool) {
+    if (pinned.has(z.id)) continue;
+    const h = home.get(z.id)!;
+    if (z.map.x === h.x && z.map.y === h.y) continue;
+    let ok = !insideFieldFootprint(z.map, zoneMap, z.id)
+      && (opts?.canStand ? opts.canStand(z, z.map) : true);
+    if (ok) {
+      for (const e of z.exits) {
+        if (e.to === '?' || e.crossDim) continue;
+        const dest = e.to === extra?.id ? extra : zoneMap[e.to];
+        if (!dest || (dest.dimension ?? 'surface') !== (z.dimension ?? 'surface')) continue;
+        if (!routeOk(z.map, dest.map)) { ok = false; break; }
+        // The FOOTPRINT LAW survives the drift too: a settled node whose
+        // road chord now cuts an expanse rect (its endpoint slid out of the
+        // exempting interior, or the line swung across a corner) reverts.
+        if (!z.dimension && !dest.dimension && e.notarized !== true
+          && footprintBars(z.map, dest.map, zoneMap)) { ok = false; break; }
+      }
+    }
+    if (!ok) { z.map.x = h.x; z.map.y = h.y; }
+  }
+  let left = 0;
+  for (let i = 0; i < pool.length; i++) {
+    for (let j = i + 1; j < pool.length; j++) if (violates(pool[i], pool[j])) left++;
+  }
+  return left;
 }
 const AT_CANDIDATES = [0.2, 0.35, 0.5, 0.65, 0.8] as const; // portal slots along a side
 // PORTAL GEOMETRY — SHARED with world.ts placeExit so the gen-time spacing test uses
@@ -780,17 +940,20 @@ export function placeZoneAt(
       // Other-dimension nodes share the coordinate plane but render on their
       // own map tab — hell must not shove surface zones around (or vice versa).
       if ((z.dimension ?? 'surface') !== (spec.dimension ?? 'surface')) continue;
-      let px = z.map.x, py = z.map.y;
+      let px = z.map.x, py = z.map.y, interior = false;
       if (z.field) {
         const r = fieldCoreRect(z.field, z.size);
         if (r.x1 > r.x0 && r.y1 > r.y0) {
           px = clamp(map.x, r.x0, r.x1); py = clamp(map.y, r.y0, r.y1);
-          // Standing INSIDE the rect: push from the rect's centre instead
-          // (the clamp degenerates to the point itself — no direction).
-          if (px === map.x && py === map.y) { px = (r.x0 + r.x1) / 2; py = (r.y0 + r.y1) / 2; }
+          // Standing INSIDE the rect: full-deficit push away from the rect's
+          // centre (the clamp degenerates to the point itself — no direction,
+          // and its distance-to-centre must NOT read as clearance: a directed
+          // quest landing mid-meadow is at clearance ZERO, wherever the
+          // centre happens to sit).
+          if (px === map.x && py === map.y) { px = (r.x0 + r.x1) / 2; py = (r.y0 + r.y1) / 2; interior = true; }
         }
       }
-      const d = Math.hypot(px - map.x, py - map.y);
+      const d = interior ? 0 : Math.hypot(px - map.x, py - map.y);
       if (d < nodeSep && d < nd) { nd = d; nearPt = { x: px, y: py }; }
     }
     if (!nearPt) break;
@@ -1039,6 +1202,23 @@ export function placeZoneAt(
   // layout rows tagged, pack tables merged — off the def seed's dedicated
   // sub-stream (blendless mints keep every draw byte-identical).
   applyBlend(def, tileset, variantName, spec.blend, !spec.packsOverride);
+  // THE SETTLING (WEB_CFG.settle): when this mint could not fully clear its
+  // neighbours — a directed quest dropped into saturated ring-1, twenty
+  // anti-crowd pushes spent — the NEIGHBOURHOOD gives way instead of two
+  // discs stacking unreadably (the def participates BEFORE it enters the
+  // zoneMap; deterministic, rng-free; moved neighbours keep their roads dry
+  // and their footing legal via the standing guards). Runs before the
+  // reciprocal/weave so every road forged below reads settled coordinates.
+  settleWeb(zoneMap, def, {
+    around: def.map,
+    canStand: spec.biomeFor
+      ? (z, pt) => (z.dimension ? true : spec.biomeFor!(pt) !== OCEAN_BIOME)
+      : undefined,
+  });
+  // The settle may have shifted THIS mint across its anchor's dominant axis:
+  // re-face the back-edge so the portal stands on the honest wall (the
+  // reciprocal below derives from the fresh side).
+  if (backEdge.length && src) backEdge[0].side = sideToward(map, srcMap);
   // Directed placements (quests) link the reciprocal road on the anchor here;
   // the frontier path leaves linkBack false (travelThrough mutates its '?' exit).
   // A FLOATING zone forges NONE of this at mint — connectFloatingZone does it on
@@ -1051,7 +1231,7 @@ export function placeZoneAt(
     // anchor fell back to a cross-dimension zone would otherwise stamp the
     // exact "hell exit to the surface" defect on the ANCHOR'S side).
     if (spec.linkBack && src && srcDim === myDim && !isRoadlessGateHub(src)) {
-      const recSide = OPP_DIR[backSide];
+      const recSide = OPP_DIR[backEdge[0]?.side ?? backSide];
       const at = findNonCollidingAt(recSide, src.exits, rng, src.size) ?? bestSpacedAt(recSide, src.exits, src.size);
       src.exits.push({ to: def.id, side: recSide, at, ...wetDeed });
     } else if (spec.linkBack && src && srcDim !== myDim) {
@@ -1081,23 +1261,29 @@ export function connectFloatingZone(fresh: ZoneDef, zoneMap: Record<string, Zone
   // frontiers): with no other node charted yet, the zone simply stays
   // floating until the realm web grows — the drain re-asks every approach.
   const exclude = new Set([fresh.id]);
+  // A DISCONNECTED or HIDDEN node is never the wire-in anchor: float-to-float
+  // would join two islands to nothing (a quest arena reachable only through
+  // an unwired sounding cluster is a stranding, not a road).
+  const sane = (z: ZoneDef): boolean => !z.floating && !z.concealed && !isRoadlessGateHub(z);
   const anchor = nearestNode(zoneMap, fresh.map, exclude, fresh.dimension,
-    (z) => !isRoadlessGateHub(z) && routeOk(fresh.map, z.map))
-    ?? nearestNode(zoneMap, fresh.map, exclude, fresh.dimension, (z) => !isRoadlessGateHub(z));
+    (z) => sane(z) && routeOk(fresh.map, z.map))
+    ?? nearestNode(zoneMap, fresh.map, exclude, fresh.dimension, sane);
   if (!anchor) return;
   const backSide = sideToward(fresh.map, anchor.map);
-  // The routeOk fallback may have yielded a WET anchor (reachability
-  // trumps): the pair is then a deliberate deed — notarized, so the
-  // dry-road heal and census read intent, never accretion.
-  const wetDeed = !(fresh.dimension ?? anchor.dimension) && !routeOk(fresh.map, anchor.map)
-    ? { notarized: true as const } : {};
-  fresh.exits.unshift({ to: anchor.id, side: backSide, ...wetDeed });
+  // A float wiring is a DELIBERATE deed both ways (a quest arena's road, an
+  // event cluster's lifeline): notarized, so the dry-road heal, the footprint
+  // sever, and the port reconciles all read intent — never accretion. (The
+  // wet case was already a deed; the dry case earns the same protection.)
+  fresh.exits.unshift({ to: anchor.id, side: backSide, notarized: true });
   const recSide = OPP_DIR[backSide];
   const at = findNonCollidingAt(recSide, anchor.exits, rng, anchor.size) ?? bestSpacedAt(recSide, anchor.exits, anchor.size);
-  anchor.exits.push({ to: fresh.id, side: recSide, at, ...wetDeed });
+  anchor.exits.push({ to: fresh.id, side: recSide, at, notarized: true });
   fresh.floating = false;
   fresh.concealed = false; // a road has formed — the player has found it; reveal it
   fresh.veiled = false;    // …and the forechart's veil lifts the same way
+  // The anchor end of the new road is found ground too — a veiled anchor
+  // would swallow the drawn road (both ends must be visible on the chart).
+  anchor.veiled = false;
   weaveConnections(fresh, zoneMap, rng);
 }
 
