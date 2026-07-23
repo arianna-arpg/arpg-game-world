@@ -25,6 +25,7 @@
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { applyBuild } from '../src/sim/builds';
 import type { BuildSpec } from '../src/sim/types';
 import { SKILLS } from '../src/data/skills';
@@ -976,6 +977,11 @@ check('E14 synthetic fixtures cleaned out of the registry',
   } as (typeof SUPPORTS)[string];
   try {
     const raise = (withGem: boolean): { dealt: number; scale?: number; leak: boolean } => {
+      // SELF-CONTAINED STREAM (the reseed-per-world trap): the A/B fold read
+      // below aggregates ~6s of rolled totem hits — upstream rigs' RNG
+      // consumption (which shifts whenever CONTENT grows, e.g. new affix
+      // families changing loot picks) must never wobble this ratio.
+      seedGlobalRandom(0x1b01);
       const w = makeSimWorld('sorcerer', 0x1b01);
       applyBuild(w, {
         id: 'rig_j', classId: 'sorcerer', level: 12,

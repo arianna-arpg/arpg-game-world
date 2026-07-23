@@ -30,6 +30,7 @@ import {
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
+  BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
   type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
@@ -1308,12 +1309,11 @@ const GROUND_KINDS = {
 // onto — is a DoodadRule.mutable flag now, read at the use site: the derived-
 // predicate pattern GROUND_KINDS set, one shelf up.)
 
-/** How many skills can be LEARNED at once — the build-defining budget. */
-export const MAX_LEARNED_SKILLS = 8;
-
-/** Skill-bar length: 8 slots — [LMB, RMB, key1, key2, key3, key4, key5, key6].
- *  Equals MAX_LEARNED_SKILLS so EVERY learnable skill can be bound to a slot. */
-export const BAR_SLOTS = 8;
+/** How many skills can be LEARNED at once — the build-defining budget.
+ *  Equals the bar (engine/skills.ts BAR_SLOTS — the one bar-shape truth)
+ *  STRUCTURALLY, so every learnable skill can always be bound to a seat. */
+export const MAX_LEARNED_SKILLS = BAR_SLOTS;
+export { BAR_SLOTS };
 
 /** Normalize a bar to exactly BAR_SLOTS entries (pad/truncate with null) — so an
  *  old length-5 character save gains the new empty, bindable slots on resume. */
@@ -1501,6 +1501,26 @@ export interface Seat {
   lastActedAt: number;
   /** Revive progress while this seat is DOWNED: ally seat id → seconds dwelt. */
   reviveDwellBy: Map<string, number>;
+  /** THE WORN-GRAFT LEDGER (slotgraft_* stats → recalcSeat): every worn
+   *  slot-bound support this seat carries, with the verdict the injection
+   *  pass reached — the UI's one read path for live chips, dormancy
+   *  reasons and empty seats. DERIVED state, rebuilt every recalc,
+   *  never saved. */
+  wornGrafts?: WornGraftRow[];
+}
+
+/** One worn slot-graft as derived at recalc: which bar seat, which gem at
+ *  what level, who sat there, and whether it rode — 'live' (injected into
+ *  inst.grafts), 'duplicate' (the gem is already socketed/grafted there —
+ *  the worn copy yields, the forward lane's law), 'unfit' (the socket-time
+ *  gate refused; self-lifts when an enabler arrives), or 'empty' (no skill
+ *  bound to that seat). */
+export interface WornGraftRow {
+  slot: number;             // 0-based bar index; speak it 1-based ("Skill Slot N")
+  def: SupportDef;
+  level: number;
+  skillId?: string;         // the skill bound at derivation time (absent = empty seat)
+  state: 'live' | 'duplicate' | 'unfit' | 'empty';
 }
 
 /** One entry on Brandt's counter — a skill gem, a support gem (once
@@ -16607,6 +16627,52 @@ export class World {
       if (!inst || !def) continue;
       (inst.grafts ??= []).push({ def, level: s.graft.level ?? 1 });
     }
+    // THE WORN GRAFT (slotgraft_<slot>_<gem> — engine/skills.ts): modifier
+    // sources bind a granted gem to a BAR SEAT; the player aims it by
+    // binding skills (bindSkill re-derives). Candidates come from a prefix
+    // scan of the recalc-time mod arrays already in hand — class innate,
+    // tree grants, worn gear (vestige words included via compileItemMods) —
+    // so the pass costs nothing when the family is absent; each found id
+    // then folds through the ONE stat engine (sheet.get: every source and
+    // increase honored, multiple grantors SUM). Injection mirrors
+    // socketSupport: the full crew-aware gate (a misfit stays dormant and
+    // self-lifts when a socketed enabler arrives — recalc re-runs it), and
+    // the forward lane's no-second-copy law (a gem already socketed, or
+    // grafted by an earlier source, wins; the worn copy yields). Level:
+    // floored sum, clamped to MAX_SUPPORT_LEVEL; below 1 grants nothing.
+    {
+      const wornGraftIds = new Set<string>();
+      const scanMods = (mods: readonly Modifier[] | undefined): void => {
+        if (!mods) return;
+        for (const gm of mods) if (gm.stat.startsWith(SLOTGRAFT_PREFIX)) wornGraftIds.add(gm.stat);
+      };
+      scanMods(m.classDef.innate);
+      scanMods(passiveMods);
+      for (const mods of gearSheetMods.values()) scanMods(mods);
+      const wornRows: WornGraftRow[] = [];
+      for (const stat of wornGraftIds) {
+        const seatRef = parseSlotGraftStat(stat);
+        if (!seatRef) continue;
+        const def = SUPPORTS[seatRef.gemId];
+        if (!def) continue; // registry-tolerant: a de-registered gem grants silence
+        const level = Math.min(MAX_SUPPORT_LEVEL, Math.floor(p.sheet.get(stat)));
+        if (level < 1) continue;
+        const inst = p.skills[seatRef.slot];
+        const state: WornGraftRow['state'] =
+          !inst ? 'empty'
+            : inst.sockets.some(s => s?.def.id === def.id) || inst.grafts?.some(g => g.def.id === def.id) ? 'duplicate'
+              : !supportFitsInstOrCrew(def, inst, this.summonCrewSkills(inst)) ? 'unfit'
+                : 'live';
+        wornRows.push({ slot: seatRef.slot, def, level, skillId: inst?.def.id, state });
+        if (state === 'live' && inst) (inst.grafts ??= []).push({ def, level });
+      }
+      // THE LEDGER (UI read path — panels speak dormancy from these rows in
+      // the injection's own verdicts; one derivation, one spelling). Sorted
+      // for stable render order (Set order follows scan order otherwise).
+      seat.wornGrafts = wornRows.length
+        ? wornRows.sort((a, b) => a.slot - b.slot || a.def.id.localeCompare(b.def.id))
+        : undefined;
+    }
     p.sheet.setSource('level', [
       mod('life', 'flat', (p.level - 1) * PROGRESSION.lifePerLevel),
       mod('mana', 'flat', (p.level - 1) * PROGRESSION.manaPerLevel),
@@ -16771,6 +16837,10 @@ export class World {
       c.companion = false; // past the down-intercept: this death is real
       this.kill(c, true);
     }
+    // Grafts are DERIVED state and stay with the book, not the bag: strip
+    // them as the instance leaves (recalcSeat can no longer reach it), so
+    // an inventory card never shows a stale bound power.
+    inst.grafts = undefined;
     m.skillInv.push(inst);
     // MIREILLE'S LESSON, inverted with intent: nobody walks a gift flask
     // BACK to the bag without commanding the whole loop the lesson teaches.
@@ -20572,6 +20642,10 @@ export class World {
     if (free === -1) return false;
     inst.sockets[free] = gem;
     m.inventory.splice(invIndex, 1);
+    // Worn slot grafts re-derive against the new socket: a duplicate worn
+    // copy yields to the real stone, and a dormant worn gem WAKES the
+    // moment this socket grants the mechanism it was refused for.
+    this.recalcSeat(seat);
     this.resyncMinionSupports(inst);
     return true;
   }
@@ -20584,6 +20658,9 @@ export class World {
     if (!inst || !gem) return false;
     inst.sockets[socketIndex] = null;
     m.inventory.push(gem);
+    // Re-derive worn slot grafts: a worn copy that yielded to this stone
+    // returns, and a worn gem whose mechanism LEFT with it goes dormant.
+    this.recalcSeat(seat);
     this.resyncMinionSupports(inst);
     return true;
   }
@@ -20736,15 +20813,34 @@ export class World {
     // borrowed kit.
     const p = this.seatHero(seat);
     if (slot < 0 || slot >= p.skills.length) return false;
-    if (skillId === null) { p.skills[slot] = null; return true; }
+    const prev = p.skills[slot];
+    if (skillId === null) {
+      p.skills[slot] = null;
+      this.rebindWornGrafts(seat, [prev]);
+      return true;
+    }
     const inst = seat.meta.knownSkills.get(skillId);
     if (!inst) return false;
-    const already = p.skills[slot]?.def.id === skillId;
+    const already = prev?.def.id === skillId;
     for (let i = 0; i < p.skills.length; i++) {
       if (p.skills[i]?.def.id === skillId) p.skills[i] = null;
     }
     if (!already) p.skills[slot] = inst;
+    this.rebindWornGrafts(seat, [prev, inst]);
     return true;
+  }
+
+  /** Bar mutations move WORN slot grafts (they bind to the SEAT, never the
+   *  skill): re-derive the graft lane, then re-mint forwarded copies on the
+   *  hosts the move touched — bindGraft's exact law, aimed by position. */
+  private rebindWornGrafts(seat: Seat, touched: (SkillInstance | null | undefined)[]): void {
+    this.recalcSeat(seat);
+    const seen = new Set<SkillInstance>();
+    for (const inst of touched) {
+      if (!inst || seen.has(inst)) continue;
+      seen.add(inst);
+      this.resyncMinionSupports(inst);
+    }
   }
 
   // ---------------------------------------------- co-op meta routing ---------

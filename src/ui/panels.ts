@@ -3088,10 +3088,28 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         ${boundTo ? `<button data-graft-unbind="${s.key}">✕</button>` : ''}
       </span>`;
     }).join('');
-    const graftBank = graftSources.length ? `
+    // THE WORN LEDGER (engine/world.ts WornGraftRow — recalcSeat's own
+    // verdicts, one derivation one spelling): every slot-bound support the
+    // seat's gear/passives grant, incl. dormant copies and empty seats, so
+    // the whole hand is legible in one place. Read-only chips — the "bind"
+    // gesture is the bar itself.
+    const wornRows = seat.wornGrafts ?? [];
+    const wornChips = wornRows.map(r => {
+      const live = r.state === 'live';
+      const word = live ? 'live on the skill seated there'
+        : r.state === 'duplicate' ? 'DORMANT — that gem is already socketed there; the worn copy yields'
+          : r.state === 'unfit' ? 'DORMANT — it does not fit the skill seated there (a socketed gem granting the mechanism would wake it)'
+            : `EMPTY SEAT — bind a skill to Skill Slot ${r.slot + 1} and it rides`;
+      return `<span class="gem-chip graft-chip" style="border-color:${live ? (r.def.color ?? '#b8a2e8') : '#4a4458'}${live ? '' : ';opacity:0.62'}"
+        title="${r.def.description}
+Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. ${word}.">
+        ✦ ${r.def.name} <b>L${r.level}</b> → Slot ${r.slot + 1}${live ? '' : ' — dormant'}</span>`;
+    }).join('');
+    const graftBank = (graftSources.length || wornRows.length) ? `
       <div class="graft-bank">
-        <span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' — click a skill to bind' : ''}:</span>
-        ${bankChips}
+        ${graftSources.length ? `<span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' — click a skill to bind' : ''}:</span>
+        ${bankChips}` : ''}
+        ${wornRows.length ? `<span style="color:#b8a2e8;font-size:10px">Worn:</span> ${wornChips}` : ''}
       </div>` : '';
     // MIREILLE'S LESSON at KEY grain: while the bar step pends, each gift
     // flask still off the bar lights the UNBOUND slot keys it could land on
@@ -3182,14 +3200,25 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
       // landing button while a lifted graft is looking for its carrier.
-      const graftRow = (inst.grafts?.length || this.liftedGraftKey) ? `
+      // WORN grafts join the row: live ones name their gear seat in the
+      // tooltip (no ✕ — the bar and the wardrobe are the unbind); dormant
+      // ones render greyed WITH THEIR REASON, in the injection's own words.
+      const wornHere = wornRows.filter(r => r.skillId === def.id);
+      const graftRow = (inst.grafts?.length || wornHere.some(r => r.state !== 'live') || this.liftedGraftKey) ? `
         <div class="grafts" style="margin-top:2px">
           ${(inst.grafts ?? []).map(g => {
             const src = graftSources.find(s => m.grafts[s.key] === def.id && SUPPORTS[s.graft.support] === g.def);
+            const worn = src ? undefined : wornHere.find(r => r.state === 'live' && r.def === g.def);
             return `<span class="gem-chip graft-chip" style="border-color:${g.def.color ?? '#b8a2e8'}"
-              title="${g.def.description} — grafted by ${src?.name ?? 'a passive power'}; no socket spent.">
+              title="${g.def.description} — grafted by ${src ? src.name : worn ? `your worn gear (Skill Slot ${worn.slot + 1})` : 'a passive power'}; no socket spent.">
               ✦ ${g.def.name} <b>L${g.level}</b>${src ? `<button data-graft-unbind="${src.key}">✕</button>` : ''}</span>`;
           }).join('')}
+          ${wornHere.filter(r => r.state !== 'live').map(r => `<span class="gem-chip graft-chip" style="border-color:#4a4458;opacity:0.62"
+            title="${r.def.description}
+Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
+              ? 'this gem is already socketed here; the worn copy yields.'
+              : 'it does not fit this skill — a socketed gem granting the mechanism would wake it, or seat a fitting skill here.'}">
+            ✦ ${r.def.name} <b>L${r.level}</b> — dormant</span>`).join('')}
           ${this.liftedGraftKey ? `<button class="graft-land" data-graft-bind="${def.id}">⊕ graft here</button>` : ''}
         </div>` : '';
       return `

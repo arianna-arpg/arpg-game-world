@@ -35,6 +35,8 @@ import {
   type ConditionId, type ModKind, type SkillTag,
 } from '../engine/stats';
 import { CLASSES, classSkillStat } from './classes';
+import { BAR_SLOTS, slotGraftStat } from '../engine/skills';
+import { SUPPORT_LIST } from './supports';
 
 // ------------------------------------------------------------ generation ---
 
@@ -396,6 +398,49 @@ const CLASS_SKILL_AFFIXES: AffixDef[] = CLASSES.map(c => ({
   weight: 22,
   tags: ['amulet', 'helmet'],
 }));
+
+/** THE WORN GRAFT catalog (engine/skills.ts slotGraftStat; injection at
+ *  World.recalcSeat) — "the skill in Skill Slot N is granted <gem>": one
+ *  suffix per (wild support gem × bar seat), GENERATED from the same
+ *  registries the drop roller serves. Every dial is a dial, never a literal:
+ *  · familyWeight is the TOTAL pick mass of the WHOLE catalog — per-row
+ *    weight = familyWeight × the gem's own drop-weight share ÷ BAR_SLOTS,
+ *    so the catalog collectively stays chase-rare however many gems
+ *    register, and rarer gems mint rarer grafts (the shelf's own odds,
+ *    never a parallel valuation).
+ *  · A gem with drop weight 0 never enters the ROLLED pool — the structural
+ *    drop-restriction boundary. Unique/vestige lines may still write its
+ *    stat: ITEM-EXCLUSIVE supports ride the same family by construction.
+ *  · Integer ladder in CLASS_SKILL_AFFIXES' exact shape: T1 grants Level 1,
+ *    the EXQUISITE grants Level 2 blue-only. Uniques may author up to
+ *    MAX_SUPPORT_LEVEL. */
+export const SLOTGRAFT_CFG = {
+  familyWeight: 30,
+  minIlvl: 8,
+  baseTags: ['gloves', 'ring', 'amulet'],
+  slotNames: ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth'],
+};
+const SLOTGRAFT_GEMS = SUPPORT_LIST.filter(d => d.weight > 0);
+const SLOTGRAFT_GEM_MASS = SLOTGRAFT_GEMS.reduce((s, d) => s + d.weight, 0);
+const SLOTGRAFT_AFFIXES: AffixDef[] = SLOTGRAFT_GEMS.flatMap(d =>
+  Array.from({ length: BAR_SLOTS }, (_, i): AffixDef => ({
+    id: `slotgraft_${i + 1}_${d.id}`,
+    kind: 'suffix' as AffixKind,
+    family: `slotgraft_${i + 1}_${d.id}`,
+    names: [`of the ${SLOTGRAFT_CFG.slotNames[i] ?? `${i + 1}th`} Finger`],
+    lines: [{ stat: slotGraftStat(i + 1, d.id), kind: 'flat' as ModKind }],
+    tiers: [
+      {
+        ilvl: ITEM_CFG.tierBreaks[Math.max(0, ITEM_CFG.tierBreaks.length - 2)] + ITEM_CFG.exquisite.ilvlPad,
+        ranges: [[2, 2]] as [number, number][],
+        weight: Math.round(100 * ITEM_CFG.exquisite.weightFrac),
+        magicOnly: true,
+      },
+      { ilvl: SLOTGRAFT_CFG.minIlvl, ranges: [[1, 1]] as [number, number][], weight: 100 },
+    ],
+    weight: SLOTGRAFT_CFG.familyWeight * (d.weight / SLOTGRAFT_GEM_MASS) / BAR_SLOTS,
+    tags: SLOTGRAFT_CFG.baseTags,
+  })));
 
 // ------------------------------------------------------------- prefixes ----
 
@@ -919,6 +964,7 @@ const SUFFIXES: AffixDef[] = [
   ...PEN_AFFIXES,
   ...APPLY_AFFIXES,
   ...CLASS_SKILL_AFFIXES,
+  ...SLOTGRAFT_AFFIXES,
 ];
 
 // ---------------------------------------------------------------- export ---

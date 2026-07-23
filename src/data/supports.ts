@@ -9,8 +9,8 @@
 // with skill points.
 // ---------------------------------------------------------------------------
 
-import { conversionStat, mod } from '../engine/stats';
-import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG } from '../engine/skills';
+import { conversionStat, mod, STAT_DEFS } from '../engine/stats';
+import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG, BAR_SLOTS, MAX_SUPPORT_LEVEL, slotGraftStat } from '../engine/skills';
 import type { SupportDef } from '../engine/skills';
 
 export const SUPPORTS: Record<string, SupportDef> = {
@@ -4758,6 +4758,19 @@ export const SUPPORTS: Record<string, SupportDef> = {
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);
+
+// THE WORN GRAFT stat family (engine/skills.ts slotGraftStat, injected at
+// World.recalcSeat): one registered stat per (bar seat × cataloged gem), so
+// affix/unique/vestige lines validate, label and clamp like any other stat —
+// the orbs.ts family-registration loop, on the gem shelf. Value = granted
+// gem LEVEL; a new support becomes worn-graftable the moment it registers.
+for (const d of SUPPORT_LIST) {
+  for (let s = 1; s <= BAR_SLOTS; s++) {
+    STAT_DEFS[slotGraftStat(s, d.id)] = {
+      label: `${d.name} Graft (Skill Slot ${s})`, base: 0, min: 0, max: MAX_SUPPORT_LEVEL,
+    };
+  }
+}
 
 /** Weighted random support for monster drops. */
 export function rollSupportDrop(rand01: number): SupportDef {

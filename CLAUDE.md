@@ -719,6 +719,24 @@ changes.
   `WorldStateSave.vendorHolds` (keep-what-stands sanitizer; empty is NOT
   load-bearing) — docs in `docs/engine/vendors.md`, probe
   `balance/probe_vendorlocker.ts`.
+  THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
+  `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
+  slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,
+  clamped `MAX_SUPPORT_LEVEL`) binds a support gem to a BAR SEAT — the
+  player aims it by binding skills; `World.recalcSeat` derives the grant
+  onto whatever sits there through the FULL socket-time gate (misfits
+  dormant + self-lifting) and the forward lane's no-second-copy law (a
+  socketed copy wins), recorded on `Seat.wornGrafts` (the ledger the
+  panels speak dormancy from). ANY modifier source grants one (affix,
+  unique line, vestige, passive); the ROLLED catalog (`SLOTGRAFT_CFG`,
+  itemaffixes.ts) generates one "of the Nth Finger" suffix per (wild gem ×
+  `BAR_SLOTS`) under a TOTAL-mass budget weighted by each gem's own drop
+  share — weight-0 gems are structurally unrollable, so ITEM-EXCLUSIVE
+  supports ride the same family via unique lines (The Rote Hand is the
+  teaching debut: one line live, one honestly dormant on most builds).
+  Derived, never saved; census-invisible (bare sim instances wear no
+  gear) — docs in `docs/engine/slotgrafts.md`, probe
+  `balance/probe_slotgraft.ts`.
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
   `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`,
   `beacons.ts` (survey-spire objective tuning); items:

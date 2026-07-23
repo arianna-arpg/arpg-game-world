@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import type { UniqueDef } from '../engine/items';
+import { slotGraftStat } from '../engine/skills';
 
 export const UNIQUE_LIST: UniqueDef[] = [
   {
@@ -218,6 +219,27 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'damage', kind: 'increased', range: [0.15, 0.25], tags: ['lightning'] },
       { stat: 'apply_shock', kind: 'flat', range: [0.1, 0.15] },
       { stat: 'lightningRes', kind: 'flat', range: [0.1, 0.15] },
+    ],
+  },
+  // THE ROTE HAND — the WORN GRAFT fabric's debut legend (slotgraft_<slot>_
+  // <gem>: the glove grants the support; the PLAYER aims it by choosing what
+  // to bind in that bar seat). Two deliberately different-fitting grafts —
+  // Multistrike wants melee on the primary, Splitting wants a projectile on
+  // Skill Slot 3 — so on most builds ONE line is live and the other sits
+  // honestly dormant in the book: the item that teaches the fabric's honesty
+  // by being worn. Ranges pin whole levels (tierScale 0): a granted gem's
+  // level is a promise, never a decimal.
+  {
+    id: 'rote_hand', name: 'The Rote Hand', baseId: 'gloves_evasion', weight: 70,
+    minIlvl: 8,
+    flavor: 'Every finger remembers.',
+    lines: [
+      { stat: slotGraftStat(1, 'multistrike'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'The skill in Skill Slot 1 is granted Level {v} Multistrike' },
+      { stat: slotGraftStat(3, 'splitting'), kind: 'flat', range: [1, 1], tierScale: 0,
+        text: 'The skill in Skill Slot 3 is granted Level {v} Splitting' },
+      { stat: 'attackSpeed', kind: 'increased', range: [0.06, 0.1] },
+      { stat: 'evasion', kind: 'increased', range: [0.2, 0.3], local: true },
     ],
   },
 ];

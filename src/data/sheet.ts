@@ -233,6 +233,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'proc_', cat: 'skills', blurb: 'Chance this triggered effect fires — on top of its own rate discipline.' },
   { prefix: 'combo_', cat: 'skills', blurb: 'Equips this cast-pattern grammar: complete its pattern with your recent casts and its payoff fires.' },
   { prefix: 'classSkill_', cat: 'skills', blurb: 'Levels added to every skill gem of this class\'s school.' },
+  { prefix: 'slotgraft_', cat: 'skills', blurb: 'A support granted by what you wear, riding whichever skill you bind to that bar slot — dormant when the gem does not fit the skill seated there.' },
   { prefix: 'remnantDrop_', cat: 'skills', blurb: 'Chance your casts shed this remnant, empowering the next cast of its school.' },
   { prefix: 'minionApply_', cat: 'minions', blurb: 'Your minions\' hits may inflict this status.' },
   { prefix: 'sympathy_', cat: 'minions', blurb: 'Your gains echo along this bond to kin — flasks, orbs, charges, heals.' },

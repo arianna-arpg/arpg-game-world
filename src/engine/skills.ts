@@ -222,6 +222,47 @@ export function hostSockets(inst: SkillInstance): SupportInstance[] {
   return out;
 }
 
+// --- THE WORN GRAFT (slot grafts) — supports granted by POSITION -----------
+
+/** Skill-bar length: 8 slots — [LMB, RMB, key1, key2, key3, key4, key5, key6].
+ *  THE ONE bar-shape truth: world's padBar/MAX_LEARNED_SKILLS, the worn
+ *  slot-graft stat family and its affix catalog all derive from it — grow
+ *  the bar and every fabric follows with zero further edits. */
+export const BAR_SLOTS = 8;
+
+/** THE WORN GRAFT — the `slotgraft_<slot>_<gemId>` stat family: the value IS
+ *  the granted gem's LEVEL (summed across grantors through the ordinary stat
+ *  engine, floored, clamped to MAX_SUPPORT_LEVEL at injection; below 1 grants
+ *  nothing). The slot ordinal is 1-BASED in the id — the player's own
+ *  vocabulary ("Skill Slot 3") — and leads the gem id because gem ids carry
+ *  underscores of their own. ANY modifier source may grant one (rolled affix,
+ *  unique line, vestige word, passive node, class innate); World.recalcSeat
+ *  derives the granted SupportInstance onto WHATEVER SKILL the player has
+ *  bound to that bar seat — through the full socket-time gate
+ *  (supportFitsInstOrCrew, so a misfit stays honestly dormant and SELF-LIFTS
+ *  when a socketed enabler arrives) and the forward lane's no-second-copy
+ *  law (a gem already socketed or grafted wins; the worn copy yields). The
+ *  graft binds to the SEAT, never the skill: re-binding the bar re-aims it —
+ *  gear that grants supports, pointed by the player's own hand. */
+export const SLOTGRAFT_PREFIX = 'slotgraft_';
+
+/** Stat id granting gem `gemId` to bar seat `slot1` (1-BASED — "Skill Slot N");
+ *  the stat's folded value is the granted gem's level. */
+export function slotGraftStat(slot1: number, gemId: string): string {
+  return `${SLOTGRAFT_PREFIX}${slot1}_${gemId}`;
+}
+
+/** Parse a slot-graft stat id → 0-based bar index + gem id. Null when the id
+ *  is not of the family or names a seat the bar does not have. */
+export function parseSlotGraftStat(stat: string): { slot: number; gemId: string } | null {
+  if (!stat.startsWith(SLOTGRAFT_PREFIX)) return null;
+  const m = /^(\d+)_(.+)$/.exec(stat.slice(SLOTGRAFT_PREFIX.length));
+  if (!m) return null;
+  const slot1 = Number(m[1]);
+  if (!Number.isInteger(slot1) || slot1 < 1 || slot1 > BAR_SLOTS) return null;
+  return { slot: slot1 - 1, gemId: m[2] };
+}
+
 /** CREW BOARDING CONFIG — the balance lever over support forwarding.
  *  'gated': boarding demands a RESONANCE key (SupportDef.resonance) riding
  *  the summon skill — the whole system costs one socket. 'free': every
