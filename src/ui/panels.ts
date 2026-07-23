@@ -60,7 +60,7 @@ import { boundaryGateOf } from '../data/boundaryGates';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
-import type { Seat, World } from '../engine/world';
+import type { Seat, VendorEntry, VendorHoldRow, World } from '../engine/world';
 import { COUCH_CFG, couchMinPads } from '../data/couch';
 import { HOLD_CLASSES } from '../data/harborholds';
 import {
@@ -69,8 +69,9 @@ import {
 } from '../meta/account';
 import {
   allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered,
-  isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks,
-  VAULT_KIND_LABELS, vaultKindOrder, vaultShelfCensus, vaultStripVisible, type Unlockable,
+  isUnlockOwned, maxSlotCount, sealedUnlocks, undiscoveredClassUnlocks,
+  VAULT_KIND_LABELS, vaultKindOrder, vaultSeatOf, vaultShelfCensus, vaultStripVisible,
+  type Unlockable,
 } from '../meta/unlocks';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
@@ -91,7 +92,7 @@ import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, TIP_CFG, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
-import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
+import { VENDORS, VENDOR_CFG, type VendorDef, type VendorTabSpec } from '../data/vendors';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
@@ -279,6 +280,10 @@ export class UI {
   /** THE STANDING ORDER picker: which counter's pane is open + its filter. */
   private vendorCommOpen: string | null = null;
   private vendorCommQuery = '';
+  /** THE COUNTER TABS — each counter remembers its open face for the session
+   *  (per vendor id; absent = the def's first tab, the Wares grid at
+   *  default-tabbed counters). */
+  private vendorTabSel: Record<string, string> = {};
   /** The vendor screen's live ticker (countdown in place; repaint on restock). */
   private vendorTicker: number | null = null;
   private vendorTickerRestockAt = 0;
@@ -417,6 +422,7 @@ export class UI {
     // so purchases and re-renders can never strand stale copy.
     bindTooltips(this.accountScreen, (el) =>
       el.dataset.tip === 'unlock' ? this.unlockTooltip(el.dataset.unlockId!)
+        : el.dataset.tip === 'sealedunlock' ? this.sealedUnlockTooltip(el.dataset.unlockId!)
         : el.dataset.tip === 'rumor' ? this.rumorTooltip(Number(el.dataset.rumorI)) : null,
     { delayMs: TIP_CFG.intentMs });
     // Delegation works on SVG descendants too — tree nodes carry data-tip like
@@ -1318,7 +1324,21 @@ export class UI {
       // THE CENSUS (vaultShelfCensus): every shelf's stock/owned/rumors and
       // its mystery-law verdict in one read the strip, faces and floor share.
       const census = vaultShelfCensus(acc);
-      const visible = census.filter(c => c.visible);
+      // THE SEALED CARDS (gatework, meta/unlocks.ts): tease-marked entries
+      // whose chain is walked but whose avenues still hold them shut hang
+      // beside the buyable stock — named, priced, locked, their roads
+      // printed in the hover story. Seated by shelf like everything else —
+      // and a sealed rack is EARNED knowledge, so it holds its shelf
+      // visible too (folding the sealed lane into the census proper is
+      // queued on the gatework landing).
+      const sealed = sealedUnlocks(acc);
+      const sealedBy = new Map<string, Unlockable[]>();
+      for (const s of sealed) {
+        const seat = vaultSeatOf(s.u.kind).id;
+        const arr = sealedBy.get(seat);
+        if (arr) arr.push(s.u); else sealedBy.set(seat, [s.u]);
+      }
+      const visible = census.filter(c => c.visible || (sealedBy.get(c.tab.id)?.length ?? 0) > 0);
       const strip = vaultStripVisible(acc, census);
 
       // COMPACT BY DESIGN: kind, name, price — the description lives in the
@@ -1340,8 +1360,21 @@ export class UI {
               <div class="uname">${u.label}</div>
               <button disabled>✓ Owned</button>
             </div>`;
+      // A sealed card wears the name and the price openly (the chain is
+      // walked — this IS the next link) with the lock on the button; the
+      // avenues that open it live in the hover story, met roads checked.
+      const sealedCardHtml = (u: Unlockable): string => `
+            <div class="unlock-card usealed" style="opacity:.7" data-tip="sealedunlock" data-unlock-id="${u.id}">
+              <div class="ukind">${u.kind} · sealed</div>
+              <div class="uname">${u.label}</div>
+              <button disabled>🔒 ${u.cost}</button>
+            </div>`;
       const grid = (rows: string): string => `<div class="unlock-grid">${rows}</div>`;
       const subHead = (label: string): string => `<h3 class="vault-sub">${esc(label)}</h3>`;
+      // The SEALED rack — beneath the buyable stock, above the rumor wall:
+      // the next links of walked chains, roads printed on hover.
+      const sealedRack = (rows: Unlockable[]): string => rows.length
+        ? subHead('Sealed — earn the road, then buy') + grid(rows.map(sealedCardHtml).join('')) : '';
       // THE RUMOR FOLD (discovery web, meta/unlocks.ts): classes the account
       // has NOT yet discovered hang shrouded — the hint whispers at the
       // deed, the name and price stay the world's secret until it is done.
@@ -1368,14 +1401,15 @@ export class UI {
       if (!strip) {
         // THE YOUNG STORE: no shelving earned yet — one flat wall of
         // everything visible, in shelf order (the cards' kind tags speak
-        // for themselves), the rumor fold, and whatever little is owned at
-        // the tail. The furniture arrives when the account outgrows this
-        // room.
+        // for themselves), the sealed rack, the rumor fold, and whatever
+        // little is owned at the tail. The furniture arrives when the
+        // account outgrows this room.
         this.vaultTab = '';
         const stock = visible.flatMap(c => c.stock);
         const ownedAll = census.find(c => c.tab.owned)?.owned ?? [];
         body = stock.length ? grid(stock.map(cardHtml).join(''))
           : `<div class="vault-empty">Nothing for sale right now — earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
+        body += sealedRack(sealed.map(s => s.u));
         body += rumorSection(census.flatMap(c => c.rumors));
         if (ownedAll.length) body += subHead(`Owned (${ownedAll.length})`) + grid(ownedAll.map(ownedCardHtml).join(''));
       } else {
@@ -1395,11 +1429,12 @@ export class UI {
         tabStrip = `<div class="book-tabs vault-tabs">${visible.map(c => {
           const t = c.tab;
           const stockN = c.stock.length, rumorN = c.rumors.length;
+          const sealedN = t.owned ? 0 : (sealedBy.get(t.id)?.length ?? 0);
           const canBuy = c.stock.filter(u => acc.credits >= u.cost).length;
           const shown = t.owned ? c.owned.length : stockN;
           const detail = t.owned
             ? ` — ${c.owned.length} claimed`
-            : ` — ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${rumorN ? `; ${rumorN} rumor${rumorN === 1 ? '' : 's'} shrouded` : ''}`;
+            : ` — ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} rumor${rumorN === 1 ? '' : 's'} shrouded` : ''}`;
           return `<button class="book-tab${t.id === this.vaultTab ? ' active' : ''}"
             data-vtab="${t.id}" title="${esc(t.blurb + detail)}">${t.label}${shown > 0
               ? `<span class="cnt${canBuy > 0 ? ' now' : ''}">${shown}</span>` : ''}</button>`;
@@ -1419,7 +1454,8 @@ export class UI {
             .join('');
         } else {
           const rows = row.stock;
-          if (rows.length === 0) {
+          const sealedRows = sealedBy.get(tab.id) ?? [];
+          if (rows.length === 0 && sealedRows.length === 0) {
             body = `<div class="vault-empty">${esc(tab.emptyNote
               ?? `Nothing here right now — earn more ${META_CURRENCY_LABEL} and milestones by playing.`)}</div>`;
           } else if ((tab.kinds?.length ?? 0) > 1) {
@@ -1428,8 +1464,9 @@ export class UI {
               return kr.length ? subHead(VAULT_KIND_LABELS[k]) + grid(kr.map(cardHtml).join('')) : '';
             }).join('');
           } else {
-            body = grid(rows.map(cardHtml).join(''));
+            body = rows.length ? grid(rows.map(cardHtml).join('')) : '';
           }
+          body += sealedRack(sealedRows);
           body += rumorSection(row.rumors);
         }
       }
@@ -1491,6 +1528,28 @@ export class UI {
       title: u.label,
       description: u.description,
       meta: `${u.kind}${req} · ${owned ? '✓ owned' : `${u.cost} ${META_CURRENCY_LABEL}`}`,
+      wide: true,
+    };
+  }
+
+  /** A SEALED card's hover story: the description plus THE ROADS — every
+   *  avenue that could open it, met ones checked (gatework, sealedGateLines;
+   *  the any-of group prefaced so "one of these" reads at a glance). */
+  private sealedUnlockTooltip(id: string): TooltipContent | null {
+    const acc = this.getAccount();
+    const s = sealedUnlocks(acc).find(x => x.u.id === id);
+    if (!s) return null;
+    const anyOf = s.lines.filter(l => l.anyOf);
+    const allOf = s.lines.filter(l => !l.anyOf);
+    const line = (l: { label: string; met: boolean }): string =>
+      `<div style="color:${l.met ? 'var(--good, #7fd88f)' : 'var(--text-dim)'}">${l.met ? '✓' : '·'} ${esc(l.label)}</div>`;
+    const roads =
+      (anyOf.length ? `<div style="margin-top:6px"><b>Opens by ANY of:</b>${anyOf.map(line).join('')}</div>` : '')
+      + (allOf.length ? `<div style="margin-top:6px"><b>Also needs:</b>${allOf.map(line).join('')}</div>` : '');
+    return {
+      title: `🔒 ${s.u.label}`,
+      description: `${s.u.description}${roads}`,
+      meta: `${s.u.kind} · sealed · ${s.u.cost} ${META_CURRENCY_LABEL} when open`,
       wide: true,
     };
   }
@@ -2989,22 +3048,30 @@ export class UI {
       const lockCap = isClient ? (world.netVendorCap ?? 0) : world.vendorLockCap();
       const hold = world.vendorHolds[holdKey];
       const lockedCount = hold?.locks.filter(r => !r.commission).length ?? 0;
-      const rows = v.stock(world).map((e, idx) => {
-        // The three counter shapes: gems read as gems; rolled GEAR reads as
-        // an item row (rarity color + the ilvl badge) and carries the full
-        // item tooltip — inspect before you spend, exactly like a bag piece.
-        const name = e.kind === 'skill' ? e.inst.def.name : e.kind === 'support' ? e.gem.def.name : e.item.name;
-        const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color
-          : e.kind === 'support' ? e.gem.def.color
-          : ITEM_RARITIES[e.item.rarity].color;
-        const lvHtml = e.kind === 'item'
-          ? `<span style="color:#9a94a8;font-size:10px">ilvl ${e.item.ilvl}</span>`
-          : `<span style="color:#ffd700">Lv ${e.kind === 'skill' ? e.inst.level : e.gem.level}</span>`;
-        const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ')
-          : e.kind === 'support' ? 'support gem'
-          : ITEM_BASES[e.item.baseId]?.name ?? 'gear';
-        const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
-        const tipAttrs = e.kind === 'item' ? ` data-tip="item" data-item-uid="${e.item.uid}"` : '';
+      const stock = v.stock(world);
+
+      // THE TRADE GATE + THE GEM CASE — the engine's own predicates (a NET
+      // client reads the snapshot mirror: the keeper's market, the keeper's
+      // law; absent fields on an older host read as open).
+      const tradeRefusal = isClient
+        ? (world.netVendorTradeOpen === false ? VENDOR_CFG.trade.hint : null)
+        : world.vendorTradeRefusal(v);
+      const gemsOpen = isClient ? world.netVendorGemsOpen !== false : world.vendorGemsOpen();
+      const tabSealed = (t: VendorTabSpec): boolean =>
+        !!t.unlock && (t.unlock === FEATURE.VENDOR_GEMS
+          ? !gemsOpen
+          : !featureEnabled(world.account, t.unlock));
+
+      // THE COUNTER TABS (VendorDef.tabs ?? VENDOR_CFG.tabs.default): the
+      // Wares grid first, the Gems case beside it — a sealed face stays
+      // VISIBLE and clickable (its body explains itself and names the key).
+      const tabs = v.tabs ?? VENDOR_CFG.tabs.default;
+      const chosen = this.vendorTabSel[v.id];
+      const tabId = tabs.some(t => t.id === chosen) ? chosen : tabs[0].id;
+
+      // --- shared per-entry pieces (indices are STOCK indices — the buy and
+      // lock intents speak the one array both faces draw from) --------------
+      const priceBits = (e: VendorEntry): { afford: boolean; priceHtml: string } => {
         const price = v.priceOf(world, e);
         const afford = price.essences
           ? price.essences.every(c => world.canAffordEssence(seat, c))
@@ -3012,9 +3079,24 @@ export class UI {
         const priceHtml = price.essences
           ? price.essences.map(c => this.essCostText(c)).join(' + ')
           : `${price.echoes} ◈`;
-        // The reserve toggle: shown once the ladder has ANY rung (or on an
-        // already-held row, so releasing never needs capacity); a full
-        // ledger disables further ticks with the reason in the title.
+        return { afford, priceHtml };
+      };
+      const lockTitleFor = (heldRow: VendorHoldRow | undefined, atCap: boolean): string => heldRow
+        ? (heldRow.commission
+          ? 'Release the standing order\'s find (the watch resumes; the slot re-rolls next restock)'
+          : 'Release this reserve — the slot re-rolls on the next restock')
+        : atCap ? `The reserve ledger holds ${lockCap} — release one first`
+        : 'Reserve this slot — it will not re-roll until bought or released';
+
+      // --- THE GEM CASE rows (skill/support entries, list rows as ever) -----
+      const gemRows = stock.map((e, idx) => {
+        if (e.kind === 'item') return '';
+        const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+        const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+        const lvHtml = `<span style="color:#ffd700">Lv ${e.kind === 'skill' ? e.inst.level : e.gem.level}</span>`;
+        const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
+        const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
+        const { afford, priceHtml } = priceBits(e);
         const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
         const badge = heldRow
           ? (heldRow.commission
@@ -3024,24 +3106,83 @@ export class UI {
         const atCap = !heldRow && lockedCount >= lockCap;
         const lockBtn = canLock && (lockCap > 0 || heldRow)
           ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} style="min-width:30px"
-              title="${heldRow
-                ? (heldRow.commission
-                  ? 'Release the standing order\'s find (the watch resumes; the slot re-rolls next restock)'
-                  : 'Release this reserve — the slot re-rolls on the next restock')
-                : atCap ? `The reserve ledger holds ${lockCap} — release one first`
-                : 'Reserve this slot — it will not re-roll until bought or released'}">${heldRow ? '🔒' : '🔓'}</button>`
+              title="${lockTitleFor(heldRow, atCap)}">${heldRow ? '🔒' : '🔓'}</button>`
           : '';
+        const canBuy = afford && !tradeRefusal;
         return `
-          <div class="skill-entry" style="border-left:3px solid ${col}${heldRow ? `;background:${v.accent}12` : ''}"${tipAttrs}>
-            <div class="name" style="${e.kind === 'item' ? `color:${col}` : ''}">${name} ${lvHtml} ${tag}${badge}</div>
+          <div class="skill-entry" style="border-left:3px solid ${col}${heldRow ? `;background:${v.accent}12` : ''}">
+            <div class="name">${name} ${lvHtml} ${tag}${badge}</div>
             <div class="tags">${tags}</div>
             <div class="bind-btns">
               ${lockBtn}
-              <button data-vbuy="${v.id}:${idx}" ${afford ? '' : 'disabled'}>
-                Buy (${priceHtml})${afford ? '' : ' — not enough'}</button>
+              <button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'} ${tradeRefusal ? `title="${esc(tradeRefusal)}"` : ''}>
+                Buy (${priceHtml})${canBuy ? '' : tradeRefusal ? '' : ' — not enough'}</button>
             </div>
           </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out — come back after the restock.</div>';
+
+      // --- THE COUNTER GLASS (gear entries as a packed grid — the player
+      // bag's own cell law: footprints, rarity borders, the full item
+      // tooltip on hover; click the glass to buy, the corner pip reserves).
+      const waresGrid = ((): string => {
+        const CELL = 34;
+        const pack = world.vendorGridPack(stock, v.grid);
+        const b = pack.board;
+        let cells = '';
+        for (let y = 0; y < b.h; y++) {
+          for (let x = 0; x < b.w; x++) {
+            cells += `<div style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
+              width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
+          }
+        }
+        let tiles = '';
+        let overflowRows = '';
+        let gearCount = 0;
+        stock.forEach((e, idx) => {
+          if (e.kind !== 'item') return;
+          gearCount++;
+          const i = e.item;
+          const { afford, priceHtml } = priceBits(e);
+          const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
+          const atCap = !heldRow && lockedCount >= lockCap;
+          const canBuy = afford && !tradeRefusal;
+          const at = pack.cells.get(i.uid);
+          if (!at) {
+            // The glass genuinely overflowed (the probe should have caught
+            // content outgrowing it) — list the piece honestly below.
+            overflowRows += `
+              <div class="skill-entry" style="border-left:3px solid ${ITEM_RARITIES[i.rarity].color}" data-tip="item" data-item-uid="${i.uid}">
+                <div class="name" style="color:${ITEM_RARITIES[i.rarity].color}">${i.name} <span style="color:#9a94a8;font-size:10px">ilvl ${i.ilvl}</span></div>
+                <div class="bind-btns"><button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'}>Buy (${priceHtml})</button></div>
+              </div>`;
+            return;
+          }
+          const s = itemGridSize(i);
+          const r = ITEM_RARITIES[i.rarity];
+          const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
+          const lockPip = canLock && (lockCap > 0 || heldRow)
+            ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} title="${lockTitleFor(heldRow, atCap)}"
+                style="position:absolute;top:-1px;right:-1px;z-index:2;font-size:9px;line-height:1;padding:1px 2px;
+                background:#141019cc;border:1px solid ${heldRow ? v.accent : '#3a3644'};border-radius:0 3px 0 3px;cursor:pointer">${heldRow ? '🔒' : '🔓'}</button>`
+            : '';
+          const badge = heldRow
+            ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
+            : '';
+          tiles += `<div data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
+            title="${tradeRefusal ? esc(tradeRefusal) : afford ? `Buy — ${esc(i.name)}` : 'Not enough essence'}"
+            style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
+            width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
+            border:2px solid ${heldRow ? v.accent : r.color};border-radius:3px;cursor:${canBuy ? 'pointer' : 'default'};box-sizing:border-box;
+            display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
+            ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip}${badge}</div>`;
+        });
+        const empty = gearCount === 0
+          ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The glass stands empty — come back after the restock.</div>' : '';
+        return `
+          <div style="position:relative;width:${b.w * CELL}px;height:${b.h * CELL}px;margin-top:2px">${cells}${tiles}</div>
+          ${overflowRows}${empty}
+          <div style="margin-top:4px;color:#8a8678;font-size:10px">hover a piece for its full story · click it to buy${canLock && lockCap > 0 ? ' · the corner pip reserves it' : ''}</div>`;
+      })();
 
       // THE STANDING ORDER strip (feature-gated; the Vault sells discovery,
       // so an un-bought rung shows nothing). A NET client's panel stays
@@ -3083,13 +3224,36 @@ export class UI {
       const reserveBadge = canLock && lockCap > 0
         ? ` <span style="opacity:0.8;font-size:10px;font-weight:normal">· 🔒 ${lockedCount}/${lockCap} reserved</span>`
         : '';
+      // THE COUNTER TABS, drawn: face labels wear their stock counts; a
+      // sealed face wears the lock instead (clickable — its body names the
+      // key). One tab = no strip (the delver's bare gems counter).
+      const tabStrip = tabs.length > 1 ? `<div class="book-tabs" style="margin:2px 0 6px">${tabs.map(t => {
+        const sealedT = tabSealed(t);
+        const label = t.id === 'wares' ? 'Wares' : 'Gems';
+        const n = t.id === 'wares'
+          ? stock.filter(e => e.kind === 'item').length
+          : stock.filter(e => e.kind !== 'item').length;
+        return `<button class="book-tab${t.id === tabId ? ' active' : ''}" data-vtabsel="${v.id}:${t.id}"
+          title="${sealedT ? esc(VENDOR_CFG.tabs.gemsSealedCopy) : label}">${label}${sealedT ? ' 🔒' : ` <span style="opacity:.7">(${n})</span>`}</button>`;
+      }).join('')}</div>` : '';
+      const activeSpec = tabs.find(t => t.id === tabId) ?? tabs[0];
+      // THE TRADE GATE strip: above the faces — the whole counter explains
+      // its shut till once, whichever face is open.
+      const tradeStrip = tradeRefusal
+        ? `<div style="margin:4px 0;padding:5px 7px;border:1px dashed #8a6a3a88;border-radius:4px;color:#c8a86a;font-size:11px">🔒 ${esc(tradeRefusal)}</div>`
+        : '';
+      const body = tabSealed(activeSpec)
+        ? `<div style="padding:16px 10px;color:#8a8678;font-size:11px;text-align:center;line-height:1.5">🔒 ${esc(VENDOR_CFG.tabs.gemsSealedCopy)}</div>`
+        : activeSpec.id === 'gems'
+          ? `${gemRows}${commStrip}`
+          : `${waresGrid}${scrap}`;
       return `
         <div style="border:1px solid ${v.accent}44;border-radius:4px;padding:8px;margin-bottom:10px;background:${v.bg}">
           <div style="color:${v.accent};font-weight:bold;font-size:12px;margin-bottom:4px">
             ${v.label}${v.headline ? ` <span data-vheadline="${v.id}" style="opacity:0.7;font-size:10px;font-weight:normal">· ${v.headline(world)}</span>` : ''}${reserveBadge}</div>
-          ${rows}
-          ${commStrip}
-          ${scrap}
+          ${tradeStrip}
+          ${tabStrip}
+          ${body}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand — find a vendor and linger.</div>';
 
@@ -3103,7 +3267,9 @@ export class UI {
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.vendorMenu.querySelectorAll<T>(sel)];
     const refresh = (): void => { this.refreshVendor(); this.refreshInventory(); };
-    q<HTMLButtonElement>('button[data-vbuy]').forEach(btn => btn.addEventListener('click', () => {
+    // Buy rides list buttons AND the glass's tiles alike — one attribute,
+    // one handler (the selector is deliberately element-agnostic).
+    q<HTMLElement>('[data-vbuy]').forEach(btn => btn.addEventListener('click', () => {
       const [vid, idx] = btn.dataset.vbuy!.split(':');
       const vendor = VENDORS.find(v => v.id === vid);
       if (!vendor) return;
@@ -3115,7 +3281,10 @@ export class UI {
     // THE PATRON'S HOLD: the toggle reads the row's CURRENT held state and
     // asks for the flip — the world validates capacity/nearness (host-side
     // in co-op; the client's optimistic repaint self-heals off the snapshot).
-    q<HTMLButtonElement>('button[data-vlock]').forEach(btn => btn.addEventListener('click', () => {
+    // stopPropagation: a glass tile's corner pip sits INSIDE its buy surface —
+    // the reserve click must never fall through into a purchase.
+    q<HTMLButtonElement>('button[data-vlock]').forEach(btn => btn.addEventListener('click', ev => {
+      ev.stopPropagation();
       const [vid, idx] = btn.dataset.vlock!.split(':');
       const vendor = VENDORS.find(x => x.id === vid);
       if (!vendor) return;
@@ -3123,6 +3292,12 @@ export class UI {
       const on = !(entry && world.vendorEntryHold(world.vendorHoldKey(vendor), entry));
       world.requestMeta({ t: 'vendorLock', vendor: vid, index: Number(idx), on });
       refresh();
+    }));
+    // THE COUNTER TABS: remember the face per counter, repaint.
+    q<HTMLButtonElement>('button[data-vtabsel]').forEach(btn => btn.addEventListener('click', () => {
+      const [vid, tabId] = btn.dataset.vtabsel!.split(':');
+      this.vendorTabSel[vid] = tabId;
+      this.refreshVendor();
     }));
     q<HTMLButtonElement>('button[data-vcomm-open]').forEach(btn => btn.addEventListener('click', () => {
       this.vendorCommOpen = btn.dataset.vcommOpen!;
