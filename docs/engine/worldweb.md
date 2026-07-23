@@ -121,9 +121,31 @@ violators revert and pin. It runs:
   the ring gives way, the expanse never moves);
 - as **THE SETTLE SWEEP** (`World.updateWebSettle`, every `settle.sweepSec`):
   local settles can chain a displacement across their pool edge — the slow
-  whole-chart pass re-relaxes violating clusters (a clean chart pays one
-  distance scan, no moves);
+  whole-chart pass re-relaxes violating clusters, at most
+  `settle.sweepClusters` neighbourhoods per beat (deferred clusters re-arm
+  themselves for the next beat);
 - in `reconcileWebLaws` on restore (saved overlap heals on load).
+
+**THE SWEEP'S COST LAWS** (probe `balance/probe_webperf.ts` — the 2026-07-23
+perf gate caught the ungated all-pairs pass costing whole frames by
+mid-session):
+
+- **THE HASH SCAN**: every violation/candidate scan inside `settleWeb` rides
+  a spatial hash (`pairsWithin`) that yields EXACTLY the naive nested walk's
+  pairs in EXACTLY its order — the relaxation trajectory is byte-identical
+  to the all-pairs original (determinism twins pinned), without the N² that
+  grew with the halo.
+- **THE QUIET GATE**: the sweep beat runs only while `webDisturbance()` has
+  moved — every mint (`placeZoneAt` pokes it), every settle that shifted a
+  node or deferred capped work re-arms it; an end-clean pass parks it. A
+  converged chart pays NOTHING per beat, however large it has grown. A
+  TOLERATED pair (immovables on both ends) never holds the gate open.
+  Anything relocating chart nodes outside the mint/settle paths calls
+  `pokeWeb()` so the self-heal notices.
+- **THE CLUSTER CAP** (`settle.sweepClusters`): a scattered disturbance (a
+  restore heal's whole-save backlog) relaxes a few neighbourhoods per beat
+  instead of the whole chart in one frame; convergence amortizes across
+  beats via the gate.
 
 ## QUEST DEEDS (directed mints never lock out)
 

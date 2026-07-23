@@ -109,7 +109,7 @@ import '../data/lightwells'; // side-effect: the ambient lightwell rows register
 import '../data/tracks'; // side-effect: the track rider + contact-doodad rows register
 import '../data/trapworks'; // side-effect: the trapworks kit (riders + tells) registers
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
-import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, chordClearsNodes, footprintBars, roadBudgetOf, settleWeb, WEB_CFG, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
+import { connectFloatingZone, countRoads, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, chordClearsNodes, footprintBars, roadBudgetOf, settleWeb, webDisturbance, WEB_CFG, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
@@ -8057,16 +8057,31 @@ export class World {
   /** THE SETTLE SWEEP's clock (WEB_CFG.settle.sweepSec). */
   private webSettleNextAt = 0;
 
+  /** The last webDisturbance() a settle sweep saw END clean — while the seq
+   *  sits here the chart is converged and the beat SKIPS whole. */
+  private webSettleSeenSeq = -1;
+
   /** The slow whole-chart settling beat: local mint-time settles can chain a
    *  displacement across their pool edge (a pushed neighbour crowding a node
    *  the pool never paired it with) — this pass re-relaxes any violating
-   *  clusters chart-wide. Cheap when clean: one distance scan, zero moves. */
+   *  clusters chart-wide, at most settle.sweepClusters neighbourhoods per
+   *  beat (deferred work re-arms itself). THE QUIET GATE: it runs only while
+   *  the web is DISTURBED (mints, node moves, deferred clusters — the
+   *  worldgen disturbance seq); a converged chart pays nothing per beat,
+   *  however many zones the halo has grown — the perf gate caught the old
+   *  ungated pass costing whole frames by mid-session. */
   private updateWebSettle(): void {
     if (this.time < this.webSettleNextAt) return;
     this.webSettleNextAt = this.time + WEB_CFG.settle.sweepSec;
+    const seen = webDisturbance();
+    if (seen === this.webSettleSeenSeq) return;
     settleWeb(this.zoneMap, null, {
+      maxClusters: WEB_CFG.settle.sweepClusters,
       canStand: (z, pt) => (z.dimension ? true : this.biomeFor(pt) !== OCEAN_BIOME),
     });
+    // A pass that moved/left/deferred anything bumped the seq past `seen` —
+    // the next beat runs again; only an END-CLEAN pass parks the gate.
+    if (webDisturbance() === seen) this.webSettleSeenSeq = seen;
   }
 
   /** Sweep context: while true, chartFrontier stamps its mints `veiled`.

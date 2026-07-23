@@ -310,9 +310,19 @@ export const WEB_CFG = {
     /** THE SETTLE SWEEP (World.update): seconds between whole-chart passes.
      *  Mint-time settles are LOCAL — a chained displacement can nudge a pair
      *  that straddles the pool's edge past the floor unseen; the sweep's
-     *  cluster-scoped global pass self-heals any residue within a beat. The
-     *  clean-chart cost is one distance scan (a few ms at halo scale). */
+     *  cluster-scoped global pass self-heals any residue within a beat.
+     *  THE QUIET GATE: the sweep runs only while the web is DISTURBED
+     *  (webDisturbance() moved since the last clean pass — mints, settles
+     *  that shifted a node, capped work left behind); a converged chart pays
+     *  literally nothing, however large it has grown. The scans themselves
+     *  ride a spatial hash (pairsWithin), never the all-pairs walk — the
+     *  perf gate caught the old N² scan costing whole frames at halo scale. */
     sweepSec: 8,
+    /** Most hot CLUSTERS one sweep beat relaxes (the rest stay hot and the
+     *  next beat takes them — the disturbance seq re-arms itself): bounds a
+     *  worst-case beat (a restore heal's scatter) to a few neighbourhoods
+     *  instead of the whole chart in one frame. */
+    sweepClusters: 4,
   },
 } as const;
 
@@ -396,6 +406,53 @@ export function settleMovable(z: ZoneDef): boolean {
     && z.caveDepth == null && !zoneKindOf(z)?.staticExits && !isRoadlessGateHub(z);
 }
 
+/** THE DISTURBANCE SEQ — the settle sweep's arming counter: bumped by every
+ *  mint (placeZoneAt) and by any settleWeb call that moved a node, left
+ *  residue, or deferred capped work. World.updateWebSettle sweeps only while
+ *  this moves (THE QUIET GATE) — a converged chart pays nothing per beat. */
+let webDisturbSeq = 0;
+export function webDisturbance(): number { return webDisturbSeq; }
+/** Arm the settle sweep by hand — any future system that relocates chart
+ *  nodes outside placeZoneAt/settleWeb (dev tools, a migration) calls this
+ *  so the self-heal notices. */
+export function pokeWeb(): void { webDisturbSeq++; }
+
+/** Every same-dimension pool pair closer than `within`, via a spatial hash —
+ *  the SAME pairs the naive i<j nested walk finds, in the SAME (i-major,
+ *  j-ascending) order (probe-pinned equivalence), without the all-pairs N²
+ *  that made the old scan a whole-frame cost at halo scale. Cell size =
+ *  `within`, so a qualifying pair always shares a cell or an adjacent one. */
+function pairsWithin(pool: readonly ZoneDef[], within: number): [number, number][] {
+  const cell = Math.max(1, within);
+  const bins = new Map<string, number[]>();
+  for (let i = 0; i < pool.length; i++) {
+    const k = Math.floor(pool[i].map.x / cell) + ',' + Math.floor(pool[i].map.y / cell);
+    let b = bins.get(k);
+    if (!b) bins.set(k, b = []);
+    b.push(i);
+  }
+  const out: [number, number][] = [];
+  const near: number[] = [];
+  for (let i = 0; i < pool.length; i++) {
+    const zi = pool[i];
+    const cx = Math.floor(zi.map.x / cell), cy = Math.floor(zi.map.y / cell);
+    near.length = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const b = bins.get((cx + dx) + ',' + (cy + dy));
+        if (b) for (const j of b) if (j > i) near.push(j);
+      }
+    }
+    near.sort((a, b) => a - b);
+    for (const j of near) {
+      const zj = pool[j];
+      if ((zi.dimension ?? 'surface') !== (zj.dimension ?? 'surface')) continue;
+      if (Math.hypot(zj.map.x - zi.map.x, zj.map.y - zi.map.y) < within) out.push([i, j]);
+    }
+  }
+  return out;
+}
+
 /** THE SETTLING — a bounded, deterministic force-directed relaxation (the
  *  portal spacedExitAt law lifted to NODES; the passive tree's layout idea,
  *  scoped to a neighbourhood): any same-dimension pair closer than
@@ -405,11 +462,14 @@ export function settleMovable(z: ZoneDef): boolean {
  *  zone must still STAND (caller's canStand: ocean/biome refusals), must not
  *  come to rest inside an expanse footprint, and must keep every real road
  *  DRY (routeOk) — violators revert and pin. `extra` lets the placement
- *  primitive settle a mint BEFORE it enters the zoneMap. Returns the count of
- *  pairs still violating (0 = fully settled). */
+ *  primitive settle a mint BEFORE it enters the zoneMap. `maxClusters` (the
+ *  sweep's dial) bounds one call to that many hot neighbourhoods — deferred
+ *  work stays armed via the disturbance seq. Returns the count of pairs
+ *  still violating among the ground it worked (0 = fully settled). */
 export function settleWeb(
   zoneMap: Record<string, ZoneDef>, extra: ZoneDef | null,
-  opts?: { around?: MapCoord; radius?: number; canStand?: (z: ZoneDef, pt: MapCoord) => boolean },
+  opts?: { around?: MapCoord; radius?: number; maxClusters?: number;
+    canStand?: (z: ZoneDef, pt: MapCoord) => boolean },
 ): number {
   const floor = WEB_CFG.hoverClear;
   const all = extra ? [...Object.values(zoneMap), extra] : Object.values(zoneMap);
@@ -417,24 +477,36 @@ export function settleWeb(
     && (!opts?.around || Math.hypot(z.map.x - opts.around.x, z.map.y - opts.around.y) <= (opts.radius ?? WEB_CFG.settle.radius)));
   if (pool.length < 2) return 0;
   // Cheap gate: no violating pair → nothing to do (the common frontier mint).
-  // A GLOBAL call (no `around` — the restore heal) shrinks the working pool
-  // to the violating CLUSTERS' neighbourhoods, so a big clean chart pays one
-  // scan and a big dirty one iterates only where it hurts.
-  const violates = (a: ZoneDef, b: ZoneDef): boolean =>
-    (a.dimension ?? 'surface') === (b.dimension ?? 'surface')
-    && Math.hypot(a.map.x - b.map.x, a.map.y - b.map.y) < floor;
-  const hot: MapCoord[] = [];
-  for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) {
-      if (violates(pool[i], pool[j])) {
-        hot.push({ x: (pool[i].map.x + pool[j].map.x) / 2, y: (pool[i].map.y + pool[j].map.y) / 2 });
-      }
-    }
-  }
-  if (!hot.length) return 0;
+  // A GLOBAL call (no `around` — the restore heal, the settle sweep) shrinks
+  // the working pool to the violating CLUSTERS' neighbourhoods — and under
+  // `maxClusters` keeps only the FIRST K clusters this call; the rest are
+  // DEFERRED (they re-arm the disturbance seq, the next beat takes them), so
+  // one beat's work stays bounded however scattered the disturbance. Every
+  // scan rides the spatial hash — never the all-pairs walk the perf gate
+  // caught spending whole frames at halo scale.
+  const hotPairs = pairsWithin(pool, floor);
+  if (!hotPairs.length) return 0;
+  const hot: MapCoord[] = hotPairs.map(([i, j]) =>
+    ({ x: (pool[i].map.x + pool[j].map.x) / 2, y: (pool[i].map.y + pool[j].map.y) / 2 }));
+  let deferred = 0;
   if (!opts?.around) {
     const r = opts?.radius ?? WEB_CFG.settle.radius;
-    pool = pool.filter(z => hot.some(h => Math.hypot(z.map.x - h.x, z.map.y - h.y) <= r));
+    const cap = opts?.maxClusters ?? Infinity;
+    // Greedy deterministic clustering of the hot midpoints (scan order): a
+    // midpoint founds a cluster unless a standing centre already covers it;
+    // founders past the cap are deferred whole.
+    const centers: MapCoord[] = [];
+    const kept: MapCoord[] = [];
+    for (const h of hot) {
+      const covered = centers.some(c => Math.hypot(c.x - h.x, c.y - h.y) <= r);
+      if (!covered) {
+        if (centers.length >= cap) { deferred++; continue; }
+        centers.push(h);
+      }
+      kept.push(h);
+    }
+    pool = pool.filter(z => kept.some(h => Math.hypot(z.map.x - h.x, z.map.y - h.y) <= r));
+    if (pool.length < 2) { webDisturbSeq += deferred > 0 ? 1 : 0; return 0; }
   }
   pool.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0); // deterministic order
   const home = new Map(pool.map(z => [z.id, { x: z.map.x, y: z.map.y }] as const));
@@ -448,36 +520,42 @@ export function settleWeb(
       z.map.x = h.x + dx * f; z.map.y = h.y + dy * f;
     }
   };
+  // Candidate pairs ONCE, at the padded reach: a pair can only come under the
+  // floor mid-relax if it STARTS within floor + 2×maxShift (each end is
+  // home-clamped to maxShift of total drift) — enumerated on the sorted pool
+  // in the naive walk's exact (i-major, j-ascending) order, so the
+  // relaxation trajectory is byte-identical to the all-pairs original
+  // (pairsWithin already filtered cross-dimension pairs out).
+  const candidates = pairsWithin(pool, floor + 2 * WEB_CFG.settle.maxShift);
+  let anyMoved = false;
   for (let it = 0; it < WEB_CFG.settle.iters; it++) {
     let moved = false;
-    for (let i = 0; i < pool.length; i++) {
-      for (let j = i + 1; j < pool.length; j++) {
-        const a = pool[i], b = pool[j];
-        if ((a.dimension ?? 'surface') !== (b.dimension ?? 'surface')) continue;
-        let dx = b.map.x - a.map.x, dy = b.map.y - a.map.y;
-        let d = Math.hypot(dx, dy);
-        if (d >= floor) continue;
-        if (d < 0.01) {
-          // Coincident: a deterministic direction from the pair's ids (no rng).
-          let h = 0;
-          for (const ch of a.id + b.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-          const ang = (h % 360) * Math.PI / 180;
-          dx = Math.cos(ang); dy = Math.sin(ang); d = 1;
-        }
-        const ux = dx / d, uy = dy / d;
-        // Target a hair PAST the floor (×1.05): pure relaxation converges
-        // asymptotically, and a pair parked at 43.98 of a 44 floor is still
-        // a violation — the overshoot lands every settled pair clear of it.
-        const deficit = (floor * 1.05 - Math.min(d, floor * 1.05)) * 0.62;
-        const aMoves = !pinned.has(a.id), bMoves = !pinned.has(b.id);
-        if (!aMoves && !bMoves) continue; // authored geography on both ends — tolerated
-        const aShare = aMoves && bMoves ? 0.5 : aMoves ? 1 : 0;
-        if (aMoves) { a.map.x -= ux * deficit * aShare; a.map.y -= uy * deficit * aShare; clampShift(a); }
-        if (bMoves) { b.map.x += ux * deficit * (1 - aShare); b.map.y += uy * deficit * (1 - aShare); clampShift(b); }
-        moved = true;
+    for (const [ci, cj] of candidates) {
+      const a = pool[ci], b = pool[cj];
+      let dx = b.map.x - a.map.x, dy = b.map.y - a.map.y;
+      let d = Math.hypot(dx, dy);
+      if (d >= floor) continue;
+      if (d < 0.01) {
+        // Coincident: a deterministic direction from the pair's ids (no rng).
+        let h = 0;
+        for (const ch of a.id + b.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+        const ang = (h % 360) * Math.PI / 180;
+        dx = Math.cos(ang); dy = Math.sin(ang); d = 1;
       }
+      const ux = dx / d, uy = dy / d;
+      // Target a hair PAST the floor (×1.05): pure relaxation converges
+      // asymptotically, and a pair parked at 43.98 of a 44 floor is still
+      // a violation — the overshoot lands every settled pair clear of it.
+      const deficit = (floor * 1.05 - Math.min(d, floor * 1.05)) * 0.62;
+      const aMoves = !pinned.has(a.id), bMoves = !pinned.has(b.id);
+      if (!aMoves && !bMoves) continue; // authored geography on both ends — tolerated
+      const aShare = aMoves && bMoves ? 0.5 : aMoves ? 1 : 0;
+      if (aMoves) { a.map.x -= ux * deficit * aShare; a.map.y -= uy * deficit * aShare; clampShift(a); }
+      if (bMoves) { b.map.x += ux * deficit * (1 - aShare); b.map.y += uy * deficit * (1 - aShare); clampShift(b); }
+      moved = true;
     }
-    if (!moved) break;
+    if (moved) anyMoved = true;
+    else break;
   }
   // THE STANDING GUARDS: a settled zone must still stand on legal ground and
   // keep every real road dry. Violators revert home and PIN (their neighbours
@@ -503,10 +581,19 @@ export function settleWeb(
     }
     if (!ok) { z.map.x = h.x; z.map.y = h.y; }
   }
-  let left = 0;
-  for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) if (violates(pool[i], pool[j])) left++;
+  const residualPairs = pairsWithin(pool, floor);
+  const left = residualPairs.length;
+  // Arm the sweep on ACTIONABLE residue only: anything this call moved
+  // (guards may have reverted some — one spare beat is cheap), any residual
+  // pair with a movable end, or work deferred past the cluster cap. A
+  // TOLERATED pair (authored geography on both ends) must NOT hold the
+  // quiet gate open — nothing can ever be done about it, and an armed gate
+  // would re-run its neighbourhood every beat forever.
+  let actionable = 0;
+  for (const [ri, rj] of residualPairs) {
+    if (!pinned.has(pool[ri].id) || !pinned.has(pool[rj].id)) actionable++;
   }
+  if (anyMoved || actionable > 0 || deferred > 0) webDisturbSeq++;
   return left;
 }
 const AT_CANDIDATES = [0.2, 0.35, 0.5, 0.65, 0.8] as const; // portal slots along a side
@@ -1215,6 +1302,10 @@ export function placeZoneAt(
       ? (z, pt) => (z.dimension ? true : spec.biomeFor!(pt) !== OCEAN_BIOME)
       : undefined,
   });
+  // Every mint arms THE SETTLE SWEEP (belt beside the settle's own bump): a
+  // local settle is blind past its pool edge — the sweep's next beat checks
+  // the wider chart once, then parks again (THE QUIET GATE).
+  pokeWeb();
   // The settle may have shifted THIS mint across its anchor's dominant axis:
   // re-face the back-edge so the portal stands on the honest wall (the
   // reciprocal below derives from the fresh side).
