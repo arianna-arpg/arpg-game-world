@@ -121,19 +121,26 @@ const HINT_BAR_ENABLED = false;
  *  falls to the spare strip under the figure (the never-invisible law):
  *  a new slot ships first and earns its place on the body second. */
 const DOLL_SEATS: Record<string, { x: number; y: number; w: number; h: number }> = {
-  helmet:   { x: 2.5,  y: 0,    w: 2,   h: 2 },
-  amulet:   { x: 4.7,  y: 1.55, w: 1,   h: 1 },
-  chest:    { x: 2.5,  y: 2.3,  w: 2,   h: 3 },
-  ring1:    { x: 0.35, y: 2.5,  w: 1,   h: 1 },
-  ring2:    { x: 1.45, y: 2.5,  w: 1,   h: 1 },
-  gloves:   { x: 0.6,  y: 3.75, w: 1.7, h: 1.7 },
-  legs:     { x: 4.7,  y: 3.6,  w: 1.7, h: 2.2 },
-  belt:     { x: 2.5,  y: 5.5,  w: 2,   h: 1 },
-  boots:    { x: 2.6,  y: 6.7,  w: 1.8, h: 1.5 },
-  mainhand: { x: 0.5,  y: 5.7,  w: 1.8, h: 2.7 },
-  offhand:  { x: 4.7,  y: 6.05, w: 1.8, h: 2.3 },
+  helmet:   { x: 2.15, y: 0,    w: 2,   h: 2 },
+  amulet:   { x: 4.35, y: 1.55, w: 1,   h: 1 },
+  chest:    { x: 2.15, y: 2.3,  w: 2,   h: 3 },
+  ring1:    { x: 0.05, y: 2.5,  w: 1,   h: 1 },
+  ring2:    { x: 1.15, y: 2.5,  w: 1,   h: 1 },
+  gloves:   { x: 0.3,  y: 3.75, w: 1.7, h: 1.7 },
+  legs:     { x: 4.35, y: 3.6,  w: 1.7, h: 2.2 },
+  belt:     { x: 2.15, y: 5.5,  w: 2,   h: 1 },
+  boots:    { x: 2.25, y: 6.7,  w: 1.8, h: 1.5 },
+  mainhand: { x: 0.15, y: 5.7,  w: 1.8, h: 2.7 },
+  offhand:  { x: 4.35, y: 6.05, w: 1.8, h: 2.3 },
 };
-const DOLL_COLS = 7;
+/** The figure's width derives from the seats shown, exactly like its height
+ *  — the doll hugs the bag inside the panel's horizontal seam, and a seat
+ *  shifting outward grows the frame instead of birthing a scrollbar. */
+const dollColsFor = (slots: readonly EquipSlotDef[]): number =>
+  slots.reduce((m, s) => {
+    const seat = DOLL_SEATS[s.id];
+    return seat ? Math.max(m, seat.x + seat.w) : m;
+  }, 0) + 0.05;
 /** The figure's height DERIVES from the seats actually shown — compact
  *  today, and the day the hand slots enable, the body simply grows to
  *  hold them (no constant to remember). */
@@ -149,7 +156,7 @@ const dollRowsFor = (slots: readonly EquipSlotDef[]): number =>
  *  to the boots): shift a seat and the body follows. Pure presentation —
  *  pointer-events none, painted before the seat buttons so every drop
  *  target and glow stacks above it. */
-const dollSilhouetteSvg = (cell: number, rows: number): string => {
+const dollSilhouetteSvg = (cell: number, cols: number, rows: number): string => {
   const S = DOLL_SEATS;
   const px = (c: number): number => Math.round(c * cell * 10) / 10;
   const cx = px(S.helmet.x + S.helmet.w / 2);
@@ -167,7 +174,7 @@ const dollSilhouetteSvg = (cell: number, rows: number): string => {
   const limb = Math.round(cell * 0.5);
   const tone = 'rgba(196,186,214,0.07)';
   const edge = 'rgba(196,186,214,0.12)';
-  return `<svg width="${DOLL_COLS * cell}" height="${Math.ceil(rows * cell)}" viewBox="0 0 ${DOLL_COLS * cell} ${Math.ceil(rows * cell)}"
+  return `<svg width="${Math.ceil(cols * cell)}" height="${Math.ceil(rows * cell)}" viewBox="0 0 ${Math.ceil(cols * cell)} ${Math.ceil(rows * cell)}"
     style="position:absolute;inset:0;pointer-events:none" aria-hidden="true">
     <g fill="${tone}" stroke="${edge}" stroke-width="1.2">
       <circle cx="${cx}" cy="${headCy}" r="${headR}"/>
@@ -2101,11 +2108,13 @@ export class UI {
     };
     const seatedSlots = dollSlots.filter(s => DOLL_SEATS[s.id]);
     const spareSlots = dollSlots.filter(s => !DOLL_SEATS[s.id]);
-    // Height derives from the seats actually shown; the faint body paints
-    // FIRST so every seat, glow and pip stacks above it.
+    // Width AND height derive from the seats actually shown; the faint body
+    // paints FIRST so every seat, glow and pip stacks above it.
     const dollRows = dollRowsFor(seatedSlots);
-    const figure = `<div style="position:relative;width:${DOLL_COLS * CELL}px;height:${Math.ceil(dollRows * CELL)}px">
-      ${dollSilhouetteSvg(CELL, dollRows)}
+    const dollCols = dollColsFor(seatedSlots);
+    const dollW = Math.ceil(dollCols * CELL);
+    const figure = `<div style="position:relative;width:${dollW}px;height:${Math.ceil(dollRows * CELL)}px">
+      ${dollSilhouetteSvg(CELL, dollCols, dollRows)}
       ${seatedSlots.map(s => dollSeatHtml(s, DOLL_SEATS[s.id])).join('')}</div>`;
     // The spare strip: seatless-but-enabled slots keep the old list rows.
     const spare = spareSlots.map(slot => {
@@ -2116,7 +2125,7 @@ export class UI {
         : `<span style="color:#5a5668">${slot.label}</span>`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
-        style="display:block;width:${DOLL_COLS * CELL}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
+        style="display:block;width:${dollW}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
         background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:pointer">${label}</button>`;
     }).join('');
     const doll = figure + spare;
@@ -2232,7 +2241,7 @@ export class UI {
         </div>
       </div>` : '';
     const gearBody = `
-      <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="display:flex;gap:10px;align-items:flex-start">
         <div>
           <h3>Equipped</h3>
           ${doll}
@@ -2268,8 +2277,16 @@ export class UI {
     const prevScroll = this.inventory.querySelector<HTMLElement>('.inv-scroll')?.scrollTop ?? 0;
     const prevBuildScroll = this.inventory.querySelector<HTMLElement>('.build-scroll')?.scrollTop ?? 0;
     const sameTab = this.lastInvTab === this.invTab;
+    // THE ANCHORED FRAME: the scroll wrapper holds the GEAR tab's height
+    // (derived from the doll itself) on EVERY tab, clamped to the viewport —
+    // an empty gem tab no longer collapses the pane, so the Build flap and
+    // drawer sit at the same seat whichever face is open. overflow-x hidden:
+    // the doll+bag row is sized to the seam (derived cols), and a set
+    // overflow-y would otherwise compute overflow-x to auto and grow a
+    // phantom horizontal bar under the fold.
+    const frameMin = Math.ceil(dollRowsFor(EQUIP_SLOTS.filter(s => s.enabled && DOLL_SEATS[s.id])) * 34) + 48;
     this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}<h2>Inventory</h2>${tabs}
-      <div class="inv-scroll" style="max-height:calc(100vh - 240px);overflow-y:auto">${body}</div>`;
+      <div class="inv-scroll" style="min-height:min(${frameMin}px, calc(100vh - 240px));max-height:calc(100vh - 240px);overflow-y:auto;overflow-x:hidden">${body}</div>`;
     const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
     if (scrollEl && sameTab) scrollEl.scrollTop = prevScroll;
     const buildEl = this.inventory.querySelector<HTMLElement>('.build-scroll');
