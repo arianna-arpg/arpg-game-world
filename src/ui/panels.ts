@@ -20,7 +20,7 @@ import {
   type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance } from '../engine/items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type EquipSlotDef, type ItemInstance } from '../engine/items';
 import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
@@ -111,6 +111,31 @@ const HINT_BAR_ENABLED = false;
 
 /** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
  *  one vocabulary (a lifted thing looks like the tile it left). */
+/** THE DOLL SEATS — the equipped figure's body arrangement as presentation
+ *  DATA, in the bag's own CELL units (fractions welcome): the center spine
+ *  runs helmet → chest → belt → legs → boots; the amulet nestles at the
+ *  neck's right; the rings sit side by side on the left flank with the
+ *  gloves beneath them at mid-chest height; the (future-slated) hands
+ *  flank the right — their seats already wait, so enabling the slots in
+ *  EQUIP_SLOTS is the WHOLE launch. Any enabled slot missing a seat here
+ *  falls to the spare strip under the figure (the never-invisible law):
+ *  a new slot ships first and earns its place on the body second. */
+const DOLL_SEATS: Record<string, { x: number; y: number; w: number; h: number }> = {
+  helmet:   { x: 2.5,  y: 0,    w: 2,   h: 2 },
+  amulet:   { x: 4.7,  y: 1.55, w: 1,   h: 1 },
+  chest:    { x: 2.5,  y: 2.3,  w: 2,   h: 3 },
+  ring1:    { x: 0.35, y: 2.5,  w: 1,   h: 1 },
+  ring2:    { x: 1.45, y: 2.5,  w: 1,   h: 1 },
+  gloves:   { x: 0.6,  y: 3.75, w: 1.7, h: 1.7 },
+  mainhand: { x: 5.0,  y: 2.5,  w: 1.8, h: 3.2 },
+  offhand:  { x: 5.0,  y: 6.0,  w: 1.8, h: 2.2 },
+  belt:     { x: 2.5,  y: 5.55, w: 2,   h: 1 },
+  legs:     { x: 2.5,  y: 6.8,  w: 2,   h: 2.4 },
+  boots:    { x: 2.6,  y: 9.45, w: 1.8, h: 1.5 },
+};
+const DOLL_COLS = 7;
+const DOLL_ROWS = 11.1;
+
 const CATEGORY_GLYPHS: Record<string, string> = {
   helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
   ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
@@ -1349,14 +1374,14 @@ export class UI {
         const afford = acc.credits >= u.cost;
         return `
             <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
-              <div class="ukind">${u.kind}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
+              <div class="ukind">${VAULT_KIND_LABELS[u.kind]}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
               <div class="uname">${u.label}</div>
               <button data-unlock="${u.id}" ${afford ? '' : 'disabled'}>Unlock — ${u.cost}</button>
             </div>`;
       };
       const ownedCardHtml = (u: Unlockable): string => `
             <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
-              <div class="ukind">${u.kind}</div>
+              <div class="ukind">${VAULT_KIND_LABELS[u.kind]}</div>
               <div class="uname">${u.label}</div>
               <button disabled>✓ Owned</button>
             </div>`;
@@ -1365,7 +1390,7 @@ export class UI {
       // avenues that open it live in the hover story, met roads checked.
       const sealedCardHtml = (u: Unlockable): string => `
             <div class="unlock-card usealed" style="opacity:.7" data-tip="sealedunlock" data-unlock-id="${u.id}">
-              <div class="ukind">${u.kind} · sealed</div>
+              <div class="ukind">${VAULT_KIND_LABELS[u.kind]} · sealed</div>
               <div class="uname">${u.label}</div>
               <button disabled>🔒 ${u.cost}</button>
             </div>`;
@@ -1391,7 +1416,7 @@ export class UI {
             ? 'Fold the rumor wall away' : 'Hang the rumor wall back up'}"><span class="arr">${open ? '▾' : '▸'}</span>Rumors — classes not yet discovered (${rows.length})</h3>`
           + (open ? grid(rows.map((_u, i) => `
             <div class="unlock-card" style="opacity:.55" data-tip="rumor" data-rumor-i="${i}">
-              <div class="ukind">class · undiscovered</div>
+              <div class="ukind">${VAULT_KIND_LABELS.class} · undiscovered</div>
               <div class="uname" style="letter-spacing:3px">? ? ?</div>
               <button disabled>Undiscovered</button>
             </div>`).join('')) : '');
@@ -1527,7 +1552,7 @@ export class UI {
     return {
       title: u.label,
       description: u.description,
-      meta: `${u.kind}${req} · ${owned ? '✓ owned' : `${u.cost} ${META_CURRENCY_LABEL}`}`,
+      meta: `${VAULT_KIND_LABELS[u.kind]}${req} · ${owned ? '✓ owned' : `${u.cost} ${META_CURRENCY_LABEL}`}`,
       wide: true,
     };
   }
@@ -1549,7 +1574,7 @@ export class UI {
     return {
       title: `🔒 ${s.u.label}`,
       description: `${s.u.description}${roads}`,
-      meta: `${s.u.kind} · sealed · ${s.u.cost} ${META_CURRENCY_LABEL} when open`,
+      meta: `${VAULT_KIND_LABELS[s.u.kind]} · sealed · ${s.u.cost} ${META_CURRENCY_LABEL} when open`,
       wide: true,
     };
   }
@@ -1562,7 +1587,7 @@ export class UI {
     return {
       title: '? ? ?',
       description: `<i>“${u.payload.hint ?? 'The world has not introduced this one yet.'}”</i>`,
-      meta: 'class · undiscovered — the world teaches what the Vault cannot sell',
+      meta: `${VAULT_KIND_LABELS.class} · undiscovered — the world teaches what the Vault cannot sell`,
       wide: true,
     };
   }
@@ -1991,26 +2016,57 @@ export class UI {
     const W = ITEM_CFG.inventory.w;
     const H = ITEM_CFG.inventory.h;
 
-    // --- the doll: every ENABLED slot from the registry, in registry order ---
-    // Every slot is a drop target (data-drop); worn chips are ALSO drag
-    // sources — a worn piece lifts off the body the same way a bag piece
-    // lifts off its tile. The fabric paints the can/over/src affordances.
-    const doll = EQUIP_SLOTS.filter(s => s.enabled).map(slot => {
+    // --- THE DOLL: the equipped figure as a BODY (the true-RPG read) -------
+    // Seats come from DOLL_SEATS (presentation data in the bag's own CELL
+    // units — helmet crowning the chest, belt/legs/boots descending the
+    // spine, amulet at the neck, rings above the gloves on the flank);
+    // every ENABLED slot without a seat falls to the SPARE STRIP below the
+    // figure (the never-invisible law — a future slot ships first, earns
+    // its place on the body second). An empty seat wears its category's
+    // GHOST GLYPH as the backdrop — what goes where, readable at a glance —
+    // and every seat keeps the full fabric dress: drop target (the glow
+    // affordances ride data-drop untouched), worn chips as drag sources,
+    // item tooltips, socket pips as vestige drop targets.
+    const dollSlots = EQUIP_SLOTS.filter(s => s.enabled);
+    const dollSeatHtml = (slot: EquipSlotDef, seat: { x: number; y: number; w: number; h: number }): string => {
       const worn = m.equipped[slot.id];
       const border = worn ? ITEM_RARITIES[worn.rarity].color : '#3a3644';
-      const wornPips = worn?.sockets?.length ? ` <span style="font-size:12px">${worn.sockets.map((vid, si) => {
+      const small = Math.min(seat.w, seat.h) < 1.5;
+      const pips = worn?.sockets?.length ? `<span style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:11px;line-height:12px">${worn.sockets.map((vid, si) => {
         const v = vid ? VESTIGES[vid] : null;
         return `<span data-sock="${worn.uid}:${si}" data-drop="sock:${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
           style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
+      const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
+      const face = worn
+        ? `<span style="font-size:${small ? 14 : 21}px;line-height:1">${wornGlyph}</span>${pips}`
+        : `<span style="opacity:0.22;font-size:${small ? 14 : 22}px;line-height:1">${CATEGORY_GLYPHS[slot.accepts[0]] ?? '?'}</span>
+           ${small ? '' : `<span style="position:absolute;bottom:2px;left:0;right:0;font-size:7px;letter-spacing:0.5px;color:#4a4656;text-align:center">${slot.label.toUpperCase()}</span>`}`;
+      return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
+        ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : `title="${slot.label}"`}
+        style="position:absolute;left:${seat.x * CELL}px;top:${seat.y * CELL}px;
+        width:${seat.w * CELL - 2}px;height:${seat.h * CELL - 2}px;box-sizing:border-box;padding:0;
+        display:flex;align-items:center;justify-content:center;
+        background:${worn ? '#221e2c' : '#171420'};border:${worn ? 2 : 1}px solid ${border};border-radius:4px;cursor:pointer;
+        ${worn?.rarity === 'unique' ? `box-shadow:0 0 10px ${border};` : ''}">${face}</button>`;
+    };
+    const seatedSlots = dollSlots.filter(s => DOLL_SEATS[s.id]);
+    const spareSlots = dollSlots.filter(s => !DOLL_SEATS[s.id]);
+    const figure = `<div style="position:relative;width:${DOLL_COLS * CELL}px;height:${DOLL_ROWS * CELL}px">
+      ${seatedSlots.map(s => dollSeatHtml(s, DOLL_SEATS[s.id])).join('')}</div>`;
+    // The spare strip: seatless-but-enabled slots keep the old list rows.
+    const spare = spareSlots.map(slot => {
+      const worn = m.equipped[slot.id];
+      const border = worn ? ITEM_RARITIES[worn.rarity].color : '#3a3644';
       const label = worn
-        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${wornPips}`
+        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>`
         : `<span style="color:#5a5668">${slot.label}</span>`;
       return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
         ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
-        style="display:block;width:170px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
+        style="display:block;width:${DOLL_COLS * CELL}px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
         background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:pointer">${label}</button>`;
     }).join('');
+    const doll = figure + spare;
 
     // --- the bag: cells (drop targets) under absolutely-positioned tiles ---
     // A cell is where a carried piece's ORIGIN lands; the fabric lights the
