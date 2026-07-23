@@ -351,9 +351,15 @@
     }
     /* THE VAULT SHELVES: the book-tabs shape at store grain. Each face wears
        a quiet stock count — gold while ≥1 of that stock is affordable right
-       now; faces with nothing to show dim (the stat-tabs' bare rule). */
+       now. THE MYSTERY LAW: shelves with nothing to show don't render at
+       all (no dimmed faces naming unmet categories), so there is no bare
+       rule here — a new face appearing IS the store growing. */
     #account-screen .vault-tabs { margin: 0 0 10px; }
-    #account-screen .vault-tabs button.bare:not(.active) { opacity: 0.5; }
+    /* THE RUMOR FOLD: the wall's header is a latch — one click folds the
+       whispers away whole; the count stays spoken on the face. */
+    #account-screen .vault-fold { cursor: pointer; user-select: none; }
+    #account-screen .vault-fold:hover { color: var(--gold); }
+    #account-screen .vault-fold .arr { display: inline-block; width: 14px; color: var(--gold); }
     #account-screen .vault-tabs .cnt {
       margin-left: 6px; font-size: 9px; color: var(--text-dim);
       background: rgba(255,255,255,0.07); border-radius: 8px; padding: 1px 6px;

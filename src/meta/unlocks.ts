@@ -19,10 +19,9 @@
 // ---------------------------------------------------------------------------
 
 import {
-  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_GEMDROP_PREFIX, LEDGER_VENDOR_BOUGHT,
-  classLevelLedgerKey, reachedLevelKey, type Account,
+  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
+  classLevelLedgerKey, type Account,
 } from './account';
-import { gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, type GateRow } from './gates';
 import { VENDOR_CFG } from '../data/vendors';
 import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
 // Pure fabric leaves (no engine cycle): the HARD-LESSON ledger keys the
@@ -65,21 +64,6 @@ interface UnlockBase {
    *  HIDDEN until the pool can actually fill it. Slot tiers author this at
    *  their own slot count; any future pool-fed purchase reuses the gate. */
   reqClasses?: number;
-  /** THE GATEWORK (meta/gates.ts): an ANY-OF avenue group — ONE held row
-   *  satisfies the whole group (ANDed with every other gate on this entry).
-   *  The family law: a ladder rung may open along several independent roads
-   *  (reach a level / finish a vocation / turn in a quest), crossed in the
-   *  player's own order. `level` avenues automatically join the XP sweep's
-   *  milestone stamps via CATALOG_LEVEL_MILESTONES — authoring one here IS
-   *  registering its signal. */
-  reqAnyOf?: readonly GateRow[];
-  /** Surface as a SEALED card once the entry's STRUCTURAL prereqs hold
-   *  (requiresUnlock chain + requiresFeature owned) while its dynamic gates
-   *  (reqAnyOf / reqLedger / reqLedgerCounts / reqLevel / reqClasses) do
-   *  not: visible, named, priced, unbuyable, its unmet avenues printed —
-   *  the player SEES the next rung and what roads open it. Default off:
-   *  everything else keeps the discovery web's hidden-until-met law. */
-  tease?: boolean;
 }
 
 export type Unlockable =
@@ -645,34 +629,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     payload: { supportIds: ['polyphony', 'ostinato'] } },
 
   // --- Town features (the roguelite town framework) ------------------------
-  // THE BROADER-WARES FAMILY — derived from VENDOR_CFG.wares.ladder (the
-  // lock ladder's own doctrine: append a rung THERE and the catalog, the
-  // stock fold, and the milestone stamps all grow together; nothing here
-  // counts to three). Rung 1 chains off the Salvage Station (trade must be
-  // POSSIBLE before width means anything) and keeps the legacy
-  // brandt_extra_gems flag, so accounts that bought "Brandt: +2 Wares" own
-  // it outright. Later rungs chain rung-to-rung; a rung wearing GATEWORK
-  // avenues (rung 3's level-15 / vocation / quest any-of) surfaces SEALED
-  // (tease) the moment its predecessor is owned — the player sees the next
-  // rung and every road that opens it, and walks whichever their play
-  // crosses first.
-  ...VENDOR_CFG.wares.ladder.map((rung, i): Unlockable => ({
-    id: `feat_vendor_wares_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
-    requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_wares_${i}`,
-    ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
-    label: `Broader Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
-    description: `Every counter stocks wider: +${rung.gems} gem slot${rung.gems === 1 ? '' : 's'} behind the gem case and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the wares grid — one purchase, every market your line will ever trade in.`,
-    payload: { flag: rung.flag },
-  })),
-  // THE GEM COUNTER — the skill/support tab, sealed at every default-tabbed
-  // counter until owned (VENDOR_CFG.tabs.default): the panel shows the tab
-  // shuttered and names this row; buying it opens the case account-wide.
-  { id: 'feat_vendor_gems', kind: 'feature', cost: 120, reqLevel: 0,
-    requiresUnlock: 'feat_vendor_wares_1',
-    label: 'The Gem Counter',
-    description: 'The counters\' shuttered gem case opens — every market stocks skill gems behind glass, account-wide. Support gems and the deeper counter services grow from here.',
-    payload: { flag: FEATURE.VENDOR_GEMS } },
-  { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 1, requiresUnlock: 'feat_vendor_gems', label: 'Gem Counter: Supports', description: 'The gem case also stocks support gems.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
+  { id: 'feat_brandt_gems',     kind: 'feature', cost: 60,  reqLevel: 0, label: 'Brandt: +2 Wares',     description: 'Brandt stocks 6 gems instead of 4.',                   payload: { flag: FEATURE.BRANDT_EXTRA_GEMS } },
+  { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 1, label: 'Brandt: Support Gems', description: 'Brandt also sells support gems.',                       payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
   { id: 'feat_brandt_restock',  kind: 'feature', cost: 100, reqLevel: 1, label: 'Brandt: Rush Order',   description: 'Brandt restocks every 15s instead of 30s.',            payload: { flag: FEATURE.BRANDT_FAST_RESTOCK } },
   // Mireille's care, in sequence: life heal, then mana heal, then an XP buff —
   // each surfaces once the previous is owned (a town pitstop that grows).
@@ -690,18 +648,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     counts to three. Surfaces once the account has BOUGHT at any
   //     counter (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
   //     you've traded in); each rung requires the last. ---------------------
-  // Rung 1 now stands at the chain's far end (the user's meta-progression:
-  // width first, then the gem case, then the right to HOLD) — it requires
-  // the Gem Counter AND a Broader Wares rung owned, plus the standing
-  // discovery law (LEDGER_VENDOR_BOUGHT: you can only reserve at a market
-  // you've traded in), and TEASES once the chain is walked: the card hangs
-  // sealed until the first purchase stamps the ledger.
   ...VENDOR_CFG.lock.ladder.map((rung, i): Unlockable => ({
     id: `feat_vendor_lock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
-    ...(i === 0
-      ? { requiresUnlock: ['feat_vendor_gems', 'feat_vendor_wares_1'],
-          reqLedger: LEDGER_VENDOR_BOUGHT, tease: true }
-      : { requiresUnlock: `feat_vendor_lock_${i}` }),
+    ...(i === 0 ? { reqLedger: LEDGER_VENDOR_BOUGHT } : { requiresUnlock: `feat_vendor_lock_${i}` }),
     label: `Reserved Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
     description: i === 0
       ? 'Every counter learns THE PATRON\'S HOLD: tick a ware to RESERVE its shelf slot — it rides every restock, every reload, untouched, until bought or released. One slot, shared law at every counter.'
@@ -712,14 +661,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // gemdrop:<id> ledger counts, genuine loot mints only) and the counter
   // resolves every restock you missed at its true shelf odds; a hit waits
   // reserved on the shelf. Gated on the index having seen real loot.
-  // Purchasable exactly when at least ONE gem is orderable — the drop index
-  // holds some gem at the commission's own `need` (a gemdrop:* prefix
-  // avenue; the same threshold the order form enforces) — so the row can
-  // never sell with nothing to name. Teases sealed once the hold is owned.
   { id: 'feat_vendor_commission', kind: 'feature', cost: VENDOR_CFG.commission.cost, reqLevel: 0,
-    requiresUnlock: 'feat_vendor_lock_1', tease: true,
-    reqAnyOf: [{ ledgerPrefix: LEDGER_GEMDROP_PREFIX, n: VENDOR_CFG.commission.need,
-                 label: `a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times` }],
+    requiresUnlock: 'feat_vendor_lock_1',
+    reqLedgerCounts: { [LEDGER_GEMDROP_TOTAL]: VENDOR_CFG.commission.discoverTotal },
     label: 'The Standing Order — Commission',
     description: `Name a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index — only true finds count) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's honest odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
     payload: { flag: FEATURE.VENDOR_COMMISSION } },
@@ -990,90 +934,7 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
   if (u.reqClasses !== undefined && a.unlockedClasses.size < u.reqClasses) return false;
   // Sequential feature ladders (e.g. Mireille life → mana → XP buff).
   if (u.kind === 'feature' && u.requiresFeature && !a.features.has(u.requiresFeature)) return false;
-  // THE GATEWORK: one held avenue opens the any-of group (gates.ts).
-  if (!gateMet(a, u.reqAnyOf, 'any', ownedUnlockById(a))) return false;
   return true;
-}
-
-/** The catalog's own ownership predicate as a closure — what gates.ts
- *  `unlock` avenues resolve through (the fabric leaf never imports us). */
-function ownedUnlockById(a: Account): (id: string) => boolean {
-  return id => {
-    const dep = CATALOG_BY_ID.get(id);
-    return !!dep && isUnlockOwned(a, dep);
-  };
-}
-
-/** Do the entry's STRUCTURAL prereqs hold — the chain part of the gate
- *  (requiresUnlock all owned + requiresFeature owned), dynamics ignored?
- *  The sealed-card test: structure met + dynamics unmet = show it locked. */
-function structuralPrereqsMet(a: Account, u: Unlockable): boolean {
-  if (u.requiresUnlock) {
-    const needs = Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
-    for (const id of needs) {
-      const dep = CATALOG_BY_ID.get(id);
-      if (!dep || !isUnlockOwned(a, dep)) return false;
-    }
-  }
-  if (u.kind === 'feature' && u.requiresFeature && !a.features.has(u.requiresFeature)) return false;
-  return true;
-}
-
-/** One spoken line per DYNAMIC gate on the entry, each marked met/unmet —
- *  what a sealed card prints. reqAnyOf rows come first (the avenue group:
- *  any ONE ✓ opens it); the ANDed ledger/level gates follow. */
-export function sealedGateLines(a: Account, u: Unlockable): { label: string; met: boolean; anyOf: boolean }[] {
-  const owned = ownedUnlockById(a);
-  const out: { label: string; met: boolean; anyOf: boolean }[] = [];
-  for (const r of u.reqAnyOf ?? []) {
-    out.push({ label: gateRowLabel(r), met: gateRowMet(a, r, owned), anyOf: true });
-  }
-  const ledgerRows: GateRow[] = [];
-  if (u.reqLedger) {
-    for (const k of Array.isArray(u.reqLedger) ? u.reqLedger : [u.reqLedger]) ledgerRows.push({ ledger: k });
-  }
-  for (const [k, n] of Object.entries(u.reqLedgerCounts ?? {})) ledgerRows.push({ ledger: k, n });
-  for (const r of ledgerRows) out.push({ label: gateRowLabel(r), met: gateRowMet(a, r, owned), anyOf: false });
-  if (u.reqLevel) out.push({ label: `account level ${u.reqLevel}`, met: a.level >= u.reqLevel, anyOf: false });
-  if (u.reqClasses !== undefined) {
-    out.push({ label: `${u.reqClasses} classes unlocked`, met: a.unlockedClasses.size >= u.reqClasses, anyOf: false });
-  }
-  return out;
-}
-
-/** SEALED entries — tease-marked rows whose chain is walked but whose
- *  dynamic gates still hold them shut: the Vault hangs these as locked
- *  cards (named, priced, avenues printed) instead of hiding them. Never
- *  purchasable: availableUnlocks omits them and applyUnlock re-checks
- *  visibility — the seal is display truth, not a second buy path. */
-export function sealedUnlocks(a: Account): { u: Unlockable; lines: { label: string; met: boolean; anyOf: boolean }[] }[] {
-  return allUnlockables()
-    .filter(u => u.tease && !isUnlockOwned(a, u) && !isUnlockVisible(a, u) && structuralPrereqsMet(a, u))
-    .map(u => ({ u, lines: sealedGateLines(a, u) }));
-}
-
-/** THE MILESTONE DERIVATION (the reached_level_15 lesson — a gate whose
- *  signal never stamps is a dead gate): every level the STATIC catalog asks
- *  about, via `level` avenues in reqAnyOf groups AND reached_level_<n> keys
- *  named in reqLedger rows. The XP sweep (world.ts grantSeatXp) stamps
- *  exactly these beside its standing decade keys — authoring a level gate
- *  anywhere in the catalog registers its stamp BY CONSTRUCTION. */
-let levelMilestoneCache: number[] | null = null;
-export function catalogLevelMilestones(): number[] {
-  if (levelMilestoneCache) return levelMilestoneCache;
-  const out = new Set<number>();
-  // The regex derives from the ONE key spelling (reachedLevelKey) — the
-  // extractor and the stamps can never drift apart.
-  const RE = new RegExp(`^${reachedLevelKey(0).slice(0, -1)}(\\d+)$`);
-  for (const u of UNLOCK_CATALOG) {
-    for (const n of gateLevelNeeds(u.reqAnyOf)) out.add(n);
-    const keys = u.reqLedger ? (Array.isArray(u.reqLedger) ? u.reqLedger : [u.reqLedger]) : [];
-    for (const k of [...keys, ...Object.keys(u.reqLedgerCounts ?? {})]) {
-      const m = RE.exec(k);
-      if (m) out.add(Number(m[1]));
-    }
-  }
-  return levelMilestoneCache = [...out].sort((x, y) => x - y);
 }
 
 /** Entries the player can SEE in the Vault (gate met, not owned). */
@@ -1179,6 +1040,66 @@ export function vaultKindOrder(): UnlockKind[] {
   }
   for (const u of allUnlockables()) if (!seen.has(u.kind)) { seen.add(u.kind); out.push(u.kind); }
   return out;
+}
+
+/** THE GROWING STORE — the shelving dials (mutable data, probe-dialable;
+ *  never literals in the UI). The tab strip is FURNITURE THE ACCOUNT EARNS:
+ *  until the account has CLAIMED at least `stripMinOwned` unlocks AND the
+ *  store visibly spans at least `stripMinShelves` shelves, the Vault renders
+ *  as one flat wall — the young store. The shelving raises itself exactly
+ *  when the single room outgrows itself, so the store's furniture grows
+ *  with the player's own knowledge of the game. Ownership never regresses
+ *  and the Owned shelf stands forever after the first claim, so the raise
+ *  is monotone in practice; if late-game stock ever dries below the span,
+ *  the flat wall still shows EVERYTHING visible — nothing is ever lost to
+ *  the furniture either way. */
+export const VAULT_SHELF_CFG = {
+  stripMinShelves: 2,
+  stripMinOwned: 3,
+};
+
+/** One shelf's live census — the ONE visibility truth the UI and the probe
+ *  both read. THE MYSTERY LAW: a shelf with nothing to show does not exist —
+ *  no dimmed faces naming categories the account hasn't met; the player
+ *  learns the store's SHAPE by playing. A browse shelf surfaces only with
+ *  stock to sell or rumors to whisper; the Owned shelf stands once anything
+ *  is claimed. (When the gatework's SEALED cards land, a walked chain's
+ *  next link is earned knowledge — the sealed lane joins this census and
+ *  its visibility predicate then.) */
+export interface VaultShelfCensus {
+  tab: VaultTabDef;
+  /** Purchasable now, seated here (browse shelves; empty on the Owned shelf). */
+  stock: Unlockable[];
+  /** Owned entries — ALL of them on the Owned shelf, the seated share elsewhere. */
+  owned: Unlockable[];
+  /** Rumors hanging here (rumor shelves only — the whole undiscovered list,
+   *  in catalog order: rumor cards are INDEX-addressed off exactly this). */
+  rumors: Unlockable[];
+  /** The mystery law's verdict for this shelf. */
+  visible: boolean;
+}
+
+export function vaultShelfCensus(a: Account): VaultShelfCensus[] {
+  const avail = availableUnlocks(a);
+  const ownedAll = allUnlockables().filter(u => isUnlockOwned(a, u));
+  const rumorsAll = undiscoveredClassUnlocks(a);
+  return VAULT_TABS.map(t => {
+    const stock = t.owned ? [] : avail.filter(u => vaultSeatOf(u.kind).id === t.id);
+    const owned = t.owned ? ownedAll : ownedAll.filter(u => vaultSeatOf(u.kind).id === t.id);
+    const rumors = t.rumors ? rumorsAll : [];
+    return {
+      tab: t, stock, owned, rumors,
+      visible: t.owned ? owned.length > 0 : stock.length > 0 || rumors.length > 0,
+    };
+  });
+}
+
+/** Is the shelving raised (VAULT_SHELF_CFG — see THE GROWING STORE)? Takes
+ *  a prebuilt census so callers never pay the walk twice. */
+export function vaultStripVisible(a: Account, census: VaultShelfCensus[] = vaultShelfCensus(a)): boolean {
+  const ownedTotal = census.find(c => c.tab.owned)?.owned.length ?? 0;
+  const span = census.filter(c => c.visible).length;
+  return span >= VAULT_SHELF_CFG.stripMinShelves && ownedTotal >= VAULT_SHELF_CFG.stripMinOwned;
 }
 
 /** Spend credits to apply an unlock. Mutates the account; returns false if

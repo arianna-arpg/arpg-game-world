@@ -17,9 +17,10 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
-  CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, VAULT_TABS, allUnlockables, applyUnlock,
-  availableUnlocks, classBundleId, classUnlockFor, discoveryLedgerKeys,
+  CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, VAULT_SHELF_CFG, VAULT_TABS, allUnlockables,
+  applyUnlock, availableUnlocks, classBundleId, classUnlockFor, discoveryLedgerKeys,
   isClassDiscovered, isUnlockVisible, undiscoveredClassUnlocks, vaultKindOrder, vaultSeatOf,
+  vaultShelfCensus, vaultStripVisible,
 } from '../src/meta/unlocks';
 import {
   CLASS_LEVEL_MILESTONES, STARTER_CLASSES, classLevelLedgerKey, makeAccount,
@@ -239,6 +240,58 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     kinds.every(k => VAULT_TABS.includes(vaultSeatOf(k))));
   check('shelves: vaultKindOrder covers every live kind exactly once',
     (() => { const o = vaultKindOrder(); return new Set(o).size === o.length && kinds.every(k => o.includes(k)); })());
+}
+
+// --- 3b) THE MYSTERY LAW + THE GROWING STORE (census + shelving dials) ------
+// A shelf with nothing to show does not exist; the tab furniture itself is
+// EARNED (VAULT_SHELF_CFG: claimed unlocks AND visible span). The census is
+// the one truth the UI reads, so it is pinned here account-first: fresh
+// accounts get the flat young store, claims raise the shelving, and the
+// rumor wall alone is enough to hold its shelf in the world.
+{
+  const fresh = makeAccount();
+  const census = vaultShelfCensus(fresh);
+  check('mystery: a fresh account hides the Owned shelf (nothing claimed, no trophy case)',
+    !census.find(c => c.tab.owned)!.visible);
+  check('mystery: every visible shelf is visible FOR something',
+    census.filter(c => c.visible).every(c =>
+      c.tab.owned ? c.owned.length > 0 : c.stock.length > 0 || c.rumors.length > 0));
+  check('mystery: every hidden shelf truly has nothing to show',
+    census.filter(c => !c.visible).every(c =>
+      c.tab.owned ? c.owned.length === 0 : c.stock.length === 0 && c.rumors.length === 0));
+  check('mystery: the rumor wall alone holds its shelf visible (whispers are content)',
+    (() => { const cl = census.find(c => c.tab.rumors)!; return cl.rumors.length > 0 && cl.visible; })());
+  check('census: the stock partition is total (every available entry on exactly one shelf)',
+    census.reduce((n, c) => n + c.stock.length, 0) === availableUnlocks(fresh).length);
+  check('census: the Owned shelf carries ALL owned; browse shelves carry the seated share',
+    census.find(c => c.tab.owned)!.owned.length
+      === census.filter(c => !c.tab.owned).reduce((n, c) => n + c.owned.length, 0));
+
+  check('store: a fresh account gets the flat young store (no shelving yet, default dials)',
+    !vaultStripVisible(fresh));
+  // THE DIALS LIVE: zeroed thresholds raise the shelving for anyone…
+  const saved = { ...VAULT_SHELF_CFG };
+  VAULT_SHELF_CFG.stripMinShelves = 0; VAULT_SHELF_CFG.stripMinOwned = 0;
+  check('store: dials live — zeroed thresholds raise the shelving even fresh',
+    vaultStripVisible(fresh));
+  Object.assign(VAULT_SHELF_CFG, saved);
+  check('store: dials restored, the young store returns', !vaultStripVisible(fresh));
+  // …and the honest walk raises it by CLAIMING: buy through the real gate
+  // until the account has earned its furniture.
+  const a = makeAccount();
+  a.credits = 100000;
+  let bought = 0;
+  while (!vaultStripVisible(a) && bought < 50) {
+    const u = availableUnlocks(a)[0];
+    if (!u || !applyUnlock(a, u)) break;
+    bought++;
+  }
+  check('store: claiming unlocks raises the shelving (the store grows with the account)',
+    vaultStripVisible(a), `after ${bought} claims (dials: ${VAULT_SHELF_CFG.stripMinOwned} owned, span ${VAULT_SHELF_CFG.stripMinShelves})`);
+  check('store: the raise waited for the owned dial, never before',
+    bought >= VAULT_SHELF_CFG.stripMinOwned);
+  check('store: the Owned shelf stands once anything is claimed',
+    vaultShelfCensus(a).find(c => c.tab.owned)!.visible);
 }
 
 // --- 4) LIVE: the engine stamps land (local hero only) ----------------------
