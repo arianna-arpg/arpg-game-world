@@ -41,8 +41,16 @@ export interface ForechartCfg {
    *  the halo radius. ~80/step ⇒ 720 ≈ nine zones out in every direction. */
   ring: number;
   /** Frontier-bearing zones processed per sweep (each yields ≤ a few mints) —
-   *  the per-tick budget that keeps minting invisible to the frame. */
+   *  the per-tick COUNT budget. */
   perSweep: number;
+  /** THE TIME GOVERNOR: wall-clock milliseconds one sweep beat may spend —
+   *  checked before EACH charting unit, so when mints grow expensive (a big
+   *  chart's O(N) scans, a foreordained sea/relief first-touch) the beat
+   *  degrades to ONE unit instead of stacking several into a single frame
+   *  (the 2026-07-23 perf gate caught count-only beats spending 200-1000ms
+   *  while the halo filled). A single unit can still cost its own price —
+   *  the governor bounds the STACK, unit cost is worldgen's own bill. */
+  beatBudgetMs: number;
   /** Seconds between sweeps. */
   sweepSec: number;
   /** Hard budget of veiled zones alive at once — the halo stops growing here
@@ -71,6 +79,7 @@ export const FORECHART_CFG: ForechartCfg = {
   enabled: true,
   ring: 720,
   perSweep: 4,
+  beatBudgetMs: 6,
   sweepSec: 0.45,
   maxVeiled: 650,
   capHeadroom: 200,

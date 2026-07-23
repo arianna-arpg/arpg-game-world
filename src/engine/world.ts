@@ -8183,14 +8183,20 @@ export class World {
       }
       cands.sort((a, b) => a.d - b.d); // grow evenly outward: close gaps first
     }
+    // THE TIME GOVERNOR (FORECHART_CFG.beatBudgetMs): the deadline is
+    // checked before each unit — an expensive charting era (big-chart O(N)
+    // scans, foreordained first-touches) degrades the beat to ONE unit
+    // instead of stacking several 60ms+ mints into a single frame; cheap
+    // eras still fill the halo at the full count budget.
+    const beatDeadline = performance.now() + FORECHART_CFG.beatBudgetMs;
     this.mintVeil = true;
     try {
       for (const { z } of cands) {
-        if (budget <= 0) break;
+        if (budget <= 0 || performance.now() > beatDeadline) break;
         this.chartNeighborsOf(z);
         budget--;
       }
-      budget = this.growSoundings(budget, all);
+      budget = this.growSoundings(budget, all, beatDeadline);
     } finally {
       this.mintVeil = false;
     }
@@ -8329,10 +8335,11 @@ export class World {
    *  nothing stands, else resolve one cluster member's frontiers; drop the
    *  request once its cluster reaches size (or its ground refuses to grow).
    *  Shares (and returns) the sweep's remaining budget. */
-  private growSoundings(budget: number, all: ZoneDef[]): number {
+  private growSoundings(budget: number, all: ZoneDef[], deadlineAt?: number): number {
     let worked = 0;
     for (let i = this.soundings.length - 1; i >= 0 && budget > 0; i--) {
       if (worked >= FORECHART_CFG.sounding.perSweep) break;
+      if (deadlineAt !== undefined && performance.now() > deadlineAt) break;
       const s = this.soundings[i];
       const near = zonesWithin(all, s.at, s.radius, s.dimension)
         .filter(z => !z.pocket && !z.eventOwned);
