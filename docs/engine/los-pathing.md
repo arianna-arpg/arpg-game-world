@@ -26,6 +26,39 @@ The terrain promise, everywhere the ray is asked:
   through, never walk; `giant_kelp` = walk-through fronds that break sight
   only; `tallgrass` = a soft hedge (move-only).
 
+## THE ELEVATION LAW (the tier fabric's heights)
+
+`castRay(env, from, to, channel, elev?)` — the optional `RayElev` height
+pair (STORY units, lerped along the segment) makes the one ray honest over
+extra walkable layers (`docs/engine/tiers.md`). Dials: `LOS_CFG.elev`.
+
+- A blocking grid cell that is tier FLOOR (`tierElevOf`) stops the ray only
+  while the lerped height is BELOW its deck; true walls (elev `null`) stop
+  every height. A butte top is a cliff to the valley and open ground to its
+  own story — one region row, both truths.
+- A blocking doodad fills `LOS_CFG.elev.doodadBand` stories of air above its
+  own `Doodad.tier` — a valley trunk stops valley rays and spares the
+  deck-height flight; deck furniture never shades the street below it.
+- SIGHT rides eyes: `World.lineOfSight(from, to, fromTier?, toTier?)` lifts
+  each endpoint `LOS_CFG.elev.eye` above its story and LERPS — a same-deck
+  butte duel is open air; the valley sees a rim-stander only once the line
+  clears the lip (the deeper the body stands, the farther back the eye must
+  be — the honest 2.5D read).
+- SHOT flies FLAT at the caster's story (`lineOfFire(from, to, story?)`,
+  `clipShot` likewise) — exactly the projectile sweep's own exemption
+  (`Projectile.tier`), so the AI's hold-fire, chain hops, beams, placements
+  and the arrow's actual flight can never disagree.
+- Omitted (`elev` absent — every untiered zone): the legacy flat read,
+  zero cost, byte-identical.
+
+`losCached` passes both actors' tiers; unpassed stories derive from the
+floor under each point. The drawn veil mirrors the law: the hero's story
+keys the occluder caches (a butte's own mass stops occluding the moment you
+stand on its deck), per-ACTOR reveals ride the exact lerp (`actorShade`
+passes the body's tier), and the sheet's cross-tier ground dark stays
+CONSERVATIVE from below — pixels may under-promise what the ray grants,
+never over-promise.
+
 ## The drawn veil (`render/vis/sightVeil.ts`)
 
 The ray's visible half — POSITIONAL OCCLUSION SHADOWS from the local hero's

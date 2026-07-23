@@ -1237,7 +1237,8 @@ export function normalizeBrain(def: BrainDef): NormalizedBrain {
 export interface AICtx {
   time: number;
   actors: readonly Actor[];
-  lineOfSight: (a: { x: number; y: number }, b: { x: number; y: number }) => boolean;
+  lineOfSight: (a: { x: number; y: number }, b: { x: number; y: number },
+    aTier?: number, bTier?: number) => boolean;
   /** FACTION/WORLD WANTS read (world/drives.ts via sim.drives): faction
    *  undefined reads the global meter. */
   factionDrive: (id: string, faction: string | undefined) => number;
@@ -1266,7 +1267,7 @@ export function evalCondition(
     if (c.targetHasStatus !== undefined
       && !target.statuses.some(s => s.id === c.targetHasStatus)) return false;
     if (c.los !== undefined
-      && ctx.lineOfSight(actor.pos, target.pos) !== c.los) return false;
+      && ctx.lineOfSight(actor.pos, target.pos, actor.tier, target.tier) !== c.los) return false;
     if (c.targetCasting !== undefined) {
       // A held channel is an open-ended commitment; a bar has a countdown.
       const cs = target.casting;

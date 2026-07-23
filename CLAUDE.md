@@ -97,7 +97,14 @@ changes.
   shared with projectiles — docs in `docs/engine/flocking.md`),
   `los.ts` (THE occlusion
   raycast: one shot/sight ray over doodads + grid regions, `LOS_CFG`
-  delivery defaults, the `phasing` stat lever; AI pathing rides
+  delivery defaults, the `phasing` stat lever; THE ELEVATION LAW —
+  `RayElev` story heights over the tier fabric's layers (`LOS_CFG.elev`):
+  sight lerps eye→eye so same-deck duels are open air and the valley sees
+  a rim-stander only over the lip, shots fly FLAT at the caster's story
+  (the projectile sweep's own law — hold-fire and the arrow always
+  agree), doodads fill a story band above their `tier`, and the veil +
+  AI perception both ride it (probe `balance/probe_tiers.ts` RIG G);
+  AI pathing rides
   `World.pathField()`; its DRAWN half is THE SIGHT VEIL —
   `render/vis/sightVeil.ts` positional occlusion shadows from wall cells
   + solid trunks, `VIS_CFG.sightVeil` + `ZoneTheme.sightVeil` +

@@ -2,7 +2,11 @@
 // (engine/tiers.ts): the region rows (including the N-story terrace/ramp
 // families), the crossing law across arbitrary spans, all three carves
 // (needles decks + sewer ducts + the switchback summits), per-story deck
-// reachability, THE ASCENT LAW (entry → summit on foot), and determinism.
+// reachability, THE ASCENT LAW (entry → summit on foot), determinism, and
+// THE ELEVATION LAW (engine/los.ts RayElev): height-aware sight/shot over
+// the stack — same-story duels over open deck, rim duels refereed by the
+// lerped eye line, the flat flight law, the doodad story band, and the
+// SIGHT VEIL's drawn parity (render/vis/sightVeil.ts, headless).
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -17,7 +21,9 @@ import '../src/data/settled';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
-import { generateLayout, hasLayout, type GeneratedLayout } from '../src/engine/levelgen';
+import { generateLayout, hasLayout, type Doodad, type GeneratedLayout } from '../src/engine/levelgen';
+import { castRay, LOS_CFG } from '../src/engine/los';
+import { SightVeil } from '../src/render/vis/sightVeil';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { massKindOf } from '../src/engine/massif';
@@ -300,6 +306,126 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   const a = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams }, 717009);
   const b = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams }, 717009);
   check('E4 the summit is byte-deterministic', fpr(a.out) === fpr(b.out));
+}
+
+// --- RIG G: THE ELEVATION LAW (sight/shot over the stack) ------------------------
+// The one occlusion ray (engine/los.ts castRay + RayElev) judged over a REAL
+// needles carve: a blocking cell that is tier FLOOR stops only rays below its
+// deck (lerped eye → eye), doodads fill one story of air above their own, and
+// the SIGHT VEIL's queries mirror the ray exactly (drawn == tested).
+{
+  interface P { x: number; y: number }
+  interface Spots { A: P; B: P; D: P; R: P; Rin: P; V1: P; V2: P }
+  /** Hunt one butte for the rig's seats: two interior deck cells (A, B), a
+   *  deep-interior cell D behind rim cell R (Rin = one cell behind R), and
+   *  valley points V1 (2 cells out) / V2 (8 cells out) on R's own outward
+   *  lane — every lane cell verified so the geometry is the law's, never
+   *  the carve's accident. */
+  const elevSpots = (grid: GridWalkField): Spots | null => {
+    const cs = grid.cell, cols = grid.cols, rows = grid.rows;
+    const at = (gx: number, gy: number): string => grid.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    const c = (gx: number, gy: number): P => ({ x: gx * cs + cs / 2, y: gy * cs + cs / 2 });
+    const isTop = (gx: number, gy: number): boolean =>
+      gx >= 0 && gy >= 0 && gx < cols && gy < rows && at(gx, gy) === 'butte_top';
+    const isValley = (gx: number, gy: number): boolean =>
+      gx >= 0 && gy >= 0 && gx < cols && gy < rows
+      && !tierFloorOf(at(gx, gy)) && grid.isWalkable(gx * cs + cs / 2, gy * cs + cs / 2);
+    const interior = (gx: number, gy: number): boolean => {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!isTop(gx + dx, gy + dy)) return false;
+      }
+      return true;
+    };
+    for (let gy = 1; gy < rows - 1; gy++) {
+      for (let gx = 1; gx < cols - 1; gx++) {
+        // A row-run of ≥ 6 interior cells: A and B are its ends (same deck).
+        let run = 0;
+        while (interior(gx + run, gy)) run++;
+        if (run < 6) continue;
+        const A = c(gx, gy), B = c(gx + run - 1, gy);
+        // R: a rim cell with an 8-cell straight valley lane outward, and 5
+        // straight deck cells behind it (D sits at the fifth).
+        for (let ry = 1; ry < rows - 1; ry++) {
+          for (let rx = 1; rx < cols - 1; rx++) {
+            if (!isTop(rx, ry)) continue;
+            for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+              let lane = true;
+              for (let k = 1; k <= 8 && lane; k++) lane = isValley(rx + ox * k, ry + oy * k);
+              if (!lane) continue;
+              let deck = true;
+              for (let k = 1; k <= 5 && deck; k++) deck = isTop(rx - ox * k, ry - oy * k);
+              if (!deck) continue;
+              return {
+                A, B, D: c(rx - ox * 5, ry - oy * 5), R: c(rx, ry),
+                Rin: c(rx - ox, ry - oy),
+                V1: c(rx + ox * 2, ry + oy * 2), V2: c(rx + ox * 8, ry + oy * 8),
+              };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+  let grid: GridWalkField | null = null;
+  let spots: Spots | null = null;
+  for (const seed of [515001, 515002, 515003, 515004, 515005]) {
+    const ts = TILESETS.needles;
+    const { out } = gen('qa_needles_elev', 'needles', ts.layout, { ...ts.layoutParams }, seed);
+    if (!(out.walk instanceof GridWalkField)) continue;
+    const s = elevSpots(out.walk);
+    if (s) { grid = out.walk; spots = s; break; }
+  }
+  check('G0 the rig finds its butte', !!spots);
+  if (grid && spots) {
+    const { A, B, D, R, Rin, V1, V2 } = spots;
+    const eye = LOS_CFG.elev.eye;
+    const env = { doodadsAt: () => [] as readonly Doodad[], walk: grid };
+    const s = (t: number): { from: number; to: number } => ({ from: t + eye, to: t + eye });
+    const pair = (a: number, b: number): { from: number; to: number } => ({ from: a + eye, to: b + eye });
+    check('G1 the legacy flat ray still blocks (no elev = the old read)',
+      castRay(env, A, B, 'sight') !== null);
+    check('G2 a same-story deck duel is open air (sight + shot)',
+      castRay(env, A, B, 'sight', s(1)) === null
+      && castRay(env, A, B, 'shot', s(1)) === null);
+    check('G3 the deep bench hides from the valley (lerped eye line)',
+      castRay(env, V1, D, 'sight', pair(0, 1)) !== null);
+    check('G4 a near-rim stander is SEEN from afar (the lerp clears the lip)',
+      castRay(env, V2, Rin, 'sight', pair(0, 1)) === null
+      && castRay(env, V2, R, 'sight', pair(0, 1)) === null);
+    check('G5 the flat flight law: valley arrows die on the cliff, deck arrows rain out',
+      castRay(env, V1, D, 'shot', s(0)) !== null
+      && castRay(env, D, V2, 'shot', s(1)) === null);
+    // The doodad story band: a body fills [tier, tier+band) of air.
+    const mid = { x: (V2.x + R.x) / 2, y: (V2.y + R.y) / 2 };
+    const rock = { pos: vec(mid.x, mid.y), radius: 20, kind: 'rock', rot: 0 } as unknown as Doodad;
+    const envRock = { doodadsAt: () => [rock] as readonly Doodad[], walk: null };
+    check('G6 a valley trunk stops valley rays and spares the deck flight',
+      castRay(envRock, V2, R, 'sight', pair(0, 0)) !== null
+      && castRay(envRock, V2, R, 'sight', pair(1, 1)) === null);
+    rock.tier = 1;
+    check('G7 deck furniture never shades the street below',
+      castRay(envRock, V2, R, 'sight', pair(0, 0)) === null
+      && castRay(envRock, V2, R, 'sight', pair(1, 1)) !== null);
+    // THE VEIL PARITY (render/vis/sightVeil.ts, headless): the drawn pass's
+    // queries walk the same lerp — pixels and rays can never disagree.
+    const veilAt = (eyeP: P, tier: number, q: P, qT: number): number => {
+      const veil = new SightVeil();
+      veil.update({
+        player: { pos: eyeP, tier }, walk: grid, zone: {},
+        doodads: [] as Doodad[], doodadsNear: () => [], doodadRev: 0,
+      }, 0, 1400, 1000);
+      return veil.occludedAt(q, qT);
+    };
+    check('G8 veil: a same-story neighbor draws SOLID (the reported bug)',
+      veilAt(A, 1, B, 1) === 0);
+    check('G9 veil: the deep bench stays dark from the valley',
+      veilAt(V1, 0, D, 1) > 0.2);
+    check('G10 veil: the rim-stander pokes above the cliff dark',
+      veilAt(V2, 0, R, 1) === 0);
+    check('G11 veil: the cliff base hides from the deep deck; the far floor shows',
+      veilAt(D, 1, V1, 0) > 0.2 && veilAt(D, 1, V2, 0) === 0);
+  }
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

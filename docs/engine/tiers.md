@@ -35,6 +35,17 @@ stateless adapter, one per story, built at zone load from
   and first benches alike; the next terrace's cliff — and true earth —
   still stop it). World-authored hitAll hazards (sky strikes) stay
   tier-agnostic by design.
+- **Sight — THE ELEVATION LAW** (`engine/los.ts` `RayElev`, dials
+  `LOS_CFG.elev`): the one occlusion ray travels at a HEIGHT. Sight rays
+  lerp eye→eye (`elev.eye` above each endpoint's story); shot rays fly
+  FLAT at the caster's story (the flight law, so hold-fire and the arrow
+  agree). A blocking cell that is tier FLOOR stops only rays below its
+  deck; true walls stop everything; a blocking doodad fills
+  `elev.doodadBand` stories above its own `tier`. So a same-deck duel is
+  open air (AI perception included — `losCached` passes both tiers), the
+  valley sees a rim-stander only once the lerped line clears the lip, and
+  deck furniture never shades the street below. Full write-up:
+  `docs/engine/los-pathing.md`.
 - **Population**: tiered zones seed `packSplit` of their packs on the
   elevated stories, dealt uniformly across the levels (rolled per pack —
   squads never straddle a rim). The BENCH picks the anchor: an elevated
@@ -47,7 +58,12 @@ stateless adapter, one per story, built at zone load from
   region visuals + the cliff read carry the height). `'covered'` hides the
   other layer's bodies and, while the local hero is below, dims the scene
   and paints the duct web live from `tierVisual` (renderer.drawTierVeil —
-  viewport cells, no bake).
+  viewport cells, no bake). The SIGHT VEIL rides the elevation law: the
+  hero's story keys its occluder caches (your own deck is clear ground the
+  moment you stand on it; the tops stay dark from the valley), and
+  per-ACTOR reveals ride the exact ray lerp (`actorShade` passes the
+  body's tier) — a rim archer reads as a lit body over conservative
+  ground-dark. Pixels under-promise the ray, never over-promise.
 
 ## The drawn reads (RegionVisualSpec, baked in render/vis/ground.ts)
 - **`steps`** — THE STEPPED WAY: carved stair treads across a link/deck
@@ -100,14 +116,20 @@ Open-exposure zones may allow cross-tier hostility — SIGHT mediates
 instead (cliff rows' blocksSight confines the fights to rims, stairs and
 spans, which is the fantasy: arrows traded across the benches while the
 shove settles arguments the long way down). Covered zones must never set
-it (a ceiling is not a vantage).
+it (a ceiling is not a vantage). THE ELEVATION LAW is the referee's
+honesty: same-deck fights are open air, a rim-stander is seen from the
+valley exactly when the lerped eye line clears the lip, and the deck
+archer's story-1 arrows rain down while story-0 answers die on the cliff
+— climb, span, or shove.
 
 ## The seam this opens (deliberate future work)
 Townhouse floors as covered tiers in one zone; tier-aware minimap tint; AI
 that climbs links; a boulder-chute lane rolling DOWN the switchbacks;
 per-story spawn tables (harder kin near the crown); avalanche fronts that
 respect the benches (creep is tier-blind today — the one reason the
-pinnacle ships without landslide lanes).
+pinnacle ships without landslide lanes); FLIERS keep their spawn story
+aloft (a crag condor over the valley still wears tier 1 — the flight
+fabric should re-derive the story on landing).
 
 Probe: `balance/probe_tiers.ts` (family rows + span derivation, the
 crossing law across arbitrary spans, all three carves, per-story orphan

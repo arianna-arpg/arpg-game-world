@@ -764,7 +764,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (stalk) {
     const off = Math.abs(angleDiff(target.facing, angleTo(target.pos, actor.pos)));
     const halfArc = ((stalk.arcDeg ?? BEHAVIOR_CFG.stalkArc) * Math.PI / 180) / 2;
-    if (off <= halfArc && world.lineOfSight(target.pos, actor.pos)) {
+    if (off <= halfArc && world.lineOfSight(target.pos, actor.pos, target.tier, actor.tier)) {
       actor.aiStalkCreep = stalk.creep ?? BEHAVIOR_CFG.stalkCreep;
     }
   }
@@ -874,7 +874,8 @@ function aiCtxOf(world: World): AICtx {
   return {
     time: world.time,
     actors: world.actors,
-    lineOfSight: (a, b) => world.lineOfSight(vec(a.x, a.y), vec(b.x, b.y)),
+    lineOfSight: (a, b, aTier, bTier) =>
+      world.lineOfSight(vec(a.x, a.y), vec(b.x, b.y), aTier, bTier),
     factionDrive: (id, faction) => world.sim.drives.get(id, faction),
   };
 }
@@ -1488,7 +1489,7 @@ function pickSkill(
   // wall while its rays wait. One lazy ray per pick.
   let fire: boolean | undefined;
   const fireLine = (): boolean =>
-    fire ??= !target || world.lineOfFire(actor.pos, target.pos);
+    fire ??= !target || world.lineOfFire(actor.pos, target.pos, actor.tier);
   // pressUsable, not raw canUse: a convert-held press is judged as the
   // face it would cast — an empty magazine still gets pressed (the press
   // IS the reload, and the standing-there-racking window is the player's
@@ -2089,7 +2090,7 @@ function losStrafe(ctx: KernelCtx): boolean {
   const implicit = !ctx.spec.losSeek && !!world.walk
     && a.skills.some(s => s?.def.delivery.type === 'projectile');
   if (!ctx.spec.losSeek && !implicit) return false;
-  if (world.lineOfSight(a.pos, target.pos)) {
+  if (world.lineOfSight(a.pos, target.pos, a.tier, target.tier)) {
     a.aiLosTimer = rand(1.4, 2.2); // LOS regained: reset the patience clock
     return false;
   }

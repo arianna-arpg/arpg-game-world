@@ -184,7 +184,7 @@ import { buildZoneSpans, type SpanField } from './spans';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
 import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
-import { castRay, LOS_CFG } from './los';
+import { castRay, LOS_CFG, type RayElev } from './los';
 import { coordDist, type MapCoord } from '../world/coords';
 import { FORECHART_CFG, forechartSource, zonesWithin } from '../world/forechart';
 import { OMEN_CFG, collectOmens, omenLine, omenReach, type Omen } from '../world/omens';
@@ -21654,7 +21654,7 @@ export class World {
         const mtags = a.defId ? MONSTERS[a.defId]?.tags : undefined;
         if (!mtags || !t.requiresMonsterTags.some(tag => mtags.includes(tag))) return false;
       }
-      if (needLoF && !this.lineOfFire(caster.pos, a.pos)) return false;
+      if (needLoF && !this.lineOfFire(caster.pos, a.pos, caster.tier)) return false;
       return true;
     };
     let best: Actor | null = null, bd = search;
@@ -25693,7 +25693,7 @@ export class World {
           inAoeBody(origin, radius, shape, caster.facing, v, undefined,
             (bp, br) =>
               !(d.edgeOnly && dist(origin, bp) + br < radius * d.edgeOnly)
-              && (phase || v === caster || this.lineOfFire(origin, bp)));
+              && (phase || v === caster || this.lineOfFire(origin, bp, caster.tier)));
         if (d.maxTargets !== undefined) {
           pool = pool
             .filter(v => novaBody(v) !== null)
@@ -25747,7 +25747,7 @@ export class World {
           this.strikeSurfaces(caster, origin, radius, (p, r) =>
             inAoe(origin, radius, shape, caster.facing, p, r)
             && !(d.edgeOnly && dist(origin, p) + r < radius * d.edgeOnly)
-            && (phase || this.lineOfFire(origin, p)));
+            && (phase || this.lineOfFire(origin, p, caster.tier)));
         }
         break;
       }
@@ -25874,7 +25874,7 @@ export class World {
             if (d.edgeOnly && dd + nb.r < range * d.edgeOnly) continue;
             if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
           }
-          if (!phase && !this.lineOfFire(caster.pos, nb.pos)) continue;
+          if (!phase && !this.lineOfFire(caster.pos, nb.pos, caster.tier)) continue;
           noteBodyHit(enemy, nb.seg);
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
         }
@@ -25884,7 +25884,7 @@ export class World {
         if (d.beamFx) {
           const beamLen = phase ? range : dist(caster.pos, this.clipShot(caster.pos,
             vec(caster.pos.x + Math.cos(caster.facing) * range,
-                caster.pos.y + Math.sin(caster.facing) * range)));
+                caster.pos.y + Math.sin(caster.facing) * range), caster.tier));
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: def.color,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
@@ -25924,13 +25924,13 @@ export class World {
         this.strikeSurfaces(caster, caster.pos, range, (p, r) => {
           if (sigiled) {
             return inAoe(sigilC, sigilR, coneSigil, sigilF, p, r)
-              && (phase || this.lineOfFire(caster.pos, p));
+              && (phase || this.lineOfFire(caster.pos, p, caster.tier));
           }
           const dd = dist(caster.pos, p);
           return dd - r <= range
             && !(d.edgeOnly && dd + r < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2
-            && (phase || this.lineOfFire(caster.pos, p));
+            && (phase || this.lineOfFire(caster.pos, p, caster.tier));
         });
         // The cascade family reaches the WAVE (minter round 2): the cone's
         // sequels mint off its true figure — the sigiled square/inverted
@@ -26644,7 +26644,7 @@ export class World {
           : vec(caster.pos.x + Math.cos(caster.facing) * d.castRange,
                 caster.pos.y + Math.sin(caster.facing) * d.castRange);
         const at = this.clampPos(this.skillOcclusion(caster, inst) === 'blocked'
-          ? this.clipShot(caster.pos, wantAt) : wantAt, 10);
+          ? this.clipShot(caster.pos, wantAt, caster.tier) : wantAt, 10);
         const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)));
         // stormImmediate is a FRACTION: that share of the strikes crashes
         // down up-front (nearest enemies first via the sparkfield sort),
@@ -27784,7 +27784,7 @@ export class World {
         mimicRefreshWatch(p, this.time);
         if (!p.mimicWatch || p.mimicWitnessR <= 0) continue;
         if (dist(p.pos, caster.pos) > p.mimicWitnessR) continue;
-        if (!this.lineOfSight(p.pos, caster.pos)) continue;
+        if (!this.lineOfSight(p.pos, caster.pos, p.tier, caster.tier)) continue;
         if (mimicCapture(this, p, caster, def)) {
           this.text(vec(p.pos.x, p.pos.y - 30),
             `ART WITNESSED: ${def.name}`, '#c8a0e8', 14);
@@ -28286,7 +28286,7 @@ export class World {
     // through masonry. Sky-called skills (occlusion 'free') and phasing
     // uses place anywhere in range.
     if (this.skillOcclusion(caster, inst) === 'blocked') {
-      const clipped = this.clipShot(from, at);
+      const clipped = this.clipShot(from, at, caster.tier);
       if (clipped.x !== at.x || clipped.y !== at.y) {
         SIM_TAP.current?.onOccluded?.('place');
         at = clipped;
@@ -38810,15 +38810,48 @@ export class World {
     }
   }
 
+  /** THE ELEVATION LAW's floor read (the tier fabric): the story a POINT's
+   *  own ground sits at — what a ray endpoint stands on when no actor is in
+   *  hand (links answer their span's top; true walls read 0). */
+  private floorElevAt(p: Vec2): number {
+    const e = this.walk?.regionAt ? tierElevOf(this.walk.regionAt(p.x, p.y)) : null;
+    return e ?? 0;
+  }
+
+  /** The height pair a SIGHT ray travels between (LOS_CFG.elev.eye above
+   *  each endpoint's story — passed tiers win, floors answer otherwise).
+   *  undefined in untiered zones: castRay's legacy flat read, zero cost. */
+  private rayElev(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): RayElev | undefined {
+    if (!this.zone.tiers) return undefined;
+    const eye = LOS_CFG.elev.eye;
+    return {
+      from: (fromTier ?? this.floorElevAt(from)) + eye,
+      to: (toTier ?? this.floorElevAt(to)) + eye,
+    };
+  }
+
+  /** The FLAT height a SHOT ray flies at (the flight law: a story-s flight
+   *  crosses any floor at or below s — the projectile sweep's own rule). */
+  private shotElev(from: Vec2, story?: number): RayElev | undefined {
+    if (!this.zone.tiers) return undefined;
+    const h = (story ?? this.floorElevAt(from)) + LOS_CFG.elev.eye;
+    return { from: h, to: h };
+  }
+
   /**
    * Can VISION travel a straight line between two points? Blocked by
    * sight-blocking doodads (rocks, cliffs, CLOSED doors — but windows and
    * open doorways pass, per blocksSightOf) and, in grid zones, by
    * sight-blocking region cells (rampart masonry; parapets/windows/arrow-slits
    * see through). This is what line-of-sight casters reposition to regain.
+   * THE ELEVATION LAW (tiered zones): pass the endpoints' STORIES (an
+   * actor's `tier`) — eyes ride LOS_CFG.elev.eye above their floors, so a
+   * butte pair duels over open ground while the valley sees a rim-stander
+   * only once the lerped line clears the cliff lip. Omitted stories read
+   * the floor under each point.
    */
-  lineOfSight(from: Vec2, to: Vec2): boolean {
-    return castRay(this, from, to, 'sight') === null;
+  lineOfSight(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): boolean {
+    return castRay(this, from, to, 'sight', this.rayElev(from, to, fromTier, toTier)) === null;
   }
 
   /**
@@ -38828,16 +38861,20 @@ export class World {
    * grid blocksShot cells (rampart masonry, true walls) — chasms, water,
    * windows and parapets all pass. Beams, novas, placements, chain hops and
    * AI hold-fire all ask THIS, so terrain data drives every one of them.
+   * THE ELEVATION LAW: the ray flies FLAT at `story` (the caster's tier;
+   * the floor under `from` otherwise) — exactly the projectile sweep's own
+   * exemption, so the decision to fire and the flight itself always agree.
    */
-  lineOfFire(from: Vec2, to: Vec2): boolean {
-    return castRay(this, from, to, 'shot') === null;
+  lineOfFire(from: Vec2, to: Vec2, story?: number): boolean {
+    return castRay(this, from, to, 'shot', this.shotElev(from, story)) === null;
   }
 
   /** Clip a cast line at the first shot-blocker: the point just SHORT of the
    *  wall (LOS_CFG.clipBackoff), or `to` itself when the line is clear —
-   *  ground/storm placements land on the castable side of the stone. */
-  clipShot(from: Vec2, to: Vec2): Vec2 {
-    const hit = castRay(this, from, to, 'shot');
+   *  ground/storm placements land on the castable side of the stone. Rides
+   *  the shot channel's flat elevation (the caster's story). */
+  clipShot(from: Vec2, to: Vec2, story?: number): Vec2 {
+    const hit = castRay(this, from, to, 'shot', this.shotElev(from, story));
     if (!hit) return to;
     const back = Math.max(0, hit.d - LOS_CFG.clipBackoff);
     const len = dist(from, to) || 1;
@@ -38867,7 +38904,8 @@ export class World {
       const home = this.roofedStructureAt(target);
       if (home) return this.roofedStructureAt(from) === home;
     }
-    const hit = castRay(this, from, target, DWELL_CFG.sightChannel);
+    const hit = castRay(this, from, target, DWELL_CFG.sightChannel,
+      this.rayElev(from, target));
     return !hit || hit.d >= dist(from, target) - DWELL_CFG.sightSlack;
   }
 
@@ -38882,7 +38920,7 @@ export class World {
     const key = a.id * 1_000_000 + b.id;
     const hit = this.losMemo.get(key);
     if (hit && hit.until > this.time) return hit.ok;
-    const ok = this.lineOfSight(a.pos, b.pos);
+    const ok = this.lineOfSight(a.pos, b.pos, a.tier, b.tier);
     if (this.losMemo.size > 4096) {
       let drop = this.losMemo.size - 3072;
       for (const k of this.losMemo.keys()) {
@@ -40736,7 +40774,7 @@ export class World {
       if (cs.held && cs.mode === 'channel') {
         const prey = a.aiTargetId !== undefined ? this.actorById(a.aiTargetId) : undefined;
         if (prey && !prey.dead && this.aiNeedsFireLine(a, cs.inst)
-          && !this.lineOfFire(a.pos, prey.pos)) {
+          && !this.lineOfFire(a.pos, prey.pos, a.tier)) {
           cs.losLost = (cs.losLost ?? 0) + dt;
           if (cs.losLost >= LOS_CFG.channelGrace) cs.held = false;
         } else if (cs.losLost) {
@@ -42179,7 +42217,7 @@ export class World {
           if (e.invulnerable) continue;
           const dd = dist(a.pos, e.pos) - e.radius;
           if (dd >= bd) continue;
-          if (!zapPhase && !this.lineOfFire(a.pos, e.pos)) continue;
+          if (!zapPhase && !this.lineOfFire(a.pos, e.pos, a.tier)) continue;
           bd = dd; best = e;
         }
         if (!best) continue;
@@ -43205,7 +43243,7 @@ export class World {
                   if (until !== undefined && p.age < until) continue;
                   const dd = dist(p.pos, cand.pos);
                   if (dd >= bestD) continue;
-                  if (!p.phase && !this.lineOfFire(p.pos, cand.pos)) continue;
+                  if (!p.phase && !this.lineOfFire(p.pos, cand.pos, p.tier)) continue;
                   bestD = dd; next = cand;
                 }
                 if (next) {
@@ -43249,7 +43287,7 @@ export class World {
                 if (p.hits.has(cand.id)) continue;
                 const dd = dist(p.pos, cand.pos);
                 if (dd >= bestD) continue;
-                if (!p.phase && !this.lineOfFire(p.pos, cand.pos)) continue;
+                if (!p.phase && !this.lineOfFire(p.pos, cand.pos, p.tier)) continue;
                 bestD = dd; next = cand;
               }
               if (next) {

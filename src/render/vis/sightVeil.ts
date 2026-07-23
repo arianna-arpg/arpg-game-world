@@ -91,6 +91,8 @@
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 import type { Doodad } from '../../engine/levelgen';
 import { doodadRuleOf, sightShadowFrac, hitSurfaceOf } from '../../engine/levelgen';
+import { LOS_CFG } from '../../engine/los';
+import { tierElevOf } from '../../engine/tiers';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 
@@ -98,7 +100,8 @@ interface Pt { x: number; y: number }
 
 /** The sliver of World this pass needs (structural — never the class). */
 export interface SightView {
-  player: { pos: Pt };
+  /** The eye — pos plus its STORY (Actor.tier; THE ELEVATION LAW). */
+  player: { pos: Pt; tier?: number };
   walk: unknown;
   zone: { theme?: { sightVeil?: { mul?: number; regionMul?: number; doodadMul?: number } } };
   doodads: readonly Doodad[];
@@ -195,13 +198,16 @@ export function castLen(bodyR: number, s = 1): number {
   return Math.max(SIGHT_VEIL_GEO.castFarFloor, bodyR * SIGHT_VEIL_GEO.castFarR) * s;
 }
 
-/** blocksSight per region id, memoized (regionAt returns strings at cell
- *  cadence — a Map get beats a registry walk in the extraction loop). */
-const sightBlockCache = new Map<string, boolean>();
-function regionBlocksSight(id: string): boolean {
+/** blocksSight + tier ELEVATION per region id, memoized (regionAt returns
+ *  strings at cell cadence — a Map get beats a registry walk in the
+ *  extraction loop). Elevation rides along for THE ELEVATION LAW
+ *  (engine/los.ts RayElev): a blocking row that is tier FLOOR occludes only
+ *  eyes below its deck — a butte top goes clear the moment you stand on it. */
+const sightBlockCache = new Map<string, { b: boolean; e: number | null }>();
+function sightBlockOf(id: string): { b: boolean; e: number | null } {
   let v = sightBlockCache.get(id);
   if (v === undefined) {
-    v = !!regionKind(id)?.blocksSight;
+    v = { b: !!regionKind(id)?.blocksSight, e: tierElevOf(id) };
     sightBlockCache.set(id, v);
   }
   return v;
@@ -230,6 +236,8 @@ export class SightVeil {
   private regionF = 0;   // hide-fraction of a true-wall shadow (0..1)
   private doodadF = 0;   // hide-fraction of a full-strength body shadow (0..1)
   private px = 0; private py = 0;
+  /** The eye's STORY (THE ELEVATION LAW) — part of every occluder cache key. */
+  private heroT = 0;
   private radius = 0;
   private frame = 0;
 
@@ -283,13 +291,20 @@ export class SightVeil {
     this.px = p.x; this.py = p.y;
     this.radius = Math.min(cfg.maxRadius, Math.hypot(vw, vh) / 2 + 120);
 
+    // THE ELEVATION LAW: the eye's story joins both cache keys — stepping
+    // off a ramp re-gathers, so a butte's own mass stops occluding the
+    // moment the hero stands on its deck (and resumes when they leave).
+    const hT = view.player.tier ?? 0;
+    const heroLifted = hT !== this.heroT;
+    this.heroT = hT;
+
     // Doodad silhouettes: re-gather when the hero crosses a bucket, the
     // doodad list changes (identity/length/rev), or the reach outgrows the
     // last sweep. Between rebuilds this costs nothing per frame.
     const bx = Math.floor(p.x / GATHER_BUCKET), by = Math.floor(p.y / GATHER_BUCKET);
     if (bx !== this.dooBx || by !== this.dooBy || view.doodadRev !== this.dooRev
       || view.doodads !== this.dooArr || view.doodads.length !== this.dooLen
-      || this.radius > this.dooR) {
+      || this.radius > this.dooR || heroLifted) {
       this.gatherDoodads(view);
       this.dooBx = bx; this.dooBy = by; this.dooRev = view.doodadRev;
       this.dooArr = view.doodads; this.dooLen = view.doodads.length;
@@ -311,7 +326,8 @@ export class SightVeil {
     if (g) {
       const gbx = Math.floor(p.x / g.cellSize), gby = Math.floor(p.y / g.cellSize);
       if (g !== this.gridRef || gbx !== this.gridBx || gby !== this.gridBy
-        || g.version !== this.gridV || this.radius > this.gridR || hullChanged) {
+        || g.version !== this.gridV || this.radius > this.gridR || hullChanged
+        || heroLifted) {
         this.extractEdges(g);
         this.gridRef = g; this.gridBx = gbx; this.gridBy = gby;
         this.gridV = g.version; this.gridR = this.radius + GATHER_PAD;
@@ -338,9 +354,15 @@ export class SightVeil {
     this.discs.length = 0;
     this.rects.length = 0;
     this.pierces.length = 0;
+    const heroEye = this.heroT + LOS_CFG.elev.eye;
     for (const d of view.doodadsNear(this.px, this.py, reach)) {
       const dx = d.pos.x - this.px, dy = d.pos.y - this.py;
       if (dx * dx + dy * dy > reach * reach) continue;
+      // THE ELEVATION LAW: a body occludes (and pierces) only the story
+      // whose air it fills — deck furniture never shades the street below,
+      // and a butte hero sees clean over the valley's trunks.
+      const dT = d.tier ?? 0;
+      if (heroEye < dT || heroEye >= dT + LOS_CFG.elev.doodadBand) continue;
       // Interactable reveals gather regardless of shadow policy (doors cast
       // nothing — the GRID owns their shadow — yet must pierce it).
       const vp = doodadRuleOf(d.kind).veilPierce;
@@ -395,13 +417,16 @@ export class SightVeil {
     if (x1 < x0 || y1 < y0) return;
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
     const solid = new Uint8Array(w * h);
+    const heroEye = this.heroT + LOS_CFG.elev.eye;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const wx = (cx + 0.5) * cs, wy = (cy + 0.5) * cs;
         // The hull law: cells under a standing roof read solid from outside
         // — the structure is one opaque mass, and its doorways/slits spill
-        // only as the roof yields.
-        if (regionBlocksSight(g.regionAt(wx, wy)) || this.concealedAt(wx, wy)) {
+        // only as the roof yields. THE ELEVATION LAW: a blocking cell that
+        // is tier FLOOR reads solid only to eyes below its deck.
+        const sb = sightBlockOf(g.regionAt(wx, wy));
+        if ((sb.b && (sb.e === null || heroEye < sb.e)) || this.concealedAt(wx, wy)) {
           solid[(cy - y0) * w + (cx - x0)] = 1;
         }
       }
@@ -450,8 +475,13 @@ export class SightVeil {
    *  hidden) — the label pass multiplies its reveal through this, exactly
    *  the roomVeil.veiledAt contract. Tested against the SAME cached
    *  occluders — same graded strengths, same far cull, same shadow lengths —
-   *  the sheet draws, so text and pixels can never disagree. */
-  occludedAt(pos: Pt): number {
+   *  the sheet draws, so text and pixels can never disagree.
+   *  THE ELEVATION LAW: `targetElev` is the queried thing's STORY (an
+   *  actor's tier — actorShade passes it); omitted, the point reads the
+   *  floor it sits on. The region march lerps eye→target height exactly
+   *  like castRay, so a rim-stander pokes above the cliff darkness while a
+   *  deep-bench body stays honestly hidden. */
+  occludedAt(pos: Pt, targetElev?: number): number {
     if (!this.active) return 0;
     const px = this.px, py = this.py;
     const qx = pos.x - px, qy = pos.y - py;
@@ -490,15 +520,21 @@ export class SightVeil {
     }
     if (this.regionF > f && this.gridRef) {
       // Half-cell march, start cell excused — the castRay grid idiom. The
-      // hull law joins the march exactly as it joins the extraction.
+      // hull law joins the march exactly as it joins the extraction; THE
+      // ELEVATION LAW lerps the ray's height eye → target (castRay's rule).
       const g = this.gridRef;
       const len = Math.sqrt(len2);
       const step = g.cellSize / 2;
       const limit = Math.min(len, this.radius);
+      const eye = LOS_CFG.elev.eye;
+      const hFrom = this.heroT + eye;
+      const hTo = (targetElev ?? (tierElevOf(g.regionAt(pos.x, pos.y)) ?? 0)) + eye;
       for (let s = step; s < limit; s += step) {
         const t = s / len;
         const wx = px + qx * t, wy = py + qy * t;
-        if (regionBlocksSight(g.regionAt(wx, wy)) || this.concealedAt(wx, wy)) {
+        const sb = sightBlockOf(g.regionAt(wx, wy));
+        if ((sb.b && (sb.e === null || hFrom + (hTo - hFrom) * t < sb.e))
+          || this.concealedAt(wx, wy)) {
           f = this.regionF;
           break;
         }
@@ -526,10 +562,12 @@ export class SightVeil {
 
   /** A body's smoothed hide-fade (0 visible .. 1 gone): occludedAt chased at
    *  fadeRate × the actor-hide lever, per actor, self-collecting. A stale
-   *  entry (off-screen a while, zone swap) SNAPS instead of replaying. */
-  actorShade(a: { pos: Pt }, dt: number): number {
+   *  entry (off-screen a while, zone swap) SNAPS instead of replaying.
+   *  Rides the body's own STORY (THE ELEVATION LAW), so a same-tier butte
+   *  neighbor draws solid and a rim archer pokes above the cliff's dark. */
+  actorShade(a: { pos: Pt; tier?: number }, dt: number): number {
     if (!this.active) return 0;
-    const target = this.occludedAt(a.pos) * VIS_CFG.sightVeil.actorHide;
+    const target = this.occludedAt(a.pos, a.tier ?? 0) * VIS_CFG.sightVeil.actorHide;
     let e = this.shades.get(a);
     if (!e) { e = { v: target, f: this.frame }; this.shades.set(a, e); return e.v; }
     if (e.f === this.frame) return e.v;

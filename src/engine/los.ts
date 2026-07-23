@@ -41,8 +41,18 @@ import { regionKind } from '../world/regions';
 import { GridWalkField } from '../world/gridWalk';
 import type { WalkField } from '../world/walk';
 import { SPATIAL_CFG } from './spatial';
+import { tierElevOf } from './tiers';
 
 export type OccChannel = 'shot' | 'sight';
+
+/** THE ELEVATION LAW (the tier fabric, engine/tiers.ts): the heights a ray
+ *  travels between, in STORY units — lerped along the segment. A blocking
+ *  region cell that is tier FLOOR (tierElevOf k) stops the ray only while
+ *  the lerped height is BELOW its deck; a true wall (elev null) stops every
+ *  height. A blocking doodad fills `LOS_CFG.elev.doodadBand` stories of air
+ *  above its own story (Doodad.tier). Omitted = the legacy flat read (every
+ *  blocker blocks) — untiered zones pay nothing and change nothing. */
+export interface RayElev { from: number; to: number }
 
 /** What castRay needs from the world — the doodad spatial index and the
  *  (optional) walk grid. World satisfies it structurally. */
@@ -109,6 +119,16 @@ export const LOS_CFG = {
   /** Controller aim assist skips wall-occluded targets (the veil rule,
    *  extended to stone). */
   aimAssist: true,
+  /** THE ELEVATION LAW's dials (the tier fabric — see RayElev). `eye` lifts
+   *  a SIGHT ray's endpoints above their floors (a butte pair duels over
+   *  open air; a valley eye clears a rim-stander over the lip once the
+   *  lerped line tops the cliff — and only then). Shot rays ride FLAT at
+   *  the caster's story + eye, which reduces to the projectile sweep's own
+   *  law (block iff elev > story) — decision and flight can never disagree.
+   *  `doodadBand` is the stories of air a solid body fills above its own
+   *  floor: a valley trunk stops valley rays; a deck-height flight sails
+   *  over it (and a deck rock never shades the street below). */
+  elev: { eye: 0.62, doodadBand: 1 },
 };
 
 /** First blocker along from→to on the given channel, or null when clear.
@@ -117,12 +137,14 @@ export function castRay(
   env: OccEnv,
   from: { x: number; y: number }, to: { x: number; y: number },
   channel: OccChannel,
+  elev?: RayElev,
 ): RayHit | null {
   const dx = to.x - from.x, dy = to.y - from.y;
   const len = Math.hypot(dx, dy);
   if (len <= 1e-6) return null;
   let bestT = Infinity;
   let kind: RayHit['kind'] = 'doodad';
+  const band = LOS_CFG.elev.doodadBand;
 
   // --- doodad surfaces (spatial-index buckets sampled along the segment) ----
   // Geometry rides the hit-surface fabric (engine/shapes.ts): discs keep the
@@ -136,7 +158,15 @@ export function castRay(
     for (const o of env.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
       if (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o)) continue;
       const t = rayShapeT(hitSurfaceOf(o, channel), o.pos.x, o.pos.y, from.x, from.y, dx, dy);
-      if (t !== null && t < bestT) { bestT = t; kind = 'doodad'; }
+      if (t === null || t >= bestT) continue;
+      if (elev) {
+        // THE ELEVATION LAW: a body fills [tier, tier+band) stories of air —
+        // it stops the ray only where the lerped height crosses that band.
+        const dT = o.tier ?? 0;
+        const h = elev.from + (elev.to - elev.from) * t;
+        if (h < dT || h >= dT + band) continue;
+      }
+      bestT = t; kind = 'doodad';
     }
   }
 
@@ -145,8 +175,16 @@ export function castRay(
     const step = (env.walk.cellSize ?? 30) / 2;
     const limit = Math.min(len, bestT === Infinity ? len : bestT * len);
     for (let s = step; s < limit; s += step) {
-      const k = regionKind(env.walk.regionAt(from.x + dx * (s / len), from.y + dy * (s / len)));
+      const kId = env.walk.regionAt(from.x + dx * (s / len), from.y + dy * (s / len));
+      const k = regionKind(kId);
       if (channel === 'shot' ? k?.blocksShot : k?.blocksSight) {
+        // THE ELEVATION LAW: a blocking cell that is tier FLOOR stops only
+        // rays below its deck (a butte top is open ground to its own story
+        // and to any line that clears the lip); true walls stop everything.
+        if (elev) {
+          const e = tierElevOf(kId);
+          if (e !== null && elev.from + (elev.to - elev.from) * (s / len) >= e) continue;
+        }
         const t = s / len;
         if (t < bestT) { bestT = t; kind = 'region'; }
         break;
