@@ -26,7 +26,7 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -34,7 +34,7 @@ import {
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
   type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
-  type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
+  type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec, type ConduitSpec,
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
@@ -3206,12 +3206,11 @@ export class World {
       modeStage: 0,
       charId: '',
     };
-    // Class bar skills come pre-learned as 2-socket magic gems.
+    // Class bar skills come pre-learned at the KIT tier — the ladder's floor
+    // (1 socket), so the wild economy outdrops the cradle from the first find.
     for (const sid of classDef.bar) {
       if (sid && !meta.knownSkills.has(sid)) {
-        const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
-        inst.rarity = 'magic';
-        meta.knownSkills.set(sid, inst);
+        meta.knownSkills.set(sid, makeSkillGem(SKILLS[sid], 1, CLASS_KIT_RARITY));
       }
     }
     p.skills = padBar(classDef.bar.map(sid => (sid ? meta.knownSkills.get(sid)! : null)));
@@ -11639,8 +11638,7 @@ export class World {
     if (!part) return;
     const lvl = Math.max(1, 1 + Math.floor(this.zone.level / 4));
     if (part.drop.skill && SKILLS[part.drop.skill]) {
-      const inst = makeSkillInstance(SKILLS[part.drop.skill], lvl, SKILL_RARITIES.rare.sockets);
-      inst.rarity = 'rare';
+      const inst = makeSkillGem(SKILLS[part.drop.skill], lvl, 'rare');
       const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
       this.noteGemDrop(inst.def.id); // a BUILT spoil is a genuine mint too — the drop index sees it
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
@@ -17316,9 +17314,8 @@ export class World {
       for (const sid of MIREILLE_GIFT_SKILLS) {
         if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
           || this.meta.skillInv.some(i => i.def.id === sid)) continue;
-        const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
-        inst.rarity = 'magic';
-        this.meta.skillInv.push(inst);
+        // Her authored generosity: a MAGIC gem — above the class kit's floor.
+        this.meta.skillInv.push(makeSkillGem(SKILLS[sid], 1, 'magic'));
         gifted = true;
       }
       if (gifted) {
@@ -17444,9 +17441,7 @@ export class World {
     for (const sid of MIREILLE_GIFT_SKILLS) {
       if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
         || this.meta.skillInv.some(i => i.def.id === sid)) continue;
-      const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
-      inst.rarity = 'magic';
-      this.meta.skillInv.push(inst);
+      this.meta.skillInv.push(makeSkillGem(SKILLS[sid], 1, 'magic'));
       // The real learn gate (cap, requirements). A refusal leaves the gem
       // carried — Mireille's talk line picks the lesson up, nothing is lost.
       if (!this.learnSkill(this.meta.skillInv.length - 1)) continue;
@@ -19739,9 +19734,11 @@ export class World {
       baseAttrs: { ...(classDef?.attributes ?? { }) } as Attributes,
       allocated: [classStartNode(t.classId)],
       vocations: [],
+      // The class kit AS the class kit: tier + sockets read the same
+      // CLASS_KIT_RARITY dial a fresh hero's starters mint at.
       knownSkills: [...new Set(bar.filter((s): s is string => !!s))].map(sid => ({
-        skillId: sid, level: cap, rarity: 'magic' as SkillRarity,
-        sockets: [null, null],
+        skillId: sid, level: cap, rarity: CLASS_KIT_RARITY,
+        sockets: new Array<null>(SKILL_RARITIES[CLASS_KIT_RARITY].sockets).fill(null),
       })),
       bar,
       equipped: {},
@@ -20777,8 +20774,9 @@ export class World {
     if (m.skillInv.some(i => i.def.id === skillId)) return false;
     const def = SKILLS[skillId];
     if (!def) return false;
-    const inst = makeSkillInstance(def, 1, SKILL_RARITIES.magic.sockets);
-    inst.rarity = 'magic';
+    // The hatch re-kindles AT the kit tier — never a socket upgrade over
+    // the starter it replaces (lose-and-rekindle must stay worthless).
+    const inst = makeSkillGem(def, 1, CLASS_KIT_RARITY);
     inst.granted = true;
     m.skillInv.push(inst);
     this.text(seat.actor.pos, `${def.name} re-kindled`, '#b06bd4', 13);
@@ -34181,9 +34179,7 @@ export class World {
     const level = 1 + (this.zone.level >= pl.minZone && chance(pl.chance)
       ? randInt(1, Math.max(1, Math.floor(this.zone.level / pl.levelDiv)))
       : 0);
-    const inst = makeSkillInstance(skillDef, level, SKILL_RARITIES[rarity].sockets);
-    inst.rarity = rarity;
-    return inst;
+    return makeSkillGem(skillDef, level, rarity);
   }
 
   /** Pick a support gem from the UNLOCKED pool (weighted, bracketed,
@@ -34959,10 +34955,7 @@ export class World {
     if (c.kind === 'skill') {
       const def = SKILLS[c.id];
       if (!def) return null;
-      const rarity = rollSkillRarity(rng.next());
-      const inst = makeSkillInstance(def, 1, SKILL_RARITIES[rarity].sockets);
-      inst.rarity = rarity;
-      return { kind: 'skill', inst };
+      return { kind: 'skill', inst: makeSkillGem(def, 1, rollSkillRarity(rng.next())) };
     }
     const def = SUPPORTS[c.id];
     if (!def) return null;

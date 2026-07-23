@@ -8,7 +8,7 @@
 import { SKILLS } from '../../data/skills';
 import { SUPPORTS } from '../../data/supports';
 import { VOCATION_CFG, VOCATION_LIST } from '../../data/vocations';
-import { makeSkillInstance, SKILL_RARITIES, type SkillRarity } from '../../engine/skills';
+import { makeSkillGem, type SkillRarity } from '../../engine/skills';
 import type { DevTabDef } from '../panel';
 import { btn, hrow, listRow, numInput, section, selectEl, textInput, wireFilter } from '../ui';
 
@@ -104,9 +104,7 @@ export const gemsTab: DevTabDef = {
     const spawnSkill = (id: string): void => {
       const w = runActive();
       if (!w) { flash('start a run first'); return; }
-      const inst = makeSkillInstance(SKILLS[id], levelOf(), SKILL_RARITIES[SPAWN_RARITY].sockets);
-      inst.rarity = SPAWN_RARITY;
-      w.meta.skillInv.push(inst);
+      w.meta.skillInv.push(makeSkillGem(SKILLS[id], levelOf(), SPAWN_RARITY));
       flash(`+ ${SKILLS[id].name} (lv ${levelOf()}) → Skills tab`);
     };
     const spawnSupport = (id: string): void => {

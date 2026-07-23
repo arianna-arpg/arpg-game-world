@@ -4549,14 +4549,25 @@ export const SOCKETS_PER_SKILL = 3;
 
 export type SkillRarity = 'common' | 'magic' | 'rare' | 'legendary';
 
+/** Weights total 100, so each reads directly as a drop percent. The mass
+ *  sits on the floor tier — the class kit mints there (CLASS_KIT_RARITY),
+ *  so nearly any wild find outdrops the cradle — and the crown tier is a
+ *  FIND (~1-in-50), never a schedule. */
 export const SKILL_RARITIES: Record<SkillRarity, {
   label: string; color: string; sockets: number; weight: number;
 }> = {
-  common:    { label: 'Common',    color: '#b8b8b8', sockets: 1, weight: 52 },
+  common:    { label: 'Common',    color: '#b8b8b8', sockets: 1, weight: 54 },
   magic:     { label: 'Magic',     color: '#7a9ae8', sockets: 2, weight: 30 },
   rare:      { label: 'Rare',      color: '#e8d44a', sockets: 3, weight: 14 },
-  legendary: { label: 'Legendary', color: '#e87a3a', sockets: 4, weight: 4 },
+  legendary: { label: 'Legendary', color: '#e87a3a', sockets: 4, weight: 2 },
 };
+
+/** The tier the CLASS KIT mints at — creation starters, the reacquire
+ *  hatch, and the merc baseline template alike. The ladder's FLOOR: the
+ *  pre-bound bar is a starting point, not a find, so nearly any drop
+ *  (more sockets on the same skill, or a new skill outright) reads as an
+ *  upgrade. Authored gifts (Mireille's flasks) choose their own tier. */
+export const CLASS_KIT_RARITY: SkillRarity = 'common';
 
 /** Roll a rarity from a uniform [0,1) sample. */
 export function rollSkillRarity(roll: number): SkillRarity {
@@ -4660,6 +4671,16 @@ export interface SkillInstance {
 
 export function makeSkillInstance(def: SkillDef, level = 1, sockets = SOCKETS_PER_SKILL): SkillInstance {
   return { def, level, sockets: new Array(sockets).fill(null) };
+}
+
+/** Mint a skill gem AT a rarity — socket count derived from the ladder, the
+ *  rarity stamped on the instance. THE one mint every granted, dropped, and
+ *  commissioned gem shares, so "rarity decides sockets" can never drift
+ *  from the SKILL_RARITIES table at any individual site. */
+export function makeSkillGem(def: SkillDef, level: number, rarity: SkillRarity): SkillInstance {
+  const inst = makeSkillInstance(def, level, SKILL_RARITIES[rarity].sockets);
+  inst.rarity = rarity;
+  return inst;
 }
 
 export function skillMaxLevel(def: SkillDef): number {
