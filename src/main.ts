@@ -488,6 +488,11 @@ window.__game = {
   fakePad: (p) => { window.__fakePad = p; },
   // Drive N frames synchronously — the antidote to rAF freezing in hidden
   // tabs; the ONLY way input polling (incl. the pad) runs under a harness.
+  // NOT sim-only: while a run is live the tick also RENDERS. Don't call
+  // renderer.render on top of step() in a QA cell — each frame then draws
+  // twice, so per-render probes read 2× (the sight veil's update runs once
+  // per pass; a doubled drive double-steps its frame counter and snaps
+  // stale actorShade fades early).
   step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
   // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
   // startGame path under the first (or named) class, menus dismissed.
