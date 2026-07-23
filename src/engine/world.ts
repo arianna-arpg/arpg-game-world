@@ -7962,6 +7962,19 @@ export class World {
       // whose edge set is its dealt exits never accretes web links either;
       // same registry-driven healing as the roadless hub above.
       if (zoneKindOf(z)?.staticExits) continue;
+      // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
+      // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
+      // would draw a road in the wrong direction and break the map's directional read).
+      // THE CHEAP-FIRST GATE: the cone + the nearest-so-far cut run BEFORE the
+      // expensive laws below (the wet-road chord march, the footprint scan,
+      // the bypass chord test) — every gate is a pure read, and the strict `<`
+      // keeps the same first-in-insertion-order winner on ties, so reordering
+      // them changes which candidates PAY, never which candidate WINS.
+      const vx = z.map.x - source.map.x, vy = z.map.y - source.map.y;
+      const vl = Math.hypot(vx, vy) || 1;
+      if ((vx * ux + vy * uy) / vl < 0.64) continue; // cos(50°) ≈ 0.64
+      const d = Math.hypot(z.map.x - target.x, z.map.y - target.y);
+      if (d >= bd) continue;
       // THE DRY-ROAD LAW: a candidate across the water is no neighbour —
       // the web walks, it never swims (the far shore is a voyage away).
       if (!source.dimension && this.roadIsWet(source.map, z.map)) continue;
@@ -7978,14 +7991,7 @@ export class World {
       // third node's disc — the web reaches that country through the
       // neighbour instead (one shared predicate with the weave).
       if (!chordClearsNodes(source.map, z.map, this.zoneMap, source.dimension, new Set([source.id, z.id]))) continue;
-      // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
-      // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
-      // would draw a road in the wrong direction and break the map's directional read).
-      const vx = z.map.x - source.map.x, vy = z.map.y - source.map.y;
-      const vl = Math.hypot(vx, vy) || 1;
-      if ((vx * ux + vy * uy) / vl < 0.64) continue; // cos(50°) ≈ 0.64
-      const d = Math.hypot(z.map.x - target.x, z.map.y - target.y);
-      if (d < bd) { bd = d; best = z; }
+      bd = d; best = z;
     }
     return best;
   }

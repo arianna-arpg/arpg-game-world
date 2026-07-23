@@ -711,7 +711,13 @@ changes.
   deterministic force-directed relaxation to `WEB_CFG.hoverClear`; runs at
   every placeZoneAt mint, after expanse re-centres, on the slow
   `updateWebSettle` sweep, and in the restore heal; immovables pin the
-  layout: sanctuaries/expanses/ports/sealed kinds), and QUEST DEEDS
+  layout: sanctuaries/expanses/ports/sealed kinds), THE SCAN LATTICE
+  (worldgen's derived index behind the per-candidate chart scans —
+  chordClearsNodes / footprintBars / insideFieldFootprint ride a field
+  roster + coord cell bins keyed (zoneMap identity, count,
+  webDisturbance()); byte-identical answers probe-pinned, the charting
+  unit's old 50-95ms quadratic closed — probe `balance/probe_webperf.ts`
+  D), and QUEST DEEDS
   (acceptQuest anchors only CONNECTED sane ground, notarizes the quest road
   both ways, and lifts the anchor's veil so the way DRAWS;
   connectFloatingZone wire-ins likewise — directed story mints can never be

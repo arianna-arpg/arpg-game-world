@@ -16,6 +16,14 @@
 //   THE CLUSTER CAP — one sweep beat relaxes at most settle.sweepClusters
 //     hot neighbourhoods; deferred clusters stay armed and later beats
 //     finish the job (bounded worst beat, amortized convergence).
+//   THE SCAN LATTICE — the per-CANDIDATE chart scans (chordClearsNodes /
+//     footprintBars / insideFieldFootprint) ride a derived index (field
+//     roster + coord cell bins) keyed (zoneMap identity, count,
+//     webDisturbance()) — the 2026-07-23 charting-unit audit caught the
+//     all-zones walks costing 50-95ms PER UNIT at halo scale. Pinned here:
+//     answers byte-equal a naive replica at grown-chart scale, stay coherent
+//     through the pokeWeb relocation contract, and serve temp maps (the
+//     severFootprintCrossers lone-map shape) without poisoning the main one.
 //
 // Run: npx tsx balance/probe_webperf.ts
 // ---------------------------------------------------------------------------
@@ -24,7 +32,8 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import type { ZoneDef } from '../src/data/zones';
 import { HUB_ZONE } from '../src/data/zones';
-import { WEB_CFG, settleWeb, settleMovable, webDisturbance, pokeWeb } from '../src/engine/worldgen';
+import { WEB_CFG, settleWeb, settleMovable, webDisturbance, pokeWeb, chordClearsNodes, footprintBars, insideFieldFootprint } from '../src/engine/worldgen';
+import { fieldCoreRect } from '../src/world/fieldRegion';
 import { OCEAN_BIOME } from '../src/world/biomes';
 import { zoneKindOf } from '../src/data/zoneKinds';
 
@@ -204,6 +213,150 @@ for (let i = 0; i < 8; i++) if (settleWeb(w.zoneMap, null, { canStand }) === 0) 
   }
   check('C: successive capped beats converge the whole scatter', naiveActionable() === 0,
     `${beats} beats, ${naiveActionable()} actionable left`);
+}
+
+// ------------------------------------------------ D. THE SCAN LATTICE
+{
+  // Naive replicas of the three scans' OLD all-zones walks — the lattice's
+  // answers must byte-equal these on the grown, settled chart (the pairsWithin
+  // equivalence idiom: same candidate superset ⇒ same boolean).
+  const naiveChord = (a: { x: number; y: number }, b: { x: number; y: number }, dim: string | undefined, skip: ReadonlySet<string>): boolean => {
+    for (const z of Object.values(w.zoneMap)) {
+      if (skip.has(z.id) || z.caveDepth != null) continue;
+      if ((z.dimension ?? 'surface') !== (dim ?? 'surface')) continue;
+      const abx = b.x - a.x, aby = b.y - a.y;
+      const l2 = abx * abx + aby * aby;
+      const t = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((z.map.x - a.x) * abx + (z.map.y - a.y) * aby) / l2));
+      if (Math.hypot(z.map.x - (a.x + t * abx), z.map.y - (a.y + t * aby)) < WEB_CFG.chordNodeClear) return false;
+    }
+    return true;
+  };
+  const naiveBars = (a: { x: number; y: number }, b: { x: number; y: number }, zm: Record<string, ZoneDef>, skip?: ReadonlySet<string>): boolean => {
+    for (const z of Object.values(zm)) {
+      if (!z.field || z.dimension || (skip && skip.has(z.id))) continue;
+      const r = fieldCoreRect(z.field, z.size);
+      if (r.x1 <= r.x0 || r.y1 <= r.y0) continue;
+      const inside = (p: { x: number; y: number }): boolean => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
+      if (inside(a) || inside(b)) continue;
+      // Proper-crossing via the sampled midpoint ladder is NOT the law —
+      // reuse the real answer only through insideness + the indexed call
+      // would be circular. Walk the rect edges exactly as segCrossesRect.
+      const d = (u: { x: number; y: number }, v: { x: number; y: number }, p: { x: number; y: number }): number =>
+        (v.x - u.x) * (p.y - u.y) - (v.y - u.y) * (p.x - u.x);
+      const cross = (p1: { x: number; y: number }, p2: { x: number; y: number }, p3: { x: number; y: number }, p4: { x: number; y: number }): boolean => {
+        const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+      };
+      const c1 = { x: r.x0, y: r.y0 }, c2 = { x: r.x1, y: r.y0 }, c3 = { x: r.x1, y: r.y1 }, c4 = { x: r.x0, y: r.y1 };
+      if (cross(a, b, c1, c2) || cross(a, b, c2, c3) || cross(a, b, c3, c4) || cross(a, b, c4, c1)) return true;
+    }
+    return false;
+  };
+  const naiveInside = (pt: { x: number; y: number }, zm: Record<string, ZoneDef>, skipId?: string): boolean => {
+    for (const z of Object.values(zm)) {
+      if (!z.field || z.dimension || z.id === skipId) continue;
+      const r = fieldCoreRect(z.field, z.size);
+      if (pt.x >= r.x0 && pt.x <= r.x1 && pt.y >= r.y0 && pt.y <= r.y1) return true;
+    }
+    return false;
+  };
+
+  // The grown chart may not have rolled an expanse this seed — plant a
+  // synthetic one so the footprint pins always bite (count key re-derives
+  // the roster; removed again below).
+  const hadField = Object.values(w.zoneMap).some(z => z.field && !z.dimension);
+  if (!hadField) {
+    const zs = surface();
+    const at = zs[Math.floor(zs.length / 2)].map;
+    w.zoneMap['probe_scan_field'] = {
+      ...zs[0],
+      id: 'probe_scan_field', name: 'Probe Meadow', exits: [],
+      map: { x: at.x + 60, y: at.y + 60 }, size: { w: 3200, h: 3200 }, dimension: undefined,
+      field: { originX: at.x - 140, originY: at.y - 140, scale: 8, seed: 7, regionId: 'probe_scan_r', nodeW: 400, nodeH: 400 },
+    };
+  }
+
+  // A deterministic probe sweep: chords of several lengths/angles from every
+  // 7th zone, with/without skip sets, surface + a foreign dimension.
+  const zs = surface();
+  let chordN = 0, chordBad = 0, barsN = 0, barsBad = 0, insideN = 0, insideBad = 0;
+  for (let i = 0; i < zs.length; i += 7) {
+    const z = zs[i];
+    for (const [dx, dy] of [[90, 0], [0, -90], [64, 64], [400, -130], [12, 5]] as const) {
+      const a = { x: z.map.x + 11, y: z.map.y - 7 };
+      const b = { x: a.x + dx, y: a.y + dy };
+      for (const [dim, skip] of [
+        [undefined, new Set([z.id])] as const,
+        [undefined, new Set<string>()] as const,
+        ['underworld', new Set([z.id])] as const,
+      ]) {
+        chordN++;
+        if (chordClearsNodes(a, b, w.zoneMap, dim, skip) !== naiveChord(a, b, dim, skip)) chordBad++;
+      }
+      barsN++;
+      if (footprintBars(a, b, w.zoneMap) !== naiveBars(a, b, w.zoneMap)) barsBad++;
+      barsN++;
+      const sk = new Set(['probe_scan_field']);
+      if (footprintBars(a, b, w.zoneMap, sk) !== naiveBars(a, b, w.zoneMap, sk)) barsBad++;
+      insideN++;
+      if (insideFieldFootprint(a, w.zoneMap) !== naiveInside(a, w.zoneMap)) insideBad++;
+    }
+  }
+  // …and chords aimed square at the field rect (the crossing lane must fire).
+  const f = Object.values(w.zoneMap).find(z => z.field && !z.dimension)!;
+  const r = fieldCoreRect(f.field!, f.size);
+  const mid = { x: (r.x0 + r.x1) / 2, y: (r.y0 + r.y1) / 2 };
+  const far = { l: { x: r.x0 - 300, y: mid.y }, r: { x: r.x1 + 300, y: mid.y } };
+  barsN += 2;
+  if (footprintBars(far.l, far.r, w.zoneMap) !== naiveBars(far.l, far.r, w.zoneMap)) barsBad++;
+  if (footprintBars(far.l, mid, w.zoneMap) !== naiveBars(far.l, mid, w.zoneMap)) barsBad++;
+  const crossFires = footprintBars(far.l, far.r, w.zoneMap) && !footprintBars(far.l, mid, w.zoneMap);
+  insideN += 1;
+  if (insideFieldFootprint(mid, w.zoneMap) !== naiveInside(mid, w.zoneMap)) insideBad++;
+  const insideFires = insideFieldFootprint(mid, w.zoneMap);
+
+  check('D: chordClearsNodes ≡ naive walk at chart scale', chordBad === 0, `${chordBad}/${chordN} diverged`);
+  check('D: footprintBars ≡ naive walk (incl. the crossing + skip lanes)', barsBad === 0 && crossFires,
+    `${barsBad}/${barsN} diverged; cross-chord barred=${crossFires}`);
+  check('D: insideFieldFootprint ≡ naive walk (incl. the interior)', insideBad === 0 && insideFires,
+    `${insideBad}/${insideN} diverged; interior hit=${insideFires}`);
+
+  // THE RELOCATION CONTRACT: move a node by hand + pokeWeb (the documented
+  // lane for movers outside placeZoneAt/settleWeb) — the lattice must
+  // re-derive and agree with the naive walk on the moved chart, including a
+  // chord the OLD position would have answered differently.
+  const mover = zs.find(z => settleMovable(z) && !z.field)!;
+  const before = { x: mover.map.x, y: mover.map.y };
+  // Find a probe chord in genuinely EMPTY country (clear pre-move), so the
+  // pin demonstrates the FLIP: clear → barred the instant the mover parks on
+  // it under the pokeWeb contract. Deterministic outward scan.
+  let a2 = { x: before.x, y: before.y }, b2 = a2, preMove = false;
+  for (let step = 1; step <= 40 && !preMove; step++) {
+    a2 = { x: before.x + 300 + step * 97, y: before.y + 1 + step * 31 };
+    b2 = { x: a2.x + 90, y: a2.y };
+    preMove = chordClearsNodes(a2, b2, w.zoneMap, undefined, new Set<string>());
+  }
+  mover.map.x = a2.x + 45; mover.map.y = a2.y; // park ON the probe chord
+  pokeWeb();
+  const postMove = chordClearsNodes(a2, b2, w.zoneMap, undefined, new Set<string>());
+  const postNaive = naiveChord(a2, b2, undefined, new Set<string>());
+  check('D: pokeWeb re-derives the lattice (moved node flips a clear chord)',
+    preMove && postMove === postNaive && postMove === false,
+    `pre=${preMove} post=${postMove} naive=${postNaive}`);
+  mover.map.x = before.x; mover.map.y = before.y;
+  pokeWeb();
+
+  // THE TEMP-MAP LANE (severFootprintCrossers' lone map): a fresh one-entry
+  // record answers for ITS zone only, and the main map's next answer is
+  // untouched (identity keying — no cross-poisoning).
+  const lone = { [f.id]: f } as Record<string, ZoneDef>;
+  const loneBars = footprintBars(far.l, far.r, lone);
+  const mainAgain = footprintBars(far.l, far.r, w.zoneMap) === naiveBars(far.l, far.r, w.zoneMap);
+  check('D: a temp lone-map serves and never poisons the main memo',
+    loneBars === naiveBars(far.l, far.r, lone) && mainAgain,
+    `lone=${loneBars} mainAgree=${mainAgain}`);
+
+  if (!hadField) delete w.zoneMap['probe_scan_field'];
 }
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} pass / ${fail} fail`);
