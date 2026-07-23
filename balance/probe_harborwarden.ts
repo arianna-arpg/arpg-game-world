@@ -36,6 +36,7 @@ import { mod } from '../src/engine/stats';
 import { cellKind, continentSeedFrom } from '../src/world/continents';
 import { clearSeaMemo, seaOfCell, type Sea } from '../src/world/seas';
 import type { World } from '../src/engine/world';
+import type { ZoneDef } from '../src/data/zones';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -88,31 +89,40 @@ const SNAP = (level: number) => ({
 
 // ------------------------------------------------ B. the live rigs
 {
-  // A world with a hold-bearing sea (the probe_harborholds hunt idiom).
+  // A world whose sea mints a HELD ANCHOR, hunted through the REAL mint.
+  // THE PAIR LAW (probe_harborholds): since the hold/port split the state
+  // lives on the mainland anchor BEHIND each quay (port.holdAnchor), never
+  // on the port zone itself — and holdClassFor may honestly leave a
+  // class × tier as a bare quay — so the rig walks seeds until
+  // devEnsureSea actually raises a hold, and reads it off the anchor.
   let w = makeSimWorld('warrior', 0x4a5d01);
-  let sea: Sea | null = null;
-  for (const ws of [0x4a5d01, 0x4a5d02, 0x4a5d03, 0x4a5d04, 0x4a5d05]) {
-    const cand = makeSimWorld('warrior', ws);
+  let seaFound = false;
+  let hz: ZoneDef | undefined;
+  for (let i = 0; i < 16 && !hz; i++) {
+    const cand = makeSimWorld('warrior', 0x4a5d01 + i);
     clearSeaMemo();
     const s = firstSeaWithPorts(cand.sim.biomeField.fieldSeed, 1);
-    if (s) { w = cand; sea = s; break; }
+    if (!s) continue;
+    seaFound = true;
+    const info = cand.devEnsureSea(s.ports[0].shore);
+    const anchor = info?.ports.map(p => cand.zoneMap[p.id])
+      .map(p => (p?.holdAnchor ? cand.zoneMap[p.holdAnchor] : undefined))
+      .find(a => a?.harborhold);
+    if (anchor) { w = cand; hz = anchor; }
   }
-  check('B: a ported sea stands for the rig', !!sea);
-  if (sea) {
-    const info = w.devEnsureSea(sea.ports[0].shore)!;
-    const hz = info.ports.map(p => w.zoneMap[p.id]).find(z => z.harborhold);
-    check('B: a hold minted', !!hz);
-    if (hz) {
-      // THE SITE AXIS: besieged refuses, open admits, plain country refuses.
-      const wAny = w as unknown as { zoneMatchesSiteFilter(d: unknown, f: unknown): boolean };
-      const f = { harborhold: 'open' };
-      check('B: the axis refuses a BESIEGED hold', wAny.zoneMatchesSiteFilter(hz, f) === false);
-      w.devSetHoldState(hz.id, 'open');
-      check('B: the axis admits an OPEN hold', wAny.zoneMatchesSiteFilter(hz, f) === true);
-      const plain = Object.values(w.zoneMap).find(z => !z.harborhold && z.objective.kind !== 'safe');
-      check('B: the axis refuses plain country', !!plain && wAny.zoneMatchesSiteFilter(plain, f) === false);
-      check('B: harborhold:true admits any hold state', wAny.zoneMatchesSiteFilter(hz, { harborhold: true }) === true);
-    }
+  check('B: a ported sea stands for the rig', seaFound);
+  check('B: a hold minted (the held ANCHOR behind the quay)', !!hz,
+    hz ? `${hz.id} (${hz.harborhold!.cls})` : 'no hunted seed raised one');
+  if (hz) {
+    // THE SITE AXIS: besieged refuses, open admits, plain country refuses.
+    const wAny = w as unknown as { zoneMatchesSiteFilter(d: unknown, f: unknown): boolean };
+    const f = { harborhold: 'open' };
+    check('B: the axis refuses a BESIEGED hold', wAny.zoneMatchesSiteFilter(hz, f) === false);
+    w.devSetHoldState(hz.id, 'open');
+    check('B: the axis admits an OPEN hold', wAny.zoneMatchesSiteFilter(hz, f) === true);
+    const plain = Object.values(w.zoneMap).find(z => !z.harborhold && z.objective.kind !== 'safe');
+    check('B: the axis refuses plain country', !!plain && wAny.zoneMatchesSiteFilter(plain, f) === false);
+    check('B: harborhold:true admits any hold state', wAny.zoneMatchesSiteFilter(hz, { harborhold: true }) === true);
   }
 
   // THE SCALING LAW — enemy spawn scaling under a fractional company seat.
