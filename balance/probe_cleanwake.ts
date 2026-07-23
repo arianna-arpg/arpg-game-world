@@ -90,5 +90,25 @@ seedGlobalRandom(0xc1ea);
     `move ${m.sheet.get('moveSpeed').toFixed(1)} vs base ${baseMove.toFixed(1)}`);
 }
 
+// ---------------- D. THE FIELD REPORT (die in the mud, wake in Lastlight)
+{
+  // The user's observed instance, verbatim: an Immortal death taken while
+  // standing in MUD (regions.ts standStatus 'mired' — re-applied per tick
+  // while stood in, −40% MORE move speed) woke in Lastlight with the slow
+  // LOCKED ON as if it were the new base — no icon, just the numbers.
+  const w: World = makeSimWorld('warrior', 0xc1ed);
+  const hero = w.player;
+  const base = hero.sheet.get('moveSpeed');
+  hero.applyStatus('mired', 0, 1, 'the mud');
+  const inMud = hero.sheet.get('moveSpeed');
+  check('D: the mud binds the stride while stood in',
+    inMud < base, `${inMud.toFixed(0)} down from ${base.toFixed(0)}`);
+  hero.dead = true;
+  (w as unknown as { performModeRespawn(): void }).performModeRespawn();
+  check('D: THE FIELD REPORT, DEAD — the sanctuary wake frees the stride whole',
+    near(hero.sheet.get('moveSpeed'), base) && !hero.statuses.some(s => s.id === 'mired'),
+    `move ${hero.sheet.get('moveSpeed').toFixed(0)} vs base ${base.toFixed(0)}`);
+}
+
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASS');
 process.exit(failed ? 1 : 0);
