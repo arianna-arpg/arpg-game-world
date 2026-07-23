@@ -2835,6 +2835,28 @@ export class World {
    *  evaporate-marked temp grounds join at runtime; loadZone re-harvests
    *  from the doodad list so a revisit resumes the drying. */
   private evaporating: Doodad[] = [];
+  /** THE POCK FIFO (plantImpactDress): the standing blast-dress subset of
+   *  this.doodads in plant order, so the dress cap stops walking the whole
+   *  doodad list per shell. DERIVED, never trusted blind: the key re-derives
+   *  it whenever the doodad list moved under us — identity catches zone
+   *  swaps and every wholesale filter, length catches every foreign push or
+   *  in-place splice, and gone-stamped pocks (the evap sweep's removals, the
+   *  only pock exit that keeps both) compact away at consult. */
+  private blastPocks: Doodad[] = [];
+  private blastPocksKey: { doodads: Doodad[] | null; len: number } = { doodads: null, len: -1 };
+  /** THE GUN CENSUS (updateBombardment): does the actor list hold any
+   *  bombard-wearing def at all? Gunless zones — almost all of them — pay
+   *  one key compare per frame instead of a MONSTERS lookup per actor. The
+   *  key re-derives on identity (zone swaps, wholesale filters), length
+   *  (every push/splice), or the mint rev — createMonster is the one
+   *  monster mint, so even a same-frame balanced splice+push that seats the
+   *  zone's FIRST gun re-derives that frame. Stale-TRUE is harmless by
+   *  construction (the loop itself decides everything); stale-FALSE cannot
+   *  happen without all three keys standing still. */
+  private bombardPresent = false;
+  private bombardKey: { actors: Actor[] | null; len: number; mintRev: number } =
+    { actors: null, len: -1, mintRev: -1 };
+  private bombardMintRev = 0;
   shrines: Shrine[] = [];
   altars: Altar[] = [];
   chests: Chest[] = [];
@@ -13866,6 +13888,19 @@ export class World {
 
   private updateBombardment(): void {
     if (this.zone.objective.kind === 'safe') return;
+    // THE GUN CENSUS: almost every zone fields zero guns — skip the whole
+    // sweep O(1) unless a bombard-wearing def stands in the list. The flag
+    // is derived, never hand-fed: identity/length re-key on any list
+    // change, the mint rev on any fresh gun (createMonster), and a stale
+    // TRUE just runs the loop below, which decides everything itself.
+    const k = this.bombardKey;
+    if (k.actors !== this.actors || k.len !== this.actors.length
+      || k.mintRev !== this.bombardMintRev) {
+      k.actors = this.actors; k.len = this.actors.length; k.mintRev = this.bombardMintRev;
+      this.bombardPresent = this.actors.some(a =>
+        a.defId !== undefined && MONSTERS[a.defId]?.bombard !== undefined);
+    }
+    if (!this.bombardPresent) return;
     for (const a of this.actors) {
       if (a.dead) continue;
       const spec = a.defId ? MONSTERS[a.defId]?.bombard : undefined;
@@ -13926,17 +13961,33 @@ export class World {
       evap: { t: rand(dwell[0], dwell[1]), rate: BOMBARD_CFG.dressEvapRate },
     };
     normalizeDoodadBound(d);
+    // THE POCK FIFO: re-derive the standing subset only when the doodad
+    // list moved under us since the last shell (identity = zone swaps +
+    // wholesale filters, length = any foreign push/splice) — derived
+    // BEFORE our own push so the walk and the append agree on the set.
+    const k = this.blastPocksKey;
+    if (k.doodads !== this.doodads || k.len !== this.doodads.length) {
+      this.blastPocks = this.doodads.filter(dd => dd.blastDress && !dd.gone);
+    }
     this.doodads.push(d);
     this.evaporating.push(d);
+    this.blastPocks.push(d);
+    k.doodads = this.doodads;
+    k.len = this.doodads.length;
     let count = 0;
     let oldest: Doodad | undefined;
-    for (const dd of this.doodads) {
-      if (!dd.blastDress || dd.gone) continue;
+    const pocks = this.blastPocks;
+    let live = 0;
+    for (let i = 0; i < pocks.length; i++) {
+      const dd = pocks[i];
+      if (!dd.blastDress || dd.gone) continue; // dried away — falls out of the FIFO
+      pocks[live++] = dd;
       count++;
       // The oldest pock NOT already forced dry — each plant past the cap
       // advances the drying frontier by one, never re-forcing the same one.
       if (!oldest && dd.evap && dd.evap.t > 0) oldest = dd;
     }
+    pocks.length = live;
     if (count > BOMBARD_CFG.dressCap && oldest?.evap) oldest.evap.t = 0;
   }
 
@@ -21484,6 +21535,9 @@ export class World {
     const def: MonsterDef = MONSTERS[defId];
     const a = new Actor(def.name, team, vec(0, 0));
     a.defId = defId;
+    // THE GUN CENSUS: a bombard-wearing mint re-keys updateBombardment's
+    // presence flag the same frame — the one signal a push can't carry.
+    if (def.bombard) this.bombardMintRev++;
     a.color = def.color;
     a.shape = def.shape;
     a.radius = def.radius;
