@@ -691,6 +691,13 @@ changes.
   `PUZZLE_KINDS` + `PUZZLES` presets (engine/puzzles.ts +
   `data/puzzles.ts`), placed at zone LOAD on a salted stream, offered
   per-biome via `TilesetDef.puzzles`, askable as the `'puzzle'` objective;
+  strike routing obeys THE KNOCK/SPILL/HUM LAWS (`knock`/`spill`/`hum`
+  dials, spec → kind → `PUZZLE_CFG`): any LANDED damaging blow rings a
+  node however mitigated (full septic forgo included; tone reads
+  pre-forgo — DoT ticks never knock), one blow rings ONE facing-aligned
+  bell (a wide cleave can't falter the refrain by clipping a neighbor),
+  and a just-judged node swallows its own echoes until another bell
+  rings — knocks queue per frame (`drainPuzzleKnocks`), kinds stay pure;
   `ZoneDef.scenery` plants ambient object-actor rows the same way — docs
   in `docs/engine/puzzles.md`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`

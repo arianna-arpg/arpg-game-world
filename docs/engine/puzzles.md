@@ -26,6 +26,48 @@ State DRESSES as it moves: lattice/chord tones ride the same
 `attuned_<tone>` lane real attunement uses; refrain playback/answers blink
 `kindled`. Co-op, nameplates and fx follow for free.
 
+## The knock, the spill, the hum (strike routing — 2026-07-22)
+
+A node is judged from `resolveHit` through THREE routing laws, each a data
+dial resolved spec → kind → `PUZZLE_CFG`, so every build's delivery answers
+honestly:
+
+- **THE KNOCK LAW** (`knock: 'landed' | 'wounding'`, default `'landed'`):
+  a node answers the KNOCK, never the wound — any LANDED damaging blow
+  rings it, however mitigated. A full septic forgo (`hitToAffliction` 1.0,
+  the pure-carrier hit), a shield's soak-to-zero, even an invulnerable
+  fixture's `immune` all still knock; evades and blocks stay refusals
+  (those never connected), and DoT ticks never knock (the ache is not a
+  blow — a wrong-node bleed must not falter the song every tick). The
+  ATTUNEMENT route shares the law: `struckTone` reads the packet
+  **pre-forgo** — the bargain rebates magnitude, never color — so a
+  full-septic firebolt still paints a chord crystal red. `'wounding'`
+  restores the moved-life-bar demand for kinds that want it.
+- **THE SPILL LAW** (`spill: 'aim' | 'all'`, default `'aim'`): one blow
+  rings ONE bell. When a single blow (same striker, same instant) knocks
+  several of a run's nodes — a reach-scaled cleave arc, melee reverb, a
+  nova across the ring — only the node best aligned with the striker's
+  FACING is judged (tie: nearest, then arrival order; `pickKnockNode`,
+  pure). Without it, arc resolution order (ring index, not aim) picks the
+  note — the "my cleave faltered the song" misfire. `'all'` keeps the
+  fan-out for kinds that want every bell (a future gong-storm).
+- **THE HUM** (`hum` seconds, default `PUZZLE_CFG.hum`): a just-judged
+  node swallows repeat knocks — echo-family re-strikes and multistrike
+  double-taps read as ONE knock — until a DIFFERENT node rings (which
+  clears the hum) or it fades. Structurally safe: the refrain never asks
+  the same note twice in a row, so a repeat inside the hum can never be
+  the intended next answer — and the cross-ring clear makes a fast A,B,A
+  answer legal at any speed. Saves the lattice from echo self-cancel
+  (toggle + toggle = no-op) too.
+
+Implementation: `World.puzzleStruck` ENQUEUES (`puzzleKnocks`, with a
+`wounding` note riding along) and `drainPuzzleKnocks` judges once per frame
+ahead of kind ticks — a whole blow is visible before any note sounds. The
+WHO gate and the knock dial refuse at the drain; kinds stay pure. The
+chord's `tuned` lane bypasses all three on purpose: tone sets are
+idempotent and multi-node washes are that riddle's play. Probe:
+`balance/probe_attunement.ts` section 4.
+
 ## Authoring
 
 **Presets** (`PUZZLES` in data/puzzles.ts): pure data — kind, board/ring

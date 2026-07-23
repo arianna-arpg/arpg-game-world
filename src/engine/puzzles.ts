@@ -27,12 +27,32 @@
 // src/data/puzzles.ts (PUZZLES) and rolled per zone from TilesetDef.puzzles
 // rows or pinned by a zone's `puzzle` OBJECTIVE (zones.ts).
 //
+// STRIKE ROUTING obeys THREE LAWS, each a data dial (spec → kind →
+// PUZZLE_CFG) so every build's delivery answers honestly:
+//   • THE KNOCK LAW (`knock`) — a node answers the KNOCK, never the wound:
+//     any LANDED damaging blow rings it, however mitigated (a full septic
+//     forgo, a shield's soak, an invulnerable fixture's 'immune'). Evades
+//     and blocks stay refusals — those never connected. DoT ticks never
+//     knock: the ache is not a blow, and a wrong-node bleed must not
+//     falter a song every tick.
+//   • THE SPILL LAW (`spill`) — one blow rings ONE bell: when a single
+//     blow (same striker, same instant) knocks several of a run's nodes —
+//     a scaled cleave arc, melee reverb, a nova across the ring — only the
+//     node best aligned with the striker's facing is judged; the rest is
+//     spill. Without it, arc order (ring index, not aim) decides the note.
+//   • THE HUM (`hum`) — a just-judged node swallows repeat knocks (echo
+//     re-strikes, multistrike double-taps read as ONE knock) until a
+//     DIFFERENT node rings or the hum fades. Structurally safe for the
+//     refrain: its sequence never asks the same note twice in a row, so a
+//     repeat inside the hum can never be the intended next answer.
+//
 // Kinds speak to the world through the narrow PuzzleHost — flashes, text,
 // dressings, completion — so this module never imports World, and a kind
 // can be unit-probed against a stub host.
 // ---------------------------------------------------------------------------
 
 import type { Vec2 } from '../core/math';
+import { angleDiff, angleTo, dist } from '../core/math';
 import type { Actor } from './actor';
 import type { DamageType } from './stats';
 import { ELEMENTAL_TYPES } from './stats';
@@ -64,6 +84,20 @@ export interface PuzzleSpec {
   tones?: DamageType[];
   /** Whose strikes the kind counts (default: the kind's own doctrine). */
   who?: 'player' | 'any';
+  /** THE KNOCK LAW: what rings a node (default PUZZLE_CFG.knock). 'landed'
+   *  counts any landed damaging blow, however mitigated — a fully-forgone
+   *  septic hit, a soaked-to-zero strike, an invulnerable fixture's
+   *  'immune' all knock; 'wounding' demands the life bar actually moved. */
+  knock?: 'landed' | 'wounding';
+  /** THE SPILL LAW: one blow, one bell (default PUZZLE_CFG.spill). 'aim'
+   *  collapses a single blow's multi-node strikes to the node best aligned
+   *  with the striker's facing; 'all' lets a wide swing ring every bell it
+   *  touched (a future gong-storm's fan-out). */
+  spill?: 'aim' | 'all';
+  /** THE HUM: seconds a just-judged node ignores repeat knocks (echo
+   *  re-strikes, multistrike double-taps). Cleared early when any OTHER
+   *  node rings; 0 disables. Default PUZZLE_CFG.hum. */
+  hum?: number;
   /** Node spacing: grid cell pitch / ring radius (defaults per kind). */
   spacing?: number;
   /** Completion flourish: free-cast a catalog skill at the site, sprinkle
@@ -84,6 +118,10 @@ export interface PuzzleRun {
   heart?: Actor;
   /** Kind-owned scratch state (each kind documents its own shape). */
   state: Record<string, unknown>;
+  /** THE HUM's ledger (engine-owned, never kind state): node actor id →
+   *  world-time its hum fades. One acknowledged ring holds the hum; any
+   *  OTHER node's ring clears the map (the structural discriminator). */
+  hums: Map<number, number>;
   done: boolean;
   /** This run IS the zone objective (updateObjective watches it). */
   isObjective: boolean;
@@ -118,6 +156,11 @@ export interface PuzzleKindDef {
   /** Whose strikes count by default ('player' includes minions/allies —
    *  the SIDE, not the seat; 'any' lets the zone itself play). */
   who: 'player' | 'any';
+  /** Kind-level routing-law defaults (spec rows override; PUZZLE_CFG
+   *  backstops) — see the header's three laws. */
+  knock?: 'landed' | 'wounding';
+  spill?: 'aim' | 'all';
+  hum?: number;
   /** Default ring radius / grid pitch (spec.spacing overrides). */
   spacing: number;
   /** Default node count band for ring kinds. */
@@ -158,7 +201,51 @@ export const PUZZLE_CFG = {
   kindleStatus: 'kindled',
   /** Playback earshot: a refrain sings only with someone to hear it. */
   earshot: 620,
+  /** THE KNOCK LAW default: any landed damaging blow rings, however
+   *  mitigated ('wounding' would demand a moved life bar). */
+  knock: 'landed' as 'landed' | 'wounding',
+  /** THE SPILL LAW default: one blow rings the bell it AIMED at. */
+  spill: 'aim' as 'aim' | 'all',
+  /** THE HUM default (seconds): swallows echo-family re-strikes and
+   *  multistrike double-taps (all well inside a second) while any
+   *  deliberate return to the same node — two answers minimum away in the
+   *  refrain, a slow undo press on the lattice — either rings another
+   *  node first (which clears the hum) or outlasts it. */
+  hum: 0.9,
 } as const;
+
+/** THE ROUTING DIALS resolve spec → kind → config (the fabric's usual
+ *  precedence); exported for World's drain and the probes. */
+export function puzzleKnockOf(run: PuzzleRun): 'landed' | 'wounding' {
+  return run.spec.knock ?? run.kind.knock ?? PUZZLE_CFG.knock;
+}
+export function puzzleSpillOf(run: PuzzleRun): 'aim' | 'all' {
+  return run.spec.spill ?? run.kind.spill ?? PUZZLE_CFG.spill;
+}
+export function puzzleHumOf(run: PuzzleRun): number {
+  return run.spec.hum ?? run.kind.hum ?? PUZZLE_CFG.hum;
+}
+
+/** THE SPILL LAW's pick: of the nodes ONE blow struck, the bell the blow
+ *  MEANT — best aligned with the striker's facing (a cleave answers where
+ *  it swung, a nova where its caster faced), ties broken by distance, then
+ *  by arrival order (deterministic). A striker-less knock keeps arrival
+ *  order. Pure — the probes drive it bare. */
+export function pickKnockNode(nodes: readonly Actor[], striker: Actor | null): Actor {
+  if (nodes.length <= 1 || !striker) return nodes[0];
+  let best = nodes[0];
+  let bestAlign = Infinity;
+  let bestDist = Infinity;
+  for (const n of nodes) {
+    const align = Math.abs(angleDiff(striker.facing, angleTo(striker.pos, n.pos)));
+    const d = dist(striker.pos, n.pos);
+    if (align < bestAlign - 1e-9
+      || (Math.abs(align - bestAlign) <= 1e-9 && d < bestDist)) {
+      best = n; bestAlign = align; bestDist = d;
+    }
+  }
+  return best;
+}
 
 /** Roll an inclusive integer band with the host's rng. */
 function rollBand(h: PuzzleHost, band: [number, number] | undefined, fallback: [number, number]): number {

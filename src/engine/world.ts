@@ -154,7 +154,7 @@ import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontCo
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
-import { PUZZLE_CFG, PUZZLE_KINDS, type PuzzleHost, type PuzzleRun } from './puzzles';
+import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
   batchScaleOf, isThrongBody, THRONG_CFG, throngMarkerOf, throngPocketKey,
   throngSkillSalt, throngSpecsOn, type ThrongSourceRow, type ThrongSpec,
@@ -29713,11 +29713,29 @@ export class World {
     this.puzzleTuned(a, tone, striker ?? null);
   }
 
+  /** THE KNOCK LAW's one route (resolveHit's landed-blow tail + its
+   *  immune early-return): a landed damaging blow re-tunes a tunable body
+   *  (pre-forgo tone — magnitude was rebated, color was not) and queues an
+   *  enrolled puzzle node's knock, wounded or not. Evaded and blocked hits
+   *  never arrive here — those refusals stand. */
+  private knockFixtures(caster: Actor, target: Actor, tone: DamageType | null, wounding: boolean): void {
+    if (target.dead) return;
+    if (tone && target.tune && !target.untargetable && tone !== target.tone
+      && !target.tune.locked && toneAccepted(target.tune, tone)) {
+      this.attuneCrystal(target, tone, caster);
+    }
+    if (target.puzzleNode) this.puzzleStruck(target, caster, wounding);
+  }
+
   // --- THE PUZZLE FABRIC (engine/puzzles.ts) --------------------------------
 
   /** This zone's live activity riddles (bootPuzzles builds them at load). */
   private puzzles: PuzzleRun[] = [];
   private puzzleHostCache: PuzzleHost | null = null;
+  /** THE KNOCK QUEUE (the spill law's window): resolveHit enqueues every
+   *  landed knock; updatePuzzles drains once per frame, so a WHOLE blow is
+   *  visible before any note is judged. */
+  private puzzleKnocks: { node: Actor; striker: Actor | null; t: number; wounding: boolean }[] = [];
 
   /** The narrow world surface puzzle kinds drive — kinds never import World. */
   private puzzleHost(): PuzzleHost {
@@ -29786,6 +29804,7 @@ export class World {
    *  (kind.solved dressing — proof, not homework). */
   private bootPuzzles(def: ZoneDef, pois: Vec2[], memory?: ZoneMemory | null): void {
     this.puzzles = [];
+    this.puzzleKnocks = []; // stale knocks never cross a zone boundary
     this.puzzleHostCache = null; // closures rebind to the fresh zone
     const o = def.objective;
     const rows = def.puzzles ?? [];
@@ -29861,7 +29880,7 @@ export class World {
       const run: PuzzleRun = {
         id: runId, spec, kind, at: vec(at.x, at.y), nodes,
         ...(heart ? { heart } : {}),
-        state: {}, done: false, isObjective: want.isObjective,
+        state: {}, hums: new Map(), done: false, isObjective: want.isObjective,
       };
       this.puzzles.push(run);
       kind.boot(run, host);
@@ -29875,6 +29894,7 @@ export class World {
   }
 
   private updatePuzzles(dt: number): void {
+    this.drainPuzzleKnocks();
     if (!this.puzzles.length) return;
     const host = this.puzzleHost();
     for (const run of this.puzzles) {
@@ -29882,17 +29902,55 @@ export class World {
     }
   }
 
-  /** resolveHit's route for a landed hit on a puzzle node — the WHO gate
-   *  ('player' counts the whole side: heroes, minions, mercs; 'any' lets
-   *  the zone itself play) lives here so kinds stay pure. */
-  private puzzleStruck(node: Actor, striker: Actor | null): void {
-    const pn = node.puzzleNode;
-    if (!pn) return;
-    const run = this.puzzles.find(r => r.id === pn.id);
-    if (!run || run.done || !run.kind.struck) return;
-    const who = run.spec.who ?? run.kind.who;
-    if (who === 'player' && striker?.team !== 'player') return;
-    run.kind.struck(run, node, this.puzzleHost(), striker);
+  /** resolveHit's route for a landed hit on an enrolled node — THE KNOCK
+   *  LAW: the blow QUEUES (however mitigated; `wounding` notes whether the
+   *  life bar moved, for 'wounding'-dialed runs) and the per-frame drain
+   *  judges, so the spill law and the hum see a whole blow first. */
+  private puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void {
+    if (!node.puzzleNode) return;
+    this.puzzleKnocks.push({ node, striker, t: this.time, wounding });
+  }
+
+  /** The knock queue's per-frame drain (updatePuzzles, ahead of kind
+   *  ticks). One BLOW = one group (same run, same striker, same instant):
+   *  the WHO gate ('player' counts the whole side: heroes, minions, mercs;
+   *  'any' lets the zone itself play) and the knock dial refuse first,
+   *  THE SPILL LAW collapses the group to its aimed bell, and THE HUM
+   *  swallows a just-judged node's echoes — all here, so kinds stay pure. */
+  private drainPuzzleKnocks(): void {
+    const knocks = this.puzzleKnocks;
+    if (!knocks.length) return;
+    this.puzzleKnocks = [];
+    if (!this.puzzles.length) return;
+    const groups = new Map<string, { run: PuzzleRun; striker: Actor | null; nodes: Actor[] }>();
+    for (const k of knocks) {
+      const pn = k.node.puzzleNode;
+      if (!pn || k.node.dead) continue;
+      const run = this.puzzles.find(r => r.id === pn.id);
+      if (!run || run.done || !run.kind.struck) continue;
+      if (puzzleKnockOf(run) === 'wounding' && !k.wounding) continue;
+      const who = run.spec.who ?? run.kind.who;
+      if (who === 'player' && k.striker?.team !== 'player') continue;
+      const key = `${run.id}|${k.striker?.id ?? -1}|${k.t}`;
+      let g = groups.get(key);
+      if (!g) groups.set(key, g = { run, striker: k.striker, nodes: [] });
+      if (!g.nodes.includes(k.node)) g.nodes.push(k.node);
+    }
+    for (const g of groups.values()) {
+      if (g.run.done) continue;
+      const rung = puzzleSpillOf(g.run) === 'all'
+        ? g.nodes : [pickKnockNode(g.nodes, g.striker)];
+      for (const node of rung) {
+        if ((g.run.hums.get(node.id) ?? 0) > this.time) continue;
+        // An acknowledged ring holds the ONLY hum: any other bell clears
+        // it (the structural discriminator — a legitimate return to the
+        // same node always rings another node in between).
+        g.run.hums.clear();
+        g.run.hums.set(node.id, this.time + puzzleHumOf(g.run));
+        g.run.kind.struck!(g.run, node, this.puzzleHost(), g.striker);
+        if (g.run.done) break;
+      }
+    }
   }
 
   /** The attunement fabric's listener: a tunable body's tone moved. Only
@@ -31443,6 +31501,11 @@ export class World {
         packet.amounts[t]! *= dmgMult;
       }
     }
+    // THE KNOCK LAW's tone snapshot: what STRUCK is the packet as rolled —
+    // conversions have spoken, the septic forgo below has not (the bargain
+    // rebates MAGNITUDE, never color) — so a full-forgo carrier still
+    // paints a tuned body the hue it truly carried.
+    const struckTone = target.tune ? toneOfAmounts(packet.amounts) : null;
     // THE SEPTIC BARGAIN (hitToAffliction): a fraction of the hit's BITE
     // is FORGONE — carved off the packet before it lands — and returns
     // through the damaging afflictions this hit produces, amplified by
@@ -31505,6 +31568,11 @@ export class World {
       }
       if (result.immune) {
         this.text(target.pos, 'immune', '#9ab0c8', 12);
+        // THE KNOCK LAW: the blow CONNECTED — invulnerability zeroed the
+        // wound, not the contact — so enrolled fixtures still ring and
+        // tunable bodies still take the color (the bell needn't bleed).
+        // Evades and blocks stayed refusals above: those never landed.
+        this.knockFixtures(caster, target, struckTone, false);
         return;
       }
       // THE MIMIC CAPTURE (engine/mimic.ts): a LANDED enemy art teaches a
@@ -31784,25 +31852,18 @@ export class World {
           break; // one row per landed hit — the icd's clean unit
         }
       }
-      // THE ATTUNEMENT FABRIC (MonsterDef.tune, engine/tuning.ts): the
-      // blow's dominant ROLLED type becomes the struck body's TONE —
-      // conversions already spoke (packet.amounts is post-fold), so what
-      // tunes is what truly struck. Locked bodies (the chord's heart) hold
-      // their note; unaccepted tones wash past; physical is a tone like
-      // any other, so battering an attuned crystal back to its ground
-      // state — "shattering the attunement" — is a deliberate act.
-      if (dealt > 0 && target.tune && !target.dead && !target.untargetable) {
-        const tone = toneOfAmounts(packet.amounts);
-        if (tone && tone !== target.tone
-          && !target.tune.locked && toneAccepted(target.tune, tone)) {
-          this.attuneCrystal(target, tone, caster);
-        }
-      }
-      // THE PUZZLE FABRIC (engine/puzzles.ts): a landed hit on an enrolled
-      // node plays its run — the refrain's answers, the lattice's toggles.
-      if (dealt > 0 && target.puzzleNode && !target.dead) {
-        this.puzzleStruck(target, caster);
-      }
+      // THE ATTUNEMENT + PUZZLE FABRICS ride ONE route (knockFixtures):
+      // the blow's dominant ROLLED type becomes a tuned body's TONE
+      // (conversions already spoke; struckTone read the packet PRE-forgo,
+      // so what tunes is what truly struck), and a landed hit on an
+      // enrolled node QUEUES its knock — the refrain's answers, the
+      // lattice's toggles — under THE KNOCK LAW: any landed damaging blow
+      // speaks, however mitigated (`dealt` rides along for runs dialed to
+      // 'wounding'). Locked bodies (the chord's heart) hold their note;
+      // unaccepted tones wash past; physical is a tone like any other, so
+      // battering an attuned crystal back to its ground state —
+      // "shattering the attunement" — is a deliberate act.
+      this.knockFixtures(caster, target, struckTone, dealt > 0);
       // CONTAGION (SkillDef/SupportDef.contagion): the struck victim may
       // become the next CAST SITE — after a telegraphed beat the skill (or
       // a named payload) RELEASES from the victim, attributed to the

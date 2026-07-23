@@ -20,8 +20,11 @@ import {
   attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, TUNE_CFG,
 } from '../src/engine/tuning';
 import {
-  PUZZLE_KINDS, PUZZLE_CFG, type PuzzleHost, type PuzzleRun,
+  pickKnockNode, PUZZLE_KINDS, PUZZLE_CFG, puzzleHumOf, puzzleKnockOf,
+  puzzleSpillOf, type PuzzleHost, type PuzzleRun,
 } from '../src/engine/puzzles';
+import { mod } from '../src/engine/stats';
+import { angleTo } from '../src/core/math';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -180,7 +183,7 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   const run: PuzzleRun = {
     id: 'probe_lattice#0', spec: { kind: 'lattice', grid: [3, 3] }, kind,
     at: { x: 466, y: 466 }, nodes: mkNodes('lattice_crystal', 9, 'probe_lattice#0'),
-    state: {}, done: false, isObjective: false,
+    state: {}, hums: new Map(), done: false, isObjective: false,
   };
   kind.boot(run, host);
   const lit = run.state.lit as boolean[];
@@ -213,7 +216,7 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   const run: PuzzleRun = {
     id: 'probe_refrain#0', spec: { kind: 'refrain', rounds: [3, 3], beat: 0.3 }, kind,
     at: { x: 700, y: 400 }, nodes: mkNodes('chime_crystal', 4, 'probe_refrain#0'),
-    state: {}, done: false, isObjective: false,
+    state: {}, hums: new Map(), done: false, isObjective: false,
   };
   kind.boot(run, host);
   const seq = run.state.seq as number[];
@@ -249,7 +252,7 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   const run: PuzzleRun = {
     id: 'probe_chord#0', spec: { kind: 'chord' }, kind,
     at: { x: 900, y: 400 }, nodes: mkNodes('chord_crystal', 4, 'probe_chord#0'),
-    heart: cheart, state: {}, done: false, isObjective: false,
+    heart: cheart, state: {}, hums: new Map(), done: false, isObjective: false,
   };
   kind.boot(run, host);
   check('chord: the heart\'s note is the goal', run.state.goal === 'fire');
@@ -267,7 +270,7 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   const run2: PuzzleRun = {
     id: 'probe_shatter#0', spec: { kind: 'chord', heart: false, tones: ['physical'] }, kind,
     at: { x: 1100, y: 400 }, nodes: mkNodes('chord_crystal', 3, 'probe_shatter#0'),
-    state: {}, done: false, isObjective: false,
+    state: {}, hums: new Map(), done: false, isObjective: false,
   };
   kind.boot(run2, host2);
   check('shatter: heartless chord pins the ground state as its goal',
@@ -302,6 +305,189 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   const spires = world.doodads.filter(d => d.kind === 'crystal_spire');
   check('country: the needle country raises its chorus (6+)', spires.length >= 6,
     `${spires.length} spires`);
+}
+
+// --- 4) THE ROUTING LAWS — knock, spill, hum (the resolveHit seam) ----------
+// The kinds above were unit-driven; this lane exercises World's REAL knock
+// queue and per-frame drain (private, reached the headless way) with runs
+// ENROLLED in world.puzzles — docs/engine/puzzles.md "The knock, the spill,
+// the hum".
+{
+  type WorldGuts = {
+    puzzles: PuzzleRun[];
+    puzzleHost(): PuzzleHost;
+    puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void;
+  };
+  const guts = world as unknown as WorldGuts;
+  // Remember REAL in-zone ground for the cast-driven tests at the end —
+  // projectiles need legal air; the queue-driven tests don't.
+  const home = { x: p.pos.x, y: p.pos.y };
+  // Park the hero on quiet ground far from the spires — these tests need
+  // stepping, not survival.
+  p.invulnerable = true;
+  p.pos = { x: -4000, y: -4000 };
+  const courtNodes = (defId: string, runId: string, n: number, at: Vec2, ringR: number): Actor[] => {
+    const out: Actor[] = [];
+    for (let i = 0; i < n; i++) {
+      const m = world.createMonster(defId, 8, 'enemy');
+      const ang = (i / n) * Math.PI * 2;
+      m.pos = { x: at.x + Math.cos(ang) * ringR, y: at.y + Math.sin(ang) * ringR };
+      m.puzzleNode = { id: runId, idx: i };
+      world.actors.push(m);
+      out.push(m);
+    }
+    return out;
+  };
+  const sing = (run: PuzzleRun): void => {
+    for (let guard = 0; guard < 600 && run.state.phase !== 'answer'; guard++) {
+      world.update(1 / 60);
+    }
+  };
+
+  // pickKnockNode, bare: facing decides; striker-less keeps arrival order.
+  {
+    const a = world.createMonster('chime_crystal', 8, 'enemy');
+    const b = world.createMonster('chime_crystal', 8, 'enemy');
+    a.pos = { x: p.pos.x + 80, y: p.pos.y };
+    b.pos = { x: p.pos.x - 80, y: p.pos.y };
+    p.facing = Math.PI; // facing b
+    check('spill pick: the faced bell wins', pickKnockNode([a, b], p) === b);
+    check('spill pick: a striker-less knock keeps arrival order',
+      pickKnockNode([a, b], null) === a);
+  }
+
+  // A refrain enrolled in the WORLD's ledger, all dials at their defaults.
+  const kind = PUZZLE_KINDS['refrain'];
+  const rNodes = courtNodes('chime_crystal', 'probe_route#0', 4, p.pos, 112);
+  const run: PuzzleRun = {
+    id: 'probe_route#0', spec: { kind: 'refrain', rounds: [3, 3], beat: 0.25 }, kind,
+    at: { x: p.pos.x, y: p.pos.y }, nodes: rNodes,
+    state: {}, hums: new Map(), done: false, isObjective: false,
+  };
+  kind.boot(run, guts.puzzleHost());
+  guts.puzzles.push(run);
+  check('dials: a bare spec resolves the config defaults',
+    puzzleKnockOf(run) === PUZZLE_CFG.knock && puzzleSpillOf(run) === PUZZLE_CFG.spill
+    && puzzleHumOf(run) === PUZZLE_CFG.hum);
+  sing(run);
+  check('route: the enrolled refrain plays through the WORLD tick',
+    run.state.phase === 'answer');
+  const seq = run.state.seq as number[];
+
+  // THE SPILL LAW: one blow (same striker, same instant) knocks a stray
+  // bell AND the right one — arc order even lands the stray FIRST — yet
+  // only the AIMED bell is judged: no falter.
+  const right = rNodes[seq[0]];
+  const stray = rNodes[(seq[0] + 1) % rNodes.length];
+  p.facing = angleTo(p.pos, right.pos);
+  guts.puzzleStruck(stray, p, true);
+  guts.puzzleStruck(right, p, true);
+  world.update(1 / 60);
+  check('spill: a two-bell blow rings only the AIMED bell — no falter',
+    run.state.phase === 'answer' && run.state.progress === 1,
+    `phase=${run.state.phase} progress=${run.state.progress}`);
+
+  // THE HUM: the just-judged bell swallows its own echo (a re-knock one
+  // frame later would otherwise judge as the NEXT note and falter).
+  guts.puzzleStruck(right, p, true);
+  world.update(1 / 60);
+  check('hum: the answered bell swallows its echo — progress holds',
+    run.state.phase === 'answer' && run.state.progress === 1,
+    `phase=${run.state.phase} progress=${run.state.progress}`);
+
+  // A DIFFERENT bell rings straight through — and clears the old hum, so
+  // a legitimate return (A,B,A) is legal at any speed.
+  const second = rNodes[seq[1]];
+  p.facing = angleTo(p.pos, second.pos);
+  guts.puzzleStruck(second, p, true);
+  world.update(1 / 60);
+  check('hum: a different bell rings through', run.state.progress === 2,
+    `progress=${run.state.progress}`);
+  check('hum: the ledger holds only the LAST-rung bell',
+    run.hums.size === 1 && (run.hums.get(second.id) ?? 0) > world.time);
+  const third = rNodes[seq[2]];
+  p.facing = angleTo(p.pos, third.pos);
+  guts.puzzleStruck(third, p, true);
+  world.update(1 / 60);
+  check('route: the song resolves through the world drain', run.done);
+
+  // Dialed run: spill 'all' + knock 'wounding' prove the overrides.
+  const at2 = { x: p.pos.x + 900, y: p.pos.y };
+  const rNodes2 = courtNodes('chime_crystal', 'probe_route#1', 4, at2, 112);
+  const run2: PuzzleRun = {
+    id: 'probe_route#1',
+    spec: { kind: 'refrain', rounds: [3, 3], beat: 0.25, spill: 'all', knock: 'wounding' },
+    kind, at: at2, nodes: rNodes2,
+    state: {}, hums: new Map(), done: false, isObjective: false,
+  };
+  kind.boot(run2, guts.puzzleHost());
+  guts.puzzles.push(run2);
+  check('dials: spec overrides outrank the defaults',
+    puzzleSpillOf(run2) === 'all' && puzzleKnockOf(run2) === 'wounding');
+  p.pos = { x: at2.x, y: at2.y }; // in earshot of the second court
+  sing(run2);
+  const seq2 = run2.state.seq as number[];
+  check('route: the dialed refrain reaches its answer phase',
+    run2.state.phase === 'answer');
+
+  // knock 'wounding': a bloodless landed blow is refused by the dial.
+  guts.puzzleStruck(rNodes2[seq2[0]], p, false);
+  world.update(1 / 60);
+  check("knock 'wounding': a bloodless knock is refused",
+    run2.state.phase === 'answer' && run2.state.progress === 0);
+
+  // spill 'all': the fan-out keeps every bell — a TRULY stray note (never
+  // the current answer, never the next) falters the song.
+  const strayIdx2 = [0, 1, 2, 3].find(i => i !== seq2[0] && i !== seq2[1])!;
+  p.facing = angleTo(p.pos, rNodes2[seq2[0]].pos);
+  guts.puzzleStruck(rNodes2[seq2[0]], p, true);
+  guts.puzzleStruck(rNodes2[strayIdx2], p, true);
+  world.update(1 / 60);
+  check("spill 'all': every bell of the blow is judged — the stray falters",
+    run2.state.phase === 'play', `phase=${run2.state.phase}`);
+
+  // THE WHO GATE survives the queue: an enemy's knock never plays.
+  sing(run2);
+  const foe = world.createMonster('zombie', 8, 'enemy');
+  foe.pos = { x: at2.x, y: at2.y };
+  world.actors.push(foe);
+  guts.puzzleStruck(rNodes2[(seq2[0] + 1) % 4], foe, true);
+  world.update(1 / 60);
+  check('who gate: an enemy knock is refused at the drain',
+    run2.state.phase === 'answer' && run2.state.progress === 0,
+    `phase=${run2.state.phase} progress=${run2.state.progress}`);
+
+  // THE KNOCK LAW end to end: a FULL-FORGO hit (hitToAffliction 1 — the
+  // septic carrier, dealt 0) still presses an enrolled board and still
+  // PAINTS a tuned voice, through the real resolveHit — on REAL in-zone
+  // ground (a bolt into the void never lands).
+  const at3 = { x: home.x, y: home.y + 140 };
+  const lNodes = courtNodes('lattice_crystal', 'probe_route#2', 9, at3, 90);
+  const lkind = PUZZLE_KINDS['lattice'];
+  const lrun: PuzzleRun = {
+    id: 'probe_route#2', spec: { kind: 'lattice', grid: [3, 3] }, kind: lkind,
+    at: at3, nodes: lNodes,
+    state: {}, hums: new Map(), done: false, isObjective: false,
+  };
+  lkind.boot(lrun, guts.puzzleHost());
+  guts.puzzles.push(lrun);
+  p.sheet.setSource('probe_septic', [mod('hitToAffliction', 'flat', 1)]);
+  const cell = lNodes[0];
+  const before = (lrun.state.lit as boolean[]).join('');
+  p.pos = { x: cell.pos.x - 60, y: cell.pos.y };
+  cast('firebolt', cell.pos);
+  const after = (lrun.state.lit as boolean[]).join('');
+  check('knock law: a full-forgo hit still presses the board', before !== after,
+    `lit ${before} -> ${after}`);
+  const septicVoice = world.createMonster('resonant_crystal', 8, 'enemy');
+  septicVoice.pos = { x: p.pos.x + 70, y: p.pos.y - 40 };
+  world.actors.push(septicVoice);
+  step(0.1);
+  cast('firebolt', septicVoice.pos);
+  check('knock law: the full-forgo carrier still paints a tuned voice',
+    septicVoice.tone === 'fire', `tone=${septicVoice.tone}`);
+  p.sheet.removeSource('probe_septic');
+  p.invulnerable = false;
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
