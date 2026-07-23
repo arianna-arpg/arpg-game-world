@@ -673,7 +673,25 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'The counters\' shuttered gem case opens — every market stocks skill gems behind glass, account-wide. Support gems and the deeper counter services grow from here.',
     payload: { flag: FEATURE.VENDOR_GEMS } },
   { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 1, requiresUnlock: 'feat_vendor_gems', label: 'Gem Counter: Supports', description: 'The gem case also stocks support gems.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
-  { id: 'feat_brandt_restock',  kind: 'feature', cost: 100, reqLevel: 1, label: 'Brandt: Rush Order',   description: 'Brandt restocks every 15s instead of 30s.',            payload: { flag: FEATURE.BRANDT_FAST_RESTOCK } },
+  // THE RUSH LADDER — derived from VENDOR_CFG.restock.ladder (the beat law's
+  // own home): each rung CUTS the counters' restock beat by its row's
+  // seconds. Rung 1 keeps the legacy brandt_fast_restock flag (the old 15s
+  // rush's owners keep their edge in the five-minute economy) and chains
+  // off the Salvage Station — no point rushing a counter you cannot buy
+  // from; later rungs chain rung-to-rung. Descriptions COMPUTE the honest
+  // before/after from the config itself.
+  ...VENDOR_CFG.restock.ladder.map((rung, i): Unlockable => {
+    const before: number = VENDOR_CFG.restock.ladder.slice(0, i)
+      .reduce((s: number, r) => Math.max(VENDOR_CFG.restock.minSec, s - r.cutSec), VENDOR_CFG.restock.baseSec as number);
+    const after = Math.max(VENDOR_CFG.restock.minSec, before - rung.cutSec);
+    return {
+      id: `feat_vendor_restock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
+      requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_restock_${i}`,
+      label: `Rush Order ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
+      description: `Every counter restocks in ${Math.round(after / 60 * 10) / 10} minutes instead of ${Math.round(before / 60 * 10) / 10} — one purchase, every market.`,
+      payload: { flag: rung.flag },
+    };
+  }),
   // Mireille's care, in sequence: life heal, then mana heal, then an XP buff —
   // each surfaces once the previous is owned (a town pitstop that grows).
   { id: 'feat_mireille_life',  kind: 'feature', cost: 40,  reqLevel: 0, label: 'Mireille: Field Care',     description: 'Mireille restores your LIFE when you linger near her.',  payload: { flag: FEATURE.MIREILLE_HEAL_LIFE } },

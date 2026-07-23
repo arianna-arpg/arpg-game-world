@@ -128,7 +128,7 @@ import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from '../quests/types';
-import { Rng, rollSeed } from '../core/rng';
+import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
@@ -1552,11 +1552,15 @@ export interface VendorHoldRow {
 
 /** One counter's persisted hold (WorldStateSave.vendorHolds, the muster-roll
  *  law's shape: STATE, not weather): the reserved rows, the standing gem
- *  commission, and the highest restock beat the order has resolved through. */
+ *  commission, and THE WALL-TIME ANCHOR — the world-clock SECONDS the
+ *  order's watch has resolved through (never a beat index: a rush-rung
+ *  purchase re-buckets elapsed time under the new cadence honestly, so a
+ *  cadence change can neither mint phantom catchup beats nor re-open
+ *  resolved time — time only runs forward). */
 export interface VendorHold {
   locks: VendorHoldRow[];
   commission?: { kind: 'skill' | 'support'; id: string };
-  ordinal: number;
+  watchedSec: number;
 }
 
 // --- the world ---------------------------------------------------------------
@@ -3091,6 +3095,16 @@ export class World {
   readonly account: Account;
   /** World-clock time (seconds) at which Brandt next restocks (town only). */
   vendorRestockAt = 0;
+  /** THE STANDING SHELF: which BEAT each counter's stock was last armed at
+   *  (key = hold key). Within one beat the projection is the beat's whole
+   *  truth — zone hops keep it verbatim (splices included), and only a
+   *  turned beat (or a fresh world) re-arms. Never persisted: a reload
+   *  re-arms from the SAME per-beat seed and meets the same shelf. */
+  private vendorArmedBeat: Record<string, number> = {};
+  /** loadZone latch: a counter NPC (vendor/chandler) stands in THIS zone —
+   *  the restock tick's gate (a standing shelf elsewhere waits frozen for
+   *  the return arm; no ghost restocks in the wilds). */
+  private zoneHasVendorCounter = false;
   /** THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG): per-counter reserved
    *  rows + the standing commission, keyed by the counter's hold key
    *  (VendorDef.holdKey ?? id). Persisted in WorldStateSave.vendorHolds;
@@ -4732,16 +4746,31 @@ export class World {
       c.pos = this.clampPos(vec(n.pos.x, n.pos.y), c.radius);
       this.actors.push(c);
     }
-    // Where there's a smith, there's a stock — armed on a restock timer that
-    // ticks on the world clock in update(), not on re-entering town. The arm
-    // resolves THE STANDING ORDER's away beats and re-seats reserved rows
-    // (the hold outlives the stock array by design).
+    // Where there's a smith, there's a stock — armed on THE BEAT LAW's
+    // lattice (floor(time / restockSeconds)): the shelf is a pure function
+    // of (world seed, counter, beat), so within one beat the counter keeps
+    // the SAME wares across zone hops and reloads — leaving town sheds
+    // nothing, re-entering re-rolls nothing, and the countdown shows the
+    // true remainder of the CURRENT beat, never a fresh full clock. A
+    // TURNED beat (or a fresh world) arms anew, resolving THE STANDING
+    // ORDER's away beats and re-seating reserved rows (the hold outlives
+    // the stock array by design). Sold-out stays sold-out until the beat
+    // turns — the wait IS the scarcity.
+    this.zoneHasVendorCounter = layout.npcs.some(n => {
+      const role = MONSTERS[n.id]?.npcRole;
+      return role === 'vendor' || role === 'chandler';
+    });
     if (layout.npcs.some(n => MONSTERS[n.id]?.npcRole === 'vendor')) {
-      this.vendorStock = this.armVendorStock('brandt');
-      this.vendorRestockAt = this.time + this.restockSeconds();
-    } else {
-      this.vendorStock = [];
-      this.vendorRestockAt = 0;
+      const beat = this.restockOrdinal();
+      if (this.vendorArmedBeat['brandt'] !== beat) {
+        this.vendorStock = this.armVendorStock('brandt');
+        this.vendorArmedBeat['brandt'] = beat;
+      } else {
+        // Same beat, standing stock: just re-anchor held rows (free, and
+        // keeps the seat law self-healing across any splice).
+        this.syncHoldIdx('brandt', this.vendorStock);
+      }
+      this.vendorRestockAt = (beat + 1) * this.restockSeconds();
     }
 
     // Population: the objective decides who's waiting. Open the Zone Memory
@@ -13329,6 +13358,14 @@ export class World {
     // tolerance doctrine: a hold row whose gem left the registry drops, a
     // site-scoped hold drops with its ground, nothing rerolls here).
     this.vendorHolds = this.rebuildVendorHolds(sanitizeVendorHolds(ws.vendorHolds, healed));
+    // …and THE STANDING SHELF yields to what stood back up: the armed-beat
+    // memory clears, so the next zone arm re-deals this beat's shelf WITH
+    // the restored reservations seated. (The world CONSTRUCTS into town —
+    // its boot arm ran before this save's holds existed; same beat, same
+    // seed, same wares, but the overlay must run again to seat the rows.
+    // A same-beat re-arm re-deals the identical seeded shelf, so this can
+    // never become a re-roll lever.)
+    this.vendorArmedBeat = {};
     // Objective clears survive only for ground that actually persisted: event
     // overlays re-seed DETERMINISTICALLY (same run seed ⇒ same crusade/demon
     // zone keys), so a stale clear-key would pre-clear the freshly re-rolled
@@ -18170,14 +18207,21 @@ export class World {
         this.markDoodadsChanged();
       }
     }
-    // THE CHANDLER'S COUNTER: its OWN stock + the shared restock clock
+    // THE CHANDLER'S COUNTER: its OWN stock on the shared beat lattice
     // (VendorDef row 'chandler' + the buyChandler intent — a real second
-    // counter, not Brandt's shadow).
+    // counter, not Brandt's shadow). The standing-shelf law verbatim:
+    // same beat keeps the projection, a turned beat re-arms; standing
+    // down no longer sheds the array (the beat owns its truth).
     if (wants.has('chandler')) {
-      if (!this.chandlerStock.length) this.chandlerStock = this.armVendorStock('chandler');
-      if (!this.vendorRestockAt) this.vendorRestockAt = this.time + this.restockSeconds();
-    } else if (this.chandlerStock.length) {
-      this.chandlerStock = [];
+      const beat = this.restockOrdinal();
+      if (this.vendorArmedBeat['chandler'] !== beat) {
+        this.chandlerStock = this.armVendorStock('chandler');
+        this.vendorArmedBeat['chandler'] = beat;
+      } else {
+        this.syncHoldIdx('chandler', this.chandlerStock);
+      }
+      this.zoneHasVendorCounter = true;
+      this.vendorRestockAt = (beat + 1) * this.restockSeconds();
     }
   }
 
@@ -34603,8 +34647,18 @@ export class World {
   private vendorSize(): number {
     return VENDOR_CFG.wares.baseGems + this.waresBonus().gems;
   }
+  /** THE BEAT LAW's quantum: the base beat cut by every owned RUSH rung
+   *  (VENDOR_CFG.restock.ladder), floored at minSec. Feeds the lattice
+   *  (restockOrdinal), the live mark, the per-beat shelf seed and the
+   *  standing order's catchup alike — ONE clock, no drift possible. A rung
+   *  bought mid-run re-buckets the watch honestly (VendorHold.watchedSec
+   *  anchors on SECONDS, never stored beat indices). */
   private restockSeconds(): number {
-    return featureEnabled(this.account, FEATURE.BRANDT_FAST_RESTOCK) ? 15 : 30;
+    let sec: number = VENDOR_CFG.restock.baseSec;
+    for (const r of VENDOR_CFG.restock.ladder) {
+      if (featureEnabled(this.account, r.flag)) sec -= r.cutSec;
+    }
+    return Math.max(VENDOR_CFG.restock.minSec, sec);
   }
 
   /** THE TRADE GATE (VENDOR_CFG.trade) — why this seat cannot BUY here, or
@@ -34696,7 +34750,7 @@ export class World {
   }
 
   private vendorHoldFor(key: string): VendorHold {
-    return this.vendorHolds[key] ??= { locks: [], ordinal: this.restockOrdinal() };
+    return this.vendorHolds[key] ??= { locks: [], watchedSec: this.time };
   }
 
   /** The reserved row a live stock entry belongs to, if any — object
@@ -34742,7 +34796,17 @@ export class World {
    *  Every arm site and the restock walk through here — one builder. */
   armVendorStock(key: string): VendorEntry[] {
     this.resolveCommission(key);
-    return this.overlayHold(key, this.buildVendorStock());
+    // THE FOREORDAINED SHELF: the whole roll runs on a stream seeded
+    // (world seed, counter, beat) — the commission resolver's own doctrine
+    // widened to the ordinary wares, borrowed via the off-stream swap
+    // (core/rng.ts withSeededRandom) so no other system's die ever moves.
+    // Within one beat the counter deals ONE truth: re-entering, reloading,
+    // or peeking twice meets the same shelf — scumming a re-roll means
+    // WAITING for the beat to turn. (Live params still fold honestly: a
+    // level-up or borough swell mid-beat changes what a FRESH arm rolls,
+    // but the standing-shelf law means mid-beat re-arms don't happen.)
+    const seed = (this.manifest.seed ^ hashStr(`vendorshelf:${key}:${this.restockOrdinal()}`)) >>> 0;
+    return this.overlayHold(key, withSeededRandom(seed, () => this.buildVendorStock()));
   }
 
   /** Roll a fresh counter: skill gems, support gems once that's unlocked —
@@ -34783,20 +34847,30 @@ export class World {
     return out;
   }
 
-  /** Restock now and arm the next restock on the world clock. The CHANDLER's
-   *  counter (a harborhold service) restocks on the same beat when one
-   *  stands — one clock, every counter. Reserved rows ride through; only
-   *  free slots re-roll. */
+  /** Restock now and arm the next restock at the next BEAT BOUNDARY —
+   *  (beat+1) × sec, never time + sec, so the live mark, the panel
+   *  countdown and the standing order's lattice are the SAME clock (phase
+   *  zero, no drift). Each counter restocks only where its keeper actually
+   *  STANDS (no ghost re-rolls, no floating text in a counterless zone;
+   *  the chandler restocks on its own presence, never as Brandt's shadow).
+   *  Reserved rows ride through; only free slots re-roll. */
   restockVendor(): void {
-    this.syncHoldIdx('brandt', this.vendorStock);
-    this.vendorStock = this.armVendorStock('brandt');
-    this.vendorRestockAt = this.time + this.restockSeconds();
-    const smith = this.actors.find(a => this.hasNpcRole(a, 'vendor'));
-    this.text(smith?.pos ?? this.player.pos, `${smith?.name ?? 'The vendor'} restocks the wares.`, '#e8c87a', 13);
-    if (this.chandlerStock.length && this.actors.some(a => this.hasNpcRole(a, 'chandler') && !a.dead)) {
+    const beat = this.restockOrdinal();
+    const smith = this.actors.find(a => this.hasNpcRole(a, 'vendor') && !a.dead);
+    if (smith) {
+      this.syncHoldIdx('brandt', this.vendorStock);
+      this.vendorStock = this.armVendorStock('brandt');
+      this.vendorArmedBeat['brandt'] = beat;
+      this.text(smith.pos, `${smith.name ?? 'The vendor'} restocks the wares.`, '#e8c87a', 13);
+    }
+    const chandler = this.actors.find(a => this.hasNpcRole(a, 'chandler') && !a.dead);
+    if (chandler) {
       this.syncHoldIdx('chandler', this.chandlerStock);
       this.chandlerStock = this.armVendorStock('chandler');
+      this.vendorArmedBeat['chandler'] = beat;
+      if (!smith) this.text(chandler.pos, `${chandler.name ?? 'The chandler'} restocks the wares.`, '#c8b06e', 13);
     }
+    this.vendorRestockAt = (beat + 1) * this.restockSeconds();
   }
 
   /** THE STANDING ORDER — resolve every restock beat since the counter last
@@ -34812,12 +34886,19 @@ export class World {
   private resolveCommission(key: string): void {
     const hold = this.vendorHolds[key];
     if (!hold) return;
-    const now = this.restockOrdinal();
     const c = hold.commission;
-    if (!c || hold.locks.some(r => r.commission)) { hold.ordinal = now; return; }
-    const from = Math.max(hold.ordinal + 1, now - VENDOR_CFG.commission.maxCatchup);
+    if (!c || hold.locks.some(r => r.commission)) { hold.watchedSec = this.time; return; }
+    // THE WALL-TIME ANCHOR: beats to resolve = the lattice indices whose
+    // spans END inside (watchedSec, now] under the CURRENT quantum. The
+    // watch remembers seconds, never beat indices — a rush rung bought
+    // mid-run re-buckets already-watched time under the new cadence
+    // honestly: no phantom catchup burst, no re-opened beats, whichever
+    // way the quantum moves (time only runs forward).
+    const sec = this.restockSeconds();
+    const nowBeat = Math.floor(this.time / sec);
+    const from = Math.max(Math.floor(hold.watchedSec / sec) + 1, nowBeat - VENDOR_CFG.commission.maxCatchup);
     const p = this.commissionOdds(c);
-    for (let o = from; o <= now && p > 0; o++) {
+    for (let o = from; o <= nowBeat && p > 0; o++) {
       const rng = new Rng((this.manifest.seed ^ hashStr(`vendorhold:${key}:${c.kind}:${c.id}:${o}`)) >>> 0);
       if (rng.next() >= p) continue;
       const entry = this.mintCommissionEntry(c, rng);
@@ -34829,7 +34910,7 @@ export class World {
       this.charDirty = true;
       break;
     }
-    hold.ordinal = now;
+    hold.watchedSec = this.time;
   }
 
   /** P(one restock beat surfaces the gem): the slot's kind share × the gem's
@@ -34957,7 +35038,7 @@ export class World {
     }
     hold.commission = { kind: gem.kind, id: gem.id };
     hold.locks = hold.locks.filter(r => !r.commission);
-    hold.ordinal = this.restockOrdinal(); // the watch starts NOW — no retroactive beats
+    hold.watchedSec = this.time; // the watch starts NOW — no retroactive beats
     this.charDirty = true;
     this.text(seat.actor.pos, `standing order: ${def.name}`, '#e8c87a', 13);
     return true;
@@ -35002,7 +35083,7 @@ export class World {
           ...(r.commission ? { commission: true as const } : {}),
         })),
         ...(hold.commission ? { commission: { ...hold.commission } } : {}),
-        ordinal: hold.ordinal,
+        watchedSec: hold.watchedSec,
       };
     }
     return Object.keys(out).length ? out : undefined;
@@ -35022,9 +35103,12 @@ export class World {
       out[key] = {
         locks,
         ...(h.commission ? { commission: { ...h.commission } } : {}),
-        // Absent ordinal (a foreign/hand-edited save): the watch starts at
-        // the CURRENT beat — never a retroactive windfall.
-        ordinal: h.ordinal ?? this.restockOrdinal(),
+        // Wall-time anchor preferred; a LEGACY beat index converts under
+        // the current quantum (approximate, tolerant); absent both (a
+        // foreign/hand-edited save) the watch starts NOW — never a
+        // retroactive windfall.
+        watchedSec: h.watchedSec
+          ?? (h.ordinal !== undefined ? h.ordinal * this.restockSeconds() : this.time),
       };
     }
     return out;
@@ -35059,10 +35143,14 @@ export class World {
    *  per-port flavor is a queued lean on the builder's tables). */
   chandlerStock: VendorEntry[] = [];
 
-  /** Is this seat at the chandler's counter? (The VendorDef row's gate.) */
+  /** Is this seat at the chandler's counter? (The VendorDef row's gate.)
+   *  Reach rides the role ruleset (THE COUNTER LAW: a roofed chandler
+   *  serves under the quay house's own roof; an open-air one degrades to
+   *  sight by the mode's law). */
   nearChandler(seat: Seat = this.localSeat): boolean {
     const c = this.actors.find(a => this.hasNpcRole(a, 'chandler') && !a.dead);
-    return !!c && dist(seat.actor.pos, c.pos) <= 96 && this.dwellReachable(seat.actor.pos, c.pos);
+    return !!c && dist(seat.actor.pos, c.pos) <= 96
+      && this.dwellReachable(seat.actor.pos, c.pos, npcDwellReach('chandler'));
   }
 
   /** Buy one of the chandler's wares — buyVendorGem's exact contract on the
@@ -35201,7 +35289,12 @@ export class World {
     if (this.mireilleXpBuff > 0) this.mireilleXpBuff = Math.max(0, this.mireilleXpBuff - dt);
 
     // Brandt restocks on the world clock (town only — stock is empty elsewhere).
-    if (this.vendorStock.length > 0 && this.time >= this.vendorRestockAt) this.restockVendor();
+    // THE BEAT LAW's live edge: only where a counter NPC actually stands
+    // (the loadZone latch — a standing shelf elsewhere waits frozen for the
+    // return arm) and never on a NET client (the host's snapshot is the
+    // client's whole truth; accounts may even disagree on the quantum).
+    if (this.zoneHasVendorCounter && !this.clientActionHook
+      && this.vendorRestockAt > 0 && this.time >= this.vendorRestockAt) this.restockVendor();
 
     // Mireille heals you for lingering near her (proximity, not a keypress).
     this.updateMireille(dt);

@@ -205,8 +205,14 @@ export interface VendorHoldSave {
   locks: VendorHoldRowSave[];
   /** THE STANDING ORDER: the pre-selected gem the counter watches for. */
   commission?: { kind: 'skill' | 'support'; id: string };
-  /** Highest restock beat (floor(worldTime / restockSeconds)) the order has
-   *  resolved through — the away-catchup resumes exactly here. */
+  /** THE WALL-TIME ANCHOR: world-clock seconds the watch has resolved
+   *  through — the away-catchup resumes exactly here, re-bucketed under
+   *  whatever restock quantum the account owns at load (a rush rung bought
+   *  between sessions can neither mint phantom beats nor re-open time). */
+  watchedSec?: number;
+  /** LEGACY (pre-beat-law saves): a beat index under the then-current
+   *  quantum. The rebuild converts it approximately (× the live quantum);
+   *  new saves never write it. */
   ordinal?: number;
 }
 
@@ -433,6 +439,7 @@ export function sanitizeVendorHolds(
     out[key] = {
       locks,
       ...(commission ? { commission } : {}),
+      ...(isFiniteNum(hold.watchedSec) ? { watchedSec: Math.max(0, hold.watchedSec) } : {}),
       ...(isFiniteNum(hold.ordinal) ? { ordinal: Math.max(0, Math.floor(hold.ordinal)) } : {}),
     };
   }

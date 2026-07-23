@@ -58,6 +58,33 @@ ledger unstamped.
   capability data. Brandt and the chandler wear both; the delver's
   per-descent shelf opts out by wearing neither.
 
+## The beat law + the standing shelf (2026-07-22)
+
+**One clock.** `restockSeconds()` = `VENDOR_CFG.restock.baseSec` (300) minus
+every owned RUSH rung's `cutSec` (`restock.ladder` — rung 1 wears the legacy
+`brandt_fast_restock` flag; catalog rows "Rush Order I/II" are DERIVED, with
+before/after copy computed from the config), floored at `minSec`. Everything
+reads the lattice `floor(worldTime / sec)`: the live mark is always the next
+BOUNDARY (`(beat+1) × sec` — never `time + sec`, so the countdown, the tick
+and the commission's beats can never drift apart), the tick fires only where
+a counter NPC actually stands (the loadZone latch; never on a NET client),
+and each counter restocks on its own keeper's presence (the chandler is
+nobody's shadow). The panel face formats m:ss (`fmtRestock`).
+
+**THE FOREORDAINED SHELF.** `armVendorStock` rolls the whole shelf on a
+stream seeded `worldSeed ^ hash('vendorshelf:<key>:<beat>')` via the
+off-stream swap (`core/rng.ts withSeededRandom` — borrowed and returned, no
+other system's die moves): the shelf is a pure function of (seed, counter,
+beat). **THE STANDING SHELF:** stock arrays survive zone hops — loadZone
+re-arms only when the beat TURNED (`vendorArmedBeat`), so re-entering town
+mid-beat keeps the very array (purchases stay spliced, the countdown shows
+the true remainder), reloading re-deals the identical shelf from the seed,
+and re-roll scumming means WAITING for the beat. Sold-out stays sold-out
+until the beat turns — the wait is the scarcity. `adoptWorldState` clears
+the armed-beat memory after holds rebuild (the world CONSTRUCTS into town;
+its boot arm ran before the save's holds existed — the re-arm re-deals the
+same seeded wares WITH the reservations seated).
+
 ## The standing order (commission)
 
 One pre-selected gem per counter, watched for across restocks — including
@@ -69,10 +96,13 @@ every restock that *would have happened* while you were away.
   mints), and rollable at this counter (`commissionOdds > 0` — an
   out-of-bracket or not-yet-sold gem refuses WITH its reason, never a
   silently dead order).
-- **The beat lattice**: `restockOrdinal() = floor(worldTime /
-  restockSeconds())` — pure f(time), so beats that passed unattended are
-  countable at any later arm and a resolved beat never comes around again
-  (`hold.ordinal` advances; `maxCatchup` bounds the loop).
+- **The beat lattice + THE WALL-TIME ANCHOR**: beats to resolve are the
+  lattice indices whose spans end inside `(hold.watchedSec, now]` under the
+  CURRENT quantum (`maxCatchup` bounds the loop). The watch remembers
+  SECONDS, never beat indices — a rush rung bought mid-run re-buckets
+  already-watched time honestly: no phantom catchup burst, no re-opened
+  beats, whichever way the quantum moves. (Legacy saves' `ordinal` converts
+  once, approximately, at rebuild.)
 - **The odds law**: `commissionOdds` reads the SAME pool + weights the
   roller draws (`skillDropPool`/`supportDropPool` + `gemWeights` — split
   from `pickGem` precisely so no parallel formula can drift), folds the
@@ -225,3 +255,13 @@ whole, and the search box's focus + caret ride through every rebuild.
 - **A tab-less future counter** (maps, consumables…): extend
   `VendorTabSpec.id`, seat the face in `refreshVendor`'s body switch, list
   it in the def's `tabs`.
+- **A third rush rung**: append `{ flag, cost, cutSec }` to
+  `VENDOR_CFG.restock.ladder` + the flag in `FEATURE` — the catalog row,
+  its computed copy, the quantum fold and the wall-time watch all follow
+  (minSec floors the ladder however far it grows).
+- **THE COUNTER LAW (dwell)**: vendor/chandler/delver roles read `'roof'`
+  reach (`data/transit.ts DWELL_CFG.npcReach` → `dwellReachable`): a roofed
+  counter serves only patrons under the SAME `PlacedStructure` roof —
+  crossing the smithy's open apron no longer rings the till — while an
+  open-air counter (the delver's camp) degrades to 'sight' by the mode's
+  own law. Un-list a role to restore plain sight-reach.

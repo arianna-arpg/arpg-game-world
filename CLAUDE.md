@@ -736,6 +736,26 @@ changes.
   shelf opts out of everything by data (gems-only tabs, tradeGate false).
   Co-op: THE KEEPER'S GATE — all three read the world-keeper's account,
   mirrored to clients via snapshot verdict bits.
+  THE BEAT LAW (2026-07-22): ONE counter clock — restockSeconds() =
+  VENDOR_CFG.restock.baseSec (300) − owned RUSH rungs (derived "Rush Order"
+  rows; legacy brandt_fast_restock = rung 1), floored at minSec; the live
+  mark always sits on the lattice boundary ((beat+1)×sec — countdown, tick
+  and commission beats can never drift), the tick fires only where a
+  counter NPC stands, the panel face reads m:ss (fmtRestock). THE
+  FOREORDAINED SHELF: armVendorStock rolls under withSeededRandom
+  (core/rng.ts — swap-and-restore, no other stream moves) seeded
+  (worldSeed, counter, beat) and THE STANDING SHELF keeps stock arrays
+  alive across zone hops (re-arm only on a TURNED beat, vendorArmedBeat;
+  adoptWorldState clears the memory so restored holds re-seat) — re-entry
+  and reload meet the SAME shelf, purchases stay spliced, re-roll scumming
+  means waiting out the beat. THE WALL-TIME ANCHOR: the standing order's
+  watch remembers VendorHold.watchedSec (seconds, never beat indices) so a
+  rush rung bought mid-run re-buckets honestly — no phantom catchup, no
+  re-opened beats (legacy ordinal converts once at rebuild). THE COUNTER
+  LAW (dwell): vendor/chandler/delver roles read 'roof' reach
+  (DWELL_CFG.npcReach → dwellReachable): a roofed counter serves only
+  under its OWN roof (Brandt's open apron no longer auto-opens the panel);
+  open-air counters degrade to 'sight' by the mode's law.
   THE GATEWORK (meta/gates.ts — the unlocks OF the unlocks as data): an
   open avenue vocabulary (GateRow: ledger / ledgerPrefix / unlock /
   feature / level / vocation / quest sugars) composed any-of or all-of;

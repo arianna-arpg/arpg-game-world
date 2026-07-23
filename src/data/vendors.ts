@@ -59,6 +59,24 @@ export const VENDOR_CFG = {
    *  behavior, verbatim). World DROPS never read this — it brackets only
    *  the shelves and THE STANDING ORDER's odds (one bracket, one truth). */
   gemBracket: 'shopper' as 'shopper' | 'zone',
+  /** THE BEAT LAW — the counters' one clock. Restocks land on the lattice
+   *  floor(worldTime / restockSeconds()): the panel countdown, the live
+   *  re-roll, the standing order's away-resolution and the shelf's own
+   *  seed all read the SAME beat — no second clock to drift against.
+   *  baseSec is deliberately unhurried (a restock should be an EVENT the
+   *  player plans around, never background noise); the RUSH ladder below
+   *  shortens the beat per owned rung, floored at minSec whatever the
+   *  ladder grows to. unlocks.ts DERIVES the catalog rows (Rush Order
+   *  I/II — rung 1 wears the LEGACY brandt_fast_restock flag, so accounts
+   *  that bought the old 15s rush keep their edge in the new economy). */
+  restock: {
+    baseSec: 300,
+    minSec: 60,
+    ladder: [
+      { flag: FEATURE.BRANDT_FAST_RESTOCK, cost: 100, cutSec: 60 },
+      { flag: FEATURE.VENDOR_RESTOCK_2, cost: 220, cutSec: 60 },
+    ] as readonly { flag: string; cost: number; cutSec: number }[],
+  },
   /** The support-gem share of each gem slot once Brandt sells supports
    *  (FEATURE.BRANDT_SELL_SUPPORTS) — the shelf builder's roll AND the
    *  standing order's odds read this ONE number (they can never disagree). */
@@ -197,6 +215,13 @@ export interface VendorDef {
   holdKey?(w: World): string;
 }
 
+/** The countdown's clock face — m:ss above a minute, bare seconds below.
+ *  ONE formatter: both counter headlines and any future clock read it. */
+export function fmtRestock(sec: number): string {
+  const s = Math.max(0, Math.ceil(sec));
+  return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : `${s}s`;
+}
+
 export const VENDORS: VendorDef[] = [
   {
     id: 'brandt', label: "BRANDT'S WARES", accent: '#e8c87a', bg: 'rgba(232,200,122,0.05)',
@@ -208,7 +233,7 @@ export const VENDORS: VendorDef[] = [
     // account owns the Salvage Station: one Vault purchase opens both doors.
     salvage: w => w.salvageUnlocked(),
     salvageLocked: 'Brandt eyes your scrap, shrugs — the Vault\'s SALVAGE STATION would teach him its worth.',
-    headline: w => `restock ${Math.max(0, Math.ceil(w.vendorRestockAt - w.time))}s`,
+    headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}`,
     holds: { locks: true, commission: true },
   },
   {
@@ -220,7 +245,7 @@ export const VENDORS: VendorDef[] = [
     stock: w => w.chandlerStock,
     priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyChandler',
-    headline: w => `restock ${Math.max(0, Math.ceil(w.vendorRestockAt - w.time))}s`,
+    headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}`,
     holds: { locks: true, commission: true },
   },
   {

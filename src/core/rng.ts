@@ -60,3 +60,23 @@ export class Rng {
 export function rollSeed(): number {
   return (Math.random() * 4294967296) >>> 0;
 }
+
+/** Run `fn` with Math.random SWAPPED for a seeded mulberry32 stream, then
+ *  restore the true die — whatever happens (try/finally). THE OFF-STREAM
+ *  LAW: a system whose rolls must be a pure function of a seed (the
+ *  counters' per-beat shelves; the sim harness) borrows the global die for
+ *  exactly its own span and hands it back untouched, so no other system's
+ *  stream ever shifts under it (the reseed-per-world trap, made
+ *  structurally impossible at this seam). Helpers that read Math.random
+ *  transitively (rand/randInt/chance/pick, the item roller) all follow the
+ *  swap for free — no rng threading through their signatures. */
+export function withSeededRandom<T>(seed: number, fn: () => T): T {
+  const rng = new Rng(seed);
+  const real = Math.random;
+  Math.random = () => rng.next();
+  try {
+    return fn();
+  } finally {
+    Math.random = real;
+  }
+}

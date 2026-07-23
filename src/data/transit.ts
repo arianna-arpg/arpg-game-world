@@ -63,8 +63,19 @@ export const DWELL_CFG = {
   sightSlack: 20,
   /** Per-npcRole reach overrides for the NPC/site dwells that tune outside
    *  the transit rows. The innkeep serves UNDER HER ROOF — you dwell her
-   *  counter from inside the inn, never through its wall. */
-  npcReach: { innkeep: 'roof' } as Record<string, DwellReach | undefined>,
+   *  counter from inside the inn, never through its wall. THE COUNTER LAW
+   *  (2026-07-22): every trading counter serves the same way — a roofed
+   *  vendor deals only to patrons standing under the SAME roof (crossing
+   *  the smithy's apron no longer rings the till), while an OPEN-AIR
+   *  counter (the delver's descent camp, a future courtyard stall)
+   *  degrades to 'sight' by the mode's own law — walls still block, the
+   *  open sky never does. Un-list a role to restore plain sight-reach. */
+  npcReach: {
+    innkeep: 'roof',
+    vendor: 'roof',
+    chandler: 'roof',
+    delver: 'roof',
+  } as Record<string, DwellReach | undefined>,
 };
 
 /** Reach for an npcRole-bound dwell (Mireille's counter, the smith's stock…). */

@@ -63,7 +63,9 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 
 bootSimEngine();
 
-const RESTOCK_SEC = 30; // no BRANDT_FAST_RESTOCK granted anywhere below
+// THE BEAT LAW's base quantum, read from the config's own home — no rush
+// rung is granted anywhere below except rig G's ladder checks.
+const RESTOCK_SEC: number = VENDOR_CFG.restock.baseSec;
 const need = VENDOR_CFG.commission.need;
 const rungs = VENDOR_CFG.lock.ladder;
 
@@ -71,7 +73,9 @@ const rungs = VENDOR_CFG.lock.ladder;
 const parkAtSmith = (w: World): void => {
   const smith = w.actors.find(a => !a.dead && a.defId && MONSTERS[a.defId]?.npcRole === 'vendor');
   if (!smith) throw new Error('no smith in town');
-  w.player.pos.x = smith.pos.x + 40;
+  // Ten px off her elbow — INSIDE the smithy's roof (THE COUNTER LAW: a
+  // roofed vendor serves only under her own roof; rig H walks the apron).
+  w.player.pos.x = smith.pos.x + 10;
   w.player.pos.y = smith.pos.y;
 };
 const enterTown = (w: World): void => { w.loadZone(START_ZONE); parkAtSmith(w); };
@@ -129,10 +133,10 @@ check('A: the released slot re-rolls; the standing reserve rides on',
   && wA.vendorHolds.brandt.locks.length === 1);
 
 leaveTown(wA);
-check('A: leaving town empties the shelf but never the hold',
-  wA.vendorStock.length === 0 && wA.vendorHolds.brandt.locks.length === 1);
+check('A: THE STANDING SHELF — leaving town sheds nothing (the beat owns its truth); the hold rides',
+  wA.vendorStock.length > 0 && wA.vendorHolds.brandt.locks.length === 1);
 enterTown(wA);
-check('A: re-entry re-seats the reserved row — the very object, at its seat',
+check('A: re-entry inside the beat keeps the very shelf — the reserved row untouched at its seat',
   wA.vendorStock[0] === heldA);
 
 fund(wA);
@@ -184,7 +188,8 @@ check('A: the purchase stamps the market ledger',
   check('B: the restored row arms at its seat wearing its identity',
     !!seated && entryId(seated) === entryId(heldNow)
     && (seated.kind !== 'skill' || heldNow.kind !== 'skill'
-      || (seated.inst.rarity === heldNow.inst.rarity && seated.inst.level === heldNow.inst.level)));
+      || (seated.inst.rarity === heldNow.inst.rarity && seated.inst.level === heldNow.inst.level)),
+    `${entryId(heldNow)} @${heldNow?.kind} vs ${seated ? entryId(seated) : 'none'} @${seated?.kind}`);
 
   // A stateless world writes NO holds (empty is not load-bearing here).
   seedGlobalRandom(0x77e2);
@@ -208,6 +213,7 @@ check('A: the purchase stamps the market ledger',
         null, 42, { idx: 1 },
       ],
       commission: { kind: 'skill', id: STARTER_SKILLS[0] },
+      watchedSec: 3210.5,
       ordinal: 12.7,
     },
     chandler: { locks: [], commission: { kind: 'support', id: 'no_such_support' } },
@@ -216,9 +222,10 @@ check('A: the purchase stamps the market ledger',
     'brandt@gone_zone': { locks: [goodRow] },
   };
   const out = sanitizeVendorHolds(raw, { [START_ZONE]: town });
-  check('B2: the good row + order survive; garbage rows drop',
+  check('B2: the good row + order survive; garbage rows drop; both clock anchors sanitize',
     out.brandt?.locks.length === 1 && out.brandt.locks[0].idx === 2
-    && out.brandt.commission?.id === STARTER_SKILLS[0] && out.brandt.ordinal === 12,
+    && out.brandt.commission?.id === STARTER_SKILLS[0]
+    && out.brandt.watchedSec === 3210.5 && out.brandt.ordinal === 12,
     JSON.stringify(out.brandt?.locks.map(r => r.idx)));
   check('B2: an order for a de-registered gem releases (its hold drops empty)',
     out.chandler === undefined);
@@ -294,8 +301,8 @@ check('A: the purchase stamps the market ledger',
   check('D: a KNOWN gem places the order',
     wD.setVendorCommission('brandt', { kind: 'skill', id: skillId }) === true
     && wD.vendorHolds.brandt.commission?.id === skillId);
-  check('D: the watch starts at the CURRENT beat (no retroactive windfall)',
-    wD.vendorHolds.brandt.ordinal === Math.floor(wD.time / RESTOCK_SEC));
+  check('D: the watch starts NOW — the wall-time anchor, no retroactive beats',
+    wD.vendorHolds.brandt.watchedSec === wD.time);
 
   // Bank the pre-resolution save for the replay rig, then resolve away beats.
   const wsPre = wD.serializeWorldState();
@@ -511,6 +518,147 @@ check('A: the purchase stamps the market ledger',
   // dead reached_level_15 gate both live now, one mechanism).
   check('F: catalogLevelMilestones carries every authored level road',
     catalogLevelMilestones().includes(15), catalogLevelMilestones().join(','));
+}
+
+// ------------------------------------------------ G. THE BEAT LAW
+// One clock: restocks land on floor(time/sec) boundaries; the shelf is a
+// pure function of (world seed, counter, beat) — zone hops keep it, reloads
+// replay it, only a TURNED beat re-rolls it; the rush ladder shortens the
+// quantum without ever bending the watch (the wall-time anchor).
+{
+  const shelfSig = (w: World): string => JSON.stringify(w.vendorStock.map(e =>
+    e.kind === 'skill' ? `s:${e.inst.def.id}:${e.inst.rarity}:${e.inst.level}`
+    : e.kind === 'support' ? `g:${e.gem.def.id}`
+    : `i:${e.item.baseId}:${e.item.rarity}:${e.item.ilvl}`));
+  const SEED_G = 0x77aa;
+  seedGlobalRandom(0x77e2);
+  const wG = makeSimWorld('warrior', SEED_G);
+  openMarket(wG);
+  enterTown(wG);
+  check('G: the live mark sits ON the lattice — (beat+1) × sec, phase zero',
+    wG.vendorRestockAt === (Math.floor(wG.time / RESTOCK_SEC) + 1) * RESTOCK_SEC,
+    `at=${wG.vendorRestockAt} t=${wG.time}`);
+  const sig0 = shelfSig(wG);
+  const obj0 = wG.vendorStock[0];
+  leaveTown(wG);
+  enterTown(wG);
+  check('G: a zone hop inside the beat keeps the very ARRAY (no re-roll, no countdown reset)',
+    shelfSig(wG) === sig0 && wG.vendorStock[0] === obj0);
+
+  // A RELOAD inside the beat meets the same shelf BY SEED (fresh world,
+  // same manifest, same beat — the foreordained-shelf identity).
+  seedGlobalRandom(0x1234); // a DIFFERENT boot stream — the shelf must not care
+  const wG2 = makeSimWorld('warrior', SEED_G);
+  openMarket(wG2);
+  wG2.time = wG.time;
+  enterTown(wG2);
+  check('G: a reload inside the beat deals the IDENTICAL shelf (seeded, boot-stream-proof)',
+    shelfSig(wG2) === sig0);
+
+  // A purchase persists across a hop (the beat keeps the SPLICED truth).
+  fund(wG);
+  const lenBefore = wG.vendorStock.length;
+  check('G: (setup) a ware bought', wG.buyVendorGem(wG.vendorStock.findIndex(e => e.kind === 'item')) === true);
+  leaveTown(wG);
+  enterTown(wG);
+  check('G: the purchase stays gone across the hop — no same-beat resurrection',
+    wG.vendorStock.length === lenBefore - 1);
+
+  // The TURNED beat deals anew.
+  leaveTown(wG);
+  wG.time += RESTOCK_SEC;
+  enterTown(wG);
+  check('G: the turned beat deals a fresh shelf', shelfSig(wG) !== sig0);
+
+  // THE RUSH LADDER: every owned rung cuts the quantum; the mark lands on
+  // the SHORTER lattice (expectation derived from the config, floored).
+  for (const r of VENDOR_CFG.restock.ladder) wG.account.features.add(r.flag);
+  const rushed = Math.max(VENDOR_CFG.restock.minSec,
+    VENDOR_CFG.restock.ladder.reduce((s: number, r) => s - r.cutSec, RESTOCK_SEC));
+  leaveTown(wG);
+  wG.time += RESTOCK_SEC;
+  enterTown(wG);
+  check('G: the full rush ladder re-times the mark onto its own lattice',
+    rushed < RESTOCK_SEC && wG.vendorRestockAt === (Math.floor(wG.time / rushed) + 1) * rushed,
+    `sec=${rushed}`);
+  check('G: the Vault derives the rush rows, chained off the station',
+    allUnlockables().some(u => u.id === 'feat_vendor_restock_1'
+      && (Array.isArray(u.requiresUnlock) ? u.requiresUnlock[0] : u.requiresUnlock) === 'feat_salvage_station')
+    && allUnlockables().some(u => u.id === 'feat_vendor_restock_2'
+      && (Array.isArray(u.requiresUnlock) ? u.requiresUnlock[0] : u.requiresUnlock) === 'feat_vendor_restock_1'));
+
+  // THE WINDFALL CHECK: a rush rung bought MID-WATCH re-buckets elapsed
+  // time honestly — the quantum change alone must resolve ZERO beats (under
+  // the old beat-index anchor, floor(t/180)−floor(t/300) ≈ 26 phantom
+  // beats here would near-certainly seat a find).
+  seedGlobalRandom(0x77e2);
+  const wW = makeSimWorld('warrior', 0x66d3);
+  openMarket(wW);
+  wW.account.features.add(FEATURE.VENDOR_COMMISSION);
+  wW.account.features.add(FEATURE.BRANDT_SELL_SUPPORTS);
+  const wSkill = STARTER_SKILLS[0];
+  wW.account.ledger[gemDropKey(wSkill)] = need;
+  enterTown(wW);
+  wW.time += 12000; // deep into the run BEFORE the order — a big re-bucket span
+  leaveTown(wW);
+  enterTown(wW);
+  check('W: (setup) the order placed deep into the run',
+    wW.setVendorCommission('brandt', { kind: 'skill', id: wSkill }) === true
+    && wW.vendorHolds.brandt.watchedSec === wW.time);
+  for (const r of VENDOR_CFG.restock.ladder) wW.account.features.add(r.flag);
+  leaveTown(wW);
+  wW.time += 1; // one second — no beat can genuinely have passed
+  enterTown(wW);
+  check('W: the quantum change alone resolves NOTHING — no phantom catchup, no windfall find',
+    commRow(wW) === undefined && wW.vendorHolds.brandt.watchedSec === wW.time);
+
+  // LEGACY SAVES: a pre-beat-law ordinal converts under the live quantum.
+  seedGlobalRandom(0x77e2);
+  const wV = makeSimWorld('warrior', 0x5b5b);
+  const legacy = {
+    brandt: {
+      locks: [], commission: { kind: 'skill' as const, id: STARTER_SKILLS[0] },
+      ordinal: 40,
+    },
+  };
+  const cleanLegacy = sanitizeVendorHolds(legacy, {});
+  check('V: (setup) the legacy row survives the sanitizer wearing its beat index',
+    cleanLegacy.brandt?.ordinal === 40 && cleanLegacy.brandt.watchedSec === undefined);
+  check('V: adoption converts a legacy beat index to wall time under the live quantum',
+    wV.adoptWorldState({ ...wV.serializeWorldState(), vendorHolds: cleanLegacy }) === true
+    && wV.vendorHolds.brandt?.watchedSec === 40 * RESTOCK_SEC);
+}
+
+// ------------------------------------------------ H. THE COUNTER LAW (roof)
+// A roofed vendor serves only patrons under the SAME roof: the smithy's
+// open apron sits inside dwell radius but outside the roof — the counter
+// stays shut until the patron steps onto the flagstone.
+{
+  seedGlobalRandom(0x77e2);
+  const wH = makeSimWorld('warrior', 0x40f1);
+  openMarket(wH);
+  enterTown(wH);
+  const smith = wH.actors.find(a => !a.dead && a.defId && MONSTERS[a.defId]?.npcRole === 'vendor')!;
+  const roofAt = (p: { x: number; y: number }): unknown =>
+    (wH as unknown as { roofedStructureAt(q: { x: number; y: number }): unknown }).roofedStructureAt(p);
+  check('H: Brandt stands under her own slate (the smithy roof is real)', roofAt(smith.pos) !== null);
+  check('H: under the shared roof, the counter serves', wH.nearSmith(wH.localSeat) === true);
+
+  // Walk the compass at ~150px until the roof ends — the open apron.
+  let apron: { x: number; y: number } | null = null;
+  for (let a = 0; a < 16 && !apron; a++) {
+    const p = { x: smith.pos.x + Math.cos(a * Math.PI / 8) * 150, y: smith.pos.y + Math.sin(a * Math.PI / 8) * 150 };
+    if (roofAt(p) === null) apron = p;
+  }
+  check('H: an open apron point stands inside dwell radius', apron !== null);
+  if (apron) {
+    wH.player.pos.x = apron.x;
+    wH.player.pos.y = apron.y;
+    check('H: from the apron — radius met, roof unshared — the counter stays shut',
+      wH.nearSmith(wH.localSeat) === false);
+    parkAtSmith(wH);
+    check('H: stepping back onto the flagstone re-opens it', wH.nearSmith(wH.localSeat) === true);
+  }
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

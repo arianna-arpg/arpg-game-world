@@ -134,6 +134,10 @@ export const FEATURE = {
    *  deliberately never wears it). Until owned, the tab shows sealed —
    *  visible, named, and pointing at the Vault. */
   VENDOR_GEMS: 'vendor_gems',
+  /** THE RUSH LADDER rung 2 (VENDOR_CFG.restock.ladder — rung 1 wears the
+   *  legacy BRANDT_FAST_RESTOCK above): each owned rung CUTS the counters'
+   *  restock beat by its own seconds, floored at the config's minSec. */
+  VENDOR_RESTOCK_2: 'vendor_restock_2',
   /** THE STANDING ORDER (World.resolveCommission): pre-select one gem the
    *  account KNOWS (drop index ≥ VENDOR_CFG.commission.need) and the counter
    *  watches its own restock beats for it — every beat that passed while you

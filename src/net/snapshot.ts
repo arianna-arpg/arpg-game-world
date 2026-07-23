@@ -894,7 +894,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     // A PROJECTION hold (host-authoritative flags, self-healing at 20 Hz):
     // the panel's one read path (vendorEntryHold) now answers identically
     // on host and client. The client never resolves or persists it.
-    world.vendorHolds['brandt'] = { locks, ordinal: 0 };
+    world.vendorHolds['brandt'] = { locks, watchedSec: 0 };
     world.vendorRestockAt = snap.vendorRestockAt;
     world.netVendorCap = snap.vendorCap;
     world.netVendorTradeOpen = snap.vendorTradeOpen;
