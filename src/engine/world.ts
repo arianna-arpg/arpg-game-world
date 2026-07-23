@@ -1589,6 +1589,15 @@ function rollPackSize(archs: PackArchetype[]): number {
   return randInt(last.size[0], last.size[1]);
 }
 const WAYPOINT_CLEAR = 500;      // safe bubble cleared of enemies around a waypoint landing
+/** THE PARTY-LANDING LAW's default scatter (World.landPartyAt): how the
+ *  travelling party fans out beside the hero when an arrival adjusts the
+ *  party's stand after loadZone. Sites with their own flavor (the
+ *  waypoint's wide ring, the quay's tight file) pass overrides — dials,
+ *  never per-site copies of the loop. */
+export const PARTY_LAND_CFG = {
+  spread: 60,                            // sideways half-width of the scatter
+  band: [30, 70] as readonly [number, number], // vertical scatter band (a step below the hero)
+};
 // (Encounter placement chance / field cap / close-reward terms live in
 // ENCOUNTER_CFG — packages/encounters.ts — so the framework tunes as data.)
 const EVENT_SPACING = 240;       // min gap between co-occurring world-event centers (legibility)
@@ -9068,6 +9077,40 @@ export class World {
     }
   }
 
+  /** THE PARTY-LANDING LAW — one placement for every arrival that adjusts
+   *  the party's stand AFTER loadZone's generic entry (cave climb-outs, dock
+   *  and quay landings, the waypoint, sky-falls, drop-cave scatters, the
+   *  descent resurface, the exact-resume wake): the local hero lands exactly
+   *  at `at`; every other seat body (downed included) and every carried
+   *  mobile minion — owner seated, alive, not a construct: the loadZone
+   *  carry filter's own shape — scatters in a loose band beside it. The
+   *  per-site loops this replaces moved the seats alone and LEFT THE
+   *  MINIONS at the generic entry (zone CENTER when no back-portal
+   *  resolves) — a climbed-out court standing half a county away, aggroing
+   *  the shire onto its keeper. Enemies, scenery, and anchored constructs
+   *  are never touched. Default scatter in PARTY_LAND_CFG; sites keep
+   *  their own flavor via `opts` (`clamp: false` = open water). */
+  landPartyAt(at: Vec2, opts?: {
+    spread?: number; band?: readonly [number, number]; clamp?: boolean;
+  }): void {
+    const spread = opts?.spread ?? PARTY_LAND_CFG.spread;
+    const band = opts?.band ?? PARTY_LAND_CFG.band;
+    const clamp = opts?.clamp ?? true;
+    const put = (a: Actor, to: Vec2): void => {
+      a.pos = clamp ? this.clampPos(to, a.radius) : to;
+    };
+    const p = this.player;
+    put(p, vec(at.x, at.y));
+    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+    for (const a of this.actors) {
+      if (a === p) continue;
+      const rides = seatActors.has(a)
+        || (!!a.owner && seatActors.has(a.owner) && !a.dead && !a.construct);
+      if (!rides) continue;
+      put(a, vec(at.x + rand(-spread, spread), at.y + rand(band[0], band[1])));
+    }
+  }
+
   /** Shove freshly-generated hostiles off a pocket's entry ring
    *  (POCKET_CFG.arrivalGrace): outward along their own bearing when the
    *  ground allows, else to the farthest stand. The samplers (spawnPoint /
@@ -9661,7 +9704,7 @@ export class World {
     // back). The picker only offers zoneMap ids anyway.
     if (!this.zoneMap[zoneId]) return false;
     this.loadZone(zoneId);
-    this.player.pos = this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), this.player.radius);
+    this.landPartyAt(vec(this.arena.w / 2, this.arena.h / 2)); // the whole party, per the law
     return true;
   }
 
@@ -9691,7 +9734,7 @@ export class World {
       });
     this.zoneMap[def.id] = def;
     this.loadZone(def.id);
-    this.player.pos = this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), this.player.radius);
+    this.landPartyAt(vec(this.arena.w / 2, this.arena.h / 2)); // the whole party, per the law
     return def.id;
   }
 
@@ -11780,7 +11823,9 @@ export class World {
     // Restore the Delver-cave's caveReturn (the way back up to the surface).
     this.caveReturn = ret ? { zoneId: ret.zoneId, pos: vec(ret.pos.x, ret.pos.y), entryFrom: ret.entryFrom } : null;
     if (this.descentSite) {
-      this.player.pos = this.clampPos(vec(this.descentSite.platform.x, this.descentSite.platform.y + 34), this.player.radius);
+      // THE PARTY-LANDING LAW: the whole party surfaces onto the platform —
+      // seats and the carried court, not the hero alone.
+      this.landPartyAt(vec(this.descentSite.platform.x, this.descentSite.platform.y + 34));
     }
     this.caveExitGrace = true;
     const msg = reason === 'climb' ? `You climb back into the light.  +${banked} Echoes`
@@ -13298,16 +13343,9 @@ export class World {
     this.loadZone(exact.zoneId);
     // Stand the party at the saved spot (loadZone placed them at the entry
     // portal): the hero exactly there, allies + carried minions in a loose
-    // ring — the same offsets loadZone itself deals.
+    // ring (THE PARTY-LANDING LAW — this wake was its reference idiom).
     const p = this.player;
-    p.pos = this.clampPos(vec(exact.x, exact.y), p.radius);
-    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-    for (const a of this.actors) {
-      if (a === p) continue;
-      const carried = seatActors.has(a) || (!!a.owner && seatActors.has(a.owner));
-      if (!carried) continue;
-      a.pos = this.clampPos(vec(exact.x + rand(-80, 80), exact.y + rand(-80, 80)), a.radius);
-    }
+    this.landPartyAt(vec(exact.x, exact.y), { spread: 80, band: [-80, 80] });
     // Vitals: proportional restore with a reaction floor — an exact wake is
     // honest about how hurt you were, not a free refill.
     const v = exact.vitals;
@@ -17669,12 +17707,8 @@ export class World {
     this.sailGate.consume();
     const dock = this.portDock();
     if (dock) {
-      this.player.pos = this.clampPos(vec(dock.pos.x, dock.pos.y + 34), this.player.radius);
-      const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-      for (const ac of this.actors) {
-        if (ac === this.player || !seatActors.has(ac)) continue;
-        ac.pos = this.clampPos(vec(dock.pos.x + rand(-60, 60), dock.pos.y + rand(30, 80)), ac.radius);
-      }
+      // THE PARTY-LANDING LAW: the whole party steps ashore at the planks.
+      this.landPartyAt(vec(dock.pos.x, dock.pos.y + 34), { band: [-4, 46] });
     }
   }
 
@@ -17917,12 +17951,8 @@ export class World {
           const at = hold.state === 'open' || !gate
             ? vec(qSeat.x, qSeat.y + 40)
             : holdGateApron(gate, 150);
-          this.player.pos = this.clampPos(vec(at.x, at.y), this.player.radius);
-          const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-          for (const ac of this.actors) {
-            if (ac === this.player || !seatActors.has(ac)) continue;
-            ac.pos = this.clampPos(vec(at.x + rand(-40, 40), at.y + rand(20, 60)), ac.radius);
-          }
+          // THE PARTY-LANDING LAW: the whole party files onto the quay.
+          this.landPartyAt(vec(at.x, at.y), { spread: 40, band: [20, 60] });
           if (hold.state !== 'open') {
             this.text(vec(at.x, at.y - 44),
               'the garrison bars the causeway behind you — sound the horn to break the siege', '#e8a050', 13);
@@ -18745,12 +18775,9 @@ export class World {
       this.player.pos.y += Math.sin(a) * 50;
     }
     this.streamCoast(true);
-    // The party's boats bob alongside (same idiom as the cave climb-out).
-    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-    for (const ac of this.actors) {
-      if (ac === this.player || !seatActors.has(ac)) continue;
-      ac.pos = vec(this.player.pos.x + rand(-70, 70), this.player.pos.y + rand(-70, 70));
-    }
+    // The party's boats bob alongside — seats AND the carried court (THE
+    // PARTY-LANDING LAW; open water: unclamped, the sea has no walls).
+    this.landPartyAt(this.player.pos, { spread: 70, band: [-70, 70], clamp: false });
     this.text(vec(this.player.pos.x, this.player.pos.y - 40),
       `you cast off aboard the ${this.voyage.ship.name} — sail for any shore, linger to land`, '#7fd0ff', 15);
   }
@@ -19123,12 +19150,8 @@ export class World {
     this.sailGate.consume();
     const dock = this.portDock();
     if (dock) {
-      this.player.pos = this.clampPos(vec(dock.pos.x, dock.pos.y + 34), this.player.radius);
-      const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-      for (const ac of this.actors) {
-        if (ac === this.player || !seatActors.has(ac)) continue;
-        ac.pos = this.clampPos(vec(dock.pos.x + rand(-60, 60), dock.pos.y + rand(30, 80)), ac.radius);
-      }
+      // THE PARTY-LANDING LAW: the whole party steps ashore at the planks.
+      this.landPartyAt(vec(dock.pos.x, dock.pos.y + 34), { band: [-4, 46] });
     }
     // A Voyage island lands with its own story (the def's blurb + the ledger
     // that surfaces the Brigantine); an ordinary coast keeps the plain line.
@@ -36902,16 +36925,11 @@ export class World {
     this.loadZone(zoneId);
     if (this.waypointPos) {
       const wp = this.waypointPos;
-      this.player.pos = this.clampPos(vec(wp.x, wp.y + 50), this.player.radius);
-      // Bring the player's OWN minions AND any co-op ally seats to the waypoint —
-      // NOT the enemies loadZone just spawned (they belong out in the zone).
-      // Moving everything here dumped the whole zone on the player.
-      const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-      for (const a of this.actors) {
-        if (a === this.player) continue;
-        if (a.owner !== this.player && !seatActors.has(a)) continue;
-        a.pos = this.clampPos(vec(wp.x + rand(-80, 80), wp.y + rand(40, 110)), a.radius);
-      }
+      // THE PARTY-LANDING LAW: seats AND every carried court body ride to the
+      // waypoint (an ALLY's pets too — owner seated, not just the local
+      // hero's own) — NOT the enemies loadZone just spawned (they belong out
+      // in the zone; moving everything here dumped the whole zone on the player).
+      this.landPartyAt(vec(wp.x, wp.y + 50), { spread: 80, band: [-10, 60] });
       // Spawns were scattered around the ENTRY, but the player lands at the
       // WAYPOINT — which may sit in the thick of them. Clear a safe bubble:
       // shove any too-close enemy out to its own far point from the landing.
@@ -37308,12 +37326,8 @@ export class World {
         const land = anchored
           ? this.clampPos(vec(below!.ax + (from.x - shelf.size.w / 2), below!.ay + (from.y - shelf.size.h / 2)), this.player.radius)
           : this.clampPos(vec(fx * this.arena.w, fy * this.arena.h), this.player.radius);
-        this.player.pos = vec(land.x, land.y);
-        const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-        for (const a of this.actors) {
-          if (a === this.player || !seatActors.has(a)) continue;
-          a.pos = this.clampPos(vec(land.x + rand(-60, 60), land.y + rand(30, 70)), a.radius);
-        }
+        // THE PARTY-LANDING LAW: the whole party rides the fall down together.
+        this.landPartyAt(land);
         this.caveExitGrace = true; // in case the fall lands you back at a mouth
         hurt();
         if (!anchored) {
@@ -37460,14 +37474,9 @@ export class World {
     if (!land) land = this.farthestStand(p.radius, true);
     if (!land || pitAt(pits, this.bridges, land.x, land.y, null)
       || dist(land, mouth) < 40) return; // cramped hollow: the classic arrival stands
-    p.pos = this.clampPos(vec(land.x, land.y), p.radius);
-    // Seats ride the tumble together (the skyfall idiom) — scattered, but
-    // never separated from each other.
-    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-    for (const a of this.actors) {
-      if (a === p || !seatActors.has(a)) continue;
-      a.pos = this.clampPos(vec(land.x + rand(-60, 60), land.y + rand(30, 70)), a.radius);
-    }
+    // Seats AND the carried court ride the tumble together (THE PARTY-LANDING
+    // LAW) — scattered, but never separated from each other.
+    this.landPartyAt(land);
   }
 
   /** PACKAGE FURNISH: manifest-active packages may plant fixtures inside a
@@ -37513,13 +37522,11 @@ export class World {
       // exit grace guards re-descent either way.
       const indoors = !!(ret.kind && sidezoneOf(ret.kind)?.indoorsOnly);
       const stepY = indoors ? 0 : 40;
-      this.player.pos = this.clampPos(vec(ret.pos.x, ret.pos.y + stepY), this.player.radius);
-      // Co-op ally seats climb out beside the local hero (SP no-op: one seat).
-      const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-      for (const a of this.actors) {
-        if (a === this.player || !seatActors.has(a)) continue;
-        a.pos = this.clampPos(vec(ret.pos.x + rand(-50, 50) * (indoors ? 0.5 : 1), ret.pos.y + stepY + rand(0, 50) * (indoors ? 0.5 : 1)), a.radius);
-      }
+      const sc = indoors ? 0.5 : 1;
+      // THE PARTY-LANDING LAW: seats AND the carried court climb out at the
+      // mouth together — loadZone stood them at the generic entry (zone
+      // CENTER when entryFrom is null), a county away from their keeper.
+      this.landPartyAt(vec(ret.pos.x, ret.pos.y + stepY), { spread: 50 * sc, band: [0, 50 * sc] });
       this.caveExitGrace = true; // standing on the mouth — don't re-descend until clear
       return;
     }
