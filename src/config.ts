@@ -20,7 +20,7 @@ export const DEV = {
    *  minting one from the live heat map when none exists — plus zone hop,
    *  ghost/noclip, kill-all).
    *  0 = off (no button, zero overhead). */
-  panel: 1,
+  panel: 0,
   /** 1 = THE ENTITY FORGE (dev/entityForge.ts): a full-screen entity
    *  creator/tweaker reachable from the START MENU ("Entity Forge" button) and
    *  from the dev panel's Forge tab in-game. Compose looks from the part
@@ -31,7 +31,7 @@ export const DEV = {
    *  namespace and ride every fabric shipped content rides). Export TS emits
    *  the def+look as source literals for hand-promotion into src/data.
    *  0 = off (no button, no tab, zero overhead). */
-  entityForge: 1,
+  entityForge: 0,
   /** 1 = PASSIVE-TREE EDITOR: with the tree open (P), click a node to SELECT it,
    *  drag to move it, click ANOTHER node (while one is selected) to add/remove the
    *  link between them, click the selected node to deselect, double-click empty
