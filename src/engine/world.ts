@@ -149,7 +149,8 @@ import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
-import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
+import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
+import { registerDoodadFamily, doodadFamilyBits, doodadFamilyIndex, doodadFamilyEpoch, doodadFamilyCount } from './doodadFamilies';
 import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
@@ -1769,6 +1770,23 @@ const DWELL_IDLE_GRACE = 0.15;   // a dwell only builds once the player has been
                                  // clause — no cast/leap/shove still resolving), so
                                  // passing by, fighting, or a cast that outlives its
                                  // press never counts as dwelling
+// DOODAD FAMILIES (engine/doodadFamilies.ts) — the engine's own consumers
+// register the exact predicates they derive with, so reported in-place churn
+// (a drying pool's radius steps) re-derives only what it can actually touch:
+// 'nav-block' — the convex nav grid's stamped bodies (spans + move-blockers).
+//   GROUND discs are deliberately NOT members: paintNavGrounds prices them,
+//   but pricing is advisory (clampPos + groundAt stay the live truth) and
+//   adds/removes still rebuild via the length key — only a drying pool's
+//   shrink steps ride a briefly-stale price, instead of rasterizing the
+//   whole grid per step.
+// 'veil' — the canopy veil index's crown-bearing kinds.
+const FAM_NAV_BLOCK = registerDoodadFamily('nav-block', (k) => {
+  const r = doodadRuleOf(k as DoodadKind);
+  return !!r.spans || !!r.blocksMove;
+});
+const FAM_VEIL = registerDoodadFamily('veil', (k) => veilSpecOf(k as DoodadKind) != null);
+void FAM_NAV_BLOCK; void FAM_VEIL; // indices resolved by id at the key sites
+
 const CORPSE_RADIUS = 110;       // how close to your old corpse to begin reclaiming
 const CORPSE_DWELL = 1.0;        // seconds dwelling to reclaim (recovering the dead is deliberate)
 const BRITTLE_WARN_EVERY = 4;    // seconds between repeats of ONE brittle warn line
@@ -30907,7 +30925,10 @@ export class World {
       } else {
         ev.t += step / ev.rate;
       }
-      this.markDoodadsChanged();
+      // Attributed: only this pool's OWN families re-derive (its bed bake,
+      // its glow cluster) — a drying field no longer rebuilds the nav grid
+      // and the veil index ten times a second (the churn cascade).
+      this.markDoodadsChanged(d);
     }
   }
 
@@ -45346,10 +45367,47 @@ export class World {
     }
   }
 
+  /** Per-family mutation counters (engine/doodadFamilies.ts) — see
+   *  doodadFamilyRev. Re-seated when the family registry grows (epoch). */
+  private famRevs: number[] = [];
+  private famEpoch = -1;
+  private syncFamRevs(): void {
+    if (this.famEpoch !== doodadFamilyEpoch()) {
+      this.famEpoch = doodadFamilyEpoch();
+      // Seed every counter at the global rev: ≥ any value a consumer has
+      // stored (families bump at most once per markDoodadsChanged), so a
+      // late-registered family forces one honest resync, never staleness.
+      this.famRevs = new Array(doodadFamilyCount()).fill(this.doodadsRev);
+    }
+  }
+
   /** In-place doodad mutations that DON'T change the list length (kind swaps,
    *  radius edits) must call this so the index re-syncs. Pushes and splices
-   *  are covered by the length check and need nothing. */
-  markDoodadsChanged(): void { this.doodadsRev++; }
+   *  are covered by the length check and need nothing. Pass the touched
+   *  doodad(s) when known: only the FAMILIES those kinds belong to re-derive
+   *  (a drying pool's radius step stops rebuilding the nav grid and the veil
+   *  index — the churn-cascade fix); a no-arg call bumps every family, the
+   *  safe default for sites that predate the registry. */
+  markDoodadsChanged(touched?: Doodad | readonly Doodad[]): void {
+    this.doodadsRev++;
+    this.syncFamRevs();
+    if (!touched) {
+      for (let i = 0; i < this.famRevs.length; i++) this.famRevs[i]++;
+      return;
+    }
+    const list = Array.isArray(touched) ? touched as readonly Doodad[] : [touched as Doodad];
+    let bits = 0;
+    for (const d of list) bits |= doodadFamilyBits(d.kind);
+    for (let i = 0; i < this.famRevs.length; i++) if (bits & (1 << i)) this.famRevs[i]++;
+  }
+  /** A family's mutation counter — cache keys pair it with (identity,
+   *  length) exactly like doodadRev, but it moves only when a doodad of THAT
+   *  family was reported changed (or on an unattributed change). */
+  doodadFamilyRev(id: string): number {
+    this.syncFamRevs();
+    const at = doodadFamilyIndex(id);
+    return at >= 0 ? this.famRevs[at] : this.doodadsRev;
+  }
   /** The doodad-list revision, readable — anything that CACHES against the
    *  doodad set (the renderer's baked blend beds) keys on (list identity,
    *  length, THIS) exactly like the internal spatial/veil indexes. */
@@ -45366,12 +45424,13 @@ export class World {
    *  pops self-heal, and co-op clients derive identical patches from the
    *  shipped doodad list with zero replication. */
   veilIndex(): VeilIndex {
+    const rev = this.doodadFamilyRev('veil');
     if (!this.veilIdx || this.veilIdxArr !== this.doodads
-      || this.veilIdxLen !== this.doodads.length || this.veilIdxRev !== this.doodadsRev) {
+      || this.veilIdxLen !== this.doodads.length || this.veilIdxRev !== rev) {
       this.veilIdx = new VeilIndex(this.doodads);
       this.veilIdxArr = this.doodads;
       this.veilIdxLen = this.doodads.length;
-      this.veilIdxRev = this.doodadsRev;
+      this.veilIdxRev = rev;
     }
     return this.veilIdx;
   }
@@ -45493,7 +45552,7 @@ export class World {
   pathField(): WalkField | null {
     if (this.walk) return this.walk.pathStep ? this.walk : null;
     if (this.arena.boundless) return null;
-    const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadsRev;
+    const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadFamilyRev('nav-block');
     if (!this.convexNav || this.convexNavKey !== key) {
       this.convexNav = this.buildConvexNav();
       this.convexNavKey = key;

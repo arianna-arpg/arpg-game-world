@@ -453,10 +453,28 @@ export const VIS_CFG = {
   lights: {
     /** Lightmap resolution as a fraction of the screen. */
     scale: 0.28,
-    maxLights: 72,
+    /** Total light budget per frame. The punch pass is one small blit per
+     *  light on the scale-reduced buffer — the cap protects the collect and
+     *  bloom passes, not fill rate, so it can afford to be generous. (72
+     *  re-starved dense fields once cinder beds + vent formations joined the
+     *  caldera: in-view static demand alone neared the cap and eruption
+     *  movers evicted the terrain glow — the original 'strange lights' bug
+     *  reborn as a class war.) */
+    maxLights: 128,
+    /** THE SHARE LAW: per-class caps on the MOVER classes so no burst can
+     *  flood the budget and starve everything after it in collect order —
+     *  an eruption's orb volley keeps its own lane, the lava sea keeps its
+     *  glow. Unshared classes (the hero's lantern, lightwells, exits,
+     *  encounter fields) are few by construction. Flashes fill newest-first
+     *  (the fresh explosion wins its lane, not the dying ember). */
+    share: { flashes: 14, projectiles: 18, bodies: 26, orbs: 10 },
     /** Static doodad emissives collapse into per-zone cluster aggregates
      *  (bin size below, world units) — dense lava fields stop fighting the
-     *  cap and the lit set stops reshuffling as the camera pans. */
+     *  cap and the lit set stops reshuffling as the camera pans. Should the
+     *  in-view cluster set STILL outgrow the room left after movers, the
+     *  drop is deterministic and stable: farthest from the bin-quantized
+     *  view centre first (the kept set changes only at bin crossings —
+     *  never a per-frame reshuffle). */
     cluster: true,
     clusterBin: 176,
     /** How dark deep night gets (0 = untouched, 1 = pitch black). */

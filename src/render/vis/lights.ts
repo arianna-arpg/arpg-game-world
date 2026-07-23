@@ -21,11 +21,18 @@ import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { MONSTERS } from '../../data/monsters';
 import { ORB_DEFS } from '../../data/orbs';
 import { courtLord } from '../../packages/courts';
+import { registerDoodadFamily } from '../../engine/doodadFamilies';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
 import { litPolygon, polygonPath } from './sight';
 import { baked, drawGlow } from './sprites';
 import { VIS_CFG } from './visConfig';
+
+// The cluster cache re-derives only when a LIGHT-bearing doodad changes —
+// the exact filter zoneClusters gathers with (scoped invalidation:
+// engine/doodadFamilies.ts). Corpse mints, drying non-lit dress and the
+// like no longer rebuild the lit field every churn frame.
+registerDoodadFamily('light', (k) => !!DOODAD_VISUALS[k]?.light);
 
 interface LightSource {
   x: number; y: number; r: number;
@@ -77,13 +84,14 @@ export class LightLayer {
    *  every member's own glow, the kind's color/intensity/flicker. Isolated
    *  sources (a lone campfire) become 1:1 clusters — one uniform path. */
   private zoneClusters(world: World): LightCluster[] {
+    const rev = world.doodadFamilyRev('light');
     if (this.clustersFor === world.doodads && this.clustersLen === world.doodads.length
-      && this.clustersRev === world.doodadsVersion()) {
+      && this.clustersRev === rev) {
       return this.clusters;
     }
     this.clustersFor = world.doodads;
     this.clustersLen = world.doodads.length;
-    this.clustersRev = world.doodadsVersion();
+    this.clustersRev = rev;
     const bin = VIS_CFG.lights.clusterBin;
     type Acc = { sx: number; sy: number; n: number; members: { x: number; y: number; lr: number }[];
       color: string; intensity: number; flicker?: number;
@@ -165,10 +173,18 @@ export class LightLayer {
       rz ? (rz.at0 ?? 1) + ((rz.at1 ?? 1) - (rz.at0 ?? 1)) * skyRad : 1;
     const inView = (x: number, y: number, r: number): boolean =>
       x + r > camX && x - r < camX + vw && y + r > camY && y - r < camY + vh;
+    // THE SHARE LAW (VIS_CFG.lights.share): each MOVER class spends its own
+    // lane of the budget — a volley of thirty lava orbs can no longer evict
+    // the terrain clusters collected after it (the winking lava sea was cap
+    // starvation by class, not flicker). Unshared classes pass undefined.
+    const share = VIS_CFG.lights.share as Record<string, number | undefined>;
+    const used: Record<string, number> = {};
     const push = (x: number, y: number, r: number, color: string, intensity: number,
-      polyKey?: object, polyR?: number): LightSource | null => {
+      polyKey?: object, polyR?: number, cls?: string): LightSource | null => {
       if (this.lights.length >= cap || intensity < minIntensity || r <= 1) return null;
+      if (cls !== undefined && (used[cls] ?? 0) >= (share[cls] ?? Infinity)) return null;
       if (!inView(x, y, r)) return null;
+      if (cls !== undefined) used[cls] = (used[cls] ?? 0) + 1;
       const L: LightSource = { x, y, r, color, intensity: Math.min(1, intensity) };
       // WALL OCCLUSION: the light's true reach against sight-blocking cells —
       // glow pools at a wall instead of punching through it (null = open
@@ -194,13 +210,16 @@ export class LightLayer {
           '#ffe8c0', Math.min(0.9, this.ambient + 0.15));
       }
     }
-    for (const f of world.flashes) {
+    // Newest-first: under the class share the FRESH explosion keeps its
+    // light — the near-spent ember is the one that yields.
+    for (let i = world.flashes.length - 1; i >= 0; i--) {
+      const f = world.flashes[i];
       if (f.haze) continue; // refraction, not emission — a haze ring casts no glow
       const k = f.maxLife > 0 ? f.life / f.maxLife : 0;
-      push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k);
+      push(f.pos.x, f.pos.y, f.radius * 1.5, f.color, 0.5 * k, undefined, undefined, 'flashes');
     }
     for (const p of world.projectiles) {
-      push(p.pos.x, p.pos.y, p.radius * 8, p.color, 0.3);
+      push(p.pos.x, p.pos.y, p.radius * 8, p.color, 0.3, undefined, undefined, 'projectiles');
     }
     // Orb kinds that declare a light carry a real candle (wakeflames in the
     // dark) — movers like projectiles, fading out with their last seconds.
@@ -208,7 +227,7 @@ export class LightLayer {
       const r = ORB_DEFS[o.kind]?.light;
       if (!r) continue;
       push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
-        0.4 * Math.min(1, o.life / 2));
+        0.4 * Math.min(1, o.life / 2), undefined, undefined, 'orbs');
     }
     // GLOWING BODIES (MonsterDef.light — the firefly fabric): kin that
     // carry their own lamp join the layer as MOVERS, live-marched like the
@@ -226,7 +245,7 @@ export class LightLayer {
         ? 0.82 + 0.18 * Math.sin(world.time * spec.flicker + a.id * 0.61) : 1;
       const r = (spec.radius < 0 ? -spec.radius * a.radius : spec.radius) * flick * br;
       push(a.pos.x, a.pos.y, r, resolveColor(spec.color, world.zone.theme),
-        spec.intensity * flick * br);
+        spec.intensity * flick * br, undefined, undefined, 'bodies');
     }
 
     // POOLED LIGHTWELLS (engine/lightwells.ts) — survival infrastructure,
@@ -278,15 +297,39 @@ export class LightLayer {
     // point lights. The legacy per-disc path stays behind the config lever.
     const t = world.time;
     if (VIS_CFG.lights.cluster) {
+      // Gather the visible candidates first: should they STILL outgrow the
+      // room the movers left (dense multi-kind fields — lava + cinder +
+      // magma_core + vents), drop the FARTHEST from the bin-quantized view
+      // centre — deterministic, and stable as the camera pans (the kept set
+      // changes only at bin crossings, never a per-frame reshuffle; the
+      // 'winking lava field' was exactly cap eviction in cull order).
+      const cands: { c: LightCluster; r: number; k: number }[] = [];
       for (const c of this.zoneClusters(world)) {
         const br = breathe(c.radiance);
         if (br <= 0.02) continue;
         const flick = c.flicker
           ? 0.82 + 0.18 * Math.sin(t * c.flicker + c.x * 0.13) : 1;
+        const rr = c.r * flick * br;
+        if (!inView(c.x, c.y, rr)) continue;
+        cands.push({ c, r: rr, k: flick * br });
+      }
+      const room = cap - this.lights.length;
+      if (cands.length > room) {
+        const bin = VIS_CFG.lights.clusterBin;
+        const qx = (Math.floor((camX + vw / 2) / bin) + 0.5) * bin;
+        const qy = (Math.floor((camY + vh / 2) / bin) + 0.5) * bin;
+        cands.sort((a, b) => {
+          const da = (a.c.x - qx) ** 2 + (a.c.y - qy) ** 2;
+          const db = (b.c.x - qx) ** 2 + (b.c.y - qy) ** 2;
+          return da !== db ? da - db : a.c.y !== b.c.y ? a.c.y - b.c.y : a.c.x - b.c.x;
+        });
+        cands.length = Math.max(0, room);
+      }
+      for (const cd of cands) {
         // The occlusion poly caches at the UN-flickered, UN-breathed reach
         // (its widest); flicker + breath animate brightness + blit size,
         // never the ray march.
-        push(c.x, c.y, c.r * flick * br, c.color, c.intensity * flick * br, c, c.r);
+        push(cd.c.x, cd.c.y, cd.r, cd.c.color, cd.c.intensity * cd.k, cd.c, cd.c.r);
       }
     } else {
       for (const [kind, list] of culled) {

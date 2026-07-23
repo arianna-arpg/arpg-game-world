@@ -902,7 +902,21 @@ changes.
   THE CARRIED LAMP `MonsterDef.light` puts glowing BODIES on the layer
   as live-marched movers; both debut in the grove country's firefly
   fabric with the `'fireflies'` ambientFx kind, docs in
-  `docs/engine/grove.md`), and weather particles. Session
+  `docs/engine/grove.md`; THE SHARE LAW `VIS_CFG.lights.share` caps each
+  MOVER class's slice of the light budget so an eruption's volley can
+  never evict the terrain glow, and an over-full cluster field drops
+  FARTHEST from the bin-quantized view centre — the lit set never
+  reshuffles as the camera pans), and weather particles.
+  DOODAD FAMILIES (`engine/doodadFamilies.ts` — scoped invalidation as an
+  open registry): consumers that cache against the doodad list (convex
+  nav grid, canopy veil index, light clusters, ground bake gather)
+  register the predicate that defines their slice and key on
+  `World.doodadFamilyRev(id)`; mutation sites that know their doodad
+  pass it to `markDoodadsChanged(d)` and only that kind's families
+  re-derive (a drying pool's radius steps stop rebuilding the nav grid —
+  the churn-cascade fix), a no-arg call bumps all, and unreported
+  pushes/splices stay caught by the length key — probe
+  `balance/probe_doodadfams.ts`. Session
   hygiene rides THE CACHE STEWARD (`render/vis/caches.ts` — every render
   cache registers; zone/run boundaries trim + release), full-screen washes
   ride the baked EDGE-OVERLAY fabric (`render/vis/overlays.ts`), and

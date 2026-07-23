@@ -29,6 +29,19 @@ import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVi
 import { paintStructureFloors } from './floors';
 import { releaseCanvas } from './sprites';
 import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './visConfig';
+import { registerDoodadFamily } from '../../engine/doodadFamilies';
+
+// The static bake gather re-derives only when a BAKED-kind doodad changes
+// (blend beds + non-live liquid bodies — the exact syncStaticGroups filter;
+// scoped invalidation: engine/doodadFamilies.ts). Non-bake churn (corpse
+// mints, pock dress) stops re-gathering the whole bed diff every frame.
+registerDoodadFamily('ground-bake', (k) => {
+  const def = DOODAD_VISUALS[k];
+  if (!def) return false;
+  const blend = VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live;
+  const body = def.painter === 'liquid' && !liquidBodyIsLive(def);
+  return !!(blend || body);
+});
 
 function strSeed(s: string): number {
   let h = 5381;
@@ -429,11 +442,12 @@ export class GroundRenderer {
    *  staleness storm on every temp-ground tick. Bake-time consumers only —
    *  the gather itself re-runs only when (identity, length, rev) move. */
   private syncStaticGroups(world: World): void {
+    const rev = world.doodadFamilyRev('ground-bake');
     if (this.staticArr === world.doodads && this.staticLen === world.doodads.length
-      && this.staticRev === world.doodadRev) return;
+      && this.staticRev === rev) return;
     this.staticArr = world.doodads;
     this.staticLen = world.doodads.length;
-    this.staticRev = world.doodadRev;
+    this.staticRev = rev;
     const byKind = new Map<string, Doodad[]>();
     for (const d of world.doodads) {
       const def = DOODAD_VISUALS[d.kind];
