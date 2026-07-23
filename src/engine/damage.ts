@@ -317,6 +317,13 @@ export function mitigateTyped(
       const v = atk.sheet.get('limbreaver', opts.tags, opts.extra);
       if (v > 0) total *= 1 + v;
     }
+    // The siege axis: the victim is a ROOTED body (Actor.stationary —
+    // minted from a def that cannot walk: engines, spawner objects, idols,
+    // planted totems). Same lane law: base 0, folded here and only here.
+    if (target.stationary) {
+      const v = atk.sheet.get('siegebreaker', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
   }
   total *= target.sheet.get('damageTaken');
   // INSIGHT (the Charisma pool): read the blow coming and slip the brunt —

@@ -4812,6 +4812,121 @@ const mortarMaw: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** THE TREBUCHET RIG — a war engine's chassis from overhead: two heavy
+ *  timber side-trusses on ground skids, an iron axle crossbeam, corner
+ *  strap-plates. The siege-STRUCTURE tell (the Warfront's engines; anything
+ *  that should read "demolish me, don't duel me"). params: w (truss half-
+ *  spread ÷ R), l (skid half-length ÷ R). */
+const trebuchetRig: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  const metal = pal.metal;
+  const hw = P(spec, 'w', 0.78);
+  const hl = P(spec, 'l', 0.92);
+  place(ctx, r, spec, (c, R) => {
+    const W = R * hw, L = R * hl;
+    // Ground skids: two long runners the frame stands on.
+    c.fillStyle = shade(wood.base, -0.22);
+    c.fillRect(-L, -W - R * 0.09, L * 2, R * 0.18);
+    c.fillRect(-L, W - R * 0.09, L * 2, R * 0.18);
+    // Side trusses: A-frames read as thick chevron beams from above.
+    c.strokeStyle = wood.base;
+    c.lineWidth = Math.max(2, R * 0.16);
+    c.lineCap = 'round';
+    for (const s of [-1, 1] as const) {
+      c.beginPath();
+      c.moveTo(-L * 0.72, W * s);
+      c.lineTo(0, W * s * 0.34);
+      c.lineTo(L * 0.72, W * s);
+      c.stroke();
+    }
+    // The axle crossbeam the arm pivots on.
+    c.strokeStyle = shade(metal.shadow, -0.05);
+    c.lineWidth = Math.max(1.8, R * 0.11);
+    c.beginPath(); c.moveTo(0, -W * 0.4); c.lineTo(0, W * 0.4); c.stroke();
+    // Corner strap-plates: iron studs where skid meets truss.
+    c.fillStyle = metal.base;
+    for (const [px, py] of [[-0.72, -1], [-0.72, 1], [0.72, -1], [0.72, 1]] as const) {
+      c.beginPath(); c.arc(L * px, W * py, Math.max(1.5, R * 0.07), 0, Math.PI * 2); c.fill();
+    }
+    c.strokeStyle = wood.outline;
+    c.lineWidth = 1;
+    c.strokeRect(-L, -W - R * 0.09, L * 2, R * 0.18);
+    c.strokeRect(-L, W - R * 0.09, L * 2, R * 0.18);
+  });
+};
+
+/** THE TREBUCHET ARM — the throwing beam along facing: counterweight box
+ *  aft, tapered beam forward to a sling cradle. The engine's WORKING part
+ *  (break it and the barrage stops — author it as the part body, so the
+ *  wreck reads armless at a glance). params: len (beam reach ÷ R), cw
+ *  (counterweight box scale). */
+const trebuchetArm: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  const metal = pal.metal;
+  const len = P(spec, 'len', 1.5);
+  const cw = P(spec, 'cw', 0.52);
+  place(ctx, r, spec, (c, R) => {
+    const L = R * len, CW = R * cw;
+    // Counterweight: an iron-bound box hung aft.
+    c.fillStyle = shade(metal.base, -0.15);
+    c.fillRect(-L * 0.62 - CW, -CW * 0.8, CW * 1.35, CW * 1.6);
+    c.strokeStyle = shade(metal.shadow, -0.2);
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    c.strokeRect(-L * 0.62 - CW, -CW * 0.8, CW * 1.35, CW * 1.6);
+    // The beam: tapered timber, thick at the pivot, thin at the sling.
+    c.fillStyle = wood.base;
+    c.beginPath();
+    c.moveTo(-L * 0.62, -R * 0.17);
+    c.lineTo(L * 0.82, -R * 0.07);
+    c.lineTo(L * 0.82, R * 0.07);
+    c.lineTo(-L * 0.62, R * 0.17);
+    c.closePath();
+    c.fill();
+    outlined(c, wood, 1.1);
+    // Pivot boss at the axle.
+    c.fillStyle = metal.base;
+    c.beginPath(); c.arc(0, 0, Math.max(2, R * 0.14), 0, Math.PI * 2); c.fill();
+    // Sling cradle: two lines to a loose pouch past the beam tip.
+    c.strokeStyle = shade(wood.shadow, -0.15);
+    c.lineWidth = Math.max(1, R * 0.045);
+    c.beginPath();
+    c.moveTo(L * 0.82, -R * 0.06); c.lineTo(L * 1.04, 0);
+    c.moveTo(L * 0.82, R * 0.06); c.lineTo(L * 1.04, 0);
+    c.stroke();
+    c.fillStyle = shade(wood.base, -0.3);
+    c.beginPath(); c.arc(L * 1.04, 0, Math.max(1.6, R * 0.1), 0, Math.PI * 2); c.fill();
+  });
+};
+
+/** THE SHOT HOPPER — a shallow crib of glowing ammunition: ember-lit shot
+ *  stacked in a timber frame. The munition tell (a gun's ready rack, a
+ *  hauler's load, a dump's heart) — the glow says "this pile fights back".
+ *  params: n (visible shot), glow. */
+const shotHopper: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  const glow = PS(spec, 'glow') ?? pal.glow;
+  const n = Math.max(1, Math.round(P(spec, 'n', 4)));
+  place(ctx, r, spec, (c, R) => {
+    const W = R * 0.55, L = R * 0.42;
+    c.fillStyle = shade(wood.base, -0.18);
+    c.fillRect(-L, -W, L * 2, W * 2);
+    c.strokeStyle = wood.outline;
+    c.lineWidth = 1.1;
+    c.strokeRect(-L, -W, L * 2, W * 2);
+    // The shot: nested spheres, each with a breathing ember ring.
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.7;
+      const sx = Math.cos(a) * L * 0.45, sy = Math.sin(a) * W * 0.55;
+      const sr = Math.max(1.8, R * 0.16);
+      c.fillStyle = '#2a2226';
+      c.beginPath(); c.arc(sx, sy, sr, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(glow, 0.8);
+      c.lineWidth = Math.max(0.8, sr * 0.28);
+      c.beginPath(); c.arc(sx, sy, sr * 0.55, 0, Math.PI * 2); c.stroke();
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -4849,6 +4964,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   spiralEyes, mothWings,
   writheMass, hatchPores,
   howdahRig, mortarMaw,
+  trebuchetRig, trebuchetArm, shotHopper,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

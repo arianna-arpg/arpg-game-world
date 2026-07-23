@@ -375,6 +375,24 @@ registerSidezone({
   },
 });
 
+// --- THE WARFRONT DEN (the Warfront country's way down) ----------------------
+// THE ORDNANCE YARD: the works where Bhorog's engines are built — proofing
+// floors, keg cellars, and the Master of Ordnance at the bottom (break the
+// shot rack on his back and his cannonade starves). The powder_magazine
+// door stands in the shelled country; 'ordnance_yard_entered' is the
+// country's gateway seam (the ordnance skill pool reads it).
+registerSidezone({
+  kind: 'powder_magazine',
+  dwell: 0.7,
+  ledgerOnEnter: 'ordnance_yard_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'ordnance_yard', {
+    rollVariant: true,
+    name: 'the Ordnance Yard',
+    objective: { kind: 'boss', id: 'ordnance_master' },
+    noDeeper: true,
+  }),
+});
+
 // --- THE AETHERIAL COUNTRY DENS (the checklist's den component) -------------
 // THE WANE: the Vesperlands' vault under the meadows — the noctarch's seat,
 // where the instruments went when the sky stopped answering. The crescent

@@ -1002,6 +1002,17 @@ export function validateContent(): void {
     for (const [i, c] of (b.cycle ?? []).entries()) fromTuning(c.use, `cycle[${i}]`);
   };
   for (const def of Object.values(MONSTERS)) {
+    // THE BOMBARDMENT FABRIC: a standing gun's shot MUST be in its own kit —
+    // the fabric casts the wearer's real instance (cooldown-arbitrated with
+    // the brain, silenced by breakDisables). A skillId outside `skills`
+    // would be a gun that never fires, silently.
+    if (def.bombard) {
+      if (!def.skills.includes(def.bombard.skillId)) {
+        warn(`monster ${def.id}: bombard.skillId '${def.bombard.skillId}' is not in its own skills [${def.skills.join(', ')}]`);
+      }
+      const [c0, c1] = def.bombard.cadence;
+      if (!(c0 > 0) || !(c1 >= c0)) warn(`monster ${def.id}: bombard.cadence [${c0}, ${c1}] must be 0 < min ≤ max`);
+    }
     const brains: [string, BrainDef | undefined][] = [
       ['brain', def.brain],
       ...(def.brainVariants ?? []).map((v, i): [string, BrainDef | undefined] => [`brainVariants[${i}]`, v.brain]),

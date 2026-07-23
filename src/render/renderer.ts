@@ -88,6 +88,7 @@ import './vis/paintersHome'; // side-effect: the hearth-and-bed kit's painters r
 import './vis/paintersSea'; // side-effect: the ship-deck kit + ghost hull register
 import './vis/paintersGarden'; // side-effect: the Garden kit's painters register
 import './vis/paintersGrove'; // side-effect: the Grove kit's painters register
+import './vis/paintersWarfront'; // side-effect: the Warfront kit's painters register
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
@@ -3277,6 +3278,35 @@ export class Renderer {
           ctx.globalAlpha = 0.15;
           ctx.fillStyle = z.color;
           ctx.fill();
+        }
+        // LOBBED SHOT (Zone.lobFrom — StormDelivery.lob): the incoming comet,
+        // flown caster → landing ring across this strike's own countdown. A
+        // top-down parabola: the head lifts off the chord by a 4t(1−t) apex
+        // and swells as it comes down — you watch each shot leave the engine
+        // that threw it. Render-only; the telegraph disc is the tested truth.
+        if (z.lobFrom && z.delay0 && z.delay0 < 100 && z.delay <= z.delay0) {
+          const t = 1 - z.delay / z.delay0;
+          const fx = z.lobFrom.x, fy = z.lobFrom.y;
+          const dxl = z.pos.x - fx, dyl = z.pos.y - fy;
+          const apex = Math.min(280, Math.max(46, Math.hypot(dxl, dyl) * (z.lobArc ?? 0.32)));
+          const lift = 4 * t * (1 - t) * apex;
+          const hx = fx + dxl * t, hy = fy + dyl * t - lift;
+          const tt = Math.max(0, t - 0.09);
+          const tlift = 4 * tt * (1 - tt) * apex;
+          ctx.globalAlpha = 0.3 + 0.5 * t;
+          ctx.strokeStyle = z.color;
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(fx + dxl * tt, fy + dyl * tt - tlift);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+          const hr = 3 + 3.5 * t;
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = z.color;
+          ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffe9c8';
+          ctx.beginPath(); ctx.arc(hx, hy, hr * 0.45, 0, Math.PI * 2); ctx.fill();
         }
       } else if (z.edge && z.edge > 0.02) {
         // Fill-in cage (Pillar of Flame / Wildfire Sweep): only the closing

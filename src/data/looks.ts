@@ -6341,6 +6341,69 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.8,
   },
+
+  // --- THE WARFRONT KIT (Bhorog's siege-works — engine/bombard.ts kin) -----
+  /** The Bale Trebuchet: chassis only — the ARM is its own part body
+   *  (break it and the rain stops; an armless wreck reads silenced at a
+   *  glance). Skull on the skid: demon-built, not dwarf-built. */
+  hell_trebuchet: {
+    parts: [
+      { kind: 'trebuchetRig', scale: 1.05 },
+      { kind: 'chains', y: 0.35, scale: 0.7, role: 'dark' },
+      { kind: 'skull', x: -0.62, y: -0.52, scale: 0.32, role: 'accent' },
+    ],
+    shadowScale: 1.2,
+  },
+  /** The throwing arm + its ready rack — scaled past its own body so the
+   *  beam spans the chassis it rides (the part seat does the placing). */
+  trebuchet_arm: {
+    parts: [
+      { kind: 'trebuchetArm', scale: 2.1 },
+      { kind: 'shotHopper', x: -1.1, y: 0.9, scale: 0.85 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The player's planted gun: a wheeled iron mortar carriage with its
+   *  powder keg — the hellbore_mortar summon's body. */
+  hellbore_engine: {
+    parts: [
+      { kind: 'wheels', scale: 1.0 },
+      { kind: 'mortarMaw', scale: 1.2, params: { len: 0.95, w: 0.3 } },
+      { kind: 'keg', x: -0.55, scale: 0.5 },
+    ],
+    shadowScale: 0.9,
+  },
+  /** The Grind Bannerman: the column's spine — the standard IS the look. */
+  grind_bannerman: {
+    parts: [
+      { kind: 'banner', x: -0.25, scale: 1.35 },
+      { kind: 'torso', scale: 0.98 },
+      { kind: 'armorPlates', params: { n: 3 } },
+      { kind: 'helm', scale: 0.9 },
+      { kind: 'sword', scale: 0.8 },
+    ],
+    shadowScale: 1.0,
+  },
+  /** The Master of Ordnance: a shoulder-slung bombard fed from the shot
+   *  rack on his back (the rack is his PART body — starve the gun). */
+  ordnance_master: {
+    parts: [
+      { kind: 'torso', scale: 1.16 },
+      { kind: 'armorPlates', params: { n: 5 } },
+      { kind: 'pauldrons', role: 'metal', scale: 1.25 },
+      { kind: 'helm', scale: 1.05 },
+      { kind: 'mortarMaw', y: -0.58, scale: 0.85, params: { len: 0.85 } },
+      { kind: 'chains', scale: 0.9, role: 'dark' },
+      { kind: 'hammer', params: { len: 1.05 } },
+    ],
+    shadowScale: 1.15,
+  },
+  shot_rack: {
+    parts: [
+      { kind: 'shotHopper', scale: 1.15, params: { n: 5 } },
+    ],
+    shadowScale: 0.55,
+  },
   /** The vat sow: flesh-country brood engine — folds, seams and the two
    *  birthing sacs it farrows from are SEPARATE bodies on its flanks. */
   vat_sow: {

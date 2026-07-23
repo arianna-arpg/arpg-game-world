@@ -496,6 +496,10 @@ export interface Doodad {
    *  from the tag, replanted deterministically per load, dissolved (evap)
    *  on a state change. Never persisted, never in layouts. */
   holdDress?: boolean;
+  /** IMPACT DRESS tag (World.plantImpactDress — ImpactDressSpec): a blast's
+   *  drying pock. Same law as weatherDress: runtime-only, already handed to
+   *  `evap` at plant, capped per zone. Never persisted, never in layouts. */
+  blastDress?: boolean;
   /** THE TIER FABRIC (engine/tiers.ts): the walkable LAYER this doodad lives
    *  on (absent = 0, the ground truth). Tier-tagged pieces are laid by the
    *  tier carvers (a duct's own webs, a butte-top cache): ground sensing,

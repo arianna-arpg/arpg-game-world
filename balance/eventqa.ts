@@ -52,6 +52,7 @@ import '../src/data/massifs';
 import '../src/data/settled';
 import '../src/data/garden';
 import '../src/data/grove';
+import '../src/data/warfront';
 import '../src/data/compositions';
 // The living-terrain registries main.ts loads (fog banks, creep kinds): a def
 // validate() that checks FOG_BANKS/CREEPS must see the same game the player

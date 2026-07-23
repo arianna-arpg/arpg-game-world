@@ -1465,6 +1465,22 @@ export interface ConeDelivery {
   occlusion?: 'blocked' | 'free';
 }
 
+/** IMPACT DRESS (the transient battlefield — engine/bombard.ts CFG): a
+ *  detonation leaves a runtime doodad at its crater that DRIES away
+ *  (Doodad.evap — the transience doctrine's generic dissolve; never
+ *  persisted, never in layouts). Shellfire pocks the ground for the length
+ *  of the fight, then the field breathes back. Any zone-pushing delivery
+ *  may wear one; a per-zone cap keeps the ground from accreting. */
+export interface ImpactDressSpec {
+  /** Doodad kind planted at the blast point (needs a DOODAD_VISUALS row). */
+  kind: string;
+  /** Dwell [min,max] seconds before the pock starts contracting
+   *  (default BOMBARD_CFG.dressDwell). */
+  evapAfter?: [number, number];
+  /** Chance per detonation to leave the pock (default 1). */
+  chance?: number;
+}
+
 export interface GroundDelivery {
   type: 'ground';         // targeted at cursor (AI: at target)
   radius: number;
@@ -1476,6 +1492,8 @@ export interface GroundDelivery {
    *  `phasing` stat frees from data. */
   occlusion?: 'blocked' | 'free';
   delay?: number;         // telegraph time before impact
+  /** The blast leaves a drying pock (see ImpactDressSpec). */
+  impactDress?: ImpactDressSpec;
   lingerDuration?: number;// if set, leaves a zone dealing damage each tick
   tickInterval?: number;  // seconds between linger ticks (default 0.5)
   /** LINGERING FUME (Toxic Cloud): an occupant must stand inside this many
@@ -1775,6 +1793,20 @@ export interface StormDelivery {
    *  this many seconds before the first strike lands — the honest circle.
    *  Distinct from target-seeking storms: the RADIUS is the promise. */
   telegraph?: number;
+  /** SKY-BORNE (the bombardment law): the strikes are WEATHER, not a duel —
+   *  each lands indiscriminately (hitAll: friend, foe and the caster's own
+   *  ranks alike), passes over dormant un-roused neutrals (spareDormant),
+   *  and spares anyone under a ROOF (spareRoofed) — a shell on the thatch
+   *  is the thatch's problem. The fireStrikeAt posture, opted in as skill
+   *  data (a trebuchet's rain, a monster-cast levinfall). */
+  sky?: true;
+  /** LOBBED SHOT (render-only, drawn == tested unchanged): each strike
+   *  draws an arcing comet from the CASTER to its landing ring across the
+   *  telegraph countdown — you see the shot coming in from the engine that
+   *  threw it. `arc` scales apex height vs flight distance (default 0.32). */
+  lob?: { arc?: number };
+  /** Each strike's blast leaves a drying pock (see ImpactDressSpec). */
+  impactDress?: ImpactDressSpec;
 }
 
 export interface DashDelivery {

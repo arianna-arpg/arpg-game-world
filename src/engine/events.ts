@@ -35,6 +35,10 @@ export interface EventContext {
   /** The faction that holds this zone (faction.owner). */
   owner: string | null;
   ownerPower: number;
+  /** The zone's biome, when it has one — the lever for BIOME-flavored kinds
+   *  (a warfront column, a fen haunt) whose ground has no faction OWNER to
+   *  read (the surface territorial overlay does not reach every dimension). */
+  biome?: string;
   /** Hostile factions staking the zone, dominant first (faction.contestants). */
   contestants: string[];
   /** A faction whose war host is pressing this zone right now, if any. */

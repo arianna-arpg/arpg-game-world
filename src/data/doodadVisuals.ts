@@ -313,6 +313,44 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       glisten: { color: '#e8a8b0' },
     },
   },
+  // --- THE WARFRONT DRESS (paintersWarfront.ts — Bhorog's siege-works) -----
+  // The signature pock: strewn at generation for the OLD war, planted live
+  // by impact dress (hellshot_volley) for the one happening to you.
+  shell_crater: {
+    painter: 'shellPock', order: 24,
+    params: { char: '#241d1a', rim: 'theme:obstacle|#4a3a2c', ember: '#b8502a' },
+  },
+  gabion: {
+    painter: 'gabion', order: 51, shadow: 0.4,
+    params: { wicker: '#5a4632', earth: '#403228' },
+  },
+  siege_shot: {
+    painter: 'shotPile', order: 50, shadow: 0.4,
+    params: { stone: '#2a2226', ember: '#ff7a3a' },
+    light: { radius: -1.6, color: '#ff6a2a', intensity: 0.18, flicker: 1.8 },
+  },
+  siege_wreck: {
+    painter: 'siegeWreck', order: 54, shadow: 0.5, longShadow: 1.3,
+    params: { timber: '#4a3626', char: '#241d1a', iron: '#55505c' },
+  },
+  // The country's own furniture (demon_banner stays invasion weather-dress).
+  war_standard: {
+    painter: 'warStandard', order: 55, shadow: 0.45, longShadow: 1.7,
+    params: { cloth: '#8a3a2a', pole: '#3a3026', sigil: '#e8c060' },
+  },
+  // The armored way DOWN into the Ordnance Yard (data/sidezones.ts) —
+  // the caveMouth vocabulary in iron-bound charcoal, ember seeping at the
+  // throat: the den-gate law, dressed for the magazine.
+  powder_magazine: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3a2e26', edge: '#5e4630', material: 'stone',
+      glow: '#ff8a3a', throat: '#0c0806',
+      teeth: {}, rubble: {},
+      label: 'the Ordnance Yard',
+    },
+    light: { radius: -2.2, color: '#ff8a3a', intensity: 0.32, flicker: 2 },
+  },
   // THE HYPHAL NETWORK: the fungal floor is a living circuit — filaments
   // crawl out of the mat and nutrient pulses travel the strands.
   mycelial_mat: {

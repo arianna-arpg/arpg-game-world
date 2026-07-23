@@ -26,6 +26,7 @@ import '../data/massifs';
 import '../data/settled';
 import '../data/garden';
 import '../data/grove';
+import '../data/warfront';
 import '../data/compositions';
 import '../data/fog';
 import '../data/creeps';

@@ -619,6 +619,16 @@ export const BIOMES: Record<string, BiomeInfo> = {
     climate: { moisture: { from: 0.22, fadeIn: 0.12 } },
     allowedLayouts: { winding: 2, plains: 1, steppes: 1 },
     layoutParams: { riverLiquid: 'gore', negativeLiquid: 'gore' } },
+  // THE WARFRONT — hell-only (the caul pattern: absent from BIOME_FIELD,
+  // present only in the underworld palette): the ACTIVE front of the war
+  // below — Bhorog the Siegewright's ground. Where the wasteland is the
+  // WOUND the war leaves, this is the war still happening: standing
+  // trebuchet batteries (engine/bombard.ts), crater country old and fresh,
+  // grind-columns on the ways. Open shelled ground — plains and marches,
+  // pocked by the crater landmark family.
+  warfront: { patronFaction: 'demon', mapColor: '#7a3a26', label: 'The Warfront', spacing: 72,
+    allowedLayouts: { plains: 2, steppes: 1 },
+    landmarks: [{ landmark: 'crater', chance: 0.45 }, { landmark: 'sinkhole', chance: 0.12 }] },
   // CAVERN — the biome tag for the underground tilesets (they previously
   // carried none, so cave zones fell back to PLAINS wildlife: hares in the
   // dark). No patron marches from here; the dark keeps its own.

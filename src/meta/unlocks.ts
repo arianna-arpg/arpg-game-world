@@ -571,6 +571,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_glimmer', kind: 'skill', cost: 160, reqLedger: 'gleam_entered', label: 'Skill Pool — Glimmercraft',
     description: 'Lure Lantern may drop. Something in the grove taught you what a light can make a body do.',
     payload: { skillIds: ['lure_lantern'] } },
+  // THE SIEGECRAFT — the Warfront's ordnance art waits under the powder
+  // magazine (the 'ordnance_yard_entered' ledger the den's door bumps —
+  // dwelled into, not taught). You watched the Grind build its guns;
+  // walking the proofing floor is the tuition.
+  { id: 'gem_skills_siegecraft', kind: 'skill', cost: 180, reqLedger: 'ordnance_yard_entered', label: 'Skill Pool — Siegecraft',
+    description: 'Hellbore Mortar may drop. The Ordnance Yard taught you what a gun needs: somewhere to stand, something to feed it, and someone it hates.',
+    payload: { skillIds: ['hellbore_mortar'] } },
   // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
   // way the idea itself arrives — by killing ONE chest that pretended to be
   // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so

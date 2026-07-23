@@ -3329,6 +3329,314 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // ==========================================================================
+  // THE WARFRONT COUNTRY — the Underworld's ACTIVE front (biome:'warfront'):
+  // Bhorog the Siegewright's ground, staged rim → line by biomeDepth. Where
+  // the wasteland is the WOUND the war leaves, this is the war HAPPENING:
+  // standing Bale Trebuchets rain shellfire zone-wide until silenced (THE
+  // BOMBARDMENT FABRIC, engine/bombard.ts — the 'spawners' objective is the
+  // signature: destroy the engines), the ground is pocked with craters old
+  // and fresh (the crater landmark family + shell_crater strata + live
+  // impact dress), grind-columns march the ways (the war_column event), and
+  // the worst-hammered ground tears into riftscar pockets. Kit in
+  // data/warfront.ts; painters in render/vis/paintersWarfront.ts; the
+  // siege-works kin in data/monsters.ts; the den door in data/sidezones.ts.
+  // ==========================================================================
+
+  // THE GRINDFIELDS — the shelled outer country (the rim face): ground the
+  // guns have ALREADY chewed — pock-strata, wrecked engines, stake belts —
+  // under a thinner rain than the line ahead.
+  grindfields: {
+    id: 'grindfields', biome: 'warfront',
+    depthAffinity: { to: 0.62, fadeOut: 0.15 },
+    compositions: [
+      { composition: 'siege_works', chance: 0.3 },
+      { composition: 'riftscar_pocket', chance: 0.22 },
+      { composition: 'powder_cache', chance: 0.16 },
+      { composition: 'war_camp', chance: 0.14 },
+      { composition: 'fallen_colossus', chance: 0.08 },
+    ],
+    nameFirst: ['Shelled', 'Cratered', 'Churned', 'Bombarded', 'Shotfallen', 'Pocked', 'Hammered', 'Beaten', 'Rutted', 'Grinding', 'Screaming', 'Broken'],
+    nameSecond: ['Fields', 'Advance', 'March', 'Reach', 'Ground', 'Downs', 'Salient', 'Approach', 'Mile', 'Verge'],
+    theme: {
+      // Scorched umber under a dim iron sky — rust-orange accent (the
+      // wasteland keeps hate-green; the two underworld war faces must
+      // never be mistaken for each other at a glance).
+      dayLight: 0.98, nightDark: 0.86, ambientDark: 0.08,
+      ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#ff9a5a' }],
+      ground: {
+        palette: ['#181012', '#221618', '#2c1c1a', '#362420', '#3e2a22'],
+        bias: 0.45, alpha: 0.5, stretchX: 1.3, speckles: 0.8, strength: 1.1,
+      },
+      floor: '#160f10', grid: '#201416', border: '#5c3226',
+      obstacle: '#3a2a22', obstacleEdge: '#6e4632', accent: '#e8823a',
+      wall: '#443026', chasm: '#0c0508', mud: '#26170f',
+    },
+    sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.3,
+    // What the shelled country ALWAYS is: pocked in bands where the
+    // barrages walked (strata — the pocks CLUSTER, they never pepper), and
+    // the Grind's standards marking whose ground it became.
+    common: [
+      { kind: 'shell_crater', count: [10, 16], where: { field: 'noise', max: 0.55, params: { scale: 420, seed: 0x51e9 } } },
+      { kind: 'war_standard', count: [1, 2] },
+      { kind: 'gore', count: [0, 1] },
+    ],
+    layout: [
+      { kind: 'siege_wreck', count: [1, 2] },
+      { kind: 'gabion', count: [2, 4] },
+      { kind: 'siege_shot', count: [1, 2] },
+      { kind: 'impaler_stake', count: [1, 3] },
+      { kind: 'rocks', count: [6, 11], radius: [22, 46] },
+      { kind: 'scree', count: [1, 3] },
+      { kind: 'dead_tree', count: [2, 4] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'ruin', count: [0, 2] },
+      { kind: 'camp', count: [1, 2] },
+      { kind: 'cliff', count: [0, 2] },
+      { kind: 'rusted_snare', count: [0, 2] },
+      { kind: 'powder_magazine', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'standard_row' },
+      { kind: 'formation', count: [0, 1], formation: 'trench_line' },
+    ],
+    variants: [
+      // SHELLED DOWNS: the barrage's own portrait — crater country proper,
+      // the wrecks of the guns that made it left where they burned.
+      {
+        name: 'Shelled Downs',
+        layout: [
+          { kind: 'shell_crater', count: [8, 14], where: { field: 'noise', max: 0.6, params: { scale: 360, seed: 0x51ea } } },
+          { kind: 'siege_wreck', count: [2, 3] },
+          { kind: 'siege_shot', count: [1, 3] },
+          { kind: 'rocks', count: [5, 9], radius: [22, 44] },
+          { kind: 'scree', count: [2, 4] },
+          { kind: 'bone_pile', count: [2, 4] },
+          { kind: 'dead_tree', count: [1, 3] },
+          { kind: 'formation', count: [0, 1], formation: 'standard_row' },
+        ],
+      },
+      // STAKE LINES: the defense belts — gabion trenches, stake rows, and
+      // the gore-stakes that shred whatever the shells throw into them.
+      {
+        name: 'Stake Lines',
+        layout: [
+          { kind: 'formation', count: [1, 2], formation: 'trench_line' },
+          { kind: 'gabion', count: [3, 6] },
+          { kind: 'impaler_stake', count: [3, 6] },
+          { kind: 'gore_stakes', count: [2, 4] },
+          { kind: 'rocks', count: [5, 9], radius: [22, 44] },
+          { kind: 'bone_pile', count: [1, 3] },
+          { kind: 'dead_tree', count: [1, 3] },
+          { kind: 'camp', count: [1, 2] },
+          { kind: 'formation', count: [0, 1], formation: 'stake_line' },
+        ],
+      },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 10 } },
+        { id: 'hellhound', weight: 3 },
+        { id: 'cinder_fiend', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'dread_fiend', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'bombard_demon', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'grind_bannerman', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'siege_hulk', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        { id: 'brimstone_cantor', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'chained_tormentor', weight: 1, presence: { from: 16, fadeIn: 6 } },
+        // A stray gun guarding works the front left behind — the barrage
+        // exists outside the objective, thin (the objective is the BATTERY).
+        { id: 'hell_trebuchet', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'hell_trebuchet',
+    objectives: [
+      { kind: 'spawners', weight: 5 },
+      { kind: 'clear', weight: 2 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
+  // THE SIEGEFRONT — the active line (the deep face): the batteries LIVE,
+  // the trenches manned, the dumps stocked, the columns forming. The rain
+  // is the place; silencing it is the day's work.
+  siegefront: {
+    id: 'siegefront', biome: 'warfront',
+    depthAffinity: { from: 0.42, fadeIn: 0.15 },
+    compositions: [
+      { composition: 'siege_works', chance: 0.5 },
+      { composition: 'riftscar_pocket', chance: 0.28 },
+      { composition: 'war_camp', chance: 0.22 },
+      { composition: 'powder_cache', chance: 0.2 },
+    ],
+    nameFirst: ['Iron', 'Grinding', 'Thundering', 'Roaring', 'Sleepless', 'Burning', 'Advancing', 'Besieging', 'Howling', 'Unbroken'],
+    nameSecond: ['Line', 'Siegeworks', 'Batteries', 'Gunline', 'Emplacement', 'Muster', 'Offensive', 'Front', 'Barrage', 'Grind'],
+    theme: {
+      dayLight: 0.92, nightDark: 0.8, ambientDark: 0.14,
+      ambientFx: [{ kind: 'motes', intensity: 0.5, color: '#ff8a4a' }],
+      ground: {
+        palette: ['#140d0e', '#1e1312', '#281816', '#321f18', '#3a261c'],
+        bias: 0.5, alpha: 0.55, stretchX: 1.4, speckles: 0.9, strength: 1.15,
+      },
+      floor: '#120c0d', grid: '#1c1210', border: '#6e3a22',
+      obstacle: '#382620', obstacleEdge: '#724a2e', accent: '#ff6a2a',
+      wall: '#402c22', chasm: '#0b0407', mud: '#241509',
+      // Battle-smoke: the line breathes its own pall (data/fog.ts).
+      fog: { banks: [0, 1], kinds: [{ id: 'dread_pall' }] },
+    },
+    sizeW: [2500, 3400], sizeH: [1600, 2300], ellipseChance: 0.25,
+    common: [
+      { kind: 'shell_crater', count: [14, 22], where: { field: 'noise', max: 0.6, params: { scale: 380, seed: 0x51eb } } },
+      { kind: 'war_standard', count: [2, 4] },
+      { kind: 'gore', count: [1, 2] },
+    ],
+    layout: [
+      { kind: 'gabion', count: [4, 8] },
+      { kind: 'siege_shot', count: [2, 4] },
+      { kind: 'powder_keg', count: [1, 3] },
+      { kind: 'siege_wreck', count: [1, 3] },
+      { kind: 'hate_brazier', count: [1, 3] },
+      { kind: 'impaler_stake', count: [2, 4] },
+      { kind: 'rocks', count: [5, 9], radius: [22, 44] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'hell_fin', count: [0, 2] },
+      { kind: 'camp', count: [1, 2] },
+      { kind: 'powder_magazine', count: [0, 1] },
+      { kind: 'formation', count: [1, 2], formation: 'trench_line' },
+      { kind: 'formation', count: [1, 2], formation: 'standard_row' },
+    ],
+    variants: [
+      // THE GUN LINE: batteries wall to wall — the emplacements' face.
+      {
+        name: 'the Gun Line',
+        layout: [
+          { kind: 'gabion', count: [6, 10] },
+          { kind: 'siege_shot', count: [3, 5] },
+          { kind: 'powder_keg', count: [2, 4] },
+          { kind: 'siege_wreck', count: [1, 2] },
+          { kind: 'hate_brazier', count: [2, 4] },
+          { kind: 'rocks', count: [4, 8], radius: [22, 42] },
+          { kind: 'formation', count: [1, 2], formation: 'trench_line' },
+          { kind: 'formation', count: [0, 1], formation: 'standard_row' },
+        ],
+      },
+      // MUSTER GROUNDS: the army forming up — camps, cages, the drilled
+      // fiction the columns march OUT of.
+      {
+        name: 'Muster Grounds',
+        layout: [
+          { kind: 'camp', count: [2, 3] },
+          { kind: 'war_standard', count: [2, 4] },
+          { kind: 'hate_brazier', count: [2, 4] },
+          { kind: 'soul_cage', count: [1, 3] },
+          { kind: 'gabion', count: [2, 4] },
+          { kind: 'bone_pile', count: [2, 4] },
+          { kind: 'rocks', count: [4, 8], radius: [22, 42] },
+          { kind: 'formation', count: [1, 1], formation: 'muster_fence' },
+          { kind: 'formation', count: [0, 1], formation: 'camp_goods' },
+        ],
+      },
+    ],
+    packs: {
+      count: [7, 9], size: [3, 5],
+      table: [
+        { id: 'hellhound', weight: 2 },
+        { id: 'dread_fiend', weight: 2 },
+        { id: 'bombard_demon', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        { id: 'grind_bannerman', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'siege_hulk', weight: 2, presence: { from: 10, fadeIn: 5 } },
+        { id: 'brimstone_cantor', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'chained_tormentor', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        { id: 'doomherald', weight: 1, presence: { from: 20, fadeIn: 7 } },
+        { id: 'hell_trebuchet', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'hell_trebuchet',
+    objectives: [
+      { kind: 'spawners', weight: 6 },
+      { kind: 'waves', weight: 2 },
+      { kind: 'clear', weight: 2 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+    ],
+  },
+
+  // THE ORDNANCE YARD — the Warfront's den (data/sidezones.ts: the
+  // powder_magazine door): the works where the engines are BUILT — proofing
+  // floors, ready racks, kegs by the cord — and the Master of Ordnance at
+  // the bottom of it (break the rack on his back and the cannonade starves).
+  ordnance_yard: {
+    id: 'ordnance_yard', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { dungeon: 3, labyrinth: 1 },
+    layoutParams: {
+      rooms: [5, 8],
+      doorChance: 0.15, doorBreakChance: 0.12,
+      corridorCells: 1.6, loopiness: 0.35,
+    },
+    nameFirst: ['Ordnance', 'Powder', 'Engine', 'Shot', 'Forgeblack', 'Grinding', 'Iron'],
+    nameSecond: ['Yard', 'Magazine', 'Works', 'Foundry', 'Arsenal', 'Cellars', 'Stores'],
+    theme: {
+      ambientDark: 0.34,
+      ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#ff8a4a' }],
+      ground: {
+        palette: ['#120d0c', '#1a1210', '#241814', '#2c1e16', '#342418'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#100b0a', grid: '#181110', border: '#5c3a22',
+      obstacle: '#32241c', obstacleEdge: '#5e4028', accent: '#ff8a3a',
+      wall: '#32241c', mud: '#1e1209',
+    },
+    sizeW: [1800, 2500], sizeH: [1300, 1900], ellipseChance: 0,
+    layout: [
+      { kind: 'gabion', count: [3, 6] },
+      { kind: 'siege_shot', count: [3, 5] },
+      { kind: 'powder_keg', count: [3, 6] },
+      { kind: 'siege_wreck', count: [1, 2] },
+      { kind: 'hate_brazier', count: [2, 4] },
+      { kind: 'shell_crater', count: [2, 4] },
+      { kind: 'rocks', count: [2, 4], radius: [16, 30] },
+    ],
+    variants: [
+      // THE PROOFING FLOOR: where each arm is tested — pocked like the
+      // front it feeds, the failures left where they tore.
+      { name: 'the proofing floor', layout: [
+        { kind: 'shell_crater', count: [5, 9] },
+        { kind: 'siege_wreck', count: [2, 3] },
+        { kind: 'siege_shot', count: [2, 4] },
+        { kind: 'gabion', count: [2, 4] },
+        { kind: 'hate_brazier', count: [1, 3] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 30] },
+      ] },
+      // THE KEG CELLARS: the magazine proper — cover that shoots back.
+      { name: 'the keg cellars', layout: [
+        { kind: 'powder_keg', count: [6, 10] },
+        { kind: 'siege_shot', count: [2, 4] },
+        { kind: 'gabion', count: [3, 5] },
+        { kind: 'hate_brazier', count: [2, 3] },
+        { kind: 'rocks', count: [1, 3], radius: [16, 28] },
+      ] },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      table: [
+        { id: 'imp', weight: 2 },
+        { id: 'bombard_demon', weight: 3 },
+        { id: 'dread_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'siege_hulk', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'grind_bannerman', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        // Guns under assembly: the yard tests what it builds.
+        { id: 'hell_trebuchet', weight: 1, presence: { from: 1 } },
+      ],
+    },
+    spawnerId: 'hell_trebuchet',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
   // THE OUTER STEPPES — the Underworld's scorched marches (biome:'steppes').
   // Open umber plains cut by the angular wall-runs of abandoned hellworks (the
   // 'steppes' recipe: true walls with breaches — navigate AROUND them), abyssal
@@ -10416,6 +10724,9 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   mire:           { title: 'The Mire',          blurb: 'A drowned graveland of standing swamp, poison bog and rotted timber — footing that pulls at you and water that hides its teeth.' },
   wasteland:      { title: 'Wasteland',         blurb: "The war-wound: ground the demon war tore through and never gave back — hate-lit rents, vitrified glass, and the Legion's toll-road furniture under a dread pall." },
   hell_steppes:   { title: 'Hell Steppes',      blurb: "The underworld's fortress plateau — impaled warnings staked between the towers, one switchback stair the only way down onto the steppe." },
+  grindfields:    { title: 'The Grindfields',   blurb: "The Warfront's shelled approaches — crater-strata, wrecked engines and stake belts under a thin, patient rain of hellshot: Bhorog's guns have already been here, and some never left." },
+  siegefront:     { title: 'The Siegefront',    blurb: 'The active line of the war below — batteries live behind their gabions, munition dumps stocked, grind-columns marching the standard-rows. Silence the engines: the rain is the place.' },
+  ordnance_yard:  { title: 'The Ordnance Yard', blurb: 'The works where the Grind builds its guns — proofing floors pocked like the front they feed, keg cellars that answer stray fire, and the Master of Ordnance feeding his shoulder-bombard from the rack on his back.' },
   caul:           { title: 'The Caul',          blurb: 'A hell-born warren of bruise-violet flesh — sacs, roots and umbilics glowing their own diegetic light while the living ground tries to take you back.' },
   river_of_flame: { title: 'River of Flame',    blurb: 'A continuous river of fire winding past gibbet galleries, banner roads and pale pyres to the Hellforge waiting where the flow finally ends.' },
   durance:        { title: 'The Durance',       blurb: 'The first fully indoor biome — a torture-hold of cold green light, instruments left mid-use, and gore underfoot that carries the whole story.' },

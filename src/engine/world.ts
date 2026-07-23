@@ -35,8 +35,9 @@ import {
   type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
-  type TetherSpec, type ConduitSpec,
+  type TetherSpec, type ConduitSpec, type ImpactDressSpec,
 } from './skills';
+import { BOMBARD_CFG, type BombardSpec } from './bombard';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
 import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
@@ -1003,6 +1004,17 @@ interface Zone {
   fillRate?: number;
   /** A Demon-Storm meteor: renders a falling fiery streak instead of a bolt. */
   meteor?: boolean;
+  /** LOBBED SHOT (StormDelivery.lob — render-only): the launch point the
+   *  incoming comet is drawn from across the telegraph countdown. */
+  lobFrom?: Vec2;
+  /** Apex-height factor for the drawn lob arc (default 0.32 of flight). */
+  lobArc?: number;
+  /** The telegraph's INITIAL countdown (stamped only when a drawn effect
+   *  needs progress = 1 − delay/delay0; armed strikes never stamp it). */
+  delay0?: number;
+  /** IMPACT DRESS (ImpactDressSpec): the detonation leaves a drying pock
+   *  (runtime doodad + Doodad.evap; capped per zone — BOMBARD_CFG). */
+  impactDress?: ImpactDressSpec;
   /** Fired ONCE when this zone explodes (a meteor crater spitting a demon). */
   onImpact?: () => void;
   /** SWEEP semantics (present = active): ids already struck — the zone is a
@@ -5311,6 +5323,7 @@ export class World {
       }
       const ctx: EventContext = {
         owner: owner.faction, ownerPower: owner.power,
+        biome: def.biome,
         contestants: fac.contestants(def.id),
         invader: host?.faction ?? null,
         isNight: dayCycle(this.time).label === 'Night',
@@ -13769,6 +13782,91 @@ export class World {
     }
   }
 
+  // ------------------------------------------------ THE BOMBARDMENT FABRIC
+  //
+  // (engine/bombard.ts): standing guns lob their own skill at the war on
+  // their own jittered clocks. Orchestration ONLY — the skill is the shot
+  // (useSkill: telegraphs, dodge-AI, mitigation, credit, cooldown
+  // arbitration all standard). One clock per gun: killing one thins the
+  // rain by exactly its share; a part-break that disables the skill
+  // (breakDisables) silences a hulk the objective still counts.
+
+  private updateBombardment(): void {
+    if (this.zone.objective.kind === 'safe') return;
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      const spec = a.defId ? MONSTERS[a.defId]?.bombard : undefined;
+      if (!spec) continue;
+      if (isDormant(a)) continue; // un-roused emplacements keep their powder
+      if (a.bombardAt === undefined) {
+        // Ranging in: the opening delay — a fresh arrival is never alpha-struck.
+        const [o0, o1] = spec.opening ?? BOMBARD_CFG.opening;
+        a.bombardAt = this.time + rand(o0, o1);
+        continue;
+      }
+      if (this.time < a.bombardAt) continue;
+      const inst = a.skills.find(s => s?.def.id === spec.skillId) ?? null;
+      const target = inst ? this.bombardTarget(a, spec) : null;
+      if (!inst || !target || !this.useSkill(a, inst, vec(target.pos.x, target.pos.y))) {
+        // No gun, no war, or the pipeline said no (mid-cast / cooldown /
+        // silenced / held) — a retry, never a crash.
+        a.bombardAt = this.time + BOMBARD_CFG.retrySec;
+        continue;
+      }
+      a.bombardAt = this.time + rand(spec.cadence[0], spec.cadence[1]);
+    }
+  }
+
+  /** Who the gun shells. Enemy-team guns: a random living player SEAT — the
+   *  rain follows YOU (the D2 catapult law; couch + co-op seats included).
+   *  Player-owned guns: THE ASSIST LAW — a random hostile pressing the
+   *  OWNER (within assistRadius), never a far pack the keeper isn't
+   *  fighting. Perception-free by design: the front knows where you are. */
+  private bombardTarget(a: Actor, spec: BombardSpec): Actor | null {
+    if (a.owner) {
+      const r = spec.assistRadius ?? BOMBARD_CFG.assistRadius;
+      const keeper = a.owner;
+      const pool = this.actors.filter(e => !e.dead && !e.untargetable
+        && this.hostileTo(a, e) && !isDormant(e) && dist(keeper.pos, e.pos) <= r);
+      return pool.length ? pick(pool) : null;
+    }
+    const seats = this.seats.filter(s => !s.actor.dead).map(s => s.actor);
+    return seats.length ? pick(seats) : null;
+  }
+
+  /** IMPACT DRESS (ImpactDressSpec): the detonation pocks the ground — a
+   *  runtime doodad handed to Doodad.evap after its dwell (the transience
+   *  doctrine: never persisted, never in layouts; the field breathes back).
+   *  Capped: past BOMBARD_CFG.dressCap the OLDEST standing pock dries NOW. */
+  private plantImpactDress(z: { pos: Vec2; radius: number; impactDress?: ImpactDressSpec }): void {
+    const spec = z.impactDress!;
+    if (!chance(spec.chance ?? 1)) return;
+    const x = z.pos.x, y = z.pos.y;
+    if (this.walk && !this.walk.isWalkable(x, y)) return; // no pocks on water/void
+    if (this.pointInSolid(x, y, 6)) return;
+    const r = clamp(z.radius * BOMBARD_CFG.dressRadiusFrac,
+      BOMBARD_CFG.dressRadiusMin, BOMBARD_CFG.dressRadiusMax);
+    const dwell = spec.evapAfter ?? BOMBARD_CFG.dressDwell;
+    const d: Doodad = {
+      pos: vec(x, y), radius: r, kind: spec.kind as DoodadKind,
+      rot: rand(0, Math.PI * 2), blastDress: true,
+      evap: { t: rand(dwell[0], dwell[1]), rate: BOMBARD_CFG.dressEvapRate },
+    };
+    normalizeDoodadBound(d);
+    this.doodads.push(d);
+    this.evaporating.push(d);
+    let count = 0;
+    let oldest: Doodad | undefined;
+    for (const dd of this.doodads) {
+      if (!dd.blastDress || dd.gone) continue;
+      count++;
+      // The oldest pock NOT already forced dry — each plant past the cap
+      // advances the drying frontier by one, never re-forcing the same one.
+      if (!oldest && dd.evap && dd.evap.t > 0) oldest = dd;
+    }
+    if (count > BOMBARD_CFG.dressCap && oldest?.evap) oldest.evap.t = 0;
+  }
+
   /** Living enemy of an invading faction in the zone — caps Demon-Storm spawn
    *  density. Faction is data-driven (an invasion type may field a sub-faction),
    *  so it must NOT be hardcoded to 'demon' or the cap is bypassed. */
@@ -21314,6 +21412,10 @@ export class World {
     // per-body word over the rarity tiers — the Winter King is never
     // luggage; a fat unique toad may opt back in.
     if (def.grabbable !== undefined) a.grabbable = def.grabbable;
+    // ROOTED BODIES (the siegebreaker lane, damage.ts): a def that cannot
+    // walk is a STRUCTURE to the slayer fold — stamped at mint like cling,
+    // so summons, spawner objects and wild engines all wear it identically.
+    if (def.base.moveSpeed === 0) a.stationary = true;
     // THE PLY FABRIC (engine/plies.ts): hit-counted durability stamped at
     // mint — the life pool underneath stays authored and fully live.
     if (def.plies) {
@@ -26149,6 +26251,7 @@ export class World {
               pos: this.clampPos(pt, 10), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
               caster, inst, color: def.color,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
+              impactDress: d.impactDress,
               linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
               linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
               tickInterval: groundTick, tickTimer: groundTick0,
@@ -26193,6 +26296,7 @@ export class World {
           // noImpact (Scythe Arc): the zone begins LIVE — no opening hit,
           // no telegraph pop; the linger does all the cutting.
           delay: d.delay ?? 0, exploded: !!d.noImpact,
+          impactDress: d.impactDress,
           linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
           tickInterval: groundTick, tickTimer: groundTick0,
           shape: groundShape,
@@ -26703,14 +26807,28 @@ export class World {
         for (let i = 0; i < strikes; i++) {
           const ang = rand(0, Math.PI * 2);
           const r = Math.sqrt(Math.random()) * d.areaRadius * aoeScale;
+          const zDelay = arming ? 9999
+            : fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval);
           this.zones.push({
             pos: this.clampPos(i < under.length
               ? vec(under[i].x, under[i].y)
               : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
             radius: d.hitRadius * aoeScale,
             caster, inst, color: def.color,
-            delay: arming ? 9999
-              : fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval),
+            delay: zDelay,
+            // SKY-BORNE (StormDelivery.sky): the strikes are weather — they
+            // hit EVERY side (the caster's own ranks included), pass over
+            // dormant un-roused neutrals, and spare anyone under a roof.
+            hitAll: d.sky || undefined,
+            spareDormant: d.sky || undefined,
+            spareRoofed: d.sky || undefined,
+            // LOBBED SHOT (render-only): the comet flies caster → landing
+            // ring across this strike's own countdown. Armed strikes wait
+            // silently — no comet hangs in the air for a held channel.
+            lobFrom: d.lob && !arming ? vec(caster.pos.x, caster.pos.y) : undefined,
+            lobArc: d.lob?.arc,
+            delay0: d.lob && !arming ? zDelay : undefined,
+            impactDress: d.impactDress,
             armed: arming || undefined,
             armSeq: arming ? this.sparkSeq++ : undefined,
             exploded: false,
@@ -35596,12 +35714,17 @@ export class World {
     // THE FORECHART: keep the veiled halo minted ahead of the walker, and grow
     // any far soundings the overlays have requested (world/forechart.ts).
     this.updateForechart();
+    // THE SETTLE SWEEP: mint-time settles are local — chained displacement
+    // can leave a pair past the hover floor across a pool edge; the slow
+    // whole-chart pass self-heals it (no-op scan on a clean chart).
+    this.updateWebSettle();
     // THE OMENS: the world murmurs about what waits unfound (world/omens.ts).
     this.updateOmens();
     this.reconcileMyceliaWarps();
     this.reconcileDeepwinter();
     this.updateStorm(dt);
     this.updateDemonStorm(dt);
+    this.updateBombardment();
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
     this.updateStrayingScene(dt);
@@ -43618,6 +43741,7 @@ export class World {
             bolt: z.hitAll && !z.meteor, meteor: z.meteor,
           });
           z.onImpact?.(); // a meteor crater spits a demon / leaves a corpse
+          if (z.impactDress) this.plantImpactDress(z); // the blast pocks the ground (drying)
           // THUNDERMARK: one marker firing PULLS THE WHOLE SET — every
           // living kin marker's telegraph collapses to a quick ripple.
           if (z.marker) {

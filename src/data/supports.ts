@@ -88,6 +88,19 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('limbreaver', 'flat', 0.025)],
     weight: 6,
   },
+  // The lane's FIFTH axis (engine/stats.ts siegebreaker, same mitigateTyped
+  // fold): whether the victim can WALK AWAY. Rooted bodies only
+  // (Actor.stationary — defs whose base moveSpeed is 0): the Warfront's
+  // engines, every spawner object, idols, planted totems. The war below
+  // builds; this gem un-builds.
+  siegebreaker: {
+    id: 'siegebreaker', name: 'Siegebreaker',
+    description: 'This skill hits 30% harder against ROOTED bodies — siege engines, spawners, idols, anything built or planted where it stands. What cannot walk away from you cannot be spared by footwork either.',
+    color: '#e8823a', requiresTags: ['attack', 'spell'],
+    mods: [mod('siegebreaker', 'flat', 0.3)],
+    perLevel: [mod('siegebreaker', 'flat', 0.02)],
+    weight: 6,
+  },
 
   // THE GRAB FABRIC's pair (engine/grab.ts) — one gem per half of the art,
   // scoped by the grapple alphabet itself ('grab' / 'throw' tags), so
@@ -2123,6 +2136,17 @@ export const SUPPORTS: Record<string, SupportDef> = {
     color: '#c8d8e8', requiresTags: ['storm'],
     mods: [mod('stormImmediate', 'override', 1)],
     perLevel: [mod('stormCount', 'flat', 0.5)],
+    weight: 6,
+  },
+  // The Warfront's doctrine gem (cloudburst's counterpart: that one changes
+  // WHEN the strikes land, this one changes HOW MANY there are — the two
+  // compose): the barrage that simply does not stop.
+  sustained_barrage: {
+    id: 'sustained_barrage', name: 'Sustained Barrage',
+    description: 'Storm skills fire two additional strikes per salvo. The Grind\'s first doctrine: the guns do not stop, and neither does the ground stop moving under whoever they hunt.',
+    color: '#e8703a', requiresTags: ['storm'],
+    mods: [mod('stormCount', 'flat', 2)],
+    perLevel: [mod('stormCount', 'flat', 0.25)],
     weight: 6,
   },
 

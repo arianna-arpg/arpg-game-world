@@ -203,6 +203,10 @@ registerDimension({
   biomes: [
     { biome: 'rift', weight: 4 },
     { biome: 'steppes', weight: 4 },
+    // THE WARFRONT — the ACTIVE front (Bhorog's siege-works): live
+    // trebuchet batteries, crater country, marching grind-columns. The
+    // war HAPPENING, where the rift's wasteland is the wound it left.
+    { biome: 'warfront', weight: 3 },
     { biome: 'volcanic', weight: 3 },
     { biome: 'flesh', weight: 2 },
     // THE CAUL — the invader: hell-ONLY membrane country (never in the

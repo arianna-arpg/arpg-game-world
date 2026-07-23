@@ -828,6 +828,15 @@ export class Actor {
   patrolIdx?: number;
   /** Actor id of the patrol leader a follower heels to. */
   patrolFollow?: number;
+  /** THE BOMBARDMENT FABRIC (engine/bombard.ts): this standing gun's next
+   *  shot time on the world clock. Unset = the gun hasn't ranged in yet
+   *  (World.updateBombardment rolls the opening delay on first sight). */
+  bombardAt?: number;
+  /** A ROOTED BODY: minted from a def whose base moveSpeed is 0 (engines,
+   *  spawners, idols, planted totems) — the siegebreaker lane's predicate
+   *  (damage.ts SLAYER fold). A structural stamp, never a CC read: chill
+   *  and root stay the ailment suite's business. */
+  stationary?: true;
   /** DUTY POST conduct (brain.ts PostSpec): stamped from MonsterDef.post at
    *  creation or by a spawner (a holdfast's gate crew). The post itself is
    *  aiPost when a spawner wrote one, else the first-tick aiAnchor. */

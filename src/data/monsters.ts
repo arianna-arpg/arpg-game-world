@@ -15,6 +15,7 @@ import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { registerAIAction } from '../engine/aiActions';
 import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
+import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
 import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
@@ -618,6 +619,13 @@ export interface MonsterDef {
    *  Meant for passive fixture bodies (resonant crystals), but nothing
    *  stops a living bearer from wearing a mood ring. */
   tune?: TuneSpec;
+  /** THE BOMBARDMENT FABRIC (engine/bombard.ts): this body is a STANDING
+   *  GUN — it lobs `bombard.skillId` (which MUST be in its own `skills`;
+   *  content-linted) at the war on its own jittered clock, perception-free.
+   *  Enemy guns shell player seats zone-wide; player-owned guns shell
+   *  hostiles pressing their keeper. One clock per gun — killing it (or
+   *  breaking the part that `breakDisables` the skill) is the counterplay. */
+  bombard?: BombardSpec;
   /** CARRIED GEAR — the Hollowborn's contract: the body spawns WEARING one
    *  real rolled item (createMonster mints it at the body's level) and its
    *  credited kill drops EXACTLY that piece instead of a gear-table roll.
@@ -3202,6 +3210,91 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['infernal_rift'],
     xp: 50,
     spawner: true,
+  },
+
+  // --- THE WARFRONT'S SIEGE-WORKS (engine/bombard.ts — the standing guns) --
+  // The Bale Trebuchet is the Warfront country's signature: a SPAWNER-OBJECT
+  // the 'spawners' objective counts, whose bombard clock rains
+  // hellshot_volley around whoever it hunts until the engine dies — or until
+  // its ARM breaks (breakDisables): the crippled hulk stands SILENT, still
+  // walling the objective, demolished at your leisure. Wood, not flesh: it
+  // neither breathes nor leaves a corpse (MATERIAL_NATURE) — and its own
+  // sky-borne shells spare no banner, its keepers' included.
+  hell_trebuchet: {
+    id: 'hell_trebuchet', name: 'Bale Trebuchet',
+    color: '#6a5240', shape: 'square', radius: 26, material: 'wood', look: 'hell_trebuchet',
+    base: { life: 300, moveSpeed: 0, armor: 55, evasion: 0, mana: 999, manaRegen: 50 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['hellshot_volley'], xp: 85, faction: 'demon',
+    spawner: true, heft: 2.2, turnSpeed: 1.2, packSize: [1, 1],
+    bombard: { skillId: 'hellshot_volley', cadence: [6, 11] },
+    parts: [{
+      monster: 'trebuchet_arm', dx: -0.35, dy: 0, lifeFrac: 0.35, breakDamage: 0.12,
+      breakDisables: ['hellshot_volley'],
+      breakMods: [mod('damageTaken', 'increased', 0.25)],
+    }],
+    brain: { type: 'artillery' },
+  },
+  // The arm: the engine's working part — a dumb break-target with no kit of
+  // its own (the root wears the skill; breaking this silences it).
+  trebuchet_arm: {
+    id: 'trebuchet_arm', name: 'Trebuchet Arm',
+    color: '#7a5a3a', shape: 'oval', radius: 12, material: 'wood', look: 'trebuchet_arm',
+    noNemesis: true, remains: false,
+    base: { life: 100, moveSpeed: 0, armor: 30, evasion: 0 },
+    skills: [], xp: 0, drops: 0, faction: 'demon',
+  },
+  // The player's planted gun (hellbore_mortar): a wheeled iron carriage
+  // wearing the SAME fabric — the assist law shells whoever presses its
+  // keeper. The fabric eats its own tail: one spec, both armies.
+  hellbore_engine: {
+    id: 'hellbore_engine', name: 'Hellbore Engine',
+    color: '#8a6a4a', shape: 'circle', radius: 13, material: 'metal', look: 'hellbore_engine',
+    noNemesis: true, remains: false,
+    base: { life: 90, moveSpeed: 0, armor: 40, evasion: 0, mana: 40, manaRegen: 6 },
+    skills: ['hellbore_lob'], xp: 0, drops: 0, faction: 'demon', tags: ['construct'],
+    bombard: { skillId: 'hellbore_lob', cadence: [3, 5], opening: [1, 2] },
+    brain: { type: 'artillery' },
+  },
+  // The Grind Bannerman: the marching column's spine — Bhorog's standard
+  // over an armored shoulder, the war-horn voice that keeps the line moving.
+  grind_bannerman: {
+    id: 'grind_bannerman', name: 'Grind Bannerman',
+    color: '#a8683a', shape: 'square', radius: 12, look: 'grind_bannerman',
+    base: { life: 95, moveSpeed: 105, accuracy: 100, armor: 35, poise: 40, mana: 60, manaRegen: 5 },
+    skills: ['war_cry', 'heavy_strike'], xp: 48, faction: 'demon',
+    packSize: [1, 1], heft: 1.1,
+    brain: { type: 'commander' },
+  },
+  // The Master of Ordnance: the Ordnance Yard's keeper — a shoulder-slung
+  // bombard fed from the shot rack on his back. Break the RACK and the
+  // cannonade starves; what remains is a hammer and a grudge.
+  ordnance_master: {
+    id: 'ordnance_master', name: 'Master of Ordnance',
+    color: '#c87a3a', shape: 'square', radius: 17, look: 'ordnance_master',
+    base: { life: 520, moveSpeed: 78, accuracy: 105, armor: 60, poise: 90, mana: 160, manaRegen: 10 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['infernal_cannonade', 'ground_slam', 'war_cry'], xp: 260, faction: 'demon',
+    boss: true, drops: 2, heft: 1.4, turnSpeed: 2.2,
+    parts: [{
+      monster: 'shot_rack', dx: -0.75, dy: 0, lifeFrac: 0.22, breakDamage: 0.1,
+      breakDisables: ['infernal_cannonade'],
+      breakMods: [mod('damageTaken', 'increased', 0.15)],
+    }],
+    brain: {
+      type: 'commander',
+      phases: [
+        { atLifeFrac: 0.5, announce: 'The Master roars for the reserve line!',
+          onEnter: [{ do: 'summon', monster: 'bombard_demon', count: 3, ring: 110 }] },
+      ],
+    },
+  },
+  shot_rack: {
+    id: 'shot_rack', name: 'Shot Rack',
+    color: '#8a5a3a', shape: 'circle', radius: 9, material: 'wood', look: 'shot_rack',
+    noNemesis: true, remains: false,
+    base: { life: 80, moveSpeed: 0, armor: 25, evasion: 0 },
+    skills: [], xp: 0, drops: 0, faction: 'demon',
   },
 
   // --- The war-wound's own (the surface rift's natives) ---------------------

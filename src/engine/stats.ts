@@ -437,6 +437,12 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  what the victim is relative to you (the three above) — WHERE on the
    *  creature you chose to spend the blow. */
   limbreaver:     { label: 'Damage vs Monster Parts', base: 0, min: 0, percent: true },
+  /** MORE damage vs ROOTED bodies (Actor.stationary — defs whose base
+   *  moveSpeed is 0: siege engines, spawner objects, idols, planted totems).
+   *  The lane's fifth axis: not what the victim is relative to you, not
+   *  where on the creature — whether it can WALK AWAY. Structural stamp at
+   *  mint, never a CC read (chill is the ailment suite's business). */
+  siegebreaker:   { label: 'Damage vs Rooted Bodies', base: 0, min: 0, percent: true },
 
   // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
   // opponent's body language and slipping the brunt. Reduction scales with

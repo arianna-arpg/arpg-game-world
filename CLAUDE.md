@@ -208,6 +208,23 @@ changes.
   faction. Kit in `data/trapworks.ts`; hidden-plate close-up resolve in
   `render/vis/trapLayer.ts`; docs in `docs/engine/trapworks.md`; probe
   `balance/probe_trapworks.ts`),
+  `bombard.ts` (THE BOMBARDMENT FABRIC — off-screen artillery presence as
+  data: `MonsterDef.bombard` standing guns lob their OWN kit skill at the
+  war on per-gun jittered clocks through the ONE pipeline (useSkill —
+  telegraphs, dodge-AI, credit, cooldown arbitration all standard);
+  enemy guns shell player SEATS zone-wide perception-free (the D2
+  catapult law), player-owned guns serve their keeper (the assist law),
+  breakDisables part-breaks SILENCE a hulk the objective still counts;
+  `StormDelivery.sky` = weather posture (hitAll/spareDormant/spareRoofed),
+  `.lob` = the render-only incoming comet, `ImpactDressSpec` = drying
+  blast pocks under a per-zone cap (the transience doctrine); the slayer
+  lane's FIFTH axis `siegebreaker` prices `Actor.stationary` rooted
+  bodies; debut = THE WARFRONT country (hell-only biome: grindfields →
+  siegefront staged faces + the ordnance_yard den, Bale Trebuchets as the
+  `spawners` signature objective, war_column marches via the new
+  `EventContext.biome` lever, Bhorog's roster fields the kin war-wide) —
+  docs in `docs/engine/bombardment.md` + `docs/engine/warfront.md`; probe
+  `balance/probe_warfront.ts`),
   `timeflow.ts` (THE TIMEFLOW FABRIC: time itself as data — one TimeHold
   registry behind the pause menu's real pause, Ultimatum-style menu
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and

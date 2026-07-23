@@ -167,6 +167,12 @@ const LORDS: LordRow[] = [
       { id: 'dread_fiend', weight: 3, presence: { from: 6 } },
       { id: 'bombard_demon', weight: 2, presence: { from: 8 } },
       { id: 'siege_hulk', weight: 2, presence: { from: 12 } },
+      // The Warfront country's siege-works kin march under their maker's
+      // banner wherever the Iron Grind holds ground (data/monsters.ts —
+      // the bannerman leads columns; the standing gun is the biome's own
+      // objective, thin outside it).
+      { id: 'grind_bannerman', weight: 1, presence: { from: 5 } },
+      { id: 'hell_trebuchet', weight: 1, presence: { from: 9 } },
       { id: 'marshal_bhorog', weight: 1, presence: { from: 14 } },
     ],
     hostTraits: { roaming: 0.5, aggression: 1.1 },

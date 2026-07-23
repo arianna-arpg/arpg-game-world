@@ -696,6 +696,67 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 3, keepDistance: 260 },
   },
 
+  // --- THE SIEGECRAFT (the bombardment fabric's arsenal) --------------------
+  //
+  // engine/bombard.ts: standing guns lob these on their own jittered clocks.
+  // hellshot_volley is the Warfront's trebuchet shot (sky-borne: it spares NO
+  // side — lure the Grind's own ranks under their shells); hellbore_lob is
+  // the player-planted engine's smaller cousin (keeper-scoped, never friendly
+  // fire); hellbore_mortar plants that engine. The lob comet + the drying
+  // shell pocks ride the deliveries as pure data (lob / impactDress).
+
+  hellshot_volley: {
+    id: 'hellshot_volley', name: 'Hellshot Volley',
+    description: 'A war engine\'s throw: a brace of burning shot lobbed HIGH across the whole field — each shell rings its landing before it falls, and the blasts spare no banner, theirs included.',
+    tags: ['attack', 'fire', 'aoe', 'storm'], color: '#ff6a2a',
+    noDrop: true, // a trebuchet's arm, not a hand — never a gem
+    manaCost: 0, cooldown: 2.5, useTime: 1.1,
+    baseDamage: { fire: [10, 16], physical: [8, 14] },
+    delivery: {
+      type: 'storm', count: [2, 3], interval: 0.28, areaRadius: 85, hitRadius: 30,
+      castRange: 4200, occlusion: 'free', // the sky does not ask the walls
+      telegraph: 1.1, sky: true, lob: { arc: 0.38 },
+      impactDress: { kind: 'shell_crater', evapAfter: [50, 100] },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.25, magnitude: 0.3 },
+    ],
+    ai: { range: 560, weight: 3, keepDistance: 0 },
+  },
+
+  hellbore_lob: {
+    id: 'hellbore_lob', name: 'Hellbore Lob',
+    description: 'The planted engine\'s cough: a pair of blazing shot arced onto whoever presses its keeper.',
+    tags: ['spell', 'fire', 'aoe', 'storm'], color: '#e8823a',
+    noDrop: true, // the engine's own throw (hellbore_mortar plants it)
+    manaCost: 0, cooldown: 2, useTime: 0.7,
+    baseDamage: { fire: [8, 13], physical: [5, 9] },
+    delivery: {
+      type: 'storm', count: [2, 2], interval: 0.22, areaRadius: 55, hitRadius: 26,
+      castRange: 900, occlusion: 'free',
+      telegraph: 0.5, lob: { arc: 0.42 },
+      impactDress: { kind: 'shell_crater', evapAfter: [30, 60], chance: 0.6 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.2, magnitude: 0.25 },
+    ],
+    ai: { range: 820, weight: 3, keepDistance: 0 },
+  },
+
+  hellbore_mortar: {
+    id: 'hellbore_mortar', name: 'Hellbore Mortar',
+    description: 'Plant a squat iron engine that lobs blazing shot at foes pressing you, on its own clock — it never needs to SEE them; it only needs you to keep fighting. Scales with your minion stats.',
+    tags: ['spell', 'summon', 'minion', 'fire'], color: '#d8703a',
+    manaCost: 30, cooldown: 4, useTime: 1,
+    delivery: { type: 'summon', monsterId: 'hellbore_engine', count: 1, maxActive: 2 },
+    effects: [],
+    requirements: { intelligence: 16, strength: 12 },
+    ai: { range: 400, weight: 2, keepDistance: 300 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.12)] },
+  },
+
   doom_chant: {
     id: 'doom_chant', name: 'Doom Chant',
     description: 'CURSE: chant the victims\' names into the pit. DOOM pumps a six-second keg that bursts EARLY if it ever covers what life remains — while torment drags at their feet.',
