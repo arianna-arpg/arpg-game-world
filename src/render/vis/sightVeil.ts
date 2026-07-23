@@ -238,6 +238,12 @@ export class SightVeil {
   private px = 0; private py = 0;
   /** The eye's STORY (THE ELEVATION LAW) — part of every occluder cache key. */
   private heroT = 0;
+  /** THE SETTLE DEBOUNCE (VIS_CFG.sightVeil.tierSettleFrames): a candidate
+   *  story waiting to hold enough consecutive frames before heroT adopts it
+   *  (the ramp-lip flicker guard). null = nothing pending. */
+  private pendTier: number | null = null;
+  private pendTierN = 0;
+  private heroTInit = false;
   private radius = 0;
   private frame = 0;
 
@@ -294,9 +300,21 @@ export class SightVeil {
     // THE ELEVATION LAW: the eye's story joins both cache keys — stepping
     // off a ramp re-gathers, so a butte's own mass stops occluding the
     // moment the hero stands on its deck (and resumes when they leave).
+    // THE SETTLE DEBOUNCE: on ramp lips and leap/dash landings the tier can
+    // flicker frame-to-frame, each flip a full re-gather + re-extract — so
+    // a CHANGED story is adopted only once it holds tierSettleFrames
+    // consecutive frames (a flicker back home costs nothing), while the
+    // first-ever story adopts instantly (a fresh veil has only cold caches).
+    // Until adoption the caches AND occludedAt keep the committed story
+    // TOGETHER — drawn==tested never splits mid-debounce.
     const hT = view.player.tier ?? 0;
-    const heroLifted = hT !== this.heroT;
-    this.heroT = hT;
+    let heroLifted = false;
+    if (!this.heroTInit) { this.heroTInit = true; this.heroT = hT; }
+    else if (hT === this.heroT) this.pendTier = null;
+    else if (this.pendTier !== hT) { this.pendTier = hT; this.pendTierN = 1; }
+    else if (++this.pendTierN >= cfg.tierSettleFrames) {
+      this.pendTier = null; this.heroT = hT; heroLifted = true;
+    }
 
     // Doodad silhouettes: re-gather when the hero crosses a bucket, the
     // doodad list changes (identity/length/rev), or the reach outgrows the

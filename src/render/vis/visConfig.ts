@@ -291,6 +291,15 @@ export const VIS_CFG = {
      *  regardless of this cache size, so the cap is a true pathological
      *  backstop, not a perf dial. */
     maxOccluders: 768,
+    /** THE SETTLE DEBOUNCE (THE ELEVATION LAW's cost guard): a hero STORY
+     *  change re-gathers doodads AND re-extracts wall faces — but on ramp
+     *  lips and leap/dash landings the tier can flicker frame-to-frame,
+     *  each flip paying both full rebuilds. A CHANGED story must hold this
+     *  many consecutive frames before the veil adopts it (a flicker back
+     *  home costs zero rebuilds); the first-ever story adopts instantly.
+     *  Render-only latency — the engine's own LoS ray never waits. 1 =
+     *  adopt on sight (the old behavior). */
+    tierSettleFrames: 2,
     /** INTERACTABLE REVEALS (DoodadRule.veilPierce — doors first): default
      *  radius (world px) and strength of the feathered visibility disc
      *  punched over a pierce doodad after every shadow layer, so the object

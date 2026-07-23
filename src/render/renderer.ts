@@ -2622,7 +2622,14 @@ export class Renderer {
    *  telling): when this text started arriving, or null while the veils
    *  conceal the speaker — first sight starts the telling from its first
    *  glyph. Keyed by actor; pruned the frame a speaker falls silent. */
-  private speechClocks = new Map<object, { text: string; startedAt: number | null }>();
+  private speechClocks = new Map<object, {
+    text: string; startedAt: number | null;
+    /** Memoized wrap layout — frame-constant across a telling, so the
+     *  per-word measureText walk runs once per utterance, not per frame.
+     *  Text is pinned by the entry itself (replaced on change); font +
+     *  maxWidth key the style, so a live tuning swap still re-wraps. */
+    wrap?: { key: string; lines: string[]; flat: string; wMax: number };
+  }>();
 
   /** Queue one SPOKEN line above an actor's head — a wrapped bubble in the
    *  speaker's ink with the typewriter reveal. Tuning folds VIS_CFG.speech
@@ -2662,17 +2669,27 @@ export class Renderer {
       if (ck.startedAt === null) ck.startedAt = world.time;
 
       ctx.font = t.font;
-      const lines = wrapSpeech(s.text, t.maxWidth, str => ctx.measureText(str).width);
-      const flat = lines.join('\n');
+      // measureText depends only on (font, string), so the wrap + line
+      // widths hold for the whole telling — memoize them on the clock entry
+      // and the per-word measure walk runs once per utterance.
+      const wk = `${t.font}\u0000${t.maxWidth}`;
+      let wr = ck.wrap;
+      if (!wr || wr.key !== wk) {
+        const wl = wrapSpeech(s.text, t.maxWidth, str => ctx.measureText(str).width);
+        let wm = 0;
+        for (const ln of wl) wm = Math.max(wm, ctx.measureText(ln).width);
+        wr = { key: wk, lines: wl, flat: wl.join('\n'), wMax: wm };
+        ck.wrap = wr;
+      }
+      const lines = wr.lines;
+      const flat = wr.flat;
       const typing = typingOn && !t.typingOff;
       const shown = typing
         ? revealedChars(flat, world.time - ck.startedAt, t.typing)
         : flat.length;
       // The box is sized to the WHOLE utterance from the first glyph — the
       // frame never jitters while the words arrive inside it.
-      let wMax = 0;
-      for (const ln of lines) wMax = Math.max(wMax, ctx.measureText(ln).width);
-      const boxW = wMax + t.padX * 2;
+      const boxW = wr.wMax + t.padX * 2;
       const boxH = lines.length * t.lineHeight + t.padY * 2;
       const tipX = s.a.pos.x, tipY = s.a.pos.y - s.a.radius - t.lift;
       const top = tipY - t.tailH - boxH;
