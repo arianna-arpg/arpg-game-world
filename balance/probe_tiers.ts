@@ -28,8 +28,8 @@ import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import { massKindOf } from '../src/engine/massif';
 import {
-  linkFlipTier, linkSpanOf, makeTierView, MAX_TIER, resolveTierCrossing,
-  tierElevOf, tierFloorAt, tierFloorOf, tierLinkOf,
+  landingTier, linkFlipTier, linkSpanOf, makeTierView, MAX_TIER,
+  resolveTierCrossing, tierElevOf, tierFloorAt, tierFloorOf, tierLinkOf,
 } from '../src/engine/tiers';
 import { TILESETS } from '../src/data/tilesets';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
@@ -306,6 +306,24 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
   const a = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams }, 717009);
   const b = gen('qa_peak', 'switchback', ts.layout, { ...ts.layoutParams }, 717009);
   check('E4 the summit is byte-deterministic', fpr(a.out) === fpr(b.out));
+}
+
+// --- RIG H: THE TOUCH-DOWN LAW (the flight fabric's landing) ---------------------
+// landingTier — the story a body wears when its wings fold: keep the current
+// story while its floor still stands, else the floor under it answers; true
+// walls keep the story for the mover snap to resolve on the body's own layer.
+{
+  check('H1 a settling body keeps a floor that still stands',
+    landingTier('butte_top', 1) === 1 && landingTier('ground', 0) === 0
+    && landingTier('tier_ramp', 0) === 0 && landingTier('tier_ramp', 1) === 1
+    && landingTier('culvert_well', 1) === 1);
+  check('H2 landing over the valley re-seats the valley\'s story',
+    landingTier('ground', 1) === 0 && landingTier('ground', 5) === 0);
+  check('H3 alighting on a deck wears it — however many stories the climb',
+    landingTier('butte_top', 0) === 1 && landingTier('peak_terrace_4', 0) === 4
+    && landingTier('peak_terrace_2', 5) === 2);
+  check('H4 a true wall keeps the story (the mover snap resolves)',
+    landingTier('wall', 1) === 1 && landingTier('wall', 0) === 0);
 }
 
 // --- RIG G: THE ELEVATION LAW (sight/shot over the stack) ------------------------

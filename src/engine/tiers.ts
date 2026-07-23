@@ -154,6 +154,22 @@ export function linkFlipTier(kindId: string | undefined, tier: number): number {
   return tier === b ? a : b;
 }
 
+/** THE TOUCH-DOWN LAW (the flight fabric's landing): the story a body wears
+ *  when its wings fold. The CURRENT story survives while its floor still
+ *  stands under the body (a condor lifting off a bench and settling back
+ *  keeps the bench; a link cell keeps whichever end the body left), else
+ *  the floor under it answers (tierElevOf — settle over the valley and you
+ *  are the valley's; alight on a summit and you wear it, however many
+ *  stories the climb). A TRUE WALL keeps the current story: the mover
+ *  contract's snap resolves the illegal seat on the body's own layer next
+ *  tick. Aloft bodies keep their last grounded story BY DESIGN — only the
+ *  landing re-seats it (a per-wingbeat re-derive would thrash hostility
+ *  and the chase ledger as the flock crossed rims). */
+export function landingTier(kindId: string | undefined, current: number): number {
+  if (tierFloorAt(kindId, current)) return current;
+  return tierElevOf(kindId) ?? current;
+}
+
 /** The narrow face of GridWalkField the mover contract consults — the tier
  *  view implements it over the SAME grid with the tier predicate. */
 export interface WalkView {

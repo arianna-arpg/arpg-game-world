@@ -1264,6 +1264,13 @@ export class Actor {
   /** The def-innate half of `flying` (MonsterDef.flier) — what the status
    *  re-derivation restores to when the last flight status ends. */
   flyingBase = false;
+  /** THE TOUCH-DOWN LATCH (engine/tiers.ts landingTier): stamped the tick
+   *  the flying flag FOLDS (aloft → grounded); World re-seats `tier` from
+   *  the floor under the body beside its walk grid, then clears it — a
+   *  butte-bench condor that settles over the valley is the valley's. The
+   *  latch HOLDS while leap/dash flight carries the body on (a stoop's
+   *  wings fold mid-dive): touch-down is wings folded AND feet on ground. */
+  touchdown = false;
   /** PACK BOND transition tracker (MonsterDef.bond) — the sheet source only
    *  moves on held/dropped edges, never per frame. */
   bondHeld = false;
@@ -2485,6 +2492,11 @@ export class Actor {
         if (STATUS_DEFS[s.id]?.flight) { fly = true; break; }
       }
     }
+    // THE TOUCH-DOWN LATCH (the tier fabric's landing law): wings folding
+    // this tick mark the body for a story re-seat — World reads the latch
+    // beside its walk grid (landingTier). Derived at the flag's own fold
+    // rather than hooked per removal path, exactly like the flag itself.
+    if (this.flying && !fly) this.touchdown = true;
     this.flying = fly;
 
     // Absorption shield expiry

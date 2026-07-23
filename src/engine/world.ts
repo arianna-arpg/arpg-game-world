@@ -85,7 +85,7 @@ import {
   type ResonanceSpec,
 } from './levelgen';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { linkFlipTier, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { landingTier, linkFlipTier, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
@@ -36177,6 +36177,22 @@ export class World {
         }
       }
       const dot = a.updateTimers(dt, rawDt);
+      // THE LANDING RE-SEAT (engine/tiers.ts landingTier): wings folded —
+      // the story re-derives from the floor under the body, so a
+      // bench-spawned condor that settles over the valley is the valley's
+      // (hostility, sight and the elevation law all honest again; the
+      // stoop's grounded punish window now lands on ITS victim's story).
+      // The latch HOLDS through leap/dash flight: a stoop's wings fold
+      // mid-dive, but touch-down means FEET ON GROUND — the re-seat reads
+      // the floor the body finally stands on, never the dive's midpoint
+      // (measured live: mid-leap folds seated divers on the story they
+      // left, 99px past their rim). Flat zones: clearing it is the cost.
+      if (a.touchdown && !a.flying && !a.leap && !a.dash) {
+        a.touchdown = false;
+        if (this.zone.tiers && this.walk?.regionAt) {
+          a.tier = landingTier(this.walk.regionAt(a.pos.x, a.pos.y), a.tier);
+        }
+      }
       if (dot) {
         // TYPED ticks: each element pools separately so tag-filtered DoT
         // interactions (esDotBypass per element, tagged damageTaken) apply.
@@ -45913,6 +45929,17 @@ export class World {
   private steppedClamp(a: Actor, dest: Vec2, from: Vec2, disp?: DisplacementPolicy): void {
     const sc = this.cScratch;
     sc.hit = 'none';
+    // THE LANDING RE-SEAT at the mover (engine/tiers.ts landingTier): a
+    // just-landed body re-derives its story from the floor it STANDS on
+    // BEFORE any clamp consults a tier view — else the first grounded
+    // step's snap drags the diver back onto the story it left (measured
+    // live: a stooping condor teleport-climbing its own rim, 24px in one
+    // frame). The world sweep keeps the stationary lander's copy.
+    if (a.touchdown && !a.flying && !a.leap && !a.dash
+      && this.zone.tiers && this.walk?.regionAt) {
+      a.touchdown = false;
+      a.tier = landingTier(this.walk.regionAt(from.x, from.y), a.tier);
+    }
     // TIER CROSSING (engine/tiers.ts): standing on a link (ramp, culvert)
     // and stepping toward ground only the other layer owns FLIPS the body's
     // tier BEFORE the clamp judges the move — walking up a ramp is just

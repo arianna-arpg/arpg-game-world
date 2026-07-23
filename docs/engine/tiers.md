@@ -46,6 +46,17 @@ stateless adapter, one per story, built at zone load from
   valley sees a rim-stander only once the lerped line clears the lip, and
   deck furniture never shades the street below. Full write-up:
   `docs/engine/los-pathing.md`.
+- **Flight — THE TOUCH-DOWN LAW** (`landingTier`): an aloft body keeps its
+  last grounded story (a per-wingbeat re-derive would thrash hostility as
+  the flock crossed rims); when its wings FOLD (`Actor.touchdown`, stamped
+  at the one flying re-derive in actor.ts) the story re-seats from the
+  floor under it — kept while it still stands, else the floor's own
+  answers (`tierElevOf`; a true wall keeps the story for the mover snap to
+  resolve). The latch HOLDS through leap/dash flight — a stoop's wings
+  fold mid-dive, but touch-down means feet on ground, so World consumes it
+  at the first genuinely grounded tick beside its walk grid. A bench
+  condor that stoops onto a valley player LANDS on the valley — the
+  grounded punish window plays on its victim's story.
 - **Population**: tiered zones seed `packSplit` of their packs on the
   elevated stories, dealt uniformly across the levels (rolled per pack —
   squads never straddle a rim). The BENCH picks the anchor: an elevated
@@ -127,9 +138,7 @@ Townhouse floors as covered tiers in one zone; tier-aware minimap tint; AI
 that climbs links; a boulder-chute lane rolling DOWN the switchbacks;
 per-story spawn tables (harder kin near the crown); avalanche fronts that
 respect the benches (creep is tier-blind today — the one reason the
-pinnacle ships without landslide lanes); FLIERS keep their spawn story
-aloft (a crag condor over the valley still wears tier 1 — the flight
-fabric should re-derive the story on landing).
+pinnacle ships without landslide lanes).
 
 Probe: `balance/probe_tiers.ts` (family rows + span derivation, the
 crossing law across arbitrary spans, all three carves, per-story orphan
