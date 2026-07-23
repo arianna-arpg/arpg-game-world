@@ -30,7 +30,7 @@ import {
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
-  BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX,
+  BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
   type LitePourEffect,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
@@ -16800,6 +16800,33 @@ export class World {
     return true;
   }
 
+  /** THE FIELD DISCIPLINE (engine/skills.ts SWAP_DISCIPLINE_CFG): the reason
+   *  loadout surgery refuses RIGHT NOW, or null when the hands are free.
+   *  ONE predicate serves the engine gates and the panels' disabled buttons,
+   *  so the refusal speaks the same words everywhere. Sanctuary ground
+   *  (zone objective 'safe' — Lastlight, the sim arena, any future haven)
+   *  waives everything: the workshop law — fall back to town and swap on a
+   *  whim at the rack. The foe scan mirrors the merc-parley's (non-passive,
+   *  non-untargetable): the training dummies never count BY CONSTRUCTION. */
+  swapRefusal(seat: Seat, kind: 'unlearn' | 'socket' | 'unsocket', skillId?: string): string | null {
+    const cfg = SWAP_DISCIPLINE_CFG;
+    if (cfg.sanctuaryWaives && this.zone.objective?.kind === 'safe') return null;
+    if (this.time - this.lastCombatAt < cfg.calmSec) return 'the blood is still hot';
+    if (cfg.foeRadius > 0) {
+      const at = seat.actor.pos;
+      const foe = this.actors.some(a =>
+        a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+        && dist(a.pos, at) <= cfg.foeRadius);
+      if (foe) return 'foes press too near';
+    }
+    if (kind === 'unlearn' && skillId) {
+      const hero = this.seatHero(seat);
+      if (cfg.unlearnOffCooldown && hero.cooldowns.has(skillId)) return 'its clock still turns';
+      if (cfg.unlearnNotCasting && hero.casting?.inst.def.id === skillId) return 'mid-cast';
+    }
+    return null;
+  }
+
   /**
    * Unlearn a skill back into the inventory — level and socketed supports
    * ride along, so experimentation costs nothing but the swap.
@@ -16818,6 +16845,14 @@ export class World {
         this.failNote(p, skillId + ':debt', 'debt outstanding');
         return false;
       }
+    }
+    // THE FIELD DISCIPLINE: unlearning is camp surgery, not battlefield
+    // triage — sanctuary waives, the field demands cold blades and a quiet
+    // clock (swapRefusal is the one law; the panel's disabled button
+    // speaks the identical words).
+    {
+      const why = this.swapRefusal(seat, 'unlearn', skillId);
+      if (why) { this.failNote(p, skillId + ':discipline', why); return false; }
     }
     m.knownSkills.delete(skillId);
     for (let i = 0; i < p.skills.length; i++) {
@@ -20640,6 +20675,11 @@ export class World {
     if (!gem || !inst || !supportFitsInstOrCrew(gem.def, inst, this.summonCrewSkills(inst))) return false;
     const free = inst.sockets.indexOf(null);
     if (free === -1) return false;
+    // THE FIELD DISCIPLINE: socket surgery wants cold blades (sanctuary waives).
+    {
+      const why = this.swapRefusal(seat, 'socket', skillId);
+      if (why) { this.failNote(seat.actor, skillId + ':discipline', why); return false; }
+    }
     inst.sockets[free] = gem;
     m.inventory.splice(invIndex, 1);
     // Worn slot grafts re-derive against the new socket: a duplicate worn
@@ -20656,6 +20696,11 @@ export class World {
     const inst = m.knownSkills.get(skillId);
     const gem = inst?.sockets[socketIndex];
     if (!inst || !gem) return false;
+    // THE FIELD DISCIPLINE: prying a stone out mid-melee is the same surgery.
+    {
+      const why = this.swapRefusal(seat, 'unsocket', skillId);
+      if (why) { this.failNote(seat.actor, skillId + ':discipline', why); return false; }
+    }
     inst.sockets[socketIndex] = null;
     m.inventory.push(gem);
     // Re-derive worn slot grafts: a worn copy that yielded to this stone

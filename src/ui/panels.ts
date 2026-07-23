@@ -1556,8 +1556,12 @@ export class UI {
    *  gems into exactly these bags. */
   private gemInventoryHtml(kind: 'skills' | 'gems'): string {
     const world = this.getWorld();
-    const m = this.panelSeat(this.inventory).meta;
+    const invSeat = this.panelSeat(this.inventory);
+    const m = invSeat.meta;
     if (kind === 'gems') {
+      // THE FIELD DISCIPLINE: one predicate, the engine's own words — the
+      // buttons refuse exactly when the mutation would (sanctuary waives).
+      const swapWhy = world.swapRefusal(invSeat, 'socket');
       return m.inventory.map((gem, idx) => {
         // Crew-aware targets: a gem may board a summon skill purely for what
         // the minted minions cast — mark those so the player knows the
@@ -1567,7 +1571,7 @@ export class UI {
             && supportFitsInstOrCrew(gem.def, inst, world.summonCrewSkills(inst)))
           .map(inst => {
             if (supportFitsInst(gem.def, inst)) {
-              return `<button data-socket="${idx}:${inst.def.id}">${inst.def.name}</button>`;
+              return `<button data-socket="${idx}:${inst.def.id}" ${swapWhy ? `disabled title="${swapWhy}"` : ''}>${inst.def.name}</button>`;
             }
             const served = crewSkillsServed(gem.def, inst, world.summonCrewSkills(inst));
             const boards = served === 'unknowable' || served === null
@@ -1575,10 +1579,12 @@ export class UI {
               : served.map(def => def.name).join(', ');
             const doorNote = crewBoardingOpen(inst) ? ''
               : ' Dormant until Resonance rides this skill.';
-            return `<button data-socket="${idx}:${inst.def.id}"
-              title="Boards the crew: forwarded to the minions' own skills (${boards}).${doorNote}">${inst.def.name} ⤳</button>`;
+            return `<button data-socket="${idx}:${inst.def.id}" ${swapWhy ? 'disabled' : ''}
+              title="${swapWhy ? `${swapWhy} — ` : ''}Boards the crew: forwarded to the minions' own skills (${boards}).${doorNote}">${inst.def.name} ⤳</button>`;
           })
           .join('') || '<span style="color:#8a8678">no socketable skill</span>';
+        const socketLabel = swapWhy
+          ? `Socket into <span style="color:#c08a68">(${swapWhy})</span>:` : 'Socket into:';
         return `
           <div class="skill-entry" data-drag="supportGem:${idx}" style="border-left:3px solid ${gem.def.color}">
             <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
@@ -1589,7 +1595,7 @@ export class UI {
                 Level Up (1 pt)</button>
               ${this.essLevelBtn(`data-invlvl-ess="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def))}
               <button data-drop-support="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
-              Socket into: ${targets}
+              ${socketLabel} ${targets}
             </div>
           </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems — walk over one to collect it.</div>';
@@ -3121,6 +3127,9 @@ Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spen
     // quiets the instant it lands, and a lived lesson never re-lights here
     // over a later unbind.
     const lessonSkills = world.mireilleGiftLesson() === 'bar' ? world.mireilleLessonSkills() : [];
+    // THE FIELD DISCIPLINE, spoken at the button (the engine gate's words):
+    // unsocket shares one verdict; unlearn adds its per-skill clock below.
+    const unsocketWhy = world.swapRefusal(seat, 'unsocket');
     return graftBank + [...m.knownSkills.values()].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
@@ -3155,7 +3164,7 @@ Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spen
           <button data-gemlvl-ess="${def.id}:${i}"
             ${!this.getWorld().canAffordEssence(seat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
             title="Level up for ${skillLevelEssenceCost(s.level + 1).count}× ${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].label}">+${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].glyph}</button>
-          <button data-unsocket="${def.id}:${i}">✕</button>
+          <button data-unsocket="${def.id}:${i}" ${unsocketWhy ? `disabled title="${unsocketWhy}"` : ''}>✕</button>
         </span>` : `<span class="gem-chip empty">empty socket</span>`).join('');
       const eff = effectiveSkillLevel(inst);
       const nextThresh = def.thresholds?.find(t => eff < t.level);
@@ -3236,7 +3245,10 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
               Level Up (1 pt)</button>
             ${this.essLevelBtn(`data-levelup-ess="${def.id}"`, inst.level, inst.level >= maxLv)}
             ${binds}
-            <button data-unlearn="${def.id}">Unlearn</button>
+            ${(() => {
+              const why = world.swapRefusal(seat, 'unlearn', def.id);
+              return `<button data-unlearn="${def.id}" ${why ? `disabled title="${why}"` : ''}>Unlearn${why ? ` (${why})` : ''}</button>`;
+            })()}
           </div>
           <div class="sockets">${sockets}</div>
           ${graftRow}

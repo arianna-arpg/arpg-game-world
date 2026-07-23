@@ -737,6 +737,17 @@ changes.
   Derived, never saved; census-invisible (bare sim instances wear no
   gear) — docs in `docs/engine/slotgrafts.md`, probe
   `balance/probe_slotgraft.ts`.
+  THE FIELD DISCIPLINE (loadout surgery is a camp habit): skill UNLEARN +
+  support SOCKET/UNSOCKET gate on cold blades (`World.lastCombatAt` +
+  calmSec), no live non-passive hostiles in foeRadius (dummies never
+  count, structurally), and — unlearn alone — the skill's own quiet clock
+  (off cooldown, not mid-cast); SANCTUARY WAIVES ALL (zone objective
+  'safe': Lastlight, the sim arena — the workshop law, so the rack tests
+  free and the balance harness is untouched by construction). ONE
+  predicate `World.swapRefusal` serves engine gates AND panel buttons —
+  refusals speak the same words everywhere; dials in
+  `SWAP_DISCIPLINE_CFG` (engine/skills.ts) — docs in
+  `docs/engine/discipline.md`, probe `balance/probe_fielddiscipline.ts`.
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
   `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`,
   `beacons.ts` (survey-spire objective tuning); items:

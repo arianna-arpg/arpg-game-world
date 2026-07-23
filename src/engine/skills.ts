@@ -263,6 +263,34 @@ export function parseSlotGraftStat(stat: string): { slot: number; gemId: string 
   return { slot: slot1 - 1, gemId: m[2] };
 }
 
+// --- THE FIELD DISCIPLINE — loadout surgery is a camp habit ----------------
+
+/** Skill UNLEARNING and support SOCKET/UNSOCKET stay free — but in the
+ *  FIELD they demand a cool head: blades cold (no player-side blow dealt
+ *  or taken inside calmSec — World.lastCombatAt, the merc-parley clock),
+ *  no live hostiles pressing (foeRadius; passive scenery like the training
+ *  dummies never counts — they are excluded structurally, not by name),
+ *  and a skill leaves the book only while its own clock is quiet
+ *  (unlearn alone: off cooldown, not mid-cast). SANCTUARY WAIVES ALL OF IT
+ *  (zone objective 'safe' — Lastlight, the sim arena, any future haven):
+ *  fall back to town and swap on a whim at the rack, the workshop law.
+ *  ONE predicate serves engine gates and panel buttons — World.swapRefusal
+ *  — so the refusal speaks the same words everywhere. Deliberately NOT
+ *  gated: bar re-binding (choosing a seat is play, not surgery), gem
+ *  leveling (only ever forward), passive-graft rebinding (tree powers),
+ *  and gear swaps (the wardrobe's own liberty). */
+export const SWAP_DISCIPLINE_CFG = {
+  /** Safe-objective ground stands the whole law down (the workshop law). */
+  sanctuaryWaives: true,
+  /** Blades-cold window: seconds since any player-side blow landed. */
+  calmSec: 5,
+  /** Live, non-passive hostiles within this range = engaged (0 disables). */
+  foeRadius: 480,
+  /** Unlearn alone also demands the skill's own clock be quiet. */
+  unlearnOffCooldown: true,
+  unlearnNotCasting: true,
+};
+
 /** CREW BOARDING CONFIG — the balance lever over support forwarding.
  *  'gated': boarding demands a RESONANCE key (SupportDef.resonance) riding
  *  the summon skill — the whole system costs one socket. 'free': every
