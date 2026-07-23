@@ -263,6 +263,7 @@ import {
   STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
   LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
+  LEDGER_CRAFTS_UNLOCKED, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED,
   questDoneKey, reachedLevelKey,
   type Account,
 } from '../meta/account';
@@ -4204,6 +4205,14 @@ export class World {
     this.arena = makeArena(def);
     if (!isCave) {
       this.visited.add(zoneId);   // caves never chart onto the map
+      // THE DEED GATE (LEDGER_ZONES_EXPLORED): each zone newly charted this
+      // run counts once toward the account's lifetime wandering — the
+      // Campfire's gate reads the total. Cheap flag; the save cadence
+      // throttles the actual write.
+      if (firstVisit && this.metaProgressionActive()) {
+        this.account.ledger[LEDGER_ZONES_EXPLORED] = (this.account.ledger[LEDGER_ZONES_EXPLORED] ?? 0) + 1;
+        this.accountDirty = true;
+      }
       if (def.concealed) def.concealed = false; // you've reached it — the blight is no longer hidden
       if (def.veiled) def.veiled = false;       // …and the forechart's veil lifts underfoot
       this.caveReturn = null;     // any surface load means we're no longer underground
@@ -11640,7 +11649,7 @@ export class World {
     if (part.drop.skill && SKILLS[part.drop.skill]) {
       const inst = makeSkillGem(SKILLS[part.drop.skill], lvl, 'rare');
       const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
-      this.noteGemDrop(inst.def.id); // a BUILT spoil is a genuine mint too — the drop index sees it
+      this.noteGemDrop(inst.def.id, inst.rarity); // a BUILT spoil is a genuine mint too — the drop index sees it
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES.rare.color, 15);
     }
@@ -34279,13 +34288,22 @@ export class World {
    *  Immortal runs read but never feed (the bestiary's own guard); the
    *  flush lands exactly when a gem crosses the commission threshold (ride
    *  the next scheduled save otherwise — the bestiary's cadence). */
-  private noteGemDrop(gemId: string): void {
+  private noteGemDrop(gemId: string, skillRarity?: SkillInstance['rarity']): void {
     if (!this.metaProgressionActive()) return;
     const key = gemDropKey(gemId);
     const after = (this.account.ledger[key] ?? 0) + 1;
     this.account.ledger[key] = after;
     this.account.ledger[LEDGER_GEMDROP_TOTAL] = (this.account.ledger[LEDGER_GEMDROP_TOTAL] ?? 0) + 1;
     if (after === VENDOR_CFG.commission.need) this.accountDirty = true;
+    // THE DEED GATE (LEDGER_LEGENDARY_SKILL_DROP): the account's first
+    // legendary SKILL gem, stamped here at the one genuine mint chokepoint —
+    // every skill-mint site hands its rarity in, so a future legendary from
+    // ANY of them lands the deed. One-shot; persisted immediately (a Vault
+    // row hangs on it — the flask lesson's own quit-proof precedent).
+    if (skillRarity === 'legendary' && !(this.account.ledger[LEDGER_LEGENDARY_SKILL_DROP] ?? 0)) {
+      this.account.ledger[LEDGER_LEGENDARY_SKILL_DROP] = 1;
+      this.accountDirty = true;
+    }
   }
 
   /** Drop one random gem (skill or support) at a point — gated by account
@@ -34297,7 +34315,7 @@ export class World {
     const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10);
     const dropSkill = (): void => {
       const inst = this.rollSkillGem(bias);
-      this.noteGemDrop(inst.def.id);
+      this.noteGemDrop(inst.def.id, inst.rarity);
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15);
     };
@@ -34618,6 +34636,13 @@ export class World {
       for (const t of taught.filter(x => x.rankedUp)) {
         this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
           `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
+        // THE DEED GATE (LEDGER_CRAFTS_UNLOCKED): a family's FIRST rank is
+        // "this craft is unlocked at all" — count each such family once,
+        // lifetime; the Oracle Stone's gate reads the tally. (saveAccount
+        // below already persists the stamp with the lore itself.)
+        if (this.account.craftLore[t.family]?.rank === 1) {
+          this.account.ledger[LEDGER_CRAFTS_UNLOCKED] = (this.account.ledger[LEDGER_CRAFTS_UNLOCKED] ?? 0) + 1;
+        }
       }
       saveAccount(this.account); // lore is account knowledge — survive the run
     }

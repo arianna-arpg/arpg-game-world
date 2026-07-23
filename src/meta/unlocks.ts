@@ -19,8 +19,9 @@
 // ---------------------------------------------------------------------------
 
 import {
-  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, LEDGER_GEMDROP_PREFIX,
-  LEDGER_VENDOR_BOUGHT, classLevelLedgerKey, reachedLevelKey, type Account,
+  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON,
+  LEDGER_GEMDROP_PREFIX, LEDGER_LEGENDARY_SKILL_DROP, LEDGER_VENDOR_BOUGHT,
+  LEDGER_ZONES_EXPLORED, classLevelLedgerKey, reachedLevelKey, type Account,
 } from './account';
 import { gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, type GateRow } from './gates';
 import { VENDOR_CFG } from '../data/vendors';
@@ -756,16 +757,23 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'A quartermaster settles in Lastlight, posting hunts into the wilds (quest chains).',
     payload: { flag: FEATURE.QUEST_GIVER } },
 
-  // --- Training Dummy (also surfaces once any character reaches L5) ----------
-  { id: 'feat_target_dummy', kind: 'feature', cost: 50, reqLevel: 0, reqLedger: 'reached_level_5',
+  // --- Training Dummy — THE DEED GATE: surfaces on the account's first
+  //     LEGENDARY skill gem (LEDGER_LEGENDARY_SKILL_DROP, stamped at the
+  //     mint chokepoint): the moment you finally hold a skill worth
+  //     practicing, the town offers somewhere to practice it. ---------------
+  { id: 'feat_target_dummy', kind: 'feature', cost: 50, reqLevel: 0, reqLedger: LEDGER_LEGENDARY_SKILL_DROP,
     label: 'Training Dummy — Town',
-    description: 'A practice dummy stands in Lastlight: an immortal target to pummel and test your skills, effects, ailments, and modifiers against.',
+    description: 'That legendary gem deserves better than guesswork. A practice dummy stands in Lastlight: an immortal target to pummel and test your skills, effects, ailments, and modifiers against.',
     payload: { flag: FEATURE.TARGET_DUMMY } },
 
-  // --- Campfire (also surfaces once any character reaches L5) ----------------
-  { id: 'feat_campfire', kind: 'feature', cost: 70, reqLevel: 0, reqLedger: 'reached_level_5',
+  // --- Campfire — THE DEED GATE: earned by WANDERING (LEDGER_ZONES_EXPLORED,
+  //     each zone newly charted per run counts once): fifty zones in, the
+  //     wilds' rhythm is yours and the fire that refreshes them makes sense
+  //     to offer. ----------------------------------------------------------
+  { id: 'feat_campfire', kind: 'feature', cost: 70, reqLevel: 0,
+    reqLedgerCounts: { [LEDGER_ZONES_EXPLORED]: 50 },
     label: 'Campfire — Town',
-    description: 'A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command — every zone repopulates fresh (your cleared objectives stay claimed).',
+    description: 'Fifty zones charted — the wilds know your steps. A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command — every zone repopulates fresh (your cleared objectives stay claimed).',
     payload: { flag: FEATURE.CAMPFIRE } },
 
   // --- The Salvage Station (the essence economy's front door). Surfaces the
@@ -781,9 +789,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Salvage Station — Twin Anvils',
     description: 'The bench learns to hold TWO crafted affixes on one item (the one-craft rule, bought apart).',
     payload: { flag: FEATURE.CRAFT_SECOND_AFFIX } },
-  { id: 'feat_oracle_stone', kind: 'feature', cost: 90, reqLevel: 0, reqLedger: 'reached_level_5',
+  // THE DEED GATE: the stone answers those who already understand the
+  // lines they'd reroll — five craft families studied to rank 1 at the
+  // bench (LEDGER_CRAFTS_UNLOCKED, stamped as studySalvage first ranks
+  // each family up at World.salvageItem).
+  { id: 'feat_oracle_stone', kind: 'feature', cost: 90, reqLevel: 0,
+    reqLedgerCounts: { [LEDGER_CRAFTS_UNLOCKED]: 5 },
     label: 'Oracle Stone — Town',
-    description: 'Standing stones rise in Lastlight. Commune over an item (trace the runes — precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
+    description: 'Five crafts studied deep enough to work — the runes will speak to you now. Standing stones rise in Lastlight. Commune over an item (trace the runes — precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
     payload: { flag: FEATURE.ORACLE_STONE } },
 
   // --- The Mercenary Recruiter (meta/mercs.ts): surfaces once the account

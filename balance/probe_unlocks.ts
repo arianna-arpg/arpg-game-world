@@ -23,7 +23,8 @@ import {
   vaultSeatOf, vaultShelfCensus, vaultStripVisible,
 } from '../src/meta/unlocks';
 import {
-  CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_FLASK_LESSON, STARTER_CLASSES,
+  CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_CRAFTS_UNLOCKED, LEDGER_FLASK_LESSON,
+  LEDGER_LEGENDARY_SKILL_DROP, LEDGER_ZONES_EXPLORED, STARTER_CLASSES,
   classLevelLedgerKey, makeAccount,
 } from '../src/meta/account';
 import { CLASSES } from '../src/data/classes';
@@ -317,16 +318,64 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
   // (the user's own report: quest package, dummy, campfire and oracle all
   // offered at level 5 on an unspent account is a wall that needs shelves).
   const b = makeAccount();
-  const seenDeeds = ['reached_level_5', LEDGER_FLASK_LESSON];
+  // A new player's real arc, deed by deed: level 5, the flask lesson, a
+  // first legendary, the bench mastered, the wilds wandered. Counted keys
+  // stamp comfortably past any authored need — exact boundaries are 3d's
+  // contract, volume is this walk's.
+  const seenDeeds: [string, number][] = [
+    ['reached_level_5', 1], [LEDGER_FLASK_LESSON, 1], [LEDGER_LEGENDARY_SKILL_DROP, 1],
+    [LEDGER_CRAFTS_UNLOCKED, 999], [LEDGER_ZONES_EXPLORED, 999],
+  ];
   const stockOf = (): number => vaultShelfCensus(b).reduce((n, c) => n + c.stock.length, 0);
   let stamped = 0;
   while (stockOf() < VAULT_SHELF_CFG.stripMinStock && stamped < seenDeeds.length) {
-    b.ledger[seenDeeds[stamped++]] = 1;
+    const [k, v] = seenDeeds[stamped++];
+    b.ledger[k] = v;
   }
   check('store: THE SEEN ROAD — played deeds alone flood the wall past the stock dial',
     stockOf() >= VAULT_SHELF_CFG.stripMinStock, `stock ${stockOf()} after ${stamped} deed(s)`);
   check('store: the seen road raises the shelving with NOTHING owned',
     vaultStripVisible(b) && vaultShelfCensus(b).find(c => c.tab.owned)!.owned.length === 0);
+}
+
+// --- 3d) THE DEED GATES (town features as miniature side-quests) ------------
+// Dummy, Oracle and Campfire each wait on their OWN themed deed — never a
+// shared level milestone — so the young store stays slim and every unlock
+// arrives as the play it serves: the first legendary skill begs a practice
+// target, five studied crafts make the stone worth consulting, fifty
+// charted zones earn the wanderer's fire. Boundary values are read from
+// the catalog rows themselves (authored once, tested verbatim).
+{
+  const a = makeAccount();
+  a.ledger['reached_level_5'] = 1; // the retired shared gate — opens NONE of the three
+  const three = ['feat_target_dummy', 'feat_oracle_stone', 'feat_campfire'];
+  const visOf = (): string[] => allUnlockables()
+    .filter(u => three.includes(u.id) && isUnlockVisible(a, u)).map(u => u.id);
+  const needOf = (id: string, key: string): number =>
+    allUnlockables().find(u => u.id === id)?.reqLedgerCounts?.[key] ?? NaN;
+  const craftNeed = needOf('feat_oracle_stone', LEDGER_CRAFTS_UNLOCKED);
+  const zoneNeed = needOf('feat_campfire', LEDGER_ZONES_EXPLORED);
+  check('deeds: the Oracle and the Campfire author COUNTED gates on their own keys',
+    craftNeed > 0 && zoneNeed > 0, `crafts ${craftNeed}, zones ${zoneNeed}`);
+  check('deeds: level 5 alone opens none of the three (the shared gate is retired)',
+    visOf().length === 0, visOf().join(','));
+  check('deeds: level 5 still surfaces the Quest Package (its own gate stands)',
+    isUnlockVisible(a, allUnlockables().find(u => u.id === 'feat_quest_giver')!));
+  a.ledger[LEDGER_LEGENDARY_SKILL_DROP] = 1;
+  check('deeds: the first legendary skill drop surfaces the Training Dummy ALONE',
+    visOf().join(',') === 'feat_target_dummy');
+  a.ledger[LEDGER_CRAFTS_UNLOCKED] = craftNeed - 1;
+  check('deeds: one craft short of the need, the Oracle keeps its counsel',
+    !visOf().includes('feat_oracle_stone'));
+  a.ledger[LEDGER_CRAFTS_UNLOCKED] = craftNeed;
+  check('deeds: the authored craft count surfaces the Oracle Stone',
+    visOf().includes('feat_oracle_stone'));
+  a.ledger[LEDGER_ZONES_EXPLORED] = zoneNeed - 1;
+  check('deeds: one zone short of the need, the fire waits',
+    !visOf().includes('feat_campfire'));
+  a.ledger[LEDGER_ZONES_EXPLORED] = zoneNeed;
+  check('deeds: the authored wandering count earns the Campfire — all three stand',
+    visOf().length === 3);
 }
 
 // --- 3c) THE INTRODUCTION LAW + catalog parity nets --------------------------

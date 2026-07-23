@@ -166,6 +166,22 @@ export const LEDGER_ACCOUNT_DEATHS = 'account_deaths';
  *  surface quiet on this account forever: completed never re-opens. */
 export const LEDGER_FLASK_LESSON = 'mireille_flasks_filled';
 
+// --- THE DEED GATES (the Vault's miniature side-quests): town features
+// that unlock purely through gradual play, each key stamped at its ONE
+// genuine engine site and read by the catalog's reqLedger/reqLedgerCounts.
+/** First LEGENDARY skill gem genuinely minted into the world (noteGemDrop —
+ *  the drop index's own chokepoint, so discards/reclaims can never fake it).
+ *  Flag semantics: any truthy value. Gates the Training Dummy. */
+export const LEDGER_LEGENDARY_SKILL_DROP = 'legendary_skill_dropped';
+/** Lifetime count of craft FAMILIES studied to rank 1 — "this craft is
+ *  unlocked at all" (studySalvage's first rank-up per family, stamped at
+ *  World.salvageItem's bench lane). Gates the Oracle Stone. */
+export const LEDGER_CRAFTS_UNLOCKED = 'crafts_unlocked';
+/** Lifetime count of zones first-visited (per run's charting — caves never
+ *  chart, so they never count; stamped at World.loadZone). Gates the
+ *  Campfire. */
+export const LEDGER_ZONES_EXPLORED = 'zones_explored';
+
 /** THE DROP INDEX (the bestiary's sibling, same ledger, same doctrine): one
  *  lifetime counter per gem id, bumped ONLY where a gem is genuinely MINTED
  *  into the world as loot (World.dropGemAt + the Bonewright's fixed spoils).
