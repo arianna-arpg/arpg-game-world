@@ -19,8 +19,8 @@
 // ---------------------------------------------------------------------------
 
 import {
-  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_GEMDROP_PREFIX, LEDGER_VENDOR_BOUGHT,
-  classLevelLedgerKey, reachedLevelKey, type Account,
+  FEATURE, LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, LEDGER_GEMDROP_PREFIX,
+  LEDGER_VENDOR_BOUGHT, classLevelLedgerKey, reachedLevelKey, type Account,
 } from './account';
 import { gateLevelNeeds, gateMet, gateRowLabel, gateRowMet, type GateRow } from './gates';
 import { VENDOR_CFG } from '../data/vendors';
@@ -672,7 +672,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'The Gem Counter',
     description: 'The counters\' shuttered gem case opens — every market stocks skill gems behind glass, account-wide. Support gems and the deeper counter services grow from here.',
     payload: { flag: FEATURE.VENDOR_GEMS } },
-  { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 1, requiresUnlock: 'feat_vendor_gems', label: 'Gem Counter: Supports', description: 'The gem case also stocks support gems.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
+  // (Chain-gated only, like every market rung — the stray account-level gate
+  // it wore before the gatework re-parented it was pre-chain residue.)
+  { id: 'feat_brandt_supports', kind: 'feature', cost: 80,  reqLevel: 0, requiresUnlock: 'feat_vendor_gems', label: 'Gem Counter: Supports', description: 'The gem case also stocks support gems.', payload: { flag: FEATURE.BRANDT_SELL_SUPPORTS } },
   // THE RUSH LADDER — derived from VENDOR_CFG.restock.ladder (the beat law's
   // own home): each rung CUTS the counters' restock beat by its row's
   // seconds. Rung 1 keeps the legacy brandt_fast_restock flag (the old 15s
@@ -694,7 +696,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   }),
   // Mireille's care, in sequence: life heal, then mana heal, then an XP buff —
   // each surfaces once the previous is owned (a town pitstop that grows).
-  { id: 'feat_mireille_life',  kind: 'feature', cost: 40,  reqLevel: 0, label: 'Mireille: Field Care',     description: 'Mireille restores your LIFE when you linger near her.',  payload: { flag: FEATURE.MIREILLE_HEAL_LIFE } },
+  // THE INTRODUCTION LAW: the whole chain waits behind her OWN lesson — the
+  // flask tutorial's completing drink (LEDGER_FLASK_LESSON, the same account
+  // stamp that graduates veterans). A menu-spelunker who has never met the
+  // innkeeper finds no mention of her; the head row surfaces the moment the
+  // lesson lands, and the chain (mana → XP → the Tracker's camp) drips from
+  // there by ownership alone — the world introduces, the Vault deepens.
+  { id: 'feat_mireille_life',  kind: 'feature', cost: 40,  reqLevel: 0, reqLedger: LEDGER_FLASK_LESSON, label: 'Mireille: Field Care',     description: 'Mireille restores your LIFE when you linger near her.',  payload: { flag: FEATURE.MIREILLE_HEAL_LIFE } },
   { id: 'feat_mireille_mana',  kind: 'feature', cost: 60,  reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_LIFE, label: 'Mireille: Restorative Brew', description: 'She also replenishes your MANA.',                       payload: { flag: FEATURE.MIREILLE_HEAL_MANA } },
   { id: 'feat_mireille_xp',    kind: 'feature', cost: 120, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Mireille: Traveller\'s Rest', description: 'Linger for a 5-minute +5% experience blessing — a worthwhile pitstop.', payload: { flag: FEATURE.MIREILLE_XP_BUFF } },
   // The TRACKER — the inn's word-of-mouth made flesh: once Mireille keeps you

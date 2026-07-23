@@ -19,11 +19,12 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import {
   CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, VAULT_SHELF_CFG, VAULT_TABS, allUnlockables,
   applyUnlock, availableUnlocks, classBundleId, classUnlockFor, discoveryLedgerKeys,
-  isClassDiscovered, isUnlockVisible, undiscoveredClassUnlocks, vaultKindOrder, vaultSeatOf,
-  vaultShelfCensus, vaultStripVisible,
+  isClassDiscovered, isUnlockOwned, isUnlockVisible, undiscoveredClassUnlocks, vaultKindOrder,
+  vaultSeatOf, vaultShelfCensus, vaultStripVisible,
 } from '../src/meta/unlocks';
 import {
-  CLASS_LEVEL_MILESTONES, STARTER_CLASSES, classLevelLedgerKey, makeAccount,
+  CLASS_LEVEL_MILESTONES, FEATURE, LEDGER_FLASK_LESSON, STARTER_CLASSES,
+  classLevelLedgerKey, makeAccount,
 } from '../src/meta/account';
 import { CLASSES } from '../src/data/classes';
 import { LEDGER_SEIZED } from '../src/engine/grab';
@@ -276,22 +277,91 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     vaultStripVisible(fresh));
   Object.assign(VAULT_SHELF_CFG, saved);
   check('store: dials restored, the young store returns', !vaultStripVisible(fresh));
-  // …and the honest walk raises it by CLAIMING: buy through the real gate
-  // until the account has earned its furniture.
+  // …and the honest walk raises it by PLAYING: claim what the young store
+  // sells, and when the wall runs dry (a truly fresh account has only a
+  // couple of purchases before the world must teach it more — the mystery
+  // doctrine working), stamp the next real deed a new player would cross
+  // (the flask lesson, then the level-5 milestone) and keep claiming.
   const a = makeAccount();
   a.credits = 100000;
+  const deeds = [LEDGER_FLASK_LESSON, 'reached_level_5'];
   let bought = 0;
   while (!vaultStripVisible(a) && bought < 50) {
     const u = availableUnlocks(a)[0];
-    if (!u || !applyUnlock(a, u)) break;
-    bought++;
+    if (u && applyUnlock(a, u)) { bought++; continue; }
+    const deed = deeds.shift();
+    if (deed === undefined) break;
+    a.ledger[deed] = 1;
   }
-  check('store: claiming unlocks raises the shelving (the store grows with the account)',
+  check('store: playing + claiming raises the shelving (the store grows with the account)',
     vaultStripVisible(a), `after ${bought} claims (dials: ${VAULT_SHELF_CFG.stripMinOwned} owned, span ${VAULT_SHELF_CFG.stripMinShelves})`);
   check('store: the raise waited for the owned dial, never before',
     bought >= VAULT_SHELF_CFG.stripMinOwned);
   check('store: the Owned shelf stands once anything is claimed',
     vaultShelfCensus(a).find(c => c.tab.owned)!.visible);
+}
+
+// --- 3c) THE INTRODUCTION LAW + catalog parity nets --------------------------
+// Mireille's whole chain waits behind her own flask lesson (the account
+// stamp the tutorial's completing drink writes): a menu-spelunker who has
+// never met the innkeeper finds NO mention of her, and the chain drips
+// open by ownership from the lesson onward. Beside it, the generic nets
+// that keep every chain honest: requiresUnlock ids must resolve (a typo
+// is a forever-invisible row), requiresFeature flags must be GRANTED by
+// some row (else the chain is unreachable), and no flag sells twice.
+{
+  const a = makeAccount();
+  // The Mireille family: her own rows by flag, plus everything chained onto
+  // her flags (the Tracker) — found structurally, never by name-list.
+  const mireilleFlags: string[] = [FEATURE.MIREILLE_HEAL_LIFE, FEATURE.MIREILLE_HEAL_MANA, FEATURE.MIREILLE_XP_BUFF];
+  const family = allUnlockables().filter(u =>
+    (u.kind === 'feature' && (mireilleFlags.includes(u.payload.flag)
+      || (u.requiresFeature !== undefined && mireilleFlags.includes(u.requiresFeature)))));
+  check('introduction: the Mireille family is four rows (life, mana, XP, the Tracker)',
+    family.length === 4, family.map(u => u.id).join(','));
+  check('introduction: before the flask lesson, NO mention of her anywhere',
+    family.every(u => !isUnlockVisible(a, u)));
+  check('introduction: the census carries no family stock before the lesson',
+    vaultShelfCensus(a).every(c => c.stock.every(u => !family.some(f => f.id === u.id))));
+  // The user's exact fantasy, pinned: with Mireille waiting on her lesson,
+  // a truly fresh account has NO Town shelf at all — the first town feature
+  // the world introduces is the first the store ever mentions.
+  check('introduction: a fresh account has no Town shelf to read (the mystery law compounds)',
+    !vaultShelfCensus(a).find(c => c.tab.id === 'town')!.visible);
+  a.ledger[LEDGER_FLASK_LESSON] = 1;
+  a.credits = 1000;
+  // Visible AND unowned — the shopping read (isUnlockVisible keeps owned
+  // entries visible by design; the drip is about what's NEWLY buyable).
+  const vis = (): string[] => family.filter(u => isUnlockVisible(a, u) && !isUnlockOwned(a, u)).map(u => u.id);
+  check('introduction: the lesson surfaces Field Care ALONE (the chain still folded)',
+    vis().join(',') === 'feat_mireille_life');
+  applyUnlock(a, family.find(u => u.id === 'feat_mireille_life')!);
+  check('introduction: owning Field Care surfaces the Brew alone',
+    vis().join(',') === 'feat_mireille_mana');
+  applyUnlock(a, family.find(u => u.id === 'feat_mireille_mana')!);
+  check('introduction: owning the Brew surfaces the Rest AND the Tracker (both chain off it)',
+    vis().sort().join(',') === 'feat_mireille_xp,feat_tracker');
+
+  // The nets, over the WHOLE live catalog:
+  const all = allUnlockables();
+  const ids = new Set(all.map(u => u.id));
+  const badReq = all.filter(u => (Array.isArray(u.requiresUnlock) ? u.requiresUnlock : u.requiresUnlock ? [u.requiresUnlock] : [])
+    .some(id => !ids.has(id)));
+  check('parity: every requiresUnlock id resolves (a typo is a forever-invisible row)',
+    badReq.length === 0, badReq.map(u => u.id).join(','));
+  const grantedFlags = new Set(all.filter(u => u.kind === 'feature').map(u => (u as { payload: { flag: string } }).payload.flag));
+  const orphanChains = all.filter(u => u.kind === 'feature' && u.requiresFeature !== undefined
+    && !grantedFlags.has(u.requiresFeature));
+  check('parity: every requiresFeature flag is granted by some row (no unreachable chains)',
+    orphanChains.length === 0, orphanChains.map(u => u.id).join(','));
+  const flagSellers = new Map<string, number>();
+  for (const u of all) if (u.kind === 'feature') {
+    const f = (u as { payload: { flag: string } }).payload.flag;
+    flagSellers.set(f, (flagSellers.get(f) ?? 0) + 1);
+  }
+  const doubleSold = [...flagSellers.entries()].filter(([, n]) => n > 1);
+  check('parity: no feature flag is sold by two rows',
+    doubleSold.length === 0, doubleSold.map(([f]) => f).join(','));
 }
 
 // --- 4) LIVE: the engine stamps land (local hero only) ----------------------
