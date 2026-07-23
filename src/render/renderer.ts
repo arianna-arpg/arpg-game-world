@@ -58,6 +58,7 @@ import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLivePar
 import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { registerVisCache, trimVisCaches } from './vis/caches';
+import { resolveSpeech, revealedChars, wrapSpeech, type SpeechStyle } from './vis/speech';
 import { drawEdgeOverlay, qFrac, qChan } from './vis/overlays';
 import { canvasCap, canvasCapsReport } from './vis/canvasCaps';
 import { GroundRenderer } from './vis/ground';
@@ -191,6 +192,13 @@ export class Renderer {
       id: 'lite',
       count: () => this.liteSprites.size,
       onZoneSwap: () => this.liteSprites.clear(),
+    });
+    // THE SPEECH FABRIC's utterance clocks: a handful of live talkers at
+    // most; dropped whole at every zone boundary (speakers are zone-local).
+    registerVisCache({
+      id: 'speech',
+      count: () => this.speechClocks.size,
+      onZoneSwap: () => this.speechClocks.clear(),
     });
   }
 
@@ -536,12 +544,6 @@ export class Renderer {
       drawFogLayer(this.ctx, world.fog, 'over', this.cam.x, this.cam.y, vw, vh);
     }
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
-    this.drawLabels(world);        // actor text (names/prompts) — above the fades, visibility-gated
-    this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
-    this.drawTexts(world);
-    this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
-    if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
-    this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
 
     ctx.restore();
 
@@ -550,6 +552,25 @@ export class Renderer {
     // atmosphere pass damps its weather against frac). Free when outside.
     // (Its update ran before the world pass — the sight veil reads frac().)
     this.roomVeil.draw(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+
+    // THE WORD LAYER: every world-anchored line of TEXT re-enters world
+    // space ABOVE the room veil's wash. The veils still decide WHETHER a
+    // line shows — labelRevealAt probes each anchor through roomVeil/
+    // sightVeil/roof/crown concealment — but they no longer get to drown
+    // words their own gate chose to reveal (Mireille's talk used to poke
+    // past her inn's footprint into the wash and read as mud). Still under
+    // the light layer + screen washes, so night and weather keep their say.
+    ctx.save();
+    ctx.scale(z, z);
+    ctx.translate(-this.cam.x + shx, -this.cam.y + shy);
+    this.drawLabels(world);        // actor text (names/prompts) — visibility-gated
+    this.drawSpeeches(world);      // THE SPEECH FABRIC: wrapped talk bubbles, typewriter reveal
+    this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
+    this.drawTexts(world);
+    this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
+    if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
+    this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
+    ctx.restore();
 
     // THE LIGHT LAYER: day/night darkness punched by every light in view +
     // emissive bloom — world-lit, drawn before the screen-space washes. The
@@ -2592,6 +2613,128 @@ export class Renderer {
     this.labels.length = 0;
   }
 
+  // --- THE SPEECH FABRIC (vis/speech.ts): wrapped talk bubbles ---------------
+
+  /** This frame's spoken lines — queued by the actor pass (role prompts and
+   *  any future talker), drawn as bubbles in the WORD LAYER above the veils. */
+  private speeches: { a: Actor; text: string; color: string; style?: SpeechStyle }[] = [];
+  /** Per-speaker utterance clocks (sim time, so menu holds freeze the
+   *  telling): when this text started arriving, or null while the veils
+   *  conceal the speaker — first sight starts the telling from its first
+   *  glyph. Keyed by actor; pruned the frame a speaker falls silent. */
+  private speechClocks = new Map<object, { text: string; startedAt: number | null }>();
+
+  /** Queue one SPOKEN line above an actor's head — a wrapped bubble in the
+   *  speaker's ink with the typewriter reveal. Tuning folds VIS_CFG.speech
+   *  ← MonsterDef.speech ← this call's style (most specific wins), under
+   *  the Settings.speechTyping master switch. Role prompts feed this;
+   *  names and marks stay queueLabel. */
+  private queueSpeech(a: Actor, text: string, color: string, style?: SpeechStyle): void {
+    this.speeches.push({ a, text: this.resolveText(text), color, style });
+  }
+
+  private drawSpeeches(world: World): void {
+    if (!this.speeches.length) {
+      if (this.speechClocks.size) this.speechClocks.clear();
+      return;
+    }
+    const { ctx } = this;
+    const typingOn = this.getSettings?.().speechTyping ?? true;
+    const spoke = new Set<object>();
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    for (const s of this.speeches) {
+      spoke.add(s.a);
+      const t = resolveSpeech(VIS_CFG.speech,
+        s.a.defId ? MONSTERS[s.a.defId]?.speech : undefined, s.style);
+      // THE SAME-VIEW GATE: the bubble exists only while its SPEAKER is
+      // revealed (room veil / sight veil / roofs / crowns — labelRevealAt,
+      // probed at the feet). Concealment parks the clock, so the telling
+      // replays whole when the player next shares the speaker's view.
+      const reveal = this.labelRevealAt(world, s.a.pos);
+      let ck = this.speechClocks.get(s.a);
+      if (!ck || ck.text !== s.text) {
+        ck = { text: s.text, startedAt: null };
+        this.speechClocks.set(s.a, ck);
+      }
+      if (reveal <= 0.02) { ck.startedAt = null; continue; }
+      if (ck.startedAt === null) ck.startedAt = world.time;
+
+      ctx.font = t.font;
+      const lines = wrapSpeech(s.text, t.maxWidth, str => ctx.measureText(str).width);
+      const flat = lines.join('\n');
+      const typing = typingOn && !t.typingOff;
+      const shown = typing
+        ? revealedChars(flat, world.time - ck.startedAt, t.typing)
+        : flat.length;
+      // The box is sized to the WHOLE utterance from the first glyph — the
+      // frame never jitters while the words arrive inside it.
+      let wMax = 0;
+      for (const ln of lines) wMax = Math.max(wMax, ctx.measureText(ln).width);
+      const boxW = wMax + t.padX * 2;
+      const boxH = lines.length * t.lineHeight + t.padY * 2;
+      const tipX = s.a.pos.x, tipY = s.a.pos.y - s.a.radius - t.lift;
+      const top = tipY - t.tailH - boxH;
+      const left = tipX - boxW / 2;
+      ctx.globalAlpha = reveal;
+      this.speechBubblePath(left, top, boxW, boxH, t.cornerR, tipX, tipY, t.tailW, t.tailH);
+      ctx.fillStyle = t.bg;
+      ctx.fill();
+      ctx.globalAlpha = reveal * t.edgeAlpha;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = reveal;
+      ctx.fillStyle = s.color;
+      let before = 0; // chars consumed by earlier lines (+1 per break)
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        const vis = Math.max(0, Math.min(ln.length, shown - before));
+        const frontHere = typing && shown < flat.length
+          && shown >= before && shown <= before + ln.length;
+        before += ln.length + 1;
+        if (vis <= 0 && !frontHere) break;
+        let out = ln.slice(0, vis);
+        // The caret blinks on the arriving glyph — sim clock, like the reveal.
+        if (frontHere && t.typing.caret && Math.floor(world.time * 3) % 2 === 0) out += '|';
+        ctx.fillText(out, left + t.padX, top + t.padY + (i + 0.5) * t.lineHeight);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    // Prune clocks for anchors that fell silent — walking away (the prompt
+    // nulls) restarts the telling on return, matching the conceal law.
+    for (const k of [...this.speechClocks.keys()]) if (!spoke.has(k)) this.speechClocks.delete(k);
+    this.speeches.length = 0;
+  }
+
+  /** One traced outline — rounded rect + the tail wedge dropping to
+   *  (tipX, tipY) — so the fill and the accent stroke agree everywhere,
+   *  with no seam where a separate tail would meet the box. */
+  private speechBubblePath(x: number, y: number, w: number, h: number, r: number,
+    tipX: number, tipY: number, tailW: number, tailH: number): void {
+    const { ctx } = this;
+    const bot = y + h;
+    const r2 = Math.min(r, w / 2, h / 2);
+    // Tail base, clamped off the rounded corners (future styles may aim it).
+    const tl = Math.max(x + r2, Math.min(tipX - tailW / 2, x + w - r2 - tailW));
+    ctx.beginPath();
+    ctx.moveTo(x + r2, y);
+    ctx.lineTo(x + w - r2, y);
+    ctx.arcTo(x + w, y, x + w, y + r2, r2);
+    ctx.lineTo(x + w, bot - r2);
+    ctx.arcTo(x + w, bot, x + w - r2, bot, r2);
+    ctx.lineTo(tl + tailW, bot);
+    ctx.lineTo(tipX, tipY);
+    ctx.lineTo(tl, bot);
+    ctx.lineTo(x + r2, bot);
+    ctx.arcTo(x, bot, x, bot - r2, r2);
+    ctx.lineTo(x, y + r2);
+    ctx.arcTo(x, y, x + r2, y, r2);
+    ctx.closePath();
+  }
+
   // --- FAKE-2D DEPTH: canopies above actors, proximity-faded -----------------
   // Tall doodads whose DOODAD_RULES row carries `occlude` draw AFTER the actor
   // pass: walk under a tree and its crown covers you — until you're close, when
@@ -4275,9 +4418,12 @@ export class Renderer {
     // caravanner/bonewright/delver siblings: the welcome-gift invitation
     // while the flasks are owed, else the locked-care note. Any body a
     // package dresses in the role gets the prompt, no renderer edit.
+    // TALK rides THE SPEECH FABRIC (queueSpeech): a wrapped bubble in the
+    // speaker's ink, told glyph by glyph — so it reads as the NPC speaking,
+    // not a caption; names and marks stay on the plain label lane.
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'innkeep') {
       const msg = world.innkeepPrompt();
-      if (msg) this.queueLabel(a, msg, '#d8b87a', 22);
+      if (msg) this.queueSpeech(a, msg, '#d8b87a');
     }
 
     // Any quest-giving NPC posts its offer above its head while you're near —
@@ -4285,12 +4431,12 @@ export class Renderer {
     // vocation's shrine spirit, future field boards), never a hand list.
     if (a.defId && QUEST_GIVER_IDS.has(a.defId)) {
       const msg = world.questGiverPrompt();
-      if (msg) this.queueLabel(a, msg, '#c8a8e8', 22);
+      if (msg) this.queueSpeech(a, msg, '#c8a8e8');
     }
 
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'caravanner') {
       const msg = world.caravanPrompt();
-      if (msg) this.queueLabel(a, msg, '#d8b87a', 22);
+      if (msg) this.queueSpeech(a, msg, '#d8b87a');
     }
 
     // The Bonewright posts its current demand above its head — bound to the
@@ -4298,13 +4444,13 @@ export class Renderer {
     // package dresses in the role gets the prompt, no renderer edit.
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'bonewright') {
       const msg = world.amalgamPrompt();
-      if (msg) this.queueLabel(a, msg, '#9ad0b0', 22);
+      if (msg) this.queueSpeech(a, msg, '#9ad0b0');
     }
 
     // The Delver posts its trade/descend prompt above its head (role-bound).
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'delver') {
       const msg = world.delverPrompt();
-      if (msg) this.queueLabel(a, msg, '#7fe0d8', 22);
+      if (msg) this.queueSpeech(a, msg, '#7fe0d8');
     }
 
     // Status pips

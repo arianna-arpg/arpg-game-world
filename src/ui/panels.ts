@@ -5660,6 +5660,10 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       <div class="rebind-row">
         <span>Foresight (enemy cast markers)</span>
         <button id="opt-foresight">${s.castTelegraphs ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>NPC Talk Typing</span>
+        <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once — same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>
@@ -5724,6 +5728,14 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-foresight')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.castTelegraphs = !st.castTelegraphs;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // THE TYPEWRITER (render speech fabric): the master switch over every
+    // per-kind/per-line typing dial — OFF is instant whole-line talk.
+    root.querySelector<HTMLElement>('#opt-speechtyping')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.speechTyping = !st.speechTyping;
       this.saveSettings();
       this.renderOptions(root, onBack);
     });

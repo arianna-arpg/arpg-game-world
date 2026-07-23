@@ -916,6 +916,15 @@ changes.
   `npm run build:portraits` bundle (`site/assets/portraits.js`, CI-built +
   gitignored beside the `export-web-data` JSON — site pixels can no more
   drift from src/ than site facts can).
+  THE SPEECH FABRIC + THE WORD LAYER (`render/vis/speech.ts` + renderer
+  `queueSpeech`/`drawSpeeches`): NPC talk as wrapped BUBBLES with a
+  typewriter reveal — pure wrap/reveal/fold laws, `VIS_CFG.speech` ←
+  `MonsterDef.speech` ← per-call style under the `Settings.speechTyping`
+  master switch; every world-anchored line of text (labels, bubbles,
+  floaters, scene HUD, reticle) composites ABOVE the room veil's wash —
+  the veils decide WHETHER text shows (`labelRevealAt` at the speaker's
+  feet: the same-view gate), never get to drown what they revealed —
+  docs in `docs/render/speech.md`; probe `balance/probe_speech.ts`.
   Tunables in `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.

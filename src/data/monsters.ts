@@ -21,6 +21,7 @@ import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { LightSpec } from '../render/vis/painters';
 import type { PortraitTune } from '../render/vis/portrait';
+import type { SpeechStyle } from '../render/vis/speech';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
 
@@ -375,6 +376,12 @@ export interface MonsterDef {
    *  facing, pose clock, worm-trail length for this kind's composed portrait
    *  in the bestiary and the website. Omitted = the fabric's measured fit. */
   portrait?: PortraitTune;
+  /** THE SPEECH FABRIC (render/vis/speech.ts): this kind's talk-bubble
+   *  dials — wrap width, ink font, typewriter pace — or `typing: false`
+   *  for instant plates (signs, echo-stones). Folded over VIS_CFG.speech
+   *  for every line this body speaks through queueSpeech; absent = the
+   *  fabric's defaults. Render-only flavor, never gameplay. */
+  speech?: SpeechStyle;
   /** THE CARRIED LAMP (the firefly fabric): this kind contributes a real
    *  light to the dynamic light layer — a mover, live-marched like the
    *  hero's lantern (render/vis/lights.ts). Same LightSpec as doodads:

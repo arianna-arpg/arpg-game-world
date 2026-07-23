@@ -36,7 +36,7 @@ export interface VisionVolume {
 
 /** The sliver of World this pass needs (structural — the vis layer never
  *  imports the engine's World; PlacedStructure satisfies ConfineStructure). */
-interface ConfineRoom {
+export interface ConfineRoom {
   rects: Rect[];
   /** Indices into ConfineStructure.doors. */
   doors: number[];
@@ -45,7 +45,7 @@ interface ConfineRoom {
   windows: { x: number; y: number; w: number; h: number; nx: number; ny: number }[];
   enclosed: boolean;
 }
-interface ConfineStructure {
+export interface ConfineStructure {
   id: string;
   confineVision?: boolean | 'rooms';
   /** Per-structure darkness override (0..1 of the pass's own alpha). */
@@ -66,7 +66,7 @@ interface RoomView {
  *  glimpsed through the frame you dwell in), and — rooms mode — each
  *  see-through window/parapet cell with its own smaller spill (the street,
  *  glimpsed through the slit). */
-function roomVolume(st: ConfineStructure, room?: ConfineRoom): VisionVolume {
+export function roomVolume(st: ConfineStructure, room?: ConfineRoom): VisionVolume {
   const cfg = VIS_CFG.roomVeil;
   const p = cfg.pad;
   const base = room ? room.rects : st.roofs;
@@ -93,6 +93,22 @@ function roomVolume(st: ConfineStructure, room?: ConfineRoom): VisionVolume {
     });
   }
   return { rects, spills, ...(st.confineAlpha !== undefined ? { alpha: st.confineAlpha } : {}) };
+}
+
+/** Pure veil query over a built volume — how veiled a world point is
+ *  (0 clear .. `frac` unseen). The class method delegates here; the probe
+ *  (balance/probe_speech.ts) pins the same-view gate law against the same
+ *  function, headless — no DOM, no buffer. */
+export function veiledAtVolume(vol: VisionVolume | null, frac: number, pos: Pt): number {
+  if (frac <= 0.02 || !vol) return 0;
+  for (const r of vol.rects) {
+    if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return 0;
+  }
+  for (const s of vol.spills) {
+    const dx = pos.x - s.x, dy = pos.y - s.y;
+    if (dx * dx + dy * dy < s.r * s.r) return 0;
+  }
+  return frac;
 }
 
 export class RoomVeil {
@@ -145,16 +161,7 @@ export class RoomVeil {
    *  multiplies its reveal through this, so nameplates beyond the room hide
    *  with the world they stand in. */
   veiledAt(pos: Pt): number {
-    const f = this.frac();
-    if (f <= 0.02 || !this.vol) return 0;
-    for (const r of this.vol.rects) {
-      if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return 0;
-    }
-    for (const s of this.vol.spills) {
-      const dx = pos.x - s.x, dy = pos.y - s.y;
-      if (dx * dx + dy * dy < s.r * s.r) return 0;
-    }
-    return f;
+    return veiledAtVolume(this.vol, this.frac(), pos);
   }
 
   /** Composite the veil over the drawn world. Screen space, untransformed

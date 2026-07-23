@@ -126,6 +126,42 @@ export const VIS_CFG = {
     veilConceal: 0.7,
   },
 
+  /** THE SPEECH FABRIC (renderer queueSpeech/drawSpeeches + vis/speech.ts) —
+   *  NPC talk as wrapped BUBBLES with a typewriter reveal, drawn in the WORD
+   *  LAYER above the room/sight veils (a room never drowns words its own
+   *  gate chose to reveal; labelRevealAt still decides WHETHER they show).
+   *  These are the fabric's base dials; MonsterDef.speech overrides per
+   *  kind, the queueSpeech call per line, and Settings.speechTyping is the
+   *  player's master switch on the reveal. */
+  speech: {
+    /** Wrap width for bubble text (world px) — lines break to fit. */
+    maxWidth: 168,
+    font: '11px Verdana',
+    lineHeight: 14,
+    /** Box padding, corner rounding, and the tail wedge at the speaker. */
+    padX: 8,
+    padY: 6,
+    cornerR: 7,
+    tailW: 12,
+    tailH: 8,
+    /** Tail-tip lift above the speaker's scalp (clears name + bar stack). */
+    lift: 26,
+    /** Box fill — the veil family's neutral dark; the INK keeps each
+     *  speaker's own accent color (who talks stays attributable). */
+    bg: 'rgba(10,10,16,0.86)',
+    /** Accent-colored border strength (× the ink color). */
+    edgeAlpha: 0.45,
+    /** THE TYPEWRITER: per-character reveal pace, held beats at sentence
+     *  stops / clause breaks (only at true breaks — "1.5" never stutters),
+     *  and the blinking caret on the arriving glyph. */
+    typing: {
+      cps: 26,
+      pausePunct: 0.22,
+      pauseComma: 0.09,
+      caret: true,
+    },
+  },
+
   /** GROUND DROPS (renderer drawDrops) — gem/gear diamond half-sizes, glow
    *  reach, and the gear name-label type. Sized SMALL on purpose: a kill
    *  burst should read as pickings on the floor, not a curtain over it —

@@ -99,6 +99,11 @@ export interface Settings {
    *  during the wind-up (a faint ring firming toward impact). ON by default;
    *  OFF is the hard-mode read-the-animation purist option. */
   castTelegraphs: boolean;
+  /** THE TYPEWRITER (render speech fabric): NPC talk bubbles tell their
+   *  lines glyph by glyph, as if the speaker were speaking. ON by default;
+   *  OFF shows every line whole at once — the master switch over every
+   *  per-kind/per-line typing dial (VIS_CFG.speech, MonsterDef.speech). */
+  speechTyping: boolean;
   /** The AIM TICK (the facing/cast-direction pointer on acting bodies):
    *  a style from the registry (render/vis/aimtick.ts — line, dot, …) and
    *  an opacity. 0 hides ticks entirely — see the monster, not the marker. */
@@ -172,6 +177,7 @@ export interface SettingsSave {
   invertMove?: boolean;
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
+  speechTyping?: boolean;
   aimTick?: Partial<AimTickOptions>;
   poolBars?: PoolBarsMode;
   resumeSpawn?: ResumeSpawn;
@@ -290,6 +296,7 @@ export const makeSettings = (): Settings => ({
   invertMove: false,
   gearPickup: 'vacuum',
   castTelegraphs: true,
+  speechTyping: true,
   aimTick: { ...DEFAULT_AIM_TICK },
   poolBars: 'smart',
   resumeSpawn: WORLDSTATE_CFG.resume,
@@ -312,6 +319,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   invertMove: s.invertMove,
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
+  speechTyping: s.speechTyping,
   aimTick: { ...s.aimTick },
   poolBars: s.poolBars,
   resumeSpawn: s.resumeSpawn,
@@ -362,6 +370,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     invertMove: s.invertMove ?? false,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
+    speechTyping: s.speechTyping ?? true,
     // Tick identity: unknown styles (a removed entry) fall back; the alpha
     // re-clamps so a hand-edited save can't smuggle a 500% tick.
     aimTick: {
