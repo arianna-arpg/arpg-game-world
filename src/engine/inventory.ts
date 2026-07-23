@@ -16,6 +16,12 @@ import { ITEM_CFG, type ItemInstance } from './items';
 export function bagWidth(): number { return ITEM_CFG.inventory.w; }
 export function bagHeight(): number { return ITEM_CFG.inventory.h; }
 
+/** An alternate board's dims. Every placement helper takes one optionally —
+ *  absent = the player bag (ITEM_CFG.inventory), so a vendor's counter
+ *  glass, a future stash page, any grid at all rides the SAME pure cell
+ *  law: one collision test, one first-fit, drawn == held everywhere. */
+export interface BoardDims { w: number; h: number }
+
 function placed(i: ItemInstance): boolean {
   return i.x !== undefined && i.y !== undefined;
 }
@@ -40,16 +46,19 @@ export function overlappingItems(
 }
 
 export function canPlaceAt(
-  bag: readonly ItemInstance[], item: ItemInstance, x: number, y: number,
+  bag: readonly ItemInstance[], item: ItemInstance, x: number, y: number, board?: BoardDims,
 ): boolean {
   const s = itemGridSize(item);
-  if (x < 0 || y < 0 || x + s.w > bagWidth() || y + s.h > bagHeight()) return false;
+  const bw = board?.w ?? bagWidth(), bh = board?.h ?? bagHeight();
+  if (x < 0 || y < 0 || x + s.w > bw || y + s.h > bh) return false;
   return overlappingItems(bag, item, x, y).length === 0;
 }
 
 /** Place (or move) an item at a cell; false (untouched) when blocked. */
-export function placeAt(bag: ItemInstance[], item: ItemInstance, x: number, y: number): boolean {
-  if (!canPlaceAt(bag, item, x, y)) return false;
+export function placeAt(
+  bag: ItemInstance[], item: ItemInstance, x: number, y: number, board?: BoardDims,
+): boolean {
+  if (!canPlaceAt(bag, item, x, y, board)) return false;
   item.x = x;
   item.y = y;
   if (!bag.some(i => i.uid === item.uid)) bag.push(item);
@@ -58,11 +67,12 @@ export function placeAt(bag: ItemInstance[], item: ItemInstance, x: number, y: n
 
 /** First-fit scan, row-major. False when the bag genuinely has no hole big
  *  enough — the caller decides what "inventory full" means (ground, note). */
-export function autoPlace(bag: ItemInstance[], item: ItemInstance): boolean {
+export function autoPlace(bag: ItemInstance[], item: ItemInstance, board?: BoardDims): boolean {
   const s = itemGridSize(item);
-  for (let y = 0; y <= bagHeight() - s.h; y++) {
-    for (let x = 0; x <= bagWidth() - s.w; x++) {
-      if (placeAt(bag, item, x, y)) return true;
+  const bw = board?.w ?? bagWidth(), bh = board?.h ?? bagHeight();
+  for (let y = 0; y <= bh - s.h; y++) {
+    for (let x = 0; x <= bw - s.w; x++) {
+      if (placeAt(bag, item, x, y, board)) return true;
     }
   }
   return false;

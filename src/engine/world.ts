@@ -263,8 +263,16 @@ import {
   STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
   LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, CLASS_LEVEL_MILESTONES,
   classLevelLedgerKey, gemDropKey, LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT,
+  questDoneKey, reachedLevelKey,
   type Account,
 } from '../meta/account';
+import { gateMet } from '../meta/gates';
+// THE MILESTONE DERIVATION: every level the unlock catalog's own gates ask
+// about — the XP sweep stamps exactly these beside its standing decade keys,
+// so a level gate authored anywhere in the catalog has a live signal BY
+// CONSTRUCTION (unlocks.ts → vendors.ts touches world only type-wise; no
+// runtime cycle).
+import { catalogLevelMilestones } from '../meta/unlocks';
 import {
   modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
   type CharacterModeDef, type ModeStageDef,
@@ -3093,6 +3101,13 @@ export class World {
    *  snapshot (the counter's true ledger — a client's own Vault does not
    *  govern the host's counters). Undefined on host/solo/couch. */
   netVendorCap?: number;
+  /** NET CLIENT only: the HOST's trade-gate + gem-case verdicts, mirrored
+   *  off the snapshot (THE KEEPER'S GATE: the keeper's progression shapes
+   *  the keeper's market — exactly as stock size already does). Undefined on
+   *  host/solo/couch AND under an older host — absent reads as OPEN, the
+   *  tolerant default. */
+  netVendorTradeOpen?: boolean;
+  netVendorGemsOpen?: boolean;
   /** Seconds the player has lingered in Mireille's radius (proximity heal). */
   private mireilleDwell = 0;
   /** Cooldown before Mireille will heal again (persists across zones). */
@@ -11758,7 +11773,10 @@ export class World {
       this.clampPos(vec(center.x + Math.cos(ang) * 92, center.y + Math.sin(ang) * 92), 24));
     this.doodads.push({ pos: vec(platform.x, platform.y), radius: 30, kind: 'descent_platform' });
     this.descentSite = { delverId: delver.id, platform: vec(platform.x, platform.y) };
-    this.descentStock = this.buildVendorStock(); // wares to spend Echoes on
+    // Wares to spend Echoes on — gems ALONE (the delver's VendorDef lists
+    // one tab and its buy lane refuses gear; a gear roll here would be a
+    // shelf of lies).
+    this.descentStock = this.buildVendorStock({ gear: false });
     bumpLedger(this.ledger, 'delvers_seen'); // DISCOVERY — surfaces the Vault unlock
     this.text(vec(center.x, center.y - 30), 'A Delver lingers by a gaping shaft…', '#7fe0d8', 15);
   }
@@ -16783,8 +16801,18 @@ export class World {
     // Same once-per-run, account-seat shape; merges into account.ledger on death.
     if (this.accountSeat(seat)) {
       for (let m10 = 10; m10 <= 90; m10 += 10) {
-        const key = `reached_level_${m10}`;
+        const key = reachedLevelKey(m10);
         if (p.level >= m10 && !this.ledger[key]) bumpLedger(this.ledger, key);
+      }
+      // THE MILESTONE DERIVATION (meta/unlocks.ts catalogLevelMilestones):
+      // every level the unlock catalog's own gates ask about stamps here —
+      // authoring a level gate IS registering its signal, so a gate whose
+      // key never fires (the old reached_level_15 hole) is structurally
+      // impossible. Stamps ALL milestones ≤ the current level, so a
+      // character already past one back-fills it on their next level-up.
+      for (const ms of catalogLevelMilestones()) {
+        const key = reachedLevelKey(ms);
+        if (p.level >= ms && !this.ledger[key]) bumpLedger(this.ledger, key);
       }
     }
     // PER-CLASS milestones — the DISCOVERY WEB's raw material (account.ts
@@ -17061,6 +17089,14 @@ export class World {
     const m = seat.meta;
     const entry = this.vendorStock[index];
     if (!entry || !this.nearSmith(seat)) return false;
+    // THE TRADE GATE + THE GEM CASE — the panel disables through these SAME
+    // predicates; refusals mutate nothing and speak the config's own words.
+    const refusal = this.vendorTradeRefusal();
+    if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
+    if (entry.kind !== 'item' && !this.vendorGemsOpen()) {
+      this.failNote(seat.actor, 'vendorgems', VENDOR_CFG.tabs.gemsSealedNote);
+      return false;
+    }
     const price = this.vendorPrice(entry);
     // Affordability first (names the missing tint), then bag space for gear,
     // THEN the spend — order matters: no partial deductions, no eaten fees.
@@ -20506,6 +20542,18 @@ export class World {
       if (q.reward.grantVocation) this.grantVocation(q.reward.grantVocation);
       if (q.reward.ledger) {
         for (const [k, v] of Object.entries(q.reward.ledger)) bumpLedger(this.ledger, k, v);
+      }
+      // THE QUEST LEDGER CONTRACT (meta/account.ts questDoneKey): a presence
+      // key per quest, stamped at turn-in — to the run ledger AND straight to
+      // the account under metaProgression (the grantVocation durability
+      // precedent: quit-without-death keeps the deed; the death-merge's later
+      // add is harmless, every reader tests ≥ 1). Gatework `quest` avenues
+      // read these the moment the deed lands, never a death later.
+      bumpLedger(this.ledger, questDoneKey(aq.questId));
+      if (this.metaProgressionActive()) {
+        this.account.ledger[questDoneKey(aq.questId)] =
+          (this.account.ledger[questDoneKey(aq.questId)] ?? 0) + 1;
+        this.accountDirty = true;
       }
       this.text(vec(this.player.pos.x, this.player.pos.y - 86),
         `Quest complete: ${q.offerLabel}!`, '#ffd700', 18);
@@ -34529,11 +34577,74 @@ export class World {
 
   // --- Brandt the smith: time-based, account-scaled stock -------------------
 
+  /** THE BROADER-WARES fold: what the account's owned ladder rungs ADD to
+   *  every counter's stock (VENDOR_CFG.wares.ladder — gem slots on the gem
+   *  case, rolled pieces in the wares grid). ONE fold; vendorSize and the
+   *  gear shelf both read it, so a rung can never widen one face and not
+   *  the other. */
+  private waresBonus(): { gems: number; gear: number } {
+    let gems = 0, gear = 0;
+    for (const r of VENDOR_CFG.wares.ladder) {
+      if (featureEnabled(this.account, r.flag)) { gems += r.gems; gear += r.gear; }
+    }
+    return { gems, gear };
+  }
   private vendorSize(): number {
-    return featureEnabled(this.account, FEATURE.BRANDT_EXTRA_GEMS) ? 6 : 4;
+    return VENDOR_CFG.wares.baseGems + this.waresBonus().gems;
   }
   private restockSeconds(): number {
     return featureEnabled(this.account, FEATURE.BRANDT_FAST_RESTOCK) ? 15 : 30;
+  }
+
+  /** THE TRADE GATE (VENDOR_CFG.trade) — why this seat cannot BUY here, or
+   *  null when trade is open. ONE predicate: the engine buy handlers refuse
+   *  through it and the panel disables through it, the same words everywhere
+   *  (the swapRefusal shape). Browsing is always free — the gate binds the
+   *  purchase, never the dwell. A counter whose def wears tradeGate: false
+   *  (the delver's echo shelf) is never bound. Reads the WORLD-KEEPER's
+   *  account (host/solo/couch — the keeper's progression shapes the keeper's
+   *  market, exactly as stock size and the support share already do). */
+  vendorTradeRefusal(v?: VendorDef): string | null {
+    if (v && v.tradeGate === false) return null;
+    // No catalog in scope here — trade gates speak feature/ledger avenues.
+    if (gateMet(this.account, VENDOR_CFG.trade.gate, 'all', () => false)) return null;
+    return VENDOR_CFG.trade.hint;
+  }
+
+  /** THE GEM CASE — is the skill/support tab open at default-tabbed counters
+   *  (FEATURE.VENDOR_GEMS)? The engine gate for gem purchases and the
+   *  panel's tab seal read this ONE predicate. Keeper's account, as above. */
+  vendorGemsOpen(): boolean {
+    return featureEnabled(this.account, FEATURE.VENDOR_GEMS);
+  }
+
+  /** THE COUNTER GLASS pack — deterministic display cells for a counter's
+   *  GEAR rows: first-fit in STOCK ORDER over the counter's board
+   *  (VendorDef.grid ?? VENDOR_CFG.gearGrid), the player bag's own cell law
+   *  through the same pure helpers. Packs SCRATCH copies (a shelf item owns
+   *  no bag cell — the buyer's autoPlace writes the real one), keyed by item
+   *  uid, so both co-op sides pack their replicated arrays to the identical
+   *  glass. Gear that cannot seat reports in `overflow` for the panel to
+   *  list honestly — though the probe derives the worst case from the
+   *  catalog and fails the build before content can outgrow the glass. */
+  vendorGridPack(stock: readonly VendorEntry[], board?: { w: number; h: number }): {
+    cells: Map<number, { x: number; y: number }>;
+    board: { w: number; h: number };
+    overflow: number[];
+  } {
+    const b = board ?? VENDOR_CFG.gearGrid;
+    const scratch: ItemInstance[] = [];
+    const cells = new Map<number, { x: number; y: number }>();
+    const overflow: number[] = [];
+    for (const e of stock) {
+      if (e.kind !== 'item') continue;
+      const ghost: ItemInstance = { ...e.item };
+      delete ghost.x;
+      delete ghost.y;
+      if (autoPlace(scratch, ghost, b)) cells.set(e.item.uid, { x: ghost.x!, y: ghost.y! });
+      else overflow.push(e.item.uid);
+    }
+    return { cells, board: b, overflow };
   }
 
   // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG) -----------------------
@@ -34625,30 +34736,38 @@ export class World {
 
   /** Roll a fresh counter: skill gems, support gems once that's unlocked —
    *  and the TRUE-VENDOR SHELF: rolled gear at the buyer's level, rarity
-   *  weighted per VENDOR_ITEM_CFG, priced by quality in mixed essence. */
-  buildVendorStock(): VendorEntry[] {
+   *  weighted per VENDOR_ITEM_CFG, priced by quality in mixed essence.
+   *  Both faces widen through the ONE broader-wares fold (waresBonus).
+   *  `opts` lets an arm site stand down a face it does not deal — the
+   *  delver's counter is gems alone (its VendorDef lists one tab; rolling
+   *  gear its buy lane refuses would be a shelf of lies). */
+  buildVendorStock(opts?: { gems?: boolean; gear?: boolean }): VendorEntry[] {
     const out: VendorEntry[] = [];
     const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
     const lvl = this.vendorGemLevel();
-    for (let i = 0; i < this.vendorSize(); i++) {
-      if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
-        const sd = this.rollSupportDropGated(undefined, lvl);
-        if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
+    if (opts?.gems !== false) {
+      for (let i = 0; i < this.vendorSize(); i++) {
+        if (sellSupports && Math.random() < VENDOR_CFG.supportShare) {
+          const sd = this.rollSupportDropGated(undefined, lvl);
+          if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
+        }
+        out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
       }
-      out.push({ kind: 'skill', inst: this.rollSkillGem(undefined, lvl) });
     }
-    // The gear shelf shares Brandt's expanded-wares feature: bigger counter,
-    // bigger shelf. Rolls anchor to the LOCAL hero's level (the shopper).
-    const shelf = VENDOR_ITEM_CFG.slots
-      + (featureEnabled(this.account, FEATURE.BRANDT_EXTRA_GEMS) ? VENDOR_ITEM_CFG.extraSlots : 0);
-    // THE PROSPERITY CURVE: a fuller Lastlight attracts finer wares — the
-    // authored weights lifted by the refugee population (data/boroughs.ts;
-    // population 0, or the Borough package off, = the authored table verbatim).
-    const shelfWeights = boroughVendorWeights(this.sim.boroughField?.population ?? 0);
-    for (let i = 0; i < shelf; i++) {
-      const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
-      const item = rollItem({ ilvl, rarityWeights: shelfWeights });
-      if (item) out.push({ kind: 'item', item });
+    if (opts?.gear !== false) {
+      // The gear shelf: the base VENDOR_ITEM_CFG.slots plus every owned
+      // broader-wares rung's gear. Rolls anchor to the LOCAL hero's level
+      // (the shopper).
+      const shelf = VENDOR_ITEM_CFG.slots + this.waresBonus().gear;
+      // THE PROSPERITY CURVE: a fuller Lastlight attracts finer wares — the
+      // authored weights lifted by the refugee population (data/boroughs.ts;
+      // population 0, or the Borough package off, = the authored table verbatim).
+      const shelfWeights = boroughVendorWeights(this.sim.boroughField?.population ?? 0);
+      for (let i = 0; i < shelf; i++) {
+        const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
+        const item = rollItem({ ilvl, rarityWeights: shelfWeights });
+        if (item) out.push({ kind: 'item', item });
+      }
     }
     return out;
   }
@@ -34941,6 +35060,14 @@ export class World {
     const m = seat.meta;
     const entry = this.chandlerStock[index];
     if (!entry || !this.nearChandler(seat)) return false;
+    // THE TRADE GATE + THE GEM CASE — buyVendorGem's exact reads (the delver
+    // alone stands outside both: tradeGate false, a bare gems tab).
+    const refusal = this.vendorTradeRefusal();
+    if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
+    if (entry.kind !== 'item' && !this.vendorGemsOpen()) {
+      this.failNote(seat.actor, 'vendorgems', VENDOR_CFG.tabs.gemsSealedNote);
+      return false;
+    }
     const price = this.vendorPrice(entry);
     const short = price.find(c => !this.canAffordEssence(seat, c));
     if (short) {

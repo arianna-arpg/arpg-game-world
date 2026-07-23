@@ -35,6 +35,7 @@
 // ---------------------------------------------------------------------------
 
 import { mod, type Attributes, type Modifier } from '../engine/stats';
+import { vocationUnlockKey } from '../meta/account';
 import type { QuestZoneSpec } from '../quests/types';
 
 /** Tunables for the whole vocation system — data, not constants baked into
@@ -2073,9 +2074,11 @@ export const VOCATION_LIST: VocationDef[] = Object.values(VOCATIONS);
 /** The ACCOUNT-wide unlock key: written when any character completes the
  *  chain; every future character's step-1 gate reads it. Merged to the
  *  account ledger on death like all run counters, and ALSO written straight
- *  to the account at grant time (the uber-kill precedent) for durability. */
+ *  to the account at grant time (the uber-kill precedent) for durability.
+ *  Spelling DERIVES from meta/account.ts (vocationUnlockKey) — the gatework's
+ *  "any vocation" prefix scans and this helper can never drift apart. */
 export function vocationLedgerKey(vocId: string): string {
-  return `vocation_unlocked_${vocId}`;
+  return vocationUnlockKey(vocId);
 }
 
 /** The RUN-ledger key step N (1-based) writes on completion; step N+1's gate

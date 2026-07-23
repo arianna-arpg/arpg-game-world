@@ -174,10 +174,11 @@ export function skillLevelEssenceCost(targetLevel: number): EssenceCost {
  *  up) a component of the rarity's own essence — so buying back mixes the
  *  lanes: sell for volume, break for tints, spend both at the counter. */
 export const VENDOR_ITEM_CFG = {
-  /** Rolled-gear slots on the counter (restocks with the gems). */
+  /** BASE rolled-gear slots on the counter (restocks with the gems). Widens
+   *  through THE BROADER-WARES ladder's per-rung gear counts
+   *  (data/vendors.ts VENDOR_CFG.wares — the one fold both faces share),
+   *  never through a flag-checked literal here. */
   slots: 3,
-  /** Extra gear slots when Brandt's expanded-wares feature is owned. */
-  extraSlots: 1,
   /** Coarse price = sellItemYield × markup (buy high, sell low — the spread). */
   markup: 4,
   /** Higher-tint component per rarity: count = ceil(quality × this). 0 = none. */

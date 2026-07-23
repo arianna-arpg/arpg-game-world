@@ -17,6 +17,34 @@
 import type { EssenceCost } from './essences';
 import type { Seat, VendorEntry, World } from '../engine/world';
 import { FEATURE } from '../meta/account';
+import type { GateRow } from '../meta/gates';
+
+/** One rung of THE BROADER-WARES ladder: the flag ownership rides, the Vault
+ *  price, and what the rung ADDS to every counter's stock — gem slots on the
+ *  Gems tab, rolled pieces in the Wares grid. `gate` is the GATEWORK seam
+ *  (meta/gates.ts): ANY listed avenue held opens the rung for purchase — the
+ *  unlocks OF the unlocks, authored per rung, fulfilled in the player's own
+ *  order. unlocks.ts DERIVES the catalog rows (ids, chaining, tease cards,
+ *  level-milestone stamps) from THIS list; appending a rung here grows the
+ *  whole family with no edit anywhere else. */
+export interface WaresRung {
+  flag: string;
+  cost: number;
+  /** Gem slots this rung adds to the Gems tab's shelf. */
+  gems: number;
+  /** Rolled gear pieces this rung adds to the Wares grid. */
+  gear: number;
+  /** GATEWORK avenues (any-of) that must open before this rung sells. */
+  gate?: readonly GateRow[];
+}
+
+/** A counter tab: the face the panel renders. `unlock` seals the tab behind
+ *  an account feature flag — sealed tabs stay VISIBLE (a named, clickable
+ *  face that says where the key is sold); absent = open from the first day. */
+export interface VendorTabSpec {
+  id: 'wares' | 'gems';
+  unlock?: string;
+}
 
 /** THE PATRON'S HOLD — every counter-hold tunable in one place (the MERC_CFG
  *  stance: the law lives beside the registry it governs, world.ts reads it).
@@ -35,6 +63,51 @@ export const VENDOR_CFG = {
    *  (FEATURE.BRANDT_SELL_SUPPORTS) — the shelf builder's roll AND the
    *  standing order's odds read this ONE number (they can never disagree). */
   supportShare: 0.25,
+  /** THE TRADE GATE: no counter SELLS until every listed avenue holds (all-of;
+   *  the default asks one thing — the account owns the Salvage Station, the
+   *  essence economy's front door). Browsing stays free: the dwell opens the
+   *  panel, the stock shows, the hint names the key. World.vendorTradeRefusal
+   *  is the ONE predicate — engine buy handlers refuse through it and the
+   *  panel disables through it, same words everywhere. A counter opts out
+   *  with VendorDef.tradeGate === false (the delver's echo shelf: echoes are
+   *  earned in-descent, outside this economy by construction). */
+  trade: {
+    gate: [{ feature: FEATURE.SALVAGE_STATION, label: 'own the Salvage Station' }] as readonly GateRow[],
+    hint: 'You have no way to pay — essence means nothing to you yet. The Vault\'s SALVAGE STATION teaches worth.',
+  },
+  /** THE BROADER-WARES LADDER (see WaresRung): rung 1 wears the LEGACY flag
+   *  (accounts that bought "Brandt: +2 Wares" own it outright — ownership
+   *  rides flags, never catalog ids); rung 3 debuts the GATEWORK: level 15,
+   *  OR a vocation completed, OR a quest turned in — whichever the player's
+   *  own road crosses first. baseGems is the shelf every account starts
+   *  with; the gear base is VENDOR_ITEM_CFG.slots (the shelf's own home). */
+  wares: {
+    baseGems: 4,
+    ladder: [
+      { flag: FEATURE.BRANDT_EXTRA_GEMS, cost: 60,  gems: 2, gear: 1 },
+      { flag: FEATURE.VENDOR_WARES_2,    cost: 140, gems: 1, gear: 2 },
+      { flag: FEATURE.VENDOR_WARES_3,    cost: 260, gems: 1, gear: 2,
+        gate: [{ level: 15 }, { vocation: true }, { quest: true }] },
+    ] as readonly WaresRung[],
+  },
+  /** THE COUNTER GLASS: every counter's rolled GEAR packs into a real grid
+   *  (the player bag's own cell law — footprints, first-fit, drawn == held),
+   *  these dims for every counter unless a VendorDef.grid overrides. Sized
+   *  so the widest ladder + the largest base footprint can NEVER overflow —
+   *  balance/probe_vendorlocker.ts derives the worst case from the catalog
+   *  and fails the build if content outgrows the glass. */
+  gearGrid: { w: 12, h: 6 },
+  /** The default tab faces (VendorDef.tabs overrides per counter): the Wares
+   *  grid opens first — equippable goods are the counter's first face — and
+   *  the Gems tab stands SEALED until the account owns THE GEM COUNTER
+   *  (FEATURE.VENDOR_GEMS): visible, named, pointing at the Vault. */
+  tabs: {
+    default: [{ id: 'wares' }, { id: 'gems', unlock: FEATURE.VENDOR_GEMS }] as readonly VendorTabSpec[],
+    gemsSealedCopy: 'The gem case is shuttered — its glass dark. The Vault\'s GEM COUNTER unlock opens it at every market you\'ll ever trade in.',
+    /** The terse float the ENGINE refuses a sealed-case buy with (failNote —
+     *  the panel face carries the long copy above; two surfaces, one config). */
+    gemsSealedNote: 'the gem case is sealed',
+  },
   lock: {
     /** The reserve LADDER: each owned Vault rung grants one more lockable
      *  slot at every holding counter (the cap = owned rungs, counted across
@@ -54,11 +127,11 @@ export const VENDOR_CFG = {
     cost: 240,
     /** Genuine mints of a gem the DROP INDEX must have witnessed before the
      *  account may commission it (gemDropKey — knowledge earned in the
-     *  field, the bestiary's own doctrine). */
+     *  field, the bestiary's own doctrine). The SAME threshold gates the
+     *  Vault row's surfacing (a gemdrop:* prefix avenue in unlocks.ts): the
+     *  standing order sells exactly when at least one gem is orderable —
+     *  never a purchase with nothing to name. */
     need: 3,
-    /** Lifetime genuine mints, ALL gems folded (LEDGER_GEMDROP_TOTAL), the
-     *  rung's discovery gate — an index must have seen loot to mean much. */
-    discoverTotal: 25,
     /** Multiplier over the counter's TRUE per-restock odds (1 = the honest
      *  shelf distribution; a kindness dial, never a different distribution). */
     oddsMult: 1,
@@ -107,6 +180,16 @@ export interface VendorDef {
   headline?(w: World): string;
   /** THE PATRON'S HOLD capabilities (absent = plain counter, nothing persists). */
   holds?: VendorHoldCaps;
+  /** The counter's tab faces (absent = VENDOR_CFG.tabs.default: the Wares
+   *  grid + the sealed Gems tab). A counter that deals only in gems lists
+   *  one face and, by listing it BARE, opts out of the account seal — the
+   *  delver's echo shelf. */
+  tabs?: readonly VendorTabSpec[];
+  /** The Wares grid dims (absent = VENDOR_CFG.gearGrid). */
+  grid?: { w: number; h: number };
+  /** false = THE TRADE GATE never binds this counter (the delver: echoes are
+   *  earned in-descent, outside the essence economy by construction). */
+  tradeGate?: false;
   /** The persisted hold's key — default the vendor id (town singletons). A
    *  per-site counter (a future delver hold) would scope itself
    *  `${id}@${w.zone.id}`; the worldstate sanitizer already tolerates both
@@ -147,5 +230,10 @@ export const VENDORS: VendorDef[] = [
     priceOf: w => ({ echoes: w.delverPrice() }),
     buyT: 'buyDelver',
     headline: w => `◈ ${w.descentEchoes} Echoes held`,
+    // The descent's shelf is gems ALONE (its arm site rolls no gear — the
+    // one face below is the whole counter), echo-priced outside the essence
+    // economy: no trade gate, no account seal. Deliberate, not omission.
+    tabs: [{ id: 'gems' }],
+    tradeGate: false,
   },
 ];

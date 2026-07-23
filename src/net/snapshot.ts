@@ -343,6 +343,12 @@ export interface StateSnapshot {
   /** The HOST account's reserve capacity (World.vendorLockCap) — the client
    *  panel draws toggles against the counter's true ledger, not its own. */
   vendorCap?: number;
+  /** THE KEEPER'S GATE, mirrored (World.vendorTradeRefusal === null /
+   *  vendorGemsOpen): the host's trade-gate + gem-case verdicts, so a client
+   *  panel disables and seals with the keeper's own truth. Absent (older
+   *  host) reads as open. */
+  vendorTradeOpen?: boolean;
+  vendorGemsOpen?: boolean;
   actors: ActorW[];
   projectiles: ProjW[];
   tethers: TetherW[];
@@ -538,6 +544,8 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     seats, seatMeta,
     vendor: world.vendorStock.map(e => vendorEntryW(e, world)), vendorRestockAt: world.vendorRestockAt,
     vendorCap: world.vendorLockCap(),
+    vendorTradeOpen: world.vendorTradeRefusal() === null,
+    vendorGemsOpen: world.vendorGemsOpen(),
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(actorToW),
     projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age })),
     tethers: world.tethers.map(t => ({
@@ -889,6 +897,8 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     world.vendorHolds['brandt'] = { locks, ordinal: 0 };
     world.vendorRestockAt = snap.vendorRestockAt;
     world.netVendorCap = snap.vendorCap;
+    world.netVendorTradeOpen = snap.vendorTradeOpen;
+    world.netVendorGemsOpen = snap.vendorGemsOpen;
   }
 
   // The client's OWN hero arrives as a POOLED actor (in world.actors). Make

@@ -719,6 +719,38 @@ changes.
   `WorldStateSave.vendorHolds` (keep-what-stands sanitizer; empty is NOT
   load-bearing) — docs in `docs/engine/vendors.md`, probe
   `balance/probe_vendorlocker.ts`.
+  THE COUNTER GLASS + THE MARKET CHAIN (2026-07-22): every counter renders
+  TWO FACES (`VendorDef.tabs ?? VENDOR_CFG.tabs.default`) — the WARES grid
+  (rolled gear packed D2-style by `World.vendorGridPack` through the
+  player bag's own board-parameterized cell law; deterministic, display-
+  only, capacity probe-derived from the catalog's worst case; tiles buy on
+  click, a corner pip reserves) opens first, and the GEMS case stands
+  SEALED account-wide until THE GEM COUNTER unlock (`FEATURE.VENDOR_GEMS`;
+  sealed face visible + naming the Vault row); THE TRADE GATE
+  (`VENDOR_CFG.trade`, `World.vendorTradeRefusal` — the swapRefusal shape,
+  ONE predicate for engine refusals and panel disables) shuts ALL
+  purchasing until the Salvage Station is owned (browsing free); the
+  BROADER-WARES ladder (`VENDOR_CFG.wares.ladder` — rung rows carry
+  {gems, gear, gate?}; rung 1 wears the legacy brandt_extra_gems flag)
+  widens BOTH faces through the ONE `waresBonus` fold; the delver's echo
+  shelf opts out of everything by data (gems-only tabs, tradeGate false).
+  Co-op: THE KEEPER'S GATE — all three read the world-keeper's account,
+  mirrored to clients via snapshot verdict bits.
+  THE GATEWORK (meta/gates.ts — the unlocks OF the unlocks as data): an
+  open avenue vocabulary (GateRow: ledger / ledgerPrefix / unlock /
+  feature / level / vocation / quest sugars) composed any-of or all-of;
+  `UnlockBase.reqAnyOf` gates any catalog row on "whichever road the
+  player crosses first", `tease` hangs a chain's next rung SEALED in the
+  Vault (named, priced, roads printed with met-marks) once its structure
+  is walked; THE MILESTONE DERIVATION (`catalogLevelMilestones` → the
+  grantSeatXp sweep) stamps every level the catalog's own gates ask about
+  — authoring a level gate IS registering its signal (the old dead
+  reached_level_15 gate now lives); quest turn-ins stamp
+  `quest_done:<id>` run + account immediately (the grantVocation
+  durability precedent). Debut chain: station → Broader Wares I→II→III
+  (III any-of level-15/vocation/quest) → Gem Counter → Reserved Wares →
+  Standing Order (needs one ORDERABLE gem via gemdrop: prefix) — docs in
+  `docs/meta/gatework.md`, probes `balance/probe_vendorlocker.ts` E/F.
   THE WORN GRAFT (slot grafts — supports granted BY POSITION): the
   `slotgraft_<slot>_<gemId>` stat family (engine/skills.ts `slotGraftStat`,
   slot 1-based "Skill Slot N"; value = granted gem LEVEL, grantors SUM,

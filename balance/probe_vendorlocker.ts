@@ -23,6 +23,17 @@
 //     unbought resumes the watch; withdrawal releases order and find.
 //   - The chandler shares the fabric by registry (holds on its VendorDef
 //     row; the live-port rig stays with probe_harborholds' ground).
+//   - THE MARKET CHAIN (rig E): the TRADE GATE refuses every purchase until
+//     the Salvage Station is owned (browsing free, refusals mutate nothing);
+//     the GEM CASE refuses gem buys until its own unlock; the BROADER-WARES
+//     ladder widens gems AND gear by its rows' own numbers; THE COUNTER
+//     GLASS seats every rolled piece deterministically and provably holds
+//     the catalog's worst case (capacity law derived, never guessed); the
+//     single-face builders roll clean (the delver's gems-only counter).
+//   - THE GATEWORK AVENUES (rig F): a gated family rung hangs SEALED once
+//     its chain is walked, and opens along ANY authored road — level /
+//     vocation / quest, the player's own order — with the level stamp
+//     REGISTERED by derivation (catalogLevelMilestones).
 // Run: npx tsx balance/probe_vendorlocker.ts
 // ---------------------------------------------------------------------------
 
@@ -31,13 +42,17 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import {
   FEATURE, STARTER_SKILLS, STARTER_SUPPORTS, gemDropKey,
   LEDGER_GEMDROP_TOTAL, LEDGER_VENDOR_BOUGHT, makeAccount,
+  questDoneKey, reachedLevelKey, vocationUnlockKey,
 } from '../src/meta/account';
 import { VENDOR_CFG } from '../src/data/vendors';
 import { sanitizeVendorHolds } from '../src/meta/worldstate';
-import { allUnlockables, isUnlockVisible } from '../src/meta/unlocks';
+import {
+  allUnlockables, catalogLevelMilestones, isUnlockVisible, sealedUnlocks,
+} from '../src/meta/unlocks';
 import { START_ZONE } from '../src/data/zones';
 import { MONSTERS } from '../src/data/monsters';
-import { ESSENCE_IDS } from '../src/data/essences';
+import { ESSENCE_IDS, VENDOR_ITEM_CFG } from '../src/data/essences';
+import { ITEM_BASES } from '../src/data/itembases';
 import type { World, VendorEntry } from '../src/engine/world';
 
 let failed = 0;
@@ -65,6 +80,13 @@ const leaveTown = (w: World): void => {
   w.loadZone(away.id);
 };
 const fund = (w: World): void => { for (const id of ESSENCE_IDS) w.localSeat.meta.essences[id] = 99999; };
+/** Open the market's meta gates (THE TRADE GATE + THE GEM CASE) so rigs that
+ *  are not ABOUT those laws can buy freely — rig E owns the laws themselves.
+ *  Neither flag touches a stock roll, so seeded determinism is unmoved. */
+const openMarket = (w: World): void => {
+  w.account.features.add(FEATURE.SALVAGE_STATION);
+  w.account.features.add(FEATURE.VENDOR_GEMS);
+};
 const entryId = (e: VendorEntry): string =>
   e.kind === 'skill' ? e.inst.def.id : e.kind === 'support' ? e.gem.def.id : `item:${e.item.uid}`;
 const commRow = (w: World, key = 'brandt') => w.vendorHolds[key]?.locks.find(r => r.commission);
@@ -73,6 +95,7 @@ const commRow = (w: World, key = 'brandt') => w.vendorHolds[key]?.locks.find(r =
 const SEED_A = 0x51c7;
 seedGlobalRandom(0x77e2);
 const wA: World = makeSimWorld('warrior', SEED_A);
+openMarket(wA);
 enterTown(wA);
 check('A: the town arms a stocked counter', wA.vendorStock.length > 0,
   `${wA.vendorStock.length} wares`);
@@ -122,13 +145,23 @@ check('A: the purchase stamps the market ledger',
   (wA.account.ledger[LEDGER_VENDOR_BOUGHT] ?? 0) >= 1);
 
 {
-  // The Vault's discovery gate reads the same stamp.
+  // The Vault's ladder rung 1 stands at the CHAIN's far end now: the Gem
+  // Counter + a Broader Wares rung owned AND the market ledger stamped —
+  // the fresh account sees nothing, the walked one sees the card.
   const fresh = makeAccount();
   const lock1 = allUnlockables().find(u => u.id === 'feat_vendor_lock_1')!;
   const met = makeAccount();
   met.ledger[LEDGER_VENDOR_BOUGHT] = 1;
-  check('A: the Vault hides the ladder until the account has traded',
-    !isUnlockVisible(fresh, lock1) && isUnlockVisible(met, lock1));
+  met.features.add(FEATURE.VENDOR_GEMS);
+  met.features.add(VENDOR_CFG.wares.ladder[0].flag);
+  const chainOnly = makeAccount();
+  chainOnly.features.add(FEATURE.VENDOR_GEMS);
+  chainOnly.features.add(VENDOR_CFG.wares.ladder[0].flag);
+  check('A: the Vault hides the ladder until the whole chain is walked + the account has traded',
+    !isUnlockVisible(fresh, lock1) && !isUnlockVisible(chainOnly, lock1) && isUnlockVisible(met, lock1));
+  check('A: the walked-but-untraded rung TEASES sealed (visible, unbuyable, its road printed)',
+    sealedUnlocks(chainOnly).some(s => s.u.id === 'feat_vendor_lock_1')
+    && !sealedUnlocks(fresh).some(s => s.u.id === 'feat_vendor_lock_1'));
 }
 
 // ------------------------------------------------ B. SAVE FIDELITY
@@ -201,6 +234,7 @@ check('A: the purchase stamps the market ledger',
 {
   seedGlobalRandom(0x77e2);
   const wC = makeSimWorld('warrior', 0x2b31);
+  openMarket(wC);
   enterTown(wC);
   const snapshot = (): string => JSON.stringify(
     Object.entries(wC.account.ledger).filter(([k]) => k.startsWith('gemdrop')).sort());
@@ -235,6 +269,7 @@ check('A: the purchase stamps the market ledger',
   const SEED_D = 0x66d3;
   seedGlobalRandom(0x77e2);
   const wD = makeSimWorld('warrior', SEED_D);
+  openMarket(wD);
   enterTown(wD);
   const skillId = STARTER_SKILLS[0];
   const supId = STARTER_SUPPORTS[0];
@@ -280,6 +315,7 @@ check('A: the purchase stamps the market ledger',
   // gem, rarity). World seed × counter × gem × beat is the whole roll.
   seedGlobalRandom(0x77e2);
   const wR = makeSimWorld('warrior', SEED_D);
+  openMarket(wR);
   wR.account.features.add(FEATURE.VENDOR_COMMISSION);
   wR.account.features.add(FEATURE.BRANDT_SELL_SUPPORTS);
   wR.account.ledger[gemDropKey(skillId)] = need;
@@ -337,16 +373,144 @@ check('A: the purchase stamps the market ledger',
   check('D: the reserve cap still binds ordinary rows',
     wD.setVendorLock('brandt', wD.vendorStock.findIndex(e => !wD.vendorEntryHold('brandt', e)), true) === false);
 
-  // The Vault's commission card: hidden until the index has SEEN loot.
+  // The Vault's commission card: purchasable exactly when at least ONE gem
+  // is ORDERABLE (some gemdrop:* key at the commission's own need — the
+  // gatework's prefix avenue), never on a bare total.
   const bare = makeAccount();
   bare.ledger[LEDGER_VENDOR_BOUGHT] = 1;
+  bare.features.add(rungs[0].flag);
   const comm = allUnlockables().find(u => u.id === 'feat_vendor_commission')!;
   const seen = makeAccount();
   seen.ledger[LEDGER_VENDOR_BOUGHT] = 1;
   seen.features.add(rungs[0].flag);
-  seen.ledger[LEDGER_GEMDROP_TOTAL] = VENDOR_CFG.commission.discoverTotal;
-  check('D: the Vault hides the order until the index has seen loot (and the first rung is owned)',
-    !isUnlockVisible(bare, comm) && isUnlockVisible(seen, comm));
+  seen.ledger[gemDropKey(skillId)] = need;
+  const shallow = makeAccount();
+  shallow.ledger[LEDGER_VENDOR_BOUGHT] = 1;
+  shallow.features.add(rungs[0].flag);
+  shallow.ledger[LEDGER_GEMDROP_TOTAL] = 999; // a wide index with no DEEP gem
+  shallow.ledger[gemDropKey(skillId)] = need - 1;
+  check('D: the Vault sells the order exactly when ONE gem is orderable (prefix ≥ need; totals prove nothing)',
+    !isUnlockVisible(bare, comm) && !isUnlockVisible(shallow, comm) && isUnlockVisible(seen, comm));
+  check('D: the hold-owning account TEASES the sealed order card with its road',
+    sealedUnlocks(shallow).some(s => s.u.id === 'feat_vendor_commission'
+      && s.lines.some(l => l.anyOf && !l.met)));
+}
+
+// ------------------------------------------------ E. THE MARKET CHAIN
+// The trade gate, the gem case, the broader-wares fold, the counter glass,
+// and the gatework avenues — the user's meta-progression as one walk.
+{
+  seedGlobalRandom(0x77e2);
+  const wE = makeSimWorld('warrior', 0x3e11);
+  enterTown(wE);
+  fund(wE);
+
+  // --- THE TRADE GATE: a bare account browses freely and buys NOTHING.
+  const gearIdx = wE.vendorStock.findIndex(e => e.kind === 'item');
+  const gemIdx = wE.vendorStock.findIndex(e => e.kind !== 'item');
+  const stockLen = wE.vendorStock.length;
+  const coarseBefore = wE.localSeat.meta.essences.coarse;
+  check('E: the trade gate speaks while the station is unowned',
+    typeof wE.vendorTradeRefusal() === 'string');
+  check('E: a gated counter refuses GEAR — stock intact, essence unspent',
+    gearIdx >= 0 && wE.buyVendorGem(gearIdx) === false
+    && wE.vendorStock.length === stockLen
+    && wE.localSeat.meta.essences.coarse === coarseBefore);
+  check('E: a gated counter refuses GEMS the same', gemIdx >= 0 && wE.buyVendorGem(gemIdx) === false);
+
+  // --- The station opens TRADE; the gem case stays shut on its own law.
+  wE.account.features.add(FEATURE.SALVAGE_STATION);
+  check('E: the salvage station opens the trade gate', wE.vendorTradeRefusal() === null);
+  check('E: gear now sells', wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind === 'item')) === true);
+  check('E: the gem case still refuses without its own unlock',
+    wE.vendorGemsOpen() === false
+    && wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind !== 'item')) === false);
+  wE.account.features.add(FEATURE.VENDOR_GEMS);
+  check('E: the gem counter unlock opens the case',
+    wE.vendorGemsOpen() === true
+    && wE.buyVendorGem(wE.vendorStock.findIndex(e => e.kind !== 'item')) === true);
+
+  // --- THE BROADER-WARES FOLD: both faces widen per the ladder's own rows
+  // (expectations DERIVED from config — nothing here counts to three).
+  const countKinds = (w: World): { gems: number; gear: number } => ({
+    gems: w.vendorStock.filter(e => e.kind !== 'item').length,
+    gear: w.vendorStock.filter(e => e.kind === 'item').length,
+  });
+  wE.restockVendor();
+  const base = countKinds(wE);
+  check('E: the bare shelf is the configured base',
+    base.gems === VENDOR_CFG.wares.baseGems && base.gear === VENDOR_ITEM_CFG.slots,
+    `gems ${base.gems} gear ${base.gear}`);
+  for (const r of VENDOR_CFG.wares.ladder) wE.account.features.add(r.flag);
+  wE.restockVendor();
+  const wide = countKinds(wE);
+  const expGems = VENDOR_CFG.wares.baseGems + VENDOR_CFG.wares.ladder.reduce((n, r) => n + r.gems, 0);
+  const expGear = VENDOR_ITEM_CFG.slots + VENDOR_CFG.wares.ladder.reduce((n, r) => n + r.gear, 0);
+  check('E: the full ladder widens BOTH faces by its own numbers',
+    wide.gems === expGems && wide.gear === expGear,
+    `gems ${wide.gems}/${expGems} gear ${wide.gear}/${expGear}`);
+
+  // --- THE COUNTER GLASS: every piece seats, deterministically, and the
+  // board provably holds the WORST case (widest ladder × largest base) —
+  // the capacity law derived from the catalog, so content that outgrows
+  // the glass fails HERE, never silently in a panel.
+  const pack1 = wE.vendorGridPack(wE.vendorStock);
+  const pack2 = wE.vendorGridPack(wE.vendorStock);
+  check('E: the glass seats every rolled piece', pack1.overflow.length === 0,
+    `${pack1.cells.size} seated`);
+  check('E: the pack is deterministic (same stock, same glass)',
+    JSON.stringify([...pack1.cells.entries()]) === JSON.stringify([...pack2.cells.entries()]));
+  const maxFoot = Object.values(ITEM_BASES).reduce((m, b) => Math.max(m, (b.w ?? 1) * (b.h ?? 1)), 1);
+  check('E: the capacity law — the glass holds the worst case the catalog can roll',
+    expGear * maxFoot <= VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h,
+    `${expGear} pieces × ${maxFoot} cells ≤ ${VENDOR_CFG.gearGrid.w * VENDOR_CFG.gearGrid.h}`);
+
+  // --- The single-face builders (the delver's gems-only counter).
+  check('E: a gems-only build rolls no gear',
+    wE.buildVendorStock({ gear: false }).every(e => e.kind !== 'item'));
+  check('E: a gear-only build rolls no gems',
+    wE.buildVendorStock({ gems: false }).every(e => e.kind === 'item'));
+}
+
+// ------------------------------------------------ F. THE GATEWORK AVENUES
+// Rung 3 of the wares family opens along ANY of its authored roads — level,
+// vocation, quest — in the player's own order; until then it hangs SEALED.
+{
+  const rung3 = allUnlockables().find(u => u.id === 'feat_vendor_wares_3')!;
+  const walk = (): ReturnType<typeof makeAccount> => {
+    const a = makeAccount();
+    a.features.add(FEATURE.SALVAGE_STATION);
+    a.features.add(VENDOR_CFG.wares.ladder[0].flag);
+    a.features.add(VENDOR_CFG.wares.ladder[1].flag);
+    return a;
+  };
+  const chained = walk();
+  check('F: rung 3 hangs SEALED once rung 2 is owned (visible road, shut door)',
+    !isUnlockVisible(chained, rung3)
+    && sealedUnlocks(chained).some(s => s.u.id === 'feat_vendor_wares_3'
+      && s.lines.filter(l => l.anyOf).length === (VENDOR_CFG.wares.ladder[2].gate?.length ?? 0)));
+  check('F: an un-walked chain teases NOTHING (structure first, roads after)',
+    !sealedUnlocks(makeAccount()).some(s => s.u.id === 'feat_vendor_wares_3'));
+
+  const byLevel = walk();
+  byLevel.ledger[reachedLevelKey(15)] = 1;
+  const byVocation = walk();
+  byVocation.ledger[vocationUnlockKey('warbringer')] = 1;
+  const byQuest = walk();
+  byQuest.ledger[questDoneKey('undead_south')] = 1;
+  const byOldQuests = walk();
+  byOldQuests.ledger.quests_completed = 3; // the pre-gatework spelling still speaks
+  check('F: the LEVEL road opens rung 3 alone', isUnlockVisible(byLevel, rung3));
+  check('F: the VOCATION road opens rung 3 alone', isUnlockVisible(byVocation, rung3));
+  check('F: the QUEST road opens rung 3 alone', isUnlockVisible(byQuest, rung3));
+  check('F: an old account\'s quests_completed counter opens the quest road',
+    isUnlockVisible(byOldQuests, rung3));
+
+  // THE MILESTONE DERIVATION: authoring the level avenue REGISTERED its
+  // stamp — the catalog's own scan carries 15 (rung 3's road and the old
+  // dead reached_level_15 gate both live now, one mechanism).
+  check('F: catalogLevelMilestones carries every authored level road',
+    catalogLevelMilestones().includes(15), catalogLevelMilestones().join(','));
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

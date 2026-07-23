@@ -119,6 +119,21 @@ export const FEATURE = {
   VENDOR_LOCK_1: 'vendor_lock_1',
   VENDOR_LOCK_2: 'vendor_lock_2',
   VENDOR_LOCK_3: 'vendor_lock_3',
+  /** THE BROADER-WARES FAMILY (data/vendors.ts VENDOR_CFG.wares.ladder):
+   *  each owned rung widens EVERY counter's stock — gem slots on the Gems
+   *  tab AND rolled pieces in the Wares grid, per the rung's own numbers.
+   *  Rung 1 wears the LEGACY flag below (accounts that bought "Brandt: +2
+   *  Wares" own rung 1 outright — ownership rides flags, never catalog
+   *  ids); later rungs may carry GATEWORK avenues (meta/gates.ts): the
+   *  unlocks OF the unlocks are data on the ladder row. */
+  VENDOR_WARES_2: 'vendor_wares_2',
+  VENDOR_WARES_3: 'vendor_wares_3',
+  /** THE GEM COUNTER: opens the skill/support TAB at every counter whose
+   *  tab spec wears this lock (VENDOR_CFG.tabs.default — brandt, the
+   *  chandler, every future default-tabbed market; the delver's echo shelf
+   *  deliberately never wears it). Until owned, the tab shows sealed —
+   *  visible, named, and pointing at the Vault. */
+  VENDOR_GEMS: 'vendor_gems',
   /** THE STANDING ORDER (World.resolveCommission): pre-select one gem the
    *  account KNOWS (drop index ≥ VENDOR_CFG.commission.need) and the counter
    *  watches its own restock beats for it — every beat that passed while you
@@ -155,7 +170,8 @@ export const LEDGER_FLASK_LESSON = 'mireille_flasks_filled';
  *  accrues through play, never through juggling. A CROSS-FILE CONTRACT like
  *  every ledger key: unlock predicates may gate on it verbatim
  *  (reqLedgerCounts), and THE STANDING ORDER's eligibility reads it. */
-export const gemDropKey = (gemId: string): string => `gemdrop:${gemId}`;
+export const LEDGER_GEMDROP_PREFIX = 'gemdrop:';
+export const gemDropKey = (gemId: string): string => `${LEDGER_GEMDROP_PREFIX}${gemId}`;
 
 /** Account-ledger key: lifetime genuine gem mints, all ids folded — the
  *  "how much loot has this line seen" gate (the commission row reads it). */
@@ -181,6 +197,35 @@ export const CLASS_LEVEL_MILESTONES: readonly number[] = [5, 10, 15, 20, 25, 30,
  *  shared by the stamp sweep (world.ts) and every gate that reads it. */
 export const classLevelLedgerKey = (classId: string, m: number): string =>
   `class_${classId}_level_${m}`;
+
+/** The GLOBAL level-milestone key — "any character has reached level n"
+ *  (`reached_level_<n>`). ONE spelling shared by the XP sweep's stamps
+ *  (world.ts grantSeatXp: the standing decade keys PLUS every level the
+ *  unlock catalog's own gates ask about — meta/unlocks.ts
+ *  CATALOG_LEVEL_MILESTONES, derived, never hand-kept) and every gate that
+ *  reads one (unlocks reqLedger rows, gates.ts `level` avenues). */
+export const reachedLevelKey = (n: number): string => `reached_level_${n}`;
+
+/** THE VOCATION LEDGER CONTRACT: `vocation_unlocked_<vocId>`, written by
+ *  World.grantVocation — to the run ledger AND immediately to the account
+ *  (quit-without-death keeps the deed). The prefix is exported apart so
+ *  "ANY vocation completed" gates (gates.ts `vocation: true` avenues) can
+ *  prefix-scan without naming ids. data/vocations.ts derives its key helper
+ *  from THIS spelling — one contract, two homes never. */
+export const LEDGER_VOCATION_PREFIX = 'vocation_unlocked_';
+export const vocationUnlockKey = (vocId: string): string => `${LEDGER_VOCATION_PREFIX}${vocId}`;
+
+/** THE QUEST LEDGER CONTRACT: `quest_done:<questId>` — a presence key
+ *  stamped at TURN-IN (world.ts applyQuestReward: run ledger + immediately
+ *  to the account under metaProgression, the grantVocation durability
+ *  precedent), so "completed a quest" gates read true the moment the deed
+ *  lands, not at the next death-merge. The prefix serves "ANY quest" scans
+ *  (gates.ts `quest: true`); the lifetime counter below is the
+ *  pre-gatework spelling every QuestReward already bumps — readers honor
+ *  BOTH so accounts whose deeds predate the per-quest keys still speak. */
+export const LEDGER_QUEST_DONE_PREFIX = 'quest_done:';
+export const questDoneKey = (questId: string): string => `${LEDGER_QUEST_DONE_PREFIX}${questId}`;
+export const LEDGER_QUESTS_COMPLETED = 'quests_completed';
 
 /** First disk save slot the character ROSTER may use (0/1/2 are account /
  *  run-character / settings). Lives here (not modes.ts) so deserialization can
