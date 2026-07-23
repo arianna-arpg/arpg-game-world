@@ -349,6 +349,24 @@
       background: #2a2a3e; color: var(--gold); border: 1px solid var(--gold);
       border-radius: 4px; padding: 8px 24px; font-size: 14px; cursor: pointer; margin: 12px 6px 0 6px;
     }
+    /* THE VAULT SHELVES: the book-tabs shape at store grain. Each face wears
+       a quiet stock count — gold while ≥1 of that stock is affordable right
+       now; faces with nothing to show dim (the stat-tabs' bare rule). */
+    #account-screen .vault-tabs { margin: 0 0 10px; }
+    #account-screen .vault-tabs button.bare:not(.active) { opacity: 0.5; }
+    #account-screen .vault-tabs .cnt {
+      margin-left: 6px; font-size: 9px; color: var(--text-dim);
+      background: rgba(255,255,255,0.07); border-radius: 8px; padding: 1px 6px;
+    }
+    #account-screen .vault-tabs .cnt.now { color: var(--gold); background: rgba(200,168,75,0.14); }
+    /* The Back row is a FOOTER, not the tail of the scroll — it never has to
+       be scrolled to (the frozen head's law, mirrored below the shelf). */
+    #account-screen .vault-foot {
+      flex: 0 0 auto; margin-top: 0; padding: 0 0 2px;
+      border-top: 1px solid var(--panel-border); background: var(--panel-bg);
+    }
+    /* An empty shelf speaks one line, never a wall. */
+    #account-screen .vault-empty { color: var(--text-dim); padding: 26px 14px; font-size: 12px; }
     /* The death screen's two buttons (#unlocks-btn, #restart-btn) both ride the
        shared #death-screen button base + the cohesive gradient rule below. */
     #death-screen button { margin: 12px 6px 0 6px; }

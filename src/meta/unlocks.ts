@@ -952,6 +952,96 @@ export function lockedPackages(a: Account): { label: string; requirement: string
     .map(p => ({ label: p.label, requirement: p.unlock.label, cost: p.cost, active: p.defaultEnabled }));
 }
 
+// ---------------------------------------------------------------------------
+//  THE VAULT SHELVES — the store's organization as DATA (the character
+//  sheet's data/sheet.ts pattern: the UI walks this list and knows nothing
+//  else). Browse shelves seat catalog KINDS; the rumor wall hangs where its
+//  shelf says; the Owned shelf is the trophy case, off the buying floor
+//  entirely so it never clutters a shopping read. Adding a catalog kind =
+//  seat it here (balance/probe_unlocks.ts pins the contract). An unseated
+//  kind still SURFACES — it folds to the `fallback` shelf, the sheet's
+//  nothing-is-ever-invisible law — but the probe fails on it, so the fold
+//  stays a safety net, never a shipped state.
+// ---------------------------------------------------------------------------
+
+export type UnlockKind = Unlockable['kind'];
+
+export interface VaultTabDef {
+  id: string;
+  /** The tab face — keep it one short word; the blurb carries the detail. */
+  label: string;
+  /** The tab's hover story (rides the face's native title). */
+  blurb: string;
+  /** Catalog kinds seated on this shelf, in DISPLAY order (browse shelves
+   *  only; a multi-kind shelf groups its floor under these, in this order). */
+  kinds?: readonly UnlockKind[];
+  /** This shelf also hangs the shrouded class-rumor wall. */
+  rumors?: boolean;
+  /** The trophy case: lists everything OWNED (grouped by kind) instead of a
+   *  buying floor. Exactly one shelf wears this. */
+  owned?: boolean;
+  /** Unseated kinds fold here. Exactly one browse shelf wears this. */
+  fallback?: boolean;
+  /** Spoken when the shelf has nothing to sell right now (a generic line
+   *  covers shelves that don't author one). */
+  emptyNote?: string;
+}
+
+export const VAULT_TABS: readonly VaultTabDef[] = [
+  {
+    id: 'classes', label: 'Classes', kinds: ['slot', 'class'], rumors: true,
+    blurb: 'The hand and the pool: Class Slots widen how many classes each deal offers, Class bundles deepen the pool the hand is dealt from. Rumors whisper at classes the world has not introduced yet.',
+    emptyNote: 'No class purchases are open right now — classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
+  },
+  {
+    id: 'gems', label: 'Gems', kinds: ['skill', 'support'],
+    blurb: 'Skill and support pools — buy one and its gems join the drop tables (and the town counters) for every character after, forever.',
+    emptyNote: 'No gem pools on the shelf right now — some surface with account levels, others only once the world has taught them.',
+  },
+  {
+    id: 'town', label: 'Town', kinds: ['feature'], fallback: true,
+    blurb: 'Lastlight grows by purchase: stations and services, counter privileges, hulls and routes, and account-wide features.',
+    emptyNote: 'Nothing to raise in town right now — milestones out in the world surface more.',
+  },
+  {
+    id: 'events', label: 'Events', kinds: ['package'],
+    blurb: 'World-event packages and their deeper tiers — owning one opens its dials on the Expedition screen.',
+    emptyNote: 'No event configurations are open — meet an event out in the world and its package surfaces here.',
+  },
+  {
+    id: 'owned', label: 'Owned', owned: true,
+    blurb: 'Everything this account has already claimed, shelved by kind — the part of the store that is yours now.',
+  },
+];
+
+/** Kind → display name for shelf sub-headers and the Owned tab's grouping
+ *  (the cards' lowercase `ukind` tag, at shelf grain). Total by type: a new
+ *  catalog kind fails the build here until it gets a name. */
+export const VAULT_KIND_LABELS: Record<UnlockKind, string> = {
+  slot: 'Class Slots', class: 'Classes', skill: 'Skill Pools',
+  support: 'Support Pools', feature: 'Town & Features', package: 'World Events',
+};
+
+/** The shelf a kind sits on — its explicit seat first, else the fallback
+ *  shelf (the fold law: never invisible; the probe keeps the fold unused). */
+export function vaultSeatOf(kind: UnlockKind): VaultTabDef {
+  return VAULT_TABS.find(t => t.kinds?.includes(kind))
+    ?? VAULT_TABS.find(t => t.fallback)
+    ?? VAULT_TABS[0];
+}
+
+/** Every live kind in shelf order (seated kinds as authored, unseated
+ *  stragglers appended) — the ONE display ordering for kind groupings. */
+export function vaultKindOrder(): UnlockKind[] {
+  const seen = new Set<UnlockKind>();
+  const out: UnlockKind[] = [];
+  for (const t of VAULT_TABS) for (const k of t.kinds ?? []) {
+    if (!seen.has(k)) { seen.add(k); out.push(k); }
+  }
+  for (const u of allUnlockables()) if (!seen.has(u.kind)) { seen.add(u.kind); out.push(u.kind); }
+  return out;
+}
+
 /** Spend credits to apply an unlock. Mutates the account; returns false if
  *  unaffordable / already owned / gate unmet. Caller saves. */
 export function applyUnlock(a: Account, u: Unlockable): boolean {

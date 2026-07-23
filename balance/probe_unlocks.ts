@@ -17,9 +17,9 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
-  CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, allUnlockables, applyUnlock,
+  CLASS_BUNDLES, SLOT_TIERS, UNLOCK_CATALOG, VAULT_TABS, allUnlockables, applyUnlock,
   availableUnlocks, classBundleId, classUnlockFor, discoveryLedgerKeys,
-  isClassDiscovered, isUnlockVisible, undiscoveredClassUnlocks,
+  isClassDiscovered, isUnlockVisible, undiscoveredClassUnlocks, vaultKindOrder, vaultSeatOf,
 } from '../src/meta/unlocks';
 import {
   CLASS_LEVEL_MILESTONES, STARTER_CLASSES, classLevelLedgerKey, makeAccount,
@@ -212,7 +212,36 @@ const bundleByClass = new Map(CLASS_BUNDLES.map(b => [b.classId, b] as const));
     && undiscoveredClassUnlocks(b).every(u => u.kind === 'class' && u.payload.classId !== 'ascetic'));
 }
 
-// --- 3) LIVE: the engine stamps land (local hero only) ----------------------
+// --- 3) THE VAULT SHELVES: the store's organization as data -----------------
+// The UI walks VAULT_TABS and knows nothing else, so the contract lives
+// here: every kind the catalog can mint must be seated EXPLICITLY (the
+// fallback fold is a safety net for the moment between adding a kind and
+// seating it — it must never be a shipped state), one seat per kind (the
+// tab counts and the Owned grouping both assume it), and the structural
+// shelves (fallback / owned / the rumor wall) each exist exactly once.
+{
+  const kinds = [...new Set(allUnlockables().map(u => u.kind))];
+  check('shelves: every live catalog kind is seated EXPLICITLY (the fallback fold stays theoretical)',
+    kinds.every(k => VAULT_TABS.some(t => t.kinds?.includes(k))), kinds.join(', '));
+  check('shelves: no kind is seated on two shelves',
+    kinds.every(k => VAULT_TABS.filter(t => t.kinds?.includes(k)).length <= 1));
+  check('shelves: exactly one fallback shelf, and it is a browse shelf',
+    VAULT_TABS.filter(t => t.fallback).length === 1
+    && VAULT_TABS.every(t => !t.fallback || (t.kinds?.length ?? 0) > 0));
+  check('shelves: exactly one Owned shelf, and it browses nothing (no kinds, no rumors, no fold)',
+    VAULT_TABS.filter(t => t.owned).length === 1
+    && VAULT_TABS.every(t => !t.owned || (t.kinds === undefined && !t.rumors && !t.fallback)));
+  check('shelves: the rumor wall hangs on the class-seated shelf',
+    VAULT_TABS.some(t => t.rumors === true && t.kinds?.includes('class') === true));
+  check('shelves: shelf ids unique',
+    new Set(VAULT_TABS.map(t => t.id)).size === VAULT_TABS.length);
+  check('shelves: vaultSeatOf lands every kind on a real shelf',
+    kinds.every(k => VAULT_TABS.includes(vaultSeatOf(k))));
+  check('shelves: vaultKindOrder covers every live kind exactly once',
+    (() => { const o = vaultKindOrder(); return new Set(o).size === o.length && kinds.every(k => o.includes(k)); })());
+}
+
+// --- 4) LIVE: the engine stamps land (local hero only) ----------------------
 bootSimEngine();
 seedGlobalRandom(0x1c0de);
 {

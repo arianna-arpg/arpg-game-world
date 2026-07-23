@@ -67,7 +67,11 @@ import {
   featureEnabled, FEATURE, isClassUnlocked, isSkillUnlockedForDrop, isSupportUnlockedForDrop,
   gemDropKey, META_CURRENCY_LABEL, selectableSlotCount, type Account,
 } from '../meta/account';
-import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered, isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks } from '../meta/unlocks';
+import {
+  allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isClassDiscovered,
+  isUnlockOwned, maxSlotCount, undiscoveredClassUnlocks,
+  VAULT_KIND_LABELS, VAULT_TABS, vaultKindOrder, vaultSeatOf, type Unlockable,
+} from '../meta/unlocks';
 import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
@@ -212,6 +216,12 @@ export class UI {
   /** The Options menu's active tab (the character sheet's book-tab idiom —
    *  the panel long outgrew "Customize Keybinds"). */
   private optionsTab: 'controls' | 'controller' | 'interface' | 'visuals' = 'controls';
+  /** THE VAULT SHELVES (meta/unlocks.ts VAULT_TABS — the store's organization
+   *  as data): the active shelf, plus each shelf's remembered scroll — the
+   *  store keeps your place per aisle across purchases, flips, and re-opens.
+   *  '' = first open this session: land where there is something to buy. */
+  private vaultTab = '';
+  private vaultScroll: Record<string, number> = {};
   /** "Show unused": list every seated stat on the active tab, base or not
    *  (generated families still surface only once touched — see sheet.ts). */
   private charShowAll = false;
@@ -1281,72 +1291,151 @@ export class UI {
   }
 
   /** The account / unlock store: spend credits on classes, gem pools, town
-   *  features. `onClose` (if given) re-opens the screen we came from. */
+   *  features. `onClose` (if given) re-opens the screen we came from.
+   *  Organized as SHELVES (VAULT_TABS, meta/unlocks.ts — organization as
+   *  data, the character sheet's idiom): the head (title, purse, tab strip)
+   *  and the Back footer stay PUT; only the active shelf scrolls between
+   *  them, so Back never has to be scrolled to and Owned never clutters a
+   *  shopping read. Skim the faces, rest on a card for its full story. */
   showAccountScreen(onClose?: () => void): void {
     this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     const acc = this.getAccount();
+    // The store keeps your place PER AISLE: capture the outgoing shelf's
+    // scroll before anything replaces the body (tab flips and purchases
+    // alike — the bought card is usually mid-list; snapping loses the spot).
+    const saveShelfScroll = (): void => {
+      const b = this.accountScreen.querySelector<HTMLElement>('.vault-body');
+      if (b && this.vaultTab) this.vaultScroll[this.vaultTab] = b.scrollTop;
+    };
     const render = (): void => {
-      // A purchase re-renders in place — keep the list where the player left it
-      // (the bought card is usually mid-list; snapping to top loses their spot).
-      const prevScroll = this.accountScreen.querySelector<HTMLElement>('.vault-body')?.scrollTop ?? 0;
       const avail = availableUnlocks(acc);
       const owned = allUnlockables().filter(u => isUnlockOwned(acc, u));
-      const cards = avail.length === 0
-        ? `<div style="color:var(--text-dim);grid-column:1/-1;padding:20px">
-             Nothing available to unlock right now — earn more ${META_CURRENCY_LABEL} and account levels by playing.
-           </div>`
-        : avail.map(u => {
-            // availableUnlocks() already excludes owned + un-gated entries,
-            // so every card here is unowned — affordability is the only gate.
-            // COMPACT BY DESIGN: kind, name, price — the description lives in
-            // the hover-intent tooltip (the accountScreen bind), so the wall
-            // reads as a shelf, not a wall of text.
-            const afford = acc.credits >= u.cost;
-            return `
+      const rumors = undiscoveredClassUnlocks(acc);
+      // Seat every AVAILABLE entry on its shelf. vaultSeatOf folds unseated
+      // kinds to the fallback shelf (the never-invisible law; the probe
+      // keeps that fold theoretical), so a new catalog kind never vanishes.
+      // (The Owned shelf groups by KIND directly — one grain finer.)
+      const availBy = new Map<string, Unlockable[]>();
+      for (const u of avail) {
+        const seat = vaultSeatOf(u.kind).id;
+        const arr = availBy.get(seat);
+        if (arr) arr.push(u); else availBy.set(seat, [u]);
+      }
+      // Land on the remembered shelf; a first open lands where there is
+      // something to BUY (a rumor-only Classes shelf beats an empty floor
+      // only when no floor anywhere has stock).
+      if (!VAULT_TABS.some(t => t.id === this.vaultTab)) {
+        this.vaultTab = (VAULT_TABS.find(t => !t.owned && (availBy.get(t.id)?.length ?? 0) > 0)
+          ?? VAULT_TABS.find(t => t.rumors && rumors.length > 0)
+          ?? VAULT_TABS[0]).id;
+      }
+      const tab = VAULT_TABS.find(t => t.id === this.vaultTab)!;
+
+      // COMPACT BY DESIGN: kind, name, price — the description lives in the
+      // hover-intent tooltip (the accountScreen bind), so a shelf reads as a
+      // shelf, never a wall of text. availableUnlocks() already excludes
+      // owned + un-gated entries, so affordability is a card's only gate.
+      const cardHtml = (u: Unlockable): string => {
+        const afford = acc.credits >= u.cost;
+        return `
             <div class="unlock-card" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="ukind">${u.kind}${u.reqLevel ? ` · req acct lv ${u.reqLevel}` : ''}</div>
               <div class="uname">${u.label}</div>
               <button data-unlock="${u.id}" ${afford ? '' : 'disabled'}>Unlock — ${u.cost}</button>
             </div>`;
-          }).join('');
-      const ownedCards = owned.map(u => `
+      };
+      const ownedCardHtml = (u: Unlockable): string => `
             <div class="unlock-card uowned" data-tip="unlock" data-unlock-id="${u.id}">
               <div class="ukind">${u.kind}</div>
               <div class="uname">${u.label}</div>
               <button disabled>✓ Owned</button>
-            </div>`).join('');
-      // THE RUMOR WALL (discovery web, meta/unlocks.ts): classes the account
-      // has NOT yet discovered hang here shrouded — the hint whispers at the
-      // deed, the name and price stay the world's secret until it is done.
-      // Hover-addressed by INDEX, not id: the catalog id spells the class
-      // name, and the DOM keeps the world's secrets too.
-      const rumors = undiscoveredClassUnlocks(acc);
-      const rumorCards = rumors.map((_u, i) => `
+            </div>`;
+      const grid = (rows: string): string => `<div class="unlock-grid">${rows}</div>`;
+      const subHead = (label: string): string => `<h3 class="vault-sub">${esc(label)}</h3>`;
+
+      // THE SHELF STRIP: each face wears its label plus a QUIET stock count —
+      // gold the moment any of that stock is affordable (the one glance that
+      // says "you can buy something here"). Everything deeper rides the hover
+      // title: blurb, exact counts, shrouded rumors. Stockless faces dim.
+      const tabStrip = `<div class="book-tabs vault-tabs">${VAULT_TABS.map(t => {
+        const stock = t.owned ? owned.length : (availBy.get(t.id)?.length ?? 0);
+        const canBuy = t.owned ? 0 : (availBy.get(t.id) ?? []).filter(u => acc.credits >= u.cost).length;
+        const rumorN = t.rumors ? rumors.length : 0;
+        const detail = t.owned
+          ? (stock ? ` — ${stock} claimed` : ' — nothing claimed yet')
+          : stock === 0 && rumorN === 0 ? ' — nothing here right now'
+          : ` — ${stock} available${canBuy ? `, ${canBuy} affordable now` : ''}${rumorN ? `; ${rumorN} rumor${rumorN === 1 ? '' : 's'} shrouded` : ''}`;
+        return `<button class="book-tab${t.id === this.vaultTab ? ' active' : ''}${stock === 0 && rumorN === 0 ? ' bare' : ''}"
+          data-vtab="${t.id}" title="${esc(t.blurb + detail)}">${t.label}${stock > 0
+            ? `<span class="cnt${canBuy > 0 ? ' now' : ''}">${stock}</span>` : ''}</button>`;
+      }).join('')}</div>`;
+
+      // The active shelf's floor. Multi-kind shelves group under kind
+      // headers (VAULT_KIND_LABELS — the cards' ukind tag at shelf grain);
+      // single-kind shelves skip them, the tab face already says it.
+      let body = '';
+      if (tab.owned) {
+        // THE TROPHY CASE: everything claimed, grouped by kind in shelf
+        // order — browsed deliberately, never underfoot while shopping.
+        const sections = vaultKindOrder()
+          .map(k => ({ k, rows: owned.filter(u => u.kind === k) }))
+          .filter(s => s.rows.length > 0)
+          .map(s => subHead(VAULT_KIND_LABELS[s.k]) + grid(s.rows.map(ownedCardHtml).join('')));
+        body = sections.length ? sections.join('')
+          : `<div class="vault-empty">Nothing claimed yet — everything bought here is the account's forever, deaths included.</div>`;
+      } else {
+        const rows = availBy.get(tab.id) ?? [];
+        if (rows.length === 0) {
+          body = `<div class="vault-empty">${esc(tab.emptyNote
+            ?? `Nothing here right now — earn more ${META_CURRENCY_LABEL} and milestones by playing.`)}</div>`;
+        } else if ((tab.kinds?.length ?? 0) > 1) {
+          body = (tab.kinds ?? []).map(k => {
+            const kr = rows.filter(u => u.kind === k);
+            return kr.length ? subHead(VAULT_KIND_LABELS[k]) + grid(kr.map(cardHtml).join('')) : '';
+          }).join('');
+        } else {
+          body = grid(rows.map(cardHtml).join(''));
+        }
+        // THE RUMOR WALL (discovery web, meta/unlocks.ts): classes the
+        // account has NOT yet discovered hang on this shelf shrouded — the
+        // hint whispers at the deed, the name and price stay the world's
+        // secret until it is done. Hover-addressed by INDEX, not id: the
+        // catalog id spells the class name, and the DOM keeps the world's
+        // secrets too.
+        if (tab.rumors && rumors.length) {
+          body += subHead('Rumors — classes not yet discovered') + grid(rumors.map((_u, i) => `
             <div class="unlock-card" style="opacity:.55" data-tip="rumor" data-rumor-i="${i}">
               <div class="ukind">class · undiscovered</div>
               <div class="uname" style="letter-spacing:3px">? ? ?</div>
               <button disabled>Undiscovered</button>
-            </div>`).join('');
+            </div>`).join(''));
+        }
+      }
+
       this.accountScreen.innerHTML = `
         <div class="vault-head">
           <h1>The Vault — Account Unlocks</h1>
           <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
             <b>${acc.credits}</b> ${META_CURRENCY_LABEL} &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
             &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">rest on a card for its full story</span></div>
+          ${tabStrip}
         </div>
-        <div class="vault-body">
-          <h3 class="vault-sub">Available</h3>
-          <div class="unlock-grid">${cards}</div>
-          ${rumors.length ? `<h3 class="vault-sub">Rumors — classes not yet discovered</h3><div class="unlock-grid">${rumorCards}</div>` : ''}
-          ${owned.length ? `<h3 class="vault-sub">Owned</h3><div class="unlock-grid">${ownedCards}</div>` : ''}
-          <div class="acct-btns"><button id="acct-close">Back</button></div>
-        </div>`;
+        <div class="vault-body">${body}</div>
+        <div class="vault-foot acct-btns"><button id="acct-close">Back</button></div>`;
       const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
-      if (bodyEl) bodyEl.scrollTop = prevScroll;
+      if (bodyEl) bodyEl.scrollTop = this.vaultScroll[this.vaultTab] ?? 0;
+      this.accountScreen.querySelectorAll<HTMLElement>('[data-vtab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.vtab === this.vaultTab) return;
+          saveShelfScroll();
+          this.vaultTab = btn.dataset.vtab!;
+          render();
+        });
+      });
       this.accountScreen.querySelectorAll<HTMLElement>('[data-unlock]').forEach(btn => {
         btn.addEventListener('click', () => {
           const u = availableUnlocks(acc).find(x => x.id === btn.dataset.unlock);
-          if (u && applyUnlock(acc, u)) { this.saveAccount(); render(); }
+          if (u && applyUnlock(acc, u)) { saveShelfScroll(); this.saveAccount(); render(); }
         });
       });
       document.getElementById('acct-close')!.addEventListener('click', () => {
