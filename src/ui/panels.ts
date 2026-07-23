@@ -127,14 +127,63 @@ const DOLL_SEATS: Record<string, { x: number; y: number; w: number; h: number }>
   ring1:    { x: 0.35, y: 2.5,  w: 1,   h: 1 },
   ring2:    { x: 1.45, y: 2.5,  w: 1,   h: 1 },
   gloves:   { x: 0.6,  y: 3.75, w: 1.7, h: 1.7 },
-  mainhand: { x: 5.0,  y: 2.5,  w: 1.8, h: 3.2 },
-  offhand:  { x: 5.0,  y: 6.0,  w: 1.8, h: 2.2 },
-  belt:     { x: 2.5,  y: 5.55, w: 2,   h: 1 },
-  legs:     { x: 2.5,  y: 6.8,  w: 2,   h: 2.4 },
-  boots:    { x: 2.6,  y: 9.45, w: 1.8, h: 1.5 },
+  legs:     { x: 4.7,  y: 3.6,  w: 1.7, h: 2.2 },
+  belt:     { x: 2.5,  y: 5.5,  w: 2,   h: 1 },
+  boots:    { x: 2.6,  y: 6.7,  w: 1.8, h: 1.5 },
+  mainhand: { x: 0.5,  y: 5.7,  w: 1.8, h: 2.7 },
+  offhand:  { x: 4.7,  y: 6.05, w: 1.8, h: 2.3 },
 };
 const DOLL_COLS = 7;
-const DOLL_ROWS = 11.1;
+/** The figure's height DERIVES from the seats actually shown — compact
+ *  today, and the day the hand slots enable, the body simply grows to
+ *  hold them (no constant to remember). */
+const dollRowsFor = (slots: readonly EquipSlotDef[]): number =>
+  slots.reduce((m, s) => {
+    const seat = DOLL_SEATS[s.id];
+    return seat ? Math.max(m, seat.y + seat.h) : m;
+  }, 0) + 0.1;
+
+/** THE UNDERLAY — a faint body behind the seats, its anatomy DERIVED from
+ *  the seat data itself (head under the helmet, shoulders through the
+ *  chest, arms reaching for the flank seats, hips at the belt, legs down
+ *  to the boots): shift a seat and the body follows. Pure presentation —
+ *  pointer-events none, painted before the seat buttons so every drop
+ *  target and glow stacks above it. */
+const dollSilhouetteSvg = (cell: number, rows: number): string => {
+  const S = DOLL_SEATS;
+  const px = (c: number): number => Math.round(c * cell * 10) / 10;
+  const cx = px(S.helmet.x + S.helmet.w / 2);
+  const headR = px(S.helmet.h * 0.34);
+  const headCy = px(S.helmet.y + S.helmet.h * 0.62);
+  const shoulderY = px(S.chest.y + 0.35);
+  const shoulderHalf = px(S.chest.w * 0.58);
+  const waistY = px(S.belt.y + S.belt.h * 0.5);
+  const waistHalf = px(S.chest.w * 0.34);
+  const wristL = { x: px(S.gloves.x + S.gloves.w * 0.55), y: px(S.gloves.y + S.gloves.h * 0.5) };
+  const wristR = { x: px(S.legs.x + S.legs.w * 0.45), y: px(S.legs.y + S.legs.h * 0.35) };
+  const footY = px(S.boots.y + S.boots.h * 0.75);
+  const hipL = cx - px(S.chest.w * 0.2);
+  const hipR = cx + px(S.chest.w * 0.2);
+  const limb = Math.round(cell * 0.5);
+  const tone = 'rgba(196,186,214,0.07)';
+  const edge = 'rgba(196,186,214,0.12)';
+  return `<svg width="${DOLL_COLS * cell}" height="${Math.ceil(rows * cell)}" viewBox="0 0 ${DOLL_COLS * cell} ${Math.ceil(rows * cell)}"
+    style="position:absolute;inset:0;pointer-events:none" aria-hidden="true">
+    <g fill="${tone}" stroke="${edge}" stroke-width="1.2">
+      <circle cx="${cx}" cy="${headCy}" r="${headR}"/>
+      <path d="M ${cx - shoulderHalf} ${shoulderY}
+               Q ${cx} ${shoulderY - cell * 0.5} ${cx + shoulderHalf} ${shoulderY}
+               L ${cx + waistHalf} ${waistY}
+               Q ${cx} ${waistY + cell * 0.3} ${cx - waistHalf} ${waistY} Z"/>
+    </g>
+    <g fill="none" stroke="${tone}" stroke-width="${limb}" stroke-linecap="round">
+      <path d="M ${cx - shoulderHalf * 0.85} ${shoulderY + 4} Q ${wristL.x - cell * 0.3} ${(shoulderY + wristL.y) / 2} ${wristL.x} ${wristL.y}"/>
+      <path d="M ${cx + shoulderHalf * 0.85} ${shoulderY + 4} Q ${wristR.x + cell * 0.3} ${(shoulderY + wristR.y) / 2} ${wristR.x} ${wristR.y}"/>
+      <path d="M ${hipL} ${waistY} L ${cx - px(0.45)} ${footY}"/>
+      <path d="M ${hipR} ${waistY} L ${cx + px(0.45)} ${footY}"/>
+    </g>
+  </svg>`;
+};
 
 const CATEGORY_GLYPHS: Record<string, string> = {
   helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
@@ -2052,7 +2101,11 @@ export class UI {
     };
     const seatedSlots = dollSlots.filter(s => DOLL_SEATS[s.id]);
     const spareSlots = dollSlots.filter(s => !DOLL_SEATS[s.id]);
-    const figure = `<div style="position:relative;width:${DOLL_COLS * CELL}px;height:${DOLL_ROWS * CELL}px">
+    // Height derives from the seats actually shown; the faint body paints
+    // FIRST so every seat, glow and pip stacks above it.
+    const dollRows = dollRowsFor(seatedSlots);
+    const figure = `<div style="position:relative;width:${DOLL_COLS * CELL}px;height:${Math.ceil(dollRows * CELL)}px">
+      ${dollSilhouetteSvg(CELL, dollRows)}
       ${seatedSlots.map(s => dollSeatHtml(s, DOLL_SEATS[s.id])).join('')}</div>`;
     // The spare strip: seatless-but-enabled slots keep the old list rows.
     const spare = spareSlots.map(slot => {
@@ -2179,7 +2232,7 @@ export class UI {
         </div>
       </div>` : '';
     const gearBody = `
-      <div style="display:flex;gap:18px;align-items:flex-start">
+      <div style="display:flex;gap:12px;align-items:flex-start">
         <div>
           <h3>Equipped</h3>
           ${doll}
