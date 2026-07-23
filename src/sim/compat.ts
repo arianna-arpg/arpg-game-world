@@ -1484,7 +1484,15 @@ export function probePair(sess: ProbeSession, row: CensusRow): PairProbeRun {
     // cast-only hosts (the moved tax still fingerprints); anything the
     // census contradicts stays open for the hand-rule anomaly lane.
     const hx = sess.opts.hostExpression?.hosts[row.skillId];
-    if (hx && hx.shape === shapeKey(shape)
+    // The census records the host's BARE shape; crew-fit pairs probe KEYED
+    // (the resonance key rides both runs). The key rides the HOST's
+    // sockets, never the pilot's hands — it cannot make a mute pilot
+    // press, and the screened classes preclude a crew for it to open
+    // ('full' never casts; 'cast-only' expresses no bodies, so boarding
+    // forwards to nobody) — census claims carry ACROSS the key. Sup-driven
+    // rig decorations (bled/range/diet…) still break the match: those
+    // change the rig itself, and with it what the host could express.
+    if (hx && hx.shape === shapeKey({ ...shape, withKey: false })
       && (hx.mute === 'full' || (hx.mute === 'cast-only' && !costFunctionSupport(sup)))) {
       cls.verdict = 'blind';
       blindWhy = `host-expression census: ${hx.mute === 'full'
