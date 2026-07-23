@@ -4051,7 +4051,14 @@ export class World {
       s.actor.dead = false;
       s.actor.downed = false;
       s.actor.casting = null;
-      s.actor.statuses.length = 0;
+      // Shed through the canonical dispel lane (endStatus: splice + the
+      // 'status:*' modifier-source cleanup; silent — a wake pops no kegs).
+      // The old raw `statuses.length = 0` wipe left every modded status's
+      // sheet source STAMPED FOREVER: dying chilled/shocked/cursed carried
+      // the debuff's numbers — invisibly, no icon — for the rest of the
+      // run, until the same status happened to be re-applied and expire
+      // cleanly on its own.
+      for (const id of new Set(s.actor.statuses.map(st => st.id))) s.actor.endStatus(id);
       s.reviveDwellBy.clear();
     }
     this.loadZone(START_ZONE);
@@ -33782,6 +33789,10 @@ export class World {
         const s = actor.statuses[si];
         if (!s.rupture || s.rupture <= 0) continue;
         actor.statuses.splice(si, 1);
+        // Sheet honesty even in death (the DOOM site's exact trio): a body
+        // that survives its own kill() path — a revived seat, a re-fielded
+        // persistent — must not keep the blown keg's modifier source.
+        if (!actor.statuses.some(o => o.id === s.id)) actor.sheet.removeSource('status:' + s.id);
         this.ruptureStatus(actor, s);
       }
     }
