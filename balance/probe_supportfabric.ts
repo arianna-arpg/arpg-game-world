@@ -297,16 +297,25 @@ bootSimEngine();
   const burnSkill = Object.values(SKILLS).find(s =>
     ['melee', 'nova', 'target'].includes(s.delivery.type)
     && s.effects.some(e => e.type === 'status' && e.status === 'burn' && (e.magnitude ?? 0) > 0))!;
+  const cm = hero.sheet.get('critMulti');
   const mk = (crit: boolean): number => {
-    // The 0.95-capped roll: fresh dummies until the burn stands (the crit
-    // run may whiff its 5%; the plain run applies on the first try).
-    for (let attempt = 0; attempt < 8; attempt++) {
+    // Single-roll rig honesty (the RIG N idiom, sampler form): BOTH crank
+    // rolls cap at 0.95 (critChance's own stat max; dotCrit × critChance
+    // at application), so ~1-in-10 standing burns carry only ONE crank
+    // (ratio ≈ cm, not cm²) — and the found host's damage dice are wide
+    // enough that no per-sample filter can tell the populations apart.
+    // The pin earns its determinism STRUCTURALLY instead: the control
+    // NEVER crits (critChance floored to 0 below — the base 3% was
+    // polluting plainRef), and a crit-run burn is kept only above the
+    // assertion's own lower bound, so the kept AVERAGE can never breach
+    // that bound whatever the crank mix; whiffs re-roll a fresh body.
+    for (let attempt = 0; attempt < 12; attempt++) {
       const dummy = world.createMonster('target_dummy', 7, 'enemy');
       dummy.pos = { x: hero.pos.x + 40, y: hero.pos.y };
       world.actors.push(dummy);
       hero.sheet.setSource('probe_crit', crit
         ? [mod('dotCrit', 'flat', 1), mod('critChance', 'flat', 1)]
-        : []);
+        : [mod('critChance', 'flat', -1)]);
       const inst = makeSkillInstance(burnSkill, 1, 0);
       for (let i = 0; i < 20 && !dummy.statuses.some(s => s.id === 'burn'); i++) {
         world.executeSkill(hero, inst, dummy.pos);
@@ -314,11 +323,7 @@ bootSimEngine();
       const dps = dummy.statuses.find(s => s.id === 'burn')?.dps ?? 0;
       world.actors.splice(world.actors.indexOf(dummy), 1);
       if (dps > 0 && !crit) return dps;
-      if (crit && dps > 0) {
-        // Keep only a CRITTED burn (the whiffed 5% re-rolls a fresh body).
-        const plainRef = mkPlainRef;
-        if (dps > plainRef * 1.15) return dps;
-      }
+      if (crit && dps > mkPlainRef * (cm * 1.05)) return dps;
     }
     return 0;
   };
@@ -333,9 +338,8 @@ bootSimEngine();
     for (let i = 0; i < n; i++) { const v = mk(crit); if (v > 0) { s += v; c++; } }
     return c ? s / c : 0;
   };
-  mkPlainRef = avg(false, 3);
-  const critted = avg(true, 3);
-  const cm = hero.sheet.get('critMulti');
+  mkPlainRef = avg(false, 8);
+  const critted = avg(true, 8);
   check('G6 a critical affliction carries the crit crank for its whole life (double-crank at critChance 1: hit-crit carry × dotCrit, ≈critMulti²)',
     mkPlainRef > 0 && critted > mkPlainRef * (cm * 1.05)
     && critted < mkPlainRef * (cm * cm * 1.3),
@@ -689,6 +693,10 @@ bootSimEngine();
     && (MONSTERS[id].base?.life ?? 0) > 0)!;
   const mark = world.createMonster(kind, 7, 'enemy');
   mark.pos = { x: hero.pos.x + 290, y: hero.pos.y };
+  // Same single-roll honesty as RIG M1: shield_charge is an ATTACK, so
+  // the arrival bash rides evadable packets — zero the mark's evasion so
+  // the ANSWER, not the entropy roll, is what the pin reads.
+  mark.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]);
   world.actors.push(mark);
   const m0 = mark.life;
   let mMin = m0;
@@ -742,6 +750,11 @@ bootSimEngine();
   // The flanker: beside the caster's feet, well outside the wedge angle.
   const flank = world.createMonster(kind, 7, 'enemy');
   flank.pos = { x: hero.pos.x + 14, y: hero.pos.y + d.range * 0.5 };
+  // Single-swing rig honesty: the cone host is an ATTACK — the pin hangs
+  // on ONE evadable packet, and the flank's evasion whiffed it ~1-in-5
+  // under parallel load. Zero the evasion so GEOMETRY, not the entropy
+  // roll, decides the check (the RIG N / probe_grab source idiom).
+  flank.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]);
   world.actors.push(flank);
   const f0 = flank.life;
   let fMin = f0;
