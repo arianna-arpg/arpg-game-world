@@ -132,7 +132,7 @@ import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from 
 import { Rng, rollSeed, withSeededRandom } from '../core/rng';
 import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
-import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
+import { patronFaction, biomesForFaction, biomeEventDensity, biomeSpacing, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { fieldRegionAt, isFieldPixel, fieldCoreRect, FIELD_BIOME, FIELD_GEN, type FieldExtent } from '../world/fieldRegion';
 import {
@@ -7613,6 +7613,16 @@ export class World {
       const near = this.nearestLinkable(target, source, exitDef.side);
       if (near) { this.linkBackTo(near, source); return near; }
     }
+    // THE OCCUPANCY LAW (WEB_CFG.mintOccupancy): a random frontier into
+    // ground that already holds a node CONSOLIDATES — never a twin. This is
+    // what a refused link used to fall through to: the mint, whose twenty
+    // anti-crowd pushes fail inside a saturated pocket, and whose settled
+    // 44u stand then reads as "zones accumulating in the same spot". The
+    // expanse path above is exempt (region-keyed mint-once); directed mints
+    // (quests/events) never pass here — the story always mints; and a
+    // ROADLESS GATE HUB's fan is exempt too (its arms are the realm's
+    // authored front door — a dropped arm could never be re-linked, ever).
+    if (!ext && !this.roadlessGateHub(source) && this.mintGroundTaken(target, source)) return source;
     // Mint at the computed target. A Field source projects from the boundary (placeZoneAt
     // takes an explicit target); a normal source uses generateZone's node-step projection.
     // A non-surface source samples ITS OWN dimension's biome palette (hell grows hell).
@@ -7927,6 +7937,33 @@ export class World {
   /** A FIELD zone's frontier target: one node-step PAST the region boundary in the exit's
    *  direction (the blob spans nodeW×nodeH from its origin), so the neighbour radiates from
    *  the expanse's edge/corner — not from the node point (which sits inside the region). */
+  /** THE OCCUPANCY LAW's read (WEB_CFG.mintOccupancy): does the target
+   *  ground already hold a same-dimension node — other than the asking
+   *  source — within the local biome spacing fraction? An expanse counts by
+   *  its CORE RECT (the whole meadow is taken ground, bays included);
+   *  everything else by its node point. Caves live off-graph and never
+   *  count. One read for every random-frontier mint decision. */
+  private mintGroundTaken(target: MapCoord, source: ZoneDef): boolean {
+    const dim = source.dimension ?? 'surface';
+    const biome = source.dimension
+      ? this.dimensionBiomeFor(source.dimension)(target)
+      : this.biomeFor(target);
+    const sep = biomeSpacing(biome) * WEB_CFG.mintOccupancy;
+    for (const z of Object.values(this.zoneMap)) {
+      if (z.id === source.id || z.caveDepth != null || (z.dimension ?? 'surface') !== dim) continue;
+      let d: number;
+      if (z.field) {
+        const r = fieldCoreRect(z.field, z.size);
+        const px = clamp(target.x, r.x0, r.x1), py = clamp(target.y, r.y0, r.y1);
+        d = Math.hypot(target.x - px, target.y - py);
+      } else {
+        d = Math.hypot(z.map.x - target.x, z.map.y - target.y);
+      }
+      if (d < sep) return true;
+    }
+    return false;
+  }
+
   private fieldFrontierTarget(f: { originX: number; originY: number; nodeW: number; nodeH: number }, side: ZoneExitDef['side'], at: number): { x: number; y: number } {
     const STEP = 80, t = clamp(at, 0.1, 0.9);
     if (side === 'n') return { x: f.originX + f.nodeW * t, y: f.originY - STEP };

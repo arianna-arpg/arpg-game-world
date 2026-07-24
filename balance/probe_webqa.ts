@@ -179,6 +179,23 @@ for (let s = 0; s < SEEDS; s++) {
   }
   worlds.push({ w, seed, stats: measure(w) });
 }
+// The laws' field checks need at least ONE expanse minted somewhere — under
+// the occupancy law growth is honest (sparser), so a seed set may stop short
+// of field country in the standard rounds. Grow the first world further
+// until an expanse appears (bounded; re-measure it after).
+{
+  const hasField = (): boolean => worlds.some(r => surfaceZones(r.w).some(z => z.field));
+  const { w } = worlds[0];
+  const chart = (w as unknown as { chartNeighborsOf(z: ZoneDef): void });
+  for (let extra = 0; extra < 8 && !hasField(); extra++) {
+    const batch = Object.values(w.zoneMap).filter(z =>
+      (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket
+      && z.objective.kind !== 'safe' && !z.floating && !zoneKindOf(z)?.staticExits
+      && z.exits.some(e => e.to === '?'));
+    for (const z of batch) chart.chartNeighborsOf(z);
+    worlds[0].stats = measure(w);
+  }
+}
 
 const tot = (f: (s: Stats) => number): number => worlds.reduce((a, r) => a + f(r.stats), 0);
 const allFields = worlds.flatMap(r => r.stats.fields);
@@ -262,7 +279,9 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
 
 // ------------------------------------------------ F. THE HEAL (reconcileWebLaws)
 {
-  const { w } = worlds[0];
+  // Heal against a world that actually minted an expanse (honest growth may
+  // leave some seed short of field country in the standard rounds).
+  const { w } = worlds.filter(r => surfaceZones(r.w).some(z => z.field)).pop() ?? worlds[0];
   const zones = surfaceZones(w);
   let field = zones.find(z => z.biome === FIELD_BIOME && z.field);
   check('F: a minted expanse exists to heal against', !!field, field?.id ?? 'NONE');
@@ -487,16 +506,77 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
   settleWeb(m2, null, { around: { x: 9000, y: 9000 } });
   const sig = (m: Record<string, ZoneDef>): string => Object.values(m).map(snap).join('|');
   check('H: the settle is DETERMINISTIC', sig(m1) === sig(m2), sig(m1));
-  // A field expanse never moves; its crowder does.
-  const fzone = zones.find(z => z.field);
-  if (fzone) {
-    const fh = { x: fzone.map.x, y: fzone.map.y };
-    const e = mk('qa_settle_field', fzone.map.x + 2, fzone.map.y - 2);
-    w.zoneMap[e.id] = e;
-    settleWeb(w.zoneMap, null, { around: fzone.map });
-    check('H: an EXPANSE pins (region-anchored) — the crowder yields',
-      fzone.map.x === fh.x && fzone.map.y === fh.y);
+  // A blob minted AROUND standing ground (the wandering hub inside a fresh
+  // expanse — seen live at 12u): the expanse's label anchor drifts WITHIN its
+  // own core rect and the squatter may walk out — the pair must separate,
+  // and the expanse's node must never leave its region.
+  const fr = worlds.filter(r => surfaceZones(r.w).some(z => z.field)).pop();
+  if (fr) {
+    const fw = fr.w;
+    const fzone = surfaceZones(fw).find(z => z.field)!;
+    const e = mk('qa_settle_field', fzone.map.x + 6, fzone.map.y - 3);
+    fw.zoneMap[e.id] = e;
+    for (let beat = 0; beat < 4; beat++) settleWeb(fw.zoneMap, null, { around: fzone.map });
+    const d = Math.hypot(e.map.x - fzone.map.x, e.map.y - fzone.map.y);
+    const r = fieldCoreRect(fzone.field!, fzone.size);
+    const inRect = fzone.map.x >= r.x0 && fzone.map.x <= r.x1 && fzone.map.y >= r.y0 && fzone.map.y <= r.y1;
+    check('H: a squatted EXPANSE separates without leaving its region',
+      d >= WEB_CFG.hoverClear && inRect, `${Math.round(d)}u apart, node in-rect=${inRect}`);
   }
+}
+
+// ------------------------------------------------ I. THE OCCUPANCY LAW (real-update soak)
+// The one lane the growth rounds above cannot see: the REAL update loop
+// (forechart sweeps + settle sweeps + overlays) walking a small loop of
+// zones — the exact play pattern that used to ACCUMULATE mints in the same
+// ground forever (pre-law: 261 zones inside a 300u disc, twins 1u apart;
+// refused links fell through to mints, failed pushes got settled to the
+// hover floor, and the halo re-densified walked country every re-arm).
+{
+  seedGlobalRandom(0x50a201);
+  const w = makeSimWorld('warrior', 0x77aa01);
+  w.loadZone(HUB_ZONE);
+  const hub = { x: w.zone.map.x, y: w.zone.map.y };
+  const zonesOf = (): ZoneDef[] => surfaceZones(w);
+  const within300 = (): number => zonesOf().filter(z => Math.hypot(z.map.x - hub.x, z.map.y - hub.y) <= 300).length;
+  const tightPairs = (): number => {
+    const zs = zonesOf();
+    let n = 0;
+    for (let i = 0; i < zs.length; i++) {
+      for (let j = i + 1; j < zs.length; j++) {
+        const d = Math.hypot(zs[i].map.x - zs[j].map.x, zs[i].map.y - zs[j].map.y);
+        if (d < Math.min(biomeSpacing(zs[i].biome), biomeSpacing(zs[j].biome)) * 0.6) n++;
+      }
+    }
+    return n;
+  };
+  const step = (n: number): void => { for (let i = 0; i < n; i++) w.update(0.25); };
+  step(400); // ~100s — the halo fills to its honest capacity
+  const afterFill = within300();
+  // Walk a loop through near-hub country twice — unveils re-arm the halo.
+  const laps: number[] = [];
+  for (let lap = 0; lap < 2; lap++) {
+    const ring = zonesOf().filter(z => z.id !== w.zone.id && !z.veiled
+      && z.objective.kind !== 'safe' && z.exits.some(e => e.to !== '?')
+      && Math.hypot(z.map.x - hub.x, z.map.y - hub.y) < 260).slice(0, 4);
+    for (const z of ring) { w.loadZone(z.id); step(40); }
+    laps.push(within300());
+  }
+  check('I: the halo packs walked ground at HONEST spacing (≤90 in a 300u disc; was 261)',
+    afterFill <= 90 && laps.every(n => n <= 90), `${afterFill} → ${laps.join(' → ')}`);
+  check('I: walking the same ground does NOT accumulate mints (was +36/lap)',
+    laps[laps.length - 1] - afterFill <= 6, `+${laps[laps.length - 1] - afterFill}`);
+  check('I: no sub-spacing twins under the real loop (was 637)', tightPairs() === 0, `${tightPairs()}`);
+  const zs = zonesOf();
+  let minPair = Infinity;
+  for (let i = 0; i < zs.length; i++) {
+    for (let j = i + 1; j < zs.length; j++) {
+      minPair = Math.min(minPair, Math.hypot(zs[i].map.x - zs[j].map.x, zs[i].map.y - zs[j].map.y));
+    }
+  }
+  check('I: the closest pair on the whole chart clears the hover floor (was 1u)',
+    minPair >= WEB_CFG.hoverClear * 0.95, `${Math.round(minPair)}u`);
+  check('I: the world still grows past the walked pocket', zonesOf().length >= 150, `${zonesOf().length} zones`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

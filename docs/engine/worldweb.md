@@ -99,6 +99,22 @@ pre-law saves is left standing: the resolution gate stops new leaks, and
 trimming a walked web's roads out from under a player is worse than
 tolerating its history.
 
+## THE OCCUPANCY LAW (`WEB_CFG.mintOccupancy`)
+
+A RANDOM frontier whose target already holds a same-dimension node within
+(local biome spacing × `mintOccupancy`) **consolidates instead of minting** —
+ground that holds a zone cannot host a twin. This is the accumulation
+killer: a refused link used to fall through to a mint whose twenty
+anti-crowd pushes failed inside the saturated pocket, and the settle then
+parked the twin at the hover floor — the halo re-densified walked country
+forever (measured: 261 zones inside a 300u disc, twins 1u apart; tundra at
+half its spacing). With the law, the halo converges at honest spacing
+capacity (~42 in the same disc) and walking the same ground mints nothing
+new. An expanse counts by its whole CORE RECT (bays included). Exempt:
+expanse mints themselves (region-keyed mint-once), directed mints
+(quests/events never pass this path — the story always mints), and a
+roadless gate hub's fan (a dropped arm could never be re-linked).
+
 ## THE SETTLING (`settleWeb` + `WEB_CFG.hoverClear`/`settle`)
 
 Two node discs closer than `hoverClear` are unreadable on the chart (neither
@@ -106,12 +122,15 @@ hovers cleanly). The settling is a **bounded, deterministic, rng-free
 force-directed relaxation** (the portal `spacedExitAt` law lifted to nodes;
 the passive tree's layout idea, scoped): violating pairs push apart, movable
 ends yielding, each zone drifting at most `settle.maxShift` from where it
-stood. **Immovables pin the layout**: sanctuaries, Field expanses (their map
-point IS the blob's centre), ports + hold anchors, sealed kinds, roadless
-hubs (`settleMovable`). A moved zone must still stand on legal ground
-(caller's `canStand` — ocean refusal), must not rest inside an expanse
-footprint, and must keep every non-notarized road dry and footprint-legal —
-violators revert and pin. It runs:
+stood. **Immovables pin the layout**: sanctuaries, ports + hold anchors,
+sealed kinds, roadless hubs (`settleMovable`). A Field expanse MAY drift,
+but only within its own core rect (its map point is the label/road anchor —
+berths carry the drawn edges — so a blob that minted AROUND authored ground
+slides its node off the squatter, and the squatter may walk itself out: the
+rect guard forbids ENTERING, never escaping). A moved zone must still stand
+on legal ground (caller's `canStand` — ocean refusal) and keep every
+non-notarized road dry and footprint-legal — violators revert and pin. It
+runs:
 
 - at `placeZoneAt`'s tail — EVERY mint family (frontier, quest, event,
   sounding, holdfast, sea anchor) inherits it, and a directed mint dropped

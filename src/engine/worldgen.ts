@@ -295,6 +295,17 @@ export const WEB_CFG = {
    *  violating pair to at least this — it is a SAFETY NET below the biome
    *  spacing (the mint-time law), not a second spacing system. */
   hoverClear: 44,
+  /** THE OCCUPANCY LAW: a RANDOM frontier whose target already has a node
+   *  within (biome spacing × this) CONSOLIDATES instead of minting — ground
+   *  that holds a zone cannot host a twin. Without it, a saturated pocket's
+   *  refused links fell through to mints, the anti-crowd's twenty pushes
+   *  failed in the crowd, and the settle then parked the twin at the hover
+   *  floor — the halo re-densified walked ground forever (tundra at half
+   *  its spacing; the "network of zones in nearly the same spot"). 0.7
+   *  keeps legitimate diagonal in-fill (≈0.72-0.9 of spacing) mintable
+   *  while refusing true cram; directed mints (quests/events) are exempt —
+   *  the story must always mint, and THE SETTLING absorbs their landing. */
+  mintOccupancy: 0.7,
   /** THE SETTLING — the bounded force-directed relaxation (the portal
    *  spacedExitAt law, lifted to nodes): when a mint cannot clear its
    *  neighbours (a directed quest landing in saturated ring-1; a Field
@@ -397,12 +408,15 @@ export function insideFieldFootprint(pt: MapCoord, zoneMap: Record<string, ZoneD
 }
 
 /** May the SETTLING move this zone? Authored geography holds its ground:
- *  sanctuaries (the town), Field expanses (region-anchored — their map point
- *  IS the blob's centre), ports + hold anchors (coastline spots), sealed
+ *  sanctuaries (the town), ports + hold anchors (coastline spots), sealed
  *  static-exits kinds, roadless gate hubs, and off-graph caves. Everything
- *  else — ordinary country, veiled halo mints, quest zones — may give way. */
+ *  else — ordinary country, veiled halo mints, quest zones — may give way.
+ *  A FIELD expanse may drift too, but only WITHIN its own core rect (the
+ *  standing guards): its map point is the label/road anchor, not the region
+ *  (berths carry the drawn edges) — so a blob that minted around authored
+ *  ground can slide its node off the squatter instead of deadlocking. */
 export function settleMovable(z: ZoneDef): boolean {
-  return z.objective.kind !== 'safe' && !z.field && !z.port && !z.holdAnchor
+  return z.objective.kind !== 'safe' && !z.port && !z.holdAnchor
     && z.caveDepth == null && !zoneKindOf(z)?.staticExits && !isRoadlessGateHub(z);
 }
 
@@ -564,8 +578,18 @@ export function settleWeb(
     if (pinned.has(z.id)) continue;
     const h = home.get(z.id)!;
     if (z.map.x === h.x && z.map.y === h.y) continue;
-    let ok = !insideFieldFootprint(z.map, zoneMap, z.id)
-      && (opts?.canStand ? opts.canStand(z, z.map) : true);
+    // A FIELD's own drift is CONTAINED: its map point stays inside its core
+    // rect (label anchor law). Everyone else must not ENTER a rect — but a
+    // zone that already stood inside one (a blob minted around it) may keep
+    // moving: that is exactly how it walks itself off the meadow.
+    let ok: boolean;
+    if (z.field) {
+      const r = fieldCoreRect(z.field, z.size);
+      ok = z.map.x >= r.x0 && z.map.x <= r.x1 && z.map.y >= r.y0 && z.map.y <= r.y1;
+    } else {
+      ok = !insideFieldFootprint(z.map, zoneMap, z.id) || insideFieldFootprint(h, zoneMap, z.id);
+    }
+    ok = ok && (opts?.canStand ? opts.canStand(z, z.map) : true);
     if (ok) {
       for (const e of z.exits) {
         if (e.to === '?' || e.crossDim) continue;

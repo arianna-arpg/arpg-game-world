@@ -707,11 +707,15 @@ changes.
   `fieldCoreRect`: spacing measured to the expanse RECT, no both-ends-outside
   road across it, mint-time sever + restore heal `reconcileWebLaws`),
   THE BYPASS/CLEARWAY dials (`WEB_CFG`: no road through a third node's disc,
-  no mint standing on a road's line), THE SETTLING (`settleWeb` — bounded
+  no mint standing on a road's line), THE OCCUPANCY LAW
+  (`WEB_CFG.mintOccupancy` — a random frontier into ground already holding a
+  node CONSOLIDATES, never a twin: the halo-accumulation killer; expanse
+  mints/directed mints/gate fans exempt), THE SETTLING (`settleWeb` — bounded
   deterministic force-directed relaxation to `WEB_CFG.hoverClear`; runs at
   every placeZoneAt mint, after expanse re-centres, on the slow
   `updateWebSettle` sweep, and in the restore heal; immovables pin the
-  layout: sanctuaries/expanses/ports/sealed kinds), and QUEST DEEDS
+  layout: sanctuaries/ports/sealed kinds, expanses drift only inside their
+  own rect), and QUEST DEEDS
   (acceptQuest anchors only CONNECTED sane ground, notarizes the quest road
   both ways, and lifts the anchor's veil so the way DRAWS;
   connectFloatingZone wire-ins likewise — directed story mints can never be
