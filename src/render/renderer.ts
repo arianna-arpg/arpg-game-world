@@ -173,11 +173,32 @@ export class Renderer {
   private frameDt = 0;
   private lastRenderTime = 0;
 
+  /** THE CREST OVERLAY (render/renderScale.ts): a full-resolution sibling
+   *  surface stacked over the world canvas. While the render scale sits
+   *  under 1, every READING surface — the word layer (labels, speech,
+   *  floaters, reticle) and the screen-space HUD passes — draws HERE at
+   *  native pixels while the world keeps its scaled buffer: legibility is
+   *  never traded for frame rate (the UI Scale dial stays the one owner of
+   *  interface size). At scale 1 it is inert — hidden, unpainted, zero
+   *  cost — and the classic single-canvas composition is byte-identical.
+   *  THE SCALED-MODE TRADE, stated honestly: on the overlay, words ride
+   *  ABOVE the light layer and weather washes (they cannot both be sharp
+   *  and under a wash painted on another surface) — full-screen fades that
+   *  must cover the HUD draw on the overlay too, so covers still cover. */
+  private overlay: HTMLCanvasElement;
+  private octx: CanvasRenderingContext2D;
+
   constructor(
     public canvas: HTMLCanvasElement,
     private getSettings?: () => Settings,
   ) {
     this.ctx = canvas.getContext('2d')!;
+    this.overlay = document.createElement('canvas');
+    this.octx = this.overlay.getContext('2d')!;
+    const os = this.overlay.style;
+    os.position = 'fixed'; os.left = '0'; os.top = '0';
+    os.pointerEvents = 'none'; os.zIndex = '5'; os.display = 'none';
+    (canvas.parentElement ?? document.body).insertBefore(this.overlay, canvas.nextSibling);
     this.resize();
     window.addEventListener('resize', () => this.resize());
     // Warm the canvas capability probe (vis/canvasCaps.ts) off the hot
@@ -262,6 +283,21 @@ export class Renderer {
     this.canvas.height = Math.max(2, Math.round(h * this.pixelScale));
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
+    // The crest overlay always carries NATIVE pixels (that is its point).
+    this.overlay.width = Math.max(2, w);
+    this.overlay.height = Math.max(2, h);
+    this.overlay.style.width = w + 'px';
+    this.overlay.style.height = h + 'px';
+  }
+
+  /** Run `fn` with this.ctx/this.canvas pointed at the crest overlay (the
+   *  draw methods destructure both, so the swap redirects their pixels AND
+   *  their dimension reads together). No-op passthrough when inactive. */
+  private onCrest(active: boolean, fn: () => void): void {
+    if (!active) { fn(); return; }
+    const c = this.ctx, cv = this.canvas;
+    this.ctx = this.octx; this.canvas = this.overlay;
+    try { fn(); } finally { this.ctx = c; this.canvas = cv; }
   }
 
   /** Screen -> world coordinates (for mouse aiming). Inverts scale·translate. */
@@ -578,19 +614,30 @@ export class Renderer {
     // line shows — labelRevealAt probes each anchor through roomVeil/
     // sightVeil/roof/crown concealment — but they no longer get to drown
     // words their own gate chose to reveal (Mireille's talk used to poke
-    // past her inn's footprint into the wash and read as mud). Still under
-    // the light layer + screen washes, so night and weather keep their say.
-    ctx.save();
-    ctx.scale(z, z);
-    ctx.translate(-this.cam.x + shx, -this.cam.y + shy);
-    this.drawLabels(world);        // actor text (names/prompts) — visibility-gated
-    this.drawSpeeches(world);      // THE SPEECH FABRIC: wrapped talk bubbles, typewriter reveal
-    this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
-    this.drawTexts(world);
-    this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
-    if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
-    this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
-    ctx.restore();
+    // past her inn's footprint into the wash and read as mud). At render
+    // scale 1 it stays under the light layer + screen washes, so night and
+    // weather keep their say — byte-identical to before. THE CREST: while
+    // the scale sits under 1, the words re-target the full-resolution
+    // overlay (native pixels, the legibility contract) — the scaled mode's
+    // stated trade is that text there rides above the washes.
+    const crest = this.pixelScale < 1;
+    this.overlay.style.display = crest ? '' : 'none';
+    if (crest) this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
+    const wordZ = crest ? z / this.pixelScale : z;
+    this.onCrest(crest, () => {
+      const wc = this.ctx;
+      wc.save();
+      wc.scale(wordZ, wordZ);
+      wc.translate(-this.cam.x + shx, -this.cam.y + shy);
+      this.drawLabels(world);        // actor text (names/prompts) — visibility-gated
+      this.drawSpeeches(world);      // THE SPEECH FABRIC: wrapped talk bubbles, typewriter reveal
+      this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
+      this.drawTexts(world);
+      this.drawSceneHeroHud(world); // scene fabric: hero-seated teaching bar + prompt (world-space)
+      if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
+      this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
+      wc.restore();
+    });
 
     // THE LIGHT LAYER: day/night darkness punched by every light in view +
     // emissive bloom — world-lit, drawn before the screen-space washes. The
@@ -610,22 +657,33 @@ export class Renderer {
     // the descent vignette/shaft pip) stay physical, interleaved in their
     // original draw order.
     const us = this.uiScaleLive();
-    this.uiW = w / us; this.uiH = h / us;
-    this.uiMouse.x = this.hudMouse.x / us; this.uiMouse.y = this.hudMouse.y / us;
-    this.uiPass(us, () => {
+    // THE CREST SPLIT: the HUD passes draw on whichever surface carries the
+    // reading layer this frame — virtual dims AND the ui mouse derive from
+    // THAT surface (the buffer-space mouse maps back to native pixels via
+    // ÷pixelScale on the crest; ÷1 classic — one formula, two surfaces).
+    const surfW = crest ? this.overlay.width : w;
+    const surfH = crest ? this.overlay.height : h;
+    const mScale = crest ? this.pixelScale : 1;
+    this.uiW = surfW / us; this.uiH = surfH / us;
+    this.uiMouse.x = this.hudMouse.x / mScale / us; this.uiMouse.y = this.hudMouse.y / mScale / us;
+    this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
       this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
       this.drawEncounterHud(world); // breach timer bar (screen-space)
       this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
       this.drawSceneHud(world);     // scene fabric: drill/assault bar + prompt (screen-space)
-    });
+    }));
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
-    this.uiPass(us, () => {
+    this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
+    }));
+    // Covers must still cover: on the crest these two draw THERE (topmost
+    // surface — one full-screen fade covers the whole composite).
+    this.onCrest(crest, () => {
+      this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
+      this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
     });
-    this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
-    this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
   }
 
   /** D2-style hover nameplate: the DISTINCTLY-NAMED foe nearest the cursor
