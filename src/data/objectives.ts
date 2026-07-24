@@ -21,6 +21,23 @@
 import type { World } from '../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../world/attention';
 
+/** THE CULL (kind 'clear'): the ask is a SHARE of the ground's counted
+ *  population — "kill N here", never "find the last body" (that hunt is the
+ *  bounty writ's identity). These dials shape the DERIVED ask on ground whose
+ *  spec authored nothing; ObjectiveSpec `need` (flat or [min,max] band) and
+ *  `frac` override per zone, and the derived ask never exceeds what actually
+ *  stands (asking more than the floor holds is just the old full-clear
+ *  wearing a broken scoreboard). The EMPTY FLOOR still completes regardless
+ *  of the tally — the mercy rule, and the whole law on `all: true` ground. */
+export const CLEAR_CFG = {
+  /** Share of the FRESH counted population the cull asks for. */
+  frac: 0.6,
+  /** Clamp band on the derived ask: a hamlet still asks a real fight, a
+   *  teeming megazone never asks a hundred heads. */
+  min: 4,
+  max: 40,
+} as const;
+
 export const STRAGGLER_CFG = {
   /** Per-kind chevron thresholds: the pointer wakes when this few remain. */
   clear: { remaining: 3, glyph: '⚔' },

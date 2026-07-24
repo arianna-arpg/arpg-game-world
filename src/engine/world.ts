@@ -76,7 +76,7 @@ import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type Exi
 import { BEACON_CFG } from '../data/beacons';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
-import { OFFERING_CFG, STRAGGLER_CFG } from '../data/objectives';
+import { CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -1991,6 +1991,11 @@ interface ZoneMemory {
   };
   /** OFFERING zones: how fed the hungering altar was at capture. */
   altarOffered?: number;
+  /** CLEAR zones (THE CULL): the tally + the stamped ask at capture. The
+   *  ask derives ONCE on fresh ground and must ride the memory — a thinned
+   *  field re-deriving from its survivors would shrink its own ask. */
+  cullKills?: number;
+  cullNeed?: number;
 }
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
@@ -2993,6 +2998,13 @@ export class World {
    *  this.altars), how fed it is, how deep the need runs. Zone-local; the
    *  fed count rides Zone Memory (altarOffered). */
   private offering: { altarIdx: number; offered: number; need: number } | null = null;
+  /** THE CULL (kind 'clear') runtime: how many counted bodies have fallen
+   *  against the stamped ask. Zone-local; both numbers ride Zone Memory
+   *  (cullKills/cullNeed). Null on `all: true` ground (the classic full
+   *  clear — the empty-floor rule is the whole law there) and on completed
+   *  zones. Kills tally at the kill chokepoint (worldKillRules
+   *  'clear_cull_tally'); completion watches in updateObjective. */
+  private cull: { kills: number; need: number } | null = null;
   /** LURE FABRIC — world points idle enemies DRIFT toward (a charging survey
    *  spire today; bait items or noise-maker skills ride the same call later).
    *  Each holder re-stamps its row every frame (`until` = a short linger), so
@@ -4347,6 +4359,7 @@ export class World {
     this.spires = [];       // beacon fixtures re-place below (charges ride Zone Memory)
     this.procession = null; // the escort re-stages below (state rides Zone Memory)
     this.offering = null;   // the hungering altar re-stages below (fed count rides Zone Memory)
+    this.cull = null;       // the cull re-stamps below (tally + ask ride Zone Memory)
     this.objectiveLost = false; // re-armed from the memory rider below
     this.lures.clear();     // lures are zone-local
 
@@ -5126,6 +5139,19 @@ export class World {
     if (memory && o.kind === 'waves' && !this.objectiveDone) {
       this.wave = Math.max(0, Math.floor(memory.wave ?? 0));
       this.waveActive = !!memory.waveActive;
+    }
+    // THE CULL (kind 'clear'): stamp the ask. A remembered ground resumes its
+    // OWN ask + tally (the need must never re-derive from a thinned field);
+    // fresh ground derives it here — after the base population stands, so a
+    // frac share reads the true fresh count. `all: true` stamps nothing (the
+    // classic full clear: updateObjective's empty-floor rule is the whole
+    // law there), and neither does a completed zone.
+    if (o.kind === 'clear' && !o.all && !this.objectiveDone) {
+      const remembered = Math.floor(memory?.cullNeed ?? 0);
+      const need = remembered > 0 ? remembered : this.rollCullNeed(o, rng);
+      if (need > 0) {
+        this.cull = { need, kills: clamp(Math.floor(memory?.cullKills ?? 0), 0, need) };
+      }
     }
     // A CLEARED side area stays cleared PERMANENTLY (run-long), even past the memory
     // TTL: drop its base population so re-entry never re-stocks a one-time cave (the
@@ -13451,6 +13477,8 @@ export class World {
       ...(procession ? { procession } : {}),
       ...(z.objective.kind === 'offering' && this.offering
         ? { altarOffered: this.offering.offered } : {}),
+      ...(z.objective.kind === 'clear' && this.cull
+        ? { cullKills: this.cull.kills, cullNeed: this.cull.need } : {}),
       // Solved riddles stay solved for the memory's life (bootPuzzles
       // re-enters them through kind.solved — proof, not homework).
       ...(this.puzzles.some(r => r.done)
@@ -13616,6 +13644,8 @@ export class World {
       ...(m.spireCharges ? { spireCharges: [...m.spireCharges] } : {}),
       ...(m.procession ? { procession: { ...m.procession } } : {}),
       ...(m.altarOffered !== undefined ? { altarOffered: m.altarOffered } : {}),
+      ...(m.cullKills !== undefined ? { cullKills: m.cullKills } : {}),
+      ...(m.cullNeed !== undefined ? { cullNeed: m.cullNeed } : {}),
     });
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
@@ -13765,6 +13795,10 @@ export class World {
         ...(procMemo ? { procession: procMemo } : {}),
         ...(typeof m.altarOffered === 'number' && Number.isFinite(m.altarOffered)
           ? { altarOffered: Math.max(0, Math.floor(m.altarOffered)) } : {}),
+        ...(typeof m.cullKills === 'number' && Number.isFinite(m.cullKills)
+          ? { cullKills: Math.max(0, Math.floor(m.cullKills)) } : {}),
+        ...(typeof m.cullNeed === 'number' && Number.isFinite(m.cullNeed) && m.cullNeed >= 1
+          ? { cullNeed: Math.floor(m.cullNeed) } : {}),
         ...(Array.isArray(m.puzzlesDone)
           ? { puzzlesDone: m.puzzlesDone.filter((x): x is string => typeof x === 'string') }
           : {}),
@@ -34258,6 +34292,22 @@ export class World {
           `the altar feeds — ${of.offered}/${of.need}`, OFFERING_CFG.accent, 13);
       },
     },
+    // THE CULL (kind 'clear'): every counted body that falls feeds the tally
+    // — any hand, credited or not (a faction brawl does your work; the
+    // writ's honesty). The predicate is the SAME one countedEnemies runs
+    // (objectiveCountable), so the scoreboard and the empty-floor rule can
+    // never disagree about who counts. Deliberately silent per kill — the
+    // commonest objective must not floater-spam; the HUD line is the
+    // scoreboard, and completeObjective is the one loud beat.
+    {
+      id: 'clear_cull_tally',
+      when: ctx => !!this.cull && !this.objectiveDone
+        && this.zone.objective.kind === 'clear' && this.objectiveCountable(ctx.actor),
+      run: () => {
+        const cu = this.cull!;
+        cu.kills = Math.min(cu.need, cu.kills + 1);
+      },
+    },
     // DESCENT: a slain brood-member pays Echoes (× depth) into the dive's haul
     // — scoped by the surge's own faction, never a literal.
     {
@@ -45066,15 +45116,20 @@ export class World {
     return AMBIENT_TAGS.has(tag) || !!this.sim.holdfastField?.guardianTags().has(tag);
   }
 
-  /** Living enemies that count toward objectives (caches and such don't).
+  /** Would this body COUNT toward the zone's objective, alive or just
+   *  felled? THE ONE PREDICATE behind countedEnemies (the population read)
+   *  and the cull's kill tally (worldKillRules 'clear_cull_tally') — the
+   *  scoreboard and the floor can never disagree about who counts. Liveness
+   *  is deliberately the CALLER's axis: the tally asks this of a body the
+   *  instant it falls.
    *  Ambient bearers are excluded wholesale — see isAmbientTag (the static
    *  registry + the live holdfast guardian tags).
    *  noObjective defs are the SOFT-LOCK GUARD: bodies whose habitat a
    *  build may be unable to reach (a void angler over its chasm) never
    *  gate a clear — they fight and drop, but the zone finishes without
    *  them. */
-  private countedEnemies(): Actor[] {
-    return this.actors.filter(a => a.team === 'enemy' && !a.dead
+  private objectiveCountable(a: Actor): boolean {
+    return a.team === 'enemy'
       && !this.isAmbientTag(a.tag)
       // ACTOR-level scenery armor is the same soft-lock guard one layer
       // down: a planted body no build can even FIGHT — a throng husk
@@ -45085,7 +45140,30 @@ export class World {
       // Deliberately the full pair — a merely-untargetable body (a phased
       // boss, a warded heart) still counts and still gates.
       && !(a.passive && a.untargetable)
-      && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective)));
+      && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective));
+  }
+
+  /** Living enemies that count toward objectives (caches and such don't). */
+  private countedEnemies(): Actor[] {
+    return this.actors.filter(a => !a.dead && this.objectiveCountable(a));
+  }
+
+  /** Derive THE CULL's ask for fresh 'clear' ground: the spec's own `need`
+   *  (flat, or a [min,max] band rolled off the layout rng — the offering's
+   *  idiom) wins; otherwise a `frac` share of the standing counted
+   *  population, clamped to CLEAR_CFG's band. A DERIVED ask never exceeds
+   *  what actually stands (asking more than the floor holds is the old
+   *  full-clear wearing a broken scoreboard); an AUTHORED ask is the
+   *  author's sovereignty (event-fed ground may intend kills the mint never
+   *  spawned — the empty-floor mercy completes it either way). Returns 0
+   *  when no ask is derivable (nothing counted stands on a strange empty
+   *  mint): no cull state, the empty-floor rule already holds. */
+  private rollCullNeed(o: Extract<ObjectiveSpec, { kind: 'clear' }>, rng: Rng): number {
+    if (typeof o.need === 'number') return Math.max(1, Math.floor(o.need));
+    if (o.need) return Math.max(1, rng.int(Math.floor(o.need[0]), Math.floor(o.need[1])));
+    const pop = this.countedEnemies().length;
+    if (!pop) return 0;
+    return Math.min(pop, clamp(Math.round(pop * (o.frac ?? CLEAR_CFG.frac)), CLEAR_CFG.min, CLEAR_CFG.max));
   }
 
   /** Living spawner objects in the zone. */
@@ -45153,8 +45231,18 @@ export class World {
         return; // hostile ground with no errand: nothing completes, nothing pays
 
       case 'clear':
-        if (!this.objectiveDone && this.countedEnemies().length === 0) {
-          this.completeObjective(`${this.zone.name} cleared!`);
+        // THE CULL: the ask is `need` felled (tallied at the kill chokepoint
+        // — worldKillRules 'clear_cull_tally'), not an empty floor. The
+        // EMPTY FLOOR still completes regardless of the tally: the mercy
+        // rule (sparse ground can never ask more than it holds — and a
+        // remembered old-save ask can never wedge), and the WHOLE law on
+        // `all: true` ground, where cull state never stands.
+        if (!this.objectiveDone) {
+          if (this.cull && this.cull.kills >= this.cull.need) {
+            this.completeObjective(`${this.zone.name} culled!`);
+          } else if (this.countedEnemies().length === 0) {
+            this.completeObjective(`${this.zone.name} cleared!`);
+          }
         }
         return;
 
@@ -46580,7 +46668,14 @@ export class World {
     if (this.objectiveDone) return 'Cleared';
     switch (o.kind) {
       case 'none': return o.label ?? 'Nothing is asked of you here';
-      case 'clear': return `Clear the area — ${this.countedEnemies().length} remain`;
+      case 'clear': {
+        // THE CULL reads its scoreboard; authored full-clear ground
+        // (`all: true` — cull state never stands there) keeps the classic
+        // remain-count line, as does any ground with no stamped ask.
+        const cu = this.cull;
+        if (!cu) return `Clear the area — ${this.countedEnemies().length} remain`;
+        return `Cull the area — ${cu.kills}/${cu.need} felled`;
+      }
       case 'boss': return `Slay ${MONSTERS[o.id].name}`;
       case 'spawners': return `Destroy the spawners — ${this.livingSpawners().length} remain`;
       case 'escape': return 'They keep coming — find the way out';

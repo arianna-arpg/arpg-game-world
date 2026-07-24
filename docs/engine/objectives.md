@@ -12,7 +12,8 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 | kind         | asks                                                          |
 |--------------|---------------------------------------------------------------|
 | `safe`       | nothing — a sanctuary                                         |
-| `clear`      | kill the counted population                                   |
+| `clear`      | THE CULL — fell a SHARE of the counted population (kill N,    |
+|              | never find-the-last-body); `all: true` = the classic empty floor |
 | `waves`      | survive N waves (0 = endless arena); boss cadence as data     |
 | `escape`     | reach an exit under an endless trickle                        |
 | `spawners`   | destroy the spawner objects                                   |
@@ -49,7 +50,40 @@ unsealed waves zone still stakes its treasure.
   wounded bodies. Past the TTL (or the Campfire) the gauntlet re-arms fresh;
   a COMPLETED arena stays completed via `completedObjectives`.
 - BEACON: `ZoneMemory.spireCharge` — a half-charged spire resumes exactly.
-- Both riders serialize with the world (`meta/worldstate.ts SavedZoneMemory`).
+- CLEAR: `ZoneMemory.cullKills`/`cullNeed` — the tally AND the stamped ask
+  both ride (the ask derives once, on fresh ground; a thinned field
+  re-deriving from its survivors would shrink its own ask).
+- The riders all serialize with the world (`meta/worldstate.ts SavedZoneMemory`).
+
+## THE CULL (`kind: 'clear'`)
+
+The workhorse objective, re-asked: **kill N here**, never "find the last
+body" — that hunt is the bounty writ's whole identity (named marks, chevrons
+by name), and the old kill-everything clear was a directionless worse writ.
+Dials in `src/data/objectives.ts` `CLEAR_CFG`; per-zone overrides on the spec
+(`need`, `frac`, `all`).
+
+- THE ASK derives ONCE, on fresh ground, after the base population stands:
+  an authored `need` wins (flat, or a `[min,max]` band rolled off the layout
+  rng — the offering's idiom); otherwise `frac` (default `CLEAR_CFG.frac`) of
+  the standing counted population, clamped to `CLEAR_CFG.min..max`. A derived
+  ask never exceeds what actually stands; an authored ask is the author's
+  sovereignty (event-fed ground may intend kills the mint never spawned).
+- THE TALLY is pure kill-chokepoint state (`worldKillRules
+  'clear_cull_tally'`): ANY counted death feeds it — credited or not, ambient
+  events included — the same honesty as the writ and the offering. The
+  predicate is `objectiveCountable`, the SAME one `countedEnemies` runs, so
+  the scoreboard and the population read can never disagree about who counts.
+- THE MERCY FLOOR: an EMPTIED floor completes regardless of the tally — a
+  sparse mint can never ask more than it holds, and old-save asks can never
+  wedge. Completing the tally reads "culled!", the floor reads "cleared!".
+- `all: true` is the classic ask as authorable vocabulary: no scoreboard, the
+  empty floor IS the objective (special gauntlets, authored set-pieces).
+- Progress rides Zone Memory (`cullKills`/`cullNeed`) — leave mid-cull, walk
+  back, same ask, same tally. Past the TTL the ground re-stocks and re-asks
+  fresh, like every forgotten field.
+- Population left standing after the cull is just the world: XP still flows,
+  events still churn, the bounty stays one-time (`completedObjectives`).
 
 ## The SURVEY SPIRE (`kind: 'beacon'`)
 
@@ -177,7 +211,10 @@ bodies revives the hunt by existing. Losing is impossible; only waiting.
 data/objectives.ts STRAGGLER_CFG: the last few counted enemies of a 'clear'
 (≤3) and the last spawner of a 'spawners' (≤1) get edge chevrons, labeled by
 name — the same mercy the bounty's marks get. One attention source reads
-`World.objectiveStragglersView()`; thresholds are data.
+`World.objectiveStragglersView()`; thresholds are data. Under THE CULL this
+fires exactly when it should: only when the standing population runs dry
+before the tally fills (the mercy-floor path — the one moment finding bodies
+is the task again).
 
 ## `objectiveLost` (the loseable-objective seam)
 

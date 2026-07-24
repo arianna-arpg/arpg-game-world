@@ -77,7 +77,20 @@ export type ObjectiveSpec = (
    *  future pocket that is a place, not a task. `label` overrides the HUD's
    *  default line. */
   | { kind: 'none'; label?: string }
-  | { kind: 'clear' }
+  /** THE CULL: fell a SHARE of the ground's counted population — the ask is
+   *  "kill N here", never "find the last body" (that hunt belongs to the
+   *  bounty writ's named marks). N derives ONCE, on fresh ground: an authored
+   *  `need` (flat, or a [min,max] band rolled off the layout rng — the
+   *  offering's idiom) wins; otherwise a `frac` share of the standing counted
+   *  population, clamped to CLEAR_CFG's band (data/objectives.ts). The tally
+   *  and the stamped ask both ride Zone Memory, so a thinned field never
+   *  shrinks its own ask on re-entry. ANY counted death feeds the tally,
+   *  credited or not — a faction brawl does your work (the writ's honesty).
+   *  An EMPTIED floor always completes regardless of the tally (the mercy
+   *  floor: sparse ground can never ask more than it holds). `all: true` is
+   *  the classic ask — the empty floor IS the objective, no scoreboard (an
+   *  authored gauntlet's lever). */
+  | { kind: 'clear'; need?: number | [number, number]; frac?: number; all?: boolean }
   /** Survive N waves (0 = endless — the original arena mode). A boss cadence
    *  is DATA: every `bossEveryWaves` waves, `bossId` emerges (The Pit's lord
    *  every 5th — any future survival arena declares its own, no engine edit).
@@ -163,7 +176,7 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
 export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; read: string }> = {
   safe: { glyph: '⌂', read: 'sanctuary' },
   none: { glyph: '·', read: 'open ground — nothing asked' },
-  clear: { glyph: '⚔', read: 'clear the area' },
+  clear: { glyph: '⚔', read: 'cull the population' },
   waves: { glyph: '≋', read: 'survive the assault' },
   escape: { glyph: '⇥', read: 'find the way out' },
   spawners: { glyph: '✸', read: 'destroy the spawners' },
@@ -182,6 +195,9 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
 export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string } {
   const base = OBJECTIVE_READS[o.kind];
   if (o.kind === 'none' && o.label) return { glyph: base.glyph, read: o.label };
+  // The authored full-clear (`all: true`) promises the classic ask; the pane
+  // never knows the cull's N (need derives from ground not yet walked).
+  if (o.kind === 'clear' && o.all) return { glyph: base.glyph, read: 'clear the area' };
   if (o.kind === 'waves') {
     return { glyph: base.glyph, read: o.waves === 0 ? 'endless waves' : `survive ${o.waves} waves` };
   }

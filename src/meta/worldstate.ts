@@ -120,6 +120,11 @@ export interface SavedZoneMemory {
   procession?: SavedProcessionMemo;
   /** OFFERING zones: how fed the hungering altar was at capture. */
   altarOffered?: number;
+  /** CLEAR zones (THE CULL): the kill tally + the stamped ask at capture
+   *  (see the engine's ZoneMemory) — the ask derives once on fresh ground
+   *  and rides here so a thinned field never shrinks its own ask. */
+  cullKills?: number;
+  cullNeed?: number;
   /** SOLVED riddle run-ids (the puzzle fabric) — solved stays solved for
    *  the memory's life; never gates progression. */
   puzzlesDone?: string[];
