@@ -15024,6 +15024,397 @@ export const MONSTERS: Record<string, MonsterDef> = {
     worm: { length: 8, spacing: 16, taper: 0.9 },
     brain: { type: 'flanker' },
   },
+  // ==========================================================================
+  // THE HIGH COURT PASS — WAVE D: THE ZENITHS. Act-grade scripted bosses,
+  // one per campaign pillar: authored COMPLETE and deliberately DOORLESS
+  // (no table, no roster — the reserves-and-remnants doctrine). They stand
+  // ready for quest mints and the coming Odyssey finales (the Q_UNMADE
+  // rails: floating special arena + objective {kind:'boss'} + the promote/
+  // uber levers). Arena verbs are safe by construction — on ordinary
+  // ground a region repaint no-ops (no walk field), on a special arena it
+  // is the choreography; every script ends in an arenaRestore rattle.
+  // ==========================================================================
+
+  // THE OSSUARCH — the Hollow Procession: the Host's funeral for YOU,
+  // conducted in three movements. Slay the choir to unmake the ward.
+  ossuarch_of_the_host: {
+    id: 'ossuarch_of_the_host', name: 'the Ossuarch of the Host',
+    color: '#cfc4ac', shape: 'star', radius: 26, material: 'bone', look: 'ossuarch_of_the_host',
+    base: { life: 820, moveSpeed: 95, accuracy: 130, armor: 50, poise: 90, mana: 240, manaRegen: 14 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('damage', 'increased', 0.35)],
+    skills: ['rising_knell', 'despair', 'cleave'],
+    xp: 300, boss: true, faction: 'undead', noNemesis: true,
+    levitates: true,
+    scaling: { life: { incPerLevel: 0.14 } },
+    detection: 1.4,
+    brain: {
+      type: 'commander',
+      script: [
+        { // Movement I — THE PROCESSION: the cortege assembles around you.
+          id: 'procession',
+          onEnter: [{ do: 'wash', color: '#4a4438', intensity: 0.1 }],
+          cadences: [{
+            every: 9, first: 4,
+            actions: [
+              { do: 'summon', monster: 'barrow_shambler', count: 3, ring: 120 },
+              { do: 'announce', text: 'the procession lengthens…', color: '#cfc4ac', size: 14 },
+            ],
+          }],
+          goto: [{ to: 'knell', atLifeFrac: 0.62 }],
+        },
+        { // Movement II — THE KNELL: every bell in the barrow, rung at once.
+          id: 'knell',
+          rewardGems: 1,
+          announce: 'the Ossuarch RINGS the barrow-bells!',
+          mods: [mod('castSpeed', 'increased', 0.25)],
+          onEnter: [
+            { do: 'summon', monster: 'thurible_bearer', count: 2, ring: 140 },
+            { do: 'wash', color: '#5a5468', intensity: 0.14 },
+          ],
+          cadences: [{
+            every: 5,
+            actions: [
+              { do: 'ring', skill: 'rising_knell', radius: 180, count: 5, delay: 0.9, at: 'target' },
+              { do: 'shake', amount: 3 },
+            ],
+          }],
+          goto: [{ to: 'choir', atLifeFrac: 0.3 }],
+        },
+        { // Movement III — THE CHOIR UNENDING: the ward is a HYMN; end the
+          // singers to end it.
+          id: 'choir',
+          rewardGems: 1,
+          announce: 'the choir takes up the DIRGE — silence them!',
+          mods: [mod('damage', 'more', 0.35)],
+          onEnter: [
+            { do: 'summon', monster: 'banshee', count: 2, ring: 200, tag: 'ossuarch_choir' },
+            { do: 'ward', tag: 'ossuarch_choir', announce: 'the dirge BREAKS — the Ossuarch stands bare!' },
+            { do: 'wash', color: '#6a5a8a', intensity: 0.18 },
+          ],
+          cadences: [{ every: 3.5, actions: [{ do: 'push', radius: 220, strength: 130, from: 'self' }] }],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE TOLL-KING — the Last Road: every road pays, and the last road
+  // pays in powder, iron, and other people's teeth.
+  toll_king: {
+    id: 'toll_king', name: 'the Toll-King of the Last Road',
+    color: '#8a6a42', shape: 'star', radius: 22, look: 'toll_king',
+    base: { life: 760, moveSpeed: 110, accuracy: 128, armor: 45, poise: 75, mana: 200, manaRegen: 12 },
+    mods: [mod('damage', 'increased', 0.3)],
+    skills: ['barrage', 'heavy_strike', 'war_cry'],
+    xp: 290, boss: true, faction: 'bandit', noNemesis: true,
+    scaling: { life: { incPerLevel: 0.14 } },
+    detection: 1.3,
+    brain: {
+      type: 'commander',
+      script: [
+        { // ACT I — THE TOLL: the road grows teeth (sprung snares, iron rain).
+          id: 'toll',
+          onEnter: [{ do: 'wash', color: '#4a3a28', intensity: 0.1 }],
+          cadences: [{
+            every: 8, first: 3,
+            actions: [
+              { do: 'summon', monster: 'jaw_snare', count: 3, ring: 160 },
+              { do: 'announce', text: 'the road grows TEETH…', color: '#c8a060', size: 14 },
+            ],
+          }],
+          goto: [{ to: 'powder', atLifeFrac: 0.6 }],
+        },
+        { // ACT II — THE POWDER: he spends the wagon.
+          id: 'powder',
+          rewardGems: 1,
+          announce: 'the Toll-King SPENDS the wagon!',
+          onEnter: [
+            { do: 'summon', monster: 'bandit_grenadier', count: 2, ring: 150 },
+            { do: 'wash', color: '#7a4a20', intensity: 0.14 },
+          ],
+          cadences: [{
+            every: 4.5,
+            actions: [
+              { do: 'ring', skill: 'gourd_bomb', radius: 160, count: 6, waves: 2, waveGap: 0.5, delay: 1.0, at: 'target' },
+              { do: 'shake', amount: 4 },
+            ],
+          }],
+          goto: [{ to: 'ledger', atLifeFrac: 0.28 }],
+        },
+        { // ACT III — THE LEDGER CLOSES: the banner guard stands the last
+          // account; break it to collect.
+          id: 'ledger',
+          rewardGems: 1,
+          announce: 'the ledger CLOSES — the banner guard stands to!',
+          mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
+          onEnter: [
+            { do: 'summon', monster: 'camp_bannerman', count: 2, ring: 170, tag: 'toll_guard' },
+            { do: 'ward', tag: 'toll_guard', announce: 'the account is OPEN — collect!' },
+          ],
+          cadences: [{ every: 3.2, actions: [{ do: 'push', radius: 200, strength: 120, from: 'self' }] }],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE SEASON-KING — the year, conducted as a duel: four acts, four
+  // weathers, and none of them yours.
+  season_king: {
+    id: 'season_king', name: 'the Season-King',
+    color: '#6a9a4e', shape: 'star', radius: 24, material: 'wood', look: 'season_king',
+    base: { life: 800, moveSpeed: 100, accuracy: 126, armor: 35, poise: 80, mana: 260, manaRegen: 15 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', -0.2)],
+    skills: ['lash_roots', 'greater_mending', 'splinter_volley', 'creeping_frost'],
+    xp: 310, boss: true, faction: 'sylvan', noNemesis: true,
+    scaling: { life: { incPerLevel: 0.14 } },
+    detection: 1.3,
+    brain: {
+      type: 'commander',
+      script: [
+        { // SPRING — everything he plants, roots.
+          id: 'spring',
+          onEnter: [{ do: 'wash', color: '#4a7a3a', intensity: 0.1 }],
+          cadences: [{
+            every: 8, first: 3,
+            actions: [{ do: 'summon', monster: 'sylvan_sapling', count: 3, ring: 130 }],
+          }],
+          goto: [{ to: 'summer', atLifeFrac: 0.72 }],
+        },
+        { // SUMMER — the green at full pressure.
+          id: 'summer',
+          rewardGems: 1,
+          announce: 'SUMMER — the green stands at full pressure!',
+          mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'more', 0.2)],
+          onEnter: [{ do: 'wash', color: '#7a9a2e', intensity: 0.14 }],
+          cadences: [{
+            every: 4,
+            actions: [{ do: 'nova', skill: 'lash_roots', at: 'target', zoneRadius: 150, delay: 0.8 }],
+          }],
+          goto: [{ to: 'autumn', atLifeFrac: 0.5 }],
+        },
+        { // AUTUMN — the reaping: casings on every wind.
+          id: 'autumn',
+          rewardGems: 1,
+          announce: 'AUTUMN — the King reaps what you would not sow!',
+          onEnter: [
+            { do: 'wash', color: '#a86a2e', intensity: 0.14 },
+            { do: 'summon', monster: 'twig_snarl', count: 2, ring: 150 },
+          ],
+          cadences: [{
+            every: 4.5,
+            actions: [{ do: 'ring', skill: 'splinter_volley', radius: 170, count: 6, delay: 0.8, at: 'self' }],
+          }],
+          goto: [{ to: 'winter', atLifeFrac: 0.26 }],
+        },
+        { // WINTER — the year forgets you.
+          id: 'winter',
+          rewardGems: 1,
+          announce: 'WINTER — and the year forgets your name.',
+          use: { type: 'artillery' },
+          mods: [mod('castSpeed', 'increased', 0.25), mod('damageTaken', 'more', -0.15)],
+          onEnter: [
+            { do: 'teleport', to: 'awayFromTarget', range: 420 },
+            { do: 'wash', color: '#8ab8cc', intensity: 0.18 },
+          ],
+          cadences: [{
+            every: 3.5,
+            actions: [{ do: 'nova', skill: 'creeping_frost', at: 'target', zoneRadius: 140, delay: 0.7 }],
+          }],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE GLUT INCARNATE — hunger with a household name: it grazes, it
+  // SWALLOWS, it floods the floor with what it could not keep down.
+  glut_incarnate: {
+    id: 'glut_incarnate', name: 'the Glut Incarnate',
+    color: '#a04a40', shape: 'star', radius: 28, material: 'flesh', look: 'glut_incarnate',
+    base: { life: 920, moveSpeed: 85, accuracy: 124, armor: 25, poise: 95, mana: 200, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['seize', 'bile_spray', 'gore_rend'],
+    xp: 320, boss: true, faction: 'flesh', noNemesis: true,
+    levitates: true,
+    heft: 1.8, turnSpeed: 2.2,
+    scaling: { life: { incPerLevel: 0.15 } },
+    detection: 1.3,
+    brain: {
+      type: 'juggernaut',
+      script: [
+        { // ACT I — THE GRAZE: it samples.
+          id: 'graze',
+          onEnter: [{ do: 'wash', color: '#5a2a24', intensity: 0.1 }],
+          cadences: [{
+            every: 7, first: 3,
+            actions: [{ do: 'nova', skill: 'bile_spray', at: 'target', zoneRadius: 140, delay: 0.7 }],
+          }],
+          goto: [{ to: 'swallow', atLifeFrac: 0.66 }],
+        },
+        { // ACT II — THE SWALLOW: the grab fabric as the whole argument.
+          id: 'swallow',
+          rewardGems: 1,
+          announce: 'the Glut opens — DO NOT BE FOOD!',
+          mods: [mod('moveSpeed', 'more', 0.25), mod('damage', 'more', 0.2)],
+          onEnter: [{ do: 'wash', color: '#7a3a2e', intensity: 0.14 }],
+          goto: [{ to: 'brood', atLifeFrac: 0.42 }],
+        },
+        { // ACT III — THE BROOD: what it kept down, it keeps.
+          id: 'brood',
+          rewardGems: 1,
+          announce: 'the Glut SHARES what it kept down!',
+          onEnter: [
+            { do: 'summon', monster: 'tract_worm', count: 2, ring: 140, tag: 'glut_brood' },
+            { do: 'summon', monster: 'lesser_ooze', count: 3, ring: 120, tag: 'glut_brood' },
+            { do: 'ward', tag: 'glut_brood', announce: 'the brood is SPENT — the Glut stands bare!' },
+          ],
+          goto: [{ to: 'flood', atLifeFrac: 0.2 }],
+        },
+        { // ACT IV — THE FLOOD: the floor becomes the stomach.
+          id: 'flood',
+          rewardGems: 1,
+          announce: 'the floor becomes the STOMACH!',
+          onEnter: [
+            { do: 'arenaSink', radius: { frac: 0.5, min: 380 }, mode: 'deep_water', dais: 140, pockets: { count: 5, radius: 120, ringFrac: 0.55 } },
+            { do: 'wash', color: '#8a4030', intensity: 0.2 },
+          ],
+          cadences: [
+            { every: 3, actions: [{ do: 'shrinkPockets', by: 12, min: 60 }] },
+            { every: 3.6, actions: [{ do: 'push', radius: 230, strength: 130, from: 'self' }] },
+          ],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE DAWN TRIBUNAL — the Host's court in session: a hearing, the
+  // scales, and one verdict, delivered in gold.
+  dawn_tribunal: {
+    id: 'dawn_tribunal', name: 'the Dawn Tribunal',
+    color: '#f4e2b0', shape: 'star', radius: 24, material: 'ethereal', look: 'dawn_tribunal',
+    base: { life: 780, moveSpeed: 105, accuracy: 130, armor: 30, energyShield: 200, mana: 280, manaRegen: 16 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.4)],
+    skills: ['versicle', 'antiphon', 'solar_brand'],
+    xp: 300, boss: true, faction: 'seraphic', noNemesis: true,
+    levitates: true,
+    scaling: { life: { incPerLevel: 0.14 } },
+    detection: 1.4,
+    brain: {
+      type: 'strafer',
+      script: [
+        { // THE HEARING: testimony, in verses.
+          id: 'hearing',
+          onEnter: [{ do: 'wash', color: '#c8b878', intensity: 0.1 }],
+          cadences: [{
+            every: 6, first: 3,
+            actions: [{ do: 'ring', skill: 'versicle', radius: 150, count: 5, delay: 0.7, at: 'target' }],
+          }],
+          goto: [{ to: 'scales', atLifeFrac: 0.58 }],
+        },
+        { // THE SCALES: the court weighs you — break the lances to be heard.
+          id: 'scales',
+          rewardGems: 1,
+          announce: 'the TRIBUNAL weighs you — answer its lances!',
+          onEnter: [
+            { do: 'summon', monster: 'virtue_lance', count: 2, ring: 190, tag: 'tribunal_scales' },
+            { do: 'ward', tag: 'tribunal_scales', announce: 'the scales TIP — the Tribunal is exposed!' },
+            { do: 'wash', color: '#e8d090', intensity: 0.16 },
+          ],
+          cadences: [{ every: 4, actions: [{ do: 'nova', skill: 'antiphon', at: 'self', zoneRadius: 170, delay: 0.8 }] }],
+          goto: [{ to: 'verdict', atLifeFrac: 0.26 }],
+        },
+        { // THE VERDICT: delivered in gold, appealed in footwork.
+          id: 'verdict',
+          rewardGems: 2,
+          announce: 'the VERDICT — let it find you standing elsewhere.',
+          mods: [mod('damage', 'more', 0.35), mod('castSpeed', 'increased', 0.25)],
+          onEnter: [{ do: 'wash', color: '#f0d060', intensity: 0.2 }],
+          cadences: [
+            { every: 4.5, actions: [{ do: 'ring', skill: 'solar_brand', radius: 160, count: 7, waves: 2, waveGap: 0.5, delay: 0.9, at: 'target' }] },
+            { every: 3.4, actions: [{ do: 'push', radius: 210, strength: 120, from: 'self' }] },
+          ],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE CONCORDANCE — the elements in session: it takes your color when
+  // struck (the attunement fabric) and answers each act in a different
+  // tongue. The zenith of the tuning lesson.
+  elemental_concordance: {
+    id: 'elemental_concordance', name: 'the Elemental Concordance',
+    color: '#b8d0e0', shape: 'star', radius: 25, material: 'crystal', look: 'elemental_concordance',
+    base: { life: 760, moveSpeed: 100, accuracy: 128, energyShield: 240, mana: 300, manaRegen: 18 },
+    skills: ['shatterchord', 'tempest', 'blizzard_coil', 'sirocco_ring'],
+    xp: 310, boss: true, faction: 'elemental', tags: ['elemental'], noNemesis: true,
+    levitates: true,
+    tune: {},
+    scaling: { life: { incPerLevel: 0.14 } },
+    detection: 1.4,
+    brain: {
+      type: 'strafer',
+      script: [
+        { // THE EMBER SESSION.
+          id: 'ember',
+          onEnter: [{ do: 'wash', color: '#c86a2e', intensity: 0.12 }],
+          cadences: [{
+            every: 5, first: 3,
+            actions: [{ do: 'nova', skill: 'sirocco_ring', at: 'target', zoneRadius: 150, delay: 0.8 }],
+          }],
+          goto: [{ to: 'gale', atLifeFrac: 0.68 }],
+        },
+        { // THE GALE SESSION: it will not be cornered.
+          id: 'gale',
+          rewardGems: 1,
+          announce: 'the Concordance changes TONGUE — the gale session!',
+          mods: [mod('moveSpeed', 'more', 0.3)],
+          onEnter: [
+            { do: 'teleport', to: 'awayFromTarget', range: 420 },
+            { do: 'wash', color: '#8ac8c8', intensity: 0.12 },
+          ],
+          cadences: [
+            { every: 4, actions: [{ do: 'nova', skill: 'tempest', at: 'target', zoneRadius: 140, delay: 0.7 }] },
+            { every: 5.5, actions: [{ do: 'push', radius: 240, strength: 140, from: 'self' }] },
+          ],
+          goto: [{ to: 'frost', atLifeFrac: 0.44 }],
+        },
+        { // THE FROST SESSION: the floor votes with it.
+          id: 'frost',
+          rewardGems: 1,
+          announce: 'the frost session — the floor votes WITH it!',
+          onEnter: [{ do: 'wash', color: '#8ab8dc', intensity: 0.16 }],
+          cadences: [{
+            every: 4,
+            actions: [{ do: 'ring', skill: 'blizzard_coil', radius: 160, count: 6, delay: 0.8, at: 'self' }],
+          }],
+          goto: [{ to: 'stone', atLifeFrac: 0.22 }],
+        },
+        { // THE STONE SESSION: the oldest voice speaks last.
+          id: 'stone',
+          rewardGems: 1,
+          announce: 'the STONE session — the oldest voice speaks last.',
+          use: { type: 'juggernaut' },
+          mods: [mod('damage', 'more', 0.3), mod('damageTaken', 'more', -0.2)],
+          onEnter: [
+            { do: 'summon', monster: 'scree_shambler', count: 2, ring: 150 },
+            { do: 'wash', color: '#8a8272', intensity: 0.18 },
+          ],
+          cadences: [{ every: 4.2, actions: [{ do: 'shake', amount: 4 }, { do: 'nova', skill: 'shatterchord', at: 'self', zoneRadius: 170, delay: 0.9 }] }],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
   // The heartwood shepherd: the Court's oldest gardener — it mends what
   // you cut faster than you cut it, until you cut the gardener.
   heartwood_shepherd: {
@@ -15043,6 +15434,424 @@ export const MONSTERS: Record<string, MonsterDef> = {
         when: {}, every: [12, 16], hold: [0.5, 0.7],
         actions: [{ do: 'summon', monster: 'sylvan_sapling', count: 2, ring: 60, lifespan: 40 }],
       }],
+    },
+  },
+
+  // ==========================================================================
+  // THE HIGH COURT PASS — WAVE E: THE APEXES. Per-faction ultimates — the
+  // Unmade's peers, built on everything shipped since it: composite parts
+  // whose breaks change the FIGHT, the attunement fabric, the grab grammar,
+  // shellGuard, worn light, arena verbs end to end. Authored COMPLETE and
+  // DOORLESS (the reserves doctrine): the Odyssey's finales, waiting. Every
+  // apex refuses possession, levitates clear of its own void, and restores
+  // the arena in its death rattle. The Unmade (unmade_chronophage) stands
+  // as the Legion's seat in this tier — see HIGH_COURT below.
+  // ==========================================================================
+
+  // MORTHESSA, THE UNBURIED TIDE — the Host's apex: every grave she ever
+  // sang over, standing up at once. Four movements; the last one is a
+  // TIDE.
+  morthessa_unburied: {
+    id: 'morthessa_unburied', name: 'Morthessa, the Unburied Tide',
+    color: '#b8a8d8', shape: 'star', radius: 30, material: 'bone', look: 'morthessa_unburied',
+    base: { life: 1100, moveSpeed: 100, accuracy: 140, armor: 45, energyShield: 180, poise: 100, mana: 320, manaRegen: 18 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.45)],
+    skills: ['soulflay', 'despair', 'rising_knell', 'shambler_horde'],
+    xp: 400, boss: true, faction: 'undead', noNemesis: true,
+    levitates: true, possessable: false,
+    light: { radius: -2.6, color: '#b8a8e8', intensity: 0.4, flicker: 1.6 },
+    scaling: { life: { incPerLevel: 0.15 } },
+    detection: 1.5,
+    brain: {
+      type: 'commander',
+      script: [
+        { // Movement I — THE DIRGE: she sings the ground soft.
+          id: 'dirge',
+          onEnter: [{ do: 'wash', color: '#4a4458', intensity: 0.1 }],
+          cadences: [{
+            every: 8, first: 3,
+            actions: [
+              { do: 'summon', monster: 'barrow_shambler', count: 3, ring: 140 },
+              { do: 'nova', skill: 'soulflay', at: 'target', zoneRadius: 130, delay: 0.7 },
+            ],
+          }],
+          goto: [{ to: 'pall', atLifeFrac: 0.7 }],
+        },
+        { // Movement II — THE PALL: she withdraws behind the bearers and
+          // the light goes to gauze.
+          id: 'pall',
+          rewardGems: 1,
+          announce: 'the PALL falls — Morthessa walks behind it!',
+          use: { type: 'artillery' },
+          mods: [mod('castSpeed', 'increased', 0.25), mod('damageTaken', 'more', -0.2)],
+          onEnter: [
+            { do: 'teleport', to: 'awayFromTarget', range: 480 },
+            { do: 'summon', monster: 'pallbearer', count: 2, ring: 160 },
+            { do: 'summon', monster: 'thurible_bearer', count: 1, ring: 180 },
+            { do: 'wash', color: '#5a5478', intensity: 0.16 },
+          ],
+          cadences: [{
+            every: 5,
+            actions: [{ do: 'ring', skill: 'rising_knell', radius: 190, count: 6, delay: 0.9, at: 'target' }],
+          }],
+          goto: [{ to: 'graves', atLifeFrac: 0.45 }],
+        },
+        { // Movement III — THE OPENED GRAVES: the floor remembers whom it
+          // holds (permanent cracks; the choir wards her).
+          id: 'graves',
+          rewardGems: 1,
+          announce: 'the graves OPEN — and the choir takes up her name!',
+          onEnter: [
+            { do: 'voidCrack', count: 3, ring: { frac: 0.3, min: 220 }, radius: 54 },
+            { do: 'summon', monster: 'banshee', count: 2, ring: 210, tag: 'morthessa_choir' },
+            { do: 'ward', tag: 'morthessa_choir', announce: 'her name FAILS her — strike!' },
+            { do: 'wash', color: '#6a4a7a', intensity: 0.18 },
+          ],
+          cadences: [{ every: 4, actions: [{ do: 'shake', amount: 4 }] }],
+          goto: [{ to: 'tide', atLifeFrac: 0.22 }],
+        },
+        { // Movement IV — THE UNBURIED TIDE: everyone she ever buried,
+          // at once, and the ground closing like water over a stone.
+          id: 'tide',
+          rewardGems: 2,
+          announce: 'ALL WHOM SHE BURIED — RISE AS ONE!',
+          use: { type: 'swarm' },
+          mods: [mod('moveSpeed', 'more', 0.4), mod('damage', 'more', 0.4)],
+          onEnter: [
+            { do: 'arenaSink', radius: { frac: 0.4, min: 320 }, mode: 'ground', dais: 150 },
+            { do: 'wash', color: '#7a5a9a', intensity: 0.22 },
+          ],
+          cadences: [
+            { every: 6, actions: [{ do: 'summon', monster: 'zombie', count: 4, ring: 180 }] },
+            { every: 3, actions: [{ do: 'push', radius: 240, strength: 140, from: 'anchor' }] },
+          ],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE MAW ENTIRE — the Glut's apex: not a creature that eats — the
+  // EATING, given a body. The swallow is the thesis; the flood is the
+  // conclusion.
+  maw_entire: {
+    id: 'maw_entire', name: 'the Maw Entire',
+    color: '#8a3a34', shape: 'star', radius: 32, material: 'flesh', look: 'maw_entire',
+    base: { life: 1250, moveSpeed: 82, accuracy: 132, armor: 30, poise: 110, mana: 240, manaRegen: 14 },
+    mods: [mod('chaosRes', 'flat', 0.6), mod('damage', 'increased', 0.4)],
+    skills: ['seize', 'bile_spray', 'gore_rend'],
+    xp: 420, boss: true, faction: 'flesh', noNemesis: true,
+    levitates: true, possessable: false,
+    heft: 2.0, turnSpeed: 2.0,
+    scaling: { life: { incPerLevel: 0.16 } },
+    detection: 1.4,
+    parts: [
+      // The sacs ride the flanks (the vat sow's grammar at apex scale):
+      // pop them to thin the brood acts — and pay the pop.
+      { monster: 'birthing_sac', dx: -0.2, dy: 0.95, lifeFrac: 0.12, breakDamage: 0.05 },
+      { monster: 'birthing_sac', dx: -0.2, dy: -0.95, lifeFrac: 0.12, breakDamage: 0.05 },
+    ],
+    brain: {
+      type: 'juggernaut',
+      script: [
+        { // ACT I — APPETITE: it noses the plate.
+          id: 'appetite',
+          onEnter: [{ do: 'wash', color: '#4a201c', intensity: 0.1 }],
+          cadences: [{
+            every: 6, first: 3,
+            actions: [{ do: 'nova', skill: 'bile_spray', at: 'target', zoneRadius: 150, delay: 0.7 }],
+          }],
+          goto: [{ to: 'swallow', atLifeFrac: 0.68 }],
+        },
+        { // ACT II — THE SWALLOW: the grab grammar as doctrine. Reflexes
+          // pierce; allies SEVER; the struggle meter is the fight.
+          id: 'swallow',
+          rewardGems: 1,
+          announce: 'the Maw OPENS — do not be the portion!',
+          mods: [mod('moveSpeed', 'more', 0.3), mod('damage', 'more', 0.25)],
+          onEnter: [{ do: 'wash', color: '#6a2a20', intensity: 0.14 }],
+          cadences: [{ every: 4, actions: [{ do: 'push', radius: 200, strength: -160, from: 'self' }] }],
+          goto: [{ to: 'digest', atLifeFrac: 0.42 }],
+        },
+        { // ACT III — THE DIGESTION: what it kept, it spends (ward through
+          // the brood; the flank sacs feed it if left whole).
+          id: 'digest',
+          rewardGems: 1,
+          announce: 'what the Maw KEPT, it now spends!',
+          onEnter: [
+            { do: 'summon', monster: 'tract_worm', count: 2, ring: 150, tag: 'maw_brood' },
+            { do: 'summon', monster: 'viscous_ooze', count: 2, ring: 130, tag: 'maw_brood' },
+            { do: 'ward', tag: 'maw_brood', announce: 'the gut EMPTIES — the Maw is meat again!' },
+            { do: 'wash', color: '#7a3428', intensity: 0.18 },
+          ],
+          goto: [{ to: 'flood', atLifeFrac: 0.2 }],
+        },
+        { // ACT IV — THE FLOOD: the room is swallowed instead.
+          id: 'flood',
+          rewardGems: 2,
+          announce: 'the ROOM is swallowed instead!',
+          onEnter: [
+            { do: 'arenaSink', radius: { frac: 0.45, min: 360 }, mode: 'deep_water', dais: 140, pockets: { count: 5, radius: 130, ringFrac: 0.55 } },
+            { do: 'wash', color: '#8a3a28', intensity: 0.22 },
+          ],
+          cadences: [
+            { every: 3, actions: [{ do: 'shrinkPockets', by: 12, min: 58 }] },
+            { every: 4.2, actions: [{ do: 'push', radius: 240, strength: -170, from: 'anchor' }] },
+          ],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE FIRST CHORD — the elements' apex, and the anatomy lesson at uber
+  // scale: three facet parts each HOLD one tongue (fire / frost / storm),
+  // and breaking a facet SILENCES that tongue for the whole fight
+  // (breakDisables on the root's own kit — the saint grammar, apex-sized).
+  // Which colors do you allow the end of the world to keep?
+  first_chord: {
+    id: 'first_chord', name: 'the First Chord',
+    color: '#c8dce8', shape: 'star', radius: 30, material: 'crystal', look: 'first_chord',
+    base: { life: 1000, moveSpeed: 95, accuracy: 136, energyShield: 320, mana: 340, manaRegen: 20 },
+    mods: [mod('damage', 'increased', 0.4)],
+    skills: ['shatterchord', 'sirocco_ring', 'blizzard_coil', 'tempest'],
+    xp: 410, boss: true, faction: 'elemental', tags: ['elemental'], noNemesis: true,
+    levitates: true, possessable: false,
+    tune: {},
+    scaling: { life: { incPerLevel: 0.15 } },
+    detection: 1.5,
+    parts: [
+      {
+        monster: 'chord_facet_ember', dx: 0.7, dy: 0.85, lifeFrac: 0.14, breakDamage: 0.08,
+        breakDisables: ['sirocco_ring'],
+      },
+      {
+        monster: 'chord_facet_rime', dx: 0.7, dy: -0.85, lifeFrac: 0.14, breakDamage: 0.08,
+        breakDisables: ['blizzard_coil'],
+      },
+      {
+        monster: 'chord_facet_storm', dx: -0.95, dy: 0, lifeFrac: 0.14, breakDamage: 0.08,
+        breakDisables: ['tempest'],
+      },
+    ],
+    brain: {
+      type: 'strafer',
+      script: [
+        { // THE TUNING: it finds your key.
+          id: 'tuning',
+          onEnter: [{ do: 'wash', color: '#7a8a9a', intensity: 0.1 }],
+          cadences: [{
+            every: 5, first: 3,
+            actions: [{ do: 'nova', skill: 'shatterchord', at: 'self', zoneRadius: 160, delay: 0.8 }],
+          }],
+          goto: [{ to: 'crescendo', atLifeFrac: 0.6 }],
+        },
+        { // THE CRESCENDO: every unbroken facet plays at once.
+          id: 'crescendo',
+          rewardGems: 1,
+          announce: 'the CRESCENDO — every unbroken facet plays!',
+          mods: [mod('castSpeed', 'increased', 0.3)],
+          onEnter: [{ do: 'wash', color: '#9ab0c8', intensity: 0.16 }],
+          cadences: [
+            { every: 4.5, actions: [{ do: 'nova', skill: 'sirocco_ring', at: 'target', zoneRadius: 150, delay: 0.8 }] },
+            { every: 5.5, actions: [{ do: 'nova', skill: 'blizzard_coil', at: 'target', zoneRadius: 140, delay: 0.8 }] },
+            { every: 6.5, actions: [{ do: 'nova', skill: 'tempest', at: 'target', zoneRadius: 140, delay: 0.8 }] },
+          ],
+          goto: [{ to: 'coda', atLifeFrac: 0.25 }],
+        },
+        { // THE CODA: the chord resolves — onto your position.
+          id: 'coda',
+          rewardGems: 2,
+          announce: 'the chord RESOLVES — be elsewhere.',
+          mods: [mod('damage', 'more', 0.4)],
+          onEnter: [
+            { do: 'teleport', to: 'awayFromTarget', range: 440 },
+            { do: 'wash', color: '#c8d8e8', intensity: 0.2 },
+          ],
+          cadences: [
+            { every: 4, actions: [{ do: 'ring', skill: 'shatterchord', radius: 180, count: 7, waves: 2, waveGap: 0.5, delay: 0.9, at: 'target' }] },
+            { every: 3.2, actions: [{ do: 'push', radius: 220, strength: 130, from: 'self' }] },
+          ],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+  // One tongue of the Chord, held in glass: the ember facet.
+  chord_facet_ember: {
+    id: 'chord_facet_ember', name: 'Ember Facet',
+    color: '#e8945a', shape: 'diamond', radius: 9, material: 'crystal', look: 'chord_facet',
+    noNemesis: true, remains: false,
+    base: { life: 90, moveSpeed: 0, energyShield: 40, mana: 60, manaRegen: 6 },
+    skills: ['fumarole'], xp: 0, drops: 0,
+  },
+  // The rime facet.
+  chord_facet_rime: {
+    id: 'chord_facet_rime', name: 'Rime Facet',
+    color: '#8ac8e8', shape: 'diamond', radius: 9, material: 'crystal', look: 'chord_facet',
+    noNemesis: true, remains: false,
+    base: { life: 90, moveSpeed: 0, energyShield: 40, mana: 60, manaRegen: 6 },
+    skills: ['creeping_frost'], xp: 0, drops: 0,
+  },
+  // The storm facet.
+  chord_facet_storm: {
+    id: 'chord_facet_storm', name: 'Storm Facet',
+    color: '#b8d05a', shape: 'diamond', radius: 9, material: 'crystal', look: 'chord_facet',
+    noNemesis: true, remains: false,
+    base: { life: 90, moveSpeed: 0, energyShield: 40, mana: 60, manaRegen: 6 },
+    skills: ['sparkfield'], xp: 0, drops: 0,
+  },
+
+  // THE LONG WINTER — the Rimebound apex: not a king of winter — the
+  // WINTER, staying. It snows, it freezes, it goes utterly still, and
+  // then it explains that spring was a rumor.
+  the_long_winter: {
+    id: 'the_long_winter', name: 'the Long Winter',
+    color: '#bcdcec', shape: 'star', radius: 29, material: 'ice', look: 'the_long_winter',
+    base: { life: 1050, moveSpeed: 90, accuracy: 134, armor: 55, poise: 105, mana: 300, manaRegen: 17 },
+    mods: [mod('coldRes', 'flat', 0.8), mod('fireRes', 'flat', -0.25), mod('damage', 'increased', 0.4)],
+    skills: ['glacial_march', 'stalactite_fall', 'creeping_frost', 'frost_nova'],
+    xp: 400, boss: true, faction: 'rimebound', noNemesis: true,
+    levitates: true, possessable: false,
+    pathCosts: { ice: 0.4 },
+    scaling: { life: { incPerLevel: 0.15 } },
+    detection: 1.4,
+    brain: {
+      type: 'caster',
+      script: [
+        { // ACT I — THE SNOWFALL: the sky takes sides.
+          id: 'snowfall',
+          onEnter: [{ do: 'wash', color: '#9ab8cc', intensity: 0.1 }],
+          cadences: [{
+            every: 5, first: 3,
+            actions: [{ do: 'nova', skill: 'stalactite_fall', at: 'target', zoneRadius: 150, delay: 0.8 }],
+          }],
+          goto: [{ to: 'freeze', atLifeFrac: 0.66 }],
+        },
+        { // ACT II — THE FREEZE: the world contracts to what stays warm.
+          id: 'freeze',
+          rewardGems: 1,
+          announce: 'the FREEZE — the world contracts to what stays warm!',
+          mods: [mod('castSpeed', 'increased', 0.2)],
+          onEnter: [
+            { do: 'arenaSink', radius: { frac: 0.55, min: 400 }, mode: 'ground', dais: 150 },
+            { do: 'wash', color: '#8ab8dc', intensity: 0.16 },
+          ],
+          cadences: [{
+            every: 4.5,
+            actions: [{ do: 'ring', skill: 'glacial_march', radius: 170, count: 6, delay: 0.8, at: 'self' }],
+          }],
+          goto: [{ to: 'still', atLifeFrac: 0.4 }],
+        },
+        { // ACT III — THE STILL: the giants stand; the winter holds its
+          // breath behind them.
+          id: 'still',
+          rewardGems: 1,
+          announce: 'the STILL — winter holds its breath behind the wall.',
+          use: { type: 'artillery' },
+          mods: [mod('damageTaken', 'more', -0.25)],
+          onEnter: [
+            { do: 'teleport', to: 'awayFromTarget', range: 460 },
+            { do: 'summon', monster: 'frost_giant', count: 2, ring: 190, tag: 'winter_wall' },
+            { do: 'ward', tag: 'winter_wall', announce: 'the wall CRACKS — the Winter is touchable!' },
+            { do: 'wash', color: '#a8ccdf', intensity: 0.18 },
+          ],
+          goto: [{ to: 'no_thaw', atLifeFrac: 0.2 }],
+        },
+        { // ACT IV — THE THAW THAT NEVER COMES.
+          id: 'no_thaw',
+          rewardGems: 2,
+          announce: 'spring was a RUMOR.',
+          mods: [mod('damage', 'more', 0.4), mod('moveSpeed', 'more', 0.25)],
+          onEnter: [
+            { do: 'voidCrack', count: 3, ring: { frac: 0.28, min: 200 }, radius: 56 },
+            { do: 'wash', color: '#c8e0f0', intensity: 0.22 },
+          ],
+          cadences: [
+            { every: 3.6, actions: [{ do: 'nova', skill: 'frost_nova', at: 'self', zoneRadius: 180, delay: 0.7 }] },
+            { every: 3, actions: [{ do: 'push', radius: 230, strength: 140, from: 'anchor' }] },
+          ],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
+    },
+  },
+
+  // THE FIRST DYNAST — the Sarcophate apex: the king the Unsealing only
+  // rumors. The seal is a SHELL (crack it), the court is a WARD (the four
+  // organs guard the King), and the dust is the last word.
+  first_dynast: {
+    id: 'first_dynast', name: 'the First Dynast',
+    color: '#d8b878', shape: 'star', radius: 28, material: 'stone', look: 'first_dynast',
+    base: { life: 1150, moveSpeed: 88, accuracy: 134, armor: 70, poise: 120, mana: 260, manaRegen: 15 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('damage', 'increased', 0.4)],
+    skills: ['soulflay', 'cleave', 'rising_knell'],
+    xp: 410, boss: true, faction: 'sarcophate', noNemesis: true,
+    levitates: true, possessable: false,
+    heft: 1.9, turnSpeed: 2.4,
+    shellGuard: { side: 'all', max: 220, regenDelay: 7, regenRate: 12, color: '#e8d090' },
+    scaling: { life: { incPerLevel: 0.15 } },
+    detection: 1.4,
+    brain: {
+      type: 'juggernaut',
+      script: [
+        { // ACT I — THE SEAL: the funeral shell holds until broken.
+          id: 'seal',
+          onEnter: [
+            { do: 'wash', color: '#8a7448', intensity: 0.1 },
+            { do: 'announce', text: 'the SEAL holds — crack the funeral shell!', color: '#e8d090', size: 16 },
+          ],
+          cadences: [{
+            every: 8, first: 4,
+            actions: [{ do: 'summon', monster: 'ushabti_file', count: 3, ring: 140 }],
+          }],
+          goto: [{ to: 'court', atLifeFrac: 0.66 }],
+        },
+        { // ACT II — THE COURT: the four organs guard the King.
+          id: 'court',
+          rewardGems: 1,
+          announce: 'the COURT attends — the four organs guard the King!',
+          onEnter: [
+            { do: 'summon', monster: 'canopic_jackal', count: 1, ring: 200, tag: 'dynast_organ' },
+            { do: 'summon', monster: 'canopic_falcon', count: 1, ring: 200, tag: 'dynast_organ' },
+            { do: 'summon', monster: 'canopic_ape', count: 1, ring: 200, tag: 'dynast_organ' },
+            { do: 'summon', monster: 'canopic_vizier', count: 1, ring: 200, tag: 'dynast_organ' },
+            { do: 'ward', tag: 'dynast_organ', announce: 'the organs FAIL him — the King is mortal!' },
+            { do: 'wash', color: '#a88a50', intensity: 0.16 },
+          ],
+          goto: [{ to: 'procession', atLifeFrac: 0.4 }],
+        },
+        { // ACT III — THE PROCESSION: the dynasty walks its own funeral.
+          id: 'procession',
+          rewardGems: 1,
+          announce: 'the PROCESSION — the dynasty walks its own funeral!',
+          mods: [mod('damage', 'more', 0.3)],
+          onEnter: [{ do: 'wash', color: '#b89858', intensity: 0.18 }],
+          cadences: [
+            { every: 4.5, actions: [{ do: 'ring', skill: 'rising_knell', radius: 180, count: 6, waves: 2, waveGap: 0.5, delay: 0.9, at: 'anchor' }] },
+            { every: 3.4, actions: [{ do: 'push', radius: 220, strength: 130, from: 'anchor' }] },
+          ],
+          goto: [{ to: 'dust', atLifeFrac: 0.18 }],
+        },
+        { // ACT IV — THE DUST: the last word in the oldest tongue.
+          id: 'dust',
+          rewardGems: 2,
+          announce: 'DUST — the last word, in the oldest tongue.',
+          use: { type: 'swarm' },
+          mods: [mod('moveSpeed', 'more', 0.35), mod('damage', 'more', 0.35)],
+          onEnter: [
+            { do: 'voidCrack', count: 4, ring: { frac: 0.3, min: 210 }, radius: 52 },
+            { do: 'wash', color: '#c8a868', intensity: 0.22 },
+          ],
+          cadences: [{ every: 3.2, actions: [{ do: 'shake', amount: 5 }, { do: 'push', radius: 240, strength: 150, from: 'self' }] }],
+          goto: [],
+        },
+      ],
+      onDeath: [{ do: 'arenaRestore' }],
     },
   },
 };
@@ -15229,6 +16038,35 @@ export const RESERVED_KIN: Record<string, string> = {
   magpie: 'the Magpie Court event/biome — loot-eaters loose in ordinary gen would tax every build',
   unrusted: 'the Verdigris Sprawl biome / custodian crusade — a corpse-starving legion loose in ordinary gen would quietly bankrupt every corpse spec',
   compact: 'the vendor-camp / caravan-escort economy — the friendly faction with teeth needs its trade doors (and its neutral-until-provoked wiring) before its war doors',
+};
+
+/** THE HIGH COURT — each faction's ascending presence ladder, as pure data.
+ *  `champion` = the bossBar SPECTACLE ELITE (tabled, deep floors, nemesis-
+ *  rememberable). `zenith` = the act-grade scripted boss; `apex` = the
+ *  per-faction ULTIMATE (the Unmade's tier). Zeniths and apexes are
+ *  authored COMPLETE and deliberately DOORLESS — the reserves-and-remnants
+ *  doctrine: no table or roster fields them; their doors are quest mints
+ *  and the coming Odyssey finales on the Q_UNMADE rails (floating special
+ *  arena via QuestZoneSpec.layoutType/special + objective {kind:'boss'},
+ *  spiked by objective.promote, made once-ever by objective.uber). Crowns
+ *  are not listed here — WARLORD_OF is already their registry. Consumers
+ *  must treat missing tiers as "not yet authored", never as an error. */
+export const HIGH_COURT: Record<string, {
+  champion?: string; zenith?: string; apex?: string;
+}> = {
+  goblin: { champion: 'goblin_warboss' },
+  gnoll: { champion: 'gnoll_ravener' },
+  undead: { champion: 'barrow_colossus', zenith: 'ossuarch_of_the_host', apex: 'morthessa_unburied' },
+  demon: { apex: 'unmade_chronophage' }, // the tier's founding exemplar
+  beastkin: { champion: 'beastkin_warbringer' },
+  flesh: { champion: 'gutwall_titan', zenith: 'glut_incarnate', apex: 'maw_entire' },
+  elemental: { champion: 'triune_elemental', zenith: 'elemental_concordance', apex: 'first_chord' },
+  rimebound: { champion: 'avalanche_herald', apex: 'the_long_winter' },
+  sarcophate: { champion: 'sepulcher_apis', apex: 'first_dynast' },
+  coilborn: { champion: 'vast_constrictor' },
+  sylvan: { champion: 'heartwood_shepherd', zenith: 'season_king' },
+  bandit: { zenith: 'toll_king' },
+  seraphic: { zenith: 'dawn_tribunal' },
 };
 
 /** RUN-SCOPED DIPLOMACY LAYERS — stances that hold for ONE RUN, over the

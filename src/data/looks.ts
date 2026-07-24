@@ -7773,6 +7773,159 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'staff', params: { orb: 'glow' } },
     ],
   },
+
+  // ==================== THE HIGH COURT PASS — WAVES D+E: ZENITHS & APEXES
+
+  /** The Ossuarch: a cathedral's worth of bone conducting its own
+   *  funeral — crowned skull, censer, the procession's bell. */
+  ossuarch_of_the_host: {
+    parts: [
+      { kind: 'torso', scale: 1.05, role: 'bone' },
+      { kind: 'ribs', scale: 0.95, params: { pairs: 4, span: 0.95 } },
+      { kind: 'cape', x: -0.3, scale: 0.95, role: 'dark' },
+      { kind: 'skull', x: 0.45, scale: 1.05 },
+      { kind: 'crown', x: 0.5, scale: 0.7, role: 'metal' },
+      { kind: 'censer', y: 0.55, scale: 0.75 },
+      { kind: 'bell', y: -0.55, scale: 0.5 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.9, alpha: 0.7, params: { n: 3 } }],
+  },
+  /** The Toll-King: a throne of confiscated plate, guns where the
+   *  scepter goes, the last road's banner behind. */
+  toll_king: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'pauldrons', scale: 1.15, role: 'metal' },
+      { kind: 'bandolier' },
+      { kind: 'musket', y: 0.45, scale: 1.1 },
+      { kind: 'banner', x: -0.45, y: -0.3, scale: 0.9 },
+      { kind: 'crown', x: 0.25, scale: 0.65, role: 'metal' },
+      { kind: 'chest', x: -0.3, y: 0.4, scale: 0.5 },
+    ],
+  },
+  /** The Season-King: a crown of all four weathers — laurel over bark,
+   *  frost at the fringe, the harvest at the belt. */
+  season_king: {
+    parts: [
+      { kind: 'barkPlates', scale: 1.05 },
+      { kind: 'roots', scale: 0.9 },
+      { kind: 'petalRuff', scale: 0.8, alpha: 0.9 },
+      { kind: 'laurel', scale: 1.05 },
+      { kind: 'icicles', x: -0.3, scale: 0.55, alpha: 0.8 },
+      { kind: 'gourdHead', x: -0.45, y: 0.45, scale: 0.4, alpha: 0.95 },
+      { kind: 'staff', params: { orb: 'glow' } },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.8, params: { n: 3 } }],
+  },
+  /** The Glut Incarnate: a tide of appetite — folds on folds, the maw
+   *  the only architecture, the gullet the only law (live). */
+  glut_incarnate: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.18, seed: 701 } },
+      { kind: 'fleshFolds', scale: 1.05 },
+      { kind: 'sphincterMaw', x: 0.35, scale: 0.95 },
+      { kind: 'eyeCluster', x: -0.2, y: 0.45, scale: 0.5 },
+      { kind: 'bloatSacs', x: -0.3, y: -0.4, scale: 0.6, params: { n: 3 } },
+    ],
+    live: [{ kind: 'gulletSac', x: 0.15, y: 0.15, scale: 1.2 }],
+  },
+  /** The Dawn Tribunal: a court of light in session — scales of gold
+   *  under a sunburst, the verdict already drafted. */
+  dawn_tribunal: {
+    parts: [
+      { kind: 'robe', color: '#c8b070', scale: 1.05 },
+      { kind: 'sunburst', color: '#ffe8a0', scale: 0.95 },
+      { kind: 'halo', color: '#fff0c0', scale: 1.3, alpha: 0.7 },
+      { kind: 'wings', scale: 1.0, alpha: 0.85 },
+      { kind: 'book', y: 0.5, scale: 0.7 },
+      { kind: 'mask', x: 0.45, scale: 0.8, role: 'metal' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.8, role: 'glow', params: { n: 3 } }],
+  },
+  /** The Concordance: the elements seated in one chamber — a crystal
+   *  senate around a heart that keeps changing its vote. */
+  elemental_concordance: {
+    parts: [
+      { kind: 'crystalGrowths', scale: 1.1 },
+      { kind: 'disc', scale: 0.55, role: 'glow' },
+      { kind: 'floatingShards', scale: 1.05 },
+      { kind: 'runes', scale: 1.0, params: { n: 5 } },
+      { kind: 'halo', scale: 1.35, alpha: 0.5 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.8, params: { n: 4 } }],
+  },
+
+  /** Morthessa: the grave-singer at the head of her tide — veils and
+   *  bone under a lantern-crown, the dirge visible (live). */
+  morthessa_unburied: {
+    parts: [
+      { kind: 'robe', scale: 1.05, role: 'dark' },
+      { kind: 'shroudWrap', scale: 0.95, alpha: 0.85, params: { bands: 4 } },
+      { kind: 'skull', x: 0.45, scale: 0.95 },
+      { kind: 'crown', x: 0.5, scale: 0.65, role: 'metal' },
+      { kind: 'veilSashes', scale: 1.0, alpha: 0.8 },
+      { kind: 'lantern', y: 0.6, scale: 0.5 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 1.0, alpha: 0.75, params: { n: 4 } }],
+  },
+  /** The Maw Entire: the eating, given a body — an architecture of
+   *  appetite with the sacs riding the flanks as PARTS. */
+  maw_entire: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.2, seed: 702 } },
+      { kind: 'fleshFolds', scale: 1.1 },
+      { kind: 'sphincterMaw', x: 0.4, scale: 1.05 },
+      { kind: 'haustraFolds', x: -0.25, scale: 0.85 },
+      { kind: 'lashFringe', scale: 0.95, alpha: 0.9 },
+      { kind: 'eyeCluster', x: 0.1, y: 0.55, scale: 0.55 },
+    ],
+    live: [{ kind: 'gulletSac', x: 0.2, y: 0.1, scale: 1.3 }],
+  },
+  /** The First Chord: three tongues of glass around the original note —
+   *  the facets are PARTS; what you break, it forgets how to say. */
+  first_chord: {
+    parts: [
+      { kind: 'disc', scale: 0.6, role: 'glow' },
+      { kind: 'crystalGrowths', scale: 1.15 },
+      { kind: 'floatingShards', scale: 1.1 },
+      { kind: 'halo', scale: 1.4, alpha: 0.6 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.9, role: 'glow', params: { n: 4 } }],
+  },
+  /** One tongue of the Chord, held in glass (shared by all three
+   *  facets — the def color speaks the element). */
+  chord_facet: {
+    parts: [
+      { kind: 'gem', scale: 1.1, role: 'glow' },
+      { kind: 'halo', scale: 1.2, alpha: 0.55 },
+      { kind: 'floatingShards', scale: 0.7, alpha: 0.9 },
+    ],
+  },
+  /** The Long Winter: the season itself standing up — a glacier's
+   *  crown, a mantle of drift, breath you can see from the next zone. */
+  the_long_winter: {
+    parts: [
+      { kind: 'torso', scale: 1.1, role: 'dark' },
+      { kind: 'icicles', scale: 1.15 },
+      { kind: 'furRuff', scale: 1.1, alpha: 0.9 },
+      { kind: 'crown', x: 0.3, scale: 0.75, role: 'bone' },
+      { kind: 'crystalGrowths', x: -0.3, scale: 0.7, alpha: 0.9 },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.5, scale: 0.9 }],
+  },
+  /** The First Dynast: the king under the seal — gold mask, lid-crown,
+   *  the funeral shell worn as regalia. */
+  first_dynast: {
+    parts: [
+      { kind: 'torso', scale: 1.05, role: 'bone' },
+      { kind: 'shroudWrap', scale: 1.0, params: { bands: 5 } },
+      { kind: 'sarcophagusLid', x: -0.25, rot: 0.1, scale: 0.75, role: 'bone', params: { face: 0 } },
+      { kind: 'mask', x: 0.45, scale: 0.9, role: 'metal' },
+      { kind: 'crownOfHorns', x: 0.4, scale: 0.8, role: 'metal' },
+      { kind: 'canopicJar', x: -0.5, y: 0.5, scale: 0.4 },
+      { kind: 'canopicJar', x: -0.5, y: -0.5, scale: 0.4 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
