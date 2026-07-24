@@ -14386,6 +14386,333 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'crusade',
     brain: { type: 'artillery' },
   },
+
+  // ==========================================================================
+  // THE HIGH COURT PASS — WAVE A: THE ANATOMY EXPANSION. Eight factions get
+  // their multi-part lesson (the gamut doctrine: every part a full def, one
+  // break-lesson each, xp on the root alone). Two lessons are INVERTED on
+  // purpose: the powder wagon punishes careless breaking, the chandelier
+  // rewards it — anatomy is a CHOICE, not a checklist.
+  // ==========================================================================
+
+  // --- THE CANOPIC PALANQUIN (sarcophate): the dynasty's traveling shrine —
+  // two bearers carry it, the Regent's urn rides it and CURSES from the
+  // seat. Silence the urn or fight in its weather.
+  canopic_palanquin: {
+    id: 'canopic_palanquin', name: 'Canopic Palanquin',
+    color: '#c9a86a', shape: 'rectangle', radius: 19, material: 'stone', look: 'canopic_palanquin',
+    base: { life: 300, moveSpeed: 70, accuracy: 96, armor: 35, poise: 70, mana: 20, manaRegen: 2 },
+    skills: ['heavy_strike'],
+    xp: 85,
+    faction: 'sarcophate',
+    heft: 1.6, turnSpeed: 2.4,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      { monster: 'palanquin_bearer', dx: 0.5, dy: 0.95, lifeFrac: 0.2, breakDamage: 0.08 },
+      { monster: 'palanquin_bearer', dx: 0.5, dy: -0.95, lifeFrac: 0.2, breakDamage: 0.08 },
+      // The urn is the caster SEAT (the thurible grammar): its death IS
+      // the silence, and the litter staggers under the spilled name.
+      { monster: 'regents_urn', dx: -0.45, dy: 0, lifeFrac: 0.25, breakDamage: 0.12 },
+    ],
+    brain: { type: 'juggernaut' },
+  },
+  // The bearer: a wrapped porter fused to the pole.
+  palanquin_bearer: {
+    id: 'palanquin_bearer', name: 'Palanquin Bearer',
+    color: '#b89868', shape: 'rectangle', radius: 9, material: 'stone', look: 'palanquin_bearer',
+    noNemesis: true, remains: false,
+    base: { life: 60, moveSpeed: 0, armor: 25, poise: 40, mana: 10, manaRegen: 2 },
+    skills: ['cleave'], xp: 0, drops: 0,
+  },
+  // The urn: the Regent's voice rides ahead of the Regent. NOTE: the root
+  // carries 'soulflay' only through this part's breakDisables contract —
+  // the urn IS the caster seat (the thurible grammar).
+  regents_urn: {
+    id: 'regents_urn', name: 'Regent\'s Urn',
+    color: '#d8b878', shape: 'circle', radius: 8, material: 'stone', look: 'regents_urn',
+    noNemesis: true, remains: false,
+    base: { life: 70, moveSpeed: 0, armor: 20, mana: 45, manaRegen: 4 },
+    skills: ['soulflay'], xp: 0, drops: 0,
+  },
+
+  // --- THE BLOOD CORTEGE (nightkin): the Court's hearse runs the night
+  // roads — corpse-lights on both boards, the casket keeping what it keeps.
+  // Snuff the lights or duel their seeking wisps; crack the casket and the
+  // whole carriage staggers.
+  blood_cortege: {
+    id: 'blood_cortege', name: 'Blood Cortege',
+    color: '#5a2a38', shape: 'rectangle', radius: 20, material: 'wood', look: 'blood_cortege',
+    base: { life: 320, moveSpeed: 95, accuracy: 98, armor: 30, poise: 60, mana: 20, manaRegen: 2 },
+    skills: ['heavy_strike'],
+    xp: 95,
+    faction: 'nightkin',
+    heft: 1.5, turnSpeed: 2.6,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      { monster: 'cortege_lantern', dx: 0.55, dy: 0.9, lifeFrac: 0.18, breakDamage: 0.08 },
+      { monster: 'cortege_lantern', dx: 0.55, dy: -0.9, lifeFrac: 0.18, breakDamage: 0.08 },
+      {
+        monster: 'reliquary_casket', dx: -0.4, dy: 0, lifeFrac: 0.28, breakDamage: 0.2,
+        breakMods: [mod('damageTaken', 'increased', 0.3)],
+      },
+    ],
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'charge', commitRange: 340, chargeSpeed: 2.2 },
+      rules: [{
+        when: {}, every: [14, 19], hold: [0.5, 0.7],
+        actions: [{ do: 'summon', monster: 'feeding_thrall', count: 2, ring: 60, lifespan: 40 }],
+      }],
+    },
+  },
+  // The corpse-light: a lantern that learned what it lit.
+  cortege_lantern: {
+    id: 'cortege_lantern', name: 'Cortege Lantern',
+    color: '#8a5a9a', shape: 'circle', radius: 7, material: 'metal', look: 'cortege_lantern',
+    noNemesis: true, remains: false,
+    base: { life: 50, moveSpeed: 0, armor: 15, mana: 60, manaRegen: 6 },
+    skills: ['marshlight'], xp: 0, drops: 0,
+  },
+  // The casket: what the Court will not leave home without.
+  reliquary_casket: {
+    id: 'reliquary_casket', name: 'Reliquary Casket',
+    color: '#4a2430', shape: 'rectangle', radius: 9, material: 'wood', look: 'reliquary_casket',
+    noNemesis: true, remains: false,
+    base: { life: 90, moveSpeed: 0, armor: 30, poise: 50 },
+    skills: [], xp: 0, drops: 0,
+  },
+
+  // --- THE SLOUGHED COLOSSUS (coilborn): the court stuffed a season of
+  // sheds into an idol and the idol agreed. The gland spits until burst.
+  sloughed_colossus: {
+    id: 'sloughed_colossus', name: 'Sloughed Colossus',
+    color: '#7a9a68', shape: 'hexagon', radius: 21, look: 'sloughed_colossus',
+    base: { life: 340, moveSpeed: 75, accuracy: 96, armor: 25, poise: 70, mana: 30, manaRegen: 3 },
+    skills: ['ground_slam', 'heavy_strike'],
+    xp: 90,
+    faction: 'coilborn',
+    heft: 1.5, turnSpeed: 2.4,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      { monster: 'molt_husk', dx: 0.35, dy: 1.0, lifeFrac: 0.18, breakDamage: 0.07 },
+      { monster: 'molt_husk', dx: 0.35, dy: -1.0, lifeFrac: 0.18, breakDamage: 0.07 },
+      // The gland casts for itself (the thurible grammar) — burst it and
+      // the spit stops with it.
+      { monster: 'venom_gland', dx: -0.35, dy: 0, lifeFrac: 0.22, breakDamage: 0.12 },
+    ],
+    brain: { type: 'juggernaut' },
+  },
+  // A shed that still remembers the muscle: it sweeps.
+  molt_husk: {
+    id: 'molt_husk', name: 'Molt Husk',
+    color: '#8aa878', shape: 'kite', radius: 9, look: 'molt_husk',
+    noNemesis: true, remains: false,
+    base: { life: 55, moveSpeed: 0, armor: 15, mana: 30, manaRegen: 3 },
+    skills: ['reavers_sweep'], xp: 0, drops: 0,
+  },
+  // The gland: the idol's one wet argument.
+  venom_gland: {
+    id: 'venom_gland', name: 'Venom Gland',
+    color: '#9ac858', shape: 'oval', radius: 8, material: 'flesh', look: 'venom_gland',
+    noNemesis: true, remains: false,
+    base: { life: 65, moveSpeed: 0, mana: 45, manaRegen: 4 },
+    skills: ['bile_spray'], xp: 0, drops: 0,
+  },
+
+  // --- THE FRUITING TITAN (fungal): the Bloom walks its orchard — two
+  // great caps ride the trunk, each with its own season. Prune the plague
+  // cap and the rot stops; prune the dart cap and the rain does.
+  fruiting_titan: {
+    id: 'fruiting_titan', name: 'Fruiting Titan',
+    color: '#8fb06f', shape: 'hexagon', radius: 20, look: 'fruiting_titan',
+    base: { life: 320, moveSpeed: 72, accuracy: 96, armor: 20, poise: 65, mana: 30, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['ground_slam'],
+    xp: 88,
+    faction: 'fungal',
+    heft: 1.4, turnSpeed: 2.6,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      // Each cap casts its own season (the thurible grammar): pruning one
+      // ends that season and wounds the trunk that fruited it.
+      { monster: 'plague_cap', dx: -0.25, dy: 0.75, lifeFrac: 0.22, breakDamage: 0.1 },
+      { monster: 'dart_cap', dx: -0.25, dy: -0.75, lifeFrac: 0.22, breakDamage: 0.1 },
+    ],
+    brain: { type: 'juggernaut' },
+  },
+  // The rot season, fruiting.
+  plague_cap: {
+    id: 'plague_cap', name: 'Plague Cap',
+    color: '#a8c86f', shape: 'circle', radius: 9, look: 'plague_cap',
+    noNemesis: true, remains: false,
+    base: { life: 60, moveSpeed: 0, mana: 60, manaRegen: 6 },
+    skills: ['epidemic'], xp: 0, drops: 0,
+  },
+  // The dart season, fruiting.
+  dart_cap: {
+    id: 'dart_cap', name: 'Dart Cap',
+    color: '#c8b05f', shape: 'circle', radius: 9, look: 'dart_cap',
+    noNemesis: true, remains: false,
+    base: { life: 60, moveSpeed: 0, mana: 45, manaRegen: 5 },
+    skills: ['splinter_volley'], xp: 0, drops: 0,
+  },
+
+  // --- THE POWDER WAGON (bandit): the warband's rolling magazine — the
+  // INVERTED lesson: the kegs are hittable and breaking one is a BLAST at
+  // everyone's feet plus a wound the wagon feels. Shoot the gunner off
+  // instead, or gamble the powder.
+  powder_wagon: {
+    id: 'powder_wagon', name: 'Powder Wagon',
+    color: '#7a5a3a', shape: 'rectangle', radius: 20, material: 'wood', look: 'powder_wagon',
+    base: { life: 300, moveSpeed: 80, accuracy: 96, armor: 30, poise: 60, mana: 20, manaRegen: 2 },
+    skills: ['heavy_strike'],
+    xp: 92,
+    faction: 'bandit',
+    heft: 1.5, turnSpeed: 2.4,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      { monster: 'powder_keg_rack', dx: -0.3, dy: 0.85, lifeFrac: 0.15, breakDamage: 0.22 },
+      { monster: 'powder_keg_rack', dx: -0.3, dy: -0.85, lifeFrac: 0.15, breakDamage: 0.22 },
+      { monster: 'wagon_gunner', dx: 0.45, dy: 0, lifeFrac: 0.2, breakDamage: 0.06 },
+    ],
+    brain: { type: 'juggernaut' },
+  },
+  // The rack: powder in public. Breaking it is everyone's problem.
+  powder_keg_rack: {
+    id: 'powder_keg_rack', name: 'Powder Keg Rack',
+    color: '#8a6a42', shape: 'rectangle', radius: 8, material: 'wood', look: 'powder_keg_rack',
+    noNemesis: true, remains: false,
+    base: { life: 45, moveSpeed: 0, armor: 10 },
+    skills: [], xp: 0, drops: 0,
+    explodeOnDeath: 0.8,
+  },
+  // The gunner: the wagon's polite argument, at range.
+  wagon_gunner: {
+    id: 'wagon_gunner', name: 'Wagon Gunner',
+    color: '#6a5a48', shape: 'circle', radius: 8, look: 'wagon_gunner',
+    noNemesis: true, remains: false,
+    base: { life: 60, moveSpeed: 0, armor: 15, mana: 40, manaRegen: 4 },
+    skills: ['barrage'], xp: 0, drops: 0,
+  },
+
+  // --- THE CHANDELIER WARDEN (glimmerkin): the court's hanging crown,
+  // walking — the OTHER inverted lesson: every pendant you shatter DIMS
+  // the warden (breakMods trim its teeth), but the light you spare keeps
+  // stinging. Choose your darkness.
+  chandelier_warden: {
+    id: 'chandelier_warden', name: 'Chandelier Warden',
+    color: '#d8e8b8', shape: 'circle', radius: 17, material: 'crystal', look: 'chandelier_warden',
+    base: { life: 260, moveSpeed: 90, accuracy: 100, armor: 15, energyShield: 80, mana: 40, manaRegen: 4 },
+    skills: ['coda'],
+    xp: 86,
+    faction: 'glimmerkin',
+    turnSpeed: 3.0,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      {
+        monster: 'gleam_pendant', dx: 0.75, dy: 0.65, lifeFrac: 0.14, breakDamage: 0.04,
+        breakMods: [mod('damage', 'more', -0.12)],
+      },
+      {
+        monster: 'gleam_pendant', dx: 0.75, dy: -0.65, lifeFrac: 0.14, breakDamage: 0.04,
+        breakMods: [mod('damage', 'more', -0.12)],
+      },
+      {
+        monster: 'gleam_pendant', dx: -0.85, dy: 0, lifeFrac: 0.14, breakDamage: 0.04,
+        breakMods: [mod('damage', 'more', -0.12)],
+      },
+    ],
+    brain: { type: 'strafer' },
+  },
+  // One hung light with an opinion.
+  gleam_pendant: {
+    id: 'gleam_pendant', name: 'Gleam Pendant',
+    color: '#e8f0c8', shape: 'circle', radius: 6, material: 'crystal', look: 'gleam_pendant',
+    noNemesis: true, remains: false,
+    base: { life: 40, moveSpeed: 0, mana: 35, manaRegen: 4 },
+    skills: ['wildwisp'], xp: 0, drops: 0,
+  },
+
+  // --- THE VIGIL ALTARPIECE (wax): the Court's standing altar on
+  // procession feet — the seal keeps it hale (crack it FIRST), the tapers
+  // brand from the wings.
+  vigil_altarpiece: {
+    id: 'vigil_altarpiece', name: 'Vigil Altarpiece',
+    color: '#c8ac6e', shape: 'trapezoid', radius: 19, look: 'vigil_altarpiece',
+    base: { life: 310, moveSpeed: 74, accuracy: 96, armor: 30, poise: 70, mana: 30, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['ground_slam'],
+    xp: 90,
+    faction: 'wax',
+    heft: 1.4, turnSpeed: 2.6,
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      { monster: 'altar_taper', dx: 0.3, dy: 0.9, lifeFrac: 0.16, breakDamage: 0.07 },
+      { monster: 'altar_taper', dx: 0.3, dy: -0.9, lifeFrac: 0.16, breakDamage: 0.07 },
+      {
+        monster: 'vigil_seal', dx: -0.4, dy: 0, lifeFrac: 0.24, breakDamage: 0.1,
+        breakMods: [mod('damageTaken', 'increased', 0.4)],
+      },
+    ],
+    brain: { type: 'juggernaut' },
+  },
+  // A taper the size of a spear, lit.
+  altar_taper: {
+    id: 'altar_taper', name: 'Altar Taper',
+    color: '#e8d098', shape: 'rectangle', radius: 7, look: 'altar_taper',
+    noNemesis: true, remains: false,
+    base: { life: 50, moveSpeed: 0, mana: 45, manaRegen: 4 },
+    skills: ['solar_brand'], xp: 0, drops: 0,
+  },
+  // The seal: the vow that keeps the wax standing.
+  vigil_seal: {
+    id: 'vigil_seal', name: 'Vigil Seal',
+    color: '#a8843e', shape: 'circle', radius: 8, material: 'metal', look: 'vigil_seal',
+    noNemesis: true, remains: false,
+    base: { life: 85, moveSpeed: 0, armor: 35, poise: 60 },
+    skills: [], xp: 0, drops: 0,
+  },
+
+  // --- THE FROST BIER (rimebound): the court carries its coldest dead on
+  // a sledge that never stops — bearers swing from the rails, and the
+  // heart in the coffin calls the comet down until it is silenced.
+  frost_bier: {
+    id: 'frost_bier', name: 'Frost Bier',
+    color: '#a8ccdc', shape: 'rectangle', radius: 20, material: 'ice', look: 'frost_bier',
+    base: { life: 330, moveSpeed: 82, accuracy: 96, armor: 30, poise: 65, mana: 45, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.3)],
+    skills: ['glacial_march'],
+    xp: 94,
+    faction: 'rimebound',
+    heft: 1.5, turnSpeed: 2.4,
+    pathCosts: { ice: 0.5 },
+    scaling: { life: { incPerLevel: 0.08 } },
+    parts: [
+      { monster: 'bier_bearer', dx: 0.5, dy: 0.95, lifeFrac: 0.18, breakDamage: 0.07 },
+      { monster: 'bier_bearer', dx: 0.5, dy: -0.95, lifeFrac: 0.18, breakDamage: 0.07 },
+      // The heart casts the comet itself (the thurible grammar): silence
+      // it and only the sledge's own ice-wake remains.
+      { monster: 'heart_of_winter', dx: -0.4, dy: 0, lifeFrac: 0.24, breakDamage: 0.14 },
+    ],
+    brain: { type: 'juggernaut' },
+  },
+  // A bearer frozen to the rail, still hauling.
+  bier_bearer: {
+    id: 'bier_bearer', name: 'Bier Bearer',
+    color: '#bcd8e8', shape: 'rectangle', radius: 8, material: 'ice', look: 'bier_bearer',
+    noNemesis: true, remains: false,
+    base: { life: 55, moveSpeed: 0, armor: 20, mana: 20, manaRegen: 2 },
+    skills: ['ice_blade'], xp: 0, drops: 0,
+  },
+  // The heart: what the bier is FOR — it calls the comet with its own
+  // voice, and its silence is the whole lesson.
+  heart_of_winter: {
+    id: 'heart_of_winter', name: 'Heart of Winter',
+    color: '#8ed0ec', shape: 'circle', radius: 8, material: 'ice', look: 'heart_of_winter',
+    noNemesis: true, remains: false,
+    base: { life: 80, moveSpeed: 0, armor: 20, mana: 190, manaRegen: 11 },
+    skills: ['icy_comet'], xp: 0, drops: 0,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -14802,6 +15129,9 @@ export const FACTIONS: Record<string, {
       { id: 'prism_lancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'dew_porter', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'shard_gardener', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The high court pass: the hanging crown, walking — shatter its
+      // pendants to dim it, or spare the light and duel it whole.
+      { id: 'chandelier_warden', weight: 1, presence: { from: 11, fadeIn: 5 } },
     ],
   },
   // Born from fire — RESERVED (see RESERVED_KIN): the roster is complete and
@@ -14928,6 +15258,9 @@ export const FACTIONS: Record<string, {
       { id: 'blood_cardinal', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'werewolf', weight: 2, presence: { from: 10, fadeIn: 5 } },
       { id: 'gloom_coach', weight: 1, presence: { from: 16 } },
+      // The high court pass: the hearse runs ahead of the coach — snuff
+      // its corpse-lights, crack the casket, or eat the charge.
+      { id: 'blood_cortege', weight: 1, presence: { from: 12, fadeIn: 5 } },
       { id: 'vampire_countess', weight: 1, presence: { from: 14, fadeIn: 6 } },
     ],
   },
@@ -15220,6 +15553,9 @@ export const FACTIONS: Record<string, {
       // lake-dancer arrives with the true court, the walking door late.
       { id: 'rime_skater', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'rime_wrecker', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      // The high court pass: the court carries its coldest dead — the
+      // bier's heart calls the comet until silenced (hard floor).
+      { id: 'frost_bier', weight: 1, presence: { from: 12 } },
     ],
   },
   // The tomb-dynasty musters in burial order: scarabs boil out first and
@@ -15247,6 +15583,9 @@ export const FACTIONS: Record<string, {
       { id: 'canopic_falcon', weight: 1, presence: { from: 11 } },
       { id: 'canopic_ape', weight: 1, presence: { from: 12 } },
       { id: 'canopic_vizier', weight: 1, presence: { from: 14 } },
+      // The high court pass: the dynasty's traveling shrine — bearers,
+      // litter, and the Regent's cursing urn (the anatomy lesson).
+      { id: 'canopic_palanquin', weight: 1, presence: { from: 13 } },
     ],
   },
   // The Coilborn muster from the water out: adders boil the early shallows
@@ -15267,6 +15606,8 @@ export const FACTIONS: Record<string, {
       // a body — same hard floors as the rest of the court.
       { id: 'skinshed_dervish', weight: 1, presence: { from: 5 } },
       { id: 'brood_coiler', weight: 1, presence: { from: 7 } },
+      // The high court pass: the idol of sheds (hard floor, court law).
+      { id: 'sloughed_colossus', weight: 1, presence: { from: 10 } },
     ],
   },
 };

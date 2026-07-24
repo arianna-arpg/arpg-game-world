@@ -1932,6 +1932,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // ambush). The King himself NEVER scatters — crown machinery only.
         { id: 'rime_hound', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'hoarfrost_wight', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        // The high court pass: the bier crosses the white roads (hard
+        // floor — the court law; silence the heart to stop the comet).
+        { id: 'frost_bier', weight: 0.5, presence: { from: 12 } },
         { id: 'glacier_shaman', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'winter_herald', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'frost_giant', weight: 1, presence: { from: 12 } },
@@ -2771,6 +2774,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         // (HARD floor, per the family law).
         { id: 'ushabti_file', weight: 2, presence: { from: 4 } },
         { id: 'canopic_bearer', weight: 2, presence: { from: 6 } },
+        // The high court pass: the traveling shrine walks its own vaults.
+        { id: 'canopic_palanquin', weight: 0.5, presence: { from: 13 } },
         { id: 'sarcophagus_warden', weight: 1, presence: { from: 9 } },
         { id: 'bronze_scarab', weight: 2 },
         { id: 'sand_skitterer', weight: 2, presence: { to: 12, fadeOut: 5 } },

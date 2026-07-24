@@ -59,6 +59,9 @@ const BANDIT_FACTION: FactionSpec = {
     { id: 'bandit_wardcaster', weight: 1, presence: { from: 7, fadeIn: 4 } },
     { id: 'bulwark_thane', weight: 1, presence: { from: 8, fadeIn: 4 } },
     { id: 'steppe_ronin', weight: 1, presence: { from: 9, fadeIn: 4 } },
+    // The high court pass: the rolling magazine — shoot the gunner off,
+    // or gamble the kegs (the INVERTED anatomy lesson).
+    { id: 'powder_wagon', weight: 1, presence: { from: 11, fadeIn: 5 } },
   ],
 };
 

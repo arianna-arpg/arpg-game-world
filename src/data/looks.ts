@@ -7462,6 +7462,206 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'helm', x: 0.32, scale: 0.7 },
     ],
   },
+
+  // ========================== THE HIGH COURT PASS — WAVE A: THE ANATOMY EXPANSION
+
+  /** The palanquin: a litter of lids and linen; the urn rides the seat. */
+  canopic_palanquin: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'bone' },
+      { kind: 'shroudWrap', scale: 0.95, params: { bands: 4 } },
+      { kind: 'sarcophagusLid', x: 0.15, rot: 0.15, scale: 0.7, role: 'bone', params: { face: 0 } },
+      { kind: 'drape', x: -0.2, scale: 0.85, alpha: 0.9 },
+    ],
+  },
+  /** A bearer fused to the pole — the pole shows, the bearer barely. */
+  palanquin_bearer: {
+    parts: [
+      { kind: 'torso', scale: 0.8, role: 'bone' },
+      { kind: 'shroudWrap', scale: 0.85, alpha: 0.9, params: { bands: 3 } },
+      { kind: 'staff', y: 0.15, scale: 0.9 },
+    ],
+  },
+  /** The Regent's urn: a canopic voice with a halo of dust. */
+  regents_urn: {
+    parts: [
+      { kind: 'canopicJar', scale: 1.0 },
+      { kind: 'halo', scale: 1.1, alpha: 0.4 },
+    ],
+  },
+
+  /** The hearse at speed: draped box, wheels, twin corpse-lights. */
+  blood_cortege: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'wheels', scale: 0.95 },
+      { kind: 'drape', x: -0.15, scale: 0.95, alpha: 0.9 },
+      { kind: 'lantern', x: 0.55, y: 0.55, scale: 0.4, alpha: 0.95 },
+      { kind: 'lantern', x: 0.55, y: -0.55, scale: 0.4, alpha: 0.95 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.8, alpha: 0.6, params: { n: 2 } }],
+  },
+  /** A lantern that learned what it lit. */
+  cortege_lantern: {
+    parts: [
+      { kind: 'lantern', scale: 1.0 },
+      { kind: 'wisps', scale: 0.6, alpha: 0.8, params: { n: 2 } },
+    ],
+  },
+  /** The casket: brassbound, unopened, non-negotiable. */
+  reliquary_casket: {
+    parts: [
+      { kind: 'chest', scale: 1.0 },
+      { kind: 'chains', scale: 0.8, alpha: 0.9 },
+    ],
+  },
+
+  /** The idol of sheds: coiled sloughs over a stone core, gland low. */
+  sloughed_colossus: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.14, seed: 501 } },
+      { kind: 'coil', scale: 0.95, alpha: 0.9 },
+      { kind: 'tatters', x: -0.3, scale: 0.85, alpha: 0.65, role: 'bone', params: { n: 6 } },
+      { kind: 'scutes', scale: 0.85 },
+      { kind: 'serpentHead', x: 0.45, scale: 0.75 },
+    ],
+  },
+  /** A shed that remembers the muscle. */
+  molt_husk: {
+    parts: [
+      { kind: 'tatters', scale: 0.9, role: 'bone', params: { n: 5 } },
+      { kind: 'scutes', scale: 0.7, alpha: 0.8 },
+    ],
+  },
+  /** The gland: taut, green, regrettable. */
+  venom_gland: {
+    parts: [
+      { kind: 'bloatSacs', scale: 1.0, params: { n: 2 } },
+      { kind: 'veinweb', alpha: 0.8, params: { n: 2 } },
+    ],
+  },
+
+  /** The orchard that walks: barked trunk under two great caps. */
+  fruiting_titan: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.12, seed: 502 } },
+      { kind: 'barkPlates', scale: 0.9 },
+      { kind: 'capDome', x: -0.25, y: 0.45, scale: 0.55 },
+      { kind: 'capDome', x: -0.25, y: -0.45, scale: 0.55, alpha: 0.95 },
+      { kind: 'mossPatch', x: 0.3, scale: 0.6, alpha: 0.8 },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.9, params: { n: 4 } }],
+  },
+  /** The rot season, fruiting. */
+  plague_cap: {
+    parts: [
+      { kind: 'capDome', scale: 1.0 },
+      { kind: 'sporeVents', scale: 0.7, alpha: 0.9 },
+    ],
+  },
+  /** The dart season, fruiting. */
+  dart_cap: {
+    parts: [
+      { kind: 'capDome', scale: 1.0 },
+      { kind: 'spikes', scale: 0.6, alpha: 0.9 },
+    ],
+  },
+
+  /** The rolling magazine: planked bulk, wheels, kegs in plain sight. */
+  powder_wagon: {
+    parts: [
+      { kind: 'crateBox', scale: 1.0 },
+      { kind: 'wheels', scale: 1.0 },
+      { kind: 'keg', x: -0.35, y: 0.5, scale: 0.45 },
+      { kind: 'keg', x: -0.35, y: -0.5, scale: 0.45 },
+      { kind: 'banner', x: 0.3, y: -0.4, scale: 0.6, alpha: 0.9 },
+    ],
+  },
+  /** Powder in public. */
+  powder_keg_rack: {
+    parts: [
+      { kind: 'keg', scale: 1.0 },
+      { kind: 'keg', x: -0.3, y: 0.4, scale: 0.7, alpha: 0.95 },
+    ],
+  },
+  /** The wagon's polite argument. */
+  wagon_gunner: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'hood', x: 0.2, scale: 0.8 },
+      { kind: 'musket', y: 0.1, scale: 1.0 },
+    ],
+  },
+
+  /** The hanging crown, walking: a glow hub ringed in pendants. */
+  chandelier_warden: {
+    parts: [
+      { kind: 'disc', scale: 0.6, role: 'glow' },
+      { kind: 'crystalGrowths', scale: 0.9 },
+      { kind: 'halo', scale: 1.2, alpha: 0.5 },
+      { kind: 'chains', scale: 0.7, alpha: 0.7 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
+  },
+  /** One hung light with an opinion. */
+  gleam_pendant: {
+    parts: [
+      { kind: 'gem', scale: 1.0, role: 'glow' },
+      { kind: 'halo', scale: 1.15, alpha: 0.5 },
+    ],
+  },
+
+  /** The altar on procession feet: plated tallow under lit wings. */
+  vigil_altarpiece: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'armorPlates', scale: 0.9, alpha: 0.85 },
+      { kind: 'candles', x: -0.05, scale: 1.0, params: { n: 4 } },
+      { kind: 'drape', x: -0.3, scale: 0.8, alpha: 0.85 },
+    ],
+    live: [{ kind: 'flames', x: -0.05, scale: 0.55, params: { n: 2 } }],
+  },
+  /** A taper the size of a spear. */
+  altar_taper: {
+    parts: [
+      { kind: 'candles', scale: 1.1, params: { n: 1, h: 1.1 } },
+    ],
+    live: [{ kind: 'flames', x: 0.3, scale: 0.4, params: { n: 1 } }],
+  },
+  /** The seal: the vow, stamped. */
+  vigil_seal: {
+    parts: [
+      { kind: 'disc', scale: 0.9, role: 'metal' },
+      { kind: 'runes', scale: 0.7, params: { n: 3 } },
+    ],
+  },
+
+  /** The bier: a sledge of blue ice, rails manned, the coffin glowing. */
+  frost_bier: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'icicles', scale: 0.95 },
+      { kind: 'chest', x: -0.2, scale: 0.7, role: 'bone' },
+      { kind: 'furRuff', x: 0.4, scale: 0.7, alpha: 0.85 },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.45, scale: 0.6 }],
+  },
+  /** A bearer frozen to the rail. */
+  bier_bearer: {
+    parts: [
+      { kind: 'torso', scale: 0.8, role: 'bone' },
+      { kind: 'icicles', scale: 0.6, alpha: 0.9 },
+      { kind: 'sword', y: 0.1, scale: 0.7, params: { len: 0.7 } },
+    ],
+  },
+  /** The heart: the cold the court cannot bury. */
+  heart_of_winter: {
+    parts: [
+      { kind: 'gem', scale: 1.1, role: 'glow' },
+      { kind: 'icicles', scale: 0.7, alpha: 0.9 },
+      { kind: 'halo', scale: 1.2, alpha: 0.45 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

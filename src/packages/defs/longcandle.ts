@@ -62,6 +62,9 @@ const WAX_FACTION: FactionSpec = {
     { id: 'taper_knight', weight: 2, presence: { from: 5, fadeIn: 3 } },
     { id: 'snuffer_priest', weight: 1, presence: { from: 6, fadeIn: 3 } },
     { id: 'candelabrum_hulk', weight: 1, presence: { from: 9, fadeIn: 4 } },
+    // The high court pass: the standing altar on procession feet — crack
+    // the seal first, or the wax refuses to yield.
+    { id: 'vigil_altarpiece', weight: 1, presence: { from: 11, fadeIn: 4 } },
     { id: 'chandler_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
   ],
   warlord: 'chandler_queen',

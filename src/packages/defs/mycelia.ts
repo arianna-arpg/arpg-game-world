@@ -71,6 +71,9 @@ const FUNGAL_FACTION: FactionSpec = {
     { id: 'mushroomling', weight: 3, presence: { to: 14, fadeOut: 5 } },
     { id: 'myconid_warrior', weight: 3, presence: { from: 5, fadeIn: 3 } },
     { id: 'myconid_capcaller', weight: 2, presence: { from: 9, fadeIn: 4 } },
+    // The high court pass: the orchard that walks — prune the caps or
+    // weather both seasons (the anatomy lesson in Bloom dress).
+    { id: 'fruiting_titan', weight: 1, presence: { from: 11, fadeIn: 5 } },
     { id: 'bolete_brute', weight: 2, presence: { from: 13, fadeIn: 5 } },
     { id: 'amanita_sovereign', weight: 1, presence: { from: 22, fadeIn: 8, mul: 2 } },
   ],
