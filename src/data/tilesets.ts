@@ -651,6 +651,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'scarecrow_watcher', weight: 2 },
         { id: 'lantern_sower', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'harvest_effigy', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The muster pass: the court's new trades walk the worked rows.
+        { id: 'tithe_gourd', weight: 1, presence: { from: 4, fadeIn: 2 } },
+        { id: 'vine_marionette', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'crowfeather_piper', weight: 0.5, presence: { from: 7, fadeIn: 3 } },
         { id: 'the_bellwether', weight: 0.5, presence: { from: 9, fadeIn: 4 } },
         { id: 'carven_king', weight: 0.5, presence: { from: 11, fadeIn: 5 } },
       ],
@@ -1184,6 +1188,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'beastkin_gorer', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'beastkin_impaler', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'beastkin_ritualist', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        // The muster pass: the chaser runs the drive, the earthshaker
+        // breaks the ground it drives you onto.
+        { id: 'beastkin_chaser', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'beastkin_earthshaker', weight: 1, presence: { from: 11, fadeIn: 5 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'werewolf', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'elder_treant', weight: 1, presence: { from: 18, fadeIn: 8 } },
@@ -1988,6 +1996,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'spitting_horror', weight: 1, presence: { to: 14, fadeOut: 7 } },
         { id: 'ember_elemental', weight: 3 },
         { id: 'gale_elemental', weight: 1, presence: { to: 16, fadeOut: 8 } },
+        // The muster pass: the tribe's own music walks its burn — the
+        // fire-hymn and the shepherd whose flock is sparks.
+        { id: 'cinder_chorister', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'ember_shepherd', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'orc_ravager', weight: 2 },
         { id: 'gnoll_longshot', weight: 1 },
         { id: 'gnoll_howler', weight: 1 },
@@ -2264,6 +2276,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mirage_dancer', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'salt_husk', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'glass_stalker', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The muster pass: the wind that dances, the glass that sings.
+        { id: 'khamsin_dervish', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'glasschanter', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'dust_djinn', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'sun_priest', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'sandmaw_burrower', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -2752,6 +2767,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'tomb_scarab', weight: 4 },
         { id: 'sarcophate_legionary', weight: 4 },
+        // The muster pass: the ushabti files hold the vault floors in step
+        // (HARD floor, per the family law).
+        { id: 'ushabti_file', weight: 2, presence: { from: 4 } },
         { id: 'canopic_bearer', weight: 2, presence: { from: 6 } },
         { id: 'sarcophagus_warden', weight: 1, presence: { from: 9 } },
         { id: 'bronze_scarab', weight: 2 },
@@ -2893,6 +2911,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'strangler_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'emerald_prowler', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'saurian_bulwark', weight: 2, presence: { from: 11, fadeIn: 5 } },
+        // The muster pass: the noose in the understory, the tusker on the
+        // game-trail (the trunk's long-promised body).
+        { id: 'liana_garrote', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'mireback_tusker', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'verdant_tyrant', weight: 1, presence: { from: 14, fadeIn: 6 } },
         // THE GRIP KIN tour the green (the grab fabric): the yoke-mauler
         // pins and drums the Takedown measure; the bloom waits to be fed.
@@ -3853,6 +3875,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'vor_maw', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'chrysalid_broodmother', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'caul_heart', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // The muster pass: the membrane's mender and the tick that sings.
+        { id: 'dream_tick', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'caul_midwife', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // Kin from the far side of the membrane: the eldritch recognize
         // their vanguard (RELATIONS ally) — a thin late-band seasoning.
         { id: 'flesh_amalgam', weight: 1, presence: { from: 16, fadeIn: 6 } },
@@ -5076,6 +5101,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bramble_matron', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'formic_worker', weight: 2 },
         { id: 'formic_forager', weight: 1 },
+        // The muster pass: the colony's missing castes work the beds too.
+        { id: 'formic_porter', weight: 1, presence: { from: 4, fadeIn: 3 } },
+        { id: 'formic_gluewright', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'formic_major', weight: 0.5, presence: { from: 8, fadeIn: 4 } },
         { id: 'garden_snail', weight: 1 },
         { id: 'bombardier_beetle', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
@@ -5760,6 +5789,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'marsh_adder', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'bog_strider', weight: 2 },
         { id: 'hooded_spitter', weight: 1, presence: { from: 4 } },
+        // The muster pass: the molt-dancer and the walking clutch raid
+        // with the rim parties (the court's hard floors hold).
+        { id: 'skinshed_dervish', weight: 1, presence: { from: 5 } },
+        { id: 'brood_coiler', weight: 1, presence: { from: 7 } },
         // The Deep washes ashore in ones and twos this far up the shelf.
         { id: 'deep_thresher', weight: 1 },
       ],

@@ -6817,6 +6817,239 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'veilSashes', scale: 0.9, alpha: 0.7, params: { n: 3 } }],
   },
+
+  // ================================ THE MUSTER PASS — WAVE 2: MIDDLE COUNTRIES
+
+  /** Dusk-light drawn to an edge: winged gleam behind a leveled shard. */
+  prism_lancer: {
+    parts: [
+      { kind: 'featherWings', scale: 0.85, alpha: 0.75 },
+      { kind: 'disc', scale: 0.5, role: 'glow' },
+      { kind: 'trident', y: 0, scale: 0.95, params: { len: 1.05 } },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 0.5, params: { n: 2 } }],
+  },
+  /** The cupbearer: a lantern-yoke and a body made of carried morning. */
+  dew_porter: {
+    parts: [
+      { kind: 'disc', scale: 0.6, role: 'glow' },
+      { kind: 'yoke', x: -0.05, params: { span: 1.1 } },
+      { kind: 'lantern', y: 0.62, scale: 0.55 },
+      { kind: 'lantern', y: -0.62, scale: 0.55 },
+      { kind: 'antennae', scale: 0.75 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.55, params: { n: 3 } }],
+  },
+  /** The gardener kneeling in its own crop: crystal rows and root-toes. */
+  shard_gardener: {
+    parts: [
+      { kind: 'roots', scale: 0.8 },
+      { kind: 'disc', scale: 0.62, role: 'glow' },
+      { kind: 'crystalGrowths', scale: 0.95 },
+      { kind: 'gem', x: 0.45, scale: 0.5 },
+    ],
+  },
+
+  /** The major: the soldier body forged bigger — plate over shear-jaws. */
+  formic_major: {
+    parts: [
+      { kind: 'carapace', scale: 0.95 },
+      { kind: 'armorPlates', scale: 0.8, alpha: 0.85 },
+      { kind: 'legs', scale: 0.95, params: { n: 6 } },
+      { kind: 'mandibles', scale: 0.95 },
+      { kind: 'antennae', scale: 0.85 },
+    ],
+  },
+  /** The engineer caste: resin bulbs slung under the thorax. */
+  formic_gluewright: {
+    parts: [
+      { kind: 'carapace', scale: 0.85 },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'bloatSacs', x: -0.25, scale: 0.7, params: { n: 3 } },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'mandibles', scale: 0.5 },
+    ],
+  },
+  /** The porter: the clutch rides her back — dropping her delivers it. */
+  formic_porter: {
+    parts: [
+      { kind: 'carapace', scale: 0.9 },
+      { kind: 'legs', scale: 0.88, params: { n: 6 } },
+      { kind: 'egg', x: -0.3, scale: 0.62 },
+      { kind: 'egg', x: -0.55, y: 0.3, scale: 0.45, alpha: 0.95 },
+      { kind: 'antennae', scale: 0.85 },
+    ],
+  },
+
+  /** The ushabti file: a baked servant-soldier — lid-faced, shield up,
+   *  built to march in step forever. */
+  ushabti_file: {
+    parts: [
+      { kind: 'torso', scale: 0.85, role: 'bone' },
+      { kind: 'shroudWrap', scale: 0.9, alpha: 0.8, params: { bands: 3 } },
+      { kind: 'shield', y: 0.4, scale: 0.8 },
+      { kind: 'sword', y: -0.3, scale: 0.7, params: { len: 0.75 } },
+      { kind: 'mask', x: 0.42, scale: 0.75, role: 'metal' },
+    ],
+  },
+
+  /** The ground-priest: horned bulk over a maul, painted for the rite. */
+  beastkin_earthshaker: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'warpaint', alpha: 0.75 },
+      { kind: 'horns', scale: 1.05 },
+      { kind: 'hammer', y: 0.5, scale: 0.95 },
+      { kind: 'runes', scale: 0.7, alpha: 0.7, params: { n: 3 } },
+    ],
+  },
+  /** The chaser: light-footed, quivered, spears already in the air. */
+  beastkin_chaser: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'furRuff', scale: 0.9, alpha: 0.85 },
+      { kind: 'horns', scale: 0.9 },
+      { kind: 'quiver', x: -0.3, scale: 0.85 },
+      { kind: 'trident', y: 0.35, scale: 0.8, params: { len: 0.95 } },
+    ],
+  },
+
+  /** Half-out of its own skin: the shed trails the dancer like a second
+   *  body that didn't get the new music. */
+  skinshed_dervish: {
+    parts: [
+      { kind: 'serpentHead', scale: 0.9 },
+      { kind: 'scutes', scale: 0.85 },
+      { kind: 'tatters', x: -0.5, scale: 0.8, alpha: 0.6, role: 'bone', params: { n: 5 } },
+      { kind: 'daggers', params: { len: 0.65 } },
+    ],
+  },
+  /** The living clutch: eggs seated in the standing coil. */
+  brood_coiler: {
+    parts: [
+      { kind: 'coil', scale: 1.0 },
+      { kind: 'segmentRings', params: { n: 3 } },
+      { kind: 'egg', x: -0.2, y: 0.25, scale: 0.42 },
+      { kind: 'egg', x: -0.35, y: -0.2, scale: 0.36, alpha: 0.95 },
+      { kind: 'serpentHead', x: 0.4, scale: 0.7 },
+    ],
+  },
+
+  /** The scarecrow that changed sides: pipe raised, the murder roosting
+   *  on its crossarm. */
+  crowfeather_piper: {
+    parts: [
+      { kind: 'strawLimbs', scale: 0.95 },
+      { kind: 'tatters', x: -0.15, scale: 0.8, alpha: 0.85, params: { n: 4 } },
+      { kind: 'nestTwigs', x: -0.4, y: -0.35, scale: 0.55 },
+      { kind: 'beak', x: 0.35, scale: 0.7, role: 'dark' },
+      { kind: 'hood', x: 0.25, scale: 0.9 },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.8, params: { n: 3 } }],
+  },
+  /** The marionette: root-wires up into the dark, lash-arms down. */
+  vine_marionette: {
+    parts: [
+      { kind: 'strawLimbs', scale: 0.85 },
+      { kind: 'roots', rot: Math.PI, scale: 0.75, alpha: 0.8 },
+      { kind: 'mask', x: 0.4, scale: 0.7, role: 'bone' },
+      { kind: 'fronds', x: -0.2, scale: 0.6, alpha: 0.8 },
+    ],
+  },
+  /** The walking offering: one great lit gourd on root-feet. */
+  tithe_gourd: {
+    parts: [
+      { kind: 'gourdHead', scale: 1.05 },
+      { kind: 'roots', scale: 0.6 },
+      { kind: 'lantern', x: 0.15, scale: 0.45, alpha: 0.9 },
+    ],
+    live: [{ kind: 'emberSparks', x: 0.15, scale: 0.6, params: { n: 3 } }],
+  },
+
+  /** The fire-hymn: robed cantor under a spark-crown, brand in hand. */
+  cinder_chorister: {
+    parts: [
+      { kind: 'robe', color: '#8a4a2e', scale: 1.0 },
+      { kind: 'laurel', color: '#ff9650', scale: 0.9, alpha: 0.9 },
+      { kind: 'brand', x: 0.3, scale: 0.8 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.75, params: { n: 4 } }],
+  },
+  /** The shepherd: crook of cooled slag, drape stitched with vents, and
+   *  the flock's stray sparks about the shoulders (live). */
+  ember_shepherd: {
+    parts: [
+      { kind: 'robe', color: '#7a4a2e', scale: 1.0 },
+      { kind: 'drape', x: -0.15, scale: 0.85, alpha: 0.9 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'hood', color: '#5a3420', x: 0.2, scale: 0.85 },
+    ],
+    live: [{ kind: 'flames', x: -0.3, scale: 0.5, params: { n: 2 } }],
+  },
+
+  /** THE TRUNK GETS ITS BODY: mud-caked bull, tusks under a reaching
+   *  trunk, jungle rot riding the shoulders. */
+  mireback_tusker: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.14, seed: 133 } },
+      { kind: 'mossPatch', x: -0.3, scale: 0.85, alpha: 0.9 },
+      { kind: 'barkPlates', x: -0.15, scale: 0.55, alpha: 0.5 },
+      { kind: 'tusks', scale: 1.15 },
+      { kind: 'trunkNose', scale: 1.0 },
+      { kind: 'ears', scale: 1.2, alpha: 0.9 },
+    ],
+  },
+  /** The noose that grew leaves: coiled vine-lengths under a leaf hood. */
+  liana_garrote: {
+    parts: [
+      { kind: 'fronds', scale: 0.9 },
+      { kind: 'roots', rot: Math.PI, scale: 0.7, alpha: 0.85 },
+      { kind: 'whip', x: 0.15, y: 0.45, scale: 0.9 },
+      { kind: 'eyes', color: '#d8f0a0', params: { n: 1, spread: 0, dist: 0.35, size: 0.09 } },
+    ],
+  },
+
+  /** A dust-devil with a name: veils in orbit around a glow that
+   *  refuses to settle. */
+  khamsin_dervish: {
+    parts: [
+      { kind: 'disc', scale: 0.55, role: 'glow' },
+      { kind: 'drape', scale: 0.9, alpha: 0.75 },
+      { kind: 'glassFins', scale: 0.8, alpha: 0.85 },
+    ],
+    live: [{ kind: 'veilSashes', scale: 1.0, alpha: 0.75, params: { n: 4 } }],
+  },
+  /** The glass that sings back: robed chanter crowned in fused sand. */
+  glasschanter: {
+    parts: [
+      { kind: 'robe', color: '#9a8a5e', scale: 1.0 },
+      { kind: 'crystalGrowths', scale: 0.8, alpha: 0.95 },
+      { kind: 'gem', x: 0.4, scale: 0.5 },
+      { kind: 'halo', scale: 1.05, alpha: 0.4 },
+    ],
+  },
+
+  /** The membrane's own mender: aproned, shroud-wrapped, watched by the
+   *  brood she carries. */
+  caul_midwife: {
+    parts: [
+      { kind: 'shroudWrap', scale: 1.0, params: { bands: 4 } },
+      { kind: 'apron', scale: 0.85 },
+      { kind: 'eyeCluster', x: 0.3, scale: 0.6 },
+      { kind: 'veinweb', alpha: 0.7, params: { n: 3 } },
+    ],
+  },
+  /** It doesn't bite — it SUGGESTS: the spiral takes your eye first
+   *  (spiralEyes live, the hypnotist's tell). */
+  dream_tick: {
+    parts: [
+      { kind: 'carapace', scale: 0.8 },
+      { kind: 'legs', scale: 0.8, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.95 },
+    ],
+    live: [{ kind: 'spiralEyes', x: 0.3, scale: 0.8 }],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

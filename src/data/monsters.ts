@@ -13497,6 +13497,328 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ambush: { radius: 46 },
     brain: { type: 'assassin', withdraw: 1.1 },
   },
+
+  // ==========================================================================
+  // THE MUSTER PASS — WAVE 2: THE MIDDLE COUNTRIES. Same doctrine as wave 1
+  // (missing trades, pool-reuse kits, affordable by law, silhouette-first),
+  // over the factions running 5-8 rows: glimmerkin / formic / sarcophate /
+  // beastkin / coilborn / carven / emberkin / junglekin / sirocco / caulborn.
+  // No near-clones: a role a family already fields is a role not minted.
+  // ==========================================================================
+
+  // --- THE GLIMMERKIN's missing trades: a lance of light, a bearer of dew,
+  // and a gardener who plants the court's glass.
+
+  // The prism lancer: dusk-light drawn to an edge — the bolt curls as it
+  // flies (the helix), and the court's chaff shelters behind the gleam.
+  prism_lancer: {
+    id: 'prism_lancer', name: 'Prism Lancer',
+    color: '#bfe8d0', shape: 'kite', radius: 11, material: 'ethereal', look: 'prism_lancer',
+    base: { life: 55, moveSpeed: 160, accuracy: 108, evasion: 50, mana: 40, manaRegen: 4 },
+    skills: ['spectral_helix'],
+    xp: 24,
+    faction: 'glimmerkin',
+    brain: { type: 'skirmish', withdraw: 1.4 },
+  },
+  // The dew porter: the court's cupbearer — a lantern-yoke of gathered
+  // morning, poured into whoever the dark is winning against.
+  dew_porter: {
+    id: 'dew_porter', name: 'Dew Porter',
+    color: '#d8f0c8', shape: 'circle', radius: 12, material: 'ethereal', look: 'dew_porter',
+    base: { life: 70, moveSpeed: 125, accuracy: 98, mana: 90, manaRegen: 8 },
+    skills: ['healing_stream', 'greater_mending'],
+    xp: 28,
+    faction: 'glimmerkin',
+    wardPriority: 1,
+    brain: { type: 'protector' },
+  },
+  // The shard gardener: kneels, plants a seed of glass, and the seed
+  // GROWS OPINIONS (shardrift — the court's standing artillery).
+  shard_gardener: {
+    id: 'shard_gardener', name: 'Shard Gardener',
+    color: '#a8e0d8', shape: 'pentagon', radius: 13, material: 'crystal', look: 'shard_gardener',
+    base: { life: 80, moveSpeed: 100, accuracy: 100, mana: 60, manaRegen: 6 },
+    skills: ['shardrift'],
+    xp: 30,
+    faction: 'glimmerkin',
+    brain: { type: 'artillery' },
+  },
+
+  // --- THE FORMIC COLONY's missing castes: the major, the gluewright,
+  // and the porter whose death frees what she carried.
+
+  // The major: the soldier caste forged one size up — the line's anvil.
+  formic_major: {
+    id: 'formic_major', name: 'Formic Major',
+    color: '#a85a3e', shape: 'hexagon', radius: 16, material: 'chitin', look: 'formic_major',
+    base: { life: 170, moveSpeed: 105, accuracy: 100, armor: 35, poise: 55, mana: 25, manaRegen: 3 },
+    skills: ['piledriver', 'heavy_strike'],
+    xp: 30,
+    faction: 'formic',
+    heft: 1.2, turnSpeed: 3.4,
+    brain: { type: 'juggernaut' },
+  },
+  // The gluewright: the colony's engineer caste — her resin ROOTS the
+  // intruder where the majors want them.
+  formic_gluewright: {
+    id: 'formic_gluewright', name: 'Formic Gluewright',
+    color: '#b06a48', shape: 'oval', radius: 13, material: 'chitin', look: 'formic_gluewright',
+    base: { life: 75, moveSpeed: 110, accuracy: 104, mana: 40, manaRegen: 5 },
+    skills: ['web_shot'],
+    xp: 26,
+    faction: 'formic',
+    brain: { type: 'artillery' },
+  },
+  // The porter: she carries the clutch on her back, and dropping her
+  // DELIVERS it — two workers boil out of the spilled brood.
+  formic_porter: {
+    id: 'formic_porter', name: 'Formic Porter',
+    color: '#98543a', shape: 'oval', radius: 14, material: 'chitin', look: 'formic_porter',
+    base: { life: 110, moveSpeed: 95, accuracy: 96, armor: 20, mana: 0 },
+    skills: ['claw'],
+    xp: 22,
+    faction: 'formic',
+    brain: {
+      type: 'basic',
+      onDeath: [{ do: 'summon', monster: 'formic_worker', count: 2, ring: 26 }],
+    },
+  },
+
+  // --- THE SAND SARCOPHATE's missing rank: the ushabti files — the
+  // funerary servants baked to march, shoulder to shoulder, tireless.
+  ushabti_file: {
+    id: 'ushabti_file', name: 'Ushabti File',
+    color: '#c9b078', shape: 'rectangle', radius: 11, material: 'stone', look: 'ushabti_file',
+    base: { life: 45, moveSpeed: 92, accuracy: 96, armor: 30, poise: 40, mana: 10, manaRegen: 2 },
+    skills: ['cleave'],
+    xp: 14,
+    faction: 'sarcophate',
+    packSize: [3, 5],
+    brain: { type: 'pack' },
+  },
+
+  // --- THE HORNED TRIBES' missing trades: the shaman who breaks ground
+  // and the chaser who fills the sky ahead of the charge.
+
+  // The earthshaker: the tribes' ground-priest — the slam is local, the
+  // shockfront travels; neither asks permission.
+  beastkin_earthshaker: {
+    id: 'beastkin_earthshaker', name: 'Beastkin Earthshaker',
+    color: '#c08a52', shape: 'octagon', radius: 14, material: 'fur', look: 'beastkin_earthshaker',
+    base: { life: 95, moveSpeed: 115, accuracy: 100, poise: 40, mana: 60, manaRegen: 6 },
+    skills: ['shockfront', 'ground_slam'],
+    xp: 32,
+    faction: 'beastkin', adorn: 'horns',
+    brain: { type: 'caster', squad: { idle: { style: 'siege' } } },
+  },
+  // The chaser: runs the quarry onto the spears he already threw
+  // (hanging_volley's suspended points — the herd-drive made a kit).
+  beastkin_chaser: {
+    id: 'beastkin_chaser', name: 'Beastkin Chaser',
+    color: '#b8824e', shape: 'triangle', radius: 12, material: 'fur', look: 'beastkin_chaser',
+    base: { life: 65, moveSpeed: 175, accuracy: 108, evasion: 50, mana: 40, manaRegen: 4 },
+    skills: ['hanging_volley', 'dash_strike'],
+    xp: 26,
+    faction: 'beastkin', adorn: 'horns',
+    brain: { type: 'skirmish', withdraw: 1.3, squad: { idle: { style: 'siege' } } },
+  },
+
+  // --- THE COILBORN's missing trades: the molt made a fighting style,
+  // and the clutch made a body.
+
+  // The skinshed dervish: fights half-out of its own skin — the shed
+  // trails it like a second dancer, and the sweep never quite ends.
+  skinshed_dervish: {
+    id: 'skinshed_dervish', name: 'Skinshed Dervish',
+    color: '#7aa86a', shape: 'kite', radius: 12, look: 'skinshed_dervish',
+    base: { life: 70, moveSpeed: 170, accuracy: 106, evasion: 60, mana: 30, manaRegen: 3 },
+    skills: ['reavers_sweep'],
+    xp: 26,
+    faction: 'coilborn',
+    brain: { type: 'flanker' },
+  },
+  // The brood coiler: a living clutch — she wears her eggs in the coil,
+  // and the marsh keeps hatching while she stands.
+  brood_coiler: {
+    id: 'brood_coiler', name: 'Brood Coiler',
+    color: '#6a9a62', shape: 'oval', radius: 15, look: 'brood_coiler',
+    base: { life: 130, moveSpeed: 90, accuracy: 96, mana: 0 },
+    skills: ['claw'],
+    xp: 30,
+    faction: 'coilborn',
+    brain: {
+      type: 'juggernaut',
+      rules: [{
+        when: {}, every: [12, 17], hold: [0.5, 0.7],
+        actions: [{ do: 'summon', monster: 'marsh_adder', count: 2, ring: 40, lifespan: 40 }],
+      }],
+    },
+  },
+
+  // --- THE CARVEN COURT's missing trades: the piper the crows answer,
+  // the marionette the vines walk, and the tithe that walks itself in.
+
+  // The crowfeather piper: a scarecrow that changed sides — its shriek
+  // scatters wits, and the murder it was built to frighten obeys it now.
+  crowfeather_piper: {
+    id: 'crowfeather_piper', name: 'Crowfeather Piper',
+    color: '#6a5a44', shape: 'cross', radius: 13, material: 'wood', look: 'crowfeather_piper',
+    base: { life: 85, moveSpeed: 110, accuracy: 100, mana: 50, manaRegen: 5 },
+    skills: ['keening_shriek'],
+    xp: 28,
+    faction: 'carven',
+    brain: {
+      type: 'strafer',
+      rules: [{
+        when: {}, every: [12, 18], hold: [0.4, 0.6],
+        actions: [{ do: 'summon', monster: 'carrion_crow', count: 2, ring: 60, lifespan: 30 }],
+      }],
+    },
+  },
+  // The vine marionette: the strings grew back INTO the ground — it
+  // dances on root-wires and lashes with what holds it up.
+  vine_marionette: {
+    id: 'vine_marionette', name: 'Vine Marionette',
+    color: '#8a9a58', shape: 'kite', radius: 11, material: 'wood', look: 'vine_marionette',
+    base: { life: 60, moveSpeed: 155, accuracy: 102, evasion: 55, mana: 20, manaRegen: 3 },
+    skills: ['lash_roots', 'claw'],
+    xp: 22,
+    faction: 'carven',
+    brain: { type: 'flanker' },
+  },
+  // The tithe gourd: the harvest's own offering, delivered on foot —
+  // it lobs its lesser kin ahead and pays the full tithe when it drops.
+  tithe_gourd: {
+    id: 'tithe_gourd', name: 'Tithe Gourd',
+    color: '#d8903a', shape: 'circle', radius: 13, material: 'wood', look: 'tithe_gourd',
+    base: { life: 70, moveSpeed: 120, accuracy: 98, mana: 45, manaRegen: 4 },
+    skills: ['gourd_bomb'],
+    xp: 20,
+    faction: 'carven',
+    explodeOnDeath: 0.7,
+    brain: { type: 'bomber', fuseRange: 60, fuseTime: 0.8 },
+  },
+
+  // --- THE EMBERKIN's missing trades: the antiphon sung in sparks, and
+  // the shepherd whose flock is fire.
+
+  // The cinder chorister: the tribe's fire-hymn — verses mark the
+  // stranger, the refrain burns the circle.
+  cinder_chorister: {
+    id: 'cinder_chorister', name: 'Cinder Chorister',
+    color: '#e8944e', shape: 'diamond', radius: 12, material: 'cloth', look: 'cinder_chorister',
+    base: { life: 65, moveSpeed: 120, accuracy: 100, mana: 60, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['antiphon', 'solar_brand'],
+    xp: 28,
+    faction: 'emberkin',
+    brain: { type: 'strafer' },
+  },
+  // The ember shepherd: walks the caldera with a crook of cooled slag,
+  // whistling wisps out of the vents and rage into the tribe.
+  ember_shepherd: {
+    id: 'ember_shepherd', name: 'Ember Shepherd',
+    color: '#d8a05a', shape: 'pentagon', radius: 13, material: 'cloth', look: 'ember_shepherd',
+    base: { life: 90, moveSpeed: 105, accuracy: 98, mana: 60, manaRegen: 5 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['furor'],
+    xp: 32,
+    faction: 'emberkin',
+    wardPriority: 1,
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: {}, every: [12, 16], hold: [0.4, 0.6],
+        actions: [{ do: 'summon', monster: 'emberwisp', count: 2, ring: 50, lifespan: 35 }],
+      }],
+    },
+  },
+
+  // --- THE JUNGLEKIN's missing trades: the tusker the green walks
+  // behind, and the noose the canopy lowers.
+
+  // THE MIREBACK TUSKER — the trunk finally gets its body: a mud-caked
+  // bull whose nose is a fifth limb and whose shoulder is a door
+  // closing. (The trunkNose painter's long-promised debut.)
+  mireback_tusker: {
+    id: 'mireback_tusker', name: 'Mireback Tusker',
+    color: '#8a7a5a', shape: 'hexagon', radius: 20, material: 'fur', look: 'mireback_tusker',
+    base: { life: 260, moveSpeed: 90, accuracy: 98, armor: 25, poise: 65, mana: 30, manaRegen: 3 },
+    skills: ['ground_slam', 'heavy_strike'],
+    xp: 45,
+    faction: 'junglekin',
+    heft: 1.5, turnSpeed: 2.6,
+    scaling: { life: { incPerLevel: 0.07 } },
+    pathCosts: { mud: 0.6 },
+    brain: { type: 'juggernaut', enrage: 0.45 },
+  },
+  // The liana garrote: a noose that grew leaves — it waits in the
+  // understory and takes the throat-height path to your attention.
+  liana_garrote: {
+    id: 'liana_garrote', name: 'Liana Garrote',
+    color: '#4a7a46', shape: 'kite', radius: 11, look: 'liana_garrote',
+    base: { life: 65, moveSpeed: 160, accuracy: 106, evasion: 60, mana: 20, manaRegen: 3 },
+    skills: ['lash_roots', 'claw'],
+    xp: 26,
+    faction: 'junglekin',
+    ambush: { radius: 44 },
+    brain: { type: 'assassin', withdraw: 1.2 },
+  },
+
+  // --- THE SIROCCO COURT's missing trades: the wind that dances and
+  // the glass that sings.
+
+  // The khamsin dervish: a dust-devil that took a name — the whirl is
+  // the body, the body is the argument.
+  khamsin_dervish: {
+    id: 'khamsin_dervish', name: 'Khamsin Dervish',
+    color: '#d8b87a', shape: 'circle', radius: 12, material: 'ethereal', look: 'khamsin_dervish',
+    base: { life: 75, moveSpeed: 175, accuracy: 104, evasion: 60, mana: 30, manaRegen: 4 },
+    skills: ['tornado', 'dash_strike'],
+    xp: 28,
+    faction: 'sirocco',
+    brain: { type: 'flanker' },
+  },
+  // The glasschanter: sings to the fused sand until it answers in
+  // three tempers at once (the shatterchord — fire, frost, storm).
+  glasschanter: {
+    id: 'glasschanter', name: 'Glasschanter',
+    color: '#c8e0d8', shape: 'diamond', radius: 13, material: 'crystal', look: 'glasschanter',
+    base: { life: 70, moveSpeed: 110, accuracy: 100, mana: 90, manaRegen: 8 },
+    skills: ['shatterchord'],
+    xp: 32,
+    faction: 'sirocco',
+    brain: { type: 'strafer' },
+  },
+
+  // --- THE CAULBORN's missing trades: the midwife the membrane trusts,
+  // and the tick that sings you to sleep.
+
+  // The caul midwife: the birthing fabric's own mender — she stands
+  // between the blow and the brood, pouring the caul back together.
+  caul_midwife: {
+    id: 'caul_midwife', name: 'Caul Midwife',
+    color: '#8a6a9a', shape: 'pentagon', radius: 14, look: 'caul_midwife',
+    base: { life: 120, moveSpeed: 105, accuracy: 96, mana: 90, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['healing_stream', 'greater_mending'],
+    xp: 34,
+    faction: 'caulborn',
+    wardPriority: 2,
+    brain: { type: 'protector' },
+  },
+  // The dream tick: it doesn't bite — it SUGGESTS. The spiral takes
+  // your eye, the doubt takes your feet.
+  dream_tick: {
+    id: 'dream_tick', name: 'Dream Tick',
+    color: '#a884b8', shape: 'oval', radius: 10, material: 'chitin', look: 'dream_tick',
+    base: { life: 55, moveSpeed: 130, accuracy: 102, evasion: 45, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['beguile', 'indecision'],
+    xp: 24,
+    faction: 'caulborn',
+    brain: { type: 'strafer' },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -13870,6 +14192,11 @@ export const FACTIONS: Record<string, {
       { id: 'formic_forager', weight: 2 },
       { id: 'formic_tender', weight: 1, presence: { from: 5, fadeIn: 3 } },
       { id: 'formic_alate', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the missing castes — the anvil, the engineer,
+      // and the porter whose death delivers what she carried.
+      { id: 'formic_porter', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'formic_gluewright', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'formic_major', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   // The garden's own kin — the beds' answer to the colony chewing them.
@@ -13903,6 +14230,11 @@ export const FACTIONS: Record<string, {
       { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'glowworm_grub', weight: 2 },
       { id: 'lampwright', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the court gets its lance, its cupbearer, and the
+      // gardener who plants the standing glass.
+      { id: 'prism_lancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'dew_porter', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'shard_gardener', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   // Born from fire — RESERVED (see RESERVED_KIN): the roster is complete and
@@ -13981,6 +14313,11 @@ export const FACTIONS: Record<string, {
       // The walking shrine: its idol is a breakable part — the court's
       // curses have a NECK now.
       { id: 'effigy_porter', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the piper the crows answer, the marionette the
+      // vines walk, and the tithe that delivers itself.
+      { id: 'tithe_gourd', weight: 2, presence: { from: 4, fadeIn: 2 } },
+      { id: 'vine_marionette', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'crowfeather_piper', weight: 1, presence: { from: 7, fadeIn: 3 } },
       { id: 'carven_king', weight: 1, presence: { from: 13, fadeIn: 5 } },
     ],
   },
@@ -14092,6 +14429,10 @@ export const FACTIONS: Record<string, {
       { id: 'cinder_hound', weight: 3 },
       { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'vent_priest', weight: 2, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the fire-hymn and the shepherd whose flock is
+      // fire — the tribe fields its own music now.
+      { id: 'cinder_chorister', weight: 1, presence: { from: 7, fadeIn: 3 } },
+      { id: 'ember_shepherd', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'emberkin_matriarch', weight: 1, presence: { from: 13, fadeIn: 5 } },
     ],
   },
@@ -14108,6 +14449,10 @@ export const FACTIONS: Record<string, {
       { id: 'emerald_prowler', weight: 2, presence: { from: 9, fadeIn: 4 } },
       { id: 'saurian_bulwark', weight: 2, presence: { from: 11, fadeIn: 5 } },
       { id: 'ruin_sentinel', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      // The muster pass: the tusker the green walks behind (the trunk's
+      // long-promised body) and the noose the canopy lowers.
+      { id: 'liana_garrote', weight: 1, presence: { from: 7, fadeIn: 3 } },
+      { id: 'mireback_tusker', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'verdant_tyrant', weight: 1, presence: { from: 14, fadeIn: 6 } },
     ],
   },
@@ -14173,6 +14518,9 @@ export const FACTIONS: Record<string, {
       // The horncaller's war-drone walks with every muster (the muster
       // rolls) — the tribes never march without their music.
       { id: 'beastkin_horncaller', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      // The muster pass: the ground-priest and the chaser join the drive.
+      { id: 'beastkin_chaser', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'beastkin_earthshaker', weight: 1, presence: { from: 9, fadeIn: 4 } },
       // The tribes' siege answer: riders on a living tower — pick the
       // archers off the howdah, or fell the whole thing.
       { id: 'siegeback_aurochs', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -14217,6 +14565,10 @@ export const FACTIONS: Record<string, {
       { id: 'nerve_weaver', weight: 2, presence: { from: 8, fadeIn: 4 } },
       { id: 'vor_maw', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'chrysalid_broodmother', weight: 1, presence: { from: 12, fadeIn: 5 } },
+      // The muster pass: the midwife the membrane trusts, and the tick
+      // that sings you to sleep.
+      { id: 'dream_tick', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'caul_midwife', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   // The deep desert's own: dancers and husks carry the early court, the
@@ -14231,6 +14583,9 @@ export const FACTIONS: Record<string, {
       { id: 'dust_djinn', weight: 2, presence: { from: 9, fadeIn: 4 } },
       { id: 'sun_priest', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'sandmaw_burrower', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the wind that dances and the glass that sings.
+      { id: 'khamsin_dervish', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'glasschanter', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
   },
   // The Seethe: drones are the coin, sources are the fight — the roster
@@ -14296,6 +14651,9 @@ export const FACTIONS: Record<string, {
       // Unsealing's own tiers — swears to the wider banner on the same hard
       // floors the family keeps everywhere (thresholds, never ramps).
       { id: 'risen_husk', weight: 3, presence: { to: 16, fadeOut: 8 } },
+      // The ushabti files: the funerary rank baked to march — the
+      // dynasty's tireless shoulder-to-shoulder line.
+      { id: 'ushabti_file', weight: 2, presence: { from: 4 } },
       { id: 'canopic_jackal', weight: 1, presence: { from: 11 } },
       { id: 'canopic_falcon', weight: 1, presence: { from: 11 } },
       { id: 'canopic_ape', weight: 1, presence: { from: 12 } },
@@ -14316,6 +14674,10 @@ export const FACTIONS: Record<string, {
       { id: 'fang_priest', weight: 2, presence: { from: 6 } },
       { id: 'siren_adder', weight: 1, presence: { from: 8 } },
       { id: 'constrictor_knight', weight: 1, presence: { from: 9 } },
+      // The muster pass: the molt made a fighting style, the clutch made
+      // a body — same hard floors as the rest of the court.
+      { id: 'skinshed_dervish', weight: 1, presence: { from: 5 } },
+      { id: 'brood_coiler', weight: 1, presence: { from: 7 } },
     ],
   },
 };
