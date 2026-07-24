@@ -6532,6 +6532,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fire_golem', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'cinder_hound', weight: 2 },
         { id: 'ashling', weight: 2 },
+        // The wild chains: gnasher warrens riddle the dark — the goblins
+        // breed them down here, and some pens don't hold.
+        { id: 'cave_gnasher', weight: 1, presence: { from: 4, fadeIn: 3 } },
         { id: 'slag_brute', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'rockgrub', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'spitting_horror', weight: 1, presence: { to: 14, fadeOut: 7 } },

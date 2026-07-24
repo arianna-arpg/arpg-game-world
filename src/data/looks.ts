@@ -8045,6 +8045,213 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'canopicJar', x: -0.5, y: -0.5, scale: 0.4 },
     ],
   },
+
+  // ============================== THE WILD CHAINS PASS — beasts of the edifice
+
+  /** The cave gnasher: a mouth that solved locomotion — the maw IS the
+   *  body, the legs an afterthought, the crest pure attitude. */
+  cave_gnasher: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.1, seed: 801 } },
+      { kind: 'maw', x: 0.3, scale: 1.15 },
+      { kind: 'fangs', x: 0.35, scale: 1.1 },
+      { kind: 'spikes', x: -0.3, scale: 0.6 },
+      { kind: 'legs', y: 0.1, scale: 0.5, alpha: 0.9, params: { n: 2 } },
+      { kind: 'eyes', color: '#f0d030', params: { spread: 0.55, dist: 0.35, size: 0.1 } },
+    ],
+  },
+  /** The great gnasher: the same appetite, promoted — tusked, crested,
+   *  and wide enough to be weather. */
+  great_gnasher: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.12, seed: 802 } },
+      { kind: 'maw', x: 0.3, scale: 1.2 },
+      { kind: 'fangs', x: 0.35, scale: 1.15 },
+      { kind: 'tusks', x: 0.3, scale: 0.9 },
+      { kind: 'spikes', x: -0.25, scale: 0.75 },
+      { kind: 'spots', role: 'dark', params: { n: 3 } },
+      { kind: 'eyes', color: '#f0d030', params: { spread: 0.5, dist: 0.4, size: 0.09 } },
+    ],
+  },
+  /** The prodder: a goblin, a very long prod, and job security. */
+  gnasher_prodder: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'ears' },
+      { kind: 'trident', y: 0.35, scale: 1.05, params: { len: 1.25 } },
+      { kind: 'pack', x: -0.35, scale: 0.7 },
+      { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** The warg: the wolfrider's mount, unridden — the EMPTY saddle is the
+   *  silhouette's whole story. */
+  warg: {
+    parts: [
+      { kind: 'snout', scale: 1.1, params: { ears: false } },
+      { kind: 'mane', scale: 1.0 },
+      { kind: 'furRuff', scale: 0.95, alpha: 0.9 },
+      { kind: 'saddlebags', x: -0.3, scale: 0.85 },
+      { kind: 'harness', alpha: 0.8 },
+      { kind: 'fangs', x: 0.45, scale: 0.8 },
+      { kind: 'tail', params: { len: 0.85, tuft: true } },
+    ],
+  },
+
+  /** The snow hare: the meadow's juke in a winter coat. */
+  snow_hare: {
+    parts: [
+      { kind: 'furRuff', scale: 0.95 },
+      { kind: 'disc', scale: 0.75, role: 'bone' },
+      { kind: 'ears', scale: 1.25 },
+      { kind: 'eyes', color: '#2a2026', params: { spread: 0.5, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The ptarmigan: it IS the snow until it isn't. */
+  ptarmigan: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'featherWings', scale: 0.65, alpha: 0.9 },
+      { kind: 'tailFeathers', scale: 0.6 },
+      { kind: 'beak', x: 0.42, scale: 0.5 },
+    ],
+  },
+  /** The snow owl: two eclipse eyes and the silence around them. */
+  snow_owl: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'featherWings', scale: 0.95, alpha: 0.95 },
+      { kind: 'tailFeathers', scale: 0.55 },
+      { kind: 'beak', x: 0.4, scale: 0.45, role: 'dark' },
+      { kind: 'eyes', color: '#f0c030', params: { spread: 0.3, dist: 0.5, size: 0.13 } },
+    ],
+  },
+  /** The lynx: tufted ears, patient spots, one pounce owed. */
+  lynx: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'spots', role: 'dark', params: { n: 4 } },
+      { kind: 'tuftEars', scale: 1.1 },
+      { kind: 'whiskers', scale: 0.9 },
+      { kind: 'tail', params: { len: 0.35, tuft: true } },
+    ],
+  },
+  /** The wolverine: a bear's argument in a badger's body. */
+  wolverine: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.12, seed: 803 } },
+      { kind: 'furRuff', scale: 1.05 },
+      { kind: 'stripes', role: 'bone', alpha: 0.7, params: { n: 2 } },
+      { kind: 'snout', scale: 0.75, params: { ears: false } },
+      { kind: 'claws', scale: 0.85, params: { len: 0.5, talons: 3 } },
+    ],
+  },
+
+  /** The roe deer: soft-footed graze, small antlers, gone already. */
+  roe_deer: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'antlers', scale: 0.7 },
+      { kind: 'ears', scale: 0.9 },
+      { kind: 'spots', role: 'bone', alpha: 0.6, params: { n: 3 } },
+      { kind: 'eyes', color: '#2a201a', params: { spread: 0.44, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** The woodgrouse: a drum-roll with feathers, fanned to detonate. */
+  woodgrouse: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'tailFeathers', scale: 1.15 },
+      { kind: 'featherWings', scale: 0.7, alpha: 0.9 },
+      { kind: 'crest', scale: 0.6, color: '#c8402e' },
+      { kind: 'beak', x: 0.42, scale: 0.5 },
+    ],
+  },
+  /** The red fox: the hedgerow's one professional — the tail is half
+   *  the animal and all of the alibi. */
+  red_fox: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'furRuff', scale: 0.9, alpha: 0.9 },
+      { kind: 'snout', scale: 0.85 },
+      { kind: 'tail', params: { len: 1.0, tuft: true } },
+      { kind: 'eyes', color: '#f0b030', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
+    ],
+  },
+
+  /** The jerboa: mostly leg, briefly airborne. */
+  jerboa: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'ears', scale: 1.3 },
+      { kind: 'tail', params: { len: 1.1, tuft: true } },
+      { kind: 'eyes', color: '#2a2026', params: { spread: 0.45, dist: 0.5, size: 0.11 } },
+    ],
+  },
+  /** The dust quail: the plume goes first, the covey follows. */
+  dust_quail: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'crest', x: 0.25, scale: 0.75, color: '#4a3a2a' },
+      { kind: 'featherWings', scale: 0.6, alpha: 0.9 },
+      { kind: 'beak', x: 0.42, scale: 0.45 },
+    ],
+  },
+  /** The horned viper: the sand's opinion, coiled. */
+  horned_viper: {
+    parts: [
+      { kind: 'coil', scale: 0.85 },
+      { kind: 'serpentHead', x: 0.35, scale: 0.8 },
+      { kind: 'horns', x: 0.4, scale: 0.5 },
+      { kind: 'scutes', scale: 0.7, alpha: 0.9 },
+    ],
+  },
+
+  /** The salt ibex: swept horns, a philosopher's beard, unreachable. */
+  salt_ibex: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'ramHorns', scale: 1.2 },
+      { kind: 'beard', x: 0.3, scale: 0.7 },
+      { kind: 'hump', x: -0.2, scale: 0.6, alpha: 0.9 },
+    ],
+  },
+  /** The river otter: whiskers, wake, and no respect. */
+  river_otter: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'furRuff', scale: 0.85, alpha: 0.85 },
+      { kind: 'whiskers', scale: 1.0 },
+      { kind: 'tail', params: { len: 0.9 } },
+      { kind: 'eyes', color: '#2a201a', params: { spread: 0.36, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The snapping terrapin: a rock with a schedule. */
+  snapping_terrapin: {
+    parts: [
+      { kind: 'shell', scale: 1.0 },
+      { kind: 'scutes', scale: 0.8 },
+      { kind: 'beak', x: 0.45, scale: 0.6, role: 'dark' },
+      { kind: 'claws', y: 0.3, scale: 0.5, params: { len: 0.35, talons: 2 } },
+    ],
+  },
+  /** The land crab: sideways citizenry. */
+  land_crab: {
+    parts: [
+      { kind: 'shell', scale: 0.85 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'pincers', scale: 0.8 },
+      { kind: 'eyestalks', scale: 0.8 },
+    ],
+  },
+  /** The ash hopper: the caldera's cricket, warm-wind fed. */
+  ash_hopper: {
+    parts: [
+      { kind: 'disc', scale: 0.75 },
+      { kind: 'legs', scale: 1.0, params: { n: 4 } },
+      { kind: 'antennae', scale: 1.1 },
+      { kind: 'glassFins', scale: 0.6, alpha: 0.6 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

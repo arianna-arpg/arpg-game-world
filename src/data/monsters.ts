@@ -848,6 +848,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'dire_wolf', chance: 0.2, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
     // Moths among the fireflies — the grove's own drifting lanterns.
     { id: 'glow_moth', chance: 0.4, count: [2, 4] },
+    // The wild chains: the hedgerow's graze and its one professional.
+    { id: 'roe_deer', chance: 0.4, count: [2, 3] },
+    { id: 'red_fox', chance: 0.3, count: [1, 1] },
     { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
     { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
       announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
@@ -866,6 +869,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'village_warden', chance: 0.4, count: [1, 2] },
     { id: 'plains_wolf', chance: 0.3, count: [2, 3] },
     { id: 'carrion_crow', chance: 0.5, count: [3, 6] },
+    // The wild chains: the hen-thief — the fold-raid's SMALL cousin, a
+    // drama the yard stages nightly through the same hunger drives.
+    { id: 'red_fox', chance: 0.35, count: [1, 1] },
     { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
     { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
       announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
@@ -901,6 +907,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
+    // The wild chains: the hop and the opinion that ends it.
+    { id: 'jerboa', chance: 0.6, count: [3, 5] },
+    { id: 'horned_viper', chance: 0.3, count: [1, 1] },
     { id: 'sand_skitterer', chance: 0.55, count: [3, 5] },
     { id: 'dune_vulture', chance: 0.45, count: [1, 2] },
     { id: 'lash_maiden', chance: 0.3, count: [2, 3] },
@@ -923,6 +932,10 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'ant_trail', chance: 0.3, count: [1, 2] },
     { id: 'reed_frog', chance: 0.4, count: [2, 3], near: 'water' },
     { id: 'dire_wolf', chance: 0.25, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
+    // The wild chains: soft-footed venison and the pounce it feeds.
+    { id: 'roe_deer', chance: 0.45, count: [2, 4] },
+    { id: 'woodgrouse', chance: 0.45, count: [2, 3] },
+    { id: 'lynx', chance: 0.25, count: [1, 1] },
   ],
   // The northern belts: elk herds with wolves on their heels.
   taiga: [
@@ -933,11 +946,24 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'squirrel', chance: 0.45, count: [2, 3] },
     { id: 'dire_wolf', chance: 0.3, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
     { id: 'moon_howler', chance: 0.2, count: [1, 1], presence: { from: 8, fadeIn: 4 } },
+    // The wild chains: grouse in the drum-brush, the lynx above them,
+    // the wolverine above everything's better judgment.
+    { id: 'snow_hare', chance: 0.45, count: [2, 3] },
+    { id: 'woodgrouse', chance: 0.4, count: [2, 3] },
+    { id: 'lynx', chance: 0.22, count: [1, 1] },
+    { id: 'wolverine', chance: 0.15, count: [1, 1], presence: { from: 5, fadeIn: 3 } },
   ],
   tundra: [
     { id: 'taiga_elk', chance: 0.5, count: [2, 3] },
     { id: 'meadow_hare', chance: 0.45, count: [2, 4] },
     { id: 'plains_wolf', chance: 0.35, count: [2, 3] },
+    // The wild chains: the white belt gets its whole food web — coveys
+    // that ARE the snow, the stoop that hunts their silence, and the
+    // little terror that refuses every arithmetic.
+    { id: 'snow_hare', chance: 0.6, count: [2, 4] },
+    { id: 'ptarmigan', chance: 0.5, count: [3, 5] },
+    { id: 'snow_owl', chance: 0.22, count: [1, 1] },
+    { id: 'wolverine', chance: 0.18, count: [1, 1], presence: { from: 5, fadeIn: 3 } },
   ],
   // The wet country: toads in the reeds, herons fishing for them.
   marsh: [
@@ -952,6 +978,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
 
     { id: 'marsh_stalker', chance: 0.3, count: [1, 2] },
     { id: 'bloat_mother', chance: 0.2, count: [1, 1], presence: { from: 7, fadeIn: 4 } },
+    // The wild chains: a rock until the worst moment of a toad's day.
+    { id: 'snapping_terrapin', chance: 0.3, count: [1, 1], near: 'water' },
+    { id: 'river_otter', chance: 0.25, count: [1, 2], near: 'water' },
   ],
   grave: [
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
@@ -972,6 +1001,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   isle: [
     { id: 'shore_crab', chance: 0.6, count: [2, 5] },
     { id: 'bog_heron', chance: 0.35, count: [1, 2] },
+    // The wild chains: the sideways citizenry above the tideline.
+    { id: 'land_crab', chance: 0.5, count: [2, 4] },
   ],
   highland: [
     { id: 'taiga_elk', chance: 0.45, count: [2, 3] },
@@ -989,6 +1020,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
     { id: 'gilded_scamp', chance: 0.35, count: [1, 1], tier: 1,
       announce: 'a golden flicker crosses the tabletops above…' },
+    // The wild chains: the ledge-graze that watches you fail to matter.
+    { id: 'salt_ibex', chance: 0.45, count: [2, 3] },
   ],
   // The karst country: sparse dry-stone life — hares grazing the pockets,
   // moths in the gulf-shade, bloodwings nesting the crag rims.
@@ -997,9 +1030,43 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'glow_moth', chance: 0.35, count: [2, 4] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
+    // The wild chains: the dry-stone country's cliff graze.
+    { id: 'salt_ibex', chance: 0.4, count: [2, 3] },
+  ],
+  // THE DOWNS: open sheep-grass under a wide sky — coveys, hares, the
+  // fox at the margins and the hawk above all of it.
+  downs: [
+    { id: 'meadow_hare', chance: 0.6, count: [2, 4] },
+    { id: 'dust_quail', chance: 0.55, count: [3, 5] },
+    { id: 'taiga_elk', chance: 0.3, count: [2, 3] },
+    { id: 'red_fox', chance: 0.3, count: [1, 1] },
+    { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
+    { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
+  ],
+  // THE LITTORAL: the tide-tangle's margin lives — crabs in both
+  // registers, the otter that hunts like play, herons over the frogs.
+  littoral: [
+    { id: 'shore_crab', chance: 0.6, count: [2, 4] },
+    { id: 'land_crab', chance: 0.35, count: [2, 3] },
+    { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
+    { id: 'river_otter', chance: 0.3, count: [1, 2], near: 'water' },
+    { id: 'bog_heron', chance: 0.3, count: [1, 2] },
+  ],
+  // THE JUNGLE: its own row at last ('grove' covered it by proxy) — the
+  // green's small lives under the silk and the strangler.
+  jungle: [
+    { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
+    { id: 'glow_moth', chance: 0.45, count: [2, 4] },
+    { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
+    { id: 'roe_deer', chance: 0.25, count: [1, 2] },
+    { id: 'squirrel', chance: 0.3, count: [2, 3] },
+    { id: 'orb_weaver', chance: 0.25, count: [1, 1], presence: { from: 6, fadeIn: 3 } },
   ],
   field: [
     { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
+    // The wild chains: coveys in the grain, the fox working the margins.
+    { id: 'dust_quail', chance: 0.5, count: [3, 5] },
+    { id: 'red_fox', chance: 0.3, count: [1, 1] },
     // the Verminfall — grain draws rats; the dead of the open field draw crows.
     { id: 'gutter_rat', chance: 0.4, count: [2, 4] },
     { id: 'carrion_crow', chance: 0.25, count: [2, 3] },
@@ -1028,6 +1095,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // land's small lives are still lives).
   volcanic: [
     { id: 'ember_wisp', chance: 0.6, count: [2, 4] },
+    // The wild chains: the caldera finally has PREY — something small
+    // that drinks the warm wind and outlives everything that notices.
+    { id: 'ash_hopper', chance: 0.55, count: [3, 5] },
   ],
   // The lattice hums with moth-light.
   crystal: [
@@ -16001,6 +16071,426 @@ export const MONSTERS: Record<string, MonsterDef> = {
       onDeath: [{ do: 'arenaRestore' }],
     },
   },
+
+  // ==========================================================================
+  // THE WILD CHAINS PASS — the prey & predator edifice, widened. Prey wear
+  // tag:'critter' (objective-exempt texture with REAL flight rhythms: juke
+  // hooks, camouflage freezes, kite budgets that tire). Predators wear
+  // tag:'predator' + HUNGER DRIVES and hunt through target.prey:['critter']
+  // — every chain below stages its own dramas whether or not you watch.
+  // Plus THE GOBLIN BEAST-TRAIN: the warband's livestock is a weapon.
+  // ==========================================================================
+
+  // --- THE GOBLIN BEAST-TRAIN: what the warband breeds in the dark.
+
+  // The cave gnasher: a mouth that solved locomotion — mostly teeth, the
+  // rest bounce. It arrives in hops, halves things, and hops on.
+  cave_gnasher: {
+    id: 'cave_gnasher', name: 'Cave Gnasher',
+    color: '#c85a3a', shape: 'circle', radius: 11, look: 'cave_gnasher',
+    base: { life: 40, moveSpeed: 195, accuracy: 104, evasion: 50, mana: 30, manaRegen: 3 },
+    skills: ['crushing_leap', 'claw'],
+    xp: 14,
+    faction: 'goblin', tags: ['beast'],
+    detection: 1.3,
+    scaleVariance: [0.85, 1.25], scaleStats: true,
+    packSize: [3, 5],
+    aggro: { fixation: 1.3, fury: 1.4, waver: 0.5 },
+    brain: {
+      type: 'swarm',
+      // The BOUNCE is the whole gait: random hooks and dead-stop gathers
+      // between leaps — a ball of appetite, never a straight line.
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1, freezeChance: 0.15, freeze: [0.2, 0.4] },
+    },
+  },
+  // The great gnasher: the one the prodders brag about — a boulder of
+  // mouth that lands where you were confident.
+  great_gnasher: {
+    id: 'great_gnasher', name: 'Great Gnasher',
+    color: '#b84a30', shape: 'circle', radius: 16, look: 'great_gnasher',
+    base: { life: 150, moveSpeed: 165, accuracy: 104, poise: 45, mana: 40, manaRegen: 4 },
+    skills: ['crushing_leap', 'heavy_strike'],
+    xp: 34,
+    faction: 'goblin', tags: ['beast'],
+    presence: { from: 7, fadeIn: 4 },
+    heft: 1.3,
+    scaleVariance: [0.9, 1.2],
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'juke', hookEvery: [0.6, 1.1], hookArc: 0.9, freezeChance: 0.12, freeze: [0.25, 0.45] },
+    },
+  },
+  // The prodder: the goblin whose job is the herd — the prod keeps the
+  // gnashers pointed at YOU, and the pens are never quite empty.
+  gnasher_prodder: {
+    id: 'gnasher_prodder', name: 'Gnasher Prodder',
+    color: '#94a850', shape: 'triangle', radius: 11, look: 'gnasher_prodder',
+    base: { life: 55, moveSpeed: 150, accuracy: 100, evasion: 45, mana: 0 },
+    skills: ['claw'],
+    xp: 20,
+    faction: 'goblin', adorn: 'ears',
+    brain: {
+      type: 'skirmish', withdraw: 1.6,
+      rules: [{
+        when: {}, every: [12, 16], hold: [0.4, 0.6],
+        announce: 'the prodder whistles — the pen empties!',
+        actions: [{ do: 'summon', monster: 'cave_gnasher', count: 2, ring: 60, lifespan: 45 }],
+      }],
+    },
+  },
+  // The warg: the wolfrider's mount, unridden — saddle-scarred, war-fed,
+  // and hungrier without the goblin telling it when to stop. It still
+  // hunts small lives mid-battle; the warband calls that foraging.
+  warg: {
+    id: 'warg', name: 'Warg',
+    color: '#6a5e52', shape: 'kite', radius: 14, material: 'fur', look: 'warg',
+    base: { life: 90, moveSpeed: 200, accuracy: 106, evasion: 45, mana: 15, manaRegen: 2 },
+    skills: ['gore_rend', 'claw'],
+    xp: 22,
+    faction: 'goblin', tags: ['beast'],
+    detection: 1.6,
+    scaleVariance: [0.9, 1.25],
+    packSize: [2, 4],
+    brain: {
+      type: 'pack',
+      drives: { hunger: { rise: 0.012, start: [0.4, 0.8], onKill: -0.7, share: 0.4 } },
+      tempo: { moveFor: [1.2, 2.0], pauseFor: [0.2, 0.5] },
+      squad: { muster: { count: 2, radius: 320, patience: 5 }, tokens: 2, surround: true },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.6 } },
+        use: {
+          target: { prey: ['critter'], detectMul: 1.25 },
+          behavior: { seek: { what: 'prey', pace: 0.5 } },
+        },
+      }],
+    },
+  },
+
+  // --- THE NORTH CHAIN: hares and coveys under owl, lynx and wolverine.
+
+  // The snow hare: the meadow's juke in a winter coat.
+  snow_hare: {
+    id: 'snow_hare', name: 'Snow Hare',
+    color: '#e8ecf0', shape: 'oval', radius: 7, material: 'fur', look: 'snow_hare',
+    base: { life: 8, moveSpeed: 220, evasion: 80, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.8, 1.15],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 160, duration: [1.4, 2.4] } },
+      perception: { arcDeg: 320, rearMul: 0.9 },
+      move: { style: 'juke', hookEvery: [0.3, 0.7], hookArc: 1.3, freezeChance: 0.25, freeze: [0.2, 0.5] },
+      tempo: { kite: 3.0, windedFor: [0.8, 1.4] },
+    },
+  },
+  // The ptarmigan covey: it IS the snow until it isn't — the freeze is
+  // the camouflage, the burst is the panic.
+  ptarmigan: {
+    id: 'ptarmigan', name: 'Ptarmigan',
+    color: '#dce4e8', shape: 'oval', radius: 6, material: 'fur', look: 'ptarmigan',
+    base: { life: 6, moveSpeed: 230, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.8)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.85, 1.1],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 130, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.4, freezeChance: 0.45, freeze: [0.4, 0.9] },
+      tempo: { kite: 2.0, windedFor: [0.9, 1.5] },
+    },
+  },
+  // The snow owl: the white stoop — it hunts the exact silence the
+  // covey trusts.
+  snow_owl: {
+    id: 'snow_owl', name: 'Snow Owl',
+    color: '#f0f2f4', shape: 'kite', radius: 9, material: 'fur', look: 'snow_owl',
+    base: { life: 22, moveSpeed: 215, accuracy: 108, evasion: 55, mana: 30, manaRegen: 3 },
+    skills: ['dash_strike', 'claw'],
+    xp: 8, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.8, drops: 0,
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'flanker',
+      drives: { hunger: { rise: 0.012, start: [0.4, 0.8], onKill: -0.8 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.6 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.6 } } },
+      }],
+    },
+  },
+  // The lynx: patience with tufted ears — one pounce, correctly spent.
+  lynx: {
+    id: 'lynx', name: 'Lynx',
+    color: '#c8b088', shape: 'kite', radius: 11, material: 'fur', look: 'lynx',
+    base: { life: 34, moveSpeed: 195, accuracy: 110, evasion: 55, mana: 30, manaRegen: 3 },
+    skills: ['crushing_leap', 'claw'],
+    xp: 10, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.6, drops: 0,
+    scaleVariance: [0.9, 1.2],
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      tempo: { moveFor: [0.9, 1.6], pauseFor: [0.4, 0.9] },
+      drives: { hunger: { rise: 0.011, start: [0.3, 0.7], onKill: -0.8 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.6 } },
+        use: { target: { prey: ['critter'], detectMul: 1.25 }, behavior: { seek: { what: 'prey', pace: 0.45 } } },
+      }],
+    },
+  },
+  // The wolverine: a bear's argument in a badger's body — it fights
+  // uphill by weight and wins by refusing the arithmetic.
+  wolverine: {
+    id: 'wolverine', name: 'Wolverine',
+    color: '#4a3e34', shape: 'oval', radius: 10, material: 'fur', look: 'wolverine',
+    base: { life: 60, moveSpeed: 165, accuracy: 104, poise: 30, mana: 15, manaRegen: 2 },
+    skills: ['gore_rend', 'claw'],
+    xp: 16, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.5, drops: 0,
+    heft: 1.3,
+    scaleVariance: [0.9, 1.2],
+    aggro: { fixation: 1.6, fury: 1.8, waver: 0.3 },
+    brain: {
+      type: 'juggernaut', enrage: 0.5,
+      drives: { hunger: { rise: 0.014, start: [0.5, 0.9], onKill: -0.6 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.5 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.6 } } },
+      }],
+    },
+  },
+
+  // --- THE HEDGE CHAIN: deer and grouse under fox and hawk.
+
+  // The roe deer: the wood's soft-footed graze — gone before the branch
+  // finishes snapping.
+  roe_deer: {
+    id: 'roe_deer', name: 'Roe Deer',
+    color: '#b08a62', shape: 'oval', radius: 11, material: 'fur', look: 'roe_deer',
+    base: { life: 30, moveSpeed: 225, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [],
+    xp: 2, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.85, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 220, duration: [1.8, 3.0] } },
+      perception: { arcDeg: 330, rearMul: 0.9 },
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 0.9, freezeChance: 0.15, freeze: [0.3, 0.6] },
+      tempo: { kite: 4.0, windedFor: [1.0, 1.6] },
+    },
+  },
+  // The woodgrouse: a drum-roll with feathers — it holds, holds, HOLDS,
+  // then detonates sideways through the brush.
+  woodgrouse: {
+    id: 'woodgrouse', name: 'Woodgrouse',
+    color: '#7a5a44', shape: 'oval', radius: 7, material: 'fur', look: 'woodgrouse',
+    base: { life: 7, moveSpeed: 225, evasion: 80, mana: 0 },
+    mods: [mod('detectability', 'more', -0.75)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 120, duration: [1.0, 1.6] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.5, freezeChance: 0.5, freeze: [0.5, 1.0] },
+      tempo: { kite: 1.8, windedFor: [1.0, 1.6] },
+    },
+  },
+  // The red fox: the hedgerow's one professional — hens, hares, eggs,
+  // and a clean conscience.
+  red_fox: {
+    id: 'red_fox', name: 'Red Fox',
+    color: '#c8622e', shape: 'kite', radius: 10, material: 'fur', look: 'red_fox',
+    base: { life: 26, moveSpeed: 205, accuracy: 106, evasion: 60, mana: 15, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 8, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.5, drops: 0,
+    adorn: 'ears',
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'skirmish', withdraw: 1.8,
+      move: { style: 'lurk' },
+      tempo: { moveFor: [1.0, 1.8], pauseFor: [0.3, 0.7] },
+      drives: { hunger: { rise: 0.014, start: [0.4, 0.8], onKill: -0.8 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
+    },
+  },
+
+  // --- THE DRY CHAIN: hoppers and quail under the patient sand.
+
+  // The jerboa: mostly leg, briefly airborne, rarely caught.
+  jerboa: {
+    id: 'jerboa', name: 'Jerboa',
+    color: '#d8b882', shape: 'oval', radius: 5, material: 'fur', look: 'jerboa',
+    base: { life: 5, moveSpeed: 235, evasion: 90, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 140, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.45], hookArc: 1.6, freezeChance: 0.2, freeze: [0.15, 0.35] },
+      tempo: { kite: 2.4, windedFor: [0.7, 1.2] },
+    },
+  },
+  // The dust quail: a covey of nerves — the downs' running punctuation.
+  dust_quail: {
+    id: 'dust_quail', name: 'Dust Quail',
+    color: '#c0a878', shape: 'oval', radius: 6, material: 'fur', look: 'dust_quail',
+    base: { life: 6, moveSpeed: 225, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.75)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 130, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.4, freezeChance: 0.35, freeze: [0.3, 0.7] },
+      tempo: { kite: 2.0, windedFor: [0.8, 1.4] },
+    },
+  },
+  // The horned viper: the sand's opinion of the jerboa — expressed once.
+  horned_viper: {
+    id: 'horned_viper', name: 'Horned Viper',
+    color: '#b89a5e', shape: 'kite', radius: 8, look: 'horned_viper',
+    base: { life: 20, moveSpeed: 150, accuracy: 112, evasion: 50, mana: 15, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 7, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.4, drops: 0,
+    ambush: { radius: 40 },
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      drives: { hunger: { rise: 0.01, start: [0.4, 0.8], onKill: -0.9 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.6 } },
+        use: { target: { prey: ['critter'], detectMul: 1.2 } },
+      }],
+    },
+  },
+
+  // --- THE HIGH & WET CHAINS: cliff grazers, water hunters.
+
+  // The salt ibex: it grazes the ledges your build can't reach and
+  // watches you fail to matter.
+  salt_ibex: {
+    id: 'salt_ibex', name: 'Salt Ibex',
+    color: '#c8bca4', shape: 'oval', radius: 11, material: 'fur', look: 'salt_ibex',
+    base: { life: 32, moveSpeed: 200, evasion: 60, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [],
+    xp: 2, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.85, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 180, duration: [1.4, 2.4] } },
+      move: { style: 'juke', hookEvery: [0.5, 0.9], hookArc: 1.0 },
+      tempo: { kite: 3.6, windedFor: [0.9, 1.4] },
+    },
+  },
+  // The river otter: the shallows' delinquent — it hunts like play and
+  // plays like hunting, and the frogs cannot tell the difference either.
+  river_otter: {
+    id: 'river_otter', name: 'River Otter',
+    color: '#6a5240', shape: 'oval', radius: 9, material: 'fur', look: 'river_otter',
+    base: { life: 24, moveSpeed: 200, accuracy: 104, evasion: 65, mana: 15, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 7, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.4, drops: 0,
+    packSize: [1, 2],
+    brain: {
+      type: 'flanker',
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.2 },
+      drives: { hunger: { rise: 0.012, start: [0.3, 0.7], onKill: -0.7, share: 0.5 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.25 }, behavior: { seek: { what: 'prey', pace: 0.6 } } },
+      }],
+    },
+  },
+  // The snapping terrapin: a rock until the worst moment of a toad's
+  // day — the shell forgives the front of nothing.
+  snapping_terrapin: {
+    id: 'snapping_terrapin', name: 'Snapping Terrapin',
+    color: '#5a6a4a', shape: 'oval', radius: 10, look: 'snapping_terrapin',
+    base: { life: 45, moveSpeed: 90, accuracy: 106, armor: 20, poise: 35, mana: 15, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 9, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.2, drops: 0,
+    ambush: { radius: 36 },
+    shellGuard: { side: 'front', max: 30, arcDeg: 140, regenDelay: 6, regenRate: 6 },
+    turnSpeed: 3.0,
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      drives: { hunger: { rise: 0.01, start: [0.4, 0.8], onKill: -0.9 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.6 } },
+        use: { target: { prey: ['critter'], detectMul: 1.2 } },
+      }],
+    },
+  },
+  // The land crab: the isle's sideways citizenry — armored, unhurried,
+  // and beneath every dignity except its own.
+  land_crab: {
+    id: 'land_crab', name: 'Land Crab',
+    color: '#c87a52', shape: 'oval', radius: 7, material: 'chitin', look: 'land_crab',
+    base: { life: 14, moveSpeed: 120, evasion: 40, armor: 12, mana: 0 },
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.2, drops: 0,
+    scaleVariance: [0.8, 1.25],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 90, duration: [0.8, 1.4] } },
+      move: { style: 'juke', hookEvery: [0.5, 1.0], hookArc: 1.5 },
+    },
+  },
+  // The ash hopper: the caldera's cricket — it drinks the warm wind and
+  // outlives everything that notices it.
+  ash_hopper: {
+    id: 'ash_hopper', name: 'Ash Hopper',
+    color: '#8a7462', shape: 'oval', radius: 6, material: 'chitin', look: 'ash_hopper',
+    base: { life: 6, moveSpeed: 230, evasion: 85, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('detectability', 'more', -0.7)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 120, duration: [1.0, 1.6] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.4], hookArc: 1.6, freezeChance: 0.25, freeze: [0.2, 0.5] },
+      tempo: { kite: 2.2, windedFor: [0.7, 1.2] },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -16295,6 +16785,13 @@ export const FACTIONS: Record<string, {
       // The champion (high court pass): the marquee bar without the boss
       // classification — the warband's loudest argument, rarely.
       { id: 'goblin_warboss', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
+      // THE BEAST-TRAIN (the wild chains pass): the warband's livestock is
+      // a weapon — gnasher herds under the prodder's whistle, and the
+      // wolfriders' mounts running unbridled beside the riders.
+      { id: 'cave_gnasher', weight: 2, presence: { from: 3, fadeIn: 2 } },
+      { id: 'gnasher_prodder', weight: 1, presence: { from: 5, fadeIn: 3 } },
+      { id: 'warg', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'great_gnasher', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   undead: {
