@@ -59,8 +59,36 @@ registerDoodadRule('corn_stand', {
   fuel: 'kindling',
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });
+// BARLEY: wheat's pale cousin — the same blind-field contract (the crop veil
+// law), a different band of the patchwork's palette.
+registerDoodadRule('barley', {
+  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+  spacing: 20, walkOnly: true, spin: true,
+  occlude: { pad: 10, alpha: 0.32 },
+  veil: { group: 'crop', standStatus: 'canopied' },
+  fuel: 'kindling',
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+// FLAX: the knee-high crop — deliberately OPEN (no sight block, no veil): a
+// flax parcel is ground you can read across, so the patchwork alternates
+// blind wheat and honest blue — vision as terrain, chosen by the plow.
+registerDoodadRule('flax', {
+  overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: false,
+  spacing: 18, walkOnly: true, spin: true,
+  occlude: { pad: 6, alpha: 0.5 },
+  fuel: 'kindling',
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+// TILLED EARTH: the parcel pass's furrowed wash (engine/settled.ts) — pure
+// ground decal, drawn with its grain along `rot` so the strips read plowed.
+registerDoodadRule('tilled_earth', {
+  overlap: 'ground', walkOnly: true,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
 registerStamp('wheat', stampSingle('wheat', [26, 40]));
 registerStamp('corn_stand', stampSingle('corn_stand', [24, 36]));
+registerStamp('barley', stampSingle('barley', [26, 40]));
+registerStamp('flax', stampSingle('flax', [18, 28]));
 
 // A WHEAT SEA: one field as one veil patch — crowns packed to overlap so the
 // whole stand merges, a bale and a watcher's cross at the headland.

@@ -9144,6 +9144,30 @@ export const MONSTERS: Record<string, MonsterDef> = {
     noNemesis: true,
     brain: { type: 'juggernaut', enrage: 0.5 },
   },
+  // THE FOLD REEVE: the farmer who oversees the worked shires — the Drove's
+  // paymaster (packages/defs/drove.ts). The scene posts one at the broken pen;
+  // he keeps the count and pays the gathering by the head. Folk law throughout
+  // (no xp, no nemesis — killing the help is a choice, never a farm), and he
+  // is no fighter: wounded, he backs off and hollers; the purse still pays
+  // from the pen itself (the fold's own worth, not his pockets).
+  drove_reeve: {
+    id: 'drove_reeve', name: 'Fold Reeve',
+    color: '#b8874a', shape: 'pentagon', radius: 12, look: 'npc_trader',
+    base: { life: 72, moveSpeed: 116, mana: 0 },
+    skills: [],
+    xp: 0,
+    faction: 'freehold',
+    detection: 0.1,
+    drops: 0,
+    post: true, // he keeps the pen — displaced, he walks back to the rail
+    noNemesis: true,
+    brain: {
+      type: 'basic',
+      move: { style: 'retreat' },
+      tempo: { kite: 3.5, windedFor: [1.0, 1.6] },
+      morale: { breakAtLife: 0.85, panicOnAllyDeath: { radius: 260, duration: 2.5 }, rallyAfter: 5 },
+    },
+  },
 
   // --- THE HEADLAND'S OWN --------------------------------------------------------
   // The boar that owns the crop margin: a charging sounder (the tusker's

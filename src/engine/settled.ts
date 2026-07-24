@@ -36,8 +36,8 @@ import type { Rng } from '../core/rng';
 import type { ZoneDef } from '../data/zones';
 import type { GridWalkField } from '../world/gridWalk';
 import {
-  ensureGrid, layoutParam, layTraveledWay, overgrowthOf, raiseStructure,
-  registerLayout, scatterDecoration,
+  areaFreeOf, doodadRuleOf, ensureGrid, inReserved, layoutParam, layTraveledWay,
+  onClearway, overgrowthOf, raiseStructure, registerLayout, scatterDecoration,
   type DoodadKind, type GenCtx,
 } from './levelgen';
 import { carveMassifs, registerMassShape } from './massif';
@@ -77,7 +77,59 @@ export const SETTLED_CFG = {
   plazaChance: 0.22,
   /** block-court inner-radius fraction (wall ring thickness lever). */
   blockInner: 0.58,
+  /** fields: THE PARCEL PASS — the tilled patchwork that makes worked
+   *  country READ as worked country: rectangular plots, crops planted in
+   *  true ROWS along a shared plow bearing, a furrowed wash beneath them.
+   *  Counts and sizes here; the crop table itself is `parcelCrops`
+   *  (PARCEL_CROPS below), every one overridable per zone/variant. */
+  cropParcels: [3, 5] as [number, number],
+  parcelW: [300, 520] as [number, number],
+  parcelH: [220, 380] as [number, number],
+  /** Per-parcel wobble off the zone's one plow bearing (radians) — real
+   *  fields share their orientation locally; the wobble keeps it worked
+   *  by hands, not printed. */
+  parcelBearingJitter: 0.12,
+  /** Siting attempts per parcel (draws are unconditional — the findSpot
+   *  discipline — so a rejected seat never shifts later parcels). */
+  parcelTries: 14,
+  /** Rim-to-rim breathing room between parcels (px). */
+  parcelGapMin: 70,
+  /** Parcel-center clearance from every portal (px, beyond the parcel's own
+   *  half-diagonal — comfortably outside the entry's 220 hard clear, so no
+   *  rail run can ever crowd a door). */
+  parcelPortalClear: 240,
+  /** Chance a parcel lies FALLOW: tilled wash + a few tufts, no crop —
+   *  the year's rest, and the fallow-shires face leans hard on it. */
+  parcelFallow: 0.15,
+  /** Chance a parcel wears a rail run along one long edge. */
+  parcelFence: 0.35,
+  /** Tilled-wash emission: disc step along each furrow row, and the disc
+   *  radius as a fraction of the crop row gap. */
+  parcelTillStep: 34,
+  parcelTillFrac: 0.62,
 } as const;
+
+/** One weighted crop-parcel row: what a plot grows and how it is planted
+ *  (plant spacing along the row, gap between rows, plant size band). */
+export interface CropParcelRow {
+  kind: DoodadKind;
+  weight: number;
+  spacing: number;
+  rowGap: number;
+  radius: [number, number];
+}
+
+/** The reference crop table (layoutParam `parcelCrops` overrides per face):
+ *  wheat and corn eat sight (the crop veil law), barley reads pale beside
+ *  them, flax stays knee-high and OPEN (a parcel you can see across — the
+ *  patchwork alternates blind and honest ground), pumpkins hug the dirt. */
+export const PARCEL_CROPS: CropParcelRow[] = [
+  { kind: 'wheat', weight: 4, spacing: 30, rowGap: 46, radius: [24, 34] },
+  { kind: 'barley', weight: 2.5, spacing: 30, rowGap: 46, radius: [24, 34] },
+  { kind: 'corn_stand', weight: 2.5, spacing: 38, rowGap: 52, radius: [24, 32] },
+  { kind: 'flax', weight: 1.5, spacing: 26, rowGap: 40, radius: [18, 26] },
+  { kind: 'pumpkin_patch', weight: 1, spacing: 42, rowGap: 56, radius: [13, 18] },
+];
 
 // --- THE 'block' MASS SHAPE ----------------------------------------------------
 // A rotated rectangular annulus with punched door-mouths: the city block.
@@ -182,11 +234,130 @@ function dressWayLamps(ctx: GenCtx, grid: GridWalkField, pts: Vec2[], kind: Dood
   }
 }
 
+// --- THE PARCEL PASS ------------------------------------------------------------
+// Rectangular tilled plots with crops planted in true ROWS — the patchwork
+// quilt that makes worked country read as worked country at a glance. The
+// pass owns GEOMETRY only: every kind it plants is data (parcelCrops rows +
+// the kinds' own DOODAD_RULES), and every placement runs the scatter's own
+// gates (walk / forbidOn / reserved / clearway), so a parcel yields to
+// roads, ponds and steadings exactly as hand scatter would — a lane crossing
+// a field mows its strip through the wheat, which is precisely how lanes
+// look. Draws are unconditional per try (the findSpot discipline): a
+// rejected seat or a skipped plant never shifts the stream of later pieces.
+
+function layCropParcels(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
+  const countBand = layoutParam<[number, number]>(def, 'cropParcels', [...SETTLED_CFG.cropParcels] as [number, number]);
+  const n = ctx.rng.int(countBand[0], countBand[1]);
+  const crops = layoutParam<CropParcelRow[]>(def, 'parcelCrops', PARCEL_CROPS);
+  if (n <= 0 || !crops.length) return;
+  const wBand = layoutParam<[number, number]>(def, 'parcelW', [...SETTLED_CFG.parcelW] as [number, number]);
+  const hBand = layoutParam<[number, number]>(def, 'parcelH', [...SETTLED_CFG.parcelH] as [number, number]);
+  const fallowChance = layoutParam(def, 'parcelFallow', SETTLED_CFG.parcelFallow);
+  const fenceChance = layoutParam(def, 'parcelFence', SETTLED_CFG.parcelFence);
+  const till = layoutParam(def, 'parcelTill', true);
+  const bearing0 = ctx.rng.range(0, Math.PI); // the zone's one plow bearing
+  const placed: { x: number; y: number; r: number }[] = [];
+  const portals = [ctx.entry, ...ctx.exits];
+
+  for (let k = 0; k < n; k++) {
+    const w = ctx.rng.range(wBand[0], wBand[1]);
+    const h = ctx.rng.range(hBand[0], hBand[1]);
+    const bearing = bearing0 + ctx.rng.range(-SETTLED_CFG.parcelBearingJitter, SETTLED_CFG.parcelBearingJitter);
+    const crop = pickW(ctx.rng, crops);
+    const fallow = ctx.rng.chance(fallowChance);
+    const fenced = ctx.rng.chance(fenceChance);
+    const fenceSide = ctx.rng.chance(0.5) ? 1 : -1;
+    const halfDiag = Math.hypot(w, h) / 2;
+    // Seat the plot: two draws per try, ALWAYS (acceptance never bends the
+    // stream) — take the first candidate whose disc clears the border,
+    // every portal, earlier parcels, and the steadings' reserved ground.
+    let seat: Vec2 | null = null;
+    for (let t = 0; t < SETTLED_CFG.parcelTries; t++) {
+      const x = ctx.rng.range(60 + w / 2, Math.max(61 + w / 2, ctx.arena.w - 60 - w / 2));
+      const y = ctx.rng.range(60 + h / 2, Math.max(61 + h / 2, ctx.arena.h - 60 - h / 2));
+      if (seat) continue;
+      const p = vec(x, y);
+      if (portals.some(q => Math.hypot(p.x - q.x, p.y - q.y) < halfDiag + SETTLED_CFG.parcelPortalClear)) continue;
+      if (placed.some(q => Math.hypot(p.x - q.x, p.y - q.y) < q.r + halfDiag + SETTLED_CFG.parcelGapMin)) continue;
+      if (inReserved(ctx, p, halfDiag * 0.55)) continue;
+      seat = p;
+    }
+    if (!seat) continue;
+    placed.push({ x: seat.x, y: seat.y, r: halfDiag });
+
+    const ux = Math.cos(bearing), uy = Math.sin(bearing);
+    const vx = -uy, vy = ux;
+    const halfW = w / 2, halfH = h / 2;
+    const rule = doodadRuleOf(crop.kind);
+    const tillRule = doodadRuleOf('tilled_earth');
+    const tillR = crop.rowGap * SETTLED_CFG.parcelTillFrac;
+    for (let off = -halfH + crop.rowGap * 0.5; off <= halfH - crop.rowGap * 0.35; off += crop.rowGap) {
+      // THE TILLED WASH: soil strips laid along the bearing (the painter
+      // draws its furrow grain off `rot`), one lattice per furrow row —
+      // no draws, so a skipped strip costs the stream nothing.
+      if (till) {
+        for (let s = -halfW + SETTLED_CFG.parcelTillStep * 0.4; s <= halfW; s += SETTLED_CFG.parcelTillStep) {
+          const p = vec(seat.x + ux * s + vx * off, seat.y + uy * s + vy * off);
+          if (!grid.isWalkable(p.x, p.y)) continue;
+          if (onClearway(ctx, p, tillR * 0.5)) continue;
+          if (inReserved(ctx, p, tillR * 0.4)) continue;
+          if (tillRule.forbidOn && !areaFreeOf(ctx, p, tillR * 0.5, tillRule.forbidOn)) continue;
+          ctx.doodads.push({ pos: p, radius: tillR, kind: 'tilled_earth', rot: bearing });
+        }
+      }
+      if (fallow) continue; // the year's rest — bare furrows and quiet
+      for (let s = -halfW + crop.spacing * 0.5; s <= halfW - crop.spacing * 0.3; s += crop.spacing) {
+        const jx = ctx.rng.range(-4, 4), jy = ctx.rng.range(-4, 4);
+        const r = ctx.rng.range(crop.radius[0], crop.radius[1]);
+        const rot = ctx.rng.range(0, Math.PI * 2);
+        const p = vec(seat.x + ux * s + vx * off + jx, seat.y + uy * s + vy * off + jy);
+        if (!grid.isWalkable(p.x, p.y)) continue;
+        if (onClearway(ctx, p, r * 0.7)) continue;
+        if (inReserved(ctx, p, r * 0.5)) continue;
+        if (rule.forbidOn && !areaFreeOf(ctx, p, r * 0.8, rule.forbidOn)) continue;
+        ctx.doodads.push({ pos: p, radius: r, kind: crop.kind, rot });
+      }
+    }
+
+    // HEADLAND DRESS: the working litter at the parcel's rim.
+    for (let i = 0, dn = ctx.rng.int(0, 2); i < dn; i++) {
+      const s = ctx.rng.range(-halfW, halfW);
+      const side = ctx.rng.chance(0.5) ? 1 : -1;
+      const kind: DoodadKind = ctx.rng.chance(0.75) ? 'hay_bale' : 'scarecrow';
+      const r = ctx.rng.range(11, 15);
+      const rot = ctx.rng.range(0, Math.PI * 2);
+      const p = vec(seat.x + ux * s + vx * (halfH + 26) * side, seat.y + uy * s + vy * (halfH + 26) * side);
+      if (!grid.isWalkable(p.x, p.y) || onClearway(ctx, p, r) || inReserved(ctx, p, r)) continue;
+      const kr = doodadRuleOf(kind);
+      if (kr.forbidOn && !areaFreeOf(ctx, p, r, kr.forbidOn)) continue;
+      ctx.doodads.push({ pos: p, radius: r, kind, rot });
+    }
+    // THE RAIL RUN: one long edge wears a fence — a boundary, not a box.
+    // Real blockers, so they run the full gate suite: a piece landing on
+    // the lane (or a pond) simply stands down, which is how hundred-year
+    // fences read (the manor-grounds precedent).
+    if (fenced) {
+      const off = (halfH + 14) * fenceSide;
+      const fr = doodadRuleOf('rail_fence');
+      for (let s = -halfW * 0.85; s <= halfW * 0.85; s += 44) {
+        const p = vec(seat.x + ux * s + vx * off, seat.y + uy * s + vy * off);
+        if (!grid.isWalkable(p.x, p.y)) continue;
+        if (onClearway(ctx, p, 20)) continue;
+        if (inReserved(ctx, p, 20)) continue;
+        if (fr.forbidOn && !areaFreeOf(ctx, p, 20, fr.forbidOn)) continue;
+        ctx.doodads.push({ pos: p, radius: 20, kind: 'rail_fence', rot: bearing });
+      }
+    }
+  }
+}
+
 // --- 'fields' — THE FARMLAND RECIPE ---------------------------------------------
 
 /** Open crop country studded with hedgerow/fold bodies, crossed by real
  *  roads. The crops themselves (wheat veils, corn rows, steadings, folk) are
- *  tileset layout rows — the recipe owns GEOMETRY: bodies, ways, the weave. */
+ *  tileset layout rows — the recipe owns GEOMETRY: bodies, ways, the weave,
+ *  and the tilled PARCEL patchwork (layCropParcels) laid after the roads so
+ *  every plot yields to the traveled way. */
 function fieldsLayout(ctx: GenCtx, def: ZoneDef): void {
   const grid = ensureGrid(ctx);
   carveMassifs(ctx, def);
@@ -206,6 +377,10 @@ function fieldsLayout(ctx: GenCtx, def: ZoneDef): void {
     // A lit lane is a FACE choice (the village approach), never the default.
     if (lampKind) dressWayLamps(ctx, grid, pts, lampKind, SETTLED_CFG.lampSpacing, SETTLED_CFG.lampOffset);
   }
+
+  // THE PARCEL PASS: the tilled patchwork, after the ways so every plot
+  // yields to the laid road (the crops mow their strip where the lane runs).
+  layCropParcels(ctx, def, grid);
 
   // The weave's belt-and-suspenders (massifLayout's exact idiom).
   for (const e of ctx.exits) {

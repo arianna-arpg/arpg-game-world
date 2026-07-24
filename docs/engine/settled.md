@@ -55,6 +55,26 @@ and `probe_settled.ts` RIG H (the capital guarantee).
     hedge-line punches a gap that reads as a field gate. Dials (all
     layoutParams): `roadCount`, `roadKind` ('road' gravel → 'paved_way'),
     `roadWidth`, `roadCarve`, `wayLamps` (a lit lane is a FACE choice).
+  - **THE PARCEL PASS** (`layCropParcels`, run by 'fields' after the roads):
+    the tilled patchwork that makes worked country READ as worked country —
+    rectangular plots, crops planted in true ROWS off ONE shared plow
+    bearing per zone (± `parcelBearingJitter`), a furrowed `tilled_earth`
+    wash beneath them (the painter draws its grain along `rot`, so a
+    lattice of strips merges into one plowed field), fallow plots
+    (`parcelFallow` — bare furrows; the fallow-shires face leans to 0.55),
+    an optional rail run along one long edge (`parcelFence` — a boundary,
+    never a box), and headland litter (bales, a scarecrow). Dials:
+    `cropParcels` count band, `parcelW`/`parcelH`, `parcelCrops` (weighted
+    `CropParcelRow`s — kind/spacing/rowGap/size per crop; `PARCEL_CROPS` is
+    the reference table), `parcelTill`. Every placement runs the scatter's
+    own gates (walk / forbidOn / reserved / clearway — via the exported
+    levelgen primitives), so plots yield to roads, ponds and steadings
+    exactly like hand scatter: a lane crossing a field mows its strip
+    through the wheat. Draws are unconditional per try (the findSpot
+    discipline). The crop vocabulary grew two kinds beside wheat/corn:
+    **barley** (wheat's veil contract, paler gold) and **flax** (knee-high
+    and deliberately OPEN — no sight block, so the patchwork alternates
+    blind wheat and honest blue: vision as terrain, chosen by the plow).
   - **'district'** (metropolis): one recipe, two param-picked modes.
     `districtMode:'massing'` carves BUILDING masses (tenement/manor), cuts
     lit **boulevards** (`boulevards`, `pavedKind`, `lampKind`,

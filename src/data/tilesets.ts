@@ -546,12 +546,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       tree: '#3f5c2e', wall: '#4a4438',
     },
     sizeW: [3200, 4400], sizeH: [2300, 3200], ellipseChance: 0.25, biome: 'farmland', sky: 'open',
+    // THE STOCK FOLD: most shires keep a pen somewhere — the fold the Drove
+    // borrows when one gives way (data/landmarks.ts 'stock_fold').
+    landmarks: [{ landmark: 'stock_fold', chance: 0.5 }],
     layoutParams: {
       massifMasses: [
         { kind: 'hedge', weight: 3 }, { kind: 'croft', weight: 2 }, { kind: 'fold', weight: 1.5 },
       ],
       massifCoverage: [0.09, 0.14],
       roadCount: [1, 2], roadKind: 'road', roadWidth: [15, 20],
+      // The parcel pass at its reference dials (engine/settled.ts): a few
+      // true tilled plots on the open face; the variants retune below.
+      cropParcels: [3, 5],
     },
     // The base face: the open shires — worked land at its widest.
     layout: [
@@ -587,6 +593,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifMasses: [{ kind: 'hedge', weight: 3 }, { kind: 'croft', weight: 1 }],
         massifCoverage: [0.05, 0.09],
         roadCount: [1, 1], roadWidth: [14, 18],
+        // The deep patchwork: the parcel pass at full stretch — plot against
+        // plot to the horizon, blind wheat trading off with open flax.
+        cropParcels: [5, 7], parcelFence: 0.45,
       } },
       // The settled face: the village kit proper — cottages, the chapel,
       // trades, the green, and a paved lamplit way through it all.
@@ -607,6 +616,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         massifMasses: [{ kind: 'croft', weight: 2 }, { kind: 'hedge', weight: 1.5 }],
         massifCoverage: [0.05, 0.09],
         roadCount: [2, 3], roadKind: 'paved_way', roadWidth: [20, 26], wayLamps: 'street_lamp',
+        // Town ground keeps its gardens small — a plot or two off the lanes.
+        cropParcels: [1, 3],
       } },
       // The wild rim: the fields nobody bound this year — the hedges gone
       // leggy, the old walls swallowed, the watchers walking their rows.
@@ -625,10 +636,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         ],
         massifCoverage: [0.12, 0.17],
         overgrowth: [0.08, 0.2],
+        // The fields nobody bound this year: the patchwork stands, but most
+        // plots lie FALLOW — bare furrows going quietly back to grass.
+        cropParcels: [2, 4], parcelFallow: 0.55, parcelFence: 0.2,
       } },
     ],
     packs: {
-      count: [5, 7], size: [3, 5],
+      // A shade sparser than the wild countries on purpose (the pastoral
+      // lean): the shires read peaceful-but-watchful, and the living farm —
+      // the folds, the folk, the parcel patchwork — carries the density.
+      count: [4, 6], size: [3, 5],
       // The worked land's own troubles: the Chattel gone wrong, the Carven
       // watching the rows, the roads' bandits — and the boar that owns the
       // headland. Deeper presence brings the harvest court out in force.

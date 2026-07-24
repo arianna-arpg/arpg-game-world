@@ -347,11 +347,28 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
     if (!unique) rarity = 'rare'; // no legend fits — degrade gracefully
   }
 
+  // THE THEMED-CACHE AIM: a forced family constrains the base LOTTERY to
+  // bases that can actually carry it — the tag gate itself is still never
+  // bent (an explicit baseId/category that misfits keeps skipping the
+  // force), this only aims the open pick. Without it a register cache paid
+  // a plain piece whenever the dice drew a base outside the family's tags:
+  // a silently unthemed payout every themed table shares (royal / drowned /
+  // pastoral). Falls back to the whole pool when nothing fits — a themed
+  // pull must degrade to an ordinary item, never to null.
+  let openPool = basePool(ilvl, opts.category);
+  if (opts.withFamily && !unique && !opts.baseId) {
+    const fits = openPool.filter(b => {
+      const pools = affixPoolsFor(b);
+      return pools.prefix.some(a => a.family === opts.withFamily)
+        || pools.suffix.some(a => a.family === opts.withFamily);
+    });
+    if (fits.length) openPool = fits;
+  }
   const base = unique
     ? ITEM_BASES[unique.baseId]
     : opts.baseId
       ? ITEM_BASES[opts.baseId]
-      : pickWeighted(basePool(ilvl, opts.category).map(b => ({ b, weight: b.dropWeight })), rng)?.b;
+      : pickWeighted(openPool.map(b => ({ b, weight: b.dropWeight })), rng)?.b;
   if (!base) return null;
 
   const tier = tierForIlvl(ilvl);

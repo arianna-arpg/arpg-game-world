@@ -206,6 +206,42 @@ const TABLE_LIST: LootTableDef[] = [
       },
     ],
   },
+
+  // THE PASTORAL REGISTER's one distribution (the Royal Register's grammar in
+  // the worked country): a single item FORCED to carry one of the Drove's
+  // three families — and deliberately MAGIC-LED (the reeve pays a day's honest
+  // herding, never a king's ransom: the low-rarity lean is the event's voice,
+  // and the register words are what make the modest piece worth turning over).
+  {
+    id: 'pastoral_register_pick',
+    rolls: [{
+      count: 1,
+      entries: [
+        { weight: 34, kind: 'item', withFamily: 'oxdrawn', rarityWeights: { common: 0, magic: 70, rare: 30 } },
+        { weight: 33, kind: 'item', withFamily: 'fleecebound', rarityWeights: { common: 0, magic: 70, rare: 30 } },
+        { weight: 33, kind: 'item', withFamily: 'foldkept', rarityWeights: { common: 0, magic: 70, rare: 30 } },
+      ],
+    }],
+  },
+
+  // THE REEVE'S PURSE (the Drove gathered — packages/defs/drove.ts): 1-2
+  // register pieces and a thin taste of the wider economy. The flawless-drove
+  // bonus (every head penned ALIVE) rolls pastoral_register_pick once more on
+  // top — the engine's beat, not this table's.
+  {
+    id: 'drove_purse',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'pastoral_register_pick' }] },
+      {
+        count: 1,
+        entries: [
+          { weight: 16, kind: 'vestige' },
+          { weight: 10, kind: 'gem' },
+          { weight: 74, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
 ];
 
 export const LOOT_TABLES: Record<string, LootTableDef> =

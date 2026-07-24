@@ -296,7 +296,7 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
     // drama contract — no scene tag to find them by), so the probe reads the
     // scene's own roster for a TARGET (targeting only; every assertion still
     // goes through the public surfaces).
-    const scene = (w as unknown as { droveScene: { strays: { a: Actor; state: string }[] } | null }).droveScene;
+    const scene = (w as unknown as { strayScene: { strays: { a: Actor; state: string }[] } | null }).strayScene;
     const before = info()!;
     check('G7: loose heads graze the corridor (critter texture, no tag)',
       !!scene && scene.strays.length === before.straysLeft

@@ -1179,6 +1179,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stalk: '#5a6a30' },
     canopy: { painter: 'wheatTops', params: { head: '#7a8a3a', tassel: '#d8c87a', tall: 1.35 } },
   },
+  // Barley: wheat's contract in a paler, whiter gold — the patchwork's
+  // second band (params-only reskin; the parcel pass alternates them).
+  barley: {
+    painter: 'wheatStalk', order: 47, bakeWhole: 'static',
+    blend: { strength: 0.3, feather: 18, color: '#948a54' },
+    params: { stalk: '#b0a45e' },
+    canopy: { painter: 'wheatTops', params: { head: '#d8c88a', tassel: '#ece0ac', tall: 0.94 } },
+  },
+  // Flax: the knee-high blue crop — OPEN ground by rule (no veil, no sight
+  // block), so its crown paints low and airy where wheat walls the view.
+  flax: {
+    painter: 'wheatStalk', order: 46, bakeWhole: 'static',
+    blend: { strength: 0.26, feather: 16, color: '#54684c' },
+    params: { stalk: '#5a7a52' },
+    canopy: { painter: 'wheatTops', params: { head: '#7f97c8', tassel: '#a8bce0', tall: 0.72 } },
+  },
+  // Tilled earth: the parcel pass's furrowed wash (engine/settled.ts) — a
+  // soil strip whose plow grain runs along `rot`; overlapping strips merge
+  // into one worked field under the crops.
+  tilled_earth: {
+    painter: 'tilledEarth', order: 19,
+    params: { soil: '#4a3c28', furrow: '#2e2517' },
+  },
   // The lit street: the lantern_post look on a civic pole (same painter — a
   // lamp is a lamp), night-lit for free through the darkness buffer.
   street_lamp: {

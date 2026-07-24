@@ -181,6 +181,7 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
+import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
 import { plyCountOf, plyFloorOf } from './plies';
 import { PUZZLES } from '../data/puzzles';
@@ -2399,7 +2400,7 @@ export class World {
   /** THE STRAYING's live scene in the current zone (null between calls) —
    *  the concrete half of packages/overlays/straying.ts: body refs + per-head
    *  bell clocks. Zone-local and rebuilt on entry; the overlay owns the counts. */
-  private droveScene: {
+  private strayScene: {
     id: string;
     fold: Vec2; rally: Vec2;
     strays: { a: Actor; state: 'loose' | 'homing'; bellLeft: number }[];
@@ -2409,6 +2410,29 @@ export class World {
     phase: string;
     sweepAcc: number;
   } | null = null;
+  /** Droves whose scene announced itself this visit (per collapse id). */
+  private materializedDroves = new Set<string>();
+  /** THE DROVE's live scene in the current zone (null between collapses) —
+   *  the concrete half of packages/overlays/drove.ts: body refs + per-head
+   *  drive state. Zone-local and rebuilt on entry; the overlay owns the
+   *  counts AND the pen's remembered seat. Heads keep their 'critter'
+   *  texture on purpose (the wolf-drama contract — predators hunt them,
+   *  objectives exempt them); this roster is the scene's only ledger. */
+  private droveScene: {
+    id: string;
+    penAt: Vec2;
+    /** drivenFor = seconds of pressure-quiet left before a driven head
+     *  settles back to milling (0 = milling at its post). */
+    heads: { a: Actor; drivenFor: number }[];
+    reeve: Actor | null;
+    /** Last overlay phase seen (transition edge detection). */
+    phase: string;
+    sweepAcc: number;
+  } | null = null;
+  /** Zone id whose stale drove dress was already swept this visit (a collapse
+   *  that resolved while the player was away leaves rails with no live call —
+   *  swept to evap ONCE per visit, never per frame). */
+  private droveDressChecked: string | null = null;
   /** Gatherings whose scene announced itself this visit (per gathering id). */
   private materializedWisplights = new Set<string>();
   /** THE QUICKENING's engine-side clocks: the graph reconcile cadence (stamps
@@ -5732,7 +5756,14 @@ export class World {
         // The Straying's scene is zone-local body refs — a zone change drops
         // them (the overlay keeps the head ledger; re-entry re-stages from it).
         id: 'straying',
-        reset: () => { this.materializedStrayings.clear(); this.droveScene = null; },
+        reset: () => { this.materializedStrayings.clear(); this.strayScene = null; },
+      },
+      {
+        // The Drove's scene is zone-local body refs — a zone change drops
+        // them (the overlay keeps the head ledger AND the pen's seat;
+        // re-entry re-stages the wreck exactly where it fell).
+        id: 'drove',
+        reset: () => { this.materializedDroves.clear(); this.droveScene = null; this.droveDressChecked = null; },
       },
       {
         // The Wisplight's scene is zone-local body refs — a zone change drops
@@ -15606,10 +15637,10 @@ export class World {
   /** Per-frame: THE STRAYING's presence in a called zone. */
   private updateStrayingScene(dt: number): void {
     const sf = this.sim.strayField;
-    if (!sf) { this.droveScene = null; return; }
+    if (!sf) { this.strayScene = null; return; }
     if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return;
     const info = sf.strayingOn(this.zone.id);
-    if (!info) { this.droveScene = null; return; }
+    if (!info) { this.strayScene = null; return; }
     const cfg = sf.surge();
     const lvl = Math.max(1, this.zone.level);
 
@@ -15628,8 +15659,8 @@ export class World {
 
     // A lost fold needs no scene — the ground just wears the feral hold
     // (affectSpawns) until the land settles.
-    if (info.phase === 'overrun' && (!this.droveScene || this.droveScene.phase === 'overrun')) {
-      this.droveScene = null;
+    if (info.phase === 'overrun' && (!this.strayScene || this.strayScene.phase === 'overrun')) {
+      this.strayScene = null;
       return;
     }
 
@@ -15637,14 +15668,14 @@ export class World {
     // on the living pasture, seat the rally out past it, scatter the loose
     // heads between, and post the still court. Idempotent under zone memory —
     // court bodies are adopted back by tag before any top-up spawn.
-    if (!this.droveScene || this.droveScene.id !== info.id) {
-      const fold = this.strayingFoldAnchor();
+    if (!this.strayScene || this.strayScene.id !== info.id) {
+      const fold = this.pastureAnchor();
       const rally = this.strayingRallySeat(fold, cfg.rallyDist);
       if (!info.staged) {
         sf.noteStaged(info.id, randInt(cfg.strays[0], cfg.strays[1]), randInt(cfg.callers[0], cfg.callers[1]));
       }
       const live = sf.strayingOn(this.zone.id);
-      if (!live) { this.droveScene = null; return; }
+      if (!live) { this.strayScene = null; return; }
       const callers: Actor[] = this.actors.filter(a => !a.dead && a.tag === 'drove_call');
       const thralls: Actor[] = this.actors.filter(a => !a.dead && a.tag === 'drove_thrall');
       const callerLvl = Math.max(1, lvl + cfg.callerLevelBonus);
@@ -15678,9 +15709,9 @@ export class World {
         this.actors.push(m);
         strays.push({ a: m, state: 'loose', bellLeft: rand(cfg.bellPull[0], cfg.bellPull[1]) });
       }
-      this.droveScene = { id: info.id, fold, rally, strays, callers, thralls, phase: info.phase, sweepAcc: 0 };
+      this.strayScene = { id: info.id, fold, rally, strays, callers, thralls, phase: info.phase, sweepAcc: 0 };
     }
-    const sc = this.droveScene!;
+    const sc = this.strayScene!;
 
     // PHASE EDGES (the overlay flips, the engine performs):
     if (info.phase !== sc.phase) {
@@ -15708,7 +15739,7 @@ export class World {
         bumpLedger(this.ledger, 'strayings_overrun');
         this.text(vec(this.player.pos.x, this.player.pos.y - 92),
           'The bell recedes — the changed go with it. The fields run feral.', info.color, 18);
-        this.droveScene = null;
+        this.strayScene = null;
         return;
       }
       sc.phase = info.phase;
@@ -15838,7 +15869,7 @@ export class World {
    *  any still court slinks off beaten, the drovers' purse pays, and the
    *  overlay resolves (starting the reprieve). ONE path for both endings. */
   private strayingRelief(sf: NonNullable<WorldSim['strayField']>, id: string, color: string, lvl: number, line: string): void {
-    const sc = this.droveScene;
+    const sc = this.strayScene;
     if (sc) {
       for (const s of sc.strays) {
         if (s.a.dead) continue;
@@ -15855,12 +15886,13 @@ export class World {
     bumpLedger(this.ledger, 'strayings_relieved');
     this.text(vec(this.player.pos.x, this.player.pos.y - 92), line, color, 18);
     sf.resolve(id);
-    this.droveScene = null;
+    this.strayScene = null;
   }
 
-  /** The fold anchor: the living pasture's centroid (posted critter texture —
-   *  wool and feathers, not folk), else somewhere honestly far. */
-  private strayingFoldAnchor(): Vec2 {
+  /** The pasture anchor: the living stock's centroid (posted critter texture —
+   *  wool and feathers, not folk), else somewhere honestly far. The Straying's
+   *  fold and the Drove's pen both seat here — trouble finds the animals. */
+  private pastureAnchor(): Vec2 {
     let x = 0, y = 0, n = 0;
     for (const a of this.actors) {
       if (a.dead || a.team !== 'enemy') continue;
@@ -15883,6 +15915,313 @@ export class World {
       if (d > bd) { bd = d; best = c; }
     }
     return this.findFreeSpot(best ?? this.clampPos(this.farPoint(rallyDist), 60), 20);
+  }
+
+  // ---------------------------------------------------------------- the drove
+  //
+  // THE PEN GIVES WAY (packages/overlays/drove.ts), engine side: the pure
+  // DroveField owns the seat, the head ledger, the pen's remembered spot and
+  // the absent clock; this block stages the CONCRETE scene in a spilled zone —
+  // the collapsed pen (runtime event dress: a rail ring torn open at its gap,
+  // the fallen rails scattered where the fold hit them, the reeve posted at
+  // the wreck) and the loose panicked heads — and reports every head's fate
+  // back through notePenned()/noteLost(). Movement is THE DRIVE WHEEL: a
+  // loose head runs FROM standing pressure (players inside driveRadius,
+  // freehold folk closer), so herding is positioning — circle wide, press
+  // from the far side, and the fold flows toward the rail. A head standing
+  // the pen ground out of anyone's hands is PENNED and paid by the head (the
+  // grab fabric composes free: a carried ewe counts the moment she is set
+  // down inside). No new AI anywhere: heads keep their own critter brains
+  // (milling posts, morale, the flock — and the predators that hunt critters
+  // keep hunting THESE, which is the gathering's whole clock).
+
+  /** Per-frame: THE DROVE's presence in a spilled zone. */
+  private updateDroveScene(dt: number): void {
+    const df = this.sim.droveField;
+    if (!df) { this.droveScene = null; return; }
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return;
+    const info = df.droveOn(this.zone.id);
+    if (!info) {
+      // THE ORPHAN SWEEP (once per visit): a collapse that resolved while
+      // nobody stood the ground leaves rails with no live call — hand them
+      // to evap (pieces already drying are the gathered pen's own beat).
+      if (this.droveDressChecked !== this.zone.id) {
+        this.droveDressChecked = this.zone.id;
+        this.evapDroveDress(3, 26);
+      }
+      this.droveScene = null;
+      return;
+    }
+    const cfg = df.surge();
+    const lvl = Math.max(1, this.zone.level);
+
+    // THE MATERIALIZE BEAT (once per visit per collapse): the discovery line
+    // + the Vault-surfacing ledger, the straying's exact pattern.
+    if (!this.materializedDroves.has(info.id)) {
+      this.materializedDroves.add(info.id);
+      bumpLedger(this.ledger, 'drove_seen');
+      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        info.phase === 'scattered'
+          ? `The fold of ${this.zone.name} is gone — scavengers range the shires.`
+          : `A pen gave way in ${this.zone.name} — drive the fold back to it ALIVE.`,
+        info.color, 18);
+    }
+
+    // A scattered fold needs no scene — the ground just wears the scavenger
+    // hold (affectSpawns) until the land settles.
+    if (info.phase === 'scattered' && (!this.droveScene || this.droveScene.phase === 'scattered')) {
+      if (this.droveDressChecked !== this.zone.id) {
+        this.droveDressChecked = this.zone.id;
+        this.evapDroveDress(3, 26);
+      }
+      this.droveScene = null;
+      return;
+    }
+
+    // STAGE (fresh entry, or a fresh collapse after a resolved one): seat the
+    // pen ONCE (the overlay remembers the wreck forever after — re-entry
+    // finds it exactly where it fell), lay the collapsed-pen dress if none
+    // stands, post the reeve, scatter the loose heads. Idempotent under zone
+    // memory: the reeve is adopted by defId, the dress by its eventDress tag;
+    // heads are minted fresh per visit from the overlay's count (older
+    // milling bodies blend back into the pasture — the critter contract
+    // keeps them honest texture either way).
+    if (!this.droveScene || this.droveScene.id !== info.id) {
+      if (!info.staged) {
+        const at = this.pastureAnchor();
+        df.noteStaged(info.id, randInt(cfg.heads[0], cfg.heads[1]), at.x, at.y);
+      }
+      const live = df.droveOn(this.zone.id);
+      if (!live || !live.penAt) { this.droveScene = null; return; }
+      const penAt = vec(live.penAt.x, live.penAt.y);
+      this.plantDrovePen(penAt, cfg);
+      let reeve = this.actors.find(a => !a.dead && a.defId === 'drove_reeve') ?? null;
+      if (!reeve && MONSTERS.drove_reeve) {
+        const gapDir = this.droveGapDir(penAt);
+        const at = this.findFreeSpot(this.clampPos(vec(
+          penAt.x + Math.cos(gapDir) * (cfg.penRingR + 30),
+          penAt.y + Math.sin(gapDir) * (cfg.penRingR + 30)), 24), 12);
+        const m = this.createMonster('drove_reeve', lvl, 'enemy');
+        m.pos = at;
+        m.postSpec = { hold: true };
+        m.aiPost = vec(at.x, at.y);
+        // He watches the mouth his fold poured through.
+        m.aiPostFacing = gapDir + Math.PI;
+        this.actors.push(m);
+        reeve = m;
+      }
+      const heads: { a: Actor; drivenFor: number }[] = [];
+      for (let i = 0; i < live.loose; i++) {
+        const id = this.weightedPick(cfg.headTable, lvl);
+        if (!MONSTERS[id]) continue;
+        const ang = rand(0, Math.PI * 2);
+        const d = rand(cfg.scatter[0], cfg.scatter[1]);
+        const at = this.findFreeSpot(this.clampPos(vec(
+          penAt.x + Math.cos(ang) * d, penAt.y + Math.sin(ang) * d), 24), 12);
+        const m = this.createMonster(id, lvl, 'enemy');
+        m.pos = at;
+        m.postSpec = { hold: false, slack: 240, pace: 0.75 }; // it mills, spooked, where it bolted to
+        m.aiPost = vec(at.x, at.y);
+        this.actors.push(m);
+        heads.push({ a: m, drivenFor: 0 });
+      }
+      this.droveScene = { id: info.id, penAt, heads, reeve, phase: info.phase, sweepAcc: 0 };
+    }
+    const sc = this.droveScene!;
+
+    // PHASE EDGES (the overlay flips, the engine performs):
+    if (info.phase !== sc.phase) {
+      if (info.phase === 'gathered') {
+        this.droveGathered(df, info.id, info.color, lvl);
+        return;
+      } else if (info.phase === 'scattered') {
+        bumpLedger(this.ledger, 'droves_scattered');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          'The last head is lost. The fold is gone — scavengers range the shires.', info.color, 18);
+        this.evapDroveDress(2, 30);
+        this.droveScene = null;
+        return;
+      }
+      sc.phase = info.phase;
+    }
+
+    // THE DRIVE WHEEL (every frame — the herding IS the event): a loose head
+    // under pressure flees the blended push of every presser. Deliberately
+    // pathing-blind: moveActor's own wall-slide is how a fence FUNNELS a
+    // fleeing body along the rail toward the gap — flushing along an edge is
+    // real herding, and the sheep's own flock brain keeps a pressed knot
+    // moving as one drivable body. Quiet for calmSec, a driven head
+    // re-plants its milling post where it stands.
+    for (const h of sc.heads) {
+      const a = h.a;
+      if (a.dead || a.heldBy) continue;
+      let px = 0, py = 0, pressed = false;
+      const press = (from: Vec2, radius: number): void => {
+        const d = dist(from, a.pos);
+        if (d > radius || d < 1e-3) return;
+        const w = 1 - d / radius;
+        px += ((a.pos.x - from.x) / d) * w;
+        py += ((a.pos.y - from.y) / d) * w;
+        pressed = true;
+      };
+      for (const seat of this.seats) {
+        if (!seat.actor.dead) press(seat.actor.pos, cfg.driveRadius);
+      }
+      for (const f of this.actors) {
+        if (f.dead || f.faction !== 'freehold' || isDormant(f)) continue;
+        press(f.pos, cfg.assistDriveRadius);
+      }
+      if (pressed) {
+        const n = Math.hypot(px, py);
+        if (n > 1e-4) {
+          if (h.drivenFor <= 0) { a.postSpec = undefined; a.aiPost = undefined; }
+          h.drivenFor = cfg.calmSec;
+          a.facing = Math.atan2(py, px);
+          this.moveActor(a, px / n, py / n, dt * cfg.drivePace);
+        }
+      } else if (h.drivenFor > 0) {
+        h.drivenFor -= dt;
+        if (h.drivenFor <= 0 && !a.postSpec) {
+          a.postSpec = { hold: false, slack: 240, pace: 0.75 };
+          a.aiPost = vec(a.pos.x, a.pos.y);
+        }
+      }
+    }
+
+    // THE SWEEP (throttled): pen arrivals + losses.
+    sc.sweepAcc += dt;
+    if (sc.sweepAcc < 0.2) return;
+    sc.sweepAcc = 0;
+
+    for (let i = sc.heads.length - 1; i >= 0; i--) {
+      const h = sc.heads[i];
+      if (h.a.dead) {
+        // The teeth found it first (a wolf, a fox, a careless swing) — lost.
+        df.noteLost(info.id);
+        this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'a head is lost…', '#c8b890', 12);
+        sc.heads.splice(i, 1);
+        continue;
+      }
+      // PENNED: standing the pen ground, out of anyone's hands (a carried
+      // head counts the moment it is set down inside — the grab lane's due).
+      if (!h.a.heldBy && dist(h.a.pos, sc.penAt) <= cfg.penRadius) {
+        df.notePenned(info.id);
+        bumpLedger(this.ledger, 'drove_heads_penned');
+        this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl);
+        this.text(vec(h.a.pos.x, h.a.pos.y - 24), 'penned!', '#b8e890', 12);
+        h.a.postSpec = { hold: false, slack: Math.max(28, cfg.penRingR * 0.55), pace: 0.4 };
+        h.a.aiPost = vec(
+          sc.penAt.x + rand(-cfg.penRingR * 0.4, cfg.penRingR * 0.4),
+          sc.penAt.y + rand(-cfg.penRingR * 0.4, cfg.penRingR * 0.4));
+        sc.heads.splice(i, 1);
+      }
+    }
+  }
+
+  /** The gathering beat: the reeve settles up at the pen. By-the-head pay
+   *  already landed at each arrival; here the purse (the Pastoral Register,
+   *  loot 'drove_purse' — OWED pay, earned of the writ), the thin gem
+   *  chance from the drover's chest, and the flawless bonus when not one
+   *  head died. The mended pen stands a while, then dries away — the
+   *  transience doctrine: the event borrows the farm, never owns it. */
+  private droveGathered(df: NonNullable<WorldSim['droveField']>, id: string, color: string, lvl: number): void {
+    const sc = this.droveScene;
+    const info = df.droveOn(this.zone.id);
+    if (sc && info) {
+      const cfg = df.surge();
+      const at = sc.penAt;
+      this.grantXp(cfg.reward.gatherXpBase + cfg.reward.gatherXpPerLevel * lvl);
+      if (chance(cfg.reward.gemChance)) this.dropGemAt(at, undefined, true);
+      const pay = (tableId: string): void => {
+        for (const res of resolveLootTable(tableId, { ilvl: this.zone.level })) {
+          const p = this.clampPos(vec(at.x + rand(-26, 26), at.y + rand(-26, 26)), 10);
+          if (res.kind === 'gem') this.dropGemAt(p, undefined, true);
+          else if (res.kind === 'vestige') this.dropVestigeAt(p, res.id, res.count);
+          else this.dropGearAt(p, res.item, undefined, true);
+        }
+      };
+      pay(cfg.reward.purseTable);
+      if (info.lost === 0 && info.penned > 0) {
+        pay(cfg.reward.flawlessTable);
+        this.text(vec(at.x, at.y - 44), 'every head alive — the flawless rate', color, 14);
+      }
+      if (sc.reeve && !sc.reeve.dead) {
+        this.text(vec(sc.reeve.pos.x, sc.reeve.pos.y - 28), 'That’s the lot. Dig in the chest.', color, 13);
+      }
+      this.evapDroveDress(45, 8); // the mended pen stands a while, then dries away
+      this.droveDressChecked = this.zone.id;
+    }
+    bumpLedger(this.ledger, 'droves_gathered');
+    this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+      'The fold is gathered — the reeve settles up.', color, 18);
+    df.resolve(id);
+    this.droveScene = null;
+  }
+
+  /** A pure per-pen hash stream (no rng draws — re-entry rebuilds the same
+   *  wreck from the pen's remembered seat alone). */
+  private droveHash(penAt: Vec2, n: number): number {
+    const s = Math.sin(n * 127.1 + penAt.x * 0.173 + penAt.y * 0.291) * 43758.5453;
+    return s - Math.floor(s);
+  }
+
+  /** The gap's bearing — shared by the dress and the reeve's post so the
+   *  farmer stands at the mouth his fold poured through. */
+  private droveGapDir(penAt: Vec2): number {
+    return this.droveHash(penAt, 1) * Math.PI * 2;
+  }
+
+  /** THE COLLAPSED PEN (runtime event dress — Doodad.eventDress 'drove'): a
+   *  rail ring with one side torn open, the fallen rails thrown outward where
+   *  the fold hit them, the drover's litter around the wreck. Deterministic
+   *  per pen seat (the droveHash stream) and idempotent: standing dress is
+   *  adopted, never doubled. rail_fence pieces are real blockers, so the
+   *  ring FUNNELS driven heads exactly as drawn — and the drive wheel's
+   *  wall-slide walks a pressed head along the rail to the mouth. */
+  private plantDrovePen(penAt: Vec2, cfg: DroveSurge): void {
+    if (this.doodads.some(d => d.eventDress === 'drove' && !d.gone)) return;
+    const h = (n: number): number => this.droveHash(penAt, n);
+    const gapDir = this.droveGapDir(penAt);
+    const gapHalf = 0.62; // the torn mouth — wide enough to drive an ox through
+    const ringN = 10;
+    for (let i = 0; i < ringN; i++) {
+      const ang = (i / ringN) * Math.PI * 2;
+      const da = Math.abs(Math.atan2(Math.sin(ang - gapDir), Math.cos(ang - gapDir)));
+      if (da < gapHalf) continue; // the collapsed side stands open
+      const r = cfg.penRingR + (h(10 + i) - 0.5) * 8;
+      const p = this.clampPos(vec(penAt.x + Math.cos(ang) * r, penAt.y + Math.sin(ang) * r), 12);
+      this.doodads.push({ pos: p, radius: 21, kind: 'rail_fence', rot: ang + Math.PI / 2, eventDress: 'drove' });
+    }
+    // The spill: rails down at the mouth, thrown outward as the fold burst through.
+    for (let i = 0; i < 3; i++) {
+      const ang = gapDir + (h(30 + i) - 0.5) * 1.1;
+      const r = cfg.penRingR + 16 + h(40 + i) * 30;
+      const p = this.clampPos(vec(penAt.x + Math.cos(ang) * r, penAt.y + Math.sin(ang) * r), 12);
+      this.doodads.push({ pos: p, radius: 17, kind: 'rail_fence', rot: h(50 + i) * Math.PI * 2, eventDress: 'drove' });
+    }
+    const bale = this.clampPos(vec(
+      penAt.x + Math.cos(gapDir + 2.4) * (cfg.penRingR + 30),
+      penAt.y + Math.sin(gapDir + 2.4) * (cfg.penRingR + 30)), 12);
+    this.doodads.push({ pos: bale, radius: 13, kind: 'hay_bale', rot: h(60) * Math.PI * 2, eventDress: 'drove' });
+    if (h(61) < 0.6) {
+      const cart = this.clampPos(vec(
+        penAt.x + Math.cos(gapDir - 2.2) * (cfg.penRingR + 44),
+        penAt.y + Math.sin(gapDir - 2.2) * (cfg.penRingR + 44)), 12);
+      this.doodads.push({ pos: cart, radius: 17, kind: 'broken_cart', rot: h(62) * Math.PI * 2, eventDress: 'drove' });
+    }
+    this.markDoodadsChanged(); // rail blockers — nav/veil/bake consumers re-derive
+  }
+
+  /** Hand every standing drove rail to the drying fabric (idempotent —
+   *  pieces already drying keep their own clocks; the evap sweep's scoped
+   *  family bumps handle the re-derives as radii step). */
+  private evapDroveDress(t: number, rate: number): void {
+    for (const d of this.doodads) {
+      if (d.eventDress !== 'drove' || d.gone || d.evap) continue;
+      d.evap = { t, rate };
+      this.evaporating.push(d);
+    }
   }
 
   // ------------------------------------------------------- the quickening
@@ -36355,6 +36694,7 @@ export class World {
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
     this.updateStrayingScene(dt);
+    this.updateDroveScene(dt);
     this.updateWispScene(dt);
     this.updateQuickening(dt);
     this.updateWraithsailDock();

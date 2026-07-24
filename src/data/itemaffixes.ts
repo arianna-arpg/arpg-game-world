@@ -571,6 +571,32 @@ const PREFIXES: AffixDef[] = [
     baseTags: ['gloves', 'boots', 'belt'], weight: 12,
   }),
 
+  // THE PASTORAL REGISTER — the Drove's spoils (the Royal Register's grammar,
+  // the worked country's voice). The reeve's purse FORCES one of these three
+  // via LootEntry.withFamily (loot 'pastoral_register_pick'); the same thin
+  // natural weight keeps the words rollable in the wild — farm-made gear
+  // turns up wherever farm goods travel. The OX pulls (the mass fabric worn
+  // as gear: shoves carry authority, arrests wound harder), the FLEECE keeps
+  // the weather out, the FOLD feeds slow and deep (suffix sibling among the
+  // suffixes).
+  fam({
+    id: 'oxdrawn', kind: 'prefix', themes: [MARTIAL],
+    names: ['Ox-Yoked', 'Oxdrawn', 'Plow-Hardened'],
+    lines: [{ stat: 'shoveAuthority', kind: 'flat' }, { stat: 'impactDamage', kind: 'flat' }],
+    top: [0.25, 0.35], floor: 0.2, count: 4,
+    baseTags: ['chest', 'gloves', 'belt'], weight: 12,
+  }),
+  fam({
+    id: 'fleecebound', kind: 'prefix', themes: [DEFENSE, SUSTAIN],
+    names: ['Shearling', 'Fleece-Bound', 'Wool-Wadded'],
+    lines: [
+      { stat: DEFENSE_KINDS['armor'].stat, kind: 'flat', local: true },
+      { stat: 'coldRes', kind: 'flat' },
+    ],
+    top: [72, 0.28], floor: 0.15, count: 4,
+    baseTags: ['chest', 'helmet', 'gloves'], weight: 12,
+  }),
+
   // PROC AFFIXES — chance stats from the PROC registry (proc_<id>; procs.ts
   // golden rules cap and depth-gate them). The two MAGIC-ONLY families are a
   // rarity identity, not a top tier: blues alone can carry them at all — the
@@ -958,6 +984,15 @@ const SUFFIXES: AffixDef[] = [
     lines: [{ stat: 'moveSpeed', kind: 'increased' }, { stat: 'coldRes', kind: 'flat' }],
     top: [0.08, 0.3], floor: 0.25, count: 4,
     baseTags: ['boots', 'ring', 'amulet'], weight: 12,
+  }),
+  // THE PASTORAL REGISTER's suffix (the prefix pair lives beside the plate
+  // families): good pasture feeds everything slowly and asks nothing back.
+  fam({
+    id: 'foldkept', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of the Fold', 'of Good Pasture', 'of the Long Graze'],
+    lines: [{ stat: 'lifeRegen', kind: 'flat' }, { stat: 'manaRegen', kind: 'flat' }],
+    top: [3, 2.2], floor: 0.2, count: 4,
+    baseTags: ['belt', 'ring', 'amulet'], weight: 12,
   }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,

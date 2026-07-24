@@ -695,6 +695,10 @@ registerComposition({
     { kind: 'hay_bale', count: [1, 3] },
     { kind: 'well', count: [0, 1] },
     { kind: 'scarecrow', count: [0, 1] },
+    // THE FOLD (data/landmarks.ts 'stock_fold'): a working farm keeps its
+    // pen — the rail ring, the trough, the heads. The Drove's whole premise
+    // stands in the generation before the event ever asks for it.
+    { kind: 'landmark', landmark: 'stock_fold', count: [0, 1] },
   ],
 });
 

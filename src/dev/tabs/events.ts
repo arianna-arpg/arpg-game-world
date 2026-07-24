@@ -55,6 +55,7 @@ export const eventsTab: DevTabDef = {
       forceEvent('Mycelia (bloom here)', (w, v, z) => w.sim.myceliaField?.devIgnite(v, z) ?? false),
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),
       forceEvent('Straying (bell here)', (w, v, z) => w.sim.strayField?.devIgnite(v, z) ?? false),
+      forceEvent('Drove (pen breaks here)', (w, v, z) => w.sim.droveField?.devIgnite(v, z) ?? false),
       forceEvent('Wisplight (lights here)', (w, v, z) => w.sim.wisplightField?.devIgnite(v, z) ?? false),
       // THE QUICKENING pair: surge THIS zone (tuning waived — visited floor,
       // outlevel law, cooldown; eligibility never), then close its window on

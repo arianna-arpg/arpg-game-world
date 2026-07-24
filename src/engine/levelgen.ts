@@ -502,6 +502,15 @@ export interface Doodad {
    *  drying pock. Same law as weatherDress: runtime-only, already handed to
    *  `evap` at plant, capped per zone. Never persisted, never in layouts. */
   blastDress?: boolean;
+  /** EVENT DRESS tag — the OPEN sibling of weatherDress for world-event
+   *  scenes: the id of the event whose scene planted this piece (the Drove's
+   *  collapsed pen rails; any future event names itself the same way). Same
+   *  law throughout: runtime-only set-dressing, presence derived from the
+   *  tag (scene staging is idempotent against standing pieces), handed to
+   *  `evap` when the event resolves — and swept to evap by the owning
+   *  scene's orphan pass when its event resolved while nobody stood the
+   *  ground. Never persisted, never in layouts. */
+  eventDress?: string;
   /** THE TIER FABRIC (engine/tiers.ts): the walkable LAYER this doodad lives
    *  on (absent = 0, the ground truth). Tier-tagged pieces are laid by the
    *  tier carvers (a duct's own webs, a butte-top cache): ground sensing,
@@ -3929,8 +3938,10 @@ export function areaFreeOf(ctx: GenCtx, p: Vec2, radius: number, kinds: DoodadKi
 
 /** Is this point inside a reserved structure footprint? Handles both the legacy
  *  circles and the plan-structure rects; honors a stamp's 'reserved' relaxation
- *  (which thereby covers EVERY caller — findSpot, blobs, cliffs, ravines). */
-function inReserved(ctx: GenCtx, p: Vec2, radius: number): boolean {
+ *  (which thereby covers EVERY caller — findSpot, blobs, cliffs, ravines).
+ *  Exported for recipe passes that place directly (the settled belt's crop
+ *  parcels) — the same gate the scatter runs, never a parallel one. */
+export function inReserved(ctx: GenCtx, p: Vec2, radius: number): boolean {
   if (ruleIgnored(ctx, 'reserved')) return false;
   return ctx.reserved.some(r => {
     if ('rect' in r) {

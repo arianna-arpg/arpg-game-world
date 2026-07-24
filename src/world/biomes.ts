@@ -873,16 +873,19 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // mild∧dry∧wild gate is narrow, so where it holds it should read as one
   // coherent stone country, and it simply doesn't exist elsewhere.
   { biome: 'karst', weight: 1.9 },
-  // 1.4: the downs claim the mild belt's drier SETTLED half (low-wildness
+  // 1.7: the downs claim the mild belt's drier SETTLED half (low-wildness
   // gate — the karst inverse), sharing that band with grove/field/grave:
   // enough seed weight to read as coherent walked country where its gate
-  // holds, never crowding the woods out of the damp half.
-  { biome: 'downs', weight: 1.4 },
-  // 1.6: the FARMLAND claims civilization's fertile half (the downs' damp
+  // holds, never crowding the woods out of the damp half. (Lifted 1.4→1.7
+  // with the farmland in the pastoral pass — the rolling-hills ask.)
+  { biome: 'downs', weight: 1.7 },
+  // 2.0: the FARMLAND claims civilization's fertile half (the downs' damp
   // mirror) — its wildness gate confines it to the tamed hearts (home's calm
-  // and the capital's basin), where this weight makes worked country common;
+  // and the capital's basin), where this weight makes worked country COMMON;
   // the capital's approach ring adds its structural mass (the bands below).
-  { biome: 'farmland', weight: 1.6 },
+  // (Lifted 1.6→2.0 in the pastoral pass: the belt should read as a real
+  // worked COUNTRY where its gate holds, not an allotment.)
+  { biome: 'farmland', weight: 2.0 },
   // 0.9: the METROPOLIS carries the tightest wildness gate in the game, so
   // the global dice can only seat it in the tamed hearts — the odd surprise
   // city neighborhood near home or the capital. Its STRUCTURAL seat is the
@@ -1026,8 +1029,11 @@ registerFieldBand({
   when: { axis: 'hearth', env: { to: 0.55, fadeOut: 0.08 } }, // r ≲ 350 of home
   mode: 'tilt',
   table: [
-    { biome: 'farmland', weight: 1.5 },
-    { biome: 'downs', weight: 1.35 },
+    // The pastoral pass leans the door-step thumb a shade harder onto the
+    // worked rows (1.5/1.35 → 1.8/1.6): the first ring out of town reads
+    // rolling shires and sheep downs oftener — likelier, never the law.
+    { biome: 'farmland', weight: 1.8 },
+    { biome: 'downs', weight: 1.6 },
     { biome: 'field', weight: 1.2 },
   ],
 });

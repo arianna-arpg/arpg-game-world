@@ -342,6 +342,50 @@ registerLandmarkBuilder('pit', (b) => {
   b.interior = floor;
 });
 
+// --- FENCE RING -----------------------------------------------------------------
+// A post-and-rail enclosure: fence DOODADS on a gapped ring (real blockers by
+// their own kind rule — bodies stay put, shots and sight do whatever the
+// fence kind says) around an open floor, with an optional ground wash and
+// interior dressing rows. The pit's civilian cousin: the palisade rim is a
+// war wall carved into the grid; this is CARPENTRY — a farm fold, a paddock,
+// any future fenced yard. Kind, gap, floor and dressing are all params; the
+// gap is the gate, and spawns 'interior' land the residents inside it.
+registerLandmarkBuilder('fence_ring', (b) => {
+  const { rng, r } = b;
+  const ringR = r * (b.param('ringFrac', 0.8) as number);
+  const gapAt = rng.range(0, Math.PI * 2);
+  const gapHalf = b.param('gapArc', 0.5) as number;
+  const fenceKind = b.param('fenceKind', 'rail_fence') as DoodadKind;
+  const railR = b.param('railRadius', 20) as number;
+  const n = Math.max(8, Math.round((Math.PI * 2 * ringR) / (railR * 2.1)));
+  for (let i = 0; i < n; i++) {
+    const ang = (i / n) * Math.PI * 2;
+    const da = Math.abs(Math.atan2(Math.sin(ang - gapAt), Math.cos(ang - gapAt)));
+    if (da < gapHalf) continue; // the gate side stays open
+    b.ctx.doodads.push({
+      pos: vec(b.center.x + Math.cos(ang) * ringR, b.center.y + Math.sin(ang) * ringR),
+      radius: railR, kind: fenceKind, rot: ang + Math.PI / 2,
+    });
+  }
+  // The floor: churned ground where the stock stands (optional wash).
+  const floor = frame(b);
+  radial(floor, b.center.x, b.center.y, () => ringR * 0.9);
+  const floorKind = b.param<string | undefined>('floorKind', undefined);
+  if (floorKind) paintLiquid(b.ctx, b.grid, floor, liquidOf(floorKind));
+  // Interior dressing — rows of {kind, count, radius}, the trough and the bale.
+  const inner = b.param('inner', []) as { kind: DoodadKind; count: [number, number]; radius: [number, number] }[];
+  for (const row of inner) {
+    for (let i = 0, k = rng.int(row.count[0], row.count[1]); i < k; i++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0, ringR * 0.55);
+      b.ctx.doodads.push({
+        pos: vec(b.center.x + Math.cos(a) * d, b.center.y + Math.sin(a) * d),
+        radius: rng.range(row.radius[0], row.radius[1]), kind: row.kind, rot: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
+  b.interior = floor;
+});
+
 // --- GLACIAL HEART ---------------------------------------------------------------
 // The Winter King's frozen-lake boss arena: an ice disc HANGING OVER THE DEEP.
 // A chasm moat rings the lake — the pitfall fabric decides what falling MEANS

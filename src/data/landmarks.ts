@@ -204,6 +204,33 @@ registerLandmark({
   },
   poi: true,
 });
+// THE STOCK FOLD (the worked country's pen): a post-and-rail ring around
+// churned mud — trough, bale, and the fold's own heads grazing in and about
+// it. The gnasher pen's honest civilian cousin (fence_ring carpentry vs the
+// pit's war palisade): rolled ambiently across farmland faces, seated by the
+// harvest steading — and the very thing the Drove borrows when a pen like
+// this one gives way. Livestock keep their own posted graze brains; no
+// ambush arm — nothing here is waiting for you.
+registerLandmark({
+  id: 'stock_fold', builder: 'fence_ring', size: [150, 210], clearSite: true,
+  params: {
+    floorKind: 'mud', gapArc: 0.5,
+    inner: [
+      { kind: 'feeding_trough', count: [1, 1], radius: [13, 16] },
+      { kind: 'hay_bale', count: [0, 2], radius: [11, 14] },
+    ],
+  },
+  spawns: {
+    table: [
+      { id: 'wool_sheep', weight: 5 },
+      { id: 'dooryard_hen', weight: 2 },
+      { id: 'greylag_goose', weight: 1 },
+      { id: 'plow_ox', weight: 1 },
+    ],
+    count: [3, 6], where: 'interior',
+  },
+  poi: true,
+});
 
 // A hive sink: the warren's open throat — a stamped pit boiling with the
 // brood, the sand packed glossy where ten thousand feet turned.

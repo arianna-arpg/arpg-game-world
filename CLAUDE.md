@@ -425,7 +425,13 @@ changes.
   THE SETTLED BELT (`engine/settled.ts` + `data/settled.ts` — farmland +
   metropolis): the worked country as two recipes over the massif fabric —
   'fields' (hedgerow bodies + REAL portal roads that punch field-gates
-  through the hedges; road kind/width/count all layoutParams) and
+  through the hedges; road kind/width/count all layoutParams; THE PARCEL
+  PASS `layCropParcels` — rectangular tilled plots, crops in true ROWS off
+  one shared plow bearing, `tilled_earth` furrow wash, fallow/fence dials,
+  weighted `parcelCrops` incl. the open-sightline flax vs blind wheat —
+  and the `stock_fold` landmark on the `fence_ring` builder: working pens
+  THE DROVE event borrows (packages drove.ts — drive the spilled fold back
+  ALIVE, paid in the Pastoral Register; docs/engine/drove.md)) and
   'district' (city faces under ONE generator: tenement/manor MASSING with
   lit paved boulevards + courtyard kits, or PLANNED BLOCKS raising plan
   structures from a weighted pool); crops are walk-through veil cover

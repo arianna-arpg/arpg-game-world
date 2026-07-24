@@ -30,6 +30,7 @@ import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
 import type { LongNightField } from '../packages/overlays/longNight';
 import type { StrayField } from '../packages/overlays/straying';
+import type { DroveField } from '../packages/overlays/drove';
 import type { WisplightField } from '../packages/overlays/wisplight';
 import type { QuickeningField } from '../packages/overlays/quickening';
 import type { VerminfallField } from '../packages/overlays/verminfall';
@@ -207,6 +208,13 @@ export class WorldSim {
    *  back through the note*() calls; the field owns the settle/phase/absent
    *  lifecycle and the head ledger. */
   readonly strayField: StrayField | null;
+  /** The drove overlay if its package is in the manifest, else null — the
+   *  engine reads droveOn() to stage the broken pen (the collapsed-rail
+   *  dress, the loose panicked heads, the reeve) in a spilled zone, runs the
+   *  drive wheel, and reports each head's fate back through notePenned()/
+   *  noteLost(); the field owns the settle/gather/absent lifecycle and the
+   *  pen's remembered seat. */
+  readonly droveField: DroveField | null;
   /** The wisplight overlay if its package is in the manifest, else null — the
    *  engine reads wisplightOn() to stage the marsh's gathering (standing
    *  neutral lights, the kindled wander + flourish aura, the strongest-host
@@ -441,6 +449,7 @@ export class WorldSim {
     this.deepwinterField = surface<DeepwinterField>('deepwinter') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.strayField = surface<StrayField>('straying') ?? null;
+    this.droveField = surface<DroveField>('drove') ?? null;
     this.wisplightField = surface<WisplightField>('wisplight') ?? null;
     this.quickeningField = surface<QuickeningField>('quickening') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;

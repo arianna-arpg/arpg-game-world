@@ -8661,6 +8661,40 @@ const settledHash = (x: number, y: number, salt = 0): number => {
 /** WHEAT/CORN STALK BASE: the rooted tuft under a crop crown — a leaning fan
  *  of stalks off a position-seeded bearing (the crown itself rides the canopy
  *  pass: wheatTops). Params: stalk. */
+// TILLED EARTH — the parcel pass's furrowed soil strip (engine/settled.ts):
+// a low soil ellipse stretched along the plow bearing (`rot`), scored with
+// parallel furrow lines, so a lattice of strips laid on one bearing merges
+// into one worked field under the crops. Deterministic — no per-draw hash.
+const tilledEarth: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { soil?: ColorSpec; furrow?: ColorSpec };
+  const { ctx, theme } = env;
+  const soil = resolveColor(p.soil, theme, '#4a3c28');
+  const furrow = resolveColor(p.furrow, theme, '#2e2517');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = soil;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.05, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    // The plow grain: furrow scores along the long axis, clipped to the lobe.
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = furrow;
+    ctx.lineWidth = Math.max(1, r * 0.09);
+    for (let i = 0; i < 3; i++) {
+      const fy = ((i + 0.5) / 3 - 0.5) * r * 1.15;
+      const reach = r * Math.sqrt(Math.max(0.08, 1 - Math.pow(fy / (r * 0.85), 2)));
+      ctx.beginPath();
+      ctx.moveTo(-reach, fy);
+      ctx.lineTo(reach, fy);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+};
+
 const wheatStalk: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { stalk?: ColorSpec };
   const { ctx, theme } = env;
@@ -8876,7 +8910,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth, hatch,
-  campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, shimmer, fogFloor,
+  campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, tilledEarth, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
   clotMound, arteryStalk, sphincterDoor, membraneSeal, villusBed, lashBed, gutKnuckle, ocularKnot, colossalHeart,

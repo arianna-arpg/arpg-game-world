@@ -19,6 +19,7 @@ import { DEADWAKE } from './defs/deadwake';
 import { DEEPWINTER } from './defs/deepwinter';
 import { DESCENT } from './defs/descent';
 import { DEMON_INVASION } from './defs/demonInvasion';
+import { DROVE } from './defs/drove';
 import { EXTRACTION } from './defs/extraction';
 import { FACTION_POLITICS } from './defs/factionPolitics';
 import { FRACTURES } from './defs/fractures';
@@ -74,6 +75,7 @@ export const PACKAGES: ContentPackage[] = [
   LONG_NIGHT,
   VERMINFALL,
   STRAYING,
+  DROVE,
   WISPLIGHT,
   QUICKENING,
   MIRRORKIN,
@@ -119,6 +121,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   vendetta: 0x0e4d,
   verminfall: 0x2a75,
   straying: 0x57a9,
+  drove: 0xd20e,
   wisplight: 0x8157,
   quickening: 0x901c,
   mirrorkin: 0x312a,
