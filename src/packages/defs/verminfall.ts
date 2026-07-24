@@ -75,6 +75,9 @@ const VERMIN_FACTION: FactionSpec = {
     // …while the verminkin — the warren's THINKING tier — hold the line.
     { id: 'verminkin_skulker', weight: 3 },
     { id: 'verminkin_broodpriest', weight: 2, presence: { from: 5, fadeIn: 3 } },
+    // The muster pass: the piper marches with the fall it plays for
+    // (already sewerworks-fielded; now the roster agrees).
+    { id: 'vermin_piper', weight: 1, presence: { from: 6, fadeIn: 3 } },
   ],
   warlord: 'rat_king',
   relations: [
