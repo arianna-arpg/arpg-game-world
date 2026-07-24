@@ -67,6 +67,12 @@ const DEPTHKIN_FACTION: FactionSpec = {
     { id: 'depthkin_lurker', weight: 3 },
     { id: 'depthkin_seer', weight: 2 },
     { id: 'depthkin_brute', weight: 1 },
+    // The muster pass: the lantern that drinks your light (wellDrain —
+    // the descent's own meter made a body), the hulk the pressure built,
+    // and the cantor of the brine.
+    { id: 'hadal_lantern', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'brine_cantor', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'pressure_hulk', weight: 1, presence: { from: 8, fadeIn: 4 } },
   ],
 };
 

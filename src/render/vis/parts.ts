@@ -4973,6 +4973,43 @@ const gauntlets: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** CANDLES — a rank of standing tapers with worked drip-skirts: the Wax
+ *  Court's silhouette word (crowns, candelabrum arms, shrine rows). The
+ *  flames themselves are the separate live 'flames' painter — this is the
+ *  STANDING wax, so an unlit body still reads. params: n (tapers, 1-6),
+ *  h (taper height ÷ body radius). */
+const candles: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.max(1, Math.round(P(spec, 'n', 3)));
+  const h = P(spec, 'h', 0.85);
+  place(ctx, r, spec, (c, R) => {
+    const H = R * h;
+    for (let i = 0; i < n; i++) {
+      // Fan the rank across the body's midline, tallest at center.
+      const t = n === 1 ? 0 : i / (n - 1) - 0.5;
+      const cx = -Math.abs(t) * R * 0.35;
+      const cy = t * R * 1.5;
+      const th = H * (1 - Math.abs(t) * 0.35);
+      const w = Math.max(1.6, R * 0.14);
+      // The taper: a pale column...
+      c.fillStyle = ramp.base;
+      c.fillRect(cx - w / 2, cy - w * 0.9, th, w * 1.8);
+      // ...its lip (the melted crown, facing +X)...
+      c.fillStyle = shade(ramp.base, 0.16);
+      c.beginPath();
+      c.ellipse(cx + th - w * 0.2, cy, w * 0.7, w * 1.05, 0, 0, Math.PI * 2);
+      c.fill();
+      // ...and the drip-skirt sagging off the base.
+      c.strokeStyle = shade(ramp.base, -0.18);
+      c.lineWidth = Math.max(1, w * 0.4);
+      c.beginPath();
+      c.moveTo(cx, cy + w * 0.9);
+      c.quadraticCurveTo(cx - w * 0.6, cy + w * 1.6, cx - w * 0.2, cy + w * 2.1);
+      c.stroke();
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -5007,7 +5044,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   cobraHood, fangJaw, coil,
   anchor,
   grapnel, yoke, gulletSac,
-  gauntlets,
+  gauntlets, candles,
   spiralEyes, mothWings,
   writheMass, hatchPores,
   howdahRig, mortarMaw,

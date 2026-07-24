@@ -7050,6 +7050,269 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'spiralEyes', x: 0.3, scale: 0.8 }],
   },
+
+  // ================================ THE MUSTER PASS — WAVE 3: STRANGE COURTS
+
+  /** The scrivener mid-sentence: open book, orbiting letters. */
+  hex_scrivener: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'hood', x: 0.22, scale: 0.85 },
+      { kind: 'book', y: 0.45, scale: 0.75 },
+      { kind: 'runes', scale: 0.85, params: { n: 4 } },
+    ],
+  },
+  /** The binder: half a bargain in chains, the brand that signed it. */
+  goetic_binder: {
+    parts: [
+      { kind: 'robe', scale: 1.0 },
+      { kind: 'chains', scale: 0.95 },
+      { kind: 'brand', x: 0.3, scale: 0.8 },
+      { kind: 'hood', x: 0.2, scale: 0.9, params: { eyes: true } },
+    ],
+  },
+  /** The haruspex at work: aproned, knived, censed for the reading. */
+  ninth_haruspex: {
+    parts: [
+      { kind: 'robe', scale: 1.0 },
+      { kind: 'apron', scale: 0.85 },
+      { kind: 'daggers', params: { len: 0.6 } },
+      { kind: 'censer', y: -0.45, scale: 0.7 },
+      { kind: 'eyes', color: '#e8c8a0', params: { spread: 0.34, dist: 0.5, size: 0.08 } },
+    ],
+  },
+
+  /** The shepherd and its flock, which are the same organism. */
+  polyp_shepherd: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.18, seed: 211 } },
+      { kind: 'polyps', scale: 0.95 },
+      { kind: 'writheMass', x: -0.25, scale: 0.7, alpha: 0.9 },
+      { kind: 'eyeCluster', x: 0.35, scale: 0.55 },
+    ],
+  },
+  /** Mostly gaze: one great iris in a wardens' wreath of flesh. */
+  gaze_warden: {
+    parts: [
+      { kind: 'fleshFolds', scale: 0.95 },
+      { kind: 'irisEye', x: 0.15, scale: 0.85 },
+      { kind: 'lashFringe', scale: 0.9, alpha: 0.9 },
+    ],
+  },
+  /** The crawler between lines: ringed bulk under a shroud of hush. */
+  meridian_crawler: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.14, seed: 212 } },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'writheMass', x: -0.35, scale: 0.6, alpha: 0.8 },
+      { kind: 'eyeCluster', x: 0.3, scale: 0.5, alpha: 0.9 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.8, alpha: 0.7, params: { n: 2 } }],
+  },
+
+  /** Your outline, poured: a bright edge with knives where hands go. */
+  quicksilver_shade: {
+    parts: [
+      { kind: 'disc', scale: 0.6, role: 'glow' },
+      { kind: 'veilSashes', scale: 0.85, alpha: 0.7 },
+      { kind: 'daggers', params: { len: 0.7 } },
+      { kind: 'eyes', color: '#e8f4f8', params: { n: 1, spread: 0, dist: 0.3, size: 0.08 } },
+    ],
+  },
+  /** A congregation of shards mid-hymn. */
+  glass_choir: {
+    parts: [
+      { kind: 'floatingShards', scale: 1.0 },
+      { kind: 'disc', scale: 0.45, role: 'glow', alpha: 0.9 },
+      { kind: 'mask', x: 0.3, scale: 0.6, alpha: 0.95 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.85, alpha: 0.75, params: { n: 3 } }],
+  },
+  /** The Antipode: your dueling stance, worn backwards — blade high,
+   *  face a mask, the halo faint and WRONG. */
+  the_antipode: {
+    parts: [
+      { kind: 'torso', scale: 0.92, role: 'dark' },
+      { kind: 'cape', x: -0.28, scale: 0.85, alpha: 0.9 },
+      { kind: 'sword', y: -0.05, params: { len: 1.0 } },
+      { kind: 'mask', x: 0.42, scale: 0.8 },
+      { kind: 'halo', scale: 1.05, alpha: 0.3 },
+    ],
+  },
+
+  /** The herald: robed under a burst of falling-star gold. */
+  meteor_herald: {
+    parts: [
+      { kind: 'robe', color: '#8a6a3e', scale: 1.0 },
+      { kind: 'sunburst', color: '#ffd890', scale: 0.85 },
+      { kind: 'orb', x: 0.35, scale: 0.5, role: 'glow' },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.7, params: { n: 3 } }],
+  },
+  /** The perigee hound: a skittering close-approach, fins swept back. */
+  perigee_hound: {
+    parts: [
+      { kind: 'carapace', scale: 0.85, role: 'glow', params: { segs: 2 } },
+      { kind: 'glassFins', scale: 0.9 },
+      { kind: 'spikes', scale: 0.7 },
+      { kind: 'eyes', color: '#e8d8ff', params: { spread: 0.4, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  /** The far cold watching back: one pale eye ringed in orbitals. */
+  aphelion_watcher: {
+    parts: [
+      { kind: 'disc', scale: 0.7, role: 'dark' },
+      { kind: 'halo', scale: 1.15, alpha: 0.5 },
+      { kind: 'floatingShards', scale: 0.8, alpha: 0.9 },
+      { kind: 'eyes', color: '#bfe0ff', params: { n: 1, spread: 0, dist: 0.15, size: 0.14 } },
+    ],
+  },
+
+  /** The lantern that drinks light: lure held high over the teeth. */
+  hadal_lantern: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.12, seed: 301 } },
+      { kind: 'fins', scale: 0.85 },
+      { kind: 'fangs', scale: 0.95 },
+      { kind: 'lure', x: 0.45, scale: 0.9, role: 'glow' },
+    ],
+  },
+  /** The pressure hulk: plated like the trench floor, slow as bedtime. */
+  pressure_hulk: {
+    parts: [
+      { kind: 'shell', scale: 1.0 },
+      { kind: 'scutes', scale: 0.9 },
+      { kind: 'hump', x: -0.2, scale: 0.7 },
+      { kind: 'pincers', scale: 0.8 },
+      { kind: 'eyes', color: '#9ad4e8', params: { spread: 0.3, dist: 0.55, size: 0.06 } },
+    ],
+  },
+  /** The brine cantor: gill-frilled, staffed, singing down-register. */
+  brine_cantor: {
+    parts: [
+      { kind: 'gillFrill', scale: 1.0 },
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'tatters', x: -0.2, scale: 0.7, alpha: 0.85 },
+      { kind: 'staff', params: { orb: 'glow' } },
+    ],
+  },
+
+  /** Patience with a glow on the end of it: low bulk, dim lure. */
+  murk_angler: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.16, seed: 302 } },
+      { kind: 'lure', x: 0.42, scale: 0.75 },
+      { kind: 'fangs', scale: 0.8 },
+      { kind: 'eyes', color: '#a8d8b8', params: { spread: 0.3, dist: 0.6, size: 0.07 } },
+    ],
+  },
+  /** The sexton: hooded, with an unlit lantern for the NEXT light. */
+  dusk_sexton: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'hood', x: 0.22, scale: 0.9 },
+      { kind: 'lantern', y: 0.5, scale: 0.6, alpha: 0.55 },
+      { kind: 'staff', y: -0.4, scale: 0.8 },
+    ],
+  },
+  /** The hush warden: a doorway of quiet with shoulders. */
+  hush_warden: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'drape', x: -0.15, scale: 0.95, alpha: 0.9 },
+      { kind: 'hood', x: 0.2, scale: 0.95, params: { eyes: true } },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.9, alpha: 0.6, params: { n: 2 } }],
+  },
+
+  /** The taper knight: armored tallow under a lit crown (the NEW
+   *  candles painter's debut — the court's silhouette word). */
+  taper_knight: {
+    parts: [
+      { kind: 'torso', scale: 0.92 },
+      { kind: 'armorPlates', scale: 0.9, alpha: 0.9 },
+      { kind: 'candles', x: -0.15, scale: 0.8, params: { n: 3 } },
+      { kind: 'sword', y: 0.05, params: { len: 0.9 } },
+    ],
+    live: [{ kind: 'flames', x: -0.15, scale: 0.45, params: { n: 2 } }],
+  },
+  /** The snuffer priest: the bell on the pole is for FLAMES. */
+  snuffer_priest: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'hood', x: 0.2, scale: 0.9 },
+      { kind: 'bell', x: 0.35, y: -0.45, scale: 0.45 },
+      { kind: 'staff', y: -0.45, scale: 0.9 },
+    ],
+  },
+  /** The candelabrum hulk: five lit arms and a grudge. */
+  candelabrum_hulk: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'armorPlates', scale: 0.95, alpha: 0.85 },
+      { kind: 'candles', x: -0.1, scale: 1.1, params: { n: 5 } },
+    ],
+    live: [{ kind: 'flames', x: -0.1, scale: 0.6, params: { n: 3 } }],
+  },
+
+  /** The advocate: robed in dusk, the case files orbiting. */
+  dusk_advocate: {
+    parts: [
+      { kind: 'robe', scale: 0.95, role: 'dark' },
+      { kind: 'book', y: 0.45, scale: 0.7 },
+      { kind: 'veilSashes', scale: 0.8, alpha: 0.7 },
+      { kind: 'hood', x: 0.22, scale: 0.88, params: { eyes: true } },
+    ],
+  },
+  /** The bailiff: one mailed fist, chains for the accused. */
+  shadow_bailiff: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'chains', scale: 0.95 },
+      { kind: 'gauntlets', y: 0.45, scale: 0.9, params: { n: 1 } },
+      { kind: 'eyes', color: '#b8a8e8', params: { spread: 0.3, dist: 0.42, size: 0.07 } },
+    ],
+  },
+  /** Three hoods, one vote: the quorum in loose session. */
+  murmur_quorum: {
+    parts: [
+      { kind: 'drape', scale: 0.95, alpha: 0.9 },
+      { kind: 'hood', x: 0.3, scale: 0.6 },
+      { kind: 'hood', x: -0.25, y: 0.4, scale: 0.5, alpha: 0.95 },
+      { kind: 'hood', x: -0.25, y: -0.4, scale: 0.5, alpha: 0.95 },
+    ],
+    live: [{ kind: 'soulGauze', scale: 0.85, alpha: 0.65, params: { n: 3 } }],
+  },
+
+  /** The plague doctor's silhouette, kept: beak mask, censer, hood. */
+  miasma_piper: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'hood', x: 0.15, scale: 0.9 },
+      { kind: 'beak', x: 0.45, scale: 0.75, role: 'dark' },
+      { kind: 'censer', y: 0.45, scale: 0.7 },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.85, params: { n: 3 } }],
+  },
+  /** The bearer: blessed in bulk, wrapped where it split. */
+  pox_bearer: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.16, seed: 303 } },
+      { kind: 'bloatSacs', scale: 0.95, params: { n: 4 } },
+      { kind: 'shroudWrap', scale: 0.85, alpha: 0.8, params: { bands: 3 } },
+      { kind: 'eyes', color: '#d8e89a', params: { spread: 0.3, dist: 0.55, size: 0.07 } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.9, params: { n: 4 } }],
+  },
+  /** The penitent under its own bell — rung walking, rung kneeling. */
+  bell_penitent: {
+    parts: [
+      { kind: 'tatters', scale: 0.95, params: { n: 5 } },
+      { kind: 'bell', x: 0.1, scale: 0.75 },
+      { kind: 'hood', x: 0.3, scale: 0.8 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

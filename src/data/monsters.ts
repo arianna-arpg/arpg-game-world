@@ -13819,6 +13819,367 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'caulborn',
     brain: { type: 'strafer' },
   },
+
+  // ==========================================================================
+  // THE MUSTER PASS — WAVE 3: THE STRANGE COURTS. The event factions ran
+  // 2-4 roster rows — a Conclave was one cultist, a Vigil four candles.
+  // Same doctrine (missing trades, pool-reuse, affordability, silhouette
+  // tells); these kin field ONLY through their events' doors, so the value
+  // lands as roster rows — no baseline spawn surface is touched.
+  // ==========================================================================
+
+  // --- THE OCCULT (the Conclave's lodge): the scribe, the binder, and
+  // the reader of what the rite spills.
+
+  // The hex scrivener: writes the working in the air ahead of you —
+  // the ink is the argument, the word lands where you were going.
+  hex_scrivener: {
+    id: 'hex_scrivener', name: 'Hex Scrivener',
+    color: '#7a5a9a', shape: 'diamond', radius: 12, material: 'cloth', look: 'hex_scrivener',
+    base: { life: 60, moveSpeed: 115, accuracy: 100, mana: 60, manaRegen: 6 },
+    skills: ['malediction', 'doomsayers_word'],
+    xp: 26,
+    faction: 'occult',
+    brain: { type: 'strafer' },
+  },
+  // The goetic binder: carries the chains of a bargain half-kept — the
+  // blade-wraith he calls is the other half.
+  goetic_binder: {
+    id: 'goetic_binder', name: 'Goetic Binder',
+    color: '#5a4a7a', shape: 'pentagon', radius: 13, material: 'cloth', look: 'goetic_binder',
+    base: { life: 75, moveSpeed: 105, accuracy: 98, mana: 60, manaRegen: 6 },
+    skills: ['summon_blade_wraith'],
+    xp: 30,
+    faction: 'occult',
+    brain: { type: 'caster' },
+  },
+  // The ninth haruspex: reads the lodge's future in the lodge's dead —
+  // tends the living with one hand, salts the ground with the other.
+  ninth_haruspex: {
+    id: 'ninth_haruspex', name: 'the Ninth Haruspex',
+    color: '#8a5a6a', shape: 'octagon', radius: 13, material: 'cloth', look: 'ninth_haruspex',
+    base: { life: 90, moveSpeed: 100, accuracy: 98, mana: 90, manaRegen: 8 },
+    skills: ['toxic_domain', 'healing_stream'],
+    xp: 32,
+    faction: 'occult',
+    wardPriority: 2,
+    brain: { type: 'caster' },
+  },
+
+  // --- THE ELDRITCH (what the blood becomes): the shepherd of growths,
+  // the warden that is mostly gaze, and the crawler between meridians.
+
+  // The polyp shepherd: it doesn't herd the growths — it GROWS the herd.
+  polyp_shepherd: {
+    id: 'polyp_shepherd', name: 'Polyp Shepherd',
+    color: '#7a8a52', shape: 'oval', radius: 15, material: 'flesh', look: 'polyp_shepherd',
+    base: { life: 140, moveSpeed: 90, accuracy: 96, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['fleshspur'],
+    xp: 30,
+    faction: 'eldritch',
+    brain: { type: 'juggernaut' },
+  },
+  // The gaze warden: an eye that learned to want things. The flaying
+  // light is how it holds them.
+  gaze_warden: {
+    id: 'gaze_warden', name: 'Gaze Warden',
+    color: '#9a6a4e', shape: 'circle', radius: 13, material: 'flesh', look: 'gaze_warden',
+    base: { life: 85, moveSpeed: 105, accuracy: 104, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['soulflay'],
+    xp: 28,
+    faction: 'eldritch',
+    vision: { arcDeg: 300, rearMul: 0.6 },
+    brain: { type: 'strafer' },
+  },
+  // The meridian crawler: it travels along lines the world forgot it
+  // drew, and the hush it drags behind it is the attack.
+  meridian_crawler: {
+    id: 'meridian_crawler', name: 'Meridian Crawler',
+    color: '#6a7a62', shape: 'oval', radius: 14, material: 'flesh', look: 'meridian_crawler',
+    base: { life: 120, moveSpeed: 95, accuracy: 96, mana: 30, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['cerement'],
+    xp: 26,
+    faction: 'eldritch',
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- THE MIRRORKIN (the rift's reflections): the shade of quicksilver,
+  // the choir of shards, and the one that fights your tempo backwards.
+
+  // The quicksilver shade: your outline, poured and sharpened.
+  quicksilver_shade: {
+    id: 'quicksilver_shade', name: 'Quicksilver Shade',
+    color: '#b8c4cc', shape: 'kite', radius: 11, material: 'ethereal', look: 'quicksilver_shade',
+    base: { life: 60, moveSpeed: 185, accuracy: 108, evasion: 65, mana: 30, manaRegen: 3 },
+    skills: ['trisect', 'dash_strike'],
+    xp: 26,
+    faction: 'mirrorkin',
+    brain: { type: 'assassin', withdraw: 1.1 },
+  },
+  // The glass choir: a congregation of shards singing what it stole —
+  // the spirits it releases wander, and wandering, find you.
+  glass_choir: {
+    id: 'glass_choir', name: 'Glass Choir',
+    color: '#c8d8e0', shape: 'circle', radius: 13, material: 'crystal', look: 'glass_choir',
+    base: { life: 70, energyShield: 40, moveSpeed: 110, accuracy: 100, mana: 70, manaRegen: 6 },
+    skills: ['wandering_spirits'],
+    xp: 28,
+    faction: 'mirrorkin',
+    brain: { type: 'strafer' },
+  },
+  // THE ANTIPODE: it learned your measure and plays it REVERSED — the
+  // perfect strike a beat early, the timed strike a beat late. Duel it
+  // like a mirror: the tempo you trust is the opening it bought.
+  the_antipode: {
+    id: 'the_antipode', name: 'the Antipode',
+    color: '#a8b8c8', shape: 'trapezoid', radius: 13, material: 'ethereal', look: 'the_antipode',
+    base: { life: 130, moveSpeed: 150, accuracy: 112, evasion: 70, insight: 40, mana: 30, manaRegen: 4 },
+    skills: ['perfect_strike', 'timed_strike'],
+    xp: 40,
+    faction: 'mirrorkin',
+    presence: { from: 9, fadeIn: 4 },
+    scaling: { life: { incPerLevel: 0.07 } },
+    brain: { type: 'flanker', behavior: { dodge: { chance: 0.6, reaction: [0.1, 0.3] } } },
+  },
+
+  // --- THE STARFALL COURT (what rides the meteors): the herald who
+  // calls the next one down, the hound that hunts at perigee, and the
+  // watcher from the far cold.
+
+  // The meteor herald: it announces. The sky does the rest.
+  meteor_herald: {
+    id: 'meteor_herald', name: 'Meteor Herald',
+    color: '#d8b06a', shape: 'diamond', radius: 13, material: 'crystal', look: 'meteor_herald',
+    base: { life: 80, moveSpeed: 100, accuracy: 100, mana: 20, manaRegen: 2 },
+    skills: ['meteor'],
+    xp: 30,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    brain: { type: 'artillery' },
+  },
+  // The perigee hound: closest approach, hardest bite — it orbits in
+  // and the swing window is the flyby.
+  perigee_hound: {
+    id: 'perigee_hound', name: 'Perigee Hound',
+    color: '#b09ad8', shape: 'triangle', radius: 12, material: 'crystal', look: 'perigee_hound',
+    base: { life: 70, moveSpeed: 190, accuracy: 106, evasion: 55, mana: 30, manaRegen: 3 },
+    skills: ['dash_strike', 'claw'],
+    xp: 24,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    brain: { type: 'flanker' },
+  },
+  // The aphelion watcher: the far cold given an orbit and an opinion —
+  // the orb it sends arrives with the temperature it left.
+  aphelion_watcher: {
+    id: 'aphelion_watcher', name: 'Aphelion Watcher',
+    color: '#8ab0d8', shape: 'circle', radius: 13, material: 'crystal', look: 'aphelion_watcher',
+    base: { life: 75, moveSpeed: 95, accuracy: 100, mana: 60, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.6)],
+    skills: ['frozen_orb'],
+    xp: 30,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    brain: { type: 'artillery' },
+  },
+
+  // --- THE DEPTHKIN (the descent's own): the lantern that drinks your
+  // light, the hulk the pressure built, and the cantor of the brine.
+
+  // The hadal lantern: its glow is a QUESTION and your light is the
+  // answer it eats (wellDrain — the descent's light meter made a body).
+  hadal_lantern: {
+    id: 'hadal_lantern', name: 'Hadal Lantern',
+    color: '#6a9ab8', shape: 'circle', radius: 12, material: 'flesh', look: 'hadal_lantern',
+    base: { life: 70, moveSpeed: 110, accuracy: 102, mana: 60, manaRegen: 6 },
+    skills: ['beguile'],
+    xp: 30,
+    faction: 'depthkin',
+    wellDrain: 6,
+    light: { radius: -3.2, color: '#8ad0e8', intensity: 0.45, flicker: 1.8 },
+    brain: { type: 'strafer' },
+  },
+  // The pressure hulk: the deep pressed until something pressed back.
+  pressure_hulk: {
+    id: 'pressure_hulk', name: 'Pressure Hulk',
+    color: '#4a6a7a', shape: 'hexagon', radius: 18, material: 'chitin', look: 'pressure_hulk',
+    base: { life: 240, moveSpeed: 80, accuracy: 98, armor: 45, poise: 60, mana: 25, manaRegen: 3 },
+    skills: ['piledriver', 'heavy_strike'],
+    xp: 36,
+    faction: 'depthkin',
+    heft: 1.5, turnSpeed: 2.8,
+    scaling: { life: { incPerLevel: 0.07 } },
+    brain: { type: 'juggernaut' },
+  },
+  // The brine cantor: sings in the register the water remembers — the
+  // coda travels farther down here.
+  brine_cantor: {
+    id: 'brine_cantor', name: 'Brine Cantor',
+    color: '#5a8a92', shape: 'pentagon', radius: 12, material: 'flesh', look: 'brine_cantor',
+    base: { life: 80, moveSpeed: 100, accuracy: 98, mana: 45, manaRegen: 5 },
+    skills: ['coda', 'claw'],
+    xp: 28,
+    faction: 'depthkin',
+    brain: { type: 'strafer' },
+  },
+
+  // --- THE GLOAMBORN (the darkness front's kin): the angler in the
+  // murk, the sexton who buries lights, and the warden of the hush.
+
+  // The murk angler: patience with a glow on the end of it.
+  murk_angler: {
+    id: 'murk_angler', name: 'Murk Angler',
+    color: '#4a5a52', shape: 'oval', radius: 13, look: 'murk_angler',
+    base: { life: 85, moveSpeed: 140, accuracy: 106, evasion: 50, mana: 20, manaRegen: 3 },
+    skills: ['talon_rake', 'claw'],
+    xp: 26,
+    faction: 'gloamborn',
+    ambush: { radius: 48 },
+    light: { radius: -2.4, color: '#a8d8b8', intensity: 0.35, flicker: 2.2, radiance: { at1: 0 } },
+    brain: { type: 'assassin', withdraw: 1.2 },
+  },
+  // The dusk sexton: it marks whose light is NEXT — the musk is a
+  // funeral notice the dark knows how to read.
+  dusk_sexton: {
+    id: 'dusk_sexton', name: 'Dusk Sexton',
+    color: '#3a4a44', shape: 'diamond', radius: 12, material: 'cloth', look: 'dusk_sexton',
+    base: { life: 70, moveSpeed: 105, accuracy: 100, mana: 50, manaRegen: 5 },
+    skills: ['prey_musk'],
+    xp: 28,
+    faction: 'gloamborn',
+    brain: { type: 'strafer' },
+  },
+  // The hush warden: stands in the doorways of the dark and lets the
+  // quiet do the wrestling.
+  hush_warden: {
+    id: 'hush_warden', name: 'Hush Warden',
+    color: '#44544c', shape: 'pentagon', radius: 15, look: 'hush_warden',
+    base: { life: 150, moveSpeed: 90, accuracy: 96, armor: 20, poise: 55, mana: 30, manaRegen: 3 },
+    skills: ['cerement'],
+    xp: 30,
+    faction: 'gloamborn',
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- THE WAX COURT (the vigil's candles): the knight in armored
+  // tallow, the priest of the snuffer bell, and the hulk that is a
+  // candelabrum first and a body second.
+
+  // The taper knight: the crown burns; the brand it leaves burns after.
+  taper_knight: {
+    id: 'taper_knight', name: 'Taper Knight',
+    color: '#d8c088', shape: 'trapezoid', radius: 13, look: 'taper_knight',
+    base: { life: 110, moveSpeed: 115, accuracy: 102, armor: 25, poise: 40, mana: 45, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['cleave', 'solar_brand'],
+    xp: 30,
+    faction: 'wax',
+    brain: { type: 'flanker' },
+  },
+  // The snuffer priest: what it puts out stays out — and the flames it
+  // has quieted follow it as pale, seeking wicks.
+  snuffer_priest: {
+    id: 'snuffer_priest', name: 'Snuffer Priest',
+    color: '#b8a478', shape: 'diamond', radius: 12, material: 'cloth', look: 'snuffer_priest',
+    base: { life: 75, moveSpeed: 105, accuracy: 100, mana: 60, manaRegen: 6 },
+    skills: ['marshlight'],
+    xp: 28,
+    faction: 'wax',
+    wellDrain: 5,
+    brain: { type: 'strafer' },
+  },
+  // The candelabrum hulk: five lit arms and a grudge — the court's
+  // heavy furniture, walking.
+  candelabrum_hulk: {
+    id: 'candelabrum_hulk', name: 'Candelabrum Hulk',
+    color: '#c8ac6e', shape: 'hexagon', radius: 19, look: 'candelabrum_hulk',
+    base: { life: 260, moveSpeed: 78, accuracy: 96, armor: 30, poise: 65, mana: 40, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['ground_slam', 'heavy_strike'],
+    xp: 44,
+    faction: 'wax',
+    heft: 1.4, turnSpeed: 2.8,
+    scaling: { life: { incPerLevel: 0.07 } },
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- THE UMBRAL PARLIAMENT (the vigil's other bench): the advocate,
+  // the bailiff, and the quorum that votes you undone.
+
+  // The dusk advocate: files the case against your standing — the
+  // verdict arrives as weather.
+  dusk_advocate: {
+    id: 'dusk_advocate', name: 'Dusk Advocate',
+    color: '#5a5470', shape: 'diamond', radius: 12, material: 'cloth', look: 'dusk_advocate',
+    base: { life: 70, moveSpeed: 110, accuracy: 100, mana: 60, manaRegen: 6 },
+    skills: ['malediction', 'soulflay'],
+    xp: 30,
+    faction: 'umbral',
+    brain: { type: 'strafer' },
+  },
+  // THE SHADOW BAILIFF: the Parliament's arrest, made literal — it
+  // SEIZES the accused (the grab fabric, worn by the dark) and holds
+  // them for the advocate's pleasure.
+  shadow_bailiff: {
+    id: 'shadow_bailiff', name: 'Shadow Bailiff',
+    color: '#48445c', shape: 'trapezoid', radius: 15, look: 'shadow_bailiff',
+    base: { life: 160, moveSpeed: 120, accuracy: 104, armor: 25, poise: 55, mana: 20, manaRegen: 3 },
+    skills: ['seize', 'claw'],
+    xp: 34,
+    faction: 'umbral',
+    heft: 1.3,
+    brain: { type: 'juggernaut' },
+  },
+  // The murmur quorum: three hoods, one vote, no floor debate — the
+  // chamber's noise made ambulatory.
+  murmur_quorum: {
+    id: 'murmur_quorum', name: 'Murmur Quorum',
+    color: '#524e68', shape: 'circle', radius: 14, material: 'cloth', look: 'murmur_quorum',
+    base: { life: 90, moveSpeed: 100, accuracy: 98, mana: 70, manaRegen: 6 },
+    skills: ['incite', 'coda'],
+    xp: 32,
+    faction: 'umbral',
+    brain: { type: 'strafer' },
+  },
+
+  // --- THE PLAGUEBOUND (the contagion's court): the piper of miasma,
+  // the bearer of the pox, and the penitent under the bell.
+
+  // The miasma piper: the tune is airborne. So is everything else.
+  miasma_piper: {
+    id: 'miasma_piper', name: 'Miasma Piper',
+    color: '#7a8a4e', shape: 'diamond', radius: 12, material: 'cloth', look: 'miasma_piper',
+    base: { life: 70, moveSpeed: 110, accuracy: 100, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['epidemic'],
+    xp: 28,
+    faction: 'plague',
+    brain: { type: 'strafer' },
+  },
+  // The pox bearer: it carries the blessing in bulk, and shares on
+  // arrival — standing near its end is joining its congregation.
+  pox_bearer: {
+    id: 'pox_bearer', name: 'Pox Bearer',
+    color: '#8a9a52', shape: 'oval', radius: 16, material: 'flesh', look: 'pox_bearer',
+    base: { life: 180, moveSpeed: 85, accuracy: 96, mana: 45, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['bile_spray'],
+    xp: 30,
+    faction: 'plague',
+    explodeOnDeath: 0.5,
+    brain: { type: 'juggernaut' },
+  },
+  // The bell penitent: it rings for you PRE-emptively — the knell is
+  // a kindness, the pulse that follows is the sermon.
+  bell_penitent: {
+    id: 'bell_penitent', name: 'Bell Penitent',
+    color: '#9a8a6a', shape: 'pentagon', radius: 13, material: 'cloth', look: 'bell_penitent',
+    base: { life: 85, moveSpeed: 95, accuracy: 98, mana: 60, manaRegen: 6 },
+    skills: ['rising_knell'],
+    xp: 30,
+    faction: 'plague',
+    brain: { type: 'caster' },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -14297,6 +14658,11 @@ export const FACTIONS: Record<string, {
       { id: 'starfall_shardling', weight: 4 },
       { id: 'starfall_prism', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'gravity_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the herald who calls the next one down, the
+      // hound that hunts at perigee, the watcher from the far cold.
+      { id: 'perigee_hound', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'meteor_herald', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'aphelion_watcher', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   carven: {

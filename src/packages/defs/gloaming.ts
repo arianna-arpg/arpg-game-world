@@ -71,6 +71,11 @@ const GLOAMBORN_FACTION: FactionSpec = {
     { id: 'murk_prowler', weight: 3, presence: { from: 4, fadeIn: 3 } },
     { id: 'wick_keeper', weight: 2, presence: { from: 7, fadeIn: 3 } },
     { id: 'hollow_shepherd', weight: 1, presence: { from: 9, fadeIn: 4 } },
+    // The muster pass: the angler in the murk, the sexton who marks
+    // whose light is NEXT, and the warden of the hush.
+    { id: 'murk_angler', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'dusk_sexton', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'hush_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
   ],
 };
 

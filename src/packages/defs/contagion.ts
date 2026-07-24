@@ -61,6 +61,11 @@ const PLAGUE_FACTION: FactionSpec = {
     { id: 'plague_carrier', weight: 5 },
     { id: 'plague_spitter', weight: 3 },
     { id: 'plague_bloat', weight: 2 },
+    // The muster pass: the court around the sickness — the piper of
+    // miasma, the bearer of the pox, the penitent under the bell.
+    { id: 'miasma_piper', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'pox_bearer', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'bell_penitent', weight: 1, presence: { from: 7, fadeIn: 3 } },
   ],
 };
 

@@ -30,6 +30,11 @@ const MIRRORKIN_FACTION: FactionSpec = {
     { id: 'mirror_husk', weight: 4 },
     // A wild-rolled reflection mirrors nothing — it fights with its own glass.
     { id: 'mirrorkin_reflection', weight: 1, presence: { from: 4, fadeIn: 3 } },
+    // The muster pass: the rift learns more shapes — the poured outline,
+    // the singing shards, and the duelist who plays your tempo BACKWARDS.
+    { id: 'quicksilver_shade', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'glass_choir', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'the_antipode', weight: 1, presence: { from: 9, fadeIn: 4 } },
   ],
 };
 

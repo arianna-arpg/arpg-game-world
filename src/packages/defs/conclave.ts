@@ -40,6 +40,11 @@ const OCCULT_FACTION: FactionSpec = {
     { id: 'conclave_cultist', weight: 3 },
     { id: 'mazer_moth', weight: 2 },
     { id: 'widdershin_wisp', weight: 1 },
+    // The muster pass: the lodge's inner offices — the scribe, the
+    // binder, and the reader of what the rite spills.
+    { id: 'hex_scrivener', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'goetic_binder', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'ninth_haruspex', weight: 1, presence: { from: 8, fadeIn: 4 } },
   ],
 };
 
@@ -58,6 +63,11 @@ const ELDRITCH_FACTION: FactionSpec = {
     // The null adepts serve what the blood becomes (the muster rolls) —
     // the Blight's own artillery, sworn wherever the eruption stands.
     { id: 'null_adept', weight: 2 },
+    // The muster pass: the eruption's deeper anatomy — the shepherd that
+    // grows its herd, the gaze that holds, the crawler between lines.
+    { id: 'polyp_shepherd', weight: 2, presence: { from: 5, fadeIn: 3 } },
+    { id: 'gaze_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
+    { id: 'meridian_crawler', weight: 1, presence: { from: 4, fadeIn: 3 } },
     { id: 'conclave_eldritch_horror', weight: 1 },
   ],
   warlord: 'conclave_eldritch_horror',

@@ -56,6 +56,12 @@ const WAX_FACTION: FactionSpec = {
     { id: 'wickling', weight: 4, presence: { to: 24, fadeOut: 12 } },
     { id: 'wax_footman', weight: 3 },
     { id: 'wax_chandler', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    // The muster pass: the court's standing orders — the knight in
+    // armored tallow, the priest of the snuffer bell, and the walking
+    // candelabrum (the new 'candles' painter carries the silhouette).
+    { id: 'taper_knight', weight: 2, presence: { from: 5, fadeIn: 3 } },
+    { id: 'snuffer_priest', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'candelabrum_hulk', weight: 1, presence: { from: 9, fadeIn: 4 } },
     { id: 'chandler_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
   ],
   warlord: 'chandler_queen',
@@ -76,6 +82,12 @@ const UMBRAL_FACTION: FactionSpec = {
   roster: [
     { id: 'umbral_footpad', weight: 4 },
     { id: 'umbral_whisper', weight: 2, presence: { from: 5, fadeIn: 3 } },
+    // The muster pass: the Parliament seats its officers — the advocate
+    // files the case, the bailiff SEIZES the accused (the grab fabric
+    // worn by the dark), the quorum votes you undone.
+    { id: 'dusk_advocate', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'shadow_bailiff', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'murmur_quorum', weight: 1, presence: { from: 8, fadeIn: 4 } },
     { id: 'speaker_of_dusk', weight: 1, presence: { from: 10, fadeIn: 5 } },
   ],
   warlord: 'speaker_of_dusk',
