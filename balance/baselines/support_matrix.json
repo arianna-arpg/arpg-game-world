@@ -1326,7 +1326,8 @@
     {"skill":"vampiric_presence","support":"corrosion","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain vampiric_presence corrosion`","since":"2026-07-20"},
     {"skill":"venomous_aura","support":"corrosion","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain venomous_aura corrosion`","since":"2026-07-20"},
     {"skill":"wall_of_meat","support":"corrosion","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain wall_of_meat corrosion`","since":"2026-07-20"},
-    {"skill":"war_chant","support":"countermelody","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain war_chant countermelody`","since":"2026-07-20"},
+    {"skill":"raise_spectre","support":"countermelody","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain raise_spectre countermelody`","since":"2026-07-24"},
+    {"skill":"revive","support":"countermelody","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain revive countermelody`","since":"2026-07-24"},
     {"skill":"ice_shield","support":"counterweight","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain ice_shield counterweight`","since":"2026-07-20"},
     {"skill":"shield_charge","support":"counterweight","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain shield_charge counterweight`","since":"2026-07-20"},
     {"skill":"agony","support":"creeping_doom","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain agony creeping_doom`","since":"2026-07-20"},
@@ -2441,7 +2442,6 @@
     {"skill":"vampiric_presence","support":"insulation","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain vampiric_presence insulation`","since":"2026-07-20"},
     {"skill":"healing_rain","support":"intensive_care","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain healing_rain intensive_care`","since":"2026-07-20"},
     {"skill":"sanctified_strike","support":"intensive_care","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain sanctified_strike intensive_care`","since":"2026-07-20"},
-    {"skill":"seize","support":"iron_grip","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain seize iron_grip`","since":"2026-07-20"},
     {"skill":"form_of_the_dire_wolf","support":"iron_trance","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain form_of_the_dire_wolf iron_trance`","since":"2026-07-20"},
     {"skill":"agony","support":"jinxing_touch","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain agony jinxing_touch`","since":"2026-07-20"},
     {"skill":"befuddlement","support":"jinxing_touch","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain befuddlement jinxing_touch`","since":"2026-07-20"},
@@ -5247,7 +5247,8 @@
     {"skill":"vampiric_presence","support":"transient_inferno","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain vampiric_presence transient_inferno`","since":"2026-07-20"},
     {"skill":"wall_of_meat","support":"transient_inferno","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain wall_of_meat transient_inferno`","since":"2026-07-20"},
     {"skill":"winters_mantle","support":"transient_inferno","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain winters_mantle transient_inferno`","since":"2026-07-20"},
-    {"skill":"heave","support":"trebuchet_arm","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain heave trebuchet_arm`","since":"2026-07-20"},
+    {"skill":"raise_spectre","support":"trebuchet_arm","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain raise_spectre trebuchet_arm`","since":"2026-07-24"},
+    {"skill":"revive","support":"trebuchet_arm","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain revive trebuchet_arm`","since":"2026-07-24"},
     {"skill":"alarm_reek","support":"triangle_sigil","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain alarm_reek triangle_sigil`","since":"2026-07-20"},
     {"skill":"befuddlement","support":"triangle_sigil","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain befuddlement triangle_sigil`","since":"2026-07-20"},
     {"skill":"combustion_strike","support":"triangle_sigil","kind":"inert","status":"open","probe":"dummy","unread":["aoeShape"],"note":"static: 'aoeShape' read only at area-shape queries (novas, ground zones, storms, auras, linger fields)","since":"2026-07-20"},
@@ -6038,7 +6039,9 @@
     {"skill":"winters_sweep","support":"wrathful_edge","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain winters_sweep wrathful_edge`","since":"2026-07-20"},
     {"skill":"wisp_call","support":"wrathful_edge","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain wisp_call wrathful_edge`","since":"2026-07-20"},
     {"skill":"zeal","support":"wrathful_edge","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain zeal wrathful_edge`","since":"2026-07-20"},
-    {"skill":"zealots_cadence","support":"wrathful_edge","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain zealots_cadence wrathful_edge`","since":"2026-07-20"}
+    {"skill":"zealots_cadence","support":"wrathful_edge","kind":"inert","status":"open","probe":"dummy","note":"no static explanation on file — run `matrix explain zealots_cadence wrathful_edge`","since":"2026-07-20"},
+    {"skill":"raise_spectre","support":"wringing_grip","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain raise_spectre wringing_grip`","since":"2026-07-24"},
+    {"skill":"revive","support":"wringing_grip","kind":"inert","status":"open","probe":"live","note":"no static explanation on file — run `matrix explain revive wringing_grip`","since":"2026-07-24"}
   ],
   "suspects": []
 }

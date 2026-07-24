@@ -35,7 +35,9 @@ import {
   supportFitsInstOrCrew, supportGlobalMods, supportRidesMinions, hostSockets,
 } from '../src/engine/skills';
 import { mod } from '../src/engine/stats';
-import { dist } from '../src/core/math';
+import { dist, vec } from '../src/core/math';
+import { PROCS } from '../src/data/procs';
+import { lightwellOf } from '../src/engine/lightwells';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -866,6 +868,88 @@ bootSimEngine();
     cast && timerBefore > cdHost.cooldown * 0.5 && timerAfter === 0
     && mintedInOldWindow === 1 && bank.count === 2,
     `host ${cdHost.id} cd ${cdHost.cooldown}: timer ${timerBefore.toFixed(2)}→${timerAfter}, after-tail ${mintedInOldWindow}, after-full-rest ${bank.count}`);
+}
+
+// === RIG N — the deepened-courts round (2026-07-24) ========================
+// N1 THE WRING (wringing_grip → gripCrush at the grab sweep): same-seed A/B —
+//    an identical seize-and-hold script, gem vs bare; only the gem's world
+//    crushes the held body. The read rides the seizing skill's live instance
+//    (the gripPower idiom), so the stat stays a skill-local gem line.
+// N2 THE KINDLE (gutterglow → the 'kindle' ProcEffect): a real kill through
+//    a socketed gem plants a REGISTERED, powered lightwell mote at the
+//    corpse — the matrix blindness row (no arena darkness event) cites this
+//    pin as the payload's deterministic proof.
+
+{
+  const holdLife = (withGem: boolean): { stage: string; before: number; after: number } => {
+    const w = makeSimWorld('warrior', 0x0e01); // SAME seed both runs — the gem is the only difference
+    const p = w.player;
+    if (!w.devGrabGrant('seize')) return { stage: 'grant-refused', before: 0, after: 0 };
+    const seize = p.skills.find(s => s?.def.id === 'seize')!;
+    if (withGem) seize.sockets[0] = { def: SUPPORTS.wringing_grip, level: 1 };
+    p.pos = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), p.radius);
+    const z = w.createMonster('zombie', 3, 'enemy');
+    z.pos = vec(p.pos.x + 50, p.pos.y);
+    // Single-hit rig honesty: the seize must LAND for the hold to form —
+    // zero the victim's evasion so the one roll can never whiff the rig
+    // (the probe_grab source idiom; global-stream drift under load is the
+    // J-flake governor lesson, and a flaky pin is no pin).
+    z.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]);
+    w.actors.push(z);
+    p.facing = 0;
+    if (!w.useSkill(p, seize, vec(z.pos.x, z.pos.y))) return { stage: 'press-refused', before: 0, after: 0 };
+    for (let i = 0; i < 14; i++) w.update(1 / 20); // through the cast; the hold forms
+    if (p.gripping?.id !== z.id) return { stage: 'no-hold', before: z.life, after: z.life };
+    const before = z.life;
+    for (let i = 0; i < 28; i++) w.update(1 / 20); // 1.4s of held ticking, no presses
+    return { stage: p.gripping?.id === z.id ? 'held' : 'slipped', before, after: z.life };
+  };
+  const bare = holdLife(false);
+  const gem = holdLife(true);
+  const bareDrop = bare.before - bare.after;
+  const gemDrop = gem.before - gem.after;
+  check('N1 THE WRING: the gem\'s hold crushes the held body (same-seed A/B — the bare hold is the exact control, the wring alone wounds through it)',
+    bare.stage === 'held' && gem.stage === 'held' && gemDrop > bareDrop + 1,
+    `bare [${bare.stage}] Δ${bareDrop.toFixed(1)}, wrung [${gem.stage}] Δ${gemDrop.toFixed(1)} over 1.4s held`);
+}
+
+{
+  const w = makeSimWorld('warrior', 0x0e02);
+  const p = w.player;
+  const procRow = PROCS['gutterglow'];
+  check('N2a the gutterglow proc row is a kill-trigger KINDLE of a registered lightwell',
+    !!procRow && procRow.trigger === 'kill' && procRow.effect.type === 'kindle'
+    && lightwellOf(procRow.effect.type === 'kindle' ? procRow.effect.kind : '') !== undefined);
+  const host = Object.values(SKILLS).find(s =>
+    s.tags.includes('attack') && s.tags.includes('melee') && s.cooldown === 0
+    && s.manaCost <= 10 && !s.gate && s.effects.some(e => e.type === 'damage')
+    && SUPPORTS.gutterglow.requiresTags!.some(t => s.tags.includes(t)))!;
+  const inst = makeSkillInstance(host, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.gutterglow, level: 1 };
+  p.skills[0] = inst;
+  // procChance caps EVERY roll at 0.95 (the rate-discipline golden rule),
+  // so one kill is a 1-in-20 flake by construction — the pin earns its
+  // determinism with icd-spaced attempts (miss odds 0.05^4 ≈ 6e-6).
+  let kills = 0;
+  let corpseAt: { x: number; y: number } | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const z = w.createMonster('zombie', 1, 'enemy');
+    z.pos = vec(p.pos.x + 40, p.pos.y);
+    z.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]); // the swing must land
+    w.actors.push(z);
+    z.life = 1; // the next landed blow is a kill
+    p.facing = 0;
+    w.useSkill(p, inst, vec(z.pos.x, z.pos.y));
+    for (let i = 0; i < 20; i++) w.update(1 / 20);
+    if (z.dead) { kills++; corpseAt = { x: z.pos.x, y: z.pos.y }; }
+    if (w.doodads.some(d => d.kind === 'gutterglow_mote')) break;
+    for (let i = 0; i < 54; i++) w.update(1 / 20); // out past the 2.5s icd
+  }
+  const mote = w.doodads.find(d => d.kind === 'gutterglow_mote');
+  check('N2b a kill through the socketed gem plants a POWERED mote at the corpse (the kindle ProcEffect, end to end)',
+    kills > 0 && !!mote && (mote.well?.power ?? 0) > 0
+    && !!corpseAt && dist(mote.pos, corpseAt) < 60,
+    mote ? `mote at ${Math.round(mote.pos.x)},${Math.round(mote.pos.y)}, pool ${mote.well?.power?.toFixed(0)}, kills ${kills}` : `no mote (host ${host.id}, kills ${kills})`);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

@@ -9,7 +9,7 @@
 // with skill points.
 // ---------------------------------------------------------------------------
 
-import { conversionStat, mod, STAT_DEFS } from '../engine/stats';
+import { conversionStat, gaugeMod, mod, STAT_DEFS } from '../engine/stats';
 import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG, BAR_SLOTS, MAX_SUPPORT_LEVEL, slotGraftStat } from '../engine/skills';
 import type { SupportDef } from '../engine/skills';
 
@@ -123,6 +123,20 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('impactDamage', 'flat', 0.06)],
     weight: 6,
   },
+  // The family's THIRD verb (2026-07-24, the deepened-courts round): the
+  // coilborn court taught the world what a squeeze is — this is the
+  // player's edition. iron_grip makes the hold LAST, trebuchet_arm makes
+  // the release LAND; wringing_grip makes the hold itself WOUND (the
+  // gripCrush read at the grab sweep — physical, mitigated, credited,
+  // stacking atop a swallow's own digestion).
+  wringing_grip: {
+    id: 'wringing_grip', name: 'Wringing Grip',
+    description: 'What this skill holds, it WRINGS: through every second of the hold the caught body is crushed for a fraction of its own life — armor counts, the squeeze is honest, and the kill is yours. The constrictor\'s whole argument, learned secondhand.',
+    color: '#b48858', requiresTags: ['grab'],
+    mods: [mod('gripCrush', 'flat', 0.05)],
+    perLevel: [mod('gripCrush', 'flat', 0.007)],
+    weight: 6,
+  },
   // THE COLONY PASS's counterplay gem (engine/plies.ts plyRend, folded at
   // the ply gate + the lite carve): the anti-SWARM blade. Count-durable
   // bodies eat blows, not damage — this gem makes each blow count double.
@@ -232,10 +246,37 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   countermelody: {
     id: 'countermelody', name: 'Countermelody',
+    // 'strikes' (2026-07-24 hygiene, the war_chant ledger row): the second
+    // line deepens damage and status chance — a pure buff-domain song has
+    // neither to deepen, and the refusal self-lifts the moment a graft
+    // makes the host genuinely strike (summon songs fit via the crew hop).
+    requiresMechanisms: ['strikes'],
     description: 'A second line UNDER this song: it works harder at everything the verse was already saying.',
     color: '#c088d0', requiresTags: ['song'],
     mods: [mod('damage', 'increased', 0.2), mod('statusChance', 'flat', 0.15)],
     perLevel: [mod('damage', 'increased', 0.04)],
+    weight: 5,
+  },
+  // The skald's CADENCE companion (2026-07-24, the deepened-courts round):
+  // the family's own meter — Verse, banked by war_chant/dissonance, spent
+  // whole by the Coda, decaying when the music rests — reached only two of
+  // the six songs. This gem TEACHES the bank to any song (the stored_verdict
+  // chargeGain-graft lane: instanceChargeGain merges socketed taps) and pays
+  // the singer per banked Verse through the charge:verse GAUGE (the first
+  // gauge-scaled support — engine/stats.ts Modifier.gauge, auto-fed from
+  // Actor.charges). On the Coda it banks what the chord then spends; on a
+  // summon song the court itself sings harder (the minionDamage line, tag-
+  // scoped so it sleeps on bodiless verses).
+  rising_chorus: {
+    id: 'rising_chorus', name: 'Rising Chorus',
+    description: 'This song JOINS THE COUNT: each singing banks a Verse (up to 5, fading when the music rests) — and every banked Verse makes it sing 4% harder. Feeds the Coda; swells the choir; rewards the set never allowed to end.',
+    color: '#e0b8e8', requiresTags: ['song'],
+    chargeGain: [{ charge: 'verse', amount: 1, max: 5, on: 'use' }],
+    mods: [
+      gaugeMod('damage', 'increased', 0.04, 'charge:verse'),
+      gaugeMod('minionDamage', 'increased', 0.04, 'charge:verse', ['summon']),
+    ],
+    perLevel: [gaugeMod('damage', 'increased', 0.005, 'charge:verse')],
     weight: 5,
   },
   lingering_moment: {
@@ -1696,6 +1737,28 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [mod('orbOnHit_wakeflame', 'flat', 0.06), mod('orbOnKill_wakeflame', 'flat', 0.25)],
     perLevel: [mod('orbOnKill_wakeflame', 'flat', 0.04)],
     weight: 6,
+  },
+
+  // THE GLOAMING'S COUNTERPLAY IN GEM FORM (2026-07-24, the deepened-courts
+  // round): the LIGHT meter's only player answer was a planted votive
+  // (kindle_wick) the fight keeps dragging you away from. This gem makes
+  // the fight itself the lantern — kills shed a real lightwell mote at the
+  // corpse (the 'kindle' ProcEffect, open to combos/fortunes by
+  // construction), pool/decay-bounded so the glow never outlives the war.
+  // In a summon skill the court lights its keeper's road (proc minionCarry).
+  // Honest everywhere by the lightwell law (the sweep feeds only meters
+  // that exist); WORTH its slot where the dark drinks — the Gloaming, the
+  // Descent's abyss floor, the long night.
+  gutterglow: {
+    id: 'gutterglow', name: 'Gutterglow',
+    requiresMechanisms: ['strikes'],
+    description: 'Kills with this skill GUTTER: a brief mote of standing light is shed at the corpse, feeding the Light of whoever fights beside it. Where the dark drinks, the fight is your lantern. In a summon skill, the court lights its keeper\'s road.',
+    color: '#e8c078', requiresTags: ['attack', 'spell'],
+    mods: [mod('proc_gutterglow', 'flat', 1)],
+    // No perLevel: the proc fires every rationed kill already (icd-paced);
+    // deepening the MOTE is the lightwell row's business, a balance dial.
+    minDropLevel: 6,
+    weight: 5,
   },
 
   victors_tempo: {

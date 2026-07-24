@@ -110,7 +110,13 @@ export type ProcEffect =
   | { type: 'fortify'; flat?: number; pctMaxLife?: number }
   /** Tick every running cooldown on the proc's OWNER down by `seconds`
    *  (the on-kill rhythm classic). */
-  | { type: 'cooldown'; seconds: number };
+  | { type: 'cooldown'; seconds: number }
+  /** PLANTS a registered LIGHTWELL (data/lightwells.ts rows) where the
+   *  trigger landed — at the struck/slain body, else at the owner. The
+   *  well's own pool/decay row bounds the litter; outside a darkness
+   *  event the mote is honest lamplight (the lightwell fabric's law:
+   *  the sweep feeds only meters that exist). */
+  | { type: 'kindle'; kind: string };
 
 export interface ProcDef {
   id: string;
@@ -248,6 +254,17 @@ export const PROCS: Record<string, ProcDef> = {
     // elite-hit lane normalized by living court size (world.ts carry loop).
     color: '#ff5a2a', trigger: 'kill', minionCarry: true,
     effect: { type: 'explosion', damageScale: 0.8, radius: 90 },
+  },
+
+  // GUTTERGLOW (the Gloaming's counterplay in gem form — the Gutterglow
+  // support): kills shed a brief standing LIGHT at the corpse, a real
+  // lightwell row feeding the LIGHT meter of whoever fights beside it.
+  // The icd paces the litter; the mote's own pool/decay row buries it.
+  // minionCarry: a summoner's court lights the ground its keeper walks.
+  gutterglow: {
+    id: 'gutterglow', name: 'Gutterglow',
+    color: '#ffd890', trigger: 'kill', icd: 2.5, minionCarry: true,
+    effect: { type: 'kindle', kind: 'gutterglow_mote' },
   },
 
   // --- THE JACKPOT LINE (rollTop procs): the dice themselves pull the ---------

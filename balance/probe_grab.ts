@@ -160,6 +160,10 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   p.pos = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), p.radius);
   const z = w.createMonster('zombie', 3, 'enemy');
   z.pos = vec(p.pos.x + 50, p.pos.y);
+  // The rig hangs on ONE swing landing — floor the victim's evasion so the
+  // roll can never whiff it (data passes shift the global stream, and a
+  // single-roll probe re-arms as a time bomb with every repo change).
+  z.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]);
   w.actors.push(z);
   p.facing = 0;
   const seize = p.skills.find(s => s?.def.id === 'seize')!;
@@ -238,6 +242,7 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
   const round = (sliver: boolean): { clinched: boolean; buff: boolean; victim: Actor } => {
     const z = w.createMonster('zombie', 3, 'enemy');
     z.pos = vec(p.pos.x - 50, p.pos.y);
+    z.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]); // the swing must land
     w.actors.push(z);
     w.useSkill(p, seize, vec(z.pos.x, z.pos.y));
     tick(w, 0.7);
@@ -416,6 +421,7 @@ const tick = (w: ReturnType<typeof makeSimWorld>, sec: number): void => {
     w.devGrabGrant('seize'); w.devGrabGrant('heave');
     const z = w.createMonster('zombie', 3, 'enemy');
     z.pos = vec(p.pos.x + 50, p.pos.y);
+    z.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]); // the swing must land
     w.actors.push(z);
     const seize = p.skills.find(s => s?.def.id === 'seize')!;
     const heave = p.skills.find(s => s?.def.id === 'heave')!;

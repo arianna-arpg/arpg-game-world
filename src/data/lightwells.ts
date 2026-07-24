@@ -65,8 +65,20 @@ registerLightwell({
   out: { text: 'the wick is spent', color: '#c8b088' },
 });
 
+// THE GUTTERGLOW MOTE — the kill-shed light (the Gutterglow support gem's
+// proc, data/procs.ts): a brief flame standing where the slain fell. Small
+// pool, quick decay — an abandoned mote gutters in ~12s, so the fight is
+// the lantern and the lantern follows the fight; no corpse-trail of lamps
+// outlives the war that lit it (the transience doctrine in miniature).
+registerLightwell({
+  kind: 'gutterglow_mote', feed: 6, pool: 10, decayPerSec: 0.8,
+  dimExp: 0.5, minReachFrac: 0.25,
+  out: { text: 'the mote gutters', color: '#e8c078' },
+});
+
 // --- Runtime doodad rules (the creeps.ts registerDoodadRule idiom — open
 // string kinds, no KnownDoodadKind union edit): both are walk-over trigger
 // bodies like the Descent's light_spot, never colliders. ---
 registerDoodadRule('gloomwell', { overlap: 'trigger', spacing: 60 });
 registerDoodadRule('kindled_wick', { overlap: 'trigger', spacing: 50 });
+registerDoodadRule('gutterglow_mote', { overlap: 'trigger', spacing: 24 });

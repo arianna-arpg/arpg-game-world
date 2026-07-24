@@ -2129,6 +2129,16 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stone: '#6e6254', roof: '#4a4034', flame: '#ffd890' },
     light: { radius: -5.5, color: '#ffd890', intensity: 0.5, flicker: 1.2 },
   },
+  // The kill-shed mote (the Gutterglow gem's proc): a guttering ember-shard
+  // standing where the slain fell — smaller than the wick in every way, and
+  // its quick-decay pool row (data/lightwells.ts) means the glow never
+  // outlives the fight that shed it.
+  gutterglow_mote: {
+    painter: 'shard', order: 54, shadow: 0.25,
+    params: { points: 5, color: '#e8b868', material: 'crystal',
+      coreGlow: { color: '#ffe8b8' }, motes: { color: '#ffd890' } },
+    light: { radius: -4.5, color: '#ffd890', intensity: 0.45, flicker: 1.4 },
+  },
   descent_platform: {
     painter: 'platformRing', order: 54,
     light: { radius: -2.2, color: '#7fe0d8', intensity: 0.3 },

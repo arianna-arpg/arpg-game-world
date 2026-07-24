@@ -247,6 +247,12 @@ export const LIVE_PROBE_HOST_RULES: { why: string; when: (def: SkillDef) => bool
   { why: 'guard host (value shows against incoming hits)', when: d => d.castMode === 'guard' || d.tags.includes('guard') },
   { why: 'heal host (value shows under damage)', when: d => d.tags.includes('heal') },
   { why: 'buff host (defensive value shows under damage)', when: d => d.tags.includes('buff') },
+  // 2026-07-24 (the grab support round — the iron_grip|seize ledger row's
+  // root): grabRefusal refuses passive bodies outright ('no purchase'), so
+  // on the dummy a seize host never forms a hold and every hold-scoped
+  // payload (gripPower, gripCrush) reads as inert. The live pack's zombies
+  // are ordinary seizable bodies — the hold forms, the fabric measures.
+  { why: 'grab host (a hold needs a seizable body — the passive immortal dummy refuses every grip)', when: d => d.effects.some(e => e.type === 'grabSeize') },
 ];
 
 /** THE RIG AXIS (orthogonal to dummy/live targets): SOLO spams the host as
@@ -1013,6 +1019,20 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     when: (def, sup) => sup.chargeCost !== undefined && def.castMode === 'channel',
   },
   {
+    // The Ravening row's MIRROR (2026-07-24, rising_chorus|war_chant): a
+    // bank graft whose visible payoff is gauge-scaled combat mods — on a
+    // strikeless host the mods have nothing to move, and the bank itself
+    // feeds CROSS-SKILL spenders (the Coda drinks the Verses) the solo
+    // single-skill rig never fields. The tap lane is stored_verdict's
+    // proven instanceChargeGain seam; the gauge lane fingerprints on every
+    // striking host of the same family.
+    note: 'charge-bank graft (chargeGain) with only gauge-scaled combat payload — a strikeless host banks for a cross-skill spender the solo rig never fields',
+    when: (def, sup) => (sup.chargeGain ?? []).length > 0
+      && [...sup.mods, ...(sup.perLevel ?? [])].every(m => m.gauge !== undefined)
+      && [...sup.mods, ...(sup.perLevel ?? [])].length > 0
+      && !def.baseDamage && !def.effects.some(e => e.type === 'damage'),
+  },
+  {
     note: 'ply-rend needs COUNT-DURABLE (plied) bodies — the probe fields none',
     when: (_def, sup) => supModsStat(sup, ['plyRend']),
   },
@@ -1020,12 +1040,43 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: "'regicide' needs EMPOWERED victims (magic/rare/champion/crowned) — the probe pack spawns unpromoted",
     when: (_def, sup) => supModsStat(sup, ['regicide']),
   },
+  {
+    // 2026-07-24 (the grab support round, the iron_grip|seize row's truth):
+    // gripPower widens the mass gate and slows struggle — against the
+    // probe pack's unpromoted normals the struggle never beats the hold's
+    // rolled patience anyway, so the deepened grip changes no observable
+    // (the hold ends at the same rolled clock either way). It expresses
+    // against rare+ policy tiers (struggle ×1.75+) and high-wriggle
+    // bodies; the struggle math itself is pinned in probe_grab.
+    note: "'gripPower' expresses only against victims whose struggle would beat the hold's patience (rare+ policy tiers, high wriggle) — the probe pack spawns unpromoted; the struggle law is pinned in probe_grab",
+    when: (_def, sup) => supModsStat(sup, ['gripPower']),
+  },
   // (giantsbane carries NO row: the training dummy's body math — radius 18,
   // wood density, ~1.63 effective weight — stands above the 1.5× ratio, so
   // the dummy probe arms it; its inert rows are non-hitting hosts, honest.)
   {
     note: "'limbreaver' reads a composite monster's PARTS — no composite spawns in probes",
     when: (_def, sup) => supModsStat(sup, ['limbreaver']),
+  },
+  {
+    // 2026-07-24 (the grab support round): heave/mauler_toss carry
+    // gate.holding — with nothing held the press refuses before any cost,
+    // so a solo single-skill rig can never fire the host at all. The
+    // trebuchet_arm|heave ledger row's structural truth; the pair lane is
+    // pinned working in balance/probe_grab.ts (seize→heave under real
+    // presses).
+    note: 'the throw gate demands a body already HELD (gate.holding) — the solo single-skill rig fields no seize to fill the hand; the seize→heave lane is pinned in probe_grab',
+    when: (def, _sup) => def.gate?.holding === true,
+  },
+  {
+    // 2026-07-24 (the Gutterglow gem): the kindle payload plants a real
+    // lightwell, but a lightwell's WORTH is the LIGHT survival meter and
+    // the sweep feeds only meters that exist — no arena zone mounts a
+    // darkness event, so the mote never reaches a fingerprint channel.
+    // The plant path is pinned deterministically in probe_supportfabric.
+    note: 'light-shed payload (kindle proc) feeds the LIGHT survival meter — no arena zone mounts a darkness event, so the mote\'s worth never reads; the plant path is pinned in probe_supportfabric',
+    when: (_def, sup) => [...sup.mods, ...(sup.perLevel ?? [])].some(m =>
+      m.stat.startsWith('proc_') && PROCS[m.stat.slice('proc_'.length)]?.effect.type === 'kindle'),
   },
   {
     note: 'remnant shards drop at kills but the SCOOP is a walk — no pilot detours over shards',

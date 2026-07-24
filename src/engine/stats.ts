@@ -599,6 +599,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** THE GRAB FABRIC's victim-side lever: struggle out of holds this much
    *  faster (the eel's answer to the ogre's palm). */
   wriggle:        { label: 'Wriggle', base: 0, percent: true },
+  /** THE WRING (the grab support lane's third lever, beside gripPower and
+   *  the throw stats): while a hold this skill established lives, the held
+   *  body takes this fraction of ITS max life per second as physical —
+   *  mitigated, holder-credited, read at the grab sweep through the
+   *  seizing skill's context (the gripPower idiom). The swallow's own
+   *  digestion stacks on top: the gulp is the verb, the wring is the
+   *  investment. */
+  gripCrush:      { label: 'Crushing Grip', base: 0, min: 0, percent: true },
   /** > 0: no body collision at all — walks THROUGH actors (and they through
    *  it). Hits and targeting are unaffected; this is substance, not stealth. */
   phasing:        { label: 'Phasing', base: 0, min: 0 },

@@ -24259,10 +24259,37 @@ export class World {
         if (taken > 0) {
           v.life -= taken;
           hold.dotAcc += taken;
+          SIM_TAP.current?.onDot?.(v, taken, dot.type);
           if (hold.spec.leech) a.healBy(taken * hold.spec.leech);
           if (v.life <= 0 && !v.dead) {
             this.kill(v, false, a);
             this.grabRelease(a);
+          }
+        }
+      }
+      // THE WRING (gripCrush — the grab support lane's third lever): an
+      // invested grip WOUNDS through the hold itself — a fraction of the
+      // held body's max life per second, physical, mitigated, holder-
+      // credited. Queried through the seizing skill's live instance (the
+      // gripPower idiom at the seize gate) so the stat stays an honest
+      // skill-local gem line; stacks atop a swallow's own digestion. Both
+      // tick lanes emit the onDot tap — a periodic drain the harness
+      // cannot see is a payload the matrix would falsely flag inert.
+      if (!v.dead && !v.invulnerable && a.gripping === hold) {
+        const wringInst = hold.skillId
+          ? a.skills.find(s => s?.def.id === hold.skillId) : undefined;
+        const crush = wringInst
+          ? a.sheet.get('gripCrush', skillContextTags(wringInst.def), instanceMods(wringInst))
+          : a.sheet.get('gripCrush');
+        if (crush > 0) {
+          const taken = mitigateTyped(v, { physical: crush * v.maxLife() * dt });
+          if (taken > 0) {
+            v.life -= taken;
+            SIM_TAP.current?.onDot?.(v, taken, 'physical');
+            if (v.life <= 0 && !v.dead) {
+              this.kill(v, false, a);
+              this.grabRelease(a);
+            }
           }
         }
       }
@@ -33887,6 +33914,17 @@ export class World {
           if (left <= 0) caster.cooldowns.delete(id);
           else caster.cooldowns.set(id, left);
         }
+        break;
+      }
+      // KINDLE: plant a registered lightwell where the trigger landed (the
+      // Gutterglow gem's kill-shed motes — the fight itself keeps the LIGHT
+      // meter fed in the Gloaming's dark). Open by construction: any proc,
+      // combo payoff or fortune that names a lightwell kind lights ground
+      // through this one case; the row's own pool/decay bounds the litter
+      // (the transience doctrine — the mote gutters, the world forgets it).
+      case 'kindle': {
+        const at = target ? target.pos : caster.pos;
+        this.spawnLightwell(fx.kind, vec(at.x, at.y));
         break;
       }
       case 'extraHit':
