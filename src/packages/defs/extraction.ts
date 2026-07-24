@@ -50,6 +50,10 @@ const MARROWDRAWN_FACTION: FactionSpec = {
     { id: 'marrow_leech', weight: 4 },
     { id: 'seep_burrower', weight: 3 },
     { id: 'vein_glutton', weight: 2 },
+    // The muster pass: the lancer of set bone and the harrow that calls
+    // the marrow up through the floor.
+    { id: 'ossein_lancer', weight: 2 },
+    { id: 'spur_harrow', weight: 1 },
     { id: 'marrow_tyrant', weight: 1 },
   ],
 };

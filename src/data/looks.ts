@@ -7313,6 +7313,155 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'hood', x: 0.3, scale: 0.8 },
     ],
   },
+
+  // ============================ THE MUSTER PASS — WAVE 4: RESERVES & REMNANTS
+
+  /** The stoker at work: ember core under a bellows-pack, sparks on the
+   *  draft (live). */
+  bellows_stoker: {
+    parts: [
+      { kind: 'disc', scale: 0.7, role: 'glow' },
+      { kind: 'lavaCracks', scale: 0.8 },
+      { kind: 'pack', x: -0.4, scale: 0.75 },
+      { kind: 'torch', x: 0.25, y: 0.5, scale: 0.7 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.8, params: { n: 4 } }],
+  },
+  /** Smoke that remembers a shape: a drape of soot around two coals. */
+  soot_veil: {
+    parts: [
+      { kind: 'drape', scale: 0.95, role: 'dark', alpha: 0.9 },
+      { kind: 'tatters', x: -0.3, scale: 0.75, alpha: 0.7, params: { n: 5 } },
+      { kind: 'eyes', color: '#ff9650', params: { spread: 0.3, dist: 0.45, size: 0.08 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, role: 'dark', params: { n: 3 } }],
+  },
+
+  /** The juggler mid-act: winged crouch, blades in orbit, one stolen
+   *  gem where a heart would be. */
+  shrike_juggler: {
+    parts: [
+      { kind: 'featherWings', scale: 0.9, alpha: 0.9 },
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'beak', x: 0.42, scale: 0.75 },
+      { kind: 'daggers', params: { len: 0.65 } },
+      { kind: 'gem', x: -0.1, scale: 0.35 },
+    ],
+  },
+  /** The hoard with a temper: strongbox torso, chained shut, coin eyes
+   *  (obolEyes — it pays attention, literally). */
+  bauble_golem: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.1, seed: 421 } },
+      { kind: 'chest', x: -0.1, scale: 0.8 },
+      { kind: 'chains', scale: 0.95 },
+      { kind: 'gem', x: 0.3, y: 0.35, scale: 0.4 },
+      { kind: 'gem', x: 0.15, y: -0.4, scale: 0.3, alpha: 0.95 },
+      { kind: 'obolEyes', x: 0.45, scale: 0.9 },
+    ],
+  },
+
+  /** The sundial's spear: a verdigris blade under the hour-plate. */
+  gnomon_lancer: {
+    parts: [
+      { kind: 'torso', scale: 0.85, role: 'metal' },
+      { kind: 'armorPlates', scale: 0.8 },
+      { kind: 'trident', y: 0.05, scale: 1.0, params: { len: 1.15 } },
+      { kind: 'halo', scale: 0.9, alpha: 0.35 },
+      { kind: 'eyes', color: '#9ae8c8', params: { n: 1, spread: 0, dist: 0.35, size: 0.08 } },
+    ],
+  },
+  /** The orrery still running: rings, the one lens, the arithmetic
+   *  showing (runes). */
+  astrolabe_warden: {
+    parts: [
+      { kind: 'disc', scale: 0.7, role: 'metal' },
+      { kind: 'wheels', scale: 0.9, alpha: 0.9 },
+      { kind: 'halo', scale: 1.15, alpha: 0.5 },
+      { kind: 'runes', scale: 0.9, params: { n: 4 } },
+      { kind: 'eyes', color: '#9ae8c8', params: { n: 1, spread: 0, dist: 0.2, size: 0.1 } },
+    ],
+  },
+
+  /** The arbiter: robed for court, ledger open, seal at the throat. */
+  ledger_arbiter: {
+    parts: [
+      { kind: 'robe', color: '#6a5a3e', scale: 0.95 },
+      { kind: 'book', y: 0.45, scale: 0.75 },
+      { kind: 'gem', x: 0.35, scale: 0.3, role: 'metal' },
+      { kind: 'hood', x: 0.2, scale: 0.85 },
+    ],
+  },
+  /** The bailiff: bought plate, the strongbox chained to the man, one
+   *  mailed fist for the overdue. */
+  toll_bailiff: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'pauldrons', scale: 1.05, role: 'metal' },
+      { kind: 'chest', x: -0.35, scale: 0.6 },
+      { kind: 'chains', scale: 0.85, alpha: 0.9 },
+      { kind: 'gauntlets', y: 0.45, scale: 0.85, params: { n: 1 } },
+    ],
+  },
+
+  /** The ripper: stitched lean, hook-scythe out, seams SHOWING. */
+  seam_ripper: {
+    parts: [
+      { kind: 'torso', scale: 0.85 },
+      { kind: 'stitchSeams', scale: 0.95 },
+      { kind: 'scythe', y: 0.1, scale: 0.9 },
+      { kind: 'eyes', color: '#c8e8b8', params: { spread: 0.3, dist: 0.5, size: 0.07 } },
+    ],
+  },
+  /** The chirurgeon: apron over stitched bulk, needle-staff raised. */
+  graft_chirurgeon: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.12, seed: 422 } },
+      { kind: 'stitchSeams', scale: 0.9 },
+      { kind: 'apron', scale: 0.85 },
+      { kind: 'staff', params: { orb: 'glow' } },
+    ],
+  },
+
+  /** The lancer of set bone: ribs worn as a quiver, bow of sinew. */
+  ossein_lancer: {
+    parts: [
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'bow' },
+      { kind: 'quiver', x: -0.3, scale: 0.8, role: 'bone' },
+      { kind: 'skull', x: 0.45, scale: 0.9 },
+    ],
+  },
+  /** The harrow: a low bone drum bristling with what it asked for. */
+  spur_harrow: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.1, seed: 423 }, role: 'bone' },
+      { kind: 'spikes', scale: 0.95, role: 'bone' },
+      { kind: 'dorsalRidge', scale: 0.9, role: 'bone' },
+      { kind: 'eyes', color: '#d8b8a0', params: { spread: 0.3, dist: 0.5, size: 0.07 } },
+    ],
+  },
+
+  /** The column's surgeon: banner-marked apron, staff, marching order. */
+  crusade_chirurgeon: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'apron', scale: 0.8 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'helm', x: 0.3, scale: 0.65 },
+    ],
+  },
+  /** Doctrine at four hundred paces: the gun and its gunner are the
+   *  same silhouette. */
+  crusade_culverin: {
+    parts: [
+      { kind: 'torso', scale: 0.9, role: 'metal' },
+      { kind: 'pauldrons', scale: 0.95 },
+      { kind: 'musket', y: 0.1, scale: 1.15 },
+      { kind: 'keg', x: -0.42, y: 0.3, scale: 0.45 },
+      { kind: 'helm', x: 0.32, scale: 0.7 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

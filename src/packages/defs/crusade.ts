@@ -50,6 +50,10 @@ const CRUSADE_FACTION: FactionSpec = {
     { id: 'crusade_zealot', weight: 3 },
     { id: 'crusade_arbalest', weight: 2 },
     { id: 'crusade_templar', weight: 2 },
+    // The muster pass: the column's services — the surgeon who sees to
+    // wounds AT PACE, and doctrine at four hundred paces.
+    { id: 'crusade_chirurgeon', weight: 1 },
+    { id: 'crusade_culverin', weight: 1 },
     { id: 'crusade_standard_bearer', weight: 1 },
     { id: 'crusade_marshal', weight: 1 },
   ],

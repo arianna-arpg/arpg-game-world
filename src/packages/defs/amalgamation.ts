@@ -156,6 +156,10 @@ const AMALGAM_FACTION: FactionSpec = {
     { id: 'amalgam_bonelord', weight: 1 },
     { id: 'amalgam_fleshweaver', weight: 1 },
     { id: 'amalgam_gravewarden', weight: 1 },
+    // The muster pass: the ripper along the seams, the chirurgeon who
+    // closes them into something else.
+    { id: 'seam_ripper', weight: 1 },
+    { id: 'graft_chirurgeon', weight: 1 },
   ],
 };
 

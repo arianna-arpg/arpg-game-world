@@ -14180,6 +14180,212 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'plague',
     brain: { type: 'caster' },
   },
+
+  // ==========================================================================
+  // THE MUSTER PASS — WAVE 4: THE RESERVES AND THE REMNANTS. The reserved
+  // kin (RESERVED_KIN — authored-complete, doorless by contract) deepen so
+  // their doors open onto FULL pages the day they ship; the last thin
+  // event courts (amalgam / marrowdrawn / crusade) take their missing
+  // trades. Reserved bodies join ONLY their own barred rosters — the
+  // validator's bar stays the law.
+  // ==========================================================================
+
+  // --- THE SMOULDERKIN (reserved: the burn-ledger door): the stoker who
+  // works the bellows, and the veil of what the fire exhaled.
+
+  // The bellows stoker: it doesn't start fires — it PROMOTES them. Feed
+  // it flame and it quickens, like all its kin.
+  bellows_stoker: {
+    id: 'bellows_stoker', name: 'Bellows Stoker',
+    color: '#d87a3e', shape: 'pentagon', radius: 12, material: 'ethereal', look: 'bellows_stoker',
+    base: { life: 70, moveSpeed: 120, accuracy: 100, mana: 60, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['fumarole'],
+    xp: 26,
+    faction: 'smoulder', tags: ['elemental'],
+    onHitByType: { fire: { status: 'furor', chance: 0.5 } },
+    brain: { type: 'strafer' },
+  },
+  // The soot veil: the smoke that remembers the shape of what burned —
+  // hard to hit, harder to breathe near.
+  soot_veil: {
+    id: 'soot_veil', name: 'Soot Veil',
+    color: '#5a4a44', shape: 'circle', radius: 11, material: 'ethereal', look: 'soot_veil',
+    base: { life: 55, moveSpeed: 150, accuracy: 100, evasion: 70, mana: 50, manaRegen: 5 },
+    mods: [mod('fireRes', 'flat', 0.6), mod('coldRes', 'flat', -0.25)],
+    skills: ['alarm_reek'],
+    xp: 24,
+    faction: 'smoulder', tags: ['elemental'],
+    brain: { type: 'strafer' },
+  },
+
+  // --- THE MAGPIE KIN (reserved: the Court's heist ground): the juggler
+  // of stolen edges, and the hoard that walks.
+
+  // The shrike juggler: everything it throws was yours, or will be —
+  // the caroms come back to a hand that was somewhere else.
+  shrike_juggler: {
+    id: 'shrike_juggler', name: 'Shrike Juggler',
+    color: '#4a5a6c', shape: 'kite', radius: 11, material: 'fur', look: 'shrike_juggler',
+    base: { life: 55, moveSpeed: 185, accuracy: 108, evasion: 65, mana: 30, manaRegen: 4 },
+    skills: ['caroms', 'thrown_ace'],
+    xp: 26,
+    faction: 'magpie', tags: ['beast'],
+    brain: { type: 'skirmish', withdraw: 1.4 },
+  },
+  // The bauble golem: the hoard grew a temper — a shamble of strongbox,
+  // chain and everything shiny the court ever swallowed.
+  bauble_golem: {
+    id: 'bauble_golem', name: 'Bauble Golem',
+    color: '#8a7a52', shape: 'hexagon', radius: 17, material: 'metal', look: 'bauble_golem',
+    base: { life: 220, moveSpeed: 80, accuracy: 96, armor: 40, poise: 55, mana: 20, manaRegen: 2 },
+    remains: false,
+    skills: ['heavy_strike'],
+    xp: 36,
+    faction: 'magpie', tags: ['construct'],
+    heft: 1.5, turnSpeed: 2.8,
+    scaling: { life: { incPerLevel: 0.07 } },
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- THE UNRUSTED (reserved: the Verdigris Sprawl door): the sundial's
+  // spear and the orrery's keeper — house doctrine worn whole (plated
+  // no-corpse attrition; nothing bleeds, nothing envenoms).
+
+  // The gnomon lancer: it kept the time by shadow; now it keeps it by
+  // reach. The charge arrives ON the hour.
+  gnomon_lancer: {
+    id: 'gnomon_lancer', name: 'Gnomon Lancer',
+    color: '#8aa896', shape: 'kite', radius: 12, material: 'metal', look: 'gnomon_lancer',
+    base: { life: 65, moveSpeed: 140, accuracy: 106, armor: 35, poise: 35, mana: 25, manaRegen: 3 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['static_strike', 'piledriver'],
+    xp: 26,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 0.9, temper: 'territorial',
+    brain: { type: 'flanker' },
+  },
+  // The astrolabe warden: it still computes the sky it can't see — the
+  // sparkfield is just the arithmetic, shown.
+  astrolabe_warden: {
+    id: 'astrolabe_warden', name: 'Astrolabe Warden',
+    color: '#7a9a8a', shape: 'octagon', radius: 13, material: 'metal', look: 'astrolabe_warden',
+    base: { life: 70, moveSpeed: 100, accuracy: 102, armor: 30, mana: 45, manaRegen: 5 },
+    remains: false,
+    mods: [mod('ailmentResist', 'flat', 0.9, ['physical']), mod('ailmentResist', 'flat', 0.75, ['chaos']), mod('lightningRes', 'flat', -0.25)],
+    skills: ['sparkfield'],
+    xp: 30,
+    faction: 'unrusted', tags: ['construct'],
+    detection: 0.9, temper: 'territorial',
+    brain: { type: 'artillery' },
+  },
+
+  // --- THE GILDED COMPACT (reserved: the trade doors): the arbiter who
+  // files the doubt, and the bailiff who collects on it — bought steel,
+  // drilled guard-craft (the insight pools money can hire).
+
+  // The ledger arbiter: your position is under review. The review is
+  // the weapon.
+  ledger_arbiter: {
+    id: 'ledger_arbiter', name: 'Ledger Arbiter',
+    color: '#b09a5e', shape: 'diamond', radius: 12, material: 'cloth', look: 'ledger_arbiter',
+    base: { life: 70, moveSpeed: 110, accuracy: 102, insight: 30, mana: 45, manaRegen: 5 },
+    skills: ['indecision'],
+    xp: 28,
+    faction: 'compact',
+    temper: 'wary',
+    brain: { type: 'strafer' },
+  },
+  // The toll bailiff: the Compact collects — bodily, if the account
+  // stands overdue (the grab fabric on a salaried arm).
+  toll_bailiff: {
+    id: 'toll_bailiff', name: 'Toll Bailiff',
+    color: '#a8925a', shape: 'trapezoid', radius: 15, material: 'flesh', look: 'toll_bailiff',
+    base: { life: 150, moveSpeed: 115, accuracy: 104, armor: 30, poise: 50, insight: 40, mana: 25, manaRegen: 3 },
+    skills: ['seize', 'piledriver'],
+    xp: 32,
+    faction: 'compact',
+    heft: 1.25, temper: 'wary',
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- THE AMALGAM (the amalgamation's court): the ripper along the
+  // seams, and the chirurgeon who closes them.
+
+  // The seam ripper: it knows where things were joined — yours too.
+  seam_ripper: {
+    id: 'seam_ripper', name: 'Seam Ripper',
+    color: '#8aa88e', shape: 'kite', radius: 12, material: 'flesh', look: 'seam_ripper',
+    base: { life: 75, moveSpeed: 165, accuracy: 108, evasion: 55, mana: 30, manaRegen: 3 },
+    skills: ['scythe_sweep'],
+    xp: 28,
+    faction: 'amalgam',
+    brain: { type: 'assassin', withdraw: 1.2 },
+  },
+  // The graft chirurgeon: the amalgamation's field surgeon — what the
+  // ripper opens, it closes into something else.
+  graft_chirurgeon: {
+    id: 'graft_chirurgeon', name: 'Graft Chirurgeon',
+    color: '#9ab89e', shape: 'pentagon', radius: 13, material: 'flesh', look: 'graft_chirurgeon',
+    base: { life: 100, moveSpeed: 100, accuracy: 98, mana: 90, manaRegen: 8 },
+    skills: ['greater_mending', 'healing_stream'],
+    xp: 32,
+    faction: 'amalgam',
+    wardPriority: 2,
+    brain: { type: 'protector' },
+  },
+
+  // --- THE MARROW-DRAWN (the extraction's kin): the lancer of set bone,
+  // and the harrow that calls the marrow up through the floor.
+
+  // The ossein lancer: every arrow is a rib that learned to travel.
+  ossein_lancer: {
+    id: 'ossein_lancer', name: 'Ossein Lancer',
+    color: '#c8b89a', shape: 'triangle', radius: 11, material: 'bone', look: 'ossein_lancer',
+    base: { life: 55, moveSpeed: 145, accuracy: 110, evasion: 45, mana: 0 },
+    skills: ['bone_arrow'],
+    xp: 24,
+    faction: 'marrowdrawn',
+    brain: { type: 'skirmish', withdraw: 1.5 },
+  },
+  // The spur harrow: it doesn't dig for the marrow — it ASKS, and the
+  // ground answers in spikes.
+  spur_harrow: {
+    id: 'spur_harrow', name: 'Spur Harrow',
+    color: '#b8a488', shape: 'oval', radius: 14, material: 'bone', look: 'spur_harrow',
+    base: { life: 120, moveSpeed: 90, accuracy: 98, mana: 60, manaRegen: 6 },
+    skills: ['fleshspur'],
+    xp: 30,
+    faction: 'marrowdrawn',
+    brain: { type: 'caster' },
+  },
+
+  // --- THE IRON CRUSADE (the column's missing services): the surgeon
+  // marching with the line, and the gun the column drags.
+
+  // The crusade chirurgeon: the column does not stop for wounds — the
+  // wounds are seen to at pace.
+  crusade_chirurgeon: {
+    id: 'crusade_chirurgeon', name: 'Crusade Chirurgeon',
+    color: '#a8a4b8', shape: 'pentagon', radius: 12, material: 'cloth', look: 'crusade_chirurgeon',
+    base: { life: 85, moveSpeed: 110, accuracy: 98, armor: 20, mana: 90, manaRegen: 8 },
+    skills: ['greater_mending', 'healing_stream'],
+    xp: 30,
+    faction: 'crusade',
+    wardPriority: 2,
+    brain: { type: 'protector' },
+  },
+  // The crusade culverin: doctrine at four hundred paces.
+  crusade_culverin: {
+    id: 'crusade_culverin', name: 'Crusade Culverin',
+    color: '#8a8a9c', shape: 'rectangle', radius: 13, material: 'metal', look: 'crusade_culverin',
+    base: { life: 90, moveSpeed: 85, accuracy: 108, armor: 35, poise: 45, mana: 40, manaRegen: 4 },
+    skills: ['barrage'],
+    xp: 32,
+    faction: 'crusade',
+    brain: { type: 'artillery' },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -14606,6 +14812,10 @@ export const FACTIONS: Record<string, {
       { id: 'smoulderling', weight: 4 },
       { id: 'ember_shrike', weight: 2 },
       { id: 'ash_wretch', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      // The muster pass: the family deepens BEHIND its bar — the stoker
+      // and the veil wait, complete, for the burn-ledger door.
+      { id: 'bellows_stoker', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'soot_veil', weight: 1, presence: { from: 5, fadeIn: 3 } },
       { id: 'the_ashmother', weight: 1, presence: { from: 10, fadeIn: 5 } },
     ],
   },
@@ -14616,6 +14826,10 @@ export const FACTIONS: Record<string, {
     table: [
       { id: 'magpie_snatch', weight: 4 },
       { id: 'magpie_shrikeblade', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      // The muster pass: the Court's deep bench, banked for its door —
+      // the juggler of stolen edges and the hoard that walks.
+      { id: 'shrike_juggler', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'bauble_golem', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'the_magpie_king', weight: 1, presence: { from: 10, fadeIn: 5 } },
     ],
   },
@@ -14629,6 +14843,11 @@ export const FACTIONS: Record<string, {
     table: [
       { id: 'awakened_custodian', weight: 4 },
       { id: 'brass_sentinel', weight: 3 },
+      // The muster pass: two more stations kept against the day the
+      // Sprawl mints — the sundial's spear and the orrery's keeper
+      // (HARD floors, the legion's inventory discipline).
+      { id: 'gnomon_lancer', weight: 2, presence: { from: 5 } },
+      { id: 'astrolabe_warden', weight: 1, presence: { from: 7 } },
       { id: 'verdigris_wright', weight: 2, presence: { from: 6 } },
       { id: 'coil_warden', weight: 2, presence: { from: 8 } },
       { id: 'scaffold_colossus', weight: 1, presence: { from: 9 } },
@@ -14645,6 +14864,10 @@ export const FACTIONS: Record<string, {
       { id: 'hired_blade', weight: 4 },
       { id: 'compact_outrider', weight: 3 },
       { id: 'compact_tallykeeper', weight: 2, presence: { from: 4 } },
+      // The muster pass: the company staffs its legal department for the
+      // day the trade doors ship — the arbiter files, the bailiff collects.
+      { id: 'ledger_arbiter', weight: 1, presence: { from: 5 } },
+      { id: 'toll_bailiff', weight: 1, presence: { from: 7 } },
       { id: 'caravan_master', weight: 2, presence: { from: 6 } },
       { id: 'vault_golem', weight: 1, presence: { from: 8 } },
       { id: 'the_factor', weight: 1, presence: { from: 12 } },
