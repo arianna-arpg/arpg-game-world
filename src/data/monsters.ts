@@ -13184,6 +13184,319 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
+
+  // ==========================================================================
+  // THE MUSTER PASS — WAVE 1: THE THIN COUNTRIES. The census found the
+  // baseline patron factions fielding 4-6 roster rows against the pillars'
+  // 16-19 — whole countries fought with half a bestiary page. Every body
+  // below is a missing TRADE, not a stat clone: kits reuse the ai-hinted
+  // pool (217 skills sat in no kit), silhouettes are composed so the trade
+  // reads at a glance, and every kit is affordable from its own pool
+  // (>= 2.2x its dearest cost; regen >= cost/6 — the anatomy law).
+  // ==========================================================================
+
+  // --- THE GOBLIN WARBAND's missing trades: the warband finally fields
+  // like a horde — sappers, cavalry, the whip behind the line, and the
+  // toll-troll that turns a road into a door.
+
+  // The satchel is the argument: lobbed firepots from the second rank, and
+  // a powder-death that pays the pack's debts when he drops (telegraphed
+  // coalesce — the escape window is honest).
+  goblin_sapper: {
+    id: 'goblin_sapper', name: 'Goblin Sapper',
+    color: '#8aa848', shape: 'circle', radius: 11, look: 'goblin_sapper',
+    base: { life: 45, moveSpeed: 155, accuracy: 100, evasion: 40, mana: 50, manaRegen: 5 },
+    skills: ['gourd_bomb', 'hurl_debris'],
+    xp: 22,
+    faction: 'goblin', adorn: 'ears',
+    explodeOnDeath: 0.6,
+    brain: { type: 'skirmish', withdraw: 1.4 },
+  },
+  // Warg cavalry: the warband's speed — wheels wide, darts in, gone again.
+  goblin_wolfrider: {
+    id: 'goblin_wolfrider', name: 'Goblin Wolfrider',
+    color: '#98a45e', shape: 'triangle', radius: 13, material: 'fur', look: 'goblin_wolfrider',
+    base: { life: 70, moveSpeed: 200, accuracy: 102, evasion: 45, mana: 40, manaRegen: 4 },
+    skills: ['dash_strike', 'claw'],
+    xp: 24,
+    faction: 'goblin', adorn: 'ears',
+    packSize: [2, 3],
+    brain: { type: 'flanker' },
+  },
+  // The whip behind the line: he fights badly and commands well — kill the
+  // voice and the warband remembers it is a mob.
+  hobgoblin_taskmaster: {
+    id: 'hobgoblin_taskmaster', name: 'Hobgoblin Taskmaster',
+    color: '#b09a4e', shape: 'trapezoid', radius: 15, look: 'hobgoblin_taskmaster',
+    base: { life: 110, moveSpeed: 125, accuracy: 100, armor: 20, poise: 40, mana: 90, manaRegen: 8 },
+    skills: ['belligerence', 'incite', 'cleave'],
+    xp: 36,
+    faction: 'goblin', adorn: 'ears',
+    wardPriority: 2,
+    brain: { type: 'commander', perception: { alertShout: 480 } },
+  },
+  // The toll-troll: a bridge with opinions. Slow, mossy, and the ground
+  // itself objects where he swings (upheaval's lingering rupture).
+  troll_bridgewarden: {
+    id: 'troll_bridgewarden', name: 'Troll Bridgewarden',
+    color: '#6a8858', shape: 'hexagon', radius: 22, look: 'troll_bridgewarden',
+    base: { life: 280, moveSpeed: 72, accuracy: 96, armor: 30, poise: 65, mana: 60, manaRegen: 5 },
+    skills: ['upheaval', 'heavy_strike'],
+    xp: 55,
+    faction: 'goblin', adorn: 'horns',
+    heft: 1.4, turnSpeed: 3.0,
+    scaling: { life: { incPerLevel: 0.07 } },
+    packSize: [1, 1],
+    brain: { type: 'juggernaut', enrage: 0.45 },
+  },
+
+  // --- THE GNOLL PACKS' missing trades: the desert court gets its
+  // scavenger, its pyres, its den-mother and its knife.
+
+  // The bonepicker works the edge of every fight, pelting from the litter
+  // of the last one — a loner the howler's bark barely reaches.
+  gnoll_bonepicker: {
+    id: 'gnoll_bonepicker', name: 'Gnoll Bonepicker',
+    color: '#b89868', shape: 'circle', radius: 11, material: 'fur', look: 'gnoll_bonepicker',
+    base: { life: 48, moveSpeed: 165, accuracy: 104, evasion: 50, mana: 40, manaRegen: 5 },
+    skills: ['hurl_debris'],
+    xp: 18,
+    faction: 'gnoll', adorn: 'ears',
+    brain: { type: 'skirmish', withdraw: 1.5, obedience: 0.5 },
+  },
+  // The pack burns its dead on ridge-pyres; the keeper carries the habit
+  // to war — vents split the ground, firepots arc over the line.
+  gnoll_pyrekeeper: {
+    id: 'gnoll_pyrekeeper', name: 'Gnoll Pyrekeeper',
+    color: '#d88848', shape: 'diamond', radius: 12, material: 'cloth', look: 'gnoll_pyrekeeper',
+    base: { life: 60, moveSpeed: 125, accuracy: 100, mana: 110, manaRegen: 9 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['fumarole', 'fire_siege'],
+    xp: 30,
+    faction: 'gnoll', adorn: 'ears',
+    brain: { type: 'strafer' },
+  },
+  // The den-mother: the pack's howl AND the pack's mending — the fight
+  // drags while she stands, which is the point of killing her first.
+  gnoll_matron: {
+    id: 'gnoll_matron', name: 'Gnoll Matron',
+    color: '#c8a878', shape: 'pentagon', radius: 15, material: 'fur', look: 'gnoll_matron',
+    base: { life: 130, moveSpeed: 118, accuracy: 98, poise: 45, mana: 110, manaRegen: 9 },
+    skills: ['rallying_howl', 'greater_mending', 'claw'],
+    xp: 38,
+    faction: 'gnoll', adorn: 'ears',
+    wardPriority: 2,
+    brain: { type: 'commander', perception: { alertShout: 460 } },
+  },
+  // The skinner: two knives and patience. Carves from behind the noise,
+  // withdraws before the answer lands.
+  gnoll_skinner: {
+    id: 'gnoll_skinner', name: 'Gnoll Skinner',
+    color: '#a88858', shape: 'kite', radius: 11, material: 'fur', look: 'gnoll_skinner',
+    base: { life: 55, moveSpeed: 175, accuracy: 112, evasion: 70, mana: 24, manaRegen: 3 },
+    skills: ['carve', 'deep_carve'],
+    xp: 26,
+    faction: 'gnoll', adorn: 'ears',
+    brain: { type: 'assassin', withdraw: 1.2 },
+  },
+
+  // --- THE CHATTEL gone wrong: the worked land's own trouble grows a
+  // charge, a brood, a dawn-terror and a walking plow-team.
+
+  // The bell ram: you hear the charge before you see it — the flock's old
+  // lead wether, iron-belled and done being led.
+  bell_ram: {
+    id: 'bell_ram', name: 'Bell Ram',
+    color: '#c8b890', shape: 'hexagon', radius: 14, material: 'fur', look: 'bell_ram',
+    base: { life: 120, moveSpeed: 150, accuracy: 102, poise: 50, mana: 25, manaRegen: 3 },
+    skills: ['heavy_strike', 'piledriver'],
+    xp: 24,
+    faction: 'chattel',
+    heft: 1.3,
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'charge', commitRange: 300, chargeSpeed: 2.6 },
+    },
+  },
+  // The muck sow: a wallow with a temper. Her farrow finish her arguments.
+  muck_sow: {
+    id: 'muck_sow', name: 'Muck Sow',
+    color: '#b08a78', shape: 'oval', radius: 16, material: 'flesh', look: 'muck_sow',
+    base: { life: 160, moveSpeed: 85, accuracy: 96, mana: 45, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['bile_spray'],
+    xp: 30,
+    faction: 'chattel',
+    brain: {
+      type: 'juggernaut',
+      onDeath: [{ do: 'summon', monster: 'muck_farrow', count: 3, ring: 26 }],
+    },
+  },
+  // The farrow: small, fast, furious — the sow's death rattle on hooves.
+  muck_farrow: {
+    id: 'muck_farrow', name: 'Muck Farrow',
+    color: '#c09a88', shape: 'oval', radius: 6, material: 'flesh', look: 'muck_farrow',
+    base: { life: 12, moveSpeed: 170, accuracy: 95, mana: 0 },
+    skills: ['claw'],
+    xp: 2,
+    faction: 'chattel', noNemesis: true,
+    brain: { type: 'swarm' },
+  },
+  // The pen harrower: the dooryard cock grown into a dawn-terror — spur
+  // first, gone before the swing, back before the nerve resets.
+  pen_harrower: {
+    id: 'pen_harrower', name: 'Pen Harrower',
+    color: '#d8784e', shape: 'kite', radius: 11, material: 'fur', look: 'pen_harrower',
+    base: { life: 55, moveSpeed: 195, accuracy: 106, evasion: 60, mana: 35, manaRegen: 4 },
+    skills: ['talon_rake', 'dash_strike'],
+    xp: 22,
+    faction: 'chattel',
+    brain: { type: 'flanker' },
+  },
+  // The long yoke: the plow-team that kept walking when the plowman
+  // stopped — two draft bodies under one beam, turning like weather.
+  the_long_yoke: {
+    id: 'the_long_yoke', name: 'the Long Yoke',
+    color: '#a89068', shape: 'oval', radius: 24, material: 'fur', look: 'the_long_yoke',
+    base: { life: 320, moveSpeed: 68, accuracy: 95, armor: 20, poise: 75, mana: 40, manaRegen: 4 },
+    skills: ['ground_slam', 'heavy_strike'],
+    xp: 52,
+    faction: 'chattel',
+    heft: 1.7, turnSpeed: 2.2,
+    scaling: { life: { incPerLevel: 0.07 } },
+    packSize: [1, 1],
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- THE HOLLOWBORN: the armory that walks fields its missing wings —
+  // the fists, the hymn, the lance, and the standing panoply whose
+  // blessing has a NECK (the anatomy lesson, metropolis dress).
+
+  // A flight of empty gauntlets — the armory's loose change, thrown hard.
+  gauntlet_swarm: {
+    id: 'gauntlet_swarm', name: 'Gauntlet Swarm',
+    color: '#8f98a8', shape: 'circle', radius: 10, material: 'metal', look: 'gauntlet_swarm',
+    base: { life: 40, moveSpeed: 175, accuracy: 104, evasion: 55, mana: 25, manaRegen: 3 },
+    skills: ['piledriver'],
+    xp: 16,
+    faction: 'hollowborn',
+    packSize: [3, 5],
+    brain: { type: 'flanker' },
+  },
+  // Three helms in loose procession, singing what the heads inside once
+  // sang. The verse stings; the coda shoves.
+  helm_choir: {
+    id: 'helm_choir', name: 'Helm Choir',
+    color: '#98a4b8', shape: 'circle', radius: 12, material: 'metal', look: 'helm_choir',
+    base: { life: 55, energyShield: 40, moveSpeed: 130, accuracy: 100, mana: 60, manaRegen: 6 },
+    skills: ['versicle', 'coda'],
+    xp: 28,
+    faction: 'hollowborn',
+    brain: { type: 'strafer' },
+  },
+  // A tourney lance that kept its banner and lost its knight: plants its
+  // colors in you, then rides through on the follow.
+  bannered_lance: {
+    id: 'bannered_lance', name: 'Bannered Lance',
+    color: '#a8b0c0', shape: 'kite', radius: 12, material: 'metal', look: 'bannered_lance',
+    base: { life: 70, moveSpeed: 165, accuracy: 108, evasion: 45, mana: 50, manaRegen: 5 },
+    skills: ['planted_banderilla', 'dash_strike'],
+    xp: 26,
+    faction: 'hollowborn',
+    brain: { type: 'skirmish', withdraw: 1.3 },
+  },
+  // THE PANOPLY SAINT — a full stand of armor at prayer: the breastplate
+  // kneels nowhere, the crown sings the blessing, the hands do the work.
+  // Break the crown and the SAINT GOES SILENT (breakDisables) — the
+  // congregation's wards die with the hymn. The anatomy gamut's
+  // metropolis lesson: choose the piece, change the fight.
+  panoply_saint: {
+    id: 'panoply_saint', name: 'Panoply Saint',
+    color: '#9aa8bc', shape: 'trapezoid', radius: 17, material: 'metal', look: 'panoply_saint',
+    base: { life: 240, moveSpeed: 85, accuracy: 100, armor: 45, poise: 60, mana: 80, manaRegen: 7 },
+    skills: ['devotion', 'preservation'],
+    xp: 64,
+    faction: 'hollowborn',
+    wardPriority: 3, turnSpeed: 3.2,
+    scaling: { life: { incPerLevel: 0.07 } },
+    parts: [
+      {
+        monster: 'saint_crown', dx: 0.55, dy: 0, lifeFrac: 0.25, breakDamage: 0.1,
+        breakDisables: ['devotion', 'preservation'],
+      },
+      { monster: 'saint_hand', dx: 0.4, dy: 0.9, lifeFrac: 0.2, breakDamage: 0.06 },
+      { monster: 'saint_hand', dx: 0.4, dy: -0.9, lifeFrac: 0.2, breakDamage: 0.06 },
+    ],
+    brain: { type: 'commander' },
+  },
+  // The crown: the saint's voice — it sings the versicle until broken,
+  // and its breaking silences the whole prayer (the root's breakDisables).
+  saint_crown: {
+    id: 'saint_crown', name: 'Saint\'s Crown',
+    color: '#b8c4d8', shape: 'circle', radius: 8, material: 'metal', look: 'saint_crown',
+    noNemesis: true, remains: false,
+    base: { life: 60, moveSpeed: 0, armor: 25, mana: 30, manaRegen: 3 },
+    skills: ['versicle'], xp: 0, drops: 0,
+  },
+  // The hands: mailed fists on no wrists — the work the prayer pays for.
+  saint_hand: {
+    id: 'saint_hand', name: 'Saint\'s Hand',
+    color: '#a0acc0', shape: 'circle', radius: 8, material: 'metal', look: 'saint_hand',
+    noNemesis: true, remains: false,
+    base: { life: 45, moveSpeed: 0, armor: 20, mana: 20, manaRegen: 2 },
+    skills: ['piledriver'], xp: 0, drops: 0,
+  },
+
+  // --- THE BLOOMKIN: the beds' own answer grows artillery, a whirl of
+  // nettles, a matron and an ambush that pretends to be the prettiest
+  // thing in the garden.
+
+  // The seedcase bombardier: a pod that learned trajectories — casings
+  // crack open downrange and keep cracking.
+  seedcase_bombardier: {
+    id: 'seedcase_bombardier', name: 'Seedcase Bombardier',
+    color: '#9ab060', shape: 'oval', radius: 13, material: 'wood', look: 'seedcase_bombardier',
+    base: { life: 70, moveSpeed: 95, accuracy: 102, mana: 45, manaRegen: 5 },
+    skills: ['splinter_volley', 'living_barrage'],
+    xp: 26,
+    faction: 'bloomkin',
+    brain: { type: 'artillery' },
+  },
+  // The nettle dervish: a hedge-spirit spinning its own sting — the whirl
+  // never quite stops, and neither should you.
+  nettle_dervish: {
+    id: 'nettle_dervish', name: 'Nettle Dervish',
+    color: '#7ab868', shape: 'circle', radius: 10, look: 'nettle_dervish',
+    base: { life: 50, moveSpeed: 180, accuracy: 104, evasion: 55, mana: 25, manaRegen: 3 },
+    skills: ['wild_strike'],
+    xp: 20,
+    faction: 'bloomkin',
+    brain: { type: 'flanker' },
+  },
+  // The bramble matron: the beds' warden-mother — roots for the rude,
+  // mending for her own. The garden fights longer while she tends it.
+  bramble_matron: {
+    id: 'bramble_matron', name: 'Bramble Matron',
+    color: '#b06a88', shape: 'pentagon', radius: 15, look: 'bramble_matron',
+    base: { life: 140, moveSpeed: 105, accuracy: 98, poise: 40, mana: 90, manaRegen: 8 },
+    skills: ['greater_mending', 'lash_roots'],
+    xp: 36,
+    faction: 'bloomkin',
+    wardPriority: 2,
+    brain: { type: 'commander' },
+  },
+  // The orchid veil: the garden's loveliest lie — it stands very still,
+  // and the pollen it throws is the last bright thing you see clearly.
+  orchid_veil: {
+    id: 'orchid_veil', name: 'Orchid Veil',
+    color: '#e08ab0', shape: 'kite', radius: 11, look: 'orchid_veil',
+    base: { life: 60, moveSpeed: 170, accuracy: 106, evasion: 65, mana: 50, manaRegen: 5 },
+    skills: ['blinding_ichor', 'talon_rake'],
+    xp: 26,
+    faction: 'bloomkin',
+    ambush: { radius: 46 },
+    brain: { type: 'assassin', withdraw: 1.1 },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -13440,6 +13753,12 @@ export const FACTIONS: Record<string, {
       { id: 'orc_ravager', weight: 2, presence: { from: 6, fadeIn: 4 } },
       { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
       { id: 'goblin_chief', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The muster pass: the warband fields like a horde — powder, cavalry,
+      // the whip behind the line, and the toll-troll walking door.
+      { id: 'goblin_sapper', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'goblin_wolfrider', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'hobgoblin_taskmaster', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'troll_bridgewarden', weight: 1, presence: { from: 10, fadeIn: 5 } },
     ],
   },
   undead: {
@@ -13500,6 +13819,13 @@ export const FACTIONS: Record<string, {
       { id: 'hollow_vanguard', weight: 3 },
       { id: 'blade_swarm', weight: 3 },
       { id: 'shield_anima', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      // The muster pass: the armory's loose change (fists), its hymn, its
+      // tourney lance — and the standing panoply whose blessing has a NECK
+      // (break the crown, silence the prayer: the anatomy lesson).
+      { id: 'gauntlet_swarm', weight: 2, presence: { to: 14, fadeOut: 6 } },
+      { id: 'bannered_lance', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'helm_choir', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'panoply_saint', weight: 1, presence: { from: 10, fadeIn: 5 } },
       { id: 'the_unworn', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
   },
@@ -13512,6 +13838,13 @@ export const FACTIONS: Record<string, {
       { id: 'broken_ewe', weight: 2, presence: { to: 14, fadeOut: 7 } },
       { id: 'feral_aurochs', weight: 3 },
       { id: 'shepherds_hound', weight: 2 },
+      // The muster pass: the pens empty in order — the dawn-terror and the
+      // belled charge first, the wallow-brood behind, and the plow-team
+      // that kept walking where the ground has truly turned.
+      { id: 'pen_harrower', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'bell_ram', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'muck_sow', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'the_long_yoke', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
@@ -13548,6 +13881,12 @@ export const FACTIONS: Record<string, {
       { id: 'sepal_warden', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'pollen_sylph', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'foxglove_chorister', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      // The muster pass: the beds grow artillery, a whirl of nettles, the
+      // warden-mother, and the loveliest lie in the garden.
+      { id: 'nettle_dervish', weight: 2, presence: { to: 16, fadeOut: 7 } },
+      { id: 'seedcase_bombardier', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'orchid_veil', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'bramble_matron', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   // The grove's fireflies — crownless BY BIOLOGY (no queen ever existed;
@@ -13675,6 +14014,12 @@ export const FACTIONS: Record<string, {
       { id: 'gnoll_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'gnoll_trapper', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'gnoll_impaler', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      // The muster pass: the packs get their scavenger, their pyres, the
+      // den-mother's mending and the skinner's quiet knives.
+      { id: 'gnoll_bonepicker', weight: 2, presence: { to: 18, fadeOut: 8 } },
+      { id: 'gnoll_skinner', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'gnoll_pyrekeeper', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'gnoll_matron', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
   },
   elemental: {

@@ -4927,6 +4927,52 @@ const shotHopper: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ================================================== THE ANIMATE ARMORY
+// The Hollowborn's loose pieces (the muster pass): armor that fights on
+// with nobody inside. Reusable by any construct, poltergeist-armory or
+// living-arsenal kit.
+
+/** GAUNTLETS — n mailed fists flying in loose formation (n=1: one fist,
+ *  centered — the single disembodied hand). Knuckle plates forward: the
+ *  silhouette says PUNCH from across the room. params: n (fists, 1-4),
+ *  size (fist radius ÷ body radius). */
+const gauntlets: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  const n = Math.max(1, Math.round(P(spec, 'n', 3)));
+  const size = P(spec, 'size', 0.42);
+  place(ctx, r, spec, (c, R) => {
+    const F = R * size;
+    for (let i = 0; i < n; i++) {
+      // One centered; a flight offsets around the body's midline.
+      const a = n === 1 ? 0 : (i / n) * Math.PI * 2 + 0.6;
+      const cx = n === 1 ? 0 : Math.cos(a) * R * 0.55;
+      const cy = n === 1 ? 0 : Math.sin(a) * R * 0.55;
+      // The cuff: a flared wrist plate trailing the punch.
+      c.fillStyle = shade(ramp.base, -0.22);
+      c.beginPath();
+      c.moveTo(cx - F * 1.1, cy - F * 0.62);
+      c.lineTo(cx - F * 0.3, cy - F * 0.48);
+      c.lineTo(cx - F * 0.3, cy + F * 0.48);
+      c.lineTo(cx - F * 1.1, cy + F * 0.62);
+      c.closePath(); c.fill();
+      // The fist: a rounded knuckle block, leading edge highlit.
+      c.fillStyle = ramp.base;
+      c.beginPath();
+      c.ellipse(cx + F * 0.15, cy, F * 0.62, F * 0.5, 0, 0, Math.PI * 2);
+      c.fill();
+      // Knuckle ridges: three short bars across the leading face.
+      c.strokeStyle = shade(ramp.base, 0.18);
+      c.lineWidth = Math.max(1, F * 0.14);
+      for (let k = -1; k <= 1; k++) {
+        c.beginPath();
+        c.moveTo(cx + F * 0.42, cy + k * F * 0.3 - F * 0.08);
+        c.lineTo(cx + F * 0.62, cy + k * F * 0.3);
+        c.stroke();
+      }
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -4961,6 +5007,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   cobraHood, fangJaw, coil,
   anchor,
   grapnel, yoke, gulletSac,
+  gauntlets,
   spiralEyes, mothWings,
   writheMass, hatchPores,
   howdahRig, mortarMaw,

@@ -637,6 +637,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'feral_aurochs', weight: 2 },
         { id: 'shepherds_hound', weight: 2 },
         { id: 'sounder_boar', weight: 2 },
+        // The muster pass: the pens empty in order — dawn-terror and belled
+        // charge early, the wallow-brood behind, the plow-team where the
+        // worked land has truly turned.
+        { id: 'pen_harrower', weight: 1.5, presence: { from: 4, fadeIn: 3 } },
+        { id: 'bell_ram', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'muck_sow', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'the_long_yoke', weight: 0.5, presence: { from: 9, fadeIn: 4 } },
         { id: 'bandit_cutthroat', weight: 2.5 },
         { id: 'bandit_bruiser', weight: 1.5, presence: { from: 4, fadeIn: 3 } },
         { id: 'gourdling', weight: 2, presence: { to: 14, fadeOut: 6 } },
@@ -808,6 +815,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hollow_vanguard', weight: 1.5, presence: { from: 6, fadeIn: 3 } },
         { id: 'blade_swarm', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'shield_anima', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        // The muster pass: the sealed armories walk their whole inventory —
+        // fists in the lanes, hymns in the arcades, the panoply at prayer
+        // where the city runs deep.
+        { id: 'gauntlet_swarm', weight: 1.5, presence: { to: 14, fadeOut: 6 } },
+        { id: 'bannered_lance', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'helm_choir', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'panoply_saint', weight: 0.5, presence: { from: 10, fadeIn: 5 } },
         { id: 'the_unworn', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
       ],
     },
@@ -2113,6 +2127,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bronze_scarab', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'sand_wyrm', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'gnoll_trapper', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        // The muster pass: the packs' full trades walk their home waste —
+        // the bonepicker on the young rim, the knife/pyre/den tiers deeper.
+        { id: 'gnoll_bonepicker', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'gnoll_skinner', weight: 1, presence: { from: 7, fadeIn: 4 } },
+        { id: 'gnoll_pyrekeeper', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'gnoll_matron', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'bombardier_beetle', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'giant_maggot', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'maggot_queen', weight: 1, presence: { from: 12, fadeIn: 5 } },
@@ -5048,6 +5068,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'skep_bee', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'petal_dancer', weight: 3 },
+        // The muster pass: the beds' own answer, staged — nettles early,
+        // casings downrange, the matron and the lie where the garden ages.
+        { id: 'nettle_dervish', weight: 2, presence: { to: 16, fadeOut: 7 } },
+        { id: 'seedcase_bombardier', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'orchid_veil', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'bramble_matron', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'formic_worker', weight: 2 },
         { id: 'formic_forager', weight: 1 },
         { id: 'garden_snail', weight: 1 },

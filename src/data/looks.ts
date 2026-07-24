@@ -6570,6 +6570,253 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'tailClub', scale: 0.85, role: 'bone' },
     ],
   },
+
+  // ================================ THE MUSTER PASS — WAVE 1: THIN COUNTRIES
+  // Silhouette carries the trade: the sapper IS his keg, the rider IS the
+  // wolf under him, the saint IS the armor praying. Kit-part tells ride the
+  // weapon painters (what it carries is what it casts).
+
+  /** Keg on the back, torch in the fist — the argument and its fuse. */
+  goblin_sapper: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'keg', x: -0.5, y: 0, scale: 0.6, rot: Math.PI / 2 },
+      { kind: 'bandolier' },
+      { kind: 'ears' },
+      { kind: 'torch', x: 0.2, y: 0.55, scale: 0.7 },
+      { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** Wolf below, goblin above: maned muzzle forward, lance couched, the
+   *  rider a hunched knot with ears at the saddle. */
+  goblin_wolfrider: {
+    parts: [
+      { kind: 'snout', scale: 1.05, params: { ears: false } },
+      { kind: 'mane', scale: 0.9 },
+      { kind: 'saddlebags', x: -0.3, scale: 0.8 },
+      { kind: 'disc', x: -0.32, y: 0, scale: 0.42 },
+      { kind: 'ears', x: -0.32, scale: 0.6 },
+      { kind: 'trident', x: 0.15, y: 0.4, scale: 0.8, params: { len: 1.05 } },
+      { kind: 'tail', params: { len: 0.8, tuft: true } },
+    ],
+  },
+  /** Broad hob under spiked pauldrons, whip coiled to strike — the line
+   *  moves because he says so. */
+  hobgoblin_taskmaster: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'warpaint', alpha: 0.7 },
+      { kind: 'ears' },
+      { kind: 'whip', x: 0.1, y: 0.5, scale: 0.95 },
+      { kind: 'eyes', color: '#f0c060', params: { spread: 0.38, dist: 0.52, size: 0.08 } },
+    ],
+  },
+  /** A bridge's worth of troll: mossed shoulders, tusked underbite, and a
+   *  maul that used to be someone's gatepost. */
+  troll_bridgewarden: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.16, seed: 77 } },
+      { kind: 'mossPatch', x: -0.25, scale: 0.8, alpha: 0.85 },
+      { kind: 'barkPlates', x: -0.1, scale: 0.6, alpha: 0.5 },
+      { kind: 'tusks', scale: 1.1 },
+      { kind: 'hammer', y: 0.55, scale: 1.05 },
+      { kind: 'eyes', params: { spread: 0.3, dist: 0.55, size: 0.07 } },
+    ],
+  },
+
+  /** Rag-draped scavenger hauling a rib-trophy — the litter of the last
+   *  fight, worn and thrown. */
+  gnoll_bonepicker: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'tatters', x: -0.2, scale: 0.7, params: { n: 4 } },
+      { kind: 'ribs', x: -0.4, y: 0.3, rot: 0.6, scale: 0.4, alpha: 0.9, params: { pairs: 3, span: 0.7 } },
+      { kind: 'snout' },
+      { kind: 'tail', params: { len: 0.7, tuft: true } },
+    ],
+  },
+  /** Robed pack-priest, brand held high — the pyre goes where he goes. */
+  gnoll_pyrekeeper: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'snout', scale: 0.95 },
+      { kind: 'torch', x: 0.15, y: 0.5, scale: 0.9 },
+      { kind: 'tail', params: { len: 0.65, tuft: true } },
+    ],
+    live: [{ kind: 'emberSparks', x: 0.15, y: 0.5, scale: 0.7, params: { n: 4 } }],
+  },
+  /** The den-mother: ruffed, staffed, unhurried — the pack's spine wears
+   *  a pelt-drape, not armor. */
+  gnoll_matron: {
+    parts: [
+      { kind: 'furRuff', scale: 1.1 },
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'drape', x: -0.15, scale: 0.85, alpha: 0.9 },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'tail', params: { len: 0.7, tuft: true } },
+    ],
+  },
+  /** Two knives, painted face, trophy ruff — the quiet one. */
+  gnoll_skinner: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'furRuff', scale: 0.9, alpha: 0.85 },
+      { kind: 'warpaint', alpha: 0.75 },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'daggers', params: { len: 0.7 } },
+      { kind: 'tail', params: { len: 0.6, tuft: true } },
+    ],
+  },
+
+  /** Iron bell at the throat, horns curled for the meeting — you hear the
+   *  charge before you see it. */
+  bell_ram: {
+    parts: [
+      { kind: 'furRuff', scale: 1.1 },
+      { kind: 'disc', scale: 0.82, role: 'bone' },
+      { kind: 'ramHorns', scale: 1.15 },
+      { kind: 'collar', scale: 0.9 },
+      { kind: 'bell', x: 0.45, y: 0, scale: 0.4 },
+      { kind: 'eyes', color: '#2a201a', params: { spread: 0.4, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** A wallow with a temper: mud-streaked bulk, bare snout, mean little
+   *  eyes over the bristle. */
+  muck_sow: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.14, seed: 88 } },
+      { kind: 'spots', role: 'dark', params: { n: 3 } },
+      { kind: 'snout', scale: 1.05, params: { ears: false } },
+      { kind: 'eyes', color: '#3a241c', params: { spread: 0.34, dist: 0.6, size: 0.07 } },
+    ],
+  },
+  /** The farrow: a fist of pig moving at grudge speed. */
+  muck_farrow: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.12, seed: 89 } },
+      { kind: 'snout', scale: 0.9, params: { ears: false } },
+      { kind: 'spots', role: 'dark', params: { n: 1 } },
+    ],
+  },
+  /** Spurred, crested, entirely without fear — the dooryard's dawn-terror. */
+  pen_harrower: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'tailFeathers', scale: 1.1 },
+      { kind: 'featherWings', scale: 0.75, alpha: 0.9 },
+      { kind: 'beak', scale: 1.0 },
+      { kind: 'crest', scale: 1.1 },
+      { kind: 'claws', y: 0.3, scale: 0.7, params: { len: 0.4, talons: 2 } },
+    ],
+  },
+  /** Two draft humps under one worn beam — the plow-team that kept
+   *  walking. The yoke IS the silhouette. */
+  the_long_yoke: {
+    parts: [
+      { kind: 'hump', y: 0.5, scale: 0.75 },
+      { kind: 'hump', y: -0.5, scale: 0.75 },
+      { kind: 'yoke', x: 0.3, params: { span: 1.35 } },
+      { kind: 'harness', alpha: 0.85 },
+      { kind: 'horns', y: 0.5, x: 0.45, scale: 0.7 },
+      { kind: 'horns', y: -0.5, x: 0.45, scale: 0.7 },
+      { kind: 'eyes', color: '#2a201a', params: { spread: 0.9, dist: 0.62, size: 0.07 } },
+    ],
+  },
+
+  /** A flight of empty gauntlets — knuckles first. */
+  gauntlet_swarm: {
+    parts: [
+      { kind: 'gauntlets', params: { n: 3 } },
+      { kind: 'eyes', color: '#9ad4e8', params: { n: 1, spread: 0, dist: 0.1, size: 0.08 } },
+    ],
+  },
+  /** Three helms in loose procession; the hymn hangs between them. */
+  helm_choir: {
+    parts: [
+      { kind: 'helm', x: 0.25, scale: 0.6 },
+      { kind: 'helm', x: -0.3, y: 0.45, scale: 0.45, alpha: 0.95 },
+      { kind: 'helm', x: -0.3, y: -0.45, scale: 0.45, alpha: 0.95 },
+    ],
+    live: [{ kind: 'soulGauze', color: '#9ad4e8', scale: 0.9, params: { n: 3 } }],
+  },
+  /** A couched lance flying its own colors — the knight rusted away and
+   *  the tourney didn't notice. */
+  bannered_lance: {
+    parts: [
+      { kind: 'trident', y: 0, scale: 1.1, params: { len: 1.2 } },
+      { kind: 'banner', x: -0.35, y: 0.2, scale: 0.8 },
+      { kind: 'pauldrons', x: -0.2, scale: 0.7, alpha: 0.9 },
+      { kind: 'eyes', color: '#9ad4e8', params: { n: 1, spread: 0, dist: 0.2, size: 0.07 } },
+    ],
+  },
+  /** The saint at prayer: breastplate and cape, empty and upright. Its
+   *  crown and hands are PARTS — the composite draws them as bodies. */
+  panoply_saint: {
+    parts: [
+      { kind: 'torso', scale: 0.95, role: 'dark' },
+      { kind: 'armorPlates', scale: 0.95 },
+      { kind: 'cape', x: -0.3, scale: 0.9 },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'eyes', color: '#9ad4e8', params: { spread: 0.26, dist: 0.4, size: 0.07 } },
+    ],
+  },
+  /** The crown: a helm under its own halo — the voice of the prayer. */
+  saint_crown: {
+    parts: [
+      { kind: 'helm', scale: 0.95 },
+      { kind: 'halo', scale: 1.1, alpha: 0.6 },
+    ],
+  },
+  /** The hand: one mailed fist on no wrist. */
+  saint_hand: {
+    parts: [
+      { kind: 'gauntlets', params: { n: 1 } },
+    ],
+  },
+
+  /** A seedpod that learned trajectories: shell whorl, petal skirt, and
+   *  a drift of casings on the wind (live). */
+  seedcase_bombardier: {
+    parts: [
+      { kind: 'shell', scale: 0.95 },
+      { kind: 'petalRuff', scale: 0.75, alpha: 0.9 },
+      { kind: 'sporeVents', scale: 0.6, alpha: 0.8 },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.9, params: { n: 4 } }],
+  },
+  /** The nettle dervish: a green whirl edged in sting. */
+  nettle_dervish: {
+    parts: [
+      { kind: 'petalRuff', scale: 0.9 },
+      { kind: 'barbs', scale: 0.95 },
+      { kind: 'fronds', scale: 0.7, alpha: 0.85 },
+      { kind: 'eyes', color: '#f0e0a0', params: { spread: 0.44, dist: 0.5, size: 0.08 } },
+    ],
+  },
+  /** The warden-mother of the beds: rooted feet, laurel crown, a staff
+   *  that flowers wrong. */
+  bramble_matron: {
+    parts: [
+      { kind: 'roots', scale: 0.8 },
+      { kind: 'petalRuff', scale: 0.9, alpha: 0.95 },
+      { kind: 'laurel', scale: 0.95 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'eyes', color: '#f0d0a0', params: { spread: 0.4, dist: 0.5, size: 0.08 } },
+    ],
+  },
+  /** The garden's loveliest lie: layered petals over a lure, sashes of
+   *  scent trailing behind (live). */
+  orchid_veil: {
+    parts: [
+      { kind: 'petalRuff', scale: 1.0 },
+      { kind: 'petalRuff', scale: 0.7, rot: 0.5, alpha: 0.85 },
+      { kind: 'lure', x: 0.4, scale: 0.7 },
+      { kind: 'eyes', color: '#f8e8b0', params: { spread: 0.36, dist: 0.55, size: 0.08 } },
+    ],
+    live: [{ kind: 'veilSashes', scale: 0.9, alpha: 0.7, params: { n: 3 } }],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
