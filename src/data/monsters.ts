@@ -14713,6 +14713,181 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 80, moveSpeed: 0, armor: 20, mana: 190, manaRegen: 11 },
     skills: ['icy_comet'], xp: 0, drops: 0,
   },
+
+  // ==========================================================================
+  // THE HIGH COURT PASS — WAVE B: THE CHAMPIONS' RING. The first bodies to
+  // wear `bossBar: true` as the SPECTACLE-ELITE lever (the marquee bar
+  // without the boss classification — loot, bestiary and domination reads
+  // untouched). One champion per major faction: deep presence floors,
+  // nemesis-REMEMBERABLE on purpose (a champion that kills you becomes a
+  // named legend), each one the faction's signature mechanic at full size.
+  // ==========================================================================
+
+  // The warboss: the warband's loudest argument — every horn-blast calls
+  // more of the horde up out of the ditches.
+  goblin_warboss: {
+    id: 'goblin_warboss', name: 'Goblin Warboss',
+    color: '#8aa445', shape: 'cross', radius: 17, look: 'goblin_warboss',
+    base: { life: 380, moveSpeed: 118, accuracy: 104, armor: 30, poise: 55, mana: 90, manaRegen: 8 },
+    skills: ['belligerence', 'war_cry', 'cleave'],
+    xp: 110, bossBar: true,
+    faction: 'goblin', adorn: 'ears',
+    presence: { from: 12, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    wardPriority: 2,
+    brain: {
+      type: 'commander', perception: { alertShout: 520 },
+      rules: [{
+        when: {}, every: [11, 15], hold: [0.4, 0.6],
+        announce: 'the Warboss bellows — the ditches empty!',
+        actions: [{ do: 'summon', monster: 'goblin_skirmisher', count: 3, ring: 70, lifespan: 35 }],
+      }],
+    },
+  },
+  // The ravener: the pack's hunger with the pack removed — all knife, no
+  // leash, faster the longer you bleed it.
+  gnoll_ravener: {
+    id: 'gnoll_ravener', name: 'Gnoll Ravener',
+    color: '#c89050', shape: 'kite', radius: 15, material: 'fur', look: 'gnoll_ravener',
+    base: { life: 340, moveSpeed: 175, accuracy: 112, evasion: 65, mana: 45, manaRegen: 5 },
+    skills: ['carve', 'deep_carve', 'dash_strike'],
+    xp: 100, bossBar: true,
+    faction: 'gnoll', adorn: 'ears',
+    presence: { from: 11, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    detection: 1.3,
+    aggro: { fixation: 1.2, fury: 1.5, waver: 0.6 },
+    brain: { type: 'assassin', withdraw: 0.8, enrage: 0.5 },
+  },
+  // The barrow colossus: a hill's worth of the Host walking under one
+  // will — the knell it rings is its own funeral, offered to you first.
+  barrow_colossus: {
+    id: 'barrow_colossus', name: 'Barrow Colossus',
+    color: '#c8c4ac', shape: 'hexagon', radius: 22, material: 'bone', look: 'barrow_colossus',
+    base: { life: 460, moveSpeed: 78, accuracy: 98, armor: 40, poise: 85, mana: 60, manaRegen: 5 },
+    skills: ['rising_knell', 'ground_slam'],
+    xp: 120, bossBar: true,
+    faction: 'undead',
+    presence: { from: 13, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    heft: 1.6, turnSpeed: 2.4,
+    brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  // The warbringer: the tribes' whole doctrine on one set of shoulders —
+  // the ground breaks toward you, then he arrives through the break.
+  beastkin_warbringer: {
+    id: 'beastkin_warbringer', name: 'Beastkin Warbringer',
+    color: '#b8823e', shape: 'hexagon', radius: 18, material: 'fur', look: 'beastkin_warbringer',
+    base: { life: 420, moveSpeed: 150, accuracy: 106, armor: 30, poise: 65, mana: 60, manaRegen: 6 },
+    skills: ['shockfront', 'heavy_strike', 'war_cry'],
+    xp: 115, bossBar: true,
+    faction: 'beastkin', adorn: 'horns',
+    presence: { from: 12, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    heft: 1.3,
+    brain: {
+      type: 'juggernaut', enrage: 0.45,
+      move: { style: 'charge', commitRange: 360, chargeSpeed: 2.5 },
+      squad: { idle: { style: 'siege' } },
+    },
+  },
+  // The gutwall titan: the Glut's answer to a locked door — it SEIZES
+  // what knocks and digests the argument (the grab fabric at full size;
+  // the gullet-sack is the tell, worn where everyone can read it).
+  gutwall_titan: {
+    id: 'gutwall_titan', name: 'Gutwall Titan',
+    color: '#a05a48', shape: 'oval', radius: 23, material: 'flesh', look: 'gutwall_titan',
+    base: { life: 520, moveSpeed: 82, accuracy: 100, armor: 20, poise: 80, mana: 45, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['seize', 'bile_spray'],
+    xp: 130, bossBar: true,
+    faction: 'flesh',
+    presence: { from: 13, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    heft: 1.7, turnSpeed: 2.2,
+    brain: { type: 'juggernaut' },
+  },
+  // The triune: the attunement fabric as a duel — it takes the color of
+  // whatever you hit it with, and answers in all three at once.
+  triune_elemental: {
+    id: 'triune_elemental', name: 'Triune Elemental',
+    color: '#b8d0e0', shape: 'star', radius: 17, material: 'crystal', look: 'triune_elemental',
+    base: { life: 360, energyShield: 120, moveSpeed: 105, accuracy: 102, mana: 90, manaRegen: 8 },
+    skills: ['shatterchord'],
+    xp: 120, bossBar: true,
+    faction: 'elemental', tags: ['elemental'],
+    presence: { from: 12, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    tune: {},
+    brain: { type: 'strafer' },
+  },
+  // The avalanche herald: it announces the mountain, then delivers it —
+  // the march comes to you in sheets, the ceiling in points.
+  avalanche_herald: {
+    id: 'avalanche_herald', name: 'Avalanche Herald',
+    color: '#bcdcec', shape: 'pentagon', radius: 17, material: 'ice', look: 'avalanche_herald',
+    base: { life: 380, moveSpeed: 95, accuracy: 100, armor: 30, poise: 60, mana: 90, manaRegen: 8 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    skills: ['glacial_march', 'stalactite_fall'],
+    xp: 110, bossBar: true,
+    faction: 'rimebound',
+    presence: { from: 13 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    pathCosts: { ice: 0.5 },
+    brain: { type: 'caster' },
+  },
+  // The sepulcher apis: the dynasty's stone bull — it was carved mid-
+  // charge, and it resents the interruption.
+  sepulcher_apis: {
+    id: 'sepulcher_apis', name: 'Sepulcher Apis',
+    color: '#d0b678', shape: 'hexagon', radius: 20, material: 'stone', look: 'sepulcher_apis',
+    base: { life: 440, moveSpeed: 120, accuracy: 102, armor: 50, poise: 90, mana: 30, manaRegen: 3 },
+    skills: ['piledriver', 'heavy_strike'],
+    xp: 125, bossBar: true,
+    faction: 'sarcophate',
+    presence: { from: 12 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    heft: 1.8, turnSpeed: 2.4,
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'charge', commitRange: 380, chargeSpeed: 2.7 },
+    },
+  },
+  // The vast constrictor: the court's oldest argument — it SEIZES, and
+  // then there is rather a lot of it between you and elsewhere.
+  vast_constrictor: {
+    id: 'vast_constrictor', name: 'Vast Constrictor',
+    color: '#6a9a5e', shape: 'oval', radius: 16, look: 'vast_constrictor',
+    base: { life: 400, moveSpeed: 125, accuracy: 106, evasion: 40, mana: 20, manaRegen: 3 },
+    skills: ['seize', 'claw'],
+    xp: 120, bossBar: true,
+    faction: 'coilborn',
+    presence: { from: 11 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    worm: { length: 8, spacing: 16, taper: 0.9 },
+    brain: { type: 'flanker' },
+  },
+  // The heartwood shepherd: the Court's oldest gardener — it mends what
+  // you cut faster than you cut it, until you cut the gardener.
+  heartwood_shepherd: {
+    id: 'heartwood_shepherd', name: 'Heartwood Shepherd',
+    color: '#4a8a44', shape: 'pentagon', radius: 18, material: 'wood', look: 'heartwood_shepherd',
+    base: { life: 420, moveSpeed: 90, accuracy: 98, armor: 25, poise: 70, mana: 90, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', -0.3)],
+    skills: ['lash_roots', 'greater_mending'],
+    xp: 115, bossBar: true,
+    faction: 'sylvan',
+    presence: { from: 12, fadeIn: 5 },
+    scaling: { life: { incPerLevel: 0.09 } },
+    wardPriority: 3,
+    brain: {
+      type: 'protector',
+      rules: [{
+        when: {}, every: [12, 16], hold: [0.5, 0.7],
+        actions: [{ do: 'summon', monster: 'sylvan_sapling', count: 2, ring: 60, lifespan: 40 }],
+      }],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -14975,6 +15150,9 @@ export const FACTIONS: Record<string, {
       { id: 'goblin_wolfrider', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'hobgoblin_taskmaster', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'troll_bridgewarden', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      // The champion (high court pass): the marquee bar without the boss
+      // classification — the warband's loudest argument, rarely.
+      { id: 'goblin_warboss', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
     ],
   },
   undead: {
@@ -15007,6 +15185,8 @@ export const FACTIONS: Record<string, {
       // keeps wounds (the segment fabric below boss tier).
       { id: 'thurible_bearer', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'marrow_whip', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      // The champion: a hill's worth of the Host under one will.
+      { id: 'barrow_colossus', weight: 0.5, presence: { from: 13, fadeIn: 5 } },
     ],
   },
   // The unferried dead of the River of Souls (world/soulriver.ts) — fielded
@@ -15279,6 +15459,8 @@ export const FACTIONS: Record<string, {
       { id: 'gnoll_skinner', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'gnoll_pyrekeeper', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'gnoll_matron', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      // The champion: the pack's hunger with the pack removed.
+      { id: 'gnoll_ravener', weight: 0.5, presence: { from: 11, fadeIn: 5 } },
     ],
   },
   elemental: {
@@ -15310,6 +15492,9 @@ export const FACTIONS: Record<string, {
       { id: 'geode_shellback', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'glassguard_sentinel', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'discord_siren', weight: 1, presence: { from: 11, fadeIn: 5 } },
+      // The champion: the attunement fabric as a duel — it takes your
+      // color and answers in three.
+      { id: 'triune_elemental', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
     ],
   },
   sylvan: {
@@ -15328,6 +15513,8 @@ export const FACTIONS: Record<string, {
       { id: 'root_snarl', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'elder_treant', weight: 1, presence: { from: 22, fadeIn: 8, mul: 1.5 } },
       { id: 'root_wraith', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      // The champion: the Court's oldest gardener — cut the gardener.
+      { id: 'heartwood_shepherd', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
     ],
   },
   wild: {
@@ -15446,6 +15633,8 @@ export const FACTIONS: Record<string, {
       // The tribes' siege answer: riders on a living tower — pick the
       // archers off the howdah, or fell the whole thing.
       { id: 'siegeback_aurochs', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The champion: the doctrine on one set of shoulders.
+      { id: 'beastkin_warbringer', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
       { id: 'beastlord_khan', weight: 1, presence: { from: 16, fadeIn: 6 } },
     ],
   },
@@ -15472,6 +15661,9 @@ export const FACTIONS: Record<string, {
       { id: 'lidless_watcher', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'weeping_orb', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'stalk_shepherd', weight: 1, presence: { from: 11, fadeIn: 5 } },
+      // The champion: the Glut's answer to a locked door (the grab
+      // fabric at full size — the gullet-sack tell reads across a room).
+      { id: 'gutwall_titan', weight: 0.5, presence: { from: 13, fadeIn: 5 } },
     ],
   },
   caulborn: {
@@ -15556,6 +15748,8 @@ export const FACTIONS: Record<string, {
       // The high court pass: the court carries its coldest dead — the
       // bier's heart calls the comet until silenced (hard floor).
       { id: 'frost_bier', weight: 1, presence: { from: 12 } },
+      // The champion: it announces the mountain, then delivers it.
+      { id: 'avalanche_herald', weight: 0.5, presence: { from: 13 } },
     ],
   },
   // The tomb-dynasty musters in burial order: scarabs boil out first and
@@ -15586,6 +15780,8 @@ export const FACTIONS: Record<string, {
       // The high court pass: the dynasty's traveling shrine — bearers,
       // litter, and the Regent's cursing urn (the anatomy lesson).
       { id: 'canopic_palanquin', weight: 1, presence: { from: 13 } },
+      // The champion: the stone bull, carved mid-charge.
+      { id: 'sepulcher_apis', weight: 0.5, presence: { from: 12 } },
     ],
   },
   // The Coilborn muster from the water out: adders boil the early shallows
@@ -15608,6 +15804,8 @@ export const FACTIONS: Record<string, {
       { id: 'brood_coiler', weight: 1, presence: { from: 7 } },
       // The high court pass: the idol of sheds (hard floor, court law).
       { id: 'sloughed_colossus', weight: 1, presence: { from: 10 } },
+      // The champion: rather a lot of it between you and elsewhere.
+      { id: 'vast_constrictor', weight: 0.5, presence: { from: 11 } },
     ],
   },
 };

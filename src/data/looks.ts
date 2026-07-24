@@ -7662,6 +7662,117 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'halo', scale: 1.2, alpha: 0.45 },
     ],
   },
+
+  // ============================ THE HIGH COURT PASS — WAVE B: THE CHAMPIONS
+
+  /** The warboss: crowned in scrap, banner on the back, horn to hand. */
+  goblin_warboss: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'pauldrons', scale: 1.1, role: 'metal' },
+      { kind: 'ears' },
+      { kind: 'banner', x: -0.4, y: -0.3, scale: 0.8 },
+      { kind: 'warhorn', x: 0.15, y: 0.5, scale: 0.8 },
+      { kind: 'crown', x: 0.2, scale: 0.6, role: 'metal' },
+    ],
+  },
+  /** The ravener: lean hunger under trophy pelts, knives everywhere. */
+  gnoll_ravener: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'furRuff', scale: 1.15 },
+      { kind: 'warpaint', alpha: 0.8 },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'daggers', params: { len: 0.8 } },
+      { kind: 'tail', params: { len: 0.75, tuft: true } },
+    ],
+  },
+  /** A hill's worth of the Host: stacked bone under one bell. */
+  barrow_colossus: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.12, seed: 601 }, role: 'bone' },
+      { kind: 'ribs', scale: 0.9, params: { pairs: 4, span: 0.9 } },
+      { kind: 'skull', x: 0.45, scale: 1.1 },
+      { kind: 'skull', x: -0.2, y: 0.5, scale: 0.6, alpha: 0.9 },
+      { kind: 'bell', x: -0.3, y: -0.4, scale: 0.55 },
+    ],
+  },
+  /** The warbringer: horns forward, horn slung, the front leg already
+   *  committed. */
+  beastkin_warbringer: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'furRuff', scale: 1.0, alpha: 0.9 },
+      { kind: 'horns', scale: 1.25 },
+      { kind: 'warpaint', alpha: 0.8 },
+      { kind: 'hammer', y: 0.55, scale: 1.05 },
+      { kind: 'warhorn', x: -0.35, y: -0.4, scale: 0.7 },
+    ],
+  },
+  /** The gutwall: a door of meat with the gullet worn in front (live —
+   *  the swallow's tell, readable across the room). */
+  gutwall_titan: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.16, seed: 602 } },
+      { kind: 'fleshFolds', scale: 0.95 },
+      { kind: 'maw', x: 0.4, scale: 0.9 },
+      { kind: 'eyes', color: '#e8d09a', params: { spread: 0.5, dist: 0.55, size: 0.07 } },
+    ],
+    live: [{ kind: 'gulletSac', x: 0.2, y: 0.2, scale: 1.1 }],
+  },
+  /** The triune: three-pointed glass around a heart that changes its
+   *  mind — the halo takes the last color it was taught. */
+  triune_elemental: {
+    parts: [
+      { kind: 'crystalGrowths', scale: 1.05 },
+      { kind: 'disc', scale: 0.5, role: 'glow' },
+      { kind: 'floatingShards', scale: 0.95 },
+      { kind: 'halo', scale: 1.25, alpha: 0.5 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
+  },
+  /** The herald: robed ice under a crown of points, breath showing. */
+  avalanche_herald: {
+    parts: [
+      { kind: 'robe', color: '#9cc4d8', scale: 1.0 },
+      { kind: 'icicles', scale: 1.0 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'hood', x: 0.2, scale: 0.9 },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.4, scale: 0.7 }],
+  },
+  /** The apis: a bull carved mid-charge, gilded where the chisel
+   *  stopped. */
+  sepulcher_apis: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.08, seed: 603 }, role: 'bone' },
+      { kind: 'hump', x: -0.15, scale: 0.8 },
+      { kind: 'horns', scale: 1.2, role: 'metal' },
+      { kind: 'shroudWrap', scale: 0.8, alpha: 0.7, params: { bands: 3 } },
+      { kind: 'mask', x: 0.45, scale: 0.85, role: 'metal' },
+    ],
+  },
+  /** The constrictor: a head worth a door, the rest of the argument
+   *  trailing behind (the worm fabric draws it). */
+  vast_constrictor: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.1 },
+      { kind: 'cobraHood', scale: 1.0, alpha: 0.95 },
+      { kind: 'scutes', scale: 0.9 },
+      { kind: 'fangJaw', scale: 0.9 },
+    ],
+  },
+  /** The shepherd: bark and laurel over root-feet, crook raised — the
+   *  garden's oldest hand. */
+  heartwood_shepherd: {
+    parts: [
+      { kind: 'barkPlates', scale: 1.0 },
+      { kind: 'roots', scale: 0.85 },
+      { kind: 'laurel', scale: 1.0 },
+      { kind: 'branchArms', scale: 0.9 },
+      { kind: 'staff', params: { orb: 'glow' } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
