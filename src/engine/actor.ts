@@ -349,6 +349,23 @@ export interface MonsterPartDef {
   breakDisables?: string[];
 }
 
+/** THE AMBUSH FABRIC (MonsterDef.ambush / spawner-row instance arming): a
+ *  body born as waiting scenery, sprung when an enemy strays inside its
+ *  wake radius — or the moment it is wounded. Default face: hidden +
+ *  untargetable (the reed lurker). `visible: true` waits in the OPEN — a
+ *  readable, targetable threat that simply hasn't moved yet (the penned
+ *  herd seething behind its fence). `pack` chains the spring: one waking
+ *  body wakes every armed kin within that radius, so a pen empties as ONE
+ *  event, not a trickle. */
+export interface AmbushSpec {
+  radius: number;
+  announce?: string;
+  /** Wait in the open (no invisibility, still targetable; wounds spring). */
+  visible?: boolean;
+  /** Chain-spring every armed body within this radius (the herd law). */
+  pack?: number;
+}
+
 // The AI vocabulary (BrainDef, archetypes, phases, rules, scripts, actions)
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
@@ -719,10 +736,20 @@ export class Actor {
   aiJukeAt = 0;
   aiJukeAng = 0;
   aiJukeFreezeUntil = 0;
-  /** MOUNTS: the beast I ride (my position pins to it) / the rider on my
-   *  back (one slot). World.updateMounts sweeps both links every frame. */
+  /** MOUNTS (engine/mounts.ts): the beast I ride (my position pins to its
+   *  saddle) / the riders on my back (one per seat — seat count is the
+   *  slot's data). World.updateMounts sweeps both links every frame:
+   *  pairing, pin, severance beats. */
   mountId?: number;
-  riderId?: number;
+  riderIds?: number[];
+  /** Which saddle I hold on my mount (index into mountSlot.seats). */
+  mountSeat?: number;
+  /** One-shot latch for the spawn-time pairing sweep (MonsterDef.mount /
+   *  mountSlot.crew): set once the sweep has considered this body, so a
+   *  slain steed is never quietly re-minted under its surviving rider.
+   *  Transient by design — zone-memory restores re-pair fresh (the
+   *  composite-parts law: the remembered rider implies its steed). */
+  mountPaired?: boolean;
   /** CONCLAVE: a ritual cultist is combat-DORMANT (chanting, no targeting/movement)
    *  until a wounding hit rouses it past its threshold (set in World.resolveHit).
    *  Per-actor, so only the wounded retaliate while the rest keep the rite going. */
@@ -1223,9 +1250,14 @@ export class Actor {
    *  leave — clamped every frame, whatever moved it (walk, dash, knockback).
    *  The lake horror's pond; the root wraith's trunk. */
   confine?: { x: number; y: number; r: number };
-  /** ARMED AMBUSH (MonsterDef.ambush): hidden + untargetable until an enemy
-   *  strays inside the wake radius — then the reveal. */
+  /** ARMED AMBUSH (MonsterDef.ambush): scenery until an enemy strays inside
+   *  the wake radius — then the reveal. Hidden + untargetable by default;
+   *  a `visible` spec waits in the open instead (the penned herd). */
   ambushArmed = false;
+  /** INSTANCE-armed ambush (spawner rows — the landmark spawn lane): wins
+   *  over the def's spec, so the SAME kind can wait coiled in a pen here
+   *  and roam free everywhere else. */
+  ambushSpec?: AmbushSpec;
   /** SHELL GUARD (MonsterDef.shellGuard, a toggled rear-guard aura, or a
    *  guard-skill graft): the directional absorb pool + its break/regrow
    *  state. `fromAura` names the installing skill so the toggle-off (or

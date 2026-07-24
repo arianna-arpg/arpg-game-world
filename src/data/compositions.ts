@@ -712,5 +712,9 @@ registerComposition({
     { kind: 'camp', count: [1, 1] },
     { kind: 'bone_pile', count: [1, 3] },
     { kind: 'banner_post', count: [0, 2] },
+    // THE PEN (data/landmarks.ts 'gnasher_pen'): every warren keeps its
+    // livestock — a palisade ring seething with the herd, sprung as one
+    // pack when approached or wounded. The warband's camps read by it.
+    { kind: 'landmark', landmark: 'gnasher_pen', count: [1, 1] },
   ],
 });

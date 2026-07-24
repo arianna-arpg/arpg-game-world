@@ -184,6 +184,27 @@ registerLandmark({
   },
   poi: true, mustReach: true,
 });
+// THE GNASHER PEN (the warband's livestock, penned): a palisade ring dug
+// around churned mud, seething with the herd — VISIBLE, waiting, and sprung
+// as ONE event when you stray to the fence or put an arrow through it (the
+// ambush fabric's pack law; the same kinds roam free everywhere else). The
+// rim gap is the gate the herd pours through; the pit builder's palisade rim
+// IS the pen doodad-work. Seated in goblin camps by the warren composition,
+// and stampable anywhere goblins keep livestock.
+registerLandmark({
+  id: 'gnasher_pen', builder: 'pit', size: [220, 300], clearSite: true,
+  params: { rimRegion: 'palisade', floorKind: 'mud', gapArc: 0.55 },
+  spawns: {
+    table: [
+      { id: 'cave_gnasher', weight: 5 },
+      { id: 'great_gnasher', weight: 1, presence: { from: 8, fadeIn: 3 } },
+    ],
+    count: [4, 7], where: 'interior',
+    ambush: { radius: 150, visible: true, pack: 400, announce: 'the pen springs!' },
+  },
+  poi: true,
+});
+
 // A hive sink: the warren's open throat — a stamped pit boiling with the
 // brood, the sand packed glossy where ten thousand feet turned.
 registerLandmark({

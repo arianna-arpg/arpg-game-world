@@ -721,6 +721,11 @@ export interface AICondition {
   drive?: { id: string; above?: number; below?: number; scope?: 'faction' | 'global' };
   /** At least this many seconds since the CURRENT engagement began. */
   sinceEngaged?: number;
+  /** IN THE SADDLE (the mount fabric): true = only while riding, false =
+   *  only while afoot. The remount grammar's trigger — `mounted: false`
+   *  plus a `{do:'mount'}` beat puts an unhorsed lancer back on the first
+   *  free saddle its kin left standing. */
+  mounted?: boolean;
   /** Gate each FIRING by this chance (rolled when everything else passes). */
   chance?: number;
   /** PACKAGE-EXTENDED conditions: each key names a predicate registered via
@@ -1296,6 +1301,7 @@ export function evalCondition(
     }
     if (n < c.enemiesWithin.count) return false;
   }
+  if (c.mounted !== undefined && (actor.mountId !== undefined) !== c.mounted) return false;
   if (c.hasStatus !== undefined && !actor.statuses.some(s => s.id === c.hasStatus)) return false;
   if (c.hasBuff !== undefined && !actor.buffs.has(c.hasBuff)) return false;
   if (c.lacksBuff !== undefined && actor.buffs.has(c.lacksBuff)) return false;

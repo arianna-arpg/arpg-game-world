@@ -2288,6 +2288,18 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'skull', x: 0.45, scale: 0.9 },
     ],
   },
+  /** The hoarfrost lancer: a wight folded jockey-low behind a lance of
+   *  ice — rime rags streaming off the saddle, and nothing warm in it
+   *  either. */
+  hoarfrost_lancer: {
+    parts: [
+      { kind: 'tatters', scale: 0.8, params: { n: 3 } },
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'icicles', scale: 0.85, params: { n: 4 } },
+      { kind: 'trident', x: 0.15, y: 0.4, scale: 0.9, params: { len: 1.3 } },
+      { kind: 'skull', x: 0.42, scale: 0.8 },
+    ],
+  },
   /** The glacier shaman: antler-crowned iceworker — robe, an ice-orb staff,
    *  cold runes, breath pluming in the endless winter. */
   glacier_shaman: {
@@ -3874,6 +3886,31 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'crown', x: 0.26, scale: 0.6, role: 'dark' },
     ],
     live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
+  },
+  /** The bone steed: a courser rendered down to the argument — skull
+   *  forward, ribs amidships, tack still cinched on bare bone. The empty
+   *  saddle is the Host's spare horse, waiting (the warg law: the tack IS
+   *  the silhouette's story). */
+  bone_steed: {
+    parts: [
+      { kind: 'ribs', scale: 0.95 },
+      { kind: 'skull', x: 0.5, scale: 0.8 },
+      { kind: 'legs', y: 0.08, scale: 0.55, role: 'bone', params: { n: 2 } },
+      { kind: 'saddlebags', x: -0.28, scale: 0.8 },
+      { kind: 'harness', alpha: 0.85 },
+      { kind: 'spineTrail', x: -0.5, scale: 0.7 },
+    ],
+  },
+  /** The barrow lancer: grave-bill couched, a rusted helm banked low —
+   *  rag-hung bone that learned to sit a horse and kept the lesson. */
+  barrow_lancer: {
+    parts: [
+      { kind: 'tatters', scale: 0.85, params: { n: 3 } },
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'helm', x: 0.3, scale: 0.85 },
+      { kind: 'trident', x: 0.15, y: 0.42, scale: 0.95, params: { len: 1.35 } },
+      { kind: 'skull', x: 0.42, scale: 0.75 },
+    ],
   },
 
   // --- THE GLOAMWOOD (carrion, crones, lanterns, the rider) ----------------
@@ -6706,17 +6743,18 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
-  /** Wolf below, goblin above: maned muzzle forward, lance couched, the
-   *  rider a hunched knot with ears at the saddle. */
+  /** The wolf runs UNDER him as its own body now (the mount fabric): what
+   *  remains is the rider — a hunched knot of goblin behind a couched
+   *  trident, harness-strapped for the saddle he means to keep. In the
+   *  field the pair rebuilds the old fused silhouette exactly: warg below,
+   *  this above, and the saddle empties honestly when either falls. */
   goblin_wolfrider: {
     parts: [
-      { kind: 'snout', scale: 1.05, params: { ears: false } },
-      { kind: 'mane', scale: 0.9 },
-      { kind: 'saddlebags', x: -0.3, scale: 0.8 },
-      { kind: 'disc', x: -0.32, y: 0, scale: 0.42 },
-      { kind: 'ears', x: -0.32, scale: 0.6 },
-      { kind: 'trident', x: 0.15, y: 0.4, scale: 0.8, params: { len: 1.05 } },
-      { kind: 'tail', params: { len: 0.8, tuft: true } },
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'harness', alpha: 0.75, scale: 0.9 },
+      { kind: 'ears' },
+      { kind: 'trident', x: 0.18, y: 0.45, scale: 0.9, params: { len: 1.15 } },
+      { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
     ],
   },
   /** Broad hob under spiked pauldrons, whip coiled to strike — the line
@@ -8081,6 +8119,19 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'trident', y: 0.35, scale: 1.05, params: { len: 1.25 } },
       { kind: 'pack', x: -0.35, scale: 0.7 },
       { kind: 'eyes', params: { spread: 0.4, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** The hopper: the prodder's apprentice who skipped the job and kept the
+   *  seat — a crouched knot of goblin, goad couched short, strapped in for
+   *  a saddle that bites. */
+  gnasher_hopper: {
+    parts: [
+      { kind: 'disc', scale: 0.82 },
+      { kind: 'harness', alpha: 0.7, scale: 0.85 },
+      { kind: 'ears' },
+      { kind: 'trident', x: 0.15, y: 0.4, scale: 0.75, params: { len: 0.9 } },
+      { kind: 'bandolier', alpha: 0.8 },
+      { kind: 'eyes', params: { spread: 0.42, dist: 0.55, size: 0.09 } },
     ],
   },
   /** The warg: the wolfrider's mount, unridden — the EMPTY saddle is the

@@ -4052,7 +4052,11 @@ export class Renderer {
     const tpose = a === world.player && world.traversal ? traversalPose(world.traversal) : null;
     // Grounding: the soft contact shadow under every body — drawn BEFORE the
     // leap swell so an airborne leaper's shadow stays put while the body rises.
-    drawShadow(ctx, 0, 0, a.radius, (a.untargetable ? 0.4 : 1) * (tpose ? Math.max(0.05, tpose.shadow) : 1));
+    // A MOUNTED rider casts none: its seat floats on the steed's back, and
+    // the steed's own shadow is the pair's contact with the ground.
+    if (a.mountId === undefined) {
+      drawShadow(ctx, 0, 0, a.radius, (a.untargetable ? 0.4 : 1) * (tpose ? Math.max(0.05, tpose.shadow) : 1));
+    }
     // The hero wears a soft class-colored ground halo — you find yourself in a
     // brawl by presence, not by hunting the cursor.
     if (a === world.player) {

@@ -300,7 +300,29 @@ changes.
   drag / yoke-mauler pin drumming the Takedown combo / gulper + planted
   maw_bloom swallow) with grapnel/yoke/gulletSac kit-part tells, and the
   `gore_stakes` speed-gated contact terrain (`TrackPayload.minSpeed`) —
-  docs in `docs/engine/grab.md`; probe `balance/probe_grab.ts`).
+  docs in `docs/engine/grab.md`; probe `balance/probe_grab.ts`),
+  `mounts.ts` (THE MOUNT FABRIC — cavalry as ONE state pair:
+  `Actor.mountId`/`riderIds`, the `{do:'mount'}`/`{do:'dismount'}` verbs,
+  and `World.updateMounts` doing pairing/pin/severance late among the
+  movers. TWO data levers pair at spawn through the composite-parts
+  lazy-attach idiom: rider-side `MonsterDef.mount` (arrives mounted —
+  steed minted beneath, any spawn path) and steed-side `mountSlot.crew`
+  (arrives manned); `mountSlot.seats[]` = facing-frame saddles + screen-up
+  lift (capacity IS the roster), `onRiderDeath` 'fight'|'rout' answers the
+  last rider's death, THE UNHORSED BEAT throws a rider whose steed dies
+  (`unhorsed` status window), a landed grip or willed step quits the
+  saddle, movement-tagged skills refuse from the seat, and the REMOUNT
+  rule is pure data (`AICondition.mounted` + the verb). VOCABULARY LAW:
+  parts = siege platforms (organs), mount links = true cavalry (two
+  sovereign bodies). Faction identities: goblins WIDE (wolfrider→warg
+  split true, gnasher_hopper on the herd, the Warboss astride a great
+  gnasher), demon towers crewed, undead bone-steed lancers in order,
+  rimebound hound-coursing lances, beastkin deliberately parts-only. THE
+  AMBUSH FABRIC deepened beside it (`AmbushSpec.visible`/`pack` + the
+  `LandmarkSpawns.ambush` instance lane + wound-springs via
+  `World.springAmbush`): the GNASHER PEN landmark (palisade-rim pit,
+  penned herd sprung as ONE event) seats in every goblin_warren_camp —
+  docs in `docs/engine/mounts.md`; probe `balance/probe_mount.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense

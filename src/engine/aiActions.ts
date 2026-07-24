@@ -15,6 +15,7 @@ import { MONSTERS } from '../data/monsters';
 import { makeSkillInstance, type SkillInstance } from './skills';
 import type { Actor } from './actor';
 import { alertScale, type AIAction } from './brain';
+import { MOUNT_CFG, mountAccepts, seatPos } from './mounts';
 import type { World } from './world';
 
 /** Mint (and cache) a skill instance for scripted casts — leveled like the
@@ -174,9 +175,11 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
     world.startBurrow(actor, act, target);
   },
 
-  // MOUNT the nearest free same-team beast whose mountSlot accepts this
-  // actor: teleport to the saddle; World.updateMounts carries the rider
-  // from here (position pinned, dash/push stilled) until either dies.
+  // MOUNT the nearest same-team beast with a FREE SEAT whose mountSlot
+  // accepts this actor: vault to the saddle; World.updateMounts carries the
+  // rider from here (seat-pinned, dash/push stilled) until dismounted,
+  // gripped loose, or either party dies. Remounting a widowed steed is this
+  // same verb behind a `mounted: false` rule — pure data.
   mount: (world, actor, act) => {
     if (act.do !== 'mount') return;
     if (actor.mountId !== undefined) return; // already in a saddle
@@ -184,17 +187,18 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
     let best: Actor | null = null;
     let bd = Infinity;
     for (const m of world.actors) {
-      if (m === actor || m.dead || m.team !== actor.team || m.riderId !== undefined) continue;
+      if (m === actor || m.dead || m.team !== actor.team) continue;
       const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
-      if (!slot) continue;
-      if (!slot.kinds.some(k => actor.tag === k || actor.defId === k || actor.faction === k)) continue;
+      if (!slot || !mountAccepts(slot, actor)) continue;
+      if (world.mountFreeSeat(m, slot) < 0) continue;
       const d = dist(actor.pos, m.pos);
       if (d <= reach && d < bd) { bd = d; best = m; }
     }
     if (!best) return; // nothing to ride — graceful no-op
-    actor.mountId = best.id;
-    best.riderId = actor.id;
-    world.teleportActor(actor, vec(best.pos.x, best.pos.y - best.radius), '#d8b0ff');
+    if (!world.mountSeatRider(actor, best)) return;
+    const slot = best.defId ? MONSTERS[best.defId]?.mountSlot : undefined;
+    const seat = seatPos(best, slot, actor.mountSeat ?? 0);
+    world.teleportActor(actor, vec(seat.x, seat.y), MOUNT_CFG.vaultFx);
   },
 
   // Shove a WANT (BrainDef.drives): choreography starves, enrages, calms —
@@ -208,12 +212,10 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
   dismount: (world, actor, act) => {
     if (act.do !== 'dismount') return;
     if (actor.mountId === undefined) return;
-    const m = world.actorById(actor.mountId);
-    if (m && m.riderId === actor.id) m.riderId = undefined;
-    actor.mountId = undefined;
+    world.mountUnlink(actor);
     const ang = rand(0, Math.PI * 2);
     world.teleportActor(actor, vec(
-      actor.pos.x + Math.cos(ang) * 50, actor.pos.y + Math.sin(ang) * 50), '#d8b0ff');
+      actor.pos.x + Math.cos(ang) * 50, actor.pos.y + Math.sin(ang) * 50), MOUNT_CFG.vaultFx);
   },
 
   teleport: (world, actor, act, target) => {

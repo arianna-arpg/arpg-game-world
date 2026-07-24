@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
-import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
+import type { ActorAdorn, ActorShape, AmbushSpec, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
 import type { BrainTuning, PhaseDef } from '../engine/brain';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
@@ -17,6 +17,7 @@ import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
 import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
+import type { MountSlotSpec, MountSpec } from '../engine/mounts';
 import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { LightSpec } from '../render/vis/painters';
@@ -519,13 +520,27 @@ export interface MonsterDef {
    *  whose page would read as nonsense). Scenery/NPC/driven kinds are already
    *  excluded structurally — this is for the rest. */
   noBestiary?: boolean;
-  /** A RIDER SLOT on this creature's back: same-team actors whose tag /
-   *  defId / faction matches `kinds` may MOUNT it (the {do:'mount'} verb) —
-   *  the rider is carried (position pinned, dash/push stilled) and casts
-   *  freely from the saddle until either party dies. One rider at a time.
-   *  The D2 siege-beast pattern: a walking tower for its faction's fragile
-   *  teeth. */
-  mountSlot?: { kinds: string[]; offsetY?: number };
+  /** A RIDER SLOT on this creature's back (THE MOUNT FABRIC,
+   *  engine/mounts.ts): same-team actors whose tag / defId / faction
+   *  matches `kinds` may MOUNT it — the {do:'mount'} verb, or arriving
+   *  paired via `mount`/`crew`. Riders are carried (seat-pinned in the
+   *  steed's facing frame, dash/push stilled) and cast freely from the
+   *  saddle until dismounted, gripped loose, or either party dies; a steed
+   *  dying under a rider THROWS them (the unhorsed beat), and the last
+   *  rider's death asks `onRiderDeath`. `seats` sets capacity (default one
+   *  saddle); `crew` makes the beast ARRIVE crewed. The D2 siege-beast
+   *  pattern grown into true cavalry. */
+  mountSlot?: MountSlotSpec;
+  /** ARRIVES MOUNTED (the rider-side pairing lever): spawning this body
+   *  mints its steed beneath it — any spawn path, any tier (the lazy
+   *  pairing sweep). `chance` fields the same def sometimes afoot. The
+   *  steed is a FULL body: its own life, kit, brain, bounty — cavalry is
+   *  two fights stacked, and killing either half degrades the pair (kill
+   *  the rider: the steed's own brain keeps its war, or routs, per its
+   *  slot; kill the steed: the rider tumbles and fights on foot — and may
+   *  vault back onto a widowed saddle if its brain carries the remount
+   *  rule). */
+  mount?: MountSpec;
   /** A BOLT-HOLE: when routed (morale break / skittish spook), this creature
    *  makes FOR the nearest doodad of `kind` instead of merely running, and
    *  SLIPS AWAY on reaching it — removed, no corpse, no credit (the frog
@@ -648,7 +663,12 @@ export interface MonsterDef {
    *  (reveal flash + announce) and fights normally. The root that was only
    *  a root, the rock that was never a rock. Selection/objectives count it
    *  normally; only the reveal is deferred. */
-  ambush?: { radius: number; announce?: string };
+  /** ARMED AMBUSH (the ambush fabric, engine/actor.ts AmbushSpec): born as
+   *  waiting scenery, sprung by proximity or a wound. Hidden by default;
+   *  `visible` waits in the open, `pack` springs the whole armed herd as
+   *  one event. Spawner rows (landmark spawns) can arm INSTANCES of kinds
+   *  that roam free elsewhere. */
+  ambush?: AmbushSpec;
   /** SHELL GUARD — a directional ABSORB worn as anatomy (the entity's own
    *  guard, not a skill): hits arriving through the covered arc soak into a
    *  breakable pool that REGROWS after `regenDelay` quiet seconds. side
@@ -2354,6 +2374,56 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'undead',
   },
 
+  // --- THE HOST'S CAVALRY (the mount fabric): the lance that doesn't tire.
+  // Where goblin cavalry is nimble chaos — tumbles, remounts, loose herds —
+  // the dead ride in ORDER: the steed marches whether or not anyone sits
+  // it, and the lancer remounts without fear because fear was buried with
+  // him. One signature pair; the faction speaks discipline through it. ---
+
+  // The steed alone: tack on bare bone, patient as a headstone. Tabled
+  // riderless too (the warg law) — an unhorsed lancer's remount, or just
+  // a spare horse the grave keeps saddled.
+  bone_steed: {
+    id: 'bone_steed', name: 'Bone Steed',
+    color: '#cfc4a8', shape: 'kite', radius: 14, material: 'bone', look: 'bone_steed',
+    base: { life: 80, moveSpeed: 190, accuracy: 100, armor: 25, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'],
+    xp: 16,
+    faction: 'undead', tags: ['beast'],
+    packSize: [1, 2],
+    mountSlot: {
+      kinds: ['barrow_lancer'],
+      seats: [{ dx: -0.2, lift: 1.0 }],
+      onRiderDeath: 'fight',
+    },
+    brain: { type: 'basic' },
+  },
+  // The lancer: a barrow-wight couched behind a grave-bill, arriving
+  // mounted and unhurried. Fell the steed and he simply stands up out of
+  // the tumble and keeps walking at you; fell him first and the steed
+  // keeps its own patient war. He will take any empty bone saddle he
+  // passes — the Host does not waste horses.
+  barrow_lancer: {
+    id: 'barrow_lancer', name: 'Barrow Lancer',
+    color: '#a8b8c8', shape: 'pentagon', radius: 11, material: 'bone', look: 'barrow_lancer',
+    base: { life: 70, moveSpeed: 110, accuracy: 106, armor: 35, mana: 40, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['heavy_strike', 'claw'],
+    xp: 20,
+    faction: 'undead',
+    packSize: [2, 3],
+    mount: { on: 'bone_steed' },
+    brain: {
+      type: 'basic',
+      rules: [{
+        // The dead remount without ceremony.
+        when: { mounted: false }, every: [4, 6], hold: [0.2, 0.3],
+        actions: [{ do: 'mount', within: 460 }],
+      }],
+    },
+  },
+
   // --- Deadwake-exclusive undead -------------------------------------------
   // The dead that march ONLY with a Deadwake. They are referenced solely by the
   // Deadwake package's flood roster + leader pool (DEADWAKE_SURGE), never by any
@@ -4052,7 +4122,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'demon',
     adorn: 'horns',
     detection: 1.0,
-    mountSlot: { kinds: ['demonkin'] },
+    // TWO seats on the tower now (the mount fabric grown up), and it can
+    // ARRIVE crewed — the walking-tower promise made literal: darters cast
+    // from its back the moment it crests the hill, not only after fleeing
+    // there. Fell the tower and the crew tumbles (unhorsed) into the open.
+    mountSlot: {
+      kinds: ['demonkin'],
+      seats: [{ dx: -0.2, lift: 0.95 }, { dx: 0.25, lift: 0.8 }],
+      crew: { riders: ['demonkin_darter'], count: [0, 2], chance: 0.6 },
+    },
     // A tower swings where it points (castArc): romp past its shoulder while
     // the riders on its back keep casting — two problems, one body.
     brain: {
@@ -5997,7 +6075,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['ground_slam', 'flame_wave'], xp: 70, faction: 'demon', adorn: 'horns',
     presence: 'legion_muster',
     turnSpeed: 2.8,
-    mountSlot: { kinds: ['demonkin', 'imp', 'finger_mage'], offsetY: -6 },
+    // The elite tower seats two and often ARRIVES manned (the mount
+    // fabric's crew lever) — the old one-slot perch grown into a working
+    // battery. Legacy offsetY retired for true seats now that paint order
+    // files riders behind their steed.
+    mountSlot: {
+      kinds: ['demonkin', 'imp', 'finger_mage'],
+      seats: [{ dx: -0.15, lift: 0.85 }, { dx: 0.2, lift: 0.7 }],
+      crew: { riders: ['demonkin_darter', 'imp'], count: [1, 2], chance: 0.5 },
+    },
     scaling: { armor: { flatPerLevel: 2.5 }, life: { incPerLevel: 0.05 } },
     deathBurst: { mode: 'orb', damageFrac: 1.2 },
     detection: 1.1,
@@ -10445,9 +10531,40 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['rime_fang'],
     xp: 10,
     faction: 'rimebound',
+    // The court's COURSING saddle (the mount fabric): a hoarfrost lancer
+    // rides the dart-and-wheel, and the hound's own skirmish brain IS the
+    // cavalry maneuver — no rider ever steered a dog.
+    mountSlot: {
+      kinds: ['hoarfrost_lancer'],
+      seats: [{ dx: -0.15, lift: 1.0 }],
+      onRiderDeath: 'fight',
+    },
     // Court hounds run in coursing packs: dart in, chill, wheel away — the
     // freeze ladder climbs across the PACK's bites, not any one dog's.
     brain: { type: 'skirmish', withdraw: 1.1 },
+  },
+  // The winter court's rider (the mount fabric): an ES-glass wight couched
+  // low on a coursing hound — the pair harries at hound speed while the
+  // shell holds. Burst the rider's glass mid-course, or fell the dog and
+  // meet a slow walker in the open; either half alone is honest work.
+  hoarfrost_lancer: {
+    id: 'hoarfrost_lancer', name: 'Hoarfrost Lancer',
+    color: '#d8ecf6', shape: 'pentagon', radius: 10, material: 'ice', look: 'hoarfrost_lancer',
+    base: { life: 28, energyShield: 65, moveSpeed: 125, accuracy: 102, mana: 45, manaRegen: 5 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    skills: ['rime_fang', 'heavy_strike'],
+    xp: 24,
+    faction: 'rimebound',
+    packSize: [1, 2],
+    mount: { on: 'rime_hound' },
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      rules: [{
+        // A lancer afoot whistles the next hound under him.
+        when: { mounted: false }, every: [5, 8], hold: [0.2, 0.3],
+        actions: [{ do: 'mount', within: 440 }],
+      }],
+    },
   },
   hoarfrost_wight: {
     id: 'hoarfrost_wight', name: 'Hoarfrost Wight',
@@ -13586,16 +13703,31 @@ export const MONSTERS: Record<string, MonsterDef> = {
     explodeOnDeath: 0.6,
     brain: { type: 'skirmish', withdraw: 1.4 },
   },
-  // Warg cavalry: the warband's speed — wheels wide, darts in, gone again.
+  // Warg cavalry — TRUE cavalry now (the mount fabric): the rider half of a
+  // two-body pair. He arrives seated on a warg minted beneath him; kill the
+  // beast first and the goblin tumbles (unhorsed) to fight afoot at foot
+  // speed; kill the goblin first and the empty-saddle warg keeps its own
+  // hunt. A rider afoot near a widowed saddle VAULTS BACK ON — wolf-riding
+  // is the warband's craft, not one body's gimmick. His dash is footwork
+  // (refused from the saddle, handed back by the tumble); mounted, the
+  // warg's legs are the lunge and the trident does the talking.
   goblin_wolfrider: {
     id: 'goblin_wolfrider', name: 'Goblin Wolfrider',
-    color: '#98a45e', shape: 'triangle', radius: 13, material: 'fur', look: 'goblin_wolfrider',
-    base: { life: 70, moveSpeed: 200, accuracy: 102, evasion: 45, mana: 40, manaRegen: 4 },
+    color: '#98a45e', shape: 'triangle', radius: 10, material: 'fur', look: 'goblin_wolfrider',
+    base: { life: 55, moveSpeed: 150, accuracy: 102, evasion: 45, mana: 40, manaRegen: 4 },
     skills: ['dash_strike', 'claw'],
-    xp: 24,
+    xp: 14,
     faction: 'goblin', adorn: 'ears',
     packSize: [2, 3],
-    brain: { type: 'flanker' },
+    mount: { on: 'warg' },
+    brain: {
+      type: 'flanker',
+      rules: [{
+        // Afoot with a free saddle near: back ON (the warband remount).
+        when: { mounted: false }, every: [5, 8], hold: [0.2, 0.3],
+        actions: [{ do: 'mount', within: 460 }],
+      }],
+    },
   },
   // The whip behind the line: he fights badly and commands well — kill the
   // voice and the warband remembers it is a mob.
@@ -15109,12 +15241,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     presence: { from: 12, fadeIn: 5 },
     scaling: { life: { incPerLevel: 0.09 } },
     wardPriority: 2,
+    // Half his arrivals come ASTRIDE a great gnasher (the mount fabric) —
+    // fell the mouth from under him for the unhorsed window, or kill the
+    // boss and inherit a very large loose appetite.
+    mount: { on: 'great_gnasher', chance: 0.5 },
     brain: {
       type: 'commander', perception: { alertShout: 520 },
       rules: [{
         when: {}, every: [11, 15], hold: [0.4, 0.6],
         announce: 'the Warboss bellows — the ditches empty!',
         actions: [{ do: 'summon', monster: 'goblin_skirmisher', count: 3, ring: 70, lifespan: 35 }],
+      }, {
+        // Unhorsed with a free war saddle standing: back UP.
+        when: { mounted: false }, every: [8, 12], hold: [0.3, 0.5],
+        actions: [{ do: 'mount', within: 500 }],
       }],
     },
   },
@@ -16096,11 +16236,42 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaleVariance: [0.85, 1.25], scaleStats: true,
     packSize: [3, 5],
     aggro: { fixation: 1.3, fury: 1.4, waver: 0.5 },
+    // Any gnasher is a saddle if you're brave enough (the mount fabric):
+    // hoppers arrive on them, and an unhorsed hopper vaults onto the next
+    // free mouth in the herd. The saddle rides the bounce.
+    mountSlot: {
+      kinds: ['gnasher_hopper'],
+      seats: [{ dx: -0.1, lift: 1.05 }],
+      onRiderDeath: 'fight',
+    },
     brain: {
       type: 'swarm',
       // The BOUNCE is the whole gait: random hooks and dead-stop gathers
       // between leaps — a ball of appetite, never a straight line.
       move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1, freezeChance: 0.15, freeze: [0.2, 0.4] },
+    },
+  },
+  // The hopper: the goblin who decided the herd is TRANSPORT (the mount
+  // fabric) — arrives astride a cave gnasher and lets the bounce do the
+  // closing while the goad does the talking. Kill the mouth and the rider
+  // tumbles; kill the rider and the mouth is just a gnasher again — which
+  // was always the dangerous part.
+  gnasher_hopper: {
+    id: 'gnasher_hopper', name: 'Gnasher Hopper',
+    color: '#a0aa58', shape: 'triangle', radius: 9, look: 'gnasher_hopper',
+    base: { life: 45, moveSpeed: 150, accuracy: 100, evasion: 50, mana: 0 },
+    skills: ['claw'],
+    xp: 12,
+    faction: 'goblin', adorn: 'ears',
+    packSize: [2, 3],
+    mount: { on: 'cave_gnasher' },
+    brain: {
+      type: 'flanker',
+      rules: [{
+        // Afoot with the herd loose: onto the next free mouth.
+        when: { mounted: false }, every: [4, 7], hold: [0.2, 0.3],
+        actions: [{ do: 'mount', within: 420 }],
+      }],
     },
   },
   // The great gnasher: the one the prodders brag about — a boulder of
@@ -16115,6 +16286,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     presence: { from: 7, fadeIn: 4 },
     heft: 1.3,
     scaleVariance: [0.9, 1.2],
+    // The WAR saddle: only the Warboss claims the boulder of mouth — half
+    // his arrivals come mounted on one (mount fabric, chance-gated).
+    mountSlot: {
+      kinds: ['goblin_warboss'],
+      seats: [{ dx: -0.25, lift: 1.15 }],
+      onRiderDeath: 'fight',
+    },
     brain: {
       type: 'juggernaut',
       move: { style: 'juke', hookEvery: [0.6, 1.1], hookArc: 0.9, freezeChance: 0.12, freeze: [0.25, 0.45] },
@@ -16138,9 +16316,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
-  // The warg: the wolfrider's mount, unridden — saddle-scarred, war-fed,
-  // and hungrier without the goblin telling it when to stop. It still
-  // hunts small lives mid-battle; the warband calls that foraging.
+  // The warg: the wolfrider's mount — saddle-scarred, war-fed, and now a
+  // TRUE saddle (the mount fabric): the wolfrider pair mints one of these
+  // beneath each rider, and the empty-saddle body here is what remains
+  // when the goblin falls first. onRiderDeath 'fight' is the family truth:
+  // a widowed warg does not mourn, it forages — the hunger drives below
+  // ARE its feral turn, no special case needed. Unbridled wargs in the
+  // tables keep their saddles OPEN: an unhorsed rider vaults onto one.
   warg: {
     id: 'warg', name: 'Warg',
     color: '#6a5e52', shape: 'kite', radius: 14, material: 'fur', look: 'warg',
@@ -16151,6 +16333,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.6,
     scaleVariance: [0.9, 1.25],
     packSize: [2, 4],
+    mountSlot: {
+      kinds: ['goblin_wolfrider'],
+      seats: [{ dx: -0.2, lift: 1.0 }],
+      onRiderDeath: 'fight',
+    },
     brain: {
       type: 'pack',
       drives: { hunger: { rise: 0.012, start: [0.4, 0.8], onKill: -0.7, share: 0.4 } },
@@ -16787,11 +16974,17 @@ export const FACTIONS: Record<string, {
       { id: 'goblin_warboss', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
       // THE BEAST-TRAIN (the wild chains pass): the warband's livestock is
       // a weapon — gnasher herds under the prodder's whistle, and the
-      // wolfriders' mounts running unbridled beside the riders.
+      // wolfriders' mounts running unbridled beside the riders (their
+      // saddles OPEN — the mount fabric's remount targets).
       { id: 'cave_gnasher', weight: 2, presence: { from: 3, fadeIn: 2 } },
       { id: 'gnasher_prodder', weight: 1, presence: { from: 5, fadeIn: 3 } },
       { id: 'warg', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'great_gnasher', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // THE CAVALRY CULTURE (the mount fabric): nobody else rides like the
+      // warband — riders on wolves, goad-goblins on the herd itself, the
+      // Warboss on the boulder of mouth. Hoppers arrive paired; their
+      // gnashers mint beneath them.
+      { id: 'gnasher_hopper', weight: 1, presence: { from: 5, fadeIn: 3 } },
     ],
   },
   undead: {
@@ -16824,6 +17017,11 @@ export const FACTIONS: Record<string, {
       // keeps wounds (the segment fabric below boss tier).
       { id: 'thurible_bearer', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'marrow_whip', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      // THE HOST'S CAVALRY (the mount fabric): lancers arrive mounted on
+      // bone steeds minted beneath them; spare steeds march riderless with
+      // their saddles open — the Host does not waste horses.
+      { id: 'barrow_lancer', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'bone_steed', weight: 0.5, presence: { from: 7, fadeIn: 4 } },
       // The champion: a hill's worth of the Host under one will.
       { id: 'barrow_colossus', weight: 0.5, presence: { from: 13, fadeIn: 5 } },
     ],
@@ -17375,6 +17573,10 @@ export const FACTIONS: Record<string, {
     table: [
       { id: 'rime_hound', weight: 4, presence: { to: 20, fadeOut: 9 } },
       { id: 'hoarfrost_wight', weight: 3, presence: { from: 4, fadeIn: 2 } },
+      // THE COURSING LANCE (the mount fabric): a wight couched on a rime
+      // hound — the court's one cavalry shape, harrying at hound speed.
+      // Loose hounds above double as its remounts.
+      { id: 'hoarfrost_lancer', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'glacier_shaman', weight: 2, presence: { from: 7, fadeIn: 3 } },
       { id: 'snow_swimmer', weight: 1, presence: { from: 5, fadeIn: 3 } },
       { id: 'frost_witch', weight: 1, presence: { from: 6, fadeIn: 3 } },

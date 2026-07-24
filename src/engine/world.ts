@@ -14,7 +14,7 @@ import { ActorGrid } from './actorGrid';
 import { erraticTurn, spinOffset, weaveOffset, weaveVel } from './flight';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
-import { Actor, shellArcFactor, type BrainPhase, type CastingState, type GainEvent, type Team } from './actor';
+import { Actor, shellArcFactor, type AmbushSpec, type BrainPhase, type CastingState, type GainEvent, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
@@ -177,6 +177,9 @@ import {
   POSSESS_CFG, possessPowerFactor, possessRefusal, riderRefusal,
   type EjectReason, type PossessRide,
 } from './possess';
+import {
+  MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
+} from './mounts';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import type { QuickeningField } from '../packages/overlays/quickening';
 import { plyCountOf, plyFloorOf } from './plies';
@@ -5072,6 +5075,12 @@ export class World {
       if (!MONSTERS[ls.id]) continue;
       const m = this.createMonster(ls.id, Math.max(1, def.level), 'enemy');
       m.pos = vec(ls.pos.x, ls.pos.y);
+      // Spawner-row ambush (LandmarkSpawns.ambush): arm the INSTANCE — the
+      // same kind roams free elsewhere; these wait (the penned herd).
+      if (ls.ambush) {
+        m.ambushSpec = ls.ambush;
+        this.armAmbush(m, ls.ambush);
+      }
       this.actors.push(m);
     }
     // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
@@ -10010,29 +10019,205 @@ export class World {
     return best;
   }
 
-  /** MOUNTS: carry riders on their beasts — the rider's position pins to the
-   *  saddle (dash/push stilled) and both links self-heal: either party dying
-   *  (or vanishing in a zone swap) frees the other. Runs late in update so
-   *  the pin wins the frame. */
+  /** THE MOUNT FABRIC sweep (engine/mounts.ts) — three duties, in order:
+   *  (1) PAIRING: spawn-time cavalry via the composite-parts lazy-attach
+   *  idiom — MonsterDef.mount mints the steed beneath its rider,
+   *  mountSlot.crew mints riders into free seats — so every spawn path
+   *  (tables, packs, events, summons, zone-memory restores) pairs free, and
+   *  minted bodies never pair further (depth bounded by construction).
+   *  (2) THE PIN: riders slave to their seats (ONE resolver, seatPos —
+   *  drawn == seated), dash/push stilled, the steed's bearing worn while
+   *  un-aggroed (the parts law). Runs LATE among movers so the saddle wins
+   *  the frame (beside the cling/grab slaves).
+   *  (3) SEVERANCE: links self-heal; a steed DYING under a live rider fires
+   *  the UNHORSED beat; a landed grip tears the rider from the saddle (the
+   *  grab seat wins); the last rider's DEATH asks the slot's onRiderDeath
+   *  policy; and a widowed steed turns zone-memory eligible — it is real on
+   *  its own now, no remembered rider implies it. */
   private updateMounts(): void {
+    // --- (1) the pairing sweep. Collect first: minting splices the roster,
+    // and a for-of over a spliced array walks crooked.
+    let toPair: Actor[] | null = null;
+    for (const a of this.actors) {
+      if (a.dead || a.mountPaired || !a.defId) continue;
+      const def = MONSTERS[a.defId];
+      if (def?.mount || def?.mountSlot?.crew) (toPair ??= []).push(a);
+    }
+    if (toPair) for (const a of toPair) this.mountPairSpawn(a);
+    // --- (2) + (3): pins and severance.
     for (const a of this.actors) {
       if (a.mountId !== undefined) {
         const m = this.actorById(a.mountId);
-        if (!m || m.dead || a.dead) {
-          if (m && m.riderId === a.id) m.riderId = undefined;
-          a.mountId = undefined;
+        if (!m || m.dead || a.dead || a.heldBy !== undefined) {
+          if (m?.dead && !a.dead) this.mountUnhorse(a, m);
+          else this.mountUnlink(a, a.dead);
           continue;
         }
         const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
-        a.pos.x = m.pos.x;
-        a.pos.y = m.pos.y - (slot?.offsetY ?? m.radius * 0.9);
+        const seat = seatPos(m, slot, a.mountSeat ?? 0);
+        a.pos.x = seat.x;
+        a.pos.y = seat.y;
         a.dash = null;
         a.push = null;
+        // Carried bearing: an idle rider faces where the beast runs; a
+        // fighting one keeps the aim its own brain chose (the parts law).
+        if (!a.aggroed) a.facing = m.facing;
       }
-      if (a.riderId !== undefined) {
-        const r = this.actorById(a.riderId);
-        if (!r || r.dead || r.mountId !== a.id) a.riderId = undefined;
+      // Belt-and-braces seat roster heal (vanished riders — zone swaps).
+      // Silent by design: DIED riders sever through their own branch above,
+      // which is the only path that may fire the widow policy.
+      if (a.riderIds?.length) {
+        const live = a.riderIds.filter(id => {
+          const r = this.actorById(id);
+          return r && !r.dead && r.mountId === a.id;
+        });
+        if (live.length !== a.riderIds.length) a.riderIds = live.length ? live : undefined;
       }
+    }
+  }
+
+  /** Spawn-time pairing for one declaring body (both levers). Minted kin
+   *  inherit team / faction / level / owner from the declarer, never pair
+   *  further, and never snapshot into zone memory while linked (the
+   *  remembered rider implies its steed — the composite-parts law). */
+  private mountPairSpawn(a: Actor): void {
+    a.mountPaired = true;
+    const def = a.defId ? MONSTERS[a.defId] : undefined;
+    if (!def) return;
+    const spec = def.mount;
+    if (spec && a.mountId === undefined
+      && (spec.chance === undefined || rand(0, 1) < spec.chance)) {
+      const pool = Array.isArray(spec.on) ? spec.on : [spec.on];
+      const steedId = pool[Math.min(pool.length - 1, Math.floor(rand(0, pool.length)))];
+      const sd = MONSTERS[steedId];
+      if (!sd?.mountSlot) {
+        console.warn(`[mounts] '${a.defId}' asks to ride '${steedId}', which has no mountSlot`);
+      } else {
+        const m = this.createMonster(steedId, Math.max(1, a.level), a.team, a.owner);
+        m.faction = a.faction;
+        m.fromZoneGen = false;
+        m.mountPaired = true;
+        m.pos.x = a.pos.x;
+        m.pos.y = a.pos.y;
+        m.facing = a.facing;
+        // Steed BEFORE rider in the roster: the renderer paints in array
+        // order, so the saddle layers under whoever sits it.
+        const at = this.actors.indexOf(a);
+        this.actors.splice(at < 0 ? this.actors.length : at, 0, m);
+        this.mountSeatRider(a, m);
+        // A steed that also declares crew fills its REMAINING seats — the
+        // full howdah, still bounded (crew never pair further).
+        this.mountCrewSpawn(m);
+      }
+    }
+    if (def.mountSlot?.crew) this.mountCrewSpawn(a);
+  }
+
+  /** Steed-side lever: arrive crewed (mountSlot.crew). Fills free seats
+   *  with freshly minted riders — full actors that fight, die, and pay xp
+   *  as themselves. */
+  private mountCrewSpawn(m: Actor): void {
+    const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
+    const crew = slot?.crew;
+    if (!crew || m.dead) return;
+    if (crew.chance !== undefined && rand(0, 1) >= crew.chance) return;
+    const want = crew.count
+      ? Math.round(rand(crew.count[0], crew.count[1])) : seatCount(slot);
+    for (let i = 0; i < want; i++) {
+      if (this.mountFreeSeat(m, slot) < 0) break;
+      const rid = crew.riders[Math.min(crew.riders.length - 1, Math.floor(rand(0, crew.riders.length)))];
+      if (!MONSTERS[rid]) {
+        console.warn(`[mounts] '${m.defId}' crews unknown rider '${rid}'`);
+        continue;
+      }
+      const r = this.createMonster(rid, Math.max(1, m.level), m.team, m.owner);
+      r.faction = m.faction;
+      r.fromZoneGen = false;
+      r.mountPaired = true;
+      r.pos.x = m.pos.x;
+      r.pos.y = m.pos.y;
+      const at = this.actors.indexOf(m);
+      this.actors.splice(at < 0 ? this.actors.length : at + 1, 0, r);
+      this.mountSeatRider(r, m);
+    }
+  }
+
+  /** Put a rider in a steed's lowest free saddle and keep the paint order
+   *  honest (rider re-files directly behind its steed — the renderer paints
+   *  in array order). No eligibility gates here; callers gate (the mount
+   *  verb checks mountAccepts, the pairing levers ARE the authorization). */
+  mountSeatRider(r: Actor, m: Actor): boolean {
+    const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
+    const seat = this.mountFreeSeat(m, slot);
+    if (seat < 0) return false;
+    r.mountId = m.id;
+    r.mountSeat = seat;
+    (m.riderIds ??= []).push(r.id);
+    const ri = this.actors.indexOf(r);
+    if (ri >= 0) {
+      this.actors.splice(ri, 1);
+      const mi = this.actors.indexOf(m);
+      this.actors.splice(mi < 0 ? this.actors.length : mi + 1, 0, r);
+    }
+    return true;
+  }
+
+  /** Lowest free seat index on a steed (-1 = saddle full). */
+  mountFreeSeat(m: Actor, slot: MountSlotSpec | undefined): number {
+    const cap = seatCount(slot);
+    for (let i = 0; i < cap; i++) {
+      let held = false;
+      for (const id of m.riderIds ?? []) {
+        const r = this.actorById(id);
+        if (r && !r.dead && r.mountId === m.id && (r.mountSeat ?? 0) === i) { held = true; break; }
+      }
+      if (!held) return i;
+    }
+    return -1;
+  }
+
+  /** Sever one rider↔steed link (any cause — death, grip, vault, verbs).
+   *  When the LAST saddle empties because its rider DIED, the slot's
+   *  onRiderDeath policy answers; a surviving steed also turns zone-memory
+   *  eligible at that moment (keep-what-stands: the widow is part of the
+   *  zone's story now). */
+  mountUnlink(r: Actor, riderDied = false): void {
+    const m = r.mountId !== undefined ? this.actorById(r.mountId) : undefined;
+    r.mountId = undefined;
+    r.mountSeat = undefined;
+    if (!m) return;
+    const left = (m.riderIds ?? []).filter(id => id !== r.id);
+    m.riderIds = left.length ? left : undefined;
+    if (!left.length && !m.dead) {
+      if (m.team === 'enemy' && !m.owner) m.fromZoneGen = true;
+      if (riderDied) this.mountWidowed(m);
+    }
+  }
+
+  /** THE UNHORSED BEAT — the steed died under a live rider: the link
+   *  severs, the rider tumbles (casterless shove — tuned reach at any
+   *  mass, per the mass fabric) and wears the daze row. All dials in
+   *  MOUNT_CFG; the status is ordinary STATUS_DEFS traffic. */
+  private mountUnhorse(r: Actor, m: Actor): void {
+    this.mountUnlink(r);
+    r.applyStatus(MOUNT_CFG.unhorse.status, 0, 1, 'Unhorsed');
+    this.pushActor(r, rand(0, Math.PI * 2), MOUNT_CFG.unhorse.push);
+    this.text(vec(r.pos.x, r.pos.y - r.radius - 10), 'UNHORSED', MOUNT_CFG.unhorse.color, 13);
+    this.flashes.push({
+      pos: vec(m.pos.x, m.pos.y), radius: m.radius * 1.4,
+      color: MOUNT_CFG.unhorse.color, life: 0.3, maxLife: 0.3,
+    });
+  }
+
+  /** The last rider died out of the saddle — the steed's conduct is the
+   *  slot's onRiderDeath row: 'fight' (default) trusts its own brain (the
+   *  empty-saddle warg still hunts); 'rout' breaks its nerve through the
+   *  morale machinery (a panic status — a def that also carries `refuge`
+   *  turns the rout into a true exit from the field). */
+  private mountWidowed(m: Actor): void {
+    const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
+    if (slot?.onRiderDeath === 'rout') {
+      m.applyStatus('horrified', 0, 5, 'Widowed');
     }
   }
 
@@ -21908,13 +22093,9 @@ export class World {
     }
     if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
     if (def.pathCosts) a.pathCosts = def.pathCosts; // the wayfaring overrides (the magma worm's bath)
-    // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
-    // update sweep springs it when an enemy strays inside the wake radius.
-    if (def.ambush) {
-      a.ambushArmed = true;
-      a.untargetable = true;
-      a.sheet.setSource('ambush', [mod('invisible', 'flat', 1)]);
-    }
+    // ARMED AMBUSH (the ambush fabric): born as waiting scenery — the
+    // update sweep springs it on proximity, a wound springs it instantly.
+    if (def.ambush) this.armAmbush(a, def.ambush);
     // SHELL GUARD worn as anatomy: the directional absorb, pool full at birth.
     if (def.shellGuard) {
       const sg = def.shellGuard;
@@ -24672,6 +24853,12 @@ export class World {
     // exempt: a possessed body answers to its rider's hands, not its
     // temper; cast-kit clingers (no gnaw) keep whacking untouched.
     if (caster.clingTo && caster.cling?.gnaw && !this.seatOf(caster)) return false;
+    // A SADDLE holds no footwork (the mount fabric): movement-tagged skills
+    // refuse while mounted — the seat pin would stomp the dash the same
+    // frame it fired, a cast paid for nothing. A rider's dashes stay its
+    // DISMOUNTED craft (the unhorse beat hands them back); every other verb
+    // casts freely from the saddle.
+    if (caster.mountId !== undefined && inst.def.tags?.includes('movement')) return false;
     // An overdrive toggle with debt outstanding is LOCKED ON — canUse would
     // refuse silently; this supplies the why.
     {
@@ -31996,6 +32183,38 @@ export class World {
     if (woke) this.text(vec(target.pos.x, target.pos.y - 24), rule.toast, rule.color, rule.size);
   }
 
+  /** ARM a body as a waiting ambusher (the ambush fabric — def lane at
+   *  mint, instance lane via spawner rows stamping `ambushSpec`). Hidden +
+   *  untouchable unless the spec waits `visible` — the penned herd you can
+   *  see seething is armed exactly like the reed lurker you can't. */
+  armAmbush(a: Actor, spec: AmbushSpec): void {
+    a.ambushArmed = true;
+    if (!spec.visible) {
+      a.untargetable = true;
+      a.sheet.setSource('ambush', [mod('invisible', 'flat', 1)]);
+    }
+  }
+
+  /** SPRING an armed ambusher — the reveal, then (pack) the chained herd:
+   *  one waking body wakes every armed same-team kin inside the pack
+   *  radius, so a pen empties as ONE event, not a trickle. Chained kin
+   *  spring quiet — the first body speaks for the herd. */
+  springAmbush(a: Actor, quiet = false): void {
+    if (!a.ambushArmed || a.dead) return;
+    a.ambushArmed = false;
+    a.untargetable = false;
+    a.sheet.setSource('ambush', []);
+    const spec = a.ambushSpec ?? (a.defId ? MONSTERS[a.defId]?.ambush : undefined);
+    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.6, color: a.color, life: 0.4, maxLife: 0.4 });
+    if (!quiet) this.text(vec(a.pos.x, a.pos.y - 24), spec?.announce ?? 'ambush!', '#e8c86a', 13);
+    if (spec?.pack) {
+      for (const k of this.actors) {
+        if (k === a || k.dead || !k.ambushArmed || k.team !== a.team) continue;
+        if (dist(a.pos, k.pos) <= spec.pack) this.springAmbush(k, true);
+      }
+    }
+  }
+
   /** Apply a skill's BUFF effect through the ONE routing (the minion
    *  war-cry lane, offering share, powerScaled magnitude) — shared by the
    *  live caster lane and the fuse sweep's late deliveries. */
@@ -32388,6 +32607,10 @@ export class World {
       // the tag-keyed rouseRules registry (Conclave cultists, Migration herds,
       // Holdfast wardens...), never a per-species branch here.
       this.rouseOnWound(target);
+      // A wounded ambusher springs at once (the visible face's honesty: a
+      // waiting body that eats an arrow is waiting no longer) — and its
+      // pack springs with it.
+      if (target.ambushArmed) this.springAmbush(target);
       // STEALTH TACTICS: struck from the shadows — the victim and its nearby
       // kin go on ALERT (eyes everywhere, range up, stalking toward where
       // the blow came from). The attacker keeps stealth only while charges
@@ -36143,7 +36366,6 @@ export class World {
     this.updateBrigandRaid(dt);
     this.updateNeutralCooldown(); // roused neutrals lose interest + re-dormant on disengage
     this.pruneEngageTokens();     // stale/dead attack-token holders rotate out
-    this.updateMounts();          // riders pin to their beasts; dead links free
     this.updateLooters();         // scavengers snatch coveted ground drops
     this.maybeOpenDemonPortal();
     this.maybeOpenCrusadePortal();
@@ -36639,18 +36861,16 @@ export class World {
         }
       }
       // ARMED AMBUSH: scenery until an enemy strays inside the wake radius —
-      // then the reveal (flash + tell) and an ordinary fight.
+      // then the reveal (flash + tell) and an ordinary fight. Instance
+      // specs (spawner-armed) win over the def row; pack springs CHAIN, so
+      // a penned herd empties as one event.
       if (a.ambushArmed && !a.dead) {
-        const spec = a.defId ? MONSTERS[a.defId]?.ambush : undefined;
+        const spec = a.ambushSpec ?? (a.defId ? MONSTERS[a.defId]?.ambush : undefined);
         const wake = spec?.radius ?? 130;
         for (const e of this.enemiesOf(a)) {
           if (e.dead || e.sheet.get('invisible') > 0) continue;
           if (dist(a.pos, e.pos) > wake) continue;
-          a.ambushArmed = false;
-          a.untargetable = false;
-          a.sheet.setSource('ambush', []);
-          this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.6, color: a.color, life: 0.4, maxLife: 0.4 });
-          this.text(vec(a.pos.x, a.pos.y - 24), spec?.announce ?? 'ambush!', '#e8c86a', 13);
+          this.springAmbush(a);
           break;
         }
       }
@@ -37146,6 +37366,11 @@ export class World {
     // THE GRAB sweep rides right behind it (engine/grab.ts): the release
     // ladder, then the held body's seat wins ITS frame the same way.
     this.updateGrabs(dt);
+    // THE MOUNT sweep rides behind the grabs (engine/mounts.ts): pairing,
+    // then the saddle pin — after the grab ladder so a grip landed THIS
+    // frame tears its rider from the saddle this frame, and the remaining
+    // riders' seats still win the frame.
+    this.updateMounts();
     // THE POSSESSION SEAM sweep rides behind the grabs (engine/possess.ts):
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
@@ -45059,6 +45284,10 @@ export class World {
           if (a.partLink && a.partLink.root === b.partLink?.root) continue;
           if (a.clingTo?.id === b.id || b.clingTo?.id === a.id) continue;
           if (a.clingTo && a.clingTo.id === b.clingTo?.id) continue;
+          // A SADDLE PAIR is one silhouette the same way (the mount
+          // fabric): rider↔steed and rider↔co-rider never shoulder.
+          if (a.mountId === b.id || b.mountId === a.id) continue;
+          if (a.mountId !== undefined && a.mountId === b.mountId) continue;
           // PHASING: no body, no shoulder — a phasing actor passes through
           // the crowd (and it through them). Hits/targeting are untouched.
           if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
@@ -46776,6 +47005,11 @@ export class World {
     // the mover contract simply refuses — no pit checks, no wall slides,
     // no drift for a body that is riding another.
     if (a.clingTo) return;
+    // A MOUNTED body that WILLS a step quits its saddle first (the mount
+    // fabric): monster riders in the 'hold' kernel never call the mover, so
+    // any real move here is deliberate — a possessed rider's stick, a
+    // command verb, a forced march. The step itself then proceeds on foot.
+    if (a.mountId !== undefined) this.mountUnlink(a);
     // A HELD body's movement is REPLACED by struggle (the grab fabric):
     // intent feeds the break meter through the one mover, then refuses —
     // mashing the stick IS the escape mechanic, for player and monster

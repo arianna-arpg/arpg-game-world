@@ -460,6 +460,16 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     // A rung bell reads nothing: insight momentum dies for the duration.
     mods: [mod('insightSap', 'flat', 1)],
   },
+  // THE UNHORSED BEAT (the mount fabric, engine/mounts.ts): the tumble a
+  // rider takes when its steed dies under it — a short daze plus an open
+  // wound of a window. Killing the MOUNT first is a tactic; this row is
+  // its payoff. Engine-stamped (binary), but an ordinary status otherwise:
+  // resists, HUD, and the co-op wire all standard.
+  unhorsed: {
+    label: 'Unhorsed', color: '#e8c884', duration: 0.9, hardCC: true,
+    mods: [mod('damageTaken', 'more', 0.15)],
+    powerInert: true,
+  },
   // THE POSSESSION SEAM's husk mark (engine/possess.ts): worn by a vacated
   // hero body while its seat rides elsewhere — re-stamped by the sweep, so
   // it lapses on its own moments after the seat returns. Presentation plus

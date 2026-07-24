@@ -23,6 +23,7 @@ import { shapeBoundR, type HitShape } from './shapes';
 import type { TrackSpec, TrackPayload } from './tracks';
 import type { TrapworkSpec } from './trapworks';
 import { rockSurfaceOf, type RockFormSpec } from './rockForms';
+import type { AmbushSpec } from './actor';
 import type { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
@@ -737,8 +738,9 @@ export interface GeneratedLayout {
    *  the reachability invariant read these; the renderer may hint them. */
   pockets?: { x: number; y: number; r: number }[];
   /** Landmark-seeded entities (pit dwellers) — loadZone spawns them with the
-   *  base population (memory-captured like every other resident). */
-  landmarkSpawns?: { id: string; pos: Vec2 }[];
+   *  base population (memory-captured like every other resident). A row's
+   *  `ambush` arms the instance as a waiting ambusher (the penned herd). */
+  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec }[];
   /** SECRET HOLLOWS (the hollows fabric, stampHollows): sealed pockets and
    *  through-wall passages hiding inside the wall mass behind brittle seams.
    *  The world consumes these (World.openHollow) — carve, reveal, memory. */
@@ -2649,8 +2651,9 @@ export interface GenCtx {
    *  the landmark that declared the pocket. */
   pockets?: { x: number; y: number; r: number }[];
   /** Entities a landmark seeded (pit dwellers), resolved at gen — loadZone
-   *  materializes them inside the memory-tagging window (base population). */
-  landmarkSpawns?: { id: string; pos: Vec2 }[];
+   *  materializes them inside the memory-tagging window (base population).
+   *  Rows may carry an instance ambush arm (the penned herd). */
+  landmarkSpawns?: { id: string; pos: Vec2; ambush?: AmbushSpec }[];
   /** A non-convex generator sets this; generateLayout passes it through to the
    *  returned GeneratedLayout.walk (the Phase-2 walkability seam). */
   walk?: WalkField;
@@ -6167,6 +6170,11 @@ export interface LandmarkSpawns {
   table: PackTableEntry[];
   count: [number, number];
   where: 'interior' | 'rim';
+  /** ARM the spawned INSTANCES as waiting ambushers (the ambush fabric,
+   *  engine/actor.ts AmbushSpec) — the penned herd: visible, sprung as one
+   *  pack when approached or wounded, while the same kinds roam free
+   *  everywhere else. loadZone stamps + arms each body. */
+  ambush?: AmbushSpec;
 }
 
 export interface LandmarkDef {
@@ -6392,7 +6400,10 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
         let pick = table[table.length - 1];
         for (const e of table) { roll -= e.weight; if (roll <= 0) { pick = e; break; } }
         const cell = cells[ctx.rng.int(0, cells.length - 1)];
-        (ctx.landmarkSpawns ??= []).push({ id: pick.id, pos: vec(cell.x, cell.y) });
+        (ctx.landmarkSpawns ??= []).push({
+          id: pick.id, pos: vec(cell.x, cell.y),
+          ...(def.spawns.ambush ? { ambush: def.spawns.ambush } : {}),
+        });
       }
     }
   }
