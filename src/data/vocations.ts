@@ -181,11 +181,13 @@ function p(angleDeg: number, r: number): { x: number; y: number } {
   return { x: Math.round(Math.cos(a) * r), y: Math.round(Math.sin(a) * r) };
 }
 
+type FanLayout = Record<string, { x: number; y: number }>;
+
 /** The shared v1 skeleton: a root-anchored fan aimed down the vocation's
  *  SPINE angle (each tree points toward its gate start node, so the layout
  *  itself says "this belongs to that starting point"). Authored trees are
  *  free to abandon the template — it's positions and links, nothing more. */
-function fan(spine: number): Record<string, { x: number; y: number }> {
+function fan(spine: number): FanLayout {
   return {
     s1: p(spine - 40, 130), s2: p(spine + 40, 130), s3: p(spine, 150),
     n1: p(spine - 65, 260), n2: p(spine - 22, 265),
@@ -332,7 +334,7 @@ const GRAVEBINDER: VocationDef = {
   },
 };
 
-const WILDSTALKER_LAYOUT = fan(330); // spine points at dex_start (up-right)
+const WILDSTALKER_LAYOUT: FanLayout = { ...fan(330), k1: p(332, 330) }; // spine points at dex_start (up-right); k1 swung clear of its disc (layout min 40)
 const WILDSTALKER: VocationDef = {
   id: 'wildstalker', name: 'Wildstalker',
   blurb: 'Every wound is a trail and every trail ends the same way. Twin shafts, torn arteries, the kill on the move.',
@@ -536,7 +538,7 @@ const HIEROPHANT: VocationDef = {
  *  the attunement/terraform primitives (data/attunements.ts): commune with
  *  living wood for rapid regeneration, and GROW your own wilting saplings so
  *  the communion travels with you — a walking pocket of forest. */
-const GREENWARDEN_LAYOUT = fan(330); // spine points at dex_start, like its public sibling
+const GREENWARDEN_LAYOUT: FanLayout = { ...fan(330), k1: p(332, 330) }; // spine points at dex_start, like its public sibling (k1 swung clear with it)
 const GREENWARDEN: VocationDef = {
   id: 'greenwarden', name: 'Greenwarden',
   blurb: 'The forest keeps its own, and now it keeps you. Roots close your wounds, seeds follow your steps, and the green goes wherever you go.',
@@ -765,7 +767,7 @@ const SHADOWDANCER: VocationDef = {
 };
 
 /** BLOODREAVER — the Berserker's calling: the wound is the fuel gauge. */
-const BLOODREAVER_LAYOUT = fan(50); // spine → prw_start
+const BLOODREAVER_LAYOUT: FanLayout = { ...fan(50), k1: p(48, 330) }; // spine → prw_start; k1 swung clear of its disc (layout min 40)
 const BLOODREAVER: VocationDef = {
   id: 'bloodreaver', name: 'Bloodreaver',
   blurb: 'Pain is just the body counting what it owes. Collect in red, spend it faster than it bleeds.',
@@ -1768,7 +1770,7 @@ const ENGINEWRIGHT: VocationDef = {
   },
 };
 
-const BANNERLORD_LAYOUT = fan(10); // spine → cha_start
+const BANNERLORD_LAYOUT: FanLayout = { ...fan(10), k1: p(5, 330) }; // spine → cha_start; k1 swung clear of its disc (layout min 40)
 const BANNERLORD: VocationDef = {
   id: 'bannerlord', name: 'Bannerlord',
   blurb: 'Wars are won by whoever the field believes in. Plant the colors, hold the road, and make belief a line item.',
