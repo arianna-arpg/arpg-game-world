@@ -56,6 +56,7 @@ import { FACTIONS, MONSTERS } from '../data/monsters';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { driftColor } from './vis/colorDrift';
 import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { registerVisCache, trimVisCaches } from './vis/caches';
@@ -567,7 +568,7 @@ export class Renderer {
       // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
       // one composited sprite per body, no per-body state churn.
       this.drawLite(world, vw, vh);
-      for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
+      for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a, world.time);
       for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     }
@@ -3839,11 +3840,15 @@ export class Renderer {
    *  chains draw SOLID (they are real bodies — drawn = tested via the one
    *  segR radius law), flash per struck segment, and wear their tears
    *  (torn segments draw smaller and dimmer, exactly as they test). */
-  private drawWormTail(a: Actor): void {
+  private drawWormTail(a: Actor, timeSec: number): void {
     const { ctx } = this;
     const w = a.worm!;
     const solid = !!w.hittable;
     const baseLook: BodyLook = { shape: 'circle', radius: a.radius, color: a.color, material: a.material };
+    // A drift-bound root drifts its whole spine — the head (drawActor) and
+    // the tail segments read one color, one sky.
+    const rootLook = lookOf(a.look);
+    if (rootLook?.drift) baseLook.color = driftColor(rootLook.drift, baseLook.color, timeSec, a.id);
     const half = spriteHalf(a.radius);
     for (let i = w.segments.length - 1; i >= 0; i--) {
       // (radius shrinks front-to-back; iterate display back-to-front)
@@ -4125,6 +4130,11 @@ export class Renderer {
     const half = spriteHalf(a.radius);
     const flash = a.hitFlash > 0;
     const lookDef = lookOf(a.look);
+    // THE COLOR DRIFT (vis/colorDrift.ts): a look whose color is weather —
+    // the base morphs through its registered palette on the world clock
+    // (quantized, so the bake cache meets a bounded set) and every derived
+    // tone follows. The per-body seed desyncs a herd within one shared sky.
+    if (lookDef?.drift) look.color = driftColor(lookDef.drift, look.color, world.time, a.id);
     // Part-grammar portraits are whole-body poses: they ALWAYS track facing.
     const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
     // SURFACE MIRROR (RegionKind.surfaceMirror — ice today): a faded, flipped

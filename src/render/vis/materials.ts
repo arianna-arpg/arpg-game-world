@@ -32,8 +32,12 @@ export interface MaterialDef {
   /** Body translucency (ethereal things never read fully solid). */
   alpha?: number;
   /** Texture stipple painted inside the silhouette at bake time. */
-  texture?: 'cracks' | 'plates' | 'facets' | 'grain' | 'fur' | 'drips' | 'weave' | 'pit' | 'scales';
+  texture?: 'cracks' | 'plates' | 'facets' | 'grain' | 'fur' | 'drips' | 'weave' | 'pit' | 'scales' | 'starfield';
   textureAlpha?: number;
+  /** Paint the texture over PART-GRAMMAR bodies too (source-atop on the
+   *  composed stack). Off by default — legacy looks keep their read; the
+   *  cosmic starfield opts in so a composed elk still wears its sky. */
+  textureOverLook?: boolean;
 }
 
 /** The material vocabulary. Keys are open — content may name any of these,
@@ -73,6 +77,10 @@ export const MATERIALS: Record<string, MaterialDef> = {
    *  sheen rides worm-tail segments too (they bake from the same material),
    *  so a naga's coils glisten without any per-segment geometry. */
   scale:    { shadow: 0.46, highlight: 0.28, coolShadow: 12, glossAlpha: 0.24, specSize: 0.26, specAlpha: 0.18, texture: 'scales', textureAlpha: 0.24 },
+  /** Night-sky stuff — a nebula body under baked pinprick stars, shadows
+   *  cooled toward violet, self-lit. The cosmos kin's coat; pairs with THE
+   *  COLOR DRIFT (colorDrift.ts) so the sky it is made of slowly turns. */
+  cosmic:   { shadow: 0.55, highlight: 0.30, coolShadow: 30, litSat: 1.1, emissive: 0.35, alpha: 0.88, texture: 'starfield', textureAlpha: 0.9, textureOverLook: true },
 };
 
 const FALLBACK: MaterialDef = MATERIALS.flesh;

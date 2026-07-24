@@ -38,7 +38,7 @@ src/data/
    color becomes a 5-tone ramp (outline/shadow/base/light/highlight) plus
    surface treatment: specular, gloss band, translucency, emissive halo, and
    a baked texture stipple (`cracks`, `plates`, `facets`, `grain`, `fur`,
-   `drips`, `weave`, `pit`). Monsters opt in with one word:
+   `drips`, `weave`, `pit`, `scales`, `starfield`). Monsters opt in with one word:
    `material: 'bone'` in a `MonsterDef` (replicated over co-op snapshots).
    Add a surface = add a row; nothing else changes.
 
@@ -131,6 +131,26 @@ no look = the legacy shape+adorn body. Looks bake through the sprite cache,
 always rotate with facing, and `live` parts animate per frame. Composing a
 new monster is a few lines of part specs; add a painter only for a new limb
 of vocabulary.
+
+## The color drift — bodies whose color is weather (`vis/colorDrift.ts`)
+
+A look may declare that its base color is not identity but WEATHER:
+`LookDef.drift = { palette, period?, desync? }` names a row in the
+`COLOR_DRIFTS` registry (stops + period + per-body desync), and the drawn
+body's base color MORPHS through the palette's stops on a slow clock. Every
+derived tone follows for free — part ramps, glows, outlines, live parts —
+because the whole look already derives from the one base color. The morph is
+QUANTIZED (`VIS_CFG.colorDrift.steps` ticks per palette leg) so the bake
+cache meets a small bounded set of colors per look; texture stipple placement
+is seeded color-blind in `body.ts`, so a starfield shimmers without its stars
+re-rolling. Registered skies: `nightsky`, `aurora`, `starlight` (the
+vesperkin debut — the cosmos country's fauna as pieces of one moving
+firmament, their brass orrery keeper deliberately still), and `prismatic`
+(the rainbow-keyed lever, standing ready for a future faction).
+`registerColorDrift` extends the vocabulary from packages. Portraits and the
+bestiary keep the def's own representative color — the drift is a world
+phenomenon, not a record-keeping one. Pairs naturally with the `cosmic`
+material (nebula body under baked pinprick stars).
 
 ## Composite monsters — plural hitboxes (`MonsterDef.parts`)
 
@@ -414,6 +434,9 @@ reveal shows a furnished, boarded room, which is the whole trick.
 - **Walk-under anything**: `bodyScale` on the DoodadRule + a trunk-style
   ground painter + a `canopy` crown — trees, palms, and now giant mushrooms.
 - **Add a new material**: one row in `MATERIALS`.
+- **Make a body's color slowly morph** (night skies, auroras, a future
+  rainbow faction): `drift: { palette: 'nightsky' }` on its `LOOKS` entry;
+  new sky = one `COLOR_DRIFTS` row (or `registerColorDrift`).
 - **Skin a new doodad kind**: one entry in `DOODAD_VISUALS` naming a painter;
   add a painter only for a genuinely new *vocabulary* of look.
 - **Floor a building**: `floorStyle: 'boards'` on its `StructureDef`

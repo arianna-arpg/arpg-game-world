@@ -5810,6 +5810,32 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.55,
   },
+  /** The ram: a blunt storm-front wearing horns — fins swept back, all
+   *  momentum (the family's fin language on a bruiser's shoulders). */
+  derecho_ram: {
+    parts: [
+      { kind: 'blob', scale: 1.05 },
+      { kind: 'horns', scale: 1.1, role: 'metal' },
+      { kind: 'fins', scale: 0.85, y: 0.15 },
+      { kind: 'tailFin', scale: 0.8 },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.34, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.6,
+  },
+  /** The medusa: a storm-bell over a glowing core, charged ribbons dragging
+   *  beneath — the sparks never settle. */
+  levin_medusa: {
+    parts: [
+      { kind: 'blob', scale: 1.0, alpha: 0.9 },
+      { kind: 'orb', scale: 0.5, role: 'glow' },
+    ],
+    live: [
+      { kind: 'tentacleRing', scale: 0.85, params: { n: 6, len: 1.5 } },
+      { kind: 'emberSparks', scale: 0.8 },
+    ],
+    shadowScale: 0.5,
+  },
 
   // --- THE ZEPHYRID KIN (the high sky's beasts — monsters.ts block) ---------
   /** The shrike: swept wings and a beak like a dropped dagger. */
@@ -5872,6 +5898,45 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 3 } }],
     shadowScale: 0.6,
   },
+  /** The falcon: swept wings in a permanent stoop — beak down, rudder tail,
+   *  built like a dropped knife with the weather behind it. */
+  zenith_falcon: {
+    parts: [
+      { kind: 'featherWings', scale: 1.3, role: 'glow' },
+      { kind: 'torso', scale: 0.65 },
+      { kind: 'beak', scale: 1.0 },
+      { kind: 'tailFin', scale: 0.7 },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.32, size: 0.13 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.4, scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.5,
+  },
+  /** The ibis: a wading tender — stilt legs on the glass, a long curved
+   *  bill, the balm hanging over its back like carried weather. */
+  balmbill_ibis: {
+    parts: [
+      { kind: 'legs', scale: 1.15, params: { n: 2 } },
+      { kind: 'torso', scale: 0.9 },
+      { kind: 'beak', scale: 1.35 },
+      { kind: 'plume', x: -0.2, scale: 0.8 },
+      { kind: 'eyes', params: { n: 2, spread: 0.35, dist: 0.3, size: 0.11 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.7 }],
+    shadowScale: 0.6,
+  },
+  /** The condor: broad wings under a WOVEN RING — the nest rides its back,
+   *  and the back is never empty. */
+  rookery_condor: {
+    parts: [
+      { kind: 'featherWings', scale: 1.45, role: 'cloth' },
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'nestTwigs', scale: 0.8, y: -0.15, role: 'wood' },
+      { kind: 'beak', scale: 0.9 },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.3, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.75,
+  },
 
   // --- THE VESPERKIN (the cosmos country's kin — monsters.ts block) ----------
   // The clarity doctrine, night-keyed: every body carries a POINT OF LIGHT
@@ -5880,8 +5945,14 @@ export const LOOKS: Record<string, LookDef> = {
   // the silhouette says the texture: wings = swarm, antlers = prey, snout
   // and mane = the night pack, lure over a maw = the gap's trap, rings and
   // shards = the glass construct, crown and sashes = the sovereign.
+  // THE MOVING FIRMAMENT: the fauna ride the COLOR DRIFT (LookDef.drift —
+  // render/vis/colorDrift.ts): base colors morph through the night-sky
+  // palettes on slow clocks, deep-space bodies wear the 'cosmic' starfield
+  // material, and the one brass instrument (the keeper) deliberately holds
+  // still — the sky turns AROUND the thing built to read it.
 
-  /** The moth: two bright wings around a mote — daylight with a wingspan. */
+  /** The moth: two bright wings around a mote — daylight with a wingspan.
+   *  Drifts through bright star-stuff (the day pole of the family sky). */
   lumen_moth: {
     parts: [
       { kind: 'featherWings', scale: 1.2, role: 'glow' },
@@ -5890,6 +5961,7 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'puffMotes', scale: 0.8 }],
     shadowScale: 0.35,
+    drift: { palette: 'starlight' },
   },
   /** The grazer: an elk of pale hide pricked with constellation-spots,
    *  antlers like a star chart. */
@@ -5903,6 +5975,7 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: -0.25, scale: 0.6, params: { n: 2 } }],
     shadowScale: 0.7,
+    drift: { palette: 'nightsky', desync: 0.3 },
   },
   /** The hound: a courser all snout and spark — the mane burns, the tail
    *  streaks, the pack arrives with the dark. */
@@ -5917,6 +5990,7 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'emberSparks', scale: 0.85 }],
     shadowScale: 0.6,
+    drift: { palette: 'nightsky', desync: 0.2 },
   },
   // (void_angler keeps its existing void-family look — the vesper meadows
   // borrow the body whole, lure and all.)
@@ -5947,6 +6021,51 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'emberSparks', scale: 0.7 },
     ],
     shadowScale: 0.6,
+    // The sovereign turns with the whole sky's period, alone in perfect
+    // sync (desync 0): the wane keeps ONE hour, and it is always its own.
+    drift: { palette: 'nightsky', period: 30, desync: 0 },
+  },
+  /** The tortoise: the night sky as a SHELL — a dome pricked with
+   *  constellation-spots on patient legs, one dim head forward. */
+  welkin_tortoise: {
+    parts: [
+      { kind: 'carapace', scale: 1.15, role: 'accent' },
+      { kind: 'spots', scale: 0.9, alpha: 0.7, role: 'glow' },
+      { kind: 'legs', scale: 0.8, params: { n: 4 } },
+      { kind: 'snout', x: 0.45, scale: 0.6 },
+      { kind: 'eyes', params: { n: 2, spread: 0.3, dist: 0.42, size: 0.09 } },
+    ],
+    shadowScale: 0.85,
+    drift: { palette: 'nightsky' },
+  },
+  /** The weaver: ribbons wearing a heart — sashes of standing light around
+   *  one bright core, trailing wisps like weather. The aurora palette IS
+   *  the body: the drift does the painting. */
+  aurora_weaver: {
+    parts: [
+      { kind: 'veilSashes', scale: 1.2, role: 'accent', alpha: 0.85 },
+      { kind: 'tatters', scale: 0.8, role: 'cloth', alpha: 0.7 },
+      { kind: 'orb', scale: 0.55, role: 'glow' },
+      { kind: 'eyes', params: { n: 2, spread: 0.35, dist: 0.25, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.4,
+    drift: { palette: 'aurora' },
+  },
+  /** The whale: a long hull of night — flukes, a ridged back, star-spots
+   *  down the flank, one mild eye. The slowest sky in the meadows. */
+  eventide_whale: {
+    parts: [
+      { kind: 'blob', scale: 1.25 },
+      { kind: 'dorsalRidge', scale: 0.8 },
+      { kind: 'fins', scale: 0.9, y: 0.2 },
+      { kind: 'tailFin', scale: 1.1 },
+      { kind: 'spots', scale: 0.95, alpha: 0.6, role: 'glow' },
+      { kind: 'eyes', params: { n: 1, spread: 0, dist: 0.5, size: 0.09 } },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.9 }],
+    shadowScale: 0.8,
+    drift: { palette: 'nightsky', period: 36, desync: 0.15 },
   },
 
   // --- THE CARVEN COURT (the Gloamwood country's harvest-kin) ----------------

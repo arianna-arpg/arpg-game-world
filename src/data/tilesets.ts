@@ -9147,6 +9147,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'cloud_grazer', weight: 2, presence: { to: 16, fadeOut: 7 } },
         { id: 'mistwing_shrike', weight: 1.5, presence: { to: 19, fadeOut: 8 } },
         { id: 'skyglass_lurker', weight: 1.2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'zenith_falcon', weight: 1, presence: { from: 11, fadeIn: 4 } },
+        { id: 'balmbill_ibis', weight: 0.8, presence: { from: 10, fadeIn: 4 } },
+        { id: 'rookery_condor', weight: 0.6, presence: { from: 12, fadeIn: 5 } },
         { id: 'zephyrid_matron', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
       ],
     },
@@ -9273,10 +9276,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'watcher_unblinking', weight: 1.5 },
         { id: 'principality_of_dawn', weight: 0.6, presence: { from: 15, fadeIn: 6 } },
         // The wilds between the courts: bulls hold the spans, lurkers keep
-        // the frail rims, shrikes stoop from the glare.
+        // the frail rims, shrikes and falcons stoop from the glare.
         { id: 'stormbrow_bull', weight: 1.5, presence: { from: 10, fadeIn: 5 } },
         { id: 'mistwing_shrike', weight: 1.2, presence: { to: 19, fadeOut: 8 } },
         { id: 'skyglass_lurker', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'zenith_falcon', weight: 1, presence: { from: 11, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar', // never rolled
@@ -9455,7 +9459,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'drift_ray', weight: 3 },
         { id: 'zephyr_eel', weight: 2.5, presence: { from: 10, fadeIn: 4 } },
         { id: 'gale_djinn', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'derecho_ram', weight: 1.5, presence: { from: 11, fadeIn: 4 } },
         { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
+        { id: 'levin_medusa', weight: 1.2, presence: { from: 12, fadeIn: 4 } },
         { id: 'cherub_wisp', weight: 1.5 },
         { id: 'watcher_unblinking', weight: 1 },
         { id: 'virtue_lance', weight: 1 },
@@ -9670,6 +9676,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'comet_hound', weight: 3, presence: { from: 9, fadeIn: 4 } },
         { id: 'void_angler', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'orrery_keeper', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'aurora_weaver', weight: 1.5, presence: { from: 11, fadeIn: 4 } },
+        { id: 'welkin_tortoise', weight: 1.2, presence: { from: 10, fadeIn: 5 } },
+        { id: 'eventide_whale', weight: 0.8, presence: { from: 12, fadeIn: 5 } },
         { id: 'noctarch_of_the_wane', weight: 0.6, presence: { from: 13, fadeIn: 5 } },
         // Guests: the wild sky drifts through the meadows.
         { id: 'cloud_grazer', weight: 1.5, presence: { to: 16, fadeOut: 7 } },
@@ -9752,6 +9761,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'drift_ray', weight: 3 },
         { id: 'comet_hound', weight: 2, presence: { from: 9, fadeIn: 4 } },
         { id: 'gale_djinn', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        // The straight-line storm RUNS the artery — the commuter with shoulders.
+        { id: 'derecho_ram', weight: 1.5, presence: { from: 11, fadeIn: 4 } },
         { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
         { id: 'mistwing_shrike', weight: 1.5, presence: { from: 9, fadeIn: 4 } },
         { id: 'thunderhead_tyrant', weight: 0.8, presence: { from: 14, fadeIn: 5 } },
@@ -9820,6 +9831,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'comet_hound', weight: 2.5, presence: { from: 9, fadeIn: 3 } },
         { id: 'void_angler', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'orrery_keeper', weight: 2, presence: { from: 11, fadeIn: 3 } },
+        { id: 'aurora_weaver', weight: 1.5, presence: { from: 11, fadeIn: 3 } },
+        { id: 'welkin_tortoise', weight: 1.2, presence: { from: 10, fadeIn: 4 } },
+        // (no whale: the sky's slowest body never fits an undercroft)
       ],
     },
     spawnerId: 'bone_altar',
@@ -9878,6 +9892,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'zephyr_eel', weight: 3, presence: { from: 10, fadeIn: 3 } },
         { id: 'gale_djinn', weight: 2.5, presence: { from: 11, fadeIn: 3 } },
         { id: 'drift_ray', weight: 2 },
+        // The medusa nests where the weather is made.
+        { id: 'levin_medusa', weight: 1.5, presence: { from: 11, fadeIn: 3 } },
         { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
       ],
     },

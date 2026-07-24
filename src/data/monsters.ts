@@ -765,6 +765,7 @@ export const MATERIAL_NATURE: Record<string, { remains: boolean; breathes: boole
   ember:    { remains: false, breathes: false, density: 0.6 },   // cinders scatter
   ethereal: { remains: false, breathes: false, density: 0.35 },  // ghost-stuff dissipates
   void:     { remains: false, breathes: false, density: 0.55 },
+  cosmic:   { remains: false, breathes: false, density: 0.35 },  // night-sky stuff — the ethereal nature in a darker coat
 };
 
 /** Does this def's death leave a corpse-economy remnant? The def's own
@@ -12072,6 +12073,39 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  /** The ram: a straight-line storm that grew a front — the derecho as an
+   *  animal. It gathers charge IN the exchange (the melee is the generator)
+   *  and answers crowds with a flat lash of wind: the family's shove, worn
+   *  as shoulders. Flies like its weather-kin — the drift's bruiser, and
+   *  honest about being weather first. */
+  derecho_ram: {
+    id: 'derecho_ram', name: 'Derecho Ram',
+    color: '#9cc0dc', shape: 'trapezoid', radius: 15, material: 'ethereal', look: 'derecho_ram',
+    base: { life: 170, moveSpeed: 100, armor: 10, poise: 50, mana: 40, manaRegen: 4 },
+    mods: [mod('lightningRes', 'flat', 0.4)],
+    skills: ['tempest_gathering', 'gale_lash'], xp: 46, faction: 'galekin',
+    flier: true, levitates: true,
+    presence: { from: 11, fadeIn: 4 },
+    gemBias: ['physical', 'lightning'],
+    brain: { type: 'juggernaut' },
+  },
+
+  /** The medusa: a bell of storm over charged ribbons — the drift's
+   *  artillery. It marks your footing and calls the levin down in ranks;
+   *  the bell itself is all CHARGE (the family's ES signature), and it
+   *  drifts away from anything that closes. */
+  levin_medusa: {
+    id: 'levin_medusa', name: 'Levin Medusa',
+    color: '#9fc2e8', shape: 'oval', radius: 12, material: 'ethereal', look: 'levin_medusa',
+    base: { life: 80, moveSpeed: 78, mana: 80, manaRegen: 6, energyShield: 40 },
+    mods: [mod('lightningRes', 'flat', 0.5)],
+    skills: ['levinfall', 'thundermark'], xp: 38, faction: 'galekin',
+    flier: true, levitates: true,
+    presence: { from: 12, fadeIn: 4 },
+    gemBias: ['lightning', 'aoe'],
+    brain: { type: 'artillery' },
+  },
+
   // ==========================================================================
   // THE ZEPHYRID KIN — the high sky's BEASTS (the shelf-and-spire country's
   // wild layer; the drift already has its weather-scraps). Where the Host
@@ -12167,6 +12201,59 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  /** The falcon: the vertical made a predator — it banks wide, RAINS the
+   *  stoop in ranks (a storm of falling talons), then dives the gap it
+   *  opened. The shrike's big cousin brought the weather with it: kill it
+   *  in the dive or fight under its sky all day. */
+  zenith_falcon: {
+    id: 'zenith_falcon', name: 'Zenith Falcon',
+    color: '#bcd4ec', shape: 'kite', radius: 12, material: 'ethereal', look: 'zenith_falcon',
+    base: { life: 110, moveSpeed: 150, evasion: 45, mana: 60, manaRegen: 5 },
+    mods: [mod('coldRes', 'flat', 0.3)],
+    skills: ['skyfall_volley', 'squall_bite'], xp: 40, faction: 'zephyrid',
+    flier: true, levitates: true,
+    presence: { from: 11, fadeIn: 4 },
+    gemBias: ['physical', 'movement'],
+    brain: { type: 'skirmish', withdraw: 1.2 },
+  },
+
+  /** The ibis: the herd's WADER — stilt legs on the glass, a standing balm
+   *  poured over whatever the sky is eating. The tender texture at beast
+   *  scale: kill the bird first or the flock never stays down. Walks by
+   *  design — a tender keeps its feet where the herd can find them. */
+  balmbill_ibis: {
+    id: 'balmbill_ibis', name: 'Balmbill Ibis',
+    color: '#d8e8f0', shape: 'oval', radius: 12, material: 'ethereal', look: 'balmbill_ibis',
+    base: { life: 90, moveSpeed: 108, mana: 70, manaRegen: 5 },
+    skills: ['balmcloud', 'talon_rake'], xp: 34, faction: 'zephyrid',
+    presence: { from: 10, fadeIn: 4 },
+    gemBias: ['buff', 'aoe'],
+    brain: { type: 'protector' },
+  },
+
+  /** The condor: the rookery that flies — a broad-winged carrier whose back
+   *  IS the nest, shrikes loosed in pairs while the wingbeat keeps the
+   *  crowd off the eggs. The kin's commander: break the roost or keep
+   *  meeting the brood. */
+  rookery_condor: {
+    id: 'rookery_condor', name: 'Rookery Condor',
+    color: '#a8bcd8', shape: 'kite', radius: 17, material: 'ethereal', look: 'rookery_condor',
+    base: { life: 230, moveSpeed: 118, evasion: 25, mana: 60, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.3)],
+    skills: ['claw', 'gust_burst'], xp: 62, faction: 'zephyrid',
+    flier: true, levitates: true,
+    presence: { from: 12, fadeIn: 5 },
+    gemBias: ['minion', 'aoe'],
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 520 }, every: [12, 18], hold: [0.4, 0.6],
+        announce: 'the rookery empties—',
+        actions: [{ do: 'summon', monster: 'mistwing_shrike', count: 2, ring: 130 }],
+      }],
+    },
+  },
+
   // ==========================================================================
   // THE VESPERKIN — the cosmos country's own (aether_vesper; grafted by the
   // Ascent package, contexts ['aetherial']). The day/night kin: nearly every
@@ -12174,7 +12261,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // by sun and by star — moths blaze at noon and gutter at dusk, hounds
   // arrive with the dark, the herds grow flighty under stars. Defense
   // textures per the doctrine: swarm-evasion / prey / night-flanker /
-  // gap-ambusher / ES-construct / the phased sovereign.
+  // gap-ambusher / ES-construct / walker-juggernaut / support / artillery /
+  // the phased sovereign. THE COSMIC DRESS: the fauna wear the 'cosmic'
+  // material (a nebula body under baked pinprick stars) and their looks ride
+  // THE COLOR DRIFT (render/vis/colorDrift.ts — LookDef.drift): the body's
+  // base color MORPHS through night-sky palettes on a slow clock, so the
+  // whole family reads as pieces of the same moving firmament. The one
+  // deliberate exception is the orrery keeper — brass stays brass, the
+  // instrument the sky is read WITH, never the sky itself.
   // ==========================================================================
 
   /** The moth: a scrap of daylight with wings — noon's swarm, dusk's
@@ -12182,7 +12276,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
    *  hours make it quick; the dark leaves it stumbling into your swings. */
   lumen_moth: {
     id: 'lumen_moth', name: 'Lumen Moth',
-    color: '#f4ecd0', shape: 'diamond', radius: 8, material: 'ethereal', look: 'lumen_moth',
+    color: '#f0eaff', shape: 'diamond', radius: 8, material: 'ethereal', look: 'lumen_moth',
     base: { life: 22, moveSpeed: 125, evasion: 25, mana: 10, manaRegen: 1 },
     skills: ['talon_rake'], xp: 5, faction: 'vesperkin',
     flier: true, levitates: true,
@@ -12198,7 +12292,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
    *  evasion); breaking it sighs out cold. The hounds' whole economy. */
   star_grazer: {
     id: 'star_grazer', name: 'Star Grazer',
-    color: '#c8d0ee', shape: 'oval', radius: 13, material: 'ethereal', look: 'star_grazer',
+    color: '#8a7fd0', shape: 'oval', radius: 13, material: 'cosmic', look: 'star_grazer',
     base: { life: 60, moveSpeed: 108, mana: 10, manaRegen: 1 },
     skills: ['talon_rake'], xp: 10, faction: 'vesperkin',
     nocturne: { phases: ['night', 'dusk'], mods: [mod('evasion', 'flat', 40), mod('moveSpeed', 'increased', 0.15)] },
@@ -12213,7 +12307,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
    *  and short-tempered; night makes it the meadow's fastest thing. */
   comet_hound: {
     id: 'comet_hound', name: 'Comet Hound',
-    color: '#d8a878', shape: 'triangle', radius: 12, material: 'ethereal', look: 'comet_hound',
+    color: '#6a5ab8', shape: 'triangle', radius: 12, material: 'cosmic', look: 'comet_hound',
     base: { life: 95, moveSpeed: 112, evasion: 20, mana: 40, manaRegen: 4 },
     mods: [mod('fireRes', 'flat', 0.4)],
     skills: ['squall_bite', 'claw'], xp: 26, faction: 'vesperkin',
@@ -12248,7 +12342,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
    *  a rumor by noon; the wane it is named for is yours. */
   noctarch_of_the_wane: {
     id: 'noctarch_of_the_wane', name: 'Noctarch of the Wane',
-    color: '#a89ae0', shape: 'star', radius: 16, material: 'ethereal', look: 'noctarch',
+    color: '#9a86dc', shape: 'star', radius: 16, material: 'cosmic', look: 'noctarch',
     base: { life: 260, moveSpeed: 96, mana: 260, manaRegen: 11, energyShield: 70, evasion: 25 },
     mods: [mod('coldRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3)],
     skills: ['starcall', 'skyhook', 'cirrus_veil'], xp: 110, faction: 'vesperkin',
@@ -12261,6 +12355,59 @@ export const MONSTERS: Record<string, MonsterDef> = {
         { atLifeFrac: 0.55, mods: [mod('castSpeed', 'increased', 0.2)], announce: 'The wane calls its hounds!', onEnter: [{ do: 'summon', monster: 'comet_hound', count: 2, ring: 130 }] },
       ],
     },
+  },
+
+  /** The tortoise: the vault of heaven at a walking pace — a dome of
+   *  starfield on legs the meadows part around. The kin's deliberate WALKER
+   *  (the dominion doctrine): a line that holds ground can be dropped WITH
+   *  it. Close with it and it exhales the cold between stars; night hardens
+   *  the shell, noon leaves the dome a rumor of itself. */
+  welkin_tortoise: {
+    id: 'welkin_tortoise', name: 'Welkin Tortoise',
+    color: '#4a4380', shape: 'octagon', radius: 16, material: 'cosmic', look: 'welkin_tortoise',
+    base: { life: 260, moveSpeed: 60, armor: 30, poise: 80, mana: 60, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    skills: ['claw', 'absolute_zero'], xp: 60, faction: 'vesperkin',
+    heft: 1.5,
+    nocturne: { phases: ['night', 'dusk'], mods: [mod('armor', 'flat', 20), mod('damage', 'increased', 0.15)] },
+    deathBurst: { mode: 'implode', damageFrac: 0.4, coalesce: 0.6, damageType: 'cold' },
+    presence: { from: 10, fadeIn: 5 },
+    gemBias: ['cold', 'aoe'],
+    brain: { type: 'juggernaut' },
+  },
+
+  /** The weaver: an aurora that took a body's worth of interest in the
+   *  herds — ribbons of standing light that MEND what the dark is chewing
+   *  and lay a rune of power under the pack. It never stops moving; the
+   *  lights never do. Dusk wakes it properly. */
+  aurora_weaver: {
+    id: 'aurora_weaver', name: 'Aurora Weaver',
+    color: '#8fd8c8', shape: 'oval', radius: 11, material: 'ethereal', look: 'aurora_weaver',
+    base: { life: 85, moveSpeed: 105, mana: 70, manaRegen: 5, energyShield: 30, evasion: 30 },
+    skills: ['renew', 'rune_of_power'], xp: 40, faction: 'vesperkin',
+    flier: true, levitates: true,
+    nocturne: { phases: ['night', 'dusk'], mods: [mod('castSpeed', 'increased', 0.2), mod('moveSpeed', 'increased', 0.15)] },
+    presence: { from: 11, fadeIn: 4 },
+    gemBias: ['buff', 'cold'],
+    brain: { type: 'strafer' },
+  },
+
+  /** The whale: the night sky under way — a hull of starfield whose passage
+   *  is WEATHER (meteors walk in its wake) and whose shadow the meadows
+   *  learned to graze beneath. It harvests the near dark when cornered and
+   *  sighs shut like a closing sky when it dies. */
+  eventide_whale: {
+    id: 'eventide_whale', name: 'Eventide Whale',
+    color: '#524e92', shape: 'oval', radius: 19, material: 'cosmic', look: 'eventide_whale',
+    base: { life: 320, moveSpeed: 55, armor: 15, mana: 80, manaRegen: 6, energyShield: 60 },
+    mods: [mod('coldRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3)],
+    skills: ['meteoric_bombardment', 'soul_harvest'], xp: 85, faction: 'vesperkin',
+    flier: true, levitates: true, heft: 1.7,
+    nocturne: { phases: ['night'], mods: [mod('damage', 'increased', 0.2), mod('castSpeed', 'increased', 0.1)] },
+    deathBurst: { mode: 'implode', damageFrac: 0.5, coalesce: 0.7, damageType: 'cold' },
+    presence: { from: 12, fadeIn: 5 },
+    gemBias: ['fire', 'aoe'],
+    brain: { type: 'artillery' },
   },
 
   // ==========================================================================

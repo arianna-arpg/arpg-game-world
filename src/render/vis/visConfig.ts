@@ -47,6 +47,15 @@ export const VIS_CFG = {
     waneRate: 2.4,
   },
 
+  /** THE COLOR DRIFT (colorDrift.ts): drift-bound looks morph their base
+   *  color through a registered palette. */
+  colorDrift: {
+    /** Quantized ticks per palette leg — bounds the bake-cache working set
+     *  at (stops × steps) sprites per drifting look, while keeping each
+     *  color hop small enough to read as continuous weather. */
+    steps: 9,
+  },
+
   /** Soft drop shadows (actors + standing doodads). */
   shadow: {
     alpha: 0.33,

@@ -33,6 +33,19 @@ export interface PartSpec {
   params?: Record<string, unknown>;
 }
 
+/** THE COLOR DRIFT binding (render/vis/colorDrift.ts): this look's base
+ *  color is WEATHER, not identity — it morphs through a registered palette
+ *  on a slow clock, and every derived tone (part ramps, glows, outlines)
+ *  follows, because they all read off the one base color. */
+export interface LookDrift {
+  /** COLOR_DRIFTS palette id ('nightsky', 'aurora', 'starlight', …). */
+  palette: string;
+  /** Cycle override in seconds (default: the palette's own period). */
+  period?: number;
+  /** Per-body phase scatter override, as a fraction of the period. */
+  desync?: number;
+}
+
 export interface LookDef {
   /** Baked stack, painted in order (under → over). */
   parts: PartSpec[];
@@ -40,6 +53,9 @@ export interface LookDef {
   live?: PartSpec[];
   /** Contact-shadow width multiplier (long bodies want more). */
   shadowScale?: number;
+  /** The color drift — a body whose base color slowly morphs through a
+   *  registered night-sky/aurora/… palette (the vesperkin debut). */
+  drift?: LookDrift;
   /** Container BANDING drawn over the body (breakables read as containers):
    *  iron hoops (kegs) or cross-slats (crates). On the LOOK, not the monster
    *  id — any def wearing the look gets the banding, and a new container

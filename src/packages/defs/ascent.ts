@@ -76,6 +76,8 @@ const GALEKIN_FACTION: FactionSpec = {
     { id: 'drift_ray', weight: 3 },
     { id: 'zephyr_eel', weight: 2.5 },
     { id: 'gale_djinn', weight: 2 },
+    { id: 'derecho_ram', weight: 1.5 },
+    { id: 'levin_medusa', weight: 1.5 },
     { id: 'nimbus_shepherd', weight: 1.5 },
     { id: 'thunderhead_tyrant', weight: 0.6 },
   ],
@@ -94,8 +96,11 @@ const ZEPHYRID_FACTION: FactionSpec = {
   roster: [
     { id: 'cloud_grazer', weight: 4 },
     { id: 'mistwing_shrike', weight: 3 },
+    { id: 'zenith_falcon', weight: 2 },
     { id: 'skyglass_lurker', weight: 2 },
+    { id: 'balmbill_ibis', weight: 1.5 },
     { id: 'stormbrow_bull', weight: 1.5 },
+    { id: 'rookery_condor', weight: 1 },
     { id: 'zephyrid_matron', weight: 0.8 },
   ],
 };
@@ -115,7 +120,10 @@ const VESPERKIN_FACTION: FactionSpec = {
     { id: 'lumen_moth', weight: 4 },
     { id: 'star_grazer', weight: 3 },
     { id: 'comet_hound', weight: 3 },
+    { id: 'aurora_weaver', weight: 2 },
     { id: 'orrery_keeper', weight: 2 },
+    { id: 'welkin_tortoise', weight: 1.5 },
+    { id: 'eventide_whale', weight: 0.8 },
     { id: 'noctarch_of_the_wane', weight: 0.6 },
   ],
 };

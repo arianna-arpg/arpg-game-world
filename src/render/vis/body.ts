@@ -281,6 +281,47 @@ function paintTexture(ctx: CanvasRenderingContext2D, r: number, ramp: Ramp, mat:
       }
       break;
     }
+    case 'starfield': {
+      // The body IS a sky: faint nebula shoals under pinprick stars, with a
+      // pair of brighter 4-ray twinkles anchoring the read at any radius.
+      // Placement is seeded color-blind (see bodySprite), so a drifting
+      // palette repaints the same constellations rather than re-rolling them.
+      const neb = 2 + Math.floor(hash01(seed, 51) * 2);
+      for (let i = 0; i < neb; i++) {
+        const ang = hash01(seed, i * 19 + 3) * Math.PI * 2;
+        const rr = Math.sqrt(hash01(seed, i * 23 + 5)) * r * 0.6;
+        const nx = Math.cos(ang) * rr, ny = Math.sin(ang) * rr;
+        const nr = r * (0.35 + hash01(seed, i * 29 + 7) * 0.3);
+        const g = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+        g.addColorStop(0, withAlpha(i % 2 ? ramp.highlight : ramp.light, a * 0.16));
+        g.addColorStop(1, withAlpha(ramp.light, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(nx - nr, ny - nr, nr * 2, nr * 2);
+      }
+      const n = Math.max(8, Math.floor(r * r * 0.12));
+      for (let i = 0; i < n; i++) {
+        const ang = hash01(seed, i * 7 + 11) * Math.PI * 2;
+        const rr = Math.sqrt(hash01(seed, i * 13 + 17)) * r * 0.92;
+        const sr = r * (0.025 + hash01(seed, i * 3 + 23) * 0.045);
+        ctx.fillStyle = withAlpha('#ffffff', a * (0.45 + hash01(seed, i * 5 + 29) * 0.5));
+        ctx.beginPath();
+        ctx.arc(Math.cos(ang) * rr, Math.sin(ang) * rr, Math.max(0.55, sr), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = withAlpha('#ffffff', a * 0.55);
+      ctx.lineWidth = Math.max(0.6, r * 0.03);
+      for (let i = 0; i < 2; i++) {
+        const ang = hash01(seed, i * 37 + 31) * Math.PI * 2;
+        const rr = Math.sqrt(hash01(seed, i * 41 + 37)) * r * 0.6;
+        const sx = Math.cos(ang) * rr, sy = Math.sin(ang) * rr;
+        const len = r * (0.12 + hash01(seed, i * 43 + 41) * 0.08);
+        ctx.beginPath();
+        ctx.moveTo(sx - len, sy); ctx.lineTo(sx + len, sy);
+        ctx.moveTo(sx, sy - len); ctx.lineTo(sx, sy + len);
+        ctx.stroke();
+      }
+      break;
+    }
   }
 }
 
@@ -346,11 +387,26 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
   const half = spriteHalf(look.radius);
   return baked(`body|${bodyKey(look)}`, half * 2, half * 2, (ctx) => {
     const r = look.radius;
+    // Texture placement is GEOMETRY, not paint: seed it color-blind so a
+    // color-drifting body's stipple (stars, cracks, facets) holds still
+    // while the palette morphs — only the ink changes between bakes.
+    const seed = strSeed(`${look.shape}|${look.radius.toFixed(1)}|${look.material ?? ''}|${look.look ?? ''}`);
     // PART-GRAMMAR PORTRAIT: a look id composes the whole body from the
     // part kit (skull/ribs/hood/scythe/…) — the legacy shape never draws.
     const lookDef = lookOf(look.look);
     if (lookDef) {
       paintLook(ctx, r, lookDef, lookPalette(look.color, look.material));
+      // A material may declare its texture rides part-grammar bodies too
+      // (MaterialDef.textureOverLook — the cosmic starfield): painted
+      // source-atop, so the stipple lands exactly on the composed stack.
+      const lmat = materialOf(look.material);
+      if (lmat.texture && lmat.textureOverLook) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-atop';
+        if (lmat.alpha !== undefined) ctx.globalAlpha = lmat.alpha;
+        paintTexture(ctx, r, rampOf(look.color, lmat), lmat, seed);
+        ctx.restore();
+      }
       paintTack(ctx, r, look);
       if (look.outline) {
         // Minion binding: a thin ring, since a part stack has no one path.
@@ -366,7 +422,6 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
     }
     const mat = materialOf(look.material);
     const ramp = rampOf(look.color, mat);
-    const seed = strSeed(bodyKey(look));
     // Emissive halo BEHIND the silhouette (spirits, embers, crystals glow).
     if (mat.emissive) {
       const g = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.8);
