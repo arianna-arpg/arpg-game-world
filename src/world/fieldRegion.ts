@@ -49,6 +49,15 @@ export const FIELD_GEN = {
    *  mint-once holds per shard, and neighbouring shards meet through the
    *  ordinary boundary-frontier law (the expanses link like country). */
   maxSpanCells: 12,
+  /** THE DWARF FLOOR — a region must span at least this many cells on BOTH
+   *  axes to become an EXPANSE at all. A 1-cell blob (35u) or a 1-wide
+   *  ribbon minted as a mega-zone whose core rect is SMALLER than the map's
+   *  hover floor: the footprint law had nothing to protect, the hub law
+   *  nothing to spread, and a neighbour standing "inside" the rect
+   *  deadlocked the settling (the tiny-rect trap, measured live at 30u).
+   *  Below the floor the ground mints as ORDINARY country — the field
+   *  layout's no-extent fallback still draws it as an inscribed meadow. */
+  minSpanCells: 3,
   /** THE HUB SPREAD — the boundary frontier fractions a Field zone deals per
    *  side (world.fieldifyZone): 2 per cardinal side at these 'at' stops, and a
    *  map BERTH stamped at each so roads land on the blob's edge (the
@@ -128,6 +137,10 @@ export function fieldRegionAt(coord: MapCoord, seed: number): FieldExtent | null
   }
   // Ragged edge: the start cell center wasn't Field but the coord was — a 1-cell region.
   if (count === 0) { minX = maxX = sgx; minY = maxY = sgy; }
+
+  // THE DWARF FLOOR: too small on either axis to be an expanse — the caller
+  // mints ORDINARY country here (the same null as non-Field ground).
+  if (maxX - minX + 1 < FIELD_GEN.minSpanCells || maxY - minY + 1 < FIELD_GEN.minSpanCells) return null;
 
   // The FIELD's own (unpadded) node extent drives the scale, so the meadow — not the
   // hedge frame — is what gets sized up to fill the arena.

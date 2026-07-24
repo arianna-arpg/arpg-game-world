@@ -38,6 +38,28 @@ factions contest it, the gloaming swallows it, fronts march over it, roads
 weave through it, its level comes off the same radial field. Only the
 player's surfaces are blind to it.
 
+### THE PREGEN DOCTRINE + THE MINT HORIZON (2026-07-23)
+
+The halo is a pre-explored COUNTRY, not a preview strip: `ring` 1000
+(~12 steps out; the occupancy law converges it at honest spacing capacity,
+so `maxVeiled` is a ceiling, not a target), and `FORECHART_CFG.horizon`
+(480) is the **guarantee**: on every zone arrival, `World.chartWithin`
+synchronously resolves every `'?'` frontier within the horizon — a no-op
+scan on sweep-filled ground, real work only after a teleport/sail into thin
+chart. Inside the horizon the only NEW nodes are **directed** (quests,
+event levers) plus foreordained sea systems (a first water touch mints that
+whole sea's harbor pairs atomically, wherever its coast runs): ambient
+growth happened long before the player arrived, and everything they meet is
+**found, never freshly minted**. Soundings ride a RESERVED budget lane
+(one unit off the top of each sweep) so the colossal fill can never starve
+an event's far seat. Pinned by `probe_webqa` section J (walked hops on
+pre-existing fully-resolved ground; rim-teleport synchronous catch-up; the
+quest exemption). Ring 1400 was measured and retreated: the young-world
+fill then lives in foreordained first-touch territory (whole-sea/relief
+units of 200-340ms) for many minutes — the time governor bounds the stack,
+but the single-unit bill is worldgen's own standing chip; when that lands,
+the ring can grow again.
+
 ### The veil laws
 
 - **One fog seam**: `World.visible(z)` returns false for veiled ground —

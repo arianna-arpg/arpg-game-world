@@ -4362,6 +4362,18 @@ export class World {
     // flag-off case is a no-op. (Charts from this zone's context, like the lazy path did.)
     if (!isCave) this.eagerChartNeighbors(def);
 
+    // THE MINT HORIZON (FORECHART_CFG.horizon — the pregen doctrine's hard
+    // half): the player's ACTIVE VICINITY is fully-resolved ground, always.
+    // Everything within the horizon of an arrival resolves NOW, veiled, so
+    // ambient growth can never happen underfoot — by the time the player
+    // walks anywhere inside it, every node they can meet already exists and
+    // is merely FOUND. On sweep-filled ground this is one no-op scan; real
+    // work only follows a long teleport/sail into thin chart, at a zone-load
+    // boundary that is already paying for a layout build.
+    if (!isCave && FORECHART_CFG.enabled && def.objective.kind !== 'safe') {
+      this.chartWithin(def.map, FORECHART_CFG.horizon, def.dimension ?? 'surface');
+    }
+
     // THE RING-1 UNVEIL (the forechart law): every direct neighbour of ground
     // you STAND ON is part of the classic one-ring map preview — if the
     // forechart minted it ahead (veiled), finding this zone finds them. The
@@ -8081,6 +8093,28 @@ export class World {
     }
   }
 
+  /** THE MINT HORIZON's catch-up (the pregen doctrine): resolve EVERY '?'
+   *  frontier within `radius` of `origin`, iteratively — a mint that lands
+   *  inside the disc resolves its own frontiers next pass; rim mints project
+   *  outward and terminate the loop. All mints are VEILED (this is forechart
+   *  work: unfound country stays unfound — the ring-1 unveil and the veil
+   *  invariant decide what shows, exactly as the ambient sweep's mints do).
+   *  Bounded and idempotent: on sweep-filled ground the first scan finds
+   *  nothing and the call is one O(zones) filter. */
+  private chartWithin(origin: MapCoord, radius: number, dim: string): void {
+    this.mintVeil = true;
+    try {
+      for (let guard = 0; guard < 20; guard++) {
+        const batch = Object.values(this.zoneMap).filter(z =>
+          forechartSource(z, dim) && coordDist(z.map, origin) <= radius);
+        if (!batch.length) break;
+        for (const z of batch) this.chartNeighborsOf(z);
+      }
+    } finally {
+      this.mintVeil = false;
+    }
+  }
+
   /** RECON SURVEY (the spire's flare): reveal the overworld within `radius`
    *  map units of `origin`. Every node inside the pulse resolves its '?'
    *  frontiers into real neighbours (the eager-web mint path); freshly minted
@@ -8250,6 +8284,14 @@ export class World {
     const beatDeadline = performance.now() + FORECHART_CFG.beatBudgetMs;
     this.mintVeil = true;
     try {
+      // SOUNDINGS FIRST (the reserved lane): a sounding is REQUESTED ground —
+      // an event's need for a far seat — and the colossal halo's fill would
+      // otherwise monopolize the unit budget for its whole young-world era,
+      // starving every far request minutes deep. One unit off the top serves
+      // the queue (sounding.perSweep caps the requests honored); the halo
+      // spends the rest.
+      const afterSoundings = this.growSoundings(Math.min(budget, 1), all, beatDeadline);
+      budget = budget - (Math.min(budget, 1) - afterSoundings);
       for (const { z } of cands) {
         if (budget <= 0 || performance.now() > beatDeadline) break;
         this.chartNeighborsOf(z);
@@ -8825,6 +8867,17 @@ export class World {
     for (const z of Object.values(this.zoneMap)) {
       if (z.dimension || !z.field) continue;
       const f = z.field;
+      // THE DWARF FLOOR, retroactive: a saved expanse below the minimum span
+      // (minted before the floor) stands down to ORDINARY country — its tiny
+      // rect protected nothing and deadlocked the settling.
+      {
+        const r = fieldCoreRect(f, z.size);
+        if (Math.min(r.x1 - r.x0, r.y1 - r.y0) < FIELD_GEN.minSpanCells * FIELD_GEN.step) {
+          delete z.field;
+          delete z.berths;
+          continue;
+        }
+      }
       if (!z.berths?.length && f.nodeW && f.nodeH) {
         z.berths = [];
         for (const at of FIELD_GEN.hubSpread) {

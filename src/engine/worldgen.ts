@@ -598,9 +598,19 @@ export function settleWeb(
         if (!routeOk(z.map, dest.map)) { ok = false; break; }
         // The FOOTPRINT LAW survives the drift too: a settled node whose
         // road chord now cuts an expanse rect (its endpoint slid out of the
-        // exempting interior, or the line swung across a corner) reverts.
-        if (!z.dimension && !dest.dimension && e.notarized !== true
-          && footprintBars(z.map, dest.map, zoneMap)) { ok = false; break; }
+        // exempting interior, or the line swung across a corner) reverts —
+        // EXCEPT over a rect the mover's HOME stood inside (the escapee's
+        // grandfather: a squatter walking off a meadow keeps its roads, or
+        // it could never leave at all — the tiny-rect trap).
+        if (!z.dimension && !dest.dimension && e.notarized !== true) {
+          const homeRects = new Set<string>();
+          for (const fz of Object.values(zoneMap)) {
+            if (!fz.field || fz.dimension || fz.id === z.id) continue;
+            const r = fieldCoreRect(fz.field, fz.size);
+            if (h.x >= r.x0 && h.x <= r.x1 && h.y >= r.y0 && h.y <= r.y1) homeRects.add(fz.id);
+          }
+          if (footprintBars(z.map, dest.map, zoneMap, homeRects)) { ok = false; break; }
+        }
       }
     }
     if (!ok) { z.map.x = h.x; z.map.y = h.y; }

@@ -38,8 +38,19 @@ export interface ForechartCfg {
   /** Master switch (the probe + sim arena can silence the sweep). */
   enabled: boolean;
   /** Node-units of veiled web maintained around the player's standing zone —
-   *  the halo radius. ~80/step ⇒ 720 ≈ nine zones out in every direction. */
+   *  the halo radius. THE PREGEN DOCTRINE: colossal — the world the player
+   *  can see, walk toward, or hear events from is minted WELL in advance;
+   *  new nodes are born far beyond attention, never underfoot. ~80/step. */
   ring: number;
+  /** THE MINT HORIZON — the active-vicinity radius the doctrine GUARANTEES
+   *  fully resolved: on every zone arrival (loadZone) all '?' frontiers
+   *  within this of the player resolve SYNCHRONOUSLY (a bounded catch-up —
+   *  a no-op on ground the sweep already filled, real work only after a
+   *  long teleport/sail into thin chart). Inside this radius the only new
+   *  nodes are DIRECTED (quest/event levers) by construction: ambient
+   *  growth happened long before the player got here, and what they meet
+   *  is FOUND, never freshly minted. */
+  horizon: number;
   /** Frontier-bearing zones processed per sweep (each yields ≤ a few mints) —
    *  the per-tick COUNT budget. */
   perSweep: number;
@@ -77,14 +88,27 @@ export interface ForechartCfg {
 
 export const FORECHART_CFG: ForechartCfg = {
   enabled: true,
-  ring: 720,
+  // THE PREGEN DOCTRINE (2026-07-23): ring 720 → 1000, maxVeiled 650 → 900,
+  // hustle window widened to match — the halo is a pre-explored COUNTRY
+  // (~12 steps out; the occupancy law makes it converge at honest spacing
+  // capacity, so maxVeiled is a ceiling, not a target), and the MINT HORIZON
+  // (480) rides ~520u inside it — the player's vicinity is minted long
+  // before arrival. Ring 1400 was measured and RETREATED: the young-world
+  // fill then lives in foreordained first-touch territory (whole-sea/relief
+  // units of 200-340ms) for many minutes — the governor bounds the stack,
+  // but the single-unit bill is worldgen's own (the standing follow-up chip:
+  // slice/index the first-touch costs, then the ring can grow again).
+  // zoneCap 2000 minus capHeadroom still bounds the save; the zones save
+  // memo keeps the autosave cheap at this scale.
+  ring: 1000,
   perSweep: 4,
   beatBudgetMs: 6,
   sweepSec: 0.45,
-  maxVeiled: 650,
+  maxVeiled: 900,
   capHeadroom: 200,
-  hustleBelow: 90,
+  hustleBelow: 300,
   hustleMul: 3,
+  horizon: 480,
   sounding: { radius: 180, maxNodes: 14, perSweep: 1 },
 };
 

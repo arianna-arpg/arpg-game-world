@@ -436,7 +436,13 @@ changes.
   events seat on, factions contest, fronts march over, invisible at ONE
   fog seam (`World.visible`) until found (entry, the ring-1 unveil,
   surveys, omen reveals); far SOUNDINGS grow veiled clusters at requested
-  coordinates (`WorldOverlay.requestSoundings` / `World.forechartSounding`).
+  coordinates (`WorldOverlay.requestSoundings` / `World.forechartSounding`)
+  on a RESERVED sweep lane. THE PREGEN DOCTRINE + MINT HORIZON
+  (`FORECHART_CFG.ring` 1000 / `horizon` 480 + `World.chartWithin`): the
+  halo is a pre-explored COUNTRY and every arrival synchronously resolves
+  its whole horizon — inside it the only new nodes are DIRECTED mints and
+  atomic sea systems; the player meets ground that is FOUND, never freshly
+  minted (probe_webqa J).
   EVENT SEATS (`world/seats.ts` — `pickSeat` + per-def `SeatTuning`) are
   the one data-driven "where does this event land": range envelopes +
   known/unknown/veiled weights (hunt, haunting, longNight, longcandle,
