@@ -2241,7 +2241,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.6), mod('minionDamage', 'increased', 0.25)],
     skills: ['raise_dead', 'rallying_howl', 'despair', 'bone_cage'],
     xp: 60,
-    brain: { type: 'commander' },
+    // The crown ladder: the Marshal withdraws to his cold seat and lets
+    // the Host argue; at the last he spends the grave-wind itself.
+    brain: {
+      type: 'commander',
+      phases: [
+        {
+          atLifeFrac: 0.6, type: 'artillery',
+          announce: 'the Marshal ascends his cold seat — the Host closes ranks!',
+          onEnter: [{ do: 'summon', monster: 'skeleton_warrior', count: 3, ring: 70 }],
+        },
+        {
+          atLifeFrac: 0.25, announce: 'the grave-wind RISES!',
+          mods: [mod('damage', 'more', 0.35), mod('castSpeed', 'increased', 0.2)],
+        },
+      ],
+    },
     faction: 'undead',
   },
 
@@ -3448,7 +3463,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 140, moveSpeed: 115, accuracy: 100, armor: 25, mana: 90, manaRegen: 7, poise: 35 },
     skills: ['rallying_howl', 'war_cry', 'heavy_strike'],
     xp: 42,
-    brain: { type: 'commander' },
+    // The crown ladder (high court pass): the chief's bar reads in beats —
+    // the muster at half, the fury at the end. Restrained on purpose:
+    // crowns rise on ORDINARY ground, so no arena verbs, only the warband.
+    brain: {
+      type: 'commander',
+      phases: [
+        {
+          atLifeFrac: 0.5, announce: 'the Chief calls in every debt — the warband ANSWERS!',
+          onEnter: [{ do: 'summon', monster: 'goblin_brute', count: 2, ring: 64 }],
+        },
+        {
+          atLifeFrac: 0.2, announce: 'the Chief fights like a cornered king!',
+          mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
+        },
+      ],
+    },
     faction: 'goblin',
     adorn: 'ears',
   },
@@ -3615,6 +3645,17 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'commander', perception: { alertShout: 480 },
       behavior: { dodge: { chance: 0.6, reaction: [0.2, 0.45] } },
+      // The crown ladder: the howl brings the pack, the end brings the dog.
+      phases: [
+        {
+          atLifeFrac: 0.5, announce: 'the howl breaks — and the PACK answers it!',
+          onEnter: [{ do: 'summon', monster: 'gnoll_prowler', count: 3, ring: 70 }],
+        },
+        {
+          atLifeFrac: 0.2, announce: 'the Howler stops commanding and starts BITING!',
+          mods: [mod('attackSpeed', 'increased', 0.25), mod('moveSpeed', 'more', 0.2)],
+        },
+      ],
     },
     faction: 'gnoll',
     adorn: 'ears',
@@ -5263,6 +5304,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
         announce: 'the Matriarch calls the vents!',
         actions: [{ do: 'summon', monster: 'ashling', count: 3, ring: 48 }],
       }],
+      // The crown ladder: the tribe burns hotter at half; at the end she
+      // steps BEHIND the tribe she raised (the vents rule keeps firing).
+      phases: [
+        {
+          atLifeFrac: 0.5, announce: 'the caldera answers HER!',
+          mods: [mod('damage', 'more', 0.25), mod('castSpeed', 'increased', 0.2)],
+        },
+        {
+          atLifeFrac: 0.2, type: 'strafer',
+          announce: 'the Matriarch withdraws behind the tribe!',
+          mods: [mod('moveSpeed', 'more', 0.25)],
+        },
+      ],
     },
   },
 
@@ -5727,7 +5781,23 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // WHEREVER his id is tabled. Invasion set-pieces spawn him explicitly
     // (epicenter/realm), so the story beats are untouched.
     presence: { from: 15, fadeIn: 5 },
-    detection: 1.4, brain: { type: 'juggernaut', enrage: 0.4 },
+    detection: 1.4,
+    // The crown ladder: NO archetype swaps on purpose — the base type must
+    // stay live for the 0.4 enrage to fire (phases that swap above the
+    // threshold dead-config it; the Unmade pass's hard-won lesson).
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      phases: [
+        {
+          atLifeFrac: 0.55, announce: 'Balor spends his court like coin — RISE, whelps!',
+          onEnter: [{ do: 'summon', monster: 'imp', count: 4, ring: 76 }],
+        },
+        {
+          atLifeFrac: 0.22, announce: 'the Rift-Tyrant burns his own blood for fury!',
+          mods: [mod('damage', 'more', 0.3), mod('moveSpeed', 'more', 0.2)],
+        },
+      ],
+    },
   },
 
   // --- THE LEGION MUSTERS: the deep-world horde (presence-banded — the
@@ -6498,7 +6568,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.5), mod('damage', 'increased', 0.15)],
     skills: ['sporefall', 'spore_burst', 'root_grasp', 'war_cry'], xp: 80, faction: 'fungal',
     gemBias: ['chaos', 'spell'], wardPriority: 2,
-    detection: 1.3, brain: { type: 'commander' },
+    detection: 1.3,
+    // The crown ladder: the Bloom rises at half; at the end the crown
+    // itself sheds — a sovereign spending its own cap.
+    brain: {
+      type: 'commander',
+      phases: [
+        {
+          atLifeFrac: 0.5, announce: 'the Bloom RISES for its sovereign!',
+          onEnter: [{ do: 'summon', monster: 'mushroomling', count: 3, ring: 60 }],
+        },
+        {
+          atLifeFrac: 0.2, announce: 'the crown SHEDS — spores on every wind!',
+          mods: [mod('damage', 'more', 0.3), mod('castSpeed', 'increased', 0.2)],
+        },
+      ],
+    },
   },
   // --- The Bloom's SPORE side, deepened (still clouds, still drifting) ------
   spore_drifter: {
@@ -6751,6 +6836,17 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'commander', perception: { alertShout: 480 },
       squad: { idle: { style: 'siege' } }, // the khan anchors his war-camp
+      // The crown ladder: the muster at half, the red horn at the end.
+      phases: [
+        {
+          atLifeFrac: 0.5, announce: 'the Khan sounds the muster — the tribes ANSWER!',
+          onEnter: [{ do: 'summon', monster: 'beastkin_gorer', count: 2, ring: 72 }],
+        },
+        {
+          atLifeFrac: 0.22, announce: 'the Khan reddens — the horn drinks first!',
+          mods: [mod('damage', 'more', 0.3), mod('moveSpeed', 'more', 0.2)],
+        },
+      ],
     },
   },
   /** The tribes' horn on the high roads (the Mountain Country's caster tell):
@@ -6902,7 +6998,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
     turnSpeed: 3.0,
     scaling: { life: { incPerLevel: 0.06 }, lifeRegen: { flatPerLevel: 0.6 } },
     deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.8, damageType: 'chaos' },
-    detection: 1.1, brain: { type: 'juggernaut', enrage: 0.4 },
+    detection: 1.1,
+    // The crown ladder (no type swaps — the 0.4 enrage stays live): it
+    // sheds its excess at half, and what remains packs DENSER.
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      phases: [
+        {
+          atLifeFrac: 0.55, announce: 'the Amalgam SHEDS its excess!',
+          onEnter: [{ do: 'summon', monster: 'lesser_ooze', count: 3, ring: 40 }],
+        },
+        {
+          atLifeFrac: 0.25, announce: 'what remains packs DENSER — the clot hardens!',
+          mods: [mod('damage', 'more', 0.3), mod('damageTaken', 'more', -0.15)],
+        },
+      ],
+    },
   },
   // The anchored wall: a corridor of meat you must burst to pass.
   membrane: {
@@ -7518,7 +7629,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // warlord seat, the Long Night's court) ignore presence by design.
     presence: { from: 14 },
     gemBias: ['chaos', 'minion'], wardPriority: 2,
-    detection: 1.3, brain: { type: 'commander' },
+    detection: 1.3,
+    // The crown ladder: court manners at full health, the hunt below
+    // half, and the whole belfry at the end.
+    brain: {
+      type: 'commander',
+      phases: [
+        {
+          atLifeFrac: 0.55, type: 'assassin',
+          announce: 'the Countess tires of court manners — she HUNTS!',
+          mods: [mod('moveSpeed', 'more', 0.25)],
+        },
+        {
+          atLifeFrac: 0.25, announce: 'the belfry EMPTIES for her!',
+          onEnter: [{ do: 'summon', monster: 'crimson_bat', count: 3, ring: 60 }],
+          mods: [mod('lifeLeech', 'flat', 0.08)],
+        },
+      ],
+    },
   },
   // The werewolf: the wolf family's horror cousin — a locked charge, tearing
   // wounds, and more of it the harder it bleeds.
@@ -8599,7 +8727,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
     grants: [{ atLevel: 12, support: 'multistrike', on: 'heavy_strike', chance: 0.6 }],
     carry: { rarity: 'rare' },
     presence: { from: 9, fadeIn: 4 },
-    brain: { type: 'commander', perception: { alertShout: 500 } },
+    // The crown ladder: the armory empties at half — including one flight
+    // of fists — and the last stand swings faster than it should.
+    brain: {
+      type: 'commander', perception: { alertShout: 500 },
+      phases: [
+        {
+          atLifeFrac: 0.5, announce: 'the armory EMPTIES for the Unworn!',
+          onEnter: [
+            { do: 'summon', monster: 'blade_swarm', count: 2, ring: 66 },
+            { do: 'summon', monster: 'gauntlet_swarm', count: 1, ring: 66 },
+          ],
+        },
+        {
+          atLifeFrac: 0.2, announce: 'every empty suit remembers its drill!',
+          mods: [mod('attackSpeed', 'increased', 0.3)],
+        },
+      ],
+    },
   },
 
   // --- THE CHATTEL (livestock gone wrong) ------------------------------------
@@ -12882,6 +13027,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
         announce: 'the Matriarch\'s hiss carries across the water!',
         actions: [{ do: 'summon', monster: 'marsh_adder', count: 3, ring: 52 }],
       }],
+      // The crown ladder: the court closes ranks at half; wounded to the
+      // quick, she is ALL coil (the torn-segment wounds keep counting).
+      phases: [
+        {
+          atLifeFrac: 0.55, announce: 'the court closes ranks around the Matriarch!',
+          onEnter: [{ do: 'summon', monster: 'hooded_spitter', count: 2, ring: 64 }],
+        },
+        {
+          atLifeFrac: 0.22, announce: 'she is ALL coil now — nothing left to charm!',
+          mods: [mod('moveSpeed', 'more', 0.25), mod('damage', 'more', 0.25)],
+        },
+      ],
     },
   },
 
