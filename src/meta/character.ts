@@ -397,11 +397,27 @@ function saveSlotFor(world: World): number {
   return entry ? entry.slot : -1;
 }
 
+/** Stringify the save, splicing the world's memoized zones JSON in verbatim
+ *  where the runtime offers JSON.rawJSON — the final walk then covers the
+ *  ~5% of the tree that actually changes per beat instead of re-serializing
+ *  663 zone defs (the 20s autosave hitch). The identity guard (`v === zs`)
+ *  keeps the splice honest: it fires only for the exact array the memo's
+ *  JSON describes; runtimes without rawJSON stringify plainly. */
+function characterBody(world: World, save: CharacterSave): string {
+  const zonesJson = world.zonesSaveJson();
+  const raw = (JSON as unknown as { rawJSON?: (s: string) => unknown }).rawJSON;
+  if (zonesJson && typeof raw === 'function' && save.world) {
+    const zs = save.world.zones;
+    return JSON.stringify(save, (k, v) => (k === 'zones' && v === zs ? raw(zonesJson) : v));
+  }
+  return JSON.stringify(save);
+}
+
 export function saveCharacter(world: World): void {
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   let body: string;
-  try { body = JSON.stringify(serializeCharacter(world)); }
+  try { body = characterBody(world, serializeCharacter(world)); }
   catch { return; } // quota / serialize errors never crash gameplay
   try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
   diskPut(slot, body);
@@ -414,8 +430,11 @@ export function saveCharacter(world: World): void {
 export function saveCharacterDurable(world: World): void {
   const slot = saveSlotFor(world);
   if (slot < 0) return;
+  // The session's LAST write is always built fresh — the memo's fold never
+  // gets a say over the exact-resume promise.
+  world.invalidateZonesSaveMemo();
   let body: string;
-  try { body = JSON.stringify(serializeCharacter(world)); }
+  try { body = characterBody(world, serializeCharacter(world)); }
   catch { return; }
   try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
   diskBeacon(slot, body);

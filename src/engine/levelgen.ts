@@ -203,6 +203,7 @@ export type KnownDoodadKind =
   // The rock grammar's kin (stone-variety round)
   | 'cairn'       // stacked waymark stones — solid, blocks feet not shots
   | 'scree'       // walkable gravel spill (pure decoration)
+  | 'boulder_rubble' // a shattered track-stone's drying bones (walkable, evap)
   | 'rock_spire'  // a standing pinnacle — solid, blocks shots, casts long
   // The Karst Country's kit (the petrified weald + the chasm reach)
   | 'petrified_tree'   // BRITTLE stone tree — walk-under cover that SHATTERS when struck
@@ -2131,6 +2132,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // scree is decoration underfoot, a spire is a full standing block.
   cairn:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['water', 'lava', 'chasm'] },
   scree:      { overlap: 'ground', walkOnly: true },
+  // A shattered track-stone's remains (THE SHATTER READ, engine/tracks.ts
+  // shatterFx): planted at the death point by the retire burst, drying away
+  // on the evap fabric — decoration underfoot exactly like scree.
+  boulder_rubble: { overlap: 'ground', walkOnly: true },
   rock_spire: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm'],
     rockForm: { spire: true } }, // spires always roll MONO — one snug honest column
   // Flora clarity: a berry bush is walkable cover exactly like brush; ferns

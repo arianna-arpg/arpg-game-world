@@ -58,6 +58,16 @@ export const WORLDSTATE_CFG = {
   /** Sanity cap on restorable zones — a save claiming more is treated as
    *  corrupt beyond the cap (kept zones still load; the rest are culled). */
   zoneCap: 2000,
+  /** THE ZONES SAVE MEMO (World.serializeWorldState): the zones section —
+   *  ~95% of a lived-in save's bytes, rebuilt with a per-def JSON round-trip
+   *  every 20s autosave (measured 80ms+ hitches by 663 zones) — is memoized
+   *  on a one-pass fold of every MUTABLE def signal (map coords, level,
+   *  veiled/quickened flags, exits incl. rewires, harborhold state, the
+   *  claimed-event set). Deep def fields are mint-once by design; this age
+   *  bound (world-clock seconds) re-derives regardless, so even a signal the
+   *  fold misses can lag a HARD CRASH's save by at most this long — normal
+   *  quits ride the durable path, which bypasses the memo entirely. */
+  zonesMemoMaxAgeSec: 120,
 } as const;
 
 /** Resolve the wake policy: the mode's pin wins (a sworn covenant is not

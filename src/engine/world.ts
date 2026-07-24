@@ -13418,29 +13418,82 @@ export class World {
    *  quests, the player's spot + vitals, and every opted-in overlay snapshot
    *  (WorldSim.snapshotOverlays). PURE — no world mutation, safe mid-frame
    *  on every autosave. */
+  /** THE ZONES SAVE MEMO (WORLDSTATE_CFG.zonesMemoMaxAgeSec): the serialized
+   *  zones section — ~95% of a lived-in save's bytes — reused across autosave
+   *  beats while no mutable def signal moved. The 20s beat on a 663-zone
+   *  chart measured 80ms+ rebuilding a byte-identical section (a JSON
+   *  round-trip per def); the fold below is one numeric pass. */
+  private zonesSaveMemo: { key: string; zones: ZoneDef[]; json: string } | null = null;
+
+  /** The memoized zones section's own JSON — saveCharacter splices it into
+   *  the body verbatim (JSON.rawJSON) so the final stringify walks the other
+   *  5% of the tree. Null until serializeWorldState has run. */
+  zonesSaveJson(): string | null { return this.zonesSaveMemo?.json ?? null; }
+
+  /** Drop the zones memo — the DURABLE quit path calls this first, so the
+   *  final write of a session is always built fresh (exact resume owes
+   *  nothing to the memo's key). */
+  invalidateZonesSaveMemo(): void { this.zonesSaveMemo = null; }
+
+  /** One-pass fold of every MUTABLE ZoneDef signal the save carries: map
+   *  coords (the settling drifts them), level + quickened (the surge), the
+   *  visibility flags, exits (mint rewires, '?' resolutions, notary stamps,
+   *  locks), harborhold lifecycle, searoutes, and the claimed-event set that
+   *  decides membership. Deep fields (layout/theme/packs/structures/geo) are
+   *  mint-once by design and deliberately unfolded — the age bucket in the
+   *  key re-derives regardless, bounding any missed signal to a crash-only,
+   *  ≤zonesMemoMaxAgeSec stale zones section. */
+  private zonesSaveFold(claimed: ReadonlySet<string>): string {
+    let h = 0x811c9dc5;
+    const mix = (n: number): void => { h ^= n | 0; h = Math.imul(h, 0x01000193); };
+    const str = (s: string): void => { for (let i = 0; i < s.length; i++) mix(s.charCodeAt(i)); };
+    let count = 0;
+    for (const z of Object.values(this.zoneMap)) {
+      if (z.eventOwned && !claimed.has(z.id)) continue;
+      count++;
+      str(z.id);
+      mix(z.map.x * 8); mix(z.map.y * 8); mix(z.level * 16);
+      mix((z.veiled ? 1 : 0) | (z.quickened !== undefined ? 2 : 0)
+        | (z.concealed ? 4 : 0) | (z.floating ? 8 : 0));
+      for (const e of z.exits) { str(e.to); mix((e.notarized === true ? 1 : 0) | (e.lock ? 2 : 0)); }
+      if (z.harborhold) str(JSON.stringify(z.harborhold));
+      if (z.searoutes) mix(z.searoutes.length);
+    }
+    return count + ':' + this.nextGenId + ':' + (h >>> 0).toString(36)
+      + ':' + Math.floor(this.time / WORLDSTATE_CFG.zonesMemoMaxAgeSec);
+  }
+
   serializeWorldState(): WorldStateSave {
     // Snapshot the overlays FIRST: their bags carry the ownedZones claims
     // (world/overlay.ts convention) that decide which event ground rides.
     const overlays = this.sim.snapshotOverlays();
     const claimed = new Set(this.activeQuests.map(q => q.zoneId));
     for (const id of claimedZonesFromBag(overlays)) claimed.add(id);
-    const zones: ZoneDef[] = [];
-    for (const z of Object.values(this.zoneMap)) {
-      // The TRANSIENCE RULE: an unclaimed event zone re-rolls with its event.
-      if (z.eventOwned && !claimed.has(z.id)) continue;
-      const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
-      delete clone.exitBoundaries; // transient — re-derived every zone load
-      delete clone.exitRoads;      // transient — the road annotation rides the same seam
-      delete clone.exitMelds;      // transient — the meld annotation rides the same seam
-      zones.push(clone);
+    let zones: ZoneDef[];
+    const foldKey = this.zonesSaveFold(claimed);
+    if (this.zonesSaveMemo && this.zonesSaveMemo.key === foldKey) {
+      zones = this.zonesSaveMemo.zones; // byte-identical section — reuse whole
+    } else {
+      zones = [];
+      for (const z of Object.values(this.zoneMap)) {
+        // The TRANSIENCE RULE: an unclaimed event zone re-rolls with its event.
+        if (z.eventOwned && !claimed.has(z.id)) continue;
+        const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
+        delete clone.exitBoundaries; // transient — re-derived every zone load
+        delete clone.exitRoads;      // transient — the road annotation rides the same seam
+        delete clone.exitMelds;      // transient — the meld annotation rides the same seam
+        zones.push(clone);
+      }
+      // Heal the roads at WRITE time too (an exit into scrubbed event ground
+      // would otherwise dangle until the next resume's load-side healing).
+      const healKept = new Set(zones.map(z => z.id));
+      for (const z of zones) {
+        z.exits = z.exits.filter(e => e.to === '?' || healKept.has(e.to));
+        if (z.searoutes) z.searoutes = z.searoutes.filter(id => healKept.has(id));
+      }
+      this.zonesSaveMemo = { key: foldKey, zones, json: JSON.stringify(zones) };
     }
-    // Heal the roads at WRITE time too (an exit into scrubbed event ground
-    // would otherwise dangle until the next resume's load-side healing).
     const kept = new Set(zones.map(z => z.id));
-    for (const z of zones) {
-      z.exits = z.exits.filter(e => e.to === '?' || kept.has(e.to));
-      if (z.searoutes) z.searoutes = z.searoutes.filter(id => kept.has(id));
-    }
     // Zone memory: every TTL-fresh remembered zone (graph zones + the
     // sanctioned cave_ namespace — cave ids are stable per mouth, so a side
     // area re-minted next session finds its survivors), topped by a LIVE
@@ -39957,8 +40010,39 @@ export class World {
             const end = r.lastLive ?? tr.arc.pts[tr.arc.pts.length - 1];
             const reach = r.def.surface.kind === 'circle'
               ? r.def.surface.r : Math.max(r.def.surface.hw, r.def.surface.hh);
-            this.flashes.push({ pos: vec(end.x, end.y), radius: reach * 1.7, color: r.def.color ?? '#cfc4ae', life: 0.45, maxLife: 0.45 });
+            const color = r.def.color ?? '#cfc4ae';
+            this.flashes.push({ pos: vec(end.x, end.y), radius: reach * 1.7, color, life: 0.45, maxLife: 0.45 });
             this.shake = Math.max(this.shake, Math.min(2.4, reach * 0.05));
+            // THE SHATTER READ (TRACK_CFG.shatterFx): a stamina-rolled stone
+            // dies MID-FLIGHT and the pure pose law re-seats it at the
+            // cradle the same instant — one modest flash read as "the
+            // boulder blinked out" (user QA report: a strange effect near
+            // the end of its curve). The lever IS the look: shatter lanes
+            // break apart — a debris fan (offsets hashed off the death
+            // point, deterministic, zero rng draws) plus a drying rubble
+            // pock riding the evap fabric, so what rolls next pass reads
+            // as a NEW stone leaving the old one's bones.
+            if (tr.spec.shatter) {
+              const FX = TRACK_CFG.shatterFx;
+              for (let fi = 0; fi < FX.fragments; fi++) {
+                const ang = fi * 2.39996 + (end.x + end.y) * 0.013;
+                const dist = reach * (0.5 + 0.45 * (((fi + 1) * 2654435761 >>> 13) % 97) / 97);
+                const life = 0.3 + 0.05 * fi;
+                this.flashes.push({
+                  pos: vec(end.x + Math.cos(ang) * dist, end.y + Math.sin(ang) * dist),
+                  radius: reach * (0.3 + 0.08 * (fi % 3)), color,
+                  life, maxLife: life,
+                });
+              }
+              const rubble: Doodad = {
+                pos: vec(end.x, end.y), radius: Math.max(10, reach * 0.9),
+                kind: 'boulder_rubble',
+                evap: { t: FX.rubbleDwell, rate: FX.rubbleRate },
+              };
+              this.doodads.push(rubble);
+              this.evaporating.push(rubble);
+              this.markDoodadsChanged(rubble);
+            }
           }
           r.resting = true;
           continue;

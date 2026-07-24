@@ -86,6 +86,15 @@ export const TRACK_CFG = {
   /** Landing shove when a payload carries impulse but the victim is already
    *  dead-centre on the rider (degenerate radial) — push along the lane. */
   degenerateDir: 0.0,
+  /** THE SHATTER READ (shatter lanes' retire moment): a stone that gives out
+   *  on its stamina roll teleports to its cradle by the pure pose law — the
+   *  READ at the death point must therefore carry the whole story. Beyond
+   *  the standing retire flash: a debris fan of `fragments` smaller bursts
+   *  (offsets hashed off the death point — deterministic, no rng draws) and
+   *  a drying rubble pock (Doodad.evap: dwell seconds, then contraction at
+   *  `rubbleRate` u/s — the transience fabric). Non-shatter completions
+   *  keep the modest single flash. */
+  shatterFx: { fragments: 5, rubbleDwell: 22, rubbleRate: 7 },
 } as const;
 
 // --- payload ---------------------------------------------------------------

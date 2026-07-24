@@ -1119,6 +1119,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'scree', order: 37, params: { color: 'theme:obstacle' },
     blend: { strength: 0.32, feather: 14, color: 'theme:obstacle' },
   },
+  // A shattered track-stone's bones (THE SHATTER READ): the scree painter in
+  // the rider's rock grey, no blend bed — it dries away via evap, and a bed
+  // would re-bake its chunk at every contraction step for a transient prop.
+  boulder_rubble: {
+    painter: 'scree', order: 37, params: { color: '#8f8878' },
+  },
   rock_spire: {
     longShadow: 1.7,
     painter: 'boulder', order: 55, shadow: 0.65,
