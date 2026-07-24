@@ -112,6 +112,24 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
     },
   },
 
+  // TWIN MEASURES — the duellist's inverse of Drumbeat: two DIFFERENT attack
+  // skills back-to-back close the measure. Variety over the skill key, gated
+  // to the attack lane, so a one-button build never accidentally wears it.
+  // Granted by the Red Cadence wing's Twin Measures notable.
+  twin_measures: {
+    id: 'twin_measures', name: 'Twin Measures', color: '#e8906a',
+    blurb: 'Strike with two DIFFERENT attack skills back-to-back to close the measure: damage and poise damage surge while the weave holds.',
+    vary: { n: 2, by: 'skill' },
+    gate: { anyTags: ['attack'] },
+    within: 4,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'twin_measures', duration: 3, maxStacks: 3,
+        mods: [mod('damage', 'increased', 0.08, ['attack']), mod('poiseDamage', 'increased', 0.1)],
+      },
+    },
+  },
+
   // DRUMBEAT — the same blow, three times running, lands heavier: damage
   // and poise damage that stack as the drum keeps time. The repetition
   // grammar (fresh trios re-form by design — the consume rule makes every

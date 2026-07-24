@@ -607,6 +607,22 @@ registerChoiceGroup({
   ],
 });
 
+// COVENANTS OF THE WILDS — the mastery pattern for the beast-and-shadow
+// lanes: sworn once per character (unique 'character'), dealt at stones on
+// the Shepherd's Sky and the Whisper Gallery. Pathing to the second stone is
+// how a hero earns a second covenant.
+registerChoiceGroup({
+  id: 'wild_covenants',
+  name: 'Covenant of the Wilds',
+  unique: 'character',
+  options: [
+    { id: 'pack', name: 'Covenant of the Pack', description: '15% increased minion damage; 10% increased minion movement speed', mods: [mod('minionDamage', 'increased', 0.15), mod('minionMoveSpeed', 'increased', 0.1)] },
+    { id: 'warren', name: 'Covenant of the Warren', description: 'Throng finds run 25% larger', mods: [mod('throngYield', 'increased', 0.25)] },
+    { id: 'quiet', name: 'Covenant of the Quiet', description: '20% harder to detect; +15% ambush damage', mods: [mod('detectability', 'increased', -0.2), mod('ambushBonus', 'flat', 0.15)] },
+    { id: 'red_meal', name: 'Covenant of the Red Meal', description: '1% of damage leeched as life; 10% increased minion life', mods: [mod('lifeLeech', 'flat', 0.01), mod('minionLife', 'increased', 0.1)] },
+  ],
+});
+
 // WAYPOSTS ('first') — the shortcut lane: the FIRST waypost taken deals its
 // blessing; every later sibling still allocates (full point) but grants
 // nothing — a paid shortcut into another branch, pure opportunity cost.
