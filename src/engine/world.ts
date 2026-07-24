@@ -8106,15 +8106,27 @@ export class World {
    *  work: unfound country stays unfound — the ring-1 unveil and the veil
    *  invariant decide what shows, exactly as the ambient sweep's mints do).
    *  Bounded and idempotent: on sweep-filled ground the first scan finds
-   *  nothing and the call is one O(zones) filter. */
+   *  nothing and the call is one O(zones) filter. Termination rides the
+   *  `charted` set, surveyAround's own shape: every pass processes only NEW
+   *  blood (fresh mints + settle drift-ins — a cleaned zone can't regain an
+   *  unlocked '?' mid-call, frontiers are only ever born WITH a new zone),
+   *  so the loop drains structurally. The old guard-20 pass cap EXHAUSTED
+   *  at the halo rim (measured: 11-19 passes routine on a teleport into
+   *  thin chart, 20+ in the tail — the settle-drift trickle + a sea batch's
+   *  second growth wave) and stranded the final pass's own mints as '?'
+   *  stragglers: probe_webqa J's rare gen_NNN[… ?×1] flake. */
   private chartWithin(origin: MapCoord, radius: number, dim: string): void {
     this.mintVeil = true;
     try {
-      for (let guard = 0; guard < 20; guard++) {
+      const charted = new Set<string>();
+      for (;;) {
         const batch = Object.values(this.zoneMap).filter(z =>
-          forechartSource(z, dim) && coordDist(z.map, origin) <= radius);
+          !charted.has(z.id) && forechartSource(z, dim) && coordDist(z.map, origin) <= radius);
         if (!batch.length) break;
-        for (const z of batch) this.chartNeighborsOf(z);
+        for (const z of batch) {
+          charted.add(z.id);
+          this.chartNeighborsOf(z);
+        }
       }
     } finally {
       this.mintVeil = false;

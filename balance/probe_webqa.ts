@@ -643,20 +643,30 @@ console.log(`  (info) jungle nodes pressing past the world cap by their own budg
     if (unresolved(w.zone.map, 'surface') === 0) cleanStops++;
     const before = new Set(inHorizon(w.zone.map, 'surface').map(z => z.id));
     step(40); // ~10s standing here — sweeps run
-    // Exempt from "ambient birth": directed quest mints, and FOREORDAINED
-    // sea systems (a first water touch mints that whole sea's harbor pairs
-    // at once, wherever its coast runs — the atomic-batch law, same
-    // exemption probe_forechart's ring check carries) with their floating
-    // sounding buds.
+    // Exempt from "ambient birth": directed quest mints; FOREORDAINED sea
+    // systems (a first water touch mints that whole sea's harbor pairs at
+    // once, wherever its coast runs — the atomic-batch law, same exemption
+    // probe_forechart's ring check carries) with their floating sounding
+    // buds; and STILL-VEILED births — the halo grows closest-first, so a
+    // frontier source just PAST the horizon (or a chain child, or a field
+    // re-centre) may land its mint just inside it. That child is invisible
+    // at the one fog seam and the next arrival's catch-up re-covers it; the
+    // player-facing law is that nothing FINDABLE is born underfoot. The
+    // veil bit at read time is exactly that truth: the per-sweep invariant
+    // pass (~0.45s cadence, ~22 beats in this window) auto-unveils anything
+    // bordering found ground, so a birth still veiled here provably never
+    // showed itself — while a pop-in (unveiled by that pass, or born bare)
+    // still counts as the breach it is.
     const born = inHorizon(w.zone.map, 'surface').filter(z => !before.has(z.id)
-      && !z.id.startsWith('quest_') && !z.port && !z.holdAnchor && !z.seaId && !z.floating);
+      && !z.id.startsWith('quest_') && !z.port && !z.holdAnchor && !z.seaId && !z.floating
+      && !z.veiled);
     if (born.length === 0) quietSteps++;
     else for (const z of born) console.log(`  (born) ${z.id}[${z.biome} kind=${z.kind ?? '-'} V=${!!z.veiled} E=${!!z.eventOwned} conc=${!!z.concealed}] at ${Math.round(Math.hypot(z.map.x - w.zone.map.x, z.map.y - w.zone.map.y))}u`);
   }
   check('J: every hop lands on PRE-EXISTING ground (found, never minted)', hops >= 4 && preExisted === hops,
     `${preExisted}/${hops} hops`);
   check('J: the horizon is fully-resolved ground at every stop', cleanStops === hops, `${cleanStops}/${hops}`);
-  check('J: standing time mints NOTHING inside the horizon', quietSteps === hops, `${quietSteps}/${hops}`);
+  check('J: standing time mints nothing FINDABLE inside the horizon', quietSteps === hops, `${quietSteps}/${hops}`);
 
   // THE TELEPORT: jump to the RIM of the halo (thin chart) — the arrival
   // catch-up must resolve the whole horizon synchronously, before any sweep.

@@ -47,9 +47,13 @@ export interface ForechartCfg {
    *  within this of the player resolve SYNCHRONOUSLY (a bounded catch-up —
    *  a no-op on ground the sweep already filled, real work only after a
    *  long teleport/sail into thin chart). Inside this radius the only new
-   *  nodes are DIRECTED (quest/event levers) by construction: ambient
-   *  growth happened long before the player got here, and what they meet
-   *  is FOUND, never freshly minted. */
+   *  FINDABLE nodes are DIRECTED (quest/event levers) by construction:
+   *  ambient growth happened long before the player got here, and what
+   *  they meet is FOUND, never freshly minted. (The halo's own VEILED
+   *  children may still land just inside — closest-first growth means a
+   *  source past the rim can mint inward — but the veil keeps them off
+   *  every player surface and the next arrival's catch-up re-covers them;
+   *  probe_webqa J reads the veil bit as that law's truth.) */
   horizon: number;
   /** Frontier-bearing zones processed per sweep (each yields ≤ a few mints) —
    *  the per-tick COUNT budget. */

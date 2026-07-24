@@ -440,9 +440,12 @@ changes.
   on a RESERVED sweep lane. THE PREGEN DOCTRINE + MINT HORIZON
   (`FORECHART_CFG.ring` 1000 / `horizon` 480 + `World.chartWithin`): the
   halo is a pre-explored COUNTRY and every arrival synchronously resolves
-  its whole horizon — inside it the only new nodes are DIRECTED mints and
-  atomic sea systems; the player meets ground that is FOUND, never freshly
-  minted (probe_webqa J).
+  its whole horizon (chartWithin drains on a charted-set — surveyAround's
+  termination shape; its old guard-20 pass cap exhausted on rim teleports
+  and stranded '?' stragglers, the J flake) — inside it the only new
+  FINDABLE nodes are DIRECTED mints and atomic sea systems (the halo's own
+  veiled children may land just inside; the veil is the law's truth); the
+  player meets ground that is FOUND, never freshly minted (probe_webqa J).
   EVENT SEATS (`world/seats.ts` — `pickSeat` + per-def `SeatTuning`) are
   the one data-driven "where does this event land": range envelopes +
   known/unknown/veiled weights (hunt, haunting, longNight, longcandle,

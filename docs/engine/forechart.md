@@ -46,15 +46,24 @@ so `maxVeiled` is a ceiling, not a target), and `FORECHART_CFG.horizon`
 (480) is the **guarantee**: on every zone arrival, `World.chartWithin`
 synchronously resolves every `'?'` frontier within the horizon — a no-op
 scan on sweep-filled ground, real work only after a teleport/sail into thin
-chart. Inside the horizon the only NEW nodes are **directed** (quests,
-event levers) plus foreordained sea systems (a first water touch mints that
-whole sea's harbor pairs atomically, wherever its coast runs): ambient
-growth happened long before the player arrived, and everything they meet is
-**found, never freshly minted**. Soundings ride a RESERVED budget lane
-(one unit off the top of each sweep) so the colossal fill can never starve
-an event's far seat. Pinned by `probe_webqa` section J (walked hops on
-pre-existing fully-resolved ground; rim-teleport synchronous catch-up; the
-quest exemption). Ring 1400 was measured and retreated: the young-world
+chart. Inside the horizon the only NEW **findable** nodes are **directed**
+(quests, event levers) plus foreordained sea systems (a first water touch
+mints that whole sea's harbor pairs atomically, wherever its coast runs):
+ambient growth happened long before the player arrived, and everything they
+meet is **found, never freshly minted**. The halo's own VEILED children may
+still land just inside the horizon — closest-first growth means a frontier
+source past the rim (or a chain child, or a re-centred field expanse) can
+mint inward — but the veil keeps them off every player surface, the
+invariant pass would unveil (and thereby FLAG) any that touched found
+ground, and the next arrival's catch-up re-covers them. Soundings ride a
+RESERVED budget lane (one unit off the top of each sweep) so the colossal
+fill can never starve an event's far seat. Pinned by `probe_webqa` section
+J (walked hops on pre-existing fully-resolved ground; rim-teleport
+synchronous catch-up — `chartWithin` drains on a charted-set, surveyAround's
+own termination shape, after its old guard-20 pass cap measured EXHAUSTING
+on teleports into thin chart and stranded the final pass's mints as the
+rare `?×1` straggler flake; standing-time births judged by the veil bit;
+the quest exemption). Ring 1400 was measured and retreated: the young-world
 fill then lives in foreordained first-touch territory (whole-sea/relief
 units of 200-340ms) for many minutes — the time governor bounds the stack,
 but the single-unit bill is worldgen's own standing chip; when that lands,
