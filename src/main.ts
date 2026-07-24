@@ -455,6 +455,7 @@ declare global {
       devStartRun: (classId?: string) => string;
       perfFrames: (reset?: boolean) => { gap: number[]; sim: number[]; ren: number[] };
       perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
+      devPanel: () => void;
     };
   }
 }
@@ -509,6 +510,7 @@ window.__game = {
     return out;
   },
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
+  devPanel: () => mountDevPanel(() => world),
 };
 
 // THE WORKSHOP (meta/workshop.ts): graft dev-authored entities from the
@@ -518,8 +520,18 @@ loadWorkshopSync();
 // Cross-check the data files; authoring mistakes warn instead of failing silently.
 validateContent();
 
-// DEV: the tabbed dev panel (config.ts DEV.panel). Off (0) = no-op.
-if (DEV.panel) mountDevPanel(() => world);
+// DEV: the tabbed dev panel (config.ts DEV.panel). Off (0) = no-op. Runtime
+// opt-ins beside the source flag — `?dev` on the URL or localStorage
+// 'dev_panel'='1' — so QA can raise the panel on any dev serve without a
+// source edit (and __game.devPanel() mounts it live in a RUNNING session,
+// no reload: mountDevPanel is idempotent).
+const devPanelOptIn = ((): boolean => {
+  try {
+    return new URLSearchParams(location.search).has('dev')
+      || localStorage.getItem('dev_panel') === '1';
+  } catch { return false; }
+})();
+if (DEV.panel || devPanelOptIn) mountDevPanel(() => world);
 // DEV: the passive-tree editor (config.ts DEV.passiveTreeEditor). Off (0) = no-op.
 if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
 // DEV: the Entity Forge (config.ts DEV.entityForge) — start-menu button +

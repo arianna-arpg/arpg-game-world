@@ -18,8 +18,13 @@ export const DEV = {
    *  EVENTS (force-spawn any world event here + a live event-frequency crank),
    *  LOCATION (jump to any dimension or the nearest (un)explored biome —
    *  minting one from the live heat map when none exists — plus zone hop,
-   *  ghost/noclip, kill-all).
-   *  0 = off (no button, zero overhead). */
+   *  ghost/noclip, kill-all),
+   *  PULSE (live frame telemetry off the always-on main-loop rings — fps,
+   *  gap/sim/render percentiles, hitch counts, world/chart rates — plus the
+   *  toggleable top-right FPS CHIP overlay).
+   *  0 = off (no button, zero overhead). Runtime opt-ins without a source
+   *  edit: `?dev` on the URL, localStorage 'dev_panel'='1', or
+   *  `__game.devPanel()` to mount it live in a RUNNING session. */
   panel: 0,
   /** 1 = THE ENTITY FORGE (dev/entityForge.ts): a full-screen entity
    *  creator/tweaker reachable from the START MENU ("Entity Forge" button) and

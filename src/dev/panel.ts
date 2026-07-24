@@ -29,6 +29,7 @@ import { liteTab } from './tabs/lite';
 import { possessTab } from './tabs/possess';
 import { entityTab } from './tabs/entity';
 import { holdsTab } from './tabs/holds';
+import { perfTab } from './tabs/perf';
 
 /** What the shell hands every tab at build time. */
 export interface DevTabCtx {
@@ -50,9 +51,13 @@ export interface DevTabDef {
 }
 
 /** THE TAB REGISTRY — order is display order. */
-const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab];
+const DEV_TABS: DevTabDef[] = [gemsTab, itemsTab, eventsTab, locationTab, accountTab, throngTab, comboTab, grabTab, liteTab, possessTab, entityTab, holdsTab, perfTab];
+
+let mounted = false;
 
 export function mountDevPanel(getWorld: () => World): void {
+  if (mounted) return; // idempotent — __game.devPanel() may call at any time
+  mounted = true;
   const openBtn = document.createElement('button');
   openBtn.textContent = '🔧 Dev';
   css(openBtn, {
