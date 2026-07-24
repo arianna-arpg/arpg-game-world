@@ -165,6 +165,34 @@ mid-session):
   restore heal's whole-save backlog) relaxes a few neighbourhoods per beat
   instead of the whole chart in one frame; convergence amortizes across
   beats via the gate.
+- **THE SCAN LATTICE** (the charting UNIT's cost, closed 2026-07-23 after
+  the forechart TIME GOVERNOR bounded the per-frame stack): the per-CANDIDATE
+  chart predicates — `chordClearsNodes`, `footprintBars`,
+  `insideFieldFootprint` — each walked the WHOLE zone map, and the
+  road-formers run them per candidate, so one charting unit went quadratic
+  (measured 50-95ms by N≈300; `footprintBars` alone 38% of the rig's
+  self-time). One derived index now serves all three: the FIELD ROSTER
+  (expanses are a handful — the only zones the footprint laws read) and the
+  COORD CELL BINS (`pairsWithin`'s spatial-hash idiom, kept across calls;
+  the chord test sweeps only the bins overlapping its clearance-inflated
+  AABB). Keyed (zoneMap identity, own-key count, `webDisturbance()`) — the
+  doodad-families discipline: identity catches wholesale swaps (restore
+  heal, new run, temp maps), count catches every insertion (zones never
+  delete; `field`/`caveDepth`/`dimension` bake pre-insert), the disturbance
+  seq catches every move (`settleWeb` bumps, every mint pokes, and
+  `pokeWeb`'s relocation contract binds everything else —
+  `randomizeStarterWeb` now pokes for its hub move). Bins hold live refs, so
+  only bin PLACEMENT and roster MEMBERSHIP can stale — exactly what the keys
+  cover; fields are settle-immovable, so the footprint lanes stay coherent
+  even mid-settle. Beside it, THE CHEAP-FIRST GATES: `weaveConnections` runs
+  `routeOk` (footprint + wet-chord march) only on survivors of the
+  WEAVE_RADIUS cut, and `nearestLinkable` runs its expensive laws only on
+  candidates that beat the standing nearest — pure-predicate reorders, the
+  same winners by construction. Answers are byte-identical (probe section D
+  pins ≡-naive at chart scale, the pokeWeb flip, and the temp-map lane; the
+  charting unit measured 34.9→1.9ms p50 / 85→10ms max at N=313, whole-chart
+  fingerprint unchanged). Biome-sample memoization was the audit's other
+  suspect — measured a non-issue (the field pick memo already absorbs it).
 
 ## QUEST DEEDS (directed mints never lock out)
 

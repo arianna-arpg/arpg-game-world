@@ -62,6 +62,9 @@ export function randomizeStarterWeb(zoneMap: Record<string, ZoneDef>, seed: numb
   const townKeep = town.exits.filter(e => e.to !== HUB_ZONE && e.to !== '?');
   const hubKeep = hub.exits.filter(e => e.to !== START_ZONE && e.to !== '?');
   hub.map = projectCoord(town.map, dir);
+  // The hub's node just MOVED outside placeZoneAt/settleWeb — honor pokeWeb's
+  // relocation contract (the settle sweep AND the scan lattice both key on it).
+  pokeWeb();
   town.exits = [{ to: HUB_ZONE, side: dir }, ...townKeep];
   const rest = DIRS.filter(d => d !== OPP_DIR[dir]);
   hub.exits = [
@@ -346,17 +349,92 @@ function segPointDist(a: MapCoord, b: MapCoord, c: MapCoord): number {
   return Math.hypot(c.x - (a.x + t * abx), c.y - (a.y + t * aby));
 }
 
+// --- THE SCAN LATTICE --------------------------------------------------------
+// The derived index behind the hot chart scans (chordClearsNodes /
+// footprintBars / insideFieldFootprint). These predicates run PER CANDIDATE
+// inside the road-formers — the all-zones walk each carried made one charting
+// unit quadratic in chart size (the 2026-07-23 forechart audit measured a
+// single unit at 50-95ms by N≈300, footprintBars alone 38% of the rig's
+// self-time). One walk now derives BOTH lanes — the FIELD ROSTER (expanses
+// are a handful; the footprint laws only ever cared about them) and the CELL
+// BINS (pairsWithin's spatial-hash idiom, kept across calls) — and every
+// consumer filters its own candidates exactly as its old per-zone line did,
+// so answers are byte-identical by construction (boolean predicates over the
+// same candidate supersets).
+//
+// KEYING (the doodad-families discipline — derived, self-healing, never a
+// hand-fed flag): (zoneMap IDENTITY, own-key COUNT, webDisturbance()).
+// Identity catches wholesale swaps (a restore heal's rebuilt map, a new run's
+// clone, a probe's temp map); count catches every insertion — zones are never
+// deleted, and a mint's field/caveDepth/dimension are baked BEFORE it enters
+// the map (fieldifyZone runs pre-insert at every site); the disturbance seq
+// catches every node MOVE (settleWeb bumps when anything moved, placeZoneAt
+// pokes every mint, and pokeWeb's contract already binds any future
+// relocator). Bins hold live REFS — coords are read fresh at test time; only
+// bin PLACEMENT and roster MEMBERSHIP can stale, and those are exactly what
+// the three keys cover. Fields never move at all (settleMovable pins them),
+// so the footprint lanes stay coherent even mid-settle, where the standing
+// guards consult them between a move and the end-of-call bump.
+const SCAN_CELL = 128; // ≥ every opportunistic chord's clearance inflation; road chords are short (≤ ~130)
+
+interface WebScanIndex {
+  zoneMap: Record<string, ZoneDef>;
+  count: number;
+  disturb: number;
+  /** Every expanse (z.field), insertion order — the footprint laws' walk. */
+  fields: ZoneDef[];
+  /** Every zone binned by floor(map/SCAN_CELL) — the chord test's candidates. */
+  cells: Map<string, ZoneDef[]>;
+}
+
+let scanMemo: WebScanIndex | null = null;
+
+function webScanIndex(zoneMap: Record<string, ZoneDef>): WebScanIndex {
+  const keys = Object.keys(zoneMap);
+  if (scanMemo && scanMemo.zoneMap === zoneMap && scanMemo.count === keys.length
+    && scanMemo.disturb === webDisturbSeq) return scanMemo;
+  const fields: ZoneDef[] = [];
+  const cells = new Map<string, ZoneDef[]>();
+  for (const k of keys) {
+    const z = zoneMap[k];
+    if (z.field) fields.push(z);
+    const ck = Math.floor(z.map.x / SCAN_CELL) + ',' + Math.floor(z.map.y / SCAN_CELL);
+    let bin = cells.get(ck);
+    if (!bin) cells.set(ck, bin = []);
+    bin.push(z);
+  }
+  scanMemo = { zoneMap, count: keys.length, disturb: webDisturbSeq, fields, cells };
+  return scanMemo;
+}
+
 /** THE BYPASS RULE's predicate: does the chord a→b stay clear of every OTHER
  *  same-dimension node's disc? (Endpoint zones passed in `skip`.) Exported
- *  beside MAX_DEGREE/countRoads: every opportunistic road-former reads it. */
+ *  beside MAX_DEGREE/countRoads: every opportunistic road-former reads it.
+ *  Rides THE SCAN LATTICE: only bins overlapping the chord's clearance-
+ *  inflated AABB are tested — any node within chordNodeClear of the segment
+ *  necessarily sits inside that AABB, so the candidate superset (and the
+ *  boolean answer) matches the old all-zones walk exactly. */
 export function chordClearsNodes(
   a: MapCoord, b: MapCoord, zoneMap: Record<string, ZoneDef>,
   dimension: string | undefined, skip: ReadonlySet<string>,
 ): boolean {
-  for (const z of Object.values(zoneMap)) {
-    if (skip.has(z.id) || z.caveDepth != null) continue;
-    if ((z.dimension ?? 'surface') !== (dimension ?? 'surface')) continue;
-    if (segPointDist(a, b, z.map) < WEB_CFG.chordNodeClear) return false;
+  const dim = dimension ?? 'surface';
+  const clear = WEB_CFG.chordNodeClear;
+  const { cells } = webScanIndex(zoneMap);
+  const cx0 = Math.floor((Math.min(a.x, b.x) - clear) / SCAN_CELL);
+  const cx1 = Math.floor((Math.max(a.x, b.x) + clear) / SCAN_CELL);
+  const cy0 = Math.floor((Math.min(a.y, b.y) - clear) / SCAN_CELL);
+  const cy1 = Math.floor((Math.max(a.y, b.y) + clear) / SCAN_CELL);
+  for (let cx = cx0; cx <= cx1; cx++) {
+    for (let cy = cy0; cy <= cy1; cy++) {
+      const bin = cells.get(cx + ',' + cy);
+      if (!bin) continue;
+      for (const z of bin) {
+        if (skip.has(z.id) || z.caveDepth != null) continue;
+        if ((z.dimension ?? 'surface') !== dim) continue;
+        if (segPointDist(a, b, z.map) < clear) return false;
+      }
+    }
   }
   return true;
 }
@@ -384,12 +462,16 @@ function segCrossesRect(a: MapCoord, b: MapCoord, r: { x0: number; y0: number; x
 export function footprintBars(
   a: MapCoord, b: MapCoord, zoneMap: Record<string, ZoneDef>, skip?: ReadonlySet<string>,
 ): boolean {
-  for (const z of Object.values(zoneMap)) {
-    if (!z.field || z.dimension || (skip && skip.has(z.id))) continue;
-    const r = fieldCoreRect(z.field, z.size);
+  // THE SCAN LATTICE's field roster: expanses are a handful — the old walk
+  // spent its time (38% of a charting unit's self-time, measured) skipping
+  // the hundreds of zones this law never cared about.
+  for (const z of webScanIndex(zoneMap).fields) {
+    if (z.dimension || (skip && skip.has(z.id))) continue;
+    const r = fieldCoreRect(z.field!, z.size);
     if (r.x1 <= r.x0 || r.y1 <= r.y0) continue;
-    const inside = (p: MapCoord): boolean => p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1;
-    if (inside(a) || inside(b)) continue; // an incident spoke / a bay pocket's road
+    const aIn = a.x >= r.x0 && a.x <= r.x1 && a.y >= r.y0 && a.y <= r.y1;
+    const bIn = b.x >= r.x0 && b.x <= r.x1 && b.y >= r.y0 && b.y <= r.y1;
+    if (aIn || bIn) continue; // an incident spoke / a bay pocket's road
     if (segCrossesRect(a, b, r)) return true;
   }
   return false;
@@ -399,9 +481,9 @@ export function footprintBars(
  *  The settling and the placement guards share it — a settled node must not
  *  come to rest ON a meadow any more than a mint may stand there. */
 export function insideFieldFootprint(pt: MapCoord, zoneMap: Record<string, ZoneDef>, skipId?: string): boolean {
-  for (const z of Object.values(zoneMap)) {
-    if (!z.field || z.dimension || z.id === skipId) continue;
-    const r = fieldCoreRect(z.field, z.size);
+  for (const z of webScanIndex(zoneMap).fields) {
+    if (z.dimension || z.id === skipId) continue;
+    const r = fieldCoreRect(z.field!, z.size);
     if (pt.x >= r.x0 && pt.x <= r.x1 && pt.y >= r.y0 && pt.y <= r.y1) return true;
   }
   return false;
@@ -745,6 +827,14 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
   // this runs (a port never opportunistically grows a road, full stop).
   if (zoneKindOf(fresh)?.staticExits) return;
   const source = fresh.exits[0]?.to; // the back-edge is always pushed first
+  // THE CHEAP-FIRST GATE: structural filters + the radius cut run over the
+  // whole map; the EXPENSIVE gates (routeOk = the footprint scan + the
+  // wet-road chord march, and the duplicate-road scans) run only on the
+  // handful inside WEAVE_RADIUS. Every predicate is a pure read of state
+  // that does not change until the add-loop below, so the candidate set —
+  // and every rng draw after it — is byte-identical to gating before the
+  // cut (the old shape paid a landRoute march per zone ON THE WHOLE CHART
+  // per mint, most of a charting unit's cost at halo scale).
   const cands = Object.values(zoneMap)
     .filter(z =>
       z.id !== fresh.id && z.id !== source &&
@@ -757,16 +847,17 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
                                                // frontiers — the weave was the one linker still forging
                                                // inbound roads (the "exit back to the Firmament" loop;
                                                // nearestLinkable learned this rule a pass earlier)
-      !z.floating && !z.concealed &&           // never weave into an UNWIRED / HIDDEN zone (a concealed
+      !z.floating && !z.concealed)             // never weave into an UNWIRED / HIDDEN zone (a concealed
                                                // Incursion epicenter reveals + wires via connectFloatingZone,
                                                // which clears both flags BEFORE it weaves — so this only blocks
                                                // others from forging a "road into the fog")
-      routeOk(fresh.map, z.map) &&              // …and never a land road over open OCEAN (an island
-                                               // is reached by SAIL; its searoutes draw the crossing)
-      !fresh.exits.some(e => e.to === z.id) &&  // no duplicate (fresh -> z)
-      !z.exits.some(e => e.to === fresh.id))    // no duplicate (z -> fresh)
     .map(z => ({ z, d: Math.hypot(z.map.x - fresh.map.x, z.map.y - fresh.map.y) }))
     .filter(c => c.d <= WEAVE_RADIUS)
+    .filter(c =>
+      routeOk(fresh.map, c.z.map) &&            // …and never a land road over open OCEAN (an island
+                                               // is reached by SAIL; its searoutes draw the crossing)
+      !fresh.exits.some(e => e.to === c.z.id) && // no duplicate (fresh -> z)
+      !c.z.exits.some(e => e.to === fresh.id))   // no duplicate (z -> fresh)
     .sort((a, b) => a.d - b.d);                 // nearest first
 
   let added = 0;
