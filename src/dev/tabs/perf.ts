@@ -132,8 +132,11 @@ export const perfTab: DevTabDef = {
 
       if (chip) {
         const fps = s1.fps;
+        const scale = (window as unknown as { __game?: { renderer?: { pixelScale?: number } } })
+          .__game?.renderer?.pixelScale ?? 1;
         chip.style.color = fps >= 55 ? DEV_UI.good : fps >= 30 ? '#e8b46a' : '#e86a6a';
-        chip.textContent = `${fps.toFixed(0)} fps  p95 ${s10.gapP95.toFixed(0)}ms  sim ${s10.simP50.toFixed(1)}  ren ${s10.renP50.toFixed(1)}`;
+        chip.textContent = `${fps.toFixed(0)} fps  p95 ${s10.gapP95.toFixed(0)}ms  sim ${s10.simP50.toFixed(1)}  ren ${s10.renP50.toFixed(1)}`
+          + (scale !== 1 ? `  ×${scale.toFixed(2)}` : '');
       }
     };
 

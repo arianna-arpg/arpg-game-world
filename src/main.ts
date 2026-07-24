@@ -37,6 +37,7 @@ import { buildManifest, reconcileManifest, type ExpeditionManifest } from './pac
 import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
 import { Renderer } from './render/renderer';
+import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
@@ -1146,6 +1147,37 @@ function perfPush(gap: number, sim: number, ren: number): void {
   if (perfCount < PERF_RING) perfCount++;
 }
 
+// --- THE RENDER-SCALE GOVERNOR (render/renderScale.ts; Settings.renderScale) --
+// 'auto' watches the SAME gap ring the Pulse tab and the perf harness read
+// and walks the notch ladder — down readily while sustained p95 sits past
+// the 30fps knee, up patiently once frames hold (the pure nextNotch law).
+// A manual number pins the scale. Runs every frame, judges every evalSec.
+let rsNotch = 0, rsHotSec = 0, rsCoolSec = 0, rsNextEvalAt = 0;
+function renderScaleTick(nowMs: number): void {
+  const want = settings.renderScale;
+  if (want !== 'auto') {
+    renderer.setRenderScale(typeof want === 'number' ? want : 1);
+    rsNotch = 0; rsHotSec = 0; rsCoolSec = 0;
+    return;
+  }
+  if (nowMs < rsNextEvalAt) return;
+  const g = RENDER_SCALE_CFG.governor;
+  rsNextEvalAt = nowMs + g.evalSec * 1000;
+  const n = Math.min(perfCount, 300);
+  if (n < 60) return; // not enough frames to judge yet
+  const start = (perfIdx - n + PERF_RING) % PERF_RING;
+  const gaps: number[] = new Array(n);
+  for (let i = 0; i < n; i++) gaps[i] = perfGap[(start + i) % PERF_RING];
+  gaps.sort((a, b) => a - b);
+  const p95 = gaps[Math.floor(n * 0.95)];
+  if (p95 > g.stepDownP95Ms) { rsHotSec += g.evalSec; rsCoolSec = 0; }
+  else if (p95 < g.stepUpP95Ms) { rsCoolSec += g.evalSec; rsHotSec = 0; }
+  else { rsHotSec = 0; rsCoolSec = 0; }
+  const next = nextNotch(rsNotch, rsHotSec, rsCoolSec);
+  if (next !== rsNotch) { rsNotch = next; rsHotSec = 0; rsCoolSec = 0; }
+  renderer.setRenderScale(RENDER_SCALE_CFG.notches[rsNotch]);
+}
+
 let last = performance.now();
 /** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
  *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
@@ -1159,6 +1191,11 @@ function tick(now: number): void {
   const frameGapMs = now - last; // true frame pacing, BEFORE the dt clamp
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+
+  // THE RENDER SCALE: apply the dial/governor, and keep the pointer seam
+  // synced (CSS events map into buffer pixels through Input.pointerScale).
+  renderScaleTick(now);
+  input.pointerScale = renderer.pixelScale;
 
   // CONTROLLER, before anything reads input: poll the device, settle who owns
   // the reticle, run the menu pointer (it consumes Ⓐ/Ⓑ while active), and fire

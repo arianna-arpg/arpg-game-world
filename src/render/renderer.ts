@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { clamp, dist, type Vec2 } from '../core/math';
+import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
@@ -167,7 +168,7 @@ export class Renderer {
    *  so every consumer of `zoom` reads the byte-identical classic 1.3. */
   private readonly baseZoom = 1.3;
   private couchStretch = 1;
-  private get zoom(): number { return this.baseZoom * this.couchStretch; }
+  private get zoom(): number { return this.baseZoom * this.couchStretch * this.pixelScale; }
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
   private frameDt = 0;
   private lastRenderTime = 0;
@@ -241,9 +242,26 @@ export class Renderer {
       kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
   }
 
+  /** THE RENDER SCALE (render/renderScale.ts): the applied buffer scale.
+   *  The zoom getter rides it, so the world view is identical at any notch —
+   *  only pixel density moves. Set through setRenderScale, never directly. */
+  pixelScale = 1;
+
+  setRenderScale(s: number): void {
+    const v = Math.min(RENDER_SCALE_CFG.max, Math.max(RENDER_SCALE_CFG.min, s));
+    if (v === this.pixelScale) return;
+    this.pixelScale = v;
+    this.resize();
+  }
+
   resize(): void {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+    const w = window.innerWidth, h = window.innerHeight;
+    // Buffer at the scaled size; the ELEMENT stays window-sized (CSS pins it
+    // — with no explicit style the element would shrink to the buffer).
+    this.canvas.width = Math.max(2, Math.round(w * this.pixelScale));
+    this.canvas.height = Math.max(2, Math.round(h * this.pixelScale));
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
   }
 
   /** Screen -> world coordinates (for mouse aiming). Inverts scale·translate. */
@@ -379,7 +397,9 @@ export class Renderer {
     // lerping this point, so drawn == scripted with no easing forked here.
     let focus: { x: number; y: number } = world.scene?.focus ?? world.player.pos;
     if (couchOn && viewOk) {
-      const fit = couchFit(couchEyes.map(a => a.pos), w, h, this.baseZoom, COUCH_CFG.camera);
+      // The fit sees the EFFECTIVE base zoom (× pixelScale): buffer dims and
+      // zoom scale together, so the stretch math is scale-invariant.
+      const fit = couchFit(couchEyes.map(a => a.pos), w, h, this.baseZoom * this.pixelScale, COUCH_CFG.camera);
       this.couchStretch += (fit.stretch - this.couchStretch)
         * Math.min(1, this.frameDt * COUCH_CFG.camera.zoomLerp);
       focus = fit.focus;

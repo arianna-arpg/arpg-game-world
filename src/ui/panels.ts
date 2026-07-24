@@ -39,6 +39,7 @@ import {
 } from '../data/bestiary';
 import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
+import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_MODES, cameraModeOf } from '../render/camera';
 import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monsters';
 import { heftTierOf } from '../engine/mass';
@@ -5589,6 +5590,12 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
           title="Grows the whole interface together — panels, tooltips, popups, and the on-screen HUD — so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
       </div>
       <div class="rebind-row">
+        <span>Render Scale</span>
+        <button id="opt-renderscale" title="Internal rendering resolution (render/renderScale.ts). The world view is identical at any setting — only pixel density changes.
+AUTO — watches your live frame rate and steps down/up so the game holds smooth even on weak or degraded graphics paths (default)
+Fixed % — pins the buffer at that share of the window">${s.renderScale === 'auto' ? 'AUTO' : `${Math.round((s.renderScale as number) * 100)}%`}</button>
+      </div>
+      <div class="rebind-row">
         <span>Map Zone Names</span>
         <button id="opt-maplabels" title="How the world map wears its name cards:
 ${MAP_LABEL_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}
@@ -5736,6 +5743,16 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-speechtyping')?.addEventListener('click', () => {
       const st = this.getSettings();
       st.speechTyping = !st.speechTyping;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    // RENDER SCALE: cycle AUTO → the notch ladder (render/renderScale.ts).
+    // The governor applies it within a frame; the world view never moves.
+    root.querySelector<HTMLElement>('#opt-renderscale')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const ring: (number | 'auto')[] = ['auto', ...RENDER_SCALE_CFG.notches];
+      const i = ring.findIndex(v => v === st.renderScale);
+      st.renderScale = ring[(i + 1) % ring.length];
       this.saveSettings();
       this.renderOptions(root, onBack);
     });

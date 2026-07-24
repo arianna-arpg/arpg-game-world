@@ -20,6 +20,7 @@ import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../co
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode } from '../ui/mapConfig';
 import { UI_SCALE_CFG } from '../ui/uiScale';
+import { RENDER_SCALE_CFG } from '../render/renderScale';
 import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 
@@ -152,6 +153,14 @@ export interface Settings {
    *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
    *  pin overrides this per-zone; boundless zones always free-follow. */
   cameraMode: CameraModeId;
+  /** THE RENDER SCALE (render/renderScale.ts): internal resolution as a
+   *  dial — the same world view rasterized into a smaller buffer, CSS-
+   *  stretched to the window (zoom rides the scale, so framing/camera/aim
+   *  are identical at any notch; only pixel density moves). 'auto' (the
+   *  default) is the governor: it steps the notch ladder against the live
+   *  frame ring — the low-end-machine and degraded-canvas-path lever. A
+   *  number pins it by hand (RENDER_SCALE_CFG rails). */
+  renderScale: number | 'auto';
   /** LINE-OF-SIGHT SHADE (render/vis/sightVeil.ts SightVeil.userMul): one
    *  multiplier on how DARK the sight veil paints its unseen-shadow — walls,
    *  trunks and roofs throw the same shapes at any setting, and everything
@@ -186,6 +195,7 @@ export interface SettingsSave {
   mapWash?: number;
   uiScale?: number;
   cameraMode?: CameraModeId;
+  renderScale?: number | 'auto';
   veilDarkness?: number;
 }
 
@@ -305,6 +315,7 @@ export const makeSettings = (): Settings => ({
   mapWash: MAP_CFG.wash.default,
   uiScale: UI_SCALE_CFG.default,
   cameraMode: CAMERA_CFG.default,
+  renderScale: 'auto',
   veilDarkness: 1,
 });
 
@@ -328,6 +339,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   mapWash: s.mapWash,
   uiScale: s.uiScale,
   cameraMode: s.cameraMode,
+  renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
 });
 
@@ -391,6 +403,11 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // Unknown values (a renamed mode, a pre-dial save) fall back to the
     // registry default — currently the hero-locked frame.
     cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,
+    // 'auto' passes whole; numbers re-clamp into the fabric's rails; anything
+    // else (a pre-dial save) falls back to the governor.
+    renderScale: s.renderScale === 'auto' ? 'auto'
+      : typeof s.renderScale === 'number'
+        ? clamp(s.renderScale, RENDER_SCALE_CFG.min, RENDER_SCALE_CFG.max) : 'auto',
     // Re-clamped like every numeric option (0 = veil lifted, 1 = authored).
     veilDarkness: clamp(s.veilDarkness ?? 1, 0, 1),
   };

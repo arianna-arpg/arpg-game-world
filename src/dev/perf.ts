@@ -164,6 +164,11 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // A fresh probe run through the REAL start path (menus dismissed).
   g.devStartRun(opts.classId);
 
+  // THE GATE PINS SCALE 1 (render/renderScale.ts): the sweep judges the
+  // authored render bill — an auto-governor stepping the buffer down mid-
+  // sample would gate a moving target and flatter every heavy zone.
+  g.settings().renderScale = 1;
+
   setVisAblate(opts.ablate ?? []);
   /** DETERMINISTIC SKY (opts.weather): silence the random sky, then pin one
    *  plateau-intensity front on the CURRENT zone's node (age mid-life keeps

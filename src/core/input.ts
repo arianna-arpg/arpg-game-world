@@ -4,6 +4,10 @@ export class Input {
   keys = new Set<string>();
   pressed = new Set<string>();   // keys pressed this frame (consumed by reader)
   mouse = { x: 0, y: 0 };
+  /** THE RENDER SCALE's pointer seam (render/renderScale.ts): CSS-pixel
+   *  events map into BUFFER pixels through this (main.ts keeps it synced to
+   *  the renderer's applied scale). 1 whenever the buffer is 1:1. */
+  pointerScale = 1;
   lmb = false;
   rmb = false;
   /** Edge flags: true only on the frame the button went down. */
@@ -20,8 +24,8 @@ export class Input {
     window.addEventListener('blur', () => { this.keys.clear(); this.lmb = false; this.rmb = false; });
 
     target.addEventListener('mousemove', e => {
-      this.mouse.x = e.clientX;
-      this.mouse.y = e.clientY;
+      this.mouse.x = e.clientX * this.pointerScale;
+      this.mouse.y = e.clientY * this.pointerScale;
     });
     target.addEventListener('mousedown', e => {
       if (e.button === 0) { this.lmb = true; this.lmbPressed = true; }
