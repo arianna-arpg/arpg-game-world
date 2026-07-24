@@ -33,7 +33,14 @@ const OCCULT_FACTION: FactionSpec = {
   name: 'the Occult',
   color: '#a86ad8',
   traits: { roaming: 0, aggression: 0, warlordHome: 'origin', contexts: ['conclave'] },
-  roster: [{ id: 'conclave_cultist', weight: 1 }],
+  roster: [
+    // The full lodge musters (the muster rolls): cultists carry the rite,
+    // the maze-moths cloud the candles, the widdershin lights walk the
+    // circle the wrong way round.
+    { id: 'conclave_cultist', weight: 3 },
+    { id: 'mazer_moth', weight: 2 },
+    { id: 'widdershin_wisp', weight: 1 },
+  ],
 };
 
 /** The Eldritch — what a slain cultist's blood erupts into. Hostile to the player
@@ -48,6 +55,9 @@ const ELDRITCH_FACTION: FactionSpec = {
   traits: { roaming: 0.4, aggression: 1.6, warlordHome: 'capital', contexts: ['conclave'] },
   roster: [
     { id: 'conclave_blood_demon', weight: 3 },
+    // The null adepts serve what the blood becomes (the muster rolls) —
+    // the Blight's own artillery, sworn wherever the eruption stands.
+    { id: 'null_adept', weight: 2 },
     { id: 'conclave_eldritch_horror', weight: 1 },
   ],
   warlord: 'conclave_eldritch_horror',

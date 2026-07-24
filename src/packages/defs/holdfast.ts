@@ -50,6 +50,15 @@ const BANDIT_FACTION: FactionSpec = {
     { id: 'bandit_grenadier', weight: 1, presence: { from: 7, fadeIn: 4 } },
     { id: 'bandit_matchlock', weight: 1, presence: { from: 10, fadeIn: 5 } },
     { id: 'bandit_powder_witch', weight: 1, presence: { from: 6, fadeIn: 4 } },
+    // The camp's full company musters for wars and vendettas too (the
+    // muster rolls) — the holdfast crews were always this same warband
+    // under canvas; the ronin rides down from the passes he already walks.
+    { id: 'bandit_trapsmith', weight: 1, presence: { from: 5, fadeIn: 3 } },
+    { id: 'warband_skald', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'camp_bannerman', weight: 1, presence: { from: 7, fadeIn: 4 } },
+    { id: 'bandit_wardcaster', weight: 1, presence: { from: 7, fadeIn: 4 } },
+    { id: 'bulwark_thane', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    { id: 'steppe_ronin', weight: 1, presence: { from: 9, fadeIn: 4 } },
   ],
 };
 

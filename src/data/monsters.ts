@@ -10228,6 +10228,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.5), mod('fireRes', 'flat', -0.2)],
     skills: ['rime_fang'],
     xp: 10,
+    faction: 'rimebound',
     // Court hounds run in coursing packs: dart in, chill, wheel away — the
     // freeze ladder climbs across the PACK's bites, not any one dog's.
     brain: { type: 'skirmish', withdraw: 1.1 },
@@ -10241,6 +10242,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
     skills: ['rime_fang', 'frostbolt'],
     xp: 22,
+    faction: 'rimebound',
     // The shell keeps its word: broken, it SHATTERS — a coalescing implosion
     // of cold (stand off the corpse, or eat the chill it saved for you).
     deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'cold', coalesce: 0.7 },
@@ -10256,6 +10258,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // the arena's floor into court ground while the nova guards its skirts.
     skills: ['icy_comet', 'frost_nova', 'frostbolt'],
     xp: 30,
+    faction: 'rimebound',
     brain: {
       type: 'caster',
       skillUse: { mode: 'priority', order: ['icy_comet', 'frost_nova', 'frostbolt'] },
@@ -10268,6 +10271,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.2), mod('blockChance', 'flat', 0.25)],
     skills: ['rallying_howl', 'war_cry', 'heavy_strike'],
     xp: 40,
+    faction: 'rimebound',
     brain: { type: 'commander' },
   },
   frost_giant: {
@@ -10281,6 +10285,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // wall (readable at a glance) and answers from behind it.
     skills: ['shield_up', 'ground_slam', 'heavy_strike'],
     xp: 65,
+    faction: 'rimebound',
     brain: { type: 'juggernaut', enrage: 0.4 },
   },
   // THE WINTER KING — the court's crown and Deepwinter's cure: the warlord
@@ -13478,6 +13483,9 @@ export const FACTIONS: Record<string, {
     name: 'the Riverbound',
     table: [
       { id: 'lorn_shade', weight: 3 },
+      // The unferried chaff (the muster rolls): motes drift thickest where
+      // the river is young, and thin as the current sends worthier dead.
+      { id: 'soul_mote', weight: 2, presence: { to: 10, fadeOut: 5 } },
       { id: 'drowned_hauler', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'soul_wellspring', weight: 1 },
       { id: 'banshee', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -13500,6 +13508,8 @@ export const FACTIONS: Record<string, {
     name: 'the Chattel',
     table: [
       { id: 'feral_hen', weight: 3, presence: { to: 16, fadeOut: 8 } },
+      // The mad ewe walks with the herd it ruined (the muster rolls).
+      { id: 'broken_ewe', weight: 2, presence: { to: 14, fadeOut: 7 } },
       { id: 'feral_aurochs', weight: 3 },
       { id: 'shepherds_hound', weight: 2 },
       { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -13547,6 +13557,9 @@ export const FACTIONS: Record<string, {
   glimmerkin: {
     name: 'the Glimmerkin',
     table: [
+      // The gleam-chaff carpets the young court and thins as it grows
+      // teeth (the muster rolls — the fodder tier was minted, never listed).
+      { id: 'glimmerling', weight: 3, presence: { to: 12, fadeOut: 6 } },
       { id: 'glimmer_courtier', weight: 3 },
       { id: 'duskveil_dancer', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'glowworm_grub', weight: 2 },
@@ -13743,6 +13756,10 @@ export const FACTIONS: Record<string, {
       { id: 'fern_stalker', weight: 4, presence: { to: 18, fadeOut: 8 } },
       { id: 'blowgun_wretch', weight: 3 },
       { id: 'spore_caller', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      // The green's own trap musters too (the muster rolls): habitat
+      // placement self-heals — a war zone without a strangling tree simply
+      // seats it at its own spot, coiled in the open like a sprung snare.
+      { id: 'strangler_maw', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'emerald_prowler', weight: 2, presence: { from: 9, fadeIn: 4 } },
       { id: 'saurian_bulwark', weight: 2, presence: { from: 11, fadeIn: 5 } },
       { id: 'ruin_sentinel', weight: 1, presence: { from: 10, fadeIn: 4 } },
@@ -13808,6 +13825,9 @@ export const FACTIONS: Record<string, {
       { id: 'beastkin_impaler', weight: 2, presence: { from: 4, fadeIn: 3 } },
       { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
       { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      // The horncaller's war-drone walks with every muster (the muster
+      // rolls) — the tribes never march without their music.
+      { id: 'beastkin_horncaller', weight: 1, presence: { from: 7, fadeIn: 4 } },
       // The tribes' siege answer: riders on a living tower — pick the
       // archers off the howdah, or fell the whole thing.
       { id: 'siegeback_aurochs', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -13880,6 +13900,14 @@ export const FACTIONS: Record<string, {
       { id: 'chitin_burrower', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'brood_sovereign', weight: 1, presence: { from: 16, fadeIn: 6 } },
+      // The hivesands field wing musters with the Seethe everywhere it
+      // fights (the muster rolls): skimmers boil the young ground, the
+      // leaping saltant and the droning stridulant arrive with the swarm's
+      // true seasons. The cycle bodies (winglings, alates, repletes) stay
+      // the hive-cycle's own — flights are weather, not war.
+      { id: 'chitin_skimmer', weight: 2, presence: { to: 14, fadeOut: 6 } },
+      { id: 'chitin_saltant', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'chitin_stridulant', weight: 1, presence: { from: 10, fadeIn: 4 } },
     ],
   },
   // The Winter Court: hounds carry the early roads and thin as the true
@@ -13918,6 +13946,15 @@ export const FACTIONS: Record<string, {
       { id: 'sarcophate_legionary', weight: 3 },
       { id: 'canopic_bearer', weight: 2, presence: { from: 6 } },
       { id: 'sarcophagus_warden', weight: 1, presence: { from: 9 } },
+      // The muster rolls: the shambling grave-stock walks the young sands,
+      // and the CANOPIC COURT — the organ-beasts and their vizier, the
+      // Unsealing's own tiers — swears to the wider banner on the same hard
+      // floors the family keeps everywhere (thresholds, never ramps).
+      { id: 'risen_husk', weight: 3, presence: { to: 16, fadeOut: 8 } },
+      { id: 'canopic_jackal', weight: 1, presence: { from: 11 } },
+      { id: 'canopic_falcon', weight: 1, presence: { from: 11 } },
+      { id: 'canopic_ape', weight: 1, presence: { from: 12 } },
+      { id: 'canopic_vizier', weight: 1, presence: { from: 14 } },
     ],
   },
   // The Coilborn muster from the water out: adders boil the early shallows

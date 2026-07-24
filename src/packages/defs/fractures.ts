@@ -32,6 +32,12 @@ const ABYSSAL_FACTION: FactionSpec = {
     { id: 'abyssal_seer', weight: 2 },
     { id: 'abyssal_render', weight: 2 },
     { id: 'abyssal_vanguard', weight: 2 },
+    // The rift's own clergy muster with the intrusion (the muster rolls):
+    // the horologist winds the clocks wrong, the ascetic walks through
+    // the answer. Both were fracture-fielded already — now the roster
+    // agrees with the ground.
+    { id: 'abyssal_horologist', weight: 2 },
+    { id: 'rift_ascetic', weight: 2 },
     { id: 'abyssal_horror', weight: 1 },
   ],
   warlord: 'abyssal_horror',
