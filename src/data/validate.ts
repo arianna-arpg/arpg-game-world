@@ -70,7 +70,9 @@ import { validateWeather } from '../world/weather';
 import { validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
 import './garden'; // side-effect: the Garden kit's kinds register before validation
-import { validateCreep } from '../engine/creep';
+import { CREEPS, validateCreep } from '../engine/creep';
+import { validateReserves } from '../engine/reserves';
+import { validateRooted } from '../engine/rooted';
 import './creeps'; // side-effect: the creep kind defs register before validation
 import { attunedStatus } from '../engine/tuning';
 import { PUZZLE_KINDS } from '../engine/puzzles';
@@ -797,6 +799,18 @@ export function validateContent(): void {
     }
   }
 
+  // THE RESERVE + ROOTED FABRICS (engine/reserves.ts + engine/rooted.ts):
+  // pools that gate casting, burn down or vent, and ground-worn claims —
+  // every row must resolve, and THE HONESTY LAW holds bestiary-wide: a
+  // body that spends, burns or draws power from where it stands must SHOW
+  // it (a matching tell row), or the boot names the hidden timer.
+  for (const msg of validateReserves(MONSTERS, {
+    skill: id => !!SKILLS[id], status: id => !!STATUS_DEFS[id],
+  })) warn(msg);
+  for (const msg of validateRooted(MONSTERS, {
+    creep: id => !!CREEPS[id], ground: id => !!regionKind(id),
+  })) warn(msg);
+
   // EPHEMERAL SPANS: every theme span row (base AND variant overrides) names
   // registered region kinds — the standing kind, its fading twin, and the
   // void it becomes — and carries a sane RadianceCond. The span fabric
@@ -1110,6 +1124,8 @@ export function validateContent(): void {
       deadStat('mod', def.mods);
       deadStat('bond mod', def.bond?.mods);
       deadStat('nocturne mod', def.nocturne?.mods);
+      deadStat('rooted mod', def.rooted?.mods);
+      deadStat('rooted off-mod', def.rooted?.off);
       deadStat('worm-wound mod', def.worm?.wounds?.mods);
     }
   }

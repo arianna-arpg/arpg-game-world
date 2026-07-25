@@ -183,6 +183,11 @@ import {
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
 import { PACK_CFG, foldPack } from './pack';
 import {
+  drainHolds, makeReserve, pipsOf, RESERVE_CFG, regenHolds, reserveCostOf,
+  reserveFrac, reserveSpent, stageAt, type ReserveSpec, type ReserveState,
+} from './reserves';
+import { ROOTED_CFG, standsRooted } from './rooted';
+import {
   feedWatch, layTrailPoint, trailNewest, trailNext, WATCH_CFG, WATCH_RUNG,
   watchRungOf, watchValueOf, type WatchSpec,
 } from './watch';
@@ -10273,6 +10278,137 @@ export class World {
   }
 
   /** Live creep cover at a point — one named KIND, or the peak of any kind.
+   *  THE one seam the tell fabric's `creep:` source and the rooted fabric's
+   *  claim test both read, so the membrane a player sees under a body's
+   *  feet is the membrane that tells and the membrane that buffs. */
+  creepCoverAt(kind: string | undefined, x: number, y: number): number {
+    const f = this.creep;
+    if (!f) return 0;
+    return kind === undefined ? f.coverAt(x, y) : f.coverOf(kind, x, y);
+  }
+
+  /** THE RESERVE FABRIC's sweep (engine/reserves.ts): burn, leak, recover,
+   *  re-judge the bands, run the vent windows, and stamp the ONE `spent`
+   *  boolean three consumers read (the slayer axis, the tell source, the
+   *  AI condition). Cadenced (RESERVE_CFG.sweepSec) with rates scaled by
+   *  the REAL elapsed span, so the cadence bounds how often thresholds are
+   *  judged and changes the arithmetic by nothing.
+   *
+   *  Null-cost on the reserveless roster, which is nearly all of it: no
+   *  `Actor.reserves` map, no work, no allocation. */
+  private updateReserves(): void {
+    const t = this.time;
+    for (const a of this.actors) {
+      const rows = a.reserves;
+      if (!rows || a.dead) continue;
+      // The shared travel odometer (drainPerUnit): BANK every frame's
+      // displacement, charge the whole bank at the sweep — charging only
+      // the sweep-frame's delta would drop most of the journey between
+      // beats and let a leaker sprint for free.
+      const prev = a.reservePrev;
+      if (prev) {
+        a.reserveOdo += dist(prev, a.pos);
+        prev.x = a.pos.x; prev.y = a.pos.y;
+      } else a.reservePrev = vec(a.pos.x, a.pos.y);
+      if (t < a.reserveNextAt) continue;
+      const moved = a.reserveOdo;
+      a.reserveOdo = 0;
+      const dt = a.reserveLastAt > 0 ? Math.min(1, t - a.reserveLastAt) : RESERVE_CFG.sweepSec;
+      a.reserveLastAt = t;
+      a.reserveNextAt = t + RESERVE_CFG.sweepSec;
+      const specs = a.reserveSpecs;
+      if (!specs) continue;
+      // ENGAGED, for this fabric's gates: a held target OR hard aggro.
+      // Ordinary locks deliberately never set Actor.aggroed (that word
+      // belongs to the watch/taunt lane), so a drainWhile:'aggroed' wick
+      // reading the bare flag would never burn against a watchless body's
+      // ordinary lock — the fight's clock starts when the MIND holds a
+      // quarry, and this is the one fold that says so.
+      const engaged = a.aggroed || a.aiTargetId !== undefined;
+      let spent = false;
+      for (const spec of specs) {
+        const st = rows.get(spec.id);
+        if (!st) continue;
+        // (1) THE VENT WINDOW — while it stands nothing burns and nothing
+        // knits; when it closes the pool comes back at the authored share.
+        if (st.ventUntil > 0) {
+          if (t >= st.ventUntil) {
+            st.ventUntil = 0;
+            st.cur = Math.min(st.max, st.max * (spec.vent?.refill ?? RESERVE_CFG.ventRefill));
+          }
+        } else {
+          // (2) THE BURN. Passive drain on its gate, plus the travel leak
+          // — displacement is displacement (the body-wake law), so a
+          // shoved leaker pays exactly like a fleeing one.
+          if (spec.drain) {
+            const moving = a.vel !== undefined
+              ? (a.vel.x * a.vel.x + a.vel.y * a.vel.y) > 1
+              : moved > 0.5;
+            if (drainHolds(spec, { aggroed: engaged, moving })) {
+              st.cur = Math.max(0, st.cur - spec.drain * dt);
+            }
+          }
+          if (spec.drainPerUnit && moved > 0) {
+            st.cur = Math.max(0, st.cur - spec.drainPerUnit * moved);
+          }
+          // (3) THE RECOVERY — gated on the quiet clock the player denies.
+          if (regenHolds(spec, st, t, { aggroed: engaged })) {
+            st.cur = Math.min(st.max, st.cur + spec.regen! * dt);
+          }
+          // (4) EMPTY OPENS THE WINDOW. A body with no authored vent just
+          // floors at zero (a pure cast gate — a legitimate row).
+          if (st.cur <= 0 && spec.vent) this.openVent(a, spec, st);
+        }
+        // (5) THE BANDS — one status per row, refreshed while its band
+        // holds, dropped the moment it does not. Statuses carry the mods,
+        // so a whole power curve is ordinary status data.
+        const frac = reserveFrac(st);
+        const want = stageAt(spec, frac);
+        if (want?.status !== st.stage) {
+          if (st.stage) a.endStatus(st.stage);
+          st.stage = want?.status;
+          if (want?.note) {
+            this.text(vec(a.pos.x, a.pos.y - 20), want.note, want.color ?? '#d0c090', 11);
+          }
+        }
+        if (st.stage) a.applyStatus(st.stage, 0, 1, 'its own burning');
+        // (6) THE PIPS — integer fuel published to the sheet (the quanta
+        // law); the setter only re-folds when an integer actually moved.
+        const pips = pipsOf(st.cur);
+        if (pips !== st.pips) st.pips = pips;
+        if (reserveSpent(spec, st, t)) spent = true;
+      }
+      if (spent !== a.spent) a.spent = spent;
+    }
+  }
+
+  /** EMPTY: open the vent window — the punish beat the whole fabric exists
+   *  to produce. The free-cast is the telegraph (a shed plume the player
+   *  learns to read across a room); the status is where the punishment
+   *  lives, as ordinary status data. */
+  private openVent(a: Actor, spec: ReserveSpec, st: ReserveState): void {
+    const v = spec.vent!;
+    st.ventUntil = this.time + v.forSec;
+    st.cur = 0;
+    // The window's status runs EXACTLY the window (the possess-eject
+    // idiom: durationScale = wanted / the def's own base), so the drawn
+    // punish and the refill clock can never drift apart.
+    if (v.status) {
+      const base = STATUS_DEFS[v.status]?.duration || 1;
+      a.applyStatus(v.status, 0, v.forSec / base, 'spent');
+    }
+    if (v.note) {
+      this.text(vec(a.pos.x, a.pos.y - 22), v.note, v.color ?? RESERVE_CFG.ventColor, 12);
+    }
+    const sd = v.skillId ? SKILLS[v.skillId] : undefined;
+    if (sd) {
+      const inst = makeSkillInstance(sd, Math.max(1, Math.round(a.level)));
+      this.executeSkill(a, inst, vec(a.pos.x, a.pos.y), {
+        noCooldown: true, noRepeat: true, keepFacing: true,
+      });
+    }
+  }
+
   /** THE TELL FABRIC's value sweep (engine/tells.ts): resolve every telled
    *  body's binding rows against its LIVE state — the same maps the AI
    *  reads (drawn == tested) — on a gentle cadence (TELL_CFG.sweepSec).
@@ -22741,6 +22877,15 @@ export class World {
     if (def.refuge) a.refuge = def.refuge;
     if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
+    // THE RESERVES (engine/reserves.ts): the body arrives with its pools
+    // filled to their authored share — one live row per spec, minted here
+    // so EVERY spawn path (packs, events, zone-memory restores, summons)
+    // carries the same fuel economy.
+    if (def.reserves?.length) {
+      a.reserves = new Map(def.reserves.map(r => [r.id, makeReserve(r)]));
+      a.reserveSpecs = def.reserves;
+    }
+    if (def.rooted) a.rootedSpec = def.rooted; // the claim, stamped for the slayer fold
     if (def.volatile) a.volatile = def.volatile; // the poked nest arms
     if (def.onHitByType) { a.onHitByType = def.onHitByType; a.onHitTypeIcd = def.onHitTypeIcd; } // the body's element grammar
     // TUNABLE (the attunement fabric): the body wakes in its ground state —
@@ -25614,6 +25759,39 @@ export class World {
       }
     }
     if (!caster.canUse(inst)) return false;
+    // THE RESERVE PRICE (engine/reserves.ts): this body's own fuel, spent
+    // by its own casting. Sits HERE — after every redirect that re-enters
+    // useSkill (convert / mimic / trigger), so the price is charged once
+    // and against the skill that actually fires, and after canUse, so a
+    // cast refused for any other reason never quietly drains the pool.
+    //
+    // COSTS REFUSE, THEY NEVER DEBT: short of fuel the cast does not fire
+    // and the brain falls through to its next rule exactly as it does on
+    // short mana. That refusal IS the denial the player is buying — bait
+    // the expensive move and the expensive move is gone.
+    if (caster.reserves && caster.reserveSpecs) {
+      let short = false;
+      for (const spec of caster.reserveSpecs) {
+        const cost = reserveCostOf(spec, inst.def.id);
+        if (!cost) continue;
+        const st = caster.reserves.get(spec.id);
+        if (!st || st.cur < cost || st.ventUntil > this.time) { short = true; break; }
+      }
+      if (short) {
+        // Belt only: canUse already refused this press (the affordability
+        // read lives there so AI rotations fall through cleanly) — this
+        // enforcement catches any path that skipped it.
+        this.failNote(caster, inst.def.id + ':reserve', 'nothing left');
+        return false;
+      }
+      for (const spec of caster.reserveSpecs) {
+        const cost = reserveCostOf(spec, inst.def.id);
+        if (!cost) continue;
+        const st = caster.reserves.get(spec.id)!;
+        st.cur = Math.max(0, st.cur - cost);
+        st.lastSpendAt = this.time;
+      }
+    }
     // A PIERCED press: canUse admitted it THROUGH a live commitment (the
     // reflex lane / a hold combo). Resolve it AROUND the running action —
     // no facing jerk, no aim restamp, no bar-growing conversions, and no
@@ -37627,6 +37805,35 @@ export class World {
           }
         }
       }
+      // GROUND-WORN MODS (MonsterDef.rooted — engine/rooted.ts): the
+      // conditional-mod family's THIRD axis. Bond asks who is near,
+      // nocturne asks what hour it is; this asks WHERE THIS BODY STANDS.
+      // Edge-triggered like both, and gated by a GRACE on the way OUT
+      // only: a creep rim breathes on the warren's pulse, so an instant
+      // edge test would flap the sheet every beat — but STEPPING BACK ON
+      // is instant, because that half is the reward.
+      if (a.defId && !a.dead) {
+        const root = MONSTERS[a.defId]?.rooted;
+        if (root) {
+          const on = standsRooted(root, a.pos, {
+            groundKind: a.groundKind,
+            creepCover: this.creep ? (k, x, y) => this.creep!.coverOf(k, x, y) : undefined,
+          });
+          if (on) a.rootedOffAt = 0;
+          else if (a.rootedOffAt === 0) a.rootedOffAt = this.time;
+          const held = on
+            || this.time - a.rootedOffAt < (root.grace ?? ROOTED_CFG.grace);
+          if (held !== a.rootedHeld) {
+            a.rootedHeld = held;
+            a.sheet.setSource('rooted', held ? root.mods : (root.off ?? []));
+            const note = held ? root.noteOn : root.note;
+            if (note) {
+              this.text(vec(a.pos.x, a.pos.y - 18), note,
+                held ? ROOTED_CFG.onColor : ROOTED_CFG.offColor, 11);
+            }
+          }
+        }
+      }
       // SHELL REGROWTH: quiet seconds knit the pool back; a broken shell
       // re-forms once a real fraction has regrown (the burst window closes).
       const sg = a.shellGuard;
@@ -38093,6 +38300,12 @@ export class World {
     // tracker's nose all settle, THEN the worn gauges read them — a tell
     // never shows last frame's ladder.
     this.updateWatch();
+    // THE RESERVE FABRIC's sweep (engine/reserves.ts) rides beside it, and
+    // for the same reason: the burn, the leak, the recovery and the vent
+    // windows all settle BEFORE the gauges read them, so a bladder never
+    // draws last frame's breath. Its travel odometer also wants every
+    // mover to have finished moving.
+    this.updateReserves();
     // THE PACK SWEEP (engine/pack.ts) — the social folds (a warden's court,
     // a squad's shared appetite, a ward's guardian) settle here, AFTER the
     // bond scan and the movers, BEFORE the gauges that read them.

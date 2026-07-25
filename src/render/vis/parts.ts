@@ -2073,6 +2073,123 @@ const fillSac: PartPainter = (ctx, r, spec, pal, t = 0) => {
   });
 };
 
+/** THE BELLOWS LUNG — a pleated air bladder that visibly DEFLATES: the
+ *  reserve fabric's flagship gauge-limb (engine/reserves.ts binds
+ *  `params.fill` to a live pool). Full, the pleats stand apart and the
+ *  bladder is a taut barrel; spent, they collapse into a stack of slack
+ *  folds and the vent slit at the nose GAPES — the punish window's own
+ *  silhouette. Pleats are the new limb here: nothing else in the kit
+ *  reads as "a thing that holds air", which is exactly why a body wearing
+ *  one is legible across a room. params: fill, n (pleats), ry, vent. */
+const bellowsLung: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+  const n = Math.max(2, Math.round(P(spec, 'n', 5)));
+  const ry = P(spec, 'ry', 0.74);
+  place(ctx, r, spec, (c, R) => {
+    // The body's extent along the facing collapses with the fill — an
+    // empty bellows is a flat stack, a full one a barrel. Area-honest
+    // enough to read instantly, and never a hitbox claim (the breathe law).
+    const ex = R * (0.42 + 0.58 * fill);
+    const ey = R * ry * (0.78 + 0.22 * fill);
+    // A slow working breath, deepest when there is air left to move.
+    const puff = 1 + Math.sin(t * 2.4) * 0.035 * fill;
+    const hull = (): void => {
+      c.beginPath();
+      c.ellipse(0, 0, ex * puff, ey * puff, 0, 0, Math.PI * 2);
+    };
+    hull();
+    c.fillStyle = withAlpha(ramp.base, 0.34 + 0.4 * fill);
+    c.fill();
+    // THE PLEATS: evenly spaced across the facing axis, bunching toward
+    // the tail as the air goes. The GAP between them IS the reading.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.5 + 0.3 * fill);
+    c.lineWidth = Math.max(1, R * 0.045);
+    c.save();
+    hull();
+    c.clip();
+    for (let i = 1; i < n; i++) {
+      const f = i / n;
+      // Squeezed toward -X when slack: the folds pile up at the hinge.
+      const px = (-1 + 2 * Math.pow(f, 1 + (1 - fill) * 1.4)) * ex;
+      c.beginPath();
+      c.moveTo(px, -ey);
+      c.quadraticCurveTo(px + ex * 0.08 * fill, 0, px, ey);
+      c.stroke();
+    }
+    c.restore();
+    hull();
+    c.strokeStyle = withAlpha(ramp.outline, 0.75);
+    c.lineWidth = 1.1 + fill * 0.7;
+    c.stroke();
+    // THE VENT SLIT at the nose — shut while there is breath, gaping and
+    // pale once there is not. The empty state has to read at a glance,
+    // because that is the state the player is playing for.
+    if (P(spec, 'vent', 1) > 0) {
+      const gape = 1 - fill;
+      const vy = ey * (0.12 + 0.46 * gape);
+      c.beginPath();
+      c.ellipse(ex * 0.94, 0, Math.max(1, R * 0.06), vy, 0, 0, Math.PI * 2);
+      c.fillStyle = withAlpha(gape > 0.5 ? ramp.highlight : ramp.shadow, 0.4 + 0.5 * gape);
+      c.fill();
+    }
+  });
+};
+
+/** THE WICK TAPER — a taper that BURNS ITSELF DOWN: length, flame and
+ *  glow all ∝ `fill`, with the spent stub sitting in its own ash. The
+ *  reserve fabric's second gauge-limb, and the inverse read of the sac:
+ *  where a filling sac says "soon", a shortening wick says "not for much
+ *  longer". Distinct from `candles` (static ornament — a rack that does
+ *  not burn) by the whole point: this one is a clock you can outlast.
+ *  params: fill, n, h. */
+const wickTaper: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+  const n = Math.max(1, Math.round(P(spec, 'n', 1)));
+  const h = P(spec, 'h', 0.95);
+  const flameC = PS(spec, 'flame') ?? ramp.highlight;
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const spread = n === 1 ? 0 : (i / (n - 1) - 0.5);
+      const cy = spread * R * 1.25;
+      const cx = -Math.abs(spread) * R * 0.22;
+      const w = Math.max(1.5, R * 0.16);
+      // THE STUB: what is left. A burned-out wick is a nub, not nothing —
+      // the body keeps its silhouette, only its clock runs out.
+      const len = R * h * (0.16 + 0.84 * fill);
+      c.fillStyle = ramp.base;
+      c.fillRect(cx - w / 2, cy - w / 2, len, w);
+      c.strokeStyle = withAlpha(ramp.outline, 0.6);
+      c.lineWidth = 1;
+      c.strokeRect(cx - w / 2, cy - w / 2, len, w);
+      // THE ASH the taper has already spent, pooled at the hinge — the
+      // reading works even on a still frame: long stub, little ash.
+      const ash = (1 - fill) * R * h * 0.7;
+      if (ash > 0.5) {
+        c.fillStyle = withAlpha(ramp.shadow, 0.5);
+        c.beginPath();
+        c.ellipse(cx - w * 0.4, cy, ash * 0.32, w * 0.72, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+      // THE FLAME: shrinks and gutters as the fuel goes.
+      if (fill > 0.02) {
+        const fl = w * (0.7 + 1.5 * fill);
+        const flick = 1 + Math.sin(t * 9 + i * 2.1) * 0.16 * fill;
+        const fx = cx + len + fl * 0.4;
+        c.fillStyle = withAlpha(flameC, 0.35 + 0.5 * fill);
+        c.beginPath();
+        c.ellipse(fx, cy, fl * 0.85 * flick, fl * 0.55, 0, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = withAlpha('#fff6e0', 0.3 + 0.45 * fill);
+        c.beginPath();
+        c.ellipse(fx, cy, fl * 0.36 * flick, fl * 0.26, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  });
+};
+
 /** Draped chains swinging off the frame — jailers, wardens, the bound. */
 const chains: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -5102,7 +5219,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   sphincterMaw, haustraFolds, lashFringe, irisEye,
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
-  armorPlates, bloatSacs, fillSac, chains, barbs, whip, keg, crateBox,
+  armorPlates, bloatSacs, fillSac, bellowsLung, wickTaper, chains, barbs, whip, keg, crateBox,
   antlers, ramHorns, beak, featherWings, crest, frill, gills,
   trunkNose, scutes, tailFin, eyestalks, mane, egg, cocoon, mask,
   quiver, cape, tailClub,

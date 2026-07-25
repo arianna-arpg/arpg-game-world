@@ -1071,6 +1071,23 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
   // wood density, ~1.63 effective weight — stands above the 1.5× ratio, so
   // the dummy probe arms it; its inert rows are non-hitting hosts, honest.)
   {
+    // THE SPENT AND THE ROOTED's slayer pair (2026-07-25, engine/reserves.ts
+    // + engine/rooted.ts): both axes read a victim STATE the probe pack can
+    // never enter — no probe body authors a reserve (Actor.spent stays
+    // false: nothing to run out of) and none wears a ground claim
+    // (Actor.rootedSpec absent: the uprooter gate is presence itself). The
+    // full arming paths — pool drained → vent window → spentbane prices the
+    // patience; heart killed / body shoved → claim drops → uprooter prices
+    // the displacement — are pinned end-to-end in balance/probe_spent.ts
+    // with exact (1 + v) fold ratios on fresh victims.
+    note: "'spentbane' needs a victim whose RESERVE has run dry (engine/reserves.ts) — probe bodies author no reserves, so nothing ever reads spent; the arming path is pinned in probe_spent",
+    when: (_def, sup) => supModsStat(sup, ['spentbane']),
+  },
+  {
+    note: "'uprooter' needs a victim wearing a GROUND CLAIM it is standing off (MonsterDef.rooted) — probe bodies author no claims; the arming path is pinned in probe_spent",
+    when: (_def, sup) => supModsStat(sup, ['uprooter']),
+  },
+  {
     note: "'limbreaver' reads a composite monster's PARTS — no composite spawns in probes",
     when: (_def, sup) => supModsStat(sup, ['limbreaver']),
   },

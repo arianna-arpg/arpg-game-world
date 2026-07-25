@@ -7,7 +7,7 @@
 // player minion (see Summon Skeleton / Flame Sprite) — same definition.
 // ---------------------------------------------------------------------------
 
-import { DAMAGE_COLOR, mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
+import { DAMAGE_COLOR, gaugeMod, mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { BuffEffect } from '../engine/skills';
 import type { ActorAdorn, ActorShape, AmbushSpec, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
 import type { BrainTuning, PhaseDef } from '../engine/brain';
@@ -23,6 +23,8 @@ import type { TellSpec } from '../engine/tells';
 import type { BondLinkStyle } from '../engine/pack';
 import type { WatchSpec } from '../engine/watch';
 import type { PlySpec } from '../engine/plies';
+import type { ReserveSpec } from '../engine/reserves';
+import type { RootedSpec } from '../engine/rooted';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { LightSpec } from '../render/vis/painters';
 import type { PortraitTune } from '../render/vis/portrait';
@@ -217,6 +219,85 @@ export const CRESCENDO_BUFF: BuffEffect = {
   type: 'buff', id: 'chorus_crescendo', duration: 3.2,
   mods: [mod('attackSpeed', 'increased', 0.25), mod('moveSpeed', 'increased', 0.18)],
 };
+
+// --- THE SPENT AND THE ROOTED's shared rows (engine/reserves.ts + -----------
+// engine/rooted.ts, docs/engine/reserves.md). HUNGER_LEAN's law again, on the
+// other half of the pressure curve: the roster is full of bodies that ALREADY
+// run out of something or ALREADY draw power from somewhere, and not one of
+// them ever said so. One const per lesson, spread by name, and the probe's
+// census can then name anyone still living the lesson silently.
+
+/** THE WIND (BEHAVIOR_CFG.defaultKite / TempoSpec.kite): every BREATHING body
+ *  in the bestiary carries a retreat budget, and until now chasing one was a
+ *  coin-flip between "it kites forever" and "it is about to gas out". The
+ *  puff says which. Reads the exact accumulator moveAway spends, so the tell
+ *  leads the mechanic by construction — and the WINDED beat that follows is
+ *  the punish window the budget was always secretly opening.
+ *  Portrait 0 on the puff: the book shows a rested body. */
+export const WIND_PUFF: TellSpec[] = [
+  {
+    source: 'wind', band: [0.45, 1], curve: 'smooth', portrait: 0,
+    channel: {
+      kind: 'part',
+      part: { kind: 'breathPuff', x: 0.48, y: 0.06, scale: 0.8 },
+      alpha: [0, 0.9], scale: [0.5, 1.15],
+    },
+  },
+  { source: 'winded', steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.6 } },
+];
+
+/** THE UNFURL (MonsterDef.nocturne): the hour-worn mods, finally worn where
+ *  they can be SEEN. Deliberately colorless — the glow takes the body's own
+ *  tone, so one row serves every phase-shifted body in the roster without a
+ *  per-def palette argument, and a player learns to read the CLOCK off the
+ *  enemy instead of off the sky. Portrait 0.85: the book shows its hour. */
+export const NOCTURNE_UNFURL: TellSpec[] = [
+  { source: 'nocturne', steps: 1, portrait: 0.85, channel: { kind: 'glow', max: 0.3 } },
+  { source: 'nocturne', steps: 1, portrait: 0.85, channel: { kind: 'scale', amp: 0.09 } },
+];
+
+/** THE SPOREBED CLAIM — the Bloom's ground-worn strength, spread by name
+ *  across the court. THE LOOP this buys: the matron's membrane is what makes
+ *  her kin hard, so the kill order stops being about threat and starts being
+ *  about TERRAIN — drop her and the floor recoils out from under all of them
+ *  at once. Authored on the BENEFICIARY (the bond seam's direction, and the
+ *  matron wears it too — she is standing on her own floor). */
+export const SPOREBED_CLAIM: RootedSpec = {
+  creep: ['sporebed'],
+  mods: [mod('damageTaken', 'more', -0.2), mod('damage', 'increased', 0.2), mod('lifeRegen', 'flat', 3)],
+  off: [mod('damageTaken', 'more', 0.15)],
+  note: 'uprooted!',
+};
+
+/** The COURT's half of the same claim — the identical gain on the mat and NO
+ *  wilt off it. Load-bearing asymmetry: the matron is SUPPOSED to be standing
+ *  on her own floor, so being shoved off it is a genuine failure state worth
+ *  a penalty; her kin range far beyond the Bloom's ground and must not be
+ *  quietly nerfed everywhere else in the world for it. Same creep kind, so
+ *  killing her still softens every one of them at once. */
+export const SPOREBED_COURT: RootedSpec = {
+  creep: ['sporebed'],
+  mods: [mod('damageTaken', 'more', -0.2), mod('damage', 'increased', 0.2), mod('lifeRegen', 'flat', 3)],
+};
+
+/** The claim's READ, matron edition: on her floor she runs rich and violet-
+ *  lit; off it the color drains and she visibly slackens. Bound to `rooted`,
+ *  the same held flag the sheet source keys on, so the wilt and the weakness
+ *  are one event. Portrait 1: the book shows a body at home. */
+export const ROOTED_THRIVE: TellSpec[] = [
+  { source: 'rooted', steps: 1, portrait: 1, channel: { kind: 'glow', color: '#c8a8e8', max: 0.32 } },
+  // The WILT is the inverted read — band [1,0] turns "rooted" into "adrift".
+  { source: 'rooted', band: [1, 0], steps: 1, portrait: 0, channel: { kind: 'tint', color: '#6a6458', max: 0.5 } },
+  { source: 'rooted', band: [1, 0], steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.45 } },
+];
+
+/** The court's READ: the GAIN only. A sporeling standing off the Bloom's mat
+ *  is at its ordinary strength, not a weakened one, and must not be drawn as
+ *  though it were — the tell layer may never imply a penalty the sheet is not
+ *  paying. On the mat it lights, and that is the whole (honest) sentence. */
+export const ROOTED_FAVOR: TellSpec[] = [
+  { source: 'rooted', steps: 1, portrait: 1, channel: { kind: 'glow', color: '#c8a8e8', max: 0.28 } },
+];
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
@@ -942,6 +1023,35 @@ export interface MonsterDef {
    *  The counterplay is the CLOCK: fight it in its off-hours. Edge-
    *  triggered at one world chokepoint, never re-folded per frame. */
   nocturne?: { phases: ('dawn' | 'day' | 'dusk' | 'night')[]; mods: Modifier[] };
+  /** GROUND-WORN MODS — the conditional-mod family's THIRD axis, and the
+   *  one it was missing. Bond asks WHO IS NEAR, nocturne asks WHAT HOUR
+   *  IT IS; `rooted` asks WHERE THIS BODY STANDS. `mods` are worn while it
+   *  stands on ground it counts as its own — a named creep membrane (the
+   *  creep fabric: its OWN heart's skin, or any kin's), a named region /
+   *  ground kind, or both — and `off` is the WILT worn while it does not.
+   *
+   *  THE LOOP this buys: a claimer plants its floor (MonsterDef.creepSource)
+   *  and is measurably stronger on it; kill the claimer and the membrane
+   *  RECOILS (the heart is bound to the actor), so its whole court softens
+   *  as the ground goes. Kill order becomes a question about TERRAIN rather
+   *  than threat — and the mass fabric is the other answer, because shoving
+   *  a rooted body off its own skin is a real play (see the slayer lane's
+   *  `uprooter`).
+   *
+   *  `grace` (seconds, default ROOTED_CFG.grace) is load-bearing: a creep
+   *  rim BREATHES on the warren's pulse, so a bare edge test would flicker
+   *  the sheet every beat. The claim drops only after the body has stood
+   *  clear for the whole grace — stepping over a gap never unroots.
+   *  Edge-triggered at the same chokepoint as bond/nocturne; the tell
+   *  source 'rooted' reads the SAME held flag the sheet wears. */
+  rooted?: RootedSpec;
+  /** THE RESERVE FABRIC (engine/reserves.ts): finite bodily fuel this body
+   *  spends by casting, burns by living, or leaks by travelling — and must
+   *  VENT when it empties. The DENIAL half of the pressure curve: bait the
+   *  expensive move, deny the recovery, outlast the burn. Every row is
+   *  visible by law (validateReserves refuses a spec with no matching
+   *  'reserve:<id>' tell — never a hidden timer). */
+  reserves?: ReserveSpec[];
   /** CARRION FEEDER: hurt and out of combat, it noses to the nearest
    *  necromancy corpse within `radius` (default CARRION_CFG.radius) and
    *  EATS — `rate` × max life healed per second; after `time` seconds the
@@ -2332,6 +2442,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // The soak: blows sink IN — muffled, not turned. Burst lands soft here;
     // sustain wrings them out. (And the water remembers lightning.)
     mods: [mod('coldRes', 'flat', 0.5), mod('lightningRes', 'flat', -0.25), mod('damageTaken', 'more', -0.12)],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [mod('moveSpeed', 'increased', 0.15), mod('damage', 'more', 0.2)] },
     skills: ['tide_lash', 'claw'],
     brain: { type: 'swarm' },
@@ -2380,6 +2491,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // now. Accuracy investment and honest AoE punish the courtesies.
     base: { life: 44, moveSpeed: 148, accuracy: 118, evasion: 85, mana: 20, manaRegen: 3 },
     mods: [mod('coldRes', 'flat', 0.5), mod('lightningRes', 'flat', -0.25)],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'more', 0.45), mod('damage', 'more', 0.15)] },
     skills: ['tide_lash', 'claw'],
     brain: { type: 'flanker', move: { style: 'weave' } },
@@ -3549,6 +3661,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.6)],
     skills: ['claw'],
     xp: 9, faction: 'fungal',
+    rooted: SPOREBED_COURT,
+    tells: [...ROOTED_FAVOR],
     brain: { type: 'swarm' },
     detection: 1.1, // the chaff that scurries the spore-mat
   },
@@ -3559,6 +3673,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.7)],
     skills: ['claw'],
     xp: 14, faction: 'fungal',
+    rooted: SPOREBED_COURT,
+    tells: [...ROOTED_FAVOR],
     brain: { type: 'swarm' },
     detection: 0.9,
     // The Bloom's spore orb: on death it gathers into a drifting spore-sphere that
@@ -3573,6 +3689,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.7)],
     skills: ['venom_bolt', 'toxic_cloud'],
     xp: 18, faction: 'fungal',
+    rooted: SPOREBED_COURT,
+    tells: [...ROOTED_FAVOR],
     brain: { type: 'strafer' }, // kites, lobs spore globs
     detection: 1.25,
   },
@@ -3583,6 +3701,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.8)],
     skills: ['heavy_strike', 'digest'],
     xp: 32, faction: 'fungal', adorn: 'horns',
+    rooted: SPOREBED_COURT,
+    tells: [...ROOTED_FAVOR],
     brain: { type: 'juggernaut', enrage: 0.4 }, // the wall you grind through to reach the core
     detection: 0.85,
   },
@@ -3593,6 +3713,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.7), mod('minionDamage', 'increased', 0.3)],
     skills: ['summon_sporeling', 'unholy_aura', 'despair'],
     xp: 36, faction: 'fungal', adorn: 'tentacles',
+    rooted: SPOREBED_COURT,
+    tells: [...ROOTED_FAVOR],
     brain: { type: 'commander' }, // re-seeds the swarm + buffs — kill-priority
     detection: 1.0,
   },
@@ -3609,6 +3731,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['summon_sporeling', 'toxic_cloud', 'contagion', 'essence_drain', 'agony'],
     xp: 340, faction: 'fungal', adorn: 'tentacles',
     detection: 1.1,
+    rooted: SPOREBED_COURT,
+    tells: [...ROOTED_FAVOR],
     brain: {
       type: 'commander',
       phases: [
@@ -8243,6 +8367,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#7a5a6a', shape: 'pentagon', radius: 12, material: 'cloth', look: 'night_hunter',
     base: { life: 75, moveSpeed: 175, accuracy: 125, evasion: 85, mana: 45, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.3)],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'more', 0.6), mod('moveSpeed', 'increased', 0.15)] },
     skills: ['gore_rend', 'claw'], xp: 30, faction: 'nightkin',
     gemBias: ['attack', 'physical'],
@@ -8289,6 +8414,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#241a20', shape: 'hexagon', radius: 19, material: 'wood', look: 'gloom_coach',
     base: { life: 420, moveSpeed: 46, accuracy: 115, armor: 55, poise: 70, mana: 40, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3)],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [
       mod('damageTaken', 'more', -0.55),
       mod('moveSpeed', 'increased', 2.2),
@@ -8316,6 +8442,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#4a4048', shape: 'octagon', radius: 15, material: 'cloth', look: 'pallbearer',
     base: { life: 200, moveSpeed: 95, accuracy: 110, armor: 45, poise: 60, mana: 35, manaRegen: 4 },
     mods: [mod('chaosRes', 'flat', 0.3)],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dawn', 'day'], mods: [mod('damageTaken', 'more', -0.18), mod('armor', 'increased', 0.6)] },
     skills: ['heavy_strike', 'tolling_ruin'], xp: 38, faction: 'nightkin',
     grants: [{ atLevel: 20, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
@@ -8526,6 +8653,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw', 'summon_crows'], xp: 24, faction: 'carven', tags: ['plant'],
     ambush: { radius: 135, announce: 'the scarecrow turns its head—' },
     post: true,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'increased', 0.35), mod('attackSpeed', 'more', 0.12)] },
     detection: 1.2,
     brain: {
@@ -8570,6 +8698,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 640, moveSpeed: 110, accuracy: 125, armor: 45, poise: 70, evasion: 30, mana: 200, manaRegen: 14 },
     mods: [mod('fireRes', 'flat', -0.15), mod('chaosRes', 'flat', 0.4)],
     skills: ['harrowing_wail', 'gourd_toss', 'heavy_strike'], xp: 170, faction: 'carven', tags: ['plant'],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [mod('damageTaken', 'more', -0.12)] },
     presence: { from: 13, fadeIn: 5 },
     drops: 1, wardPriority: 2,
@@ -10823,6 +10952,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['glimmer_pulse'], xp: 12, faction: 'glimmerkin', tags: ['beast'],
     flier: true, levitates: true,
     packSize: [3, 6],
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [
       mod('evasion', 'increased', 0.35), mod('moveSpeed', 'increased', 0.15),
       mod('damage', 'increased', 0.25),
@@ -10844,6 +10974,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['beguiling_glow', 'glimmer_pulse'], xp: 24, faction: 'glimmerkin', tags: ['beast'],
     gemBias: ['duration', 'aoe'],
     flier: true, levitates: true,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [
       mod('evasion', 'increased', 0.3), mod('moveSpeed', 'increased', 0.15),
     ] },
@@ -10878,6 +11009,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['glimmer_pulse'], xp: 26, faction: 'glimmerkin', tags: ['beast'],
     gemBias: ['lightning', 'spell'],
     flier: true, levitates: true,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['dusk', 'night'], mods: [
       mod('castSpeed', 'increased', 0.2), mod('damage', 'increased', 0.2),
     ] },
@@ -13354,6 +13486,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 22, moveSpeed: 125, evasion: 25, mana: 10, manaRegen: 1 },
     skills: ['talon_rake'], xp: 5, faction: 'vesperkin',
     flier: true, levitates: true,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['day', 'dawn'], mods: [mod('evasion', 'flat', 30), mod('moveSpeed', 'increased', 0.2)] },
     deathBurst: { mode: 'implode', damageFrac: 0.12, coalesce: 0.4, damageType: 'fire' },
     presence: { to: 15, fadeOut: 6 },
@@ -13369,6 +13502,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#8a7fd0', shape: 'oval', radius: 13, material: 'cosmic', look: 'star_grazer',
     base: { life: 60, moveSpeed: 108, mana: 10, manaRegen: 1 },
     skills: ['talon_rake'], xp: 10, faction: 'vesperkin',
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['night', 'dusk'], mods: [mod('evasion', 'flat', 40), mod('moveSpeed', 'increased', 0.15)] },
     deathBurst: { mode: 'implode', damageFrac: 0.2, coalesce: 0.55, damageType: 'cold' },
     presence: { to: 17, fadeOut: 7 },
@@ -13385,6 +13519,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 95, moveSpeed: 112, evasion: 20, mana: 40, manaRegen: 4 },
     mods: [mod('fireRes', 'flat', 0.4)],
     skills: ['squall_bite', 'claw'], xp: 26, faction: 'vesperkin',
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['night', 'dusk'], mods: [mod('moveSpeed', 'increased', 0.25), mod('damage', 'increased', 0.2), mod('evasion', 'flat', 25)] },
     presence: { from: 9, fadeIn: 4 },
     gemBias: ['fire', 'movement'],
@@ -13420,6 +13555,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 260, moveSpeed: 96, mana: 260, manaRegen: 11, energyShield: 70, evasion: 25 },
     mods: [mod('coldRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3)],
     skills: ['starcall', 'skyhook', 'cirrus_veil'], xp: 110, faction: 'vesperkin',
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['night'], mods: [mod('damage', 'increased', 0.25), mod('castSpeed', 'increased', 0.15)] },
     presence: { from: 13, fadeIn: 5 },
     gemBias: ['fire', 'cold'],
@@ -13443,6 +13579,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.5)],
     skills: ['claw', 'absolute_zero'], xp: 60, faction: 'vesperkin',
     heft: 1.5,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['night', 'dusk'], mods: [mod('armor', 'flat', 20), mod('damage', 'increased', 0.15)] },
     deathBurst: { mode: 'implode', damageFrac: 0.4, coalesce: 0.6, damageType: 'cold' },
     presence: { from: 10, fadeIn: 5 },
@@ -13460,6 +13597,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 85, moveSpeed: 105, mana: 70, manaRegen: 5, energyShield: 30, evasion: 30 },
     skills: ['renew', 'rune_of_power'], xp: 40, faction: 'vesperkin',
     flier: true, levitates: true,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['night', 'dusk'], mods: [mod('castSpeed', 'increased', 0.2), mod('moveSpeed', 'increased', 0.15)] },
     presence: { from: 11, fadeIn: 4 },
     gemBias: ['buff', 'cold'],
@@ -13477,6 +13615,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('coldRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3)],
     skills: ['meteoric_bombardment', 'soul_harvest'], xp: 85, faction: 'vesperkin',
     flier: true, levitates: true, heft: 1.7,
+    tells: [...NOCTURNE_UNFURL],
     nocturne: { phases: ['night'], mods: [mod('damage', 'increased', 0.2), mod('castSpeed', 'increased', 0.1)] },
     deathBurst: { mode: 'implode', damageFrac: 0.5, coalesce: 0.7, damageType: 'cold' },
     presence: { from: 12, fadeIn: 5 },
@@ -17844,6 +17983,289 @@ export const MONSTERS: Record<string, MonsterDef> = {
         use: { skillUse: { cadence: [0.12, 0.28] }, move: { style: 'direct', pace: 1.15 } },
       }],
     },
+  },
+
+  // --- THE SPENT AND THE ROOTED (engine/reserves.ts + engine/rooted.ts) -----
+  // Five bodies that invert the roster's one pressure curve. Everything else
+  // in the bestiary asks the same question — can you kill it before it kills
+  // you — because every limit an enemy had was invisible. These wear their
+  // limits, so the answer becomes PATIENCE and POSITION: outlast the burn,
+  // bait the bladders flat, deny the recovery, take the floor away.
+  //
+  // Three depletion dials and one claim, all data:
+  //   fumelung    costs + vent      bait it empty, then pay the fume to close
+  //   taperwight  drain             let it burn — the fight gets easier
+  //   sapbleeder  drainPerUnit      make it run; follow the trail to the husk
+  //   bloom_matron creepSource+rooted  kill the heart, the floor recedes
+  //   nightbloom  nocturne          fight it in its off-hours
+
+  /** THE BELLOWS. Three lungs of gas and not one more until it breathes.
+   *  The gout has no meaningful cooldown ON PURPOSE — its clock is the
+   *  bladder on its flank, which you can see, and the AI HUSBANDS it
+   *  (a `reserve.above` rule, so draining it is something you do TO the
+   *  body, not something it does to itself). Empty, it vents: a real
+   *  window that opens inside its own pall, so closing on one is a
+   *  decision instead of a formality. */
+  fumelung: {
+    id: 'fumelung', name: 'Fumelung',
+    color: '#6a7a48', shape: 'oval', radius: 19, material: 'flesh', look: 'fumelung',
+    heft: 1.35,
+    base: { life: 168, moveSpeed: 96, accuracy: 102, armor: 22, mana: 0, poise: 40 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['claw', 'fume_gout'], xp: 34,
+    faction: 'beast', tags: ['beast'],
+    detection: 0.95,
+    reserves: [{
+      id: 'breath', label: 'Breath', pool: 3,
+      costs: { fume_gout: 1 },
+      // Slow, and only once it has had a moment — staying on it IS the
+      // denial. regenDelay is the lever a player actually plays against.
+      regen: 0.22, regenDelay: 3.2,
+      vent: {
+        forSec: 2.6, status: 'winded_gasp', skillId: 'fume_vent',
+        note: 'out of breath!', refill: 1,
+      },
+    }],
+    tells: [
+      // THE BLADDER: the pleats ARE the meter. Same map the cast gate
+      // reads, so a lung that draws flat is a lung that cannot fire.
+      {
+        source: 'reserve:breath', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'bellowsLung', x: -0.42, scale: 0.95, color: '#9ab84a', params: { n: 5, ry: 0.7 } },
+          scale: [0.7, 1.1],
+        },
+      },
+      // Mirrored on the far flank — the pair reads from any facing.
+      {
+        source: 'reserve:breath', curve: 'smooth', portrait: 0.5,
+        channel: {
+          kind: 'part',
+          part: { kind: 'bellowsLung', x: -0.42, scale: 0.95, mirror: true, alpha: 0.9, color: '#9ab84a', params: { n: 5, ry: 0.7 } },
+          scale: [0.7, 1.1],
+        },
+      },
+      // The whole body deflates with them (posture, never a hitbox lie).
+      { source: 'reserve:breath', band: [0, 1], portrait: 0.5, channel: { kind: 'scale', amp: 0.1 } },
+      // SPENT reads on the body itself: the punish window advertises.
+      { source: 'spent', steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.7 } },
+    ],
+    brain: {
+      type: 'juggernaut',
+      // The gout LEADS the rotation and the BLADDER is its pacing: canUse
+      // reads the reserve price (the dry-magazine idiom), so priority
+      // falls through to claw the moment the lungs cannot pay — no rule
+      // contention, no accidental last breath held back. Three gouts,
+      // then teeth, then the vent: the whole rhythm is the pool.
+      skillUse: { mode: 'priority', order: ['fume_gout', 'claw'] },
+      rules: [
+        // Dry: it closes and swings, because backing off would let it
+        // breathe — and the player denying that is the whole exchange.
+        {
+          when: { spent: true },
+          use: { move: { style: 'direct', pace: 1.1 } },
+        },
+      ],
+    },
+  },
+
+  /** THE WICK. It is burning itself to fight you and it does not stop.
+   *  Strongest the moment it stands up, weaker every second after — the
+   *  damage curve is ONE gaugeMod on the fuel it has left, so the number
+   *  and the taper on its spine are literally the same number. The play
+   *  the roster has never once rewarded: disengage. Let it burn. */
+  taperwight: {
+    id: 'taperwight', name: 'Taperwight',
+    color: '#8a7a68', shape: 'trapezoid', radius: 16, material: 'cloth', look: 'taperwight',
+    base: { life: 132, moveSpeed: 104, accuracy: 112, armor: 14, mana: 80, manaRegen: 7, poise: 20 },
+    mods: [
+      // THE BURN CURVE: +9% damage per unit of taper left, so a fresh wight
+      // hits ~54% harder than a guttered one. Integer pips (the quanta
+      // law) — the sheet folds this only when a pip actually crosses.
+      gaugeMod('damage', 'more', 0.09, 'reserve:wick'),
+      gaugeMod('castSpeed', 'increased', 0.04, 'reserve:wick'),
+      mod('fireRes', 'flat', 0.5),
+    ],
+    skills: ['claw', 'ember_breath'], xp: 30,
+    faction: 'undead', tags: ['undead'],
+    detection: 1.0,
+    reserves: [{
+      id: 'wick', label: 'Taper', pool: 6,
+      // No regen and no vent: this clock runs ONE way, and it starts when
+      // the FIGHT does (drainWhile 'aggroed' — a wight standing quiet in
+      // an unvisited vault keeps its taper; the burn is the engagement's
+      // clock, not the zone's). The breath is ALSO priced in wax — every
+      // gout it throws shortens it, so fighting it hard makes it burn
+      // faster, and a guttered wight has no fire left to breathe (the
+      // cast gate refuses; claw is what remains of it).
+      drain: 0.2, drainWhile: 'aggroed',
+      costs: { ember_breath: 1 },
+      spentAt: 0.1,
+      stages: [{ below: 0.25, status: 'guttered', note: 'guttering...', color: '#8a8070' }],
+    }],
+    tells: [
+      // THE TAPER: length, flame and ash all ride the fuel.
+      {
+        source: 'reserve:wick', steps: 12,
+        channel: {
+          kind: 'part',
+          part: { kind: 'wickTaper', x: -0.15, y: -0.1, rot: -1.35, scale: 1.15, color: '#e8dcc0', params: { n: 1, h: 1.1, flame: '#ffb14a' } },
+        },
+      },
+      // The light it throws dies with it — visible from across a room,
+      // which is the range the decision to disengage is made at.
+      { source: 'reserve:wick', curve: 'early', channel: { kind: 'glow', color: '#ffb14a', max: 0.45 } },
+      // And the body goes ashen as the fuel goes.
+      { source: 'reserve:wick', band: [1, 0], curve: 'smooth', portrait: 0.2, channel: { kind: 'tint', color: '#4a4238', max: 0.55 } },
+    ],
+    brain: {
+      type: 'juggernaut',
+      rules: [{
+        // Burned down it stops pressing — a guttered wight is a body
+        // shuffling toward you, and letting it get that way was the point.
+        when: { reserve: { id: 'wick', below: 0.25 } },
+        use: { move: { style: 'direct', pace: 0.7 }, skillUse: { cadence: [1.4, 2.4] } },
+      }],
+    },
+  },
+
+  /** THE LEAKING. It pays to move, and it leaves the receipt on the floor.
+   *  Press it and it runs; running is what empties it; the trail is how you
+   *  find it again. When the sap is gone it drops where it stands — the
+   *  chase, not the burst, is the kill. */
+  sapbleeder: {
+    id: 'sapbleeder', name: 'Sapbleeder',
+    color: '#7a6a3a', shape: 'oval', radius: 17, material: 'verdant', look: 'sapbleeder',
+    heft: 1.15,
+    base: { life: 146, moveSpeed: 150, accuracy: 100, evasion: 55, mana: 0, poise: 25 },
+    mods: [mod('physicalRes', 'flat', 0.15)],
+    skills: ['claw'], xp: 28,
+    faction: 'beast', tags: ['beast'],
+    detection: 1.2,
+    // The trail: shed by DISTANCE, exactly like the drain — one journey,
+    // two readouts, and they can never disagree about how far it ran.
+    wake: { skillId: 'sap_trail', everyDist: 62 },
+    reserves: [{
+      id: 'sap', label: 'Sap', pool: 5,
+      drainPerUnit: 0.011,
+      // It only knits back once it has genuinely lost you. Keep it in sight
+      // and it never refills — the purest denial dial in the fabric.
+      regen: 0.5, regenDelay: 2, regenWhile: 'calm',
+      spentAt: 0.02,
+      stages: [{ below: 0.34, status: 'sap_starved', note: 'running dry', color: '#b8a068' }],
+      vent: { forSec: 3.2, status: 'wilted', note: 'bled out!', refill: 0.35, color: '#c8a878' },
+    }],
+    tells: [
+      // The reservoir, draining — the accumulator family's sac read
+      // BACKWARD, which is the whole thesis of this school in one part.
+      {
+        source: 'reserve:sap', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'fillSac', x: -0.5, y: 0.18, scale: 0.72, color: '#c8a44a', params: { fluid: '#e8b854', ry: 0.9 } },
+          scale: [0.72, 1.0],
+        },
+      },
+      { source: 'reserve:sap', band: [1, 0], curve: 'smooth', portrait: 0.25, channel: { kind: 'tint', color: '#6a6250', max: 0.5 } },
+      { source: 'spent', steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.8 } },
+      // It is a prey-brained runner: it hungers, so it wears the family row.
+      ...HUNGER_LEAN,
+    ],
+    brain: {
+      type: 'skirmish',
+      move: { style: 'skitter', dart: [0.3, 0.6], pause: [0.1, 0.2] },
+      drives: { hunger: { rise: 0.02 } },
+      rules: [{
+        // Dry, it cannot keep the distance it was living on.
+        when: { spent: true },
+        use: { move: { style: 'direct', pace: 0.5 } },
+      }],
+    },
+  },
+
+  /** THE CLAIMER. She lays the floor her court fights on (creepSource — the
+   *  membrane grows from under her and RECOILS when she dies), and every
+   *  body of the Bloom is measurably harder while standing on it. Kill
+   *  order stops being about threat: drop her and the ground goes out from
+   *  under all of them at once. The mass fabric is the other answer —
+   *  shove one clear of the mat and it is just a mushroom. */
+  bloom_matron: {
+    id: 'bloom_matron', name: 'Bloom-Matron',
+    color: '#a898c0', shape: 'octagon', radius: 22, material: 'verdant', look: 'bloom_matron',
+    heft: 1.5,
+    base: { life: 240, moveSpeed: 74, accuracy: 104, armor: 32, mana: 180, manaRegen: 12, poise: 55 },
+    mods: [mod('chaosRes', 'flat', 0.75)],
+    skills: ['claw', 'toxic_cloud', 'summon_sporeling'], xp: 62,
+    faction: 'fungal', adorn: 'tentacles',
+    detection: 0.9,
+    creepSource: { kind: 'sporebed', reach: [150, 230], bornFrac: 0.45 },
+    rooted: SPOREBED_CLAIM,
+    tells: [
+      ...ROOTED_THRIVE,
+      // THE GRIP: her roots take hold of ground she actually owns. Reads
+      // the fabric's own cover predicate — the mat drawn under her IS the
+      // mat this counts, so the grip can never claim floor she has lost.
+      {
+        source: 'creep:sporebed', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'roots', y: 0.05, scale: 1.1, color: '#8a7a9a', params: { n: 5 } },
+          count: [2, 7], alpha: [0.25, 0.95], scale: [0.6, 1.15],
+        },
+      },
+    ],
+    brain: {
+      type: 'commander',
+      rules: [{
+        // Off her own floor she withdraws to it — the claim is a WANT, so
+        // shoving her clear starts a chase she is trying to end.
+        when: { rooted: false },
+        use: { move: { style: 'direct', pace: 1.25 } },
+      }],
+    },
+  },
+
+  /** THE NOCTURNE-KIN. Fifteen bodies in this roster already gain and lose
+   *  whole modifier sets to the day wheel and not one of them ever showed
+   *  it. This one is the lesson made unmissable: a shut stump at noon, the
+   *  widest thing in the clearing at midnight. Read the hour off the enemy,
+   *  and fight it in its off-hours. */
+  nightbloom: {
+    id: 'nightbloom', name: 'Nightbloom',
+    color: '#5a6a7a', shape: 'circle', radius: 18, material: 'verdant', look: 'nightbloom',
+    heft: 1.4,
+    // moveSpeed 0 IS the immobility stamp (Actor.stationary derives from it —
+    // the siegebreaker axis's own read). A bloom does not walk.
+    base: { life: 190, moveSpeed: 0, accuracy: 108, armor: 26, mana: 140, manaRegen: 10, poise: 60 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['venom_bolt', 'toxic_cloud'], xp: 40,
+    faction: 'beast', tags: ['beast'],
+    detection: 1.15,
+    nocturne: {
+      phases: ['dusk', 'night'],
+      mods: [
+        mod('damage', 'more', 0.45),
+        mod('castSpeed', 'increased', 0.3),
+        mod('armor', 'increased', 0.5),
+      ],
+    },
+    tells: [
+      ...NOCTURNE_UNFURL,
+      // THE UNFURL proper: the corolla opens as its hour comes on. Count
+      // and spread ride the SAME held flag the mods do, so a wide-open
+      // bloom is always the dangerous one.
+      {
+        source: 'nocturne', steps: 1, portrait: 1,
+        channel: {
+          kind: 'part',
+          part: { kind: 'fronds', scale: 1.15, color: '#c8a8e8', params: { n: 7 } },
+          count: [2, 8], scale: [0.45, 1.2], alpha: [0.3, 0.95],
+        },
+      },
+      { source: 'nocturne', steps: 1, portrait: 1, channel: { kind: 'tint', color: '#b088e0', max: 0.4 } },
+    ],
+    brain: { type: 'artillery' },
   },
 };
 

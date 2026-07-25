@@ -329,6 +329,26 @@ export function mitigateTyped(
       const v = atk.sheet.get('siegebreaker', opts.tags, opts.extra);
       if (v > 0) total *= 1 + v;
     }
+    // THE SPENT axis (engine/reserves.ts): the victim has run its own
+    // reservoir dry — a bellows mid-vent, a wick burned down. The first
+    // axis in the lane keyed off a state the victim ENTERS AND LEAVES, so
+    // it prices PATIENCE rather than a matchup. Same lane law: base 0,
+    // folded here and only here, read off the one `spent` boolean the
+    // tell fabric also draws (punished == advertised).
+    if (target.spent) {
+      const v = atk.sheet.get('spentbane', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
+    // THE UPROOTED axis (engine/rooted.ts): the victim's power depends on
+    // ground it is not currently standing on. Armed by DISPLACEMENT (the
+    // mass fabric's shoves) or by DENIAL (kill the heart, the membrane
+    // recoils, the whole court steps off at once). Bodies that wear no
+    // rooted spec never arm it — rootedHeld is false on all of them, so
+    // the claim check, not the flag, is what gates.
+    if (target.rootedSpec && !target.rootedHeld) {
+      const v = atk.sheet.get('uprooter', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
     // THE WARDED axis (engine/pack.ts): the victim stands in a living
     // warden's favor — the exact bond the pack layer DRAWS a line for.
     // Punished == advertised, in the strongest sense the lane has: the

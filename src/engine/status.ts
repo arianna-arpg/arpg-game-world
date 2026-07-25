@@ -470,6 +470,62 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     mods: [mod('damageTaken', 'more', 0.15)],
     powerInert: true,
   },
+
+  // --- THE RESERVE FABRIC's windows (engine/reserves.ts) --------------------
+  // The vent and the burn-down stages, as ordinary status data: the fabric
+  // owns the CLOCK, these rows own the CONSEQUENCE, and any future reserve
+  // body picks whichever of them fits without new machinery. Deliberately
+  // NOT hardCC — a spent body is OPEN, not helpless; it can still swing,
+  // which is what makes closing on one a decision rather than a formality.
+
+  /** THE VENT: an emptied bellows must haul air back in. The window the
+   *  whole bait-the-big-move play is aiming at — and the `spentbane`
+   *  slayer axis arms straight through it. */
+  winded_gasp: {
+    label: 'Winded', color: '#cfe8e4', duration: 2.6,
+    mods: [
+      mod('moveSpeed', 'increased', -0.5),
+      mod('damageTaken', 'more', 0.3),
+      mod('armor', 'more', -0.35),
+    ],
+    powerInert: true,
+  },
+  /** THE GUTTER: a wick burned past its last quarter. The reward for
+   *  disengaging instead of trading — worn while the band holds, so it
+   *  lifts if anything ever refuels the body. */
+  guttered: {
+    label: 'Guttered', color: '#8a8070', duration: 1,
+    mods: [
+      mod('moveSpeed', 'increased', -0.28),
+      mod('damageTaken', 'more', 0.2),
+      mod('accuracy', 'increased', -0.25),
+    ],
+    powerInert: true,
+  },
+  /** RUNNING DRY: a leaker below its last third — the flight is costing
+   *  more than it has left. */
+  sap_starved: {
+    label: 'Running Dry', color: '#b8a068', duration: 1,
+    mods: [mod('moveSpeed', 'increased', -0.2), mod('damageTaken', 'more', 0.12)],
+    powerInert: true,
+  },
+  /** BLED OUT: the leaker's vent — it has spent what it needed to run, and
+   *  now it cannot. THE CATCH: chasing one until the trail runs dry is the
+   *  whole fight, and this is where the chase pays. */
+  wilted: {
+    label: 'Bled Out', color: '#c8a878', duration: 3.2, hardCC: true,
+    mods: [mod('damageTaken', 'more', 0.4)],
+    powerInert: true,
+  },
+  /** THE SPOREBED's intruder toll (data/creeps.ts): the claimed floor
+   *  fights anyone who is not of the Bloom. The natives' own strength
+   *  comes from MonsterDef.rooted instead — one lever each, never both on
+   *  the same body (the skin taxes YOU, the claim lifts THEM). */
+  sporemired: {
+    label: 'Spore-Mired', color: '#b6a8c8', duration: 1.2,
+    mods: [mod('moveSpeed', 'increased', -0.16), mod('chaosRes', 'flat', -0.1)],
+    powerInert: true,
+  },
   // THE POSSESSION SEAM's husk mark (engine/possess.ts): worn by a vacated
   // hero body while its seat rides elsewhere — re-stamped by the sweep, so
   // it lapses on its own moments after the seat returns. Presentation plus

@@ -79,6 +79,34 @@ registerCreep({
   grants: [{ status: 'slippery' }],
 });
 
+/** SPOREBED — the Bloom's claimed floor: a pale fungal mat, bone-violet
+ *  and freckled, laid by a matron's own body (MonsterDef.creepSource) and
+ *  RECOILING the moment she dies. The anchored-pocket lane the fabric was
+ *  built for and has barely been asked to do: caulflesh and blightgrowth
+ *  are the only other kinds a zone grows as standing pockets, and both
+ *  belong to one country apiece.
+ *
+ *  THE TWO-LEVER SPLIT (load-bearing, and the reason this row grants only
+ *  ONE status): the SKIN taxes intruders, and the natives' own strength
+ *  comes from `MonsterDef.rooted` instead — never both on one body. A
+ *  creep grant is invisible bookkeeping; a rooted claim is a VISIBLE held
+ *  flag that drives the thrive/wilt tell and arms the `uprooter` slayer
+ *  axis. Putting the Bloom's buff here as well would double it AND hide
+ *  half of it, so the buff lives where it can be seen and taken away. */
+registerCreep({
+  id: 'sporebed',
+  color: '#2a2230', rim: '#c8b8d8', vein: '#6a5a7a', glow: '#d8c8e8',
+  alpha: 0.7,
+  reach: [120, 190],
+  lobing: 0.38,
+  spread: 14,      // it creeps SLOWLY — this is a claim, not a wave
+  recede: 90,      // and lets go fast: the heart's death reads instantly
+  pulse: 0.7,
+  veins: [5, 9],
+  nodes: 0.4,
+  grants: [{ status: 'sporemired', notFactions: ['fungal'] }],
+});
+
 // --- THE ADVANCING FRONTS — the debut marching rows ------------------------
 
 /** THE FLOODCREST — a directional wall of water that breaks in from the

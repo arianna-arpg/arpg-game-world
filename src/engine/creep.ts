@@ -1421,6 +1421,22 @@ export class CreepField {
     return best;
   }
 
+  /** Peak live cover at a point FROM ONE KIND, gameplay-honest: 0 unless
+   *  the reading clears that kind's own `hitFloor`, so "> 0 here" means
+   *  exactly what "on creep" means to a grant, a drag or a drown. THE
+   *  ROOTED FABRIC's claim test (engine/rooted.ts) — a body standing on a
+   *  named membrane — and the `creep:<kind>` tell source both read this,
+   *  so the skin drawn under the feet IS the skin that buffs. */
+  coverOf(kind: string, x: number, y: number, pad = 0): number {
+    let best = 0;
+    for (const s of this.sources) {
+      if (s.def.id !== kind) continue;
+      const c = this.sourceCover(s, x, y, pad);
+      if (c > best && c >= (s.def.hitFloor ?? CREEP_CFG.hitFloor)) best = c;
+    }
+    return best;
+  }
+
   /** Is this point on live creep at all? (The gameplay predicate.) */
   onCreep(x: number, y: number, pad = 0): boolean {
     for (const s of this.sources) {

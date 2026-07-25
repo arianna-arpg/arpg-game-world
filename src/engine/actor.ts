@@ -29,6 +29,8 @@ import type { CreepSource } from './creep';
 import type { GripHold } from './grab';
 import type { PossessRide, VacantMark } from './possess';
 import type { PlySpec } from './plies';
+import { reserveCostOf, type ReserveSpec, type ReserveState } from './reserves';
+import type { RootedSpec } from './rooted';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
@@ -1410,6 +1412,46 @@ export class Actor {
   /** PHASE-WORN MODS transition tracker (MonsterDef.nocturne) — the sheet
    *  source only moves when the day wheel crosses the def's hours. */
   nocturneHeld = false;
+  /** GROUND-WORN MODS transition tracker (MonsterDef.rooted) — the third
+   *  member of the conditional-mod family: bond asks WHO is near, nocturne
+   *  asks WHAT HOUR it is, rooted asks WHERE THIS BODY STANDS. Edge-
+   *  triggered at the same chokepoint; `rootedOffAt` stamps when the body
+   *  first stepped off its claim, so the spec's grace can ride the creep
+   *  rim's own breathing without flickering the sheet. */
+  rootedHeld = false;
+  rootedOffAt = 0;
+  /** The def's ground-claim spec, stamped at spawn so the mitigation
+   *  chokepoint can arm `uprooter` without a registry lookup in the hot
+   *  damage path (the wake/volatile stamping idiom). Presence IS the
+   *  gate: a body with no claim can never read as uprooted. */
+  rootedSpec?: RootedSpec;
+  /** THE RESERVE FABRIC (engine/reserves.ts): live pools by id, minted at
+   *  spawn from MonsterDef.reserves. Undefined = no reserves, and every
+   *  sweep / cast gate / slayer read short-circuits (null-cost on the
+   *  reserveless roster). */
+  reserves?: Map<string, ReserveState>;
+  /** The def's reserve rows, stamped beside the live pools (the rootedSpec
+   *  idiom) so canUse, the useSkill spend and the sweep all read the specs
+   *  without a registry lookup in hot paths — and so a minted/possessed
+   *  body carries its economy wherever it came from. */
+  reserveSpecs?: ReserveSpec[];
+  /** Next reserve sweep (world clock) + the shared travel odometer anchor
+   *  (`drainPerUnit` — the body-wake law: displacement is displacement,
+   *  however it happened). */
+  reserveNextAt = 0;
+  reserveLastAt = 0;
+  reservePrev?: Vec2;
+  /** Accumulated displacement since the last charged sweep (the odometer
+   *  BANKS every frame's delta so the cadence drops none of the journey —
+   *  charging only the sweep-frame's delta would let a leaker sprint for
+   *  free between beats). */
+  reserveOdo = 0;
+  /** IS THIS BODY SPENT? — true while ANY of its reserves sits at/below
+   *  its spentAt threshold or holds an open vent window. Stamped by the
+   *  reserve sweep and read by THREE consumers off this one boolean (the
+   *  slayer lane's `spentbane`, the `spent` tell source, AICondition) so
+   *  the punished body, the drawn body and the decided body are one. */
+  spent = false;
   /** NO BOUNTY: this body was CONJURED mid-fight (an enemy's summon verb,
    *  summon delivery, brood hatch, split, spew) — killing it pays no xp, no
    *  drops, no orbs. The summoner is the prize; its spawn is just weather.
@@ -2435,6 +2477,18 @@ export class Actor {
         ha = Math.imul(ha ^ pips, 0x01000193); hb = (Math.imul(hb, 31) + pips) | 0;
       }
     }
+    // RESERVES publish the same way (engine/reserves.ts THE QUANTA LAW):
+    // integer pips of fuel REMAINING, so "more damage per unit of wick
+    // left" is one gaugeMod and the wick's whole power curve is data —
+    // continuous in feel, integer on the wire, and read off the exact
+    // number the tell draws.
+    if (this.reserves) {
+      for (const [id, r] of this.reserves) {
+        if (r.pips <= 0) continue;
+        mixStr(id);
+        ha = Math.imul(ha ^ r.pips, 0x01000193); hb = (Math.imul(hb, 31) + r.pips) | 0;
+      }
+    }
     if (ha !== this.gaugeHashA || hb !== this.gaugeHashB || sheetChanged) {
       this.gaugeHashA = ha; this.gaugeHashB = hb;
       const gauges: [string, number][] = [];
@@ -2448,6 +2502,11 @@ export class Actor {
         for (const [id, b] of this.brims) {
           const pips = Math.round(b.fill * 5);
           if (pips > 0) gauges.push(['brim:' + id, pips]);
+        }
+      }
+      if (this.reserves) {
+        for (const [id, r] of this.reserves) {
+          if (r.pips > 0) gauges.push(['reserve:' + id, r.pips]);
         }
       }
       this.sheet.setGauges(gauges);
@@ -3259,6 +3318,21 @@ export class Actor {
     {
       const uc = instanceUseCharges(inst);
       if (uc && uc.empower === undefined && this.skillChargeBank(inst).count <= 0) return false;
+    }
+    // THE RESERVE PRICE (engine/reserves.ts): a pool too dry to pay this
+    // cast refuses HERE — the same affordability read the mana line below
+    // makes, so an AI rotation (priority and weighted alike) falls through
+    // to its next art instead of pressing a refusal, and a venting body
+    // (ventUntil > 0 exactly while the window stands — the sweep zeroes it
+    // at close) cannot cast through its own recovery. The actual SPEND
+    // stays in World.useSkill, after every redirect.
+    if (this.reserves && this.reserveSpecs) {
+      for (const spec of this.reserveSpecs) {
+        const rc = reserveCostOf(spec, inst.def.id);
+        if (!rc) continue;
+        const st = this.reserves.get(spec.id);
+        if (!st || st.cur < rc || st.ventUntil > 0) return false;
+      }
     }
     // INVOCATION: nothing woven, nothing to release.
     if (inst.def.invokes && this.runes.length === 0) return false;

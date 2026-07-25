@@ -737,6 +737,21 @@ export interface AICondition {
    *  plus a `{do:'mount'}` beat puts an unhorsed lancer back on the first
    *  free saddle its kin left standing. */
   mounted?: boolean;
+  /** OWN RESERVE LEVEL (engine/reserves.ts): fill fraction bands on a named
+   *  pool — `{ id: 'breath', above: 0.5 }` on the expensive move and
+   *  `{ id: 'breath', below: 0.2 }` on the cautious one. THE BAIT IS A
+   *  DECISION, not an accident: a bellows that HUSBANDS its breath makes
+   *  the player work to drain it, and the same rows tell the mind what to
+   *  do once it is dry. Reads the exact map the gauge draws. */
+  reserve?: { id: string; above?: number; below?: number };
+  /** SPENT (Actor.spent): true = only while some pool is dry or a vent
+   *  window stands open, false = only while it still has something left.
+   *  The one boolean the slayer axis and the tell also read. */
+  spent?: boolean;
+  /** ROOTED (MonsterDef.rooted): true = only while standing on its own
+   *  claimed ground, false = only while off it. Pairs with a seek beat to
+   *  make "get back on my floor" an authored want. */
+  rooted?: boolean;
   /** Gate each FIRING by this chance (rolled when everything else passes). */
   chance?: number;
   /** PACKAGE-EXTENDED conditions: each key names a predicate registered via
@@ -1338,6 +1353,19 @@ export function evalCondition(
     if (c.drive.above !== undefined && !(v >= c.drive.above)) return false;
     if (c.drive.below !== undefined && !(v <= c.drive.below)) return false;
   }
+  // THE RESERVE bands (engine/reserves.ts) — the drive grammar's shape over
+  // the body's own fuel, so husbanding a breath is an authored WANT and the
+  // bait the player performs is answered by a real decision. A body with no
+  // such pool reads 0 and simply fails an `above` rule, which is honest:
+  // it has nothing to spend.
+  if (c.reserve) {
+    const r = actor.reserves?.get(c.reserve.id);
+    const v = r && r.max > 0 ? Math.max(0, Math.min(1, r.cur / r.max)) : 0;
+    if (c.reserve.above !== undefined && !(v >= c.reserve.above)) return false;
+    if (c.reserve.below !== undefined && !(v <= c.reserve.below)) return false;
+  }
+  if (c.spent !== undefined && actor.spent !== c.spent) return false;
+  if (c.rooted !== undefined && actor.rootedHeld !== c.rooted) return false;
   if (c.ext) {
     for (const key of Object.keys(c.ext)) {
       const fn = EXT_CONDITIONS.get(key);

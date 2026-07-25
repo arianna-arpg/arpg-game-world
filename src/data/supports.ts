@@ -89,16 +89,46 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
   // The lane's FIFTH axis (engine/stats.ts siegebreaker, same mitigateTyped
-  // fold): whether the victim can WALK AWAY. Rooted bodies only
+  // fold): whether the victim can WALK AWAY. IMMOBILE bodies only
   // (Actor.stationary — defs whose base moveSpeed is 0): the Warfront's
   // engines, every spawner object, idols, planted totems. The war below
-  // builds; this gem un-builds.
+  // builds; this gem un-builds. (Vocabulary: 'immobile' is this axis;
+  // 'ROOTED' belongs to engine/rooted.ts — ground-worn power — and is the
+  // Uprooter's business two rows down.)
   siegebreaker: {
     id: 'siegebreaker', name: 'Siegebreaker',
-    description: 'This skill hits 30% harder against ROOTED bodies — siege engines, spawners, idols, anything built or planted where it stands. What cannot walk away from you cannot be spared by footwork either.',
+    description: 'This skill hits 30% harder against IMMOBILE bodies — siege engines, spawners, idols, anything built or planted where it stands. What cannot walk away from you cannot be spared by footwork either.',
     color: '#e8823a', requiresTags: ['attack', 'spell'],
     mods: [mod('siegebreaker', 'flat', 0.3)],
     perLevel: [mod('siegebreaker', 'flat', 0.02)],
+    weight: 6,
+  },
+  // The lane's SIXTH axis (engine/stats.ts spentbane, same mitigateTyped
+  // fold) — and the first keyed off a state the victim ENTERS AND LEAVES.
+  // Every other axis prices a matchup; this one prices PATIENCE. A body
+  // whose reserve has run dry (engine/reserves.ts: a bellows mid-vent, a
+  // wick burned down, a leaker bled out) reads spent, and it wears that
+  // fact on its body — so the gem is never a guess, and the whole play is
+  // "bait it empty, THEN commit".
+  spentbane: {
+    id: 'spentbane', name: 'Spentbane',
+    description: 'This skill hits 40% harder against SPENT enemies — a body whose own reserve has run dry, or that is venting to get it back. Worth nothing against a full one. Bait the expensive move, watch the bladder go slack, and spend everything into the window it just opened.',
+    color: '#9ad0c8', requiresTags: ['attack', 'spell'],
+    mods: [mod('spentbane', 'flat', 0.4)],
+    perLevel: [mod('spentbane', 'flat', 0.028)],
+    weight: 6,
+  },
+  // The lane's SEVENTH axis (engine/stats.ts uprooter, same mitigateTyped
+  // fold) — the positional one. A body wearing MonsterDef.rooted draws its
+  // strength from ground it claims; off that ground it is merely a body.
+  // You ARM this gem with the mass fabric (shove it off) or with the kill
+  // order (drop the heart and the membrane recoils under the whole court).
+  uprooter: {
+    id: 'uprooter', name: 'Uprooter',
+    description: 'This skill hits 35% harder against enemies standing OFF their own ground — the claimed membrane or native floor their strength depends on. Shove one clear of it, or kill the heart that grows it and take the floor out from under the whole court at once.',
+    color: '#8fbf6a', requiresTags: ['attack', 'spell'],
+    mods: [mod('uprooter', 'flat', 0.35)],
+    perLevel: [mod('uprooter', 'flat', 0.025)],
     weight: 6,
   },
   // THE LANE'S SOCIAL PAIR (engine/pack.ts bondbreaker/quailbane, same

@@ -442,7 +442,20 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  The lane's fifth axis: not what the victim is relative to you, not
    *  where on the creature — whether it can WALK AWAY. Structural stamp at
    *  mint, never a CC read (chill is the ailment suite's business). */
-  siegebreaker:   { label: 'Damage vs Rooted Bodies', base: 0, min: 0, percent: true },
+  siegebreaker:   { label: 'Damage vs Immobile Bodies', base: 0, min: 0, percent: true },
+  /** MORE damage vs SPENT bodies (Actor.spent — engine/reserves.ts: any
+   *  reserve at/below its threshold, or a vent window standing open). The
+   *  lane's sixth axis, and the first one keyed off a state the victim
+   *  ENTERS AND LEAVES rather than a fact about what it is: the whole
+   *  point is that it rewards WAITING. Bait the expensive move, then
+   *  spend your own burst into the window it opened. */
+  spentbane:      { label: 'Damage vs Spent Enemies', base: 0, min: 0, percent: true },
+  /** MORE damage vs a body wearing MonsterDef.rooted that is standing OFF
+   *  its claimed ground (Actor.rootedHeld false). The lane's seventh axis
+   *  and its most positional: the mass fabric (shoveAuthority, knockback,
+   *  a grab-and-throw) is how you ARM it, and killing the heart that
+   *  grows the floor is how you arm it for the whole court at once. */
+  uprooter:       { label: 'Damage vs Uprooted Enemies', base: 0, min: 0, percent: true },
   /** MORE damage vs a body standing in a WARDEN'S FAVOR (Actor.bondHeld —
    *  engine/pack.ts). The lane's eighth axis, and the first keyed off a
    *  SOCIAL fact rather than a physical one. It exists to give the pack

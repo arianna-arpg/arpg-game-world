@@ -165,8 +165,21 @@ export interface TellBody {
    *  same quarry its reserves and rules test against (a fully-reserved
    *  coil never aggroes; the LOCK is its honest marked-you truth). */
   aiTargetId?: number;
-  /** Wearing MonsterDef.bond mods right now (the bond scan's flag —
-   *  engine/pack.ts reads it; the Rooted school shares it). */
+  // --- THE DEPLETION LANES (the Spent's school) — all OPTIONAL, so a
+  // hand-built probe body stays three lines; absent fields read 0.
+  /** Live reserve pools by id (Actor.reserves — engine/reserves.ts). */
+  reserves?: Map<string, { cur: number; max: number }>;
+  /** The one SPENT boolean (Actor.spent) the slayer axis arms off. */
+  spent?: boolean;
+  /** THE WIND: the kite budget's live spend + its effective cap, exactly
+   *  as updateAI stamped them for moveAway to read. */
+  aiKiteAcc?: number;
+  aiKiteSpec?: { kite: number };
+  aiWindedUntil?: number;
+  // --- THE CONDITIONAL-MOD LANES (the Rooted's school): the held flags
+  // the stat sheet itself keys on — read, never written.
+  rootedHeld?: boolean;
+  nocturneHeld?: boolean;
   bondHeld?: boolean;
   // --- THE PACK LANES (the social school — engine/pack.ts). All OPTIONAL,
   // so a hand-built probe body stays three lines; absent fields read their
@@ -200,12 +213,18 @@ export interface TellBody {
    *  predation is OPEN — the same stamp World.isPrey gates hostility on,
    *  so the nose-down posture and who-counts-as-food are one fact. */
   aiPrey?: readonly string[];
+  /** Where the body stands (the `creep` source's sample point). */
+  pos?: { x: number; y: number };
 }
 
-/** The narrow world view (the clock + the sky's light). */
+/** The narrow world view (the clock, the sky's light, the living ground). */
 export interface TellWorld {
   time: number;
   radiance?(): number;
+  /** Live creep cover at a point — one named KIND, or the peak of any
+   *  kind when `kind` is undefined (World supplies the fabric's own
+   *  gameplay predicate, so drawn == tested rides through unchanged). */
+  creepCoverAt?(kind: string | undefined, x: number, y: number): number;
 }
 
 /** One state source: (body, world, arg-after-colon) → raw reading. Raw may
@@ -346,6 +365,56 @@ export const TELL_SOURCES: Record<string, TellSource> = {
    *  is food wears it, and you can tell at a glance whether you are being
    *  hunted or merely walked past. */
   coursing: a => (a.aiPrey?.length ? 1 : 0),
+  // --- THE DEPLETION SOURCES (the Spent's school — docs/engine/reserves.md).
+  // Everything below reads a reservoir the engine ALREADY kept and never
+  // showed. None of them add state; each is a pure read of a live map, so
+  // the gauge on the body and the number the mechanic spends are the same
+  // number by construction.
+  /** THE RESERVE (engine/reserves.ts): named pool fill, 0..1 — bounded by
+   *  construction (the fabric knows its own capacity), so unlike `charge`
+   *  it needs no band. 'reserve:breath' is the bellows' bladder; band it
+   *  [1, 0] to read as a DRAIN instead of a fill. */
+  reserve: (a, _w, arg) => {
+    if (!arg) return 0;
+    const r = a.reserves?.get(arg);
+    if (!r) return 0;
+    return r.max > 0 ? Math.max(0, Math.min(1, r.cur / r.max)) : 0;
+  },
+  /** IS THIS BODY SPENT — any reserve at/below its threshold, or a vent
+   *  window standing open. The one boolean the slayer lane's `spentbane`
+   *  arms off, so the punish window and the tell that advertises it can
+   *  never disagree about when it is open. */
+  spent: a => (a.spent ? 1 : 0),
+  /** THE WIND (BEHAVIOR_CFG.defaultKite / TempoSpec.kite): retreat budget
+   *  SPENT, 0 fresh → 1 blown. Every breathing body in the bestiary
+   *  already carries this and none of them ever showed it — which is why
+   *  chasing a kiter read as futility instead of a rhythm. */
+  wind: a => {
+    const cap = a.aiKiteSpec?.kite;
+    if (!cap || cap <= 0 || !Number.isFinite(cap)) return 0;
+    return Math.max(0, Math.min(1, (a.aiKiteAcc ?? 0) / cap));
+  },
+  /** WINDED RIGHT NOW — the legs are out and it cannot backpedal. The
+   *  punish beat's own tell (morale's shape, in the lungs). */
+  winded: (a, w) => (w.time < (a.aiWindedUntil ?? 0) ? 1 : 0),
+  // --- THE CONDITIONAL-MOD SOURCES (the Rooted's school). Three fields
+  // have quietly worn and shed whole Modifier[] sets for months with no
+  // outward sign; these read the exact HELD FLAGS the stat sheet keys on.
+  /** Standing on its own claimed ground (MonsterDef.rooted, engine/
+   *  rooted.ts) — the thrive/wilt read. */
+  rooted: a => (a.rootedHeld ? 1 : 0),
+  /** Its hour is standing (MonsterDef.nocturne) — the body that opens in
+   *  the dark and closes by day, so a player learns to read the CLOCK off
+   *  the enemy. */
+  nocturne: a => (a.nocturneHeld ? 1 : 0),
+  /** Its pack bond is holding (MonsterDef.bond) — the priority read: the
+   *  softened body is visibly softened. */
+  bonded: a => (a.bondHeld ? 1 : 0),
+  /** Live creep cover underfoot, 0..1 — ANY kind bare, or one named kind
+   *  ('creep:rootmire'). Reads the fabric's own gameplay predicate, so the
+   *  membrane drawn under the feet is the membrane the tell reports. */
+  creep: (a, w, arg) =>
+    (a.pos && w.creepCoverAt ? w.creepCoverAt(arg, a.pos.x, a.pos.y) : 0),
 };
 
 /** Extend the vocabulary (packages register their own state reads). */

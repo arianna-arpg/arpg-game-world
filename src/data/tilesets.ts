@@ -300,6 +300,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gnoll_butcher', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'thorn_sprite', weight: 2, presence: { to: 20, fadeOut: 10 } },
         { id: 'sylvan_warden', weight: 1 },
+        { id: 'sapbleeder', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'nightbloom', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -1200,6 +1202,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'den_matron', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'den_whelp', weight: 2, presence: { to: 14, fadeOut: 6 } },
         { id: 'moon_howler', weight: 1, presence: { from: 9, fadeIn: 5 } },
+        // THE LEAKING (engine/reserves.ts): it pays to run and leaves the
+        // receipt — the wood's own tracking lesson, and the trail is real
+        // ground you can follow to a body that has nothing left.
+        { id: 'sapbleeder', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        // THE NOCTURNE made visible: a shut stump at noon, the widest
+        // thing in the clearing at midnight.
+        { id: 'nightbloom', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'treant_warden', weight: 2, presence: { from: 10, fadeIn: 5 } },
@@ -4490,6 +4499,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'bone_serpent', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'barrow_wight', weight: 2, presence: { from: 10, fadeIn: 5 } },
+        // THE WICK (engine/reserves.ts): grave-tapers that burn themselves
+        // to fight. The vaults' one enemy the correct answer to is PATIENCE
+        // — back off and it beats itself.
+        { id: 'taperwight', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'banshee', weight: 1, presence: { from: 12, fadeIn: 6 } },
         { id: 'lich_marshal', weight: 1, presence: { from: 14, fadeIn: 6 } },
@@ -6750,6 +6763,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         palette: ['#0b0714', '#150e20', '#1f152e', '#2b1e3e', '#38294e'],
       },
       ambientFx: [{ kind: 'spores', intensity: 0.7, color: '#b8e88f' }],
+      // The hollow's own claimed floor — smaller than the surface Bloom's,
+      // but the same lesson underground (see the mycelia theme's note).
+      creep: { pockets: [1, 3], kinds: [{ id: 'sporebed' }] },
     },
     sizeW: [1200, 1700], sizeH: [900, 1300],
     common: [
@@ -6810,6 +6826,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fungal_puffball', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'fungal_brute', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'fungal_tender', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        // THE CLAIMER (engine/rooted.ts): she lays the floor the rest of
+        // this table fights better on — kill her and it recedes.
+        { id: 'bloom_matron', weight: 1, presence: { from: 7, fadeIn: 4 } },
         { id: 'mushroomling', weight: 2, presence: { to: 14, fadeOut: 5 } },
         { id: 'myconid_warrior', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'myconid_capcaller', weight: 1, presence: { from: 9, fadeIn: 4 } },
@@ -8921,6 +8940,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
       // Luminous spores adrift on the grotto's own slow convection.
       ambientFx: [{ kind: 'spores', intensity: 0.9, color: '#b8e88f' }],
+      // THE BLOOM'S CLAIMED FLOOR (engine/creep.ts + engine/rooted.ts):
+      // standing sporebed pockets, the anchored-membrane lane the fabric was
+      // built for and had only two tilesets asking for. Fungal kin wearing
+      // SPOREBED_COURT are measurably harder while they stand on one, and a
+      // Bloom-Matron GROWS her own — so the mat you walk into decides how
+      // hard the room is before anything has swung at you.
+      creep: { pockets: [2, 4], kinds: [{ id: 'sporebed' }] },
     },
     sizeW: [2100, 2900], sizeH: [1500, 2200], ellipseChance: 0,
     // Organic fungal clutter scattered INSIDE the carved grotto chambers (myceliaLayout
@@ -8944,6 +8970,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fungal_spitter', weight: 3 },
         { id: 'fungal_brute', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'fungal_tender', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        // THE CLAIMER (engine/rooted.ts): the Bloom's ground-layer — the
+        // membrane under her court is hers, and it dies with her.
+        { id: 'bloom_matron', weight: 1.5, presence: { from: 6, fadeIn: 3 } },
         // The CAP-FOLK — the Bloom's solid kin (mushrooms, not clouds):
         // caplings underfoot early, the myconid line by the mid-teens, the
         // Sovereign only where the mycelium runs old and deep.

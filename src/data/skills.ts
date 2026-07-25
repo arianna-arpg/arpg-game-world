@@ -4596,6 +4596,70 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 150, weight: 2 },
   },
 
+  // --- THE RESERVE FABRIC's debut kit (engine/reserves.ts) -----------------
+  // The bellows' economy in three skills: a gout that costs real breath, the
+  // vent it must pay when the bladders run flat, and nothing else. Note what
+  // is NOT here — no cooldown doing the pacing work. The gout's clock IS the
+  // reserve (cooldown 0.9 is only a double-tap guard), which is the whole
+  // point: the limit is a thing the player can see, bait and starve, not a
+  // number ticking behind the body.
+
+  /** THE GOUT — priced at one lung. A bellows carries three. */
+  fume_gout: {
+    id: 'fume_gout', name: 'Fume Gout', noDrop: true,
+    description: 'The bladders clench and empty: a rolling gout of swamp-gas, thick enough to chew. It has three of these in it, and not one more until it breathes.',
+    tags: ['spell', 'chaos', 'aoe'], color: '#a8c85a',
+    manaCost: 0, cooldown: 0.9, useTime: 0.85,
+    baseDamage: { chaos: [10, 16] },
+    delivery: { type: 'cone', range: 175, arcDeg: 54 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.5, magnitude: 0.4 },
+    ],
+    ai: { range: 165, weight: 3 },
+  },
+  /** THE VENT — what an emptied body pays, and the reason closing on one is
+   *  a DECISION rather than a formality: the window is real, but it opens
+   *  inside the last of its own lungs. Rush the fume or wait it out. */
+  fume_vent: {
+    id: 'fume_vent', name: 'Vent', noDrop: true,
+    description: 'Flat bladders haul air back in, and the dregs come out with it — a low, clinging pall around its own feet.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#8aa84a',
+    manaCost: 0, cooldown: 0, useTime: 0.1,
+    baseDamage: { chaos: [5, 8] },
+    delivery: {
+      type: 'ground', radius: 74, castRange: 0,
+      lingerDuration: 2.6, tickInterval: 0.55,
+      noImpact: true,
+      sizeOver: { from: 0.5, to: 1, curve: 'quadOut' },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.3, magnitude: 0.3 },
+    ],
+  },
+  /** THE LEAK — the sapbleeder's wake payload (MonsterDef.wake sheds it by
+   *  distance travelled, and the same travel is what drains the reserve, so
+   *  the trail on the floor is a HONEST readout of what the flight cost).
+   *  Follow it to the body; the body is at the end of it, dry. */
+  sap_trail: {
+    id: 'sap_trail', name: 'Sap Trail', noDrop: true,
+    description: 'Amber weeping from a body that cannot stop spending it. Tacky underfoot, and it points the way it went.',
+    tags: ['spell', 'physical', 'aoe', 'duration'], color: '#d8a850',
+    manaCost: 0, cooldown: 0, useTime: 0.1,
+    baseDamage: { physical: [2, 4] },
+    delivery: {
+      type: 'ground', radius: 26, castRange: 90,
+      lingerDuration: 6.5, tickInterval: 0.7,
+      noImpact: true,
+      sizeOver: { from: 1, to: 0.4, curve: 'quadIn' },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'mired', chance: 0.55 },
+    ],
+  },
+
   time_dilation: {
     id: 'time_dilation', name: 'Time Dilation',
     description: 'Pinch the clockwork: every OTHER skill\'s running cooldown sheds 2 seconds and a quarter of what remains. Its own long clock is the price — the winder cannot wind itself (#19).',

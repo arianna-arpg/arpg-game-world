@@ -8541,6 +8541,90 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#f0e0a8', params: { spread: 0.3, dist: 0.66, size: 0.08 } },
     ],
   },
+
+  // --- THE SPENT AND THE ROOTED (engine/reserves.ts + engine/rooted.ts) -----
+  // The depletion school, silhouette-first. Every body here keeps THE
+  // GAUGE'S SEAT BARE — the flank or the spine where its reserve-limb will
+  // ride is deliberately unpainted in the baked stack, exactly as the
+  // accumulator family keeps the sac's seat clear, so the live meter is the
+  // loudest thing on the body and never fights the anatomy for the eye.
+
+  /** THE FUMELUNG: a low, wide, wet-skinned brute with its ribcage hinged
+   *  OUTWARD — the paired bladders ride those flanks (bare here) and the
+   *  head is mostly a vent. It reads as a thing built around holding air. */
+  fumelung: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.2, seed: 61 } },
+      { kind: 'haustraFolds', x: -0.1, scale: 0.9, params: { n: 4 } },
+      { kind: 'legs', scale: 0.9, params: { n: 4, len: 0.44 } },
+      { kind: 'snout', x: 0.52, scale: 0.72 },
+      { kind: 'maw', x: 0.66, scale: 0.5, params: { arc: 0.7 } },
+      { kind: 'eyes', color: '#c8e070', params: { n: 2, spread: 0.44, dist: 0.5, size: 0.075 } },
+    ],
+    live: [{ kind: 'sporeVents', color: '#9ab84a', params: { n: 2 } }],
+    shadowScale: 1.05,
+  },
+
+  /** THE TAPERWIGHT: a hollow standing husk of wax-pale cloth around a
+   *  burning core. The spine seat above it is bare — that is where the
+   *  taper rides, and watching it shorten is the whole fight. */
+  taperwight: {
+    parts: [
+      { kind: 'robe', scale: 1.0, params: { tatter: 0.5 } },
+      { kind: 'tatters', scale: 1.05, params: { n: 6 } },
+      { kind: 'ribs', scale: 0.7, alpha: 0.55, params: { n: 4 } },
+      { kind: 'hood', x: 0.24, scale: 0.86, params: { eyes: true } },
+      { kind: 'eyes', color: '#ffc46a', params: { n: 2, spread: 0.3, dist: 0.6, size: 0.07 } },
+    ],
+    live: [{ kind: 'emberSparks', color: '#ffb14a', params: { n: 3 } }],
+    shadowScale: 0.8,
+  },
+
+  /** THE SAPBLEEDER: a long-legged verdant browser with a split, weeping
+   *  bark-flank. Built to run — and to lose something the whole time it is
+   *  running. The flank seat carries the draining sac. */
+  sapbleeder: {
+    parts: [
+      { kind: 'torso', scale: 1.0, params: { irr: 0.12 } },
+      { kind: 'barkPlates', scale: 0.95, params: { n: 5 } },
+      { kind: 'legs', scale: 1.05, params: { n: 4, len: 0.62 } },
+      { kind: 'mossPatch', x: -0.3, scale: 0.7, params: { n: 2 } },
+      { kind: 'snout', x: 0.5, scale: 0.66 },
+      { kind: 'antlers', x: 0.36, scale: 0.7 },
+      { kind: 'eyes', color: '#e8d088', params: { n: 2, spread: 0.36, dist: 0.56, size: 0.07 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#c89a44', params: { n: 3 } }],
+    shadowScale: 1.1,
+  },
+
+  /** THE BLOOM-MATRON: a squat fruiting mass, skirted in the mat she is
+   *  laying. Her ROOTS are the live layer — they grip when she stands on
+   *  her own floor and hang slack when she does not, which is the tell the
+   *  whole court's strength is keyed to. */
+  bloom_matron: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.22, seed: 73 } },
+      { kind: 'capDome', x: -0.05, scale: 1.15 },
+      { kind: 'polyps', scale: 0.9, params: { n: 7 } },
+      { kind: 'gillFrill', scale: 0.95, params: { n: 16 } },
+      { kind: 'eyeCluster', color: '#d8c8e8', params: { n: 5, spread: 0.7, dist: 0.5 } },
+    ],
+    live: [{ kind: 'sporeVents', color: '#c8b8d8', params: { n: 3 } }],
+    shadowScale: 1.15,
+  },
+
+  /** THE NIGHTBLOOM: a shut fist of a plant by day. The unfurling fronds
+   *  and the lantern-glow are live rows the hour drives — at noon this is
+   *  a stump, and at midnight it is the widest thing in the clearing. */
+  nightbloom: {
+    parts: [
+      { kind: 'blob', scale: 0.86, params: { irr: 0.16, seed: 89 } },
+      { kind: 'roots', scale: 1.0, params: { n: 5 } },
+      { kind: 'barkPlates', scale: 0.82, params: { n: 4 } },
+      { kind: 'lure', x: 0.3, scale: 0.55, alpha: 0.8 },
+    ],
+    shadowScale: 0.95,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
