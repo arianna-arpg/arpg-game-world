@@ -180,6 +180,8 @@ export interface TellBody {
   // the stat sheet itself keys on — read, never written.
   rootedHeld?: boolean;
   nocturneHeld?: boolean;
+  /** Wearing MonsterDef.bond mods right now (the bond scan's flag —
+   *  engine/pack.ts reads it; the Rooted school shares it). */
   bondHeld?: boolean;
   // --- THE PACK LANES (the social school — engine/pack.ts). All OPTIONAL,
   // so a hand-built probe body stays three lines; absent fields read their
