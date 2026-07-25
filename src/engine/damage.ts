@@ -36,6 +36,11 @@ export const SLAYER_CFG = {
   giantsbaneRatio: 1.5,
   /** regicide arms against these Actor.rarity classes. */
   regicideRarities: ['magic', 'rare', 'champion', 'crowned'] as readonly string[],
+  /** quailbane arms below this NERVE (engine/pack.ts — 1 steady, 0
+   *  breaking). Set at the band where the craven's collapse posture has
+   *  become unmistakable, so the bonus is live exactly while the body is
+   *  visibly showing it: the tell IS the tooltip. */
+  quailAt: 0.5,
 } as const;
 
 export interface DamagePacket {
@@ -322,6 +327,25 @@ export function mitigateTyped(
     // planted totems). Same lane law: base 0, folded here and only here.
     if (target.stationary) {
       const v = atk.sheet.get('siegebreaker', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
+    // THE WARDED axis (engine/pack.ts): the victim stands in a living
+    // warden's favor — the exact bond the pack layer DRAWS a line for.
+    // Punished == advertised, in the strongest sense the lane has: the
+    // condition is not merely visible on the victim, it is visible as a
+    // rope running to the body you could kill instead. Two answers, one
+    // read. Same lane law: base 0, folded here and only here, off the one
+    // flag the bond scan sets.
+    if (target.bondHeld) {
+      const v = atk.sheet.get('bondbreaker', opts.tags, opts.extra);
+      if (v > 0) total *= 1 + v;
+    }
+    // THE FALTERING axis (engine/pack.ts): the victim's nerve has frayed
+    // past the threshold — wounds, odds, or a captain you already dropped.
+    // Read off the SAME aiNerve the craven's collapsing posture draws, so
+    // the window is announced by the body wearing it and priced here.
+    if (target.aiNerve < SLAYER_CFG.quailAt) {
+      const v = atk.sheet.get('quailbane', opts.tags, opts.extra);
       if (v > 0) total *= 1 + v;
     }
   }

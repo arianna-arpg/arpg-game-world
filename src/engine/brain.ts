@@ -574,6 +574,17 @@ export interface MoraleSpec {
    *  within radius — hares, songbirds, everything that exists to be chased.
    *  Routs for `duration` (rolled, default [1.2, 2.2]) from the intruder. */
   skittish?: { radius: number; duration?: [number, number] };
+  /** THE WARD (engine/pack.ts) — a rout that RUNS TO its guardian instead
+   *  of merely away: `kin` names who is safety (a defId, tag or faction),
+   *  and a frightened body makes for the nearest living one, huddling at
+   *  its flank on arrival instead of scattering to the horizon. This is
+   *  the refuge machinery with a BODY for a bolt-hole, so it composes with
+   *  every flight behavior already authored (jukes, panic statuses, the
+   *  skittish bubble) and falls through to the ordinary rout when no
+   *  guardian stands. The young of the world flee to the adult; making
+   *  that visible is what turns a den into a den rather than a spawn
+   *  point. Pair with juvenileBelow/juvenileBrain for the full ecology. */
+  wardTo?: { kin: string; seek?: number };
 }
 
 // --- SKILL POLICY ----------------------------------------------------------------

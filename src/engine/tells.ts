@@ -83,10 +83,17 @@ export type TellChannel =
   | { kind: 'tint'; color: string; max?: number }
   /** Under-glow halo: alpha = value × TELL_CFG.glowAlpha (attunement kin). */
   | { kind: 'glow'; color?: string; max?: number }
-  /** Body swell: draw scale 1 → 1+amp (clamped by TELL_CFG.maxBodyScale).
-   *  Presentation only — the hitbox stays the radius (the breathe law). */
+  /** Body swell, SIGNED: draw scale 1 → 1+amp (MAGNITUDE clamped by
+   *  TELL_CFG.maxBodyScale). Positive engorges (the accumulator filling);
+   *  negative SHRINKS — the craven sinking into itself as its nerve goes,
+   *  which is the same channel read the other way rather than a second
+   *  mechanism. Presentation only — the hitbox stays the radius (the
+   *  breathe law), so a cowering body is never a smaller target. */
   | { kind: 'scale'; amp: number }
-  /** Posture lean: crouched-forward shift + squash by value (the stalk). */
+  /** Posture lean, SIGNED: positive amp hunkers forward along the facing
+   *  with a screen squash (the stalk); negative amp cants BACKWARD off the
+   *  facing with a rise (the reader's weight-on-the-back-foot, the coiled
+   *  load). Deepest magnitude wins when rows stack. */
   | { kind: 'lean'; amp?: number }
   /** Transparency: draw alpha lerps 1 → `min` as the value rises. */
   | { kind: 'alpha'; min: number }
@@ -137,6 +144,41 @@ export interface TellBody {
   fuse?: number;
   stored?: number;
   groundKind?: string;
+  /** Wearing MonsterDef.bond mods right now (the bond scan's flag —
+   *  engine/pack.ts reads it; the Rooted school shares it). */
+  bondHeld?: boolean;
+  // --- THE PACK LANES (the social school — engine/pack.ts). All OPTIONAL,
+  // so a hand-built probe body stays three lines; absent fields read their
+  // brave/lone defaults. Every one is a STAMP written where the mechanic
+  // is DECIDED (updateMorale, the bond scan, the pack sweep, the AI tick) —
+  // never a second opinion computed for the eye alone. `bondHeld` above is
+  // shared with the Rooted school: one flag, both readings.
+  /** THE NERVE (Actor.aiNerve): 1 steady → 0 breaking, stamped by
+   *  updateMorale from the same terms as the break decision itself. */
+  aiNerve?: number;
+  /** How many living bodies THIS one currently empowers (Actor.wardCount,
+   *  folded by the pack sweep from the very records the links draw) — the
+   *  warden's own read: a court of six burns brighter than a court of one.
+   *  Unbounded (a count) — a band is required. */
+  wardCount?: number;
+  /** Guardian proximity for a warded body (Actor.wardNear): 1 at her
+   *  flank → 0 with none in reach. */
+  wardNear?: number;
+  /** Warded young huddled at THIS body (Actor.broodNear) — the guardian's
+   *  half of wardNear, folded in the same pass. Unbounded (a count). */
+  broodNear?: number;
+  /** Rolled a JUVENILE at spawn (Actor.juvenile — scale ≤ juvenileBelow):
+   *  the young of the world, who flee rather than fight. */
+  juvenile?: boolean;
+  /** THE SQUAD's aggregate (Actor.packAgg): living kin in earshot and the
+   *  MEAN of every drive across them — what DriveSpec.share was already
+   *  producing invisibly, finally readable. Shared by reference across a
+   *  squad, so one fold serves every member. */
+  packAgg?: { kin: number; drives: Map<string, number> };
+  /** THE HUNT's resolved prey list (Actor.aiPrey): non-empty exactly while
+   *  predation is OPEN — the same stamp World.isPrey gates hostility on,
+   *  so the nose-down posture and who-counts-as-food are one fact. */
+  aiPrey?: readonly string[];
 }
 
 /** The narrow world view (the clock + the sky's light). */
@@ -150,7 +192,7 @@ export interface TellWorld {
 export type TellSource = (a: TellBody, w: TellWorld, arg?: string) => number;
 
 /** Sources whose raw reading is NOT already 0..1 — their specs must band. */
-const UNBOUNDED = new Set<string>(['charge', 'fuse', 'stored']);
+const UNBOUNDED = new Set<string>(['charge', 'fuse', 'stored', 'foecast', 'warding', 'kin', 'brood']);
 
 export const TELL_SOURCES: Record<string, TellSource> = {
   /** Constant — the identity-marker lane (temperament dress: the mark IS
@@ -203,6 +245,52 @@ export const TELL_SOURCES: Record<string, TellSource> = {
   radiance: (_a, w) => w.radiance?.() ?? 1,
   /** Standing on the named ground kind — claimed-terrain tells. */
   ground: (a, _w, arg) => (arg !== undefined && a.groundKind === arg ? 1 : 0),
+  // --- THE PACK SOURCES (the social school — docs/engine/pack.md). A group
+  // of enemies read as N independent bodies because every relationship
+  // between them was invisible. Each source below is a pure read of social
+  // machinery the engine ALREADY ran (morale, the bond scan, DriveSpec's
+  // shared appetite, juvenile rolls) — the structure was always there; this
+  // is the first time it can be SEEN. Kill order becomes legible.
+  /** THE NERVE: 1 steady → 0 breaking. The continuous shadow of MoraleSpec's
+   *  binary break, stamped by updateMorale from the SAME terms that decide
+   *  it. Wear it banded [1, 0] and a body about to rout LOOKS like a body
+   *  about to rout — pressure becomes a visible resource. Bodies that
+   *  author no morale read 1 (the brave default). */
+  nerve: a => a.aiNerve ?? 1,
+  /** WARDED: this body currently wears a pack bond's mods — the
+   *  beneficiary's own read of the line drawn to it, for kin who should
+   *  visibly stand taller in their warden's reach. */
+  warded: a => (a.bondHeld ? 1 : 0),
+  /** WARDING: how many living bodies this one empowers RIGHT NOW — folded
+   *  by the pack sweep from the same records the links draw, so the
+   *  warden's glow and its court are one count. Unbounded: band it
+   *  ([0, 5] reads a full court at five). */
+  warding: a => a.wardCount ?? 0,
+  /** GUARDED: the ward's guardian proximity, 1 at her flank → 0 with none
+   *  in reach (MoraleSpec.wardTo). The huddle, drawn. */
+  guarded: a => a.wardNear ?? 0,
+  /** THE BROOD: how many warded young are huddled at THIS body — the
+   *  guardian's half of `guarded`, from the same fold. A matriarch standing
+   *  over her calves should read differently from one standing alone, and
+   *  this is the number that says so. Unbounded: band it. */
+  brood: a => a.broodNear ?? 0,
+  /** JUVENILE: rolled young at spawn (scale ≤ juvenileBelow). The identity
+   *  marker for a den's small — an `always` for the young only. */
+  juvenile: a => (a.juvenile ? 1 : 0),
+  /** KIN: living squadmates in earshot, RAW (band it — [1, 8] reads a
+   *  swelling horde, [8, 1] a thinning one: the same source tells "we are
+   *  many" or "I am the last" depending only on which way you band it). */
+  kin: a => a.packAgg?.kin ?? 0,
+  /** THE PACK'S APPETITE: the squad's MEAN of a named drive — the group
+   *  meter DriveSpec.share was already keeping and never showing. An
+   *  individual wolf's hunger is 'drive:hunger'; what the PACK wants is
+   *  this. Already 0..1 (a mean of bounded meters). */
+  packDrive: (a, _w, arg) => (arg ? a.packAgg?.drives.get(arg) ?? 0 : 0),
+  /** COURSING: predation is OPEN — the resolved prey stamp the hostility
+   *  gate itself reads (World.isPrey). A pack that has decided the meadow
+   *  is food wears it, and you can tell at a glance whether you are being
+   *  hunted or merely walked past. */
+  coursing: a => (a.aiPrey?.length ? 1 : 0),
 };
 
 /** Extend the vocabulary (packages register their own state reads). */
@@ -277,7 +365,9 @@ export interface TellDress {
   glow?: { color?: string; a: number };
   /** Body draw-scale multiplier (1 = none). */
   scale: number;
-  /** Posture lean 0..1. */
+  /** Posture lean, SIGNED −1..1 (positive = the forward stalk, negative =
+   *  the back-foot cant; renderer shifts along ±facing and squashes or
+   *  rises to match). */
   lean: number;
   /** Draw-alpha multiplier (1 = none). */
   alpha: number;
@@ -333,12 +423,22 @@ export function materializeTellDress(
         if (alpha > 0.01 && (!d.glow || alpha > d.glow.a)) d.glow = { color: ch.color, a: alpha };
         break;
       }
-      case 'scale':
-        d.scale *= 1 + Math.min(TELL_CFG.maxBodyScale, Math.max(0, ch.amp)) * v;
+      case 'scale': {
+        // SIGNED (the collapse law, the lean's kin): the MAGNITUDE is
+        // clamped, the sign carried — a sac engorging and a coward sinking
+        // are one channel read two ways, never two mechanisms.
+        const cap = TELL_CFG.maxBodyScale;
+        d.scale *= 1 + Math.max(-cap, Math.min(cap, ch.amp)) * v;
         break;
-      case 'lean':
-        d.lean = Math.max(d.lean, Math.min(1, (ch.amp ?? 1) * v));
+      }
+      case 'lean': {
+        // SIGNED (the back-foot law): the deepest MAGNITUDE wins, sign
+        // carried — a forward stalk and a backward cant never average
+        // into a lie of neutrality.
+        const lv = Math.max(-1, Math.min(1, (ch.amp ?? 1) * v));
+        if (Math.abs(lv) > Math.abs(d.lean)) d.lean = lv;
         break;
+      }
       case 'alpha':
         d.alpha *= lerp(1, Math.max(0, Math.min(1, ch.min)), v);
         break;

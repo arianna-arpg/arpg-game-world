@@ -34,6 +34,7 @@ import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
 import type { PartSpec } from '../render/vis/parts';
 import type { TellDress, TellSpec } from './tells';
+import type { PackAggregate } from './pack';
 import type { TrailPoint, WatchSpec } from './watch';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
@@ -1362,6 +1363,44 @@ export class Actor {
   /** PACK BOND transition tracker (MonsterDef.bond) — the sheet source only
    *  moves on held/dropped edges, never per frame. */
   bondHeld = false;
+  /** THE PACK LAYER's DRAWN BOND (engine/pack.ts): the living holder whose
+   *  mods this body currently wears — recorded by the SAME scan that sets
+   *  bondHeld, so the drawn link and the worn buff are one answer and can
+   *  never disagree (drawn == tested). Cleared the instant the bond drops.
+   *  Co-op: the host ships the holder's id (ActorW.bl) and the client
+   *  re-points this at its own pooled shell, so both halves derive the
+   *  identical link list over live, interpolated positions. */
+  bondFrom?: Actor;
+  /** THE NERVE (engine/pack.ts) — MoraleSpec's binary break as a continuous
+   *  0..1 reading: 1 steady, 0 breaking. Stamped by updateMorale from the
+   *  SAME terms the break decision evaluates (the aiFoeCastSec precedent),
+   *  so a craven's collapsing posture can never drift from its courage.
+   *  1 for every body that authors no morale — the brave default. */
+  aiNerve = 1;
+  /** THE PACK AGGREGATE (engine/pack.ts): this body's squad read — living
+   *  kin in earshot and the squad's MEAN drives (what DriveSpec.share was
+   *  already producing invisibly). Refreshed on World.updatePack's cadence,
+   *  shared by reference across a squad's members (one fold, not N). */
+  packAgg?: PackAggregate;
+  /** THE WARDEN'S COURT (engine/pack.ts): how many living bodies this one
+   *  currently empowers — folded by the pack sweep from the SAME bondFrom
+   *  records the links draw, so the warden's own tell and its drawn court
+   *  can never report different numbers. */
+  wardCount = 0;
+  /** THE WARD'S read (MoraleSpec.wardTo): guardian proximity, 1 at her
+   *  flank → 0 with none in reach. Stamped by the pack sweep. */
+  wardNear = 0;
+  /** THE BROOD (engine/pack.ts): how many warded bodies are huddled at THIS
+   *  one right now — the guardian's half of wardNear, folded in the same
+   *  pass. What lets a matriarch KNOW she is standing over her young, so
+   *  "the adult defends them" is a rule she can act on rather than a claim
+   *  the design doc makes about her. */
+  broodNear = 0;
+  /** ROLLED YOUNG (MonsterDef.juvenileBelow): this body came up under the
+   *  juvenile cut at spawn and took juvenileBrain. The flag the matriarch's
+   *  rules and the den's tells both read — before it, "juvenile" was a
+   *  brain swap nothing could ever ask about again. */
+  juvenile = false;
   /** PHASE-WORN MODS transition tracker (MonsterDef.nocturne) — the sheet
    *  source only moves when the day wheel crosses the def's hours. */
   nocturneHeld = false;

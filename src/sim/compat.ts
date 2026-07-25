@@ -1041,6 +1041,22 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     when: (_def, sup) => supModsStat(sup, ['regicide']),
   },
   {
+    // THE PACK LAYER's social pair (2026-07-25, engine/pack.ts): both axes
+    // read a victim's place in its GROUP, and the probe rigs field loners —
+    // no MonsterDef.bond kin adjacency ever forms (bondHeld never sets),
+    // and nothing authors morale (aiNerve pins 1, the brave default). The
+    // full arming path — court forms → bondbreaker prices the favored;
+    // nerve frays → quailbane prices the collapse — is pinned end-to-end
+    // in balance/probe_pack.ts against live matron courts and wounded
+    // cravens.
+    note: "'bondbreaker' needs a victim WEARING a warden's bond — probe bodies spawn without kin adjacency, so no bond ever holds; the arming path is pinned in probe_pack",
+    when: (_def, sup) => supModsStat(sup, ['bondbreaker']),
+  },
+  {
+    note: "'quailbane' needs a victim whose NERVE has frayed (morale terms under pressure) — probe bodies author no morale and read the brave default; the arming path is pinned in probe_pack",
+    when: (_def, sup) => supModsStat(sup, ['quailbane']),
+  },
+  {
     // 2026-07-24 (the grab support round, the iron_grip|seize row's truth):
     // gripPower widens the mass gate and slows struggle — against the
     // probe pack's unpromoted normals the struggle never beats the hold's

@@ -24,11 +24,12 @@ import { mod } from './stats';
 import type { Actor } from './actor';
 import {
   alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, evalCondition, FLOCK_CFG, mergeTuning,
-  normalizeBrain, POST_CFG, tuningOf,
+  normalizeBrain, POST_CFG, registerAICondition, tuningOf,
   type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
+import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity } from './pack';
 import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
   watchRiseAmount, watchRungOf, watchValueOf,
@@ -157,6 +158,45 @@ export const ROUSE_RULES: Record<string, () => RouseCfg | null> = {};
 export function registerRouseRule(tag: string, cfg: () => RouseCfg | null): void {
   ROUSE_RULES[tag] = cfg;
 }
+
+// --- THE PACK LAYER's condition vocabulary (engine/pack.ts) -----------------
+//
+// registerAICondition has existed as an open seam with NOTHING registered
+// through it — the DSL's last closed door, standing open onto an empty room.
+// The social layer is its natural first tenant: every predicate below reads
+// a stamp the pack sweep or updateMorale already wrote, so a rule that fires
+// on it and the tell that DRAWS it are reading one number. Conduct and
+// appearance cannot drift, which is the whole contract of the layer.
+//
+// Registered here rather than in pack.ts so that leaf stays pure (types,
+// config and math only — the registerTellSource / mounts.ts idiom).
+
+/** NERVE BELOW: this body's courage has frayed past `arg` (0..1) — the
+ *  continuous shadow of MoraleSpec's binary break. Lets a craven CHANGE ITS
+ *  CONDUCT as it loses heart (back away, call for help, spend its panic
+ *  button) instead of fighting perfectly right up to the instant it bolts. */
+registerAICondition('nerveBelow', (actor, _t, _ctx, arg) =>
+  actor.aiNerve < (typeof arg === 'number' ? arg : 0.5));
+
+/** WARDS NEAR: at least `arg` warded bodies (MoraleSpec.wardTo) are huddled
+ *  at this one. THE MATRIARCH's trigger — "I am standing over my young" as
+ *  something she can act on. Reads the pack sweep's own count, the same one
+ *  the young's huddle is measured by. */
+registerAICondition('wardsNear', (actor, _t, _ctx, arg) =>
+  actor.broodNear >= (typeof arg === 'number' ? arg : 1));
+
+/** PACK DRIVE ABOVE: the SQUAD's mean of a named drive has passed a
+ *  threshold — a GROUP decision rather than an individual one. "The pack is
+ *  hungry enough to promote you to prey" is one row of data; the crest every
+ *  member wears is the same number, so you are warned before it is made. */
+registerAICondition('packDrive', (actor, _t, _ctx, arg) => {
+  const a = arg as { id?: string; above?: number; below?: number } | undefined;
+  if (!a?.id) return false;
+  const v = actor.packAgg?.drives.get(a.id) ?? 0;
+  if (a.above !== undefined && v <= a.above) return false;
+  if (a.below !== undefined && v >= a.below) return false;
+  return a.above !== undefined || a.below !== undefined;
+});
 
 /** DORMANT = tag-gated neutral that hasn't been roused. THE predicate every
  *  fabric reads (one definition, never re-derived): the AI gate holds the
@@ -1099,6 +1139,12 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
     return from ?? actor.aiLastSeen ?? null;
   };
   const rout = (): boolean => {
+    // THE WARD (MoraleSpec.wardTo — engine/pack.ts): safety is a BODY, not
+    // a bolt-hole. A frightened ward runs to the nearest living guardian
+    // and huddles at her flank rather than scattering; only when none
+    // stands does it fall through to the ordinary flight. Checked BEFORE
+    // the doodad refuge — kin outrank cover.
+    if (m?.wardTo && wardStep(actor, world, m.wardTo, dt)) return true;
     // REFUGE (MonsterDef.refuge): a routed creature with a bolt-hole makes
     // FOR it instead of merely running — and slips away on arrival (the
     // frog's dive). Falls through to the ordinary rout when none is near.
@@ -1117,35 +1163,56 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
     }
     return true;
   };
-  if (actor.aiMoraleUntil > world.time) return rout();
+  // THE NERVE (engine/pack.ts): every return below stamps Actor.aiNerve —
+  // MoraleSpec's binary break as its own continuous shadow, derived from
+  // the SAME terms this function already evaluates (never a second opinion
+  // computed elsewhere). A craven's collapsing posture therefore tracks its
+  // real courage by construction; the tell layer cannot flatter or lie.
+  const steady = (v: number): false => { actor.aiNerve = v; return false; };
+  const broken = (): boolean => { actor.aiNerve = PACK_CFG.nerve.routed; return rout(); };
+  if (actor.aiMoraleUntil > world.time) return broken();
   // PANIC (StatusDef.panic — the fear CC class): a status-driven rout that
   // overrides the body's own courage spec entirely — the bravest wall flees
   // while horrified. Rides the SAME rout (refuges, jukes, squad dynamics),
   // so fear composes with every flight behavior already authored.
-  if (actor.isPanicked()) return rout();
-  if (!m || (m.breakAtLife === undefined && !m.breakOutnumbered && !m.skittish)) return false;
+  if (actor.isPanicked()) return broken();
+  if (!m || (m.breakAtLife === undefined && !m.breakOutnumbered && !m.skittish)) return steady(1);
   // SKITTISH: anything non-kin inside the bubble is reason enough to bolt.
+  // The scan tracks the NEAREST intruder rather than stopping at the first,
+  // so the nerve can fray on approach (a hare is uneasy before it runs);
+  // the bolt decision is identical — the loop already walked the whole
+  // roster whenever nothing was inside.
+  let skittishNerve = 1;
   if (m.skittish) {
+    let near = Infinity;
     for (const a of world.actors) {
       if (a === actor || a.dead || a.passive || a.construct || a.untargetable) continue;
       if (a.defId === actor.defId) continue;
       if (actor.squadId !== undefined && a.squadId === actor.squadId) continue;
       if (a.sheet.get('invisible') > 0) continue;
-      if (dist(actor.pos, a.pos) > m.skittish.radius) continue;
+      const d = dist(actor.pos, a.pos);
+      if (d < near) near = d;
+    }
+    skittishNerve = nerveFromProximity(near, m.skittish.radius);
+    if (near <= m.skittish.radius) {
       const dur = m.skittish.duration ?? [1.2, 2.2];
       actor.aiMoraleUntil = world.time + rand(dur[0], dur[1]);
-      return rout();
+      return broken();
     }
   }
-  // Courage holds while the squad leader stands close.
+  // Courage holds while the squad leader stands close — and so does the
+  // NERVE: a body emboldened by its captain reads bold, which is precisely
+  // the information "kill the captain" is built on.
   if (m.boldNearLeader && actor.squadId !== undefined && !actor.squadLeader) {
     const lead = world.actors.find(x =>
       !x.dead && x.squadId === actor.squadId && x.squadLeader);
-    if (lead && dist(actor.pos, lead.pos) <= m.boldNearLeader) return false;
+    if (lead && dist(actor.pos, lead.pos) <= m.boldNearLeader) return steady(1);
   }
   let breaks = false;
+  let nerve = skittishNerve;
   if (m.breakAtLife !== undefined) {
     const frac = actor.life / Math.max(1, actor.maxLife());
+    nerve = Math.min(nerve, nerveFromLife(frac, m.breakAtLife));
     if (frac >= m.breakAtLife) {
       actor.aiMoraleBroke = false; // recovered above the line: courage re-arms
     } else if (!actor.aiMoraleBroke) {
@@ -1163,12 +1230,45 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
       if (dist(a.pos, actor.pos) > radius) continue;
       if (a.team === actor.team) friends++; else foes++;
     }
-    if (foes - friends >= deficit) breaks = true;
+    nerve = Math.min(nerve, nerveFromOdds(foes, friends, deficit));
+    if (!breaks && foes - friends >= deficit) breaks = true;
   }
-  if (!breaks) return false;
+  if (!breaks) return steady(nerve);
   actor.aiMoraleUntil = world.time + (m.rallyAfter ?? 3);
   world.text(vec(actor.pos.x, actor.pos.y - 18), '!!', '#e8d44a', 14);
-  return rout();
+  return broken();
+}
+
+/** THE WARD's step (MoraleSpec.wardTo): make for the nearest living
+ *  guardian and HUDDLE at her flank. The refuge machinery with a body for
+ *  a bolt-hole — same shape, same fall-through (no guardian in reach = the
+ *  ordinary rout), so the young's flight composes with jukes, panic and
+ *  every other flight lever already authored. Returns true when it owned
+ *  the tick. Deliberately un-cached: guardians MOVE, and a stale goal is
+ *  exactly the bug that would make a den read as a spawn point. */
+function wardStep(
+  actor: Actor, world: World, ward: { kin: string; seek?: number }, dt: number,
+): boolean {
+  const reach = ward.seek ?? PACK_CFG.ward.seek;
+  let best: Actor | null = null;
+  let bd = reach;
+  for (const o of world.actors) {
+    if (o === actor || o.dead || o.team !== actor.team) continue;
+    if (o.defId !== ward.kin && o.tag !== ward.kin && o.faction !== ward.kin) continue;
+    const d = dist(actor.pos, o.pos);
+    if (d < bd) { bd = d; best = o; }
+  }
+  if (!best) return false;
+  // Arrived: hold at her flank facing OUT (the huddle reads as a huddle,
+  // not as a body stuck in a wall). Still consumes the tick — a warded
+  // juvenile does not resume fighting just because it stopped running.
+  if (bd <= best.radius * PACK_CFG.ward.huddleMul) {
+    actor.facing = angleTo(best.pos, actor.pos);
+    return true;
+  }
+  actor.facing = angleTo(actor.pos, best.pos);
+  moveToward(actor, world, best.pos, dt);
+  return true;
 }
 
 // === READING THE CAST ===========================================================

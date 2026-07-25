@@ -181,6 +181,7 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import { PACK_CFG, foldPack } from './pack';
 import {
   feedWatch, layTrailPoint, trailNewest, trailNext, WATCH_CFG, WATCH_RUNG,
   watchRungOf, watchValueOf, type WatchSpec,
@@ -2148,6 +2149,9 @@ export class World {
   /** Live tether bands (see TetherSpec). Host-simulated; coords cached per
    *  tick for the renderer and the co-op wire. */
   tethers: Tether[] = [];
+  /** THE PACK SWEEP's clock (engine/pack.ts) — one world-level cadence for
+   *  the social folds; the reads it feeds are all cadenced gauges. */
+  private packNextAt = 0;
   texts: FloatingText[] = [];
   flashes: Flash[] = [];
   drops: GemDrop[] = [];
@@ -10276,6 +10280,88 @@ export class World {
    *  the render dress keys on) land only when a reading genuinely moved.
    *  Read-only over the sources by law: a tell reports state, never bends
    *  it. Null-cost on the untelled roster (no specs → skip). */
+  /** THE PACK SWEEP (engine/pack.ts) — the SOCIAL reads every member wears.
+   *  Three folds, all derived from machinery that already ran this frame:
+   *
+   *   (1) THE COURT — wardCount per holder, tallied straight off the
+   *       bondFrom records the bond scan just wrote. The warden's own tell
+   *       and its drawn links are therefore the same count by construction;
+   *       there is no second scan that could disagree.
+   *   (2) THE SQUAD — living kin in earshot and the MEAN of every drive
+   *       across them, folded ONCE per squad and shared BY REFERENCE with
+   *       its members (one fold, not N). This is what DriveSpec.share was
+   *       already producing invisibly.
+   *   (3) THE WARD — guardian proximity for bodies with MoraleSpec.wardTo.
+   *
+   *  Cadenced (PACK_CFG.sweepSec) and null-cost on a roster with no bonds,
+   *  no squads and no wards — the common case allocates nothing and the
+   *  loop falls straight through. Runs BEFORE updateTells so the sources
+   *  read this frame's aggregate, never last frame's. */
+  private updatePack(): void {
+    const t = this.time;
+    if (t < this.packNextAt) return;
+    this.packNextAt = t + PACK_CFG.sweepSec;
+    // (1) THE COURT. Clear then tally — a warden whose court died this
+    // frame must read zero, not a stale six.
+    for (const a of this.actors) if (a.wardCount) a.wardCount = 0;
+    for (const a of this.actors) {
+      if (a.dead || !a.bondHeld) continue;
+      const h = a.bondFrom;
+      if (h && !h.dead) h.wardCount++;
+    }
+    // (2) THE SQUAD. Bucket the living by squad id, fold each once, then
+    // hand every member the SAME aggregate object.
+    let squads: Map<number, Actor[]> | null = null;
+    for (const a of this.actors) {
+      if (a.dead || a.squadId === undefined) { a.packAgg = undefined; continue; }
+      (squads ??= new Map());
+      const cur = squads.get(a.squadId);
+      if (cur) cur.push(a); else squads.set(a.squadId, [a]);
+    }
+    if (squads) {
+      for (const members of squads.values()) {
+        // Reuse the first member's existing aggregate as the fold target —
+        // the no-churn law: a steady squad rebuilds no objects and its
+        // drive map keeps its identity across sweeps.
+        const agg = foldPack(members, members[0].packAgg);
+        for (const m of members) m.packAgg = agg;
+      }
+    }
+    // (3) THE WARD, both halves in ONE pass. For each warded body: its
+    // guardian proximity (wardNear, the same envelope wardStep flees along).
+    // For each GUARDIAN: how many wards are huddled at it (broodNear) — so
+    // a matriarch can act on standing over her young instead of the design
+    // merely asserting she does. Sampled on the sweep's cadence, which is
+    // the cadence every tell reads at, so huddle and drawn read agree.
+    for (const a of this.actors) if (a.broodNear) a.broodNear = 0;
+    for (const a of this.actors) {
+      if (a.dead || !a.defId) continue;
+      const ward = MONSTERS[a.defId]?.brain?.morale?.wardTo
+        ?? (a.brain?.morale?.wardTo);
+      if (!ward) { if (a.wardNear) a.wardNear = 0; continue; }
+      const reach = ward.seek ?? PACK_CFG.ward.seek;
+      let bd = Infinity;
+      let best: Actor | undefined;
+      for (const o of this.actors) {
+        if (o === a || o.dead || o.team !== a.team) continue;
+        if (o.defId !== ward.kin && o.tag !== ward.kin && o.faction !== ward.kin) continue;
+        const d = dist(a.pos, o.pos);
+        if (d < bd) { bd = d; best = o; }
+      }
+      // 1 while GATHERED (inside the huddle band), easing to 0 at the
+      // search reach. Both halves key on this ONE threshold, so a
+      // matriarch can never read "no young" while a young beside her reads
+      // "guarded" — the failure the probe caught when the two used
+      // different rings.
+      const huddle = Math.max(
+        PACK_CFG.ward.huddleRadius, (best?.radius ?? 0) * PACK_CFG.ward.huddleMul);
+      a.wardNear = !best ? 0
+        : bd <= huddle ? 1
+        : Math.max(0, Math.min(1, 1 - (bd - huddle) / Math.max(1, reach - huddle)));
+      if (best && bd <= huddle) best.broodNear++;
+    }
+  }
+
   private updateTells(): void {
     const t = this.time;
     for (const a of this.actors) {
@@ -22593,7 +22679,14 @@ export class World {
       const s = rand(def.scaleVariance[0], def.scaleVariance[1]);
       a.radius = def.radius * s;
       if (def.scaleStats) a.sheet.setSource('scaleVar', [mod('life', 'more', s - 1), mod('damage', 'more', s - 1)]);
-      if (def.juvenileBelow !== undefined && s <= def.juvenileBelow && def.juvenileBrain) a.brain = def.juvenileBrain;
+      // THE YOUNG (engine/pack.ts): the roll is RECORDED, not merely acted
+      // on. Before this flag a juvenile was a one-way brain swap nothing
+      // could ask about afterwards — so the matriarch could not know whom
+      // she was guarding and the den could not show its young as young.
+      if (def.juvenileBelow !== undefined && s <= def.juvenileBelow) {
+        a.juvenile = true;
+        if (def.juvenileBrain) a.brain = def.juvenileBrain;
+      }
     }
     // WEIGHT defaults from the BODY: mass grows with the (post-variance)
     // radius × the material's DENSITY (MATERIAL_NATURE — a knee-high iron
@@ -37489,16 +37582,30 @@ export class World {
         const bond = MONSTERS[a.defId]?.bond;
         if (bond) {
           const r = bond.radius ?? 520;
-          let held = false;
+          // THE PACK LAYER (engine/pack.ts): this scan does not merely answer
+          // WHETHER a holder stands near — it records WHICH ONE, and that
+          // record IS the drawn link. Taking the NEAREST rather than the
+          // first in array order costs nothing (squared compare, no sqrt —
+          // strictly cheaper per candidate than the old dist() call, and the
+          // holder-less worst case already walked the whole roster) and buys
+          // the honest read: a body's line runs to the warden actually
+          // standing over it. The boolean is unchanged either way, so the
+          // mods and the line are one answer — drawn == tested.
+          const r2 = r * r;
+          let from: Actor | undefined;
+          let bd = Infinity;
           for (const o of this.actors) {
             if (o === a || o.dead || o.team !== a.team) continue;
             if (bond.kin
               ? (o.defId !== bond.kin && o.tag !== bond.kin && o.faction !== bond.kin)
               : (a.squadId === undefined || o.squadId !== a.squadId)) continue;
-            if (dist(a.pos, o.pos) > r) continue;
-            held = true;
-            break;
+            const dx = a.pos.x - o.pos.x, dy = a.pos.y - o.pos.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > r2 || d2 >= bd) continue;
+            bd = d2; from = o;
           }
+          const held = !!from;
+          a.bondFrom = from;
           if (held !== a.bondHeld) {
             a.bondHeld = held;
             a.sheet.setSource('bond', held ? bond.mods : []);
@@ -37986,6 +38093,10 @@ export class World {
     // tracker's nose all settle, THEN the worn gauges read them — a tell
     // never shows last frame's ladder.
     this.updateWatch();
+    // THE PACK SWEEP (engine/pack.ts) — the social folds (a warden's court,
+    // a squad's shared appetite, a ward's guardian) settle here, AFTER the
+    // bond scan and the movers, BEFORE the gauges that read them.
+    this.updatePack();
     // THE TELL FABRIC's value sweep (engine/tells.ts) — after every mover
     // and state machine has spoken for the frame, the worn gauges read.
     this.updateTells();

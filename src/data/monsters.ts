@@ -20,6 +20,7 @@ import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
 import type { MountSlotSpec, MountSpec } from '../engine/mounts';
 import type { TellSpec } from '../engine/tells';
+import type { BondLinkStyle } from '../engine/pack';
 import type { WatchSpec } from '../engine/watch';
 import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
@@ -57,6 +58,112 @@ export const MONSTER_TURN_DEFAULT = 10;
 export const HUNGER_LEAN: TellSpec[] = [
   { source: 'drive:hunger', band: [0.45, 0.95], curve: 'smooth', channel: { kind: 'lean', amp: 1 } },
 ];
+
+// --- THE PACK LAYER's shared rows (engine/pack.ts, docs/engine/pack.md) -----
+// HUNGER_LEAN's social kin. A group of enemies read as N independent bodies
+// because every RELATIONSHIP between them was invisible — the bond that
+// buffed them, the nerve that was about to break, the adult the young were
+// running to, the appetite they shared. One const per lesson, spread by name
+// across every body that lives it, so a new member joins in one word and the
+// probe's census can name anyone who lives a lesson silently.
+
+/** THE WARDEN'S COURT: the holder brightens with how many bodies it is
+ *  ACTUALLY empowering — the same count the drawn links come from, so the
+ *  glow and the lines can never report different courts. A lone warden is
+ *  dim; one mid-court blazes. The value of killing it is legible BEFORE you
+ *  commit to crossing the room for it. */
+export const WARDEN_COURT: TellSpec[] = [
+  { source: 'warding', band: [0, 5], curve: 'early', channel: { kind: 'glow', color: '#e8c66a', max: 0.5 } },
+];
+
+/** THE WARDED: kin standing in a warden's favor stand visibly taller. This
+ *  is the beneficiary's HALF of the link, and it matters most exactly when
+ *  the link itself is gone — a line culled by the share law still leaves its
+ *  body reading as buffed, so the budget can never quietly lie. */
+export const WARDED_LIFT: TellSpec[] = [
+  { source: 'warded', steps: 1, channel: { kind: 'scale', amp: 0.07 } },
+  { source: 'warded', steps: 1, channel: { kind: 'glow', color: '#e8c66a', max: 0.22 } },
+];
+
+/** THE CRAVEN'S COLLAPSE: nerve 1→0 worn as a body folding into itself — it
+ *  SINKS (the signed scale), cants BACK off its facing (the flinch, the
+ *  stalk's opposite) and greys toward ash. Banded to begin while there is
+ *  still a fight left to press rather than at the instant it bolts: pressure
+ *  becomes a resource you can watch working, and a body about to break
+ *  finally looks like one. */
+export const CRAVEN_COLLAPSE: TellSpec[] = [
+  // portrait: 0 on every row (the tell fabric's posture law): the book
+  // shows the BODY, fresh and upright — collapse is a live reading, not
+  // an identity, and a half-sunk half-grey portrait reads as a misprint.
+  { source: 'nerve', band: [1, 0.15], curve: 'smooth', portrait: 0, channel: { kind: 'scale', amp: -0.18 } },
+  { source: 'nerve', band: [0.8, 0.1], curve: 'smooth', portrait: 0, channel: { kind: 'lean', amp: -0.85 } },
+  { source: 'nerve', band: [0.7, 0.05], curve: 'smooth', portrait: 0, channel: { kind: 'tint', color: '#8e8a86', max: 0.5 } },
+];
+
+/** THE YOUNG: a juvenile wears BOTH facts a den needs to read — what it is
+ *  (a soft pale cast, always on) and whether it has reached safety (it
+ *  presses low at its guardian's flank as the huddle closes). */
+export const JUVENILE_YOUNG: TellSpec[] = [
+  // portrait: 0 on BOTH rows — the bestiary shows the DEF, and the def's
+  // page is the ADULT: a book boar wearing the calf's pale cast would be
+  // the book lying about what a boar is.
+  { source: 'juvenile', steps: 1, portrait: 0, channel: { kind: 'tint', color: '#dccaa6', max: 0.38 } },
+  { source: 'guarded', curve: 'smooth', portrait: 0, channel: { kind: 'lean', amp: 0.5 } },
+];
+
+/** THE MATRIARCH: she reads as GUARDING. The more young huddled at her
+ *  flank, the wider and warmer she stands — the brood count is the posture,
+ *  so a herd with its calves gathered looks like a herd that will not run. */
+export const MATRIARCH_GUARD: TellSpec[] = [
+  // The swell is a live posture (portrait: 0 — the book body stands plain);
+  // the warm glow stays at the book's default as the guardian identity hint.
+  { source: 'brood', band: [0, 3], curve: 'early', portrait: 0, channel: { kind: 'scale', amp: 0.12 } },
+  { source: 'brood', band: [0, 3], curve: 'early', channel: { kind: 'glow', color: '#c8a878', max: 0.3 } },
+];
+
+/** THE PACK'S APPETITE: the SQUAD's MEAN hunger worn as a raised crest whose
+ *  spines literally multiply as the group starves (the count dial makes any
+ *  painter a gauge). HUNGER_LEAN says "this wolf is hungry"; this says "the
+ *  PACK is hungry" — and that is the number deciding whether you are walked
+ *  past or promoted to prey, so it is the one you must be able to see. */
+export const PACK_HUNGER_CREST: TellSpec[] = [
+  {
+    source: 'packDrive:hunger', band: [0.35, 0.95], curve: 'smooth',
+    channel: {
+      kind: 'part',
+      part: { kind: 'crest', x: -0.05, y: -0.02, scale: 0.85, color: '#a83c3c' },
+      count: [2, 7], scale: [0.4, 1], alpha: [0.2, 0.95],
+    },
+  },
+];
+
+/** THE COURSING NOSE: predation is OPEN — this body has decided something is
+ *  food and is running it down right now. The panting puff is the read, and
+ *  it is the good news: a pack busy coursing a hare is a pack not coming for
+ *  you. Pairs with the crest (how hungry) to complete the sentence. */
+export const COURSING_NOSE: TellSpec[] = [
+  {
+    source: 'coursing', steps: 1,
+    channel: {
+      kind: 'part',
+      part: { kind: 'breathPuff', x: 0.5, y: 0.05, scale: 0.9 },
+      alpha: [0, 0.9],
+    },
+  },
+];
+
+/** THE MATRON'S FAVOR — the Gnoll Packs' warden bond, spread by name across
+ *  her court. Her own def has said "the point of killing her first" since
+ *  she was written, and the fight has never once shown you why; now a rope
+ *  of ochre light runs from her to every gnoll she is stiffening, and the
+ *  ropes drop the moment she does. Authored on the BENEFICIARY (the bond
+ *  seam's direction), so joining her court is one word per body. */
+export const MATRON_BOND: NonNullable<MonsterDef['bond']> = {
+  kin: 'gnoll_matron',
+  mods: [mod('damageTaken', 'more', -0.18), mod('damage', 'increased', 0.15)],
+  radius: 430,
+  link: { color: '#e0a94e', style: 'banner', weight: 2 },
+};
 
 // --- THE ACCUMULATOR FAMILY (engine/tells.ts consumers) ----------------------
 // Bodies whose meter you can SEE filling toward a payoff — the mire leech's
@@ -819,8 +926,13 @@ export interface MonsterDef {
    *  living bond-holder stands within `radius` (default 520). `kin` names
    *  who holds the bond (a defId, tag or faction); omitted = any living
    *  SQUADMATE. The counterplay is priority: burst the bond-holder first
-   *  and the pack softens. */
-  bond?: { mods: Modifier[]; kin?: string; radius?: number };
+   *  and the pack softens.
+   *  THE DRAWN BOND (engine/pack.ts): `link` styles the LINE this bond
+   *  paints from its holder to every body it empowers — the counterplay
+   *  made visible, so "kill that one first" needs no tutorial. Absent =
+   *  the PACK_CFG defaults (every bond is legible out of the box); `false`
+   *  = a deliberately invisible bond the player must infer. */
+  bond?: { mods: Modifier[]; kin?: string; radius?: number; link?: BondLinkStyle | false };
   /** PHASE-WORN MODS — the bond's TEMPORAL twin: these mods are worn only
    *  while the world clock stands in `phases` (world/daynight wheel). The
    *  Night Court's whole rhythm is this one field — the hunter unpinnable
@@ -3906,6 +4018,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     faction: 'gnoll',
     adorn: 'ears',
+    // THE PACK LAYER (engine/pack.ts): the prowler is where all three social
+    // reads meet, which is why it is the warband's teaching body.
+    //  · the MATRON'S rope, drawn — kill her and the whole line softens;
+    //  · the WARDED lift, so a prowler in her favor reads buffed even when
+    //    the share law has culled its own line;
+    //  · the CRAVEN COLLAPSE riding the faction DREAD rule above — that
+    //    meter has driven gnoll nerve since it was written and has never
+    //    been visible on a single body. Cull a warband and you can now WATCH
+    //    the survivors sag; press the sagging ones and they break. Nerve
+    //    reads 1 until the dread rule actually installs a morale spec, so
+    //    the tell is silent exactly while the pack has nothing to fear.
+    bond: MATRON_BOND,
+    tells: [...WARDED_LIFT, ...CRAVEN_COLLAPSE],
   },
 
   gnoll_butcher: {
@@ -3926,6 +4051,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     faction: 'gnoll',
     adorn: 'ears',
+    // The veterans stand in the matron's favor too — and being veterans,
+    // they never sag: no collapse rows, because a butcher does not break.
+    bond: MATRON_BOND,
+    tells: WARDED_LIFT,
   },
 
   gnoll_longshot: {
@@ -3961,6 +4090,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     faction: 'gnoll',
     adorn: 'ears',
+    bond: MATRON_BOND,
+    tells: WARDED_LIFT,
   },
 
   gnoll_howler: {
@@ -4044,7 +4175,17 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.6,
     adorn: 'ears',
     scaleVariance: [0.9, 1.25],
-    tells: HUNGER_LEAN, // the stalk reads (engine/tells.ts)
+    // THE COURSING PACK (engine/pack.ts). Three reads, three different
+    // questions the player is actually asking about a wolf pack:
+    //   HUNGER_LEAN       is THIS wolf hungry           (the individual)
+    //   PACK_HUNGER_CREST is the PACK hungry            (the group — the
+    //                     crest grows spines as the shared meter climbs,
+    //                     and that meter is what decides your promotion)
+    //   COURSING_NOSE     are they busy eating something else  (the reprieve)
+    // A fed pack that has just run down a hare is a pack you can walk past,
+    // and you can now SEE that it is fed. That is a real tactic rather than
+    // a fact you learn by dying.
+    tells: [...HUNGER_LEAN, ...PACK_HUNGER_CREST, ...COURSING_NOSE],
     brain: {
       type: 'pack',
       // THE WANTS (BrainDef.drives): a wolf hunts because it HUNGERS. The
@@ -4079,6 +4220,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
           when: { targetCasting: 0.35, distUnder: 380, chance: 0.55 },
           hold: [0.7, 1.1], cooldown: 3,
           use: { move: { style: 'direct', pace: 1.3 } },
+        },
+        // THE PROMOTION (engine/pack.ts) — a GROUP decision, read off the
+        // squad's shared meter rather than any one wolf's belly. Fed, the
+        // pack barely notices you (detection collapses: you can walk the
+        // treeline past wolves that just ate). Starving, it notices you
+        // across the meadow and stops caring about hares. The crest every
+        // member wears IS this number, so the promotion is always announced
+        // before it happens — "avoid them while they are fed" becomes a
+        // tactic you can actually see the state of.
+        {
+          when: { ext: { packDrive: { id: 'hunger', below: 0.35 } } },
+          use: { target: { detectMul: 0.4 } },
+        },
+        {
+          when: { ext: { packDrive: { id: 'hunger', above: 0.85 } } },
+          use: { target: { detectMul: 1.5, kindBias: { player: 1.6 } } },
         },
       ],
     },
@@ -9143,11 +9300,26 @@ export const MONSTERS: Record<string, MonsterDef> = {
     temper: 'territorial',
     turnSpeed: 3.4,
     scaleVariance: [0.9, 1.35], scaleStats: true,
-    juvenileBelow: 0.98, juvenileBrain: { type: 'flee' }, // the calves bolt
+    // THE MATRIARCH AND HER YOUNG (engine/pack.ts) — the sounder's lesson in
+    // the farm's voice. Calves run to the herd rather than off the map.
+    juvenileBelow: 0.98,
+    juvenileBrain: {
+      type: 'basic',
+      move: { style: 'retreat' },
+      morale: {
+        skittish: { radius: 240, duration: [1.2, 2.2] },
+        wardTo: { kin: 'feral_aurochs', seek: 760 },
+      },
+    },
     brain: {
       type: 'juggernaut',
       move: { style: 'charge', commitRange: 360, chargeSpeed: 2.6 },
+      rules: [{
+        when: { ext: { wardsNear: 1 } },
+        use: { move: { style: 'charge', commitRange: 500, chargeSpeed: 2.9 } },
+      }],
     },
+    tells: [...JUVENILE_YOUNG, ...MATRIARCH_GUARD],
   },
   feral_hen: {
     id: 'feral_hen', name: 'Feral Hen',
@@ -9173,7 +9345,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.5,
     adorn: 'ears',
     // It fights for the flock: harder and faster while the herd stands near.
-    bond: { mods: [mod('damage', 'increased', 0.2), mod('moveSpeed', 'increased', 0.1)], radius: 460 },
+    // THE DRAWN BOND (engine/pack.ts): the working pack's own line — a taut
+    // drover's lead in leather-brown. Cut the dog that holds it and the rest
+    // slow down, which you can now watch happen.
+    bond: {
+      mods: [mod('damage', 'increased', 0.2), mod('moveSpeed', 'increased', 0.1)], radius: 460,
+      link: { color: '#c09858', style: 'banner' },
+    },
+    tells: WARDED_LIFT,
     brain: {
       type: 'pack',
       squad: { muster: { count: 2, radius: 320, patience: 5 }, tokens: 2, surround: true },
@@ -9405,12 +9584,38 @@ export const MONSTERS: Record<string, MonsterDef> = {
     temper: 'territorial',
     turnSpeed: 3.6,
     scaleVariance: [0.85, 1.3], scaleStats: true,
-    juvenileBelow: 0.95, juvenileBrain: { type: 'flee' }, // the piglets bolt
+    // THE MATRIARCH AND HER YOUNG (engine/pack.ts). The piglets have always
+    // "bolted" — and `type: 'flee'` means bolt FOR THE EXIT AND LEAVE THE
+    // ZONE, so a sounder's young simply deleted themselves the moment you
+    // arrived and the den never read as a den. Now they run to the SOWS
+    // (MoraleSpec.wardTo: safety is a body, not a doorway), huddle at a
+    // flank, and stay. The adults do not need a script to defend them: the
+    // calves drag the threat into charge range and the juggernaut does what
+    // a juggernaut does. Geometry, not a bespoke guard-AI.
+    juvenileBelow: 0.95,
+    juvenileBrain: {
+      type: 'basic',
+      move: { style: 'retreat' },
+      morale: {
+        skittish: { radius: 260, duration: [1.4, 2.4] },
+        wardTo: { kin: 'sounder_boar', seek: 700 },
+      },
+    },
     packSize: [3, 5],
     brain: {
       type: 'juggernaut',
       move: { style: 'charge', commitRange: 340, chargeSpeed: 2.5 },
+      // WITH YOUNG AT HER FLANK she commits sooner and further — the herd
+      // closing ranks, expressed as the charge she already had. Reads the
+      // pack sweep's own brood count (the same number her tell draws).
+      rules: [{
+        when: { ext: { wardsNear: 1 } },
+        use: { move: { style: 'charge', commitRange: 470, chargeSpeed: 2.8 } },
+      }],
     },
+    // Both halves of the ecology, worn: the young read young and show
+    // whether they have reached safety; the adults read as guarding.
+    tells: [...JUVENILE_YOUNG, ...MATRIARCH_GUARD],
   },
 
   // --- THE CRIMP GANGS (the metropolis' press) -----------------------------------
@@ -10020,7 +10225,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw', 'surgical_strike'], xp: 18, faction: 'formic',
     // The colony's SYNCHRONY: soldiers fight harder while a worker lives
     // near — burst the workers first and the line softens (the bond seam).
-    bond: { kin: 'formic_worker', mods: [mod('damageTaken', 'more', -0.25)] },
+    // THE DRAWN BOND (engine/pack.ts): the colony's discipline reads as a
+    // CHAIN of pale chitin — bound service, not devotion. The comment above
+    // has always said "burst the workers first"; now the game says it too.
+    bond: {
+      kin: 'formic_worker', mods: [mod('damageTaken', 'more', -0.25)],
+      link: { color: '#cfc0a0', style: 'chain', width: 1.7 },
+    },
+    tells: WARDED_LIFT,
     // LOW SHELL + REAL POISE (the texture doctrine's other pole): a thin
     // frontal plate over a braced body — crack the line fast, then commit
     // through the poise to the soft flesh. Sustain-then-burst, where the
@@ -10141,7 +10353,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 65, moveSpeed: 130, accuracy: 95, armor: 30, mana: 120, manaRegen: 9 },
     skills: ['stridulate', 'claw'], xp: 24, faction: 'formic',
     wardPriority: 1,
-    bond: { kin: 'wool_aphid', mods: [mod('damageTaken', 'more', -0.2)] },
+    // THE DRAWN BOND (engine/pack.ts): husbandry, not command — a soft
+    // green ROOT sagging between the tender and the herd it milks. The one
+    // bond in the game whose holder is livestock: kill the aphids and the
+    // tenders lose their comfort, which the line makes obvious.
+    bond: {
+      kin: 'wool_aphid', mods: [mod('damageTaken', 'more', -0.2)],
+      link: { color: '#8fb26a', style: 'root' },
+    },
     gemBias: ['buff', 'minion'],
     detection: 1.0,
     brain: {
@@ -11168,9 +11387,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.4, adorn: 'ears',
     carrion: { radius: 360, rate: 0.07, time: 2.4 },
+    // THE DRAWN BOND (engine/pack.ts): a MUTUAL pack bond — every hound
+    // holds it for every other, so the drawn court is a web that thins as
+    // you cut it. The clearest teaching case in the game for "the group is
+    // the stat": no single throat to open, just fewer lines each time.
     bond: {
       mods: [mod('damage', 'increased', 0.2), mod('moveSpeed', 'increased', 0.1)],
       kin: 'gravemaw_hound', radius: 420,
+      link: { color: '#9aa06a', style: 'beam', width: 1.6 },
     },
     scaleVariance: [0.9, 1.2],
     presence: { from: 5, fadeIn: 3 },
@@ -12324,7 +12548,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 85, moveSpeed: 110, mana: 140, manaRegen: 8, energyShield: 45 },
     skills: ['trumpet_peal', 'war_cry'], xp: 26, faction: 'seraphic',
     flier: true, levitates: true,
-    bond: { mods: [mod('damage', 'increased', 0.2), mod('attackSpeed', 'increased', 0.1)], radius: 180 },
+    // THE DRAWN BOND (engine/pack.ts): the choir's harmony as a BEAM of
+    // pale gold — a tight 180px court, so the read is "stand apart from
+    // them and they are ordinary".
+    bond: {
+      mods: [mod('damage', 'increased', 0.2), mod('attackSpeed', 'increased', 0.1)], radius: 180,
+      link: { color: '#f0e2b0', style: 'beam', weight: 1 },
+    },
     grants: [{ atLevel: 14, skill: 'judgement_pillar' }],
     presence: 'host_vigil',
     brain: { type: 'commander' },
@@ -12453,7 +12683,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 130, moveSpeed: 100, mana: 160, manaRegen: 8, energyShield: 60 },
     skills: ['judgement_pillar', 'war_cry'], xp: 34, faction: 'seraphic',
     flier: true, levitates: true,
-    bond: { mods: [mod('damage', 'increased', 0.15), mod('castSpeed', 'increased', 0.1)], radius: 170 },
+    // THE DRAWN BOND (engine/pack.ts): the law steadies its bailiffs — a
+    // white beam, the court's own light.
+    bond: {
+      mods: [mod('damage', 'increased', 0.15), mod('castSpeed', 'increased', 0.1)], radius: 170,
+      link: { color: '#fff4d4', style: 'beam', weight: 1 },
+    },
     presence: { from: 12, fadeIn: 4 },
     brain: { type: 'commander' },
   },
@@ -12467,7 +12702,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 80, moveSpeed: 95, mana: 200, manaRegen: 10, energyShield: 35 },
     skills: ['feather_volley'], xp: 28, faction: 'seraphic',
     flier: true, levitates: true,
-    bond: { mods: [mod('castSpeed', 'increased', 0.25)], radius: 200 },
+    // THE DRAWN BOND (engine/pack.ts): the song IS the aura, so the lyrist's
+    // line is the widest and softest of the three — you can see the edge of
+    // the music and step out of it.
+    bond: {
+      mods: [mod('castSpeed', 'increased', 0.25)], radius: 200,
+      link: { color: '#ffe9b4', style: 'beam' },
+    },
     presence: { from: 13, fadeIn: 4 },
     brain: { type: 'strafer' },
   },
@@ -14179,7 +14420,34 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['hurl_debris'],
     xp: 18,
     faction: 'gnoll', adorn: 'ears',
-    brain: { type: 'skirmish', withdraw: 1.5, obedience: 0.5 },
+    // THE CRAVEN (engine/pack.ts). The bonepicker is the pack's coward and
+    // always has been in prose — a loner working the edge of a fight it
+    // never joins. Give it real courage terms and the collapse rows, and
+    // the prose becomes a mechanic you can play against: it breaks on
+    // WOUNDS or on ODDS, both of which you can apply deliberately, and the
+    // nerve tell shows the meter moving the entire way down. Pressure, not
+    // damage, is the answer to this body — and the answer is now visible.
+    brain: {
+      type: 'skirmish', withdraw: 1.5, obedience: 0.5,
+      morale: {
+        breakAtLife: 0.6,
+        breakOutnumbered: { deficit: 2, radius: 300 },
+        rallyAfter: 3.5,
+        // Courage is BORROWED: while its own squad leader stands close it
+        // cannot break, and the nerve tell pins bright to say so. Drop the
+        // leader and every bonepicker downstream starts visibly fraying —
+        // one kill, a whole flank's worth of read, no new machinery.
+        boldNearLeader: 380,
+      },
+      // As its nerve goes it stops trading and starts backing off — conduct
+      // that changes BEFORE the break, through the pack layer's own
+      // registered condition (the first tenant of registerAICondition).
+      rules: [{
+        when: { ext: { nerveBelow: 0.45 } },
+        use: { move: { style: 'retreat' }, tempo: { pauseFor: [0.4, 0.9] } },
+      }],
+    },
+    tells: CRAVEN_COLLAPSE,
   },
   // The pack burns its dead on ridge-pyres; the keeper carries the habit
   // to war — vents split the ground, firepots arc over the line.
@@ -14204,6 +14472,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'gnoll', adorn: 'ears',
     wardPriority: 2,
     brain: { type: 'commander', perception: { alertShout: 460 } },
+    // THE WARDEN, realized (engine/pack.ts). She has always been the
+    // kill-first body and the fight has never said so out loud. Now the
+    // ropes of her favor run visibly to every gnoll she stiffens, and she
+    // BRIGHTENS with the size of the court holding them — so the decision
+    // "cross the room for her" is made on information, not on a wiki.
+    tells: WARDEN_COURT,
   },
   // The skinner: two knives and patience. Carves from behind the noise,
   // withdraws before the answer lands.
@@ -14215,6 +14489,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 26,
     faction: 'gnoll', adorn: 'ears',
     brain: { type: 'assassin', withdraw: 1.2 },
+    // The knives keep to the matron's favor too — and the ochre rope back
+    // to her is the one thing that gives a skinner away at range.
+    bond: MATRON_BOND,
+    tells: WARDED_LIFT,
   },
 
   // --- THE CHATTEL gone wrong: the worked land's own trouble grows a
@@ -16744,7 +17022,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.6,
     scaleVariance: [0.9, 1.25],
     packSize: [2, 4],
-    tells: HUNGER_LEAN,
+    // A pack hunter wears the GROUP meter beside its own (engine/pack.ts):
+    // the crest says how hungry the wolfpack is, the puff says it is busy
+    // with something that is not you.
+    tells: [...HUNGER_LEAN, ...PACK_HUNGER_CREST, ...COURSING_NOSE],
     mountSlot: {
       kinds: ['goblin_wolfrider'],
       seats: [{ dx: -0.2, lift: 1.0 }],

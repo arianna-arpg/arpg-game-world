@@ -72,6 +72,11 @@ export interface ActorW {
   /** Rolled brainVariants index — the client rebuilds the same variant
    *  tell rows from its own def registry (tellSpecsOf). */
   bv?: number;
+  /** THE PACK LAYER's bond holder (engine/pack.ts): the HOST id of the body
+   *  currently empowering this one. Absent = no bond worn. The client
+   *  re-points it at its own pooled shell, then derives the same link list
+   *  the host draws — over live positions, so lines track moving bodies. */
+  bl?: number;
   /** THE WATCH FABRIC's drawn read (engine/watch.ts), host-stamped —
    *  [reach base, arc half-angle (rad, 3dp), rear fraction (3dp),
    *  alerted 0|1, ladder value (3dp)]. DERIVED scalars in the tell wire's
@@ -447,6 +452,14 @@ function actorToW(a: Actor): ActorW {
     if (a.brainVariant !== undefined) w.bv = a.brainVariant;
     if (a.tells?.some(v => v > 0)) w.tl = a.tells;
   }
+  // THE PACK LAYER's drawn bond (engine/pack.ts): the HOLDER whose mods this
+  // body wears, shipped as the host's actor id and re-pointed client-side
+  // through the same pool the snapshot already keys on. We ship the holder
+  // rather than the derived line so the client runs the IDENTICAL link
+  // derivation over its OWN interpolated positions — the link then tracks
+  // smoothly between moving bodies instead of snapping at 20 Hz, and host
+  // and client cannot draw different structures.
+  if (a.bondHeld && a.bondFrom && !a.bondFrom.dead) w.bl = a.bondFrom.id;
   // THE WATCH FABRIC (engine/watch.ts): the stamped sense + the ladder,
   // quantized to the wire grid — the client draws the same fan from the
   // same numbers (never the suspicion sources).
@@ -926,6 +939,19 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     if (aw.seat) partyByseat.set(aw.seat, a);
   }
   for (const id of POOL.keys()) if (!seen.has(id)) POOL.delete(id);
+  // THE PACK LAYER's drawn bonds (engine/pack.ts): re-point each warded body
+  // at its holder AFTER the whole roster exists — a holder may be serialized
+  // after the bodies it empowers, and a one-frame-late line is a line that
+  // flickers. Resolution goes through the same POOL the snapshot keys on, so
+  // the client's own Actor.id (pooled and local) never enters it. Absent
+  // `bl` CLEARS the pair: a pooled shell must never wear a stale court.
+  for (let i = 0; i < snap.actors.length; i++) {
+    const aw = snap.actors[i];
+    const a = actors[i];
+    const held = aw.bl !== undefined;
+    a.bondHeld = held;
+    a.bondFrom = held ? POOL.get(aw.bl!) : undefined;
+  }
   world.actors = actors;
 
   // Lightweight entities — plain render structs the renderer reads positionally.

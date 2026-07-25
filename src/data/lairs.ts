@@ -285,3 +285,49 @@ registerLair({
   },
 });
 
+// === THE GNOLL MOOT (the pack layer's ground — engine/pack.ts) ===============
+// Where the packs gather between hunts: a trampled moot-ring under a ridge
+// pyre, the matron at its heart, her court around her, the bonepickers at
+// the litter. This ground exists so the SOCIAL STRUCTURE stands assembled
+// where you can read it before anything moves: the ochre ropes of the
+// matron's favor, the drilled court wearing her lift, the cowards at the
+// edge already sagging when the odds turn. Kill her first, or cut through
+// her favored with a Bondbreaker, or rout the pickers with pressure alone —
+// the moot is the pack layer's whole argument staged as one landmark.
+// ZERO new machinery, ZERO new doodad kinds: the pit builder (the barrow
+// watch's law), pyre/hide_rack/feeding_stake/bone_pile dress, and spawns
+// whose defs already wear the layer.
+
+registerLandmark({
+  id: 'gnoll_moot', builder: 'pit', size: [230, 310],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    rimRegion: 'wall', floorKind: 'mud', gapArc: 0.95,
+    inner: [
+      { kind: 'pyre', count: [1, 1], radius: [13, 16] },
+      { kind: 'hide_rack', count: [1, 2], radius: [10, 13] },
+      { kind: 'feeding_stake', count: [1, 2], radius: [8, 11] },
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 15] },
+    ],
+  },
+  spawns: {
+    table: [
+      { id: 'gnoll_matron', weight: 2 },
+      { id: 'gnoll_prowler', weight: 3 },
+      { id: 'gnoll_butcher', weight: 1 },
+      { id: 'gnoll_bonepicker', weight: 2 },
+    ],
+    count: [5, 8], where: 'interior',
+  },
+});
+
+registerLair({
+  id: 'gnoll_moot',
+  landmark: 'gnoll_moot',
+  seat: {
+    biomes: ['downs', 'butteland', 'grove'],
+    place: 'surface',
+    level: { from: 6, fadeIn: 3 },
+    chance: 0.2,
+  },
+});

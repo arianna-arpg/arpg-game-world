@@ -6917,6 +6917,12 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'snout', scale: 0.9 },
       { kind: 'staff', params: { orb: 'glow' } },
       { kind: 'tail', params: { len: 0.7, tuft: true } },
+      // THE WARDEN'S STANDARD (engine/pack.ts): the banner she plants is
+      // the same ochre as the ropes of her favor — holder and links share
+      // one color word, so the eye binds them without being told. The
+      // silhouette now names the ROLE (a body worth killing first), while
+      // her WARDEN_COURT glow names the live COUNT.
+      { kind: 'banner', x: -0.45, y: -0.3, scale: 0.8, color: '#e0a94e' },
     ],
   },
   /** Two knives, painted face, trophy ruff — the quiet one. */

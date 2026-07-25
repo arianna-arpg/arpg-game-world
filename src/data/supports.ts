@@ -101,6 +101,28 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('siegebreaker', 'flat', 0.02)],
     weight: 6,
   },
+  // THE LANE'S SOCIAL PAIR (engine/pack.ts bondbreaker/quailbane, same
+  // mitigateTyped fold) — the first two axes keyed off a victim's place in
+  // its GROUP rather than any fact about its body. Both exist because the
+  // pack layer DRAWS what they price: a rope of light running from a
+  // warden, and a body visibly folding as its nerve goes. Punished ==
+  // advertised, so neither gem asks the player to memorize anything.
+  bondbreaker: {
+    id: 'bondbreaker', name: 'Bondbreaker',
+    description: 'This skill hits 30% harder against enemies standing in a WARDEN\'S FAVOR — anything wearing a bond you can see drawn to the body empowering it. The pack always had two answers; this gem is the one that does not require crossing the room. Nothing extra against the warden itself, or against a body already cut loose.',
+    color: '#e0a94e', requiresTags: ['attack', 'spell'],
+    mods: [mod('bondbreaker', 'flat', 0.3)],
+    perLevel: [mod('bondbreaker', 'flat', 0.02)],
+    weight: 6,
+  },
+  quailbane: {
+    id: 'quailbane', name: 'Quailbane',
+    description: 'This skill hits 32% harder against FALTERING enemies — those whose nerve has broken down, whether from wounds, from being outnumbered, or from the captain you already dropped. It pays for pressure rather than for damage, and the collapsing posture on the body in front of you is the only tooltip you need.',
+    color: '#9aa8b8', requiresTags: ['attack', 'spell'],
+    mods: [mod('quailbane', 'flat', 0.32)],
+    perLevel: [mod('quailbane', 'flat', 0.022)],
+    weight: 6,
+  },
 
   // THE GRAB FABRIC's pair (engine/grab.ts) — one gem per half of the art,
   // scoped by the grapple alphabet itself ('grab' / 'throw' tags), so

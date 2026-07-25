@@ -443,6 +443,23 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  where on the creature — whether it can WALK AWAY. Structural stamp at
    *  mint, never a CC read (chill is the ailment suite's business). */
   siegebreaker:   { label: 'Damage vs Rooted Bodies', base: 0, min: 0, percent: true },
+  /** MORE damage vs a body standing in a WARDEN'S FAVOR (Actor.bondHeld —
+   *  engine/pack.ts). The lane's eighth axis, and the first keyed off a
+   *  SOCIAL fact rather than a physical one. It exists to give the pack
+   *  layer a second honest answer: the drawn link says "kill the holder
+   *  and they all soften", and this says "or don't — cut straight through
+   *  the favored instead". Two live strategies against one visible
+   *  structure is the whole reason to draw the structure at all. */
+  bondbreaker:    { label: 'Damage vs Warded Enemies', base: 0, min: 0, percent: true },
+  /** MORE damage vs a body whose NERVE has frayed past SLAYER_CFG.quailAt
+   *  (Actor.aiNerve — engine/pack.ts). The lane's ninth axis and the
+   *  sharpest reward for reading rather than swinging: nerve is driven by
+   *  wounds, by odds, and by whether its captain still stands, so this
+   *  pays for pressure you APPLIED — flank it, drop its leader, thin its
+   *  line — and the craven's collapsing posture is the tell that says the
+   *  bonus is live. Spentbane's social twin: a state the victim enters
+   *  and leaves, and one you can deliberately cause. */
+  quailbane:      { label: 'Damage vs Faltering Enemies', base: 0, min: 0, percent: true },
 
   // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
   // opponent's body language and slipping the brunt. Reduction scales with

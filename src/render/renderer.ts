@@ -53,6 +53,7 @@ import { padDisplay } from '../core/gamepad';
 import { collectActiveFx, collectFalterK, type ActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { FACTIONS, MONSTERS } from '../data/monsters';
+import { PACK_CFG, packLinks, type LinkStyleOf, type PackLink } from '../engine/pack';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
@@ -115,6 +116,16 @@ const ORB_ARCS = {
 
 const warnedUnrenderedKinds = new Set<string>();
 
+/** THE PACK LAYER (engine/pack.ts): the def-registry lookup the pure link
+ *  derivation takes as an injected resolver — the leaf stays free of data
+ *  imports, and the CLIENT resolves through this identical function off its
+ *  own registry, so both halves of a co-op session draw one structure. */
+const PACK_LINK_STYLE_OF: LinkStyleOf = defId =>
+  (defId ? MONSTERS[defId]?.bond?.link : undefined);
+/** Reused dash arrays — set once, mutated in place (no per-link alloc). */
+const EMPTY_DASH: number[] = [];
+const PACK_DASH: number[] = [0, 0];
+
 /** The low-life vignette's heartbeat waveform: two smooth gaussian swells per
  *  cycle (the lub, then the softer dub from VIS_CFG.lowLife.beat), then a long
  *  quiet diastole. Phase in [0,1); each swell is also evaluated one cycle to
@@ -141,6 +152,9 @@ function blendRgb(from: string, to: string, k: number): string {
 export class Renderer {
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
+  /** THE PACK LAYER's link scratch (engine/pack.ts): the derivation writes
+   *  through it every frame, so a steady court allocates nothing. */
+  private packLinkBuf: PackLink[] = [];
   /** Screen-space mouse, fed by main each frame — HUD hover affordances
    *  (buff-pip names) read it; (-1,-1) = no pointer. */
   hudMouse = { x: -1, y: -1 };
@@ -573,6 +587,12 @@ export class Renderer {
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
     for (const f of world.flashes) this.drawFlash(f);
+    // THE PACK LAYER's drawn bonds (engine/pack.ts): the warden's lines to
+    // every body it is actually empowering — over the ground reads, UNDER
+    // the bodies they bind (a link is context for a silhouette, never a
+    // thing that occludes one). The sight veil composites above both, so a
+    // bond behind a wall hides exactly like the wardens holding it.
+    if (!VIS_ABLATE.has('actors')) this.drawPackLinks(world);
     if (!VIS_ABLATE.has('actors')) {
       // THE LITE TIER (engine/lite.ts): the crowd blits UNDER real bodies —
       // one composited sprite per body, no per-body state churn.
@@ -4215,11 +4235,14 @@ export class Renderer {
       ctx.scale(breathe, breathe);
     }
     // TELL POSTURE: the swell channel scales the DRAW (the breathe law —
-    // presentation, never the hitbox), and the lean channel hunkers the
-    // body forward along its facing with a screen squash (the stalk).
+    // presentation, never the hitbox), and the SIGNED lean channel shifts
+    // the body along its facing — positive hunkers forward with a screen
+    // squash (the stalk), negative cants BACKWARD with the same formula
+    // rising instead (the reader's back foot, the coiled load). One
+    // transform, both postures; the sign does the work.
     if (tdress) {
       if (tdress.scale !== 1) ctx.scale(tdress.scale, tdress.scale);
-      if (tdress.lean > 0) {
+      if (tdress.lean !== 0) {
         const k = tdress.lean;
         ctx.translate(Math.cos(a.facing) * k * TELL_CFG.lean.shift * a.radius,
           Math.sin(a.facing) * k * TELL_CFG.lean.shift * a.radius);
@@ -5297,6 +5320,93 @@ export class Renderer {
       ctx.restore();
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** THE DRAWN BOND (engine/pack.ts) — a warden's empowering links, one
+   *  line per body it is ACTUALLY buffing. The whole point of the pack
+   *  layer: `MonsterDef.bond` has always made a pack harder to kill from
+   *  somewhere off to the side, and nothing said where. Now it does, so
+   *  "burst the holder first" is legible at a glance rather than a wiki
+   *  fact.
+   *
+   *  DRAWN == TESTED: the rows come from Actor.bondFrom, recorded by the
+   *  bond scan at the same instant it decided Actor.bondHeld — this pass
+   *  performs no proximity test of its own and therefore cannot disagree
+   *  with the mods. Endpoints are read LIVE off the bodies each frame (so a
+   *  line never detaches from what it binds, on host or client alike), and
+   *  the SHARE LAW in packLinks() caps the layer the way VIS_CFG.lights
+   *  caps the light budget — total, per-holder, and dropped in a
+   *  view-bin-quantized order that does not reshuffle as the camera pans. */
+  private drawPackLinks(world: World): void {
+    const links = packLinks(world.actors, PACK_LINK_STYLE_OF, this.cam, this.packLinkBuf);
+    if (!links.length) return;
+    const { ctx } = this;
+    const cfg = PACK_CFG.links;
+    const t = world.time;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const l of links) {
+      const a = l.from, b = l.to;
+      let ax = a.pos.x, ay = a.pos.y, bx = b.pos.x, by = b.pos.y;
+      const dx = bx - ax, dy = by - ay;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) continue;
+      // Spring the line from each body's RIM, not its navel — a link should
+      // read as reaching between two creatures, not skewering them.
+      const ux = dx / len, uy = dy / len;
+      const ai = a.radius * cfg.inset, bi = b.radius * cfg.inset;
+      if (ai + bi >= len) continue; // overlapping bodies: nothing to draw
+      ax += ux * ai; ay += uy * ai;
+      bx -= ux * bi; by -= uy * bi;
+      // Per-pair phase so a court throbs as a court, not as one metronome.
+      const pulse = 1 - cfg.pulseDepth
+        + cfg.pulseDepth * Math.sin(t * cfg.pulseRate + (a.id * 1.7 + b.id * 0.9));
+      ctx.beginPath();
+      if (l.style === 'root') {
+        // A sagging ground-cord: the control point hangs downscreen, so
+        // vegetal/chthonic kinship reads as weight rather than as light.
+        ctx.moveTo(ax, ay);
+        ctx.quadraticCurveTo((ax + bx) * 0.5, (ay + by) * 0.5 + len * cfg.sag, bx, by);
+      } else {
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+      }
+      ctx.strokeStyle = l.color;
+      // The soft under-stroke (the tether idiom): volume without brightness.
+      ctx.setLineDash(EMPTY_DASH);
+      ctx.globalAlpha = cfg.haloAlpha * pulse;
+      ctx.lineWidth = Math.max(3, l.width * cfg.haloMul);
+      ctx.stroke();
+      // The core. 'chain' dashes it into bound segments; 'banner' rides a
+      // travelling swell along the span (a rallying flag, not a wire).
+      if (l.style === 'chain') {
+        PACK_DASH[0] = cfg.dash; PACK_DASH[1] = cfg.dash * 0.8;
+        ctx.setLineDash(PACK_DASH);
+        ctx.lineDashOffset = -(t * 26) % (cfg.dash * 1.8);
+      }
+      ctx.globalAlpha = cfg.coreAlpha * pulse;
+      ctx.lineWidth = l.width;
+      ctx.stroke();
+      if (l.style === 'banner') {
+        // The swell: a short bright arc travelling holder → warded, so the
+        // direction of the favor is part of the read.
+        const p = (t * 0.55 + (a.id * 0.37 + b.id * 0.11)) % 1;
+        const sw = Math.min(0.34, 26 / len);
+        const s0 = Math.max(0, p - sw), s1 = Math.min(1, p + sw);
+        if (s1 > s0) {
+          ctx.beginPath();
+          ctx.moveTo(ax + (bx - ax) * s0, ay + (by - ay) * s0);
+          ctx.lineTo(ax + (bx - ax) * s1, ay + (by - ay) * s1);
+          ctx.globalAlpha = Math.min(1, cfg.coreAlpha * 1.9) * pulse;
+          ctx.lineWidth = l.width * 1.5;
+          ctx.stroke();
+        }
+      }
+      ctx.setLineDash(EMPTY_DASH);
+      ctx.lineDashOffset = 0;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   /** Tether bands: a soft wide beam + a bright core line between the cached
