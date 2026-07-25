@@ -257,6 +257,33 @@ registerLandmark({
   },
   poi: true,
 });
+// THE MOLTING GROUND (the mantid school's practice ring): a trodden circle
+// fenced in the school's own shed skins — brittle history, never a pen —
+// where the five stances assemble. The TEACHING-PAIRS law made geography:
+// the duelist bluffs beside the headsman that cannot, the augur leaves
+// through the same window the penitent arrives through, and the redoubt
+// closes in the middle of it. The spawn table mixes BY DESIGN — telling
+// them apart before you commit is the whole lesson (docs/engine/tells.md).
+registerLandmark({
+  id: 'molting_ground', builder: 'fence_ring', size: [170, 240], clearSite: true,
+  params: {
+    fenceKind: 'molt_husk', floorKind: 'mud', gapArc: 0.8,
+    inner: [{ kind: 'molt_husk', count: [1, 2], radius: [12, 16] }],
+  },
+  spawns: {
+    table: [
+      { id: 'mantid_duelist', weight: 3 },
+      { id: 'mantid_headsman', weight: 2 },
+      { id: 'mantid_augur', weight: 2 },
+      { id: 'mantid_penitent', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'pillbug_redoubt', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      // The elder attends: the gaze game schooling beside the bar games.
+      { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+    count: [4, 7], where: 'interior',
+  },
+  poi: true,
+});
 
 // A hive sink: the warren's open throat — a stamped pit boiling with the
 // brood, the sand packed glossy where ten thousand feet turned.

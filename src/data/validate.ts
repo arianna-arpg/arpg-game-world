@@ -958,18 +958,33 @@ export function validateContent(): void {
     }
   }
 
-  // FEINT DISCIPLINE: a bluffed cast bar is a SIGNATURE move. The player
-  // cannot cancel a bar, so an enemy that constantly does reads as broken
-  // rather than clever — keep chances rare and deliberate (tricksters only).
-  const feintCheck = (id: string, chance: number | undefined, src: string): void => {
-    if (chance !== undefined && chance > 0.35) {
-      warn(`monster ${id}: ${src} feint.chance ${chance} > 0.35 — feints are signature moves, keep them RARE`);
+  // FEINT DISCIPLINE — THE READABLE-BLUFF LAW: a bluffed cast bar is legal
+  // two different ways. RARE (≤0.35) it is a signature surprise and may go
+  // untold (the lash maiden's game). COMMON (>0.35) it MUST wear a
+  // 'feinting'-source tell row — the body visibly loads its guard side on
+  // a lie (the mantid duelist's game) — because the tell layer structurally
+  // cannot bluff (engine/tells.ts: 'casting' reads 0 through any feint), a
+  // told bluff is a READ the player can learn, never a coin flip. Untold-
+  // and-common is the outlawed middle; past 0.6 even a told bluff reads as
+  // a broken metronome. probe_readers pins the same census with teeth.
+  const feintCheck = (id: string, chance: number | undefined, src: string,
+    told: boolean): void => {
+    if (chance === undefined) return;
+    if (chance > 0.35 && !told) {
+      warn(`monster ${id}: ${src} feint.chance ${chance} > 0.35 with no 'feinting'-source tell — an unreadable common bluff is the outlawed coin flip (wear the tell or keep it rare)`);
+    }
+    if (chance > 0.6) {
+      warn(`monster ${id}: ${src} feint.chance ${chance} > 0.6 — even a told bluff this common reads as a broken metronome`);
     }
   };
   for (const def of Object.values(MONSTERS)) {
-    feintCheck(def.id, def.brain?.behavior?.feint?.chance, 'brain');
+    const defTold = !!def.tells?.some(t => t.source === 'feinting');
+    feintCheck(def.id, def.brain?.behavior?.feint?.chance, 'brain', defTold);
     for (const [i, v] of (def.brainVariants ?? []).entries()) {
-      feintCheck(def.id, v.brain?.behavior?.feint?.chance, `brainVariants[${i}]`);
+      // A variant bluffer may be licensed by the def's own tell rows (the
+      // worn list composes def + variant — tellSpecsOf).
+      const told = defTold || !!v.tells?.some(t => t.source === 'feinting');
+      feintCheck(def.id, v.brain?.behavior?.feint?.chance, `brainVariants[${i}]`, told);
     }
   }
 

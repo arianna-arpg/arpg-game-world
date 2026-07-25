@@ -58,11 +58,16 @@ tells: [{
 | `charge:<id>` | banked charge count | **raw — band required** |
 | `status:<id>` | stacks / the registry cap (presence for non-stackers) | 0..1 |
 | `alert` | has this body noticed anyone (`aggroed`) | 0 / 1 |
+| `engaged` | a live quarry stands (`aiTargetId` — the lock its reserves test) | 0 / 1 |
 | `morale` | routing right now (the break window) | 0 / 1 |
 | `fuse` | armed self-detonation, seconds REMAINING | **raw — band required** |
 | `stored` | the banked reservoir (Tree-of-Life lane) | **raw — band required** |
 | `radiance` | the sky's light (`World.radiance`) | 0..1 |
 | `ground:<kind>` | standing on the named ground kind | 0 / 1 |
+| `buff:<id>` | a live buff's stacks / its cap (presence for non-stackers) | 0..1 |
+| `casting` / `casting:<skillId>` | own REAL bar progress (held channel = 1; **a bluffed bar reads 0 by law**) | 0..1 |
+| `feinting` | a bluffed bar in flight (`BehaviorSpec.feint`) | 0 / 1 |
+| `foecast` | seconds left on the TARGET's bar (`aiFoeCastSec`, stamped by the AI tick) | **raw — band required** |
 
 Parameterized ids split on `:` — an exact registered id wins over the
 prefix lane, so a package may override `drive:dread` wholesale. Unknown
@@ -85,7 +90,10 @@ registry.
   alpha IS the reading.
 - **`scale`** — body swell, clamped by `TELL_CFG.maxBodyScale`. Draw-only,
   riding the breathe transform: a posture, never a hitbox lie.
-- **`lean`** — hunkered-forward shift + screen squash (the stalk).
+- **`lean`** — SIGNED posture shift along the facing: positive hunkers
+  forward with a screen squash (the stalk); negative cants BACKWARD with a
+  rise (the reader's back foot, the coiled load). Deepest magnitude wins
+  when rows stack; one transform serves both postures.
 - **`alpha`** — draw alpha lerps 1 → `min` as the value rises, folded into
   the ordinary fade lanes (a fading body fades whole).
 - **`adorn`** — silhouette-accent swap while value ≥ `at` (a different
@@ -173,6 +181,60 @@ caters it, a deliberate crack baits it away.
 Probe: `balance/probe_tells.ts` rigs 12–17 (the family weave, the buff
 source, and all four live loops: gorge → burst, term → laying → hatch,
 crest → sag, stoke → vent).
+
+## The commitment sources & THE READABLE-BLUFF LICENSE (the Readers)
+
+The `casting` / `feinting` / `foecast` / `engaged` lanes make INTENT itself
+wearable — the mind-layer arc's Readers chip:
+
+- **`casting`** is the wind-up drawn on the body: the mantid headsman's
+  overhead edge rises with its own bar (`part` + alpha/scale dials), and
+  `casting:<skillId>` filters to ONE skill's bar (the pillbug redoubt's
+  plates close across `casting:bulwark_set` while its ordinary strikes
+  never flicker the shell).
+- **THE FEINT EXCLUSION is structural law**: a bluffed bar
+  (`BehaviorSpec.feint` — begun for real, dropped payload-less at the
+  beat) reads 0 through `casting` and 1 through `feinting`. The tell
+  layer CANNOT bluff — a feint fools readers of the BAR, never readers of
+  the BODY. That honesty is what LICENSES common bluffs at all: validate
+  + the probe census hold that any `feint.chance > 0.35` anywhere in the
+  bestiary must wear a `feinting`-source tell (the mantid duelist's
+  guard-side flare), while a rare untold feint (≤ 0.35 — the lash
+  maiden) stays a legal signature surprise. Past 0.6 even a told bluff is
+  refused (a coin flip forever is a broken metronome, not a lesson).
+- **`foecast`** is the read of YOU: `Actor.aiFoeCastSec` is stamped each
+  AI tick where the lock is final, through the SAME `castRemaining`
+  (engine/brain.ts) every `targetCasting` rule evaluates — the mantid
+  augur's back-foot cant and its retreat rule can never disagree about
+  what it saw. Unbounded (seconds): band it (`[0, 0.35]` reads full while
+  a bar has ≥0.35s left and eases as it closes).
+- **`engaged`** is the quiet lock: a fully-reserved body (the mantid
+  penitent — its whole kit sits in `skillUse.reserve`) never aggroes
+  because it never engages first, but it has absolutely marked you; the
+  lock its reserves test IS its honest tension tell.
+
+### The mantid school (the teaching-pairs debut)
+
+Five stances seated in ONE country (the garden's stalkwood + petalfields;
+the `molting_ground` landmark assembles the full set inside a ring of
+brittle `molt_husk` shed skins), because a discrimination is only learnable
+beside its contrast:
+
+- **duelist ↔ headsman** — the readable bluff and the body that CANNOT
+  bluff (no feint in its mind by construction; press-anchored plant
+  outlasting the bar = the authored punish window).
+- **augur ↔ penitent** — ONE trigger (your own cast bar), two OPPOSITE
+  answers: the augur leaves the window (`targetCasting` rule → retreat;
+  note a rule is EDGE-fired with a hold + re-arm cooldown — a near-zero
+  `cooldown` is what makes the leaving continuous), the penitent arrives
+  through it (reserves on `targetCasting`/`distUnder` + a dash rule).
+- **pillbug redoubt** — the spatial lesson: `bulwark_set` (a real skill —
+  the bar IS the closing telegraph) grants the buff that IS the armor,
+  a `hasBuff` rule holds the `turtle` kernel, and the skill's own
+  cooldown arithmetic is the open-window rhythm between sets.
+
+Probe: `balance/probe_readers.ts` (the census, the divergence, all five
+live lessons, the wire, the book).
 
 ## Authoring recipes
 

@@ -23,7 +23,7 @@ import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
 import type { Actor } from './actor';
 import {
-  alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, evalCondition, FLOCK_CFG, mergeTuning,
+  alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, castRemaining, evalCondition, FLOCK_CFG, mergeTuning,
   normalizeBrain, POST_CFG, registerAICondition, tuningOf,
   type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
@@ -614,6 +614,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       actor.aggroed = true;
     }
   }
+
+  // THE FORECAST STAMP (the tell fabric's 'foecast' source): what this mind
+  // just read off its quarry's hands — seconds left on the target's bar,
+  // through the SAME castRemaining every targetCasting rule evaluates.
+  // Stamped HERE, where the tick's lock is final, so the worn lean and the
+  // conduct that answers the bar read one moment of one truth (drawn ==
+  // decided); no lock reads 0. Costs one branch on the untargeted roster.
+  actor.aiFoeCastSec = target ? castRemaining(target) : 0;
 
   // LEASH (TargetSpec.leash): guardians give up the marathon. Beyond the
   // tether they drop the lock and walk home (with hysteresis, so the edge

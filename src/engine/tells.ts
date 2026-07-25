@@ -144,6 +144,27 @@ export interface TellBody {
   fuse?: number;
   stored?: number;
   groundKind?: string;
+  // --- THE COMMITMENT LANES (the Readers' school) — all OPTIONAL, so a
+  // hand-built probe body stays three lines; absent fields read 0.
+  /** The live cast (Actor.casting, structurally narrowed) — the 'casting'
+   *  source's bar-progress read. */
+  casting?: {
+    inst: { def: { id: string } };
+    mode: string; elapsed: number; total: number; held: boolean;
+  } | null;
+  /** THE FEINT clock (Actor.aiFeintAt): nonzero while a bluffed bar is in
+   *  flight — the 'feinting' source, and the 'casting' source's exclusion
+   *  (THE TELL LAYER CANNOT BLUFF: a bar may lie, the body never does). */
+  aiFeintAt?: number;
+  /** THE FORECAST stamp (Actor.aiFoeCastSec, written by the AI tick where
+   *  the tick's lock is final): seconds left on the current TARGET's bar —
+   *  the same castRemaining read every targetCasting rule makes, so the
+   *  worn tell and the conduct can never disagree about what was seen. */
+  aiFoeCastSec?: number;
+  /** The live lock (Actor.aiTargetId) — the 'engaged' source's read: the
+   *  same quarry its reserves and rules test against (a fully-reserved
+   *  coil never aggroes; the LOCK is its honest marked-you truth). */
+  aiTargetId?: number;
   /** Wearing MonsterDef.bond mods right now (the bond scan's flag —
    *  engine/pack.ts reads it; the Rooted school shares it). */
   bondHeld?: boolean;
@@ -233,6 +254,40 @@ export const TELL_SOURCES: Record<string, TellSource> = {
     const cap = Math.max(1, b.def.maxStacks ?? 1);
     return Math.max(0, Math.min(1, (b.stacks || 1) / cap));
   },
+  // --- THE COMMITMENT SOURCES (the Readers' school — docs/engine/tells.md).
+  /** Own REAL bar progress 0..1 (elapsed/total; a held channel reads 1) —
+   *  the wind-up DRAWN ON THE BODY. Optionally parameterized by skill id
+   *  ('casting:bulwark_set' reads only that skill's bar). A BLUFFED bar
+   *  (aiFeintAt in flight) reads 0 BY LAW: the tell layer cannot bluff —
+   *  a feint can fool readers of the BAR, never readers of the BODY, and
+   *  that structural honesty is what licenses common feints at all. */
+  casting: (a, _w, arg) => {
+    const cs = a.casting;
+    if (!cs) return 0;
+    if (a.aiFeintAt !== undefined && a.aiFeintAt > 0) return 0;
+    if (arg !== undefined && cs.inst.def.id !== arg) return 0;
+    if (cs.mode === 'channel') return cs.held ? 1 : 0;
+    return cs.total > 0 ? Math.max(0, Math.min(1, cs.elapsed / cs.total)) : 0;
+  },
+  /** A BLUFFED bar in flight (BehaviorSpec.feint — the bar began for real
+   *  and will drop payload-less at the beat): the liar's own honest tell.
+   *  Wear it on the GUARD side and 'casting' on the STRIKE side and which
+   *  limb loads IS the information — the readable-bluff license. */
+  feinting: a =>
+    (a.aiFeintAt !== undefined && a.aiFeintAt > 0 && !!a.casting ? 1 : 0),
+  /** THE FORECAST: seconds left on the current TARGET's bar, exactly as
+   *  the mind read it this tick (Actor.aiFoeCastSec — stamped beside the
+   *  lock by updateAI through the same castRemaining every targetCasting
+   *  rule evaluates: the reader's lean and the reader's retreat can never
+   *  disagree). Unbounded (seconds) — a band is required; [0, 0.35] reads
+   *  full while a bar has ≥0.35s left and eases off as it closes. */
+  foecast: a => a.aiFoeCastSec ?? 0,
+  /** A live QUARRY stands (the same lock its reserves and rules test —
+   *  Actor.aiTargetId): the engaged-read for bodies whose whole kit WAITS.
+   *  A fully-reserved coil never aggroes (aggro rides taunts, wounds,
+   *  relentless minds and the watch ladder — never a quiet lock), but it
+   *  has absolutely marked you, and the marking is the tell. */
+  engaged: a => (a.aiTargetId !== undefined ? 1 : 0),
   /** Has this body noticed ANYONE — the watcher's step tell. */
   alert: a => (a.aggroed ? 1 : 0),
   /** Routing RIGHT NOW (the morale machinery's break window). */

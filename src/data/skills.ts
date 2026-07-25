@@ -12398,6 +12398,74 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 48, weight: 2 },
   },
 
+  // --- THE MANTID SCHOOL's verbs (the Readers — enemies whose POSTURE is
+  // the information; engine/tells.ts 'casting'/'feinting'/'foecast'). Five
+  // stances, five noDrop kit pieces; the numbers are deliberately modest —
+  // the interest is the MIND wearing them, never the stat block.
+  mantis_scythe: {
+    id: 'mantis_scythe', name: 'Scythe Cut', noDrop: true,
+    description: 'A folded arm unfolds into one clean crescent. The bar is the warning; WHICH ARM LOADS is the truth — the duelist\'s shield-side flare is a lie about to drop.',
+    tags: ['attack', 'melee', 'physical'], color: '#8ed060',
+    manaCost: 0, cooldown: 1.2, useTime: 0.6,
+    baseDamage: { physical: [11, 17] },
+    delivery: { type: 'melee', range: 62, arcDeg: 70 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 66, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  headsman_arc: {
+    id: 'headsman_arc', name: 'Headsman\'s Arc', noDrop: true,
+    description: 'Both scythes rise together and become one edge. Once it starts it CANNOT stop — no cancel, no bluff, the blade exactly where the body points. Be elsewhere when the arc closes; the long recovery afterward is yours to spend.',
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#5a8a46',
+    manaCost: 0, cooldown: 4, useTime: 1.7,
+    baseDamage: { physical: [34, 48] },
+    delivery: { type: 'melee', range: 84, arcDeg: 110 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 120 },
+    ],
+    ai: { range: 74, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  barb_spit: {
+    id: 'barb_spit', name: 'Barb Spit', noDrop: true,
+    description: 'A single chitin needle, coughed flat — the augur\'s harassment. It costs the reader nothing to make you flinch, and everything you cast in answer is information.',
+    tags: ['attack', 'projectile', 'physical'], color: '#b8d878',
+    manaCost: 0, cooldown: 0.8, useTime: 0.45,
+    baseDamage: { physical: [7, 11] },
+    delivery: { type: 'projectile', speed: 520, radius: 5, range: 430 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 400, weight: 3, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  penitent_lunge: {
+    id: 'penitent_lunge', name: 'Answered Prayer', noDrop: true,
+    description: 'The held coil spends itself in one released line. The strike was wound long before you moved — your commitment merely finished the prayer.',
+    tags: ['attack', 'melee', 'physical'], color: '#6aa858',
+    manaCost: 0, cooldown: 2.5, useTime: 0.3,
+    baseDamage: { physical: [22, 32] },
+    delivery: { type: 'melee', range: 92, arcDeg: 50 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 88, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  bulwark_set: {
+    id: 'bulwark_set', name: 'Set the Bulwark', noDrop: true,
+    description: 'Plate by plate the redoubt closes, and for a while there is nothing to fight — only a sealed box standing where an argument used to be. Go around, or wait for the plates to open and spend the window well.',
+    tags: ['buff', 'duration'], color: '#8a8068',
+    manaCost: 0, cooldown: 12, useTime: 1.0,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'bulwark_set', duration: 6,
+      mods: [
+        mod('armor', 'flat', 60),
+        mod('damageTaken', 'more', -0.5),
+      ],
+    }],
+    ai: { range: 200, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.05)] },
+  },
+
   // THE THRONG's kit whacks (engine/throng.ts kinds) — ordinary catalog
   // pieces, so supports, statuses and the whole hit pipeline apply while
   // a rider swings them from its seat (engine/cling.ts).

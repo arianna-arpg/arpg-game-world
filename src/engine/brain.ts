@@ -1260,6 +1260,20 @@ export interface AICtx {
   factionDrive: (id: string, faction: string | undefined) => number;
 }
 
+/** Seconds of commitment left on a body's live cast — a bar counts down, a
+ *  held channel is open-ended (reads as a long 999). THE ONE READ behind
+ *  every targetCasting rule AND the AI tick's aiFoeCastSec stamp (the tell
+ *  fabric's 'foecast' source), so a reader's retreat and a reader's worn
+ *  lean can never disagree about what the mind saw. */
+export function castRemaining(a: {
+  casting: { mode: string; elapsed: number; total: number; held: boolean } | null;
+}): number {
+  const cs = a.casting;
+  return !cs ? 0
+    : cs.mode === 'channel' ? (cs.held ? 999 : 0)
+    : Math.max(0, cs.total - cs.elapsed);
+}
+
 /** Evaluate one condition bundle (AND semantics). `chance` is NOT rolled here
  *  — it gates discrete FIRINGS and is rolled by the rule/goto runner, so a
  *  per-frame evaluation can't turn 20% into near-certainty. */
@@ -1286,10 +1300,7 @@ export function evalCondition(
       && ctx.lineOfSight(actor.pos, target.pos, actor.tier, target.tier) !== c.los) return false;
     if (c.targetCasting !== undefined) {
       // A held channel is an open-ended commitment; a bar has a countdown.
-      const cs = target.casting;
-      const rem = !cs ? 0
-        : cs.mode === 'channel' ? (cs.held ? 999 : 0)
-        : Math.max(0, cs.total - cs.elapsed);
+      const rem = castRemaining(target);
       if (c.targetCasting === false && rem > 0) return false;
       if (c.targetCasting === true && rem <= 0) return false;
       if (typeof c.targetCasting === 'number' && rem < c.targetCasting) return false;

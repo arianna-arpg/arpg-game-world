@@ -909,6 +909,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { char: '#241f22', wood: '#3c3230', iron: '#3a3d44' },
   },
   drained_husk: { painter: 'drainedHusk', order: 51, params: { skin: '#cfc4bd', shade: '#8a7a80' } },
+  // The mantid school's shed skins (data/garden.ts) — the drainedHusk brush
+  // in chitin: a standing empty molt, pale green-tan and split up the back.
+  molt_husk: { painter: 'drainedHusk', order: 51, shadow: 0.35, params: { skin: '#c2cc96', shade: '#79865a' } },
   // --- The HALLOW COUNTRY kit (vis/paintersHallow.ts): the harvest rim, the
   // estate deeps, and the manor's rooms. Every brush is time-free by
   // construction, so the whole kit BAKES; candle glows live on the light

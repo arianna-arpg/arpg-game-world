@@ -65,6 +65,19 @@ registerDoodadRule('wildgrass_blade', {
 });
 registerStamp('wildgrass_blade', stampSingle('wildgrass_blade', [26, 40]));
 
+// --- THE MOLTING GROUND (the mantid school's landmark furniture) ---------------
+// A shed mantis skin, standing where its owner stepped out of it — the
+// school's practice ring is fenced in its own history. Brittle: one blow
+// and it crumbles (the ring is decoration, never a pen), with a rare
+// morsel inside. Reuses the drainedHusk painter — an empty standing skin
+// is an empty standing skin; only the palette is chitin.
+registerDoodadRule('molt_husk', {
+  overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.4,
+  brittle: { on: ['hit'], orbChance: 0.05, text: 'the old skin crumbles—', color: '#c8cf9a' },
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
+});
+registerStamp('molt_husk', stampSingle('molt_husk', [14, 20]));
+
 // --- SMALL WONDERS ------------------------------------------------------------
 // Petal drift: fallen petals drifted against whatever stopped them. Ground
 // dressing (and the petalfall front's temporary dress — it evaporates when

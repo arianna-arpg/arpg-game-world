@@ -4311,6 +4311,62 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#d8ffb0', params: { spread: 0.55, dist: 0.6, size: 0.1 } },
     ],
   },
+  // --- THE MANTID SCHOOL (the Readers): one clade, five stances — the
+  // SILHOUETTES carry the first read (asymmetric / heavy / sensor-forward /
+  // cocked / shelled) and the tell rows animate the second (which arm
+  // loads, the rising edge, the back-foot cant, the closing plates).
+  /** The duelist: ONE scythe arm, one leaf-guard — asymmetry IS the body.
+   *  (The guard flares on a bluff, the blade rises on truth: tells.) */
+  mantid_duelist: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'raptorArms', params: { side: 1, len: 1.0, fold: 0.5 } },
+      { kind: 'shield', scale: 0.6, role: 'base' },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'eyes', color: '#e0ffb8', params: { spread: 0.5, dist: 0.58, size: 0.1 } },
+    ],
+  },
+  /** The headsman: both scythes carried LOW at rest over heavy shoulders —
+   *  the rising overhead edge is the tell, and it never lies. */
+  mantid_headsman: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'pauldrons', scale: 0.9 },
+      { kind: 'raptorArms', params: { len: 1.1, fold: 0.35 } },
+      { kind: 'antennae', scale: 0.7 },
+      { kind: 'eyes', color: '#c8e8a0', params: { spread: 0.42, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The augur: a sensor before it is a soldier — dowsing antennae, wide
+   *  eyes, vestigial arms. Weight already on the back foot (the lean tell). */
+  mantid_augur: {
+    parts: [
+      { kind: 'disc', scale: 0.62 },
+      { kind: 'raptorArms', params: { len: 0.6, fold: 0.3 } },
+      { kind: 'antennae', scale: 1.3 },
+      { kind: 'eyes', color: '#f0ffc8', params: { spread: 0.65, dist: 0.62, size: 0.13 } },
+    ],
+  },
+  /** The penitent: the prayer pose held — arms cocked HIGH at rest, the
+   *  whole body a drawn spring waiting on your first move. */
+  mantid_penitent: {
+    parts: [
+      { kind: 'disc', scale: 0.72 },
+      { kind: 'raptorArms', params: { len: 1.05, fold: 0.9 } },
+      { kind: 'antennae', scale: 0.85 },
+      { kind: 'eyes', color: '#d0f0a8', params: { spread: 0.4, dist: 0.56, size: 0.09 } },
+    ],
+  },
+  /** The pillbug redoubt: a walking keep of banded plate — the armorPlates
+   *  tell closes over this shell when it sets. */
+  pillbug_redoubt: {
+    parts: [
+      { kind: 'shell', scale: 0.95 },
+      { kind: 'scutes', scale: 0.9 },
+      { kind: 'legs', scale: 0.75, params: { n: 7 } },
+      { kind: 'antennae', scale: 0.65 },
+    ],
+  },
   /** The bronzeback scarab: a rolling shield with a horn. */
   bronze_scarab: {
     parts: [

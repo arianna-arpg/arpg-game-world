@@ -298,6 +298,20 @@
       "autoPort": false
     },
     {
+      "name": "arpg-dev-qa19",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5270",
+        "--strictPort"
+      ],
+      "port": 5270,
+      "autoPort": false
+    },
+    {
       "name": "arpg-dev-qa20",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

@@ -714,6 +714,12 @@ export class Actor {
   /** THE FEINT (BehaviorSpec.feint): world time the bluffed bar drops
    *  (0 = no feint in flight). */
   aiFeintAt = 0;
+  /** THE FORECAST (the tell fabric's 'foecast' source): seconds left on the
+   *  current TARGET's bar, stamped by updateAI where the tick's lock is
+   *  final — through the SAME castRemaining every targetCasting rule
+   *  evaluates, so the worn read and the conduct agree by construction.
+   *  0 with no lock / no bar. Transient combat state, never snapshotted. */
+  aiFoeCastSec = 0;
   /** THE WANTS (BrainDef.drives): named slow meters, 0..1 — seeded on the
    *  first AI tick, drifted per tick, jumped by World.bumpDrives events. */
   drives = new Map<string, number>();

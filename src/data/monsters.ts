@@ -4629,10 +4629,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'skirmish', withdraw: 1.3,
       target: { prey: ['critter'] },
       impulses: [{ type: 'swarm', every: [6, 9], duration: [1.2, 1.8] }],
-      // THE FEINT IS HER SIGNATURE — and hers nearly alone (the player
-      // can't cancel a bar; an enemy that constantly does reads as broken,
-      // so bluffs stay RARE and this one's identity): roughly one draw in
-      // six is bait for your sidestep, the true cast into your recovery.
+      // THE FEINT, THE RARE WAY: roughly one draw in six is bait for your
+      // sidestep, the true cast into your recovery — and she wears NO tell.
+      // An untold bluff stays legal only this rare (the readable-bluff law,
+      // validate.ts): the mantid duelist plays the OTHER game — a common
+      // bluff licensed by a worn arm-tell. Two games, one law; a surprise
+      // and a lesson are different weapons on purpose.
       behavior: { feint: { chance: 0.18 } },
       // The huntress PUNISHES a planted foot: begin a bar with a maiden in
       // spear range and the line rushes THAT instant, not on its own clock.
@@ -10269,6 +10271,239 @@ export const MONSTERS: Record<string, MonsterDef> = {
       skillUse: { finesse: { chance: 0.5 } },
     },
   },
+
+  // ==========================================================================
+  // THE MANTID SCHOOL — THE READERS (the mind-layer arc): enemies whose
+  // POSTURE broadcasts intent, taught in DISCRIMINATING PAIRS seated in one
+  // country (the garden's stalk-high aisles) so the lesson is learnable:
+  //   duelist  ↔ headsman   the readable bluff, and the body that CANNOT
+  //                         bluff — beside each other, the difference is
+  //                         a skill instead of a coin flip
+  //   augur    ↔ penitent   ONE trigger (your own cast bar), two OPPOSITE
+  //                         answers — one leaves the window, one arrives
+  //                         through it; know which is watching before you
+  //                         commit
+  //   redoubt               the spatial lesson: plates close, and the
+  //                         answer is your feet, not your damage
+  // The emerald mantis (above) was the school's first arrival — the GAZE
+  // game (lurk: it commits when you look away); these five add the BAR
+  // games. Cast honesty is doctrine: the duelist's high bluff rate is
+  // LICENSED by its worn arm-tell (engine/tells.ts 'feinting'/'casting' —
+  // the tell layer structurally cannot lie), where the lash maiden's rare
+  // UNTOLD feint stays legal by rarity alone. Two different games, one law
+  // (validate.ts feintCheck; balance/probe_readers.ts pins both).
+  // Behaviour identities, deliberately modest stat blocks.
+  // ==========================================================================
+  mantid_duelist: {
+    id: 'mantid_duelist', name: 'Mantid Duelist',
+    color: '#8ed060', shape: 'kite', radius: 12, material: 'chitin', look: 'mantid_duelist',
+    base: { life: 62, moveSpeed: 158, accuracy: 112, evasion: 55, mana: 0 },
+    skills: ['mantis_scythe'], xp: 24,
+    detection: 1.2,
+    tells: [
+      // THE ASYMMETRIC BUILD: one arm shields, one arm strikes — WHICH SIDE
+      // LOADS is the information. A true cut raises the scythe arm with the
+      // bar ('casting' reads 0 through any bluff, BY LAW)...
+      {
+        source: 'casting', steps: 4, portrait: 0.7,
+        channel: {
+          kind: 'part',
+          part: { kind: 'raptorArms', params: { side: 1, len: 1.05, fold: 0.95 } },
+          alpha: [0, 0.95], scale: [0.8, 1.08],
+        },
+      },
+      // ...a BLUFF flares the leaf-guard instead (the bar drops payload-less
+      // at the beat). Hold your dodge through a guard-side flare and punish
+      // the drop — the lesson this whole body exists to teach.
+      {
+        source: 'feinting', steps: 1, portrait: 0,
+        channel: {
+          kind: 'part',
+          part: { kind: 'shield', role: 'base' },
+          alpha: [0, 0.95], scale: [0.75, 1.1],
+        },
+      },
+    ],
+    brain: {
+      // The flanker's orbit at the kit's own blade-length ring (an explicit
+      // wider ring would stand her outside her scythe's reach — the preset
+      // default IS the correct dueling distance).
+      type: 'flanker',
+      // THE FEINT AT SCHOOL RATE: nearly half her draws are bait — legal
+      // ONLY because the guard-side flare distinguishes them (the readable-
+      // bluff license; an untold bluff this common would be the outlawed
+      // coin flip). The real cut follows the drop fast.
+      behavior: { feint: { chance: 0.45, hold: [0.3, 0.5] } },
+    },
+  },
+  mantid_headsman: {
+    id: 'mantid_headsman', name: 'Mantid Headsman',
+    color: '#5a8a46', shape: 'hexagon', radius: 16, material: 'chitin', look: 'mantid_headsman',
+    base: { life: 150, moveSpeed: 105, accuracy: 108, armor: 25, poise: 55, mana: 0 },
+    skills: ['headsman_arc'], xp: 36,
+    turnSpeed: 2.8,
+    detection: 1.0,
+    tells: [
+      // The whole wind-up DRAWN ON THE BODY: the edge rises with the bar
+      // and lands where the body points. It cannot stop, and it cannot
+      // bluff — no feint in this mind BY CONSTRUCTION (the duelist's pair:
+      // stand them side by side and reading becomes a skill).
+      {
+        source: 'casting', steps: 6, portrait: 0.8,
+        channel: {
+          kind: 'part',
+          part: { kind: 'scythe', scale: 1.15 },
+          alpha: [0, 1], scale: [0.7, 1.2],
+        },
+      },
+      // The late-bar swell — the last half of the rise leans its weight in
+      // (portrait 0: the book shows the raised edge on an unswollen body).
+      { source: 'casting', band: [0.4, 1], steps: 3, portrait: 0, channel: { kind: 'scale', amp: 0.1 } },
+    ],
+    brain: {
+      type: 'juggernaut',
+      // BODY-AIMED (castArc × the slow shoulders): the arc lands along the
+      // FACING — keep moving through its pivot and the edge closes on empty
+      // ground. The plant is PRESS-anchored (the roll happens at cast), so
+      // it must OUTLAST the 1.7s bar: rooted through the whole wind-up AND
+      // a 0.7-1.2s recovery after — the AUTHORED punish window, every time.
+      behavior: { castArc: 0.5, plantChance: 1, plantFor: [2.4, 2.9] },
+    },
+  },
+  mantid_augur: {
+    id: 'mantid_augur', name: 'Mantid Augur',
+    color: '#b8d878', shape: 'kite', radius: 10, material: 'chitin', look: 'mantid_augur',
+    base: { life: 44, moveSpeed: 172, accuracy: 104, evasion: 60, mana: 0 },
+    skills: ['barb_spit'], xp: 22,
+    detection: 1.3,
+    tells: [
+      // THE FORECAST WORN: the instant your bar starts, the weight goes to
+      // the back foot — it is already leaving. The lean rides the SAME
+      // castRemaining read its retreat rule evaluates (aiFoeCastSec), so
+      // the posture and the leaving cannot disagree.
+      { source: 'foecast', band: [0, 0.35], steps: 3, portrait: 0, channel: { kind: 'lean', amp: -1 } },
+      // The dowsing antennae surge toward what they are reading.
+      {
+        source: 'foecast', band: [0, 0.35], steps: 3, portrait: 0.8,
+        channel: {
+          kind: 'part',
+          part: { kind: 'antennae', scale: 1.25 },
+          alpha: [0.25, 1], scale: [1, 1.35],
+        },
+      },
+    ],
+    brain: {
+      type: 'artillery',
+      move: { style: 'holdRange', hold: 320, band: [0.6, 1.3] },
+      rules: [{
+        // THE READ: while your hands are committed (≥0.3s of bar left)
+        // near enough to matter, it steps OUT of your window — casting AT
+        // it is feeding it. Bait with short casts, corner it, or make it
+        // spend its wind (the artillery kite budget is the counterplay:
+        // enough forced retreats and its legs give out). A rule is EDGE-
+        // fired (hold window + re-arm cooldown, default 1s) — the near-
+        // zero cooldown is what makes the leaving CONTINUOUS for as long
+        // as the bar runs, instead of a burst-and-stall.
+        when: { targetCasting: 0.3, distUnder: 500 },
+        use: { move: { style: 'retreat', pace: 1.15 } },
+        hold: [0.3, 0.45], cooldown: 0.15,
+      }],
+    },
+  },
+  mantid_penitent: {
+    id: 'mantid_penitent', name: 'Mantid Penitent',
+    color: '#6aa858', shape: 'trapezoid', radius: 12, material: 'chitin', look: 'mantid_penitent',
+    base: { life: 85, moveSpeed: 140, accuracy: 112, evasion: 40, poise: 30, mana: 0 },
+    skills: ['penitent_lunge'], xp: 28,
+    detection: 1.1,
+    tells: [
+      // The load: once it holds a quarry the whole body draws BACK and a
+      // taut shimmer stands on the coil ('engaged' — the SAME lock its
+      // reserves test; 'alert' would lie here: a fully-reserved kit never
+      // aggroes because it never engages first). The wind-up already
+      // happened — the release is waiting for YOUR move. The augur's
+      // opposite: same trigger, and this one ARRIVES.
+      { source: 'engaged', steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.8 } },
+      { source: 'engaged', steps: 1, portrait: 0.9, channel: { kind: 'glow', color: '#b8f088', max: 0.32 } },
+    ],
+    brain: {
+      type: 'basic',
+      // The coil ring: walk to ~180 and STAND (panic fraction 0 = it never
+      // gives ground — it wins staring contests by construction).
+      move: { style: 'holdRange', hold: 180, band: [0, 1.1] },
+      skillUse: {
+        // The WHOLE kit is reserved: nothing in rotation, so it never
+        // opens. Commit a bar in its reach or step into its lap and the
+        // prayer answers; do neither and it simply waits.
+        mode: 'priority', order: [],
+        reserve: [
+          { skill: 'penitent_lunge', when: { targetCasting: 0.25 } },
+          { skill: 'penitent_lunge', when: { distUnder: 84 } },
+        ],
+      },
+      rules: [{
+        // A commitment at range springs the coil ACROSS the gap: the dash
+        // covers ground, the arrival reserve finishes the prayer.
+        when: { targetCasting: 0.3, distUnder: 320 },
+        cooldown: 2.5,
+        actions: [{ do: 'dash', toward: 'target', speed: 640, duration: 0.3 }],
+      }],
+    },
+  },
+  pillbug_redoubt: {
+    id: 'pillbug_redoubt', name: 'Pillbug Redoubt',
+    color: '#8a8068', shape: 'oval', radius: 15, material: 'chitin', look: 'pillbug_redoubt',
+    base: { life: 130, moveSpeed: 90, accuracy: 100, armor: 20, poise: 40, mana: 30, manaRegen: 3 },
+    skills: ['heavy_strike', 'bulwark_set'], xp: 30,
+    turnSpeed: 3.2,
+    detection: 0.9,
+    tells: [
+      // Plates visibly CLOSING, one per beat of the set bar (count rides
+      // 'casting:bulwark_set' — the skill-filtered lane, so its ordinary
+      // strikes never flicker the shell)...
+      {
+        source: 'casting:bulwark_set', steps: 7, portrait: 0,
+        channel: {
+          kind: 'part',
+          part: { kind: 'armorPlates', scale: 1.05, params: { n: 7 } },
+          count: [0, 7], alpha: [0.4, 1],
+        },
+      },
+      // ...and worn CLOSED while the set holds — the plates read the same
+      // buff the mitigation reads (drawn == mitigated). The book shows the
+      // closed redoubt: the wall IS the identity.
+      {
+        source: 'buff:bulwark_set', steps: 1, portrait: 1,
+        channel: {
+          kind: 'part',
+          part: { kind: 'armorPlates', scale: 1.05, params: { n: 7 } },
+          alpha: [0, 1],
+        },
+      },
+      { source: 'buff:bulwark_set', steps: 1, portrait: 0, channel: { kind: 'scale', amp: 0.14 } },
+    ],
+    brain: {
+      type: 'juggernaut',
+      skillUse: {
+        mode: 'priority', order: ['heavy_strike'],
+        // The set is reserved, not rotated: it closes when pressed and
+        // open, and the skill's own cooldown arithmetic (12s press-start
+        // vs 1s bar + 6s hold) IS the ~5s punish rhythm between sets.
+        reserve: [{
+          skill: 'bulwark_set',
+          when: { enemiesWithin: { count: 1, radius: 170 }, lacksBuff: 'bulwark_set' },
+        }],
+      },
+      rules: [{
+        // SET: near-immobile, armoured, enduring — the turtle window. The
+        // answer is SPATIAL: walk on and fight the school, or stand ready
+        // for the plates to part and spend the open window well.
+        when: { hasBuff: 'bulwark_set' },
+        use: { move: { style: 'turtle' } },
+      }],
+    },
+  },
+
   bronze_scarab: {
     id: 'bronze_scarab', name: 'Bronzeback Scarab',
     color: '#b08a3a', shape: 'oval', radius: 15, material: 'metal', look: 'bronze_scarab',

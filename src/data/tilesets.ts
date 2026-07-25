@@ -5161,6 +5161,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bombardier_beetle', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'maw_bloom', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The mantid school's overflow: the bluff pair hunts the beds too
+        // (the pairs stay TOGETHER by law — never a lone bluffer without
+        // its honest twin somewhere in the same country).
+        { id: 'mantid_duelist', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'mantid_headsman', weight: 0.8, presence: { from: 6, fadeIn: 3 } },
+        { id: 'pillbug_redoubt', weight: 0.6, presence: { from: 7, fadeIn: 3 } },
         { id: 'pollen_sylph', weight: 1, presence: { from: 5, fadeIn: 3 } },
       ],
     },
@@ -5279,6 +5285,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
     ],
     scenery: [{ monster: 'ant_trail', count: [1, 3] }],
+    // THE SCHOOL'S HOME COUNTRY: the stalkwood's grass was always "cover
+    // for the mantis" — now the mantis school holds class here (the
+    // teaching-pairs law: every stance seats in ONE country so reading
+    // them apart is learnable; the molting_ground assembles the full set).
+    landmarks: [{ landmark: 'molting_ground', chance: 0.45 }],
     packs: {
       count: [6, 8], size: [3, 5],
       table: [
@@ -5288,6 +5299,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'orb_weaver', weight: 2 },
         { id: 'widow_matron', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'emerald_mantis', weight: 1.5, presence: { from: 8, fadeIn: 4 } },
+        // The mantid school (the Readers): the bluff pair early, the
+        // bar-watch pair a step deeper, the wall deepest.
+        { id: 'mantid_duelist', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'mantid_headsman', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'mantid_augur', weight: 1.5, presence: { from: 5, fadeIn: 3 } },
+        { id: 'mantid_penitent', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'pillbug_redoubt', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'petal_dancer', weight: 1.5 },
         { id: 'pollen_sylph', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'banded_slug', weight: 1 },
