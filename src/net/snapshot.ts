@@ -42,6 +42,7 @@ import type { Attributes } from '../engine/stats';
 import { COMBO_CFG, comboProgress } from '../engine/sequence';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
+import { watchRungOf, watchValueOf } from '../engine/watch';
 
 export type Vec2W = [number, number];
 
@@ -71,6 +72,13 @@ export interface ActorW {
   /** Rolled brainVariants index — the client rebuilds the same variant
    *  tell rows from its own def registry (tellSpecsOf). */
   bv?: number;
+  /** THE WATCH FABRIC's drawn read (engine/watch.ts), host-stamped —
+   *  [reach base, arc half-angle (rad, 3dp), rear fraction (3dp),
+   *  alerted 0|1, ladder value (3dp)]. DERIVED scalars in the tell wire's
+   *  own idiom: the client re-folds the same fan from the same numbers
+   *  (its own hero's detectability/stealth fold locally) — suspicion
+   *  sources never cross the wire. Omitted until the first scan stamps. */
+  wp?: [number, number, number, number, number];
   tr?: number;                 // THE TIER FABRIC: walkable layer (omit at 0)
   aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
@@ -439,6 +447,18 @@ function actorToW(a: Actor): ActorW {
     if (a.brainVariant !== undefined) w.bv = a.brainVariant;
     if (a.tells?.some(v => v > 0)) w.tl = a.tells;
   }
+  // THE WATCH FABRIC (engine/watch.ts): the stamped sense + the ladder,
+  // quantized to the wire grid — the client draws the same fan from the
+  // same numbers (never the suspicion sources).
+  if (a.watch && a.senseDetect > 0) {
+    w.wp = [
+      Math.round(a.senseDetect),
+      Math.round(a.senseArcHalf * 1000) / 1000,
+      Math.round(a.senseRearMul * 1000) / 1000,
+      a.senseAlerted ? 1 : 0,
+      Math.round(WATCH_V_OF(a) * 1000) / 1000,
+    ];
+  }
   // THE TIER FABRIC's layer (engine/tiers.ts) — clients gate draw + veil on it.
   if (a.tier) w.tr = a.tier;
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
@@ -515,6 +535,10 @@ let COMBO_HUD_OF: (a: Actor) => [string, number, number, number][] | null = () =
 // (engine/grab.ts — pair state lives host-side only; the same bar the
 // host renderer draws off the live pair).
 let GRAB_HUD_OF: (a: Actor) => [string, number] | null = () => null;
+// Set per-serialize: the watch fabric's ladder read at the host clock
+// (engine/watch.ts — suspicion decay is a function of world.time, which
+// actorToW does not otherwise carry).
+let WATCH_V_OF: (a: Actor) => number = () => 0;
 
 export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
@@ -527,6 +551,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     if (!hold || hold.id !== a.id) return null;
     return [GRAB_VERB_LABEL[hold.verb], Math.round(Math.min(1, hold.struggle) * 100) / 100];
   };
+  WATCH_V_OF = (a) => (a.watch ? watchValueOf(a, a.watch, world.time) : 0);
   COMBO_HUD_OF = (a) => {
     if (!a.comboRules?.length) return null;
     const rows: [string, number, number, number][] = [];
@@ -806,6 +831,26 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       a.brainVariant = aw.bv;
       a.tellSpecs = aw.defId ? tellSpecsOf(MONSTERS[aw.defId], aw.bv) : undefined;
       a.tellRev++;
+      // THE WATCH FABRIC: the posture comes from the client's OWN registry
+      // (the tellSpecs law) — only derived scalars ride the wire.
+      a.watch = aw.defId ? MONSTERS[aw.defId]?.watch : undefined;
+    }
+    // THE WATCH FABRIC's stamped sense + ladder (drawn == wired): adopt the
+    // host's exact scan scalars; the ladder value banks at the local clock
+    // (watchValueOf holds it through the grace, the next snapshot re-syncs
+    // long before honest decay would diverge).
+    if (aw.wp) {
+      a.senseDetect = aw.wp[0];
+      a.senseArcHalf = aw.wp[1];
+      a.senseRearMul = aw.wp[2];
+      a.senseAlerted = aw.wp[3] === 1;
+      a.watchS = aw.wp[4];
+      a.watchFedAt = world.time;
+      a.watchRung = watchRungOf(aw.wp[4]);
+    } else if (a.senseDetect !== 0) {
+      a.senseDetect = 0;
+      a.watchS = 0;
+      a.watchRung = 0;
     }
     {
       const tl = aw.tl;

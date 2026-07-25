@@ -179,6 +179,22 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('damageVs_aloft', 'increased', 0.05)],
     weight: 5,
   },
+  // THE DIN (the watch fabric, engine/watch.ts): strikes as STIMULUS — the
+  // stealth layer's lure gem. The stat is a radius; the bang lands at the
+  // blow (resolveHit) and wherever a flight ends (wall, floor, range's
+  // edge), so a bolt thrown PAST a sentinel pulls it off its post. Watchers
+  // climb only to the search rung on sound — the lure repositions, never
+  // aggros. Deliberately single-purpose: against anything that keeps no
+  // watch it does nothing, and the no-op ledger records that on purpose.
+  ringing_report: {
+    id: 'ringing_report', name: 'Ringing Report',
+    requiresMechanisms: ['strikes'],
+    description: 'This skill\'s blows LAND LOUD — and a spent flight rings wherever it ends. Anything that keeps a watch comes to look at the noise, not at you.',
+    color: '#c8b880', requiresTags: ['attack', 'spell'],
+    mods: [mod('noiseOnHit', 'flat', 260)],
+    perLevel: [mod('noiseOnHit', 'flat', 14)],
+    weight: 4,
+  },
   smothering_spores: {
     id: 'smothering_spores', name: 'Smothering Spores',
     requiresMechanisms: ['strikes'],

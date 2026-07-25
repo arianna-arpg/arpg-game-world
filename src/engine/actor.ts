@@ -34,6 +34,7 @@ import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
 import type { PartSpec } from '../render/vis/parts';
 import type { TellDress, TellSpec } from './tells';
+import type { TrailPoint, WatchSpec } from './watch';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
  *  triggers read kind/id/depth; the SYMPATHY FABRIC reads the payload tail
@@ -490,6 +491,41 @@ export class Actor {
   /** Render-side materialized tell dress (identity-stable cache — rebuilt
    *  in place only when tellRev moves; see materializeTellDress). */
   tellVis?: TellDress;
+  /** THE WATCH FABRIC (engine/watch.ts): this body's watch posture (the
+   *  def's spec, stamped at spawn on host and client alike). Undefined =
+   *  no ladder — the gate, the sweep and the drawn cone all short-circuit
+   *  (null-cost on the watchless roster). */
+  watch?: WatchSpec;
+  /** Banked suspicion + its feed clock (the lazy-decay pair — always read
+   *  through watchValueOf, never raw; decay is earned in the read). */
+  watchS = 0;
+  watchFedAt = -1e9;
+  /** The last stimulus that fed the ladder — looked toward while STIRRING,
+   *  planted as the investigation point at the SEARCH crossing. */
+  watchAt?: Vec2;
+  /** The rung the sweep last saw (the transition edge-detector: the search
+   *  crossing plants its investigation exactly once per climb). */
+  watchRung = 0;
+  /** SCENT (WatchSpec.scent): the quarry whose trail this nose holds + the
+   *  lay-time of the last print consumed (the cursor — prints are followed
+   *  in the order they were laid: where you WERE, not where you are). */
+  watchQuarryId?: number;
+  watchTrailT = -1e9;
+  /** The scanning gaze's home bearing (aiPostFacing wins where posted). */
+  watchBase?: number;
+  /** THE STAMPED SENSE (drawn == tested by construction): the exact
+   *  scalars the last perception scan TESTED — reach base, arc half-angle,
+   *  rear-hearing fraction, alert state. The drawn cone, the co-op wire
+   *  (ActorW.wp) and the probes read these stamps, never a re-derivation. */
+  senseDetect = 0;
+  senseArcHalf = 0;
+  senseRearMul = 0;
+  senseAlerted = false;
+  /** THE TRAIL (engine/watch.ts): scent prints this body lays while a
+   *  hostile scent-watcher stands in the zone (players wear it; a ring
+   *  buffer — layTrailPoint). Cleared when the last tracker falls. */
+  trail?: TrailPoint[];
+  trailIdx = 0;
 
   sheet = new StatSheet();
   level = 1;

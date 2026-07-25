@@ -334,6 +334,36 @@ export const VIS_CFG = {
     roofMul: 1,
   },
 
+  /** THE WATCH FABRIC's drawn read (render/vis/watchLayer.ts): a watcher's
+   *  sense field as a filled fan — the front cone at tested reach, the
+   *  rear-hearing ring behind it, every ray clipped by the SAME sight
+   *  raycast perception marches (drawn == tested; engine/watch.ts). Color
+   *  climbs the ladder with the suspicion meter; a sleeper's collapsed
+   *  cone reads as its bare hearing ring; a locked watcher draws nothing
+   *  (the fight is the read). Reach folds vs the LOCAL hero (seat 0) —
+   *  detectability and stealth included, so your shroud visibly SHRINKS
+   *  their cones. */
+  watch: {
+    enabled: true,
+    /** Fan rays over the full circle (exact cone-edge rays are added on
+     *  top, so the arc boundary stays crisp at any ray budget). */
+    rays: 36,
+    /** Most cones drawn per frame (roster order; a backstop, not a dial). */
+    maxCones: 6,
+    /** Draw cull: watchers farther than this from the hero skip (px). */
+    cullDist: 1500,
+    /** Fill / outline alphas (× the rung color); a rising meter brightens
+     *  both — at value 1 they read alpha × (1 + valueBoost). */
+    fillAlpha: 0.05,
+    lineAlpha: 0.26,
+    valueBoost: 0.9,
+    /** Rung colors: unaware / stirring / searching (alerted reads search). */
+    colors: { calm: '#7a92b8', stir: '#e8d080', search: '#f0a050' },
+    /** The tracker's read: its quarry's yet-unconsumed prints (count cap,
+     *  dot px, alpha) and a dashed nose-line to the print it walks. */
+    trail: { max: 7, size: 3.4, alpha: 0.55, color: '#b8d4a0', noseLine: true },
+  },
+
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's
    *  alpha chases its target per second (patch reveals and the per-tree
    *  near-fade share it — one speed, coherent motion). */

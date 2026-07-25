@@ -29,6 +29,10 @@ import {
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
+import {
+  feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
+  watchRiseAmount, watchRungOf, watchValueOf,
+} from './watch';
 import { isThrongBody, throngHeelOffset } from './throng';
 import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
@@ -324,12 +328,9 @@ registerCommandKind({
   },
 });
 
-/** Default frontal sight-cone width (degrees) and rear-hearing fraction of
- *  detection range — PerceptionSpec / MonsterDef.vision override per monster. */
-const VISION_ARC_DEG = 150;
-const VISION_REAR_MUL = 0.35;
-/** How hard stealth charges shroud their bearer (× detection reach). */
-const STEALTH_DETECT_MUL = 0.35;
+// (The perception constants — cone width, rear hearing, the stealth shroud,
+//  the alerted reach — live in SENSE_CFG (engine/watch.ts) so the scan, the
+//  drawn cone and the probes read ONE source. Values unchanged.)
 /** Brainless actors run the plain approach-and-attack bundle. */
 const DEFAULT_BRAIN: BrainDef = {};
 
@@ -1289,9 +1290,23 @@ function acquireTarget(
   // restores the eyes. Walk on; it has forgotten you.
   if (dazed) detect = 0;
   const vis = actor.defId ? MONSTERS[actor.defId]?.vision : undefined;
-  const arcHalf = ((per?.arcDeg ?? vis?.arcDeg ?? VISION_ARC_DEG) * Math.PI / 180) / 2;
-  const rearMul = per?.rearMul ?? vis?.rearMul ?? VISION_REAR_MUL;
+  // THE WATCH FABRIC (engine/watch.ts): a sleeper below the stir rung has
+  // its eyes SHUT — the authored cone collapses to 0 and every approach is
+  // rear hearing (drawn as the ring). Watchless bodies pass through verbatim.
+  const watchV = actor.watch ? watchValueOf(actor, actor.watch, world.time) : 0;
+  const arcHalf = (watchArcDeg(actor.watch, watchV,
+    per?.arcDeg ?? vis?.arcDeg ?? SENSE_CFG.arcDeg) * Math.PI / 180) / 2;
+  const rearMul = per?.rearMul ?? vis?.rearMul ?? SENSE_CFG.rearMul;
   const alerted = world.time < actor.alertUntil;
+  // THE STAMPED SENSE (drawn == tested by construction): record the exact
+  // scalars this scan tests — the drawn cone, the co-op wire and the
+  // probes read the stamps, never a re-derivation that could drift.
+  if (actor.watch) {
+    actor.senseDetect = detect;
+    actor.senseArcHalf = arcHalf;
+    actor.senseRearMul = rearMul;
+    actor.senseAlerted = alerted;
+  }
   const prefer = tuning.target?.prefer ?? 'nearest';
   const bias = tuning.target?.kindBias;
   // WALLS BLIND (LOS_CFG.perception): a FRESH lock needs an actual sight
@@ -1331,10 +1346,10 @@ function acquireTarget(
       const d = segsHittable(e)
         ? dist(actor.pos, nearestBody(e, actor.pos).pos)
         : dist(actor.pos, e.pos);
-      let reach = detect * e.sheet.get('detectability');
-      if ((e.charges.get('stealth') ?? 0) > 0) reach *= STEALTH_DETECT_MUL;
-      if (alerted) reach *= 1.5;
-      else if (Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) > arcHalf) reach *= rearMul;
+      const reach = senseReach(detect, e.sheet.get('detectability'),
+        (e.charges.get('stealth') ?? 0) > 0, alerted,
+        alerted || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
+        rearMul);
       if (d <= reach) {
         const seen = !losGated || world.losCached(actor, e);
         let ok = seen;
@@ -1393,10 +1408,10 @@ function acquireTarget(
     const d = segsHittable(e)
       ? dist(actor.pos, nearestBody(e, actor.pos).pos)
       : dist(actor.pos, e.pos);
-    let reach = detect * e.sheet.get('detectability');
-    if ((e.charges.get('stealth') ?? 0) > 0) reach *= STEALTH_DETECT_MUL;
-    if (alerted) reach *= 1.5;
-    else if (Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) > arcHalf) reach *= rearMul;
+    const reach = senseReach(detect, e.sheet.get('detectability'),
+      (e.charges.get('stealth') ?? 0) > 0, alerted,
+      alerted || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) < arcHalf,
+      rearMul);
     if (d > reach) continue;
     if (losGated) {
       if (e.id !== actor.aiTargetId) {
@@ -1421,6 +1436,58 @@ function acquireTarget(
     bestD = currentD;
   }
   if (tauntTarget && !tuning.target?.ignoreTaunt) { target = tauntTarget; bestD = tauntBest; }
+  // THE WATCH GATE (engine/watch.ts): a watcher's UNPROVOKED fresh lock does
+  // not lock — it CLIMBS. The would-be acquisition feeds the suspicion
+  // ladder (proximity-tapered, alert-hastened, footfall-scaled for
+  // sleepers) and the gate holds below the top rung: STIRRING turns the
+  // head (updateWatch), SEARCHING plants the standing investigate walk
+  // (the same alertFrom walk kin callouts use), and only a full meter
+  // falls through to the ordinary lock — shout, opener, aggro, everything
+  // downstream unchanged. Pain skips the climb (a wounded watcher needs no
+  // ladder), a taunt is its own provocation (resolved above), and a held
+  // or aggroed lock never re-gates. Back off mid-climb and the meter
+  // decays — watchable, learnable, reversible below the lock.
+  if (target && actor.watch && actor.aiTargetId === undefined && !actor.aggroed
+    && !(tauntTarget && !tuning.target?.ignoreTaunt)
+    && !(actor.aiHitAt >= 0 && world.time - actor.aiHitAt < WATCH_CFG.provokedSec)) {
+    const w = actor.watch;
+    // One rescan beat of exposure, bounded (the scan clock is staggered).
+    const dtSee = Math.max(0, Math.min(world.time - actor.aiLastScanAt, rc.sec * 2));
+    // This target's tested reach, re-folded through the SAME senseReach the
+    // walk just used — the proximity taper reads the honest fraction.
+    // (strict <: a collapsed sleeper arc of 0 admits nothing — the exact
+    //  boundary ray is measure-zero for every honest cone.)
+    const inCone = alerted
+      || Math.abs(angleDiff(actor.facing, angleTo(actor.pos, target.pos))) < arcHalf;
+    const reach = senseReach(detect, target.sheet.get('detectability'),
+      (target.charges.get('stealth') ?? 0) > 0, alerted, inCone, rearMul);
+    // Sleepers hear FOOTFALLS: a slow creep feeds at stillMul.
+    const sl = w.sleep;
+    const asleep = !!sl && watchV < WATCH_CFG.rungs.stir;
+    const stillMul = asleep
+      && Math.hypot(target.vel.x, target.vel.y) < WATCH_CFG.sleep.stillSpeed
+      ? ((typeof sl === 'object' ? sl.stillMul : undefined) ?? WATCH_CFG.sleep.stillMul)
+      : 1;
+    const v = feedWatch(actor, w, world.time, watchRiseAmount(
+      w, dtSee, reach > 0 ? Math.min(1, bestD / reach) : 1, alerted, stillMul));
+    if (actor.watchAt) { actor.watchAt.x = target.pos.x; actor.watchAt.y = target.pos.y; }
+    else actor.watchAt = vec(target.pos.x, target.pos.y);
+    const rung = watchRungOf(v);
+    if (rung >= WATCH_RUNG.search && watchRungOf(watchV) < WATCH_RUNG.search) {
+      // THE SEARCH CROSSING: plant the standing investigation, once per
+      // climb (alertMul scales it like every other alert duration).
+      actor.alertUntil = Math.max(actor.alertUntil,
+        world.time + (w.searchSec ?? WATCH_CFG.searchSec) * alertScale(actor));
+      actor.alertFrom = vec(target.pos.x, target.pos.y);
+    }
+    actor.watchRung = rung;
+    if (v >= 1) {
+      actor.aggroed = true; // the ladder's top — the alert tell pins
+    } else {
+      target = null; // the gate holds: no lock this beat
+      bestD = Infinity;
+    }
+  }
   if (target && tuning.target?.relentless) actor.aggroed = true;
   // Fighting resets the leash-recall stuck window — a stationary brawl must
   // never read as "snagged on terrain" the moment it ends.
@@ -1428,6 +1495,12 @@ function acquireTarget(
 
   if (target) {
     if (actor.aiTargetId === undefined) {
+      // THE WATCH FABRIC: for a watcher, ANY fresh lock is the ladder's top
+      // rung — climbed, wound-bypassed or taunted alike — so the meter pins,
+      // the worn tell reads LOCKED and the drawn cone stands down (the tell
+      // must never say "searching" about a body already fighting you). The
+      // stand-down sweep walks it back down when the fight is over.
+      if (actor.watch) actor.aggroed = true;
       // A FRESH engagement (openers key off it) — and the sentry's CALLOUT:
       // kin within the shout radius go on alert toward the prey.
       if (actor.aiEngagedAt < 0
@@ -1449,6 +1522,15 @@ function acquireTarget(
           if (dist(a.pos, actor.pos) > shout) continue;
           a.alertUntil = Math.max(a.alertUntil, world.time + 5 * alertScale(a));
           a.alertFrom ??= vec(target.pos.x, target.pos.y);
+          // THE WATCH FABRIC: a warned watcher's ladder JUMPS to the search
+          // rung (capped — a shout names a place, never a prey; its own
+          // senses must close the lock) and its climb runs alert-fast.
+          if (a.watch) {
+            const v = feedWatch(a, a.watch, world.time, 1, WATCH_CFG.rungs.search);
+            a.watchRung = Math.max(a.watchRung, watchRungOf(v));
+            if (a.watchAt) { a.watchAt.x = target.pos.x; a.watchAt.y = target.pos.y; }
+            else a.watchAt = vec(target.pos.x, target.pos.y);
+          }
         }
       }
     }

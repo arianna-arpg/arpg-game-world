@@ -39,6 +39,38 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'skull', x: 0.5 },
     ],
   },
+  /** The Barrow Watch's lamplighter: hooded bones under a swung wick-green
+   *  grave-lantern — the cone you skirt is the light it carries. */
+  barrow_watchman: {
+    parts: [
+      { kind: 'tatters', x: -0.12, scale: 0.85, params: { n: 4 } },
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'lantern', color: '#8fd8a8', scale: 1.05 },
+      { kind: 'skull', x: 0.45 },
+      { kind: 'hood', x: 0.26, scale: 0.92 },
+    ],
+  },
+  /** Glutted flesh heaped on itself, torn ribs half-buried in the slump.
+   *  Deliberately EYELESS: the eyes are a watch TELL part — they exist
+   *  only as the ladder climbs (data/monsters.ts gorged_ghoul.tells). */
+  gorged_ghoul: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.26, seed: 9 } },
+      { kind: 'fleshFolds', scale: 0.95 },
+      { kind: 'ribs', x: -0.2, y: 0.28, rot: 0.6, scale: 0.4, alpha: 0.8, params: { pairs: 3, span: 0.7 } },
+      { kind: 'maw', x: 0.5, scale: 0.7, alpha: 0.9 },
+    ],
+  },
+  /** A grave-hound in bare bone: skull low and forward, a whip of spine
+   *  for a tail. The nose-down stalk is the watch lean, worn live. */
+  barrow_hound: {
+    parts: [
+      { kind: 'ribs', scale: 0.85, params: { pairs: 4, span: 0.9, under: true } },
+      { kind: 'skull', x: 0.55, scale: 0.9 },
+      { kind: 'fangs', x: 0.72, scale: 0.7 },
+      { kind: 'spineTrail', x: -0.55, scale: 0.75 },
+    ],
+  },
   /** Shambling flesh: lopsided blob, ribs torn open on one flank, dull eyes. */
   zombie: {
     parts: [

@@ -57,6 +57,7 @@ import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { TELL_CFG, tellDressOf } from '../engine/tells';
+import { drawWatchSense, drawWatchTrails } from './vis/watchLayer';
 import { driftColor } from './vis/colorDrift';
 import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
@@ -557,6 +558,13 @@ export class Renderer {
     this.drawDeathBursts(world);   // coalescing spore/orb gather + the tracking volatile orb
     this.drawEncounters(world);    // breach diamonds + their growing fields (under actors)
     this.drawFractures(world);     // fracture object / crawling fissure / chasm maw (under actors)
+    // THE WATCH FABRIC's drawn read (render/vis/watchLayer.ts): sense fans
+    // + followed trails, under bodies like every ground read. Reach folds
+    // vs the local hero; with no live seat there is nothing to fold against.
+    if (world.seats.length) {
+      drawWatchSense(this.ctx, world, world.player);
+      drawWatchTrails(this.ctx, world);
+    }
     this.drawAuras(world);
     this.drawCorpses(world);
     this.drawPlayerCorpses(world);

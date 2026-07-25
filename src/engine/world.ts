@@ -181,6 +181,10 @@ import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
 import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
+import {
+  feedWatch, layTrailPoint, trailNewest, trailNext, WATCH_CFG, WATCH_RUNG,
+  watchRungOf, watchValueOf, type WatchSpec,
+} from './watch';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
@@ -9594,6 +9598,11 @@ export class World {
     const clamp = opts?.clamp ?? true;
     const put = (a: Actor, to: Vec2): void => {
       a.pos = clamp ? this.clampPos(to, a.radius) : to;
+      // THE TRAIL breaks on any party landing (zone arrival, teleport,
+      // corpse-run): scent follows walked ground only — you didn't walk
+      // here, so nothing leads here (engine/watch.ts).
+      a.trail = undefined;
+      a.trailIdx = 0;
     };
     const p = this.player;
     put(p, vec(at.x, at.y));
@@ -10066,6 +10075,200 @@ export class World {
    *  grab seat wins); the last rider's DEATH asks the slot's onRiderDeath
    *  policy; and a widowed steed turns zone-memory eligible — it is real on
    *  its own now, no remembered rider implies it. */
+  /** THE WATCH FABRIC's behavior sweep (engine/watch.ts), cadenced at
+   *  WATCH_CFG.sweepSec and run late among the movers so its facing writes
+   *  win the frame (the renderer and next tick's cone test read the same
+   *  bearing — drawn == tested). Per watcher: (1) the rung cache follows
+   *  the decaying meter (the down-ladder is watchable), (2) THE STAND-DOWN
+   *  — a locked watcher whose fight is over clears aggro and re-banks at
+   *  the search rung, decaying from there like any suspicion, (3) THE
+   *  GAZE — unaware sweep-spec bodies oscillate their bearing around the
+   *  post (the drawn cone sweeps with it); stirring bodies turn toward the
+   *  stimulus (the head is the tell), (4) THE NOSE — scent watchers follow
+   *  their quarry's trail prints in lay order through the standing
+   *  investigate walk (alertFrom), losing the line exactly where the
+   *  prints gap. Also lays the players' trails (only while a live scent
+   *  watcher stands — null-cost otherwise) and clears them when the last
+   *  tracker falls. */
+  private watchNextAt = 0;
+  private updateWatch(): void {
+    const t = this.time;
+    if (t < this.watchNextAt) return;
+    this.watchNextAt = t + WATCH_CFG.sweepSec;
+    let scent = 0;
+    for (const a of this.actors) {
+      const w = a.watch;
+      if (!w || a.dead) continue;
+      const v = watchValueOf(a, w, t);
+      const rung = watchRungOf(v);
+      a.watchRung = rung;
+      // (2) THE STAND-DOWN: lock gone, investigation over, no fresh wound —
+      // come down the ladder (the alert tell dims as the watch resumes).
+      if (a.aggroed && a.aiTargetId === undefined && t >= a.alertUntil
+        && !(a.aiHitAt >= 0 && t - a.aiHitAt < WATCH_CFG.provokedSec)) {
+        a.aggroed = false;
+        a.watchS = WATCH_CFG.rungs.search;
+        a.watchFedAt = t;
+        a.watchRung = WATCH_RUNG.search;
+      }
+      // (4) THE NOSE (before the gaze: a fresh print may re-aim the head).
+      if (w.scent) {
+        scent++;
+        if (!a.aggroed && a.aiTargetId === undefined) this.watchScent(a, w, t);
+      }
+      // (3) THE GAZE — never wrench a casting or locked body's aim.
+      if (a.aiTargetId === undefined && !a.casting && !a.aggroed) {
+        if (a.watchRung === WATCH_RUNG.unaware && w.sweep) {
+          const base = a.aiPostFacing ?? (a.watchBase ??= a.facing);
+          const ph = (((a.id * 2654435761) >>> 9) & 1023) / 1023 * Math.PI * 2;
+          a.facing = base
+            + Math.sin(t / w.sweep.sec * Math.PI * 2 + ph)
+            * (w.sweep.arcDeg * Math.PI / 180) / 2;
+        } else if (a.watchRung === WATCH_RUNG.stir && a.watchAt) {
+          const want = angleTo(a.pos, a.watchAt);
+          const d = angleDiff(a.facing, want);
+          const step = WATCH_CFG.turnRadSec * WATCH_CFG.sweepSec;
+          a.facing = Math.abs(d) <= step ? want : a.facing + Math.sign(d) * step;
+        }
+      }
+    }
+    // THE TRAIL LAY: players print the ground while a scent watcher stands;
+    // wet feet (WATCH_CFG.trail.breakStatuses — wading, swimming) print
+    // nothing, so a stream crossing GAPS the line (the honest counterplay).
+    for (const p of this.actors) {
+      if (p.dead || p.kind !== 'player') continue;
+      if (!scent) {
+        if (p.trail) { p.trail = undefined; p.trailIdx = 0; }
+        continue;
+      }
+      let wet = false;
+      for (const s of p.statuses) {
+        if (WATCH_CFG.trail.breakStatuses.includes(s.id)) { wet = true; break; }
+      }
+      if (wet) continue;
+      const newest = trailNewest(p);
+      if (!newest || (p.pos.x - newest.x) * (p.pos.x - newest.x)
+        + (p.pos.y - newest.y) * (p.pos.y - newest.y)
+        >= WATCH_CFG.trail.stepDist * WATCH_CFG.trail.stepDist) {
+        layTrailPoint(p, p.pos.x, p.pos.y, t);
+      }
+    }
+  }
+
+  /** One tracker's nose for one sweep beat: hold (or find) a quarry whose
+   *  trail offers a print in nose range, feed the ladder (capped at the
+   *  search rung — scent says WHERE, never WHO), aim the investigate walk
+   *  at the print, and consume it on arrival so the walk marches the trail
+   *  in the order it was laid. A gap (wading), a cold print or a spent
+   *  trail leaves the nose empty — the walk lapses where the water was,
+   *  and the ladder decays until the quarry is forgotten. */
+  private watchScent(a: Actor, w: WatchSpec, t: number): void {
+    const range = w.scent?.range ?? WATCH_CFG.scent.range;
+    const maxAge = w.scent?.maxAge ?? WATCH_CFG.scent.maxAge;
+    let q = a.watchQuarryId !== undefined ? this.actorById(a.watchQuarryId) : undefined;
+    if (!q || q.dead || !q.trail?.length) {
+      q = undefined;
+      for (const p of this.actors) {
+        if (p.dead || !p.trail?.length || !this.hostileTo(a, p)) continue;
+        // The cursor doubles as the SNIFFED-OUT floor: only prints fresher
+        // than it can hook (a forgotten line never re-hooks off its own
+        // stale prints — see the decay-clear below).
+        const first = trailNext(p.trail, a.watchTrailT, t, maxAge,
+          { x: a.pos.x, y: a.pos.y, range });
+        if (first) {
+          q = p;
+          a.watchQuarryId = p.id;
+          // LOCK THE LINE'S DIRECTION at the first catch: the cursor sits
+          // just below the caught print, so the nose only ever advances
+          // FORWARD through lay order — never the backward drift toward
+          // ever-older prints an open cursor allowed.
+          a.watchTrailT = Math.max(a.watchTrailT, first.t - 1e-6);
+          break;
+        }
+      }
+    }
+    if (!q) {
+      if (a.watchQuarryId !== undefined
+        && watchValueOf(a, w, t) < WATCH_CFG.rungs.stir) {
+        a.watchQuarryId = undefined;
+        a.watchTrailT = t; // sniffed out: this ground holds nothing new
+      }
+      return;
+    }
+    const print = trailNext(q.trail, a.watchTrailT, t, maxAge,
+      { x: a.pos.x, y: a.pos.y, range });
+    if (!print) {
+      // No print in nose range. While suspicion stands, PAD to the last
+      // known scent and snuffle there — closing often brings the line back
+      // under the nose (the mid-trail dead-band un-sticks itself), and at
+      // a true gap it reads as sniffing the waterline. Once the meter
+      // drains below the stir rung, FORGET the quarry — the water did
+      // its work.
+      if (watchValueOf(a, w, t) >= WATCH_CFG.rungs.stir) {
+        if (a.watchAt) {
+          if (a.alertFrom) { a.alertFrom.x = a.watchAt.x; a.alertFrom.y = a.watchAt.y; }
+          else a.alertFrom = vec(a.watchAt.x, a.watchAt.y);
+          a.alertUntil = Math.max(a.alertUntil, t + WATCH_CFG.scent.walkSec);
+        }
+      } else {
+        a.watchQuarryId = undefined;
+        a.watchTrailT = t; // sniffed out: only FRESHER prints may re-hook
+      }
+      return;
+    }
+    feedWatch(a, w, t, WATCH_CFG.scent.feedPerSec * WATCH_CFG.sweepSec,
+      WATCH_CFG.rungs.search);
+    if (a.watchAt) { a.watchAt.x = print.x; a.watchAt.y = print.y; }
+    else a.watchAt = vec(print.x, print.y);
+    // The walk rides the standing investigate machinery — a short rolling
+    // window, refreshed while prints keep coming.
+    if (a.alertFrom) { a.alertFrom.x = print.x; a.alertFrom.y = print.y; }
+    else a.alertFrom = vec(print.x, print.y);
+    a.alertUntil = Math.max(a.alertUntil, t + WATCH_CFG.scent.walkSec);
+    a.watchRung = Math.max(a.watchRung,
+      watchRungOf(watchValueOf(a, w, t)));
+    const dx = print.x - a.pos.x, dy = print.y - a.pos.y;
+    const arrive = WATCH_CFG.scent.arrive;
+    if (dx * dx + dy * dy <= arrive * arrive) a.watchTrailT = print.t;
+  }
+
+  /** THE NOISE STIMULUS (engine/watch.ts): a bang at a point feeds every
+   *  hostile watcher's ladder toward it — capped at the search rung (noise
+   *  names a PLACE, never a prey; only a watcher's own senses on your
+   *  actual body close the lock). Any system may ring it: the Din support
+   *  grafts it onto strikes, and skills or doodads may carry it natively.
+   *  Feed falls off linearly to the radius edge. */
+  noiseAt(pos: Vec2, radius: number, source?: Actor): void {
+    if (radius <= 0) return;
+    const t = this.time;
+    for (const a of this.actors) {
+      const w = a.watch;
+      if (!w || a.dead || a.aggroed || a.aiTargetId !== undefined) continue;
+      if (source && !this.hostileTo(a, source)) continue;
+      const d = dist(a.pos, pos);
+      if (d > radius) continue;
+      const before = watchValueOf(a, w, t);
+      const v = feedWatch(a, w, t,
+        WATCH_CFG.noise.feed * (1 - 0.6 * (d / radius)), WATCH_CFG.rungs.search);
+      if (a.watchAt) { a.watchAt.x = pos.x; a.watchAt.y = pos.y; }
+      else a.watchAt = vec(pos.x, pos.y);
+      const rung = watchRungOf(v);
+      if (rung >= WATCH_RUNG.search) {
+        if (watchRungOf(before) < WATCH_RUNG.search) {
+          a.alertUntil = Math.max(a.alertUntil,
+            t + (w.searchSec ?? WATCH_CFG.searchSec) * alertScale(a));
+        } else {
+          a.alertUntil = Math.max(a.alertUntil, t + WATCH_CFG.scent.walkSec);
+        }
+        // A newer bang re-aims a standing walk (the freshest sound wins).
+        if (a.alertFrom) { a.alertFrom.x = pos.x; a.alertFrom.y = pos.y; }
+        else a.alertFrom = vec(pos.x, pos.y);
+      }
+      a.watchRung = Math.max(a.watchRung, rung);
+    }
+  }
+
+  /** Live creep cover at a point — one named KIND, or the peak of any kind.
   /** THE TELL FABRIC's value sweep (engine/tells.ts): resolve every telled
    *  body's binding rows against its LIVE state — the same maps the AI
    *  reads (drawn == tested) — on a gentle cadence (TELL_CFG.sweepSec).
@@ -22368,6 +22571,9 @@ export class World {
     // def rows + the rolled temperament's rows. Stamped once; the sweep
     // (updateTells) and the renderer both read it. Undefined = null-cost.
     a.tellSpecs = tellSpecsOf(def, a.brainVariant);
+    // THE WATCH FABRIC (engine/watch.ts): the ladder posture, stamped the
+    // same way — undefined keeps every gate/sweep/draw hook null-cost.
+    a.watch = def.watch;
     // Def-level role tag (ambient wildlife etc.) — spawners may still
     // overwrite it for event roles (patrols, sieges).
     if (def.tag) a.tag = def.tag;
@@ -32682,6 +32888,14 @@ export class World {
         'the guise breaks!', '#b8a8e8', 12);
     }
     const extra = instanceMods(inst);
+    // THE DIN (the watch fabric): a resolved blow RINGS — noiseOnHit is a
+    // radius, and every hostile watcher inside hears the bang at the
+    // victim's feet (capped at the search rung). Read tag-scoped so the
+    // Ringing Report graft rings only the skill it rides.
+    {
+      const din = caster.sheet.get('noiseOnHit', skillContextTags(def), extra);
+      if (din > 0) this.noiseAt(target.pos, din, caster);
+    }
     // Status shatter (Absolute Zero): consume the listed statuses for a
     // MORE multiplier — chilled and frozen things break beautifully.
     if (def.shatterStatus) {
@@ -33002,6 +33216,22 @@ export class World {
           a.alertUntil = Math.max(a.alertUntil, this.time + 4 * alertScale(a));
           a.alertFrom ??= vec(caster.pos.x, caster.pos.y);
         }
+      }
+      // THE WATCH FABRIC (engine/watch.ts): pain is a FULL stimulus — a
+      // wounded watcher's ladder jumps to the search rung toward the blow's
+      // author and the struck alarm arms it, so its now-alerted all-around
+      // senses find the attacker on the next scan and the gate's wound
+      // bypass locks at once. A watcher can be sniped from beyond its
+      // senses; it can never be left standing dumb under fire.
+      if (target.watch && target.team !== caster.team && !target.aggroed
+        && target !== caster) {
+        target.alertUntil = Math.max(target.alertUntil, this.time + 5 * alertScale(target));
+        target.alertFrom = vec(caster.pos.x, caster.pos.y);
+        feedWatch(target, target.watch, this.time, 1, WATCH_CFG.rungs.search);
+        if (target.watchAt) { target.watchAt.x = caster.pos.x; target.watchAt.y = caster.pos.y; }
+        else target.watchAt = vec(caster.pos.x, caster.pos.y);
+        target.watchRung = Math.max(target.watchRung,
+          watchRungOf(watchValueOf(target, target.watch, this.time)));
       }
       // A hit landed on the player while at low life — kick the renderer's
       // hit-while-low surge (one smooth bloom over the low-life vignette).
@@ -37751,6 +37981,11 @@ export class World {
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
     this.updatePossessions(dt);
+    // THE WATCH FABRIC's behavior sweep (engine/watch.ts) rides just ahead
+    // of the tells: rung cache, stand-downs, the scanning gaze and the
+    // tracker's nose all settle, THEN the worn gauges read them — a tell
+    // never shows last frame's ladder.
+    this.updateWatch();
     // THE TELL FABRIC's value sweep (engine/tells.ts) — after every mover
     // and state machine has spoken for the frame, the worn gauges read.
     this.updateTells();
@@ -39999,6 +40234,17 @@ export class World {
    */
   lineOfSight(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): boolean {
     return castRay(this, from, to, 'sight', this.rayElev(from, to, fromTier, toTier)) === null;
+  }
+
+  /** THE WATCH FABRIC's drawn-read ray (render/vis/watchLayer.ts + the
+   *  probes): the sight-channel clip distance from a watcher's eye toward
+   *  a point — the SAME castRay, channel and elevation law the perception
+   *  gate rides (losCached → lineOfSight, watcher tier → floor under the
+   *  sample), so the drawn fan and the tested ray can never disagree.
+   *  Returns the clip distance, or Infinity when the line is clear. */
+  sightClipD(from: Vec2, to: Vec2, fromTier?: number, toTier?: number): number {
+    const hit = castRay(this, from, to, 'sight', this.rayElev(from, to, fromTier, toTier));
+    return hit ? hit.d : Infinity;
   }
 
   /**
@@ -44692,6 +44938,13 @@ export class World {
                 fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec);
             }
           }
+          // THE DIN (the watch fabric): a noisy flight RINGS where it ends —
+          // wall, floor, range's edge or the body that stopped it — so a
+          // thrown bolt is a LURE any watcher in earshot walks to (noiseAt
+          // caps at the search rung; the stat is the radius).
+          const din = p.caster.sheet.get('noiseOnHit',
+            skillContextTags(p.inst.def), instanceMods(p.inst));
+          if (din > 0) this.noiseAt(vec(p.pos.x, p.pos.y), din, p.caster);
         }
         // PLANT ON LAND (#17): the spent projectile stands where it fell —
         // a small anchor object the rest of the kit interacts with

@@ -20,6 +20,7 @@ import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
 import type { MountSlotSpec, MountSpec } from '../engine/mounts';
 import type { TellSpec } from '../engine/tells';
+import type { WatchSpec } from '../engine/watch';
 import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { LightSpec } from '../render/vis/painters';
@@ -404,6 +405,15 @@ export interface MonsterDef {
    *  (defaults 150° / 0.35 — see ai.ts). A sentry might watch 220° at 0.5;
    *  a sluggard 100° at 0.2. The stealth playstyle lives in these numbers. */
   vision?: { arcDeg?: number; rearMul?: number };
+  /** THE WATCH FABRIC (engine/watch.ts): attention as a VISIBLE LADDER —
+   *  unaware → stirring → searching → locked. A watcher's unprovoked fresh
+   *  lock is gated behind a rising suspicion meter (proximity-tapered,
+   *  decaying when you back off), its sense read is DRAWN (the cone/ring
+   *  the scan itself tested), and pain always bypasses the climb. Dials:
+   *  `sweep` (the scanning gaze), `sleep` (eyes shut below the stir rung —
+   *  hearing only), `scent` (hunts trails: where you WERE). {} is already
+   *  a full watcher. Docs: docs/engine/watchers.md. */
+  watch?: WatchSpec;
   /** Guaranteed support gem drops on death (overrides the 7% roll). */
   drops?: number;
   /** Chance to pop a resource orb on death (barrels, crates). */
@@ -1706,10 +1716,104 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // THE SENTRY (PerceptionSpec showcase): a keen but NARROW gaze — wider
     // blind flanks reward the sneak — that CALLS THE WATCH when it spots
     // you, and investigates your last position when you slip away.
+    // you, and investigates your last position when you slip away. The
+    // watch fabric (engine/watch.ts) finally makes those numbers VISIBLE:
+    // the cone draws, and its unprovoked lock climbs a fast ladder (a
+    // sniper's read is quick — the gate teaches, it doesn't coddle).
+    watch: { riseSec: 1.2 },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#e8d080', max: 0.4 } },
+    ],
     brain: {
       type: 'basic',
       perception: { arcDeg: 120, rearMul: 0.25, alertShout: 380, memory: 5 },
     },
+  },
+
+  // === THE BARROW WATCH (the watch fabric's debut wardens, engine/watch.ts).
+  // Three postures of ATTENTION, each read at a glance and each with its own
+  // counterplay: the Watchman's swept lantern-cone (skirt the beam), the
+  // Gorged Ghoul's shut eyes and bare hearing ring (creep the rim — don't
+  // dash it), the Barrow Hound's nose on your trail (wade water: prints gap
+  // where nothing was walked). They seat together at the barrow_watch lair
+  // (data/lairs.ts) — a sunken ring of grave-lanterns on the downs.
+  /** The lamplighter of the dead: a hooded skeleton on a duty post, its
+   *  grave-lantern swung in the scanning arc the drawn cone traces. Narrow,
+   *  LONG gaze; wide deaf flanks; a full-throated callout when it locks. */
+  barrow_watchman: {
+    id: 'barrow_watchman', name: 'Barrow Watchman',
+    color: '#c8c0a0', shape: 'ribcage', radius: 12, material: 'bone', look: 'barrow_watchman',
+    base: { life: 46, moveSpeed: 120, accuracy: 106, evasion: 45, mana: 0 },
+    skills: ['bone_arrow'],
+    xp: 16,
+    faction: 'undead',
+    detection: 1.35, // the longest eye on the barrow — the cone IS the fight
+    post: true,      // stands its watch; drifts walk home (brain.ts PostSpec)
+    // THE CARRIED LAMP: the grave-light is the identity — the cone you
+    // skirt is the lantern it swings (wick-green: the dead's fire is cold).
+    light: { radius: -9, color: '#8fd8a8', intensity: 0.5, flicker: 1.2 },
+    watch: { sweep: { arcDeg: 150, sec: 6.5 }, riseSec: 1.8, searchSec: 7.5 },
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 70, rearMul: 0.2, alertShout: 420, memory: 6 },
+    },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#8fd8a8', max: 0.5 } },
+      { source: 'watch', band: [0.5, 1], channel: { kind: 'lean', amp: 0.6 } },
+    ],
+  },
+  /** THE DROWSING: genuinely asleep on its heap — eyes SHUT (the sight
+   *  cone collapses to the drawn hearing ring), woken by footfalls, and
+   *  woken INSTANTLY by pain (the gate never coddles an aggressor). Its
+   *  post is its heap: chase over, it walks back and settles dark again. */
+  gorged_ghoul: {
+    id: 'gorged_ghoul', name: 'Gorged Ghoul',
+    color: '#9aa47e', shape: 'circle', radius: 16, look: 'gorged_ghoul',
+    base: { life: 150, moveSpeed: 125, accuracy: 100, mana: 20, manaRegen: 2 },
+    skills: ['heavy_strike', 'claw'],
+    xp: 20,
+    faction: 'undead',
+    detection: 0.75, // groggy even awake — the ring is honest about it
+    heft: 1.5,
+    post: true, // the heap is the post: it re-settles where it was authored
+    vision: { arcDeg: 130, rearMul: 0.5 }, // waking, its EARS are the sense
+    watch: { sleep: true, riseSec: 3.2, decaySec: 9 },
+    brain: { type: 'basic' },
+    tells: [
+      // Shut eyes that OPEN as the ladder climbs (alpha rides the meter —
+      // the look wears no eyes of its own on purpose).
+      {
+        source: 'watch', curve: 'early', channel: {
+          kind: 'part',
+          part: { kind: 'eyes', x: 0.42, color: '#e8d060', params: { spread: 0.5, dist: 0.6, size: 0.1 } },
+          alpha: [0, 1], scale: [0.7, 1.1],
+        },
+      },
+      // Asleep it runs DARK (inverted band: full tint at meter 0); waking
+      // pales it — the same read at silhouette range.
+      { source: 'watch', band: [1, 0], channel: { kind: 'tint', color: '#232838', max: 0.4 } },
+      { source: 'watch', channel: { kind: 'scale', amp: 0.12 } },
+    ],
+  },
+  /** THE TRACKER: weak eyes, a peerless nose — it hunts where you WERE,
+   *  print by print (the drawn trail), and only its own short sight closes
+   *  the lock. Break the line in water; the nose has nothing there. */
+  barrow_hound: {
+    id: 'barrow_hound', name: 'Barrow Hound',
+    color: '#b8b09a', shape: 'triangle', radius: 11, material: 'bone', look: 'barrow_hound',
+    base: { life: 34, moveSpeed: 190, accuracy: 100, evasion: 45, mana: 0 },
+    skills: ['claw'],
+    xp: 13,
+    faction: 'undead', tags: ['beast'],
+    detection: 0.55, // truly short-sighted: the trail is the hunt, the eyes only END it
+    packSize: [2, 3],
+    vision: { arcDeg: 80, rearMul: 0.6 },
+    watch: { scent: { range: 130, maxAge: 16 }, riseSec: 1.3, decaySec: 5 },
+    brain: { type: 'basic' },
+    tells: [
+      { source: 'watch', channel: { kind: 'lean', amp: 1 } }, // NOSE-DOWN
+      { source: 'watch', channel: { kind: 'glow', color: '#b8d4a0', max: 0.3 } },
+    ],
   },
 
   // A shrieking skull of flame: fast, untouchable, briefly alive — the

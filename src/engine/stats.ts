@@ -1294,6 +1294,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Range at which THIS actor notices enemies (per-monster `detection`
    *  multiplier varies it: zombies shamble, blood mites sense you afar). */
   detectionRange: { label: 'Detection Range', base: 520, min: 50 },
+  /** THE DIN (the watch fabric, engine/watch.ts): this actor's blows — and
+   *  its spent flights, wherever they end — RING. The value is a RADIUS
+   *  (px): every hostile watcher inside hears the bang and investigates
+   *  the spot (World.noiseAt, capped at the search rung — a sound names a
+   *  place, never a prey). The Ringing Report support grafts it per-skill;
+   *  any modifier source may grant it. */
+  noiseOnHit:     { label: 'Din on Strike', base: 0, min: 0 },
   // AI COGNITION (BehaviorSpec, brain.ts): the aim knobs read through the
   // sheet with the brain's spec value as the innate base, so curses, auras
   // and ground can bend an enemy's MIND the way they bend its body.

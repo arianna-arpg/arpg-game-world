@@ -243,3 +243,45 @@ registerLair({
     chance: 0.16,
   },
 });
+
+// === THE BARROW WATCH (the watch fabric's debut ground — engine/watch.ts) ====
+// A sunken grave-ring on the downs, its lanterns still kept: the Watchman
+// sweeps a lantern-cone at the gap, Barrow Hounds prowl for your trail, and
+// Gorged Ghouls sleep dark on the spoil heaps. Nothing here SPRINGS (the
+// cairn's law is ambush; this ground's law is the LADDER) — everything
+// climbs where you can see it climb: skirt the cone, creep the hearing
+// ring, wade a stream to gap your scent — or loose an arrow and skip the
+// lesson, because pain never needs the ladder.
+
+registerLandmark({
+  id: 'barrow_watch', builder: 'pit', size: [240, 320],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    rimRegion: 'wall', floorKind: 'mud', gapArc: 0.85,
+    inner: [
+      { kind: 'lantern_post', count: [2, 3], radius: [9, 11] },
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 15] },
+      { kind: 'rock', count: [1, 3], radius: [10, 18] },
+    ],
+  },
+  spawns: {
+    table: [
+      { id: 'barrow_watchman', weight: 2 },
+      { id: 'gorged_ghoul', weight: 2 },
+      { id: 'barrow_hound', weight: 2 },
+    ],
+    count: [4, 6], where: 'interior',
+  },
+});
+
+registerLair({
+  id: 'barrow_watch',
+  landmark: 'barrow_watch',
+  seat: {
+    biomes: ['downs', 'field'],
+    place: 'surface',
+    level: { from: 3, fadeIn: 2 },
+    chance: 0.22,
+  },
+});
+

@@ -371,7 +371,39 @@ changes.
   reserved OUT of its rotation so the full sac is the only warning) and
   `HUNGER_LEAN`, the one shared predator row all twelve hunger-driven
   hunters wear (the probe census names future shirkers) — docs in
-  `docs/engine/tells.md`; probe `balance/probe_tells.ts`).
+  `docs/engine/tells.md`; probe `balance/probe_tells.ts`),
+  `watch.ts` (THE WATCH FABRIC — attention as a VISIBLE LADDER:
+  `MonsterDef.watch` gates a watcher's UNPROVOKED fresh lock behind a
+  rising suspicion meter (unaware → stirring → searching → locked;
+  thresholds GLOBAL in `WATCH_CFG.rungs` — the ladder is a language, def
+  dials tune only speeds), each rung riding standing machinery — stirring
+  TURNS the head, searching plants the alertUntil/alertFrom investigate
+  walk, locked is the ordinary lock with the shout jumping kin ladders to
+  the search cap. THE LAWS: drawn == tested BY CONSTRUCTION (the scan
+  STAMPS the exact scalars it tested — `Actor.sense*` — and the fan
+  (`render/vis/watchLayer.ts`) re-folds them through the scan's own
+  `senseReach` with every ray clipped by the same castRay-'sight' ride,
+  `World.sightClipD`; `SENSE_CFG` hosts the historical perception
+  constants), ladders DECAY (lazy-decay pure read `watchValueOf`; the
+  stand-down walks a spent lock all the way down and re-arms the gate),
+  PAIN NEEDS NO LADDER (a wound bypasses the gate, and resolveHit jumps a
+  wounded watcher to searching toward the blow's author — snipe it, never
+  leave it dumb), a LOCK IS A LOCK (any fresh lock pins aggro so the tell
+  can't lie mid-fight), side channels CAP at search (noise and scent say
+  WHERE, never WHO). Postures: `sweep` (the sentinel's scanning gaze),
+  `sleep` (the drowser: cone collapses to the drawn hearing ring below the
+  stir rung; footfall-scaled feeds — creep the rim), `scent` (the tracker
+  hunts trail prints in lay order — players print `Actor.trail` while a
+  scent-watcher stands; `wading`/`swimming` suspend printing, so WATER
+  breaks the line; landPartyAt clears it). `World.noiseAt` is the open
+  stimulus (the `noiseOnHit` stat rings it at resolved blows + spent
+  flights — the Ringing Report support's lure play). Co-op ships
+  `ActorW.wp` derived scalars (the tell-wire idiom). Debut: THE BARROW
+  WATCH lair (data/lairs.ts, downs/field) — `barrow_watchman` (lantern
+  cone + callout) / `gorged_ghoul` (eyes that exist only as a tell part;
+  runs dark asleep) / `barrow_hound` (nose-down lean, 0.55× sight) — plus
+  the `skeleton_archer` sentry showcase retrofit. Docs
+  `docs/engine/watchers.md`; probe `balance/probe_watchers.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense
