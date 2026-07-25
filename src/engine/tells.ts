@@ -128,6 +128,10 @@ export interface TellBody {
   drives: Map<string, number>;
   charges: Map<string, number>;
   statuses: { id: string; stacks: number }[];
+  /** Live buffs by id (Actor.buffs satisfies this) — the `buff:` source's
+   *  read: the {do:'buff'} lane's windows (a spent-slump, a crescendo)
+   *  become wearable exactly like status stacks. */
+  buffs: { get(id: string): { stacks: number; def: { maxStacks?: number } } | undefined };
   aggroed: boolean;
   aiMoraleUntil: number;
   fuse?: number;
@@ -175,6 +179,17 @@ export const TELL_SOURCES: Record<string, TellSource> = {
       }
     }
     return 0;
+  },
+  /** A live BUFF by id: stacks / its own def's cap (presence = 1 for
+   *  non-stackers) — the status source's twin over the buff map, so a
+   *  {do:'buff'} window (the accumulators' spent slump, a crescendo) is
+   *  wearable state like any other. */
+  buff: (a, _w, arg) => {
+    if (!arg) return 0;
+    const b = a.buffs.get(arg);
+    if (!b) return 0;
+    const cap = Math.max(1, b.def.maxStacks ?? 1);
+    return Math.max(0, Math.min(1, (b.stacks || 1) / cap));
   },
   /** Has this body noticed ANYONE — the watcher's step tell. */
   alert: a => (a.aggroed ? 1 : 0),

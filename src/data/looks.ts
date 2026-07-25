@@ -4719,6 +4719,64 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'slimeTrail', color: '#4a4230', params: { n: 3 } }],
     shadowScale: 0.7,
   },
+
+  // --- THE ACCUMULATOR FAMILY (engine/tells.ts) ---------------------------
+  // The leech's law, spread: every body here keeps the METER'S seat BARE —
+  // the sac, the crest, the furnace-glow ride as TELLS, never as look
+  // parts, so an empty accumulator honestly wears an empty body and the
+  // book samples the live gauge. Silhouettes stay distinct at a glance:
+  // the mother is a pale swagged mound, the glutton a knuckled paunch
+  // under flies, the cinderback a seamed plate dome, the chorister a lean
+  // crest-stub runner.
+  /** The Bloat Mother (THE BROODER): a pale swagged mound of a body — the
+   *  ventral egg-sac rides as the term tell (drive:brood → fillSac). */
+  bloat_mother: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.22, seed: 277 } },
+      { kind: 'fleshFolds', params: { n: 4 } },
+      { kind: 'eyes', color: '#e8d8a8', params: { n: 2, spread: 0.3, dist: 0.6, size: 0.07 } },
+    ],
+    shadowScale: 0.9,
+  },
+  /** The Charnel Glutton (THE GORGER): all paunch and maw under an escort
+   *  of flies — the bile paunch itself is the tell (drive:gorge). */
+  charnel_glutton: {
+    parts: [
+      { kind: 'blob', scale: 1.0, role: 'dark', params: { irr: 0.18, seed: 421 } },
+      { kind: 'fleshFolds', params: { n: 4 } },
+      { kind: 'mawRing', x: 0.55, scale: 0.5 },
+      { kind: 'eyes', color: '#d8c86a', params: { n: 2, spread: 0.35, dist: 0.55, size: 0.09 } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.9, params: { n: 4 } }],
+    shadowScale: 0.9,
+  },
+  /** The Cinderback (THE KINDLER): a seamed dome of dull plate, mandibles
+   *  low — cold it reads as slag; the stoked furnace arrives as the tell's
+   *  under-glow and tint (drive:kindle), never painted here. */
+  cinderback: {
+    parts: [
+      { kind: 'carapace', scale: 1.05, params: { segs: 4 } },
+      { kind: 'mandibles', scale: 0.5 },
+      { kind: 'eyes', color: '#ffb060', params: { n: 2, spread: 0.4, dist: 0.5, size: 0.08 } },
+    ],
+    live: [{ kind: 'wisps', color: '#ff9a5a', scale: 0.5, alpha: 0.35 }],
+    shadowScale: 0.8,
+  },
+  /** The Crag Chorister (THE CHORUS): a lean scaled runner with a whip
+   *  tail — the crest is deliberately ABSENT: it rides as the pack-meter
+   *  tell (drive:chorus), folded to a stub on a silent bird and standing
+   *  tall gold across a cresting choir. */
+  crag_chorister: {
+    parts: [
+      { kind: 'tail', x: -0.32, scale: 0.9, params: { len: 0.9 } },
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'scutes', scale: 0.7, alpha: 0.85 },
+      { kind: 'legs', scale: 0.8, params: { n: 2 } },
+      { kind: 'beak', x: 0.45, scale: 0.5 },
+      { kind: 'eyes', color: '#ffd890', params: { spread: 0.4, dist: 0.5, size: 0.1 } },
+    ],
+    shadowScale: 0.55,
+  },
   /** The shard spire: a standing crown of charged crystal over a core. */
   shard_spire: {
     parts: [

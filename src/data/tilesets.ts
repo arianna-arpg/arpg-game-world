@@ -473,6 +473,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'warband_chieftain', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        // THE CHORUS (the accumulator family): the downs' cresting choir —
+        // packs whose shared meter teaches kill order in open country.
+        { id: 'crag_chorister', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'zombie', weight: 2, presence: { to: 20, fadeOut: 10 } },
         { id: 'skeleton_archer', weight: 2 },
         { id: 'crypt_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -1371,6 +1374,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // teach the tells, faded before the Court's own heavies own it.
         { id: 'mazer_moth', weight: 2, presence: { to: 24, fadeOut: 10 } },
         { id: 'widdershin_wisp', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        // THE GORGER (the accumulator family): the wood's own dead feed
+        // it — read the paunch, mind your cleaves near the middens.
+        { id: 'charnel_glutton', weight: 2, presence: { from: 3, fadeIn: 2 } },
         { id: 'feeding_thrall', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'vampire_thrall', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'crimson_bat', weight: 2, presence: { to: 22, fadeOut: 10 } },
@@ -1391,6 +1397,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
+    // The glutton's schoolyard: heaped dead that SPILL when struck.
+    landmarks: [{ landmark: 'carrion_midden', chance: 0.22 }],
     objectives: [
       { kind: 'offering', weight: 1 },
       { kind: 'bounty', weight: 1 },
@@ -2020,6 +2028,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // fire-hymn and the shepherd whose flock is sparks.
         { id: 'cinder_chorister', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'ember_shepherd', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // THE KINDLER (the accumulator family): stoked by your own blows —
+        // the cinder country's first lesson in reading the glow.
+        { id: 'cinderback', weight: 2, presence: { to: 20, fadeOut: 9 } },
         { id: 'orc_ravager', weight: 2 },
         { id: 'gnoll_longshot', weight: 1 },
         { id: 'gnoll_howler', weight: 1 },
@@ -3223,13 +3234,25 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
         { id: 'mire_leech', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        // THE ACCUMULATORS deepen the fen's sac-literacy: the mother's
+        // brood clock beside the leech's blood bank (two gauges, two
+        // debts), and the glutton working the grave-mire's easy dead.
+        { id: 'bloat_mother', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'charnel_glutton', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'lake_horror', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'tide_whelk', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        // THE SPENT (engine/reserves.ts): the fen's own depletion lesson,
+        // set against the leech's INVERSE one table over — the leech fills
+        // toward a burst, the fumelung empties toward a window. Learn to
+        // read a sac in this biome and you have learned both.
+        { id: 'fumelung', weight: 2, presence: { from: 5, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
+    // The glutton's schoolyard rolls where the dead already heap.
+    landmarks: [{ landmark: 'carrion_midden', chance: 0.18 }],
     objectives: [
       { kind: 'offering', weight: 1 },
       { kind: 'bounty', weight: 1 },
@@ -4335,6 +4358,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'zombie', weight: 2, presence: { to: 22, fadeOut: 12 } },
         // The rival customer: it eats the bodies your detonations wanted.
         { id: 'charnel_ghoul', weight: 2 },
+        // THE GORGER (the accumulator family): the ghoul's fat cousin —
+        // it BANKS the graveyard's easy dead toward the burst you can read.
+        { id: 'charnel_glutton', weight: 2, presence: { from: 3, fadeIn: 2 } },
         // THE COLONY KIN (the collective pass): the mites' nest and the
         // midden that walks — kill the anchor or the carpet breeds back.
         { id: 'marrow_midden', weight: 1 },
@@ -4350,11 +4376,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'barrow_wight', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'taperwight', weight: 2, presence: { from: 3, fadeIn: 2 } },
         { id: 'banshee', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'vampire_thrall', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
+    // The glutton's schoolyard among the graves (brittle heaps that spill).
+    landmarks: [{ landmark: 'carrion_midden', chance: 0.2 }],
     objectives: [
       { kind: 'offering', weight: 1 },
       { kind: 'bounty', weight: 1 },
@@ -6051,6 +6080,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'lake_horror', weight: 1, presence: { from: 10 } },
         { id: 'mire_leech', weight: 1, presence: { to: 12, fadeOut: 6 } },
         { id: 'mire_maw', weight: 1, presence: { from: 8 } },
+        // THE BROODER: the tangle's clutch-mother — read the sac's term.
+        { id: 'bloat_mother', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'fen_hound', weight: 1, presence: { to: 12, fadeOut: 6 } },
       ],
     },
@@ -7986,6 +8017,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The ground itself: pools with appetites, water with arms.
         { id: 'mire_leech', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        // THE BROODER beside the leech: two sacs, two debts — the fen
+        // teaches the family's whole gauge-literacy in one country.
+        { id: 'bloat_mother', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
@@ -8500,6 +8534,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'lode_thrall', weight: 1, presence: { from: 4 } },
         { id: 'shard_spire', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 10 } },
+        // THE CHORUS (the accumulator family): the dry-stone country's
+        // cresting choir — the big-covey archetype suits the shared meter.
+        { id: 'crag_chorister', weight: 3, presence: { to: 18, fadeOut: 8 } },
       ],
     },
     spawnerId: 'grub_clutch',
@@ -8835,6 +8872,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'cinder_hound', weight: 2 },
         { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'vent_priest', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // THE KINDLER (the accumulator family): the plate dome the fight
+        // itself stokes — read the seam-glow, mind your last hit.
+        { id: 'cinderback', weight: 2 },
       ],
     },
     spawnerId: 'bone_altar',

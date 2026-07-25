@@ -5607,6 +5607,41 @@ export const SKILLS: Record<string, SkillDef> = {
   // The bestiary-expansion arsenal: roots, spores, talons, shrieks and bile.
   // Monster-first (every entry has an ai hint), player-usable like any gem.
 
+  // --- THE ACCUMULATOR RELEASES (engine/tells.ts payoff verbs) -------------
+  // Monster-only (noDrop): each is the SPEND of a meter the body visibly
+  // fills — reserved OUT of the owner's kit rotation (skillUse priority)
+  // and force-cast by its brim rule, so the worn gauge is the only warning
+  // and the only one needed. Slow bars on purpose: the wind-up is the
+  // second half of the tell.
+  gorge_burst: {
+    id: 'gorge_burst', name: 'Gorge Burst', noDrop: true,
+    description: 'Everything it ate, all at once — a nova of bone shards and grave-bile: the whole banked meal, returned with interest.',
+    tags: ['spell', 'physical', 'aoe'], color: '#8a9a4a',
+    manaCost: 0, cooldown: 3, useTime: 0.95,
+    baseDamage: { physical: [14, 20], chaos: [8, 13] },
+    delivery: { type: 'nova', radius: 120 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'decay', chance: 0.5, magnitude: 0.35 },
+    ],
+    ai: { range: 110, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  kindled_eruption: {
+    id: 'kindled_eruption', name: 'Kindled Eruption', noDrop: true,
+    description: 'The stoked furnace VENTS: a slow, honest ring of fire paid for with every blow that fed it.',
+    tags: ['spell', 'fire', 'aoe'], color: '#ff8a3a',
+    manaCost: 0, cooldown: 2.5, useTime: 1.1,
+    baseDamage: { fire: [22, 32] },
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.5, magnitude: 0.35 },
+    ],
+    ai: { range: 120, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   talon_rake: {
     id: 'talon_rake', name: 'Talon Rake',
     description: 'A fast raking strike that opens shallow, bleeding cuts — the hunting-bird\'s argument.',

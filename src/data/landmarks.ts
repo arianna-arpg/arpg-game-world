@@ -184,6 +184,32 @@ registerLandmark({
   },
   poi: true, mustReach: true,
 });
+// THE CARRION MIDDEN (the accumulator family's schoolyard): a dug hollow
+// heaped with the field's dead — brittle mounds that SPILL raisable meat
+// when struck (formations.ts), the glutton that BANKS them (carrion.drive →
+// the paunch tell), and the wings and hounds that race it for the same
+// larder. The lesson stages itself: crack a mound carelessly and watch the
+// paunch fill; crack one deliberately, far off, and the compulsion walks
+// the glutton away from you. One gap in the rim — a committed room.
+registerLandmark({
+  id: 'carrion_midden', builder: 'pit', size: [210, 290], clearSite: true,
+  params: {
+    floorKind: 'mud', gapArc: 0.6,
+    inner: [
+      { kind: 'carrion_midden', count: [2, 4], radius: [13, 17] },
+      { kind: 'bone_pile', count: [2, 4], radius: [9, 13] },
+    ],
+  },
+  spawns: {
+    table: [
+      { id: 'charnel_glutton', weight: 3 },
+      { id: 'gravemaw_hound', weight: 2 },
+      { id: 'carrion_crow', weight: 2 },
+    ],
+    count: [3, 5], where: 'interior',
+  },
+  poi: true,
+});
 // THE GNASHER PEN (the warband's livestock, penned): a palisade ring dug
 // around churned mud, seething with the herd — VISIBLE, waiting, and sprung
 // as ONE event when you stray to the fence or put an arrow through it (the

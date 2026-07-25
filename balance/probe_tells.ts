@@ -21,7 +21,8 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { HUNGER_LEAN, MONSTERS } from '../src/data/monsters';
+import { HUNGER_LEAN, MONSTERS, SPENT_SLUMP, SPENT_SLUMP_BUFF } from '../src/data/monsters';
+import { SKILLS } from '../src/data/skills';
 import { LOOKS } from '../src/data/looks';
 import { STATUS_DEFS } from '../src/engine/status';
 import { PART_PAINTERS } from '../src/render/vis/parts';
@@ -66,12 +67,19 @@ MONSTERS.probe_tells_dummy = {
   skills: [], xp: 1, faction: 'beast',
   brain: { type: 'basic' },
 };
+// The stoking post: a tough claw that FEEDS an onHurt meter with real hits.
+MONSTERS.probe_tells_biter = {
+  id: 'probe_tells_biter', name: 'Probe Biter', color: '#aa8899', shape: 'circle',
+  radius: 12, base: { life: 6000, moveSpeed: 150, accuracy: 200, mana: 0 },
+  skills: ['claw'], xp: 1, faction: 'beast',
+  brain: { type: 'basic' },
+};
 
 // Hand-built state for the pure rigs (TellBody is structural by design).
 const body = (over?: Partial<TellBody>): TellBody => ({
   id: 7, life: 80, maxLife: () => 100, plies: 0, pliesMax: 0,
   drives: new Map<string, number>(), charges: new Map<string, number>(),
-  statuses: [], aggroed: false, aiMoraleUntil: 0,
+  statuses: [], buffs: new Map(), aggroed: false, aiMoraleUntil: 0,
   ...over,
 });
 const W: TellWorld = { time: 5, radiance: () => 0.4 };
@@ -425,6 +433,285 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   }, PART_PAINTERS);
   check('validate: unknown source / missing band / degenerate band / dead painter / bad steps all named',
     bad.length === 5, bad.join(' | '));
+}
+
+// --- 12) THE ACCUMULATOR FAMILY weave (the shared grammar, statically) -------------
+{
+  // Every family body: the payoff is RESERVED out of the weighted roll, the
+  // brim rule casts it + shoves the drive + ends in the family slump, the
+  // worn rows read the SAME drive the rule reads, and the look keeps the
+  // meter's seat BARE (the leech law: the gauge is a tell, never a part).
+  const fam: [string, string, string, string][] = [
+    // [def, drive, payoff skill, the bare look part the tell wears]
+    ['mire_leech', 'glut', 'sanguine_burst', 'fillSac'],
+    ['charnel_glutton', 'gorge', 'gorge_burst', 'fillSac'],
+    ['cinderback', 'kindle', 'kindled_eruption', 'fillSac'],
+    ['bloat_mother', 'brood', 'broodpod', 'fillSac'],
+  ];
+  for (const [id, drive, payoff, barePart] of fam) {
+    const def = MONSTERS[id];
+    const rule = def.brain?.rules?.find(r => r.when.drive?.id === drive
+      && r.actions?.some(a => a.do === 'cast' && a.skill === payoff));
+    check(`family ${id}: brim rule casts ${payoff}, empties the bank, and SLUMPS`,
+      !!rule
+      && (rule.when.drive?.above ?? 0) >= 0.9
+      && rule.actions?.some(a => a.do === 'drive' && a.id === drive && a.add <= -1) === true
+      && rule.actions?.some(a => a.do === 'buff' && a.buff.id === SPENT_SLUMP_BUFF.id) === true);
+    check(`family ${id}: the payoff is reserved OUT of the rotation (priority kit)`,
+      def.brain?.skillUse?.mode === 'priority'
+      && !def.brain?.skillUse?.order?.includes(payoff)
+      && def.skills.includes(payoff));
+    check(`family ${id}: a worn row reads the SAME meter the rule reads (drawn == decided)`,
+      def.tells?.some(t => t.source === `drive:${drive}`) === true);
+    check(`family ${id}: the slump window is worn (the buff: source row)`,
+      def.tells?.some(t => t.source === `buff:${SPENT_SLUMP_BUFF.id}`) === true);
+    const look = LOOKS[def.look ?? ''];
+    check(`family ${id}: the look keeps the meter's seat bare (no ${barePart}/crest as a part)`,
+      !!look && !look.parts.some(p => p.kind === barePart || p.kind === 'crest'));
+  }
+  check('family: the chorister wears the crest AS the pack meter (part channel, dun→gold)',
+    MONSTERS.crag_chorister.tells?.some(t => t.source === 'drive:chorus'
+      && t.channel.kind === 'part' && t.channel.part.kind === 'crest') === true
+    && !LOOKS.crag_chorister.parts.some(p => p.kind === 'crest'));
+  check('family: the chorus drive is PACK-SHARED and sags on a felled voice',
+    (MONSTERS.crag_chorister.brain?.drives?.chorus?.share ?? 0) >= 1
+    && (MONSTERS.crag_chorister.brain?.drives?.chorus?.onAllyDeath ?? 0) < 0
+    && (MONSTERS.crag_chorister.brain?.drives?.chorus?.onKill ?? 0) > 0);
+  check('family: the glutton BANKS meals through the carrion lane, under fire',
+    MONSTERS.charnel_glutton.carrion?.drive?.id === 'gorge'
+    && (MONSTERS.charnel_glutton.carrion?.drive?.add ?? 0) > 0
+    && MONSTERS.charnel_glutton.carrion?.combat === true);
+  check('family: the releases are monster-only (noDrop — outside the gem economy by construction)',
+    SKILLS.gorge_burst.noDrop === true && SKILLS.kindled_eruption.noDrop === true);
+  // THE BURST-TELL CENSUS: every deathBurst body wears a life-read glow (the
+  // registry-close fold) unless deliberately opted out — shirkers get named.
+  const dark: string[] = [];
+  let bursters = 0;
+  for (const id in MONSTERS) {
+    const def = MONSTERS[id];
+    if (!def.deathBurst || def.burstTell === false) continue;
+    bursters++;
+    const worn = def.tells?.some(t => t.source === 'life' && t.channel.kind === 'glow');
+    if (!worn) dark.push(id);
+  }
+  check(`family: THE BURST-TELL LAW — all ${bursters} death-burst bodies glow as life falls (census)`,
+    bursters >= 30 && dark.length === 0, dark.join(','));
+  const cb = MONSTERS.cinderback;
+  check('family: the cinderback layers BOTH glows (kindle drive + the derived life read; deepest wins)',
+    cb.tells?.some(t => t.source === 'drive:kindle' && t.channel.kind === 'glow') === true
+    && cb.tells?.some(t => t.source === 'life' && t.channel.kind === 'glow') === true
+    && !!cb.deathBurst);
+}
+
+// --- 13) The buff source (the slump's read) — pure and honest ----------------------
+{
+  const withBuff = (id: string, stacks = 1, maxStacks?: number): TellBody => body({
+    buffs: new Map([[id, { stacks, def: { maxStacks } }]]),
+  });
+  check('source buff: presence reads 1 (the slump window is binary)',
+    resolveTell(row('buff:spent_slump'), withBuff('spent_slump'), W) === 1
+    && resolveTell(row('buff:spent_slump'), body(), W) === 0);
+  check('source buff: stacks read over the buff\'s own cap (3/4 → 0.75)',
+    resolveTell(row('buff:stack_pile'), withBuff('stack_pile', 3, 4), W) === 0.75);
+  const b = withBuff('spent_slump');
+  const before = JSON.stringify([...b.buffs as Map<string, unknown>]);
+  resolveTell(row('buff:spent_slump'), b, W);
+  check('source buff: a pure read (the map is byte-identical after)',
+    JSON.stringify([...b.buffs as Map<string, unknown>]) === before);
+  check('law: SPENT_SLUMP is one binary lean row, invisible in the book (portrait 0)',
+    SPENT_SLUMP.length === 1 && SPENT_SLUMP[0].steps === 1 && SPENT_SLUMP[0].portrait === 0
+    && SPENT_SLUMP[0].channel.kind === 'lean');
+}
+
+// --- 14) THE GORGER end to end (fill from real meals → burst → slump) ----------------
+{
+  seedGlobalRandom(0x60f6e);
+  const w = makeSimWorld('warrior', 0x7e120);
+  const glut = spawn(w, 'charnel_glutton', 6);
+  glut.pos = vec(w.arena.w / 2 - 40, w.arena.h / 2);
+  glut.drives.set('gorge', 0); // strip the rolled head start: every fill is a MEAL
+  const meal = (): void => {
+    w.corpses.push({
+      pos: vec(glut.pos.x + 50, glut.pos.y), defId: 'taiga_elk', level: 6,
+      maxLife: 100, remaining: 60,
+    });
+  };
+  meal(); meal(); meal();
+  const corpses0 = w.corpses.length;
+  // Phase 1 — the IDLE larder: full-life, it still eats (the bank is hunger).
+  for (let t = 0; t < 25 && (glut.drives.get('gorge') ?? 0) < 0.95; t += DT) {
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+    if (w.corpses.length === 0) { meal(); }
+  }
+  check('gorger e2e: meals BANKED at full life (corpses eaten, the drive climbed to the brim)',
+    (glut.drives.get('gorge') ?? 0) >= 0.95 && w.corpses.length < corpses0,
+    `gorge ${(glut.drives.get('gorge') ?? 0).toFixed(2)}`);
+  check('gorger e2e: the paunch tell reads the bank (drawn == banked)',
+    (glut.tells?.[0] ?? 0) >= 0.875, `tell ${glut.tells?.[0]}`);
+  check('gorger e2e: the gorged waddle is ON while fed (the drag buff reapplies)',
+    glut.buffs.get('gorged_waddle') !== undefined);
+  // Phase 2 — the RELEASE: prey in reach, the bank comes back up.
+  const dummy = spawn(w, 'probe_tells_dummy', 6, 'player');
+  dummy.pos = vec(glut.pos.x + 60, glut.pos.y);
+  let burstAt = -1; let clock = 0;
+  setSimTap({
+    onCast: (caster, inst) => {
+      if (caster === glut && inst.def.id === 'gorge_burst' && burstAt < 0) burstAt = clock;
+    },
+  });
+  let slumped = false, drained = false;
+  for (let t = 0; t < 20 && !(slumped && drained); t += DT) {
+    clock = t;
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+    if (burstAt >= 0 && glut.buffs.get('spent_slump')) slumped = true;
+    if (burstAt >= 0 && (glut.drives.get('gorge') ?? 0) <= 0.05) drained = true;
+  }
+  setSimTap(null);
+  check('gorger e2e: the full paunch BURST in reach (a real gorge_burst cast)', burstAt >= 0,
+    `burst at ${burstAt.toFixed(1)}s`);
+  check('gorger e2e: the spend emptied the bank and bought the SLUMP window', slumped && drained);
+  check('gorger e2e: the slump row wore the sag (lean while the window held)',
+    (glut.tellSpecs?.findIndex(t => t.source === 'buff:spent_slump') ?? -1) >= 0);
+  // Phase 3 — THE COMPULSION: under fire, a short bank walks it back to meat.
+  // (A CLEAR larder: leftover phase-1 corpses can sit under the dummy's own
+  // body — the nearest-corpse walk then body-blocks into the stall/snub
+  // guard, which is that guard's own law, not the one under test here.)
+  glut.drives.set('gorge', 0.2);
+  glut.carrionSnubUntil = 0;
+  w.corpses.length = 0;
+  w.corpses.push({
+    pos: vec(glut.pos.x - 50, glut.pos.y - 60), defId: 'taiga_elk', level: 6,
+    maxLife: 100, remaining: 60,
+  });
+  const n0 = w.corpses.length;
+  for (let t = 0; t < 12 && w.corpses.length >= n0; t += DT) {
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+  }
+  check('gorger e2e: it kept feeding UNDER FIRE (carrion.combat — the meal owned the fight)',
+    w.corpses.length < n0 && !glut.dead);
+}
+
+// --- 15) THE BROODER end to end (term → the laying → the clutch) ---------------------
+{
+  seedGlobalRandom(0xb00d);
+  const w = makeSimWorld('warrior', 0x7e121);
+  const mother = spawn(w, 'bloat_mother', 6);
+  mother.pos = vec(w.arena.w / 2, w.arena.h / 2);
+  mother.drives.set('brood', 0.9);
+  let laidAt = -1; let clock = 0;
+  setSimTap({
+    onCast: (caster, inst) => {
+      if (caster === mother && inst.def.id === 'broodpod' && laidAt < 0) laidAt = clock;
+    },
+  });
+  for (let t = 0; t < 20 && laidAt < 0; t += DT) {
+    clock = t;
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+  }
+  check('brooder e2e: the sac came to TERM on its own clock (a real broodpod laying)',
+    laidAt >= 0, `laid at ${laidAt.toFixed(1)}s`);
+  check('brooder e2e: the laying emptied the clock and bought the slump',
+    (mother.drives.get('brood') ?? 1) <= 0.2 && mother.buffs.get('spent_slump') !== undefined);
+  // The pod incubates its five readable seconds, then the clutch walks.
+  let hatched = false;
+  for (let t = 0; t < 12 && !hatched; t += DT) {
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+    hatched = w.actors.some(a => !a.dead && a.defId === 'broodling');
+  }
+  check('brooder e2e: the pod HATCHED the brood (the machinery was always hers)', hatched);
+  setSimTap(null);
+  // The death-clutch stands regardless: killing her still spills the mites.
+  w.kill(mother, false);
+  const mites = w.actors.filter(a => !a.dead && a.defId === 'blood_mite').length;
+  check('brooder e2e: her death still spills the death-clutch (the old law kept)', mites >= 4,
+    `${mites} mites`);
+}
+
+// --- 16) THE CHORUS live (the crest crests, the felled voice sags the choir) ----------
+{
+  seedGlobalRandom(0xc405);
+  const w = makeSimWorld('warrior', 0x7e122);
+  const choir: Actor[] = [];
+  for (let i = 0; i < 4; i++) {
+    const c = spawn(w, 'crag_chorister', 5);
+    c.squadId = 777;
+    c.pos = vec(w.arena.w / 2 + (i % 2) * 60 - 30, w.arena.h / 2 + Math.floor(i / 2) * 60 - 30);
+    choir.push(c);
+  }
+  for (const c of choir) c.drives.set('chorus', 0.95);
+  for (let t = 0; t < 4; t += DT) {
+    for (const a of w.actors) updateAI(a, w, DT);
+    w.update(DT);
+  }
+  check('chorus live: the crested choir wears the fervor (the crescendo rule reapplies it)',
+    choir.every(c => c.buffs.get('chorus_crescendo') !== undefined));
+  check('chorus live: the crest tell stands tall at crest (the worn meter)',
+    choir.every(c => (c.tells?.[0] ?? 0) >= 0.875));
+  const before = choir.slice(1).map(c => c.drives.get('chorus') ?? 0);
+  w.kill(choir[0], false);
+  for (let t = 0; t < 0.4; t += DT) {
+    for (const a of w.actors) { if (!a.dead) updateAI(a, w, DT); }
+    w.update(DT);
+  }
+  const after = choir.slice(1).map(c => c.drives.get('chorus') ?? 0);
+  check('chorus live: ONE felled voice sagged every crest in earshot (onAllyDeath)',
+    after.every((v, i) => v < before[i] - 0.3),
+    `${before.map(v => v.toFixed(2))} -> ${after.map(v => v.toFixed(2))}`);
+  const sagged = choir[1];
+  check('chorus live: the sag is WORN (the crest tell fell with the meter after a sweep)',
+    (sagged.tells?.[0] ?? 1) <= 0.625, `tell ${sagged.tells?.[0]}`);
+}
+
+// --- 17) THE KINDLER end to end (stoked by real blows → the vent → the slump) --------
+{
+  seedGlobalRandom(0x51071);
+  const w = makeSimWorld('warrior', 0x7e123);
+  // THE PINNED STAGE: enemies hunt the HERO, and the sim hero drifts — so
+  // the rig parks the seat at the stage and holds it there. The kindler
+  // stands at its quarry, the biter stands at the kindler, and the blows
+  // stream instead of a three-body chase across the arena.
+  const hub = vec(w.arena.w / 2, w.arena.h / 2);
+  const hero = w.player;
+  const kin = spawn(w, 'cinderback', 6);
+  kin.pos = vec(hub.x + 28, hub.y);
+  kin.drives.set('kindle', 0);
+  const biter = spawn(w, 'probe_tells_biter', 6, 'player');
+  biter.pos = vec(kin.pos.x + 30, kin.pos.y);
+  let stoked = 0;
+  let ventAt = -1; let clock = 0;
+  setSimTap({
+    onCast: (caster, inst) => {
+      if (caster === kin && inst.def.id === 'kindled_eruption' && ventAt < 0) ventAt = clock;
+    },
+  });
+  for (let t = 0; t < 60 && ventAt < 0; t += DT) {
+    clock = t;
+    for (const a of w.actors) { if (!a.dead) updateAI(a, w, DT); }
+    w.update(DT);
+    stoked = Math.max(stoked, kin.drives.get('kindle') ?? 0);
+    // The rig tops the furnace's LIFE each beat (the meter is under test,
+    // not the TTK — a real fight overkills it long before the brim, which
+    // is exactly the DENY strategy and its own probe-less truth). The seat
+    // is pinned + topped the same way: the stage must outlive the lesson.
+    kin.life = kin.maxLife();
+    hero.pos.x = hub.x; hero.pos.y = hub.y;
+    hero.life = hero.maxLife();
+  }
+  setSimTap(null);
+  check('kindler e2e: real blows STOKED the furnace (the drive climbed off onHurt jumps alone)',
+    stoked >= 0.95 && !kin.dead, `peak ${stoked.toFixed(2)}`);
+  check('kindler e2e: the brimming furnace VENTED in reach (a real kindled_eruption cast)',
+    ventAt >= 0, `vent at ${ventAt.toFixed(1)}s`);
+  check('kindler e2e: the vent emptied the coals and bought the slump window',
+    (kin.drives.get('kindle') ?? 1) <= 0.2 && kin.buffs.get('spent_slump') !== undefined);
+  check('kindler e2e: the glow rows read the same meter (kindle glow at 0 now, life glow layered)',
+    kin.tellSpecs?.[0]?.source === 'drive:kindle'
+    && kin.tellSpecs?.some(t => t.source === 'life' && t.channel.kind === 'glow') === true);
 }
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);

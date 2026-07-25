@@ -7,7 +7,8 @@
 // player minion (see Summon Skeleton / Flame Sprite) — same definition.
 // ---------------------------------------------------------------------------
 
-import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
+import { DAMAGE_COLOR, mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
+import type { BuffEffect } from '../engine/skills';
 import type { ActorAdorn, ActorShape, AmbushSpec, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
 import type { BrainTuning, PhaseDef } from '../engine/brain';
 import type { CurveKind } from '../engine/curves';
@@ -55,6 +56,59 @@ export const MONSTER_TURN_DEFAULT = 10;
 export const HUNGER_LEAN: TellSpec[] = [
   { source: 'drive:hunger', band: [0.45, 0.95], curve: 'smooth', channel: { kind: 'lean', amp: 1 } },
 ];
+
+// --- THE ACCUMULATOR FAMILY (engine/tells.ts consumers) ----------------------
+// Bodies whose meter you can SEE filling toward a payoff — the mire leech's
+// glut sac generalized into a shared grammar: FILL (a worn gauge, a glow, a
+// crest) → RELEASE (the payoff verb, reserved OUT of the kit rotation and
+// force-cast by the brim rule — the worn meter is the only warning and the
+// only one needed) → THE SPENT SLUMP (the family's structural answer to the
+// death-spiral: every release ends in a readable beat of exhaustion, so the
+// player always holds two live strategies — DENY the fill, or BAIT the spend
+// and farm the window). Shared dials here; each body's own thresholds live
+// on its def (defs ARE data). Probe: balance/probe_tells.ts.
+export const ACCUM_CFG = {
+  /** THE SPENT SLUMP: seconds of the post-release window, its speed/softness
+   *  price (buff mods), and how deep the worn sag reads (the lean row). */
+  slump: { sec: 2.6, moveSpeed: -0.4, damageTaken: 0.3, lean: 0.85 },
+  /** THE GORGED WADDLE (the corpse-eater): while the bank runs past `at`
+   *  the gait drags — a fed glutton is a slower glutton. */
+  gorged: { at: 0.5, sec: 2.8, moveSpeed: -0.28 },
+  /** THE BURST TELL derivation (the registry-close fold at file end): every
+   *  deathBurst body wears an under-glow in its blast's own element color,
+   *  brightening as life falls — life IS a death-burst's countdown, so the
+   *  ambush bomb becomes an honest timer. band maps the life read, `max`
+   *  caps the glow, `portrait` is the book's sample value. */
+  burstTell: { band: [0.55, 0.05] as [number, number], steps: 6, max: 0.5, portrait: 0.6 },
+};
+
+/** The family SLUMP, wearable in one word each: the buff is the mechanic
+ *  (a brim rule's third action), the tell row is the read (spread into a
+ *  def's tells). Binary threshold, portrait 0 — the book never slumps. */
+export const SPENT_SLUMP_BUFF: BuffEffect = {
+  type: 'buff', id: 'spent_slump', duration: ACCUM_CFG.slump.sec,
+  mods: [
+    mod('moveSpeed', 'increased', ACCUM_CFG.slump.moveSpeed),
+    mod('damageTaken', 'increased', ACCUM_CFG.slump.damageTaken),
+  ],
+};
+export const SPENT_SLUMP: TellSpec[] = [
+  { source: 'buff:spent_slump', steps: 1, portrait: 0, channel: { kind: 'lean', amp: ACCUM_CFG.slump.lean } },
+];
+
+/** The glutton's drag while the bank runs high (reapplied on a beat by its
+ *  waddle rule, so spending the bank frees the feet within one lapse). */
+export const GORGED_WADDLE_BUFF: BuffEffect = {
+  type: 'buff', id: 'gorged_waddle', duration: ACCUM_CFG.gorged.sec,
+  mods: [mod('moveSpeed', 'increased', ACCUM_CFG.gorged.moveSpeed)],
+};
+
+/** The chorus at crest: the fervor every standing voice wears while the
+ *  shared meter holds the line (the crescendo rule reapplies it). */
+export const CRESCENDO_BUFF: BuffEffect = {
+  type: 'buff', id: 'chorus_crescendo', duration: 3.2,
+  mods: [mod('attackSpeed', 'increased', 0.25), mod('moveSpeed', 'increased', 0.18)],
+};
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
@@ -512,6 +566,11 @@ export interface MonsterDef {
    *  every row resolves off the live mechanic the AI itself reads — a sac
    *  that reads full IS full. Docs: docs/engine/tells.md. */
   tells?: TellSpec[];
+  /** THE BURST TELL (the registry-close fold at file end): a deathBurst
+   *  body derives a life-banded under-glow in its blast's own color by
+   *  DEFAULT — a silent invisible bomb is no longer authorable by omission.
+   *  `false` opts out; a TellSpec row is worn INSTEAD of the derivation. */
+  burstTell?: false | TellSpec;
   /** Def-level role tag stamped at spawn (ambient wildlife: 'critter' /
    *  'predator' — AMBIENT_TAGS keeps them off objectives). Event spawners
    *  may overwrite for their own roles (patrol, siege, brigand...). */
@@ -766,8 +825,17 @@ export interface MonsterDef {
    *  EATS — `rate` × max life healed per second; after `time` seconds the
    *  corpse is GONE, denied to every spectre corpse-read and raise skill
    *  sharing the larder. The scavenger and the necromancer fight over the
-   *  same bodies — kill the eaters first or lose your material. */
-  carrion?: { radius?: number; rate?: number; time?: number };
+   *  same bodies — kill the eaters first or lose your material.
+   *  THE ACCUMULATOR LANE (the tell fabric's gorger): `drive` BANKS each
+   *  finished meal into a named drive — the fill a worn tell shows and a
+   *  brain rule spends — and keeps the feeder hungry at full life while
+   *  the bank is short; `combat: true` lets a wild body keep feeding UNDER
+   *  FIRE (the meal owns its whole attention — the open window is the
+   *  meal's price; summoned copies stay obedient and eat on idle). */
+  carrion?: {
+    radius?: number; rate?: number; time?: number;
+    drive?: { id: string; add: number }; combat?: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -10406,7 +10474,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'mire_leech', name: 'Mire Leech',
     color: '#7a4652', shape: 'oval', radius: 11, material: 'slime', look: 'mire_leech',
     base: { life: 52, moveSpeed: 124, accuracy: 96, evasion: 30, mana: 0 },
-    mods: [mod('poisonRes', 'flat', 0.35), mod('lifeLeech', 'flat', 0.15)],
+    // (poisonRes dropped — the boot validator names it a dead stat: seated
+    // in no registry, a silent no-op since the debut. The leech's identity
+    // is the leech line.)
+    mods: [mod('lifeLeech', 'flat', 0.15)],
     skills: ['claw', 'sanguine_burst'], xp: 16,
     faction: 'beast', tags: ['beast'],
     detection: 1.3, // it smells blood (the hemophage's nose)
@@ -10423,6 +10494,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // Past the burst line the whole body engorges — the last warning.
       // (portrait 0: the book shows the half-full sac on an unswollen body.)
       { source: 'drive:glut', band: [0.6, 1], portrait: 0, channel: { kind: 'scale', amp: 0.12 } },
+      ...SPENT_SLUMP,
     ],
     brain: {
       type: 'swarm',
@@ -10433,9 +10505,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
       rules: [{
         when: { drive: { id: 'glut', above: 0.95 }, distUnder: 140 },
         cooldown: 2.5,
+        // The spend ends in the family slump (ACCUM_CFG) — the overcommit
+        // that makes FEEDING it a strategy, not just a mistake.
         actions: [
           { do: 'cast', skill: 'sanguine_burst', force: true },
           { do: 'drive', id: 'glut', add: -1 },
+          { do: 'buff', buff: SPENT_SLUMP_BUFF },
         ],
       }],
     },
@@ -10876,16 +10951,60 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'swarm' },
   },
   // The brood carried to term: killing her IS the fight's second half.
+  // THE BROODER (the accumulator family, engine/tells.ts): her term is now
+  // a meter you can READ — the brood drive rises on its own clock and the
+  // pale egg-sac IS it (drive:brood → fillSac): slack after a laying,
+  // straining at the brim. At term she LAYS — broodpod, reserved OUT of her
+  // rotation and force-cast as the birth itself (the pod she has always
+  // carried: five incubating seconds, breakable early — the sac merely
+  // makes its hidden clock visible) — then the family slump. Burst her
+  // before term and the wave never comes; her death still spills the
+  // death-clutch it always did. Two sacs now read in the same fen: the
+  // leech's blood bank and the mother's brood — same gauge, different
+  // debts, and the difference IS the literacy.
   bloat_mother: {
     id: 'bloat_mother', name: 'Bloat Mother',
-    color: '#a8506a', shape: 'oval', radius: 19,
+    color: '#a8506a', shape: 'oval', radius: 19, look: 'bloat_mother',
     base: { life: 130, moveSpeed: 70, accuracy: 90, poise: 35, mana: 40, manaRegen: 3 },
     skills: ['claw', 'broodpod'], xp: 30,
     faction: 'wild', tags: ['beast'],
     presence: { from: 7, fadeIn: 4 },
     turnSpeed: 3.5,
-    brain: { type: 'basic', onDeath: [{ do: 'summon', monster: 'blood_mite', count: 5, ring: 32 }] },
+    tells: [
+      // The egg-sac: fill + strain ride the SAME clock the laying rule reads.
+      {
+        source: 'drive:brood',
+        channel: {
+          kind: 'part',
+          part: { kind: 'fillSac', x: -0.2, scale: 1.1, color: '#d8b890', params: { fluid: '#c8a86a', ry: 0.9 } },
+          scale: [0.85, 1.2],
+        },
+      },
+      // Near term the whole body swells (portrait 0: the book shows the
+      // half-full sac on an unswollen frame).
+      { source: 'drive:brood', band: [0.55, 1], portrait: 0, channel: { kind: 'scale', amp: 0.12 } },
+      ...SPENT_SLUMP,
+    ],
+    brain: {
+      type: 'basic',
+      drives: { brood: { rise: 0.033, start: [0.2, 0.6] } },
+      // The laying stays OUT of the weighted roll: claw is the rotation.
+      skillUse: { mode: 'priority', order: ['claw'] },
+      rules: [{
+        // THE TERM: the sac at the brim comes due wherever she stands —
+        // the pod plants, the clock resets, and the slump is the window.
+        when: { drive: { id: 'brood', above: 0.97 } },
+        cooldown: 4,
+        actions: [
+          { do: 'cast', skill: 'broodpod', force: true },
+          { do: 'drive', id: 'brood', add: -1 },
+          { do: 'buff', buff: SPENT_SLUMP_BUFF },
+        ],
+      }],
+      onDeath: [{ do: 'summon', monster: 'blood_mite', count: 5, ring: 32 }],
+    },
   },
+
   // The gaze-frozen cat: hold your aim on it and it holds its ground.
   marsh_stalker: {
     id: 'marsh_stalker', name: 'Marsh Stalker',
@@ -10953,8 +11072,72 @@ export const MONSTERS: Record<string, MonsterDef> = {
     presence: { from: 5, fadeIn: 3 },
     brain: { type: 'pack', squad: { muster: { count: 2, radius: 320, patience: 5 }, tokens: 2, surround: true } },
   },
+  // THE GORGER (the accumulator family, engine/tells.ts): a grave-fat
+  // scavenger that eats the field's dead INTO a bank — every finished
+  // corpse fills the paunch (carrion.drive), and it keeps feeding UNDER
+  // FIRE (carrion.combat): the meal owns its whole attention, and that
+  // open window is the meal's price. The paunch IS the meter (drive:gorge
+  // → fillSac): slack-bellied it is quick and weak; fed, it drags (the
+  // gorged waddle) and one step too close buys the whole meal back —
+  // gorge_burst, the bank vomited as a bone-and-bile nova, then the family
+  // slump. Deny it bodies (spend the corpses, fight it off its larder) or
+  // cater deliberately and farm the window. Its midden landmark teaches it
+  // wholesale: the mounds SPILL corpses when struck, so a careless cleave
+  // sets its table.
+  charnel_glutton: {
+    id: 'charnel_glutton', name: 'Charnel Glutton',
+    color: '#8a7a5e', shape: 'oval', radius: 16, material: 'flesh', look: 'charnel_glutton',
+    base: { life: 150, moveSpeed: 118, accuracy: 96, armor: 25, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw', 'gorge_burst'], xp: 26,
+    faction: 'beast', tags: ['beast'],
+    detection: 1.4, turnSpeed: 4.5,
+    carrion: { radius: 320, rate: 0.05, time: 1.6, combat: true, drive: { id: 'gorge', add: 0.34 } },
+    tells: [
+      // The paunch: fill + strain ride the SAME bank the burst rule spends.
+      {
+        source: 'drive:gorge', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'fillSac', x: -0.3, scale: 1.0, color: '#a8b06a', params: { fluid: '#6a7a2a', ry: 0.9 } },
+          scale: [0.75, 1.2],
+        },
+      },
+      // Past half-fed the whole body distends (portrait 0 — the book shows
+      // the half-full paunch on an undistended frame).
+      { source: 'drive:gorge', band: [0.5, 1], portrait: 0, channel: { kind: 'scale', amp: 0.16 } },
+      ...SPENT_SLUMP,
+    ],
+    brain: {
+      type: 'basic',
+      drives: { gorge: { start: [0, 0.25] } },
+      // The burst stays OUT of the weighted roll: claw is the rotation.
+      skillUse: { mode: 'priority', order: ['claw'] },
+      rules: [
+        // THE RELEASE: a full paunch within arm's reach comes back up —
+        // and the spend ends in the family slump (the bait's payoff).
+        {
+          when: { drive: { id: 'gorge', above: 0.95 }, distUnder: 170 },
+          cooldown: 3,
+          actions: [
+            { do: 'cast', skill: 'gorge_burst', force: true },
+            { do: 'drive', id: 'gorge', add: -1 },
+            { do: 'buff', buff: SPENT_SLUMP_BUFF },
+          ],
+        },
+        // THE GORGED WADDLE: while the bank runs high the gait drags —
+        // reapplied on a beat, so spending the bank frees the feet.
+        {
+          when: { drive: { id: 'gorge', above: ACCUM_CFG.gorged.at } },
+          every: [1.6, 2.4], hold: [0.2, 0.3],
+          actions: [{ do: 'buff', buff: GORGED_WADDLE_BUFF }],
+        },
+      ],
+    },
+  },
   // THE SHARD SPIRE — a standing battery of charged crystal: the leyline's
   // own turret tier (visible from the start; its menace is the arc).
+
   shard_spire: {
     id: 'shard_spire', name: 'Shard Spire',
     color: '#7fd0ff', shape: 'octagon', radius: 14, material: 'crystal', look: 'shard_spire',
@@ -16669,8 +16852,61 @@ export const MONSTERS: Record<string, MonsterDef> = {
       tempo: { kite: 2.4, windedFor: [0.7, 1.2] },
     },
   },
+  // THE CHORUS (the accumulator family, engine/tells.ts): a crested runner
+  // whose meter is the PACK'S — the shrilling builds while the covey stands
+  // together (rise), a kill lifts every crest in earshot (onKill echoed
+  // whole, share 1), and every voice you fell knocks the choir flat
+  // (onAllyDeath). The crest IS the meter (drive:chorus → the crest part,
+  // dun folding up to gold): low crests circle polite on two engage tokens;
+  // at full crest the chorus COMMITS — the token cap opens and the whole
+  // pack takes the field wearing the crescendo. Kill order finally reads at
+  // a glance: fell one and watch the whole field sag.
+  crag_chorister: {
+    id: 'crag_chorister', name: 'Crag Chorister',
+    color: '#b09a6a', shape: 'kite', radius: 11, material: 'scale', look: 'crag_chorister',
+    base: { life: 44, moveSpeed: 176, accuracy: 98, evasion: 55, mana: 0 },
+    skills: ['claw'], xp: 15,
+    faction: 'beast', tags: ['beast'],
+    detection: 1.3,
+    scaleVariance: [0.9, 1.15],
+    tells: [
+      // The crest: height + hue ride the SAME meter the commit rule reads.
+      {
+        source: 'drive:chorus', curve: 'smooth', portrait: 0.85,
+        channel: {
+          kind: 'part',
+          part: { kind: 'crest', x: 0.08, scale: 0.9, role: 'accent', params: { n: 4 } },
+          scale: [0.35, 1.3], color: ['#7a6a4a', '#ffd05a'],
+        },
+      },
+      { source: 'drive:chorus', band: [0.6, 1], channel: { kind: 'glow', color: '#ffd870', max: 0.3 } },
+    ],
+    brain: {
+      type: 'pack',
+      squad: { muster: { count: 2, radius: 340 }, tokens: 2, surround: true, onLeaderDeath: 'scatter' },
+      tempo: { moveFor: [1.0, 1.8], pauseFor: [0.2, 0.5] },
+      drives: { chorus: { rise: 0.014, start: [0.1, 0.4], onKill: 0.35, share: 1, onAllyDeath: -0.5 } },
+      rules: [
+        // THE COMMIT (level rule — active exactly while the choir crests):
+        // the token cap opens and the whole pack engages at once. Felling
+        // ONE voice sags every crest below the line and this lapses.
+        {
+          when: { drive: { id: 'chorus', above: 0.85 } },
+          use: { squad: { muster: { count: 2, radius: 340 }, tokens: 6, surround: true, onLeaderDeath: 'scatter' } },
+        },
+        // THE CRESCENDO (periodic while crested): the fervor, reapplied on
+        // a beat so a sagging choir loses it within one lapse.
+        {
+          when: { drive: { id: 'chorus', above: 0.85 } },
+          every: [2.4, 3.4], hold: [0.3, 0.5],
+          actions: [{ do: 'buff', buff: CRESCENDO_BUFF }],
+        },
+      ],
+    },
+  },
   // The dust quail: a covey of nerves — the downs' running punctuation.
   dust_quail: {
+
     id: 'dust_quail', name: 'Dust Quail',
     color: '#c0a878', shape: 'oval', radius: 6, material: 'fur', look: 'dust_quail',
     base: { life: 6, moveSpeed: 225, evasion: 85, mana: 0 },
@@ -16810,6 +17046,53 @@ export const MONSTERS: Record<string, MonsterDef> = {
       tempo: { kite: 2.2, windedFor: [0.7, 1.2] },
     },
   },
+  // THE KINDLER (the accumulator family, engine/tells.ts): an ember-gutted
+  // dome of plate the FIGHT ITSELF stokes — every landed blow feeds the
+  // kindle meter (drives.onHurt; nothing else does), and the furnace shows
+  // through the plate seams as the under-glow brightens (drive:kindle →
+  // glow + tint). At the brim, one step too close and it VENTS —
+  // kindled_eruption, a slow honest fire nova, then the family slump while
+  // the coals rebuild. Your own damage is the fuse: overkill it between
+  // vents, kill it at range, or stoke it deliberately and dodge the payoff.
+  // It also bursts on death (deathBurst) — the derived life-glow (the
+  // burst-tell law, this file's closing fold) layers beneath the kindle
+  // glow; deepest read wins and both are honest.
+  cinderback: {
+    id: 'cinderback', name: 'Cinderback',
+    color: '#6a4638', shape: 'oval', radius: 12, material: 'chitin', look: 'cinderback',
+    base: { life: 78, moveSpeed: 128, accuracy: 98, armor: 30, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.6), mod('coldRes', 'flat', -0.25)],
+    skills: ['claw', 'kindled_eruption'], xp: 20,
+    faction: 'beast', tags: ['beast'],
+    // The furnace doesn't tire: no breath = no default kite budget (the
+    // material nature's per-def override) — it TRUNDLES INTO reach, which
+    // its own point-blank vent rule needs. A kiting bomb defuses itself.
+    breathes: false,
+    detection: 1.1,
+    deathBurst: { mode: 'implode', damageFrac: 0.6, damageType: 'fire', coalesce: 0.6, radius: 62 },
+    tells: [
+      // The furnace: the glow rides the SAME meter the vent rule spends.
+      { source: 'drive:kindle', curve: 'smooth', channel: { kind: 'glow', color: '#ff9a3a', max: 0.55 } },
+      { source: 'drive:kindle', band: [0.35, 1], channel: { kind: 'tint', color: '#ff7a30', max: 0.4 } },
+      ...SPENT_SLUMP,
+    ],
+    brain: {
+      type: 'basic',
+      drives: { kindle: { onHurt: 0.07, start: [0, 0.15] } },
+      // The vent stays OUT of the weighted roll: claw is the rotation.
+      skillUse: { mode: 'priority', order: ['claw'] },
+      rules: [{
+        when: { drive: { id: 'kindle', above: 0.95 }, distUnder: 150 },
+        cooldown: 2.5,
+        actions: [
+          { do: 'cast', skill: 'kindled_eruption', force: true },
+          { do: 'drive', id: 'kindle', add: -1 },
+          { do: 'buff', buff: SPENT_SLUMP_BUFF },
+        ],
+      }],
+    },
+  },
+
 
   // ==========================================================================
   // THE TRUE NATIVES (the lair fabric — engine/lairs.ts, data/lairs.ts):
@@ -17981,3 +18264,31 @@ export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
 
 /** Every 5th wave spawns this boss alongside the pack. */
 export const BOSS_ID = 'pit_lord';
+
+// --- THE BURST TELL (the kindler law over the whole bestiary) ----------------
+// A death-burst is a bomb whose countdown is the bearer's LIFE — so at
+// registry close every deathBurst body DERIVES an under-glow tell in its
+// blast's own hue (DeathBurstDef.color, else the element's canonical tint),
+// brightening as the life falls (engine/tells.ts 'life' source; the glow
+// channel's deepest-wins fold keeps authored glows honest above it). The
+// honesty is the DEFAULT: a def opts out (`burstTell: false`) or wears its
+// own row instead (`burstTell: {...}`) — a silent invisible bomb is no
+// longer authorable by omission. Dials in ACCUM_CFG.burstTell;
+// probe_tells.ts censuses the law.
+for (const id in MONSTERS) {
+  const def = MONSTERS[id];
+  const db = def.deathBurst;
+  if (!db || def.burstTell === false) continue;
+  const row: TellSpec = def.burstTell ?? {
+    source: 'life',
+    band: [ACCUM_CFG.burstTell.band[0], ACCUM_CFG.burstTell.band[1]],
+    curve: 'smooth', steps: ACCUM_CFG.burstTell.steps,
+    portrait: ACCUM_CFG.burstTell.portrait,
+    channel: {
+      kind: 'glow',
+      color: db.color ?? DAMAGE_COLOR[db.damageType ?? 'fire'],
+      max: ACCUM_CFG.burstTell.max,
+    },
+  };
+  def.tells = def.tells ? [...def.tells, row] : [row];
+}

@@ -158,7 +158,7 @@ export const ADVANCED_KEYS: { key: string; help: string }[] = [
   { key: 'ambush', help: 'Hidden as scenery until an enemy strays: { radius, announce? }' },
   { key: 'bond', help: 'Pack bond: { mods, kin?, radius? } — mods only while a kin-holder is near' },
   { key: 'nocturne', help: '{ phases: [dawn|day|dusk|night], mods } — day/night-worn mods' },
-  { key: 'carrion', help: 'Eats corpses to heal: { radius?, rate?, time? }' },
+  { key: 'carrion', help: 'Eats corpses to heal: { radius?, rate?, time?, drive?: {id, add} banks meals into a drive, combat? keeps feeding under fire }' },
   { key: 'wake', help: 'Sheds a ground skill as it travels: { skillId, everyDist, dmgMult? }' },
   { key: 'volatile', help: 'Free-cast when struck: { skillId, chance, icd?, dmgMult? }' },
   { key: 'onHitByType', help: "Element responses: { fire: { status?, chance?, skillId?, dmgMult? }, … }" },

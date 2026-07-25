@@ -1898,6 +1898,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'bonePile', order: 53, shadow: 0.55, longShadow: 0.9,
     params: { bone: '#cfc4a8', dark: '#6a604e', skulls: 3 },
   },
+  // THE CARRION MIDDEN (the accumulator family's larder — formations.ts
+  // arms it brittle: striking it spills raisable meat): the bone-pile
+  // painter in fleshier, fresher grave tones — a heap someone keeps FED.
+  carrion_midden: {
+    painter: 'bonePile', order: 53, shadow: 0.5, longShadow: 0.85,
+    params: { bone: '#c8b090', dark: '#5a4636', skulls: 2 },
+  },
   ossuary_niche: {
     painter: 'boneShelf', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { bone: '#c9bda0', dark: '#57503f', skulls: 4 },

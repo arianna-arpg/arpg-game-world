@@ -769,6 +769,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   }
   actor.wanderDir = undefined; // combat focuses the mind
 
+  // THE GLUTTON'S COMPULSION (carrion.combat): a feeder that keeps feeding
+  // UNDER FIRE — mid-fight it noses to the nearest corpse in scent range and
+  // eats, and the meal OWNS the tick: it does not fight while it feeds, and
+  // that open window is the meal's whole price. Wild bodies only — a
+  // summoned copy fights its keeper's fight and eats on idle like any
+  // scavenger (orders outrank appetite; parity with the idle lane's law).
+  if (!actor.isMinion() && updateCarrion(actor, world, dt, true)) return;
+
   // ELBOW ROOM (BehaviorSpec.spacing): closing movement repels off the
   // nearest packmate this tick — moveToward reads the stamp.
   actor.aiSpacing = tuning.behavior?.spacing;
@@ -1717,16 +1725,29 @@ export const CARRION_CFG = {
    *  unreachable-corpse wedge guard) and how long the snub holds. */
   stallAfter: 1.5,
   snubFor: 6,
+  /** A fill drive (carrion.drive) at/over this reads FULL — the feeder stops
+   *  banking (the accumulator family's brim; engine/tells.ts wears it). */
+  fillFullAt: 0.999,
 };
 
 /** Hurt + idle + a corpse in scent range → walk to it and eat: life back per
  *  second while feeding, and after the spec's `time` the corpse is REMOVED —
  *  the same `World.corpses` larder spectre corpse-reads and raise skills
  *  draw from, so the scavenger literally eats the necromancer's material.
- *  Returns true while the meal (or the walk to it) owns this idle tick. */
-function updateCarrion(actor: Actor, world: World, dt: number): boolean {
+ *  THE ACCUMULATOR LANE (carrion.drive): each consumed corpse also BANKS
+ *  into a named drive, and a feeder whose bank isn't full stays hungry at
+ *  full life — the meter, not the wound, is what it's filling (the tell
+ *  fabric wears it; a brain rule spends it). `inCombat` is the engaged-path
+ *  call and requires carrion.combat — the glutton that keeps feeding under
+ *  fire, paying for the meal with the fight it isn't fighting.
+ *  Returns true while the meal (or the walk to it) owns this tick. */
+function updateCarrion(actor: Actor, world: World, dt: number, inCombat = false): boolean {
   const spec = actor.defId ? MONSTERS[actor.defId]?.carrion : undefined;
-  if (!spec || actor.life >= actor.maxLife() - 0.5) { actor.carrionEatT = 0; return false; }
+  if (!spec || (inCombat && !spec.combat)) { if (!spec) actor.carrionEatT = 0; return false; }
+  const lifeHungry = actor.life < actor.maxLife() - 0.5;
+  const fillHungry = spec.drive !== undefined
+    && (actor.drives.get(spec.drive.id) ?? 0) < CARRION_CFG.fillFullAt;
+  if (!lifeHungry && !fillHungry) { actor.carrionEatT = 0; return false; }
   // A snubbed larder (an unreachable meal, below) stays off the menu long
   // enough for ordinary idle life to move the body somewhere new.
   if (world.time < actor.carrionSnubUntil) return false;
@@ -1768,6 +1789,12 @@ function updateCarrion(actor: Actor, world: World, dt: number): boolean {
     const i = world.corpses.indexOf(best as (typeof world.corpses)[number]);
     if (i !== -1) world.corpses.splice(i, 1);
     actor.carrionEatT = 0;
+    // THE BANK: the meal fills the named meter (clamped like every drive
+    // write) — the same map the def's own rules and worn tells read.
+    if (spec.drive) {
+      const v = (actor.drives.get(spec.drive.id) ?? 0) + spec.drive.add;
+      actor.drives.set(spec.drive.id, Math.max(0, Math.min(1, v)));
+    }
     world.text(vec(actor.pos.x, actor.pos.y - 16), 'feeds', '#a8c87a', 11);
   }
   return true;

@@ -810,6 +810,20 @@ registerDoodadRule('shallow_grave', {
     corpses: { monster: 'zombie', count: [1, 2], chance: 0.9, text: 'the earth gives up its dead!' },
   },
 });
+// THE CARRION MIDDEN (the accumulator family's larder): a heaped kill-mound
+// in scavenger country — struck, it SPILLS raisable meat (the shallow
+// grave's law with graze-kill bodies, not risen dead), so a careless cleave
+// CATERS the glutton banking beside it and a deliberate crack BAITS it
+// away. The corpse economy's three customers (raiser, ghoul, gorger) all
+// dine at the same heap.
+registerDoodadRule('carrion_midden', {
+  overlap: 'ground', spacing: 34,
+  brittle: {
+    on: ['hit'], orbChance: 0.06,
+    text: 'the midden spills open!', color: '#9a8a6a',
+    corpses: { monster: 'taiga_elk', count: [1, 2], chance: 0.9, text: 'the heap gives up its meat!' },
+  },
+});
 // Tileset layouts speak in STAMPS — the kit's kinds join the vocabulary.
 registerStamp('shallow_grave', stampSingle('shallow_grave', [11, 15]));
 registerStamp('plague_cart', stampSingle('plague_cart', [15, 19]));

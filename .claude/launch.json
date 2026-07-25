@@ -282,6 +282,20 @@
       ],
       "port": 5274,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa18",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5272",
+        "--strictPort"
+      ],
+      "port": 5272,
+      "autoPort": false
     }
   ]
 }
