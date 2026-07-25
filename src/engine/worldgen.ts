@@ -1761,6 +1761,15 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     // the salted streams.
     ...(ts.puzzles ? { puzzles: ts.puzzles } : {}),
     ...(ts.scenery ? { scenery: ts.scenery } : {}),
+    // COMPOSITION ROLLS: the face's whole-zone bundles ride the minted def
+    // exactly as the surface literal bakes them — planCompositions reads
+    // only def.compositions, so an un-baked row was a dead dial down here
+    // (the gleamhollow's glowworm grotto could never fire; genqa's tileset
+    // sweep always assumed the bake). Rows draw rng only when present, so
+    // composition-less faces stay byte-identical; noDeeper pockets are safe
+    // by construction — the levelgen strip eats any entrance a composition
+    // plants.
+    ...(ts.compositions ? { compositions: ts.compositions } : {}),
     packs: ts.packs,
     exits: [{ to: parent.id, side: 's' }],  // the sole exit — back to the surface
     map: { x: parent.map.x, y: parent.map.y }, // unused off-graph, but type-required
