@@ -100,6 +100,36 @@ const TABLE_LIST: LootTableDef[] = [
     ],
   },
 
+  // THE LAIR HOARD (the lair fabric, data/lairs.ts): what the den's victims
+  // carried, paid by every fallen alpha — the Rimefather, the cairn giant,
+  // the hag, a sphinx who chose poorly. REPEATABLE faucet, so it runs a
+  // half-step over boss_gear, never near the one-shot capstone hoards: one
+  // elevated find with honest rare odds, plus a scavenged side pour.
+  {
+    id: 'lair_hoard',
+    rolls: [
+      {
+        count: [1, 2],
+        entries: [
+          {
+            weight: 75, kind: 'item', ilvlBonus: 1,
+            rarityWeights: { common: 10, magic: 40, rare: 42, unique: 8 },
+          },
+          { weight: 25, kind: 'table', table: 'world_gear' },
+        ],
+      },
+      {
+        count: 1,
+        entries: [
+          { weight: 30, kind: 'gem' },
+          { weight: 25, kind: 'table', table: 'jewelry_cache' },
+          { weight: 10, kind: 'vestige' },
+          { weight: 35, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
   // THE ROYAL REGISTER's one distribution: a single item FORCED to carry one
   // of the Swarming's three families (equal thirds), never common. Both the
   // cache and the replete drink from this one table — the register stays in

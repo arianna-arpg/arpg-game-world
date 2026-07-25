@@ -137,6 +137,23 @@ export function registerDormantTag(tag: string, reset?: NeutralResetRule): void 
   if (reset) NEUTRAL_RESET[tag] = reset;
 }
 
+/** What a wounding hit does to a dormant cohort of this tag (the world's
+ *  rouseOnWound consults this beside its own live-overlay rows): woundFrac
+ *  1 = any landed hit bites, lower = only past that life fraction; radius
+ *  0 = only the struck one wakes, else every armed same-tag kin inside it. */
+export interface RouseCfg {
+  woundFrac: number; radius: number; toast: string; color: string; size: number;
+}
+
+/** OPEN rouse registry — registerDormantTag's sibling: static rules a def
+ *  file registers at module init (the lair fabric's vault warden). The
+ *  world-state readers that must close over live overlay tuning stay in
+ *  World.rouseRules; everything else belongs here, one call per tag. */
+export const ROUSE_RULES: Record<string, () => RouseCfg | null> = {};
+export function registerRouseRule(tag: string, cfg: () => RouseCfg | null): void {
+  ROUSE_RULES[tag] = cfg;
+}
+
 /** DORMANT = tag-gated neutral that hasn't been roused. THE predicate every
  *  fabric reads (one definition, never re-derived): the AI gate holds the
  *  brain, and the world's displacement physics — wind drift, knockback/pull

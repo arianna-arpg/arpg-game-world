@@ -26,6 +26,7 @@ import {
   paintRegion, paintLiquid, liquidOf, bearingNoise,
 } from './genkit';
 import { ringPath } from './tracks';
+import { LAIR_CFG } from './lairs';
 
 /** The def's liquid (params.liquid overrides def.liquid; default water). */
 function liq(b: LandmarkBuildCtx): ReturnType<typeof liquidOf> {
@@ -339,6 +340,19 @@ registerLandmarkBuilder('pit', (b) => {
   // A sunken-floor wash (data ground kinds compose: gore, cinder, mud…).
   const floorKind = b.param<string | undefined>('floorKind', undefined);
   if (floorKind) paintLiquid(b.ctx, b.grid, floor, liquidOf(floorKind));
+  // Interior dressing — the fence_ring's {kind, count, radius} rows, so a
+  // pit can furnish its own floor (the giant's cookfire and gnawed bones).
+  // Absent = no rows, no draws: every existing pit stays byte-identical.
+  const inner = b.param('inner', [] as { kind: DoodadKind; count: [number, number]; radius: [number, number] }[]);
+  for (const row of inner) {
+    for (let i = 0, k = rng.int(row.count[0], row.count[1]); i < k; i++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(0, r * 0.55);
+      b.ctx.doodads.push({
+        pos: vec(b.center.x + Math.cos(a) * d, b.center.y + Math.sin(a) * d),
+        radius: rng.range(row.radius[0], row.radius[1]), kind: row.kind, rot: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
   b.interior = floor;
 });
 
@@ -522,4 +536,45 @@ registerLandmarkBuilder('lake', (b) => {
     }
   }
   b.interior = body.clone().invert();
+});
+
+// --- DEN MOUTH (the lair fabric, engine/lairs.ts) --------------------------------
+// The native's DOOR and the ground that confesses it: a trodden APRON
+// (optional wash), the mouth doodad centered — a registered sidezone
+// entrance; the lair fabric's data rows pick the kind — and the SPOOR ring:
+// dress rows scattered on the apron band, so the den reads from thirty paces
+// before the door does. Every knob is a param; the builder owns no lair
+// knowledge (any recipe or composition may stamp one). The landmark recipe
+// should carry mustReach (the door joins the reachability net) and
+// clearSite (the spoor tells its own story — no borrowed scatter).
+registerLandmarkBuilder('den_mouth', (b) => {
+  const { rng, r } = b;
+  const apron = frame(b);
+  radial(apron, b.center.x, b.center.y, (a) => r * 0.82 + bearingNoise(a, 0.1 * r, rng.int(0, 1 << 30)));
+  const floorKind = b.param<string | undefined>('floorKind', undefined);
+  if (floorKind) paintLiquid(b.ctx, b.grid, apron, liquidOf(floorKind));
+  // The spoor: {kind, count, radius} rows on the apron's outer band — never
+  // crowding the door (the annulus keeps the dwell spot honest).
+  const dress = b.param('dress', [] as { kind: DoodadKind; count: [number, number]; radius: [number, number] }[]);
+  for (const row of dress) {
+    for (let i = 0, k = rng.int(row.count[0], row.count[1]); i < k; i++) {
+      const a = rng.range(0, Math.PI * 2), d = rng.range(r * 0.38, r * 0.78);
+      b.ctx.doodads.push({
+        pos: vec(b.center.x + Math.cos(a) * d, b.center.y + Math.sin(a) * d),
+        radius: rng.range(row.radius[0], row.radius[1]),
+        kind: row.kind, rot: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
+  const mouthKind = b.param<string | undefined>('mouthKind', undefined);
+  if (mouthKind) {
+    b.ctx.doodads.push({
+      pos: vec(b.center.x, b.center.y),
+      radius: b.param('mouthRadius', LAIR_CFG.mouth.radius),
+      kind: mouthKind as DoodadKind, rot: 0,
+    });
+  } else {
+    console.warn(`[lairs] den_mouth landmark '${b.def.id}' has no mouthKind param — an apron with no door`);
+  }
+  b.interior = apron;
 });

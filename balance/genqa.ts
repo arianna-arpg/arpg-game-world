@@ -53,6 +53,7 @@ import '../src/data/clusters';
 import '../src/data/formations';
 import '../src/engine/landmarkBuilders';
 import '../src/data/landmarks';
+import '../src/data/lairs';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
 import '../src/data/massifs';

@@ -16702,6 +16702,137 @@ export const MONSTERS: Record<string, MonsterDef> = {
       tempo: { kite: 2.2, windedFor: [0.7, 1.2] },
     },
   },
+
+  // ==========================================================================
+  // THE TRUE NATIVES (the lair fabric — engine/lairs.ts, data/lairs.ts):
+  // apex kin who claim GROUND, not wars. None of them enter a biome's spawn
+  // tables or a faction's diplomacy — they stand where their lair seats
+  // (highland cave ladders, marsh hollows, the deep desert's vaults) and
+  // treat everything that walks in as what it is: food, sport, or a riddle.
+  // Factions 'jotun' (the old cold giants) and 'coven' (the fen's crones)
+  // debut here; the sphinx wears 'carven' (stone remembers its own).
+  // ==========================================================================
+
+  // THE YETI — the mountain's landlord. A shag-furred wall that CLOSES THE
+  // HAND (the grab fabric worn as identity): snatch, carry, and a lesson in
+  // ballistics off the nearest cave wall. Hunts the larder's hares through
+  // its own hunger when nobody worth throwing is available.
+  yeti: {
+    id: 'yeti', name: 'Yeti',
+    color: '#dfe8ee', shape: 'rectangle', radius: 21, material: 'fur', look: 'yeti',
+    heft: 1.5,
+    base: { life: 210, moveSpeed: 105, accuracy: 96, armor: 30, mana: 45, manaRegen: 5, poise: 55 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    skills: ['yeti_snatch', 'yeti_hurl', 'rime_breath', 'ground_slam'],
+    xp: 48,
+    faction: 'jotun', tags: ['beast'],
+    packSize: [2, 3],
+    scaleVariance: [0.9, 1.3], scaleStats: true,
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.7, reaction: [0.3, 0.7] },
+      // The larder is stocked for a reason: a peckish yeti hunts the small
+      // meat through the same hunger drive the wargs wear.
+      drives: { hunger: { rise: 0.008, start: [0.2, 0.6], onKill: -0.8 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.65 } },
+        use: { target: { prey: ['critter'], detectMul: 1.2 }, behavior: { seek: { what: 'prey', pace: 0.55 } } },
+      }],
+    },
+  },
+  // THE RIMEFATHER — the den's eldest, white where the others are grey, and
+  // the reason the bones outside are stacked so neatly. The frostmaw den's
+  // boss objective (data/lairs.ts).
+  yeti_alpha: {
+    id: 'yeti_alpha', name: 'Rimefather',
+    color: '#f0f5f8', shape: 'rectangle', radius: 30, material: 'fur', look: 'yeti_alpha',
+    heft: 1.7, boss: true,
+    base: { life: 540, moveSpeed: 95, accuracy: 100, armor: 45, mana: 60, manaRegen: 6, poise: 95 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    skills: ['yeti_snatch', 'yeti_hurl', 'rime_breath', 'hurl_debris', 'ground_slam'],
+    xp: 240, loot: 'lair_hoard',
+    faction: 'jotun', tags: ['beast'],
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.65, reaction: [0.3, 0.6] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.08 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.6 } },
+        announce: 'the Rimefather ROARS — the icicles come down!',
+        use: { skillUse: { cadence: [0.1, 0.3] }, move: { style: 'direct', pace: 1.2 }, behavior: { reaction: [0, 0.1] } },
+      }],
+    },
+  },
+  // THE HILL GIANT — six hundred pounds of appetite asleep beside a cookfire.
+  // Wakes when you step into the cairn ring (the lair landmark arms the
+  // spawned instance as a visible ambush — the gnasher pen's law), wrestles
+  // like the old schools (the mauler pair worn at true scale), and keeps
+  // what its victims carried. bossBar without boss: the marquee reads, the
+  // loot laws stay elite-tier.
+  hill_giant: {
+    id: 'hill_giant', name: 'Hill Giant',
+    color: '#c4a878', shape: 'trapezoid', radius: 27, look: 'hill_giant',
+    heft: 1.8, bossBar: true,
+    base: { life: 480, moveSpeed: 92, accuracy: 92, armor: 35, mana: 55, manaRegen: 5, poise: 100 },
+    skills: ['hurl_debris', 'ground_slam', 'mauler_clinch', 'mauler_toss', 'heavy_strike'],
+    xp: 200, loot: 'lair_hoard',
+    faction: 'jotun',
+    scaleVariance: [0.95, 1.2], scaleStats: true,
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.6, reaction: [0.4, 0.9] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.09 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.6 } },
+        announce: 'the giant is properly awake now.',
+        use: { skillUse: { cadence: [0.15, 0.3] }, move: { style: 'direct', pace: 1.25 } },
+      }],
+    },
+  },
+  // THE MIRE HAG — the fen's crone, who knows your name and dislikes it.
+  // Hexes that cross the wires (the confusion family worn as a kit), a
+  // plague javelin for the doorway, and a will-o-wisp court that lights
+  // nothing anybody should follow. The hovel den's boss (data/lairs.ts).
+  mire_hag: {
+    id: 'mire_hag', name: 'Mire Hag',
+    color: '#7a8a5e', shape: 'kite', radius: 13, look: 'mire_hag',
+    boss: true,
+    base: { life: 300, moveSpeed: 125, accuracy: 102, evasion: 55, mana: 130, manaRegen: 10, insight: 30 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['scatterhex', 'turnwise_hex', 'blightspear', 'claw'],
+    xp: 190, loot: 'lair_hoard',
+    faction: 'coven',
+    brain: {
+      type: 'flanker',
+      behavior: { castArc: 0.85, reaction: [0.25, 0.6] },
+    },
+  },
+  // THE VAULT SPHINX — the deep desert's warden, carved before the dynasties
+  // and patient past all of them. She is NOT the vault's ask (the riddle is —
+  // the puzzle objective); she is what happens when you answer with a sword:
+  // a dormant sentry (tag 'vault_warden', latched-once — stone does not
+  // forgive) planted at her plinth, wearing the marquee bar when roused.
+  vault_sphinx: {
+    id: 'vault_sphinx', name: 'Vault Sphinx',
+    color: '#d8c084', shape: 'trapezoid', radius: 22, material: 'stone', look: 'vault_sphinx',
+    heft: 2.0, bossBar: true, noNemesis: true,
+    tag: 'vault_warden', post: true,
+    base: { life: 620, moveSpeed: 110, accuracy: 105, armor: 60, mana: 90, manaRegen: 6, poise: 120 },
+    skills: ['claw', 'bewilder', 'harrowing_wail'],
+    xp: 300, loot: 'lair_hoard',
+    faction: 'carven',
+    vision: { arcDeg: 220, rearMul: 0.5 },
+    brain: {
+      type: 'juggernaut', enrage: 0.3,
+      behavior: { castArc: 0.75, reaction: [0.2, 0.5] },
+      drives: { wrath: { rise: -0.04, onHurt: 0.07 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.55 } },
+        announce: 'the vault remembers violence.',
+        use: { skillUse: { cadence: [0.12, 0.28] }, move: { style: 'direct', pace: 1.15 } },
+      }],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

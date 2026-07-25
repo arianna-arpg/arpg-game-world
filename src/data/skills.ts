@@ -10621,6 +10621,41 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // --- THE JOTUN SCHOOL (the lair fabric's natives, data/lairs.ts) ---------
+  // The yeti's argument, in two verbs the grip kin would recognize: the
+  // SNATCH closes a hand the size of your torso, the HURL explains the
+  // nearest wall. Same fabric, same struggle ladder, same mass law — worn
+  // at a scale where the mass law is usually on the yeti's side.
+
+  yeti_snatch: {
+    id: 'yeti_snatch', name: 'Snatch', noDrop: true,
+    description: 'A hand the size of a door closes, and the argument becomes LUGGAGE: hoisted, carried, and jostled toward wherever the yeti is walking — until the grip is struggled off, torn open, or spent the hard way.',
+    tags: ['attack', 'melee', 'physical', 'grab'], color: '#cfe0ea',
+    manaCost: 0, cooldown: 9, useTime: 0.55,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'melee', range: 80, arcDeg: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'grabSeize', grab: { verb: 'carry', breakMult: 1.05 } },
+    ],
+    requirements: { strength: 20 },
+    ai: { range: 76, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  yeti_hurl: {
+    id: 'yeti_hurl', name: 'Mountain Hurl', noDrop: true,
+    description: 'What the snatch caught, the mountain SPENDS: the carried body leaves at avalanche speed, toward whatever ends flights — a wall, a drop, the rest of your expedition. Winter does not aim carefully. It does not have to.',
+    tags: ['attack', 'melee', 'physical', 'throw'], color: '#e6f0f6',
+    manaCost: 0, cooldown: 3, useTime: 0.5,
+    baseDamage: { physical: [14, 22] },
+    delivery: { type: 'self' },
+    gate: { holding: true, note: 'nothing held' },
+    effects: [{ type: 'grabThrow', impulse: 700, damageMult: 1.5 }],
+    requirements: { strength: 22 },
+    ai: { range: 95, weight: 5 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   // ======================= Trajectories, returns & shrapnel ================
   // §4: the flight levers as skills — zig-zags that shed, bounces that work
   // the room, recurves, selective pierce, arced convergence, aimed spread.

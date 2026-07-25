@@ -3221,6 +3221,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'banshee', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'mire_leech', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'lake_horror', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
@@ -6048,6 +6049,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'constrictor_knight', weight: 1, presence: { from: 9 } },
         // What else the brack keeps: water with arms, hounds at the rim.
         { id: 'lake_horror', weight: 1, presence: { from: 10 } },
+        { id: 'mire_leech', weight: 1, presence: { to: 12, fadeOut: 6 } },
         { id: 'mire_maw', weight: 1, presence: { from: 8 } },
         { id: 'fen_hound', weight: 1, presence: { to: 12, fadeOut: 6 } },
       ],
@@ -7982,6 +7984,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'galvanic_ooze', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'gutspray_hurler', weight: 1, presence: { from: 10, fadeIn: 4 } },
         // The ground itself: pools with appetites, water with arms.
+        { id: 'mire_leech', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
@@ -10642,6 +10645,180 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'choir_ring', chance: 0.5 },
       { composition: 'vault_of_dawn', chance: 0.6 },
     ],
+  },
+
+  // ==========================================================================
+  // THE LAIR COUNTRIES (the lair fabric — engine/lairs.ts, data/lairs.ts):
+  // den interiors minted BEHIND a lair's mouth, never field-minted, never
+  // face-rolled (no caveFace — the mouth is the only door in). Each is one
+  // native's whole world: the larder, the hovel, the vault of the asking.
+  // ==========================================================================
+
+  // THE FROSTMAW — the yeti den under the mountains: blue ice, old bone,
+  // and a cold that reads as ownership. The hares are not decoration; they
+  // are the pantry (mint-authored fauna), and the residents get hungry.
+  frostmaw_hollow: {
+    id: 'frostmaw_hollow', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { winding: 3, plains: 2 },
+    nameFirst: ['Frostmaw', 'Whitefang', 'Rimehollow', 'Hunger', 'Bonechill', 'Stillbreath', 'Snowthroat', 'Palegrip'],
+    nameSecond: ['Larder', 'Den', 'Hollow', 'Sleep', 'Warren', 'Gullet', 'Keep', 'Dark'],
+    theme: {
+      ambientDark: 0.46,
+      ground: {
+        palette: ['#141c26', '#1a2532', '#22303e', '#2b3a4a', '#354756'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#101820', grid: '#16202a', border: '#4a5c6e',
+      obstacle: '#31404e', obstacleEdge: '#5a7086', accent: '#a8d8f0',
+      wall: '#31404e', water: '#1d4264', mud: '#1c2530',
+    },
+    sizeW: [1500, 2100], sizeH: [1150, 1600], ellipseChance: 0,
+    layout: [
+      { kind: 'ice', count: [2, 4] },
+      { kind: 'rocks', count: [3, 5], radius: [16, 30] },
+      { kind: 'bone_pile', count: [3, 6] },
+      { kind: 'bone', count: [1, 3] },
+    ],
+    variants: [
+      // The bone larder: where everything the mountain caught ended up.
+      { name: 'the bone larder', layout: [
+        { kind: 'bone_pile', count: [5, 9] },
+        { kind: 'bone', count: [2, 4] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+      ] },
+      // The deep sleep: blue ice floors and almost nothing else — the cold
+      // itself is the furniture.
+      { name: 'the deep sleep', layout: [
+        { kind: 'ice', count: [4, 6] },
+        { kind: 'rocks', count: [2, 3], radius: [18, 32] },
+        { kind: 'bone_pile', count: [1, 3] },
+      ] },
+    ],
+    packs: {
+      count: [3, 4], size: [1, 2],
+      table: [
+        { id: 'yeti', weight: 5 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
+  // THE HAG'S HOLLOW — the root-cellar under the hovel: peat walls, hung
+  // pots, wisplight with no honest destination, and the fen's crone at the
+  // bottom of it. One rung deep by design (the den IS the vault).
+  hag_hollow: {
+    id: 'hag_hollow', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { winding: 2.5, labyrinth: 1, plains: 1.5 },
+    nameFirst: ['Crone', 'Willow', 'Fetch', 'Mire', 'Tallow', 'Henbane', 'Croak', 'Bramble'],
+    nameSecond: ['Hollow', 'Cellar', 'Roots', 'Parlor', 'Pantry', 'Warren', 'Bottom', 'Keeping'],
+    theme: {
+      ambientDark: 0.55,
+      ground: {
+        palette: ['#12140c', '#191c10', '#212416', '#2a2d1b', '#333722'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#0e100a', grid: '#14170d', border: '#485030',
+      obstacle: '#2c3018', obstacleEdge: '#4c542e', accent: '#b8d070',
+      wall: '#2c3018', mud: '#1c1c10', water: '#1b3a34',
+      tree: '#4a5a2c',
+    },
+    sizeW: [1400, 1900], sizeH: [1050, 1500], ellipseChance: 0,
+    layout: [
+      { kind: 'web', count: [2, 4] },
+      { kind: 'mud', count: [2, 3] },
+      { kind: 'bog', count: [1, 2] },
+      { kind: 'toadstool', count: [2, 4] },
+      { kind: 'pot_cluster', count: [1, 3] },
+      { kind: 'feeding_stake', count: [0, 2] },
+    ],
+    variants: [
+      // The pantry: what she keeps, in jars and on hooks.
+      { name: 'the pantry', layout: [
+        { kind: 'pot_cluster', count: [3, 5] },
+        { kind: 'web', count: [2, 4] },
+        { kind: 'feeding_stake', count: [1, 3] },
+        { kind: 'mud', count: [1, 2] },
+      ] },
+      // The drowned garden: the bog reached in and she let it.
+      { name: 'the drowned garden', layout: [
+        { kind: 'bog', count: [2, 4] },
+        { kind: 'water', count: [1, 2] },
+        { kind: 'toadstool', count: [3, 6] },
+        { kind: 'web', count: [1, 2] },
+      ] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 3],
+      table: [
+        { id: 'will_o_wisp', weight: 4 },
+        { id: 'orb_weaver', weight: 2 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
+  // THE RIDDLE VAULT — the deep desert's hall of the asking: sunkstone rooms
+  // swept clean by ten dynasties of wind, a warden who was here before all
+  // of them, and ONE question (the puzzle objective — the mint forces it).
+  // The halls stand nearly empty on purpose: the riddle is the population.
+  riddle_vault: {
+    id: 'riddle_vault', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { rooms: 3, labyrinth: 1.5 },
+    layoutParams: {
+      interiorWall: 'sunkstone_wall', floorStyle: 'flagstone',
+      rooms: [4, 7], doorChance: 0.4, corridorCells: 2,
+    },
+    nameFirst: ['Riddling', 'Asking', 'Silent', 'Patient', 'Watchful', 'Old', 'Sandworn', 'Unanswered'],
+    nameSecond: ['Vault', 'Hall', 'Antechamber', 'Court', 'Sanctum', 'Gallery', 'Repose', 'Question'],
+    theme: {
+      ambientDark: 0.34,
+      ambientFx: [{ kind: 'motes', intensity: 0.35 }],
+      ground: {
+        palette: ['#1a1408', '#28200e', '#382c14', '#48391c', '#584624'], bias: 0.52, alpha: 0.55, speckles: 0.6,
+      },
+      floor: '#161006', grid: '#1e160a', border: '#6a5834',
+      obstacle: '#3e321a', obstacleEdge: '#70603a', accent: '#f0d078',
+      wall: '#3e321a', sand: '#c9a86a', water: '#2a5a6a', mud: '#241c10',
+    },
+    sizeW: [1250, 1650], sizeH: [950, 1250], ellipseChance: 0,
+    layout: [
+      { kind: 'rubble', count: [1, 3] },
+      { kind: 'broken_column', count: [1, 3] },
+      { kind: 'ruin_plinth', count: [1, 2] },
+      { kind: 'brazier', count: [1, 2] },
+      { kind: 'sand', count: [1, 2] },
+    ],
+    variants: [
+      // The processional: the walk the askers took, column by column.
+      { name: 'the processional', layout: [
+        { kind: 'broken_column', count: [3, 5] },
+        { kind: 'standing_stone', count: [1, 2] },
+        { kind: 'brazier', count: [2, 3] },
+        { kind: 'rubble', count: [1, 2] },
+      ] },
+      // The sand-choked wing: the desert got one room back.
+      { name: 'the sand-choked wing', layout: [
+        { kind: 'sand', count: [2, 4] },
+        { kind: 'rubble', count: [2, 4] },
+        { kind: 'broken_column', count: [1, 2] },
+      ] },
+    ],
+    packs: {
+      count: [1, 2], size: [1, 1],
+      table: [
+        { id: 'horned_viper', weight: 3 },
+      ],
+    },
+    puzzles: [
+      { id: 'singing_refrain', chance: 0.6 },
+      { id: 'charged_lattice', chance: 0.3 },
+      { id: 'great_chord', chance: 0.1 },
+    ],
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'puzzle', weight: 1 }],
   },
 };
 

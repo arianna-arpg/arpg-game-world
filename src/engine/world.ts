@@ -22,7 +22,7 @@ import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSk
 import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittable, stampSegFlash, tickSegFlash, woundCount, type SegBody } from './segments';
 import { DEFENSE_CFG } from './defense';
 import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
-import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
+import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
@@ -32441,7 +32441,9 @@ export class World {
    *  Each cfg() reads the LIVE overlay tuning per hit (null = that package is
    *  not in this run's manifest — the tag never rouses). woundFrac 1 = any
    *  landed hit bites; radius 0 = only the struck one wakes. A new dormant
-   *  species is one row here + registerDormantTag(tag, reset?) (ai.ts). */
+   *  species is registerRouseRule(tag, cfg) + registerDormantTag(tag, reset?)
+   *  (ai.ts) — the module registry below; the rows HERE are the world-state
+   *  readers that close over `this` and never grow again. */
   private readonly rouseRules: Record<string, () => {
     woundFrac: number; radius: number; toast: string; color: string; size: number;
   } | null> = {
@@ -32505,7 +32507,10 @@ export class World {
    *  resolve through the live site's own GuardianSpec (data, not a row). */
   private rouseOnWound(target: Actor): void {
     if (!target.tag || target.aiAwakened) return;
-    const rule = this.rouseRules[target.tag]?.() ?? this.holdfastRouseRule(target.tag);
+    // Live-overlay rows first, then the OPEN registry (ai.ts registerRouseRule
+    // — the lair fabric's vault warden), then the holdfast generics.
+    const rule = (this.rouseRules[target.tag] ?? ROUSE_RULES[target.tag])?.()
+      ?? this.holdfastRouseRule(target.tag);
     if (!rule) return;
     if (rule.woundFrac < 1
       && !(target.life > 0 && target.life <= target.maxLife() * rule.woundFrac)) return;

@@ -20,6 +20,7 @@ import '../data/clusters';
 import '../data/formations';
 import '../engine/landmarkBuilders';
 import '../data/landmarks';
+import '../data/lairs';
 import '../engine/layoutRecipes';
 import '../engine/interiorGen';
 import '../data/massifs';

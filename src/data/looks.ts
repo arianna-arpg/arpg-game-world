@@ -8303,6 +8303,78 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'glassFins', scale: 0.6, alpha: 0.6 },
     ],
   },
+
+  // =========================================== THE TRUE NATIVES (the lair fabric)
+  /** THE YETI: a shag-walled bulk under frost-matted fur — ruff and mane
+   *  carrying the silhouette, icicles beard the jaw, long talons forward,
+   *  breath steaming (live) even standing still. Cold has a body. */
+  yeti: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.22, seed: 9 } },
+      { kind: 'furRuff', scale: 1.05, alpha: 0.95 },
+      { kind: 'mane', scale: 0.9, alpha: 0.85 },
+      { kind: 'icicles', x: 0.3, scale: 0.7, alpha: 0.9 },
+      { kind: 'claws', x: 0.15, scale: 1.15, params: { len: 0.6, talons: 3 } },
+      { kind: 'fangs', x: 0.48, scale: 0.75 },
+      { kind: 'eyes', color: '#8ac8e8', params: { spread: 0.4, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.55, scale: 0.8 }],
+  },
+  /** THE RIMEFATHER: the den's eldest — the yeti stack grown a winter crown
+   *  of icicles and a deeper ruff, breath heavier, eyes older. */
+  yeti_alpha: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.2, seed: 13 } },
+      { kind: 'furRuff', scale: 1.15, alpha: 1 },
+      { kind: 'mane', scale: 1.05, alpha: 0.9 },
+      { kind: 'icicles', x: 0.28, scale: 0.95 },
+      { kind: 'icicles', x: -0.35, rot: Math.PI, scale: 0.7, alpha: 0.8 },
+      { kind: 'claws', x: 0.15, scale: 1.3, params: { len: 0.65, talons: 3 } },
+      { kind: 'fangs', x: 0.46, scale: 0.85 },
+      { kind: 'eyes', color: '#b8e8ff', params: { spread: 0.38, dist: 0.58, size: 0.1 } },
+    ],
+    live: [{ kind: 'breathPuff', x: 0.55, scale: 1.1 }],
+  },
+  /** THE HILL GIANT: a tor with opinions — massed torso, a matted beard, a
+   *  fur collar, knuckle-blocks the size of shields, and the club it calls
+   *  furniture. Sleeps by its cookfire until the cairn ring is trespassed. */
+  hill_giant: {
+    parts: [
+      { kind: 'torso', scale: 1.1 },
+      { kind: 'collar', scale: 1.0, alpha: 0.9 },
+      { kind: 'beard', x: 0.35, scale: 0.9 },
+      { kind: 'mace', y: -0.15, scale: 1.25 },
+      { kind: 'gauntlets', scale: 1.1 },
+      { kind: 'eyes', color: '#e8d8a0', params: { spread: 0.32, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** THE MIRE HAG: rags over a bent frame, a deep hood, reaching talons, a
+   *  crook tipped with something that glows wrong — and the flies (live)
+   *  that never leave her. */
+  mire_hag: {
+    parts: [
+      { kind: 'tatters', scale: 0.95, params: { n: 5 } },
+      { kind: 'robe', scale: 0.85 },
+      { kind: 'claws', x: 0.2, scale: 0.9, params: { len: 0.5, talons: 3 } },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'hood', x: 0.3, scale: 0.95, params: { eyes: true } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.9 }],
+  },
+  /** THE VAULT SPHINX: carven stone at rest — a couched leonine mass, folded
+   *  wings, the still mask of a face under a sun-crown headdress. Reads as
+   *  statuary right up until it doesn't. */
+  vault_sphinx: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.08, seed: 21 } },
+      { kind: 'featherWings', scale: 0.85, alpha: 0.85 },
+      { kind: 'tail', params: { len: 0.9, tuft: true } },
+      { kind: 'claws', x: 0.2, scale: 0.95, params: { len: 0.45, talons: 3 } },
+      { kind: 'sunburst', x: 0.22, scale: 0.7, alpha: 0.9 },
+      { kind: 'mask', x: 0.42, scale: 0.85 },
+      { kind: 'eyes', color: '#f0e0a8', params: { spread: 0.3, dist: 0.66, size: 0.08 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

@@ -2231,6 +2231,39 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#c8a84b', intensity: 0.4, flicker: 4 },
   },
+  // --- THE LAIR MOUTHS (the lair fabric, data/lairs.ts) --------------------
+  // Every den door rides the parameterized caveMouth: same geology grammar,
+  // its own blood. The frostmaw breathes cold blue past icicle teeth; the
+  // hovel door is peat and root under witchlight; the vault gate is
+  // sunkstone gone gold at the throat. Fixed palettes on purpose — a lair
+  // mouth should read as ITSELF whatever country it stands in.
+  frostmaw_maw: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3a4a58', edge: '#7a98ac', material: 'stone',
+      glow: '#8ac8e8', throat: '#0a1016', teeth: {},
+      label: 'the Frostmaw',
+    },
+    light: { radius: -2, color: '#8ac8e8', intensity: 0.3, flicker: 2 },
+  },
+  hovel_door: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#2c3018', edge: '#4c542e', material: 'wood',
+      glow: '#b8d070', throat: '#0a0c06', vines: { color: '#4a5a2c' },
+      label: "Hag's Hovel",
+    },
+    light: { radius: -2, color: '#b8d070', intensity: 0.32, flicker: 3.5 },
+  },
+  sphinx_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3e321a', edge: '#70603a', material: 'stone',
+      glow: '#f0d078', throat: '#0c0a06', rubble: {}, tumble: 1,
+      label: 'the Vault of the Asking',
+    },
+    light: { radius: -2, color: '#f0d078', intensity: 0.28, flicker: 1.6 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },

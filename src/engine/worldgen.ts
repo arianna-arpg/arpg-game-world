@@ -13,6 +13,7 @@ import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type TilesetDef, type TilesetVariant } from '../data/tilesets';
 import { hasLayout } from './levelgen';
+import { lairLandmarkRolls } from './lairs';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
 import type { BlendSpec, HollowRollSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
@@ -1311,6 +1312,11 @@ export function placeZoneAt(
     // A port ALWAYS gets its shoreline (the harbor's reason to exist).
     ...(spec.port ? [{ landmark: 'coast', chance: 1 }] : []),
     ...(onCourse?.landmarks ?? []),
+    // THE LAIR FABRIC (engine/lairs.ts): natives that claim this biome at
+    // this level seat their lair rolls beside the authored ones — pure
+    // predicate here; the chance draws in generateLayout's landmark loop
+    // like any other row (unclaimed ground burns no rng).
+    ...lairLandmarkRolls({ place: 'surface', biome, level, tileset: tileset.id, port: spec.port }),
   ];
   // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
   // discipline as structures/landmarks (special arenas skip them too).
@@ -1709,6 +1715,15 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // NAMING wears the band: the Galleries' depth-2 "Deep …", the Depths'
   // "Sunless …" — the prefix is stratum data, the breach naming stays its own.
   const prefix = namePrefixAt(depth);
+  // THE LAIR FABRIC (engine/lairs.ts): natives that claim this ladder's
+  // ANCHOR biome at this depth band seat their lair rolls on the minted def
+  // (the fold is a pure predicate — the chance draws in generateLayout).
+  // Sealed pockets grow no lairs (the noDeeper contract).
+  const level = parent.level + levelStepAt(depth);
+  const lairRolls = lairLandmarkRolls({
+    place: 'cave', biome: anchor, caveDepth: depth, level, tileset: ts.id,
+    noDeeper: opts?.noDeeper,
+  });
   const baseName = opts?.name ?? (breach ? `${rng.pick(ts.nameFirst)} Breach`
     : prefix ? `${prefix} ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
       : `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`);
@@ -1726,7 +1741,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ...(variantName ? { variantName } : {}),
     // The band's level STEP over the parent (strata data): the classic curve
     // at the Galleries (+0 then +1), a full rung per descent below them.
-    level: parent.level + levelStepAt(depth),
+    level,
     size: { w, h },
     shape: 'rect',                          // caves stay rect — no ellipse rim math
     ...(ts.boundless ? { boundless: true } : {}),
@@ -1760,6 +1775,8 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ...(anchor ? { anchor } : {}),
     ...(breach ? { breach: true } : {}),
     ...(parent.dimension ? { dimension: parent.dimension } : {}),
+    // Any lair the fold seated on this rung (never on noDeeper pockets).
+    ...(lairRolls.length ? { landmarks: lairRolls } : {}),
   };
   // THE BLEND (engine/blend.ts): a pocket tileset may declare a partner —
   // the whole fold rides the def seed's dedicated sub-stream, so blendless

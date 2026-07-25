@@ -1,0 +1,131 @@
+# The Lair Fabric — apex natives claiming ground by predicate
+
+`src/engine/lairs.ts` (the seat registry + fold), `src/data/lairs.ts` (the
+lairs themselves), `den_mouth` in `src/engine/landmarkBuilders.ts`.
+Probe: `balance/probe_lairs.ts`. Debuts: the Frostmaw (yeti), the Giant's
+Cairn, the Hag's Hovel, the Riddle Vault.
+
+## Why it exists
+
+Before this fabric a den existed only where its home country's compositions
+planted the door (the Wane's arch on Vesperlands ground, the gleamhollow's
+bole in the grove). Nothing let a *creature* claim land by rule — "yetis
+live under the mountains, one or two caves deep, and nowhere else." The lair
+fabric is that sentence as one data row. It adds **no new placement
+machinery**: a seat row resolves into an ordinary `LandmarkRoll` appended at
+the two mint chokepoints, so siting, reachability, portal clearance, the
+noDeeper strip, genqa's invariants and zone memory all arrive from standing
+law.
+
+## The seat (`LairSeat`)
+
+```ts
+registerLair({
+  id: 'frostmaw',
+  landmark: 'frostmaw_lair_mouth',
+  seat: {
+    biomes: ['highland'],          // surface biome / cave-ladder ANCHOR
+    place: 'cave',                 // 'cave' | 'surface' | 'both'
+    strata: { from: 1, to: 2, fadeOut: 2 },  // over ZoneDef.caveDepth
+    level:  { from: 5, fadeIn: 3 },          // over the zone's level
+    chance: 0.35,                  // scaled by both envelopes, clamped ≤ 1
+  },
+});
+```
+
+- **biomes** — underground this matches the ladder's **anchor** (the surface
+  biome the whole ladder hangs beneath — provenance survives nesting), so
+  "under the mountains" stays true whatever face the strata fabric rolled.
+- **strata / level** — presence-fabric envelopes (`presenceMul`). One
+  evaluation law: strata always reads `caveDepth ?? 0`, level reads the
+  zone's level. Integer depths make a 1-wide fadeOut a hard cliff — author
+  `fadeOut: 2` when you want the next rung to whisper before refusing.
+- **chance** — rolled per qualifying zone *inside generateLayout's landmark
+  loop* (the roll rides the baked row; the fold itself draws nothing).
+  Scaled results under `LAIR_CFG.minChance` are dropped before the def
+  bakes them — no ghost draws, and ground no lair claims stays
+  byte-identical.
+- `tilesets: [...]` — optional allowlist when a lair keeps to named faces.
+
+**Chokepoints:** `placeZoneAt` (surface mints — beside the tileset + biome
+landmark merge) and `mintCave` (the ladder — beside the face roll). Sealed
+pockets (`noDeeper`) and harbors (`port`) refuse all lairs by rule, and the
+levelgen entrance strip eats any stray door a variant smuggled in.
+
+## The two lanes
+
+**`kind` den — a mouth that mints a country.** The seat's landmark is a
+`den_mouth` builder recipe: a trodden apron (optional `floorKind` wash), the
+**spoor ring** (`dress` rows — bone piles before the door: the den reads
+from thirty paces), and the mouth doodad centered. The mouth is an ordinary
+registered **sidezone** (`registerSidezone`) minting the den country through
+`mintCave` with a forced tileset: authored name, authored objective, its own
+fauna (the NEST_FAUNA lesson — without authored rows a minted pocket grows
+plains wildlife), `noDeeper: true` (the den is the bottom), and a gateway
+ledger (`frostmaw_entered` — the ruin_entered pattern, ready for any future
+unlock). Same mouth, same den, forever: position-hash seeds make every den
+persistent geography.
+
+**`landmark` lair — the lair IS the landmark.** No door: the seat places a
+whole in-zone set-piece whose `spawns` carry the natives. The Giant's Cairn
+rides the pit builder (which grew fence_ring's `inner` dressing rows — the
+cookfire in the ring) and arms its giant through the **ambush fabric**
+(`visible: true, pack` — the gnasher pen's law: a readable sleeping threat,
+sprung as one event on proximity or a wound).
+
+## The debut natives
+
+| lair | where | behind the door | faction |
+|---|---|---|---|
+| **the Frostmaw** | highland caves, depth 1–2 (depth 3 whispers) | yeti packs, a snow-hare larder they hunt through hunger drives, the **Rimefather** (boss ask seals the arena; the chest banks) | `jotun` (new) |
+| **the Giant's Cairn** | highland + downs surface | a sleeping `hill_giant` (marquee `bossBar`, never `boss`) in a stone ring with his cookfire and midden | `jotun` |
+| **the Hag's Hovel** | marsh surface | the root-cellar hollow: wisp court, rats in the walls, the **Mire Hag** (confusion-family kit) | `coven` (new) |
+| **the Riddle Vault** | desert surface AND caves 1–2 (`place: 'both'`) | a **puzzle** objective (the tileset's riddle repertoire), the hoard chest banking on the answer — and the **Vault Sphinx**, a dormant `vault_warden` planted at her plinth | `carven` |
+
+The sphinx is the fabric's thesis statement: the den's ask is *exploration*
+(answer the riddle; roads never seal; violence optional). She stands as
+statuary through the sentry fabric (`registerDormantTag('vault_warden')` —
+latched-once, no reset row: stone does not forgive) and wakes through
+`registerRouseRule` — **the new open sibling of registerDormantTag**
+(engine/ai.ts): static wound-rouse rules register from def files; only
+world-state readers that must close over live overlay tuning stay in
+`World.rouseRules`.
+
+The yeti's kit is the grab fabric worn as identity: `yeti_snatch` (carry) +
+`yeti_hurl` (throw at 700 impulse — walls, drops and the bowling lane all
+pay out through the mass fabric with the yeti's name on the credit). Every
+alpha pays `lair_hoard` (loottables.ts) — a repeatable faucet tuned a
+half-step over `boss_gear`, never near the one-shot capstones.
+
+Factions are deliberately **diplomacy-silent**: no RELATIONS rows, no
+WAR_PAIRS seeds, no FACTION_TRAITS — natives claim ground, not wars, and the
+default `neutral` stance means the world's armies leave the mountain alone.
+
+## Authoring a new lair
+
+1. A den tileset if the lane is a den (`frontier: false`, `perfProbe: true`,
+   `sky: 'sheltered'`, its own `caveLayouts`/packs/variants — gleamhollow's
+   template). Never a `caveFace` — the mouth is the only door in.
+2. `registerDoodadRule(mouth, { overlap: 'trigger', spacing: 60 })` + a
+   `DOODAD_VISUALS` row (the parameterized `caveMouth` painter reskins:
+   fixed palette on purpose — a lair mouth reads as ITSELF anywhere).
+3. `registerLandmark` — `den_mouth` + `mouthKind`/`dress`, or any builder
+   for an in-zone lair (`mustReach: true, poi: true, clearSite: true`).
+4. `registerSidezone` for den lanes — forced tileset, name, objective,
+   fauna, `noDeeper: true`, `ledgerOnEnter`.
+5. `registerLair` — the seat.
+6. Natives in `data/monsters.ts` (kit-net rules apply: skills exist, carry
+   `ai` hints, affordable from the def's mana — probe_anatomy pins all
+   three), a look in `data/looks.ts`, `loot: 'lair_hoard'` on the alpha.
+
+## QA
+
+`balance/probe_lairs.ts` — registry weave, the seat fold's pure law
+(depth/level/biome/place gating by assertion), placement + spoor +
+determinism + the noDeeper strip through real generateLayout, the live
+Frostmaw round trip (boss ask → objectiveDone), snatch/hurl through the grab
+fabric, the cairn's armed visible ambush, the vault's puzzle ask + dormant
+warden rouse, and den-mint byte-purity. The den tilesets join `npm run
+genqa` (interiors at cave scale) and `npm run perf` (perfProbe) by
+registration, and probe_anatomy sweeps the natives' kits/looks with the
+whole bestiary.

@@ -322,7 +322,29 @@ changes.
   `LandmarkSpawns.ambush` instance lane + wound-springs via
   `World.springAmbush`): the GNASHER PEN landmark (palisade-rim pit,
   penned herd sprung as ONE event) seats in every goblin_warren_camp —
-  docs in `docs/engine/mounts.md`; probe `balance/probe_mount.ts`).
+  docs in `docs/engine/mounts.md`; probe `balance/probe_mount.ts`),
+  `lairs.ts` (THE LAIR FABRIC — apex natives claiming ground by PREDICATE:
+  `registerLair` seat rows (biomes × place cave/surface/both × a caveDepth
+  STRATA envelope × a level envelope × chance — "yetis only in the first
+  and second caves under the mountains" is one data row) resolve to
+  ordinary LandmarkRolls at BOTH mint chokepoints (placeZoneAt + mintCave;
+  noDeeper pockets + ports refuse; unclaimed ground burns no rng — the
+  fold is pure), so siting/reachability/portal-clears/genqa all arrive
+  from standing law. TWO LANES: a DEN (the `den_mouth` builder — spoor
+  dress ring + a registered sidezone mouth → mintCave-forced den country
+  with authored name/objective/fauna/noDeeper + gateway ledger; position-
+  hash seeds = persistent geography) or an in-zone LAIR (any landmark
+  whose spawns carry the natives — the pit builder grew fence_ring's
+  `inner` dressing rows). Debuts: the FROSTMAW (yeti snatch/hurl = the
+  grab fabric as identity; snow-hare larder hunted through hunger drives;
+  the Rimefather boss ask), the GIANT'S CAIRN (visible sleeping ambush,
+  the gnasher-pen law), the HAG'S HOVEL (coven crone, confusion-family
+  kit), and the RIDDLE VAULT (objective = a PUZZLE — exploration as the
+  ask; the Vault Sphinx stands as a dormant latched-once `vault_warden`
+  through `registerRouseRule`, the NEW open sibling of registerDormantTag
+  in ai.ts). Factions `jotun`/`coven` debut diplomacy-silent (natives
+  claim ground, not wars); alphas pay the lean repeatable `lair_hoard` —
+  docs in `docs/engine/lairs.md`; probe `balance/probe_lairs.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense
