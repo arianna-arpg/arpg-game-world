@@ -4694,6 +4694,20 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyeCluster', color: '#c8e86a', params: { n: 3, spread: 0.5, dist: 0.45 } },
     ],
   },
+  /** The mire leech (THE TELL FABRIC's accumulator debut): a slick banded
+   *  crawler, sucker forward, back deliberately BARE — the translucent
+   *  glut sac rides there as a TELL, not a look part (engine/tells.ts
+   *  drive:glut → fillSac), so the field and the book both read the live
+   *  meter and an empty leech honestly wears an empty back. */
+  mire_leech: {
+    parts: [
+      { kind: 'carapace', scale: 1.0, params: { segs: 5 } },
+      { kind: 'mawRing', x: 0.62, scale: 0.42 },
+      { kind: 'eyes', color: '#e8c890', params: { n: 2, spread: 0.42, dist: 0.52, size: 0.07 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#5a2a34', params: { n: 3 } }],
+    shadowScale: 0.85,
+  },
   /** The mire maw: a sag of bog with a ring of teeth at the middle. */
   mire_maw: {
     parts: [

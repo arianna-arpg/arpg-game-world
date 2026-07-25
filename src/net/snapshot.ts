@@ -41,6 +41,7 @@ import { ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
 import { COMBO_CFG, comboProgress } from '../engine/sequence';
 import { GRAB_VERB_LABEL } from '../engine/grab';
+import { tellSpecsOf } from '../engine/tells';
 
 export type Vec2W = [number, number];
 
@@ -62,6 +63,14 @@ export interface ActorW {
   gb?: [string, number];
   pl?: number;                 // plies remaining (THE PLY FABRIC pips)
   plm?: number;                // plies ceiling (omit both when the fabric is off)
+  /** THE TELL FABRIC's quantized values (engine/tells.ts), host-swept —
+   *  the DERIVED scalars, never the source state (drives/morale live only
+   *  in the host's brains). Omitted when every reading is 0: the client
+   *  materializes zeros and the dress is identical. */
+  tl?: number[];
+  /** Rolled brainVariants index — the client rebuilds the same variant
+   *  tell rows from its own def registry (tellSpecsOf). */
+  bv?: number;
   tr?: number;                 // THE TIER FABRIC: walkable layer (omit at 0)
   aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
@@ -425,6 +434,11 @@ function actorToW(a: Actor): ActorW {
   if (gbHold) w.gb = gbHold;
   // THE PLY FABRIC's pips (engine/plies.ts).
   if (a.pliesMax > 0) { w.pl = a.plies; w.plm = a.pliesMax; }
+  // THE TELL FABRIC (engine/tells.ts): derived scalars + the variant roll.
+  if (a.tellSpecs?.length) {
+    if (a.brainVariant !== undefined) w.bv = a.brainVariant;
+    if (a.tells?.some(v => v > 0)) w.tl = a.tells;
+  }
   // THE TIER FABRIC's layer (engine/tiers.ts) — clients gate draw + veil on it.
   if (a.tier) w.tr = a.tier;
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
@@ -784,6 +798,26 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.material = aw.mat;
     a.look = aw.lk;
     a.extraParts = aw.ep;
+    // THE TELL FABRIC (engine/tells.ts): the client rebuilds the binding
+    // list from its OWN registry (def + wired variant roll) and adopts the
+    // host's derived scalars. Change-guarded both ways so the render dress
+    // cache stays warm across snapshots that moved nothing.
+    if (a.defId !== aw.defId || a.brainVariant !== aw.bv) {
+      a.brainVariant = aw.bv;
+      a.tellSpecs = aw.defId ? tellSpecsOf(MONSTERS[aw.defId], aw.bv) : undefined;
+      a.tellRev++;
+    }
+    {
+      const tl = aw.tl;
+      const cur = a.tells;
+      if (tl) {
+        let same = !!cur && cur.length === tl.length;
+        if (same && cur) for (let i = 0; i < tl.length; i++) if (cur[i] !== tl[i]) { same = false; break; }
+        if (!same) { a.tells = tl.slice(); a.tellRev++; }
+      } else if (cur?.some(v => v > 0)) {
+        a.tells = undefined; a.tellRev++;
+      }
+    }
     a.rarity = aw.rarity as Actor['rarity'];
     a.defId = aw.defId;
     a.faction = aw.faction;

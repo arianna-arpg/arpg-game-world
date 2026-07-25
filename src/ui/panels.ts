@@ -6,7 +6,8 @@
 // stats, skills, supports, passives, and classes appear here automatically.
 // ---------------------------------------------------------------------------
 
-import { clamp } from '../core/math';
+import { clamp, mixHex } from '../core/math';
+import { tellPortraitDress } from '../engine/tells';
 import { DEV, GAME_TITLE } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
@@ -2583,9 +2584,19 @@ export class UI {
 
   /** def → the portrait fabric's def-like. The fabric is vis-pure and cannot
    *  read FACTIONS, so the faction's horn style is stamped here (exactly the
-   *  derivation drawActor makes for live bodies). */
+   *  derivation drawActor makes for live bodies). THE TELL FABRIC's book
+   *  face is stamped here too (portrait.ts stays vis-pure): def-level tells
+   *  render at their sane default value — the worn gauge rides the
+   *  extraParts lane (baked, static pose), tint and adorn swap pre-bake. */
   private portraitDefOf(def: MonsterDef): PortraitDefLike {
-    return { ...def, demonHorns: !!FACTIONS[def.faction ?? '']?.nubHorns };
+    const like: PortraitDefLike = { ...def, demonHorns: !!FACTIONS[def.faction ?? '']?.nubHorns };
+    if (def.tells?.length) {
+      const dress = tellPortraitDress(def.tells);
+      if (dress.parts?.length) like.extraParts = [...(like.extraParts ?? []), ...dress.parts];
+      if (dress.tint) like.color = mixHex(like.color, dress.tint.color, dress.tint.f);
+      if (dress.adorn) like.adorn = dress.adorn;
+    }
+    return like;
   }
 
   /** The resolved portrait subject — composite parts expanded from the live

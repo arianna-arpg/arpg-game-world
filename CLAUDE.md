@@ -344,7 +344,34 @@ changes.
   through `registerRouseRule`, the NEW open sibling of registerDormantTag
   in ai.ts). Factions `jotun`/`coven` debut diplomacy-silent (natives
   claim ground, not wars); alphas pay the lean repeatable `lair_hoard` —
-  docs in `docs/engine/lairs.md`; probe `balance/probe_lairs.ts`).
+  docs in `docs/engine/lairs.md`; probe `balance/probe_lairs.ts`),
+  `tells.ts` (THE TELL FABRIC — visible internal state as a readable
+  information layer on enemy bodies: `MonsterDef.tells` rows bind a STATE
+  SOURCE (open `registerTellSource` registry — drives, charges, status
+  stacks, morale, alertness, the fuse, plies spent, radiance, claimed
+  ground) to a VISUAL CHANNEL (a worn gauge part riding the live-part
+  pass — `params.fill` + scale/alpha/count/color dials make ANY painter a
+  meter; body tint on the drift's quantized pre-bake swap; a state-fed
+  under-glow; posture scale/lean on the breathe transform; an adorn swap)
+  through band/curve/quantize dials. THE LAWS: drawn == tested (a tell
+  resolves off the SAME map the AI reads — the sac that reads full IS
+  full; sources are pure reads, never writes), cheap (cadenced sweep,
+  wire-grid quantize, identity-stable dress — `Actor.tellRev` moves only
+  on true change), co-op safe (the wire ships DERIVED scalars `tl` + the
+  variant roll `bv`, never source state; the client rebuilds specs from
+  its own registry), portrait-aware (the book renders `TellSpec.portrait`
+  sane defaults through the ONE `portraitDefOf` seam — portrait.ts stays
+  vis-pure). TEMPERAMENT TELLS: `brainVariants[].tells` rows append per
+  roll, so a rolled mind is VISIBLE (the skitterer's loner runs dark and
+  hunkers once it has marked you — `alert` is the stalker's honest
+  step-tell). Debuts: `mire_leech` the accumulator (glut drive fed by its
+  own landed wounds — the first authored `onDealt` — → the translucent
+  `fillSac` gauge-limb → sanguine_burst at the brim with the drive shoved
+  empty: the sac drains exactly when the bank spends, and the burst is
+  reserved OUT of its rotation so the full sac is the only warning) and
+  `HUNGER_LEAN`, the one shared predator row all twelve hunger-driven
+  hunters wear (the probe census names future shirkers) — docs in
+  `docs/engine/tells.md`; probe `balance/probe_tells.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense

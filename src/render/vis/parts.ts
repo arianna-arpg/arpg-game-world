@@ -2015,6 +2015,64 @@ const bloatSacs: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** THE FILL SAC — a translucent reservoir that VISIBLY FILLS: the tell
+ *  fabric's gauge-limb (engine/tells.ts binds `params.fill` to a live
+ *  meter — a glut drive, banked blood, a brood clock). Empty reads as a
+ *  slack membrane; the fluid grows AREA-honest (radius ∝ √fill) so half
+ *  full LOOKS half full; near full the membrane strains with a taut
+ *  highlight ring — "about to burst" at a glance. Static bakes (no fill)
+ *  show the slack membrane. params: fill (0..1), ry (height ratio,
+ *  default 0.82), fluid (color override for the contents). */
+const fillSac: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const fill = Math.max(0, Math.min(1, P(spec, 'fill', 0)));
+  const ry = P(spec, 'ry', 0.82);
+  const fluidC = PS(spec, 'fluid');
+  place(ctx, r, spec, (c, R) => {
+    const membrane = (): void => { c.beginPath(); c.ellipse(0, 0, R, R * ry, 0, 0, Math.PI * 2); };
+    // The slack membrane — see THROUGH an empty sac.
+    membrane();
+    c.fillStyle = withAlpha(ramp.base, 0.16 + 0.1 * fill);
+    c.fill();
+    // The contents: area-honest radius, a slow deterministic slosh.
+    if (fill > 0.02) {
+      const fr = Math.sqrt(fill) * 0.9;
+      const sx = Math.sin(t * 2.1) * R * 0.05 * (1 - fill);
+      const sy = Math.cos(t * 1.7) * R * ry * 0.05 * (1 - fill);
+      const fc = fluidC ? rampOf(fluidC, materialOf('slime')) : ramp;
+      c.save();
+      membrane();
+      c.clip();
+      c.beginPath();
+      c.ellipse(sx, sy, R * fr, R * ry * fr, 0, 0, Math.PI * 2);
+      c.fillStyle = withAlpha(fc.base, 0.78);
+      c.fill();
+      c.beginPath();
+      c.ellipse(sx, sy, R * fr, R * ry * fr, 0, 0, Math.PI * 2);
+      c.strokeStyle = withAlpha(fc.shadow, 0.5);
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.stroke();
+      // The gleam rides the fluid, not the membrane.
+      c.fillStyle = withAlpha('#ffffff', 0.22 + 0.1 * fill);
+      c.beginPath();
+      c.ellipse(sx - R * fr * 0.3, sy - R * ry * fr * 0.3, R * fr * 0.28, R * ry * fr * 0.2, 0, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    }
+    // The membrane's own edge — strains taut as the sac nears full.
+    membrane();
+    c.strokeStyle = withAlpha(ramp.outline, 0.6 + 0.3 * fill);
+    c.lineWidth = 1.2 + fill * 0.8;
+    c.stroke();
+    if (fill >= 0.85) {
+      membrane();
+      c.strokeStyle = withAlpha(ramp.highlight, (fill - 0.85) / 0.15 * 0.8);
+      c.lineWidth = 2.4;
+      c.stroke();
+    }
+  });
+};
+
 /** Draped chains swinging off the frame — jailers, wardens, the bound. */
 const chains: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -5040,7 +5098,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   sphincterMaw, haustraFolds, lashFringe, irisEye,
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
-  armorPlates, bloatSacs, chains, barbs, whip, keg, crateBox,
+  armorPlates, bloatSacs, fillSac, chains, barbs, whip, keg, crateBox,
   antlers, ramHorns, beak, featherWings, crest, frill, gills,
   trunkNose, scutes, tailFin, eyestalks, mane, egg, cocoon, mask,
   quiver, cape, tailClub,

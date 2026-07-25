@@ -51,6 +51,19 @@ export function drawLiveParts(ctx: CanvasRenderingContext2D, look: BodyLook,
   paintLiveParts(ctx, look.radius, def, lookPalette(look.color, look.material), t);
 }
 
+/** Draw an EXPLICIT part list live in facing space — the tell fabric's worn
+ *  gauges (engine/tells.ts dress parts) and any future runtime overlay.
+ *  Same palette derivation as the look's own live parts: a gauge recolors
+ *  with the body it rides. */
+export function drawPartSpecs(ctx: CanvasRenderingContext2D, look: BodyLook,
+  specs: PartSpec[], t: number): void {
+  const pal = lookPalette(look.color, look.material);
+  for (const spec of specs) {
+    const painter = PART_PAINTERS[spec.kind];
+    if (painter) painter(ctx, look.radius, spec, pal, t);
+  }
+}
+
 /** Shapes that rotate with facing at draw time (the rest hold their pose). */
 const ORIENTED = new Set<ActorShape>([
   'triangle', 'pentagon', 'hexagon', 'octagon', 'star', 'cross',

@@ -18,6 +18,7 @@ import type { TuneSpec } from '../engine/tuning';
 import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
 import type { MountSlotSpec, MountSpec } from '../engine/mounts';
+import type { TellSpec } from '../engine/tells';
 import type { PlySpec } from '../engine/plies';
 import type { ColonySpec, LiteSpec } from '../engine/lite';
 import type { LightSpec } from '../render/vis/painters';
@@ -45,6 +46,15 @@ registerPresenceBand('host_vigil', { from: 10, fadeIn: 5 });
  *  natural, no longer instant (smooths the one-frame snap-flips). Defs
  *  override with `turnSpeed`; low values (2-4) make big bodies LUMBER. */
 export const MONSTER_TURN_DEFAULT = 10;
+
+/** THE HUNGER LEAN (engine/tells.ts): the shared predator tell — the body
+ *  hunkers into the stalk as its hunger drive crosses the SAME band the
+ *  hunt rules read (drive above ~0.5-0.6 opens predation), so a leaning
+ *  wolf IS a hunting wolf and a sated one honestly ambles tall. One row,
+ *  every prey-reading predator; new hunters spread it in one word. */
+export const HUNGER_LEAN: TellSpec[] = [
+  { source: 'drive:hunger', band: [0.45, 0.95], curve: 'smooth', channel: { kind: 'lean', amp: 1 } },
+];
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
@@ -490,8 +500,18 @@ export interface MonsterDef {
   /** BRAIN VARIANTS: a weighted PERSONALITY roll per spawn — one def, many
    *  minds (a leaper that runs with the pack, hunts alone, or attacks in
    *  tides, decided the moment it walks in). Overrides `brain` when rolled;
-   *  juvenileBrain still wins for the small. */
-  brainVariants?: { weight: number; brain: BrainDef }[];
+   *  juvenileBrain still wins for the small. A variant may carry its own
+   *  `tells` — TEMPERAMENT TELLS, appended to the def rows for that roll,
+   *  so a cautious body READS differently from a reckless one of the same
+   *  kind (engine/tells.ts). */
+  brainVariants?: { weight: number; brain: BrainDef; tells?: TellSpec[] }[];
+  /** THE TELL FABRIC (engine/tells.ts): visible internal state — bindings
+   *  from a STATE SOURCE (a drive meter, charges, status stacks, morale,
+   *  the fuse, alertness) to a VISUAL CHANNEL (a worn gauge part, a body
+   *  tint, an under-glow, a posture lean, an adorn swap). DRAWN == TESTED:
+   *  every row resolves off the live mechanic the AI itself reads — a sac
+   *  that reads full IS full. Docs: docs/engine/tells.md. */
+  tells?: TellSpec[];
   /** Def-level role tag stamped at spawn (ambient wildlife: 'critter' /
    *  'predator' — AMBIENT_TAGS keeps them off objectives). Event spawners
    *  may overwrite for their own roles (patrol, siege, brigand...). */
@@ -3852,6 +3872,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.6,
     adorn: 'ears',
     scaleVariance: [0.9, 1.25],
+    tells: HUNGER_LEAN, // the stalk reads (engine/tells.ts)
     brain: {
       type: 'pack',
       // THE WANTS (BrainDef.drives): a wolf hunts because it HUNGERS. The
@@ -3906,6 +3927,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'beast', tags: ['beast'],
     detection: 1.2,
     adorn: 'spikes',
+    // TEMPERAMENT TELLS (engine/tells.ts): the rolled mind WEARS its roll —
+    // same body, three personalities, three reads. The pack-mind is the
+    // bare baseline (its numbers are its tell); the loner runs dust-dark
+    // and hunkers the moment it has marked you (alert is the stalker's
+    // honest step-tell); the tide wears a blood-red storm crest — the one
+    // you back away from before the rush.
     brainVariants: [
       { // the PACK-MIND: waits for numbers, then everyone at once
         weight: 2,
@@ -3922,6 +3949,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
           move: { style: 'skitter', dart: [0.3, 0.55], pause: [0.1, 0.3] },
           perception: { memory: 2.5 },
         },
+        tells: [
+          { source: 'always', channel: { kind: 'tint', color: '#4a3a26', max: 0.5 } },
+          { source: 'alert', channel: { kind: 'lean', amp: 0.9 } },
+        ],
       },
       { // the TIDE: a strict ebb-and-flow on the CYCLE machine — hold off at
         // range, then a boiling skitter-rush, then ebb, forever; bolder for
@@ -3939,6 +3970,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
             use: { skillUse: { cadence: [0.08, 0.18] } },
           }],
         },
+        tells: [
+          { source: 'always', channel: { kind: 'part', part: { kind: 'dorsalRidge', color: '#e05a3a', scale: 0.85, params: { n: 5 } } } },
+        ],
       },
     ],
   },
@@ -3957,6 +3991,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'beast', tags: ['beast'],
     detection: 1.5,
     adorn: 'ears',
+    tells: HUNGER_LEAN,
     brain: {
       type: 'basic',
       move: { style: 'lurk', ring: 260, commitRange: 250, unseenArc: 1.6 },
@@ -6025,9 +6060,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['gore_rend', 'claw'], xp: 34, faction: 'demon', adorn: 'spikes',
     detection: 1.5,
+    // TEMPERAMENT TELLS (engine/tells.ts): the smoke tells you WHICH
+    // skinner walked in — the stalker runs void-dark and coils low the
+    // moment it has your scent (lean rides `alert`, the honest aggro
+    // read); the knife-runner wears its cuts openly (warpaint).
     brainVariants: [
-      { weight: 3, brain: { type: 'assassin', withdraw: 0.8 } },
-      { weight: 2, brain: { type: 'flanker' } },
+      {
+        weight: 3, brain: { type: 'assassin', withdraw: 0.8 },
+        tells: [
+          { source: 'always', channel: { kind: 'tint', color: '#1a1022', max: 0.5 } },
+          { source: 'alert', channel: { kind: 'lean', amp: 1 } },
+        ],
+      },
+      {
+        weight: 2, brain: { type: 'flanker' },
+        tells: [
+          { source: 'always', channel: { kind: 'part', part: { kind: 'warpaint', color: '#e0485a', scale: 0.9 } } },
+        ],
+      },
     ],
   },
   // The gatekeeper: whelps through the skill-gate, and every so often it
@@ -10341,6 +10391,55 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.0, brain: { type: 'basic' },
   },
   // THE MIRE MAW — a bog pool with an appetite: mud until it opens.
+  // THE ACCUMULATOR DEBUT (the tell fabric end to end, engine/tells.ts): a
+  // fen leech that BANKS what it drinks. Every wound it gives feeds the
+  // glut meter (BrainDef.drives, onDealt — the first authored use of that
+  // jump), and the translucent sac on its back IS that meter (drive:glut →
+  // fillSac): slack when it walks in, sloshing as it feeds, straining taut
+  // at the brim — where the bank DETONATES as a blood nova (sanguine_burst,
+  // paid from its own hoarded body, the drive shoved empty in the same
+  // beat: the sac drains exactly when the mechanic does). The burst is
+  // reserved OUT of its ordinary rotation (priority policy — claw is the
+  // whole kit until the meter speaks), so a full sac is the only warning
+  // you get and the only warning you need. Read the sac, keep your range.
+  mire_leech: {
+    id: 'mire_leech', name: 'Mire Leech',
+    color: '#7a4652', shape: 'oval', radius: 11, material: 'slime', look: 'mire_leech',
+    base: { life: 52, moveSpeed: 124, accuracy: 96, evasion: 30, mana: 0 },
+    mods: [mod('poisonRes', 'flat', 0.35), mod('lifeLeech', 'flat', 0.15)],
+    skills: ['claw', 'sanguine_burst'], xp: 16,
+    faction: 'beast', tags: ['beast'],
+    detection: 1.3, // it smells blood (the hemophage's nose)
+    tells: [
+      // The sac: fill + swell ride the SAME meter the burst rule reads.
+      {
+        source: 'drive:glut', curve: 'smooth',
+        channel: {
+          kind: 'part',
+          part: { kind: 'fillSac', x: -0.55, scale: 0.9, color: '#c8536a', params: { fluid: '#8a1626' } },
+          scale: [0.7, 1.15],
+        },
+      },
+      // Past the burst line the whole body engorges — the last warning.
+      // (portrait 0: the book shows the half-full sac on an unswollen body.)
+      { source: 'drive:glut', band: [0.6, 1], portrait: 0, channel: { kind: 'scale', amp: 0.12 } },
+    ],
+    brain: {
+      type: 'swarm',
+      move: { style: 'skitter', dart: [0.25, 0.5], pause: [0.1, 0.25] },
+      drives: { glut: { onDealt: 0.16, onHurt: 0.05 } },
+      // The burst stays OUT of the weighted roll: claw is the rotation.
+      skillUse: { mode: 'priority', order: ['claw'] },
+      rules: [{
+        when: { drive: { id: 'glut', above: 0.95 }, distUnder: 140 },
+        cooldown: 2.5,
+        actions: [
+          { do: 'cast', skill: 'sanguine_burst', force: true },
+          { do: 'drive', id: 'glut', add: -1 },
+        ],
+      }],
+    },
+  },
   mire_maw: {
     id: 'mire_maw', name: 'Mire Maw',
     color: '#5a5238', shape: 'oval', radius: 16, material: 'slime', look: 'mire_maw',
@@ -10796,6 +10895,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.4, vision: { arcDeg: 220, rearMul: 0.4 },
     adorn: 'ears',
+    tells: HUNGER_LEAN,
     brain: {
       type: 'basic',
       move: { style: 'lurk', ring: 240, commitRange: 230, unseenArc: 1.5 },
@@ -16357,6 +16457,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.6,
     scaleVariance: [0.9, 1.25],
     packSize: [2, 4],
+    tells: HUNGER_LEAN,
     mountSlot: {
       kinds: ['goblin_wolfrider'],
       seats: [{ dx: -0.2, lift: 1.0 }],
@@ -16427,6 +16528,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 8, tag: 'predator',
     faction: 'beast', tags: ['beast'],
     detection: 1.8, drops: 0,
+    tells: HUNGER_LEAN,
     scaleVariance: [0.9, 1.15],
     brain: {
       type: 'flanker',
@@ -16447,6 +16549,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'beast', tags: ['beast'],
     detection: 1.6, drops: 0,
     scaleVariance: [0.9, 1.2],
+    tells: HUNGER_LEAN,
     brain: {
       type: 'basic',
       move: { style: 'lurk' },
@@ -16470,6 +16573,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.5, drops: 0,
     heft: 1.3,
     scaleVariance: [0.9, 1.2],
+    tells: HUNGER_LEAN,
     aggro: { fixation: 1.6, fury: 1.8, waver: 0.3 },
     brain: {
       type: 'juggernaut', enrage: 0.5,
@@ -16533,6 +16637,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.5, drops: 0,
     adorn: 'ears',
     scaleVariance: [0.9, 1.15],
+    tells: HUNGER_LEAN,
     brain: {
       type: 'skirmish', withdraw: 1.8,
       move: { style: 'lurk' },
@@ -16590,6 +16695,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 7, tag: 'predator',
     faction: 'beast', tags: ['beast'],
     detection: 1.4, drops: 0,
+    tells: HUNGER_LEAN,
     ambush: { radius: 40 },
     brain: {
       type: 'basic',
@@ -16633,6 +16739,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 7, tag: 'predator',
     faction: 'beast', tags: ['beast'],
     detection: 1.4, drops: 0,
+    tells: HUNGER_LEAN,
     packSize: [1, 2],
     brain: {
       type: 'flanker',
@@ -16654,6 +16761,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 9, tag: 'predator',
     faction: 'beast', tags: ['beast'],
     detection: 1.2, drops: 0,
+    tells: HUNGER_LEAN,
     ambush: { radius: 36 },
     shellGuard: { side: 'front', max: 30, arcDeg: 140, regenDelay: 6, regenRate: 6 },
     turnSpeed: 3.0,
@@ -16721,6 +16829,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'yeti', name: 'Yeti',
     color: '#dfe8ee', shape: 'rectangle', radius: 21, material: 'fur', look: 'yeti',
     heft: 1.5,
+    tells: HUNGER_LEAN,
     base: { life: 210, moveSpeed: 105, accuracy: 96, armor: 30, mana: 45, manaRegen: 5, poise: 55 },
     mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
     skills: ['yeti_snatch', 'yeti_hurl', 'rime_breath', 'ground_slam'],

@@ -3,7 +3,7 @@
 // every visual reads its color/shape from the data definitions.
 // ---------------------------------------------------------------------------
 
-import { clamp, dist, type Vec2 } from '../core/math';
+import { clamp, dist, mixHex, type Vec2 } from '../core/math';
 import { RENDER_SCALE_CFG } from './renderScale';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, skillContextTags, SKILL_RARITIES } from '../engine/skills';
@@ -55,7 +55,8 @@ import { RARITY_DEFS } from '../engine/rarity';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
-import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, drawPartSpecs, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { TELL_CFG, tellDressOf } from '../engine/tells';
 import { driftColor } from './vis/colorDrift';
 import { portraitSubjectOf, portraitTile, type PortraitSubject } from './vis/portrait';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
@@ -4116,6 +4117,14 @@ export class Renderer {
       const dip = a.wane * VIS_CFG.body.waneDepth;
       ctx.globalAlpha *= 1 - dip * (0.5 + 0.5 * Math.sin(world.time * VIS_CFG.body.waneRate + a.id * 1.7));
     }
+    // THE TELL FABRIC's worn dress (engine/tells.ts): materialized channel
+    // state, identity-stable until a quantized value moves. Every channel
+    // below rides a mechanism this path already owns — the alpha lanes,
+    // the pre-bake color swap, the tone glow, the breathe transform, the
+    // live-part pass, the adorn bake. The transparency channel folds here
+    // so overlays ride the same fade (a fading body fades whole).
+    const tdress = a.tellSpecs?.length ? tellDressOf(a) : undefined;
+    if (tdress && tdress.alpha < 1) ctx.globalAlpha *= tdress.alpha;
     // Every overlay from here rides the same fade as the body itself.
     const baseAlpha = ctx.globalAlpha;
 
@@ -4126,7 +4135,9 @@ export class Renderer {
     // always tracking it) are unchanged.
     const look: BodyLook = {
       shape: a.shape, radius: a.radius, color: a.color,
-      material: a.material, adorn: a.adorn, look: a.look,
+      // The tell dress's adorn channel swaps the silhouette accent at its
+      // threshold — a different cached sprite, bounded by construction.
+      material: a.material, adorn: tdress?.adorn ?? a.adorn, look: a.look,
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
       extraParts: a.extraParts,
@@ -4139,6 +4150,9 @@ export class Renderer {
     // (quantized, so the bake cache meets a bounded set) and every derived
     // tone follows. The per-body seed desyncs a herd within one shared sky.
     if (lookDef?.drift) look.color = driftColor(lookDef.drift, look.color, world.time, a.id);
+    // TELL TINT rides the same pre-bake color swap (quantized upstream by
+    // the tell resolver, so the bake cache meets a bounded set per look).
+    if (tdress?.tint) look.color = mixHex(look.color, tdress.tint.color, tdress.tint.f);
     // Part-grammar portraits are whole-body poses: they ALWAYS track facing.
     const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
     // SURFACE MIRROR (RegionKind.surfaceMirror — ice today): a faded, flipped
@@ -4170,6 +4184,20 @@ export class Renderer {
       ctx.arc(0, 0, gr, 0, Math.PI * 2);
       ctx.fill();
     }
+    // TELL GLOW (the tone pool's kin): a state-fed under-halo whose alpha
+    // IS the reading — an accumulator brightens toward its burst, a
+    // gloamborn kindles in its hour. Color defaults to the body's own.
+    if (tdress?.glow) {
+      const gc = tdress.glow.color ?? look.color;
+      const gr = a.radius * 1.9;
+      const g = ctx.createRadialGradient(0, 0, a.radius * 0.3, 0, 0, gr);
+      g.addColorStop(0, withAlpha(gc, tdress.glow.a * baseAlpha));
+      g.addColorStop(1, withAlpha(gc, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, gr, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.save();
     // Idle breathing — a live transform over the static bake. Scenery
     // (barrels, spawners) holds still; living things never quite do.
@@ -4178,11 +4206,31 @@ export class Renderer {
         * Math.sin(world.time * VIS_CFG.body.breatheRate + a.id * 1.31);
       ctx.scale(breathe, breathe);
     }
+    // TELL POSTURE: the swell channel scales the DRAW (the breathe law —
+    // presentation, never the hitbox), and the lean channel hunkers the
+    // body forward along its facing with a screen squash (the stalk).
+    if (tdress) {
+      if (tdress.scale !== 1) ctx.scale(tdress.scale, tdress.scale);
+      if (tdress.lean > 0) {
+        const k = tdress.lean;
+        ctx.translate(Math.cos(a.facing) * k * TELL_CFG.lean.shift * a.radius,
+          Math.sin(a.facing) * k * TELL_CFG.lean.shift * a.radius);
+        ctx.scale(1, 1 - k * TELL_CFG.lean.squash);
+      }
+    }
     if (rot !== 0) ctx.rotate(rot);
     ctx.drawImage(flash ? bodyFlashSprite(look) : bodySprite(look), -half, -half);
     // Animated look parts (wisps, flames) ride in the same facing space.
     if (lookDef?.live && !flash) drawLiveParts(ctx, look, lookDef, world.time);
     if (rot !== 0) ctx.rotate(-rot);
+    // THE WORN GAUGES (tell dress parts): live meters in facing space —
+    // the adorn law (a gauge tracks the snout on every body, look or
+    // legacy). Values already live in each instance's params (`fill`).
+    if (tdress?.parts && !flash) {
+      ctx.rotate(a.facing);
+      drawPartSpecs(ctx, look, tdress.parts, world.time);
+      ctx.rotate(-a.facing);
+    }
     const adornImg = flash ? adornFlashSprite(look) : adornSprite(look);
     if (adornImg) {
       ctx.rotate(a.facing);

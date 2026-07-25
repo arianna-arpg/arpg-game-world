@@ -180,6 +180,7 @@ import {
 import {
   MOUNT_CFG, seatCount, seatPos, type MountSlotSpec,
 } from './mounts';
+import { resolveTell, TELL_CFG, tellSpecsOf } from './tells';
 import type { WispKindRow, WisplightSurge } from '../packages/overlays/wisplight';
 import type { DroveSurge } from '../packages/overlays/drove';
 import type { QuickeningField } from '../packages/overlays/quickening';
@@ -10065,6 +10066,31 @@ export class World {
    *  grab seat wins); the last rider's DEATH asks the slot's onRiderDeath
    *  policy; and a widowed steed turns zone-memory eligible — it is real on
    *  its own now, no remembered rider implies it. */
+  /** THE TELL FABRIC's value sweep (engine/tells.ts): resolve every telled
+   *  body's binding rows against its LIVE state — the same maps the AI
+   *  reads (drawn == tested) — on a gentle cadence (TELL_CFG.sweepSec).
+   *  Values are quantized by the resolver, so writes (and the tellRev bump
+   *  the render dress keys on) land only when a reading genuinely moved.
+   *  Read-only over the sources by law: a tell reports state, never bends
+   *  it. Null-cost on the untelled roster (no specs → skip). */
+  private updateTells(): void {
+    const t = this.time;
+    for (const a of this.actors) {
+      const specs = a.tellSpecs;
+      if (!specs || a.dead || t < a.tellNextAt) continue;
+      a.tellNextAt = t + TELL_CFG.sweepSec;
+      let vals = a.tells;
+      if (!vals || vals.length !== specs.length) {
+        vals = a.tells = new Array<number>(specs.length).fill(0);
+        a.tellRev++;
+      }
+      for (let i = 0; i < specs.length; i++) {
+        const v = resolveTell(specs[i], a, this);
+        if (v !== vals[i]) { vals[i] = v; a.tellRev++; }
+      }
+    }
+  }
+
   private updateMounts(): void {
     // --- (1) the pairing sweep. Collect first: minting splices the roster,
     // and a for-of over a spliced array walks crooked.
@@ -22332,11 +22358,16 @@ export class World {
       let total = 0;
       for (const v of def.brainVariants) total += v.weight;
       let roll = rand(0, total);
-      for (const v of def.brainVariants) {
+      for (let vi = 0; vi < def.brainVariants.length; vi++) {
+        const v = def.brainVariants[vi];
         roll -= v.weight;
-        if (roll <= 0) { a.brain = v.brain; break; }
+        if (roll <= 0) { a.brain = v.brain; a.brainVariant = vi; break; }
       }
     }
+    // THE TELL FABRIC (engine/tells.ts): the binding list this body wears —
+    // def rows + the rolled temperament's rows. Stamped once; the sweep
+    // (updateTells) and the renderer both read it. Undefined = null-cost.
+    a.tellSpecs = tellSpecsOf(def, a.brainVariant);
     // Def-level role tag (ambient wildlife etc.) — spawners may still
     // overwrite it for event roles (patrols, sieges).
     if (def.tag) a.tag = def.tag;
@@ -37720,6 +37751,9 @@ export class World {
     // the ride clock + the husk ladder — a hold landed on the husk THIS
     // frame is seen this frame.
     this.updatePossessions(dt);
+    // THE TELL FABRIC's value sweep (engine/tells.ts) — after every mover
+    // and state machine has spoken for the frame, the worn gauges read.
+    this.updateTells();
     // THE COUCH EDGE LAW dead last among movers: whatever moved a local hero
     // this frame — intent, dash, shove, carrier — the shared frame's wall
     // answers it (no-op outside couch play; see couchConfine).

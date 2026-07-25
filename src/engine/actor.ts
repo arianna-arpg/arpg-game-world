@@ -33,6 +33,7 @@ import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monsters';
 import type { PartSpec } from '../render/vis/parts';
+import type { TellDress, TellSpec } from './tells';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
  *  triggers read kind/id/depth; the SYMPATHY FABRIC reads the payload tail
@@ -470,6 +471,25 @@ export class Actor {
    *  (part of the bake key) and co-op replicates it (snapshot `ep`). Draws
    *  on part-grammar and legacy bodies alike. */
   extraParts?: PartSpec[];
+  /** THE TELL FABRIC (engine/tells.ts): the binding list this body wears —
+   *  def rows + the rolled brain-variant's rows, stamped at spawn (host)
+   *  or adopt (client). Undefined = no tells, and every sweep/draw hook
+   *  short-circuits (null-cost on the untelled roster). */
+  tellSpecs?: TellSpec[];
+  /** Quantized tell values, one per spec row — host-swept (updateTells),
+   *  shipped on the wire (ActorW.tl). The DERIVED scalars, never sources. */
+  tells?: number[];
+  /** Bumped when any tell value moves — the render dress cache key. */
+  tellRev = 0;
+  /** Next tell sweep (world clock; 0 = resolve on the first sweep seen). */
+  tellNextAt = 0;
+  /** Rolled brainVariants index (undefined = base brain). Wired (ActorW.bv)
+   *  so clients rebuild the same variant tell rows; also the honest record
+   *  of WHICH temperament walked in. */
+  brainVariant?: number;
+  /** Render-side materialized tell dress (identity-stable cache — rebuilt
+   *  in place only when tellRev moves; see materializeTellDress). */
+  tellVis?: TellDress;
 
   sheet = new StatSheet();
   level = 1;
