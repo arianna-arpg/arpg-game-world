@@ -8625,6 +8625,68 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.95,
   },
+
+  // ================================= THE TRUE NATIVES, WAVE TWO (the lairs)
+  /** THE MAZE BULL: a wall of shoulder under a ram-horned skull, head
+   *  carried LOW — the nose is the sense. War-paint over old fur; the
+   *  knuckle-blocks have opened doors that were not doors. */
+  maze_bull: {
+    parts: [
+      { kind: 'torso', scale: 1.12 },
+      { kind: 'mane', scale: 0.95, alpha: 0.9 },
+      { kind: 'warpaint', scale: 0.9, alpha: 0.85 },
+      { kind: 'gauntlets', scale: 1.05 },
+      { kind: 'snout', x: 0.34, scale: 0.95, params: { ears: false } },
+      { kind: 'ramHorns', x: 0.3, scale: 1.2 },
+      { kind: 'eyes', color: '#e05a3a', params: { spread: 0.34, dist: 0.62, size: 0.08 } },
+    ],
+  },
+  /** THE EMBERWYRM: a furnace-scaled serpent head — the body is the worm
+   *  fabric's trailing segments; the head carries ridge, fangs, and the
+   *  crack-glow of banked fire (the ember reserve's glow tell floods the
+   *  whole stack; these are the always-on bones). */
+  emberwyrm: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.05 },
+      { kind: 'dorsalRidge', scale: 0.9, alpha: 0.9 },
+      { kind: 'lavaCracks', scale: 0.85, alpha: 0.9 },
+      { kind: 'fangs', x: 0.44, scale: 0.85 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.9 }],
+  },
+  /** THE SPINNEY MATRON: a pale bulk on weaver's legs — egg-swollen abdomen
+   *  (the colony's honest seat), spinnerets trailing, eight eyes that have
+   *  counted you already. */
+  spinney_matron: {
+    parts: [
+      { kind: 'shell', scale: 0.95 },
+      { kind: 'legs', scale: 1.15, params: { n: 8 } },
+      { kind: 'bloatSacs', x: -0.3, scale: 0.8, alpha: 0.9 },
+      { kind: 'mandibles', x: 0.4, scale: 0.85 },
+      { kind: 'eyeCluster', x: 0.32, scale: 0.7, color: '#d8e8a0' },
+    ],
+  },
+  /** The broodling: a fleck of the swarm — pooled bodies read at a glance,
+   *  never in detail. */
+  spinney_broodling: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'legs', scale: 1.0, params: { n: 8 } },
+      { kind: 'eyes', color: '#d8e8a0', params: { spread: 0.4, dist: 0.5, size: 0.1 } },
+    ],
+  },
+  /** THE WELLSPRING NAIAD: a current wearing a figure — veils of water for
+   *  hair and hem, gauze where a body would be, and the river's own light
+   *  (the rooted glow floods her at home; dry, she is this pale sketch). */
+  river_naiad: {
+    parts: [
+      { kind: 'disc', scale: 0.78, alpha: 0.85 },
+      { kind: 'veilSashes', scale: 1.05, alpha: 0.9 },
+      { kind: 'soulGauze', scale: 0.9, alpha: 0.75 },
+      { kind: 'eyes', color: '#bff0fa', params: { spread: 0.32, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.8, params: { n: 3 } }],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

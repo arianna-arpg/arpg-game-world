@@ -10907,6 +10907,164 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
     objectives: [{ kind: 'puzzle', weight: 1 }],
   },
+
+  // THE MAZE — the bull's labyrinth under the karst: red-brown stone halls
+  // rolled labyrinth-ONLY, old blood on the floor, and standing water in
+  // the low turns (the mercy: the scent hunt cannot cross it — the watch
+  // fabric's own law, seated as terrain).
+  bull_maze: {
+    id: 'bull_maze', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { labyrinth: 1 },
+    nameFirst: ['Red', 'Blind', 'Turning', 'Old', 'Gorewalk', 'Hornbound', 'Echoing', 'Lost'],
+    nameSecond: ['Maze', 'Halls', 'Turns', 'Warren', 'Run', 'Gallery', 'Court', 'Winding'],
+    theme: {
+      ambientDark: 0.42,
+      ground: {
+        palette: ['#1c120c', '#281a10', '#342215', '#402b1a', '#4c3420'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#170f09', grid: '#1f150c', border: '#5c4630',
+      obstacle: '#3c2c1c', obstacleEdge: '#6a5238', accent: '#d8a05a',
+      wall: '#3c2c1c', water: '#1d4258', mud: '#241a10',
+    },
+    sizeW: [1600, 2200], sizeH: [1250, 1700], ellipseChance: 0,
+    layout: [
+      { kind: 'water', count: [1, 2] },
+      { kind: 'gore', count: [2, 4] },
+      { kind: 'bone_pile', count: [3, 6] },
+      { kind: 'rubble', count: [1, 3] },
+      { kind: 'brazier', count: [1, 2] },
+    ],
+    variants: [
+      // The old halls: whoever built it built it PROUD, once.
+      { name: 'the old halls', layout: [
+        { kind: 'broken_column', count: [2, 4] },
+        { kind: 'standing_stone', count: [1, 2] },
+        { kind: 'brazier', count: [2, 3] },
+        { kind: 'water', count: [1, 2] },
+        { kind: 'bone_pile', count: [1, 3] },
+      ] },
+      // The red run: the part of the maze the bull eats in.
+      { name: 'the red run', layout: [
+        { kind: 'gore', count: [4, 7] },
+        { kind: 'bone_pile', count: [4, 7] },
+        { kind: 'water', count: [1, 1] },
+        { kind: 'rubble', count: [1, 2] },
+      ] },
+    ],
+    packs: {
+      count: [2, 3], size: [1, 2],
+      table: [
+        { id: 'gutter_rat', weight: 3 },
+        { id: 'orb_weaver', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
+  // THE WYRM BARROW — black glass and banked ash under the caldera country:
+  // the emberwyrm's hoard-floor (gem caches ride the mint's fauna — robbing
+  // it asleep is the whole second way through), vents coughing the odd orb,
+  // and a heat that reads as ownership.
+  wyrm_barrow: {
+    id: 'wyrm_barrow', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { winding: 3, plains: 1.5 },
+    nameFirst: ['Ember', 'Cinder', 'Glasswake', 'Smoulder', 'Hoard', 'Ashbed', 'Slagsunk', 'Wyrm'],
+    nameSecond: ['Barrow', 'Coil', 'Bed', 'Vault', 'Throat', 'Hollow', 'Keeping', 'Rest'],
+    theme: {
+      ambientDark: 0.5,
+      ambientFx: [{ kind: 'motes', intensity: 0.4 }],
+      ground: {
+        palette: ['#120c0a', '#1c1210', '#261815', '#301e1a', '#3a2620'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#0e0a08', grid: '#160f0c', border: '#5c3a28',
+      obstacle: '#2e2018', obstacleEdge: '#5a3c2a', accent: '#ff9a3a',
+      wall: '#2e2018', lava: '#e05a1a', mud: '#1c1410',
+    },
+    sizeW: [1450, 2000], sizeH: [1100, 1550], ellipseChance: 0,
+    layout: [
+      { kind: 'obsidian', count: [3, 5] },
+      { kind: 'cinder', count: [3, 5] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'ember_vent', count: [1, 2] },
+      { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+    ],
+    variants: [
+      // The ash bed: the sleep is oldest here — drifts of it.
+      { name: 'the ash bed', layout: [
+        { kind: 'cinder', count: [5, 8] },
+        { kind: 'bone_pile', count: [3, 5] },
+        { kind: 'obsidian', count: [1, 3] },
+      ] },
+      // The glass throat: cooled melt in standing shards.
+      { name: 'the glass throat', layout: [
+        { kind: 'obsidian', count: [5, 8] },
+        { kind: 'ember_vent', count: [1, 3] },
+        { kind: 'cinder', count: [2, 3] },
+      ] },
+    ],
+    packs: {
+      count: [1, 2], size: [1, 1],
+      table: [
+        { id: 'magma_worm', weight: 2 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
+  // THE SPINNEY HOLLOW — the silk-choked bole under the old forest: webs in
+  // every angle, the swaddled leavings of the larder underfoot, and the
+  // matron's court strung on ropes you can read (the pack layer's bonds).
+  spinney_hollow: {
+    id: 'spinney_hollow', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { winding: 2, plains: 2 },
+    nameFirst: ['Silk', 'Swaddled', 'Pale', 'Spinney', 'Cocoon', 'Husk', 'Weft', 'Hollowbole'],
+    nameSecond: ['Hollow', 'Larder', 'Gallery', 'Cradle', 'Warren', 'Loom', 'Parlor', 'Keep'],
+    theme: {
+      ambientDark: 0.5,
+      ground: {
+        palette: ['#14120c', '#1c1910', '#242015', '#2c281a', '#34301f'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#100e09', grid: '#16130c', border: '#565040',
+      obstacle: '#322c1e', obstacleEdge: '#585034', accent: '#e8e4d0',
+      wall: '#322c1e', mud: '#1c1810', water: '#173a42',
+      tree: '#4a5a2c',
+    },
+    sizeW: [1500, 2050], sizeH: [1150, 1600], ellipseChance: 0,
+    layout: [
+      { kind: 'web', count: [5, 8] },
+      { kind: 'briarwood', count: [1, 3] },
+      { kind: 'toadstool', count: [1, 3] },
+      { kind: 'drained_husk', count: [2, 4] },
+      { kind: 'rocks', count: [2, 3], radius: [14, 24] },
+    ],
+    variants: [
+      // The swaddled larder: everything hanging here was walking once.
+      { name: 'the swaddled larder', layout: [
+        { kind: 'web', count: [7, 11] },
+        { kind: 'drained_husk', count: [4, 7] },
+        { kind: 'bone_pile', count: [1, 3] },
+      ] },
+      // The old growth: the wood the silk conquered, still standing in it.
+      { name: 'the old growth', layout: [
+        { kind: 'briarwood', count: [3, 5] },
+        { kind: 'web', count: [4, 6] },
+        { kind: 'toadstool', count: [2, 4] },
+      ] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 3],
+      table: [
+        { id: 'orb_weaver', weight: 4 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
 };
 
 // --- BIOME → TILESET resolver (the heat-map-authoritative mint) --------------
@@ -11149,6 +11307,13 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   aether_bastion: { title: 'The High Bastion',  blurb: 'The Host\'s seat: enormous silver-and-gold citadels strewn about a rolling cloud continent, gleamways of bound blue light bridging the rim — and higher cloud still streaming overhead. Everything here holds; everything here is watched.' },
   aether_gloria:  { title: 'The Gloria',        blurb: 'The seraph city\'s approach: hemicycle amphitheaters opening their chords to the field, rotunda courts ringing their sanctums, laurel and marble gaining on silver with every step deeper. The choirs carry farther here.' },
   aether_seraphal:{ title: 'Seraphal',          blurb: 'The city of the Aetherial lords: pantheon domes and colonnaded forums in white marble and gold, streets of light between them, the cloudsea far below. The seats of gods incarnate — and every one of them home.' },
+  // THE LAIR COUNTRIES (the lair fabric, data/lairs.ts) — one native each.
+  frostmaw_hollow:{ title: 'The Frostmaw',      blurb: 'The yeti den under the mountains: blue ice, stacked bone, a pantry of live hares — and the Rimefather at the bottom of the cold, who stacked it all.' },
+  hag_hollow:     { title: 'The Hag\'s Hollow', blurb: 'The root-cellar under the hovel: peat walls, hung pots, wisplight with no honest destination, and the fen\'s crone at the bottom, who knows your name and dislikes it.' },
+  riddle_vault:   { title: 'The Riddle Vault',  blurb: 'The deep desert\'s hall of the asking: sunkstone rooms swept clean by ten dynasties of wind, one question — and a warden older than all of it, watching you work.' },
+  bull_maze:      { title: 'The Maze',          blurb: 'The labyrinth under the karst: red stone turns, old blood, standing water in the low halls — and a landlord who reads the floor. He knows where you were. Be somewhere else.' },
+  wyrm_barrow:    { title: 'The Wyrm Barrow',   blurb: 'Black glass and banked ash: a furnace asleep on everything it was ever paid. Rob it on tiptoe, or wake it and outlast the ember — both are the barrow working as intended.' },
+  spinney_hollow: { title: 'The Spinney',       blurb: 'The silk-choked bole under the old forest: webs in every angle, the larder\'s swaddled leavings underfoot, and a matron whose court hangs on ropes you can read.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no

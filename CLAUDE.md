@@ -343,7 +343,17 @@ changes.
   ask; the Vault Sphinx stands as a dormant latched-once `vault_warden`
   through `registerRouseRule`, the NEW open sibling of registerDormantTag
   in ai.ts). Factions `jotun`/`coven` debut diplomacy-silent (natives
-  claim ground, not wars); alphas pay the lean repeatable `lair_hoard` —
+  claim ground, not wars); alphas pay the lean repeatable `lair_hoard`.
+  WAVE TWO (lairs of many laws — each debut seats ONE landed fabric as
+  its whole argument): the MAZE (karst labyrinth den; the bull hunts
+  trail prints — the watch fabric's scent posture; standing water breaks
+  the line), the EMBERWYRM BARROW (volcanic; a true sleeper over a
+  gem-cache hoard floor whose fire verbs are all PRICED from one finite
+  reserve — rob it on tiptoe or starve the ember), the SPINNEY (forest;
+  a lite-colony brood + the matron's strength hung beneficiary-side on
+  her weaver court — the silk bond rope IS the kill order), and the
+  WELLSPRING (the naiad ON the traced rivers via `LairSeat.courses`,
+  the fold's new course axis — rooted on `water`, drawn wilt off it) —
   docs in `docs/engine/lairs.md`; probe `balance/probe_lairs.ts`),
   `tells.ts` (THE TELL FABRIC — visible internal state as a readable
   information layer on enemy bodies: `MonsterDef.tells` rows bind a STATE

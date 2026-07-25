@@ -2274,6 +2274,35 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#f0d078', intensity: 0.28, flicker: 1.6 },
   },
+  // Wave two: the bull's gore-stained gate, the wyrm's glassed barrow (its
+  // banked-fire glow is the warning), the matron's silk-shrouded bole.
+  maze_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#3c2c1c', edge: '#6a5238', material: 'stone',
+      glow: '#d88a4a', throat: '#0c0806', rubble: {},
+      label: 'the Maze',
+    },
+    light: { radius: -2, color: '#d88a4a', intensity: 0.26, flicker: 2 },
+  },
+  wyrm_barrow_mouth: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#2e2018', edge: '#5a3c2a', material: 'stone',
+      glow: '#ff8a2a', throat: '#140a04', teeth: {},
+      label: 'the Emberwyrm Barrow',
+    },
+    light: { radius: -2, color: '#ff8a2a', intensity: 0.42, flicker: 5 },
+  },
+  spinney_bole: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#322c1e', edge: '#585034', material: 'wood',
+      glow: '#e8e4d0', throat: '#0a0906', vines: { color: '#d8d4c0' },
+      label: 'the Spinney',
+    },
+    light: { radius: -2, color: '#e8e4d0', intensity: 0.22, flicker: 1.2 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },

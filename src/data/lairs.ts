@@ -331,3 +331,200 @@ registerLair({
     chance: 0.2,
   },
 });
+
+// ============================================================================
+// WAVE TWO — LAIRS OF MANY LAWS. Four more natives, each lair seating ONE
+// landed fabric as its whole argument (the gnasher-pen doctrine): the scent
+// hunt, the sleeper's ember, the colony court, the rooted river.
+// ============================================================================
+
+// === THE MAZE (the bull's labyrinth) =========================================
+// Karst surface: a gore-stained gate into a labyrinth-ONLY den. The law is
+// the WATCH fabric's scent posture — the bull hunts your trail through the
+// walls, and the maze's standing water is the fabric's own counterplay
+// (wading breaks the print line). Boss ask; the chest banks past the horns.
+
+registerDoodadRule('maze_gate', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'maze_gate_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'maze_gate',
+    dress: [
+      { kind: 'broken_column', count: [2, 3], radius: [10, 15] },
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 15] },
+      { kind: 'gore', count: [1, 3], radius: [14, 20] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'maze_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'maze_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'bull_maze', {
+      rollVariant: true,
+      name: 'the Maze',
+      objective: { kind: 'boss', id: 'maze_bull' },
+      noDeeper: true,
+    });
+    // Rats in the walls — prints of their own, which is the scent law's
+    // gentle chaff: the bull's nose is good, not perfect.
+    def.fauna = [
+      { id: 'gutter_rat', chance: 0.6, count: [2, 4] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'bull_maze',
+  landmark: 'maze_gate_site',
+  seat: {
+    biomes: ['karst'],
+    place: 'surface',
+    level: { from: 8, fadeIn: 3 },
+    chance: 0.14,
+  },
+});
+
+// === THE WYRM BARROW (the sleeping hoard) ====================================
+// Volcanic country, surface and the first two caves (the sphinx's 'both'
+// posture in fire). TWO laws behind one door: the sleeper (watch sleep —
+// the hearing ring is the whole game of robbing the floor caches) and the
+// ember (a finite reserve both fire verbs spend — wake it and its opening
+// minute is the worst minute; outlast the burn and it visibly gutters).
+
+registerDoodadRule('wyrm_barrow_mouth', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'wyrm_barrow_site', builder: 'den_mouth', size: [200, 270],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'wyrm_barrow_mouth',
+    dress: [
+      { kind: 'obsidian', count: [2, 4], radius: [12, 18] },
+      { kind: 'cinder', count: [2, 4], radius: [14, 20] },
+      { kind: 'bone_pile', count: [1, 3], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'wyrm_barrow_mouth',
+  dwell: 0.7,
+  ledgerOnEnter: 'wyrm_barrow_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'wyrm_barrow', {
+      rollVariant: true,
+      name: 'the Emberwyrm Barrow',
+      objective: { kind: 'boss', id: 'emberwyrm' },
+      noDeeper: true,
+    });
+    // THE HOARD FLOOR: breakable gem caches strewn where it sleeps — the
+    // robbery is authored tenancy (passive treasure bodies), so the choice
+    // is real: tiptoe the hearing ring and leave rich, or wake the furnace.
+    def.fauna = [
+      { id: 'gem_cache', chance: 1, count: [3, 5] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'wyrm_barrow',
+  landmark: 'wyrm_barrow_site',
+  seat: {
+    biomes: ['volcanic'],
+    place: 'both',
+    strata: { to: 2, fadeOut: 2 },
+    level: { from: 9, fadeIn: 3 },
+    chance: 0.16,
+  },
+});
+
+// === THE SPINNEY (the matron's silk court) ===================================
+// Old-forest surface: a silk-shrouded bole into the web hollow. The laws
+// are the LITE COLONY (her brood is a pooled tide that regrows while she
+// stands — the exterminator's true target) and the PACK LAYER's drawn
+// bonds (the weaver court hangs on visible silk ropes: kill order is
+// hanging in the air, literally).
+
+registerDoodadRule('spinney_bole', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'spinney_bole_site', builder: 'den_mouth', size: [180, 250],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'spinney_bole',
+    dress: [
+      { kind: 'web', count: [3, 5], radius: [12, 18] },
+      { kind: 'drained_husk', count: [2, 4], radius: [12, 16] },
+      { kind: 'briarwood', count: [1, 2], radius: [14, 20] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'spinney_bole',
+  dwell: 0.7,
+  ledgerOnEnter: 'spinney_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'spinney_hollow', {
+      rollVariant: true,
+      name: 'the Spinney',
+      objective: { kind: 'boss', id: 'spinney_matron' },
+      noDeeper: true,
+    });
+    def.fauna = [
+      { id: 'glow_moth', chance: 0.5, count: [2, 4] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'spinney',
+  landmark: 'spinney_bole_site',
+  seat: {
+    biomes: ['forest'],
+    place: 'surface',
+    level: { from: 6, fadeIn: 3 },
+    chance: 0.15,
+  },
+});
+
+// === THE WELLSPRING (the naiad's pool — the courses seat axis) ===============
+// The in-zone lane, seated ON THE RIVERS THEMSELVES: the seat's `courses`
+// row keys to the relief fabric's traced surface rivers ('rivers'), so the
+// spring stands only where a river actually runs — whatever country it is
+// crossing (the biome list is the local-ground gate). The law is ROOTED
+// ground: in her water she is the river's argument; haul her out — or bait
+// her out — and the wilt is drawn. Her undertow reels you IN, because all
+// of her numbers live where the water is.
+
+registerLandmark({
+  id: 'naiad_spring', builder: 'lake', size: [260, 360], liquid: 'water',
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    rim: { kind: 'flowers', count: [4, 7], radius: [10, 15] },
+  },
+  spawns: {
+    table: [{ id: 'river_naiad', weight: 1 }],
+    count: [1, 1], where: 'interior',
+  },
+});
+
+registerLair({
+  id: 'wellspring',
+  landmark: 'naiad_spring',
+  seat: {
+    biomes: ['forest', 'downs', 'farmland', 'highland', 'marsh', 'karst'],
+    place: 'surface',
+    courses: ['rivers'],
+    level: { from: 5, fadeIn: 2 },
+    chance: 0.22,
+  },
+});

@@ -18267,6 +18267,184 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ],
     brain: { type: 'artillery' },
   },
+
+  // ==========================================================================
+  // THE TRUE NATIVES, WAVE TWO (the lair fabric, data/lairs.ts): four more
+  // apex kin, each wearing a DIFFERENT landed fabric as its lair's law —
+  // the gnasher-pen doctrine generalized: a lair is a place where one
+  // mechanic gets to be the whole argument.
+  //   THE MAZE BULL   — the watch fabric's SCENT posture: he hunts where
+  //                     you WERE, through walls, and water breaks the line.
+  //   THE EMBERWYRM   — the sleeper (watch sleep) over the reserve fabric:
+  //                     creep the hearing ring and rob it, or wake it and
+  //                     starve its ember.
+  //   THE SPINNEY     — the lite colony + the pack layer's drawn bonds:
+  //                     the brood regrows while the matron stands, and the
+  //                     silk ropes say whom to cut first.
+  //   THE WELLSPRING  — the rooted fabric's ground axis: monstrous in her
+  //                     water, wilting on dry stone. TAKE THE GROUND.
+  // ==========================================================================
+
+  // THE MAZE BULL — the labyrinth's landlord. His eyes are poor and it has
+  // never once mattered: he reads the floor (scent watch — your own trail
+  // prints are the hunt), and the maze is HIS argument. The charge is the
+  // kill and the corner is the counterplay; the standing water is mercy
+  // for those who read the fabric.
+  maze_bull: {
+    id: 'maze_bull', name: 'Bull of the Maze',
+    color: '#8a6a4e', shape: 'trapezoid', radius: 24, material: 'fur', look: 'maze_bull',
+    heft: 1.7, boss: true,
+    base: { life: 560, moveSpeed: 118, accuracy: 98, armor: 40, mana: 55, manaRegen: 6, poise: 110 },
+    skills: ['charge', 'gore_rend', 'heavy_strike', 'ground_slam'],
+    xp: 260, loot: 'lair_hoard',
+    faction: 'jotun', tags: ['beast'],
+    vision: { arcDeg: 80, rearMul: 0.6 }, // the nose is the sense, not the eye
+    watch: { scent: { range: 190, maxAge: 22 }, riseSec: 1.2, decaySec: 6 },
+    tells: [
+      // The hunt reads: a rising snort-glow as the ladder climbs, and the
+      // head goes DOWN when he has the line (the hound's honest posture).
+      { source: 'watch', channel: { kind: 'glow', color: '#d88a4a', max: 0.4 } },
+      { source: 'watch', band: [0.4, 1], channel: { kind: 'lean', amp: 0.7 } },
+    ],
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.55, reaction: [0.3, 0.7] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.08 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.6 } },
+        announce: 'the maze SHAKES — the bull has the scent!',
+        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.3 } },
+      }],
+    },
+  },
+  // THE EMBERWYRM — a furnace asleep on everything it has ever been paid.
+  // Two clocks, both visible: the WATCH (genuinely asleep — the hearing
+  // ring is the whole game of robbing it) and the EMBER (a finite reserve
+  // its breath and its rush both spend, that burns down just by fighting —
+  // wake it and its opening minute is the worst minute; survive that and
+  // the fire visibly gutters). The barrow's floor caches are the wager.
+  emberwyrm: {
+    id: 'emberwyrm', name: 'Emberwyrm',
+    color: '#e0763a', shape: 'circle', radius: 20, material: 'ember', look: 'emberwyrm',
+    heft: 1.6, boss: true,
+    worm: { length: 8, spacing: 16, taper: 0.9 },
+    base: { life: 520, moveSpeed: 130, accuracy: 100, armor: 38, mana: 70, manaRegen: 6, poise: 85 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['ember_breath', 'immolation_rush', 'claw'],
+    xp: 280, loot: 'lair_hoard',
+    faction: 'wyrmkin',
+    post: true, // the hoard is the post — it re-coils where it was authored
+    vision: { arcDeg: 120, rearMul: 0.55 },
+    watch: { sleep: true, riseSec: 3.4, decaySec: 8.5 },
+    reserves: [{
+      id: 'ember', label: 'Ember', pool: 5,
+      // Both fire verbs are PRICED (the cast gate refuses a spent furnace —
+      // claw is what remains), and the fight itself stokes the burn
+      // (drainWhile 'aggroed'). It banks back only in the quiet: leaving
+      // and returning meets a re-kindled wyrm — commit, or rob it cold.
+      costs: { ember_breath: 1, immolation_rush: 1 },
+      drain: 0.12, drainWhile: 'aggroed',
+      regen: 0.14, regenDelay: 4, regenWhile: 'calm',
+      spentAt: 0.1,
+      stages: [{ below: 0.3, status: 'guttered', note: 'the furnace gutters...', color: '#8a8070' }],
+    }],
+    tells: [
+      // THE FURNACE GLOW: the whole body reads as its fuel — banked high it
+      // floods ember-orange; guttered it cools toward ash (inverted band).
+      { source: 'reserve:ember', curve: 'smooth', channel: { kind: 'glow', color: '#ff9a3a', max: 0.55 } },
+      { source: 'reserve:ember', band: [1, 0], channel: { kind: 'tint', color: '#5a5048', max: 0.45 } },
+      // Shut eyes that OPEN as the watch climbs (the drowser's honest read).
+      {
+        source: 'watch', curve: 'early', channel: {
+          kind: 'part',
+          part: { kind: 'eyes', x: 0.4, color: '#ffc84a', params: { spread: 0.44, dist: 0.6, size: 0.11 } },
+          alpha: [0, 1], scale: [0.7, 1.15],
+        },
+      },
+    ],
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+    },
+  },
+  // THE SPINNEY MATRON — the silk country's queen, and the two fabrics she
+  // wears ARE the fight: a pooled BROOD that crawls off her and regrows
+  // while she stands (the colony law — exterminate the source or drown),
+  // and HER OWN strength hung on the weaver court (the pack layer's bond,
+  // worn beneficiary-side: while a weaver stands in reach the silk rope
+  // draws and the matron fights harder — CUT THE COURT OUT FROM UNDER HER
+  // is the kill order, and it is hanging in the air, literally).
+  spinney_matron: {
+    id: 'spinney_matron', name: 'Spinney Matron',
+    color: '#d8d0b8', shape: 'oval', radius: 19, material: 'chitin', look: 'spinney_matron',
+    boss: true,
+    base: { life: 460, moveSpeed: 125, accuracy: 104, evasion: 45, armor: 26, mana: 110, manaRegen: 9 },
+    skills: ['silk_snare', 'web_shot', 'claw'],
+    xp: 250, loot: 'lair_hoard',
+    faction: 'beast', tags: ['beast'],
+    colony: { monsterId: 'spinney_broodling', cap: 14, radius: 75, calmRadius: 260 },
+    bond: {
+      kin: 'orb_weaver',
+      mods: [mod('damageTaken', 'more', -0.2), mod('damage', 'increased', 0.15)],
+      radius: 420,
+      link: { color: '#e8e4d0', style: 'root' },
+    },
+    brain: {
+      type: 'flanker',
+      behavior: { castArc: 0.8, reaction: [0.25, 0.55] },
+    },
+  },
+  // The broodling: one bite of the swarm — a pooled body (the lite tier)
+  // that costs the frame budget nothing and the player one clean sweep.
+  spinney_broodling: {
+    id: 'spinney_broodling', name: 'Spinney Broodling',
+    color: '#c8c0a8', shape: 'oval', radius: 6, material: 'chitin', look: 'spinney_broodling',
+    base: { life: 10, moveSpeed: 150, accuracy: 70, mana: 0 },
+    skills: ['claw'], xp: 1,
+    faction: 'beast', tags: ['beast'],
+    drops: 0, noNemesis: true,
+    plies: { count: 1 },
+    lite: {
+      contact: { damage: 3 }, aggro: 250, separation: 1.1,
+      regen: {},
+    },
+    brain: { type: 'basic', move: { style: 'skitter' } },
+  },
+  // THE WELLSPRING NAIAD — the river's own opinion, seated ON the traced
+  // rivers themselves (the courses seat axis). In her water she is the
+  // argument: rooted mods, an undertow that reels you into the pool, the
+  // spring knitting her back together. On dry stone she is a pale wisp of
+  // it — TAKE THE GROUND is the whole lesson, and the wilt is drawn.
+  river_naiad: {
+    id: 'river_naiad', name: 'Wellspring Naiad',
+    color: '#7ac8d8', shape: 'kite', radius: 14, material: 'ethereal', look: 'river_naiad',
+    bossBar: true,
+    base: { life: 300, moveSpeed: 135, accuracy: 104, evasion: 60, mana: 140, manaRegen: 10, insight: 25 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.2)],
+    skills: ['undertow_lash', 'frostbolt', 'claw'],
+    xp: 210, loot: 'lair_hoard',
+    faction: 'sylvan',
+    rooted: {
+      ground: ['water'],
+      mods: [
+        mod('damage', 'increased', 0.35), mod('damageTaken', 'more', -0.25),
+        mod('lifeRegen', 'flat', 6), mod('castSpeed', 'increased', 0.2),
+      ],
+      off: [mod('damageTaken', 'more', 0.2)],
+      note: 'torn from the water!', noteOn: 'the spring takes her back',
+    },
+    tells: [
+      // At home she runs river-lit; hauled out, the color drains and she
+      // visibly slackens (the matron's thrive/wilt grammar, in water).
+      { source: 'rooted', steps: 1, portrait: 1, channel: { kind: 'glow', color: '#7ad8e8', max: 0.35 } },
+      { source: 'rooted', band: [1, 0], steps: 1, portrait: 0, channel: { kind: 'tint', color: '#8a9498', max: 0.5 } },
+      { source: 'rooted', band: [1, 0], steps: 1, portrait: 0, channel: { kind: 'lean', amp: -0.4 } },
+    ],
+    brain: {
+      type: 'flanker',
+      behavior: { castArc: 0.85, reaction: [0.25, 0.6] },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

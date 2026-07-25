@@ -10755,6 +10755,28 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // --- THE WELLSPRING'S ARGUMENT (the lair fabric's river naiad) -----------
+  // The gaff cast's grammar in water: a lash of current that closes around
+  // an ankle and REELS. The naiad never leaves her pool to collect you —
+  // the drag seat trails the holder, so the catch is hauled INTO the water
+  // she is rooted in, where all her numbers live. Struggle out, or fight
+  // the river standing in it.
+  undertow_lash: {
+    id: 'undertow_lash', name: 'Undertow Lash', noDrop: true,
+    description: 'The current itself thrown as a line: it closes around whatever it touches and REELS the catch back toward the wellspring — into the water, where the naiad is the river and you are wading. The grip is struggled off like any other; the lesson is where you are standing when it breaks.',
+    tags: ['spell', 'projectile', 'cold', 'grab'], color: '#6ac8dc',
+    manaCost: 9, cooldown: 8, useTime: 0.55,
+    baseDamage: { cold: [7, 12] },
+    delivery: { type: 'projectile', speed: 560, radius: 8, range: 320, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'grabSeize', grab: { verb: 'drag', breakMult: 1.1 } },
+    ],
+    requirements: { intelligence: 14 },
+    ai: { range: 300, weight: 3, keepDistance: 140 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   // ======================= Trajectories, returns & shrapnel ================
   // §4: the flight levers as skills — zig-zags that shed, bounces that work
   // the room, recurves, selective pierce, arced convergence, aimed spread.

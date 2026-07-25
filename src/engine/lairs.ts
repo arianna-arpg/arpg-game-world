@@ -64,6 +64,12 @@ export interface LairSeat {
   /** Explicit tileset-id allowlist — a lair that keeps to named faces
    *  (absent = any face the biome mints). */
   tilesets?: string[];
+  /** COURSE claims (world/courses.ts CourseSpec.id — 'rivers' is the relief
+   *  fabric's traced surface rivers): the seat stands only on zones minted
+   *  ALONG a listed course. A course row still needs `biomes` satisfied by
+   *  the LOCAL ground (rivers cross countries and repaint none), so "the
+   *  naiad keeps to forest rivers" is biomes + courses composing. */
+  courses?: string[];
 }
 
 /** One registered lair: an id, the LANDMARK that stands at its seat, and the
@@ -94,6 +100,9 @@ export interface LairGround {
   caveDepth?: number;
   level: number;
   tileset: string;
+  /** The course this mint rides (CourseSpec.id), when it rides one — the
+   *  surface chokepoint threads onCourse; caves never carry a course. */
+  course?: string;
   /** Sealed pockets grow no lairs (the noDeeper contract — mintCave's
    *  authored-row filter, extended to the fabric's own rows). */
   noDeeper?: boolean;
@@ -111,6 +120,9 @@ export function lairLandmarkRolls(q: LairGround): LandmarkRoll[] {
     if (s.place !== 'both' && s.place !== q.place) continue;
     if (!s.biomes.includes(q.biome)) continue;
     if (s.tilesets && !s.tilesets.includes(q.tileset)) continue;
+    // Course claims: a row listing courses stands ONLY on those courses; a
+    // row listing none never minds them (ordinary ground law, unchanged).
+    if (s.courses && (!q.course || !s.courses.includes(q.course))) continue;
     // ONE evaluation law: strata reads the ladder depth (surface = 0), level
     // reads the zone's level — both through the presence fabric's envelope.
     const w = s.chance

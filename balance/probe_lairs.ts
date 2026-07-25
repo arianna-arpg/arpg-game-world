@@ -30,6 +30,7 @@ import {
   type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lairs';
+import { reserveFrac } from '../src/engine/reserves';
 import { BIOMES } from '../src/world/biomes';
 import { TILESETS } from '../src/data/tilesets';
 import { MONSTERS } from '../src/data/monsters';
@@ -52,9 +53,19 @@ const check = (name: string, ok: boolean, detail = ''): void => {
   if (!ok) fails++;
 };
 
-const LAIR_IDS = ['frostmaw', 'giants_cairn', 'hag_hovel', 'riddle_vault'];
-const MOUTHS = ['frostmaw_maw', 'hovel_door', 'sphinx_gate'];
-const NATIVES = ['yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx'];
+const LAIR_IDS = [
+  'frostmaw', 'giants_cairn', 'hag_hovel', 'riddle_vault',
+  // Wave two — lairs of many laws.
+  'bull_maze', 'wyrm_barrow', 'spinney', 'wellspring',
+];
+const MOUTHS = [
+  'frostmaw_maw', 'hovel_door', 'sphinx_gate',
+  'maze_gate', 'wyrm_barrow_mouth', 'spinney_bole',
+];
+const NATIVES = [
+  'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
+  'maze_bull', 'emberwyrm', 'spinney_matron', 'spinney_broodling', 'river_naiad',
+];
 
 // --- RIG A: the registry weave --------------------------------------------------
 {
@@ -335,6 +346,174 @@ const step = (secs: number): void => {
   check('E1 the mint is pure (byte-equal defs)', JSON.stringify(a) === JSON.stringify(b));
   check('E2 the den carries its own pantry rows (authored fauna)',
     Array.isArray(a.fauna) && a.fauna.some(f => f.id === 'snow_hare'));
+}
+
+// --- RIG F: wave two — the laws each lair wears (pure) ---------------------------
+{
+  // The courses seat axis: the wellspring stands ONLY on the traced rivers,
+  // in any of its listed countries — and nowhere off them.
+  const at = (biome: string, course?: string) =>
+    lairLandmarkRolls({ place: 'surface', biome, level: 20, tileset: 'meadow', course });
+  const hasSpring = (rolls: { landmark: string }[]) => rolls.some(r => r.landmark === 'naiad_spring');
+  check('F1 the wellspring keeps to the rivers (courses axis)',
+    !hasSpring(at('forest')) && hasSpring(at('forest', 'rivers'))
+    && hasSpring(at('karst', 'rivers')) && !hasSpring(at('jungle', 'rivers')));
+  check('F2 course rows never leak onto courseless lairs (ordinary ground law)',
+    at('forest', 'rivers').some(r => r.landmark === 'spinney_bole_site'));
+  // The bull is a TRACKER: scent watch + a drawn read (validateWatch's law).
+  const bull = MONSTERS.maze_bull;
+  check('F3 the bull hunts by SCENT and tells it',
+    !!bull.watch?.scent && (bull.watch.scent.range ?? 0) > 0
+    && (bull.tells ?? []).some(t => t.source === 'watch'));
+  // The wyrm: both fire verbs PRICED from one pool, the gutter staged, the
+  // sleep posture worn, the body a true worm.
+  const wyrm = MONSTERS.emberwyrm;
+  const res = wyrm.reserves?.[0];
+  check('F4 the ember prices BOTH fire verbs and stages the gutter',
+    !!res && res.costs?.ember_breath === 1 && res.costs?.immolation_rush === 1
+    && (res.stages ?? []).some(s => s.status === 'guttered')
+    && wyrm.watch?.sleep !== undefined && !!wyrm.worm);
+  check('F5 the wyrm READS its fuel (reserve-sourced tells — the honesty law)',
+    (wyrm.tells ?? []).some(t => t.source === 'reserve:ember'));
+  // The matron: a pooled colony + a styled bond over her court; the
+  // broodling is a true lite body (one ply, pooled bite).
+  const matron = MONSTERS.spinney_matron;
+  check('F6 the matron anchors a colony and ropes her court',
+    matron.colony?.monsterId === 'spinney_broodling'
+    && matron.bond?.kin === 'orb_weaver' && !!matron.bond?.link);
+  const brood = MONSTERS.spinney_broodling;
+  check('F7 the broodling is swarm-substrate (lite + 1 ply)',
+    !!brood.lite && brood.plies?.count === 1);
+  // The naiad: rooted on WATER with a drawn wilt (the ground axis + the
+  // thrive/wilt read — the tell layer never implies an unpaid penalty).
+  const naiad = MONSTERS.river_naiad;
+  check('F8 the naiad claims the water and wilts off it, drawn both ways',
+    (naiad.rooted?.ground ?? []).includes('water') && !!naiad.rooted?.off
+    && (naiad.tells ?? []).filter(t => t.source === 'rooted').length >= 2);
+}
+
+// --- RIG G: wave two live (sim world) --------------------------------------------
+// G-I: the Maze — labyrinth-only country, the bull's ask, the scent line.
+{
+  w.player.pos = vec(400, 400);
+  w.enterSidezone({ pos: { x: 400, y: 400 }, seed: 61061, kind: 'maze_gate' });
+  check('G1 the gate mints the Maze (labyrinth-only, the bull\'s ask)',
+    w.zone.layoutType === 'labyrinth' && w.zone.objective.kind === 'boss'
+    && w.zone.objective.id === 'maze_bull' && w.zone.noDeeper === true,
+    `${w.zone.layoutType}`);
+  const bull = (w.actors as Actor[]).find(a => a.defId === 'maze_bull');
+  check('G2 the bull holds the maze', !!bull);
+  // The scent law's substrate: a standing scent-watcher makes the player
+  // PRINT a trail as they move (probe_watchers owns the full hunt; this
+  // pins the lair's half — his presence turns the floor into a record).
+  const p = w.player;
+  for (let i = 0; i < 20; i++) { p.pos = vec(p.pos.x + 14, p.pos.y); step(0.1); }
+  check('G3 the floor remembers you (trail printed under a scent-watcher)',
+    Array.isArray(p.trail) && p.trail.length >= 1, `${p.trail?.length ?? 0} prints`);
+  leaveToHome();
+}
+// G-II: the Barrow — the hoard floor, the sleeper, and the ember's arithmetic.
+{
+  w.player.pos = vec(400, 400);
+  w.enterSidezone({ pos: { x: 400, y: 400 }, seed: 72072, kind: 'wyrm_barrow_mouth' });
+  const wyrm = (w.actors as Actor[]).find(a => a.defId === 'emberwyrm');
+  const caches = (w.actors as Actor[]).filter(a => a.defId === 'gem_cache');
+  check('G4 the barrow holds the sleeper and the hoard it sleeps on',
+    !!wyrm && caches.length >= 3, `${caches.length} caches`);
+  if (wyrm) {
+    const st = wyrm.reserves?.get('ember');
+    check('G5 the ember banks full at the coil', !!st && reserveFrac(st) === 1);
+    // Spend the pool dry through the REAL cast gate: five breaths pay five
+    // ember; the sixth REFUSES (costs refuse, they never debt) while the
+    // claw — unpriced — still answers. BRAINS FROZEN for the arithmetic
+    // (w.update alone): the probe's presses must be the only spender, and
+    // an un-aggroed wyrm burns no ambient drain — pure cost math.
+    const tickOnly = (secs: number): void => {
+      const dt = 1 / 30;
+      for (let t = 0; t < secs; t += dt) w.update(dt);
+    };
+    const breath = wyrm.skills.find((s: any) => s?.def.id === 'ember_breath');
+    const clawI = wyrm.skills.find((s: any) => s?.def.id === 'claw');
+    wyrm.pos = vec(w.player.pos.x + 80, w.player.pos.y);
+    let paid = 0;
+    for (let i = 0; i < 7; i++) {
+      wyrm.cooldowns.clear(); wyrm.mana = wyrm.maxMana();
+      if (w.useSkill(wyrm, breath, vec(w.player.pos.x, w.player.pos.y))) paid++;
+      // Let the 0.9s cast AND its recovery tail finish (a busy-body press
+      // refuses for the wrong reason) while staying inside the 4s regen
+      // delay per spend — 2.0s clears both windows.
+      tickOnly(2.0);
+    }
+    const stAfter = wyrm.reserves?.get('ember');
+    // paid === 5 IS the refusal proof (presses 6-7 bounced off canUse).
+    // The residue read loosens past 0.05 deliberately: the calm regen's
+    // delay expires DURING the refused presses and the furnace begins to
+    // re-kindle — which is the recovery law working, not a leak.
+    check('G6 five breaths drain the pool; the dry furnace REFUSES the sixth',
+      paid === 5 && !!stAfter && reserveFrac(stAfter) < 0.25, `paid ${paid}`);
+    wyrm.cooldowns.clear(); wyrm.mana = wyrm.maxMana();
+    check('G7 claw is what remains of it (unpriced verbs never gate)',
+      w.useSkill(wyrm, clawI, vec(w.player.pos.x, w.player.pos.y)));
+  }
+  leaveToHome();
+}
+// G-III: the Spinney — the roped court.
+{
+  w.player.pos = vec(400, 400);
+  w.enterSidezone({ pos: { x: 400, y: 400 }, seed: 83083, kind: 'spinney_bole' });
+  const matron = (w.actors as Actor[]).find(a => a.defId === 'spinney_matron');
+  const weavers = (w.actors as Actor[]).filter(a => a.defId === 'orb_weaver');
+  check('G8 the matron holds the loom with a court to rope', !!matron && weavers.length >= 1,
+    `${weavers.length} weavers`);
+  if (matron && weavers[0]) {
+    // The bond is worn BENEFICIARY-side: the MATRON reads held while a
+    // weaver stands in reach, and the drawn rope runs to that weaver —
+    // cut the court out from under her is the kill order.
+    weavers[0].pos = vec(matron.pos.x + 60, matron.pos.y);
+    step(1.2);
+    check('G9 the silk rope is REAL (the matron hangs on her court)',
+      matron.bondHeld === true && (matron.bondFrom as Actor | undefined)?.id === weavers[0].id);
+    // Cut the court: the rope falls and so does her favor (edge-triggered).
+    for (const v of weavers) v.dead = true;
+    step(1.2);
+    check('G10a the cut is REAL (bond broken when the court dies)',
+      matron.bondHeld === false);
+  }
+  leaveToHome();
+}
+// G-IV: the Wellspring — rooted in her water, wilted off it, home again.
+{
+  const springDef = caveDef({
+    id: 'probe_spring_zone',
+    landmarks: [{ landmark: 'naiad_spring', chance: 1 }],
+    caveDepth: undefined, anchor: undefined,
+    exits: [{ to: homeId, side: 's' }],
+  });
+  w.caveMap[springDef.id] = springDef;
+  w.loadZone(springDef.id);
+  step(0.5);
+  const naiad = (w.actors as Actor[]).find(a => a.defId === 'river_naiad');
+  check('G10 the spring spawns its naiad IN the pool', !!naiad);
+  if (naiad) {
+    step(0.8);
+    check('G11 in her water she is ROOTED (the claim held from frame one)',
+      naiad.rootedHeld === true);
+    // Haul her onto dry stone: past the grace the claim DROPS...
+    naiad.pos = vec(120, 120);
+    step(1.2);
+    check('G12 torn from the water the wilt is REAL (grace-timed drop)',
+      naiad.rootedHeld === false);
+    // ...and the spring takes her back the frame she touches it.
+    const pool = (w.doodads as { kind: string; pos: { x: number; y: number } }[])
+      .find(d => d.kind === 'water');
+    if (pool) {
+      naiad.pos = vec(pool.pos.x, pool.pos.y);
+      step(0.3);
+      check('G13 stepping home re-roots without a grace (the one-way debounce)',
+        naiad.rootedHeld === true);
+    }
+  }
+  leaveToHome();
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

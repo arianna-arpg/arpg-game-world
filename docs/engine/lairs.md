@@ -118,6 +118,29 @@ default `neutral` stance means the world's armies leave the mountain alone.
    `ai` hints, affordable from the def's mana — probe_anatomy pins all
    three), a look in `data/looks.ts`, `loot: 'lair_hoard'` on the alpha.
 
+## Wave two — lairs of many laws
+
+The second wave generalizes the gnasher-pen doctrine: **a lair is a place
+where one mechanic gets to be the whole argument.** Each debut seats a
+different landed fabric as its law, and the seat registry grew ONE axis:
+`LairSeat.courses` — course claims (`world/courses.ts` CourseSpec.id), so a
+native can stand on zones minted ALONG a traced course ("the rivers
+themselves"), with `biomes` still gating the local ground the course is
+crossing.
+
+| lair | where | the law |
+|---|---|---|
+| **the Maze** | karst surface | THE SCENT HUNT (watch fabric): the bull reads your trail prints through the walls; the maze's standing water breaks the line — the tracker posture seated as terrain. |
+| **the Emberwyrm Barrow** | volcanic surface + caves 1–2 | THE SLEEPER + THE EMBER: a genuine sleeper (hearing-ring watch — rob the gem-cache hoard floor on tiptoe) whose fire verbs are all PRICED from one finite reserve. Wake it and its opening minute is the worst minute; outlast the burn and it visibly gutters (`guttered`), re-kindling only in the quiet. |
+| **the Spinney** | forest surface | THE COLONY + THE COURT: a pooled lite brood that regrows while the matron stands, and her own strength hung beneficiary-side on the weaver court — the silk bond rope IS the kill order. |
+| **the Wellspring** | ON the rivers (`courses: ['rivers']`, six crossing biomes) | THE ROOTED GROUND: the naiad claims `water` — monstrous in her pool, drawn wilt off it, undertow reeling you IN because all her numbers live where the water is. The in-zone lane (lake landmark + spawns), no den. |
+
+Authoring lessons the wave banked: the pack `bond` field is worn by the
+BENEFICIARY (its `kin` names the holder it looks for), cast `useTime` +
+recovery must clear before a re-press or `useSkill` refuses for the wrong
+reason (probe pacing), and a reserve's post-refusal residue read must
+tolerate the calm regen re-kindling — that residue is the law, not a leak.
+
 ## QA
 
 `balance/probe_lairs.ts` — registry weave, the seat fold's pure law

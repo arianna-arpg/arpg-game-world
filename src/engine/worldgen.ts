@@ -1315,8 +1315,12 @@ export function placeZoneAt(
     // THE LAIR FABRIC (engine/lairs.ts): natives that claim this biome at
     // this level seat their lair rolls beside the authored ones — pure
     // predicate here; the chance draws in generateLayout's landmark loop
-    // like any other row (unclaimed ground burns no rng).
-    ...lairLandmarkRolls({ place: 'surface', biome, level, tileset: tileset.id, port: spec.port }),
+    // like any other row (unclaimed ground burns no rng). Course mints
+    // carry their course id, so a native may claim the rivers themselves.
+    ...lairLandmarkRolls({
+      place: 'surface', biome, level, tileset: tileset.id, port: spec.port,
+      course: onCourse?.spec.id,
+    }),
   ];
   // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
   // discipline as structures/landmarks (special arenas skip them too).
