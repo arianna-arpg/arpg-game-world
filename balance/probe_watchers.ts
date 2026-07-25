@@ -472,7 +472,7 @@ MONSTERS.probe_din_striker = {
   pin(far, 0); // gaze +X: the scuffle sits in its deaf 156px-rear — only the DIN reaches
   const claw = striker.skills.find(s => s?.def.id === 'claw');
   check('noise: the rig premise holds (the striker carries a claw)', !!claw);
-  if (claw) w3.useSkill(striker, claw, mark.pos, mark);
+  if (claw) w3.useSkill(striker, claw, mark.pos);
   tick(w3, 1.4, () => pin(far, 0));
   check('noise: the Din stat RANG through the real hit (the far watcher heard the blow land)',
     far.watchS > 0 && far.watchAt !== undefined

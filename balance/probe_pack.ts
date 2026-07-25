@@ -110,7 +110,7 @@ const liveBondPairs = (w: { actors: readonly Actor[] }): string[] => {
   return out.sort();
 };
 const drawnPairs = (w: { actors: readonly Actor[] }, view = { x: 0, y: 0 }): string[] =>
-  packLinks(w.actors as PackLinkBody[], STYLE_OF, view)
+  packLinks(w.actors as readonly PackLinkBody[], STYLE_OF, view)
     .map(l => `${l.from.id}->${l.to.id}`).sort();
 
 console.log('\n=== A. the registry weave ===');
@@ -430,10 +430,10 @@ console.log('\n=== E. THE MATRIARCH AND HER YOUNG ===');
   check('the scare body kept its distance (rig sanity)', scare.pos.x > 400);
 
   // THE TWO HALVES AGREE: guarded on the calf, brood on the sow.
-  const guardedV = resolveTell(
-    { source: 'guarded' }, calf as unknown as TellBody, w2 as unknown as TellWorld);
-  const broodV = resolveTell(
-    { source: 'brood', band: [0, 3] }, sow as unknown as TellBody, w2 as unknown as TellWorld);
+  const guardedV = resolveTell({ source: 'guarded', channel: { kind: 'glow' } },
+    calf as unknown as TellBody, w2 as unknown as TellWorld);
+  const broodV = resolveTell({ source: 'brood', band: [0, 3], channel: { kind: 'glow' } },
+    sow as unknown as TellBody, w2 as unknown as TellWorld);
   check('both halves of the huddle read nonzero', guardedV > 0 && broodV > 0,
     `guarded=${guardedV} brood=${broodV}`);
   // THE AGREEMENT LAW (a real bug this probe caught): wardNear and
@@ -524,10 +524,12 @@ console.log('\n=== F. THE COURSING PACK — the shared meter ===');
   const wolf = pack[0];
   wolf.aiPrey = undefined;
   check('no predation open = no coursing tell',
-    resolveTell({ source: 'coursing' }, wolf as unknown as TellBody, w as unknown as TellWorld) === 0);
+    resolveTell({ source: 'coursing', channel: { kind: 'glow' } },
+      wolf as unknown as TellBody, w as unknown as TellWorld) === 0);
   wolf.aiPrey = ['critter'];
   check('predation open = the coursing tell reads',
-    resolveTell({ source: 'coursing' }, wolf as unknown as TellBody, w as unknown as TellWorld) === 1);
+    resolveTell({ source: 'coursing', channel: { kind: 'glow' } },
+      wolf as unknown as TellBody, w as unknown as TellWorld) === 1);
 }
 
 console.log('\n=== G. the co-op wire round trip (REAL serialize/apply) ===');
@@ -536,13 +538,13 @@ console.log('\n=== G. the co-op wire round trip (REAL serialize/apply) ===');
   const matron = at(spawn(host, 'gnoll_matron', 8), 0, 0);
   const c1 = at(spawn(host, 'gnoll_prowler', 8), 55, 0);
   const c2 = at(spawn(host, 'gnoll_prowler', 8), -55, 0);
-  const lone = at(spawn(host, 'gnoll_prowler', 8), 6000, 0);
+  at(spawn(host, 'gnoll_prowler', 8), 6000, 0); // the lone body — found again below by its position
   tick(host, 0.4);
   const hostDrawn = drawnPairs(host);
   check('host court formed (rig sanity)', hostDrawn.length === 2);
 
   const client = mkWorld();
-  applySnapshot(client, serializeSnapshot(host));
+  applySnapshot(client, serializeSnapshot(host, 1));
 
   // Identity survives: the client's warded bodies point at the client's own
   // matron shell, and the un-warded one points at nothing.
@@ -572,7 +574,7 @@ console.log('\n=== G. the co-op wire round trip (REAL serialize/apply) ===');
   // wear a stale court.
   host.kill(matron, false);
   tick(host, 0.4);
-  applySnapshot(client, serializeSnapshot(host));
+  applySnapshot(client, serializeSnapshot(host, 2));
   const stale = client.actors.filter(a => a.bondHeld || a.bondFrom);
   check('an absent holder CLEARS the client pair (no stale court)', stale.length === 0,
     `stale=${stale.length}`);
@@ -598,15 +600,18 @@ console.log('\n=== H. the read-only law + determinism ===');
   const SOURCES = ['nerve', 'warded', 'warding', 'guarded', 'brood', 'juvenile',
     'kin', 'packDrive:hunger', 'coursing'];
   for (const s of SOURCES) {
-    resolveTell({ source: s, band: [0, 5] }, a as unknown as TellBody, w as unknown as TellWorld);
-    resolveTell({ source: s, band: [0, 5] }, m as unknown as TellBody, w as unknown as TellWorld);
+    resolveTell({ source: s, band: [0, 5], channel: { kind: 'glow' } },
+      a as unknown as TellBody, w as unknown as TellWorld);
+    resolveTell({ source: s, band: [0, 5], channel: { kind: 'glow' } },
+      m as unknown as TellBody, w as unknown as TellWorld);
   }
   check('every pack source is a pure READ (state byte-identical)',
     before === snapOf(a) + '|' + snapOf(m));
 
   // Unknown source stays zero (the fail-closed law).
   check('an unknown pack source resolves 0',
-    resolveTell({ source: 'pack_not_a_source' }, a as unknown as TellBody, w as unknown as TellWorld) === 0);
+    resolveTell({ source: 'pack_not_a_source', channel: { kind: 'glow' } },
+      a as unknown as TellBody, w as unknown as TellWorld) === 0);
 
   // SAME SEED, SAME STORY.
   const run = (): string => {
