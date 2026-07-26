@@ -133,7 +133,19 @@ deliberately:
   is lawful; a single sitting is still bounded.
 - **The standing condition** (contagion, verminfall, deepwinter, crusade
   territory): a persistent state CURED BY A DEED, not a clock — lawful because
-  its per-visit yield is finite placed packs, never a sustained pour.
+  its per-visit yield is finite placed packs, never a sustained pour. The
+  ELDRITCH INCURSION is this shape with a tug-of-war rider: its deed is the
+  epicenter Observer (`termination.observer`, materialized at a revealed
+  epicenter under the `hybridCleanseObserver` policy — world.ts
+  `materializeObserver` + the `eldritch_observer` kill handler →
+  `resolveEpicenter`; each kill collapses an epicenter, the last collapses
+  the blight whole and its keyed warp + pall recede), and its in-zone pour
+  SELF-THROTTLES — every corrupted-foe/eldritch-spawn cull retracts the
+  reach by `termination.cleanseRetract`, censused above `spread.growthPerSec
+  × eventInterval` so one cull per event beat strictly outruns regrowth: the
+  pour is always player-shuttable and the deed always stands. An
+  `ambientCapped` archetype must declare NO observer/cleanseRetract (dead
+  knobs) and a positive `maxInfluencedZones` (its name's own promise).
 
 A presence-frozen clock (wisplight / straying / drove pause while the player
 stands the ground) is lawful ONLY over a finite scene — fixed heads, fixed
@@ -141,7 +153,9 @@ lights. Any future change that respawns the scene's bodies must move that
 event onto one of the shapes above.
 
 `npm run eventqa`'s `waning` group censuses the encounter framework + the
-declared ceilings; `npx tsx balance/probe_eventclock.ts` proves the dynamics
+declared ceilings + the incursion termination (knobs coherent both ways, and
+the ignite → cleanse → Observer-deed collapse driven live through the
+overlay's own public seams); `npx tsx balance/probe_eventclock.ts` proves the dynamics
 on the real engine (a ~180-kills/sec perpetual farm cannot outlive the
 authored ceiling; the wane latches once, at the dry well; a roaming tide
 spends nothing; a restored tide keeps its spent well).

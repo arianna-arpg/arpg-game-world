@@ -37,7 +37,9 @@
 //               and kill-fed well are finite; kill-fed defs carry the wane
 //               tell; wells without spigots (and spigots without wells) are
 //               dead knobs; surge/tide ceilings (maxLifeSec, the deadwake
-//               pour budget) are declared and positive
+//               pour budget) are declared and positive; the incursion's
+//               termination is wired-and-winnable (the Observer deed
+//               resolves, cleanse outruns regrowth, collapse is total)
 //
 // Usage: npm run eventqa [-- --verbose]
 // ---------------------------------------------------------------------------
@@ -78,7 +80,9 @@ import { scaledCap } from '../src/packages/frequency';
 import { chooseEvent, zoneEventDefs, type EventContext } from '../src/engine/events';
 import { WorldSim, packageLookups } from '../src/world/sim';
 import { BIOMES } from '../src/world/biomes';
-import { FACTIONS } from '../src/data/monsters';
+import { FACTIONS, MONSTERS } from '../src/data/monsters';
+import { IncursionField, INCURSION_ARCHETYPES } from '../src/packages/overlays/incursion';
+import { Rng } from '../src/core/rng';
 import { START_ZONE, ZONES, type ZoneDef } from '../src/data/zones';
 import { randomizeStarterWeb } from '../src/engine/worldgen';
 import { makeAccount } from '../src/meta/account';
@@ -565,7 +569,10 @@ console.log('eventqa: zone-event registry');
 // cumulative and never refills), so the reachable ceiling falls at wall-clock
 // rate however hard a field is farmed. This census makes the law unauthorable
 // by omission; the live dynamics are pinned on the real engine by
-// balance/probe_eventclock.ts.
+// balance/probe_eventclock.ts. The INCURSION — always-on infra, no package
+// def, so the package audits never see it — joins at the tail: its declared
+// termination policy is censused knob-by-knob and DRIVEN through the
+// overlay's own public seams (the deadwake surge() idiom).
 console.log('eventqa: the waning law (finite clocks)');
 {
   for (const e of allEncounterSpecs()) {
@@ -614,6 +621,101 @@ console.log('eventqa: the waning law (finite clocks)');
       'deadwake falterFrac leaves a real pre-ebb tell window');
     assert(typeof s.ebbText === 'string' && s.ebbText.length > 0, 'waning',
       'deadwake declares its ebb announce (tone is data)');
+  }
+
+  // THE INCURSION TERMINATION: the always-on infra blight (no package def —
+  // the lifetime audit's last uncensused stream). Its lawful shape is the
+  // STANDING CONDITION: cured by the Observer DEED (world.ts
+  // materializeObserver gates on the policy; killHandlers' eldritch_observer
+  // → resolveEpicenter), with a SELF-THROTTLING pour — every blight cull
+  // retracts the reach by termination.cleanseRetract (killHandlers'
+  // eldritch_cleanse → cleanse), so one cull per event beat strictly outruns
+  // regrowth and the pour is always player-shuttable. The config half
+  // censuses every archetype's knobs (dead knobs refused BOTH ways, the
+  // waning idiom); the dynamics half drives the REAL overlay through the
+  // exact public seams the engine calls, so the declared policy can never
+  // silently un-wire again.
+  for (const [aid, a] of Object.entries(INCURSION_ARCHETYPES)) {
+    const t = a.termination;
+    assert(Number.isFinite(a.spread.maxReach) && a.spread.maxReach > 0, 'waning',
+      `incursion '${aid}': maxReach is a finite spatial ceiling`);
+    assert(a.cap.maxConcurrent >= 1, 'waning', `incursion '${aid}': maxConcurrent sane`);
+    assert(a.announce.length > 0, 'waning', `incursion '${aid}': the landing is told (announce)`);
+    if (t.policy === 'hybridCleanseObserver') {
+      assert(!!t.observer && !!MONSTERS[t.observer], 'waning',
+        `incursion '${aid}': the Observer deed resolves — '${t.observer ?? '(none)'}' must be a real `
+        + `monster or materializeObserver refuses forever (an immortal blight)`);
+      assert(Number.isFinite(t.cleanseRetract ?? NaN) && (t.cleanseRetract ?? 0) > 0, 'waning',
+        `incursion '${aid}': cleanseRetract is a live, positive retract`);
+      assert((t.cleanseRetract ?? 0) > a.spread.growthPerSec * a.eventInterval, 'waning',
+        `incursion '${aid}': the tug-of-war is winnable — one cull per beat outruns regrowth `
+        + `(${t.cleanseRetract} > ${a.spread.growthPerSec}/s × ${a.eventInterval}s)`);
+    } else {
+      assert(t.observer == null && t.cleanseRetract == null, 'waning',
+        `incursion '${aid}': ambientCapped carries no observer/cleanseRetract dead knobs`);
+      assert(a.cap.maxInfluencedZones > 0, 'waning',
+        `incursion '${aid}': ambientCapped honors its own name (maxInfluencedZones > 0)`);
+    }
+    if (t.observerReward) {
+      assert(t.observerReward.base > 0 && t.observerReward.festerBonusMax >= 0
+        && t.observerReward.festerSeconds > 0, 'waning', `incursion '${aid}': observerReward row sane`);
+    }
+  }
+
+  // The dynamics, on the real overlay (fixed seed — a deterministic landing):
+  // ignite → bind → cleanse retracts exactly → the deeds collapse it whole.
+  {
+    const arch = INCURSION_ARCHETYPES['eldritch'];
+    const retract = arch.termination.cleanseRetract ?? 0;
+    const inc = new IncursionField(new Rng(0x1ec0));
+    const lit = inc.ignite('eldritch', { x: 0, y: 0 }, 12);
+    assert(!!lit, 'waning', 'eldritch incursion ignites (under maxConcurrent)');
+    const eps = inc.peek()[0]?.epicenters ?? [];
+    assert(eps.length >= arch.nodeCount[0] && eps.length <= arch.nodeCount[1], 'waning',
+      `landing fields ${eps.length} epicenter(s) within nodeCount`);
+    assert(inc.mintRequests.length === eps.length, 'waning', 'one mint request per epicenter');
+    // Bind each epicenter to a QA zone AT its coord — what the engine's mint
+    // drain does through placeZoneAt + bindEpicenter.
+    const byId: Record<string, ZoneDef> = {};
+    eps.forEach((ep, i) => {
+      const zid = `qa_inc_e${i}`;
+      byId[zid] = { id: zid, map: { x: ep.coord.x, y: ep.coord.y }, exits: [] } as unknown as ZoneDef;
+      inc.bindEpicenter(ep.id, zid);
+    });
+    const view = { byId, visited: new Set(Object.keys(byId)) } as unknown as OverlayView;
+    inc.update(0.001, view); // hand the overlay its node view (the engine's tick)
+    assert(inc.influence('qa_inc_e0') > 0.5, 'waning', 'a bound epicenter zone reads deep influence');
+    assert(inc.resolveEpicenter('qa_not_a_zone') === 1, 'waning', 'resolving a non-epicenter zone is a 1× no-op');
+
+    // CLEANSE: the per-cull retract shrinks every influencing pod by exactly
+    // cleanseRetract (the eldritch_cleanse kill handler's own call).
+    type Snap = { ownedZones: string[]; incursions: { epicenters: { pods: { len: number }[] }[] }[] };
+    const podsOf = (s: Snap): number[] => s.incursions[0].epicenters[0].pods.map(p => p.len);
+    const before = podsOf(inc.snapshot() as Snap);
+    inc.cleanse('qa_inc_e0', retract);
+    const after = podsOf(inc.snapshot() as Snap);
+    assert(after.length > 0 && after.every((len, i) => Math.abs(len - Math.max(0, before[i] - retract)) < 1e-9),
+      'waning', `cleanse retracts every influencing pod by cleanseRetract (${retract})`);
+
+    // THE DEED: resolve every epicenter — the LAST collapses the incursion
+    // whole, and a festered blight pays the declared richer multiplier.
+    for (let i = 0; i < eps.length - 1; i++) {
+      const mul = inc.resolveEpicenter(`qa_inc_e${i}`);
+      assert(mul >= 1.5 - 1e-9, 'waning', `epicenter ${i} resolves for ≥ base spoils (${mul.toFixed(2)}×)`);
+      assert(inc.activeCount() === 1, 'waning', `incursion stands while epicenters remain (${i + 1}/${eps.length} down)`);
+    }
+    inc.update(240, view); // let the last epicenter FESTER past festerSeconds
+    const lastMul = inc.resolveEpicenter(`qa_inc_e${eps.length - 1}`);
+    assert(Math.abs(lastMul - 3.5) < 1e-6, 'waning',
+      `a fully-festered Observer pays base + festerBonusMax (${lastMul.toFixed(2)}× = 3.5×)`);
+    assert(inc.activeCount() === 0, 'waning', 'the last Observer deed collapses the incursion');
+    assert(inc.influence('qa_inc_e0') === 0 && inc.eventContext('qa_inc_e0') === null, 'waning',
+      'a collapsed incursion holds no influence and fires no events');
+    const residue = inc.snapshot() as Snap;
+    assert(residue.incursions.length === 0 && residue.ownedZones.length === 0, 'waning',
+      'the collapse leaves no residue in the save (dead incursions never snapshot)');
+    assert(!!inc.ignite('eldritch', { x: 0, y: 0 }, 12), 'waning',
+      'the deed re-opens the sky (a collapsed incursion frees its maxConcurrent seat)');
   }
 }
 

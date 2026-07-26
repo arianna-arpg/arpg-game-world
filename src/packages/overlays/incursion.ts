@@ -18,10 +18,23 @@
 // always-on infrastructure (constructed in WorldSim regardless of packages); a
 // package's own overlay TRIGGERS it via the engine (ConclaveField → ignite()).
 //
-// Pass 2a (this file's live behavior): THE LANDING — ignite picks a far cluster,
-// emits mints, returns the announce. The reach sim, the gloop render, the event
-// rolls, and the termination policy are DECLARED on the archetype and stubbed here
-// (update/influence/renderMap inert) — the reserved seams 2b–2d grow into.
+// ALL FOUR PASSES ARE LIVE. 2a THE LANDING: ignite() picks a far cluster, emits
+// mints, returns the announce. 2b THE REACH: update() writhes the tentacles
+// (growth frozen at the influence cap) and renderMap() draws the lagged gloop.
+// 2c THE EVENTS: the engine rolls the archetype's pool per influence source
+// (world.ts updateIncursionEvents → its incursionEvents registry). 2d THE
+// TERMINATION, per the declared policy: entering a revealed epicenter zone
+// materializes the OBSERVER (world.ts materializeObserver — gated on
+// policy 'hybridCleanseObserver' + termination.observer, tag
+// 'eldritch_observer'); its kill resolves that epicenter for festering-scaled
+// spoils (killHandlers.ts → resolveEpicenter — the LAST collapses the whole
+// incursion, and the engine's warp sweep releases the keyed blight warp: the
+// land heals); culling a corrupted foe or an eldritch spawn retracts the reach
+// by termination.cleanseRetract (killHandlers.ts → cleanse — the tug-of-war).
+// THE WANING LAW (docs/events/README.md): the incursion is a STANDING
+// CONDITION cured by the Observer deed, and its in-zone pour self-throttles —
+// one cull per event beat outruns regrowth (cleanseRetract > growthPerSec ×
+// eventInterval, pinned by eventqa's waning census).
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
@@ -82,11 +95,15 @@ export interface IncursionCap {
   maxConcurrent: number;
 }
 
-/** How an incursion ENDS (Pass 2d). Declared now so the archetype + ledger keys
- *  are stable. 'hybridCleanseObserver' = cleansing events retract the reach + an
- *  Observer kill collapses it; 'ambientCapped' = the reusable no-win standing
- *  hazard (capped growth, spoils only) — kept as a first-class precedent for
- *  future archetypes that want a permanent blight. */
+/** How an incursion ENDS (Pass 2d — LIVE: world.ts materializeObserver stands
+ *  the Observer on this policy's own gate; killHandlers.ts routes its kill →
+ *  resolveEpicenter and blight-culls → cleanse). 'hybridCleanseObserver' =
+ *  cleansing kills retract the reach + an Observer kill collapses it;
+ *  'ambientCapped' = the reusable no-win standing hazard (capped growth,
+ *  spoils only) — kept as a first-class precedent for future archetypes that
+ *  want a permanent blight. eventqa's waning census refuses dead knobs on
+ *  either policy (an ambient blight may declare no observer/cleanseRetract;
+ *  a hybrid one must declare both, resolvable + tug-of-war-winnable). */
 export interface IncursionTermination {
   policy: 'hybridCleanseObserver' | 'ambientCapped';
   /** Monster id of the epicenter Observer (the kill that collapses it). */
@@ -180,7 +197,7 @@ export interface IncursionArchetype {
   clusterRadius: number;
   /** The biome heat-map warp pushed at the cluster (radius + strength). */
   biomeWarp: { radius: number; strength: number };
-  // --- SPREAD / CAP / TERMINATION / EVENTS (Pass 2b–2d; declared now) ---
+  // --- SPREAD / CAP / TERMINATION / EVENTS (Pass 2b–2d; all live) ---
   spread: IncursionSpread;
   cap: IncursionCap;
   termination: IncursionTermination;
@@ -317,7 +334,10 @@ export class IncursionField implements WorldOverlay {
 
   constructor(rng: Rng) { this.rng = rng; }
 
-  // Pass 2b: advance the tentacle reach. (Event rolls 2c, termination 2d still inert.)
+  // Pass 2b: advance the tentacle reach. (2c/2d live ENGINE-side — world.ts
+  // updateIncursionEvents rolls the event pool off eventContext(); world.ts
+  // materializeObserver + the killHandlers drive the termination seams below:
+  // resolveEpicenter is the Observer deed, cleanse the per-cull retract.)
   update(dt: number, view: OverlayView): void {
     this.nodesById = view.byId;
     this.visited = view.visited;
