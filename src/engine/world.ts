@@ -123,7 +123,7 @@ import {
   rollRerolledAffix, salvageItemYield, salvageSkillYield, salvageSupportYield,
   sellItemYield, sellSkillYield, sellSupportYield, studySalvage, vendorItemPrice,
 } from './crafting';
-import { ITEM_AFFIXES } from '../data/itemaffixes';
+import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
@@ -146,7 +146,7 @@ import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField, PathProfile } from '../world/walk';
 import { GridWalkField, WALK_CFG } from '../world/gridWalk';
-import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec } from '../world/regions';
+import { regionKind, survivalResource, survivalEaseStat, SURVIVAL_EASE_CAP, doodadGroundIds, LIQUID_CFG, regionPathCost, DOUSE_CFG, type DouseSpec } from '../world/regions';
 import { continentAt, continentSeedFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, veilSpecOf, type VeilPatch } from './veil';
@@ -1563,10 +1563,18 @@ export interface WornGraftRow {
 /** One entry on Brandt's counter — a skill gem, a support gem (once
  *  unlocked), or a rolled piece of GEAR (the true-vendor shelf: random
  *  rolls at the buyer's level, quality-priced in mixed essence). */
-export type VendorEntry =
+export type VendorEntry = (
   | { kind: 'skill'; inst: SkillInstance }
   | { kind: 'support'; gem: SupportInstance }
-  | { kind: 'item'; item: ItemInstance };
+  | { kind: 'item'; item: ItemInstance }
+) & {
+  /** THE DEPTH LOCK (the Delver's shelf): purchasable only once this shaft's
+   *  own descent has SEEN this depth (World.delverEntryRefusal — the one
+   *  predicate engine buys and panel disables share). Rolled at mint from
+   *  the surge's rung table, locked forever. Absent = open at once. Other
+   *  counters simply never set it. */
+  depthReq?: number;
+};
 
 /** THE PATRON'S HOLD — one reserved shelf row: the LIVE entry (the very
  *  object sitting in the counter's stock while it stands) and the slot the
@@ -1774,8 +1782,9 @@ const AMALGAM_GRAVE_RING = 104;  // graves ring the Bonewright at this radius
 const DELVER_RADIUS = 160;       // dwell/trade range at the Delver (mirrors the smith)
 const CARAVAN_RADIUS = 160;      // dwell range at the Caravanner (opens the band menu)
 const CARAVAN_DWELL = 0.9;       // seconds lingering before the Caravan menu opens
-// (Descent-shaft dwell/radius: the TRANSIT registry's 'descent_shaft' row.)
-const DELVER_WARE_COST = 30;     // Depth Echoes per Delver ware
+// (Descent-shaft dwell/radius: the TRANSIT registry's 'descent_shaft' row.
+//  Delver prices: ordinary essence via vendorPrice — the ONE economy; the
+//  old run-scoped Echo purse is gone.)
 const APPROACH_RADIUS = 150;     // node-units: a floating quest zone wires in when a
                                  // charted zone lands this near (> WEAVE_RADIUS 96, so
                                  // the road draws while you're still ~1.5 steps out)
@@ -2059,8 +2068,15 @@ interface DescentRun {
   /** The parent (Delver) cave's caveReturn, saved so resurface restores the way out
    *  to the surface (the descent is a SECOND cave level — nested). */
   prevReturn: { zoneId: string; pos: Vec2; entryFrom: string | null } | null;
-  /** Echoes earned this dive (added to descentEchoes on resurface, ×keptOnDeath). */
-  payout: number;
+  /** The abyss zone's level AT ENTRY — the live level is baseLevel +
+   *  floor(depth × levelPerDepth) (THE PRESSURE LADDER; restored on
+   *  resurface for hygiene, though the spent ground is never re-entered). */
+  baseLevel: number;
+  /** THE DEEP LEDGER: whole essence packets banked this dive, by tint —
+   *  granted (× keptOnDeath) to every player seat on resurface. */
+  haul: Partial<Record<EssenceId, number>>;
+  /** Fractional coarse-units accumulating toward the next minted packet. */
+  haulBank: number;
   /** Current depth = floor(dist(player, origin) / depthUnit) — scales danger + payout. */
   depth: number;
 }
@@ -2616,16 +2632,23 @@ export class World {
   private amalgamPickDwell: number[] = [];
   /** The rare-undead minibosses already materialized this visit ('id@zone'). */
   private materializedAmalgamMobs = new Set<string>();
-  // DESCENT: the Delver site in THIS (normal) cave, the live abyss RUN, the run-
-  // scoped Echoes purse, and the dwell/stream timers. descentRun persists across the
-  // descend→resurface loadZones (set in descend, cleared in resurface), so it is NOT
-  // reset per loadZone; descentSite + the dwell/stream timers ARE.
+  // DESCENT: the Delver site in THIS (normal) cave, the live abyss RUN, the
+  // once-minted shelves, and the dwell/stream timers. descentRun persists across
+  // the descend→resurface loadZones (set in descend, cleared in resurface), so it
+  // is NOT reset per loadZone; descentSite + the dwell/stream timers ARE.
   private descentSite: { delverId: number; platform: Vec2 } | null = null;
   private descentRun: DescentRun | null = null;
-  /** Run-scoped purse spent at the Delver (NOT account credits — a self-contained
-   *  descent economy; persists across descents within a run). */
-  descentEchoes = 0;
-  /** The Delver's wares (built when a Delver is placed; spent with Echoes). */
+  /** THE LOCKED SHELF: each shaft's stock, minted ONCE per run on a seeded
+   *  stream and remembered per Delver cave — re-entering the cave re-projects
+   *  the SAME array (purchases stay spliced), so there is no re-roll to scum
+   *  (the mercenary lock-in law). Run-scoped like descentSpent. */
+  private descentStocks = new Map<string, VendorEntry[]>();
+  /** The deepest depth each shaft's dive has SEEN (keyed by Delver cave id) —
+   *  THE DEPTH LOCKS on that shaft's shelf read it; death still counts what
+   *  the dive witnessed. */
+  private descentDeepest = new Map<string, number>();
+  /** The CURRENT cave's Delver shelf (a projection of descentStocks —
+   *  vendors.ts reads this; essence-priced through the standard lanes). */
   descentStock: VendorEntry[] = [];
   private descentShaftDwell = 0;
   private descentSpawnTimer = 0;
@@ -12889,12 +12912,70 @@ export class World {
       this.clampPos(vec(center.x + Math.cos(ang) * 92, center.y + Math.sin(ang) * 92), 24));
     this.doodads.push({ pos: vec(platform.x, platform.y), radius: 30, kind: 'descent_platform' });
     this.descentSite = { delverId: delver.id, platform: vec(platform.x, platform.y) };
-    // Wares to spend Echoes on — gems ALONE (the delver's VendorDef lists
-    // one tab and its buy lane refuses gear; a gear roll here would be a
-    // shelf of lies).
-    this.descentStock = this.buildVendorStock({ gear: false });
+    // THE LOCKED SHELF: minted ONCE per shaft per run (seeded per cave) and
+    // re-PROJECTED on every re-entry — purchases stay spliced, the roll never
+    // repeats, so there is no refresh to scum. The counter itself stays
+    // sealed until the dive resolves (THE PROVING LAW — delverShopOpen).
+    this.descentStock = this.descentStocks.get(def.id) ?? this.mintDelverStock(def);
     bumpLedger(this.ledger, 'delvers_seen'); // DISCOVERY — surfaces the Vault unlock
     this.text(vec(center.x, center.y - 30), 'A Delver lingers by a gaping shaft…', '#7fe0d8', 15);
+  }
+
+  /** Mint one Delver's shelf (THE LOCKED SHELF): Brandt's own grammar —
+   *  rolled gear + skill/support gems, essence-priced through the standard
+   *  vendor lanes — on a stream seeded (world, cave), so the same shaft
+   *  deals the same shelf however often the cave is walked. Every entry
+   *  rolls a DEPTH LOCK from the surge's rung table (a miniature
+   *  progression, fixed at mint), and each GEAR entry rolls THE ABYSSAL
+   *  REGISTER's chance at base + perDepth × its OWN rung — the deeper the
+   *  lock, the likelier the abyss's reserved words: deterministic farming,
+   *  priced in danger. */
+  private mintDelverStock(def: ZoneDef): VendorEntry[] {
+    const st = this.sim.descentField?.surge().stock;
+    const out: VendorEntry[] = [];
+    if (!st) return out;
+    const seed = (this.manifest.seed ^ hashStr(`delvershelf:${def.id}`)) >>> 0;
+    withSeededRandom(seed, () => {
+      const rollRung = (): number => {
+        let total = 0;
+        for (const r of st.depthRungs) total += Math.max(0, r.weight);
+        if (total <= 0) return 0;
+        let roll = Math.random() * total;
+        for (const r of st.depthRungs) {
+          roll -= Math.max(0, r.weight);
+          if (roll <= 0) return r.depth;
+        }
+        return st.depthRungs[st.depthRungs.length - 1].depth;
+      };
+      // Gems mirror Brandt's shelf gate for supports — normalize means the
+      // SAME rules, the depth locks merely layer on top.
+      const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
+      const lvl = this.vendorGemLevel();
+      for (let i = 0; i < st.gems; i++) {
+        const depth = rollRung();
+        let e: VendorEntry;
+        const sd = sellSupports && Math.random() < VENDOR_CFG.supportShare
+          ? this.rollSupportDropGated(undefined, lvl) : undefined;
+        if (sd) e = { kind: 'support', gem: { def: sd, level: 1 } };
+        else e = { kind: 'skill', inst: this.rollSkillGem(undefined, lvl) };
+        if (depth > 0) e.depthReq = depth;
+        out.push(e);
+      }
+      for (let i = 0; i < st.gear; i++) {
+        const depth = rollRung();
+        const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
+        const withFamily = Math.random() < st.affixChanceBase + st.affixChancePerDepth * depth
+          ? DESCENT_AFFIX_FAMILIES[Math.floor(Math.random() * DESCENT_AFFIX_FAMILIES.length)]
+          : undefined;
+        const item = rollItem({ ilvl, rarityWeights: VENDOR_ITEM_CFG.rarityWeights, withFamily });
+        if (!item) continue;
+        const e: VendorEntry = { kind: 'item', item };
+        if (depth > 0) e.depthReq = depth;
+        out.push(e);
+      }
+    });
+    this.descentStocks.set(def.id, out);
+    return out;
   }
 
   /** Dwell the platform to descend: mint/reuse the boundless abyss cave, save the
@@ -12917,7 +12998,7 @@ export class World {
       this.caveMap[id] = abyss;
     }
     this.caveReturn = { zoneId: parentCaveId, pos: vec(site.platform.x, site.platform.y), entryFrom: this.entryFrom };
-    this.descentRun = { caveId: id, parentCaveId, origin: vec(0, 0), prevReturn, payout: 0, depth: 0 };
+    this.descentRun = { caveId: id, parentCaveId, origin: vec(0, 0), prevReturn, baseLevel: 0, haul: {}, haulBank: 0, depth: 0 };
     bumpLedger(this.ledger, 'descents_run');
     this.loadZone(id, parentCaveId); // the cave branch calls enterDescentZone()
   }
@@ -12928,7 +13009,8 @@ export class World {
     const run = this.descentRun, df = this.sim.descentField;
     if (!run || !df) return;
     run.origin = vec(this.player.pos.x, this.player.pos.y);
-    run.depth = 0; run.payout = 0;
+    run.depth = 0; run.haul = {}; run.haulBank = 0;
+    run.baseLevel = this.zone.level; // THE PRESSURE LADDER's anchor
     this.doodads.push({ pos: vec(run.origin.x, run.origin.y), radius: 30, kind: 'descent_platform' });
     if (!this.player.survival) this.player.survival = new Map();
     this.player.survival.set('light', df.surge().lightMax);
@@ -12942,14 +13024,23 @@ export class World {
   private resurfaceFromDescent(reason: 'climb' | 'consumed' | 'died'): void {
     const run = this.descentRun, df = this.sim.descentField;
     if (!run || !df) return;
+    // THE DEEP LEDGER banks out: whole packets by tint, × keptOnDeath unless
+    // the climb was CHOSEN (a voluntary exit always keeps everything).
     const keep = reason === 'climb' ? 1 : df.surge().payoutKeptOnDeath;
-    const banked = Math.round(run.payout * keep);
-    this.descentEchoes += banked;
+    const banked: EssenceCost[] = [];
+    for (const id of ESSENCE_IDS) {
+      const n = Math.round((run.haul[id] ?? 0) * keep);
+      if (n > 0) banked.push({ essence: id, count: n });
+    }
     for (const s of this.seats) {
       s.actor.dead = false; s.actor.downed = false; s.actor.casting = null;
       if (s.actor.life <= 0) s.actor.life = Math.max(1, s.actor.maxLife() * 0.5);
     }
     this.gameOver = false;
+    // Hygiene: hand the abyss's def its entry level back — the ground is
+    // spent and never re-entered, but THE PRESSURE LADDER should not
+    // outlive the dive it climbed for.
+    if (run.baseLevel > 0) this.zone.level = run.baseLevel;
     const ret = run.prevReturn, parentCaveId = run.parentCaveId;
     this.descentRun = null;
     this.player.survival?.delete('light'); // out of the dark
@@ -12962,10 +13053,15 @@ export class World {
       this.landPartyAt(vec(this.descentSite.platform.x, this.descentSite.platform.y + 34));
     }
     this.caveExitGrace = true;
-    const msg = reason === 'climb' ? `You climb back into the light.  +${banked} Echoes`
-      : reason === 'consumed' ? `The dark consumes you — you scramble out.  +${banked} Echoes`
-      : `You are dragged from the deep.  +${banked} Echoes`;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 50), msg, '#7fe0d8', 16);
+    const msg = reason === 'climb' ? 'You climb back into the light.'
+      : reason === 'consumed' ? 'The dark consumes you — you scramble out.'
+      : 'You are dragged from the deep.';
+    this.text(vec(this.player.pos.x, this.player.pos.y - 50),
+      `${msg}  The Delver's counter opens.`, '#7fe0d8', 16);
+    // The haul lands in the ONE economy — every player seat paid in full
+    // (the XP-share law's generosity); floats + wallet sync ride
+    // grantEssence itself, so the payout explains itself on screen.
+    for (const s of this.seats) for (const c of banked) this.grantEssence(s, c);
   }
 
   /** Delver-cave tick: dwell the platform to descend (the wares open in the skill
@@ -12991,8 +13087,12 @@ export class World {
     // DARKNESS encroaches. The consume check is PREDICTIVE — resurface the frame
     // the drain would empty the meter, BEFORE drainSurvival can see zero: in the
     // abyss the dark takes you whole, it never gnaws (the light row's underflow
-    // ramp belongs to the surface Gloaming, and must not fire down here).
-    if ((this.player.survival?.get('light') ?? cfg.lightMax) - cfg.drainRate * dt <= 0) { this.resurfaceFromDescent('consumed'); return; }
+    // ramp belongs to the surface Gloaming, and must not fire down here). The
+    // prediction reads the SAME eased rate drainSurvival will apply (THE EASE
+    // LAW — survivalDrainRate is the one fold), so a Lampkeeper roll can never
+    // be consumed while its meter still holds.
+    const drainNow = this.survivalDrainRate(this.player, 'light', cfg.drainRate);
+    if ((this.player.survival?.get('light') ?? cfg.lightMax) - drainNow * dt <= 0) { this.resurfaceFromDescent('consumed'); return; }
     this.drainSurvival(this.player, 'light', cfg.drainRate, dt);
     // LIGHT spots push the dark back — served by the lightwell fabric's BURST
     // lane now (updateLightwells; the row registers in defs/descent.ts with
@@ -13000,6 +13100,16 @@ export class World {
     // and a spot's glow still never shelters (bursts are not light cover).
     // DEPTH: how far you've delved from the shaft — scales danger + payout.
     run.depth = Math.floor(dist(p, run.origin) / Math.max(1, cfg.depthUnit));
+    // THE DEPTH LOCKS' witness: the shaft's shelf unlocks whatever this dive
+    // has SEEN — recorded live, so the dark taking you forfeits nothing seen.
+    if (run.depth > (this.descentDeepest.get(run.parentCaveId) ?? 0)) {
+      this.descentDeepest.set(run.parentCaveId, run.depth);
+    }
+    // THE PRESSURE LADDER: the abyss's OWN zone level climbs with depth —
+    // drops, XP, gem ilvls and fresh spawns all read the one live truth (the
+    // quickening's level-surge precedent, confined to the dive's spent
+    // ground; resurface hands the entry level back).
+    this.zone.level = run.baseLevel + Math.floor(run.depth * cfg.levelPerDepth);
     // Continuous Depthkin pressure (faster the deeper you are) — floor + ramp
     // are the surge's own data, not engine literals.
     this.descentSpawnTimer -= dt;
@@ -13017,25 +13127,34 @@ export class World {
     }
   }
 
-  /** Spawn one of the abyss's brood just past the light, scaled to depth, under
-   *  the live cap — picked from the surge faction's REGISTERED roster (weighted
-   *  + presence-shaped), so the brood's mix is data. An inline threshold ladder
-   *  here once drifted out of sync with the declared roster weights. */
+  /** Spawn the abyss's brood just past the light — a BATCH per beat under a
+   *  depth-grown live cap (THE PRESSURE LADDER's density half: the far deep
+   *  is a constant tide), each body picked from the surge faction's
+   *  REGISTERED roster with its presence envelopes evaluated on the DEPTH
+   *  axis (broodAnchor + depth) — the heavy kin structurally cannot rise
+   *  shallow, whatever the cave's level. Body level reads the abyss's LIVE
+   *  zone level + the surge's flat headroom. The roster stays the one
+   *  composition truth — an inline threshold ladder here once drifted out
+   *  of sync with the declared roster weights. */
   private spawnDepthkin(cfg: import('../packages/overlays/descent').DescentSurge): void {
     const run = this.descentRun;
     if (!run) return;
-    const live = this.actors.filter(a => a.team === 'enemy' && !a.dead && a.faction === cfg.faction).length;
-    if (live >= cfg.spawnCap) return;
+    let live = this.actors.filter(a => a.team === 'enemy' && !a.dead && a.faction === cfg.faction).length;
+    const cap = Math.min(cfg.spawnCapMax, cfg.spawnCap + run.depth * cfg.spawnCapPerDepth);
     const roster = FACTIONS[cfg.faction]?.table;
     if (!roster?.length) return;
-    const lvl = Math.max(1, this.zone.level + cfg.enemyLevelBonus + Math.floor(run.depth));
-    const id = this.weightedPick(roster, lvl);
-    const m = this.createMonster(id, lvl, 'enemy');
-    m.faction = cfg.faction;
-    const ang = rand(0, Math.PI * 2);
-    const dr = rand(cfg.spawnDist[0], cfg.spawnDist[1]);
-    m.pos = vec(this.player.pos.x + Math.cos(ang) * dr, this.player.pos.y + Math.sin(ang) * dr);
-    this.actors.push(m);
+    const lvl = Math.max(1, this.zone.level + cfg.enemyLevelBonus);
+    let batch = 1 + Math.floor(run.depth * cfg.spawnBatchPerDepth);
+    while (batch-- > 0 && live < cap) {
+      const id = this.weightedPick(roster, cfg.broodAnchor + run.depth);
+      const m = this.createMonster(id, lvl, 'enemy');
+      m.faction = cfg.faction;
+      const ang = rand(0, Math.PI * 2);
+      const dr = rand(cfg.spawnDist[0], cfg.spawnDist[1]);
+      m.pos = vec(this.player.pos.x + Math.cos(ang) * dr, this.player.pos.y + Math.sin(ang) * dr);
+      this.actors.push(m);
+      live++;
+    }
   }
 
   /** Maintain streamed-terrain density around the player (boundless coords): cull far
@@ -13058,7 +13177,8 @@ export class World {
     }
   }
 
-  /** Is the player at the Delver's counter? (Gates the wares panel + the prompt.) */
+  /** Is the player bodily at the Delver? (The prompt's gate — the COUNTER
+   *  additionally waits on THE PROVING LAW below.) */
   nearDelver(seat: Seat = this.localSeat): boolean {
     const site = this.descentSite;
     if (!site || this.descentRun) return false;
@@ -13067,39 +13187,97 @@ export class World {
       && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('delver')));
   }
 
-  /** Buy one of the Delver's wares for Depth Echoes (mirrors buyVendorGem).
-   *  The Delver deals only in GEMS — a rolled-gear entry (Brandt's shelf
-   *  shape) can't appear in descentStock, so it simply no-ops here. */
+  /** THE PROVING LAW: the Delver's counter exists only AFTER this shaft's
+   *  own descent has been taken and RESOLVED (climb, darkness or death all
+   *  resolve) — the shop is the dive's epilogue, never its lobby. ONE
+   *  predicate: the VendorDef's near(), the dwell that opens the panel, and
+   *  the engine buy handler all read it. */
+  delverShopOpen(seat: Seat = this.localSeat): boolean {
+    return this.nearDelver(seat) && this.descentSpent.has(this.zone.id);
+  }
+
+  /** The deepest depth THIS cave's dive has SEEN (0 before/without one) —
+   *  the shelf's DEPTH LOCKS read it, and the counter headline prints it. */
+  delverDepthReached(): number {
+    return this.descentDeepest.get(this.zone.id) ?? 0;
+  }
+
+  /** Why this shelf entry refuses purchase (its DEPTH LOCK still sealed), or
+   *  null when open. ONE predicate: the engine buy refuses through it and
+   *  the panel disables through it — same words everywhere (the
+   *  swapRefusal shape). */
+  delverEntryRefusal(entry: VendorEntry): string | null {
+    if (!entry.depthReq || this.delverDepthReached() >= entry.depthReq) return null;
+    return `sealed until a dive here reaches Depth ${entry.depthReq} (deepest seen: ${this.delverDepthReached()})`;
+  }
+
+  /** Buy one of the Delver's wares — NORMALIZED to the town counters
+   *  (buyChandlerGem's exact contract: trade gate, gem case, essence
+   *  prices, bag fit before a single essence moves), plus the shelf's own
+   *  DEPTH LOCK. */
   buyDelverGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.descentStock[index];
-    if (!entry || entry.kind === 'item') return false;
-    if (!this.nearDelver(seat) || this.descentEchoes < DELVER_WARE_COST) return false;
-    this.descentEchoes -= DELVER_WARE_COST;
-    this.descentStock.splice(index, 1);
+    if (!entry || !this.delverShopOpen(seat)) return false;
+    const refusal = this.vendorTradeRefusal();
+    if (refusal) { this.failNote(seat.actor, 'vendortrade', refusal); return false; }
+    if (entry.kind !== 'item' && !this.vendorGemsOpen()) {
+      this.failNote(seat.actor, 'vendorgems', VENDOR_CFG.tabs.gemsSealedNote);
+      return false;
+    }
+    const lock = this.delverEntryRefusal(entry);
+    if (lock) { this.failNote(seat.actor, 'delver:' + index, lock); return false; }
+    const price = this.vendorPrice(entry);
+    const short = price.find(c => !this.canAffordEssence(seat, c));
+    if (short) {
+      this.failNote(seat.actor, 'delver:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
+      return false;
+    }
+    if (entry.kind === 'item' && !autoPlace(m.items, entry.item)) {
+      this.failNote(seat.actor, 'bagfull', 'inventory full');
+      return false;
+    }
+    for (const c of price) m.essences[c.essence] -= c.count;
+    this.descentStock.splice(index, 1); // the map holds this same array — the purchase persists
     this.vendorBought('delver', entry, seat, this.descentStock); // holdless — the market stamp alone
-    if (entry.kind === 'skill') { m.skillInv.push(entry.inst); this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#7fe0d8', 13); }
-    else { m.inventory.push(entry.gem); this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#7fe0d8', 13); }
+    if (entry.kind === 'skill') {
+      m.skillInv.push(entry.inst);
+      this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#7fe0d8', 13);
+    } else if (entry.kind === 'support') {
+      m.inventory.push(entry.gem);
+      this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#7fe0d8', 13);
+    } else {
+      this.text(seat.actor.pos, `bought ${entry.item.name}`, ITEM_RARITIES[entry.item.rarity].color, 13);
+    }
+    this.markMetaDirty(seat);
     if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
     return true;
   }
 
-  /** The Delver's prompt above its head while the player is near, or null. */
+  /** The Delver's prompt above its head while the player is near, or null —
+   *  it TEACHES the proving law: no trade until the shaft below has had
+   *  its due. */
   delverPrompt(): string | null {
     if (!this.nearDelver()) return null;
     return this.descentSpent.has(this.zone.id)
       ? 'Linger to trade — the shaft below is spent.'
-      : 'Linger to trade — or dwell the shaft to descend.';
+      : 'The wares wait on the deep — dwell the shaft to descend.';
   }
 
-  /** The live descent readout for the renderer (HUD depth/echoes, the darkness
-   *  vignette intensity, and the climb-out shaft to pip toward), or null when not delving. */
-  descentView(): { depth: number; echoes: number; lightFrac: number; shaft: Vec2 } | null {
+  /** The live descent readout for the renderer (HUD depth + the banked
+   *  essence haul, the darkness vignette intensity, and the climb-out shaft
+   *  to pip toward), or null when not delving. */
+  descentView(): { depth: number; haul: EssenceCost[]; lightFrac: number; shaft: Vec2 } | null {
     const run = this.descentRun;
     if (!run) return null;
     const max = this.sim.descentField?.surge().lightMax ?? 100;
     const light = this.player.survival?.get('light') ?? max;
-    return { depth: run.depth, echoes: this.descentEchoes, lightFrac: clamp(light / max, 0, 1), shaft: run.origin };
+    const haul: EssenceCost[] = [];
+    for (const id of ESSENCE_IDS) {
+      const n = run.haul[id] ?? 0;
+      if (n > 0) haul.push({ essence: id, count: n });
+    }
+    return { depth: run.depth, haul, lightFrac: clamp(light / max, 0, 1), shaft: run.origin };
   }
 
   // --- LIGHTWELLS (engine/lightwells.ts) -------------------------------------
@@ -19154,10 +19332,6 @@ export class World {
   }
 
   // --------------------------------------------------------------- vendors ---
-
-  /** The Delver's per-ware price (Depth Echoes) — surfaced for the vendor
-   *  registry so the tunable stays exactly where it lives. */
-  delverPrice(): number { return DELVER_WARE_COST; }
 
   /** Any registered vendor at hand for this seat? (The Vendor screen gate.) */
   nearAnyVendor(seat: Seat = this.localSeat): boolean {
@@ -35428,17 +35602,33 @@ export class World {
         cu.kills = Math.min(cu.need, cu.kills + 1);
       },
     },
-    // DESCENT: a slain brood-member pays Echoes (× depth) into the dive's haul
-    // — scoped by the surge's own faction, never a literal.
+    // DESCENT — THE DEEP LEDGER: a slain brood-member banks essence UNITS
+    // (payoutPerKill × the depth multiplier) into the dive's haul; each
+    // whole unit mints a PACKET whose tint climbs the payout rung ladder at
+    // the CURRENT depth (the essence-spill tierRungs grammar on the depth
+    // axis — deep kills pay deep tints). Scoped by the surge's own faction,
+    // never a literal; the haul lands in the seats' real wallets on
+    // resurface (× keptOnDeath).
     {
       id: 'descent_depthkin',
       when: ctx => !!this.descentRun && ctx.credit
         && ctx.actor.faction === ctx.sim.descentField?.surge().faction,
       run: ctx => {
         const dr = this.descentRun;
-        if (!dr) return;
         const cfg = ctx.sim.descentField?.surge();
-        if (cfg) dr.payout += Math.round(cfg.payoutPerKill * (1 + dr.depth * cfg.payoutDepthBonus));
+        if (dr && cfg) {
+          dr.haulBank += cfg.payoutPerKill * (1 + dr.depth * cfg.payoutDepthBonus);
+          while (dr.haulBank >= 1) {
+            dr.haulBank -= 1;
+            let tier = 0;
+            for (const rung of cfg.payoutTierRungs) {
+              if (dr.depth < rung.atDepth || Math.random() >= rung.chance) break;
+              tier = Math.min(tier + 1, ESSENCE_IDS.length - 1);
+            }
+            const id = ESSENCE_IDS[tier];
+            dr.haul[id] = (dr.haul[id] ?? 0) + 1;
+          }
+        }
         ctx.bumpLedger('depthkin_slain');
       },
     },
@@ -42290,12 +42480,25 @@ export class World {
     def.onStand?.(a, this, dt);
   }
 
+  /** THE EASE LAW's one fold: the EFFECTIVE drain rate for this actor+meter
+   *  after `survivalEase_<resource>` grants (gear, passives, monster mods),
+   *  capped by the meter's own row — slowed, never stopped. drainSurvival
+   *  AND every predictive read (the abyss's consume check) share THIS, so
+   *  drawn == tested through every source of ease. */
+  survivalDrainRate(a: Actor, resource: string, rate: number): number {
+    if (rate <= 0) return rate;
+    const ease = a.sheet.get(survivalEaseStat(resource));
+    if (ease <= 0) return rate;
+    const def = survivalResource(resource);
+    return rate * (1 - Math.min(def?.easeCap ?? SURVIVAL_EASE_CAP, ease));
+  }
+
   /** Drain a survival resource; at 0 apply its underflow damage (drowning). */
   private drainSurvival(a: Actor, resource: string, drain: number, dt: number): void {
     const def = survivalResource(resource);
     if (!def) return;
     if (!a.survival) a.survival = new Map();
-    const v = Math.max(0, (a.survival.get(resource) ?? def.max) - drain * dt);
+    const v = Math.max(0, (a.survival.get(resource) ?? def.max) - this.survivalDrainRate(a, resource, drain) * dt);
     a.survival.set(resource, v);
     if (v > 0) { if (a.underflowSince) delete a.underflowSince[resource]; return; } // refilled → THAT meter's ramp resets
     if (def.underflowPctLifePerSec > 0 && !a.invulnerable) {

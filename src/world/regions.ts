@@ -319,7 +319,24 @@ export interface SurvivalResourceDef {
   /** HUD meter fill colour (the readout loops this table, so a new resource draws
    *  for free — just add a row + a colour). */
   color: string;
+  /** THE EASE LAW's per-row ceiling: stacked `survivalEase_<id>` stat grants
+   *  (see survivalEaseStat) never slow this meter's drain past this fraction
+   *  (default SURVIVAL_EASE_CAP) — a survival clock may be slowed, never
+   *  stopped. */
+  easeCap?: number;
 }
+
+/** Default ceiling on stacked drain-ease for any survival meter (rows may
+ *  override via easeCap). */
+export const SURVIVAL_EASE_CAP = 0.7;
+
+/** THE EASE LEVER — the `survivalEase_<resource>` stat family: any modifier
+ *  source (affix, passive, unique line, monster mod) may grant a fraction of
+ *  drain-ease for ONE named meter; World.drainSurvival folds it at the one
+ *  chokepoint, capped by the row. A new survival resource wears the lever the
+ *  moment its row exists — 'of the Lampkeeper' (light, THE ABYSSAL REGISTER)
+ *  is the debut; a breath- or warmth-easing roll is one data line, no code. */
+export function survivalEaseStat(id: string): string { return `survivalEase_${id}`; }
 
 export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
   // Drowning RAMPS: ~5%/s at first, climbing to ~25%/s after 10s under without air —

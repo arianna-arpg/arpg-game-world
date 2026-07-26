@@ -3209,16 +3209,20 @@ export class UI {
 
       // --- shared per-entry pieces (indices are STOCK indices — the buy and
       // lock intents speak the one array both faces draw from) --------------
+      // Essence is the ONE counter currency (the delver's old echo lane is
+      // gone). THE ENTRY LOCK lane (VendorDef.entryLock — the delver's depth
+      // locks) disables per entry through the same predicate the engine
+      // refuses with.
       const priceBits = (e: VendorEntry): { afford: boolean; priceHtml: string } => {
         const price = v.priceOf(world, e);
-        const afford = price.essences
-          ? price.essences.every(c => world.canAffordEssence(seat, c))
-          : world.descentEchoes >= (price.echoes ?? 0);
-        const priceHtml = price.essences
-          ? price.essences.map(c => this.essCostText(c)).join(' + ')
-          : `${price.echoes} ◈`;
+        const afford = (price.essences ?? []).every(c => world.canAffordEssence(seat, c));
+        const priceHtml = (price.essences ?? []).map(c => this.essCostText(c)).join(' + ');
         return { afford, priceHtml };
       };
+      const entryLockOf = (e: VendorEntry): string | null => v.entryLock?.(world, e) ?? null;
+      const lockChip = (e: VendorEntry, lock: string | null): string => lock
+        ? `<span style="color:#8a8678;font-size:9px;border:1px solid #8a867866;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle" title="${esc(lock)}">🔒${e.depthReq ? ` DEPTH ${e.depthReq}` : ''}</span>`
+        : '';
       const lockTitleFor = (heldRow: VendorHoldRow | undefined, atCap: boolean): string => heldRow
         ? (heldRow.commission
           ? 'Release the standing order\'s find (the watch resumes; the slot re-rolls next restock)'
@@ -3235,26 +3239,28 @@ export class UI {
         const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
         const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
         const { afford, priceHtml } = priceBits(e);
+        const entryLock = entryLockOf(e);
         const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
-        const badge = heldRow
+        const badge = (heldRow
           ? (heldRow.commission
             ? '<span style="color:#7fe0d8;font-size:9px;border:1px solid #7fe0d866;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle">STANDING ORDER</span>'
             : `<span style="color:${v.accent};font-size:9px;border:1px solid ${v.accent}66;border-radius:3px;padding:0 3px;margin-left:4px;vertical-align:middle">RESERVED</span>`)
-          : '';
+          : '') + lockChip(e, entryLock);
         const atCap = !heldRow && lockedCount >= lockCap;
         const lockBtn = canLock && (lockCap > 0 || heldRow)
           ? `<button data-vlock="${v.id}:${idx}" ${atCap ? 'disabled' : ''} style="min-width:30px"
               title="${lockTitleFor(heldRow, atCap)}">${heldRow ? '🔒' : '🔓'}</button>`
           : '';
-        const canBuy = afford && !tradeRefusal;
+        const canBuy = afford && !tradeRefusal && !entryLock;
+        const buyTitle = entryLock ?? tradeRefusal;
         return `
-          <div class="skill-entry" style="border-left:3px solid ${col}${heldRow ? `;background:${v.accent}12` : ''}">
+          <div class="skill-entry" style="border-left:3px solid ${col}${heldRow ? `;background:${v.accent}12` : ''}${entryLock ? ';opacity:0.65' : ''}">
             <div class="name">${name} ${lvHtml} ${tag}${badge}</div>
             <div class="tags">${tags}</div>
             <div class="bind-btns">
               ${lockBtn}
-              <button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'} ${tradeRefusal ? `title="${esc(tradeRefusal)}"` : ''}>
-                Buy (${priceHtml})${canBuy ? '' : tradeRefusal ? '' : ' — not enough'}</button>
+              <button data-vbuy="${v.id}:${idx}" ${canBuy ? '' : 'disabled'} ${buyTitle ? `title="${esc(buyTitle)}"` : ''}>
+                Buy (${priceHtml})${canBuy || buyTitle ? '' : ' — not enough'}</button>
             </div>
           </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out — come back after the restock.</div>';
@@ -3281,9 +3287,10 @@ export class UI {
           gearCount++;
           const i = e.item;
           const { afford, priceHtml } = priceBits(e);
+          const entryLock = entryLockOf(e);
           const heldRow = canLock ? world.vendorEntryHold(holdKey, e) : undefined;
           const atCap = !heldRow && lockedCount >= lockCap;
-          const canBuy = afford && !tradeRefusal;
+          const canBuy = afford && !tradeRefusal && !entryLock;
           const at = pack.cells.get(i.uid);
           if (!at) {
             // The glass genuinely overflowed (the probe should have caught
@@ -3305,9 +3312,11 @@ export class UI {
             : '';
           const badge = heldRow
             ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:${heldRow.commission ? '#7fe0d8' : v.accent}">${heldRow.commission ? 'ORDER' : 'RESERVED'}</div>`
-            : '';
+            : entryLock
+              ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:#8a8678">🔒${e.depthReq ? ` D${e.depthReq}` : ''}</div>`
+              : '';
           tiles += `<div data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
-            title="${tradeRefusal ? esc(tradeRefusal) : afford ? `Buy — ${esc(i.name)}` : 'Not enough essence'}"
+            title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy — ${esc(i.name)}` : 'Not enough essence'}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
             width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
             border:2px solid ${heldRow ? v.accent : r.color};border-radius:3px;cursor:${canBuy ? 'pointer' : 'default'};box-sizing:border-box;

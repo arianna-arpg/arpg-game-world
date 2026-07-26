@@ -29,33 +29,85 @@ export interface DescentSurge {
   lightMax: number;
   /** Node-units of delve distance per +1 DEPTH (depth scales danger + payout). */
   depthUnit: number;
-  /** Echoes paid per Depthkin slain (× depth multiplier). */
+
+  // ------------------------------------------------------ THE DEEP LEDGER ---
+  /** Coarse-equivalent essence UNITS banked per Depthkin slain (× the depth
+   *  multiplier below). Fractions accumulate on the dive's bank; each whole
+   *  unit mints ONE essence packet. The abyss pays the ONE economy (essence,
+   *  salvage-grade) — never a private purse. */
   payoutPerKill: number;
-  /** Extra Echo multiplier per depth (payout = base × (1 + depth × this)). */
+  /** Extra payout multiplier per depth (payout = base × (1 + depth × this)). */
   payoutDepthBonus: number;
-  /** Fraction of banked Echoes KEPT when the dark/death takes you (1 = keep all;
-   *  lower for bank-or-bust tension). A voluntary climb-out always keeps 100%. */
+  /** Fraction of the banked haul KEPT when the dark/death takes you (1 = keep
+   *  all; lower for bank-or-bust tension). A voluntary climb keeps 100%. */
   payoutKeptOnDeath: number;
-  /** Depthkin level = the descent cave level + this + floor(depth). */
+  /** THE TINT LADDER on the DEPTH axis (the essence-spill tierRungs grammar):
+   *  each minted packet rolls the rungs in order — every rung whose depth the
+   *  dive currently stands at climbs one essence step on its chance, stopping
+   *  at the first miss. Deep dives pay the deep tints; a new essence tier is
+   *  one more rung, never new code. */
+  payoutTierRungs: { atDepth: number; chance: number }[];
+
+  // -------------------------------------------------- THE PRESSURE LADDER ---
+  /** Depthkin level = the LIVE abyss zone level + this (flat headroom). */
   enemyLevelBonus: number;
+  /** The abyss's OWN zone level climbs this much per depth (floored) — drops,
+   *  XP, gem ilvls and spawns all read the one live truth (the quickening's
+   *  level-surge precedent, self-contained to the dive's spent ground). */
+  levelPerDepth: number;
   /** The abyss's brood FACTION — the engine spawns from ITS registered roster
    *  (weighted + presence-shaped) and scopes culling/credit by it. Swapping
    *  the brood (or reweighting a type) is a data edit, never an engine one. */
   faction: string;
-  /** Seconds between continuous Depthkin spawns (scaled down by depth). */
+  /** Seconds between continuous Depthkin spawn beats (scaled down by depth). */
   spawnInterval: number;
   /** The spawn interval never drops below this, however deep you delve. */
   spawnIntervalFloor: number;
   /** Seconds shaved off the interval per depth unit (the pressure ramp). */
   spawnRampPerDepth: number;
-  /** Most live Depthkin around the player at once (the streamed pressure cap). */
+  /** BASE cap on live Depthkin around the player (the streamed pressure). */
   spawnCap: number;
+  /** The live cap GROWS this much per depth… */
+  spawnCapPerDepth: number;
+  /** …to this ceiling — the deep's constant-stream tide, bounded. */
+  spawnCapMax: number;
+  /** Bodies per spawn beat = 1 + floor(depth × this), cap-clamped — the deep
+   *  doesn't just spawn FASTER, it spawns MORE at once. */
+  spawnBatchPerDepth: number;
+  /** COMPOSITION anchor: the brood roster's presence envelopes are evaluated
+   *  at (this + depth) — the presence axis is DEPTH, not zone level, so a
+   *  roster row's `from: 6` means depth six under ANY cave: the heavy kin
+   *  simply do not swim this shallow, whatever the ground's level. */
+  broodAnchor: number;
   /** Depthkin spawn this far from the player (just past the light, into the dark). */
   spawnDist: [number, number];
   /** Doodads/enemies beyond this from the player are culled (off-screen in the dark). */
   cullRadius: number;
   /** Target streamed-doodad count around the player (terrain density). */
   doodadTarget: number;
+
+  // -------------------------------------------------- THE DELVER'S SHELF ---
+  /** The Delver's counter: minted ONCE per shaft per run on a seeded stream
+   *  (re-entry meets the SAME shelf — the mercenary lock-in law), normalized
+   *  to Brandt's grammar (rolled gear + gems, ordinary essence prices), and
+   *  sealed until THIS shaft's descent has resolved (THE PROVING LAW). */
+  stock: {
+    /** Rolled gear pieces on the shelf (the wares grid). */
+    gear: number;
+    /** Skill/support gem slots (the support share follows Brandt's own gate). */
+    gems: number;
+    /** THE DEPTH LOCKS: each entry rolls its rung from this weighted table —
+     *  purchasable only once this shaft's own dive has SEEN that depth
+     *  (depth 0 = open at once). The shelf is a miniature progression,
+     *  locked at mint: no re-roll scumming, ever. */
+    depthRungs: { depth: number; weight: number }[];
+    /** Chance a GEAR entry carries one of THE ABYSSAL REGISTER's families
+     *  (itemaffixes.ts DESCENT_AFFIX_FAMILIES — weight-0, structurally
+     *  unrollable in the wild): base + perDepth × the entry's rolled rung.
+     *  Deeper wares carry the deeper words — the deterministic farm. */
+    affixChanceBase: number;
+    affixChancePerDepth: number;
+  };
 }
 
 export class DescentField implements WorldOverlay {

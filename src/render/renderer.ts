@@ -704,7 +704,7 @@ export class Renderer {
       this.drawSceneHud(world);     // scene fabric: drill/assault bar + prompt (screen-space)
     }));
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
-    this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
+    this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/haul + shaft pip
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
     }));
@@ -826,8 +826,9 @@ export class Renderer {
   }
 
   /** THE DESCENT readout (screen-space): the encroaching-darkness vignette around the
-   *  player (clear radius shrinks as Light depletes), the Depth + Echoes line, and a
-   *  chevron pointing back to the climb-out shaft when it's off-screen in the dark. */
+   *  player (clear radius shrinks as Light depletes), the Depth + banked-haul line
+   *  (THE DEEP LEDGER's packets by tint glyph), and a chevron pointing back to the
+   *  climb-out shaft when it's off-screen in the dark. */
   private drawDescentHud(world: World): void {
     const dv = world.descentView();
     if (!dv) return;
@@ -849,7 +850,8 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.font = 'bold 16px Verdana';
     ctx.fillStyle = '#7fe0d8';
-    ctx.fillText(`Depth ${dv.depth}   ·   ◈ ${dv.echoes} Echoes`, w / 2, 30);
+    const haul = dv.haul.map(c => `${ESSENCES[c.essence].glyph}${c.count}`).join('  ');
+    ctx.fillText(`Depth ${dv.depth}${haul ? `   ·   ${haul}` : ''}`, w / 2, 30);
     ctx.restore();
     const sx = (dv.shaft.x - this.cam.x) * this.zoom, sy = (dv.shaft.y - this.cam.y) * this.zoom;
     if (sx < 0 || sy < 0 || sx > w || sy > h) {

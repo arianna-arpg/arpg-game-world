@@ -1031,6 +1031,23 @@ changes.
   ANCHORED PARTS) folds once at mitigateTyped
   (`SLAYER_CFG`) as plain stats anything may grant. Docs
   `docs/engine/quickening.md`; probe `balance/probe_quickening.ts`.
+  THE DESCENT (defs+overlays/descent.ts — the Delver's boundless abyss)
+  runs on ONE config (`DescentSurge`): THE DEEP LEDGER (kills bank essence
+  units × depth, packets tint up `payoutTierRungs` on the DEPTH axis, haul
+  lands in real wallets on resurface × keptOnDeath — the ONE economy, no
+  echo purse), THE PRESSURE LADDER (live `zone.level = base + depth ×
+  levelPerDepth`; brood presence evaluated at `broodAnchor + depth` so the
+  heavy kin never swim shallow; cap+batch density tide), THE PROVING LAW
+  (`delverShopOpen` — no counter until THIS shaft's dive resolves), THE
+  LOCKED SHELF (once-minted seeded Brandt-grammar stock in `descentStocks`,
+  per-entry DEPTH LOCKS via the generic `VendorDef.entryLock` seam vs the
+  `descentDeepest` witness), THE ABYSSAL REGISTER (weight-0 reserved affix
+  families `DESCENT_AFFIX_FAMILIES`, forced via `withFamily` at
+  depth-scaled chances — THE RESERVED-WORD LAW: the economy audit classes
+  weight-0 as reserved, never dead), and THE EASE LAW
+  (`survivalEase_<resource>` stat family, ONE fold at
+  `World.survivalDrainRate`, row-capped — the Lampkeeper suffix's debut).
+  Docs `docs/engine/descent.md`; probe `balance/probe_descent.ts`.
   THE ANATOMY GAMUT (data/monsters.ts) fields `MonsterDef.parts` composites
   BELOW boss tier as ordinary spawn-table citizens — one break-lesson each
   (crack the wall / silence the blessing / pick the riders / break the gun /

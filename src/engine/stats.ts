@@ -474,6 +474,18 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  and leaves, and one you can deliberately cause. */
   quailbane:      { label: 'Damage vs Faltering Enemies', base: 0, min: 0, percent: true },
 
+  // THE EASE LANE — per-meter survival-drain relief (world/regions.ts
+  // survivalEaseStat: the `survivalEase_<resource>` family): a fraction of
+  // slower DRAIN for one named meter, folded ONCE at World.drainSurvival and
+  // capped by the meter's own row (easeCap — slowed, never stopped). One row
+  // per REGISTERED resource so gear lines describe themselves; a new meter's
+  // row joins here beside its SURVIVAL_RESOURCES entry. Debut: 'of the
+  // Lampkeeper' (THE ABYSSAL REGISTER) eases light in the Descent's abyss
+  // and under the Gloaming alike — one stat, every dark.
+  survivalEase_light:  { label: 'Slower Light Drain', base: 0, min: 0, percent: true },
+  survivalEase_breath: { label: 'Slower Breath Drain', base: 0, min: 0, percent: true },
+  survivalEase_soul:   { label: 'Slower Soul Drain', base: 0, min: 0, percent: true },
+
   // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
   // opponent's body language and slipping the brunt. Reduction scales with
   // MOMENTUM (1 while moving, tapering to 0 over insightTaper seconds after

@@ -122,7 +122,12 @@ export function auditAffixes(opts: {
       if (!base) continue;
       const pools = affixPoolsFor(base);
       for (const [kind, pool] of [['prefix', pools.prefix], ['suffix', pools.suffix]] as const) {
-        const unlocked = pool.filter(a => a.tiers.some(t => ilvl >= t.ilvl));
+        // THE RESERVED-WORD LAW: weight-0 families are structurally
+        // unrollable by design (forced-only registers — the Abyssal
+        // Register's delver-shelf words), so they are RESERVED, never
+        // "dead": keep them out of the eligibility mass and the
+        // never-rolled triage alike.
+        const unlocked = pool.filter(a => a.weight > 0 && a.tiers.some(t => ilvl >= t.ilvl));
         const total = unlocked.reduce((s, a) => s + a.weight, 0);
         if (total <= 0) continue;
         if (kind === 'prefix') prefixMass += count; else suffixMass += count;

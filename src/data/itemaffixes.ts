@@ -597,6 +597,37 @@ const PREFIXES: AffixDef[] = [
     baseTags: ['chest', 'helmet', 'gloves'], weight: 12,
   }),
 
+  // THE ABYSSAL REGISTER — the Descent's own words (packages/defs/descent.ts;
+  // the Delver's depth-locked shelf forces one via RollItemOpts.withFamily).
+  // WEIGHT 0 across the whole register: STRUCTURALLY unrollable in the wild
+  // (THE RESERVED-WORD LAW — the slotgraft weight-0 precedent; the economy
+  // audit classes weight-0 families as reserved, never "dead"), so the
+  // abyss's words surface ONLY where the deep itself sells them — the
+  // deterministic farm. Each family is the abyss worn as gear: the ore
+  // vein, the trench cold, the outleveled dark (overmatch — the slayer
+  // lane's level axis, and the Descent's OWN fight: the deeper brood
+  // outlevels you by construction, so the deep's gear is best in the deep).
+  fam({
+    id: 'deepvein', kind: 'prefix', themes: [SUSTAIN, DEFENSE],
+    names: ['Veinlit', 'Deepveined', 'Motherlode'],
+    lines: [{ stat: 'life', kind: 'flat' }, { stat: 'lifeRegen', kind: 'flat' }],
+    top: [48, 3.5], floor: 0.2, count: 4,
+    baseTags: ['chest', 'belt', 'amulet'], weight: 0,
+  }),
+  fam({
+    id: 'hadal_cold', kind: 'prefix', themes: [MARTIAL, CASTER],
+    names: ['Brinetouched', 'Hadal', 'Trench-Cold'],
+    lines: [{ stat: 'addedCold', kind: 'flat' }, { stat: 'coldRes', kind: 'flat' }],
+    top: [13, 0.25], floor: 0.2, count: 4,
+    baseTags: ['weapon', 'gloves', 'ring'], weight: 0,
+  }),
+  fam({
+    id: 'voidbound', kind: 'prefix', themes: [MARTIAL, CASTER],
+    names: ['Voidtouched', 'Voidbound', 'Abyssbound'],
+    stat: 'overmatch', top: 0.3, floor: 0.25, count: 4,
+    baseTags: ['weapon', 'amulet', 'ring'], weight: 0,
+  }),
+
   // PROC AFFIXES — chance stats from the PROC registry (proc_<id>; procs.ts
   // golden rules cap and depth-gate them). The two MAGIC-ONLY families are a
   // rarity identity, not a top tier: blues alone can carry them at all — the
@@ -994,6 +1025,31 @@ const SUFFIXES: AffixDef[] = [
     top: [3, 2.2], floor: 0.2, count: 4,
     baseTags: ['belt', 'ring', 'amulet'], weight: 12,
   }),
+  // THE ABYSSAL REGISTER's suffixes (the prefix trio lives beside the other
+  // register prefixes; weight 0 = reserved, delver-shelf only): the lamp
+  // that outlasts the dark (THE EASE LANE's debut — also worth its salt
+  // under the Gloaming), the pressure of the fathoms (the mass fabric worn
+  // deep — stacks with the Pastoral OX's prefix for a full shove build),
+  // and the echo that widens the measure.
+  fam({
+    id: 'lampkeeper', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of the Last Flame', 'of the Lampkeeper', 'of Lampoil'],
+    stat: 'survivalEase_light', top: 0.35, floor: 0.3, count: 3,
+    baseTags: ['helmet', 'boots', 'amulet'], weight: 0,
+  }),
+  fam({
+    id: 'crushing_deep', kind: 'suffix', themes: [MARTIAL],
+    names: ['of the Crushing Deep', 'of Pressure', 'of the Fathoms'],
+    lines: [{ stat: 'shoveAuthority', kind: 'flat' }, { stat: 'impactDamage', kind: 'flat' }],
+    top: [0.3, 0.45], floor: 0.2, count: 4,
+    baseTags: ['belt', 'boots', 'gloves'], weight: 0,
+  }),
+  fam({
+    id: 'deep_echo', kind: 'suffix', themes: [CASTER, MARTIAL],
+    names: ['of the Deep Refrain', 'of Echoes'],
+    stat: 'comboWindow', modKind: 'increased', top: 0.3, floor: 0.3, count: 3,
+    baseTags: ['ring', 'amulet', 'gloves'], weight: 0,
+  }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
   ...PEN_AFFIXES,
@@ -1008,3 +1064,12 @@ export const ITEM_AFFIX_LIST: AffixDef[] = [...PREFIXES, ...SUFFIXES];
 
 export const ITEM_AFFIXES: Record<string, AffixDef> =
   Object.fromEntries(ITEM_AFFIX_LIST.map(a => [a.id, a]));
+
+/** THE ABYSSAL REGISTER's census — the Descent's reserved (weight-0)
+ *  families in ONE list, so the Delver's shelf mint, the probes and any
+ *  future deep-themed cache all draw from the same registry (never a
+ *  scattered literal). Appending a family here + its fam() row above IS
+ *  shipping a new abyssal word. */
+export const DESCENT_AFFIX_FAMILIES: readonly string[] = [
+  'deepvein', 'hadal_cold', 'voidbound', 'lampkeeper', 'crushing_deep', 'deep_echo',
+];

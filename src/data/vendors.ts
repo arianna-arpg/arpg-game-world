@@ -171,9 +171,10 @@ export interface VendorHoldCaps {
 
 export interface VendorPrice {
   /** Essence costs, ALL required (a one-tint price is a list of one) — the
-   *  mixed-essence seam that lets a shelf item ask coarse AND its tint. */
+   *  mixed-essence seam that lets a shelf item ask coarse AND its tint.
+   *  Essence is the ONE counter currency (the delver's old echo lane is
+   *  gone — its shelf normalized into this economy). */
   essences?: EssenceCost[];
-  echoes?: number;
 }
 
 export interface VendorDef {
@@ -194,8 +195,14 @@ export interface VendorDef {
   /** Shown in place of the scrap wheel while `salvage` says no — the counter
    *  explains its own lock (and where the key is sold). */
   salvageLocked?: string;
-  /** Contextual header line (restock countdown, held echoes …). */
+  /** Contextual header line (restock countdown, deepest depth …). */
   headline?(w: World): string;
+  /** THE ENTRY LOCK lane: why stock entry `e` refuses purchase (a short
+   *  refusal string), or null when open — a PER-ENTRY gate as data. The
+   *  panel disables + badges through it and the engine buy handler refuses
+   *  through the same predicate (one truth). The Delver's DEPTH LOCKS are
+   *  the debut; any future counter may lock entries behind anything. */
+  entryLock?(w: World, e: VendorEntry): string | null;
   /** THE PATRON'S HOLD capabilities (absent = plain counter, nothing persists). */
   holds?: VendorHoldCaps;
   /** The counter's tab faces (absent = VENDOR_CFG.tabs.default: the Wares
@@ -250,15 +257,17 @@ export const VENDORS: VendorDef[] = [
   },
   {
     id: 'delver', label: "THE DELVER'S WARES", accent: '#7fe0d8', bg: 'rgba(127,224,216,0.06)',
-    near: (w, seat) => w.nearDelver(seat),
+    // THE PROVING LAW rides near(): the counter EXISTS only once this
+    // shaft's own descent has resolved — so the dwell never opens a
+    // pre-dive panel and the buy handler shares the same gate. NORMALIZED
+    // otherwise to the town counters: default tabs (wares grid + the
+    // sealed gem case), the standard trade gate, ordinary essence prices —
+    // the DEPTH LOCKS (entryLock) are the delver's own layer on top.
+    near: (w, seat) => w.delverShopOpen(seat),
     stock: w => w.descentStock,
-    priceOf: w => ({ echoes: w.delverPrice() }),
+    priceOf: (w, e) => ({ essences: w.vendorPrice(e) }),
     buyT: 'buyDelver',
-    headline: w => `◈ ${w.descentEchoes} Echoes held`,
-    // The descent's shelf is gems ALONE (its arm site rolls no gear — the
-    // one face below is the whole counter), echo-priced outside the essence
-    // economy: no trade gate, no account seal. Deliberate, not omission.
-    tabs: [{ id: 'gems' }],
-    tradeGate: false,
+    headline: w => `deepest seen: Depth ${w.delverDepthReached()}`,
+    entryLock: (w, e) => w.delverEntryRefusal(e),
   },
 ];
