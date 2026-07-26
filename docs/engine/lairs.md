@@ -173,6 +173,27 @@ structurally cannot host the roost, so *finding one is the proof the
 world has deepened* — exploration as horizontal progression, seat by
 seat.
 
+## Wave four — the crown lairs (and the conditioned door)
+
+**`SidezoneDef.when`** — the radiance fabric as a DOOR GATE: the mouth
+admits only while a `RadianceCond` holds in the parent zone (`{ phases:
+['dusk','night'] }` = a barrow that opens after dark). A closed door never
+starts the dwell, and standing on one floats its `refusal` (throttled) —
+the schedule is readable, never a mystery. Author only on open-sky
+parents: sheltered ground reads a flat twilight. Any future dawn shrine,
+storm door, or moonwell gate is one field on its sidezone row.
+
+| lair | where | held back: nothing |
+|---|---|---|
+| **the Leviathan Trench** | the deep sea's HEART (`interior ≥ 0.6` — the marine sampler), level 16+ | **the Fathomking** — the segment fabric at full reach: 14 REAL coils (hittable, drawn == tested), per-segment wound pools that TEAR permanently (drawn smaller, stacking slow on the root, a cold burst at the wound — spread your damage along the animal), fluke tail + dorsal sails by segment class, and a kit of gulp / undertow / breaching crushing-leap. |
+| **the King's Barrow** | downs surface, level 12+, **after dusk only** | **the Unquiet King** — nocturne hours (honestly unfurled), an undead court with riderless bone-steed spares, and the phylactery bond at boss scale: while the jar stands ANYWHERE in the halls he is scarcely killable, and the bond's drawn beam crossing the dark is both the reason and the map. Break the jar, break the king. |
+
+Rig lessons: worm segments UNSPOOL only as the body moves (march the head
+before counting; winding ground pins straight marches — wander through
+clampPos and read the running max), and dwell-entry rigs must step in
+small beats then pull the hero OFF the arrival portal at once — lingering
+ping-pongs the zones and double-mints the halls.
+
 ## QA
 
 `balance/probe_lairs.ts` — registry weave, the seat fold's pure law

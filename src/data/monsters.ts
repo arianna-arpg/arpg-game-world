@@ -18516,6 +18516,104 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 0, faction: 'wyrmkin', // parts pay nothing — the ROOT pays the bounty
     noNemesis: true, remains: false,
   },
+
+  // ==========================================================================
+  // THE CROWN LAIRS (the lair fabric, wave four): the deep sea's coil and
+  // the downs' unquiet king — nothing held back. The leviathan is the
+  // SEGMENT fabric at full reach (a body that is the dungeon: hittable,
+  // tearable, retaliating coil by coil); the lich is the pack fabric at
+  // boss scale (the phylactery bond's drawn beam IS the strategy) under
+  // nocturne hours behind the fabric's first CONDITIONED DOOR.
+  // ==========================================================================
+
+  // THE FATHOMKING — the trench's owner, and the reason the Deep speaks of
+  // the trench in the passive voice. Fourteen REAL coils unspool behind the
+  // skull (hittable, drawn == tested): damage landing anywhere feeds the one
+  // shared pool, but a coil worried to nothing TEARS — permanent, drawn
+  // smaller, a cold burst at the wound, and the whole body slower for it.
+  // Spread the work along the animal or drown beside an unhurt one. The
+  // maw swallows (the grab fabric's gulp), the undertow reels you back in,
+  // and the BREACH is a leviathan-sized crushing leap: untouchable airborne,
+  // a shockwave where it lands.
+  trench_leviathan: {
+    id: 'trench_leviathan', name: 'Fathomking',
+    color: '#3a5a6e', shape: 'circle', radius: 30, look: 'trench_leviathan',
+    heft: 2.2, boss: true,
+    worm: {
+      length: 14, spacing: 22, taper: 0.94,
+      hittable: true,
+      looks: {
+        body: 'leviathan_coil',
+        tail: 'leviathan_flukes',
+        every: { n: 4, look: 'leviathan_sail' },
+      },
+      wounds: {
+        frac: 0.05,
+        mods: [mod('moveSpeed', 'increased', -0.04)],
+        text: 'the coil TEARS',
+        burst: { radius: 90, damageFrac: 0.04, type: 'cold', color: '#7ab8d8' },
+      },
+    },
+    base: { life: 1400, moveSpeed: 140, accuracy: 105, armor: 45, mana: 120, manaRegen: 9, poise: 140 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('lightningRes', 'flat', -0.2)],
+    skills: ['gulp', 'undertow_lash', 'crushing_leap', 'cleave'],
+    xp: 600, loot: 'lair_hoard',
+    faction: 'deep',
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.55] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.06 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.55 } },
+        announce: 'the trench HEAVES — the Fathomking rises!',
+        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.2 } },
+      }],
+    },
+  },
+  // THE UNQUIET KING — the barrow's lich, behind a door that answers only
+  // after dusk (the conditioned door) and stronger in his own hours (the
+  // nocturne fold, honestly unfurled). While his phylactery stands ANYWHERE
+  // in the halls he is scarcely killable — and the bond's drawn BEAM says
+  // so, and says WHERE: following the light to the jar is the fight's own
+  // exploration. Break the jar, break the king.
+  barrow_lich: {
+    id: 'barrow_lich', name: 'the Unquiet King',
+    color: '#8a88b8', shape: 'kite', radius: 15, material: 'bone', look: 'lich',
+    boss: true,
+    base: { life: 640, moveSpeed: 115, accuracy: 106, evasion: 40, armor: 30, mana: 200, manaRegen: 14, insight: 40, poise: 70 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    skills: ['summon_skeleton', 'summon_skeleton_archer', 'gravewisp', 'frostbolt'],
+    xp: 500, loot: 'lair_hoard',
+    faction: 'undead', tags: ['undead'],
+    nocturne: {
+      phases: ['dusk', 'night'],
+      mods: [mod('damage', 'more', 0.25), mod('castSpeed', 'increased', 0.25), mod('damageTaken', 'more', -0.15)],
+    },
+    bond: {
+      kin: 'kings_phylactery',
+      // The whole-hall radius is the point: the jar holds him from wherever
+      // it stands, and the BEAM crossing rooms is the map to it.
+      mods: [mod('damageTaken', 'more', -0.6), mod('lifeRegen', 'flat', 25)],
+      radius: 4000,
+      link: { color: '#b8a8e8', style: 'beam', width: 2 },
+    },
+    tells: [...NOCTURNE_UNFURL, ...WARDED_LIFT],
+    brain: {
+      type: 'flanker',
+      behavior: { castArc: 0.85, reaction: [0.25, 0.55] },
+    },
+  },
+  // The phylactery: a jar of somebody who refused to stop. Scenery with a
+  // health bar (passive — it gates no objective), standing wherever the
+  // halls keep it — the beam finds it long before your torch does.
+  kings_phylactery: {
+    id: 'kings_phylactery', name: 'Phylactery of the King',
+    color: '#b8a8e8', shape: 'diamond', radius: 10, material: 'crystal', look: 'kings_phylactery',
+    base: { life: 220, moveSpeed: 0, evasion: 0, armor: 20, mana: 0 },
+    skills: [],
+    xp: 30, faction: 'undead',
+    passive: true, noNemesis: true, remains: false, drops: 0,
+  },
 };
 
 // ---------------------------------------------------------------------------

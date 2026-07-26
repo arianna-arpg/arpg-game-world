@@ -21,6 +21,7 @@ import { mintCave } from '../engine/worldgen';
 import { transitDwell } from './transit';
 import { TILESETS } from './tilesets';
 import type { ZoneDef } from './zones';
+import type { RadianceCond } from '../world/radiance';
 
 /** Everything a mint may read from the live world, passed by the engine. */
 export interface SidezoneMintCtx {
@@ -61,6 +62,14 @@ export interface SidezoneDef {
    *  minted def carries `below` also asks the renderer to capture the parent
    *  as its understory during the windup. Absent = the classic instant step. */
   traversal?: string;
+  /** THE CONDITIONED DOOR (the radiance fabric as a gate — world/radiance.ts
+   *  RadianceCond): the mouth admits only while the cond holds in the parent
+   *  zone — a barrow that opens at dusk, a dawn shrine, a storm door. A
+   *  closed door never starts the dwell, and standing on one floats
+   *  `refusal` (throttled) so the schedule is readable, never a mystery.
+   *  Author only on OPEN-SKY parents: sheltered ground reads a flat
+   *  twilight and a phase cond there would never (or always) hold. */
+  when?: { cond: RadianceCond; refusal?: string };
   /** Build the pocket's ZoneDef. Minted once per entrance (cached in caveMap);
    *  keep it pure — the same ctx must yield the same def. */
   mint: (ctx: SidezoneMintCtx) => ZoneDef;

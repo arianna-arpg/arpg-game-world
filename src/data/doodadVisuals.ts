@@ -2314,6 +2314,25 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#ff9a3a', intensity: 0.45, flicker: 4 },
   },
+  // Wave four: the trench's drowned throat and the barrow's night door.
+  trench_maw: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#1e3240', edge: '#3a586c', material: 'stone',
+      glow: '#7ab8d8', throat: '#040a10', teeth: {},
+      label: 'the Leviathan Trench',
+    },
+    light: { radius: -2, color: '#7ab8d8', intensity: 0.3, flicker: 1.5 },
+  },
+  barrow_door: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#322e22', edge: '#5a5440', material: 'stone',
+      glow: '#b8a8e8', throat: '#0a0810', rubble: {},
+      label: "the King's Barrow",
+    },
+    light: { radius: -2, color: '#b8a8e8', intensity: 0.3, flicker: 1.8 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },

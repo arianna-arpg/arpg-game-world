@@ -593,3 +593,123 @@ registerLair({
     chance: 0.35,
   },
 });
+
+// ============================================================================
+// WAVE FOUR — THE CROWN LAIRS: the trench and the barrow, nothing held back.
+// ============================================================================
+
+// === THE LEVIATHAN TRENCH (the deep sea's heart) =============================
+// The interior axis pointed at the ocean: the maw seats only where the deep
+// sea is at its DEEPEST (biomeDepth ≥ 0.6 — the marine sampler that already
+// splits shallow isles from true deeps), at real levels. Behind it: the
+// hadal hollow, and the Fathomking — the segment fabric at full reach. His
+// coils are the dungeon: spread your damage along the animal or drown
+// beside an unhurt one.
+
+registerDoodadRule('trench_maw', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'trench_maw_site', builder: 'den_mouth', size: [200, 270],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'trench_maw',
+    dress: [
+      { kind: 'sea_rock', count: [2, 4], radius: [16, 30] },
+      { kind: 'coral', count: [2, 3], radius: [12, 20] },
+      { kind: 'bone_pile', count: [1, 3], radius: [10, 16] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'trench_maw',
+  dwell: 0.7,
+  ledgerOnEnter: 'leviathan_trench_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'leviathan_trench', {
+      rollVariant: true,
+      name: 'the Leviathan Trench',
+      objective: { kind: 'boss', id: 'trench_leviathan' },
+      noDeeper: true,
+    });
+    // What the coil pulled down and did not finish: the trench's own small
+    // lives (texture past the thresher packs).
+    def.fauna = [
+      { id: 'land_crab', chance: 0.6, count: [2, 4] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'leviathan_trench',
+  landmark: 'trench_maw_site',
+  seat: {
+    biomes: ['deepsea'],
+    place: 'surface',
+    interior: { from: 0.6, fadeIn: 0.15 },
+    level: { from: 16, fadeIn: 2 },
+    chance: 0.3,
+  },
+});
+
+// === THE KING'S BARROW (the downs' unquiet mound) ============================
+// THE CONDITIONED DOOR's debut: the mound stands all day — dressed, marked,
+// refusing — and ANSWERS only after dusk (SidezoneDef.when; the refusal
+// floater reads the schedule to anyone who stands on it at noon). Inside:
+// the lich under his own nocturne hours, scarcely killable while the
+// phylactery stands ANYWHERE in the halls — and the bond's drawn beam
+// crossing the dark is both the reason and the map. Break the jar, break
+// the king.
+
+registerDoodadRule('barrow_door', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'barrow_door_site', builder: 'den_mouth', size: [190, 260],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'barrow_door',
+    dress: [
+      { kind: 'tombstone', count: [2, 4], radius: [10, 15] },
+      { kind: 'standing_stone', count: [1, 2], radius: [13, 18] },
+      { kind: 'bone_pile', count: [1, 3], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'barrow_door',
+  dwell: 0.8,
+  ledgerOnEnter: 'kings_barrow_entered',
+  when: {
+    cond: { phases: ['dusk', 'night'] },
+    refusal: 'the barrow sleeps until dark…',
+  },
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'kings_barrow', {
+      rollVariant: true,
+      name: "the King's Barrow",
+      objective: { kind: 'boss', id: 'barrow_lich' },
+      noDeeper: true,
+    });
+    // AUTHORED TENANCY, twice: the jar stands somewhere in the halls (ONE,
+    // always — following the beam to it is the fight's own exploration),
+    // and the walls keep their rats.
+    def.fauna = [
+      { id: 'kings_phylactery', chance: 1, count: [1, 1] },
+      { id: 'gutter_rat', chance: 0.5, count: [2, 4] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'kings_barrow',
+  landmark: 'barrow_door_site',
+  seat: {
+    biomes: ['downs'],
+    place: 'surface',
+    level: { from: 12, fadeIn: 2 },
+    chance: 0.18,
+  },
+});

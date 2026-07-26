@@ -596,5 +596,108 @@ const step = (secs: number): void => {
   leaveToHome();
 }
 
+// --- RIG I: wave four — the trench (the segment fabric at full reach) ------------
+{
+  const lev = MONSTERS.trench_leviathan;
+  check('I1 the Fathomking is a TRUE worm (hittable, wounded, dressed by class)',
+    lev.worm?.hittable === true && !!lev.worm?.wounds
+    && !!LOOKS[lev.worm?.looks?.body ?? ''] && !!LOOKS[lev.worm?.looks?.tail ?? '']
+    && !!LOOKS[lev.worm?.looks?.every?.look ?? '']);
+  check('I2 the trench claims only the deep sea\'s HEART (interior axis)',
+    lairLandmarkRolls({ place: 'surface', biome: 'deepsea', level: 20, tileset: 'deepsea', biomeDepth: 0.8 })
+      .some(r => r.landmark === 'trench_maw_site')
+    && !lairLandmarkRolls({ place: 'surface', biome: 'deepsea', level: 20, tileset: 'deepsea', biomeDepth: 0.3 })
+      .some(r => r.landmark === 'trench_maw_site'));
+  w.player.pos = vec(400, 400);
+  w.enterSidezone({ pos: { x: 400, y: 400 }, seed: 51051, kind: 'trench_maw' });
+  step(0.5);
+  const levA = (w.actors as Actor[]).find(a => a.defId === 'trench_leviathan');
+  check('I3 the coil owns the bottom (leviathan home, boss ask)',
+    !!levA && w.zone.objective.kind === 'boss' && w.zone.objective.id === 'trench_leviathan');
+  // The coils unspool as the body MOVES (the anatomy rig's idiom) — but a
+  // winding trench pins straight marches against walls, so wander the head
+  // through clampPos and read the RUNNING max the payout reaches.
+  let segMax = 0;
+  if (levA) {
+    step(2);
+    for (let i = 0; i < 240; i++) {
+      const dx = (i % 60 < 30 ? 9 : -9), dy = ((i % 120) < 60 ? 5 : -5);
+      levA.pos = w.clampPos(vec(levA.pos.x + dx, levA.pos.y + dy), levA.radius);
+      w.update(1 / 60);
+      segMax = Math.max(segMax, (levA as any).worm?.segments?.length ?? 0);
+    }
+  }
+  check('I4 the coils unspool REAL behind the skull', segMax >= 10, `${segMax} segments at peak`);
+  leaveToHome();
+}
+
+// --- RIG J: wave four — the barrow (the conditioned door + the jar) --------------
+{
+  // The night-door law through the REAL dwell loop: plant a barrow_door
+  // under the player's feet and stand there. At NOON the dwell never
+  // carries (and the refusal floats); after DUSK the same stones open.
+  const { dayCycle } = await import('../src/world/daynight');
+  const phaseAt = (t: number) => dayCycle(t).phase as string;
+  // Scan FORWARD from the live clock only: rewinding w.time would strand
+  // every cadence sweep (packNextAt etc.) in the future and stall the rig.
+  const t0 = Math.ceil(w.time) + 1;
+  let noon = -1, night = -1;
+  for (let t = t0; t < t0 + 4000 && (noon < 0 || night < 0); t += 5) {
+    const p = phaseAt(t);
+    if (noon < 0 && p === 'day') noon = t;
+    if (night < 0 && p === 'night') night = t;
+  }
+  // Test the closed door FIRST whatever the wheel offers next (noon may
+  // fall after night in wheel order — the door only cares which is which).
+  check('J1 the wheel offers both hours to test against', noon >= 0 && night >= 0);
+  const sz = sidezoneOf('barrow_door');
+  check('J2 the door carries its schedule (when + refusal authored)',
+    !!sz?.when && (sz.when.cond.phases ?? []).includes('night') && !!sz.when.refusal);
+  w.player.pos = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), w.player.radius);
+  w.caveEntrances.push({
+    pos: vec(w.player.pos.x, w.player.pos.y),
+    seed: 60060, kind: 'barrow_door',
+  });
+  const homeNow = w.zone.id;
+  w.time = noon;
+  step(2.0);
+  check('J3 at noon the barrow does not answer (the dwell never carries)',
+    w.zone.id === homeNow);
+  check('J4 the refusal READS (the schedule floats, throttled)',
+    w.doorRefusalAt > 0);
+  w.time = night;
+  // Step in SMALL beats and bail the instant the swap lands — then pull the
+  // hero straight off the arrival portal (lingering there ping-pongs the
+  // zones and double-mints the halls: the rig's bug, not the door's).
+  for (let i = 0; i < 40 && w.zone.id === homeNow; i++) step(0.1);
+  if (w.zone.id !== homeNow) {
+    w.player.pos = w.clampPos(vec(w.arena.w / 2, w.arena.h / 2), w.player.radius);
+    step(0.2);
+  }
+  check('J5 after dark the same stones open (the cond holds, the dwell carries)',
+    w.zone.id !== homeNow && String(w.zone.name).includes('Barrow'), w.zone.name);
+  // Inside: the king under his hours, held by the jar — the beam is the map.
+  const lich = (w.actors as Actor[]).find(a => a.defId === 'barrow_lich');
+  const jar = (w.actors as Actor[]).find(a => a.defId === 'kings_phylactery');
+  check('J6 the king and his jar both stand', !!lich && !!jar);
+  if (lich && jar) {
+    step(1.2);
+    check('J7 the jar HOLDS him from across the halls (whole-den bond, drawn beam)',
+      lich.bondHeld === true && (lich.bondFrom as Actor | undefined)?.id === jar.id);
+    check('J8 his hours are HIS (nocturne held at night, honestly unfurled)',
+      lich.nocturneHeld === true
+      && (MONSTERS.barrow_lich.tells ?? []).some(t => t.source === 'nocturne'));
+    // Break EVERY jar standing (the rig owns one; a double-minted hall must
+    // not fake a pass or a fail) — the law under test is bond-falls-with-kin.
+    for (const j of (w.actors as Actor[]).filter(a => a.defId === 'kings_phylactery' && !a.dead)) {
+      w.kill(j, false, w.player);
+    }
+    step(1.2);
+    check('J9 break the jar, break the king (the bond falls with it)',
+      lich.bondHeld === false);
+  }
+  leaveToHome();
+}
+
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');
 process.exit(fails ? 1 : 0);

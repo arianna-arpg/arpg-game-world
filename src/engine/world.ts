@@ -2682,6 +2682,10 @@ export class World {
    *  running over a mouth no longer yanks you underground (mirrors the portal dwell). */
   private caveDwellIdx = -1;
   private caveDwellStart = 0;
+  /** Throttle for the CONDITIONED DOOR's refusal floater (SidezoneDef.when
+   *  — the night barrow): the schedule reads once every couple of seconds,
+   *  never as floater spam. */
+  private doorRefusalAt = 0;
   /** Dwell-to-ENTER a REALM GATE (demon/crusade/necropolis/fracture) — keyed by the
    *  gate's stable id, its pos (for the renderer ring) + when it began, so running
    *  over a gate never yanks you into a realm without meaning to. */
@@ -38385,6 +38389,10 @@ export class World {
       const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null }): boolean =>
         dist(this.player.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius
         && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof))
+        // THE CONDITIONED DOOR (SidezoneDef.when — the lair fabric's night
+        // barrow): a closed door never starts the dwell. The refusal READ
+        // lives below the mouth scan, so the schedule is never a mystery.
+        && (!sidezoneOf(cm.kind)?.when || this.radianceCondHeld(sidezoneOf(cm.kind)!.when!.cond))
         && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
@@ -38392,6 +38400,19 @@ export class World {
       } else {
         let mouthIdx = -1;
         for (let i = 0; i < this.caveEntrances.length; i++) { if (onMouth(this.caveEntrances[i])) { mouthIdx = i; break; } }
+        // THE CONDITIONED DOOR's refusal read: standing on a door whose cond
+        // does NOT hold floats its schedule (throttled) — a closed barrow
+        // tells you it is closed, and roughly when it will not be.
+        if (mouthIdx < 0 && this.time - this.doorRefusalAt > 2.5) {
+          for (const cm of this.caveEntrances) {
+            const sz = sidezoneOf(cm.kind);
+            if (!sz?.when || this.radianceCondHeld(sz.when.cond)) continue;
+            if (dist(this.player.pos, cm.pos) > transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius) continue;
+            this.doorRefusalAt = this.time;
+            this.text(vec(cm.pos.x, cm.pos.y - 26), sz.when.refusal ?? 'the door does not answer…', '#b8a8d8', 12);
+            break;
+          }
+        }
         // Dwell builds only while standing idle AND not being knocked (a knockback
         // onto a mouth must never carry you under).
         if (mouthIdx >= 0 && this.playerIdle() && !this.player.push) {

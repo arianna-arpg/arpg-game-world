@@ -8711,6 +8711,47 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'sailfin', scale: 0.8, alpha: 0.8 },
     ],
   },
+  /** THE FATHOMKING's skull: a maw that has opinions about ships, barbels
+   *  trailing, hadal-pale eyes — the coils behind it are the worm fabric's
+   *  own segment looks (leviathan_coil / _sail / _flukes). */
+  trench_leviathan: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.15 },
+      { kind: 'mawRing', x: 0.42, scale: 0.7, alpha: 0.9 },
+      { kind: 'barbs', x: -0.2, scale: 0.8, alpha: 0.85 },
+      { kind: 'fangs', x: 0.46, scale: 0.9 },
+      { kind: 'eyes', color: '#bfe8f0', params: { spread: 0.4, dist: 0.6, size: 0.1 } },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.9, params: { n: 3 } }],
+  },
+  /** One coil of him: plated, wet, unhurried. */
+  leviathan_coil: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.1, seed: 41 } },
+      { kind: 'scutes', scale: 0.9, alpha: 0.9 },
+    ],
+  },
+  /** The dorsal sail rung: every fourth coil carries the ridge. */
+  leviathan_sail: {
+    parts: [
+      { kind: 'blob', scale: 0.92, params: { irr: 0.1, seed: 43 } },
+      { kind: 'sailfin', scale: 1.05, alpha: 0.9 },
+    ],
+  },
+  /** The flukes: the tail that ends arguments and starts currents. */
+  leviathan_flukes: {
+    parts: [
+      { kind: 'tailFin', scale: 1.3 },
+    ],
+  },
+  /** The phylactery: a jar of refusal — gem-hearted, haloed, rune-bound. */
+  kings_phylactery: {
+    parts: [
+      { kind: 'gem', scale: 0.9 },
+      { kind: 'halo', scale: 1.1, alpha: 0.8 },
+      { kind: 'runes', scale: 0.95, params: { n: 3 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

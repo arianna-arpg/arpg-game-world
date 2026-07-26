@@ -362,7 +362,18 @@ changes.
   elevation ≥0.55: a crag mouth onto an OPEN-SKY shelf — explicit
   def.sky beats the caveDepth derivation — where Old Scald keeps a
   gem-cache hoard and a live ibex larder; the lair's law is the ANATOMY
-  GAMUT: wings = a real part whose break silences BOTH wing verbs) —
+  GAMUT: wings = a real part whose break silences BOTH wing verbs).
+  WAVE FOUR — THE CROWN LAIRS + THE CONDITIONED DOOR
+  (`SidezoneDef.when` — a RadianceCond gate on any sidezone mouth: a
+  closed door never starts the dwell and floats its `refusal`, so the
+  schedule reads; author on open-sky parents only): the LEVIATHAN
+  TRENCH (deepsea interior ≥0.6, level 16+ — the Fathomking: the
+  SEGMENT fabric at full reach, 14 hittable coils with per-segment
+  wound pools that TEAR permanently + retaliate, gulp/undertow/breach
+  kit) and the KING'S BARROW (downs 12+, opens ONLY after dusk — the
+  Unquiet King under nocturne hours, scarcely killable while his
+  phylactery stands ANYWHERE in the halls: the pack fabric's drawn
+  beam at boss scale is both the reason and the map to the jar) —
   docs in `docs/engine/lairs.md`; probe `balance/probe_lairs.ts`),
   `tells.ts` (THE TELL FABRIC — visible internal state as a readable
   information layer on enemy bodies: `MonsterDef.tells` rows bind a STATE

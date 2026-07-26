@@ -11117,6 +11117,119 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
+
+  // THE LEVIATHAN TRENCH — the hadal hollow under the deep sea's heart:
+  // black water light, kelp gone pale at this depth, and the coil that owns
+  // the bottom of the map. Caustics and bubbles keep the drowned read; the
+  // chasm rims drop into the true dark.
+  leviathan_trench: {
+    id: 'leviathan_trench', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { winding: 2, plains: 2 },
+    nameFirst: ['Hadal', 'Fathomless', 'Coilhome', 'Pressuredark', 'Sunless', 'Brineblack', 'Leviathan', 'Stillcrush'],
+    nameSecond: ['Trench', 'Hollow', 'Coil', 'Bottom', 'Throat', 'Fathoms', 'Rest', 'Deep'],
+    theme: {
+      ambientDark: 0.55,
+      ambientFx: [{ kind: 'caustics' }, { kind: 'bubbles' }],
+      ground: {
+        palette: ['#0a1218', '#0e1820', '#121e28', '#182632', '#1e2e3c'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#080e14', grid: '#0c141c', border: '#2e4a5c',
+      obstacle: '#1e3240', obstacleEdge: '#3a586c', accent: '#7ab8d8',
+      wall: '#1e3240', water: '#10344a', mud: '#101a22',
+    },
+    sizeW: [1700, 2300], sizeH: [1300, 1750], ellipseChance: 0,
+    layout: [
+      { kind: 'water', count: [3, 5] },
+      { kind: 'kelp', count: [3, 6] },
+      { kind: 'coral', count: [2, 4], radius: [16, 28] },
+      { kind: 'sea_rock', count: [3, 6], radius: [22, 42] },
+      { kind: 'chasm', count: [1, 2] },
+      { kind: 'bone_pile', count: [2, 4] },
+    ],
+    variants: [
+      // The wreck line: everything the coil ever pulled down, in one drift.
+      { name: 'the wreck line', layout: [
+        { kind: 'bone_pile', count: [5, 8] },
+        { kind: 'broken_cart', count: [1, 2] },
+        { kind: 'sea_rock', count: [3, 5], radius: [24, 44] },
+        { kind: 'water', count: [2, 3] },
+      ] },
+      // The pale garden: kelp that has never seen the sun and grew anyway.
+      { name: 'the pale garden', layout: [
+        { kind: 'kelp', count: [6, 10] },
+        { kind: 'coral', count: [4, 7], radius: [16, 30] },
+        { kind: 'water', count: [2, 4] },
+      ] },
+    ],
+    packs: {
+      count: [2, 3], size: [1, 2],
+      table: [
+        { id: 'deep_thresher', weight: 3 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
+  // THE KING'S BARROW — the halls under the mound: bone-stacked walls,
+  // grave goods nobody living has counted, the court still in armor ranks,
+  // and the beam of pale light that crosses the dark to wherever the jar
+  // stands. The door above answers only after dusk.
+  kings_barrow: {
+    id: 'kings_barrow', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { dungeon: 2, winding: 1 },
+    layoutParams: {
+      rooms: [5, 8], doorChance: 0.4, corridorCells: 2,
+    },
+    nameFirst: ['Unquiet', 'Kingsrest', 'Barrowdeep', 'Old', 'Crownfast', 'Gravegold', 'Stillcourt', 'Wightward'],
+    nameSecond: ['Barrow', 'Halls', 'Court', 'Vault', 'Rest', 'Crypt', 'Under', 'Keeping'],
+    theme: {
+      ambientDark: 0.52,
+      ambientFx: [{ kind: 'motes', intensity: 0.3 }],
+      ground: {
+        palette: ['#14120e', '#1c1a14', '#24211a', '#2c2920', '#343026'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#100e0a', grid: '#161410', border: '#5c5644',
+      obstacle: '#322e22', obstacleEdge: '#5a5440', accent: '#b8a8e8',
+      wall: '#322e22', mud: '#1c1810', water: '#1b3038',
+    },
+    sizeW: [1500, 2000], sizeH: [1150, 1550], ellipseChance: 0,
+    layout: [
+      { kind: 'bone_pile', count: [3, 6] },
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'tombstone', count: [2, 4] },
+      { kind: 'brazier', count: [1, 3] },
+      { kind: 'web', count: [1, 3] },
+      { kind: 'rubble', count: [1, 2] },
+    ],
+    variants: [
+      // The grave-gold gallery: what he was buried WITH.
+      { name: 'the grave-gold gallery', layout: [
+        { kind: 'burial_urn', count: [4, 7] },
+        { kind: 'brazier', count: [2, 4] },
+        { kind: 'tombstone', count: [1, 3] },
+      ] },
+      // The still court: the retinue, standing down the centuries.
+      { name: 'the still court', layout: [
+        { kind: 'tombstone', count: [4, 7] },
+        { kind: 'bone_pile', count: [4, 7] },
+        { kind: 'web', count: [2, 4] },
+      ] },
+    ],
+    packs: {
+      count: [3, 5], size: [2, 3],
+      table: [
+        { id: 'skeleton_warrior', weight: 4 },
+        { id: 'skeleton_archer', weight: 2 },
+        { id: 'barrow_lancer', weight: 1, presence: { from: 14, fadeIn: 3 } },
+        { id: 'bone_steed', weight: 1, presence: { from: 14, fadeIn: 3 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
 };
 
 // --- BIOME → TILESET resolver (the heat-map-authoritative mint) --------------
@@ -11367,6 +11480,8 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   wyrm_barrow:    { title: 'The Wyrm Barrow',   blurb: 'Black glass and banked ash: a furnace asleep on everything it was ever paid. Rob it on tiptoe, or wake it and outlast the ember — both are the barrow working as intended.' },
   spinney_hollow: { title: 'The Spinney',       blurb: 'The silk-choked bole under the old forest: webs in every angle, the larder\'s swaddled leavings underfoot, and a matron whose court hangs on ropes you can read.' },
   drake_roost:    { title: 'The Drake Roost',   blurb: 'A wind-scoured shelf at the high heart of the mountains: the hoard underfoot, the larder grazing the rim, the drop on three sides — and Old Scald, who owns the sky until you take the wings off him.' },
+  leviathan_trench:{ title: 'The Leviathan Trench', blurb: 'The hadal hollow under the deep sea\'s heart: pale kelp, wreck-drift bones, and the Fathomking — fourteen coils of him, every one of them real, every one of them a place the fight can go wrong.' },
+  kings_barrow:   { title: 'The King\'s Barrow', blurb: 'The halls under the mound, behind a door that answers only after dusk: the court in armor ranks, the grave gold uncounted — and a beam of pale light crossing the dark to the jar that keeps the Unquiet King unquiet.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no
