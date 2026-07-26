@@ -141,6 +141,38 @@ recovery must clear before a re-press or `useSkill` refuses for the wrong
 reason (probe pacing), and a reserve's post-refusal residue read must
 tolerate the calm regen re-kindling — that residue is the law, not a leak.
 
+## Wave three — THE LADDER (horizontal progression per biome)
+
+Two more seat axes make a biome read as a **progression**, not a palette:
+
+- `LairSeat.interior` — a weight envelope over `ZoneDef.geo.biomeDepth`
+  (0 = the country's border, 1 = its deep heart; the marine shallow/deep
+  sampler, hoisted above the roll merge so the fold can read it). Caves
+  inherit their parent's depth — a cave under the deep mountains is still
+  deep-mountain ground.
+- `LairSeat.climate` — inclusive `[min, max]` bands over the climate axes
+  at the mint coordinate (`{ elevation: [0.55, 1] }` = high ground only —
+  the relief fabric's vertical truth as a seat gate).
+
+Rows that ask REFUSE unreadable ground (directed mints without samplers
+never host deep-country content); rows that don't ask never mind the new
+axes. Compose them with the level envelope and one biome becomes a ladder:
+
+**The highland ladder** — the cairn at the border (level 6+), the Frostmaw
+under the slopes (5+, caves 1–2), and at the high deep heart (14+,
+interior ≥ 0.55, elevation ≥ 0.55) **THE DRAKE ROOST**: a crag mouth into
+an OPEN-SKY shelf (`def.sky = 'open'` — `skyOf` honors an explicit sky
+over the caveDepth derivation, so weather reaches the perch), floored
+with gem caches, grazed by a live ibex larder, and held by **Old Scald**.
+The roost's law is the ANATOMY GAMUT: the wings are a real composite part
+whose break silences both wing verbs (`breakDisables: crushing_leap +
+gust_burst` — the silenced instances leave the bar) and slows the walk —
+BREAK THE WINGS and the sky stops helping him, while the breath (no
+part's hostage) still answers. A low-level zone or a border zone
+structurally cannot host the roost, so *finding one is the proof the
+world has deepened* — exploration as horizontal progression, seat by
+seat.
+
 ## QA
 
 `balance/probe_lairs.ts` — registry weave, the seat fold's pure law

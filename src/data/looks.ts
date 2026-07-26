@@ -8687,6 +8687,30 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'puffMotes', scale: 0.8, params: { n: 3 } }],
   },
+  /** OLD SCALD: scale and scute over furnace-red bulk, a ridge down the
+   *  spine, a tail that has swept shelves clear — the WINGS live on the
+   *  part's own look (drake_wingspan), so the grounded silhouette is
+   *  honest: break them and this is all that remains, walking at you. */
+  roost_dragon: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.14, seed: 33 } },
+      { kind: 'scutes', scale: 0.95, alpha: 0.95 },
+      { kind: 'dorsalRidge', scale: 1.0 },
+      { kind: 'tail', params: { len: 1.15, tuft: false } },
+      { kind: 'claws', x: 0.16, scale: 1.15, params: { len: 0.55, talons: 3 } },
+      { kind: 'serpentHead', x: 0.4, scale: 0.8 },
+      { kind: 'fangs', x: 0.52, scale: 0.8 },
+      { kind: 'eyes', color: '#ffc84a', params: { spread: 0.3, dist: 0.68, size: 0.09 } },
+    ],
+    live: [{ kind: 'emberSparks', scale: 1.0 }],
+  },
+  /** The wingspan: leather and sinew at full spread — the sky, worn. */
+  drake_wingspan: {
+    parts: [
+      { kind: 'featherWings', scale: 1.55, alpha: 0.95 },
+      { kind: 'sailfin', scale: 0.8, alpha: 0.8 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

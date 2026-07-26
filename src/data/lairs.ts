@@ -528,3 +528,68 @@ registerLair({
     chance: 0.22,
   },
 });
+
+// === THE DRAKE ROOST (wave three — the ladder's crown) =======================
+// The horizontal-progression thesis made flesh: the mountain country now
+// READS as a ladder — cairns at its border (level 6+), the frostmaw under
+// its slopes (5+, caves), and THIS at its high deep heart (14+, interior
+// ≥ ~0.55, elevation ≥ 0.55): a crag mouth into an OPEN-SKY shelf (the
+// mint stamps def.sky — weather reaches the perch) where Old Scald keeps
+// his hoard. The lair's law is the ANATOMY GAMUT: the wings are a real
+// part; break them and both wing verbs die with them — the sky stops
+// helping him, and the fight becomes a walk he has to make at you.
+
+registerDoodadRule('roost_crag', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'roost_crag_site', builder: 'den_mouth', size: [200, 270],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'roost_crag',
+    dress: [
+      { kind: 'rock', count: [2, 4], radius: [14, 24] },
+      { kind: 'bone_pile', count: [2, 4], radius: [10, 16] },
+      { kind: 'cinder', count: [2, 3], radius: [14, 20] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'roost_crag',
+  dwell: 0.7,
+  ledgerOnEnter: 'drake_roost_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'drake_roost', {
+      rollVariant: true,
+      name: 'the Drake Roost',
+      objective: { kind: 'boss', id: 'roost_dragon' },
+      noDeeper: true,
+    });
+    // THE OPEN-SKY POCKET: skyOf honors an explicit def sky over the
+    // caveDepth derivation — the shelf stands under real weather, and the
+    // wind on the perch is not a metaphor.
+    def.sky = 'open';
+    // The hoard floor, cache by cache — richer than the wyrm's barrow:
+    // this is the ladder's crown, and the wager should read like it.
+    def.fauna = [
+      { id: 'gem_cache', chance: 1, count: [5, 8] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'drake_roost',
+  landmark: 'roost_crag_site',
+  seat: {
+    biomes: ['highland'],
+    place: 'surface',
+    // THE LADDER'S TOP RUNG: real levels, the country's deep heart, and
+    // high ground only — a low zone or a border zone structurally cannot
+    // host it, so meeting the roost MEANS the world has already deepened.
+    level: { from: 14, fadeIn: 2 },
+    interior: { from: 0.55, fadeIn: 0.15 },
+    climate: { elevation: [0.55, 1] },
+    chance: 0.35,
+  },
+});

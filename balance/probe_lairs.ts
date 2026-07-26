@@ -42,7 +42,7 @@ import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { sidezoneOf } from '../src/data/sidezones';
 import { isDormant, updateAI } from '../src/engine/ai';
 import { mod } from '../src/engine/stats';
-import type { ZoneDef } from '../src/data/zones';
+import { skyOf, type ZoneDef } from '../src/data/zones';
 import type { Actor } from '../src/engine/actor';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
@@ -512,6 +512,86 @@ const step = (secs: number): void => {
       check('G13 stepping home re-roots without a grace (the one-way debounce)',
         naiad.rootedHeld === true);
     }
+  }
+  leaveToHome();
+}
+
+// --- RIG H: wave three — THE LADDER (interior + climate axes, the roost) ---------
+{
+  const at = (level: number, biomeDepth?: number, elevation?: number) =>
+    lairLandmarkRolls({
+      place: 'surface', biome: 'highland', level, tileset: 'snowcrown',
+      biomeDepth, ...(elevation !== undefined ? { climate: { elevation } } : {}),
+    });
+  const has = (rolls: { landmark: string }[], lm: string) => rolls.some(r => r.landmark === lm);
+  check('H1 the roost claims ONLY the deep high heart (interior + climate bands)',
+    has(at(20, 0.7, 0.8), 'roost_crag_site')
+    && !has(at(20, 0.2, 0.8), 'roost_crag_site')     // country's edge refuses
+    && !has(at(20, 0.7, 0.3), 'roost_crag_site')     // low ground refuses
+    && !has(at(20, undefined, 0.8), 'roost_crag_site')  // unreadable depth refuses
+    && !has(at(20, 0.7), 'roost_crag_site'));        // unreadable climate refuses
+  check('H2 a green world never meets the dragon (the level rung is hard)',
+    !has(at(6, 0.7, 0.8), 'roost_crag_site') && !has(at(11, 0.7, 0.8), 'roost_crag_site'));
+  // THE LADDER READS: the same country offers DIFFERENT natives by rung —
+  // border level 6 = the cairn alone; deep high 20 = cairn AND roost.
+  const low = at(6, 0.2, 0.4), deep = at(20, 0.7, 0.8);
+  check('H3 the ladder is real (rungs differ within one biome)',
+    has(low, 'giants_cairn') && !has(low, 'roost_crag_site')
+    && has(deep, 'giants_cairn') && has(deep, 'roost_crag_site'));
+  // Axis-less rows never mind the new axes (ordinary ground law): the cairn
+  // seats with or without geo readings.
+  check('H4 axis-less lairs ignore the new axes (no retroactive gating)',
+    has(lairLandmarkRolls({ place: 'surface', biome: 'highland', level: 20, tileset: 'snowcrown' }), 'giants_cairn'));
+  // Registry: the dragon's wings are a REAL part whose break silences
+  // exactly the wing verbs (both in the root's own kit).
+  const drake = MONSTERS.roost_dragon;
+  const wings = drake.parts?.[0];
+  check('H5 the wings are a true part and the grounding is authored',
+    wings?.monster === 'drake_wingspan' && !!MONSTERS.drake_wingspan
+    && (wings.breakDisables ?? []).every(s => drake.skills.includes(s))
+    && (wings.breakDisables ?? []).includes('crushing_leap'));
+}
+// H-live: the roost round trip — open sky, the hoard, the grounding law.
+{
+  w.player.pos = vec(400, 400);
+  w.enterSidezone({ pos: { x: 400, y: 400 }, seed: 94094, kind: 'roost_crag' });
+  step(0.5); // parts lazy-attach on the root's first update tick
+  const skyRead = skyOf(w.zone);
+  check('H6 the roost stands under OPEN SKY (explicit def sky beats caveDepth)',
+    skyRead === 'open', String(skyRead));
+  const drake = (w.actors as Actor[]).find(a => a.defId === 'roost_dragon');
+  const wings = (w.actors as Actor[]).find(a => a.defId === 'drake_wingspan');
+  const hoard = (w.actors as Actor[]).filter(a => a.defId === 'gem_cache').length;
+  check('H7 Old Scald holds the shelf, wings attached, hoard underfoot',
+    !!drake && !!wings && hoard >= 5, `hoard ${hoard}, wings ${String(!!wings)}`);
+  if (drake && wings) {
+    const tickOnly = (secs: number): void => {
+      const dt = 1 / 30;
+      for (let t = 0; t < secs; t += dt) w.update(dt);
+    };
+    const leap = drake.skills.find((s: any) => s?.def.id === 'crushing_leap');
+    drake.cooldowns.clear(); drake.mana = drake.maxMana();
+    check('H8 with wings, the sky is his (leap fires)',
+      w.useSkill(drake, leap, vec(drake.pos.x + 200, drake.pos.y)));
+    tickOnly(2.0);
+    // BREAK THE WINGS: the part dies, both wing verbs fall silent, the
+    // breath — no part's hostage — still answers.
+    w.kill(wings, false, w.player);
+    tickOnly(0.5);
+    // The break-disable REMOVES the silenced instances from the bar — a
+    // vanished verb IS the refusal (re-find, and absent = grounded).
+    drake.cooldowns.clear(); drake.mana = drake.maxMana();
+    const leapNow = drake.skills.find((s: any) => s?.def.id === 'crushing_leap');
+    const leapAfter = leapNow ? w.useSkill(drake, leapNow, vec(drake.pos.x + 200, drake.pos.y)) : false;
+    const gustNow = drake.skills.find((s: any) => s?.def.id === 'gust_burst');
+    drake.cooldowns.clear(); drake.mana = drake.maxMana();
+    const gustAfter = gustNow ? w.useSkill(drake, gustNow, vec(drake.pos.x, drake.pos.y)) : false;
+    check('H9 GROUNDED: both wing verbs die with the wings', !leapAfter && !gustAfter);
+    const breath = drake.skills.find((s: any) => s?.def.id === 'ember_breath');
+    drake.cooldowns.clear(); drake.mana = drake.maxMana();
+    tickOnly(1.5);
+    check('H10 the furnace still answers (breath is no part\'s hostage)',
+      w.useSkill(drake, breath, vec(drake.pos.x + 100, drake.pos.y)));
   }
   leaveToHome();
 }

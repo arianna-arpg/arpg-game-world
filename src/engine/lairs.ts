@@ -70,6 +70,19 @@ export interface LairSeat {
    *  the LOCAL ground (rivers cross countries and repaint none), so "the
    *  naiad keeps to forest rivers" is biomes + courses composing. */
   courses?: string[];
+  /** COUNTRY-INTERIOR claim — a weight envelope over ZoneDef.geo.biomeDepth
+   *  (0 = the biome blob's edge, 1 = its deep heart; the same sampler the
+   *  marine shallow/deep split rides). `{ from: 0.55, fadeIn: 0.15 }` is
+   *  "only deep inside the country, thinning toward the border" — THE
+   *  LADDER's spatial rung: the roost stands where the mountains are at
+   *  their most mountainous. A row that asks REFUSES ground with no depth
+   *  sample (directed mints without samplers stay lair-ordinary). */
+  interior?: LevelEnvelope;
+  /** CLIMATE claims — inclusive [min, max] bands over the world's climate
+   *  axes at the mint coordinate (ZoneDef.geo.climate — 'elevation' is the
+   *  relief fabric's vertical truth). `{ elevation: [0.6, 1] }` is "high
+   *  ground only". A row that asks refuses ground with no reading. */
+  climate?: Record<string, [number, number]>;
 }
 
 /** One registered lair: an id, the LANDMARK that stands at its seat, and the
@@ -103,6 +116,11 @@ export interface LairGround {
   /** The course this mint rides (CourseSpec.id), when it rides one — the
    *  surface chokepoint threads onCourse; caves never carry a course. */
   course?: string;
+  /** How deep inside its biome blob the ground sits (ZoneDef.geo.biomeDepth;
+   *  caves inherit their parent's — the country's depth survives descent). */
+  biomeDepth?: number;
+  /** Climate axes at the mint coordinate (ZoneDef.geo.climate). */
+  climate?: Record<string, number>;
   /** Sealed pockets grow no lairs (the noDeeper contract — mintCave's
    *  authored-row filter, extended to the fabric's own rows). */
   noDeeper?: boolean;
@@ -123,11 +141,25 @@ export function lairLandmarkRolls(q: LairGround): LandmarkRoll[] {
     // Course claims: a row listing courses stands ONLY on those courses; a
     // row listing none never minds them (ordinary ground law, unchanged).
     if (s.courses && (!q.course || !s.courses.includes(q.course))) continue;
+    // Interior + climate claims: rows that ask REFUSE unreadable ground
+    // (a directed mint with no samplers can't host deep-country content).
+    if (s.interior && q.biomeDepth === undefined) continue;
+    if (s.climate) {
+      const c = q.climate;
+      if (!c) continue;
+      let inBand = true;
+      for (const [axis, [lo, hi]] of Object.entries(s.climate)) {
+        const v = c[axis];
+        if (v === undefined || v < lo || v > hi) { inBand = false; break; }
+      }
+      if (!inBand) continue;
+    }
     // ONE evaluation law: strata reads the ladder depth (surface = 0), level
     // reads the zone's level — both through the presence fabric's envelope.
     const w = s.chance
       * presenceMul(s.strata, q.caveDepth ?? 0)
-      * presenceMul(s.level, q.level);
+      * presenceMul(s.level, q.level)
+      * (s.interior ? presenceMul(s.interior, q.biomeDepth ?? 0) : 1);
     if (w < LAIR_CFG.minChance) continue;
     out.push({ landmark: row.landmark, chance: Math.min(1, w) });
   }

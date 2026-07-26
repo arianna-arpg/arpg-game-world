@@ -1298,6 +1298,23 @@ export function placeZoneAt(
   if (layoutType !== 'plains' && !hasLayout(layoutType)) {
     console.warn(`[worldgen] mint '${id}' names unregistered layout '${layoutType}' — generateLayout will fall back to 'plains'`);
   }
+  // GEO context — how deep inside its biome blob the zone sits (0 = edge, 1 =
+  // interior), from the EXISTING biome-depth sampler (sim.biomeField.sampleDepth,
+  // already threaded for the marine shallow-isles/deep-sea split), plus the
+  // CLIMATE axes at the coordinate (rounded for tidy serialization). Pure field
+  // reads, NO rng — directed mints without samplers simply carry no geo.
+  // Computed BEFORE the roll merges (a pure hoist, stream-invisible): the
+  // lair fold reads it, so deep-country natives can claim the heart of a
+  // biome and refuse its border (the roost law).
+  const climate = spec.climateFor?.(target, spec.dimension);
+  const geo = (spec.biomeDepthFor || climate)
+    ? {
+      ...(spec.biomeDepthFor ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) } : {}),
+      ...(climate ? {
+        climate: Object.fromEntries(Object.entries(climate).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+      } : {}),
+    }
+    : undefined;
   // STRUCTURE ROLLS: merge the tileset's chances with the biome's (both pure
   // data). Baked onto the def so revisits/co-op replay the same rolls, and so
   // the bastion layout resolves its candidate pool from the zone itself. Special
@@ -1320,6 +1337,7 @@ export function placeZoneAt(
     ...lairLandmarkRolls({
       place: 'surface', biome, level, tileset: tileset.id, port: spec.port,
       course: onCourse?.spec.id,
+      biomeDepth: geo?.biomeDepth, climate: geo?.climate,
     }),
   ];
   // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
@@ -1331,20 +1349,7 @@ export function placeZoneAt(
     // roll source (revisits/co-op replay them — the same discipline).
     ...(onCourse?.compositions ?? []),
   ];
-  // GEO context — how deep inside its biome blob the zone sits (0 = edge, 1 =
-  // interior), from the EXISTING biome-depth sampler (sim.biomeField.sampleDepth,
-  // already threaded for the marine shallow-isles/deep-sea split), plus the
-  // CLIMATE axes at the coordinate (rounded for tidy serialization). Pure field
-  // reads, NO rng — directed mints without samplers simply carry no geo.
-  const climate = spec.climateFor?.(target, spec.dimension);
-  const geo = (spec.biomeDepthFor || climate)
-    ? {
-      ...(spec.biomeDepthFor ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) } : {}),
-      ...(climate ? {
-        climate: Object.fromEntries(Object.entries(climate).map(([k, v]) => [k, Math.round(v * 100) / 100])),
-      } : {}),
-    }
-    : undefined;
+  // (GEO hoisted above the roll merges — the lair fold reads it there.)
   // Layout knobs, spec ▷ course ▷ variant ▷ tileset ▷ biome (most-specific
   // wins) — baked so revisits/co-op replay the same recipe tweaks. A course
   // slots UNDER the spec (a directed mint may still override the artery's
@@ -1727,6 +1732,9 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   const lairRolls = lairLandmarkRolls({
     place: 'cave', biome: anchor, caveDepth: depth, level, tileset: ts.id,
     noDeeper: opts?.noDeeper,
+    // The country's depth survives descent (parent geo chains rung to rung
+    // below): a cave under the deep mountains is still deep-mountain ground.
+    biomeDepth: parent.geo?.biomeDepth, climate: parent.geo?.climate,
   });
   const baseName = opts?.name ?? (breach ? `${rng.pick(ts.nameFirst)} Breach`
     : prefix ? `${prefix} ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
@@ -1788,6 +1796,9 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ...(anchor ? { anchor } : {}),
     ...(breach ? { breach: true } : {}),
     ...(parent.dimension ? { dimension: parent.dimension } : {}),
+    // GEO inherits down the ladder (the anchor's sibling): a depth-2 gallery
+    // under the deep mountains still knows how deep in the country it hangs.
+    ...(parent.geo ? { geo: parent.geo } : {}),
     // Any lair the fold seated on this rung (never on noDeeper pockets).
     ...(lairRolls.length ? { landmarks: lairRolls } : {}),
   };

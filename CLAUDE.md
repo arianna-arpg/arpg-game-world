@@ -353,7 +353,16 @@ changes.
   a lite-colony brood + the matron's strength hung beneficiary-side on
   her weaver court — the silk bond rope IS the kill order), and the
   WELLSPRING (the naiad ON the traced rivers via `LairSeat.courses`,
-  the fold's new course axis — rooted on `water`, drawn wilt off it) —
+  the fold's new course axis — rooted on `water`, drawn wilt off it).
+  WAVE THREE — THE LADDER: seat axes `interior` (envelope over
+  ZoneDef.geo.biomeDepth; geo hoisted above the roll merge + inherited
+  down the cave ladder) + `climate` ([min,max] bands over the climate
+  axes — elevation as a gate), so one biome reads as a PROGRESSION;
+  debut = the DRAKE ROOST (highland level 14+ × interior ≥0.55 ×
+  elevation ≥0.55: a crag mouth onto an OPEN-SKY shelf — explicit
+  def.sky beats the caveDepth derivation — where Old Scald keeps a
+  gem-cache hoard and a live ibex larder; the lair's law is the ANATOMY
+  GAMUT: wings = a real part whose break silences BOTH wing verbs) —
   docs in `docs/engine/lairs.md`; probe `balance/probe_lairs.ts`),
   `tells.ts` (THE TELL FABRIC — visible internal state as a readable
   information layer on enemy bodies: `MonsterDef.tells` rows bind a STATE

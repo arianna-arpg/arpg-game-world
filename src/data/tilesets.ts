@@ -11065,6 +11065,58 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
     objectives: [{ kind: 'clear', weight: 1 }],
   },
+
+  // THE DRAKE ROOST — the ladder's crown: a wind-scoured crag shelf under
+  // OPEN SKY (the mint stamps def.sky — weather reaches the perch), rimmed
+  // by the drop, floored with the hoard, grazed by the larder. Seats only
+  // deep in the high country (interior + elevation axes) at real levels:
+  // finding it is the mountain's own endgame.
+  drake_roost: {
+    id: 'drake_roost', frontier: false, perfProbe: true,
+    sky: 'open',
+    caveLayouts: { plains: 2, winding: 1 },
+    nameFirst: ['Scald', 'High', 'Windshear', 'Cinder', 'Old', 'Ember', 'Stormworn', 'Hoard'],
+    nameSecond: ['Roost', 'Perch', 'Shelf', 'Aerie', 'Crag', 'Watch', 'Seat', 'Crown'],
+    theme: {
+      ambientDark: 0.18,
+      ground: {
+        palette: ['#2a2622', '#34302a', '#3e3832', '#48423a', '#544c42'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#242019', grid: '#2c2820', border: '#6a5c48',
+      obstacle: '#4a4238', obstacleEdge: '#786a54', accent: '#ff9a3a',
+      wall: '#4a4238', mud: '#2c261e', water: '#2a4a5a',
+    },
+    sizeW: [1500, 2000], sizeH: [1150, 1550], ellipseChance: 0,
+    layout: [
+      { kind: 'rocks', count: [4, 7], radius: [18, 34] },
+      { kind: 'chasm', count: [1, 2] },
+      { kind: 'bone_pile', count: [3, 6] },
+      { kind: 'cinder', count: [2, 4] },
+      { kind: 'rubble', count: [1, 3] },
+    ],
+    variants: [
+      // The high perch: more sky than shelf — the drop owns three sides.
+      { name: 'the high perch', layout: [
+        { kind: 'chasm', count: [2, 3] },
+        { kind: 'rocks', count: [3, 5], radius: [20, 36] },
+        { kind: 'bone_pile', count: [2, 4] },
+      ] },
+      // The bone shelf: every meal he ever carried home, sorted by wind.
+      { name: 'the bone shelf', layout: [
+        { kind: 'bone_pile', count: [6, 10] },
+        { kind: 'cinder', count: [3, 5] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+      ] },
+    ],
+    packs: {
+      count: [1, 2], size: [1, 2],
+      table: [
+        { id: 'salt_ibex', weight: 3 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
 };
 
 // --- BIOME → TILESET resolver (the heat-map-authoritative mint) --------------
@@ -11314,6 +11366,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   bull_maze:      { title: 'The Maze',          blurb: 'The labyrinth under the karst: red stone turns, old blood, standing water in the low halls — and a landlord who reads the floor. He knows where you were. Be somewhere else.' },
   wyrm_barrow:    { title: 'The Wyrm Barrow',   blurb: 'Black glass and banked ash: a furnace asleep on everything it was ever paid. Rob it on tiptoe, or wake it and outlast the ember — both are the barrow working as intended.' },
   spinney_hollow: { title: 'The Spinney',       blurb: 'The silk-choked bole under the old forest: webs in every angle, the larder\'s swaddled leavings underfoot, and a matron whose court hangs on ropes you can read.' },
+  drake_roost:    { title: 'The Drake Roost',   blurb: 'A wind-scoured shelf at the high heart of the mountains: the hoard underfoot, the larder grazing the rim, the drop on three sides — and Old Scald, who owns the sky until you take the wings off him.' },
 };
 
 /** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no

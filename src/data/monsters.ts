@@ -18445,6 +18445,77 @@ export const MONSTERS: Record<string, MonsterDef> = {
       behavior: { castArc: 0.85, reaction: [0.25, 0.6] },
     },
   },
+
+  // ==========================================================================
+  // THE LADDER'S CROWN (the lair fabric, wave three): the deep-country rung.
+  // The seat grammar's interior + climate axes exist so a biome can read as
+  // a PROGRESSION — the mountains offer cairns at their border, the frostmaw
+  // under their slopes, and THIS at their high deep heart. A low-level zone
+  // structurally cannot host it (the level envelope), and neither can the
+  // country's edge (the interior envelope): finding a roost MEANS something.
+  // ==========================================================================
+
+  // OLD SCALD — the drake of the high roost. The lair's law is the ANATOMY
+  // GAMUT: the wings are a real part, and while they beat, the sky is his —
+  // the leap that clears your melee, the gust that throws your ranks. BREAK
+  // THE WINGS (breakDisables both wing verbs) and six hundred pounds of
+  // furnace has to WALK at you. The roost floor is his hoard, cache by
+  // cache; the ibex on the shelf are his larder, hunted through his own
+  // hunger like any honest predator.
+  roost_dragon: {
+    id: 'roost_dragon', name: 'Old Scald',
+    color: '#c0503a', shape: 'trapezoid', radius: 26, look: 'roost_dragon',
+    heft: 2.0, boss: true,
+    base: { life: 900, moveSpeed: 125, accuracy: 105, armor: 55, mana: 110, manaRegen: 8, poise: 130 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.2)],
+    skills: ['ember_breath', 'crushing_leap', 'gust_burst', 'cleave'],
+    xp: 420, loot: 'lair_hoard',
+    faction: 'wyrmkin',
+    // The carried lamp: a furnace with a heartbeat, visible across the shelf
+    // (reserved for kin that MEAN it — a dragon means it).
+    light: { radius: -6, color: '#ff9a3a', intensity: 0.4, flicker: 3 },
+    // A hunger-driven hunter wears the family lean (the HUNGER_LEAN census
+    // law): the ibex larder is hunted honestly, and honestly read.
+    tells: HUNGER_LEAN,
+    parts: [{
+      monster: 'drake_wingspan', dx: -0.35, dy: 0,
+      lifeFrac: 0.32, breakDamage: 0.1,
+      // Grounded: both wing verbs die with the wings, and the walk slows.
+      breakDisables: ['crushing_leap', 'gust_burst'],
+      breakMods: [mod('moveSpeed', 'increased', -0.25)],
+    }],
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+      drives: {
+        wrath: { rise: -0.05, onHurt: 0.07 },
+        hunger: { rise: 0.006, start: [0.2, 0.5], onKill: -0.9 },
+      },
+      rules: [
+        {
+          when: { drive: { id: 'wrath', above: 0.6 } },
+          announce: 'OLD SCALD ROARS — the roost shakes loose!',
+          use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.25 } },
+        },
+        {
+          when: { drive: { id: 'hunger', above: 0.7 } },
+          use: { target: { prey: ['critter'], detectMul: 1.2 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
+        },
+      ],
+    },
+  },
+  // The wingspan: a full monster def anchored to the drake's frame (parts
+  // ARE monster defs — the forge law). No kit of its own: it is leather,
+  // sinew, and the reason he owns the air. remains: false — a broken wing
+  // crumples into the body, never a second corpse.
+  drake_wingspan: {
+    id: 'drake_wingspan', name: 'Wingspan',
+    color: '#d8763a', shape: 'oval', radius: 15, look: 'drake_wingspan',
+    base: { life: 300, moveSpeed: 0, evasion: 0, mana: 0 },
+    skills: [],
+    xp: 0, faction: 'wyrmkin', // parts pay nothing — the ROOT pays the bounty
+    noNemesis: true, remains: false,
+  },
 };
 
 // ---------------------------------------------------------------------------

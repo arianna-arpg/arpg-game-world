@@ -2303,6 +2303,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#e8e4d0', intensity: 0.22, flicker: 1.2 },
   },
+  // The ladder's crown: a crag throat breathing furnace-light — the climb's
+  // own warning, visible from the valley floor.
+  roost_crag: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#4a4238', edge: '#786a54', material: 'stone',
+      glow: '#ff9a3a', throat: '#120c06', teeth: {}, rubble: {},
+      label: 'the Drake Roost',
+    },
+    light: { radius: -2, color: '#ff9a3a', intensity: 0.45, flicker: 4 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },
