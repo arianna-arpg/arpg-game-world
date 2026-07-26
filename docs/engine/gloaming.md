@@ -76,6 +76,34 @@ In a gloomed zone (engine half, `World.updateGloaming`):
   (`easeSec`; set instantly at loadZone — arriving in a gloomed zone is
   honest, the dark does not fade in politely).
 
+### THE BITING HOURS (`surge.bite` — 2026-07-25)
+
+The risen dark has TEETH only while a `RadianceCond` holds (the radiance
+fabric's one condition vocabulary — the authored row is `{ phases:
+['night'] }`; retune to a radiance band and black storms bite at noon, or
+drop the field for the old any-hour teeth). The FRONT's world-map life —
+territory, march, rim bulletins, the zone-info row — runs on its own clock
+regardless: the dark CLAIMS ground at any hour and the map says so, but the
+in-zone bite folds into the ONE eased target (`World.updateGloaming`), so
+drain, darkness, wash, veil, wells, witness and the vignette all sleep by
+day (a day under a standing front recovers the meter exactly like clear
+ground) and ease back in at nightfall over `easeSec` — dusk and dawn arrive
+as weather, never as a light switch. The zone-info row reads the schedule
+honestly: a covered zone out of hours says "dormant — night wakes it".
+
+### THE CLOSING EYE (renderer `drawDarknessHud` — 2026-07-25)
+
+A biting gloom wears the Descent's own encroaching-darkness vignette
+(`drawDarknessVignette` — extracted, ONE veil for every light-survival
+fabric): a radial dark whose clear eye shrinks as the LIGHT meter empties,
+at strength `gloom × (base + perMeterLost × (1 − lightFrac))`
+(`VIS_CFG.gloamVignette`) — present enough to announce the drain the moment
+it starts, closing toward the abyss's full dread as the lamp runs down. The
+seam is `World.gloamingView()` (null by day, under shelter, or during a
+descent — the abyss keeps its richer HUD and wins the frame), and it reads
+the SAME eased gloom the drain folds: drawn == tested. Dying to an
+unnoticed gloaming is no longer a thing the screen permits.
+
 ## Lightwells (engine/lightwells.ts — the shared light-source fabric)
 
 Data rows (`registerLightwell`) over doodad kinds; the Gloaming's spawned

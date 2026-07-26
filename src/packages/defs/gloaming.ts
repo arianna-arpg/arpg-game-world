@@ -5,11 +5,15 @@
 // Distinctness ledger (docs/engine/gloaming.md): Descent keeps the
 // underground; Long Night is the Court feeding under a night sky; Long Candle
 // is two courts warring over candle-light. THE GLOAMING IS THE DARK ITSELF
-// ARRIVING — no faction owns it, noon gloom is gloom, and it eats light:
-// yours (the LIGHT survival meter) and its own sources' (finite lightwells).
+// ARRIVING — no faction owns it, and it eats light: yours (the LIGHT survival
+// meter) and its own sources' (finite lightwells). Its TEETH keep the night
+// (surge.bite — the front claims ground at any hour, marks the map, and
+// waits; only the night's gloom drains): the day walks its territory safely,
+// the dusk announces, the dark bites after nightfall.
 // ---------------------------------------------------------------------------
 
 import { GloamingField, type GloamingSurge } from '../overlays/gloaming';
+import { validateRadianceCond } from '../../world/radiance';
 import type { ContentPackage, FactionSpec } from '../types';
 
 export const GLOAMING_SURGE: GloamingSurge = {
@@ -23,6 +27,14 @@ export const GLOAMING_SURGE: GloamingSurge = {
   rampHops: 2.5,                 // rim → full dark over ~2.5 hops of depth
   cooldownSec: [420, 660],
 
+  // THE BITING HOURS: the risen dark drains/darkens/veils only by NIGHT —
+  // a front that gathers at dusk is the WARNING (bulletins, the map's
+  // territory, the zone-info row all speak), and nightfall is the bill.
+  // Day under a standing front recovers the meter like clear ground. One
+  // condition row: retune to dusk-inclusive, a radiance band ({ radiance:
+  // { to: 0.3 } } — then black storms bite at noon), or drop the field for
+  // the old any-hour teeth.
+  bite: { phases: ['night'] },
   drainPerSec: 6,                // ~17s from full in deep gloom outside light
   recoverPerSec: 18,             // the eyes recover fast once the dark lifts
   easeSec: 2.2,
@@ -121,5 +133,6 @@ export const GLOAMING: ContentPackage = {
     ...GLOAMBORN_FACTION.roster.filter(e => !look.monster(e.id)).map(e => `gloamborn '${e.id}' unknown`),
     ...GLOAMING_SURGE.spawnBias.filter(r => !look.faction(r.faction)).map(r => `spawn-bias faction '${r.faction}' unknown`),
     ...(look.biome(GLOAMING_SURGE.originBiome) ? [] : [`origin biome '${GLOAMING_SURGE.originBiome}' unknown`]),
+    ...validateRadianceCond('gloaming.bite', GLOAMING_SURGE.bite),
   ],
 };

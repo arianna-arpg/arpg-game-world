@@ -13475,6 +13475,20 @@ export class World {
     return gf ? this.gloomCur * gf.surge().gloomDark : 0;
   }
 
+  /** THE GLOAMING'S OWN READOUT (renderer): the descent's encroaching-dark
+   *  vignette worn by the surface dark — non-null while the risen gloom
+   *  BITES this ground (eased gloom past the drain threshold; the abyss
+   *  keeps its richer HUD and wins the frame). lightFrac is the local
+   *  hero's meter, so the screen closes in exactly as the lamp empties:
+   *  the danger that once read only as a small bar is now the whole frame
+   *  (drawn == tested — the same gloomCur the drain folds). */
+  gloamingView(): { gloom: number; lightFrac: number } | null {
+    if (this.descentRun || this.gloomCur <= 0.02) return null;
+    const max = survivalResource('light')?.max ?? 100;
+    const light = this.player.survival?.get('light') ?? max;
+    return { gloom: this.gloomCur, lightFrac: clamp(light / max, 0, 1) };
+  }
+
   /** Is this point inside ANY light's tested reach? (lightReach — the same
    *  resolver the drawn glow uses: drawn == tested.) BURST rows never count:
    *  a flare is a pickup, not shelter (descent canon — the spots glow and
@@ -13544,7 +13558,16 @@ export class World {
     const gf = this.sim.gloamingField;
     if (!gf) { this.gloomCur = 0; return; }
     const cfg = gf.surge();
-    const target = skyOf(this.zone) === 'sheltered' ? 0 : gf.gloomOn(this.zone.id);
+    // THE BITING HOURS (surge.bite — the radiance fabric's one condition
+    // vocabulary): the risen dark has TEETH only while the condition holds.
+    // The front's world-map life (territory, march, rim news) runs on its
+    // own clock regardless, but the in-zone bite eases to ZERO outside its
+    // hours — and everything downstream (drain, darkness, wash, veil,
+    // wells, witness, the vignette) rides the ONE eased gloomCur, so dusk
+    // and dawn arrive over easeSec like the weather they are. A day under
+    // a standing front recovers the meter exactly like clear ground.
+    const biting = this.radianceCondHeld(cfg.bite);
+    const target = !biting || skyOf(this.zone) === 'sheltered' ? 0 : gf.gloomOn(this.zone.id);
     // Ease toward the front's target — EXCEPT across a zone change: arriving
     // in a gloomed zone is honest (the dark does not fade in politely).
     if (this.gloomZone !== this.zone.id) {

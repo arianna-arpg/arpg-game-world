@@ -401,6 +401,14 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
     raw.gloomOn = () => 1;          // the front stands over the arena
     raw.phaseNow = () => 'holding';
 
+    // THE BITING HOURS (surge.bite): the in-zone teeth keep the night now —
+    // walk the clock INTO the biting hour first (forward-only scans, the
+    // conditioned-door law: never rewind w.time), so the drain rigs below
+    // meet a live bite. The scan reads the engine's own predicate.
+    let hourGuard = 0;
+    while (!w.radianceCondHeld(gf.surge().bite) && hourGuard++ < 4000) w.time += 30;
+    check('the biting hour is reachable (forward clock scan)', w.radianceCondHeld(gf.surge().bite));
+
     // Outside any light: the meter drains at the surge rate.
     step(w, 0.1, 1); // zone-change branch snaps gloomCur to 1
     check('gloom is honest on arrival (no polite fade-in)', w.gloom() === 1);
@@ -445,6 +453,48 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
         gf.markPairTold('longcandle') === false);
     }
 
+    // --- THE BITING HOURS LAW (surge.bite): day disarms, night re-arms ----
+    // The front STANDS (gloomOn still 1) while the clock walks out of the
+    // biting hour: the eased gloom falls to zero — no drain, no veil, no
+    // vignette view — and the meter RECOVERS under the standing front
+    // exactly like clear ground. Nightfall eases the teeth back in.
+    {
+      let g2 = 0;
+      while (w.radianceCondHeld(gf.surge().bite) && g2++ < 4000) w.time += 30;
+      check('BITE: the clock walks out of the biting hour', !w.radianceCondHeld(gf.surge().bite));
+      step(w, 0.25, 60); // the ease is the dawn — the teeth withdraw over easeSec
+      check('BITE: by day a STANDING front bites nothing (eased to zero)', w.gloom() === 0);
+      check('BITE: no vignette view by day', w.gloamingView() === null);
+      hero.survival ??= new Map();
+      hero.survival.set('light', 40);
+      step(w, 0.1, 20); // 2s of day under the standing front (recover 18/s
+      // + the still-burning gloomwell's residence feed — direction is the law)
+      const dayLit = hero.survival.get('light');
+      check('BITE: day under the front RECOVERS the meter (clear-ground law)',
+        dayLit !== undefined && dayLit > 70 && dayLit < 100, `${dayLit?.toFixed(1)}`);
+      // Night returns: the teeth ease back through the SAME seam.
+      let g3 = 0;
+      while (!w.radianceCondHeld(gf.surge().bite) && g3++ < 4000) w.time += 30;
+      step(w, 0.25, 60);
+      check('BITE: nightfall re-arms the bite (eased back to full)', w.gloom() === 1);
+      const gv = w.gloamingView();
+      check('BITE: the vignette view stands at night (gloom + meter frac)',
+        !!gv && gv.gloom === 1 && gv.lightFrac > 0 && gv.lightFrac <= 1);
+      // Step OUT of the burning well's reach: the resumed drain must be real.
+      const homePos = vec(hero.pos.x, hero.pos.y);
+      hero.pos = vec(hero.pos.x + 900, hero.pos.y);
+      const nightBefore = hero.survival.get('light') ?? 100;
+      step(w, 0.1, 10);
+      check('BITE: the night drain is live again',
+        (hero.survival.get('light') ?? 100) < nightBefore);
+      // The abyss keeps its own richer HUD — a live descent silences the
+      // surface veil (one frame, one dark).
+      (w as unknown as { descentRun: object | null }).descentRun = {};
+      check('BITE: a descent run wins the frame (gloamingView null)', w.gloamingView() === null);
+      (w as unknown as { descentRun: object | null }).descentRun = null;
+      hero.pos = homePos;
+    }
+
     // Outlasting a witnessed front stamps the survival ledger ONCE.
     raw.phaseNow = () => 'idle';
     raw.gloomOn = () => 0;
@@ -454,7 +504,9 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
     check('…exactly once', (w.ledger.gloaming_survived ?? 0) === 1);
 
     // Clear ground: the meter recovers and the HUD row retires at full.
-    for (let i = 0; i < 40 && hero.survival?.has('light'); i++) step(w, 0.25);
+    // (80 × 0.25s — the ease from full gloom eats the first ~9s of the
+    // budget before the ≤0.01 recovery branch can run at all.)
+    for (let i = 0; i < 80 && hero.survival?.has('light'); i++) step(w, 0.25);
     check('clear ground refills then retires the meter', !hero.survival?.has('light'));
   }
 }

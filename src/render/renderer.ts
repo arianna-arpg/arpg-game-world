@@ -704,7 +704,7 @@ export class Renderer {
       this.drawSceneHud(world);     // scene fabric: drill/assault bar + prompt (screen-space)
     }));
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
-    this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/haul + shaft pip
+    this.drawDarknessHud(world);  // the dark's screen veil: abyss depth/haul/shaft, or the gloaming's closing eye
     this.onCrest(crest, () => this.uiPass(us, () => {
       this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
     }));
@@ -825,27 +825,48 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** THE DESCENT readout (screen-space): the encroaching-darkness vignette around the
-   *  player (clear radius shrinks as Light depletes), the Depth + banked-haul line
-   *  (THE DEEP LEDGER's packets by tint glyph), and a chevron pointing back to the
-   *  climb-out shaft when it's off-screen in the dark. */
-  private drawDescentHud(world: World): void {
-    const dv = world.descentView();
-    if (!dv) return;
+  /** THE ENCROACHING DARK (screen-space): the radial veil whose clear eye
+   *  shrinks as the LIGHT meter empties — ONE vignette every light-survival
+   *  fabric wears (drawn == tested: the meter that drains is the eye that
+   *  closes). `strength` scales the whole veil: the abyss is always 1; the
+   *  gloaming folds its eased gloom × the meter (VIS_CFG.gloamVignette), so
+   *  the rim hints and a draining deep closes in like the descent itself. */
+  private drawDarknessVignette(world: World, lightFrac: number, strength: number): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
     const px = (world.player.pos.x - this.cam.x) * this.zoom;
     const py = (world.player.pos.y - this.cam.y) * this.zoom;
     const maxR = Math.hypot(w, h) * 0.62;
-    const clear = Math.max(60, (0.14 + 0.5 * dv.lightFrac) * Math.min(w, h));
+    const clear = Math.max(60, (0.14 + 0.5 * lightFrac) * Math.min(w, h));
     const g = ctx.createRadialGradient(px, py, clear * 0.5, px, py, maxR);
     g.addColorStop(0, 'rgba(2,2,6,0)');
-    g.addColorStop(0.55, `rgba(2,2,6,${(0.5 + 0.42 * (1 - dv.lightFrac)).toFixed(3)})`);
-    g.addColorStop(1, 'rgba(2,2,6,1)');
+    g.addColorStop(0.55, `rgba(2,2,6,${((0.5 + 0.42 * (1 - lightFrac)) * strength).toFixed(3)})`);
+    g.addColorStop(1, `rgba(2,2,6,${Math.min(1, strength).toFixed(3)})`);
     ctx.save();
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
     ctx.restore();
+  }
+
+  /** THE DARKNESS HUD: the abyss's full readout (vignette + Depth/haul line +
+   *  shaft chevron) when a descent runs — else THE SURFACE DARK's turn: a
+   *  BITING gloaming wears the same encroaching vignette scaled by its eased
+   *  gloom and the emptying meter, so an active drain can never again go
+   *  unnoticed until the death text. */
+  private drawDarknessHud(world: World): void {
+    const dv = world.descentView();
+    if (!dv) {
+      const gv = world.gloamingView();
+      if (gv) {
+        const gc = VIS_CFG.gloamVignette;
+        this.drawDarknessVignette(world, gv.lightFrac,
+          gv.gloom * (gc.base + gc.perMeterLost * (1 - gv.lightFrac)));
+      }
+      return;
+    }
+    const { ctx, canvas } = this;
+    const w = canvas.width, h = canvas.height;
+    this.drawDarknessVignette(world, dv.lightFrac, 1);
     ctx.save();
     ctx.textAlign = 'center';
     ctx.font = 'bold 16px Verdana';

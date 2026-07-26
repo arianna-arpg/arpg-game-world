@@ -30,6 +30,7 @@ import { skyOf, type ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { biomeAt } from '../../world/biomes';
 import { inPhases, type DayPhase } from '../../world/daynight';
+import type { RadianceCond } from '../../world/radiance';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { registerBulletinSource, type WorldBulletin } from '../../world/bulletins';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
@@ -65,6 +66,16 @@ export interface GloamingSurge {
   cooldownSec: [number, number];
 
   // --- the engine half's levers (World.updateGloaming / the render dark) ---
+  /** THE BITING HOURS: the risen dark has TEETH only while this holds (the
+   *  radiance fabric's one condition vocabulary — phases / radiance band /
+   *  weather kinds, AND-composed). The front's world-map life (territory,
+   *  march, rim news) runs on its own clock regardless — the dark CLAIMS
+   *  ground at any hour — but the in-zone bite (drain, darkness, veil,
+   *  wells, witness) eases to ZERO outside the condition, and eases back in
+   *  when the hour comes: dusk and dawn arrive over easeSec like the
+   *  weather they are, never as a light switch. Omitted = bites at any
+   *  hour (the pre-2026-07-25 behavior). */
+  bite?: RadianceCond;
   /** LIGHT meter loss/sec at FULL gloom, outside any light's reach. */
   drainPerSec: number;
   /** Meter regain/sec once the zone is clear (and delete-at-full). */
@@ -417,9 +428,15 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const g = gf?.gloomOn(zoneId) ?? 0;
   if (!gf || g <= 0.03) return [];
   const word = g >= 0.85 ? 'deep dark' : g >= 0.4 ? 'the dark risen' : 'the rim of the dark';
+  // THE BITING HOURS read: outside surge.bite the covered ground is claimed
+  // but DORMANT — the row says so (a readable schedule, never a mystery),
+  // and warns what nightfall brings.
+  const biting = world.radianceCondHeld(gf.surge().bite);
   return [{
     kind: 'condition', icon: '🌑', color: gf.surge().color,
-    label: 'The Gloaming', detail: `${word} — carry light or stand near it`, z: 6,
+    label: 'The Gloaming',
+    detail: biting ? `${word} — carry light or stand near it`
+      : `${word}, dormant — night wakes it: carry light`, z: 6,
   }];
 });
 

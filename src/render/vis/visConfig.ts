@@ -10,6 +10,14 @@ export const VIS_CFG = {
    *  bands and long doodad shadows all agree on this one sun. */
   lightAngle: -2.35, // up-left
 
+  /** THE SURFACE DARK's screen veil (renderer drawDarknessHud): a biting
+   *  gloaming wears the descent's encroaching vignette at strength =
+   *  gloom × (base + perMeterLost × (1 − lightFrac)) — present enough to
+   *  announce itself while the lamp is full, closing to the abyss's own
+   *  dread as the meter empties. The METER is the message: the gloom's
+   *  ambience already darkens the world; this veil tracks the bill. */
+  gloamVignette: { base: 0.35, perMeterLost: 0.65 },
+
   /** Baked-sprite cache (bodies, glows, shadows, crowns, whole-doodads). */
   sprite: {
     /** Crowns/whole-doodad bakes share this LRU with actor bodies — a deep
