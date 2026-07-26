@@ -76,20 +76,33 @@ In a gloomed zone (engine half, `World.updateGloaming`):
   (`easeSec`; set instantly at loadZone — arriving in a gloomed zone is
   honest, the dark does not fade in politely).
 
-### THE BITING HOURS (`surge.bite` — 2026-07-25)
+### THE BITING HOURS (`surge.bite`) + THE DAYLOCK (2026-07-25/26)
 
 The risen dark has TEETH only while a `RadianceCond` holds (the radiance
-fabric's one condition vocabulary — the authored row is `{ phases:
-['night'] }`; retune to a radiance band and black storms bite at noon, or
+fabric's one condition vocabulary — the authored row is `{ phases: ['dusk',
+'night'] }`; retune to a radiance band and black storms bite at noon, or
 drop the field for the old any-hour teeth). The FRONT's world-map life —
 territory, march, rim bulletins, the zone-info row — runs on its own clock
 regardless: the dark CLAIMS ground at any hour and the map says so, but the
 in-zone bite folds into the ONE eased target (`World.updateGloaming`), so
 drain, darkness, wash, veil, wells, witness and the vignette all sleep by
-day (a day under a standing front recovers the meter exactly like clear
-ground) and ease back in at nightfall over `easeSec` — dusk and dawn arrive
-as weather, never as a light switch. The zone-info row reads the schedule
-honestly: a covered zone out of hours says "dormant — night wakes it".
+day and ease back in at dusk over `easeSec` — the hours arrive as weather,
+never as a light switch.
+
+**THE DAYLOCK** (`World.lightMeterHeld` — ONE predicate: the engine freeze,
+the well refusals and the HUD all read it): daylight under a STANDING front
+does not absolve the dark's bill — it suspends it. While the front covers
+this open-sky ground out of its biting hours, the lamp is HELD: frozen
+exactly where daybreak found it (no drain, no recovery), lightwell feeds
+and burst flares pass it by (daylight camping can never quietly refill the
+debt), the HUD hides the bar (`World.survivalRowVisible` — inert AND
+invisible, the value parked, never deleted), and the panic clock clears so
+a re-engaged empty lamp panics afresh. Dusk re-engages the meter exactly
+where it stood — you resume the vie for light mid-debt. Only ground the
+front does NOT cover (or shelter, or the front's true recession) recovers:
+clear ground absolves, held ground merely waits. The zone-info row reads
+the schedule honestly: a covered zone out of hours says "held by daylight —
+dusk rewakes it, and the lamp remembers".
 
 ### THE CLOSING EYE (renderer `drawDarknessHud` — 2026-07-25)
 

@@ -33,6 +33,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { inPhases } from '../src/world/daynight';
 import { vec } from '../src/core/math';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
@@ -394,6 +395,10 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   const hero = w.player;
   hero.sheet.setSource('probe', [{ stat: 'life', kind: 'flat', value: 99999 }]);
   hero.life = hero.maxLife();
+  // %-max underflow is BUFF-PROOF (a bigger pool dies no slower) — the QA
+  // hero must be invulnerable or a zeroed meter kills him mid-rig and the
+  // death overlay freezes every downstream section. Meters still drain.
+  hero.invulnerable = true;
   const gf = w.sim.gloamingField;
   check('quiet manifest still constructs the field (gates carry the off)', !!gf);
   if (gf) {
@@ -453,11 +458,12 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
         gf.markPairTold('longcandle') === false);
     }
 
-    // --- THE BITING HOURS LAW (surge.bite): day disarms, night re-arms ----
-    // The front STANDS (gloomOn still 1) while the clock walks out of the
-    // biting hour: the eased gloom falls to zero — no drain, no veil, no
-    // vignette view — and the meter RECOVERS under the standing front
-    // exactly like clear ground. Nightfall eases the teeth back in.
+    // --- THE BITING HOURS + THE DAYLOCK (surge.bite): day HOLDS, dusk ----
+    // re-engages. The front STANDS (gloomOn still 1) while the clock walks
+    // out of the biting hour: the eased gloom falls to zero — no drain, no
+    // veil, no vignette — and the lamp FREEZES where daybreak found it
+    // (hidden, fed by nothing); only ground the front does NOT cover
+    // recovers. Dusk eases the teeth back in against the SAME debt.
     {
       let g2 = 0;
       while (w.radianceCondHeld(gf.surge().bite) && g2++ < 4000) w.time += 30;
@@ -465,28 +471,54 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
       step(w, 0.25, 60); // the ease is the dawn — the teeth withdraw over easeSec
       check('BITE: by day a STANDING front bites nothing (eased to zero)', w.gloom() === 0);
       check('BITE: no vignette view by day', w.gloamingView() === null);
+      check('DAYLOCK: the held predicate stands (front up, hour out) and hides the bar',
+        w.lightMeterHeld() === true && w.survivalRowVisible('light') === false
+        && w.survivalRowVisible('breath') === true);
+      // The freeze: 10 day-seconds INSIDE the burning gloomwell's reach —
+      // recovery silent, the well's feed refused, the panic clock cleared.
       hero.survival ??= new Map();
       hero.survival.set('light', 40);
-      step(w, 0.1, 20); // 2s of day under the standing front (recover 18/s
-      // + the still-burning gloomwell's residence feed — direction is the law)
-      const dayLit = hero.survival.get('light');
-      check('BITE: day under the front RECOVERS the meter (clear-ground law)',
-        dayLit !== undefined && dayLit > 70 && dayLit < 100, `${dayLit?.toFixed(1)}`);
-      // Night returns: the teeth ease back through the SAME seam.
-      let g3 = 0;
-      while (!w.radianceCondHeld(gf.surge().bite) && g3++ < 4000) w.time += 30;
-      step(w, 0.25, 60);
-      check('BITE: nightfall re-arms the bite (eased back to full)', w.gloom() === 1);
-      const gv = w.gloamingView();
-      check('BITE: the vignette view stands at night (gloom + meter frac)',
-        !!gv && gv.gloom === 1 && gv.lightFrac > 0 && gv.lightFrac <= 1);
-      // Step OUT of the burning well's reach: the resumed drain must be real.
+      hero.underflowSince = { light: w.time - 5 };
+      step(w, 0.25, 40);
+      const heldLit = hero.survival.get('light');
+      check('DAYLOCK: the lamp FREEZES exactly (no recovery, no well feed — 40 stays 40)',
+        heldLit !== undefined && Math.abs(heldLit - 40) < 1e-9, `${heldLit}`);
+      check('DAYLOCK: the panic clock clears while held', hero.underflowSince?.light === undefined);
+      // Contrast: ground the front does NOT cover still absolves.
+      raw.gloomOn = () => 0;
+      step(w, 0.1, 10);
+      const clearLit = hero.survival.get('light');
+      check('DAYLOCK: clear ground (front gone) recovers as ever',
+        clearLit !== undefined && clearLit > 41, `${clearLit?.toFixed(1)}`);
+      raw.gloomOn = () => 1;
+      hero.survival.set('light', 40);
+      // Step OUT of the burning well's reach BEFORE the hour turns: the
+      // re-engaged drain must be real, and the debt must resume from 40.
       const homePos = vec(hero.pos.x, hero.pos.y);
       hero.pos = vec(hero.pos.x + 900, hero.pos.y);
-      const nightBefore = hero.survival.get('light') ?? 100;
+      // DUSK joins the biting hours: the data says so, and the clock agrees.
+      check('DUSK: the bite includes dusk (data)',
+        (gf.surge().bite?.phases ?? []).includes('dusk'));
+      let g3 = 0;
+      while (!inPhases(w.time, ['dusk']) && g3++ < 8000) w.time += 15;
+      check('DUSK: the condition holds at dusk',
+        inPhases(w.time, ['dusk']) && w.radianceCondHeld(gf.surge().bite) === true);
+      step(w, 0.1, 10); // one second of dusk — the teeth ease back in
+      const resumed = hero.survival.get('light');
+      check('DAYLOCK: dusk re-engages EXACTLY the held debt (resumes from 40 — never refilled, never zeroed)',
+        resumed !== undefined && resumed > 30 && resumed <= 40, `${resumed?.toFixed(1)}`);
+      check('DAYLOCK: the held predicate lifts with the hour', w.lightMeterHeld() === false);
+      step(w, 0.25, 60);
+      check('BITE: the bite eases to full through dusk', w.gloom() === 1);
+      hero.survival.set('light', 60); // pin the meter for a crisp frac read
+      const gv = w.gloamingView();
+      check('BITE: the vignette view stands in the biting hour (gloom + meter frac)',
+        !!gv && gv.gloom === 1 && !!gv.lightFrac && Math.abs(gv.lightFrac - 0.6) < 0.02,
+        gv ? `frac ${gv.lightFrac.toFixed(2)}` : 'null');
+      const duskBefore = hero.survival.get('light') ?? 100;
       step(w, 0.1, 10);
-      check('BITE: the night drain is live again',
-        (hero.survival.get('light') ?? 100) < nightBefore);
+      check('BITE: the drain is live again in the biting hour',
+        (hero.survival.get('light') ?? 100) < duskBefore);
       // The abyss keeps its own richer HUD — a live descent silences the
       // surface veil (one frame, one dark).
       (w as unknown as { descentRun: object | null }).descentRun = {};

@@ -13379,6 +13379,11 @@ export class World {
     if (!wells.length) return;
     const lightDef = survivalResource('light');
     const lightMax = lightDef?.max ?? 100;
+    // THE DAYLOCK: a held lamp is inert — well feeds refill nothing and
+    // burst flares neither feed nor spend (the pickup waits for the biting
+    // hour), so daylight camping can never quietly pay the dark's bill.
+    // Hoisted once: the predicate is zone-scoped, not per-resident.
+    const held = this.lightMeterHeld();
     for (let i = wells.length - 1; i >= 0; i--) {
       const d = wells[i];
       const def = lightwellOf(d.kind);
@@ -13388,6 +13393,7 @@ export class World {
       // wasted in peacetime — and a full meter still consumes it (sloppy
       // routing pays). Never the residence lane, never light cover.
       if (def.burst) {
+        if (held) continue; // the flare waits for the biting hour
         for (const s of this.seats) {
           const a = s.actor;
           if (!a || a.dead || a.downed) continue;
@@ -13418,8 +13424,9 @@ export class World {
         residents++;
         // FEED — only a meter that exists and wants: an absent map is
         // semantically full (the survival fabric's lazy-create contract).
+        // A HELD lamp (the daylock) wants nothing.
         const cur = a.survival?.get('light');
-        if (cur !== undefined && cur < lightMax) {
+        if (cur !== undefined && cur < lightMax && !held) {
           a.survival!.set('light', Math.min(lightMax, cur + (def.feed ?? 0) * dt));
         }
       }
@@ -13487,6 +13494,31 @@ export class World {
     const max = survivalResource('light')?.max ?? 100;
     const light = this.player.survival?.get('light') ?? max;
     return { gloom: this.gloomCur, lightFrac: clamp(light / max, 0, 1) };
+  }
+
+  /** THE DAYLOCK (docs/engine/gloaming.md): is the LIGHT meter HELD here —
+   *  a gloaming front STANDING over this open-sky ground while the biting
+   *  hour (surge.bite) does not hold? Held = frozen exactly where daybreak
+   *  found it: updateGloaming neither drains nor recovers it, lightwell
+   *  feeds and burst flares pass it by, and the HUD hides its bar — inert
+   *  and invisible, the value parked, so the biting hour re-engages the
+   *  same debt. Daylight suspends the dark's bill; it never pays it. The
+   *  abyss never holds (its own clock rules there), and ground the front
+   *  does not cover recovers as ever. ONE predicate: the engine freeze,
+   *  the well refusals and the HUD all read it. */
+  lightMeterHeld(): boolean {
+    if (this.descentRun) return false;
+    const gf = this.sim.gloamingField;
+    if (!gf || skyOf(this.zone) === 'sheltered') return false;
+    return gf.gloomOn(this.zone.id) > 0.001 && !this.radianceCondHeld(gf.surge().bite);
+  }
+
+  /** Should the HUD draw this survival row? A HELD light meter hides
+   *  (inert and invisible — never deleted, so the wire and the dusk
+   *  re-engage keep the exact debt); every other row shows by the
+   *  ordinary below-max rule. */
+  survivalRowVisible(resource: string): boolean {
+    return resource !== 'light' || !this.lightMeterHeld();
   }
 
   /** Is this point inside ANY light's tested reach? (lightReach — the same
@@ -13564,10 +13596,12 @@ export class World {
     // own clock regardless, but the in-zone bite eases to ZERO outside its
     // hours — and everything downstream (drain, darkness, wash, veil,
     // wells, witness, the vignette) rides the ONE eased gloomCur, so dusk
-    // and dawn arrive over easeSec like the weather they are. A day under
-    // a standing front recovers the meter exactly like clear ground.
+    // and dawn arrive over easeSec like the weather they are. Out of hours
+    // the covered ground falls under THE DAYLOCK (below): the lamp holds,
+    // it is never absolved.
     const biting = this.radianceCondHeld(cfg.bite);
-    const target = !biting || skyOf(this.zone) === 'sheltered' ? 0 : gf.gloomOn(this.zone.id);
+    const covered = skyOf(this.zone) !== 'sheltered' && gf.gloomOn(this.zone.id) > 0.001;
+    const target = covered && biting ? gf.gloomOn(this.zone.id) : 0;
     // Ease toward the front's target — EXCEPT across a zone change: arriving
     // in a gloomed zone is honest (the dark does not fade in politely).
     if (this.gloomZone !== this.zone.id) {
@@ -13599,6 +13633,20 @@ export class World {
       if (this.descentRun) return;
       if (this.gloomCur <= 0.01) {
         this.gloomCur = 0;
+        // THE DAYLOCK: while the front still STANDS over this ground out of
+        // its biting hours, the lamp is HELD — frozen exactly where daybreak
+        // found it. No drain (upstream), no recovery (here), no well feeds
+        // or flares (updateLightwells), no bar (drawSurvival), and the panic
+        // clock clears so a re-engaged empty lamp panics afresh, never off a
+        // stale night. Daylight suspends the dark's bill; it never pays it.
+        // Only ground the front does NOT cover recovers below — clear ground
+        // absolves, held ground merely waits for dusk.
+        if (covered) {
+          for (const s of this.seats) {
+            if (s.actor?.underflowSince) delete s.actor.underflowSince.light;
+          }
+          return;
+        }
         for (const s of this.seats) {
           const a = s.actor;
           const cur = a?.survival?.get('light');

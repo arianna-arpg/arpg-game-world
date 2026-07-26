@@ -73,8 +73,13 @@ export interface GloamingSurge {
    *  ground at any hour — but the in-zone bite (drain, darkness, veil,
    *  wells, witness) eases to ZERO outside the condition, and eases back in
    *  when the hour comes: dusk and dawn arrive over easeSec like the
-   *  weather they are, never as a light switch. Omitted = bites at any
-   *  hour (the pre-2026-07-25 behavior). */
+   *  weather they are, never as a light switch. Out of hours, ground the
+   *  front still COVERS falls under THE DAYLOCK (World.lightMeterHeld):
+   *  the lamp FREEZES where daybreak found it — bar hidden, drain silent,
+   *  wells and flares feeding nothing — and the biting hour re-engages it
+   *  exactly there. Daylight suspends the dark's bill, it never pays it;
+   *  only ground the front does not cover recovers. Omitted = bites at
+   *  any hour (the pre-2026-07-25 behavior). */
   bite?: RadianceCond;
   /** LIGHT meter loss/sec at FULL gloom, outside any light's reach. */
   drainPerSec: number;
@@ -429,14 +434,14 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!gf || g <= 0.03) return [];
   const word = g >= 0.85 ? 'deep dark' : g >= 0.4 ? 'the dark risen' : 'the rim of the dark';
   // THE BITING HOURS read: outside surge.bite the covered ground is claimed
-  // but DORMANT — the row says so (a readable schedule, never a mystery),
-  // and warns what nightfall brings.
+  // but HELD — the row says so (a readable schedule, never a mystery), and
+  // warns that the lamp's debt merely waits for dusk (THE DAYLOCK).
   const biting = world.radianceCondHeld(gf.surge().bite);
   return [{
     kind: 'condition', icon: '🌑', color: gf.surge().color,
     label: 'The Gloaming',
     detail: biting ? `${word} — carry light or stand near it`
-      : `${word}, dormant — night wakes it: carry light`, z: 6,
+      : `${word}, held by daylight — dusk rewakes it, and the lamp remembers`, z: 6,
   }];
 });
 

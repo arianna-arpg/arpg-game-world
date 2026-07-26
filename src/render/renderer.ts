@@ -5958,8 +5958,9 @@ export class Renderer {
       p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
 
     // Environmental-survival meters (breath underwater; future heat/cold) — tucked
-    // under the mana orb, shown only while a resource is below max (i.e. active).
-    this.drawSurvival(p, manaX, orbY, orbR);
+    // under the mana orb, shown only while a resource is below max (i.e. active)
+    // AND not HELD (the gloaming's daylock parks the light bar out of sight).
+    this.drawSurvival(world, p, manaX, orbY, orbR);
 
     // Skill bar
     ctx.textAlign = 'center';
@@ -6642,8 +6643,11 @@ export class Renderer {
 
   /** Environmental-survival meters under an orb — one slim bar per resource the
    *  player has BELOW max (hidden when full / never-touched). Registry-driven, so a
-   *  future heat/cold resource renders automatically from its SURVIVAL_RESOURCES row. */
-  private drawSurvival(p: Actor, cx: number, orbY: number, orbR: number): void {
+   *  future heat/cold resource renders automatically from its SURVIVAL_RESOURCES row.
+   *  World.survivalRowVisible gates each row: a HELD lamp (the gloaming's daylock)
+   *  is inert AND invisible — the value parks, the bar retires until the biting
+   *  hour re-engages the same debt. */
+  private drawSurvival(world: World, p: Actor, cx: number, orbY: number, orbR: number): void {
     if (!p.survival) return;
     const { ctx } = this;
     // Stack the bars ABOVE the orb (the orbs hug the bottom edge, so a below-orb
@@ -6654,6 +6658,7 @@ export class Renderer {
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = p.survival.get(def.id);
       if (cur === undefined || cur >= def.max) continue; // full / inactive → hidden
+      if (!world.survivalRowVisible(def.id)) continue;   // held → parked out of sight
       const frac = clamp(cur / def.max, 0, 1);
       const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - base - dy;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, bw, bh);

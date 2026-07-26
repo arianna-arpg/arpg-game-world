@@ -166,12 +166,17 @@ changes.
   front seeded by Gloamwood's biome, breathing as one BFS-hop float, met
   in-zone by the LIGHT meter, spawned wells, `gloomveiled` stealth and
   the gloamborn; THE BITING HOURS (`surge.bite`, a RadianceCond — authored
-  `phases:['night']`) sleep the whole in-zone bite outside its hour through
-  the ONE eased-gloom seam (day under a standing front recovers like clear
-  ground; the front's map life runs regardless), and a biting gloom wears
-  the Descent's encroaching-dark vignette (`World.gloamingView` → renderer
-  `drawDarknessHud`/`drawDarknessVignette`, `VIS_CFG.gloamVignette` — the
-  closing eye tracks the emptying meter) — docs in
+  `phases:['dusk','night']`) sleep the whole in-zone bite outside its hour
+  through the ONE eased-gloom seam (the front's map life runs regardless)
+  under THE DAYLOCK (`World.lightMeterHeld`, one predicate for the engine
+  freeze + well/flare refusals + the HUD hide): daylight under a standing
+  front FREEZES the lamp where daybreak found it — inert, invisible, fed
+  by nothing — and dusk re-engages the same debt (only uncovered ground
+  recovers; the day suspends the dark's bill, never pays it); a biting
+  gloom wears the Descent's encroaching-dark vignette
+  (`World.gloamingView` → renderer `drawDarknessHud`/
+  `drawDarknessVignette`, `VIS_CFG.gloamVignette` — the closing eye tracks
+  the emptying meter) — docs in
   `docs/engine/gloaming.md`; probe `balance/probe_gloaming.ts`),
   `tracks.ts` (THE TRACK FABRIC: moving hazards on authored ways as pure
   data — TrackSpec lanes (waypoints, loop/pingpong, speed, pauses, per-rider
