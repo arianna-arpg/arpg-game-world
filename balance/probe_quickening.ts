@@ -90,6 +90,9 @@ const HOT: QuickeningSurge = {
   ...QUICKENING_SURGE,
   igniteChance: 1, firstDelaySec: 0, minCharted: 1,
   cooldown: [30, 30], holdSec: [10, 10],
+  // The rigs test the cap LAW at 1 (B3/B4 read a lone window's whole life);
+  // the shipped default is rolling coverage — E12 pins that separately.
+  maxConcurrent: 1,
   outlevelWeighPer: 2, outlevelWeighCap: 100,
   seat: { range: { min: 60, max: 500 }, prefer: 'flat' },
 };
@@ -248,6 +251,12 @@ const mkField = (surge: QuickeningSurge, seed = 0x5eed): QuickeningField =>
     QUICKENING_SURGE.holdSec[0] >= 900 && QUICKENING_SURGE.holdSec[1] > QUICKENING_SURGE.holdSec[0]
     && QUICKENING_SURGE.cooldown[0] <= QUICKENING_SURGE.cooldown[1],
     `hold ${QUICKENING_SURGE.holdSec[0]}–${QUICKENING_SURGE.holdSec[1]}s, cool ${QUICKENING_SURGE.cooldown[0]}–${QUICKENING_SURGE.cooldown[1]}s`);
+  // ROLLING COVERAGE: with ~20m windows the default fields TWO seats — a
+  // second surge may open while the first still runs, so there is usually
+  // somewhere quick worth answering (the crank lifts it further; the rigs
+  // above test the cap LAW at 1 via HOT's own pin).
+  check('E12: the default runs rolling coverage (maxConcurrent 2)',
+    QUICKENING_SURGE.maxConcurrent === 2, `maxConcurrent ${QUICKENING_SURGE.maxConcurrent}`);
 }
 
 // ------------------------------------------------ F. LIVE — the real engine

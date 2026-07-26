@@ -58,6 +58,10 @@ import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen }
 import { SUPPORTS, SUPPORT_LIST } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
+import {
+  floatKindOn, floatKinds, noticeChannelOn, noticeChannels,
+  NOTICE_ANCHORS, NOTICE_CFG, PICKUP_FEED_CFG,
+} from '../world/bulletins';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
@@ -5664,6 +5668,41 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
           `<button data-cursor-color="${c.css}" title="${c.label}"
             style="margin-left:5px;width:26px;height:20px;vertical-align:middle;background:${c.css};
             border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
+      </div>
+      <h1>Information Stream</h1>
+      <div class="acct-head">Compose your own stream of information — what announces, where it stacks,
+        and how long it stands. Gold = shown; dimmed = muted. Every switch takes effect on the next frame.</div>
+      <div class="rebind-row">
+        <span>World News Time</span>
+        <span class="pad-opt"><input type="range" id="opt-noticesec" min="${NOTICE_CFG.secMin * 10}" max="${NOTICE_CFG.secMax * 10}" step="5"
+          value="${Math.round(s.noticeSec * 10)}"
+          title="How long each world-news line stands in the screen feed — held legible, then fading out by this clock. Every line runs its own timer, and the stack keeps the newest on top so nothing overprints."> <b id="val-noticesec">${s.noticeSec.toFixed(1)}s</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>World News Position</span>
+        <button id="opt-noticeanchor" title="${NOTICE_ANCHORS.map(a => `${a.label} — ${a.blurb}`).join('\n')}">${(NOTICE_ANCHORS.find(a => a.id === s.noticeAnchor) ?? NOTICE_ANCHORS[0]).label.toUpperCase()}</button>
+      </div>
+      <div class="rebind-row">
+        <span>News Channels</span>
+        <span>${noticeChannels().map(c =>
+          `<button data-notice-ch="${c.id}" title="${c.blurb}" style="margin-left:5px;${noticeChannelOn(s.noticeChannels, c.id)
+            ? 'border-color:var(--gold);color:var(--gold)' : 'opacity:0.55'}">${c.label}</button>`).join('')}</span>
+      </div>
+      <div class="rebind-row">
+        <span>Battlefield Text</span>
+        <span>${floatKinds().map(k =>
+          `<button data-float-kind="${k.id}" title="${k.blurb}" style="margin-left:5px;${floatKindOn(s.floatKinds, k.id)
+            ? 'border-color:var(--gold);color:var(--gold)' : 'opacity:0.55'}">${k.label}</button>`).join('')}</span>
+      </div>
+      <div class="rebind-row">
+        <span>Pickup Feed (right flank)</span>
+        <button id="opt-pickupfeed" title="Lists exactly what entered your bags — 'Warcry (Common) x1' — stacked on the right where the inventory opens, coalescing repeat grabs into one row. Drawn beneath every panel: an open inventory always covers it, never the reverse.">${s.pickupFeed ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
+        <span>Pickup Feed Time</span>
+        <span class="pad-opt"><input type="range" id="opt-pickupsec" min="${PICKUP_FEED_CFG.secMin * 10}" max="${PICKUP_FEED_CFG.secMax * 10}" step="5"
+          value="${Math.round(s.pickupFeedSec * 10)}"
+          title="How long each pickup row stands before it fades (a repeat grab refreshes its row's clock)."> <b id="val-pickupsec">${s.pickupFeedSec.toFixed(1)}s</b></span>
       </div>`;
     const visualsTab = `
       <div class="rebind-row">
@@ -5844,6 +5883,45 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     // engine's own LoS ray never reads it.
     slider('veildark', v => { this.getSettings().veilDarkness = v / 100; },
       v => v <= 0 ? 'LIFTED' : `${v}%`);
+    // THE INFO STREAM (world/bulletins.ts): the player composes their own
+    // stream — durations, anchor, channel mutes, per-kind battlefield text,
+    // the pickup ledger. The renderer reads Settings live at draw, so every
+    // change shows on the very next frame, menu still open; the toggle
+    // records stay SPARSE (a missing id reads its registry default), so new
+    // packages' channels and kinds arrive already wired.
+    slider('noticesec', v => { this.getSettings().noticeSec = v / 10; }, v => `${(v / 10).toFixed(1)}s`);
+    slider('pickupsec', v => { this.getSettings().pickupFeedSec = v / 10; }, v => `${(v / 10).toFixed(1)}s`);
+    root.querySelector<HTMLElement>('#opt-noticeanchor')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = NOTICE_ANCHORS.findIndex(a => a.id === st.noticeAnchor);
+      st.noticeAnchor = NOTICE_ANCHORS[(i + 1) % NOTICE_ANCHORS.length].id;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    root.querySelector<HTMLElement>('#opt-pickupfeed')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.pickupFeed = !st.pickupFeed;
+      this.saveSettings();
+      this.renderOptions(root, onBack);
+    });
+    root.querySelectorAll<HTMLElement>('[data-notice-ch]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const st = this.getSettings();
+        const id = btn.dataset.noticeCh!;
+        st.noticeChannels[id] = !noticeChannelOn(st.noticeChannels, id);
+        this.saveSettings();
+        this.renderOptions(root, onBack);
+      });
+    });
+    root.querySelectorAll<HTMLElement>('[data-float-kind]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const st = this.getSettings();
+        const id = btn.dataset.floatKind!;
+        st.floatKinds[id] = !floatKindOn(st.floatKinds, id);
+        this.saveSettings();
+        this.renderOptions(root, onBack);
+      });
+    });
     // UI SCALE: the accessibility dial (ui/uiScale.ts). Drag applies INSTANTLY —
     // the very panel under your hand grows (the honest preview) and the canvas
     // HUD follows next frame (the renderer reads Settings live); release persists.

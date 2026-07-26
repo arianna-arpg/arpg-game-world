@@ -256,7 +256,10 @@ import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarit
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
 import { claimedZonesFromBag } from '../world/overlay';
-import { collectBulletins, BULLETIN_CFG } from '../world/bulletins';
+import {
+  collectBulletins, pushNotice, pruneNotices, notePickup, prunePickupFeed,
+  FLOAT_CFG, type NoticeEntry, type PickupFeedEntry,
+} from '../world/bulletins';
 import { edgeBlockAt } from '../world/edgeBlocks';
 import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldboss';
 import { eventTargetable, holdfastHostable } from '../world/zonePolicy';
@@ -1153,6 +1156,10 @@ interface Zone {
 
 interface FloatingText {
   pos: Vec2; text: string; color: string; life: number; maxLife: number; size: number;
+  /** INFO-STREAM kind (world/bulletins.ts registerFloatKind) — the renderer
+   *  gates the draw per-kind off the player's own Settings.floatKinds.
+   *  Absent = unkinded, always drawn (story beats need no enrollment). */
+  kind?: string;
 }
 
 interface Flash {
@@ -2174,6 +2181,14 @@ export class World {
    *  the social folds; the reads it feeds are all cadenced gauges. */
   private packNextAt = 0;
   texts: FloatingText[] = [];
+  /** THE NOTICE FEED (world/bulletins.ts): world news as a screen-anchored
+   *  stack — the bulletin pump lands lines here; the renderer draws them at
+   *  the player's anchor, filtered by their channel mutes. */
+  notices: NoticeEntry[] = [];
+  /** THE PICKUP FEED: what actually entered whose bags — coalesced rows the
+   *  renderer lists on the local seat's right flank (below any DOM panel by
+   *  construction: the canvas composites under the DOM). */
+  pickupFeed: PickupFeedEntry[] = [];
   flashes: Flash[] = [];
   drops: GemDrop[] = [];
   orbs: ResourceOrb[] = [];
@@ -18887,7 +18902,9 @@ export class World {
     }
     bumpLedger(this.ledger, LEDGER_ESSENCE_TOUCHED, gain.count);
     const def = ESSENCES[gain.essence];
-    this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12);
+    this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12, 'gains');
+    // The PICKUP FEED keeps the ledger (coalesced — a spill trail reads as one row).
+    notePickup(this.pickupFeed, seat.id, def.label, def.color, this.time, gain.count);
     this.markMetaDirty(seat); // the wallet rides seatMeta — replicate every gain
   }
 
@@ -33452,7 +33469,7 @@ export class World {
         dmgMult *= def.shatterStatus.perStack
           ? 1 + (def.shatterStatus.mult - 1) * consumedStacks
           : def.shatterStatus.mult;
-        this.text(vec(target.pos.x, target.pos.y - 14), 'SHATTER!', '#bfe8ff', 14);
+        this.text(vec(target.pos.x, target.pos.y - 14), 'SHATTER!', '#bfe8ff', 14, 'combat');
         this.flashes.push({
           pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
           color: '#bfe8ff', life: 0.25, maxLife: 0.25,
@@ -33468,7 +33485,7 @@ export class World {
       const amb = caster.sheet.get('ambushBonus', skillContextTags(def), extra);
       if (amb > 0) {
         dmgMult *= 1 + amb;
-        this.text(vec(target.pos.x, target.pos.y - 18), 'AMBUSH!', '#b8d0ff', 13);
+        this.text(vec(target.pos.x, target.pos.y - 18), 'AMBUSH!', '#b8d0ff', 13, 'combat');
       }
     }
 
@@ -33477,7 +33494,7 @@ export class World {
       const behind = Math.abs(angleDiff(target.facing, angleTo(target.pos, caster.pos))) > 2.0;
       if (behind) {
         dmgMult *= def.backstabMult;
-        this.text(vec(target.pos.x, target.pos.y - 12), 'backstab!', '#d8c8ff', 12);
+        this.text(vec(target.pos.x, target.pos.y - 12), 'backstab!', '#d8c8ff', 12, 'combat');
       }
     }
     // PROXIMITY (the point-blank graft): up to the stat's bonus at touch,
@@ -33545,7 +33562,7 @@ export class World {
       const result = applyHit(caster, target, packet);
       wasCrit = result.crit;
       if (result.evaded) {
-        this.text(target.pos, 'evade', '#9ab0c8', 12);
+        this.text(target.pos, 'evade', '#9ab0c8', 12, 'combat');
         // The evader's rewards: the deterministic lifeOnEvade floor plus
         // their own 'evade' procs (global sheet — golden rule 3).
         const mend = target.sheet.get('lifeOnEvade');
@@ -33554,7 +33571,7 @@ export class World {
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
-        this.text(target.pos, 'block!', '#8ab8d8', 12);
+        this.text(target.pos, 'block!', '#8ab8d8', 12, 'combat');
         this.applyThorns(target, caster);
         if (depth === 0) this.tapCharges(target, 'block');
         const mend = target.sheet.get('lifeOnBlock');
@@ -33778,15 +33795,15 @@ export class World {
         this.lowLifeHitFlash = LOW_LIFE_FLASH_SEC;
       }
       this.text(target.pos, Math.round(dealt).toString(),
-        result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13);
+        result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13, 'dmg');
       // CULLED: the executing threshold fired inside applyHit.
       if (result.culled) {
-        this.text(vec(target.pos.x, target.pos.y - 20), 'CULLED!', '#c8a0e8', 14);
+        this.text(vec(target.pos.x, target.pos.y - 20), 'CULLED!', '#c8a0e8', 14, 'combat');
       }
       // CAPPED: the victim's hitCap flattened the life cut (cast honesty —
       // a clamped blow must never read as full work; the counter is DoT).
       if (result.clamped) {
-        this.text(vec(target.pos.x, target.pos.y - 20), 'capped', '#9ab0c8', 12);
+        this.text(vec(target.pos.x, target.pos.y - 20), 'capped', '#9ab0c8', 12, 'combat');
       }
       // The poise bar SHATTERED under this blow — the breaker's payoff
       // loop (poiseBreakDealt, with the breaking skill's context). The
@@ -33840,7 +33857,7 @@ export class World {
         if (vdef) {
           target.volatileReadyAt = this.time + (target.volatile.icd ?? 1.5);
           target.volatileInst ??= makeSkillInstance(vdef, Math.max(1, Math.round(target.level)));
-          this.text(vec(target.pos.x, target.pos.y - 18), 'volatile!', vdef.color, 11);
+          this.text(vec(target.pos.x, target.pos.y - 18), 'volatile!', vdef.color, 11, 'combat');
           this.executeSkill(target, target.volatileInst, vec(caster.pos.x, caster.pos.y), {
             dmgMult: target.volatile.dmgMult ?? 1,
             noCooldown: true, noRepeat: true, keepFacing: true,
@@ -36160,7 +36177,7 @@ export class World {
         // its spawn is a closed door.
         if (!actor.noBounty) {
           this.grantXp(actor.xpValue);
-          this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11);
+          this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11, 'xp');
           this.rollDrops(actor);
           // Elites spill extra gems on top of the base roll (bias rides along).
           if (actor.rarity) {
@@ -36374,14 +36391,15 @@ export class World {
       const inst = this.rollSkillGem(bias);
       this.noteGemDrop(inst.def.id, inst.rarity);
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
-      this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15);
+      this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15,
+        'drop', FLOAT_CFG.dropNameSec);
     };
     if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
     const gemDef = this.rollSupportDropGated(bias);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     this.noteGemDrop(gemDef.id);
     this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: rand(0, Math.PI * 2) });
-    this.text(at, `${gemDef.name}!`, gemDef.color, 14);
+    this.text(at, `${gemDef.name}!`, gemDef.color, 14, 'drop', FLOAT_CFG.dropNameSec);
   }
 
   /** DROP-A-GEM (discard / co-op drop-trade): eject the EXACT carried gem from a
@@ -36398,13 +36416,13 @@ export class World {
       if (!inst) return null;
       m.skillInv.splice(index, 1);
       item = { kind: 'skill', inst };
-      this.text(p.pos, `dropped ${inst.def.name}`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 13);
+      this.text(p.pos, `dropped ${inst.def.name}`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 13, 'pickup');
     } else {
       const gem = m.inventory[index];
       if (!gem) return null;
       m.inventory.splice(index, 1);
       item = { kind: 'support', gem };
-      this.text(p.pos, `dropped ${gem.def.name}`, gem.def.color, 13);
+      this.text(p.pos, `dropped ${gem.def.name}`, gem.def.color, 13, 'pickup');
     }
     const pos = this.clampPos(vec(p.pos.x + rand(-14, 14), p.pos.y + rand(-14, 14)), 10);
     this.drops.push({ pos, item, bob: rand(0, Math.PI * 2), grace: DROP_PICKUP_GRACE, droppedBy: seat.id });
@@ -36551,7 +36569,8 @@ export class World {
     if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
     this.drops.push(drop);
     if (!droppedBy) {
-      this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color, item.rarity === 'unique' ? 17 : 14);
+      this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color,
+        item.rarity === 'unique' ? 17 : 14, 'drop', FLOAT_CFG.dropNameSec);
     }
   }
 
@@ -36561,7 +36580,8 @@ export class World {
     const def = VESTIGES[id];
     if (!def || count <= 0) return;
     seat.meta.vestiges[id] = (seat.meta.vestiges[id] ?? 0) + count;
-    this.text(seat.actor.pos, `${def.glyph} ${def.name}${count > 1 ? ` ×${count}` : ''}`, def.color, 13);
+    this.text(seat.actor.pos, `${def.glyph} ${def.name}${count > 1 ? ` ×${count}` : ''}`, def.color, 13, 'pickup');
+    notePickup(this.pickupFeed, seat.id, `${def.glyph} ${def.name}`, def.color, this.time, count);
     this.markMetaDirty(seat);
   }
 
@@ -36652,7 +36672,9 @@ export class World {
       return;
     }
     this.drops.splice(bestIdx, 1);
-    this.text(p.pos, item.name, ITEM_RARITIES[item.rarity].color, 13);
+    const kRar = ITEM_RARITIES[item.rarity];
+    this.text(p.pos, item.name, kRar.color, 13, 'pickup');
+    notePickup(this.pickupFeed, seat.id, `${item.name} (${kRar.label})`, kRar.color, this.time);
     this.markMetaDirty(seat);
   }
 
@@ -37532,9 +37554,11 @@ export class World {
     // fresh "something happened somewhere" lines — faction conquests, crusade
     // front shifts, and any future overlay's notices — through ONE registry.
     // A new overlay registers a source at import time; no engine edit.
+    // Lines land in THE NOTICE FEED (screen-anchored, stacked, per-line
+    // clocks, channel-curated at draw) — never in the overhead float lane,
+    // where world news used to fight the combat text for the same pixels.
     for (const b of collectBulletins(this)) {
-      this.text(vec(this.player.pos.x, this.player.pos.y - 110),
-        b.text, b.color ?? BULLETIN_CFG.color, b.size ?? BULLETIN_CFG.size);
+      pushNotice(this.notices, b, this.time);
     }
 
     // THE DEADWAKE collides: charted zones its tide has rolled onto AND won the
@@ -38612,6 +38636,10 @@ export class World {
       t.life -= dt; t.pos.y -= 28 * dt;
       if (t.life <= 0) this.texts.splice(i, 1);
     }
+    // The INFO-STREAM feeds age on the same beat (world clock — a held menu
+    // freezes the news mid-breath; the caps live in the fabric's own laws).
+    pruneNotices(this.notices, this.time);
+    prunePickupFeed(this.pickupFeed, this.time);
     for (let i = this.flashes.length - 1; i >= 0; i--) {
       this.flashes[i].life -= dt;
       if (this.flashes[i].life <= 0) this.flashes.splice(i, 1);
@@ -44013,7 +44041,7 @@ export class World {
     if (a.gainEvents.length < 64) {
       a.gainEvents.push({ kind: 'orb', id: orb.kind, depth: 0, n: orb.amount });
     }
-    if (gained.length) this.text(a.pos, gained.join('  '), def.color, 12);
+    if (gained.length) this.text(a.pos, gained.join('  '), def.color, 12, 'gains');
     SIM_TAP.current?.onOrbPickup?.(orb.kind, a);
   }
 
@@ -44122,7 +44150,10 @@ export class World {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
           continue;
         }
-        this.text(seat.actor.pos, drop.item.item.name, ITEM_RARITIES[drop.item.item.rarity].color, 13);
+        const gRar = ITEM_RARITIES[drop.item.item.rarity];
+        this.text(seat.actor.pos, drop.item.item.name, gRar.color, 13, 'pickup');
+        notePickup(this.pickupFeed, seat.id,
+          `${drop.item.item.name} (${gRar.label})`, gRar.color, this.time);
         this.markMetaDirty(seat);
         this.drops.splice(i, 1);
         continue;
@@ -44132,12 +44163,16 @@ export class World {
       const item = drop.item;
       if (item.kind === 'support') {
         seat.meta.inventory.push(item.gem);
-        this.text(seat.actor.pos, `${item.gem.def.name} (support)`, item.gem.def.color, 13);
+        this.text(seat.actor.pos, `${item.gem.def.name} (support)`, item.gem.def.color, 13, 'pickup');
+        notePickup(this.pickupFeed, seat.id,
+          `${item.gem.def.name} (Support)`, item.gem.def.color, this.time);
       } else {
         seat.meta.skillInv.push(item.inst);
         const rarity = SKILL_RARITIES[item.inst.rarity ?? 'common'];
         this.text(seat.actor.pos,
-          `${item.inst.def.name} (${rarity.label.toLowerCase()} skill)`, rarity.color, 14);
+          `${item.inst.def.name} (${rarity.label.toLowerCase()} skill)`, rarity.color, 14, 'pickup');
+        notePickup(this.pickupFeed, seat.id,
+          `${item.inst.def.name} (${rarity.label})`, rarity.color, this.time);
       }
       // CO-OP: the picked-up gem entered this seat's inventory → re-replicate it.
       this.markMetaDirty(seat);
@@ -44151,7 +44186,7 @@ export class World {
     if (!acc) { acc = { amount: 0, timer: 0 }; this.dotAccum.set(a.id, acc); }
     acc.amount += dot; acc.timer += dt;
     if (acc.timer >= 0.5 && acc.amount >= 1) {
-      this.text(a.pos, Math.round(acc.amount).toString(), '#d88a50', 11);
+      this.text(a.pos, Math.round(acc.amount).toString(), '#d88a50', 11, 'dmg');
       acc.amount = 0; acc.timer = 0;
     }
   }
@@ -48218,10 +48253,14 @@ export class World {
     }
   }
 
-  text(at: Vec2, text: string, color: string, size = 13): void {
+  /** Float world-anchored text. `kind` enrolls the line in the INFO STREAM's
+   *  per-kind curation (world/bulletins.ts registerFloatKind — the renderer
+   *  gates the draw; unkinded lines always show); `life` is its stand time in
+   *  seconds (drop names stand longer than damage ticks by design). */
+  text(at: Vec2, text: string, color: string, size = 13, kind?: string, life = 1): void {
     this.texts.push({
       pos: vec(at.x + rand(-10, 10), at.y - 16), text, color,
-      life: 1, maxLife: 1, size,
+      life, maxLife: life, size, kind,
     });
   }
 

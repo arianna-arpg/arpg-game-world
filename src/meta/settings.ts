@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 
 import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../core/gamepad';
+import { NOTICE_CFG, NOTICE_ANCHORS, PICKUP_FEED_CFG, type NoticeAnchorId } from '../world/bulletins';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode } from '../ui/mapConfig';
@@ -171,6 +172,25 @@ export interface Settings {
    *  entirely. Purely aesthetic — enemy eyes read the engine's own ray and
    *  never this. */
   veilDarkness: number;
+  /** THE INFO STREAM (world/bulletins.ts — the player composes their own
+   *  stream of information; registries, never hardwired lists):
+   *  noticeSec — how long each world-news line stands in the screen feed
+   *  before its fade completes (the stack holds it legible, then lets go). */
+  noticeSec: number;
+  /** WHERE the notice feed stacks (NOTICE_ANCHORS registry row). */
+  noticeAnchor: NoticeAnchorId;
+  /** Per-CHANNEL mutes over the notice registry — sparse: a missing id reads
+   *  the channel's own default, so new packages' channels arrive live. */
+  noticeChannels: Record<string, boolean>;
+  /** Per-KIND switches over the world-text registry (damage numbers, combat
+   *  cries, xp, drop names…) — sparse, same law as noticeChannels. */
+  floatKinds: Record<string, boolean>;
+  /** THE PICKUP FEED — the right-flank ledger of what entered your bags
+   *  ("Warcry (Common) x1"). Canvas-drawn, so an open inventory panel always
+   *  composites above it. */
+  pickupFeed: boolean;
+  /** Seconds each pickup row stands (rails in PICKUP_FEED_CFG). */
+  pickupFeedSec: number;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -197,6 +217,12 @@ export interface SettingsSave {
   cameraMode?: CameraModeId;
   renderScale?: number | 'auto';
   veilDarkness?: number;
+  noticeSec?: number;
+  noticeAnchor?: NoticeAnchorId;
+  noticeChannels?: Record<string, boolean>;
+  floatKinds?: Record<string, boolean>;
+  pickupFeed?: boolean;
+  pickupFeedSec?: number;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -317,6 +343,12 @@ export const makeSettings = (): Settings => ({
   cameraMode: CAMERA_CFG.default,
   renderScale: 'auto',
   veilDarkness: 1,
+  noticeSec: NOTICE_CFG.defaultSec,
+  noticeAnchor: NOTICE_CFG.anchorDefault,
+  noticeChannels: {},
+  floatKinds: {},
+  pickupFeed: true,
+  pickupFeedSec: PICKUP_FEED_CFG.defaultSec,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -341,9 +373,25 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   cameraMode: s.cameraMode,
   renderScale: s.renderScale,
   veilDarkness: s.veilDarkness,
+  noticeSec: s.noticeSec,
+  noticeAnchor: s.noticeAnchor,
+  noticeChannels: { ...s.noticeChannels },
+  floatKinds: { ...s.floatKinds },
+  pickupFeed: s.pickupFeed,
+  pickupFeedSec: s.pickupFeedSec,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
+/** Keep only honest boolean overrides — a hand-edited save can't smuggle
+ *  functions or truthy junk into a sparse toggle record. */
+const boolRecord = (r: Record<string, unknown> | undefined): Record<string, boolean> => {
+  const out: Record<string, boolean> = {};
+  if (r && typeof r === 'object') {
+    for (const [k, v] of Object.entries(r)) if (typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+};
 
 /** null ⇒ schema mismatch → caller wipes. Unknown/partial keybinds fall back
  *  to the default per-action, so a partial save still yields a complete map.
@@ -410,5 +458,17 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
         ? clamp(s.renderScale, RENDER_SCALE_CFG.min, RENDER_SCALE_CFG.max) : 'auto',
     // Re-clamped like every numeric option (0 = veil lifted, 1 = authored).
     veilDarkness: clamp(s.veilDarkness ?? 1, 0, 1),
+    // THE INFO STREAM: durations re-clamp into the fabric's rails; an unknown
+    // anchor (a renamed row) falls back to the registry default; the sparse
+    // toggle records keep only honest booleans (missing ids read registry
+    // defaults live, so new channels/kinds need no save migration).
+    noticeSec: clamp(s.noticeSec ?? NOTICE_CFG.defaultSec, NOTICE_CFG.secMin, NOTICE_CFG.secMax),
+    noticeAnchor: NOTICE_ANCHORS.some(a => a.id === s.noticeAnchor)
+      ? s.noticeAnchor! : NOTICE_CFG.anchorDefault,
+    noticeChannels: boolRecord(s.noticeChannels),
+    floatKinds: boolRecord(s.floatKinds),
+    pickupFeed: s.pickupFeed ?? true,
+    pickupFeedSec: clamp(s.pickupFeedSec ?? PICKUP_FEED_CFG.defaultSec,
+      PICKUP_FEED_CFG.secMin, PICKUP_FEED_CFG.secMax),
   };
 }

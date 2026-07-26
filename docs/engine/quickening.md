@@ -120,7 +120,7 @@ player already knows.
 
 - Events tab: `Quickening (surge here)` / `Quickening (end here)` — the full
   stamp → refresh → revert loop QAs in one sitting.
-- `balance/probe_quickening.ts` (49 checks): the known-ground law
+- `balance/probe_quickening.ts` (50 checks): the known-ground law
   statistically, the level band + raise law, the set window/cooldown/cap,
   accessors + dev seams, snapshot/restore/prune/determinism, def + registry
   integrity (incl. the OPT-IN WINDOW pin — ≥15m floor, spread kept), and a
@@ -134,8 +134,11 @@ player already knows.
 
 ## Tuning notes
 
-- `maxConcurrent` > 1 turns the lone window into rolling coverage; the
-  frequency crank's `concurrencyMul` lifts it live.
+- `maxConcurrent` ships at **2** — ROLLING COVERAGE: with the ~20-minute
+  opt-in window, a second surge may open while the first still runs, so
+  there is usually somewhere quick worth answering (probe E12 pins the
+  default; the rigs test the cap law itself at 1 via their own HOT pin).
+  The frequency crank's `concurrencyMul` lifts it further live.
 - The package is `dimensions`-ready: every engine consumer resolves fields
   per dimension (`quickeningFieldsAll`, `overlayFor`), so "the underworld
   quickens too" is one `dimensions: ['surface','underworld']` line.

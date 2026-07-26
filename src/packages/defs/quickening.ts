@@ -32,7 +32,11 @@ const SURGE_GILT = '#e8c86a';
 
 export const QUICKENING_SURGE: QuickeningSurge = {
   igniteChance: 0.004,     // per 0.5s step, × pressure — patient, then loud
-  maxConcurrent: 1,        // one quickened zone at a time (the crank lifts it)
+  maxConcurrent: 2,        // ROLLING COVERAGE: with the long opt-in window, a
+                           // second surge may open while the first still runs —
+                           // there is usually somewhere quick worth answering,
+                           // and the cooldown still breathes between ignitions
+                           // (the crank lifts it further)
   minCharted: 10,          // it needs a past worth returning to
   firstDelaySec: 300,      // no surge at minute zero — there is nothing to re-walk
   cooldown: [600, 1200],   // the world breathes between windows (paced to the

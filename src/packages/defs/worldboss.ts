@@ -325,10 +325,11 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 });
 
 // --- world notices (drained through the bulletins pump) -------------------------
+// Tagged at the drain: apparition news rides the WORLD EVENTS channel.
 registerBulletinSource((world: World) => {
   const out = [];
   for (const f of world.sim.worldBossFieldsAll()) out.push(...f.drainBulletins());
-  return out;
+  return out.map(b => ({ ...b, channel: 'events' }));
 });
 
 // --- the kill bounty --------------------------------------------------------------

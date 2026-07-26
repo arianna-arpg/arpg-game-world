@@ -43,7 +43,7 @@ import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { coordDist, DIRS, projectCoord, type MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
-import { registerBulletinSource } from '../../world/bulletins';
+import { registerBulletinSource, type WorldBulletin } from '../../world/bulletins';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { scaledCap } from '../frequency';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -300,7 +300,7 @@ export class CrusadeField implements WorldOverlay {
   /** Last announced owner per VISITED zone — the conquest-bulletin edge. */
   private lastZoneOwner = new Map<string, string>();
   /** War news (drained by the registered bulletin source). */
-  readonly bulletins: { text: string; color: string }[] = [];
+  readonly bulletins: WorldBulletin[] = [];
 
   constructor(ctx: OverlayBuildCtx, surge: CrusadeSurge) {
     this.rng = new Rng(ctx.seed);
@@ -496,7 +496,7 @@ export class CrusadeField implements WorldOverlay {
   }
 
   private pushBulletin(text: string, color: string): void {
-    this.bulletins.push({ text, color });
+    this.bulletins.push({ text, color, channel: 'war' }); // war news, curated as war news
     if (this.bulletins.length > MAX_BULLETINS) this.bulletins.shift();
   }
 

@@ -958,6 +958,20 @@ export const VIS_CFG = {
       color: '#cfd6ff', colorMix: 0.6, rMin: 0.8, rMax: 2.1,
     },
   },
+
+  /** THE INFO FEEDS (world/bulletins.ts owns the model laws + the player's
+   *  dials; these are the PIXELS). Both draw inside the ui-scale pass, on
+   *  the canvas — which composites BELOW every DOM panel by construction,
+   *  so an open inventory always covers the pickup ledger, never the
+   *  reverse (the layering law the feature was asked with). */
+  infoFeeds: {
+    /** The world-news stack: edge pads per anchor + the line gap. maxRows
+     *  bounds a bulletin storm to a readable column. */
+    notice: { topPad: 64, bottomPad: 96, sidePad: 18, rowGap: 4, maxRows: 8 },
+    /** The right-flank pickup ledger ("Warcry (Common) x1") — seated over
+     *  the ground the inventory panel opens onto. */
+    pickup: { rightPad: 14, topFrac: 0.34, rowH: 17, font: 12, maxRows: 10 },
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------

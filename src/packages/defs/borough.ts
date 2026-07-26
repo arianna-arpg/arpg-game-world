@@ -283,5 +283,7 @@ registerMarkerSource((world: World): MapMarker[] => {
   }];
 });
 
-/** Arrival toasts: "+N souls reach Lastlight" as refugees make it home. */
-registerBulletinSource((world: World) => world.sim.boroughField?.drainBulletins() ?? []);
+/** Arrival toasts: "+N souls reach Lastlight" as refugees make it home —
+ *  tagged at the drain onto the CIVIC channel (the towns talking). */
+registerBulletinSource((world: World) =>
+  (world.sim.boroughField?.drainBulletins() ?? []).map(b => ({ ...b, channel: 'civic' })));

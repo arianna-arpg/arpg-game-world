@@ -36,7 +36,7 @@
 import { Rng } from '../../core/rng';
 import { setRunStances, type FactionStance } from '../../data/monsters';
 import { allLords, lordDef, type UnderworldLordDef } from '../lords';
-import { registerBulletinSource } from '../../world/bulletins';
+import { registerBulletinSource, type WorldBulletin } from '../../world/bulletins';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
@@ -194,7 +194,7 @@ export class HellWarField implements WorldOverlay {
   /** Last announced owner per CHARTED zone — the conquest-bulletin edge. */
   private lastZoneOwner = new Map<string, number>();
 
-  readonly bulletins: { text: string; color: string }[] = [];
+  readonly bulletins: WorldBulletin[] = [];
 
   /** View plumbing: zone reads resolve coords through the last scoped view. */
   private nodeById: ((id: string) => { map: MapCoord; name: string } | undefined) | null = null;
@@ -472,7 +472,7 @@ export class HellWarField implements WorldOverlay {
   }
 
   private pushBulletin(text: string, color: string): void {
-    this.bulletins.push({ text, color });
+    this.bulletins.push({ text, color, channel: 'war' }); // the underworld's front page
     if (this.bulletins.length > WAR_CFG.bulletins.max) this.bulletins.shift();
   }
 

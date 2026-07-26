@@ -923,5 +923,6 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
 });
 
 // --- bulletins (registered on import) ------------------------------------------
+// Tagged at the drain: every hive-cycle line rides the WORLD EVENTS channel.
 registerBulletinSource((world: World): WorldBulletin[] =>
-  world.sim.swarmingField?.drainBulletins() ?? []);
+  (world.sim.swarmingField?.drainBulletins() ?? []).map(b => ({ ...b, channel: 'events' })));

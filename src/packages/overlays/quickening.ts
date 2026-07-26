@@ -349,6 +349,7 @@ export class QuickeningField implements WorldOverlay {
         .replace('{mins}', String(mins ?? 0)),
       color: this.cfg.color,
       size: 16,
+      channel: 'events', // the notice feed's WORLD EVENTS switch curates us
     });
   }
 

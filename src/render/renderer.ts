@@ -26,6 +26,9 @@ import { COMBO_CFG, comboProgress, comboStat } from '../engine/sequence';
 import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { Seat, World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
+import {
+  floatKindOn, noticeChannelOn, NOTICE_CFG, PICKUP_FEED_CFG, type NoticeEntry,
+} from '../world/bulletins';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
@@ -702,6 +705,8 @@ export class Renderer {
       this.drawEncounterHud(world); // breach timer bar (screen-space)
       this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
       this.drawSceneHud(world);     // scene fabric: drill/assault bar + prompt (screen-space)
+      this.drawNoticeFeed(world);   // world news, stacked at the player's anchor (info stream)
+      this.drawPickupFeed(world);   // the right-flank pickup ledger (canvas = below every DOM panel)
     }));
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
     this.drawDarknessHud(world);  // the dark's screen veil: abyss depth/haul/shaft, or the gloaming's closing eye
@@ -5780,7 +5785,11 @@ export class Renderer {
   private drawTexts(world: World): void {
     const { ctx } = this;
     ctx.textAlign = 'center';
+    // THE INFO STREAM's per-kind curation: each client gates kinds by its
+    // OWN settings (the host mints one truth; every seat curates its view).
+    const kindPrefs = this.getSettings?.().floatKinds;
     for (const t of world.texts) {
+      if (t.kind && !floatKindOn(kindPrefs, t.kind)) continue;
       // Bind tokens resolve at DRAW, not at spawn — a float naming a key
       // stays honest even if the player rebinds (or grabs the pad) mid-air.
       const txt = this.resolveText(t.text);
@@ -5793,6 +5802,91 @@ export class Renderer {
       ctx.fillText(txt, t.pos.x, t.pos.y);
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** THE NOTICE FEED (world/bulletins.ts): world news as a screen-anchored
+   *  stack — newest at the anchor, each line held legible then fading out on
+   *  the player's own clock (Settings.noticeSec), at the player's own anchor
+   *  (Settings.noticeAnchor), channels muted at draw so the curation is
+   *  instant AND retroactive. Runs inside the ui-scale pass: virtual coords. */
+  private drawNoticeFeed(world: World): void {
+    if (!world.notices.length) return;
+    const s = this.getSettings?.();
+    const sec = s?.noticeSec ?? NOTICE_CFG.defaultSec;
+    const anchor = s?.noticeAnchor ?? NOTICE_CFG.anchorDefault;
+    const v = VIS_CFG.infoFeeds.notice;
+    const hold = sec * NOTICE_CFG.holdFrac;
+    const now = world.time;
+    // Visible lines, newest first — the stack reads away from the anchor.
+    const live: { n: NoticeEntry; alpha: number }[] = [];
+    for (let i = world.notices.length - 1; i >= 0 && live.length < v.maxRows; i--) {
+      const n = world.notices[i];
+      const age = now - n.bornAt;
+      if (age < 0 || age >= sec) continue; // the buffer may outlive MY dial — draw my window only
+      if (!noticeChannelOn(s?.noticeChannels, n.channel)) continue;
+      live.push({
+        n,
+        alpha: age <= hold ? 1 : Math.max(0, 1 - (age - hold) / Math.max(0.001, sec - hold)),
+      });
+    }
+    if (!live.length) return;
+    const { ctx } = this;
+    ctx.save();
+    ctx.textAlign = anchor === 'topLeft' ? 'left' : anchor === 'topRight' ? 'right' : 'center';
+    const x = anchor === 'topLeft' ? v.sidePad
+      : anchor === 'topRight' ? this.uiW - v.sidePad : this.uiW / 2;
+    const up = anchor === 'bottom';
+    let y = up ? this.uiH - v.bottomPad : v.topPad;
+    for (const { n, alpha } of live) {
+      ctx.globalAlpha = alpha;
+      ctx.font = `bold ${n.size}px Verdana`;
+      ctx.fillStyle = n.color;
+      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(n.text, x, y);
+      ctx.fillText(n.text, x, y);
+      y += (up ? -1 : 1) * (n.size + v.rowGap);
+    }
+    ctx.restore();
+  }
+
+  /** THE PICKUP FEED: what actually entered YOUR bags, listed down the right
+   *  flank ("Warcry (Common) x1") — each client draws only its OWN seat's
+   *  rows, on the canvas, which composites BELOW every DOM panel by
+   *  construction: an open inventory always covers the ledger, never the
+   *  reverse. Rows hold legible then fade on Settings.pickupFeedSec. */
+  private drawPickupFeed(world: World): void {
+    if (!world.pickupFeed.length || !world.localSeat) return;
+    const s = this.getSettings?.();
+    if (s && !s.pickupFeed) return;
+    const sec = s?.pickupFeedSec ?? PICKUP_FEED_CFG.defaultSec;
+    const v = VIS_CFG.infoFeeds.pickup;
+    const hold = sec * PICKUP_FEED_CFG.holdFrac;
+    const now = world.time;
+    const { ctx } = this;
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.font = `bold ${v.font}px Verdana`;
+    const x = this.uiW - v.rightPad;
+    let y = this.uiH * v.topFrac;
+    let drawn = 0;
+    for (const e of world.pickupFeed) {
+      if (e.seatId !== world.localSeat.id) continue; // my flank lists my haul
+      const age = now - e.bornAt;
+      if (age < 0 || age >= sec) continue;
+      if (drawn >= v.maxRows) break;
+      ctx.globalAlpha = age <= hold ? 1
+        : Math.max(0, 1 - (age - hold) / Math.max(0.001, sec - hold));
+      ctx.fillStyle = e.color;
+      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.lineWidth = 3;
+      const line = `${e.label} x${e.count}`;
+      ctx.strokeText(line, x, y);
+      ctx.fillText(line, x, y);
+      y += v.rowH;
+      drawn++;
+    }
+    ctx.restore();
   }
 
   // -------------------------------------------------------------------- HUD
