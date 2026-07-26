@@ -4,7 +4,7 @@
 // A puzzle is a small machine of STRUCK FIXTURES: crystal bodies (ordinary
 // passive monster defs — they reach resolveHit like anything else, so every
 // delivery in the game can play them: arcs, arrows, novas, minions) wired to
-// a PUZZLE RUN that a registered KIND drives. Three kinds ship here; the
+// a PUZZLE RUN that a registered KIND drives. Six kinds ship here; the
 // registry is open — a package or future biome adds a kind + a spec row and
 // the placer, HUD, objective plumbing and reward lane all follow.
 //
@@ -20,6 +20,17 @@
 //     ring's crystals with matching damage until every voice joins the
 //     chord. The heartless 'shatter' variant boots the ring mistuned and
 //     asks for silence — batter every crystal back to physical.
+//   • tempo — the rising measure: every voice pulses on its own period
+//     from one synced opening bar; strike them slowest first, fastest
+//     last. The order is READ off the world, never memorized — a wrong
+//     voice breaks the measure and re-syncs the bar for a fresh read.
+//   • accord — the twin voices: opposite seats share a color; ring BOTH
+//     halves of a pair inside the linger window to bind it. The shipped
+//     spill:'all' consumer — one wide blow through the ring can bind a
+//     pair whole, and walking between partners solves it just as truly.
+//   • ember — the tended ring: a struck coal stays alight for its gutter
+//     window; have EVERY coal alight at once. No falter, no clock but the
+//     coals' own — patience circles, breadth blazes.
 //
 // Placement happens at ZONE LOAD (World's puzzle placer), never at
 // generation: no genqa surface, no layout-rng movement — the same salted
@@ -74,14 +85,26 @@ export interface PuzzleSpec {
   rounds?: [number, number];
   /** refrain: seconds between played notes (default 0.85). */
   beat?: number;
-  /** refrain: answer seconds allowed PER NOTE before the refrain replays
-   *  (default 8 — a puzzle, not a reflex test). */
+  /** refrain: answer seconds granted PER NOTE — pooled into ONE window for
+   *  the whole answer (window × notes; default 8 — a puzzle, not a reflex
+   *  test); dawdling past the pool replays the song. */
   window?: number;
   /** lattice: scramble strikes band rolled at boot (default [3, 6]). */
   scramble?: [number, number];
   /** chord: the heart's tone pool (default the three elements). The
-   *  heartless variant reads tones[0] as the fixed goal. */
+   *  heartless variant reads tones[0] as the fixed goal — and the accord
+   *  draws each PAIR's shared color from the same pool. */
   tones?: DamageType[];
+  /** tempo: the slowest voice's seconds-per-pulse (default 2.4). */
+  period?: number;
+  /** tempo: per-rank period cut in seconds (default 0.35) — each rank up
+   *  pulses this much sooner; the fastest voice floors at the kind's min. */
+  step?: number;
+  /** accord: seconds a lone rung voice holds for its partner (default 3).
+   *  The worn kindle IS this window — drawn == tested. */
+  linger?: number;
+  /** ember: seconds a struck coal stays alight before guttering (default 7). */
+  gutter?: number;
   /** Whose strikes the kind counts (default: the kind's own doctrine). */
   who?: 'player' | 'any';
   /** THE KNOCK LAW: what rings a node (default PUZZLE_CFG.knock). 'landed'
@@ -165,6 +188,10 @@ export interface PuzzleKindDef {
   spacing: number;
   /** Default node count band for ring kinds. */
   count?: [number, number];
+  /** Node-count GRAIN for ring kinds (default 1): the placer rounds the
+   *  rolled count DOWN to this multiple (floor one grain), so a kind built
+   *  of pairs (the accord's 2) or triads can never mint an orphan voice. */
+  quantize?: number;
   label: string;
   boot(run: PuzzleRun, h: PuzzleHost): void;
   /** A qualifying landed hit on a node (resolveHit routes here). */
@@ -467,5 +494,244 @@ registerPuzzleKind({
     const matched = run.nodes.filter(n => n.tone === goal).length;
     const verb = goal === 'physical' ? 'shattered to silence' : `attuned to ${goal}`;
     return `${run.spec.label ?? this.label}: ${matched}/${run.nodes.length} ${verb}`;
+  },
+});
+
+// --- TEMPO (the rising measure) ------------------------------------------------
+// state: { order: number[] (node idx by rank, slowest first), progress:
+// number, pulseAt: number[] }. The order is READ, never memorized: every
+// unsettled voice pulses on its own period — rank r pulses (period − r×step)
+// seconds apart, floored — from ONE synced opening bar, so the comparison is
+// legible from the first drift. A wrong voice breaks the measure and
+// re-syncs the bar (a fresh read, not a punishment). Settled voices hold
+// steady light and stop pulsing; re-tapping one is quietly ignored.
+
+const TEMPO_TINT = '#d8b8ff';
+const TEMPO_BREAK = '#e86a5a';
+/** The united opening blink's lead-in, and the re-sync pause after a break. */
+const TEMPO_OPEN = 1.2;
+/** A pulse's visible blink (kindle seconds). */
+const TEMPO_BLINK = 0.35;
+/** The fastest voice's period floor — readability's hard deck. */
+const TEMPO_MIN = 0.4;
+
+function tempoPeriodOf(run: PuzzleRun, rank: number): number {
+  const base = run.spec.period ?? 2.4;
+  const step = run.spec.step ?? 0.35;
+  return Math.max(TEMPO_MIN, base - rank * step);
+}
+
+function tempoResync(run: PuzzleRun, h: PuzzleHost): void {
+  const at = h.now() + TEMPO_OPEN;
+  run.state.pulseAt = run.nodes.map(() => at);
+}
+
+registerPuzzleKind({
+  id: 'tempo',
+  nodeMonster: 'tempo_crystal',
+  geometry: 'ring',
+  who: 'player',
+  spacing: 112,
+  count: [4, 5],
+  label: 'the rising tempo',
+  boot(run, h) {
+    // Ranks are a SHUFFLED permutation — the ring's seating never betrays
+    // the measure (Fisher–Yates on the host's stream).
+    const order = run.nodes.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(h.rng() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    run.state.order = order;
+    run.state.progress = 0;
+    tempoResync(run, h);
+  },
+  tick(run, h, dt) {
+    const at = run.state.pulseAt as number[];
+    // Nobody watching: hold every phase in place — the synced bar and all
+    // its relative drift survive the walk away (the refrain's earshot law).
+    if (!h.heroNear(run.at, PUZZLE_CFG.earshot)) {
+      for (let i = 0; i < at.length; i++) at[i] += dt;
+      return;
+    }
+    const order = run.state.order as number[];
+    const progress = run.state.progress as number;
+    for (let i = 0; i < run.nodes.length; i++) {
+      if (h.now() < at[i]) continue;
+      const rank = order.indexOf(i);
+      at[i] = h.now() + tempoPeriodOf(run, rank);
+      if (rank < progress) continue; // settled voices hold steady light
+      h.kindle(run.nodes[i], TEMPO_BLINK);
+      h.flash(run.nodes[i].pos, run.nodes[i].radius + 14, TEMPO_TINT, 0.22);
+    }
+  },
+  struck(run, node, h) {
+    const idx = node.puzzleNode?.idx ?? -1;
+    if (idx < 0) return;
+    const order = run.state.order as number[];
+    const progress = run.state.progress as number;
+    const rank = order.indexOf(idx);
+    if (rank < progress) return; // an already-settled voice — quiet
+    if (rank === progress) {
+      run.state.progress = progress + 1;
+      h.kindle(node, 9999);
+      h.flash(node.pos, node.radius + 18, TEMPO_TINT, 0.25);
+      if ((run.state.progress as number) >= order.length) h.complete(run);
+      return;
+    }
+    h.flash(node.pos, node.radius + 26, TEMPO_BREAK, 0.35);
+    h.say(node.pos, 'the measure breaks…', TEMPO_BREAK, 12);
+    run.state.progress = 0;
+    for (const n of run.nodes) h.quench(n);
+    tempoResync(run, h); // a fresh bar — the re-read starts legible
+  },
+  solved(run, h) {
+    run.state.progress = (run.state.order as number[]).length;
+    for (const n of run.nodes) h.kindle(n, 9999);
+  },
+  status(run) {
+    const n = (run.state.order as number[]).length;
+    return `${run.spec.label ?? this.label}: ${run.state.progress as number}/${n} voices in measure`;
+  },
+});
+
+// --- ACCORD (the twin voices) --------------------------------------------------
+// state: { bound: boolean[], pending: ({ half: number; until: number } |
+// null)[] } — one slot per PAIR. Partners sit OPPOSITE (idx and idx+pairs)
+// and SHARE a tone off the spec's pool: the color names the partnership.
+// Ring one half and it holds — kindled for exactly the linger window
+// (drawn == tested) — ring its partner inside that window and the pair
+// BINDS for good. Bound pairs never come undone: the riddle is per-pair
+// simultaneity, never a global restart. The kind-level spill:'all' is the
+// law's shipped fan-out consumer — one wide blow may bind a pair whole
+// (both knocks land in the same drained group), several pairs at once if
+// the blow is wide enough.
+
+const ACCORD_TINT = '#e8fff0';
+const ACCORD_SLIP = '#9ab0c8';
+
+function accordLingerOf(run: PuzzleRun): number {
+  return run.spec.linger ?? 3;
+}
+/** idx ↔ partner: pair p seats nodes p and p+pairs (opposite on the ring). */
+function accordPairOf(run: PuzzleRun, idx: number): number {
+  return idx % (run.nodes.length >> 1);
+}
+
+registerPuzzleKind({
+  id: 'accord',
+  nodeMonster: 'accord_crystal',
+  geometry: 'ring',
+  who: 'player',
+  spill: 'all',
+  spacing: 128,
+  count: [4, 6],
+  quantize: 2, // pairs stay whole — the placer floors odd rolls
+  label: 'the twin accord',
+  boot(run, h) {
+    const pairs = run.nodes.length >> 1;
+    const pool = run.spec.tones ?? [...ELEMENTAL_TYPES];
+    run.state.bound = new Array<boolean>(pairs).fill(false);
+    run.state.pending = new Array<{ half: number; until: number } | null>(pairs).fill(null);
+    for (let i = 0; i < run.nodes.length; i++) {
+      h.setTone(run.nodes[i], pool[accordPairOf(run, i) % pool.length] ?? 'fire');
+    }
+  },
+  tick(run, h) {
+    const pending = run.state.pending as ({ half: number; until: number } | null)[];
+    for (let p = 0; p < pending.length; p++) {
+      const pend = pending[p];
+      if (!pend || h.now() <= pend.until) continue;
+      pending[p] = null; // the lone voice's window lapses — its light with it
+      const node = run.nodes[pend.half];
+      h.quench(node);
+      h.say(node.pos, 'the accord slips…', ACCORD_SLIP, 11);
+    }
+  },
+  struck(run, node, h) {
+    const idx = node.puzzleNode?.idx ?? -1;
+    if (idx < 0) return;
+    const bound = run.state.bound as boolean[];
+    const pending = run.state.pending as ({ half: number; until: number } | null)[];
+    const p = accordPairOf(run, idx);
+    if (bound[p]) return; // a bound pair holds — quiet
+    const pend = pending[p];
+    if (pend && pend.half !== idx && h.now() <= pend.until) {
+      bound[p] = true;
+      pending[p] = null;
+      const other = run.nodes[pend.half];
+      h.kindle(node, 9999);
+      h.kindle(other, 9999);
+      h.flash(node.pos, node.radius + 20, ACCORD_TINT, 0.3);
+      h.flash(other.pos, other.radius + 20, ACCORD_TINT, 0.3);
+      if (bound.every(v => v)) h.complete(run);
+      return;
+    }
+    // First (or refreshed) half: hold the window, wear it as light.
+    pending[p] = { half: idx, until: h.now() + accordLingerOf(run) };
+    h.kindle(node, accordLingerOf(run));
+    h.flash(node.pos, node.radius + 16, ACCORD_TINT, 0.22);
+  },
+  solved(run, h) {
+    (run.state.bound as boolean[]).fill(true);
+    for (const n of run.nodes) h.kindle(n, 9999);
+  },
+  status(run) {
+    const bound = run.state.bound as boolean[];
+    return `${run.spec.label ?? this.label}: ${bound.filter(v => v).length}/${bound.length} accords bound`;
+  },
+});
+
+// --- EMBER (the tended ring) ---------------------------------------------------
+// state: { litUntil: number[] }. A struck coal is ALIGHT for the gutter
+// window — worn as kindle for exactly those seconds, so the fade the player
+// sees IS the clock the kind tests. Have every coal alight at once. No
+// falter: the coals' own guttering is the only pressure, so patience
+// circles the ring forever and breadth lights it in a blow (the kind-level
+// spill:'all' — a wide swing feeds several coals; echo re-taps merely
+// refresh). The tick only lets expired coals go out (litUntil → 0, the
+// worn kindle fades on its own matched clock); completion is judged at
+// the strike.
+
+const EMBER_TINT = '#ffb27a';
+
+function emberGutterOf(run: PuzzleRun): number {
+  return run.spec.gutter ?? 7;
+}
+
+registerPuzzleKind({
+  id: 'ember',
+  nodeMonster: 'ember_crystal',
+  geometry: 'ring',
+  who: 'player',
+  spill: 'all',
+  spacing: 112,
+  count: [5, 6],
+  label: 'the ember ring',
+  boot(run) {
+    run.state.litUntil = run.nodes.map(() => 0);
+  },
+  tick(run, h) {
+    const lit = run.state.litUntil as number[];
+    for (let i = 0; i < lit.length; i++) {
+      if (lit[i] > 0 && lit[i] <= h.now()) lit[i] = 0; // guttered out
+    }
+  },
+  struck(run, node, h) {
+    const idx = node.puzzleNode?.idx ?? -1;
+    if (idx < 0) return;
+    const lit = run.state.litUntil as number[];
+    lit[idx] = h.now() + emberGutterOf(run);
+    h.kindle(node, emberGutterOf(run));
+    h.flash(node.pos, node.radius + 16, EMBER_TINT, 0.22);
+    if (lit.every(t => t > h.now())) h.complete(run);
+  },
+  solved(run, h) {
+    run.state.litUntil = run.nodes.map(() => Infinity);
+    for (const n of run.nodes) h.kindle(n, 9999);
+  },
+  status(run) {
+    const lit = run.state.litUntil as number[];
+    return `${run.spec.label ?? this.label}: ${lit.filter(t => t > 0).length}/${lit.length} alight`;
   },
 });

@@ -64,6 +64,32 @@ export const PUZZLES: Record<string, PuzzleSpec> = {
     label: 'the glimmer refrain',
     reward: { gems: 2, washFor: 20 },
   },
+  // THE RISING TEMPO — every voice keeps its own time from one synced
+  // opening bar; strike them slowest first, fastest last. Nothing to
+  // memorize: the order is read straight off the pulses, and a broken
+  // measure only re-syncs the bar for a fresh look.
+  rising_tempo: {
+    kind: 'tempo',
+    label: 'the rising tempo',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE TWIN ACCORD — opposite seats share a color; ring both halves of a
+  // pair inside the linger and the accord binds for good. A wide blow can
+  // bind a pair whole (spill 'all' is this kind's law) — or just walk it.
+  twin_accord: {
+    kind: 'accord',
+    label: 'the twin accord',
+    reward: { gems: 2, washFor: 20 },
+  },
+  // THE EMBER RING — struck coals stay alight for their gutter window;
+  // have every coal burning at once. Patience circles the ring forever,
+  // breadth lights half of it in a swing — no falter, no penalty, only
+  // the coals' own cooling.
+  ember_ring: {
+    kind: 'ember',
+    label: 'the ember ring',
+    reward: { gems: 2, washFor: 20 },
+  },
 };
 
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);

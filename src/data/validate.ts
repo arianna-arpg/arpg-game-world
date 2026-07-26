@@ -23,7 +23,7 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunement
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
-import { DAMAGE_TYPES, STAT_DEFS, STAT_TRADES, type Modifier } from '../engine/stats';
+import { DAMAGE_TYPES, ELEMENTAL_TYPES, STAT_DEFS, STAT_TRADES, type Modifier } from '../engine/stats';
 import type { AIAction, BrainDef, BrainTuning, FlockSpec } from '../engine/brain';
 import { regionKind, PATH_CFG, SURVIVAL_RESOURCES } from '../world/regions';
 import { CHARGE_DEFS } from '../engine/charges';
@@ -441,6 +441,33 @@ export function validateContent(): void {
       }
       if (spec.kind === 'chord' && spec.heart === false && !spec.tones?.length) {
         warn(`puzzle preset '${id}': a heartless chord needs tones[0] as its fixed goal`);
+      }
+      // The kind-scoped timing dials: every one a positive number of seconds.
+      for (const [dial, v] of [['period', spec.period], ['step', spec.step],
+        ['linger', spec.linger], ['gutter', spec.gutter]] as const) {
+        if (v !== undefined && !(v > 0)) {
+          warn(`puzzle preset '${id}': ${dial} ${v} must be > 0 seconds`);
+        }
+      }
+      // The tempo's measure must stay READABLE: the fastest voice's period
+      // (period − step×(maxCount−1), before the engine floor) should keep
+      // clear air — a negative spread means the authored dials rely on the
+      // floor to rescue them, and adjacent ranks stop being tellable apart.
+      if (spec.kind === 'tempo') {
+        const band = spec.count ?? kind.count ?? [4, 5];
+        const fastest = (spec.period ?? 2.4) - (spec.step ?? 0.35) * (band[1] - 1);
+        if (fastest < 0.3) {
+          warn(`puzzle preset '${id}': tempo dials leave the fastest voice at ${fastest.toFixed(2)}s — unreadable below 0.3s`);
+        }
+      }
+      // The accord's pairs each wear a pool color — more pairs than colors
+      // would seat two partnerships in the SAME dress (ambiguous partners).
+      if (spec.kind === 'accord') {
+        const band = spec.count ?? kind.count ?? [4, 6];
+        const pool = (spec.tones ?? ELEMENTAL_TYPES).length;
+        if (Math.ceil(band[1] / 2) > pool) {
+          warn(`puzzle preset '${id}': up to ${Math.ceil(band[1] / 2)} pairs but only ${pool} pool tones — partnerships would share a color`);
+        }
       }
     }
     // Tileset + authored-zone rows: presets exist, chances are chances,

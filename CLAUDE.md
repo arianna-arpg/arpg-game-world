@@ -923,7 +923,12 @@ changes.
   (conversions honored) and pulse `attuned_<tone>` onto friend and foe
   alike — engine/tuning.ts + the `attuned_*` status family; docs in
   `docs/engine/attunement.md`. THE PUZZLE FABRIC (activity riddles as
-  data): lights-out lattices, singing refrains, attunement chords as open
+  data): lights-out lattices, singing refrains, attunement chords, rising
+  tempos (rank-pulsed voices struck slowest-first — read, never
+  memorized), twin accords (opposite tone-paired seats both rung inside a
+  linger — the shipped spill:'all' consumer; `PuzzleKindDef.quantize`
+  keeps paired rings whole at the placer) and ember rings (keep every
+  struck coal alight through its gutter window at once) as open
   `PUZZLE_KINDS` + `PUZZLES` presets (engine/puzzles.ts +
   `data/puzzles.ts`), placed at zone LOAD on a salted stream, offered
   per-biome via `TilesetDef.puzzles`, askable as the `'puzzle'` objective;
@@ -932,10 +937,11 @@ changes.
   node however mitigated (full septic forgo included; tone reads
   pre-forgo — DoT ticks never knock), one blow rings ONE facing-aligned
   bell (a wide cleave can't falter the refrain by clipping a neighbor),
-  and a just-judged node swallows its own echoes until another bell
-  rings — knocks queue per frame (`drainPuzzleKnocks`), kinds stay pure;
+  and THE HUM swallows echoes at BLOW grain — a fan-out's bells hum
+  together until a later blow's fresh bell claims the ledger — knocks
+  queue per frame (`drainPuzzleKnocks`), kinds stay pure;
   `ZoneDef.scenery` plants ambient object-actor rows the same way — docs
-  in `docs/engine/puzzles.md`;
+  in `docs/engine/puzzles.md`, probe `balance/probe_puzzles.ts`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
   `loot.ts` (nestable loot tables + DROP_CFG kill-path levers). THE SPOILS

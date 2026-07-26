@@ -4823,6 +4823,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     puzzles: [
       { id: 'glimmer_refrain', chance: 0.4 },
       { id: 'singing_refrain', chance: 0.15 },
+      { id: 'ember_ring', chance: 0.15 }, // dusk coals under the lamps
     ],
   },
 
@@ -4943,6 +4944,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     puzzles: [
       { id: 'singing_refrain', chance: 0.3 },
       { id: 'glimmer_refrain', chance: 0.15 },
+      { id: 'rising_tempo', chance: 0.15 }, // the fireflies' own cadence
     ],
   },
 
@@ -6257,7 +6259,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveLayouts: { plains: 4.5, rooms: 2.5, dungeon: 2, labyrinth: 1 },
     // Rarely, the dark keeps a CHORD (engine/puzzles.ts): a ringed riddle
     // deep underground — the crystal grotto face's promise, cave-wide odds.
-    puzzles: [{ id: 'great_chord', chance: 0.06 }],
+    // Rarer still, someone's cold campfire ring waits to be re-lit.
+    puzzles: [
+      { id: 'great_chord', chance: 0.06 },
+      { id: 'ember_ring', chance: 0.05 },
+    ],
     // What the walls are hiding (grid layouts): mostly honest treasure and
     // trouble; sometimes a passage the map never admitted to; rarely, the
     // lid on a whole further cave.
@@ -8819,6 +8825,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { id: 'great_chord', chance: 0.3 },
       { id: 'charged_lattice', chance: 0.25 },
       { id: 'singing_refrain', chance: 0.25 },
+      { id: 'rising_tempo', chance: 0.22 },
+      { id: 'twin_accord', chance: 0.2 },
+      { id: 'ember_ring', chance: 0.15 },
       { id: 'shatter_chord', chance: 0.12 },
     ],
     packs: {
@@ -10480,6 +10489,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     puzzles: [
       { id: 'singing_refrain', chance: 0.25 },
+      { id: 'twin_accord', chance: 0.15 }, // antiphon — the paired voices
     ],
     packs: {
       count: [4, 6], size: [2, 4],
@@ -10586,6 +10596,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     puzzles: [
       { id: 'singing_refrain', chance: 0.35 },
+      { id: 'rising_tempo', chance: 0.15 }, // the liturgy keeps its measure
     ],
     packs: {
       count: [4, 6], size: [2, 4],
@@ -10901,7 +10912,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     puzzles: [
       { id: 'singing_refrain', chance: 0.6 },
+      { id: 'rising_tempo', chance: 0.35 },
       { id: 'charged_lattice', chance: 0.3 },
+      { id: 'twin_accord', chance: 0.3 },
+      { id: 'ember_ring', chance: 0.3 },
       { id: 'great_chord', chance: 0.1 },
     ],
     spawnerId: 'bone_altar', // never rolled — the den mint forces its objective

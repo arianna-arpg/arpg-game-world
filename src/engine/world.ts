@@ -31875,7 +31875,12 @@ export class World {
         }
       } else {
         const band = spec.count ?? kind.count ?? [4, 5];
-        const n = rng.int(band[0], band[1]);
+        let n = rng.int(band[0], band[1]);
+        // THE GRAIN (PuzzleKindDef.quantize): kinds built of pairs/triads
+        // round the roll DOWN to their multiple (floor one grain) — the
+        // accord can never mint an orphan voice.
+        const grain = kind.quantize ?? 1;
+        if (grain > 1) n = Math.max(grain, Math.floor(n / grain) * grain);
         const ringR = spec.spacing ?? kind.spacing;
         footprint = ringR + 90;
         const a0 = rng.range(0, Math.PI * 2);
@@ -31968,13 +31973,19 @@ export class World {
       if (g.run.done) continue;
       const rung = puzzleSpillOf(g.run) === 'all'
         ? g.nodes : [pickKnockNode(g.nodes, g.striker)];
-      for (const node of rung) {
-        if ((g.run.hums.get(node.id) ?? 0) > this.time) continue;
-        // An acknowledged ring holds the ONLY hum: any other bell clears
-        // it (the structural discriminator — a legitimate return to the
-        // same node always rings another node in between).
-        g.run.hums.clear();
-        g.run.hums.set(node.id, this.time + puzzleHumOf(g.run));
+      // THE HUM at BLOW grain: a still-humming bell is spill, judged by
+      // nothing; if ANY bell of this blow rings fresh, the blow claims the
+      // ledger WHOLE — cleared once, then every rung bell hums together —
+      // so a fan-out's echo (a re-fan of the same bells one frame later)
+      // is swallowed as ONE knock, exactly like a single bell's double-tap.
+      // The structural discriminator stands: a fresh bell from a LATER
+      // blow clears the standing hums, so a legitimate return to a bell
+      // always rings something else in between (or outlasts the hum).
+      const fresh = rung.filter(n => (g.run.hums.get(n.id) ?? 0) <= this.time);
+      if (!fresh.length) continue;
+      g.run.hums.clear();
+      for (const n of fresh) g.run.hums.set(n.id, this.time + puzzleHumOf(g.run));
+      for (const node of fresh) {
         g.run.kind.struck!(g.run, node, this.puzzleHost(), g.striker);
         if (g.run.done) break;
       }

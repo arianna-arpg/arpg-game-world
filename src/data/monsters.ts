@@ -5450,6 +5450,43 @@ export const MONSTERS: Record<string, MonsterDef> = {
     passive: true, immortal: true, noObjective: true, aims: false,
   },
 
+  // The tempo's voices: puzzle-owned metronomes — each keeps its own time
+  // (the kindle blink IS the pulse), and the measure decides what settles.
+  tempo_crystal: {
+    id: 'tempo_crystal', name: 'Tempo Crystal',
+    color: '#d8b8ff', shape: 'circle', radius: 13, material: 'crystal', look: 'chime_crystal',
+    base: { life: 260, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+  },
+
+  // The accord's twin voices: puzzle-owned pairs — the worn tone NAMES the
+  // partnership (no `tune`: blows ring them, they never repaint), and the
+  // kindle they hold is exactly the linger window their partner has.
+  accord_crystal: {
+    id: 'accord_crystal', name: 'Accord Crystal',
+    color: '#c8e8d8', shape: 'circle', radius: 14, material: 'crystal', look: 'resonant_crystal',
+    base: { life: 300, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+  },
+
+  // The ember ring's coals: puzzle-owned embers — struck alight for the
+  // gutter window (the kindle fade is the same clock the riddle tests).
+  ember_crystal: {
+    id: 'ember_crystal', name: 'Ember Crystal',
+    color: '#ff9a5e', shape: 'circle', radius: 13, material: 'crystal', look: 'lattice_crystal',
+    base: { life: 260, lifeRegen: 80, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
+    scaling: { life: { incPerLevel: 0.2 } },
+    skills: [],
+    xp: 0,
+    passive: true, immortal: true, noObjective: true, aims: false,
+  },
+
   // Friendly scenery folk: they stand at their posts and cannot be harmed.
   // Behavior binds to npcRole (vendor / innkeep / caravanner / questgiver),
   // so any body — these or a package's — can staff a counter.
