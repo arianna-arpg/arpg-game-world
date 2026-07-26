@@ -23,13 +23,24 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 | `procession` | escort the caravan to the far crossing — WINNABLE and LOSEABLE |
 | `bounty`     | claim every WRIT — named rare quarry roaming with the population |
 | `offering`   | FEED the altar — kills inside its field power it; stalls, never fails |
+| `leyline`    | THE BESIEGED WAYPOINT — fell the SIPHON drinking the node dry; |
+|              | the stone refuses attunement while the thief lives              |
+| `rifts`      | SEAL the seeping tears — each pours the zone's own underside    |
+|              | until held shut under the contest law                           |
+| `pyres`      | KINDLE the cold fire-bowls — each lit bowl is a REGISTERED      |
+|              | lightwell (real light; the Gloaming's meter drinks from it)     |
+| `unearth`    | DIG the burial mounds open — spoils spill (spoils-law honest),  |
+|              | and the turned earth may answer                                 |
 
 ## Exit-seal POLICY (not physics)
 
 Whether an UNMET objective seals the zone's other exits is data at two levels:
 
 - `OBJECTIVE_SEALS` (data/zones.ts) — the per-kind default. Today only `boss`
-  seals (the classic arena commitment). Waves/spawners roads stay OPEN.
+  seals (the classic arena commitment). Waves/spawners roads stay OPEN, and
+  the whole contest-law family + the leyline siege ship open too (the ground
+  itself is the commitment; a severed waypoint punishes nothing but fast
+  travel).
 - `ObjectiveTuning.seal` — a per-zone override on any spec (`seal: true` makes
   one special gauntlet seal; `seal: false` makes a fleeable boss).
 
@@ -50,10 +61,102 @@ unsealed waves zone still stakes its treasure.
   wounded bodies. Past the TTL (or the Campfire) the gauntlet re-arms fresh;
   a COMPLETED arena stays completed via `completedObjectives`.
 - BEACON: `ZoneMemory.spireCharge` — a half-charged spire resumes exactly.
+- RIFTS / PYRES / UNEARTH: `riftCharges`/`pyreCharges`/`digCharges` — the
+  spire's charge-array shape, one per fixture in placement order. Full =
+  the finished face: a sealed tear re-places sealed, a lit bowl burning,
+  an opened mound dug.
+- LEYLINE: nothing of its own — the wounded siphon is ordinary enemy memory
+  (`ZoneEnemyMemo` carries its name, rarity, tag and HP for free), and a
+  fallen one stays fallen via `completedObjectives`.
 - CLEAR: `ZoneMemory.cullKills`/`cullNeed` — the tally AND the stamped ask
   both ride (the ask derives once, on fresh ground; a thinned field
   re-deriving from its survivors would shrink its own ask).
 - The riders all serialize with the world (`meta/worldstate.ts SavedZoneMemory`).
+
+## THE CONTEST LAW (the hold-family discipline)
+
+`data/objectives.ts` `ContestSpec`/`CONTEST_CFG`, spread into each kind's own
+config (`BEACON_CFG.contest`, `RIFT_CFG.contest`, `PYRE_CFG.contest`,
+`DIG_CFG.contest`) and driven by ONE engine helper (`World.driveHoldFixtures`)
+for every hold-the-ground fixture family:
+
+- BUILD only on held, CLEARED ground: any live counted enemy inside the
+  contest ring (`radius`) STALLS the fixture's progress. The presser
+  predicate is `objectiveCountable` — the SAME one the cull's scoreboard
+  runs, so "contested" and "who counts" can never disagree (dormant sleepers
+  count on purpose: ground with a sleeper on it is not cleared ground).
+- A CROWD (`drainAt`+) DRAINS banked progress (`drainPerSec`), attended or
+  not — walk away from pressed ground and the wilds smother the work back
+  down (the spire's own lure feeds this loop by design). Charges floor at 0;
+  nothing ever resets.
+- The drive STAMPS its frame read (`holdRead` — the watch fabric's idiom):
+  `spireView`/`riftsView`/`pyresView`/`digsView` re-speak the exact scalars
+  the drive tested, so the HUD line, the chevron label and the charge logic
+  are one truth (drawn == tested).
+- Per-zone override: `ObjectiveTuning.contest` re-dials any knob, or `false`
+  waives the law for an authored uncontested stand. Kinds that hold no
+  ground ignore it.
+
+## THE BESIEGED WAYPOINT (`kind: 'leyline'`)
+
+All numbers in `src/data/leyline.ts` `LEYLINE_CFG`; spec overrides `id`
+(pin a def), `rarity`/`stacks` (the promote), `levelBonus`.
+
+- The zone's waypoint stands SEVERED: a SIPHON — by default a promoted,
+  NEMESIS-NAMED champion rolled from the zone's OWN table (every biome's
+  thief is native), `id` pins a def instead — seats at its own POI (it taps
+  the vein wherever it runs) and is POSTED there (the duty-post fabric:
+  storm-drift and shoves can never wander the objective away).
+- `World.waypointBesieged()` is the ONE predicate: the attune brush REFUSES
+  (throttled float names why), the HUD line names the thief, and the
+  renderer draws the starved face — a broken guttering ring — plus THE
+  TETHER: a crackling beam from the stone to the siphon, dashes marching
+  TOWARD the thief (power flows out; the beam IS the map to the fight).
+- State is PURE POPULATION (the bounty's honesty): any death counts, the
+  wounded thief rides Zone Memory free, a save/guest derives "besieged"
+  from the same replicated actors the fight stands on. The kill frees the
+  stone on the spot; the same brush then attunes. A rosterless zone spawns
+  nothing and completes vacuously (the puzzle's no-wedge law).
+- WORLDGEN: a 'leyline' roll FORCES the mint's waypoint (OR-ed after the
+  chance draw — the seeded stream stays byte-identical for every other
+  mint); ground the vetoes refuse (exclusion discs, waypointless
+  dimensions) degrades the roll to 'clear'. validate() warns on authored
+  leyline ground without a waypoint and on pinned siphons that don't
+  resolve.
+
+## SEAL THE RIFTS (`kind: 'rifts'`)
+
+All numbers in `src/data/rifts.ts` `RIFT_CFG`; spec overrides `count`,
+`sealSec`. Seeping tears (`rift_tear`/`rift_tear_sealed` — the chasm-pit
+painter glowing the zone's own accent) stand at POIs:
+
+- Each OPEN tear POURS: small groups of the zone's own kin on a jittered
+  clock (`pour` — every/batch/cap/radius), tagged `rift_born`, zone-capped.
+  The pour is counted population: it stalls the seal, pays xp, rides Zone
+  Memory — the tear literally contests its own closing. Sealed tears pour
+  nothing; packless zones seal quietly.
+- PRESENCE beside a tear builds its SEAL (the 'rift' transit row) under the
+  contest law. Sealed stays sealed across re-entry (`riftCharges`).
+
+## KINDLE THE PYRES (`kind: 'pyres'`)
+
+All numbers in `src/data/pyres.ts` `PYRE_CFG`; spec overrides `count`,
+`kindleSec`. Cold iron fire-bowls (`night_pyre`/`night_pyre_lit` — the
+campfire painter's bowl face, the regent-brazier precedent) stand at POIs;
+presence kindles each under the contest law. THE PAYOFF IS REAL LIGHT: the
+lit kind wears a REGISTERED lightwell row (`registerLightwell` — the engine
+reads wells by doodad kind, zero engine edits), so on gloaming ground a lit
+pyre feeds the LIGHT meter like a campfire, and its light row rides the
+dynamic light layer everywhere.
+
+## UNEARTH THE CACHES (`kind: 'unearth'`)
+
+All numbers in `src/data/digsites.ts` `DIG_CFG`; spec overrides `count`,
+`digSec`. Burial mounds (`burial_mound`/`burial_mound_dug` — cairn standing,
+scree opened) dig open under the contest law (the dead dislike shovels). An
+opened mound SPILLS through the ordinary drop chokepoint (`spoilGemChance` —
+the SPOILS LAW still governs sealed ground) and may SPRING an ambush of the
+zone's own kin from the turned earth (`ambush` — chance/count/radius).
 
 ## THE CULL (`kind: 'clear'`)
 
@@ -97,20 +200,42 @@ spec (`chargeSec`, `lureRadius`, `revealRadius`).
 - PRESENCE (not idleness — you will be fighting) inside the hold ring builds
   the charge: the ring radius + ring style live on the `'beacon'` TRANSIT row
   (data/transit.ts), the seconds default from the row's dwell. Stepping out
-  PAUSES the charge; it never resets.
+  PAUSES the charge; it never resets — but the ground must be TRULY CLEARED:
+  the charge runs under THE CONTEST LAW (above, `BEACON_CFG.contest`) — any
+  counted enemy inside the ring stalls it, a crowd drains it, and the HUD +
+  chevron say which is happening in as many words.
 - While charge is banked, the spire holds a LURE (below): the zone's own
   population drifts toward the glow — the pressure is whoever already lives
-  here. NO waves, NO bonus spawns.
+  here. The lure's standoff ring sits INSIDE the contest ring on purpose:
+  drawn moths stall the stone until cut down, and an abandoned half-charged
+  stone gets smothered back toward zero by its own crowd.
+- …and the operation BLEEDS (`BEACON_CFG.reinforce`, spec `reinforce`
+  overrides any dial, `false` silences it): while any stone holds banked,
+  unfinished charge, small reinforcement groups arrive at the rim on a
+  jittered clock — the zone's OWN table seasoned with the mix factions'
+  rosters (`mixFactions`, debut `['marrowdrawn']` — the essence-drawn
+  opportunists follow charged ley like bleeding marrow; an unregistered
+  roster degrades silently to native). Arrivals are ordinary tagged bodies
+  (`spire_drawn`), capped live, spawned into the lure's pull — no orders,
+  no scripted charge: the pull does the rest.
 - At full charge the spire flares (kind swap to `_lit`, big light) and
-  SURVEYS the overworld: every node within `revealRadius` map units resolves
-  its `?` frontiers through the eager-web mint path (`chartNeighborsOf` —
-  fresh mints inside the pulse chart theirs in turn, so the growth is bounded
-  by the radius), concealment lifts, and everything touched lands in
-  `World.surveyed` (persisted). The map (ui/panels.ts) draws surveyed-but-
-  unwalked nodes as RECON INTEL: real name/biome/level, washed fill, dashed
-  rim in the spire's tint.
+  SURVEYS the overworld — THE RECON CAP (`BEACON_CFG.revealCount`, spec
+  `revealCount`): the flare names a seeded RANDOM ASSORTMENT of up to
+  `revealCount` NEW nodes (never visited, never surveyed) inside
+  `revealRadius`, not the whole disc (the old whole-disc unfurl dumped 80+
+  nodes of intel in one flash and flattened the map's mystery). Picked
+  nodes chart their `?` frontiers (real graph citizens — roads drawn),
+  unveil, unconceal, and land in `World.surveyed` (persisted); everything
+  else keeps its veil, and any structural mints the picked charting causes
+  stay forechart-veiled (unfound country stays unfound). The pick is
+  deterministic per zone (`seed × revealSalt`). The HARBOR's purchased
+  charts keep the whole-disc pulse — a paid chart is a different promise
+  (`surveyAround`'s uncapped lane, byte-identical to the old behavior).
+  The map (ui/panels.ts) draws surveyed-but-unwalked nodes as RECON INTEL:
+  real name/biome/level, washed fill, dashed rim in the spire's tint.
 - The off-screen chevron rides the attention fabric (registered in
-  data/beacons.ts); the charge ring rides the shared dwell-ring feed
+  data/beacons.ts) and speaks the contest (`contested` / `draining` off the
+  stamped view); the charge ring rides the shared dwell-ring feed
   (`World.dwellRingsView`, styled by the transit row).
 
 ## The ATTUNEMENT CIRCUIT (`kind: 'beacon', count: 2+`)

@@ -490,6 +490,18 @@ export function validateContent(): void {
       if (t.objectives.some(o => o.kind === 'puzzle') && !t.puzzles?.length) {
         warn(`tileset '${t.id}': a 'puzzle' objective row but no puzzles repertoire — every ask would repeat the engine default`);
       }
+      // THE OBJECTIVE-KIND CENSUS: every tileset weight row must name a real
+      // kind (or the 'circuit' alias) — a typo'd row silently degraded to
+      // 'clear' at rollObjective's default, thinning the authored variety
+      // with no witness.
+      {
+        const kinds = new Set<string>(Object.keys(OBJECTIVE_SEALS));
+        kinds.add('circuit');
+        for (const row of t.objectives) {
+          if (!kinds.has(row.kind)) warn(`tileset '${t.id}': objective row names unknown kind '${row.kind}' — it would roll as 'clear'`);
+          if (!(row.weight > 0)) warn(`tileset '${t.id}': objective row '${row.kind}' weight must be > 0`);
+        }
+      }
     }
     for (const z of Object.values(ZONES)) {
       for (const row of z.puzzles ?? []) {
@@ -500,6 +512,16 @@ export function validateContent(): void {
       }
       if (z.objective.kind === 'puzzle' && z.objective.puzzle && !PUZZLES[z.objective.puzzle]) {
         warn(`zone '${z.id}': objective pins unknown puzzle preset '${z.objective.puzzle}'`);
+      }
+      // THE BESIEGED WAYPOINT's coherence: authored leyline ground must
+      // carry the stone it besieges, and a pinned siphon must exist (a
+      // rosterless miss completes vacuously at load — legal, but an
+      // authored id that never resolves is a typo, not a choice).
+      if (z.objective.kind === 'leyline') {
+        if (!z.waypoint) warn(`zone '${z.id}': 'leyline' objective on waypointless ground — the siege has nothing to besiege`);
+        if (z.objective.id && !MONSTERS[z.objective.id]) {
+          warn(`zone '${z.id}': leyline objective pins unknown siphon '${z.objective.id}'`);
+        }
       }
     }
   }

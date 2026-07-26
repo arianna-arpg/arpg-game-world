@@ -917,7 +917,30 @@ changes.
   `balance/probe_coherence.ts`.
   ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
   `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the
-  monster-LURE fabric — docs in `docs/engine/objectives.md`).
+  monster-LURE fabric). THE CONTEST LAW (`data/objectives.ts CONTEST_CFG` →
+  per-kind configs → `ObjectiveTuning.contest` override/waiver; ONE driver
+  `World.driveHoldFixtures` + the stamped `holdRead` views) gates every
+  hold-the-ground fixture family: progress BUILDS only on cleared ground
+  (any counted enemy in the ring stalls it — the cull's own predicate),
+  a crowd DRAINS banked work, and the HUD/chevron speak the tested frame.
+  The SPIRE runs contested + BLEEDS reinforcements (`BEACON_CFG.reinforce`
+  — zone table seasoned by mix-faction rosters, debut marrowdrawn, tagged
+  + capped) and its flare reveals a seeded RANDOM ASSORTMENT of
+  `revealCount` (10) new nodes instead of the whole disc (harbor charts
+  keep the uncapped pulse). NEW KINDS, biome-attached via tileset weight
+  rows: `leyline` (THE BESIEGED WAYPOINT — `data/leyline.ts`: a promoted
+  nemesis-named native SIPHON posted at its own POI drinks the node dry
+  behind a drawn waypoint→thief tether; `World.waypointBesieged` is the one
+  predicate for the refused attune brush + HUD + starved drawn face; pure
+  population state, worldgen forces the mint's waypoint or degrades the
+  roll), `rifts` (`data/rifts.ts` — sealing tears that POUR the zone's own
+  kin, `rift_born` capped), `pyres` (`data/pyres.ts` — kindled bowls that
+  ARE registered lightwells: the objective pushes the Gloaming back), and
+  `unearth` (`data/digsites.ts` — dug mounds spill through the spoils law
+  + may spring ambushes). Progress rides Zone Memory charge arrays
+  (`riftCharges`/`pyreCharges`/`digCharges`); fixtures re-place in their
+  finished faces. Docs in `docs/engine/objectives.md`; probe
+  `balance/probe_objectives.ts`.
   THE ATTUNEMENT FABRIC (crystals take the color of the blow):
   `MonsterDef.tune` bodies re-tune to a landed hit's dominant ROLLED type
   (conversions honored) and pulse `attuned_<tone>` onto friend and foe

@@ -2410,6 +2410,49 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stone: 'theme:obstacle|#5e6a66', gem: '#b8ffe4', lit: true },
     light: { radius: -4.4, color: '#8ff0d4', intensity: 0.5, flicker: 1.4 },
   },
+  // --- THE OBJECTIVE FIXTURES (contest-law kinds — data/rifts.ts /
+  // pyres.ts / digsites.ts). Every face an existing painter re-dressed (the
+  // skyglass_spur doctrine): the seeping tear is the chasm-pit painter
+  // glowing the zone's own accent; sealed, the same seam scarred dark. The
+  // cold pyre is the regent-brazier's iron bowl; lit, the campfire's flame
+  // and a REGISTERED lightwell (the light row is the objective's payoff).
+  // The burial mound is a cairn; dug, its stones spill as scree.
+  rift_tear: {
+    painter: 'chasmPit', order: 38,
+    params: {
+      rim: { color: '#241430', alpha: 0.5, grow: 4 },
+      core: { color: '#0a0512' },
+      bands: 0,
+      cracks: { chance: 0.9, color: 'theme:accent|#c86aff' },
+      glow: { color: 'theme:accent|#c86aff', alpha: 0.24 },
+    },
+    light: { radius: -2.6, color: 'theme:accent|#c86aff', intensity: 0.3, flicker: 2.2 },
+  },
+  rift_tear_sealed: {
+    painter: 'chasmPit', order: 38,
+    params: {
+      rim: { color: '#1c1822', alpha: 0.4, grow: 3 },
+      core: { color: '#14101a' },
+      bands: 0,
+      cracks: { chance: 0.35, color: '#3a3444' },
+    },
+  },
+  night_pyre: {
+    painter: 'campfire', order: 53, shadow: 0.5,
+    params: { bowl: true, cold: true },
+  },
+  night_pyre_lit: {
+    painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
+    params: { bowl: true },
+    light: { radius: -6, color: '#ffc878', intensity: 0.6, flicker: 3.5 },
+  },
+  burial_mound: {
+    painter: 'cairn', order: 54, shadow: 0.55, longShadow: 0.9,
+    params: { color: 'theme:obstacle|#7a6e58', edge: 'theme:obstacleEdge|#98886c' },
+  },
+  burial_mound_dug: {
+    painter: 'scree', order: 37, params: { color: '#7a6e58' },
+  },
 
   // --- The AETHERIAL kit (vis/paintersAether.ts — the cloud shelves) --------
   cloud_billow: {

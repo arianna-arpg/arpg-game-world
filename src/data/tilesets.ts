@@ -22,7 +22,8 @@ import { climateAffinity, type ClimateSpec } from '../world/climate';
 export type BlendRoll = BlendSpec & { chance?: number };
 
 export interface ObjectiveWeight {
-  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession' | 'bounty' | 'offering' | 'puzzle';
+  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession' | 'bounty' | 'offering' | 'puzzle'
+  | 'leyline' | 'rifts' | 'pyres' | 'unearth';
   weight: number;
 }
 
@@ -505,6 +506,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'beacon', weight: 1 },
       { kind: 'spawners', weight: 1 },
       { kind: 'procession', weight: 1 },
+      { kind: 'unearth', weight: 2 },   // barrow country digs its own dead
+      { kind: 'leyline', weight: 1 },
     ],
     caveLayouts: { plains: 3, rooms: 2, dungeon: 1 },
     // The bodies themselves hide the finds: cache and ambush hollows carve
@@ -1238,6 +1241,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 1 },
       { kind: 'waves', weight: 1 },
+      { kind: 'leyline', weight: 1 },
     ],
     structures: [
       { structure: 'walled_manor', chance: 0.12 },
@@ -1417,6 +1421,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 1 },
       { kind: 'waves', weight: 1 },
+      { kind: 'pyres', weight: 2 },     // the gloam country's own ask: push the dark back
     ],
     structures: [
       { structure: 'pillaged_township', chance: 0.15 },
@@ -1570,6 +1575,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'beacon', weight: 1 },
       { kind: 'waves', weight: 1 },
+      { kind: 'pyres', weight: 1.5 },   // hallow the field against the night
+      { kind: 'unearth', weight: 1.5 }, // …or turn its old graves over
     ],
     structures: [
       { structure: 'hay_barn', chance: 0.3 },
@@ -1710,6 +1717,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 1 },
       { kind: 'bounty', weight: 1 },
+      { kind: 'pyres', weight: 2 },     // grave-country vigil fires
     ],
     structures: [
       { structure: 'chapel', chance: 0.3 },
@@ -1891,6 +1899,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'pyres', weight: 1.5 },   // fire against the long cold
+      { kind: 'leyline', weight: 1 },
     ],
   },
 
@@ -1983,6 +1993,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'pyres', weight: 1.5 },   // the tundra's answer to the dark and the cold
+      { kind: 'leyline', weight: 1 },
     ],
   },
 
@@ -2054,6 +2066,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 3 },
       { kind: 'waves', weight: 1 },
+      { kind: 'rifts', weight: 2 },     // the cinder country tears easily
     ],
   },
 
@@ -2205,6 +2218,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'unearth', weight: 2 },   // the sand keeps what the caravans lost
+      { kind: 'leyline', weight: 1 },
     ],
   },
 
@@ -2344,6 +2359,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'procession', weight: 1 },
       { kind: 'spawners', weight: 1 },
       { kind: 'waves', weight: 1 },
+      { kind: 'unearth', weight: 2 },   // the erg swallowed whole caravans
     ],
   },
 
@@ -2455,6 +2471,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bounty', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'escape', weight: 1 },
+      { kind: 'unearth', weight: 1.5 }, // the dead lake's floor keeps its drowned
     ],
   },
 
@@ -2823,6 +2840,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 1 },
+      { kind: 'unearth', weight: 2 },   // tomb country — the ask is a shovel
     ],
   },
 
@@ -2983,6 +3001,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'leyline', weight: 1 },
     ],
   },
 
@@ -3271,6 +3290,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'pyres', weight: 1.5 },   // vigil fires over the drowned graves
     ],
   },
 
@@ -3423,6 +3443,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 3 },
       { kind: 'waves', weight: 1 },
+      { kind: 'rifts', weight: 1.5 },   // the war-wound still tears open
+      { kind: 'leyline', weight: 1 },
     ],
   },
 
@@ -3838,6 +3860,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 1 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'rifts', weight: 2 },     // hell's own floor gives way
     ],
   },
 
@@ -3947,6 +3970,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 1 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'rifts', weight: 1.5 },   // the membrane splits where it strains
     ],
   },
 
@@ -4399,6 +4423,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 3 },
       { kind: 'waves', weight: 1 },
+      { kind: 'unearth', weight: 1.5 }, // burial goods under every headstone
+      { kind: 'pyres', weight: 1 },     // …and vigil fires against the risen
     ],
     structures: [
       { structure: 'dungeon_block', chance: 0.3 },
@@ -4514,6 +4540,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bounty', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 2 },
+      { kind: 'unearth', weight: 1.5 }, // the sanctum's reliquaries go under the spade
     ],
   },
 
@@ -4582,6 +4609,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+      { kind: 'unearth', weight: 1.5 }, // what the tide buried, the spade finds
     ],
   },
 
@@ -4710,6 +4738,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'waves', weight: 2 },
+      { kind: 'leyline', weight: 1 },
     ],
     structures: [
       { structure: 'walled_manor', chance: 0.3 },
@@ -7399,7 +7428,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'rime_stone',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 },
+      { kind: 'leyline', weight: 1 }],  // the range's high nodes are worth their theft
   },
 
   // THE FOOTHILLS — the pinewood foot of the range (rim face, massif recipe):
@@ -7509,7 +7539,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     caveLayouts: { rooms: 2, plains: 1 },
     spawnerId: 'rime_stone',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'bounty', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'spawners', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'bounty', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'spawners', weight: 1 },
+      { kind: 'leyline', weight: 1 }, { kind: 'unearth', weight: 1 }],
   },
 
   // THE OVERPASS — the precarious crossing (mid-high face, the karst recipe
@@ -8074,7 +8105,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'waves', weight: 1 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'waves', weight: 1 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 },
+      { kind: 'pyres', weight: 1.5 }],  // will-o-wisp country: light that ISN'T lying
   },
 
   // --- THE FLESH COUNTRY (four faces, one biome tag) -------------------------
@@ -8163,7 +8195,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     // The Glut's own spawners-objective destructible: burst the blooms.
     spawnerId: 'corpse_bloom',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 },
+      { kind: 'rifts', weight: 1.5 }],  // the meat splits along its own seams
   },
 
   // SANGUINE — the body's open rivers: blood pooled into galleries and red
@@ -8282,6 +8315,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'offering', weight: 2 },
       { kind: 'beacon', weight: 1 },
       { kind: 'escape', weight: 1 },
+      { kind: 'rifts', weight: 1.5 },   // arteries burst into open tears
     ],
   },
 
@@ -8590,6 +8624,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'beacon', weight: 1 },
       { kind: 'spawners', weight: 1 },
       { kind: 'circuit', weight: 1 },
+      { kind: 'unearth', weight: 1.5 }, // the dry-stone country hides its hoards shallow
+      { kind: 'leyline', weight: 1 },
     ],
     // Rooms-heavy under the Reach: hollow wall mass for secret doors, and
     // the crag rim carries hollows of its own (crevice shafts = deeper yet).
@@ -8924,7 +8960,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 },
+      { kind: 'rifts', weight: 2 }],    // the caldera's floor is still deciding to be liquid
   },
 
   // MYCELIA — a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
@@ -9064,7 +9101,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'beacon', weight: 1 }, { kind: 'circuit', weight: 1 }, { kind: 'procession', weight: 1 }, { kind: 'bounty', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'beacon', weight: 1 }, { kind: 'circuit', weight: 1 }, { kind: 'procession', weight: 1 }, { kind: 'bounty', weight: 1 },
+      { kind: 'leyline', weight: 1 }],
     structures: [
       { structure: 'market_row', chance: 0.14 },
     ],

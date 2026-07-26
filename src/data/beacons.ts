@@ -26,6 +26,7 @@
 import { registerDoodadRule } from '../engine/levelgen';
 import type { World } from '../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../world/attention';
+import { CONTEST_CFG, type ContestSpec } from './objectives';
 import { registerTransit } from './transit';
 
 export const BEACON_CFG = {
@@ -51,6 +52,49 @@ export const BEACON_CFG = {
   /** World-map radius the finished spire surveys (charts frontiers, lifts
    *  concealment, marks intel). ObjectiveSpec.revealRadius overrides. */
   revealRadius: 330,
+  /** THE RECON CAP: how many NEW nodes (unvisited, unsurveyed) the finished
+   *  survey actually reveals — a seeded RANDOM ASSORTMENT from inside the
+   *  pulse, not the whole disc (the old whole-disc unfurl dumped ~80+ nodes
+   *  of intel and flattened the map's mystery in one flare). The pick is
+   *  deterministic per zone (seed × revealSalt): reload and the same spire
+   *  names the same places. ObjectiveSpec.revealCount overrides; the
+   *  harbor's PURCHASED charts keep their whole-disc pulse (a paid chart is
+   *  a different promise). */
+  revealCount: 10,
+  /** Salt for the reveal pick's seeded stream (over the zone's own seed). */
+  revealSalt: 0x53a9e1,
+  /** THE CONTEST LAW at the stone (data/objectives.ts): any live counted
+   *  enemy inside the ring stalls the charge; a crowd (`drainAt`+) drains
+   *  banked seconds — attended or not, so the lure's own drawn moths smother
+   *  an abandoned stone back down. The zone's ObjectiveTuning.contest
+   *  overrides (or `false` waives). "Truly cleared" is the whole ask. */
+  contest: { ...CONTEST_CFG, radius: 150 } as ContestSpec,
+  /** THE OPERATION'S PRESSURE: while any stone holds banked, unfinished
+   *  charge, the working of the leyline BLEEDS — small reinforcement groups
+   *  arrive at the rim on a jittered clock and drift in on the standing
+   *  lure. The body of each group is the zone's OWN population (the
+   *  disturbed-locals thesis); `mixFactions` seasons it with essence-drawn
+   *  opportunists through the extraction package's faction grammar (the
+   *  Marrow-Drawn follow charged ley like they follow bleeding marrow).
+   *  ObjectiveSpec.reinforce overrides any dial; `false` silences it. */
+  reinforce: {
+    /** Seconds between arrivals (jittered band) while the operation lives. */
+    every: [9, 14] as [number, number],
+    /** Bodies per arrival. */
+    batch: [1, 2] as [number, number],
+    /** Live drawn reinforcements at once (tag 'spire_drawn') — the trickle
+     *  never becomes a wave. */
+    cap: 7,
+    /** Faction rosters folded into the arrival table (FACTIONS registry —
+     *  absent rosters degrade silently to the native table). */
+    mixFactions: ['marrowdrawn'] as readonly string[],
+    /** Chance an arriving body draws from the mix rosters instead. */
+    mixChance: 0.35,
+    /** Arrival band (world units) around the pressed stone. */
+    radius: [320, 460] as [number, number],
+    /** Level bonus on arrivals over the zone's own level. */
+    levelBonus: 0,
+  },
   /** The fixture's doodad kinds (dormant / lit) — looks in doodadVisuals.ts;
    *  the engine swaps dormant → lit at full charge (a pure kind swap, so the
    *  bake cache and the light layer both just follow the data). */
@@ -109,8 +153,11 @@ registerAttentionSource((world: World): AttentionPoint[] => {
   const v = world.spireView();
   if (!v || v.done) return [];
   const stone = v.count > 1 ? 'waystone' : 'spire';
+  const label = v.draining ? `the ${stone} is overrun — its charge drains!`
+    : v.contested ? `the ${stone} is contested — clear the ground`
+      : v.frac > 0 ? `the ${stone} charges` : `a dormant ${stone}`;
   return [{
     id: 'survey_spire', pos: v.pos, color: BEACON_CFG.accent, glyph: '▲',
-    label: v.frac > 0 ? `the ${stone} charges` : `a dormant ${stone}`, z: 2,
+    label, z: 2,
   }];
 });

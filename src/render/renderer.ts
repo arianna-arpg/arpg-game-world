@@ -5367,20 +5367,66 @@ export class Renderer {
     }
   }
 
-  /** Waypoints: a cyan ring stone — bright once attuned. */
+  /** Waypoints: a cyan ring stone — bright once attuned. A BESIEGED stone
+   *  (the 'leyline' objective) wears its starved face — guttering violet,
+   *  the ring broken — and THE TETHER: a crackling drain-beam from the
+   *  stone to the live siphon, dashes marching TOWARD the thief (power
+   *  flows out — the beam is honest about direction, and it IS the map to
+   *  the fight). All state reads World.waypointBesieged/leylineView, the
+   *  same predicate the attune brush refuses on: drawn == tested. */
   private drawWaypoint(world: World): void {
     const wp = world.waypointPos;
     if (!wp) return;
     const { ctx } = this;
     const t = performance.now() / 1000;
     const attuned = world.discoveredWaypoints.has(world.zone.id);
-    const color = attuned ? '#5ad8d8' : '#3a6a72';
+    const ley = world.leylineView();
+    const besieged = !!ley?.besieged;
+    // THE TETHER (under the stone's own ring): a slightly wavering polyline
+    // with marching dashes — cheap (one stroke per frame), long-range
+    // legible (the accent stays saturated the whole run).
+    if (besieged && ley?.siphon) {
+      const s = ley.siphon;
+      const dx = s.x - wp.x, dy = s.y - wp.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len, ny = dx / len; // crackle axis (perpendicular)
+      const segs = Math.max(6, Math.min(26, Math.round(len / 46)));
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.15 * Math.sin(t * 5);
+      ctx.strokeStyle = '#b06bd4';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([10, 14]);
+      ctx.lineDashOffset = -((t * 90) % 24); // dashes MARCH toward the thief
+      ctx.beginPath();
+      ctx.moveTo(wp.x, wp.y);
+      for (let i = 1; i < segs; i++) {
+        const f = i / segs;
+        const wob = Math.sin(f * Math.PI * 3 + t * 6) * 5 * Math.sin(f * Math.PI);
+        ctx.lineTo(wp.x + dx * f + nx * wob, wp.y + dy * f + ny * wob);
+      }
+      ctx.lineTo(s.x, s.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    const color = besieged ? '#8a5aa8' : attuned ? '#5ad8d8' : '#3a6a72';
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(wp.x, wp.y, 20, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = attuned ? 0.5 + 0.2 * Math.sin(t * 3) : 0.25;
+    if (besieged) {
+      // The broken ring: three guttering arcs instead of the whole circle.
+      const gap = 0.35 + 0.1 * Math.sin(t * 7);
+      for (let i = 0; i < 3; i++) {
+        const a0 = t * 0.8 + i * (Math.PI * 2 / 3);
+        ctx.beginPath();
+        ctx.arc(wp.x, wp.y, 20, a0, a0 + Math.PI * 2 / 3 - gap);
+        ctx.stroke();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.arc(wp.x, wp.y, 20, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = besieged ? 0.12 + 0.08 * Math.sin(t * 9) : attuned ? 0.5 + 0.2 * Math.sin(t * 3) : 0.25;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(wp.x, wp.y, 12, 0, Math.PI * 2);
@@ -5389,7 +5435,7 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.font = '10px Verdana';
     ctx.fillStyle = color;
-    ctx.fillText(attuned ? 'waypoint' : 'dormant waypoint', wp.x, wp.y + 36);
+    ctx.fillText(besieged ? 'severed waypoint' : attuned ? 'waypoint' : 'dormant waypoint', wp.x, wp.y + 36);
   }
 
   /** Resource orbs: little glowing droplets of life / mana / shield. */

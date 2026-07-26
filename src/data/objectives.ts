@@ -21,6 +21,33 @@
 import type { World } from '../engine/world';
 import { registerAttentionSource, type AttentionPoint } from '../world/attention';
 
+/** THE CONTEST LAW — one contested-presence discipline for every hold-the-
+ *  ground objective fixture (survey spires, rift seals, pyre kindlings, dig
+ *  sites…): a fixture's progress only BUILDS on ground that is truly held.
+ *  Any live counted enemy inside the contest ring STALLS the work (the same
+ *  `objectiveCountable` predicate the cull's scoreboard runs, so "cleared"
+ *  can never disagree with "counting"); a CROWD (`drainAt`+) actively DRAINS
+ *  banked progress — walk away from a half-charged stone and the wilds
+ *  smother it back down. Per-kind configs spread these defaults; a zone's
+ *  ObjectiveTuning.contest overrides any dial (or `false` waives the law). */
+export interface ContestSpec {
+  /** Contest ring radius (world units) around the fixture. */
+  radius: number;
+  /** Live counted enemies at/above this STALL the work (progress freezes). */
+  stallAt: number;
+  /** …at/above this the crowd DRAINS banked progress (attended or not). */
+  drainAt: number;
+  /** Banked seconds lost per second while drained (floors at 0). */
+  drainPerSec: number;
+}
+
+export const CONTEST_CFG: ContestSpec = {
+  radius: 150,
+  stallAt: 1,
+  drainAt: 4,
+  drainPerSec: 0.35,
+} as const;
+
 /** THE CULL (kind 'clear'): the ask is a SHARE of the ground's counted
  *  population — "kill N here", never "find the last body" (that hunt is the
  *  bounty writ's identity). These dials shape the DERIVED ask on ground whose

@@ -1367,10 +1367,16 @@ export function placeZoneAt(
   // its own radius. Measured in Euclidean node-space (the same convention everywhere).
   // A WAYPOINTLESS DIMENSION (DimensionDef.waypoints: false — the Aetherial)
   // vetoes outright, AFTER the ??-chain so the seeded draw order is untouched.
-  const wpCand = (spec.forceWaypoint ?? rng.chance(0.3))
+  // A 'leyline' roll FORCES the stone (the besieged waypoint IS the ask) —
+  // OR-ed after the chance draw so the seeded stream is byte-identical for
+  // every other mint; ground the vetoes still refuse degrades the objective
+  // back to 'clear' below (a leyline zone without a waypoint is incoherent).
+  const wpCand = ((spec.forceWaypoint ?? rng.chance(0.3)) || objective.kind === 'leyline')
     && dimensionDef(spec.dimension).waypoints !== false;
   const wpBlocked = Object.values(zoneMap).some(z =>
     z.wpExclusionRadius !== undefined && z.id !== id && coordDist(target, z.map) < z.wpExclusionRadius);
+  const objectiveFinal: ObjectiveSpec =
+    objective.kind === 'leyline' && (wpBlocked || !wpCand) ? { kind: 'clear' } : objective;
   // SKY EXPOSURE bake (spec ▷ tileset, most-specific wins): a sheltered
   // interior carries its roof on the def, so skyOf() answers from pure
   // zone data everywhere (engine, sim, renderer, both co-op sides).
@@ -1387,7 +1393,7 @@ export function placeZoneAt(
       : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
     layout,
     ...(layoutType !== 'plains' ? { layoutType } : {}),
-    objective,
+    objective: objectiveFinal,
     // The biome's puzzle repertoire + ambient scenery-actors ride the def
     // (rolled at LOAD on salted streams — never a generation concern).
     ...(tileset.puzzles ? { puzzles: tileset.puzzles } : {}),
@@ -1825,6 +1831,14 @@ function rollObjective(
     case 'bounty': return { kind: 'bounty' };         // numbers default from BOUNTY_CFG
     case 'offering': return { kind: 'offering' };     // altar + numbers roll at load
     case 'puzzle': return { kind: 'puzzle' };         // preset resolves at load (ZoneDef.puzzles rows)
+    // The contest-law kinds + the siege: counts/seconds default from their
+    // config files at load (LEYLINE/RIFT/PYRE/DIG _CFG) — the offering's
+    // idiom. 'leyline' forces the mint's waypoint (see the wpCand OR above);
+    // vetoed ground degrades back to 'clear' there.
+    case 'leyline': return { kind: 'leyline' };
+    case 'rifts': return { kind: 'rifts' };
+    case 'pyres': return { kind: 'pyres' };
+    case 'unearth': return { kind: 'unearth' };
     default: return { kind: 'clear' };
   }
 }

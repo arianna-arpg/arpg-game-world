@@ -74,6 +74,11 @@ import { COMBO_LIST, COMBO_RULES } from '../data/combos';
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
+import { LEYLINE_CFG } from '../data/leyline';
+import { RIFT_CFG } from '../data/rifts';
+import { PYRE_CFG } from '../data/pyres';
+import { DIG_CFG } from '../data/digsites';
+import type { ContestSpec } from '../data/objectives';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
 import { CLEAR_CFG, OFFERING_CFG, STRAGGLER_CFG } from '../data/objectives';
@@ -2012,6 +2017,13 @@ interface ZoneMemory {
    *  stood. (`spireCharge` is the legacy single-stone field, still read.) */
   spireCharge?: number;
   spireCharges?: number[];
+  /** The other CONTEST-LAW hold fixtures, each the spire's charge-array
+   *  shape in placement order: RIFTS' seal seconds, PYRES' kindling
+   *  seconds, DIG SITES' spade seconds. Full = sealed/lit/opened — the
+   *  fixture re-places in its finished face. */
+  riftCharges?: number[];
+  pyreCharges?: number[];
+  digCharges?: number[];
   /** PROCESSION zones: the escort's state at capture. `lost` marks a dead
    *  cart (the objective stays forfeit until the memory lapses); otherwise
    *  the cart re-waits dormant at (x,y) with `life`, keeping its original
@@ -2029,6 +2041,11 @@ interface ZoneMemory {
   cullKills?: number;
   cullNeed?: number;
 }
+
+/** One CONTEST-LAW hold fixture (a survey stone, rift seal, pyre bowl, or
+ *  burial mound): `charge` is banked seconds toward its finished face;
+ *  `pourAt` is the rift family's next-pour clock (idle 0 on the others). */
+interface HoldFixture { pos: Vec2; charge: number; doodad: Doodad; pourAt: number }
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
  *  of stationary cultists in the zone the player stands in. The ConclaveField
@@ -3061,7 +3078,22 @@ export class World {
    *  banked charge, and the fixture whose kind flips dormant → lit. ONE entry
    *  is the lone spire; several is the ATTUNEMENT CIRCUIT (ObjectiveSpec
    *  count). Zone-local; charges persist across boundaries via Zone Memory. */
-  private spires: { pos: Vec2; charge: number; doodad: Doodad }[] = [];
+  private spires: HoldFixture[] = [];
+  /** The other CONTEST-LAW hold fixtures (one shape, one driver —
+   *  driveHoldFixtures): rift seals, pyre kindlings, dig sites. Charges ride
+   *  Zone Memory exactly like the spires'. */
+  private rifts: HoldFixture[] = [];
+  private pyres: HoldFixture[] = [];
+  private digs: HoldFixture[] = [];
+  /** The spire operation's reinforcement clock (BEACON_CFG.reinforce) —
+   *  transient, re-armed per load. */
+  private spireReinforceAt = 0;
+  /** The contest drive's last frame read (the stamp idiom — views re-speak
+   *  the exact scalars the drive tested; one row suffices, since a zone
+   *  runs exactly one objective). */
+  private holdRead = { contested: false, draining: false };
+  /** Attune-refusal float throttle (the besieged waypoint's brush). */
+  private wpRefusedAt = -1e9;
   /** The zone's live PROCESSION (escort objective): the caravan cart, its
    *  crossing, and the march state. Zone-local; progress persists across
    *  boundaries via Zone Memory (the cart re-waits DORMANT where you left
@@ -4447,6 +4479,12 @@ export class World {
     this.waveTimer = WAVE_CFG.firstDelay;
     this.waveActive = false;
     this.spires = [];       // beacon fixtures re-place below (charges ride Zone Memory)
+    this.rifts = [];        // …and the contest-law kin: rift seals,
+    this.pyres = [];        // pyre kindlings,
+    this.digs = [];         // dig sites — all charge-array riders
+    this.spireReinforceAt = 0;
+    this.wpRefusedAt = -1e9;
+    this.holdRead = { contested: false, draining: false };
     this.procession = null; // the escort re-stages below (state rides Zone Memory)
     this.offering = null;   // the hungering altar re-stages below (fed count rides Zone Memory)
     this.cull = null;       // the cull re-stamps below (tally + ask ride Zone Memory)
@@ -5070,7 +5108,86 @@ export class World {
             : (circuit ? BEACON_CFG.kindWay : BEACON_CFG.kind),
         };
         this.doodads.push(spireDoodad);
-        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad });
+        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad, pourAt: 0 });
+      }
+    }
+    // THE CONTEST-LAW KIN (rifts / pyres / dig sites): the spire's placement
+    // discipline verbatim — fixtures at POIs off the layout rng (a remembered
+    // seed re-places every one on the same ground), remembered charges resume
+    // fixture by fixture, and a finished zone stands them in their finished
+    // face (sealed seam / burning bowl / opened mound — proof of work done).
+    const placeHolds = (
+      count: [number, number], need: number, bodyR: number, clear: number,
+      kinds: { open: string; done: string }, charges: number[] | undefined,
+      into: { pos: Vec2; charge: number; doodad: Doodad; pourAt: number }[],
+    ): void => {
+      const n = rng.int(count[0], count[1]);
+      for (let i = 0; i < n; i++) {
+        const at = this.interactSpot(pois, rng, 620, clear);
+        const pos = this.clampPos(vec(at.x, at.y), bodyR);
+        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
+        const d: Doodad = {
+          pos: vec(pos.x, pos.y), radius: bodyR,
+          kind: charge >= need ? kinds.done : kinds.open,
+        };
+        this.doodads.push(d);
+        into.push({ pos: vec(pos.x, pos.y), charge, doodad: d, pourAt: 0 });
+      }
+    };
+    if (o.kind === 'rifts') {
+      placeHolds(o.count ?? RIFT_CFG.count, o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec),
+        RIFT_CFG.radius, RIFT_CFG.portalClear,
+        { open: RIFT_CFG.kind, done: RIFT_CFG.kindSealed }, memory?.riftCharges, this.rifts);
+    }
+    if (o.kind === 'pyres') {
+      placeHolds(o.count ?? PYRE_CFG.count, o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec),
+        PYRE_CFG.radius, PYRE_CFG.portalClear,
+        { open: PYRE_CFG.kind, done: PYRE_CFG.kindLit }, memory?.pyreCharges, this.pyres);
+    }
+    if (o.kind === 'unearth') {
+      placeHolds(o.count ?? DIG_CFG.count, o.digSec ?? transitDwell('digsite', DIG_CFG.digSec),
+        DIG_CFG.radius, DIG_CFG.portalClear,
+        { open: DIG_CFG.kind, done: DIG_CFG.kindDug }, memory?.digCharges, this.digs);
+    }
+    // THE BESIEGED WAYPOINT ('leyline'): the SIPHON seats at its own POI —
+    // it taps the vein wherever it runs, and the drawn tether spans back to
+    // the starved stone (the beam is the map to the fight). A promoted,
+    // NAMED champion of the zone's own table by default (every biome's thief
+    // is native; spec `id` pins a def), posted at its tap so nothing wanders
+    // the objective away. Spawned inside the tagging window: the wounded
+    // thief rides Zone Memory like any body, and a fallen one stays fallen
+    // via completedObjectives. A rosterless zone spawns nothing — the
+    // objective completes vacuously (the puzzle's no-wedge law).
+    if (o.kind === 'leyline' && !this.objectiveDone) {
+      let type = o.id && MONSTERS[o.id] ? o.id : undefined;
+      if (!type && def.packs) {
+        const e = this.effectiveSpawn(def, this.baseTable(def));
+        const eligible = e.table.filter(en => {
+          const d = MONSTERS[en.id];
+          return !!d && !d.passive && !d.noObjective && !d.spawner;
+        });
+        // THE STATURE FLOOR (LEYLINE_CFG.siphonMinXp): the thief is a body
+        // worth promoting — livestock-grade fauna stay in the flock. The
+        // floor degrades gracefully: an all-critter table rolls unfiltered.
+        const statured = eligible.filter(en =>
+          (MONSTERS[en.id]?.xp ?? 0) >= LEYLINE_CFG.siphonMinXp);
+        const pool = statured.length ? statured : eligible;
+        if (pool.length) type = this.weightedPick(pool, def.level);
+      }
+      if (type) {
+        const m = this.createMonster(type,
+          Math.max(1, def.level + (o.levelBonus ?? LEYLINE_CFG.levelBonus)), 'enemy');
+        const at = this.interactSpot(pois, rng, 640, LEYLINE_CFG.portalClear);
+        m.pos = this.clampPos(this.findFreeSpot(vec(at.x, at.y), m.radius + 2) ?? vec(at.x, at.y), m.radius);
+        this.promoteRarityStacked(m, o.rarity ?? LEYLINE_CFG.rarity, o.stacks ?? LEYLINE_CFG.stacks);
+        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
+        m.name = `${mintNemesisName(fac, () => rng.next())}, ${rng.pick(LEYLINE_CFG.titles)}`;
+        m.tag = 'ley_siphon';
+        // Posted at the tap (the duty-post fabric): a displaced thief walks
+        // back to the vein it drinks from.
+        m.aiPost = vec(m.pos.x, m.pos.y);
+        m.postSpec = { slack: LEYLINE_CFG.leash, hold: false };
+        this.actors.push(m);
       }
     }
     // PROCESSION (escort): the caravan waits DORMANT beside the gate you came
@@ -8273,27 +8390,70 @@ export class World {
     }
   }
 
-  /** RECON SURVEY (the spire's flare): reveal the overworld within `radius`
-   *  map units of `origin`. Every node inside the pulse resolves its '?'
-   *  frontiers into real neighbours (the eager-web mint path); freshly minted
-   *  nodes that land inside the pulse chart THEIRS in turn — so the reveal is
-   *  bounded by the radius, not a ring count. Concealed ground inside the
-   *  pulse is unveiled, and every node touched is marked SURVEYED (map intel:
-   *  real names/levels on ground you haven't walked — panels reads the set).
+  /** RECON SURVEY (the spire's flare + the harbor's purchased charts):
+   *  reveal the overworld within `radius` map units of `origin`.
+   *
+   *  UNCAPPED (`cap` absent — the harbor chart's whole-disc promise): every
+   *  node inside the pulse resolves its '?' frontiers into real neighbours
+   *  (the eager-web mint path); fresh mints inside the pulse chart THEIRS in
+   *  turn, concealment lifts, and every node touched is marked SURVEYED
+   *  (map intel: real names/levels on ground you haven't walked).
+   *
+   *  CAPPED (the spire's RECON CAP — BEACON_CFG.revealCount): the flare
+   *  reveals a seeded RANDOM ASSORTMENT of up to `cap` NEW nodes (never
+   *  visited, never surveyed) inside the pulse instead of the whole disc —
+   *  intel worth standing for, not a map dump. The pick is deterministic
+   *  per zone (seed × revealSalt): reload, and the same spire names the
+   *  same places. Picked nodes chart their frontiers (real graph citizens,
+   *  roads drawn), unveil, unconceal, and join `surveyed`; everything else
+   *  inside the pulse keeps its mystery — and any structural mints the
+   *  picked charting causes stay VEILED (the forechart doctrine: unfound
+   *  country stays unfound).
+   *
    *  Same-dimension only; floating/event-owned/pocket ground keeps its own
    *  lifecycle (surveyed-markable, never force-charted). Returns how many
-   *  nodes are newly known. If the CURRENT zone gains exits, the next frame's
-   *  syncZoneExits drain places the live portals ("a path opens!"). */
-  private surveyAround(origin: ZoneDef, radius: number): number {
+   *  nodes are newly known. If the CURRENT zone gains exits, the next
+   *  frame's syncZoneExits drain places the live portals ("a path opens!"). */
+  private surveyAround(origin: ZoneDef, radius: number, cap?: number): number {
     const dim = origin.dimension ?? 'surface';
     const inPulse = (z: ZoneDef): boolean =>
       (z.dimension ?? 'surface') === dim && z.caveDepth == null && !z.pocket
       && Math.hypot(z.map.x - origin.map.x, z.map.y - origin.map.y) <= radius;
+    const chartable = (z: ZoneDef): boolean =>
+      z.objective.kind !== 'safe' && !z.floating && !z.eventOwned;
+    if (cap !== undefined) {
+      // THE RECON CAP — the spire's bounded flare.
+      const news = Math.max(0, Math.floor(cap));
+      const picked: ZoneDef[] = [];
+      this.mintVeil = true; // structural mints stay forechart-veiled
+      try {
+        // Your own doors always answer the flare (a no-op on halo-charted
+        // ground — the horizon already resolved them).
+        this.chartNeighborsOf(origin);
+        const cands = Object.values(this.zoneMap).filter(z =>
+          z.id !== origin.id && inPulse(z) && chartable(z)
+          && !this.visited.has(z.id) && !this.surveyed.has(z.id));
+        const rng = new Rng(((origin.seed ?? 0) ^ BEACON_CFG.revealSalt) >>> 0);
+        for (let i = 0; i < news && cands.length; i++) {
+          picked.push(cands.splice(rng.int(0, cands.length - 1), 1)[0]);
+        }
+        for (const z of picked) {
+          this.chartNeighborsOf(z);   // a surveyed node is a REAL node — roads and all
+          z.concealed = false;        // recon out-scries concealment
+          z.veiled = false;           // …and pierces the forechart's veil
+          this.surveyed.add(z.id);
+        }
+      } finally {
+        this.mintVeil = false;
+      }
+      this.refreshExitLabels();
+      return picked.length;
+    }
+    // THE WHOLE-DISC PULSE (the harbor chart's paid promise) — unchanged.
     const charted = new Set<string>();
     for (;;) {
       const batch = Object.values(this.zoneMap).filter(z =>
-        !charted.has(z.id) && inPulse(z)
-        && z.objective.kind !== 'safe' && !z.floating && !z.eventOwned);
+        !charted.has(z.id) && inPulse(z) && chartable(z));
       if (!batch.length) break;
       for (const z of batch) {
         charted.add(z.id);
@@ -14467,6 +14627,12 @@ export class World {
       ...(z.objective.kind === 'waves' ? { wave: this.wave, waveActive: this.waveActive } : {}),
       ...(z.objective.kind === 'beacon' && this.spires.length
         ? { spireCharges: this.spires.map(s => s.charge) } : {}),
+      ...(z.objective.kind === 'rifts' && this.rifts.length
+        ? { riftCharges: this.rifts.map(s => s.charge) } : {}),
+      ...(z.objective.kind === 'pyres' && this.pyres.length
+        ? { pyreCharges: this.pyres.map(s => s.charge) } : {}),
+      ...(z.objective.kind === 'unearth' && this.digs.length
+        ? { digCharges: this.digs.map(s => s.charge) } : {}),
       ...(procession ? { procession } : {}),
       ...(z.objective.kind === 'offering' && this.offering
         ? { altarOffered: this.offering.offered } : {}),
@@ -14635,6 +14801,9 @@ export class World {
       ...(m.hollows ? { hollows: [...m.hollows] } : {}),
       ...(m.wave !== undefined ? { wave: m.wave, waveActive: !!m.waveActive } : {}),
       ...(m.spireCharges ? { spireCharges: [...m.spireCharges] } : {}),
+      ...(m.riftCharges ? { riftCharges: [...m.riftCharges] } : {}),
+      ...(m.pyreCharges ? { pyreCharges: [...m.pyreCharges] } : {}),
+      ...(m.digCharges ? { digCharges: [...m.digCharges] } : {}),
       ...(m.procession ? { procession: { ...m.procession } } : {}),
       ...(m.altarOffered !== undefined ? { altarOffered: m.altarOffered } : {}),
       ...(m.cullKills !== undefined ? { cullKills: m.cullKills } : {}),
@@ -14785,6 +14954,12 @@ export class World {
           ? { spireCharges: m.spireCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) }
           : typeof m.spireCharge === 'number' && Number.isFinite(m.spireCharge)
             ? { spireCharges: [Math.max(0, m.spireCharge)] } : {}),
+        ...(Array.isArray(m.riftCharges)
+          ? { riftCharges: m.riftCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) } : {}),
+        ...(Array.isArray(m.pyreCharges)
+          ? { pyreCharges: m.pyreCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) } : {}),
+        ...(Array.isArray(m.digCharges)
+          ? { digCharges: m.digCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) } : {}),
         ...(procMemo ? { procession: procMemo } : {}),
         ...(typeof m.altarOffered === 'number' && Number.isFinite(m.altarOffered)
           ? { altarOffered: Math.max(0, Math.floor(m.altarOffered)) } : {}),
@@ -38837,16 +39012,28 @@ export class World {
     this.actors = this.actors.filter(a => !a.dead || a.isPlayerKind());
 
     // Waypoint attunement: brush against it once and it's yours for the run.
+    // A BESIEGED stone (the 'leyline' objective — waypointBesieged, the one
+    // predicate) REFUSES the brush while its siphon drinks: the refusal
+    // floats throttled, and the moment the thief falls the same brush
+    // attunes. Radius is data (LEYLINE_CFG.attuneRadius — the historical 70).
     if (!this.player.dead && !this.player.downed && this.waypointPos
       && !this.discoveredWaypoints.has(this.zone.id)
-      && dist(this.player.pos, this.waypointPos) <= 70) {
-      this.discoveredWaypoints.add(this.zone.id);
-      this.text(vec(this.waypointPos.x, this.waypointPos.y - 30),
-        'waypoint attuned — travel from the map (M)', '#5ad8d8', 14);
-      this.flashes.push({
-        pos: vec(this.waypointPos.x, this.waypointPos.y),
-        radius: 50, color: '#5ad8d8', life: 0.5, maxLife: 0.5,
-      });
+      && dist(this.player.pos, this.waypointPos) <= LEYLINE_CFG.attuneRadius) {
+      if (this.waypointBesieged()) {
+        if (this.time - this.wpRefusedAt > 2.5) {
+          this.wpRefusedAt = this.time;
+          this.text(vec(this.waypointPos.x, this.waypointPos.y - 30),
+            'the waypoint is severed — its power bleeds to the siphon', LEYLINE_CFG.beam, 14);
+        }
+      } else {
+        this.discoveredWaypoints.add(this.zone.id);
+        this.text(vec(this.waypointPos.x, this.waypointPos.y - 30),
+          'waypoint attuned — travel from the map (M)', '#5ad8d8', 14);
+        this.flashes.push({
+          pos: vec(this.waypointPos.x, this.waypointPos.y),
+          radius: 50, color: '#5ad8d8', life: 0.5, maxLife: 0.5,
+        });
+      }
     }
 
     // Sidezone mouths (data/sidezones.ts): DWELL on one (stand idle) to descend
@@ -39251,6 +39438,27 @@ export class World {
         if (s.charge < need) add({ pos: s.pos, frac: clamp(s.charge / Math.max(0.01, need), 0, 1), kind: 'beacon' });
       }
     }
+    // The contest-law kin's progress rings — same law, their own transit
+    // styles (each family's row tints its ring; full fixtures are finished
+    // faces and need no gauge).
+    if (bo.kind === 'rifts' && !this.objectiveDone && this.rifts.length) {
+      const need = bo.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec);
+      for (const s of this.rifts) {
+        if (s.charge < need) add({ pos: s.pos, frac: clamp(s.charge / Math.max(0.01, need), 0, 1), kind: 'rift' });
+      }
+    }
+    if (bo.kind === 'pyres' && !this.objectiveDone && this.pyres.length) {
+      const need = bo.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec);
+      for (const s of this.pyres) {
+        if (s.charge < need) add({ pos: s.pos, frac: clamp(s.charge / Math.max(0.01, need), 0, 1), kind: 'pyre' });
+      }
+    }
+    if (bo.kind === 'unearth' && !this.objectiveDone && this.digs.length) {
+      const need = bo.digSec ?? transitDwell('digsite', DIG_CFG.digSec);
+      for (const s of this.digs) {
+        if (s.charge < need) add({ pos: s.pos, frac: clamp(s.charge / Math.max(0.01, need), 0, 1), kind: 'digsite' });
+      }
+    }
     // The procession's rally ring while the dwell builds at the dormant cart.
     const pr = this.procession;
     if (pr && !pr.rolling && !this.objectiveDone && !this.objectiveLost && pr.dwellStart > 0) {
@@ -39265,15 +39473,33 @@ export class World {
 
   /** The live SURVEY SPIRES, for the renderer's ring pass + the attention
    *  fabric: features the NEAREST unfinished stone (the circuit walks you leg
-   *  by leg), plus the set's tally. */
-  spireView(): { pos: Vec2; frac: number; done: boolean; charged: number; count: number } | null {
+   *  by leg), plus the set's tally and the drive's stamped contest read
+   *  (drawn == tested: the chevron speaks the exact scalars the charge
+   *  logic ran this frame). */
+  spireView(): { pos: Vec2; frac: number; done: boolean; charged: number; count: number; contested: boolean; draining: boolean } | null {
     const o = this.zone.objective;
     if (o.kind !== 'beacon' || !this.spires.length) return null;
     const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-    const charged = this.spires.filter(s => s.charge >= need).length;
-    let pick = this.spires[0];
+    const v = this.holdFixturesView(this.spires, need);
+    if (!v) return null;
+    return {
+      pos: v.pos, frac: v.frac, done: v.done,
+      charged: v.filled, count: v.count,
+      contested: v.contested, draining: v.draining,
+    };
+  }
+
+  /** Shared view for the contest-law fixture families (spires, rifts,
+   *  pyres, digs): the nearest unfinished fixture, the set's tally, and the
+   *  drive's stamped contest read (holdRead — the watch fabric's stamp
+   *  idiom, so a view can never disagree with the drive about the frame). */
+  private holdFixturesView(fixtures: HoldFixture[], need: number):
+    { pos: Vec2; frac: number; done: boolean; filled: number; count: number; contested: boolean; draining: boolean } | null {
+    if (!fixtures.length) return null;
+    const filled = fixtures.filter(s => s.charge >= need).length;
+    let pick = fixtures[0];
     let bd = Infinity;
-    for (const s of this.spires) {
+    for (const s of fixtures) {
       if (s.charge >= need) continue;
       const d = dist(this.player.pos, s.pos);
       if (d < bd) { bd = d; pick = s; }
@@ -39281,7 +39507,54 @@ export class World {
     return {
       pos: pick.pos,
       frac: need > 0 ? clamp(pick.charge / need, 0, 1) : 1,
-      done: this.objectiveDone, charged, count: this.spires.length,
+      done: this.objectiveDone, filled, count: fixtures.length,
+      contested: this.holdRead.contested, draining: this.holdRead.draining,
+    };
+  }
+
+  /** The live RIFT SEALS ('rifts'), for the attention fabric + the HUD. */
+  riftsView(): { pos: Vec2; frac: number; done: boolean; sealed: number; count: number; contested: boolean; draining: boolean } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'rifts') return null;
+    const v = this.holdFixturesView(this.rifts, o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec));
+    return v && { pos: v.pos, frac: v.frac, done: v.done, sealed: v.filled, count: v.count, contested: v.contested, draining: v.draining };
+  }
+
+  /** The live PYRES ('pyres'), for the attention fabric + the HUD. */
+  pyresView(): { pos: Vec2; frac: number; done: boolean; lit: number; count: number; contested: boolean; draining: boolean } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'pyres') return null;
+    const v = this.holdFixturesView(this.pyres, o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec));
+    return v && { pos: v.pos, frac: v.frac, done: v.done, lit: v.filled, count: v.count, contested: v.contested, draining: v.draining };
+  }
+
+  /** The live DIG SITES ('unearth'), for the attention fabric + the HUD. */
+  digsView(): { pos: Vec2; frac: number; done: boolean; dug: number; count: number; contested: boolean; draining: boolean } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'unearth') return null;
+    const v = this.holdFixturesView(this.digs, o.digSec ?? transitDwell('digsite', DIG_CFG.digSec));
+    return v && { pos: v.pos, frac: v.frac, done: v.done, dug: v.filled, count: v.count, contested: v.contested, draining: v.draining };
+  }
+
+  /** THE BESIEGED WAYPOINT's one predicate: is this zone's waypoint severed
+   *  right now? Worn by the attune brush (refusal), the HUD line, and the
+   *  renderer's waypoint face + tether — DERIVED from the living population
+   *  (the replicated actors a guest already has), never latched. */
+  waypointBesieged(): boolean {
+    return this.zone.objective.kind === 'leyline' && !this.objectiveDone
+      && this.actors.some(a => !a.dead && a.tag === 'ley_siphon');
+  }
+
+  /** The live LEYLINE SIEGE ('leyline'), for the attention fabric + the
+   *  renderer's tether: both ends of the drawn beam and the thief's name. */
+  leylineView(): { waypoint: Vec2 | null; siphon: Vec2 | null; name: string; besieged: boolean } | null {
+    if (this.zone.objective.kind !== 'leyline') return null;
+    const s = this.actors.find(a => !a.dead && a.tag === 'ley_siphon');
+    return {
+      waypoint: this.waypointPos ? vec(this.waypointPos.x, this.waypointPos.y) : null,
+      siphon: s ? vec(s.pos.x, s.pos.y) : null,
+      name: s?.name ?? '',
+      besieged: !this.objectiveDone && !!s,
     };
   }
 
@@ -46890,6 +47163,95 @@ export class World {
     return this.actors.filter(a => !a.dead && !!a.defId && !!MONSTERS[a.defId]?.spawner);
   }
 
+  /** THE CONTEST LAW's resolution: the kind's own config under the zone's
+   *  ObjectiveTuning.contest override (`false` waives the law → null,
+   *  a partial re-dials it). One seam for every hold-family kind. */
+  private resolveContest(base: ContestSpec): ContestSpec | null {
+    const t = this.zone.objective.contest;
+    if (t === false) return null;
+    return t ? { ...base, ...t } : base;
+  }
+
+  /** Live counted enemies inside a contest ring — the SAME predicate the
+   *  cull's scoreboard runs (objectiveCountable), so "contested" and
+   *  "counting" can never disagree about who counts. Dormant sleepers
+   *  count on purpose: ground with a sleeper on it is not cleared ground. */
+  private contestPressers(pos: Vec2, radius: number): number {
+    let n = 0;
+    for (const a of this.actors) {
+      if (!a.dead && this.objectiveCountable(a) && dist(a.pos, pos) <= radius) n++;
+    }
+    return n;
+  }
+
+  /** ONE contested-presence driver for every hold-the-ground fixture family
+   *  (survey stones, rift seals, pyre kindlings, dig sites): find the
+   *  nearest unfinished fixture the hero honestly reaches (the transit
+   *  family's radius + reach), BUILD its charge only while no counted enemy
+   *  stands inside the contest ring (the stall), DRAIN any banked fixture a
+   *  crowd smothers — attended or not, so walking away from pressed ground
+   *  costs the work — and swap a filled fixture to its finished face (kind
+   *  swap: the bake cache and light layer follow the data). Charges pause,
+   *  never reset; the ring only ever empties them through the drain. */
+  private driveHoldFixtures(dt: number, opts: {
+    fixtures: HoldFixture[]; need: number;
+    transitKind: string; holdFallback: number;
+    contest: ContestSpec | null;
+    doneKind: string; accent: string; flareColor: string; flareR: number;
+    stirText?: string;
+    onFill?: (s: HoldFixture) => void;
+  }): { filled: HoldFixture | null; contested: boolean; draining: boolean } {
+    const holdR = transitRadius(opts.transitKind, opts.holdFallback);
+    let held: HoldFixture | null = null;
+    if (!this.player.dead) {
+      let bd = Infinity;
+      for (const s of opts.fixtures) {
+        if (s.charge >= opts.need) continue;
+        const d = dist(this.player.pos, s.pos);
+        if (d <= holdR && d < bd
+          && this.dwellReachable(this.player.pos, s.pos, transitReach(opts.transitKind))) { bd = d; held = s; }
+      }
+    }
+    let contested = false;
+    let draining = false;
+    let filled: HoldFixture | null = null;
+    for (const s of opts.fixtures) {
+      if (s.charge >= opts.need) continue;
+      if (s !== held && s.charge <= 0) continue; // dormant, unattended — nothing to defend
+      const pressers = opts.contest ? this.contestPressers(s.pos, opts.contest.radius) : 0;
+      if (opts.contest && pressers >= opts.contest.drainAt) {
+        // THE SMOTHER: a crowd drains banked work, attended or not.
+        s.charge = Math.max(0, s.charge - opts.contest.drainPerSec * dt);
+        draining = true;
+        continue;
+      }
+      if (s !== held) continue; // banked, unattended, uncrowded: it keeps
+      if (opts.contest && pressers >= opts.contest.stallAt) {
+        contested = true; // held ground, but not CLEARED ground — the stall
+        continue;
+      }
+      const was = s.charge;
+      s.charge = Math.min(opts.need, s.charge + dt);
+      if (was <= 0 && s.charge > 0 && opts.stirText) {
+        this.text(vec(s.pos.x, s.pos.y - 40), opts.stirText, opts.accent, 14);
+        this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: 90, color: opts.accent, life: 0.5, maxLife: 0.5 });
+      }
+      if (s.charge >= opts.need) {
+        // This fixture is done — it turns its finished face NOW (the beat
+        // is per fixture); whatever the set completes waits for the caller.
+        s.doodad.kind = opts.doneKind;
+        this.markDoodadsChanged();
+        this.flashes.push({ pos: vec(s.pos.x, s.pos.y), radius: opts.flareR, color: opts.flareColor, life: 0.8, maxLife: 0.8 });
+        filled = s;
+        opts.onFill?.(s);
+      }
+    }
+    // THE STAMP (the watch fabric's idiom): views re-speak exactly what the
+    // drive tested this frame — chevron and charge logic can never disagree.
+    this.holdRead = { contested, draining };
+    return { filled, contested, draining };
+  }
+
   /** Pay the zone's one-time bounty and unseal its exits. */
   /** ONE-SHOT UBER: has this boss been permanently defeated, so it must not re-spawn?
    *  `account` scope reads an account-ledger key (survives the run AND the permadeath
@@ -46993,61 +47355,55 @@ export class World {
       }
 
       case 'beacon': {
-        // SURVEY SPIRES: presence (not idleness — you will be fighting)
-        // inside a stone's hold ring builds ITS charge; every stone with
-        // banked, unfinished charge holds a LURE, so the fight migrates with
-        // your work. When the last stone fills, the objective flares and
-        // SURVEYS the overworld around this zone. count 1 = the lone spire;
-        // 2+ = the ATTUNEMENT CIRCUIT (same rules, smaller stones).
+        // SURVEY SPIRES under THE CONTEST LAW (driveHoldFixtures): presence
+        // inside a stone's hold ring builds ITS charge — but only on ground
+        // truly held (any counted enemy in the contest ring STALLS the work,
+        // a crowd DRAINS banked seconds, attended or not: the lure's own
+        // drawn moths smother an abandoned stone back down). Every stone
+        // with banked, unfinished charge holds a LURE, so the fight migrates
+        // with your work — and while the operation lives the leyline BLEEDS
+        // (updateSpireReinforce): reinforcements arrive at the rim and
+        // drift in on the standing pull. When the last stone fills, the
+        // flare SURVEYS a seeded random assortment of the country (the
+        // recon cap), not the whole disc. count 1 = the lone spire; 2+ =
+        // the ATTUNEMENT CIRCUIT (same rules, smaller stones).
         if (this.objectiveDone || !this.spires.length) return;
         const circuit = this.spires.length > 1;
         const stone = circuit ? 'waystone' : 'spire';
         const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-        const holdR = transitRadius('beacon', BEACON_CFG.holdRadius);
-        // The stone under work: the nearest unfinished one the hero reaches.
-        let held: { pos: Vec2; charge: number; doodad: Doodad } | null = null;
-        if (!this.player.dead) {
-          let bd = Infinity;
-          for (const s of this.spires) {
-            if (s.charge >= need) continue;
-            const d = dist(this.player.pos, s.pos);
-            if (d <= holdR && d < bd
-              && this.dwellReachable(this.player.pos, s.pos, transitReach('beacon'))) { bd = d; held = s; }
-          }
-        }
-        if (held) {
-          const was = held.charge;
-          held.charge = Math.min(need, held.charge + dt);
-          if (was <= 0 && held.charge > 0) {
-            this.text(vec(held.pos.x, held.pos.y - 40),
-              `the ${stone} stirs — the wilds turn toward its light…`, BEACON_CFG.accent, 14);
-            this.flashes.push({ pos: vec(held.pos.x, held.pos.y), radius: 90, color: BEACON_CFG.accent, life: 0.5, maxLife: 0.5 });
-          }
-          if (held.charge >= need) {
-            // This stone is done — it lights NOW (the flare beat is per stone);
-            // the survey waits for the full set.
-            held.doodad.kind = circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit;
-            this.markDoodadsChanged();
-            this.flashes.push({ pos: vec(held.pos.x, held.pos.y), radius: circuit ? 160 : 240, color: BEACON_CFG.flare, life: 0.8, maxLife: 0.8 });
-            const left = this.spires.filter(s => s.charge < need).length;
+        const res = this.driveHoldFixtures(dt, {
+          fixtures: this.spires, need,
+          transitKind: 'beacon', holdFallback: BEACON_CFG.holdRadius,
+          contest: this.resolveContest(BEACON_CFG.contest),
+          doneKind: circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit,
+          accent: BEACON_CFG.accent, flareColor: BEACON_CFG.flare,
+          flareR: circuit ? 160 : 240,
+          stirText: `the ${stone} stirs — the wilds turn toward its light…`,
+          onFill: s => {
+            const left = this.spires.filter(x => x.charge < need).length;
             if (left > 0) {
-              this.text(vec(held.pos.x, held.pos.y - 56),
+              this.text(vec(s.pos.x, s.pos.y - 56),
                 `the ${stone} hums — ${left} remain${left === 1 ? 's' : ''}`, BEACON_CFG.flare, 14);
             }
-          }
-        }
+          },
+        });
         // Lit wicks draw moths whether or not the hero stands by them: every
         // banked, unfinished stone keeps its pull. No waves, no bonus spawns —
-        // the lure only redirects who already lives here.
+        // the lure only redirects who already lives here…
         this.spires.forEach((s, i) => {
           if (s.charge > 0 && s.charge < need) {
             this.setLure(`survey_spire_${i}`, s.pos,
               o.lureRadius ?? BEACON_CFG.lureRadius, BEACON_CFG.lurePace, BEACON_CFG.lureStandoff);
           }
         });
+        // …while the OPERATION'S PRESSURE trickles real bodies to the rim
+        // (the marrow-drawn seasoning — BEACON_CFG.reinforce, spec-overridable).
+        this.updateSpireReinforce(o);
         if (this.spires.every(s => s.charge >= need)) {
-          const last = held ?? this.spires[this.spires.length - 1];
-          const news = this.surveyAround(this.zone, o.revealRadius ?? BEACON_CFG.revealRadius);
+          const last = res.filled ?? this.spires[this.spires.length - 1];
+          const news = this.surveyAround(this.zone,
+            o.revealRadius ?? BEACON_CFG.revealRadius,
+            o.revealCount ?? BEACON_CFG.revealCount);
           this.completeObjective(circuit
             ? 'The circuit hums as one — the land is surveyed!'
             : 'The spire flares — the land is surveyed!');
@@ -47055,6 +47411,130 @@ export class World {
             this.text(vec(last.pos.x, last.pos.y - 64),
               `${news} new ${news === 1 ? 'place' : 'places'} charted`, BEACON_CFG.flare, 14);
           }
+        }
+        return;
+      }
+
+      case 'leyline': {
+        // THE BESIEGED WAYPOINT: pure population state (the bounty's
+        // honesty — any death counts, the wounded thief rides Zone Memory
+        // free). The moment no siphon stands, the leyline reattaches and
+        // the stone hums awake; a rosterless zone that spawned no thief
+        // completes vacuously (the puzzle's no-wedge law). The attunement
+        // refusal itself lives on waypointBesieged — one predicate for the
+        // brush, the HUD, and the drawn face.
+        if (this.objectiveDone) return;
+        if (!this.actors.some(a => !a.dead && a.tag === 'ley_siphon')) {
+          if (this.waypointPos) {
+            this.flashes.push({ pos: vec(this.waypointPos.x, this.waypointPos.y), radius: 160, color: LEYLINE_CFG.accent, life: 0.9, maxLife: 0.9 });
+            this.text(vec(this.waypointPos.x, this.waypointPos.y - 40),
+              'the leyline reattaches — the waypoint hums awake', LEYLINE_CFG.accent, 14);
+          }
+          this.completeObjective('The siphon is broken — the waypoint is freed!');
+        }
+        return;
+      }
+
+      case 'rifts': {
+        // SEAL THE RIFTS: the contest driver seals, the pour fights back —
+        // every OPEN tear births its bounded trickle (updateRiftPours), and
+        // those births are counted population, so the tear literally
+        // contests its own seal. Sealed tears pour nothing and stay sealed
+        // (the charge array rides Zone Memory).
+        if (this.objectiveDone || !this.rifts.length) return;
+        const need = o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec);
+        this.driveHoldFixtures(dt, {
+          fixtures: this.rifts, need,
+          transitKind: 'rift', holdFallback: 120,
+          contest: this.resolveContest(RIFT_CFG.contest),
+          doneKind: RIFT_CFG.kindSealed,
+          accent: RIFT_CFG.accent, flareColor: RIFT_CFG.accent, flareR: 150,
+          stirText: 'the seal takes — the tear howls against it…',
+          onFill: s => {
+            const left = this.rifts.filter(x => x.charge < need).length;
+            if (left > 0) {
+              this.text(vec(s.pos.x, s.pos.y - 56),
+                `the tear seals — ${left} remain${left === 1 ? 's' : ''}`, RIFT_CFG.accent, 14);
+            }
+          },
+        });
+        this.updateRiftPours(o);
+        if (this.rifts.every(s => s.charge >= need)) {
+          this.completeObjective('The last rift is sealed — the ground rests!');
+        }
+        return;
+      }
+
+      case 'pyres': {
+        // KINDLE THE PYRES: the contest driver kindles; the lit kind is a
+        // REGISTERED lightwell (data/pyres.ts), so the payoff is real light
+        // the moment the bowl catches — no extra machinery here.
+        if (this.objectiveDone || !this.pyres.length) return;
+        const need = o.kindleSec ?? transitDwell('pyre', PYRE_CFG.kindleSec);
+        this.driveHoldFixtures(dt, {
+          fixtures: this.pyres, need,
+          transitKind: 'pyre', holdFallback: 110,
+          contest: this.resolveContest(PYRE_CFG.contest),
+          doneKind: PYRE_CFG.kindLit,
+          accent: PYRE_CFG.accent, flareColor: PYRE_CFG.accent, flareR: 130,
+          stirText: 'the kindling catches — hold the ground…',
+          onFill: s => {
+            const left = this.pyres.filter(x => x.charge < need).length;
+            if (left > 0) {
+              this.text(vec(s.pos.x, s.pos.y - 56),
+                `the pyre burns — ${left} still cold`, PYRE_CFG.accent, 14);
+            }
+          },
+        });
+        if (this.pyres.every(s => s.charge >= need)) {
+          this.completeObjective('Every pyre burns — the dark gives ground!');
+        }
+        return;
+      }
+
+      case 'unearth': {
+        // UNEARTH THE CACHES: the contest driver digs; an opened mound
+        // SPILLS through the ordinary drop chokepoint (the spoils law still
+        // governs sealed ground) and may SPRING the zone's own kin out of
+        // the turned earth.
+        if (this.objectiveDone || !this.digs.length) return;
+        const need = o.digSec ?? transitDwell('digsite', DIG_CFG.digSec);
+        this.driveHoldFixtures(dt, {
+          fixtures: this.digs, need,
+          transitKind: 'digsite', holdFallback: 100,
+          contest: this.resolveContest(DIG_CFG.contest),
+          doneKind: DIG_CFG.kindDug,
+          accent: DIG_CFG.accent, flareColor: DIG_CFG.accent, flareR: 110,
+          stirText: 'the spade bites — stand your ground…',
+          onFill: s => {
+            // THE SPILL: the ordinary drop chokepoint (spoils-law honest).
+            if (rand(0, 1) < DIG_CFG.spoilGemChance) {
+              this.dropGemAt(vec(s.pos.x, s.pos.y + 18));
+            }
+            // THE SPRING: the turned earth answers.
+            const A = DIG_CFG.ambush;
+            if (rand(0, 1) < A.chance && this.zone.packs) {
+              const { table } = this.effectiveSpawn(this.zone, this.baseTable(this.zone));
+              const type = this.weightedPick(table, this.zone.level);
+              const n = randInt(A.count[0], A.count[1]);
+              for (let i = 0; i < n; i++) {
+                const m = this.createMonster(type, Math.max(1, this.zone.level + A.levelBonus), 'enemy');
+                const ang = rand(0, Math.PI * 2);
+                const rr = rand(A.radius[0], A.radius[1]);
+                m.pos = this.clampPos(vec(s.pos.x + Math.cos(ang) * rr, s.pos.y + Math.sin(ang) * rr), m.radius);
+                this.actors.push(m);
+              }
+              this.text(vec(s.pos.x, s.pos.y - 56), 'the turned earth answers!', '#d05050', 14);
+            }
+            const left = this.digs.filter(x => x.charge < need).length;
+            if (left > 0) {
+              this.text(vec(s.pos.x, s.pos.y - 72),
+                `${left} mound${left === 1 ? '' : 's'} left unopened`, DIG_CFG.accent, 13);
+            }
+          },
+        });
+        if (this.digs.every(s => s.charge >= need)) {
+          this.completeObjective('Every cache is unearthed!');
         }
         return;
       }
@@ -47205,6 +47685,101 @@ export class World {
         }
         return;
       }
+    }
+  }
+
+  /** THE OPERATION'S PRESSURE (BEACON_CFG.reinforce, spec-overridable;
+   *  `reinforce: false` silences the bleed): while any stone holds banked,
+   *  unfinished charge, small reinforcement groups arrive at the rim of the
+   *  pressed stone on a jittered clock and drift in on the standing lure —
+   *  no orders, no scripted charge: they exist inside the pull, and the
+   *  pull does the rest. The body of each group is the zone's OWN table,
+   *  seasoned with the mix factions' rosters (the extraction package's
+   *  grammar — the Marrow-Drawn follow charged ley like bleeding marrow;
+   *  an unregistered roster degrades silently to the native table).
+   *  Bounded by the live 'spire_drawn' cap — a trickle, never a wave. */
+  private updateSpireReinforce(o: Extract<ObjectiveSpec, { kind: 'beacon' }>): void {
+    if (o.reinforce === false) return;
+    const cfg = { ...BEACON_CFG.reinforce, ...(o.reinforce ?? {}) };
+    const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+    if (!this.spires.some(s => s.charge > 0 && s.charge < need)) return;
+    if (this.spireReinforceAt === 0) {
+      // Arm on the first banked second — the first group is never instant.
+      this.spireReinforceAt = this.time + rand(cfg.every[0], cfg.every[1]);
+      return;
+    }
+    if (this.time < this.spireReinforceAt) return;
+    this.spireReinforceAt = this.time + rand(cfg.every[0], cfg.every[1]);
+    const drawn = this.actors.filter(a => !a.dead && a.tag === 'spire_drawn').length;
+    if (drawn >= cfg.cap) return;
+    // The pressed stone: the banked-unfinished one nearest the hero.
+    let at: Vec2 | null = null;
+    let bd = Infinity;
+    for (const s of this.spires) {
+      if (!(s.charge > 0 && s.charge < need)) continue;
+      const d = dist(this.player.pos, s.pos);
+      if (d < bd) { bd = d; at = s.pos; }
+    }
+    if (!at) return;
+    const native: PackTableEntry[] = this.zone.packs
+      ? this.effectiveSpawn(this.zone, this.baseTable(this.zone)).table
+        .filter(en => MONSTERS[en.id])
+        .map(en => ({ id: en.id, weight: en.weight, presence: en.presence }))
+      : [];
+    const mix: PackTableEntry[] = [];
+    for (const fid of cfg.mixFactions) {
+      for (const en of FACTIONS[fid]?.table ?? []) {
+        if (MONSTERS[en.id]) mix.push({ id: en.id, weight: en.weight, presence: en.presence });
+      }
+    }
+    if (!native.length && !mix.length) return;
+    const n = Math.min(randInt(cfg.batch[0], cfg.batch[1]), cfg.cap - drawn);
+    for (let i = 0; i < n; i++) {
+      const table = mix.length && (!native.length || rand(0, 1) < cfg.mixChance) ? mix : native;
+      const type = this.weightedPick(table, this.zone.level);
+      const m = this.createMonster(type, Math.max(1, this.zone.level + cfg.levelBonus), 'enemy');
+      const ang = rand(0, Math.PI * 2);
+      const rr = rand(cfg.radius[0], cfg.radius[1]);
+      m.pos = this.clampPos(vec(at.x + Math.cos(ang) * rr, at.y + Math.sin(ang) * rr), m.radius);
+      m.tag = 'spire_drawn';
+      this.actors.push(m);
+    }
+    this.flashes.push({ pos: vec(at.x, at.y), radius: 40, color: BEACON_CFG.accent, life: 0.35, maxLife: 0.35 });
+  }
+
+  /** THE POUR (RIFT_CFG.pour): every OPEN tear births small groups of the
+   *  zone's own kin on a jittered clock — counted population (they stall
+   *  the seal, they pay xp, they ride Zone Memory), zone-capped by the live
+   *  'rift_born' tally so two tears never stack an army. Sealed tears pour
+   *  nothing; a packless zone pours nothing (its tears seal quietly). */
+  private updateRiftPours(o: Extract<ObjectiveSpec, { kind: 'rifts' }>): void {
+    if (!this.zone.packs) return;
+    const need = o.sealSec ?? transitDwell('rift', RIFT_CFG.sealSec);
+    const P = RIFT_CFG.pour;
+    let born = this.actors.filter(a => !a.dead && a.tag === 'rift_born').length;
+    for (const r of this.rifts) {
+      if (r.charge >= need) continue;
+      if (r.pourAt === 0) {
+        // Arm on first sight — a fresh tear waits one beat before it pours.
+        r.pourAt = this.time + rand(P.every[0], P.every[1]);
+        continue;
+      }
+      if (this.time < r.pourAt) continue;
+      r.pourAt = this.time + rand(P.every[0], P.every[1]);
+      if (born >= P.cap) continue;
+      const { table } = this.effectiveSpawn(this.zone, this.baseTable(this.zone));
+      const n = Math.min(randInt(P.batch[0], P.batch[1]), P.cap - born);
+      for (let i = 0; i < n; i++) {
+        const type = this.weightedPick(table, this.zone.level);
+        const m = this.createMonster(type, Math.max(1, this.zone.level + P.levelBonus), 'enemy');
+        const ang = rand(0, Math.PI * 2);
+        const rr = rand(P.radius[0], P.radius[1]);
+        m.pos = this.clampPos(vec(r.pos.x + Math.cos(ang) * rr, r.pos.y + Math.sin(ang) * rr), m.radius);
+        m.tag = 'rift_born';
+        this.actors.push(m);
+        born++;
+      }
+      this.flashes.push({ pos: vec(r.pos.x, r.pos.y), radius: 60, color: RIFT_CFG.accent, life: 0.4, maxLife: 0.4 });
     }
   }
 
@@ -48404,10 +48979,40 @@ export class World {
       case 'beacon': {
         const v = this.spireView();
         if (!v) return 'Find the survey spire and hold your ground beside it';
-        if (v.count > 1) return `Attune the waystones — ${v.charged}/${v.count}`;
+        // The contest reads on the line itself — the scoreboard never lies
+        // about WHY the number stopped (or fell).
+        const mark = v.draining ? ' — OVERRUN, the charge drains!'
+          : v.contested ? ' — contested, clear the ground!' : '';
+        if (v.count > 1) return `Attune the waystones — ${v.charged}/${v.count}${mark}`;
         return v.frac > 0
-          ? `Charge the survey spire — ${Math.round(v.frac * 100)}%`
+          ? `Charge the survey spire — ${Math.round(v.frac * 100)}%${mark}`
           : 'Find the survey spire and hold your ground beside it';
+      }
+      case 'leyline': {
+        const v = this.leylineView();
+        if (!v || !v.besieged) return 'The waypoint is besieged — fell the siphon';
+        return `Fell ${v.name || 'the siphon'} — the waypoint bleeds to it`;
+      }
+      case 'rifts': {
+        const v = this.riftsView();
+        if (!v) return 'Seal the seeping rifts';
+        const mark = v.draining ? ' — OVERRUN, the seal unravels!'
+          : v.contested ? ' — contested, cut down the pour!' : '';
+        return `Seal the rifts — ${v.sealed}/${v.count}${mark}`;
+      }
+      case 'pyres': {
+        const v = this.pyresView();
+        if (!v) return 'Kindle the cold pyres';
+        const mark = v.draining ? ' — OVERRUN, the kindling smothers!'
+          : v.contested ? ' — contested, clear the ground!' : '';
+        return `Kindle the pyres — ${v.lit}/${v.count} burning${mark}`;
+      }
+      case 'unearth': {
+        const v = this.digsView();
+        if (!v) return 'Unearth the buried caches';
+        const mark = v.draining ? ' — OVERRUN, the dig collapses!'
+          : v.contested ? ' — contested, see off the mourners!' : '';
+        return `Unearth the caches — ${v.dug}/${v.count} opened${mark}`;
       }
       case 'procession': {
         const v = this.processionView();

@@ -114,6 +114,12 @@ export interface SavedZoneMemory {
    *  placement order (the ATTUNEMENT CIRCUIT's set). */
   spireCharge?: number;
   spireCharges?: number[];
+  /** The other CONTEST-LAW hold fixtures (rifts / pyres / dig sites), each
+   *  the spire's charge-array shape in placement order — full = the
+   *  fixture's finished face (sealed / lit / opened). */
+  riftCharges?: number[];
+  pyreCharges?: number[];
+  digCharges?: number[];
   /** PROCESSION zones: the escort's stand at capture (see the engine's
    *  ZoneMemory.procession — lost flag, cart spot + life, march origin,
    *  pinned crossing). */

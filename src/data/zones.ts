@@ -61,6 +61,15 @@ export interface ObjectiveTuning {
    *  can seal where its kind doesn't (a special gauntlet), or open where its
    *  kind seals (a boss you may flee). */
   seal?: boolean;
+  /** THE CONTEST LAW override (data/objectives.ts CONTEST_CFG → the kind's
+   *  own config → this): any dial of the contested-presence discipline the
+   *  hold-family kinds run (beacon / rifts / pyres / unearth — enemies in
+   *  the ring stall the work, a crowd drains it). `false` waives the law for
+   *  this one zone (an authored uncontested stand); absent = the kind's
+   *  config. Kinds that hold no ground ignore it. */
+  contest?: false | {
+    radius?: number; stallAt?: number; drainAt?: number; drainPerSec?: number;
+  };
 }
 
 /** What the zone asks of you. Whether an UNMET objective seals the exits is
@@ -112,7 +121,19 @@ export type ObjectiveSpec = (
    *  2+ is the ATTUNEMENT CIRCUIT — smaller waystones, the fight migrating
    *  stone to stone as the lure follows your work. All numbers default from
    *  data/beacons.ts BEACON_CFG. */
-  | { kind: 'beacon'; count?: number; chargeSec?: number; lureRadius?: number; revealRadius?: number }
+  | {
+    kind: 'beacon'; count?: number; chargeSec?: number; lureRadius?: number; revealRadius?: number;
+    /** THE RECON CAP: how many new nodes the finished survey reveals — a
+     *  seeded random assortment inside the pulse (BEACON_CFG.revealCount). */
+    revealCount?: number;
+    /** THE OPERATION'S PRESSURE (BEACON_CFG.reinforce): the reinforcement
+     *  trickle's dials, any subset — or `false` for an unbled operation. */
+    reinforce?: false | {
+      every?: [number, number]; batch?: [number, number]; cap?: number;
+      mixFactions?: readonly string[]; mixChance?: number;
+      radius?: [number, number]; levelBonus?: number;
+    };
+  }
   /** ESCORT THE CARAVAN: a cart waits DORMANT (immobile, immune) by the gate
    *  you entered through; linger beside it and the procession sets out down a
    *  carved gravel way toward the far exit. Robbers converge — the zone's own
@@ -147,6 +168,34 @@ export type ObjectiveSpec = (
    *  the biome's repertoire IS the objective pool. Roads stay open (the
    *  riddle waits); the chest banks on the solve. */
   | { kind: 'puzzle'; puzzle?: string }
+  /** THE BESIEGED WAYPOINT (data/leyline.ts LEYLINE_CFG): the zone's
+   *  waypoint stands SEVERED — a SIPHON (a promoted champion of the zone's
+   *  own table by default; `id` pins a def) has latched onto the leyline
+   *  and drinks the node dry, tethered to its theft (the drawn beam) and
+   *  posted beside it. The waypoint refuses attunement while the siphon
+   *  lives; fell it and the leyline reattaches on the spot. State is PURE
+   *  POPULATION (the bounty's honesty — any death counts, the wounded thief
+   *  rides Zone Memory free). Worldgen mints leyline ground WITH a waypoint
+   *  by construction; vetoed ground (waypointless dimensions, exclusion
+   *  discs) degrades the roll to 'clear'. */
+  | { kind: 'leyline'; id?: string; rarity?: MonsterRarity; stacks?: number; levelBonus?: number }
+  /** SEAL THE RIFTS (data/rifts.ts RIFT_CFG): `count` seeping tears stand
+   *  at POIs, each POURING the zone's own underside (small bounded groups
+   *  on a clock) until SEALED — presence beside a tear builds its seal
+   *  under the contest law (the pour itself fights the work). Sealed tears
+   *  stay sealed (the charge array rides Zone Memory). */
+  | { kind: 'rifts'; count?: [number, number]; sealSec?: number }
+  /** KINDLE THE PYRES (data/pyres.ts PYRE_CFG): `count` cold fire-bowls
+   *  stand dark at POIs; presence beside one kindles it (the contest law
+   *  applies — a crowded pyre won't take the flame). A LIT pyre is a REAL
+   *  registered lightwell: on gloaming ground it feeds the LIGHT meter,
+   *  everywhere it is a lamp the dark must respect. */
+  | { kind: 'pyres'; count?: [number, number]; kindleSec?: number }
+  /** UNEARTH THE CACHES (data/digsites.ts DIG_CFG): `count` burial mounds
+   *  hide their spoil at POIs; presence digs each open (contested — the
+   *  dead dislike shovels), the opened mound SPILLS (through the spoils
+   *  law) and may SPRING an ambush of the zone's own kin. */
+  | { kind: 'unearth'; count?: [number, number]; digSec?: number }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -158,6 +207,9 @@ export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   safe: false, none: false, clear: false, waves: false, escape: false, spawners: false,
   boss: true, beacon: false, procession: false, bounty: false, offering: false,
   puzzle: false,
+  // The hold-family + siege kinds keep the roads open: the ground itself is
+  // the commitment (a severed waypoint punishes nothing but fast travel).
+  leyline: false, rifts: false, pyres: false, unearth: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -186,6 +238,10 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   bounty: { glyph: '✜', read: 'hunt the marked quarry' },
   offering: { glyph: '♨', read: 'feed the hungering altar' },
   puzzle: { glyph: '❖', read: 'answer the riddle' },
+  leyline: { glyph: '◈', read: 'the waypoint is besieged — fell the siphon' },
+  rifts: { glyph: '⟁', read: 'seal the seeping rifts' },
+  pyres: { glyph: '✶', read: 'kindle the cold pyres' },
+  unearth: { glyph: '⛏', read: 'unearth the buried caches' },
 };
 
 /** Resolve a spec to its pane read, honoring the spec-level refinements the
@@ -212,7 +268,8 @@ export function objectiveRead(o: ObjectiveSpec): { glyph: string; read: string }
  *  locks its roads, yet still stakes its reward. Endless arenas never do —
  *  nothing completes. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
-  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering', 'puzzle']);
+  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering', 'puzzle',
+    'leyline', 'rifts', 'pyres', 'unearth']);
 
 export function objectiveEarnsChest(o: ObjectiveSpec): boolean {
   if (o.kind === 'waves' && o.waves === 0) return false;
