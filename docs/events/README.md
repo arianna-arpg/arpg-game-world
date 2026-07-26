@@ -104,12 +104,55 @@ One def file (`src/packages/defs/<id>.ts`) + one registry line
   villagers, a mustered countdown, the arming table, refugees who grow
   Lastlight's population on the BoroughField overlay).
 
+## The waning law (finite clocks)
+
+No event is farmable ad infinitum. Every repeating stream an event runs — a
+kill-fed field, an undead pour, a meteor rain — must carry a hard ceiling the
+player cannot push back indefinitely, and the ceiling must be VISIBLE (a
+hidden timer is unauthorable by omission). Four lawful shapes, pick one
+deliberately:
+
+- **The kill-fed field** (Breach, the Mirror Rift — `EncounterDef.timePerKill`):
+  kills buy time only from a finite, per-scale well (`scale.maxBonusTime`;
+  `bonusUsed` is cumulative and never refills), so the REACHABLE CEILING
+  (timer + unspent well) falls at wall-clock rate however hard the field is
+  cleared — total life can never exceed `baseTime + maxBonusTime`. The HUD bar
+  draws the unspent well as a dim HEADROOM BAND past the fill (it shrinks as
+  kills spend it; a dry well has no band), and the moment the well runs dry
+  the def's REQUIRED `waneText` floats once. Symmetric dead-knob law: a
+  spigot needs a well and a well needs a spigot (`timePerKill > 0` ⇔ some
+  `maxBonusTime > 0`).
+- **The bounded surge** (Demon Invasion `maxLifeSec`, breach map-tears
+  `lifeSeconds` under the clamped severity crank, the deadwake POUR WELL —
+  `DeadwakeSurge.pourBudgetSec`, spent only while the tide holds + pours on
+  the player's ground, never while roaming; at zero the tide EBBS, unrouted
+  and unpaid, with the marker/zone-info reading "faltering" below
+  `falterFrac` first): the stream's own config declares the wall.
+- **The phase-bound stream** (haunting, longNight, longcandle): the day wheel
+  is the ceiling — the pour ends at dawn regardless of play. Recurring nightly
+  is lawful; a single sitting is still bounded.
+- **The standing condition** (contagion, verminfall, deepwinter, crusade
+  territory): a persistent state CURED BY A DEED, not a clock — lawful because
+  its per-visit yield is finite placed packs, never a sustained pour.
+
+A presence-frozen clock (wisplight / straying / drove pause while the player
+stands the ground) is lawful ONLY over a finite scene — fixed heads, fixed
+lights. Any future change that respawns the scene's bodies must move that
+event onto one of the shapes above.
+
+`npm run eventqa`'s `waning` group censuses the encounter framework + the
+declared ceilings; `npx tsx balance/probe_eventclock.ts` proves the dynamics
+on the real engine (a ~180-kills/sec perpetual farm cannot outlive the
+authored ceiling; the wane latches once, at the dry well; a roaming tide
+spends nothing; a restored tide keeps its spent well).
+
 ## The gates
 
 | Gate | What it holds |
 | --- | --- |
 | `npx tsc --noEmit` | the types, incl. the persistence pledge being present |
-| `npm run eventqa` | the nine invariant groups (registry, pledge, gate math, manifest, lifecycle/determinism/restore, fracture divert handoff, ledger contract, zone policy, zone events) |
+| `npm run eventqa` | the ten invariant groups (registry, pledge, gate math, manifest, lifecycle/determinism/restore, fracture divert handoff, ledger contract, zone policy, zone events, the waning law) |
+| `npx tsx balance/probe_eventclock.ts` | the waning law's live dynamics (perpetual-farm ceiling, the wane tell, the deadwake ebb) |
 | `npm run sim -- baseline check --suite smoke` | combat regression (events off in the arena by design) |
 | `npm run genqa` | any generation your event's tilesets/layouts/compositions touch |
 

@@ -41,6 +41,7 @@ export const WRAITHSAIL_SURGE: WraithsailSurge = {
   boundsPad: 130,             // she roams past the charted coast, not past reason
   interceptRadius: 34,        // you must genuinely CROSS her, not share a sea
   sightRadius: 140,           // 'a ghost sail crosses the horizon…'
+  boardingHoldSec: 1800,      // one boarding may hold her ~30 min — the backstop, not the norm
   boardCooldownSeconds: [180, 300],
   dockRadius: 60,
   dockChance: 0.012,          // per step while you idle at an eligible port, × pressure

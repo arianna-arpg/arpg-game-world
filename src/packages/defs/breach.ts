@@ -177,6 +177,9 @@ const BREACH_ENCOUNTER: EncounterDef = {
   trigger: { glyph: '◈', color: '#b04ae8', activateRadius: 30 },
   timePerKill: 0.18,   // the minuscule per-kill add that snowballs fast clears
   radiusPerKill: 1.2,
+  // The waning law's tell: the snowball well is FINITE (scale.maxBonusTime) —
+  // when it runs dry, the tear says so and nothing holds it open again.
+  waneText: 'The tear is spent — nothing holds it open now.',
   scales: [
     { id: 'fracture', label: 'Breach Fracture', weight: 6,
       baseTime: 18, maxBonusTime: 25, startRadius: 90, maxRadius: 260, growthPerSec: 6,

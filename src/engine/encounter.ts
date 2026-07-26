@@ -122,6 +122,10 @@ export interface ActiveEncounter {
   kills: number;
   /** Kill-fed time spent so far (capped at scale.maxBonusTime). */
   bonusUsed: number;
+  /** Latched once the kill-fed well ran dry (bonusUsed == maxBonusTime): the
+   *  def's waneText has spoken and the HUD's headroom band has collapsed to
+   *  nothing — the clock only falls now (THE WANING LAW's runtime latch). */
+  waned?: boolean;
   /** Actor ids spawned by this encounter (so their kills feed it even if they
    *  wander out of the radius). */
   spawned: Set<number>;

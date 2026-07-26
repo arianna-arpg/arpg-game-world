@@ -90,6 +90,11 @@ const DEADWAKE_SURGE: DeadwakeSurge = {
   minStreamCap: 6,           // the floor on how many it keeps pouring
   streamInterval: 0.7,       // a relentless trickle…
   streamBatch: [1, 2],       // …1-2 dead per pour
+  pourBudgetSec: 300,        // THE EBB: five minutes of cumulative pouring per tide —
+                             // generous for any honest rout, a wall for the farm; a
+                             // spent tide recedes on its own, unrouted and unpaid
+  falterFrac: 0.35,          // the last ~105s read "faltering" (marker + zone info)
+  ebbText: 'The Deadwake spends itself — the tide recedes unbroken.',
   ambientAmp: 1.8,        // the tide swells the zone's native undead…
   ambientCountMul: 1.12,  // …and brings a few more packs with it
   consumeChance: 0.5,     // a coin-flip to CONSUME a zone's active event on collision…

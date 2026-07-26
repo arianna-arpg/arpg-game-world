@@ -549,6 +549,13 @@ export interface EncounterDef {
   timePerKill: number;
   /** Tiny radius nudge per kill. */
   radiusPerKill: number;
+  /** THE WANING TELL — floated once, mid-fight, the moment the kill-fed well
+   *  runs dry (bonusUsed reaches the rolled scale's maxBonusTime): from here
+   *  the clock only falls, however fast the field is cleared. REQUIRED on
+   *  kill-fed defs (timePerKill > 0) — a snowball budget that runs out
+   *  silently is a hidden timer, and hidden timers are unauthorable by
+   *  omission (eventqa: the waning law). */
+  waneText?: string;
   ledger: EncounterLedger;
   /** The DIMENSIONS this encounter may place in (default ['surface']) — the
    *  same seam the overlays use (WorldHooks.dimensions), so "breaches tear in

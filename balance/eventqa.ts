@@ -33,6 +33,11 @@
 //               factions name real (post-graft) factions
 //   zone-events the on-entry registry: unique ids, sane rewards, the classic
 //               priority cascade (siege > caravan > patrol) preserved
+//   waning      THE WANING LAW (finite clocks): every encounter scale's clock
+//               and kill-fed well are finite; kill-fed defs carry the wane
+//               tell; wells without spigots (and spigots without wells) are
+//               dead knobs; surge/tide ceilings (maxLifeSec, the deadwake
+//               pour budget) are declared and positive
 //
 // Usage: npm run eventqa [-- --verbose]
 // ---------------------------------------------------------------------------
@@ -552,6 +557,64 @@ console.log('eventqa: zone-event registry');
   assert(patrol?.kind === 'patrol', 'zone-events', 'priority: weak owner ⇒ patrol');
   const nothing = chooseEvent({ ...base, owner: null, invader: null }, plain, 0.99);
   assert(nothing === null, 'zone-events', 'no owner + no invader ⇒ quiet ground');
+}
+
+// === 9. THE WANING LAW (finite clocks) =======================================
+// No event may be farmable ad infinitum: every in-zone event clock is FINITE,
+// and kills may buy time only from a finite, per-scale well (bonusUsed is
+// cumulative and never refills), so the reachable ceiling falls at wall-clock
+// rate however hard a field is farmed. This census makes the law unauthorable
+// by omission; the live dynamics are pinned on the real engine by
+// balance/probe_eventclock.ts.
+console.log('eventqa: the waning law (finite clocks)');
+{
+  for (const e of allEncounterSpecs()) {
+    assert(Number.isFinite(e.timePerKill) && e.timePerKill >= 0, 'waning',
+      `'${e.id}' timePerKill is finite and non-negative`);
+    for (const s of e.scales) {
+      assert(Number.isFinite(s.baseTime) && s.baseTime > 0, 'waning',
+        `'${e.id}' scale '${s.id}' baseTime is finite and positive`);
+      assert(Number.isFinite(s.maxBonusTime) && s.maxBonusTime >= 0, 'waning',
+        `'${e.id}' scale '${s.id}' maxBonusTime is finite and non-negative`);
+    }
+    if (e.timePerKill > 0) {
+      // The spigot needs a well…
+      assert(e.scales.some(s => s.maxBonusTime > 0), 'waning',
+        `'${e.id}' is kill-fed but every scale's well is empty — timePerKill is a dead knob`);
+      // …and a well that runs dry must SAY so (the honesty tell).
+      assert(!!e.waneText, 'waning',
+        `'${e.id}' is kill-fed but declares no waneText — a silently-dry well is a hidden timer`);
+    } else {
+      // …and a well needs a spigot: a bonus budget no kill can fill is dead
+      // data AND would draw a lying headroom band on the HUD bar.
+      assert(e.scales.every(s => s.maxBonusTime === 0), 'waning',
+        `'${e.id}' is not kill-fed but carries a bonus well — maxBonusTime is a dead knob`);
+    }
+    // A surge-carrying encounter must burn out on its own clock (the demon
+    // invasion's maxLifeSec precedent — enforced in its overlay).
+    if (e.surge) {
+      assert(Number.isFinite(e.surge.maxLifeSec) && e.surge.maxLifeSec > 0, 'waning',
+        `'${e.id}' surge declares a hard maxLifeSec burnout`);
+    }
+  }
+
+  // THE DEADWAKE EBB: the tide's pour well is declared, positive, and told.
+  // (Reached through the overlay's public surge() seam — the config is the
+  // def's, the read is the engine's own.)
+  const dwPkg = PACKAGE_BY_ID['deadwake'];
+  assert(!!dwPkg?.world?.overlay, 'waning', 'the deadwake package stands');
+  if (dwPkg?.world?.overlay) {
+    const gate = { active: true, share: 1, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 };
+    const dw = dwPkg.world.overlay({ seed: 0xdead, gate: () => gate, biomeSeed: 0xdead }) as unknown as {
+      surge(): { pourBudgetSec: number; falterFrac: number; ebbText: string } };
+    const s = dw.surge();
+    assert(Number.isFinite(s.pourBudgetSec) && s.pourBudgetSec > 0, 'waning',
+      'deadwake pourBudgetSec is a hard, positive pour ceiling');
+    assert(s.falterFrac > 0 && s.falterFrac < 1, 'waning',
+      'deadwake falterFrac leaves a real pre-ebb tell window');
+    assert(typeof s.ebbText === 'string' && s.ebbText.length > 0, 'waning',
+      'deadwake declares its ebb announce (tone is data)');
+  }
 }
 
 // === verdict =================================================================

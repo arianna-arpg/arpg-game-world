@@ -1243,6 +1243,20 @@ export class Renderer {
     const r = Math.round(150 + (1 - frac) * 90), g = Math.round(70 + frac * 110);
     ctx.fillStyle = `rgb(${r},${g},210)`;
     ctx.fillRect(bx, by, bw * frac, bh);
+    // THE WANING LAW, drawn: the dim band past the fill is the REACHABLE
+    // ceiling — the time kills could still buy back (the unspent snowball
+    // well). It falls at wall-clock rate however the fight goes, shrinks as
+    // kills spend the well, and once the well is dry there is no band: the
+    // bar only falls. Non-kill-fed clocks (extract/borough/muster) carry no
+    // well, so they never grow one.
+    if (!collapsing && open.maxTimer > 0) {
+      const capFrac = clamp((open.timer + Math.max(0, open.scale.maxBonusTime - open.bonusUsed)) / open.maxTimer, 0, 1);
+      if (capFrac > frac + 0.004) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(bx + bw * frac, by, bw * (capFrac - frac), bh);
+        ctx.globalAlpha = 1;
+      }
+    }
     ctx.strokeStyle = '#0a0a0e'; ctx.lineWidth = 1;
     ctx.strokeRect(bx, by, bw, bh);
   }

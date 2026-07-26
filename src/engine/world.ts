@@ -6637,6 +6637,12 @@ export class World {
         e.timer = Math.min(e.maxTimer, e.timer + add);
         e.bonusUsed += add;
       }
+      // THE WANING LAW's tell: the moment the well runs dry, say so once —
+      // from here no clearing rate holds the door; the clock only falls.
+      if (!e.waned && e.def.timePerKill > 0 && e.bonusUsed >= e.scale.maxBonusTime) {
+        e.waned = true;
+        if (e.def.waneText) this.text(vec(e.pos.x, e.pos.y - 30), e.def.waneText, e.def.trigger.color, 16);
+      }
       e.radius = Math.min(e.scale.maxRadius, e.radius + e.def.radiusPerKill);
       break; // one breach per kill
     }
@@ -15940,7 +15946,18 @@ export class World {
    *  flee and it simply rolls on, pouring again wherever it next catches you. */
   private updateDeadwakeStream(dt: number): void {
     const df = this.sim.deadwakeField;
-    if (!df || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
+    if (!df) { this.deadwakeStreamTimer = 0; return; }
+    // THE EBB drains first (the haunting's drainDissipated placement — even on
+    // ground the stream skips, the queue never backs up): a tide that SPENT its
+    // pour well recedes on its own — announce it if it was pouring over us.
+    for (const at of df.drainEbbed()) {
+      const def = this.zoneMap[this.zone.id];
+      if (def && coordDist(def.map, at) <= df.surge().radius) {
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          df.surge().ebbText, df.surge().color ?? '#7a5aa6', 18);
+      }
+    }
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.deadwakeStreamTimer = 0; return;
     }
     const info = df.deadwakeOn(this.zone.id);

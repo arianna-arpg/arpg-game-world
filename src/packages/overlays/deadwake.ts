@@ -150,6 +150,17 @@ export interface DeadwakeSurge {
   /** Seconds between stream spawns, and how many pour per tick. */
   streamInterval: number;
   streamBatch: [number, number];
+  /** THE EBB (the waning law): cumulative seconds a tide may HOLD + POUR into
+   *  the player's ground before its host is SPENT and it recedes on its own,
+   *  unrouted and unpaid (routing the leader stays the paying play). The well
+   *  drains ONLY while engaged — roaming costs nothing — so the stalking
+   *  identity and the Necropolis fusion stand; only the infinite farm dies. */
+  pourBudgetSec: number;
+  /** At or below this remaining fraction of the pour well the tide reads
+   *  FALTERING (marker + zone-info — the pre-ebb tell; no hidden timers). */
+  falterFrac: number;
+  /** Announce spoken over the player as a spent tide recedes (tone is data). */
+  ebbText: string;
   /** Ambient amplifier (+count multiplier) on the covered zone's OWN undead. */
   ambientAmp: number;
   ambientCountMul: number;
@@ -176,6 +187,9 @@ export interface DeadwakeInfo {
   strength: number;
   streamCap: number;
   variant: string;
+  /** Remaining fraction of the tide's pour well (1 fresh → 0 spent; the ebb's
+   *  falter read — at or below the surge's falterFrac the tide FALTERS). */
+  pourFrac: number;
   levelBonus: number;
   ambientAmp: number;
   ambientCountMul: number;
@@ -207,6 +221,8 @@ interface ActiveWake {
   engagedGrowth: number;
   color: string;
   variant: string;
+  /** Cumulative seconds spent HOLDING + POURING (the ebb's spent well). */
+  pouredSec: number;
 }
 
 /** The travelling seat of the dead — its own Deadwake generator. */
@@ -242,6 +258,8 @@ export class DeadwakeField implements WorldOverlay {
   private wakes: ActiveWake[] = [];
   private necropolis: ActiveNecropolis | null = null;
   private coveredLast = new Set<string>();
+  /** Tides that EBBED (spent pour wells) since the engine last drained. */
+  private ebbedQueue: MapCoord[] = [];
   private acc = 0;
   private seq = 0;
   private nodesById: Record<string, ZoneDef> = {};
@@ -282,12 +300,20 @@ export class DeadwakeField implements WorldOverlay {
     // SEVERITY lever: how fast a tide SWELLS (its carried-horde growth) — the
     // crusade-clamped band, so a cranked mix can't compound into a wall of dead.
     const sev = clamp(g.severityMul || 1, 0, 1.5);
-    for (const w of this.wakes) {
+    for (let i = this.wakes.length - 1; i >= 0; i--) {
+      const w = this.wakes[i];
       w.age += dt;
       const eng = this.engaged(w, here);
       w.strength = Math.min(w.maxStrength, w.strength + (eng ? w.engagedGrowth : w.roamGrowth) * sev * dt);
-      if (eng) continue; // pouring into the player's zone — it holds
-      this.drift(w, speed, dt, bounds, view.terrain);
+      if (!eng) { this.drift(w, speed, dt, bounds, view.terrain); continue; }
+      // Pouring into the player's zone — it holds, and HOLDING SPENDS the pour
+      // well (THE EBB, the waning law): a tide farmed past its budget recedes
+      // on its own, however fast its stream is cut down. Roaming never spends.
+      w.pouredSec += dt;
+      if (w.pouredSec >= this.cfg.pourBudgetSec) {
+        this.ebbedQueue.push({ x: w.coord.x, y: w.coord.y });
+        this.wakes.splice(i, 1);
+      }
     }
     if (this.necropolis) {
       this.necropolis.age += dt;
@@ -299,7 +325,9 @@ export class DeadwakeField implements WorldOverlay {
         this.drift(this.necropolis, this.cfg.necropolis.driftSpeed, dt, bounds, view.terrain);
       }
     }
-    // NB: no lifespan cull — tides persist until ROUTED; the Necropolis until PURGED.
+    // NB: no AGE cull — a ROAMING tide persists until ROUTED (the Necropolis
+    // until PURGED); only the POUR is finite (the ebb above): time spent
+    // farming the stream is spent from a budget, never from nothing.
 
     // 3. NECROPOLIS FUSION — two tides colliding fuse into the (single) Necropolis.
     if (!this.necropolis && this.wakes.length >= 2) this.maybeFuseNecropolis();
@@ -384,6 +412,7 @@ export class DeadwakeField implements WorldOverlay {
           id: w.id, faction: this.cfg.faction, color: w.color,
           coord: { x: w.coord.x, y: w.coord.y },
           strength: w.strength, streamCap: this.streamCapFor(w.strength), variant: w.variant,
+          pourFrac: this.pourFracOf(w),
           levelBonus: this.cfg.floodLevelBonus, ambientAmp: this.cfg.ambientAmp,
           ambientCountMul: this.cfg.ambientCountMul,
           leaderLevelBonus: this.cfg.leaderLevelBonus, leaderXpFloor: this.cfg.leaderXpFloor,
@@ -457,12 +486,13 @@ export class DeadwakeField implements WorldOverlay {
       necropolis: this.necropolis ? { ...this.necropolis, coord: { ...this.necropolis.coord } } : null,
       coveredLast: [...this.coveredLast],
       consumedZones: [...this.consumedZones],
+      ebbed: this.ebbedQueue.map(c => ({ x: c.x, y: c.y })),
       seq: this.seq,
     };
   }
 
   restore(snap: unknown): void {
-    const s = snap as { counter?: unknown; armed?: unknown; wakes?: unknown[]; necropolis?: unknown; coveredLast?: unknown[]; consumedZones?: unknown[]; seq?: unknown } | null;
+    const s = snap as { counter?: unknown; armed?: unknown; wakes?: unknown[]; necropolis?: unknown; coveredLast?: unknown[]; consumedZones?: unknown[]; ebbed?: unknown[]; seq?: unknown } | null;
     if (!s || typeof s !== 'object') return;
     const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
     if (num(s.counter)) this.counter = Math.max(0, s.counter);
@@ -480,6 +510,8 @@ export class DeadwakeField implements WorldOverlay {
           strength: w.strength!, maxStrength: w.maxStrength!, roamGrowth: w.roamGrowth!,
           engagedGrowth: w.engagedGrowth!, color: typeof w.color === 'string' ? w.color : (this.cfg.color ?? DEADWAKE_VIOLET),
           variant: w.variant,
+          // Old saves carry no pour well — a restored tide starts fresh (tolerant).
+          pouredSec: num(w.pouredSec) ? Math.max(0, w.pouredSec) : 0,
         });
       }
     }
@@ -501,6 +533,13 @@ export class DeadwakeField implements WorldOverlay {
     if (Array.isArray(s.consumedZones)) {
       this.consumedZones.length = 0;
       for (const z of s.consumedZones) if (typeof z === 'string') this.consumedZones.push(z);
+    }
+    this.ebbedQueue = [];
+    if (Array.isArray(s.ebbed)) {
+      for (const raw of s.ebbed) {
+        const c = raw as { x?: unknown; y?: unknown } | null;
+        if (c && num(c.x) && num(c.y)) this.ebbedQueue.push({ x: c.x, y: c.y });
+      }
     }
   }
 
@@ -535,6 +574,15 @@ export class DeadwakeField implements WorldOverlay {
     return true;
   }
 
+  /** Drain tides that EBBED since last frame (spent pour wells) — the engine
+   *  announces each where it was pouring (the haunting drainDissipated idiom). */
+  drainEbbed(): MapCoord[] {
+    if (!this.ebbedQueue.length) return [];
+    const out = this.ebbedQueue;
+    this.ebbedQueue = [];
+    return out;
+  }
+
   activeCount(): number { return this.wakes.length; }
   hasNecropolis(): boolean { return !!this.necropolis; }
 
@@ -542,8 +590,8 @@ export class DeadwakeField implements WorldOverlay {
   counterFrac(): number { return clamp(this.counter / Math.max(1, this.cfg.threshold), 0, 1); }
 
   /** Read-only snapshot for the map markers / tests. */
-  peek(): ReadonlyArray<{ id: string; coord: MapCoord; age: number; strength: number; color: string; variant: string }> {
-    return this.wakes.map(w => ({ id: w.id, coord: { x: w.coord.x, y: w.coord.y }, age: w.age, strength: w.strength, color: w.color, variant: w.variant }));
+  peek(): ReadonlyArray<{ id: string; coord: MapCoord; age: number; strength: number; color: string; variant: string; pourFrac: number }> {
+    return this.wakes.map(w => ({ id: w.id, coord: { x: w.coord.x, y: w.coord.y }, age: w.age, strength: w.strength, color: w.color, variant: w.variant, pourFrac: this.pourFracOf(w) }));
   }
 
   // --- dev seams (the QA Event tab) ------------------------------------------
@@ -590,7 +638,13 @@ export class DeadwakeField implements WorldOverlay {
       roamGrowth: v.roamGrowthPerSec, engagedGrowth: v.engagedGrowthPerSec,
       color: v.color ?? this.cfg.color ?? FACTION_COLORS[this.cfg.faction] ?? DEADWAKE_VIOLET,
       variant: v.name,
+      pouredSec: 0,
     };
+  }
+
+  /** Remaining fraction of a wake's pour well (the falter/ebb read). */
+  private pourFracOf(w: ActiveWake): number {
+    return clamp(1 - w.pouredSec / Math.max(1, this.cfg.pourBudgetSec), 0, 1);
   }
 
   private pickVariant(): DeadwakeVariant {
@@ -728,10 +782,13 @@ export class DeadwakeField implements WorldOverlay {
 registerMarkerSource((world: World): MapMarker[] => {
   const df = world.sim.deadwakeField;
   if (!df) return [];
+  const falterAt = df.surge().falterFrac;
   const out: MapMarker[] = df.peek().map(w => ({
     id: `deadwake-${w.id}`, coord: { x: w.coord.x, y: w.coord.y },
     glyph: '⚰', fill: '#160e1e', stroke: w.color, text: '#d8c2ec', r: 10,
-    title: `Deadwake — ${w.variant} (${Math.round(w.strength)} strong)`, fog: 'always', z: 18,
+    // A tide near its ebb reads FALTERING — the pre-ebb tell (no hidden timers).
+    title: `Deadwake — ${w.variant} (${Math.round(w.strength)} strong${w.pourFrac <= falterAt ? ', faltering' : ''})`,
+    fog: 'always', z: 18,
   }));
   const n = df.necropolisInfo();
   if (n) out.push({
@@ -752,9 +809,12 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   // The host only POURS into the player's OWN zone; a covered neighbour merely has
   // the tide roll over it (a consume risk + an ambient swell), not a stream.
   const streaming = zoneId === world.zone.id;
+  const faltering = info.pourFrac <= world.sim.deadwakeField!.surge().falterFrac;
   return [{
     kind: 'event', icon: '⚰', color: info.color, label: `Deadwake · ${info.variant}`,
-    detail: streaming ? `an undead tide pours through — ${info.streamCap} strong` : 'an undead tide rolls over this ground',
+    detail: streaming
+      ? `an undead tide pours through — ${info.streamCap} strong${faltering ? ', but the tide falters' : ''}`
+      : 'an undead tide rolls over this ground',
     z: 16,
   }];
 });

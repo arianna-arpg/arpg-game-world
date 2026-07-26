@@ -68,6 +68,10 @@ export interface WraithsailSurge {
   interceptRadius: number;
   /** Sailing within this sights her (the wraithsail_seen ledger + toast). */
   sightRadius: number;
+  /** Ceiling on ONE boarding hold (seconds): she holds while her decks are
+   *  contested, but never forever — the backstop release if a boarding is
+   *  neither resolved nor left (the waning law; was a bare 1800 literal). */
+  boardingHoldSec: number;
   /** After a boarding resolves (fled or won) before she'll be boarded again. */
   boardCooldownSeconds: [number, number];
   /** Ship-to-port-node distance inside which a docking may roll. */
@@ -300,7 +304,7 @@ export class WraithsailField implements WorldOverlay {
   onBoarded(): void {
     const s = this.ship;
     if (!s) return;
-    s.holdLeft = 1800; // released by onBoardingLeft/onRegentSlain
+    s.holdLeft = this.cfg.boardingHoldSec; // released by onBoardingLeft/onRegentSlain; the ceiling is the backstop
     s.becalmLeft = 0;
   }
 
