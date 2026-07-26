@@ -487,6 +487,18 @@ export interface Doodad {
    *  evaporate option; carried ON the doodad so a revisit within the
    *  zone's memory TTL resumes the drying where it left off. */
   evap?: { t: number; rate: number };
+  /** THE RAMPAGE FABRIC (engine/rampage.ts): this piece is CRUSHED FLAT —
+   *  temporarily. The blocking trio below (blocksMovement/-Projectiles/
+   *  -SightOf) and the drawn shadow read a felled piece as DOWN, the
+   *  renderer draws it squashed/regrowing (fellFace), and World's regrowth
+   *  sweep stands it back up at `wake` (+ the swell), staggered and
+   *  entomb-safe. Runtime-only, never persisted, never in layouts — zone
+   *  re-entry re-mints pristine ground from seed, so however thorough the
+   *  obliteration, the land always returns EXACTLY as authored. `k` = the
+   *  cause key THE HOLD matches against (the sovereign's instance); `p` =
+   *  co-op wire-stamped progress (clients only — the 20 Hz reconcile IS
+   *  their felled truth, absence = standing). */
+  felled?: { at: number; wake: number; k?: string; p?: number };
   /** WEATHER DRESS tag (engine/weatherDress.ts): the WeatherKind whose front
    *  planted this piece. Runtime-only set-dressing — the reconcile derives
    *  presence from these tags, and hands the piece to `evap` the beat its
@@ -1012,6 +1024,15 @@ export interface DoodadRule {
    *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
    *  becomes a pot, a crumbling plug, or a secret door with one row. */
   brittle?: BrittleSpec;
+  /** THE RAMPAGE FABRIC's per-kind override (engine/rampage.ts). Absent =
+   *  DERIVED: any STANDING body (a rule that blocks movement, shots, or
+   *  sight) may be temporarily crushed by a rampager, state-carrying and
+   *  load-bearing kinds refusing structurally (doors, wells, hollow seals,
+   *  pits, spans, seed-paired mouths, brittle kinds — see fellableDoodad).
+   *  `false` = an authored refusal (the wyrm's own coil walls: overlay-owned
+   *  state must never be crushed out from under its ledger); `true` = opt a
+   *  non-blocking kind in (crushable brush that flattens underfoot). */
+  fell?: boolean;
   /** RESONANCE: struck stone RINGS (the Karst Country's noise fabric). Any
    *  strike that plays the surfaces — and any brittle pop — TOLLS this kind:
    *  a lure ping at the doodad draws the idle zone toward the sound and
@@ -2443,16 +2464,19 @@ export function doodadRuleKinds(): string[] {
 }
 
 export function blocksMovement(d: Doodad): boolean {
+  if (d.felled) return false; // crushed flat (the rampage fabric) — down is down on EVERY channel
   if (d.door?.open || d.door?.broken) return false; // an open doorway is a doorway
   return !!doodadRule(d.kind).blocksMove;
 }
 export function blocksProjectiles(d: Doodad): boolean {
+  if (d.felled) return false;
   if (d.door?.open || d.door?.broken) return false;
   return !!doodadRule(d.kind).blocksShot;
 }
 /** Blocks AI line of sight — defaults to the shot rule so existing kinds are
  *  untouched; windows opt out (see through what you cannot walk through). */
 export function blocksSightOf(d: Doodad): boolean {
+  if (d.felled) return false;
   if (d.door?.open || d.door?.broken) return false;
   const r = doodadRule(d.kind);
   return r.blocksSight ?? !!r.blocksShot;
@@ -2482,6 +2506,7 @@ export function pitRegionOf(d: Doodad): string | null {
  *  authored radius (low-profile kinds: the fire-ring stone you see over
  *  breathes faint gloom, the boulder-sized rock keeps its night). */
 export function sightShadowFrac(d: Doodad): number {
+  if (d.felled) return 0; // a crushed body throws no dark (the rampage fabric — drawn lifts with tested)
   if (d.door) return 0;
   const r = doodadRule(d.kind);
   const s = r.sightShadow;

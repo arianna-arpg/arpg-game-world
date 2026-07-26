@@ -9,8 +9,14 @@
 //   behind a short grace window (be in the zone as it passes and you can dash
 //   through the closing coils — or watch the pass shut in your face and
 //   re-route). Its body lies drawn across the world map. When it settles, its
-//   arena is minted at the rest and its HEAD — a multi-part composite — waits
-//   there. Slay it and every strangled road falls open at once.
+//   HEAD — the segment fabric's true worm — waits ON the rest ground itself
+//   (THE SETTLED GROUND venue: the fight happens in the real world it
+//   strangled, no minted pocket jarring against the neighbors), and the land
+//   YIELDS to it: head, coils and the passing body all wear the RAMPAGE
+//   fabric (engine/rampage.ts), so standing timber and stone are crushed
+//   flat in its wake — temporarily; the regrowth law returns every piece,
+//   and a re-entered zone re-mints pristine from seed. Slay it and every
+//   strangled road falls open at once.
 //
 //   CRAGMAW, the Orogeny (apparition) — a walking mountain heralded on the
 //   map with a countdown; it manifests, it waits, and unbeaten it DEPARTS.
@@ -87,8 +93,12 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       monster: 'primeval_wyrm_head', minLevel: 10, levelBonus: 3,
       glyph: '🐍', color: '#7fb069',
       escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [3, 5] },
-      roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', arenaName: 'The Sunder-Coil' },
-      arenaBand: { w: [3200, 3800], h: [2300, 2800] }, // room for the body to sweep
+      // THE SETTLED GROUND: the head fight stands in the REST ZONE itself —
+      // real country, its own dress, doors that were always there. The
+      // colossus needs no minted room to sweep because the room yields: the
+      // whole animal wears the rampage fabric (data/monsters.ts) and plows
+      // the ground's standing timber flat — temporarily, always temporarily.
+      roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', venue: 'ground' },
       pitch: 'every scale of it is a target — tear the plates along its length and it bleeds the harder, but a torn coil spits venom',
       reward: { xp: 1250, gems: 6 },
     },
@@ -198,6 +208,14 @@ export const WORLDBOSS: ContentPackage = {
       if (d.roam && !look.monster(d.roam.passingMonster)) {
         out.push(`world boss '${d.id}' passing body '${d.roam.passingMonster}' unknown`);
       }
+      // Venue coherence: the minted lane needs its name; the ground lane
+      // must not carry dead arena knobs (a band with no mint is a lie).
+      if (d.roam && (d.roam.venue ?? 'ground') === 'arena' && !d.roam.arenaName) {
+        out.push(`world boss '${d.id}' venue 'arena' without an arenaName`);
+      }
+      if (d.roam && (d.roam.venue ?? 'ground') === 'ground' && d.arenaBand) {
+        out.push(`world boss '${d.id}' venue 'ground' carries a dead arenaBand knob`);
+      }
       for (const e of d.escort?.table ?? []) {
         if (!look.monster(e.id)) out.push(`world boss '${d.id}' escort '${e.id}' unknown`);
       }
@@ -214,7 +232,11 @@ export const WORLDBOSS: ContentPackage = {
 // The wyrm's coil: a wall of living scale. Solid to feet, shots AND sight —
 // the pass is truly shut (the LOS raycast reads these rules). 'inert' keeps it
 // out of gen-time placement checks (it exists only where the engine lays it).
-registerDoodadRule('wyrm_coil', { overlap: 'inert', blocksMove: true, blocksShot: true, blocksSight: true });
+// fell:false — THE AUTHORED REFUSAL (the rampage fabric): the coils are the
+// blockade's DRAWN face and the edge-block ledger is overlay state; a
+// rampaging kin crushing them would make the map lie about a sealed road.
+// Living scale does not yield to its own kind.
+registerDoodadRule('wyrm_coil', { overlap: 'inert', blocksMove: true, blocksShot: true, blocksSight: true, fell: false });
 // Velketh's throne: a great walkable dais the boss is habitat-bound to (the
 // lake-horror pattern — ground, never a blocker; the boss stands ON it).
 registerDoodadRule('husk_throne', { overlap: 'ground' });
@@ -247,9 +269,13 @@ registerMarkerSource((world: World): MapMarker[] => {
           fog: 'always', z: 22, dimension: dim,
         });
       }
-      if (s.arenaZoneId) {
+      // The fight seat: the minted arena where one exists (venue 'arena', or
+      // an old save's honored mint), else — THE SETTLED GROUND — the rest
+      // zone itself once the serpent has settled there.
+      const seat = s.arenaZoneId ?? (s.phase === 'settled' ? s.restZoneId : null);
+      if (seat) {
         out.push({
-          id: `wb-arena-${s.id}`, zoneId: s.arenaZoneId,
+          id: `wb-arena-${s.id}`, zoneId: seat,
           glyph: '☠', fill: '#1a140c', stroke: s.def.color, text: '#f0e2c0', r: 9,
           title: `${s.def.name} — the head. Strike it off and the roads open.`,
           fog: 'always', z: 21,

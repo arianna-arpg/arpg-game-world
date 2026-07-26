@@ -42,6 +42,7 @@ import type { Attributes } from '../engine/stats';
 import { COMBO_CFG, comboProgress } from '../engine/sequence';
 import { GRAB_VERB_LABEL } from '../engine/grab';
 import { tellSpecsOf } from '../engine/tells';
+import { fellProgress } from '../engine/rampage';
 import { watchRungOf, watchValueOf } from '../engine/watch';
 
 export type Vec2W = [number, number];
@@ -431,6 +432,16 @@ export interface StateSnapshot {
    *  while the host's pool holds bodies; the client renders it verbatim
    *  (World.liteWire) — host-authoritative, self-healing at 20 Hz. */
   lt?: { k: string[]; b: number[] };
+  /** THE RAMPAGE FABRIC's felled set (engine/rampage.ts): position-keyed
+   *  (doodad positions are seed-shared and immutable — splice-proof where
+   *  indices are not) with the host-resolved stand-up progress `p` (-1 =
+   *  crushed flat, 0..1 = the regrow swell). The wells idiom throughout:
+   *  this 20 Hz reconcile IS the client's felled truth (absence = standing),
+   *  the stamped `p` drives both the guest's drawn face (fellFace) and its
+   *  predicted collision (the blocking trio reads Doodad.felled), and a
+   *  dropped packet self-heals on the next beat. Present only while any
+   *  piece lies crushed — the whole-ground common case ships zero bytes. */
+  fell?: { x: number; y: number; p: number }[];
 }
 
 /** One live pooled lightwell: id, kind, pos, doodad radius, power fraction. */
@@ -650,7 +661,24 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       ? world.trapworks.map(tw => ({ i: tw.id, s: (tw.state === 'sprung' ? 1 : 0) as 0 | 1, t: Math.round(tw.sprungAt * 100) / 100 }))
       : undefined,
     lt: liteOf(world),
+    fell: fellOf(world),
   };
+}
+
+/** The rampage fabric's felled rows (undefined while the ground stands whole
+ *  — the common case). Progress is resolved host-side so guests need no
+ *  clock agreement: they draw and test the shipped fraction verbatim. */
+function fellOf(world: World): { x: number; y: number; p: number }[] | undefined {
+  if (!world.rampageActive()) return undefined;
+  let out: { x: number; y: number; p: number }[] | undefined;
+  for (const d of world.doodads) {
+    if (!d.felled) continue;
+    (out ??= []).push({
+      x: Math.round(d.pos.x), y: Math.round(d.pos.y),
+      p: Math.round(fellProgress(d.felled, world.time) * 1000) / 1000,
+    });
+  }
+  return out;
 }
 
 /** THE LITE TIER's draw list (engine/lite.ts): a kind table + flat rounded
@@ -801,6 +829,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   if (!world.appliedZoneId || snap.zoneId === world.appliedZoneId) {
     world.applyNetWells(snap.wells ?? []);
     world.setNetGloom(snap.gloom ?? 0);
+    // THE RAMPAGE FABRIC's felled set — same idiom, same guard: the guest's
+    // ground crushes and regrows exactly where the host's does.
+    world.applyNetFell(snap.fell);
   }
   // THE LITE TIER's draw list (engine/lite.ts): the client renders the
   // host's pool verbatim off this mirror — absent truly means empty (the

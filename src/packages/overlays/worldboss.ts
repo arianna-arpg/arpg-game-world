@@ -12,11 +12,14 @@
 //                  the coils close), leaving a growing body drawn across the
 //                  world map that BLOCKS through-travel (the engine's edge-
 //                  block gate + in-zone coil walls read this field). When it
-//                  reaches its rest it SETTLES: the engine mints its arena
-//                  beside the rest node and the head — a multi-part composite
-//                  monster — waits there. Slay it and every sealed road falls
-//                  open at once. Paths are BFS-guarded: the serpent never
-//                  cuts the charted graph apart (no stranding, ever).
+//                  reaches its rest it SETTLES — and THE SETTLED GROUND law
+//                  (roam.venue, default 'ground') stands the head fight IN
+//                  the rest zone itself: real charted country in its own
+//                  dress, no minted pocket jarring against the neighbors
+//                  (venue 'arena' keeps the classic minted stage as data).
+//                  Slay it and every sealed road falls open at once. Paths
+//                  are BFS-guarded: the serpent never cuts the charted graph
+//                  apart (no stranding, ever).
 //
 //   'apparition' — the TIMED manifestation (the D4 beat). A herald warns the
 //                  map with a countdown; the boss MANIFESTS in a real zone
@@ -82,15 +85,28 @@ export interface WorldBossDef {
   /** Escorting adds spawned alongside the boss (rolled from the table). */
   escort?: { table: PackTableEntry[]; count: [number, number] };
   /** ROAMER: the passing-body visual monster (driven, untargetable), the wall
-   *  doodad kind its coils plug roads with, and the minted arena's name. */
-  roam?: { passingMonster: string; wallKind: string; arenaName: string };
+   *  doodad kind its coils plug roads with, and THE VENUE — where the settled
+   *  head stands its fight:
+   *    'ground' (the default — THE SETTLED GROUND law): the fight happens IN
+   *      the rest zone itself, real charted country in its own dress; no
+   *      arena is minted, nothing jars against the neighbors, and the
+   *      colossus meets the land honestly (wear MonsterDef.rampage and the
+   *      land yields — temporarily — instead of walling the fight).
+   *    'arena': the classic minted pocket beside the rest node (special
+   *      theme, eventOwned, scrubbed after the kill) — `arenaName` required,
+   *      `arenaBand` honored. Kept as pure data for sovereigns that WANT a
+   *      stage of their own. */
+  roam?: { passingMonster: string; wallKind: string; venue?: 'ground' | 'arena'; arenaName?: string };
   /** LAIR: the structure doodad it is habitat-bound to + the lair zone name.
    *  `radius` sizes the dais (default 130) — the habitat confine derives
    *  radius + grace, so the throne IS the leash length, as data. */
   lair?: { structureKind: string; zoneName: string; radius?: number };
   /** Minted-ground FOOTPRINT floor (ZoneSpec.sizeBand — the pocket-form
    *  seam reused): a colossus's arena guarantees itself room to sweep.
-   *  Absent = the anchor tileset's own bands, exactly as before. */
+   *  Absent = the anchor tileset's own bands, exactly as before. Venue
+   *  'arena' only — a SETTLED GROUND fight stands on country that already
+   *  exists (validate flags the dead knob), and makes its room by crushing
+   *  through what stands there (the rampage fabric). */
   arenaBand?: { w: [number, number]; h: [number, number] };
   /** Kill spoils paid by the kill rule on top of the ordinary boss drop path. */
   reward: { xp: number; gems: number };
@@ -467,6 +483,11 @@ export class WorldBossField implements WorldOverlay {
     return this.cfg.defs.find(d => d.id === defId) ?? null;
   }
 
+  /** The roamer's settled venue (default 'ground' — THE SETTLED GROUND law). */
+  roamVenue(def: WorldBossDef | null): 'ground' | 'arena' {
+    return def?.roam?.venue ?? 'ground';
+  }
+
   /** Is the road a→b sealed by a serpent's body? (Directionless.) */
   edgeBlocked(a: string, b: string): { serpentId: string; def: WorldBossDef } | null {
     const key = edgeKey(a, b);
@@ -524,10 +545,17 @@ export class WorldBossField implements WorldOverlay {
     return null;
   }
 
-  /** The fight that materializes in this zone (arena head / manifest / lair). */
+  /** The fight that materializes in this zone (settled head — on its REST
+   *  ground or its minted arena, per venue — / manifest / lair). */
   fightAt(zoneId: string): WorldBossFight | null {
     for (const s of this.serpents) {
-      if (s.phase === 'settled' && s.arenaZoneId === zoneId) {
+      if (s.phase !== 'settled') continue;
+      // THE SETTLED GROUND: a ground-venue serpent fights in the rest zone
+      // itself. A bound arena (venue 'arena' — or an old save's already-
+      // minted coil) always wins the match: the mint, once made, is honored.
+      const seat = s.arenaZoneId ?? (this.roamVenue(this.defById(s.defId)) === 'ground'
+        ? s.path[s.path.length - 1] : null);
+      if (seat === zoneId) {
         const def = this.defById(s.defId);
         if (def) return { instanceId: s.id, def, archetype: 'roamer', bossLifeFrac: s.bossLifeFrac };
       }
@@ -554,10 +582,13 @@ export class WorldBossField implements WorldOverlay {
     for (const s of this.serpents) {
       if (s.phase !== 'settled' || s.arenaZoneId !== null) continue;
       const def = this.defById(s.defId);
-      if (def?.roam) {
+      // THE SETTLED GROUND: a ground-venue serpent owes the engine NOTHING —
+      // its fight seat IS the rest node (fightAt matches it directly).
+      if (def?.roam && this.roamVenue(def) === 'arena') {
         out.push({
           instanceId: s.id, kind: 'arena',
-          anchorZoneId: s.path[s.path.length - 1], def, zoneName: def.roam.arenaName,
+          anchorZoneId: s.path[s.path.length - 1], def,
+          zoneName: def.roam.arenaName ?? def.name,
         });
       }
     }

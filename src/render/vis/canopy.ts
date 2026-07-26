@@ -242,7 +242,7 @@ export class CanopySlices {
               // per-chunk clip (each clip is a raster state flush; dozens a
               // frame WAS the strangler-court GPU stall).
               for (const o of members) {
-                if (o.gone || g.diverged.has(o) || this.standInDrawn.has(o)) continue;
+                if (o.gone || o.felled || g.diverged.has(o) || this.standInDrawn.has(o)) continue;
                 this.standInDrawn.add(o);
                 const meta = metaOf(o.kind);
                 blitCrown(ctx, theme, o, meta.name, meta.params, a);
@@ -307,7 +307,9 @@ export class CanopySlices {
     if (bctx) {
       bctx.translate(-cx * chunk, -cy * chunk);
       for (const o of members) {
-        if (o.gone || g.diverged.has(o)) continue;
+        // A crushed crown leaves the composite (the rampage fabric — the
+        // rebuilt veil index drops it; this guards the same-frame window).
+        if (o.gone || o.felled || g.diverged.has(o)) continue;
         const meta = metaOf(o.kind);
         blitCrown(bctx, theme, o, meta.name, meta.params, 1);
       }

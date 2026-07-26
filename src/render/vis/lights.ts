@@ -100,6 +100,9 @@ export class LightLayer {
     for (const d of world.doodads) {
       const spec = DOODAD_VISUALS[d.kind]?.light;
       if (!spec) continue;
+      // A crushed lamp goes dark (the rampage fabric) — the fell/regrow flips
+      // bump the 'light' family, so this cache re-derives on the transition.
+      if (d.felled) continue;
       // Pooled LIGHTWELLS dim per frame — this cache (keyed on list identity
       // + length only) cannot see that, so they bypass clustering entirely
       // and push as live individually-resolved lights in collect().

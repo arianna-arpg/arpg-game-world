@@ -1020,6 +1020,14 @@ export class Actor {
 
   /** Scenery with a health bar: never acts, never walks, never counted. */
   passive = false;
+  /** ENGINE-WHEELED (MonsterDef.driven): this body's motion is authored by
+   *  engine code, never by a brain — the world-boss passing body wheeled
+   *  door to door, any future scripted mover. movementLocked exempts a
+   *  driven body from the PASSIVE volition lock alone (the engine IS its
+   *  volition); death, stun, dash and anchors still hold. Without this the
+   *  passive+driven pair deadlocks: the glimpse body parks at the door it
+   *  entered by while the engine wheels a refusal every frame. */
+  driven = false;
   /** Rooted in place: never walks, never pushed (spawners, townsfolk).
    *  Passive things WITHOUT this (barrels) can still be shoved around. */
   anchored = false;

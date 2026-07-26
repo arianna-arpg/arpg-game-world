@@ -84,6 +84,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type DoodadKind, type PlacedStructure, type PlacedSlot,
   type ResonanceSpec,
 } from './levelgen';
+import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
 import { landingTier, linkFlipTier, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
@@ -2923,6 +2924,12 @@ export class World {
    *  evaporate-marked temp grounds join at runtime; loadZone re-harvests
    *  from the doodad list so a revisit resumes the drying. */
   private evaporating: Doodad[] = [];
+  /** THE RAMPAGE FABRIC (engine/rampage.ts): pieces currently crushed flat
+   *  (Doodad.felled), awaiting THE HOLD's lapse + the staggered stand-up.
+   *  Strictly runtime — loadZone resets it empty (fresh ground is pristine
+   *  by seed) and saves never see it: the reversion guarantee. */
+  private regrowing: Doodad[] = [];
+  private rampageTimer = 0;
   /** THE POCK FIFO (plantImpactDress): the standing blast-dress subset of
    *  this.doodads in plant order, so the dress cap stops walking the whole
    *  doodad list per shell. DERIVED, never trusted blind: the key re-derives
@@ -4750,6 +4757,11 @@ export class World {
     // Evaporating pools persist ON their doodads (zone memory) — harvest
     // them back into the sweep so a revisit resumes the drying mid-step.
     this.evaporating = this.doodads.filter(d => d.evap && !d.gone);
+    // THE RAMPAGE FABRIC: felled state is strictly runtime — a fresh load
+    // mints pristine ground from seed (the reversion guarantee's second
+    // road), so the regrow sweep starts empty by construction.
+    this.regrowing = [];
+    this.rampageTimer = 0;
     // THE LIVING FOG (engine/fog.ts): banks gather on a SALTED copy of the
     // layout seed — fog can never advance layout/spawn rng — and roam from
     // there, transient like all ambient texture. Open-sky zones (no
@@ -13594,6 +13606,45 @@ export class World {
     if (changed) this.markDoodadsChanged();
   }
 
+  /** CLIENT-SIDE (co-op): converge the local ground on the host's FELLED set
+   *  (the rampage fabric — the wells idiom, position-keyed because doodad
+   *  positions are seed-shared and immutable where indices are splice-prone).
+   *  The stamped `p` drives the guest's drawn face (fellFace prefers it) AND
+   *  its predicted collision (the blocking trio reads Doodad.felled), so a
+   *  guest walks the same crushed gap the host does; absence = standing, and
+   *  a dropped packet self-heals on the next reconcile. */
+  applyNetFell(rows: readonly { x: number; y: number; p: number }[] | undefined): void {
+    const want = rows ?? [];
+    if (!want.length && !this.regrowing.length) return; // whole ground, nothing tracked
+    const key = (x: number, y: number): string => `${Math.round(x)},${Math.round(y)}`;
+    const byPos = new Map<string, number>();
+    for (const r of want) byPos.set(key(r.x, r.y), r.p);
+    // Clear the unlisted (they stood back up host-side)…
+    for (let i = this.regrowing.length - 1; i >= 0; i--) {
+      const d = this.regrowing[i];
+      if (!d.felled) { this.regrowing.splice(i, 1); continue; }
+      if (!byPos.has(key(d.pos.x, d.pos.y))) {
+        delete d.felled;
+        this.regrowing.splice(i, 1);
+        this.markDoodadsChanged(d);
+      }
+    }
+    if (!byPos.size) return;
+    // …then stamp the listed (fell the fresh, restate progress on the rest).
+    for (const d of this.doodads) {
+      const p = byPos.get(key(d.pos.x, d.pos.y));
+      if (p === undefined) continue;
+      if (!d.felled) {
+        if (d.gone) continue;
+        d.felled = { at: 0, wake: 0, p };
+        this.regrowing.push(d);
+        this.markDoodadsChanged(d);
+      } else {
+        d.felled.p = p;
+      }
+    }
+  }
+
   /** CLIENT-SIDE (co-op): the host's eased zone gloom — a render input (the
    *  client never runs updateGloaming, so this write is uncontested). */
   setNetGloom(g: number): void {
@@ -13891,6 +13942,7 @@ export class World {
     for (const d of this.doodads) {
       const eff = d.effect;
       if (!eff) continue;
+      if (d.felled) continue; // a crushed vent sleeps until it stands again (the rampage fabric)
       eff.cd = (eff.cd ?? 0) - dt;
       if (eff.cd > 0) continue;
       eff.cd = eff.interval;
@@ -13921,7 +13973,7 @@ export class World {
         // (validated at boot) — never a full doodad scan.
         let near = false;
         for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
-          if (!def.kinds.includes(d.kind)) continue;
+          if (!def.kinds.includes(d.kind) || d.felled) continue; // crushed shrines don't attune
           const dx = a.pos.x - d.pos.x, dy = a.pos.y - d.pos.y;
           const reach = def.radius + d.radius;
           if (dx * dx + dy * dy <= reach * reach) { near = true; break; }
@@ -18261,9 +18313,11 @@ export class World {
     if (fight.archetype === 'lair' && fight.def.lair) {
       this.doodads.push({ pos: vec(at.x, at.y), radius: fight.def.lair.radius ?? 130, kind: fight.def.lair.structureKind });
     }
-    // Minted arenas already carry the level bonus; an apparition stands in an
-    // ordinary zone and takes it here.
-    const lvl = Math.max(1, def.level + (fight.archetype === 'apparition' ? (fight.def.levelBonus ?? 0) : 0));
+    // Ground minted FOR the fight (a venue-'arena' coil, a lair) already
+    // carries the level bonus in its ZoneDef; a fight standing on ORDINARY
+    // world ground — an apparition, or a settled serpent under THE SETTLED
+    // GROUND venue — takes it here.
+    const lvl = Math.max(1, def.level + (!def.special ? (fight.def.levelBonus ?? 0) : 0));
     const m = this.createMonster(fight.def.monster, lvl, 'enemy');
     m.pos = vec(at.x, at.y);
     m.tag = 'worldboss_boss';
@@ -23088,6 +23142,8 @@ export class World {
     // postSpec directly for site-exact posts (a holdfast's gate crew).
     if (def.post) a.postSpec = def.post === true ? {} : def.post;
     a.passive = !!def.passive;
+    a.driven = !!def.driven; // engine-wheeled — movementLocked's passive lock stands aside
+
     // aims:false — facing-is-noise bodies (data lever): no aim tick.
     if (def.aims === false) a.aims = false;
     // SCALE VARIANCE: a herd reads as a mix of big adults and small young. Roll a
@@ -32532,6 +32588,122 @@ export class World {
     }
   }
 
+  // ------------------------------------------------ THE RAMPAGE FABRIC
+  // (engine/rampage.ts — docs/engine/rampage.md): temporary doodad felling
+  // with a guaranteed return. The PLOW runs per frame BEFORE the movers step
+  // (fell-before-move: the wall is down by the time moveActor arrives, so the
+  // shared collision path needs no rampager bypass); THE REGROWTH runs on its
+  // own cadence — the hold, the stagger, the entomb law.
+
+  /** THE FELLING — the one chokepoint every crusher speaks through (the
+   *  rampage sweep today; any future feller — a trample stat, a scripted
+   *  calamity — uses this same door so the regrowth guarantee holds). Marks
+   *  the piece down (the blocking trio + drawn shadow read it at their own
+   *  seams), stamps the regrow clock, bumps the piece's families. */
+  fellDoodad(d: Doodad, cause?: string, spec?: RampageSpec | null): boolean {
+    if (!fellableDoodad(d)) return false;
+    const now = this.time;
+    d.felled = { at: now, wake: now + RAMPAGE_CFG.delaySec + fellJitter(d), ...(cause ? { k: cause } : {}) };
+    this.regrowing.push(d);
+    this.markDoodadsChanged(d);
+    if (!spec?.quiet) {
+      this.flashes.push({
+        pos: vec(d.pos.x, d.pos.y), radius: Math.min(52, d.radius + 14),
+        color: RAMPAGE_CFG.fxColor, life: 0.35, maxLife: 0.35,
+      });
+      this.shake = Math.max(this.shake, RAMPAGE_CFG.shake);
+    }
+    return true;
+  }
+
+  /** The cause key THE HOLD matches: the event instance a sovereign carries
+   *  (eventKey — the vendetta pattern), else the def itself. */
+  private rampageCauseOf(a: Actor): string {
+    return a.eventKey ?? `def:${a.defId ?? a.name}`;
+  }
+
+  /** One crush footprint: fellable standing doodads whose TRUE surface (the
+   *  hit-surface fabric — canopy brushes never fell the trunk) sits within
+   *  reach of this body point go down. */
+  private rampageCrush(a: Actor, px: number, py: number, pr: number, spec: RampageSpec, cause: string): void {
+    const reach = (spec.reach ?? RAMPAGE_CFG.reach) + pr;
+    for (const d of this.doodadsNear(px, py, reach + 12)) {
+      if ((d.tier ?? 0) !== (a.tier ?? 0)) continue; // its own story's furniture only
+      if (!fellableDoodad(d)) continue;
+      const ch = doodadRuleOf(d.kind).blocksMove ? 'move' : 'shot';
+      if (!shapeContains(hitSurfaceOf(d, ch), d.pos.x, d.pos.y, px, py, reach)) continue;
+      this.fellDoodad(d, cause, spec);
+    }
+  }
+
+  /** Would standing this piece back up entomb a body? (The wyrm-wall
+   *  precedent: regrowth never buries anyone — completion defers.) */
+  private rampageBlockedStand(d: Doodad): boolean {
+    if (!doodadRuleOf(d.kind).blocksMove) return false; // never pushes → can never entomb
+    const s = hitSurfaceOf(d, 'move');
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      if (shapeContains(s, d.pos.x, d.pos.y, a.pos.x, a.pos.y, a.radius * 0.8)) return true;
+    }
+    return false;
+  }
+
+  /** Renderer gate: any felled piece standing in this zone? (The felled draw
+   *  pass pays nothing while the ground is whole.) */
+  rampageActive(): boolean {
+    return this.regrowing.length > 0;
+  }
+
+  private updateRampage(dt: number): void {
+    // 1. THE PLOW (per frame, before the movers step): every rampager's
+    //    footprint — the head and, for worms, every trailing coil (the whole
+    //    animal is the plow) — crushes at true-surface contact + reach.
+    //    Free while no rampager stands.
+    let liveCauses: Set<string> | null = null;
+    for (const a of this.actors) {
+      if (a.dead || !a.defId) continue;
+      const spec = rampageSpecOf(MONSTERS[a.defId]);
+      if (!spec) continue;
+      const cause = this.rampageCauseOf(a);
+      (liveCauses ??= new Set()).add(cause);
+      this.rampageCrush(a, a.pos.x, a.pos.y, a.radius, spec, cause);
+      const segs = (spec.segments ?? true) ? a.worm?.segments : null;
+      if (segs) {
+        for (let i = 0; i < segs.length; i++) {
+          this.rampageCrush(a, segs[i].x, segs[i].y, segR(a, i), spec, cause);
+        }
+      }
+    }
+    // 2. THE REGROWTH (cadenced): the land waits while the cause still stands
+    //    (the hold — wake pushed, never pulled), then stands its pieces back
+    //    up staggered; completion defers around bodies (the entomb law) and
+    //    each stand-up is announced by the piece's own flash.
+    this.rampageTimer -= dt;
+    if (this.rampageTimer > 0 || !this.regrowing.length) return;
+    this.rampageTimer = RAMPAGE_CFG.sweepSec;
+    const now = this.time;
+    for (let i = this.regrowing.length - 1; i >= 0; i--) {
+      const d = this.regrowing[i];
+      const f = d.felled;
+      if (!f || d.gone) { this.regrowing.splice(i, 1); continue; }
+      if (f.k && liveCauses?.has(f.k)) {
+        // The hold re-carries each piece's own jitter, so however long the
+        // fight ran, the release still re-stands the country piecewise.
+        f.wake = Math.max(f.wake, now + RAMPAGE_CFG.holdSec + fellJitter(d));
+        continue;
+      }
+      if (fellProgress(f, now) < 1) continue;
+      if (this.rampageBlockedStand(d)) continue; // wait for them to move (never entombs)
+      delete d.felled;
+      this.regrowing.splice(i, 1);
+      this.markDoodadsChanged(d);
+      this.flashes.push({
+        pos: vec(d.pos.x, d.pos.y), radius: Math.min(46, d.radius + 8),
+        color: '#7fb069', life: 0.4, maxLife: 0.4,
+      });
+    }
+  }
+
   /**
    * No Man's Land: drop the lingering damage field a skill's area leaves
    * behind. Shared by deliveries AND async resolutions (leap landings),
@@ -37836,6 +38008,10 @@ export class World {
     this.updateRitualSite();
     this.updateHoldfastSite();
     this.updateIncursionEvents(dt);
+    // THE RAMPAGE (engine/rampage.ts): fell-before-move — the plow runs
+    // ahead of the actor step below, so a crushed wall is already down when
+    // its crusher's moveActor arrives (no bypass inside the shared confine).
+    this.updateRampage(dt);
     this.updateDoodadEffects(dt);
     this.updateArenaCrowd();
     this.updateAttunements(dt);
@@ -41166,7 +41342,7 @@ export class World {
       let warmed = this.underRoofAt(a.pos);
       if (!warmed) {
         for (const d of this.doodadsNear(a.pos.x, a.pos.y, WINDCHILL_CFG.warmReach)) {
-          if (d.gone) continue;
+          if (d.gone || d.felled) continue; // a crushed hearth warms no one (the rampage fabric)
           const warms = doodadRuleOf(d.kind).warms;
           if (!warms) continue;
           const reach = warms === true ? WINDCHILL_CFG.warmReach : warms;
@@ -41775,7 +41951,7 @@ export class World {
       }
     }
     for (const c of this.contactHazards) {
-      if (c.d.gone) continue;
+      if (c.d.gone || c.d.felled) continue; // a crushed bumper bumps nothing (the rampage fabric)
       const rule = doodadRuleOf(c.d.kind);
       if (!rule.contact) continue;
       const shape = hitSurfaceOf(c.d, 'move');
@@ -48271,7 +48447,10 @@ export class World {
    *  factor). Replicated per-seat (SeatW.rooted) so a co-op client's movement
    *  PREDICTION doesn't drift the hero forward while the host has them rooted. */
   movementLocked(a: Actor): boolean {
-    if (a.dash || a.leap || a.isStunned() || a.dead || a.anchored || a.passive) return true;
+    // The PASSIVE lock is a volition lock — a DRIVEN body (engine-wheeled
+    // scenery: the serpent's passing glimpse) has no volition to lock; the
+    // engine's own hand moves it. Death, stun, dash and anchors still hold.
+    if (a.dash || a.leap || a.isStunned() || a.dead || a.anchored || (a.passive && !a.driven)) return true;
     // SEALS & FORMS: a toggled form with moveFactor 0 ROOTS its bearer
     // (Stormbind plants you) — factors above 0 slow in moveActor instead.
     for (const au of a.activeAuras.values()) {

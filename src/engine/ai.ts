@@ -2292,7 +2292,7 @@ function refugeStep(actor: Actor, world: World, dt: number): boolean {
     let best: { x: number; y: number; r: number } | null = null;
     let bd = r.seek ?? 900;
     for (const d of world.doodads) {
-      if (d.kind !== r.kind || d.gone) continue;
+      if (d.kind !== r.kind || d.gone || d.felled) continue; // no refuge in wreckage (the rampage fabric)
       const dd = dist(actor.pos, d.pos);
       if (dd < bd) { bd = dd; best = { x: d.pos.x, y: d.pos.y, r: d.radius }; }
     }

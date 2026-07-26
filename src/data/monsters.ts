@@ -18,6 +18,7 @@ import { FluxPhase } from '../engine/flux';
 import type { TuneSpec } from '../engine/tuning';
 import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
+import type { RampageSpec } from '../engine/rampage';
 import type { MountSlotSpec, MountSpec } from '../engine/mounts';
 import type { TellSpec } from '../engine/tells';
 import type { BondLinkStyle } from '../engine/pack';
@@ -925,6 +926,13 @@ export interface MonsterDef {
    *  hostiles pressing their keeper. One clock per gun — killing it (or
    *  breaking the part that `breakDisables` the skill) is the counterplay. */
   bombard?: BombardSpec;
+  /** THE RAMPAGE FABRIC (engine/rampage.ts): this body PLOWS — fellable
+   *  standing doodads its true surface touches are crushed flat instead of
+   *  walling its movement (worm bodies crush along every trailing coil).
+   *  TEMPORARY BY CONSTRUCTION: the regrowth law stands every piece back up,
+   *  and re-entered zones re-mint pristine from seed — the land always
+   *  returns exactly as authored. `true` = all defaults. */
+  rampage?: true | RampageSpec;
   /** CARRIED GEAR — the Hollowborn's contract: the body spawns WEARING one
    *  real rolled item (createMonster mints it at the body's level) and its
    *  credited kill drops EXACTLY that piece instead of a gear-table roll.
@@ -12456,6 +12464,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['venom_bolt', 'bile_spray', 'ground_slam'],
     xp: 900, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.4, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 1.7,
+    // THE RAMPAGE: a settled-ground fight (worldboss venue 'ground') in real
+    // country — the world-serpent does not queue behind pine trees. Head AND
+    // every trailing coil crush standing timber flat; the land regrows.
+    rampage: true,
     worm: {
       length: 26, spacing: 44, taper: 0.975,
       hittable: true,
@@ -12546,6 +12558,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     remains: false, // organic dress, but an OBJECT — no corpse
     skills: [], xp: 0,
     faction: 'primeval', tags: ['primeval'],
+    // The pass leaves a WAKE: the driven glimpse-body plows the same furrow
+    // the true fight does — follow the crushed line to the door it left by.
+    rampage: true,
     worm: {
       length: 30, spacing: 46, taper: 0.975,
       looks: { body: 'wyrm_plate', tail: 'wyrm_tail_spade', every: { n: 5, look: 'wyrm_sail' } },
@@ -12567,6 +12582,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['ground_slam', 'hurl_debris', 'cleave'],
     xp: 780, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.3, turnSpeed: 1.8,
+    rampage: true, // a walking mountain does not notice a fence
     scaling: { life: { incPerLevel: 0.15 } },
     parts: [
       { monster: 'primeval_cragmaw_fist', dx: 0.85, dy: 1.25, lifeFrac: 0.28, breakDamage: 0.1, breakDisables: ['ground_slam'] },
@@ -12646,6 +12662,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [],
     xp: 640, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.5, turnSpeed: 0.9,
+    // The mausoleum walks THROUGH the karst stones, not around them — its
+    // glacial stride is the whole threat, so nothing may queue it.
+    rampage: true,
     scaling: { life: { incPerLevel: 0.15 }, hitCap: { incPerLevel: 0.15 } },
     parts: [
       { monster: 'primeval_ironbell_leg', dx: 1.25, dy: 1.15, lifeFrac: 0.13, breakDamage: 0.05,
@@ -12746,6 +12765,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['flame_wave', 'meteor_storm'],
     xp: 800, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
     detection: 1.4, levitates: true,
+    rampage: true, // the furnace's drift chars hell's own props out of its way
     scaling: { life: { incPerLevel: 0.15 } },
     brain: {
       type: 'artillery',

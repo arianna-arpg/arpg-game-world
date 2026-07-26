@@ -35,6 +35,7 @@ import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { tierLinkOf } from '../engine/tiers';
 import { stratumOf } from '../world/strata';
 import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, pitRegionOf, type Doodad } from '../engine/levelgen';
+import { fellFace } from '../engine/rampage';
 import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { transitRing } from '../data/transit';
@@ -2532,6 +2533,27 @@ export class Renderer {
    * def; unknown kinds draw the warned generic disc so brand-new data kinds
    * are visible before (or without) ever earning a dressed look.
    */
+  /** THE RAMPAGE FABRIC's drawn face (fellFace — one pure resolver, host and
+   *  co-op client alike, off the same replicated state the blocking trio
+   *  tests): each crushed piece draws as ITSELF squashed flat and faded —
+   *  kind-honest wreckage, zero new painters — then swells back up through
+   *  the regrow window as a ghost until the completion flash pops it solid. */
+  private drawFelledDoodads(env: PaintEnv, down: readonly Doodad[], def: DoodadVisualDef | undefined, now: number): void {
+    const { ctx } = this;
+    for (const d of down) {
+      const face = fellFace(d.felled!, now);
+      ctx.save();
+      ctx.globalAlpha *= face.alpha;
+      ctx.translate(d.pos.x, d.pos.y);
+      ctx.scale(face.sx, face.sy);
+      ctx.translate(-d.pos.x, -d.pos.y);
+      if (!def) PAINTERS.fallback(env, [d], { painter: 'fallback', order: 50 });
+      else if (def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, [d], def);
+      else (PAINTERS[def.painter] ?? PAINTERS.fallback)(env, [d], def);
+      ctx.restore();
+    }
+  }
+
   private drawDoodads(world: World): void {
     const { ctx } = this;
     // Per-zone shadow art direction (ZoneTheme.shadows) folds over the
@@ -2565,18 +2587,30 @@ export class Renderer {
     // The sun's cast this frame — directional shadows SPIN through the day
     // and stretch toward dawn/dusk (null at night).
     const sun = sunCast(world.time);
+    const anyFelled = world.rampageActive();
     for (const g of groups) {
+      // THE RAMPAGE FABRIC (engine/rampage.ts): felled pieces leave every
+      // normal lane — no long shadow, no blend bed, no group shadow (a
+      // crushed body throws no dark, and the ground shows through it) — and
+      // draw squashed/fading through the felled pass, each one still its own
+      // KIND: wreckage stays kind-honest with zero new painters.
+      let list = g.list;
+      if (anyFelled && g.list.some(d => d.felled)) {
+        this.drawFelledDoodads(env, g.list.filter(d => d.felled), g.def, world.time);
+        list = g.list.filter(d => !d.felled);
+        if (!list.length) continue;
+      }
       if (!g.def) {
         if (!warnedUnrenderedKinds.has(g.kind)) {
           warnedUnrenderedKinds.add(g.kind);
           console.warn(`[render] doodad kind '${g.kind}' has no DOODAD_VISUALS entry — generic disc fallback`);
         }
-        PAINTERS.fallback(env, g.list, { painter: 'fallback', order: 50 });
+        PAINTERS.fallback(env, list, { painter: 'fallback', order: 50 });
         continue;
       }
       if (sun && g.def.longShadow && !VIS_ABLATE.has('shadows')) {
         const gate = env.shadowGate;
-        for (const d of g.list) {
+        for (const d of list) {
           if (gate) {
             if (gate.left <= 0 || d.radius < gate.minR) continue;
             gate.left--;
@@ -2589,13 +2623,13 @@ export class Renderer {
       // normally baked into the floor chunks (static); `blend.live` kinds
       // (or a bakeBlend=false fallback) still paint here every frame.
       if (g.def.blend && (g.def.blend.live || !VIS_CFG.ground.bakeBlend)) {
-        paintBlendUnderlay(env, g.list, g.def);
+        paintBlendUnderlay(env, list, g.def);
       }
-      if (g.def.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, g.list, g.def.shadow * shAlphaMul);
+      if (g.def.shadow && !VIS_ABLATE.has('shadows')) paintGroupShadows(env, list, g.def.shadow * shAlphaMul);
       // bakeWhole kinds (brush clumps, ferns) blit variant sprites through
       // their own painter's bake — the understory half of the forest fix.
-      if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, g.list, g.def);
-      else (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, g.list, g.def);
+      if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, list, g.def);
+      else (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, list, g.def);
     }
 
     // Eldritch-mutated doodads: writhing tentacles grafted onto the silhouette
@@ -2603,7 +2637,7 @@ export class Renderer {
     // hazard). Kind-agnostic, so it rides ANY doodad the mutation touched.
     const t = world.time;
     for (const o of this.culledAll) {
-      if (o.adorn !== 'tentacles') continue;
+      if (o.adorn !== 'tentacles' || o.felled) continue; // a crushed graft writhes nothing
       if (o.effect) {
         ctx.globalAlpha = 0.10 + 0.06 * Math.abs(Math.sin(t * 4 + o.pos.x * 0.05));
         ctx.fillStyle = '#7fce6a';

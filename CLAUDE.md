@@ -444,7 +444,27 @@ changes.
   cone + callout) / `gorged_ghoul` (eyes that exist only as a tell part;
   runs dark asleep) / `barrow_hound` (nose-down lean, 0.55× sight) — plus
   the `skeleton_archer` sentry showcase retrofit. Docs
-  `docs/engine/watchers.md`; probe `balance/probe_watchers.ts`).
+  `docs/engine/watchers.md`; probe `balance/probe_watchers.ts`),
+  `rampage.ts` (THE RAMPAGE FABRIC — temporary doodad destruction with a
+  GUARANTEED return: `MonsterDef.rampage` bodies PLOW, felling fellable
+  standing doodads at true-surface contact (worm bodies along every coil;
+  fell-before-move, so the shared confine needs no bypass) through the ONE
+  chokepoint `World.fellDoodad`; `Doodad.felled` reads DOWN at the blocking
+  trio + `sightShadowFrac` (drawn == tested for movement/shots/sight/veil at
+  one seam), fellable is DERIVED (standing bodies minus state-carriers:
+  doors/wells/hollows/pits/spans/seed-paired/brittle; `DoodadRule.fell`
+  overrides — wyrm_coil's authored refusal) and TEMPORARY BY CONSTRUCTION:
+  the regrowth sweep (THE HOLD pushes wakes while the cause stands, jitter
+  staggers the release, THE ENTOMB LAW defers completion around bodies),
+  zone re-mint from seed, and save-silence are three independent roads back
+  — no path to a barren world exists. Renderer draws crushed pieces as
+  THEMSELVES squashed/fading (`fellFace`, zero new painters); co-op ships
+  position-keyed `fell` rows (the wells idiom). THE SETTLED GROUND rides it:
+  `WorldBossDef.roam.venue` default 'ground' seats the settled serpent's
+  fight IN the real rest zone (no more jarring minted eldritch pocket;
+  'arena' stays pure data), and `Actor.driven` exempts engine-wheeled bodies
+  from the passive volition lock (the parked glimpse-body regression). Docs
+  `docs/engine/rampage.md`; probe `balance/probe_rampage.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense

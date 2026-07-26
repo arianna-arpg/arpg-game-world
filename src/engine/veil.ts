@@ -81,12 +81,14 @@ export class VeilIndex {
   private readonly disc = new DiscIndex<Doodad>();
 
   constructor(doodads: readonly Doodad[]) {
-    // Gather the veil-bearing crowns (a popped brittle stays out).
+    // Gather the veil-bearing crowns (a popped brittle stays out, and so
+    // does a crushed one — the rampage fabric: a felled crown hides nothing;
+    // the fell/regrow flips bump the kind's families, so this index re-derives).
     const members: { d: Doodad; spec: VeilSpec }[] = [];
     let maxRadius = 0;
     let maxScale: number = VEIL_DEFAULTS.mergeScale;
     for (const d of doodads) {
-      if (d.gone) continue;
+      if (d.gone || d.felled) continue;
       const spec = veilSpecOf(d.kind);
       if (!spec) continue;
       members.push({ d, spec });
@@ -161,7 +163,7 @@ export class VeilIndex {
     let best: VeilMember | null = null;
     let bd = Infinity;
     for (const d of this.disc.at(x, y)) {
-      if (d.gone) continue;
+      if (d.gone || d.felled) continue; // a crushed crown conceals no one
       const dx = x - d.pos.x, dy = y - d.pos.y;
       const dd = dx * dx + dy * dy;
       if (dd > d.radius * d.radius || dd >= bd) continue;

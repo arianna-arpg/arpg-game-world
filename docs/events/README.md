@@ -41,6 +41,19 @@ One def file (`src/packages/defs/<id>.ts`) + one registry line
   zones includes `ownedZones: string[]` at its snapshot's top level. Both
   save sides read it generically: claimed ground rides the save; unclaimed
   event zones scrub and the event re-rolls (the transience rule).
+- **THE SETTLED GROUND (prefer the world over a minted pocket)** — before
+  minting a special stage for a fight, ask whether the fight can stand on
+  the REAL zone that earned it: a minted arena wears the generic special
+  theme and jars against its neighbors, while the world's own ground keeps
+  its dress, doors and stakes. The world-boss roamer is the template
+  (`WorldBossDef.roam.venue`, default `'ground'`: `fightAt` seats on the
+  rest node, `pendingMints` owes nothing; `'arena'` keeps the minted lane as
+  pure data). A colossus that needs room takes it by CRUSHING through — the
+  rampage fabric (`MonsterDef.rampage`, docs/engine/rampage.md) fells
+  standing doodads temporarily, with regrowth + zone-remint + save-silence
+  triply guaranteeing the land returns exactly as authored. Events borrow
+  the world, never own it — this is the transience doctrine applied to boss
+  venues.
 - **Gate reads** — ignition rolls multiply `gate().ignitionMul`; size/speed/
   escalation levers read `gate().severityMul` (clamped, crusade-style, where
   they compound); every concurrency cap goes through
