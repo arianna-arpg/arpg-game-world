@@ -107,6 +107,10 @@ export interface QuickeningSurge {
   /** The event-pinned sky while a zone runs quick (a WEATHER_DEFS eventOnly
    *  kind — the def registers it, dress rows and all). Absent = clear sky. */
   weatherKind?: string;
+  /** The sky's LAST BREATH: intensity eases from full down to `floor` over
+   *  the window's final `easeSec`, so the fade never pops (absent = the
+   *  historical 45s / 0.25). Dials, not constants — a tuning may snap. */
+  sky?: { easeSec: number; floor: number };
   /** The event's palette (markers, rings, chips, announce lines). */
   color: string;
 }
@@ -452,7 +456,8 @@ registerEventFront({
     const f = world.sim.overlayFor<QuickeningField>('quickening', zone.dimension);
     const info = f?.quickeningOn(zone.id);
     const kind = f?.surge().weatherKind;
-    if (!info || !kind) return null;
-    return { kind, intensity: Math.min(1, Math.max(0.25, info.timeLeft / 45)) };
+    if (!f || !info || !kind) return null;
+    const sky = f.surge().sky ?? { easeSec: 45, floor: 0.25 };
+    return { kind, intensity: Math.min(1, Math.max(sky.floor, info.timeLeft / sky.easeSec)) };
   },
 });

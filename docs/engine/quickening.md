@@ -32,6 +32,15 @@ Everything is data on one `QuickeningSurge` config
   stay, worn by ground). Nothing extends it; only the clock (or `devFade`)
   ends it. Note the world clock is GAME time — a mid-window save resumes
   mid-window; offline wall time never spends it.
+- **The opt-in window.** The default hold is LONG — ~20 minutes, rolled
+  17–23 (`holdSec: [1020, 1380]`) — because a quickening is something the
+  player *chooses* to answer: hear the bulletin, finish what you were doing,
+  cross the map, and still have a real session on the quick ground. A short
+  window makes the event a sprint sprung on you; the long one makes it an
+  invitation. The spread keeps the clock a roll, never a metronome, and the
+  cooldown (`[600, 1200]`) is paced against it so the surge stays an event,
+  not the weather (~57% of world time carries one, close to the old rhythm).
+  Probe E11 pins the floor and the spread so no retune shrinks it silently.
 - **The pointer, not the hand.** The overlay never touches a ZoneDef. The
   engine reconciles stamps off the field's arcs in BOTH directions each beat,
   so the pair is self-healing against restores, prunes, and stale saves:
@@ -76,7 +85,8 @@ wash, radiance leaning gold, and the surge's own DRESS kit — `surge_stone` /
 planted while the front holds, evaporated as it lifts (the transience
 doctrine: the event flavors the land it borrows, never repaints it). Pinned
 by the overlay's `registerEventFront` source, easing off through the window's
-last breath.
+last breath — the ease itself is a dial (`sky: { easeSec, floor }` on the
+surge config; absent falls back to the historical 45s / 0.25).
 
 ## The Slayer lane (the event's own support family — general everywhere)
 
@@ -110,11 +120,12 @@ player already knows.
 
 - Events tab: `Quickening (surge here)` / `Quickening (end here)` — the full
   stamp → refresh → revert loop QAs in one sitting.
-- `balance/probe_quickening.ts` (48 checks): the known-ground law
+- `balance/probe_quickening.ts` (49 checks): the known-ground law
   statistically, the level band + raise law, the set window/cooldown/cap,
   accessors + dev seams, snapshot/restore/prune/determinism, def + registry
-  integrity, and a LIVE rig — stamp, refresh, materialize, kin pulse, echo,
-  ledgers, revert, and the three slayer folds at exact ratios.
+  integrity (incl. the OPT-IN WINDOW pin — ≥15m floor, spread kept), and a
+  LIVE rig — stamp, refresh, materialize, kin pulse, echo, ledgers, revert,
+  and the three slayer folds at exact ratios.
 - eventqa: the package auto-joins (registry validation, pledge, dev seams,
   ledger reads ⊆ bumps).
 - Browser QA note: `__game.step(frames, dtMs)` clamps to a fixed ~50ms sim
@@ -129,3 +140,7 @@ player already knows.
   per dimension (`quickeningFieldsAll`, `overlayFor`), so "the underworld
   quickens too" is one `dimensions: ['surface','underworld']` line.
 - A pure farming tuning deletes `echo`; a crueler one widens `levelBand`.
+- `holdSec` is the SESSION dial: shorten it back toward the old sprint
+  (`[420, 660]`) for a rush-the-window variant, or stretch it further for a
+  lazy afternoon — pace `cooldown` alongside so uptime keeps the intent
+  (probe E11 holds the shipped default to the opt-in law).

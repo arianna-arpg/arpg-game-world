@@ -35,10 +35,17 @@ export const QUICKENING_SURGE: QuickeningSurge = {
   maxConcurrent: 1,        // one quickened zone at a time (the crank lifts it)
   minCharted: 10,          // it needs a past worth returning to
   firstDelaySec: 300,      // no surge at minute zero — there is nothing to re-walk
-  cooldown: [420, 780],    // the world breathes between windows
+  cooldown: [600, 1200],   // the world breathes between windows (paced to the
+                           // long window below — the surge stays an event,
+                           // never the weather)
   // THE WINDOW: rolled once at ignition, run on the world clock, indifferent
   // to the player — the world-boss apparition's stay, worn by ground.
-  holdSec: [420, 660],
+  // THE OPT-IN LAW: the default window is LONG (~20m, rolled 17–23) — long
+  // enough to hear the call, finish what you were doing, cross the map, and
+  // still have a real session on the quick ground. A quickening is something
+  // the player CHOOSES to answer, never a sprint sprung on them; the spread
+  // keeps the clock a roll, not a metronome. (Pinned by probe E11.)
+  holdSec: [1020, 1380],
   // Surge level = hero level + [-1 .. +3]: your level, a level under you, or
   // a genuine reach — the band the ask named, every bound a dial.
   levelBand: [-1, 3],
@@ -63,6 +70,7 @@ export const QUICKENING_SURGE: QuickeningSurge = {
     fade: 'The surge over {zone} spends itself — the ground settles back to sleep.',
   },
   weatherKind: 'quickened_air',
+  sky: { easeSec: 45, floor: 0.25 }, // the last-breath fade (never a pop)
   color: SURGE_GILT,
 };
 
@@ -107,6 +115,11 @@ export const QUICKENING: ContentPackage = {
     ...(QUICKENING_SURGE.levelBand[0] > QUICKENING_SURGE.levelBand[1]
       ? ['levelBand inverted'] : []),
     ...(QUICKENING_SURGE.holdSec[0] > 0 ? [] : ['holdSec must be positive']),
+    ...(QUICKENING_SURGE.holdSec[0] > QUICKENING_SURGE.holdSec[1] ? ['holdSec inverted'] : []),
+    ...(QUICKENING_SURGE.cooldown[0] > QUICKENING_SURGE.cooldown[1] ? ['cooldown inverted'] : []),
+    ...(QUICKENING_SURGE.sky && !(QUICKENING_SURGE.sky.easeSec > 0
+      && QUICKENING_SURGE.sky.floor > 0 && QUICKENING_SURGE.sky.floor <= 1)
+      ? ['sky ease dials out of band'] : []),
   ],
 };
 

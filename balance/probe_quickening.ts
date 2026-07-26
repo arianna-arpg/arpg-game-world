@@ -235,9 +235,19 @@ const mkField = (surge: QuickeningSurge, seed = 0x5eed): QuickeningField =>
   check('E9: the band + laws read sane',
     QUICKENING_SURGE.levelBand[0] <= QUICKENING_SURGE.levelBand[1]
     && QUICKENING_SURGE.minOutlevel >= 0 && QUICKENING_SURGE.holdSec[0] > 0
-    && QUICKENING_SURGE.eventMul >= 1 && QUICKENING_SURGE.bountyMul >= 1);
+    && QUICKENING_SURGE.eventMul >= 1 && QUICKENING_SURGE.bountyMul >= 1
+    && (!QUICKENING_SURGE.sky || (QUICKENING_SURGE.sky.easeSec > 0
+      && QUICKENING_SURGE.sky.floor > 0 && QUICKENING_SURGE.sky.floor <= 1)));
   check('E10: the evade proc ceded the name (Quickstep — ids are contracts, names are presentation)',
     PROCS.quickening?.name === 'Quickstep');
+  // THE OPT-IN LAW: the default window is a real session — long enough to
+  // hear the call, cross the map, and still farm (≥15m floor), with the roll
+  // kept a roll (a genuine spread) and the cooldown paced so the surge stays
+  // an event. A future retune may move the numbers, but it must MEAN to.
+  check('E11: THE OPT-IN WINDOW — the default hold is LONG (≥15m) and still a roll',
+    QUICKENING_SURGE.holdSec[0] >= 900 && QUICKENING_SURGE.holdSec[1] > QUICKENING_SURGE.holdSec[0]
+    && QUICKENING_SURGE.cooldown[0] <= QUICKENING_SURGE.cooldown[1],
+    `hold ${QUICKENING_SURGE.holdSec[0]}–${QUICKENING_SURGE.holdSec[1]}s, cool ${QUICKENING_SURGE.cooldown[0]}–${QUICKENING_SURGE.cooldown[1]}s`);
 }
 
 // ------------------------------------------------ F. LIVE — the real engine
