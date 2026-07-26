@@ -38,9 +38,10 @@ import type { PackageGate, OverlayBuildCtx } from '../src/packages/types';
 import { BiomeField } from '../src/world/biomeField';
 import { BIOME_FIELD_CFG, biomeAt } from '../src/world/biomes';
 import { WEATHER_DEFS, validateWeather } from '../src/world/weather';
-import { WEATHER_FX } from '../src/render/vis/weatherFx';
+import { skyGeoOf, skyRawIntensity, WEATHER_FX } from '../src/render/vis/weatherFx';
+import { VIS_CFG } from '../src/render/vis/visConfig';
 import { WEATHER_DRESS_CFG, dressPlanFor } from '../src/engine/weatherDress';
-import { registerEventFront, eventFrontSourceIds, type EventFrontPin } from '../src/engine/eventWeather';
+import { EVENT_PIN_RADIUS, registerEventFront, eventFrontSourceIds, type EventFrontPin } from '../src/engine/eventWeather';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { INCURSION_ARCHETYPES } from '../src/packages/overlays/incursion';
 import { DemonInvasionField } from '../src/packages/overlays/demonInvasion';
@@ -133,6 +134,11 @@ const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++
   const info = f.invasionOn('za');
   check('C: invasionOn carries the opening stage\'s sky',
     info?.stage.weather?.kind === 'demonstorm' && info.stage.weather.intensity === stages[0].weather!.intensity);
+  // THE ANCHORED SKY: the info carries the storm's TRUE footprint so the
+  // event-front source can pin the veil over the invasion's actual heart.
+  check('C: invasionOn carries the storm\'s footprint (epicenter coord + live radius)',
+    !!info && info.stormCoord.x === 0 && info.stormCoord.y === 0
+    && info.stormRadius === f.surge().startRadius);
   f.resolveInvasion('za');
   check('C: the strike broken, the sky claim is GONE with it', f.invasionOn('za') === null && f.activeCount() === 0);
 }
@@ -207,6 +213,74 @@ registerEventFront({ id: 'probe_pin', sample: () => pin });
   pin = null;
   arena.objective = { kind: 'clear' };
   check('D: demonstorm bends the light (radiance dial authored)', (WEATHER_DEFS.demonstorm.radiance?.mul ?? 1) < 1);
+}
+
+// ------------------- G. THE ANCHORED SKY: pinned footprints + the projection
+{
+  const A = VIS_CFG.weather.anchor;
+  const zmap = w.zone.map;
+  // A geometry-less pin stands ZONE-anchored at the default footprint — the
+  // honest read for zone-held events (a quickening's air IS its zone).
+  pin = { kind: 'demonstorm', intensity: 0.5 };
+  const bare = w.skyFront();
+  check('G: a geometry-less pin stands zone-anchored at EVENT_PIN_RADIUS',
+    !!bare && bare.pos.x === zmap.x && bare.pos.y === zmap.y && bare.radius === EVENT_PIN_RADIUS);
+  // A pin with its own footprint (the Demon Storm's true heart) rides through.
+  const at = { x: zmap.x + 55, y: zmap.y - 30 };
+  pin = { kind: 'demonstorm', intensity: 0.5, pos: at, radius: 210 };
+  const shaped = w.skyFront();
+  check('G: a pinned footprint rides through skyFront',
+    !!shaped && shaped.pos.x === at.x && shaped.pos.y === at.y && shaped.radius === 210);
+  check('G: the synthetic front COPIES the pin coord (never aliases source state)',
+    !!shaped && shaped.pos !== at);
+  pin = null;
+
+  // The projection (skyGeoOf): a point-node zone hangs its node at the arena
+  // centre and scales by the anchor dial…
+  const mk = (m: { x: number; y: number }, field?: ZoneDef['field']): ZoneDef =>
+    ({ id: 'g', name: 'g', map: m, exits: [], objective: { kind: 'clear' }, level: 1, field } as unknown as ZoneDef);
+  const zone = mk({ x: 100, y: 40 });
+  const front = { pos: { x: 130, y: 40 }, radius: 120 };
+  const geo = skyGeoOf(front, zone, 3000, 2000);
+  check('G: point-node projection seats the sample point at the arena centre',
+    geo.sx === 1500 && geo.sy === 1000);
+  check('G: …and offsets the heart by nodeScale px per node unit',
+    geo.x === 1500 + 30 * A.nodeScale && geo.y === 1000
+    && geo.r === Math.max(120 * A.nodeScale, A.minR));
+  // …while a FIELD mega-zone projects through its OWN authored mapping.
+  const fz = mk({ x: 100, y: 40 },
+    { originX: 90, originY: 20, scale: 10, seed: 1, regionId: 'r', nodeW: 300, nodeH: 200 });
+  const fgeo = skyGeoOf(front, fz, 3000, 2000);
+  check('G: a FIELD zone projects through its authored pixel↔node mapping',
+    fgeo.x === (130 - 90) * 10 && fgeo.y === (40 - 20) * 10
+    && fgeo.sx === (100 - 90) * 10 && fgeo.sy === (40 - 20) * 10);
+  check('G: the footprint floor holds (a small disc still reads as standing air)',
+    fgeo.r === Math.max(120 * 10, A.minR));
+
+  // DRAWN == TESTED, in the sky: sample() hands the renderer the rim-faded
+  // node intensity; skyRawIntensity inverts the SAME linear falloff at the
+  // projected sample point, so the drawn field reproduces the engine's own
+  // strength exactly where the engine scored it.
+  const raw = 0.8;
+  const dNode = Math.hypot(front.pos.x - zone.map.x, front.pos.y - zone.map.y);
+  const wi = raw * (1 - dNode / front.radius); // what WeatherField.sample returns
+  const rawBack = skyRawIntensity(wi, geo);
+  check('G: skyRawIntensity inverts the engine\'s rim falloff (the raw heart recovered)',
+    Math.abs(rawBack - raw) < 1e-9, `raw ${rawBack.toFixed(4)} vs ${raw}`);
+  const dPx = Math.hypot(geo.x - geo.sx, geo.y - geo.sy);
+  check('G: …so the drawn field at the sample point IS the sampled intensity',
+    Math.abs(rawBack * (1 - dPx / geo.r) - wi) < 1e-9);
+
+  // The census: veil anchors speak only the fabric's vocabulary, parallax
+  // dials stay sane, and both event skies ride the ANCHORED lane by default
+  // (a 'view' veil is a deliberate personal-air exception, never a drift).
+  const rows = Object.entries(WEATHER_FX);
+  check('G: veil anchors are only front/view; parallax dials finite and sane',
+    rows.every(([, d]) => !d || ((!d.veil?.anchor || d.veil.anchor === 'front' || d.veil.anchor === 'view')
+      && (d.parallax === undefined || (isFinite(d.parallax) && d.parallax >= 0 && d.parallax <= 2)))));
+  check('G: both event skies hang on the FRONT (the anchored default)',
+    (WEATHER_FX.demonstorm?.veil?.anchor ?? 'front') === 'front'
+    && (WEATHER_FX.eldritch_pall?.veil?.anchor ?? 'front') === 'front');
 }
 
 // ------------------------- E. the incursion, whole arc, through the real drain

@@ -229,6 +229,30 @@ fast, fog seeps), and `WEATHER_FX.fadeIn` crossfades the DISPLAYED weather
 per kind in the renderer (`smoothWeather`) — a kind may still slam in by
 design with a small fadeIn.
 
+THE ANCHORED SKY (`vis/weatherFx.ts` + `VIS_CFG.weather.anchor`): a front is
+a PLACE, not a screen filter. The engine already simulates every front as
+node-space geometry (pos + radius — the SAME field `WeatherField.sample`
+scores its linear rim falloff by; event pins carry their own footprint via
+`EventFrontPin.pos`/`radius`, defaulting to the claimed zone's node at
+`EVENT_PIN_RADIUS`). `skyGeoOf` projects that footprint into zone world
+pixels — FIELD mega-zones through their own authored `ZoneDef.field`
+pixel↔node mapping (exact), point-node zones at `anchor.nodeScale` px per
+node unit around the arena centre — and the wash + veil draw AS that field:
+one LRU-baked radial sprite (`drawSkyField`), full over the storm's heart,
+thinning to its rim, FIXED IN THE WORLD as the camera pans, sweeping as the
+front itself drifts (eased at `anchor.easeSec` so a strongest-front handoff
+sweeps, never snaps; held while a lifted front drains where it stood).
+`skyRawIntensity` inverts the engine's rim falloff at the projected sample
+point, so the drawn field reproduces the sampled intensity exactly where
+the engine scored it — drawn == tested, in the sky. Particle sheets and the
+gale's wind streamlines counter-ride the camera (`WeatherFxDef.parallax`,
+default `anchor.parallax` 1 — the overclouds idiom): the rain is air you
+move through, a fog bank is a thing you walk into. `veil.anchor: 'view'`
+keeps the legacy screen vignette as a deliberate data choice for PERSONAL
+airs — and STATUS overlays (frost rim, blind iris, low-life, the survival
+vignettes) are exempt by law: those happen TO the player and stay
+screen-anchored. Probe: `balance/probe_transience.ts` section G.
+
 ## Walk-under trees, sun shadows, fog, Foresight
 
 TREES have TRUNKS: `DoodadRule.bodyScale` makes movement/projectiles/spawn

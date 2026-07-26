@@ -75,7 +75,7 @@ import { RoomVeil } from './vis/roomVeil';
 import { SightVeil } from './vis/sightVeil';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
-import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
+import { drawSkyField, drawWeatherFx, skyGeoOf, skyRawIntensity, WEATHER_FX, type SkyFieldView, type SkyGeo } from './vis/weatherFx';
 import { drawFogLayer } from './vis/fogLayer';
 import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
@@ -1792,11 +1792,31 @@ export class Renderer {
     const f = this.smoothWeather(world);
     if (f) {
       const wi = f.intensity * openAir;
-      const [r, g, b] = hexToRgb(WEATHER_DEFS[f.kind].color);
-      ctx.fillStyle = `rgba(${r},${g},${b},${((0.05 + 0.12 * wi) * openAir).toFixed(3)})`;
-      ctx.fillRect(0, 0, w, h);
-      // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).
-      if (!VIS_ABLATE.has('weatherfx')) drawWeatherFx(ctx, f.kind, wi, w, h, world.time);
+      const wc = WEATHER_DEFS[f.kind].color;
+      // THE ANCHORED SKY (vis/weatherFx.ts): the wash is the front's own
+      // projected field — dense at the storm's heart, thinning to its rim,
+      // FIXED IN THE WORLD as the camera pans — and it still matches the
+      // engine's node sample at the zone's node by construction
+      // (skyRawIntensity). The geo-less fallback keeps the flat fill.
+      let sky: SkyFieldView | null = null;
+      if (f.geo) {
+        const s = this.toScreen(f.geo);
+        sky = {
+          fx: s.x, fy: s.y, r: f.geo.r * this.zoom,
+          rawI: skyRawIntensity(wi, f.geo),
+          ox: this.cam.x * this.zoom, oy: this.cam.y * this.zoom,
+        };
+      }
+      if (sky) {
+        drawSkyField(ctx, sky, wc, (0.05 + 0.12 * sky.rawI) * openAir);
+      } else {
+        const [r, g, b] = hexToRgb(wc);
+        ctx.fillStyle = `rgba(${r},${g},${b},${((0.05 + 0.12 * wi) * openAir).toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+      // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts),
+      // counter-riding the camera through the same sky view.
+      if (!VIS_ABLATE.has('weatherfx')) drawWeatherFx(ctx, f.kind, wi, w, h, world.time, sky ?? undefined);
     }
     // EVENT ZONE WASH (world/zoneWash.ts): ground HELD by something — a
     // haunting's pale cold — colours the whole air of the zone. Smoothed
@@ -1823,6 +1843,14 @@ export class Renderer {
       const t = world.time;
       const ang = Math.atan2(gale.ny, gale.nx);
       const diag = Math.hypot(w, h);
+      // THE ANCHORED AIR: the camera's scroll projected onto the gale's
+      // (along, across) axes — the wisp lattice hangs in the WORLD, so a
+      // pan sweeps standing streamlines past the frame and running downwind
+      // you pace the air instead of dragging it with you.
+      const ca = Math.cos(ang), sa = Math.sin(ang);
+      const wox = this.cam.x * this.zoom, woy = this.cam.y * this.zoom;
+      const along = wox * ca + woy * sa, across = woy * ca - wox * sa;
+      const wwrap = (v: number, span: number): number => ((v % span) + span) % span;
       ctx.save();
       ctx.strokeStyle = '#e8f0f8';
       ctx.lineWidth = 1.2;
@@ -1830,8 +1858,8 @@ export class Renderer {
       const n = Math.round(6 + gale.strength * 10);
       const speed = 140 + gale.strength * 280;
       for (let i = 0; i < n; i++) {
-        const s = ((t * speed + i * 227) % (diag + 220)) - 110 - diag / 2;
-        const off = ((i * 349) % Math.round(diag)) - diag / 2;
+        const s = wwrap(t * speed + i * 227 - along, diag + 220) - 110 - diag / 2;
+        const off = wwrap(i * 349 - across, Math.round(diag)) - diag / 2;
         const cx = w / 2 + Math.cos(ang) * s - Math.sin(ang) * off;
         const cy = h / 2 + Math.sin(ang) * s + Math.cos(ang) * off;
         const wob = Math.sin(t * 2 + i * 1.7) * 6;
@@ -2392,14 +2420,19 @@ export class Renderer {
   /** The dynamic darkness/emissive compositor (vis/lights.ts). */
   private lightLayer = new LightLayer();
   /** Crossfaded DISPLAYED weather (the raw sample can pop on zone hops and
-   *  kind flips; each kind ramps at its own WEATHER_FX.fadeIn). */
-  private wx: { kind: WeatherKind | null; intensity: number } = { kind: null, intensity: 0 };
+   *  kind flips; each kind ramps at its own WEATHER_FX.fadeIn). `geo` is THE
+   *  ANCHORED SKY: the displayed front's projected world footprint
+   *  (vis/weatherFx.ts skyGeoOf), eased so a front handoff SWEEPS the drawn
+   *  field, held while a lifted front drains where it stood, snapped across
+   *  zone hops (new ground, new frame). */
+  private wx: { kind: WeatherKind | null; intensity: number; geo: SkyGeo | null; zoneId: string } =
+    { kind: null, intensity: 0, geo: null, zoneId: '' };
   /** The DISPLAYED zone wash (world/zoneWash.ts), eased toward the folded
    *  target each frame — a grief settling / lifting / a zone hop seeps
    *  instead of popping. */
   private zw: { color: string; alpha: number } = { color: '#b8c8e8', alpha: 0 };
 
-  private smoothWeather(world: World): { kind: WeatherKind; intensity: number } | null {
+  private smoothWeather(world: World): { kind: WeatherKind; intensity: number; geo: SkyGeo | null } | null {
     // skyFront (not the raw node sample): a SHELTERED zone shows no rain,
     // grit or storm-wash — step into the cellar and the sky's business
     // crossfades away at the kind's own ramp.
@@ -2413,6 +2446,7 @@ export class Renderer {
       if (this.wx.intensity <= 0.02) {
         this.wx.kind = target?.kind ?? null;
         this.wx.intensity = 0.02;
+        this.wx.geo = null; // the new front seeds its own footprint below
       }
     } else if (target) {
       this.wx.kind = target.kind;
@@ -2424,10 +2458,29 @@ export class Renderer {
       if (this.wx.intensity <= 0.02) {
         this.wx.kind = null;
         this.wx.intensity = 0;
+        this.wx.geo = null;
+      }
+    }
+    // THE ANCHORED SKY: carry the DISPLAYED front's projected footprint
+    // beside the eased intensity. Eased in world px while the same kind
+    // holds (a handoff between two live fronts SWEEPS the field); HELD
+    // during a drain (a lifted front empties where it stood); snapped on a
+    // zone hop (new ground, new frame).
+    if (this.wx.zoneId !== world.zone.id) { this.wx.geo = null; this.wx.zoneId = world.zone.id; }
+    if (target && target.kind === this.wx.kind) {
+      const g = skyGeoOf(target, world.zone, world.arena.w, world.arena.h);
+      const prev = this.wx.geo;
+      if (!prev) this.wx.geo = g;
+      else {
+        const k = 1 - Math.exp(-dt / Math.max(0.05, VIS_CFG.weather.anchor.easeSec));
+        prev.x += (g.x - prev.x) * k;
+        prev.y += (g.y - prev.y) * k;
+        prev.r += (g.r - prev.r) * k;
+        prev.sx = g.sx; prev.sy = g.sy;
       }
     }
     return this.wx.kind && this.wx.intensity > 0.02
-      ? { kind: this.wx.kind, intensity: clamp(this.wx.intensity, 0, 1) }
+      ? { kind: this.wx.kind, intensity: clamp(this.wx.intensity, 0, 1), geo: this.wx.geo }
       : null;
   }
 

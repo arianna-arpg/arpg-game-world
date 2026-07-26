@@ -1092,7 +1092,22 @@ changes.
   MOVER class's slice of the light budget so an eruption's volley can
   never evict the terrain glow, and an over-full cluster field drops
   FARTHEST from the bin-quantized view centre — the lit set never
-  reshuffles as the camera pans), and weather particles.
+  reshuffles as the camera pans), and weather particles under THE
+  ANCHORED SKY (`vis/weatherFx.ts` + `VIS_CFG.weather.anchor`): a front
+  is a PLACE, never a screen filter — its node-space footprint (the SAME
+  pos+radius the engine's rim-falloff sample scores; event pins carry
+  their own via `EventFrontPin.pos/radius`, the Demon Storm pins its
+  true epicenter) projects into the zone (`skyGeoOf` — FIELD zones
+  through their own authored mapping) and the wash + veil draw AS that
+  field, dense at the storm's heart, thinning to its rim, fixed in the
+  world as the camera pans and sweeping as the front drifts;
+  `skyRawIntensity` inverts the rim falloff at the sample point so
+  drawn == tested in the sky; particle sheets + wind streamlines
+  counter-ride the camera (`WeatherFxDef.parallax`, overclouds idiom).
+  STATUS overlays (frost rim, blind iris, low-life, survival vignettes)
+  are exempt by law — they happen TO the player and stay screen-anchored
+  (`veil.anchor: 'view'` = the same exception as data). Probe:
+  `balance/probe_transience.ts` G.
   DOODAD FAMILIES (`engine/doodadFamilies.ts` — scoped invalidation as an
   open registry): consumers that cache against the doodad list (convex
   nav grid, canopy veil index, light clusters, ground bake gather)

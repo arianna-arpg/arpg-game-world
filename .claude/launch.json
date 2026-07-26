@@ -380,6 +380,20 @@
       ],
       "port": 5260,
       "autoPort": false
+    },
+    {
+      "name": "arpg-dev-qa26",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5256",
+        "--strictPort"
+      ],
+      "port": 5256,
+      "autoPort": false
     }
   ]
 }

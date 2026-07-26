@@ -79,6 +79,13 @@ export interface InvasionInfo {
    *  (the lord itself never leaves its throne), else null → the surge's
    *  legacy champion (the Balor). */
   champion: string | null;
+  /** The storm's TRUE footprint (node space): epicenter coordinate + live
+   *  radius. The event-front source pins these so THE ANCHORED SKY hangs the
+   *  crimson veil over the invasion's actual heart — in a rim zone the heavy
+   *  air visibly leans epicenter-ward. Presentation-only; every mechanical
+   *  consumer above keeps reading the zone-granular fields. */
+  stormCoord: MapCoord;
+  stormRadius: number;
 }
 
 /** Engine-drained: mint a demon-blighted epicenter zone at an uncharted coord. */
@@ -246,6 +253,8 @@ export class DemonInvasionField implements WorldOverlay {
         lordId: inv.lordId,
         faction: lord?.faction ?? inv.type.factions?.[0] ?? 'demon',
         champion: lord?.marshal ?? null,
+        stormCoord: { x: inv.coord.x, y: inv.coord.y },
+        stormRadius: inv.radius,
       };
       // Prefer the epicenter, else the higher stage (the more dangerous one wins).
       if (!best || (info.isEpicenter && !best.isEpicenter) || info.stageIdx > best.stageIdx) best = info;
@@ -503,7 +512,11 @@ registerEventFront({
   sample: (world: World, zone: ZoneDef) => {
     if (zone.objective.kind === 'safe') return null;
     const info = world.sim.demonFieldFor(zone.dimension)?.invasionOn(zone.id);
-    return info?.stage.weather ?? null;
+    if (!info?.stage.weather) return null;
+    // THE ANCHORED SKY: the pin carries the storm's TRUE footprint (epicenter
+    // coord + live radius) so the in-zone veil/wash hang over the invasion's
+    // heart — never a screen filter riding the player's viewbox.
+    return { ...info.stage.weather, pos: info.stormCoord, radius: info.stormRadius };
   },
 });
 

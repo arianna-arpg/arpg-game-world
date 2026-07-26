@@ -657,12 +657,36 @@ export const VIS_CFG = {
     },
   },
 
-  /** Screen-space weather + ambient particles. */
+  /** Weather particles + THE ANCHORED SKY (vis/weatherFx.ts). */
   weather: {
     maxParticles: 150,
     /** Default crossfade seconds for a full 0→1 weather swing — each kind
      *  may override via WEATHER_FX.fadeIn (a storm can SLAM by design). */
     fadeSec: 5,
+    /** THE ANCHORED SKY: the front's node-space footprint (the SAME pos +
+     *  radius the engine's rim-falloff sample scores — event pins carry
+     *  their own via EventFrontPin.pos/radius) projected into the zone, so
+     *  the wash + veil hang over the WORLD and the particle sheets counter-
+     *  ride the camera. Status overlays stay screen-anchored by law — they
+     *  happen TO the player. */
+    anchor: {
+      /** World px per node-space unit for point-node zones (FIELD mega-zones
+       *  project through their own authored ZoneDef.field mapping instead).
+       *  Sets how fast a front's drift SWEEPS the in-zone gradient and how
+       *  much of its rim one screen shows. */
+      nodeScale: 44,
+      /** Ease seconds (exp time-constant) for the projected focus/rim — a
+       *  front handoff (two storms trading "strongest") sweeps the drawn
+       *  field across, never snaps it. */
+      easeSec: 2.5,
+      /** Projected footprint floor (world px): a degenerate pin still reads
+       *  as standing air, never a spotlight. */
+      minR: 1200,
+      /** Default particle-sheet parallax (per-kind override on
+       *  WeatherFxDef.parallax): 1 = fixed in the world — the rain is air
+       *  you move through; 0 = the legacy view-glued sheet. */
+      parallax: 1,
+    },
   },
 
   /** THE FOG LAYER (vis/fogLayer.ts — the render half of engine/fog.ts).
