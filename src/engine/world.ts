@@ -919,6 +919,14 @@ interface InheritedFlight {
   spin: number; weave: number; amp: number; orbitR0: number;
 }
 
+/** THE BAND LAW's lanes (LOS_CFG.tetherLinks): every band names the lane it
+ *  was strung on, so the occlusion registry can answer per lane instead of
+ *  the tick site testing a literal. TetherSpec's three link kinds, plus
+ *  'pack' (MonsterDef.tether kin arcs) and 'zap' (the momentary, payload-less
+ *  visual arcs — a drawn beam is not a hit surface). Required, so a new band
+ *  site cannot forget to declare which law it lives under. */
+type TetherLink = TetherSpec['link'] | 'pack' | 'zap';
+
 /** A live tether band (see TetherSpec in engine/skills). Damage was scaled by
  *  the owner's damage stat and CONVERTED at attach time; ticks run through the
  *  shared typed mitigation, so beams are real, dressable damage — the transient
@@ -929,6 +937,13 @@ interface Tether {
   owner: Actor;
   /** The skill that laid it (re-casting refreshes rather than stacking). */
   skillId: string;
+  /** Which band lane this is — the key LOS_CFG.tetherLinks answers. */
+  link: TetherLink;
+  /** The laying instance, where a skill laid it: the occlusion fold reads
+   *  the spec's own `occlusion` word and the INSTANCE-scoped `phasing`
+   *  through it, so a socketed Wraith Passage reaches its own band. Pack
+   *  arcs and bare visual zaps have none. */
+  inst?: SkillInstance;
   /** Post-conversion damage per second, by type. */
   amounts: Partial<Record<DamageType, number>>;
   /** Healing per second to allies inside the band. */
@@ -943,6 +958,14 @@ interface Tether {
   color: string;
   /** Endpoint coords cached each tick — the renderer + co-op wire read these. */
   ax: number; ay: number; bx: number; by: number;
+  /** THE BAND LAW's attitude, resolved ONCE on first hit test (tetherSees —
+   *  the Zone.phase idiom): true = this band's bite ignores walls (a free
+   *  lane, a skill that says so, a phasing owner). */
+  phase?: boolean;
+  /** THE BAND LAW's ray memo, keyed per touched BODY (victim × segment) and
+   *  aged on the losCached TTL. Lives and dies with the band, and is only
+   *  ever allocated once something actually stands in a blocked one. */
+  los?: Map<number, { ok: boolean; until: number }>;
 }
 
 /** Seconds between tether damage ticks (chunked so typed mitigation isn't fed
@@ -30260,7 +30283,7 @@ export class World {
       if ((v ?? 0) > domAmt) { domAmt = v ?? 0; domType = k as DamageType; }
     }
     this.tethers.push({
-      a, b, owner, skillId: inst.def.id,
+      a, b, owner, skillId: inst.def.id, link: spec.link, inst,
       amounts, heal: spec.healPerSec ?? 0,
       affects: spec.affects ?? 'enemies',
       width,
@@ -30325,7 +30348,7 @@ export class World {
       };
       applyConversion(a, amounts, tags);
       this.tethers.push({
-        a, b: best, owner: a, skillId: '__pack:' + a.defId,
+        a, b: best, owner: a, skillId: '__pack:' + a.defId, link: 'pack',
         amounts, heal: 0, affects: 'enemies',
         width: td.width ?? 10,
         remaining: duty - phase,
@@ -30334,6 +30357,51 @@ export class World {
         ax: a.pos.x, ay: a.pos.y, bx: best.pos.x, by: best.pos.y,
       });
     }
+  }
+
+  /** THE BAND LAW (LOS_CFG.tetherLinks): does this band's bite reach one
+   *  touched BODY POINT past terrain? A band is strung between two anchors
+   *  and its arc has to run from BOTH of them to the ground it burns, so
+   *  masonry anywhere across that run eats it — a wall laid over the line
+   *  kills the band that crosses it (drawn crossing stone == burning
+   *  nothing), while a lone pillar shadowing one coil of a serpent spares
+   *  THAT COIL and leaves the next one over, in the open, honestly bitten.
+   *  The gate rides INSIDE the body predicate, so every body is refereed
+   *  against its own line by construction — a creature's coils can never
+   *  disagree about the same wall. The anchors themselves are never walled
+   *  off from a band they ARE (the nova's `v === caster` exemption; and
+   *  TetherSpec promises a mending band reaches its own endpoints).
+   *  The attitude resolves ONCE per band (t.phase — the Zone.phase idiom);
+   *  the rays are memoed per touched body on the band's own map with the
+   *  losCached TTL and jitter, because the mend half tests every frame. */
+  private tetherSees(t: Tether, victim: Actor, bp: Vec2, seg: number): boolean {
+    t.phase ??= this.tetherOcclusion(t) === 'free';
+    if (t.phase) return true;
+    if (victim === t.a || victim === t.b) return true;
+    const memo = (t.los ??= new Map());
+    const key = victim.id * 128 + seg + 1;
+    const seen = memo.get(key);
+    if (seen && seen.until > this.time) return seen.ok;
+    const ok = this.lineOfFire(vec(t.ax, t.ay), bp)
+      && this.lineOfFire(vec(t.bx, t.by), bp);
+    if (memo.size > 512) {
+      // Oldest-first eviction (Map insertion order), like losCached: never
+      // dump the whole cache at once, or a crowd re-marches every ray next
+      // frame at exactly the moment frames are dearest.
+      let drop = memo.size - 384;
+      for (const k of memo.keys()) { memo.delete(k); if (--drop <= 0) break; }
+    }
+    // DE-SYNCHRONIZED expiry (LOS_CFG.memoJitter, salted by the band's own
+    // endpoints): bodies cached in one tick must not all expire in one tick.
+    const j = LOS_CFG.memoJitter;
+    const salt = key ^ Math.imul(t.a.id * 131 + t.b.id, 0x85EBCA6B);
+    memo.set(key, {
+      ok,
+      until: this.time + (j > 0
+        ? LOS_CFG.memoTtl * (1 - j / 2 + j * ((Math.imul(salt, 0x9E3779B1) >>> 16) / 65536))
+        : LOS_CFG.memoTtl),
+    });
+    return ok;
   }
 
   /** Advance every tether band: cull dead links, cache coords, tick chunked
@@ -30354,8 +30422,12 @@ export class World {
         if (e.dead) continue;
         // SEGMENT FABRIC: the band bites whichever hittable body crosses it
         // (plain monsters: the classic point-segment test, byte-identical).
-        const touch = bodyWhere(e, (bp, br) =>
-          pointSegDist(bp.x, bp.y, t.ax, t.ay, t.bx, t.by) <= t.width + br);
+        // THE BAND LAW rides INSIDE the predicate, so the wall test runs at
+        // each candidate body's own point — geometry first, so a ray only
+        // ever fires for a body actually standing in the band.
+        const touch = bodyWhere(e, (bp, br, seg) =>
+          pointSegDist(bp.x, bp.y, t.ax, t.ay, t.bx, t.by) <= t.width + br
+          && this.tetherSees(t, e, bp, seg));
         if (!touch) continue;
         if (hasDamage && damageTick && this.isBurstTarget(e, t.owner.team)) {
           const tick: Partial<Record<DamageType, number>> = {};
@@ -33377,7 +33449,7 @@ export class World {
       scale *= 0.75;
       // A momentary mending arc (the discharge-zap visual pattern).
       this.tethers.push({
-        a: from, b: next, owner: caster, skillId: inst.def.id,
+        a: from, b: next, owner: caster, skillId: inst.def.id, link: 'zap',
         amounts: {}, heal: 0, affects: 'allies', width: 5,
         remaining: 0.16, tickTimer: 99,
         color: '#7ec88a',
@@ -40755,7 +40827,7 @@ export class World {
                 }
                 // The beam IS a moment-long tether (the discharge visual).
                 this.tethers.push({
-                  a: c, b: kin, owner: c, skillId: '__embedbeam:' + c.id,
+                  a: c, b: kin, owner: c, skillId: '__embedbeam:' + c.id, link: 'zap',
                   amounts: {}, heal: 0, affects: 'enemies', width,
                   remaining: 0.15, tickTimer: 9, color: c.color,
                   ax: c.pos.x, ay: c.pos.y, bx: kin.pos.x, by: kin.pos.y,
@@ -41533,6 +41605,26 @@ export class World {
     if (base === 'free') return 'free';
     return caster.sheet.get('phasing', skillContextTags(inst.def, grantedTags(inst)),
       instanceMods(inst)) > 0 ? 'free' : 'blocked';
+  }
+
+  /** THE BAND LAW's attitude for one strung band — skillOcclusion's exact
+   *  fold, keyed on the band's LINK lane (LOS_CFG.tetherLinks) instead of a
+   *  delivery type, because a band is a lane of its own however it was
+   *  strung (a summon's caster-link is not its summon skill's delivery).
+   *  The laying skill's own `occlusion` word still wins, exactly as it does
+   *  for every delivery type; lanes the registry doesn't name are free; and
+   *  a positive `phasing` frees the whole band — read through the laying
+   *  instance where there is one, so a socketed Wraith Passage reaches the
+   *  band it grafted onto. */
+  tetherOcclusion(t: Tether): 'blocked' | 'free' {
+    const d = t.inst?.def.delivery as { occlusion?: 'blocked' | 'free' } | undefined;
+    const base = d?.occlusion ?? LOS_CFG.tetherLinks[t.link] ?? 'free';
+    if (base === 'free') return 'free';
+    const phasing = t.inst
+      ? t.owner.sheet.get('phasing', skillContextTags(t.inst.def, grantedTags(t.inst)),
+        instanceMods(t.inst))
+      : t.owner.sheet.get('phasing');
+    return phasing > 0 ? 'free' : 'blocked';
   }
 
   /** Should an AI HOLD FIRE on this skill without a clear firing line?
@@ -44866,7 +44958,7 @@ export class World {
         // The zap visual: a zero-damage, moment-long tether IS the beam
         // (tickTimer > remaining, so it never deals a tick of its own).
         this.tethers.push({
-          a, b: best, owner: a, skillId: '__discharge:' + inst!.def.id,
+          a, b: best, owner: a, skillId: '__discharge:' + inst!.def.id, link: 'zap',
           amounts: {}, heal: 0, affects: 'enemies', width: 5,
           remaining: 0.14, tickTimer: 9, color: inst!.def.color,
           ax: a.pos.x, ay: a.pos.y, bx: best.pos.x, by: best.pos.y,

@@ -146,7 +146,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_sympathy.ts', status: 'green', tier: 'fast', why: 'THE SYMPATHY FABRIC — the tamed flask/orb bond, keeper-support potency, the charge echo and the one-depth discipline' },
   { probe: 'probe_tells.ts', status: 'green', tier: 'fast', why: 'THE TELL FABRIC — every shipped tell row names a live source, bands its unbounded reads and wears a painter that resolves' },
   { probe: 'probe_throng.ts', status: 'excluded', excuse: 'red', why: 'RED at HEAD (1 fail, deterministic, exit 2): "trickle: the re-armed clock refills the loss" — the RECURRING BROOD source does not re-mint the killed body after a full wait' },
-  { probe: 'probe_tiers.ts', status: 'green', tier: 'fast', why: 'THE TIER FABRIC — the region rows (incl. N-story terrace/ramp families), the crossing law over arbitrary spans, and the elevation law' },
+  { probe: 'probe_tiers.ts', status: 'green', tier: 'fast', why: 'THE TIER FABRIC — the region rows (incl. N-story terrace/ramp families), the crossing law over arbitrary spans, the elevation law, and THE BAND LAW (tether bands vs. masonry, per touched body)' },
   { probe: 'probe_tracks.ts', status: 'green', tier: 'fast', why: 'THE TRACK FABRIC — the pure resolver\'s geometry (loop closure, pingpong mirror, pause plateaus, phase spread) and clock-purity' },
   { probe: 'probe_transience.ts', status: 'green', tier: 'fast', why: 'THE TRANSIENCE DOCTRINE — THE WARP LAW: every warp keyed, reconciled and decaying, while the mint path samples the BASE field' },
   { probe: 'probe_trapworks.ts', status: 'green', tier: 'fast', why: 'THE TRAPWORKS FABRIC — the pure trigger law (feet-press pad, tripline capsule) and the ONCE-lane resolver with presser credit' },

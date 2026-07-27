@@ -85,14 +85,17 @@ export function bodiesOf(a: Actor): SegBody[] {
 /** First hittable body passing `test`, head first (the classic
  *  single-circle order — byte-identical for plain monsters). The generic
  *  funnel for any containment geometry (zones, pulses, bursts): pass the
- *  shape test, get the CONTACT body back. */
-export function bodyWhere(a: Actor, test: (pos: Vec2, r: number) => boolean): SegBody | null {
-  if (test(a.pos, a.radius)) return { pos: a.pos, r: a.radius, seg: SEG_CFG.HEAD };
+ *  shape test, get the CONTACT body back. The test is also handed the
+ *  body's SEGMENT INDEX (HEAD = -1), so a gate that must answer PER BODY
+ *  rather than per creature — the tether band's firing line, which memoes
+ *  its ray per body — can key on it; callbacks that don't care ignore it. */
+export function bodyWhere(a: Actor, test: (pos: Vec2, r: number, seg: number) => boolean): SegBody | null {
+  if (test(a.pos, a.radius, SEG_CFG.HEAD)) return { pos: a.pos, r: a.radius, seg: SEG_CFG.HEAD };
   if (segsHittable(a)) {
     const segs = a.worm!.segments;
     for (let i = 0; i < segs.length; i++) {
       const r = segR(a, i);
-      if (test(segs[i], r)) return { pos: segs[i], r, seg: i };
+      if (test(segs[i], r, i)) return { pos: segs[i], r, seg: i };
     }
   }
   return null;

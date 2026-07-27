@@ -21,6 +21,10 @@ import '../src/data/settled';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
+import type { Actor } from '../src/engine/actor';
+import { SEG_CFG } from '../src/engine/segments';
+import { mod } from '../src/engine/stats';
+import { makeSimWorld } from '../src/sim/arena';
 import { generateLayout, hasLayout, type Doodad, type GeneratedLayout } from '../src/engine/levelgen';
 import { castRay, LOS_CFG } from '../src/engine/los';
 import { SightVeil } from '../src/render/vis/sightVeil';
@@ -443,6 +447,128 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
       veilAt(V2, 0, R, 1) === 0);
     check('G11 veil: the cliff base hides from the deep deck; the far floor shows',
       veilAt(D, 1, V1, 0) > 0.2 && veilAt(D, 1, V2, 0) === 0);
+  }
+}
+
+// --- RIG I: THE BAND LAW (tether bands vs. masonry) ------------------------------
+// A tether band is not a placement but a LINE strung between two anchors, so its
+// arc has to run from BOTH of them to the ground it burns (LOS_CFG.tetherLinks +
+// World.tetherOcclusion/tetherSees): masonry across the run eats the bite AND the
+// ally mend, the attitude is DATA rather than a literal at the tick site, a
+// skill's own `occlusion` word still overrides, a phasing owner burns through —
+// and every hittable body is refereed against its OWN line, so a serpent's coils
+// can never disagree about one pillar.
+{
+  check('I1 the band lanes are DATA (LOS_CFG.tetherLinks), payload lanes blocked',
+    LOS_CFG.tetherLinks.caster === 'blocked' && LOS_CFG.tetherLinks.network === 'blocked'
+    && LOS_CFG.tetherLinks.target === 'blocked' && LOS_CFG.tetherLinks.pack === 'blocked'
+    // Momentary payload-less visual arcs stay unenrolled — unlisted reads free,
+    // exactly as unlisted delivery types do.
+    && LOS_CFG.tetherLinks.zap === undefined);
+
+  const w = makeSimWorld('summoner', 0x7be1);
+  type Band = ReturnType<typeof makeSimWorld>['tethers'][number];
+  const drive = (dt: number): void =>
+    (w as unknown as { updateTethers(dt: number): void }).updateTethers(dt);
+
+  // The band runs due east through the arena's middle; ONE wall stands on its
+  // line at the midpoint. It severs the run past itself from either end, and
+  // shadows nothing that stands wide enough to be seen around.
+  const cx = 800, cy = 600;
+  const A = { x: cx - 300, y: cy }, B = { x: cx + 300, y: cy };
+  const far = { x: cx + 150, y: cy };   // ON the band, east of the wall
+  const wide = { x: cx, y: cy + 90 };   // ON the band, wide of the wall
+  w.player.pos = vec(A.x, A.y);
+  const anchor = w.createMonster('zombie', 3, 'player');
+  anchor.pos = vec(B.x, B.y);
+  w.actors.push(anchor);
+  w.doodads.push({ pos: vec(cx, cy), radius: 50, kind: 'wall' } as never);
+  w.markDoodadsChanged();
+
+  check('I2 the fixture is honest: the wall eats the west line to the far seat, and neither line to the wide one',
+    !w.lineOfFire(vec(A.x, A.y), vec(far.x, far.y))
+    && w.lineOfFire(vec(B.x, B.y), vec(far.x, far.y))
+    && w.lineOfFire(vec(A.x, A.y), vec(wide.x, wide.y))
+    && w.lineOfFire(vec(B.x, B.y), vec(wide.x, wide.y)));
+
+  /** A fresh body per case — one tether tick is deliberately a heavy blow, so
+   *  no seat is ever asked to answer twice. */
+  const seat = (team: 'enemy' | 'player', at: { x: number; y: number }): Actor => {
+    const e = w.createMonster('zombie', 3, team);
+    e.pos = vec(at.x, at.y);
+    w.actors.push(e);
+    return e;
+  };
+  /** Re-string the ONE band under test (the attitude resolves once per band,
+   *  so every case gets a fresh one). */
+  const band = (over: Partial<Band> = {}): Band => {
+    const t: Band = {
+      a: w.player, b: anchor, owner: w.player,
+      skillId: 'probe_band', link: 'target',
+      amounts: { physical: 500 }, heal: 0, affects: 'enemies',
+      width: 120, remaining: 999, tickTimer: 0, color: '#fff',
+      ax: A.x, ay: A.y, bx: B.x, by: B.y,
+      ...over,
+    };
+    w.tethers.length = 0;
+    w.tethers.push(t);
+    return t;
+  };
+
+  {
+    const walled = seat('enemy', far), open = seat('enemy', wide);
+    const t = band();
+    const l0 = walled.life, o0 = open.life;
+    drive(0.5);
+    check('I3 the band lane reads BLOCKED off the registry', w.tetherOcclusion(t) === 'blocked');
+    check('I4 a hostile the band only reaches THROUGH stone takes no tick', walled.life === l0);
+    check('I5 ...while one the whole band still reaches is bitten', open.life < o0);
+  }
+  {
+    // The mend obeys the same wall — succor is not a loophole.
+    const ally = seat('player', far), mate = seat('player', wide);
+    ally.life = 10; mate.life = 10;
+    band({ amounts: {}, heal: 200, affects: 'allies' });
+    drive(0.5);
+    check('I6 a walled-off ally receives no mend either', ally.life === 10);
+    check('I7 ...while an ally the band reaches is healed', mate.life > 10);
+  }
+  {
+    // A positive `phasing` on the owner frees the whole band, exactly as it
+    // frees every other delivery lane.
+    const walled = seat('enemy', far);
+    w.player.sheet.setSource('probe_phasing', [mod('phasing', 'flat', 1)]);
+    const t = band();
+    const l0 = walled.life;
+    drive(0.5);
+    check('I8 a phasing owner\'s band burns straight through the stone',
+      w.tetherOcclusion(t) === 'free' && walled.life < l0);
+    w.player.sheet.setSource('probe_phasing', []);
+  }
+  {
+    // The laying skill's own word still overrides the lane default.
+    const walled = seat('enemy', far);
+    const t = band({ inst: { def: { id: 'probe_free', delivery: { type: 'target', occlusion: 'free' } } } as never });
+    const l0 = walled.life;
+    drive(0.5);
+    check('I9 the skill\'s own `occlusion: free` overrides the lane',
+      w.tetherOcclusion(t) === 'free' && walled.life < l0);
+  }
+  {
+    // THE SEGMENT GRAIN: a serpent whose HEAD stands past the wall and whose
+    // first coil stands wide of it. Gated once per actor centre the head's
+    // blocked line would spare the whole creature; gated per BODY the coil is
+    // honestly bitten — and the flash lands on the coil that was actually hit.
+    const coiled = seat('enemy', far);
+    coiled.worm = {
+      length: 1, spacing: 30, taper: 0.9, hittable: true,
+      segments: [vec(wide.x, wide.y)],
+    };
+    band();
+    const c0 = coiled.life;
+    drive(0.5);
+    check('I10 a serpent\'s coils each answer their OWN line (walled head, open coil → the coil bites)',
+      coiled.life < c0 && coiled.worm.flash?.[0] === SEG_CFG.flashTime);
   }
 }
 

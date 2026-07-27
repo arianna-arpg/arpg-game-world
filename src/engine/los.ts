@@ -89,6 +89,23 @@ export const LOS_CFG = {
    *  side); storm strikes fall from the SKY and melee sweeps are traveling
    *  body-momentum — neither consults walls. */
   zoneTickTypes: { ground: true } as Record<string, boolean | undefined>,
+  /** THE BAND LAW: which TETHER band lanes occlude per-victim while they
+   *  burn. A band is not a placement but a line STRUNG between two anchors,
+   *  so the arc has to run from BOTH of them to the ground it burns —
+   *  masonry laid anywhere across that run eats the bite (and the ally
+   *  mend), exactly as a wall shields you from a burning field's far side
+   *  (zoneTickTypes). Keyed by the band's LINK lane rather than by the
+   *  laying skill's delivery type, because a band is a lane of its own
+   *  however it was strung (a summon's caster-link is not its summon
+   *  skill's delivery): TetherSpec.link's three kinds, plus 'pack'
+   *  (MonsterDef.tether kin arcs) and 'zap' (the momentary, payload-less
+   *  visual arcs — a drawn beam is not a hit surface). Lanes absent here
+   *  are 'free', exactly as unlisted delivery types are. The laying skill's
+   *  own `occlusion` word overrides, and a positive `phasing` frees the
+   *  whole band. */
+  tetherLinks: {
+    caster: 'blocked', network: 'blocked', target: 'blocked', pack: 'blocked',
+  } as Record<string, 'blocked' | 'free' | undefined>,
   /** Delivery types an AI HOLDS FIRE on without a clear firing line (it
    *  repositions instead — pathing does the rest). Free/phasing skills are
    *  never held: the meteor caster keeps bombarding from behind its wall. */
