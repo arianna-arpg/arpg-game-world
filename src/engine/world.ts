@@ -27609,32 +27609,12 @@ export class World {
         // HANDS — a crescent wave built from the cone's own geometry
         // travels forward, striking each enemy exactly once (surface
         // semantics). The firing-styles precedent applied to melee.
-        if (caster.sheet.get('meleeSweep', tags, extra) > 0) {
-          const R = Math.min(140, Math.max(70, (caster.radius + d.range) * 1.35));
-          const arc = (d.arcDeg * Math.PI / 180) * Math.sqrt(aoeScale) * arcScale;
-          const speed = 480 * caster.sheet.get('sweepSpeed', tags, extra);
-          const travel = 210 * caster.sheet.get('sweepRange', tags, extra)
-            * Math.min(2, caster.sheet.get('effectDuration', tags, extra));
-          this.zones.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: R,
-            caster, inst, color: def.color,
-            delay: 0, exploded: true,
-            linger: travel / speed,
-            tickInterval: 0, tickTimer: 0,
-            shape: AOE_SHAPE.crescent, facing: caster.facing,
-            dmgMult: useMult, depth: 0,
-            drift: speed, arcRad: arc,
-            struck: new Set(),
-            flatBonus,
-          });
-          this.flashes.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: R * 0.6, color: def.color,
-            life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: arc },
-          });
-          // The wave's launch point is the sweep's area anchor.
-          fieldAt = vec(caster.pos.x, caster.pos.y);
-          break;
-        }
+        // The conversion replaces only the swing's PRIMARY strike (plus the
+        // cast-time flash/heal/mallet, which the traveling surface replays
+        // per crossing through the zone tick) — the shared tail below,
+        // reverberation and the aftermath minter, runs for BOTH deliveries
+        // off whichever geometry the cast actually drew.
+        const sweeping = caster.sheet.get('meleeSweep', tags, extra) > 0;
         // meleeReach: the strike-distance lever swingArc trades against
         // (Reckless Breadth — a wider, shorter swing).
         const reach = (caster.radius + d.range)
@@ -27647,23 +27627,63 @@ export class World {
         // along the facing (inAoe's own geometry; the crescent/sector kinds
         // keep the classic arc test — shape 0 is byte-identical bare).
         const swingShape = caster.sheet.get('aoeShape', tags, extra);
+        // ONE struck ledger for the whole cast: the swing's hits, the
+        // reverb's picks and — sweeping — the wave's crossings all mark it.
         const struck = new Set<number>();
-        for (const enemy of this.enemiesOf(caster)) {
-          // SEGMENT FABRIC: the swing connects with the NEAREST hittable
-          // body — the coil beside you, not only the head across the room.
-          // Plain monsters: nearest body IS the head, byte-identical.
-          const nb = nearestBody(enemy, caster.pos);
-          if (swingShape >= 1 && swingShape <= 2) {
-            if (!inAoe(caster.pos, reach, swingShape, caster.facing, nb.pos, nb.r)) continue;
-          } else {
-            if (dist(caster.pos, nb.pos) - nb.r > reach) continue;
-            if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+        // The crescent's geometry, hoisted for the shared tail below.
+        let sweepR = 0, sweepArc = 0;
+        if (sweeping) {
+          sweepR = Math.min(140, Math.max(70, (caster.radius + d.range) * 1.35));
+          sweepArc = (d.arcDeg * Math.PI / 180) * Math.sqrt(aoeScale) * arcScale;
+          const speed = 480 * caster.sheet.get('sweepSpeed', tags, extra);
+          const travel = 210 * caster.sheet.get('sweepRange', tags, extra)
+            * Math.min(2, caster.sheet.get('effectDuration', tags, extra));
+          this.zones.push({
+            pos: vec(caster.pos.x, caster.pos.y), radius: sweepR,
+            caster, inst, color: def.color,
+            delay: 0, exploded: true,
+            linger: travel / speed,
+            tickInterval: 0, tickTimer: 0,
+            shape: AOE_SHAPE.crescent, facing: caster.facing,
+            dmgMult: useMult, depth: 0,
+            drift: speed, arcRad: sweepArc,
+            struck,
+            flatBonus,
+          });
+          this.flashes.push({
+            pos: vec(caster.pos.x, caster.pos.y), radius: sweepR * 0.6, color: def.color,
+            life: 0.2, maxLife: 0.2, arc: { facing: caster.facing, arcRad: sweepArc },
+          });
+          // The wave's launch point is the sweep's area anchor.
+          fieldAt = vec(caster.pos.x, caster.pos.y);
+        } else {
+          for (const enemy of this.enemiesOf(caster)) {
+            // SEGMENT FABRIC: the swing connects with the NEAREST hittable
+            // body — the coil beside you, not only the head across the room.
+            // Plain monsters: nearest body IS the head, byte-identical.
+            const nb = nearestBody(enemy, caster.pos);
+            if (swingShape >= 1 && swingShape <= 2) {
+              if (!inAoe(caster.pos, reach, swingShape, caster.facing, nb.pos, nb.r)) continue;
+            } else {
+              if (dist(caster.pos, nb.pos) - nb.r > reach) continue;
+              if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, nb.pos))) > arcRad / 2) continue;
+            }
+            struck.add(enemy.id);
+            noteBodyHit(enemy, nb.seg);
+            this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
           }
-          struck.add(enemy.id);
-          noteBodyHit(enemy, nb.seg);
-          this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
         }
         // Reverberation: the blow rings outward to extra nearby enemies.
+        // SWEEPING: the ring fires AT CAST with the ledger still empty — the
+        // wave has struck no one yet, so the reverb picks the true nearest
+        // bodies (including behind the caster, where the wave never looks).
+        // No double-dip BY CONSTRUCTION: the ledger IS the wave's own struck
+        // Set, so a reverb-rung body reads as already crossed when the
+        // crescent reaches it — one cast strikes each body at most once,
+        // the swing's own reverb law (EXTRA bodies, never repeats) extended
+        // to the traveling surface. Deferring the ring to the wave's expiry
+        // was rejected: it would need bespoke zone-expiry machinery for a
+        // mechanic whose whole feel is the blow's immediate ring-out.
         const reverb = Math.round(caster.sheet.get('meleeReverb', tags, extra));
         for (let r = 0; r < reverb; r++) {
           let next: Actor | null = null, bd = reach + 140;
@@ -27677,48 +27697,59 @@ export class World {
           this.resolveHit(caster, inst, next, useMult, 0, flatBonus);
           this.flashes.push({ pos: vec(next.pos.x, next.pos.y), radius: 18, color: def.color, life: 0.15, maxLife: 0.15 });
         }
-        // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
-        // classic swing keeps its arc sweep.
-        this.flashes.push(swingShape >= 1 && swingShape <= 2
-          ? {
-            pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
-            life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing,
-          }
-          : {
-            pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
-            life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad },
-          });
-        // Melee 'aoe' swings have an area too (Cleave + No Man's Land
-        // scorches where the blade passed) — the arc's centroid; a
-        // surround slam centers on the caster.
-        fieldAt = swingShape === 1
-          ? vec(caster.pos.x, caster.pos.y)
-          : vec(caster.pos.x + Math.cos(caster.facing) * reach * 0.6,
-                caster.pos.y + Math.sin(caster.facing) * reach * 0.6);
+        if (!sweeping) {
+          // Drawn == tested: a sigil-shaped swing flashes its SHAPE; the
+          // classic swing keeps its arc sweep. (The sweep pushed its own
+          // crescent flash above.)
+          this.flashes.push(swingShape >= 1 && swingShape <= 2
+            ? {
+              pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
+              life: 0.18, maxLife: 0.18, shape: swingShape, facing: caster.facing,
+            }
+            : {
+              pos: vec(caster.pos.x, caster.pos.y), radius: reach, color: def.color,
+              life: 0.18, maxLife: 0.18, arc: { facing: caster.facing, arcRad },
+            });
+          // Melee 'aoe' swings have an area too (Cleave + No Man's Land
+          // scorches where the blade passed) — the arc's centroid; a
+          // surround slam centers on the caster.
+          fieldAt = swingShape === 1
+            ? vec(caster.pos.x, caster.pos.y)
+            : vec(caster.pos.x + Math.cos(caster.facing) * reach * 0.6,
+                  caster.pos.y + Math.sin(caster.facing) * reach * 0.6);
+        }
         // The cascade family beyond ground: the swing's sequels — the
         // same slam detonating again, Seismic March quaking forward out
         // of it — mint off the swing's own geometry (sigil shapes true;
-        // the classic swing re-strikes as its own SECTOR).
+        // the classic swing re-strikes as its own SECTOR, and a SWEEPING
+        // cast re-strikes as the CRESCENT it actually drew — the wave's
+        // anchor, facing and arc, never the swing's sector).
         this.mintAftermath(caster, inst, vec(caster.pos.x, caster.pos.y),
-          reach,
-          swingShape >= 1 && swingShape <= 2 ? swingShape : AOE_SHAPE.sector,
+          sweeping ? sweepR : reach,
+          sweeping ? AOE_SHAPE.crescent
+            : swingShape >= 1 && swingShape <= 2 ? swingShape : AOE_SHAPE.sector,
           caster.facing, useMult, tags, extra,
-          swingShape >= 1 && swingShape <= 2 ? undefined : arcRad);
-        // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
-        // allies standing in it — one swing, both congregations.
-        this.healAlliesInArea(caster, inst, a =>
-          dist(caster.pos, a.pos) - a.radius <= reach
-          && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
-          useMult);
-        // THE MALLET: the swing's own arc rings castOnStruck constructs
-        // and pops brittle 'hit' scenery through the shared strike-surface
-        // seam — walk up and play the bell on purpose (the PoE2 combo),
-        // smash the pots on the follow-through. Team-wide by design:
-        // minions and co-op allies swing mallets too.
-        this.frontSplash(caster, inst, caster.pos, reach);
-        this.strikeSurfaces(caster, caster.pos, reach, (p, r) =>
-          dist(caster.pos, p) - r <= reach
-          && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2);
+          sweeping ? sweepArc
+            : swingShape >= 1 && swingShape <= 2 ? undefined : arcRad);
+        if (!sweeping) {
+          // Heal-and-harm swings (Sanctified Strike): the same arc MENDS the
+          // allies standing in it — one swing, both congregations. (A
+          // sweeping cast skips the cast-time mend and mallet: the wave
+          // zone replays both per crossing through its own tick.)
+          this.healAlliesInArea(caster, inst, a =>
+            dist(caster.pos, a.pos) - a.radius <= reach
+            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
+            useMult);
+          // THE MALLET: the swing's own arc rings castOnStruck constructs
+          // and pops brittle 'hit' scenery through the shared strike-surface
+          // seam — walk up and play the bell on purpose (the PoE2 combo),
+          // smash the pots on the follow-through. Team-wide by design:
+          // minions and co-op allies swing mallets too.
+          this.frontSplash(caster, inst, caster.pos, reach);
+          this.strikeSurfaces(caster, caster.pos, reach, (p, r) =>
+            dist(caster.pos, p) - r <= reach
+            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2);
+        }
         break;
       }
 
@@ -29708,7 +29739,12 @@ export class World {
           });
         }
       }
-      if (fx.type === 'spawnZone') {
+      // LINGERING GROUND: the pool stands at the resolved point — for a
+      // BLINK, where the caster STOOD (origin binds pre-step on purpose:
+      // Shatterstep erupts behind the escape). A PROJECTILE delivery
+      // blooms at the FLIGHT'S END instead (the projectile sweep's hook,
+      // the litePour/lure law — the lobbed rite pools where it lands).
+      if (fx.type === 'spawnZone' && d.type !== 'projectile') {
         this.zones.push({
           pos: vec(origin.x, origin.y),
           radius: fx.radius * aoeScale,
@@ -46110,6 +46146,26 @@ export class World {
             if (fx.type === 'lure') {
               this.setLure(`skill#${p.caster.id}#${p.inst.def.id}`, p.pos, fx.radius,
                 fx.pace ?? 0.5, fx.standoff ?? 90, fx.sec);
+            }
+            // A LINGERING GROUND on a flight: the pool blooms where the
+            // flight ENDED (the litePour hook's kin — the lobbed rite
+            // pools on the ground it struck, never at the hand). Scales
+            // re-fold from the sheet exactly as executeSkill's cast-time
+            // spawnZone branch folds them — the two sites must agree.
+            if (fx.type === 'spawnZone') {
+              const zTags = skillContextTags(p.inst.def, grantedTags(p.inst));
+              const zExtra = instanceMods(p.inst);
+              this.zones.push({
+                pos: vec(p.pos.x, p.pos.y),
+                radius: fx.radius * p.caster.sheet.get('aoeRadius', zTags, zExtra),
+                caster: p.caster, inst: p.inst, color: p.color,
+                delay: 0, exploded: true,
+                linger: fx.duration * p.caster.sheet.get('effectDuration', zTags, zExtra),
+                tickInterval: fx.tickInterval ?? 0.5, tickTimer: 0,
+                shape: p.caster.sheet.get('aoeShape', zTags, zExtra),
+                facing: p.dir,
+                dmgMult: (fx.damageScale ?? 0.5) * p.mult, depth: 1,
+              });
             }
           }
           // THE DIN (the watch fabric): a noisy flight RINGS where it ends —
