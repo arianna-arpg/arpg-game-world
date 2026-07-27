@@ -61,6 +61,10 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'poiseDamage', 'sunderDuration', 'impalePower',
       // Position & execution
       'ambushBonus', 'proximityDamage', 'cullThreshold', 'killProcOnHit',
+      // The slayer lane — MORE damage keyed to what the victim IS, where on
+      // it you struck, or what state you drove it into
+      'overmatch', 'giantsbane', 'regicide', 'limbreaver', 'siegebreaker',
+      'spentbane', 'uprooter', 'bondbreaker', 'quailbane',
       // Dice texture
       'damageSpread', 'luckyChance', 'unluckyChance', 'highRollWindow',
       // Power from elsewhere
@@ -151,7 +155,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'meleeSweep', 'sweepRange', 'sweepSpeed',
       // Impact & control
       'knockback', 'displaceForce', 'knockBuffet', 'shoveAuthority', 'impactDamage',
-      'gripPower', 'wriggle', 'trample', 'plyRend',
+      'gripPower', 'gripCrush', 'wriggle', 'trample', 'plyRend',
       // Areas & ground
       'aoeShape', 'aoeScatter', 'aoeCascade', 'cascadeStep', 'aoeSpin', 'pulseCount',
       'stormCount', 'stormImmediate', 'fissureCount', 'fissureBranches',
@@ -173,11 +177,16 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       'bashPower', 'bashFloor', 'bashInvert',
       'durationAuraCap', 'auraEsRecharge', 'auraEsDelay',
       'reflex', 'thirstless', 'remnantChance', 'remnantOnCast',
+      // Borrowed kits — the mimic's stolen arts and the possession seam's
+      // ride (huskGuard defends the body you left behind, but it belongs
+      // beside the two dials that decide the ride itself)
+      'mimicWitness', 'mimicBank',
+      'possessDuration', 'possessPower', 'huskGuard',
     ],
   },
   minions: {
     label: 'Minions',
-    blurb: 'Everything you summon, plant, or echo.',
+    blurb: 'Everything you summon, plant, echo, or hire.',
     core: [],
     used: [
       'minionDamage', 'minionLife', 'minionMaxCount', 'minionDamageTaken',
@@ -195,13 +204,16 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
       // Echoes — ghosts that cast YOUR skills (deliberately not minions,
       // but this is their household on the sheet)
       'mirageCount', 'mirageDamage',
+      // The company lane — hired blades (likewise not minions; likewise
+      // the tab a player looks at for the bodies fighting beside them)
+      'mercRetinue', 'mercVigor', 'mercEase', 'mercHireDiscount',
     ],
   },
   misc: {
     label: 'Misc',
     blurb: 'Movement, presence, fortune — and anything else your build touches.',
     core: [],
-    used: ['traction', 'detectability', 'threatGen', 'invisible', 'luck'],
+    used: ['traction', 'detectability', 'noiseOnHit', 'threatGen', 'invisible', 'luck'],
   },
 };
 
@@ -228,6 +240,8 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
   { prefix: 'orbOnKill_', cat: 'sustain', blurb: 'Chance your kills shed this orb.' },
   { prefix: 'orbOnHurt_', cat: 'sustain', blurb: 'Chance taking a wound sheds this orb.' },
   { prefix: 'orbRefund_', cat: 'sustain', blurb: 'What picking this orb up refunds.' },
+  { prefix: 'orbTrickle_', cat: 'sustain', blurb: 'Chance you shed this orb on your own every few seconds, unprompted — it lands a walk away, never in your hand.' },
+  { prefix: 'survivalEase_', cat: 'defense', blurb: 'Slows this survival meter\'s drain while the world spends it — eased, never stopped.' },
   { prefix: 'chargeCap_', cat: 'skills', blurb: 'Additional maximum stacks of this charge.' },
   { prefix: 'chargeRegen_', cat: 'skills', blurb: 'This charge builds on its own over time.' },
   { prefix: 'proc_', cat: 'skills', blurb: 'Chance this triggered effect fires — on top of its own rate discipline.' },
@@ -393,6 +407,15 @@ const STAT_BLURBS: Record<string, string> = {
   proximityDamage: 'Up to this much more damage at touch range, fading with distance.',
   cullThreshold: 'Your hits EXECUTE enemies at or below this fraction of their life.',
   killProcOnHit: 'Your on-kill effects may also fire on plain hits against elite prey.',
+  overmatch: 'More damage against enemies of a higher level than yours — the punch-up bonus.',
+  giantsbane: 'More damage against enemies far heavier than you — the giant-feller\'s edge.',
+  regicide: 'More damage against empowered enemies — magic, rare, champion and crowned alike.',
+  limbreaver: 'More damage against a creature\'s anchored PARTS — the pavise, the censer, the rider, the bell.',
+  siegebreaker: 'More damage against bodies that cannot walk away — siege engines, spawners, idols, planted totems.',
+  spentbane: 'More damage against enemies that have spent themselves — a reserve run down, or a vent left standing open. It pays for waiting.',
+  uprooter: 'More damage against rooted enemies standing OFF the ground they claim — shove them out of it first.',
+  bondbreaker: 'More damage against enemies held in a warden\'s favor — cut through the favored instead of hunting the holder.',
+  quailbane: 'More damage against enemies whose nerve has frayed — wound them, flank them, drop their captain, then collect.',
   dotCrit: 'The fraction of your critical chance that applies when a damaging ailment lands — a critical affliction ticks at your full critical multiplier for its whole life.',
   hitToAffliction: 'This fraction of every hit\'s damage is FORGONE — and returns through the damaging afflictions the hit produces, at your Affliction Yield.',
   afflictionYield: 'The forgone bite\'s return rate through the affliction — the septic bargain\'s premium.',
@@ -568,6 +591,7 @@ const STAT_BLURBS: Record<string, string> = {
   shoveAuthority: 'Multiplies your shove authority — how much of your mass every push you author carries. The heavy move the light; this moves the needle.',
   impactDamage: 'Scales the impact wounds your shoves inflict when the victim is arrested — by a wall, or by a body heavy enough to be one.',
   gripPower: 'Your holds close on heavier bodies and are struggled out of slower — the grab fabric\'s holder-side lever.',
+  gripCrush: 'A body you hold is crushed for this fraction of its own maximum life each second — the wring, on top of whatever the hold already does to it.',
   wriggle: 'You struggle out of holds faster — the grab fabric\'s victim-side lever.',
   trample: 'Added mass for TRAMPLE checks only: moving through a swarm disperses pool bodies whose gate your speed and mass meet. The small die underfoot; your own shovability never changes.',
   plyRend: 'Each landed blow against a PLIED body tears this many extra plies — the exterminator\'s edge against count-durable swarms.',
@@ -631,6 +655,11 @@ const STAT_BLURBS: Record<string, string> = {
   thirstless: 'Thirst gates are waived — a brimming pool no longer refuses the drink.',
   remnantChance: 'Your hits may shed an elemental remnant; picking it up empowers the next cast of that school.',
   remnantOnCast: 'Chance a real cast of a school sheds its remnant.',
+  mimicWitness: 'Opens WITNESSED capture: studied arts cast near you are banked without your having to take the blow — the value is how far away you can learn from.',
+  mimicBank: 'Extra captured arts your mimic repertoire holds at once.',
+  possessDuration: 'Multiplies how long you may ride a possessed body before the seat snaps home.',
+  possessPower: 'Lifts the power a borrowed kit casts at — a ridden body swings closer to its own full strength.',
+  huskGuard: 'Less damage your vacated body takes while your seat is away wearing another — the trance is warded, never safe.',
 
   // Minions
   minionDamage: 'Scales the damage everything you summon deals.',
@@ -674,9 +703,14 @@ const STAT_BLURBS: Record<string, string> = {
   totemPlaceTime: 'How long planting a totem takes, against the spell\'s own bar.',
   mirageCount: 'Additional echo-ghosts per family — mirages that cast YOUR skills with YOUR scaling.',
   mirageDamage: 'Scales every echo\'s blow — the one crank on the whole mirage economy.',
+  mercRetinue: 'Additional hired blades you may field at once — whole retainers, never fractions.',
+  mercVigor: 'Increased life and damage on every blade you hire.',
+  mercEase: 'How much of a hired blade\'s pressure on the world is forgiven — at full, your company never hardens what you fight.',
+  mercHireDiscount: 'The captain knows you: hiring costs this much less.',
 
   // Misc
   detectability: 'How far away enemies notice you — the stealth stat.',
+  noiseOnHit: 'Your blows — and your spent shots, wherever they land — RING. Every watcher within this radius hears the bang and comes to look. A sound names a place, never a prey.',
   threatGen: 'How loudly your damage registers on the victim\'s ledger — loud styles goad monsters onto themselves.',
   invisible: 'Enemies cannot see or deliberately target you — but areas and stray shots still connect.',
   luck: 'Every proc roll\'s chance is scaled by your luck — fortune as a stat, curseable both ways.',
