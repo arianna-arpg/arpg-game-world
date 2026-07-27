@@ -17,6 +17,13 @@
 //   RIG E — THE GRANTED SHED (orbShedGraft): with NO innate orb shed, the
 //           floor stands the lane up at GLOBAL rate only — the granting
 //           gem's own skill-local rate bonus never compounds its floor.
+//   RIG O — THE PARTING LANE (2026-07-27): a sequel gem socketed into a
+//           CORPSE summon reaches the raised body's own flights — boarded,
+//           read, minted at the flight's end, and credited to the KEEPER.
+//   RIG P — SWEEPING BLOW REJOINS THE MELEE TAIL (2026-07-27): the crescent
+//           conversion no longer break-s past the shared tail — reverb rings
+//           at cast seeding the wave's own struck ledger (no double-dip),
+//           and the aftermath minter fires off the CRESCENT's geometry.
 //
 // Run: npx tsx balance/probe_supportfabric.ts
 // ---------------------------------------------------------------------------
@@ -30,12 +37,15 @@ import {
   STANCE_PLANT_TIME, type Actor,
 } from '../src/engine/actor';
 import {
-  SUPPORT_MECHANISMS, instanceMods, instanceUseCharges, makeSkillInstance,
-  skillContextTags, supportFitsInst,
+  AOE_SHAPE, SUPPORT_MECHANISMS, instanceMods, instanceSequel, instanceUseCharges, makeSkillInstance,
+  minionSeatBoundFields, skillContextTags, supportFitsInst,
   supportFitsInstOrCrew, supportGlobalMods, supportRidesMinions, hostSockets,
 } from '../src/engine/skills';
+import { CORPSE_CFG } from '../src/engine/world';
+import { setSimTap } from '../src/engine/tap';
 import { mod } from '../src/engine/stats';
 import { dist, vec } from '../src/core/math';
+import { withSeededRandom } from '../src/core/rng';
 import { PROCS } from '../src/data/procs';
 import { lightwellOf } from '../src/engine/lightwells';
 
@@ -348,7 +358,27 @@ bootSimEngine();
 
 // === RIG H — the septic bargain (hit-to-DoT conversion) ====================
 
-{
+// THE SEEDED SPAN + THE AVERAGED SAMPLE (2026-07-27 — the flake this whole
+// file was rostered out for). H4's law is TRUE and large: measured over 40
+// applications per arm the bargain festers ×1.50 (5.42 → 8.15 mean burn dps).
+// What failed was the EVIDENCE, not the law — ONE application's dps is a ROLL
+// (the host's [9,15] fire range through whichever cast finally landed the
+// ~8.75%-tuned ignite, on a hero whose own starting gear rolled off the
+// unseeded die), and the two arms rolled INDEPENDENTLY, so single-sample
+// ratios spanned 1.06…2.11 and a high plain draw against a low bargained one
+// read '8.4 -> 8.0' and cried regression at a healthy fabric.
+// The assertion below is UNCHANGED (still > 1.1×, the honest floor under a
+// ×1.5 effect). Two things changed under it:
+//   · ONE SEEDED SPAN wraps the rig — world, hero, gear and every cast roll
+//     are now a pure function of H_SEED. withSeededRandom is the off-stream
+//     law (core/rng.ts): it swaps Math.random for its own stream and hands
+//     the true die back untouched, so NO other rig in this file shifts.
+//   · EACH ARM REPORTS A MEAN over H_SAMPLES applications instead of one
+//     draw — strictly more evidence for the same claim, never less.
+const H_SEED = 0x5EC71C;
+const H_SAMPLES = 12;
+
+withSeededRandom(H_SEED, () => {
   // Full conversion: the hit's bite goes to ~zero while the affliction
   // festers HARDER than the plain twin (dealt + forgone × yield). Gate:
   // the 'affliction' mechanism refuses a dot-less host and admits it the
@@ -388,15 +418,34 @@ bootSimEngine();
     }
     return { hit: 0, dps: 0 };
   };
-  const plain = run(false);
-  const bargained = run(true);
+  /** H_SAMPLES independent applications, averaged — one arm of the A/B.
+   *  Draws that never landed an ignite in six tries (dps 0) would drag a
+   *  mean toward zero on evidence they don't carry, so they are counted and
+   *  reported: the rig needs a real sample in BOTH arms to speak at all. */
+  const sample = (bargain: boolean): { hit: number; dps: number; landed: number } => {
+    let hit = 0, dps = 0, landed = 0;
+    for (let i = 0; i < H_SAMPLES; i++) {
+      const r = run(bargain);
+      if (r.dps <= 0) continue;
+      hit += r.hit; dps += r.dps; landed++;
+    }
+    return landed
+      ? { hit: hit / landed, dps: dps / landed, landed }
+      : { hit: 0, dps: 0, landed: 0 };
+  };
+  const plain = sample(false);
+  const bargained = sample(true);
   check('H3 the bargained hit BITES nothing (full conversion carves the packet)',
     plain.hit > 0 && bargained.hit < plain.hit * 0.1,
-    `hit dmg ${plain.hit.toFixed(1)} -> ${bargained.hit.toFixed(1)}`);
+    `mean hit dmg ${plain.hit.toFixed(1)} -> ${bargained.hit.toFixed(1)}`
+    + ` over ${plain.landed}/${bargained.landed} landed ignites`);
   check('H4 the affliction festers HARDER than the plain twin (the forgone bite returns at yield)',
-    bargained.dps > plain.dps * 1.1,
-    `burn dps ${plain.dps.toFixed(1)} -> ${bargained.dps.toFixed(1)}`);
-}
+    plain.landed >= H_SAMPLES / 2 && bargained.landed >= H_SAMPLES / 2
+    && bargained.dps > plain.dps * 1.1,
+    `mean burn dps ${plain.dps.toFixed(2)} -> ${bargained.dps.toFixed(2)}`
+    + ` (×${(bargained.dps / Math.max(0.01, plain.dps)).toFixed(2)})`
+    + ` over ${plain.landed}/${bargained.landed} of ${H_SAMPLES} samples`);
+});
 
 // === RIG I — the kindred rule + the inheritance law ========================
 // (2026-07-21: graft-wins is dead — the native lane wins the slot and the
@@ -963,6 +1012,227 @@ bootSimEngine();
     kills > 0 && !!mote && (mote.well?.power ?? 0) > 0
     && !!corpseAt && dist(mote.pos, corpseAt) < 60,
     mote ? `mote at ${Math.round(mote.pos.x)},${Math.round(mote.pos.y)}, pool ${mote.well?.power?.toFixed(0)}, kills ${kills}` : `no mote (host ${host.id}, kills ${kills})`);
+}
+
+// === RIG O — THE PARTING LANE (2026-07-27) ================================
+// The sequel gems (Parting Gift, Parting Judgement) carried a standing note
+// naming them a "known crew-lane inert pair": raise_spectre/revive board a
+// sequel gem onto raised minions that never read it. THE CREW FORWARD
+// retired that — `sequel` is a MINION_RIDABLE field, so the gem lands on the
+// raised body's OWN flight skill and instanceSequel reads it there. The note
+// is gone; this rig is why it can never come back quietly.
+//   O1 THE CLASS: both gems RIDE, neither fits the summon HOST itself, and
+//      both board a corpse crew — 'unknowable' by construction, fit resolved
+//      PER BODY at raise (an archer carries it, a melee husk doesn't).
+//   O2 THE FORWARD + THE READ: raise a body whose kit shoots and the gem sits
+//      FORWARDED on that flight skill, where instanceSequel names the payload.
+//   O3 SAME-SEED A/B, END TO END: the flight's end MINTS the payload, its
+//      bloom fells a bystander no arrow ever touched, and the corpse is
+//      credited to the KEEPER's seat — the bare control mints nothing, and
+//      the bystander lives.
+
+{
+  const PARTING = ['parting_gift', 'parting_judgement'] as const;
+  // The corpse body is DERIVED, never named: the first plain GROUNDED
+  // monster whose own kit carries a flight with reach (registry order —
+  // stable, and it re-aims itself if any one archer's kit ever changes).
+  // Fliers are excluded on purpose: a shot leaving at its caster's story is
+  // the elevation law's business, not this lane's.
+  // A PLAIN flight only: one bolt, straight, no pierce/fork/return/emit and
+  // no trajectory of its own — the rig's geometry (a bystander outside the
+  // flight and inside the bloom) is only honest for a shot that goes where
+  // it was aimed and stops at the first body.
+  const shooterOf = (m: { skills: string[] }): string | undefined =>
+    m.skills.find(id => {
+      const s = SKILLS[id];
+      const d = s?.delivery;
+      if (d?.type !== 'projectile') return false;
+      return d.range >= 250 && d.speed >= 300
+        && !d.pierce && !d.count && !d.forks && !d.returns && !d.emit
+        && !d.trajectory && !d.trail && !d.sequel && !d.duration
+        && !s.effects.some(e => e.type !== 'damage');
+    });
+  const body = Object.values(MONSTERS).find(m =>
+    !m.parts && !m.lite && !m.flier && !m.levitates && !m.plies
+    && !!shooterOf(m) && (m.base?.life ?? 0) > 0);
+  const flightId = body ? shooterOf(body) : undefined;
+  check('O1a a corpse-raisable body whose OWN kit shoots exists (the lane needs a shooter to be worth boarding)',
+    !!body && !!flightId, body ? `${body.id} → ${flightId}` : 'none found');
+
+  for (const gemId of PARTING) {
+    const gem = SUPPORTS[gemId];
+    const raise = makeSkillInstance(SKILLS.raise_spectre, 3, 3);
+    check(`O1b ${gemId} RIDES minions (its payload is the sequel field, not the player's seat)`,
+      supportRidesMinions(gem), `seat-bound: [${minionSeatBoundFields(gem)}]`);
+    check(`O1c ${gemId} does NOT fit the summon host itself — the crew door is the only road in`,
+      !supportFitsInst(gem, raise));
+    check(`O1d ${gemId} boards the corpse crew (raise_spectre + revive alike — 'unknowable', resolved per body at raise)`,
+      supportFitsInstOrCrew(gem, raise, 'unknowable')
+      && supportFitsInstOrCrew(gem, makeSkillInstance(SKILLS.revive, 3, 3), 'unknowable'));
+  }
+
+  /** One arm of the A/B: raise the shooter, press its own flight at a body it
+   *  cannot fell, and watch what the flight's END does. `gemId` null = the
+   *  bare control, identical in every other particular (same seed, same
+   *  Resonance key, same geometry). */
+  const partingArm = (gemId: string | null): {
+    stage: string; forwarded: boolean; sequelId: string | null;
+    payloadCasts: number; frailDead: boolean; frailKiller: string | null; xpGain: number;
+  } => {
+    const miss = (stage: string): ReturnType<typeof partingArm> => ({
+      stage, forwarded: false, sequelId: null, payloadCasts: 0,
+      frailDead: false, frailKiller: null, xpGain: 0,
+    });
+    if (!body || !flightId) return miss('no-shooter');
+    const w = makeSimWorld('summoner', 0x0f01); // SAME seed both arms
+    const p = w.player;
+    p.sheet.setSource('probe', [mod('mana', 'flat', 400)]); // the raise must be affordable
+    p.mana = p.maxMana();
+    const raise = makeSkillInstance(SKILLS.raise_spectre, 3, 3);
+    // THE RESONANCE KEY rides BOTH arms: the crew door's price is not the
+    // variable under test — the sequel gem is.
+    raise.sockets[0] = { def: SUPPORTS.resonance, level: 1 };
+    if (gemId) raise.sockets[1] = { def: SUPPORTS[gemId], level: 1 };
+    p.skills[0] = raise;
+
+    const spot = vec(p.pos.x + 120, p.pos.y);
+    w.corpses.push({
+      pos: vec(spot.x, spot.y), defId: body.id, level: 8,
+      maxLife: 30, remaining: CORPSE_CFG.duration,
+    });
+    if (!w.useSkill(p, raise, spot)) return miss('raise-refused');
+    for (let i = 0; i < 90; i++) w.update(1 / 60); // out past the rite's own cast bar
+    const minion = w.actors.find(a => a.owner === p && !a.dead && !a.construct);
+    if (!minion) return miss('no-body');
+    const flight = minion.skills.find(s => s?.def.id === flightId);
+    if (!flight) return miss('no-flight');
+    const forwarded = flight.sockets.some(s => !!gemId && s?.def.id === gemId && !!s.forwarded);
+    const sq = instanceSequel(flight);
+
+    // THE TANK stops the arrow and shrugs it off; THE FRAIL BYSTANDER stands
+    // off the flight line, beyond the arrow's reach and inside the bloom's —
+    // so anything that fells it came from the flight's END, not its flight.
+    const tank = w.createMonster('zombie', 5, 'enemy');
+    tank.pos = vec(p.pos.x + 300, p.pos.y);
+    tank.sheet.setSource('probe', [mod('life', 'more', 400), mod('evasion', 'flat', -1e6)]);
+    tank.life = tank.maxLife();
+    w.actors.push(tank);
+    const frail = w.createMonster('zombie', 5, 'enemy');
+    frail.pos = vec(tank.pos.x + 40, tank.pos.y + 20);
+    w.actors.push(frail);
+    frail.life = 1;
+
+    // OBSERVE-ONLY, through the sanctioned seam (engine/tap.ts).
+    let payloadCasts = 0;
+    let frailKiller: string | null = null;
+    const payloadId = sq?.skillId;
+    setSimTap({
+      onCast: (caster, inst) => {
+        if (payloadId && inst.def.id === payloadId) payloadCasts++;
+        void caster;
+      },
+      onDeath: (actor, killer) => {
+        if (actor === frail) frailKiller = killer ? killer.defId ?? 'player' : null;
+      },
+    });
+    const seat = w.seats[0];
+    const xp0 = seat.meta.xp;
+    // The sim runs no brains — press the raised body's own flight directly.
+    const pressed = w.useSkill(minion, flight, vec(tank.pos.x, tank.pos.y));
+    for (let i = 0; i < 8 * 60; i++) w.update(1 / 60);
+    setSimTap(null);
+    return {
+      stage: pressed ? 'fired' : 'press-refused', forwarded,
+      sequelId: sq?.skillId ?? null, payloadCasts,
+      frailDead: frail.dead, frailKiller, xpGain: seat.meta.xp - xp0,
+    };
+  };
+
+  const bare = partingArm(null);
+  check('O3a THE CONTROL: the same raise WITHOUT the gem reads no sequel, mints nothing, and the bystander lives',
+    bare.stage === 'fired' && bare.sequelId === null && bare.payloadCasts === 0 && !bare.frailDead,
+    `[${bare.stage}] sequel=${bare.sequelId} casts=${bare.payloadCasts} bystander dead=${bare.frailDead}`);
+
+  for (const gemId of PARTING) {
+    const gem = SUPPORTS[gemId];
+    const arm = partingArm(gemId);
+    check(`O2 ${gemId} lands FORWARDED on the raised body's own flight, and instanceSequel reads its payload there`,
+      arm.stage === 'fired' && arm.forwarded && arm.sequelId === gem.sequel!.skillId,
+      `[${arm.stage}] forwarded=${arm.forwarded} sequel=${arm.sequelId} (want ${gem.sequel!.skillId})`);
+    check(`O3b ${gemId} MINTS at the raised body's flight-end and its bloom fells the bystander — credited to the KEEPER's seat`,
+      arm.payloadCasts > 0 && arm.frailDead && arm.frailKiller === body?.id && arm.xpGain > 0,
+      `casts=${arm.payloadCasts} bystander dead=${arm.frailDead} by '${arm.frailKiller}' keeper xp +${arm.xpGain}`);
+  }
+}
+
+// === RIG P — SWEEPING BLOW rejoins the melee tail (2026-07-27) =============
+
+{
+  // THE SWEEP'S SHARED TAIL, pinned: converting the swing into the traveling
+  // crescent must not silently drop the OTHER invested mechanics. (a) The
+  // reverb rings out AT CAST — its picks seed the wave's own struck ledger,
+  // so one cast strikes each body at most once (no reverb+wave double-dip,
+  // and no over-suppression of un-rung bodies down the corridor). (b) The
+  // aftermath minter fires off the SWEEP's drawn geometry — crescent
+  // ripples wearing the wave's facing and arc, never the swing's sector.
+  const world = makeSimWorld('warrior', 7);
+  const hero = world.player;
+  hero.facing = 0; // due east; every placement below is relative to this
+
+  // Count resolveHit CHOICES per victim (whiffs included — the ledger is
+  // written before the dice roll, so the CHOICE is the law under test).
+  const hits = new Map<number, number>();
+  setSimTap({ onHit: (_atk, tgt) => hits.set(tgt.id, (hits.get(tgt.id) ?? 0) + 1) });
+
+  const mk = (dx: number, dy: number): Actor => {
+    const m = world.createMonster('target_dummy', 7, 'enemy');
+    m.pos = { x: hero.pos.x + dx, y: hero.pos.y + dy };
+    world.actors.push(m);
+    return m;
+  };
+  // The wave travels east. `front` stands inside the crescent's opening
+  // band; `control` farther down the corridor (wave-only ground: reverb 2
+  // picks the two NEAREST bodies); `behind` stands west — reverb-only
+  // ground by construction, where the forward arc never looks.
+  const front = mk(80, 0);
+  const behind = mk(-70, 0);
+  const control = mk(170, 0);
+
+  const inst = makeSkillInstance(SKILLS.cleave, 1, 3);
+  inst.sockets[0] = { def: SUPPORTS.sweeping_blow, level: 1 };
+  inst.sockets[1] = { def: SUPPORTS.reverberation, level: 3 }; // meleeReverb 2
+  const zBefore = world.zones.length;
+  world.executeSkill(hero, inst, { x: hero.pos.x + 100, y: hero.pos.y });
+  const wave = world.zones.slice(zBefore).find(z => z.drift && z.shape === AOE_SHAPE.crescent);
+  check('P1 the sweep still launches its crescent wave (the conversion itself, undisturbed)',
+    !!wave, `${world.zones.length - zBefore} zones minted`);
+  check('P2 sweep reverb rings out AT CAST — the behind-the-caster body, where the wave never looks, is struck',
+    (hits.get(behind.id) ?? 0) === 1, `behind=${hits.get(behind.id) ?? 0}`);
+
+  // Run the wave to rest (travel ≈ 210 at 480 u/s), then read the ledger law.
+  for (let i = 0; i < 90; i++) world.update(1 / 60);
+  check('P3 no double-dip: the reverb-rung front body reads as already crossed — ONE hit for the whole cast',
+    (hits.get(front.id) ?? 0) === 1, `front=${hits.get(front.id) ?? 0}`);
+  check('P4 the wave still strikes un-rung bodies down the corridor (the shared ledger never over-suppresses)',
+    (hits.get(control.id) ?? 0) === 1, `control=${hits.get(control.id) ?? 0}`);
+  setSimTap(null);
+
+  // (b) THE AFTERMATH HALF: seismic_march beside sweeping_blow mints its
+  // marching ripples off the crescent the cast actually drew.
+  const mInst = makeSkillInstance(SKILLS.cleave, 1, 3);
+  mInst.sockets[0] = { def: SUPPORTS.sweeping_blow, level: 1 };
+  mInst.sockets[1] = { def: SUPPORTS.seismic_march, level: 1 };
+  const z2 = world.zones.length;
+  world.executeSkill(hero, mInst, { x: hero.pos.x + 100, y: hero.pos.y });
+  const minted = world.zones.slice(z2);
+  const waveZ = minted.find(z => z.drift);
+  const ripples = minted.filter(z => !z.exploded && z.delay > 0);
+  check('P5 seismic_march on a SWEEPING cast mints the marching ripples (mintAftermath is reached)',
+    ripples.length === 3, `${ripples.length} ripples`);
+  check('P6 the ripples wear the SWEEP\'s drawn geometry — crescent, the wave\'s facing and arc, never the swing\'s sector',
+    !!waveZ && ripples.length > 0 && ripples.every(z =>
+      z.shape === AOE_SHAPE.crescent && z.facing === waveZ!.facing && z.arcRad === waveZ!.arcRad),
+    ripples.map(z => `shape=${z.shape} arc=${(z.arcRad ?? 0).toFixed(2)}`).join(', '));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

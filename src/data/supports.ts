@@ -466,6 +466,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'parting_gift', name: 'Parting Gift',
     description: 'Where this skill\'s projectiles END their flight — struck home or spent — a FROST NOVA blooms at the death point. The going-away present.',
     color: '#a8e4ff', requiresTags: ['projectile'],
+    // THE PARTING LANE (2026-07-27 — this pair carried a standing note calling
+    // itself a "known crew-lane inert pair"; THE CREW FORWARD retired it):
+    // `sequel` is a MINION_RIDABLE field, so a sequel gem socketed into a
+    // summon RIDES — forwardSummonSockets lands it on the raised body's OWN
+    // flight skill and instanceSequel reads it THERE, at that flight's end,
+    // the kill credited to the keeper like any minion's. Corpse crews
+    // (raise_spectre/revive) are 'unknowable' at socket time and resolve fit
+    // PER BODY at the raise: raise an archer and the arrows bloom; raise a
+    // melee husk and the gem simply finds no flight to board. Pinned end to
+    // end — board, read, mint, credit — by probe_supportfabric RIG O.
     sequel: { skillId: 'frost_nova', damageScale: 0.7 },
     mods: [mod('manaCost', 'more', 0.2)],
     perLevel: [mod('damage', 'increased', 0.05, ['cold'])],
@@ -4817,9 +4827,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'parting_judgement', name: 'Parting Judgement',
     description: 'Where this skill\'s projectiles END their flight, a JUDGEMENT PILLAR falls on the spot at 60% effect — every shot a sentence, every landing a verdict.',
     color: '#ffd27f', requiresTags: ['projectile'],
-    // NOTE: shares parting_gift's known crew-lane inert pair (raise_spectre/
-    // revive board sequel gems onto raised minions that never read them) —
-    // one behavior class, so whatever fixes the frost gem fixes this one.
+    // One behavior class with parting_gift — see THE PARTING LANE note there
+    // for how a sequel gem reaches a summoned crew's own flights.
     sequel: { skillId: 'judgement_pillar', damageScale: 0.6 },
     mods: [mod('manaCost', 'more', 0.25)],
     perLevel: [mod('damage', 'increased', 0.05, ['fire'])],
