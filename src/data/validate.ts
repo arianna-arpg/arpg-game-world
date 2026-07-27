@@ -57,6 +57,7 @@ import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS, LOOKS, SELF_DRESSING_KINDS } from './looks';
 import { PART_PAINTERS } from '../render/vis/parts';
+import { painterParamGaps } from '../render/vis/painters';
 import './glyphParts'; // side-effect: the shipped glyph parts register before validation
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
@@ -720,6 +721,22 @@ export function validateContent(): void {
     .map(([k]) => k);
   if (crownOnly.length) {
     warn(`doodad kind(s) whose ground body is still the legacy groundShadow disc: ${crownOnly.join(', ')}`);
+  }
+
+  // THE PARAM CONTRACT (render/vis/painters.ts registerPainterParams) — the
+  // twin of the track-rider beam check above: there the painter's params must
+  // AGREE with the tested rect, here they must simply BE there. A painter
+  // reads def.params through an unchecked cast, so an omitted required key is
+  // undefined at the read site and NaN geometry a line later — a body that
+  // silently fails to draw, with no witness anywhere. Painters declare their
+  // required keys as data beside themselves; painterParamGaps is the ONE
+  // resolver this warning and probe_painterparams both read, so the gate and
+  // the test can never drift. (Read sites carry `?? default` fallbacks now, so
+  // a miss degrades to a drawn body — this is what NAMES it.)
+  for (const [kind, vis] of Object.entries(DOODAD_VISUALS)) {
+    for (const gap of painterParamGaps(vis.painter, vis.params)) {
+      warn(`doodad '${kind}' (painter '${vis.painter}'): params ${gap}`);
+    }
   }
 
   // ACTOR half of the sweep — deployed constructs. Every construct delivery

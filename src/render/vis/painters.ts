@@ -84,6 +84,66 @@ export function resolveColorOpt(spec: ColorSpec | undefined, theme: ZoneTheme): 
 
 export type GroupPainter = (env: PaintEnv, group: readonly Doodad[], def: DoodadVisualDef) => void;
 
+// --- THE PARAM CONTRACT ------------------------------------------------------
+// A painter reads `def.params` through an UNCHECKED cast (`as unknown as
+// XParams`) — TypeScript vouches for nothing, so an omitted required key is
+// `undefined` at the read site and NaN geometry a line later: a body that
+// silently fails to draw, with no witness anywhere. The contract used to live
+// only in prose beside the data rows (doodadVisuals.ts, caul_sac).
+//
+// So it becomes DATA. Each painter that consumes a required key declares it
+// here, beside its own interface; `painterParamGaps` is THE resolver, shared
+// by boot validation (data/validate.ts) and the probe (probe_painterparams.ts)
+// so the gate and the test can never read different contracts. Registration is
+// OPT-IN: a painter whose params are all optional declares nothing and is
+// simply never checked — the registry names obligations, never kinds.
+//
+// The read sites also carry `?? default` fallbacks now, so a miss DEGRADES to
+// a drawn body instead of a blank frame. That is the mercy; this is the gate.
+
+/** What a required param key must BE. 'color' is a ColorSpec string — the
+ *  intent is worth naming in the warning even though the test is `typeof`. */
+export type PainterParamType = 'number' | 'color' | 'string' | 'object';
+
+/** Required keys of one painter's params, key → expected type. Optional keys
+ *  are deliberately absent: this declares the FLOOR, not the shape. */
+export type PainterParamSpec = Readonly<Record<string, PainterParamType>>;
+
+const PAINTER_PARAMS: Record<string, PainterParamSpec> = {};
+
+/** Declare a painter's required params. Sited beside the painter it speaks
+ *  for; the id is the painter's key in PAINTERS (what a data row names). */
+export function registerPainterParams(painter: string, required: PainterParamSpec): void {
+  PAINTER_PARAMS[painter] = required;
+}
+
+export function painterParamSpec(painter: string): PainterParamSpec | undefined {
+  return PAINTER_PARAMS[painter];
+}
+
+/** Every painter that has declared a contract. */
+export function painterParamIds(): string[] {
+  return Object.keys(PAINTER_PARAMS);
+}
+
+/** THE RESOLVER: what a params record OWES its painter. Returns one human
+ *  phrase per violation (empty = the row satisfies its contract). A painter
+ *  that declared nothing owes nothing. */
+export function painterParamGaps(painter: string, params: Record<string, unknown> | undefined): string[] {
+  const spec = PAINTER_PARAMS[painter];
+  if (!spec) return [];
+  const gaps: string[] = [];
+  for (const [key, want] of Object.entries(spec)) {
+    const v = params?.[key];
+    if (v === undefined || v === null) { gaps.push(`missing '${key}' (${want})`); continue; }
+    const ok = want === 'number' ? (typeof v === 'number' && Number.isFinite(v))
+      : want === 'object' ? (typeof v === 'object' && !Array.isArray(v))
+        : typeof v === 'string' && v.length > 0;
+    if (!ok) gaps.push(`'${key}' should be ${want}, got ${Array.isArray(v) ? 'array' : typeof v}`);
+  }
+  return gaps;
+}
+
 export interface LightSpec {
   /** Light reach in world units (absolute), or negative = multiple of the
    *  doodad's radius (-2.5 → 2.5 × radius). */
@@ -462,6 +522,17 @@ export interface LiquidParams {
   flicker?: { every?: number; len?: number; dip?: number };
 }
 
+// The liquid family's floor: `core` is read bare (p.core.color/.alpha) at four
+// sites including the blink's dimLiquid re-derive — an omitted one THROWS
+// rather than merely drawing nothing.
+registerPainterParams('liquid', { core: 'object' });
+
+/** THE MERCY: a liquid missing its `core` still pours SOMETHING — the generic
+ *  grey body, visible and obviously undressed — instead of throwing mid-frame.
+ *  The gate above is what actually names the mistake. */
+const LIQUID_CORE_FALLBACK = { color: '#9a9aa0', alpha: 0.85 } as const;
+const liquidCore = (p: LiquidParams): LiquidParams['core'] => p.core ?? LIQUID_CORE_FALLBACK;
+
 /** The STATIC body of a liquid group — rim silhouette, core fill, inset pass.
  *  Time-free, so it bakes into the ground chunks by default (the merged
  *  union path of a big pool rasterized most of the screen TWICE a frame;
@@ -478,9 +549,10 @@ export function paintLiquidBody(env: PaintEnv, group: readonly Doodad[],
     blobPath(ctx, group, p.rim.grow);
     ctx.fill();
   }
-  ctx.globalAlpha = p.core.alpha;
-  ctx.fillStyle = resolveColor(p.core.color, theme);
-  blobPath(ctx, group, p.core.grow ?? 0);
+  const core = liquidCore(p);
+  ctx.globalAlpha = core.alpha;
+  ctx.fillStyle = resolveColor(core.color, theme);
+  blobPath(ctx, group, core.grow ?? 0);
   ctx.fill();
   if (p.inner) {
     ctx.globalAlpha = p.inner.alpha;
@@ -511,7 +583,7 @@ export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
   const { ctx, theme } = env;
   paintLiquidBody(env, group, def);
   if (p.fords) {
-    const coreCol = resolveColor(p.core.color, theme);
+    const coreCol = resolveColor(liquidCore(p).color, theme);
     const fordCol = p.fords.lighten !== undefined
       ? shade(coreCol, p.fords.lighten)
       : resolveColor(p.fords.color, theme, coreCol);
@@ -611,7 +683,7 @@ function dimLiquid(def: DoodadVisualDef, mul: number): DoodadVisualDef {
   const params: LiquidParams = {
     ...p,
     rim: p.rim && { ...p.rim, alpha: p.rim.alpha * mul },
-    core: { ...p.core, alpha: p.core.alpha * mul },
+    core: { ...liquidCore(p), alpha: liquidCore(p).alpha * mul },
     inner: p.inner && { ...p.inner, alpha: p.inner.alpha * mul },
     heart: p.heart && { ...p.heart, alpha: (p.heart.alpha ?? 0.3) * mul },
   };
@@ -651,7 +723,7 @@ const liquid: GroupPainter = (env, group, def) => {
   // that opted out (params.liveBody) — or a bakeLiquidBody=false fallback —
   // paints them here, exactly as the chunk baker would.
   if (liquidBodyIsLive(def)) paintLiquidStatics(env, group, def);
-  const coreCol = resolveColor(p.core.color, theme);
+  const coreCol = resolveColor(liquidCore(p).color, theme);
   if (p.ripples) {
     ctx.globalAlpha = 0.12;
     ctx.strokeStyle = resolveColor(p.ripples.color, theme);
@@ -979,6 +1051,8 @@ export interface MoundParams {
   barnacle?: ColorSpec;
 }
 
+registerPainterParams('mound', { color: 'color' });
+
 /** A lit mound with ramp-based volume — rocks stop being flat pancakes. */
 const mound: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as MoundParams;
@@ -1080,6 +1154,8 @@ export interface RockParams {
    *  under a falling front and shed it again as the melt runs. */
   snowCap?: { color?: ColorSpec };
 }
+
+registerPainterParams('boulder', { color: 'color' });
 
 interface RockBody { cx: number; cy: number; r: number; seed: number; squash: number }
 
@@ -1478,10 +1554,15 @@ export interface ShardParams {
   motes?: { color: ColorSpec; count?: number };
 }
 
+// `points` feeds jaggedPoly's vertex count — omitted, the whole silhouette is
+// NaN and the crystal simply is not there.
+registerPainterParams('shard', { points: 'number', color: 'color' });
+
 /** Faceted crystalline/volcanic shards. */
 const shard: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as ShardParams;
   const { ctx, theme, time } = env;
+  const points = p.points ?? 6; // THE MERCY: a crystal, not a NaN silhouette
   for (const o of group) {
     const base = resolveColor(p.color, theme);
     const ramp = rampOf(base, materialOf(p.material ?? 'crystal'));
@@ -1489,11 +1570,11 @@ const shard: GroupPainter = (env, group, def) => {
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
     ctx.fillStyle = ramp.base;
-    jaggedPoly(ctx, p.points, o.radius, 0.3, (o.pos.x * 7 + o.pos.y) | 0);
+    jaggedPoly(ctx, points, o.radius, 0.3, (o.pos.x * 7 + o.pos.y) | 0);
     ctx.fill();
     // Facet shading: one lit wedge, one shadowed.
     ctx.save();
-    jaggedPoly(ctx, p.points, o.radius, 0.3, (o.pos.x * 7 + o.pos.y) | 0);
+    jaggedPoly(ctx, points, o.radius, 0.3, (o.pos.x * 7 + o.pos.y) | 0);
     ctx.clip();
     ctx.globalAlpha = 0.4;
     ctx.fillStyle = ramp.light;
@@ -1505,7 +1586,7 @@ const shard: GroupPainter = (env, group, def) => {
       ctx.globalAlpha = p.edgeGlow.alpha;
       ctx.strokeStyle = resolveColor(p.edgeGlow.color, theme);
       ctx.lineWidth = 1.5;
-      jaggedPoly(ctx, p.points, o.radius, 0.3, (o.pos.x * 7 + o.pos.y) | 0);
+      jaggedPoly(ctx, points, o.radius, 0.3, (o.pos.x * 7 + o.pos.y) | 0);
       ctx.stroke();
     }
     if (p.coreGlow) {
@@ -1545,6 +1626,8 @@ const shard: GroupPainter = (env, group, def) => {
 export interface VentParams {
   rim: ColorSpec; throat: ColorSpec; hot: ColorSpec; core: ColorSpec;
 }
+
+registerPainterParams('vent', { rim: 'color', throat: 'color', hot: 'color', core: 'color' });
 
 /** Molten vents: obsidian rim, pulsing throat, bright core. */
 /** VENTS — a CRATER, not circles-in-circles: a scorched apron fan, a
@@ -1648,6 +1731,14 @@ export interface PodParams {
   veins?: ColorSpec;
 }
 
+// THE KNOWN OFFENDER, the one the prose beside caul_sac warned about: four
+// bare numerics feeding the breath, the aspect and the inner gradient. Any
+// one missing was a NaN gradient and a dead frame with no witness.
+registerPainterParams('pod', {
+  body: 'color', glow: 'color',
+  aspectY: 'number', glowY: 'number', glowR: 'number', pulseRate: 'number',
+});
+
 /** PODS — one membrane, five biomes: a bulb that BREATHES (the whole body
  *  swells on its pulse), shaded to a sun-side pole, seated by a basal
  *  collar with root ticks, mottled or banded or veined by params, its glow
@@ -1658,11 +1749,13 @@ const pod: GroupPainter = (env, group, def) => {
   const { ctx, theme, time } = env;
   for (const o of group) {
     const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
-    const pulse = 0.5 + 0.5 * Math.sin(time * p.pulseRate + seed * 0.1);
+    // THE MERCY (the param contract's fallbacks): a pod short a numeric still
+    // breathes as a plain bulb instead of collapsing to NaN geometry.
+    const pulse = 0.5 + 0.5 * Math.sin(time * (p.pulseRate ?? 1) + seed * 0.1);
     const body = resolveColor(p.body, theme);
     const glowCol = resolveColor(p.glow, theme);
     const r = o.radius * (0.97 + 0.05 * pulse); // the whole bulb breathes
-    const ry = r * p.aspectY;
+    const ry = r * (p.aspectY ?? 1);
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
@@ -1745,8 +1838,8 @@ const pod: GroupPainter = (env, group, def) => {
     // POOLED with the pulse factored into globalAlpha (profile baked at the
     // pulse-1 peak; 0.588+0.412·pulse reproduces the old stop-0 curve
     // exactly, the mid stop lands within a few percent — invisible in play).
-    const gyq = Math.round(ry * p.glowY);
-    const grq = Math.max(1, Math.round(r * p.glowR * 1.5));
+    const gyq = Math.round(ry * (p.glowY ?? 0));
+    const grq = Math.max(1, Math.round(r * (p.glowR ?? 0.5) * 1.5));
     const gg = cachedRadial(ctx, `podglow|${glowCol}|${grq}|${gyq}`,
       0, gyq, 0, 0, gyq, grq,
       () => [[0, withAlpha(glowCol, 0.85)], [0.6, withAlpha(glowCol, 0.33)], [1, withAlpha(glowCol, 0)]]);
@@ -2059,6 +2152,9 @@ export interface SlabParams {
   /** Pulsing gem inset (obelisks). */
   gem?: { color: ColorSpec };
 }
+
+// `shape` picks the silhouette outright — the arch branch or the monolith one.
+registerPainterParams('slab', { shape: 'string', fill: 'color', edge: 'color' });
 
 /** Standing stones: rounded tombstones and jagged monoliths. */
 const slab: GroupPainter = (env, group, def) => {
@@ -2635,6 +2731,10 @@ export interface ChasmParams {
   glow?: { color: ColorSpec; alpha?: number };
 }
 
+// The dark itself: read bare on the painter's first line, and every other
+// tone (rim, bands) mixes toward it.
+registerPainterParams('chasmPit', { core: 'object' });
+
 /** CHASMS — a real drop instead of a flat disc: lip stone, a descending shelf
  *  terrace, per-well depth gradients pulling the eye down, fracture cracks
  *  radiating into the ground, chance-rolled overhang slabs, and a slow mist
@@ -2643,7 +2743,7 @@ export interface ChasmParams {
 const chasmPit: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as ChasmParams;
   const { ctx, theme, time } = env;
-  const coreCol = resolveColor(p.core.color, theme);
+  const coreCol = resolveColor(p.core?.color, theme, '#0a0a0c'); // THE MERCY: a dark, not a throw
   const rimCol = resolveColor(p.rim?.color, theme, shade(coreCol, 0.4));
   const rimGrow = p.rim?.grow ?? 6;
   // The lip: weathered stone ringing the whole merged silhouette.
@@ -2752,7 +2852,10 @@ const chasmPit: GroupPainter = (env, group, def) => {
 };
 
 export interface CragParams {
-  color: ColorSpec;
+  /** Optional BY THE READ SITE: an omitted color falls back to the biome's
+   *  own `theme.obstacle`, which is why this painter registers no param
+   *  contract — a bare crag still draws correct stone. */
+  color?: ColorSpec;
   edge?: ColorSpec;
   material?: string;
   /** Flank band width before the plateau top (world units, default 7). */

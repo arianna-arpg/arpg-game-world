@@ -2699,7 +2699,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   choir_stall: { painter: 'bench', order: 53, shadow: 0.45, params: { color: '#5e4c34' } },
   high_altar: {
     painter: 'slab', order: 55, shadow: 0.5,
-    params: { color: '#efe9da', edge: '#c9b878' },
+    // The slab painter reads `fill`, not `color`, and picks its silhouette from
+    // `shape` — this row said neither, so the altar drew as the generic grey
+    // placeholder. Found by THE PARAM CONTRACT gate (validate.ts + probe).
+    params: { shape: 'monolith', fill: '#efe9da', edge: '#c9b878' },
     light: { radius: -3.4, color: '#ffe9b8', intensity: 0.35 },
   },
   empty_throne: {
