@@ -616,6 +616,16 @@ export const SCENERY_CFG = {
   portalClear: 200,
 } as const;
 
+/** THE SEEDED-FALLBACK salt (World.seededDraw → farPoint's `draw`). A load-time
+ *  placement that holds a seeded stream must not fall back to the TRUE die when
+ *  the POI pool runs dry, or its ground stops being a function of the zone seed
+ *  — the gap that let a remembered survey spire re-place itself somewhere new
+ *  while its banked charge (restored by INDEX) followed the old ordinal. Its own
+ *  salt, like SCENERY_CFG's: the fallback draws from a DEDICATED sub-stream and
+ *  never from the caller's rng, so making a lane reproducible shifts no other
+ *  lane's draw order. */
+const FARPOINT_SALT = 0x7a4f0d;
+
 /** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
  *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched);
  *  the cap's consequence lives on its buildup ladder (heatstroke). */
@@ -2757,6 +2767,12 @@ export class World {
   private zoneMemory = new Map<string, ZoneMemory>();
   private currentZoneSeed = 0;
   private zoneGenTagging = false;
+  /** Ordinal of seeded farPoint fallbacks taken this load (World.seededDraw's
+   *  sub-stream index, so two fallbacks in one load never land on the same
+   *  ground — the beacon circuit asks twice with no draw in between). Reset per
+   *  loadZone, which is what makes the lane replay: same seed, same order, same
+   *  stones. */
+  private farPointDraws = 0;
   /** Dwell-to-travel: which exit (defIndex) the player lingers on + when it began
    *  (game time); reset on zone change / stepping off / acting. */
   private exitDwellIdx = -1;
@@ -4660,6 +4676,7 @@ export class World {
     const memory = !def.boundless && this.zoneMemoryFresh(zoneId) ? this.zoneMemory.get(zoneId)! : null;
     const layoutSeed = memory?.seed ?? def.seed ?? rollSeed();
     this.currentZoneSeed = layoutSeed;
+    this.farPointDraws = 0; // the seeded-fallback lane replays from the top
     const rng = new Rng(layoutSeed);
     // CRUSADE WORKS ride the REAL structure pipeline: a held zone's tier
     // structures inject as per-load fixtures (plan walls carve the walk grid,
@@ -5105,7 +5122,9 @@ export class World {
       const n = rng.int(o.count[0], o.count[1]);
       for (let i = 0; i < n; i++) {
         const s = this.createMonster(o.spawnerId, def.level, 'enemy');
-        const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(740);
+        const at = pois.length
+          ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
+          : this.farPoint(740, false, this.seededDraw());
         s.pos = this.clampPos(vec(at.x, at.y), s.radius);
         this.actors.push(s);
       }
@@ -5233,7 +5252,8 @@ export class World {
         // Roadless fallback (a dead-end pocket): the farthest POI stands in
         // for the crossing — the escort runs, only the carved way is absent.
         const dest = destExit ? vec(destExit.pos.x, destExit.pos.y)
-          : (pois.length ? vec(pois[pois.length - 1].x, pois[pois.length - 1].y) : this.farPoint(700));
+          : (pois.length ? vec(pois[pois.length - 1].x, pois[pois.length - 1].y)
+            : this.farPoint(700, false, this.seededDraw()));
         const cart = this.createMonster(PROCESSION_CFG.cartId, Math.max(1, def.level), 'player');
         const pool = Math.round(PROCESSION_CFG.lifeBase + Math.max(1, def.level) * PROCESSION_CFG.lifePerLevel);
         cart.sheet.setSource('procession_cart', [{ stat: 'life', kind: 'flat', value: Math.max(0, pool - cart.maxLife()) }]);
@@ -5516,7 +5536,8 @@ export class World {
     if (def.id === START_ZONE || (!def.special && o.kind !== 'waves' && o.kind !== 'safe' && rng.chance(0.3))) {
       const at = def.id === START_ZONE
         ? vec(this.arena.w / 2 + 90, this.arena.h / 2 - 40)
-        : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(450));
+        : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
+          : this.farPoint(450, false, this.seededDraw()));
       this.fonts.push({ pos: this.clampPos(vec(at.x, at.y), 18) });
     }
     // The waypoint, for zones that carry one (the town's always burns).
@@ -5532,7 +5553,8 @@ export class World {
     if (def.waypoint) {
       const at = def.id === START_ZONE
         ? vec(this.arena.w / 2 - 90, this.arena.h / 2 - 40)
-        : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(420));
+        : (pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
+          : this.farPoint(420, false, this.seededDraw()));
       this.waypointPos = this.clampPos(vec(at.x, at.y), 18);
       // You know the way home: the town's waypoint starts attuned.
       if (def.id === START_ZONE) this.discoveredWaypoints.add(def.id);
@@ -9668,14 +9690,18 @@ export class World {
    *  chest, cache): prefer a generation POI that honors the door clearance
    *  (rolled among the clear ones), then a far point that does, then SLIDE
    *  the best candidate off the doors (clearTransitSpot) — placed farther is
-   *  fine, placed atop a portal is never. `pois` is consumed (splice), the
-   *  zone rng keeps the roll deterministic. Clearance is data:
+   *  fine, placed atop a portal is never. `pois` is consumed (splice), so the
+   *  LAST consumers in a load can find the pool empty and reach the far-point
+   *  fallback as a matter of course, not as an edge case — it draws off
+   *  seededDraw() for that reason, and clearTransitSpot/farthestStand are pure
+   *  scans, so every road through here is a function of the zone seed.
+   *  Clearance is data:
    *  INTERACT_PLACE_CFG.portalClear or the def's own portalClear. */
   private interactSpot(pois: Vec2[], rng: Rng, minDist: number, clear: number): Vec2 {
     const clearIdx: number[] = [];
     for (let i = 0; i < pois.length; i++) if (this.clearOfDoors(pois[i], clear)) clearIdx.push(i);
     if (clearIdx.length) return pois.splice(clearIdx[rng.int(0, clearIdx.length - 1)], 1)[0];
-    const far = this.farPoint(minDist);
+    const far = this.farPoint(minDist, false, this.seededDraw());
     if (this.clearOfDoors(far, clear)) return far;
     const seed = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : far;
     return this.clearTransitSpot(vec(seed.x, seed.y), clear);
@@ -18678,18 +18704,40 @@ export class World {
     return picks[picks.length - 1].id;
   }
 
+  /** THE SEEDED FALLBACK — a sampler off this load's own dedicated sub-stream,
+   *  for a load-time placement that holds a seeded rng and must not degrade to
+   *  the true die (interactSpot when no POI is door-clear, and the handful of
+   *  siblings that fall back to farPoint directly). Keyed (zone seed, salt, call
+   *  ordinal), so the ground is a pure function of the seed and two fallbacks in
+   *  one load still land apart.
+   *
+   *  It deliberately does NOT draw from the caller's rng, though the caller has
+   *  one: consuming the layout stream would shift every placement rolled after
+   *  it, so a lane that gains reproducibility would move everybody else's ground
+   *  (the seeded draw-order contract — the same reason SCENERY_CFG and
+   *  PUZZLE_CFG carry their own salts). */
+  private seededDraw(): (a: number, c: number) => number {
+    const r = new Rng((this.currentZoneSeed ^ FARPOINT_SALT
+      ^ Math.imul(++this.farPointDraws, 0x9e3779b1)) >>> 0);
+    return (a, c) => r.range(a, c);
+  }
+
   /** A random point at least `minFromPlayer` away (best effort). When
    *  `spaceFromEvents`, it also tries to stay EVENT_SPACING from every other world
    *  event already placed this zone (so a multi-event "festival" zone doesn't pile
    *  on one spot), and RECORDS the chosen point as an event anchor for the next.
    *  NOTE: the recorded anchor is the PRE-clampPos point (callers wrap the result in
    *  clampPos), so spacing is best-effort, not exact — a doodad-push of one center
-   *  can shave the gap below EVENT_SPACING in rare edge cases. Purely cosmetic. */
-  private farPoint(minFromPlayer: number, spaceFromEvents = false): Vec2 {
+   *  can shave the gap below EVENT_SPACING in rare edge cases. Purely cosmetic.
+   *  `draw` is the SAMPLER: the true die by default (an event that wants a fresh
+   *  roll each visit — nearly every caller), or seededDraw() for a load-time
+   *  placement whose ground has to replay off the zone seed. */
+  private farPoint(minFromPlayer: number, spaceFromEvents = false,
+    draw: (a: number, c: number) => number = rand): Vec2 {
     let best = vec(this.arena.w / 2, this.arena.h / 2);
     let bestScore = -Infinity;
     for (let tries = 0; tries < 40; tries++) {
-      const sp = samplePoint(this.arena, 90, rand);
+      const sp = samplePoint(this.arena, 90, draw);
       const p = vec(sp.x, sp.y);
       if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
       if (this.pointInSolid(p.x, p.y, 16)) continue; // never anchor an event/pack inside a rock blob

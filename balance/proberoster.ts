@@ -118,6 +118,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_painterparams.ts', status: 'green', tier: 'fast', why: 'THE PARAM CONTRACT — painters declare their required params as data (registerPainterParams); every DOODAD_VISUALS row satisfies its painter, and a painter with required params cannot be forgotten into silence' },
   { probe: 'probe_pathpref.ts', status: 'excluded', excuse: 'red', why: 'RED at HEAD (3 fails, deterministic): the caldera-rim rig never marches — "the wolf closes on its prey" minD 479, "the veto rig is live" maxX 500 from 500; the pathing veto lane needs a real look' },
   { probe: 'probe_pitfall.ts', status: 'excluded', excuse: 'red', why: 'RED at HEAD (1 fail, deterministic): "a hostile shoved past the lip at maxChain is STILL swallowed" — the shoved wolf survives the pit at chain depth' },
+  { probe: 'probe_placedeterminism.ts', status: 'green', tier: 'fast', why: 'THE SEEDED FALLBACK — a load-time placement stays a pure function of the zone seed even when the POI pool runs dry (interactSpot\'s far-point road consults the true die ZERO times), while the ~70 event callers keep their fresh roll' },
   { probe: 'probe_plies.ts', status: 'green', tier: 'fast', why: 'THE PLY FABRIC — the magnitude-blind eat (a 500-damage slam and a gnat nip each cost one ply) and the dual live pool DoTs pierce to' },
   { probe: 'probe_portal_contract.ts', status: 'green', tier: 'fast', why: 'THE PORTAL-CLEAR CONTRACT — levelgen\'s carve and genqa\'s invariant exempt the SAME set (keep-tagged waivers, doors, plan rects) and nothing else' },
   { probe: 'probe_possession.ts', status: 'green', tier: 'fast', why: 'THE POSSESSION SEAM — the pure policy lanes (structural refusals, allow/deny, the rarity ladder) and the swap through a real seat' },
@@ -159,8 +160,8 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_webperf.ts', status: 'green', tier: 'fast', why: 'THE SETTLE SWEEP\'s COST LAWS — the whole-chart settling pass pinned cheap (work counts, never wall clock) after the N² regression' },
   { probe: 'probe_webqa.ts', status: 'green', tier: 'slow', why: 'THE WORLD-WEB LAWS end to end (3 seeds × 11 rounds + quests/settle/halo/horizon) — minutes-long by nature; its old red ("C: 7/8 re-floods agree") healed by THE RAGGED DOORWAY, 8/8 today' },
   { probe: 'probe_wisplight.ts', status: 'excluded', excuse: 'flaky', why: 'FLAKY (5 fails in 10 observed runs — the loudest of the four): G10-G12/G16 cascade off "the light rides the STRONGEST body in reach", which picks the fen_hound over the level-18 weaver about half the time; the seek/ride window is not deterministic' },
-  { probe: 'probe_worldbossloot.ts', status: 'green', tier: 'fast', why: 'THE SOVEREIGN HOARDS — every world boss names its OWN resolvable loot table, the generic KillCtx.dropLootTable verb lays all three result kinds through the drop primitives, and the seal still refuses on spoils-none ground' },
   { probe: 'probe_workshop.ts', status: 'green', tier: 'fast', why: 'THE WORKSHOP (the Entity Forge\'s store) — the NAMESPACE LAW both directions: grafts refuse unprefixed ids, shipped content never squats the prefix' },
+  { probe: 'probe_worldbossloot.ts', status: 'green', tier: 'fast', why: 'THE SOVEREIGN HOARDS — every world boss names its OWN resolvable loot table, the generic KillCtx.dropLootTable verb lays all three result kinds through the drop primitives, and the seal still refuses on spoils-none ground' },
 ];
 
 /** Green rows — the gate — optionally narrowed to one lane. */
