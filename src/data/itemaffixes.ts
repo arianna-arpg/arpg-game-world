@@ -36,6 +36,7 @@ import {
 } from '../engine/stats';
 import { CLASSES, classSkillStat } from './classes';
 import { BAR_SLOTS, slotGraftStat } from '../engine/skills';
+import { CHARGE_DEFS, chargeCapStat } from '../engine/charges';
 import { SUPPORT_LIST } from './supports';
 
 // ------------------------------------------------------------ generation ---
@@ -56,7 +57,11 @@ interface FamOpts {
   local?: boolean;
   /** Multi-line families (hybrids, all-res) override the single line. */
   lines?: ModLineDef[];
-  /** Top-tier MAX per line (scalar broadcast when lines share a scale). */
+  /** Top-tier MAX per line (scalar broadcast when lines share a scale).
+   *  NEGATIVE is legal and means "the best roll is the most negative one" —
+   *  the direction a base-1 multiplier wants when gear should LOWER it
+   *  (manaCost) or when the word itself is a reduction (threat_quiet). The
+   *  ladder below orders its windows by sign, so both directions are data. */
   top: number | number[];
   /** Worst tier's floor as a fraction of top (windows are contiguous). */
   floor?: number;
@@ -98,13 +103,28 @@ function fam(o: FamOpts): AffixDef {
   const post = (top: number, i: number): number =>
     top * (floor + (1 - floor) * Math.pow(i / count, LADDER_CURVE));
 
+  // THE SIGN ORDERING. The fence always walks WEAK → STRONG, so for a
+  // NEGATIVE top it walks DOWNWARD and every raw window would arrive as
+  // [hi,lo]. The drop roller alone wouldn't notice — lerpRange sweeps the
+  // same closed interval whichever end it starts from — but a tier window is
+  // read as [min,max] elsewhere: crafting's rollIntoSpan matches a landed
+  // value with `v >= tLo && v <= tHi` (unsatisfiable when inverted, so the
+  // tier walk falls through to the ceiling) and takes its within-tier
+  // fraction from `tHi > tLo` (false when inverted, so every bench roll
+  // collapses to 0.5 and records a tier it did not earn). Order once, here:
+  // a no-op for every positive family, and the negative direction becomes
+  // ordinary data instead of a shape only one consumer survives.
+  // (Ordering is half the story — the LADDER's direction is the other half,
+  // and rollIntoSpan reads it off the ladder itself; see crafting.ts.)
+  const ordered = (a: number, b: number): [number, number] => (a <= b ? [a, b] : [b, a]);
+
   const tiers: AffixTierDef[] = [];
   for (let t = 0; t < count; t++) {
     // t = 0 is the BEST tier (window count-1..count of the fence).
     const k = count - t;
     tiers.push({
       ilvl: Math.max(1, Math.round(1 + (maxIlvl - 1) * ((k - 1) / Math.max(1, count - 1)))),
-      ranges: tops.map(top => [post(top, k - 1), post(top, k)] as [number, number]),
+      ranges: tops.map(top => ordered(post(top, k - 1), post(top, k))),
       weight: 100,
       ...(o.magicOnly ? { magicOnly: true } : {}),
     });
@@ -113,7 +133,7 @@ function fam(o: FamOpts): AffixDef {
     const ex = ITEM_CFG.exquisite;
     tiers.unshift({
       ilvl: tiers[0].ilvl + ex.ilvlPad,
-      ranges: tops.map(top => [top, top * (1 + ex.rangeLift)] as [number, number]),
+      ranges: tops.map(top => ordered(top, top * (1 + ex.rangeLift))),
       weight: Math.round(100 * ex.weightFrac),
       magicOnly: true,
     });
@@ -376,6 +396,23 @@ const APPLY_AFFIXES: AffixDef[] = Object.keys(APPLY_NAMES).map(s => fam({
   stat: `apply_${s}`, top: 0.22, floor: 0.25, count: 4, weight: 55,
 }));
 
+/** FOUNT CAPACITY suffixes — "+1 maximum Life Fount", generated over the
+ *  CHARGE registry's own chargeCap_<id> family (charges.ts chargeCapStat),
+ *  never a hand-spelled stat id: a fount that registers tomorrow ships its
+ *  gear roll the same day. The FOUNTS are exactly the charges the registry
+ *  pins to a hotbar SLOT (`hud: 'slot'`) — the ammunition lane, where the
+ *  bank's SIZE is the whole investment and the passive tree has long had
+ *  its say (cl_fount_p0, cl_fount_r4) while gear had none.
+ *  Integer ladder in 'of Reserves' shape — one tier, +1, no exquisite: a
+ *  fount holds whole sips, so a fractional roll would be a lie. */
+const FOUNT_CHARGES = Object.entries(CHARGE_DEFS).filter(([, d]) => d.hud === 'slot');
+const FOUNT_AFFIXES: AffixDef[] = FOUNT_CHARGES.map(([id, d]) => fam({
+  id: `fount_cap_${id}`, kind: 'suffix', themes: [SUSTAIN],
+  names: [`of the Brimming ${d.label}`],
+  stat: chargeCapStat(id), top: 1, floor: 1, count: 1, exquisite: false,
+  baseTags: ['belt', 'ring', 'amulet'], weight: 20,
+}));
+
 /** "+1 to <Class> Skills" — one family per registered class, resolving
  *  DYNAMICALLY against that class's live starting bar (classes.ts
  *  classSkillStat + recalcSeat). Integer ladder: T1 grants +1; the
@@ -497,6 +534,19 @@ const PREFIXES: AffixDef[] = [
     names: ['of Culling', "of the Exterminator"],
     stat: 'plyRend', top: 2, floor: 0.5, count: 2,
     baseTags: ['gloves'], weight: 30,
+  }),
+  // THE WAGON'S SECOND HORSE (world.ts corpseBatch): every corpse-handling
+  // cast loads MORE bodies — the plural feast eats a second corpse, the
+  // fromCorpse raise stands a second thrall, and the sweep reaches farther
+  // for both. The corpse_wagon gem taught the lever; the necromancer's tree
+  // and this suffix are how a build reaches it without spending the socket.
+  // WHOLE BODIES ONLY — one tier, +1, no exquisite: the engine rounds the
+  // count, so a fractional roll would read as a corpse that isn't there.
+  fam({
+    id: 'corpse_batch', kind: 'suffix', themes: [SUMMONER],
+    names: ['of the Charnel Wagon', 'of the Second Body'],
+    stat: 'corpseBatch', top: 1, floor: 1, count: 1, exquisite: false,
+    baseTags: ['helmet', 'amulet', 'gloves'], weight: 25,
   }),
   // MONSTER-INFREQUENT lines — roll ONLY on mi_<theme> bases (the same tag
   // gate as everything else; see data/infrequents.ts). Each theme gets one
@@ -793,6 +843,16 @@ const SUFFIXES: AffixDef[] = [
     stat: 'lifeOnEvade', top: 5, floor: 0.25, count: 3,
     baseTags: ['boots', 'chest', 'ring'], weight: 45,
   }),
+  // The BLOCK texture's sustain — the third sibling beside on-hit and
+  // on-evade: a made block feeds the blocker. Seated where the guard lane
+  // already lives (chest/hands, and the offhand the day shields ship), so
+  // the stance-holder's wardrobe reads as one wing.
+  fam({
+    id: 'life_on_block', kind: 'suffix', themes: [DEFENSE, SUSTAIN],
+    names: ['of the Answered Blow', 'of the Braced Arm'],
+    stat: 'lifeOnBlock', top: 6, floor: 0.25, count: 3,
+    baseTags: ['chest', 'gloves', 'offhand'], weight: 45,
+  }),
   // POISE cycle levers — the break-bar's recovery machine, investable on
   // gear: faster recovery climbs, fight-to-stay-armed on-hit refill, and
   // overcharge headroom for the crest-then-eat-the-haymaker play.
@@ -836,6 +896,17 @@ const SUFFIXES: AffixDef[] = [
     stat: 'critAvoid', top: 0.25, floor: 0.2, count: 4,
     baseTags: ['helmet', 'chest', 'belt'], weight: 45,
   }),
+  // THE VICTIM'S CLOCK (actor.ts afflictionExpiry): the defender's twin of
+  // the attacker's effectDuration — hostile statuses landed ON you run out
+  // this much faster, beneficial ones untouched. ailmentResist refuses the
+  // wound; this one shortens the one that landed, so the two stack into a
+  // real ailment-answering wardrobe instead of one lever worn twice.
+  fam({
+    id: 'affliction_recovery', kind: 'suffix', themes: [DEFENSE, SUSTAIN],
+    names: ['of Cleansing', 'of the Quick Mend', 'of Shrugging Off'],
+    stat: 'afflictionExpiry', modKind: 'increased', top: 0.35, floor: 0.25, count: 4,
+    baseTags: ['belt', 'boots', 'amulet'], weight: 50,
+  }),
   // BODY texture rolls: mass against the shove (knockback and crowd press
   // divide by weight), grip against the slick (traction refills toward its
   // cap of 1 — worth exactly its ice, nothing on dry land).
@@ -850,6 +921,26 @@ const SUFFIXES: AffixDef[] = [
     names: ['of Surefooting', 'of the Icewalker'],
     stat: 'traction', top: 0.3, floor: 0.3, count: 3,
     baseTags: ['boots'], weight: 30,
+  }),
+  // THE ATTENTION LEVER (world.ts threatGen — how loudly your damage books
+  // on the victim's ledger, folded with the SKILL's own context). It runs
+  // BOTH WAYS by design, and the two directions are two families so an item
+  // can never carry both: the banner-bearer WANTS the ledger to shout, and
+  // the one who lives behind him wants it to forget. The tree already says
+  // both words (cl_std_1 / cl_std_2); this is the same argument on gear —
+  // loud on the plate that can take the answer, quiet on the heels and hands
+  // that cannot.
+  fam({
+    id: 'threat_loud', kind: 'suffix', themes: [DEFENSE, MARTIAL],
+    names: ['of the Blaring Horn', 'of Provocation', 'of Loud Colors'],
+    stat: 'threatGen', modKind: 'increased', top: 0.6, floor: 0.25, count: 3,
+    baseTags: ['chest', 'helmet', 'belt'], weight: 40,
+  }),
+  fam({
+    id: 'threat_quiet', kind: 'suffix', themes: [RANGER, CASTER],
+    names: ['of the Grey Hood', 'of the Forgotten Name', 'of Quietude'],
+    stat: 'threatGen', modKind: 'increased', top: -0.35, floor: 0.3, count: 3,
+    baseTags: ['boots', 'gloves', 'amulet'], weight: 40,
   }),
   // CONDUIT levers — the resource-pump fabric's two dials, investable on
   // gear: throughput (how hard every running pump draws) and the exchange
@@ -880,6 +971,17 @@ const SUFFIXES: AffixDef[] = [
     stat: 'esRechargeSteadfast', top: 0.35, floor: 0.3,
     baseTags: ['armour', 'amulet'], weight: 45,
   }),
+  // THE COST LEVER (stats.ts manaCost — a base-1 MULTIPLIER, and every
+  // support gem in the game RAISES it: +20% here, +35% there, until the
+  // six-link that reads beautifully cannot be afforded). This is the one
+  // rolled word that pushes back, so its magnitude is NEGATIVE — the whole
+  // reason fam()'s windows are ordered by sign rather than by index.
+  fam({
+    id: 'mana_efficiency', kind: 'suffix', themes: [CASTER, SUSTAIN],
+    names: ['of Thrift', 'of Frugality', 'of the Careful Word'],
+    stat: 'manaCost', modKind: 'increased', top: -0.14, floor: 0.25, count: 3,
+    baseTags: ['ring', 'amulet', 'helmet'], weight: 50,
+  }),
   fam({
     id: 'cooldown', kind: 'suffix',
     names: ['of Readiness', 'of Promptness'],
@@ -906,6 +1008,25 @@ const SUFFIXES: AffixDef[] = [
     names: ['of Benediction', 'of Grace'],
     stat: 'healPower', modKind: 'increased', top: 0.25, floor: 0.25,
     baseTags: ['amulet', 'gloves', 'ring'], weight: 55,
+  }),
+  // THE RESTORE PAIR (world.ts's pour resolver): healPower above scales a
+  // MEND; these two scale the DRINK. restorePower multiplies every fount
+  // pour and restore-over-time stream, restorePctMax adds a slice of the
+  // pool's own ceiling to each gulp — so the first rewards a big flask and
+  // the second rewards a big POOL, and a deep-pool build wants both. The
+  // fount tree has said these words since the cellar cluster shipped;
+  // flask-adjacent jewellery is where gear gets to answer.
+  fam({
+    id: 'restore_power', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of the Deep Draught', 'of the Long Pour', 'of Steady Hands'],
+    stat: 'restorePower', modKind: 'increased', top: 0.3, floor: 0.25, count: 3,
+    baseTags: ['amulet', 'ring', 'belt'], weight: 45,
+  }),
+  fam({
+    id: 'restore_pct_max', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of the Brimming Cup', 'of the Full Measure'],
+    stat: 'restorePctMax', top: 0.035, floor: 0.3, count: 3,
+    baseTags: ['amulet', 'ring', 'belt'], weight: 35,
   }),
   fam({
     id: 'luck', kind: 'suffix',
@@ -1054,6 +1175,7 @@ const SUFFIXES: AffixDef[] = [
   ...RESIST_AFFIXES,
   ...PEN_AFFIXES,
   ...APPLY_AFFIXES,
+  ...FOUNT_AFFIXES,
   ...CLASS_SKILL_AFFIXES,
   ...SLOTGRAFT_AFFIXES,
 ];

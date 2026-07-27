@@ -288,14 +288,25 @@ function rollIntoSpan(
   rng: () => number, score: number,
 ): { tier: number; rolls: number[] } | null {
   if (bestIdx < 0 || worstIdx < 0 || bestIdx > worstIdx) return null;
-  const lo = def.tiers[worstIdx].ranges[0][0];
-  const hi = def.tiers[bestIdx].ranges[0][1];
-  const v = lo + (hi - lo) * liftT(baseRollT(rng), score);
+  // THE LADDER'S DIRECTION. Windows are ordered [min,max] and the ladder is
+  // best-first — but "best" is the LARGER number only for a family that reads
+  // UPWARD. A REDUCTION family ladders downward (manaCost's base-1 multiplier,
+  // the quiet half of threatGen: its best tier is its most negative), so the
+  // worst tier's weak end is its MAX and the best tier's strong end is its
+  // MIN. Read the direction off the ladder itself rather than assuming it —
+  // taking `worst[0]` as the floor and `best[1]` as the ceiling collapses a
+  // downward family's span to a POINT wherever the two windows meet, and the
+  // tier walk below then can never step off the worst rung. A no-op for every
+  // upward family, where weak/strong are exactly the old lo/hi.
+  const down = def.tiers[bestIdx].ranges[0][1] < def.tiers[worstIdx].ranges[0][1];
+  const weak = def.tiers[worstIdx].ranges[0][down ? 1 : 0];
+  const strong = def.tiers[bestIdx].ranges[0][down ? 0 : 1];
+  const v = weak + (strong - weak) * liftT(baseRollT(rng), score);
   let tier = worstIdx;
   for (let i = worstIdx; i >= bestIdx; i--) {
     const [tLo, tHi] = def.tiers[i].ranges[0];
     if (v >= tLo && v <= tHi) { tier = i; break; }
-    if (v > tHi) tier = Math.max(bestIdx, i - 1);
+    if (down ? v < tLo : v > tHi) tier = Math.max(bestIdx, i - 1);
   }
   const [tLo, tHi] = def.tiers[tier].ranges[0];
   const frac0 = tHi > tLo ? Math.max(0, Math.min(1, (v - tLo) / (tHi - tLo))) : 0.5;
