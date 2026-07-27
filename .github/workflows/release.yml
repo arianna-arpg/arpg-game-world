@@ -4,8 +4,13 @@
 # Release. electron-builder's github publisher does the uploading; the tag
 # should match package.json's version (bump it in the same commit you tag).
 #
-# Manual runs (workflow_dispatch) build the same artifacts and stash them as
-# workflow artifacts instead of publishing — a dry run for the pipeline.
+# Manual runs (workflow_dispatch) on a BRANCH build the same artifacts and
+# stash them as workflow artifacts instead of publishing — a dry run for the
+# pipeline. Dispatched on a TAG ref (how nightly.yml drives this after
+# pushing its RC tag — GITHUB_TOKEN tag pushes can't trigger on:push), it
+# publishes exactly like a tag push; rc=true makes finalize publish as a
+# PRERELEASE (invisible to /releases/latest, the launcher's update probe)
+# instead of the new latest.
 # ---------------------------------------------------------------------------
 name: release
 
@@ -13,6 +18,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      rc:
+        description: 'Publish as a prerelease RC (the nightly channel)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # electron-builder uploads release assets
@@ -37,6 +47,22 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Tag builds stamp the TAG's version into the workspace before anything
+      # reads it. Hand-cut stables bump package.json in the tagged commit, so
+      # for them this is a value-level no-op; nightly RC tags carry no bump
+      # commit, and this stamp is what keys electron-builder's draft, the
+      # artifact names, and the packaged launcher's identity to the tag
+      # (version mismatch = orphan draft). assume-unchanged keeps
+      # build-info's dirty probe honest — the tree is still byte-for-byte the
+      # tagged commit's content, the version is the tag's own datum.
+      - name: Stamp tag version into the workspace
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        shell: bash
+        run: |
+          npm pkg set version="${GITHUB_REF_NAME#v}"
+          git update-index --assume-unchanged package.json
+          echo "workspace version = $(npm pkg get version)"
 
       # Same pipeline as `npm run dist`, split so CI logs separate the stages.
       - run: npm run build
@@ -83,6 +109,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
+          RC: ${{ inputs.rc && 'true' || 'false' }}
         run: |
           # GET /releases/tags/:tag hides drafts — find ours in the list.
           id="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=30" \
@@ -93,6 +120,15 @@ jobs:
           else
             notes="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$TAG" --jq .body)"
           fi
-          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" \
-            -f name="Hollow Wake $TAG" -f body="$notes" \
-            -F draft=false -f make_latest=true
+          if [ "$RC" = "true" ]; then
+            # Nightly RC: a PRERELEASE, never latest — /releases/latest (the
+            # launcher's update probe and the Deck install link) keeps
+            # serving the newest STABLE; testers pick RCs off the page.
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" \
+              -f name="Hollow Wake $TAG (nightly RC)" -f body="$notes" \
+              -F draft=false -F prerelease=true -f make_latest=false
+          else
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" \
+              -f name="Hollow Wake $TAG" -f body="$notes" \
+              -F draft=false -f make_latest=true
+          fi

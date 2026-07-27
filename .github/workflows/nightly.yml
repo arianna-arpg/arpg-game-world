@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------------------
+# NIGHTLY RELEASE CANDIDATES — every night, IF main carries new commits since
+# the newest release tag (stable or RC alike), cut the next patch-numbered
+# tag (v0.5.0 → v0.5.1 → v0.5.2 → …) and run the normal release pipeline on
+# it, published as a PRERELEASE. A quiet night cuts nothing.
+#
+# Player safety: the launcher's update probe reads /releases/latest, which by
+# GitHub API definition never serves prereleases or drafts — installed stable
+# copies never see a nightly. Testers grab RCs from the Releases page.
+#
+# Numbering law: nightlies bump the PATCH of the newest existing vX.Y.Z tag;
+# hand-cut stables keep bumping the MINOR (v0.6.0), which numerically
+# supersedes every v0.5.x RC for the launcher's compare — and the next
+# night's RC becomes v0.6.1 automatically.
+#
+# Why the dispatch hop: tags pushed with the workflow's own GITHUB_TOKEN
+# never trigger on:push workflows (Actions' recursion guard), so this job
+# pushes the tag inertly and then dispatches release.yml on that tag ref
+# explicitly, with rc=true so its finalize publishes as a prerelease.
+#
+# No bump commit exists for an RC tag — release.yml stamps the tag's version
+# into the CI workspace instead (see its "Stamp tag version" step), so
+# electron-builder's draft, the artifact names, and the packaged launcher's
+# identity all read the tag, and main's history stays free of bot commits
+# (which would otherwise re-trigger the "new commits?" gate forever).
+# ---------------------------------------------------------------------------
+name: nightly-rc
+
+on:
+  schedule:
+    - cron: '37 8 * * *'   # 03:37 America/Chicago — off-:00 minute, GitHub delays the herd slots
+  workflow_dispatch:        # manual "cut an RC now" button (same no-new-commits gate applies)
+
+permissions:
+  contents: write   # push the RC tag
+  actions: write    # dispatch release.yml on it
+
+concurrency: nightly-rc
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history + tags — the gate is rev-list against the last tag
+
+      - name: Gate on new commits, then tag and dispatch the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          last="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
+          if [ -z "$last" ]; then
+            echo "No vX.Y.Z release tags exist — cut the first release by hand before enabling nightlies."
+            exit 1
+          fi
+          count="$(git rev-list "$last..HEAD" --count)"
+          if [ "$count" -eq 0 ]; then
+            echo "HEAD is exactly $last — no commits since the last release; skipping tonight."
+            exit 0
+          fi
+          ver="${last#v}"
+          IFS=. read -r ma mi pa <<<"$ver"
+          next="v$ma.$mi.$((pa + 1))"
+          echo "$count commit(s) since $last — cutting $next at $(git rev-parse --short HEAD)"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$next" -m "Nightly RC $next — $count commit(s) since $last"
+          git push origin "refs/tags/$next"
+          gh workflow run release.yml --ref "$next" -f rc=true
+          echo "Dispatched release.yml on $next. It publishes (as a prerelease) only if both OS legs build."
