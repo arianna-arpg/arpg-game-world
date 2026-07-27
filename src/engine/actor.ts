@@ -1982,16 +1982,24 @@ export class Actor {
     const cur = this.charges.get(charge) ?? 0;
     const next = Math.min(cap, cur + amount);
     this.charges.set(charge, next);
-    // An ACTUAL increase is a gain event (a full bank refreshing isn't).
-    if (next > cur && this.gainEvents.length < 64) {
-      this.gainEvents.push({
-        kind: 'charge', id: charge, depth: chainDepth,
-        n: next - cur, tags: inst?.def.tags,
-      });
-    }
-    // A fresh gain resets the decay clock.
+    // An ACTUAL increase is a gain event (a full bank refreshing isn't) —
+    // and it is the SAME truth that resets the DECAY CLOCK. One predicate
+    // owns both: a gain that banks nothing neither events nor refreshes,
+    // so a full bank under a still-firing tap (a per-second chargeGain, a
+    // chargeRegen trickle, an echo) begins fading on schedule instead of
+    // being held alive forever by gains that added no charge.
     const state = st ?? { idle: 0, acc: 0, tick: 0 };
-    state.idle = 0;
+    if (next > cur) {
+      state.idle = 0;
+      if (this.gainEvents.length < 64) {
+        this.gainEvents.push({
+          kind: 'charge', id: charge, depth: chainDepth,
+          n: next - cur, tags: inst?.def.tags,
+        });
+      }
+    }
+    // The state ROW is created on first touch either way, and the gauge
+    // re-syncs on every call — a capped gain still owns its per-charge mods.
     this.chargeState.set(charge, state);
     this.syncChargeMods(charge);
   }

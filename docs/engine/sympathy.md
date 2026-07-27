@@ -23,7 +23,14 @@ chargeGain/buffGain/orbPickup proc spine) grew payload fields and two kinds:
 | `buff`    | `Actor.addBuff` (every application)       | `buff` (the effect), tags      |
 | `orb`     | `World.pourOrb`                           | `n` = orb amount               |
 | `restore` | `World.startRestoreStream` (flask pours)  | `n` total, `dur` window, tags  |
+| `restore` | `World.applyRestore` (landed > 0)         | `n` landed, **no `dur`**, tags |
 | `heal`    | `World.applyHeal` (landed > 0)            | `n` landed, tags               |
+
+**One gain, one event.** `pourOrb` restores through `applyRestore` but events
+whole on the `orb` channel, so it passes `noEvent` — and so does every echo,
+which is what kills the chains. `dur` is the **shape marker**: present means a
+pour, absent means an instant gain, and the echo branches on it rather than
+guessing a window.
 
 The world sweeps events once per frame per actor and calls `rollGainProcs`
 **and** `echoSympathy` on each. Tick-rate sources (regen, tether drips,
@@ -86,8 +93,12 @@ grants never stack additively across surfaces):
 
 ## Channel semantics (canonical gates only)
 
-- `restore` — the recipient gets their **own stream**, same window, scaled
-  total ("the beast gains regeneration from your flask" — literally).
+- `restore` — replayed **in the shape it landed**. A pour (`dur` present):
+  the recipient gets their **own stream**, same window, scaled total ("the
+  beast gains regeneration from your flask" — literally). An instant restore
+  (`dur` absent): replayed instantly through `applyRestore`, which is also
+  the only gate that knows **poise** — so the poise resource has a real echo
+  path instead of being silently poured into energy shield.
 - `heal` — `healBy` (healTaken and ceilings bind the copy).
 - `charge` — count copies **verbatim** (quanta never fraction; scale > 0
   gates). Cap = the charge's registry `baseCap` + the recipient's own taps

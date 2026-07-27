@@ -27344,8 +27344,8 @@ export class World {
             const rr = t.corpseLifeRestore;
             let meat = 0;
             for (const c of feast) meat += c.maxLife;
-            if (rr.life) this.applyRestore(caster, { resource: 'life', amount: meat * rr.life });
-            if (rr.mana) this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana });
+            if (rr.life) this.applyRestore(caster, { resource: 'life', amount: meat * rr.life }, { tags: def.tags });
+            if (rr.mana) this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana }, { tags: def.tags });
           }
           // HIVEBORN (corpseSpawn graft): the bodies eaten by this offering
           // crawl back out changed — one crawler per corpse consumed.
@@ -27944,7 +27944,7 @@ export class World {
             else if (fx.type === 'absorb') {
               this.grantAbsorb(friendly, fx.amount,
                 fx.duration * caster.sheet.get('effectDuration', tags, extra));
-            } else if (fx.type === 'restore') this.applyRestore(friendly, fx);
+            } else if (fx.type === 'restore') this.applyRestore(friendly, fx, { tags: def.tags });
             else if (fx.type === 'ward') {
               friendly.gainWard(fx.amount
                 * (fx.perCharge ? Math.max(1, opts.chargesSpent ?? 0) : 1));
@@ -29544,7 +29544,7 @@ export class World {
         this.grantAbsorb(caster, fx.amount, fx.duration * durScale);
       }
       if (d.type === 'self' && fx.type === 'restore') {
-        this.applyRestore(caster, fx);
+        this.applyRestore(caster, fx, { tags: def.tags });
       }
       // WARD: the decaying shield pours onto the caster (self deliveries;
       // perCharge scales with what the press consumed — Soul Glut).
@@ -33359,18 +33359,47 @@ export class World {
   /** Restore a resource (Power Surge, resource orbs). ES rides gainEs
    *  (the esFilled seam sees it); poise rides gainPoise (broken bars are
    *  fed, invested bars may overcharge). resetEsDelay starts the ES
-   *  recharge flowing immediately — the autonomous-recharge lever. */
-  private applyRestore(target: Actor, fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean }): void {
+   *  recharge flowing immediately — the autonomous-recharge lever.
+   *  Returns what actually LANDED (a restore into a full pool lands 0).
+   *
+   *  THE INSTANT GAIN EVENT: a restore is a GAIN, exactly like the pour
+   *  (startRestoreStream) and the mend (applyHeal), and events on the
+   *  'restore' channel so sympathy links replay it — this is THE one
+   *  chokepoint for that fact, so every instant-restore lane inherits it.
+   *  Only a landed gain events (the gainCharge law: a top-up into a full
+   *  pool is not a gain). No `dur`: an instant restore has no pour window,
+   *  and that ABSENCE is the shape marker an echo reads to replay it
+   *  instantly rather than as a stream (see applySympathyEcho).
+   *  `noEvent` is for the two lanes that must NOT event here: the orb pour
+   *  (evented whole on the 'orb' channel — one gain, one event) and the
+   *  sympathy echo itself (an echo never re-events; chains die by
+   *  construction). `tags` carry the source skill's tags so tag-filtered
+   *  links (the flask bonds) read instant restores as they read pours. */
+  private applyRestore(
+    target: Actor,
+    fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean },
+    opts?: { noEvent?: boolean; tags?: SkillTag[] },
+  ): number {
+    let landed = 0;
     if (fx.resource === 'life') {
-      target.healBy(fx.amount);
+      landed = target.healBy(fx.amount);
     } else if (fx.resource === 'mana') {
+      const before = target.mana;
       target.mana = Math.min(target.availableMaxMana(), target.mana + fx.amount);
+      landed = target.mana - before;
     } else if (fx.resource === 'poise') {
-      target.gainPoise(fx.amount);
+      landed = target.gainPoise(fx.amount);
     } else {
-      target.gainEs(fx.amount);
+      landed = target.gainEs(fx.amount);
       if (fx.resetEsDelay) target.esDelay = 0;
     }
+    if (landed > 0 && !opts?.noEvent && target.gainEvents.length < 64) {
+      target.gainEvents.push({
+        kind: 'restore', id: fx.resource, depth: 0,
+        n: landed, tags: opts?.tags,
+      });
+    }
+    return landed;
   }
 
   /** Open a RESTORE STREAM (restoreOverTime — the flask pour): the base
@@ -34962,7 +34991,7 @@ export class World {
       } else if (fx.type === 'absorb') {
         this.grantAbsorb(target, fx.amount, fx.duration * durScale);
       } else if (fx.type === 'restore') {
-        this.applyRestore(target, fx);
+        this.applyRestore(target, fx, { tags: def.tags });
       } else if (fx.type === 'ward') {
         // Per-HIT ward (Soul Glut: every soul devoured is shell); ally-
         // resolving deliveries ward the touched instead.
@@ -35662,10 +35691,24 @@ export class World {
       case 'restore': {
         const total = (ev.n ?? 0) * scale;
         if (total <= 0) return false;
-        const dur = Math.max(0.2, ev.dur ?? 1);
+        // THE SHAPE OF THE GAIN: `dur` is the pour window, and an INSTANT
+        // restore has none — its absence routes the echo back through the
+        // instant gate the original used, so a sudden gain echoes suddenly
+        // instead of as a phantom one-second drip. That gate is also the
+        // only one that knows POISE (restore streams carry life/mana/es
+        // alone), so the poise channel has a real echo path and needs no
+        // gate upstream. noEvent: an echo never re-events. resetEsDelay is
+        // deliberately not carried — the echo replays the RESOURCE; kicking
+        // the recharge is the original cast's own lever.
+        if (ev.dur === undefined) {
+          return this.applyRestore(r, {
+            resource: ev.id as 'life' | 'mana' | 'es' | 'poise', amount: total,
+          }, { noEvent: true }) > 0;
+        }
+        // A POUR echoes as a pour: the recipient's own stream, same window.
         r.restoreStreams.push({
           resource: ev.id as 'life' | 'mana' | 'es',
-          perSec: total / dur, remaining: total,
+          perSec: total / Math.max(0.2, ev.dur), remaining: total,
         });
         return true;
       }
@@ -35693,11 +35736,11 @@ export class World {
         if (!def) return false;
         let landed = false;
         if (def.restore && (ev.n ?? 0) > 0) {
-          this.applyRestore(r, {
+          // noEvent: an echo never re-events (the 'orb' chain dies here).
+          landed = this.applyRestore(r, {
             resource: def.restore, amount: (ev.n ?? 0) * scale,
             resetEsDelay: def.restore === 'es',
-          });
-          landed = true;
+          }, { noEvent: true }) > 0;
         }
         if (def.charge) {
           const before = r.charges.get(def.charge.charge) ?? 0;
@@ -40868,6 +40911,8 @@ export class World {
             if (spec.runOver === 'collect' && spec.collect) {
               const col = spec.collect;
               if (col.charge) owner.gainCharge(col.charge, col.amount, col.max ?? 10, c.summonInst);
+              // A real instant gain and nothing else events it — untagged,
+              // because a run-over collect is a PICKUP, not a cast.
               if (col.resource) this.applyRestore(owner, { resource: col.resource, amount: col.amount });
               this.text(owner.pos, 'collected', c.color, 11);
             } else if (spec.runOver === 'detonate' && spec.detonateSkillId && SKILLS[spec.detonateSkillId]) {
@@ -44742,10 +44787,12 @@ export class World {
     if (!def) return;
     const gained: string[] = [];
     if (def.restore && orb.amount > 0) {
+      // noEvent: the scoop events ONCE, whole, on the 'orb' channel below —
+      // a 'restore' twin here would replay the same gain twice.
       this.applyRestore(a, {
         resource: def.restore, amount: orb.amount,
         resetEsDelay: def.restore === 'es',
-      });
+      }, { noEvent: true });
       gained.push(`+${orb.amount} ${def.label}`);
     }
     if (def.charge) {

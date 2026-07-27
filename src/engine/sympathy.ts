@@ -46,8 +46,13 @@ import { dist } from '../core/math';
 
 /** What KIND of gain a link can echo. Each channel replays through its
  *  canonical gate (see World.applySympathyEcho):
- *   'restore' — flask/fount POUR STREAMS (startRestoreStream): the recipient
- *               gets their own stream, same window, scaled total.
+ *   'restore' — resource restores, in EITHER shape. A POUR STREAM
+ *               (startRestoreStream, the flask/fount) carries its window as
+ *               `dur` and the recipient gets their own stream over the same
+ *               window; an INSTANT restore (applyRestore — Power Surge, the
+ *               corpse feast) carries no `dur` and replays instantly through
+ *               that same gate — the only one that knows POISE, which
+ *               streams cannot carry. Scaled total either way.
  *   'heal'    — direct heals (applyHeal, landed > 0): healBy on the copy.
  *   'charge'  — banked charges (gainCharge): the copy banks the same count
  *               against the charge's registry baseCap (+ recipient's own
