@@ -33,6 +33,7 @@
 // faction is grafted at boot (contexts keep it out of ordinary generation).
 // ---------------------------------------------------------------------------
 
+import { LOOT_TABLES } from '../../data/loottables';
 import { registerDoodadRule } from '../../engine/levelgen';
 import { registerKillHandler } from '../../engine/killHandlers';
 import type { World } from '../../engine/world';
@@ -100,14 +101,14 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       // the ground's standing timber flat — temporarily, always temporarily.
       roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', venue: 'ground' },
       pitch: 'every scale of it is a target — tear the plates along its length and it bleeds the harder, but a torn coil spits venom',
-      reward: { xp: 1250, gems: 6 },
+      reward: { xp: 1250, gems: 6, tables: ['sunderwyrm_hoard'] },
     },
     {
       id: 'cragmaw', name: 'Cragmaw, the Orogeny', archetype: 'apparition',
       monster: 'primeval_cragmaw', minLevel: 6, levelBonus: 2,
       glyph: '⛰', color: '#b0916a',
       escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [2, 4] },
-      reward: { xp: 850, gems: 4 },
+      reward: { xp: 850, gems: 4, tables: ['orogeny_hoard'] },
     },
     {
       id: 'ashvein', name: 'Ashvein, the Furnace Below', archetype: 'apparition',
@@ -115,7 +116,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       monster: 'primeval_ashvein', minLevel: 1, levelBonus: 2,
       glyph: '☄', color: '#e06a2a',
       escort: { table: [{ id: 'primeval_cinder', weight: 1 }], count: [3, 5] },
-      reward: { xp: 920, gems: 5 },
+      reward: { xp: 920, gems: 5, tables: ['furnace_hoard'] },
     },
     {
       // THE IRON BELL — the walking mausoleum of the karst country. Almost
@@ -130,7 +131,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       monster: 'primeval_ironbell', minLevel: 7, levelBonus: 2,
       glyph: '🔔', color: '#8d8672',
       escort: { table: [{ id: 'bell_keeper', weight: 2 }, { id: 'toll_wretch', weight: 3 }], count: [3, 5] },
-      reward: { xp: 850, gems: 5 },
+      reward: { xp: 850, gems: 5, tables: ['iron_bell_hoard'] },
       pitch: 'the steps ARE the battle — no single blow cracks it; rot, burn and bleed do',
     },
     {
@@ -139,7 +140,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       glyph: '👁', color: '#9a6ad2',
       escort: { table: [{ id: 'primeval_spawn', weight: 1 }], count: [2, 3] },
       lair: { structureKind: 'husk_throne', zoneName: 'The Husk Throne', radius: 165 },
-      reward: { xp: 980, gems: 5 },
+      reward: { xp: 980, gems: 5, tables: ['husk_throne_hoard'] },
     },
   ],
 };
@@ -221,6 +222,15 @@ export const WORLDBOSS: ContentPackage = {
       }
       for (const b of d.biomes ?? []) {
         if (!look.biome(b)) out.push(`world boss '${d.id}' biome '${b}' unknown`);
+      }
+      // THE HOARD MUST STAND (the drove-purse net): resolveLootTable warns
+      // ONCE on an unknown id and then drops nothing forever — a silent
+      // sovereign paying an empty table is exactly the failure this catches.
+      // And every sovereign owes a hoard: a named force of nature whose fall
+      // pays only the generic boss faucet is the bug we came here to fix.
+      if (!d.reward.tables?.length) out.push(`world boss '${d.id}' names no loot table`);
+      for (const t of d.reward.tables ?? []) {
+        if (!LOOT_TABLES[t]) out.push(`world boss '${d.id}' loot table '${t}' unknown`);
       }
     }
     return out;
@@ -379,6 +389,11 @@ registerKillHandler({
       if (ctx.credit) {
         ctx.grantXp(def.reward.xp);
         for (let i = 0; i < def.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+        // THE SOVEREIGN'S HOARD: what falls is DATA on the def row — this rule
+        // never names a table, never mints a piece, and never learns a sixth
+        // sovereign's taste. The verb routes through the drop primitives, so
+        // spoils-sealed ground still yields nothing here.
+        for (const t of def.reward.tables ?? []) ctx.dropLootTable(t, ctx.actor.pos);
       }
       ctx.flash(ctx.actor.pos, 220, def.color, 1.0);
       ctx.text({ x: ctx.actor.pos.x, y: ctx.actor.pos.y - 64 }, `${def.name} falls!`, '#ffd700', 20);

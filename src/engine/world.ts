@@ -36109,6 +36109,22 @@ export class World {
       actor, killer, credit, zone: this.zone, sim: this.sim, time: this.time,
       grantXp: n => this.grantXp(n),
       dropGemAt: at => this.dropGemAt(at),
+      // THE SPOILS VERB (see KillCtx.dropLootTable): the kill path's own
+      // three-kind dispatch, reachable by any bounty row. It mints NOTHING
+      // itself — every result goes out through the same primitives rollDrops
+      // uses, so THE SPOILS LAW, the pickup grace and the drop floats all
+      // arrive for free and there is exactly ONE place to get them wrong.
+      // The slain body's MONSTER INFREQUENT theme rides along, exactly as it
+      // does on the ordinary kill path: one kill, one theme.
+      dropLootTable: (tableId, at) => {
+        const kdef = actor.defId ? MONSTERS[actor.defId] : undefined;
+        const miTheme = kdef?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
+        for (const res of resolveLootTable(tableId, { ilvl: this.zone.level, miTheme })) {
+          if (res.kind === 'gem') this.dropGemAt(at);
+          else if (res.kind === 'vestige') this.dropVestigeAt(at, res.id, res.count);
+          else this.dropGearAt(at, res.item);
+        }
+      },
       text: (at, msg, color, size) => this.text(at, msg, color, size),
       bumpLedger: (key, by) => bumpLedger(this.ledger, key, by),
       bumpAccountLedger: (key, by = 1, flush = false) => {

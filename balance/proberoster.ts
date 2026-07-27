@@ -159,6 +159,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_webperf.ts', status: 'green', tier: 'fast', why: 'THE SETTLE SWEEP\'s COST LAWS — the whole-chart settling pass pinned cheap (work counts, never wall clock) after the N² regression' },
   { probe: 'probe_webqa.ts', status: 'green', tier: 'slow', why: 'THE WORLD-WEB LAWS end to end (3 seeds × 11 rounds + quests/settle/halo/horizon) — minutes-long by nature; its old red ("C: 7/8 re-floods agree") healed by THE RAGGED DOORWAY, 8/8 today' },
   { probe: 'probe_wisplight.ts', status: 'excluded', excuse: 'flaky', why: 'FLAKY (5 fails in 10 observed runs — the loudest of the four): G10-G12/G16 cascade off "the light rides the STRONGEST body in reach", which picks the fen_hound over the level-18 weaver about half the time; the seek/ride window is not deterministic' },
+  { probe: 'probe_worldbossloot.ts', status: 'green', tier: 'fast', why: 'THE SOVEREIGN HOARDS — every world boss names its OWN resolvable loot table, the generic KillCtx.dropLootTable verb lays all three result kinds through the drop primitives, and the seal still refuses on spoils-none ground' },
   { probe: 'probe_workshop.ts', status: 'green', tier: 'fast', why: 'THE WORKSHOP (the Entity Forge\'s store) — the NAMESPACE LAW both directions: grafts refuse unprefixed ids, shipped content never squats the prefix' },
 ];
 

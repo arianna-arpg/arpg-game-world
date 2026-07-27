@@ -272,6 +272,139 @@ const TABLE_LIST: LootTableDef[] = [
       },
     ],
   },
+
+  // --- THE SOVEREIGN HOARDS (the Primeval — packages/defs/worldboss.ts) ------
+  //
+  // A world boss is a RARE, NAMED cataclysm: one abroad at a time, minutes of
+  // map warning, a long cooldown after each slaying. So a sovereign pays at
+  // CAPSTONE heat (the regent's band) rather than the repeatable boss faucet —
+  // and it pays it as ITSELF. Every sovereign names its own table, because a
+  // named force of nature whose spoils are indistinguishable from a warlord's
+  // isn't a sovereign, it's a health bar.
+  //
+  // All five drink from ONE spine (primeval_spoil), so the tier retunes in a
+  // single row; each face then carries only the character its body earned —
+  // how MANY pulls it pays, what the land it ate is made of, and which side
+  // currency it spills. (These stack ON TOP of the ordinary boss drop path:
+  // every primeval root wears MonsterDef.boss, so boss_gear already fired.)
+  //
+  // WHERE THE TIER SITS, measured at ilvl 20 (`sim audit drops --table …`):
+  // the spine pays ~1 item at ~15% unique — roughly THREE TIMES a lair
+  // alpha's 4.7% and a boss's 3.0%, and well under HALF the one-shot
+  // regent_hoard's 33.7%. A sovereign is rare but it is still a FAUCET (an
+  // apparition can breach again inside the quarter hour), so it is priced as
+  // the best repeatable kill in the world — never as a dynasty's grave.
+  {
+    id: 'primeval_spoil',
+    rolls: [{
+      count: 1,
+      entries: [
+        {
+          weight: 72, kind: 'item', ilvlBonus: 2,
+          rarityWeights: { common: 0, magic: 34, rare: 58, unique: 8 },
+        },
+        { weight: 8, kind: 'unique', ilvlBonus: 2 },
+        { weight: 20, kind: 'table', table: 'world_gear' },
+      ],
+    }],
+  },
+
+  // VHORUN, THE SUNDER-WYRM — a chain of strangled roads went down its throat.
+  // The WIDEST haul of the five (3.3 pieces — a season of travellers, all at
+  // once), earned by the longest arc in the package: it must wake, slither a
+  // chain of nodes and settle before it can even be fought. The only sovereign
+  // that pays ARMOUR by name — the plates you tore off its length.
+  {
+    id: 'sunderwyrm_hoard',
+    rolls: [
+      { count: [2, 3], entries: [{ weight: 100, kind: 'table', table: 'primeval_spoil' }] },
+      {
+        count: [1, 2],
+        entries: [
+          { weight: 30, kind: 'item', category: 'chest', ilvlBonus: 2, rarityWeights: { common: 0, magic: 32, rare: 58, unique: 10 } },
+          { weight: 24, kind: 'item', category: 'belt', ilvlBonus: 2, rarityWeights: { common: 0, magic: 32, rare: 58, unique: 10 } },
+          { weight: 26, kind: 'gem' },
+          { weight: 20, kind: 'vestige' },
+        ],
+      },
+    ],
+  },
+
+  // CRAGMAW, THE OROGENY — a walking mountain, and mountains are where the
+  // stones come from. The RICHEST GEM pour of the five (0.69/kill): what you
+  // crack out of it is worth more than what it was wearing.
+  {
+    id: 'orogeny_hoard',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'primeval_spoil' }] },
+      {
+        count: [1, 2],
+        entries: [
+          { weight: 46, kind: 'gem' },
+          { weight: 22, kind: 'item', category: 'helmet', ilvlBonus: 1, rarityWeights: { common: 0, magic: 40, rare: 55, unique: 5 } },
+          { weight: 22, kind: 'item', category: 'boots', ilvlBonus: 1, rarityWeights: { common: 0, magic: 40, rare: 55, unique: 5 } },
+          { weight: 10, kind: 'vestige' },
+        ],
+      },
+    ],
+  },
+
+  // ASHVEIN, THE FURNACE BELOW — hell's own sovereign, and the surface never
+  // sees it. The FEWEST pieces of the five and the HOTTEST unique odds among
+  // them (21.6%): what the furnace pours was never mined, it was made — and
+  // it cools into slag worth socketing.
+  {
+    id: 'furnace_hoard',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'primeval_spoil' }] },
+      {
+        count: 1,
+        entries: [
+          { weight: 20, kind: 'unique', ilvlBonus: 3 },
+          { weight: 44, kind: 'vestige', count: [1, 2] },
+          { weight: 36, kind: 'item', category: 'gloves', ilvlBonus: 2, rarityWeights: { common: 0, magic: 30, rare: 58, unique: 12 } },
+        ],
+      },
+    ],
+  },
+
+  // DOLMOURN, THE IRON BELL — a walking mausoleum carrying a cast bell. The
+  // VESTIGE-richest table in the whole economy (0.98/kill, over twice the
+  // tidebound hold's 0.45): it is made of the one thing sockets want, and
+  // every grave it walked over hung something on a chain.
+  {
+    id: 'iron_bell_hoard',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'primeval_spoil' }] },
+      {
+        count: [1, 2],
+        entries: [
+          { weight: 44, kind: 'vestige', count: [1, 2] },
+          { weight: 30, kind: 'item', category: 'amulet', ilvlBonus: 2, rarityWeights: { common: 0, magic: 30, rare: 58, unique: 12 } },
+          { weight: 26, kind: 'table', table: 'jewelry_cache' },
+        ],
+      },
+    ],
+  },
+
+  // VELKETH, THE ENTHRONED HUSK — the throne kept its regalia long after it
+  // stopped keeping its king. Grave goods: jewelled, elevated, and the only
+  // sovereign hoard whose SIDE pour can be a second dynasty's worth of rings.
+  {
+    id: 'husk_throne_hoard',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'primeval_spoil' }] },
+      {
+        count: [1, 2],
+        entries: [
+          { weight: 38, kind: 'table', table: 'jewelry_cache' },
+          { weight: 26, kind: 'item', category: 'ring', ilvlBonus: 3, rarityWeights: { common: 0, magic: 20, rare: 62, unique: 18 } },
+          { weight: 20, kind: 'gem' },
+          { weight: 16, kind: 'vestige' },
+        ],
+      },
+    ],
+  },
 ];
 
 export const LOOT_TABLES: Record<string, LootTableDef> =

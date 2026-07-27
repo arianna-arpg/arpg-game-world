@@ -44,6 +44,15 @@ export interface KillCtx {
   readonly time: number;
   grantXp(amount: number): void;
   dropGemAt(at: Vec2): void;
+  /** Resolve a LOOT TABLE (a data/loottables.ts id) and lay every result on
+   *  the ground at `at` — THE spoils verb. A named payout is a table id on the
+   *  paying def's own row, never a mint spelled out inside a rule: a rule that
+   *  wants themed gear names its table, and the economy stays in one file.
+   *  The results route through the ordinary drop primitives, so THE SPOILS LAW
+   *  (sealed ground mints nothing) and every other drop policy hold for free —
+   *  this verb owns no policy of its own. Unknown ids warn once and drop
+   *  nothing (resolveLootTable's law); packages should validate their ids. */
+  dropLootTable(tableId: string, at: Vec2): void;
   text(at: Vec2, msg: string, color: string, size?: number): void;
   /** Run-ledger bump. KEYS ARE CROSS-FILE CONTRACTS — unlock predicates read
    *  them verbatim (hunt tiers, Warbands' crowned_killed, the Conclave's

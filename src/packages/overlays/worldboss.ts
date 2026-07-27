@@ -108,8 +108,13 @@ export interface WorldBossDef {
    *  exists (validate flags the dead knob), and makes its room by crushing
    *  through what stands there (the rampage fabric). */
   arenaBand?: { w: [number, number]; h: [number, number] };
-  /** Kill spoils paid by the kill rule on top of the ordinary boss drop path. */
-  reward: { xp: number; gems: number };
+  /** Kill spoils paid by the kill rule on top of the ordinary boss drop path:
+   *  the XP purse, a guaranteed gem trickle, and THE SOVEREIGN'S OWN HOARD —
+   *  `tables` names LOOT_TABLES ids (data/loottables.ts) resolved through the
+   *  generic KillCtx.dropLootTable verb. Table ids belong HERE, on the row, so
+   *  a sovereign's spoils read as ITS spoils and the rule stays one line for
+   *  all of them; the package's validate refuses an id that doesn't resolve. */
+  reward: { xp: number; gems: number; tables?: readonly string[] };
 }
 
 /** The whole World Boss mechanic as data — every number a knob. */
