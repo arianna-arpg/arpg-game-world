@@ -128,7 +128,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
       ],
       massifCoverage: [0.12, 0.19],
     },
-    landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 }],
+    landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 },
+      // The lake with something STANDING in it: a wooded holm you wade out to
+      // (a POI — the water is shallow, the walk is the point).
+      { landmark: 'lake_island', chance: 0.12 }],
     // The warband shows NATIVE here: the hovel blueprint re-skinned as a
     // staked warren camp in the deep green (the reskin doctrine's proof).
     compositions: [{ composition: 'goblin_warren_camp', chance: 0.08 }] },
@@ -461,7 +464,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   taiga:    { patronFaction: 'rimebound', mapColor: '#9ec4b4', label: 'Taiga', spacing: 62,
     climate: { temperature: 'cold', moisture: { from: 0.32, fadeIn: 0.18 } },
     meld: 'taiga_meld',
-    allowedLayouts: { plains: 3, riverland: 1 },
+    // …and the LAKELANDS face: great water between the stands, the country
+    // the word is FOR (the recipe is pure composition — lake landmarks plus
+    // the tileset's own scatter, nothing bespoke).
+    allowedLayouts: { plains: 3, riverland: 1, lakelands: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.6 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }] },
   // Highland: the mountain-pass maze, now with a bastion chance — a full castle
@@ -645,7 +651,11 @@ export const BIOMES: Record<string, BiomeInfo> = {
     climate: { temperature: 'scorching', wildness: { from: 0.25, fadeIn: 0.2 } },
     allowedLayouts: { plains: 2, spiral: 1, winding: 1 },
     layoutParams: { negativeLiquid: 'lava', riverLiquid: 'lava' },
-    landmarks: [{ landmark: 'caldera', chance: 0.25 }, { landmark: 'lava_coast', chance: 0.18 }, { landmark: 'crater', chance: 0.2 }] },
+    landmarks: [{ landmark: 'caldera', chance: 0.25 }, { landmark: 'lava_coast', chance: 0.18 }, { landmark: 'crater', chance: 0.2 },
+      // The two rarer faces of the same fire: a neck of land walked BETWEEN
+      // two melts (the isthmus recipe, poured in lava), and the cauldron that
+      // went cold and filled — a spiral ramp down into deep water.
+      { landmark: 'lava_isthmus', chance: 0.14 }, { landmark: 'flooded_caldera', chance: 0.1 }] },
   // MYCELIA — a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
   // layout). The dormant HOME of the Mycelia spore-bloom (its 'fungal' patron springs from
   // the tileset packs). eventDensityMul 0.7 = the quiet home (the bloom suppresses events as

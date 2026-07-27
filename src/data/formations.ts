@@ -774,11 +774,14 @@ registerDoodadRule('shot_stack', {
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
 });
 
-// A POWDER CACHE: someone's munitions dump — kegs racked in a tight ring,
-// shot pyramided beside them, bundled charges still strapped. One stray
-// shot and the whole larder answers.
+// A KEG RING: someone's munitions dump — kegs racked in a tight ring, shot
+// pyramided beside them, bundled charges still strapped. One stray shot and
+// the whole larder answers. (The 'powder_cache' COMPOSITION seats this ring
+// in a scratched-out clearing; the two carry different names on purpose —
+// generation ids are unique ACROSS the registries, so a stamp row's
+// `formation:` and a roll's `composition:` can never read as the same thing.)
 registerFormation({
-  id: 'powder_cache', arrange: 'orbit', span: [70, 105], step: 38,
+  id: 'keg_ring', arrange: 'orbit', span: [70, 105], step: 38,
   params: { rings: [1, 1], innerFrac: 0.9 },
   pieces: [
     { kind: 'powder_keg', radius: [11, 15], jitter: 8, rot: true },
@@ -882,30 +885,15 @@ registerFormation({
   ],
 });
 
-// --- THE RIVER-OF-SOULS GRAMMAR (the underworld's ferry hub — 'river_of_souls') --
-
-// THE DROWNED PROCESSION: cairns pacing a mourners' walk that never reached
-// the pier — bone heaped where the bearers set their burden down. Reads as
-// a funeral the river interrupted; all inert (the formation doctrine).
-registerFormation({
-  id: 'drowned_procession', arrange: 'meander', span: [300, 560], step: 70,
-  params: { wobble: 28 },
-  pieces: [
-    { kind: 'drowned_cairn', radius: [12, 17], jitter: 10, rot: true },
-    { kind: 'bone_pile', radius: [12, 16], every: 3, jitter: 18, rot: true },
-    { kind: 'candle_raft', radius: [8, 11], every: 4, jitter: 24 },
-  ],
-});
-
-// A LANTERN VIGIL: wake-lanterns ringed on the bank where someone still
-// waits for a boat that already passed — pale rushes gathering at the feet.
-registerFormation({
-  id: 'lantern_vigil', arrange: 'ring', span: [140, 220],
-  pieces: [
-    { kind: 'wake_lantern', radius: [9, 11], jitter: 8 },
-    { kind: 'pale_rushes', radius: [14, 20], every: 2, jitter: 16 },
-  ],
-});
+// --- THE RIVER-OF-SOULS GRAMMAR ------------------------------------------------
+// (Retired.) The ferry hub kept two formations here — a drowned procession of
+// cairns and a ring of wake-lanterns — from before the 'soulriver' recipe
+// existed. That recipe now PLANTS the same furniture itself (layoutRecipes:
+// wake-lanterns at every pier post, a cairn or statue on each dock islet, pale
+// rushes at the strand rims), and the megazone's tileset carries `layout: []`
+// on purpose — so no stamp row could ever have reached them. Removed by THE
+// ORPHAN CENSUS rather than left as scenery nothing can place; the name
+// 'drowned_procession' now belongs to the marsh COMPOSITION alone.
 
 // --- THE LEYLINE + ABYSS GRAMMAR (fracture capstone arenas) -------------------
 

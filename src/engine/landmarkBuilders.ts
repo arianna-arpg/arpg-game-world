@@ -27,6 +27,12 @@ import {
 } from './genkit';
 import { ringPath } from './tracks';
 import { LAIR_CFG } from './lairs';
+import { registerGenPin } from './genPins';
+
+/** The glacial heart's moat when no def names its own `deep` — a builder
+ *  DEFAULT is a real reference to a liquid, so it is pinned (engine/genPins.ts)
+ *  for THE ORPHAN CENSUS and read where it is poured. */
+const MOAT_DEEP_LIQUID = registerGenPin('liquid', 'chasm', 'the glacial heart moat default (params.deep)');
 
 /** The def's liquid (params.liquid overrides def.liquid; default water). */
 function liq(b: LandmarkBuildCtx): ReturnType<typeof liquidOf> {
@@ -441,7 +447,7 @@ registerLandmarkBuilder('glacial_heart', (b) => {
   }
   // Deep first, lake second — the disc is always whole ice, the causeway
   // strips keep the zone's own ground.
-  paintLiquid(ctx, b.grid, moat, liquidOf(b.param('deep', 'chasm')));
+  paintLiquid(ctx, b.grid, moat, liquidOf(b.param('deep', MOAT_DEEP_LIQUID)));
   paintLiquid(ctx, b.grid, lake, liq(b));
   // ICE TEETH on the outer shore: the rim-of-the-deep read, parted at each
   // causeway mouth so the crossings stay legible.

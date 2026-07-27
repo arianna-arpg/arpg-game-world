@@ -30,6 +30,7 @@
 // ---------------------------------------------------------------------------
 
 import type { PresenceEntry } from '../engine/presence';
+import { registerGenPin } from '../engine/genPins';
 
 /** THE PERSISTED STATE — rides ZoneDef.harborhold verbatim into the world
  *  save (pure JSON; the zones array is the store). IDENTITY (which class,
@@ -269,6 +270,18 @@ export const HOLD_CLASSES: Record<string, HoldClassDef> = {
     mercOffers: [3, 4],
   },
 };
+
+/** THE HOLD COMPOSITIONS — the bundle each class stamps on its anchor
+ *  (data/compositions.ts registers one `harborhold_<class>` per row here). The
+ *  id is DERIVED from the ladder, so a new hold class carries its own name; the
+ *  mint reads this map instead of rebuilding the string, and each entry is
+ *  pinned (engine/genPins.ts) so THE ORPHAN CENSUS counts a reference the data
+ *  never spells out. */
+export const HOLD_COMPOSITIONS: Record<string, string> = Object.fromEntries(
+  Object.keys(HOLD_CLASSES).map(id => [
+    id, registerGenPin('composition', `harborhold_${id}`, `the '${id}' hold class stamps it on its anchor`),
+  ]),
+);
 
 /** One RUIN/CAMP dress row — pieces rolled around the town by the pure
  *  roller in world/harborholds.ts. `where` anchors the band: 'rect' inside

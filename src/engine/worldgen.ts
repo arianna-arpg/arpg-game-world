@@ -13,6 +13,7 @@ import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type TilesetDef, type TilesetVariant } from '../data/tilesets';
 import { hasLayout } from './levelgen';
+import { registerGenPin } from './genPins';
 import { lairLandmarkRolls } from './lairs';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
@@ -33,6 +34,10 @@ import type { CourseMintHints } from '../world/courses';
 // from worldgen unchanged.
 export { projectCoord };
 export type { Dir, MapCoord };
+
+/** THE PORT'S SHORELINE — the one landmark this file forces by hand, pinned so
+ *  the orphan census sees a reference no data row carries (engine/genPins.ts). */
+const PORT_COAST = registerGenPin('landmark', 'coast', 'every port mint forces its shoreline at chance 1');
 
 /** THE STARTER WEB — the only hand-placed geography left is the town and its
  *  hub, and even their arrangement is rolled per run: the Crossroads lands one
@@ -1327,7 +1332,7 @@ export function placeZoneAt(
     ...(tileset.landmarks ?? []),
     ...(biome ? BIOMES[biome]?.landmarks ?? [] : []),
     // A port ALWAYS gets its shoreline (the harbor's reason to exist).
-    ...(spec.port ? [{ landmark: 'coast', chance: 1 }] : []),
+    ...(spec.port ? [{ landmark: PORT_COAST, chance: 1 }] : []),
     ...(onCourse?.landmarks ?? []),
     // THE LAIR FABRIC (engine/lairs.ts): natives that claim this biome at
     // this level seat their lair rolls beside the authored ones — pure

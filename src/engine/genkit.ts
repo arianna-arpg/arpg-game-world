@@ -434,7 +434,11 @@ registerLiquid('gore', { doodad: 'gore' });                       // viscera poo
 registerLiquid('mud', { doodad: 'mud' });
 registerLiquid('blood', { doodad: 'blood_pool' });                // the flesh country's open rivers (faintness on entry)
 registerLiquid('chyme', { doodad: 'chyme_pool' });                // digesting bile (typed chaos + queasy)
-registerLiquid('soul_water', { doodad: 'soul_water' });           // the River of Souls: wadeable, luminous, never still
+// (No 'soul_water' liquid.) The River of Souls pours its pale water as a
+// REGION — layoutRecipes' soulriver carves the whole expanse with
+// paintRegion(…, 'soul_water') — so nothing ever asked liquidOf for it. The
+// doodad kind and its rules stay (the scatter's forbidOn lists speak doodad
+// grounds); only the unreachable liquid row is retired, by THE ORPHAN CENSUS.
 
 /** Pour a liquid over a mask: region liquids paint the grid; doodad liquids
  *  scatter merged blobs (one disc per Nth cell, radius > spacing so the fill

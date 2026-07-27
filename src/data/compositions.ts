@@ -288,7 +288,7 @@ registerComposition({
   id: 'powder_cache',
   sites: [{ id: 'dump', radius: [90, 130] }],
   pre: [{ kind: 'clearing', at: 'dump', count: [1, 1], radius: [42, 58] }],
-  post: [{ kind: 'formation', formation: 'powder_cache', at: 'dump', count: [1, 1] }],
+  post: [{ kind: 'formation', formation: 'keg_ring', at: 'dump', count: [1, 1] }],
 });
 
 // THE FALLEN COLOSSUS: something vast broke here, long before the map had

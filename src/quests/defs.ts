@@ -6,6 +6,12 @@
 
 import type { QuestDef } from './types';
 import { vocationQuestDefs } from './vocations';
+import { registerGenPin } from '../engine/genPins';
+
+/** The Hollow Vault's arena recipe — a quest zone spec is the ONLY thing that
+ *  ever asks for it, and the census walks tilesets/biomes/zones, not quests.
+ *  Pinned (engine/genPins.ts) and read below, so the reference has a witness. */
+const UNMADE_VAULT_LAYOUT = registerGenPin('layout', 'unmade_vault', 'the Unmade quest arena forces it');
 
 /** The level-5 exemplar: "go slay the rising undead to the south" — a crypt zone
  *  placed south of town, undead horde + gravecaller boss, always a waypoint. */
@@ -97,7 +103,7 @@ export const Q_UNMADE: QuestDef = {
     tileset: 'wasteland', direction: 'n', level: 20,
     bandPlacement: true,    // location dictated by the LEVEL field (the lvl-20 band), not a fixed distance
     special: true,          // a clean arena: ignores biome/doodads/events/faction spawns
-    layoutType: 'unmade_vault',
+    layoutType: UNMADE_VAULT_LAYOUT,
     objective: { kind: 'boss', id: 'unmade_chronophage', levelBonus: 2 },
     forceWaypoint: false,   // no waypoint AT the arena — trek to it each run
     floating: true,         // uncharted: explore toward the "?" until a road forms

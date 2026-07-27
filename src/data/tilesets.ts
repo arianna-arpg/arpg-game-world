@@ -411,6 +411,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'camp', count: [0, 1] },
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
       { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+      // The barrow-folk's ring: stones set round a bare middle worth fighting
+      // over — where the scattered standing_stone singles above are the
+      // country's litter, this is its monument. (Appended: a new row at the
+      // END of the array leaves every existing row's rng draws untouched.)
+      { kind: 'cluster', count: [0, 1], cluster: 'menhir_ring' },
     ],
     // Whatever face rolls, the downs always carry their bones' litter.
     common: [
@@ -1860,6 +1865,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'icicle_cluster', count: [1, 3] },
       // Cold vapor pooling in the hollows (the Weatherworks kit).
       { kind: 'mist_pool', count: [1, 2] },
+      // A packed stand to slip beneath: one canopy mass over brush (where the
+      // windrow above is a LINE of firs, this is the thicket between them).
+      // APPENDED, not filed with the trees, on purpose: rows draw in array
+      // order, so a new row at the END leaves every existing row's rng
+      // sequence — and every drift, cairn and cliff it placed — untouched.
+      { kind: 'cluster', count: [1, 2], cluster: 'stand_of_pines' },
     ],
     packs: {
       count: [6, 9], size: [3, 6],
@@ -3625,6 +3636,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'powder_magazine', count: [0, 1] },
       { kind: 'formation', count: [1, 2], formation: 'trench_line' },
       { kind: 'formation', count: [1, 2], formation: 'standard_row' },
+      // The army's larder behind its gabion arc — kegs and shot heaped where
+      // the line can reach them (terrain-as-wager: cover that shoots back).
+      // (Appended: a new row at the END leaves every existing row's rng
+      // draws — and every placement they made — untouched.)
+      { kind: 'cluster', count: [0, 1], cluster: 'munition_dump' },
     ],
     variants: [
       // THE GUN LINE: batteries wall to wall — the emplacements' face.
@@ -8125,6 +8141,14 @@ export const TILESETS: Record<string, TilesetDef> = {
   flesh: {
     id: 'flesh', biome: 'flesh',
     depthAffinity: { to: 0.55, fadeOut: 0.3 },
+    // THE COUNTRY'S TWO WATERS, found at its rim: what the deeper faces run
+    // ON, standing still in a gorged cavity or a spent gullet. They pour here
+    // rather than in the Sanguine and the Gutworks ON PURPOSE — those faces
+    // already scatter loose pools of the same stuff, and a poured basin
+    // landing beside one leaves the sliver the fuse guard cannot weld shut
+    // through a carved wall (genqa's "guard split" warn). The warrens scatter
+    // neither, so both lakes read whole.
+    landmarks: [{ landmark: 'blood_mere', chance: 0.3 }, { landmark: 'chyme_sump', chance: 0.22 }],
     nameFirst: ['Pulsing', 'Writhing', 'Fleshborn', 'Gorged', 'Throbbing', 'Visceral', 'Sinewed', 'Bilegorged', 'Tumorous', 'Marrow-Deep', 'Quivering', 'Membranous', 'Engorged', 'Pus-Slick', 'Heartbound', 'Glistening', 'Distended', 'Wet-Walled'],
     nameSecond: ['Hollow', 'Womb', 'Maw', 'Warren', 'Gullet', 'Cavity', 'Innards', 'Chamber', 'Sac', 'Viscera', 'Atrium', 'Sinew', 'Antrum'],
     theme: {
@@ -8208,6 +8232,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { from: 0.25, fadeIn: 0.3 },
     // The Sanguine's lost place: the heart the whole country beats for.
     compositions: [{ composition: 'heart_chamber', chance: 0.24 }],
+    // The country is NAMED for its lakes — one gets to be a real basin.
     nameFirst: ['Bleeding', 'Sanguine', 'Arterial', 'Haemal', 'Weeping', 'Splattered', 'Openveined', 'Clotted', 'Exsanguine', 'Red-Running', 'Spilt', 'Wound-Deep', 'Pooling', 'Gushing', 'Crimson-Slick', 'Salt-Sweet'],
     nameSecond: ['Fields', 'Shallows', 'Lakes', 'Banks', 'Basin', 'Fountains', 'Tide', 'Reservoir', 'Spill', 'Font', 'Flow', 'Gallery', 'Wading', 'Redness'],
     layoutParams: {
@@ -8329,6 +8354,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { from: 0.4, fadeIn: 0.3 },
     // The Gutworks' lost place: the weir where the flow banks up.
     compositions: [{ composition: 'chyme_weir', chance: 0.22 }],
+    // …and where it banks up long enough, it SITS: a sump of the stuff.
+    // …and where it banks up long enough, it SITS: a sump of the stuff.
     nameFirst: ['Churning', 'Peristaltic', 'Bile-Wet', 'Swallowing', 'Puckered', 'Knotted', 'Coiled', 'Digesting', 'Gurgling', 'Half-Digested', 'Airless', 'Sour', 'Rumbling', 'Clenched', 'Acid-Bright', 'Colicky'],
     nameSecond: ['Tract', 'Coil', 'Passage', 'Winding', 'Churn', 'Gorge', 'Bowels', 'Loop', 'Descent', 'Throat', 'Swallow', 'Gutworks', 'Strait', 'Gullet'],
     layoutParams: {

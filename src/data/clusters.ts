@@ -13,17 +13,13 @@
 
 import { registerCluster } from '../engine/levelgen';
 
-// A boulder field: a big anchor stone ringed by smaller shards — spread, never
-// intersecting (the "rocks should not generate within one another" contract).
-registerCluster({
-  id: 'boulder_field',
-  anchor: { radius: 30, kind: 'rock' },
-  pieces: [
-    { kind: 'rock', radius: [16, 34], count: [4, 7], ring: [40, 130], rot: true },
-    { kind: 'rock', radius: [8, 14], count: [2, 5], ring: [60, 160], rot: true },
-  ],
-  poi: false,
-});
+// (No 'boulder_field' cluster.) The boulder field is a BESPOKE stamp kind
+// (engine/levelgen registerStamp('boulder_field') — an anchor stone with
+// shoulders and spills, drawn before its own filters), and every tileset row
+// in the game asks for it that way: `{ kind: 'boulder_field' }`. A cluster of
+// the same name shadowed it here for nothing — no `{ kind: 'cluster',
+// cluster: 'boulder_field' }` row has ever existed. Retired by THE ORPHAN
+// CENSUS; the stamp keeps the name.
 
 // A pine stand: trees packed into one canopy mass over a brush understory.
 registerCluster({

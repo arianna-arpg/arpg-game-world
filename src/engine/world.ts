@@ -215,8 +215,8 @@ import { PORT_CFG } from '../data/ports';
 import { SEA_CFG } from '../data/seas';
 import { seaAt, seaById, seaSpotsNear, type Sea, type SeaPortSpot } from '../world/seas';
 import {
-  HARBORHOLD_CFG, holdActiveServices, holdClassFor, holdClassOf, holdRestoreCost,
-  mintHoldState, sanitizeHoldState, type HarborholdState, type HoldClassDef,
+  HARBORHOLD_CFG, HOLD_COMPOSITIONS, holdActiveServices, holdClassFor, holdClassOf,
+  holdRestoreCost, mintHoldState, sanitizeHoldState, type HarborholdState, type HoldClassDef,
 } from '../data/harborholds';
 import { holdGateApron, holdGateDoor, holdSeatPos, holdStructureIn, rollHoldDressPieces } from '../world/harborholds';
 import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dimensionsEnteredBy, isRoadlessGateHub, GATE_FANOUT } from '../world/dimensions';
@@ -224,6 +224,17 @@ import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radian
 import { delverMulAt } from '../world/strata';
 import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
+import { registerGenPin } from './genPins';
+
+/** THE GENERATION PINS this file forces by hand (engine/genPins.ts): ground
+ *  the engine mints or grafts directly, named nowhere in the data. Declared
+ *  here so THE ORPHAN CENSUS (data/validate.ts) counts them as the live
+ *  references they are — and READ at the sites below, so a pin can never
+ *  outlive its use. */
+const HARBORCOVE_LAYOUT = registerGenPin('layout', 'harborcove', 'every sea PORT zone is carved by it');
+const OPEN_SEA_LAYOUT = registerGenPin('layout', 'open_sea', 'the sailing zone the voyage mints');
+const GLACIAL_HEART_LM = registerGenPin('landmark', 'glacial_heart', 'deepwinter grafts it onto the crystallized heart zone');
+const FROZEN_LAKE_LM = registerGenPin('landmark', 'frozen_lake', 'the pre-graft heart scar old saves already wear');
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
  *  override confinement) + an opt-in COLLISION RESULT (what stopped the move — the
@@ -8738,7 +8749,7 @@ export class World {
           const holdCls = holdClassFor(sea.cls.id, spot.tier);
           if (holdCls) {
             anchor.harborhold = mintHoldState(holdCls);
-            (anchor.compositions ??= []).push({ composition: `harborhold_${holdCls.id}`, chance: 1 });
+            (anchor.compositions ??= []).push({ composition: HOLD_COMPOSITIONS[holdCls.id], chance: 1 });
           }
           this.zoneMap[anchor.id] = anchor;
           this.sim.onNodeCharted(anchor, this.simView());
@@ -8751,7 +8762,7 @@ export class World {
           biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
           fieldBiome: true, port: true,
           kind: 'port',                 // sealed shores bind INSIDE the mint (the weave already honors it)
-          layoutType: 'harborcove',
+          layoutType: HARBORCOVE_LAYOUT,
           layoutParams: { quayFacing: Math.atan2(ly, lx) },
           sizeBand: { w: P.sizeW, h: P.sizeH },
           // NEAR-SANCTUARY: the quay asks nothing (no objective to clear,
@@ -16477,8 +16488,8 @@ export class World {
       // the plain lake. Old saves whose heart already wears a chance-1
       // frozen_lake keep it (the scar stands; no double lake).
       if (def && !def.landmarks?.some(l =>
-        (l.landmark === 'glacial_heart' || l.landmark === 'frozen_lake') && l.chance >= 1)) {
-        (def.landmarks ??= []).push({ landmark: 'glacial_heart', chance: 1 });
+        (l.landmark === GLACIAL_HEART_LM || l.landmark === FROZEN_LAKE_LM) && l.chance >= 1)) {
+        (def.landmarks ??= []).push({ landmark: GLACIAL_HEART_LM, chance: 1 });
       }
     }
   }
@@ -20958,7 +20969,7 @@ export class World {
           bias: 0.55, alpha: 0.6, stretchX: 2.6, scale: 1.5, speckles: 0,
         },
       },
-      layout: [], layoutType: 'open_sea',
+      layout: [], layoutType: OPEN_SEA_LAYOUT,
       objective: { kind: 'clear' },              // nothing gates the water
       packs: { count: [0, 0], size: [0, 0], table: [] },
       exits: [],                                 // you LAND, you don't walk out

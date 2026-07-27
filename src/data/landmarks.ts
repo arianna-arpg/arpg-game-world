@@ -151,6 +151,22 @@ registerLandmark({
 registerLandmark({
   id: 'tar_pool', builder: 'lake', size: [420, 680], liquid: 'bog', clearSite: true,
 });
+// THE FLESH COUNTRY'S OWN WATERS — the two liquids the body runs on, poured by
+// the same lake recipe that fills every other basin (the composability proof:
+// a liquid id is all it takes). A BLOOD MERE stands where the Sanguine's
+// chambers drain — the country is named for its lakes and finally has one;
+// a CHYME SUMP is where the Gutworks' flow banks up and sits, digesting.
+// clearSite on both: the flesh scatter runs dense (pods, clots, villi) and a
+// poured pool would otherwise drown earlier solids on their own ground — the
+// oasis lesson, in meat.
+registerLandmark({
+  id: 'blood_mere', builder: 'lake', size: [460, 780], liquid: 'blood', clearSite: true,
+  params: { rim: { kind: 'clot_mound', count: [4, 7], radius: [14, 26] } }, poi: true,
+});
+registerLandmark({
+  id: 'chyme_sump', builder: 'lake', size: [420, 700], liquid: 'chyme', clearSite: true,
+  params: { rim: { kind: 'villus_bed', count: [4, 8], radius: [16, 28] } }, poi: true,
+});
 
 // --- POCKETS & PITS --------------------------------------------------------------
 // Pillars of Arun: island pockets across a void gulf — jump/blink-only ground

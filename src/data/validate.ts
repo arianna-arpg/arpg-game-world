@@ -48,9 +48,11 @@ import { MONSTER_NAME_CFG, MONSTER_NAMES } from './monsterNames';
 import { RARITY_DEFS } from '../engine/rarity';
 import {
   validateStamps, validateCompositions, compositionDefs, hasComposition,
-  doodadRuleOf, doodadRuleKinds, hasDoodadRule,
-  hasLandmark, hasLandmarkBuilder, landmarkDefs, hasLayout,
+  doodadRuleOf, doodadRuleKinds, hasDoodadRule, clusterDefs, formationDefs,
+  hasLandmark, hasLandmarkBuilder, landmarkDefs, hasLayout, layoutIds,
 } from '../engine/levelgen';
+import { genPins, type GenRegistry } from '../engine/genPins';
+import { lairRows } from '../engine/lairs';
 import { interiorRoleDefs } from '../engine/interiorGen';
 import { hasCommandKind } from '../engine/ai';
 import { hasConvertRule } from '../engine/skills';
@@ -707,6 +709,126 @@ export function validateContent(): void {
     }
   }
 
+  // THE ORPHAN CENSUS — every check above runs FORWARD (a reference must name
+  // a registered thing); this one runs BACKWARD (a registered thing must be
+  // named by something). Without it a formation, cluster, landmark,
+  // composition, layout or liquid can be authored, registered, and reachable
+  // by nothing at all, forever, with no witness anywhere — landmarks resolve
+  // by explicit id ONLY, so an unrolled landmark is not merely rare, it is
+  // unreachable. Every reference site is walked from the DATA (stamp rows,
+  // roll rows, weight records, liquid params) plus the engine's own declared
+  // pins (engine/genPins.ts) — there is no id list here, on purpose: a waiver
+  // list would silence exactly the drift this exists to catch.
+  //
+  // One summary line per registry (the skill/support pool-orphan shape): the
+  // COUNT moving is the tripwire. Pay an orphan down by wiring ONE reference
+  // row where the thing belongs, or by deleting it — a deleted def is an
+  // honest close, a def nothing can reach is a lie.
+  //
+  // Boot order: pins register when their owning module evaluates, and every
+  // validateContent() caller loads the engine first (main.ts, sim/arena.ts,
+  // dev/entityForge.ts) — the same standing dependency hasLandmarkBuilder's
+  // check already rides.
+  const LANDMARK_LIQUID_KEYS = ['liquid', 'fill', 'skirt', 'floorKind', 'gulf', 'deep'] as const;
+  {
+    const refs: Record<GenRegistry, Set<string>> = {
+      formation: new Set(), cluster: new Set(), landmark: new Set(),
+      composition: new Set(), layout: new Set(), liquid: new Set(),
+    };
+    const ref = (registry: GenRegistry, id: string | undefined): void => {
+      if (typeof id === 'string' && id) refs[registry].add(id);
+    };
+    // 1) STAMP ROWS — the same sources validateStamps walked above (zone and
+    //    tileset layouts, per-variant layouts, tileset `common`, composition
+    //    pre/post, interior role furnishings, meld edge rows).
+    for (const { specs } of layoutSources) {
+      for (const s of specs) { ref('formation', s.formation); ref('cluster', s.cluster); ref('landmark', s.landmark); }
+    }
+    // 2) ROLL ROWS — landmarks and compositions are chances, not stamps.
+    const landmarkRollSources: { landmark: string }[][] = [
+      ...Object.values(TILESETS).map(t => t.landmarks ?? []),
+      ...Object.values(ZONES).map(z => z.landmarks ?? []),
+      ...Object.values(BIOMES).map(b => b.landmarks ?? []),
+      ...Object.values(VOYAGE_ISLANDS).map(i => i.landmarks ?? []),
+      // THE LAIR FABRIC seats its natives' ground as ordinary landmark rolls
+      // at the mint chokepoints — the seat row IS the reference.
+      lairRows().map(r => ({ landmark: r.landmark })),
+    ];
+    for (const rows of landmarkRollSources) for (const r of rows) ref('landmark', r.landmark);
+    for (const { rolls } of compRollSources) for (const r of rolls ?? []) ref('composition', r.composition);
+    // 3) LAYOUT PINS — biome weight records, tileset force/cave tables, the
+    //    authored zones' own recipe pins.
+    for (const b of Object.values(BIOMES)) for (const id of Object.keys(b.allowedLayouts ?? {})) ref('layout', id);
+    for (const t of Object.values(TILESETS)) {
+      ref('layout', t.forceLayout);
+      for (const id of Object.keys(t.caveLayouts ?? {})) ref('layout', id);
+    }
+    for (const z of Object.values(ZONES)) ref('layout', z.layoutType);
+    // 4) COURSES (world/courses.ts) carry their own recipe pin, terminus rolls
+    //    and layout knobs — every dimension's, the surface's rivers included.
+    for (const dimId of dimensionIds()) {
+      for (const c of dimensionDef(dimId).courses ?? []) {
+        ref('layout', c.forceLayout);
+        for (const r of c.terminus?.landmarks ?? []) ref('landmark', r.landmark);
+        for (const r of c.terminus?.compositions ?? []) ref('composition', r.composition);
+        for (const [key, v] of Object.entries(c.layoutParams ?? {})) {
+          if ((/liquid/i.test(key) || key === 'gulf') && typeof v === 'string') ref('liquid', v);
+        }
+      }
+    }
+    // 5) LIQUIDS — a landmark's own pour plus every builder param that
+    //    reaches liquidOf, and the layoutParams half already gathered above.
+    for (const lm of landmarkDefs()) {
+      ref('liquid', lm.liquid);
+      for (const key of LANDMARK_LIQUID_KEYS) {
+        const v = lm.params?.[key];
+        if (typeof v === 'string' && v !== 'ground') ref('liquid', v);
+      }
+    }
+    for (const { params } of paramSources) {
+      for (const [key, v] of Object.entries(params ?? {})) {
+        if ((/liquid/i.test(key) || key === 'gulf') && typeof v === 'string') ref('liquid', v);
+      }
+    }
+    // 6) ENGINE PINS — the references no data row carries (a port's forced
+    //    coast, a recipe's fallback liquid, a quest's arena recipe).
+    for (const p of genPins()) ref(p.registry, p.id);
+
+    const registries: { registry: GenRegistry; label: string; ids: string[] }[] = [
+      { registry: 'formation', label: 'formation', ids: formationDefs().map(d => d.id) },
+      { registry: 'cluster', label: 'cluster', ids: clusterDefs().map(d => d.id) },
+      { registry: 'landmark', label: 'landmark', ids: landmarkDefs().map(d => d.id) },
+      { registry: 'composition', label: 'composition', ids: compositionDefs().map(d => d.id) },
+      { registry: 'layout', label: 'layout', ids: layoutIds() },
+      { registry: 'liquid', label: 'liquid', ids: liquidIds() },
+    ];
+    for (const { registry, label, ids } of registries) {
+      const dead = ids.filter(id => !refs[registry].has(id));
+      if (dead.length) {
+        warn(`${label} orphans (registered but named by no stamp row, roll, weight, param or engine pin — unreachable): `
+          + `${dead.length} — ${dead.slice(0, 10).join(', ')}${dead.length > 10 ? ', …' : ''}`);
+      }
+    }
+    // THE UNIQUE-ID LAW: these are SEPARATE registries, and every reference
+    // resolves inside exactly one of them — `formation: 'x'` can never reach a
+    // composition named 'x'. So a shared id is a trap: the twin nobody names
+    // is dead, and its orphan line above reads like a wiring bug instead of
+    // the name clash it is (the marsh 'drowned_procession' composition placed
+    // for two days while a formation of the same name could never fire).
+    // Generation ids are therefore unique ACROSS the six registries; when a
+    // bundle wants to seat its own centerpiece, the two carry different names
+    // ('powder_cache' the composition seats 'keg_ring' the formation).
+    const owners = new Map<string, GenRegistry[]>();
+    for (const { registry, ids } of registries) {
+      for (const id of ids) owners.set(id, [...(owners.get(id) ?? []), registry]);
+    }
+    const clashes = [...owners].filter(([, rs]) => rs.length > 1);
+    if (clashes.length) {
+      warn(`generation id COLLISIONS (one id in several registries — refs resolve per registry, so a twin can be silently unreachable): `
+        + `${clashes.length} — ${clashes.slice(0, 10).map(([id, rs]) => `${id} (${rs.join('+')})`).join(', ')}${clashes.length > 10 ? ', …' : ''}`);
+    }
+  }
+
   // VISUAL COVERAGE SWEEP — the "don't miss things in multiple passes" net.
   // Every kind the rules registry knows should own a DOODAD_VISUALS entry
   // (else it ships as the warned generic disc), and no kind should regress to
@@ -1025,8 +1147,10 @@ export function validateContent(): void {
   for (const lm of landmarkDefs()) {
     if (!hasLandmarkBuilder(lm.builder)) warn(`landmark ${lm.id}: unknown builder '${lm.builder}'`);
     // Every param a builder feeds to liquidOf/paintLiquid: the base liquid,
-    // fills, skirts, pit/pool floors (demon_pit's 'cinder'), and coast gulfs.
-    const liquids = [lm.liquid, lm.params?.liquid, lm.params?.fill, lm.params?.skirt, lm.params?.floorKind, lm.params?.gulf]
+    // fills, skirts, pit/pool floors (demon_pit's 'cinder'), coast gulfs and
+    // moat deeps — ONE key list, shared with the orphan census above so the
+    // forward check and the reverse one can never disagree about what counts.
+    const liquids = [lm.liquid, ...LANDMARK_LIQUID_KEYS.map(k => lm.params?.[k])]
       .filter((x): x is string => typeof x === 'string');
     for (const lq of liquids) {
       if (!knownLiquids.has(lq) && lq !== 'ground') warn(`landmark ${lm.id}: unknown liquid '${lq}'`);

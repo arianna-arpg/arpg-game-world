@@ -36,9 +36,15 @@ import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
 } from './genkit';
 import { carveMassifs } from './massif';
+import { registerGenPin } from './genPins';
 import { ferryLaneFor, soulriverPlan, SOULRIVER_CFG } from '../world/soulriver';
 import { HARBORHOLD_CFG } from '../data/harborholds';
 import { STRUCTURES } from '../data/structures';
+
+/** The wadeable shoreline the harborcove pours when no zone names its own
+ *  skirt — a recipe DEFAULT is a real reference to a liquid, so it is pinned
+ *  (engine/genPins.ts) for THE ORPHAN CENSUS and read where it is poured. */
+const SHALLOWS_LIQUID = registerGenPin('liquid', 'shallows', 'the harborcove skirt default (layoutParams.skirtLiquid)');
 
 /** The negative-space region a carved recipe leaves between its passages —
  *  'wall' reads as rock (true wall: blocks shots + sight); a biome may swap
@@ -773,7 +779,7 @@ function harborcoveLayout(ctx: GenCtx, def: ZoneDef): void {
   // The skirt is SHALLOWS (wadeable doodad water — scatter's forbidOn sees
   // doodad grounds, so the shoreline reads to every placement law), the land
   // plain ground over the deep pour.
-  paintLiquid(ctx, grid, skirt, liquidOf(layoutParam(def, 'skirtLiquid', 'shallows')));
+  paintLiquid(ctx, grid, skirt, liquidOf(layoutParam(def, 'skirtLiquid', SHALLOWS_LIQUID)));
   paintRegion(grid, skirt, 'water');
   paintRegion(grid, land, 'ground');
 
