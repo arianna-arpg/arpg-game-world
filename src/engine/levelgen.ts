@@ -6205,7 +6205,13 @@ export interface LandmarkSpawns {
   /** Rows may carry PRESENCE envelopes — shaped by the zone's level at gen. */
   table: PackTableEntry[];
   count: [number, number];
-  where: 'interior' | 'rim';
+  /** Where the bodies seat. 'interior' is the builder's USABLE-GROUND mask (a
+   *  lake's interior is its SHORE — see placeLandmark's anchor note), 'rim' its
+   *  edge, and 'liquid' THE LIQUID SEAT: inside the body of liquid the builder
+   *  poured, for a dweller whose whole identity is being IN it (the wellspring
+   *  naiad, rooted on water). A builder that pours nothing exposes no liquid
+   *  mask, and the seat degrades to the shore with a warning. */
+  where: 'interior' | 'rim' | 'liquid';
   /** ARM the spawned INSTANCES as waiting ambushers (the ambush fabric,
    *  engine/actor.ts AmbushSpec) — the penned herd: visible, sprung as one
    *  pack when approached or wounded, while the same kinds roam free
@@ -6250,6 +6256,11 @@ export interface LandmarkBuildCtx {
   def: LandmarkDef;
   param<T>(key: string, dflt: T): T;
   interior: Mask;
+  /** THE LIQUID SEAT's source: the body of liquid this builder poured, when it
+   *  poured one. `interior` is deliberately the DRY complement for water
+   *  builders ("spawns/POIs live on the shore"), so a body that belongs IN the
+   *  water has no other way to ask for it. Set it beside paintLiquid. */
+  liquid?: Mask;
   /** A builder whose jump-only geometry stops short of the footprint sets the
    *  TRUE pocket radius here (the pillars' gulf ends at 0.9r); placeLandmark
    *  registers the pocket at this instead of the whole footprint, so ordinary
@@ -6419,7 +6430,20 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   // Entity SPAWNS over the landmark: weighted picks over interior/rim cells,
   // resolved AT GEN (deterministic per seed) — loadZone materializes them.
   if (def.spawns) {
-    const src = def.spawns.where === 'rim' ? b.interior.edge() : b.interior;
+    // THE LIQUID SEAT: 'liquid' seats the body IN the poured liquid rather than
+    // on the shore `interior` means. paintLiquid lays its doodads from this very
+    // mask at radius 1.05× the cell, so a cell centre here is always inside one
+    // — the drawn water and the tested groundKind cannot disagree.
+    let src: Mask;
+    if (def.spawns.where === 'rim') src = b.interior.edge();
+    else if (def.spawns.where === 'liquid') {
+      if (b.liquid) src = b.liquid;
+      else {
+        console.warn(`[landmarks] '${def.id}': spawns.where 'liquid' but builder `
+          + `'${def.builder}' pours none — seating on the shore instead`);
+        src = b.interior;
+      }
+    } else src = b.interior;
     const cells: Vec2[] = [];
     src.forEach((cx, cy) => {
       const c = src.center(cx, cy);

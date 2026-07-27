@@ -80,8 +80,10 @@ registerLandmarkBuilder('coast', (b) => {
     water.subtract(island);
   }
   paintLiquid(b.ctx, b.grid, water, liq(b));
-  // The land side is the interior (spawns/POIs live on the shore).
+  // The land side is the interior (spawns/POIs live on the shore); the water
+  // itself is THE LIQUID SEAT, for a dweller that belongs in it.
   b.interior = water.clone().invert();
+  b.liquid = water;
 
   // Cliff coast: a wall band hugging the landward rim, gapped so the shore
   // stays walkable through it (the invariant would catch a sealed shore).
@@ -517,6 +519,9 @@ registerLandmarkBuilder('lake', (b) => {
     body.subtract(isle);
   }
   paintLiquid(b.ctx, b.grid, body, liq(b));
+  // THE LIQUID SEAT: the pool itself, for a dweller that belongs IN it. The
+  // island (subtracted above) is correctly excluded — it is not water.
+  b.liquid = body;
   // Rim clutter: doodads scattered just OUTSIDE the shore.
   const rim = b.param<{ kind: string; count: [number, number]; radius: [number, number] } | undefined>('rim', undefined);
   if (rim) {

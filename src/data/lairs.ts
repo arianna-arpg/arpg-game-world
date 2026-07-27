@@ -513,7 +513,12 @@ registerLandmark({
   },
   spawns: {
     table: [{ id: 'river_naiad', weight: 1 }],
-    count: [1, 1], where: 'interior',
+    // THE LIQUID SEAT, not 'interior': a lake builder's interior is its SHORE
+    // (the dry complement — POIs and mustReach anchors need standable ground),
+    // and seated there she boots WILTED with her off-water sheet, which is the
+    // exact opposite of this lair's thesis. Measured 30-in/30-out of 60 layouts
+    // before this word existed.
+    count: [1, 1], where: 'liquid',
   },
 });
 

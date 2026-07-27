@@ -493,7 +493,17 @@ const step = (secs: number): void => {
   w.loadZone(springDef.id);
   step(0.5);
   const naiad = (w.actors as Actor[]).find(a => a.defId === 'river_naiad');
-  check('G10 the spring spawns its naiad IN the pool', !!naiad);
+  // THE LIQUID SEAT asserted, not just assumed: this check's LABEL always said
+  // "IN the pool" while the assertion only demanded she EXIST, so a seat on the
+  // dry shore read green here and G11 below carried the whole claim — passing on
+  // whichever half of a 30-in/30-out coin flip the layout landed on. Her stand
+  // is the precondition; test it where it is named.
+  const inPool = (a: Actor): boolean =>
+    (w.doodads as { kind: string; pos: Vec2; radius: number }[]).some(d =>
+      d.kind === 'water' && Math.hypot(d.pos.x - a.pos.x, d.pos.y - a.pos.y) <= d.radius);
+  check('G10 the spring spawns its naiad IN the pool (the liquid seat, not the shore)',
+    !!naiad && inPool(naiad),
+    naiad ? `ground=${naiad.groundKind ?? 'dry stone'}` : 'no naiad');
   if (naiad) {
     step(0.8);
     check('G11 in her water she is ROOTED (the claim held from frame one)',
