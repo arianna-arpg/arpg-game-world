@@ -600,7 +600,7 @@ export class UI {
     const couchOwnerOf = (t: EventTarget | null): string | null => {
       if (!(t instanceof Node)) return null;
       for (const el of [this.charSheet, this.inventory, this.passiveTree, this.vendorMenu,
-        this.salvageMenu, this.oracleMenu, this.bestiaryMenu]) {
+        this.salvageMenu, this.oracleMenu, this.bestiaryMenu, this.caravanMenu]) {
         if (el.contains(t)) {
           const id = this.panelSeatIds.get(el);
           return id && id !== this.getWorld().localSeat.id ? id : null;
@@ -719,7 +719,10 @@ export class UI {
     const mine = (el: HTMLElement): boolean =>
       (this.panelSeatIds.get(el) ?? w.localSeat.id) === seatId;
     const hostOwned = seatId === w.localSeat.id;
-    if (hostOwned && this.caravanOpen) { this.closeCaravan(); return true; }
+    // The Caravan dialog is OWNED (showCaravan stamps the seat that lingered):
+    // the guest who called the escort dismisses it with their own Ⓑ. Unowned
+    // (solo, every hero-opened dialog) `mine` is the hero's — as it always was.
+    if (this.caravanOpen && mine(this.caravanMenu)) { this.closeCaravan(); return true; }
     if (this.vendorOpen && mine(this.vendorMenu)) { this.closeVendor(); return true; }
     if (this.salvageOpen && mine(this.salvageMenu)) { this.closeSalvage(); return true; }
     if (this.oracleOpen && mine(this.oracleMenu)) { this.closeOracle(); return true; }
@@ -4273,9 +4276,13 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
 
   // ------------------------------------------------------------- caravan menu
 
-  /** Open the Caravan band-travel menu (called from main.ts on the dwell callback). */
-  showCaravan(): void {
+  /** Open the Caravan band-travel menu (called from main.ts on the dwell callback).
+   *  Seat-owned like the station panels: the seat that lingered owns the dialog, so
+   *  it docks to that seat's flank and THE ACTION LATCH routes its band pick to that
+   *  seat's `caravanTo`. No id (solo, and every pre-couch call site) = the hero's. */
+  showCaravan(seatId?: string): void {
     this.hideAll();
+    this.ownPanel(this.caravanMenu, this.couchSeatFor(seatId));
     this.caravanOpen = true;
     this.caravanMenu.classList.remove('hidden');
     this.refreshCaravan();

@@ -1133,6 +1133,41 @@ function handleCouchPanels(): void {
   }
 }
 
+// --- THE CARAVAN's three seams (engine/world.ts updateCaravan) ---------------
+// The dwell is seat-scoped and the travel is host-authoritative, so every road
+// out of the Caravanner ends in the SAME caravanTo intent — the host mints the
+// route and loads the party, whoever asked.
+
+/** Ask the escort for band N (0 = home) for whichever LOCAL seat lingered.
+ *  ALWAYS the intent lane, never startCaravan directly: on a co-op CLIENT
+ *  requestMeta forwards caravanTo and applies nothing locally (a render shell
+ *  never mints or loads a zone), and host-side a couch guest's ask must land on
+ *  the GUEST's seat — startCaravan re-checks proximity per seat, so routing a
+ *  guest's dwell through the distant hero would simply refuse. Solo the dwell
+ *  seat IS the local seat: one requestMeta, exactly as before. */
+function caravanTo(band: number): void {
+  const seat = world.seats.find(s => s.id === world.caravanDwellSeatId);
+  if (seat?.couch) world.applyAction(seat, { t: 'caravanTo', band });
+  else world.requestMeta({ t: 'caravanTo', band });
+}
+
+/** The Caravanner's TOWN answer: open the band menu on the seat that lingered. */
+function pollCaravanMenu(): void {
+  if (world.caravanDwellRequested && !ui.escapeMenuOpen) {
+    world.caravanDwellRequested = false;
+    if (!ui.caravanOpen) ui.showCaravan(world.caravanDwellSeatId);
+  }
+}
+
+/** The Caravanner's WILDS answer: port straight home, no menu (so nothing pops
+ *  up mid-combat) — through the intent, so a client's return works too. */
+function pollCaravanReturn(): void {
+  if (world.caravanReturnRequested) {
+    world.caravanReturnRequested = false;
+    caravanTo(0);
+  }
+}
+
 // The pause-menu row (panels.ts gates it on pads + a free guest seat).
 ui.onCouchJoin = openCouchJoin;
 ui.onCouchLeave = () => {
@@ -1290,10 +1325,7 @@ function tick(now: number): void {
       // until the pause menu closes, else a station menu pops OVER the pause
       // screen and Escape starts fighting through stacked surprises.
       // The Caravanner dwell (in TOWN) asks to open the band-travel menu.
-      if (world.caravanDwellRequested && !ui.escapeMenuOpen) {
-        world.caravanDwellRequested = false;
-        if (!ui.caravanOpen) ui.showCaravan();
-      }
+      pollCaravanMenu();
       // The salvage-bench dwell asks to open the break/craft menu.
       if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
         world.salvageDwellRequested = false;
@@ -1358,10 +1390,7 @@ function tick(now: number): void {
         ui.hideStoryCard();
       }
       // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
-      if (world.caravanReturnRequested) {
-        world.caravanReturnRequested = false;
-        world.startCaravan(0);
-      }
+      pollCaravanReturn();
       // (The dock dwell now CASTS OFF into the sailing mode directly — handled
       // inside world.updateSail; the Sail menu panel stays dormant.)
       // (The Holdfast toll pays directly on the keeper dwell — an essence price
@@ -1549,6 +1578,16 @@ function clientApplyAndRender(dt: number): void {
   // meta change — keep them live on the same 0.5s throttle the host uses.
   uiRefreshTimer -= dt;
   if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshMap(); }
+  // THE CLIENT'S CARAVANNER: a render shell runs no sim, so the engine's dwell
+  // gates never tick here — drive the ONE whose answer is a pure INTENT the host
+  // performs (the escort is a client's only road between level bands, and the
+  // return-Caravanner its only way home). Positions are this frame's, applied
+  // just above, and the dwell clock is honest by construction: prediction
+  // replays our own moves through moveActor, which stamps the seat exactly as
+  // the host's own hands do — walking past still never pops the menu.
+  world.updateCaravan(dt);
+  pollCaravanMenu();
+  pollCaravanReturn();
   feedRendererAim();
   renderer.render(world);
 }

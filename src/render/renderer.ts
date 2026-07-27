@@ -4753,8 +4753,13 @@ export class Renderer {
     }
 
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'caravanner') {
-      const msg = world.caravanPrompt();
-      if (msg) this.queueSpeech(a, msg, '#d8b87a');
+      // COUCH: the bubble answers whichever LOCAL hand is standing at the
+      // escort — the Caravanner speaks to the guest who walked up, not only to
+      // P1. Solo (and on a client) that list is the one seat: one call, as before.
+      for (const s of world.localHumanSeats()) {
+        const msg = world.caravanPrompt(s);
+        if (msg) { this.queueSpeech(a, msg, '#d8b87a'); break; }
+      }
     }
 
     // The Bonewright posts its current demand above its head — bound to the

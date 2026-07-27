@@ -27,15 +27,22 @@
 //     own ring, NO world half, the dormant menagerie passed through
 //     verbatim; rebuildSavedMeta round-trips it,
 //   - the account-seat XP law: a couch guest's level milestones feed THIS
-//     machine's run ledger (one account on the couch).
+//     machine's run ledger (one account on the couch),
+//   - THE CARAVANNER seat-scoped: its prompt answers per SEAT (a guest at the
+//     escort is spoken to, the hero a zone away is not), its dwell is the
+//     local-hands scan that stamps WHO asked (one ask per approach, re-armed
+//     by stepping away), and its travel stays host-authoritative — a client
+//     shell refuses to mint/load and ships the caravanTo INTENT instead, while
+//     still seeing the prompt; solo the whole lane is byte-identical.
 // Run: npx tsx balance/probe_couch.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { vec } from '../src/core/math';
-import { NullInput } from '../src/net/intent';
+import { NullInput, type MetaAction } from '../src/net/intent';
 import { CLASSES } from '../src/data/classes';
+import { FEATURE } from '../src/meta/account';
 import { COUCH_CFG } from '../src/data/couch';
 import { couchFit, couchConfineRect } from '../src/render/camera';
 import { rebuildSavedMeta, serializeCharacter, serializeCouchGuest } from '../src/meta/character';
@@ -325,6 +332,87 @@ const CAM = COUCH_CFG.camera;
   check('xp law: a guest crossing level 5 stamps the run ledger',
     guest.actor.level >= 5 && (w.ledger.reached_level_5 ?? 0) >= 1,
     `guest level ${guest.actor.level}`);
+}
+
+// ------------------------------------------- THE CARAVANNER (seat-scoped)
+// The escort's prompt and dwell are per-SEAT and its travel is an INTENT: a
+// couch guest can call the caravan for the party, and a co-op CLIENT sees the
+// prompt and ASKS the host — which alone mints the route and loads the party.
+{
+  seedGlobalRandom(7111);
+  const w = makeSimWorld('warrior', 7111);
+  w.account.features.add(FEATURE.CARAVAN);
+  const cls = CLASSES.find(c => c.id !== w.meta.classDef.id) ?? CLASSES[0];
+  const guest = w.addSeat('c1', cls, new NullInput());
+  guest.couch = { pad: 1, side: 'right' };
+
+  // The Caravanner stands at the GUEST's elbow; the hero waits well away.
+  const npc = w.createMonster('townsfolk_caravanner', 1, 'player');
+  npc.pos = vec(900, 900);
+  w.actors.push(npc);
+  guest.actor.pos = vec(940, 920);
+  w.player.pos = vec(120, 120);
+
+  check('caravan: the prompt answers for a NON-LOCAL seat (the guest at the escort)',
+    w.caravanPrompt(guest) !== null);
+  check('caravan: it stays silent for the seat standing a zone away (seat-scoped)',
+    w.caravanPrompt(w.localSeat) === null && w.caravanPrompt() === null);
+
+  // The dwell: only the guest is at the escort, so the guest's linger fires it
+  // — and the stamp records WHO asked (the arena is not town, so it's the
+  // wilds lane: port home, no menu).
+  for (let i = 0; i < 20 && !w.caravanReturnRequested; i++) w.updateCaravan(0.1);
+  check('caravan: the guest\'s linger fires the dwell and STAMPS its seat',
+    w.caravanReturnRequested && w.caravanDwellSeatId === 'c1', `seat ${w.caravanDwellSeatId}`);
+
+  // ONE ASK PER APPROACH (the consumed latch — unchanged by the seat scope).
+  w.caravanReturnRequested = false;
+  for (let i = 0; i < 20; i++) w.updateCaravan(0.1);
+  check('caravan: the consumed latch holds while the hand keeps standing there',
+    !w.caravanReturnRequested);
+
+  // Stepping away re-arms it: one tick with NOBODY at the escort, then the
+  // hero walks up and the stamp follows the new asker.
+  guest.actor.pos = vec(120, 140);
+  w.updateCaravan(0.1);
+  w.player.pos = vec(940, 880);
+  for (let i = 0; i < 20 && !w.caravanReturnRequested; i++) w.updateCaravan(0.1);
+  check('caravan: stepping away re-arms it — the hero\'s own linger stamps p0',
+    w.caravanReturnRequested && w.caravanDwellSeatId === w.localSeat.id,
+    `seat ${w.caravanDwellSeatId}`);
+
+  // HOST AUTHORITY: with the client hook set, the shell must never mint or
+  // load — but it still SEES the prompt, because it can act through the intent.
+  const sent: MetaAction[] = [];
+  w.clientActionHook = (a) => { sent.push(a); };
+  const zoneBefore = w.zone.id;
+  let refused = false;
+  try { refused = w.startCaravan(1) === false; } catch { refused = false; }
+  check('caravan: startCaravan REFUSES on a client shell (host-authoritative)',
+    refused && w.zone.id === zoneBefore, `zone ${w.zone.id}`);
+  check('caravan: the client still gets the prompt (it can act via the intent)',
+    w.caravanPrompt() !== null);
+  w.requestMeta({ t: 'caravanTo', band: 1 });
+  check('caravan: the client\'s band pick SHIPS as an intent, loading nothing locally',
+    sent.length === 1 && sent[0].t === 'caravanTo' && w.zone.id === zoneBefore,
+    `sent ${sent.map(a => a.t).join(',') || 'nothing'}`);
+  w.clientActionHook = undefined;
+}
+
+// SOLO INVARIANT for the same lane: no guests, no client, no change — the
+// hero's own linger fires the classic dwell and the stamp is the hero's seat.
+{
+  seedGlobalRandom(7112);
+  const w = makeSimWorld('warrior', 7112);
+  w.account.features.add(FEATURE.CARAVAN);
+  const npc = w.createMonster('townsfolk_caravanner', 1, 'player');
+  npc.pos = vec(w.player.pos.x + 40, w.player.pos.y);
+  w.actors.push(npc);
+  check('caravan solo: the prompt answers with no seat argument at all',
+    w.caravanPrompt() !== null);
+  for (let i = 0; i < 20 && !w.caravanReturnRequested; i++) w.updateCaravan(0.1);
+  check('caravan solo: the hero\'s linger fires and stamps p0 (byte-identical)',
+    w.caravanReturnRequested && w.caravanDwellSeatId === 'p0' && !w.couchActive());
 }
 
 // ---------------------- THE CLAIM PIN (the Steam Deck deadlock, pinned dead)

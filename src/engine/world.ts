@@ -2865,6 +2865,10 @@ export class World {
   salvageDwellSeatId = 'p0';
   oracleDwellSeatId = 'p0';
   trackerDwellSeatId = 'p0';
+  /** WHO lingered at the Caravanner (same idiom, party-travel lane): the menu
+   *  opens on that seat's flank and its band pick routes to that seat, so a
+   *  couch guest can call the escort. 'p0' outside couch play. */
+  caravanDwellSeatId = 'p0';
   /** STASHED BONDS: companions whose skill was UNLEARNED (the pet dies with
    *  the bond — no slot-juggling exploit) — remembered here so RELEARNING
    *  the same skill returns them DOWNED, owed a revival. Serialized with
@@ -19856,12 +19860,13 @@ export class World {
     return `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`;
   }
 
-  /** The Caravanner's prompt while the player is near (renderer), or null. The dwell
-   *  + zone-mint are host-authoritative, so a render-shell CLIENT shows no prompt (it
-   *  can't open the menu) — co-op caravan travel is host-only for now. */
-  caravanPrompt(): string | null {
-    if (this.clientActionHook) return null;
-    return this.nearCaravan() ? 'Linger to consult the Caravanner…' : null;
+  /** The Caravanner's prompt while a hero is near (renderer), or null — SEAT-SCOPED,
+   *  so the renderer speaks it for whichever local hand is standing there (a couch
+   *  guest included). The word is purely informative: the mint + load stay
+   *  host-authoritative, and a co-op CLIENT acts through the `caravanTo` INTENT, so
+   *  it sees the prompt exactly like anyone else. */
+  caravanPrompt(seat: Seat = this.localSeat): string | null {
+    return this.nearCaravan(seat) ? 'Linger to consult the Caravanner…' : null;
   }
 
   // --- NAVAL TRAVEL (ports + the Sail menu) -----------------------------------
@@ -21442,12 +21447,21 @@ export class World {
   }
 
   /** Linger by the Caravanner → open the band menu (a UI callback; World can't import
-   *  the UI). A cooldown keeps it from instantly re-opening after the player closes it. */
-  private updateCaravan(dt: number): void {
-    const engaged = !this.player.dead && !this.player.downed && this.nearCaravan();
-    // Fires ONCE per approach (consumed until the player steps OUT of range)
+   *  the UI). PUBLIC because a co-op CLIENT drives it too: a render shell runs no sim,
+   *  so main.ts ticks this ONE dwell on the client path — travel is the client's only
+   *  road onto the caravan, and its answer is a pure INTENT the host performs. (The
+   *  client's dwell clock is honest by construction: prediction replays its own moves
+   *  through moveActor, which stamps the seat exactly as the host's own hands do.) */
+  updateCaravan(dt: number): void {
+    // Any LOCAL hand at the Caravanner holds the latch; the first idle one fires
+    // (local hero checked first — solo is order-identical, see localHumanSeats).
+    const near = this.localHumanSeats().filter(s =>
+      !s.actor.dead && !s.actor.downed && this.nearCaravan(s));
+    const ready = near.find(s => this.seatIdle(s));
+    // Fires ONCE per approach (consumed until every hand steps OUT of range)
     // — so closing the menu while still standing here won't re-open it.
-    if (!this.caravanGate.fire(engaged && this.playerIdle(), engaged, dt, CARAVAN_DWELL)) return;
+    if (!this.caravanGate.fire(!!ready, near.length > 0, dt, CARAVAN_DWELL)) return;
+    this.caravanDwellSeatId = ready!.id; // WHO asked — the menu + the band pick follow
     if (this.zone.id === START_ZONE) {
       this.caravanDwellRequested = true; // in town: the main loop opens the band menu
     } else {
