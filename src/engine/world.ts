@@ -20859,6 +20859,11 @@ export class World {
   /** The Voyage pseudo-zone def (rebuilt each cast-off so level tracks). */
   private voyageZoneDef(): ZoneDef {
     return {
+      // LEVEL is the DEPARTURE PORT's — kept because beginWraithsailBoarding
+      // prices her decks off it (the floor under the interception's radial
+      // coord). It is NOT the open water's danger, so the HUD banner skips its
+      // Monster Lv clause while sailing instead of this being zeroed here (see
+      // drawHudStatus, keyed on sailing / the client's mirrored zone id).
       id: VOYAGE_ZONE_ID, name: 'The Open Sea', level: this.zone.level,
       size: { w: 2400, h: 1800 }, shape: 'rect', boundless: true,
       // The sea IS the ocean biome (WILDLIFE has no ocean row — deliberate:

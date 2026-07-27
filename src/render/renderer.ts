@@ -34,6 +34,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { tierLinkOf } from '../engine/tiers';
 import { stratumOf } from '../world/strata';
+import { VOYAGE_ZONE_ID } from '../world/voyage';
 import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, pitRegionOf, type Doodad } from '../engine/levelgen';
 import { fellFace } from '../engine/rampage';
 import type { HitShape } from '../engine/shapes';
@@ -6725,11 +6726,24 @@ export class Renderer {
     if (worldInfo) {
       ctx.font = '12px Verdana';
       ctx.fillStyle = world.zone.theme.accent;
-      const lvText = world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
-      // Underground, the banner names the BAND (the strata fabric): where you
-      // are on the world's vertical ladder, read from caveDepth.
-      const stratText = world.zone.caveDepth != null
-        ? ` · ${stratumOf(world.zone.caveDepth).name}` : '';
+      // AT SEA the banner keeps its mouth shut about levels: voyageZoneDef
+      // rebuilds the pseudo-zone carrying the DEPARTURE PORT's level, which is
+      // not the open water's danger at all. It can't simply be zeroed at the
+      // source — beginWraithsailBoarding prices her decks off zone.level (the
+      // floor under the interception's radial coord), so a level-0 sea would
+      // silently cheapen a deep-water fight. The lie dies at the READ instead.
+      // A co-op guest's own world.zone still aliases a node in its local graph
+      // (applyZone patches only name/level/theme), so the id of the terrain it
+      // MIRRORS is the honest tell for a client — hence both reads.
+      const atSea = world.sailing || world.appliedZoneId === VOYAGE_ZONE_ID;
+      const lvText = !atSea && world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
+      // Underground, the banner names the BAND (the strata fabric) AND the rung
+      // standing on it: where you are on the world's vertical ladder, and how
+      // far down that is. Both read the ONE caveDepth datum — the number IS the
+      // depth stratumOf was asked about — so band and rung can never disagree.
+      const caveD = world.zone.caveDepth;
+      const stratText = caveD != null
+        ? ` · ${stratumOf(caveD).name} · Depth ${caveD}` : '';
       ctx.fillText(`${world.zone.name}${lvText}${stratText}`, x, 46);
       // Living-world status: time of day · weather · who holds this ground.
       ctx.font = '11px Verdana';
