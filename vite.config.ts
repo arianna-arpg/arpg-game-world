@@ -16,9 +16,37 @@
 // ---------------------------------------------------------------------------
 
 import { defineConfig } from 'vite';
-import type { Connect, ViteDevServer, PreviewServer } from 'vite';
+import type { Connect, HmrContext, ViteDevServer, PreviewServer } from 'vite';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// THE RELOAD TREES — source trees that may NEVER take a partial HMR update.
+//
+// src/engine holds LONG-LIVED CLASS INSTANCES (the live `World`, its actors,
+// the zone graph) and src/data holds the registries those instances close
+// over. A partial accept re-evaluates the module — minting a NEW class object
+// — while the already-constructed instance keeps its PRE-EDIT prototype: the
+// next call throws `<method> is not a function` (e.g. `this.groundInsured is
+// not a function`) and the run is wedged. The page keeps painting; the world
+// is dead, and the QA session has to be restarted.
+//
+// So: a change under any of these prefixes forces a FULL PAGE RELOAD and the
+// hook returns an empty module list, so Vite never attempts propagation for
+// these trees at all. Every other tree (src/ui, src/render, …) is left
+// untouched — whatever Vite decided for it before, it still decides (in
+// practice usually its own full reload, since nothing in src/ accepts).
+//
+// This is the cheap MITIGATION. Why the partial accept happens at all — no
+// module in src/ calls `import.meta.hot.accept`, so this is entirely Vite's
+// default propagation — is a separate, unsolved question.
+//
+// Prefixes are project-root-relative, posix-separated (the tested path is
+// normalized first — this is a Windows repo and `ctx.file` arrives with
+// backslashes). ONE declared table, tested at the hook; never inline string
+// comparisons scattered through the config.
+// ---------------------------------------------------------------------------
+const HMR_FULL_RELOAD_PREFIXES: readonly string[] = ['src/engine/', 'src/data/'];
 
 function diskSavePlugin() {
   const dir = join(process.cwd(), 'saves');
@@ -83,8 +111,26 @@ function diskSavePlugin() {
   };
 }
 
+// Forces a full page reload for edits under HMR_FULL_RELOAD_PREFIXES (see the
+// table's comment for why). Dev-only by nature: `handleHotUpdate` never runs
+// during a build or preview.
+function reloadTreesPlugin() {
+  return {
+    name: 'hmr-full-reload-trees',
+    handleHotUpdate(ctx: HmrContext): [] | undefined {
+      // ctx.file is absolute and, on Windows, backslash-separated — fold both
+      // to the posix shape the prefix table is written in.
+      const rel = relative(ctx.server.config.root, ctx.file).replace(/\\/g, '/');
+      if (!HMR_FULL_RELOAD_PREFIXES.some((p) => rel.startsWith(p))) return undefined;
+      ctx.server.ws.send({ type: 'full-reload' });
+      ctx.server.config.logger.info(`page reload ${rel} (reload tree — no partial HMR)`, { timestamp: true });
+      return []; // no modules handed back → Vite skips partial propagation entirely
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [diskSavePlugin()],
+  plugins: [diskSavePlugin(), reloadTreesPlugin()],
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).
