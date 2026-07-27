@@ -79,11 +79,36 @@ and the player, monsters, and minions all act through a single skill pipeline
   door-sides sanity, fuse contiguity). Exit 2 on breach — run after any
   levelgen/tileset/formation/composition/landmark change.
   Flags: `-- --seeds 5 --filter mire --verbose`.
+- `npm run probe` — THE PROBE GATE: the 98 standalone regression rigs in
+  `balance/probe_*.ts` (each boots the real engine headless and prints
+  PASS/FAIL) driven off `balance/proberoster.ts` — the roster IS the gate,
+  one typed row per probe carrying `green` + a tier, or `excluded` + an
+  excuse (`red` = fails deterministically at HEAD, `flaky` = passes only
+  sometimes) and a one-line reason. THE CENSUS runs first, always: an
+  unenrolled probe or a row naming a missing file is a hard error (exit 2)
+  before a rig boots, so the registry can never drift behind the directory
+  and a new probe cannot be forgotten into silence. Default = the FAST green
+  lane (84 rigs, <1 min); `-- --slow` adds the 3 heavy rigs, `-- --all` runs
+  everything on disk and calls out any EXCLUDED probe that now passes
+  (promote its row); `-- <substr>` / `-- --filter <substr>` names rigs
+  directly (reaches every tier and status), `-- --jobs 1` streams one probe's
+  output live, `-- --list` prints the roster. Excluded probes NEVER gate.
+  THE RETRY: a handful of rigs carry unseeded nondeterminism at a few percent
+  (the four loudest are excluded by name; the tail is unmapped), so a failing
+  green probe is re-run once and only a probe that fails EVERY attempt gates —
+  a real regression is deterministic and still stops the build, while a
+  fail-then-pass is NAMED as FLAKY with its fail lines instead of being
+  swallowed (`-- --retries 0` restores strict first-verdict behavior).
+  NEVER weaken a probe's assertions to move it onto the green list — an
+  excluded row is a debt with a name, not a silenced test.
+  `.github/workflows/ci.yml` runs `npm run check` + `npm run probe` on every
+  push and PR; nightly.yml's release-candidate `cut` needs the same pair with
+  `--slow`.
 - `npm run preview` — serve the built `dist/`.
 
-No unit-test runner is configured; `tsc --noEmit`, the smoke checks, the
-balance harness's smoke suite, and the generation QA sweep are how we verify
-changes.
+No unit-test runner is configured; `tsc --noEmit`, the probe gate, the smoke
+checks, the balance harness's smoke suite, and the generation QA sweep are how
+we verify changes.
 
 ## Layout
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`

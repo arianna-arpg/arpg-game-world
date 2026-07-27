@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------------------
+# CI — the correctness gate on every push and pull request.
+#
+# Until now nothing type-checked or tested main automatically: release.yml's
+# `npm run build` was the only INDIRECT tsc pass (tag pushes only), `npm run
+# check` ran in no workflow at all, and balance/probe_*.ts — 98 standing
+# regression rigs — were run by hand or not at all. This closes both holes
+# with exactly the two commands a developer runs locally:
+#
+#   npm run check   tsc over the game, the Electron launcher and the balance
+#                   harness (the three tsconfigs — `npm run build`'s single
+#                   `tsc --noEmit` misses the launcher and balance legs)
+#   npm run probe   the green probe roster (balance/proberoster.ts), the
+#                   FAST lane — 84 rigs, well under a minute wall clock
+#
+# The SLOW green lane (`npm run probe -- --slow`) rides nightly.yml, which
+# gates its release candidate on it — see that file.
+#
+# A failing green probe is re-run once (runprobes.ts's THE RETRY) — a real
+# regression is deterministic and still reddens this job, while the suite's
+# few-percent flake tail is reported by name instead of crying wolf.
+#
+# Adding a probe needs no edit here: runprobes.ts's census reads the balance/
+# directory and fails if the roster and the disk disagree.
+# ---------------------------------------------------------------------------
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# One run per ref. A new push supersedes the one still running on that branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # A same-repo PR would duplicate the push run on its own branch; fork PRs
+    # have no push event here, so they still get the gate.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Types first: a broken tree makes every probe verdict meaningless.
+      - name: Type-check (game + launcher + balance harness)
+        run: npm run check
+
+      - name: Probes (green roster, fast lane)
+        run: npm run probe

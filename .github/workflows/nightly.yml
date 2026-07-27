@@ -23,6 +23,12 @@
 # electron-builder's draft, the artifact names, and the packaged launcher's
 # identity all read the tag, and main's history stays free of bot commits
 # (which would otherwise re-trigger the "new commits?" gate forever).
+#
+# THE FULL LANE: `verify` runs the whole green probe roster — the fast lane
+# ci.yml runs on every push PLUS the heavy rigs (`--slow`) that are too
+# expensive to pay per push — and `cut` needs it. An RC is a build testers
+# install, so a red night cuts nothing and says why; the manual dispatch
+# button re-tries once the tree is green again.
 # ---------------------------------------------------------------------------
 name: nightly-rc
 
@@ -38,7 +44,24 @@ permissions:
 concurrency: nightly-rc
 
 jobs:
+  # The full correctness lane — ci.yml's two commands, with the heavy probe
+  # rigs added. Nothing gets tagged for testers over a red tree.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Type-check (game + launcher + balance harness)
+        run: npm run check
+      - name: Probes (green roster, fast + slow lanes)
+        run: npm run probe -- --slow
+
   cut:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
