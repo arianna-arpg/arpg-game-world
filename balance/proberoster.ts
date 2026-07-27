@@ -128,7 +128,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_seas.ts', status: 'green', tier: 'fast', why: 'THE SEA FABRIC — THE FOREORDAINED TENET: a sea is a pure, entry-invariant function of the seed; plus the landing law' },
   { probe: 'probe_segments.ts', status: 'green', tier: 'fast', why: 'THE SEGMENT FABRIC against its debut consumer (Vhorun) — per-segment wound pools that tear permanently and retaliate' },
   { probe: 'probe_settled.ts', status: 'green', tier: 'fast', why: 'THE SETTLED BELT — farmland + metropolis pinned structurally over the biome/tileset/door rows, not by lucky sweep seeds' },
-  { probe: 'probe_sheet.ts', status: 'excluded', excuse: 'red', why: 'RED at HEAD (2 fails, deterministic): 27 stats seated nowhere in data/sheet.ts (overmatch, giantsbane, survivalEase_*, mercRetinue, orbTrickle_*, …) and the same 27 carry no blurb — BEING FIXED UNDER A SEPARATE TASK; promote when it lands' },
+  { probe: 'probe_sheet.ts', status: 'green', tier: 'fast', why: 'THE SHEET CATALOG — every seated id exists in STAT_DEFS, statics seated-or-omitted with blurbs, family seats + the show-all census (healed by THE SHEET SPEAKS THE WHOLE BUILD: the 27 missing seats landed)' },
   { probe: 'probe_sightveil.ts', status: 'green', tier: 'fast', why: 'THE SIGHT VEIL — the drawn veil\'s geometry and query contract against the EXACT path builders draw() fills' },
   { probe: 'probe_slotgraft.ts', status: 'green', tier: 'fast', why: 'THE WORN GRAFT — slotGraftStat, the recalcSeat injection, the rolled catalog and The Rote Hand\'s honestly-dormant line' },
   { probe: 'probe_soulriver.ts', status: 'green', tier: 'fast', why: 'THE RIVER OF SOULS — the strewn deal (pure f(seed), no gate) with PAINT == FUNNEL pinned end to end' },
@@ -154,7 +154,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_warfront.ts', status: 'green', tier: 'fast', why: 'THE WARFRONT COUNTRY + THE BOMBARDMENT FABRIC — the hell-only biome seat, the staging law and the standing guns\' own clocks' },
   { probe: 'probe_watchers.ts', status: 'green', tier: 'fast', why: 'THE WATCH FABRIC — every watcher validates, the Barrow Watch trio stands, and the drawn fan re-folds the scan\'s OWN stamped scalars' },
   { probe: 'probe_webperf.ts', status: 'green', tier: 'fast', why: 'THE SETTLE SWEEP\'s COST LAWS — the whole-chart settling pass pinned cheap (work counts, never wall clock) after the N² regression' },
-  { probe: 'probe_webqa.ts', status: 'excluded', excuse: 'red', why: 'RED at HEAD (1 fail, deterministic): "C: shard flood is entry-independent (mint-once holds) — 7/8 re-floods agree" — one mega-region shard re-floods to a different regionId depending on entry' },
+  { probe: 'probe_webqa.ts', status: 'green', tier: 'slow', why: 'THE WORLD-WEB LAWS end to end (3 seeds × 11 rounds + quests/settle/halo/horizon) — minutes-long by nature; its old red ("C: 7/8 re-floods agree") healed by THE RAGGED DOORWAY, 8/8 today' },
   { probe: 'probe_wisplight.ts', status: 'excluded', excuse: 'flaky', why: 'FLAKY (5 fails in 10 observed runs — the loudest of the four): G10-G12/G16 cascade off "the light rides the STRONGEST body in reach", which picks the fen_hound over the level-18 weaver about half the time; the seek/ride window is not deterministic' },
   { probe: 'probe_workshop.ts', status: 'green', tier: 'fast', why: 'THE WORKSHOP (the Entity Forge\'s store) — the NAMESPACE LAW both directions: grafts refuse unprefixed ids, shipped content never squats the prefix' },
 ];
