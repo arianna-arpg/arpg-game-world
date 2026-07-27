@@ -24,7 +24,8 @@ import {
   puzzleSpillOf, type PuzzleHost, type PuzzleRun,
 } from '../src/engine/puzzles';
 import { mod } from '../src/engine/stats';
-import { angleTo } from '../src/core/math';
+import { angleTo, pointSegDist } from '../src/core/math';
+import { withSeededRandom } from '../src/core/rng';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -280,7 +281,24 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
 }
 
 // --- 3) the REAL crystal country: scenery voices + salted riddles ------------
-{
+
+// THE SEEDED SPAN (2026-07-27 — the flake this rig was rostered green through:
+// 7 fails in 80 runs, 8.75%, always "a real blow tunes a planted voice —
+// tone=physical"). A mint's `seed` pins its LAYOUT, but a scenery voice's stand
+// does not ride it: interactSpot degrades to farPoint when no POI is door-clear
+// (world.ts), and farPoint samples the UNSEEDED global die — so the country's
+// voices, and the packs and puzzle courts around them, landed somewhere new
+// every run. What failed was the EVIDENCE, not the law: twice in 80 runs a
+// frost elemental (23px off the voice) or a chord crystal (25px) stood on the
+// firing line and took the bolt — the voice never struck, still physical, while
+// the fabric painted the interloper correctly.
+// withSeededRandom is the off-stream law (core/rng.ts): it swaps Math.random
+// for its own stream and hands the true die back untouched, so no other lane in
+// this file shifts. Every assertion below is unchanged.
+const COUNTRY_SEED = 0xC7A57A;
+/** Slack a chosen firing line keeps from any other body's rim (bolt radius 9). */
+const STAND_CLEAR = 14;
+withSeededRandom(COUNTRY_SEED, () => {
   const zid = world.devMintTileset('crystal', 0, 8, { seed: 424242 });
   check('country: the crystal zone mints', !!zid, zid ?? 'null');
   const voices = world.actors.filter(a => !a.dead && a.defId === 'resonant_crystal');
@@ -292,9 +310,37 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   check('country: every placed riddle reads out a HUD line',
     views.every(v => v.line.length > 3 && v.label.length > 3));
   // resolveHit integration in a REAL zone: strike a planted voice.
-  const voice = voices[0];
+  // THE CLEAR LINE. A minted zone is LIVING ground: packs and puzzle courts
+  // stand wherever the zone's own streams put them, and a body parked on the
+  // firing line eats the bolt first (a projectile stops at the FIRST victim it
+  // touches). That is the fabric working — it paints the interloper — but it is
+  // not the claim this check makes, so the rig steps to a stand nobody blocks,
+  // exactly as a player would walk around a body. The assertion is unchanged.
+  const shotBlocked = (from: Vec2, voice: Actor): boolean =>
+    world.actors.some(a => !a.dead && a !== voice && a !== p
+      && pointSegDist(a.pos.x, a.pos.y, from.x, from.y, voice.pos.x, voice.pos.y)
+         < a.radius + STAND_CLEAR);
+  const stand = (voice: Actor): Vec2 | null => {
+    for (let i = 0; i < 12; i++) {
+      const ang = (i / 12) * Math.PI * 2;
+      // clampPos is the engine's OWN "may a body stand here" (arena bounds,
+      // doodad collision, walk confine) — a stand outside it is a stand a
+      // player could never take, and a bolt loosed from there is culled
+      // unresolved instead of flying.
+      const at = world.clampPos(
+        { x: voice.pos.x + Math.cos(ang) * 60, y: voice.pos.y + Math.sin(ang) * 60 }, p.radius);
+      const d = Math.hypot(at.x - voice.pos.x, at.y - voice.pos.y);
+      if (d < voice.radius + 18 || d > 80) continue; // room to fly, close enough to land in-step
+      if (!shotBlocked(at, voice)) return at;
+    }
+    return null;
+  };
+  const shot = voices.map(v => ({ v, at: stand(v) })).find(s => s.at);
+  const voice = shot?.v ?? voices[0];
   if (voice) {
-    p.pos = { x: voice.pos.x - 60, y: voice.pos.y };
+    const at = shot?.at ?? { x: voice.pos.x - 60, y: voice.pos.y };
+    p.pos = { x: at.x, y: at.y };
+    p.facing = angleTo(p.pos, voice.pos);
     cast('firebolt', voice.pos);
     check('country: a real blow tunes a planted voice', voice.tone === 'fire',
       `tone=${voice.tone}`);
@@ -305,7 +351,7 @@ const mkNodes = (defId: string, n: number, runId: string): Actor[] => {
   const spires = world.doodads.filter(d => d.kind === 'crystal_spire');
   check('country: the needle country raises its chorus (6+)', spires.length >= 6,
     `${spires.length} spires`);
-}
+});
 
 // --- 4) THE ROUTING LAWS — knock, spill, hum (the resolveHit seam) ----------
 // The kinds above were unit-driven; this lane exercises World's REAL knock
