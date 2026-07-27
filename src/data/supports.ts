@@ -2134,6 +2134,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     // pulses, this beat APPENDS after the native rhythm in its own
     // character — Earthquake's 2.4× quake tolls, then the buried charge
     // answers at full effect. On pulse-less ground it stands the lane up.
+    // PRICE RE-DERIVED 2026-07-27, and it STANDS at 0.25 (measured:
+    // `sweep supports --support buried_charge --seeds 3`, 184 effective
+    // pairs). The APPEND lane is this gem's WEAKEST, not its strongest:
+    // +10.6% median output across the 9 natively-pulsing hosts (starcall
+    // +38.9 · fleshspur +29.5 · earthquake +26.8 · epicenter +10.6 ·
+    // crumble +7.2 · rising_knell +5.6) against +53.0% median across the
+    // 175 pulse-less hosts where it stands the lane up. The kindred rule
+    // lifted the append lane OUT of a trap — it used to replace the 2.4×
+    // quake with a plain 1.0× one, a net loss — but did not make it the
+    // strong lane, and the pulse-less lane never moved at all. +25% mana
+    // is the repo's own going rate for this magnitude: the same tax buys
+    // spooling +43.5%, terminal_velocity +18.0%, violent_genesis +10.7%
+    // median. Raising it would re-break the lane the kindred rule fixed.
+    // OPEN DESIGN CALL, surfaced not built: one flat price cannot serve
+    // both lanes — it is a damage-per-mana LOSS on the append lane
+    // (×0.88) and a gain on the stand-up lane (×1.22). Splitting the
+    // price by host rhythm would need a mechanism; that call is the
+    // owner's, not this pass's.
     pulse: { delay: 1.0 },
     mods: [mod('manaCost', 'more', 0.25)],
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -2142,9 +2160,23 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   unsettled_earth: {
     id: 'unsettled_earth', name: 'Unsettled Earth',
-    description: 'The quake refuses to SETTLE: pulsing ground beats twice more before it stills — every pulse a fresh detonation, and every detonation still scatters its Aftershocks. 20% less damage; the earth pays in instalments.',
+    description: 'The quake refuses to SETTLE: pulsing ground beats twice more before it stills — every pulse a fresh detonation, and every detonation still scatters its Aftershocks. 10% less damage; the earth pays in instalments.',
     color: '#c8b068', requiresTags: ['pulse'],
-    mods: [mod('pulseCount', 'flat', 2), mod('damage', 'more', -0.2)],
+    // PRICE RE-DERIVED 2026-07-27: -0.2 → -0.1 (measured: `sweep supports
+    // --support unsettled_earth --seeds 3`, 6 effective hosts — the
+    // narrowest tag gate in the game). pulseCount deepens the NATIVE
+    // rhythm, so this gem's worth tracks the host's own dmgMult and the
+    // spread is structural, not priceable: at -0.2 the median was +24.9%
+    // (30s window) / +3.3% (the 10s dummy window, where the late beats
+    // simply never land) with THREE of six hosts net NEGATIVE — crumble
+    // -9.7%, whose dmgStep 0.8 decay makes each added beat worth less
+    // than the flat tax on everything. That sat far under the family's
+    // going rate (chaining pays -15% damage for +67.3% median;
+    // buried_charge +25% mana for +39.1%). At -0.1: median +40.4% (30s) /
+    // +16.2% (10s), no host left a trap (crumble +1.6% / -2.5%), top host
+    // earthquake +113.3% — between buried_charge's p90 (+106.8%) and
+    // chaining's p75 (+144.2%), so the ceiling is ordinary for the family.
+    mods: [mod('pulseCount', 'flat', 2), mod('damage', 'more', -0.1)],
     perLevel: [mod('pulseCount', 'flat', 0.5)],
     weight: 5,
   },
