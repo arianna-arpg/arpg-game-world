@@ -1467,6 +1467,35 @@ export function addedDamageStat(type: DamageType): string { return ADDED_DAMAGE_
 // StatSheet
 // ---------------------------------------------------------------------------
 
+/** The GAIN side of every trade, by target stat: a trade is the one road to a
+ *  non-zero value that NO modifier names (its rate dial names the DIAL, never
+ *  the target) — see StatSheet.armedFamily. Derived from the registry (a
+ *  future trade into a generated family arms itself) and re-derived on the
+ *  LENGTH KEY, so a late registration can never leave a stale snapshot. */
+let tradeTargets: ReadonlySet<string> | null = null;
+let tradeTargetsLen = -1;
+
+/** Can this stat stand non-zero with no modifier naming it? A registered
+ *  non-zero base, a positive min clamp (compute's floor lifts an untouched
+ *  stat), or a trade's gain side. Read at CALL time — generated families
+ *  (apply_<status>, …) register long after this module loads. */
+function staticallyArmed(stat: string): boolean {
+  const def = STAT_DEFS[stat];
+  if (def && (def.base > 0 || (def.min ?? 0) > 0)) return true;
+  if (!tradeTargets || tradeTargetsLen !== STAT_TRADES.length) {
+    tradeTargets = new Set(STAT_TRADES.map(t => t.to));
+    tradeTargetsLen = STAT_TRADES.length;
+  }
+  return tradeTargets.has(stat);
+}
+
+/** One family's derived ARMED LIST (see StatSheet.armedFamily) — the ordered
+ *  ids and the same set for O(1) membership during the `extra` union. */
+interface ArmedFamily {
+  ids: readonly string[];
+  set: ReadonlySet<string>;
+}
+
 export class StatSheet {
   private sources = new Map<string, Modifier[]>();
   private baseOverrides = new Map<string, number>();
@@ -1487,13 +1516,27 @@ export class StatSheet {
    *  with instance-level consumers scan those themselves. */
   private whenRefs: Set<ConditionId> | null = null;
 
+  /** THE ARMED LISTS — per generated stat FAMILY (see armedFamily), keyed by
+   *  the family's prefix and derived lazily. Dropped by invalidate() beside
+   *  the value cache: a derived list that outlived a departed source would
+   *  be a stale-arm bug, so both hang off the ONE seam. */
+  private armedFams: Map<string, ArmedFamily> | null = null;
+
+  /** Drop every DERIVED read — the value cache and the armed lists. Every
+   *  mutation below funnels through this one seam so a future mutation can
+   *  never clear half the derivations. */
+  private invalidate(): void {
+    this.cache.clear();
+    this.armedFams = null;
+  }
+
   /** Replace the active condition set (cache clears only on real change). */
   setConditions(active: ConditionId[]): void {
     const key = active.slice().sort().join(',');
     if (key === this.conditionKey) return;
     this.conditionKey = key;
     this.conditions = new Set(active);
-    this.cache.clear();
+    this.invalidate();
   }
 
   hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
@@ -1517,7 +1560,7 @@ export class StatSheet {
     if (key === this.gaugeKey) return;
     this.gaugeKey = key;
     this.gauges = new Map(entries);
-    this.cache.clear();
+    this.invalidate();
   }
 
   gauge(id: string): number { return this.gauges.get(id) ?? 0; }
@@ -1525,13 +1568,13 @@ export class StatSheet {
   /** Add or replace a named bundle of modifiers (e.g. 'class', 'buff:warcry'). */
   setSource(name: string, mods: Modifier[]): void {
     this.sources.set(name, mods);
-    this.cache.clear();
+    this.invalidate();
     this.whenRefs = null;
   }
 
   removeSource(name: string): void {
     if (this.sources.delete(name)) {
-      this.cache.clear();
+      this.invalidate();
       this.whenRefs = null;
     }
   }
@@ -1545,7 +1588,79 @@ export class StatSheet {
   /** Override a stat's base value (used by monster definitions). */
   setBase(stat: string, value: number): void {
     this.baseOverrides.set(stat, value);
-    this.cache.clear();
+    this.invalidate();
+  }
+
+  /**
+   * THE ARMED LIST — which ids of a GENERATED stat family (`apply_<status>`,
+   * `minionApply_<status>`, …) this sheet plus the caller's skill-local
+   * `extra` could carry a non-zero value for. Per-hit sweeps over families
+   * that have grown to ~130 ids ask this instead of computing every one; an
+   * uninvested sheet on a gemless skill answers with an EMPTY list.
+   *
+   * The saving is not the memo — it is the FULL RESOLUTION: any gemmed skill
+   * passes instance mods as `extra`, which makes every get() uncacheable
+   * (compute's `cacheable`), and a single compute walks every modifier of
+   * every source. One derivation per cache generation replaces ~130 of those
+   * walks per hit.
+   *
+   * THE SUPERSET LAW: the answer is derived from what the layers NAME, never
+   * from what they currently resolve to — a condition-gated, tag-filtered,
+   * gauge-zeroed or outright negative grant stays armed. That keeps the
+   * derivation O(mods) and independent of the query context (tags), and it
+   * costs the caller nothing: a visited id that resolves to zero takes the
+   * caller's own `<= 0` branch exactly as it always did. Names cannot be the
+   * whole story, so the three NAMELESS arming roads fold in structurally
+   * (staticallyArmed): a non-zero registered base, a positive min clamp, and
+   * a trade's gain side.
+   *
+   * THE ORDER LAW: the result is a subset of `ids` IN `ids` ORDER. Callers
+   * that roll per id (the apply_ sweep's `chance()`, rolled only where the
+   * chance is positive) walk the RNG stream in exactly the order the full
+   * sweep walked it — an armed list that reordered would silently reshuffle
+   * every seeded run.
+   *
+   * `extra` is scanned per call (O(instance mods) — a handful, against ~130
+   * full resolutions) because a socketed gem can arm a status the sheet
+   * itself never mentions; the sheet's own half derives once per generation.
+   */
+  armedFamily(
+    prefix: string, ids: readonly string[], extra?: readonly Modifier[],
+  ): readonly string[] {
+    const fams = (this.armedFams ??= new Map());
+    let fam = fams.get(prefix);
+    if (!fam) {
+      const named = new Set<string>();
+      for (const mods of this.sources.values()) {
+        for (const m of mods) if (m.stat.startsWith(prefix)) named.add(m.stat);
+      }
+      // A base override arms only where it is POSITIVE: a zeroed or negative
+      // base still needs a named mod (or a structural road) to stand positive,
+      // and setBase(stat, 0) is an ordinary way to retire a grant.
+      for (const [stat, v] of this.baseOverrides) {
+        if (v > 0 && stat.startsWith(prefix)) named.add(stat);
+      }
+      const list = ids.filter(id =>
+        named.has(prefix + id) || staticallyArmed(prefix + id));
+      fam = { ids: list, set: new Set(list) };
+      fams.set(prefix, fam);
+    }
+    if (!extra || !extra.length) return fam.ids;
+    // A socketed gem may arm what the sheet never mentions. Ids the sheet
+    // already carries change nothing — the common gemmed case allocates
+    // nothing and hands back the derived list.
+    const sheetArmed = fam.set;
+    let added: Set<string> | undefined;
+    for (const m of extra) {
+      if (!m.stat.startsWith(prefix)) continue;
+      const id = m.stat.slice(prefix.length);
+      if (!sheetArmed.has(id)) (added ??= new Set()).add(id);
+    }
+    if (!added) return fam.ids;
+    const fresh = added;
+    // Filtering `ids` (never concatenating) is what keeps THE ORDER LAW, and
+    // it drops any prefixed stat that is not a member of this family.
+    return ids.filter(id => sheetArmed.has(id) || fresh.has(id));
   }
 
   /**

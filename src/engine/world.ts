@@ -524,7 +524,11 @@ const SHRAPNEL_SKILL = 'shrapnel_shard';
  *  shattering into shards) from going geometric. */
 const PROJ_CHILD_DEPTH_MAX = 2;
 
-/** Every status id, for the per-hit apply_<status> stat sweep (resolveHit). */
+/** Every status id, in registry order — the canonical order of the generated
+ *  apply_<status> / minionApply_<status> families. Handed to
+ *  StatSheet.armedFamily, which answers with the subset a sheet could carry
+ *  IN THIS ORDER: the per-hit sweep (resolveHit) rolls only the armed ids and
+ *  keeps the RNG stream it always had. */
 const STATUS_IDS = Object.keys(STATUS_DEFS);
 
 /** Normalize a TargetingSpec.requiresStatus (string | string[]) to a list. */
@@ -30846,7 +30850,11 @@ export class World {
     // the minion's own apply_<status> chance — "minions poison on hit" is one
     // modifier anywhere on the owner (gem, passive, vocation node). Generated
     // per-status alongside apply_<id> in engine/status.ts.
-    for (const sid of STATUS_IDS) {
+    // Swept over THE ARMED LIST (StatSheet.armedFamily), not the whole ~130-id
+    // registry: the ids the owner's own layers or this instance's gems even
+    // NAME, in STATUS_IDS order. An uncarried id resolved to zero and pushed
+    // nothing — visiting it was pure cost.
+    for (const sid of caster.sheet.armedFamily('minionApply_', STATUS_IDS, extra)) {
       const carry = caster.sheet.get('minionApply_' + sid, tags, extra);
       if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry * s));
     }
@@ -34860,8 +34868,15 @@ export class World {
     // derives from the HIT's damage via the status's canonical hitMagnitude,
     // floored by its caster-less baseline, × the potency crank — so Chance
     // to Ignite on a physical Cleave burns off the physical hit.
+    // THE ARMED LIST (StatSheet.armedFamily) picks the sweep: the ids this
+    // caster's layers or this instance's gems even NAME, in STATUS_IDS order —
+    // so the `chance()` rolls below (reached only where the chance is
+    // positive, then as now) walk the RNG stream in the identical order. The
+    // registry outgrew the loop: ~130 ids × a full uncacheable resolution
+    // (`extra` defeats the memo) ran on every landed hit to find the two an
+    // ailment build actually carries.
     if (dealt > 0) {
-      for (const sid of STATUS_IDS) {
+      for (const sid of caster.sheet.armedFamily('apply_', STATUS_IDS, extra)) {
         const ch = caster.sheet.get('apply_' + sid, tags, extra);
         if (ch <= 0 || !chance(Math.min(1, ch + bonusChance))) continue;
         const sdef = STATUS_DEFS[sid];

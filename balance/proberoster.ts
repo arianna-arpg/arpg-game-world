@@ -61,6 +61,7 @@ export type ProbeRow =
 export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_aether_countries.ts', status: 'green', tier: 'fast', why: 'the Aetherial pass — the Galestream course, its gate anchor, the course-only biome law and realm-pool tileset resolution' },
   { probe: 'probe_anatomy.ts', status: 'green', tier: 'fast', why: 'the ANATOMY GAMUT — composite monsters below boss tier, the kit-integrity nets (every monster skill exists, is hinted, is affordable) and the limbreaver fold' },
+  { probe: 'probe_applyarm.ts', status: 'green', tier: 'fast', why: 'THE ARMED LIST — armedFamily == the brute-force family scan (the union, THE ORDER LAW\'s identical RNG walk, superset-by-name adversarials, the one invalidate seam) so the per-hit apply_ sweeps stay stream-identical' },
   { probe: 'probe_attunement.ts', status: 'green', tier: 'fast', why: 'the ATTUNEMENT + PUZZLE fabrics — tone read off the ROLLED packet, the worn attuned_<tone> family, and the knock/spill/hum routing laws' },
   { probe: 'probe_biome_share.ts', status: 'green', tier: 'fast', why: 'SURFACE BIOME SHARE — the biome field sampled the way the overworld mints, each biome\'s share of land by distance band' },
   { probe: 'probe_bore.ts', status: 'green', tier: 'fast', why: 'THE VESSEL BORE — flow steering follows a winding tube, rebounds out of dead ends, and confine walls the current to its vessel' },
