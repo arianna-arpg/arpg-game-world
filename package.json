@@ -18,6 +18,7 @@
     "probe": "tsx balance/runprobes.ts",
     "genqa": "tsx balance/genqa.ts",
     "eventqa": "tsx balance/eventqa.ts",
+    "gate": "node scripts/ownership-gate.mjs",
     "review:context": "node scripts/ai-review-context.mjs",
     "export-web-data": "tsx scripts/export-web-data.ts",
     "game": "electron .",

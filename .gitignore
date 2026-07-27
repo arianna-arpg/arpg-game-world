@@ -42,6 +42,9 @@ saves/
 # Machine-specific paths/permissions — do not share.
 .claude/settings.local.json
 .claude/worktrees/
+# Per-session ownership declarations for scripts/ownership-gate.mjs — they
+# describe ONE session's in-flight work, so they are never shared.
+.claude/ownership.*
 
 # ── Generated editor backups ─────────────────────────────────
 # The dev passive-tree editor writes passives.ts.bak before each

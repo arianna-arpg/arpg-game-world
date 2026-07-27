@@ -1243,3 +1243,71 @@ Prefer targeted `grep` over reading whole files.
 - Never commit generated or personal files: `node_modules/`, `dist/`, `saves/`,
   and `.claude/settings.local.json` are gitignored on purpose. Machine-specific
   settings belong in `.claude/settings.local.json` (stays local, never pushed).
+
+## Concurrent sessions — THE OWNERSHIP GATE
+Several Claude Code sessions work this repo AT ONCE, sharing one working tree
+(plus the `claude/*` worktrees). **The staged index is shared state.** A
+`git commit -a`, or a careless `git add <file>`, silently swallows whatever
+a co-session had in flight — and the loss is invisible until they go looking.
+The protocol has four steps.
+
+**1. Declare what you own, at session start.** Name the files this session owns
+WHOLE, and the distinctive tokens it owns inside SHARED files (`world.ts`,
+`skills.ts`, `monsters.ts`, `package.json`, this file). Keep the declaration
+session-local — `.claude/ownership.*` is gitignored:
+
+```
+# session: the armed list
+[files]
+balance/probe_applyarm.ts      # new file — mine whole
+
+[tokens]
+armedFamily                    # in shared files, hunks naming these are mine
+staticallyArmed
+STAT_TRADES
+```
+
+**2. Stage at hunk grain in shared files.** Never `git add -A` or
+`git commit -a`. Use `git add <path>` only for files you own whole; in a shared
+file use `git add -p <path>` and take ONLY your own hunks — THE HUNK ROUTER:
+route each hunk by a distinctive content token it touches.
+
+**3. Run the gate before every commit.** It reads the staged index (not the
+working tree), so run it after staging and before `git commit`:
+
+```bash
+node scripts/ownership-gate.mjs --allow .claude/ownership.local.txt
+```
+
+`npm run gate -- --allow <file>` is the same thing. It reports EVERY staged
+hunk with its file + hunk header and one verdict — `OWNED-FILE`, `OWNED`,
+`MIXED` (owned and foreign tokens in one hunk; passes, warns), `FOREIGN`, or
+`UNATTRIBUTABLE` — and exits 1 if any hunk is unattributed. `--own-file` /
+`--own-token` declare inline without a file, `--strict` also gates MIXED
+hunks, `--ignore-token` quiets noise, `--json` is machine-readable; `--help`
+carries the declaration format and the rest of the dials.
+
+**4. When it fires, re-stage at finer grain — NEVER force.**
+
+```bash
+git restore --staged <file>
+git add -p <file>
+```
+
+If a listed hunk really is yours, DECLARE it — add its token, or the file —
+and re-run; the declaration is the honest record of what you touched. Never
+widen a declaration to cover a hunk you did not write, and never commit past a
+red gate. There is no `--force`, on purpose.
+
+THE UNATTRIBUTABLE VERDICT is the one that matters most. A hunk changing only
+numbers or whitespace carries no quotable text, so THE HUNK ROUTER cannot route
+it and no token can attribute it — that is precisely the hole this gate exists
+to close. Because it keys on OWNERSHIP rather than on recognizable prose, such
+a hunk is reported with its raw changed lines instead of passing silently: read
+them, decide whose they are, then declare the file or unstage it. (Git's hunk
+header names the enclosing symbol as provenance, but it NEVER attributes — it
+is git's heuristic guess, not your declaration.)
+
+Two habits keep the gate cheap: prefer NEW files for new work (a file you own
+whole needs no token bookkeeping), and land your own change promptly rather
+than letting it sit staged across another session's landing.
