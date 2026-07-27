@@ -48,6 +48,7 @@ export class LocalTransport implements NetTransport {
   onPeerLeave(_cb: (id: PlayerId) => void): () => void { return () => { /* no wire */ }; }
   sendSession(_msg: SessionMsg, _to?: PlayerId): void { /* no wire (single machine) */ }
   onSession(_cb: (msg: SessionMsg, from: PlayerId) => void): () => void { return () => { /* no wire */ }; }
+  onHostLost(_cb: () => void): () => void { return () => { /* no wire — you ARE the host */ }; }
 
   // --- local stand-in seam (no network) -----------------------------------
   /** Register a stand-in peer (the hero actor is created by World.addSeat). */

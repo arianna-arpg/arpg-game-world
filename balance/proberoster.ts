@@ -73,6 +73,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_cohort.ts', status: 'green', tier: 'fast', why: 'ZoneDef.cohort "authored" — a curated zone\'s population is EXACTLY its authored cohort whatever the world\'s politics do' },
   { probe: 'probe_combo.ts', status: 'green', tier: 'fast', why: 'THE COMBO GRAMMAR + the one sequence matcher — tail seq / counts / vary / repeat / minLen / gate, and the invocation parity fuzz' },
   { probe: 'probe_conversions.ts', status: 'green', tier: 'fast', why: 'THE CONVERSION FABRIC — STAT_TRADES rate/forgo dials and stat links, all under THE GOLDEN RULE (single-hop, pre-forgo baseline)' },
+  { probe: 'probe_coopseed.ts', status: 'green', tier: 'fast', why: 'THE CO-OP SEED THREAD — wireSeed\'s untrusted-wire fold (seed 0 kept, junk never collapsing to 0) and the map it buys: a client seeded from the HOST grows the host\'s starter web on both seating roads (welcome + newRun)' },
   { probe: 'probe_corpse.ts', status: 'green', tier: 'fast', why: 'THE CORPSE WAGON — plural finds, summed corpseLifeDamage fuel, echo re-seek and the remains gate' },
   { probe: 'probe_couch.ts', status: 'green', tier: 'fast', why: 'THE COUCH FABRIC — above all THE SOLO INVARIANT: with no couch seats every branch short-circuits and solo is byte-identical' },
   { probe: 'probe_crusade.ts', status: 'green', tier: 'fast', why: 'THE CRUSADE WARFRONT — unbeknownst ignition off a random charted node and the war\'s march through the real overlay' },

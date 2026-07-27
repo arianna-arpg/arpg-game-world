@@ -26,7 +26,7 @@ const RTC_CONFIG: RTCConfiguration = {
 
 type NetMsg =
   | { t: 'join'; classId: string; name: string }
-  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[] }
+  | { t: 'welcome'; self: PlayerId; peers: PeerInfo[]; seed: number }
   | { t: 'input'; seat: PlayerId; input: PlayerInput }
   | { t: 'snap'; snap: StateSnapshot }
   | { t: 'zone'; zone: ZoneMsg }
@@ -61,6 +61,16 @@ export class WebRtcTransport implements NetTransport {
   private readonly joinCbs = new Set<(p: PeerInfo) => void>();
   private readonly leaveCbs = new Set<(id: PlayerId) => void>();
   private readonly sessionCbs = new Set<(m: SessionMsg, from: PlayerId) => void>();
+  private readonly hostLostCbs = new Set<() => void>();
+
+  /** HOST: reads the seed of the run a joiner is being welcomed INTO. A getter,
+   *  not a stored value — the host's manifest seed changes with every new run
+   *  ("Rise Again" mints a fresh one), so a snapshot taken when the lobby opened
+   *  would seat a later joiner in the wrong world. Wired by the lobby, which
+   *  holds the World; src/net/ never imports it. Unwired (host() never called,
+   *  or a client) it is 0, which no welcome this side sends ever reads. */
+  private seedSource: () => number = () => 0;
+  setSeedSource(fn: () => number): void { this.seedSource = fn; }
 
   // HOST state: one channel per seated peer + a pending invite awaiting its join.
   private readonly conns = new Map<PlayerId, RTCDataChannel>();
@@ -70,7 +80,16 @@ export class WebRtcTransport implements NetTransport {
   // CLIENT state: the single connection to the host.
   private hostPc: RTCPeerConnection | null = null;
   private hostCh: RTCDataChannel | null = null;
-  private welcomeResolve: ((r: { self: PlayerId }) => void) | null = null;
+  private welcomeResolve: ((r: { self: PlayerId; seed: number }) => void) | null = null;
+  /** CLIENT: true once the host's welcome actually SEATED us. Before that the
+   *  lobby owns every failure (a bad paste, a host that never accepts the
+   *  answer) — a connection that dies before it ever opened is not a host that
+   *  left, so hostLost must stay quiet and let the lobby's own catch speak. */
+  private welcomed = false;
+  /** Latches hostLost to at most one firing — a single disappearance can land as
+   *  channel close AND channel error AND a terminal connection state. Set by
+   *  leave() too, so a teardown WE chose never reports a lost host. */
+  private hostGone = false;
 
   peers(): PeerInfo[] { return this.peerList; }
 
@@ -84,6 +103,9 @@ export class WebRtcTransport implements NetTransport {
   join(): Promise<{ self: PlayerId }> { return Promise.reject(new Error('use createAnswer()')); }
 
   leave(): void {
+    // OUR OWN teardown: the closes below fire the client's channel/connection
+    // handlers, which must not be reported as a host that vanished.
+    this.hostGone = true;
     this.pendingInvite?.pc.close();
     this.pendingInvite = null;
     this.conns.forEach(ch => { try { ch.close(); } catch { /* ignore */ } });
@@ -121,7 +143,9 @@ export class WebRtcTransport implements NetTransport {
         this.conns.set(seatId, ch);
         const peer: PeerInfo = { id: seatId, name: m.name, classId: m.classId, isHost: false };
         this.peerList.push(peer);
-        ch.send(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList } satisfies NetMsg));
+        // THE SEED THREAD: the joiner builds its World from OUR run seed, read
+        // live (seedSource) so it is the seed of the run we are seating it in.
+        ch.send(JSON.stringify({ t: 'welcome', self: seatId, peers: this.peerList, seed: this.seedSource() >>> 0 } satisfies NetMsg));
         this.broadcastExcept(ch, { t: 'pjoin', peer });
         this.joinCbs.forEach(cb => cb(peer)); // host spawns the seat
       } else if (m.t === 'input' && seatId) {
@@ -149,13 +173,23 @@ export class WebRtcTransport implements NetTransport {
 
   // ---- CLIENT signaling -----------------------------------------------------
   /** Take the host's invite blob, return our answer blob (paste back to host).
-   *  `joined` resolves with our assigned seat id once the host welcomes us. */
-  async createAnswer(offerBlob: string, info: Omit<PeerInfo, 'id' | 'isHost'>): Promise<{ answer: string; joined: Promise<{ self: PlayerId }> }> {
+   *  `joined` resolves with our assigned seat id AND the host's run seed (THE
+   *  SEED THREAD — our World is built from it) once the host welcomes us. */
+  async createAnswer(offerBlob: string, info: Omit<PeerInfo, 'id' | 'isHost'>): Promise<{ answer: string; joined: Promise<{ self: PlayerId; seed: number }> }> {
     this.isHost = false; this.myInfo = info;
     const pc = new RTCPeerConnection(RTC_CONFIG);
     this.hostPc = pc;
-    const joined = new Promise<{ self: PlayerId }>(res => { this.welcomeResolve = res; });
+    const joined = new Promise<{ self: PlayerId; seed: number }>(res => { this.welcomeResolve = res; });
     pc.ondatachannel = (ev): void => this.setupClientChannel(ev.channel);
+    // The mirror of the host's peer watch (setupHostChannel): same rule, that
+    // 'disconnected' is a TRANSIENT ICE blip which usually recovers, so only the
+    // terminal states end the session — else one hiccup dumps a client out of a
+    // live fight. Without this a vanished host left the client rendering its
+    // last snapshot forever, with nothing to press.
+    pc.onconnectionstatechange = (): void => {
+      const st = pc.connectionState;
+      if (st === 'failed' || st === 'closed') this.signalHostLost();
+    };
     await pc.setRemoteDescription(decode(offerBlob));
     await pc.setLocalDescription(await pc.createAnswer());
     await iceComplete(pc);
@@ -165,10 +199,20 @@ export class WebRtcTransport implements NetTransport {
   private setupClientChannel(ch: RTCDataChannel): void {
     this.hostCh = ch;
     ch.onopen = (): void => ch.send(JSON.stringify({ t: 'join', classId: this.myInfo.classId, name: this.myInfo.name } satisfies NetMsg));
+    // A channel that closes under a SEATED client is a host that vanished — the
+    // same ending as an explicit `hostLeft`, minus the goodbye.
+    ch.onclose = (): void => this.signalHostLost();
+    // An ERROR only ends the session if the channel is actually down with it: a
+    // transport failure always leaves it closing/closed (and fires onclose right
+    // behind, which catches it regardless), while a send-level error on a still-
+    // open channel is survivable and must NOT dump the player out of a live
+    // fight. The gate costs no coverage — onclose and the connection state
+    // change are both unconditional — and removes the false positive.
+    ch.onerror = (): void => { if (ch.readyState !== 'open') this.signalHostLost(); };
     ch.onmessage = (ev): void => {
       const m = JSON.parse(ev.data as string) as NetMsg;
       switch (m.t) {
-        case 'welcome': this.self = m.self; this.peerList = m.peers; this.welcomeResolve?.({ self: m.self }); this.welcomeResolve = null; break;
+        case 'welcome': this.self = m.self; this.peerList = m.peers; this.welcomed = true; this.welcomeResolve?.({ self: m.self, seed: m.seed }); this.welcomeResolve = null; break;
         case 'snap': this.stateCbs.forEach(cb => cb(m.snap)); break;
         case 'zone': this.zoneCbs.forEach(cb => cb(m.zone)); break;
         case 'pjoin': if (!this.peerList.some(p => p.id === m.peer.id)) this.peerList.push(m.peer); break;
@@ -223,6 +267,17 @@ export class WebRtcTransport implements NetTransport {
     }
   }
   onSession(cb: (m: SessionMsg, from: PlayerId) => void): () => void { this.sessionCbs.add(cb); return () => { this.sessionCbs.delete(cb); }; }
+
+  onHostLost(cb: () => void): () => void { this.hostLostCbs.add(cb); return () => { this.hostLostCbs.delete(cb); }; }
+
+  /** CLIENT: the wire to the host died with no goodbye. Latched — one
+   *  disappearance arrives as several events — and silent until the welcome
+   *  seated us, so the lobby keeps ownership of a join that never connected. */
+  private signalHostLost(): void {
+    if (this.hostGone || !this.welcomed) return;
+    this.hostGone = true;
+    this.hostLostCbs.forEach(cb => cb());
+  }
 
   private broadcastAll(m: NetMsg): void {
     const d = JSON.stringify(m);

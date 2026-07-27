@@ -43,6 +43,7 @@ import { UI } from './ui/panels';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction } from './net/intent';
+import { wireSeed } from './net/transport';
 import type { NetTransport, StateSnapshot, PeerInfo, SessionMsg, ZoneMsg } from './net/transport';
 import { serializeSnapshot, applySnapshot, serializeZone, applyZone } from './net/snapshot';
 import { RemoteInput } from './net/remote';
@@ -215,6 +216,10 @@ let lastSentZone = '';
  *  pendingRejoinClass = the class WE chose at the run-end screen (used when the
  *  host re-seats us via newRun). */
 let sessionDispose: (() => void) | null = null;
+/** CLIENT: tears down the onHostLost subscription on leave — and, because it is
+ *  dropped BEFORE net.leave() closes the channels, keeps our own teardown from
+ *  calling back into the host-gone landing. */
+let hostLostDispose: (() => void) | null = null;
 const pendingRejoins = new Map<string, string>();
 let pendingRejoinClass: ClassDef | null = null;
 /** HOST: meta intents (point-spends, gem ops, drops) received from clients this
@@ -1631,6 +1636,11 @@ function onRemoteLeave(id: string): void {
 function wireSession(): void {
   sessionDispose?.();
   sessionDispose = net.onSession(onSessionMsg);
+  // The OTHER road to the same ending: a host that vanishes without a goodbye.
+  // Wired for host and client alike (a host's transport never fires it) so the
+  // two subscriptions live and die together.
+  hostLostDispose?.();
+  hostLostDispose = net.onHostLost(() => onHostGone('Connection to the host was lost.'));
 }
 
 /** Dispatch a run-lifecycle message. HOST handles `rejoin`; CLIENT handles
@@ -1651,7 +1661,9 @@ function onSessionMsg(msg: SessionMsg, from: string): void {
   } else if (msg.t === 'runEnd') {
     onClientRunEnd();
   } else if (msg.t === 'newRun') {
-    onClientNewRun(msg.seat);
+    onClientNewRun(msg.seat, msg.seed);
+  } else if (msg.t === 'hostLeft') {
+    onHostGone('The host left the session.');
   }
 }
 
@@ -1677,7 +1689,11 @@ function drainMetaActions(): void {
 function reseatPeer(peerId: string, classId: string): void {
   const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
   if (!world.seats.some(s => s.id === peerId)) world.addSeat(peerId, cls, new RemoteInput(peerId));
-  net.sendSession({ t: 'newRun', seat: peerId }, peerId);
+  // THE SEED THREAD: newRun carries the seed of the run we are seating them
+  // INTO — deliberately not the one their welcome carried. This is our NEXT run
+  // with a freshly rolled manifest, so a client re-using the join-time seed
+  // would build the PREVIOUS run's map; the seed rides every seating message.
+  net.sendSession({ t: 'newRun', seat: peerId, seed: world.manifest.seed }, peerId);
   net.sendZone(serializeZone(world));
 }
 
@@ -1704,8 +1720,8 @@ function onClientRunEnd(): void {
 
 /** CLIENT: the host re-seated us in its new run — rebuild our render shell and
  *  re-subscribe to the host's broadcasts with a clean snapshot state. */
-function onClientNewRun(seat: string): void {
-  startAsClient(pendingRejoinClass ?? CLASSES[0], seat);
+function onClientNewRun(seat: string, seed: number): void {
+  startAsClient(pendingRejoinClass ?? CLASSES[0], seat, seed);
   subscribeToHost();        // fresh onState/onZone for the new run (torn down at runEnd)
 }
 
@@ -1734,6 +1750,11 @@ function openLobby(): void {
       try {
         rtc.onPeerJoin(onRemoteJoin);
         rtc.onPeerLeave(onRemoteLeave);
+        // THE SEED THREAD: a joiner is welcomed into our CURRENT run, so hand the
+        // transport a live READ of the manifest seed rather than a snapshot of
+        // it — "Rise Again" mints a fresh manifest, and a joiner arriving after
+        // that must be seated in the run actually being played.
+        rtc.setSeedSource(() => world.manifest.seed);
         await rtc.host({ name: 'Host', classId });
         const invite = await rtc.createInvite();   // fallible WebRTC work FIRST
         net = rtc;                                 // commit globals only on success
@@ -1752,7 +1773,7 @@ function openLobby(): void {
         subscribeToHost();
         wireSession();                             // run-lifecycle channel (runEnd/newRun)
         const { answer, joined } = await rtc.createAnswer(offer, { name: 'Joiner', classId });
-        const connected = joined.then(({ self }) => startAsClient(cls, self));
+        const connected = joined.then(({ self, seed }) => startAsClient(cls, self, seed));
         return { answer, connected };
       } catch (e) { resetToLocal(); throw e; }     // a bad paste must revert net to LocalTransport
     },
@@ -1763,9 +1784,15 @@ function openLobby(): void {
 /** Become a render-only CLIENT of a host: a shell World backs the camera/HUD/
  *  getters, but it never simulates — the frame loop's client branch applies the
  *  host's snapshots and renders. clientSeatId anchors the camera on OUR hero. */
-function startAsClient(classDef: ClassDef, selfSeat: string): void {
+function startAsClient(classDef: ClassDef, selfSeat: string, hostSeed: number): void {
   couchReset(); // a render shell hosts no couch — the pads are free again
-  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
+  // THE SEED THREAD: build the shell from the HOST's run seed, never a local
+  // roll — manifest.seed drives randomizeStarterWeb and every `manifest.seed ^ …`
+  // mint derivation, so our own seed would put us on a different map from frame
+  // one (the shell's zone graph, gate seeds and vendor shelves would all
+  // disagree with the authority we render). wireSeed normalizes the untrusted
+  // wire value; ONE seam covers both seating roads (welcome and newRun).
+  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, wireSeed(hostSeed, rollSeed())))));
   world.createPlayer(classDef);   // a local shell (getters/camera/HUD) — not the authority
   world.clientSeatId = selfSeat;
   // META mutations on a client are INTENTS: ship them to the host (which owns every
@@ -1786,6 +1813,9 @@ function startAsClient(classDef: ClassDef, selfSeat: string): void {
 function resetToLocal(): void {
   unsubscribeFromHost();
   sessionDispose?.(); sessionDispose = null;
+  // Dropped BEFORE net.leave() below: closing our own channels fires the client
+  // handlers, and a teardown we chose is not a host that vanished.
+  hostLostDispose?.(); hostLostDispose = null;
   pendingRejoins.clear(); pendingRejoinClass = null;
   pendingActions.length = 0;
   net.leave();
@@ -1794,16 +1824,41 @@ function resetToLocal(): void {
 }
 
 /** Return to the start menu, always resetting the transport to local first — so
- *  a co-op host's death or a client's Leave can't strand a stale WebRtcTransport. */
-function toStartMenu(): void {
+ *  a co-op host's death or a client's Leave can't strand a stale WebRtcTransport.
+ *  `notice` is the reason we landed here, shown on the menu (a session that ended
+ *  under the player must say so — an unexplained menu reads as a crash). */
+function toStartMenu(notice?: string): void {
+  // A HOST SAYS GOODBYE FIRST — and says it HERE rather than in leaveCoop, so
+  // that every road to the menu carries it (the Leave button, "Save & Main
+  // Menu", any future exit), never just the one that remembered. The ordering is
+  // load-bearing: resetToLocal closes the datachannels synchronously, so a
+  // hostLeft sent after it is dropped on the floor. If the flush is lost anyway,
+  // those closing channels still land every client in the same place through
+  // onHostLost — the two roads deliberately back each other up.
+  if (net.isHost && coopActive()) net.sendSession({ t: 'hostLeft' });
   resetToLocal();
   couchReset(); // guest seats die with the world; the pads are free again
   running = false;
-  ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
+  ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar, notice);
 }
 
-/** Leave a co-op session and return to the menu (client or host). */
+/** Leave a co-op session and return to the menu (client or host). The host's
+ *  goodbye rides toStartMenu, which every exit road already shares. */
 function leaveCoop(): void { toStartMenu(); }
+
+/** CLIENT: the session is OVER — the host said goodbye (`hostLeft`) or its
+ *  connection died silently (onHostLost). There is no host migration, so the one
+ *  answer to either is to drop back to a plain local transport and land at the
+ *  start menu wearing the reason. Deliberately NOT onClientRunEnd's shape: that
+ *  offers a class pick because the host is starting another run, and there is no
+ *  longer a host to ask. Idempotent — a goodbye followed by the channel closing
+ *  arrives twice, and resetToLocal has already made us our own host by then. */
+function onHostGone(reason: string): void {
+  if (net.isHost) return;   // a host has no host to lose — and after the first
+                            // call resetToLocal has made us one, so this is also
+                            // the idempotence guard for the second arrival.
+  toStartMenu(reason);      // stops the loop, drops the shell, states the reason
+}
 
 // THE QUIT FLUSH: Alt-F4, the window ✕, a tab close — one last DURABLE save
 // (sendBeacon, the same machinery the permadeath wipe trusts to survive a

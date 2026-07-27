@@ -280,6 +280,10 @@ export class UI {
     onContinue: (s?: CharacterSave | null) => void;
     onCoop?: () => void;
     onRoster?: (e: RosterEntry) => void;
+    /** Why we landed here (a co-op session that ended under the player). Shown
+     *  until the menu is next opened without one — the Vault/Options sub-views
+     *  return through showStartMenu with no notice, which clears it. */
+    notice?: string;
   } | null = null;
   /** The pending rebind keydown-capture listener (armed when a row is clicked,
    *  before a key is pressed). Tracked so it can be torn down on re-render / any
@@ -6059,9 +6063,10 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     onContinue: (s?: CharacterSave | null) => void,
     onCoop?: () => void,
     onRoster?: (e: RosterEntry) => void,
+    notice?: string,
   ): void {
     this.hideAll();
-    this.startHandlers = { onStart, onContinue, onCoop, onRoster };
+    this.startHandlers = { onStart, onContinue, onCoop, onRoster, notice };
     this.renderStartMenu();
     this.startMenu.classList.remove('hidden');
   }
@@ -6089,6 +6094,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.startMenu.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div class="acct-head">Account Level <b>${acc.level}</b> · <b>${acc.credits}</b> ${META_CURRENCY_LABEL}</div>
+      ${h.notice ? `<div class="acct-head" style="color:#e8b06a">${h.notice}</div>` : ''}
       <div class="esc-btns">
         <button id="sm-start">Start New Game</button>
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
