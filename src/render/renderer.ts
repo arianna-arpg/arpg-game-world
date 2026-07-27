@@ -2093,6 +2093,7 @@ export class Renderer {
     const wf = world.walk;
     if (!(wf instanceof GridWalkField)) return;
     const { ctx } = this;
+    const tMs = world.time * 1000;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const cell = wf.cell;
     const c0 = Math.max(0, Math.floor(this.cam.x / cell));
@@ -2107,17 +2108,17 @@ export class Renderer {
         const vis = regionKind(id)?.visual;
         if (!vis?.animate) continue;
         let alpha = vis.alpha ?? 1;
-        if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(performance.now() / 650 + cx * 0.3 + cy * 0.3);
-        else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(performance.now() / 900 + cx * 0.2);
+        if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(tMs / 650 + cx * 0.3 + cy * 0.3);
+        else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(tMs / 900 + cx * 0.2);
         // SHIMMER (the frail cloud): a quick, cell-desynced glitter — the wash
         // itself is the warning, so it has to LIVE, not sit like paint.
-        else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(performance.now() / 480 + (cx * 7 + cy * 13) * 0.53);
-        else if (vis.animate === 'prism') alpha *= 0.72 + 0.28 * Math.sin(performance.now() / 700 + (cx * 5 + cy * 9) * 0.41);
+        else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(tMs / 480 + (cx * 7 + cy * 13) * 0.53);
+        else if (vis.animate === 'prism') alpha *= 0.72 + 0.28 * Math.sin(tMs / 700 + (cx * 5 + cy * 9) * 0.41);
         // SOULS (the living water): the deep's own breath is SLOW and broad —
         // cells swell together in drifting swathes, not a glitter (the
         // under-surface figures draw in the overlay pass below).
         else if (vis.animate === 'souls') {
-          alpha *= 0.9 + 0.1 * Math.sin(performance.now() / 2400 + cx * 0.11 + cy * 0.07);
+          alpha *= 0.9 + 0.1 * Math.sin(tMs / 2400 + cx * 0.11 + cy * 0.07);
           soulsFill = vis.fill;
         }
         ctx.globalAlpha = Math.max(0, alpha);
@@ -2126,13 +2127,13 @@ export class Renderer {
         // Any future kind joins by declaring animate:'prism' — the fill color
         // is ignored in favour of the living hue.
         ctx.fillStyle = vis.animate === 'prism'
-          ? `hsl(${(performance.now() / 24 + (cx * 11 + cy * 17) * 6) % 360} 78% 68%)`
+          ? `hsl(${(tMs / 24 + (cx * 11 + cy * 17) * 6) % 360} 78% 68%)`
           : vis.fill;
         ctx.fillRect(cx * cell, cy * cell, cell + 0.6, cell + 0.6);
       }
     }
     ctx.globalAlpha = 1;
-    if (soulsFill) this.drawSoulsUnderSurface(wf);
+    if (soulsFill) this.drawSoulsUnderSurface(wf, world.time);
   }
 
   /** THE UNDER-SURFACE (animate:'souls' — the River of Souls' living deep):
@@ -2141,9 +2142,8 @@ export class Renderer {
    *  seeded on a world-anchored lattice (no state, no churn: a figure lives
    *  where its hash says, breathes on its own slow clock, and fades back
    *  under). View-culled; a handful of path draws per frame. */
-  private drawSoulsUnderSurface(wf: GridWalkField): void {
+  private drawSoulsUnderSurface(wf: GridWalkField, t: number): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const STEP = 150; // lattice pitch, world units
     const gx0 = Math.floor(this.cam.x / STEP) - 1, gx1 = Math.ceil((this.cam.x + vw) / STEP) + 1;
@@ -3437,7 +3437,7 @@ export class Renderer {
 
   private drawExits(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     for (const e of world.exits) {
       const locked = world.isExitLocked(e);
       // A BOUNDARY-GATE exit answers in its enclave's color (the gate row's
@@ -3763,7 +3763,7 @@ export class Renderer {
    *  blink. The implosion pop + the final blast render via the flashes loop (no code here). */
   private drawDeathBursts(world: World): void {
     const { ctx } = this;
-    const t = world.time, now = performance.now();
+    const t = world.time, tMs = t * 1000;
     for (const b of world.deathBurstsView()) {
       // Refuse non-finite work (same contract as drawFlash): the gradient
       // calls below are the ONE canvas surface that THROWS on a bad number
@@ -3810,7 +3810,7 @@ export class Renderer {
           ctx.beginPath(); ctx.arc(p.x, p.y, 7 - k * 2, 0, Math.PI * 2); ctx.fill();
         }
         // The element-coloured sphere — the dominant tell of what it deals.
-        const r = 9 + 2.5 * (0.55 + 0.45 * Math.sin(now / 300));
+        const r = 9 + 2.5 * (0.55 + 0.45 * Math.sin(tMs / 300));
         const grd = ctx.createRadialGradient(b.pos.x, b.pos.y, 0, b.pos.x, b.pos.y, r * 2.2);
         grd.addColorStop(0, b.color); grd.addColorStop(0.55, b.color); grd.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.globalAlpha = 0.6; ctx.fillStyle = grd;
@@ -3820,7 +3820,7 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, r * 0.34, 0, Math.PI * 2); ctx.fill();
         // Arming: blink the TRUE blast-radius ring so the player sees exactly how far to dash.
         if (b.arming) {
-          ctx.globalAlpha = Math.sin(now / 40) > 0 ? 0.85 : 0.3; ctx.strokeStyle = b.color; ctx.lineWidth = 2;
+          ctx.globalAlpha = Math.sin(tMs / 40) > 0 ? 0.85 : 0.3; ctx.strokeStyle = b.color; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, b.radius, 0, Math.PI * 2); ctx.stroke();
         }
         ctx.globalAlpha = 1;
@@ -4573,7 +4573,7 @@ export class Renderer {
 
     // Protection domes: the bubble around the construct.
     if (a.construct?.kind === 'dome' && a.construct.domeRadius) {
-      const t2 = performance.now() / 1000;
+      const t2 = world.time;
       ctx.globalAlpha = 0.1 + 0.04 * Math.sin(t2 * 2.5);
       ctx.fillStyle = a.color;
       ctx.beginPath();
@@ -4590,7 +4590,7 @@ export class Renderer {
 
     // Armed fuse: an urgent blinking ring closing in on the bang.
     if (a.fuse !== undefined) {
-      const blink = Math.sin(performance.now() / 40) > 0;
+      const blink = Math.sin(world.time * 25) > 0;
       ctx.globalAlpha = blink ? 0.9 : 0.4;
       ctx.strokeStyle = '#ff5050';
       ctx.lineWidth = 3;
@@ -4643,7 +4643,7 @@ export class Renderer {
     // Ears/horns/spikes/wings bake into the adorn sprite above. TENTACLES
     // stay live — the eldritch writhe is per-frame motion no bake can hold.
     if (a.adorn === 'tentacles') {
-      const t = performance.now() / 1000;
+      const t = world.time;
       ctx.strokeStyle = a.color;
       ctx.lineWidth = 2;
       for (let s = 0; s < 6; s++) {
@@ -5076,7 +5076,7 @@ export class Renderer {
 
   private drawAuras(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     for (const a of world.actors) {
       if (a.dead || a.activeAuras.size === 0) continue;
       for (const aura of a.activeAuras.values()) {
@@ -5098,7 +5098,7 @@ export class Renderer {
   /** Mark runes and gate tethers. */
   private drawMovementMarkers(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     // Mark/Recall runes on the player's bar
     for (const inst of world.player.skills) {
       const mp = inst?.state?.markPos;
@@ -5378,7 +5378,7 @@ export class Renderer {
     const wp = world.waypointPos;
     if (!wp) return;
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     const attuned = world.discoveredWaypoints.has(world.zone.id);
     const ley = world.leylineView();
     const besieged = !!ley?.besieged;
@@ -5470,7 +5470,7 @@ export class Renderer {
    *  registry fragment kinds, tinted from their defining data). */
   private drawRemnants(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     const COLORS = { fire: '#ff7a3a', cold: '#7ac8e8', lightning: '#ffe14a' };
     for (const r of world.remnants) {
       const color = r.element ? COLORS[r.element]
@@ -5589,7 +5589,7 @@ export class Renderer {
   private drawTethers(world: World): void {
     const { ctx } = this;
     if (!world.tethers.length) return;
-    const t = performance.now() / 1000;
+    const t = world.time;
     const pulse = 0.75 + 0.25 * Math.sin(t * 5);
     for (const tb of world.tethers) {
       ctx.save();

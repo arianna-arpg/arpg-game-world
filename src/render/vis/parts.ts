@@ -2216,13 +2216,13 @@ const chains: PartPainter = (ctx, r, spec, pal) => {
 
 /** RAPTOR ARMS — the mantis's folded scythe-forelimbs: two segments hinged
  *  at a raised elbow, blade tucked inward, held COCKED. Draws both sides
- *  by default (a mantis prays with the pair). params: len, fold (elbow
- *  lift), side (0 = both; 1 / -1 = that arm alone — the asymmetric
- *  builds: a duelist's single scythe, a tell's one raised arm). */
+ *  (a mantis prays with the pair). params: len, fold (elbow lift). */
 const raptorArms: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'base');
   const len = P(spec, 'len', 0.9);
   const fold = P(spec, 'fold', 0.55);
+  // side: 0 = both arms (the classic pair); 1 / -1 = that arm alone — the
+  // asymmetric builds (a duelist's single scythe, a tell's one raised arm).
   const side = P(spec, 'side', 0);
   place(ctx, r, spec, (c, R) => {
     for (const m of [1, -1]) {

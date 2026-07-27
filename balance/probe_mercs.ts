@@ -22,11 +22,27 @@
 //     the Vault card hides until LEDGER_MERC_MARKET_MET is stamped.
 //   - the worldstate sanitizer: unknown zones/templates/classes drop, empty
 //     sheets survive, garbage never crashes, ghost-zone sheets never write.
+//   - THE HIRELING'S HAND (engine/mercbrain.ts): the cadence flourish NEVER
+//     presses a trigger-socketed slot — a merc is a seat, so its press would
+//     TOGGLE the gem's arming (useSkill's seatPress lane) — the arming stays
+//     wherever the player left it while real buttons still take their turn,
+//     and an all-trigger bar spends its beat empty-handed (the tries bound).
+//   - its second law: a flourish only ever RAISES — a toggle whose state
+//     STANDS (active aura / drawn hex / strobe stance / summon contract) is
+//     walked past while it stands (the press would lower it: useSkill's seat
+//     toggle-off lanes) and pressed again only when it is down.
 // Run: npx tsx balance/probe_mercs.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { vec } from '../src/core/math';
+import { mod } from '../src/engine/stats';
+import { MERC_BRAIN, MercInput } from '../src/engine/mercbrain';
+import { instanceTrigger, makeSkillInstance, type SkillInstance } from '../src/engine/skills';
+import { SKILLS } from '../src/data/skills';
+import { SUPPORTS } from '../src/data/supports';
+import type { PlayerInput } from '../src/net/intent';
 import {
   LEDGER_MERC_MARKET_MET, LEDGER_MERC_OUTPOST_FOUND, MERC_CFG, MERC_SCHEMA,
   type MercOffer, type MercRosterEntry,
@@ -460,6 +476,141 @@ check('A: at the unlock level the ordinary roll seats wild camps', armedAt30.len
   const ws = wZ.serializeWorldState();
   check('E: the save-side kept filter drops sheets whose ground is gone',
     !!ws.mercSheets && ws.mercSheets['zone_that_never_was'] === undefined);
+}
+
+// --------------------------------- F. THE HIRELING'S HAND (trigger slots)
+{
+  // A trigger-socketed slot is NOT a button: a seat press TOGGLES the gem's
+  // arming (world.useSkill's seatPress lane), and a merc IS a seat — its
+  // intent rides applyInputs. The cadence flourish must walk PAST such
+  // slots, or a veteran's cast-on-X build flips armed/disarmed every beat.
+  seedGlobalRandom(0x3e5c);
+  const w = makeSimWorld('warrior', 0xf17a);
+  const warrior = CLASSES.find(c => c.id === 'warrior')!;
+  const seat = w.addSeat('m0', warrior, new MercInput());
+
+  const mk = (sid: string): SkillInstance => makeSkillInstance(SKILLS[sid], 1, 1);
+  const trig = mk('firebolt');
+  trig.sockets[0] = { def: SUPPORTS.cast_on_crit, level: 1 };
+  const plain = mk('firebolt');
+  seat.actor.skills = [mk('cleave'), trig, plain, null, null, null, null, null];
+  check('F: the rig gem actually rides its host (admission sanity)',
+    instanceTrigger(trig) !== undefined && instanceTrigger(plain) === undefined);
+
+  // A durable standing target: the sim never runs monster brains, so the
+  // zombie neither dies inside the window nor fights back — the merc just
+  // engages and drums its cadence against it.
+  const foe = w.createMonster('zombie', 30, 'enemy');
+  w.actors.push(foe);
+  w.player.pos = vec(400, 400);
+  seat.actor.pos = vec(460, 400);
+  foe.pos = vec(560, 400);
+
+  // The HOST FRAME verbatim (sim/runner.ts): poll every seat's source,
+  // applyInputs, update — the same artery a live hireling's presses ride.
+  const edges = new Array<number>(seat.actor.skills.length).fill(0);
+  const run = (secs: number): void => {
+    const dt = 1 / 30;
+    for (let t = 0; t < Math.round(secs * 30); t++) {
+      const inputs = new Map<string, PlayerInput>();
+      for (const s of w.seats) {
+        const intent = s.input.poll(s.actor, w, dt);
+        if (!intent) continue;
+        inputs.set(s.id, intent);
+        if (s === seat) intent.edge.forEach((e, i) => { if (e) edges[i]++; });
+      }
+      w.applyInputs(inputs, dt);
+      w.update(dt);
+    }
+  };
+  run(MERC_BRAIN.altCastSec * 4); // beats at 0.5/1.5/2.5/3.5 × altCastSec
+  check('F: the cadence still lands on real buttons (the plain slot cycles)',
+    edges[2] >= 3, `${edges[2]} presses`);
+  check('F: the trigger-socketed slot is NEVER pressed',
+    edges[1] === 0, `${edges[1]} presses`);
+  check('F: the arming stays where the player left it (armed)',
+    !trig.state?.triggerOff);
+  check('F: the rigged bar rode the whole window (no silent rebuild)',
+    seat.actor.skills[1] === trig && seat.actor.skills[2] === plain);
+
+  // EVERY alt slot trigger-socketed + the player left one DISARMED: the
+  // walk ends empty-handed on its tries bound (this section completing IS
+  // the termination proof), presses nothing, and flips nothing.
+  const trigB = mk('firebolt');
+  trigB.sockets[0] = { def: SUPPORTS.cast_on_crit, level: 1 };
+  (trig.state ??= {}).triggerOff = true; // the player disarmed it
+  seat.actor.skills = [mk('cleave'), trig, trigB, null, null, null, null, null];
+  edges.fill(0);
+  run(MERC_BRAIN.altCastSec * 3);
+  check('F: an all-trigger bar spends its beats empty-handed (no alt press)',
+    edges.every(n => n === 0), edges.join(','));
+  check('F: the disarmed gem STAYS disarmed across the beats',
+    trig.state?.triggerOff === true && !trigB.state?.triggerOff);
+}
+
+// ------------------------------ G. THE HIRELING'S HAND (standing toggles)
+{
+  // The flourish only ever RAISES: an alt press on a toggle whose state
+  // stands (active aura / drawn hex — useSkill's seat toggle-off lanes)
+  // would LOWER it, blinking the aura/hex with a beats-long period. The
+  // merc presses such a slot while it is DOWN, then walks past it while
+  // it stands — raised once, up for good, real buttons still cycling.
+  seedGlobalRandom(0x3e5c);
+  const w = makeSimWorld('warrior', 0xf17b);
+  const warrior = CLASSES.find(c => c.id === 'warrior')!;
+  const seat = w.addSeat('m0', warrior, new MercInput());
+  // Head-room for the reservations (devotion's flat 40 + the hex's 25%):
+  // the law under test is the walk, never the merc's purse.
+  seat.actor.sheet.setSource('probe_mana', [mod('mana', 'flat', 400)]);
+  seat.actor.mana = seat.actor.maxMana();
+
+  const mk = (sid: string): SkillInstance => makeSkillInstance(SKILLS[sid], 1, 1);
+  const aura = mk('devotion');               // TOGGLE aura (reserves mana)
+  const hex = mk('despair');                 // curse host…
+  hex.sockets[0] = { def: SUPPORTS.curse_on_hit, level: 1 }; // …made a hex TOGGLE
+  const plain = mk('firebolt');
+  // EMPTY primary, deliberately: the raise paths sit BEHIND canUse (the
+  // busy gate at world.useSkill — unlike the trigger toggle, which
+  // pre-dates it), so a rig that swings every frame starves every raise
+  // and proves nothing. Idle between beats = the raises go through the
+  // REAL gate and the walk's skip is what's actually under test.
+  seat.actor.skills = [null, aura, hex, plain, null, null, null, null];
+
+  const foe = w.createMonster('zombie', 30, 'enemy');
+  w.actors.push(foe);
+  w.player.pos = vec(400, 400);
+  seat.actor.pos = vec(460, 400);
+  foe.pos = vec(560, 400);
+
+  // The host frame again — plus a per-frame CONTINUITY watch: once a state
+  // is seen standing, it must never blink off for the rest of the window.
+  const edges = new Array<number>(seat.actor.skills.length).fill(0);
+  let auraSeen = false, auraDropped = false, hexSeen = false, hexDropped = false;
+  const dt = 1 / 30;
+  for (let t = 0; t < Math.round(MERC_BRAIN.altCastSec * 6 * 30); t++) {
+    const inputs = new Map<string, PlayerInput>();
+    for (const s of w.seats) {
+      const intent = s.input.poll(s.actor, w, dt);
+      if (!intent) continue;
+      inputs.set(s.id, intent);
+      if (s === seat) intent.edge.forEach((e, i) => { if (e) edges[i]++; });
+    }
+    w.applyInputs(inputs, dt);
+    w.update(dt);
+    if (seat.actor.activeAuras.has('devotion')) auraSeen = true;
+    else if (auraSeen) auraDropped = true;
+    if (seat.actor.hexToggles.has('despair')) hexSeen = true;
+    else if (hexSeen) hexDropped = true;
+  }
+  check('G: the merc RAISES the aura (one press, the toggle comes up)',
+    edges[1] === 1 && seat.actor.activeAuras.has('devotion'), `${edges[1]} presses`);
+  check('G: the raised aura STAYS up across the beats (never blinks)',
+    auraSeen && !auraDropped);
+  check('G: the hex is DRAWN once and stays drawn (curseOnHit, same law)',
+    edges[2] === 1 && hexSeen && !hexDropped && seat.actor.hexToggles.has('despair'),
+    `${edges[2]} presses`);
+  check('G: real buttons still cycle around the standing toggles',
+    edges[3] >= 3, `${edges[3]} presses`);
 }
 
 console.log(failed ? `\nprobe_mercs: ${failed} FAILURE(S)` : '\nprobe_mercs: ALL PASS');

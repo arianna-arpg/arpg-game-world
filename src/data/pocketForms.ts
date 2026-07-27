@@ -101,6 +101,11 @@ registerPocketForm({
 // area budgeting does the rest), and the plunder is the point — gem caches on
 // the POIs, a chest staked on clearing the guard, and every kill's drop gates
 // tripled. No patrols, no wars, no arena modes: you bought a strongroom.
+// The hard-authored 'clear' is safe on this small a floor BY LAW, not luck:
+// the cull derives its ask from objectiveCountable's population, and that
+// predicate's confine clause (World.confineUnreachable) excludes any dweller
+// confined to ground the door cannot reach — so a tiny pocket's ask can never
+// exceed what a walker can actually fell (probe_objectives RIG I).
 registerPocketForm({
   id: 'hoard',
   pitch: 'the wardens camp over a hoard — a small hollow littered with plunder, lightly held',

@@ -12,7 +12,10 @@
 //      a real melee swing floats kind 'dmg'; the co-op wire round-trips
 //      kinds, notices and feed rows losslessly),
 //   D. the SETTINGS round-trip (defaults, rail clamps, sparse-record
-//      sanitization, unknown-anchor fallback).
+//      sanitization, unknown-anchor fallback),
+//   E. the WAR DESK (faction conquest news obeys the entry law — an
+//      UNVISITED zone's fall makes no bulletin while the conquest state
+//      still flips; a visited fall AND reclaim both ride channel 'war').
 // Run: npx tsx balance/probe_infostream.ts
 // ---------------------------------------------------------------------------
 
@@ -26,10 +29,11 @@ import {
 import { makeSettings, serializeSettings, deserializeSettings, type SettingsSave } from '../src/meta/settings';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { SUPPORTS } from '../src/data/supports';
-import { MONSTERS } from '../src/data/monsters';
+import { FACTIONS, MONSTERS } from '../src/data/monsters';
 import { ESSENCES } from '../src/data/essences';
 import type { Actor } from '../src/engine/actor';
 import type { World } from '../src/engine/world';
+import type { ZoneDef } from '../src/data/zones';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -214,6 +218,41 @@ const check = (name: string, ok: boolean, detail = ''): void => {
   check('D4: an unknown anchor falls back and junk record values drop (booleans only)',
     !!healed && healed.noticeAnchor === NOTICE_CFG.anchorDefault
     && Object.keys(healed.floatKinds).length === 0);
+}
+
+// ------------------------------------------------ E. the war desk (conquest news)
+{
+  const w: World = makeSimWorld('juggernaut', 0x1f0c5);
+  const stub = (id: string, name: string): ZoneDef => {
+    const z = {
+      id, name, level: 9, seed: 1, size: { w: 1200, h: 900 }, map: { x: 30, y: 30 },
+      exits: [], layoutParams: {}, objective: { kind: 'clear' },
+    } as unknown as ZoneDef;
+    w.zoneMap[id] = z;
+    return z;
+  };
+  const seen = stub('qa_conq_seen', 'Emberwatch Fen');
+  const unseen = stub('qa_conq_unseen', 'Umberfall Reach');
+  w.visited.add(seen.id); // walked ground — the only door the news may use
+  const fid = Object.keys(FACTIONS)[0];
+  const fname = FACTIONS[fid]?.name ?? fid;
+  w.sim.faction.conquests.push(
+    { zoneId: unseen.id, faction: fid, reclaimed: false },
+    { zoneId: seen.id, faction: fid, reclaimed: false },
+    { zoneId: seen.id, faction: fid, reclaimed: true },
+  );
+  for (let i = 0; i < 3; i++) w.update(0.1); // the engine's pump drains the source
+  check('E1: an UNVISITED zone\'s fall makes no news (state flips; the feed stays silent)',
+    !w.notices.some(n => n.text.includes(unseen.name)),
+    w.notices.map(n => n.text).join(' | ') || 'feed empty');
+  const fall = w.notices.find(n => n.text === `${seen.name} falls to ${fname}!`);
+  check('E2: a VISITED zone\'s fall lands, riding the war channel',
+    !!fall && fall.channel === 'war', fall ? `channel ${fall.channel}` : 'no bulletin');
+  const reclaim = w.notices.find(n => n.text === `${fname} reclaim ${seen.name}!`);
+  check('E3: the reclaim variant rides the same war channel',
+    !!reclaim && reclaim.channel === 'war', reclaim ? `channel ${reclaim.channel}` : 'no bulletin');
+  check('E4: the queue drained WHOLE (a suppressed row never lingers to replay)',
+    w.sim.faction.conquests.length === 0, `${w.sim.faction.conquests.length} left`);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');

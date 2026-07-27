@@ -1230,7 +1230,7 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
       breaks = true;
     }
   }
-  if (!breaks && m.breakOutnumbered) {
+  if (m.breakOutnumbered) {
     const { deficit, radius } = m.breakOutnumbered;
     let foes = 0, friends = 0;
     for (const a of world.actors) {

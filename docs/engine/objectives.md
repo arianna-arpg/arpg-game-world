@@ -177,6 +177,16 @@ Dials in `src/data/objectives.ts` `CLEAR_CFG`; per-zone overrides on the spec
   events included — the same honesty as the writ and the offering. The
   predicate is `objectiveCountable`, the SAME one `countedEnemies` runs, so
   the scoreboard and the population read can never disagree about who counts.
+- THE CONFINE CLAUSE (the soft-lock guard's instance half,
+  `World.confineUnreachable`): a body hard-confined to a disc whose HEART the
+  walker cannot reach — its confine centre off the zone's own pathing
+  components (`pathField` → `reachable`, anchored at the entry) — neither
+  feeds the derived ask nor holds the floor, however its def was authored.
+  Def-level `noObjective` covers kinds; this covers the stamped body, so a
+  forgotten def row can no longer wedge a small floor (the hoard pocket's
+  hard-authored 'clear' leans on it — probe RIG I). Where no verdict exists
+  (boundless ground, an unwalkable entry) the body counts, exactly as before:
+  the clause may only excuse a wedge, never invent a completion.
 - THE MERCY FLOOR: an EMPTIED floor completes regardless of the tally — a
   sparse mint can never ask more than it holds, and old-save asks can never
   wedge. Completing the tally reads "culled!", the floor reads "cleared!".

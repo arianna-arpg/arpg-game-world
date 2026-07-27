@@ -12,6 +12,8 @@
 // journey-relative, everything pure of the clock), THE SOUL-SHIP's lane on
 // the pure resolver, THE DECK LAW live (a near-landmass deck carrying
 // bodies rigidly through bends, byte-determinism of carried positions),
+// THE CALL AT THE PIER's entry-law refresh (the stamp renames the standing
+// dock portal from 'Uncharted' to the destination LIVE — no zone reload),
 // THE BOARDS SHIELD + THE SOUL TETHER + THE BOARDWALK (grid soul-water
 // drains the survival meter; the deck suspends it; a poured boardwalk
 // pier suspends it STATICALLY — the bridge law), the PORTS mint (landing
@@ -688,6 +690,86 @@ const findInstance = (fieldSeed: number): CourseInstance => {
     !!ZONE_KINDS['soulriver'] && !!ZONE_KINDS['soulriver'].lanes && ZONE_KINDS['soulriver'].keepLevel === true);
   check('kit: the shores are SEALED by registry (ZoneKindDef.staticExits)',
     ZONE_KINDS['soulriver'].staticExits === true);
+}
+
+// --- 9) THE CALL AT THE PIER names the door NOW (the entry-law refresh) -----
+{
+  const world = makeSimWorld('warrior', 9106);
+  const fs = world.sim.biomeField.fieldSeed;
+  const inst = findInstance(fs);
+  const seat = riverSeatOf(inst);
+  // A discovering shore beside the seat (the real mint's `source` argument;
+  // whole enough for the ports' road weave to read — objective and all).
+  const shore = {
+    id: 'uw_probe_call_src', name: 'probe shore', level: 12, seed: 3,
+    size: { w: 2000, h: 1500 }, map: { x: seat.x + 90, y: seat.y },
+    dimension: 'underworld', biome: 'grave', objective: { kind: 'clear' },
+    exits: [], layoutParams: {},
+  } as unknown as ZoneDef;
+  world.zoneMap[shore.id] = shore;
+  const river = (world as unknown as {
+    mintSoulriverZone(s: ZoneDef, i: CourseInstance): ZoneDef;
+  }).mintSoulriverZone(shore, inst);
+  const palette = (river.layoutParams as { dockBiomes?: string[] }).dockBiomes ?? [];
+  const plan = soulriverPlan(river.seed ?? 0, river.size.w, river.size.h, palette);
+  check('call: the river minted with landings to name', plan.landings.length >= 1,
+    `${plan.landings.length} landings`);
+
+  const landing = plan.landings[0];
+  const dockId = `${SOULRIVER_CFG.dockIdBase}_${inst.key}_${landing.i}`;
+  const dest = world.zoneMap[dockId];
+  check('call: the landing mints veiled (revealed only as found)',
+    !!dest && dest.veiled === true);
+
+  world.loadZone(river.id);
+  check('call: aboard the river zone itself (no reload after this point)',
+    world.zone.id === river.id, world.zone.id);
+  // Loading STRAIGHT into the river ran the entry ring-lift over every
+  // adjacent landing (the veil invariant — dev entry). A live walker can
+  // stand aboard with this landing still VEILED (a resumed mid-voyage save
+  // restores its veils; the ring-lift ran in a session long past) — re-stand
+  // the veil to reproduce that knowledge state. The door speaks the same
+  // 'Uncharted' brush either way (unveiled-but-unknown is the same read).
+  if (dest) dest.veiled = true;
+  const door = world.exits.find(e => e.to === dockId);
+  check('call: before the call the door reads the uncharted brush',
+    !!door && !!dest && door.label === `Uncharted · Lv ${dest.level}`, door?.label ?? 'no door');
+
+  // Sail the clock forward to a moment the ferry stands PAUSED at this pier,
+  // seat the hero on the boards, and let the REAL update speak the call.
+  const lane = world.tracks.find(t => t.spec.tag === 'pale_ferry');
+  check('call: the ferry lane stands armed in the poured zone', !!lane && lane.armed === true);
+  if (lane && dest && door) {
+    let tAt = -1;
+    let seatAt = { x: 0, y: 0 };
+    const t0 = world.time + 0.05;
+    outer:
+    for (let t = t0; t < t0 + lane.periodSec * 2.5; t += 0.1) {
+      for (const r of lane.riders) {
+        if (!r.def.carry) continue;
+        const p = trackPose(lane, t, r.phase, r.def);
+        if (p.pending || !p.paused) continue;
+        if (Math.hypot(p.x - landing.pier.x, p.y - landing.pier.y) < 3) {
+          tAt = t; seatAt = { x: p.x, y: p.y }; break outer;
+        }
+      }
+    }
+    check('call: a paused deck stands at the landing pier inside two cycles',
+      tAt >= 0, tAt >= 0 ? `t=${tAt.toFixed(1)}s` : 'never paused there');
+    if (tAt >= 0) {
+      world.time = tAt; // forward only — the scan starts past the live clock
+      world.player.pos = vec(seatAt.x, seatAt.y);
+      (world as unknown as { updateSoulriver(dt: number): void }).updateSoulriver(DT);
+      check('call: the stamp lands (veil down, landing surveyed)',
+        dest.veiled === false && world.surveyed.has(dockId));
+      const sub = dest.objective.kind === 'waves' && dest.objective.waves === 0
+        ? 'endless' : `Lv ${dest.level}`;
+      check('call: the standing dock portal re-speaks the NAME without a reload',
+        door.label === `${dest.name} · ${sub}`, door.label);
+      check('call: the cry itself floats at the pier',
+        world.texts.some(t => t.text === `the ship calls at ${dest.name}`));
+    }
+  }
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

@@ -14,6 +14,7 @@
 
 import { installHeadlessShims } from './shims';
 import { resetActorIdCounter } from '../engine/actor';
+import { FORECHART_CFG } from '../world/forechart';
 // The same side-effect registrations main.ts performs — a World without them
 // is missing stamps/landmarks/layouts and zone generation would be wrong.
 import '../data/clusters';
@@ -87,6 +88,16 @@ export function bootSimEngine(): void {
   if (booted) return;
   booted = true;
   installHeadlessShims();
+  // THE PINNED GOVERNOR: forechart's TIME GOVERNOR (beatBudgetMs) is a
+  // wall-clock frame guard for the live client — under the harness it made
+  // halo progress a function of MACHINE LOAD (units-per-beat varied with the
+  // clock), so the standing web at any world-time wobbled, and every seeded
+  // roll downstream of web state (mint name-dedupe retries, exit picks, and
+  // through them zone-load fixture counts) wobbled with it — one seed rolled
+  // 3/4/5 burial mounds in probe_objectives G1. Sim beats run the COUNT
+  // budget alone: determinism is a harness property (see sim/rng.ts), and
+  // the live game keeps its guard untouched.
+  FORECHART_CFG.beatBudgetMs = Infinity;
   registerAllPackageFactions();
   validateContent();
   ZONES[SIM_ARENA_ID] = simArenaDef();

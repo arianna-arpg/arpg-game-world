@@ -1345,6 +1345,11 @@ export function validateContent(): void {
     // guard; this makes forgetting it a boot-time warning, not a stuck
     // player. (Walkable habitats — water, bog, the now-liquid lava — are
     // reachable at a price and stay counted.)
+    // Deliberately a WARN, never an error: live data trips it (skep_bee
+    // patrols the standable grace band around its solid hive — the def-level
+    // read is a judgment call, not a proof), and the engine's confine clause
+    // (World.objectiveCountable → confineUnreachable) refuses the wedge at
+    // runtime per stamped instance regardless of what the def forgot.
     if (m.habitat && hasDoodadRule(m.habitat.kind)
       && doodadRuleOf(m.habitat.kind).blocksMove && !m.noObjective) {
       warn(`${m.id}: habitat '${m.habitat.kind}' blocks movement but the def lacks noObjective — a build that cannot reach it soft-locks the clear`);

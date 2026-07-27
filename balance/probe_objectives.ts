@@ -38,13 +38,11 @@ import {
 } from '../src/data/zones';
 import { TILESETS } from '../src/data/tilesets';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
-import { MONSTERS } from '../src/data/monsters';
 import { lightwellOf } from '../src/engine/lightwells';
 import { transitDwell, transitOf } from '../src/data/transit';
 import { placeZoneAt } from '../src/engine/worldgen';
 import { CONTEST_CFG } from '../src/data/objectives';
 import { BEACON_CFG } from '../src/data/beacons';
-import { LEYLINE_CFG } from '../src/data/leyline';
 import { RIFT_CFG } from '../src/data/rifts';
 import { PYRE_CFG } from '../src/data/pyres';
 import { DIG_CFG } from '../src/data/digsites';
@@ -374,6 +372,56 @@ const mintWith = (objective: ObjectiveSpec, seed: number, spread: number): strin
   step(1);
   check('H2 a partial override re-dials the law (drainAt 2 drains at 2)',
     s2.charge < 3 - 0.2, s2.charge.toFixed(2));
+}
+
+// --- RIG I: the confine clause (the soft-lock guard's instance half) -------
+// The hoard-pocket wedge shape, arranged by hand: a SMALL 'clear' floor where
+// one body is hard-confined over ground no walker can stand on (the void-
+// angler shape — a chasm, the confine disc at its heart). Before the clause:
+// pop 4 ⇒ the cull asks 4, three are killable, the zone wedges at "1 remain".
+// Under the clause: the dweller neither feeds the derived need nor holds the
+// empty-floor read — and an ordinary body still counts and still gates.
+{
+  const zid = mintWith({ kind: 'clear' }, 262626, 7);
+  killAllEnemies(); // the mint population stands down — the rig owns the floor
+  const far = w.farPoint(740);
+  // Carve the unreachable ground the way GENERATION does: the hazard doodad
+  // for the pit truth, AND — where the zone runs a walk grid — the 'chasm'
+  // region cells painted into it (a runtime doodad alone never reaches a
+  // baked walk grid; the field is what the confine clause honestly reads).
+  w.doodads.push({ pos: vec(far.x, far.y), radius: 90, kind: 'chasm' });
+  w.markDoodadsChanged();
+  if (w.walk) w.walk.fillDisc(far.x, far.y, 90, 'chasm');
+  const reach = [
+    plantFoe(w.zoneEntry.x + 120, w.zoneEntry.y),
+    plantFoe(w.zoneEntry.x + 140, w.zoneEntry.y + 60),
+    plantFoe(w.zoneEntry.x + 100, w.zoneEntry.y - 70),
+  ];
+  const angler = plantFoe(far.x + 200, far.y);
+  angler.pos = vec(far.x, far.y);     // over the pit, raw (no clamp snap)
+  angler.flying = true;               // hovers its home — the pit never swallows it
+  angler.habitat = { kind: 'chasm' }; // the terrain-bound sweep enforces the disc
+  angler.confine = { x: far.x, y: far.y, r: 40 };
+  // Re-run the load-time cull derive on the arranged floor (loadZone's own law).
+  const o = (w.zoneMap[zid] as ZoneDef).objective;
+  w.cull = null; w.objectiveDone = false;
+  const counted = w.countedEnemies() as Actor[];
+  check('I1 a body confined to unreachable ground does NOT count',
+    counted.length === 3 && !counted.includes(angler), `${counted.length} counted`);
+  const need = w.rollCullNeed(o, w.encRng) as number;
+  check('I2 the derived need excludes it (3 reachable ⇒ ask 3, never 4)',
+    need === 3, `${need}`);
+  w.cull = { need, kills: 0 };
+  w.kill(reach[0], true);
+  w.kill(reach[1], true);
+  step(0.5);
+  check('I3 an ordinary unconfined body still counts and still GATES',
+    w.objectiveDone === false && w.countedEnemies().length === 1
+    && (w.countedEnemies() as Actor[])[0] === reach[2]);
+  w.kill(reach[2], true);
+  step(0.5);
+  check('I4 every reachable body felled ⇒ the floor completes, the dweller still ALIVE',
+    w.objectiveDone === true && !angler.dead);
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURES`);

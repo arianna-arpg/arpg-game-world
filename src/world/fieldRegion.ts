@@ -122,20 +122,38 @@ export function fieldRegionAt(coord: MapCoord, seed: number): FieldExtent | null
 
   const seen = new Set<string>([`${sgx},${sgy}`]);
   const queue: { gx: number; gy: number }[] = [{ gx: sgx, gy: sgy }];
+  // THE RAGGED DOORWAY (the shard probe's null, 2026-07-27): a coord can
+  // stand on Field ground inside a cell whose CENTER samples off-Field —
+  // the silhouette's sub-cell fringe. Treating that start cell as plain
+  // boundary collapsed the flood to a 1-cell region and the dwarf floor
+  // nulled it, so the SAME blob answered differently by entry coord
+  // (entry-independence broken at the blob's own ragged edge — a bbox
+  // corner cell can sit inside the core rect with an off-Field center).
+  // The law: such a start is a DOORWAY — it expands into the component
+  // beside it but is never COUNTED (no bbox claim, exactly like the
+  // mint-side flood that skipped it), so every Field coord of a blob
+  // re-floods the identical bbox + regionId. (A doorway touching two
+  // lattice-separate components floods their union — at coord grain the
+  // ragged ground IS the connection.)
+  const doorwayStart = !cellIsField(sgx, sgy);
   let minX = sgx, maxX = sgx, minY = sgy, maxY = sgy, count = 0;
   while (queue.length && count < FIELD_GEN.maxCells) {
     const c = queue.shift()!;
     if (!inWindow(c.gx, c.gy)) continue;    // beyond the shard window — the next shard's ground
-    if (!cellIsField(c.gx, c.gy)) continue; // boundary cell — don't count or expand
-    count++;
-    if (c.gx < minX) minX = c.gx; if (c.gx > maxX) maxX = c.gx;
-    if (c.gy < minY) minY = c.gy; if (c.gy > maxY) maxY = c.gy;
+    if (cellIsField(c.gx, c.gy)) {
+      if (count === 0) { minX = maxX = c.gx; minY = maxY = c.gy; } // first REAL cell seats the bbox
+      count++;
+      if (c.gx < minX) minX = c.gx; if (c.gx > maxX) maxX = c.gx;
+      if (c.gy < minY) minY = c.gy; if (c.gy > maxY) maxY = c.gy;
+    } else if (!(doorwayStart && c.gx === sgx && c.gy === sgy)) {
+      continue; // boundary cell — don't count or expand (the doorway alone passes)
+    }
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
       const k = `${c.gx + dx},${c.gy + dy}`;
       if (!seen.has(k)) { seen.add(k); queue.push({ gx: c.gx + dx, gy: c.gy + dy }); }
     }
   }
-  // Ragged edge: the start cell center wasn't Field but the coord was — a 1-cell region.
+  // Ragged edge, isolated: no adjoining component found — a 1-cell region.
   if (count === 0) { minX = maxX = sgx; minY = maxY = sgy; }
 
   // THE DWARF FLOOR: too small on either axis to be an expanse — the caller

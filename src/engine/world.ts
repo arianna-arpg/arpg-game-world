@@ -8828,9 +8828,15 @@ export class World {
         const z = this.zoneMap[o.zoneId];
         if (z) {
           this.omenRevealed.add(o.id);
+          // Fresh knowledge? (The reveal re-stamps already-known ground
+          // idempotently — only a genuinely new name re-speaks the doors.)
+          const news = z.veiled || (!this.visited.has(z.id) && !this.surveyed.has(z.id));
           z.veiled = false;
           z.concealed = false;
           this.surveyed.add(z.id);
+          // The standing portals answer the reveal at once (the entry law —
+          // surveyAround's own refresh; no waiting for the next zone load).
+          if (news) this.refreshExitLabels();
           const line = o.lines.length ? omenLine(o, o.lines[0], here) : 'something waits out there';
           this.text(vec(this.player.pos.x, this.player.pos.y - 110),
             `${line} — it is marked on your map.`, o.color ?? OMEN_CFG.color, OMEN_CFG.size + 1);
@@ -20629,8 +20635,12 @@ export class World {
       if (def.holdPort) {
         const port = this.zoneMap[def.holdPort];
         if (port) {
+          const news = port.veiled || (!this.visited.has(port.id) && !this.surveyed.has(port.id));
           port.veiled = false;
           this.surveyed.add(port.id);
+          // The win names the port: the hold's own quay door re-speaks NOW
+          // (the entry law) — a re-won siege changes nothing and stays quiet.
+          if (news) this.refreshExitLabels();
           this.text(vec(at.x, at.y - 100),
             `the quay causeway stands open — ${port.name} waits through the gate`, '#9fd8ec', 14);
         }
@@ -20996,18 +21006,22 @@ export class World {
     // spot's veil lifts + it surveys onto the map: seeing a harbor from the
     // water IS finding it — the isles' own mint-on-sight law). Between these
     // lights the shore is breakers: they ARE the landing zones.
+    let sighted = false;
     for (const qs of seaSpotsNear(this.nodeFromSea(p), R / VOYAGE_CFG.pxPerNode + VOYAGE_CFG.islandSightPad, this.sim.biomeField.fieldSeed)) {
       const qsea = seaAt(qs.shore, this.sim.biomeField.fieldSeed);
       if (!qsea) continue;
       this.ensureSeaPorts(qsea);
       const pz = this.zoneMap[qs.id];
-      if (pz?.veiled) { pz.veiled = false; this.surveyed.add(pz.id); }
+      if (pz?.veiled) { pz.veiled = false; this.surveyed.add(pz.id); sighted = true; }
       keep.push({
         pos: this.seaFromNode(qs.shore), radius: 16, kind: 'quay_beacon',
         label: pz?.name ?? 'a harborage',
         adorn: qs.tier === 'haven' ? '#ffd898' : '#7fd0ff',
       });
     }
+    // A sighted harbor is NAMED knowledge: the standing portals re-speak at
+    // once (the entry law), not on the next zone load.
+    if (sighted) this.refreshExitLabels();
     this.doodads = keep;
   }
 
@@ -22606,8 +22620,13 @@ export class World {
         // The quest TELLS you the way ("head south") — the anchor it wired
         // to is named knowledge now. A veiled halo anchor would swallow the
         // drawn road (both ends must be visible), leaving the quest node
-        // floating on the chart with no way marked; the accept lifts it.
-        if (anchor.veiled) anchor.veiled = false;
+        // floating on the chart with no way marked; the accept lifts it —
+        // and any standing portal onto the anchor re-speaks from live state
+        // (the entry law's refresh).
+        if (anchor.veiled) {
+          anchor.veiled = false;
+          this.refreshExitLabels();
+        }
       }
     }
     this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false });
@@ -42343,6 +42362,10 @@ export class World {
         if (dest?.veiled) {
           dest.veiled = false;
           this.surveyed.add(dest.id);
+          // The call names the landing NOW: the standing dock portal flips
+          // from 'Uncharted' to the name (the entry law) — no zone reload
+          // between the cry and the door.
+          this.refreshExitLabels();
           this.text(vec(deck.x, deck.y - 90), `the ship calls at ${dest.name}`, '#9fd8ec', 15);
         }
       }
@@ -47119,7 +47142,9 @@ export class World {
    *  noObjective defs are the SOFT-LOCK GUARD: bodies whose habitat a
    *  build may be unable to reach (a void angler over its chasm) never
    *  gate a clear — they fight and drop, but the zone finishes without
-   *  them. */
+   *  them. The CONFINE CLAUSE below is that guard's instance-level half:
+   *  a body hard-confined to a disc the walker cannot reach is excluded
+   *  by what actually stands on THIS floor, not by what its def promised. */
   private objectiveCountable(a: Actor): boolean {
     return a.team === 'enemy'
       && !this.isAmbientTag(a.tag)
@@ -47132,7 +47157,34 @@ export class World {
       // Deliberately the full pair — a merely-untargetable body (a phased
       // boss, a warded heart) still counts and still gates.
       && !(a.passive && a.untargetable)
-      && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective));
+      && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective))
+      && !this.confineUnreachable(a);
+  }
+
+  /** THE CONFINE CLAUSE of the soft-lock guard — the INSTANCE half.
+   *  Def-level noObjective covers KINDS that live on forbidding ground;
+   *  this covers the STAMPED BODY: a confine disc (habitat placement, the
+   *  lazy terrain-bound derive) whose home the walker who came in the door
+   *  cannot reach must never gate a clear, however the def was authored —
+   *  a forgotten noObjective row can no longer wedge a small floor. The
+   *  test is the disc's CENTRE through the zone's own pathing truth
+   *  (pathField → reachable, component labels): the grace band at a
+   *  confine's rim often laps onto standable lip ground, but the body's
+   *  home is the disc's heart, and a build that cannot stand there may
+   *  never force the fight (the same judgment validate.ts's habitat lint
+   *  makes def-side). Cheap by construction: unconfined bodies pay one
+   *  undefined check, and reachable() reads the grid's version-cached
+   *  flood labels — no per-frame BFS. Where no verdict exists — boundless
+   *  ground, a field without components, an unwalkable entry anchor — the
+   *  body COUNTS, exactly as before this clause: the guard may only ever
+   *  excuse a wedge, never invent a completion. */
+  private confineUnreachable(a: Actor): boolean {
+    const c = a.confine;
+    if (!c) return false;
+    const f = this.pathField();
+    if (!f || !f.reachable) return false;
+    if (!f.isWalkable(this.zoneEntry.x, this.zoneEntry.y)) return false;
+    return !f.reachable(this.zoneEntry, vec(c.x, c.y));
   }
 
   /** Living enemies that count toward objectives (caches and such don't). */

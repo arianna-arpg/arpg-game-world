@@ -1945,7 +1945,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.1, // a watchful sniper
     // THE SENTRY (PerceptionSpec showcase): a keen but NARROW gaze — wider
     // blind flanks reward the sneak — that CALLS THE WATCH when it spots
-    // you, and investigates your last position when you slip away.
     // you, and investigates your last position when you slip away. The
     // watch fabric (engine/watch.ts) finally makes those numbers VISIBLE:
     // the cone draws, and its unprovoked lock climbs a fast ladder (a
@@ -11739,7 +11738,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
       onDeath: [{ do: 'summon', monster: 'blood_mite', count: 5, ring: 32 }],
     },
   },
-
   // The gaze-frozen cat: hold your aim on it and it holds its ground.
   marsh_stalker: {
     id: 'marsh_stalker', name: 'Marsh Stalker',
@@ -11877,7 +11875,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   // THE SHARD SPIRE — a standing battery of charged crystal: the leyline's
   // own turret tier (visible from the start; its menace is the arc).
-
   shard_spire: {
     id: 'shard_spire', name: 'Shard Spire',
     color: '#7fd0ff', shape: 'octagon', radius: 14, material: 'crystal', look: 'shard_spire',
@@ -17722,7 +17719,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   // The dust quail: a covey of nerves — the downs' running punctuation.
   dust_quail: {
-
     id: 'dust_quail', name: 'Dust Quail',
     color: '#c0a878', shape: 'oval', radius: 6, material: 'fur', look: 'dust_quail',
     base: { life: 6, moveSpeed: 225, evasion: 85, mana: 0 },
@@ -17908,7 +17904,6 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
-
 
   // ==========================================================================
   // THE TRUE NATIVES (the lair fabric — engine/lairs.ts, data/lairs.ts):

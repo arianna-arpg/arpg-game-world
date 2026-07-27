@@ -45,6 +45,12 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 bootSimEngine();
 seedGlobalRandom(0xf03e);
 
+// THE PINNED GOVERNOR (the harness half of the TIME GOVERNOR's law): under
+// sim boot the beat budget is COUNT alone — wall clock steering the halo made
+// every seeded probe's web state load-dependent (probe_objectives G1).
+check('A: the harness pins the TIME GOVERNOR (count-budgeted beats — load never steers the halo)',
+  FORECHART_CFG.beatBudgetMs === Infinity);
+
 const step = (w: World, dt: number, n = 1): void => { for (let i = 0; i < n; i++) w.update(dt); };
 const veiledOf = (w: World): ZoneDef[] => Object.values(w.zoneMap).filter(z => z.veiled);
 const invariantBreaks = (w: World): number =>

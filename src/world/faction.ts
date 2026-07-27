@@ -27,7 +27,7 @@ import { clamp } from '../core/math';
 import { FACTIONS, factionStance, MONSTERS } from '../data/monsters';
 import type { ZoneDef } from '../data/zones';
 import type { World } from '../engine/world';
-import { registerBulletinSource } from './bulletins';
+import { registerBulletinSource, type WorldBulletin } from './bulletins';
 import { patronFaction } from './biomes';
 import { factionAllowed } from './zonePolicy';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
@@ -362,11 +362,21 @@ export class FactionField implements WorldOverlay {
 registerBulletinSource((world: World) => {
   const q = world.sim.faction.conquests;
   if (!q.length) return [];
-  const out = q.map(c => {
+  const out: WorldBulletin[] = [];
+  for (const c of q) {
+    // THE ENTRY LAW, news edition: conquest is a world-sim fact and keeps
+    // happening off-screen (`conquered` above is stamped regardless) — but
+    // the feed only names ground the player has WALKED (the crusade /
+    // gloaming precedent: an unseen zone's fall is discovered, never
+    // announced).
+    if (!world.visited.has(c.zoneId)) continue;
     const zn = world.zoneMap[c.zoneId]?.name ?? c.zoneId;
     const fn = FACTIONS[c.faction]?.name ?? c.faction;
-    return { text: c.reclaimed ? `${fn} reclaim ${zn}!` : `${zn} falls to ${fn}!` };
-  });
+    out.push({
+      text: c.reclaimed ? `${fn} reclaim ${zn}!` : `${zn} falls to ${fn}!`,
+      channel: 'war',
+    });
+  }
   q.length = 0;
   return out;
 });

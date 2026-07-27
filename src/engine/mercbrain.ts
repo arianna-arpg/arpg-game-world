@@ -18,6 +18,7 @@
 
 import { dist } from '../core/math';
 import { MERC_CFG } from '../meta/mercs';
+import { instanceTrigger } from './skills';
 import type { Actor } from './actor';
 import type { World } from './world';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
@@ -97,7 +98,27 @@ export class MercInput implements PlayerInputSource {
         // gets its turn — summons stay raised, auras come up, curses land.
         for (let tries = 0; tries < actor.skills.length; tries++) {
           this.altSlot = 1 + ((this.altSlot) % Math.max(1, actor.skills.length - 1));
-          if (actor.skills[this.altSlot]) { edge[this.altSlot] = true; break; }
+          const inst = actor.skills[this.altSlot];
+          // …but NEVER a trigger-socketed slot: a merc is a SEAT, so its
+          // press TOGGLES the gem's arming (useSkill's seatPress lane) —
+          // the cadence would thrash the state the player left. Walk on to
+          // a real button; an all-trigger bar just spends the beat (the
+          // tries bound above still ends the walk).
+          if (!inst || instanceTrigger(inst)) continue;
+          // A flourish only ever RAISES. Pressing a toggle whose state
+          // already STANDS would lower it (useSkill's seat toggle-off
+          // lanes): an active aura drops, a summon contract dismisses, a
+          // strobe stance rests, a drawn hex sheathes. Walk past those
+          // while their state stands — the merc re-raises them when down.
+          const dv = inst.def.delivery;
+          const standing =
+            (dv.type === 'aura' && dv.mode === 'toggle' && actor.activeAuras.has(inst.def.id))
+            || (dv.type === 'summon' && dv.persistent?.toggle && actor.summonToggles.has(inst.def.id))
+            || (dv.type === 'ground' && !!dv.strobe && actor.strobes.has(inst.def.id))
+            || actor.hexToggles.has(inst.def.id);
+          if (standing) continue;
+          edge[this.altSlot] = true;
+          break;
         }
       }
       return { dx, dy, aim: { x: target.pos.x, y: target.pos.y }, held, edge };
