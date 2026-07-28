@@ -95,6 +95,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_guardbash.ts', status: 'green', tier: 'fast', why: 'the SHIELD-BASH lane — the arming line as layered data and the bashAt/bashLow tic fields the HUD reads' },
   { probe: 'probe_harborholds.ts', status: 'green', tier: 'fast', why: 'THE HARBORHOLD FABRIC — the assign law (every sea class × tier resolves to a registered hold), the muster, the fall and the prosperity ladder' },
   { probe: 'probe_harborwarden.ts', status: 'green', tier: 'fast', why: 'THE HARBORWARDEN vocation + the company lane — the merc levers through meta/mercs.ts and the world runtime' },
+  { probe: 'probe_hellwar.ts', status: 'green', tier: 'fast', why: 'THE WAR BELOW\'s rolled TRUCE — the 35% pact published into the stance layer, held to breakAt, then shattered and republished hostile' },
   { probe: 'probe_highcourt.ts', status: 'green', tier: 'fast', why: 'THE HIGH COURT — the per-faction presence ladder (champions / zeniths / apexes) and the registry that indexes it' },
   { probe: 'probe_holdfast_pocket.ts', status: 'green', tier: 'slow', why: '~30s: THE HOLDFAST POCKET across many seeds — purchased ground behind a toll must be worth the toll and never a death trap' },
   { probe: 'probe_hollows.ts', status: 'green', tier: 'fast', why: 'THE HOLLOWS — pockets generate sealed (non-walkable, seam-zipped) and a reveal carves the way in' },
