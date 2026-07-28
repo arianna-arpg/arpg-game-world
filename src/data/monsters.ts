@@ -18864,6 +18864,26 @@ const RELATIONS: Record<string, FactionStance> = {
   // land against everything that raids it — the roads' bandits, the Chattel
   // gone wrong, the Carven walking the rows, the warband, the vermin tide.
   // These pairs ARE the farm-raid drama; no event script stages it.
+  //
+  // THE BANDIT RULING (2026-07-28) — this row is LOAD-BEARING and stays.
+  // packages/defs/holdfast.ts once claimed bandits carried "no hostile
+  // relations", and rested the toll-wardens' safety on that neutrality. The
+  // claim was never true (this row, and the Compact's below), so the two
+  // sites told different stories. The DATA won: bandits raiding the shires
+  // is authored content, and a toll gate is not reason enough to disarm a
+  // whole faction's diplomacy. What protects a sleeping gate instead:
+  //   - DORMANCY, for everything that reads it (the un-roused warden is
+  //     planted vs weather, spared by environmental strikes, pulls, grabs);
+  //   - THE RESERVE GATE on WAR_PAIRS below, which keeps the doorless
+  //     Compact off the board entirely (it was the ONE road to an
+  //     unprovoked pre-arrival wipe — measured, see the holdfast header);
+  //   - and the freehold roster itself, which fields no unprovoked
+  //     aggressor: village_warden is a dormant sentry (tag 'freehold_watch')
+  //     and crofter/drove_reeve carry no skills at all.
+  // So a freehold body only ever fights a warden after the PLAYER turns the
+  // watch out — which is the farm-raid drama working, not a pre-wipe. Add an
+  // awake, armed freehold body and that changes: give the bandit gate its
+  // own relation-less guardian faction then (the durance_toll pattern).
   'freehold|bandit': 'hostile',
   'freehold|chattel': 'hostile',
   'freehold|carven': 'hostile',
@@ -18943,6 +18963,9 @@ const RELATIONS: Record<string, FactionStance> = {
   'unrusted|undead': 'hostile',
   // The Compact's charters put a PERMANENT price on the road-toll trade:
   // merchants and bandits want the same wagons, pointed opposite ways.
+  // DECLARATIVE ONLY while 'compact' is reserved: the WAR_PAIRS reserve gate
+  // below bars this pair from seeding a procedural war zone, so the charter
+  // is recorded without fielding a doorless family (see THE BANDIT RULING).
   'compact|bandit': 'hostile',
   // The Seethe wants the deep sand to itself: the packs raid its warrens
   // for grubs, and the Court remembers when the erg was ITS floor alone —
@@ -19059,11 +19082,32 @@ export function factionStance(a: string, b: string): FactionStance {
   return RELATIONS[`${a}|${b}`] ?? RELATIONS[`${b}|${a}`] ?? 'neutral';
 }
 
-/** Every hostile pair — worldgen draws its war zones from this list. Mutable so
- *  a faction grafted at boot can append its hostile pairs (see addRelation). */
+/** Every hostile pair worldgen may stage — a zone's `factionWar` is picked
+ *  straight off this list, which spawns BOTH rosters mid-brawl.
+ *
+ *  THE RESERVE GATE: a pair only seeds a war zone if both sides may actually
+ *  be FIELDED. A mechanic-barred family (RESERVED_KIN) is authored-complete
+ *  and deliberately doorless, so its diplomacy must stay DECLARATIVE — the
+ *  world holds opinions about it without putting it on the board. Un-gated,
+ *  worldgen would stage the whole Gilded Compact (or the Smoulderkin, the
+ *  Magpie Kin, the Unrusted) as one side of an ordinary war zone: precisely
+ *  the fielding their reserve entries forbid, and — because the Compact's one
+ *  war is with the bandits — the one road by which a Holdfast toll gate could
+ *  be wiped before the player ever reached it (packages/defs/holdfast.ts).
+ *
+ *  This is the rule factionGen already applies to PACKAGE factions through
+ *  addRelation's `seedWar` (a non-baseline faction brawls when fielded but
+ *  never seeds a war zone); the static table simply never had it. Enforced
+ *  STRUCTURALLY rather than by validateContent's reserved-kin sweep — that
+ *  sweep checks seven spawn surfaces and this was the eighth, so the war
+ *  surface is closed by construction instead of by another warning.
+ *
+ *  Mutable so a faction grafted at boot can append its hostile pairs (see
+ *  addRelation, which applies the same gate). */
 export const WAR_PAIRS: [string, string][] = Object.entries(RELATIONS)
   .filter(([, stance]) => stance === 'hostile')
-  .map(([key]) => key.split('|') as [string, string]);
+  .map(([key]) => key.split('|') as [string, string])
+  .filter(([a, b]) => !RESERVED_KIN[a] && !RESERVED_KIN[b]);
 
 /** Register a faction stance at boot (used by the content-package faction
  *  generator to graft a new faction's diplomacy in). No-op if already set.
@@ -19075,7 +19119,10 @@ export const WAR_PAIRS: [string, string][] = Object.entries(RELATIONS)
 export function addRelation(a: string, b: string, stance: FactionStance, seedWar = true): void {
   if (RELATIONS[`${a}|${b}`] === undefined && RELATIONS[`${b}|${a}`] === undefined) {
     RELATIONS[`${a}|${b}`] = stance;
-    if (stance === 'hostile' && seedWar) WAR_PAIRS.push([a, b]);
+    // THE RESERVE GATE applies to grafted pairs too — one law for the static
+    // table and the boot graft, so a reserved family can never reach the war
+    // surface by either road.
+    if (stance === 'hostile' && seedWar && !RESERVED_KIN[a] && !RESERVED_KIN[b]) WAR_PAIRS.push([a, b]);
   }
 }
 

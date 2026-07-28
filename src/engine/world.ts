@@ -12426,10 +12426,24 @@ export class World {
     const banditIds: number[] = [];
     const keeper = this.createMonster(g.keeperId, lvl, 'enemy');
     keeper.tag = g.neutralTag;
-    // The guardian FACTION claims its crew (over the monster def's own): the
-    // toll factions are relation-less by design, so a zone's warring natives
-    // can never pick a fight with a sleeping gate (a fiend crew of Legion
-    // bodies must not inherit the Legion's wars).
+    // The guardian FACTION claims its crew (over the monster def's own), so a
+    // gate's bodies answer to the GATE and not to whatever stock they were
+    // minted from — a fiend crew of Legion bodies must never inherit the
+    // Legion's wars. How much that stamp buys differs per guardian:
+    //   - 'durance_toll' IS relation-less, and the stamp is load-bearing —
+    //     the tithe-gate's crew has no diplomacy, so a zone's warring natives
+    //     can never pick a fight with it while it sleeps.
+    //   - 'bandit' is NOT. It is a full baseline faction with real shipped
+    //     wars ('freehold|bandit' and 'compact|bandit' in data/monsters.ts,
+    //     both kept — see THE BANDIT RULING there), so this stamp does not
+    //     make the surface gate safe on its own. Three other things do:
+    //     dormancy, the WAR_PAIRS reserve gate keeping the doorless Compact
+    //     off the board, and the freehold roster fielding no unprovoked
+    //     aggressor — measured and written up in the holdfast header
+    //     (packages/defs/holdfast.ts, "what keeps a sleeping gate safe").
+    //     Note dormancy is NOT a targeting shield: acquireTarget filters
+    //     dead/untargetable/downed/passive/invisible, never dormant, so an
+    //     awake hostile does hunt a sleeping neutral.
     keeper.faction = g.factionId;
     keeper.pos = this.clampPos(vec(standC.x + tx * rand(-20, 20) + inward.x * rand(0, 24),
       standC.y + ty * rand(-20, 20) + inward.y * rand(0, 24)), keeper.radius);

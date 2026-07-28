@@ -12,12 +12,38 @@
 // DIMENSION band — the Bandit toll on the surface, the Durance tithe-gate in the
 // underworld — so a Goblin camp on a cave or a seraphic vigil is PURE DATA.
 //
-// It fields DEDICATED guardian factions — the 'bandit' host (surface) and the
-// 'durance_toll' fiend crew (underworld). Both are NEUTRAL by design (no faction
-// grudges, so the toll-wardens are never attacked by natives; placeHoldfast also
-// stamps the guardian faction onto the mustered crew so a warring native can't
-// pick a fight with a sleeping gate). Bandits are wired into WARBAND_FACTIONS as
-// a FORWARD HOOK so they can march in Warbands the day they hold ground.
+// It fields two guardian factions — the 'bandit' host (surface) and the
+// 'durance_toll' fiend crew (underworld). placeHoldfast stamps the guardian
+// faction onto the mustered crew (over each body's own def faction), so a
+// fiend crew of Legion stock never inherits the Legion's wars. Bandits are
+// wired into WARBAND_FACTIONS as a FORWARD HOOK so they can march in Warbands
+// the day they hold ground.
+//
+// WHAT KEEPS A SLEEPING GATE SAFE (2026-07-28 — this header used to claim both
+// guardian factions were relation-less, and rest the wardens' safety on that;
+// for the bandits it was never true, so the promise is restated as measured):
+//   - 'durance_toll' IS relation-less, and that is load-bearing — see its spec.
+//   - 'bandit' is NOT. It is a full baseline faction with real wars: the
+//     freeholds defend the worked land against the roads' bandits, and the
+//     Gilded Compact's charters price the toll trade (both RELATIONS rows in
+//     data/monsters.ts, both authored deliberately, both kept — see THE BANDIT
+//     RULING there). The wardens are protected by three things instead:
+//       DORMANCY (an un-roused warden is planted and spared by weather,
+//       environmental strikes, pulls and grabs — though NOT by AI targeting:
+//       acquireTarget filters dead/untargetable/downed/passive, never dormant,
+//       so an awake hostile still hunts a sleeping neutral);
+//       THE RESERVE GATE on WAR_PAIRS, which keeps the doorless Compact off
+//       the board — measured, it was the ONE road to an unprovoked wipe: four
+//       Compact bodies staged by a `factionWar` zone killed a whole gate crew
+//       in 40s while it slept, where freehold natives left it untouched;
+//       and THE FREEHOLD ROSTER, which fields no unprovoked aggressor
+//       (village_warden is a dormant sentry; crofter and drove_reeve carry no
+//       skills). A freehold body only fights a warden after the PLAYER turns
+//       the watch out — the farm-raid drama, not a pre-arrival wipe.
+//     That last leg is a roster accident, not a law. The day an awake, armed
+//     freehold body ships, give this gate its own relation-less guardian
+//     faction the way the tithe-gate has one, and the promise becomes
+//     structural for both.
 // ---------------------------------------------------------------------------
 
 import { registerDormantTag } from '../../engine/ai';
@@ -27,10 +53,13 @@ import { allHoldfastDefs } from '../registry';
 import type { ContentPackage, FactionSpec } from '../types';
 
 /** THE BANDITS — an opportunist human faction. contexts:['baseline','holdfast'] makes
- *  them eligible for baseline gen + holding a toll-gate. NEUTRAL by design: no hostile
- *  relations (so factionGen seeds no WAR_PAIRS and the dormant toll-wardens are never
- *  attacked by a zone's natives). The warlord + WARBAND_FACTIONS entry are the forward
- *  hook for warband marching once bandits gain territory (see the header note). */
+ *  them eligible for baseline gen + holding a toll-gate. They are a WARRING faction,
+ *  not a neutral one: the freeholds and the Gilded Compact both hold permanent
+ *  grudges (data/monsters.ts RELATIONS), so a bandit toll-crew is NOT protected by
+ *  its faction the way the tithe-gate's relation-less crew is — see the header's
+ *  "what keeps a sleeping gate safe" for the three things that do protect it. The
+ *  warlord + WARBAND_FACTIONS entry are the forward hook for warband marching once
+ *  bandits gain territory (see the header note). */
 const BANDIT_FACTION: FactionSpec = {
   id: 'bandit',
   name: 'the Roadwardens',
@@ -68,8 +97,11 @@ const BANDIT_FACTION: FactionSpec = {
 /** THE TITHE CREW — the underworld gate's fiends, a DEDICATED neutral faction
  *  (contexts:['holdfast'] only: they exist to hold tithe-gates, never baseline
  *  gen). Deliberately WITHOUT relations even though its bodies are Legion
- *  stock — the crew must never inherit the demon faction's wars, or natives
- *  would rouse a sleeping gate (the exact reason the bandits are neutral). */
+ *  stock — the crew must never inherit the demon faction's wars, or a zone's
+ *  natives could cut down a sleeping gate. This is the PATTERN the surface
+ *  gate does not follow: 'bandit' is a live warring faction (see BANDIT_FACTION
+ *  and the header), so relation-lessness is load-bearing HERE and merely
+ *  aspirational there. A future guardian should copy this crew, not that one. */
 const DURANCE_TOLL_FACTION: FactionSpec = {
   id: 'durance_toll',
   name: 'the Tithe Crew',
