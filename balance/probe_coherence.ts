@@ -39,6 +39,7 @@ import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import {
   generateLayout, blocksMovement, doodadRuleOf, bodyRadiusOf,
+  registerCluster, registerComposition,
   type Doodad, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
@@ -300,6 +301,144 @@ function standingOnWay(layout: GeneratedLayout): Doodad[] {
   else if (liveTotal === 0) fail('E: dial 0.35 swallowed the entire way (share math broken)');
   else if (sprouts === 0) fail('E: overgrown stretches sprouted no reclaiming flora');
   else console.log(`rig E (overgrowth): ${wildTotal} wild / ${liveTotal} live discs, ${runs} runs, ${sprouts} sprouts`);
+}
+
+// --- RIG F: THE SITE WALK GATE — ring stamps keep their whole ring on ground -
+// A palisade rect and a ruin ring are sited by CLEARANCE, not by walkability:
+// on maze country (the karst chasm mazes, the cloud lattices) that hung 38-91%
+// of their segments over the void, which is why two countries deleted their
+// camp rows outright. The gate is two halves that must BOTH hold — ctx.siteWalk
+// inside findSpot's try loop keeps the center on ground, and the ring probe
+// keeps every corner and segment seat there too. The control samples the ring
+// the OLD way (uniform-random centers, walk-blind) over the same field, so a
+// zone that would have been easy anyway can never pass this rig green.
+{
+  // Generous karst dials (the Overpass's): big pockets, so a camp CAN seat and
+  // the rig is not measuring an impossible fit. The gulfs are still the maze.
+  const rig = defOf('walkgate_ring', [
+    { kind: 'rocks', count: [3, 6] },
+    { kind: 'camp', count: [1, 1] },
+    { kind: 'ruin', count: [1, 1] },
+  ], {
+    layoutType: 'karst',
+    layoutParams: {
+      karstPocketR: [150, 260], karstGap: [330, 420], karstCorridorW: [40, 58],
+      karstLoops: 0.26, karstRim: [90, 140],
+    },
+  });
+  const SPACING = 13 * 1.7; // stampCamp's segment cadence
+  const ringClear = (walk: NonNullable<GeneratedLayout['walk']>,
+                     cx: number, cy: number, hw: number, hh: number): boolean => {
+    const runs: [number, number, number, number][] = [
+      [cx - hw, cy - hh, cx + hw, cy - hh], [cx - hw, cy + hh, cx + hw, cy + hh],
+      [cx - hw, cy - hh, cx - hw, cy + hh], [cx + hw, cy - hh, cx + hw, cy + hh],
+    ];
+    for (const [ax, ay, bx, by] of runs) {
+      const len = Math.hypot(bx - ax, by - ay);
+      const steps = Math.ceil(len / SPACING);
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        if (!walk.isWalkable(ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
+      }
+    }
+    return true;
+  };
+
+  let walls = 0, wallsOverVoid = 0, ringRocks = 0, rocksOverVoid = 0;
+  let camps = 0, pois = 0, poisOverVoid = 0;
+  let voidSamples = 0, voidHits = 0;      // is this ground actually a maze?
+  let ctlTries = 0, ctlClear = 0;         // the walk-BLIND control
+  for (let s = 0; s < SEEDS; s++) {
+    const seed = seedAt(s);
+    const layout = gen(rig, seed);
+    const walk = layout.walk;
+    if (!walk) { fail(`F seed ${seed}: karst produced NO walk field — rig blind`); continue; }
+    camps += layout.camps.length;
+    // The camp's palisade: 'wall' doodads exist only here in this def.
+    for (const d of layout.doodads) {
+      if (d.kind === 'wall') { walls++; if (!walk.isWalkable(d.pos.x, d.pos.y)) wallsOverVoid++; }
+      // stampRuin PUSHES its ring rocks directly — they never pass findSpot's
+      // rule walk gate, so they are the ruin half's honest witness.
+      if (d.kind === 'rock') { ringRocks++; if (!walk.isWalkable(d.pos.x, d.pos.y)) rocksOverVoid++; }
+    }
+    // Camp + ruin centers both land in pois (karst's own leaf pockets are
+    // painted ground, so every POI in this def must read walkable).
+    for (const p of layout.pois) { pois++; if (!walk.isWalkable(p.x, p.y)) poisOverVoid++; }
+    // PRESSURE 1: the country really is mostly gulf.
+    const rng = new Rng(seed ^ 0x5f5f);
+    for (let i = 0; i < 400; i++) {
+      voidSamples++;
+      if (!walk.isWalkable(rng.range(0, arena.w), rng.range(0, arena.h))) voidHits++;
+    }
+    // PRESSURE 2: the OLD acceptance — a uniform-random center, walk-blind —
+    // would have hung this ring over the gulf most of the time.
+    for (let i = 0; i < 200; i++) {
+      const cx = rng.range(200, arena.w - 200), cy = rng.range(200, arena.h - 200);
+      ctlTries++;
+      if (ringClear(walk, cx, cy, 160, 135)) ctlClear++;
+    }
+  }
+  const voidFrac = voidSamples ? voidHits / voidSamples : 0;
+  const ctlFrac = ctlTries ? ctlClear / ctlTries : 0;
+  if (walls === 0) fail('F: RIG DEAD — no palisade ever seated (camp row placed nothing)');
+  else if (camps === 0) fail('F: RIG DEAD — walls without a recorded camp center');
+  else if (voidFrac < 0.25) fail(`F: RIG DEAD — only ${(voidFrac * 100).toFixed(0)}% of the arena is void (no maze pressure)`);
+  else if (ctlFrac > 0.5) fail(`F: RIG DEAD — a walk-blind ring already cleared ${(ctlFrac * 100).toFixed(0)}% of the time (gate untested)`);
+  else if (wallsOverVoid > 0) fail(`F: ${wallsOverVoid}/${walls} palisade segment(s) stand over unwalkable ground`);
+  else if (rocksOverVoid > 0) fail(`F: ${rocksOverVoid}/${ringRocks} ruin-ring rock(s) stand over unwalkable ground`);
+  else if (poisOverVoid > 0) fail(`F: ${poisOverVoid}/${pois} set-piece center(s) recorded over unwalkable ground`);
+  else {
+    note(`F control: walk-blind ring cleared ${ctlClear}/${ctlTries}`);
+    console.log(`rig F (site walk gate): ${camps} camps / ${walls} palisade segs / ${ringRocks} ring rocks`
+      + `, 0 over void — ${(voidFrac * 100).toFixed(0)}% gulf, walk-blind control cleared only ${(ctlFrac * 100).toFixed(1)}%`);
+  }
+}
+
+// --- RIG G: CompositionSite.siteWalk — the bundle's shared anchor finds ground
+// A composition resolves ONE site its whole bundle hangs off (the clearing, the
+// statues, the bell). Walk-blind, that anchor strands the entire arrangement in
+// open sky. The lever is opt-in, so the rig runs BOTH faces of the same bundle
+// over the same ground: the declared one must never anchor over void, and the
+// undeclared one must SOMETIMES — otherwise the flag is being credited for
+// ground that was never in doubt. Running ON first also proves the transient
+// does not leak: a sticky ctx.siteWalk would silently gate OFF's site too.
+{
+  registerCluster({ id: 'probe_sitemark', anchor: { radius: 40 }, pieces: [], poi: true });
+  for (const [id, siteWalk] of [['probe_walkgate_on', true], ['probe_walkgate_off', false]] as const) {
+    registerComposition({
+      id,
+      sites: [{ id: 'court', radius: [60, 90], ...(siteWalk ? { siteWalk: true } : {}) }],
+      post: [{ kind: 'cluster', cluster: 'probe_sitemark', at: 'court', count: [1, 1] }],
+    });
+  }
+  // A void-rich lattice with NO poi-pushing recipe of its own would be ideal;
+  // karst pushes up to 3 leaf pockets, and those are painted ground — so every
+  // unwalkable POI here is the composition's own anchor.
+  const zoneFor = (comp: string): ZoneDef => defOf(`walkgate_site_${comp}`, [
+    { kind: 'rocks', count: [2, 4] },
+  ], {
+    layoutType: 'karst',
+    layoutParams: { karstPocketR: [90, 150], karstGap: [300, 380], karstCorridorW: [44, 60] },
+    compositions: [{ composition: comp, chance: 1 }],
+  });
+  const measure = (comp: string): { pois: number; overVoid: number; zones: number } => {
+    let pois = 0, overVoid = 0, zones = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      const layout = gen(zoneFor(comp), seedAt(s));
+      const walk = layout.walk;
+      if (!walk) continue;
+      zones++;
+      for (const p of layout.pois) { pois++; if (!walk.isWalkable(p.x, p.y)) overVoid++; }
+    }
+    return { pois, overVoid, zones };
+  };
+  const on = measure('probe_walkgate_on');
+  const off = measure('probe_walkgate_off');
+  if (on.zones === 0 || on.pois === 0) fail('G: RIG DEAD — the declared bundle anchored nothing');
+  else if (off.overVoid === 0) fail('G: RIG DEAD — an UNDECLARED site never landed over void, so siteWalk is untested here');
+  else if (on.overVoid > 0) fail(`G: ${on.overVoid}/${on.pois} siteWalk anchor(s) resolved over unwalkable ground`);
+  else console.log(`rig G (composition siteWalk): declared ${on.pois} anchors, 0 over void`
+    + ` — undeclared control put ${off.overVoid}/${off.pois} in the gulf`);
 }
 
 console.log(`\nprobe coherence: ${SEEDS} seeds/rig — ${fails} failure(s)`);

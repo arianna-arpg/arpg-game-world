@@ -4190,6 +4190,11 @@ export function generateLayout(
   // Dispatch to the zone's layout generator (default 'plains' = byte-identical).
   const gen = LAYOUT_GENERATORS[def.layoutType ?? 'plains'] ?? plainsLayout;
   gen(ctx, def);
+  // THE ANCHOR SNAP: a composition site declaring siteWalk steps onto the walk
+  // field the generator just painted (an open-sky country's court has to land
+  // ON an isle, not between them). Pure reads, zero rng — a zone that declared
+  // none finds nothing to move.
+  snapWalkSites(ctx, compositions);
   // BOUNDARY GATES: exits crossing an ENCLAVE biome's boundary wear its
   // monumental gate (data/boundaryGates.ts) — raised for EVERY layout family.
   // The annotation rides the def (stamped per-load by the World off the same
@@ -5736,8 +5741,8 @@ registerStamp('ice', (ctx) => stampBlob(ctx, 'ice', [26, 80], [6, 11], false));
 registerStamp('chasm', (ctx) => stampBlob(ctx, 'chasm', [28, 76], [6, 12], true));
 registerStamp('ravine', (ctx) => stampRavine(ctx));
 registerStamp('river', (ctx) => stampRiver(ctx));
-registerStamp('ruin', (ctx) => stampRuin(ctx));
-registerStamp('camp', (ctx) => stampCamp(ctx));
+registerStamp('ruin', (ctx, spec) => stampRuin(ctx, spec));
+registerStamp('camp', (ctx, spec) => stampCamp(ctx, spec));
 registerStamp('trees', (ctx, spec) => stampTree(ctx, spec.radius ?? [12, 30]));
 registerStamp('grove', (ctx) => stampGrove(ctx));
 registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [16, 54], [4, 8], false));
@@ -7094,6 +7099,12 @@ export interface CompositionSite {
   where?: WhereSpec;
   /** Portal-margin policy for the site probe (default false = soft). */
   hard?: boolean;
+  /** Resolve this anchor on WALKABLE ground (GenCtx.siteWalk): opt in where the
+   *  bundle's country is mostly open sky (the Aetherial shelves, the Driftways'
+   *  isles) — a walk-blind site strands the whole bundle, clearing and pieces
+   *  together, over the void. Unset = the exact acceptance (and rng stream) of
+   *  today, because the filter lives INSIDE findSpot's try loop. */
+  siteWalk?: boolean;
 }
 
 export interface CompositionDef {
@@ -7128,7 +7139,36 @@ export function compositionDefs(): CompositionDef[] { return Object.values(COMPO
  *  ignored: those handlers site themselves). */
 export const SITE_AWARE_STAMPS: ReadonlySet<string> = new Set(['clearing', 'formation', 'cluster', 'structure']);
 
-interface CompositionPlan { def: CompositionDef; sites: Record<string, Vec2> }
+interface CompositionPlan {
+  def: CompositionDef;
+  sites: Record<string, Vec2>;
+  /** Index into ctx.reserved where this bundle's PRE entries began — the window
+   *  the anchor snap carries with it (see snapWalkSites). */
+  reservedFrom?: number;
+}
+
+/** Resolve a bundle's shared anchors. Each site's band draw happens BEFORE its
+ *  filters (the findSpot discipline), and both transients it rides — the strata
+ *  band and the walk gate — are saved and restored per site, so neither leaks
+ *  into the next site or out into the zone's own scatter. */
+function resolveSites(ctx: GenCtx, c: CompositionDef): Record<string, Vec2> {
+  const sites: Record<string, Vec2> = {};
+  for (const s of c.sites ?? []) {
+    const r = ctx.rng.range(s.radius[0], s.radius[1]);
+    const prevGate = ctx.fieldGate;
+    const prevSiteWalk = ctx.siteWalk;
+    try {
+      ctx.fieldGate = compileFieldGate(ctx, s.where);
+      ctx.siteWalk = s.siteWalk;
+      const p = findSpot(ctx, r, s.hard ?? false, 0, false);
+      if (p) sites[s.id] = p;
+    } finally {
+      ctx.fieldGate = prevGate;
+      ctx.siteWalk = prevSiteWalk;
+    }
+  }
+  return sites;
+}
 
 function compositionEligible(def: ZoneDef, c: CompositionDef): boolean {
   if (!c.when) return true;
@@ -7178,22 +7218,51 @@ function planCompositions(ctx: GenCtx, def: ZoneDef): CompositionPlan[] {
       continue;
     }
     if (!compositionEligible(def, c)) continue;
-    const sites: Record<string, Vec2> = {};
-    for (const s of c.sites ?? []) {
-      const r = ctx.rng.range(s.radius[0], s.radius[1]);
-      const prevGate = ctx.fieldGate;
-      try {
-        ctx.fieldGate = compileFieldGate(ctx, s.where);
-        const p = findSpot(ctx, r, s.hard ?? false, 0, false);
-        if (p) sites[s.id] = p;
-      } finally {
-        ctx.fieldGate = prevGate;
-      }
-    }
+    const sites = resolveSites(ctx, c);
+    const reservedFrom = ctx.reserved.length;
     stampCompositionEntries(ctx, c.pre, sites);
-    plans.push({ def: c, sites });
+    plans.push({ def: c, sites, reservedFrom });
   }
   return plans;
+}
+
+/** THE ANCHOR SNAP — the walk half of CompositionSite.siteWalk.
+ *
+ *  A bundle's shared anchor is resolved HERE, before the layout generator, on
+ *  purpose: a PRE clearing has to sweep its court before the scatter fills it.
+ *  But ctx.walk is painted BY that generator, so at plan time there is no walk
+ *  field to gate against and the probe inside findSpot passes everything — a
+ *  declared siteWalk site would be a lever that silently does nothing.
+ *
+ *  So the anchor is resolved exactly like any other (identical draws — every
+ *  zone's generation stays byte-identical, declared or not), and the moment the
+ *  grid exists a declared anchor STEPS to the nearest standing ground, carrying
+ *  the reservations its own PRE entries swept along with it so the court and
+ *  the pieces it was cleared for stay one arrangement. snapToWalkable is a pure
+ *  deterministic resolver: no rng is drawn, so nothing downstream re-phases.
+ *  (Should a walk field ever predate this phase, findSpot's probe gates the
+ *  site directly and this pass simply finds nothing to move.)
+ */
+function snapWalkSites(ctx: GenCtx, plans: CompositionPlan[]): void {
+  const walk = ctx.walk;
+  if (!walk) return;
+  for (const plan of plans) {
+    for (const s of plan.def.sites ?? []) {
+      if (!s.siteWalk) continue;
+      const p = plan.sites[s.id];
+      if (!p || walk.isWalkable(p.x, p.y)) continue;
+      const q = walk.snapToWalkable(p);
+      // Carry only what this anchor itself swept: a site-anchored clearing
+      // reserves a circle centred EXACTLY on the site point, so identity of
+      // position is an exact attribution — a sibling site's court in the same
+      // bundle can never be mistaken for this one's.
+      for (let i = plan.reservedFrom ?? ctx.reserved.length; i < ctx.reserved.length; i++) {
+        const r = ctx.reserved[i];
+        if ('pos' in r && r.pos.x === p.x && r.pos.y === p.y) r.pos = vec(q.x, q.y);
+      }
+      plan.sites[s.id] = q;
+    }
+  }
 }
 
 function runCompositionPost(ctx: GenCtx, plans: CompositionPlan[]): void {
@@ -7996,42 +8065,130 @@ function stampRiver(ctx: GenCtx): void {
   }
 }
 
+/** THE SITE WALK GATE, ring half: is every sampled point of a stamp's ring on
+ *  ground the walk field calls walkable? A convex layout carries NO walk field
+ *  (plains, bridge-islands) and passes exactly as today; the maze/lattice
+ *  countries answer honestly. Pure reads — no rng draw — so a walk-blind zone's
+ *  sequence is untouched and a rejected candidate only burns a siting try.
+ *  Pairs with ctx.siteWalk, which gates the CENTER inside findSpot: together
+ *  they are the whole footprint the stamp will actually draw. */
+function allWalkable(ctx: GenCtx, pts: Vec2[]): boolean {
+  const walk = ctx.walk;
+  if (!walk) return true;
+  for (const p of pts) if (!walk.isWalkable(p.x, p.y)) return false;
+  return true;
+}
+
+/** The reference camp's half-extent bands — the palisade's authored default.
+ *  A layout row may narrow the WIDTH band via StampSpec.radius; the height
+ *  band scales with it (see stampCamp). */
+const CAMP_HALF: { w: [number, number]; h: [number, number] } = { w: [130, 190], h: [110, 160] };
+
+/** The reference ruin ring's radius band (StampSpec.radius overrides it). */
+const RUIN_R: [number, number] = [95, 140];
+
+type CampSide = { side: 'n' | 's' | 'e' | 'w'; from: Vec2; to: Vec2 };
+
+/** The palisade's four runs. ONE geometry, shared by the siting walk gate and
+ *  the segment draw below — the ring that is TESTED is the ring that is DRAWN. */
+function campSides(center: Vec2, halfW: number, halfH: number): CampSide[] {
+  return [
+    { side: 'n', from: vec(center.x - halfW, center.y - halfH), to: vec(center.x + halfW, center.y - halfH) },
+    { side: 's', from: vec(center.x - halfW, center.y + halfH), to: vec(center.x + halfW, center.y + halfH) },
+    { side: 'w', from: vec(center.x - halfW, center.y - halfH), to: vec(center.x - halfW, center.y + halfH) },
+    { side: 'e', from: vec(center.x + halfW, center.y - halfH), to: vec(center.x + halfW, center.y + halfH) },
+  ];
+}
+
+/** Every seat the palisade would push a segment at — the four corners included,
+ *  each shared by two runs. Gate gaps are NOT excused: the gate roll happens
+ *  after siting (moving it would shift the stream), and a gate mouth opening
+ *  onto a gulf is no better than a wall hanging over one. */
+function campRingPoints(sides: CampSide[], spacing: number): Vec2[] {
+  const pts: Vec2[] = [];
+  for (const s of sides) {
+    const len = dist(s.from, s.to);
+    const steps = Math.ceil(len / spacing);
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * len;
+      pts.push(vec(
+        s.from.x + (s.to.x - s.from.x) * (t / len),
+        s.from.y + (s.to.y - s.from.y) * (t / len)));
+    }
+  }
+  return pts;
+}
+
+/** A ring of `n` evenly spaced points at radius R — the ruin ring's walk probe.
+ *  Sampled FINER than any rolled segment cadence, so no drawn piece can slip
+ *  between two probes. */
+function ringPoints(center: Vec2, R: number, n: number): Vec2[] {
+  const pts: Vec2[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    pts.push(vec(center.x + Math.cos(a) * R, center.y + Math.sin(a) * R));
+  }
+  return pts;
+}
+
 /**
  * A walled camp: a palisade rectangle with 1-2 gate gaps, its yard a POI
  * (spawners, caches, shrines and altars nest inside) — and the world posts
  * a guard pack at the center. Wall pieces block movement AND projectiles,
  * so storming a camp is a real proposition.
  */
-function stampCamp(ctx: GenCtx): void {
+function stampCamp(ctx: GenCtx, spec: StampSpec): void {
   const { rng } = ctx;
-  const halfW = rng.range(130, 190);
-  const halfH = rng.range(110, 160);
+  // THE FORT'S SIZE IS DATA (StampSpec.radius = the HALF-WIDTH band): the
+  // default is the reference camp, and a country whose ground comes in small
+  // pockets authors a smaller stockade instead of deleting its camp row. The
+  // height band scales with the width one, so the fort keeps its proportions
+  // and the two rolls stay two rolls — an unset radius is byte-identical.
+  const wBand = (spec.radius ?? CAMP_HALF.w);
+  const halfW = rng.range(wBand[0], wBand[1]);
+  const halfH = rng.range(
+    CAMP_HALF.h[0] * (wBand[0] / CAMP_HALF.w[0]),
+    CAMP_HALF.h[1] * (wBand[1] / CAMP_HALF.w[1]));
   // Camps tolerate company — a boulder inside the palisade is flavor — but
   // nobody builds a fort over a chasm or in a lake: the footprint must be
   // free of hazard terrain, and once sited it's RESERVED so later rivers
   // and ravines route around it.
   const footprint = Math.max(halfW, halfH) * 1.15;
+  const segR = 13;
+  const spacing = segR * 1.7;
   let center: Vec2 | null = null;
-  for (let tries = 0; tries < 14 && !center; tries++) {
-    const p = findSpot(ctx, Math.max(halfW, halfH) * 0.55, true, 0);
-    if (p && areaFreeOf(ctx, p, footprint, hazardGrounds())) center = p;
+  // THE WALK GATE (the karst lesson): a palisade rect was walk-BLIND — sited by
+  // clearance and hazard terrain alone, it hung 38% of its segments over the
+  // Overpass's gorges and 67% over the Reach's gulfs, which is why both
+  // countries deleted their camp rows rather than ship a fort over a chasm.
+  // ctx.siteWalk keeps the CENTER on ground inside findSpot's try loop; the
+  // ring probe keeps every corner and segment seat there too. Both are pure
+  // reads on ctx.walk, absent on every convex layout — those zones draw
+  // byte-identically.
+  const prevSiteWalk = ctx.siteWalk;
+  try {
+    ctx.siteWalk = true;
+    for (let tries = 0; tries < 14 && !center; tries++) {
+      const p = findSpot(ctx, Math.max(halfW, halfH) * 0.55, true, 0);
+      if (!p || !areaFreeOf(ctx, p, footprint, hazardGrounds())) continue;
+      if (!allWalkable(ctx, campRingPoints(campSides(p, halfW, halfH), spacing))) continue;
+      center = p;
+    }
+  } finally {
+    ctx.siteWalk = prevSiteWalk;
   }
   if (!center) return;
   ctx.reserved.push({ pos: center, radius: footprint + 20 });
-  const segR = 13;
-  const spacing = segR * 1.7;
   const gates: ('n' | 's' | 'e' | 'w')[] = ['n', 's', 'e', 'w'];
   const gateSides = new Set([gates[rng.int(0, 3)]]);
   if (rng.chance(0.45)) gateSides.add(gates[rng.int(0, 3)]);
   const gateAt = rng.range(-0.4, 0.4); // gate position along its side
-  const gateHalf = 58; // generous: walk through, don't squeeze
+  // Generous: walk through, don't squeeze — but a stockade narrower than the
+  // reference camp scales its mouth down with it, or the gate eats the wall.
+  // Every default-sized camp clamps to exactly 58, as before.
+  const gateHalf = 58 * Math.min(1, halfW / CAMP_HALF.w[0]);
 
-  const sides: { side: 'n' | 's' | 'e' | 'w'; from: Vec2; to: Vec2 }[] = [
-    { side: 'n', from: vec(center.x - halfW, center.y - halfH), to: vec(center.x + halfW, center.y - halfH) },
-    { side: 's', from: vec(center.x - halfW, center.y + halfH), to: vec(center.x + halfW, center.y + halfH) },
-    { side: 'w', from: vec(center.x - halfW, center.y - halfH), to: vec(center.x - halfW, center.y + halfH) },
-    { side: 'e', from: vec(center.x + halfW, center.y - halfH), to: vec(center.x + halfW, center.y + halfH) },
-  ];
+  const sides = campSides(center, halfW, halfH);
   for (const s of sides) {
     const len = dist(s.from, s.to);
     const steps = Math.ceil(len / spacing);
@@ -8054,12 +8211,26 @@ function stampCamp(ctx: GenCtx): void {
  * A ruin ring: broken walls around an interior worth visiting. The center
  * is recorded as a POI — spawners and gem caches are placed there first.
  */
-function stampRuin(ctx: GenCtx): void {
-  const R = ctx.rng.range(95, 140);
+function stampRuin(ctx: GenCtx, spec: StampSpec): void {
+  const rBand = (spec.radius ?? RUIN_R); // the ring's size is data too
+  const R = ctx.rng.range(rBand[0], rBand[1]);
   let center: Vec2 | null = null;
-  for (let tries = 0; tries < 10 && !center; tries++) {
-    const p = findSpot(ctx, R + 40, true, 30);
-    if (p && areaFreeOf(ctx, p, R + 30, hazardGrounds())) center = p;
+  // THE WALK GATE (stampCamp's law on a circle): a broken wall ring is scenery
+  // you fight through, so it belongs on ground. 24 probes sit closer together
+  // than a 15-22px segment is wide at every rolled R, so no drawn piece can
+  // slip between them — and the rolled segment COUNT (10-14) is still free to
+  // draw after siting.
+  const prevSiteWalk = ctx.siteWalk;
+  try {
+    ctx.siteWalk = true;
+    for (let tries = 0; tries < 10 && !center; tries++) {
+      const p = findSpot(ctx, R + 40, true, 30);
+      if (!p || !areaFreeOf(ctx, p, R + 30, hazardGrounds())) continue;
+      if (!allWalkable(ctx, ringPoints(p, R, 24))) continue;
+      center = p;
+    }
+  } finally {
+    ctx.siteWalk = prevSiteWalk;
   }
   if (!center) return;
   ctx.reserved.push({ pos: center, radius: R + 40 });
@@ -8078,6 +8249,13 @@ function stampRuin(ctx: GenCtx): void {
     const r = ctx.rng.range(15, 22);
     const p = vec(center.x + Math.cos(ang) * R, center.y + Math.sin(ang) * R);
     if (!clearOf(ctx, p, r, true)) continue;
+    // DRAWN == TESTED, exactly. The siting probe above samples a FIXED 24-point
+    // ring, but the segment count is rolled here, AFTER siting — so a piece at
+    // (i/10)·2π sits between two probes and can straddle a gulf lip the probe
+    // cleared. The camp needs no twin of this line: its probe walks the very
+    // seats its segments are pushed at. A dropped stone is already this ring's
+    // idiom (clearOf drops them too — broken walls are the look).
+    if (!allWalkable(ctx, [p])) continue;
     ctx.doodads.push({ pos: p, radius: r, kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2) });
   }
   ctx.pois.push(center);

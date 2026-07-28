@@ -7638,8 +7638,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The cold range's shelf-ice and drift pockets (the lock, mid-climb).
       { kind: 'snowdrift', count: [0, 4], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
       { kind: 'ice', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.4 } },
-      // NO camp row: palisade rects can't seat honestly on pocket-maze
-      // ground (the karst lesson) — the Overpass garrisons are its packs.
+      // THE CAMP RETURNS (the walk gate, levelgen stampCamp): the row was cut
+      // because a walk-BLIND palisade hung 38% of its segments over the
+      // Overpass's gorges. Now the siting probe gates the center on ctx.walk
+      // and tests every corner and segment seat of the ring, so a fort seats
+      // on a shelf or not at all — measured 74/200 seeds, 0 segments over
+      // void. APPENDED at the end deliberately: a row inserted mid-array
+      // shifts every later row's rng draws (the fuse-warn trap), so it is
+      // filed by history, not by theme.
+      { kind: 'camp', count: [0, 1] },
     ],
     common: [
       { kind: 'cairn', count: [1, 2] },
@@ -8602,9 +8609,20 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'petrified_tree', count: [2, 5] },
       { kind: 'cave', count: [1, 3] },
       { kind: 'formation', count: [1, 2], formation: 'pinnacle_train' },
-      // NO camp here: a palisade rect can't seat honestly on pocket-maze
-      // ground (its wall ring overhangs the gulfs) — the Reach's garrisons
-      // are its packs and its sanctums, not tents.
+      // STILL NO CAMP — and now we know exactly why. The walk gate (levelgen
+      // stampCamp) brought the Overpass's camp row back, so this one was
+      // re-measured with it: 0 seats in 200 seeds, at EVERY authored size down
+      // to a 84x71 stockade. The refusal is not the fort's size and not the
+      // gate — it is the SEARCH. findSpot draws 26 uniform-random points per
+      // try, and on a chasm maze this fine the viable seats are a vanishing
+      // slice of the arena: 839 of 840 probes never found a walkable center at
+      // all, and at the small band all 123 that did had a gulf under the ring.
+      // A brute-force lattice sweep does find a seat in most zones, so the row
+      // would only come back on a walk-aware sampler — a change to a hot
+      // rng-critical path that would shift every caller's stream. Until then
+      // the row stays cut: authoring it would burn ~730 draws per zone and
+      // shift every later stamp to place nothing. The Reach's garrisons are
+      // its packs and its sanctums, not tents.
     ],
     common: [
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },

@@ -425,7 +425,9 @@ registerComposition({
 // gleaming between them, a bell to mark hours nobody keeps anymore.
 registerComposition({
   id: 'choir_ring',
-  sites: [{ id: 'court', radius: [140, 190] }],
+  // siteWalk: the Aetherial's shelves are mostly OPEN SKY — a walk-blind court
+  // strands the statues, the bell and the clearing together over the void.
+  sites: [{ id: 'court', radius: [140, 190], siteWalk: true }],
   pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [60, 85] }],
   post: [
     { kind: 'formation', formation: 'choir_statues', at: 'court', count: [1, 1] },
@@ -437,7 +439,8 @@ registerComposition({
 // dream-blossoms drifting along its feet — the wind's own instrument.
 registerComposition({
   id: 'harp_gallery',
-  sites: [{ id: 'walk', radius: [150, 210] }],
+  // siteWalk: an arcade you cannot walk is no gallery (the shelves are sky).
+  sites: [{ id: 'walk', radius: [150, 210], siteWalk: true }],
   pre: [{ kind: 'clearing', at: 'walk', count: [1, 1], radius: [55, 75] }],
   post: [
     { kind: 'formation', formation: 'harp_arcade', at: 'walk', count: [1, 2] },
@@ -449,7 +452,8 @@ registerComposition({
 // and crystal ringing the treasure the crossing was for.
 registerComposition({
   id: 'vault_of_dawn',
-  sites: [{ id: 'vault', radius: [150, 200] }],
+  // siteWalk: the crossing's prize must stand on ground you can reach.
+  sites: [{ id: 'vault', radius: [150, 200], siteWalk: true }],
   pre: [{ kind: 'clearing', at: 'vault', count: [1, 1], radius: [70, 95] }],
   post: [
     { kind: 'formation', formation: 'choir_statues', at: 'vault', count: [1, 1] },
@@ -462,7 +466,8 @@ registerComposition({
 // ringing a cleared reading of the wind, crystal glinting between them.
 registerComposition({
   id: 'vane_court',
-  sites: [{ id: 'court', radius: [130, 180] }],
+  // siteWalk: the Driftways are isles in open air — the compass rose needs one.
+  sites: [{ id: 'court', radius: [130, 180], siteWalk: true }],
   pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [55, 80] }],
   post: [
     { kind: 'formation', formation: 'totem_ring', at: 'court', count: [1, 1] },
