@@ -80,8 +80,10 @@ export interface MyceliaSurge {
   homeBiome: string;
   faction: string;
   /** The toggleable core boss (default ON). When enabled the Heartbloom holds the core;
-   *  striking it FORCES a withdraw. When disabled, the bloom is pure-cull (no heart). */
-  heartbloom: { enabled: boolean; defId: string; promote: 'none' | 'champion' | 'crowned' };
+   *  striking it FORCES a withdraw. When disabled, the bloom is pure-cull (no heart).
+   *  promoteAt: zone level the full `promote` rarity is EARNED at — a promoted bloom on
+   *  ground below it stands champion instead (absent = promote at any level). */
+  heartbloom: { enabled: boolean; defId: string; promote: 'none' | 'champion' | 'crowned'; promoteAt?: number };
   reward: { xpBase: number; xpPerLevel: number; gems: number };
   color: string;
   glow?: { strong: string; weak: string; accent: string };
@@ -235,10 +237,11 @@ export class MyceliaField implements WorldOverlay {
   }
 
   /** The Heartbloom descriptor for the core zone (if the toggle is on + the bloom lives). */
-  heartbloomIn(zoneId: string): { defId: string; promote: 'none' | 'champion' | 'crowned' } | null {
+  heartbloomIn(zoneId: string): { defId: string; promote: 'none' | 'champion' | 'crowned'; promoteAt?: number } | null {
     if (!this.cfg.heartbloom.enabled || !this.bloom || this.bloom.state === 'withdraw') return null;
     if (this.bloom.coreZoneId !== zoneId) return null;
-    return { defId: this.cfg.heartbloom.defId, promote: this.cfg.heartbloom.promote };
+    const hb = this.cfg.heartbloom;
+    return { defId: hb.defId, promote: hb.promote, promoteAt: hb.promoteAt };
   }
 
   /** Event-chance multiplier a zone's spore density imposes (1 = clear, →floor = smothered).

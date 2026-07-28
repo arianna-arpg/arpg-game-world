@@ -45,7 +45,9 @@ const MYCELIA_SURGE: MyceliaSurge = {
   warp: { radius: 70, strength: 0.85 }, // the biome-warp geometry stamped at a saturated zone
   homeBiome: 'mycelia',
   faction: 'fungal',
-  heartbloom: { enabled: true, defId: 'fungal_heartbloom', promote: 'crowned' },
+  // The crown is EARNED at zone level 6 (the repo's earliest crowned floor — contagion's) —
+  // a bloom met at the level-4 start stands champion until the ground reaches promoteAt.
+  heartbloom: { enabled: true, defId: 'fungal_heartbloom', promote: 'crowned', promoteAt: 6 },
   reward: { xpBase: 300, xpPerLevel: 50, gems: 4 },
   color: '#8fd06f',
 };

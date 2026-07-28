@@ -16223,7 +16223,6 @@ export class World {
     if (!info) return;
     if (this.materializedCandle.has(def.id)) return;
     this.materializedCandle.add(def.id);
-    bumpLedger(this.ledger, 'vigil_seen');
     const cfg = lc.surge();
     const lvl = Math.max(1, def.level);
     const muster = (facId: string, tag: string): void => {
@@ -16244,6 +16243,7 @@ export class World {
       }
     };
     if (info.vigil) {
+      bumpLedger(this.ledger, 'vigil_seen'); // the WAX side only — a convene-only claim never stamps it
       const n = randInt(cfg.shrines[0], cfg.shrines[1]);
       for (let i = 0; i < n; i++) {
         const shrine = this.createMonster('candle_shrine', lvl, 'enemy');
@@ -16374,7 +16374,11 @@ export class World {
       const boss = this.createMonster(hb.defId, lvl, 'enemy');
       boss.faction = cfg.faction;
       boss.tag = 'mycelia_heart';
-      if (hb.promote !== 'none') this.promoteRarity(boss, hb.promote === 'crowned' ? 'crowned' : 'champion');
+      if (hb.promote !== 'none') {
+        // THE EARNED CROWN: below the spec's promoteAt the bloom stands champion instead.
+        const crowned = hb.promote === 'crowned' && (hb.promoteAt == null || lvl >= hb.promoteAt);
+        this.promoteRarity(boss, crowned ? 'crowned' : 'champion');
+      }
       boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
       this.actors.push(boss);
       this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
