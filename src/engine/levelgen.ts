@@ -5214,6 +5214,13 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // Draw-free, so the rng sequence is untouched. A removed SEED-PAIRED doodad
   // (cave_entrance) takes its caveSeeds entry with it — the index zip between
   // mouths and seeds must never shear (every surviving mouth keeps ITS cave).
+  // A removed DOOR takes its structure record with it (dropDoorRecord — the
+  // boundary-gate façade's law): when footprints overlap, the earlier
+  // structure's swallowed flank must not survive as a PHANTOM door the zone
+  // still believes in (the boulevards' market_row on undersized plots is the
+  // case that taught us — the plot-fit law in cityBlocks now prevents the
+  // overlap itself; this keeps the two halves dying together wherever any
+  // future claim swallows a door).
   for (let i = ctx.doodads.length - 1; i >= 0; i--) {
     const d = ctx.doodads[i];
     if (d.pos.x > rect.x - d.radius * 0.4 && d.pos.x < rect.x + rect.w + d.radius * 0.4
@@ -5223,6 +5230,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
         for (let k = 0; k < i; k++) if (ctx.doodads[k].kind === d.kind) ordinal++;
         if (ordinal < ctx.caveSeeds.length) ctx.caveSeeds.splice(ordinal, 1);
       }
+      if (d.door) dropDoorRecord(ctx, d.door.id);
       ctx.doodads.splice(i, 1);
     }
   }
@@ -6468,6 +6476,26 @@ export function raiseStructure(ctx: GenCtx, defId: string, at?: Vec2): void {
   if (!s) { console.warn(`[structures] raiseStructure: unknown '${defId}'`); return; }
   if (s.plan || s.generator) placeStructurePlan(ctx, s, at);
   else if (at) placeStructure(ctx, s, at);
+}
+
+/** The WORST-CASE footprint a structure can paint (px), DRAW-FREE — the bound
+ *  a placer may budget plots and spots by BEFORE resolvePlan rolls anything:
+ *  literal plans are measured exactly through the same cell quantization the
+ *  raise uses; generator plans read their authored w/h cell BANDS at the top
+ *  end (resolving one would draw from the layout stream); anything else falls
+ *  back to the declared halves. Null only for an unknown id. */
+export function structureMaxFootprint(defId: string): { w: number; h: number } | null {
+  const def = STRUCTURES[defId];
+  if (!def) return null;
+  const cell = Math.max(1, Math.round((def.cellSize ?? WALK_CELL) / WALK_CELL)) * WALK_CELL;
+  if (def.plan) {
+    return { w: Math.max(...def.plan.map(r => r.length)) * cell, h: def.plan.length * cell };
+  }
+  const gw = def.genParams?.w, gh = def.genParams?.h;
+  if (def.generator && Array.isArray(gw) && Array.isArray(gh)) {
+    return { w: gw[1] * cell, h: gh[1] * cell };
+  }
+  return { w: def.halfW * 2, h: def.halfH * 2 };
 }
 export function hasLandmarkBuilder(id: string): boolean { return id in LANDMARK_BUILDERS; }
 export function landmarkDefs(): LandmarkDef[] { return Object.values(LANDMARKS); }

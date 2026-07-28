@@ -38,6 +38,7 @@ import type { GridWalkField } from '../world/gridWalk';
 import {
   areaFreeOf, doodadRuleOf, ensureGrid, inReserved, layoutParam, layTraveledWay,
   onClearway, overgrowthOf, raiseStructure, registerLayout, scatterDecoration,
+  structureMaxFootprint,
   type DoodadKind, type GenCtx,
 } from './levelgen';
 import { carveMassifs, registerMassShape } from './massif';
@@ -77,6 +78,12 @@ export const SETTLED_CFG = {
   plazaChance: 0.22,
   /** block-court inner-radius fraction (wall ring thickness lever). */
   blockInner: 0.58,
+  /** district/blocks: THE PLOT-FIT LAW's daylight — a pool structure's
+   *  worst-case footprint must fit its plot pitch minus this gap (px), so
+   *  two max-width neighbors still leave a walkable slit and no footprint
+   *  ever claims the next plot's ground (an overlapping claim site-clears
+   *  the neighbor's flank doors — the boulevards' market_row lesson). */
+  blockFitGap: 48,
   /** fields: THE PARCEL PASS — the tilled patchwork that makes worked
    *  country READ as worked country: rectangular plots, crops planted in
    *  true ROWS along a shared plow bearing, a furrowed wash beneath them.
@@ -468,6 +475,24 @@ function cityBlocks(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
   const rows = Math.max(2, Math.floor(arena.h / blockPx));
   const bw = arena.w / cols, bh = arena.h / rows;
 
+  // THE PLOT-FIT LAW: a plot raises only structures whose WORST-CASE
+  // footprint (structureMaxFootprint — draw-free) fits its own pitch with
+  // blockFitGap of daylight. A wider plan would silently claim the
+  // neighbor's ground, and the raise's site-clear there would swallow its
+  // flank doors (the boulevards' market_row on 380px plots minted phantom
+  // doors this way). Filtered ONCE and draw-free, so a pool that already
+  // fits picks byte-identically; an authored row that can never rise is
+  // called out, never silently dead.
+  const fitGap = layoutParam(def, 'blockFitGap', SETTLED_CFG.blockFitGap);
+  const fitPool = pool.filter(row => {
+    const fp = structureMaxFootprint(row.structure);
+    return !fp || (fp.w <= bw - fitGap && fp.h <= bh - fitGap);
+  });
+  if (fitPool.length < pool.length) {
+    const dropped = pool.filter(r => !fitPool.includes(r)).map(r => r.structure).join(', ');
+    console.warn(`[settled] '${def.id}' blocks: pool row(s) [${dropped}] exceed the ${Math.round(bw)}×${Math.round(bh)} plot pitch — never raised (widen blockSize or trim the pool)`);
+  }
+
   for (let by = 0; by < rows; by++) {
     for (let bx = 0; bx < cols; bx++) {
       const cx = (bx + 0.5) * bw, cy = (by + 0.5) * bh;
@@ -496,7 +521,8 @@ function cityBlocks(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
         }
         continue;
       }
-      const pick = pool.length === 1 ? pool[0] : pickW(rng, pool);
+      if (!fitPool.length) continue; // nothing fits — the plot stays open ground
+      const pick = fitPool.length === 1 ? fitPool[0] : pickW(rng, fitPool);
       raiseStructure(ctx, pick.structure, vec(cx, cy));
     }
   }

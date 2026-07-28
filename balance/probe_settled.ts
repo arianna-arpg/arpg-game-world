@@ -39,7 +39,8 @@ import '../src/data/settled';
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import {
-  doodadRuleOf, generateLayout, hasLayout, type GeneratedLayout,
+  doodadRuleOf, generateLayout, hasLayout, raiseStructure,
+  type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
@@ -271,6 +272,84 @@ const regionCells = (grid: GridWalkField, id: string): number => {
     check('D9 blocks ONE weave', !!gs && gs.comps === 1, `comps=${gs?.comps}`);
     const a2 = fingerprint(gen(bdef, 909091)), b2 = fingerprint(gen(bdef, 909091));
     check('D10 blocks byte-deterministic', a2 === b2 && a2.length > 0);
+
+    // THE DOOR TRUTH + THE PLOT LAW: the boulevards' market_row (600-720px
+    // compound on ~390-430px plots) claimed neighbor ground, and the raise's
+    // site-clear swallowed the neighbors' flank doors into PHANTOM records —
+    // surfaced the day genqa folded variant layoutParams. These pins hold the
+    // healed state: no overlapping footprints, every door record keeps its
+    // doodad, every door keeps walkable ground on BOTH sides.
+    let doorsSeen = 0;
+    for (const seed of [888004, 888005, 888006]) {
+      const o = gen(bdef, seed);
+      const g = o.walk instanceof GridWalkField ? o.walk : null;
+      const sts = o.structures ?? [];
+      let overlaps = 0;
+      for (let i = 0; i < sts.length; i++) {
+        for (let j = i + 1; j < sts.length; j++) {
+          const a = sts[i].rect, b = sts[j].rect;
+          if (a.x < b.x + b.w - 1 && a.x + a.w > b.x + 1
+            && a.y < b.y + b.h - 1 && a.y + a.h > b.y + 1) overlaps++;
+        }
+      }
+      check(`D11 no two footprints overlap (seed ${seed})`, overlaps === 0, `${overlaps} pair(s)`);
+      let phantoms = 0, floorless = 0, doors = 0;
+      for (const st of sts) {
+        for (const rec of st.doors) {
+          doors++;
+          if (!o.doodads.some(d => d.door?.id === rec.door.id)) phantoms++;
+          if (g) {
+            const cs = st.cellSize;
+            if (!g.isWalkable(rec.pos.x + rec.normal.x * cs, rec.pos.y + rec.normal.y * cs)
+              || !g.isWalkable(rec.pos.x - rec.normal.x * cs, rec.pos.y - rec.normal.y * cs)) floorless++;
+          }
+        }
+      }
+      doorsSeen += doors;
+      check(`D12 every door record keeps its doodad (seed ${seed})`, phantoms === 0, `${phantoms}/${doors} phantom`);
+      check(`D13 every door keeps floor on BOTH sides (seed ${seed})`, floorless === 0, `${floorless}/${doors} floorless`);
+    }
+    check('D14 pressure — the blocks face raised doors to test', doorsSeen > 0, `doors=${doorsSeen}`);
+
+    // THE PLOT-FIT LAW directly (filter, not luck): a pool of ONLY the
+    // oversized row raises nothing — plots degrade to open ground — and a
+    // mixed pool raises only what fits.
+    const wideOnly = defOf('qa_blocks_wide', 'district', blocksFace.layout,
+      { ...metro.layoutParams, ...blocksFace.layoutParams, blockPool: [{ structure: 'market_row', weight: 1 }] });
+    const ow = gen(wideOnly, 888007);
+    check('D15 an oversized-only pool raises NOTHING (plot-fit law)', (ow.structures?.length ?? 0) === 0,
+      `structures=${ow.structures?.length ?? 0}`);
+    const mixed = defOf('qa_blocks_mixed', 'district', blocksFace.layout,
+      { ...metro.layoutParams, ...blocksFace.layoutParams,
+        blockPool: [{ structure: 'market_row', weight: 5 }, { structure: 'cottage', weight: 1 }] });
+    const om = gen(mixed, 888008);
+    const raised = om.structures ?? [];
+    check('D16 a mixed pool raises ONLY what fits', raised.length > 0 && raised.every(s => s.defId === 'cottage'),
+      `raised=${[...new Set(raised.map(s => s.defId))].join(',') || 'none'}`);
+
+    // THE SITE-CLEAR HARDENING directly: two plans FORCED into overlap on a
+    // bare ctx (explicit `at` skips the siting gates — exactly how the
+    // pre-fix city overlapped) — the later raise's site-clear swallows the
+    // earlier's door doodad, and the RECORD must die with it
+    // (dropDoorRecord): no phantom survives any future claim, whatever
+    // placer makes it. Pressure: the swallow must actually have happened.
+    {
+      const bctx: GenCtx = {
+        rng: new Rng(424243), arena, entry, exits, seed: 424243,
+        doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+        garrisons: [], caveSeeds: [], reserved: [],
+      };
+      raiseStructure(bctx, 'cottage', vec(600, 600));
+      const doorsBefore = (bctx.structures ?? []).reduce((a, s) => a + s.doors.length, 0);
+      raiseStructure(bctx, 'cottage', vec(660, 600));
+      const sts2 = bctx.structures ?? [];
+      const phantoms2 = sts2.flatMap(s => s.doors)
+        .filter(rec => !bctx.doodads.some(d => d.door?.id === rec.door.id)).length;
+      const doorsHeld = sts2[0]?.doors.length ?? 0;
+      check('D17 a swallowed door dies WHOLE (record + doodad together)', phantoms2 === 0, `${phantoms2} phantom`);
+      check('D18 pressure — the overlap really swallowed a door', doorsBefore > 0 && doorsHeld < doorsBefore,
+        `first structure doors ${doorsBefore}→${doorsHeld}`);
+    }
   }
 }
 

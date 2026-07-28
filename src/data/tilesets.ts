@@ -792,11 +792,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       ], layoutParams: {
         districtMode: 'blocks',
         blockSize: 380, streetWidth: 100, plazaChance: 0.24, paveStreets: true,
+        // The pool fits the pitch (THE PLOT-FIT LAW, engine/settled.ts):
+        // market_row's compound rolls 540-720px wide — half again these
+        // ~390-430px plots — so it claimed neighbor ground and site-cleared
+        // their doors into phantoms. It stays a crusade/village structure
+        // (self-siting lanes); a boulevards market wants a WIDE-plot face,
+        // not a silent overlap.
         blockPool: [
           { structure: 'metro_house', weight: 3 },
           { structure: 'townhouse', weight: 2 },
           { structure: 'longhouse', weight: 1 },
-          { structure: 'market_row', weight: 1 },
           { structure: 'cottage', weight: 0.8 },
           { structure: 'chapel', weight: 0.6 },
         ],
