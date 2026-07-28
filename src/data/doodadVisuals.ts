@@ -195,6 +195,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // The perched boulder at a runway's head — the Indiana-Jones tell: you SEE
   // the stone waiting before you ever find the plate that frees it.
+  // (No bakeWhole — see THE ROCK GRAMMAR note at `rock`: the boulder family
+  // stays live; a one-per-runway set-piece has no volume to win besides.)
   boulder_cradle: {
     painter: 'boulder', order: 52, shadow: 0.5,
     params: { color: '#8a8168' },
@@ -403,6 +405,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       tufts: { color: '#d88ab8' },
     },
   },
+  // NO bakeWhole (2026-07-28 doodad-raster attribution): a liquid row's
+  // rim/core ARE paintLiquidBody statics, already baked into the ground
+  // chunks (liquidBodyIsLive false — this row rides the 'ground-bake'
+  // family via its blend). The renderer's bakeWhole branch REPLACES the
+  // live painter call, so a sprite here would bake nothing at best and
+  // vanish the body outright wherever bakeLiquidBody is off — and blobPath
+  // merges neighboring drifts into one bank a per-doodad blit would shatter.
   snowdrift: {
     painter: 'liquid', order: 21,
     blend: { strength: 0.3, feather: 26, color: '#e6eef6' },
@@ -673,6 +682,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // THE CRAG: the chasm's inverse, drawn RAISED — thrown ground shadow, flank
   // band, inset plateau bevel, sun-keyed rims, chance-rolled accents. A
   // wandering cliff chain reads as ONE ridge (merged blobs).
+  // NO bakeWhole (2026-07-28 doodad-raster attribution): cliffMass is a
+  // genuinely MERGING painter — shadow/edge/flank/plateau are four
+  // whole-group blobPath fills, so a per-doodad sprite would shatter the
+  // ridge back into the stamped-circles read the merged edge fill exists to
+  // kill (its own comment names it); snowCap reads live world state besides.
   cliff: {
     painter: 'cliffMass', order: 46,
     params: {
@@ -1103,6 +1117,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // --- Standing minerals + organics ---------------------------------------
   // THE ROCK GRAMMAR: every stone rolls its own form (mono/split/outcrop) and
   // chance-rolled accents — same entry, endless variety, tinted per biome.
+  // NO bakeWhole ON THE BOULDER FAMILY (2026-07-28 doodad-raster attribution,
+  // reports perf_20260728050059 + _050229): the rockForm-ruled kinds (rock,
+  // sea_rock, rock_spire, stalagmite, dripstone_column, basalt_column) draw
+  // the SAME seed-rolled bodies the hit surface collides (engine/rockForms.ts
+  // keys on rockSeedOf(the REAL position) + DoodadRule.rockForm), while
+  // wholeKindSprite bakes a fake '__bake' doodad at a variant-derived pos —
+  // a baked face would show different lobes than the stone collides, breaking
+  // drawn == tested. rock/rock_spire/stalagmite also read live state no bake
+  // can carry (snowCap → world.snowCover, null at bake time; quartz's time
+  // shimmer). The param-formed rest (boulder_cradle, colossus_fist, the
+  // brittle plugs, wyrm_coil) are sparse set-pieces — the sweep's heavy faces
+  // censused 0-2 boulder bodies per zone, so there is no volume to win: those
+  // faces' mass (the trunk/deadTree tree kinds) already bakes.
   rock: {
     longShadow: 0.7,
     painter: 'boulder', order: 55, shadow: 0.7,
