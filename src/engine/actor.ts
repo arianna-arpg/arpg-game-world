@@ -561,6 +561,11 @@ export class Actor {
    *  first update tick — after every spawn path has settled the body's true
    *  position — and the planted source is bound to this life. */
   creepPlanted?: boolean;
+  /** THE HEART PUMP's next-beat stamp (creepSource.cadence): seconds on the
+   *  world clock; armed at plant, re-stamped each pump. Cadence-less hearts
+   *  never set it — their latch stays the one-shot it always was. Never
+   *  serializes (the sources it feeds are zone-local, same as the latch). */
+  creepPumpAt?: number;
   /** CREST RIDER (FrontSpec.riders — World.updateCreepRiders): mounted on a
    *  marching creep section, position slaved to crestPoint every tick
    *  (drawn == seated). Dismounts when the section disperses or dies, on

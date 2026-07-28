@@ -212,15 +212,31 @@ fraction/arc, dismount shove, mount status). Validation covers every lever
 (`validateCreep`, incl. rider monster existence and the mount status's
 registration).
 
+**Heart-driven pumps (`creepSource.cadence`) — BUILT.** A creep heart may
+carry a clock: while it lives, `World.updateCreepHearts` `addFront`s a
+marching wave every `every`-rolled seconds (`opening` staggers the first
+beat — the bombard fabric's cadence vocabulary), bound to the same life as
+the planted skin, so killing the heart recoils pocket and waves together
+(kill the heart, still the vessel — `boundTo`, no cleanup code). `bearing`
+picks the march: `'toward'`/`'away'` aim off the nearest live, roused
+hostile the world knows (perception-free — the bombard law; the compass
+roll when none stands), `'random'` (the default) always rolls the compass.
+`kind` pumps a DIFFERENT registered row than the planted skin — it must
+carry front levers (a lever-less pump warns once and stands down);
+`reach`/`bornFrac` override the pumped wave. A saturated field's refusal
+is transient — the clock keeps beating. A heart WITHOUT a cadence never
+arms the next-beat stamp (`Actor.creepPumpAt`): its path through the sweep
+and its rng stream are byte-identical to the classic one-shot latch
+(probe_front's pinned fingerprint holds). Debut wearer: the flesh
+amalgam — somewhere in the fused mass a heart still keeps time, squeezing
+a `sanguine_bore` at whoever it hates every dozen-odd seconds.
+
 **Reserved seams, named.**
 - *Peristalsis down the tract*: the gutworks' queued push is one bore row
   with `flow` + a slow `travel` on the tract faces — no new machinery.
 - *Escape-chase pairing*: a bore lane bound to an `'escape'` objective is
   the pursuer that follows you around corners; the spawn rows already
   carry it.
-- *Heart-driven pumps*: a `MonsterDef.creepSource`-style heart that
-  `addFront`s a bore on its own cadence (kill the heart, still the vessel)
-  — the runtime seam is open; nothing built yet.
 
 ## Extension seams
 

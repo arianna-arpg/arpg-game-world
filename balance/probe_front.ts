@@ -5,8 +5,11 @@
 // affinity weighting + the clearway firebreak, consumption (remnant swap,
 // removal, kin), conversion-behind (ashfield; the flood's shallow wake),
 // the yieldWays causeway mask (drawn == tested), quench/feed through the
-// real blast tap, undertow drag + the breath ramp, and ambient wave lanes.
-// Run: npx tsx balance/probe_front.ts
+// real blast tap, undertow drag + the breath ramp, ambient wave lanes,
+// and the cadence-less creep heart's ONE-SHOT latch (a shipped
+// creepSource without a cadence never arms the pump clock — and the
+// section-0 fingerprint re-proves the classic path byte-identical under
+// the pump-aware sweep). Run: npx tsx balance/probe_front.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
@@ -504,6 +507,28 @@ const fnv = (text: string): string => {
   f.update(0.1, 0, []);
   check('announce: one line per announcing wave — silent rows stay silent',
     seen.length === 1 && seen[0] === 'the sea rises!', seen.join('|') || 'none');
+}
+
+// --- 13) THE ONE-SHOT LATCH: a shipped cadence-less heart never pumps ------
+// creepSource.cadence added the pump lane; a SHIPPED heart without one
+// must keep yesterday's contract exactly — one planted pocket, no next-
+// beat stamp, no marching wave, ever (the byte-identity half is section
+// 0's pinned fingerprint, which ticks through the same pump-aware sweep).
+{
+  const world = makeSimWorld('warrior', 24611);
+  const cx = world.arena.w / 2, cy = world.arena.h / 2;
+  const f = world.creepEnsure()!;
+  const snail = world.createMonster('garden_snail', 4, 'enemy');
+  snail.pos.x = cx + 500; snail.pos.y = cy;
+  world.actors.push(snail);
+  const dt = 1 / 60;
+  for (let i = 0; i < 60 * 6; i++) world.update(dt);
+  const own = f.sources.filter(s => s.boundTo === snail);
+  check('one-shot: the shipped heart planted exactly one pocket in 6s',
+    own.length === 1 && !own[0]?.front, `${own.length} sources`);
+  check('one-shot: no pump stamp ever armed (creepSource without cadence)',
+    snail.creepPlanted === true && snail.creepPumpAt === undefined,
+    `planted ${snail.creepPlanted}, pumpAt ${snail.creepPumpAt ?? '-'}`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL FRONT CHECKS PASSED');

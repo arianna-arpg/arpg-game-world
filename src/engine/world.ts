@@ -41496,21 +41496,70 @@ export class World {
    *  membrane on its first update tick — the composite-parts lazy-attach
    *  idiom, so every spawn path (packs, events, zone-memory restore) grows
    *  the skin at the body's TRUE settled position. The source is bound to
-   *  the actor: the heart dies, the skin recoils, no cleanup code. */
+   *  the actor: the heart dies, the skin recoils, no cleanup code.
+   *  THE HEART PUMP (creepSource.cadence): a heart with a clock also
+   *  addFront()s a marching wave each beat while it lives — same binding,
+   *  so death recoils skin and waves together. A cadence-less heart never
+   *  arms `creepPumpAt`, so its planted body exits on the fast path below
+   *  and its rng stream stays byte-identical to the one-shot latch. */
   private updateCreepHearts(): void {
     for (const a of this.actors) {
-      if (a.dead || a.creepPlanted || !a.defId) continue;
+      if (a.dead || !a.defId || (a.creepPlanted && a.creepPumpAt === undefined)) continue;
       const cs = MONSTERS[a.defId]?.creepSource;
       if (!cs) continue;
-      a.creepPlanted = true;
-      const def = CREEPS[cs.kind];
-      if (!def) { console.warn(`[creep] '${a.defId}' names unknown creep kind '${cs.kind}'`); continue; }
+      if (!a.creepPlanted) {
+        a.creepPlanted = true;
+        const def = CREEPS[cs.kind];
+        if (!def) { console.warn(`[creep] '${a.defId}' names unknown creep kind '${cs.kind}'`); continue; }
+        const field = this.creepEnsure();
+        if (!field) continue;
+        const reach = cs.reach ? rand(cs.reach[0], cs.reach[1]) : undefined;
+        field.addSource(def, a.pos.x, a.pos.y,
+          { boundTo: a, bornFrac: cs.bornFrac ?? 0.12, ...(reach !== undefined ? { reach } : {}) });
+        if (cs.cadence) a.creepPumpAt = this.time + rand(...(cs.cadence.opening ?? cs.cadence.every));
+        continue;
+      }
+      // The pump lane — reached only with an armed stamp that has come due.
+      if (this.time < a.creepPumpAt!) continue;
+      const cad = cs.cadence;
+      if (!cad) { a.creepPumpAt = undefined; continue; } // def edited underfoot: stand down
+      const pumpDef = CREEPS[cad.kind ?? cs.kind];
+      if (!pumpDef?.front) {
+        console.warn(`[creep] '${a.defId}' pump names '${cad.kind ?? cs.kind}' — no front levers`);
+        a.creepPumpAt = undefined;
+        continue;
+      }
       const field = this.creepEnsure();
-      if (!field) continue;
-      const reach = cs.reach ? rand(cs.reach[0], cs.reach[1]) : undefined;
-      field.addSource(def, a.pos.x, a.pos.y,
-        { boundTo: a, bornFrac: cs.bornFrac ?? 0.12, ...(reach !== undefined ? { reach } : {}) });
+      if (!field) { a.creepPumpAt = undefined; continue; }
+      const reach = cad.reach ? rand(cad.reach[0], cad.reach[1]) : undefined;
+      // A cap-refused addFront (null) is transient: keep the clock beating.
+      field.addFront(pumpDef, a.pos.x, a.pos.y, this.creepPumpBearing(a, cad.bearing ?? 'random'), {
+        boundTo: a,
+        ...(reach !== undefined ? { reach } : {}),
+        ...(cad.bornFrac !== undefined ? { bornFrac: cad.bornFrac } : {}),
+      });
+      a.creepPumpAt = this.time + rand(cad.every[0], cad.every[1]);
     }
+  }
+
+  /** THE PUMP's march bearing: 'toward'/'away' aim off the nearest live,
+   *  roused hostile the world knows (perception-free — the bombard law),
+   *  falling back to the compass roll when none stands or the row asks
+   *  'random'. */
+  private creepPumpBearing(a: Actor, mode: 'toward' | 'away' | 'random'): number {
+    if (mode !== 'random') {
+      let best: Actor | null = null, bd = Infinity;
+      for (const o of this.actors) {
+        if (o === a || o.dead || isDormant(o) || !this.hostileTo(a, o)) continue;
+        const d2 = (o.pos.x - a.pos.x) ** 2 + (o.pos.y - a.pos.y) ** 2;
+        if (d2 < bd) { bd = d2; best = o; }
+      }
+      if (best) {
+        const at = angleTo(a.pos, best.pos);
+        return mode === 'toward' ? at : at + Math.PI;
+      }
+    }
+    return rand(0, Math.PI * 2);
   }
 
   /** COMPOSITE MONSTERS (MonsterDef.parts): lazy-attach part actors to any

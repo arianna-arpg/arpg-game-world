@@ -853,8 +853,30 @@ export interface MonsterDef {
    *  bound to the actor). Any monster may carry one: biome hearts, event
    *  spreaders, broodmothers whose brood fights better on their own skin.
    *  `reach` overrides the kind's roll; `bornFrac` starts the front
-   *  part-grown (default 0.12 — you should SEE it claim ground). */
-  creepSource?: { kind: string; reach?: [number, number]; bornFrac?: number };
+   *  part-grown (default 0.12 — you should SEE it claim ground).
+   *
+   *  THE HEART PUMP (`cadence`, docs/engine/creep.md § heart-driven pumps):
+   *  while the heart lives it also `addFront`s a MARCHING wave every
+   *  `every`-rolled seconds (the bombard fabric's cadence/opening
+   *  vocabulary), bound to the same life — kill the heart and skin and
+   *  waves recoil together. `bearing` picks the march ('toward'/'away' aim
+   *  off the nearest hostile the world knows, perception-free — the
+   *  bombard law; 'random', the default, rolls the compass); `kind` pumps
+   *  a DIFFERENT registered row than the planted skin (it must carry
+   *  front levers); `reach`/`bornFrac` override the pumped wave the way
+   *  the outer pair overrides the pocket. A heart WITHOUT a cadence never
+   *  arms the clock — the classic one-shot latch, byte-identical. */
+  creepSource?: {
+    kind: string; reach?: [number, number]; bornFrac?: number;
+    cadence?: {
+      every: [number, number];
+      opening?: [number, number];
+      bearing?: 'toward' | 'away' | 'random';
+      kind?: string;
+      reach?: [number, number];
+      bornFrac?: number;
+    };
+  };
   /** NEVER COUNTS toward zone objectives (clear counts and kin): bodies
    *  whose habitat the player may be unable to reach (a void angler over
    *  its chasm) must never gate progress — the soft-lock guard. The
@@ -7826,6 +7848,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaling: { life: { incPerLevel: 0.06 }, lifeRegen: { flatPerLevel: 0.6 } },
     deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.8, damageType: 'chaos' },
     detection: 1.1,
+    // Somewhere in the fused mass a HEART still keeps time (the pump lane,
+    // docs/engine/creep.md): the amalgam wakes in its own wallow and every
+    // dozen-odd seconds it SQUEEZES — a sanguine bore rushes the galleries
+    // at whoever it hates, corpuscles surfing the crest. Kill it and skin
+    // and waves recoil together (boundTo — the heart IS the pump).
+    creepSource: {
+      kind: 'sanguine_bore', bornFrac: 0.3,
+      cadence: { every: [11, 17], opening: [4, 7], bearing: 'toward' },
+    },
     // The crown ladder (no type swaps — the 0.4 enrage stays live): it
     // sheds its excess at half, and what remains packs DENSER.
     brain: {

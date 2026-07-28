@@ -165,7 +165,7 @@ export const ADVANCED_KEYS: { key: string; help: string }[] = [
   { key: 'onHitTypeIcd', help: 'Seconds between element-response firings' },
   { key: 'immuneGround', help: "Region kinds whose standDamage/heat it ignores (['lava'])" },
   { key: 'pathCosts', help: 'Per-body travel-cost overrides (the wayfaring lever)' },
-  { key: 'creepSource', help: 'Anchors a creep membrane: { kind, reach?, bornFrac? }' },
+  { key: 'creepSource', help: 'Anchors a creep membrane: { kind, reach?, bornFrac?, cadence? } — cadence { every, opening?, bearing?, kind?, reach?, bornFrac? } pumps marching fronts on the heart\'s clock' },
   { key: 'scaling', help: 'Opt-in per-stat level scaling: { life: { flatPerLevel?, incPerLevel?, pow?, rate? } }' },
   { key: 'boons', help: 'Spawn-rolled options from player choice pools: [{ group, pick?, chance? }]' },
   { key: 'brainVariants', help: 'Weighted per-spawn personality roll: [{ weight, brain }]' },

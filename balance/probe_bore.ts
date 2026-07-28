@@ -7,8 +7,11 @@
 // a wall to the blood), crest riders through the REAL world (mount, slave
 // to crestPoint, stun/shove dismount, the per-visit cap), the drag's
 // faction waiver (natives ride free), lane snap-in from a walled rim, full
-// determinism, legacy byte-identity of the attach path, and the validator
-// net. Run: npx tsx balance/probe_bore.ts
+// determinism, legacy byte-identity of the attach path, the validator
+// net, THE HEART PUMP (creepSource.cadence: waves beat on the clock,
+// bearing aims at the hostile, a cadence-less heart stays the one-shot
+// latch, death stills pump and skin together) and the shipped-wearer
+// census. Run: npx tsx balance/probe_bore.ts
 // (probe_front pins the classic fingerprint 0x04e4055d — run it beside
 // this; the two together are the fabric's whole regression net.)
 // ---------------------------------------------------------------------------
@@ -19,6 +22,7 @@ import {
   CreepField, CREEPS, CREEP_CFG, anisoMode, crestPoint, registerCreep, validateCreep,
   type CreepTerrain, type CreepSource,
 } from '../src/engine/creep';
+import { MONSTERS } from '../src/data/monsters';
 import { Rng } from '../src/core/rng';
 
 let failed = 0;
@@ -379,6 +383,112 @@ const dt = 1 / 60;
   const noStatus = validateCreep(id => id !== 'crestborne', [], undefined);
   check('validator: rider rows demand the mount status registered',
     noStatus.some(b => b.includes('crestborne')));
+}
+
+// --- 11) THE HEART PUMP: creepSource.cadence beats waves on the clock ------
+// (docs/engine/creep.md § heart-driven pumps). Probe hearts with EXACT
+// clocks ([1,1] opening, [2,2] every — rand() on a degenerate span draws
+// but cannot vary), planting a classic pocket and pumping the finite
+// travel row 'toward' the nearest hostile: beats land on schedule, the
+// bearing aims at the player, a cadence-less twin stays the one-shot
+// latch, and death stills pump and skin together (boundTo).
+{
+  MONSTERS['probe_pump_heart'] = {
+    id: 'probe_pump_heart', name: 'Probe Pump Heart',
+    color: '#ff4455', shape: 'circle', radius: 16,
+    base: { life: 400, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0,
+    creepSource: {
+      kind: 'caulflesh',
+      cadence: { every: [2, 2], opening: [1, 1], bearing: 'toward', kind: 'probe_bore_travel' },
+    },
+  };
+  MONSTERS['probe_still_heart'] = {
+    id: 'probe_still_heart', name: 'Probe Still Heart',
+    color: '#884444', shape: 'circle', radius: 16,
+    base: { life: 400, moveSpeed: 0, mana: 0 },
+    skills: [], xp: 0,
+    creepSource: { kind: 'caulflesh' },
+  };
+  const world = makeSimWorld('warrior', 515151);
+  const f = world.creepEnsure()!;
+  const cx = world.arena.w / 2, cy = world.arena.h / 2;
+  const heart = world.createMonster('probe_pump_heart', 5, 'enemy');
+  heart.pos.x = cx; heart.pos.y = cy;
+  world.actors.push(heart);
+  const still = world.createMonster('probe_still_heart', 5, 'enemy');
+  still.pos.x = cx - 700; still.pos.y = cy;
+  world.actors.push(still);
+  const p = world.player;
+  p.pos.x = cx + 400; p.pos.y = cy; // due east: the 'toward' referent
+  const seen = new Set<CreepSource>();
+  const stepTo = (t: number): void => {
+    while (world.time < t) {
+      world.update(dt);
+      for (const s of f.sources) if (s.front && s.boundTo === heart) seen.add(s);
+    }
+  };
+  world.update(dt);
+  check('pump: both hearts planted their pocket on the first tick',
+    f.sources.filter(s => s.boundTo === heart && !s.front).length === 1
+    && f.sources.filter(s => s.boundTo === still && !s.front).length === 1,
+    `${f.sources.length} sources`);
+  check('pump: the clock ARMED only on the cadence heart',
+    heart.creepPumpAt !== undefined && still.creepPumpAt === undefined,
+    `pumpAt ${heart.creepPumpAt?.toFixed(2) ?? '-'}`);
+  stepTo(0.9);
+  check('pump: no wave before the opening beat', seen.size === 0);
+  stepTo(1.2);
+  check('pump: the OPENING beat fired exactly one marching wave', seen.size === 1,
+    `${seen.size} waves by t=1.2`);
+  const w0 = [...seen][0];
+  check('pump: the wave wears the pumped kind and the heart\'s binding',
+    !!w0 && w0.def.id === 'probe_bore_travel' && w0.boundTo === heart,
+    w0 ? w0.def.id : 'no wave');
+  check('pump: the wave marches TOWARD the nearest hostile (the player, due east)',
+    !!w0 && Math.cos(w0.front!.bearing) > 0.99,
+    w0 ? `bearing ${w0.front!.bearing.toFixed(3)}` : 'no wave');
+  stepTo(3.2);
+  check('pump: the SECOND beat landed on the every clock (1 + 2s)', seen.size === 2,
+    `${seen.size} waves by t=3.2`);
+  check('pump: the cadence-less heart stayed a one-shot latch (no stamp, one source, no wave)',
+    still.creepPumpAt === undefined
+    && f.sources.filter(s => s.boundTo === still).length === 1
+    && f.sources.every(s => s.boundTo !== still || !s.front));
+  heart.dead = true;
+  heart.life = 0;
+  for (let i = 0; i < 3; i++) world.update(dt);
+  check('pump: death RECOILS the planted skin and the marching waves together (boundTo)',
+    f.sources.filter(s => s.boundTo === heart).every(s => s.state === 'recede'),
+    f.sources.filter(s => s.boundTo === heart).map(s => s.state).join(',') || 'all gone');
+  const before = seen.size;
+  stepTo(7.8); // two more would-be beats (~5.05, ~7.05) come and go
+  check('pump: a dead heart pumps NOTHING (the clock died with it)', seen.size === before,
+    `${seen.size} waves (was ${before})`);
+}
+
+// --- 12) THE PUMP CENSUS: shipped cadences name marching kinds, sanely -----
+// The lever must not be dead on arrival, and no shipped heart may pump a
+// kind without front levers (addFront would warn and stand down at the
+// first beat — catch it here instead). Probe-injected defs are excluded:
+// this census is about the SHIPPED bestiary.
+{
+  const wearers = Object.values(MONSTERS)
+    .filter(m => m.creepSource?.cadence && !m.id.startsWith('probe_'));
+  check('census: at least one shipped heart PUMPS (the lever is live on arrival)',
+    wearers.length >= 1, wearers.map(m => m.id).join(',') || 'none');
+  for (const m of wearers) {
+    const cs = m.creepSource!;
+    const cad = cs.cadence!;
+    const pumpedKind = cad.kind ?? cs.kind;
+    check(`census: ${m.id} pumps a registered kind carrying front levers`,
+      !!CREEPS[pumpedKind]?.front, `kind '${pumpedKind}'`);
+    check(`census: ${m.id} clocks and spans are sane`,
+      cad.every[0] > 0 && cad.every[0] <= cad.every[1]
+      && (!cad.opening || (cad.opening[0] >= 0 && cad.opening[0] <= cad.opening[1]))
+      && (!cad.reach || (cad.reach[0] > 0 && cad.reach[0] <= cad.reach[1])),
+      `every [${cad.every.join(',')}], opening [${cad.opening?.join(',') ?? '-'}]`);
+  }
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL BORE CHECKS PASSED');
