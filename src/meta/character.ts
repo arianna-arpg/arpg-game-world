@@ -24,7 +24,7 @@ import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import { emptyEssences, type PlayerMeta, type Seat, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable, saveRefused } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { DEFAULT_MODE_ID, mintCharId, modeById, ROSTER_SLOT_BASE, type RosterEntry } from './modes';
 import type { WorldStateSave } from './worldstate';
@@ -414,6 +414,7 @@ function characterBody(world: World, save: CharacterSave): string {
 }
 
 export function saveCharacter(world: World): void {
+  if (saveRefused('character')) return; // the crash trap's stand-down (persistence.ts)
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   let body: string;
@@ -428,6 +429,7 @@ export function saveCharacter(world: World): void {
  *  and the worldstate's exact-resume promise is only as honest as the last
  *  write that actually landed. Same routing as saveCharacter. */
 export function saveCharacterDurable(world: World): void {
+  if (saveRefused('character')) return; // stand-down: the quit flush refuses too
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   // The session's LAST write is always built fresh — the memo's fold never
@@ -441,6 +443,10 @@ export function saveCharacterDurable(world: World): void {
 }
 
 export function clearCharacter(): void {
+  // Stand-down covers the WIPE too: a post-crash death flow must not erase a
+  // run off the back of untrusted state (frozen means frozen — both halves,
+  // so the disk-first loader isn't left disagreeing with localStorage).
+  if (saveRefused('character wipe')) return;
   try { window.localStorage.removeItem(CHAR_KEY); } catch { /* ignore */ }
   // DURABLE wipe: must survive the player closing the game on the death screen,
   // else the disk-first loader resurrects the dead character (permadeath break).
@@ -568,6 +574,7 @@ export function saveCouchGuest(
   dormant: Pick<CharacterSave, 'companions' | 'throng' | 'throngClaimed'>,
   durable = false,
 ): void {
+  if (saveRefused('couch guest')) return;
   if (slot < ROSTER_SLOT_BASE) return; // guests only ever write roster slots
   let body: string;
   try { body = JSON.stringify(serializeCouchGuest(world, seat, dormant)); }

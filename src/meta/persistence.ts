@@ -21,6 +21,42 @@ import {
 const KEY = 'arpg_account_v1';
 const SETTINGS_KEY = 'arpg_settings_v1';
 
+// --- THE SAVE STAND-DOWN (the crash trap's fatal latch) ----------------------
+// One page-lifetime latch: after main.ts's crash trap reports a FATAL error,
+// every writer here refuses, so a crash mid-corruption can never persist the
+// broken frame into a permadeath roster — persistence freezes at the last
+// good save and a restart resumes from it. It guards BOTH halves of the
+// hybrid store: the disk primitives (diskPut/diskBeacon — every disk write in
+// src/ routes through them) and the localStorage half at each serializing
+// writer's top (saveAccount/saveAccountDurable/saveSettings here;
+// saveCharacter/saveCharacterDurable/saveCouchGuest/clearCharacter in
+// character.ts), because on an endpoint-less host localStorage IS the store.
+// This latch is the FATAL reason; the save layer's OTHER stand-down reason —
+// a playing SCENE (engine/scenes.ts) — deliberately stays at main.ts's
+// run-save chokepoints instead, because a scene suppresses only the RUN save
+// while account writes (its own ledger stamp) must still flow. A crash
+// trusts nothing, so it latches everything, here at the bottom.
+let suppressedReason: string | null = null;
+
+/** Flip the latch (first reason wins; there is deliberately no un-suppress —
+ *  only a restart, with its fresh module state, saves again). */
+export function suppressSaves(reason: string): void {
+  if (suppressedReason) return;
+  suppressedReason = reason;
+  console.warn(`[save] persistence stood down — ${reason}`);
+}
+
+/** The one predicate: the reason saves are refusing, or null while healthy. */
+export function saveSuppressed(): string | null { return suppressedReason; }
+
+/** Writer-top guard: true (saying so on the console — the probe-visible
+ *  refusal) when the write must be refused. */
+export function saveRefused(what: string): boolean {
+  if (!suppressedReason) return false;
+  console.warn(`[save] ${what} write refused — ${suppressedReason}`);
+  return true;
+}
+
 // Disk save slots (the Vite plugin maps these to saves/save_<slot>.json).
 // Slots are numeric (account/character/settings/roster) or short lowercase
 // NAMES for tool stores ('workshop' → save_workshop.json) — both endpoint
@@ -41,6 +77,7 @@ export async function diskGet<T>(slot: SaveSlot): Promise<T | null> {
 }
 /** Write a save slot to disk (fire-and-forget; localStorage already holds it). */
 export function diskPut(slot: SaveSlot, body: string): void {
+  if (saveRefused(`disk slot ${slot}`)) return; // the stand-down's structural backstop
   fetch(`/__save/${slot}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body })
     .catch(() => { /* endpoint absent — localStorage is the fallback */ });
 }
@@ -51,6 +88,7 @@ export function diskPut(slot: SaveSlot, body: string): void {
  *  would then resurrect the dead character). sendBeacon is queued by the browser
  *  and flushed even on unload; we fall back to the plain POST when it's absent. */
 export function diskBeacon(slot: SaveSlot, body: string): void {
+  if (saveRefused(`disk slot ${slot}`)) return; // stand-down: the durable lane refuses too
   try {
     if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
       // A string body is sent as text/plain; the middleware JSON.parses it
@@ -86,6 +124,7 @@ export async function loadAccountAsync(): Promise<Account> {
 }
 
 export function saveAccount(a: Account): void {
+  if (saveRefused('account')) return;
   const body = JSON.stringify(serializeAccount(a));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   diskPut(ACCOUNT_SLOT, body);
@@ -95,6 +134,7 @@ export function saveAccount(a: Account): void {
  *  wipe is durable, so the just-earned death record must be too — else closing
  *  the tab on the death screen wipes the character but drops the corpse. */
 export function saveAccountDurable(a: Account): void {
+  if (saveRefused('account')) return;
   const body = JSON.stringify(serializeAccount(a));
   try { window.localStorage.setItem(KEY, body); } catch { /* ignore */ }
   diskBeacon(ACCOUNT_SLOT, body);
@@ -136,6 +176,7 @@ export async function loadSettingsAsync(): Promise<Settings> {
 }
 
 export function saveSettings(s: Settings): void {
+  if (saveRefused('settings')) return;
   const body = JSON.stringify(serializeSettings(s));
   try { window.localStorage.setItem(SETTINGS_KEY, body); } catch { /* ignore */ }
   diskPut(SETTINGS_SLOT, body);

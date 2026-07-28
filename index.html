@@ -4,6 +4,67 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hollow Wake</title>
+  <!-- THE EARLY TRAP: a classic (non-module) script installed BEFORE the module
+       graph loads, so a failure of the bundle itself — a 404'd chunk, a parse
+       error, a boot-time import throw — is CAPTURED and eventually SHOWN
+       instead of a silent black screen. Errors ring-buffer into
+       window.__bootErrors (cap 20 — the same ring the in-game crash overlay's
+       Copy Details reads); if src/main.ts never takes over (__gameBooted stays
+       unset), a timeout renders the captured text as a minimal DOM fallback.
+       main.ts replaces these handlers with the full crash trap the moment it
+       boots and clears the fallback timer (__bootTrapTimer). -->
+  <script>
+    (function () {
+      var ring = window.__bootErrors = [];
+      function push(kind, msg, stack) {
+        if (ring.length >= 20) ring.shift();
+        ring.push({
+          t: Date.now(), kind: kind,
+          msg: String(msg == null ? 'unknown error' : msg),
+          stack: stack ? String(stack) : '',
+        });
+      }
+      window.onerror = function (msg, src, line, col, err) {
+        push('error', (err && err.message) || msg, err && err.stack);
+      };
+      window.onunhandledrejection = function (ev) {
+        var r = ev ? ev.reason : null;
+        push('rejection', r && r.message ? r.message : r, r && r.stack);
+      };
+      // Resource failures (the 404'd bundle case) fire on the ELEMENT, never
+      // window.onerror — a capture-phase listener is the only net that holds.
+      window.addEventListener('error', function (ev) {
+        var t = ev ? ev.target : null;
+        if (t && t !== window && (t.src || t.href)) {
+          push('load', 'failed to load ' + (t.src || t.href), '');
+        }
+      }, true);
+      // The fallback: only ever speaks when boot FAILED with evidence — a slow
+      // first dev transform re-arms quietly instead of crying wolf.
+      function fallback() {
+        if (window.__gameBooted) return;
+        if (!ring.length) { window.__bootTrapTimer = setTimeout(fallback, 4000); return; }
+        var host = document.body || document.documentElement;
+        var box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#0a0a0e;'
+          + 'color:#d8d4c8;font:14px/1.5 Verdana,sans-serif;padding:40px;overflow:auto;';
+        var text = '';
+        for (var i = 0; i < ring.length; i++) {
+          text += ring[i].kind + ': ' + ring[i].msg + '\n'
+            + (ring[i].stack ? ring[i].stack + '\n' : '') + '\n';
+        }
+        box.innerHTML = '<h1 style="color:#c03030;font-size:20px;letter-spacing:2px;">'
+          + 'HOLLOW WAKE FAILED TO START</h1>'
+          + '<p>The game did not boot. The captured error is below — restarting the '
+          + 'game (or updating to the latest build) may resolve it.</p>'
+          + '<pre style="white-space:pre-wrap;user-select:text;-webkit-user-select:text;'
+          + 'color:#8a8678;font-size:12px;"></pre>';
+        box.querySelector('pre').textContent = text;
+        host.appendChild(box);
+      }
+      window.__bootTrapTimer = setTimeout(fallback, 8000);
+    })();
+  </script>
   <style>
     :root {
       --panel-bg: rgba(12, 12, 18, 0.92);

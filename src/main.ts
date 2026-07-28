@@ -1,6 +1,11 @@
 // ---------------------------------------------------------------------------
 // Entry point: boots the world, runs the loop, and routes player input into
 // the same skill pipeline the AI uses.
+// Also home of THE CRASH TRAP's game half (the early half is inline in
+// index.html): uncaught errors ring-buffer, the first FATAL raises the crash
+// overlay and stands the save writers down (meta/persistence.ts). `?crashtest`
+// is the dev-only negative control — a deliberate throw from inside the rAF
+// loop one second after boot, to drill the whole path.
 // ---------------------------------------------------------------------------
 
 import { Input } from './core/input';
@@ -40,6 +45,7 @@ import { registerAllPackageFactions } from './packages/factionGen';
 import { Renderer } from './render/renderer';
 import { RENDER_SCALE_CFG, nextNotch } from './render/renderScale';
 import { UI } from './ui/panels';
+import { errorOverlayShown, showErrorOverlay, type CrashEntry } from './ui/errorOverlay';
 import { LocalTransport } from './net/local';
 import { ScriptedInput, LocalCoopInput } from './net/scripted';
 import type { PlayerInput, MetaAction } from './net/intent';
@@ -61,6 +67,7 @@ import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, 
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
   saveAccount, saveAccountDurable, saveSettings, resetAccount,
+  saveSuppressed, suppressSaves,
 } from './meta/persistence';
 import {
   applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
@@ -75,6 +82,45 @@ import type { Settings } from './meta/settings';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const input = new Input(canvas);
+
+// ---------------------------------------------------------------------------
+// THE CRASH TRAP (game half — the early half is inline in index.html and owns
+// everything before this module evaluates). Installed FIRST, before the boot
+// work below, so a throw anywhere later still lands in the full trap. Every
+// uncaught error / unhandled rejection appends to the SAME ring the early
+// trap seeded (window.__bootErrors, cap 20); the FIRST fatal:
+//  1. stands the saves down (meta/persistence.ts suppressSaves — baseline,
+//     autosave, menu-exit, quit flush, durable wipes all refuse, so a crash
+//     mid-corruption can never overwrite the last good save),
+//  2. raises THE CRASH OVERLAY (ui/errorOverlay.ts — no auto-dismiss), and
+//  3. ends the rAF pump (frame() stops re-arming — a crashed sim is not
+//     ticked onward beneath the overlay; only a restart resumes).
+// DOCTRINE (start simple): EVERYTHING uncaught is fatal. If real noise ever
+// surfaces — say a transport's benign rejection — the refinement is to route
+// it to crashPush (ring-only, no latch) here, not to grow a taxonomy.
+// ---------------------------------------------------------------------------
+const crashRing: CrashEntry[] = (window.__bootErrors ??= []);
+let crashFatal: CrashEntry | null = null;
+function crashPush(kind: string, msg: string, stack?: string): CrashEntry {
+  const entry: CrashEntry = { t: Date.now(), kind, msg, stack };
+  if (crashRing.length >= 20) crashRing.shift();
+  crashRing.push(entry);
+  return entry;
+}
+function reportFatal(err: unknown, kind: string): void {
+  const e = err instanceof Error ? err : null;
+  const entry = crashPush(kind, e?.message ?? String(err ?? 'unknown error'), e?.stack);
+  if (crashFatal) return;   // the first fatal owns the screen; later ones just ring
+  crashFatal = entry;
+  console.error('[crash] fatal —', err);
+  suppressSaves(`fatal ${kind}: ${entry.msg}`);
+  try { showErrorOverlay(entry, crashRing); }
+  catch (overlayErr) { console.error('[crash] the overlay itself failed to raise', overlayErr); }
+}
+window.__gameBooted = true;   // the early trap's boot-failure fallback stands down
+if (window.__bootTrapTimer !== undefined) clearTimeout(window.__bootTrapTimer);
+window.onerror = (msg, _src, _line, _col, err): void => { reportFatal(err ?? msg, 'uncaught error'); };
+window.onunhandledrejection = (ev): void => { reportFatal(ev.reason, 'unhandled rejection'); };
 
 // The ACCOUNT and the keybind SETTINGS are loaded ONCE here and live in module
 // scope — they outlive every character death and World recreation. World, UI,
@@ -165,6 +211,12 @@ const COOP_PARAMS = new URLSearchParams(location.search);
 /** `?coophuman` = a second LOCAL HUMAN seat (arrow keys); `?coop` = a scripted one. */
 const COOP_HUMAN = COOP_PARAMS.has('coophuman');
 const COOP_ALLY = COOP_PARAMS.has('coop') || COOP_HUMAN;
+/** `?crashtest` — THE NEGATIVE CONTROL for the crash trap (dev-only, the
+ *  `?prologue` idiom): one second after boot, tick() throws deliberately so
+ *  the whole capture → overlay → save-stand-down path can be drilled and the
+ *  refusals observed live. OFF (param absent) this is one always-false
+ *  compare per frame — zero behavior change. */
+let crashTestAt = COOP_PARAMS.has('crashtest') ? performance.now() + 1000 : Infinity;
 
 // Host→client snapshot broadcast at a FIXED wire rate (decoupled from the host's
 // render FPS), only ever while real peers are connected — single-player/local-only
@@ -438,6 +490,12 @@ function resumeGame(preloaded?: CharacterSave | null): void {
 // Dev/debug handle (also keeps headless testing possible when rAF is paused).
 declare global {
   interface Window {
+    /** THE CRASH TRAP's shared error ring — seeded by index.html's early trap. */
+    __bootErrors?: CrashEntry[];
+    /** The early trap's boot-failure fallback timer (cleared once we boot). */
+    __bootTrapTimer?: number;
+    /** Set the moment this module evaluates — the early fallback's stand-down. */
+    __gameBooted?: boolean;
     __game?: {
       world: () => World; ui: UI; ai: typeof updateAI; renderer: Renderer;
       account: () => Account; saveAccount: () => void; save: () => void;
@@ -463,6 +521,10 @@ declare global {
       perfFrames: (reset?: boolean) => { gap: number[]; sim: number[]; ren: number[] };
       perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
       devPanel: () => void;
+      crash: () => {
+        fatal: CrashEntry | null; suppressed: string | null;
+        overlay: boolean; errors: CrashEntry[];
+      };
     };
   }
 }
@@ -523,6 +585,12 @@ window.__game = {
   },
   perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
   devPanel: () => mountDevPanel(() => world),
+  // CRASH TRAP state — the ?crashtest negative control's probe surface (is the
+  // latch flipped, why are saves refusing, did the overlay rise, the ring).
+  crash: () => ({
+    fatal: crashFatal, suppressed: saveSuppressed(),
+    overlay: errorOverlayShown(), errors: [...crashRing],
+  }),
 };
 
 // THE WORKSHOP (meta/workshop.ts): graft dev-authored entities from the
@@ -1228,12 +1296,23 @@ let last = performance.now();
 /** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
  *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
  *  entirely (the tab-throttle gotcha), which would otherwise freeze input
- *  polling, the pad, and the sim under any headless/backgrounded harness. */
+ *  polling, the pad, and the sim under any headless/backgrounded harness.
+ *  A throw out of tick() is a FATAL (the crash trap above): before this
+ *  catch existed it silently KILLED the pump — the classic wedged canvas —
+ *  and after a fatal the pump stands down deliberately (no re-arm): a
+ *  crashed sim is not ticked onward beneath the overlay. */
 function frame(now: number): void {
-  tick(now);
-  requestAnimationFrame(frame);
+  if (crashFatal) return;
+  try { tick(now); } catch (e) { reportFatal(e, 'game loop'); }
+  if (!crashFatal) requestAnimationFrame(frame);
 }
 function tick(now: number): void {
+  // ?crashtest — the negative control's deliberate throw, from INSIDE the
+  // live loop (see the const by COOP_PARAMS; Infinity while the param is off).
+  if (now >= crashTestAt) {
+    crashTestAt = Infinity;
+    throw new Error('?crashtest — deliberate crash-trap drill from the rAF loop');
+  }
   const frameGapMs = now - last; // true frame pacing, BEFORE the dt clamp
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
