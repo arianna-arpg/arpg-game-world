@@ -26,11 +26,13 @@ an effect kind with zero engine edits.
 
 1. **Generation** — the interiorGen trap pass reads
    `layoutParams.trapworks` (`TrapGenSpec` dials: `sawHalls`, `mincerRooms`,
-   `dartWards`, `boulderRuns`, `falseFloors`, each `{ chance, max }`) and
+   `bladeLattice`, `dartWards`, `boulderRuns`, `falseFloors`, `wireWards`,
+   each `{ chance, max }` plus its own character dials) and
    lays mechanisms WITH the geometry in hand: saw lanes down measured
    corridor stretches (groove carved, clearway-protected), rotor mincers in
    real chambers (hub sized to the room), plates at real coordinates, maws
-   on real walls, runways pre-grooved. Portal/door clearances enforced;
+   on real walls, runways pre-grooved, wires strung wall to wall. Portal/door
+   clearances enforced;
    every rng draw rides the layout stream (genqa determinism pins the pass).
    Surfaced on `GeneratedLayout.trapworks` → placed by loadZone.
    **Two invocation homes, one pass.** The interior generators
@@ -55,7 +57,11 @@ an effect kind with zero engine edits.
 
 `trapTriggerHit` is pure: plates press by **feet, not shoulders** (a body's
 radius counts only `TRAPWORK_CFG.pressPad` of itself — rim brushes never
-press); triplines are crossed capsules. Filters reuse the payload grammar:
+press); triplines are crossed capsules — the generated wires run `w: 14`, so
+a wire's capsule is the plate's own thickness and neither is easier to blunder
+across between sweep beats than the other (the sweep samples POSITIONS every
+`TRAPWORK_CFG.sweepEvery`; nothing here is swept). Filters reuse the payload
+grammar:
 `who` ('any' default — packs blunder onto plates, and **baiting them across
 is the intended play**), `factions`/`notFactions`, `sparesAirborne` (leap
 the plate!), `sparesDormant`. Springs latch `sprung`; `rearm` seconds
@@ -137,11 +143,36 @@ sweeps can never meet; fill misses leave lanes through), rings are grooved
 hopeless halls stay quiet (author `roomCellsMax` up for full-size lattice
 country; the toothed halls do). It picks BEFORE the mincers — the rarest
 archetype gets the grandest floor.
+**The wire ward** (`wireWards`): the fabric's TRIPLINE half, and the only
+archetype that is not a plate. A wire strung wall-to-wall across a real
+corridor stretch, wired to a `volley` raking the hall's own LENGTH — `rays`
+lanes spread evenly across the width so the seams between them stay honest
+ground, `crossfire` turning every other lane around so the far mouth answers
+too. Where a plate is a PLACE you walk around, a wire is the whole width:
+leap it (`sparesAirborne` default) or learn it. Single-use unless `rearm` is
+authored — a cut wire stays cut, and the zone's own re-mint is the reset.
+**SITE HUNGER orders the pass.** Corridor stretches are the scarcest thing
+this generator makes and `takeStretch` is first-come: laid last, `wireWards`
+measured **zero** wires over 24 minted ruins, starved by the plates ahead of
+it. It draws straight after `boulderRuns` (the ask ladder: boulder 240 >
+wire 130 ≈ ward 130 < saw 140), and — uniquely — its whole block is **gated
+on the dial** instead of burning the customary chance draw, which is what
+makes that position free: a face that strings no wire draws nothing here
+wherever the block sits, so no standing seed moves for an archetype it never
+fields. Every point of `chance` on a face is a saw hall somewhere else that
+never got built — the sunken ruin's dials are sized against that trade
+(base 0.35×1, toothed halls 0.6×2).
 Tells: `ruin_plate`/`ruin_plate_hidden` (`floorPlate` painter, `sink`
 dial), `ruin_floor_gap` (chasmPit — a TRUE pit, `DoodadRule.fall`),
 `boulder_cradle` (boulder painter — you SEE the stone waiting),
 `dart_maw` (watcherStone re-cut — the wall that watches is the wall that
-spits).
+spits), `ruin_tripwire` (groundChain re-palette in verdigris — a bolted
+cleat whose link run marches along the wire's bearing, which is the doodad's
+`rot`; laid in facing PAIRS, one per wall, so the two runs meet mid-hall and
+the corridor reads STRUNG from either mouth. The one tell with no
+`DoodadRule` row on purpose: the unlisted default ('ground') is already
+exactly what a chain lying on the flagstones is — never blocking, never
+walk-gated off the wall it bolts to).
 
 ## Config + reserved seams
 

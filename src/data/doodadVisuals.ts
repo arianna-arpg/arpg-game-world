@@ -199,6 +199,18 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'boulder', order: 52, shadow: 0.5,
     params: { color: '#8a8168' },
   },
+  // The tripwire's ANCHOR — the wire ward's only visible part: a bolted cleat
+  // in the masonry with its run of taut links marching in along the wire's
+  // bearing (the doodad's `rot` IS that bearing — the titan-chain painter's
+  // own contract, here in the city's verdigris instead of hell's rust). Laid
+  // in facing PAIRS, one per wall, so the two runs meet mid-hall and the
+  // corridor reads STRUNG from either mouth. No DoodadRule row on purpose:
+  // the unlisted default ('ground') is exactly what a chain lying on the
+  // flagstones is — never blocking, never walk-gated off the wall it bolts to.
+  ruin_tripwire: {
+    painter: 'groundChain', order: 25,
+    params: { iron: '#8a7a52', rust: '#5c6a3e', plate: '#4a4232' },
+  },
   // The dart maw: the watcher-stone gaze slab re-cut as a carved face whose
   // eye TRACKS you — the wall that watches is the wall that spits.
   dart_maw: {

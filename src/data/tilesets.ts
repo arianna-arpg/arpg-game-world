@@ -3059,6 +3059,14 @@ export const TILESETS: Record<string, TilesetDef> = {
           blades: [2, 3], speed: [85, 130], seating: 'random',
           reverse: 0.35, greatBlade: 0.2,
         },
+        // THE WIRE WARDS — the cheap ward the city strung where the machines
+        // were too dear: a taut span across a hall, and the hall itself the
+        // firing line. Single-use (no rearm) — a cut wire stays cut for the
+        // visit. Two or three lanes down the corridor, one in four answering
+        // from the far mouth. Deliberately the THINNEST dial on this face: the
+        // wire picks its hall ahead of the saws (site hunger), so every point
+        // of chance here is a buzzsaw hall somewhere else that never got built.
+        wireWards: { chance: 0.35, max: 1, rays: [2, 3], crossfire: 0.25 },
       },
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
@@ -3126,6 +3134,11 @@ export const TILESETS: Record<string, TilesetDef> = {
           // want it — the chances split the marquee between them; the mint
           // repro is the tuning truth.)
           bladeLattice: { chance: 0.5, max: 1 },
+          // The machine face strings the wires TIGHTER: two tries, wider
+          // volleys, and half of them firing from both mouths at once — but
+          // still under the saws' own chance, because the wire takes its hall
+          // FIRST and this face's identity is the blades.
+          wireWards: { chance: 0.6, max: 2, rays: [2, 4], crossfire: 0.5 },
         },
       } },
     ],

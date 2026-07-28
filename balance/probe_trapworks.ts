@@ -11,8 +11,10 @@
 // body swallowed through the pitfall fabric's forced lane WITH credit,
 // off-cells body untouched), the co-op wire (specs ride ZoneMsg, states
 // converge via setNetTrapState, the collapse MIRROR plants visual gaps and
-// swallows nothing), and the interior GEN PASS (forced dials lay trapworks
-// + lanes deterministically on a real minted sunken_ruin).
+// swallows nothing), the interior GEN PASS (forced dials lay trapworks
+// + lanes deterministically on a real minted sunken_ruin), and THE WIRE WARD
+// (the tripline archetype: wall-to-wall spans over real corridor legs, two
+// facing anchors as the tell, a volley raking the hall's own length).
 // Run: npx tsx balance/probe_trapworks.ts
 // ---------------------------------------------------------------------------
 
@@ -28,7 +30,8 @@ import { mintCave } from '../src/engine/worldgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { Rng } from '../src/core/rng';
 import { serializeZone, applyZone } from '../src/net/snapshot';
-import { vec } from '../src/core/math';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
+import { vec, type Vec2 } from '../src/core/math';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -498,6 +501,96 @@ const DT = 1 / 60;
     && Math.abs((legacy[0].riders[0].phase ?? 0) - 0) < 1e-9
     && Math.abs((legacy[0].riders[1].phase ?? 0) - 0.5) < 1e-9,
     legacy.map(t => `n=${t.riders.length} v=${t.speed}`).join(' '));
+}
+
+// --- 12) THE WIRE WARD — the fabric's TRIPLINE half, end to end -------------
+// (The tripline trigger existed as grammar and nothing authored one. wireWards
+// is the archetype that fields it: a wire strung wall-to-wall across a real
+// corridor stretch, wired to a volley raking the hall's own LENGTH. The
+// placement law that matters is SITE HUNGER — laid last it measured zero wires
+// over 24 minted ruins, starved of halls by the plate archetypes ahead of it.)
+{
+  const w = makeSimWorld('warrior', 9801);
+  const parent = w.zone;
+  const WIRED = { wireWards: { chance: 1, max: 2, rays: [2, 3] as [number, number], crossfire: 1 } };
+  let wires = 0, anchors = 0, deterministic = true, plumbed = true;
+  let spanned = true, walkable = true, laneWalk = true, crossed = true;
+  for (let s = 0; s < 4; s++) {
+    const seed = 51000 + s * 907;
+    const def = mintCave(parent, seed, `probe_wire_${s}`, 'sunken_ruin', { rollVariant: false });
+    const forced = {
+      ...def, seed, layoutType: 'dungeon',
+      layoutParams: { ...def.layoutParams, trapworks: WIRED },
+    } as typeof def;
+    const arena = { w: 1300, h: 1000 };
+    const entry = vec(120, 500), exits = [vec(1180, 500)];
+    const layout = generateLayout(forced, arena, new Rng(seed), entry, exits);
+    const layout2 = generateLayout(forced, arena, new Rng(seed), entry, exits);
+    if (JSON.stringify(layout.trapworks ?? []) !== JSON.stringify(layout2.trapworks ?? [])) deterministic = false;
+    const laid = (layout.trapworks ?? []).filter(t => t.trigger.kind === 'tripline');
+    wires += laid.length;
+    anchors += layout.doodads.filter(d => d.kind === 'ruin_tripwire').length;
+    const gw = layout.walk;
+    for (const t of laid) {
+      const a = t.trigger.a, b = t.trigger.b;
+      if (!a || !b) { spanned = false; continue; }
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      // A wire spans the WHOLE hall (both walls) — never a stub across part of it.
+      if (len < 2 * 29 || len > 2 * 60) spanned = false;
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (gw instanceof GridWalkField && !gw.isWalkable(mid.x, mid.y)) walkable = false;
+      // Drawn == tested: crossing the mid presses; a stride down the hall
+      // (perpendicular to the wire, well past the capsule) does not.
+      const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+      if (!trapTriggerHit(t.trigger, mid.x, mid.y, 12)) crossed = false;
+      if (trapTriggerHit(t.trigger, mid.x + uy * 44, mid.y - ux * 44, 12)) crossed = false;
+      for (const eff of t.effects) {
+        if (!trapEffect(eff.kind)) plumbed = false;
+        for (const ray of (eff as { rays?: { a: Vec2; b: Vec2 }[] }).rays ?? []) {
+          // The bolts fly down honest ground, the boulder-runway law.
+          if (gw instanceof GridWalkField && !gw.lineWalkable(vec(ray.a.x, ray.a.y), vec(ray.b.x, ray.b.y))) laneWalk = false;
+        }
+      }
+    }
+  }
+  check('wire: forced dials STRING wires across real corridor legs', wires >= 3, `${wires} wires`);
+  check('wire: two facing anchors per wire (the strung hall reads from either mouth)',
+    anchors === wires * 2, `${anchors} anchors / ${wires} wires`);
+  check('wire: the span crosses the WHOLE hall, wall to wall', spanned);
+  check('wire: the wire is strung over walkable ground', walkable);
+  check('wire: drawn == tested — crossing presses, striding the hall does not', crossed);
+  check('wire: every firing lane runs honest ground (lineWalkable, the runway law)', laneWalk);
+  check('wire: the volley it looses resolves a registered handler (no invented kind)', plumbed);
+  check('wire: the trap pass stays deterministic per seed with wires in it', deterministic);
+  check('wire: the tell is DRAWN — ruin_tripwire owns a DOODAD_VISUALS row',
+    !!DOODAD_VISUALS['ruin_tripwire'], DOODAD_VISUALS['ruin_tripwire']?.painter ?? 'MISSING');
+
+  // LIVE: the wire springs on a feet-honest cross and looses its bolts.
+  const lw = makeSimWorld('warrior', 9802);
+  lw.player.pos.x = 200; lw.player.pos.y = 200;
+  const lanesBefore = lw.tracks.length;
+  lw.trapworksEnsure([{
+    id: 'live_wire',
+    trigger: { kind: 'tripline', a: vec(600, 440), b: vec(600, 560), w: 14 },
+    effects: [{ kind: 'volley', rays: [
+      { a: vec(420, 480), b: vec(820, 480) },
+      { a: vec(420, 520), b: vec(820, 520) },
+    ] }],
+  }]);
+  const wire = lw.trapworks.find(t => t.id === 'live_wire')!;
+  check('wire live: a tripline plants NO plate tell (the anchors are gen\'s job)',
+    !lw.doodads.some(d => d.kind === 'ruin_plate' || d.kind === 'ruin_plate_hidden'));
+  lw.player.pos.x = 560; lw.player.pos.y = 500;   // short of the wire, in the hall
+  for (let i = 0; i < 30; i++) lw.update(DT);
+  check('wire live: walking the hall short of the wire springs nothing', wire.state === 'armed');
+  lw.player.pos.x = 600; lw.player.pos.y = 500;   // cross it
+  for (let i = 0; i < 12; i++) lw.update(DT);
+  check('wire live: the cross SPRINGS it within one sweep beat', wire.state === 'sprung');
+  check('wire live: the bolts fly as staggered once-lanes down the hall',
+    lw.tracks.length === lanesBefore + 2
+    && lw.tracks.slice(-2).every(t => t.spec.mode === 'once' && t.spec.tag === 'live_wire'));
+  check('wire live: single-use by default — a cut wire stays cut for the visit',
+    wire.rearmAt === Infinity);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

@@ -295,13 +295,13 @@ export function validateContent(): void {
     };
     for (const t of Object.values(TILESETS)) lintThemeTraps(t.theme?.trapworks, `tileset ${t.id}`);
     for (const z of Object.values(ZONES)) lintThemeTraps(z.theme?.trapworks, `zone ${z.id}`);
-    for (const kind of ['ruin_plate', 'ruin_plate_hidden', 'ruin_floor_gap', 'boulder_cradle', 'dart_maw']) {
+    for (const kind of ['ruin_plate', 'ruin_plate_hidden', 'ruin_floor_gap', 'boulder_cradle', 'dart_maw', 'ruin_tripwire']) {
       if (!DOODAD_VISUALS[kind]) warn(`trapworks: tell kind '${kind}' has no DOODAD_VISUALS row — an invisible mechanism is a lie`);
     }
     const lintTrapDials = (spec: unknown, where: string): void => {
       if (!spec || typeof spec !== 'object') return;
       for (const [arch, dial] of Object.entries(spec as Record<string, { chance?: number; max?: number }>)) {
-        if (!['sawHalls', 'mincerRooms', 'bladeLattice', 'dartWards', 'boulderRuns', 'falseFloors'].includes(arch)) {
+        if (!['sawHalls', 'mincerRooms', 'bladeLattice', 'dartWards', 'boulderRuns', 'falseFloors', 'wireWards'].includes(arch)) {
           warn(`trapworks: ${where} names unknown archetype '${arch}'`);
           continue;
         }
@@ -309,14 +309,23 @@ export function validateContent(): void {
         if (dial.max !== undefined && (dial.max < 1 || dial.max > 4)) warn(`trapworks: ${where}.${arch} max outside [1,4]`);
         // The wheel dials stay physical: bands ordered, speeds inside the
         // track lint's own (0,600], riders resolvable at boot.
-        const wd = dial as { blades?: [number, number]; speed?: [number, number]; hubR?: [number, number]; rider?: string; seating?: string };
-        for (const bandKey of ['blades', 'speed', 'hubR'] as const) {
+        const wd = dial as {
+          blades?: [number, number]; speed?: [number, number]; hubR?: [number, number];
+          rays?: [number, number]; rider?: string; seating?: string;
+          crossfire?: number; rearm?: number;
+        };
+        for (const bandKey of ['blades', 'speed', 'hubR', 'rays'] as const) {
           const band = wd[bandKey];
           if (band && !(band[0] <= band[1] && band[0] > 0)) warn(`trapworks: ${where}.${arch}.${bandKey} band [${band}] not ordered-positive`);
         }
         if (wd.speed && wd.speed[1] > 600) warn(`trapworks: ${where}.${arch}.speed exceeds the lane lint's 600px/s`);
         if (wd.rider && !trackRider(wd.rider)) warn(`trapworks: ${where}.${arch}.rider '${wd.rider}' unregistered`);
         if (wd.seating && !['even', 'random'].includes(wd.seating)) warn(`trapworks: ${where}.${arch}.seating '${wd.seating}' unknown`);
+        // THE WIRE WARD's own dials: a second chance lives beside the first
+        // (crossfire), and its rearm answers to lintTrapworkSpec's own band —
+        // the wire re-tightens on the same clock any authored trapwork does.
+        if (wd.crossfire !== undefined && (wd.crossfire < 0 || wd.crossfire > 1)) warn(`trapworks: ${where}.${arch} crossfire outside [0,1]`);
+        if (wd.rearm !== undefined && (wd.rearm < 0 || wd.rearm > 300)) warn(`trapworks: ${where}.${arch} rearm ${wd.rearm}s outside [0,300]`);
       }
     };
     for (const t of Object.values(TILESETS)) {

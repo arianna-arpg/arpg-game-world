@@ -462,6 +462,21 @@ export interface TrapGenSpec {
   /** Hidden plates in dead-end chambers whose wrong step drops the floor
    *  into the stratum below (the pitfall fabric's descend). */
   falseFloors?: { chance: number; max?: number };
+  /** THE WIRE WARD — the fabric's TRIPLINE half: a taut wire strung
+   *  wall-to-wall across a hall, and the hall itself the firing line. Where
+   *  a dartWard's plate is a PLACE you can walk around, a wire is the whole
+   *  width — you leap it (sparesAirborne) or you learn where the old city
+   *  strung them. The bolts fly ALONG the corridor in evenly-spread lanes,
+   *  so the seams between them are real ground, and the volley's rake
+   *  strokes the whole hall before a single one flies.
+   *  Dials: `rays` [lo,hi] firing lanes down the hall; `crossfire` chance
+   *  the FAR mouth answers too (alternating lanes fire back the other way);
+   *  `rearm` seconds until the wire re-tightens (absent = ONE snare for the
+   *  visit — a cut wire stays cut, and the zone's own re-mint is the reset). */
+  wireWards?: {
+    chance: number; max?: number;
+    rays?: [number, number]; crossfire?: number; rearm?: number;
+  };
 }
 
 /** The geometry the trap pass measures against. The interior generators build
@@ -583,6 +598,73 @@ function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: T
     });
     ctx.doodads.push({ pos: vec(s.a.x, s.a.y), radius: 24, kind: 'boulder_cradle' });
     layTraveledWay(ctx, [s.a, s.b], { kind: 'track_groove', band: [12, 15], step: 26, overgrowth: 0 });
+  }
+
+  // --- WIRE WARDS: the fabric's TRIPLINE half. A wire strung wall-to-wall
+  // across a hall, wired to a volley that rakes the hall's own LENGTH — the
+  // plate archetypes give you a place to step around, a wire gives you none.
+  //
+  // TWO placement laws meet here. (1) SITE HUNGER decides the order, the blade
+  // lattice's own rule: the longest halls are the scarcest thing this generator
+  // makes, and after the boulder run (240) the wire (130) asks for more travel
+  // than a saw (140) or a ward (130) can pay back — laid LAST it measured
+  // exactly ZERO wires over 24 minted ruins, starved by the plates in front of
+  // it. (2) The block is GATED ON THE DIAL rather than burning the customary
+  // chance draw, which is what makes law 1 free: a face that strings no wire
+  // draws nothing here whatever position the block sits in, so no standing seed
+  // moves for an archetype it never fields. (A face that DOES author one accepts
+  // the shift, exactly as it would for any dial change.)
+  const wd2 = spec.wireWards;
+  for (let k = 0; wd2 && k < (wd2.max ?? 1); k++) {
+    const want = rng.chance(wd2.chance ?? 0);
+    if (!want) continue;
+    // The per-laid draw shape is fixed (the wheel discipline): roll the seat
+    // and every dial, then site — a future dial never reshuffles a seed.
+    const f = rng.range(0.34, 0.66);
+    const rayBand = wd2.rays ?? [2, 3];
+    const lanes = rng.int(rayBand[0], rayBand[1]);
+    const cross = rng.chance(wd2.crossfire ?? 0);
+    const s = takeStretch(130);
+    if (!s) continue;
+    const at = lerpAt(s, f);
+    if (!clearOfDoors(at)) continue;
+    const perpX = s.horiz ? 0 : 1, perpY = s.horiz ? 1 : 0;
+    // The wire spans past the walkable width and bites into the masonry —
+    // the anchors are wall furniture, the taut span between them is the trap.
+    const span = geo.halfW + CELL * 0.35;
+    const wa = vec(at.x - perpX * span, at.y - perpY * span);
+    const wb = vec(at.x + perpX * span, at.y + perpY * span);
+    // The firing lanes: bolts down the corridor's LENGTH, spread evenly ACROSS
+    // its width so the gaps between them stay honest ground. `crossfire` turns
+    // every other lane around — the far mouth answers, and neither way is safe.
+    const pitch = (geo.halfW * 2) / (lanes + 1);
+    const rays: { a: Vec2; b: Vec2 }[] = [];
+    for (let i = 0; i < lanes; i++) {
+      const off = (i - (lanes - 1) / 2) * pitch;
+      const back = cross && i % 2 === 1;
+      const from = back ? s.b : s.a, to = back ? s.a : s.b;
+      rays.push({
+        a: { x: from.x + perpX * off, y: from.y + perpY * off },
+        b: { x: to.x + perpX * off, y: to.y + perpY * off },
+      });
+    }
+    (ctx.trapworks ??= []).push({
+      id: `gen_wire${k}`,
+      // w 14: the plate's own exposure (a press disc is r 16), so a wire is no
+      // easier to blunder through between sweep beats than a flagstone — and
+      // no harder. sparesAirborne stays default-true: LEAP the wire.
+      trigger: { kind: 'tripline', a: wa, b: wb, w: 14 },
+      ...(wd2.rearm && wd2.rearm > 0 ? { rearm: wd2.rearm } : {}),
+      effects: [{ kind: 'volley', rays }],
+      announce: 'the wire sings taut —',
+      color: '#c8b06a',
+    });
+    // THE TELL (triplines plant none by default — the emitters are gen's job):
+    // a bolted anchor at each wall whose chain run marches in along the wire's
+    // own bearing. Two facing anchors and the hall reads STRUNG.
+    const bear = Math.atan2(wb.y - wa.y, wb.x - wa.x);
+    ctx.doodads.push({ pos: vec(wa.x, wa.y), radius: 13, kind: 'ruin_tripwire', rot: bear });
+    ctx.doodads.push({ pos: vec(wb.x, wb.y), radius: 13, kind: 'ruin_tripwire', rot: bear + Math.PI });
   }
 
   // --- SAW HALLS: always-on shuttling blades, groove carved, learnable.
@@ -810,6 +892,7 @@ function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: T
     // The honest whisper: a little rubble where the masons cut corners.
     ctx.doodads.push({ pos: vec(rm.cx + rng.range(-14, 14), rm.cy + rng.range(-14, 14)), radius: 12, kind: 'rubble' });
   }
+
 }
 
 registerLayout('dungeon', (ctx, def) => interiorLayout(ctx, def));
