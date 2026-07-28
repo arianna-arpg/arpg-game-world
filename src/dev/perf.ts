@@ -286,7 +286,22 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
       continue;
     }
     pinWeather(); // re-pin on the fresh zone's own node
-    zones.push(await sampleCurrentZone(id));
+    const stats = await sampleCurrentZone(id);
+    if (g.world().zone.id !== zid) {
+      // THE MID-WALK EXIT (aether_vesper 2026-07-28, the load-fallback
+      // guard's missing half): the walker LEFT the minted zone DURING the
+      // sample — a skyfall off a void-realm isle whose spans stood down
+      // (beginSkyfall → skyBelow → the nearest charted surface zone), or a
+      // portal step. The collected frames measure the zone-swap stitch plus
+      // a FOREIGN zone's steady state, and the meta reads the landing zone —
+      // a mournstead forest wore the vesper row's budget and gated the
+      // sweep (report perf_20260728052558: zone 'Mournstead Keep', variant
+      // 'the drowned garden', under tileset 'aether_vesper'). A row that
+      // did not stay home is not a measurement of its tileset.
+      skipped.push(`${id} (walk left the zone mid-sample → '${g.world().zone.name}')`);
+      continue;
+    }
+    zones.push(stats);
   }
   g.fakePad(null);
   setVisAblate([]);
