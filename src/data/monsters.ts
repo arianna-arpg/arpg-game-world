@@ -1514,6 +1514,104 @@ const wingCycle = (opts: {
   },
 ];
 
+// ===========================================================================
+// THE MIXTURE LAW — the roster's kit partition (design ruling, 2026-07-27)
+// ===========================================================================
+// A standard `claw` / `heavy_strike` kit is NOT a defect. It is the FLOOR
+// LANGUAGE of every faction's weakest tier, and it is deliberate: the player
+// must not have to read a unique kit on every body that walks at them. Within
+// a faction the weaker members KEEP the generic verbs; only a curated set of
+// distinctive MID-TIER members carries ONE identity verb each.
+//
+// This block is the adjudicated partition. A future sweep that re-flags a
+// body listed below as "missing a kit" is re-litigating a settled ruling —
+// read the bucket first. (Probe: balance/probe_anatomy.ts pins that every
+// verb here exists, carries an ai hint, and is payable from its own pool.)
+//
+// --- THE GAIN LIST (exactly 22, one verb each) -----------------------------
+// Composed from the shipped catalog wherever a verb already said the thing
+// (11 of them); eleven fresh manaCost-0 signatures live under "THE MIXTURE
+// LAW — identity verbs" in data/skills.ts. Three defs grew a base mana pool
+// so an existing verb could hang on them honestly (marked * below).
+//
+// THREE of the fresh eleven exist because a shipped verb MEASURED wrong for
+// a body this small — couched_lance, static_jolt and soul_toll replace
+// bastion_thrust / spark_bolt / siphon_strike, each of which ran 2.4-2.8×
+// its host's floor-language dps (and siphon_strike's mana-orb rider was
+// inert on a wretch with no mana pool at all). The catalog is the first
+// answer, never the automatic one.
+//
+//   gorged_ghoul     bile_spray        a retched sickening cone
+//   barrow_lancer    couched_lance     the reach, read from the saddle
+//   barrow_shambler  grave_grasp       hands from below; a brief root
+//   fungal_puffball* spore_burst       the name IS the verb
+//   galvanic_globule static_jolt       NAME-DEMAND; deliberately the weakest
+//   broodmother      web_shot          the matron's snare over her brood
+//   horned_viper     fang_strike       NAME-DEMAND; tiny
+//   sand_scorpion    tail_sting        NAME-DEMAND; weaker than its own claw
+//   crag_chorister   crag_peal         the chorus drive made audible
+//   sapbleeder       sap_jet           the wake trail fired forward
+//   quag_gel         engulf_slam       the smother (the -ling stays plain)
+//   blade_swarm*     whirling_reap     one press, one full turn
+//   hollow_vanguard  marching_bulwark  the wall that WALKS (and still bashes)
+//   mirror_husk      riposte           a mirror ANSWERS
+//   toll_wretch      soul_toll         a touch that BANKS; six stacks swoon
+//   gnasher_prodder  goad_jab          reach and a shove, not a wound
+//   bulwark_scuttler bulwark_set       the shell that SEALS
+//   bronze_scarab    charge            the curl, arriving
+//   mimic            snap_shut         the lid closes on whoever opened it
+//   brood_coiler     coil_lash         a 160° sweep; width is the identity
+//   smoulderling     ash_smother       a brief blind, cut short on purpose
+//   fern_stalker*    panther_pounce    out of the sight-eating brush
+//
+// A signature reads DIFFERENT, never STRONGER — each trades bite for a rider
+// the floor language cannot say. Do NOT grow this list without a ruling.
+//
+// --- KEEP STANDARD: the buckets, and why -----------------------------------
+// PARITY-FROZEN (the balance baselines lean on these; changing a kit here
+//   moves committed numbers): zombie, skeleton_warrior, blood_mite.
+//
+// WEAKEST-IN-FACTION (the floor language itself — this bucket is the point
+//   of the whole ruling): zombie_crawler, barrow_hound, fungal_sporeling,
+//   mushroomling, lesser_ooze, quag_gelling, spiderling, den_whelp,
+//   plains_wolf, sand_skitterer, fen_hound, breach_spawn, chitin_drone,
+//   chitin_wingling, tomb_scarab, risen_husk, formic_worker, formic_forager,
+//   formic_porter (the colony CASTES are the identity), ushabti_file (the
+//   marching cleave-file is FORMATION identity), primeval_spawn, snuffwick
+//   (the Gloaming carries it), gourdling, warren_rat, rockgrub, giant_maggot,
+//   lesser_brute, brute.
+//
+// LITE-POOL bodies (engine/lite.ts): the pooled bite is MAGNITUDE-BLIND, so
+//   a verb would be literally invisible — soul_mote, vermin_tide, grave_mite,
+//   emberling, vault_tick, spinney_broodling, husk_swarmer, wool_aphid.
+//
+// STRUCTURAL-ROLE bodies whose identity is a FABRIC, not a verb: caul_tick
+//   (the cling latch), pale_corpuscle (a crest rider), bone_steed +
+//   gnasher_hopper (steeds — the mount fabric's other half), vacant_shell
+//   (the possession tutor, deliberately blank), resonant_shardling (the
+//   attunement family; its CHAMPION variant carries the read),
+//   starfall_shardling (PARKED by standing ruling — the Starfall Court awaits
+//   its own event; do not touch).
+//
+// FAUNA / LIVESTOCK — never weaponize the pastoral fabric: garden_snail,
+//   banded_slug, skep_bee, greylag_goose, feral_hen, broken_ewe, red_fox,
+//   river_otter, snapping_terrapin, taiga_elk, muck_farrow, shore_crab,
+//   shepherds_hound.
+//
+// PLATFORM heavies (xp 44-95) — these speak through MonsterDef.parts, and
+//   the ANATOMY is the kit: break the right piece and the body changes what
+//   it can do. A signature verb on the root would talk over its own lesson —
+//   canopic_palanquin, blood_cortege, sloughed_colossus, fruiting_titan,
+//   powder_wagon, vigil_altarpiece.
+//
+// HEFT heavies (xp 44-52) — VERIFIED 2026-07-27 and the bucket's original
+//   reason CORRECTED: these three carry NO parts. They are plain great
+//   bodies, and the generic slam genuinely IS their language — the identity
+//   is already spoken in mass (heft 1.4-1.7, poise 65-75, turnSpeed 2.2-2.8,
+//   life 260-320, juggernaut). They ground_slam, which the floor-language
+//   trash never does. Adding a fourth verb would inflate, not distinguish —
+//   the_long_yoke, candelabrum_hulk, mireback_tusker.
+// ===========================================================================
 export const MONSTERS: Record<string, MonsterDef> = {
 
   zombie: {
@@ -1999,7 +2097,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'gorged_ghoul', name: 'Gorged Ghoul',
     color: '#9aa47e', shape: 'circle', radius: 16, look: 'gorged_ghoul',
     base: { life: 150, moveSpeed: 125, accuracy: 100, mana: 20, manaRegen: 2 },
-    skills: ['heavy_strike', 'claw'],
+    // THE RETCH: the fat body's verb. It cannot chase, so it makes the
+    // ground in front of it not worth standing on.
+    skills: ['heavy_strike', 'claw', 'bile_spray'],
     xp: 20,
     faction: 'undead',
     detection: 0.75, // groggy even awake — the ring is honest about it
@@ -2832,7 +2932,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#a8b8c8', shape: 'pentagon', radius: 11, material: 'bone', look: 'barrow_lancer',
     base: { life: 70, moveSpeed: 110, accuracy: 106, armor: 35, mana: 40, manaRegen: 4 },
     mods: [mod('chaosRes', 'flat', 0.3)],
-    skills: ['heavy_strike', 'claw'],
+    // THE COUCHED LANCE: carries no 'movement' tag, so it reads FROM THE
+    // SADDLE (the mount fabric refuses only movement-tagged casts) — a
+    // razor-narrow 145-reach line that arrives before the steed does. Its
+    // own verb, not the player's greatshield lance: REACH is the identity,
+    // and the per-cast bite sits below the heavy strike beside it.
+    skills: ['heavy_strike', 'claw', 'couched_lance'],
     xp: 20,
     faction: 'undead',
     packSize: [2, 3],
@@ -3676,9 +3781,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
   fungal_puffball: {
     id: 'fungal_puffball', name: 'Puffball',
     color: '#adbf6a', shape: 'circle', radius: 14, material: 'verdant', look: 'puffball',
-    base: { life: 38, moveSpeed: 120, accuracy: 88, mana: 0 },
+    // Pool grown from 0 so the name can be the verb — a puffball that only
+    // claws is the one body in the fungal roster that MUST speak.
+    base: { life: 38, moveSpeed: 120, accuracy: 88, mana: 20, manaRegen: 2 },
     mods: [mod('chaosRes', 'flat', 0.7)],
-    skills: ['claw'],
+    // THE PUFF, in life as in death: it vents the ring while it lives and
+    // gathers into the drifting orb when it doesn't.
+    skills: ['claw', 'spore_burst'],
     xp: 14, faction: 'fungal',
     rooted: SPOREBED_COURT,
     tells: [...ROOTED_FAVOR],
@@ -4727,7 +4836,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#7a6a52', shape: 'cross', radius: 17, look: 'spider_big',
     base: { life: 130, moveSpeed: 120, accuracy: 95, armor: 25, mana: 40, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.4)],
-    skills: ['claw'],
+    // THE SNARE: the matron's verb over her spiderlings — she roots you and
+    // the brood arrives. Weak on its own, decisive with the nest standing.
+    skills: ['claw', 'web_shot'],
     xp: 30,
     tag: 'predator',
     faction: 'beast', tags: ['beast'],
@@ -5159,7 +5270,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'mimic', name: 'Mimic',
     color: '#a8743e', shape: 'square', radius: 14, material: 'wood', look: 'mimic',
     base: { life: 160, moveSpeed: 165, accuracy: 110, armor: 25, mana: 30, manaRegen: 4 },
-    skills: ['claw', 'heavy_strike'],
+    // THE SNAP: iron jaws and a held ankle. The lid closes on whoever came
+    // to open it — the latch (rooted 1.6s) IS the surprise, not the bite.
+    skills: ['claw', 'heavy_strike', 'snap_shut'],
     xp: 40,
     brain: { type: 'swarm' },
     drops: 2,
@@ -6013,8 +6126,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
   fern_stalker: {
     id: 'fern_stalker', name: 'Fern Stalker',
     color: '#5a8a44', shape: 'triangle', radius: 11, material: 'verdant', look: 'fern_stalker',
-    base: { life: 38, moveSpeed: 150, accuracy: 90, evasion: 55, mana: 0, insight: 30 },
-    skills: ['claw'], xp: 12,
+    // Pool grown from 0: a lurking predator that picks its moment is not a
+    // mindless body, and the pounce is the moment it was picking.
+    base: { life: 38, moveSpeed: 150, accuracy: 90, evasion: 55, mana: 15, manaRegen: 2, insight: 30 },
+    // THE VEIL POUNCE: airborne and untouchable, then all claws at once —
+    // out of the sight-eating brush the ambush spec already hides it in.
+    skills: ['claw', 'panther_pounce'], xp: 12,
     faction: 'junglekin',
     // Scenery until you're past it — the brush you didn't cut.
     ambush: { radius: 130, announce: 'the ferns move —' },
@@ -7682,7 +7799,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#c8e86a', shape: 'oval', radius: 9, material: 'slime', look: 'lesser_ooze',
     base: { life: 30, moveSpeed: 125, accuracy: 85, mana: 30, manaRegen: 4 },
     mods: [mod('lightningRes', 'flat', 0.75), mod('damageSpread', 'flat', 0.5)],
-    skills: ['claw'], xp: 6, faction: 'flesh',
+    // NAME-DEMAND (the ruling's one exception): a "galvanic" globule that
+    // only claws is a lie. Deliberately the weakest gain on the list — a
+    // jolt cut BELOW claw, not the component-payload spark_bolt its volatile
+    // still flings on death. It sparks in life; it SPARKS when it pops.
+    skills: ['claw', 'static_jolt'], xp: 6, faction: 'flesh',
     volatile: { skillId: 'spark_bolt', chance: 0.25, icd: 1.6, dmgMult: 0.7 },
     detection: 1.0, brain: { type: 'swarm' },
   },
@@ -8964,7 +9085,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'barrow_shambler', name: 'Barrow Shambler',
     color: '#8a8270', shape: 'octagon', radius: 16, material: 'bone', look: 'barrow_shambler',
     base: { life: 130, moveSpeed: 55, accuracy: 90, armor: 16, poise: 30, mana: 0 },
-    skills: ['claw'], xp: 32,
+    // THE GRAVE GRASP: how a 55-speed thing arrives. It does not close the
+    // distance — it takes yours away.
+    skills: ['claw', 'grave_grasp'], xp: 32,
     faction: 'undead', tags: ['undead'],
     colony: { monsterId: 'grave_mite', cap: 7, radius: 55, rate: 0.8 },
     brain: { type: 'juggernaut' },
@@ -9174,7 +9297,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#b8c4d8', shape: 'circle', radius: 11, material: 'ethereal', look: 'mirror_husk',
     base: { life: 44, moveSpeed: 175, accuracy: 95, evasion: 85, mana: 20, manaRegen: 3 },
     mods: [mod('coldRes', 'flat', 0.4)],
-    skills: ['claw'],
+    // THE GLASS RIPOSTE: a mirror ANSWERS. Any frontal blow inside the
+    // window is returned at 220% — the dodge behavior below reads your
+    // wind-up, and this is what it was reading FOR.
+    skills: ['claw', 'riposte'],
     xp: 16,
     faction: 'mirrorkin', tags: ['construct'],
     detection: 1.2,
@@ -9382,7 +9508,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'hollow_vanguard', name: 'Hollow Vanguard',
     color: '#9aa4b2', shape: 'pentagon', radius: 14, material: 'metal', look: 'hollow_vanguard',
     base: { life: 95, moveSpeed: 105, accuracy: 100, armor: 55, poise: 90, mana: 12, manaRegen: 2 },
-    skills: ['heavy_strike'],
+    // THE BRACE + THE BASH, in one verb: the phalanx-step guard WALKS its
+    // wall forward and still bashes on release. The vanguard holds a line.
+    // (Its chitin cousin the bulwark_scuttler SEALS instead — bulwark_set.)
+    skills: ['heavy_strike', 'marching_bulwark'],
     xp: 30,
     faction: 'hollowborn', tags: ['construct'],
     detection: 0.9,
@@ -9395,8 +9524,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
   blade_swarm: {
     id: 'blade_swarm', name: 'Living Blades',
     color: '#b6bec8', shape: 'kite', radius: 10, material: 'metal', look: 'blade_swarm',
-    base: { life: 44, moveSpeed: 195, accuracy: 105, evasion: 60, mana: 10, manaRegen: 2 },
-    skills: ['claw'],
+    // Pool 10 → 18 (regen 2 → 3): at exactly-affordable the whirl fired once
+    // and never again. A construct swarm carrying its own wind-up is honest.
+    base: { life: 44, moveSpeed: 195, accuracy: 105, evasion: 60, mana: 18, manaRegen: 3 },
+    // THE SHEAR WHIRL: one press, one full turn — the blades walk a circle.
+    skills: ['claw', 'whirling_reap'],
     xp: 24,
     faction: 'hollowborn', tags: ['construct'],
     detection: 1.1,
@@ -9920,7 +10052,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#e8763a', shape: 'circle', radius: 9, material: 'ethereal', look: 'smoulderling',
     base: { life: 22, moveSpeed: 195, accuracy: 90, evasion: 55, mana: 0 },
     mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
-    skills: ['claw'],
+    // THE SMOTHER: it coughs up the part of itself that already burned.
+    // Almost no damage — the 1.6s blind is the verb, cut short on purpose
+    // so a mustered squad of three can never stack you dark.
+    skills: ['claw', 'ash_smother'],
     xp: 10,
     faction: 'smoulder', tags: ['elemental'],
     detection: 1.2,
@@ -10685,7 +10820,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // trimmed so shell+armor+poise never stack into a wall of no-answers.
     // Burst cracks it open; anything staggers what's underneath.
     base: { life: 120, moveSpeed: 105, accuracy: 100, armor: 55, poise: 0, mana: 20, manaRegen: 3 },
-    skills: ['heavy_strike'], xp: 28,
+    // THE CURL CHARGE: the brain already MOVES by charging; this is the ram
+    // it arrives with — committed, unstoppable, trampling the line en route.
+    skills: ['heavy_strike', 'charge'], xp: 28,
     // The exoskeleton retrofit: a knitting full shell over the old armor.
     shellGuard: { side: 'all', max: 90, regenDelay: 5, regenRate: 18, color: '#d8b86a' },
     turnSpeed: 3.2,
@@ -11115,7 +11252,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sand_scorpion', name: 'Sand Scorpion',
     color: '#c8a86a', shape: 'oval', radius: 8, material: 'chitin', look: 'sand_scorpion',
     base: { life: 14, moveSpeed: 135, evasion: 55, armor: 20, mana: 0 },
-    skills: ['claw'], xp: 3, tag: 'critter', faction: 'beast', tags: ['beast'],
+    // NAME-DEMAND, at critter scale: the sting is WEAKER than the claw and
+    // the poison is the whole verb.
+    skills: ['claw', 'tail_sting'], xp: 3, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.4, drops: 0,
     scaleVariance: [0.8, 1.2],
     brain: { type: 'basic', morale: { skittish: { radius: 90, duration: [0.8, 1.4] } } },
@@ -11665,7 +11804,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#7fa04e', shape: 'oval', radius: 16, material: 'slime',
     base: { life: 64, moveSpeed: 92, accuracy: 88, poise: 20, mana: 0 },
     mods: [mod('chaosRes', 'flat', 0.45), mod('fireRes', 'flat', -0.25)],
-    skills: ['claw'], xp: 15,
+    // THE ENGULF: it cannot follow you off its shallows, so its verb is to
+    // come DOWN over whoever stepped in. The -ling stays plain by ruling.
+    skills: ['claw', 'engulf_slam'], xp: 15,
     faction: 'wild', tags: ['ooze'],
     // Terrain-bound to its own poured ground (the gel_pool dressing): the
     // gel fights from its shallows and cannot be kited onto dry land.
@@ -12088,7 +12229,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'bulwark_scuttler', name: 'Bulwark Scuttler',
     color: '#8a9a78', shape: 'hexagon', radius: 15, material: 'chitin', look: 'bulwark_scuttler',
     base: { life: 130, moveSpeed: 125, accuracy: 105, armor: 35, mana: 25, manaRegen: 3, poise: 50 },
-    skills: ['claw', 'heavy_strike'], xp: 34,
+    // THE SHELL BRACE: plate by plate the redoubt closes. Pairs with the
+    // rear shellGuard and the turtle rule below — go around, or wait it out.
+    skills: ['claw', 'heavy_strike', 'bulwark_set'], xp: 34,
     shellGuard: { side: 'rear', max: 140, regenDelay: 4, regenRate: 30, color: '#a8c890' },
     turnSpeed: 3.0,
     detection: 1.1,
@@ -12778,7 +12921,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'toll_wretch', name: 'Toll-Wretch',
     color: '#7c766a', shape: 'circle', radius: 8, material: 'cloth', look: 'toll_wretch',
     base: { life: 42, moveSpeed: 74, accuracy: 95 },
-    skills: ['claw'], xp: 12,
+    // THE TOLL: barely a wound, but every touch BANKS a faintness stack, and
+    // six build into a swoon. A swarm body that arrives in numbers should
+    // charge in numbers — the drain is cumulative, never per-blow.
+    skills: ['claw', 'soul_toll'], xp: 12,
     noNemesis: true, faction: 'primeval', tags: ['primeval'],
     brain: { type: 'swarm' },
   },
@@ -15266,7 +15412,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'brood_coiler', name: 'Brood Coiler',
     color: '#6a9a62', shape: 'oval', radius: 15, look: 'brood_coiler',
     base: { life: 130, moveSpeed: 90, accuracy: 96, mana: 0 },
-    skills: ['claw'],
+    // THE COIL LASH: a 160° sweep off the body's own length. The WIDTH is
+    // the identity — you do not sidestep a coil, you leave its circle.
+    skills: ['claw', 'coil_lash'],
     xp: 30,
     faction: 'coilborn',
     brain: {
@@ -17421,7 +17569,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'gnasher_prodder', name: 'Gnasher Prodder',
     color: '#94a850', shape: 'triangle', radius: 11, look: 'gnasher_prodder',
     base: { life: 55, moveSpeed: 150, accuracy: 100, evasion: 45, mana: 0 },
-    skills: ['claw'],
+    // THE GOAD: reach and a shove, not a wound. It drives you back toward the
+    // pen it just whistled open, and never closes to claw range itself.
+    skills: ['claw', 'goad_jab'],
     xp: 20,
     faction: 'goblin', adorn: 'ears',
     brain: {
@@ -17678,7 +17828,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'crag_chorister', name: 'Crag Chorister',
     color: '#b09a6a', shape: 'kite', radius: 11, material: 'scale', look: 'crag_chorister',
     base: { life: 44, moveSpeed: 176, accuracy: 98, evasion: 55, mana: 0 },
-    skills: ['claw'], xp: 15,
+    // THE PEAL: the chorus drive made audible at the crescendo. The stagger
+    // is cut to 0.28s so a whole crested choir can never chain it.
+    skills: ['claw', 'crag_peal'], xp: 15,
     faction: 'beast', tags: ['beast'],
     detection: 1.3,
     scaleVariance: [0.9, 1.15],
@@ -17739,7 +17891,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'horned_viper', name: 'Horned Viper',
     color: '#b89a5e', shape: 'kite', radius: 8, look: 'horned_viper',
     base: { life: 20, moveSpeed: 150, accuracy: 112, evasion: 50, mana: 15, manaRegen: 2 },
-    skills: ['claw'],
+    // NAME-DEMAND: the fang IS the animal. Small wound, long consequence.
+    skills: ['claw', 'fang_strike'],
     xp: 7, tag: 'predator',
     faction: 'beast', tags: ['beast'],
     detection: 1.4, drops: 0,
@@ -18192,7 +18345,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     heft: 1.15,
     base: { life: 146, moveSpeed: 150, accuracy: 100, evasion: 55, mana: 0, poise: 25 },
     mods: [mod('physicalRes', 'flat', 0.15)],
-    skills: ['claw'], xp: 28,
+    // THE JET: the wake trail fired FORWARD — same amber, same `mired`. The
+    // denial school's verb, spent to buy back the gap it lives on.
+    skills: ['claw', 'sap_jet'], xp: 28,
     faction: 'beast', tags: ['beast'],
     detection: 1.2,
     // The trail: shed by DISTANCE, exactly like the drain — one journey,

@@ -12730,6 +12730,209 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 60, weight: 2 },
   },
 
+  // ================== THE MIXTURE LAW — identity verbs ======================
+  // Eight fresh mid-tier signatures for bodies whose intent NO shipped verb
+  // covers (the other fourteen gains compose from the catalog above). Every
+  // one is manaCost 0 — these hang on defs with an empty pool by design, and
+  // a body's tier should never have to grow a caster's reservoir to speak.
+  //
+  // THE LAW they obey: a signature reads DIFFERENT, never STRONGER. Each
+  // trades raw bite for a rider its faction's floor language (claw /
+  // heavy_strike) cannot say — reach, a root, a slow, a shove, a stagger, a
+  // blind — and every damage roll here sits at or below `claw`'s effective
+  // weight once its cooldown is paid.
+
+  // The barrow's own grasp: hands come up UNDER you. A telegraphed ground
+  // pull with almost no bite — the shambler is slow, and this is how a slow
+  // thing arrives. Rooted, not stunned: you may still fight, only not leave.
+  grave_grasp: {
+    id: 'grave_grasp', name: 'Grave Grasp', noDrop: true,
+    description: 'The barrow floor remembers how to hold. Hands come up under the living and simply do not let go.',
+    tags: ['spell', 'physical', 'aoe', 'duration'], color: '#8a8270',
+    manaCost: 0, cooldown: 6, useTime: 0.9,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'ground', radius: 70, castRange: 260, delay: 0.6 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'rooted', chance: 0.55, durationOverride: 1.1 },
+    ],
+    ai: { range: 240, weight: 2 },
+  },
+
+  // Name-demand, at critter scale: the sting is WEAKER than a claw and the
+  // poison is the entire point. A scorpion that only pinches is a lie.
+  tail_sting: {
+    id: 'tail_sting', name: 'Tail Sting', noDrop: true,
+    description: 'The tail comes over the back in one flick — a wound you could miss, carrying everything that matters.',
+    tags: ['attack', 'melee', 'physical', 'chaos'], color: '#c8a86a',
+    manaCost: 0, cooldown: 1.6, useTime: 0.7,
+    baseDamage: { physical: [2, 4], chaos: [1, 2] },
+    delivery: { type: 'melee', range: 40, arcDeg: 55 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.5, magnitude: 0.25 },
+    ],
+    ai: { range: 44, weight: 2 },
+  },
+
+  // The choir's note made physical. Tiny damage, a BRIEF stagger — short
+  // enough that a whole crested choir cannot chain it into a lock, long
+  // enough to read as an interruption rather than a scratch.
+  crag_peal: {
+    id: 'crag_peal', name: 'Crag Peal', noDrop: true,
+    description: 'One note off the crest, flat and hard, and the rock answers it. The choir is not singing to you.',
+    tags: ['spell', 'physical', 'aoe'], color: '#ffd05a',
+    manaCost: 0, cooldown: 5, useTime: 0.6,
+    baseDamage: { physical: [4, 7] },
+    delivery: { type: 'nova', radius: 110 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.3, durationOverride: 0.28 },
+    ],
+    ai: { range: 100, weight: 2 },
+  },
+
+  // The wake trail, fired FORWARD — same amber, same `mired`, one journey's
+  // worth of denial spent deliberately instead of dripped. The skirmisher's
+  // whole argument is the gap; this is how it buys one back.
+  sap_jet: {
+    id: 'sap_jet', name: 'Sap Jet', noDrop: true,
+    description: 'It spends the reservoir all at once and forward — a tacky amber sheet, and suddenly the distance is its to keep.',
+    tags: ['attack', 'physical', 'aoe'], color: '#d8a850',
+    manaCost: 0, cooldown: 4, useTime: 0.7,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'cone', range: 150, arcDeg: 45 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'mired', chance: 0.7 },
+    ],
+    ai: { range: 140, weight: 2, keepDistance: 110 },
+  },
+
+  // The gel's one verb: it comes DOWN over you. Small radius, slow wind-up
+  // (readable), and the payload is `smothered` — sight and aim, not health.
+  engulf_slam: {
+    id: 'engulf_slam', name: 'Engulf', noDrop: true,
+    description: 'The whole mass rears and falls, and for a moment the world is warm, green, and very close.',
+    tags: ['attack', 'physical', 'aoe'], color: '#7fa04e',
+    manaCost: 0, cooldown: 4, useTime: 1.0,
+    baseDamage: { physical: [8, 13] },
+    delivery: { type: 'nova', radius: 76 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'smothered', chance: 0.6 },
+    ],
+    ai: { range: 70, weight: 2 },
+  },
+
+  // The herd-driver's pole: REACH and a shove, not a wound. It prods you
+  // back into the pen's line of fire and never closes to claw range itself.
+  goad_jab: {
+    id: 'goad_jab', name: 'Goad Jab', noDrop: true,
+    description: 'The prod is for driving, not killing — a long poke that puts you where the herd already is.',
+    tags: ['attack', 'melee', 'physical'], color: '#94a850',
+    manaCost: 0, cooldown: 2, useTime: 0.55,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'cone', range: 120, arcDeg: 14 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 90 },
+    ],
+    ai: { range: 110, weight: 3, keepDistance: 95 },
+  },
+
+  // The worm-kin sweep: a WIDE, shoving arc off the body's own length. The
+  // width is the identity — you do not sidestep a coil, you leave its circle.
+  coil_lash: {
+    id: 'coil_lash', name: 'Coil Lash', noDrop: true,
+    description: 'The whole length comes around at once. There is no edge to this attack, only an inside and an outside.',
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#6a9a62',
+    manaCost: 0, cooldown: 3, useTime: 0.85,
+    baseDamage: { physical: [9, 14] },
+    delivery: { type: 'melee', range: 100, arcDeg: 160 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 150, mode: 'shove' },
+    ],
+    ai: { range: 100, weight: 2 },
+  },
+
+  // The cavalry lesson at MONSTER scale. The shipped `bastion_thrust` is the
+  // player's committed greatshield lance (21 mean every 1.2s = 17.5 sustained
+  // dps — nearly triple an xp-20 body's floor language), so the lancer gets
+  // its own: the REACH is the whole identity (145 vs heavy_strike's 50 — you
+  // are hit from outside your own melee range), and the per-cast bite sits
+  // BELOW the heavy strike it rides beside. Carries no 'movement' tag, so the
+  // mount fabric lets it fire from the saddle.
+  couched_lance: {
+    id: 'couched_lance', name: 'Couched Lance', noDrop: true,
+    description: 'The lance comes down and locks under the arm, and after that the horse is the weapon. It does not need to reach you quickly — only first.',
+    tags: ['attack', 'melee', 'physical'], color: '#a8b8c8',
+    manaCost: 0, cooldown: 3, useTime: 0.5,
+    baseDamage: { physical: [12, 18] },
+    delivery: { type: 'cone', range: 145, arcDeg: 14 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.4 },
+    ],
+    ai: { range: 130, weight: 2 },
+  },
+
+  // NAME-DEMAND, kept genuinely WEAK per the ruling. Calibrated to `pale_zap`
+  // (the trash-tier ranged standard) and then cut BELOW `claw`: the shipped
+  // `spark_bolt` is a component payload at 18.8 sustained dps, which is not
+  // what "keep the verb weak" means. Shorter reach than a pale zap, too — a
+  // tiny arc, not artillery. The globule's volatile still pops the real bolt.
+  static_jolt: {
+    id: 'static_jolt', name: 'Static Jolt', noDrop: true,
+    description: 'The charge it has been holding all its short life, let go of. Barely a spark — but it was never going to be anything else.',
+    tags: ['spell', 'projectile', 'lightning'], color: '#c8e86a',
+    manaCost: 0, cooldown: 0, useTime: 0.9,
+    baseDamage: { lightning: [3, 6] },
+    delivery: { type: 'projectile', speed: 400, radius: 5, range: 220 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.15 },
+    ],
+    ai: { range: 200, weight: 2, keepDistance: 140 },
+  },
+
+  // THE TOLL, and it is a toll: almost no damage, but every touch BANKS a
+  // stack of faintness — and six stacks build into a swoon. A swarm body that
+  // arrives in numbers should charge in numbers. (The shipped `siphon_strike`
+  // was wrong twice over here: 16.7 sustained dps on an xp-12 body, and its
+  // siphonOrb pays mana to a wretch whose base sheet has no mana pool at all
+  // — an inert rider.)
+  soul_toll: {
+    id: 'soul_toll', name: 'Soul-Toll', noDrop: true,
+    description: 'It only ever touches you, and it never takes much. What it takes, it keeps, and it has all the time there is.',
+    tags: ['spell', 'chaos'], color: '#7c766a',
+    manaCost: 0, cooldown: 2.5, useTime: 0.8,
+    baseDamage: { chaos: [3, 6] },
+    delivery: { type: 'melee', range: 46, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'faintness', chance: 0.7 },
+    ],
+    ai: { range: 50, weight: 2 },
+  },
+
+  // A puff of spent fire. Almost no damage — the blind is the verb, and it
+  // is cut to 1.6s on purpose so a whole smoulder cannot stack you dark.
+  ash_smother: {
+    id: 'ash_smother', name: 'Ash Smother', noDrop: true,
+    description: 'It coughs up the part of itself that already burned. Grit, ash, and a moment where you cannot see what is next to you.',
+    tags: ['spell', 'fire', 'aoe'], color: '#8a7a72',
+    manaCost: 0, cooldown: 5, useTime: 0.5,
+    baseDamage: { fire: [2, 4] },
+    delivery: { type: 'nova', radius: 60 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'blind', chance: 0.5, durationOverride: 1.6 },
+    ],
+    ai: { range: 56, weight: 2 },
+  },
+
   // ======================= The EMPYREAN kata ================================
   // The Aetherial's own arts — verticality, radiance, judgement — brought
   // down by whoever survives the crossing. Five distinct rhythms (the samurai
