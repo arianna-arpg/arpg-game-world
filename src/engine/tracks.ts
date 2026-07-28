@@ -180,6 +180,19 @@ export interface TrackRiderDef {
    *  (trackArcFrac feeds the layer); the surface stays honest to the last
    *  pixel of the pass. */
   fadeTail?: number;
+  /** THE HEADWAY (the escort law): px of ARC this rider stands AHEAD of its
+   *  schedule seat — the Pale Ferry's prow riding a fixed stretch before the
+   *  hull it serves. An escort row shares its body's PHASE exactly (a phase
+   *  lead is NOT this: releaseReversed folds phase into the reversal coin,
+   *  so a phase-offset escort deals its OWN journey direction — measured
+   *  17/32 releases opposed — and time-leads collapse onto the body through
+   *  every dwell); the displacement rides the release's OWN arc table, so
+   *  'ahead' is journey-ahead whichever way the coin fell, and the pingpong
+   *  return leg flips the sign (ahead along the RETURN). Past either strand
+   *  the escort FURLS (pending — parked, harmless, undrawn under fadeTail):
+   *  the bow-wave breaks at the berth, and no clamped remainder ever
+   *  compresses back onto the deck it leads. Negative = a stern escort. */
+  headway?: number;
 }
 
 const TRACK_RIDERS: Record<string, TrackRiderDef> = {};
@@ -542,7 +555,23 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
   const sched = rev && tr.scheduleR ? tr.scheduleR : tr.schedule;
   const arcT = rev && tr.arcR ? tr.arcR : tr.arc;
   const { s, paused } = scheduleS(sched, t);
-  const p = pointAt(arcT, s);
+  // THE HEADWAY (TrackRiderDef.headway): an escort stands a fixed stretch of
+  // arc ahead of its schedule seat — same phase, same release, same coin as
+  // the body it leads. The offset rides the release's OWN table (a reversed
+  // journey's arcR already points +s at ITS destination), and the pingpong
+  // return leg flips the sign so 'ahead' follows the travel, not the path.
+  // Past either strand the escort FURLS: pending, parked at the strand,
+  // unspun — the sweep, the threat scan, and a fadeTail draw all stand down.
+  let sEff = s;
+  let furled = false;
+  if (rider?.headway) {
+    sEff = s + (reversed ? -rider.headway : rider.headway);
+    if (sEff <= 0 || sEff >= arcT.total) {
+      furled = true;
+      sEff = Math.min(Math.max(sEff, 0), arcT.total);
+    }
+  }
+  const p = pointAt(arcT, sEff);
   const dir = reversed ? p.dir + Math.PI : p.dir;
   const spin = (rider?.spin ?? 0) * spinT;
   // 'radial' turns the rect across the lane; on a CCW ring the −π/2 turn
@@ -552,6 +581,7 @@ export function trackPose(tr: PlacedTrack, timeSec: number, phase: number, rider
   const base = rider?.surface.kind === 'rect'
     ? dir + (rider.orient === 'radial' ? -Math.PI / 2 : 0)
     : dir;
+  if (furled) return { x: p.x, y: p.y, dir, rot: base, paused: true, pending: true };
   return { x: p.x, y: p.y, dir, rot: base + spin, paused };
 }
 
@@ -682,6 +712,7 @@ export function validateTrackRiders(warn: (msg: string) => void): void {
     // A carry rider is a PLATFORM — an empty payload is its whole point.
     if (!p.hit && !p.status && !p.impulse && !def.carry) warn(`track rider ${def.id}: payload does nothing`);
     if (def.fadeTail !== undefined && !(def.fadeTail > 0 && def.fadeTail <= 1)) warn(`track rider ${def.id}: fadeTail ${def.fadeTail} outside (0,1]`);
+    if (def.headway !== undefined && (Math.abs(def.headway) < 24 || Math.abs(def.headway) > 480)) warn(`track rider ${def.id}: headway ${def.headway}px outside ±[24,480]`);
     if (p.hit && (p.hit.base < 0 || p.hit.base > 400)) warn(`track rider ${def.id}: hit.base ${p.hit.base} outside [0,400]`);
     if (p.impulse !== undefined && (p.impulse < 0 || p.impulse > 900)) warn(`track rider ${def.id}: impulse ${p.impulse} outside [0,900]`);
     if (p.push && !p.impulse) warn(`track rider ${def.id}: push grain '${p.push}' without impulse — dead field`);

@@ -9042,6 +9042,16 @@ export class World {
       levelFor: this.levelFor,
       biomeDepthFor: this.dimensionBiomeDepthFor(dimId),
       climateFor: this.climateFor,
+      // THE AUTHORED BASIN: the river's own bands, read from the registry —
+      // a spec'd sizeBand stands the spec-less 1.4× height stretch down
+      // (worldgen's SPECLESS_H_STRETCH), so the sea mints inside its
+      // authored footprint by construction. Without it the aspect roll
+      // admitted faces up to 4480 tall against a 3200 ceiling (measured:
+      // 6/6 sampled mints outside the band, 5 pinned at the stretched cap).
+      sizeBand: {
+        w: TILESETS[SOULRIVER_CFG.tileset].sizeW,
+        h: TILESETS[SOULRIVER_CFG.tileset].sizeH,
+      },
     });
     gen.level += dimensionDef(dimId)?.levelBonus ?? 0;
     // The sea-node identity (data/zoneKinds.ts): ring + ship glyph on the
@@ -9355,6 +9365,10 @@ export class World {
       const palette = (z.layoutParams as { dockBiomes?: string[] } | undefined)?.dockBiomes ?? [];
       const plan = soulriverPlan(z.seed ?? 0, z.size.w, z.size.h, palette);
       for (const r of lane.riders) {
+        // ONE MARKER PER HULL: escort riders (the prow — TrackRiderDef.
+        // headway) are the ship's own body, never a second boat; only
+        // CARRIER poses project (the deck-scan's own filter).
+        if (!r.def.carry) continue;
         const pose = trackPose(lane, this.time, r.phase, r.def);
         if (pose.pending) continue;
         const at = ribbonCoordAt(inst, channelFracOf(plan, pose.x, pose.y));

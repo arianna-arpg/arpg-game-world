@@ -42,6 +42,7 @@ import { CreepField, CREEPS, type CreepActorLike, type CreepTerrain } from '../s
 import { GridWalkField } from '../src/world/gridWalk';
 import { SURVIVAL_RESOURCES, regionKind } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { MONSTERS } from '../src/data/monsters';
 import { ZONE_KINDS } from '../src/data/zoneKinds';
 import { shapeContains } from '../src/engine/shapes';
@@ -266,9 +267,16 @@ const findInstance = (fieldSeed: number): CourseInstance => {
     && spec.pauses![spec.pauses!.length - 1].sec === SOULRIVER_CFG.ferry.boardSec);
   check('lane: the coin is armed (spec.reversal = the ferry dial)',
     spec.reversal === SOULRIVER_CFG.ferry.reversal);
-  check(`lane: ${SOULRIVER_CFG.ferry.count} ships share the lane a phase apart`,
-    spec.riders.length === SOULRIVER_CFG.ferry.count
-    && spec.riders.every(r => trackRider(r.kind)?.carry === true));
+  const hulls = spec.riders.filter(r => r.kind === 'pale_ferry');
+  const prows = spec.riders.filter(r => r.kind === 'pale_prow');
+  check(`lane: ${SOULRIVER_CFG.ferry.count} ships share the lane a phase apart, each hull a carrier`,
+    hulls.length === SOULRIVER_CFG.ferry.count
+    && spec.riders.length === hulls.length + prows.length
+    && hulls.every(r => trackRider(r.kind)?.carry === true));
+  check('lane: every hull leads with a prow riding its EXACT phase (same release, same coin — THE GLUE)',
+    prows.length === hulls.length
+    && hulls.every(h => prows.some(p => p.phase === h.phase))
+    && prows.every(p => !trackRider(p.kind)?.carry));
   const tr = placeTrack(spec);
   const pauseSum = spec.pauses!.reduce((s, p) => s + p.sec, 0);
   check('lane: pass = travel + every dock dwell',
@@ -343,6 +351,92 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   const plain = placeTrack({ ...spec, reversal: undefined });
   check('coin: a lever-less lane never reverses (legacy byte-path)',
     !plain.arcR && [0, 1, 2, 3, 4, 5].every(k => !releaseReversed(plain, 0, k)));
+}
+
+// --- 2b) THE PALE PROW: the headway law on the ferry's own lane -------------
+// (TrackRiderDef.headway — the same-phase escort: same release, same coin,
+// same schedule seat, displaced a fixed stretch of arc ahead along the
+// release's OWN table. The checks pin the kit's dials, THE CLEARANCE LAW
+// (prow tail clear of the deck bow by a deck-stander's spare band), the
+// exact headway on BOTH coin faces, THE BERTH FURL at the strands, the live
+// parked prow at interior pier calls — and record the measurement that
+// settled the design: a phase-LEAD rider deals its OWN reversal coin.)
+{
+  const plan = soulriverPlan(777, 4900, 4400, PALETTE);
+  const spec = ferryLaneFor(plan);
+  const tr = placeTrack(spec);
+  const hull = trackRider('pale_ferry')!;
+  const prow = trackRider('pale_prow')!;
+  const hr = hull.surface.kind === 'rect' ? hull.surface : null;
+  const pr = prow.surface.kind === 'rect' ? prow.surface : null;
+  check('prow: registered — a beam-wide crest (surface spans the hull\'s beam), radial, never a carrier',
+    !!pr && !!hr && pr.hw === hr.hh && prow.orient === 'radial'
+    && !prow.carry && (prow.headway ?? 0) > 0);
+  check('prow: the payload is the rundown (typed keel wound + the along-lane shove)',
+    !!prow.payload.hit && prow.payload.hit.type === 'physical'
+    && (prow.payload.impulse ?? 0) > 0 && prow.payload.push === 'along');
+  check('prow: telegraphed and ephemeral (warn arc armed, frays with its hull)',
+    (prow.warnAhead ?? 0) > 0 && prow.fadeTail === hull.fadeTail);
+  const spare = (prow.headway ?? 0) - (pr?.hh ?? 0) - (hr?.hw ?? 0);
+  check('prow: THE CLEARANCE LAW — 40px+ of open water between prow tail and deck bow',
+    spare >= 40, `${spare}px spare`);
+
+  // THE HEADWAY GEOMETRY, both coin faces: mid-travel the prow rides EXACTLY
+  // its headway ahead of the hull measured ALONG the channel, journey-ahead
+  // whichever way the release runs, bearings agreed (the glue's observable).
+  const flips = Array.from({ length: 32 }, (_, k) => releaseReversed(tr, 0, k));
+  const kFwd = flips.indexOf(false), kRev = flips.indexOf(true);
+  const measure = (k: number): { d: number; ahead: number; dirDot: number } | null => {
+    for (let dt = 4; dt < tr.passSec; dt += 1.7) {
+      const t = k * tr.periodSec + dt;
+      const hp = trackPose(tr, t, 0, hull);
+      const pp = trackPose(tr, t, 0, prow);
+      if (hp.paused || hp.pending || pp.pending) continue;
+      const fh = channelFracOf(plan, hp.x, hp.y), fp = channelFracOf(plan, pp.x, pp.y);
+      const d = (fp - fh) * tr.arc.total;
+      return { d: Math.abs(d), ahead: Math.sign(d), dirDot: Math.cos(hp.dir - pp.dir) };
+    }
+    return null;
+  };
+  const mF = measure(kFwd), mR = measure(kRev);
+  check('prow: rides EXACTLY its headway ahead of the hull (forward release)',
+    !!mF && Math.abs(mF.d - (prow.headway ?? 0)) < 2 && mF.ahead > 0 && mF.dirDot > 0.5,
+    mF ? `${mF.d.toFixed(1)}px ahead` : 'no live sample');
+  check('prow: …and journey-ahead on a REVERSED release (one coin binds the pair)',
+    !!mR && Math.abs(mR.d - (prow.headway ?? 0)) < 2 && mR.ahead < 0 && mR.dirDot > 0.5,
+    mR ? `${mR.d.toFixed(1)}px ahead (upstream)` : 'no live sample');
+
+  // THE BERTH FURL: docked at the far strand the prow is PENDING — parked,
+  // harmless, undrawn — so no boarding queue is ever shoved at a pier head.
+  const lastPauseSec = spec.pauses![spec.pauses!.length - 1].sec;
+  const tBerth = kFwd * tr.periodSec + tr.passSec - lastPauseSec * 0.5;
+  const hB = trackPose(tr, tBerth, 0, hull), pB = trackPose(tr, tBerth, 0, prow);
+  check('prow: THE BERTH FURL — at the far berth the hull dwells live, the prow parks pending',
+    hB.paused && !hB.pending && pB.pending === true);
+  // …but an INTERIOR pier call keeps the prow LIVE, parked over the open
+  // water ahead of the pier (the berth law bites only at the strands).
+  let interior: { h: ReturnType<typeof trackPose>; p: ReturnType<typeof trackPose> } | null = null;
+  for (let dt = 4; dt < tr.passSec - lastPauseSec - 1 && !interior; dt += 0.5) {
+    const t = kFwd * tr.periodSec + dt;
+    const hp = trackPose(tr, t, 0, hull);
+    if (!hp.paused || hp.pending) continue;
+    if (Math.hypot(hp.x - plan.channel[0].x, hp.y - plan.channel[0].y) < 4) continue;
+    interior = { h: hp, p: trackPose(tr, t, 0, prow) };
+  }
+  check('prow: an interior pier call keeps the prow live ahead (parked, honest, sweeping)',
+    !!interior && !interior.p.pending && interior.p.paused === true);
+
+  // THE PHASE-LEAD DISPROOF (the recorded measurement that settled the
+  // design): a prow given a TIME lead instead of the same phase deals its
+  // OWN reversal coin (releaseReversed folds phase), sailing against its
+  // hull — measured 17/32 releases opposed at the shipping dials.
+  const leadPhase = ((prow.headway ?? 0) / spec.speed) / tr.periodSec;
+  let opposed = 0;
+  for (let k = 0; k < 32; k++) {
+    if (releaseReversed(tr, 0, k) !== releaseReversed(tr, leadPhase, k)) opposed++;
+  }
+  check('prow: the phase-lead road is UNSOUND (a time-lead escort deals its own coin)',
+    opposed >= 8, `${opposed}/32 releases opposed`);
 }
 
 // --- 3) THE DECK LAW: a near-landmass carrying bodies, live ----------------
@@ -600,9 +694,16 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   // course corridor.
   (world.visited as Set<string>).add(river.id);
   river.layoutParams = { ...river.layoutParams };
+  // ONE MARKER PER HULL: the chart projects CARRIER poses only — the prow
+  // escort is the ship's own body, never a second boat. Expected count is
+  // derived from the same pure lane at the same clock (no update between).
+  const chartLane = placeTrack(ferryLaneFor(plan));
+  const abroadHulls = chartLane.riders.filter(r =>
+    r.def.carry === true && !trackPose(chartLane, world.time, r.phase, r.def).pending).length;
   const ships = world.soulriverShipCoords();
-  check('chart: soul-ship markers ride once the river is charted (abroad ships only)',
-    ships.length >= 1, `${ships.length} abroad`);
+  check('chart: soul-ship markers ride once the river is charted (ONE MARKER PER HULL)',
+    ships.length === abroadHulls && abroadHulls >= 1,
+    `${ships.length} markers / ${abroadHulls} hulls abroad`);
   check('chart: every ship marker sits ON its ribbon (projection == corridor)',
     ships.every(s => soulwayCatchAt({ x: s.x, y: s.y }, fs) !== null));
   check('chart: frac projection is sane (0 at the spring, 1 at the terminus)',
@@ -673,6 +774,14 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   const cfgDeck = SOULRIVER_CFG.ferry.deck;
   check('kit: deck config == rider surface (the agreement contract)',
     ferry?.surface.kind === 'rect' && ferry.surface.hw === cfgDeck.hw && ferry.surface.hh === cfgDeck.hh);
+  const prowKit = trackRider('pale_prow');
+  check('kit: the Pale Prow stands beside its hull (escort, armed, along-grain)',
+    !!prowKit && !prowKit.carry && (prowKit.headway ?? 0) > 0
+    && (prowKit.payload.impulse ?? 0) > 0 && prowKit.payload.push === 'along');
+  const prowBeam = DOODAD_VISUALS['pale_prow']?.params as { beamHw?: number; beamHh?: number } | undefined;
+  check('kit: the prow look wears the agreement contract (drawn beam == tested rect)',
+    prowKit?.surface.kind === 'rect'
+    && prowBeam?.beamHw === prowKit.surface.hw && prowBeam?.beamHh === prowKit.surface.hh);
   check('kit: the riverbound stand in the roster',
     ['lorn_shade', 'drowned_hauler', 'soul_wellspring', 'soul_mote', 'farshore_warden']
       .every(id => !!MONSTERS[id]));
@@ -710,6 +819,16 @@ const findInstance = (fieldSeed: number): CourseInstance => {
   const river = (world as unknown as {
     mintSoulriverZone(s: ZoneDef, i: CourseInstance): ZoneDef;
   }).mintSoulriverZone(shore, inst);
+  // THE AUTHORED BASIN (the sizeBand law): the REAL mint lands inside the
+  // tileset's own bands. Without the spec, worldgen's spec-less 1.4× height
+  // stretch admitted 4480-tall faces against the authored 3200 ceiling —
+  // measured 6/6 sampled mints outside the band pre-fix; this very seed
+  // minted 4952×4480.
+  const basin = TILESETS['river_of_souls'];
+  check('mint: the sea mints inside its AUTHORED basin (sizeBand — the stretch stood down)',
+    river.size.w >= basin.sizeW[0] && river.size.w <= basin.sizeW[1]
+    && river.size.h >= basin.sizeH[0] && river.size.h <= basin.sizeH[1],
+    `${river.size.w}×${river.size.h} vs W[${basin.sizeW}] H[${basin.sizeH}]`);
   const palette = (river.layoutParams as { dockBiomes?: string[] }).dockBiomes ?? [];
   const plan = soulriverPlan(river.seed ?? 0, river.size.w, river.size.h, palette);
   check('call: the river minted with landings to name', plan.landings.length >= 1,

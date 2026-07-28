@@ -933,6 +933,15 @@ const SPECIAL_ARENA_THEME: ZoneDef['theme'] = {
  *  mint's main stream — blendless tilesets stay draw-for-draw identical). */
 const BLEND_ROLL_SALT = 0x6b1e9d2f;
 
+/** THE SPEC-LESS STRETCH: a mint with no sizeBand spec may run its height up
+ *  to this factor past the tileset's sizeH ceiling, so the tall ASPECT rolls
+ *  (1.32/1.55) survive the clamp with real variety — historical headroom the
+ *  whole charted world's footprints (and their rng-downstream content) stand
+ *  on, so the value can never move. A sizeBand SPEC is an authored promise
+ *  and stands the stretch down: spec'd mints land band-true by construction
+ *  (the River of Souls' basin — see mintSoulriverZone). */
+const SPECLESS_H_STRETCH = 1.4;
+
 /** Resolve + apply a BLEND onto a freshly-built def (the blend fabric,
  *  engine/blend.ts). Ordering: spec override (null = suppress) ▷ variant
  *  override (null = suppress) ▷ tileset roll. On a hit the def carries the
@@ -1268,7 +1277,7 @@ export function placeZoneAt(
   const baseW = genRng.range(bandW[0], bandW[1]);
   const size = {
     w: Math.round(baseW),
-    h: Math.round(clamp(baseW * aspect, bandH[0], bandH[1] * (spec.sizeBand ? 1 : 1.4))),
+    h: Math.round(clamp(baseW * aspect, bandH[0], bandH[1] * (spec.sizeBand ? 1 : SPECLESS_H_STRETCH))),
   };
   // COURSE CONTINUATION: a zone on a throughline GUARANTEES a way onward along
   // it (up- and downstream) — a 1-frontier roll on the wrong side must never

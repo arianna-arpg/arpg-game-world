@@ -16,6 +16,7 @@
 
 import { registerDoodadRule } from '../engine/levelgen';
 import { registerTrackRider } from '../engine/tracks';
+import { DOODAD_VISUALS } from './doodadVisuals';
 
 // --- THE SHEAR DISC — the buzzsaw ------------------------------------------
 // A grinding wheel of ice-shard teeth riding carved grooves. Physical bite +
@@ -80,6 +81,49 @@ registerTrackRider({
   warnAhead: 0,
   color: '#9fd4e8',
 });
+
+// --- THE PALE PROW — the rundown --------------------------------------------
+// The Soul-Ship's bow pressure: a same-phase ESCORT on the ferry's own lane
+// (TrackRiderDef.headway — same release, same coin, same schedule seat; a
+// phase-lead rider would deal its OWN journey direction at every cradle,
+// releaseReversed folds phase into the coin, and would collapse onto the
+// boards through every dwell). Bodies the ship runs down are wounded by the
+// keel and batted ALONG the lane (the sweeper-arm grain — dribbled ahead of
+// the ship, not flung wide), while the deck astern stays pure moving FOOTING:
+// the gap between prow tail and deck bow spares every legal deck-stander
+// (headway 280 − hh 26 − deck hw 210 = 44px of water — THE CLEARANCE LAW,
+// probe-pinned). Past either strand the prow FURLS (the berth law), so no
+// boarding queue is ever shoved at a pier head, and it frays with its hull
+// (the ferry's own fadeTail). Faction-blind on purpose: the river parts for
+// nobody — souls, strays and swimmers alike are cleared from her way.
+registerTrackRider({
+  id: 'pale_prow',
+  kind: 'pale_prow',
+  // The crest spans the hull's full beam (surface hw == deck hh): anything
+  // the deck would sweep, the prow bats first. 'radial' lays it across.
+  surface: { kind: 'rect', hw: 96, hh: 26 },
+  orient: 'radial',
+  headway: 280,
+  payload: {
+    hit: { base: 16, perLevel: 5, type: 'physical' },
+    impulse: 280,
+    push: 'along',
+    icdSec: 0.8,
+  },
+  warnAhead: 160,
+  fadeTail: 0.12,
+  color: '#bfe6f6',
+});
+
+// The prow's look: the parametric beam painter as a pale surge crest (the
+// trapworks' reuse precedent — one painter, another bed of colors), its
+// beamHw/beamHh mirroring the surface (the agreement contract, validation-
+// pinned). Registered here beside its rider so the pair can never drift
+// (the open-registry assignment idiom — meta/workshop.ts does the same).
+DOODAD_VISUALS['pale_prow'] = {
+  painter: 'rimeFlail', order: 46,
+  params: { beamHw: 96, beamHh: 26, body: '#7fb6cf', edge: '#eafaff' },
+};
 
 // --- THE CARVED GROOVE — the lane made legible ------------------------------
 // Ground way discs laid under every gen-authored lane (layTraveledWay kind

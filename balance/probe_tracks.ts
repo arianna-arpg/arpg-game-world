@@ -383,5 +383,80 @@ const DT = 1 / 60;
     expected < raw - 0.5 && life0 > m.life, `raw ${raw} → ${expected.toFixed(1)}`);
 }
 
+// --- 11) THE HEADWAY: the escort law, live (the Pale Prow's contract) ------
+// (TrackRiderDef.headway — a same-phase escort displaced a fixed stretch of
+// arc ahead of its hull; the Soul-Ship's prow is the debut. The live
+// contract: a body in the ship's PATH is wounded and batted ALONG by the
+// PROW while the deck is still more than a ship-length away; a body riding
+// the deck's BOW — the worst legal seat — is never touched (THE CLEARANCE
+// LAW); past the far strand the escort FURLS; and on a pingpong return leg
+// the lead flips with the travel, not the path.)
+{
+  const world = makeSimWorld('warrior', 8991);
+  world.player.pos = vec(150, 1100); // parked clear of the lane
+  const tr = world.addTrack({
+    path: linePath(vec(140, 500), vec(1460, 500)), mode: 'once', rearm: 40, speed: 120,
+    riders: [{ kind: 'pale_ferry', phase: 0 }, { kind: 'pale_prow', phase: 0 }],
+    groove: true,
+  })!;
+  const hull = tr.riders.find(r => r.def.kind === 'pale_ferry')!;
+  const prow = tr.riders.find(r => r.def.kind === 'pale_prow')!;
+  const deckHw = hull.def.surface.kind === 'rect' ? hull.def.surface.hw : 0;
+  // The runner-down: re-parked dead in the lane every frame, so its own feet
+  // never muddy the measurement — the push VECTOR is the evidence. The
+  // passenger: re-parked at the deck's BOW every frame, the seat a broken
+  // clearance would shove first.
+  const mark = world.createMonster('plains_wolf', 5, 'enemy');
+  const rider = world.createMonster('plains_wolf', 5, 'enemy');
+  world.actors.push(mark, rider);
+  const mark0 = mark.life, rider0 = rider.life;
+  let gapAtFirstTouch = -1;
+  let firstPush: { vx: number; vy: number } | null = null;
+  let riderTouched = false;
+  for (let i = 0; i < Math.ceil(12 / DT); i++) {
+    const hp = trackPose(tr, world.time, hull.phase, hull.def);
+    mark.pos = vec(1000, 500);
+    if (!hp.pending) {
+      rider.pos = vec(hp.x + Math.cos(hp.dir) * (deckHw - 10), hp.y + Math.sin(hp.dir) * (deckHw - 10));
+    }
+    rider.push = null; // any push after the step is fresh evidence
+    world.update(DT);
+    if (!firstPush && mark.push) {
+      firstPush = { vx: mark.push.vx, vy: mark.push.vy };
+      const hp2 = trackPose(tr, world.time, hull.phase, hull.def);
+      gapAtFirstTouch = 1000 - hp2.x;
+    }
+    if (rider.push || rider.life < rider0 - 0.01) riderTouched = true;
+  }
+  check('headway: the runner-down is shoved by the PROW a ship-length early (never deck-scooped)',
+    gapAtFirstTouch > 240, gapAtFirstTouch < 0
+      ? 'never touched' : `deck center still ${gapAtFirstTouch.toFixed(0)}px away at first touch`);
+  check('headway: the rundown wounds (the keel\'s typed hit landed)',
+    mark.life < mark0 - 1, `${mark0.toFixed(0)} → ${mark.life.toFixed(0)}`);
+  check("headway: the shove wears the 'along' grain (batted ahead of the keel)",
+    !!firstPush && firstPush.vx > 0 && firstPush.vx > Math.abs(firstPush.vy) * 1.5,
+    firstPush ? `push (${firstPush.vx.toFixed(0)}, ${firstPush.vy.toFixed(0)})` : 'never pushed');
+  check('headway: the BOW-SEAT passenger rode the whole pass untouched (THE CLEARANCE LAW)',
+    !riderTouched && rider.life >= rider0 - 0.01);
+  // THE BERTH FURL, pure: with the hull still 100px short of the far strand
+  // the escort has already parked pending — no clamped remainder ever
+  // compresses back onto the deck it leads.
+  const tFurl = (tr.arc.total - 100) / 120;
+  check('headway: past the far strand the escort furls (pending; the hull sails on)',
+    trackPose(tr, tFurl, 0, prow.def).pending === true
+    && !trackPose(tr, tFurl, 0, hull.def).pending);
+  // The pingpong sign law, pure: 'ahead' follows the TRAVEL — on the return
+  // leg the escort leads back toward home.
+  const pp = placeTrack({
+    path: linePath(vec(0, 0), vec(1000, 0)), mode: 'pingpong', speed: 100,
+    riders: [{ kind: 'pale_prow', phase: 0 }],
+  });
+  const outLeg = trackPose(pp, 4, 0, prow.def);                // s=400 → +280 = 680
+  const backLeg = trackPose(pp, pp.passSec + 4, 0, prow.def);  // s=600, return → −280 = 320
+  check("headway: the pingpong return flips the lead ('ahead' follows the travel)",
+    Math.abs(outLeg.x - 680) < 1 && Math.abs(backLeg.x - 320) < 1,
+    `out ${outLeg.x.toFixed(0)} back ${backLeg.x.toFixed(0)}`);
+}
+
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);

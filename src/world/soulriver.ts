@@ -423,7 +423,9 @@ export function channelFracOf(plan: SoulriverPlan, x: number, y: number): number
  *  pier, then the cradle rest (the dissolved window) — cycling forever on
  *  the pure clock. `count` ships ride the same lane a phase apart, so a
  *  missed boat is never a full cycle's wait; each release deals its OWN
- *  direction (TrackSpec.reversal). */
+ *  direction (TrackSpec.reversal); and each hull leads with THE PALE PROW,
+ *  a same-phase escort (TrackRiderDef.headway) that shoves what the ship
+ *  runs down while the deck astern stays pure footing. */
 export function ferryLaneFor(plan: SoulriverPlan): TrackSpec {
   const f = SOULRIVER_CFG.ferry;
   const last = plan.channel.length - 1;
@@ -432,7 +434,17 @@ export function ferryLaneFor(plan: SoulriverPlan): TrackSpec {
     pauses.push({ at: d.chIdx, sec: d.chIdx === 0 || d.chIdx === last ? f.boardSec : f.dockSec });
   }
   const riders = [] as { kind: string; phase?: number }[];
-  for (let i = 0; i < f.count; i++) riders.push({ kind: 'pale_ferry', phase: i / f.count });
+  for (let i = 0; i < f.count; i++) {
+    const phase = i / f.count;
+    riders.push({ kind: 'pale_ferry', phase });
+    // THE RUNDOWN: the prow rides the SAME phase as its hull — same release,
+    // same coin, same schedule seat — displaced ahead by its own def-level
+    // headway (data/tracks.ts 'pale_prow'). A phase LEAD is the wrong tool
+    // here: releaseReversed folds phase into the reversal coin (a leading
+    // phase deals its own direction — measured 17/32 releases opposed) and a
+    // time-lead collapses onto the boards through every dock dwell.
+    riders.push({ kind: 'pale_prow', phase });
+  }
   return {
     path: plan.channel.map(p => ({ x: p.x, y: p.y })),
     mode: 'once',
