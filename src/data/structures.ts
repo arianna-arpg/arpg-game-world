@@ -1043,14 +1043,17 @@ export const STRUCTURES: Record<string, StructureDef> = {
   },
 
   // THE SKINNER'S HUT: the trade reads from the yard — stretched hides on
-  // their racks around a working shed, the smell implied.
+  // their racks around a working shed, the smell implied. The breakable side
+  // gate stands IN the east wall, not one cell inside it: a door needs open
+  // ground on both flanks or it is dead décor (it read as an interior door
+  // boxed by the outer wall — no passage either way).
   skinners_hut: {
     id: 'skinners_hut', halfW: 91, halfH: 65, cellSize: 26,
     plan: [
       '_R___R_',
       '_#####_',
       'R#f..C#',
-      '_#...X#',
+      '_#....X',
       '_##D##R',
     ],
     legend: {

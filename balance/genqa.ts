@@ -365,10 +365,13 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
     }
     // Door sanity (warn): a placed door should open BETWEEN two walkable
     // sides along its normal — a door with a wall behind it is dead décor.
-    // Mirrors the engine's apron contract: a SEARCH along the normal
-    // (1.2–3.4 cells, either sign), not a fixed-offset probe — fixed
-    // offsets land on second wall lines exactly like the apron warns the
-    // manor pass fixed.
+    // Mirrors the engine's apron contract (levelgen's `apronMarch`): a
+    // CONTIGUOUS march out along the normal, either sign, that STOPS at the
+    // first blocked sample. Ground beyond a band of masonry is not this
+    // door's floor however open it looks — you cannot step onto it. (The
+    // march starts at 1.2 cells, safely outside the door's own cell, so the
+    // classic "a fixed offset lands on a second wall line" case is answered
+    // by the near samples rather than by hopping the wall.)
     for (const st of layout.structures ?? []) {
       for (const pd of st.doors) {
         const grid = layout.walk;
@@ -376,7 +379,8 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
           for (let k = 1.2; k <= 3.4; k += 0.4) {
             const x = pd.pos.x + pd.normal.x * st.cellSize * k * sign;
             const y = pd.pos.y + pd.normal.y * st.cellSize * k * sign;
-            if (grid.isWalkable(x, y)) return true;
+            if (!grid.isWalkable(x, y)) break;
+            return true;
           }
           return false;
         };
@@ -384,6 +388,20 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
           warns.push(`${name}: door ${pd.door.id} lacks floor on ${!open(1) ? 'its apron' : 'its room'} side`);
         }
       }
+    }
+  }
+  // NO PHANTOM DOORS (warn): a door is TWO things — the doodad the world
+  // draws and blocks with, and the PlacedDoor record the structure keeps
+  // (door state, Zone Memory, the co-op ZoneMsg, breakable door-actors, the
+  // open-doors topology reachability reads). A pass that splices the doodad
+  // and keeps the record ships a door the zone believes in and nobody can
+  // see — usually standing in whatever masonry killed it. Match by position:
+  // the two halves are minted from the same cells rect.
+  for (const st of layout.structures ?? []) {
+    for (const pd of st.doors) {
+      const drawn = doodads.some(d => d.kind === 'door'
+        && Math.abs(d.pos.x - pd.pos.x) < 1 && Math.abs(d.pos.y - pd.pos.y) < 1);
+      if (!drawn) warns.push(`${name}: door ${pd.door.id} has a record but no doodad (phantom — a splice took the doodad only)`);
     }
   }
   // Fuse promise (warn): poured same-kind bodies never a sliver apart.

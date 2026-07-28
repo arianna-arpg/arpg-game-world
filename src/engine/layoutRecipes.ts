@@ -30,7 +30,7 @@ import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
   placeLandmarkById, raiseStructure, setBoundaryGateBuilder, setExitRoadBuilder,
   setMeldBuilder, stamp, areaFreeOf, doodadRuleOf, type DoodadKind, type GenCtx,
-  layTraveledWay, onClearway, overgrowthOf,
+  layTraveledWay, onClearway, overgrowthOf, dropDoorRecord,
 } from './levelgen';
 import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
@@ -1424,11 +1424,16 @@ export function carveBoundaryGate(ctx: GenCtx, at: Vec2, gateId: string): void {
   const { halfWidth: halfW, depth, mouthWidth: mouthW, rect } = throat;
   const wallRegion = g.wallRegion ?? 'rampart';
   // The gate arrives AFTER the base layout — splice whatever scatter/liquid
-  // discs it would swallow (rim-aware, the causeway discipline).
+  // discs it would swallow (rim-aware, the causeway discipline). A swallowed
+  // DOOR takes its structure RECORD with it (dropDoorRecord): the façade is
+  // about to stand masonry where that door was, and a record left behind is a
+  // phantom — a door the zone still believes in, drawn nowhere, its sides now
+  // wall. (A Durance interior shipped five of them before this line.)
   for (let k = ctx.doodads.length - 1; k >= 0; k--) {
     const d = ctx.doodads[k];
     if (d.pos.x > rect.x - d.radius && d.pos.x < rect.x + rect.w + d.radius
       && d.pos.y > rect.y - d.radius && d.pos.y < rect.y + rect.h + d.radius) {
+      if (d.door) dropDoorRecord(ctx, d.door.id);
       ctx.doodads.splice(k, 1);
     }
   }

@@ -4786,6 +4786,64 @@ export function ensureGrid(ctx: GenCtx): GridWalkField {
 }
 
 const APRON_CELLS = 1.6;      // how far outside a door its guaranteed-clear apron sits
+/** The walk lattice a plan structure quantizes to (see placeStructurePlan's
+ *  quantization note): plan cells are rounded to a multiple of this and the
+ *  footprint origin snaps onto it, so every plan cell maps to exactly k×k walk
+ *  cells and no wall lands on a half cell. */
+const WALK_CELL = 30;
+
+/** The rect a plan structure will ACTUALLY paint from a sited center — the
+ *  footprint snapped onto the walk lattice. Siting tests must model this and
+ *  not the raw candidate: half a cell of phase decides which cells the walls
+ *  land on, and a severance test reading the unsnapped rect would judge a
+ *  different building than the one that gets built. */
+function plannedRect(c: Vec2, w: number, h: number): { x: number; y: number; w: number; h: number } {
+  return {
+    x: Math.round((c.x - w / 2) / WALK_CELL) * WALK_CELL,
+    y: Math.round((c.y - h / 2) / WALK_CELL) * WALK_CELL,
+    w, h,
+  };
+}
+
+// THE APRON SEARCH (one law, two readers): how far out along a door's normal
+// the apron pass hunts for open ground — and, through ApronOffset, the same
+// march the SITING gate runs so a spot is only taken where the guarantee can
+// actually be met. Cells, not pixels: a plan's own cellSize scales it.
+const APRON_SEARCH_FROM = 1.2, APRON_SEARCH_TO = 3.4, APRON_SEARCH_STEP = 0.5;
+
+/** THE APRON MARCH: step outward from a door along its normal and return the
+ *  first open ground on an UNBROKEN run — the samples walk cell by cell, and a
+ *  BLOCKED one ENDS the march. Ground beyond a band of masonry is not this
+ *  door's apron however open it looks: you cannot step onto it. (A townhouse
+ *  whose street face stood two cells off the room found floor at 2.7 cells,
+ *  called its apron satisfied, and stayed sealed — the whole house, its POI
+ *  and its inner door stranded behind a door that drew as a door.) The band
+ *  still starts OUTSIDE the door cell, so the classic "a fixed offset lands on
+ *  a second wall line" case is answered by the near samples, not by hopping. */
+function apronMarch(
+  walkableAt: (x: number, y: number) => boolean, from: Vec2, n: Vec2, cell: number,
+): Vec2 | null {
+  for (let step = APRON_SEARCH_FROM; step <= APRON_SEARCH_TO; step += APRON_SEARCH_STEP) {
+    const p = vec(from.x + n.x * cell * step, from.y + n.y * cell * step);
+    if (!walkableAt(p.x, p.y)) break;
+    return p;
+  }
+  return null;
+}
+
+/** One door's siting apron: the classic offset point (`dx/dy` — arena bounds +
+ *  reservation tests) plus the door-center offset (`ox/oy`), its outward
+ *  `n`ormal and the plan's `cell`, so the ground test can march the guarantee's
+ *  own search. `edge` marks a PERIMETER door (its group touches the plan's
+ *  boundary): only those open onto pre-existing ground — an interior door's
+ *  apron is floor the build itself carves. */
+interface ApronOffset {
+  dx: number; dy: number;
+  ox: number; oy: number;
+  n: Vec2;
+  cell: number;
+  edge: boolean;
+}
 
 /** Hazard grounds structure/landmark/camp siting must refuse — DERIVED from
  *  DoodadRule.hazardGround (never a literal list: a package's tar pit joins
@@ -4845,6 +4903,92 @@ export function onClearway(ctx: GenCtx, p: Vec2, bodyR: number): boolean {
   return false;
 }
 
+/** A DOOR IS TWO THINGS: the doodad the world draws (and blocks/opens with)
+ *  and the PlacedDoor record its structure keeps — door state, Zone Memory,
+ *  the co-op ZoneMsg, breakable door-actors, and the open-doors topology every
+ *  reachability test reads. A pass that splices the doodad and leaves the
+ *  record behind ships a PHANTOM door: a door the zone still believes in with
+ *  nothing drawn, usually standing in the very masonry that killed it. Call
+ *  this beside any splice that can swallow a door, so the two halves die
+ *  together (the boundary-gate façade is the one that taught us). */
+export function dropDoorRecord(ctx: GenCtx, id: string): void {
+  for (const st of ctx.structures ?? []) {
+    const i = st.doors.findIndex(d => d.door.id === id);
+    if (i >= 0) { st.doors.splice(i, 1); return; }
+  }
+}
+
+/** THE SEVERANCE GATE: build the test "would this footprint, standing solid,
+ *  CUT the map?" — or null when the question doesn't arise (no pre-existing
+ *  grid, no connectivity model, nothing promised yet).
+ *
+ *  A plan structure paints its whole rect. Where that rect is the only throat
+ *  between two halves of a carved layout, everything beyond it strands — and
+ *  nothing downstream can heal it: ensureReachability's 8-bearing rescue march
+ *  BREAKS on `insideStructure`, so it will never carve a causeway through (or
+ *  around, it marches straight) a castle to reach what the castle cut off. A
+ *  stranded EXIT is a dead zone, so this is judged at siting, where the answer
+ *  is still free: the spot is simply refused and the next try rolled.
+ *
+ *  The footprint is modelled SOLID, doors and all. That is deliberately
+ *  conservative — walking through a stranger's parlour is not a corridor, and
+ *  a house that is the only way onward reads as a bug however open its doors.
+ *
+ *  What must survive is what the layout has ALREADY promised: exits, POIs,
+ *  camps, garrisons, mustReach. Each is filtered against the grid as it stands
+ *  TODAY, so ground that was already cut off (a sealed structure's own centre,
+ *  a pocket) is never blamed on the newcomer. One flood per candidate, over
+ *  cell centres, early-out the moment every promise is met; the buffers and
+ *  the promise list are built once because the grid cannot change between
+ *  tries. */
+function severanceTest(ctx: GenCtx): ((rect: { x: number; y: number; w: number; h: number }) => boolean) | null {
+  const grid = ctx.walk;
+  if (!grid || ctx.gridEnsured || !grid.reachable) return null;
+  if (!grid.isWalkable(ctx.entry.x, ctx.entry.y)) return null;
+  const cell = grid.cellSize ?? WALK_CELL;
+  const cols = Math.max(1, Math.ceil(ctx.arena.w / cell));
+  const rows = Math.max(1, Math.ceil(ctx.arena.h / cell));
+  const cellOf = (p: Vec2): number =>
+    Math.min(rows - 1, Math.max(0, Math.floor(p.y / cell))) * cols
+    + Math.min(cols - 1, Math.max(0, Math.floor(p.x / cell)));
+  const promised = new Set<number>();
+  for (const p of [...ctx.exits, ...ctx.pois, ...ctx.camps,
+    ...ctx.garrisons.map(g => g.pos), ...(ctx.mustReach ?? [])]) {
+    if (grid.isWalkable(p.x, p.y) && grid.reachable(ctx.entry, p)) promised.add(cellOf(p));
+  }
+  promised.delete(cellOf(ctx.entry));
+  if (!promised.size) return null;
+  // Stamped visit marks (no per-try clear) + a ring buffer sized to the grid.
+  const seenAt = new Int32Array(cols * rows);
+  const queue = new Int32Array(cols * rows);
+  let stamp = 0;
+  return rect => {
+    stamp++;
+    let head = 0, tail = 0, met = 0;
+    const start = cellOf(ctx.entry);
+    seenAt[start] = stamp;
+    queue[tail++] = start;
+    while (head < tail && met < promised.size) {
+      const i = queue[head++];
+      const ix = i % cols, iy = (i - ix) / cols;
+      for (let d = 0; d < 4; d++) {
+        const nx = ix + (d === 0 ? 1 : d === 1 ? -1 : 0);
+        const ny = iy + (d === 2 ? 1 : d === 3 ? -1 : 0);
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const ni = ny * cols + nx;
+        if (seenAt[ni] === stamp) continue;
+        const px = nx * cell + cell / 2, py = ny * cell + cell / 2;
+        if (px > rect.x && px < rect.x + rect.w && py > rect.y && py < rect.y + rect.h) continue;
+        if (!grid.isWalkable(px, py)) continue;
+        seenAt[ni] = stamp;
+        queue[tail++] = ni;
+        if (promised.has(ni)) met++;
+      }
+    }
+    return met < promised.size;
+  };
+}
+
 /** Does qualifying habitat ground lie within reach of `p`? (Rim distance —
  *  standing beside the pool is as coherent as standing in it.) */
 function nearHabitatGround(ctx: GenCtx, p: Vec2, hab: HabitatSpec): boolean {
@@ -4869,8 +5013,9 @@ function pointOnKinds(ctx: GenCtx, p: Vec2, kinds: DoodadKind[]): boolean {
  *  Hazards are POINT-probed (center/corners/edge midpoints): light overlap is
  *  fine because placement then CLEARS the footprint (builders drain the pond). */
 function findStructureSpot(
-  ctx: GenCtx, w: number, h: number, aprons: { dx: number; dy: number }[],
+  ctx: GenCtx, w: number, h: number, aprons: ApronOffset[],
 ): Vec2 | null {
+  const severs = severanceTest(ctx);
   for (let tries = 0; tries < 18; tries++) {
     const c = vec(
       ctx.rng.range(BORDER + w / 2, Math.max(BORDER + w / 2, ctx.arena.w - BORDER - w / 2)),
@@ -4916,6 +5061,32 @@ function findStructureSpot(
           && !inReserved(ctx, p, 20);
     });
     if (!apronsOk) continue;
+    // NO DOOR ONTO MASONRY: on a PRE-EXISTING grid (rooms/dungeon/field — a
+    // grid the structure did not make), a PERIMETER door's apron must stand on
+    // open ground the walk grid agrees is connected to the entry. Interior
+    // doors are exempt: the build carves its own floor, so their aprons are
+    // rock until the walls rise. Without this the footprint probe alone can
+    // seat a house with its street face against the rock — the guarantee below
+    // then digs a blind egress stub that dead-ends, and the house, its POI and
+    // both aprons strand (a metropolis townhouse in a 'rooms' arena taught us:
+    // its only outside door faced 200px of stone while the open room lay
+    // behind it). The probe MIRRORS the guarantee's own outward search, so
+    // what sites is exactly what the apron pass can satisfy — drawn == tested.
+    if (ctx.walk && !ctx.gridEnsured) {
+      const grid = ctx.walk;
+      const entryOn = grid.isWalkable(ctx.entry.x, ctx.entry.y);
+      const apronGrounded = aprons.every(a => {
+        if (!a.edge) return true;
+        const p = apronMarch((x, y) => grid.isWalkable(x, y), vec(c.x + a.ox, c.y + a.oy), a.n, a.cell);
+        if (!p) return false;
+        return !(entryOn && grid.reachable) || grid.reachable(ctx.entry, p);
+      });
+      if (!apronGrounded) continue;
+    }
+    // NO PLUGGED THROATS: last because it is the dearest test — one flood per
+    // surviving candidate, and only on a pre-existing grid. The rect judged is
+    // the one that will be PAINTED (lattice-snapped), never the raw candidate.
+    if (severs && severs(plannedRect(c, w, h))) continue;
     return c;
   }
   return null;
@@ -4929,12 +5100,12 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   const resolved = resolvePlan(ctx, def);
   if (!resolved) return;
   const { rows, cells } = resolved;
-  // QUANTIZE the plan cell to a multiple of the WALK cell (30), and later snap
-  // the footprint origin to the walk lattice: every plan cell then maps to
-  // exactly k×k walk cells. Unaligned cells bleed via fillRegion's intersect-
-  // inclusive painting and can pinch a 1-cell corridor SHUT depending on the
-  // footprint's pixel phase (the fortress ring corridor taught us that).
-  const WALK_CELL = 30;
+  // QUANTIZE the plan cell to a multiple of the WALK cell (WALK_CELL), and
+  // later snap the footprint origin to the walk lattice (plannedRect): every
+  // plan cell then maps to exactly k×k walk cells. Unaligned cells bleed via
+  // fillRegion's intersect-inclusive painting and can pinch a 1-cell corridor
+  // SHUT depending on the footprint's pixel phase (the fortress ring corridor
+  // taught us that).
   const cell = Math.max(1, Math.round((def.cellSize ?? WALK_CELL) / WALK_CELL)) * WALK_CELL;
   const planW = Math.max(...rows.map(r => r.length));
   const planH = rows.length;
@@ -5020,21 +5191,21 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     const ddx = gx - planW / 2, ddy = gy - planH / 2;
     return Math.abs(ddx) >= Math.abs(ddy) ? vec(Math.sign(ddx) || 1, 0) : vec(0, Math.sign(ddy) || 1);
   };
-  const apronOffsets = doorGroups.map(g => {
+  const apronOffsets: ApronOffset[] = doorGroups.map(g => {
     const n = groupNormal(g.cells);
     const gx = (g.cells.reduce((a, c) => a + c.cx, 0) / g.cells.length + 0.5 - planW / 2) * cell;
     const gy = (g.cells.reduce((a, c) => a + c.cy, 0) / g.cells.length + 0.5 - planH / 2) * cell;
-    return { dx: gx + n.x * cell * APRON_CELLS, dy: gy + n.y * cell * APRON_CELLS };
+    // PERIMETER == touching the plan's boundary — the same four edges
+    // groupNormal reads first, so `edge` and the outward normal always agree.
+    const edge = g.cells.some(c => c.cy === 0 || c.cy === planH - 1 || c.cx === 0 || c.cx === planW - 1);
+    return { dx: gx + n.x * cell * APRON_CELLS, dy: gy + n.y * cell * APRON_CELLS, ox: gx, oy: gy, n, cell, edge };
   });
 
   const sited = at ?? findStructureSpot(ctx, w, h, apronOffsets);
   if (!sited) return;
-  // Snap the footprint origin onto the walk lattice (see the quantization note).
-  const rect = {
-    x: Math.round((sited.x - w / 2) / WALK_CELL) * WALK_CELL,
-    y: Math.round((sited.y - h / 2) / WALK_CELL) * WALK_CELL,
-    w, h,
-  };
+  // Snap the footprint origin onto the walk lattice (see the quantization
+  // note) — the SAME derivation the siting gates judged the candidate by.
+  const rect = plannedRect(sited, w, h);
   const center = vec(rect.x + w / 2, rect.y + h / 2);
   ctx.reserved.push({ rect, margin: def.margin ?? cell * 1.5 });
   // CLEAR THE SITE: builders drain the pond and fell the trees — every doodad
@@ -5322,13 +5493,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // carves are allowed only OUTSIDE the footprint, so a wall is never breached.
   for (let gi = 0; gi < doorGroups.length; gi++) {
     const pd = placed.doors[gi];
-    const searchAlong = (nx: number, ny: number): Vec2 | null => {
-      for (let step = 1.2; step <= 3.4; step += 0.5) {
-        const p = vec(pd.pos.x + nx * cell * step, pd.pos.y + ny * cell * step);
-        if (grid.isWalkable(p.x, p.y)) return p;
-      }
-      return null;
-    };
+    const searchAlong = (nx: number, ny: number): Vec2 | null =>
+      apronMarch((x, y) => grid.isWalkable(x, y), pd.pos, vec(nx, ny), cell);
     let apron: Vec2 | null = searchAlong(pd.normal.x, pd.normal.y);
     if (!apron) {
       // Which side does the recorded normal face? A PERIMETER door's apron

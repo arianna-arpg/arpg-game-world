@@ -267,6 +267,19 @@ registerStructureGen('compound', (rng, p) => {
   // sealed reopens to floor (a 1-cell doorway notch in that wall — exactly
   // the connectivity the door promised). Runs before courtyards so reopened
   // flanks join a courtyard conversion like any other floor cell. Draw-free.
+  //
+  // MEASURED SOUND — don't re-chase this (2026-07-27). A backlog lead claimed
+  // this deferral grouped its doors badly and left market_row doors with no
+  // walkable apron. It doesn't: 400 seeded market_row plans through this
+  // generator with its real genParams = 3665 doors, ZERO without a walkable
+  // pair on either normal, ZERO plans with orphaned floor. The lead came from
+  // MIS-MODELLING THE LEGEND, and a fresh census will mis-model it the same
+  // way unless it reads three rules off data/structures.ts: 'F' is the
+  // courtyard campfire — a `{ overlap: 'ground', warms: true }` doodad that
+  // does NOT block movement; 'B'/'C' are destructible barrels/crates, doodads
+  // rather than wall cells; and a PERIMETER gate ('X' at x=0/y=0 by
+  // construction) has the WORLD on its outward side, so it owes floor on its
+  // inward flank only. Model those three and the census reads clean.
   for (const op of doorOps) {
     g.set(op.x, op.y, doorChar);
     const flanks = op.vertical
