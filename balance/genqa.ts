@@ -543,6 +543,14 @@ for (const ts of Object.values(TILESETS)) {
     runCase(`tileset:${ts.id}/${v.name ?? i}`, {
       ...base, id: `qa_${ts.id}_v${i}`,
       layout: [...(ts.common ?? []), ...v.layout],
+      // THE FACE'S OWN KNOBS ride its case — the live mint merges variant
+      // layoutParams per-key over the tileset's (worldgen's placeZoneAt and
+      // mintCave both; the trapworks group below already mirrors it). Until
+      // it did, every variant was swept under the BASE face's dials: the sea
+      // of ramparts' massif mix was never generated here, which is how its
+      // under-fill collapse hid (probe_massif rig F pins the fix).
+      ...(ts.layoutParams || v.layoutParams
+        ? { layoutParams: { ...ts.layoutParams, ...v.layoutParams } } : {}),
     });
   }
 }
@@ -777,7 +785,10 @@ for (const m of Object.values(MELDS)) {
         theme: ts.theme,
         layout: composeBlendLayout([...(ts.common ?? []), ...rows], partner),
         ...(layoutType ? { layoutType } : {}),
-        ...(ts.layoutParams ? { layoutParams: ts.layoutParams } : {}),
+        // A variant's blend generates under the variant's MERGED knobs, same
+        // as the tileset sweep (tag 'base' has no variant — base params only).
+        ...(ts.layoutParams || variant?.layoutParams
+          ? { layoutParams: { ...ts.layoutParams, ...variant?.layoutParams } } : {}),
         blend: { with: roll.with, field: roll.field, ...(roll.packs !== undefined ? { packs: roll.packs } : {}) },
         objective: { kind: 'clear' },
         exits: [], map: { x: 0, y: 0 },
