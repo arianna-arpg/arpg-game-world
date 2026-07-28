@@ -10163,6 +10163,21 @@ export const TILESETS: Record<string, TilesetDef> = {
       massifMaxMasses: 11,
       massifSeatGround: true, // keeps every keep's footing on the cloud
       massifPlaceTries: 240,  // most darts land on sky — buy the tries back
+      // THE FLOOR (engine/massif.ts rescue pass): the tries alone still ship
+      // 1-2 body countries on hostile small-cloud seeds — measured across the
+      // seed ladder: base face bottomed at 1 body, 'sea of ramparts' at 2,
+      // with 480 tries no better than 240 (the geometry, not the budget, is
+      // what starves). The ask is FIVE (the rescue pulls until it stands or
+      // the budget dies; medians land 6-8); the DOCUMENTED never-below floor
+      // is FOUR — the bottom ~1% of min-size cloud rolls genuinely hold no
+      // fifth seat at any body size, and clearance never relaxes to conjure
+      // one. Every face inherits both dials through the variant param merge
+      // (probe_massif rig F pins the hostile seeds).
+      massifMinMasses: 5,
+      // Deep relief for the rescue tail: the worst small-cloud seeds only
+      // offer seats to short wall runs (bound ≲ 140px) — at the reference
+      // 0.45 two ladder seeds still stalled a body short; 0.3 seats them.
+      massifRescueShrink: 0.3,
     },
     layout: [
       { kind: 'cloud_billow', count: [4, 7] },

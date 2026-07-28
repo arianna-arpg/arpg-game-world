@@ -71,9 +71,24 @@ export const MASSIF_CFG = {
   portalClear: 250,
   /** Hard ceiling on bodies per zone (coverage usually stops first). */
   maxMasses: 11,
+  /** Body-count FLOOR (massifMinMasses): a zone whose dart budget dies below
+   *  this many standing bodies re-arms the budget ONCE as a RESCUE pass with
+   *  the rolled size relaxing toward rescueShrink — small walls seat where
+   *  giants could not. A budgeted promise, never a loop: a zone that cannot
+   *  seat the floor ships what it could stand. Clearance NEVER relaxes —
+   *  laneW, portalClear, reservations and the ground seat are structural
+   *  (healMassifWeave's contract rides them). 0 = no floor (the reference
+   *  default: coverage and the budget rule, and the rescue never draws). */
+  minMasses: 0,
   /** Placement dart budget. Rejections are cheap; the budget bounds worst-
    *  case draws so generation cost stays flat. */
   placeTries: 90,
+  /** Rescue-pass size relaxation floor: the LAST rescue dart rolls the
+   *  authored sizeR band scaled by this (the first re-rolls it at 1×, the
+   *  ramp is linear). Measured on the bastion faces: bodies at ~0.5× the
+   *  authored band seat reliably on cloud geometries where the full band
+   *  starves (2026-07 sea-of-ramparts sweep). */
+  rescueShrink: 0.45,
   /** Default radial lobe amplitude (fraction of r) for noise-lobed shapes. */
   lobe: 0.34,
   /** Court-shape mouth count band when the kind doesn't declare its own. */
@@ -406,17 +421,22 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
   // Dart budget as a dial: a mostly-void country burns most darts on sky and
   // seat rejections — it buys more tries instead of shipping empty fields.
   const placeTries = layoutParam<number>(def, 'massifPlaceTries', MASSIF_CFG.placeTries);
+  // THE FLOOR (a count promise, not a coverage one — see MASSIF_CFG.minMasses;
+  // clamped to the ceiling so the dials can never deadlock the rescue).
+  const minMasses = Math.min(maxMasses,
+    layoutParam<number>(def, 'massifMinMasses', MASSIF_CFG.minMasses));
+  const rescueShrink = layoutParam<number>(def, 'massifRescueShrink', MASSIF_CFG.rescueShrink);
 
   const portals = [ctx.entry, ...ctx.exits];
   const targetCover = rng.range(coverBand[0], coverBand[1]) * arena.w * arena.h;
 
   const placed: PlacedMass[] = [];
   let covered = 0;
-  for (let t = 0; t < placeTries; t++) {
-    if (covered >= targetCover || placed.length >= maxMasses) break;
-    // Fixed per-try draw shape (r, x, y, kind, shape): rejections change which
-    // darts land, never how the stream advances past a landed one.
-    const r = rng.range(sizeR[0], sizeR[1]);
+  // ONE DART, r rolled by the caller: draw the rest of the fixed per-try
+  // shape (x, y, kind, shape), test the structural laws, paint on a land.
+  // Rejections change which darts land, never how the stream advances past
+  // a landed one.
+  const dart = (r: number): void => {
     const inset = Math.max(90, r * 0.35); // bodies may bleed off the border — pockets heal
     const at = vec(
       rng.range(inset, Math.max(inset + 1, arena.w - inset)),
@@ -425,10 +445,10 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     const shapeId = pickWeighted(rng, kind.shapes).shape;
     const shape = massShapeOf(shapeId);
     const bound = r * shape.reach;
-    if (portals.some(p => Math.hypot(p.x - at.x, p.y - at.y) < portalClear + bound)) continue;
-    if (resHits(ctx, at.x, at.y, bound + laneW / 2)) continue;
-    if (placed.some(m => Math.hypot(m.cm.at.x - at.x, m.cm.at.y - at.y) < m.cm.bound + bound + laneW)) continue;
-    if (seatGround && !seatOnWalkable(grid, at, r)) continue;
+    if (portals.some(p => Math.hypot(p.x - at.x, p.y - at.y) < portalClear + bound)) return;
+    if (resHits(ctx, at.x, at.y, bound + laneW / 2)) return;
+    if (placed.some(m => Math.hypot(m.cm.at.x - at.x, m.cm.at.y - at.y) < m.cm.bound + bound + laneW)) return;
+    if (seatGround && !seatOnWalkable(grid, at, r)) return;
 
     const seed = rng.int(0, 0x7fffffff);
     const body = Mask.forRect(0, 0, arena.w, arena.h);
@@ -444,6 +464,27 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     // the universal reachability invariant's required points — the mouth (or
     // a rescue breach through the ring) is guaranteed from here on.
     if (res.interior && kind.poiInterior !== false) ctx.pois.push(vec(res.interior.x, res.interior.y));
+  };
+  for (let t = 0; t < placeTries; t++) {
+    if (covered >= targetCover || placed.length >= maxMasses) break;
+    dart(rng.range(sizeR[0], sizeR[1]));
+  }
+
+  // THE RESCUE PASS: an under-filled zone re-arms the same dart budget once,
+  // the rolled size ramping from the authored band down to rescueShrink × it
+  // by HALF the budget, then holding there — the early darts re-roll the
+  // authored look, the back half is guaranteed small (small walls seat where
+  // giants could not — measured, not hoped: the bastion cloud at half-band
+  // never failed to stand 6, while a full-length ramp still shipped 4s).
+  // Every structural law above holds verbatim — only r relaxes. Floor-less
+  // zones (the default) never reach this line, so their streams are
+  // byte-identical.
+  if (placed.length < minMasses) {
+    const rampLen = Math.max(1, Math.floor(placeTries / 2));
+    for (let t = 0; t < placeTries && placed.length < minMasses; t++) {
+      const shrink = 1 - (1 - rescueShrink) * Math.min(1, t / rampLen);
+      dart(rng.range(sizeR[0] * shrink, sizeR[1] * shrink));
+    }
   }
 
   healMassifWeave(ctx, grid, laneW);
