@@ -406,11 +406,49 @@ function sweepSkills(args: Args): void {
   const vs = vsFlag ? resolveTargets(vsFlag, num(args.flags['target-level'], level)) : null;
   if (vs) for (const w of vs.warnings) console.log(`panel note: ${w}`);
 
+  // --droppable: rank only rows a PLAYER can actually obtain. Construct and
+  // monster kit skills (noDrop) live in the same registry but not the same
+  // economy — a turret's 0-mana / 0-cooldown / 0-cast-time round outranks
+  // every real gem on a dummy by construction, and reading that gap as a
+  // balance finding compares things no build ever chooses between. `!noDrop`
+  // is the same droppability predicate the support-matrix census uses.
+  //
+  // THE FIRE-GAP VERDICT (2026-07-27, HEAD f6add35, L5 / gem L2, dummy lane).
+  // The standing "7.7× fire gap" is RETIRED as an artifact — three separate
+  // apples-to-oranges stacked in one number, and no skills.ts retune follows
+  // from it:
+  //
+  //  1. THE NODROP ARTIFACT. It was measured against hellfire_missile, the
+  //     'eruptor' construct's turret round — noDrop, never player-castable.
+  //     Measured here it tops the entire fire lane at 90.72 dps: 2.6× the best
+  //     droppable row and 12.2× fire_siege — while carrying the LOWEST base
+  //     damage of the lane ({fire:[6,10]} against fire_siege's [14,22]). It
+  //     wins on cast economics alone (mana 0, cooldown 0, useTime 0): a round
+  //     with no animation lock fires every tick. --droppable excludes it and
+  //     the comparison simply disappears.
+  //  2. THE CADENCE ARTIFACT — the finding that survives, and it is a
+  //     different one. Among droppable rows fire_siege posts 7.43 vs
+  //     fireball's 35.1 (4.7×) on IDENTICAL base damage ({fire:[14,22]}),
+  //     identical tags, and near-identical useTime (0.85 vs 0.8). The whole
+  //     difference is the 3s cooldown: cycle 3.0s vs 0.8s predicts 3.75× of
+  //     the observed 4.7×. Sustained dummy DPS structurally under-rates every
+  //     cooldown-gated skill, so this lane CANNOT price fire_siege's burst —
+  //     answering that needs a burst-window or --vs panel run, not this one.
+  //  3. THE UNEXPRESSED ROWS. summon_fire_golem / fire_mine / righteous_fire /
+  //     purity_of_fire / wildfire_sweep all read 0.00 here: minion, trap and
+  //     aura skills a brawler pilot cannot express against one immortal dummy.
+  //     Zero is a rig artifact, not a dead skill.
+  //
+  // Net: fire is not shown to be mis-tuned. Any future fire claim must cite a
+  // --droppable run, and must not compare across cooldown classes on this lane.
+  const droppableOnly = !!args.flags.droppable;
+  let skippedNoDrop = 0;
   const rigs: { skillId: string; build: BuildSpec }[] = [];
   for (const [id, def] of Object.entries(SKILLS)) {
     const tags = def.tags as readonly string[];
     if (!tags.includes('attack') && !tags.includes('spell')) continue;
     if (filter && !id.includes(filter)) continue;
+    if (droppableOnly && def.noDrop) { skippedNoDrop++; continue; }
     const classId = classOverride || (tags.includes('spell') ? 'magician' : 'warrior');
     rigs.push({
       skillId: id,
@@ -459,6 +497,8 @@ function sweepSkills(args: Args): void {
     }
   }
   const runName = vs ? `sweep_skills_vs_${idSafe(vs.tag)}_l${level}` : `sweep_skills_l${level}`;
+  // NO SILENT CAPS: say out loud what the restriction dropped.
+  if (droppableOnly) console.log(`--droppable: ${skippedNoDrop} noDrop kit skill(s) excluded — player-obtainable rows only.`);
   console.log(`Sweeping ${rigs.length} attack/spell skill(s)${vs ? ` × ${vs.targets.length} target(s)` : ' vs dummy'} × ${seeds} seed(s) @ character L${level}, gem L${gemLevel} — ${defs.length * seeds} episode(s)…`);
   const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed);
   const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
@@ -1438,9 +1478,106 @@ function cmdManifest(): void {
 
 const GATE_METRICS = ['dps_out', 'dps_dummy', 'dps_in', 'ttk_wave_mean', 'kills', 'kill_rate', 'player_deaths', 'life_floor_pct'];
 
-interface Deviation { scenarioId: string; metric: string; a: number; b: number; rel: number }
+/** THE TOLERANCE TABLE — how far a metric may move before the gate calls it a
+ *  regression, as DATA rather than one flat number.
+ *
+ *  A single global tolerance is wrong in BOTH directions at once, and the
+ *  smoke suite proves it. Measured 2026-07-27 at HEAD f6add35 by re-running
+ *  the committed suite under two fresh base seeds (424242, 987654) with ZERO
+ *  code change — a pure RNG-stream re-roll, exactly what a sibling's added
+ *  rng draw does to the stream:
+ *
+ *    dummy_dps_warrior_l1   every metric moved ≤1%   (immortal dummy, no dice)
+ *    ttk_parity_* dps_in    up to 33%                (CV 107% — the noisiest)
+ *    ttk_parity_magician_   ttk_wave_mean up to 38%, dps_out 22%, life_floor 22%
+ *    ttk_parity_warrior_    ttk_wave_mean  4%        (the STABLE leg)
+ *
+ *  Under the old flat 0.15 that noise fired 5 and 3 "regressions" on the two
+ *  re-rolls — while leaving the deterministic dummy leg a 15× slack a real
+ *  kit regression could hide in. Rows below are sized off the measured move
+ *  (~1.3× the worst observed), and TIGHTEN as readily as they loosen.
+ *
+ *  Resolution: every matching row applies, least-specific first, each field
+ *  overriding independently (a row setting only `tolerance` leaves `absEps`
+ *  alone). Specificity = a named metric first, then the longer scenario
+ *  prefix. Omit a field to inherit it.
+ *
+ *  A wide row is a confession, not a shrug: it says this leg cannot currently
+ *  distinguish a real balance change from sampling noise at its seed count.
+ *  The structural cure is MORE SEEDS on the noisy legs (smoke runs in ~6s;
+ *  30 seeds would cut the standard error ~1.7×), which needs a deliberate
+ *  re-baseline — deferred here on purpose, see the note in the summary. */
+export interface GateTolerance {
+  /** Scenario-id PREFIX this row governs (omitted = every scenario). */
+  scenario?: string;
+  /** Gate metric this row governs (omitted = every gated metric). */
+  metric?: string;
+  /** Relative move allowed, as a fraction of the baseline mean. */
+  tolerance?: number;
+  /** Absolute floor — a move smaller than this is never a breach. */
+  absEps?: number;
+  /** The measurement that sized this row. */
+  note: string;
+}
 
-function compareSuites(a: SuiteResult, b: SuiteResult, tolerance: number, absEps: number): Deviation[] {
+export const GATE_TOLERANCES: GateTolerance[] = [
+  {
+    scenario: 'dummy_dps_', tolerance: 0.05,
+    note: 'Immortal-dummy legs are deterministic — ≤1% across two full seed re-rolls. Held tight ON PURPOSE: at the flat 0.15 a real 10% starter-kit regression walked straight through this gate.',
+  },
+  {
+    metric: 'player_deaths', tolerance: 1,
+    note: 'A near-zero count metric: 0.1 → 0 is a "100%" move that means one seed of ten stopped dying. Relative tolerance is meaningless here — the absEps floor (0.5, i.e. half a death per episode) is the real gate, and it is what already keeps this row quiet.',
+  },
+  {
+    scenario: 'ttk_parity_', metric: 'dps_in', tolerance: 0.45,
+    note: 'The noisiest gated metric in the suite: CV 107% on the warrior leg, 33% observed on a bare stream re-roll. Incoming damage depends on which bodies reach the hero first — a coin-flip the seed decides.',
+  },
+  {
+    scenario: 'ttk_parity_', metric: 'life_floor_pct', tolerance: 0.30,
+    note: 'Worst observed re-roll move 22% (both legs). Life floor is a per-episode MINIMUM — one unlucky episode drags the mean.',
+  },
+  {
+    scenario: 'ttk_parity_', metric: 'ttk_wave_mean', tolerance: 0.25,
+    note: 'Clear time on a 6-body parity pack. The warrior leg is stable (4% across both re-rolls); this general row covers it with room to spare.',
+  },
+  {
+    scenario: 'ttk_parity_', metric: 'dps_out', tolerance: 0.25,
+    note: 'Warrior 7%, magician 22% on the re-rolls — one band over both.',
+  },
+  {
+    scenario: 'ttk_parity_magician_', metric: 'ttk_wave_mean', tolerance: 0.50,
+    note: 'THE NOISE-DOMINATED LEG. 10.26 baseline → 14.12 / 11.89 on two bare re-rolls (+38% / +16%), all three sets the same code. At 10 seeds this leg cannot tell a real 40% balance change from the dice; the row is sized to stop the false alarms, and the honest fix is more seeds. See the ttk_parity_ adjudication in src/sim/data/targets.ts.',
+  },
+];
+
+/** Which row governs a (scenario, metric) cell — least specific first, so the
+ *  most specific setter of each field wins, and fields inherit independently. */
+function resolveTolerance(scenarioId: string, metric: string, dfltTol: number, dfltAbs: number)
+  : { tolerance: number; absEps: number; via: string } {
+  const rank = (r: GateTolerance): number => (r.metric ? 1e6 : 0) + (r.scenario?.length ?? 0);
+  const rows = GATE_TOLERANCES
+    .filter(r => (!r.scenario || scenarioId.startsWith(r.scenario)) && (!r.metric || r.metric === metric))
+    .sort((x, y) => rank(x) - rank(y));
+  let tolerance = dfltTol, absEps = dfltAbs, via = 'default';
+  for (const r of rows) {
+    if (r.tolerance !== undefined) { tolerance = r.tolerance; via = `${r.scenario ?? '*'} · ${r.metric ?? '*'}`; }
+    if (r.absEps !== undefined) absEps = r.absEps;
+  }
+  return { tolerance, absEps, via };
+}
+
+const DEFAULT_TOLERANCE = 0.15;
+const DEFAULT_ABS_EPS = 0.5;
+
+interface Deviation { scenarioId: string; metric: string; a: number; b: number; rel: number; tol: number; via: string }
+
+/** flatTol/flatAbs are the EXPLICIT command-line overrides. Passing --tolerance
+ *  means "judge every cell by this one number" — it beats the table outright,
+ *  so the flag keeps the meaning it always had (and `--tolerance 0.15` still
+ *  reproduces the pre-table gate exactly, which is the forensics lane). Leave
+ *  them undefined and GATE_TOLERANCES governs, falling back to the defaults. */
+function compareSuites(a: SuiteResult, b: SuiteResult, flatTol?: number, flatAbs?: number): Deviation[] {
   const out: Deviation[] = [];
   const byId = new Map(a.scenarios.map(r => [r.scenarioId, r]));
   for (const rb of b.scenarios) {
@@ -1450,21 +1587,32 @@ function compareSuites(a: SuiteResult, b: SuiteResult, tolerance: number, absEps
       const ma = ra.metrics[metric]?.mean;
       const mb = rb.metrics[metric]?.mean;
       if (ma === undefined || mb === undefined || !Number.isFinite(ma) || !Number.isFinite(mb)) continue;
+      const band = resolveTolerance(rb.scenarioId, metric, DEFAULT_TOLERANCE, DEFAULT_ABS_EPS);
+      const tol = flatTol ?? band.tolerance;
+      const eps = flatAbs ?? band.absEps;
+      const via = flatTol !== undefined ? 'flat --tolerance' : band.via;
       const rel = Math.abs(mb - ma) / Math.max(Math.abs(ma), 1e-9);
-      if (rel > tolerance && Math.abs(mb - ma) > absEps) {
-        out.push({ scenarioId: rb.scenarioId, metric, a: ma, b: mb, rel });
+      if (rel > tol && Math.abs(mb - ma) > eps) {
+        out.push({ scenarioId: rb.scenarioId, metric, a: ma, b: mb, rel, tol, via });
       }
     }
   }
   return out;
 }
 
+/** The explicit-override readers: undefined unless the flag was actually passed. */
+const flatTolOf = (args: Args): number | undefined =>
+  args.flags.tolerance !== undefined ? num(args.flags.tolerance, DEFAULT_TOLERANCE) : undefined;
+const flatAbsOf = (args: Args): number | undefined =>
+  args.flags['abs-eps'] !== undefined ? num(args.flags['abs-eps'], DEFAULT_ABS_EPS) : undefined;
+
 function printDeviations(devs: Deviation[]): void {
   if (!devs.length) { console.log('No gated metric moved beyond tolerance.'); return; }
   console.log(`${devs.length} gated metric(s) moved beyond tolerance:`);
   for (const d of devs) {
     const dir = d.b > d.a ? '↑' : '↓';
-    console.log(`  ${d.scenarioId} · ${d.metric}: ${d.a} → ${d.b} (${dir}${Math.round(d.rel * 100)}%)`);
+    // Name the band that fired — a breach should never be a mystery number.
+    console.log(`  ${d.scenarioId} · ${d.metric}: ${d.a} → ${d.b} (${dir}${Math.round(d.rel * 100)}%, band ${Math.round(d.tol * 100)}% via ${d.via})`);
   }
 }
 
@@ -1473,7 +1621,7 @@ function cmdCompare(args: Args): void {
   if (!fileA || !fileB) throw new Error('compare needs two report.json paths');
   const a = JSON.parse(fs.readFileSync(fileA, 'utf8')) as SuiteResult;
   const b = JSON.parse(fs.readFileSync(fileB, 'utf8')) as SuiteResult;
-  const devs = compareSuites(a, b, num(args.flags.tolerance, 0.15), num(args.flags['abs-eps'], 0.5));
+  const devs = compareSuites(a, b, flatTolOf(args), flatAbsOf(args));
   printDeviations(devs);
   if (devs.length) process.exitCode = 2;
 }
@@ -1485,25 +1633,45 @@ function baselinePath(suiteName: string): string {
 function cmdBaseline(args: Args): void {
   const mode = args._[1];
   const suiteName = str(args.flags.suite, 'smoke');
-  const seeds = num(args.flags.seeds, 10);
-  const baseSeed = num(args.flags['base-seed'], 0xa11ce);
+  let seeds = num(args.flags.seeds, 10);
+  let baseSeed = num(args.flags['base-seed'], 0xa11ce);
   const ids = SUITES[suiteName];
   if (!ids) throw new Error(`unknown suite '${suiteName}'`);
   const defs = ids.map(id => SCENARIOS[id]).filter(Boolean);
-  console.log(`Baseline ${mode}: suite '${suiteName}' × ${seeds} seed(s)…`);
+
+  // THE SEED PIN — a check asks the BASELINE'S OWN question. Run the same
+  // scenarios under different seeds and every difference you measure is
+  // sampling noise wearing a regression's clothes: on this suite a bare
+  // re-roll moves ttk_parity_magician_l5's clear time 38%. So `check` adopts
+  // the baseline's seeds/baseSeed by default (the comparison is then exactly
+  // reproducible), and REFUSES rather than quietly noting a mismatch when
+  // the command line asks for different ones. --force runs it anyway.
+  let baseline: SuiteResult | null = null;
+  if (mode === 'check') {
+    const p = baselinePath(suiteName);
+    if (!fs.existsSync(p)) throw new Error(`no baseline at ${p} — run 'baseline write --suite ${suiteName}' first`);
+    baseline = JSON.parse(fs.readFileSync(p, 'utf8')) as SuiteResult;
+    const pinSeeds = Number.isFinite(baseline.seeds) ? baseline.seeds : seeds;
+    const pinBase = Number.isFinite(baseline.baseSeed) ? baseline.baseSeed : baseSeed;
+    const asked = (args.flags.seeds !== undefined && seeds !== pinSeeds)
+      || (args.flags['base-seed'] !== undefined && baseSeed !== pinBase);
+    if (asked && !args.flags.force) {
+      throw new Error(`seed mismatch: baseline '${suiteName}' is ${pinSeeds} seed(s) @ base ${pinBase}, `
+        + `this check was asked for ${seeds} @ ${baseSeed} — the comparison would grade sampling noise as `
+        + `regression. Drop --seeds/--base-seed to ask the baseline's own question, or pass --force.`);
+    }
+    if (asked) console.log(`WARNING: --force — ${seeds}@${baseSeed} against a ${pinSeeds}@${pinBase} baseline; deviations include sampling noise.`);
+    else { seeds = pinSeeds; baseSeed = pinBase; }
+  }
+
+  console.log(`Baseline ${mode}: suite '${suiteName}' × ${seeds} seed(s) @ base ${baseSeed}…`);
   const { suite } = runDefs(suiteName, defs, seeds, baseSeed);
   if (mode === 'write') {
     fs.mkdirSync(BASELINES_DIR, { recursive: true });
     fs.writeFileSync(baselinePath(suiteName), JSON.stringify(suite, null, 2));
     console.log(`Baseline written: ${baselinePath(suiteName)}`);
   } else if (mode === 'check') {
-    const p = baselinePath(suiteName);
-    if (!fs.existsSync(p)) throw new Error(`no baseline at ${p} — run 'baseline write --suite ${suiteName}' first`);
-    const baseline = JSON.parse(fs.readFileSync(p, 'utf8')) as SuiteResult;
-    if (baseline.seeds !== seeds || baseline.baseSeed !== baseSeed) {
-      console.log(`note: baseline was ${baseline.seeds} seed(s) @ base ${baseline.baseSeed}; this check ran ${seeds} @ ${baseSeed}`);
-    }
-    const devs = compareSuites(baseline, suite, num(args.flags.tolerance, 0.15), num(args.flags['abs-eps'], 0.5));
+    const devs = compareSuites(baseline!, suite, flatTolOf(args), flatAbsOf(args));
     printDeviations(devs);
     if (devs.length) process.exitCode = 2;
   } else {
@@ -1519,6 +1687,8 @@ const HELP = `Hollow Wake balance harness
             [--as <build|save:slot|save:path>]        (same questions, YOUR character)
   sweep     skills  [--level N] [--gem-level N] [--class id] [--filter substr] [--seeds N]
             [--vs panel:<id> | --vs id[:lvl],…]       (skill × enemy-texture matrix)
+            [--droppable]  player-obtainable rows only — drops noDrop monster/
+                           construct kit, which no build ever chooses between
   sweep     matchups --build <id|save:ref> (--panel <id> | --targets id[:lvl],…)
             [--level N] [--seeds N] [--duration N]    (one build across a target panel)
   sweep     supports [--filter skill] [--support substr] [--seeds N] [--budget N]
@@ -1544,7 +1714,9 @@ const HELP = `Hollow Wake balance harness
             (loot-table yields + DROP_CFG per-kill expectations)
   manifest  (JSON catalogs of everything runnable — for tooling/agents)
   compare   <a/report.json> <b/report.json> [--tolerance 0.15] [--abs-eps 0.5]
-  baseline  write|check --suite <name> [--seeds N] [--tolerance 0.15]
+  baseline  write|check --suite <name> [--seeds N] [--tolerance 0.15] [--force]
+            (check PINS the baseline's own seeds/base-seed — asking for others
+             refuses unless --force; per-scenario/metric bands: GATE_TOLERANCES)
 
 Build refs: registry ids (see manifest), save:<slot|path> (a real character,
             verbatim), balance/players/*.json (auto-registered as player_<file>).
