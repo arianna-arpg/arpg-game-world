@@ -7,11 +7,14 @@
 // heart crystallization + the one-shot frozen_lake mark, the war-map render
 // (territory rects + marching-ants frontline + the eye glyph), map-fit
 // extents, the snapshot round-trip (+ old zone-hop-era snapshots dropped
-// tolerantly), and the thaw walking the territory home.
+// tolerantly), and the thaw walking the territory home — then conversion's
+// ENGINE half on real minted ground: THE ENTRY FREEZE (standing water frozen
+// over, scoped, idempotent, and borrowed — section H).
 // Run: npx tsx balance/probe_deepwinter.ts
 // ---------------------------------------------------------------------------
 
-import { bootSimEngine } from '../src/sim/arena';
+import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { liquidOf } from '../src/engine/genkit';
 import { DeepwinterField, type DeepwinterSurge } from '../src/packages/overlays/deepwinter';
 import { climateAt } from '../src/world/climate';
 import { biomeAt } from '../src/world/biomes';
@@ -193,6 +196,102 @@ if (field) {
   check('G2 the thaw empties the territory', field.activeCount() === 0, `${guard} ticks`);
   check('G3 released ground is free', field.frostOn('gen_heart') === null && field.convertedZones().length === 0);
   check('G4 the eye warp lifts', field.eyeWarp() === null);
+}
+
+// --- H: THE ENTRY FREEZE — conversion's ENGINE half ----------------------------
+//
+// C+D pinned conversion as DERIVED overlay state. THIS is what conversion does
+// to the ground a player actually walks. The mint-time freeze (layoutRecipes'
+// `freezeAt`) can only shape zones minted AFTER the front arrived, so an
+// already-charted zone kept its open, flowing water under a whiteout blizzard —
+// the one contradiction left. World.materializeDeepwinter now freezes the
+// standing water on arrival; these rigs hold it to the fabric's four promises:
+// it CONVERTS, it is SCOPED (water liquids only — doodads, never regions), it
+// is IDEMPOTENT + family-scoped (the hook re-fires every frame), and it is
+// BORROWED (the thaw restores ordinary water; nothing is written down).
+{
+  const w = makeSimWorld('warrior', 0xd1ce);
+  // Resolve the kinds the way the engine does — through the liquid registry,
+  // so this rig can never drift from the rows it is testing. ('water' and
+  // 'shallows' are ONE doodad kind; the ford is the `shallow` mark on it.)
+  const WATER = liquidOf('water').doodad as string;
+  const ICE = liquidOf('ice').doodad as string;
+  const count = (k: string): number => w.doodads.filter(d => d.kind === k).length;
+  const fords = (): number => w.doodads.filter(d => d.kind === WATER && d.shallow).length;
+
+  // A marsh through the REAL mint path: open water, fords, and bog/swamp
+  // beside them as the scope control.
+  const zid = w.devMintTileset('marsh', 0, 8, { seed: 909909 });
+  const water0 = count(WATER), ice0 = count(ICE), fords0 = fords();
+  const bog0 = count('bog'), swamp0 = count('swamp');
+  check('H1 fixture: the marsh mints real open water (fords and all)',
+    !!zid && water0 > 0 && fords0 > 0,
+    `${water0} water (${fords0} fords), ${ice0} ice, ${bog0} bog, ${swamp0} swamp`);
+
+  // A STANDING FRONT holding this zone. The engine reads exactly four
+  // accessors off the field, so the rig installs a minimal one carrying the
+  // probe's own SURGE verbatim: the half under test doesn't care WHY the
+  // ground is held (the march's own zonePolicy is B/C's business), only THAT
+  // it is — and a stub lets `held` flip to model the thaw.
+  let held = true;
+  (w.sim as unknown as { deepwinterField: unknown }).deepwinterField = {
+    surge: () => SURGE,
+    frostOn: (id: string) => (held && id === zid
+      ? { intensity: 0.8, isHeart: false, thawing: false, color: SURGE.color, label: 'deep winter' }
+      : null),
+    kingIn: () => null,
+    markDiscovered: () => false,
+  };
+
+  // THE LIVE PATH: a front that SPREADS onto the zone the player is already
+  // standing in converts it where they stand (devRematerialize re-runs the
+  // real zone-runtime registry, deepwinter row included — no private reach).
+  const rev0 = w.doodadRev, nav0 = w.doodadFamilyRev('nav-block');
+  w.devRematerialize();
+  check('H2 the standing water freezes over', count(WATER) === 0 && count(ICE) === ice0 + water0,
+    `${count(WATER)} water left, ice ${ice0} → ${count(ICE)}`);
+  check('H3 no ford survives the freeze (the shallow mark went with the water)',
+    fords() === 0 && !w.doodads.some(d => d.kind === ICE && d.shallow));
+  // GAMEPLAY, NOT PAINT: the foot senses the new ground (ice reports itself
+  // outright — wading is gone), so drawn and tested froze together.
+  const iced = w.doodads.filter(d => d.kind === ICE);
+  const sensed = iced.map(d => w.groundAt(d.pos)?.kind);
+  check('H4 the ground underfoot is ice, and nowhere still water',
+    sensed.some(k => k === ICE) && !sensed.some(k => k === WATER),
+    `${sensed.filter(k => k === ICE).length}/${iced.length} sense ice`);
+  check('H5 scope: only WATER liquids froze (bog + swamp keep their own rows)',
+    count('bog') === bog0 && count('swamp') === swamp0);
+  check('H6 the swap reported itself (the doodad rev moved)', w.doodadRev > rev0);
+  check('H7 …scoped to the families it touched: nav-block never re-derived',
+    w.doodadFamilyRev('nav-block') === nav0, 'neither water nor ice blocks a foot');
+
+  // IDEMPOTENT BY THE SWEEP, not merely by its memo: invalidate the key (any
+  // doodad change does) and prove the second pass finds nothing AND stays
+  // silent — a re-entry must never thrash the caches.
+  w.markDoodadsChanged();
+  const rev1 = w.doodadRev;
+  w.devRematerialize();
+  check('H8 a second pass converts nothing and bumps nothing', w.doodadRev === rev1 && count(WATER) === 0);
+  w.devRematerialize();
+  check('H9 the per-frame re-invoke is free while the list is unchanged', w.doodadRev === rev1);
+
+  // THE ENTRY PATH: leave and come back. Re-entry re-mints the zone's authored
+  // water from its seed, and the standing front freezes it again on arrival —
+  // no update tick, no re-materialize needed.
+  w.loadZone(zid!);
+  check('H10 re-entry: the re-minted water is frozen again at the door',
+    count(WATER) === 0 && count(ICE) === ice0 + water0,
+    `${count(WATER)} water, ${count(ICE)} ice`);
+
+  // THE THAW (transience — events BORROW the world): the front lets the ground
+  // go, frostOn() returns null, the hook early-returns. There is no unfreeze
+  // pass because the ice was never written down — zone memory carries seed and
+  // population, never doodads — so the zone simply re-mints ITS OWN water.
+  held = false;
+  w.loadZone(zid!);
+  check('H11 the thaw restores the zone\'s ordinary water, ford for ford',
+    count(WATER) === water0 && fords() === fords0 && count(ICE) === ice0,
+    `${count(WATER)}/${water0} water, ${fords()}/${fords0} fords, ${count(ICE)}/${ice0} ice`);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nprobe_deepwinter OK');

@@ -12,7 +12,10 @@
 // with an animated MARCHING frontline along its boundary — a war map's
 // shifting border, watchable from ignition day. Minted zones convert the
 // moment the territory swallows their node: standing snow at the frozen
-// floor, WHITEOUT banks, Rimebound court packs — and the WINTER KING
+// floor, WHITEOUT banks, standing water frozen over (the entry half of the
+// mint-time freezeAt — see World.materializeDeepwinter: charted ground is
+// already poured, so its water is converted in place), Rimebound court
+// packs — and the WINTER KING
 // (Crowned) at the glacial heart, which CRYSTALLIZES onto the first held
 // zone near the eye (usually one the player mints pushing toward it) and is
 // grafted its frozen_lake landmark. Clearing zones changes nothing; only
