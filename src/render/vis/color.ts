@@ -44,6 +44,41 @@ export function mix(a: string, b: string, t: number): string {
   return rgbToHex([A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f]);
 }
 
+/** THE CONTRAST GUARD — push a derived tone AWAY from what it sits on until
+ *  the two read apart. A biome whose derived tones land within a whisker of
+ *  each other swallows whatever boundary they were drawn to describe (the
+ *  ground pass guards its wall fill against the floor this way; the void
+ *  frame guards its skirt/seat/crest against the ink and each other).
+ *
+ *  `prefer` is the tone's INTENT — a dark seat wants to go darker, a lit
+ *  crest lighter — and is honored unless that side is out of headroom (a
+ *  near-black reference forces light, a near-white one dark). The intent
+ *  matters: when the guard fires the two tones are within `minGap` BY
+ *  DEFINITION, so "which side is the tone already on" is coin-flip noise —
+ *  two neighbouring themes would pick opposite directions off a rounding
+ *  hair. The intent is stable, so a realm's rims all break the same way.
+ *
+ *  shade() is linear per channel and luminance is linear in the channels, so
+ *  the step that reaches a target luminance SOLVES exactly — no blind fixed
+ *  step, which on a near-black palette overshoots into mid-grey. `margin`
+ *  overshoots the floor by a fraction of itself so a guarded tone clears the
+ *  line rather than landing on it (and absorbs 8-bit rounding on the way
+ *  back out to hex). */
+export function contrastGuard(tone: string, against: string,
+  cfg: { minGap: number; margin: number }, prefer: 'lighter' | 'darker'): string {
+  const lt = luminance(tone), la = luminance(against);
+  if (Math.abs(lt - la) >= cfg.minGap) return tone; // already reads — untouched
+  const want = cfg.minGap * (1 + cfg.margin);
+  let up = prefer === 'lighter';
+  if (up && la + want > 1) up = false;
+  else if (!up && la - want < 0) up = true;
+  const target = up ? la + want : la - want;
+  const t = Math.min(1, Math.max(0, up
+    ? (target - lt) / Math.max(1e-6, 1 - lt)
+    : 1 - target / Math.max(1e-6, lt)));
+  return shade(tone, up ? t : -t);
+}
+
 // --- HSL (h 0..360, s/l 0..1) ----------------------------------------------
 
 export function rgbToHsl([r, g, b]: RGB): [number, number, number] {

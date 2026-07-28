@@ -941,6 +941,29 @@ export const VIS_CFG = {
      *  own dark (0 = every zone ends in the same flat night). */
     color: '#0a0a0e',
     tintMix: 0.1,
+    /** THE CONTRAST GUARD. Every tone below is DERIVED from theme.floor and
+     *  theme.border by a DIFFERENT recipe, so what collapses a rim is not
+     *  the two theme colors sitting close (they never do — the tightest
+     *  floor/border gap shipping is 0.110) but WHERE the pair sits: near the
+     *  ink the skirt and its seat drop into the dark they were drawn to
+     *  describe, and on a pale floor the lit crest vanishes into its own
+     *  ground. The Aetherial's cloud country was the witness — on
+     *  aether_cathedral the crest and the skirt earth differed by 0.0006
+     *  luminance, an invisible hairline. minGap is the
+     *  luminance distance a derived tone must clear from what it sits on;
+     *  margin overshoots it by that fraction so a guarded tone reads past
+     *  the line, not on it. A tone already clear is returned UNTOUCHED —
+     *  themes that read fine today are byte-identical. MEASURED over the 104
+     *  themes carrying one (balance/probe_voidframe.ts): 0.06 moves 15 — the
+     *  twelve pale Aetherial crests, two invisible skirts (descent 0.037,
+     *  abyssal_rift 0.054) and one seat. This is a SAFETY NET for reads that
+     *  have collapsed, not a restyle: ground.ts's 0.09 (tuned for midtone
+     *  walls on midtone floors) moves 49 of 104 here, because the void
+     *  frame's whole palette lives near black where an absolute linear gap
+     *  bites everything. Raising it past ~0.148 is the real ceiling — beyond
+     *  that the seat's dark direction runs out of room and flips light,
+     *  brightening the one tone that exists to be dark. */
+    contrast: { minGap: 0.06, margin: 0.25 },
     /** The falling-away skirt just past the rim: the zone's earth catching
      *  the last light as it drops. width in world px; floorMix blends the
      *  earth tone floor→border. */

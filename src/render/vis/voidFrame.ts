@@ -24,6 +24,15 @@
 // edits here. Ablate pass name: 'voidframe' (restores the pre-fabric look —
 // flat #0a0a0e + the plain 4px border — for perf forensics).
 //
+// THE CONTRAST GUARD: those four tones are four different functions of the
+// same two theme colors, and on some palettes they land on top of each other
+// — the pale Aetherial realms drew a lit crest 0.0006 luminance from their
+// own skirt, an invisible hairline. Each tone is now pushed clear of what it
+// SITS ON (skirt off the ink, seat off the skirt, crest off both) by
+// VIS_CFG.voidFrame.contrast, LEAST-MOVE and intent-preserving: a tone that
+// already reads is returned byte-identical, so this is a net under collapsed
+// reads and never a restyle. Pinned by balance/probe_voidframe.ts.
+//
 // FUTURE HOOK: zones with an understory (ZoneDef.below / cloud-sea realms)
 // could show the world-below past the rim instead of the abyss — extend the
 // understory snap by a padding band and draw it here, unclipped, before the
@@ -33,16 +42,23 @@
 import type { ZoneTheme } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { hash01 } from '../../engine/hash';
-import { mix, withAlpha } from './color';
+import { contrastGuard, mix, withAlpha } from './color';
 import { VIS_ABLATE, VIS_CFG } from './visConfig';
 
 /** Tiny per-theme color memos — themes are static per zone def, so these
- *  stay a handful of entries for a whole session. */
+ *  stay a handful of entries for a whole session. THE KEY LAW: a memo's key
+ *  must name EVERY theme color its value is derived from. The contrast guard
+ *  gives the seat and the crest a second input (the skirt earth, itself
+ *  floor+border), so those two key on the PAIR — keyed on border alone they
+ *  would serve one biome's tone to the next biome that shares a border. */
 const baseMemo = new Map<string, string>();
 const earthMemo = new Map<string, string>();
 const seatMemo = new Map<string, string>();
 const crestMemo = new Map<string, string>();
 const moteMemo = new Map<string, string>();
+
+/** The pair key for anything derived from both theme colors. */
+const pairKey = (theme: ZoneTheme): string => theme.floor + '|' + theme.border;
 
 /** The abyss ink for this zone — the renderer's screen clear, the ellipse
  *  outside-mask, and the frame's own strokes all drink from this one well.
@@ -55,23 +71,48 @@ export function voidBaseOf(theme: ZoneTheme): string {
   return c;
 }
 
-/** The skirt's earth tone: floor blended toward the border line's color. */
-function earthOf(theme: ZoneTheme): string {
-  const key = theme.floor + '|' + theme.border;
+/** The skirt's earth tone: floor blended toward the border line's color, then
+ *  guarded LIGHTER against the abyss ink it falls into — a skirt that reads
+ *  the same as the void is no skirt at all. (Exported for the probe; the
+ *  three tones below are a pure function of the theme.) */
+export function earthOf(theme: ZoneTheme): string {
+  const key = pairKey(theme);
   let c = earthMemo.get(key);
-  if (!c) { c = mix(theme.floor, theme.border, VIS_CFG.voidFrame.skirt.floorMix); earthMemo.set(key, c); }
+  if (!c) {
+    c = contrastGuard(mix(theme.floor, theme.border, VIS_CFG.voidFrame.skirt.floorMix),
+      voidBaseOf(theme), VIS_CFG.voidFrame.contrast, 'lighter');
+    earthMemo.set(key, c);
+  }
   return c;
 }
 
-function seatColorOf(theme: ZoneTheme): string {
-  let c = seatMemo.get(theme.border);
-  if (!c) { c = mix(theme.border, '#000000', 0.75); seatMemo.set(theme.border, c); }
+/** The rim's dark seat, guarded DARKER against the skirt it sits in. THE
+ *  CHAIN ORDER IS LOAD-BEARING: the earth is guarded LIGHTER first, so it
+ *  always stands a clear step above the ink — which is exactly the headroom
+ *  the seat needs to move down without hitting black and flipping light. */
+export function seatColorOf(theme: ZoneTheme): string {
+  const key = pairKey(theme);
+  let c = seatMemo.get(key);
+  if (!c) {
+    c = contrastGuard(mix(theme.border, '#000000', 0.75),
+      earthOf(theme), VIS_CFG.voidFrame.contrast, 'darker');
+    seatMemo.set(key, c);
+  }
   return c;
 }
 
-function crestColorOf(theme: ZoneTheme): string {
-  let c = crestMemo.get(theme.border);
-  if (!c) { c = mix(theme.border, '#ffffff', 0.45); crestMemo.set(theme.border, c); }
+/** The lit crest, guarded LIGHTER against BOTH the skirt it crowns and the
+ *  seat it sits over — the pale cloud realms collapsed all three into one
+ *  tone, and a hairline that matches its own ground draws nothing. */
+export function crestColorOf(theme: ZoneTheme): string {
+  const key = pairKey(theme);
+  let c = crestMemo.get(key);
+  if (!c) {
+    const cfg = VIS_CFG.voidFrame.contrast;
+    c = contrastGuard(mix(theme.border, '#ffffff', 0.45), earthOf(theme), cfg, 'lighter');
+    c = contrastGuard(c, seatColorOf(theme), cfg, 'lighter');
+    crestMemo.set(key, c);
+  }
   return c;
 }
 
