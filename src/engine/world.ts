@@ -16942,14 +16942,19 @@ export class World {
       if (s.state === 'loose') {
         // A player's touch — or a farmhand's — turns it home. The duty post
         // does the walking; the panic fabric may interrupt, the post resumes.
+        // A head in someone's HANDS is not herded (the Drove's pen law, one
+        // law for both events): the grip owns its feet, so the trek home
+        // begins the moment it is set down — never while it is carried.
         let touched = false;
-        for (const seat of this.seats) {
-          if (!seat.actor.dead && dist(seat.actor.pos, s.a.pos) <= cfg.herdRadius) { touched = true; break; }
-        }
-        if (!touched) {
-          for (const f of this.actors) {
-            if (f.dead || f.faction !== 'freehold' || isDormant(f)) continue;
-            if (dist(f.pos, s.a.pos) <= cfg.assistRadius) { touched = true; break; }
+        if (!s.a.heldBy) {
+          for (const seat of this.seats) {
+            if (!seat.actor.dead && dist(seat.actor.pos, s.a.pos) <= cfg.herdRadius) { touched = true; break; }
+          }
+          if (!touched) {
+            for (const f of this.actors) {
+              if (f.dead || f.faction !== 'freehold' || isDormant(f)) continue;
+              if (dist(f.pos, s.a.pos) <= cfg.assistRadius) { touched = true; break; }
+            }
           }
         }
         if (touched) {
@@ -16981,9 +16986,11 @@ export class World {
           this.text(vec(at.x, at.y - 24), 'a head goes to the bell…', info.color, 13);
           sf.noteConverted(info.id);
         }
-      } else if (dist(s.a.pos, sc.fold) <= cfg.arriveRadius) {
-        // HOME SAFE: the head rejoins the pasture (a graze post at the fold)
-        // and the drovers pay by the head (the Drover tier counts the act).
+      } else if (!s.a.heldBy && dist(s.a.pos, sc.fold) <= cfg.arriveRadius) {
+        // HOME SAFE: standing the fold ground, out of anyone's hands (the
+        // Drove's pen law again — a carried head counts the moment it is set
+        // down inside). The head rejoins the pasture (a graze post at the
+        // fold) and the drovers pay by the head (the Drover tier counts it).
         sf.noteReturned(info.id);
         bumpLedger(this.ledger, 'strays_returned');
         this.grantXp(cfg.reward.xpPerHead + cfg.reward.xpPerHeadPerLevel * lvl);

@@ -25,7 +25,12 @@
 //     (dormant thralls walking to the rally), the raid rouses the court, and
 //     breaking it to the last body relieves the fold (ledger + resolve) —
 //     then a leave/return round-trip re-stages from the overlay's counts
-//     without double-spawning the court.
+//     without double-spawning the court,
+//   - THE CARRY LANE (the grab fabric meets the fold, section H): the mass law
+//     ADMITS the fold's own stock at default policy, a head in someone's HANDS
+//     is neither herded nor banked, and SETTING IT DOWN inside arriveRadius is
+//     what pays — once — and re-posts it at the fold. One law with the Drove's
+//     pen test (probe_drove G), driven through the real grabSeize path.
 // Run: npx tsx balance/probe_straying.ts
 // ---------------------------------------------------------------------------
 
@@ -34,6 +39,10 @@ import { seedGlobalRandom } from '../src/sim/rng';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import type { ZoneDef } from '../src/data/zones';
+import { vec, dist, type Vec2 } from '../src/core/math';
+import { mod } from '../src/engine/stats';
+import { SKILLS } from '../src/data/skills';
+import { grabRefusal, type GrabSpec } from '../src/engine/grab';
 import { MONSTERS } from '../src/data/monsters';
 import { BIOMES } from '../src/world/biomes';
 import { isDormant } from '../src/engine/ai';
@@ -375,6 +384,154 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
       !!staged && !!restaged && restaged.staged && restaged.callersLeft === staged.callersLeft
       && callers().length === restaged.callersLeft,
       restaged ? `${callers().length} court vs ${restaged.callersLeft} remembered (was ${courtBefore})` : 'gone');
+  }
+}
+
+// ------------------------------------------------ H. LIVE — THE CARRY LANE
+// The grab fabric meets the fold. THE LAW (the Drove's pen law, worn by both
+// events): a head in someone's HANDS is not herded and is not banked — SETTING
+// IT DOWN on the fold ground is what pays. Driven end to end through the
+// ordinary grabSeize path (useSkill → the real seize), never by setting
+// heldBy/gripping by hand; the only rig pokes are ISOLATION (the bell's clock
+// is G11's lane, the grip's patience is probe_grab's) so this rig tests the
+// straying's bookkeeping and nothing else.
+{
+  const w: World = makeSimWorld('warrior', 0xbe1104);
+  const p = w.player;
+  const zid = w.devMintTileset('farmland', 0, 5, { seed: 553355 });
+  const sf = w.sim.strayField;
+  check('H1: a farmland mint + the field stand', !!zid && !!sf, zid ?? 'null');
+  if (zid && sf) {
+    const step = (secs: number, dt = 0.25): void => { for (let t = 0; t < secs; t += dt) w.update(dt); };
+    const info = () => sf.strayingOn(zid);
+    const cfg = sf.surge();
+    const SPEC = (SKILLS.seize.effects.find(f => f.type === 'grabSeize') as { grab: GrabSpec }).grab;
+    /** A point `d` along the from→to bearing (rig placement, no hardcoded map). */
+    const along = (from: Vec2, to: Vec2, d: number): Vec2 => {
+      const dx = to.x - from.x, dy = to.y - from.y, l = Math.hypot(dx, dy) || 1;
+      return vec(from.x + (dx / l) * d, from.y + (dy / l) * d);
+    };
+
+    // THE MASS GATE, measured over the AUTHORED table: the fold's own stock is
+    // carryable at DEFAULT policy — no `grabbable` word on any def. The ox is
+    // the honest exception (it is authored as 'the heavy save'): the mass law
+    // prices it out of a bare pair of hands, and that is reported, not gated.
+    const verdicts = cfg.strayTable.map(e =>
+      `${e.id} ${grabRefusal(p, w.createMonster(e.id, 5, 'enemy'), SPEC, 0) ?? 'CARRYABLE'}`);
+    const ewe = w.createMonster('wool_sheep', 5, 'enemy');
+    check('H2: the mass/policy gate ADMITS the fold\'s ewe at default policy',
+      grabRefusal(p, ewe, SPEC, 0) === null && ewe.grabbable === undefined,
+      `${verdicts.join(' · ')} (hands ${p.effectiveWeight().toFixed(2)})`);
+
+    sf.devIgnite(w.devOverlayView(), zid);
+    step(1.5);
+    type SStray = { a: Actor; state: string; bellLeft: number };
+    type SScene = { fold: Vec2; rally: Vec2; strays: SStray[] } | null;
+    const scene = (w as unknown as { strayScene: SScene }).strayScene;
+    const carryable = (scene?.strays ?? []).filter(s => grabRefusal(p, s.a, SPEC, 0) === null);
+    const sheep = carryable.filter(s => s.a.defId === 'wool_sheep');
+    const carry = sheep[0] ?? carryable[0];
+    const touch = sheep[1] ?? carryable.find(s => s !== carry);
+    check('H3: the staged fold offers heads a pair of hands can lift',
+      !!scene && !!carry && !!touch,
+      scene ? `${carryable.length} carryable of ${scene.strays.length}` : 'no scene');
+
+    if (scene && carry && touch) {
+      // RIG ISOLATION — the spares are scenery (parked at the rally, out of
+      // every swing), the field is cleared of the farm's own weather (G8's
+      // lane), and both lane heads cannot whiff a single roll.
+      for (const s of scene.strays) {
+        s.bellLeft = cfg.bellPull[1] * 4;   // the bell's own lane is G11
+        if (s === carry || s === touch) continue;
+        s.a.pos = w.clampPos(vec(scene.rally.x, scene.rally.y), s.a.radius);
+        s.a.untargetable = true;
+      }
+      for (const a of w.actors) {
+        if (a.dead || a === p || a.tag === 'drove_call') continue;
+        if (scene.strays.some(s => s.a === a)) continue;
+        w.kill(a, true);
+      }
+      for (const s of [carry, touch]) s.a.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]);
+      w.devGrabGrant('seize'); w.devGrabGrant('gaff_cast');
+      const seize = p.skills.find(s => s?.def.id === 'seize')!;
+      const gaff = p.skills.find(s => s?.def.id === 'gaff_cast')!;
+
+      // --- THE CARRY: Seize a loose head, walk it home, SET IT DOWN --------
+      const r0 = info()!.returned, l0 = w.ledger.strays_returned ?? 0, xp0 = w.localSeat.meta.xp;
+      // Stand on the head's ROAD HOME: the touch starts the wheel, and a head
+      // that remembers the fold trots off DURING the swing — meet it coming.
+      p.pos = w.clampPos(along(carry.a.pos, scene.fold, 50), p.radius);
+      p.facing = Math.atan2(carry.a.pos.y - p.pos.y, carry.a.pos.x - p.pos.x);
+      w.useSkill(p, seize, vec(carry.a.pos.x, carry.a.pos.y));
+      for (let i = 0; i < 90 && !p.gripping; i++) w.update(1 / 60);
+      check('H4: a REAL Seize closes the hold on a staged head (the pair 1:1)',
+        p.gripping?.id === carry.a.id && carry.a.heldBy === p.id && !carry.a.dead,
+        p.gripping ? `verb ${p.gripping.verb}` : 'no hold');
+      if (p.gripping) {
+        // WALK the holder home (the catch REELS to its seat, it never
+        // teleports) on the wheel's own pathing idiom. The hold's patience and
+        // break meter are pinned every tick: those clocks are probe_grab's
+        // lane, and this rig must not race them across a field's width.
+        for (let i = 0; i < 1200 && dist(p.pos, scene.fold) > 6; i++) {
+          const pf = w.pathField();
+          let goal: Vec2 = scene.fold;
+          if (pf?.pathStep && !(pf.lineWalkable?.(p.pos, scene.fold) ?? false)) {
+            goal = pf.pathStep(p.pos, scene.fold) ?? scene.fold;
+          }
+          p.facing = Math.atan2(goal.y - p.pos.y, goal.x - p.pos.x);
+          w.moveActor(p, goal.x - p.pos.x, goal.y - p.pos.y, 1 / 60);
+          if (p.gripping) { p.gripping.until = w.time + 60; p.gripping.struggle = 0; }
+          w.update(1 / 60);
+        }
+        for (let i = 0; i < 240 && dist(carry.a.pos, scene.fold) > cfg.arriveRadius * 0.5; i++) {
+          if (p.gripping) { p.gripping.until = w.time + 60; p.gripping.struggle = 0; }
+          w.update(1 / 60);
+        }
+        step(0.6);
+        const dHeld = dist(carry.a.pos, scene.fold);
+        check('H5: a CARRIED head standing the fold banks NOTHING (still in hand)',
+          dHeld <= cfg.arriveRadius && carry.a.heldBy === p.id
+          && info()?.returned === r0 && (w.ledger.strays_returned ?? 0) === l0,
+          `d ${dHeld.toFixed(0)} ≤ ${cfg.arriveRadius} · returned ${info()?.returned} · ledger ${w.ledger.strays_returned ?? 0}`);
+        p.gripping.until = w.time;   // patience over — carry has no throw spec, so a plain SET DOWN
+        step(1.5);
+        const paid = info();
+        check('H6: SET DOWN inside arriveRadius pays — once, and re-posted at the fold',
+          !!paid && paid.returned === r0 + 1 && (w.ledger.strays_returned ?? 0) === l0 + 1
+          && w.localSeat.meta.xp > xp0 && carry.a.heldBy === undefined
+          && !!carry.a.aiPost && dist(carry.a.aiPost, scene.fold) < 1
+          && !scene.strays.some(s => s.a === carry.a),
+          paid ? `returned ${r0}→${paid.returned} · ledger ${w.ledger.strays_returned ?? 0} · xp +${w.localSeat.meta.xp - xp0}` : 'call resolved');
+        step(4);
+        check('H7: and it counts EXACTLY once (the fold does not re-bank it)',
+          info()?.returned === r0 + 1 && (w.ledger.strays_returned ?? 0) === l0 + 1,
+          `returned ${info()?.returned} · ledger ${w.ledger.strays_returned ?? 0}`);
+      }
+
+      // --- THE TOUCH GUARD: held from BEYOND herdRadius, then walked in ----
+      // The gaff is the only reach longer than the herd radius (melee closes
+      // inside it by law), so this is the one honest way to hold a head that
+      // has never been touched.
+      p.pos = w.clampPos(along(touch.a.pos, scene.rally, 160), p.radius);
+      p.facing = Math.atan2(touch.a.pos.y - p.pos.y, touch.a.pos.x - p.pos.x);
+      const reach = dist(p.pos, touch.a.pos);
+      w.useSkill(p, gaff, vec(touch.a.pos.x, touch.a.pos.y));
+      for (let i = 0; i < 120 && !p.gripping; i++) w.update(1 / 60);
+      check('H8: the gaff takes an UNTOUCHED head from beyond herdRadius',
+        p.gripping?.id === touch.a.id && touch.a.heldBy === p.id && touch.state === 'loose',
+        `reach ${reach.toFixed(0)} > ${cfg.herdRadius} · state ${touch.state}`);
+      if (p.gripping) {
+        p.gripping.until = w.time + 60;
+        step(0.8);
+        check('H9: a HELD head in herd reach does not remember the fold',
+          dist(p.pos, touch.a.pos) <= cfg.herdRadius && touch.a.heldBy === p.id && touch.state === 'loose',
+          `d ${dist(p.pos, touch.a.pos).toFixed(0)} ≤ ${cfg.herdRadius} · state ${touch.state}`);
+        p.gripping.until = w.time;   // set it down where it stands — the touch may take NOW
+        step(1.0);
+        check('H10: set down in herd reach, the touch takes at once (the guard reads the HOLD, not the head)',
+          touch.a.heldBy === undefined && touch.state === 'homing', `state ${touch.state}`);
+      }
+    }
   }
 }
 
