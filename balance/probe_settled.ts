@@ -35,6 +35,7 @@ import '../src/engine/interiorGen';
 import '../src/data/massifs';
 import '../src/data/compositions';
 import '../src/data/settled';
+import '../src/data/tracks';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
@@ -57,6 +58,9 @@ import { hollowDef } from '../src/data/hollows';
 import { meldOf } from '../src/data/melds';
 import { skyOf, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { isDormant, NEUTRAL_RESET, updateAI } from '../src/engine/ai';
+import { SETTLED_CFG } from '../src/engine/settled';
+import { lintTrackSpec, placeTrack, trackRider } from '../src/engine/tracks';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 
 const VERBOSE = process.argv.includes('--verbose');
@@ -183,6 +187,8 @@ function gridStats(out: GeneratedLayout): { comps: number; grid: GridWalkField }
 }
 const fingerprint = (out: GeneratedLayout): string =>
   out.doodads.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)},${Math.round(d.radius)}`).join('|');
+const maskPrint = (out: GeneratedLayout): string =>
+  out.walk instanceof GridWalkField ? Array.from(out.walk.mask).join('') : '';
 const kindCount = (out: GeneratedLayout, k: string): number => out.doodads.filter(d => d.kind === k).length;
 const regionCells = (grid: GridWalkField, id: string): number => {
   let n = 0;
@@ -229,6 +235,78 @@ const regionCells = (grid: GridWalkField, id: string): number => {
     check('C8 the towns face BUILDS (structures raised)', (out.structures?.length ?? 0) > 0,
       `structures=${out.structures?.length ?? 0}`);
   }
+}
+
+// --- RIG T: the road-traffic law (the track fabric on the fields' own roads) -----
+// The dial ships CLOSED: SETTLED_CFG.traffic is 0, and an undialed mint emits
+// no lane and spends no rng — THE APPEND LAW below is the byte-level proof
+// (same seed, dial on vs off: every doodad and every grid cell identical; the
+// lanes are pure addition at the recipe's tail). Forced on, every road long
+// enough carries a pingpong carriage lane riding the road's own polyline —
+// groove-free (the road IS the carved way), terminus dwells at both gates,
+// field_wain carts in counter-file.
+{
+  const farm = TILESETS.farmland;
+  const SEED = 771777;
+  const off = defOf('qa_traffic', 'fields', farm.layout, { ...farm.layoutParams });
+  const on = defOf('qa_traffic', 'fields', farm.layout, {
+    ...farm.layoutParams, traffic: 1, trafficCarts: [2, 2] as [number, number],
+  });
+  const outOff = gen(off, SEED);
+  const outOn = gen(on, SEED);
+  check('T1 the dial ships CLOSED (reference 0; an undialed mint lanes nothing)',
+    SETTLED_CFG.traffic === 0 && (outOff.tracks?.length ?? 0) === 0,
+    `cfg=${SETTLED_CFG.traffic} lanes=${outOff.tracks?.length ?? 0}`);
+  const lanes = outOn.tracks ?? [];
+  check('T2 the forced dial lanes the roads', lanes.length >= 1 && lanes.length <= 2, `${lanes.length} lane(s)`);
+  let shapeOk = lanes.length > 0;
+  const lintGripes: string[] = [];
+  let placeOk = true;
+  for (const spec of lanes) {
+    if (spec.mode !== 'pingpong' || spec.groove !== false || spec.tag !== 'settled_traffic') shapeOk = false;
+    if (!(spec.speed >= 52 && spec.speed <= 72)) shapeOk = false;
+    if ((spec.riders?.length ?? 0) !== 2 || spec.riders.some(r => r.kind !== 'field_wain')) shapeOk = false;
+    if ((spec.pauses?.length ?? 0) !== 2 || spec.pauses![0].at !== 0 || spec.pauses![1].at !== spec.path.length - 1) shapeOk = false;
+    lintGripes.push(...lintTrackSpec(spec, 'traffic'));
+    try { placeTrack(spec); } catch { placeOk = false; }
+  }
+  check('T3 every lane wears the traffic shape (pingpong, groove-free, tagged, paced, two carts, gate dwells)',
+    shapeOk);
+  check('T4 every lane lints clean and places without refusal', lintGripes.length === 0 && placeOk,
+    lintGripes.join(' | '));
+  // The lane IS the road: endpoints sit exactly on entry and one exit
+  // (wanderPath keeps its termini), so the cart shuttles gate to gate.
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }): boolean =>
+    Math.hypot(a.x - b.x, a.y - b.y) < 1;
+  check('T5 every lane runs entry → an exit on the road\'s own polyline',
+    lanes.length > 0 && lanes.every(s => near(s.path[0], entry) && exits.some(e => near(s.path[s.path.length - 1], e))));
+  // Counter-file: two carts sit half a shuttle apart whatever the splay rolled.
+  check('T6 the pair runs in counter-file (phases half a cycle apart)',
+    lanes.length > 0 && lanes.every(s => {
+      const [a, b] = s.riders.map(r => r.phase ?? 0);
+      const gap = Math.abs(a - b) % 1;
+      return Math.abs(Math.min(gap, 1 - gap) - 0.5) < 1e-9;
+    }));
+  // The rider is the registered traffic contract; its face resolves.
+  const wain = trackRider('field_wain');
+  check('T7 the field_wain wears the traffic contract (low bite, along-carry, no speed gate, faction-blind, drawn face)',
+    !!wain && wain.payload.push === 'along' && (wain.payload.impulse ?? 0) > 0
+    && (wain.payload.hit?.base ?? 999) <= 10 && wain.payload.minSpeed === undefined
+    && !wain.payload.factions && !wain.payload.notFactions && !!DOODAD_VISUALS['field_wain']);
+  // THE APPEND LAW: the dial adds lanes and NOTHING else — doodads and grid
+  // byte-identical, so an opted-in face keeps its trafficless country.
+  check('T8 THE APPEND LAW — dial on vs off: same doodads, same grid, lanes pure addition',
+    fingerprint(outOn) === fingerprint(outOff)
+    && maskPrint(outOn) === maskPrint(outOff) && maskPrint(outOn) !== '');
+  // Determinism: the ON face re-mints the same lanes to the byte.
+  check('T9 traffic byte-deterministic',
+    lanes.length > 0 && JSON.stringify(gen(on, SEED).tracks ?? []) === JSON.stringify(lanes));
+  // The length gate: an impossible minimum lanes nothing — and the country
+  // STILL matches the off mint (the filter spends its draws either way).
+  const gated = gen(defOf('qa_traffic', 'fields', farm.layout,
+    { ...farm.layoutParams, traffic: 1, trafficMinLen: 99999 }), SEED);
+  check('T10 the length gate refuses dooryard hops (and the country never moves)',
+    (gated.tracks?.length ?? 0) === 0 && fingerprint(gated) === fingerprint(outOff));
 }
 
 // --- RIG D: the district law -------------------------------------------------------

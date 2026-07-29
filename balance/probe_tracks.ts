@@ -16,7 +16,8 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { mitigateTyped } from '../src/engine/damage';
-import { placeTrack, trackPose, ringPath, linePath, lintTrackSpec, TRACK_CFG, type TrackSpec } from '../src/engine/tracks';
+import { placeTrack, trackPose, trackRider, ringPath, linePath, lintTrackSpec, TRACK_CFG, type TrackSpec } from '../src/engine/tracks';
+import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { type Doodad } from '../src/engine/levelgen';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 import { vec } from '../src/core/math';
@@ -456,6 +457,52 @@ const DT = 1 / 60;
   check("headway: the pingpong return flips the lead ('ahead' follows the travel)",
     Math.abs(outLeg.x - 680) < 1 && Math.abs(backLeg.x - 320) < 1,
     `out ${outLeg.x.toFixed(0)} back ${backLeg.x.toFixed(0)}`);
+}
+
+// --- 12) THE FIELD WAIN: the settled belt's traffic contract ---------------
+// (data/tracks.ts 'field_wain' + engine/settled.ts layRoadTraffic — the
+// farmland's carriage lane, generation-side pinned in probe_settled RIG T.
+// The def IS the contract: traffic, not a saw — token knock, no speed gate,
+// faction-blind, and the 'along' grain so a body in the road is CARRIED
+// ahead of the axle down the lane, dribbled to the verge rather than
+// shredded. Live: a shuttle lane in the settled shape — pingpong, groove
+// false, gate dwells — parks at its terminus, then carries a parked body
+// down-lane while barely denting it.)
+{
+  const wain = trackRider('field_wain');
+  check('wain: registered wearing the traffic contract (low bite, along-carry, no speed gate, faction-blind)',
+    !!wain && wain.payload.push === 'along' && (wain.payload.impulse ?? 0) > 0
+    && (wain.payload.hit?.base ?? 999) <= 10 && wain.payload.minSpeed === undefined
+    && !wain.payload.factions && !wain.payload.notFactions);
+  check('wain: the drawn face is a registered row (drawn == tested has something to draw)',
+    !!DOODAD_VISUALS['field_wain']);
+  const world = makeSimWorld('warrior', 9151);
+  world.player.pos = vec(200, 900);
+  const tr = world.addTrack({
+    path: linePath(vec(400, 500), vec(1100, 500)), mode: 'pingpong', speed: 70,
+    pauses: [{ at: 0, sec: 2 }, { at: 1, sec: 2 }],
+    riders: [{ kind: 'field_wain', phase: 0 }],
+    groove: false, tag: 'settled_traffic',
+  })!;
+  check('wain: the terminus dwell parks the cart at the gate',
+    trackPose(tr, 0.5, 0).paused === true);
+  const m = world.createMonster('plains_wolf', 5, 'enemy');
+  m.pos = vec(760, 500);
+  world.actors.push(m);
+  const l0 = m.life, x0 = m.pos.x;
+  let firstPush: { vx: number; vy: number } | null = null;
+  for (let i = 0; i < Math.ceil(11 / DT); i++) {
+    world.update(DT);
+    if (!firstPush && m.push) firstPush = { vx: m.push.vx, vy: m.push.vy };
+  }
+  check("wain: the shove wears the 'along' grain (carried down the lane, not flung aside)",
+    !!firstPush && firstPush.vx > 0 && firstPush.vx > Math.abs(firstPush.vy) * 1.5,
+    firstPush ? `push (${firstPush.vx.toFixed(0)}, ${firstPush.vy.toFixed(0)})` : 'never pushed');
+  check('wain: the body is CARRIED ahead of the axle (real down-lane displacement)',
+    m.pos.x > x0 + 60, `Δx=${(m.pos.x - x0).toFixed(0)}px`);
+  check('wain: traffic, not a saw (bitten, never shredded)',
+    !m.dead && m.life < l0 && m.life > l0 * 0.35,
+    `life ${l0.toFixed(0)} → ${m.life.toFixed(0)}`);
 }
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);

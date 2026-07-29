@@ -125,6 +125,41 @@ DOODAD_VISUALS['pale_prow'] = {
   params: { beamHw: 96, beamHh: 26, body: '#7fb6cf', edge: '#eafaff' },
 };
 
+// --- THE FIELD WAIN — the settled belt's traffic -----------------------------
+// The farmland's carriage lane (engine/settled.ts layRoadTraffic): a laden
+// wain shuttling the carved portal roads on the track fabric's clock.
+// TRAFFIC, not a saw — a token knock the mitigation ladder mostly eats, no
+// speed gate, and the 'along' grain: a body in the road is CARRIED ahead of
+// the axle down the lane (the sweeper-arm physics) rather than wounded.
+// Faction-blind like every wheel: the road parts for nobody — crofter, wolf
+// and hero alike get dribbled to the verge. Circle surface on purpose: the
+// painter's yoke poles overhang the tested disc a touch (drawn a hair
+// LARGER than tested — near-misses land in the walker's favor; the rect
+// dialect's beam contract stays the blades' law).
+registerTrackRider({
+  id: 'field_wain',
+  kind: 'field_wain',
+  surface: { kind: 'circle', r: 24 },
+  payload: {
+    hit: { base: 5, perLevel: 0.8, type: 'physical' },
+    impulse: 260,
+    push: 'along',
+    icdSec: 0.7,
+  },
+  warnAhead: 90,
+  color: '#c8a865',
+});
+
+// The wain's look: the plagueCart painter re-paletted as a WORKING cart —
+// warm timber bed, a hay-gold lashed load, and the trailing 'flesh' stroke
+// re-toned to harness leather (a loose strap off the sideboard, not an
+// arm). Registered beside its rider so the pair can never drift (the
+// pale_prow idiom).
+DOODAD_VISUALS['field_wain'] = {
+  painter: 'plagueCart', order: 54,
+  params: { wood: '#6a5434', cloth: '#b89a4e', flesh: '#7a6242' },
+};
+
 // --- THE CARVED GROOVE — the lane made legible ------------------------------
 // Ground way discs laid under every gen-authored lane (layTraveledWay kind
 // 'track_groove'): walkable, never blocking, CLEARWAY-protected so scatter

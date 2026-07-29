@@ -71,7 +71,10 @@ Three authoring surfaces, one runtime:
    and lays the groove itself (`layTraveledWay(ctx, pts, { kind:
    'track_groove' })`), so the lane bakes into the ground chunks. Surfaced on
    `GeneratedLayout.tracks` → placed by `loadZone`. The **glacial heart**
-   (`landmarkBuilders.ts`) is the debut author.
+   (`landmarkBuilders.ts`) is the debut author; the settled belt's
+   **road traffic** (`layRoadTraffic` in `engine/settled.ts` — see below)
+   is the first RECIPE author, riding an already-carved way with
+   `groove: false` (a track groove under a real road would be a lie).
 2. **ZoneTheme.tracks** — fixed rows for authored layouts (interiors, arenas).
 3. **`World.tracksEnsure(specs)`** — the runtime seam (the creepEnsure idiom)
    for packages and boss beats. `World.addTrack` lint-refuses garbage and
@@ -163,6 +166,31 @@ in a blade's path, slick that makes both worse. His poise-folded weight is
 his only shove insurance **on purpose** — break the poise and a knockback
 build may hurl the King into his own deep; the fabric credits the shover and
 the winter honestly breaks.
+
+## The settled traffic — the field wain
+
+The fields recipe (`engine/settled.ts`) keeps every road polyline it carves
+and, at the recipe's TAIL, may emit one **carriage lane per road**
+(`layRoadTraffic`): `mode: 'pingpong'` gate-to-gate on the road's own points,
+a `trafficPauseSec` dwell at each terminus, `groove: false` (the road IS the
+carved way — and the road's own `reserve` already keeps scatter off the
+lane), 1–2 `field_wain` carts phase-spread in counter-file with a seeded
+per-lane splay. Every dial is a layoutParam over `SETTLED_CFG`
+(`traffic` chance — **reference 0: the lane never rolls and never draws, so
+an un-opted face generates byte-identically**, probe-pinned append law —
+plus `trafficSpeed`, `trafficCarts`, `trafficPauseSec`, `trafficMinLen`,
+`trafficRider`). Emission draws ride `ctx.rng` at the stream's very end, so
+toggling the dial adds lanes without reshaping the country.
+
+The **field_wain** (`data/tracks.ts`) is the traffic contract in rider form:
+a token typed knock (`hit.base` 5), **no** `minSpeed`, faction-blind, and
+`push: 'along'` with a real impulse — a body in the road is *carried ahead
+of the axle* down the lane, dribbled to the verge, never shredded. Its look
+re-palettes the `plagueCart` painter as a working hay wain (circle surface;
+the yoke poles overhang the tested disc slightly — drawn a hair larger than
+tested, misses in the walker's favor). No farmland face opts in yet:
+adoption is one tileset row (`layoutParams: { traffic: … }` on the face
+that wants a worked road to feel worked — probes force the dial directly).
 
 ## Config
 

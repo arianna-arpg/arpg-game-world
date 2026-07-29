@@ -114,6 +114,25 @@ export const SETTLED_CFG = {
    *  radius as a fraction of the crop row gap. */
   parcelTillStep: 34,
   parcelTillFrac: 0.62,
+  /** fields: THE ROAD TRAFFIC — chance per carved road that a carriage lane
+   *  shuttles it (the track fabric riding the road's own polyline; engine
+   *  half layRoadTraffic below). 0 — the reference default — is the SILENT
+   *  recipe: not one rng draw, byte-identical generation; a face opts in by
+   *  raising the `traffic` layoutParam. */
+  traffic: 0,
+  /** fields: cart pace band, px/s (a laden wain, never a blade). */
+  trafficSpeed: [52, 72] as [number, number],
+  /** fields: carts per lane (band, inclusive) — phase-spread over the
+   *  shuttle, so a pair runs in counter-file. */
+  trafficCarts: [1, 2] as [number, number],
+  /** fields: terminus dwell (seconds) — the cart rests at each field gate
+   *  before the return leg (TrackSpec.pauses at both ends). */
+  trafficPauseSec: 2.5,
+  /** fields: roads with less arc than this (px) carry no lane — a dooryard
+   *  hop is not a route. */
+  trafficMinLen: 520,
+  /** fields: the rider def a lane fields (registered in data/tracks.ts). */
+  trafficRider: 'field_wain',
 } as const;
 
 /** One weighted crop-parcel row: what a plot grows and how it is planted
@@ -358,6 +377,52 @@ function layCropParcels(ctx: GenCtx, def: ZoneDef, grid: GridWalkField): void {
   }
 }
 
+// --- THE ROAD TRAFFIC ------------------------------------------------------------
+// A carriage lane may shuttle each carved road: the track fabric riding the
+// road's OWN polyline (the lane IS the way already laid), pingpong with a
+// dwell at each field gate. groove:false on purpose — the road is already
+// carved, and a track groove under it would be a lie. The cart is TRAFFIC,
+// not a saw (data/tracks.ts 'field_wain': token knock, an 'along' shove that
+// CARRIES a body down the lane, no speed gate, faction-blind — the road
+// parts for nobody). Every dial is a layoutParam over SETTLED_CFG, and the
+// reference default (traffic: 0) short-circuits BEFORE the first rng draw:
+// a face that never opts in generates byte-identically, forever.
+
+function layRoadTraffic(ctx: GenCtx, def: ZoneDef, ways: Vec2[][]): void {
+  const chance = layoutParam<number>(def, 'traffic', SETTLED_CFG.traffic);
+  if (!(chance > 0)) return; // the silent default: not one draw
+  const speedBand = layoutParam<[number, number]>(def, 'trafficSpeed', [...SETTLED_CFG.trafficSpeed] as [number, number]);
+  const cartBand = layoutParam<[number, number]>(def, 'trafficCarts', [...SETTLED_CFG.trafficCarts] as [number, number]);
+  const pauseSec = layoutParam<number>(def, 'trafficPauseSec', SETTLED_CFG.trafficPauseSec);
+  const minLen = layoutParam<number>(def, 'trafficMinLen', SETTLED_CFG.trafficMinLen);
+  const rider = layoutParam<string>(def, 'trafficRider', SETTLED_CFG.trafficRider);
+  for (const pts of ways) {
+    // Draws are unconditional per way (the findSpot discipline): a road that
+    // rolls no lane, or is too short for one, never shifts a later road's.
+    const laned = ctx.rng.chance(chance);
+    const speed = ctx.rng.range(speedBand[0], speedBand[1]);
+    const carts = Math.max(1, ctx.rng.int(cartBand[0], cartBand[1]));
+    const phase0 = ctx.rng.range(0, 1);
+    if (!laned) continue;
+    let arc = 0;
+    for (let i = 1; i < pts.length; i++) arc += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    // 48 = twice placeTrack's own degeneracy refusal — a structural floor
+    // under the dial, not a tunable.
+    if (arc < Math.max(48, minLen)) continue;
+    (ctx.tracks ??= []).push({
+      path: pts.map(p => vec(p.x, p.y)),
+      mode: 'pingpong',
+      speed,
+      pauses: [{ at: 0, sec: pauseSec }, { at: pts.length - 1, sec: pauseSec }],
+      // THE PHASE SPLAY: each lane's file starts somewhere of its own on the
+      // shuttle (seeded, never synchronized), riders evenly spread within it.
+      riders: Array.from({ length: carts }, (_, j) => ({ kind: rider, phase: (phase0 + j / carts) % 1 })),
+      groove: false,
+      tag: 'settled_traffic',
+    });
+  }
+}
+
 // --- 'fields' — THE FARMLAND RECIPE ---------------------------------------------
 
 /** Open crop country studded with hedgerow/fold bodies, crossed by real
@@ -377,10 +442,12 @@ function fieldsLayout(ctx: GenCtx, def: ZoneDef): void {
   const roads = Math.min(ctx.exits.length, ctx.rng.int(countBand[0], countBand[1]));
   const ordered = exitsByReach(ctx);
   const lampKind = layoutParam<DoodadKind | ''>(def, 'wayLamps', '');
+  const ways: Vec2[][] = [];
   for (let i = 0; i < roads; i++) {
     const pts = carveWay(ctx, grid, ctx.entry, ordered[i], {
       kind: roadKind, band: roadBand, carveHalfW: roadCarve, overgrowth: laneOver,
     });
+    ways.push(pts);
     // A lit lane is a FACE choice (the village approach), never the default.
     if (lampKind) dressWayLamps(ctx, grid, pts, lampKind, SETTLED_CFG.lampSpacing, SETTLED_CFG.lampOffset);
   }
@@ -394,6 +461,12 @@ function fieldsLayout(ctx: GenCtx, def: ZoneDef): void {
     if (!grid.reachable(ctx.entry, e)) grid.carveCorridor(ctx.entry.x, ctx.entry.y, e.x, e.y, 34);
   }
   scatterDecoration(ctx, def);
+
+  // THE ROAD TRAFFIC: emitted LAST, after every other draw the recipe makes,
+  // so the dial can never reshape the country it serves — at the reference
+  // chance 0 the call draws nothing and the recipe is byte-identical to a
+  // trafficless build.
+  layRoadTraffic(ctx, def, ways);
 }
 
 registerLayout('fields', fieldsLayout);
