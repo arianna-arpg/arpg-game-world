@@ -26,7 +26,7 @@ import '../src/data/lairs';
 import { Rng } from '../src/core/rng';
 import { vec, type Vec2 } from '../src/core/math';
 import {
-  doodadRuleOf, generateLayout, hasLandmark, isSidezoneEntranceKind,
+  doodadRuleOf, generateLayout, hasLandmark, isSidezoneEntranceKind, landmarkDefs,
   type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lairs';
@@ -707,6 +707,90 @@ const step = (secs: number): void => {
       lich.bondHeld === false);
   }
   leaveToHome();
+}
+
+// --- RIG K: wave five — the drowned wallow (the anatomy gamut, finally seated) ---
+// The Marsh Leviathan was the composite framework's own exemplar and had no
+// door for years: five hitboxes fully authored, zero ways to meet them. Its
+// seat is the fabric's CHEAPEST lane proven end to end — an in-zone landmark
+// (no den tileset, no sidezone, no engine work), the wellspring's LIQUID SEAT
+// for a dweller that belongs in the water, and a level band argued against the
+// shipped ladder rather than inherited from whatever fen it lands in.
+{
+  const row = lairOf('marsh_leviathan');
+  const lm = landmarkDefs().find(d => d.id === 'leviathan_wallow');
+  check('K1 the wallow is registered and pours its own pool',
+    !!row && hasLandmark(row.landmark) && lm?.builder === 'lake' && lm?.liquid === 'water'
+    && lm?.mustReach === true);
+  check('K2 the beast IS the landmark, seated IN the water (the naiad\'s word)',
+    lm?.spawns?.where === 'liquid'
+    && (lm?.spawns?.table ?? []).length === 1
+    && lm?.spawns?.table[0].id === 'marsh_leviathan'
+    && lm?.spawns?.count[0] === 1 && lm?.spawns?.count[1] === 1);
+  check('K3 the exemplar pays the lean repeatable faucet, not the capstone table',
+    MONSTERS.marsh_leviathan?.loot === 'lair_hoard' && MONSTERS.marsh_leviathan?.boss === true);
+  check('K4 all five hitboxes still resolve (root + head + two claws + tail)',
+    (MONSTERS.marsh_leviathan?.parts ?? []).length === 4
+    && (MONSTERS.marsh_leviathan?.parts ?? []).every(p => !!MONSTERS[p.monster]));
+
+  const fen = (level: number) =>
+    lairLandmarkRolls({ place: 'surface', biome: 'marsh', level, tileset: 'marsh' });
+  const has = (rolls: { landmark: string }[], id: string) => rolls.some(r => r.landmark === id);
+  check('K5 the fen\'s crown claims the marsh SURFACE at real levels',
+    has(fen(20), 'leviathan_wallow'));
+  check('K6 the band is DELIBERATE: a green fen never grows one',
+    !has(fen(5), 'leviathan_wallow') && !has(fen(10), 'leviathan_wallow'));
+  check('K7 the wallow is surface ground only (no wallow in a cave)',
+    !lairLandmarkRolls({ place: 'cave', biome: 'marsh', caveDepth: 1, level: 20, tileset: 'marsh' })
+      .some(r => r.landmark === 'leviathan_wallow')
+    && !has(lairLandmarkRolls({ place: 'surface', biome: 'downs', level: 20, tileset: 'downs' }), 'leviathan_wallow'));
+  // THE FEN READS AS A LADDER, exactly like the highland one: the hovel alone
+  // at the low end, hovel AND wallow once the country can feed the apex.
+  check('K8 one biome, two rungs (the hag below, the leviathan above)',
+    has(fen(5), 'hag_hovel') && !has(fen(5), 'leviathan_wallow')
+    && has(fen(20), 'hag_hovel') && has(fen(20), 'leviathan_wallow'));
+
+  // Placement through the standing machinery (RIG C's law): chance-1 roll,
+  // one beast, and its seat cell inside the DRAWN water — paintLiquid lays
+  // its discs from the very mask `where: 'liquid'` samples, so drawn == tested
+  // or this fails.
+  const wallow = gen(caveDef({
+    landmarks: [{ landmark: 'leviathan_wallow', chance: 1 }],
+    caveDepth: undefined, anchor: undefined,
+  }), 77321);
+  const seats = (wallow.landmarkSpawns ?? []).filter(s => s.id === 'marsh_leviathan');
+  check('K9 exactly one leviathan stands per wallow', seats.length === 1, `${seats.length} seated`);
+  const water = wallow.doodads.filter(d => d.kind === 'water');
+  check('K10 the pool is poured and the reeds ring its shore',
+    water.length > 0 && wallow.doodads.some(d => d.kind === 'reeds'),
+    `${water.length} water pieces`);
+  check('K11 THE LIQUID SEAT holds (the seat cell lies inside the drawn water)',
+    seats.length === 1
+    && water.some(d => Math.hypot(d.pos.x - seats[0].pos.x, d.pos.y - seats[0].pos.y) <= d.radius));
+  // Nothing springs here, deliberately: a composite's parts attach as ordinary
+  // actors AFTER the spawn, so arming only the root would leave its limbs
+  // awake beside a sleeping body.
+  check('K12 the wallow arms no ambush (the composite exemption)', !lm?.spawns?.ambush);
+
+  // Live: the seat delivers a WORKING composite — four parts anchored ahead
+  // of, beside and behind the hulk in its own facing frame.
+  const beast = w.createMonster('marsh_leviathan', 12, 'enemy') as Actor;
+  beast.pos = vec(w.arena.w / 2, w.arena.h / 2);
+  beast.facing = 0;
+  (beast as any).aiCooldown = 99999;
+  w.actors.push(beast);
+  step(0.3);
+  const parts = (beast.partActors ?? []) as Actor[];
+  check('K13 the hulk stands with all four limbs attached', parts.length === 4);
+  check('K14 the limbs ride the FACING frame (head ahead, tail behind, claws flanking)',
+    parts.length === 4
+    && parts.some(p => p.defId === 'leviathan_head' && p.pos.x > beast.pos.x + beast.radius * 0.5)
+    && parts.some(p => p.defId === 'leviathan_tail' && p.pos.x < beast.pos.x - beast.radius * 0.5)
+    && parts.filter(p => p.defId === 'leviathan_claw').length === 2
+    && Math.sign(parts.filter(p => p.defId === 'leviathan_claw')[0].pos.y - beast.pos.y)
+      !== Math.sign(parts.filter(p => p.defId === 'leviathan_claw')[1].pos.y - beast.pos.y));
+  beast.dead = true;
+  for (const p of parts) p.dead = true;
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

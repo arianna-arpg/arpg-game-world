@@ -194,6 +194,43 @@ clampPos and read the running max), and dwell-entry rigs must step in
 small beats then pull the hero OFF the arrival portal at once — lingering
 ping-pongs the zones and double-mints the halls.
 
+## Wave five — the drowned wallow (a seat for the exemplar)
+
+**THE DROWNED WALLOW** — marsh surface, level 14+ (silent below 11), chance
+0.18. The **Marsh Leviathan** was authored as the *proof* of
+`MonsterDef.parts` — one creature, five hitboxes (body, head, two claws, tail;
+each a full monster-actor in the root's facing frame, each breaking on its
+own) — and then never placed: no pack row, no landmark, no den, no objective.
+The framework's own exemplar was unreachable in ordinary play for years.
+
+Its seat is this fabric's **cheapest lane, proven end to end**: two registry
+rows in `data/lairs.ts` and nothing else. The `lake` builder already pours the
+pool, `where: 'liquid'` (the wellspring's LIQUID SEAT) already seats a dweller
+*in* it rather than on the shore, and the seat row's own level envelope means
+the def needs no `presence` block. The other three routes all cost more — a
+pack-table weight row rolls a boss-tier body as trash (and costs a tileset
+edit), a den costs a whole new den tileset, an authored objective costs a
+directed mint to hang it on.
+
+Two authoring rules the wave restates:
+
+- **The band is argued, never inherited.** ~1650 effective life (700 on the
+  root, 1.35× of it again across the parts), 40 armor, 420 xp puts it between
+  the Emberwyrm's barrow (9) and the Fathomking's trench (16) — so the fen
+  reads as a ladder: the hag's hovel from 4, the leviathan from 14. Note
+  `LevelEnvelope.from` is the first level at FULL weight and `fadeIn` the ramp
+  *below* it (`{ from: 14, fadeIn: 3 }` = silent under 11).
+- **A composite arms no ambush.** Parts attach as ordinary actors *after* the
+  spawn, so arming only the root would leave its limbs awake beside a sleeping
+  body — the cairn's `visible` sleep is a single-body word.
+
+`probe_anatomy`'s **SEAT CENSUS** closes the hole generally: every `boss: true`
+def carrying `parts` must resolve to a reachable seat (tileset/zone tables,
+landmark spawns, sidezone mints, scene stages, faction rosters, world-boss
+package defs), with `HIGH_COURT` zeniths and apexes exempt as *reserved* by
+the registry's own reserves-and-remnants doctrine. The next composite that
+loses its door is named at probe time, not by a grep years later.
+
 ## QA
 
 `balance/probe_lairs.ts` — registry weave, the seat fold's pure law
@@ -201,7 +238,10 @@ ping-pongs the zones and double-mints the halls.
 determinism + the noDeeper strip through real generateLayout, the live
 Frostmaw round trip (boss ask → objectiveDone), snatch/hurl through the grab
 fabric, the cairn's armed visible ambush, the vault's puzzle ask + dormant
-warden rouse, and den-mint byte-purity. The den tilesets join `npm run
+warden rouse, den-mint byte-purity, and (RIG K) the drowned wallow's whole
+lane — the seat's band by assertion, the fen's two rungs, one leviathan per
+pool with its seat cell inside the DRAWN water, and the live hulk's four
+limbs anchored in its facing frame. The den tilesets join `npm run
 genqa` (interiors at cave scale) and `npm run perf` (perfProbe) by
 registration, and probe_anatomy sweeps the natives' kits/looks with the
 whole bestiary.

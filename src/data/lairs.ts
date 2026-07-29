@@ -718,3 +718,71 @@ registerLair({
     chance: 0.18,
   },
 });
+
+// ============================================================================
+// WAVE FIVE — THE DROWNED WALLOW: the composite framework's own exemplar,
+// finally given ground to stand on.
+// ============================================================================
+
+// === THE DROWNED WALLOW (the fen's crown — the anatomy gamut at lair scale) ==
+// The Marsh Leviathan was authored as the PROOF of MonsterDef.parts — one
+// creature, five hitboxes (body, head, two claws, tail), each part a full
+// monster-actor anchored in the root's facing frame and breaking on its own —
+// and then never placed. No pack row, no landmark, no den, no objective: the
+// exemplar of the composite framework was unreachable in ordinary play. This
+// is its door.
+//
+// WHY THIS LANE, and not the other three:
+//   · a PACK-TABLE weight row would roll a boss-tier body as ordinary trash,
+//     and costs a tileset edit besides;
+//   · a DEN (den_mouth + sidezone) costs a whole new den TILESET — its own
+//     packs, variants, caveLayouts, perf + genqa enrollment: by far the most
+//     authoring of the four for a beast that wants no rooms;
+//   · an authored OBJECTIVE costs a directed mint to hang it on.
+// The in-zone landmark lane costs TWO registry rows and no engine work at
+// all: the `lake` builder already pours the pool, `where: 'liquid'` (the
+// wellspring's LIQUID SEAT) already seats a dweller IN it rather than on the
+// shore, and the seat row below carries its own level envelope — so the def
+// needs no `presence` block either.
+//
+// The beast IS the landmark: a slow armored hulk lying in its own churned
+// water, the head shelling from the middle of the pool while claws and tail
+// keep the reeds honest. Nothing springs — no ambush arm here, deliberately:
+// a composite's parts attach as ordinary actors AFTER the spawn, so arming
+// only the root would leave its limbs awake beside a sleeping body.
+
+registerLandmark({
+  id: 'leviathan_wallow', builder: 'lake', size: [300, 400], liquid: 'water',
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    rim: { kind: 'reeds', count: [5, 9], radius: [10, 16] },
+  },
+  spawns: {
+    table: [{ id: 'marsh_leviathan', weight: 1 }],
+    // THE LIQUID SEAT (the naiad's hard-won word): a lake builder's
+    // `interior` is its SHORE, and a leviathan beached on the bank is a
+    // different animal entirely.
+    count: [1, 1], where: 'liquid',
+  },
+});
+
+registerLair({
+  id: 'marsh_leviathan',
+  landmark: 'leviathan_wallow',
+  seat: {
+    biomes: ['marsh'],
+    place: 'surface',
+    // THE BAND IS ARGUED, never inherited. The fen already reads as a ladder
+    // at its low end — the hag's hovel from level 4 — and this is its crown:
+    // ~1650 effective life (700 on the root, 1.35× of it again spread across
+    // four breakable parts), 40 armor, 420 xp. On the shipped seat ladder
+    // that sits between the Emberwyrm's barrow (9) and the Fathomking's
+    // trench (16), so: silent below 11, whispering 11→14, full weight from 14
+    // (`from` is the first FULL level and `fadeIn` the ramp BELOW it — the
+    // roost's idiom). The chance matches the King's Barrow, the other crown
+    // lair standing on a common surface biome, where a generous roll would
+    // wear the country out.
+    level: { from: 14, fadeIn: 3 },
+    chance: 0.18,
+  },
+});

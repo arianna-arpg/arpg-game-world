@@ -7309,13 +7309,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // Each part fights with its own skills and BREAKS individually — sundering
   // a claw wounds the beast and tears its guard open; the head is the prize
   // weakspot. The framework, proven: dragons/world bosses are data from here.
+  // IT STANDS ON THE DROWNED WALLOW (data/lairs.ts) — the fen's crown lair,
+  // an in-zone pool it lies in. For years the exemplar had no door at all;
+  // probe_anatomy's seat census now names the next composite that loses one.
   marsh_leviathan: {
     id: 'marsh_leviathan', name: 'The Marsh Leviathan',
     color: '#4a7a68', shape: 'oval', radius: 30, material: 'slime', look: 'leviathan_body',
     boss: true, noNemesis: true,
     base: { life: 700, moveSpeed: 52, armor: 40, weight: 6 },
     skills: [],
-    xp: 420,
+    // THE HOARD LAW (docs/engine/lairs.md): a lair alpha pays the lean
+    // REPEATABLE lair_hoard faucet. Left bare, `boss: true` falls through to
+    // DROP_CFG.bossTable — the one-shot capstone table — on ground that
+    // re-mints every time the fen rolls another wallow.
+    xp: 420, loot: 'lair_hoard',
     parts: [
       { monster: 'leviathan_head', dx: 1.5, dy: 0, lifeFrac: 0.45, breakDamage: 0.18 },
       {

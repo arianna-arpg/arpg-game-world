@@ -23,7 +23,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { updateAI } from '../src/engine/ai';
-import { MONSTERS } from '../src/data/monsters';
+import { FACTIONS, HIGH_COURT, MONSTERS, WAVE_TABLE, WILDLIFE } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { SUPPORTS } from '../src/data/supports';
 import { LOOKS } from '../src/data/looks';
@@ -34,6 +34,17 @@ import { STAT_DEFS, mod } from '../src/engine/stats';
 import { segsHittable } from '../src/engine/segments';
 import { vec } from '../src/core/math';
 import type { Actor } from '../src/engine/actor';
+// THE SEAT CENSUS's sources (see the census block at the tail). Every one of
+// these registries is already standing after bootSimEngine — these are value
+// imports only, deliberately placed LAST so the module graph the live rigs
+// boot against keeps its existing order.
+import { TILESETS } from '../src/data/tilesets';
+import { ZONES } from '../src/data/zones';
+import { SIDEZONES } from '../src/data/sidezones';
+import { PROLOGUE_SCENE, SCENES } from '../src/data/scenes';
+import { WORLDBOSS_SURGE } from '../src/packages/defs/worldboss';
+import { landmarkDefs } from '../src/engine/levelgen';
+import { withSeededRandom } from '../src/core/rng';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -379,6 +390,141 @@ function rigComposite(id: string, dx = 340): Actor {
   check('spoken verb: every caster part SPENDS in the melee scrum (plant-and-fire)',
     mute.length === 0, mute.join('; '));
   check("spoken verb: the idol's curse LANDS on the hero (bewilder worn)", idolCursed);
+}
+
+// ========================================================== THE SEAT CENSUS
+// A composite that nothing can reach is an EXPENSIVE ghost: full defs for the
+// root and every part, looks, painters, break numbers — all of it exercised
+// by the static rigs above, none of it ever met in play. The Marsh Leviathan
+// (the framework's own exemplar) lived exactly that way for years, and the
+// only reason anyone noticed was a grep. So: every `boss: true` def carrying
+// a `parts` array must resolve to a REACHABLE SEAT — a row in some standing
+// registry that can put the body on the ground.
+//
+// The sweep is registry-only and deliberately EXPLICIT (a blind deep-walk
+// would seat a def off any string that merely names it — including the very
+// reserve list below). One named line per placement lane:
+//   tilesets (packs/fauna/scenery/caveFaces/variants/lite pours) · zone defs
+//   (packs/fauna/scenery/objective) · landmark spawn tables (the lair fabric's
+//   in-zone lane rides this one) · faction rosters + high-court champions ·
+//   the wave + wildlife tables · SIDEZONE MINTS, harvested by calling each
+//   registered mint (the den bosses live inside those closures — the roost
+//   dragon and the ordnance master are reachable no other way) · scene stages
+//   (the prologue's Hordefather) · world-boss package defs, escorts, roamers.
+//
+// THE RESERVE EXEMPTION is itself a registry read, never a hand-kept list:
+// HIGH_COURT zeniths and apexes are authored COMPLETE and deliberately
+// DOORLESS by the reserves-and-remnants doctrine (data/monsters.ts says so on
+// the registry), exactly like the Descent's weight-0 affix families. Reserved
+// is not orphaned — but nothing else gets that grace.
+//
+// LAST in the file on purpose: the sidezone mints are the only lane that
+// EXECUTES anything, and they run inside withSeededRandom so no other stream
+// moves. Census law: `probe_` defs a probe injects into MONSTERS are its own
+// process's business and never count as content.
+{
+  const seats = new Map<string, string>();
+  const add = (id: unknown, where: string): void => {
+    if (typeof id === 'string' && MONSTERS[id] && !seats.has(id)) seats.set(id, where);
+  };
+  const table = (t: unknown, where: string): void => {
+    if (!Array.isArray(t)) return;
+    for (const e of t as { id?: string }[]) add(e?.id, where);
+  };
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+
+  // 1 · TILESETS — packs, fauna, scenery, lite pours, down every cave face
+  //     and every variant (a variant's own pack table is a real door).
+  for (const t of Object.values(TILESETS) as any[]) {
+    const eat = (o: any, where: string): void => {
+      if (!o) return;
+      table(o.packs?.table, where);
+      table(o.fauna, where);
+      for (const s of o.scenery ?? []) add(s?.monster, where);
+      for (const sw of o.lite?.swarms ?? []) add(sw?.monsterId, where);
+      for (const cf of o.caveFaces ?? []) eat(cf, where);
+      for (const v of o.variants ?? []) eat(v, where);
+    };
+    eat(t, `tileset:${t.id}`);
+  }
+  // 2 · AUTHORED ZONES — the hand-built country's own populations + asks.
+  for (const z of Object.values(ZONES) as any[]) {
+    table(z.packs?.table, `zone:${z.id}`);
+    table(z.fauna, `zone:${z.id}`);
+    for (const s of z.scenery ?? []) add(s?.monster, `zone:${z.id}`);
+    add(z.objective?.id, `zone:${z.id}`);
+    add(z.objective?.spawnerId, `zone:${z.id}`);
+  }
+  // 3 · LANDMARK SPAWNS — the lair fabric's in-zone lane and every pit
+  //     dweller: the cairn giant, the wellspring naiad, the drowned wallow.
+  for (const lm of landmarkDefs()) table(lm.spawns?.table, `landmark:${lm.id}`);
+  // 4 · FACTION ROSTERS + the high court's tabled CHAMPIONS.
+  for (const [fid, f] of Object.entries(FACTIONS) as [string, any][]) table(f.table, `faction:${fid}`);
+  for (const [fid, court] of Object.entries(HIGH_COURT)) add(court.champion, `court:${fid}`);
+  // 5 · WAVE + WILDLIFE tables.
+  for (const [k, rows] of Object.entries(WAVE_TABLE as any)) table(rows, `wave:${k}`);
+  for (const [k, rows] of Object.entries(WILDLIFE)) table(rows, `wildlife:${k}`);
+  // 6 · SIDEZONE MINTS — the den lane. A den's boss lives inside the mint
+  //     CLOSURE, so the only honest read is to call it (pure by contract —
+  //     probe_lairs pins byte-equal mints on one ctx) under a swapped stream.
+  const parent = world.zoneMap[world.zone.id];
+  let mintsRead = 0;
+  const mintsRefused: string[] = [];
+  withSeededRandom(0x5ea7, () => {
+    for (const [kind, sz] of Object.entries(SIDEZONES)) {
+      try {
+        const def = sz.mint({
+          parent, seed: 1234, id: `census_${kind}`,
+          pos: { x: 0, y: 0 }, playerLevel: 10, pkgActive: () => false,
+        }) as any;
+        mintsRead++;
+        add(def?.objective?.id, `sidezone:${kind}`);
+        table(def?.fauna, `sidezone:${kind}`);
+        table(def?.packs?.table, `sidezone:${kind}`);
+      } catch (e) {
+        mintsRefused.push(`${kind}: ${(e as Error).message.slice(0, 50)}`);
+      }
+    }
+  });
+  // A refused mint is a BLIND SPOT in the census, not a pass — say so loudly
+  // rather than let an unread lane quietly manufacture a false orphan.
+  check(`seat census: every sidezone mint reads (${mintsRead} dens harvested)`,
+    mintsRefused.length === 0, mintsRefused.slice(0, 3).join('; '));
+  // 7 · SCENE STAGES — scripted ground is a seat (the prologue's Hordefather).
+  for (const sc of [PROLOGUE_SCENE, ...Object.values(SCENES)] as any[]) {
+    for (const st of sc.stages ?? []) {
+      add(st?.def, `scene:${sc.id}`);
+      for (const s of st?.spawns ?? []) add(s?.def, `scene:${sc.id}`);
+      for (const wv of st?.waves ?? []) for (const s of wv?.spawns ?? []) add(s?.def, `scene:${sc.id}`);
+    }
+  }
+  // 8 · WORLD-BOSS package defs — the roamers, their passing bodies, escorts.
+  for (const d of ((WORLDBOSS_SURGE as any).defs ?? []) as any[]) {
+    add(d?.monster, `worldboss:${d?.id}`);
+    add(d?.roam?.passingMonster, `worldboss:${d?.id}`);
+    table(d?.escort?.table, `worldboss:${d?.id}`);
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  const reserved = new Set<string>();
+  for (const court of Object.values(HIGH_COURT)) {
+    if (court.zenith) reserved.add(court.zenith);
+    if (court.apex) reserved.add(court.apex);
+  }
+  const gamut = Object.values(MONSTERS)
+    .filter(d => d.boss && d.parts?.length && !d.id.startsWith('probe_'));
+  const orphans = gamut.filter(d => !seats.has(d.id) && !reserved.has(d.id));
+  check(`seat census: every boss composite is REACHABLE (${gamut.length} judged, `
+    + `${gamut.filter(d => reserved.has(d.id)).length} reserved by the high court)`,
+    orphans.length === 0,
+    orphans.map(d => `${d.id} — no spawn row, landmark, den, scene or roster seats it`).join('; '));
+  // The census must be able to FAIL: a sweep that seats everything by accident
+  // (a bug turning `add` into a no-op check, say) would pass in silence
+  // forever. Pin that the marsh leviathan's seat is the landmark lane it was
+  // actually given, and that the sweep found real ground for real bodies.
+  check('seat census: the sweep resolves real seats (the leviathan on its wallow)',
+    seats.get('marsh_leviathan') === 'landmark:leviathan_wallow' && seats.size > 300,
+    `${seats.size} seated; leviathan → ${seats.get('marsh_leviathan') ?? 'NOWHERE'}`);
 }
 
 console.log(failed === 0 ? '\nprobe_anatomy: ALL GREEN' : `\nprobe_anatomy: ${failed} FAILURE(S)`);
