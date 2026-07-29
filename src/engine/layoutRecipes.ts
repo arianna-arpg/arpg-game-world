@@ -1004,6 +1004,11 @@ function forestLayout(ctx: GenCtx, def: ZoneDef): void {
       // overgrown (wild) stretches admit the wood back. Post-roll rejection,
       // acceptance-only — the draw stream stays deterministic.
       if (onClearway(ctx, vec(px, py), treeR * (doodadRuleOf(m.kind).bodyScale ?? 1))) continue;
+      // PORTAL BODY (the same law): the portal test above stays center-only
+      // and PRE-roll so the draw stream never moves; this second gate refuses
+      // a rolled BODY leaning across the clearance line — the fat trunk that
+      // used to plant inside the portal's carve disc.
+      if (portals.some(p => Math.hypot(p.x - px, p.y - py) < portalClear + treeR * (doodadRuleOf(m.kind).bodyScale ?? 1))) continue;
       ctx.doodads.push({ pos: vec(px, py), radius: treeR, kind: m.kind, rot: treeRot });
     }
   }
@@ -1101,6 +1106,11 @@ function plantRiverbankRoof(ctx: GenCtx, def: ZoneDef, liquidKinds: ReadonlySet<
       // overgrown (wild) stretches admit the wood back. Post-roll rejection,
       // acceptance-only — the draw stream stays deterministic.
       if (onClearway(ctx, vec(px, py), treeR * (doodadRuleOf(m.kind).bodyScale ?? 1))) continue;
+      // PORTAL BODY (the same law): the portal test above stays center-only
+      // and PRE-roll so the draw stream never moves; this second gate refuses
+      // a rolled BODY leaning across the clearance line — the fat trunk that
+      // used to plant inside the portal's carve disc.
+      if (portals.some(p => Math.hypot(p.x - px, p.y - py) < portalClear + treeR * (doodadRuleOf(m.kind).bodyScale ?? 1))) continue;
       ctx.doodads.push({ pos: vec(px, py), radius: treeR, kind: m.kind, rot: treeRot });
     }
   }
