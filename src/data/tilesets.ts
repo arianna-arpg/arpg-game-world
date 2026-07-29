@@ -5877,6 +5877,15 @@ export const TILESETS: Record<string, TilesetDef> = {
         pockets: [0, 0], kinds: [],
         fronts: [
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.22, delay: [40, 80], waves: [120, 200], announce: { text: 'the sea rises!', color: '#bfe8ef' } },
+          // THE STORM TIDE (appended — the append law): while a storm
+          // holds the sky the sea comes OFTEN and comes BIG — a taller
+          // wall (lane reach override) on a shorter clock, gated by
+          // FrontCond.weather (the snowcrown avalanche lane's law). Clear
+          // skies keep only the gentle fixture above; the spanning wave's
+          // corridor guarantee holds either way.
+          { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, reach: [210, 290], chance: 0.65, delay: [25, 50], waves: [80, 140],
+            when: { weather: ['storm'] },
+            announce: { text: 'the storm drives the sea ashore!', color: '#9fd8f0' } },
         ],
       },
     },
@@ -5990,6 +5999,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         fronts: [
           { id: 'brinesurge', line: [2, 3], delay: [12, 24], waves: [40, 70], chance: 0.75 },
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.4, delay: [35, 70], waves: [100, 160], announce: { text: 'the sea returns!', color: '#bfe8ef' } },
+          // THE STORM TIDE (appended — the append law): under a storm the
+          // drained seabed remembers HARD — a taller wall, more often,
+          // sooner. FrontCond.weather, the snowcrown avalanche lane's law.
+          { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, reach: [210, 290], chance: 0.75, delay: [20, 45], waves: [70, 120],
+            when: { weather: ['storm'] },
+            announce: { text: 'the storm drives the sea ashore!', color: '#9fd8f0' } },
         ],
       },
     },
@@ -6220,6 +6235,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         fronts: [
           { id: 'floodcrest', line: [3, 5], delay: [10, 20], waves: [55, 90] },
           { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, chance: 0.55, delay: [25, 50], waves: [80, 130], announce: { text: 'the sea rises!', color: '#bfe8ef' } },
+          // THE STORM TIDE (appended — the append law): the margin under a
+          // storm is nearly the sea's again — the biggest wall of the
+          // country's ladder, near-certain, on the shortest clock.
+          { id: 'tidalwall', line: 'span', bearing: 'cardinal', spacing: 1.15, reach: [220, 300], chance: 0.85, delay: [15, 35], waves: [60, 100],
+            when: { weather: ['storm'] },
+            announce: { text: 'the storm drives the sea ashore!', color: '#9fd8f0' } },
         ],
       },
     },
@@ -8403,6 +8424,33 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
       // The sour breath hanging in the tract's low places.
       fog: { banks: [1, 2], kinds: [{ id: 'gut_miasma' }] },
+      // PERISTALSIS DOWN THE TRACT (docs/engine/creep.md): the country
+      // digesting is the country MOVING — one slow chyme bolus per push,
+      // squeezed down the serpentine tube (flow steers with the walls,
+      // confine keeps the swallow out of the neighbouring coil), queued
+      // push after push. A fixture, not an event: the gut never stops.
+      // Bearings are FIXED along the tract's grain (the soulriver
+      // channel's idiom), TWO opposed lanes on staggered clocks — the
+      // SWALLOW (east, the working push) and the sparser RETROGRADE
+      // CLENCH (west, the churn) — because a rolled bearing can enter
+      // through a barren wall quadrant and strand the wave past the
+      // snap-in cap (measured: 0% in-vessel), and a small off-center
+      // snake can sit beyond ONE rim's cap entirely (measured, seed
+      // forensics) while the opposite rim reaches it. The wide jitter
+      // fans each push's entry ray, so a missed line is a queued retry,
+      // never a visit-long silence.
+      creep: {
+        pockets: [0, 0], kinds: [],
+        fronts: [
+          { id: 'chyme_bolus', line: [1, 1], bearing: 0, jitter: 0.35, delay: [8, 16], waves: [16, 28],
+            announce: { text: 'the tract clenches!', color: '#c2cc74' } },
+          // The retrograde lane runs SILENT: on a layout whose far rim is
+          // barren its strays strand off-tract and die unseen in seconds —
+          // an announce with nothing visible would be a lie; the working
+          // slug speaks for itself.
+          { id: 'chyme_bolus', line: [1, 1], bearing: Math.PI, jitter: 0.35, delay: [22, 38], waves: [26, 44] },
+        ],
+      },
     },
     sizeW: [3200, 4400], sizeH: [1700, 2300], ellipseChance: 0,
     layout: [

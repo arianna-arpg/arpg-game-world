@@ -130,7 +130,11 @@ per lane — one kind fields both a shin-high wash and a towering crest.
 dial: 0.22 = the rare day the sea decides); `announce` prints one arrival
 line on every seat (the wildlife arrival-line idiom); `bearing: 'cardinal'`
 rolls compass bearings (spanning waves read cleanest wall-to-wall);
-`when` (the radiance gate) composes — a storm-tide is one row away.
+`when` (the radiance gate) composes — THE STORM TIDE is that row, shipped:
+each coastal face (strand / brine flats / drowned margin) APPENDS a
+storm-gated `tidalwall` sibling beside its ungated fixture — bigger reach,
+higher chance, shorter clocks, fielding only while `weather: ['storm']`
+holds (the snowcrown avalanche lane's law, on the shore).
 Aquatic honesty: `CreepDef.notAquatic` kinds never field in
 `ZoneDef.aquatic` arenas — **no water within water** — filtered
 structurally at `buildZoneCreep` (blends and cross-seeds can't smuggle
@@ -231,9 +235,26 @@ and its rng stream are byte-identical to the classic one-shot latch
 amalgam — somewhere in the fused mass a heart still keeps time, squeezing
 a `sanguine_bore` at whoever it hates every dozen-odd seconds.
 
+**Peristalsis down the tract — BUILT.** The gutworks' queued push is one
+bore row, exactly as reserved — no new machinery: `chyme_bolus`
+(data/creeps.ts) on two fixture lanes in the gutworks theme. A slow slug
+squeezed down the serpentine tube (`flow` steers with the walls, `confine`
+keeps the swallow out of the neighbouring coil), a slow finite `travel`
+spending each push mid-tract, swell filling the tube behind the clench,
+and the wake is the tract's own `chyme_pool` bile, draining as it fades.
+Queued push after push (`waves`), announced ('the tract clenches!').
+THE NARROW-CARVE SEATING LESSON (measured, worth keeping for the next
+thin-vessel tileset): a rolled lane bearing can enter a serpentine carve
+through a barren wall quadrant and strand the wave past the snap-in cap
+(`flow.snapMaxFrac`), and a small OFF-CENTER snake can sit beyond one
+rim's cap entirely — so the tract authors FIXED bearings along its grain
+(the soulriver channel's idiom), a wide per-wave `jitter` fanning each
+entry ray (a missed line is a queued retry, never a visit-long silence),
+and TWO opposed lanes on staggered clocks — the SWALLOW (east, announced)
+and the sparser silent RETROGRADE CLENCH (west) — so whichever end of the
+carve the layout favors, one lane reaches it.
+
 **Reserved seams, named.**
-- *Peristalsis down the tract*: the gutworks' queued push is one bore row
-  with `flow` + a slow `travel` on the tract faces — no new machinery.
 - *Escape-chase pairing*: a bore lane bound to an `'escape'` objective is
   the pursuer that follows you around corners; the spawn rows already
   carry it.

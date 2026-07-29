@@ -16,6 +16,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { buildZoneCreep, CreepField, CREEPS, CREEP_CFG, registerCreep } from '../src/engine/creep';
+import { TILESETS } from '../src/data/tilesets';
 import type { Doodad } from '../src/engine/levelgen';
 import { vec } from '../src/core/math';
 import { Rng } from '../src/core/rng';
@@ -529,6 +530,83 @@ const fnv = (text: string): string => {
   check('one-shot: no pump stamp ever armed (creepSource without cadence)',
     snail.creepPlanted === true && snail.creepPumpAt === undefined,
     `planted ${snail.creepPlanted}, pumpAt ${snail.creepPumpAt ?? '-'}`);
+}
+
+// --- 14) THE WEATHER GATE: a when-gated lane waits at the door -------------
+// FrontSpawnRow.when (FrontCond via the terrain window's condHeld): a
+// pending wave whose sky says no WAITS timer-spent and fields the moment
+// the condition holds — the machinery behind the snowcrown avalanche and
+// the coastal STORM TIDE rows.
+{
+  let held = false;
+  const f = new CreepField(new Rng(88), 1600, 1200);
+  f.setTerrain({
+    groundKindAt: () => null,
+    eachFuelNear: () => {},
+    consume: () => {},
+    stamp: () => {},
+    drag: () => {},
+    drown: () => {},
+    condHeld: () => held,
+  });
+  f.installLanes([{
+    id: 'tidalwall', line: 'span', bearing: 0, delay: [0.5, 0.5],
+    when: { weather: ['storm'] },
+  }]);
+  const dt = 1 / 60;
+  for (let i = 0; i < 90; i++) f.update(dt, i * dt, []);
+  check('when: a gated lane WAITS at the door while the sky says no (timer spent)',
+    f.sources.length === 0, `${f.sources.length} sections by 1.5s on a 0.5s delay`);
+  held = true;
+  f.update(dt, 1.6, []);
+  check('when: the wave fields the MOMENT its condition holds',
+    f.sources.length > 0, `${f.sources.length} sections`);
+}
+
+// --- 15) THE SHIPPED LANES: storm-tide rows + the gutworks peristalsis -----
+// Census of the authored when-gated content (docs/engine/creep.md): each
+// coastal face keeps its ungated tidal fixture AND appends exactly one
+// storm-gated sibling (the append law — appended rows never shift earlier
+// rows' draws) that is strictly meaner: likelier, bigger, sooner. And the
+// gutworks runs its queued push — a bore row with flow + confine + a slow
+// finite travel, leaning on the tract's own ground.
+{
+  const mean = (band: readonly [number, number]): number => (band[0] + band[1]) / 2;
+  const defMean = mean(CREEPS['tidalwall'].reach ?? [0, 0]);
+  for (const id of ['strand', 'brine_flats', 'drowned_margin']) {
+    const fronts = TILESETS[id]?.theme.creep?.fronts ?? [];
+    const walls = fronts.filter(r => r.id === 'tidalwall');
+    const clear = walls.filter(r => !r.when);
+    const storm = walls.filter(r => r.when?.weather?.includes('storm'));
+    check(`storm tide: ${id} fields the ungated fixture AND one storm sibling`,
+      clear.length === 1 && storm.length === 1,
+      `${clear.length} ungated, ${storm.length} storm-gated of ${fronts.length} lanes`);
+    if (clear.length !== 1 || storm.length !== 1) continue;
+    const s0 = storm[0], c0 = clear[0];
+    check(`storm tide: ${id} appended the gated row AFTER the fixture (the append law)`,
+      fronts.indexOf(s0) > fronts.indexOf(c0));
+    check(`storm tide: ${id} storm wall is strictly meaner (chance up, reach up, clock down)`,
+      (s0.chance ?? 1) > (c0.chance ?? 1)
+      && !!s0.reach && mean(s0.reach) > defMean
+      && !!s0.waves && !!c0.waves && s0.waves[1] <= c0.waves[1],
+      `chance ${c0.chance} → ${s0.chance}, reach mean ${defMean} → ${s0.reach ? mean(s0.reach) : '-'}`);
+  }
+  const gutFronts = TILESETS['gutworks']?.theme.creep?.fronts ?? [];
+  const bolus = gutFronts.find(r => !!CREEPS[r.id]?.front?.flow);
+  const bk = bolus ? CREEPS[bolus.id] : undefined;
+  check('peristalsis: the gutworks fields a bore lane (a flow row on the tract face)',
+    !!bolus && !!bk, gutFronts.map(r => r.id).join(',') || 'no lanes');
+  if (bolus && bk?.front) {
+    check('peristalsis: the push is vessel-confined with a finite travel (the reserved shape)',
+      bk.front.flow?.confine === true && !!bk.front.travel);
+    check('peristalsis: a QUEUE, not a pump — slower than the artery\'s bore',
+      bk.front.speed < CREEPS['sanguine_bore'].front!.speed,
+      `${bk.front.speed} vs sanguine ${CREEPS['sanguine_bore'].front!.speed}`);
+    check('peristalsis: the wave leans on the tract\'s own ground and never refuses it',
+      (bk.front.affinity?.ground?.['chyme_pool'] ?? 0) > 1
+      && bk.front.convert?.ground === 'chyme_pool' && !!bk.front.convert?.fade,
+      `chyme_pool affinity ${bk.front.affinity?.ground?.['chyme_pool'] ?? '-'}`);
+  }
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL FRONT CHECKS PASSED');

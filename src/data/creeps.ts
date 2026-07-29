@@ -485,6 +485,54 @@ registerCreep({
   ],
 });
 
+/** THE CHYME BOLUS — peristalsis down the tract, made literal: the gut's
+ *  QUEUED push. One slow slug of half-digested bile squeezed down the
+ *  serpentine tube (FrontSpec.flow — whisker steering follows the winding
+ *  walls, rebounds out of blind pouches), ELONGATING as the walls clench
+ *  behind it (swell) until the push peters out mid-tract and the mass
+ *  settles (travel — the taper is the clench audibly relaxing). The
+ *  swallow is vessel-CONFINED (flow.confine): the meat between two loops
+ *  is a wall to the chyme — no grant, no drag reaches through the tract
+ *  wall into the neighbouring coil. Deliberately SLOW — peristalsis is a
+ *  queue, not the artery's pump: outwalking it is always possible, but
+ *  every sphincter-door you must dwell at is a decision with the push at
+ *  your back. It leaves the tract's own bile pooled behind it (draining
+ *  as the walls re-open), shoves what it swallows down-tract, and the
+ *  flesh's own ride the swallow unbothered. Cold stills a clench. */
+registerCreep({
+  id: 'chyme_bolus',
+  color: '#2e2508', rim: '#c2cc74', glow: '#a8b86a',
+  notAquatic: true,
+  alpha: 0.68,
+  // Sized to the TUBES, not the bulbs (fleshTract tubeW [44, 62]) — the
+  // slug fills the gut it follows wall-to-wall; the bulbs are the safe
+  // harbors where it can be stepped around. Swell supplies the length.
+  reach: [48, 70],
+  lobing: 0.18,
+  spread: 45,
+  recede: 110,
+  pulse: 1.6,
+  skin: 'water',
+  edge: { color: '#d8e08a', style: 'foam', width: 5 },
+  front: {
+    speed: 55,
+    stretch: 1.4,
+    flow: { steer: 2.2, bounce: 0.4, confine: true },
+    travel: { range: [2000, 3200], taper: 0.35 },
+    swell: { max: 2.2, per: 1100 },
+    affinity: {
+      ground: { chyme_pool: 1.35, water: 1.1 },
+      default: 1,
+    },
+    convert: { ground: 'chyme_pool', every: 1.8, r: [0.5, 0.7], fade: { after: [10, 18], rate: 9 } },
+    drag: { accel: 150, notFactions: ['flesh'] },
+    quench: { types: ['cold'], power: 550 },
+  },
+  grants: [
+    { status: 'wading', notFactions: ['flesh'] },
+  ],
+});
+
 // --- The fronts' remnant vocabulary (runtime-ruled kinds, the attunements
 // registerDoodadRule idiom — no KnownDoodadKind union edit needed) ----------
 
