@@ -39,6 +39,7 @@ import { runAIActions } from './aiActions';
 import { nearestBody, segsHittable } from './segments';
 import { LOS_CFG } from './los';
 import { socketSpec, type SkillInstance } from './skills';
+import { TIER_CFG } from './tiers';
 import type { World } from './world';
 import { PATH_CFG } from '../world/regions';
 
@@ -2128,21 +2129,38 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
   // mindlessness. An unreachable goal falls back to the straight steer.
   let goal = to;
   if (!actor.flying && actor.aiPathing !== 'none') {
-    const pf = world.pathField();
+    // Each hunter fields over ITS OWN story (the tier fabric's proactive
+    // half) — flat zones get the same one field they always did.
+    const pf = world.pathField(actor.tier);
     if (pf?.pathStep) {
-      // ANY-ANGLE shortcut, PRICED (the wayfaring fabric): beeline while the
-      // straight line is walkable AND no crossed ground costs this body more
-      // than plain floor (linePreferred; profiles fold insurance and
-      // MonsterDef.pathCosts) — open ground keeps its beelines, and a lava
-      // lake in the line now consults the weighted flow field exactly like a
-      // wall would. Models without costs keep the classic walkable-only gate.
-      const profile = world.pathProfileFor(actor);
-      const clean = pf.linePreferred
-        ? pf.linePreferred(actor.pos, to, profile)
-        : (pf.lineWalkable?.(actor.pos, to) ?? false);
-      if (!clean) {
-        const step = pf.pathStep(actor.pos, to, profile);
-        if (step) goal = step;
+      // THE STAIR ELECTION (engine/tiers.ts): a goal on ground this story's
+      // floor doesn't own can't be fielded directly — walk the best crossing
+      // instead; stepping off it flips the story (the mover's crossing law)
+      // and the next frame's field resumes the hunt on the new floor.
+      // Standing ON a link already, steer STRAIGHT at the true goal: the
+      // strip is its own way through, and a flow-field step would only aim
+      // back at the seat it stands on.
+      let aim: { x: number; y: number } | null = to;
+      if (world.zone.tiers && !pf.isWalkable(to.x, to.y)) {
+        aim = actor.onTierLink ? null : (world.tierLinkToward(actor, to) ?? to);
+      }
+      if (aim) {
+        // ANY-ANGLE shortcut, PRICED (the wayfaring fabric): beeline while the
+        // straight line is walkable AND no crossed ground costs this body more
+        // than plain floor (linePreferred; profiles fold insurance and
+        // MonsterDef.pathCosts) — open ground keeps its beelines, and a lava
+        // lake in the line now consults the weighted flow field exactly like a
+        // wall would. Models without costs keep the classic walkable-only gate.
+        const profile = world.pathProfileFor(actor);
+        const clean = pf.linePreferred
+          ? pf.linePreferred(actor.pos, aim, profile)
+          : (pf.lineWalkable?.(actor.pos, aim) ?? false);
+        if (!clean) {
+          const step = pf.pathStep(actor.pos, aim, profile);
+          if (step) goal = step;
+        } else if (aim !== to) {
+          goal = aim; // a clean line to an elected SEAT beelines at the seat
+        }
       }
     }
   }
@@ -2262,6 +2280,18 @@ function standoff(actor: Actor): { keep: number; desired: number } {
   }
   if (minRange === Infinity) minRange = 40;
   return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8) };
+}
+
+/** The kit's longest usable reach (max ai.range) — THE SEVERED BAND's
+ *  "can this fight cross a story at all" measure. Distinct from standoff():
+ *  a bow that LIKES 280 still KILLS at 470, and it is the kill reach, not
+ *  the standing habit, that keeps a rim duel honest. */
+function kitReach(actor: Actor): number {
+  let reach = 0;
+  for (const s of actor.skills) {
+    if (s?.def.ai) reach = Math.max(reach, s.def.ai.range);
+  }
+  return reach;
 }
 
 function setShroud(actor: Actor, on: boolean): void {
@@ -2628,6 +2658,46 @@ function makeCtx(
   };
 }
 
+/** Styles THE SEVERED BAND never defers: stand-ground and ward-bound
+ *  postures whose conduct is authored place-keeping, not a chase band —
+ *  deferring them would betray the author (a ritualist that holds, holds;
+ *  a protector stays between the threat and its ward; a retreat runs AWAY).
+ *  Packages that register such styles enroll them here (registerMoveStyle's
+ *  companion). */
+export const SEVERED_BAND_EXEMPT = new Set<string>([
+  'hold', 'turtle', 'garrison', 'interpose', 'hoverAllies', 'retreat', 'lurk',
+]);
+
+/** THE SEVERED BAND (the tier fabric's kernel law, TIER_CFG.severedBandReach):
+ *  flat distance LIES across stories — a band kernel holding ring distance on
+ *  a target whose ground its own story's floor doesn't own is pinned at a rim
+ *  over a fight it cannot join (measured live: a flanker oscillating at a
+ *  butte lip for a full minute, the stair election one cell away and never
+ *  consulted). When the kit cannot make that fight real — melee-reach kits
+ *  always; every kit where the zone's rim duels are off — the styled kernel
+ *  defers to the approach lane. Returns the tested body point to march on
+ *  when severed, else null. Flat zones read one property and pay nothing;
+ *  fliers, mounted riders, authored mindlessness (pathing 'none') and the
+ *  stand-ground styles never defer. Exported as the law's probe seam —
+ *  live kernel conduct is deliberately free (a blocked volley lane lets
+ *  approach march and honestly elect the stair), so the probe pins the
+ *  verdict, not the walk. */
+export function severedBandGoal(ctx: KernelCtx, style: string): Vec2 | null {
+  const { a, world } = ctx;
+  if (!world.zone.tiers) return null;
+  if (a.flying || a.mountId !== undefined || ctx.spec.pathing === 'none') return null;
+  if (SEVERED_BAND_EXEMPT.has(style)) return null;
+  const pf = world.pathField(a.tier);
+  if (!pf?.pathStep) return null;
+  // Judge the target's own SEAT (nearest hittable body for segment kin) —
+  // never ctx.goal, whose encircle ring points can land on this story's
+  // ground while the victim itself stands a floor away.
+  const tp = segsHittable(ctx.target) ? nearestBody(ctx.target, a.pos).pos : ctx.target.pos;
+  if (pf.isWalkable(tp.x, tp.y)) return null; // shared floor — the band is real
+  if (world.zone.tiers.rimDuels && kitReach(a) > TIER_CFG.severedBandReach) return null;
+  return tp;
+}
+
 function runKernel(style: string, ctx: KernelCtx): void {
   const pace = ctx.spec.pace;
   if (pace !== undefined && pace !== 1) {
@@ -2639,6 +2709,18 @@ function runKernel(style: string, ctx: KernelCtx): void {
   // zero, the pick/cast path keeps its real clock. A post-cast PLANT
   // (BehaviorSpec.plantChance) is the same stillness on a per-cast roll.
   if (ctx.paused || ctx.a.aiPlantUntil > ctx.world.time) ctx = { ...ctx, dt: 0 };
+  // THE SEVERED BAND: a chase band spanning a story gap yields to the
+  // approach lane's march — moveToward owns the per-story field and the
+  // stair election — while any cast that still reaches (a lip claw, a
+  // legal rim volley) stays free. The style resumes untouched the tick
+  // the floor is shared again.
+  const sg = severedBandGoal(ctx, style);
+  if (sg) {
+    const chosen = ctx.pick();
+    if (chosen) ctx.cast(chosen);
+    moveToward(ctx.a, ctx.world, sg, ctx.dt);
+    return;
+  }
   (MOVE_KERNELS[style] ?? MOVE_KERNELS.approach)(ctx);
 }
 

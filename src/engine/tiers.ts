@@ -31,15 +31,23 @@
 //     ('open' = every layer visible — buttes, summits; 'covered' = the
 //     active layer only — sewers).
 //   · AI — monsters spawn per tier (ZoneTiers.packSplit dealt across the
-//     levels) and stay on their tier (crossing links is the player's craft;
-//     the chase ledger walks pursuers through stairs their quarry took).
+//     levels) and HUNT across the stack from both halves of the chase: the
+//     REACTIVE ledger walks pursuers through stairs they watched their
+//     quarry take (aiTierGoal, stamped at the ladder toggle), and the
+//     PROACTIVE fields (World.pathField(story) over makeTierNav below —
+//     each story's own floor with the link cells as walkable seams) let a
+//     hunter ELECT a stair it never saw used (World.tierLinkToward) and
+//     cross toward ground its own floor doesn't own; THE SEVERED BAND
+//     (ai.ts runKernel + TIER_CFG.severedBandReach) folds the chase-band
+//     kernels in — an orbit held across a cliff defers to that same lane,
+//     while kits that truly rain out keep their rim duels.
 //
 // Docs: docs/engine/tiers.md · Probe: balance/probe_tiers.ts
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
 import type { ZoneDef, ZoneTiers } from '../data/zones';
-import type { GridWalkField } from '../world/gridWalk';
+import { GridWalkField } from '../world/gridWalk';
 import { regionKind, type RegionKind } from '../world/regions';
 import {
   ensureGrid, layoutParam, registerLayout, scatterDecoration,
@@ -71,6 +79,15 @@ export const TIER_CFG = {
   ductHalfW: 32,
   /** Fraction of a tiered zone's packs seeded on tier 1 (ZoneTiers override). */
   packSplit: 0.4,
+  /** THE SEVERED BAND (ai.ts runKernel — the tier chase's kernel law): a
+   *  chase-band kernel whose target stands on ground its own story's floor
+   *  doesn't own holds flat distance across a cliff — a lie. Kits whose
+   *  longest ai range is at or under this reach defer to the approach lane
+   *  (moveToward → the stair election) until the floor is shared; longer
+   *  kits keep their band only while the zone's rim duels make the
+   *  cross-story fight real (rim archery is the needles' authored
+   *  conversation — never defer a bow that can genuinely rain out). */
+  severedBandReach: 160,
   /** switchback: THE SUMMIT ASCENT recipe's dials (every one a layoutParam). */
   switchback: {
     /** Terrace stories rolled per summit (clamped to MAX_TIER and to what
@@ -208,6 +225,40 @@ export function makeTierView(grid: RegionWalk, tier = 1): WalkView {
       return p; // no tier floor in reach — keep the point (never loop forever)
     },
   };
+}
+
+/** A per-story PATHING GRID (the PROACTIVE half of the tier chase —
+ *  World.pathField(story)): a real GridWalkField over the same cells whose
+ *  walkable MASK is the story's floor truth (tierFloorAt — link cells count
+ *  on both their span's stories, the SEAMS without which a story's field
+ *  would be a prison) while every cell keeps its TRUE region kind, so
+ *  travel pricing and the priced beeline (the wayfaring fabric) judge a
+ *  deck hazard exactly as they judge a street one. A derived SNAPSHOT, not
+ *  a live view like makeTierView above — pathStep needs a stable grid to
+ *  shoot distance fields over — so the caller re-derives when the base
+ *  grid's version moves (World's per-story cache keys on it). */
+export function makeTierNav(base: GridWalkField, tier: number): GridWalkField {
+  const cs = base.cell;
+  const g = new GridWalkField(base.cols * cs, base.rows * cs, cs);
+  const floorOf = new Map<string, number>(); // kind → story-floor verdict (1/0)
+  for (let gy = 0; gy < base.rows; gy++) {
+    const y = gy * cs + cs / 2;
+    let run0 = 0;
+    let runK = base.regionAt(cs / 2, y);
+    for (let gx = 1; gx <= base.cols; gx++) {
+      const k = gx < base.cols ? base.regionAt(gx * cs + cs / 2, y) : '';
+      if (gx < base.cols && k === runK) continue;
+      // The finished same-kind run [run0, gx): paint its true kind (quiet —
+      // nothing bakes this grid), then override the walkable mask with the
+      // story's floor truth.
+      g.fillRegion(run0 * cs + cs / 2, y, (gx - 1) * cs + cs / 2, y, runK, true);
+      let f = floorOf.get(runK);
+      if (f === undefined) { f = tierFloorAt(runK, tier) ? 1 : 0; floorOf.set(runK, f); }
+      g.mask.fill(f, gy * base.cols + run0, gy * base.cols + gx);
+      run0 = gx; runK = k;
+    }
+  }
+  return g;
 }
 
 /** TIER CROSSING (the link law), resolved at the mover: a body standing on a

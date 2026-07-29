@@ -91,7 +91,7 @@ import {
 } from './levelgen';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
-import { landingTier, linkFlipTier, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
+import { landingTier, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
 import { gateThroatAt } from './layoutRecipes';
 import { liquidOf } from './genkit';
@@ -4746,6 +4746,7 @@ export class World {
       for (let t = 1; t <= lv; t++) this.tierViews[t] = makeTierView(this.walk, t);
     } else this.tierViews = null;
     this.tierCrossings.length = 0; // the chase ledger is zone-local
+    this.tierNavs.clear(); this.tierSeats = null; // per-story fields die with their zone
     this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
     this.structures = layout.structures ?? []; // plan structures (rects/roofs/doors/slots)
     // A PORT's DOCK: planted on the oceanward arena edge (the coast landmark's
@@ -48635,6 +48636,20 @@ export class World {
   // --- PATHING AUTHORITY: the flow-field every steered foot follows --------
   private convexNav: GridWalkField | null = null;
   private convexNavKey = '';
+  /** Per-STORY pathing fields (THE TIER FABRIC's proactive half — the
+   *  pathField(story) lane): one derived grid per elevated story
+   *  (makeTierNav — story-floor mask, true kinds, link seams), keyed BY
+   *  story so no two stories can clobber each other through a single-slot
+   *  key, re-derived when the base grid's identity or version moves (door
+   *  breaks and carves reach every layer's field on their next ask).
+   *  Distinct from tierViews — those are the stateless confine adapters;
+   *  pathStep needs a real grid to shoot distance fields over. */
+  private tierNavs = new Map<number, { g: GridWalkField; walk: GridWalkField; v: number }>();
+  /** THE LINK SEATS — one aim point per contiguous link-cell cluster (a
+   *  ramp, a culvert well): the stair election's ballot. Same identity +
+   *  version keys as the story fields; tier-less zones answer [] free. */
+  private tierSeats: { arr: Vec2[]; walk: GridWalkField; v: number } | null = null;
+  private static readonly NO_SEATS: readonly Vec2[] = [];
 
   // --- TRAVEL PREFERENCE (the wayfaring fabric) -----------------------------
   /** Interned PathProfiles: identical priced views share one object (and so
@@ -48739,16 +48754,124 @@ export class World {
    *  mazes. Purely advisory (clampPos stays the collision truth): a monster
    *  the grid can't route falls back to straight steering. Rebuilt when the
    *  doodad list changes (brittle pops, terraforms — the doodadsRev seam).
-   *  Boundless zones (the open sea) steer straight — nothing to round. */
-  pathField(): WalkField | null {
-    if (this.walk) return this.walk.pathStep ? this.walk : null;
+   *  Boundless zones (the open sea) steer straight — nothing to round.
+   *  `story` (THE TIER FABRIC's proactive half, engine/tiers.ts): an
+   *  elevated asker fields over ITS OWN story's floor — link cells included,
+   *  the seams — so a deck hunter routes its stair instead of pathing the
+   *  flattened stack. Story 0 and tier-less zones return exactly the field
+   *  they always did (same object, no new work): the flat lane is
+   *  byte-identical by construction. */
+  pathField(story = 0): WalkField | null {
+    if (this.walk) {
+      if (!this.walk.pathStep) return null;
+      if (story >= 1 && this.zone.tiers && this.tierViews) return this.tierPathField(story);
+      return this.walk;
+    }
     if (this.arena.boundless) return null;
+    // Convex zones carry no tier stack (tierViews ride this.walk), so every
+    // story normalizes onto the ONE nav below; the per-story fields cache in
+    // tierNavs — a Map keyed BY story — never through this single-slot key,
+    // so two stories can't clobber (or serve) each other here.
     const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadFamilyRev('nav-block');
     if (!this.convexNav || this.convexNavKey !== key) {
       this.convexNav = this.buildConvexNav();
       this.convexNavKey = key;
     }
     return this.convexNav;
+  }
+
+  /** The per-story field behind pathField(story ≥ 1): derived off the base
+   *  grid (makeTierNav — the story's floor mask, true kinds, link seams) and
+   *  re-derived when the grid's identity or version moves, so carves and
+   *  door breaks reach every story's field on their next ask. A story past
+   *  the zone's stack clamps to the top (the clampPos discipline); a
+   *  non-grid walk model degrades to the flat field it always had. */
+  private tierPathField(story: number): WalkField {
+    const base = this.walk!;
+    if (!(base instanceof GridWalkField)) return base;
+    const t = Math.max(1, Math.min(story, this.tierViews!.length - 1));
+    const hit = this.tierNavs.get(t);
+    if (hit && hit.walk === base && hit.v === base.version) return hit.g;
+    const g = makeTierNav(base, t);
+    this.tierNavs.set(t, { g, walk: base, v: base.version });
+    return g;
+  }
+
+  /** THE LINK SEATS: the zone's crossings as aim points — contiguous link
+   *  cells (4-neighbour flood) clustered to ONE seat each, the member cell
+   *  nearest the cluster's centroid so a bent stair still aims ON itself.
+   *  Cached on the base grid's identity + version; tier-less zones and
+   *  non-grid models answer the shared empty list without scanning. */
+  private tierLinkSeats(): readonly Vec2[] {
+    if (!this.zone.tiers || !(this.walk instanceof GridWalkField)) return World.NO_SEATS;
+    const base = this.walk;
+    if (this.tierSeats && this.tierSeats.walk === base && this.tierSeats.v === base.version) {
+      return this.tierSeats.arr;
+    }
+    const cs = base.cell, cols = base.cols, rows = base.rows;
+    const linkOf = new Map<string, boolean>(); // kind → crossing verdict
+    const isLink = (gx: number, gy: number): boolean => {
+      const k = base.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+      let l = linkOf.get(k);
+      if (l === undefined) { l = tierLinkOf(k); linkOf.set(k, l); }
+      return l;
+    };
+    const seen = new Uint8Array(cols * rows);
+    const arr: Vec2[] = [];
+    const q: number[] = [];
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        if (seen[gy * cols + gx] || !isLink(gx, gy)) continue;
+        q.length = 0;
+        q.push(gy * cols + gx);
+        seen[gy * cols + gx] = 1;
+        let sx = 0, sy = 0;
+        for (let h = 0; h < q.length; h++) {
+          const c = q[h], cx = c % cols, cy = (c / cols) | 0;
+          sx += cx; sy += cy;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+            const n = ny * cols + nx;
+            if (seen[n] || !isLink(nx, ny)) continue;
+            seen[n] = 1; q.push(n);
+          }
+        }
+        const mx = sx / q.length, my = sy / q.length;
+        let best = q[0], bd = Infinity;
+        for (const c of q) {
+          const d = (c % cols - mx) ** 2 + (((c / cols) | 0) - my) ** 2;
+          if (d < bd) { bd = d; best = c; }
+        }
+        arr.push(vec((best % cols) * cs + cs / 2, ((best / cols) | 0) * cs + cs / 2));
+      }
+    }
+    this.tierSeats = { arr, walk: base, v: base.version };
+    return arr;
+  }
+
+  /** THE STAIR ELECTION (THE TIER FABRIC's proactive half): the crossing a
+   *  hunter should walk when its goal stands on ground its OWN story's floor
+   *  doesn't own — the link seat minimizing walk-there + walk-on (straight-
+   *  line halves; the flow field does the actual routing), restricted to
+   *  seats that are floor on the hunter's story (the span gate — a valley
+   *  ramp is no seat for the third bench) and connected to it on that
+   *  story's field. Null when the zone is flat, the goal stands on no real
+   *  floor (a wall niche elects nothing), or no seat serves — the caller
+   *  falls back to the classic off-mesh snap. */
+  tierLinkToward(a: Actor, goal: { x: number; y: number }): Vec2 | null {
+    if (!this.zone.tiers) return null;
+    const pf = this.pathField(a.tier);
+    if (!pf?.pathStep || !pf.regionAt || !pf.reachable) return null;
+    if (pf.isWalkable(goal.x, goal.y)) return null; // own-floor goals field directly
+    if (tierElevOf(pf.regionAt(goal.x, goal.y)) === null) return null;
+    let best: Vec2 | null = null, bestD = Infinity;
+    for (const s of this.tierLinkSeats()) {
+      if (!pf.isWalkable(s.x, s.y) || !pf.reachable(a.pos, s)) continue;
+      const d = Math.hypot(s.x - a.pos.x, s.y - a.pos.y) + Math.hypot(goal.x - s.x, goal.y - s.y);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best;
   }
 
   /** Rake the nav grid: interior walkable (rect or ellipse bounds), then

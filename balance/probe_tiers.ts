@@ -6,7 +6,16 @@
 // THE ELEVATION LAW (engine/los.ts RayElev): height-aware sight/shot over
 // the stack — same-story duels over open deck, rim duels refereed by the
 // lerped eye line, the flat flight law, the doodad story band, and the
-// SIGHT VEIL's drawn parity (render/vis/sightVeil.ts, headless).
+// SIGHT VEIL's drawn parity (render/vis/sightVeil.ts, headless) — plus
+// THE PROACTIVE HUNT (RIG J): World.pathField(story) per-story fields
+// (makeTierNav — link cells as walkable seams), the tier-less identity
+// law (flat zones return the same object for every story), the stair
+// election (World.tierLinkToward), the live crossing (an un-witnessed
+// deck hunter elects a ramp and changes story toward a valley player),
+// and THE SEVERED BAND (ai.ts severedBandGoal / TIER_CFG.severedBandReach):
+// a flanker's orbit defers to the approach lane across a story gap and
+// crosses, while long kits keep their rim duel and stand-ground styles
+// keep their posts.
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -21,6 +30,7 @@ import '../src/data/settled';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
+import { severedBandGoal, updateAI, type KernelCtx } from '../src/engine/ai';
 import type { Actor } from '../src/engine/actor';
 import { SEG_CFG } from '../src/engine/segments';
 import { mod } from '../src/engine/stats';
@@ -569,6 +579,274 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     drive(0.5);
     check('I10 a serpent\'s coils each answer their OWN line (walled head, open coil → the coil bites)',
       coiled.life < c0 && coiled.worm.flash?.[0] === SEG_CFG.flashTime);
+  }
+}
+
+// --- RIG J: THE PROACTIVE HUNT (per-story pathField + the stair election) --------
+// The other half of the tier chase: a pursuer that never SAW a crossing still
+// routes onto a link and changes story on its own hunt. World.pathField(story)
+// serves each story's own floor (makeTierNav — links as walkable seams), flat
+// zones return the identical old field for EVERY story (object identity), and
+// the live run drives a deck zombie down a ramp toward a valley player with
+// the reactive aiTierGoal lane provably silent throughout.
+{
+  const w = makeSimWorld('warrior', 0x71e21);
+  const hyp = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
+    Math.hypot(a.x - b.x, a.y - b.y);
+
+  // J1 — THE IDENTITY LAW on tier-less ground, both lanes. The sim arena
+  // (convex nav) and a farmland mint (walk grid, no def.tiers) must answer
+  // every story with the SAME object the flat call returns.
+  {
+    const f0 = w.pathField();
+    check('J1a a tier-less convex zone answers every story with ONE field',
+      !!f0 && w.pathField(0) === f0 && w.pathField(3) === f0);
+    const zid = w.devMintTileset('farmland', 1, 5, { seed: 909170 });
+    const g0 = w.pathField();
+    check('J1b a tier-less GRID zone answers every story with the base grid',
+      !!zid && !!g0 && w.pathField(0) === g0 && w.pathField(2) === g0 && w.pathField(9) === g0);
+  }
+
+  // The needles fixture: mint through the REAL path (placeZoneAt → loadZone),
+  // then hunt the carve for the rig's seats — a ramp (link cluster), an
+  // interior deck cell a real walk from it, and a valley cell the ramp's foot
+  // can reach. Seeds re-rolled until the geometry stands (the RIG G idiom).
+  interface JSpots { deck: { x: number; y: number }; ramp: { x: number; y: number }; valley: { x: number; y: number } }
+  const findSpots = (grid: GridWalkField): JSpots | null => {
+    const cs = grid.cell, cols = grid.cols, rows = grid.rows;
+    const at = (gx: number, gy: number): string => grid.regionAt(gx * cs + cs / 2, gy * cs + cs / 2);
+    const c = (gx: number, gy: number): { x: number; y: number } => ({ x: gx * cs + cs / 2, y: gy * cs + cs / 2 });
+    const links: [number, number][] = [];
+    for (let gy = 1; gy < rows - 1; gy++) {
+      for (let gx = 1; gx < cols - 1; gx++) if (tierLinkOf(at(gx, gy))) links.push([gx, gy]);
+    }
+    for (const [lx, ly] of links) {
+      // The link's own story-1 country: BFS deck floor (links included) and
+      // keep the interior deck cells (all four neighbours story-1 floor).
+      const seen = new Uint8Array(cols * rows);
+      const q: number[] = [ly * cols + lx];
+      seen[ly * cols + lx] = 1;
+      const deck: [number, number][] = [];
+      for (let h = 0; h < q.length; h++) {
+        const cell = q[h], cx = cell % cols, cy = Math.floor(cell / cols);
+        const k = at(cx, cy);
+        if (tierFloorAt(k, 1) && !tierLinkOf(k)) {
+          let interior = true;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+            if (!tierFloorAt(at(cx + dx, cy + dy), 1)) { interior = false; break; }
+          }
+          if (interior) deck.push([cx, cy]);
+        }
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 1 || ny < 1 || nx >= cols - 1 || ny >= rows - 1) continue;
+          const n = ny * cols + nx;
+          if (seen[n] || !tierFloorAt(at(nx, ny), 1)) continue;
+          seen[n] = 1; q.push(n);
+        }
+      }
+      // The hunter's seat: an interior deck cell a REAL march from the stair
+      // (5–10 cells — routing, not adjacency), yet near enough that the
+      // whole fixture fits one detection bubble.
+      let seat: [number, number] | null = null, seatD = 0;
+      for (const [gx, gy] of deck) {
+        const d = Math.hypot(gx - lx, gy - ly);
+        if (d >= 5 && d <= 10 && d > seatD) { seatD = d; seat = [gx, gy]; }
+      }
+      if (!seat) continue;
+      // The quarry's ground: open valley floor (no story above it), a
+      // mid-range walk from the stair's foot, connected to it, and inside
+      // the hunter's detect bubble (≤ 13 cells ≈ 390 px < the warrior's 442).
+      const ramp = c(lx, ly);
+      let valley: { x: number; y: number } | null = null, vScore = Infinity;
+      for (let gy = 1; gy < rows - 1; gy++) {
+        for (let gx = 1; gx < cols - 1; gx++) {
+          const k = at(gx, gy);
+          if (tierFloorOf(k) || tierLinkOf(k)) continue;
+          const p = c(gx, gy);
+          if (!grid.isWalkable(p.x, p.y)) continue;
+          const dCells = Math.hypot(gx - lx, gy - ly);
+          if (dCells < 8 || dCells > 14) continue;
+          if (Math.hypot(gx - seat[0], gy - seat[1]) > 13) continue;
+          // RIM STANDOFF: no story floor within 4 cells — a rim-duel claw
+          // from the lip must never reach the quarry, so the DESCENT is the
+          // only road to blood (the thing under test).
+          let standoff = true;
+          for (let oy = -4; oy <= 4 && standoff; oy++) {
+            for (let ox = -4; ox <= 4; ox++) {
+              const nx = gx + ox, ny = gy + oy;
+              if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+              if (tierFloorOf(at(nx, ny))) { standoff = false; break; }
+            }
+          }
+          if (!standoff) continue;
+          const score = Math.abs(dCells - 12);
+          if (score < vScore && grid.reachable(vec(ramp.x, ramp.y), vec(p.x, p.y))) {
+            vScore = score; valley = p;
+          }
+        }
+      }
+      if (valley) return { deck: c(seat[0], seat[1]), ramp, valley };
+    }
+    return null;
+  };
+
+  let grid: GridWalkField | null = null;
+  let spots: JSpots | null = null;
+  for (const [i, seed] of [909171, 909172, 909173].entries()) {
+    const zid = w.devMintTileset('needles', 2 + i, 8, { seed, layoutType: 'needles' });
+    if (!zid) continue;
+    const pf = w.pathField(0);
+    if (!(pf instanceof GridWalkField)) continue;
+    const s = findSpots(pf);
+    if (s) { grid = pf; spots = s; break; }
+  }
+  check('J0 the rig finds its butte, stair and valley', !!grid && !!spots);
+
+  if (grid && spots) {
+    const { deck, ramp, valley } = spots;
+    // A quiet stage: the mint's own fauna leaves (this rig hunts alone).
+    for (const a of w.actors) if (a !== w.player) a.dead = true;
+    w.update(1 / 30);
+    w.player.pos = vec(valley.x, valley.y);
+    w.player.tier = 0;
+
+    // J2 — the per-story field itself.
+    const pf1 = w.pathField(1);
+    check('J2a story 1 gets its OWN field; story 0 keeps the base grid',
+      !!pf1 && pf1 !== grid && w.pathField(0) === grid && w.pathField() === grid);
+    if (pf1) {
+      check('J2b the deck is floor up here and wall below',
+        pf1.isWalkable(deck.x, deck.y) && !grid.isWalkable(deck.x, deck.y));
+      check('J2c the valley is floor below and wall up here',
+        !pf1.isWalkable(valley.x, valley.y) && grid.isWalkable(valley.x, valley.y));
+      check('J2d the link is a SEAM — floor on BOTH fields',
+        pf1.isWalkable(ramp.x, ramp.y) && grid.isWalkable(ramp.x, ramp.y));
+      check('J2e the story field is cached (one object per story per grid)',
+        w.pathField(1) === pf1);
+    }
+
+    // J3 — the stair election, unit grain. The hunter is chosen with care:
+    // the shambling zombie is AUTHORED mindless (pathing 'none' — it can
+    // never elect anything), and tight-range kernels (the flanker's orbit)
+    // steer DIRECTLY once in band — only the basic APPROACH kernel walks
+    // moveToward the whole way in, which is the lane under test. A skeleton
+    // warrior: basic brain, field pathing, breathless bone (no kite lapse).
+    const m = w.createMonster('skeleton_warrior', 8, 'enemy');
+    m.pos = vec(deck.x, deck.y);
+    m.tier = 1;
+    w.actors.push(m);
+    const seat = w.tierLinkToward(m, valley);
+    check('J3a the election returns a crossing on the hunter\'s own floor',
+      !!seat && tierLinkOf(pf1?.regionAt?.(seat.x, seat.y)) && (pf1?.isWalkable(seat.x, seat.y) ?? false),
+      seat ? `${Math.round(seat.x)},${Math.round(seat.y)}` : 'null');
+    check('J3b an own-floor goal elects nothing (the field handles it)',
+      w.tierLinkToward(m, deck) === null);
+
+    // J4 — THE LIVE CROSSING: the deck hunter, engagement held (the rim
+    // duel: target + aggro + the alerted all-around gaze re-primed per
+    // frame — brains are the CALLER's to tick, the main.ts/runner idiom),
+    // no crossing ever witnessed — it must elect the ramp, ride the ladder
+    // toggle and close on the valley player, with the REACTIVE goal lane
+    // silent the whole run.
+    const d0 = hyp(m.pos, w.player.pos);
+    // The quarry is the fixture, not the fight: tank it through the SHEET
+    // (a life mod never gates targeting the way `invulnerable` would).
+    w.player.sheet.setSource('probe_tank', [mod('life', 'flat', 1e6)]);
+    w.player.life = w.player.maxLife();
+    let sawLink = false, usedReactive = false;
+    let steps = 0;
+    for (; steps < 1800; steps++) {
+      m.aiTargetId = w.player.id;
+      m.aggroed = true;
+      m.alertUntil = w.time + 5;
+      for (const a of w.actors) updateAI(a, w, 1 / 30);
+      w.update(1 / 30);
+      sawLink = sawLink || m.onTierLink;
+      usedReactive = usedReactive || m.aiTierGoal !== undefined;
+      if (m.tier === 0 && !m.onTierLink && hyp(m.pos, w.player.pos) < 240) break;
+      if (m.dead || w.player.dead) break;
+    }
+    const d1 = hyp(m.pos, w.player.pos);
+    check('J4a the un-witnessed hunter crosses a link and changes story',
+      !m.dead && m.tier === 0 && sawLink,
+      `tier=${m.tier} link=${sawLink} dead=${m.dead} steps=${steps}`);
+    check('J4b ...proactively — the reactive aiTierGoal lane stayed silent', !usedReactive);
+    check('J4c ...and closes on the valley player', d1 < 240 && d1 < d0,
+      `dist ${Math.round(d0)} → ${Math.round(d1)}`);
+    check('J4d the quarry never crossed (the un-witnessed premise held)', w.player.tier === 0);
+    // J5 — the crossing rode the LADDER TOGGLE: the zone-local ledger (the
+    // reactive lane's source, untouched by this pass) stamped the hunter.
+    const crossings = (w as unknown as { tierCrossings: { actorId: number }[] }).tierCrossings;
+    check('J5 the ledger stamped the hunter\'s own crossing', crossings.some(r => r.actorId === m.id),
+      `${crossings.length} stamped`);
+
+    // J6 — THE SEVERED BAND (TIER_CFG.severedBandReach): the same fixture,
+    // a FLANKER-brain hunter. Its orbit kernel steers directly once flat
+    // distance sits in band — before the deferral it pinned at the rim
+    // above the quarry for a full minute, the stair election one cell away
+    // and never consulted (the measured stall this law exists for). Severed
+    // now, runKernel yields to the approach lane and it crosses like the
+    // warrior did.
+    m.dead = true; // the warrior leaves the stage
+    w.update(1 / 30);
+    const g = w.createMonster('deadwake_ghoul', 8, 'enemy');
+    g.pos = vec(deck.x, deck.y);
+    g.tier = 1;
+    w.actors.push(g);
+    const gd0 = hyp(g.pos, w.player.pos);
+    let gSawLink = false, gReactive = false;
+    let gSteps = 0;
+    for (; gSteps < 1800; gSteps++) {
+      g.aiTargetId = w.player.id;
+      g.aggroed = true;
+      g.alertUntil = w.time + 5;
+      for (const a of w.actors) updateAI(a, w, 1 / 30);
+      w.update(1 / 30);
+      gSawLink = gSawLink || g.onTierLink;
+      gReactive = gReactive || g.aiTierGoal !== undefined;
+      if (g.tier === 0 && !g.onTierLink && hyp(g.pos, w.player.pos) < 240) break;
+      if (g.dead || w.player.dead) break;
+    }
+    const gd1 = hyp(g.pos, w.player.pos);
+    check('J6a THE SEVERED BAND: the flanker defers its orbit and crosses',
+      !g.dead && g.tier === 0 && gSawLink,
+      `tier=${g.tier} link=${gSawLink} steps=${gSteps}`);
+    check('J6b ...closing like the warrior did', gd1 < 240 && gd1 < gd0,
+      `dist ${Math.round(gd0)} → ${Math.round(gd1)}`);
+    check('J6c ...with the reactive lane still silent', !gReactive);
+
+    // J7 — THE REACH GATE at unit grain (mint-independent by design: LIVE
+    // archer conduct is legitimately free — a blocked volley lane lets
+    // approach march and honestly elect the stair, which is the PREVIOUS
+    // law working — so this rig pins the severed-band VERDICT at its own
+    // exported seam, never the walk).
+    g.dead = true;
+    w.update(1 / 30);
+    const ar = w.createMonster('skeleton_archer', 8, 'enemy');
+    ar.pos = vec(deck.x, deck.y);
+    ar.tier = 1;
+    w.actors.push(ar);
+    const g2 = w.createMonster('deadwake_ghoul', 8, 'enemy');
+    g2.pos = vec(deck.x, deck.y);
+    g2.tier = 1;
+    w.actors.push(g2);
+    const ctxOf = (a: Actor): KernelCtx =>
+      ({ a, world: w, target: w.player, spec: {}, goal: w.player.pos } as unknown as KernelCtx);
+    const sg = severedBandGoal(ctxOf(g2), 'orbit');
+    check('J7a the melee band reads SEVERED (claw cannot cross a story)',
+      !!sg && Math.abs(sg.x - w.player.pos.x) < 1 && Math.abs(sg.y - w.player.pos.y) < 1);
+    check('J7b a kit that RAINS OUT never defers (bone_arrow 470 > the reach dial)',
+      severedBandGoal(ctxOf(ar), 'approach') === null
+      && severedBandGoal(ctxOf(ar), 'orbit') === null);
+    check('J7c stand-ground styles are exempt however short the kit',
+      severedBandGoal(ctxOf(g2), 'hold') === null
+      && severedBandGoal(ctxOf(g2), 'turtle') === null
+      && severedBandGoal(ctxOf(g2), 'interpose') === null);
+    check('J7d authored mindlessness never defers',
+      severedBandGoal({ ...ctxOf(g2), spec: { style: 'orbit', pathing: 'none' } } as KernelCtx, 'orbit') === null);
+    g2.tier = 0; // a valley hunter shares the quarry's floor —
+    check('J7e a shared floor reads no severance', severedBandGoal(ctxOf(g2), 'orbit') === null);
   }
 }
 
