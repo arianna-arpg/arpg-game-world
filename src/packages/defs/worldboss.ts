@@ -246,6 +246,18 @@ export const WORLDBOSS: ContentPackage = {
 // blockade's DRAWN face and the edge-block ledger is overlay state; a
 // rampaging kin crushing them would make the map lie about a sealed road.
 // Living scale does not yield to its own kind.
+//
+// NO rockForm, DELIBERATELY — the coil is a DISC by design even though it
+// paints through the boulder painter's lobed cluster 0.35 (doodadVisuals.ts).
+// A coil is never one body: World.updateWorldBossWalls lays seven of them in
+// an overlapping run, and the run's overlap is the seal. Measured over the
+// real arc, discs overlap by ≥21.2px at every joint (structural — nothing
+// threads it), while the rolled lobes open gaps to +9.6px: 13.7% of sealed
+// passes would leak a sight ray through a wall that declares blocksSight, and
+// 0.4% would admit a radius-4 body. Silhouette parity is not worth a pass
+// that is only probably shut — the full holdout argument, its numbers and the
+// re-measure recipe live at THE OVERLAPPING-RUN HOLDOUT in engine/levelgen.ts
+// (pinned by RIG H in balance/probe_coherence.ts).
 registerDoodadRule('wyrm_coil', { overlap: 'inert', blocksMove: true, blocksShot: true, blocksSight: true, fell: false });
 // Velketh's throne: a great walkable dais the boss is habitat-bound to (the
 // lake-horror pattern — ground, never a blocker; the boss stands ON it).

@@ -39,9 +39,12 @@ import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import {
   generateLayout, blocksMovement, doodadRuleOf, bodyRadiusOf,
+  doodadRuleKinds, hitSurfaceOf, normalizeDoodadBound,
   registerCluster, registerComposition,
-  type Doodad, type GeneratedLayout,
+  type Doodad, type DoodadKind, type GeneratedLayout,
 } from '../src/engine/levelgen';
+import { shapeBoundR, type HitShape } from '../src/engine/shapes';
+import { WORLDBOSS_SURGE } from '../src/packages/defs/worldboss';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
 
 const args = process.argv.slice(2);
@@ -439,6 +442,144 @@ function standingOnWay(layout: GeneratedLayout): Doodad[] {
   else if (on.overVoid > 0) fail(`G: ${on.overVoid}/${on.pois} siteWalk anchor(s) resolved over unwalkable ground`);
   else console.log(`rig G (composition siteWalk): declared ${on.pois} anchors, 0 over void`
     + ` — undeclared control put ${off.overVoid}/${off.pois} in the gulf`);
+}
+
+// --- RIG H: THE BROAD-PHASE BOUND — channel-honest, and never under-selecting
+// The spatial index inserts every doodad at max(radius, boundR); a bound that
+// falls SHORT of a surface a consumer tests makes queries miss the body, so
+// the doctrine is asymmetric — over-select freely, under-select never.
+// Two drifts this pins:
+//   1. rockForm kinds once fell through normalizeDoodadBound's early-out (it
+//      keyed on `surface` alone), so a rolled OUTCROP's satellites — which
+//      reach ~1.11r — stood in the index at a bare radius.
+//   2. the bound was taken at the 'sight' channel for everything, inflating
+//      shrunken bodies no eye can test by their crown-scaled surface
+//      (hollow_log: a 1.82r body inserted at 3.04r).
+{
+  const RAD = 40;
+  const mk = (kind: string, x: number, y: number, rot = 0): Doodad =>
+    ({ pos: vec(x, y), radius: RAD, kind: kind as DoodadKind, rot });
+  // The channels a consumer can actually ASK of a kind, derived from the
+  // CONSUMER's own gates (los.castRay gates sight on blocksSight ?? blocksShot
+  // and shot on blocksShot; clampPos/nav/the contact sweep ask 'move'), not
+  // from normalizeDoodadBound — so this stays a real check, not a mirror.
+  const askable = (kind: string): ('move' | 'shot' | 'sight')[] => {
+    const r = doodadRuleOf(kind as DoodadKind);
+    const out: ('move' | 'shot' | 'sight')[] = ['move', 'shot'];
+    if (r.blocksSight ?? !!r.blocksShot) out.push('sight');
+    return out;
+  };
+
+  // H1 — THE DOCTRINE CENSUS: no kind, at any roll, may under-select.
+  let under = 0, firstUnder = '', bounded = 0, kinds = 0;
+  for (const kind of doodadRuleKinds()) {
+    const rule = doodadRuleOf(kind as DoodadKind);
+    if (!rule.surface && !rule.rockForm) continue;
+    kinds++;
+    for (let i = 0; i < 60; i++) {
+      // rockForm rolls off position, surfaces spin off rot — sweep both.
+      const d = mk(kind, 300 + i * 37.3, 200 + i * 53.7, (i * 0.41) % (Math.PI * 2));
+      normalizeDoodadBound(d);
+      const stamped = Math.max(d.radius, d.boundR ?? 0);
+      if (d.boundR !== undefined) bounded++;
+      for (const ch of askable(kind)) {
+        const need = shapeBoundR(hitSurfaceOf(d, ch));
+        if (need > stamped + 1e-6) {
+          under++;
+          if (!firstUnder) firstUnder = `${kind} '${ch}' needs ${need.toFixed(2)} > stamped ${stamped.toFixed(2)}`;
+        }
+      }
+    }
+  }
+  if (kinds === 0) fail('H: RIG DEAD — no surface/rockForm kinds registered');
+  else if (bounded === 0) fail('H: RIG DEAD — not one instance ever earned a boundR (nothing pokes past radius)');
+  else if (under > 0) fail(`H1: ${under} under-selecting bound(s) — the index would MISS these bodies; first: ${firstUnder}`);
+  else note(`H1 census: ${kinds} surface/rockForm kinds × 60 rolls — 0 under-selections, ${bounded} earned a boundR`);
+
+  // H2 — rockForm-only kinds earn a bound when the roll pokes past radius.
+  // (The early-out that skipped them was silent: nothing else stamps boundR.)
+  let outcrops = 0, outcropsBounded = 0, monos = 0, monosBounded = 0;
+  for (let i = 0; i < 4000; i++) {
+    const d = mk('rock', 120 + i * 13.7, 240 + i * 29.3, (i * 0.31) % (Math.PI * 2));
+    const s = hitSurfaceOf(d, 'move');
+    normalizeDoodadBound(d);
+    const reach = shapeBoundR(s);
+    if (reach > RAD) { outcrops++; if ((d.boundR ?? 0) >= reach - 1e-6) outcropsBounded++; }
+    else { monos++; if (d.boundR === undefined) monosBounded++; }
+  }
+  if (outcrops === 0) fail('H2: RIG DEAD — no rock roll ever reached past its radius (the case is untested)');
+  else if (outcropsBounded < outcrops) fail(`H2: ${outcrops - outcropsBounded}/${outcrops} over-radius rock rolls carry no covering boundR`);
+  else if (monosBounded < monos) fail(`H2: ${monos - monosBounded}/${monos} inside-radius rolls stamped a needless boundR`);
+  else note(`H2 rockForm: ${outcrops}/${outcrops + monos} rolls reach past radius — all bounded; ${monos} tucked rolls left bare`);
+
+  // H3 — the channel-honest bound: a shrunken body no eye tests is inserted
+  // at its BODY reach, not its crown's. Fractions ride the body radius by
+  // authoring law, so these are the drawn extents (see DoodadRule.surface).
+  const NAMED: Record<string, number> = { hollow_log: 1.8224, fishing_rack: 1.0645, herb_rack: 1.0645 };
+  let namedBad = 0, inflationSeen = 0;
+  for (const [kind, want] of Object.entries(NAMED)) {
+    const d = mk(kind, 500.5, 500.5, 0.6);
+    const body = shapeBoundR(hitSurfaceOf(d, 'move'));
+    const crown = shapeBoundR(hitSurfaceOf(d, 'sight'));
+    normalizeDoodadBound(d);
+    const got = (d.boundR ?? d.radius) / RAD;
+    // Control: the two channels must genuinely differ, or the rig proves nothing.
+    if (crown > body + 1e-6) inflationSeen++;
+    if (Math.abs(got - want) > 0.001) {
+      namedBad++;
+      fail(`H3: ${kind} bound ${got.toFixed(4)}r — expected the ${want}r body reach (crown would be ${(crown / RAD).toFixed(4)}r)`);
+    }
+  }
+  if (inflationSeen < Object.keys(NAMED).length) {
+    fail('H3: RIG DEAD — the named kinds no longer scale differently across channels, so the bound cannot be inflated');
+  } else if (!namedBad) note(`H3 channel-honest: ${Object.keys(NAMED).length} shrunken kinds bounded at the body, not the crown`);
+
+  // H4 — THE OVERLAPPING-RUN HOLDOUT (see engine/levelgen.ts). wyrm_coil is a
+  // DISC on purpose: its seal is the overlap between neighbouring stamps, and
+  // lobed surfaces open slits a sight ray crosses. This asserts the seal the
+  // holdout claims, so wiring rockForm can never land unmeasured.
+  const W = WORLDBOSS_SURGE.roamer.wall;
+  const lobeParts = (s: HitShape, x: number, y: number): { x: number; y: number; r: number }[] =>
+    s.kind === 'circle' ? [{ x, y, r: s.r }]
+      : s.kind === 'multi' ? s.parts.map(p => ({ x: x + p.dx, y: y + p.dy, r: p.r }))
+        : [{ x, y, r: shapeBoundR(s) }];
+  let widest = -Infinity, arcs = 0;
+  for (let s = 0; s < 400; s++) {
+    const ex = 200 + (s * 37) % 2600, ey = 150 + (s * 53) % 1800;
+    const inward = (s * 0.7853981) % (Math.PI * 2);
+    // World.wyrmWallSpots: `count` seats fanned 0.85π around the door at `dist`,
+    // then reordered outer-ends-first — rot is stamped by PLACEMENT index.
+    const seats: { x: number; y: number }[] = [];
+    for (let k = 0; k < W.count; k++) {
+      const t = W.count === 1 ? 0.5 : k / (W.count - 1);
+      const ang = inward + (t - 0.5) * Math.PI * 0.85;
+      seats.push({ x: ex + Math.cos(ang) * W.dist, y: ey + Math.sin(ang) * W.dist });
+    }
+    const order: number[] = [];
+    for (let lo = 0, hi = W.count - 1; lo <= hi; lo++, hi--) { order.push(lo); if (hi !== lo) order.push(hi); }
+    const rotAt = new Map<number, number>();
+    order.forEach((arcIdx, placeIdx) => rotAt.set(arcIdx, (placeIdx * 2.39996) % (Math.PI * 2)));
+    const surf = seats.map((p, k) => {
+      const d: Doodad = { pos: vec(p.x, p.y), radius: W.radius, kind: 'wyrm_coil' as DoodadKind, rot: rotAt.get(k)! };
+      return hitSurfaceOf(d, 'move');
+    });
+    arcs++;
+    for (let k = 0; k + 1 < W.count; k++) {
+      let gap = Infinity;
+      for (const a of lobeParts(surf[k], seats[k].x, seats[k].y)) {
+        for (const b of lobeParts(surf[k + 1], seats[k + 1].x, seats[k + 1].y)) {
+          gap = Math.min(gap, Math.hypot(a.x - b.x, a.y - b.y) - a.r - b.r);
+        }
+      }
+      if (gap > widest) widest = gap;
+    }
+  }
+  if (arcs === 0) fail('H4: RIG DEAD — no coil arc was built');
+  else if (widest >= 0) {
+    fail(`H4: the wyrm_coil pass seal LEAKS — widest joint gap ${widest.toFixed(2)}px (a sight ray crosses any gap ≥ 0,`
+      + ' and the coils declare blocksSight). The overlapping-run holdout in engine/levelgen.ts was measured against DISCS;'
+      + ' re-measure the seal before changing this kind\'s surface.');
+  } else note(`H4 coil seal: ${arcs} arcs × ${W.count - 1} joints — widest gap ${widest.toFixed(2)}px (every joint overlaps)`);
 }
 
 console.log(`\nprobe coherence: ${SEEDS} seeds/rig — ${fails} failure(s)`);

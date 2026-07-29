@@ -1603,14 +1603,38 @@ export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel): HitShape {
 }
 
 /** Broad-phase radius the spatial index must insert this doodad at — the
- *  visual radius unless a surface pokes past it (a door slab's corners).
- *  World stamps `boundR` through here on every index rebuild, so runtime
- *  doodads (terraforms, mutations, snapshot-applied guests) self-heal. */
+ *  visual radius unless a surface pokes past it (a door slab's corners, a
+ *  rolled outcrop's satellites). World stamps `boundR` through here on every
+ *  index rebuild, so runtime doodads (terraforms, mutations, snapshot-applied
+ *  guests) self-heal.
+ *
+ *  THE CHANNEL-HONEST BOUND: the bound covers every channel this body can
+ *  actually be TESTED at, and no more. move/shot both resolve at
+ *  bodyRadiusOf, so one call bounds the pair; 'sight' resolves at the full
+ *  visual radius, but los.castRay only ever asks it of a SIGHT-BLOCKING kind
+ *  — so a shrunken body no eye can test must not inflate the index by a
+ *  crown-scaled surface it never wears (a hollow_log's fracs are authored
+ *  against its 0.6 body: 1.82r drawn, 3.04r inserted). The gate reads the
+ *  RULE, never blocksSightOf's live predicate: felled/open state must never
+ *  shrink a bound the index was already built on.
+ *
+ *  Over-selection is always safe here; under-selection is not. Widen the
+ *  bound freely, narrow it only for a channel nothing can ask for. */
 export function normalizeDoodadBound(d: Doodad): void {
   const rule = doodadRule(d.kind);
-  if (!d.hitbox && !rule.surface) { d.boundR = undefined; return; }
-  // Sight resolves at the widest channel radius, so it bounds all three.
-  const b = shapeBoundR(hitSurfaceOf(d, 'sight'));
+  // rockForm kinds carry NO surface key and once fell through this early-out
+  // entirely — a rolled outcrop's satellites reach ~1.11r, so up to a quarter
+  // of every rock/stalagmite/basalt_column/sea_rock stood in the index a tenth
+  // of a body too small (absorbed by SPATIAL_CFG.queryPad, which is reserved
+  // for fat query BODIES, not for surfaces the bound underestimates).
+  if (!d.hitbox && !rule.surface && !rule.rockForm) { d.boundR = undefined; return; }
+  let b = shapeBoundR(hitSurfaceOf(d, 'move'));
+  // Only a shrunken body can differ across channels; at bodyScale 1 the move
+  // surface IS the sight surface, so the one call above already bounds all
+  // three (and rockForm's per-instance memo keeps its single slot).
+  if (bodyRadiusOf(d) !== d.radius && (rule.blocksSight ?? !!rule.blocksShot)) {
+    b = Math.max(b, shapeBoundR(hitSurfaceOf(d, 'sight')));
+  }
   d.boundR = b > d.radius ? b : undefined;
 }
 
@@ -1888,8 +1912,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // proportions — keep the two in sync when retuning either. Kinds left as
   // discs on purpose: rib_arch (multi-hoop arch — needs multi-part surfaces),
   // gallows/soul_cage (walk-on platform / hanging cage: the small bodyScale
-  // disc IS the intent), wall/cliff/wyrm_coil (stamped as overlapping runs —
-  // rect joints would open pinholes), tooth_row (an offset C-arc no centered
+  // disc IS the intent), wall/cliff/wyrm_coil (stamped as overlapping RUNS,
+  // where the run's own overlap is the seal — see THE OVERLAPPING-RUN
+  // HOLDOUT below), tooth_row (an offset C-arc no centered
   // rect can hug — it wears a snugged bodyScale disc instead),
   // crumbling_wall/secret_wall (FUNCTIONAL PLUGS: the full disc IS the door —
   // it must seal its gap until popped, so their VISUAL rolls mono
@@ -1897,6 +1922,29 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // around), and the true circles the sweep verified honest as drawn:
   // mounds, kiln/salt/umbilic columns, wells, pot clusters, vents, domes,
   // shard clusters.
+  //
+  // THE OVERLAPPING-RUN HOLDOUT (wall/cliff/wyrm_coil). These kinds are not
+  // stamped as single bodies but as RUNS whose neighbours overlap, and the
+  // overlap IS the seal — so their surface is judged by what survives BETWEEN
+  // two stamps, not by how well one stamp hugs its own pixels. The original
+  // note argued only about rect joints; the same pinhole opens under a LOBED
+  // multi-circle, which is the live temptation here because wyrm_coil paints
+  // through the boulder painter with cluster 0.35 (doodadVisuals.ts) while
+  // colliding as a disc. Wiring it to rockForm was measured against the real
+  // arc World.wyrmWallSpots lays (7 coils, radius 30, fanned 0.85π at 88px —
+  // adjacent centres 38.8px apart) over 24k adjacent pairs:
+  //   DISC  — every pair overlaps by ≥21.2px. The seal is STRUCTURAL: no body
+  //           of any radius, and no zero-width ray, can ever thread it.
+  //   LOBED — the widest gap opens to +9.6px. 13.7% of sealed passes grow a
+  //           slit a sight ray crosses (the coils declare blocksSight), and
+  //           0.4% admit the game's radius-4 bodies (gnatling, soul_mote,
+  //           grave_mite, emberling).
+  // A blockade whose whole job is that the map must not lie about a sealed
+  // road cannot trade a guarantee for a 1-in-7 leak to buy silhouette parity.
+  // The honest fix for a functional plug is the crumbling_wall precedent —
+  // pin the VISUAL to the sealing mass — never shrink the collision to the
+  // rolled look. Re-measure before any future wiring; the probe's RIG H
+  // (balance/probe_coherence.ts) fails if wyrm_coil stops resolving as a disc.
   firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50, surface: { hw: 1.05, hh: 0.55 }, fuel: 'timber' },
   // Settlement + wayside clutter (towns, roads, farms, ruins).
   fountain:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140 },
