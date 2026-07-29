@@ -11,8 +11,9 @@ import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presen
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
-  CREW_CFG, DEFAULT_RELOAD_SKILL, summonCrewOf, supportFits, supportRidesMinions,
-  type Delivery, type SkillDef, type SupportDef, type ConduitSpec,
+  CREW_CFG, DEFAULT_RELOAD_SKILL, crewSkillsServed, makeSkillInstance, summonCrewOf,
+  supportFits, supportFitsInst,
+  type Delivery, type SkillDef, type SkillInstance, type SupportDef, type ConduitSpec,
 } from '../engine/skills';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -1611,38 +1612,88 @@ export function validateContent(): void {
 
   // THE CREW HOP: gems socketed into a SUMMON skill FORWARD onto the minted
   // minions' own skill instances (world.forwardSummonSockets) — so a row is
-  // genuinely read when any crew member's tag-fitting skill reads it (the
-  // trail gem boarding the archer's bow is live, not inert). 'unknowable'
-  // crews (corpse-raised) can't be audited — treat as read.
+  // genuinely read when any crew member's SERVED skill reads it (the trail
+  // gem boarding the archer's bow is live, not inert). Service is decided by
+  // the engine's own gate, crewSkillsServed — tags AND the mechanism hop
+  // (aligned 2026-07-28: the hand-rolled tag-grain copy here lagged the gate
+  // and flagged pairs the forward genuinely refuses — Overgrowth "boarding"
+  // the lampad's surfaceless votive was never a silent no-op, it was
+  // refused). 'unknowable' crews (corpse-raised) can't be audited — treat
+  // as read.
   const crewOf = (def: SkillDef) => summonCrewOf(
     def.delivery.type === 'summon' ? def.delivery : undefined,
     id => MONSTERS[id], id => SKILLS[id]);
-  const crewReads = (sup: SupportDef, row: GraftReadRow, def: SkillDef): boolean => {
-    if (!supportRidesMinions(sup)) return false;
+  const crewServed = (sup: SupportDef, def: SkillDef): SkillDef[] | 'unknowable' | null => {
     const crew = crewOf(def);
-    if (!crew) return false;
-    if (crew === 'unknowable') return true;
-    return crew.some(cd => supportFits(sup, cd) && !rowUnread(row, cd));
+    if (!crew) return null;
+    let inst = bareInsts.get(def.id);
+    if (!inst) { inst = makeSkillInstance(def, 1, 3); bareInsts.set(def.id, inst); }
+    return crewSkillsServed(sup, inst, crew);
   };
-  const crewFits = (sup: SupportDef, def: SkillDef): boolean => {
-    if (!supportRidesMinions(sup)) return false;
-    const crew = crewOf(def);
-    return crew === 'unknowable' || (!!crew && crew.some(cd => supportFits(sup, cd)));
+  const crewFits = (sup: SupportDef, def: SkillDef): boolean => crewServed(sup, def) !== null;
+  const crewReads = (sup: SupportDef, row: GraftReadRow, def: SkillDef): boolean => {
+    const served = crewServed(sup, def);
+    if (!served) return false;
+    if (served === 'unknowable') return true;
+    return served.some(cd => !rowUnread(row, cd));
   };
 
   // The catalog sweep: every DROPPABLE skill a gem fits — by tags, or by
   // boarding a summon's crew — whose payload is then never read anywhere.
+  // THE SOCKET-GATE HONESTY (2026-07-28): 'fitting' means SOCKETABLE — the
+  // tag gate AND the gem's own requiresMechanisms, evaluated on a bare
+  // instance exactly as the sim census does (src/sim/compat.ts). A
+  // mechanism-refused pair (Overgrowth's 'surface' gate on a surfaceless
+  // host) is refused LOUDLY at socket time — it is not a silent no-op, and
+  // counting it here would cry wolf. Loadout-time compositions (mechanisms
+  // met by ANOTHER socketed gem) stay out of scope, same as the tag lane.
   const droppable = Object.values(SKILLS).filter(s => !s.noDrop);
+  const bareInsts = new Map<string, SkillInstance>();
+  const socketable = (sup: SupportDef, def: SkillDef): boolean => {
+    let inst = bareInsts.get(def.id);
+    if (!inst) { inst = makeSkillInstance(def, 1, 3); bareInsts.set(def.id, inst); }
+    return supportFitsInst(sup, inst);
+  };
+  // THE ADJUDICATION SEAM (2026-07-28): known-broad pairs — GraftReadRow's
+  // `inertOk` ledger, data beside the row (the support_matrix.json idiom) —
+  // collapse into ONE counted summary line; any pair NOT on the ledger stays
+  // loud and individually named, so a fresh genuine finding can never drown
+  // in the standing wall. The ledger is audited right back below: a stale
+  // entry warns until removed.
+  const adjudicated: string[] = [];
+  const inertPairs = new Set<string>();
   for (const sup of Object.values(SUPPORTS)) {
     for (const row of GRAFT_READ_SITES) {
       if (!carriesRow(sup, row)) continue;
       const inert = droppable.filter(def =>
-        (supportFits(sup, def) || crewFits(sup, def))
+        (socketable(sup, def) || crewFits(sup, def))
         && rowUnread(row, def) && !crewReads(sup, row, def));
       if (!inert.length) continue;
+      inertPairs.add(`${sup.id}|${String(row.key)}`);
+      if (row.inertOk?.some(a => a.support === sup.id)) {
+        adjudicated.push(`${sup.id}:${String(row.key)}(${inert.length})`);
+        continue;
+      }
       const shown = inert.slice(0, 8).map(s => s.id).join(', ');
       warn(`support ${sup.id}: '${row.key}' is read only at ${row.site} — silently INERT on `
         + `${inert.length} fitting skill(s): ${shown}${inert.length > 8 ? ` (+${inert.length - 8} more)` : ''}`);
+    }
+  }
+  if (adjudicated.length) {
+    warn(`no-op audit: ${adjudicated.length} known-broad pair(s) adjudicated inertOk — collapsed: `
+      + `${adjudicated.join(', ')} — the whys live on the rows in data/graftReadSites.ts`);
+  }
+  // The adjudication audits itself both directions (the reconcile idiom): an
+  // entry naming an unknown support, a support that no longer carries the
+  // row's payload, or a pair with no inert fits left is a STALE adjudication
+  // — the debt it recorded is gone, so the record must go too.
+  for (const row of GRAFT_READ_SITES) {
+    for (const a of row.inertOk ?? []) {
+      const sup = SUPPORTS[a.support];
+      if (!sup || !supportCarriesRow(sup, row) || !inertPairs.has(`${a.support}|${String(row.key)}`)) {
+        warn(`no-op audit: STALE inertOk entry '${a.support}' on row '${row.key}' — `
+          + `${!sup ? 'unknown support' : !supportCarriesRow(sup, row) ? 'payload no longer carried' : 'no inert fits left'} (remove or re-adjudicate)`);
+      }
     }
   }
   // Monster-only kit pieces (noDrop) skip the sweep but their authored

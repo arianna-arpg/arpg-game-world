@@ -44,6 +44,10 @@ import {
 import { CORPSE_CFG } from '../src/engine/world';
 import { setSimTap } from '../src/engine/tap';
 import { mod } from '../src/engine/stats';
+import {
+  GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, unreadPayloadRows,
+} from '../src/data/graftReadSites';
+import { validateContent } from '../src/data/validate';
 import { dist, vec } from '../src/core/math';
 import { withSeededRandom } from '../src/core/rng';
 import { PROCS } from '../src/data/procs';
@@ -1233,6 +1237,109 @@ withSeededRandom(H_SEED, () => {
     !!waveZ && ripples.length > 0 && ripples.every(z =>
       z.shape === AOE_SHAPE.crescent && z.facing === waveZ!.facing && z.arcRad === waveZ!.arcRad),
     ripples.map(z => `shape=${z.shape} arc=${(z.arcRad ?? 0).toFixed(2)}`).join(', '));
+}
+
+// === RIG Q — THE ADJUDICATION SEAM + the rowed trio (2026-07-28) ===========
+// The graft-audit noise fix, pinned: known-broad (support × row) pairs are
+// adjudicated IN DATA (GraftReadRow.inertOk — the support_matrix.json idiom
+// carried on the registry row) and collapse into ONE counted summary line at
+// boot, while an unadjudicated pair stays loud and the ledger audits itself
+// (stale entries warn). The once-unrowed exposure/zoneGrow/zoneSizeOver
+// payloads now carry MEASURED rows: ground reads, the lifted-linger-field
+// escape for the growth/envelope pair, and deliberately NO escape for a
+// projectile fissureTrail (its segment mint vents no grafted fumes).
+// NOTE: this rig re-runs validateContent(), which draws from the seeded
+// global stream — it must stay the LAST rig in the file.
+
+{
+  // Q1 — the ledger points at live data: every entry names a real support
+  // that carries its row's payload, and carries its why + date.
+  {
+    const bad: string[] = [];
+    for (const row of GRAFT_READ_SITES) {
+      for (const a of row.inertOk ?? []) {
+        const sup = SUPPORTS[a.support];
+        if (!sup || !supportCarriesRow(sup, row) || !a.why || !a.since) {
+          bad.push(`${a.support}:${String(row.key)}`);
+        }
+      }
+    }
+    check('Q1 every inertOk entry names a live payload-carrying support and carries its why', !bad.length, bad.join(', '));
+  }
+
+  const rowOf = (key: string) => GRAFT_READ_SITES.find(r => String(r.key) === key);
+  const expRow = rowOf('exposure'), growRow = rowOf('zoneGrow'), envRow = rowOf('zoneSizeOver');
+  const lookup = (id: string) => SKILLS[id];
+  const groundDef = Object.values(SKILLS).find(s => !s.noDrop && s.delivery.type === 'ground')!;
+  const flightDef = Object.values(SKILLS).find(s =>
+    !s.noDrop && s.delivery.type === 'projectile' && !s.delivery.fissureTrail && !s.delivery.explode
+    && !s.effects.some(e => e.type === 'spawnZone'))!;
+  check('Q2 the trio is rowed ground-scoped, and a ground delivery READS all three',
+    !!expRow && !!growRow && !!envRow
+    && [expRow, growRow, envRow].every(r =>
+      r!.deliveries.length === 1 && r!.deliveries[0] === 'ground' && !rowUnreadBy(r!, groundDef, lookup)));
+
+  // Q3 — the lifted-field escape: a def whose OWN data stands a linger field
+  // up genuinely grows/breathes it (dropLingerField), while a plain flight
+  // reads neither — and the lifted field VENTS NO FUMES, so exposure keeps
+  // no escape (measured 2026-07-28: dropLingerField mints no fume ledger).
+  const lifted = { ...flightDef, innateMods: [...(flightDef.innateMods ?? []), mod('lingerField', 'flat', 3)] };
+  check('Q3 the lingerField escape opens zoneGrow/zoneSizeOver on a field-standing def and stays shut on a plain flight',
+    !rowUnreadBy(growRow!, lifted, lookup) && !rowUnreadBy(envRow!, lifted, lookup)
+    && rowUnreadBy(growRow!, flightDef, lookup) && rowUnreadBy(envRow!, flightDef, lookup)
+    && rowUnreadBy(expRow!, lifted, lookup));
+
+  // Q4-Q9 — the seam itself, through the REAL boot sweep (warn-captured).
+  const runCensus = (): { inert: string[]; audit: string[]; stale: string[] } => {
+    const lines: string[] = [];
+    const orig = console.warn;
+    console.warn = (...a: unknown[]) => { lines.push(a.map(String).join(' ')); };
+    try { validateContent(); } finally { console.warn = orig; }
+    return {
+      inert: lines.filter(l => l.includes('silently INERT')),
+      audit: lines.filter(l => l.includes('known-broad pair(s) adjudicated')),
+      stale: lines.filter(l => l.includes('STALE inertOk')),
+    };
+  };
+  const clean = runCensus();
+  check('Q4 the boot census is CLEAN — zero individual INERT lines, zero stale adjudications',
+    clean.inert.length === 0 && clean.stale.length === 0,
+    `inert=${clean.inert.length} stale=${clean.stale.length}`);
+  check('Q5 the adjudicated wall collapses into exactly ONE counted summary line',
+    clean.audit.length === 1 && /\d+ known-broad pair\(s\)/.test(clean.audit[0] ?? ''),
+    (clean.audit[0] ?? '').slice(0, 90));
+  check('Q6 socket-gate honesty: no surface-gated carrier (overgrowth, the envelope trio) needs adjudication — the socket/forward gate already refuses their off-surface pairs',
+    !!clean.audit[0] && !/overgrowth|ebbing_ground|blooming_ground|tidal_ground/.test(clean.audit[0]));
+
+  // Q7 — THE NEGATIVE CONTROL: de-adjudicate one pair and the individual
+  // loud line comes straight back (the seam can never swallow a fresh
+  // finding); restore and the census is clean again — the probe leaves the
+  // registry exactly as it found it.
+  const scatterRow = rowOf('aoeScatter')!;
+  const saved = scatterRow.inertOk!;
+  scatterRow.inertOk = saved.filter(a => a.support !== 'aftershocks');
+  const loud = runCensus();
+  check('Q7 de-adjudicating a pair brings its individual INERT line straight back (negative control)',
+    loud.inert.length === 1 && (loud.inert[0] ?? '').includes('support aftershocks') && loud.stale.length === 0,
+    `inert=${loud.inert.length}`);
+
+  // Q8 — the stale lane: an entry naming an unknown support warns until
+  // removed (the ledger audits itself, both directions).
+  scatterRow.inertOk = [...saved, { support: 'probe_bogus_gem', why: 'stale-lane negative control', since: '2026-07-28' }];
+  const stale = runCensus();
+  check('Q8 a ledger entry naming an unknown support warns STALE (the adjudication audits itself)',
+    stale.stale.length === 1 && (stale.stale[0] ?? '').includes('probe_bogus_gem') && stale.inert.length === 0,
+    `stale=${stale.stale.length}`);
+  scatterRow.inertOk = saved;
+  const restored = runCensus();
+  check('Q9 restoration is clean — the registry is exactly as authored',
+    restored.inert.length === 0 && restored.stale.length === 0 && restored.audit.length === 1);
+
+  // Q10 — the second consumer: the sim matrix's static annotation resolves
+  // the new rows (an INERT creeping_fumes × war_cry finding now arrives
+  // with its read-site explanation on file).
+  check('Q10 unreadPayloadRows resolves the new rows for the matrix — creeping_fumes × war_cry names exposure',
+    unreadPayloadRows(SUPPORTS.creeping_fumes, SKILLS.war_cry, lookup).some(r => String(r.key) === 'exposure'));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
