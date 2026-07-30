@@ -41,10 +41,11 @@ import { blocksSightOf } from '../src/engine/levelgen';
 import { updateAI } from '../src/engine/ai';
 import {
   feedWatch, layTrailPoint, SENSE_CFG, senseReach, trailNewest, trailNext,
-  validateWatch, WATCH_CFG, WATCH_RUNG, watchArcDeg, watchRiseAmount,
-  watchRungOf, watchValueOf, type TrailBody, type WatchBody,
+  validateWatch, WATCH_CFG, WATCH_RUNG, watchArcDeg, watchFanVisible,
+  watchRiseAmount, watchRungOf, watchValueOf,
+  type TrailBody, type WatchBody,
 } from '../src/engine/watch';
-import { watchFanRadius } from '../src/render/vis/watchLayer';
+import { WATCH_FAN_DEV, watchFanRadius } from '../src/render/vis/watchLayer';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
 import { vec } from '../src/core/math';
 import { mod } from '../src/engine/stats';
@@ -272,6 +273,77 @@ MONSTERS.probe_din_striker = {
     tryAt(600 + 260, 800) === 0);
   w.doodads.pop();
   w.markDoodadsChanged();
+}
+
+// --- 4b) THE FAN-VISIBILITY LEVER (gates WHETHER a fan draws, never what it says) -
+{
+  // The pure resolution ladder: per-entity stamp > kind posture > the
+  // standing law (wild show, owned hide). Both directions authorable at
+  // both grains.
+  const wild = {} as { owner?: unknown; watchFan?: 'show' | 'hide' };
+  const owned = { owner: { id: 1 } } as typeof wild;
+  check('fan: the standing law — wild watchers SHOW (the readability contract)',
+    watchFanVisible(wild, {}) === true);
+  check('fan: the standing law — owned bodies HIDE (the summoner-crew mud)',
+    watchFanVisible(owned, {}) === false);
+  check('fan: the kind posture flips either way (WatchSpec.fan)',
+    watchFanVisible(owned, { fan: 'show' }) === true
+    && watchFanVisible(wild, { fan: 'hide' }) === false);
+  check('fan: the per-entity stamp wins over the kind posture, both directions',
+    watchFanVisible({ ...owned, watchFan: 'show' }, { fan: 'hide' }) === true
+    && watchFanVisible({ ...wild, watchFan: 'hide' }, { fan: 'show' }) === false);
+  check('fan: the dev flood ships OFF (QA chrome, never a shipped default)',
+    WATCH_FAN_DEV.all === false);
+  const faults = validateWatch({
+    stripped: { watch: { fan: 'hide' } },
+    strippedLegible: { watch: { fan: 'hide' }, tells: [{ source: 'watch' }] },
+    forced: { watch: { fan: 'show' } },
+  });
+  check('fan: fan:\'hide\' without a watch tell is ILLEGIBLE; with one (or fan:\'show\') clean',
+    faults.length === 1 && faults[0].startsWith('stripped:'),
+    faults.join(' | '));
+
+  // THE LIVE CREW (the diagnosis pinned): a player-owned skeleton_archer
+  // runs the SAME scan (senses stamped — the mechanism that painted the
+  // mud), resolves HIDDEN by the standing law, and its geometry stays the
+  // scan's own stamps (the lever never touches what a fan would say). The
+  // wild sentry beside it resolves SHOWN — today's read exactly.
+  const w = world(0xfa11);
+  const crew = spawn(w, 'skeleton_archer', 6, 'player');
+  crew.owner = w.player;
+  crew.pos = vec(700, 900);
+  const sentry = spawn(w, 'skeleton_archer', 6);
+  sentry.pos = vec(1400, 900);
+  sentry.aiAnchor = vec(1400, 900);
+  tick(w, 0.4);
+  check('fan live: the owned crew ran the scan (senses stamped — the mud\'s mechanism)',
+    crew.senseDetect > 0 && !!crew.watch);
+  check('fan live: the crew resolves HIDDEN, the wild sentry SHOWN (one law, no id lists)',
+    watchFanVisible(crew, crew.watch!) === false
+    && watchFanVisible(sentry, sentry.watch!) === true);
+  check('fan live: hidden ≠ zeroed — the crew\'s fan geometry is still its stamped truth',
+    watchFanRadius(w, crew, 0, 1, false) > 0);
+  crew.watchFan = 'show';
+  check('fan live: one data field flips the body (the classic cone read, forced)',
+    watchFanVisible(crew, crew.watch!) === true);
+  crew.watchFan = undefined;
+  sentry.watchFan = 'hide';
+  check('fan live: the same field strips a wild watcher (true-stealth authoring)',
+    watchFanVisible(sentry, sentry.watch!) === false);
+  sentry.watchFan = undefined;
+
+  // The wire: the client rebuilds owner from the mn flag (a shared stand-in)
+  // and the posture from its own registry — the standing law folds the SAME
+  // verdicts client-side, nothing new on the wire.
+  const snap = serializeSnapshot(w, 1);
+  const w2 = makeSimWorld('warrior', 0xfa12);
+  applySnapshot(w2, snap);
+  const cCrew = w2.actors[snap.actors.findIndex(x => x.id === crew.id)];
+  const cSentry = w2.actors[snap.actors.findIndex(x => x.id === sentry.id)];
+  check('fan wire: the client resolves crew hidden / sentry shown from its own adopt',
+    !!cCrew?.watch && !!cSentry?.watch
+    && watchFanVisible(cCrew, cCrew.watch) === false
+    && watchFanVisible(cSentry, cSentry.watch) === true);
 }
 
 // --- 5) THE LADDER END TO END (sentinel: climb, callout, decay, stand-down) -----

@@ -210,6 +210,125 @@ console.log('— A3. slab: surface melt + fan (the long-face press) —');
   check('eye inside the slab: no shadow', rectShadowPath(sIn, slab, 0, 0, FAR, 0, 0, 1) === 0);
 }
 
+console.log('— A4. THE EXACT OBB: an oriented slab\'s query tests the slab the wedge draws —');
+{
+  // The failure class: occludedAt's rect branch tested the BOUNDING CIRCLE
+  // (segHitsCircle at boundR) while rectShadowPath walks the true oriented
+  // corners — so a ray clipping the circle but missing the slab reported
+  // "hidden" over ground nothing painted. Worst on long thin slabs at 45°.
+  // The rig runs the REAL gather (an explicit hitbox rides hitSurfaceOf
+  // verbatim) and judges query + drawn wedge against an INDEPENDENT
+  // segment-vs-quad truth (edge crossings + containment — a different
+  // formulation than the slab clip under test).
+  const CX = 1200, CY = 1000, HW = 240, HH = 12, ROT = Math.PI / 4;
+  const EYE = { x: 700, y: 500 };
+  const cosR = Math.cos(ROT), sinR = Math.sin(ROT);
+  const quad = (grow: number): P[] =>
+    ([[+1, +1], [-1, +1], [-1, -1], [+1, -1]] as const).map(([su, sv]) => ({
+      x: CX + su * (HW + grow) * cosR - sv * (HH + grow) * sinR,
+      y: CY + su * (HW + grow) * sinR + sv * (HH + grow) * cosR,
+    }));
+  const cross = (ax: number, ay: number, bx: number, by: number, x: number, y: number): number =>
+    (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+  const inQuad = (c: P[], p: P): boolean => {
+    let sgn = 0;
+    for (let i = 0; i < 4; i++) {
+      const a = c[i], b = c[(i + 1) % 4];
+      const s = cross(a.x, a.y, b.x, b.y, p.x, p.y);
+      if (Math.abs(s) < 1e-6) continue;
+      if (!sgn) sgn = s > 0 ? 1 : -1;
+      else if ((s > 0 ? 1 : -1) !== sgn) return false;
+    }
+    return true;
+  };
+  const segSeg = (a: P, b: P, c: P, d: P): boolean => {
+    const d1 = cross(c.x, c.y, d.x, d.y, a.x, a.y), d2 = cross(c.x, c.y, d.x, d.y, b.x, b.y);
+    const d3 = cross(a.x, a.y, b.x, b.y, c.x, c.y), d4 = cross(a.x, a.y, b.x, b.y, d.x, d.y);
+    return (d1 > 0) !== (d2 > 0) && (d3 > 0) !== (d4 > 0);
+  };
+  const truth = (grow: number, to: P): boolean => {
+    const c = quad(grow);
+    if (inQuad(c, EYE) || inQuad(c, to)) return true;
+    for (let i = 0; i < 4; i++) if (segSeg(EYE, to, c[i], c[(i + 1) % 4])) return true;
+    return false;
+  };
+
+  const veil = new SightVeil();
+  const doodads: Doodad[] = [{
+    kind: 'cliff', radius: 30, pos: { x: CX, y: CY },
+    hitbox: { kind: 'rect', hw: HW, hh: HH, rot: ROT },
+  } as unknown as Doodad];
+  const view: SightView = {
+    player: { pos: { x: EYE.x, y: EYE.y } },
+    walk: null, zone: {}, doodads,
+    doodadsNear: (x, y, reach) =>
+      doodads.filter(d => Math.hypot(d.pos.x - x, d.pos.y - y) <= reach + d.radius),
+    doodadRev: 1,
+  };
+  veil.update(view, 0, 1280, 800);
+  const rects = (veil as unknown as { rects: { rot: number; boundR: number; s: number }[] }).rects;
+  check('rig sanity: the hitbox slab gathered as ONE oriented rect (rot intact)',
+    rects.length === 1 && rects[0].rot === ROT && rects[0].s === 1,
+    `rects ${rects.length}`);
+  const dF = VIS_CFG.sightVeil.doodadStrength;
+  const radius = Math.min(VIS_CFG.sightVeil.maxRadius, Math.hypot(1280, 800) / 2 + 120);
+  const far = radius * VIS_CFG.sightVeil.farSlack;
+  const sink = new CollectSink();
+  rectShadowPath(sink, { x: CX, y: CY, hw: HW, hh: HH, rot: ROT, boundR: Math.hypot(HW, HH), s: 1 },
+    EYE.x, EYE.y, far, 0, 0, 1);
+
+  // THE WITNESS PAIR. Beside the slab (perp offset off the long axis): the
+  // ray clips the bounding circle yet misses the body — must read CLEAR and
+  // draw nothing. Dead behind the thin end: must read the full graded dark
+  // and be painted.
+  const beside = { x: 1094, y: 1106 };
+  const behind = { x: 1412, y: 1212 };
+  check('witness sanity (independent truth): beside misses, behind crosses',
+    !truth(0, beside) && truth(0, behind));
+  // Pressure: the OLD bounding-circle verdict lied about `beside`.
+  const oldVerdict = (to: P): boolean => {
+    const qx = to.x - EYE.x, qy = to.y - EYE.y, len2 = qx * qx + qy * qy;
+    const wx = CX - EYE.x, wy = CY - EYE.y;
+    let t = (wx * qx + wy * qy) / len2;
+    if (t < 0) t = 0; else if (t > 1) t = 1;
+    const ddx = wx - qx * t, ddy = wy - qy * t;
+    return ddx * ddx + ddy * ddy < HW * HW + HH * HH;
+  };
+  check('pressure: the OLD circle test called the lit ground hidden', oldVerdict(beside));
+  check('beside the slab: occludedAt reads CLEAR (the regression)',
+    veil.occludedAt(beside) === 0, `${veil.occludedAt(beside)}`);
+  check('beside the slab: the wedge paints nothing there (drawn agrees)',
+    !inside(sink.polys, beside.x, beside.y));
+  check('behind the slab: occludedAt = doodadStrength',
+    Math.abs(veil.occludedAt(behind) - dF) < 1e-9, `${veil.occludedAt(behind)}`);
+  check('behind the slab: the wedge paints it (drawn agrees)',
+    inside(sink.polys, behind.x, behind.y));
+
+  // THE SWEEP: a fan of query points around the slab — query, drawn wedge
+  // and the independent truth must agree everywhere. Samples the truth
+  // itself calls marginal (verdict flips within ±3px of slab surface) are
+  // skipped — boundary fuzz, not law; distances stay inside the far fan's
+  // chord sag; points inside the body are skipped (nothing queryable
+  // stands inside a solid — the discs' standing asymmetry).
+  let agree = true, worst = '', tested = 0;
+  for (let deg = 20; deg <= 70; deg += 2.5) {
+    for (const d of [350, 550, 750, 950, 1050]) {
+      const th = deg * Math.PI / 180;
+      const p = { x: EYE.x + Math.cos(th) * d, y: EYE.y + Math.sin(th) * d };
+      if (truth(3, p) !== truth(-3, p)) continue;       // marginal: boundary fuzz
+      if (inQuad(quad(0), p)) continue;                  // inside the solid body
+      const want = truth(0, p);
+      tested++;
+      const q = veil.occludedAt(p) > 0;
+      const drawn = inside(sink.polys, p.x, p.y);
+      if (q !== want) { agree = false; worst = `query@${deg}°/${d}px: got ${String(q)}, truth ${String(want)}`; }
+      if (drawn !== want) { agree = false; worst = `drawn@${deg}°/${d}px: got ${String(drawn)}, truth ${String(want)}`; }
+    }
+  }
+  check(`sweep: query == drawn == independent truth (${tested} samples)`,
+    agree && tested > 60, worst || `${tested} tested`);
+}
+
 console.log('— C. the graded low-profile ladder (sightShadowFrac) —');
 {
   const mk = (kind: string, radius: number, door = false): Doodad =>

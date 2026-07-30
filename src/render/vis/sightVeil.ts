@@ -529,7 +529,14 @@ export class SightVeil {
           const bd = Math.hypot(r.x - px, r.y - py);
           if (bd - r.boundR > this.radius) continue;
           if (len > bd + castLen(r.boundR, r.s)) continue;
-          if (segHitsCircle(px, py, qx, qy, len2, r.x, r.y, r.boundR)) {
+          // Broad phase at the bounding circle, then THE EXACT SLAB: the
+          // drawn wedge walks the TRUE oriented corners (rectShadowPath),
+          // so the query must test the same slab. The circle verdict alone
+          // reported "hidden" over ground nothing painted — worst on long
+          // thin slabs at 45° (wall runs, plank spans, wreck hulls), where
+          // boundR sweeps a disc the body fills a sliver of.
+          if (segHitsCircle(px, py, qx, qy, len2, r.x, r.y, r.boundR)
+            && segHitsOBB(px, py, qx, qy, r)) {
             f = v;
             if (f >= this.doodadF) break;
           }
@@ -895,4 +902,38 @@ function segHitsCircle(px: number, py: number, qx: number, qy: number,
   if (t < 0) t = 0; else if (t > 1) t = 1;
   const dx = wx - qx * t, dy = wy - qy * t;
   return dx * dx + dy * dy < r * r;
+}
+
+/** Does the segment (P → P+Q) cross the oriented slab? The EXACT rect
+ *  mirror of segHitsCircle: the segment enters the slab's local frame
+ *  through the SAME rotation rectShadowPath spins its corners by (and the
+ *  melt measures surface distance in), then a standard slab clip walks
+ *  both axes. Runs only behind the boundR broad phase. */
+function segHitsOBB(px: number, py: number, qx: number, qy: number,
+  r: { x: number; y: number; hw: number; hh: number; rot: number }): boolean {
+  const cos = Math.cos(r.rot), sin = Math.sin(r.rot);
+  const sx = px - r.x, sy = py - r.y;
+  const lx = sx * cos + sy * sin, ly = -sx * sin + sy * cos;
+  const dx = qx * cos + qy * sin, dy = -qx * sin + qy * cos;
+  let t0 = 0, t1 = 1;
+  // X slab, then Y slab (unrolled — this sits on the per-query hot path).
+  if (Math.abs(dx) < 1e-9) {
+    if (Math.abs(lx) > r.hw) return false;
+  } else {
+    let ta = (-r.hw - lx) / dx, tb = (r.hw - lx) / dx;
+    if (ta > tb) { const t = ta; ta = tb; tb = t; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  if (Math.abs(dy) < 1e-9) {
+    if (Math.abs(ly) > r.hh) return false;
+  } else {
+    let ta = (-r.hh - ly) / dy, tb = (r.hh - ly) / dy;
+    if (ta > tb) { const t = ta; ta = tb; tb = t; }
+    if (ta > t0) t0 = ta;
+    if (tb < t1) t1 = tb;
+    if (t0 > t1) return false;
+  }
+  return true;
 }

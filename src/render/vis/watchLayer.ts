@@ -27,7 +27,8 @@
 // ---------------------------------------------------------------------------
 
 import {
-  senseReach, WATCH_CFG, watchRungOf, watchValueOf, type TrailPoint,
+  senseReach, WATCH_CFG, watchFanVisible, watchRungOf, watchValueOf,
+  type TrailPoint,
 } from '../../engine/watch';
 import type { Actor } from '../../engine/actor';
 import type { World } from '../../engine/world';
@@ -36,6 +37,14 @@ import { VIS_CFG } from './visConfig';
 /** Scratch (single-threaded render loop): fan bearings + gathered prints. */
 const RELS: number[] = [];
 const PRINTS: TrailPoint[] = [];
+
+/** THE DEV FLOOD (the local-CFG idiom — this layer's own dial): while `all`
+ *  holds, EVERY stamped sense fan draws — the visibility lever
+ *  (watchFanVisible), a kind's cone:false silence and even the locked
+ *  stand-down are all bypassed. The "absolutely invaluable" debugging read:
+ *  actual sight radii on every body at a glance. Flipped by the dev panel's
+ *  Watch tab (src/dev/tabs/watch.ts); never shipped-on — QA chrome only. */
+export const WATCH_FAN_DEV = { all: false };
 
 /** The fan's boundary radius at one bearing — THE tested fold: senseReach
  *  over the stamped scalars, then the sight-ray clip. Exported for the
@@ -65,14 +74,20 @@ export function drawWatchSense(
   if (!cfg.enabled) return;
   const det = viewer.sheet.get('detectability');
   const sneaking = (viewer.charges.get('stealth') ?? 0) > 0;
+  const flood = WATCH_FAN_DEV.all;
   let drawn = 0;
   for (const a of world.actors) {
     const w = a.watch;
-    if (!w || w.cone === false || a.dead || a.senseDetect <= 0) continue;
+    if (!w || a.dead || a.senseDetect <= 0) continue;
+    // THE VISIBILITY LEVER (watchFanVisible): gates WHETHER this fan draws,
+    // never what it says — everything below reads the scan's own stamps
+    // untouched. cone:false keeps its authored hard silence; the dev flood
+    // shows every fan regardless (the full debugging view).
+    if (!flood && (w.cone === false || !watchFanVisible(a, w))) continue;
     const dx = a.pos.x - viewer.pos.x, dy = a.pos.y - viewer.pos.y;
     if (dx * dx + dy * dy > cfg.cullDist * cfg.cullDist) continue;
     const v = watchValueOf(a, w, world.time);
-    if (v >= 1) continue; // locked: the fight is the read
+    if (v >= 1 && !flood) continue; // locked: the fight is the read
     if (drawn++ >= cfg.maxCones) break;
 
     // The fan bearings: uniform rays + exact cone-edge pairs (crisp arc).

@@ -38,7 +38,7 @@ import type { DeathBurstDef, WormLookSpec, WormWoundSpec } from '../data/monster
 import type { PartSpec } from '../render/vis/parts';
 import type { TellDress, TellSpec } from './tells';
 import type { PackAggregate } from './pack';
-import type { TrailPoint, WatchSpec } from './watch';
+import type { TrailPoint, WatchFanMode, WatchSpec } from './watch';
 
 /** One entry of Actor.gainEvents — a gain that landed this frame. The proc
  *  triggers read kind/id/depth; the SYMPATHY FABRIC reads the payload tail
@@ -500,6 +500,13 @@ export class Actor {
    *  no ladder — the gate, the sweep and the drawn cone all short-circuit
    *  (null-cost on the watchless roster). */
   watch?: WatchSpec;
+  /** THE FAN-VISIBILITY STAMP (watchFanVisible): per-entity override for
+   *  whether this body's sense fan DRAWS — 'show' forces the classic
+   *  stealth-cone read, 'hide' strips the fan UI (the body's tells still
+   *  speak). Content stamps it after minting (the aiPost spawner-stamp
+   *  idiom); absent = the kind's WatchSpec.fan, else the standing law
+   *  (wild show, owned hide). Never changes what a drawn fan SAYS. */
+  watchFan?: WatchFanMode;
   /** Banked suspicion + its feed clock (the lazy-decay pair — always read
    *  through watchValueOf, never raw; decay is earned in the read). */
   watchS = 0;
