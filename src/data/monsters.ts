@@ -1474,7 +1474,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // the def is untagged so PACK bats count toward objectives — ambient bats
   // arrive through the roost's summon rule, which stamps them
   // 'predator'/exempt. Terrestrial dress only: the fantastical cave pools —
-  // rocklings, constructs — are a coming chip's own identity work.)
+  // rocklings, constructs — live in CAVE_POOLS below, rolled per zone by
+  // World.caveAirFor; this key stays the biome-stamped 'cavern' answer.)
   cavern: [
     { id: 'glow_moth', chance: 0.65, count: [3, 6] },
     // the Verminfall — the dark's small tenants.
@@ -1707,6 +1708,99 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   //    rivers repaint nothing); a row here could never spawn.
   // ======================================================================
 };
+
+// ============================================================================
+// THE CAVE POOLS (the pooled-fauna fabric): which ambient REPERTOIRE a
+// standard cave breathes — rolled ONCE per zone on the zone's own mint seed
+// by World.caveAirFor (foreordained: the same cave answers the same forever;
+// only the seed moves the roll — the body spawns beneath it stay live dice,
+// spawnWildlife unchanged). Rows are PREDICATE claims, the lair seat-row
+// idiom: a row CLAIMS generalist cave faces (explicit ids), an optional
+// caveDepth envelope (presence algebra — the strata axis), optional anchor
+// affinity weights (pickCaveFace's algebra: named weight, else '*' ?? 1),
+// and a base weight; the resolver folds and one salted draw answers.
+//
+// THE THEMED BYPASS lives in the resolver, not here: a face whose
+// caveFace.biomes claims a country at CAVE_POOL_CFG.themedBar or better IS
+// that country underground and breathes ITS air wherever the ladder hangs
+// (the magma gallery under plains is still a volcano's throat) — only the
+// unclaimed generalists (cavern, depths) roll pools. THE ANCHOR ECHO: the
+// surface country's own table stands in every roll at anchorEcho weight, so
+// provenance keeps a living seat — some caverns under wolf country still
+// breathe wolf country's air (the echo winning falls to the anchor lane).
+// ============================================================================
+
+export interface CavePoolRow {
+  id: string;
+  /** Generalist cave-face tileset ids this pool claims (explicit — the lair
+   *  fold's doctrine: a row CLAIMS, the resolver answers; a new generalist
+   *  face joins the pools by being named here). */
+  faces: string[];
+  /** caveDepth envelope (presence algebra — from/fadeIn/to/fadeOut/stops).
+   *  Absent = every depth at full weight. */
+  strata?: PresenceSpec;
+  /** Anchor-biome affinity weights (named weight, else '*' ?? 1) — thin or
+   *  fatten this pool under particular surface countries. */
+  anchors?: Record<string, number>;
+  weight: number;
+  table: WildlifeRow[];
+}
+
+export const CAVE_POOL_CFG = {
+  /** A face whose caveFace.biomes names a country at this weight or better
+   *  is THEMED — it breathes that country's own WILDLIFE, never a pool. */
+  themedBar: 4,
+  /** The anchor country's own table stands in every pool roll at this
+   *  weight — provenance keeps a seat at the table it used to own. */
+  anchorEcho: 1.1,
+} as const;
+
+export const CAVE_POOLS: CavePoolRow[] = [
+  // THE TERRESTRIAL POOL — the cave as the earth actually keeps it: bats in
+  // the ceiling, rats in the scree, the snail's slow clock, and something
+  // pale that never needed eyes. The common answer, weighted so.
+  {
+    id: 'cave_terrestrial', faces: ['cavern', 'depths'], weight: 1.5,
+    table: [
+      { id: 'bat_roost', chance: 0.5, count: [1, 2] },
+      { id: 'cave_cricket', chance: 0.5, count: [2, 4] },
+      { id: 'dripstone_snail', chance: 0.55, count: [1, 3] },
+      { id: 'gutter_rat', chance: 0.4, count: [2, 3] },
+      { id: 'gutter_roach', chance: 0.45, count: [3, 6] },
+      { id: 'blind_salamander', chance: 0.5, count: [1, 2], near: 'water' },
+      { id: 'glow_moth', chance: 0.3, count: [2, 4] },
+    ],
+  },
+  // THE EXOTIC POOL — the cave as nothing on the surface ordered: drifting
+  // bells of almost-nothing, striders that stop mid-step to consider you,
+  // an organ out for a stroll. Whispers near the light; owns the deep
+  // (the strata envelope — depth 1 at half weight, full from 2).
+  {
+    id: 'cave_exotic', faces: ['cavern', 'depths'], weight: 0.9,
+    strata: { from: 2, fadeIn: 2 },
+    table: [
+      { id: 'veil_drifter', chance: 0.6, count: [2, 4] },
+      { id: 'pale_strider', chance: 0.45, count: [1, 2] },
+      { id: 'wandering_polyp', chance: 0.4, count: [1, 3] },
+      { id: 'scuttle_mite', chance: 0.45, count: [3, 6] },
+      { id: 'spore_puff', chance: 0.25, count: [2, 3] },
+    ],
+  },
+  // THE FEY POOL — the cave as the old stories kept it: rocklings waltzing
+  // at geological tempo, splinters of the dark's own glitter keeping house
+  // in the crystals they were born of, and a light that wants following.
+  // The rare answer, and the reason to peer into one more cave.
+  {
+    id: 'cave_fey', faces: ['cavern', 'depths'], weight: 0.6,
+    table: [
+      { id: 'rockling', chance: 0.7, count: [2, 4] },
+      { id: 'geodeling', chance: 0.6, count: [1, 3] },
+      { id: 'will_o_wisp', chance: 0.45, count: [2, 3] },
+      { id: 'glow_moth', chance: 0.4, count: [2, 4] },
+      { id: 'gilded_scamp', chance: 0.04, count: [1, 1] },
+    ],
+  },
+];
 
 /** THE DIVE-CYCLE WHEEL (the murmuration's brain, as a data factory): aloft
  *  ⇄ stoop ⇄ grounded on the script FSM. Aloft: weave the ring flock-heavy —
@@ -18485,6 +18579,101 @@ export const MONSTERS: Record<string, MonsterDef> = {
       morale: { skittish: { radius: 90, duration: [0.8, 1.4] } },
       move: { style: 'juke', hookEvery: [0.2, 0.4], hookArc: 1.6, freezeChance: 0.55, freeze: [0.5, 1.1] },
       tempo: { kite: 1.6, windedFor: [1.0, 1.6] },
+    },
+  },
+
+  // --- THE CAVE POOLS' KIN (the pooled-fauna fabric, CAVE_POOLS) ------------
+  // The three repertoires' own bodies. Texture, never encounters — the
+  // critter contract throughout (skittish, near-blind, dropless).
+
+  // The blind salamander: milk-white and eyeless, drawn up out of the black
+  // water. It has never needed to hurry and does not start now.
+  blind_salamander: {
+    id: 'blind_salamander', name: 'Blind Salamander',
+    color: '#e8e0e2', shape: 'oval', radius: 7, look: 'blind_salamander',
+    base: { life: 14, moveSpeed: 28, evasion: 30, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.05, drops: 0,
+    turnSpeed: 1.6,
+    scaleVariance: [0.8, 1.35],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 36, duration: [0.6, 1.2] } },
+    },
+  },
+  // The veil drifter: a bell of almost-nothing riding air no one else can
+  // feel. It does not live in the cave so much as pass through it, forever.
+  veil_drifter: {
+    id: 'veil_drifter', name: 'Veil Drifter',
+    color: '#b8a8d8', shape: 'oval', radius: 9, material: 'ethereal', look: 'veil_drifter',
+    base: { life: 10, moveSpeed: 32, evasion: 55, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    light: { radius: -3.2, color: '#b8a8d8', intensity: 0.3, flicker: 0.6, radiance: { at1: 0.3 } },
+    scaleVariance: [0.7, 1.4],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 60, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.8, 1.6], hookArc: 1.1, freezeChance: 0.2, freeze: [0.4, 0.9] },
+    },
+  },
+  // The pale strider: legs first, the body an afterthought hung between
+  // them. It stops mid-stride to consider you, then finishes the step.
+  pale_strider: {
+    id: 'pale_strider', name: 'Pale Strider',
+    color: '#d8d0c8', shape: 'oval', radius: 10, look: 'pale_strider',
+    base: { life: 22, moveSpeed: 48, evasion: 35, mana: 0 },
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.08, drops: 0,
+    turnSpeed: 1.4,
+    scaleVariance: [0.85, 1.5],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 70, duration: [1.0, 1.6] } },
+      move: { style: 'juke', hookEvery: [1.2, 2.4], hookArc: 0.7, freezeChance: 0.45, freeze: [0.8, 1.8] },
+    },
+  },
+  // THE ROCKLING (the fey pool's named debut): a fist of the cave that got
+  // up one day. It waltzes at geological tempo — drifting arcs, long stone
+  // stillnesses — and is unperturbed BY LAW: it yields only to a boot
+  // planted directly on its head, briefly, as a courtesy.
+  rockling: {
+    id: 'rockling', name: 'Rockling',
+    color: '#8a8478', shape: 'oval', radius: 8, material: 'stone', look: 'rockling',
+    base: { life: 30, moveSpeed: 22, evasion: 10, armor: 40, mana: 0 },
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['construct'],
+    detection: 0.05, drops: 0,
+    turnSpeed: 1.1,
+    scaleVariance: [0.7, 1.5],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 22, duration: [0.4, 0.8] } },
+      move: { style: 'juke', hookEvery: [1.8, 3.4], hookArc: 0.9, freezeChance: 0.35, freeze: [1.0, 2.4] },
+    },
+  },
+  // THE GEODELING (the fey pool's other named debut): a splinter of the
+  // cave's own glitter that keeps house in the crystals it was born of —
+  // the habitat fabric IS its biography (it putters the cluster's yard and
+  // no further, forever). A cave without crystals simply has none.
+  geodeling: {
+    id: 'geodeling', name: 'Geodeling',
+    color: '#9fd8ff', shape: 'diamond', radius: 7, material: 'crystal', look: 'geodeling',
+    base: { life: 20, moveSpeed: 30, evasion: 20, armor: 25, mana: 0 },
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['construct'],
+    // noObjective BY LAW (the soft-lock guard, the skep precedent): its home
+    // cluster blocks movement — a clear must never wait on a body a build
+    // cannot reach inside its own furniture.
+    noObjective: true,
+    detection: 0.05, drops: 0,
+    habitat: { kind: 'crystal_cluster', grace: 90 },
+    light: { radius: -2.8, color: '#9fd8ff', intensity: 0.35, flicker: 0.5, radiance: { at1: 0.4 } },
+    turnSpeed: 1.3,
+    scaleVariance: [0.75, 1.3],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 30, duration: [0.5, 1.0] } },
+      move: { style: 'juke', hookEvery: [1.2, 2.6], hookArc: 1.0, freezeChance: 0.3, freeze: [0.8, 1.8] },
     },
   },
 

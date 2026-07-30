@@ -8539,6 +8539,60 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.6,
   },
+
+  // --- THE CAVE POOLS' KIN (the pooled-fauna fabric) ------------------------
+  /** The blind salamander: milk-pale and eyeless — the dark took the eyes
+   *  back and the face is all patience now. */
+  blind_salamander: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.1, seed: 41 } },
+      { kind: 'tail', params: { len: 1.0 } },
+      { kind: 'legs', scale: 0.8, params: { n: 4 } },
+      // No eyes, on purpose.
+    ],
+    shadowScale: 0.6,
+  },
+  /** The veil drifter: a bell of gauze around a dim heart, trailing light
+   *  it never quite owns. */
+  veil_drifter: {
+    parts: [
+      { kind: 'soulGauze', scale: 0.95, alpha: 0.55 },
+      { kind: 'disc', scale: 0.45, role: 'glow' },
+      { kind: 'halo', scale: 1.05, alpha: 0.45 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, params: { n: 2 } }],
+    shadowScale: 0.35,
+  },
+  /** The pale strider: stilts wearing a thought — the body is barely the
+   *  point. */
+  pale_strider: {
+    parts: [
+      { kind: 'legs', scale: 1.7, params: { n: 4 } },
+      { kind: 'disc', scale: 0.55, y: -0.1 },
+      { kind: 'eyes', color: '#3a3a44', params: { spread: 0.5, dist: 0.45, size: 0.08 } },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The rockling: a cobble with a brow — two dim gleams under the moss,
+   *  and no opinion of you whatsoever. */
+  rockling: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.22, seed: 19 } },
+      { kind: 'spots', color: '#5a6a4e', scale: 0.7, alpha: 0.8 },
+      { kind: 'eyes', color: '#d8cfa8', params: { spread: 0.34, dist: 0.4, size: 0.07 } },
+    ],
+    shadowScale: 0.85,
+  },
+  /** The geodeling: the cluster's own glitter, up and about — facets over a
+   *  cold small light. */
+  geodeling: {
+    parts: [
+      { kind: 'crystalGrowths', scale: 1.0, params: { n: 5 } },
+      { kind: 'disc', scale: 0.4, role: 'glow' },
+      { kind: 'halo', scale: 0.8, alpha: 0.4 },
+    ],
+    shadowScale: 0.55,
+  },
   /** The vent salamander: ember-spotted and utterly unbothered. */
   vent_salamander: {
     parts: [

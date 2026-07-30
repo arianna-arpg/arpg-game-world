@@ -53,7 +53,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
@@ -132,7 +132,7 @@ import {
 } from './crafting';
 import { DESCENT_AFFIX_FAMILIES, ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
-import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
+import { TILESETS, CAVE_FACE_IDS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from '../quests/types';
@@ -10080,17 +10080,92 @@ export class World {
    *  probe (drawn == tested). Authored fauna wins outright. A BIOMED zone
    *  reads its own country — and a biome with no table stays fauna-free
    *  (the standing law; the ascent shelf's `biome = 'aether'` stamp leans
-   *  on it to keep hares out of the clouds). A biome-less mint (every
-   *  cave/sidezone rung) reads its stamped ANCHOR — the surface country
-   *  the whole ladder hangs beneath (ZoneDef.anchor) — so a gallery under
-   *  volcanic country breathes ember wisps, not meadow hares; plains is
-   *  the net under BOTH misses (no anchor at all, or an anchor whose
-   *  country keeps no table): unrowed provenance degrades to the meadow
-   *  texture it always had, never to silence. */
+   *  on it to keep hares out of the clouds). A biome-less CAVE consults
+   *  THE CAVE AIR next (caveAirFor below): themed faces breathe their
+   *  claimed country, standard faces roll the CAVE_POOLS repertoires on
+   *  the mint seed. Whatever remains reads its stamped ANCHOR — the
+   *  surface country the whole ladder hangs beneath (ZoneDef.anchor) — so
+   *  a gallery under volcanic country breathes ember wisps, not meadow
+   *  hares; plains is the net under BOTH misses (no anchor at all, or an
+   *  anchor whose country keeps no table): unrowed provenance degrades to
+   *  the meadow texture it always had, never to silence. */
   static wildlifeTableFor(def: ZoneDef): (typeof WILDLIFE)[string] | undefined {
     if (def.fauna) return def.fauna;
     if (def.biome !== undefined) return WILDLIFE[def.biome];
+    const air = World.caveAirFor(def);
+    if (air?.length) return air;
     return WILDLIFE[def.anchor ?? 'plains'] ?? WILDLIFE.plains;
+  }
+
+  /** The pool roll's identity salt (the CAVE_FACE_SALT discipline): the
+   *  draw rides its own stream derived off the zone's mint seed — nothing
+   *  shared moves, and the answer is a pure function of the def. */
+  private static readonly CAVE_POOL_SALT = 0xca9e51;
+
+  /** THE CAVE AIR RESOLVER (the pooled-fauna fabric, data in CAVE_POOLS):
+   *  which ambient repertoire a CAVE breathes, resolved from the minted def
+   *  alone — pure and seed-FOREORDAINED (the same cave answers the same on
+   *  every visit; only the seed moves the roll), shared by wildlifeTableFor
+   *  and the cohort probe (drawn == tested). Returns a table, or undefined
+   *  to fall through to the standing anchor law.
+   *
+   *  THE FACE ORACLE: mintCave stamps `packs: ts.packs` BY REFERENCE, so a
+   *  minted cave's packs object fingerprints the tileset it actually wears
+   *  — honest for face-rolled AND forced mints alike. A def whose packs
+   *  matches no caveFace claimant (den hollows, cellars, interiors, stair
+   *  floors — and BLENDED caves, whose packs were re-minted by the blend
+   *  merge) simply keeps the standing anchor law. Probe_cohort RIG F pins
+   *  the reference contract + fingerprint uniqueness, so a future copy-
+   *  spread in the mint turns a light red rather than silently killing
+   *  this lane.
+   *
+   *  THE THEMED BYPASS: a face whose caveFace.biomes claims a country at
+   *  CAVE_POOL_CFG.themedBar or better IS that country underground — it
+   *  breathes the claimed country's own WILDLIFE wherever the ladder hangs
+   *  (the magma gallery under plains is still a volcano's throat; the
+   *  trench is drowned under any shore). A themed face over a table-less
+   *  country falls to the anchor lane — themed ground never pools.
+   *
+   *  THE POOL ROLL: generalist faces (no themed claim — cavern, depths)
+   *  fold the CAVE_POOLS rows that claim them (face list × strata envelope
+   *  × anchor affinity × weight), seat THE ANCHOR ECHO among the
+   *  candidates (the surface country's own table at anchorEcho weight —
+   *  provenance keeps a living seat), and ONE draw on the def-seed's
+   *  salted sub-stream picks the winner; the echo winning falls through to
+   *  the anchor lane. Dimension-hung ladders (hell's caves, realm pockets)
+   *  never pool — their worlds' texture is authored, not ambient; the body
+   *  spawns beneath the chosen table stay live dice (spawnWildlife
+   *  unchanged). */
+  static caveAirFor(def: ZoneDef): (typeof WILDLIFE)[string] | undefined {
+    if (def.caveDepth == null || def.seed == null || def.dimension !== undefined) return undefined;
+    const face = def.packs
+      ? CAVE_FACE_IDS.find(id => TILESETS[id]?.packs === def.packs) : undefined;
+    const spec = face !== undefined ? TILESETS[face]?.caveFace : undefined;
+    if (face === undefined || !spec) return undefined;
+    // THE THEMED BYPASS: the face's own biomes map names its country.
+    let themed: string | undefined; let best = 0;
+    for (const [b, bw] of Object.entries(spec.biomes ?? {})) {
+      if (b !== '*' && bw >= CAVE_POOL_CFG.themedBar && bw > best) { themed = b; best = bw; }
+    }
+    if (themed !== undefined) return WILDLIFE[themed];
+    // THE POOL ROLL: claiming rows × strata × anchor affinity, plus the echo.
+    const cands: { table?: (typeof WILDLIFE)[string]; w: number }[] = [];
+    for (const p of CAVE_POOLS) {
+      if (!p.faces.includes(face)) continue;
+      const aff = p.anchors
+        ? (def.anchor !== undefined && p.anchors[def.anchor] !== undefined
+          ? p.anchors[def.anchor] : p.anchors['*'] ?? 1)
+        : 1;
+      const w = p.weight * presenceMul(p.strata, def.caveDepth) * aff;
+      if (w > 0) cands.push({ table: p.table, w });
+    }
+    if (!cands.length) return undefined;
+    cands.push({ table: undefined, w: CAVE_POOL_CFG.anchorEcho }); // the echo's seat
+    let total = 0;
+    for (const c of cands) total += c.w;
+    let roll = new Rng(((def.seed ^ World.CAVE_POOL_SALT) >>> 0)).range(0, total);
+    for (const c of cands) { roll -= c.w; if (roll <= 0) return c.table; }
+    return cands[cands.length - 1].table;
   }
 
   /** Populate the zone's ambient FAUNA from its provenance WILDLIFE table

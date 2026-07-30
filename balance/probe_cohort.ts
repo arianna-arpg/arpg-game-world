@@ -23,13 +23,25 @@
 //      volcanic-anchored biome-less cave births ONLY volcanic-table fauna,
 //      anchor-less ground keeps plains, and the cohort law still outranks
 //      the anchor (a closed zone births nothing — the law this rig pins).
+//   F. THE CAVE AIR (World.caveAirFor, the pooled-fauna fabric) — a
+//      standard cave's ambient repertoire is FOREORDAINED by its mint seed
+//      (same def, same pool, forever; only the seed moves the roll, and the
+//      anchor echo genuinely wins some caves); themed faces breathe their
+//      claimed country wherever they surface; foreign fingerprints,
+//      dimension ladders and seedless ground keep the standing anchor law;
+//      real mintCave defs flow the lane end to end; and the geodeling homes
+//      to the crystal it was born of (the habitat fabric, live).
 //
 //   npx tsx balance/probe_cohort.ts [-- --verbose]
 
-import { FACTIONS, factionStance, WILDLIFE } from '../src/data/monsters';
+import { CAVE_POOLS, MONSTERS, FACTIONS, factionStance, WILDLIFE } from '../src/data/monsters';
 import { ZONES, type ZoneDef } from '../src/data/zones';
+import { TILESETS, CAVE_FACE_IDS } from '../src/data/tilesets';
 import { BIOMES } from '../src/world/biomes';
 import { World } from '../src/engine/world';
+import { mintCave } from '../src/engine/worldgen';
+import { presenceMul } from '../src/engine/presence';
+import { vec } from '../src/core/math';
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 
 const VERBOSE = process.argv.includes('--verbose');
@@ -193,6 +205,154 @@ const wlStub = (over: Partial<ZoneDef>): ZoneDef => ({
   check('E6 the cohort law still outranks the anchor read (closed zone births none)',
     closed.length === 0, `${closed.length} born`);
   note(`anchored census: ${[...new Set(anchored)].join(', ') || 'none'}`);
+}
+
+// --- RIG F: the cave air (pooled + themed lanes, seed-foreordained) --------------
+{
+  // F0 — THE FACE ORACLE's ground: every caveFace claimant carries its own
+  // packs object and no two share one — the fingerprint mintCave stamps by
+  // reference (`packs: ts.packs`) is unambiguous. A copy-spread in the mint
+  // or a shared packs literal turns THIS light red before the lane can lie.
+  const facePacks = CAVE_FACE_IDS.map(id => TILESETS[id]?.packs);
+  check('F0 every cave face carries its own packs fingerprint (unique, defined)',
+    facePacks.every(p => p !== undefined) && new Set(facePacks).size === facePacks.length,
+    CAVE_FACE_IDS.join(','));
+  check('F1 every pool claims real faces and every pool row names a real monster',
+    CAVE_POOLS.length >= 3
+    && CAVE_POOLS.every(p => p.faces.every(f => CAVE_FACE_IDS.includes(f))
+      && p.table.length > 0 && p.table.every(r => !!MONSTERS[r.id])));
+
+  // The pool-lane stub: a cave-shaped def wearing a REAL face's fingerprint.
+  // (The wlStub chassis carries crossroads' authored packs — exactly the
+  // foreign-fingerprint control the forced-mint leg wants.)
+  const caveStub = (over: Partial<ZoneDef>): ZoneDef => ({
+    ...wlStub({}), caveDepth: 1, seed: 12345, packs: TILESETS.cavern.packs, ...over,
+  });
+  const poolTables = new Set<unknown>(CAVE_POOLS.map(p => p.table));
+
+  // F2/F3 — FOREORDAINED: same def, same answer; a spread clone (fresh
+  // object, same fingerprint) answers identically; the answer is a pool
+  // table or the echo (undefined), never anything else.
+  const d1 = caveStub({});
+  const a1 = World.caveAirFor(d1);
+  check('F2 the roll is a pure function of the def (same def + clone, same answer)',
+    World.caveAirFor(d1) === a1 && World.caveAirFor({ ...d1 }) === a1,
+    a1 ? `a pool of ${a1.length} rows` : 'the anchor echo');
+  check('F3 a cavern-faced cave answers a pool or the echo, nothing else',
+    a1 === undefined || poolTables.has(a1));
+
+  // F4/F5 — the seed MOVES the roll and the echo keeps its seat.
+  const seen = new Set<unknown>();
+  let legal = true;
+  for (let s = 1; s <= 300; s++) {
+    const a = World.caveAirFor(caveStub({ seed: s * 7919 }));
+    seen.add(a);
+    if (a !== undefined && !poolTables.has(a)) legal = false;
+  }
+  check('F4 the seed moves the roll (≥3 outcomes over 300 seeds, all legal)',
+    legal && seen.size >= 3, `${seen.size} distinct outcomes`);
+  check('F5 the anchor echo genuinely wins some caves (provenance keeps its seat)',
+    seen.has(undefined));
+
+  // F6 — THE THEMED BYPASS: each themed face breathes its claimed country
+  // wherever it hangs (the anchor deliberately foreign in every leg).
+  const themedLegs: [string, string][] = [
+    ['magma_gallery', 'volcanic'], ['rime_gallery', 'tundra'],
+    ['fungal_hollow', 'mycelia'], ['marine_trench', 'deepsea'],
+    ['rootways', 'garden'],
+  ];
+  for (const [face, biome] of themedLegs) {
+    check(`F6 ${face} breathes ${biome} under a plains anchor`,
+      (WILDLIFE[biome]?.length ?? 0) > 0
+      && World.caveAirFor(caveStub({ caveDepth: 3, anchor: 'plains', packs: TILESETS[face]?.packs }))
+        === WILDLIFE[biome]);
+  }
+
+  // F7-F9 — structural refusals: foreign fingerprints (dens, cellars,
+  // interiors, blends), dimension ladders, seedless and surface ground all
+  // keep the standing anchor law.
+  check('F7 a foreign-fingerprint mint refuses the lane (the den law)',
+    World.caveAirFor(caveStub({ packs: ZONES.crossroads.packs })) === undefined
+    && World.wildlifeTableFor(caveStub({ packs: ZONES.crossroads.packs, anchor: 'volcanic' }))
+      === WILDLIFE.volcanic);
+  check('F8 a dimension-hung ladder never pools',
+    World.caveAirFor(caveStub({ dimension: 'hell' })) === undefined);
+  check('F9 seedless or surface ground never pools',
+    World.caveAirFor(caveStub({ seed: undefined })) === undefined
+    && World.caveAirFor({ ...wlStub({}), packs: TILESETS.cavern.packs }) === undefined);
+
+  // F10 — the strata envelope is live data (the exotic pool whispers
+  // shallow and owns the deep) — exact, no dice.
+  const exotic = CAVE_POOLS.find(p => p.id === 'cave_exotic');
+  check('F10 the exotic pool rises with depth (its envelope is live)',
+    !!exotic && presenceMul(exotic?.strata, 1) < presenceMul(exotic?.strata, 3));
+
+  // F11/F12 — REAL MINTS flow the lane end to end: actual mintCave defs
+  // resolve to a legal non-silent answer, the same entrance seed re-answers
+  // identically (foreordained through the real stamp path), and pooled air
+  // reaches a healthy share of real caves.
+  const parent: ZoneDef = { ...ZONES.crossroads, id: 'qa_pool_parent', biome: 'grove' };
+  let realLegal = true; let rePinned = true; let pooled = 0;
+  for (let s = 0; s < 40; s++) {
+    const seed = 1000 + s * 331;
+    const def = mintCave(parent, seed, `qa_pool_cave_${s}`);
+    const a = World.wildlifeTableFor(def);
+    const b = World.wildlifeTableFor(mintCave(parent, seed, `qa_pool_cave_${s}b`));
+    if (a !== b) rePinned = false;
+    if (!a || a.length === 0) realLegal = false;
+    if (poolTables.has(a)) pooled++;
+  }
+  check('F11 real mintCave defs answer the lane (never silent, seed-stable)',
+    realLegal && rePinned);
+  check('F12 pooled air reaches real minted caves', pooled > 0, `${pooled}/40 pooled`);
+
+  // F13/F14 — the pooled census, live (the E-rig idiom): a real minted cave
+  // whose air is a POOL births ONLY that repertoire, however the dice fall.
+  let poolDef: ZoneDef | undefined;
+  for (let s = 0; s < 200 && !poolDef; s++) {
+    const def = mintCave(parent, 5000 + s * 613, `qa_pool_live_${s}`);
+    const a = World.caveAirFor(def);
+    if (a && poolTables.has(a)) poolDef = def;
+  }
+  check('F13 a pooled real mint exists to census', !!poolDef);
+  if (poolDef) {
+    const table = World.caveAirFor(poolDef)!;
+    const ids = new Set(table.map(r => r.id));
+    const actors = w.actors as { defId?: string }[];
+    const before = actors.length;
+    for (let i = 0; i < 25; i++) w.spawnWildlife(poolDef);
+    const born = actors.slice(before).map(a => a.defId ?? '?');
+    check('F14 the pooled cave births ONLY its rolled repertoire',
+      born.length > 0 && born.every(id => ids.has(id)),
+      `${born.length} born; foreign: ${born.filter(id => !ids.has(id)).join(',') || 'none'}`);
+    note(`pooled census: ${[...new Set(born)].join(', ') || 'none'}`);
+  }
+
+  // F15-F19 — THE GEODELING HOMES (the habitat fabric, live): no crystal,
+  // no geodeling; a planted cluster seats the band inside its yard and the
+  // yard HOLDS them — the native-to-the-doodad promise, walked.
+  const clusterKind = MONSTERS.geodeling?.habitat?.kind ?? '';
+  check('F15 the arena starts bare of the geodeling\'s home doodad',
+    clusterKind !== '' && (w.doodads as { kind: string }[]).every(d => d.kind !== clusterKind));
+  const fauna = [{ id: 'geodeling', chance: 1, count: [2, 2] as [number, number] }];
+  const actors2 = w.actors as { defId?: string }[];
+  const b0 = actors2.length;
+  w.spawnWildlife(wlStub({ id: 'qa_wl_geode0', fauna }));
+  check('F16 no crystal, no geodeling (habitat gates the spawn outright)',
+    actors2.length === b0);
+  w.doodads.push({ pos: vec(900, 900), radius: 16, kind: clusterKind } as never);
+  w.spawnWildlife(wlStub({ id: 'qa_wl_geode1', fauna }));
+  type Bodied = { defId?: string; pos: { x: number; y: number }; radius: number };
+  const kin = (w.actors as Bodied[]).filter(a => a.defId === 'geodeling');
+  const grace = MONSTERS.geodeling?.habitat?.grace ?? 24;
+  const home = (a: Bodied): boolean =>
+    Math.hypot(a.pos.x - 900, a.pos.y - 900) <= 16 + grace + a.radius + 6;
+  check('F17 with a cluster planted the geodelings arrive', kin.length === 2,
+    `${kin.length} born`);
+  check('F18 …born inside the cluster\'s yard', kin.length > 0 && kin.every(home));
+  for (let i = 0; i < 240; i++) w.update(1 / 30);
+  check('F19 …and the yard HOLDS them (the habitat confine, walked ~8s)',
+    kin.length > 0 && kin.every(home));
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);
