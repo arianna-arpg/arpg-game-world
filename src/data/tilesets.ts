@@ -4284,6 +4284,16 @@ export const TILESETS: Record<string, TilesetDef> = {
       interiorWall: 'durance_wall', floorStyle: 'tile',
       corridorCells: 2.2, doorChance: 0.55, doorBreakChance: 0.35,
     },
+    // What the citadel's masonry keeps (the hollows fabric): every durance
+    // face is an interior grid by biome law (dungeon/edifice — both
+    // GridWalkField recipes), so the budget never idles. The walls hold what
+    // the halls walled IN: cells bricked over still tenanted, confiscated
+    // stores of the Kept, warders' bypasses through the thick courses, and
+    // the odd penitent who asked for the brick.
+    hollows: {
+      count: [1, 2],
+      table: { ambush_hollow: 3, cache_hollow: 2, passage_hollow: 2, hermit_hollow: 1 },
+    },
     // What EVERY hall keeps: the stains, the webs of long custody, its own
     // cold lights, and the bones of the kept.
     common: [
@@ -4476,6 +4486,19 @@ export const TILESETS: Record<string, TilesetDef> = {
     structures: [
       { structure: 'dungeon_block', chance: 0.3 },
     ],
+    // What the grave-walls were paid to keep (the hollows fabric): burial
+    // stores interred with their owners, sealed dead the masons heard moving,
+    // processional bypasses between tomb-halls, and the odd shaft down to the
+    // labyrinths under the open graves (crevice — noDeeper pockets filter
+    // descending kinds at mint). GRID faces only, by the stamper's law: the
+    // biome's interior rolls (dungeon / labyrinth / edifice) and the mixture
+    // faces that grid lazily (massif, metropolis, a plains face raising a
+    // plan structure); the OPEN graveland faces keep the classic secret_wall
+    // beat from `common`.
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2.5, passage_hollow: 2, crevice_hollow: 1 },
+    },
   },
 
   // THE OSSUARY — the Necropolis' interior sanctum (realm-only: frontier
@@ -4512,6 +4535,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
     },
     sizeW: [1400, 1800], sizeH: [1050, 1350], biome: 'ossuary',
+    // HOLLOWS ADJUDICATION (2026-07-29): NO budget here, deliberately. Every
+    // ossuary face is convex ('plains' — this row AND the biome's own
+    // allowedLayouts), and stampHollows is grid-only, so a budget authored
+    // here would be inert data. The openness IS the identity (the CLARITY
+    // doctrine above: long sightlines, the stamps carry it) — this sanctum is
+    // the OPEN half of the sepulcher blend, and the walled-secrets half
+    // already lives on sepulcher_sands' own budget. If the sanctum ever grows
+    // a grid face (rooms/labyrinth bone-stacks), author the budget WITH it.
     caveLayouts: { plains: 1 }, // the open charnel crawl — the STAMPS carry the identity
     compositions: [{ composition: 'charnel_rotunda', chance: 0.5 }],
     // What the sanctum always IS, whichever face it shows: litter drifts,

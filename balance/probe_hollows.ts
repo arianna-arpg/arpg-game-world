@@ -12,9 +12,15 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { mintCave } from '../src/engine/worldgen';
 import { GridWalkField } from '../src/world/gridWalk';
-import { hollowShapeOf } from '../src/data/hollows';
+import { hollowDef, hollowDescends, hollowShapeOf } from '../src/data/hollows';
+import { generateLayout } from '../src/engine/levelgen';
 import type { HollowSpec } from '../src/engine/levelgen';
-import type { ZoneDef } from '../src/data/zones';
+import type { HollowRollSpec, ZoneDef } from '../src/data/zones';
+import { TILESETS } from '../src/data/tilesets';
+import type { TilesetDef } from '../src/data/tilesets';
+import { BIOMES } from '../src/world/biomes';
+import { Rng } from '../src/core/rng';
+import { vec } from '../src/core/math';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -157,6 +163,133 @@ if (amb) {
   check('revive never re-wakes (memory owns survivors)', totalAfterReturn <= totalAfterOpen,
     `${totalAfterReturn} after return vs ${totalAfterOpen} after open`);
   leaveToHome();
+}
+
+// --- 5-7. THE AUTHORED BUDGETS (durance + crypt author; ossuary abstains) ----
+// stampHollows is GRID-ONLY, so a tileset budget is honest exactly where the
+// host's own layout rolls build a GridWalkField. These sections MEASURE that
+// qualification per host — run each face's real generator headless (the
+// genqa call shape) with the tileset's OWN authored budget, and assert the
+// walk class plus the stamping. Never assumed from the biome table alone.
+
+/** Generate one face of a tileset headless; report walk class + hollows. */
+const genFace = (
+  ts: TilesetDef, layoutType: string, seed: number,
+  budget: HollowRollSpec | undefined, size: { w: number; h: number },
+): { grid: boolean; hollows: HollowSpec[] } => {
+  const def: ZoneDef = {
+    id: `probe_h_${ts.id}_${layoutType}_${seed}`, name: 'probe face', level: 8,
+    size: { w: size.w, h: size.h },
+    theme: ts.theme, layout: [...(ts.common ?? []), ...ts.layout],
+    layoutType,
+    ...(ts.layoutParams ? { layoutParams: ts.layoutParams } : {}),
+    ...(budget ? { hollows: budget } : {}),
+    objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    seed,
+  };
+  const arena = { w: size.w, h: size.h };
+  const layout = generateLayout(def, arena, new Rng(seed), vec(120, arena.h / 2),
+    [vec(arena.w - 120, arena.h / 2)]);
+  return { grid: layout.walk instanceof GridWalkField, hollows: layout.hollows ?? [] };
+};
+
+/** Hunt seeds until a face stamps (best-effort by the fabric's own law);
+ *  reports whether EVERY hunted seed built a grid + the first placed count. */
+const huntFace = (ts: TilesetDef, face: string, salt: number, budget: HollowRollSpec,
+  size: { w: number; h: number }): { gridEvery: boolean; placed: number } => {
+  let gridEvery = true, placed = 0;
+  for (let s = 0; s < 10 && !placed; s++) {
+    const r = genFace(ts, face, (salt + s * 101) >>> 0, budget, size);
+    gridEvery = gridEvery && r.grid;
+    placed = r.hollows.length;
+  }
+  return { gridEvery, placed };
+};
+
+// --- 5. THE DURANCE: authored, and every biome face qualifies ----------------
+// The durance biome allows dungeon/edifice only — both interiorGen grids —
+// so the citadel's budget must stamp on EVERY face it can roll. A future
+// CONVEX face added to the biome row fails here honestly: the budget's
+// "never idles" claim would no longer hold.
+{
+  const ts = TILESETS.durance;
+  const spec = ts?.hollows;
+  check('durance authors a hollows budget', !!spec);
+  if (spec) {
+    check('durance table names only registered kinds',
+      Object.keys(spec.table).every(k => !!hollowDef(k)), Object.keys(spec.table).join(','));
+    const faces = Object.keys(BIOMES.durance?.allowedLayouts ?? {});
+    check('durance biome rolls at least one face', faces.length > 0, faces.join(','));
+    for (const face of faces) {
+      const r = huntFace(ts, face, 0xd07a + faces.indexOf(face) * 0x2000, spec, { w: 2200, h: 1600 });
+      check(`durance '${face}' face is a grid`, r.gridEvery);
+      check(`durance '${face}' face stamps the authored budget`, r.placed >= 1, `${r.placed} hollow(s)`);
+    }
+  }
+}
+
+// --- 6. THE CRYPT: authored; the grave biome's GRID faces stamp it -----------
+// The graveland is a MIXED country: plains rolls stay convex (the classic
+// secret_wall beat rides `common` there), the interior rolls are native
+// grids, and the mixture faces (massif/metropolis) grid via ensureGrid. The
+// interior faces must stamp; the mixture faces must at least stand a grid
+// (their wall mass is geometry-dependent — best-effort by the fabric's law).
+{
+  const ts = TILESETS.crypt;
+  const spec = ts?.hollows;
+  check('crypt authors a hollows budget', !!spec);
+  if (spec) {
+    check('crypt table names only registered kinds',
+      Object.keys(spec.table).every(k => !!hollowDef(k)), Object.keys(spec.table).join(','));
+    // The crevice pick DESCENDS — worldgen's sealedHollows noDeeper filter
+    // keys on exactly this flag, so pin it against a silent registry drift.
+    check('crypt crevice pick declares descent', hollowDescends('crevice_hollow'));
+    const faces = Object.keys(BIOMES.grave?.allowedLayouts ?? {});
+    for (const face of ['dungeon', 'labyrinth', 'edifice'].filter(f => faces.includes(f))) {
+      const r = huntFace(ts, face, 0xc09b + faces.indexOf(face) * 0x2000, spec, { w: 2400, h: 1800 });
+      check(`crypt '${face}' face is a grid`, r.gridEvery);
+      check(`crypt '${face}' face stamps the authored budget`, r.placed >= 1, `${r.placed} hollow(s)`);
+    }
+    for (const face of ['massif', 'metropolis'].filter(f => faces.includes(f))) {
+      const r = genFace(ts, face, 0xc09b, spec, { w: 2400, h: 1800 });
+      check(`crypt '${face}' mixture face grids (ensureGrid)`, r.grid);
+    }
+    // The convex law, measured on the crypt's own plains face: where no grid
+    // stood up, no hollows may be recorded. (A rolled plan structure may
+    // lazily grid a lucky seed — such a seed just doesn't witness this side.)
+    let convexSeen = 0, convexLeaks = 0;
+    for (let s = 0; s < 10; s++) {
+      const r = genFace(ts, 'plains', (0x9d41 + s * 101) >>> 0, spec, { w: 2400, h: 1800 });
+      if (!r.grid) { convexSeen++; if (r.hollows.length) convexLeaks++; }
+    }
+    check('crypt plains faces stay convex → budget honestly idle', convexSeen >= 1 && convexLeaks === 0,
+      `${convexSeen}/10 convex, ${convexLeaks} leak(s)`);
+  }
+}
+
+// --- 7. THE OSSUARY ABSTAINS: convex everywhere, so NO budget (adjudicated) --
+// Both its layout rows are plains-only (tileset caveLayouts AND the biome's
+// allowedLayouts), and plains is the convex classic — even a FAT injected
+// budget must record nothing. The tileset therefore authors none (inert data
+// is a lie waiting to be believed); the ruling comment sits on its
+// caveLayouts row. If either row ever grows a grid face, this section fails
+// and the budget question re-opens.
+{
+  const ts = TILESETS.ossuary;
+  check('ossuary authors NO budget (adjudicated abstention)', !ts?.hollows);
+  const tsFaces = Object.keys(ts?.caveLayouts ?? {});
+  const biomeFaces = Object.keys(BIOMES.ossuary?.allowedLayouts ?? {});
+  check('ossuary faces are still plains-only',
+    tsFaces.join(',') === 'plains' && biomeFaces.join(',') === 'plains',
+    `tileset: ${tsFaces.join(',')} / biome: ${biomeFaces.join(',')}`);
+  const fat: HollowRollSpec = { count: [3, 3], table: { cache_hollow: 1 } };
+  let anyGrid = false, anyHollow = false;
+  for (let s = 0; s < 6; s++) {
+    const r = genFace(ts, 'plains', (0x055a + s * 101) >>> 0, fat, { w: 1600, h: 1200 });
+    anyGrid = anyGrid || r.grid; anyHollow = anyHollow || r.hollows.length > 0;
+  }
+  check('ossuary plains face stays convex under a fat budget', !anyGrid);
+  check('…and stamps nothing (the fabric cannot reach it)', !anyHollow);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
