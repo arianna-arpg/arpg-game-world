@@ -5,7 +5,7 @@
 // skill and just stands there) get a loud console line instead.
 // ---------------------------------------------------------------------------
 
-import { FACTIONS, MATERIAL_NATURE, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
+import { AMBIENT_TAGS, FACTIONS, MATERIAL_NATURE, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
 import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
@@ -495,7 +495,18 @@ export function validateContent(): void {
       for (const row of t.scenery ?? []) {
         const md = MONSTERS[row.monster];
         if (!md) warn(`tileset '${t.id}' scenery: unknown monster '${row.monster}'`);
-        else if (!md.passive) warn(`tileset '${t.id}' scenery: '${row.monster}' is not passive (scenery rows are object-actors)`);
+        // THE SCENERY CONTRACT: the lane plants passive object-actors (the
+        // crystal country's voices) OR ambient-exempt fauna (the garden's
+        // marching ant files — brained ambience rides the fromZoneGen swap
+        // like any base body). The one thing it must NEVER plant is a body
+        // that would COUNT toward objectives: a load-time lane silently
+        // walling a clear is the real bug this warn exists to catch. Same
+        // predicate as the objective law's def-static axes (AMBIENT_TAGS /
+        // noObjective / passive — World.isAmbientTag adds only live
+        // holdfast tags on top).
+        else if (!md.passive && !md.noObjective && !(md.tag && AMBIENT_TAGS.has(md.tag))) {
+          warn(`tileset '${t.id}' scenery: '${row.monster}' would COUNT toward objectives (the lane plants passive object-actors or ambient-exempt fauna — tag it ambient/noObjective, or field it through packs)`);
+        }
         if (!(row.count[1] >= row.count[0] && row.count[0] >= 0)) {
           warn(`tileset '${t.id}' scenery '${row.monster}': count [${row.count}] is not a range`);
         }
@@ -521,7 +532,13 @@ export function validateContent(): void {
         if (!PUZZLES[row.id]) warn(`zone '${z.id}' puzzles: unknown preset '${row.id}'`);
       }
       for (const row of z.scenery ?? []) {
-        if (!MONSTERS[row.monster]) warn(`zone '${z.id}' scenery: unknown monster '${row.monster}'`);
+        const md = MONSTERS[row.monster];
+        if (!md) warn(`zone '${z.id}' scenery: unknown monster '${row.monster}'`);
+        // The SAME scenery contract as the tileset rows above — authored
+        // zones were silently uncovered before this check landed.
+        else if (!md.passive && !md.noObjective && !(md.tag && AMBIENT_TAGS.has(md.tag))) {
+          warn(`zone '${z.id}' scenery: '${row.monster}' would COUNT toward objectives (the lane plants passive object-actors or ambient-exempt fauna — tag it ambient/noObjective, or field it through packs)`);
+        }
       }
       if (z.objective.kind === 'puzzle' && z.objective.puzzle && !PUZZLES[z.objective.puzzle]) {
         warn(`zone '${z.id}': objective pins unknown puzzle preset '${z.objective.puzzle}'`);

@@ -122,5 +122,11 @@ memory rider.
 ## Siblings
 
 `ZoneDef.scenery` rows (`World.bootScenery`, its own salt) plant ambient
-passive object-actors the same way — the crystal country's freestanding
-resonant voices. Same discipline, no riddle attached.
+bodies the same way — two blessed classes: passive object-actors (the
+crystal country's freestanding resonant voices) and ambient-exempt fauna
+(the garden's marching ant files — brained ambience that rides the
+fromZoneGen memory swap like any base body). Same discipline, no riddle
+attached. THE SCENERY CONTRACT (data/validate.ts, pinned by
+probe_anatomy's census): a row must name a def that is `passive`,
+`noObjective`, or ambient-tagged (`AMBIENT_TAGS`, data/monsters.ts) —
+the lane must never plant a body that would count toward objectives.

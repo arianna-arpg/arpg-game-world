@@ -602,6 +602,35 @@ function rigComposite(id: string, dx = 340): Actor {
   check('wildlife debuts: the tailthief steals and exits (looter + refuge, critter-tagged)',
     !!MONSTERS.ruin_tailthief?.looter && !!MONSTERS.ruin_tailthief?.refuge
     && MONSTERS.ruin_tailthief?.tag === 'critter');
+
+  // 4 · THE SCENERY CONTRACT (World.bootScenery; data/validate.ts): every
+  //     scenery row — tileset AND authored zone — names a def that is
+  //     passive (an object-actor: the crystal country's voices) or
+  //     ambient-exempt (fauna: the garden's marching ant files). The lane
+  //     plants at LOAD inside the zoneGenTagging window, so a breach here
+  //     would be a load-time body that COUNTS toward objectives — walling
+  //     clears invisibly on every fresh mint. Judged by the SAME predicate
+  //     as census 2 (AMBIENT_TAGS / noObjective / passive) — the validator,
+  //     the scoreboard and this census can never disagree.
+  const sceneryBreaches: string[] = [];
+  const sceneryRows: { where: string; monster: string }[] = [];
+  for (const t of Object.values(TILESETS)) {
+    for (const row of t.scenery ?? []) sceneryRows.push({ where: `tileset:${t.id}`, monster: row.monster });
+  }
+  for (const z of Object.values(ZONES)) {
+    for (const row of z.scenery ?? []) sceneryRows.push({ where: `zone:${z.id}`, monster: row.monster });
+  }
+  for (const { where, monster } of sceneryRows) {
+    const d = MONSTERS[monster];
+    if (!d) { sceneryBreaches.push(`${where}:${monster} MISSING`); continue; }
+    const exempt = (d.tag && AMBIENT_TAGS.has(d.tag)) || d.noObjective || d.passive;
+    if (!exempt) sceneryBreaches.push(`${where}:${monster} tag '${d.tag ?? '(none)'}'`);
+  }
+  check('scenery contract: every planted row is passive or ambient-exempt (never objective-counting)',
+    sceneryBreaches.length === 0, sceneryBreaches.slice(0, 5).join('; '));
+  check('scenery contract: the garden\'s marching files are the blessed-fauna debut (rows exist + critter-tagged)',
+    sceneryRows.some(r => r.monster === 'ant_trail')
+    && MONSTERS.ant_trail.tag === 'critter' && AMBIENT_TAGS.has('critter'));
 }
 
 console.log(failed === 0 ? '\nprobe_anatomy: ALL GREEN' : `\nprobe_anatomy: ${failed} FAILURE(S)`);

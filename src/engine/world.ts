@@ -53,7 +53,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS, VENDOR_CFG, type VendorDef } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { AMBIENT_TAGS, CAVE_POOLS, CAVE_POOL_CFG, FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, defBreathes, defDensity, defLeavesRemains, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { updateScene, sceneInterceptFall, sceneNoteCast, type SceneRuntime } from './scenes';
@@ -770,27 +770,11 @@ const STARFALL_CFG = {
   color: '#9ad4e8',
 };
 
-export const AMBIENT_TAGS = new Set([
-  'migrant',       // a passing herd is wildlife
-  'brigand',       // a roving band passes through
-  'contagion',     // plague packs are ambient infection
-  'patient_zero',  // the source boss is an OPTIONAL hunt (its death cures)
-  'toll_bandit',   // Holdfast wardens guard an OPTIONAL bonus exit
-  'mycelia',       // the fungal horde is ambient spore-spread
-  'mycelia_heart', // the Heartbloom is an OPTIONAL collapse-the-bloom strike
-  'critter',       // ambient WILDLIFE prey (hares) — texture, never an objective
-  'vermin',        // Verminfall packs are ambient infestation (the warren, not the zone)
-  'warren_nest',   // warren nests are the Verminfall's OWN ledger, never the zone's
-  'rat_king_manifest', // the manifested King is an OPTIONAL strike (his fall clears the claim)
-  'wax_vigil',     // the Wax Court's night procession passes through
-  'umbral_parliament', // the Parliament's shadows hold no zone hostage
-  'candle_shrine', // a shrine is an OPTIONAL snuff (the stealth counterplay)
-  'starfall',      // the Court rides the shower — the sky owes no objective
-  'fallen_star',   // the impact heart is an OPTIONAL break (it pays a gem)
-  'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
-  'wayfarer',      // neutral human travelers — minding their own way
-  'hold_camp',     // a harborhold's dormant siege-camp watch — texture the MUSTER drafts
-]);
+// THE AMBIENT-TAG VOCABULARY moved to its data home (data/monsters.ts,
+// beside the MonsterDef.tag field it classifies) so the content validator's
+// scenery-contract check reads the SAME set as the live objective-exemption
+// law below — re-exported here for every standing consumer (probes, engine).
+export { AMBIENT_TAGS };
 
 /** Every tag the HAUNTING stamps on what it stands up — the one set the engine
  *  sweeps at a dawn dissipation and paints with the wane pulse. A new haunt
@@ -32394,13 +32378,19 @@ export class World {
     a.applyStatus(attunedStatus(tone), 0, TUNE_CFG.holdScale, 'attunement');
   }
 
-  /** AMBIENT SCENERY-ACTORS (ZoneDef.scenery): passive object-actor rows —
-   *  the crystal country's freestanding resonant crystals; any future
-   *  shrine-body — planted at LOAD on their OWN salted stream + the
-   *  leftover POIs (the puzzle placer's exact discipline; a separate salt
-   *  so the two lanes never shift each other's rolls). Scenery defs are
-   *  ordinary passive monsters: resolveHit plays them, statuses dress
-   *  them, zone memory remembers them like any body. */
+  /** AMBIENT SCENERY-ACTORS (ZoneDef.scenery): planted at LOAD on their
+   *  OWN salted stream + the leftover POIs (the puzzle placer's exact
+   *  discipline; a separate salt so the two lanes never shift each other's
+   *  rolls). TWO blessed classes ride it — passive OBJECT-ACTORS (the
+   *  crystal country's freestanding resonant voices; any future
+   *  shrine-body) and ambient-exempt FAUNA (the garden's marching ant
+   *  files — brained, killable, squishable): both are ordinary monsters
+   *  (resolveHit plays them, statuses dress them), both spawn inside the
+   *  zoneGenTagging window, so zone memory swaps them like any base body —
+   *  a squished file stays squished for the memory's life, and the mint
+   *  re-deals it fresh past the TTL. The one refusal (the validator's
+   *  scenery contract, data/validate.ts): never a body that would COUNT
+   *  toward objectives — a load-time lane must not silently wall a clear. */
   private bootScenery(def: ZoneDef, pois: Vec2[]): void {
     const rows = def.scenery ?? [];
     if (!rows.length) return;

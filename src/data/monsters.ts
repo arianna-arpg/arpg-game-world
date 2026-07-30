@@ -1164,6 +1164,37 @@ export function defDensity(def: MonsterDef): number {
   return MATERIAL_NATURE[def.material ?? 'flesh']?.density ?? 1;
 }
 
+/** THE AMBIENT-TAG VOCABULARY — spawn-time role tags that mean "this body is
+ *  TEXTURE, never an objective": the one set behind the engine's
+ *  objective-exemption law (World.isAmbientTag — which also folds live
+ *  holdfast-guardian tags on top) and the content validator's
+ *  scenery-contract check (a scenery row may plant passive object-actors OR
+ *  ambient-exempt fauna — data/validate.ts). Seated in DATA beside the
+ *  MonsterDef.tag field it classifies: packages may add() their own species
+ *  at module init (the registerDormantTag idiom), and both consumers read
+ *  THIS set — never a copy. */
+export const AMBIENT_TAGS = new Set([
+  'migrant',       // a passing herd is wildlife
+  'brigand',       // a roving band passes through
+  'contagion',     // plague packs are ambient infection
+  'patient_zero',  // the source boss is an OPTIONAL hunt (its death cures)
+  'toll_bandit',   // Holdfast wardens guard an OPTIONAL bonus exit
+  'mycelia',       // the fungal horde is ambient spore-spread
+  'mycelia_heart', // the Heartbloom is an OPTIONAL collapse-the-bloom strike
+  'critter',       // ambient WILDLIFE prey (hares) — texture, never an objective
+  'vermin',        // Verminfall packs are ambient infestation (the warren, not the zone)
+  'warren_nest',   // warren nests are the Verminfall's OWN ledger, never the zone's
+  'rat_king_manifest', // the manifested King is an OPTIONAL strike (his fall clears the claim)
+  'wax_vigil',     // the Wax Court's night procession passes through
+  'umbral_parliament', // the Parliament's shadows hold no zone hostage
+  'candle_shrine', // a shrine is an OPTIONAL snuff (the stealth counterplay)
+  'starfall',      // the Court rides the shower — the sky owes no objective
+  'fallen_star',   // the impact heart is an OPTIONAL break (it pays a gem)
+  'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
+  'wayfarer',      // neutral human travelers — minding their own way
+  'hold_camp',     // a harborhold's dormant siege-camp watch — texture the MUSTER drafts
+]);
+
 /** One ambient-fauna row: an independent per-zone roll (chance), a band size,
  *  an optional presence envelope / doodad-rim placement hint — and an optional
  *  ARRIVAL LINE (`announce`): floated to the players when the band lands, for
