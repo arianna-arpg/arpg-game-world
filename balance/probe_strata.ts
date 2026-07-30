@@ -76,9 +76,18 @@ const tally = (biome: string | undefined, depth: number, n = 400): Record<string
 const show = (c: Record<string, number>): string =>
   Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${v}`).join(' ');
 
-// Shallow under a meadow: the classic cavern dominates; magma is a rarity.
+// Shallow under a grove: the classic cavern leads the pool. "Dominates" is
+// PLURALITY with a near-half floor, not strict majority — the garden pass
+// (680dbe2) gave grove anchors an authored rootways share (grove caves are
+// rooty, by design), which sits cavern at ~199/400. The pin asserts the
+// classic face still LEADS every kin face and holds ≥45% — tight enough to
+// catch a real collapse, honest about the authored dilution.
 const grove1 = tally('grove', 1);
-check('d1 under grove: cavern dominates', (grove1['cavern'] ?? 0) > 200, show(grove1));
+const grove1Cavern = grove1['cavern'] ?? 0;
+check('d1 under grove: cavern dominates (plurality, ≥45%)',
+  grove1Cavern >= 180
+  && Object.entries(grove1).every(([k, n]) => k === 'cavern' || n < grove1Cavern),
+  show(grove1));
 check('d1 under grove: magma a rarity', (grove1['magma_gallery'] ?? 0) < 40, show(grove1));
 // Shallow under volcanic country: the magma gallery is the neighbourhood.
 const volc1 = tally('volcanic', 1);
@@ -92,6 +101,36 @@ check('d4: depths face arrived', (grove4['depths'] ?? 0) > 60, show(grove4));
 check('d4: the generalist has faded', (grove4['cavern'] ?? 0) === 0, show(grove4));
 // Deep under a meadow the lava STILL comes — depth is the other answer.
 check('d4 under grove: magma present (depth is why)', (grove4['magma_gallery'] ?? 0) > 60, show(grove4));
+
+// THE MARINE FACE — the drowned underground: under a deepsea anchor the
+// trench is the neighbourhood (a pit descent through the seabed lands in
+// drowned ground, not landlocked rock); under a landlocked anchor it NEVER
+// arrives ('*' 0 — the sea's dress is geography, not depth; a zero weight
+// also never re-buckets a roll, so the landlocked tallies above are
+// byte-identical to the pre-marine pool by construction).
+const sea1 = tally('deepsea', 1);
+check('d1 under deepsea: the marine trench is the neighbourhood', (sea1['marine_trench'] ?? 0) > 200, show(sea1));
+const sea4 = tally('deepsea', 4);
+check('d4 under deepsea: the deep stays drowned (stops hold their end)', (sea4['marine_trench'] ?? 0) > 150, show(sea4));
+check('d1 under grove: the trench never floods landlocked ground', (grove1['marine_trench'] ?? 0) === 0, show(grove1));
+check('d4 under grove: not even deep (geography, not depth)', (grove4['marine_trench'] ?? 0) === 0, show(grove4));
+// The shore half-floods: littoral caves draw honest sea-caves without the
+// trench owning the coast's underground outright.
+const shore1 = tally('littoral', 1);
+check('d1 under littoral: sea caves arrive, the shore keeps its own dark',
+  (shore1['marine_trench'] ?? 0) > 40 && (shore1['marine_trench'] ?? 0) < 300, show(shore1));
+// The MINT wires it: an unforced cave under a deepsea surface wears the face
+// (packs identity — the same read the vault check below uses), and a forced
+// mint of the face itself is clean and stamps the ladder.
+const seaMints = [1, 2, 3, 4, 5, 6].map(i =>
+  mintCave(surface('deepsea'), (0xd0e ^ (i * 7919)) >>> 0, `probe_sea_cave_${i}`));
+check('unforced deepsea pit-drop mints the marine trench (≥1 of 6 seeds)',
+  seaMints.some(z => z.packs === TILESETS['marine_trench'].packs),
+  seaMints.map(z => z.name).join(' | '));
+const forcedTrench = mintCave(surface('deepsea', 12), 31337, 'probe_marine_trench', 'marine_trench');
+check('forced marine_trench mints clean (depth stamped, packs its own)',
+  forcedTrench.caveDepth === 1 && forcedTrench.packs === TILESETS['marine_trench'].packs
+  && forcedTrench.anchor === 'deepsea');
 
 // --- 3. The mint itself ---------------------------------------------------------
 const ladder = chain('volcanic', 7, 5);

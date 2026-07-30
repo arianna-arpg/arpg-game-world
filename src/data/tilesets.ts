@@ -631,6 +631,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         roadCount: [2, 3], roadKind: 'paved_way', roadWidth: [20, 26], wayLamps: 'street_lamp',
         // Town ground keeps its gardens small — a plot or two off the lanes.
         cropParcels: [1, 3],
+        // THE ROAD TRAFFIC opt-in (engine/settled.ts layRoadTraffic): the
+        // working country's busiest face actually works — roughly half the
+        // paved ways carry a field_wain shuttle. VARIANT-scoped on purpose:
+        // the reference default stays 0, so the open shires and the fallow
+        // rim keep their trafficless byte-identical country.
+        traffic: 0.45,
       } },
       // The wild rim: the fields nobody bound this year — the hedges gone
       // leggy, the old walls swallowed, the watchers walking their rows.
@@ -6934,6 +6940,120 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // MARINE TRENCH — the drowned galleries under the sea floor: black standing
+  // water, kelp that has never seen the sun, and everything the tide pulled
+  // down. leviathan_trench's PLAIN SIBLING — the den keeps its hadal dress,
+  // its sparse lair table and its boss; THIS face takes the unforced cave-face
+  // pool, so a pit descent through the seabed finally lands in drowned ground
+  // instead of landlocked rock. Under deepsea anchors it is the neighbourhood;
+  // it half-floods the shore countries' undergrounds (isle/littoral/beach);
+  // and it claims NO landlocked base ('*' 0 on purpose — kelp, coral and
+  // wreck-drift are the SEA's dress: geography, not depth; the inland water
+  // table is the karst's story). Breathable BY DESIGN (sky 'sheltered', biome
+  // 'cavern', no underwater layout): a drowned-LOOKING gallery, never a
+  // drowning zone — the leviathan_trench precedent.
+  marine_trench: {
+    id: 'marine_trench', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveFace: {
+      // Strongest right under the seabed, thinning as the ladder leaves the
+      // water behind (stops HOLD their last value: the deep under the ocean
+      // stays drowned — the deepest fathoms' DEN dress stays leviathan's).
+      strata: { stops: [[1, 1], [2, 0.85], [4, 0.5]] },
+      biomes: { deepsea: 10, isle: 2.5, littoral: 1.5, beach: 1.5, '*': 0 },
+      variantChance: 0.4,
+    },
+    caveLayouts: { winding: 2.5, plains: 2 },
+    hollows: {
+      count: [1, 2],
+      table: {
+        cache_hollow: 2.5, ambush_hollow: 2, vein_hollow: 1.5,
+        passage_hollow: 1.5, crevice_hollow: 1,
+      },
+    },
+    nameFirst: ['Drowned', 'Tidelocked', 'Brinebound', 'Saltveined', 'Wracklit', 'Fathomcut', 'Kelpshadowed', 'Pearlgloom', 'Tideworn', 'Stillbrine', 'Weedchoked', 'Coldwater'],
+    nameSecond: ['Trench', 'Galleries', 'Undertow', 'Grottoes', 'Shoals', 'Sump', 'Channels', 'Brineways', 'Hollow', 'Fathoms'],
+    theme: {
+      ambientDark: 0.52,
+      ambientFx: [{ kind: 'caustics' }, { kind: 'bubbles' }],
+      ground: {
+        palette: ['#0a141b', '#0e1a23', '#132431', '#19303e', '#20404e'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#081018', grid: '#0c161e', border: '#2e5266',
+      obstacle: '#1c3844', obstacleEdge: '#3a6276', accent: '#6fc8d8',
+      wall: '#1c3844', water: '#0e3448', mud: '#0f1920',
+    },
+    sizeW: [1150, 1600], sizeH: [880, 1250],
+    common: [
+      { kind: 'crumbling_wall', count: [1, 2] },
+      { kind: 'secret_wall', count: [1, 1] },
+      { kind: 'crystal_vein', count: [0, 1] },
+      { kind: 'spelunker_pack', count: [0, 1] },
+    ],
+    // Water stamps FIRST (the habitat doctrine): the kelp and coral that
+    // follow keep to the standing pools they grew in.
+    layout: [
+      { kind: 'water', count: [3, 5] },
+      { kind: 'kelp', count: [3, 6] },
+      { kind: 'coral', count: [2, 4], radius: [16, 28] },
+      { kind: 'sea_rock', count: [3, 6], radius: [22, 42] },
+      { kind: 'rocks', count: [6, 10], radius: [18, 40] },
+      { kind: 'stalagmite', count: [1, 3] },
+      { kind: 'chasm', count: [0, 1] },
+      { kind: 'bone_pile', count: [1, 3] },
+    ],
+    variants: [
+      // The pale shoals: a garden the sun never planted — kelp stands and
+      // coral heads crowding the standing water.
+      { name: 'the pale shoals', layout: [
+        { kind: 'water', count: [2, 4] },
+        { kind: 'kelp', count: [6, 10] },
+        { kind: 'coral', count: [4, 7], radius: [16, 30] },
+        { kind: 'sea_rock', count: [2, 4], radius: [22, 42] },
+      ], theme: { accent: '#9fdce8', ambientDark: 0.48 } },
+      // The wreck vault: everything the tide ever pulled down, shelved in
+      // one gallery — keels, cargo, and the crews.
+      { name: 'the wreck vault', layout: [
+        { kind: 'water', count: [2, 3] },
+        { kind: 'bone_pile', count: [4, 7] },
+        { kind: 'broken_cart', count: [1, 2] },
+        { kind: 'sea_rock', count: [3, 5], radius: [24, 44] },
+        { kind: 'rocks', count: [4, 8], radius: [18, 40] },
+      ] },
+      // The brine sump: the flooded throat — drip-pools, channels, and the
+      // drop into water with no bottom worth naming.
+      { name: 'the brine sump', layout: [
+        { kind: 'water', count: [4, 6] },
+        { kind: 'rimstone_pool', count: [1, 3] },
+        { kind: 'chasm', count: [1, 2] },
+        { kind: 'kelp', count: [2, 4] },
+        { kind: 'sea_rock', count: [2, 4], radius: [22, 42] },
+        { kind: 'stalagmite', count: [2, 4] },
+      ], theme: { water: '#124055', ambientDark: 0.56 } },
+    ],
+    // The Deep's own kin hold the galleries (the AMBIENT table the den never
+    // had — the lair keeps its sparse threshers; this face fields the family).
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'deep_thresher', weight: 3 },
+        { id: 'tide_skitter', weight: 2, presence: { to: 12, fadeOut: 6 } },
+        { id: 'reef_lurcher', weight: 2 },
+        { id: 'deep_angler', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'tidewrack_shambler', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'deep_tidecaller', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'tide_whelk', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'deep_leviathan', weight: 1, presence: { from: 16, fadeIn: 8 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    biome: 'cavern',
+    objectives: [
+      { kind: 'clear', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
   // DESCENT — the boundless abyss the Delver's mineshaft drops into. Minted as a
   // BOUNDLESS cave (worldgen.mintCave forces boundless + layoutType 'descent'); the
   // sizeW/H is just the STARTER patch the engine streams outward from. Packs the
@@ -11618,6 +11738,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   magma_gallery:  { title: 'Magma Gallery',     blurb: 'The underground remembering it is a volcano: basalt colonnades, ember vents, floors still deciding to be liquid. Near volcanic country it is the neighbourhood; elsewhere, you have simply gone deep enough.' },
   rime_gallery:   { title: 'Rime Gallery',      blurb: 'Winter under the world: blue ice, brittle fangs, meres frozen mid-ripple. The cold pockets under tundra and taiga — and a rare deep chill anywhere else.' },
   fungal_hollow:  { title: 'Fungal Hollow',     blurb: 'The mycelium in the dark — glowcap lanterns, spore-choked air, the Bloom’s patient underground root. Rot needs no map; anywhere damp will do.' },
+  marine_trench:  { title: 'Marine Trench',     blurb: 'The drowned galleries under the sea floor — black standing water, kelp that never saw the sun, and everything the tide pulled down. Under deep water it is the neighbourhood; landlocked ground never floods this way.' },
   descent:        { title: 'The Descent',       blurb: "A boundless lightless abyss the Delver's mineshaft drops into — push back the dark, harvest Echoes, and resurface before the deep keeps you." },
   grand_arena:    { title: 'Grand Arena',       blurb: 'A sand pit under open sky ringed with roaring crowd-rows and braziered rails — the colosseum where the ways in breach the very seats.' },
   abyssal_rift:   { title: 'The Abyssal',       blurb: "A winding cave-gut of narrow ways over bottomless rents, everything lit violet by the Abyssal faction's own cold light." },
