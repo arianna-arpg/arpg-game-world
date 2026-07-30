@@ -569,6 +569,26 @@ export const VIS_CFG = {
     zoneWashMaxAlpha: 0.3,
   },
 
+  /** THE SPARED-BURST CUE (renderer.drawDeathBursts): a death-burst spares its
+   *  own team (world.isBurstTarget), so a burst that cannot touch ANY hero this
+   *  screen draws for (the couchHeroes roster — controlled bodies, so the
+   *  possession seam reads honestly) softens its danger ring + arming blink:
+   *  dashed, at a fraction of the hostile alpha/width. COLOUR never changes —
+   *  the hue is the damage-type read — and the body cues (motes, core, orb)
+   *  stay full, so the burst remains legible as a thing in the world; only the
+   *  "leave this circle" command stands down. A hostile-or-unknown team draws
+   *  byte-identical to the classic ring (snapshot-fed co-op client rows carry
+   *  no team on the wire — full strength, the conservative read). */
+  deathBurst: {
+    /** Alpha multiplier on the spared ring + blink strokes. */
+    sparedAlpha: 0.45,
+    /** LineWidth multiplier on the spared ring + blink strokes. */
+    sparedWidth: 0.65,
+    /** Dash pattern (px on/off, world units) of the spared strokes — the
+     *  at-a-glance "not for you" read that survives any ring colour. */
+    sparedDash: [5, 6],
+  },
+
   /** ENCOUNTER FIELDS (renderer.drawEncounters) — the breach ring's whole
    *  look grammar: the veiled-knot shimmer beyond the rim, the rim's crackle
    *  ticks and orbiting edge motes, and the collapse styling. Colors come

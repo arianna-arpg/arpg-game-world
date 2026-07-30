@@ -3765,6 +3765,16 @@ export class Renderer {
   private drawDeathBursts(world: World): void {
     const { ctx } = this;
     const t = world.time, tMs = t * 1000;
+    // THE TEAM READ (co-op safe): a burst spares its OWN team (isBurstTarget),
+    // so each danger ring is judged against every hero THIS SCREEN draws for —
+    // couchHeroes() walks the CONTROLLED bodies (the possession seam's
+    // pointer), so a ridden enemy-team husk reads honestly, and one threatened
+    // couch seat holds the ring at full strength for the whole shared frame.
+    // Snapshot-fed client rows carry NO team (DeathBurstW ships only what this
+    // function draws): undefined compares unequal to every hero team, so an
+    // unknown burst keeps the classic full-strength ring — never a false "safe".
+    const heroes = world.couchHeroes();
+    const bc = VIS_CFG.deathBurst;
     for (const b of world.deathBurstsView()) {
       // Refuse non-finite work (same contract as drawFlash): the gradient
       // calls below are the ONE canvas surface that THROWS on a bad number
@@ -3776,6 +3786,10 @@ export class Renderer {
       // hue alone tells the player the damage type — and what resistance/armour to dress.
       // Kept deliberately sparse: a danger ring + a core, not a particle storm, so the read
       // stays clean even with several bursts on screen.
+      // SPARED = this burst cannot touch anyone we draw for. Its command cues
+      // (danger ring, arming blink) take the sparedAlpha/sparedWidth/sparedDash
+      // haircut below; body cues and the colour stay untouched.
+      const spared = heroes.every(h => h.team === b.team);
       if (b.phase === 'gather') {
         // 0→1 coalesce progress; a zero-coalesce burst (possible only through
         // poisoned data — the stat floor keeps real ones > 0) draws fully
@@ -3784,8 +3798,13 @@ export class Renderer {
         // PRIMARY CUE: the blast-radius danger ring — "leave this circle". Legible from the
         // first frame (when escape time is greatest) and still firms up (wider, brighter) as
         // the pop nears, so the avoidance read sharpens with the threat.
-        ctx.globalAlpha = 0.4 + 0.35 * g; ctx.strokeStyle = b.color; ctx.lineWidth = 2 + 1.5 * g;
+        // (×1 in the hostile case — byte-identical to the classic ring.)
+        if (spared) ctx.setLineDash(bc.sparedDash);
+        ctx.globalAlpha = (0.4 + 0.35 * g) * (spared ? bc.sparedAlpha : 1);
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = (2 + 1.5 * g) * (spared ? bc.sparedWidth : 1);
         ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, b.radius, 0, Math.PI * 2); ctx.stroke();
+        if (spared) ctx.setLineDash([]);
         // Just a few motes spiralling inward — enough to read "energy gathering", not a swarm.
         ctx.fillStyle = b.color;
         for (let k = 0; k < 6; k++) {
@@ -3821,8 +3840,12 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, r * 0.34, 0, Math.PI * 2); ctx.fill();
         // Arming: blink the TRUE blast-radius ring so the player sees exactly how far to dash.
         if (b.arming) {
-          ctx.globalAlpha = Math.sin(tMs / 40) > 0 ? 0.85 : 0.3; ctx.strokeStyle = b.color; ctx.lineWidth = 2;
+          if (spared) ctx.setLineDash(bc.sparedDash);
+          ctx.globalAlpha = (Math.sin(tMs / 40) > 0 ? 0.85 : 0.3) * (spared ? bc.sparedAlpha : 1);
+          ctx.strokeStyle = b.color;
+          ctx.lineWidth = 2 * (spared ? bc.sparedWidth : 1);
           ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, b.radius, 0, Math.PI * 2); ctx.stroke();
+          if (spared) ctx.setLineDash([]);
         }
         ctx.globalAlpha = 1;
       }
