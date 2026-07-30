@@ -18,6 +18,12 @@
 //                become fall-able pit doodads and the pitfall fabric owns
 //                everything after (descend mints the hollow below, grasp
 //                law at the lip, swallowed hostiles credit the presser).
+//   'door'     — open NAMED structure doors through THE ONE door gate
+//                (setDoorOpen → World.setDoorState: state flip, cell
+//                repaint, memory + co-op convergence all standing law).
+//                Open-only on purpose: doors have no close lane anywhere
+//                (cells repaint one-way, Zone Memory ratchets opens), so
+//                the honest verb set is the door fabric's own.
 //
 // The registry is OPEN (registerTrapEffect) — a package adds an effect kind
 // without engine edits, and handlers speak only TrapHost (the PuzzleHost
@@ -72,18 +78,39 @@ export const TRAPWORK_CFG = {
   revealNear: 110,
   /** Spring accent (flash + click text) when a spec names no color. */
   springColor: '#e8b45a',
+  /** Default lever pull seconds (a throw is a shade more deliberate than a
+   *  door push) — stamped as the lever record's own `dwell` by the gen
+   *  pass; per-record data overrides like any door. */
+  leverPullSec: 0.7,
 } as const;
 
 // --- triggers --------------------------------------------------------------
 
 /** How a trapwork senses. Plate = a press disc underfoot; tripline = a
- *  capsule across a way. The who/faction/airborne grammar mirrors
- *  TrackPayload's filters — one vocabulary for "whom the world touches". */
+ *  capsule across a way; lever = a THROWN SWITCH — the deliberate tier
+ *  beside the blundered ones. The who/faction/airborne grammar mirrors
+ *  TrackPayload's filters — one vocabulary for "whom the world touches".
+ *
+ *  THE LEVER is pure composition: `door` names a DOOR-RECORD doodad
+ *  (DoodadDoor.mode 'pull' — a mechanism look wearing the door fabric's
+ *  own state), and the PULL is the standing door-dwell grammar (reach
+ *  law, idle law, the dwell ring, memory persistence, the co-op doors
+ *  channel — World.update's switch lane serves it; no bespoke input
+ *  path exists). Feet never press it (trapTriggerHit is always false),
+ *  packs never blunder it: a throw is a party hero's deliberate act.
+ *  A thrown lever stays thrown — the record is one-way like every door,
+ *  so lint refuses `rearm` and a remembered-open lever on re-entry
+ *  simply stands inert over its re-armed (unpullable) trapwork. */
 export interface TrapTrigger {
-  kind: 'plate' | 'tripline';
-  /** plate: press disc center + radius (default TRAPWORK_CFG.plateRadius). */
+  kind: 'plate' | 'tripline' | 'lever';
+  /** plate: press disc center + radius (default TRAPWORK_CFG.plateRadius).
+   *  lever: `at` = the handle's anchor (flash/announce seat — mirror the
+   *  lever doodad's pos). */
   at?: Vec2;
   r?: number;
+  /** lever: the lever's OWN door-record id (the pull state; the doodad
+   *  carrying it is authored beside the spec — the tripline emitter law). */
+  door?: string;
   /** tripline: the crossed segment + half-width. */
   a?: Vec2;
   b?: Vec2;
@@ -133,6 +160,12 @@ export interface VolleyEffectRow extends TrapEffectRow {
 export interface CollapseEffectRow extends TrapEffectRow {
   kind: 'collapse'; cells: { x: number; y: number; r?: number }[]; delay?: number;
 }
+/** Open the named structure doors (DoodadDoor ids) through THE ONE door
+ *  gate. Open-only — see the header doctrine. The natural pairs: a LEVER
+ *  trigger = the visible notice tier; a HIDDEN PLATE = the true secret. */
+export interface DoorEffectRow extends TrapEffectRow {
+  kind: 'door'; ids: string[];
+}
 
 // --- specs -----------------------------------------------------------------
 
@@ -169,6 +202,10 @@ export interface PlacedTrapwork {
   /** Zone-clock second of the last spring (the co-op mirror's anchor). */
   sprungAt: number;
   springs: number;
+  /** LEVER triggers only: zone-clock second the current pull began
+   *  (undefined = nobody at the handle). Live-visit state like the rest of
+   *  the row — never serialized; the ring view is fed from it. */
+  pullStart?: number;
 }
 
 // --- the host contract -----------------------------------------------------
@@ -184,6 +221,12 @@ export interface TrapHost {
   setTracksArmed(tag: string, armed: boolean): void;
   /** Is any lane wearing this tag currently armed? (toggle's read.) */
   laneArmed(tag: string): boolean;
+  /** Open a named structure door (World.setDoorState 'open' — THE one
+   *  door gate: state, cell repaint, memory, co-op all converge there).
+   *  Idempotent; an unknown id is silently nothing (the standing gate's
+   *  own law). No mirror lane exists on purpose — door states ride their
+   *  own 20 Hz snapshot channel (the laneArm precedent). */
+  setDoorOpen(id: string): void;
   /** False-floor drop: crumble telegraph, then fall-able pit doodads at the
    *  cells, then the standing-body swallow pass with presser credit. The
    *  visualOnly half is the co-op client mirror (doodads + FX, no routing). */
@@ -227,6 +270,9 @@ export function trapEffectKinds(): string[] { return Object.keys(TRAP_EFFECTS); 
  *  step ON a plate; brushing its rim is not a press. Pure — the sweep, the
  *  probe, and any AI plate-read all ask the same function. */
 export function trapTriggerHit(t: TrapTrigger, x: number, y: number, radius: number): boolean {
+  // A LEVER is never feet-pressed: the pull is the door-dwell grammar's
+  // deliberate act (World.update's switch lane), not a body-overlap.
+  if (t.kind === 'lever') return false;
   const pad = radius * TRAPWORK_CFG.pressPad;
   if (t.kind === 'plate') {
     if (!t.at) return false;
@@ -244,9 +290,11 @@ export function trapTriggerHit(t: TrapTrigger, x: number, y: number, radius: num
   return dx * dx + dy * dy <= w * w;
 }
 
-/** The trigger's anchor point (tell placement, reveal range, map reads). */
+/** The trigger's anchor point (tell placement, reveal range, map reads).
+ *  A lever anchors at `at` — author it to the lever doodad's own pos so
+ *  the spring's flash + announce land at the handle. */
 export function trapAnchor(t: TrapTrigger): Vec2 {
-  if (t.kind === 'plate') return t.at ?? { x: 0, y: 0 };
+  if (t.kind === 'plate' || t.kind === 'lever') return t.at ?? { x: 0, y: 0 };
   const a = t.a ?? { x: 0, y: 0 }, b = t.b ?? a;
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
@@ -260,6 +308,10 @@ export function lintTrapworkSpec(spec: TrapworkSpec, where: string): string[] {
   if (!t) { out.push(`${where}: no trigger`); return out; }
   if (t.kind === 'plate' && !t.at) out.push(`${where}: plate without 'at'`);
   if (t.kind === 'tripline' && (!t.a || !t.b)) out.push(`${where}: tripline needs 'a' and 'b'`);
+  if (t.kind === 'lever' && !t.door) out.push(`${where}: lever without 'door' (its record id)`);
+  if (t.kind === 'lever' && spec.rearm !== undefined) {
+    out.push(`${where}: lever cannot rearm (a thrown lever stays thrown — the record is one-way)`);
+  }
   if (t.r !== undefined && (t.r < 6 || t.r > 90)) out.push(`${where}: plate r ${t.r} outside [6,90]`);
   if (!spec.effects?.length) out.push(`${where}: trapwork with no effects`);
   for (const e of spec.effects ?? []) {
@@ -328,6 +380,15 @@ registerTrapEffect('volley', {
     })));
   },
   // No mirror: laneOnce carries the bolts to every seat.
+});
+
+registerTrapEffect('door', {
+  spring(host, _trap, row) {
+    const r = row as DoorEffectRow;
+    for (const id of r.ids ?? []) host.setDoorOpen(id);
+  },
+  // No mirror: structure-door states converge on their own 20 Hz snapshot
+  // channel through the same setDoorState gate (the laneArm precedent).
 });
 
 registerTrapEffect('collapse', {

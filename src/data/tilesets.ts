@@ -3082,6 +3082,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         // cross-corridor stinger gauntlet, woken by a hidden flag plate and
         // forgiven by the visible mouth lever (docs/engine/trapworks.md).
         dartLanes: { chance: 0.3, max: 1 },
+        // THE SWITCH LANE — one hall's door re-hung on a mechanism: it holds
+        // fast against the push until its lever, a stride or two out, is
+        // thrown (docs/engine/trapworks.md).
+        leverDoors: { chance: 0.35, max: 1 },
       },
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
@@ -3136,6 +3140,10 @@ export const TILESETS: Record<string, TilesetDef> = {
           // The toothed halls run the gallery LONG: two gauntlets, deeper
           // station rows — the dense face earns its name in the crossfire.
           dartLanes: { chance: 0.7, max: 2, stations: [3, 6] },
+          // The machine face re-hung more of its doors on the mechanism —
+          // where the halls allow it (leaf + vestibule scarcity is the real
+          // limiter past ~0.6; the dial buys what the geometry sells).
+          leverDoors: { chance: 0.6, max: 2 },
           // The machines-won face turns every wheel dial up: more arms,
           // wider speed spread, free seating, the great blade one in four —
           // and one hub bar in three is the SWEEPARM (the bar that CARRIES

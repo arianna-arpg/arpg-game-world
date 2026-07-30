@@ -598,10 +598,22 @@ export interface Doodad {
 
 /** The live state a door doodad carries. Ids are deterministic per zone seed
  *  (`<structureId>/d<n>`), which is what lets Zone Memory + co-op re-apply
- *  states onto a regenerated layout. */
+ *  states onto a regenerated layout.
+ *
+ *  THE SWITCH MODES (the trapworks door lane — engine/trapworks.ts):
+ *  'switched' = the push never opens it — the dwell sweep skips it and the
+ *  switch lane floats a readable refusal instead (a hero at the door learns
+ *  there IS a mechanism, not a bug); its openers are the 'door' trap effect
+ *  (a lever, a hidden plate) and the one setDoorState gate's other standing
+ *  callers (memory, net). Never author a `lesson` on one — the graduated
+ *  replay would open it for free. 'pull' = a LEVER'S OWN record: a
+ *  mechanism doodad wearing door state so the throw inherits the door
+ *  fabric whole (dwell ring, one-way flip, memory, the co-op doors
+ *  channel); the switch lane serves its dwell, the door sweep skips it,
+ *  and it carries no `cells` (a lever is furniture, not a breach). */
 export interface DoodadDoor {
   id: string;
-  mode: 'dwell' | 'breakable' | 'both' | 'sealed';
+  mode: 'dwell' | 'breakable' | 'both' | 'sealed' | 'switched' | 'pull';
   open?: boolean;
   broken?: boolean;
   /** World rect of the door's plan cells — repainted to floor when it opens. */

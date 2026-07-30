@@ -39630,6 +39630,63 @@ export class World {
         } else {
           this.doorDwellId = '';
         }
+        // THE SWITCH LANE (the trapworks door lane — engine/trapworks.ts,
+        // docs/engine/trapworks.md). Two halves, one door-fabric seat:
+        // (1) LEVER PULLS: a lever is a DOOR-RECORD doodad (DoodadDoor.mode
+        //     'pull') — the pull IS the door sweep's own dwell grammar
+        //     (reach, idle, the ring, one-way persistence, the co-op doors
+        //     channel) with an honest verb. The sweep above skips 'pull'
+        //     records; the throw lands here: dwell done → the record opens
+        //     through THE one door gate (silently — the spring's announce
+        //     speaks instead) and every armed lever trapwork naming it
+        //     springs with the puller's credit. tw.pullStart is the truth;
+        //     the doorDwell trio is fed as a VIEW so the standing ring
+        //     draws the pull (the sweep clears the id each frame the hero
+        //     stands off dwell doors — feeding after it is the contract,
+        //     and render reads after update).
+        // (2) SWITCHED DOORS (DoodadDoor.mode 'switched'): the push never
+        //     opens them — a hero at one learns there IS a mechanism (the
+        //     conditioned-mouth refusal idiom, the shared refusal clock).
+        for (const tw of this.trapworks) {
+          const lt = tw.spec.trigger;
+          if (lt.kind !== 'lever' || tw.state !== 'armed' || !lt.door) continue;
+          const ld = this.doodads.find(x => x.door?.id === lt.door);
+          const rec = ld?.door;
+          if (!ld || !rec || rec.mode !== 'pull' || rec.open || rec.broken) { tw.pullStart = undefined; continue; }
+          let puller: Actor | null = null; let pullD = Infinity;
+          for (const seat of this.seats) {
+            const hero = seat.actor;
+            if (hero.dead || hero.downed || hero.push || !this.seatIdle(seat)) continue;
+            const dd = dist(hero.pos, ld.pos);
+            if (dd <= ld.radius + hero.radius + DOOR_REACH && dd < pullD
+              && this.dwellReachable(hero.pos, ld.pos, transitReach('door'))) { pullD = dd; puller = hero; }
+          }
+          if (!puller) { tw.pullStart = undefined; continue; }
+          tw.pullStart ??= this.time;
+          this.doorDwellId = rec.id;
+          this.doorDwellStart = tw.pullStart;
+          this.doorDwellPos = vec(ld.pos.x, ld.pos.y);
+          if (this.time - tw.pullStart >= (rec.dwell ?? transitDwell('door'))) {
+            tw.pullStart = undefined;
+            this.doorDwellId = '';
+            this.setDoorState(rec.id, 'open', { silent: true });
+            this.springTrapwork(tw, puller);
+          }
+        }
+        if (this.time - this.doorRefusalAt > 2.5) {
+          refuse: for (const seat of this.seats) {
+            const hero = seat.actor;
+            if (hero.dead || hero.downed) continue;
+            for (const d of this.doodads) {
+              const dr = d.door;
+              if (!dr || dr.open || dr.broken || dr.mode !== 'switched') continue;
+              if (dist(hero.pos, d.pos) > d.radius + hero.radius + DOOR_REACH) continue;
+              this.doorRefusalAt = this.time;
+              this.text(vec(d.pos.x, d.pos.y - 26), 'held fast — some mechanism answers elsewhere…', '#c8b47a', 12);
+              break refuse;
+            }
+          }
+        }
         // REALM GATES (demon rift / crusade sanctum / necropolis / fracture rift):
         // DWELL on one (stand idle ~0.5s) to step through — so running OVER a gate
         // never yanks you into a realm without meaning to (mirrors the portal + cave
@@ -42558,6 +42615,9 @@ export class World {
       tracksEnsure: (specs) => this.tracksEnsure(specs),
       setTracksArmed: (tag, armed) => this.setTracksArmed(tag, armed),
       laneArmed: (tag) => this.tracks.some(tr => tr.spec.tag === tag && tr.armed),
+      // The door lane: THE one door gate does everything (state, repaint,
+      // memory, co-op) — the narrow method is a pure delegation.
+      setDoorOpen: (id) => this.setDoorState(id, 'open'),
       collapseFloor: (cells, delaySec, presserId, visualOnly) =>
         this.collapseFloor(cells, delaySec, presserId, visualOnly),
       clearDoodads: (kind, at, r) => this.clearDoodadsNear(kind, at, r),

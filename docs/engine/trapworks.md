@@ -18,6 +18,7 @@ import World; a stub host probes them all):
 | `boulder` | `tracksEnsure` — a ONCE-lane from cradle to wall, `ownerId` = the presser (crush credit), `bornAt` = the rumble |
 | `volley` | `tracksEnsure` — a fan of dart once-lanes, births staggered so the RAKE telegraph lights the rays before the bolts fly |
 | `collapse` | fall-able `ruin_floor_gap` doodads after a crumble telegraph — the pitfall fabric owns everything after |
+| `door` | `setDoorOpen` → `World.setDoorState('open')` — named structure doors swing for the mechanism (THE one door gate: state, cell repaint, memory, the co-op doors channel). OPEN-ONLY on purpose — no close lane exists anywhere in the door fabric, so the honest verb set is its own. No mirror: door states ride their own 20 Hz snapshot channel (the laneArm precedent) |
 
 `registerTrapEffect(kind, { spring, mirror? })` is **open** — a package adds
 an effect kind with zero engine edits.
@@ -27,7 +28,8 @@ an effect kind with zero engine edits.
 1. **Generation** — the interiorGen trap pass reads
    `layoutParams.trapworks` (`TrapGenSpec` dials: `sawHalls`, `mincerRooms`,
    `bladeLattice`, `dartWards`, `boulderRuns`, `falseFloors`, `wireWards`,
-   `dartLanes`, each `{ chance, max }` plus its own character dials) and
+   `dartLanes`, `leverDoors`, each `{ chance, max }` plus its own character
+   dials) and
    lays mechanisms WITH the geometry in hand: saw lanes down measured
    corridor stretches (groove carved, clearway-protected), rotor mincers in
    real chambers (hub sized to the room), plates at real coordinates, maws
@@ -95,6 +97,45 @@ hostiles are swallowed WITH credit, lip-graspers hold).
 - **The RAKE** — a pending lane strokes its WHOLE coming way, pulsing
   harder toward birth (trackLayer): the volley's firing lines, the
   boulder's runway.
+
+## The switch lane — levers, switched doors, the two secrecy tiers
+
+The trapworks' DELIBERATE trigger beside the blundered ones, and the door
+mode that makes it matter (the secrets framework's early mover). Three data
+pieces, zero new input paths:
+
+- **The LEVER trigger** (`{ kind: 'lever', door, at }`) — `door` names a
+  DOOR-RECORD doodad (`DoodadDoor.mode: 'pull'`, no cells: a mechanism
+  wearing door state), and the PULL is the door fabric's own dwell grammar
+  whole: the same reach law (`DOOR_REACH` + the `'door'` transit row), the
+  same idle law, the standing dwell RING (the switch lane feeds the
+  doorDwell view from `PlacedTrapwork.pullStart` — its own truth), one-way
+  persistence (Zone Memory remembers the thrown handle), and the co-op
+  doors channel. Feet never press it (`trapTriggerHit` is always false for
+  levers), packs never blunder it — a throw is a party hero's deliberate
+  act, served by `World.update`'s switch lane right after the door sweep.
+  Dwell done → the record opens SILENTLY through the one door gate and the
+  trapwork springs with the puller's credit (`spec.announce` is the voice —
+  the lever clicks, then the barred door announces itself across the room).
+  A thrown lever stays thrown: lint refuses `rearm`, and on re-entry a
+  remembered-open record simply stands inert over its re-armed trapwork
+  (no replay — the edge is an act, not a state-sense).
+- **`DoodadDoor.mode: 'switched'`** — the push never opens it: the dwell
+  sweep skips the mode and the switch lane floats a throttled refusal
+  (`held fast — some mechanism answers elsewhere…`, the conditioned-mouth
+  idiom) so a hero at the door learns there IS a mechanism, not a bug.
+  Openers: the `door` effect, and the one gate's other standing callers
+  (memory replay, the net channel). Never author a `lesson` on one.
+- **The two secrecy tiers** compose from the same two pieces: a LEVER is
+  the VISIBLE notice (meant to be seen, answered explicitly — the amber-eyed
+  `ruin_lever` switch stone); a HIDDEN PLATE wired to the same `door`
+  effect is the true secret (the odd flagstone that opens the wall
+  somewhere else). The refusal floater is itself the hunt's first clue.
+
+One documented seam: while a hero stands inside a lever's pull reach, the
+switch lane's view-feed wins the dwell ring over an adjacent dwell door
+(that door's own dwell stalls until you step off — generation keeps 70px
+between a lever and every foreign door, so the overlap is authorial).
 
 ## Hidden triggers
 
@@ -186,11 +227,30 @@ blocks sit, so no standing seed moves for an archetype it never fields
 on a face is a saw hall somewhere else that never got built — the sunken
 ruin's dials are sized against that trade (base 0.35×1, toothed halls
 0.6×2).
+**The lever door** (`leverDoors`): the switch lane's generation debut, and
+the one archetype with ZERO site hunger (it takes a door and a wall seat,
+never a corridor stretch — laid last, starving nothing). An unclaimed
+dead-end chamber whose mouth wears a plain `dwell` door is re-hung
+`switched`, and a `ruin_lever` stands ~2.2 cells outside the mouth against
+the corridor wall (deterministic fallback ladder toward the corridor
+center; 150px off portals, 70px off every OTHER door), wearing its own
+`pull` record wired `{door}` back to the barred mouth. Push the door: the
+refusal names a mechanism. Throw the amber-eyed stone beside it: the door
+swings across the room. False-floored chambers and wheel halls are
+excluded (the vault asks a pull, not a plunge), `both`-mode doors keep
+their breakable half, and the room behind is always OPTIONAL ground (leaf
+rooms only — the way onward is never barred). Dials: `chance`/`max`. Like
+the gallery and the wire the block is gated on the dial — absent or
+chance-0 burns no draws (probe §14 pins the byte-parity).
 Tells: `ruin_plate`/`ruin_plate_hidden` (`floorPlate` painter, `sink`
 dial), `ruin_floor_gap` (chasmPit — a TRUE pit, `DoodadRule.fall`),
 `boulder_cradle` (boulder painter — you SEE the stone waiting),
 `dart_maw` (watcherStone re-cut — the wall that watches is the wall that
-spits), `ruin_tripwire` (groundChain re-palette in verdigris — a bolted
+spits), `ruin_lever` (the switch lane's VISIBLE tier: the maw's watcher
+family stood free as a small switch stone, iris in the spring-amber accent
+— a mechanism that reads as a NOTICE; walk-through by rule so its closed
+`pull` record never blocks a channel, the composition-honest law),
+`ruin_tripwire` (groundChain re-palette in verdigris — a bolted
 cleat whose link run marches along the wire's bearing, which is the doodad's
 `rot`; laid in facing PAIRS, one per wall, so the two runs meet mid-hall and
 the corridor reads STRUNG from either mouth. The one tell with no
@@ -201,8 +261,11 @@ walk-gated off the wall it bolts to).
 ## Config + reserved seams
 
 All dials in `TRAPWORK_CFG` (salt, sweep beat, press pad, crumble/rumble/
-rake delays, dart/boulder speeds, `maxPerZone` 14, `revealNear`).
-Named-unbuilt: `trapSense` reveal stat; lever fixtures (a struck
-`passive+immortal` actor driving `lanes` — the puzzle-node sensing lane is
-already open); grapple-plates for the mass fabric's shove grammar. (The
-labyrinth trap pass and the surface rooms seam are BUILT — see Authoring.)
+rake delays, dart/boulder speeds, `maxPerZone` 14, `revealNear`,
+`leverPullSec`).
+Named-unbuilt: `trapSense` reveal stat; STRUCK lever fixtures (a
+`passive+immortal` actor driving effects through the puzzle-node sensing
+lane — the DWELL lever is built, see The switch lane; a bell you shoot
+remains the open sibling); grapple-plates for the mass fabric's shove
+grammar. (The labyrinth trap pass and the surface rooms seam are BUILT —
+see Authoring.)

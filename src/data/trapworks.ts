@@ -201,3 +201,13 @@ registerDoodadRule('boulder_cradle', { overlap: 'trigger', spacing: 90 });
 // watcher-stone painter re-cut). Decor: the volley's rays are authored by
 // the gen pass; the maw marks where they come from.
 registerDoodadRule('dart_maw', { overlap: 'trigger', spacing: 60 });
+
+// The RUIN LEVER — the SWITCH LANE's visible tier (the notice that answers
+// the hand where the hidden plate answers the misstep). A mechanism doodad
+// wearing a DOOR RECORD (DoodadDoor.mode 'pull'): the throw is the door
+// fabric's own dwell, the trapworks 'lever' trigger springs off it, and the
+// wired 'door' effect opens the barred way. Walk-through on purpose — the
+// blocking trio consult the RULE while a record stands closed, so trigger
+// overlap keeps the closed record from ever reading as an invisible post
+// (composition-honest: pathing, shots and sight all pass it).
+registerDoodadRule('ruin_lever', { overlap: 'trigger', spacing: 60 });

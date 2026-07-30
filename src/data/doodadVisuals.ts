@@ -219,6 +219,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'watcherStone', order: 53, shadow: 0.5, longShadow: 1.1,
     params: { color: '#7d7666', edge: '#3e382c', iris: '#7aa06a' },
   },
+  // The ruin lever: the switch lane's VISIBLE tier — the maw's own watcher
+  // family stood free as a small switch stone, its iris the spring-amber
+  // accent so the mechanism reads as a NOTICE at a glance (the hidden
+  // plate stays the secret; this one is meant to be seen and answered).
+  ruin_lever: {
+    painter: 'watcherStone', order: 53, shadow: 0.5,
+    params: { color: '#8a8172', edge: '#3e382c', iris: '#e8b45a' },
+  },
   // LAVA reads as FIRE UNDER PACK ICE now: hot hearts glow up through the
   // merged flow, dark crust plates ride the surface with melt seams burning
   // at their edges, crawl-glow wanders beneath. One body, like water.

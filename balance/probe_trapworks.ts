@@ -22,16 +22,16 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { linePath, placeTrack, trackDone, trackPending, trackPose, trackRider, type TrackSpec } from '../src/engine/tracks';
 import {
-  trapEffect, trapTriggerHit, TRAPWORK_CFG,
+  LEDGER_TRAP_SPRUNG, trapEffect, trapTriggerHit, TRAPWORK_CFG,
   type BoulderEffectRow, type PlacedTrapwork, type TrapHost,
 } from '../src/engine/trapworks';
-import { generateLayout } from '../src/engine/levelgen';
+import { blocksMovement, generateLayout, type Doodad } from '../src/engine/levelgen';
 import { mintCave } from '../src/engine/worldgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { Rng } from '../src/core/rng';
 import { serializeZone, applyZone } from '../src/net/snapshot';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
-import { vec, type Vec2 } from '../src/core/math';
+import { dist, vec, type Vec2 } from '../src/core/math';
 
 let failed = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -87,6 +87,7 @@ const DT = 1 / 60;
 {
   const ensured: TrackSpec[] = [];
   const armed = new Map<string, boolean>([['gate', true]]);
+  const opened: string[] = [];
   const cleared: string[] = [];
   const collapsed: { cells: number; delay: number; presser?: number; visual?: boolean }[] = [];
   const deferred: { sec: number; run: () => void }[] = [];
@@ -95,6 +96,7 @@ const DT = 1 / 60;
     tracksEnsure: (s) => ensured.push(...s),
     setTracksArmed: (tag, on) => armed.set(tag, on),
     laneArmed: (tag) => armed.get(tag) ?? false,
+    setDoorOpen: (id) => opened.push(id),
     collapseFloor: (cells, delay, presser, visual) =>
       collapsed.push({ cells: cells.length, delay, presser, visual }),
     clearDoodads: (kind) => cleared.push(kind),
@@ -107,6 +109,11 @@ const DT = 1 / 60;
   };
   trapEffect('lanes')!.spring(host, trap, { kind: 'lanes', tags: ['gate'], set: 'toggle' });
   check('effect lanes: toggle reads laneArmed and flips it', armed.get('gate') === false);
+  trapEffect('door')!.spring(host, trap, { kind: 'door', ids: ['vault/d0', 'vault/d1'] });
+  check('effect door: every named door opens through the narrow host',
+    opened.length === 2 && opened[0] === 'vault/d0' && opened[1] === 'vault/d1');
+  check('effect door: no mirror on purpose (door states ride their own 20 Hz channel)',
+    !trapEffect('door')!.mirror);
   trapEffect('boulder')!.spring(host, trap,
     { kind: 'boulder', from: vec(0, 0), to: vec(400, 0) }, 7);
   check('effect boulder: one ONCE-lane, presser-credited, trap-tagged, born after the rumble',
@@ -753,6 +760,169 @@ const DT = 1 / 60;
   for (let i = 0; i < 12; i++) lw.update(DT);
   check('gallery live: the wrong flag WAKES it again (the bait loop stands forever)',
     lane.armed === true);
+}
+
+// --- 14) THE SWITCH LANE — levers, switched doors, the 'door' effect --------
+// (The deliberate trigger beside the blundered ones. A LEVER is a DOOR-RECORD
+// doodad — DoodadDoor.mode 'pull' — thrown through the door fabric's own
+// dwell grammar (reach, idle, the standing ring, one-way persistence), and
+// the 'door' effect opens NAMED doors through THE one door gate. mode
+// 'switched' refuses the push READABLY (the conditioned-mouth idiom); the
+// visible lever and the hidden plate are the two secrecy tiers over one
+// effect. The stub-host half of the effect lives in §2 with its siblings.)
+{
+  // (a) THE GRAMMAR: lint refuses the malformed lever; feet never press one.
+  const w0 = makeSimWorld('warrior', 10007);
+  const before = w0.trapworks.length;
+  w0.trapworksEnsure([{ trigger: { kind: 'lever' }, effects: [{ kind: 'door', ids: ['x'] }] }]);
+  check('switch: lint refuses a lever without its record id', w0.trapworks.length === before);
+  w0.trapworksEnsure([{
+    trigger: { kind: 'lever', door: 'x', at: vec(0, 0) }, rearm: 3,
+    effects: [{ kind: 'door', ids: ['x'] }],
+  }]);
+  check('switch: lint refuses a rearming lever (a thrown lever stays thrown)',
+    w0.trapworks.length === before);
+  check('switch: feet never press a lever (the pull is a deliberate act)',
+    !trapTriggerHit({ kind: 'lever', door: 'x', at: vec(0, 0) }, 0, 0, 12));
+
+  // (b) LIVE: refusal → pull → the door swings across the room, end to end.
+  const w = makeSimWorld('warrior', 10009);
+  w.player.pos.x = 200; w.player.pos.y = 200;
+  const swDoor = {
+    pos: vec(600, 300), radius: 30, kind: 'door',
+    door: { id: 'p14_door', mode: 'switched' },
+  } as Doodad;
+  const lever = {
+    pos: vec(700, 500), radius: 11, kind: 'ruin_lever',
+    door: { id: 'p14_lv', mode: 'pull', dwell: 0.4 },
+  } as Doodad;
+  const plain = {
+    pos: vec(300, 700), radius: 30, kind: 'door',
+    door: { id: 'p14_plain', mode: 'dwell', dwell: 0.3 },
+  } as Doodad;
+  w.doodads.push(swDoor, lever, plain);
+  w.trapworksEnsure([{
+    id: 'p14_tw',
+    trigger: { kind: 'lever', door: 'p14_lv', at: vec(700, 500) },
+    effects: [{ kind: 'door', ids: ['p14_door'] }],
+    announce: 'the lever throws —',
+  }]);
+  const tw = w.trapworks.find(t => t.id === 'p14_tw')!;
+  check('switch live: the lever trapwork stands armed, tell-less (the stone IS the tell)',
+    tw?.state === 'armed' && !w.doodads.some(d => d.kind === 'ruin_plate' && dist(d.pos, vec(700, 500)) < 30));
+  check('switch live: drawn == tested at rest — the closed switched door BLOCKS, the closed lever never does',
+    blocksMovement(swDoor) && !blocksMovement(lever));
+  // Age past the refusal throttle's cold start (doorRefusalAt begins at 0).
+  for (let i = 0; i < Math.ceil(2.6 / DT); i++) w.update(DT);
+  check('switch live: far away, nothing moves (armed, closed, quiet)',
+    tw.state === 'armed' && !swDoor.door!.open && !lever.door!.open);
+  w.player.pos.x = 550; w.player.pos.y = 300;   // push the barred mouth
+  for (let i = 0; i < Math.ceil(0.5 / DT); i++) w.update(DT);
+  check('switch live: the push never opens a switched door', !swDoor.door!.open);
+  check('switch live: the refusal READS (the mechanism is named, not a bug)',
+    w.texts.some(t => t.text.includes('held fast')));
+  check('switch live: no dwell ring ever starts at a switched door',
+    w.doorDwellView() === null);
+  w.player.pos.x = 660; w.player.pos.y = 500;   // stand at the handle
+  for (let i = 0; i < Math.ceil(0.3 / DT); i++) w.update(DT);
+  const ring = w.doorDwellView();
+  check('switch live: the pull wears the STANDING dwell ring at the lever (drawn == tested mid-throw)',
+    !!ring && ring.frac > 0 && ring.frac < 1
+    && Math.abs(ring.pos.x - 700) < 1 && Math.abs(ring.pos.y - 500) < 1);
+  const led0 = w.ledger[LEDGER_TRAP_SPRUNG] ?? 0;
+  for (let i = 0; i < Math.ceil(0.6 / DT); i++) w.update(DT);
+  check('switch live: the throw lands — lever record open, trapwork sprung single-use',
+    lever.door!.open === true && tw.state === 'sprung' && tw.rearmAt === Infinity);
+  check('switch live: the named door swings across the room (the \'door\' effect)',
+    swDoor.door!.open === true);
+  check('switch live: drawn == tested after — the open way blocks nothing',
+    !blocksMovement(swDoor));
+  check('switch live: the puller\'s own feet teach the account (the hard-lesson ledger)',
+    (w.ledger[LEDGER_TRAP_SPRUNG] ?? 0) === led0 + 1);
+  w.player.pos.x = 350; w.player.pos.y = 700;   // the standing sweep, untouched
+  for (let i = 0; i < Math.ceil(0.8 / DT); i++) w.update(DT);
+  check('switch live: a plain dwell door still opens by push (the sweep regression guard)',
+    plain.door!.open === true);
+
+  // (c) GEN: forced leverDoors bar real dead-end chambers on minted ruins.
+  const parent = w.zone;
+  const arena = { w: 1300, h: 1000 };
+  const entry = vec(120, 500), exits = [vec(1180, 500)];
+  type TrapDials = Record<string, unknown>;
+  const genOn = (def: ReturnType<typeof mintCave>, seed: number, trapworks: TrapDials | undefined): ReturnType<typeof generateLayout> =>
+    generateLayout({
+      ...def, seed, layoutType: 'dungeon',
+      layoutParams: { ...def.layoutParams, ...(trapworks ? { trapworks } : {}) },
+    } as typeof def, arena, new Rng(seed), entry, exits);
+  // The fingerprint carries door MODES — the re-hang must show, and parity
+  // must prove chance-0 re-hangs nothing.
+  const fp = (out: ReturnType<typeof generateLayout>): string => JSON.stringify({
+    t: out.tracks ?? [], w: out.trapworks ?? [],
+    d: out.doodads.map(d => [d.kind, Math.round(d.pos.x), Math.round(d.pos.y), d.door?.mode ?? '']),
+  });
+  const BASE = { sawHalls: { chance: 1, max: 2 }, falseFloors: { chance: 1, max: 1 } };
+  let parity = true, absentZero = true;
+  for (let s = 0; s < 2; s++) {
+    const seed = 81000 + s * 1237;
+    const def = mintCave(parent, seed, `probe_lvr_par_${s}`, 'sunken_ruin', { rollVariant: false });
+    const a = genOn(def, seed, BASE);
+    const b = genOn(def, seed, { ...BASE, leverDoors: undefined });
+    const c = genOn(def, seed, { ...BASE, leverDoors: { chance: 0, max: 2 } });
+    if (fp(a) !== fp(b) || fp(a) !== fp(c)) parity = false;
+    if (a.doodads.some(d => d.kind === 'ruin_lever' || d.door?.mode === 'switched')
+      || (a.trapworks ?? []).some(t => t.trigger.kind === 'lever')) absentZero = false;
+  }
+  check('lever gen: ABSENT lays zero (no levers, no switched mouths)', absentZero);
+  check('lever gen: absent == chance-0, byte for byte (the off-default law)', parity);
+
+  let laid = 0, wiredOk = true, recordOk = true, seatOk = true, strideOk = true, deterministic = true;
+  for (let s = 0; s < 4; s++) {
+    const seed = 82000 + s * 911;
+    const def = mintCave(parent, seed, `probe_lvr_${s}`, 'sunken_ruin', { rollVariant: false });
+    const DIAL = { leverDoors: { chance: 1, max: 1 } };
+    const out = genOn(def, seed, DIAL);
+    if (fp(out) !== fp(genOn(def, seed, DIAL))) deterministic = false;
+    const twSpec = (out.trapworks ?? []).find(t => t.id === 'gen_leverdoor0');
+    if (!twSpec) continue;   // this seed grew no doored leaf — honest scarcity
+    laid++;
+    // The wiring: lever trigger → its own record → one 'door' effect naming
+    // a real, now-switched mouth.
+    const eff = twSpec.effects[0] as { kind: string; ids?: string[] };
+    if (twSpec.trigger.kind !== 'lever' || twSpec.trigger.door !== 'gen_leverdoor0_lv'
+      || !twSpec.trigger.at || twSpec.effects.length !== 1
+      || eff.kind !== 'door' || eff.ids?.length !== 1) wiredOk = false;
+    const mouth = out.doodads.find(d => d.door?.id === eff.ids?.[0]);
+    if (!mouth || mouth.door?.mode !== 'switched' || mouth.kind !== 'door') wiredOk = false;
+    // The lever: a real record doodad in 'pull' mode at the trigger's anchor,
+    // wearing the config pull.
+    const lv = out.doodads.find(d => d.door?.id === 'gen_leverdoor0_lv');
+    if (!lv || lv.kind !== 'ruin_lever' || lv.door?.mode !== 'pull'
+      || lv.door?.dwell !== TRAPWORK_CFG.leverPullSec
+      || !twSpec.trigger.at || dist(lv.pos, vec(twSpec.trigger.at.x, twSpec.trigger.at.y)) > 1) recordOk = false;
+    // The seat: walkable corridor ground, portal-clear, off every FOREIGN door.
+    if (lv) {
+      const gw = out.walk;
+      if (gw instanceof GridWalkField && !gw.isWalkable(lv.pos.x, lv.pos.y)) seatOk = false;
+      if (![entry, ...exits].every(p => Math.hypot(p.x - lv.pos.x, p.y - lv.pos.y) >= 149)) seatOk = false;
+      // The foreign-door floor is 48 — just past the pull's own reach, so a
+      // lever is never pullable from a foreign door's push seat.
+      for (const d of out.doodads) {
+        if (!d.door || d === lv || d === mouth) continue;
+        if (Math.hypot(d.pos.x - lv.pos.x, d.pos.y - lv.pos.y) < 47) seatOk = false;
+      }
+      // The stride law: beside ITS OWN mouth — visible from the refusal.
+      if (mouth) {
+        const dd = Math.hypot(mouth.pos.x - lv.pos.x, mouth.pos.y - lv.pos.y);
+        if (dd < 40 || dd > 140) strideOk = false;
+      }
+    }
+  }
+  check('lever gen: forced dials BAR real chambers on minted ruins', laid >= 2, `${laid}/4 seeds`);
+  check('lever gen: lever → own pull record → one door effect → a switched mouth (wired whole)', wiredOk);
+  check('lever gen: the record doodad is real, pull-moded, config-dwelled, anchored', recordOk);
+  check('lever gen: the seat is walkable, portal-clear, off every foreign door', seatOk);
+  check('lever gen: the stride law — the mechanism stands beside its own mouth', strideOk);
+  check('lever gen: deterministic per seed (double-gen identical)', deterministic);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

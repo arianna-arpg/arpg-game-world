@@ -27,6 +27,7 @@ import {
   stampEntries, type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
 } from './levelgen';
 import { ringPath, trackRider } from './tracks';
+import { TRAPWORK_CFG } from './trapworks';
 
 const CELL = 30;
 /** Interior margin (cells) between the arena border and any carved space. */
@@ -497,6 +498,17 @@ export interface TrapGenSpec {
     chance: number; max?: number;
     stations?: [number, number]; speed?: number; cadence?: number; rider?: string;
   };
+  /** THE LEVER DOOR — the switch lane's generation debut (the 'door' effect
+   *  wired to the VISIBLE lever tier): an unclaimed dead-end chamber's mouth
+   *  door is re-hung 'switched' (the push refuses READABLY — the mechanism
+   *  is the way in) and a RUIN LEVER stands a stride outside it against the
+   *  corridor wall, wearing its own 'pull' door record wired back to the
+   *  barred mouth. The pull is the door fabric's own dwell; a thrown lever
+   *  stays thrown; the room behind is OPTIONAL ground (leaf rooms only —
+   *  the way onward is never barred). Dials: chance/max. Absent OR chance 0
+   *  = the block never draws — the dial-gate law (probe §14 pins absent ==
+   *  chance-0 byte-parity). */
+  leverDoors?: { chance: number; max?: number };
 }
 
 /** The geometry the trap pass measures against. The interior generators build
@@ -1003,6 +1015,104 @@ function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: T
     }
     // The honest whisper: a little rubble where the masons cut corners.
     ctx.doodads.push({ pos: vec(rm.cx + rng.range(-14, 14), rm.cy + rng.range(-14, 14)), radius: 12, kind: 'rubble' });
+  }
+
+  // --- LEVER DOORS: the switch lane's debut — a dead-end chamber barred
+  // behind the VISIBLE mechanism tier. The leaf's mouth door is re-hung
+  // 'switched' (the push refuses readably) and a ruin lever stands a stride
+  // outside it against the corridor wall, its own 'pull' record wired
+  // {door} back to the barred mouth. Takes NO corridor stretch (zero site
+  // hunger) and sits last on purpose; like the gallery and the wire the
+  // whole block is GATED ON THE DIAL — an absent or chance-0 face burns no
+  // draws, so no standing seed moves (probe §14 pins the byte-parity).
+  // Only plain 'dwell' mouths qualify (a 'both' door keeps its breakable
+  // half; flipped rooms self-exclude on the mode), never a false-floored
+  // chamber (the vault should ask a pull, not a plunge), never a wheel hall.
+  const lvd = spec.leverDoors;
+  if (lvd && lvd.chance > 0) {
+    // MY OWN pool, MY OWN ask (the hunger doctrine — measured: borrowing the
+    // false floors' big-chamber pool starved 3 of 4 probe ruins): ANY doored
+    // leaf is a vault — the room needs no interior clearance (nothing hides
+    // inside it) and no minimum floor; the SEAT's own portal/door clearances
+    // below are the real constraint. False-floored chambers stay excluded.
+    const falseFloored = new Set(deadEnds.slice(0, floorsLaid).map(c => c.i));
+    const leafRooms = geo.rooms
+      .map((r, i) => ({ r, i }))
+      .filter(({ r, i }) => !r.portal && geo.adj[i].length === 1
+        && !usedRooms.has(i) && !falseFloored.has(i));
+    for (let k = 0; k < (lvd.max ?? 1); k++) {
+      const want = rng.chance(lvd.chance);
+      if (!want) continue;
+      // Fixed draw shape (the wheel discipline): the seat draw always burns.
+      const pickF = rng.range(0, 1);
+      const cands = leafRooms
+        .filter(({ r, i }) => !usedRooms.has(i)
+          && geo.doors.some(pd => pd.door.mode === 'dwell'
+            && pd.pos.x > r.x - CELL * 1.5 && pd.pos.x < r.x + r.w + CELL * 1.5
+            && pd.pos.y > r.y - CELL * 1.5 && pd.pos.y < r.y + r.h + CELL * 1.5));
+      if (!cands.length) continue;
+      // The pick seeds a DRAW-FREE scan (the takeStretch shape): starting at
+      // the rolled leaf, walk the pool until a seat legalizes — a cramped
+      // mouth burns no slot when a sane one stands two rooms over. Measured:
+      // dungeon corridors are SHORT, so most mouths keep another door inside
+      // any generous clearance — the foreign-door floor is 48px, just past
+      // the pull's own reach (11 + hero + DOOR_REACH), which is the honest
+      // ask: a lever may stand NEAR a foreign door, it just must not be
+      // pullable from that door's own push seat.
+      const pickIdx = Math.min(cands.length - 1, Math.floor(pickF * cands.length));
+      let seated = false;
+      for (let ci = 0; ci < cands.length && !seated; ci++) {
+        const cand = cands[(pickIdx + ci) % cands.length];
+        const rm = cand.r;
+        const pd = geo.doors.find(x => x.door.mode === 'dwell'
+          && x.pos.x > rm.x - CELL * 1.5 && x.pos.x < rm.x + rm.w + CELL * 1.5
+          && x.pos.y > rm.y - CELL * 1.5 && x.pos.y < rm.y + rm.h + CELL * 1.5);
+        if (!pd) continue;
+        // The lever seat: a stride OUT from the mouth along the corridor (the
+        // door's normal, signed away from the chamber), hugged toward the
+        // corridor wall. Deterministic fallback ladder — no draws.
+        const away = ((pd.pos.x - rm.cx) * pd.normal.x + (pd.pos.y - rm.cy) * pd.normal.y) >= 0
+          ? vec(pd.normal.x, pd.normal.y) : vec(-pd.normal.x, -pd.normal.y);
+        const side = k % 2 === 0 ? 1 : -1;
+        const hug = Math.max(0, geo.halfW - 12);
+        let seat: Vec2 | null = null;
+        // Two distance rings (a stride, then a long stride — both inside the
+        // stride law's window) × the wall-hug ladder. A junction-adjacent
+        // foreign door defeats the near ring whole; the far ring clears it.
+        // A mouth-to-mouth vestibule shorter than the floor defeats BOTH —
+        // the honest refusal (a lever there WOULD be pullable from the
+        // foreign door's own push seat).
+        for (const strideCells of [2.2, 3.2]) {
+          const out = vec(pd.pos.x + away.x * CELL * strideCells, pd.pos.y + away.y * CELL * strideCells);
+          for (const off of [hug * side, hug * -side, hug * 0.5 * side, 0]) {
+            const p = vec(out.x - away.y * off, out.y + away.x * off);
+            if (!geo.grid.isWalkable(p.x, p.y)) continue;
+            if (!clearOfPortals(p, 150)) continue;
+            if (!geo.doors.every(x => x === pd || Math.hypot(p.x - x.pos.x, p.y - x.pos.y) >= 48)) continue;
+            seat = p;
+            break;
+          }
+          if (seat) break;
+        }
+        if (!seat) continue;
+        // The re-hang + the mechanism. The mouth keeps its own id (memory and
+        // the co-op doors channel key on it); the lever record is the trap's.
+        pd.door.mode = 'switched';
+        usedRooms.add(cand.i);
+        const lvId = `gen_leverdoor${k}_lv`;
+        ctx.doodads.push({
+          pos: vec(seat.x, seat.y), radius: 11, kind: 'ruin_lever',
+          door: { id: lvId, mode: 'pull', dwell: TRAPWORK_CFG.leverPullSec },
+        });
+        (ctx.trapworks ??= []).push({
+          id: `gen_leverdoor${k}`,
+          trigger: { kind: 'lever', door: lvId, at: { x: seat.x, y: seat.y } },
+          effects: [{ kind: 'door', ids: [pd.door.id] }],
+          announce: 'the lever throws —',
+        });
+        seated = true;
+      }
+    }
   }
 
 }
