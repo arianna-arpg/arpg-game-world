@@ -21,6 +21,12 @@
 //     script = byte-identical fields,
 //   - THE DEF: validate() clean over live registries, every kind's monster/
 //     status/skills resolve, the package rides the registry,
+//   - THE GLOAM LANE (rig H): THE FEN LAW over the WIDENED list — ignition
+//     seats marsh AND gloamwood, never off-list; the fourth kind
+//     (gloam_light) is presence-banded (absent in the shallows, whole at its
+//     `from`) and its ride mark carries THE LAMPKEEPER'S GIFT
+//     (survivalEase_light — folded at the engine's ONE survivalDrainRate
+//     chokepoint, live end to end on a real gloamwood mint),
 //   - LIVE (the real engine): a dev-pinned gathering on a real marsh mint
 //     stages standing untargetable/invulnerable lights out of arm's reach;
 //     the touch kindles one (ledger + route); the walk pulses `emboldened`
@@ -42,6 +48,8 @@ import type { ZoneDef } from '../src/data/zones';
 import { MONSTERS } from '../src/data/monsters';
 import { SKILLS } from '../src/data/skills';
 import { BIOMES } from '../src/world/biomes';
+import { presenceMul, presenceTable } from '../src/engine/presence';
+import { survivalEaseStat, SURVIVAL_EASE_CAP } from '../src/world/regions';
 import { STATUS_DEFS } from '../src/engine/status';
 import { riderRefusal } from '../src/engine/possess';
 import type { OverlayView } from '../src/world/overlay';
@@ -432,6 +440,113 @@ const mkField = (surge: WisplightSurge, seed = 0x5eed): WisplightField =>
         !!i4 && i4.ridden === 1 && hostsNow.length === 1,
         `${hostsNow.length} marked hosts`);
     }
+  }
+}
+
+// ------------------------------------------------ H. the gloam lane
+// The fourth kind (chip: the gloamwood joins THE FEN LAW; the gift is LIGHT).
+{
+  // H1 — THE FEN LAW over the WIDENED list: ignition seats BOTH listed
+  // biomes (the fen and the hollows) and never any other ground.
+  const zones = [
+    mkZone('home', 'marsh', 5, 0, 0),          // the player stands here
+    mkZone('fen', 'marsh', 5, 60, 0),          // legal: the old ground
+    mkZone('hollow', 'gloamwood', 9, 0, 60),   // legal: the NEW ground
+    mkZone('croft', 'farmland', 5, 60, 60),    // wrong biome, still refused
+  ];
+  let fen = 0, hollow = 0, illegal = 0;
+  for (let s = 0; s < 40; s++) {
+    const f = mkField(HOT, 0x6000 + s);
+    const web = mkWeb(zones, 'home', ['home', 'fen', 'hollow', 'croft']);
+    for (let i = 0; i < 8 && f.activeCount() === 0; i++) f.update(0.5, web.view);
+    const seat = f.peek()[0];
+    if (!seat) continue;
+    if (seat.zoneId === 'fen') fen++;
+    else if (seat.zoneId === 'hollow') hollow++;
+    else illegal++;
+  }
+  check('H1: ignition seats the fen AND the hollows — never off-list ground',
+    fen >= 8 && hollow >= 8 && illegal === 0, `${fen} fen, ${hollow} hollow, ${illegal} illegal`);
+  check('H2: the surge names its ground (marsh + gloamwood) and every entry resolves in BIOMES',
+    WISPLIGHT_SURGE.biomes.includes('marsh') && WISPLIGHT_SURGE.biomes.includes('gloamwood')
+    && WISPLIGHT_SURGE.biomes.every(b => !!BIOMES[b]));
+
+  // H3/H4 — the fourth kind is PRESENCE-BANDED like its siblings: absent in
+  // the shallows, ramping through the band, whole at its `from` — and the
+  // stage-time fold (presenceTable, weightedPick's own shaper) agrees.
+  const row = wispKindOf(WISPLIGHT_SURGE, 'gloam_light');
+  check('H3: the gloam kind rides the envelope (0 below the band, a ramp, 1 at `from`)',
+    !!row && !!row.presence
+    && presenceMul(row.presence, 2) === 0
+    && presenceMul(row.presence, 6) > 0 && presenceMul(row.presence, 6) < 1
+    && presenceMul(row.presence, 12) === 1,
+    row?.presence ? JSON.stringify(row.presence) : 'no presence');
+  const shallow = presenceTable(WISPLIGHT_SURGE.kinds, 2);
+  const deep = presenceTable(WISPLIGHT_SURGE.kinds, 12);
+  check('H4: the stage-time fold drops it in the shallows and deals it deep',
+    !shallow.some(k => k.id === 'gloam_light') && deep.some(k => k.id === 'gloam_light'));
+
+  // H5 — the ride mark IS the light gift: the Lampkeeper's stat, worn as a
+  // beneficial mark, under THE EASE LAW's cap (slowed, never stopped).
+  const st = row ? STATUS_DEFS[row.rideStatus] : undefined;
+  const ease = st?.mods?.find(m => m.stat === survivalEaseStat('light'));
+  check('H5: the ride mark carries survivalEase_light (beneficial, under the ease cap)',
+    !!st && st.beneficial === true && !!ease && ease.value > 0 && ease.value < SURVIVAL_EASE_CAP,
+    ease ? `ease ${ease.value}` : 'no ease mod');
+}
+
+// ------------------------------------------------ H-LIVE — gloamwood end to end
+{
+  const w: World = makeSimWorld('warrior', 0xb0903);
+  const zid = w.devMintTileset('gloamwood', 1, 10, { seed: 606606 });
+  check('H6: a gloamwood mint stands', !!zid, zid ?? 'null');
+  const wf = w.sim.wisplightField;
+  if (zid && wf) {
+    w.player.invulnerable = true;
+    // Rig reach into the engine's private seams (mint + ride force) —
+    // targeting/setup only; every assertion goes through public surfaces.
+    const wx = w as unknown as {
+      createMonster(id: string, lvl: number, team: 'enemy'): Actor;
+      applyWispRide(a: Actor, k: unknown, c: unknown): void;
+      wispScene: { wisps: { a: Actor; state: string }[] } | null;
+    };
+    const ok = wf.devIgnite(w.devOverlayView(), zid);
+    check('H7: the hollows gather lights', ok);
+    const step = (secs: number, dt = 0.25): void => { for (let t = 0; t < secs; t += dt) w.update(dt); };
+    step(1.5);
+    const info = wf.wisplightOn(zid);
+    check('H8: the scene stages on gloam ground (kinds rolled once)',
+      !!info && info.staged && info.slots.length >= WISPLIGHT_SURGE.wisps[0],
+      info ? `${info.slots.length} slots` : 'no info');
+
+    // THE TOUCH on gloam ground (the kindle half of the end-to-end).
+    const scene = wx.wispScene;
+    if (scene && scene.wisps.length) {
+      const target = scene.wisps[0];
+      w.player.pos.x = target.a.pos.x + 10; w.player.pos.y = target.a.pos.y;
+      step(0.8);
+      check('H9: the touch kindles in the hollows', (wf.wisplightOn(zid)?.kindled ?? 0) >= 1);
+    } else {
+      check('H9: the touch kindles in the hollows', false, 'no staged lights');
+    }
+
+    // THE RIDE, forced with the gloam row (the G17 idiom): the host wears
+    // the mark + epithet + the lantern-glass shield, and THE LAMPKEEPER'S
+    // GIFT folds at the engine's ONE survivalDrainRate chokepoint.
+    const kind = wispKindOf(WISPLIGHT_SURGE, 'gloam_light')!;
+    const victim = wx.createMonster('bog_strider', 12, 'enemy');
+    victim.pos.x = w.player.pos.x + 200; victim.pos.y = w.player.pos.y;
+    w.actors.push(victim);
+    wx.applyWispRide(victim, kind, WISPLIGHT_SURGE);
+    const esGrant = kind.grant!.es![0] + kind.grant!.es![1] * victim.level;
+    check('H10: the host wears the gloam mark + epithet + the level-computed shield',
+      victim.statuses.some(s => s.id === kind.rideStatus)
+      && victim.name.startsWith(kind.epithet)
+      && victim.sheet.get('energyShield') >= esGrant && victim.es > 0,
+      `${victim.name}, es ${victim.es}/${victim.sheet.get('energyShield')} (grant ${esGrant})`);
+    const rate = w.survivalDrainRate(victim, 'light', 1);
+    check('H11: the light drain EASES through the one fold (slowed, never stopped)',
+      rate > 0 && rate < 1 && Math.abs(rate - 0.7) < 1e-9, `rate ${rate}`);
   }
 }
 

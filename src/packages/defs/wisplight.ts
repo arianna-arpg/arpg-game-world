@@ -39,9 +39,10 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
   // while an unknown seat settles LATENT and murmurs (the omen below). The
   // min keeps it off the player's own boots: a gathering is ARRIVED AT.
   seat: { range: { min: 40, max: 560 }, knownMul: 1.2, unknownMul: 1, prefer: 'near' },
-  // THE FEN LAW: a biome list, never a hardcode — a harsher tuning could add
-  // the gloamwood's hollows or the caul's shallows.
-  biomes: ['marsh'],
+  // THE FEN LAW: a biome list, never a hardcode — the gloamwood's hollows
+  // joined the fen (the gloam wisp is that country's own colour); a harsher
+  // tuning could still add the caul's shallows.
+  biomes: ['marsh', 'gloamwood'],
   // No levelMax on purpose: the whole fen, every band — the ride scales with
   // the host it takes, so the event is level-honest by construction.
   latentOnUnknown: true,
@@ -85,6 +86,18 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
       // THE MOURNER'S GIFT: a thin cold shield and a real curse in the kit.
       grant: { es: [16, 5] },
       grantSkills: ['despair'],
+    },
+    {
+      id: 'gloam_light', weight: 2, presence: { from: 8, fadeIn: 4 }, monster: 'gloam_light',
+      rideStatus: 'wisp_ridden_gloam', epithet: 'Gloamlit',
+      line: 'the gloam-light sinks in — it keeps the last lamp lit.',
+      // THE LAMPKEEPER'S GIFT: the deep country's own colour (the gloamwood
+      // hollows, where light is a RESOURCE — the Gloaming's meter). The ride
+      // status carries `survivalEase_light` (the Lampkeeper suffix's stat,
+      // folded once at World.survivalDrainRate), so a possessed Gloamlit
+      // host is a lamp that outlasts the dark — plus a faint lantern-glass
+      // shield the latest-arriving band wears whole.
+      grant: { es: [18, 5] },
     },
   ],
   standMinDist: 260,       // a light is stumbled ACROSS, never spawned underfoot

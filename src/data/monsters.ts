@@ -11480,6 +11480,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'sylvan', tags: [],
     flier: true, levitates: true, noNemesis: true,
   },
+  // The gloamwood's own colour of wisp (the wisplight's fourth kind — THE
+  // LAMPKEEPER'S GIFT). Alone among its kin it wears a CARRIED LAMP
+  // (MonsterDef.light, the murk_angler precedent): in the wood where light
+  // is a resource, the wandering wisp must READ as one — a dusk-violet lamp
+  // on the dynamic light layer, dimmed under whatever noon the gloam allows.
+  gloam_light: {
+    id: 'gloam_light', name: 'Gloam-Light',
+    color: '#c8b0f0', shape: 'circle', radius: 7, material: 'ethereal', look: 'fen_light',
+    base: { life: 10, moveSpeed: 110, mana: 0 },
+    // No body, no shoulder: the light streams through the crowd (the
+    // separation pass's own phasing exemption — a body parked on a light
+    // must never pin its walk).
+    mods: [mod('phasing', 'flat', 1)],
+    skills: [], xp: 0, drops: 0,
+    faction: 'sylvan', tags: [],
+    flier: true, levitates: true, noNemesis: true,
+    light: { radius: -4, color: '#c8b0f0', intensity: 0.5, flicker: 1.8, radiance: { at1: 0.35 } },
+  },
   // THE SURGE ECHO — the Quickening's one named face (packages/defs/
   // quickening.ts): once per quickened zone the surge knots itself into a
   // walking body, champion-promoted by the scene at staging and paid by its

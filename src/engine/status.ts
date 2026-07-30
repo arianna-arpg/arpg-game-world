@@ -1186,6 +1186,16 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Gravelit', color: '#9ae8ff', duration: 900, beneficial: true,
     mods: [mod('damage', 'increased', 0.2), mod('evasion', 'increased', 0.3)],
   },
+  // The gloam wisp's mark carries THE LIGHT GIFT itself: `survivalEase_light`
+  // (the Lampkeeper suffix's stat — folds once at World.survivalDrainRate,
+  // row-capped) is dead weight on an unseated monster but comes alive the
+  // moment a player POSSESSES the host — the borrowed body's lamp outlasts
+  // the Gloaming's dark. The accuracy half is the fight texture: a gloam-lit
+  // body strikes true in its own half-light.
+  wisp_ridden_gloam: {
+    label: 'Gloamlit', color: '#c8b0f0', duration: 900, beneficial: true,
+    mods: [mod('survivalEase_light', 'flat', 0.3), mod('accuracy', 'increased', 0.3)],
+  },
 
   // HARRIED — the gnat-cloud's misdirection seed (THE THRONG's smallest
   // flavor, and any future biting-cloud kin): each stack is one more
