@@ -10075,10 +10075,28 @@ export class World {
     this.text(vec(a.pos.x, a.pos.y - 24), 'ERUPTION!', '#e8c86a', 14);
   }
 
-  /** Populate the zone's ambient FAUNA from the biome's WILDLIFE table: each
-   *  entry rolls independently and spawns its band (squad-stamped, so wolf
-   *  packs hunt with discipline) away from the entrance. Safe zones and
-   *  biomes without a table stay fauna-free. */
+  /** THE FAUNA PROVENANCE RESOLVER — which WILDLIFE table a zone's ambient
+   *  life draws from: ONE pure read shared by spawnWildlife and the cohort
+   *  probe (drawn == tested). Authored fauna wins outright. A BIOMED zone
+   *  reads its own country — and a biome with no table stays fauna-free
+   *  (the standing law; the ascent shelf's `biome = 'aether'` stamp leans
+   *  on it to keep hares out of the clouds). A biome-less mint (every
+   *  cave/sidezone rung) reads its stamped ANCHOR — the surface country
+   *  the whole ladder hangs beneath (ZoneDef.anchor) — so a gallery under
+   *  volcanic country breathes ember wisps, not meadow hares; plains is
+   *  the net under BOTH misses (no anchor at all, or an anchor whose
+   *  country keeps no table): unrowed provenance degrades to the meadow
+   *  texture it always had, never to silence. */
+  static wildlifeTableFor(def: ZoneDef): (typeof WILDLIFE)[string] | undefined {
+    if (def.fauna) return def.fauna;
+    if (def.biome !== undefined) return WILDLIFE[def.biome];
+    return WILDLIFE[def.anchor ?? 'plains'] ?? WILDLIFE.plains;
+  }
+
+  /** Populate the zone's ambient FAUNA from its provenance WILDLIFE table
+   *  (wildlifeTableFor): each entry rolls independently and spawns its band
+   *  (squad-stamped, so wolf packs hunt with discipline) away from the
+   *  entrance. Safe zones and biomes without a table stay fauna-free. */
   private spawnWildlife(def: ZoneDef): void {
     // AUTHORED FAUNA (ZoneDef.fauna) REPLACES the biome table outright — and it
     // alone passes the sanctuary gate below (the town's gutter rats, the
@@ -10095,7 +10113,7 @@ export class World {
     // THE COHORT LAW: a closed-membership zone hosts no biome fallback fauna
     // — its authored rows (if any) are the whole ambient cohort too.
     if (!authored && def.cohort === 'authored') return;
-    const table = authored ?? WILDLIFE[def.biome ?? 'plains'];
+    const table = World.wildlifeTableFor(def);
     if (!table?.length) return;
     // TOWN PRESSURE (the Verminfall's threat-as-texture): while warrens fester
     // in the near ring, authored VERMIN-tagged rows swell their chance — home
