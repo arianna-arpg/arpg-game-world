@@ -324,16 +324,21 @@
       <h2>The map was finished before you arrived</h2>
       <p>Two anchors are set by hand: the town of Lastlight, and Wayfarer's Crossroads past it. Everything beyond is frontier. Step through a rim portal and the next zone is stitched into the world graph one level deeper, permanent from that moment on: named, walked, warred over, remembered. You will stop before it does.</p>
     </div>
-    <div class="pillars">
+    <div class="pillars" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
       <div class="pillar reveal" style="--accent:var(--green)">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/></svg></div>
         <h3>The fog is not empty</h3>
         <p>Finished country stands past your map's edge before you ever face that way: charted, populated, already contested, invisible until found. You never watch the world load in. You catch up to it. Depth is the difficulty curve, and the curve does not end.</p>
       </div>
       <div class="pillar reveal" style="--accent:var(--teal)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
-        <h3>Ground makes demands</h3>
-        <p>Cull it, hold it, outlive it, dig up what it buried, relight what it let go dark, break whatever keeps pouring bodies into it, or answer a riddle it has been keeping for nobody. The objective changes what a zone is, and some zones will not open the way out until you finish.</p>
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0M5 15V8l6-3 6 3v7"/></svg></div>
+        <h3>The sea is a place</h3>
+        <p>Cast off and you <i>are</i> the boat. Every water is one whole thing with a class, a name, and its harbors already seated; it was all decided before your bow ever touched it. You learn the name by finding your first port. Some ports are under siege when you get there, and the causeway stays barred until you end it.</p>
+      </div>
+      <div class="pillar reveal" style="--accent:var(--ember)">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6M12 2v3M8 8c0-2 1.8-3 4-3s4 1 4 3v8c0 1.7-1.8 3-4 3s-4-1.3-4-3V8z"/><circle cx="12" cy="12" r="1.6"/></svg></div>
+        <h3>The dark keeps a ledger</h3>
+        <p>Somewhere on the map is a darkness with a border, and the border moves. Inside it, light is a meter with a drain rate. Daylight never pays that debt down; it only suspends the bill until dusk collects. Bring a lantern. Bring two.</p>
       </div>
     </div>
   </div>
@@ -356,29 +361,14 @@
         <p>Zones run <b>owned</b>, <b>contested</b>, or <b>conquered</b> outright. Contested is the fun one: two hostile populations spawning into the same ground, already at each other when you arrive, and you get to choose whose day gets worse. Faction power is fed by living monsters, so every corpse you make is a vote.</p>
       </div>
       <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg></div>
-        <h4>Day, dusk, night, dawn</h4>
-        <p>The wheel turns while you play, and the world is rigged to it. The <b>Haunting</b> binds only after dark, and dawn cuts it loose. Star-lit spans hold only under a night sky. At least one door refuses to open until dusk. Route by the light you'll have when you get there, not the light you left in.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a4 4 0 014-4 5 5 0 019.5-1.5A3.5 3.5 0 0119 15H6a2 2 0 01-2-1z"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2"/></svg></div>
-        <h4>Weather with teeth</h4>
-        <p>Rain, fog, ashfall, snow, and the <b>Blood Moon</b>, under which the dead walk twice as thick. A storm is a place, with a heart and a rim and a drift, and the ground dresses for it while it holds. Every front re-weights who spawns where. The forecast is a farming decision.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0M5 15V8l6-3 6 3v7"/></svg></div>
-        <h4>The sea is a place</h4>
-        <p>Cast off and you <i>are</i> the boat. Every water is one whole thing with a class, a name, and its harbors already seated; it was all decided before your bow ever touched it. You learn the name by finding your first port. Some ports are under siege when you get there, and the causeway stays barred until you end it.</p>
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
+        <h4>Ground makes demands</h4>
+        <p>Cull it, hold it, outlive it, dig up what it buried, relight what it let go dark, break whatever keeps pouring bodies into it, or answer a riddle it has been keeping for nobody. The objective changes what a zone is, and some zones will not open the way out until you finish.</p>
       </div>
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--steel)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg></div>
         <h4>Everything out there pays attention</h4>
         <p>Suspicion is a ladder you can read from the outside: heads turn first, then lanterns swing, then the searching starts. Sleepers collapse to a hearing ring, so creep the rim. Trackers run your footprints in the order you laid them, and wading breaks the trail. Yes, that is a hint.</p>
-      </div>
-      <div class="lcard reveal">
-        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6M12 2v3M8 8c0-2 1.8-3 4-3s4 1 4 3v8c0 1.7-1.8 3-4 3s-4-1.3-4-3V8z"/><circle cx="12" cy="12" r="1.6"/></svg></div>
-        <h4>The dark keeps a ledger</h4>
-        <p>Somewhere on the map is a darkness with a border, and the border moves. Inside it, light is a meter with a drain rate. Daylight never pays that debt down; it only suspends the bill until dusk collects. Bring a lantern. Bring two.</p>
       </div>
     </div>
   </div>
