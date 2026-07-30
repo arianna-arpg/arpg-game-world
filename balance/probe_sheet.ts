@@ -19,6 +19,7 @@
 
 import { bootSimEngine } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
+import { BEHAVIOR_STATS } from '../src/engine/brain';
 import { STAT_DEFS } from '../src/engine/stats';
 import {
   SHEET_CATS, SHEET_FALLBACK_CAT, SHEET_FAMILY_SEATS, SHEET_OMIT, SHEET_VITALS,
@@ -56,6 +57,18 @@ const unseated = Object.keys(STAT_DEFS).filter(id =>
   !seatCount.has(id) && !SHEET_OMIT.has(id) && !isGenerated(id));
 check('every static stat is seated or omitted (no silent misc-folds)',
   unseated.length === 0, unseated.join(', '));
+
+// --- the AI-cognition lane (BEHAVIOR_STATS, brain.ts) ----------------------
+// Every behavior knob reads through the sheet with the brain/def value as
+// the innate base — each row must BE a registered stat (a typo'd id silently
+// no-ops the whole lever) and must stay deliberately OFF the player sheet
+// (aiTurnSpeed joined aim lead/scatter here).
+const behaviorRows = Object.values(BEHAVIOR_STATS) as string[];
+check('every behavior stat exists in STAT_DEFS', behaviorRows.every(id => !!STAT_DEFS[id]),
+  behaviorRows.filter(id => !STAT_DEFS[id]).join(', '));
+check('every behavior stat is deliberately sheet-omitted',
+  behaviorRows.every(id => SHEET_OMIT.has(id)),
+  behaviorRows.filter(id => !SHEET_OMIT.has(id)).join(', '));
 
 // --- blurb coverage --------------------------------------------------------
 const silentStatics = Object.keys(STAT_DEFS).filter(id =>

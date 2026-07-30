@@ -4812,7 +4812,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // the meadow's critters become food — and a kill feeds the WHOLE
       // pack in earshot (share), so one hare buys the field an hour of
       // peace. Sated wolves amble past the prey they'd have run down.
-      drives: { hunger: { rise: 0.01, start: [0.3, 0.8], onKill: -0.7, share: 0.4 } },
+      // A KEPT wolf hunts on orders, not appetite (whileOwned): the wild
+      // meter — and the hungry lean it draws — stands down at the leash.
+      drives: { hunger: { rise: 0.01, start: [0.3, 0.8], onKill: -0.7, share: 0.4, whileOwned: false } },
       // The wait RESOLVES (muster.patience): five seconds of circling a prey
       // that won't be caught up to, and hunger wins — a lone or scattered
       // wolf no longer strafes a slow player to the horizon forever.

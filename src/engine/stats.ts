@@ -1350,6 +1350,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   aiAimLead:      { label: 'Aim Leading', base: 0, min: -2, max: 2 },
   /** Aim scatter (radians) rolled onto every cast's bearing. */
   aiAimJitter:    { label: 'Aim Scatter', base: 0, min: 0 },
+  /** Facing swing cap, radians/sec (Actor.turnSpeed — the def stamp — is the
+   *  innate base at the world's turn clamp; 0 = pivots freely, every player
+   *  body's resting read). */
+  aiTurnSpeed:    { label: 'Pivot Rate', base: 0, min: 0 },
 
   // DoT & curse mechanics
   /** CHANCE that a DoT applied by the skill spreads on the victim's death

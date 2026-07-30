@@ -26,6 +26,12 @@
 //      same link list from its own registry.
 //   H  the read-only law + determinism: the sweep mutates no source state
 //      and two identical runs agree byte for byte.
+//   I  THE AI LEVERS: aiTurnSpeed reads THROUGH the sheet at the world's
+//      turn clamp (the def stamp is the innate base, mods bend it, and an
+//      innate-0 body — every player seat — still pivots instantly); a
+//      commanded march stamps BehaviorSpec.spacing so moveToward fans the
+//      ordered band; DriveSpec.whileOwned=false EMPTIES a kept body's wild
+//      meter, so the hungry lean quiets by construction.
 //
 // Run: npx tsx balance/probe_pack.ts
 // ---------------------------------------------------------------------------
@@ -33,9 +39,10 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
-  CRAVEN_COLLAPSE, JUVENILE_YOUNG, MATRIARCH_GUARD, MATRON_BOND,
-  MONSTERS, PACK_HUNGER_CREST, WARDED_LIFT, WARDEN_COURT,
+  CRAVEN_COLLAPSE, HUNGER_LEAN, JUVENILE_YOUNG, MATRIARCH_GUARD, MATRON_BOND,
+  MONSTERS, PACK_HUNGER_CREST, WARDED_LIFT, WARDEN_COURT, type MonsterDef,
 } from '../src/data/monsters';
+import { mod } from '../src/engine/stats';
 import { PART_PAINTERS } from '../src/render/vis/parts';
 import {
   bondLinkLive, foldPack, nerveFromLife, nerveFromOdds, nerveFromProximity,
@@ -626,6 +633,132 @@ console.log('\n=== H. the read-only law + determinism ===');
     ).join('|') + '#' + drawnPairs(ww).join();
   };
   check('same seed, byte-identical social state', run() === run());
+}
+
+console.log('\n=== I. THE AI LEVERS — sheet-read pivot, ordered spacing, owned appetites ===');
+{
+  // THE PIVOT CAP (BEHAVIOR_STATS.turnSpeed → 'aiTurnSpeed'): the world's
+  // turn clamp reads THROUGH the sheet with Actor.turnSpeed (the def stamp)
+  // as the innate base. Four shells, four corners of the lane: an innate
+  // lumberer, the same body cursed slower, an innate-0 body left free, and
+  // an innate-0 body OPENED by a granted rate.
+  const shell: Omit<MonsterDef, 'id'> = {
+    name: 'Probe Pivot', color: '#8899aa', shape: 'circle', radius: 12,
+    base: { life: 200, moveSpeed: 0, accuracy: 100, mana: 0 },
+    skills: [], xp: 1, faction: 'beast', brain: { type: 'basic' },
+  };
+  MONSTERS.probe_pivot_lug = { ...shell, id: 'probe_pivot_lug', turnSpeed: 2 };
+  MONSTERS.probe_pivot_bent = {
+    ...shell, id: 'probe_pivot_bent', turnSpeed: 2,
+    mods: [mod('aiTurnSpeed', 'increased', -0.5)],
+  };
+  MONSTERS.probe_pivot_free = { ...shell, id: 'probe_pivot_free', turnSpeed: 0 };
+  MONSTERS.probe_pivot_granted = {
+    ...shell, id: 'probe_pivot_granted', turnSpeed: 0,
+    mods: [mod('aiTurnSpeed', 'flat', 1.5)],
+  };
+
+  const w = mkWorld();
+  // Brains are CALLER-driven (w.update runs none), so a still, castless body
+  // moves its facing only through the clamp under test.
+  const swingOf = (a: Actor): number => {
+    a.facing = 0; a.facingPrev = 0;
+    w.update(DT);       // latch facingPrev at 0
+    a.facing = 3;       // ask for a 3-rad snap no cap allows in one frame
+    w.update(DT);
+    return Math.abs(a.facing);
+  };
+  // The arena is SIM_CFG.arena (1600×1200) with the hero centered — every
+  // rig body stands INSIDE it (out-of-zone spawns clamp home on first move).
+  const lug = at(spawn(w, 'probe_pivot_lug', 8), 150, 1050);
+  const bent = at(spawn(w, 'probe_pivot_bent', 8), 350, 1050);
+  const free = at(spawn(w, 'probe_pivot_free', 8), 1250, 1050);
+  const opened = at(spawn(w, 'probe_pivot_granted', 8), 1450, 1050);
+  check('the def stamp is the innate base (authored 0 survives the default)',
+    lug.turnSpeed === 2 && free.turnSpeed === 0,
+    `lug=${lug.turnSpeed} free=${free.turnSpeed}`);
+  const sLug = swingOf(lug), sBent = swingOf(bent), sFree = swingOf(free), sOpen = swingOf(opened);
+  check('an innate rate clamps the swing to rate × dt', Math.abs(sLug - 2 * DT) < 1e-9,
+    `swing=${sLug} want ${2 * DT}`);
+  check('a modifier BENDS the pivot through the sheet (50% slower mind)',
+    Math.abs(sBent - 1 * DT) < 1e-9, `swing=${sBent} want ${1 * DT}`);
+  check('an innate-0 body pivots INSTANTLY (the player law, on a monster shell)',
+    sFree === 3, `swing=${sFree}`);
+  check('a granted rate OPENS the clamp on an innate-0 body (the curse lane)',
+    Math.abs(sOpen - 1.5 * DT) < 1e-9, `swing=${sOpen} want ${1.5 * DT}`);
+  // And THE PLAYER ITSELF — no def stamp, nothing folded: the clamp must
+  // resolve 0 and leave the facing untouched (instant, as ever).
+  const sHero = swingOf(w.player);
+  check('the player still faces instantly (nothing folded, gate stays open)',
+    sHero === 3, `swing=${sHero}`);
+
+  // ORDERED ELBOW ROOM: a standing order stamps BehaviorSpec.spacing before
+  // the kind's handler walks — the commanded band pays for its crescent on
+  // the way TO the mark, not only after a target locks. Idle bodies still
+  // pay nothing, and a spacingless def stamps no phantom room.
+  const w2 = mkWorld();
+  const SPACING = MONSTERS.gnoll_prowler.brain!.behavior!.spacing!;
+  const sq: Actor[] = [];
+  for (let i = 0; i < 3; i++) sq.push(at(spawn(w2, 'gnoll_prowler', 8), 200 + i * 26, 200));
+  for (const a of sq) a.aiCommand = { kind: 'assault', pos: { x: 200, y: 1000 }, until: w2.time + 60 };
+  const y0 = sq.map(a => a.pos.y);
+  for (let f = 0; f < 12; f++) { for (const a of sq) updateAI(a, w2, DT); w2.update(DT); }
+  check('an ordered march wears its elbow room (assault)',
+    sq.every(a => a.aiSpacing === SPACING),
+    `aiSpacing=[${sq.map(a => String(a.aiSpacing)).join(',')}] want ${SPACING}`);
+  check('the march moved on the mark (rig sanity)', sq.every((a, i) => a.pos.y > y0[i] + 1),
+    `dy=[${sq.map((a, i) => (a.pos.y - y0[i]).toFixed(1)).join(',')}]`);
+  const holder = at(spawn(w2, 'gnoll_prowler', 8), 1400, 200);
+  holder.aiCommand = { kind: 'hold', pos: { x: 1400, y: 900 }, until: w2.time + 60 };
+  updateAI(holder, w2, DT);
+  check('a hold order marches with elbow room too', holder.aiSpacing === SPACING,
+    String(holder.aiSpacing));
+  const idler = at(spawn(w2, 'gnoll_prowler', 8), 1500, 1100);
+  updateAI(idler, w2, DT);
+  check('idle movement still pays nothing (the clear stands)', idler.aiSpacing === undefined,
+    String(idler.aiSpacing));
+  const dummyCmd = at(spawn(w2, 'probe_pack_dummy', 8), 1400, 400);
+  dummyCmd.aiCommand = { kind: 'assault', pos: { x: 1400, y: 700 }, until: w2.time + 60 };
+  updateAI(dummyCmd, w2, DT);
+  check('a spacingless def stamps nothing on the march', dummyCmd.aiSpacing === undefined,
+    String(dummyCmd.aiSpacing));
+
+  // OWNED APPETITES (DriveSpec.whileOwned): a KEPT wolf hunts on orders,
+  // not appetite — the wild hunger meter EMPTIES at the leash (never merely
+  // freezes), so the hungry lean quiets through the same map it always
+  // read; a spec without the flag keeps today's law, and a released body
+  // re-seeds fresh.
+  const w3 = mkWorld();
+  const hero3 = w3.player;
+  const wild = at(spawn(w3, 'plains_wolf', 6), 200, 950);
+  const kept = at(spawn(w3, 'plains_wolf', 6, 'player'), 1400, 950);
+  kept.owner = hero3;
+  wild.drives.set('hunger', 0.6);
+  kept.drives.set('hunger', 0.6);
+  for (let t = 0; t < 2; t += DT) { updateAI(wild, w3, DT); updateAI(kept, w3, DT); }
+  check('a wild wolf\'s hunger keeps drifting', (wild.drives.get('hunger') ?? 0) > 0.61,
+    `hunger=${(wild.drives.get('hunger') ?? 0).toFixed(3)}`);
+  check('a KEPT wolf\'s meter stands down EMPTY, not frozen',
+    kept.drives.get('hunger') === undefined, String(kept.drives.get('hunger')));
+  wild.drives.set('hunger', 0.9);
+  const leanWild = resolveTell(HUNGER_LEAN[0], wild as unknown as TellBody, w3 as unknown as TellWorld);
+  const leanKept = resolveTell(HUNGER_LEAN[0], kept as unknown as TellBody, w3 as unknown as TellWorld);
+  check('the hungry lean draws on the wild wolf', leanWild > 0, `lean=${leanWild}`);
+  check('the lean QUIETS on the kept wolf (drawn == tested, one map)', leanKept === 0,
+    `lean=${leanKept}`);
+  MONSTERS.probe_want_dummy = {
+    ...shell, id: 'probe_want_dummy',
+    brain: { type: 'basic', drives: { urge: { rise: 0.5, start: [0.4, 0.4] } } },
+  };
+  const dflt = at(spawn(w3, 'probe_want_dummy', 6, 'player'), 1400, 300);
+  dflt.owner = hero3;
+  for (let t = 0; t < 1; t += DT) updateAI(dflt, w3, DT);
+  check('an unflagged drive still runs while owned (default = the old law)',
+    (dflt.drives.get('urge') ?? 0) > 0.8, `urge=${(dflt.drives.get('urge') ?? 0).toFixed(3)}`);
+  kept.owner = undefined;
+  updateAI(kept, w3, DT);
+  check('a released body re-seeds its appetite', kept.drives.get('hunger') !== undefined,
+    String(kept.drives.get('hunger')));
 }
 
 console.log(`\n${failed === 0 ? 'ALL PASS' : `${failed} FAILED`}`);

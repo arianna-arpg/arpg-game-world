@@ -437,10 +437,13 @@ export const BEHAVIOR_CFG = {
   defaultKite: { kite: 3.2, windedFor: [0.9, 1.5] as [number, number] },
 };
 
-/** The behavior knobs that read THROUGH the actor's stat sheet at cast time
- *  (spec value = the innate base), so mods — curses, auras, ground — can bend
- *  an enemy's mind the way they bend its body. Registered in stats.ts. */
-export const BEHAVIOR_STATS = { aimLead: 'aiAimLead', aimJitter: 'aiAimJitter' } as const;
+/** The behavior knobs that read THROUGH the actor's stat sheet at their read
+ *  sites — the aim pair at cast time, the pivot cap at the world's turn clamp
+ *  (def/spec value = the innate base) — so mods — curses, auras, ground — can
+ *  bend an enemy's mind the way they bend its body. Registered in stats.ts. */
+export const BEHAVIOR_STATS = {
+  aimLead: 'aiAimLead', aimJitter: 'aiAimJitter', turnSpeed: 'aiTurnSpeed',
+} as const;
 
 // --- THE DUTY POST -------------------------------------------------------------
 
@@ -691,6 +694,12 @@ export interface DriveSpec {
   /** PACK APPETITE: fraction of my event jumps echoed to squad kin within
    *  earshot — one kill feeds the pack, one wound angers the line. */
   share?: number;
+  /** Does this meter run while the body is OWNED (a minion/companion serving
+   *  a keeper)? Default true. `false` EMPTIES the meter for as long as a
+   *  keeper holds the leash — orders outrank appetite (the carrion lane's
+   *  law) — rather than freezing it, so every read of the map (rules, tells,
+   *  the pack fold) goes quiet with it by construction. */
+  whileOwned?: boolean;
 }
 
 // --- THE CONDITION DSL --------------------------------------------------------------

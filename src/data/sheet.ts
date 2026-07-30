@@ -259,7 +259,7 @@ export const SHEET_FAMILY_SEATS: SheetFamilySeat[] = [
 /** Stats that never print, whatever their value — monster/AI-side dials the
  *  player sheet has no honest reading for. An escape hatch, kept tiny. */
 export const SHEET_OMIT: Set<string> = new Set([
-  'aiAimLead', 'aiAimJitter', 'detectionRange',
+  'aiAimLead', 'aiAimJitter', 'aiTurnSpeed', 'detectionRange',
 ]);
 
 /** Where an unseated, modified stat folds — the safety net, never the plan. */

@@ -23,7 +23,7 @@ import { SEG_CFG, bodyWhere, nearestBody, noteBodyHit, reachTo, segR, segsHittab
 import { DEFENSE_CFG } from './defense';
 import { MASS_CFG, impactFrac, impactScale, shoveAuthority } from './mass';
 import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf, ROUSE_RULES } from './ai';
-import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
+import { alertScale, BEHAVIOR_CFG, BEHAVIOR_STATS, normalizeBrain, type ArenaRadius, type CommandState } from './brain';
 import { runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
@@ -39005,14 +39005,21 @@ export class World {
           a.facing = angleTo(a.pos, cl.aim);
         }
       }
-      // TURN CLAMP (Actor.turnSpeed): facing may only swing so far per
-      // frame — big bodies LUMBER, their shell arcs and their aim lag the
-      // fight, and circling them becomes real play. Runs AFTER the cast
-      // lock, so a lumbering body still SWINGS onto its stamp believably.
-      if (a.turnSpeed > 0 && a.facingPrev !== undefined && !a.dead) {
-        const want = angleDiff(a.facingPrev, a.facing);
-        const cap = a.turnSpeed * dt;
-        if (Math.abs(want) > cap) a.facing = a.facingPrev + Math.sign(want) * cap;
+      // TURN CLAMP (BEHAVIOR_STATS.turnSpeed ← Actor.turnSpeed as the innate
+      // base): facing may only swing so far per frame — big bodies LUMBER,
+      // their shell arcs and their aim lag the fight, and circling them
+      // becomes real play. Runs AFTER the cast lock, so a lumbering body
+      // still SWINGS onto its stamp believably. The rate reads THROUGH the
+      // sheet (the aim knobs' law), so curses, auras and ground can bend the
+      // pivot; a body with nothing folded — every player seat — resolves 0
+      // and keeps its instant facing.
+      if (a.facingPrev !== undefined && !a.dead) {
+        const rate = a.sheet.get(BEHAVIOR_STATS.turnSpeed, undefined, undefined, a.turnSpeed);
+        if (rate > 0) {
+          const want = angleDiff(a.facingPrev, a.facing);
+          const cap = rate * dt;
+          if (Math.abs(want) > cap) a.facing = a.facingPrev + Math.sign(want) * cap;
+        }
       }
       a.facingPrev = a.facing;
       // VELOCITY ESTIMATE (the behavior fabric): an EMA of the actual frame

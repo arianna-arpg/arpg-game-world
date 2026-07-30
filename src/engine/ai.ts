@@ -495,8 +495,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // Stamp the RESOLVED prey so the hostility gate (World.isPrey) sees what
   // the machines see — a hunger rule can switch predation on and off live.
   actor.aiPrey = tuning.target?.prey;
-  // Elbow room re-stamps below once a target locks; idle/ordered movement
-  // never pays for it.
+  // Elbow room re-stamps below (a standing order first, then again once a
+  // target locks); idle movement never pays for it.
   actor.aiSpacing = undefined;
   // PATHING (MoveSpec.pathing): stamped every tick so the machines can
   // shift it live (a panicked phase can go 'none'); moveToward reads it.
@@ -517,6 +517,15 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (norm.drives) {
     for (const id in norm.drives) {
       const spec = norm.drives[id];
+      // A KEPT body sets its wild appetites down (DriveSpec.whileOwned
+      // false): orders outrank appetite — the carrion lane's law, one lane
+      // below. The meter EMPTIES rather than freezing, so every read of the
+      // map — rules, tells, the pack fold — goes quiet with it by
+      // construction; a released body re-seeds fresh.
+      if (spec.whileOwned === false && actor.isMinion()) {
+        actor.drives.delete(id);
+        continue;
+      }
       let v = actor.drives.get(id);
       if (v === undefined) {
         const s = spec.start ?? [0, 0];
@@ -578,6 +587,11 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     if (!kindDef || cmd.until <= world.time) {
       actor.aiCommand = undefined;
     } else {
+      // ELBOW ROOM on the march (BehaviorSpec.spacing): stamped BEFORE the
+      // kind's handler walks, so moveToward's repulsion fans a commanded
+      // band into the crescent the lever promises — an ordered squad no
+      // longer files to the mark as a conga line.
+      actor.aiSpacing = tuning.behavior?.spacing;
       const r = kindDef.step(actor, world, cmd, dt);
       if (r === 'done') actor.aiCommand = undefined;
       else if (r === 'consumed') return;
@@ -2165,10 +2179,10 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
     }
   }
   let dx = goal.x - actor.pos.x, dy = goal.y - actor.pos.y;
-  // ELBOW ROOM (BehaviorSpec.spacing, stamped per combat tick): a soft
-  // repulsion off the nearest packmate folds into the goal bearing, so a
-  // closing band arrives as a crescent instead of a conga line shoving its
-  // own front rank out of cast range. Idle/ordered movement never pays.
+  // ELBOW ROOM (BehaviorSpec.spacing, stamped per ordered/combat tick): a
+  // soft repulsion off the nearest packmate folds into the goal bearing, so
+  // a closing band arrives as a crescent instead of a conga line shoving its
+  // own front rank out of cast range. Idle movement never pays.
   const room = actor.aiSpacing;
   if (room && room > 0) {
     let nx = 0, ny = 0, nd = room;
