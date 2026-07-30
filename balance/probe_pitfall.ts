@@ -13,7 +13,12 @@
 // nothing ever; noDeeper strips mouths/breach/descending hollows), the
 // chain bottoming out at maxChain (the classic edge-bite, monsters still
 // swallowed), and the scatter arrival (each fall lands somewhere new, on
-// lawful reachable ground, never at the door).
+// lawful reachable ground, never at the door). Plus THE RENT'S OWN DARK
+// (abyssal_rent carries a kind-level fall region: 'abyss' — hell's burn,
+// never generic void) and THE ONE POLICY RESOLVER (pitPolicyFor: the
+// brittle-span give-way hears theme.pitfall / the cave default exactly as
+// the walked rim does; the maxChain floor deliberately stays a literal —
+// section 10 has teeth against re-routing it).
 // Run: npx tsx balance/probe_pitfall.ts
 // ---------------------------------------------------------------------------
 
@@ -21,7 +26,7 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { PIT_CFG, pitAt, pitSupportedAt, pitSectorKey, pitIdentityKey } from '../src/engine/pitfall';
 import { pitRegionOf, type Doodad } from '../src/engine/levelgen';
-import { regionKind } from '../src/world/regions';
+import { regionKind, type CollisionResult, type RecoveryPolicy } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
 import { OBJECTIVE_SEALS, objectiveEarnsChest } from '../src/data/zones';
 import { serializeZone, applyZone } from '../src/net/snapshot';
@@ -53,12 +58,25 @@ type WorldPrivate = {
   bridges: Doodad[];
   travelThrough(e: unknown): void;
   caveReturn: { zoneId: string; pos: { x: number; y: number } } | null;
+  popBrittle(d: Doodad, striker?: unknown): void;
+  pitPolicyFor(policy: RecoveryPolicy): RecoveryPolicy;
+  walk: { fillDisc?: (x: number, y: number, r: number, kind: string) => void } | null;
 };
 const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
+
+/** THE SINGLETON TRAP: the sim arena's ZoneDef (and its theme) is a module
+ *  singleton, and a 'descend' probe fall leaves the walker standing IN the
+ *  minted hollow — so a post-fall `delete world.zone.theme.pitfall` cleans
+ *  the HOLLOW's def, not the arena's, and the arena def leaks pitfall
+ *  'descend' into every later section (latent until sections 12/13 became
+ *  the first sections after 11 to READ the def fresh). Fall-crossing
+ *  sections clean THIS handle instead — captured before any fall. */
+let arenaTheme: { pitfall?: RecoveryPolicy } | null = null;
 
 // --- 0) SURFACES: drawn == tested (the chasmPit blob union) -----------------
 {
   const world = makeSimWorld('warrior', 4101);
+  arenaTheme = world.zone.theme; // pre-fall: this IS the arena def's theme
   const { a } = layPitBlob(world, 900, 600);
   const pits = world.zonePits();
   check('surfaces: both wells resolved as pits carrying the chasm region',
@@ -151,7 +169,7 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
     check('descend: the SAME stretch of the same pit opens the SAME hollow (identity is math)',
       world.zone.id === caveId1, `re-fell into '${world.zone.id}'`);
   }
-  delete world.zone.theme.pitfall; // the sim def is a module singleton — leave it clean
+  if (arenaTheme) delete arenaTheme.pitfall; // we stand in the hollow now — clean the ARENA's def
 }
 
 // --- 3) THE SWALLOW vs THE HOLD (knockback payoff; nothing suicides) -------
@@ -235,7 +253,7 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
   check('decks: knocked OFF the planks mid-span, the player DESCENDS (bridges are precarious now)',
     world.zone.id !== parentId && world.zone.id.startsWith(`cave_${parentId}_pit_`),
     `landed in '${world.zone.id}'`);
-  delete world.zone.theme.pitfall;
+  if (arenaTheme) delete arenaTheme.pitfall; // the descend left us in the hollow — clean the ARENA's def
 }
 
 // --- 5) AIRBORNE ARCS, PLACEMENTS, THE SENTINEL TRUCE -----------------------
@@ -342,7 +360,7 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
     idA === idB, `A='${idA}' B='${idB}'`);
   check('one hollow: distinct sectors were actually crossed (the check has teeth)',
     pitSectorKey(parentId, 900, 600) !== pitSectorKey(parentId, 360, 1080));
-  delete world.zone.theme.pitfall;
+  if (arenaTheme) delete arenaTheme.pitfall; // the falls left us in the hollow — clean the ARENA's def
 }
 
 // --- 9) THE PUNISHMENT MINT: no errand, no doors, chain stamped -------------
@@ -381,7 +399,7 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
   check('punishment: \'none\' is data-sealed OPEN and chestless (the vocabulary contract)',
     OBJECTIVE_SEALS.none === false && !objectiveEarnsChest({ kind: 'none' })
     && world.exits.length > 0, `${world.exits.length} exits stand`);
-  delete world.zone.theme.pitfall;
+  if (arenaTheme) delete arenaTheme.pitfall; // the fall left us in the hollow — clean the ARENA's def
 }
 
 // --- 10) THE BOTTOM: the ladder runs out at maxChain ------------------------
@@ -401,6 +419,14 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
     // — the deck-test idiom, immune to walls a walk might snag on.
     const bx = p.pos.x + 100, by = p.pos.y;
     layPitBlob(world, bx, by);
+    // The minted rungs are REAL caves and the blind blob may land on rock —
+    // there the WALL arrest wins before the pit's and no fall door ever
+    // fires (the shoved wolf below was born wedged in stone: the old red
+    // verdict on this rig). Real stamps site pits on open ground (findSpot);
+    // carve the floor under both wells so the rig tests the PIT lane, not
+    // cave-wall luck — the arena parity section 3 already has for free.
+    priv(world).walk?.fillDisc?.(bx, by, 100, 'ground');
+    priv(world).walk?.fillDisc?.(bx + 110, by, 100, 'ground');
     const from = world.zone.id;
     world.pushActor(p, 0, 340);
     for (let i = 0; i < 420 && world.zone.id === from && !world.traversal; i++) world.update(DT);
@@ -432,6 +458,7 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
   for (let i = 0; i < 90 && !wolf.dead; i++) world.update(DT);
   check('bottom: a hostile shoved past the lip at maxChain is STILL swallowed', wolf.dead);
   drop.arrival = arrivalWas;
+  if (arenaTheme) delete arenaTheme.pitfall; // this section never cleaned up at all — the def leaked
 }
 
 // --- 11) THE SCATTER: the dark does not deliver you to the door -------------
@@ -467,7 +494,114 @@ const priv = (w: World): WorldPrivate => w as unknown as WorldPrivate;
       dist(p.pos.x, p.pos.y, land1.x, land1.y) > 1,
       `${dist(p.pos.x, p.pos.y, land1.x, land1.y).toFixed(0)}u apart`);
   }
+  if (arenaTheme) delete arenaTheme.pitfall; // the fall left us in the hollow — clean the ARENA's def
+}
+
+// --- 12) THE RENT'S OWN DARK: abyssal_rent falls are the ABYSS row's --------
+// The steppes' rent is void_chasm's hell twin — its rule row names the
+// 'abyss' region (hell's burn, the ember rim), so a fall past its lip is
+// never the generic 'void'. Kind-level derivation, stamp-flag agreement,
+// the decorative escape, and the LIVE arrest all speak the same row.
+{
+  const world = makeSimWorld('warrior', 4113);
+  const rent: Doodad = { pos: vec(900, 600), radius: 70, kind: 'abyssal_rent', fall: true };
+  world.doodads.push(rent);
+  const pits = world.zonePits();
+  check('rent: the stamped rent resolves to the ABYSS region row (hell twin, not generic void)',
+    pits.length === 1 && pits[0].region === 'abyss' && pits[0].kind === 'abyssal_rent',
+    `${pits.length} pit(s), region '${pits[0]?.region}'`);
+  check('rent: kind-level derivation — the rule row ALONE makes a rent a real abyss drop',
+    pitRegionOf({ pos: vec(0, 0), radius: 40, kind: 'abyssal_rent' }) === 'abyss');
+  check('rent: the per-stamp decorative escape survives (fall: false still never drops)',
+    pitRegionOf({ pos: vec(0, 0), radius: 40, kind: 'abyssal_rent', fall: false }) === null);
+  const ab = regionKind('abyss')?.boundaryPolicy;
+  check('rent: the abyss row it routes through BURNS (typed fire — hell\'s toll, resistable)',
+    ab?.kind === 'fall' && ab.damage?.type === 'fire' && ab.to === 'edge',
+    `row ${ab?.kind ?? 'missing'}${ab?.kind === 'fall' ? '/' + (ab.damage?.type ?? 'untyped') : ''}`);
+  // The LIVE arrest classifies 'abyss' — the exact blockedKind resolveBoundary
+  // receives (the pit confine's probe-beyond stamp, drawn == tested).
+  const cres: CollisionResult = { hit: 'none', at: vec(0, 0) };
+  world.clampPos(vec(940, 600), 14, vec(760, 600), { out: cres });
+  check('rent: a live arrest at the lip stamps blockedKind \'abyss\' (what the boundary door reads)',
+    cres.hit === 'void' && cres.blockedKind === 'abyss',
+    `hit '${cres.hit}', blockedKind '${cres.blockedKind}'`);
+  // And the door FIRES: pressing past the lip bites the abyss row's default.
+  const p = world.player;
+  p.pos = vec(760, 600);
+  const life0 = p.life;
+  for (let i = 0; i < 180 && p.life >= life0 - 0.01; i++) { world.moveActor(p, 1, 0, DT); world.update(DT); }
+  const bite = (life0 - p.life) / p.maxLife();
+  check('rent: pressing past the rent\'s lip bites (the fall door fires on the rent like any pit)',
+    bite > 0.1 && bite < 0.25 && world.zone.id === 'sim_arena', `bite ${(bite * 100).toFixed(1)}%`);
+}
+
+// --- 13) THE GIVE-WAY HEARS THE ZONE: brittle spans route pitPolicyFor ------
+// A popping span's collapse is a PIT-FAMILY fall: it must resolve through
+// the same override ladder as a walked rim (theme.pitfall → cave default →
+// the span's own authored toll) — the old inline policy skipped the ladder.
+{
+  // Control: NO zone word, surface zone — the span's own edge-bite stands.
+  const world = makeSimWorld('warrior', 4114);
+  layPitBlob(world, 900, 600);
+  const deck: Doodad = { pos: vec(920, 600), radius: 40, kind: 'rotten_bridge' };
+  world.doodads.push(deck);
+  priv(world).bridges.push(deck);
+  const p = world.player;
+  p.pos = vec(920, 600);
+  const life0 = p.life;
+  priv(world).popBrittle(deck);
+  const bite = (life0 - p.life) / p.maxLife();
+  check('give-way: with no zone word the span\'s own toll stands (the 12% edge-bite, no swap)',
+    world.zone.id === 'sim_arena' && !world.traversal && bite > 0.06 && bite < 0.2,
+    `bite ${(bite * 100).toFixed(1)}%`);
+  check('give-way: the faller is delivered to REAL footing outside the union',
+    !pitAt(world.zonePits(), priv(world).bridges, p.pos.x, p.pos.y, null),
+    `stands at (${p.pos.x.toFixed(0)}, ${p.pos.y.toFixed(0)})`);
+}
+{
+  // The zone's word: theme.pitfall 'descend' — the pop drops its rider a
+  // stratum, exactly as walking off the same rim would.
+  const world = makeSimWorld('warrior', 4115);
+  layPitBlob(world, 900, 600);
+  world.zone.theme.pitfall = { kind: 'descend' };
+  const parentId = world.zone.id;
+  const deck: Doodad = { pos: vec(920, 600), radius: 40, kind: 'rotten_bridge' };
+  world.doodads.push(deck);
+  priv(world).bridges.push(deck);
+  const p = world.player;
+  p.pos = vec(920, 600);
+  const life0 = p.life;
+  priv(world).popBrittle(deck);
+  check('give-way: an authored theme.pitfall is HEARD — the pop begins the descent', !!world.traversal);
+  for (let i = 0; i < 600 && world.traversal; i++) world.update(DT);
+  check('give-way: the span\'s rider DESCENDS through the zone\'s word (one stratum, like the walked rim)',
+    world.zone.id !== parentId && world.zone.id.startsWith(`cave_${parentId}_pit_`),
+    `landed in '${world.zone.id}'`);
+  const toll = (life0 - p.life) / p.maxLife();
+  check('give-way: the descend landing tolls, never kills (the pit delivers you hurt)',
+    p.life >= 1 && toll > 0.1 && toll < 0.45, `toll ${(toll * 100).toFixed(1)}%`);
+  if (arenaTheme) delete arenaTheme.pitfall; // the descend left us in the hollow — clean the ARENA's def
+}
+{
+  // The resolver ladder itself (unit grain): word beats cave default beats
+  // the authored row; non-fall-family policies pass through untouched.
+  const world = makeSimWorld('warrior', 4116);
+  const pp = (pol: RecoveryPolicy): RecoveryPolicy => priv(world).pitPolicyFor(pol);
+  const authored: RecoveryPolicy = { kind: 'fall', to: 'edge' };
+  const eject: RecoveryPolicy = { kind: 'eject', to: 'edge' };
+  check('resolver: surface + no word = the authored policy, byte-identical (nothing invented)',
+    pp(authored) === authored);
+  const depthWas = world.zone.caveDepth;
+  world.zone.caveDepth = 1;
+  check('resolver: a cave rung defaults every fall-family policy to descend (PIT_CFG.caveFall)',
+    pp(authored) === PIT_CFG.caveFall);
+  world.zone.theme.pitfall = { kind: 'fall', to: 'lastNode' };
+  check('resolver: the zone\'s own word BEATS the cave default',
+    pp(authored) === world.zone.theme.pitfall);
+  check('resolver: non-fall-family policies pass through untouched (ejects keep their meaning)',
+    pp(eject) === eject);
   delete world.zone.theme.pitfall;
+  if (depthWas === undefined) delete world.zone.caveDepth; else world.zone.caveDepth = depthWas;
 }
 
 console.log(failed === 0 ? '\nALL CHECKS PASS' : `\n${failed} CHECK(S) FAILED`);

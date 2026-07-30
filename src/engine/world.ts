@@ -40707,6 +40707,9 @@ export class World {
       // regardless (the knockback payoff never dulls with depth).
       if ((this.zone.pitChain ?? 0) >= PIT_CFG.dropCave.maxChain) {
         this.text(vec(a.pos.x, a.pos.y - 34), 'the crack narrows — nothing below but stone', '#9a8ab8', 12);
+        // Deliberately NOT pitPolicyFor: the zone's word ('descend') is what
+        // routed the fall HERE — re-reading it would answer descend forever.
+        // The ladder's floor is a LITERAL edge-bite.
         this.applyRecovery(a, { kind: 'fall', to: 'edge', damage: policy.damage ?? PIT_CFG.fallDamage }, pre, forced);
         return;
       }
@@ -47352,13 +47355,18 @@ export class World {
         const edge = this.clampPos(vec(a.pos.x, a.pos.y), a.radius);
         if (dist(edge, a.pos) < 0.5) continue;
         a.pos = edge;
-        this.applyRecovery(a, {
+        // The give-way is a PIT-FAMILY fall: the span's authored toll routes
+        // through the same pitfall override walking off this rim reads
+        // (pitPolicyFor — theme.pitfall → cave default → the span's own
+        // edge-bite), so a bridge popping over a descend gorge drops its
+        // riders one stratum instead of biting at a lip the zone re-defined.
+        this.applyRecovery(a, this.pitPolicyFor({
           kind: 'fall', to: br.collapse.to ?? 'edge',
           damage: {
             amount: dmg.amount ?? 0, pctMaxLife: dmg.pctMaxLife ?? 0.12,
             type: (dmg.type ?? 'physical') as DamageSpec['type'], canKill: dmg.canKill ?? true,
           },
-        }, edge);
+        }), edge);
       }
     }
     // FUME: the wreck exhales a lingering hazard cloud (gas pods, spore sacs).
@@ -49235,22 +49243,27 @@ export class World {
    *  without allocating each frame. Reset hit='none' before each clampPos that uses it. */
   private readonly cScratch: CollisionResult = { hit: 'none', at: vec(0, 0) };
 
+  /** THE PITFALL OVERRIDE (ZoneTheme.pitfall — the pitfall fabric): the zone
+   *  declares what a PIT-FAMILY fall MEANS here. Resolution: the zone's own
+   *  word (theme.pitfall) → the CAVE DEFAULT (every rung below the surface
+   *  descends — a cave's chasm is a mouth of the next stratum,
+   *  PIT_CFG.caveFall; the descent abyss opts back out with an explicit
+   *  row) → the policy as authored. Only fall-family policies are
+   *  overridden: sky doors (skyfall) and authored ejects keep their meaning.
+   *  ONE resolver for every fall the ground itself deals — the boundary
+   *  arrest and the brittle-span give-way must hear the same word. */
+  private pitPolicyFor(policy: RecoveryPolicy): RecoveryPolicy {
+    if (policy.kind !== 'fall' && policy.kind !== 'descend') return policy;
+    return this.zone.theme.pitfall
+      ?? ((this.zone.caveDepth ?? 0) >= 1 ? PIT_CFG.caveFall : policy);
+  }
+
   /** A MOVE was arrested entering a region with a boundary policy (void → fall).
    *  Routes to the data-driven RecoveryPolicy — never a literal void rule. The actor
    *  is already confined to the EDGE by clampPos; `pre` is where they moved from. */
   private resolveBoundary(a: Actor, result: CollisionResult, pre: Vec2, forced = false): void {
     let policy = regionKind(result.blockedKind)?.boundaryPolicy;
-    // THE PITFALL OVERRIDE (ZoneTheme.pitfall — the pitfall fabric): the zone
-    // declares what a PIT-FAMILY fall MEANS here. Resolution: the zone's own
-    // word (theme.pitfall) → the CAVE DEFAULT (every rung below the surface
-    // descends — a cave's chasm is a mouth of the next stratum,
-    // PIT_CFG.caveFall; the descent abyss opts back out with an explicit
-    // row) → the region row's classic default. Only fall-family defaults are
-    // overridden: sky doors (skyfall) and authored ejects keep their meaning.
-    if (policy && (policy.kind === 'fall' || policy.kind === 'descend')) {
-      policy = this.zone.theme.pitfall
-        ?? ((this.zone.caveDepth ?? 0) >= 1 ? PIT_CFG.caveFall : policy);
-    }
+    if (policy) policy = this.pitPolicyFor(policy); // the zone's word on pit-family falls
     if (!policy) return;
     // A LEVITATING actor floats over fall pits (void): no fall damage / eject — so it
     // can't be knocked into the void for a cheap kill. (Pathing still avoids void.)

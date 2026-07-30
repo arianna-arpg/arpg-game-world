@@ -2278,7 +2278,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   impaler_stake: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   hell_chain:    { overlap: 'ground', walkOnly: true },
   ember_fissure: { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 70, forbidOn: ['water', 'lava', 'chasm'] },
-  abyssal_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true, hazardGround: true },
+  abyssal_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true, hazardGround: true,
+    // A REAL drop like its karst twin above (the pitfall fabric): falls
+    // resolve through the ABYSS row — hell's burn, its ember rim, "the
+    // abyss" — not the generic 'void' the stamp flag alone would reach.
+    fall: { region: 'abyss' } },
   gate_stair:    { overlap: 'ground', walkOnly: true },
   // The ossuary kit: mounds are the bonefields' rolling skyline (step around,
   // shoot over); niches are the reliquary's shelf-walls (full blocks — rows of
