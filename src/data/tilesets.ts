@@ -10469,7 +10469,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [{ kind: 'clear', weight: 1 }],
-    caveLayouts: { cavern: 2, rooms: 1 },
+    // 'plains' names what the roll always meant: the unregistered 'cavern'
+    // key fell back to plainsLayout anyway — same weights, same draw, same
+    // generator, and the saved ZoneDef stops carrying an unregistered label.
+    caveLayouts: { plains: 2, rooms: 1 },
   },
 
   // THE HIGH BASTION — the Aetherial's citadel face: the Host's SEAT. One

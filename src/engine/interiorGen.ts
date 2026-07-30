@@ -511,6 +511,19 @@ export interface TrapGenSpec {
   leverDoors?: { chance: number; max?: number };
 }
 
+/** THE ARCHETYPE CENSUS — the runtime mirror of TrapGenSpec's field set, for
+ *  the boot net (data/validate.ts) to key authored dial rows against.
+ *  `Record<keyof TrapGenSpec, true>` makes tsc hold it complete both ways —
+ *  a new archetype field cannot compile without its census row, and a census
+ *  row cannot outlive its field — so the net's known-key list can never
+ *  drift behind the spec it polices. */
+const TRAP_ARCH_CENSUS: Record<keyof TrapGenSpec, true> = {
+  sawHalls: true, mincerRooms: true, bladeLattice: true, dartWards: true,
+  boulderRuns: true, falseFloors: true, wireWards: true, dartLanes: true,
+  leverDoors: true,
+};
+export const TRAP_ARCHETYPES: readonly string[] = Object.keys(TRAP_ARCH_CENSUS);
+
 /** The geometry the trap pass measures against. The interior generators build
  *  it in-recipe; a SURFACE recipe with real room/corridor truth records it as
  *  `ctx.trapGeo` instead (roomsLayout) and generateLayout's finished-grid tail

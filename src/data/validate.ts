@@ -54,7 +54,7 @@ import {
 } from '../engine/levelgen';
 import { genPins, type GenRegistry } from '../engine/genPins';
 import { lairRows } from '../engine/lairs';
-import { interiorRoleDefs } from '../engine/interiorGen';
+import { interiorRoleDefs, TRAP_ARCHETYPES } from '../engine/interiorGen';
 import { hasCommandKind } from '../engine/ai';
 import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
@@ -302,7 +302,11 @@ export function validateContent(): void {
     const lintTrapDials = (spec: unknown, where: string): void => {
       if (!spec || typeof spec !== 'object') return;
       for (const [arch, dial] of Object.entries(spec as Record<string, { chance?: number; max?: number }>)) {
-        if (!['sawHalls', 'mincerRooms', 'bladeLattice', 'dartWards', 'boulderRuns', 'falseFloors', 'wireWards'].includes(arch)) {
+        // The known set is TRAP_ARCHETYPES — derived from TrapGenSpec's own
+        // keys (interiorGen's compile-pinned census), so an archetype joins
+        // this net the moment it becomes authorable at all; a hand-copied
+        // list here went stale twice (dartLanes, leverDoors).
+        if (!TRAP_ARCHETYPES.includes(arch)) {
           warn(`trapworks: ${where} names unknown archetype '${arch}'`);
           continue;
         }
@@ -311,15 +315,18 @@ export function validateContent(): void {
         // The wheel dials stay physical: bands ordered, speeds inside the
         // track lint's own (0,600], riders resolvable at boot.
         const wd = dial as {
-          blades?: [number, number]; speed?: [number, number]; hubR?: [number, number];
-          rays?: [number, number]; rider?: string; seating?: string;
+          blades?: [number, number]; speed?: [number, number] | number; hubR?: [number, number];
+          rays?: [number, number]; stations?: [number, number]; rider?: string; seating?: string;
           crossfire?: number; rearm?: number;
         };
-        for (const bandKey of ['blades', 'speed', 'hubR', 'rays'] as const) {
+        // Only ARRAY dials are bands — dartLanes' `speed` is a lone scalar by
+        // type (the build clamps it to [60,600] itself), so band law must not
+        // call a legal scalar malformed.
+        for (const bandKey of ['blades', 'speed', 'hubR', 'rays', 'stations'] as const) {
           const band = wd[bandKey];
-          if (band && !(band[0] <= band[1] && band[0] > 0)) warn(`trapworks: ${where}.${arch}.${bandKey} band [${band}] not ordered-positive`);
+          if (Array.isArray(band) && !(band[0] <= band[1] && band[0] > 0)) warn(`trapworks: ${where}.${arch}.${bandKey} band [${band}] not ordered-positive`);
         }
-        if (wd.speed && wd.speed[1] > 600) warn(`trapworks: ${where}.${arch}.speed exceeds the lane lint's 600px/s`);
+        if (Array.isArray(wd.speed) && wd.speed[1] > 600) warn(`trapworks: ${where}.${arch}.speed exceeds the lane lint's 600px/s`);
         if (wd.rider && !trackRider(wd.rider)) warn(`trapworks: ${where}.${arch}.rider '${wd.rider}' unregistered`);
         if (wd.seating && !['even', 'random'].includes(wd.seating)) warn(`trapworks: ${where}.${arch}.seating '${wd.seating}' unknown`);
         // THE WIRE WARD's own dials: a second chance lives beside the first
