@@ -1364,21 +1364,35 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'carrion_shrike', chance: 0.4, count: [1, 2] },
     { id: 'pale_watcher', chance: 0.3, count: [1, 1], presence: { from: 9, fadeIn: 4 } },
   ],
+  // THE STRAND REGISTER (the ambient expansion): the coast's ambience is
+  // TWO tempos at once — the waterline RUNS (pipers stitching the foam-edge)
+  // while the air above it WHEELS (gull flocks that barely deign to lift).
   beach: [
     { id: 'shore_crab', chance: 0.7, count: [3, 6] },
     { id: 'bog_heron', chance: 0.4, count: [1, 2] },
+    { id: 'strand_piper', chance: 0.6, count: [3, 5], near: 'water' },
+    { id: 'harbor_gull', chance: 0.5, count: [2, 4] },
+    { id: 'tide_skitter', chance: 0.2, count: [1, 2] },
   ],
   isle: [
     { id: 'shore_crab', chance: 0.6, count: [2, 5] },
     { id: 'bog_heron', chance: 0.35, count: [1, 2] },
     // The wild chains: the sideways citizenry above the tideline.
     { id: 'land_crab', chance: 0.5, count: [2, 4] },
+    { id: 'strand_piper', chance: 0.5, count: [2, 4], near: 'water' },
+    { id: 'harbor_gull', chance: 0.45, count: [2, 3] },
   ],
+  // THE MOUNTAINS: the ambience is VERTICAL — a sentry that stands its own
+  // watch below (the marmot's freeze IS the whistle) and one slow shadow
+  // above it all writing circles on the crags.
   highland: [
     { id: 'taiga_elk', chance: 0.45, count: [2, 3] },
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
+    { id: 'whistle_marmot', chance: 0.5, count: [2, 4] },
+    { id: 'crag_condor', chance: 0.3, count: [1, 2] },
+    { id: 'salt_ibex', chance: 0.4, count: [2, 3] },
   ],
   // THE BUTTELAND (the needle country — its own biome since the tier pass):
   // valley life below, and THE TOP-ONLY FLICKER — a scamp that dens where
@@ -1393,8 +1407,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     // The wild chains: the ledge-graze that watches you fail to matter.
     { id: 'salt_ibex', chance: 0.45, count: [2, 3] },
   ],
-  // The karst country: sparse dry-stone life — hares grazing the pockets,
-  // moths in the gulf-shade, bloodwings nesting the crag rims.
+  // The karst country: the gulfs' sky is a SHAPE — swift-flocks pouring
+  // along the rims (the land murmuration), crickets detonating blind in
+  // the gulf-shade, the adder sunning where you were about to step.
   karst: [
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'glow_moth', chance: 0.35, count: [2, 4] },
@@ -1402,9 +1417,13 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
     // The wild chains: the dry-stone country's cliff graze.
     { id: 'salt_ibex', chance: 0.4, count: [2, 3] },
+    { id: 'gorge_swift', chance: 0.5, count: [4, 7] },
+    { id: 'cave_cricket', chance: 0.35, count: [2, 4] },
+    { id: 'heath_adder', chance: 0.2, count: [1, 1], near: 'rocks' },
   ],
   // THE DOWNS: open sheep-grass under a wide sky — coveys, hares, the
-  // fox at the margins and the hawk above all of it.
+  // fox at the margins, the hawk above all of it, and the stones' one
+  // zigzag opinion sunning among the tors.
   downs: [
     { id: 'meadow_hare', chance: 0.6, count: [2, 4] },
     { id: 'dust_quail', chance: 0.55, count: [3, 5] },
@@ -1412,6 +1431,7 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'red_fox', chance: 0.3, count: [1, 1] },
     { id: 'gore_hawk', chance: 0.15, count: [1, 1] },
     { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
+    { id: 'heath_adder', chance: 0.22, count: [1, 1], near: 'rocks' },
   ],
   // THE LITTORAL: the tide-tangle's margin lives — crabs in both
   // registers, the otter that hunts like play, herons over the frogs.
@@ -1421,9 +1441,12 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
     { id: 'river_otter', chance: 0.3, count: [1, 2], near: 'water' },
     { id: 'bog_heron', chance: 0.3, count: [1, 2] },
+    { id: 'strand_piper', chance: 0.45, count: [2, 4], near: 'water' },
   ],
   // THE JUNGLE: its own row at last ('grove' covered it by proxy) — the
-  // green's small lives under the silk and the strangler.
+  // green's small lives under the silk and the strangler. Its ambience is
+  // the ROOF: disturb the canopy and it detonates in color and noise, then
+  // vanishes back up into the green (refuge — the squirrel's exit, aloft).
   jungle: [
     { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
     { id: 'glow_moth', chance: 0.45, count: [2, 4] },
@@ -1431,6 +1454,7 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'roe_deer', chance: 0.25, count: [1, 2] },
     { id: 'squirrel', chance: 0.3, count: [2, 3] },
     { id: 'orb_weaver', chance: 0.25, count: [1, 1], presence: { from: 6, fadeIn: 3 } },
+    { id: 'canopy_screecher', chance: 0.5, count: [3, 5] },
   ],
   field: [
     { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
@@ -1445,43 +1469,243 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
     { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
   ],
-  // The dark keeps its own small lives. (No bare cave_bat row: the def is
-  // untagged so PACK bats count toward objectives — ambient bats arrive
-  // through the roost's summon rule, which stamps them 'predator'/exempt.)
+  // The dark keeps its own small lives — and its own PACE: the snail is the
+  // cave's clock, the cricket its blind detonation. (No bare cave_bat row:
+  // the def is untagged so PACK bats count toward objectives — ambient bats
+  // arrive through the roost's summon rule, which stamps them
+  // 'predator'/exempt. Terrestrial dress only: the fantastical cave pools —
+  // rocklings, constructs — are a coming chip's own identity work.)
   cavern: [
     { id: 'glow_moth', chance: 0.65, count: [3, 6] },
     // the Verminfall — the dark's small tenants.
     { id: 'gutter_rat', chance: 0.4, count: [2, 3] },
     { id: 'gutter_roach', chance: 0.55, count: [3, 6] },
     { id: 'bat_roost', chance: 0.45, count: [1, 2] },
+    { id: 'dripstone_snail', chance: 0.5, count: [1, 3] },
+    { id: 'cave_cricket', chance: 0.45, count: [2, 4] },
   ],
+  // The rot country DRIFTS: loosed caps riding the spore-haze at the speed
+  // of patience, snails working the mulch beneath them.
   mycelia: [
     { id: 'glow_moth', chance: 0.5, count: [2, 5] },
     { id: 'gutter_roach', chance: 0.4, count: [2, 4] }, // the Verminfall — rot draws roaches
 
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
+    { id: 'spore_puff', chance: 0.55, count: [2, 4] },
+    { id: 'dripstone_snail', chance: 0.35, count: [1, 2] },
   ],
-  // The cinder country breathes: wisps rising off the vents (they flee — the
-  // land's small lives are still lives).
+  // The cinder country breathes in TWO tempos: wisps and hoppers bolt from
+  // you (the land's small lives are still lives), while the salamander basks
+  // ON the melt and regards you across it — and at dark the vents wear
+  // crowns of drifting spark-lamps (the carried-lamp law in fire).
   volcanic: [
     { id: 'ember_wisp', chance: 0.6, count: [2, 4] },
     // The wild chains: the caldera finally has PREY — something small
     // that drinks the warm wind and outlives everything that notices.
     { id: 'ash_hopper', chance: 0.55, count: [3, 5] },
+    { id: 'cinder_moth', chance: 0.5, count: [2, 4] },
+    { id: 'vent_salamander', chance: 0.45, count: [1, 2], near: 'lava' },
   ],
-  // The lattice hums with moth-light.
+  // The lattice hums with moth-light — and keeps cave tenants under it
+  // (terrestrial dress only; the construct ambience is a later chip's).
   crystal: [
     { id: 'glow_moth', chance: 0.55, count: [2, 4] },
+    { id: 'dripstone_snail', chance: 0.45, count: [1, 3] },
+    { id: 'cave_cricket', chance: 0.4, count: [2, 4] },
   ],
-  // The gloam keeps its small hearts too — moths at the tallow stumps,
-  // squirrels that won't be caught.
+  // The gloam's ambience UNSETTLES rather than flees: the pale hart turns
+  // and WATCHES (the stare is the texture), the wisps drift their own
+  // errands, and the small lives keep to the tallow-light.
   gloamwood: [
     { id: 'glow_moth', chance: 0.45, count: [2, 4] },
     { id: 'squirrel', chance: 0.4, count: [2, 3] },
     // Field rats in the stubble — the country's rim is old cropland, and
     // cropland keeps its rats long after it stops keeping farmers.
     { id: 'gutter_rat', chance: 0.35, count: [1, 3] },
+    { id: 'pale_hart', chance: 0.35, count: [1, 2] },
+    { id: 'will_o_wisp', chance: 0.4, count: [1, 3] },
   ],
+
+  // ======================================================================
+  // THE AMBIENT EXPANSION (wildlife pass 2): every country below breathed
+  // dead air until now. Each roster is built to read DIFFERENT at a glance
+  // — what moves, how fast, in what formation, carrying what light.
+  // ======================================================================
+
+  // THE OSSUARY: bone country's ambience is UNDERFOOT — scarab files
+  // flowing between the ribs (a grounded flock), gauze-moths sipping at
+  // lamplight that isn't there, rats gnawing what the dynasties left.
+  ossuary: [
+    { id: 'bone_scarab', chance: 0.6, count: [3, 6] },
+    { id: 'soul_moth', chance: 0.45, count: [2, 4] },
+    { id: 'gutter_rat', chance: 0.35, count: [2, 3] },
+  ],
+  // THE GLOAM MANOR: the house keeps ONE working resident — the mouser,
+  // asleep in the lamplight until the floorboards say rat (the watch
+  // fabric's drowse) — and the vermin it was hired about. Candle-stub
+  // lights walk the halls on their own errands.
+  manor: [
+    { id: 'manor_mouser', chance: 0.55, count: [1, 1] },
+    { id: 'gutter_rat', chance: 0.6, count: [2, 4] },
+    { id: 'will_o_wisp', chance: 0.3, count: [1, 2] },
+    { id: 'glow_moth', chance: 0.25, count: [1, 3] },
+  ],
+  // THE SUNKEN RUIN: the green sends its agents down — a masked thief
+  // working your drops toward the nearest root (looter + refuge), roaches
+  // and toads in the drip, moth-light in the galleries.
+  ruin: [
+    { id: 'ruin_tailthief', chance: 0.45, count: [1, 2] },
+    { id: 'gutter_roach', chance: 0.45, count: [2, 4] },
+    { id: 'glow_moth', chance: 0.35, count: [2, 4] },
+    { id: 'marsh_toad', chance: 0.3, count: [2, 3] },
+  ],
+  // THE SEPULCHER: the vault floor FLOWS — scarab rivers between the
+  // sarcophagi (the grounded flock at its densest), the asp coiled in the
+  // offering bowls, gauze-light over the dead kings.
+  sepulcher: [
+    { id: 'bone_scarab', chance: 0.65, count: [4, 7] },
+    { id: 'sand_scorpion', chance: 0.4, count: [2, 3] },
+    { id: 'horned_viper', chance: 0.25, count: [1, 1] },
+    { id: 'soul_moth', chance: 0.2, count: [1, 2] },
+  ],
+  // THE RIFT: the old wound's ambience is CARRION AIR — fly-knots boiling
+  // over the scar, crows working the gore-banks, the war dead's lights
+  // still drifting their unfinished errands.
+  rift: [
+    { id: 'blister_fly', chance: 0.55, count: [3, 6] },
+    { id: 'carrion_crow', chance: 0.4, count: [2, 4] },
+    { id: 'will_o_wisp', chance: 0.3, count: [1, 3] },
+    { id: 'gutter_rat', chance: 0.25, count: [2, 3] },
+  ],
+  // THE RIVER OF FLAME: moths TO the flame — spark-lamp flocks swirling
+  // over hell's artery, wisps off the melt, the salamander basking on the
+  // one shore nothing else can stand.
+  flame: [
+    { id: 'cinder_moth', chance: 0.6, count: [3, 5] },
+    { id: 'ember_wisp', chance: 0.5, count: [2, 4] },
+    { id: 'vent_salamander', chance: 0.4, count: [1, 2], near: 'lava' },
+    { id: 'ash_hopper', chance: 0.35, count: [2, 4] },
+  ],
+  // THE RIVER OF SOULS: the shore glows — grave-lights on their errands,
+  // minnow-shoals of the remembered schooling close and silent (the
+  // murmuration law in gauze), moths sipping at the ferry lamps.
+  soulway: [
+    { id: 'will_o_wisp', chance: 0.6, count: [2, 4] },
+    { id: 'soul_minnow', chance: 0.5, count: [3, 6] },
+    { id: 'soul_moth', chance: 0.45, count: [2, 4] },
+  ],
+  // THE DURANCE: a prison's ambience — the vermin the cells feed, and the
+  // green-lit dead drifting the torture halls. Nothing here flocks;
+  // everything here scatters.
+  durance: [
+    { id: 'gutter_rat', chance: 0.55, count: [2, 4] },
+    { id: 'gutter_roach', chance: 0.5, count: [3, 5] },
+    { id: 'will_o_wisp', chance: 0.3, count: [1, 2] },
+  ],
+  // THE OUTER STEPPES: the scorched marches keep scorched-march life —
+  // hoppers in the cinder-grass, wisps off the maws, and the carrion sky
+  // wheeling over the legions' roads.
+  steppes: [
+    { id: 'ash_hopper', chance: 0.5, count: [3, 5] },
+    { id: 'ember_wisp', chance: 0.4, count: [2, 3] },
+    { id: 'dune_vulture', chance: 0.35, count: [1, 2] },
+    { id: 'carrion_crow', chance: 0.3, count: [2, 3] },
+  ],
+  // THE DEEP SEA: the drowned ambience at last — shoals that murmurate
+  // (one creature, a hundred bodies), jelly-lamps drifting the crush (the
+  // carried-lamp law underwater), hermits clamping among the sea-rocks.
+  deepsea: [
+    { id: 'silver_shoal', chance: 0.65, count: [5, 9] },
+    { id: 'moon_jelly', chance: 0.5, count: [2, 4] },
+    { id: 'hermit_scuttler', chance: 0.45, count: [2, 4], near: 'sea_rock' },
+    { id: 'shore_crab', chance: 0.3, count: [2, 3] },
+  ],
+  // THE FLESH: the country's ambience IS the country — spare organs out
+  // for a stroll (the waltzer tempo: nothing here hurries), fly-knots over
+  // whatever the ground digested last, mites in the folds.
+  flesh: [
+    { id: 'wandering_polyp', chance: 0.6, count: [2, 4] },
+    { id: 'blister_fly', chance: 0.45, count: [3, 5] },
+    { id: 'scuttle_mite', chance: 0.35, count: [3, 5] },
+  ],
+  // THE CAUL: the membrane's ambience SKITTERS where the flesh's strolls —
+  // lice-spills running the vertebra-ridges and freezing flat, flies in
+  // the ichor-throats, the odd loosed organ wandering through.
+  caul: [
+    { id: 'scuttle_mite', chance: 0.6, count: [4, 7] },
+    { id: 'blister_fly', chance: 0.45, count: [3, 5] },
+    { id: 'wandering_polyp', chance: 0.3, count: [1, 2] },
+  ],
+  // THE WARFRONT: the active war's ambience is what war leaves — fly-knots
+  // over the fresh craters, crows on the ordnance, rats in the works,
+  // scarabs already filing through the older dead.
+  warfront: [
+    { id: 'blister_fly', chance: 0.55, count: [3, 6] },
+    { id: 'carrion_crow', chance: 0.45, count: [2, 4] },
+    { id: 'gutter_rat', chance: 0.35, count: [2, 4] },
+    { id: 'bone_scarab', chance: 0.3, count: [2, 4] },
+  ],
+  // THE AETHER FAMILY: one realm, five moods — dove country in the built
+  // belts (flocks that lift as one soft ring and resettle), wind country
+  // on the drifts (the fastest wingbeat in the game riding the gusts),
+  // and constellation country in the vesper cold (star-moths, the
+  // carried-lamp law worn as night sky). The weights tell the moods apart;
+  // the family tells apart from every surface country at a glance.
+  aether: [
+    { id: 'gleam_dove', chance: 0.45, count: [2, 4] },
+    { id: 'zephyr_darter', chance: 0.35, count: [3, 5] },
+    { id: 'star_moth', chance: 0.3, count: [2, 3] },
+  ],
+  aether_sanctum: [
+    { id: 'gleam_dove', chance: 0.6, count: [3, 5] },
+    { id: 'star_moth', chance: 0.3, count: [2, 3] },
+    { id: 'zephyr_darter', chance: 0.2, count: [2, 4] },
+  ],
+  aether_spires: [
+    { id: 'gleam_dove', chance: 0.5, count: [2, 4] },
+    { id: 'zephyr_darter', chance: 0.35, count: [3, 5] },
+    { id: 'star_moth', chance: 0.25, count: [2, 3] },
+  ],
+  aether_drift: [
+    { id: 'zephyr_darter', chance: 0.6, count: [4, 7] },
+    { id: 'gleam_dove', chance: 0.25, count: [2, 3] },
+    { id: 'star_moth', chance: 0.2, count: [2, 3] },
+  ],
+  aether_vesper: [
+    { id: 'star_moth', chance: 0.6, count: [3, 5] },
+    { id: 'zephyr_darter', chance: 0.25, count: [2, 4] },
+    { id: 'gleam_dove', chance: 0.2, count: [1, 2] },
+  ],
+  aether_bastion: [
+    { id: 'gleam_dove', chance: 0.55, count: [3, 5] },
+    { id: 'star_moth', chance: 0.3, count: [2, 3] },
+    { id: 'zephyr_darter', chance: 0.25, count: [2, 4] },
+  ],
+  aether_civitas: [
+    { id: 'gleam_dove', chance: 0.7, count: [3, 6] },
+    { id: 'star_moth', chance: 0.25, count: [2, 3] },
+    { id: 'zephyr_darter', chance: 0.2, count: [2, 3] },
+  ],
+  aether_stream: [
+    { id: 'zephyr_darter', chance: 0.7, count: [4, 7] },
+    { id: 'gleam_dove', chance: 0.2, count: [1, 2] },
+    { id: 'star_moth', chance: 0.2, count: [2, 3] },
+  ],
+
+  // ======================================================================
+  // RULED SILENT (adjudicated, not forgotten — the census probe pins this
+  // set, so a new biome can never fall silent by accident):
+  //  - 'eldritch': the dead air IS the ambience. Blight ground is painted
+  //    by the Incursion, which pours its own kin as the zone's living
+  //    texture — a neutral critter hopping through the wrongness would
+  //    break the one thing the biome is FOR (nothing lives here but IT).
+  //  - 'ocean': structurally unreadable — open-sea voyage zones are
+  //    `special` and spawnWildlife returns before the table lookup (the
+  //    hares-on-open-water guard). Sea ambience belongs to the voyage
+  //    fabric, not this registry.
+  //  - 'river': a virtual course biome worn by NO zone (relief fabric —
+  //    rivers repaint nothing); a row here could never spawn.
+  // ======================================================================
 };
 
 /** THE DIVE-CYCLE WHEEL (the murmuration's brain, as a data factory): aloft
@@ -18118,6 +18342,496 @@ export const MONSTERS: Record<string, MonsterDef> = {
           { do: 'buff', buff: SPENT_SLUMP_BUFF },
         ],
       }],
+    },
+  },
+
+  // ==========================================================================
+  // THE AMBIENT EXPANSION (wildlife pass 2) — every biome breathes, and each
+  // breathes DIFFERENTLY. New small lives composed entirely from standing
+  // levers: murmurations (behavior.flock, air and water and floor), carried
+  // lamps (MonsterDef.light), the sentinel freeze, the unperturbed waltzers
+  // (speed as personality), waterline runners, a sleeping predator (watch),
+  // a looting thief. Critters wear tag 'critter', hunters 'predator' — no
+  // ambience ever gates an objective.
+  // ==========================================================================
+
+  // --- THE SHORE SET: the tideline runs, the harbor wheels ------------------
+  // The strand piper: it outruns the foam both ways and calls that a life.
+  strand_piper: {
+    id: 'strand_piper', name: 'Strand Piper',
+    color: '#d8ccb4', shape: 'oval', radius: 6, material: 'fur', look: 'strand_piper',
+    base: { life: 6, moveSpeed: 240, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.75)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.85, 1.1],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 140, duration: [0.9, 1.6] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.45], hookArc: 1.5, freezeChance: 0.3, freeze: [0.2, 0.5] },
+      tempo: { kite: 2.2, windedFor: [0.7, 1.2] },
+    },
+  },
+  // The harbor gull: bold past the edge of manners — it lifts LAST, wheels
+  // once, and lands exactly where it was.
+  harbor_gull: {
+    id: 'harbor_gull', name: 'Harbor Gull',
+    color: '#e8ecf0', shape: 'kite', radius: 8, material: 'fur', look: 'harbor_gull',
+    base: { life: 10, moveSpeed: 190, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.2, drops: 0,
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 70, duration: [0.6, 1.2] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+      behavior: { flock: { kin: 'def', radius: 180, cohesion: 0.7, alignment: 0.9, separation: 1.1, weave: 1.6, erratic: 0.8 } },
+    },
+  },
+
+  // --- THE HIGH SET: the sentinel whistle, the wheeling shadow --------------
+  // The whistle marmot: it stands UP first — the freeze is the watch, the
+  // bolt is the verdict.
+  whistle_marmot: {
+    id: 'whistle_marmot', name: 'Whistle Marmot',
+    color: '#a89066', shape: 'oval', radius: 8, material: 'fur', look: 'whistle_marmot',
+    base: { life: 10, moveSpeed: 200, evasion: 75, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.85, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 200, duration: [1.4, 2.4] } },
+      perception: { arcDeg: 360, rearMul: 1 },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.0, freezeChance: 0.6, freeze: [0.8, 1.6] },
+      tempo: { kite: 2.6, windedFor: [0.9, 1.4] },
+    },
+  },
+  // (The mountain sky's wheeling shadow is the EXISTING crag_condor — the
+  // wingCycle dive-wheel fighter the mountain tilesets already field; the
+  // highland wildlife row re-seats it rather than minting a lesser twin.)
+  // The gorge swift: the karst's sky is a SHAPE — a sickle-flock pouring
+  // along the gulf rims, folding and unfolding. The land murmuration.
+  gorge_swift: {
+    id: 'gorge_swift', name: 'Gorge Swift',
+    color: '#5a5e6a', shape: 'kite', radius: 6, material: 'fur', look: 'gorge_swift',
+    base: { life: 5, moveSpeed: 250, evasion: 95, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 160, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.3 },
+      behavior: { flock: { kin: 'def', radius: 220, cohesion: 1.1, alignment: 1.25, separation: 1.0, weave: 3.0, erratic: 1.1 } },
+    },
+  },
+  // The heath adder: the stones' opinion of the covey — the downs' quiet
+  // spice, sunning where you were about to step.
+  heath_adder: {
+    id: 'heath_adder', name: 'Heath Adder',
+    color: '#8a7a56', shape: 'kite', radius: 8, look: 'heath_adder',
+    base: { life: 18, moveSpeed: 140, accuracy: 110, evasion: 50, mana: 15, manaRegen: 2 },
+    skills: ['claw', 'fang_strike'],
+    xp: 6, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.3, drops: 0,
+    tells: HUNGER_LEAN,
+    ambush: { radius: 36 },
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      drives: { hunger: { rise: 0.01, start: [0.4, 0.8], onKill: -0.9 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.6 } },
+        use: { target: { prey: ['critter'], detectMul: 1.2 } },
+      }],
+    },
+  },
+
+  // --- THE DEEP-ROCK SET (terrestrial cave ambience; the fantastical pools
+  // are a later chip's remit) ------------------------------------------------
+  // The dripstone snail: the cave's pace, stated as an animal. It has been
+  // crossing this gallery since before you were born and will finish after.
+  dripstone_snail: {
+    id: 'dripstone_snail', name: 'Dripstone Snail',
+    color: '#8a8290', shape: 'oval', radius: 7, look: 'dripstone_snail',
+    base: { life: 16, moveSpeed: 24, evasion: 20, armor: 15, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    turnSpeed: 1.6,
+    scaleVariance: [0.8, 1.3],
+    brain: {
+      type: 'basic',
+      // It does flee. Technically.
+      morale: { skittish: { radius: 40, duration: [0.5, 1.0] } },
+    },
+  },
+  // The cave cricket: it sees with its whiskers or not at all — long stills,
+  // then a blind sideways detonation.
+  cave_cricket: {
+    id: 'cave_cricket', name: 'Cave Cricket',
+    color: '#b0a284', shape: 'oval', radius: 6, material: 'chitin', look: 'cave_cricket',
+    base: { life: 5, moveSpeed: 235, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.75)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 90, duration: [0.8, 1.4] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.4], hookArc: 1.6, freezeChance: 0.55, freeze: [0.5, 1.1] },
+      tempo: { kite: 1.6, windedFor: [1.0, 1.6] },
+    },
+  },
+
+  // --- THE FIRE SET: the caldera's two tempos -------------------------------
+  // The vent salamander: it basks ON the melt and regards you across it.
+  // Nothing in its life has ever mattered enough to hurry for.
+  vent_salamander: {
+    id: 'vent_salamander', name: 'Vent Salamander',
+    color: '#c86a3e', shape: 'oval', radius: 9, material: 'scale', look: 'vent_salamander',
+    base: { life: 24, moveSpeed: 55, evasion: 30, armor: 10, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.75)],
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    immuneGround: ['lava', 'magma_core'],
+    turnSpeed: 2.4,
+    scaleVariance: [0.8, 1.3],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 45, duration: [0.8, 1.4] } },
+    },
+  },
+  // The cinder moth: a moth TO the flame that learned to keep the flame —
+  // a drifting spark-lamp swirling over the vents (the carried-lamp law).
+  cinder_moth: {
+    id: 'cinder_moth', name: 'Cinder Moth',
+    color: '#ff9a4a', shape: 'diamond', radius: 6, material: 'ember', look: 'cinder_moth',
+    base: { life: 6, moveSpeed: 150, evasion: 85, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    light: { radius: -3.2, color: '#ff9a4a', intensity: 0.35, flicker: 2.2, radiance: { at1: 0.15 } },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 110, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.4 },
+      behavior: { flock: { kin: 'def', radius: 170, cohesion: 0.8, alignment: 0.6, separation: 1.1, weave: 1.8, erratic: 1.4 } },
+    },
+  },
+
+  // --- THE SOFT-GROUND SET: rot, membrane, and the slow pulse ---------------
+  // The spore puff: a cap that let go — it drifts the warrens at the speed
+  // of patience and settles nowhere in particular.
+  spore_puff: {
+    id: 'spore_puff', name: 'Spore Puff',
+    color: '#a8d08f', shape: 'oval', radius: 8, material: 'verdant', look: 'spore_puff',
+    base: { life: 8, moveSpeed: 45, evasion: 45, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.75, 1.3],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 60, duration: [1.0, 1.8] } },
+    },
+  },
+  // The wandering polyp: the flesh country's ambience IS the country — a
+  // spare organ out for a stroll, pulsing at its own untroubled tempo.
+  wandering_polyp: {
+    id: 'wandering_polyp', name: 'Wandering Polyp',
+    color: '#c87a86', shape: 'oval', radius: 10, look: 'wandering_polyp',
+    base: { life: 25, moveSpeed: 35, evasion: 25, mana: 0 },
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    turnSpeed: 2.0,
+    scaleVariance: [0.7, 1.4],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 50, duration: [0.8, 1.5] } },
+    },
+  },
+  // The scuttle mite: the membrane's lice — a spill of chitin that runs the
+  // ridge-vertebrae and freezes flat when the light finds it.
+  scuttle_mite: {
+    id: 'scuttle_mite', name: 'Scuttle Mite',
+    color: '#5a4a58', shape: 'oval', radius: 5, material: 'chitin', look: 'scuttle_mite',
+    base: { life: 5, moveSpeed: 205, evasion: 80, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 100, duration: [0.8, 1.4] } },
+      move: { style: 'skitter', dart: [0.25, 0.45], pause: [0.15, 0.4] },
+      tempo: { kite: 2.0, windedFor: [0.7, 1.2] },
+    },
+  },
+  // The blister fly: the war's smallest beneficiary — glut-fed swarms
+  // boiling over the craters. They scatter wide and re-knot; the knot
+  // drifts toward whatever died most recently.
+  blister_fly: {
+    id: 'blister_fly', name: 'Blister Fly',
+    color: '#8a5a4e', shape: 'oval', radius: 5, material: 'chitin', look: 'blister_fly',
+    base: { life: 4, moveSpeed: 175, evasion: 90, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 100, duration: [0.6, 1.2] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.4], hookArc: 1.6 },
+      behavior: { flock: { kin: 'def', radius: 150, cohesion: 0.9, alignment: 0.5, separation: 1.0, weave: 2.2, erratic: 1.6 } },
+    },
+  },
+
+  // --- THE DEAD-GROUND SET: bone, gauze, and the one working cat ------------
+  // The bone scarab: the ossuary's floor FLOWS — a grounded flock polishing
+  // the dead by walking on them.
+  bone_scarab: {
+    id: 'bone_scarab', name: 'Bone Scarab',
+    color: '#cfc4a8', shape: 'oval', radius: 6, material: 'chitin', look: 'bone_scarab',
+    base: { life: 8, moveSpeed: 150, evasion: 60, armor: 10, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 90, duration: [0.8, 1.4] } },
+      move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.2, 0.4] },
+      behavior: { flock: { kin: 'def', radius: 140, cohesion: 1.1, alignment: 0.9, separation: 0.9 } },
+    },
+  },
+  // The soul moth: gauze on gauze — it sips at lamplight that isn't there
+  // and carries a little of it away (the carried-lamp law, dimmed).
+  soul_moth: {
+    id: 'soul_moth', name: 'Soul Moth',
+    color: '#bcd4f0', shape: 'diamond', radius: 6, material: 'ethereal', look: 'soul_moth',
+    base: { life: 6, moveSpeed: 120, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    light: { radius: -3.0, color: '#bcd4f0', intensity: 0.3, flicker: 1.6, radiance: { at1: 0.2 } },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 110, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2, freezeChance: 0.2, freeze: [0.3, 0.6] },
+    },
+  },
+  // The manor mouser: the house's one working resident — asleep in the
+  // lamplight (the watch fabric's drowse) until the floorboards say RAT.
+  // The manor stages its own drama: cat hunts vermin, nightly.
+  manor_mouser: {
+    id: 'manor_mouser', name: 'Manor Mouser',
+    color: '#3a3438', shape: 'kite', radius: 9, material: 'fur', look: 'manor_mouser',
+    base: { life: 22, moveSpeed: 210, accuracy: 106, evasion: 70, mana: 15, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 6, tag: 'predator',
+    faction: 'beast', tags: ['beast'],
+    detection: 1.4, drops: 0,
+    tells: HUNGER_LEAN,
+    watch: { sleep: true, riseSec: 3.0, decaySec: 9 },
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk' },
+      tempo: { moveFor: [0.8, 1.5], pauseFor: [0.6, 1.4] },
+      drives: { hunger: { rise: 0.013, start: [0.3, 0.7], onKill: -0.85 } },
+      rules: [{
+        when: { drive: { id: 'hunger', above: 0.55 } },
+        use: { target: { prey: ['critter'], detectMul: 1.3 }, behavior: { seek: { what: 'prey', pace: 0.5 } } },
+      }],
+    },
+  },
+
+  // --- THE DROWNED SET: the sea's own ambience, finally ---------------------
+  // The silver shoaling: the underwater murmuration — a school that is one
+  // creature with a hundred bodies, bursting apart and re-forming.
+  silver_shoal: {
+    id: 'silver_shoal', name: 'Silver Shoaling',
+    color: '#b8ccd8', shape: 'oval', radius: 5, material: 'scale', look: 'silver_shoal',
+    base: { life: 4, moveSpeed: 230, evasion: 95, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.8, 1.15],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 170, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.3 },
+      behavior: { flock: { kin: 'def', radius: 200, cohesion: 1.15, alignment: 1.2, separation: 0.95, weave: 2.6, erratic: 0.9 } },
+    },
+  },
+  // The moon jelly: a lamp that forgot it was an animal — the abyss' slow
+  // drifting glow (the carried-lamp law under the crush).
+  moon_jelly: {
+    id: 'moon_jelly', name: 'Moon Jelly',
+    color: '#b8d8f0', shape: 'oval', radius: 9, material: 'slime', look: 'moon_jelly',
+    base: { life: 14, moveSpeed: 40, evasion: 40, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    light: { radius: -3.8, color: '#b8d8f0', intensity: 0.4, flicker: 0.8, radiance: { at1: 0.35 } },
+    scaleVariance: [0.75, 1.35],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 55, duration: [1.0, 1.8] } },
+    },
+  },
+  // The hermit scuttler: somebody else's shell, worn with conviction — it
+  // CLAMPS when worried and waits you out.
+  hermit_scuttler: {
+    id: 'hermit_scuttler', name: 'Hermit Scuttler',
+    color: '#c8a06a', shape: 'oval', radius: 8, material: 'chitin', look: 'hermit_scuttler',
+    base: { life: 16, moveSpeed: 70, evasion: 35, armor: 25, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.8, 1.25],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 80, duration: [1.0, 1.6] } },
+      move: { style: 'juke', hookEvery: [0.5, 1.0], hookArc: 1.4, freezeChance: 0.5, freeze: [0.6, 1.2] },
+    },
+  },
+  // The soul minnow: a sliver of someone, still swimming — the River of
+  // Souls keeps SHOALS, and they school like memory: close, silent, lit.
+  soul_minnow: {
+    id: 'soul_minnow', name: 'Soul Minnow',
+    color: '#a8ccf0', shape: 'oval', radius: 5, material: 'ethereal', look: 'soul_minnow',
+    base: { life: 4, moveSpeed: 200, evasion: 90, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    light: { radius: -2.6, color: '#a8ccf0', intensity: 0.25, flicker: 1.4, radiance: { at1: 0.3 } },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 140, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2 },
+      behavior: { flock: { kin: 'def', radius: 180, cohesion: 1.2, alignment: 1.15, separation: 0.95, weave: 2.2, erratic: 0.8 } },
+    },
+  },
+
+  // --- THE GREEN-ROOF SET: the canopy answers back --------------------------
+  // The canopy screecher: plumage with a volume problem — the jungle's roof
+  // EXPLODES when disturbed, and the flock is gone up into the green.
+  canopy_screecher: {
+    id: 'canopy_screecher', name: 'Canopy Screecher',
+    color: '#3a9a5e', shape: 'kite', radius: 8, material: 'fur', look: 'canopy_screecher',
+    base: { life: 9, moveSpeed: 215, evasion: 80, mana: 0 },
+    mods: [mod('detectability', 'more', -0.4)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.2, drops: 0,
+    refuge: { kind: 'tree', text: 'vanishes into the canopy!' },
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 180, duration: [1.6, 2.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.4 },
+      behavior: { flock: { kin: 'def', radius: 190, cohesion: 0.8, alignment: 0.9, separation: 1.1, weave: 1.7, erratic: 1.2 } },
+    },
+  },
+  // The ruin tailthief: a masked face, a prehensile conscience — it works
+  // your drops toward the nearest trunk and is gone up it (looter + refuge:
+  // the scamp's trade, the squirrel's exit).
+  ruin_tailthief: {
+    id: 'ruin_tailthief', name: 'Ruin Tailthief',
+    color: '#8a7458', shape: 'oval', radius: 8, material: 'fur', look: 'ruin_tailthief',
+    base: { life: 14, moveSpeed: 230, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.3, drops: 0,
+    looter: { reach: 32 },
+    refuge: { kind: 'tree', text: 'swings away into the roots!' },
+    scaleVariance: [0.85, 1.15],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 220, duration: [1.4, 2.4] } },
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.3, freezeChance: 0.15, freeze: [0.2, 0.4] },
+      behavior: { seek: { what: 'loot', pace: 0.65, range: 1200 } },
+      tempo: { kite: 3.4, windedFor: [0.8, 1.3] },
+    },
+  },
+  // The pale hart: the gloam's wrong deer — it does not startle; it TURNS,
+  // and it watches, and only when you look away is it somewhere else.
+  pale_hart: {
+    id: 'pale_hart', name: 'Pale Hart',
+    color: '#d8d4c8', shape: 'oval', radius: 11, material: 'fur', look: 'pale_hart',
+    base: { life: 28, moveSpeed: 190, evasion: 65, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
+    detection: 0.2, drops: 0,
+    scaleVariance: [0.9, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 240, duration: [2.4, 4.0] } },
+      perception: { arcDeg: 360, rearMul: 1 },
+      move: { style: 'juke', hookEvery: [0.6, 1.1], hookArc: 0.8, freezeChance: 0.75, freeze: [1.2, 2.4] },
+      tempo: { kite: 4.5, windedFor: [1.2, 1.8] },
+    },
+  },
+
+  // --- THE SKY-REALM SET: what lives above the weather ----------------------
+  // The gleam dove: the Civitas' own bird — a white flock that lifts as one
+  // soft ring and resettles on the marble like nothing happened.
+  gleam_dove: {
+    id: 'gleam_dove', name: 'Gleam Dove',
+    color: '#f0f2f6', shape: 'oval', radius: 7, material: 'fur', look: 'gleam_dove',
+    base: { life: 8, moveSpeed: 185, evasion: 80, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.9, 1.1],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 130, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.1 },
+      behavior: { flock: { kin: 'def', radius: 190, cohesion: 1.0, alignment: 1.1, separation: 1.0, weave: 1.3, erratic: 0.6 } },
+    },
+  },
+  // The star moth: wings of night sky, dusted with somewhere else — the
+  // Vesperlands' drifting constellation (the carried-lamp law, cold).
+  star_moth: {
+    id: 'star_moth', name: 'Star Moth',
+    color: '#cfd6ff', shape: 'diamond', radius: 6, material: 'cosmic', look: 'star_moth',
+    base: { life: 6, moveSpeed: 110, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    light: { radius: -3.4, color: '#cfd6ff', intensity: 0.4, flicker: 1.2, radiance: { at1: 0.1 } },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 100, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.2, freezeChance: 0.2, freeze: [0.3, 0.6] },
+    },
+  },
+  // The zephyr darter: mostly wind, briefly bird — the Driftways' flocks
+  // ride the gusts at the fastest wingbeat in the game.
+  zephyr_darter: {
+    id: 'zephyr_darter', name: 'Zephyr Darter',
+    color: '#a8dce8', shape: 'kite', radius: 6, material: 'fur', look: 'zephyr_darter',
+    base: { life: 5, moveSpeed: 265, evasion: 95, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 150, duration: [0.9, 1.6] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.45], hookArc: 1.4 },
+      tempo: { kite: 2.4, windedFor: [0.6, 1.1] },
+      behavior: { flock: { kin: 'def', radius: 240, cohesion: 1.0, alignment: 1.3, separation: 1.0, weave: 3.4, erratic: 0.9, amplitude: 40 } },
     },
   },
 

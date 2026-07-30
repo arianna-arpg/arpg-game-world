@@ -8470,6 +8470,258 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ================================= THE AMBIENT EXPANSION (wildlife pass 2)
+  // Every biome breathes in its own register — the small lives that carry a
+  // country's ambience. Composed entirely from standing part kinds.
+
+  /** The strand piper: stilts and hurry — the waterline's running stitch. */
+  strand_piper: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'featherWings', scale: 0.55, alpha: 0.9 },
+      { kind: 'legs', scale: 1.15, params: { n: 2 } },
+      { kind: 'beak', x: 0.45, scale: 0.7 },
+    ],
+  },
+  /** The harbor gull: white audacity on grey wings. */
+  harbor_gull: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'featherWings', color: '#9aa8b4', scale: 0.95, alpha: 0.95 },
+      { kind: 'tailFeathers', scale: 0.65 },
+      { kind: 'beak', x: 0.45, scale: 0.55, color: '#e8b048' },
+    ],
+  },
+  /** The whistle marmot: a fat sentry standing its own watch. */
+  whistle_marmot: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'furRuff', scale: 0.95, alpha: 0.9 },
+      { kind: 'ears', scale: 0.6 },
+      { kind: 'tail', params: { len: 0.5, tuft: true } },
+      { kind: 'eyes', color: '#2a2026', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** The gorge swift: a sickle of wing — the flock is the shape. */
+  gorge_swift: {
+    parts: [
+      { kind: 'featherWings', scale: 0.9, alpha: 0.9 },
+      { kind: 'disc', scale: 0.55 },
+      { kind: 'tailFeathers', scale: 0.5 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The heath adder: a zigzag opinion sunning on the stones. */
+  heath_adder: {
+    parts: [
+      { kind: 'coil', scale: 0.8 },
+      { kind: 'serpentHead', x: 0.35, scale: 0.75 },
+      { kind: 'stripes', scale: 0.8, alpha: 0.8 },
+      { kind: 'scutes', scale: 0.65, alpha: 0.85 },
+    ],
+  },
+  /** The dripstone snail: the cave's slowest tenant, house and all. */
+  dripstone_snail: {
+    parts: [
+      { kind: 'shellSpiral', scale: 0.95 },
+      { kind: 'disc', scale: 0.55, y: 0.15 },
+      { kind: 'eyestalks', x: 0.4, scale: 0.75 },
+    ],
+    live: [{ kind: 'slimeTrail', scale: 0.8, alpha: 0.6 }],
+    shadowScale: 0.7,
+  },
+  /** The cave cricket: all antennae — it sees with its whiskers or not at all. */
+  cave_cricket: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'legs', scale: 1.1, params: { n: 4 } },
+      { kind: 'antennae', scale: 1.5 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The vent salamander: ember-spotted and utterly unbothered. */
+  vent_salamander: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.12, seed: 77 } },
+      { kind: 'tail', params: { len: 0.9 } },
+      { kind: 'spots', color: '#ff9a3a', scale: 0.8 },
+      { kind: 'eyes', color: '#ffd05a', params: { spread: 0.4, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** The cinder moth: a moth TO the flame, wearing the flame's own coat. */
+  cinder_moth: {
+    parts: [
+      { kind: 'mothWings', scale: 1.0, alpha: 0.9 },
+      { kind: 'disc', scale: 0.45, role: 'glow' },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.6, params: { n: 2 } }],
+  },
+  /** The spore puff: a drifting cap that was never asked to hurry. */
+  spore_puff: {
+    parts: [
+      { kind: 'capDome', scale: 0.95 },
+      { kind: 'sporeVents', scale: 0.6, alpha: 0.7 },
+    ],
+    live: [{ kind: 'puffMotes', scale: 0.8, params: { n: 3 } }],
+    shadowScale: 0.5,
+  },
+  /** The pale hart: antlers like winter branches, and that STARE. */
+  pale_hart: {
+    parts: [
+      { kind: 'disc', scale: 0.95, role: 'bone' },
+      { kind: 'furRuff', scale: 0.9, alpha: 0.7 },
+      { kind: 'antlers', scale: 1.15, color: '#d8d4c8' },
+      { kind: 'eyes', color: '#1a1418', params: { spread: 0.44, dist: 0.55, size: 0.12 } },
+    ],
+  },
+  /** The soul moth: gauze on gauze — it drinks lamplight that isn't there. */
+  soul_moth: {
+    parts: [
+      { kind: 'mothWings', scale: 1.0, alpha: 0.7 },
+      { kind: 'soulGauze', scale: 0.8, alpha: 0.6 },
+      { kind: 'disc', scale: 0.4, role: 'glow' },
+    ],
+    shadowScale: 0.4,
+  },
+  /** The bone scarab: it polishes the dead by walking on them. */
+  bone_scarab: {
+    parts: [
+      { kind: 'carapace', scale: 0.85 },
+      { kind: 'legs', scale: 0.95, params: { pairs: 3 } },
+      { kind: 'mandibles', scale: 0.6 },
+      { kind: 'spots', color: '#efe8d4', scale: 0.6, alpha: 0.9 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The blister fly: the war's smallest beneficiary. */
+  blister_fly: {
+    parts: [
+      { kind: 'blob', scale: 0.7, params: { irr: 0.18, seed: 311 } },
+      { kind: 'featherWings', scale: 0.5, alpha: 0.5 },
+      { kind: 'eyes', color: '#c83a2e', params: { spread: 0.5, dist: 0.45, size: 0.14 } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.4,
+  },
+  /** The wandering polyp: the ground's spare organ, out for a stroll. */
+  wandering_polyp: {
+    parts: [
+      { kind: 'oozeLobes', scale: 0.95 },
+      { kind: 'fleshFolds', scale: 0.75, alpha: 0.85 },
+      { kind: 'polyps', scale: 0.7 },
+      { kind: 'eyeCluster', scale: 0.45, alpha: 0.8 },
+    ],
+  },
+  /** The scuttle mite: the membrane's lice, at membrane scale. */
+  scuttle_mite: {
+    parts: [
+      { kind: 'carapace', scale: 0.75 },
+      { kind: 'legs', scale: 1.05, params: { n: 8 } },
+      { kind: 'antennae', scale: 0.7 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The silver shoaling: one coin of the school — the flock is the creature. */
+  silver_shoal: {
+    parts: [
+      { kind: 'disc', scale: 0.75 },
+      { kind: 'fins', scale: 0.8, alpha: 0.9 },
+      { kind: 'tailFin', scale: 0.85 },
+      { kind: 'spots', color: '#dce8f0', scale: 0.5, alpha: 0.8 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The moon jelly: a lamp that forgot it was an animal. */
+  moon_jelly: {
+    parts: [
+      { kind: 'blob', scale: 1.0, alpha: 0.6, params: { irr: 0.1, seed: 89 } },
+      { kind: 'disc', scale: 0.5, role: 'glow', alpha: 0.8 },
+      { kind: 'tentacleRing', scale: 0.85, alpha: 0.6 },
+    ],
+    shadowScale: 0.4,
+  },
+  /** The hermit scuttler: somebody else's shell, worn with conviction. */
+  hermit_scuttler: {
+    parts: [
+      { kind: 'shellSpiral', scale: 1.05 },
+      { kind: 'legs', scale: 0.85, params: { n: 4 } },
+      { kind: 'pincers', scale: 0.65 },
+      { kind: 'eyestalks', x: 0.4, scale: 0.7 },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The gleam dove: the Civitas' own bird — a faint ring rides its wake. */
+  gleam_dove: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'featherWings', scale: 0.95, alpha: 0.95 },
+      { kind: 'tailFeathers', scale: 0.7 },
+      { kind: 'halo', scale: 0.5, alpha: 0.25 },
+      { kind: 'beak', x: 0.45, scale: 0.4 },
+    ],
+  },
+  /** The star moth: wings of night sky, dusted with somewhere else. */
+  star_moth: {
+    parts: [
+      { kind: 'mothWings', scale: 1.05, alpha: 0.85 },
+      { kind: 'spots', color: '#e8ecff', scale: 0.75, role: 'glow' },
+      { kind: 'disc', scale: 0.4, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, params: { n: 2 } }],
+    shadowScale: 0.4,
+  },
+  /** The zephyr darter: mostly wind, briefly bird. */
+  zephyr_darter: {
+    parts: [
+      { kind: 'featherWings', scale: 1.0, alpha: 0.9 },
+      { kind: 'disc', scale: 0.5 },
+      { kind: 'tailFeathers', scale: 0.6 },
+      { kind: 'glassFins', scale: 0.5, alpha: 0.45 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The canopy screecher: plumage with a volume problem. */
+  canopy_screecher: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'featherWings', color: '#3a9a5e', scale: 0.95 },
+      { kind: 'crest', x: 0.2, scale: 1.0, color: '#e8484a' },
+      { kind: 'tailFeathers', scale: 1.1, color: '#3a6ac8' },
+      { kind: 'beak', x: 0.45, scale: 0.6, color: '#e8c048' },
+    ],
+  },
+  /** The ruin tailthief: a masked face, a prehensile conscience. */
+  ruin_tailthief: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'mask', scale: 0.6, color: '#e8dcc8' },
+      { kind: 'ears', scale: 0.7 },
+      { kind: 'tail', params: { len: 1.3, tuft: true } },
+      { kind: 'eyes', color: '#2a2026', params: { spread: 0.4, dist: 0.52, size: 0.1 } },
+    ],
+  },
+  /** The manor mouser: the house's one working resident. */
+  manor_mouser: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'ears', scale: 0.85 },
+      { kind: 'whiskers', scale: 0.95 },
+      { kind: 'tail', params: { len: 1.1, tuft: false } },
+      { kind: 'eyes', color: '#9ae848', params: { spread: 0.42, dist: 0.55, size: 0.1 } },
+    ],
+  },
+  /** The soul minnow: a sliver of someone, still swimming. */
+  soul_minnow: {
+    parts: [
+      { kind: 'disc', scale: 0.65, role: 'glow', alpha: 0.8 },
+      { kind: 'fins', scale: 0.7, alpha: 0.6 },
+      { kind: 'tailFin', scale: 0.75, alpha: 0.7 },
+      { kind: 'soulGauze', scale: 0.6, alpha: 0.5 },
+    ],
+    shadowScale: 0.3,
+  },
+
   // =========================================== THE TRUE NATIVES (the lair fabric)
   /** THE YETI: a shag-walled bulk under frost-matted fur — ruff and mane
    *  carrying the silhouette, icicles beard the jaw, long talons forward,

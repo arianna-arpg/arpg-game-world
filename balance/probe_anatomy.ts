@@ -40,6 +40,12 @@ import type { Actor } from '../src/engine/actor';
 // boot against keeps its existing order.
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES } from '../src/data/zones';
+// THE AMBIENT CENSUS's sources (the wildlife-pass coverage pin at the tail):
+// the biome roster the coverage floor sweeps, and the engine's own
+// objective-exemption tag set — the census judges by the predicate the
+// scoreboard actually reads, never a copy.
+import { BIOMES } from '../src/world/biomes';
+import { AMBIENT_TAGS } from '../src/engine/world';
 import { SIDEZONES } from '../src/data/sidezones';
 import { PROLOGUE_SCENE, SCENES } from '../src/data/scenes';
 import { WORLDBOSS_SURGE } from '../src/packages/defs/worldboss';
@@ -525,6 +531,77 @@ function rigComposite(id: string, dx = 340): Actor {
   check('seat census: the sweep resolves real seats (the leviathan on its wallow)',
     seats.get('marsh_leviathan') === 'landmark:leviathan_wallow' && seats.size > 300,
     `${seats.size} seated; leviathan → ${seats.get('marsh_leviathan') ?? 'NOWHERE'}`);
+}
+
+// ================================== THE AMBIENT CENSUS (wildlife pass 2)
+// Every biome breathes or carries a written ruling — the coverage floor the
+// ambient expansion promised, pinned so a NEW biome can never fall silent by
+// accident and no ambience can ever wall an objective unnoticed.
+{
+  const RULED_SILENT = new Set([
+    'eldritch', // dead air IS the blight's ambience (the Incursion pours its own kin)
+    'ocean',    // structurally unreadable: sea zones are `special` — spawnWildlife never looks
+    'river',    // virtual course biome worn by NO zone — a row could never spawn
+  ]);
+  // 1 · The coverage floor: every registered biome keeps a roster or a ruling,
+  //     and no roster runs thin. ('plains' is the untagged-zone fallback key.)
+  const silent = Object.keys(BIOMES).filter(b => !WILDLIFE[b] && !RULED_SILENT.has(b));
+  check(`wildlife census: every biome breathes or is ruled silent (${Object.keys(BIOMES).length} biomes)`,
+    silent.length === 0, silent.join(','));
+  const thin = Object.entries(WILDLIFE).filter(([, rows]) => rows.length < 3).map(([k]) => k);
+  check('wildlife census: no roster runs thinner than 3 rows', thin.length === 0, thin.join(','));
+  const ruledYetRostered = [...RULED_SILENT].filter(b => WILDLIFE[b]);
+  check('wildlife census: a ruling and a roster never coexist', ruledYetRostered.length === 0,
+    ruledYetRostered.join(','));
+  const strayKeys = Object.keys(WILDLIFE).filter(k => k !== 'plains' && !BIOMES[k]);
+  check('wildlife census: every roster key names a real biome (plus the plains fallback)',
+    strayKeys.length === 0, strayKeys.join(','));
+
+  // 2 · The ambient-tag contract: a wildlife body is objective-exempt (tag in
+  //     AMBIENT_TAGS, or def-level noObjective/passive) or stands on the FROZEN
+  //     counted-texture allowlist — killable, reachable ordinary population the
+  //     design deliberately counts (crows, folk, the gilded pair, two re-seated
+  //     fighters). Growing that list is a deliberate act, never drift.
+  const COUNTED_TEXTURE = new Set([
+    'gilded_scamp', 'gilded_hoarder', // the payout pair ('gilded_hoard' keys the spill)
+    'crofter', 'village_warden',      // farmland folk (warden = live holdfast guardian tag)
+    'carrion_crow', 'quag_gel', 'bloat_mother', 'pale_watcher', // legacy counted texture
+    'tide_skitter', 'crag_condor',    // re-seated fighters (shore skirmisher, dive-wheel)
+  ]);
+  const tagBreaches: string[] = [];
+  for (const [k, rows] of Object.entries(WILDLIFE)) {
+    for (const r of rows) {
+      const d = MONSTERS[r.id];
+      if (!d) { tagBreaches.push(`${k}:${r.id} MISSING`); continue; }
+      const exempt = (d.tag && AMBIENT_TAGS.has(d.tag)) || d.noObjective || d.passive;
+      if (!exempt && !COUNTED_TEXTURE.has(r.id)) tagBreaches.push(`${k}:${r.id} tag '${d.tag ?? '(none)'}'`);
+    }
+  }
+  check('wildlife census: every body is objective-exempt or frozen counted texture',
+    tagBreaches.length === 0, tagBreaches.slice(0, 5).join('; '));
+
+  // 3 · The differentiation debuts hold their shape (the census must be able
+  //     to FAIL — pin the marquee levers, not just existence):
+  //     the sea murmurates, the lamps stay lit, the waltzers stay slow, the
+  //     mouser drowses, and the thief still steals-and-exits.
+  const flocked = (id: string): boolean => !!(MONSTERS[id]?.brain as any)?.behavior?.flock;
+  check('wildlife debuts: the drowned country murmurates (silver_shoal flocks in deepsea)',
+    flocked('silver_shoal') && (WILDLIFE.deepsea ?? []).some(r => r.id === 'silver_shoal'));
+  check('wildlife debuts: the sky-realm family flies its three moods (dove/darter/star)',
+    ['aether', 'aether_drift', 'aether_vesper', 'aether_civitas', 'aether_stream']
+      .every(k => (WILDLIFE[k] ?? []).length >= 3) && flocked('gleam_dove') && flocked('zephyr_darter'));
+  check('wildlife debuts: the carried lamps stay lit (moth/jelly/minnow wear light)',
+    ['cinder_moth', 'star_moth', 'soul_moth', 'moon_jelly', 'soul_minnow'].every(id => !!MONSTERS[id]?.light));
+  check('wildlife debuts: the waltzers stay slow (snail/polyp/salamander/jelly ≤ 60)',
+    ['dripstone_snail', 'wandering_polyp', 'vent_salamander', 'moon_jelly', 'spore_puff']
+      .every(id => (MONSTERS[id]?.base.moveSpeed ?? 999) <= 60));
+  check('wildlife debuts: the mouser drowses on watch and hunts by hunger (the manor drama)',
+    !!MONSTERS.manor_mouser?.watch?.sleep && !!MONSTERS.manor_mouser?.brain?.drives?.hunger
+    && (WILDLIFE.manor ?? []).some(r => r.id === 'manor_mouser')
+    && (WILDLIFE.manor ?? []).some(r => r.id === 'gutter_rat'));
+  check('wildlife debuts: the tailthief steals and exits (looter + refuge, critter-tagged)',
+    !!MONSTERS.ruin_tailthief?.looter && !!MONSTERS.ruin_tailthief?.refuge
+    && MONSTERS.ruin_tailthief?.tag === 'critter');
 }
 
 console.log(failed === 0 ? '\nprobe_anatomy: ALL GREEN' : `\nprobe_anatomy: ${failed} FAILURE(S)`);
