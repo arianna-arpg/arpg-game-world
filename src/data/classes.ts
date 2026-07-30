@@ -90,7 +90,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'berserker', name: 'Berserker',
     look: 'class_berserker',
-    description: 'Trades safety for speed and fury. Heavy strikes stack into a whirlwind of carnage — and leech life back.',
+    description: 'Trades safety for speed and fury. Heavy strikes stack into a whirlwind of carnage that leeches life back.',
     color: '#e05545',
     attributes: {
       strength: 14, prowess: 12, fortitude: 4,
@@ -146,7 +146,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'summoner', name: 'Summoner',
     look: 'class_summoner',
-    description: 'Commands the dead and the elemental. Your minions run on the same skills monsters do — because they are monsters.',
+    description: 'Commands the dead and the elemental. Your minions run on the same skills monsters do, because they are monsters.',
     color: '#b06bd4',
     attributes: {
       strength: 2, prowess: 2, fortitude: 0,
@@ -218,7 +218,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'necromancer', name: 'Necromancer',
     look: 'class_necromancer',
-    description: 'Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom that outlasts every argument — the classic corpse-and-poison artisan.',
+    description: 'Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom that outlasts every argument. The classic corpse-and-poison artisan.',
     color: '#a6c87a',
     attributes: {
       strength: 2, prowess: 0, fortitude: 2,
@@ -232,7 +232,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'cleric', name: 'Cleric',
     look: 'class_cleric',
-    description: 'The line holds because someone holds it together. Mends the wounded, sanctifies the ground, and swings a blessed arc when the fight closes in — the support archetype, played straight.',
+    description: 'The line holds because someone holds it together. Mends the wounded, sanctifies the ground, and swings a blessed arc when the fight closes in. The support archetype, played straight.',
     color: '#8ae0a8',
     attributes: {
       strength: 6, prowess: 0, fortitude: 4,
@@ -246,7 +246,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'tamer', name: 'Tamer',
     look: 'class_tamer',
-    description: 'A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus, and fights beside the bond — the pet at the front, the whistle in reserve.',
+    description: 'A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus, and fights beside the bond: the pet at the front, the whistle in reserve.',
     color: '#a8c87a',
     attributes: {
       strength: 2, prowess: 2, fortitude: 4,
@@ -271,7 +271,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'breaker', name: 'Breaker',
     look: 'class_breaker',
-    description: 'Stances are load-bearing. Crumple the poise, quake the ground under the rout, and pass The Verdict on whatever kneels.',
+    description: 'Stances are structure. Crumple the poise, quake the ground under the rout, and pass The Verdict on whatever kneels.',
     color: '#c8824a',
     attributes: {
       strength: 20, prowess: 6, fortitude: 12,
@@ -387,7 +387,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'warlord', name: 'Warlord',
     look: 'class_warlord',
-    description: 'Wars are won by whoever the field believes in. Plant the colors, name the first to die, and dare the rest to object.',
+    description: 'Wars go to whoever the field believes in. Plant the colors, name the first to die, and dare the rest to object.',
     color: '#e0b060',
     attributes: {
       strength: 12, prowess: 8, fortitude: 6,
@@ -507,7 +507,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'wallwright', name: 'Wallwright',
     look: 'class_wallwright',
-    description: 'Architecture, weaponized. Raises stone where stone is needed, charges through what it raised, and swings demolition arcs that leave survivors load-bearing no more — the wall is a weapon that hasn\'t fallen yet.',
+    description: 'Architecture, weaponized. Raises stone where stone is needed, charges through what it raised, and swings demolition arcs that knock the last props out from under survivors. The wall is a weapon that hasn\'t fallen yet.',
     color: '#b0a890',
     attributes: {
       strength: 18, prowess: 4, fortitude: 10,
@@ -523,7 +523,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'matador', name: 'Matador',
     look: 'class_matador',
-    description: 'The fight as theatre with exactly one critic. Bait the charge, step through the horns, and schedule the third act — whatever survives its own momentum answers to the blade.',
+    description: 'The fight as theatre with exactly one critic. Bait the charge, step through the horns, and schedule the third act: whatever survives its own momentum answers to the blade.',
     color: '#d84a5a',
     attributes: {
       strength: 16, prowess: 16, fortitude: 0,
@@ -539,7 +539,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'flagellant', name: 'Flagellant',
     look: 'class_flagellant',
-    description: 'Pain, notarized. A covenant that feeds on its keeper and repays exactly when the flesh runs short — whole men owe; the broken are owed. The order\'s arithmetic has never once been audited.',
+    description: 'Pain, notarized. A covenant that feeds on its keeper and repays exactly when the flesh runs short. Whole men owe; the broken are owed. The order\'s arithmetic has never once been audited.',
     color: '#c05838',
     attributes: {
       strength: 18, prowess: 0, fortitude: 16,
@@ -571,7 +571,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'sharper', name: 'Sharper',
     look: 'class_sharper',
-    description: 'Probability owes money. Cards thrown flat with every suit riding, odds palmed until the house pays wrong, and an exit practiced quiet — nobody can prove anything, which is the trick.',
+    description: 'Probability owes money. Cards thrown flat with every suit riding, odds palmed until the house pays wrong, and an exit practiced quiet. Nobody can prove anything, which is the trick.',
     color: '#c8b078',
     attributes: {
       strength: 0, prowess: 4, fortitude: 0,
@@ -603,7 +603,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'runeweaver', name: 'Runeweaver',
     look: 'class_runeweaver',
-    description: 'Spells are sentences; runes are the words; patience is the grammar. Bank the weave sigil by sigil and release it as whatever the pattern spells — the invocation fabric\'s own class.',
+    description: 'Spells are sentences; runes are the words; patience is the grammar. Bank the weave sigil by sigil and release it as whatever the pattern spells. The invocation fabric\'s own class.',
     color: '#8a9ae8',
     attributes: {
       strength: 0, prowess: 0, fortitude: 0,
@@ -619,7 +619,7 @@ export const CLASSES: ClassDef[] = [
   {
     id: 'resonator', name: 'Resonator',
     look: 'class_resonator',
-    description: 'Everything rings if struck sincerely. Strikes leave bodies humming one bright tone; the chord, played fortissimo, shatters loudest at whatever note the flesh confessed — the attunement law made a discipline.',
+    description: 'Everything rings if struck sincerely. Strikes leave bodies humming one bright tone; the chord, played fortissimo, shatters loudest at whatever note the flesh confessed. The attunement law made a discipline.',
     color: '#88c8b8',
     attributes: {
       strength: 6, prowess: 0, fortitude: 0,

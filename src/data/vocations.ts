@@ -272,7 +272,7 @@ const WARBRINGER: VocationDef = {
 const GRAVEBINDER_LAYOUT = fan(210); // spine points at wis_start (up-left)
 const GRAVEBINDER: VocationDef = {
   id: 'gravebinder', name: 'Gravebinder',
-  blurb: 'The dead do not rest — they serve. Legions that endure, envenom, and refuse the second death.',
+  blurb: 'The dead do not rest; they serve. Legions that endure, envenom, and refuse the second death.',
   color: '#9a5ad8',
   classId: 'summoner',
   tree: [
@@ -280,9 +280,9 @@ const GRAVEBINDER: VocationDef = {
     { id: 's2', name: 'Grave-Mender', description: 'Minions regenerate 2% of their life per second', kind: 'small', ...GRAVEBINDER_LAYOUT.s2, mods: [mod('minionRegenPct', 'flat', 0.02)], links: ['root'] },
     { id: 's3', name: 'Restless Dead', description: '15% increased minion movement speed', kind: 'small', ...GRAVEBINDER_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.15)], links: ['root'] },
     { id: 'n1', name: 'Legion Eternal', description: '+1 maximum minion; 25% increased minion life', kind: 'notable', ...GRAVEBINDER_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1), mod('minionLife', 'increased', 0.25)], links: ['s1'] },
-    { id: 'n2', name: 'Undying Covenant', description: 'ALL your minion skills gain Undying Loyalty — slain minions fight on for 3 more seconds (stacks with the gem)', kind: 'notable', ...GRAVEBINDER_LAYOUT.n2, mods: [mod('minionUndying', 'flat', 3, ['minion'])], links: ['s1', 's3'] },
+    { id: 'n2', name: 'Undying Covenant', description: 'ALL your minion skills gain Undying Loyalty: slain minions fight on for 3 more seconds (stacks with the gem)', kind: 'notable', ...GRAVEBINDER_LAYOUT.n2, mods: [mod('minionUndying', 'flat', 3, ['minion'])], links: ['s1', 's3'] },
     { id: 'n3', name: 'Venom Communion', description: 'Minions have 25% chance to Poison on hit', kind: 'notable', ...GRAVEBINDER_LAYOUT.n3, mods: [mod('minionApply_poison', 'flat', 0.25)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Phantasmal Retinue', description: 'Gain Phantasm — your hits, and your minions’ hits, conjure raging phantasms', kind: 'notable', ...GRAVEBINDER_LAYOUT.n4, mods: [mod('proc_summon_phantasm', 'flat', 1)], links: ['s2'] },
+    { id: 'n4', name: 'Phantasmal Retinue', description: 'Gain Phantasm: your hits, and your minions’ hits, conjure raging phantasms', kind: 'notable', ...GRAVEBINDER_LAYOUT.n4, mods: [mod('proc_summon_phantasm', 'flat', 1)], links: ['s2'] },
     { id: 'k1', name: 'Deathless Court', description: '20% more minion damage; 20% more minion life', kind: 'keystone', ...GRAVEBINDER_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionLife', 'more', 0.2)], links: ['n2', 'n3'] },
   ],
   quest: {
@@ -564,11 +564,11 @@ const GREENWARDEN: VocationDef = {
     { id: 's2', name: 'Thorn-Calloused', description: '+10 thorns; 10% increased armor', kind: 'small', ...GREENWARDEN_LAYOUT.s2, mods: [mod('thorns', 'flat', 10), mod('armor', 'increased', 0.1)], links: ['root'] },
     { id: 's3', name: 'Sap-Blooded', description: '+2 life regeneration per second', kind: 'small', ...GREENWARDEN_LAYOUT.s3, mods: [mod('lifeRegen', 'flat', 2)], links: ['root'] },
     { id: 'n1', name: 'Verdant Communion', description: 'Linger near living wood (trees, thickets, your own saplings) and the green knits you: rapid life regeneration while you commune', kind: 'notable', ...GREENWARDEN_LAYOUT.n1, mods: [mod('attune_verdant_communion', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Seedbearer', description: 'Living saplings spring up in your footsteps and wilt away behind you — the forest travels with its warden', kind: 'notable', ...GREENWARDEN_LAYOUT.n2, mods: [mod('terraform_sapling_ring', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n2', name: 'Seedbearer', description: 'Living saplings spring up in your footsteps and wilt away behind you. The forest travels with its warden', kind: 'notable', ...GREENWARDEN_LAYOUT.n2, mods: [mod('terraform_sapling_ring', 'flat', 1)], links: ['s1', 's3'] },
     { id: 'n3', name: 'Briar Pact', description: 'Projectiles have 15% chance to Root; 25% increased damage against Rooted enemies', kind: 'notable', ...GREENWARDEN_LAYOUT.n3, mods: [mod('apply_rooted', 'flat', 0.15, ['projectile']), mod('damageVs_rooted', 'flat', 0.25)], links: ['s3', 's2'] },
     { id: 'n4', name: 'Wildveined', description: 'Projectiles: 20% chance to Poison; 15% increased ailment magnitude', kind: 'notable', ...GREENWARDEN_LAYOUT.n4, mods: [mod('apply_poison', 'flat', 0.2, ['projectile']), mod('statusMagnitude', 'increased', 0.15, ['projectile'])], links: ['s2'] },
     { id: 'k1', name: 'Heart of the Forest', description: 'Your saplings spring up twice as fast; +2% of maximum life regenerated per second; 10% more projectile damage', kind: 'keystone', ...GREENWARDEN_LAYOUT.k1, mods: [mod('terraform_sapling_ring', 'flat', 1), mod('lifeRegenPct', 'flat', 0.02), mod('damage', 'more', 0.1, ['projectile'])], links: ['n2', 'n3'] },
-    { id: 'n5', name: 'Bramble Ward', description: 'Your saplings FIGHT — thorned canes lash your enemies while the growth stands', kind: 'notable', ...p(330 + 90, 210), mods: [mod('terraformFx_sapling_ring', 'flat', 1)], links: ['s2'] },
+    { id: 'n5', name: 'Bramble Ward', description: 'Your saplings FIGHT: thorned canes lash your enemies while the growth stands', kind: 'notable', ...p(330 + 90, 210), mods: [mod('terraformFx_sapling_ring', 'flat', 1)], links: ['s2'] },
   ],
   quest: {
     offerAtLevel: 28,
@@ -906,14 +906,14 @@ const STORMWEAVER: VocationDef = {
 const SPELLBLADE_LAYOUT = fan(185); // spine → int_start (offset from the Archmage's 170)
 const SPELLBLADE: VocationDef = {
   id: 'spellblade', name: 'Spellblade',
-  blurb: 'The blade asks; the sigil answers. Neither is the argument — the alternation is.',
+  blurb: 'The blade asks; the sigil answers. Neither is the argument. The alternation is.',
   color: '#b8a8e8',
   classId: 'magician',
   tree: [
     { id: 's1', name: 'Edge Discipline', description: '12% increased melee damage', kind: 'small', ...SPELLBLADE_LAYOUT.s1, mods: [mod('damage', 'increased', 0.12, ['melee'])], links: ['root'] },
     { id: 's2', name: 'Sigil Discipline', description: '12% increased spell damage', kind: 'small', ...SPELLBLADE_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12, ['spell'])], links: ['root'] },
     { id: 's3', name: 'Measured Breath', description: '6% increased attack and cast speed', kind: 'small', ...SPELLBLADE_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.06), mod('castSpeed', 'increased', 0.06)], links: ['root'] },
-    { id: 'n1', name: 'Blade-and-Vein', description: 'THE WEAVE: gain the Blade-and-Vein grammar — an attack and a spell back-to-back surge your attack and cast speed, stacking while you keep alternating', kind: 'notable', ...SPELLBLADE_LAYOUT.n1, mods: [mod('combo_spellblade_weave', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n1', name: 'Blade-and-Vein', description: 'THE WEAVE: gain the Blade-and-Vein grammar. An attack and a spell back-to-back surge your attack and cast speed, stacking while you keep alternating', kind: 'notable', ...SPELLBLADE_LAYOUT.n1, mods: [mod('combo_spellblade_weave', 'flat', 1)], links: ['s1', 's3'] },
     { id: 'n2', name: 'Woven Steel', description: 'While your last three casts were all different skills: 15% increased damage', kind: 'notable', ...SPELLBLADE_LAYOUT.n2, mods: [mod('damage', 'increased', 0.15, undefined, 'comboVaried')], links: ['s1'] },
     { id: 'n3', name: 'Long Measure', description: 'Your combo windows stay open 25% longer; 10% increased skill effect duration', kind: 'notable', ...SPELLBLADE_LAYOUT.n3, mods: [mod('comboWindow', 'increased', 0.25), mod('effectDuration', 'increased', 0.1)], links: ['s3', 's2'] },
     { id: 'n4', name: 'Counterpoint Guard', description: 'While your last three casts were all different skills: 10% less damage taken', kind: 'notable', ...SPELLBLADE_LAYOUT.n4, mods: [mod('damageTaken', 'more', -0.1, undefined, 'comboVaried')], links: ['s2'] },
@@ -1104,7 +1104,7 @@ const CORSAIR: VocationDef = {
 const ASHBORN_LAYOUT = fan(170); // spine → int_start
 const ASHBORN: VocationDef = {
   id: 'ashborn', name: 'Ashborn',
-  blurb: 'Everything burns eventually. Your gift is the word "now" — and the patience to watch it finish.',
+  blurb: 'Everything burns eventually. Your gift is the word "now", and the patience to watch it finish.',
   color: '#ff8a3a',
   classId: 'pyromancer',
   tree: [
@@ -1172,7 +1172,7 @@ const ASHBORN: VocationDef = {
 const EXSANGUINATOR_LAYOUT = fan(290); // spine → fin_start
 const EXSANGUINATOR: VocationDef = {
   id: 'exsanguinator', name: 'Exsanguinator',
-  blurb: 'Anyone can spill blood. The craft is in the ledger — every vein an account, every wound a withdrawal on schedule.',
+  blurb: 'Anyone can spill blood. The craft is in the ledger: every vein an account, every wound a withdrawal on schedule.',
   color: '#c03a4a',
   classId: 'assassin',
   tree: [
@@ -1180,7 +1180,7 @@ const EXSANGUINATOR: VocationDef = {
     { id: 's2', name: 'Surgical Care', description: '+4% critical strike chance', kind: 'small', ...EXSANGUINATOR_LAYOUT.s2, mods: [mod('critChance', 'flat', 0.04)], links: ['root'] },
     { id: 's3', name: 'Steady Wrist', description: '8% increased attack speed', kind: 'small', ...EXSANGUINATOR_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.08)], links: ['root'] },
     { id: 'n1', name: 'Opened Veins', description: 'Attacks have +15% chance to Bleed; 25% increased physical ailment magnitude', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n1, mods: [mod('apply_bleed', 'flat', 0.15, ['attack']), mod('statusMagnitude', 'increased', 0.25, ['physical'])], links: ['s1'] },
-    { id: 'n2', name: 'Ruptured Veins', description: 'Gain Ruptured Veins — your hits load Hemorrhage, and reloading it POPS the damage still owed', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n2, mods: [mod('proc_ruptured_veins', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n2', name: 'Ruptured Veins', description: 'Gain Ruptured Veins: your hits load Hemorrhage, and reloading it POPS the damage still owed', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n2, mods: [mod('proc_ruptured_veins', 'flat', 1)], links: ['s1', 's3'] },
     { id: 'n3', name: 'The Deep Wound', description: '50% increased Hemorrhage pop damage; attacks have 10% chance to Hemorrhage', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n3, mods: [mod('popPower_hemorrhage', 'flat', 0.5), mod('apply_hemorrhage', 'flat', 0.1, ['attack'])], links: ['s3', 's2'] },
     { id: 'n4', name: 'Bloodletting', description: '8% of bleed damage leeched as life; 5% increased damage per Bleed stack', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n4, mods: [mod('dotLeech_bleed', 'flat', 0.08), mod('damageVs_bleed', 'flat', 0.05)], links: ['s2'] },
     { id: 'k1', name: 'Exsanguination', description: '+2 physical ailment stacks; 50% increased Hemorrhage pop damage; 12% more physical ailment magnitude', kind: 'keystone', ...EXSANGUINATOR_LAYOUT.k1, mods: [mod('ailmentStacks', 'flat', 2, ['physical']), mod('popPower_hemorrhage', 'flat', 0.5), mod('statusMagnitude', 'more', 0.12, ['physical'])], links: ['n2', 'n3'] },
@@ -1270,7 +1270,7 @@ const STONEWROUGHT: VocationDef = {
     { id: 's2', name: 'Bones of the Hill', description: '+30 maximum life', kind: 'small', ...STONEWROUGHT_LAYOUT.s2, mods: [mod('life', 'flat', 30)], links: ['root'] },
     { id: 's3', name: 'Patient Weight', description: '20% increased stagger window', kind: 'small', ...STONEWROUGHT_LAYOUT.s3, mods: [mod('staggerWindow', 'increased', 0.2)], links: ['root'] },
     { id: 'n1', name: 'Stone Communion', description: 'Linger near living rock (cliffs, boulders, your own cairns) and take the mountain\'s patience: armor, poise, and quiet endurance', kind: 'notable', ...STONEWROUGHT_LAYOUT.n1, mods: [mod('attune_stone_communion', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Cairnraiser', description: 'Waymarks of raised stone follow your steps and crumble behind you — the mountain travels with its child', kind: 'notable', ...STONEWROUGHT_LAYOUT.n2, mods: [mod('terraform_stone_cairns', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n2', name: 'Cairnraiser', description: 'Waymarks of raised stone follow your steps and crumble behind you. The mountain travels with its child', kind: 'notable', ...STONEWROUGHT_LAYOUT.n2, mods: [mod('terraform_stone_cairns', 'flat', 1)], links: ['s1', 's3'] },
     { id: 'n3', name: "Mountain's Grip", description: '+40 knockback strength; 30% increased poise damage', kind: 'notable', ...STONEWROUGHT_LAYOUT.n3, mods: [mod('knockback', 'flat', 40), mod('poiseDamage', 'increased', 0.3)], links: ['s3', 's2'] },
     { id: 'n4', name: 'Bedrock Blood', description: '+3 life regeneration per second; 15% increased armor', kind: 'notable', ...STONEWROUGHT_LAYOUT.n4, mods: [mod('lifeRegen', 'flat', 3), mod('armor', 'increased', 0.15)], links: ['s2'] },
     { id: 'k1', name: 'The Mountain Walks', description: 'Your cairns rise twice as fast. While standing still: 20% more armor and 8% less damage taken', kind: 'keystone', ...STONEWROUGHT_LAYOUT.k1, mods: [mod('terraform_stone_cairns', 'flat', 1), mod('armor', 'more', 0.2, undefined, 'stationary'), mod('damageTaken', 'more', -0.08, undefined, 'stationary')], links: ['n2', 'n3'] },
@@ -1360,11 +1360,11 @@ const HARBORWARDEN: VocationDef = {
     { id: 's1', name: 'Dockside Ledger', description: 'Hires cost 10% less', kind: 'small', ...HARBORWARDEN_LAYOUT.s1, mods: [mod('mercHireDiscount', 'flat', 0.10)], links: ['root'] },
     { id: 's2', name: 'Sea Legs', description: '+25 maximum life', kind: 'small', ...HARBORWARDEN_LAYOUT.s2, mods: [mod('life', 'flat', 25)], links: ['root'] },
     { id: 's3', name: 'Harbor Watch', description: '12% increased armor', kind: 'small', ...HARBORWARDEN_LAYOUT.s3, mods: [mod('armor', 'increased', 0.12)], links: ['root'] },
-    { id: 'n1', name: 'Fair Company', description: 'Your hired blades no longer harden the world — enemies scale as if you stood alone, company and all', kind: 'notable', ...HARBORWARDEN_LAYOUT.n1, mods: [mod('mercEase', 'flat', 1)], links: ['s1'] },
+    { id: 'n1', name: 'Fair Company', description: 'Your hired blades no longer harden the world: enemies scale as if you stood alone, company and all', kind: 'notable', ...HARBORWARDEN_LAYOUT.n1, mods: [mod('mercEase', 'flat', 1)], links: ['s1'] },
     { id: 'n2', name: 'Iron Company', description: 'Your hired blades gain 20% increased life and damage', kind: 'notable', ...HARBORWARDEN_LAYOUT.n2, mods: [mod('mercVigor', 'flat', 0.2)], links: ['s1', 's3'] },
     { id: 'n3', name: 'Shared Purse', description: 'Hires cost a further 15% less; 10% increased armor', kind: 'notable', ...HARBORWARDEN_LAYOUT.n3, mods: [mod('mercHireDiscount', 'flat', 0.15), mod('armor', 'increased', 0.1)], links: ['s3', 's2'] },
-    { id: 'n4', name: "Warden's Table", description: '+30 maximum life; +2 life regeneration per second — the harbor feeds its warden', kind: 'notable', ...HARBORWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 30), mod('lifeRegen', 'flat', 2)], links: ['s2'] },
-    { id: 'k1', name: 'The Free Company', description: 'Field a SECOND blade under contract — one more seat in your company, hired through the same muster', kind: 'keystone', ...HARBORWARDEN_LAYOUT.k1, mods: [mod('mercRetinue', 'flat', 1)], links: ['n1', 'n2'] },
+    { id: 'n4', name: "Warden's Table", description: '+30 maximum life; +2 life regeneration per second. The harbor feeds its warden', kind: 'notable', ...HARBORWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 30), mod('lifeRegen', 'flat', 2)], links: ['s2'] },
+    { id: 'k1', name: 'The Free Company', description: 'Field a SECOND blade under contract: one more seat in your company, hired through the same muster', kind: 'keystone', ...HARBORWARDEN_LAYOUT.k1, mods: [mod('mercRetinue', 'flat', 1)], links: ['n1', 'n2'] },
   ],
   quest: {
     offerAtLevel: 12, // the harbor band — sieges are early-world content
@@ -1446,10 +1446,10 @@ const PACKWARDEN: VocationDef = {
     { id: 's1', name: 'Denspeech', description: '20% increased companion damage', kind: 'small', ...PACKWARDEN_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
     { id: 's2', name: 'Thick Pelt', description: 'Companions have 25% increased life', kind: 'small', ...PACKWARDEN_LAYOUT.s2, mods: [mod('minionLife', 'increased', 0.25)], links: ['root'] },
     { id: 's3', name: 'Loping Gait', description: '15% increased companion movement speed; 5% increased movement speed', kind: 'small', ...PACKWARDEN_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.15), mod('moveSpeed', 'increased', 0.05)], links: ['root'] },
-    { id: 'n1', name: 'Second Bond', description: '+1 maximum minion — the den holds another', kind: 'notable', ...PACKWARDEN_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
+    { id: 'n1', name: 'Second Bond', description: '+1 maximum minion. The den holds another', kind: 'notable', ...PACKWARDEN_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
     { id: 'n2', name: 'Red in Tooth', description: 'Companions have 25% chance to Poison on hit; 15% increased companion damage', kind: 'notable', ...PACKWARDEN_LAYOUT.n2, mods: [mod('minionApply_poison', 'flat', 0.25), mod('minionDamage', 'increased', 0.15)], links: ['s1', 's3'] },
     { id: 'n3', name: 'Den-Mended', description: 'Companions regenerate 3% of their life per second', kind: 'notable', ...PACKWARDEN_LAYOUT.n3, mods: [mod('minionRegenPct', 'flat', 0.03)], links: ['s3', 's2'] },
-    { id: 'n4', name: 'Warden\'s Hide', description: '+40 maximum life; 15% increased armor — the pack defends its keeper', kind: 'notable', ...PACKWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 40), mod('armor', 'increased', 0.15)], links: ['s2'] },
+    { id: 'n4', name: 'Warden\'s Hide', description: '+40 maximum life; 15% increased armor. The pack defends its keeper', kind: 'notable', ...PACKWARDEN_LAYOUT.n4, mods: [mod('life', 'flat', 40), mod('armor', 'increased', 0.15)], links: ['s2'] },
     { id: 'k1', name: 'One Body, Many Teeth', description: '20% more companion damage; companions fight on for 2 more seconds when slain', kind: 'keystone', ...PACKWARDEN_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionUndying', 'flat', 2)], links: ['n2', 'n3'] },
   ],
   quest: {
@@ -1480,7 +1480,7 @@ const PACKWARDEN: VocationDef = {
 const GROUNDBREAKER_LAYOUT = fan(105); // spine → str_start (offset from the Warbringer's 90)
 const GROUNDBREAKER: VocationDef = {
   id: 'groundbreaker', name: 'Groundbreaker',
-  blurb: 'Stances are load-bearing and so is the ground. Break both, then bill whatever is still standing.',
+  blurb: 'Stances are structure and so is the ground. Break both, then bill whatever is still standing.',
   color: '#c8824a',
   classId: 'breaker',
   tree: [
@@ -1526,8 +1526,8 @@ const SPEARHEAD: VocationDef = {
     { id: 's1', name: 'Point of Contact', description: '15% increased melee damage; +20 knockback strength', kind: 'small', ...SPEARHEAD_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['melee']), mod('knockback', 'flat', 20)], links: ['root'] },
     { id: 's2', name: 'March Discipline', description: '8% increased movement speed', kind: 'small', ...SPEARHEAD_LAYOUT.s2, mods: [mod('moveSpeed', 'increased', 0.08)], links: ['root'] },
     { id: 's3', name: 'Shieldwall Shoulders', description: '15% increased armor; +25 maximum life', kind: 'small', ...SPEARHEAD_LAYOUT.s3, mods: [mod('armor', 'increased', 0.15), mod('life', 'flat', 25)], links: ['root'] },
-    { id: 'n1', name: 'Thrown Gate', description: '+35% shove authority — the heavy learn to move for you', kind: 'notable', ...SPEARHEAD_LAYOUT.n1, mods: [mod('shoveAuthority', 'increased', 0.35)], links: ['s1'] },
-    { id: 'n2', name: 'Momentum Ledger', description: '30% increased impact damage — walls, and whatever you put into them, pay out', kind: 'notable', ...SPEARHEAD_LAYOUT.n2, mods: [mod('impactDamage', 'increased', 0.3)], links: ['s1', 's2'] },
+    { id: 'n1', name: 'Thrown Gate', description: '+35% shove authority. The heavy learn to move for you', kind: 'notable', ...SPEARHEAD_LAYOUT.n1, mods: [mod('shoveAuthority', 'increased', 0.35)], links: ['s1'] },
+    { id: 'n2', name: 'Momentum Ledger', description: '30% increased impact damage. Walls, and whatever you put into them, pay out', kind: 'notable', ...SPEARHEAD_LAYOUT.n2, mods: [mod('impactDamage', 'increased', 0.3)], links: ['s1', 's2'] },
     { id: 'n3', name: 'Unbroken Column', description: '20% increased stagger window; 10% increased armor', kind: 'notable', ...SPEARHEAD_LAYOUT.n3, mods: [mod('staggerWindow', 'increased', 0.2), mod('armor', 'increased', 0.1)], links: ['s2', 's3'] },
     { id: 'n4', name: 'Breach Instinct', description: 'While moving: 10% increased melee damage; 5% increased movement speed', kind: 'notable', ...SPEARHEAD_LAYOUT.n4, mods: [mod('damage', 'increased', 0.1, ['melee'], 'moving'), mod('moveSpeed', 'increased', 0.05)], links: ['s3'] },
     { id: 'k1', name: 'The Gap Is a Door', description: 'While moving: 20% more melee damage. +40 knockback strength', kind: 'keystone', ...SPEARHEAD_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['melee'], 'moving'), mod('knockback', 'flat', 40)], links: ['n2', 'n3'] },
@@ -1574,7 +1574,7 @@ const SWORDSAINT: VocationDef = {
   tree: [
     { id: 's1', name: 'Measured Breath', description: '10% increased attack speed', kind: 'small', ...SWORDSAINT_LAYOUT.s1, mods: [mod('attackSpeed', 'increased', 0.1)], links: ['root'] },
     { id: 's2', name: 'Read the Wrist', description: '15% increased evasion', kind: 'small', ...SWORDSAINT_LAYOUT.s2, mods: [mod('evasion', 'increased', 0.15)], links: ['root'] },
-    { id: 's3', name: 'Longer Cadence', description: '20% increased combo window — the measure forgives a late beat', kind: 'small', ...SWORDSAINT_LAYOUT.s3, mods: [mod('comboWindow', 'increased', 0.2)], links: ['root'] },
+    { id: 's3', name: 'Longer Cadence', description: '20% increased combo window. The measure forgives a late beat', kind: 'small', ...SWORDSAINT_LAYOUT.s3, mods: [mod('comboWindow', 'increased', 0.2)], links: ['root'] },
     { id: 'n1', name: 'Opening Read', description: 'Melee hits: 20% chance to apply Vulnerable', kind: 'notable', ...SWORDSAINT_LAYOUT.n1, mods: [mod('apply_vulnerable', 'flat', 0.2, ['melee'])], links: ['s1'] },
     { id: 'n2', name: 'The Third Stroke Settles', description: '30% increased combo window; 12% increased melee damage', kind: 'notable', ...SWORDSAINT_LAYOUT.n2, mods: [mod('comboWindow', 'increased', 0.3), mod('damage', 'increased', 0.12, ['melee'])], links: ['s3', 's1'] },
     { id: 'n3', name: 'Empty Scabbard Mind', description: '15% increased attack speed; 10% increased evasion', kind: 'notable', ...SWORDSAINT_LAYOUT.n3, mods: [mod('attackSpeed', 'increased', 0.15), mod('evasion', 'increased', 0.1)], links: ['s3', 's2'] },
@@ -1613,10 +1613,10 @@ const PITFIGHTER: VocationDef = {
     { id: 's1', name: 'Knuckle Rhythm', description: '12% increased attack speed', kind: 'small', ...PITFIGHTER_LAYOUT.s1, mods: [mod('attackSpeed', 'increased', 0.12)], links: ['root'] },
     { id: 's2', name: 'Corner Cutman', description: '+30 maximum life; +2 life regeneration per second', kind: 'small', ...PITFIGHTER_LAYOUT.s2, mods: [mod('life', 'flat', 30), mod('lifeRegen', 'flat', 2)], links: ['root'] },
     { id: 's3', name: 'Low Center', description: '15% increased grip power', kind: 'small', ...PITFIGHTER_LAYOUT.s3, mods: [mod('gripPower', 'increased', 0.15)], links: ['root'] },
-    { id: 'n1', name: 'Iron Clinch', description: '30% increased grip power — what you catch, stays caught', kind: 'notable', ...PITFIGHTER_LAYOUT.n1, mods: [mod('gripPower', 'increased', 0.3)], links: ['s3'] },
-    { id: 'n2', name: 'Slippery When Held', description: '40% increased wriggle — nothing keeps YOU, either', kind: 'notable', ...PITFIGHTER_LAYOUT.n2, mods: [mod('wriggle', 'increased', 0.4)], links: ['s3', 's2'] },
+    { id: 'n1', name: 'Iron Clinch', description: '30% increased grip power. What you catch, stays caught', kind: 'notable', ...PITFIGHTER_LAYOUT.n1, mods: [mod('gripPower', 'increased', 0.3)], links: ['s3'] },
+    { id: 'n2', name: 'Slippery When Held', description: '40% increased wriggle. Nothing keeps YOU, either', kind: 'notable', ...PITFIGHTER_LAYOUT.n2, mods: [mod('wriggle', 'increased', 0.4)], links: ['s3', 's2'] },
     { id: 'n3', name: 'Crowd-Pleaser', description: 'Melee hits: 15% chance to apply Vulnerable; 10% increased melee damage', kind: 'notable', ...PITFIGHTER_LAYOUT.n3, mods: [mod('apply_vulnerable', 'flat', 0.15, ['melee']), mod('damage', 'increased', 0.1, ['melee'])], links: ['s1'] },
-    { id: 'n4', name: 'Takedown Artist', description: 'Gain the Takedown measure (seize, then throw, and the crowd pays out) — the Grappler\'s Rhythm combo', kind: 'notable', ...PITFIGHTER_LAYOUT.n4, mods: [mod('combo_grapplers_rhythm', 'flat', 1)], links: ['s1', 's2'] },
+    { id: 'n4', name: 'Takedown Artist', description: 'Gain the Takedown measure (seize, then throw, and the crowd pays out): the Grappler\'s Rhythm combo', kind: 'notable', ...PITFIGHTER_LAYOUT.n4, mods: [mod('combo_grapplers_rhythm', 'flat', 1)], links: ['s1', 's2'] },
     { id: 'k1', name: 'Last One Standing', description: '15% more melee damage; +40 maximum life; 20% increased grip power', kind: 'keystone', ...PITFIGHTER_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['melee']), mod('life', 'flat', 40), mod('gripPower', 'increased', 0.2)], links: ['n3', 'n4'] },
   ],
   quest: {
@@ -1653,7 +1653,7 @@ const THORNWALL: VocationDef = {
     { id: 's2', name: 'Set Footing', description: '15% increased armor', kind: 'small', ...THORNWALL_LAYOUT.s2, mods: [mod('armor', 'increased', 0.15)], links: ['root'] },
     { id: 's3', name: 'Deep Roots', description: '+30 maximum life', kind: 'small', ...THORNWALL_LAYOUT.s3, mods: [mod('life', 'flat', 30)], links: ['root'] },
     { id: 'n1', name: 'Bristling Ledger', description: '+30 thorns; 10% increased armor', kind: 'notable', ...THORNWALL_LAYOUT.n1, mods: [mod('thorns', 'flat', 30), mod('armor', 'increased', 0.1)], links: ['s1'] },
-    { id: 'n2', name: 'Barbed Answer', description: 'Melee hits: 20% chance to Root — stand still and be billed', kind: 'notable', ...THORNWALL_LAYOUT.n2, mods: [mod('apply_rooted', 'flat', 0.2, ['melee'])], links: ['s1', 's2'] },
+    { id: 'n2', name: 'Barbed Answer', description: 'Melee hits: 20% chance to Root. Stand still and be billed', kind: 'notable', ...THORNWALL_LAYOUT.n2, mods: [mod('apply_rooted', 'flat', 0.2, ['melee'])], links: ['s1', 's2'] },
     { id: 'n3', name: 'Paid in Kind', description: '25% increased damage against Rooted enemies', kind: 'notable', ...THORNWALL_LAYOUT.n3, mods: [mod('damageVs_rooted', 'flat', 0.25)], links: ['s2', 's3'] },
     { id: 'n4', name: 'Living Palisade', description: '+3 life regeneration per second; 15% increased stagger window', kind: 'notable', ...THORNWALL_LAYOUT.n4, mods: [mod('lifeRegen', 'flat', 3), mod('staggerWindow', 'increased', 0.15)], links: ['s3'] },
     { id: 'k1', name: 'The Wall Collects', description: '+60 thorns; 15% increased armor; +30 maximum life', kind: 'keystone', ...THORNWALL_LAYOUT.k1, mods: [mod('thorns', 'flat', 60), mod('armor', 'increased', 0.15), mod('life', 'flat', 30)], links: ['n2', 'n3'] },
@@ -1744,7 +1744,7 @@ const ENGINEWRIGHT: VocationDef = {
     { id: 'n1', name: 'Double Charge', description: '20% increased mine damage; 10% increased area of effect', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n1, mods: [mod('damage', 'increased', 0.2, ['mine']), mod('aoeRadius', 'increased', 0.1)], links: ['s3'] },
     { id: 'n2', name: 'Tripwire Patience', description: '20% increased trap damage; 15% increased status magnitude', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n2, mods: [mod('damage', 'increased', 0.2, ['trap']), mod('statusMagnitude', 'increased', 0.15)], links: ['s3', 's2'] },
     { id: 'n3', name: 'Rapid Rearm', description: '20% increased cooldown recovery', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n3, mods: [mod('cooldownRecovery', 'increased', 0.2)], links: ['s1'] },
-    { id: 'n4', name: 'Sapper\'s Instinct', description: '10% increased movement speed; 15% increased evasion — never beside your own work when it goes off', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n4, mods: [mod('moveSpeed', 'increased', 0.1), mod('evasion', 'increased', 0.15)], links: ['s1', 's2'] },
+    { id: 'n4', name: 'Sapper\'s Instinct', description: '10% increased movement speed; 15% increased evasion. Never beside your own work when it goes off', kind: 'notable', ...ENGINEWRIGHT_LAYOUT.n4, mods: [mod('moveSpeed', 'increased', 0.1), mod('evasion', 'increased', 0.15)], links: ['s1', 's2'] },
     { id: 'k1', name: 'The Ground Does the Arguing', description: '20% more mine and trap damage', kind: 'keystone', ...ENGINEWRIGHT_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['mine']), mod('damage', 'more', 0.2, ['trap'])], links: ['n1', 'n2'] },
   ],
   quest: {
@@ -1773,7 +1773,7 @@ const ENGINEWRIGHT: VocationDef = {
 const BANNERLORD_LAYOUT: FanLayout = { ...fan(10), k1: p(5, 330) }; // spine → cha_start; k1 swung clear of its disc (layout min 40)
 const BANNERLORD: VocationDef = {
   id: 'bannerlord', name: 'Bannerlord',
-  blurb: 'Wars are won by whoever the field believes in. Plant the colors, hold the road, and make belief a line item.',
+  blurb: 'Wars go to whoever the field believes in. Plant the colors, hold the road, and make belief a line item.',
   color: '#e0b060',
   classId: 'warlord',
   tree: [
@@ -1781,10 +1781,10 @@ const BANNERLORD: VocationDef = {
     { id: 's2', name: 'Standard-Bearer\'s Arm', description: '12% increased damage', kind: 'small', ...BANNERLORD_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12)], links: ['root'] },
     { id: 's3', name: 'Command Presence', description: '+20 insight; +20 maximum life', kind: 'small', ...BANNERLORD_LAYOUT.s3, mods: [mod('insight', 'flat', 20), mod('life', 'flat', 20)], links: ['root'] },
     { id: 'n1', name: 'The Colors Hold', description: '15% increased armor; 15% increased stagger window', kind: 'notable', ...BANNERLORD_LAYOUT.n1, mods: [mod('armor', 'increased', 0.15), mod('staggerWindow', 'increased', 0.15)], links: ['s3'] },
-    { id: 'n2', name: 'Named and Doomed', description: 'Warcries: 25% chance to apply Vulnerable — what the voice singles out, the field finishes', kind: 'notable', ...BANNERLORD_LAYOUT.n2, mods: [mod('apply_vulnerable', 'flat', 0.25, ['warcry'])], links: ['s1', 's2'] },
+    { id: 'n2', name: 'Named and Doomed', description: 'Warcries: 25% chance to apply Vulnerable. What the voice singles out, the field finishes', kind: 'notable', ...BANNERLORD_LAYOUT.n2, mods: [mod('apply_vulnerable', 'flat', 0.25, ['warcry'])], links: ['s1', 's2'] },
     { id: 'n3', name: 'Rout Arithmetic', description: '25% increased damage against Vulnerable enemies', kind: 'notable', ...BANNERLORD_LAYOUT.n3, mods: [mod('damageVs_vulnerable', 'flat', 0.25)], links: ['s2'] },
     { id: 'n4', name: 'Longer Reveille', description: '20% increased warcry cooldown recovery; +15 insight', kind: 'notable', ...BANNERLORD_LAYOUT.n4, mods: [mod('cooldownRecovery', 'increased', 0.2, ['warcry']), mod('insight', 'flat', 15)], links: ['s1'] },
-    { id: 'k1', name: 'The Field Believes', description: '15% more damage; +30 insight — presence, weaponized', kind: 'keystone', ...BANNERLORD_LAYOUT.k1, mods: [mod('damage', 'more', 0.15), mod('insight', 'flat', 30)], links: ['n2', 'n3'] },
+    { id: 'k1', name: 'The Field Believes', description: '15% more damage; +30 insight. Presence, weaponized', kind: 'keystone', ...BANNERLORD_LAYOUT.k1, mods: [mod('damage', 'more', 0.15), mod('insight', 'flat', 30)], links: ['n2', 'n3'] },
   ],
   quest: {
     steps: [
@@ -1811,14 +1811,14 @@ const BANNERLORD: VocationDef = {
 const WARCHANTER_LAYOUT = fan(20); // spine → cha_start (a half-step off the Bannerlord)
 const WARCHANTER: VocationDef = {
   id: 'warchanter', name: 'Warchanter',
-  blurb: 'The battle keeps time whether it wants to or not — and the meter always resolves. Longer songs, crueler refrains, a Coda worth the wait.',
+  blurb: 'The battle keeps time whether it wants to or not, and the meter always resolves. Longer songs, crueler refrains, a Coda worth the wait.',
   color: '#c890d8',
   classId: 'skald',
   tree: [
     { id: 's1', name: 'Trained Diaphragm', description: '12% increased song damage', kind: 'small', ...WARCHANTER_LAYOUT.s1, mods: [mod('damage', 'increased', 0.12, ['song'])], links: ['root'] },
     { id: 's2', name: 'Carrying Voice', description: '12% increased area of effect', kind: 'small', ...WARCHANTER_LAYOUT.s2, mods: [mod('aoeRadius', 'increased', 0.12)], links: ['root'] },
     { id: 's3', name: 'Steady Meter', description: '10% increased cast speed', kind: 'small', ...WARCHANTER_LAYOUT.s3, mods: [mod('castSpeed', 'increased', 0.1)], links: ['root'] },
-    { id: 'n1', name: 'The Drumbeat', description: 'Gain the Drumbeat measure — cadence itself pays out (the combo grammar reads your casts)', kind: 'notable', ...WARCHANTER_LAYOUT.n1, mods: [mod('combo_drumbeat', 'flat', 1)], links: ['s3'] },
+    { id: 'n1', name: 'The Drumbeat', description: 'Gain the Drumbeat measure: cadence itself pays out (the combo grammar reads your casts)', kind: 'notable', ...WARCHANTER_LAYOUT.n1, mods: [mod('combo_drumbeat', 'flat', 1)], links: ['s3'] },
     { id: 'n2', name: 'Cruel Refrain', description: '20% increased song damage; 15% increased status magnitude', kind: 'notable', ...WARCHANTER_LAYOUT.n2, mods: [mod('damage', 'increased', 0.2, ['song']), mod('statusMagnitude', 'increased', 0.15)], links: ['s1', 's2'] },
     { id: 'n3', name: 'Wide Chorus', description: '15% increased area of effect; 8% increased cast speed', kind: 'notable', ...WARCHANTER_LAYOUT.n3, mods: [mod('aoeRadius', 'increased', 0.15), mod('castSpeed', 'increased', 0.08)], links: ['s2'] },
     { id: 'n4', name: 'Longer Held Note', description: '20% increased combo window; 10% increased song damage', kind: 'notable', ...WARCHANTER_LAYOUT.n4, mods: [mod('comboWindow', 'increased', 0.2), mod('damage', 'increased', 0.1, ['song'])], links: ['s3', 's1'] },
@@ -1857,7 +1857,7 @@ const VEILWEAVER: VocationDef = {
     { id: 's1', name: 'Soft Footfall', description: '15% increased evasion', kind: 'small', ...VEILWEAVER_LAYOUT.s1, mods: [mod('evasion', 'increased', 0.15)], links: ['root'] },
     { id: 's2', name: 'Patter', description: '10% increased cast speed', kind: 'small', ...VEILWEAVER_LAYOUT.s2, mods: [mod('castSpeed', 'increased', 0.1)], links: ['root'] },
     { id: 's3', name: 'Slipping Silhouette', description: '6% increased movement speed', kind: 'small', ...VEILWEAVER_LAYOUT.s3, mods: [mod('moveSpeed', 'increased', 0.06)], links: ['root'] },
-    { id: 'n1', name: 'Turned Ankle, Turned Mind', description: 'Hits: 15% chance to Disorient — the crowd loses the thread', kind: 'notable', ...VEILWEAVER_LAYOUT.n1, mods: [mod('apply_disoriented', 'flat', 0.15)], links: ['s2'] },
+    { id: 'n1', name: 'Turned Ankle, Turned Mind', description: 'Hits: 15% chance to Disorient. The crowd loses the thread', kind: 'notable', ...VEILWEAVER_LAYOUT.n1, mods: [mod('apply_disoriented', 'flat', 0.15)], links: ['s2'] },
     { id: 'n2', name: 'Smoke Ledger', description: '20% increased evasion; 15% increased status magnitude', kind: 'notable', ...VEILWEAVER_LAYOUT.n2, mods: [mod('evasion', 'increased', 0.2), mod('statusMagnitude', 'increased', 0.15)], links: ['s1', 's2'] },
     { id: 'n3', name: 'Exit, Pursued by Nothing', description: '8% increased movement speed; 10% increased evasion', kind: 'notable', ...VEILWEAVER_LAYOUT.n3, mods: [mod('moveSpeed', 'increased', 0.08), mod('evasion', 'increased', 0.1)], links: ['s3'] },
     { id: 'n4', name: 'Punish the Lunge', description: '25% increased damage against Disoriented enemies', kind: 'notable', ...VEILWEAVER_LAYOUT.n4, mods: [mod('damageVs_disoriented', 'flat', 0.25)], links: ['s1', 's3'] },
@@ -1950,7 +1950,7 @@ const STILLMIND: VocationDef = {
     { id: 's1', name: 'Settled Breath', description: '+2% of maximum life regenerated per second', kind: 'small', ...STILLMIND_LAYOUT.s1, mods: [mod('lifeRegenPct', 'flat', 0.02)], links: ['root'] },
     { id: 's2', name: 'Open Palm', description: '12% increased melee damage', kind: 'small', ...STILLMIND_LAYOUT.s2, mods: [mod('damage', 'increased', 0.12, ['melee'])], links: ['root'] },
     { id: 's3', name: 'Unhurried Cup', description: '15% increased mana regeneration', kind: 'small', ...STILLMIND_LAYOUT.s3, mods: [mod('manaRegen', 'increased', 0.15)], links: ['root'] },
-    { id: 'n1', name: 'Reflex Like Water', description: '+1 reflex — flasks answer even mid-form', kind: 'notable', ...STILLMIND_LAYOUT.n1, mods: [mod('reflex', 'flat', 1)], links: ['s1'] },
+    { id: 'n1', name: 'Reflex Like Water', description: '+1 reflex. Flasks answer even mid-form', kind: 'notable', ...STILLMIND_LAYOUT.n1, mods: [mod('reflex', 'flat', 1)], links: ['s1'] },
     { id: 'n2', name: 'Rooted Mountain', description: '20% increased armor; 20% increased stagger window', kind: 'notable', ...STILLMIND_LAYOUT.n2, mods: [mod('armor', 'increased', 0.2), mod('staggerWindow', 'increased', 0.2)], links: ['s1', 's2'] },
     { id: 'n3', name: 'Empty Vessel Fills', description: '20% increased mana regeneration; +20 maximum mana', kind: 'notable', ...STILLMIND_LAYOUT.n3, mods: [mod('manaRegen', 'increased', 0.2), mod('mana', 'flat', 20)], links: ['s3'] },
     { id: 'n4', name: 'The Practiced Form', description: '12% increased attack speed; 10% increased melee damage', kind: 'notable', ...STILLMIND_LAYOUT.n4, mods: [mod('attackSpeed', 'increased', 0.12), mod('damage', 'increased', 0.1, ['melee'])], links: ['s2', 's3'] },
@@ -2000,10 +2000,10 @@ const SWARMLORD: VocationDef = {
     { id: 's1', name: 'Brood Arithmetic', description: '20% increased minion damage', kind: 'small', ...SWARMLORD_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.2)], links: ['root'] },
     { id: 's2', name: 'Waxbound Shells', description: 'Minions have 25% increased life', kind: 'small', ...SWARMLORD_LAYOUT.s2, mods: [mod('minionLife', 'increased', 0.25)], links: ['root'] },
     { id: 's3', name: 'Skitterspeed', description: '20% increased minion movement speed', kind: 'small', ...SWARMLORD_LAYOUT.s3, mods: [mod('minionMoveSpeed', 'increased', 0.2)], links: ['root'] },
-    { id: 'n1', name: 'One More Voice', description: '+1 maximum minion — the chorus grows', kind: 'notable', ...SWARMLORD_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
-    { id: 'n2', name: 'Chitin Plies', description: '+1 minion ply — every body in the swarm EATS one more blow before it breaks (the quanta law)', kind: 'notable', ...SWARMLORD_LAYOUT.n2, mods: [mod('minionPlies', 'flat', 1)], links: ['s2'] },
+    { id: 'n1', name: 'One More Voice', description: '+1 maximum minion. The chorus grows', kind: 'notable', ...SWARMLORD_LAYOUT.n1, mods: [mod('minionMaxCount', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Chitin Plies', description: '+1 minion ply: every body in the swarm EATS one more blow before it breaks', kind: 'notable', ...SWARMLORD_LAYOUT.n2, mods: [mod('minionPlies', 'flat', 1)], links: ['s2'] },
     { id: 'n3', name: 'Venom Relay', description: 'Minions have 25% chance to Poison on hit', kind: 'notable', ...SWARMLORD_LAYOUT.n3, mods: [mod('minionApply_poison', 'flat', 0.25)], links: ['s1', 's3'] },
-    { id: 'n4', name: 'Harrying Chorus', description: 'Minions have 20% chance to Harry on hit — the cloud spoils aim and attention', kind: 'notable', ...SWARMLORD_LAYOUT.n4, mods: [mod('minionApply_harried', 'flat', 0.2)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Harrying Chorus', description: 'Minions have 20% chance to Harry on hit. The cloud spoils aim and attention', kind: 'notable', ...SWARMLORD_LAYOUT.n4, mods: [mod('minionApply_harried', 'flat', 0.2)], links: ['s3', 's2'] },
     { id: 'k1', name: 'The Hive Does Not Run Out', description: '20% more minion damage; slain minions fight on for 2 more seconds', kind: 'keystone', ...SWARMLORD_LAYOUT.k1, mods: [mod('minionDamage', 'more', 0.2), mod('minionUndying', 'flat', 2)], links: ['n1', 'n4'] },
   ],
   quest: {

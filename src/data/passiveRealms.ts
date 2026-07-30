@@ -62,7 +62,7 @@ registerPassiveRealm({
   id: MAIN_REALM,
   label: 'The Star',
   color: '#c8a84b',
-  blurb: 'The nine-pointed star every hero walks — passive points, earned by level.',
+  blurb: 'The nine-pointed star every hero walks. Passive points, earned by level.',
 });
 
 /** The realm a node belongs to (nodes with no `realm` field ride the star). */
@@ -123,7 +123,7 @@ registerPassiveRealm({
   id: 'devotion',
   label: 'Devotion',
   color: '#7ab8d8',
-  blurb: 'Constellations attuned at shrines — devotion points walk their stars, and their powers can be GRAFTED onto your skills.',
+  blurb: 'Constellations attuned at shrines. Devotion points walk their stars, and their powers can be GRAFTED onto your skills.',
   adjacency: 'tree',
   roots: ['dev_hunt_root', 'dev_bul_root'],
   currency: 'devotion',
@@ -136,7 +136,7 @@ registerPassiveRealm({
   id: 'pantheon',
   label: 'The Pantheon',
   color: '#d8b878',
-  blurb: 'The gods answer communion — free-standing shrines, no pathing: choose a Major voice and minor blessings.',
+  blurb: 'The gods answer communion at free-standing shrines, no pathing: choose a Major voice and minor blessings.',
   adjacency: 'free',
   currency: 'communion',
   unlockLedger: 'pantheon_communed',

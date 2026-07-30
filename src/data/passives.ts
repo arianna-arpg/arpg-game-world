@@ -636,7 +636,7 @@ const nodes: PassiveNode[] = [
   { id: "cl_pri_fire", name: "Fire Codex", description: "12% increased fire damage", kind: "small", x: 578, y: 3390, mods: [mod("damage", "increased", 0.12, ["fire"])], links: ["cl_pri_gate"] },
   { id: "cl_pri_cold", name: "Cold Codex", description: "12% increased cold damage", kind: "small", x: 497, y: 3313, mods: [mod("damage", "increased", 0.12, ["cold"])], links: ["cl_pri_fire"] },
   { id: "cl_pri_light", name: "Storm Codex", description: "12% increased lightning damage", kind: "small", x: 507, y: 3446, mods: [mod("damage", "increased", 0.12, ["lightning"])], links: ["cl_pri_fire"] },
-  { id: "cl_pri_pen", name: "The Threefold Key", description: "+12% fire, cold and lightning penetration", kind: "notable", x: 417, y: 3392, mods: [mod("firePen", "flat", 0.12), mod("coldPen", "flat", 0.12), mod("lightningPen", "flat", 0.12)], links: ["cl_pri_cold", "cl_pri_light"] },
+  { id: "cl_pri_pen", name: "The Threefold Breach", description: "+12% fire, cold and lightning penetration", kind: "notable", x: 417, y: 3392, mods: [mod("firePen", "flat", 0.12), mod("coldPen", "flat", 0.12), mod("lightningPen", "flat", 0.12)], links: ["cl_pri_cold", "cl_pri_light"] },
   { id: "cl_pri_round", name: "Conduction Rites", description: "Your projectiles crossing elemental fields and hazardous ground inherit the element", kind: "notable", x: 436, y: 3505, mods: [mod("conduction", "flat", 1)], links: ["cl_pri_light"] },
   { id: "cl_pri_suffuse", name: "Suffusion", description: "Projectiles crossing YOUR ground effects carry them onward - the field re-blooms where the flight ends", kind: "notable", x: 387, y: 3610, mods: [mod("suffusion", "flat", 1)], links: ["cl_pri_round"] },
   { id: "cl_pri_ember", name: "Banked Embers", description: "15% increased fire ailment magnitude", kind: "small", x: 420, y: 3254, mods: [mod("statusMagnitude", "increased", 0.15, ["fire"])], links: ["cl_pri_cold"] },
@@ -894,7 +894,7 @@ export const STAR_CENTER = {
 for (const v of Object.values(VOCATIONS)) {
   nodes.push({
     id: vocationRootId(v.id), name: v.name,
-    description: `${v.blurb} â€” the ${v.name}'s crest, granted with the vocation. Its nodes spend vocation points.`,
+    description: `${v.blurb} The ${v.name}'s crest comes with the vocation; its nodes spend vocation points.`,
     kind: 'vocation', vocation: v.id,
     x: STAR_CENTER.x, y: STAR_CENTER.y, links: [],
   });
