@@ -90,6 +90,7 @@ import {
   type ResonanceSpec,
 } from './levelgen';
 import { fellableDoodad, fellJitter, fellProgress, RAMPAGE_CFG, rampageSpecOf, type RampageSpec } from './rampage';
+import { canSquish, SQUISH_CFG, squishSpecOf } from './squish';
 import { anyPitNear, PIT_CFG, pitAt, pitIdentityKey, pitSupportedAt, type PitSurface } from './pitfall';
 import { landingTier, linkFlipTier, makeTierNav, makeTierView, resolveTierCrossing, tierElevOf, tierFloorAt, tierLinkOf, TIER_CFG, type WalkView } from './tiers';
 import { BURST_TOUCH_PAD, lightReach, lightwellOf } from './lightwells';
@@ -23720,6 +23721,10 @@ export class World {
     if (def.explodeOnDeath) a.explodeOnDeath = def.explodeOnDeath;
     if (def.deathBurst) a.deathBurst = def.deathBurst;
     if (def.refuge) a.refuge = def.refuge;
+    // THE SQUISH FABRIC (engine/squish.ts): normalized once at spawn — the
+    // tread sweep and the separation exemption read a field, never the registry.
+    const squishSpec = squishSpecOf(def);
+    if (squishSpec) a.squish = squishSpec;
     if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
     // THE RESERVES (engine/reserves.ts): the body arrives with its pools
@@ -39423,6 +39428,7 @@ export class World {
     this.updatePendingBlinks(dt);
     this.checkMinionDetonations();
     this.separateActors();
+    this.updateSquish();
     this.updateWindPush(dt);
     this.updateBrittle(dt);
     this.updateSnow(dt);
@@ -47713,6 +47719,13 @@ export class World {
           // Hits/targeting untouched — a swing still swats what passes
           // overhead; it just can't be body-blocked.
           if (a.flying !== b.flying) continue;
+          // A SQUISH PAIR never shoulders (engine/squish.ts): the boot goes
+          // OVER the bug, not into it — parting them here would keep the
+          // crunch from ever landing. The tread sweep (updateSquish, same
+          // frame) resolves the overlap as the kill instead; same-size kin
+          // fail the mass gate and part normally.
+          if ((b.squish && canSquish(a, b, b.squish))
+            || (a.squish && canSquish(b, a, a.squish))) continue;
           // Constructs and rooted objects (spawners, caches) are anchored:
           // only the mobile party gets pushed.
           const ang = angleTo(a.pos, b.pos);
@@ -47744,6 +47757,55 @@ export class World {
             b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy));
           }
         }
+      }
+    }
+  }
+
+  /** Scratch for the squish sweep's per-victim treader query (actorsNear contract). */
+  private squishScratch: Actor[] = [];
+
+  /** THE SQUISH FABRIC (engine/squish.ts; docs/engine/squish.md): bodies
+   *  wearing `MonsterDef.squish` die UNDERFOOT — the rampage plow inverted
+   *  (walkers crush the small at drawn-body contact, head + every worm
+   *  segment through the one segR law). Runs right after separateActors so
+   *  the frame's resting overlap is exactly what is tested (drawn ==
+   *  trodden); the pair's shoulder exemption above guarantees the overlap
+   *  survives to be read. An ORDINARY credited kill — XP, kill handlers,
+   *  spoils, possession hooks and co-op replication all standing law.
+   *  Free while nothing squishable stands (one field read per actor). */
+  private updateSquish(): void {
+    for (const v of this.actors) {
+      const spec = v.squish;
+      if (!spec || v.dead) continue;
+      // THE SLEEPER IS SPARED: dormancy outranks physics (the sentry
+      // fabric's own law for wind and environmental strikes).
+      if (isDormant(v)) continue;
+      // One query covers the whole animal: the head plus the worm's file.
+      const span = v.worm ? v.worm.length * v.worm.spacing + v.radius : v.radius;
+      for (const t of this.actorsNear(v.pos.x, v.pos.y, span + 64, this.squishScratch)) {
+        if (!canSquish(t, v, spec)) continue;
+        const tread = t.radius * SQUISH_CFG.treadFrac;
+        let hit = dist(t.pos, v.pos) <= tread + v.radius;
+        if (!hit && v.worm) {
+          const segs = v.worm.segments;
+          for (let i = 0; i < segs.length && !hit; i++) {
+            hit = dist(t.pos, segs[i]) <= tread + segR(v, i);
+          }
+        }
+        if (!hit) continue;
+        // The crunch: an ordinary death, credited to the tread.
+        this.kill(v, false, t);
+        if (!spec.quiet) {
+          const tint = spec.color ?? (v.defId ? MONSTERS[v.defId]?.color : undefined) ?? '#8a6a4a';
+          this.flashes.push({
+            pos: vec(v.pos.x, v.pos.y), radius: SQUISH_CFG.fx.radius,
+            color: tint, life: SQUISH_CFG.fx.life, maxLife: SQUISH_CFG.fx.life,
+          });
+          if (spec.text) {
+            this.text(vec(v.pos.x, v.pos.y - 16), spec.text, tint, SQUISH_CFG.textSize);
+          }
+        }
+        break; // this life is spent — next victim
       }
     }
   }

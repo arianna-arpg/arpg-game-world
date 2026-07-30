@@ -19,6 +19,7 @@ import type { TuneSpec } from '../engine/tuning';
 import type { BombardSpec } from '../engine/bombard';
 import type { ClingSpec } from '../engine/cling';
 import type { RampageSpec } from '../engine/rampage';
+import type { SquishSpec } from '../engine/squish';
 import type { MountSlotSpec, MountSpec } from '../engine/mounts';
 import type { TellSpec } from '../engine/tells';
 import type { BondLinkStyle } from '../engine/pack';
@@ -955,6 +956,13 @@ export interface MonsterDef {
    *  and re-entered zones re-mint pristine from seed — the land always
    *  returns exactly as authored. `true` = all defaults. */
   rampage?: true | RampageSpec;
+  /** THE SQUISH FABRIC (engine/squish.ts): this body dies UNDERFOOT — any
+   *  grounded body out-massing it by the spec's ratio (effectiveWeight, so
+   *  density/heft/poise all speak) kills it just by walking over it, through
+   *  the ordinary credited kill path. Faction-blind — physics, not
+   *  allegiance; worm bodies are tender along every trailing segment.
+   *  The D2 desert-scorpion law. `true` = all defaults. */
+  squish?: true | SquishSpec;
   /** CARRIED GEAR — the Hollowborn's contract: the body spawns WEARING one
    *  real rolled item (createMonster mints it at the body's level) and its
    *  credited kill drops EXACTLY that piece instead of a gear-table roll.
@@ -11620,17 +11628,27 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw', 'tail_sting'], xp: 3, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.4, drops: 0,
     scaleVariance: [0.8, 1.2],
+    // The D2 Act 2 throwback made law (THE SQUISH FABRIC): at 1.6× the
+    // gate covers a hero's boot on every variance roll (max-scale asks
+    // ≈ 0.94 effective weight) — and any man-weight horror marching over
+    // it crushes it just the same. Physics, not allegiance: only the
+    // light (squirrels, hounds, its own kin) still have to fight it.
+    squish: { ratio: 1.6, text: 'crunch!' },
     brain: { type: 'basic', morale: { skittish: { radius: 90, duration: [0.8, 1.4] } } },
   },
   // THE ANT TRAIL: one marching line as one body — the WORM machinery worn
-  // as pure ambience (a drawn file of tiny workers crossing the ground).
+  // as pure ambience (a drawn file of tiny workers crossing the ground), at
+  // TRUE ant scale: radius-3 bodies in a nine-strong file. The debut wearer
+  // of THE SQUISH FABRIC (engine/squish.ts): run the file over and it dies
+  // underfoot — credited, announced — the way the desert always worked.
   ant_trail: {
     id: 'ant_trail', name: 'Ant Trail',
-    color: '#7a5838', shape: 'oval', radius: 5, material: 'chitin', look: 'ant_trail',
-    base: { life: 10, moveSpeed: 95, evasion: 40, mana: 0 },
+    color: '#7a5838', shape: 'oval', radius: 3, material: 'chitin', look: 'ant_trail',
+    base: { life: 6, moveSpeed: 65, evasion: 40, mana: 0 },
     skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.1, drops: 0,
-    worm: { length: 7, spacing: 9, taper: 0.97 },
+    worm: { length: 9, spacing: 7, taper: 0.97 },
+    squish: { text: 'squish!' },
     brain: { type: 'basic' },
   },
   // The reed frog: spawns at the water's edge (WILDLIFE row `near`) and,

@@ -24,6 +24,7 @@ import {
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { TuneSpec } from './tuning';
+import type { SquishSpec } from './squish';
 import type { ClingSpec, ClingRide } from './cling';
 import type { CreepSource } from './creep';
 import type { GripHold } from './grab';
@@ -1252,6 +1253,10 @@ export class Actor {
   /** BOLT-HOLE (MonsterDef.refuge): when routed, run FOR the nearest doodad of
    *  this kind and slip away on arrival (the frog's dive). */
   refuge?: { kind: string; seek?: number; text?: string };
+  /** THE SQUISH FABRIC (engine/squish.ts): this body dies UNDERFOOT —
+   *  normalized spec stamped at spawn from MonsterDef.squish; the tread
+   *  sweep and the crowd-separation exemption both read this field. */
+  squish?: SquishSpec;
   /** The rout's cached bolt-hole (found once — ponds don't move). */
   refugeGoal?: { x: number; y: number; r: number } | null;
   /** TERRAIN-BOUND spec (MonsterDef.habitat) — carried so any spawn path

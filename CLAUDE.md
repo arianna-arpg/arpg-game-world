@@ -489,7 +489,18 @@ we verify changes.
   fight IN the real rest zone (no more jarring minted eldritch pocket;
   'arena' stays pure data), and `Actor.driven` exempts engine-wheeled bodies
   from the passive volition lock (the parked glimpse-body regression). Docs
-  `docs/engine/rampage.md`; probe `balance/probe_rampage.ts`).
+  `docs/engine/rampage.md`; probe `balance/probe_rampage.ts`),
+  `squish.ts` (THE SQUISH FABRIC — death underfoot, the D2 desert-scorpion
+  law as data: `MonsterDef.squish` bodies die to TREAD — any grounded body
+  out-massing them by the spec's `ratio` (ONE effectiveWeight read —
+  density/heft/poise all speak; faction-blind, no player special case)
+  kills them by walking over them through the ordinary credited kill();
+  worm files are tender along every segment (segR — drawn == trodden),
+  squish pairs skip the crowd shoulder (the boot goes OVER, the
+  flat-construct precedent), dormant sleepers spared (the sentry law);
+  debut = the ant trail at TRUE ant scale + the sand scorpion at
+  `ratio: 1.6` — docs in `docs/engine/squish.md`, probe
+  `balance/probe_squish.ts`).
   THE DEFENSE-TEXTURE DOCTRINE (signature pools ship EMPTY): poise /
   insight / energy shield are authored identities, never ambience —
   attributes only SCALE them (1%/pt), bases come from gear defense
