@@ -8380,6 +8380,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'flesh_membrane', count: [2, 4] }, { kind: 'vein_cluster', count: [3, 5] },
       { kind: 'eye_stalk', count: [2, 4] }, { kind: 'rib_arch', count: [1, 3] },
       { kind: 'tooth_row', count: [0, 2] },
+      // The warren's rim tastes the deeper faces (the flesh formations).
+      { kind: 'formation', count: [0, 1], formation: 'clot_bank' },
     ],
     // What the warren ALWAYS is, whichever face of it a variant shows.
     common: [
@@ -8485,6 +8487,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clot_mound', count: [3, 5] }, { kind: 'artery_stalk', count: [2, 4] },
       { kind: 'flesh_pod', count: [2, 4] }, { kind: 'bone', count: [1, 3] },
       { kind: 'flesh_membrane', count: [1, 3] }, { kind: 'vein_cluster', count: [3, 5] },
+      { kind: 'formation', count: [1, 2], formation: 'vessel_braid' },
     ],
     common: [
       { kind: 'blood_pool', count: [2, 3] },
@@ -8496,11 +8499,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'artery_stalk', count: [4, 6] }, { kind: 'blood_pool', count: [5, 8] },
         { kind: 'vein_cluster', count: [5, 7] }, { kind: 'clot_mound', count: [2, 3] },
         { kind: 'gore', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'vessel_braid' },
       ] },
       // The spill gone old: crusted banks, standing red, slow flies.
       { name: 'clotted shallows', layout: [
         { kind: 'clot_mound', count: [5, 8] }, { kind: 'blood_pool', count: [6, 9] },
         { kind: 'gore', count: [4, 6] }, { kind: 'bone', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'clot_bank' },
       ], theme: { ground: {
         scale: 1.0, stretchX: 1.1, strength: 1.15, bias: 0.44, evenness: 0.6, speckles: 0.5,
         palette: ['#160509', '#260a10', '#380e18', '#4a1420', '#5a1a28'],
@@ -8616,6 +8621,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'gas_polyp', count: [3, 5] }, { kind: 'gut_knuckle', count: [2, 4] },
       { kind: 'tooth_row', count: [1, 3] }, { kind: 'rib_arch', count: [1, 2] },
       { kind: 'flesh_pod', count: [1, 3] }, { kind: 'gore', count: [1, 3] },
+      { kind: 'formation', count: [1, 2], formation: 'knuckle_march' },
     ],
     common: [
       { kind: 'villus_bed', count: [1, 2] },
@@ -8633,6 +8639,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { name: 'knotted strait', layout: [
         { kind: 'gut_knuckle', count: [4, 7] }, { kind: 'chyme_pool', count: [2, 4] },
         { kind: 'villus_bed', count: [3, 5] }, { kind: 'tooth_row', count: [1, 2] },
+        { kind: 'formation', count: [1, 2], formation: 'knuckle_march' },
       ] },
       // Something laid its clutch here: polyps in rows, air you can chew.
       { name: 'wormworks', layout: [
@@ -8715,6 +8722,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'weep_spring', count: [2, 4] }, { kind: 'ocular_knot', count: [2, 4] },
       { kind: 'flesh_pod', count: [1, 3] }, { kind: 'vein_cluster', count: [2, 4] },
       { kind: 'flesh_membrane', count: [1, 2] }, { kind: 'gore', count: [0, 2] },
+      { kind: 'formation', count: [1, 2], formation: 'watching_gallery' },
     ],
     common: [
       { kind: 'eye_stalk', count: [2, 3] },
@@ -8733,6 +8741,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { name: 'a thousand eyes', layout: [
         { kind: 'eye_stalk', count: [8, 12] }, { kind: 'ocular_knot', count: [4, 6] },
         { kind: 'lash_bed', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'watching_gallery' },
       ] },
       // A few GREAT eyes instead of many — the long stare.
       { name: 'the long stare', layout: [

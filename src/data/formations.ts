@@ -1464,3 +1464,71 @@ registerDoodadRule('howdah_wreck', {
   forbidOn: ['water', 'lava', 'chasm'],
 });
 registerStamp('howdah_wreck', stampSingle('howdah_wreck', [20, 26]));
+
+// ============================ THE FLESH GRAMMAR ==============================
+// The flesh country's kit, COMPOSED — its first formations. The country's
+// pool kinds (blood_pool / chyme_pool / weep_spring) never ride one ON
+// PURPOSE: they are REGION LIQUIDS (regions.ts rows carrying stand-in
+// gameplay — the vasovagal blood, the digesting bile), and that region truth
+// rasterizes only at their own blob stamps, so a formation-planted pool
+// would wear a pool's face over dry ground. (Dry pour WASHES — cinder, sand,
+// snowdrift — ride formations today; the line is the region contract, not
+// the pour field.) Brittle kit pieces (gas_polyp, ocular_knot, eye_stalk)
+// ride freely — their pops are the KIND's own rule contract (the caul_sac
+// precedent), so a formation-planted polyp belches exactly like a scattered
+// one.
+
+// A VESSEL BRAID: arteries plaiting down the gallery the way they grew —
+// paired strands crossing on a slow wavelength, thrombi clotted where the
+// weave knots, one strand's ground lacework running beneath. The Sanguine's
+// severed mains, arranged instead of scattered.
+registerFormation({
+  id: 'vessel_braid', arrange: 'braid', span: [320, 560], step: 44,
+  params: { strands: 2, weave: 28, wavelength: 260 },
+  pieces: [
+    { kind: 'artery_stalk', radius: [10, 15], jitter: 8, rot: true },
+    { kind: 'clot_mound', radius: [14, 22], every: 3, jitter: 18, rot: true },
+    { kind: 'vein_cluster', radius: [18, 28], every: 2, jitter: 22 },
+  ],
+});
+
+// A KNUCKLE MARCH: the tract clenching in file — haustral folds pacing a
+// slow peristaltic wander, the absorptive carpet between them, polyps queued
+// along the way.
+registerFormation({
+  id: 'knuckle_march', arrange: 'meander', span: [340, 600], step: 56,
+  params: { wobble: 30 },
+  pieces: [
+    { kind: 'gut_knuckle', radius: [18, 30], jitter: 6, rot: true },
+    { kind: 'villus_bed', radius: [20, 34], every: 2, jitter: 26 },
+    { kind: 'gas_polyp', radius: [10, 14], every: 3, jitter: 20, rot: true },
+  ],
+});
+
+// A WATCHING GALLERY: the regard hung in an arc — wall-knots and tracking
+// stalks curving a gallery of eyes around whatever walks the chord, lashes
+// fringing the floor beneath. Every eye in it is POPPABLE (the stalk's own
+// brittle row landed with this formation): burst the gallery blind, press
+// close to shut it, or be beheld.
+registerFormation({
+  id: 'watching_gallery', arrange: 'arc', span: [120, 200], step: 46,
+  params: { sweep: 0.45 },
+  pieces: [
+    { kind: 'ocular_knot', radius: [13, 20], jitter: 10, rot: true },
+    { kind: 'eye_stalk', radius: [11, 17], every: 2, jitter: 14, rot: true },
+    { kind: 'lash_bed', radius: [18, 30], every: 2, jitter: 24 },
+  ],
+});
+
+// A CLOT BANK: the spill gone old, in court — mounds banked in a broken
+// ring (the pine_stand shape, in meat), the vessels that fed them still
+// paying out between, pods grown fat on the supply line.
+registerFormation({
+  id: 'clot_bank', arrange: 'orbit', span: [130, 210], step: 50,
+  params: { rings: [1, 2], innerFrac: 0.55 },
+  pieces: [
+    { kind: 'clot_mound', radius: [15, 26], jitter: 16, rot: true },
+    { kind: 'artery_stalk', radius: [10, 14], every: 2, jitter: 20, rot: true },
+    { kind: 'gas_polyp', radius: [10, 13], every: 4, jitter: 18, rot: true },
+  ],
+});

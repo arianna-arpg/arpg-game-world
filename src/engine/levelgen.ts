@@ -2237,7 +2237,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // shoot over, growing out of the meat.
   flesh_membrane: { overlap: 'ground', walkOnly: true },
   vein_cluster:   { overlap: 'ground', walkOnly: true },
-  eye_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'] },
+  // The stalk's iris pops like the wall-knot (brittle 'hit' — the gaze pair,
+  // both poppable): the gaze lane's live filter drops a burst stalk, and the
+  // fell lane refuses it from here on (breakables BREAK, their own spoils law).
+  eye_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'],
+    brittle: { on: ['hit'], text: 'the stalk bursts!', color: '#d8b04a' } },
   rib_arch:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 50, forbidOn: ['water', 'lava', 'chasm'] },
   // The tooth arc is an OFFSET C (gum ring 0.66r, outer stroke 0.82r) — a
   // centered rect can't hug it, so it keeps a disc snugged to the drawn arc.

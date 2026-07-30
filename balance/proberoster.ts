@@ -86,6 +86,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_drove.ts', status: 'green', tier: 'fast', why: 'THE DROVE — the belt law (ignition seats only the surge\'s biomes at/below levelMax) and the drive-them-back-alive payout' },
   { probe: 'probe_eventclock.ts', status: 'green', tier: 'fast', why: 'THE WANING LAW — no in-zone event can be held open ad infinitum; the rigs enumerate the registry so future kill-fed defs are covered' },
   { probe: 'probe_fielddiscipline.ts', status: 'green', tier: 'fast', why: 'THE FIELD DISCIPLINE — unlearn/socket/unsocket gate on cold blades through the ONE World.swapRefusal predicate; sanctuary waives all' },
+  { probe: 'probe_fleshkit.ts', status: 'green', tier: 'fast', why: 'THE FLESH KIT — the gaze pair both poppable (stalk brittle row + the registry census), live pop parity + the beheld build/drop cycle, and the four flesh formations on-grammar via forced generateLayout' },
   { probe: 'probe_forechart.ts', status: 'green', tier: 'fast', why: 'THE FORECHART — the veiled halo of pre-minted zones, the mint horizon drain, soundings and the omen widening' },
   { probe: 'probe_front.ts', status: 'green', tier: 'fast', why: 'THE ADVANCING FRONT — classic-creep byte-identity when no front lever is set (a pinned pre-change fingerprint) plus directional march' },
   { probe: 'probe_garden.ts', status: 'green', tier: 'fast', why: 'THE GARDEN COUNTRY — biome/field seeding, the four-face staging law and the doodad contracts on the real registries' },
