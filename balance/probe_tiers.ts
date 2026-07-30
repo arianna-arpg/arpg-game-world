@@ -15,7 +15,9 @@
 // and THE SEVERED BAND (ai.ts severedBandGoal / TIER_CFG.severedBandReach):
 // a flanker's orbit defers to the approach lane across a story gap and
 // crosses, while long kits keep their rim duel and stand-ground styles
-// keep their posts.
+// keep their posts — and THE MAP TELL (RIG M): tierMapTell (ui/panels.ts),
+// the world map's fog-gated stacked-ground read, pinned pure and against
+// the real minted defs.
 //   npx tsx balance/probe_tiers.ts
 
 import '../src/data/clusters';
@@ -47,6 +49,7 @@ import {
 } from '../src/engine/tiers';
 import { TILESETS } from '../src/data/tilesets';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
+import { tierMapTell } from '../src/ui/panels';
 
 let fails = 0;
 const check = (name: string, ok: boolean, detail = ''): void => {
@@ -848,6 +851,53 @@ function ascentReaches(grid: GridWalkField, from: { x: number; y: number }, top:
     g2.tier = 0; // a valley hunter shares the quarry's floor —
     check('J7e a shared floor reads no severance', severedBandGoal(ctxOf(g2), 'orbit') === null);
   }
+}
+
+// --- RIG M: THE MAP TELL (the world map's tier read, ui/panels.ts) ----------------
+// tierMapTell distills ZoneDef.tiers for the map node — PURE, fog-gated by the
+// SAME predicate the biome fill and zone-kind glyph ride (the loop's
+// `known || scouted` arrives as `revealed`): null on flat ground, null while
+// fogged, 'open' and 'covered' exposures distinguishable at a glance, the
+// stack hinted through `floors`. The real recipes then ground it: minted
+// needles / warrens / switchback defs speak through the same helper the
+// panel calls.
+{
+  check('M1 flat ground tells nothing', tierMapTell({}, true) === null);
+  const open = tierMapTell({ tiers: { kind: 'over', exposure: 'open' } }, true);
+  const covered = tierMapTell({ tiers: { kind: 'under', exposure: 'covered' } }, true);
+  check('M2 an open two-layer zone tells its stack', open?.mark === 'open' && open?.floors === 2);
+  check('M3 a covered lattice tells its stack', covered?.mark === 'covered' && covered?.floors === 2);
+  check('M4 the two exposures read DIFFERENT', !!open && !!covered
+    && open.mark !== covered.mark && open.tint !== covered.tint);
+  check('M5 THE FOG GATE: an unrevealed zone keeps its secret',
+    tierMapTell({ tiers: { kind: 'over', exposure: 'open' } }, false) === null
+    && tierMapTell({}, false) === null);
+  const stack = tierMapTell({ tiers: { kind: 'over', exposure: 'open', levels: 3 } }, true);
+  check('M6 a multi-story stack hints TALLER than the classic pair',
+    !!stack && !!open && stack.floors > open.floors, `floors=${stack?.floors}`);
+  const tall = tierMapTell({ tiers: { kind: 'over', exposure: 'open', levels: 9 } }, true);
+  check('M7 ...clamped to what a node can legibly stack', tall?.floors === stack?.floors);
+  // The real stamps: the defs the recipes mint (RIG C/D/E's own fixtures)
+  // answer through the helper exactly as the authored shapes did.
+  const nd = gen('qa_map_needles', 'needles', TILESETS.needles.layout,
+    { ...TILESETS.needles.layoutParams }, 515001);
+  check('M8 a minted needles def tells open — and only once revealed',
+    tierMapTell(nd.def, true)?.mark === 'open' && tierMapTell(nd.def, false) === null);
+  const metro = TILESETS.metropolis;
+  const warrens = metro.variants?.find(v => v.name === 'the warrens');
+  let carved = 0, told = 0;
+  for (const seed of [616001, 616002, 616003, 616004, 616005, 616006]) {
+    const { def } = gen('qa_map_warrens', 'district', warrens?.layout ?? metro.layout,
+      { ...metro.layoutParams, ...warrens?.layoutParams, sewerTier: 1 }, seed);
+    if (!def.tiers) continue; // the lattice honestly declined (RIG D's tolerance)
+    carved++;
+    if (tierMapTell(def, true)?.mark === 'covered') told++;
+  }
+  check('M9 every carved warren tells covered', carved >= 1 && told === carved, `${told}/${carved}`);
+  const pk = gen('qa_map_peak', 'switchback', TILESETS.pinnacle.layout,
+    { ...TILESETS.pinnacle.layoutParams }, 717001);
+  check('M10 a minted summit stacks taller than the classic pair',
+    tierMapTell(pk.def, true)?.floors === 3, `floors=${tierMapTell(pk.def, true)?.floors}`);
 }
 
 console.log(fails === 0 ? '\nALL PASS' : `\n${fails} FAILURE(S)`);

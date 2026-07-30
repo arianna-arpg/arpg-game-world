@@ -226,6 +226,27 @@ export function meetsRequirements(world: World, def: SkillDef): boolean {
   return true;
 }
 
+/** THE TIER TELL (the world map's stacked-ground read, refreshMap's node
+ *  loop): distills `ZoneDef.tiers` into the node's under-disc glyph — null
+ *  on flat ground, and null while the zone is fogged (`revealed` is the
+ *  loop's `known || scouted`, the EXACT predicate the biome fill and
+ *  zone-kind glyph ride: an unwalked, unsurveyed zone keeps its secret).
+ *  `mark` mirrors ZoneTiers.exposure — 'open' (both layers visible in
+ *  zone: buttes, summits) wears solid under-rims, 'covered' (only the
+ *  active layer draws: sewer ducts, stacked floors) wears dashed ones —
+ *  and `floors` counts walkable stories (ground + elevated levels),
+ *  clamped to the two under-discs a node can legibly stack. Pure by
+ *  construction — pinned by balance/probe_tiers.ts RIG M. */
+export function tierMapTell(def: Pick<ZoneDef, 'tiers'>, revealed: boolean):
+  { mark: 'open' | 'covered'; floors: number; tint: string } | null {
+  const t = def.tiers;
+  if (!t || !revealed) return null;
+  const floors = 1 + Math.max(1, Math.min(Math.floor(t.levels ?? 1), 2));
+  return t.exposure === 'open'
+    ? { mark: 'open', floors, tint: '#b8a878' }
+    : { mark: 'covered', floors, tint: '#8878c8' };
+}
+
 export class UI {
   private classSelect = document.getElementById('class-select')!;
   private charSheet = document.getElementById('char-sheet')!;
@@ -4800,12 +4821,30 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       const pinned = this.pinnedZone === z.id;
       const r = current ? 13 : 10;
       const travelAttrs = canTravel ? ` class="wp-node" data-wp="${z.id}" style="cursor:pointer"` : '';
+      // THE TIER TELL (tierMapTell above — ZoneDef.tiers distilled): multi-
+      // story ground wears UNDER-DISCS peeking below the node, one per extra
+      // story — solid rims for 'open' exposure (both layers visible: buttes,
+      // summits), dashed for 'covered' (sewer ducts, stacked floors) — laid
+      // BEFORE the main disc so only the lower crescents show. Same fog gate
+      // as the fill and the kind glyph; pointer-transparent and <title>-free
+      // like every other badge (THE INTERACTIVITY CONTRACT above), so the
+      // node's hit shape never grows.
+      const tt = tierMapTell(z, known || scouted);
+      let tierMark = '';
+      if (tt) {
+        const underFill = bi ? mixHex(bi.mapColor, '#000000', 0.45) : '#1c1c26';
+        for (let i = tt.floors - 1; i >= 1; i--) {
+          tierMark += `<circle cx="${z.map.x}" cy="${z.map.y + i * 3.2}" r="${r}"
+          fill="${underFill}" fill-opacity="${known ? 0.85 : 0.55}" stroke="${tt.tint}" stroke-width="1.4"
+          ${tt.mark === 'covered' ? 'stroke-dasharray="2.6 2.2" ' : ''}pointer-events="none"/>`;
+        }
+      }
       // A FIELD zone renders like any other node: ONE circle, centred on the region (its
       // def.map is the blob centre). The region BOUNDS live on def.field but are NOT drawn —
       // the player understands a Field is a single zone, and the bbox stays available as the
       // Field's spatial "event node" (a stormfront / incursion can later target/show over it).
       nodes += `<g data-zone="${z.id}" style="cursor:help">
-        <circle cx="${z.map.x}" cy="${z.map.y}" r="${MAP_CFG.nodeHitR}" fill="none" pointer-events="all"${travelAttrs}/>
+        <circle cx="${z.map.x}" cy="${z.map.y}" r="${MAP_CFG.nodeHitR}" fill="none" pointer-events="all"${travelAttrs}/>${tierMark}
         <circle cx="${z.map.x}" cy="${z.map.y}" r="${r}"
           fill="${fill}" fill-opacity="${known ? 0.85 : scouted ? 0.55 : 1}"
           stroke="${pinned ? '#5ad8d8' : current ? '#ffd700' : known ? '#d8d4c8' : scouted ? '#8fd4ff' : '#4a4a5e'}"
