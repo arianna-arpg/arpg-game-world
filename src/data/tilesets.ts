@@ -3078,6 +3078,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         // wire picks its hall ahead of the saws (site hunger), so every point
         // of chance here is a buzzsaw hall somewhere else that never got built.
         wireWards: { chance: 0.35, max: 1, rays: [2, 3], crossfire: 0.25 },
+        // THE DART GALLERY — the 'lanes' trap effect's field debut: a standing
+        // cross-corridor stinger gauntlet, woken by a hidden flag plate and
+        // forgiven by the visible mouth lever (docs/engine/trapworks.md).
+        dartLanes: { chance: 0.3, max: 1 },
       },
     },
     // What EVERY face keeps: the urns and their tenants, pots someone cached,
@@ -3129,6 +3133,9 @@ export const TILESETS: Record<string, TilesetDef> = {
           dartWards: { chance: 0.8, max: 2 },
           boulderRuns: { chance: 0.7, max: 1 },
           falseFloors: { chance: 0.7, max: 2 },
+          // The toothed halls run the gallery LONG: two gauntlets, deeper
+          // station rows — the dense face earns its name in the crossfire.
+          dartLanes: { chance: 0.7, max: 2, stations: [3, 6] },
           // The machines-won face turns every wheel dial up: more arms,
           // wider speed spread, free seating, the great blade one in four —
           // and one hub bar in three is the SWEEPARM (the bar that CARRIES

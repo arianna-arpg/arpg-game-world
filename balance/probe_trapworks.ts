@@ -20,7 +20,7 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
-import { linePath, placeTrack, trackDone, trackPending, trackPose, type TrackSpec } from '../src/engine/tracks';
+import { linePath, placeTrack, trackDone, trackPending, trackPose, trackRider, type TrackSpec } from '../src/engine/tracks';
 import {
   trapEffect, trapTriggerHit, TRAPWORK_CFG,
   type BoulderEffectRow, type PlacedTrapwork, type TrapHost,
@@ -591,6 +591,168 @@ const DT = 1 / 60;
     && lw.tracks.slice(-2).every(t => t.spec.mode === 'once' && t.spec.tag === 'live_wire'));
   check('wire live: single-use by default — a cut wire stays cut for the visit',
     wire.rearmAt === Infinity);
+}
+
+// --- 13) THE DART GALLERY — the 'lanes' effect's field debut ----------------
+// (The dormant half armed: registerTrapEffect('lanes'), TrackSpec.tag/armed
+// and World.setTracksArmed all shipped with ZERO authored emitters. dartLanes
+// fields them: standing cross-corridor once+rearm lanes born DISARMED, a
+// hidden flagstone deep in the gallery wired {lanes,on}, a visible silencing
+// plate past the far mouth wired {lanes,off}. The archetype is DIAL-GATED
+// before any draw — absent == chance-0, byte for byte, so the authored
+// tileset matrix cannot move until a face opts in.)
+{
+  const w = makeSimWorld('warrior', 9901);
+  const parent = w.zone;
+  const arena = { w: 1300, h: 1000 };
+  const entry = vec(120, 500), exits = [vec(1180, 500)];
+  type TrapDials = Record<string, unknown>;
+  const genOn = (def: ReturnType<typeof mintCave>, seed: number, trapworks: TrapDials | undefined): ReturnType<typeof generateLayout> =>
+    generateLayout({
+      ...def, seed, layoutType: 'dungeon',
+      layoutParams: { ...def.layoutParams, ...(trapworks ? { trapworks } : {}) },
+    } as typeof def, arena, new Rng(seed), entry, exits);
+  // The whole surface the archetype could touch, one fingerprint.
+  const fp = (out: ReturnType<typeof generateLayout>): string => JSON.stringify({
+    t: out.tracks ?? [], w: out.trapworks ?? [],
+    d: out.doodads.map(d => [d.kind, Math.round(d.pos.x), Math.round(d.pos.y)]),
+  });
+
+  // (a) THE OFF-DEFAULT LAW: absent == chance-0, byte for byte.
+  const BASE = { sawHalls: { chance: 1, max: 2 }, dartWards: { chance: 1, max: 2 } };
+  let parity = true, absentZero = true;
+  for (let s = 0; s < 2; s++) {
+    const seed = 71000 + s * 1237;
+    const def = mintCave(parent, seed, `probe_gal_par_${s}`, 'sunken_ruin', { rollVariant: false });
+    const a = genOn(def, seed, BASE);
+    const b = genOn(def, seed, { ...BASE, dartLanes: undefined });
+    const c = genOn(def, seed, { ...BASE, dartLanes: { chance: 0, max: 3, stations: [4, 6] as [number, number] } });
+    if (fp(a) !== fp(b) || fp(a) !== fp(c)) parity = false;
+    if ((a.tracks ?? []).some(t => t.tag?.startsWith('gen_dartlane'))
+      || (a.trapworks ?? []).some(t => t.effects.some(e => e.kind === 'lanes'))) absentZero = false;
+  }
+  check('gallery: ABSENT lays zero (no tagged lanes, no lanes-effect plates)', absentZero);
+  check('gallery: absent == chance-0, byte for byte (the off-default law)', parity);
+
+  // (b) FORCED dials lay galleries on real minted sunken ruins.
+  let galleries = 0, lanesOk = true, wiredOk = true, mawsOk = true, groovesOk = true;
+  let walkOk = true, deterministic = true, phased = true, sided = true, platesClear = true;
+  for (let s = 0; s < 4; s++) {
+    const seed = 72000 + s * 911;
+    const def = mintCave(parent, seed, `probe_gal_${s}`, 'sunken_ruin', { rollVariant: false });
+    const DIAL = { dartLanes: { chance: 1, max: 1 } };
+    const out = genOn(def, seed, DIAL);
+    if (fp(out) !== fp(genOn(def, seed, DIAL))) deterministic = false;
+    const lanes = (out.tracks ?? []).filter(t => t.tag === 'gen_dartlane0');
+    if (!lanes.length) continue;   // this seed grew no 190px hall — honest scarcity
+    galleries++;
+    if (lanes.length < 2) lanesOk = false;
+    for (const t of lanes) {
+      if (t.mode !== 'once' || !((t.rearm ?? 0) >= 1) || t.armed !== false || t.groove !== true
+        || t.riders.length !== 1 || t.riders[0].kind !== 'ruin_stinger') lanesOk = false;
+    }
+    // Every station fires its own beat: phases distinct, marched.
+    if (new Set(lanes.map(t => t.riders[0].phase ?? 0)).size !== lanes.length) phased = false;
+    // Alternating walls: consecutive crossings spring from opposite sides.
+    for (let i = 1; i < lanes.length; i++) {
+      const v = (t: TrackSpec): Vec2 => vec(t.path[1].x - t.path[0].x, t.path[1].y - t.path[0].y);
+      const p = v(lanes[i - 1]), q = v(lanes[i]);
+      if (p.x * q.x + p.y * q.y >= 0) sided = false;
+    }
+    // The crossing's INTERIOR is honest floor (the ends are buried in the
+    // masonry by the dartWard ray law — sample inside the walkable band).
+    const gw = out.walk;
+    for (const t of lanes) {
+      for (const f of [0.4, 0.5, 0.6]) {
+        const x = t.path[0].x + (t.path[1].x - t.path[0].x) * f;
+        const y = t.path[0].y + (t.path[1].y - t.path[0].y) * f;
+        if (gw instanceof GridWalkField && !gw.isWalkable(x, y)) walkOk = false;
+      }
+    }
+    // The wiring: exactly one hidden ON flag + one visible OFF plate, both
+    // re-arming, both speaking the gallery's own tag.
+    const flag = (out.trapworks ?? []).find(t => t.id === 'gen_dartlane0_flag');
+    const still = (out.trapworks ?? []).find(t => t.id === 'gen_dartlane0_still');
+    if (!flag || !still || flag.hidden !== true || still.hidden
+      || !((flag.rearm ?? 0) > 0) || !((still.rearm ?? 0) > 0)) wiredOk = false;
+    for (const [tw, set] of [[flag, 'on'], [still, 'off']] as const) {
+      const e = tw?.effects[0] as { kind: string; tags?: string[]; set?: string } | undefined;
+      if (!e || e.kind !== 'lanes' || e.set !== set || e.tags?.[0] !== 'gen_dartlane0') wiredOk = false;
+    }
+    // Plates stand on walkable ground, portal-clear, OUTSIDE every crossing.
+    for (const tw of [flag, still]) {
+      const at = tw?.trigger.kind === 'plate' ? tw.trigger.at : undefined;
+      if (!at) { platesClear = false; continue; }
+      if (gw instanceof GridWalkField && !gw.isWalkable(at.x, at.y)) platesClear = false;
+      if (![entry, ...exits].every(p => Math.hypot(p.x - at.x, p.y - at.y) >= 100)) platesClear = false;
+      for (const t of lanes) {
+        const ax = t.path[0].x, ay = t.path[0].y, bx = t.path[1].x, by = t.path[1].y;
+        const len2 = (bx - ax) ** 2 + (by - ay) ** 2;
+        const f = Math.min(1, Math.max(0, ((at.x - ax) * (bx - ax) + (at.y - ay) * (by - ay)) / len2));
+        if (Math.hypot(at.x - (ax + (bx - ax) * f), at.y - (ay + (by - ay) * f)) < 20) platesClear = false;
+      }
+    }
+    // The tells: a maw per station, the crossings grooved.
+    if (out.doodads.filter(d => d.kind === 'dart_maw').length !== lanes.length) mawsOk = false;
+    if (!out.doodads.some(d => d.kind === 'track_groove')) groovesOk = false;
+  }
+  check('gallery: forced dials LAY galleries on real minted ruins', galleries >= 2, `${galleries}/4 seeds`);
+  check('gallery: standing tagged lanes — once+rearm, DISARMED at birth, grooved, stinger-ridden', lanesOk);
+  check('gallery: stations march (distinct phases down the hall)', phased);
+  check('gallery: stations alternate walls (the left-right rhythm)', sided);
+  check('gallery: every crossing\'s interior is honest floor', walkOk);
+  check('gallery: hidden ON flag + visible OFF plate, re-arming, one shared tag', wiredOk);
+  check('gallery: plates walkable, portal-clear, outside every crossing line', platesClear);
+  check('gallery: a maw per station (the reload read has a home)', mawsOk);
+  check('gallery: the crossings are carved (the dormant tell)', groovesOk);
+  check('gallery: deterministic per seed (double-gen identical)', deterministic);
+  check('gallery: the standing dart wears the volley bolt\'s own painter (drawn == tested, one row)',
+    trackRider('ruin_stinger')?.kind === 'ruin_dart' && !!DOODAD_VISUALS['ruin_dart']);
+  check('gallery: the standing dart TELEGRAPHS (a warn arc — no rake moment to lean on)',
+    (trackRider('ruin_stinger')?.warnAhead ?? 0) >= 100);
+
+  // (c) LIVE: the wrong flag wakes it, the crossing bites, the far plate
+  // stills it, and the flag re-arms — the standing lever, end to end.
+  const lw = makeSimWorld('warrior', 9905);
+  lw.player.pos.x = 200; lw.player.pos.y = 200;
+  lw.tracksEnsure([{
+    path: linePath(vec(700, 434), vec(700, 566)), mode: 'once', rearm: 2, speed: 340,
+    riders: [{ kind: 'ruin_stinger', phase: 0 }], tag: 'gallery', armed: false,
+  }]);
+  lw.trapworksEnsure([
+    { id: 'gal_flag', trigger: { kind: 'plate', at: vec(620, 500), r: 15 }, hidden: true, rearm: 2.5,
+      effects: [{ kind: 'lanes', tags: ['gallery'], set: 'on' }] },
+    { id: 'gal_still', trigger: { kind: 'plate', at: vec(780, 500), r: 16 }, rearm: 1.5,
+      effects: [{ kind: 'lanes', tags: ['gallery'], set: 'off' }] },
+  ]);
+  const lane = lw.tracks.find(t => t.spec.tag === 'gallery')!;
+  const m = lw.createMonster('skeleton_warrior', 3, 'enemy');
+  m.pos.x = 700; m.pos.y = 500;
+  lw.actors.push(m);
+  const life0 = m.life;
+  for (let i = 0; i < Math.ceil(2.6 / DT); i++) lw.update(DT);
+  check('gallery live: DISARMED, a full would-be cycle touches nothing',
+    !lane.armed && m.life === life0, `Δlife=${(life0 - m.life).toFixed(1)}`);
+  lw.player.pos.x = 620; lw.player.pos.y = 500;   // the wrong flagstone
+  for (let i = 0; i < 12; i++) lw.update(DT);
+  check('gallery live: the hidden flag ARMS every lane wearing the tag',
+    lane.armed === true && lw.trapworks.find(t => t.id === 'gal_flag')?.state === 'sprung');
+  lw.player.pos.x = 200; lw.player.pos.y = 200;   // off the flag — the lane hunts alone
+  for (let i = 0; i < Math.ceil(2.6 / DT); i++) lw.update(DT);
+  check('gallery live: a body on the crossing takes the swept-beat hit',
+    m.life < life0, `Δlife=${(life0 - m.life).toFixed(1)}`);
+  lw.player.pos.x = 780; lw.player.pos.y = 500;   // beat it to the silencing plate
+  for (let i = 0; i < 12; i++) lw.update(DT);
+  check('gallery live: the far plate STILLS it through the same tag',
+    lane.armed === false && lw.trapworks.find(t => t.id === 'gal_still')?.state === 'sprung');
+  lw.player.pos.x = 200; lw.player.pos.y = 200;
+  for (let i = 0; i < Math.ceil(0.4 / DT); i++) lw.update(DT);
+  check('gallery live: the flag re-armed on its clock (a standing lever, not a one-shot)',
+    lw.trapworks.find(t => t.id === 'gal_flag')?.state === 'armed');
+  lw.player.pos.x = 620; lw.player.pos.y = 500;   // the wrong flag, again
+  for (let i = 0; i < 12; i++) lw.update(DT);
+  check('gallery live: the wrong flag WAKES it again (the bait loop stands forever)',
+    lane.armed === true);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');

@@ -155,6 +155,29 @@ registerTrackRider({
   color: '#d8cba0',
 });
 
+// --- THE RUIN STINGER — the gallery's standing dart -------------------------
+// The dart gallery's cycling bolt (interiorGen `dartLanes`): the same drawn
+// quarrel as the volley's ruin_dart — one painter, one honest disc — but on a
+// STANDING once+rearm lane instead of a loosed one: it springs from a wall
+// maw, crosses the hall, the far wall swallows it, and the maw reloads
+// through the cradle rest. Where the volley bolt wears warnAhead 0 (the rake
+// IS its warning, and then it is consequence), a standing gallery has no
+// spring moment to rake at — so the stinger TELEGRAPHS every crossing with a
+// real warn arc, and the parked pending dart at the maw is the reload read.
+// Gentler bite, shorter ICD: the gauntlet asks timing, not one dodge.
+registerTrackRider({
+  id: 'ruin_stinger',
+  kind: 'ruin_dart',
+  surface: { kind: 'circle', r: 5 },
+  payload: {
+    hit: { base: 12, perLevel: 4, type: 'physical' },
+    status: { id: 'poison', chance: 0.3 },
+    icdSec: 1.4,
+  },
+  warnAhead: 140,
+  color: '#d8cba0',
+});
+
 // --- Standing tells ---------------------------------------------------------
 // The pressure plates: walk-through (overlap 'trigger') — a plate is floor,
 // never furniture. The trapworks sweep owns the press (trapTriggerHit);

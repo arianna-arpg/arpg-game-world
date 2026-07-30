@@ -27,7 +27,7 @@ an effect kind with zero engine edits.
 1. **Generation** — the interiorGen trap pass reads
    `layoutParams.trapworks` (`TrapGenSpec` dials: `sawHalls`, `mincerRooms`,
    `bladeLattice`, `dartWards`, `boulderRuns`, `falseFloors`, `wireWards`,
-   each `{ chance, max }` plus its own character dials) and
+   `dartLanes`, each `{ chance, max }` plus its own character dials) and
    lays mechanisms WITH the geometry in hand: saw lanes down measured
    corridor stretches (groove carved, clearway-protected), rotor mincers in
    real chambers (hub sized to the room), plates at real coordinates, maws
@@ -127,7 +127,12 @@ a caught body is batted around the wheel; deliberately edgeless bronze, the
 look must not promise a wound it doesn't deal), `ruin_scythe` (the short
 arm, hw 28 — the blade lattice's substrate),
 `ruin_boulder` (`rollingStone` painter — rotation-stable seams, the roll
-reads), `ruin_dart` (`dartBolt`, warnAhead 0 — the rake is the warning).
+reads), `ruin_dart` (`dartBolt`, warnAhead 0 — the rake is the warning),
+`ruin_stinger` (the gallery's standing dart — the SAME `dartBolt` painter
+and honest disc as `ruin_dart`, but warnAhead 140: a standing lane has no
+spring moment to rake at, so the warn arc is the read and the parked
+pending dart at the maw is the reload tell; gentler bite, shorter ICD —
+the gauntlet asks timing, not one dodge).
 
 **The wheel dials** (`mincerRooms`): every laid wheel rolls its own character
 — `blades` [lo,hi] arms, `speed` [lo,hi] rim px/s (slow wheels and fast
@@ -151,17 +156,36 @@ ground, `crossfire` turning every other lane around so the far mouth answers
 too. Where a plate is a PLACE you walk around, a wire is the whole width:
 leap it (`sparesAirborne` default) or learn it. Single-use unless `rearm` is
 authored — a cut wire stays cut, and the zone's own re-mint is the reset.
+**The dart gallery** (`dartLanes`): the `lanes` effect's field debut — the
+fabric's WIRED-STANDING archetype. A hall of cross-firing wall maws on
+STANDING `once`+`rearm` lanes: each station is a **tagged** lane firing from
+a `dart_maw` (alternating walls, phases marched down the hall so the wave
+reads), born `armed: false` — the dormant corridor shows only the carved
+cross-grooves and the maws. A HIDDEN flagstone between the first two
+crossings is wired `{lanes, on}`; one visible plate past the far mouth is
+wired `{lanes, off}`. The wrong flag WAKES the corridor **around** you
+(stations ahead and behind — committed either way); beating it to the far
+plate stills it; both plates re-arm, so a stilled gallery re-wakes on the
+next wrong step, and baiting a pack across the flag is the intended play,
+forever. Dials: `stations` [lo,hi] (geometry trims the count), `speed`
+(default 340), `cadence` (each maw's reload rest, the lanes' rearm), `rider`
+(default `ruin_stinger`). Its hunger is the saw's own 140 — measured: these
+interiors grow few long halls, so a short hall carries the compact
+2-station lesson and a grand one scales to the full march.
 **SITE HUNGER orders the pass.** Corridor stretches are the scarcest thing
 this generator makes and `takeStretch` is first-come: laid last, `wireWards`
 measured **zero** wires over 24 minted ruins, starved by the plates ahead of
-it. It draws straight after `boulderRuns` (the ask ladder: boulder 240 >
-wire 130 ≈ ward 130 < saw 140), and — uniquely — its whole block is **gated
-on the dial** instead of burning the customary chance draw, which is what
-makes that position free: a face that strings no wire draws nothing here
-wherever the block sits, so no standing seed moves for an archetype it never
-fields. Every point of `chance` on a face is a saw hall somewhere else that
-never got built — the sunken ruin's dials are sized against that trade
-(base 0.35×1, toothed halls 0.6×2).
+it. The two DIAL-GATED blocks draw straight after `boulderRuns` — the
+gallery first, then the wire (the ask ladder: boulder 240 > gallery 140 ≈
+saw 140 > wire 130 ≈ ward 130) — and, uniquely, their whole blocks are
+**gated on the dial** (for the gallery: dial present AND `chance > 0`)
+instead of burning the customary chance draw, which is what makes those
+positions free: a face that fields neither draws nothing here wherever the
+blocks sit, so no standing seed moves for an archetype it never fields
+(probe §13 pins absent == chance-0, byte for byte). Every point of `chance`
+on a face is a saw hall somewhere else that never got built — the sunken
+ruin's dials are sized against that trade (base 0.35×1, toothed halls
+0.6×2).
 Tells: `ruin_plate`/`ruin_plate_hidden` (`floorPlate` painter, `sink`
 dial), `ruin_floor_gap` (chasmPit — a TRUE pit, `DoodadRule.fall`),
 `boulder_cradle` (boulder painter — you SEE the stone waiting),

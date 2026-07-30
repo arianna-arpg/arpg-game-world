@@ -477,6 +477,26 @@ export interface TrapGenSpec {
     chance: number; max?: number;
     rays?: [number, number]; crossfire?: number; rearm?: number;
   };
+  /** THE DART GALLERY — the fabric's WIRED-STANDING archetype (the 'lanes'
+   *  effect's field debut): a long hall of cross-firing wall maws on
+   *  STANDING once+rearm lanes born DISARMED — only the carved cross-grooves
+   *  and the maws betray the dormant corridor — with a HIDDEN flagstone deep
+   *  in the gallery wired `{lanes, on}` and one visible plate past the far
+   *  mouth wired `{lanes, off}`. Stepping the wrong flag WAKES the corridor
+   *  around you (stations both ahead and behind — committed either way);
+   *  beating it to the far plate stills it. Both plates re-arm, so a stilled
+   *  gallery re-wakes on the next wrong step — baiting a pack across the
+   *  flag is the intended play, forever.
+   *  Dials: `stations` [lo,hi] firing maws across the hall (alternating
+   *  walls, phase-marched down the corridor; geometry may trim the count);
+   *  `speed` dart px/s; `cadence` seconds each maw rests between shots (the
+   *  lane's rearm, [1,90]); `rider` overrides the standing-dart kind
+   *  (default ruin_stinger). Absent OR chance 0 = the block never draws —
+   *  the authored matrix cannot move (probe §13 pins byte-parity). */
+  dartLanes?: {
+    chance: number; max?: number;
+    stations?: [number, number]; speed?: number; cadence?: number; rider?: string;
+  };
 }
 
 /** The geometry the trap pass measures against. The interior generators build
@@ -598,6 +618,98 @@ function layInteriorTrapworks(ctx: GenCtx, spec: TrapGenSpec | undefined, geo: T
     });
     ctx.doodads.push({ pos: vec(s.a.x, s.a.y), radius: 24, kind: 'boulder_cradle' });
     layTraveledWay(ctx, [s.a, s.b], { kind: 'track_groove', band: [12, 15], step: 26, overgrowth: 0 });
+  }
+
+  // --- THE DART GALLERY: the 'lanes' effect's field debut — a hall of
+  // standing cross-fire the corridor CARRIES disarmed until the wrong
+  // flagstone wakes it. Each station is a tagged once+rearm lane firing from
+  // a wall maw (alternating walls, phases marched down the hall so the wave
+  // reads); the hidden flag deep in the gallery is wired {lanes, on}, the
+  // visible plate past the far mouth {lanes, off}, and both re-arm — the
+  // stilled gallery re-wakes on the next wrong step, and baiting a pack
+  // across the flag is the intended play. Seated after the boulder run and
+  // before the always-drawing plates: like the wire it is GATED ON THE DIAL
+  // — an absent or chance-0 face burns no draws, so no standing seed moves
+  // for an archetype it never fields (probe §13 pins absent == chance-0
+  // byte-parity) — and its hunger is the saw's own 140 (measured: these
+  // interiors grow FEW long halls — a 190 ask starved 3 of 4 probe ruins;
+  // at 140 a short hall carries the compact 2-station lesson and a grand
+  // one scales to the full march).
+  const dl = spec.dartLanes;
+  if (dl && dl.chance > 0) {
+    for (let k = 0; k < (dl.max ?? 1); k++) {
+      const want = rng.chance(dl.chance);
+      if (!want) continue;
+      // Fixed draw shape (the wheel discipline): roll the dials, then site.
+      const stBand = dl.stations ?? [3, 5];
+      let n = rng.int(stBand[0], stBand[1]);
+      const s = takeStretch(140);
+      if (!s) continue;
+      const perpX = s.horiz ? 0 : 1, perpY = s.horiz ? 1 : 0;
+      // The station field [fA,fB]; the silencing plate stands past its far
+      // edge (fOff), so the gap between the last crossing and the plate is
+      // real ground — you still the gallery from OUTSIDE its teeth.
+      const fA = 0.14, fB = 0.80, fOff = 0.95;
+      const span = (fB - fA) * s.len;
+      n = Math.max(2, Math.min(n, Math.floor(span / 56) + 1));
+      const stepF = (fB - fA) / (n - 1);
+      // The wrong flag sits BETWEEN the first and second crossings: you meet
+      // one dormant groove before it (forewarned), and once it clicks the
+      // gallery is live on BOTH sides of you.
+      const flagAt = lerpAt(s, fA + stepF / 2);
+      const offAt = lerpAt(s, fOff);
+      // The silencing plate lives NEAR the mouth by design (it is the exit
+      // lever) — measured mouths seat it 30-35px inside the door, a clear
+      // stride past the thin slab, so ask only that it stays off the leaf
+      // itself (26 ≈ slab half-thickness + a rim). A door-funneled walker
+      // may press it on the way in: set 'off' is a mercy lever — it can
+      // only forgive, never spring. The deep flag keeps the full clearance.
+      if (!clearOfDoors(flagAt) || !clearOfDoors(offAt, 26)) continue;
+      const reach = geo.halfW + CELL * 0.9;
+      const tag = `gen_dartlane${k}`;
+      const speed = Math.min(600, Math.max(60, dl.speed ?? 340));
+      const cadence = Math.min(90, Math.max(1, dl.cadence ?? 1.6));
+      const rider = dl.rider ?? 'ruin_stinger';
+      for (let i = 0; i < n; i++) {
+        const c = lerpAt(s, fA + i * stepF);
+        const side = i % 2 === 0 ? 1 : -1;
+        const a = vec(c.x + perpX * reach * side, c.y + perpY * reach * side);
+        const b = vec(c.x - perpX * reach * side, c.y - perpY * reach * side);
+        (ctx.tracks ??= []).push({
+          path: [{ x: a.x, y: a.y }, { x: b.x, y: b.y }],
+          mode: 'once', rearm: cadence, speed,
+          riders: [{ kind: rider, phase: i / n }],
+          tag, armed: false, groove: true,
+        });
+        // The maw at the firing wall (dart_maw, the dartWard's own tell) —
+        // the parked pending stinger rests in it between shots.
+        ctx.doodads.push({
+          pos: vec(a.x - perpX * side * 4, a.y - perpY * side * 4),
+          radius: 12, kind: 'dart_maw',
+        });
+        // Carve only the WALKABLE crossing — the lane's ends are buried in
+        // masonry (the dartWard ray law); the groove is floor truth.
+        layTraveledWay(ctx, [
+          vec(c.x + perpX * (geo.halfW - 2) * side, c.y + perpY * (geo.halfW - 2) * side),
+          vec(c.x - perpX * (geo.halfW - 2) * side, c.y - perpY * (geo.halfW - 2) * side),
+        ], { kind: 'track_groove', band: [9, 12], step: 20, overgrowth: 0 });
+      }
+      (ctx.trapworks ??= []).push({
+        id: `${tag}_flag`,
+        trigger: { kind: 'plate', at: flagAt, r: 15 },
+        hidden: true,
+        rearm: 2.5,
+        effects: [{ kind: 'lanes', tags: [tag], set: 'on' }],
+        announce: 'the maws grind open —',
+      }, {
+        id: `${tag}_still`,
+        trigger: { kind: 'plate', at: offAt, r: 16 },
+        rearm: 1.5,
+        effects: [{ kind: 'lanes', tags: [tag], set: 'off' }],
+        announce: 'the maws fall still —',
+        color: '#9db4a6',
+      });
+    }
   }
 
   // --- WIRE WARDS: the fabric's TRIPLINE half. A wire strung wall-to-wall
