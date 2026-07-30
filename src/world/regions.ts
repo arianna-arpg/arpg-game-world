@@ -950,6 +950,16 @@ registerRegion({ id: 'drystone', walkable: false, blocks: true, label: 'the fiel
 registerRegion({ id: 'hedgewall', walkable: false, blocks: true, label: 'the hedgerow',
   blocksShot: false, blocksSight: true,
   visual: { fill: '#1e3610', alpha: 1, foliage: true, edge: { color: '#68a03c', width: 5 } } });
+// SANDSTONE: the mesa country's standing stone — crag's TRUE-WALL policy in
+// desert tones (bodies, shots and sight all stop). The sheared-table read
+// rides the cliff face; the pale sun-baked rim announces stone against sand
+// (the flesh-wall lesson, kilned). data/massifs.ts rides it for the mesa and
+// sand_court masses; distinct from butte_top on purpose — no tier row, a
+// tableland mesa is a WALL you round, never a summit the needles recipe cuts
+// ramps to.
+registerRegion({ id: 'sandstone', walkable: false, blocks: true, label: 'the sandstone',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#5e4526', alpha: 1, cliff: true, edge: { color: '#c9a05c', width: 5 } } });
 // BED WALL: the Tender's raised planter bed at bug height — timber boards
 // shoring a rampart of worked soil (data/garden.ts rides it for the
 // planter_bed masses). A TRUE WALL: at this scale the boards stand a

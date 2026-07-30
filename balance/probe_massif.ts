@@ -26,6 +26,22 @@
 //      carve is a byte-exact prefix of the floored carve on the same seed —
 //      the rescue only APPENDS, so every minMasses-0 zone in the game is
 //      untouched by construction.
+//   G. THE GARRISON + THE ROW GRAIN (the 2026-07-30 expansion) — THE FORK
+//      LAW: authoring a garrison perturbs garrisons ALONE (same-seed carves
+//      byte-identical with it on or off — the roll rides a per-mass fork,
+//      never the layout stream); the patron default (faction absent = the
+//      zone biome's patron, no biome = nobody posts); `over: {}` is a no-op;
+//      per-row/per-kind sizeR bands honored; inner dressing lands on court
+//      floors (off the POI seat's standoff) and the invariants hold under
+//      authored ringInner/mouthScale.
+//   H. THE MESA — the tableland tileset (desert biome, forceLayout massif),
+//      the sandstone TRUE-WALL region row, the mesa kind's own size band
+//      honored on minted ground, and garrisoned courts posting the desert's
+//      patron.
+//   I. THE COURT COUNTRY (the extreme regime) — the court-of-sands face:
+//      court kinds only, high coverage, the weave/exit/POI guarantees intact,
+//      shipped garrison chances seating guards, the great-court row's size
+//      band live, and a forced-chance run garrisoning every court exactly.
 //
 // Rigs carry pressure detection: a rig that never actually stressed its law
 // exits 1 rather than passing green.
@@ -433,6 +449,306 @@ function bareCtx(seed: number): GenCtx {
     if (!prefixPairs) fail('F: prefix rig never ran (dead rig)');
     if (!rescued) fail('F: pressure — the rescue never fired on the synthetic starved arena (dead rig)');
     note(`F: prefix law held on ${prefixPairs} pairs, rescue fired on ${rescued}`);
+  }
+}
+
+// --- Rig G: the garrison fork law + the row grain -----------------------------
+{
+  // G1 — THE FORK LAW: garrison on vs off, same seed → the carved masses are
+  // byte-identical (the roll rides a per-mass fork of the shape seed, never
+  // the layout stream); garrisons land at interiors with the authored
+  // faction/size.
+  const plainRows = [{ kind: 'fold', weight: 1 }];
+  const garrRows = [{ kind: 'fold', weight: 1, over: { garrison: { chance: 1, faction: 'gnoll', size: [2, 3] as [number, number] } } }];
+  const G_PARAMS = { massifCoverage: [0.2, 0.26] as [number, number], massifSizeR: [200, 300] as [number, number] };
+  let forked = 0;
+  for (let s = 0; s < Math.min(SEEDS, 10); s++) {
+    const seed = seedAt(s) ^ 0xa11;
+    const cPlain = bareCtx(seed);
+    const plain = carveMassifs(cPlain, { ...defOf('massif_g', [], { layoutParams: { ...G_PARAMS, massifMasses: plainRows } }), seed });
+    const cGarr = bareCtx(seed);
+    const garr = carveMassifs(cGarr, { ...defOf('massif_g', [], { layoutParams: { ...G_PARAMS, massifMasses: garrRows } }), seed });
+    if (JSON.stringify(plain) !== JSON.stringify(garr)) {
+      fail(`G1: seed ${seed} authoring a garrison disturbed the carve — the fork law broke`);
+    }
+    if (cPlain.garrisons.length) fail(`G1: seed ${seed} garrison-less rows posted ${cPlain.garrisons.length} garrisons`);
+    const interiors = garr.filter(m => m.interior);
+    if (cGarr.garrisons.length !== interiors.length) {
+      fail(`G1: seed ${seed} chance-1 garrison posted ${cGarr.garrisons.length} packs over ${interiors.length} courts`);
+    }
+    for (const g of cGarr.garrisons) {
+      if (g.faction !== 'gnoll') fail(`G1: seed ${seed} garrison faction '${g.faction}' — authored 'gnoll' lost`);
+      if (g.size[0] !== 2 || g.size[1] !== 3) fail(`G1: seed ${seed} garrison size ${g.size} — authored [2,3] lost`);
+      if (!interiors.some(m => m.interior!.x === g.pos.x && m.interior!.y === g.pos.y)) {
+        fail(`G1: seed ${seed} garrison at ${Math.round(g.pos.x)},${Math.round(g.pos.y)} matches no court interior`);
+      }
+    }
+    forked += cGarr.garrisons.length;
+  }
+  if (!forked) fail('G1: pressure — no garrison ever posted (dead rig)');
+
+  // G2 — THE PATRON DEFAULT: faction absent = the zone biome's patron
+  // (desert → gnoll); no biome and no faction = nobody posts (the roll still
+  // rides the fork, so the carve is untouched either way).
+  {
+    const seed = seedAt(3) ^ 0xa22;
+    const rows = [{ kind: 'fold', weight: 1, over: { garrison: { chance: 1 } } }];
+    const cPatron = bareCtx(seed);
+    carveMassifs(cPatron, { ...defOf('massif_g2', [], { layoutParams: { ...G_PARAMS, massifMasses: rows }, biome: 'desert' }), seed });
+    if (!cPatron.garrisons.length) fail('G2: desert-biome courts posted no patron garrison');
+    for (const g of cPatron.garrisons) {
+      if (g.faction !== 'gnoll') fail(`G2: patron default resolved '${g.faction}', expected the desert's gnolls`);
+    }
+    const cNone = bareCtx(seed);
+    carveMassifs(cNone, { ...defOf('massif_g2b', [], { layoutParams: { ...G_PARAMS, massifMasses: rows } }), seed });
+    if (cNone.garrisons.length) fail('G2: biome-less def posted a garrison from nowhere');
+  }
+
+  // G3 — `over: {}` is a NO-OP: the merge seam adds no draws and changes no
+  // reads.
+  {
+    const seed = seedAt(5) ^ 0xa33;
+    const a = carveMassifs(bareCtx(seed), { ...defOf('massif_g3', [], { layoutParams: { ...G_PARAMS, massifMasses: [{ kind: 'fold', weight: 1 }] } }), seed });
+    const b = carveMassifs(bareCtx(seed), { ...defOf('massif_g3', [], { layoutParams: { ...G_PARAMS, massifMasses: [{ kind: 'fold', weight: 1, over: {} }] } }), seed });
+    if (JSON.stringify(a) !== JSON.stringify(b)) fail('G3: over:{} disturbed the carve — the merge seam is not a no-op');
+  }
+
+  // G4 — THE ROW BAND: a row's sizeR remaps every landed body of that row
+  // into its own band (draw-free — the zone's roll is re-mapped, never
+  // re-drawn).
+  {
+    let banded = 0;
+    for (let s = 0; s < Math.min(SEEDS, 8); s++) {
+      const seed = seedAt(s) ^ 0xa44;
+      const rows = [{ kind: 'tor', weight: 1, sizeR: [80, 110] as [number, number] }];
+      const masses = carveMassifs(bareCtx(seed), { ...defOf('massif_g4', [], { layoutParams: { massifMasses: rows, massifCoverage: [0.1, 0.14] as [number, number] } }), seed });
+      for (const m of masses) {
+        banded++;
+        if (m.r < 80 - 1e-9 || m.r > 110 + 1e-9) fail(`G4: seed ${seed} row-banded tor rolled r=${m.r.toFixed(1)} outside [80,110]`);
+      }
+    }
+    if (!banded) fail('G4: pressure — no row-banded mass ever landed (dead rig)');
+  }
+
+  // G5 — INNER DRESSING: a court kind's inner rows stock its own floor —
+  // pieces inside the ring (off the 42px POI-seat standoff), none anywhere
+  // else (the def's layout is EMPTY, so every landed piece IS an inner
+  // piece), and the interior stays reachable around them.
+  {
+    const innerRows = [{ kind: 'clay_pots', weight: 1, radius: [10, 14] as [number, number] }];
+    const rows = [{ kind: 'fold', weight: 1, over: { inner: innerRows, innerChance: 1, innerSpacing: 40 } }];
+    let pots = 0, courts = 0;
+    for (let s = 0; s < Math.min(SEEDS, 8); s++) {
+      const seed = seedAt(s) ^ 0xa55;
+      const def = defOf('massif_g5', [], { layoutParams: { ...G_PARAMS, massifMasses: rows } });
+      const out = gen(def, seed);
+      const st = gridStats(out);
+      if (!st) { fail(`G5: seed ${seed} no grid`); continue; }
+      const masses = carveMassifs(bareCtx(seed), { ...def, seed });
+      const inner = out.doodads.filter(d => d.kind === 'clay_pots');
+      pots += inner.length;
+      courts += masses.filter(m => m.interior).length;
+      for (const d of inner) {
+        const home = masses.find(m => m.interior && Math.hypot(d.pos.x - m.interior.x, d.pos.y - m.interior.y) <= m.r * 0.6 * 0.9 + 15);
+        if (!home) fail(`G5: seed ${seed} inner piece at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} sits outside every court floor`);
+        else if (Math.hypot(d.pos.x - home.interior!.x, d.pos.y - home.interior!.y) < 42 - 15) {
+          fail(`G5: seed ${seed} inner piece crowds the POI seat — the standoff broke`);
+        }
+      }
+      for (const poi of out.pois) {
+        const q = st.grid.isWalkable(poi.x, poi.y) ? poi : st.grid.snapToWalkable(vec(poi.x, poi.y));
+        if (!st.grid.reachable(entry, q)) fail(`G5: seed ${seed} stocked court interior unreachable`);
+      }
+    }
+    if (!courts) fail('G5: pressure — no court minted (dead rig)');
+    if (!pots) fail('G5: pressure — inner dressing never landed a piece (dead rig)');
+    note(`G5: ${pots} inner pieces over ${courts} courts`);
+  }
+
+  // G6 — RING DIALS UNDER THE INVARIANTS: authored ringInner (thick and
+  // thin) + widened mouths keep the weave one component, exits + interiors
+  // reachable.
+  for (const [ri, ms] of [[0.45, 1], [0.75, 1.4]] as const) {
+    for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+      const seed = seedAt(s) ^ 0xa66;
+      const rows = [{ kind: 'fold', weight: 1, over: { ringInner: ri, mouthScale: ms } }];
+      const out = gen(defOf('massif_g6', [], { layoutParams: { ...G_PARAMS, massifMasses: rows } }), seed);
+      const st = gridStats(out);
+      if (!st) { fail(`G6: ri=${ri} seed ${seed} no grid`); continue; }
+      if (st.comps !== 1) fail(`G6: ri=${ri} ms=${ms} seed ${seed} split the weave (${st.comps} comps)`);
+      for (const e of exits) if (!st.grid.reachable(entry, e)) fail(`G6: ri=${ri} seed ${seed} exit unreachable`);
+      for (const poi of out.pois) {
+        const q = st.grid.isWalkable(poi.x, poi.y) ? poi : st.grid.snapToWalkable(vec(poi.x, poi.y));
+        if (!st.grid.reachable(entry, q)) fail(`G6: ri=${ri} seed ${seed} interior unreachable`);
+      }
+    }
+  }
+}
+
+// --- Rig H: the mesa — tableland tileset + sandstone + the kind band ----------
+{
+  const ts = TILESETS.tableland;
+  if (!ts) fail('H: tableland tileset missing');
+  else {
+    if (ts.forceLayout !== 'massif') fail(`H: tableland forceLayout '${ts.forceLayout}' — the massif coupling is gone`);
+    if (ts.biome !== 'desert') fail(`H: tableland biome '${ts.biome}' — the desert claim is gone`);
+    if (!ts.depthAffinity) fail('H: tableland carries no depthAffinity — the country staging is gone');
+    const sand = regionKind('sandstone');
+    if (!sand || sand.walkable || !sand.blocks || !sand.blocksShot || !sand.blocksSight) {
+      fail('H: sandstone must be a TRUE WALL (blocks + blocksShot + blocksSight)');
+    }
+    const mesa = massKindOf('mesa');
+    if (mesa.id !== 'mesa') fail('H: mass kind mesa missing');
+    else {
+      if (mesa.region !== 'sandstone') fail(`H: mesa region '${mesa.region}' — expected sandstone`);
+      if (!mesa.sizeR) fail('H: mesa carries no kind-default size band');
+    }
+    const court = massKindOf('sand_court');
+    if (court.id !== 'sand_court') fail('H: mass kind sand_court missing');
+    else {
+      if (!court.garrison) fail('H: sand_court authors no garrison — Part A left the regime');
+      if (court.garrison?.faction) fail(`H: sand_court hardcodes faction '${court.garrison.faction}' — the patron default is the law`);
+      if (!court.inner?.length) fail('H: sand_court authors no inner rows — the stocked ring is gone');
+    }
+
+    // Minted base face (compositions omitted so the carve replay's streams
+    // align — rig D's law; genqa sweeps the composed whole).
+    const W = 3400, H2 = 2500;
+    const hEntry = vec(130, H2 / 2);
+    const hExits = [vec(W - 130, H2 / 2), vec(W / 2, 130)];
+    const baseDef = (id: string, params: Record<string, unknown>, layout: StampSpec[]): ZoneDef => ({
+      id, name: `QA ${id}`, level: 9, size: { w: W, h: H2 },
+      theme: ts.theme as ZoneDef['theme'],
+      layout,
+      layoutType: 'massif',
+      layoutParams: params,
+      biome: ts.biome,
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    });
+    const mesaBand = massKindOf('mesa').sizeR!;
+    let sandCells = false, mesas = 0;
+    for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+      const seed = seedAt(s) ^ 0xbe5a;
+      const def = baseDef('massif_h', ts.layoutParams as Record<string, unknown>, [...(ts.common ?? []), ...ts.layout]);
+      const out = generateLayout({ ...def, seed }, { w: W, h: H2 }, new Rng(seed), hEntry, hExits);
+      if (!(out.walk instanceof GridWalkField)) { fail(`H: seed ${seed} no grid`); continue; }
+      const st = gridStats(out)!;
+      if (st.comps !== 1) fail(`H: seed ${seed} tableland weave split (${st.comps} comps)`);
+      for (const e of hExits) if (!st.grid.reachable(hEntry, e)) fail(`H: seed ${seed} exit unreachable`);
+      if (out.walk.pack().kinds.includes('sandstone')) sandCells = true;
+      // Carve replay (no compositions in the def, streams align): the kind
+      // band holds — mesas inside their own [200,360], courts inside the
+      // zone default.
+      const ctx: GenCtx = {
+        rng: new Rng(seed), arena: { w: W, h: H2 }, entry: hEntry, exits: hExits, seed,
+        doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+        garrisons: [], caveSeeds: [], reserved: [],
+      };
+      const masses = carveMassifs(ctx, { ...def, seed });
+      for (const m of masses) {
+        if (m.kind === 'mesa') {
+          mesas++;
+          if (m.r < mesaBand[0] - 1e-9 || m.r > mesaBand[1] + 1e-9) {
+            fail(`H: seed ${seed} mesa r=${m.r.toFixed(1)} outside its kind band [${mesaBand}]`);
+          }
+        }
+        if (m.kind === 'sand_court' && (m.r < MASSIF_CFG.sizeR[0] - 1e-9 || m.r > MASSIF_CFG.sizeR[1] + 1e-9)) {
+          fail(`H: seed ${seed} sand_court r=${m.r.toFixed(1)} outside the zone band`);
+        }
+      }
+      // Any posted garrison speaks the desert's patron.
+      for (const g of ctx.garrisons) {
+        if (g.faction !== 'gnoll') fail(`H: seed ${seed} tableland garrison faction '${g.faction}' — patron is gnoll`);
+      }
+    }
+    if (!sandCells) fail('H: pressure — no minted tableland ever painted sandstone (dead rig)');
+    if (!mesas) fail('H: pressure — no mesa ever landed (dead rig)');
+    note(`H: ${mesas} mesas banded`);
+  }
+}
+
+// --- Rig I: the court country — the extreme regime, census'd ------------------
+{
+  const ts = TILESETS.tableland;
+  const face = ts?.variants?.find(v => v.name === 'the court of sands');
+  if (!ts || !face) fail('I: the court-of-sands face is missing');
+  else {
+    const MERGED = { ...ts.layoutParams, ...face.layoutParams } as Record<string, unknown>;
+    const pool = MERGED.massifMasses as { kind: string; sizeR?: [number, number]; over?: Record<string, unknown> }[];
+    // Court kinds ONLY, structurally: every pool row names a kind whose every
+    // silhouette is the court shape.
+    for (const row of pool) {
+      const kd = massKindOf(row.kind);
+      if (kd.shapes.some(sh => sh.shape !== 'court')) {
+        fail(`I: regime pool row '${row.kind}' rolls non-court shapes — the court country leaked`);
+      }
+    }
+    const W = 3400, H2 = 2500;
+    const iEntry = vec(130, H2 / 2);
+    const iExits = [vec(W - 130, H2 / 2), vec(W / 2, 130)];
+    const regimeDef = (id: string, params: Record<string, unknown>): ZoneDef => ({
+      id, name: `QA ${id}`, level: 9, size: { w: W, h: H2 },
+      theme: { ...ts.theme, ...(face.theme ?? {}) } as ZoneDef['theme'],
+      layout: [...(ts.common ?? []), ...face.layout],
+      layoutType: 'massif',
+      layoutParams: params,
+      biome: ts.biome,
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    });
+    let courts = 0, guards = 0, great = 0;
+    for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+      const seed = seedAt(s) ^ 0xc0a7;
+      const def = regimeDef('massif_i', MERGED);
+      const out = generateLayout({ ...def, seed }, { w: W, h: H2 }, new Rng(seed), iEntry, iExits);
+      if (!(out.walk instanceof GridWalkField)) { fail(`I: seed ${seed} no grid`); continue; }
+      const st = gridStats(out)!;
+      if (st.comps !== 1) fail(`I: seed ${seed} the regime split the weave (${st.comps} comps)`);
+      if (st.wallFrac > 0.5) fail(`I: seed ${seed} wall fraction ${st.wallFrac.toFixed(2)} — the field drowned`);
+      for (const e of iExits) if (!st.grid.reachable(iEntry, e)) fail(`I: seed ${seed} exit unreachable at the regime dials`);
+      for (const poi of out.pois) {
+        const q = st.grid.isWalkable(poi.x, poi.y) ? poi : st.grid.snapToWalkable(vec(poi.x, poi.y));
+        if (!st.grid.reachable(iEntry, q)) fail(`I: seed ${seed} court interior unreachable at the regime dials`);
+      }
+      // Replay the carve for the census (rig D's law; def carries no comps).
+      const ctx: GenCtx = {
+        rng: new Rng(seed), arena: { w: W, h: H2 }, entry: iEntry, exits: iExits, seed,
+        doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+        garrisons: [], caveSeeds: [], reserved: [],
+      };
+      const masses = carveMassifs(ctx, { ...def, seed });
+      if (masses.length < 3) fail(`I: seed ${seed} regime minted only ${masses.length} courts — the country is empty`);
+      for (const m of masses) {
+        if (m.kind !== 'sand_court') fail(`I: seed ${seed} non-court mass '${m.kind}' in the court country`);
+        if (!m.interior) fail(`I: seed ${seed} a court reported no interior`);
+        if (m.r > 300 + 1e-9) great++;
+      }
+      courts += masses.length;
+      guards += ctx.garrisons.length;
+      for (const g of ctx.garrisons) {
+        if (g.faction !== 'gnoll') fail(`I: seed ${seed} regime garrison faction '${g.faction}'`);
+      }
+      note(`I seed ${seed}: ${masses.length} courts, ${ctx.garrisons.length} garrisoned, wallFrac ${st.wallFrac.toFixed(2)}`);
+    }
+    if (courts < 18) fail(`I: pressure — the regime aggregated only ${courts} courts over the sweep (dead regime)`);
+    if (!guards) fail('I: shipped garrison chances posted NO guard across the whole sweep (statistically impossible at 0.55)');
+    if (!great) fail('I: the great-court row never landed (its sizeR band is dead in the shipped face)');
+
+    // Forced-chance control: every court garrisoned, exactly.
+    {
+      const seed = seedAt(2) ^ 0xc1a7;
+      const forcedPool = pool.map(row => ({ ...row, over: { ...(row.over ?? {}), garrison: { chance: 1 } } }));
+      const ctx: GenCtx = {
+        rng: new Rng(seed), arena: { w: W, h: H2 }, entry: iEntry, exits: iExits, seed,
+        doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+        garrisons: [], caveSeeds: [], reserved: [],
+      };
+      const masses = carveMassifs(ctx, { ...regimeDef('massif_i_forced', { ...MERGED, massifMasses: forcedPool }), seed });
+      const interiors = masses.filter(m => m.interior).length;
+      if (!interiors) fail('I: forced control minted no courts');
+      else if (ctx.garrisons.length !== interiors) {
+        fail(`I: forced chance-1 garrisoned ${ctx.garrisons.length}/${interiors} courts — the roll leaks`);
+      }
+    }
   }
 }
 

@@ -2636,6 +2636,133 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // TABLELAND — the desert's massif country (the downs doctrine in sandstone):
+  // standing mesas and half-swallowed sandstone courts strewn over open waste,
+  // the MIXTURE archetype where the dunefields march and the scrub scatters.
+  // The mesa kind carries its own size band (tables run big); the sand courts
+  // come garrisoned by the waste's own patron and stocked with what the dead
+  // city left (data/massifs.ts — Part A's debut authors). The court-of-sands
+  // face is THE COURT COUNTRY: nothing but walled rings at high coverage —
+  // the walk between the walls IS the zone.
+  tableland: {
+    id: 'tableland',
+    forceLayout: 'massif',
+    biome: 'desert', sky: 'open',
+    // The waste's middle band: past the rim scrub, thinning before the erg
+    // heart and the hive warrens claim the deeps.
+    depthAffinity: { from: 0.12, fadeIn: 0.18, to: 0.7, fadeOut: 0.2, mul: 0.85 },
+    compositions: [
+      { composition: 'caravan_graveyard', chance: 0.2 },
+      { composition: 'buried_village', chance: 0.16 },
+      { composition: 'sepulcher_site', chance: 0.12 },
+      { composition: 'oasis_haven', chance: 0.15 },
+    ],
+    layoutParams: {
+      massifMasses: [
+        { kind: 'mesa', weight: 3 },
+        { kind: 'sand_court', weight: 1.2 },
+      ],
+      massifCoverage: [0.16, 0.24],
+    },
+    nameFirst: ['Redstone', 'Sunspire', 'Dust-Carved', 'Old Kiln', 'Windshear', 'Highshelf', 'Cracked-Crown', 'Vulture-Rock', 'Sandworn', 'Ochre', 'Broketable', 'Longmesa', 'Scorchstone', 'Dry-Terrace'],
+    nameSecond: ['Tables', 'Mesas', 'Terraces', 'Stands', 'Shelves', 'Tablelands', 'Crowns', 'Steps', 'Benches', 'Rises', 'Courts'],
+    theme: {
+      dayLight: 1.55,
+      heat: 1,
+      swelter: 0.8,
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.75 }, { kind: 'sandDrift', intensity: 0.4 }],
+      // The waste's sun-bleached floor, a shade rockier than the open desert
+      // (the tables shed their own rubble); the wall tone is the sandstone
+      // region's fill, so bodies and floor read one country.
+      ground: {
+        scale: 2.4, stretchX: 1.7, strength: 1.2, speckles: 0.5,
+        palette: ['#241c0e', '#3a2c16', '#503e20', '#66522a', '#7c6634'], bias: 0.56, alpha: 0.55,
+      },
+      floor: '#1c170d', grid: '#2c2518', border: '#7a6438',
+      obstacle: '#5e4526', obstacleEdge: '#8a6e40', accent: '#e8c060',
+      mud: '#6a5630', water: '#2a6a7a', sand: '#c9a86a', wall: '#5e4526',
+    },
+    sizeW: [3000, 4000], sizeH: [2200, 2900], ellipseChance: 0.2,
+    layout: [
+      { kind: 'cactus', count: [4, 8] },
+      { kind: 'sand', count: [3, 5] },
+      { kind: 'rocks', count: [5, 9], radius: [20, 44] },
+      { kind: 'rock_spire', count: [1, 3] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'heat_shimmer', count: [2, 4] },
+      { kind: 'ruin', count: [0, 1] },
+      { kind: 'camp', count: [0, 1] },
+      { kind: 'sun_awning', count: [0, 1] },
+      { kind: 'cave', count: [0, 2] },
+      { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
+    ],
+    // Whatever face rolls, the tables keep the waste's own litter.
+    common: [
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      { kind: 'fulgurite', count: [0, 1] },
+      { kind: 'bone_pile', count: [1, 2] },
+      { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
+    ],
+    variants: [
+      // THE COURT COUNTRY — the extreme regime, shipped: court kinds ONLY at
+      // high coverage (a ruined city of courts in the sand). The second pool
+      // row is the per-row grain live in data: the GREAT courts — wider
+      // rings, twin gates, a garrison that nearly always answers.
+      { name: 'the court of sands', layout: [
+        { kind: 'ruin', count: [1, 2] },
+        { kind: 'sand', count: [3, 5] },
+        { kind: 'bone_pile', count: [1, 3] },
+        { kind: 'heat_shimmer', count: [2, 4] },
+        { kind: 'scree', count: [2, 3] },
+        { kind: 'cave', count: [0, 1] },
+      ], layoutParams: {
+        massifMasses: [
+          { kind: 'sand_court', weight: 3 },
+          { kind: 'sand_court', weight: 1, sizeR: [260, 380],
+            over: { mouths: [2, 3], garrison: { chance: 0.75 } } },
+        ],
+        massifCoverage: [0.24, 0.3],
+        massifMaxMasses: 14,
+        massifSizeR: [170, 300],
+      } },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      archetypes: [
+        { weight: 2, size: [6, 9] }, { weight: 5, size: [3, 5] }, { weight: 3, size: [1, 2] },
+      ],
+      // The waste's own tenants hold the tables (the desert roster, staged
+      // by presence — the courts' garrisons draw from the patron lane).
+      table: [
+        { id: 'gnoll_prowler', weight: 4 },
+        { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },
+        { id: 'gnoll_butcher', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'dune_stalker', weight: 2 },
+        { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'bronze_scarab', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'gnoll_bonepicker', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'gnoll_skinner', weight: 1, presence: { from: 7, fadeIn: 4 } },
+        { id: 'gnoll_matron', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'giant_maggot', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'mirage_dancer', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'salt_husk', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'unearth', weight: 2 },
+      { kind: 'leyline', weight: 1 },
+    ],
+  },
+
   // BURIED VAULT — the desert's descent (vault_gate sidezone): a lost
   // village's underworks in dressed sandstone, preserved by the sands that
   // erased its streets. Interior-only (frontier:false); the sunken_ruin

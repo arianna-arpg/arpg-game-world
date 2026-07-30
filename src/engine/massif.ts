@@ -40,9 +40,10 @@
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
-import type { Rng } from '../core/rng';
+import { Rng } from '../core/rng';
 import type { ZoneDef } from '../data/zones';
 import { GridWalkField } from '../world/gridWalk';
+import { patronFaction } from '../world/biomes';
 import { regionKind } from '../world/regions';
 import {
   ensureGrid, layoutParam, registerLayout, scatterDecoration,
@@ -93,6 +94,18 @@ export const MASSIF_CFG = {
   lobe: 0.34,
   /** Court-shape mouth count band when the kind doesn't declare its own. */
   mouths: [1, 2] as [number, number],
+  /** Dart border-inset FLOOR (px): bodies may bleed off the arena border
+   *  (pockets heal), but a seat never lands closer than max(this, r×0.35)
+   *  to it — the bleed reads as country running past the edge, never as a
+   *  wall living entirely outside the arena. */
+  insetMin: 90,
+  /** GARRISON pack-size band when a kind's garrison spec doesn't name one
+   *  (the structure-stamp default — levelgen's pre-inhabited POI law). */
+  garrisonSize: [3, 5] as [number, number],
+  /** INNER dressing cadence defaults (court floors — per-kind overrides on
+   *  MassKindDef, the skirt/crest discipline). */
+  innerChance: 0.45,
+  innerSpacing: 60,
   /** healMassifWeave: sealed pockets AT/UNDER this many cells fuse into the
    *  mass that trapped them; larger ones get their pinch re-opened. ~26 cells
    *  at 30px ≈ a 150px-wide nook — too small to be a place, big enough to
@@ -125,8 +138,17 @@ export interface MassShapeOpts {
   seed: number;
   /** The zone's weave lane (court mouths size themselves off it). */
   laneW: number;
-  /** Court mouth count band (kind ▷ cfg). */
+  /** Court mouth count band (kind ▷ layoutParam ▷ cfg). */
   mouths: [number, number];
+  /** Ring-interior fraction for annulus shapes (court/crescent): the inner
+   *  rim sits at this fraction of the outer radius — small = thick fortress
+   *  wall, large = thin garden ring. Absent = each shape's historical
+   *  default (court 0.6, crescent 0.62), byte-identical. */
+  ringInner?: number;
+  /** Mouth-width multiplier for punched shapes (kind ▷ 1). The mouth still
+   *  floors at the weave lane and spans the ring band — this widens a gate
+   *  past the guarantee, never narrows it below. */
+  mouthScale: number;
 }
 
 export interface MassShapeDef {
@@ -229,12 +251,20 @@ registerMassShape('chain', {
 registerMassShape('court', {
   reach: 1.5,
   paint: (m, at, r, rng, o) => {
+    // THE RING DIALS (kind-authored, see MassShapeOpts): default path keeps
+    // the historical literals EXACTLY (0.6 ring → 0.8 seat / 0.45 band) so
+    // dial-less kinds stay byte-identical; authored rings derive the seat as
+    // the band's center and the punch as the band's span + margin, so the
+    // never-half-punches law holds at ANY thickness.
+    const ri = o.ringInner ?? 0.6;
+    const mouthSeat = ri === 0.6 ? 0.8 : (1 + ri) / 2;
+    const mouthBand = ri === 0.6 ? 0.45 : (1 - ri) * 1.125;
     const rOf = (a: number): number =>
       Math.min(r * 1.42, r * (1 + bearingNoise(a, o.lobe * 0.55, o.seed)));
     const outer = m.like();
     radial(outer, at.x, at.y, rOf);
     const inner = m.like();
-    radial(inner, at.x, at.y, a => rOf(a) * 0.6);
+    radial(inner, at.x, at.y, a => rOf(a) * ri);
     outer.subtract(inner);
     const mouths = rng.int(o.mouths[0], o.mouths[1]);
     const a0 = rng.range(0, Math.PI * 2);
@@ -242,11 +272,12 @@ registerMassShape('court', {
       const a = a0 + (i / Math.max(1, mouths)) * Math.PI * 2 + rng.range(-0.4, 0.4);
       const rr = rOf(a);
       const hole = m.like();
-      // Centered mid-ring, radius ≥ 45% of the LOCAL outer radius: spans the
-      // whole [0.6·rr, rr] band whatever the noise rolled — a mouth never
-      // half-punches into a dead-end alcove.
-      disc(hole, at.x + Math.cos(a) * rr * 0.8, at.y + Math.sin(a) * rr * 0.8,
-        Math.max(o.laneW * 0.55, rr * 0.45));
+      // Centered mid-ring, spanning the whole [ri·rr, rr] band whatever the
+      // noise rolled — a mouth never half-punches into a dead-end alcove.
+      // mouthScale widens the gate INSIDE the max: the lane floor is the
+      // structural guarantee and no dial narrows a punch below it.
+      disc(hole, at.x + Math.cos(a) * rr * mouthSeat, at.y + Math.sin(a) * rr * mouthSeat,
+        Math.max(o.laneW * 0.55, rr * mouthBand * o.mouthScale));
       outer.subtract(hole);
     }
     m.union(outer);
@@ -256,11 +287,32 @@ registerMassShape('court', {
 
 // --- MASS KINDS --------------------------------------------------------------
 
-/** One weighted dressing row (skirt at the foot, crest on the crown). */
+/** One weighted dressing row (skirt at the foot, crest on the crown, inner
+ *  on a court's floor). */
 export interface MassDressRow {
   kind: DoodadKind;
   weight: number;
   radius: [number, number];
+}
+
+/** A court comes PRE-INHABITED: a faction guard pack posts at the interior —
+ *  an ordinary ctx.garrisons row, so the reachability net guards the way in
+ *  and the spawn side (world.ts faction-POI law) draws the pack from the
+ *  faction's own roster. Rolled on a PER-MASS FORK of the body's own shape
+ *  seed, never the layout stream: authoring a garrison changes garrisons and
+ *  NOTHING else — the masses, the weave, and every dressing draw stay
+ *  byte-identical (probe-pinned). Court-shaped kinds only (needs a reported
+ *  interior); a garrison on a mouthless kind never fires. */
+export interface MassGarrisonSpec {
+  /** Per-court roll. */
+  chance: number;
+  /** Pack-size band (default MASSIF_CFG.garrisonSize). */
+  size?: [number, number];
+  /** Posting faction. ABSENT = the zone's PATRON (the biome's own power,
+   *  world/biomes.ts) — a court kind never hardcodes who holds it; the same
+   *  ruincourt garrisons gnolls in the waste and the dead in the graveland.
+   *  A def with no biome (and no explicit faction) posts nobody. */
+  faction?: string;
 }
 
 /** What a mass IS — the open vocabulary content registers against. */
@@ -275,8 +327,20 @@ export interface MassKindDef {
   shapes: { shape: string; weight: number }[];
   /** Radial lobe amplitude override (fraction of r). */
   lobe?: number;
-  /** Court mouth count band (court-shaped kinds; default MASSIF_CFG.mouths). */
+  /** KIND-DEFAULT base-radius band: bodies of this kind remap the zone's
+   *  rolled size into this band (mesas run big, garden rings modest — in one
+   *  pool). Row grain outranks it (MassPoolRow.sizeR); the remap is a pure
+   *  affine map of the already-drawn roll, so it never moves the stream and
+   *  the rescue ramp's shrink composes onto it. Absent = the zone band. */
+  sizeR?: [number, number];
+  /** Court mouth count band (court-shaped kinds; default the massifMouths
+   *  layoutParam ▷ MASSIF_CFG.mouths). */
   mouths?: [number, number];
+  /** Ring-interior fraction for annulus shapes (see MassShapeOpts.ringInner):
+   *  thick fortress walls at 0.45, thin garden rings at 0.75. */
+  ringInner?: number;
+  /** Mouth-width multiplier (see MassShapeOpts.mouthScale; default 1). */
+  mouthScale?: number;
   /** FOOT dressing: banded on open ground hugging the rim (never inside the
    *  guaranteed weave between two bodies — the carver keeps the lane law). */
   skirt?: MassDressRow[];
@@ -291,6 +355,34 @@ export interface MassKindDef {
   /** Court interiors become POIs (spawn/loot anchors + reachability-guarded).
    *  Default true; opt out for purely scenic rings. */
   poiInterior?: boolean;
+  /** THE GARRISON: this kind's courts come pre-inhabited (see
+   *  MassGarrisonSpec — patron-faction default, per-mass fork stream). */
+  garrison?: MassGarrisonSpec;
+  /** INNER dressing: rows dressed on a court's own FLOOR (the stocked ring —
+   *  brittle urns and pots paying through the ordinary breakage/drop
+   *  chokepoints; no chest doodad exists, on purpose). Dressed off the LIVE
+   *  grid like skirt/crest, standing off the interior POI seat so the
+   *  garrison's spawn scatter and the reachability promise keep their floor. */
+  inner?: MassDressRow[];
+  innerChance?: number;
+  innerSpacing?: number;
+}
+
+/** One weighted row of a zone's massifMasses pool. Beyond kind + weight, the
+ *  row is the PER-ZONE TAILORING grain: its own size band, and `over` — a
+ *  partial MassKindDef merged over the registered kind at carve time, so
+ *  EVERY kind dial (mouths, dressing, garrison, ringInner…) is reachable per
+ *  row without minting a sibling kind. Absent fields = the registered kind,
+ *  byte-identical by construction (the merge adds no draws). */
+export interface MassPoolRow {
+  kind: string;
+  weight: number;
+  /** Per-row base-radius band (outranks MassKindDef.sizeR; same draw-free
+   *  affine remap of the zone's rolled size). */
+  sizeR?: [number, number];
+  /** Per-row kind tailoring: merged over the registered def (id excepted —
+   *  a row tailors a kind, never mints one). */
+  over?: Partial<Omit<MassKindDef, 'id'>>;
 }
 
 const MASS_KINDS: Record<string, MassKindDef> = {};
@@ -336,7 +428,14 @@ export interface CarvedMass {
   interior?: Vec2;
 }
 
-interface PlacedMass { cm: CarvedMass; body: Mask }
+interface PlacedMass {
+  cm: CarvedMass;
+  body: Mask;
+  /** The RESOLVED kind def this body carved with (row `over` merged) — the
+   *  one truth dressing reads, so per-row tailoring reaches skirts/crests/
+   *  inner without a second registry lookup. */
+  kd: MassKindDef;
+}
 
 function pickWeighted<T extends { weight: number }>(rng: Rng, rows: readonly T[]): T {
   const total = rows.reduce((a, m) => a + m.weight, 0);
@@ -394,9 +493,14 @@ function resHits(ctx: GenCtx, x: number, y: number, r: number): boolean {
 
 /** Default mix — the engine's reference country (stone downs). Content packs
  *  point massifMasses at their own registered kinds. */
-const DEFAULT_MIX: { kind: string; weight: number }[] = [
+const DEFAULT_MIX: MassPoolRow[] = [
   { kind: 'tor', weight: 3 }, { kind: 'bluff', weight: 2 }, { kind: 'fold', weight: 1 },
 ];
+
+/** The garrison roll's fork salt (XORed with the body's own shape seed):
+ *  garrison chances ride a PER-MASS side stream so the layout stream never
+ *  moves — see MassGarrisonSpec. */
+const GARRISON_SALT = 0x6a7217;
 
 /**
  * Carve the zone's mass bodies into the walk grid — THE fabric entry, callable
@@ -410,7 +514,7 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
   const { rng, arena } = ctx;
   const grid = ensureGrid(ctx);
 
-  const mix = layoutParam<{ kind: string; weight: number }[]>(def, 'massifMasses', DEFAULT_MIX);
+  const mix = layoutParam<MassPoolRow[]>(def, 'massifMasses', DEFAULT_MIX);
   const sizeR = layoutParam<[number, number]>(def, 'massifSizeR', MASSIF_CFG.sizeR);
   const coverBand = layoutParam<[number, number]>(def, 'massifCoverage', MASSIF_CFG.coverage);
   const laneW = layoutParam<number>(def, 'massifLaneW', MASSIF_CFG.laneW);
@@ -418,6 +522,12 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
   const maxMasses = layoutParam<number>(def, 'massifMaxMasses', MASSIF_CFG.maxMasses);
   const lobe = layoutParam<number>(def, 'massifLobe', MASSIF_CFG.lobe);
   const seatGround = layoutParam<boolean>(def, 'massifSeatGround', false);
+  // Zone-level mouth band + dart inset floor + heal swallow threshold — the
+  // last carve constants opened as dials (the 2026-07-30 audit; defaults are
+  // the historical literals, absent = byte-identical).
+  const mouthsDflt = layoutParam<[number, number]>(def, 'massifMouths', MASSIF_CFG.mouths);
+  const insetMin = layoutParam<number>(def, 'massifInsetMin', MASSIF_CFG.insetMin);
+  const swallowCells = layoutParam<number>(def, 'massifSwallowCells', MASSIF_CFG.swallowCells);
   // Dart budget as a dial: a mostly-void country burns most darts on sky and
   // seat rejections — it buys more tries instead of shipping empty fields.
   const placeTries = layoutParam<number>(def, 'massifPlaceTries', MASSIF_CFG.placeTries);
@@ -432,17 +542,34 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
 
   const placed: PlacedMass[] = [];
   let covered = 0;
-  // ONE DART, r rolled by the caller: draw the rest of the fixed per-try
-  // shape (x, y, kind, shape), test the structural laws, paint on a land.
-  // Rejections change which darts land, never how the stream advances past
-  // a landed one.
-  const dart = (r: number): void => {
-    const inset = Math.max(90, r * 0.35); // bodies may bleed off the border — pockets heal
+  // ONE DART, r rolled by the caller (rollLo/rollHi = the band it rolled
+  // from): draw the rest of the fixed per-try shape (x, y, kind, shape),
+  // test the structural laws, paint on a land. Rejections change which darts
+  // land, never how the stream advances past a landed one.
+  const dart = (r: number, rollLo: number, rollHi: number): void => {
+    const inset = Math.max(insetMin, r * 0.35); // bodies may bleed off the border — pockets heal
     const at = vec(
       rng.range(inset, Math.max(inset + 1, arena.w - inset)),
       rng.range(inset, Math.max(inset + 1, arena.h - inset)));
-    const kind = massKindOf(pickWeighted(rng, mix).kind);
-    const shapeId = pickWeighted(rng, kind.shapes).shape;
+    const row = pickWeighted(rng, mix);
+    // THE ROW TAILORING: `over` merges the row's partial onto the registered
+    // kind — every kind dial at per-zone-row grain, no sibling kind minted.
+    // No `over` = the registered def itself (identical reads, no draws).
+    const base = massKindOf(row.kind);
+    const kd: MassKindDef = row.over ? { ...base, ...row.over } : base;
+    // THE BAND REMAP (row ▷ kind ▷ zone), draw-free: the already-rolled r
+    // maps affinely from the caller's roll band into the authored one, and
+    // the rescue ramp's shrink carries through as the bands' ratio — a
+    // rescued mesa shrinks exactly as a rescued tor does. Absent bands touch
+    // nothing (not even arithmetic), so the stream AND the value are
+    // byte-identical by construction.
+    const band = row.sizeR ?? kd.sizeR;
+    if (band) {
+      const u = rollHi > rollLo ? (r - rollLo) / (rollHi - rollLo) : 0.5;
+      const shrink = sizeR[1] > 0 ? rollHi / sizeR[1] : 1;
+      r = (band[0] + u * (band[1] - band[0])) * shrink;
+    }
+    const shapeId = pickWeighted(rng, kd.shapes).shape;
     const shape = massShapeOf(shapeId);
     const bound = r * shape.reach;
     if (portals.some(p => Math.hypot(p.x - at.x, p.y - at.y) < portalClear + bound)) return;
@@ -453,21 +580,39 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     const seed = rng.int(0, 0x7fffffff);
     const body = Mask.forRect(0, 0, arena.w, arena.h);
     const res = shape.paint(body, at, r, rng, {
-      lobe: kind.lobe ?? lobe, seed, laneW, mouths: kind.mouths ?? MASSIF_CFG.mouths,
+      lobe: kd.lobe ?? lobe, seed, laneW, mouths: kd.mouths ?? mouthsDflt,
+      ringInner: kd.ringInner, mouthScale: kd.mouthScale ?? 1,
     }) || {};
-    paintRegion(grid, body, regionIdOf(kind));
+    paintRegion(grid, body, regionIdOf(kd));
     covered += body.count() * GEN_CELL * GEN_CELL;
 
-    const cm: CarvedMass = { kind: kind.id, shape: shapeId, at, r, bound, interior: res.interior };
-    placed.push({ cm, body });
+    const cm: CarvedMass = { kind: kd.id, shape: shapeId, at, r, bound, interior: res.interior };
+    placed.push({ cm, body, kd });
     // A court's interior is a PLACE: a POI joins the spawn/loot anchors AND
     // the universal reachability invariant's required points — the mouth (or
     // a rescue breach through the ring) is guaranteed from here on.
-    if (res.interior && kind.poiInterior !== false) ctx.pois.push(vec(res.interior.x, res.interior.y));
+    if (res.interior && kd.poiInterior !== false) ctx.pois.push(vec(res.interior.x, res.interior.y));
+    // THE GARRISON (see MassGarrisonSpec): rolled on a fork of the body's
+    // own shape seed — the layout stream NEVER moves, so authoring a
+    // garrison perturbs garrisons alone (probe-pinned). The row rides the
+    // pre-inhabited-POI machinery: reachability guards it, the spawn side
+    // posts the pack from the faction's roster.
+    if (res.interior && kd.garrison) {
+      const g = kd.garrison;
+      if (new Rng((seed ^ GARRISON_SALT) >>> 0).chance(g.chance)) {
+        const faction = g.faction ?? patronFaction(def.biome) ?? undefined;
+        if (faction) {
+          ctx.garrisons.push({
+            pos: vec(res.interior.x, res.interior.y),
+            faction, size: g.size ?? MASSIF_CFG.garrisonSize,
+          });
+        }
+      }
+    }
   };
   for (let t = 0; t < placeTries; t++) {
     if (covered >= targetCover || placed.length >= maxMasses) break;
-    dart(rng.range(sizeR[0], sizeR[1]));
+    dart(rng.range(sizeR[0], sizeR[1]), sizeR[0], sizeR[1]);
   }
 
   // THE RESCUE PASS: an under-filled zone re-arms the same dart budget once,
@@ -483,11 +628,11 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     const rampLen = Math.max(1, Math.floor(placeTries / 2));
     for (let t = 0; t < placeTries && placed.length < minMasses; t++) {
       const shrink = 1 - (1 - rescueShrink) * Math.min(1, t / rampLen);
-      dart(rng.range(sizeR[0] * shrink, sizeR[1] * shrink));
+      dart(rng.range(sizeR[0] * shrink, sizeR[1] * shrink), sizeR[0] * shrink, sizeR[1] * shrink);
     }
   }
 
-  healMassifWeave(ctx, grid, laneW);
+  healMassifWeave(ctx, grid, laneW, swallowCells);
   if (!ctx.lite) dressMasses(ctx, grid, placed, laneW);
   return placed.map(p => p.cm);
 }
@@ -503,8 +648,15 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
  * finds the thinnest crossing, and the corridor is carved along that path —
  * a broken pass where the bodies almost met, never a random tunnel. Draw-free
  * (no rng): zones that never pinch are byte-identical.
+ *
+ * swallowCells is a dial (layoutParam massifSwallowCells through the recipe;
+ * optional here so composition callers keep their signature) — deep country
+ * may fuse bigger pockets rather than breach them.
  */
-export function healMassifWeave(ctx: GenCtx, grid: GridWalkField, laneW: number): void {
+export function healMassifWeave(
+  ctx: GenCtx, grid: GridWalkField, laneW: number,
+  swallowCells: number = MASSIF_CFG.swallowCells,
+): void {
   const cols = grid.cols, rows = grid.rows, cs = grid.cell;
   const n = cols * rows;
   const label = new Int32Array(n);
@@ -547,7 +699,7 @@ export function healMassifWeave(ctx: GenCtx, grid: GridWalkField, laneW: number)
     let acted = false;
     for (let comp = 0; comp < sizes.length; comp++) {
       if (comp === main) continue;
-      if (sizes[comp] <= MASSIF_CFG.swallowCells) {
+      if (sizes[comp] <= swallowCells) {
         // SWALLOW: tally the pocket's adjacent wall kinds, fuse it into the
         // majority one (a nook behind the crag becomes crag — seamless).
         const tally = new Map<string, number>();
@@ -608,14 +760,18 @@ export function healMassifWeave(ctx: GenCtx, grid: GridWalkField, laneW: number)
 
 // --- DRESSING ----------------------------------------------------------------
 
-/** Skirts at the foot, crests on the crown — read off the LIVE grid (a lane
- *  the heal carved through a body is never skirted shut again; a swallowed
- *  pocket is never dressed). Skirt pieces respect the lane law: nothing lands
- *  inside the guaranteed weave between two bodies. */
+/** Skirts at the foot, crests on the crown, inner rows on a court's floor —
+ *  read off the LIVE grid (a lane the heal carved through a body is never
+ *  skirted shut again; a swallowed pocket is never dressed). Skirt pieces
+ *  respect the lane law: nothing lands inside the guaranteed weave between
+ *  two bodies. Reads the RESOLVED kind carried by the carver, so per-row
+ *  `over` tailoring reaches every dressing dial. Draw order per body is
+ *  skirt → crest → inner: inner is the newest lane and appends its draws
+ *  LAST, so a kind that grows inner rows keeps its skirt/crest streams
+ *  byte-identical. */
 function dressMasses(ctx: GenCtx, grid: GridWalkField, placed: PlacedMass[], laneW: number): void {
   const { rng } = ctx;
-  for (const { cm, body } of placed) {
-    const kd = massKindOf(cm.kind);
+  for (const { cm, body, kd } of placed) {
     if (kd.skirt?.length) {
       const fringe = body.clone().grow(1).subtract(body);
       const done: Vec2[] = [];
@@ -666,6 +822,37 @@ function dressMasses(ctx: GenCtx, grid: GridWalkField, placed: PlacedMass[], lan
           kind: row.kind, rot: rng.range(0, Math.PI * 2),
         });
       });
+    }
+    // INNER — the court's stocked floor: a GEN_CELL lattice over the ring's
+    // interior disc, walkable ground only (the mouth corridor and any healed
+    // breach stay clear by the live-grid read). Two standoffs keep the
+    // machinery honest: the POI seat stays open (the garrison's spawn
+    // scatter + the reachability promise land on floor, not on an urn), and
+    // reservations pass untouched. The universal doodad-navigability net
+    // rides behind as belt-and-suspenders, same as every scatter lane.
+    if (kd.inner?.length && cm.interior) {
+      const done: Vec2[] = [];
+      const spacing = kd.innerSpacing ?? MASSIF_CFG.innerSpacing;
+      const chance = kd.innerChance ?? MASSIF_CFG.innerChance;
+      const floorR = cm.r * (kd.ringInner ?? 0.6) * 0.9;
+      const seat = cm.interior;
+      for (let gy = seat.y - floorR; gy <= seat.y + floorR; gy += GEN_CELL) {
+        for (let gx = seat.x - floorR; gx <= seat.x + floorR; gx += GEN_CELL) {
+          const dd = Math.hypot(gx - seat.x, gy - seat.y);
+          if (dd > floorR || dd < 42) continue; // the POI seat's standoff
+          if (!grid.isWalkable(gx, gy)) continue;
+          if (!rng.chance(chance)) continue;
+          if (done.some(p => Math.hypot(p.x - gx, p.y - gy) < spacing)) continue;
+          if (resHits(ctx, gx, gy, 20)) continue;
+          const row = pickWeighted(rng, kd.inner!);
+          done.push(vec(gx, gy));
+          ctx.doodads.push({
+            pos: vec(gx + rng.range(-6, 6), gy + rng.range(-6, 6)),
+            radius: rng.range(row.radius[0], row.radius[1]),
+            kind: row.kind, rot: rng.range(0, Math.PI * 2),
+          });
+        }
+      }
     }
   }
 }

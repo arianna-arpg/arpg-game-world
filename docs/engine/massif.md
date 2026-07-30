@@ -19,44 +19,99 @@ Built-ins: `blob` (noise-lobed disc), `slab` (the plopped rectangle, rotated,
 ragged corners), `ridge` (a short wandering cliff line — never zone-spanning;
 long marches stay the dunefield's business), `chain` (lobes fused along a
 bearing), `court` (a lobed annulus punched by 1–2 MOUTHS, interior reported).
-Each declares a bounding `reach` (multiple of r) and **clamps its paint inside
-it** — the spacing law below measures bounding circles, so the guarantee is
-enforceable whatever the noise rolls.
+Content adds `crescent` (the hemicycle — massifs.ts) and `block` (the built
+plot — settled.ts). Each declares a bounding `reach` (multiple of r) and
+**clamps its paint inside it** — the spacing law below measures bounding
+circles, so the guarantee is enforceable whatever the noise rolls.
+Annulus shapes honor two kind dials through `MassShapeOpts`: `ringInner`
+(ring thickness — thick fortress wall at 0.45, thin garden rail at 0.75;
+per-shape historical default when absent: court 0.6, crescent 0.62) and
+`mouthScale` (mouth width multiplier — applied INSIDE the lane-floor max, so
+a dial can widen a gate but never narrow a punch below the weave guarantee).
 
 **Mass kinds** (`registerMassKind`) — what a body IS. A kind names a
 **registered region** (`world/regions.ts` carries collision, shot/sight
 policy, pathing price, and the entire drawn look — the fabric adds no second
-truth), picks weighted shapes, and bands skirt/crest dressing rows
-(`MassDressRow`: doodad kind + weight + radius). Engine ships the reference
-stone country — `tor` (crag blobs/chains), `bluff` (crag slabs/ridges),
-`fold` (a drystone court) — and `data/massifs.ts` grows the world's
-vocabulary: `hedge` (hedgewall lines), `ruincourt` (ruin_wall courts),
-`barrow` (low crag mounds crowned with stones).
+truth), picks weighted shapes, and bands its dressing and its residents:
 
-**The `massif` layout recipe** — `ensureGrid` + `carveMassifs` + the per-exit
-belt + `scatterDecoration` (the tileset's own kit walk-gates into the open
-weave for free). Every dial is a layoutParam (spec ▷ tileset ▷ biome):
+- `skirt` / `crest` rows (`MassDressRow`) + chance/spacing — foot and crown.
+- `inner` rows + `innerChance`/`innerSpacing` — **the stocked ring**: a
+  court's own floor dressed off the live grid (brittle urns and pots paying
+  through the ordinary breakage/drop chokepoints — no chest doodad exists,
+  on purpose), standing 42px off the interior POI seat so the reachability
+  promise and the garrison's spawn scatter keep their floor. Inner draws run
+  LAST per body (after skirt → crest), so a kind that grows inner rows keeps
+  its older dressing streams byte-identical.
+- `garrison` (`MassGarrisonSpec`) — **the court comes pre-inhabited**: an
+  ordinary `ctx.garrisons` row at the interior (the levelgen pre-inhabited-
+  POI law: reachability guards it, world.ts posts the pack from the faction's
+  own roster at zone load). `faction` absent = **the zone's PATRON** (the
+  biome's power, `world/biomes.ts`) — a kind never hardcodes who holds it;
+  the same ruincourt garrisons gnolls in the waste and the dead in a
+  graveland. THE FORK LAW: the chance rolls on a per-mass fork of the body's
+  own shape seed (`GARRISON_SALT`), never the layout stream — authoring a
+  garrison perturbs garrisons ALONE; masses, weave and dressing are
+  byte-identical with it on or off (probe rig G pins this).
+- `sizeR` — a kind-default base-radius band (mesas run big in any pool).
+- `mouths`, `ringInner`, `mouthScale`, `lobe`, `poiInterior` — court anatomy.
+
+Engine ships the reference stone country — `tor` (crag blobs/chains),
+`bluff` (crag slabs/ridges), `fold` (a drystone court; deliberately bare —
+the reference vocabulary demonstrates the mechanism OFF) — and
+`data/massifs.ts` grows the world's vocabulary: `hedge`, `ruincourt`,
+`barrow`, the settled belt's `tenement`/`manor`/`butte`/`croft`, the
+bastion's `bastion`/`high_court`/`curtain`/`gilt_ring`, the seraph city's
+`pantheon`/`rotunda_court`/`amphitheater`/`grand_colonnade`, and the
+tableland's `mesa`/`sand_court`. Garrison + inner debut authors: sand_court,
+ruincourt, high_court, rotunda_court, gilt_ring.
+
+**The `massif` layout recipe** — `ensureGrid` + `carveMassifs` + the
+hollow-tor bores + registered post hooks + the per-exit belt +
+`scatterDecoration`. Every dial is a layoutParam (spec ▷ tileset ▷ biome):
 
 | param | default (`MASSIF_CFG`) | meaning |
 |---|---|---|
-| `massifMasses` | tor 3 / bluff 2 / fold 1 | weighted kind mix |
+| `massifMasses` | tor 3 / bluff 2 / fold 1 | weighted pool of `MassPoolRow`s (see below) |
 | `massifSizeR` | [170, 320] | base radius band (px) |
 | `massifCoverage` | [0.13, 0.22] | arena fraction the bodies aim to paint |
 | `massifLaneW` | 110 | guaranteed open weave between bounding circles |
 | `massifPortalClear` | 250 | portal standoff (mouths open onto country) |
 | `massifMaxMasses` | 11 | body ceiling |
+| `massifMinMasses` | 0 | body FLOOR (arms the rescue pass; see probe rig F) |
+| `massifRescueShrink` | 0.45 | rescue ramp's size-relaxation floor |
+| `massifPlaceTries` | 90 | dart budget |
 | `massifLobe` | 0.34 | radial noise amplitude |
+| `massifMouths` | [1, 2] | zone default court-mouth band (kind outranks) |
+| `massifInsetMin` | 90 | dart border-inset floor (bodies may still bleed) |
+| `massifSwallowCells` | 26 | heal: pocket size that fuses instead of breaching |
+| `massifSeatGround` | false | darts must seat on walkable ground (cloud isles) |
+| `massifBores` | — | the hollow-tor gallery spec (chance/max/minR/region/halfW) |
 
-## The three block TEXTURES
+**`MassPoolRow`** — the per-zone tailoring grain: `{ kind, weight, sizeR?,
+over? }`. `sizeR` remaps that row's bodies into its own band — a pure affine
+remap of the already-rolled size (row ▷ kind ▷ zone; the rescue ramp's
+shrink composes through as the bands' ratio), so it is **draw-free**: absent
+bands touch neither the stream nor the value. `over` is a partial
+`MassKindDef` (id excepted) merged over the registered kind at carve time —
+EVERY kind dial (mouths, ring, dressing, garrison, inner…) is reachable per
+row without minting a sibling kind, and the resolved def is carried to
+dressing so tailoring reaches skirts/crests/inner too. The court-of-sands
+face ships the demonstration: a second `sand_court` row with `sizeR:
+[260,380]` and `over: { mouths: [2,3], garrison: { chance: 0.75 } }` — the
+GREAT courts, one data row.
 
-The configurability axis — same fabric, three different fights, all carried by
-the region row, never by code:
+## The block TEXTURES
 
-- `crag` / `ruin_wall` — **TRUE WALL**: bodies, shots and sight all stop.
-- `hedgewall` — **BLIND COVER**: bodies and sight stop, shots THREAD it —
-  firing blind through your own hedge is the kind's whole conversation.
-- `drystone` — **PARAPET**: bodies stop; you duel ACROSS the wall and walk
-  around to the fold's mouth.
+The configurability axis — same fabric, different fights, all carried by the
+region row, never by code:
+
+- `crag` / `ruin_wall` / `sandstone` — **TRUE WALL**: bodies, shots, sight all stop.
+- `hedgewall` — **BLIND COVER**: bodies and sight stop, shots THREAD it.
+- `drystone` / `gilt_parapet` — **PARAPET**: bodies stop; you duel ACROSS.
+
+`sandstone` (the tableland's stone) is deliberately its own row rather than
+`butte_top`: no tier semantics — a tableland mesa is a wall you round, never
+a summit the needles recipe cuts ramps to.
 
 ## The weave law (why you can never get stuck)
 
@@ -64,45 +119,98 @@ the region row, never by code:
    bounding circles and `portalClear` off every portal; shapes clamp inside
    their declared reach; skirt dressing re-checks the lane law per piece.
 2. **`healMassifWeave`** then walks the painted truth: sealed pockets ≤
-   `swallowCells` FUSE into the mass that trapped them (majority adjacent
-   wall kind — no dead floor for spawns/loot); larger ones RE-OPEN at their
-   natural pinch (a BFS from the pocket THROUGH the wall to the main
-   component finds the thinnest crossing — the carve reads as a broken pass).
-   Draw-free: zones that never pinch are byte-identical.
-3. Court interiors become POIs, which joins them to the universal
-   reachability invariant's required points — the mouth (or a rescue breach)
-   is guaranteed.
-4. The universal invariant + `ensureDoodadNavigability` + genqa's
-   `reachable`/`portals` checks hold as belt-and-suspenders, not mechanism.
+   `massifSwallowCells` FUSE into the mass that trapped them; larger ones
+   RE-OPEN at their natural pinch (BFS through the wall — the carve reads as
+   a broken pass). Draw-free: zones that never pinch are byte-identical.
+3. Court interiors become POIs → the universal reachability invariant's
+   required points; garrison rows join the same net.
+4. The universal invariant + `ensureDoodadNavigability` + genqa's checks
+   hold as belt-and-suspenders, not mechanism.
+
+## THE DIAL AUDIT (2026-07-30 — every constant opened or ruled)
+
+The commission: "as equally modifiable, tweakable and customizable as
+everything else." The walk covered `carveMassifs`, the dart, the shapes,
+`healMassifWeave`, `dressMasses`, and `MASSIF_CFG`. Verdicts:
+
+**Opened this pass** (absent == byte-identical, probe rig G + genqa diff):
+
+| lever | grain | mechanism |
+|---|---|---|
+| per-row size band | `MassPoolRow.sizeR` | draw-free affine remap |
+| per-kind size band | `MassKindDef.sizeR` | same remap, row outranks |
+| whole-kind tailoring | `MassPoolRow.over` | partial merged at carve; carried to dressing |
+| garrison | `MassKindDef.garrison` | fork-stream roll; patron-faction default |
+| the stocked ring | `MassKindDef.inner` + chance/spacing | live-grid lattice, POI-seat standoff |
+| ring thickness | `MassKindDef.ringInner` | court + crescent; per-shape default |
+| mouth width | `MassKindDef.mouthScale` | inside the lane-floor max |
+| zone mouth band | `massifMouths` | kind ▷ param ▷ CFG |
+| dart inset floor | `massifInsetMin` | was literal 90 |
+| heal swallow size | `massifSwallowCells` | optional arg on `healMassifWeave` for composition callers |
+
+**Ruled fixed** (a structural guarantee is not a dial):
+
+| constant | why it stays fixed |
+|---|---|
+| mouth lane floor (`laneW × 0.55`) | "the punch always goes through" — narrowing below the weave lane breaks the guarantee; `mouthScale` widens inside the max only |
+| mouth seat/band derivation | pure corollary of `ringInner` (seat = band center, punch spans the band) — a second dial would let them contradict |
+| dart inset slope (`r × 0.35`) | proportional bleed keeps a body from living outside the arena; the FLOOR is the honest lever and is open |
+| `seatOnWalkable` ring (0.9r, 2-of-8, beyond-ring 1.7r 2-of-4) | the measured cloud-seat law (2026-07 bastion sweep) — data must not be able to author a floating bastion |
+| rescue ramp shape (`placeTries/2`, linear) | measured convergence recipe; `massifRescueShrink` IS the dial |
+| `healMaxIter` (6) | convergence bound, belt-and-suspenders |
+| `healHalfW` derivation (`max(cell×1.1, min(48, laneW×0.45))`) | the breach must pass a body and never outscale the lane; rides the open `massifLaneW` |
+| skirt fringe `grow(1)` / crest crown `erode(1)` | the rim IS one cell — a dial detaches dressing from the painted truth |
+| skirt lane standoff (`laneW × 0.8`), reservation pad (20) | the weave guarantee at dress grain |
+| inner POI-seat standoff (42) | the reachability seat + garrison scatter keep floor; ≈1.4 walk cells |
+| cosmetic jitters (±5/±8/±6, rot ±0.5) | cosmetic grain; radius bands are the authored lever |
+| `GARRISON_SALT` | fork identity — changing it re-rolls every garrison in the world, expressiveness zero |
+| shape `reach` values | per-shape structural declarations the spacing law trusts; new shapes declare their own |
+| coverage measured on painted cells | definition of coverage, not a lever |
+| `DEFAULT_MIX` | reference data; `massifMasses` replaces it wholesale |
+
+**Known partial reach**: the `block` shape (engine/settled.ts) keeps its own
+ring/mouth constants (`SETTLED_CFG.blockInner`) and ignores
+`ringInner`/`mouthScale` — the settled belt owns its own dials; recorded
+here so nobody hunts a phantom.
 
 ## Who wears it
 
-- **THE DOWNS** (`downs` tileset, `forceLayout: 'massif'`; biome `downs` —
-  the mild belt's drier SETTLED half, low-wildness gated): the fabric's home
-  country. Three faces re-mix one vocabulary through variant layoutParams
-  alone — `the grey tors` (crag-heavy), `the old fields` (folds, hedges,
-  swallowed steadings), `the barrowfield` (mound country). Cache/ambush
-  hollows carve into tor wall mass (the hollows fabric rides along).
-- **Retrofits**: `grove` rolls the odd BOCAGE face (hedge/fold/tor),
-  `grave` the SACKED ACRES (ruincourt/barrow/hedge), `tundra` the SCOURED
-  FELLS (reference stone mix) — one allowedLayouts weight + a massifMasses
-  row each.
+- **THE DOWNS** (`downs`, `forceLayout: 'massif'`) — the fabric's home
+  country; three faces re-mix one vocabulary through variant layoutParams
+  (`the grey tors`, `the old fields`, `the barrowfield`).
+- **THE TABLELAND** (`tableland`, biome `desert`, own depthAffinity band) —
+  the desert's massif country: `mesa` tables (kind-band sized) and
+  garrisoned, stocked `sand_court` rings in sandstone. Its
+  **`the court of sands`** face is THE COURT COUNTRY — the extreme regime:
+  court kinds ONLY at high coverage (0.24–0.3, 14 bodies), the walk between
+  the walls IS the zone; probe rig I censuses it (weave one component, exits
+  + interiors reachable, shipped chances seating guards, the great-court row
+  live). A DEDICATED all-courts biome is a sanctioned follow-on — this face
+  plus this audit are its readiness proof.
+- **Highlands** (`foothills`/`snowcrown`/`stonecrown`), **tendersrows**
+  (garden planter beds), **aether_bastion** + the seraph-city faces, and the
+  settled belt's recipes via exported `carveMassifs`.
+- **Retrofits**: `grove` bocage, `grave` sacked acres, `tundra` scoured fells.
 
 ## Growing it
 
-- New mass kind = one `registerMassKind` in data (region + shapes +
-  dressing). New silhouette = one `registerMassShape` (declare honest
-  `reach`, clamp inside it). New block texture = one region row.
-- `carveMassifs(ctx, def)` is exported — any future recipe can stud its own
-  country with bodies and inherit the weave law (call it before your own
-  scatter; it heals and dresses off the live grid).
+- New mass kind = one `registerMassKind` in data (region + shapes + dressing
+  + residents). New silhouette = one `registerMassShape` (declare honest
+  `reach`, clamp inside it; honor `ringInner`/`mouthScale` if annular). New
+  block texture = one region row.
+- A zone re-tunes ANY kind per pool row (`over`) — mint a sibling kind only
+  when the identity is genuinely new, not for a chance tweak.
+- `carveMassifs(ctx, def)` and `healMassifWeave(ctx, grid, laneW,
+  swallowCells?)` are exported — any recipe can stud its own country and
+  inherit the weave law.
 - Registration rides `src/data/massifs.ts`, imported by `main.ts`,
   `sim/arena.ts`, and `balance/genqa.ts` (the one side-effect set).
 
 ## Verification
 
-`balance/probe_massif.ts` (rigs: weave law end-to-end + determinism, the
-placement law directly, courts reachable, heal under starved-lane pressure
-with structural crowding proof, block textures + registry). `npm run genqa`
-sweeps the downs faces and the bare recipe under the standard invariants
-(portals, reachability, determinism, forbidOn, caveSeeds).
+`balance/probe_massif.ts` — rigs: A weave law end-to-end + determinism,
+B placement law, C courts reachable, D heal under starved-lane pressure,
+E block textures + registry, F the floor + rescue prefix law, G the garrison
+fork law + row grain + inner + ring dials, H the mesa/tableland census,
+I the court-country regime census. `npm run genqa` sweeps every tileland
+face beside the downs under the standard invariants.

@@ -55,6 +55,15 @@ registerMassKind({
   shapes: [{ shape: 'court', weight: 2 }, { shape: 'slab', weight: 1 }],
   lobe: 0.2,
   mouths: [1, 2],
+  // Whoever owns the land squats the old walls (patron default), among
+  // whatever the owners left (the interior POI's promise, made literal).
+  garrison: { chance: 0.35 },
+  inner: [
+    { kind: 'burial_urn', weight: 2, radius: [11, 15] },
+    { kind: 'clay_pots', weight: 1.5, radius: [10, 14] },
+    { kind: 'rubble', weight: 1, radius: [12, 20] },
+  ],
+  innerChance: 0.4,
   skirt: [
     { kind: 'rubble', weight: 3, radius: [14, 24] },
     { kind: 'rock', weight: 1, radius: [12, 20] },
@@ -173,6 +182,61 @@ registerMassKind({
   skirtSpacing: 54,
 });
 
+// --- THE TABLELAND (the desert's massif country) -------------------------------
+
+// THE MESA — the waste's standing tables (massif.ts's founding aspiration made
+// real): sheared sandstone slabs, weathered blob stubs, the odd short scarp
+// run — region 'sandstone', the TRUE-WALL policy in desert tones. The kind
+// carries its own SIZE BAND (the MassKindDef.sizeR debut): tables run big in
+// any pool that mixes them, no per-zone retune needed. Scree and thirsty
+// scrub bank the foot; spires ride the odd crown.
+registerMassKind({
+  id: 'mesa',
+  region: 'sandstone',
+  shapes: [{ shape: 'slab', weight: 2.5 }, { shape: 'blob', weight: 1.5 }, { shape: 'ridge', weight: 0.8 }],
+  lobe: 0.18,
+  sizeR: [200, 360],
+  skirt: [
+    { kind: 'scree', weight: 3, radius: [16, 28] },
+    { kind: 'rocks', weight: 2, radius: [16, 30] },
+    { kind: 'cactus', weight: 1, radius: [12, 18] },
+  ],
+  skirtChance: 0.32,
+  crest: [
+    { kind: 'rock_spire', weight: 1.5, radius: [16, 26] },
+    { kind: 'rocks', weight: 1, radius: [14, 22] },
+  ],
+  crestChance: 0.14,
+  crestSpacing: 110,
+});
+
+// THE SAND COURT — the ruined city's walled ring: a sandstone court the sand
+// half-swallowed, its doorway still a doorway. The Part-A debut author:
+// GARRISON (patron default — the waste posts its gnolls, a graveland would
+// post its dead; never a hardcoded id) + INNER rows (what the dead city left:
+// urns and pots paying through the ordinary brittle/drop chokepoints).
+registerMassKind({
+  id: 'sand_court',
+  region: 'sandstone',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.12,
+  mouths: [1, 2],
+  garrison: { chance: 0.55 },
+  inner: [
+    { kind: 'burial_urn', weight: 2, radius: [11, 15] },
+    { kind: 'clay_pots', weight: 2, radius: [10, 14] },
+    { kind: 'bone_pile', weight: 1, radius: [12, 18] },
+  ],
+  innerChance: 0.5,
+  innerSpacing: 58,
+  skirt: [
+    { kind: 'scree', weight: 2, radius: [14, 24] },
+    { kind: 'rubble', weight: 2, radius: [12, 20] },
+    { kind: 'bone_pile', weight: 1, radius: [12, 18] },
+  ],
+  skirtChance: 0.26,
+});
+
 // =============================================================================
 // THE HIGH BASTION (aether_bastion) — the Host's citadel country: ENORMOUS
 // silver-and-gold architecture strewn about a rolling cloud continent. The
@@ -228,6 +292,15 @@ registerMassKind({
   shapes: [{ shape: 'court', weight: 2 }, { shape: 'slab', weight: 0.5 }],
   lobe: 0.09,
   mouths: [1, 2],
+  // A citadel court is HELD ground: the country's own host posts inside
+  // (patron default), the yard lit and stocked as a place still in use.
+  garrison: { chance: 0.45 },
+  inner: [
+    { kind: 'aureate_brazier', weight: 1.5, radius: [11, 15] },
+    { kind: 'aether_crystal', weight: 1.5, radius: [12, 18] },
+    { kind: 'flowers', weight: 1, radius: [12, 18] },
+  ],
+  innerChance: 0.35,
   skirt: [
     { kind: 'gleam_lamp', weight: 2, radius: [8, 11] },
     { kind: 'flowers', weight: 1, radius: [12, 18] },
@@ -269,6 +342,15 @@ registerMassKind({
   shapes: [{ shape: 'court', weight: 1 }],
   lobe: 0.08,
   mouths: [1, 2],
+  // The garden behind the rail, made literal: a keeper pack and visible
+  // treasures you duel across the parapet for — the see-over promise now
+  // has something to see.
+  garrison: { chance: 0.3 },
+  inner: [
+    { kind: 'flowers', weight: 2, radius: [12, 18] },
+    { kind: 'aether_crystal', weight: 1.5, radius: [12, 16] },
+  ],
+  innerChance: 0.45,
   skirt: [
     { kind: 'flowers', weight: 2, radius: [12, 18] },
     { kind: 'aether_crystal', weight: 1, radius: [12, 16] },
@@ -289,12 +371,16 @@ registerMassKind({
 registerMassShape('crescent', {
   reach: 1.5,
   paint: (m, at, r, rng, o) => {
+    // ringInner honored (the court's dial, hemicycle default 0.62 — absent
+    // stays byte-identical); mouthScale has no business here: the open chord
+    // IS the mouth.
+    const ri = o.ringInner ?? 0.62;
     const rOf = (a: number): number =>
       Math.min(r * 1.42, r * (1 + bearingNoise(a, o.lobe * 0.5, o.seed)));
     const outer = m.like();
     radial(outer, at.x, at.y, rOf);
     const inner = m.like();
-    radial(inner, at.x, at.y, a => rOf(a) * 0.62);
+    radial(inner, at.x, at.y, a => rOf(a) * ri);
     outer.subtract(inner);
     const dir = rng.range(0, Math.PI * 2);
     const bite = m.like();
@@ -427,6 +513,14 @@ registerMassKind({
   shapes: [{ shape: 'court', weight: 1 }],
   lobe: 0.07,
   mouths: [1, 2],
+  // The temple ring keeps a watch (patron default) over an inlaid, lit floor.
+  garrison: { chance: 0.4 },
+  inner: [
+    { kind: 'mosaic_medallion', weight: 2, radius: [26, 40] },
+    { kind: 'aureate_brazier', weight: 1, radius: [11, 15] },
+  ],
+  innerChance: 0.4,
+  innerSpacing: 72,
   skirt: [
     { kind: 'pantheon_column', weight: 2.5, radius: [10, 14] },
     { kind: 'laurel_topiary', weight: 1, radius: [13, 18] },
