@@ -5,8 +5,9 @@
 // PEOPLE standing. While adventuring you come across a small settlement of
 // friendly folk in temperate country (the biomes allowlist). Sighting it
 // starts a fair, visible MUSTER — a countdown to an incoming horde (the
-// zone's own population, poured through the shared swarm director and
-// fixated on the FOLK via the threat chart, so Goad and the Quiet Hand are
+// zone's own population, seasoned with a minority of Roadwarden raiders —
+// swarm.mixChance — poured through the shared swarm director and fixated
+// on the FOLK via the threat chart, so Goad and the Quiet Hand are
 // emergently the bodyguard levers). During the muster — and, this def says,
 // right through the fight — you may ARM villagers: dwell by one to offer
 // your gear (its compiled mods graft onto their body) or spend the essence
@@ -51,7 +52,16 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
   id: 'borough',
   packageId: 'borough',
   label: 'Borough',
-  factions: [], // the horde is the zone's OWN population (swarm.source 'native')
+  // THE MIX ROSTER (assault.swarm.mixChance): the horde's BODY stays the zone's
+  // own population (swarm.source 'native'); the seasoning is the Roadwardens —
+  // the standing grafted 'bandit' faction (packages/defs/holdfast.ts), whose
+  // presence-banded table (cutthroats early, powder kin from the mid-world, the
+  // powder wagon from 11) reads true across every homestead biome below and
+  // grows with each muster pass for free. REFERENCED, never forked: no new
+  // FactionSpec, no relations row — the freehold|bandit grudge already tells
+  // exactly this story ("bandits raiding the shires", data/monsters.ts
+  // RELATIONS), and the Bandit Ruling stands untouched by construction.
+  factions: ['bandit'],
   trigger: { glyph: '⌂', color: ACCENT, activateRadius: 60 },
   timePerKill: 0,   // the muster and the assault are honest clocks — never kill-fed
   radiusPerKill: 0,
@@ -117,7 +127,16 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
       graceSec: 20,
       swarm: {
         source: 'native',      // the wilds converge on the settlement — the land objects to a home
-        mixChance: 0,          // no grafted seasoning (a raider faction is one FactionSpec away)
+        // THE RAIDER SEASONING — the extraction's proven fraction (0.22), read
+        // against this block's own numbers: per-body Bernoulli, so the early
+        // beats (batchStart 2-3 every ~4.2s) walk a raider in about every
+        // OTHER batch, the crescendo (batchEnd 3-5 every ~2s along
+        // elapsed^1.3) lands ~one per batch, and the standing field at
+        // fieldCap 13 holds ~0.22×13 ≈ 3 Roadwardens among ~10 wilds — 'the
+        // wilds AND opportunists', never a bandit war. The folk stay the
+        // quarry: the fixation graft below is table-blind (native and mixed
+        // alike are stamped seedThreat onto a villager × aggro.fixation).
+        mixChance: 0.22,
         intervalStart: [3.6, 4.8], intervalEnd: [1.6, 2.4],
         batchStart: [2, 3], batchEnd: [3, 5],
         rampPower: 1.3,

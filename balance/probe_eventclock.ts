@@ -8,7 +8,9 @@
 // exceed baseTime + maxBonusTime. The moment the well runs dry the def's wane
 // tell speaks, once. The deadwake tide's POUR WELL (the ebb) rides the same
 // law at the overlay: holding + pouring spends a finite budget; roaming spends
-// nothing.
+// nothing. Group E rides beside the clock rigs: THE BOROUGH SEASONING — the
+// assault's minority raider mix (def.factions × swarm.mixChance) and its
+// table-blind fixation graft.
 // Run: npx tsx balance/probe_eventclock.ts
 // ---------------------------------------------------------------------------
 
@@ -37,6 +39,8 @@ interface WorldInternals {
   clampPos(p: Vec2, r: number): Vec2;
   createMonster(type: string, level: number, team: 'enemy'): Actor;
   texts: { text: string }[];
+  materializeBorough(e: ActiveEncounter): void;
+  spawnBoroughWave(e: ActiveEncounter, n: number): void;
 }
 
 // Boot once so the package factions are grafted before we enumerate rosters.
@@ -228,6 +232,78 @@ for (const def of killFed) unfedRig(def);
   while (rt < budget + 60) { r.update(step, mkView(rt, 'nowhere')); rt += step; }
   check('D6 deadwake: a ROAMING tide spends nothing (persists past the budget, well full)',
     r.peek().length === 1 && r.peek()[0].pourFrac === 1, `pourFrac=${r.peek()[0]?.pourFrac}`);
+}
+
+// === E. THE BOROUGH SEASONING ================================================
+// The assault pour is the extraction swarm pointed at PEOPLE: 'native' bodies
+// with a minority raider mix (def.factions × swarm.mixChance). The rigs drive
+// the REAL spawnBoroughWave over an injected native table (the quiet arena has
+// no population of its own — with an empty native table EVERY body routes down
+// the factions branch and the fraction would read 1.0 by construction) and pin
+// three laws: the mix is a MINORITY at the authored fraction, every mixed body
+// rolls from the named faction's own post-graft table, and the fixation graft
+// is TABLE-BLIND — raider and wild alike are stamped onto a villager quarry.
+{
+  const def = allEncounterSpecs().find(e => e.id === 'borough');
+  check('E0 borough: the def stands in the registry', !!def?.borough);
+  if (def?.borough) {
+    const spec = def.borough;
+    const sw = spec.assault.swarm;
+    check('E1 borough: the raider mix is DECLARED (factions non-empty, mixChance a SEASONING)',
+      def.factions.length > 0 && sw.mixChance > 0 && sw.mixChance <= 0.35,
+      `factions=[${def.factions.join(',')}] mixChance=${sw.mixChance}`);
+    const mixIds = new Set((FACTIONS[def.factions[0]]?.table ?? []).map(r => r.id));
+    check('E2 borough: the named faction fields bodies post-graft', mixIds.size > 0, def.factions[0]);
+
+    const pour = (d: EncounterDef, n: number): { enc: ActiveEncounter; bodies: Actor[] } => {
+      const world = makeSimWorld('juggernaut', 4242);
+      const w = world as unknown as WorldInternals;
+      const enc: ActiveEncounter = {
+        def: d, scale: d.scales[0],
+        pos: w.clampPos(vec(world.player.pos.x + 220, world.player.pos.y), 24),
+        phase: 'open', radius: d.scales[0].startRadius, timer: 0, maxTimer: 0,
+        spawnTimer: 0, kills: 0, bonusUsed: 0, spawned: new Set(),
+      };
+      w.encounters.push(enc);
+      w.materializeBorough(enc);
+      // The injected native population lives only for the pour — the arena
+      // def may be shared across worlds, so it is restored before returning.
+      world.zone.packs = { count: [0, 0], size: [0, 0], table: [{ id: 'zombie', weight: 3 }] };
+      w.spawnBoroughWave(enc, n);
+      delete world.zone.packs;
+      return { enc, bodies: world.actors.filter(a => a.tag === 'borough_raider') };
+    };
+
+    const N = 400;
+    const { enc, bodies } = pour(def, N);
+    const folk = new Set(enc.bo!.folkIds);
+    const mixed = bodies.filter(b => b.faction === def.factions[0]);
+    const frac = bodies.length ? mixed.length / bodies.length : 0;
+    check(`E3 borough: the pour stands every body asked (${N})`, bodies.length === N, `got ${bodies.length}`);
+    check('E4 borough: raiders SEASON the wave — present, and a minority',
+      mixed.length > 0 && mixed.length < bodies.length && frac >= 0.12 && frac <= 0.32,
+      `mixed=${mixed.length}/${bodies.length} (${frac.toFixed(3)} vs mixChance ${sw.mixChance})`);
+    check("E5 borough: every raider is the named faction's own (roster attribution)",
+      mixed.every(b => !!b.defId && mixIds.has(b.defId)),
+      [...new Set(mixed.map(b => b.defId))].join(','));
+    const grafted = (b: Actor): boolean =>
+      b.aggroed && enc.bo!.quarry.has(b.id) && enc.bo!.entries.has(b.id)
+      && b.aiTargetId !== undefined && folk.has(b.aiTargetId)
+      && b.aiTuning?.target?.prefer === 'highestThreat';
+    check('E6 borough: the fixation graft is TABLE-BLIND (every body, wild or raider, hunts a villager)',
+      bodies.every(grafted), `${bodies.filter(b => !grafted(b)).length} ungrafted`);
+
+    // THE NEGATIVE CONTROL: the same machinery with the dial at 0 — while a
+    // native table stands, the mix lane must fall silent.
+    const def0: EncounterDef = {
+      ...def,
+      borough: { ...spec, assault: { ...spec.assault, swarm: { ...sw, mixChance: 0 } } },
+    };
+    const zero = pour(def0, 200);
+    check('E7 borough: mixChance 0 pours pure wilds (the control)',
+      zero.bodies.length === 200 && zero.bodies.every(b => b.faction !== def.factions[0]),
+      `${zero.bodies.filter(b => b.faction === def.factions[0]).length} raiders leaked`);
+  }
 }
 
 console.log(failed ? `\nprobe_eventclock: ${failed} FAILURE(S)` : '\nprobe_eventclock: ALL PASS');
