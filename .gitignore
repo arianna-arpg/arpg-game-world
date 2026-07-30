@@ -45,6 +45,10 @@ saves/
 # Per-session ownership declarations for scripts/ownership-gate.mjs — they
 # describe ONE session's in-flight work, so they are never shared.
 .claude/ownership.*
+# Machine-local coordination artifacts (the chip loop's backlog snapshot and
+# hunk-staging tool, copied out of session temp so they survive temp cleans).
+.claude/*.local.json
+.claude/*.local.js
 
 # ── Generated editor backups ─────────────────────────────────
 # The dev passive-tree editor writes passives.ts.bak before each
