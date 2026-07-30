@@ -39,7 +39,10 @@
 //   caveSeeds  the cave_entrance ↔ caveSeeds index zip holds
 //   reachable  on walk-grid layouts, every exit shares the entry's component
 //   doors      placed doors keep walkable floor on BOTH sides (warn)
-//   fuse       poured same-kind bodies never sit a sliver apart (warn)
+//   fuse       poured bodies never sit a sliver apart (warn) — contiguity read
+//              off RIM OVERLAP, and a seam another poured ground overlay
+//              covers is not a seam (the cross-kind read fuseGroundBodies'
+//              per-kind weld cannot make)
 //
 // Case groups: every tileset (base + variants, with its rolls), every
 // registered layout generator, and every composition FORCED at chance 1.
@@ -404,7 +407,50 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
       if (!drawn) warns.push(`${name}: door ${pd.door.id} has a record but no doodad (phantom — a splice took the doodad only)`);
     }
   }
-  // Fuse promise (warn): poured same-kind bodies never a sliver apart.
+  // Fuse promise (warn): poured bodies never sit a sliver apart — the promise
+  // fuseGroundBodies makes is that a zone's poured ground reads as CONTINUOUS
+  // BODIES, not as circles jammed together with a dry seam between them. Two
+  // honesty guards keep the assertion on what the ground actually IS instead of
+  // on a per-kind proxy (drawn == tested):
+  //
+  //  · CONTIGUITY, not weld reach. Bodies union on ANY rim overlap. The
+  //    engine's weld unions at `dist < r+r-6` because a pair already deeper
+  //    into each other than that has nothing left to weld; that margin is a
+  //    WELD heuristic and copying it into a CONNECTIVITY test made the pour's
+  //    own gapless-by-design lattice read as a split — paintLiquid thins solid
+  //    interiors to a checker, leaving same-axis neighbours 2 cells (60px)
+  //    apart at radius 1.05×cell (31.5), i.e. genuinely OVERLAPPING by 3px,
+  //    which the 57px threshold refuses to union. A "split" reported at a
+  //    NEGATIVE gap is nonsense: overlapping rims are one body, so the union
+  //    tests the rims, and every surviving cross-body gap is ≥ 0 by
+  //    construction.
+  //  · CROSS-KIND BRIDGES. fuseGroundBodies buckets byKind and welds within a
+  //    kind only, which is right for the WELD (a cross-kind weld would move
+  //    generated geometry, and a bog is not a river). But the promise a player
+  //    reads off the ground is ONE CONTINUOUS BODY, and a river or swamp lying
+  //    across the seam between two bog bodies keeps that promise — there is no
+  //    dry sliver, no guard split and no fuse miss to report. So a gap another
+  //    poured ground overlay covers rim-to-rim is not a gap.
+  //
+  // The reported number is the smallest UNBRIDGED cross-body gap, so a bridged
+  // pair can never mask a real split elsewhere in the same zone.
+  const FUSE_SLIVER = 25;  // gap (px) under which two bodies read as jammed, not fused
+  const FUSE_SAMPLES = 4;  // rim→rim steps a bridge must cover (both ends + 3 inside)
+  // The bridge set, gathered once: every poured GROUND overlay in the zone.
+  // 'ground' is the overlap class that merges freely and gates nothing (mud,
+  // water, lava) — which is exactly what "no dry sliver here" means. Inert
+  // poured kinds are excluded by the same read: a chasm or a magma_core wall
+  // in the seam is a HOLE between the bodies, never a bridge across them.
+  // ONE judgment call sits in that predicate: a HAZARD overlay bridges too
+  // (lava carries no forbidOn, so lava-between-bogs is geometrically legal
+  // and covers the seam — no guard split, no fuse miss, nothing dry to see).
+  // The authored matrix pours no such pair today; narrowing the read to
+  // non-hazard ground is a `&& !rule.hazardGround` away if one ever reads
+  // wrong on screen.
+  const pouredGround = doodads.filter(d => {
+    const rule = doodadRuleOf(d.kind);
+    return !!rule.pour && rule.overlap === 'ground';
+  });
   const pouredKinds = [...new Set(doodads.filter(d => doodadRuleOf(d.kind).pour
     && (doodadRuleOf(d.kind).pour!.fuseGap ?? 1) > 0).map(d => d.kind))];
   for (const kind of pouredKinds) {
@@ -415,22 +461,45 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
     for (let i = 0; i < discs.length; i++) {
       for (let j = i + 1; j < discs.length; j++) {
         if (Math.hypot(discs[i].pos.x - discs[j].pos.x, discs[i].pos.y - discs[j].pos.y)
-          < discs[i].radius + discs[j].radius - 6) {
+          < discs[i].radius + discs[j].radius) {
           const ri = find(i), rj = find(j);
           if (ri !== rj) parent[ri] = rj;
         }
       }
     }
+    // A same-kind disc in the seam would already have unioned the pair, so the
+    // bridge set is every OTHER kind's poured ground.
+    const bridges = pouredGround.filter(d => d.kind !== kind);
+    /** Does other-kind poured ground cover the whole rim→rim segment? Sampled
+     *  rather than solved: the gap is sub-cell (FUSE_SLIVER < GEN_CELL) and
+     *  bridge discs are ≥ 1.05 cells across, so a few samples answer at the
+     *  lattice's own grain. Coverage is a UNION over the bridge set — a chain
+     *  of touching discs bridges as honestly as one fat one. */
+    const bridgedAcross = (a: Doodad, b: Doodad, len: number, gap: number): boolean => {
+      if (!bridges.length) return false;
+      const ux = (b.pos.x - a.pos.x) / len, uy = (b.pos.y - a.pos.y) / len;
+      for (let s = 0; s <= FUSE_SAMPLES; s++) {
+        const t = a.radius + gap * (s / FUSE_SAMPLES);
+        const px = a.pos.x + ux * t, py = a.pos.y + uy * t;
+        if (!bridges.some(o => Math.hypot(px - o.pos.x, py - o.pos.y) < o.radius)) return false;
+      }
+      return true;
+    };
     let minGap = Infinity;
     for (let i = 0; i < discs.length; i++) {
       for (let j = i + 1; j < discs.length; j++) {
         if (find(i) === find(j)) continue;
-        const g = Math.hypot(discs[i].pos.x - discs[j].pos.x, discs[i].pos.y - discs[j].pos.y)
-          - discs[i].radius - discs[j].radius;
-        if (g < minGap) minGap = g;
+        const a = discs[i], b = discs[j];
+        const len = Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y);
+        const gap = len - a.radius - b.radius;
+        // Only a pair that would LOWER the reported floor needs the bridge
+        // test — pairs at or above the sliver threshold can never warn.
+        if (gap >= FUSE_SLIVER || gap >= minGap) continue;
+        if (bridgedAcross(a, b, len, gap)) continue;
+        minGap = gap;
       }
     }
-    if (minGap < 25) warns.push(`${name}: ${kind} bodies ${minGap.toFixed(0)}px apart (guard split or fuse miss)`);
+    if (minGap < FUSE_SLIVER) warns.push(`${name}: ${kind} bodies ${minGap.toFixed(0)}px apart (guard split or fuse miss)`);
   }
 }
 

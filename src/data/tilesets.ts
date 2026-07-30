@@ -1321,7 +1321,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'wayshrine', count: [0, 1] }, { kind: 'signpost', count: [0, 1] },
       { kind: 'rocks', count: [3, 6], radius: [18, 32] },
       { kind: 'river', count: [0, 1] },
-      { kind: 'bog', count: [0, 1] },
+      { kind: 'bog', count: [1, 2] },
       { kind: 'ruin', count: [0, 2] },
     ],
     // Whatever face it shows: gloom-glades reserved first, a lantern someone
