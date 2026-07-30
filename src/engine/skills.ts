@@ -15,7 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
-import { STATUS_DEFS } from './status';
+import { STATUS_DEFS, tuneAilmentChance } from './status';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
@@ -4968,8 +4968,17 @@ export const SUPPORT_MECHANISMS: Record<string, (inst: SkillInstance, param?: st
     // ('affliction:fire') — either way the match must still be a dot.
     const fits = (id: string): boolean =>
       param ? !!dotOf(id) && (id === param || dotOf(id) === param) : !!dotOf(id);
+    // THE TUNING IS THE TRUTH (2026-07-30): an authored effect row counts
+    // only if its EFFECTIVE chance survives AILMENT_TUNING — the same
+    // tuneAilmentChance the application site rolls — so the gate can never
+    // admit a wound the engine will never mint (the tuned-zero bleed
+    // class: sub-identity flavor bleeds apply at exactly 0). Self-lifting
+    // stays whole through the apply_ arm below: an apply_<dot> gem beside
+    // the asking gem re-opens the door AND makes the wound real, since
+    // bonusChance adds past the tuned zero at application.
     return inst.def.effects.some(e => e.type === 'status'
-      && (e.magnitude ?? 0) > 0 && fits(e.status))
+      && (e.magnitude ?? 0) > 0 && tuneAilmentChance(e.status, e.chance) > 0
+      && fits(e.status))
       || hostSockets(inst).some(s => [...s.def.mods, ...(s.def.perLevel ?? [])]
         .some(m => m.stat.startsWith('apply_') && fits(m.stat.slice(6))));
   },

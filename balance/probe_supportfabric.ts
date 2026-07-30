@@ -37,9 +37,11 @@ import {
   STANCE_PLANT_TIME, type Actor,
 } from '../src/engine/actor';
 import {
-  AOE_SHAPE, SUPPORT_MECHANISMS, instanceMods, instanceSequel, instanceUseCharges, makeSkillInstance,
+  AOE_SHAPE, HOST_COST_STATS, SUPPORT_MECHANISMS, crewSkillsServed, instanceMods, instanceSequel,
+  instanceUseCharges, makeSkillInstance,
   minionSeatBoundFields, skillContextTags, supportFitsInst,
   supportFitsInstOrCrew, supportGlobalMods, supportRidesMinions, hostSockets,
+  type SkillInstance,
 } from '../src/engine/skills';
 import { CORPSE_CFG } from '../src/engine/world';
 import { setSimTap } from '../src/engine/tap';
@@ -634,6 +636,24 @@ withSeededRandom(H_SEED, () => {
     supportFitsInst(supp, makeSkillInstance(chiller, 1, 3))
     && !supportFitsInst(supp, makeSkillInstance(taunter, 1, 3)),
     `chill stacks, taunt does not`);
+
+  // K7–K9 — THE TUNING IS THE TRUTH (2026-07-30, the tuned-zero bleed
+  // class): the affliction gate counts an authored status row only at its
+  // EFFECTIVE chance (tuneAilmentChance — the application site's own
+  // roll), so a sub-identity flavor bleed (talon_rake's 0.5 < the 0.7
+  // identity threshold, incidental scale 0) admits nothing, an identity
+  // bleeder (bloodlet, chance 1) still does, and the refusal self-lifts
+  // through the apply_ arm — which also makes the wound REAL (bonusChance
+  // adds past the tuned zero).
+  const talon = makeSkillInstance(SKILLS.talon_rake, 1, 3);
+  check('K7 a tuned-zero flavor bleed admits NO affliction gem (the gate reads the tuning, not the author)',
+    !supportFitsInst(sf, talon) && !supportFitsInst(SUPPORTS.septic_bargain, talon),
+    `talon_rake bleed 0.5 < identity 0.7, incidental ×0`);
+  check('K8 an identity bleeder still admits (the tuning passes what it never touched)',
+    supportFitsInst(sf, makeSkillInstance(SKILLS.bloodlet, 1, 3)));
+  talon.sockets[0] = { def: SUPPORTS.bleed_chance, level: 1 };
+  check('K9 the refusal self-lifts: an apply_bleed gem beside it re-opens the door AND makes the wound real',
+    supportFitsInst(sf, talon) && supportFitsInst(SUPPORTS.septic_bargain, talon));
 }
 
 // === RIG L — the read-site package =========================================
@@ -1340,6 +1360,112 @@ withSeededRandom(H_SEED, () => {
   // with its read-site explanation on file).
   check('Q10 unreadPayloadRows resolves the new rows for the matrix — creeping_fumes × war_cry names exposure',
     unreadPayloadRows(SUPPORTS.creeping_fumes, SKILLS.war_cry, lookup).some(r => String(r.key) === 'exposure'));
+}
+
+// === RIG R — THE GRAFTED CREW (2026-07-30) =================================
+// (crewSkillsServed + the crew cost tax walk the FULL slot lane
+// (socketsWithGrafts) — a graft is a socket to the crew gate: riders pool,
+// mechanism hop, and the bill. The forward lane carried grafts aboard the
+// minted bodies already (world.forwardSummonSockets); these pins hold the
+// gate, the ⤳ truth and the tax to what actually ships.)
+
+{
+  const world = makeSimWorld('warrior', 11);
+  const raise = SKILLS.raise_dead;
+  const tectonic = SUPPORTS.tectonic_echoes;
+  const fault = SUPPORTS.faultfinder;
+
+  // R1–R5: riders-pool parity, tag form — crewSkillsServed's own doc
+  // example (Faultfinder grants 'fissure' aboard the warriors' Cleave).
+  const bare = makeSkillInstance(raise, 1, 3);
+  const crew = world.summonCrewSkills(bare);
+  check('R1 tectonic_echoes refuses the bare crew (no fissure anywhere aboard)',
+    crewSkillsServed(tectonic, bare, crew) === null
+    && !supportFitsInstOrCrew(tectonic, bare, crew),
+    `crew ${Array.isArray(crew) ? crew.map(c => c.id).join('/') : crew}`);
+  const socketed = makeSkillInstance(raise, 1, 3);
+  socketed.sockets[0] = { def: fault, level: 1 };
+  const viaSocket = crewSkillsServed(tectonic, socketed, crew);
+  check('R2 a SOCKETED Faultfinder admits it aboard the crew (the doc example, socket form)',
+    Array.isArray(viaSocket) && viaSocket.some(d => d.id === 'cleave'));
+  const grafted = makeSkillInstance(raise, 1, 3);
+  grafted.grafts = [{ def: fault, level: 1 }];
+  const viaGraft = crewSkillsServed(tectonic, grafted, crew);
+  check('R3 a GRAFTED Faultfinder admits it identically (the riders pool walks the full slot lane)',
+    Array.isArray(viaGraft) && viaGraft.some(d => d.id === 'cleave')
+    && supportFitsInstOrCrew(tectonic, grafted, crew));
+  check('R4 socket and graft serve the SAME crew set (parity, not merely presence)',
+    Array.isArray(viaSocket) && Array.isArray(viaGraft)
+    && viaSocket.length === viaGraft.length
+    && viaSocket.every(d => viaGraft.some(g => g.id === d.id)));
+  grafted.grafts = undefined;
+  check('R5 the refusal returns when the graft leaves (live re-evaluation, no residue)',
+    crewSkillsServed(tectonic, grafted, crew) === null);
+
+  // R6: THE MECHANISM HOP through a graft — Septic Bargain needs an
+  // affliction the crew can carry; a grafted poison gem stands it up on
+  // the pseudo-instance exactly as a socketed one does (the J8/H2 laws,
+  // graft form).
+  const septic = SUPPORTS.septic_bargain;
+  check('R6a septic refuses the bare crew (no affliction anywhere aboard)',
+    crewSkillsServed(septic, bare, crew) === null);
+  const pcGrafted = makeSkillInstance(raise, 1, 3);
+  pcGrafted.grafts = [{ def: SUPPORTS.poison_chance, level: 1 }];
+  const septicServed = crewSkillsServed(septic, pcGrafted, crew);
+  check('R6b a GRAFTED poison gem opens it aboard the crew (the mechanism hop reads grafted riders)',
+    Array.isArray(septicServed) && septicServed.length > 0,
+    Array.isArray(septicServed) ? septicServed.map(d => d.id).join('/') : String(septicServed));
+
+  // R7–R10: THE CREW TAX walks the full lane — a grafted rider bills its
+  // HOST_COST_STATS to the summon cast exactly like a socketed one, and a
+  // HOST-SERVING graft is never double-billed.
+  const reaper = SUPPORTS.reapers_encore;
+  const costOf = (inst: SkillInstance): string =>
+    JSON.stringify(instanceMods(inst)
+      .filter(m => HOST_COST_STATS.has(m.stat))
+      .map(m => `${m.stat}:${m.kind}:${m.value}`).sort());
+  const taxSock = makeSkillInstance(raise, 1, 3);
+  taxSock.sockets[0] = { def: SUPPORTS.resonance, level: 1 }; // the boarding key
+  const keyOnly = costOf(taxSock);
+  taxSock.sockets[1] = { def: reaper, level: 1 };
+  check('R7 the socketed rider bills the host (reaper\'s mana freight — the standing law)',
+    !hostSockets(taxSock).some(s => s.def.id === 'reapers_encore')
+    && costOf(taxSock) !== keyOnly,
+    costOf(taxSock));
+  const taxGraft = makeSkillInstance(raise, 1, 3);
+  taxGraft.sockets[0] = { def: SUPPORTS.resonance, level: 1 };
+  taxGraft.grafts = [{ def: reaper, level: 1 }];
+  check('R8 the GRAFTED rider bills the identical freight (the tax walks the full slot lane)',
+    costOf(taxGraft) === costOf(taxSock),
+    `graft ${costOf(taxGraft)} vs socket ${costOf(taxSock)}`);
+  const noKey = makeSkillInstance(raise, 1, 3);
+  noKey.grafts = [{ def: reaper, level: 1 }];
+  check('R9 no bill without the boarding key (a dormant graft costs nothing, like a dormant stone)',
+    costOf(noKey) === costOf(makeSkillInstance(raise, 1, 3)));
+  const legionSock = makeSkillInstance(raise, 1, 3);
+  legionSock.sockets[0] = { def: SUPPORTS.legion_call, level: 1 };
+  const legionGraft = makeSkillInstance(raise, 1, 3);
+  legionGraft.grafts = [{ def: SUPPORTS.legion_call, level: 1 }];
+  check('R10 a HOST-SERVING graft is billed ONCE (folds via hostSockets, the tax skips it — no double-dip)',
+    costOf(legionGraft) === costOf(legionSock)
+    && JSON.stringify(instanceMods(legionGraft).map(m => `${m.stat}:${m.kind}:${m.value}`).sort())
+      === JSON.stringify(instanceMods(legionSock).map(m => `${m.stat}:${m.kind}:${m.value}`).sort()));
+
+  // R11–R12 — THE TUNING IS THE TRUTH, crew face (2026-07-30): the
+  // mechanism hop reads the crew skill's EFFECTIVE applications, so a
+  // crew whose only wound is a tuned-zero flavor bleed (crimson_bat's
+  // talon_rake) refuses the affliction gems honestly — and an apply_
+  // rider beside them re-opens the door while making the wound real.
+  const sbInst = makeSkillInstance(SKILLS.summon_bats, 1, 3);
+  const sbCrew = world.summonCrewSkills(sbInst);
+  check('R11 septic refuses the bat crew (talon_rake\'s authored bleed is tuned to zero — the honest refusal)',
+    crewSkillsServed(septic, sbInst, sbCrew) === null
+    && !supportFitsInstOrCrew(septic, sbInst, sbCrew),
+    `crew ${Array.isArray(sbCrew) ? sbCrew.map(c => c.id).join('/') : sbCrew}`);
+  sbInst.sockets[0] = { def: SUPPORTS.bleed_chance, level: 1 };
+  const sbServed = crewSkillsServed(septic, sbInst, sbCrew);
+  check('R12 an apply_bleed rider re-opens the crew door (self-lift — and bonusChance makes the wound real)',
+    Array.isArray(sbServed) && sbServed.some(d => d.id === 'talon_rake'));
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
