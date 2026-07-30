@@ -1,5 +1,5 @@
-/* Hollow Wake — Passive Tree Builder
-   Renders the real passive tree from data/passives.json (generated from
+/* Hollow Wake · Passive Tree Builder
+   Renders the game's passive tree from data/passives.json (generated from
    src/data/passives.ts) and lets you plan a build: allocate outward from a
    class start with connectivity enforced, total every modifier live, and
    share a build as a URL. No game facts are hard-coded here. */
@@ -78,7 +78,7 @@
   }
 
   function boot(p, classesJson) {
-    // Scope to the MAIN STAR — the tree a normal character navigates. Vocation
+    // Scope to the MAIN STAR: the tree a normal character navigates. Vocation
     // subtrees (voc_*, shown only once a vocation is earned) and the locked
     // devotion/pantheon realm scaffolding live on separate coordinate islands
     // with their own point pools; the game hides them from a base character,
@@ -116,12 +116,12 @@
 
     // sample-data banner (parity with the Database)
     fetch(DATA_DIR + 'meta.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (meta) {
-      if (meta && meta.sample) el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>Seeded preview data — the CI export replaces it with the game\'s real tree on deploy.</span></div>';
+      if (meta && meta.sample) el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>Seeded preview data. On deploy the CI export replaces it with the tree the game ships.</span></div>';
     }).catch(function () {});
 
     initFromURL();
     resize();      // size the canvas first (sets W/H from the wrap's rect)…
-    fitView();     // …so fitView reads real dimensions and fits, not the fallback
+    fitView();     // …so fitView reads true dimensions and fits, not the fallback
     wireEvents();
     scheduleDraw();
     refreshUI();
@@ -146,7 +146,7 @@
     return false;
   }
 
-  // component of `allocated` reachable from start — used to prune on refund
+  // component of `allocated` reachable from start; used to prune on refund
   function reachableFromStart() {
     var seen = new Set(), stack = [startNode];
     if (!startNode || !allocated.has(startNode)) return seen;
@@ -178,7 +178,7 @@
   function toggle(id) {
     if (allocated.has(id)) return deallocate(id);
     if (canAllocate(id)) return allocate(id);
-    toast('Not reachable yet — allocate a path to it first.');
+    toast('Not reachable yet. Allocate a path to it first.');
     return false;
   }
 
@@ -358,7 +358,7 @@
       if (n.attributesPct) for (var b in n.attributesPct) apct[b] = (apct[b] || 0) + n.attributesPct[b];
       (n.mods || []).forEach(function (m) {
         var tagKey = (m.tags && m.tags.length) ? m.tags.slice().sort().join('+') : '';
-        // fromStat is part of the identity of a 'link' (conversion) mod — keep
+        // fromStat is part of the identity of a 'link' (conversion) mod; keep
         // it in the key so two different conversions into the same stat don't merge
         var key = m.stat + '|' + m.kind + '|' + tagKey + '|' + (m.fromStat || '');
         if (!mods[key]) mods[key] = { stat: m.stat, kind: m.kind, tags: tagKey, fromStat: m.fromStat || null, val: (m.kind === 'more' ? 1 : 0), ov: null };
@@ -544,7 +544,7 @@
 
   function showTip(n, mx, my) {
     var K = KIND[kindOf(n)];
-    var state = n.id === startNode ? 'Class start' : allocated.has(n.id) ? 'Allocated — click to refund' : canAllocate(n.id) ? 'Click to allocate' : 'Locked — no path yet';
+    var state = n.id === startNode ? 'Class start' : allocated.has(n.id) ? 'Allocated · click to refund' : canAllocate(n.id) ? 'Click to allocate' : 'Locked · no path yet';
     el.tip.innerHTML = '<div class="tk" style="color:' + K.color + '">' + K.label + '</div>' +
       '<div class="tn">' + esc(n.name || n.id) + '</div>' +
       '<div class="td">' + esc(n.description || '') + '</div>' +

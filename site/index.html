@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hollow Wake — a data-driven top-down action RPG</title>
+<title>Hollow Wake · a top-down action RPG with no far edge</title>
 <script>document.documentElement.className += ' js';</script>
-<meta name="description" content="Hollow Wake is a top-down action RPG built around one idea: every system is open, modular data. Skills are loot, classes are only a starting point, and one engine runs the player, the monsters, and everything they summon.">
+<meta name="description" content="A top-down action RPG on a frontier with no far edge. The world was settled the moment it was seeded; walking it is how you find out what was settled. Free and open source.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -92,17 +92,17 @@
   .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal-hi);
     padding:7px 16px;border:1px solid var(--line);border-radius:999px;background:rgba(79,214,196,.06)}
   .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ember);box-shadow:0 0 12px var(--ember)}
-  /* THE LOCKUP — wordmark over the insignia, and the whole card BREATHES
+  /* THE LOCKUP: wordmark over the insignia, and the whole card BREATHES
      (inhale to 44%, longer exhale). Thematic, and it pulls the eye to the
-     name itself. user-select:none on the card: the title is ephemeral — you
+     name itself. user-select:none on the card: the title is ephemeral. You
      can't drag-copy it, only read it. */
   .hero-lockup{position:relative;display:inline-block;margin:26px auto 4px;-webkit-user-select:none;user-select:none}
   .hero .eyebrow,.hero .tagline{-webkit-user-select:none;user-select:none}
   /* Glyph glow lives on this radial layer, NOT on a text-shadow: Gecko
      composites text-shadow over gradient-clipped text (mud), Blink behind it
-     (halo) — a separate layer renders identically in both. will-change on
+     (halo); a separate layer renders identically in both. will-change on
      every breathing element keeps the animation on the compositor (Firefox
-     otherwise re-rasterizes the gradient text per frame — the chop). */
+     otherwise re-rasterizes the gradient text per frame, the chop). */
   .hero-lockup::before{content:"";position:absolute;inset:-34% -18%;pointer-events:none;
     background:radial-gradient(closest-side,rgba(79,214,196,.22),rgba(169,139,255,.10) 52%,transparent 76%);
     animation:hw-glow 7.2s ease-in-out infinite;will-change:opacity}
@@ -252,7 +252,7 @@
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
     <!-- THE LOCKUP: the insignia (same mark as the nav + footer) hides behind
-         the wordmark and the whole card breathes — hollow core, three points,
+         the wordmark and the whole card breathes: hollow core, three points,
          the same three colours the backdrop's flickers wear. Deliberately
          unselectable: the name is an impression, not a string to copy. -->
     <div class="hero-lockup">
@@ -266,7 +266,7 @@
         <circle cx="5.6" cy="22" r="2" fill="#ff8a4c" opacity=".16"/><circle cx="5.6" cy="22" r=".8" fill="#ff8a4c"/>
         <defs><linearGradient id="hwHeroGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs>
       </svg>
-      <!-- THE EYE — dormant in the hollow. Rarely, once the Observer has
+      <!-- THE EYE: dormant in the hollow. Rarely, once the Observer has
            parked, the lid opens for a moment and the pupil finds your
            cursor. A separate svg so the breath's opacity keyframes can't
            dim it: when it opens, it is MEANT to be seen. -->
@@ -280,8 +280,8 @@
       </div>
       <h1 class="display">Hollow Wake</h1>
     </div>
-    <p class="tagline">A world that keeps <b>generating itself.</b></p>
-    <p class="pitch">A top-down action RPG about pushing into an endless, self-minting frontier — dozens of biomes, world-events that erupt on their own clocks, factions warring over ground you don't own, and a build made from the skills you find. Descend, explore, get strong. Then try to bring it back alive.</p>
+    <p class="tagline">Nothing here is generated. <b>Everything is revealed.</b></p>
+    <p class="pitch">A top-down action RPG about walking out past the last safe light. The frontier has no far edge and no blank spots, only ground you haven't stood on yet: all of it was decided the moment your world was seeded. Build from the skills you pull out of the dirt, go deeper than you should, and settle what your death is allowed to cost before you leave town.</p>
     <div class="cta-row">
       <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="btn btn-primary" target="_blank" rel="noopener">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
@@ -320,20 +320,20 @@
 <section class="band" data-nav="World">
   <div class="wrap">
     <div class="sec-head center reveal">
-      <div class="kicker">Infinite by design</div>
-      <h2>A world that generates itself, and never stops</h2>
-      <p>Two hand-built anchors — the town of Lastlight and Wayfarer's Crossroads — open onto a frontier with no edge. Step through a frontier portal and a fresh zone is minted and stitched onto the map, one level deeper. It grows as far as you're willing to walk.</p>
+      <div class="kicker">No far edge</div>
+      <h2>The map was finished before you arrived</h2>
+      <p>Two anchors are set by hand: the town of Lastlight, and Wayfarer's Crossroads past it. Everything beyond is frontier. Step through a rim portal and the next zone is stitched into the world graph one level deeper, permanent from that moment on: named, walked, warred over, remembered. You will stop before it does.</p>
     </div>
     <div class="pillars">
       <div class="pillar reveal" style="--accent:var(--green)">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/></svg></div>
-        <h3>The map grows as you explore</h3>
-        <p>Frontier portals mint a brand-new zone on the way through and graft it into the world graph. There's no end of content — the graph itself is the difficulty curve, every step deeper raising the stakes.</p>
+        <h3>The fog is not empty</h3>
+        <p>Finished country stands past your map's edge before you ever face that way: charted, populated, already contested, invisible until found. You never watch the world load in. You catch up to it. Depth is the difficulty curve, and the curve does not end.</p>
       </div>
       <div class="pillar reveal" style="--accent:var(--teal)">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
-        <h3>Every zone asks something different</h3>
-        <p>Clear the packs, survive the waves, escape a zone that never goes quiet, destroy the spawners, or hunt down the boss. Objectives vary the play, so no two runs feel like the same checklist.</p>
+        <h3>Ground makes demands</h3>
+        <p>Cull it, hold it, outlive it, dig up what it buried, relight what it let go dark, break whatever keeps pouring bodies into it, or answer a riddle it has been keeping for nobody. The objective changes what a zone is, and some zones will not open the way out until you finish.</p>
       </div>
     </div>
   </div>
@@ -345,30 +345,40 @@
 <section class="band" style="padding-top:0" data-nav="Living">
   <div class="wrap">
     <div class="sec-head reveal">
-      <div class="kicker">A breathing world</div>
+      <div class="kicker">While you were away</div>
       <h2>Factions fight over ground you don't own</h2>
-      <p>Territory is a living field. <span data-count="factions">10+</span> factions gain and lose ground based on which of their monsters are alive, and go to war with each other — a zone you knew as undead can flip to goblin colours while you're away. The clock and the weather change who's out there.</p>
+      <p><span data-count="factions">10+</span> factions hold ground, take it, lose it, and starve each other off it, with or without an audience. A zone you knew as undead can answer in goblin colours by the time you walk back. Check the banners before you commit to a pull.</p>
     </div>
     <div class="living-grid">
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M4 9h16M4 15h16"/></svg></div>
-        <h4>Territory that shifts</h4>
-        <p>Zones become <b>owned</b>, <b>contested</b> — where two hostile factions both spawn and tear into each other — or <b>conquered</b>, flipping the whole population. You're the lever: thin out the goblins here and goblin power falls.</p>
+        <h4>Territory changes hands</h4>
+        <p>Zones run <b>owned</b>, <b>contested</b>, or <b>conquered</b> outright. Contested is the fun one: two hostile populations spawning into the same ground, already at each other when you arrive, and you get to choose whose day gets worse. Faction power is fed by living monsters, so every corpse you make is a vote.</p>
       </div>
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg></div>
         <h4>Day, dusk, night, dawn</h4>
-        <p>A full day/night wheel turns as you play — and it's load-bearing. The Haunting only binds after dark, and dawn unbinds it. What hunts you depends on the hour.</p>
+        <p>The wheel turns while you play, and the world is rigged to it. The <b>Haunting</b> binds only after dark, and dawn cuts it loose. Star-lit spans hold only under a night sky. At least one door refuses to open until dusk. Route by the light you'll have when you get there, not the light you left in.</p>
       </div>
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a4 4 0 014-4 5 5 0 019.5-1.5A3.5 3.5 0 0119 15H6a2 2 0 01-2-1z"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2"/></svg></div>
         <h4>Weather with teeth</h4>
-        <p>Rain, storm, fog, ashfall, snow — and the <b>Blood Moon</b>, under which the undead walk twice as thick. Every front re-weights who spawns where.</p>
+        <p>Rain, fog, ashfall, snow, and the <b>Blood Moon</b>, under which the dead walk twice as thick. A storm is a place, with a heart and a rim and a drift, and the ground dresses for it while it holds. Every front re-weights who spawns where. The forecast is a farming decision.</p>
       </div>
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0M5 15V8l6-3 6 3v7"/></svg></div>
         <h4>The sea is a place</h4>
-        <p>Cast off from a dock and you <i>are</i> the boat — the coastline streams in, and every shore you nose up to lands a real, generated zone, with one-off voyage islands riding on top.</p>
+        <p>Cast off and you <i>are</i> the boat. Every water is one whole thing with a class, a name, and its harbors already seated; it was all decided before your bow ever touched it. You learn the name by finding your first port. Some ports are under siege when you get there, and the causeway stays barred until you end it.</p>
+      </div>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--steel)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <h4>Everything out there pays attention</h4>
+        <p>Suspicion is a ladder you can read from the outside: heads turn first, then lanterns swing, then the searching starts. Sleepers collapse to a hearing ring, so creep the rim. Trackers run your footprints in the order you laid them, and wading breaks the trail. Yes, that is a hint.</p>
+      </div>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6M12 2v3M8 8c0-2 1.8-3 4-3s4 1 4 3v8c0 1.7-1.8 3-4 3s-4-1.3-4-3V8z"/><circle cx="12" cy="12" r="1.6"/></svg></div>
+        <h4>The dark keeps a ledger</h4>
+        <p>Somewhere on the map is a darkness with a border, and the border moves. Inside it, light is a meter with a drain rate. Daylight never pays that debt down; it only suspends the bill until dusk collects. Bring a lantern. Bring two.</p>
       </div>
     </div>
   </div>
@@ -378,25 +388,25 @@
 <section class="band" style="padding-top:0" data-nav="Death">
   <div class="wrap">
     <div class="sec-head reveal">
-      <div class="kicker">Your contract with the dark</div>
-      <h2>Death means something — you decide how much</h2>
-      <p>Run <b>Mortal</b> and a fall ends the character, pays the essence tithe, and leaves a corpse any successor can reclaim. Swear the <b>Immortal</b> covenant and death can't keep you — the world stops counting. Hire fallen heroes, or bring a friend.</p>
+      <div class="kicker">The covenant</div>
+      <h2>Set the price of your death before you leave</h2>
+      <p>Two ways to run. <b>Mortal</b>: a fall ends the character, the world takes its essence tithe, and the body stays where it dropped, wearing everything it owned. <b>Immortal</b>: death cannot hold you, and the world quietly stops counting. Neither is the coward's option. You'll find out which one you are.</p>
     </div>
     <div class="living-grid">
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 00-4 12.7V18h8v-3.3A7 7 0 0012 2z"/><path d="M9 21h6M10 18v3M14 18v3"/></svg></div>
         <h4>Corpse runs</h4>
-        <p>Your death drops a reclaimable corpse holding your equipped gear, marked on the world map — the skill and support gems you carried are lost to the fall. The road back is part of the danger.</p>
+        <p>A successor can walk back out and reclaim the fallen: the gear is still there, all of it, marked on the world map. The gems are not. Skills die with the hands that held them, and the road back is the same road that ended the last one.</p>
       </div>
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 8l2 2 4-4"/></svg></div>
         <h4>Mercenaries</h4>
-        <p>Hire archetype blades at the outpost — the archer, the desert warrior, the caster-for-coin — synthesized fresh at your own power. Retired heroes become veterans.</p>
+        <p>Hire blades at the wilds outposts, cut fresh at your own power: the archer, the desert swordsman, the caster who charges by the hour. Retire a hero and they come back to the board as a veteran. Company that costs nothing but coin.</p>
       </div>
       <div class="lcard reveal">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="9" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M2 20c0-3 2.5-5 6-5s6 2 6 5M14.5 15c2.8.2 5 2.2 5 5"/></svg></div>
-        <h4>Early co-op</h4>
-        <p>Play together, host-authoritative; enemies scale with the party so solo stays untouched. Early support, still being hardened — but the seats are there.</p>
+        <h4>Bring a body you trust</h4>
+        <p>Online co-op runs host-authoritative, and enemies scale to the party, so solo stays exactly as tuned. Couch play is in too: hand a second pad to whoever's on the sofa, the camera stretches to hold you both, and the screen's edge turns solid. Early, still being hardened. The seats are there.</p>
       </div>
     </div>
   </div>
@@ -407,11 +417,11 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <div class="kicker">The lay of the land</div>
-      <h2>Dozens of lands, one growing frontier</h2>
-      <p>The world is stitched from a deep roster of biomes — verdant to infernal — each with its own terrain, set-pieces, and monster ecology that shifts by depth. Here's a handful; shuffle for more, and hover any card for the full read.</p>
+      <h2>Every country keeps its own laws</h2>
+      <p>The frontier is stitched from a deep roster of biomes, verdant through infernal, and each runs rules the others don't: ground that dissolves behind you, a hedge maze with something at the middle of it, a heart of ice with moving parts, wheat tall enough to blind both sides of an ambush. Depth reshuffles the ecology. Here's a handful; shuffle for more, and hover any card for the full read.</p>
     </div>
     <div class="reveal" data-deck="biomes" data-count="5" data-min="200" data-shuffle></div>
-    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">A card marked <b style="color:var(--ink-dim)">Landmark</b> — the Ossuary, the Grand Arena, the rifts — is a set-piece reached through a specific event, not common terrain you roll into.</p>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">A card marked <b style="color:var(--ink-dim)">Landmark</b> is a set-piece with an address, not terrain you roll into: the Ossuary, the Grand Arena, the rifts. Getting there is its own story.</p>
   </div>
 </section>
 
@@ -420,11 +430,11 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <div class="kicker">The world runs without you</div>
-      <h2>World-events, each its own mini-campaign</h2>
-      <p>Optional overlays erupt across the map on their own clocks — war-hosts, plagues, rifts, hunts, invasions. Chase them, dodge them, or get caught inside. Shuffle the deck, and hover a card for what wakes it and what it fields.</p>
+      <h2>You will be interrupted</h2>
+      <p>War-hosts muster, plagues take root, rifts tear open, hunts begin, and none of it asks first. World-events erupt on their own clocks, bring their own weather, chew on the map for a while, and resolve with or without you. Chase one for the payout, or dodge it and live with not knowing. Shuffle the deck, and hover a card for what wakes it and what it fields.</p>
     </div>
     <div class="reveal" data-deck="events" data-count="8" data-min="244" data-shuffle></div>
-    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">Each is a self-contained package layered onto the world — the mix you meet is tuned per run from the ones you've unlocked.</p>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">Each one is a sealed package layered onto the world. The mix a run can field is drawn from the ones you've unlocked, so no two runs get interrupted the same way.</p>
   </div>
 </section>
 
@@ -434,7 +444,7 @@
     <div class="sec-head center reveal">
       <div class="kicker">The roster</div>
       <h2>Pick where you begin</h2>
-      <p>Every class is just a starting kit — a spread across the ten attributes and three signature skills — never a cage. The loot decides who you actually become. Shuffle for another cut of the roster; hover a card for its kit.</p>
+      <p>A class is a starting spread across the ten attributes plus three signature skills, and that is all it is. Nobody stays what they rolled: the loot decides who you become, the class only decides who walks out of town on day one. Shuffle for another cut of the roster; hover a card for its kit.</p>
     </div>
     <div class="reveal" data-deck="classes" data-count="9" data-min="300" data-shuffle></div>
   </div>
@@ -446,13 +456,13 @@
     <div class="sec-head reveal">
       <div class="kicker">Make it yours</div>
       <h2>Skills are loot. Everything is a lever.</h2>
-      <p>You don't unlock skills on a class tree — you find them. Active skills and supports drop as gems, slot into any build, and recombine into your own way to play. Hover anything in the rack to see the real numbers.</p>
+      <p>There is no skill tree to climb. Actives and supports drop as gems, socket into any build, and stack into shapes the class screen never promised. Levels buy passive points; the gems themselves level by being fed. Hover anything in the rack for the live numbers.</p>
     </div>
     <div class="build-cols">
       <div class="build-facts reveal">
-        <div class="bfact"><span class="n" data-count="classes">20+</span><span class="t"><b>classes</b>, each a starting kit of attributes and signature skills — never a cage. Specialize into one of <b data-count="vocations" data-count-exact>15</b> vocations, from the Warbringer to the Stormweaver.</span></div>
-        <div class="bfact"><span class="n" data-count="passives">250+</span><span class="t">a deep <b>passive tree</b> — keystones, notables, and raw attributes placed on the graph itself — all plannable in the <a href="tree/" style="color:var(--teal)">build tool</a>.</span></div>
-        <div class="bfact"><span class="n" style="font-size:26px">◆</span><span class="t">a growing chase layer of named <b>uniques</b> and socketable <b>Vestiges</b> that spell runic Words — the drop that turns a skill into a whole archetype.</span></div>
+        <div class="bfact"><span class="n" data-count="classes">20+</span><span class="t"><b>classes</b>, every one a different door into the same shared pools. Specialize later into one of <b data-count="vocations" data-count-exact>15</b> vocations, Warbringer through Stormweaver, once it's clear what you've been building toward.</span></div>
+        <div class="bfact"><span class="n" data-count="passives">250+</span><span class="t">a <b>passive tree</b> of keystones, notables, and raw attribute stops laid onto one graph, plannable outside the game in the <a href="tree/" style="color:var(--teal)">build tool</a>.</span></div>
+        <div class="bfact"><span class="n" style="font-size:26px">◆</span><span class="t">a chase layer of named <b>uniques</b> and socketable <b>Vestiges</b> that spell runic Words, the drops that bend a skill into a whole archetype.</span></div>
       </div>
       <div class="reveal">
         <div class="showhead"><h3>The rack</h3><a href="database/">Browse all <span data-count="skills">350+</span> in the Database →</a></div>
@@ -468,25 +478,25 @@
 <section class="band" id="explore" data-nav="Explore">
   <div class="wrap">
     <div class="sec-head center reveal">
-      <div class="kicker">Explore the world</div>
+      <div class="kicker">Do your homework</div>
       <h2>Live tools, straight from the game data</h2>
-      <p>These pull from the same <span class="mono" style="color:var(--teal-hi)">src/data/</span> files the game runs on — regenerated on every deploy, so they never fall out of date.</p>
+      <p>These run on the same <span class="mono" style="color:var(--teal-hi)">src/data/</span> files the game runs on, rebuilt on every deploy. If the game knows it, these know it. Neither can drift.</p>
     </div>
     <div class="pillars" style="grid-template-columns:repeat(3,1fr)">
       <a class="pillar reveal" href="database/" style="--accent:var(--teal);text-align:left">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div>
         <h3>Database</h3>
-        <p>Search and filter every skill, support gem, and monster — with the full authored entry for each. <span style="color:var(--teal)">Open →</span></p>
+        <p>Every skill, support gem, and monster, searchable and filterable, each one drawn by the game's own painters. <span style="color:var(--teal)">Open →</span></p>
       </a>
       <a class="pillar reveal" href="tree/" style="--accent:var(--violet);text-align:left">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><circle cx="5" cy="14" r="2"/><circle cx="19" cy="14" r="2"/><circle cx="12" cy="20" r="2"/><path d="M12 6v4m0 0l-5.5 3M12 10l6 3M7 15l4 4m6-4l-4 4"/></svg></div>
         <h3>Passive Tree</h3>
-        <p>Plan a build on the real tree — allocate from your class start, watch your stats total up, share the link. <span style="color:var(--violet)">Open →</span></p>
+        <p>Plan on the tree itself: allocate from a class start, watch the totals move, share the whole build as a link. <span style="color:var(--violet)">Open →</span></p>
       </a>
       <a class="pillar reveal" href="play/" style="--accent:var(--ember);text-align:left">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg></div>
         <h3>Play in browser</h3>
-        <p>A free, in-browser demo of the prototype — no install. Downloads give the full experience with saved characters. <span style="color:var(--ember)">Play now →</span></p>
+        <p>The prototype in a browser tab, free, no install. Downloads are the full ride, with saved characters. <span style="color:var(--ember)">Play now →</span></p>
       </a>
     </div>
   </div>
@@ -500,12 +510,12 @@
     <div class="sec-head center reveal">
       <div class="kicker">Play it</div>
       <h2>Grab a build, or run the source</h2>
-      <p>Packaged desktop builds for Windows and Linux, or clone the repo and run it in your browser in one command.</p>
+      <p>Packaged desktop builds for Windows and Linux, or clone the repo and be in-game in one command.</p>
     </div>
     <div class="get">
       <div class="get-card reveal">
         <h3>Play a build</h3>
-        <div class="sub">From the GitHub Releases page — the launcher auto-checks for updates.</div>
+        <div class="sub">From the GitHub Releases page. The launcher checks for updates on its own.</div>
         <a class="plat" href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">
           <span class="pi"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7-1v7H3v-6zM11 4.3L21 3v9h-10V4.3zM3 12.5h7v7l-7-1v-6zM11 12.5h10v9l-10-1.4v-7.6z"/></svg></span>
           <span><span class="pt">Windows</span><br><span class="pd">HollowWake-Setup-&lt;ver&gt;.exe · per-user, no admin</span></span>
@@ -518,7 +528,7 @@
         </a>
         <div class="note">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
-          <span>On a Steam Deck, add it as a non-Steam game — there's a one-line installer and full controller notes in <b style="color:var(--ink-dim)">STEAM.md</b>. Controllers work in the browser build too.</span>
+          <span>On a Steam Deck, add it as a non-Steam game; there's a one-line installer and full controller notes in <b style="color:var(--ink-dim)">STEAM.md</b>. Controllers work in the browser build too.</span>
         </div>
       </div>
       <div class="get-card reveal">
@@ -537,7 +547,7 @@ npm run <span class="g">game</span>
 npm run <span class="g">build</span></pre>
         <div class="note">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
-          <span><b style="color:var(--ink-dim)">Controls:</b> WASD to move, LMB/RMB + 1–6 for skills, C / B / P / M for character, skills, tree and map — all rebindable.</span>
+          <span><b style="color:var(--ink-dim)">Controls:</b> WASD to move, LMB/RMB + 1–6 for skills, C / B / P / M for character, skills, tree and map. All rebindable.</span>
         </div>
       </div>
     </div>
@@ -549,7 +559,7 @@ npm run <span class="g">build</span></pre>
   <div class="wrap reveal">
     <div class="status">
       <span class="badge">Early prototype</span>
-      <p>Hollow Wake is in active development. The <b>systems are broad and working</b> — skills, supports, items, passives, procedural worlds, AI, factions, co-op and permadeath — but the presentation is intentionally minimal for now: art is deliberate placeholder geometry rendered through the shading layer, and audio isn't in yet. Expect balance, content and class identity to keep shifting between versions.</p>
+      <p>Hollow Wake is in active development, and it leads with its bones. <b>The systems run deep</b>: skills, supports, items, passives, endless worldgen, factions, permadeath, co-op. The presentation is scaffolding on purpose: placeholder geometry through a shading layer, and no audio yet. If you need the paint first, watch from a distance. If you want to feel a world think, get in now; it already does the thing. Expect balance and class identity to keep shifting under you between versions.</p>
     </div>
   </div>
 </section>
@@ -563,7 +573,7 @@ npm run <span class="g">build</span></pre>
           <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="url(#g2)" stroke-width="1.4" opacity=".9"/><path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#g2)" stroke-width="1.1" opacity=".55"/><circle cx="16" cy="16" r="4.4" stroke="url(#g2)" stroke-width="1.5"/><circle cx="16" cy="4" r="2.2" fill="#4fd6c4"/><circle cx="26.4" cy="22" r="2.2" fill="#a98bff"/><circle cx="5.6" cy="22" r="2.2" fill="#ff8a4c"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs></svg>
           HOLLOW WAKE
         </div>
-        <p style="color:var(--ink-faint);font-size:14px;margin-top:14px;max-width:340px">A top-down action RPG built around one idea: every system is open, modular data.</p>
+        <p style="color:var(--ink-faint);font-size:14px;margin-top:14px;max-width:340px">A top-down action RPG where every system is open data, and the whole world was decided at the seed.</p>
       </div>
       <div class="foot-links">
         <div class="foot-col">
@@ -609,25 +619,25 @@ npm run <span class="g">build</span></pre>
     setTimeout(function(){ revs.forEach(function(el){ var r=el.getBoundingClientRect(); if(r.top < window.innerHeight*1.2) el.classList.add('in'); }); }, 2600);
   } else { revealAll(); }
 
-  /* THE OBSERVER — scroll, and the insignia detaches from the title to creep
+  /* THE OBSERVER: scroll, and the insignia detaches from the title to creep
      toward the centre of the backdrop, where it stays for the whole page:
      the thing that made the world, watching you read about it. Scroll-driven
      only (it moves exactly as much as you do), fixed BEHIND all content
-     (z:-1 in the content plane), and skipped entirely under reduced-motion —
+     (z:-1 in the content plane), and skipped entirely under reduced-motion;
      there the mark simply stays anchored in the hero. */
   var mwrap = document.querySelector('.hero-mark-wrap'), mlock = document.querySelector('.hero-lockup');
   if(mwrap && mlock && !reduce){
     var mAX = 0, mADocY = 0, mLastP = 0;
-    /* jitter offsets — written by the twitch engine below, composed into
+    /* jitter offsets, written by the twitch engine below, composed into
        every placement write so scroll and jitter never fight */
     var jx = 0, jy = 0, jr = 0, jTimer = null;
     /* eye state: boost pulls the wrap's opacity toward full while the lid is
-       open — the mark is faint by design; the eye is not */
+       open; the mark is faint by design and the eye is not */
     var eyeBoost = 0, lastEye = 0;
     var eyeG = mwrap.querySelector('.hw-eyeg'), eyePupil = mwrap.querySelector('.hw-pupil');
     var mPlace = function(){
       var vw = window.innerWidth, vh = window.innerHeight, s = window.scrollY || window.pageYOffset || 0;
-      var t = Math.min(1, s/(vh*2.0)), p = t*t*(3-2*t);   /* smoothstep over ~2 viewports — the creep is patient */
+      var t = Math.min(1, s/(vh*2.0)), p = t*t*(3-2*t);   /* smoothstep over ~2 viewports; the creep is patient */
       var heroW = Math.min(Math.max(300, vw*.44), 560);
       var obsW  = Math.min(vh*.72, vw*.8, 700);
       var ay = mADocY - s;
@@ -646,12 +656,12 @@ npm run <span class="g">build</span></pre>
       mPlace();
     };
 
-    /* THE TWITCH — once the Observer has detached and re-anchored (parked),
+    /* THE TWITCH: once the Observer has detached and re-anchored (parked),
        it occasionally moves when you aren't quite looking: every 6–14s one
        of two tells, gated on being parked and the tab being visible.
        'twitch' = a small decaying wobble in a random direction (~half a
        second, a few px). 'lean' = the rarer one: a slow 2–4px drift with a
-       hair of rotation, a held beat, then a quick snap back to true — the
+       hair of rotation, a held beat, then a quick snap back to true. The
        "did it move? ...no. ...right?" of it. Never while it's still riding
        the title, never under reduced-motion (this whole block is gated). */
     var jGap = function(){ return 6000 + Math.random()*8000; };
@@ -663,8 +673,8 @@ npm run <span class="g">build</span></pre>
       eyeG.setAttribute('transform', 'translate(16 16) scale(1 ' + k.toFixed(3) + ') translate(-16 -16)');
       if(eyePupil){ eyePupil.setAttribute('cx', (16 + px).toFixed(2)); eyePupil.setAttribute('cy', (16 + py).toFixed(2)); }
     };
-    /* THE EYE — the lid in the hollow opens for a breathless moment: rise,
-       a beat, one saccade (the pupil finds your cursor — nobody at the
+    /* THE EYE: the lid in the hollow opens for a breathless moment. Rise,
+       a beat, one saccade (the pupil finds your cursor; nobody at the
        glass and it picks its own spot to study), then shut. */
     var eyeEvent = function(){
       lastEye = performance.now();
@@ -687,7 +697,7 @@ npm run <span class="g">build</span></pre>
     var jEvent = function(){
       if(document.hidden || mLastP < .92){ jSchedule(2500 + Math.random()*2500); return; }
       /* the eye is rarer than rare: never in the first 75s, at most once per
-         75s after that, and only a 7% roll even then — most visitors will
+         75s after that, and only a 7% roll even then; most visitors will
          never see it, which is the point */
       var nowE = performance.now();
       if(nowE > 75e3 && nowE - lastEye > 75e3 && Math.random() < .07){ eyeEvent(); return; }
@@ -733,13 +743,14 @@ npm run <span class="g">build</span></pre>
       eyeTest: function(k, px, py){ eyeBoost = k||0; setEye(k||0, px||0, py||0); mPlace(); } };
   }
 
-  /* stat band — numbers come from the exported data/meta.json so they never go
-     stale. Real deploy → floored live counts ("400+"); sample/preview or no data
-     → the curated round fallbacks in the markup. Classes shows the exact count. */
+  /* stat band: numbers come from the exported data/meta.json so they never go
+     stale. A live deploy → floored live counts ("400+"); sample/preview or no
+     data → the curated round fallbacks in the markup. Classes shows the exact
+     count. */
   /* UNDERPROMISE on purpose: the shown floor sits well below the live count
-     (~2/3 for big catalogs, 3/4 for small rosters — a 27-class roster should
-     still read "20+"), so the "+" always hides meaningfully more content —
-     an expectation to shatter, never a rounding hedge. */
+     (~2/3 for big catalogs, 3/4 for small rosters; a 27-class roster should
+     still read "20+"), so the "+" always hides far more content than it
+     claims: an expectation to shatter, never a rounding hedge. */
   function floorNice(n){
     var v = n * (n < 100 ? 0.75 : 0.65);
     var step = v < 50 ? 5 : v < 100 ? 10 : v < 1000 ? 50 : 100;
@@ -792,14 +803,14 @@ npm run <span class="g">build</span></pre>
   var ctx = canvas.getContext('2d');
   var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1, 1.75);
   var nodes=[], embers=[], LINK=140;
-  /* the graph's flickers ARE the insignia's three points — teal / violet /
+  /* the graph's flickers ARE the insignia's three points: teal / violet /
      ember, same hexes as the mark in the nav, the hero and the footer. */
   var COLORS=['#4fd6c4','#a98bff','#ff8a4c'];
 
-  /* THE FIDGET LAYER — the backdrop is quietly interactive: the pointer
+  /* THE FIDGET LAYER: the backdrop is quietly interactive. The pointer
      (mouse, pen, or a dragging finger) carries a soft repulsion field the
-     motes bounce off — parked it barely bends the drift, swept through them
-     it scatters — and every click/tap drops a stone into the pool: an
+     motes bounce off (parked it barely bends the drift, swept through them
+     it scatters), and every click/tap drops a stone into the pool: an
      expanding ripple that shoves the motes as its wavefront passes. Ambient
      by design: passive listeners, nothing ever blocks the page, and
      prefers-reduced-motion keeps the whole layer still. */
@@ -834,7 +845,7 @@ npm run <span class="g">build</span></pre>
   }
   function frame(){
     ctx.clearRect(0,0,W,H);
-    /* ripples — the stone drops, the pool answers (drawn beneath the web) */
+    /* ripples: the stone drops, the pool answers (drawn beneath the web) */
     for(var rq=ripples.length-1;rq>=0;rq--){
       var w=ripples[rq]; w.t++;
       var p=w.t/RIP_LIFE;
@@ -849,7 +860,7 @@ npm run <span class="g">build</span></pre>
         ctx.beginPath(); ctx.arc(w.x,w.y,w.r*.62,0,6.2832); ctx.stroke();
       }
     }
-    /* pointer field gain — parked ≈ a whisper, swept ≈ a real shove */
+    /* pointer field gain: parked ≈ a whisper, swept ≈ a proper shove */
     var pmx=ptr.x-ptr.px, pmy=ptr.y-ptr.py;
     ptr.speed=ptr.speed*.8+Math.min(40,Math.sqrt(pmx*pmx+pmy*pmy))*.2;
     ptr.px=ptr.x; ptr.py=ptr.y;
@@ -901,7 +912,7 @@ npm run <span class="g">build</span></pre>
     for(var e=0;e<embers.length;e++){
       var m=embers[e];
       m.y+=m.vy; m.x+=Math.sin((m.tw+=0.01))*0.25;
-      /* embers part around the pointer — a lighter touch than the motes */
+      /* embers part around the pointer, a lighter touch than the motes */
       var ex=m.x-ptr.x, ey=m.y-ptr.y, ed2=ex*ex+ey*ey;
       if(ed2<PTR_EMBER2 && ed2>1){ var ed=Math.sqrt(ed2); m.x+=(ex/ed)*(1-ed/PTR_EMBER)*.9; }
       if(m.y< -12){ embers[e]=newEmber(false); }

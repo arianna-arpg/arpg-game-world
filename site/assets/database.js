@@ -1,4 +1,4 @@
-/* Hollow Wake — Database
+/* Hollow Wake · Database
    Loads the exported JSON (generated from src/data/) and renders a searchable,
    filterable catalog. No game facts are hard-coded here. */
 (function () {
@@ -7,7 +7,7 @@
   var DATA_DIR = '../data/';
   var PALETTE = { skill: '#ff8a4c', support: '#a98bff', monster: '#ef6b6b', class: '#e9c46a' };
   var TYPE_LABEL = { all: 'All', skill: 'Skills', support: 'Supports', monster: 'Monsters', class: 'Classes' };
-  // Monster portraits (assets/portraits.js — the game's own painters, bundled).
+  // Monster portraits (assets/portraits.js: the game's own painters, bundled).
   // Sizes are CSS px; backing stores ride the bundle's oversample factor.
   var PORTRAIT = { card: 44, detail: 132 };
   function portraitsReady() { return typeof window.HWPortraits === 'object' && !!window.HWPortraits; }
@@ -46,7 +46,7 @@
   // ---- load ---------------------------------------------------------------
   // Normally reads the exported JSON via fetch. If the page ships an embedded
   // dataset (window.__HW_DATA, used by the self-contained preview build), use
-  // that instead — no server required.
+  // that instead; no server required.
   function loadAll() {
     if (window.__HW_DATA) {
       var d = window.__HW_DATA;
@@ -77,7 +77,7 @@
 
     if (meta) {
       if (meta.sample) {
-        el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>This preview is seeded with <b>sample entries</b> so you can see the catalog working. On deploy, the CI export replaces it with your game\'s <b>real, complete</b> data — this banner disappears automatically.</span></div>';
+        el.banner.innerHTML = '<div class="databanner"><span class="tag">Sample data</span><span>This preview is seeded with <b>sample entries</b> so you can see the catalog working. On deploy, the CI export replaces it with the game\'s <b>complete</b> data, and this banner disappears on its own.</span></div>';
       }
       if (meta.generatedAt) {
         var d = new Date(meta.generatedAt);
@@ -331,13 +331,13 @@
       if (e.skills && e.skills.length) row('Signature skills', badges(e.skills));
     }
 
-    // The monster itself, drawn by the game's own painters — the drawer leads
+    // The monster itself, drawn by the game's own painters; the drawer leads
     // with the creature, then the facts.
     var portrait = '';
     if (e.type === 'monster' && portraitsReady() && e.raw) {
       var px = Math.round(PORTRAIT.detail * portraitOS());
       portrait = '<div class="dportrait"><canvas class="mport-detail" data-mport="' + esc(e.id) + '" width="' + px + '" height="' + px + '"></canvas>' +
-        '<div class="dportcap">as it walks the world — drawn by the game\'s own painters</div></div>';
+        '<div class="dportcap">as it walks the world, drawn by the game\'s own painters</div></div>';
     }
 
     return '<div class="dhead">' +

@@ -1,6 +1,6 @@
-/* Hollow Wake — the loot showcase.
-   A self-contained interactive rack: hover a real skill, support, or unique
-   and a PoE-style tooltip reveals its stats/mods/flavor — all fed by the
+/* Hollow Wake · the loot showcase.
+   A self-contained interactive rack: hover a live skill, support, or unique
+   and a PoE-style tooltip reveals its stats/mods/flavor, all fed by the
    exported JSON (site/data/*.json), so it can never drift from the game.
 
    Drop <div data-showcase></div> on a page and include this script. It injects
@@ -62,7 +62,7 @@
 
     var current = TABS[0].key;
 
-    // Fisher–Yates spread — the shuffle re-deals the current tab from its
+    // Fisher–Yates spread; the shuffle re-deals the current tab from its
     // full pool (same prefer gate as the first deal), so the rack rarely
     // reads the same twice. Mirrors the decks' shuffle.
     function sample(list, n) {
@@ -86,7 +86,7 @@
           '<button type="button" class="hwsc-shuffle" aria-label="Show a different spread">Shuffle <span aria-hidden="true">↻</span></button>' +
         '</div>' +
         '<div class="hwsc-rack" id="hwsc-rack"></div>' +
-        '<div class="hwsc-hint">Hover a chip to inspect it — real data, straight from the game.</div>' +
+        '<div class="hwsc-hint">Hover a chip to inspect it. Live data, straight from the game.</div>' +
       '</div>';
 
     var rack = mount.querySelector('#hwsc-rack');
@@ -158,7 +158,7 @@
       tip.innerHTML = tipHTML(e, chipEl.getAttribute('data-type'));
       tip.classList.add('on');
       var r = chipEl.getBoundingClientRect(), tw = Math.min(300, window.innerWidth - 20);
-      // tip is position:absolute in document space — add scroll offsets on both axes
+      // tip is position:absolute in document space; add scroll offsets on both axes
       var x = window.scrollX + Math.max(10, Math.min(r.left + r.width / 2 - tw / 2, window.innerWidth - tw - 10));
       tip.style.left = x + 'px'; tip.style.width = tw + 'px';
       // place above the chip if room, else below
@@ -170,9 +170,9 @@
     }
     function hideTip() { tip.classList.remove('on'); }
 
-    // Only wire hover/focus on real hover pointers. On touch, the synthetic
+    // Only wire hover/focus on true hover pointers. On touch, the synthetic
     // mouseover/focus would set '.on' just before the tap's click fires, and
-    // the click toggle would then immediately hide it — so click is the SOLE
+    // the click toggle would then immediately hide it, so click is the SOLE
     // toggle on touch.
     var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
     if (canHover) {

@@ -1,8 +1,8 @@
-/* Hollow Wake — the exploration decks.
+/* Hollow Wake · the exploration decks.
    A self-contained sibling to the loot showcase: drop a
      <div data-deck="biomes|events|classes" data-count="5"></div>
-   on a page, include this script, and it renders a random spread of real
-   cards — each with a colour indicator drawn from the game's own data — and
+   on a page, include this script, and it renders a random spread of live
+   cards, each with a colour indicator drawn from the game's own data, and
    one shared PoE-style tooltip that reveals a DIFFERENT set of facts per card
    (a biome's living fabrics, an event's unlock, a class's kit). Everything is
    fed by the exported JSON (site/data/*.json), so it can never drift from the
@@ -162,7 +162,7 @@
               '<span class="hwdk-line">' + esc(K.line(e) || '') + '</span>' +
               '</button>';
           }).join('') + '</div>';
-        mount.innerHTML = '<div class="hwdk">' + head + grid + '<div class="hwdk-hint">Hover a card for the full read — real data, straight from the game.</div></div>';
+        mount.innerHTML = '<div class="hwdk">' + head + grid + '<div class="hwdk-hint">Hover a card for the full read. Live data, straight from the game.</div></div>';
       }
 
       function showTip(cardEl) {
@@ -178,7 +178,7 @@
         else tip.style.top = (window.scrollY + r.bottom + 12) + 'px';
       }
 
-      // hover only on real hover pointers; click toggles (sole toggle on touch)
+      // hover only on true hover pointers; click toggles (sole toggle on touch)
       if (canHover) {
         mount.addEventListener('mouseover', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c) showTip(c); });
         mount.addEventListener('mouseout', function (ev) { var c = ev.target.closest('.hwdk-card'); if (c) hideTip(); });

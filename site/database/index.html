@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Database — Hollow Wake</title>
-<meta name="description" content="A live, searchable catalog of every skill, support gem, and monster in Hollow Wake — generated straight from the game's own data files.">
+<title>Database · Hollow Wake</title>
+<meta name="description" content="A live, searchable catalog of every skill, support gem, and monster in Hollow Wake, generated from the game's own data files on every deploy.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -74,7 +74,7 @@
   .drawer .close:hover{color:var(--ink);border-color:var(--line-2)}
   .dbody{padding:22px 26px 40px}
   .dbody .desc{color:var(--ink-dim);font-size:15px;margin-bottom:20px}
-  /* the drawer's monster portrait — the creature as the game draws it */
+  /* the drawer's monster portrait: the creature as the game draws it */
   .dportrait{display:flex;flex-direction:column;align-items:center;gap:10px;background:radial-gradient(ellipse at 50% 42%,rgba(255,255,255,.05),transparent 68%),#080a10;border:1px solid var(--line);border-radius:12px;padding:20px 16px 14px;margin-bottom:22px}
   .dportrait canvas{width:132px;height:132px}
   .dportcap{font-family:var(--font-head);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
@@ -97,14 +97,14 @@
 <div class="bg-veil" aria-hidden="true"></div>
 <div class="page">
 
-<!-- shared nav widget (assets/nav.js) — identical on every page -->
+<!-- shared nav widget (assets/nav.js), identical on every page -->
 <header data-hwnav></header>
 
 <main class="wrap">
   <div class="pagehead">
     <div class="kicker">Compendium</div>
     <h1>Database</h1>
-    <p>Every skill, support gem, and monster — searchable and filterable. This catalog is generated straight from the game's own data files, so it can't drift out of date.</p>
+    <p>Everything the game knows about itself, searchable and filterable, each entry exactly as authored. Rebuilt from the game's own data files on every deploy, so it cannot drift and it cannot lie.</p>
     <div id="banner"></div>
   </div>
 
@@ -136,7 +136,7 @@
 
 <footer class="site">
   <div class="wrap row">
-    <span>Hollow Wake — data generated from <span class="mono">src/data/</span> · <span id="genstamp"></span></span>
+    <span>Hollow Wake · data generated from <span class="mono">src/data/</span> · <span id="genstamp"></span></span>
     <span><a href="../">Home</a> · <a href="../tree/">Passive Tree</a> · <a href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">GitHub</a></span>
   </div>
 </footer>
@@ -149,7 +149,7 @@
 
 <script src="../assets/nav.js"></script>
 <!-- The portrait bundle: the game's own body painters (built by CI / `npm run
-     build:portraits`). Optional — the catalog degrades to dot-only cards when
+     build:portraits`). Optional; the catalog degrades to dot-only cards when
      it's absent (e.g. a fresh clone before the first build). -->
 <script src="../assets/portraits.js"></script>
 <script src="../assets/database.js"></script>

@@ -1,7 +1,7 @@
-/* Hollow Wake — the section dot-rail.
+/* Hollow Wake · the section dot-rail.
    A self-contained vertical rail of small dots that snap-scroll between a
    page's in-page sections. Fully dynamic: it reads every element carrying a
-   [data-nav="Label"] attribute, so adding a section adds a dot automatically —
+   [data-nav="Label"] attribute, so adding a section adds a dot automatically;
    nothing here is hard-coded. Renders nothing on pages with fewer than two
    marked sections (e.g. the single-view Database/Tree tools), so it can be
    included everywhere for parity without cluttering app pages.
