@@ -159,12 +159,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // but they walk it as HER servants; the undead keep the graves proper).
   gloamwood: { patronFaction: 'nightkin', mapColor: '#3a4a40', label: 'Gloamwood', spacing: 62,
     climate: { temperature: { to: 0.55, fadeOut: 0.15 }, moisture: { from: 0.42, fadeIn: 0.12 } },
-    // Forest + riverland ONLY: riverlands now keep the crooked roof
-    // (plantRiverbankRoof reads forestTrees below), but 'winding' carves a
-    // treeless rock maze no wood should wake up as — retired until a
-    // thicket-lane treatment exists (foliage-walled winding, the verdure
-    // idiom in gloam tones).
-    allowedLayouts: { forest: 3, riverland: 1.5 },
+    // Three faces: the crooked roof (forest), riverlands keeping it
+    // (plantRiverbankRoof reads forestTrees below), and 'winding' RETURNED
+    // as the BRIAR MAZE — the thicket-lane treatment its retirement waited
+    // on shipped as layoutParams.negative below (negativeRegion in
+    // layoutRecipes.ts): the recipe's rock negative swaps for 'briarwall'
+    // (world/regions.ts), so the maze walls in gloam-toned briar, never the
+    // bare stone no wood should wake up as. Kept the rare face — the roof
+    // stays the country's read.
+    allowedLayouts: { forest: 3, riverland: 1.5, winding: 1 },
     layoutParams: {
       // The crooked roof: gloam oaks knit the same sealed masses, bare snags
       // break the canopy line, briars snarl the understory edge.
@@ -178,6 +181,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
       forestClearings: [2, 5],
       // The haunted wood keeps its roads worse than the living one does.
       overgrowth: [0.04, 0.26],
+      // The briar maze's walls (the winding face): sight dies in the briar,
+      // arrows thread it — the row in world/regions.ts carries the reasoning.
+      negative: 'briarwall',
     },
     landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.12 }] },
   // THE JUNGLE: the strangling green — the WET half of the WARM belt (the

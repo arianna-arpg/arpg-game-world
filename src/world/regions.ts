@@ -850,6 +850,21 @@ registerRegion({ id: 'fungal_wall', walkable: false, blocks: true, label: 'the m
 registerRegion({ id: 'verdure', walkable: false, blocks: true, label: 'the verdure',
   blocksShot: true, blocksSight: true,
   visual: { fill: '#22421a', alpha: 1, foliage: true, edge: { color: '#4f7a2c', width: 5 } } });
+// BRIARWALL: the GLOAMWOOD's thicket wall — the winding recipe's negative space
+// in the haunted wood (layoutParams.negative; the thicket-lane treatment whose
+// absence had the biome's winding face retired). Bodies stop and SIGHT dies in
+// the briar, but SHOTS thread it — hedgewall's conversation in gloam tones,
+// chosen DELIBERATELY over verdure's full seal: this wood's dread is what you
+// cannot SEE, not what you cannot reach — the rustle past the thorns invites a
+// blind volley, and can answer with one — and the country already runs on
+// eaten sight (the living fog); walls that also ate arrows would strangle
+// ranged play twice over. The jungle keeps the blind-green press as its own
+// read. Desaturated cold grey-green fill (lum ≈ .21 vs the gloam floors'
+// ≈ .05-.06 — verdure's own separation, and a hue away from the theme's warm
+// umber rock) under a WAN moonlit rim — never hedgewall's sunlit fringe.
+registerRegion({ id: 'briarwall', walkable: false, blocks: true, label: 'the briar',
+  blocksShot: false, blocksSight: true,
+  visual: { fill: '#2e3a30', alpha: 1, foliage: true, edge: { color: '#5c7a62', width: 5 } } });
 // RUIN WALL: root-riven masonry — the sunken ruin interiors' negative space
 // (the jungle swallowed a civilization; its halls are what's left). A TRUE
 // WALL like rampart, coursed so the halls read BUILT — the pale moss-grey rim

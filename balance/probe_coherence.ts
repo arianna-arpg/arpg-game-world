@@ -46,6 +46,9 @@ import {
 import { shapeBoundR, type HitShape } from '../src/engine/shapes';
 import { WORLDBOSS_SURGE } from '../src/packages/defs/worldboss';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
+import { BIOMES } from '../src/world/biomes';
+import { regionKind } from '../src/world/regions';
+import { GridWalkField } from '../src/world/gridWalk';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -580,6 +583,68 @@ function standingOnWay(layout: GeneratedLayout): Doodad[] {
       + ' and the coils declare blocksSight). The overlapping-run holdout in engine/levelgen.ts was measured against DISCS;'
       + ' re-measure the seal before changing this kind\'s surface.');
   } else note(`H4 coil seal: ${arcs} arcs × ${W.count - 1} joints — widest gap ${widest.toFixed(2)}px (every joint overlaps)`);
+}
+
+// --- Rig I: THE AUTHORED NEGATIVE — gloamwood's briar-walled winding ----------
+// A biome swaps a carved recipe's negative space by DATA alone
+// (layoutParams.negative → negativeRegion, layoutRecipes.ts); gloamwood is the
+// debut consumer — its winding face walls in 'briarwall' foliage, the exact
+// treatment whose absence had the layout retired. Nothing boot-validates the
+// param's VALUE (validate.ts's layoutParams net keys on /liquid/i only), so a
+// typo here would paint an unregistered kind without a witness — this rig is
+// that witness, plus the drawn == tested row contract and the carve staying
+// reachable through the briar.
+{
+  const gw = BIOMES.gloamwood;
+  if (!((gw?.allowedLayouts?.winding ?? 0) > 0)) fail('I: gloamwood no longer rolls the winding face');
+  const negRaw = gw?.layoutParams?.negative;
+  const negId = typeof negRaw === 'string' ? negRaw : undefined;
+  if (!negId) fail('I: gloamwood layoutParams.negative is unset — winding would wall in bare rock again');
+  const row = negId ? regionKind(negId) : undefined;
+  if (negId && !row) fail(`I: negative '${negId}' is not a registered region`);
+  if (row) {
+    // The row contract, drawn == tested: the registered truth IS what the
+    // renderer paints from, so the foliage read and the block policy must
+    // agree — blind cover that shots thread (the hedgewall policy; the
+    // reasoning lives on the row in world/regions.ts).
+    if (row.walkable || !row.blocks) fail('I: briarwall must be a wall (blocks, never walkable)');
+    if (row.blocksShot) fail('I: briarwall must let shots THREAD (the authored conversation)');
+    if (!row.blocksSight) fail('I: briarwall must eat SIGHT (blind cover is the gloam read)');
+    if (!row.visual?.foliage) fail('I: briarwall must wear the foliage coursing (a briar painted as flat rock lies)');
+  }
+
+  // The mint: winding under gloamwood's own layoutParams (the worldgen biome
+  // merge mirrored, the genqa layout-case idiom) actually walls in the
+  // region, and the carved lanes thread it. Fixed 8 seeds — the wire is
+  // deterministic data plumbing; genqa sweeps the carve shapes wider.
+  if (negId && row) {
+    let briared = 0;
+    for (let s = 0; s < 8; s++) {
+      const seed = seedAt(s);
+      const out = gen(defOf('gloam_winding', [], {
+        layoutType: 'winding',
+        layoutParams: gw?.layoutParams,
+      }), seed);
+      const grid = out.walk;
+      if (!(grid instanceof GridWalkField)) { fail(`I: seed ${seed} minted no walk grid`); continue; }
+      let briar = 0, rock = 0, total = 0;
+      for (let cy = 0; cy < grid.rows; cy++) {
+        for (let cx = 0; cx < grid.cols; cx++) {
+          const k = grid.kindAt(cx * grid.cell + grid.cell / 2, cy * grid.cell + grid.cell / 2);
+          total++;
+          if (k === negId) briar++;
+          else if (k === 'wall') rock++;
+        }
+      }
+      if (briar / total > 0.3) briared++;
+      if (rock > briar) fail(`I: seed ${seed} walled mostly in rock (${rock} wall vs ${briar} briar cells) — the negative did not take`);
+      for (const e of exits) {
+        if (!grid.reachable(entry, e)) fail(`I: seed ${seed} exit ${Math.round(e.x)},${Math.round(e.y)} unreachable through the briar`);
+      }
+      note(`I seed ${seed}: briar ${(briar / total * 100).toFixed(0)}% of cells, rock ${rock}`);
+    }
+    if (!briared) fail('I: pressure — no seed ever briared a meaningful fraction of the zone (dead rig)');
+  }
 }
 
 console.log(`\nprobe coherence: ${SEEDS} seeds/rig — ${fails} failure(s)`);
