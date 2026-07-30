@@ -131,7 +131,7 @@ export type KnownDoodadKind =
   | 'banner_post' // a faction's cloth on a pole (camps, war roads)
   | 'masque_banner' // the Mummers' troupe colors (the mimicry camp's standard)
   | 'mirrorglass_shard' // practice glass at the Mummers' camp — sings apart when struck
-  | 'beehive'   // a humming skep (grove flavor; future bee grudges)
+  | 'beehive'   // a humming skep — strike it and the resident bees answer (resonance)
   | 'bed'       // frame, mattress, someone's blanket — where a run wakes
   | 'hearth'    // a home's stone fire (standing warm light; always lit)
   | 'stool'     // a three-legged seat by the fire
@@ -1990,7 +1990,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], text: 'the glass sings apart', color: '#dbe6ee' },
   },
-  beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
+  // THE SKEP WAKES: any strike that plays the surfaces TOLLS the hive
+  // (resonance — the doodad-native noise fabric): the hum lures the idle,
+  // alerts the pack, and the roused bees' own widened senses close the
+  // lock on the offender. The skep itself is the trigger; the bees are
+  // the answer (skep_bee: habitat-bound with a territory-wide grace).
+  beehive:   { overlap: 'solid', blocksMove: true, spacing: 75,
+    resonance: { radius: 420, text: 'the skep thrums with fury…', color: '#e0b048' } },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true, fuel: 'kindling' },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true,
     surface: { hw: 0.65, hh: 0.34 }, // the headstone slab (arch face 1.3r wide; thin depth)

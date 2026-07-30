@@ -11110,18 +11110,25 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   // The skep bee: the Tender's stock, still working the rows — and still
   // remembering how the skep is defended. Poke the forager, meet the sting
-  // (volatile: TAKING a hit answers with one).
+  // (volatile: TAKING a hit answers with one); strike the SKEP, meet the
+  // swarm — the hive tolls (beehive DoodadRule.resonance) and the pack
+  // pours out to the territory's edge (habitat grace = the defense radius),
+  // the first bee to find you shouting the rest onto the prey (alertShout,
+  // the sentry-callout lever — a waggle in armor). noObjective BY LAW
+  // (the soft-lock guard): the pack is bound to ground that blocksMove.
   skep_bee: {
     id: 'skep_bee', name: 'Skep Bee',
     color: '#e0b048', shape: 'oval', radius: 8, material: 'chitin', look: 'skep_bee',
     base: { life: 25, moveSpeed: 165, evasion: 60, mana: 0 },
     skills: ['claw'], xp: 8, faction: 'beast', tags: ['beast'],
     packSize: [3, 6],
-    habitat: { kind: 'beehive' },
+    habitat: { kind: 'beehive', grace: 220 },
+    noObjective: true,
     volatile: { skillId: 'claw', chance: 0.5, icd: 0.8 },
     detection: 0.8,
     brain: {
       type: 'swarm',
+      perception: { alertShout: 320 },
       behavior: { flock: { kin: 'def', radius: 160, cohesion: 0.7, alignment: 0.6, separation: 1.2, weave: 1.3, erratic: 1.2 } },
     },
   },

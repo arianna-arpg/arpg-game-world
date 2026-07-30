@@ -378,5 +378,87 @@ const step = (w: World, seconds: number): void => {
       ['petalfields', 'stalkwood', 'tendersrows', 'mulchreach', 'rootways', 'formicary'].includes(id)));
 }
 
+// --- 10) THE SKEP WAKES: strike the hive, meet the swarm ---------------------
+// The beehive is a TRIGGER, not furniture: any strike that plays the surfaces
+// TOLLS it (DoodadRule.resonance — the doodad-native noise fabric), the toll
+// alerts the resident pack, and the roused bees' own widened senses close the
+// lock on the offender — then the habitat's territory-wide grace lets them
+// POUR OUT and prosecute to the rim (and no farther: the confine law).
+{
+  check('the skep is a trigger: beehive wears an authored resonance row',
+    !!doodadRuleOf('beehive').resonance
+    && (doodadRuleOf('beehive').resonance?.radius ?? 0) >= 300
+    && !!doodadRuleOf('beehive').resonance?.text);
+  check('the soft-lock law: skep_bee wears noObjective for its blocking ground',
+    MONSTERS.skep_bee.noObjective === true
+    && !(doodadRuleOf('beehive').blocksMove && !MONSTERS.skep_bee.noObjective));
+  check('the territory: habitat grace frees the pack to defend, not to roam',
+    (MONSTERS.skep_bee.habitat?.grace ?? 0) >= 200);
+  check('the waggle: a bee that finds the prey shouts the pack onto it',
+    (MONSTERS.skep_bee.brain?.perception?.alertShout ?? 0) >= 200);
+
+  const w = makeSimWorld('warrior', 0x5ee9b);
+  const p = w.player;
+  const W = w as unknown as {
+    createMonster(id: string, level: number, team: string): Actor;
+    actors: Actor[];
+    strikeSurfaces(striker: Actor | null, at: { x: number; y: number }, reach: number): void;
+    flashes: unknown[];
+  };
+  // The stage: hive far right, striker far left — beyond every unroused
+  // sense (in-cone reach 520 × 0.8 detection × 1.4 detectMul = 582 < the
+  // ~730px worst-case gap), so only the strike itself can start the war.
+  const hive = vec(1220, 600);
+  w.doodads.push({ pos: vec(hive.x, hive.y), radius: 12, kind: 'beehive' } as never);
+  p.pos.x = 360; p.pos.y = 600;
+  const bees: Actor[] = [];
+  for (let i = 0; i < 3; i++) {
+    const b = W.createMonster('skep_bee', 5, 'enemy');
+    b.pos.x = hive.x - 6 + i * 6; b.pos.y = hive.y - 4 + i * 4;
+    W.actors.push(b);
+    bees.push(b);
+  }
+
+  // An untouched skep stays quiet: idle a beat, nobody stirs.
+  step(w, 1.5);
+  check('untouched: the pack keeps its peace (no alert, no lock)',
+    bees.every(b => b.alertUntil === 0 && b.aiTargetId === undefined));
+  check('untouched: the confine derives the territory from the hive (r + grace)',
+    bees.every(b => Math.abs((b.confine?.r ?? 0) - (12 + (MONSTERS.skep_bee.habitat?.grace ?? 0))) < 1));
+
+  // The strike: a surface-play at the hive from 820px out — the one seam
+  // every melee arc, nova, splash and ownerless blast funnels through.
+  const flashesBefore = W.flashes.length;
+  const t0 = w.time;
+  W.strikeSurfaces(p, hive, 60);
+  check('struck: the toll reads on screen (the hive flashes its hum)',
+    W.flashes.length > flashesBefore);
+  check('struck: the whole pack is roused toward the hive',
+    bees.every(b => b.alertUntil >= t0 + 2
+      && !!b.alertFrom && Math.hypot(b.alertFrom.x - hive.x, b.alertFrom.y - hive.y) < 2));
+
+  // The pursuit: roused senses find the offender; the pack leaves the skep
+  // and presses to the territory's edge — and the clamp holds the edge.
+  step(w, 4.0);
+  check('the wake: every resident locks the offender (their own senses closed it)',
+    bees.every(b => b.aiTargetId === p.id && b.aggroed));
+  check('the leave: the swarm poured out of the skep (past the old 36px pin)',
+    bees.some(b => Math.hypot(b.pos.x - hive.x, b.pos.y - hive.y) > 120));
+  check('the territory law: no bee prosecutes past the confine rim',
+    bees.every(b => Math.hypot(b.pos.x - hive.x, b.pos.y - hive.y) <= 234));
+
+  // A hive with no living residents does nothing: no bodies minted, no
+  // crash, and the standing war is not disturbed.
+  const bare = vec(360, 1080);
+  w.doodads.push({ pos: vec(bare.x, bare.y), radius: 12, kind: 'beehive' } as never);
+  const actorsBefore = W.actors.length;
+  W.strikeSurfaces(p, bare, 60);
+  step(w, 1.0);
+  check('residentless: a bare skep tolls into empty air (nothing minted)',
+    W.actors.length === actorsBefore);
+  check('residentless: the struck pack holds its own war regardless',
+    bees.every(b => b.aiTargetId === p.id));
+}
+
 console.log(failed ? `\nprobe_garden: ${failed} FAILURE(S)` : '\nprobe_garden: ALL PASS');
 process.exit(failed ? 1 : 0);
