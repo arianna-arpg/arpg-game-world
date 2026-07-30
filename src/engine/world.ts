@@ -19121,6 +19121,28 @@ export class World {
         wornRows.push({ slot: seatRef.slot, def, level, skillId: inst?.def.id, state });
         if (state === 'live' && inst) (inst.grafts ??= []).push({ def, level });
       }
+      // THE FIXPOINT (order-independence): the pass above gates in SCAN
+      // order (innate → passives → gear slots), so a worn DEPENDENT read
+      // before its worn ENABLER pushed would stay 'unfit' on arrangement
+      // alone — permanently, since every recalc scans the same way. Pushes
+      // only ADD to the riders pool, so the gate is monotone: re-run it over
+      // the unfit rows until none flips and the admitted set matches the
+      // socket lane's own sequential admission whatever order the scan dealt.
+      // A row can never turn 'duplicate' here (one stat per slot+gem — no
+      // two worn rows share a def on one instance), and mutually-dependent
+      // pairs still refuse (neither ever fits alone): socket-time semantics
+      // untouched, only the order sensitivity gone.
+      for (let flipped = true; flipped;) {
+        flipped = false;
+        for (const row of wornRows) {
+          if (row.state !== 'unfit') continue;
+          const inst = p.skills[row.slot];
+          if (!inst || !supportFitsInstOrCrew(row.def, inst, this.summonCrewSkills(inst))) continue;
+          row.state = 'live';
+          (inst.grafts ??= []).push({ def: row.def, level: row.level });
+          flipped = true;
+        }
+      }
       // THE LEDGER (UI read path — panels speak dormancy from these rows in
       // the injection's own verdicts; one derivation, one spelling). Sorted
       // for stable render order (Set order follows scan order otherwise).
@@ -24100,15 +24122,24 @@ export class World {
     const drives = normalizeBrain(actor.brain).drives;
     if (!drives) return;
     for (const id in drives) {
-      const jump = drives[id][kind];
+      const spec = drives[id];
+      // A KEPT body's stood-down appetite (DriveSpec.whileOwned false) takes
+      // no event jumps either: the AI tick DELETES the meter (delete-never-
+      // freeze, ai.ts), and a jump landing between ticks would flash a
+      // sub-tick value through every read until that tick swept it. The
+      // jump refuses to feed the dead meter; the tick stays the deleter.
+      if (spec.whileOwned === false && actor.isMinion()) continue;
+      const jump = spec[kind];
       if (!jump) continue;
       const v = (actor.drives.get(id) ?? 0) + jump;
       actor.drives.set(id, Math.max(0, Math.min(1, v)));
-      const share = drives[id].share;
+      const share = spec.share;
       if (share && actor.squadId !== undefined) {
         for (const kin of this.actors) {
           if (kin === actor || kin.dead || kin.squadId !== actor.squadId) continue;
           if (dist(kin.pos, actor.pos) > COMMAND_CFG.earshot) continue;
+          // The echoed row honors the same leash on the receiving body.
+          if (spec.whileOwned === false && kin.isMinion()) continue;
           const kv = (kin.drives.get(id) ?? 0) + jump * share;
           kin.drives.set(id, Math.max(0, Math.min(1, kv)));
         }

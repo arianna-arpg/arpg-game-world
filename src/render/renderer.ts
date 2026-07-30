@@ -3770,9 +3770,10 @@ export class Renderer {
     // couchHeroes() walks the CONTROLLED bodies (the possession seam's
     // pointer), so a ridden enemy-team husk reads honestly, and one threatened
     // couch seat holds the ring at full strength for the whole shared frame.
-    // Snapshot-fed client rows carry NO team (DeathBurstW ships only what this
-    // function draws): undefined compares unequal to every hero team, so an
-    // unknown burst keeps the classic full-strength ring — never a false "safe".
+    // Snapshot-fed client rows carry the team over the wire (DeathBurstW.tm),
+    // so a client softens the same rings its host does; a row without one (an
+    // old host's wire) compares unequal to every hero team and keeps the
+    // classic full-strength ring — never a false "safe".
     const heroes = world.couchHeroes();
     const bc = VIS_CFG.deathBurst;
     for (const b of world.deathBurstsView()) {

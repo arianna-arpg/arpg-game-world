@@ -226,9 +226,9 @@ check('J: a worn MELEE gem rides the summon seat live VIA THE CREW (the recalc g
   && raise3.grafts?.some(g => g.def.id === 'reapers_encore') === true,
   `state ${row3('reapers_encore')?.state}`);
 // THE COMPOSITION: the worn crack gem is dormant until a worn Faultfinder
-// stands beside it. NOTE the derivation is one pass in SCAN ORDER (gear
-// slots in equip order) — the enabler must scan before its dependent to
-// land in the same recalc; the read-time gates themselves fixpoint.
+// stands beside it. The injection FIXPOINTS (2026-07-30): scan order (gear
+// slots in EQUIP_SLOTS order) no longer decides — dependent and enabler
+// land the same recalc whichever slot scans first (the pin further down).
 const tectRing = rollItem({
   ilvl: 20, rarity: 'magic', baseId: 'ring_coral',
   withFamily: 'slotgraft_1_tectonic_echoes',
@@ -257,6 +257,18 @@ seat3.meta.inventory.push({ def: SUPPORTS['resonance'], level: 1 });
 check('J: the boarding key sockets', w3.socketSupport(seat3.meta.inventory.length - 1, 'raise_dead', seat3));
 check('J: the WORN rider bills the host cast through the open door (the crew tax, worn lane)',
   reaperBills() === 1, `manaCost more 0.15 ×${reaperBills()}`);
+// THE FIXPOINT PIN (2026-07-30): swap the rings so the DEPENDENT scans
+// first (ring1 walks before ring2 in EQUIP_SLOTS — tectonic now precedes
+// its enabler). The single-pass derivation this replaced left it 'unfit'
+// on arrangement alone — every recalc, forever; the fixpoint re-runs the
+// gate over unfit rows until none flips, so both land live either way.
+seat3.meta.equipped['ring1'] = tectRing!;
+seat3.meta.equipped['ring2'] = faultRing!;
+w3.recalcSeat(seat3);
+check('J: the worn crack gem lands live scanned BEFORE its enabler (the dependent-first fixpoint)',
+  row3('tectonic_echoes')?.state === 'live' && row3('faultfinder')?.state === 'live'
+  && raise3.grafts?.some(g => g.def.id === 'tectonic_echoes') === true,
+  (seat3.wornGrafts ?? []).map(r => `${r.def.id}:${r.state}`).join(' '));
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);

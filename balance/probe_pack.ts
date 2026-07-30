@@ -759,6 +759,28 @@ console.log('\n=== I. THE AI LEVERS — sheet-read pivot, ordered spacing, owned
   updateAI(kept, w3, DT);
   check('a released body re-seeds its appetite', kept.drives.get('hunger') !== undefined,
     String(kept.drives.get('hunger')));
+
+  // THE OWNED JUMP (2026-07-30): event jumps honor the leash too. The AI
+  // tick DELETES a kept body's whileOwned:false meter, but bumpDrives
+  // (onKill/onHurt/onDealt/onAllyDeath) lands BETWEEN ticks — an unguarded
+  // jump would flash a sub-tick value through every read until the next
+  // tick swept it (invisible on the wolf, whose only jump is negative;
+  // wrong for any positive jump). The jump refuses to feed the dead meter;
+  // a wild body's jump lands exactly as before.
+  MONSTERS.probe_owned_jump = {
+    ...shell, id: 'probe_owned_jump',
+    brain: { type: 'basic', drives: { urge: { rise: 0.01, start: [0, 0], onHurt: 0.5, whileOwned: false } } },
+  };
+  const jumped = at(spawn(w3, 'probe_owned_jump', 6, 'player'), 1400, 150);
+  jumped.owner = hero3;
+  w3.bumpDrives(jumped, 'onHurt');
+  check('an owned whileOwned:false meter stays EMPTY through a positive event jump',
+    jumped.drives.get('urge') === undefined, String(jumped.drives.get('urge')));
+  const wildJump = at(spawn(w3, 'probe_owned_jump', 6), 200, 150);
+  w3.bumpDrives(wildJump, 'onHurt');
+  check('the same jump still lands on a WILD body (control unchanged)',
+    Math.abs((wildJump.drives.get('urge') ?? 0) - 0.5) < 1e-9,
+    String(wildJump.drives.get('urge')));
 }
 
 console.log(`\n${failed === 0 ? 'ALL PASS' : `${failed} FAILED`}`);

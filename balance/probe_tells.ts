@@ -405,6 +405,31 @@ const row = (source: string, over?: Partial<TellSpec>): TellSpec =>
   applySnapshot(w2, snap);
   check('wire: a repeated snapshot bumps nothing (the client no-churn law)',
     c(leech)!.tellRev === rev && tellDressOf(c(leech)!) === dress);
+
+  // THE BURST TEAM ON THE WIRE (2026-07-30): THE SPARED RING softens a
+  // death burst's command cues for the team it cannot hurt — a read of
+  // b.team in drawDeathBursts — so DeathBurstW ships it (`tm`) and the
+  // client's row compares equal to the hero's team exactly where the
+  // host's does. Absent tm (an old host's wire) the row stays undefined:
+  // the classic full-strength ring, never a false "safe".
+  w.deathBursts.push({
+    phase: 'gather', mode: 'implode', pos: vec(400, 300), team: 'player', dmg: 25,
+    radius: 60, type: 'physical', color: '#f4a', t: 0.1, coalesce: 0.8, life: 1.2,
+    armAt: 0.3, speed: 0, turn: 0, dir: 0, trail: [], arming: false, contact: false,
+    stuck: false, contactFuse: 0, contactRadius: 0,
+  });
+  const snapB = serializeSnapshot(w, 1);
+  check('wire: a death burst ships its team (tm rides)',
+    snapB.deathBursts[0]?.tm === 'player', String(snapB.deathBursts[0]?.tm));
+  applySnapshot(w2, snapB);
+  const cb = w2.deathBursts[0] as { team?: string } | undefined;
+  check('wire: the client row compares equal to the hero team (the spared ring softens)',
+    cb?.team === w2.player.team, String(cb?.team));
+  delete snapB.deathBursts[0].tm;
+  applySnapshot(w2, snapB);
+  const cbOld = w2.deathBursts[0] as { team?: string } | undefined;
+  check('wire: an old host\'s teamless burst stays full-strength (undefined — never a false safe)',
+    cbOld?.team === undefined, String(cbOld?.team));
 }
 
 // --- 10) The portrait's sane default ---------------------------------------------------
