@@ -1329,6 +1329,18 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
       announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
   ],
+  // THE COURTLANDS: the rim of rings — the tenant-read made fauna. Doves
+  // roost at the urns INSIDE the quiet courts (the `near` lever): a burst
+  // of pale wings out of a ring says nobody holds it, which is the
+  // threshold rhythm speaking through the wildlife layer. Swifts wheel the
+  // walls; the waste's small lives work the gaps between.
+  courtland: [
+    { id: 'tomb_dove', chance: 0.6, count: [3, 5], near: 'burial_urn' },
+    { id: 'gorge_swift', chance: 0.45, count: [4, 7] },
+    { id: 'jerboa', chance: 0.5, count: [2, 4] },
+    { id: 'horned_viper', chance: 0.25, count: [1, 1] },
+    { id: 'dune_vulture', chance: 0.4, count: [1, 2] },
+  ],
   // The deep wood: small lives in the roof, hooves and hunters below.
   forest: [
     { id: 'squirrel', chance: 0.8, count: [3, 5] },
@@ -14777,6 +14789,39 @@ export const MONSTERS: Record<string, MonsterDef> = {
     temper: 'territorial',
     brain: { type: 'skirmish', withdraw: 0.4 },
   },
+  /** THE COURTLANDS' posted watch (the threshold rhythm's legibility
+   *  instrument): a baked servant-soldier stood in the OPEN between the
+   *  rings, sweeping the gaps with the watch fabric's drawn fan — read the
+   *  fans before you cross, slip them, or snipe the watcher (pain needs no
+   *  ladder). Its real threat is the CALLOUT: a lock jumps kin ladders,
+   *  and the kept courts answer. The wandering finger it looses is slow,
+   *  patient and dodgeable — a deterrent, not an execution. */
+  ushabti_sentinel: {
+    id: 'ushabti_sentinel', name: 'Ushabti Sentinel',
+    color: '#c9ab6e', shape: 'rectangle', radius: 12, material: 'stone', look: 'ushabti_sentinel',
+    base: { life: 58, moveSpeed: 96, accuracy: 104, armor: 35, poise: 45, mana: 60, manaRegen: 5 },
+    mods: [mod('ailmentResist', 'flat', 0.5, ['chaos']), mod('fireRes', 'flat', -0.2)],
+    skills: ['spectral_finger'],
+    xp: 18,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    detection: 1.4, // the long eye of the rim — the fan IS the crossing's ask
+    post: true,     // stands its ground; drifts walk home (brain.ts PostSpec)
+    packSize: [1, 2], // sentinels dot the gaps, never march in files
+    // The gilded face catches the light — a dim ember-glow marks the post
+    // toward dusk (the carried-lamp lever; the fan stays the daytime tell).
+    light: { radius: -8, color: '#e8c060', intensity: 0.4, flicker: 0.6 },
+    watch: { sweep: { arcDeg: 130, sec: 7 }, riseSec: 1.6, searchSec: 7 },
+    temper: 'territorial',
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 75, rearMul: 0.2, alertShout: 480, memory: 6 },
+    },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#e8c060', max: 0.5 } },
+      { source: 'watch', band: [0.5, 1], channel: { kind: 'lean', amp: 0.6 } },
+    ],
+  },
 
   // --- THE UNSEALING's named bodies (event-spawned only — packages/defs/
   // unsealing.ts; NEVER on a spawn table). The four seal-bearers split the
@@ -18338,6 +18383,26 @@ export const MONSTERS: Record<string, MonsterDef> = {
         when: { drive: { id: 'hunger', above: 0.6 } },
         use: { target: { prey: ['critter'], detectMul: 1.2 } },
       }],
+    },
+  },
+  // The tomb dove: the courtlands' quiet-ring tell — it roosts at the urns
+  // inside unheld courts (WILDLIFE `near: 'burial_urn'`), so the burst of
+  // pale wings IS the read: nobody home.
+  tomb_dove: {
+    id: 'tomb_dove', name: 'Tomb Dove',
+    color: '#d8cfc0', shape: 'oval', radius: 6, material: 'fur', look: 'tomb_dove',
+    base: { life: 5, moveSpeed: 235, evasion: 90, mana: 0 },
+    mods: [mod('detectability', 'more', -0.75)],
+    skills: [],
+    xp: 1, tag: 'critter',
+    faction: 'beast', tags: ['beast'],
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.9, 1.1],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 150, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.2, 0.45], hookArc: 1.5, freezeChance: 0.3, freeze: [0.4, 0.9] },
+      tempo: { kite: 1.8, windedFor: [0.7, 1.2] },
     },
   },
 

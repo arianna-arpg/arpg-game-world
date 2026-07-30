@@ -42,6 +42,14 @@
 //      court kinds only, high coverage, the weave/exit/POI guarantees intact,
 //      shipped garrison chances seating guards, the great-court row's size
 //      band live, and a forced-chance run garrisoning every court exactly.
+//   J. THE COURTLANDS (the court-country pass — the regime grown into a
+//      BIOME): the rim-claim law (the moisture band stands astride the
+//      desert's dry fade-out), ring-only pools on every face (court/crescent
+//      silhouettes exclusively), the two new kinds (well_court stocked,
+//      fallen_court crescent), minted census over base + both faces with
+//      garrisons speaking the DYNASTY, and the threshold rhythm's testable
+//      half — the posted sweeping sentinel in the pack table, the dove's
+//      quiet-ring roost in the wildlife layer.
 //
 // Rigs carry pressure detection: a rig that never actually stressed its law
 // exits 1 rather than passing green.
@@ -67,6 +75,10 @@ import {
   carveMassifs, massKindIds, massKindOf, massShapeIds, MASSIF_CFG,
 } from '../src/engine/massif';
 import { TILESETS } from '../src/data/tilesets';
+import { BIOME_FIELD_BANDS, BIOMES, patronFaction } from '../src/world/biomes';
+import { climateEnvelope } from '../src/world/climate';
+import { presenceMul } from '../src/engine/presence';
+import { MONSTERS, WILDLIFE } from '../src/data/monsters';
 import type { StampSpec, ZoneDef } from '../src/data/zones';
 
 const args = process.argv.slice(2);
@@ -749,6 +761,195 @@ function bareCtx(seed: number): GenCtx {
         fail(`I: forced chance-1 garrisoned ${ctx.garrisons.length}/${interiors} courts — the roll leaks`);
       }
     }
+  }
+}
+
+// --- Rig J: THE COURTLANDS — the desert's rim of rings ------------------------
+// The court-country pass: rig I's regime grown into a BIOME. The law under
+// test is THE THRESHOLD RHYTHM's structural half — nothing but TRUE-wall
+// ring architecture (the relief), a watched, hunted open (the peril) — plus
+// the citizenship wiring that makes it a country: the rim climate claim,
+// the dynasty's patronage, the stocked well ring, the crescent ruin lane.
+{
+  const ts = TILESETS.courtland;
+  const biome = BIOMES.courtland;
+  if (!ts) fail('J: courtland tileset missing');
+  else if (!biome) fail('J: courtland biome row missing');
+  else {
+    // J1 — citizenship statics.
+    if (ts.forceLayout !== 'massif') fail(`J: courtland forceLayout '${ts.forceLayout}' — the massif coupling is gone`);
+    if (ts.biome !== 'courtland') fail(`J: courtland tileset biome '${ts.biome}' — the country lost its tag`);
+    if (patronFaction('courtland') !== 'sarcophate') {
+      fail(`J: courtland patron '${patronFaction('courtland')}' — the dynasty lost its belt`);
+    }
+    // THE RIM LAW (the border-proof sweep's landed shape): the claim hugs
+    // the desert's WETTER VERGE — full on desert-grade ground (0.42: both
+    // envelopes full — the rim stands ON the waste's margin), dead in the
+    // arid heart (0.28: the deep desert stays its parent's alone), dead on
+    // the green flank (0.55), and TAPERING through the semi-arid shoulder
+    // (0.48: both bands mid-fade — the crossing ground the rim was built
+    // to read).
+    const dry = climateEnvelope('moisture', BIOMES.desert.climate!.moisture);
+    const rim = climateEnvelope('moisture', biome.climate!.moisture);
+    if (presenceMul(rim, 0.42) < 1 - 1e-9 || presenceMul(dry, 0.42) < 1 - 1e-9) {
+      fail('J: the rim no longer stands on the desert\'s verge (both envelopes must be FULL at 0.42)');
+    }
+    if (presenceMul(rim, 0.28) > 0) fail('J: the rim claims the desert\'s arid heart');
+    if (presenceMul(dry, 0.28) < 1 - 1e-9) fail('J: 0.28 left the desert\'s full-dry band — re-pin the rim law');
+    if (presenceMul(rim, 0.55) > 0) fail('J: the rim claims the green flank');
+    const rimTaper = presenceMul(rim, 0.48), dryTaper = presenceMul(dry, 0.48);
+    if (!(rimTaper > 0 && rimTaper < 1 && dryTaper > 0 && dryTaper < 1)) {
+      fail('J: 0.48 is not a shared taper of rim and dry — the shoulder read is gone');
+    }
+    // THE VERGE TILT: the desert_verge field band stands, tilts (never
+    // replaces), and names both family rows — the lever the measured
+    // adjacency rides (biomes.ts carries the numbers).
+    const verge = BIOME_FIELD_BANDS.find(b => b.id === 'desert_verge');
+    if (!verge) fail('J: the desert_verge field band is gone — the rim\'s adjacency lever');
+    else {
+      if (verge.mode !== 'tilt') fail('J: desert_verge must TILT, never replace');
+      if (verge.when.axis !== 'moisture') fail(`J: desert_verge gates on '${verge.when.axis}' — the stratum is moisture`);
+      for (const b of ['desert', 'courtland']) {
+        if (!verge.table.some(r => r.biome === b)) fail(`J: desert_verge lost its '${b}' row`);
+      }
+    }
+
+    // The two new kinds: sandstone rings, the well stocked, the ruin a crescent.
+    const well = massKindOf('well_court');
+    if (well.id !== 'well_court') fail('J: mass kind well_court missing');
+    else {
+      if (well.region !== 'sandstone') fail(`J: well_court region '${well.region}' — expected sandstone`);
+      if (!well.inner?.some(r => r.kind === 'stone_cistern')) fail('J: well_court lost its cistern — the watered ring is dry');
+      if ((well.garrison?.chance ?? 0) > 0.3) fail('J: well_court garrison chance rose past the relief read');
+    }
+    const fallen = massKindOf('fallen_court');
+    if (fallen.id !== 'fallen_court') fail('J: mass kind fallen_court missing');
+    else if (fallen.shapes.some(s => s.shape !== 'crescent')) fail('J: fallen_court rolls non-crescent shapes');
+
+    // NOTHING BUT RINGS, on every face: each pool row (the biome row, the
+    // base face, both variants) names a kind whose every silhouette is
+    // court or crescent — ring architecture whole or breached, never a
+    // slab, never a mesa.
+    const faces: { label: string; params: Record<string, unknown> }[] = [
+      { label: 'biome', params: (biome.layoutParams ?? {}) as Record<string, unknown> },
+      { label: 'base', params: ts.layoutParams as Record<string, unknown> },
+      ...(ts.variants ?? []).map(v => ({
+        label: v.name, params: { ...ts.layoutParams, ...v.layoutParams } as Record<string, unknown>,
+      })),
+    ];
+    for (const f of faces) {
+      const pool = f.params.massifMasses as { kind: string }[] | undefined;
+      if (!pool?.length) { fail(`J: face '${f.label}' carries no court pool`); continue; }
+      for (const row of pool) {
+        const kd = massKindOf(row.kind);
+        if (kd.shapes.some(sh => sh.shape !== 'court' && sh.shape !== 'crescent')) {
+          fail(`J: face '${f.label}' row '${row.kind}' rolls non-ring shapes — the court country leaked`);
+        }
+      }
+    }
+
+    // J3 — THE THRESHOLD RHYTHM's testable half. The open is READ before it
+    // is crossed: the sentinel wears the watch fabric's sweeping fan ON A
+    // POST and stands in the tileset's own pack table; the dove roosts at
+    // the urns inside quiet rings (the `near` lever), so the burst of pale
+    // wings is the no-tenant read.
+    const sen = MONSTERS.ushabti_sentinel;
+    if (!sen) fail('J: ushabti_sentinel def missing');
+    else {
+      if (!sen.watch?.sweep) fail('J: the sentinel lost its sweeping watch — the fans went dark');
+      if (!sen.post) fail('J: the sentinel lost its post — the gaps go unwatched');
+      if (sen.faction !== 'sarcophate') fail(`J: the sentinel serves '${sen.faction}' — the watch is the dynasty's`);
+    }
+    if (!ts.packs?.table.some(r => r.id === 'ushabti_sentinel')) {
+      fail('J: ushabti_sentinel absent from the courtland pack table — the open goes unwatched');
+    }
+    const fauna = WILDLIFE.courtland;
+    if (!fauna || fauna.length < 3 || fauna.length > 6) {
+      fail(`J: courtland wildlife carries ${fauna?.length ?? 0} rows — the ambient law wants 3-5`);
+    }
+    const dove = fauna?.find(r => r.id === 'tomb_dove');
+    if (!dove) fail('J: tomb_dove missing from courtland wildlife');
+    else if (dove.near !== 'burial_urn') fail('J: the dove lost its urn roost — the quiet-ring tell is gone');
+    if (MONSTERS.tomb_dove?.tag !== 'critter') fail('J: tomb_dove is not critter-tagged (the ambient-exemption law)');
+
+    // J2 — the minted census: base + both faces, weave/exits/interiors
+    // whole, ring-only silhouettes on the carved truth, garrisons speaking
+    // the dynasty, the kept-court row landing, the watered face's cistern
+    // stock inside its own floors.
+    const W = 3400, H2 = 2500;
+    const jEntry = vec(130, H2 / 2);
+    const jExits = [vec(W - 130, H2 / 2), vec(W / 2, 130)];
+    const faceDefs = [
+      {
+        label: 'base',
+        params: ts.layoutParams as Record<string, unknown>,
+        layout: [...(ts.common ?? []), ...ts.layout],
+        theme: ts.theme as ZoneDef['theme'],
+      },
+      ...(ts.variants ?? []).map(v => ({
+        label: v.name,
+        params: { ...ts.layoutParams, ...v.layoutParams } as Record<string, unknown>,
+        layout: [...(ts.common ?? []), ...v.layout],
+        theme: { ...ts.theme, ...(v.theme ?? {}) } as ZoneDef['theme'],
+      })),
+    ];
+    let rings = 0, guards = 0, kept = 0, fallenSeen = 0, wellStock = 0;
+    for (const f of faceDefs) {
+      for (let s = 0; s < Math.min(SEEDS, 4); s++) {
+        const seed = seedAt(s) ^ 0xd0c7 ^ (f.label.length << 8);
+        const def: ZoneDef = {
+          id: `massif_j_${f.label.replace(/\W+/g, '_')}`, name: `QA courtland ${f.label}`, level: 9,
+          size: { w: W, h: H2 }, theme: f.theme, layout: f.layout,
+          layoutType: 'massif', layoutParams: f.params, biome: 'courtland',
+          objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+        };
+        const out = generateLayout({ ...def, seed }, { w: W, h: H2 }, new Rng(seed), jEntry, jExits);
+        if (!(out.walk instanceof GridWalkField)) { fail(`J: ${f.label} seed ${seed} no grid`); continue; }
+        const st = gridStats(out)!;
+        if (st.comps !== 1) fail(`J: ${f.label} seed ${seed} split the weave (${st.comps} comps)`);
+        if (st.wallFrac > 0.5) fail(`J: ${f.label} seed ${seed} wall fraction ${st.wallFrac.toFixed(2)} — the rim drowned`);
+        for (const e of jExits) if (!st.grid.reachable(jEntry, e)) fail(`J: ${f.label} seed ${seed} exit unreachable`);
+        for (const poi of out.pois) {
+          const q = st.grid.isWalkable(poi.x, poi.y) ? poi : st.grid.snapToWalkable(vec(poi.x, poi.y));
+          if (!st.grid.reachable(jEntry, q)) fail(`J: ${f.label} seed ${seed} ring interior unreachable`);
+        }
+        // Carve replay (defs carry no compositions — rig D's stream-align law).
+        const ctx: GenCtx = {
+          rng: new Rng(seed), arena: { w: W, h: H2 }, entry: jEntry, exits: jExits, seed,
+          doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+          garrisons: [], caveSeeds: [], reserved: [],
+        };
+        const masses = carveMassifs(ctx, { ...def, seed });
+        for (const m of masses) {
+          rings++;
+          if (m.shape !== 'court' && m.shape !== 'crescent') {
+            fail(`J: ${f.label} seed ${seed} non-ring silhouette '${m.shape}' in the courtlands`);
+          }
+          if (m.shape === 'crescent') fallenSeen++;
+          if (f.label === 'base' && m.kind === 'sand_court' && m.r > 300) kept++;
+        }
+        guards += ctx.garrisons.length;
+        for (const g of ctx.garrisons) {
+          if (g.faction !== 'sarcophate') fail(`J: ${f.label} seed ${seed} garrison faction '${g.faction}' — the rings answer to the dynasty`);
+        }
+        if (f.label === 'the watered courts') {
+          const ri = massKindOf('well_court').ringInner ?? 0.6;
+          const wells = masses.filter(m => m.kind === 'well_court' && m.interior);
+          for (const d of out.doodads.filter(d => d.kind === 'stone_cistern')) {
+            wellStock++;
+            if (!wells.some(m => Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= m.r * ri * 0.9 + 16)) {
+              fail(`J: watered face seed ${seed} cistern at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} sits outside every well-court floor`);
+            }
+          }
+        }
+        note(`J ${f.label} seed ${seed}: ${masses.length} rings, ${ctx.garrisons.length} garrisoned, wallFrac ${st.wallFrac.toFixed(2)}`);
+      }
+    }
+    if (rings < 30) fail(`J: pressure — the country aggregated only ${rings} rings over the sweep (dead regime)`);
+    if (!guards) fail('J: shipped garrison chances posted NO dynasty guard across the sweep');
+    if (!kept) fail('J: the kept-court row never landed (its sizeR band is dead in the shipped base face)');
+    if (!fallenSeen) fail('J: no fallen ring ever landed (the crescent lane is dead)');
+    if (!wellStock) fail('J: the watered face never landed a cistern (the relief is dry)');
   }
 }
 

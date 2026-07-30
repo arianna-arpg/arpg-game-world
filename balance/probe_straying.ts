@@ -452,6 +452,21 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
         w.kill(a, true);
       }
       for (const s of [carry, touch]) s.a.sheet.setSource('probe', [mod('evasion', 'flat', -1e6)]);
+      // THE TOUCH LANE'S OWN ISOLATION (2026-07-30): the scatter may stage
+      // the second head ANYWHERE — including square on the carry's road
+      // home, where the player's own passage herds it mid-walk (touched at
+      // herdRadius), pre-spending its 'loose' state AND banking a second
+      // return into the ledger H5-H7 read. A world-geography reshuffle (a
+      // new biome joining the field table moves the mint's coord, and
+      // coord-fed generation moves the fold and the whole scatter with it)
+      // tripped exactly that — minTouchD measured 27px against herdR 84.
+      // So the touch head waits out the carry lane AS SCENERY at the rally
+      // beside the spares (the rig's own proven parking), and returns to
+      // its staged ground — still loose, still untouched — for the gaff
+      // lane below, which is the lane that actually tests it.
+      const touchHome = vec(touch.a.pos.x, touch.a.pos.y);
+      touch.a.pos = w.clampPos(vec(scene.rally.x, scene.rally.y), touch.a.radius);
+      touch.a.untargetable = true;
       w.devGrabGrant('seize'); w.devGrabGrant('gaff_cast');
       const seize = p.skills.find(s => s?.def.id === 'seize')!;
       const gaff = p.skills.find(s => s?.def.id === 'gaff_cast')!;
@@ -512,6 +527,9 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
       // The gaff is the only reach longer than the herd radius (melee closes
       // inside it by law), so this is the one honest way to hold a head that
       // has never been touched.
+      // The parked touch head takes its staged ground back for its own lane.
+      touch.a.pos = w.clampPos(touchHome, touch.a.radius);
+      touch.a.untargetable = false;
       p.pos = w.clampPos(along(touch.a.pos, scene.rally, 160), p.radius);
       p.facing = Math.atan2(touch.a.pos.y - p.pos.y, touch.a.pos.x - p.pos.x);
       const reach = dist(p.pos, touch.a.pos);

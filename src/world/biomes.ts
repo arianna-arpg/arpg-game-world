@@ -776,6 +776,56 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { aether_drift: 1 },
     eventDensityMul: 0.3,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE COURTLANDS — the desert's RIM as its own country: the Sand
+  // Sarcophate's living belt of walled ring-courts, strung along the one
+  // band where the waste gives out and wells still fill (the sepulcher
+  // country is the same dynasty gone under the deep erg). THE THRESHOLD
+  // RHYTHM is its law — the open ground is the peril, the rings are the
+  // relief (full thesis at the courtland tileset, data/tilesets.ts).
+  // THE RIM CLAIM (measured, 2026-07-30 — the border-proof sweep, values
+  // in the pass memory): temperature matches the desert's own 'warm' gate,
+  // and the moisture band claims the desert's WETTER VERGE — full over
+  // 0.34–0.46 (overlapping the dry band's own wet margin, where a desert
+  // region's moisture gradient rises toward its boundary), tapering out by
+  // ~0.51 so the green belt is never ours and by ~0.30 so the arid heart
+  // stays the desert's alone. Wide wet-side claims measured as CONFETTI
+  // (a 0.40–0.60 band: 34% of court regions desert-adjacent — the warm
+  // mid-moisture belt is the green countries' home ground and courts
+  // scattered through it); hugging the verge + the desert_verge tilt band
+  // below lifts that to 62% of regions bordering true desert with 85% of
+  // court cells within two field cells of it — the honest ceiling of this
+  // vocabulary (the residual is semi-arid pockets whose desert dice went
+  // to the filler; they read as the dry marches the waste once reached).
+  // The desert's temperature edge is deliberately NOT claimed — that
+  // border belongs to karst/downs/mountains; a rim of rings needs water
+  // to wall, not merely cooler sand.
+  // Seated LAST in this object on purpose: genqa's layout:<id> cases take
+  // their params from the FIRST biome carrying a layout — the grove keeps
+  // the massif representative seat.
+  courtland: { patronFaction: 'sarcophate', mapColor: '#cf9358', label: 'Courtlands', spacing: 100,
+    // THE ROAD BUDGET: 4 — a march, not a hub. The rim is a BAND: it passes
+    // you along itself or across it, and the ring-courts are the stops.
+    // One under the world cap keeps the crossing committed without
+    // starving the through-trade the desert's edge exists to carry.
+    maxRoads: 4,
+    climate: { temperature: 'warm', moisture: { from: 0.34, fadeIn: 0.04, to: 0.46, fadeOut: 0.05 } },
+    allowedLayouts: { massif: 1 },
+    // The court pools at biome grain (the tileset's faces re-mix them): the
+    // law is NOTHING BUT RINGS — every row rolls ring architecture only
+    // (court/crescent silhouettes), the walk between the walls is the zone.
+    layoutParams: {
+      massifMasses: [
+        { kind: 'sand_court', weight: 3, over: { garrison: { chance: 0.3 } } },
+        { kind: 'well_court', weight: 1.6 },
+        { kind: 'fallen_court', weight: 1.4 },
+        { kind: 'sand_court', weight: 1, sizeR: [270, 390],
+          over: { mouths: [2, 3], garrison: { chance: 0.8, size: [4, 6] } } },
+      ],
+      massifCoverage: [0.22, 0.28],
+      massifMaxMasses: 13,
+    },
+    landmarks: [{ landmark: 'oasis', chance: 0.2 }, { landmark: 'canyon', chance: 0.1 },
+      { landmark: 'sinkhole', chance: 0.1 }] },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */
@@ -913,6 +963,16 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'crystal', weight: 1.2 },
   { biome: 'volcanic', weight: 1.3 },
   { biome: 'mycelia', weight: 1.2 }, // rare fungal regions — the dormant homes the bloom collapses to
+  // 2.2: the COURTLANDS — the conditioned-equilibrium doctrine on a RIM:
+  // the moisture claim hugs the desert's own wetter verge, and the
+  // desert_verge tilt band (below) coheres the family along that stratum.
+  // Measured 2026-07-30 (the border-proof sweep, 6 seeds × 141² cells):
+  // 1.8% of land, 62% of court regions bordering true desert (every one
+  // also facing non-desert land — the two-sided rim), 85% of court cells
+  // within two field cells of the waste; desert 3.2%→4.1% as its margins
+  // cohere. A wider wet-side band measured as confetti (34% adjacency) —
+  // the numbers, not the guess, picked this row.
+  { biome: 'courtland', weight: 2.2 },
 ];
 
 // --- CLIMATE-BANDED FIELD TABLES ----------------------------------------------
@@ -1051,6 +1111,27 @@ registerFieldBand({
     { biome: 'farmland', weight: 1.8 },
     { biome: 'downs', weight: 1.6 },
     { biome: 'field', weight: 1.2 },
+  ],
+});
+// THE DESERT VERGE — a TILT on the semi-arid stratum (the court-country
+// pass): inside it the desert-family rows rise, so the waste COHERES along
+// its own wetter margin (the biomes-table doctrine — a desert should read
+// as one coherent commitment, not a mottle of fillers at its edge) and the
+// courtlands ride the same stratum as its rim. Temperature never enters the
+// gate — but the desert's own warm∧dry affinity zeroes it off the warm
+// belt, so cold semi-arid steppe is untouched by construction. Registered
+// AFTER the capital/home bands (first match wins): civic ground keeps its
+// structure. Measured 2026-07-30: this band is what lifted the rim's
+// desert-adjacency from ~50% to 62% of regions (85% of cells within two
+// field cells); desert land share 3.2%→4.1%, the growth concentrated at
+// region margins — the deliberate half of the trade.
+registerFieldBand({
+  id: 'desert_verge',
+  when: { axis: 'moisture', env: { from: 0.34, fadeIn: 0.03, to: 0.5, fadeOut: 0.04 } },
+  mode: 'tilt',
+  table: [
+    { biome: 'desert', weight: 1.6 },
+    { biome: 'courtland', weight: 1.3 },
   ],
 });
 

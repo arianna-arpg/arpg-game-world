@@ -187,6 +187,27 @@ here so nobody hunts a phantom.
   + interiors reachable, shipped chances seating guards, the great-court row
   live). A DEDICATED all-courts biome is a sanctioned follow-on — this face
   plus this audit are its readiness proof.
+- **THE COURTLANDS** (`courtland` — the sanctioned follow-on, landed): the
+  regime grown into a BIOME on the desert's rim. THE IDENTITY THESIS (full
+  text at the courtland tileset header, data/tilesets.ts): the Sand
+  Sarcophate walled every well along the one band where the waste gives out
+  — and THE THRESHOLD RHYTHM is the country's law, the inversion no other
+  country runs: **the open ground is the peril, the rings are the relief.**
+  Structural, not narrated — sandstone TRUE walls end every open-ground
+  engagement at a mouth you hold; the open between is hunted (the waste's
+  packs), watched (posted `ushabti_sentinel` bodies sweeping watch-fabric
+  fans), sun-hammered, and crossed by sandstorms that birth over the deep
+  erg and arrive here as a neighbor's weather. Nothing but ring
+  architecture, pinned: every pool row on every face rolls court/crescent
+  silhouettes only — `sand_court` retuned per row (mostly-quiet 0.3, the
+  KEPT courts 0.8 at [270,390]), the new `well_court` (thin ring, cistern +
+  palm stock, garrison 0.2 — the watered relief) and `fallen_court` (the
+  breached crescent — free cover, no tenant). A BORDERING country by
+  measurement, not intent: its climate row hugs the desert's wetter verge
+  and the `desert_verge` field-band tilt coheres the family along that
+  stratum (world/biomes.ts carries the measured numbers). Probe rig J
+  censuses all of it; the tomb_dove's urn-roost (`WILDLIFE.courtland`) is
+  the quiet-ring tell.
 - **Highlands** (`foothills`/`snowcrown`/`stonecrown`), **tendersrows**
   (garden planter beds), **aether_bastion** + the seraph-city faces, and the
   settled belt's recipes via exported `carveMassifs`.

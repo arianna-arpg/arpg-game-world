@@ -7216,6 +7216,18 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'mask', x: 0.42, scale: 0.75, role: 'metal' },
     ],
   },
+  /** The ushabti sentinel: the file's watch-post cousin — no shield, a
+   *  longer blade grounded like a stave, funerary paint, the gilded face
+   *  that catches the light while the fan does the looking. */
+  ushabti_sentinel: {
+    parts: [
+      { kind: 'torso', scale: 0.85, role: 'bone' },
+      { kind: 'shroudWrap', scale: 0.9, alpha: 0.8, params: { bands: 4 } },
+      { kind: 'runes', scale: 0.65, alpha: 0.7, params: { n: 3 } },
+      { kind: 'sword', y: 0.38, scale: 0.85, params: { len: 0.95 } },
+      { kind: 'mask', x: 0.42, scale: 0.8, role: 'metal' },
+    ],
+  },
 
   /** The ground-priest: horned bulk over a maul, painted for the rite. */
   beastkin_earthshaker: {
@@ -8411,6 +8423,15 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'crest', x: 0.25, scale: 0.75, color: '#4a3a2a' },
       { kind: 'featherWings', scale: 0.6, alpha: 0.9 },
       { kind: 'beak', x: 0.42, scale: 0.45 },
+    ],
+  },
+  /** The tomb dove: pale wings in a quiet ring — the burst is the tell. */
+  tomb_dove: {
+    parts: [
+      { kind: 'disc', scale: 0.75 },
+      { kind: 'featherWings', scale: 0.65, alpha: 0.9 },
+      { kind: 'tailFeathers', scale: 0.9 },
+      { kind: 'beak', x: 0.42, scale: 0.4 },
     ],
   },
   /** The horned viper: the sand's opinion, coiled. */

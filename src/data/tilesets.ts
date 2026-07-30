@@ -2763,6 +2763,188 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // ═══ THE COURTLANDS — THE IDENTITY THESIS (the court-country pass) ═══
+  // WHO: the Sand Sarcophate built these rings while the dynasty still
+  // LIVED. Before it sealed itself under the deep erg (the sepulcher
+  // country is the same house, gone down), it farmed the desert's rim —
+  // the one band where the waste gives out and wells still fill — and it
+  // walled every well: orchard courts, cistern courts, garrison yards,
+  // strung along the edge of the sand. The baked servants never stopped
+  // keeping them.
+  // WHY RINGS AT THE RIM: a wall is a claim on WATER. The deep desert has
+  // nothing left to claim; the green country needs no claiming. The rim is
+  // the only ground where a ring PAYS — so the rim, and only the rim,
+  // became a country of rings (a BORDERING country: the climate row in
+  // world/biomes.ts stands astride the desert's own dry fade-out).
+  // THE ONE LAW (that no other country obeys) — THE THRESHOLD RHYTHM: the
+  // open ground is the peril and the walls are the relief. Everywhere else
+  // the built thing is the danger and the wild is the walk (a bastion is a
+  // fight you choose; the jungle's own growth is the threat; a tableland
+  // court is a garrison you skirt). Here the polarity inverts, and it is
+  // STRUCTURAL, not narrated: sandstone rings are TRUE walls (shots and
+  // sight die at the stone) with one or two mouths — stepping inside ENDS
+  // every open-ground engagement and funnels pursuit through a chokepoint
+  // you hold; the weave law guarantees the mouth. The open between the
+  // rings is where numbers and sightlines work — the waste's packs hunt
+  // it, posted ushabti sentinels sweep it (the watch fabric's drawn fans:
+  // read them before you cross), the sun hammers it, and the sandstorms
+  // born over the deep erg BREAK across it (birthGeo: the rim never births
+  // its own storm — the desert's weather arrives as a neighbor's). Safety
+  // is always one wall away; the price is always the crossing. Traversal
+  // becomes court-to-court passage: read the gap, commit, then read the
+  // ring — a burst of doves says nobody holds it; a garrison says the
+  // dynasty still answers.
+  courtland: {
+    id: 'courtland',
+    forceLayout: 'massif',
+    biome: 'courtland', sky: 'open',
+    compositions: [
+      // Their door down: the rim stands OVER the dynasty's vault country.
+      { composition: 'sepulcher_site', chance: 0.18 },
+      { composition: 'caravan_graveyard', chance: 0.15 },
+      { composition: 'buried_village', chance: 0.12 },
+      { composition: 'oasis_haven', chance: 0.12 },
+    ],
+    // The base face re-states the biome pools (spec ▷ tileset ▷ biome:
+    // variants re-mix per face, and a directed courtland mint that never
+    // consulted the biome row still gets the law).
+    layoutParams: {
+      massifMasses: [
+        // The standard ring — usually quiet, stocked (the kind's 0.55
+        // squatter chance retuned to the rim's mostly-kept-empty truth).
+        { kind: 'sand_court', weight: 3, over: { garrison: { chance: 0.3 } } },
+        { kind: 'well_court', weight: 1.6 },
+        { kind: 'fallen_court', weight: 1.4 },
+        // THE KEPT COURT: the dynasty's standing seats — wide rings, twin
+        // gates, a garrison that nearly always answers.
+        { kind: 'sand_court', weight: 1, sizeR: [270, 390],
+          over: { mouths: [2, 3], garrison: { chance: 0.8, size: [4, 6] } } },
+      ],
+      massifCoverage: [0.22, 0.28],
+      massifMaxMasses: 13,
+    },
+    nameFirst: ['Ringstone', 'Drywell', 'Lastwater', 'Sunwalled', 'Hundredgate', 'Old Dynast', 'Kilnbrick', 'Threshold', 'Gatewatch', 'Palmshade', 'Cistern', 'Doverook', 'Emberwall', 'Wellward'],
+    nameSecond: ['Courts', 'Rings', 'Walls', 'Wells', 'Yards', 'Closes', 'Gardens', 'Enclosures', 'Gates', 'Belt', 'Marches'],
+    theme: {
+      dayLight: 1.5,
+      heat: 1,
+      swelter: 0.75,
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.7 }, { kind: 'sandDrift', intensity: 0.35 }],
+      // Kilned earth a shade redder than the open waste (fired brick, old
+      // floors); the wall tone stays the sandstone region's fill so bodies
+      // and floor read one country.
+      ground: {
+        scale: 2.4, stretchX: 1.5, strength: 1.15, speckles: 0.45,
+        palette: ['#261a10', '#3e2a18', '#563c22', '#6e4e2c', '#846238'], bias: 0.55, alpha: 0.55,
+      },
+      floor: '#1e160e', grid: '#2e2416', border: '#7a6438',
+      obstacle: '#5e4526', obstacleEdge: '#8a6e40', accent: '#e8b850',
+      mud: '#6a5630', water: '#2a6a7a', sand: '#c9a26a', wall: '#5e4526',
+    },
+    sizeW: [3000, 3900], sizeH: [2200, 2800], ellipseChance: 0.18,
+    layout: [
+      { kind: 'cactus', count: [3, 6] },
+      { kind: 'sand', count: [3, 5] },
+      { kind: 'rocks', count: [4, 7], radius: [20, 40] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'heat_shimmer', count: [2, 4] },
+      { kind: 'dust_sheet', count: [0, 2] },
+      { kind: 'ruin', count: [0, 1] },
+      { kind: 'sun_awning', count: [0, 1] },
+      { kind: 'camp', count: [0, 1] },
+      { kind: 'cave', count: [0, 2] },
+      { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
+    ],
+    // Whatever face rolls, the rim keeps the waste's litter at its edge.
+    common: [
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      { kind: 'bone_pile', count: [1, 2] },
+      { kind: 'fulgurite', count: [0, 1] },
+      { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
+    ],
+    variants: [
+      // THE HUNDRED RINGS — the rhythm at sprint grain: many SMALL rings
+      // packed close (the dead city read). Garrisons sparser per ring; the
+      // crossing never stops asking.
+      { name: 'the hundred rings', layout: [
+        { kind: 'ruin', count: [1, 2] },
+        { kind: 'sand', count: [2, 4] },
+        { kind: 'bone_pile', count: [1, 3] },
+        { kind: 'heat_shimmer', count: [2, 4] },
+        { kind: 'scree', count: [2, 3] },
+        { kind: 'cave', count: [0, 1] },
+      ], layoutParams: {
+        massifMasses: [
+          { kind: 'sand_court', weight: 3, over: { garrison: { chance: 0.25 } } },
+          { kind: 'fallen_court', weight: 2 },
+          { kind: 'well_court', weight: 1 },
+        ],
+        massifSizeR: [120, 200],
+        massifCoverage: [0.24, 0.3],
+        massifMaxMasses: 18,
+      } },
+      // THE WATERED COURTS — the oasis belt: the dynasty tends its water,
+      // so the wells run green and the garrisons answer oftener. The
+      // relief is richest exactly where the tenants are likeliest — read
+      // the ring before you drink.
+      { name: 'the watered courts', layout: [
+        { kind: 'palm', count: [2, 4] },
+        { kind: 'brush', count: [2, 4] },
+        { kind: 'sand', count: [2, 3] },
+        { kind: 'heat_shimmer', count: [1, 3] },
+        { kind: 'sun_awning', count: [0, 1] },
+        { kind: 'cave', count: [0, 1] },
+      ], layoutParams: {
+        massifMasses: [
+          { kind: 'well_court', weight: 2.5 },
+          { kind: 'sand_court', weight: 1.2, over: { garrison: { chance: 0.4 } } },
+          { kind: 'well_court', weight: 0.8, sizeR: [260, 380],
+            over: { mouths: [2, 3], garrison: { chance: 0.85, size: [4, 6] } } },
+          { kind: 'fallen_court', weight: 0.6 },
+        ],
+        massifCoverage: [0.22, 0.28],
+      } },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      // Singles matter here: posted sentinels and lone hunters dot the
+      // gaps between rings — the open reads one body at a time.
+      archetypes: [
+        { weight: 3, size: [5, 8] }, { weight: 4, size: [3, 5] }, { weight: 3, size: [1, 2] },
+      ],
+      // THE CONTESTED RIM: the waste hunts the gaps (gnolls, stalkers, the
+      // wyrm), the dynasty keeps the walls and walks its old patrol roads
+      // (the garrisons draw the patron lane; these are its files abroad).
+      table: [
+        { id: 'gnoll_prowler', weight: 3 },
+        { id: 'dune_stalker', weight: 2 },
+        { id: 'ushabti_sentinel', weight: 2 },
+        { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },
+        { id: 'sarcophate_legionary', weight: 1.5, presence: { from: 3, fadeIn: 2 } },
+        { id: 'tomb_scarab', weight: 1.5, presence: { to: 16, fadeOut: 8 } },
+        { id: 'ushabti_file', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'bronze_scarab', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'canopic_bearer', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'mirage_dancer', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'salt_husk', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      // Walk the courts: the circuit is this country's native ask.
+      { kind: 'circuit', weight: 2 },
+      { kind: 'unearth', weight: 2 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'leyline', weight: 1 },
+    ],
+  },
+
   // BURIED VAULT — the desert's descent (vault_gate sidezone): a lost
   // village's underworks in dressed sandstone, preserved by the sands that
   // erased its streets. Interior-only (frontier:false); the sunken_ruin

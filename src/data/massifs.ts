@@ -237,6 +237,59 @@ registerMassKind({
   skirtChance: 0.26,
 });
 
+// --- THE COURTLANDS (the desert's rim of rings — biome 'courtland') -----------
+// The Sand Sarcophate's LIVING architecture: where the sepulcher country is
+// the dynasty gone under the erg, these are the rings it raised while it
+// still farmed the rim. Two kinds beside the shared sand_court vocabulary,
+// each one pole of THE THRESHOLD RHYTHM (open = peril, ring = relief).
+
+// THE WELL COURT — the watered ring, the relief made literal: a thinner
+// sandstone ring (more floor to the same wall) around the dynasty's old
+// plumbing — a cistern still holding, palms on the water, pots at their
+// feet. Garrison LOW: the true oases mostly stand quiet; walking in ends
+// every open-ground engagement at the mouth (the TRUE-wall funnel), and
+// what you find inside is shade and stock, not a fight you didn't pick.
+registerMassKind({
+  id: 'well_court',
+  region: 'sandstone',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.1,
+  ringInner: 0.68,
+  mouths: [1, 2],
+  garrison: { chance: 0.2 },
+  inner: [
+    { kind: 'stone_cistern', weight: 2, radius: [13, 16] },
+    { kind: 'palm', weight: 2, radius: [16, 24] },
+    { kind: 'clay_pots', weight: 1.5, radius: [10, 14] },
+    { kind: 'flowers', weight: 1, radius: [12, 18] },
+  ],
+  innerChance: 0.7,
+  innerSpacing: 52,
+  skirt: [
+    { kind: 'brush', weight: 2, radius: [14, 22] },
+    { kind: 'scree', weight: 2, radius: [14, 24] },
+  ],
+  skirtChance: 0.24,
+});
+
+// THE FALLEN COURT — the breached ring: a court the waste already won,
+// its wall a hemicycle (the crescent silhouette — the open chord IS the
+// mouth, no interior POI, no tenant, no stock). Free partial cover on the
+// crossing, and the country's memento mori: this is what a ring becomes
+// when its well gives out. Rubble where the missing arc fell.
+registerMassKind({
+  id: 'fallen_court',
+  region: 'sandstone',
+  shapes: [{ shape: 'crescent', weight: 1 }],
+  lobe: 0.14,
+  skirt: [
+    { kind: 'rubble', weight: 3, radius: [12, 20] },
+    { kind: 'scree', weight: 2, radius: [14, 24] },
+    { kind: 'bone_pile', weight: 1, radius: [12, 18] },
+  ],
+  skirtChance: 0.3,
+});
+
 // =============================================================================
 // THE HIGH BASTION (aether_bastion) — the Host's citadel country: ENORMOUS
 // silver-and-gold architecture strewn about a rolling cloud continent. The
