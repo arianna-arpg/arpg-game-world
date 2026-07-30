@@ -49,6 +49,7 @@ saves/
 # hunk-staging tool, copied out of session temp so they survive temp cleans).
 .claude/*.local.json
 .claude/*.local.js
+.claude/*.local.cjs
 
 # ── Generated editor backups ─────────────────────────────────
 # The dev passive-tree editor writes passives.ts.bak before each
