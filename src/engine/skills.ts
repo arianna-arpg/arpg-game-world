@@ -178,6 +178,22 @@ export function supportFitsTags(sup: SupportDef, tags: readonly SkillTag[]): boo
   return sup.requiresTags.some(t => tags.includes(t));
 }
 
+/** THE RAW SLOT LANE — sockets plus derived grafts, in slot order (sockets
+ *  first, grafts after), BEFORE any admission gate. The ONE spread every
+ *  gem-PRESENCE reader walks: hostSockets' fixpoint, the crew riders pool
+ *  (crewSkillsServed) and the crew cost tax (instanceMods) all start here,
+ *  so a graft is a socket to every downstream law — the same pool
+ *  World.forwardSummonSockets already carries aboard minted bodies. Safe
+ *  by the no-second-copy law: recalcSeat never derives a graft whose gem
+ *  id is already socketed (or grafted by an earlier source), so the spread
+ *  cannot double-count. Socket SURGERY (socketSupport / unsocket, the bag
+ *  UI) deliberately touches `inst.sockets` alone — grafts are derived
+ *  state, never owned stones. Returns the LIVE array when graft-free:
+ *  read-only by contract. */
+export function socketsWithGrafts(inst: SkillInstance): readonly (SupportInstance | null)[] {
+  return inst.grafts?.length ? [...inst.sockets, ...inst.grafts] : inst.sockets;
+}
+
 /**
  * THE LANE ROUTER — the sockets that serve the HOST instance's own casts.
  * A gem serves exactly the lanes it FITS: one admitted through the CREW
@@ -201,7 +217,7 @@ export function hostSockets(inst: SkillInstance): SupportInstance[] {
   // pass the identical fixpoint tag-admission — a misfit graft is inert
   // exactly like a misfit socket, and every payload reader downstream sees
   // grafts with no further edits. Slot order: sockets first, grafts after.
-  const sockets = inst.grafts?.length ? [...inst.sockets, ...inst.grafts] : inst.sockets;
+  const sockets = socketsWithGrafts(inst);
   const admitted: boolean[] = new Array(sockets.length).fill(false);
   const pool = [...inst.def.tags];
   let grew = true;
@@ -5154,7 +5170,13 @@ export function summonCrewOf(
 export function crewSkillsServed(sup: SupportDef, inst: SkillInstance, crew: SummonCrew): SkillDef[] | 'unknowable' | null {
   if (!crew || !supportRidesMinions(sup)) return null;
   if (crew === 'unknowable') return 'unknowable';
-  const riders = inst.sockets.filter((x): x is SupportInstance =>
+  // Riders come off the FULL slot lane (sockets + grafts): the forward
+  // lane (World.forwardSummonSockets) already carries grafts aboard the
+  // minted bodies, so the gate/⤳/legality truth here must see the same
+  // pool — a grafted Faultfinder admits Tectonic Echoes aboard the crew
+  // exactly as a socketed one would, mechanism hop included. A raw
+  // inst.sockets read would refuse links the crew genuinely runs.
+  const riders = socketsWithGrafts(inst).filter((x): x is SupportInstance =>
     !!x && x.def.id !== sup.id && supportRidesMinions(x.def));
   const served = crew.filter(cd => {
     const pool = [...cd.tags];
@@ -5278,7 +5300,17 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
   if (inst.def.delivery.type === 'summon' || instanceSummon(inst)) {
     if (crewBoardingOpen(inst)) {
       const servingSet = new Set(serving);
-      for (const socket of inst.sockets) {
+      // The bill walks the FULL slot lane: a GRAFTED rider boards the crew
+      // through the same forward lane a socketed one does, so it pays the
+      // same freight. THE RULING — that includes PASSIVE-granted grafts
+      // (devotions, The Rote Hand): the tax prices the rider's PRESENCE
+      // aboard the crew (the summoner straining to field the stronger
+      // working), not the socket spent acquiring it. Grafts carry no
+      // provenance to split on (one derived lane, by construction), and an
+      // exempt copy would strictly outclass the same gem socketed — the
+      // worn-graft identity law forbids exactly that. The passive's value
+      // is the FREE GEM, never a free crew.
+      for (const socket of socketsWithGrafts(inst)) {
         if (!socket || servingSet.has(socket) || !supportRidesMinions(socket.def)) continue;
         for (const m of socket.def.mods) if (HOST_COST_STATS.has(m.stat)) out.push(m);
         const sl = socket.level - 1;

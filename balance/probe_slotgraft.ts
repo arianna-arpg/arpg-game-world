@@ -32,9 +32,10 @@
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import {
-  BAR_SLOTS, MAX_SUPPORT_LEVEL, hostSockets, instanceMods, parseSlotGraftStat,
-  slotGraftStat,
+  BAR_SLOTS, HOST_COST_STATS, MAX_SUPPORT_LEVEL, hostSockets, instanceMods, makeSkillInstance,
+  parseSlotGraftStat, slotGraftStat,
 } from '../src/engine/skills';
+import { SKILLS } from '../src/data/skills';
 import { STAT_DEFS, mod } from '../src/engine/stats';
 import { ITEM_AFFIX_LIST } from '../src/data/itemaffixes';
 import { SLOTGRAFT_CFG } from '../src/data/itemaffixes';
@@ -197,6 +198,65 @@ check('I: unlearning strips derived grafts from the departing instance',
   w2.unlearnSkill('cleave', w2.localSeat)
   && w2cleave.grafts === undefined
   && w2.localSeat.meta.skillInv.includes(w2cleave));
+
+// ------------------------------------------------- J. THE CREW SEAT
+// (2026-07-30) A worn graft on a SUMMON skill is a full crew citizen:
+// the recalc gate admits a gem that fits only VIA THE CREW, a worn
+// enabler opens a worn dependent aboard it (crewSkillsServed's riders
+// pool walks the full slot lane — socketsWithGrafts), and a boarding
+// worn rider BILLS the host cast through the crew tax, affix/passive
+// provenance notwithstanding (the ruling in instanceMods).
+const w3: World = makeSimWorld('warrior', 0x51a9);
+const seat3 = w3.localSeat;
+seat3.meta.attrs.willpower = 20; // raise_dead asks willpower 14 (learn gate reads allocated attrs)
+seat3.meta.skillInv.push(makeSkillInstance(SKILLS.raise_dead, 1, 3));
+check('J: the summon learns and takes the seat',
+  w3.learnSkill(seat3.meta.skillInv.length - 1, seat3)
+  && w3.bindSkill(0, 'raise_dead', seat3));
+const raise3 = seat3.meta.knownSkills.get('raise_dead')!;
+const row3 = (gem: string) => (seat3.wornGrafts ?? []).find(r => r.def.id === gem);
+const reapGlove = rollItem({
+  ilvl: 20, rarity: 'magic', baseId: 'gloves_evasion',
+  withFamily: 'slotgraft_1_reapers_encore',
+});
+seat3.meta.equipped['gloves'] = reapGlove!;
+w3.recalcSeat(seat3);
+check('J: a worn MELEE gem rides the summon seat live VIA THE CREW (the recalc gate hops)',
+  row3('reapers_encore')?.state === 'live'
+  && raise3.grafts?.some(g => g.def.id === 'reapers_encore') === true,
+  `state ${row3('reapers_encore')?.state}`);
+// THE COMPOSITION: the worn crack gem is dormant until a worn Faultfinder
+// stands beside it. NOTE the derivation is one pass in SCAN ORDER (gear
+// slots in equip order) — the enabler must scan before its dependent to
+// land in the same recalc; the read-time gates themselves fixpoint.
+const tectRing = rollItem({
+  ilvl: 20, rarity: 'magic', baseId: 'ring_coral',
+  withFamily: 'slotgraft_1_tectonic_echoes',
+});
+seat3.meta.equipped['ring2'] = tectRing!;
+w3.recalcSeat(seat3);
+check('J: the worn crack gem alone is honestly dormant (no fissure aboard the crew)',
+  row3('tectonic_echoes')?.state === 'unfit',
+  `state ${row3('tectonic_echoes')?.state}`);
+const faultRing = rollItem({
+  ilvl: 20, rarity: 'magic', baseId: 'ring_coral',
+  withFamily: 'slotgraft_1_faultfinder',
+});
+delete seat3.meta.equipped['ring2'];
+seat3.meta.equipped['ring1'] = faultRing!;
+seat3.meta.equipped['ring2'] = tectRing!;
+w3.recalcSeat(seat3);
+check('J: a worn Faultfinder opens the worn crack gem aboard the crew (grafts compose in the riders pool)',
+  row3('faultfinder')?.state === 'live' && row3('tectonic_echoes')?.state === 'live',
+  (seat3.wornGrafts ?? []).map(r => `${r.def.id}:${r.state}`).join(' '));
+// THE BILL: the worn rider pays its freight once the boarding key stands.
+const reaperBills = () => instanceMods(raise3).filter(m =>
+  HOST_COST_STATS.has(m.stat) && m.kind === 'more' && m.value === 0.15).length;
+check('J: no key, no bill (a dormant door costs nothing)', reaperBills() === 0);
+seat3.meta.inventory.push({ def: SUPPORTS['resonance'], level: 1 });
+check('J: the boarding key sockets', w3.socketSupport(seat3.meta.inventory.length - 1, 'raise_dead', seat3));
+check('J: the WORN rider bills the host cast through the open door (the crew tax, worn lane)',
+  reaperBills() === 1, `manaCost more 0.15 ×${reaperBills()}`);
 
 console.log(failed === 0 ? '\nALL PASS' : `\n${failed} FAILED`);
 process.exit(failed === 0 ? 0 : 1);
