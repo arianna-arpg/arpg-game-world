@@ -102,7 +102,7 @@ export const CONCLAVE: ContentPackage = {
   id: 'conclave',
   label: 'Conclave',
   color: '#a86ad8',
-  blurb: 'Occult cultists gather at pentagram rituals — neutral until you draw blood. Subdue the rite for an immediate fight, or let it incubate and feed a spreading Eldritch awakening.',
+  blurb: 'Occult cultists gather at pentagram rituals, neutral until you draw blood. Subdue the rite for an immediate fight, or let it incubate and feed a spreading Eldritch awakening.',
   cost: 120,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING, and
   // surfaces once you've found your first ritual site.

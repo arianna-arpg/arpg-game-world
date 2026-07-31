@@ -79,7 +79,7 @@ export const MIRRORKIN: ContentPackage = {
   id: 'mirrorkin',
   label: 'The Mirrorkin',
   color: MIRROR_COLOR,
-  blurb: 'Somewhere between the world and its image, something learned to want. A pale diamond stands in the field — harmless, patient, exactly as interesting as a mirror — until you touch it, and the glass remembers everyone who ever stood in front of it. Husks pour out first: reflections that found no face, hungry for one. Then the rift takes yours. It walks like you. It casts what you cast. In company it is worse — every hero in the party meets themselves, and the fight is a portrait gallery with knives. Seal the rift fast and the glass forgets; linger, and understand that the thing wearing your face has been watching you play this whole time.',
+  blurb: 'Somewhere between the world and its image, something learned to want. A pale diamond stands in the field (harmless, patient, exactly as interesting as a mirror) until you touch it, and the glass remembers everyone who ever stood in front of it. Husks pour out first: reflections that found no face, hungry for one. Then the rift takes yours. It walks like you. It casts what you cast. In company it is worse: every hero in the party meets themselves, and the fight is a portrait gallery with knives. Seal the rift fast and the glass forgets; linger, and understand that the thing wearing your face has been watching you play this whole time.',
   cost: 120,
   unlock: {
     id: 'mirrorkin_unlock',

@@ -248,7 +248,7 @@ function hostName(lordId: string): string {
 export const UNDERWORLD_WAR: ContentPackage = {
   id: 'underworld_war',
   label: 'The War Below',
-  blurb: 'The Underworld is a country at war: rolled lords, living fronts, and a struggle no one can win — least of all you.',
+  blurb: 'The Underworld is a country at war: rolled lords, living fronts, and a struggle that crowns no victor, least of all you.',
   color: '#a83a4a',
   cost: 120,
   unlock: {

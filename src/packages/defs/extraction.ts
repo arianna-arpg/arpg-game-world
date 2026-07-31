@@ -134,7 +134,7 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
 export const EXTRACTION: ContentPackage = {
   id: 'extraction',
   label: 'Extraction',
-  blurb: 'Seams of the world\'s marrow well up in the wilds. Tap one, and hold the line while it pays out in essence — the longer the draw, the richer the vein.',
+  blurb: 'Seams of the world\'s marrow well up in the wilds. Tap one, and hold the line while it pays out in essence: the longer the draw, the richer the vein.',
   color: '#a5e3b4',
   cost: 70,
   // DISCOVERY: the Vault surfaces Extraction's config once you've TAPPED one
@@ -203,7 +203,7 @@ registerAttentionSource((world: World): AttentionPoint[] => {
       pos: e.pos,
       color: look.accent,
       glyph: e.def.trigger.glyph,
-      label: e.phase === 'open' ? `the ${look.title.toLowerCase()} — hold the line!` : undefined,
+      label: e.phase === 'open' ? `the ${look.title.toLowerCase()}: hold the line!` : undefined,
       z: e.phase === 'open' ? 8 : 4,
     });
   }
@@ -219,7 +219,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     const look = extractionLookFor(world.zone.biome);
     out.push({
       kind: 'event', icon: e.def.trigger.glyph, color: look.accent,
-      label: e.phase === 'open' ? `${look.title} — extraction underway` : `${look.title} wells up here`,
+      label: e.phase === 'open' ? `${look.title}: extraction underway` : `${look.title} wells up here`,
       z: 5,
     });
   }

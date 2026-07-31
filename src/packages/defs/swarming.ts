@@ -149,7 +149,7 @@ export const SWARMING: ContentPackage = {
   id: 'swarming',
   label: 'The Swarming',
   color: SEETHE_AMBER,
-  blurb: 'The Seethe never crowns — it CYCLES. Brood grounds in the deep sand grow hive throats you can watch climb on the map; stamp them early and the swarming shrinks or never rises. Left to build, the swarm takes wing: a fast hostile band that strips migrating herds it crosses, salts its wake with royal-jelly caches, and — unbroken — plants a new brood ground where it gorged. Cut down its winged alates mid-flight to break the wing. There is no queen. There is only the next cycle.',
+  blurb: 'The Seethe never crowns. It CYCLES. Brood grounds in the deep sand grow hive throats you can watch climb on the map; stamp them early and the swarming shrinks or never rises. Left to build, the swarm takes wing: a fast hostile band that strips migrating herds it crosses, salts its wake with royal-jelly caches, and, unbroken, plants a new brood ground where it gorged. Cut down its winged alates mid-flight to break the wing. There is no queen. There is only the next cycle.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once the player has met a brood ground or stood under the wing.

@@ -103,7 +103,7 @@ export const UNSEALING: ContentPackage = {
   id: 'unsealing',
   label: 'The Unsealing',
   color: SEPULCHER_GOLD,
-  blurb: 'Somewhere under the deep desert waits the Regent\'s tomb: a door sealed behind four talismans. Four canopic seal-bearers keep vaults of their own across the Sepulcher Sands — each one slain lights a talisman on that door, wherever it is. Find the tomb and the map remembers it; light all four and walk through. He is at full strength. So is his hoard.',
+  blurb: 'Somewhere under the deep desert waits the Regent\'s tomb: a door sealed behind four talismans. Four canopic seal-bearers keep vaults of their own across the Sepulcher Sands; each one slain lights a talisman on that door, wherever it is. Find the tomb and the map remembers it; light all four and walk through. He is at full strength. So is his hoard.',
   cost: 100,
   // DISCOVERY: the first descent surfaces the codex entry (the pit's
   // cellar_entered pattern — sepulcher_entered is the gateway ledger the

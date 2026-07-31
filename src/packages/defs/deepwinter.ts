@@ -80,7 +80,7 @@ export const DEEPWINTER: ContentPackage = {
   id: 'deepwinter',
   label: 'Deepwinter',
   color: FROST_COLOR,
-  blurb: 'Somewhere out past the cold rim of the charted world, a winter refuses to end. Its eye opens on ground no map has reached, and then it MARCHES — a contiguous white territory creeping across the world map like a war front, its border a living line you can watch push toward everything you know. Each land it swallows wakes blanketed, whited out, and garrisoned by the Winter Court. Clearing the ground does nothing; the frost holds until you push through the front to its glacial heart, where a King crowns himself on a frozen lake as the ice claims a body for him — and even felled, the winter does not vanish, but retreats the way it came, newest ground first, home to bury its crown.',
+  blurb: 'Somewhere out past the cold rim of the charted world, a winter refuses to end. Its eye opens on ground no map has reached, and then it MARCHES: a contiguous white territory creeping across the world map like a war front, its border a living line you can watch push toward everything you know. Each land it swallows wakes blanketed, whited out, and garrisoned by the Winter Court. Clearing the ground does nothing; the frost holds until you push through the front to its glacial heart, where a King crowns himself on a frozen lake as the ice claims a body for him. Even felled, the winter does not vanish, but retreats the way it came, newest ground first, home to bury its crown.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once the player has walked frost-held ground.

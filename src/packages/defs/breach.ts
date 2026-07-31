@@ -252,7 +252,7 @@ export const BREACH: ContentPackage = {
     { id: 'breach_invest', label: 'Breach Investigation', requirement: 'Seal 5 Breaches', cost: 120,
       test: (ctx) => (ctx.ledger.breaches_closed ?? 0) >= 5,
       grants: { weight: { min: 0, max: 80 } } },          // widen the frequency band
-    { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches — or fell a Vessel of the court', cost: 220,
+    { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches, or fell a Vessel of the court', cost: 220,
       // The deep seal-count — OR the court's pinnacle: felling a lord's vessel
       // (the collapse → door → domain chain) fast-tracks the exploration rung.
       // Its key lands here WITH its bump (the vessel kill handler above), the

@@ -73,7 +73,7 @@ registerStamp('wildgrass_blade', stampSingle('wildgrass_blade', [26, 40]));
 // is an empty standing skin; only the palette is chitin.
 registerDoodadRule('molt_husk', {
   overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.4,
-  brittle: { on: ['hit'], orbChance: 0.05, text: 'the old skin crumbles—', color: '#c8cf9a' },
+  brittle: { on: ['hit'], orbChance: 0.05, text: 'the old skin crumbles…', color: '#c8cf9a' },
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp', 'ice'],
 });
 registerStamp('molt_husk', stampSingle('molt_husk', [14, 20]));

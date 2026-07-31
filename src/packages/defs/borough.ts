@@ -177,7 +177,7 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
 export const BOROUGH: ContentPackage = {
   id: 'borough',
   label: 'Borough',
-  blurb: 'Settlements of friendly folk raise their hearths in the wilds — and the wilds object. Arm the villagers with your gear and essence, hold the line when the horde breaks, and every survivor becomes a soul in Lastlight.',
+  blurb: 'Settlements of friendly folk raise their hearths in the wilds, and the wilds object. Arm the villagers with your gear and essence, hold the line when the horde breaks, and every survivor becomes a soul in Lastlight.',
   color: ACCENT,
   cost: 90,
   // DISCOVERY: the Vault surfaces the Borough's config once you've SIGHTED one
@@ -263,7 +263,7 @@ registerAttentionSource((world: World): AttentionPoint[] => {
       pos: e.pos,
       color: ACCENT,
       glyph: e.def.trigger.glyph,
-      label: e.phase === 'open' ? 'the borough — defend the folk!' : undefined,
+      label: e.phase === 'open' ? 'the borough: defend the folk!' : undefined,
       z: e.phase === 'open' ? 8 : 4,
     });
   }

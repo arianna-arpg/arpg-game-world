@@ -98,7 +98,7 @@ export const WRAITHSAIL: ContentPackage = {
   id: 'wraithsail',
   label: 'The Wraithsail',
   color: '#7ad8d8',
-  blurb: 'One ship, and she is dead. The Wraithsail wanders the open sea — becalmed for days, then RUNNING when a storm takes her, because she rides the weather the way gulls ride a wake: the worst skies on the map arrive with a ghost sail in them. Cross her under sail and she will have you aboard: fight the Drowned Court across her weather deck, break into a hold paying drowned finery and old vestiges, and put the TIDEBOUND REGENT to rest in his great cabin — if you can time the tide he wears as armor. Or linger at an island harbor with her glass on you, and she may simply come alongside: the Court walks ashore, once, and takes the air until someone objects. Sink her master and the sea is quiet — for a while.',
+  blurb: 'One ship, and she is dead. The Wraithsail wanders the open sea, becalmed for days, then RUNNING when a storm takes her, because she rides the weather the way gulls ride a wake: the worst skies on the map arrive with a ghost sail in them. Cross her under sail and she will have you aboard: fight the Drowned Court across her weather deck, break into a hold paying drowned finery and old vestiges, and put the TIDEBOUND REGENT to rest in his great cabin, if you can time the tide he wears as armor. Or linger at an island harbor with her glass on you, and she may simply come alongside: the Court walks ashore, once, and takes the air until someone objects. Sink her master and the sea is quiet. For a while.',
   cost: 140,
   unlock: {
     id: 'wraithsail_unlock',

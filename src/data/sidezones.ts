@@ -246,7 +246,7 @@ registerSidezone({
   indoorsOnly: true, // the stair is dwelled from the hall, never through a wall
   ledgerOnEnter: 'manor_entered',
   mint: ({ parent, seed, id }) => ({
-    id, name: 'Gloam Manor — Upstairs',
+    id, name: 'Gloam Manor: Upstairs',
     level: Math.max(1, parent.level + 1),
     size: { w: 560, h: 430 },
     theme: { ...manorFace().theme },
@@ -268,7 +268,7 @@ registerSidezone({
   dwell: 0.7,
   indoorsOnly: true,
   mint: ({ parent, seed, id }) => ({
-    id, name: 'Gloam Manor — the Attic',
+    id, name: 'Gloam Manor: the Attic',
     level: Math.max(1, parent.level + 1),
     size: { w: 480, h: 400 },
     theme: { ...manorFace().theme },

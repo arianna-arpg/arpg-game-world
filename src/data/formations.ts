@@ -1033,7 +1033,7 @@ registerDoodadRule('stone_cistern', {
 registerDoodadRule('votive_basin', {
   overlap: 'solid', blocksMove: true, spacing: 26,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  brittle: { on: ['hit'], orbChance: 0.1, text: 'the basin cracks — what it held runs out!', color: '#8ad0c8' },
+  brittle: { on: ['hit'], orbChance: 0.1, text: 'the basin cracks: what it held runs out!', color: '#8ad0c8' },
 });
 registerDoodadRule('offering_urns', {
   overlap: 'solid', blocksMove: true, spacing: 24,
@@ -1236,7 +1236,7 @@ registerDoodadRule('lantern_totem', {
   overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
   // Struck totems gutter out the way lone lanterns do — the light is the loot.
-  brittle: { on: ['hit'], orbChance: 0.3, text: 'the totem gutters out—', color: '#ffb44a' },
+  brittle: { on: ['hit'], orbChance: 0.3, text: 'the totem gutters out…', color: '#ffb44a' },
 });
 registerDoodadRule('wicker_effigy', {
   overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 130, bodyScale: 0.4,
@@ -1304,7 +1304,7 @@ registerDoodadRule('still_effigy', {
 registerDoodadRule('slumped_shell', {
   overlap: 'solid', blocksMove: true, spacing: 40, bodyScale: 0.35,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
-  brittle: { on: ['hit'], text: 'the shell folds—', color: '#7a7290' },
+  brittle: { on: ['hit'], text: 'the shell folds…', color: '#7a7290' },
 });
 registerStamp('still_effigy', stampSingle('still_effigy', [20, 26]));
 registerStamp('slumped_shell', stampSingle('slumped_shell', [12, 15]));

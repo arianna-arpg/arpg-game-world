@@ -191,7 +191,7 @@ export const CRUSADE: ContentPackage = {
   id: 'crusade',
   label: 'Crusades',
   color: '#d8b040',
-  blurb: 'A faction kindles a holy war in the wilds — a living warfront that grows, clashes with rivals, and plants a throne — beat it back, or cut down its Leader in his arena.',
+  blurb: 'A faction kindles a holy war in the wilds: a living warfront that grows, clashes with rivals, and plants a throne. Beat it back, or cut down its Leader in his arena.',
   cost: 130,
   // DISCOVERED in play (runs at defaults from level 12); the Vault unlock gates
   // TUNING, surfacing once you've encountered a Crusade in the world.

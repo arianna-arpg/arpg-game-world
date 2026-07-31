@@ -27,7 +27,7 @@ export const HUNT: ContentPackage = {
   id: 'hunt',
   label: 'The Hunt',
   color: '#b58a52',
-  blurb: 'Footprints in the wilds lead to a great beast — bloody it and it flees across the zones, health and all, until you run it down for the kill.',
+  blurb: 'Footprints in the wilds lead to a great beast: bloody it and it flees across the zones, health and all, until you run it down for the kill.',
   cost: 110,
   // DISCOVERED in play (runs at defaults from level 8); the Vault unlock gates
   // TUNING, surfacing once you've tracked down a beast.

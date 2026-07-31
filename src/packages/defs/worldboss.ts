@@ -169,7 +169,7 @@ const PRIMEVAL_FACTION: FactionSpec = {
 export const WORLDBOSS: ContentPackage = {
   id: 'worldboss',
   label: 'World Bosses',
-  blurb: 'The Primeval — rare, named forces of nature that belong to no faction and no war. A world-serpent slithers across the map and strangles the roads it crosses until its head is struck off; heralded colossi breach on a countdown and depart unbeaten; an enthroned horror waits in a lair minted onto the world, fused to the throne it erupts from. Watch the map: the world will warn you, once.',
+  blurb: 'The Primeval: rare, named forces of nature that belong to no faction and no war. A world-serpent slithers across the map and strangles the roads it crosses until its head is struck off; heralded colossi breach on a countdown and depart unbeaten; an enthroned horror waits in a lair minted onto the world, fused to the throne it erupts from. Watch the map: the world will warn you, once.',
   color: '#c8a03c',
   cost: 150,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,

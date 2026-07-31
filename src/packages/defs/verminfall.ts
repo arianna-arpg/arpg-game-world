@@ -141,7 +141,7 @@ export const VERMINFALL: ContentPackage = {
   id: 'verminfall',
   label: 'The Verminfall',
   color: VERMIN_COLOR,
-  blurb: 'Everything the town grows, something smaller wants. Warrens claim the farmland — never the far wilds, always the crofts and granaries that feed the town — and stand there festering: nests seething with rats, verminkin skulking the hedgerows, and under it all a King. Leave it be and nothing is taken from you, exactly; the rats simply MULTIPLY, in the gutters, under the benches, down in the cellar, until the town feels like it belongs to them. Break every nest and the warren answers — the Rat King rises over the splinters, and only his fall clears the ground. The wolves, at least, approve of all this: more rats than the shires have ever carried, and every one of them catchable.',
+  blurb: 'Everything the town grows, something smaller wants. Warrens claim the farmland (never the far wilds, always the crofts and granaries that feed the town) and stand there festering: nests seething with rats, verminkin skulking the hedgerows, and under it all a King. Leave it be and nothing is taken from you, exactly; the rats simply MULTIPLY, in the gutters, under the benches, down in the cellar, until the town feels like it belongs to them. Break every nest and the warren answers: the Rat King rises over the splinters, and only his fall clears the ground. The wolves, at least, approve of all this: more rats than the shires have ever carried, and every one of them catchable.',
   cost: 110,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once the player has walked into a claimed zone.

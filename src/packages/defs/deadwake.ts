@@ -128,7 +128,7 @@ export const DEADWAKE: ContentPackage = {
   id: 'deadwake',
   label: 'Deadwake',
   color: '#7a5aa6',
-  blurb: 'Slaughter feeds a hidden tide of the dead. When it crests, a Deadwake breaks loose — a tight, travelling mass of undead that rolls zone to zone, consuming the events it collides with and pouring a relentless, swelling stream into any ground you are caught on, routed only by cutting down its host-leader. Let two tides collide and they fuse into a travelling NECROPOLIS that spawns its own — chase it down and purge it to break the cycle.',
+  blurb: 'Slaughter feeds a hidden tide of the dead. When it crests, a Deadwake breaks loose: a tight, travelling mass of undead that rolls zone to zone, consuming the events it collides with and pouring a relentless, swelling stream into any ground you are caught on, routed only by cutting down its host-leader. Let two tides collide and they fuse into a travelling NECROPOLIS that spawns its own. Chase it down and purge it to break the cycle.',
   cost: 130,
   // DISCOVERED in play (runs at defaults from level 14); the Vault unlock gates
   // TUNING, surfacing once a Deadwake has caught the player in the world.

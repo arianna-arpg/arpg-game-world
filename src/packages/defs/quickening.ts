@@ -82,7 +82,7 @@ export const QUICKENING: ContentPackage = {
   id: 'quickening',
   label: 'The Quickening',
   color: SURGE_GILT,
-  blurb: 'The world is a corpse being waked — but a corpse remembers. Now and then a surge of what it used to be finds an old limb: some zone you walked, stripped, and outgrew runs QUICK again. For one window on the world\'s own clock the ground leaps to your measure and past it, everything on it stands up new and gilt-marked, trouble comes looking for trouble, and the dirt itself pays better. Then the window closes, wherever you are, and the country lies back down exactly as you left it. The map will tell you where. The clock will not wait for you.',
+  blurb: 'The world is a corpse being waked, but a corpse remembers. Now and then a surge of what it used to be finds an old limb: some zone you walked, stripped, and outgrew runs QUICK again. For one window on the world\'s own clock the ground leaps to your measure and past it, everything on it stands up new and gilt-marked, trouble comes looking for trouble, and the dirt itself pays better. Then the window closes, wherever you are, and the country lies back down exactly as you left it. The map will tell you where. The clock will not wait for you.',
   cost: 130,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once the player has stood on quickened ground.
