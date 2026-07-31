@@ -544,7 +544,10 @@ const DT = 1 / 60;
 // crossing IS the gorge (voidRegion) — so stepping into it rides the zone's
 // own pitfall word: 'descend', one stratum into the galleries, credit
 // intact. The shortcut turning one-way at dusk is the AUTHORED reading (the
-// tileset comment carries the decision); this rig pins the live door.
+// tileset comment carries the decision); this rig pins BOTH live doors —
+// the walk-in (boundary arrest) and the linger (beginSkyfall's pit-word
+// override: a body that stood dead-still through fade + grace descends the
+// same stratum, never the aetherial sky door's neighbor-zone teleport).
 {
   const dial = (TILESETS.overpass.layoutParams?.karstSpanKinds as string[] | undefined) ?? [];
   const row = (TILESETS.overpass.theme.spans ?? []).find(r => r.region === 'span_sun');
@@ -659,6 +662,49 @@ const DT = 1 / 60;
       check('sunbridge: one stratum down, way home banked at the rim',
         (world.zone.caveDepth ?? 0) === 1 && wa.caveReturn?.zoneId === parentId,
         `caveDepth ${world.zone.caveDepth}, return ${wa.caveReturn?.zoneId ?? 'none'}`);
+
+      // THE LINGER DOOR (the seam batch-13 deferred, now closed): a body
+      // standing DEAD-STILL through fade + grace — never a step, so the
+      // boundary arrest never fires — must ride the SAME descend through
+      // beginSkyfall's pit-word override, never the aetherial sky door's
+      // neighbor-zone teleport.
+      const movementCaveId = world.zone.id;
+      world.time = NOON;
+      const back = world.devTravelTo(parentId);
+      world.time = NOON;
+      check('linger door: back on the overpass, the day re-forms the deck', back);
+      if (back) {
+        const gw2 = world.walk as GridWalkField;
+        world.update(DT);
+        // The most interior deck cell — when the deck goes, the grasp disc
+        // must find nothing under this body.
+        let park = spanCells[0], bestN = -1;
+        for (const c of spanCells) {
+          let n = 0;
+          for (const [dx, dy] of [[gw2.cell, 0], [-gw2.cell, 0], [0, gw2.cell], [0, -gw2.cell]] as const) {
+            if (spanCells.some(s => Math.abs(s.x - (c.x + dx)) < 1 && Math.abs(s.y - (c.y + dy)) < 1)) n++;
+          }
+          if (n > bestN) { bestN = n; park = c; }
+        }
+        check('linger door: noon re-holds the deck (the park cell is bridge again)',
+          gw2.isWalkable(park.x, park.y) && gw2.regionAt(park.x, park.y) === 'span_sun');
+        world.time = MIDNIGHT;
+        for (let i = 0; i < 600 && !world.traversal; i++) {
+          p.life = p.maxLife();
+          p.pos.x = park.x; p.pos.y = park.y; // nailed to the deck: linger, never step
+          world.update(DT);
+          world.time = MIDNIGHT;
+        }
+        const lingered = !!world.traversal;
+        for (let i = 0; i < 900 && world.traversal; i++) world.update(DT);
+        check('linger door: the deck giving way underfoot DESCENDS (no sky teleport)',
+          lingered && world.zone.id.startsWith(`cave_${parentId}_pit_`),
+          `landed '${world.zone.id}'`);
+        check("linger door: the ONE hollow (identity 'zone') — both doors open the same dark",
+          world.zone.id === movementCaveId && (world.zone.caveDepth ?? 0) === 1
+          && wa.caveReturn?.zoneId === parentId,
+          `movement '${movementCaveId}' vs linger '${world.zone.id}'`);
+      }
     }
   }
 }

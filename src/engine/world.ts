@@ -40833,7 +40833,10 @@ export class World {
    *  resolves the nearest charted SURFACE zone under the realm and lets you
    *  go over open ground there. `fall.kind: 'eject'` remains the data option
    *  for ground that should scramble instead of drop (a future crumbling
-   *  bridge over a river, not over a world). */
+   *  bridge over a river, not over a world). Where no fabric authored a fall
+   *  spec and the zone's pit word is 'descend' (theme.pitfall / the cave
+   *  default), THE PIT-WORD OVERRIDE below wins before any sky resolution —
+   *  a span dying over a gorge is the gorge's business, not the sky's. */
   private beginSkyfall(): void {
     if (this.traversal) return;
     const shelf = this.zone;
@@ -40848,6 +40851,34 @@ export class World {
       this.teleportActor(this.player, vec(s.x, s.y), '#cfe0ff');
       hurt();
       this.text(vec(this.player.pos.x, this.player.pos.y - 32), 'you scramble back onto standing ground!', '#cfe0ff', 14);
+      return;
+    }
+    // THE PIT-WORD OVERRIDE (the brittle-span precedent — pitPolicyFor's own
+    // law: the boundary arrest and a fabric's give-way must hear the same
+    // word): when NO vertical fabric authored a fall spec and the zone's
+    // word for pit-family falls resolves 'descend' (theme.pitfall — the
+    // overpass gorge under a dusk-closed sunbridge — or the cave default),
+    // ground voiding underfoot drops the lingerer ONE STRATUM through the
+    // same door walking off the rim reads, never the neighbor-zone sky
+    // resolution. Aetherial shelves keep their sky door by construction:
+    // they carry no theme.pitfall and sit at caveDepth 0, so the word stays
+    // 'fall' and this branch never fires there.
+    if (!fall && this.pitPolicyFor({ kind: 'fall', to: 'edge' }).kind === 'descend') {
+      // The rim the descent banks (caveReturn — the climb-out surfaces the
+      // party there) must be STANDABLE: a lingerer's own feet are mid-void
+      // by definition, so the nearest lip stands in for where they fell.
+      const lip = this.walk?.snapToWalkable(this.player.pos) ?? this.zoneEntry;
+      if ((this.zone.pitChain ?? 0) >= PIT_CFG.dropCave.maxChain) {
+        // THE LADDER RUNS OUT (routePitFall's floor): no new rung — and with
+        // no lip holding the body, the classic edge-bite becomes the
+        // scramble plus the same toll.
+        this.teleportActor(this.player, vec(lip.x, lip.y), '#9a8ab8');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 34), 'the crack narrows — nothing below but stone', '#9a8ab8', 12);
+        this.applyEnvDamage(this.player, PIT_CFG.fallDamage);
+        return;
+      }
+      this.player.pos = vec(lip.x, lip.y);
+      this.beginPitDescent({});
       return;
     }
     // Resolve where the world catches you: the anchored zone below (launch

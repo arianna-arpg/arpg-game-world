@@ -8119,13 +8119,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       // purpose: the galleries always keep their climb-out, so the toll is
       // a detour, never a soft-lock. The fade runs longer than the default
       // (4.5s vs 3.2) because this is windchill country — a chilled crosser
-      // must still clear the far mouth after the warning. KNOWN SEAM,
-      // deferred: a body standing DEAD-STILL through fade + grace rides the
-      // span fabric's generic sky door (routeSkyFalls → beginSkyfall),
-      // which on surface ground resolves a neighbor zone — the brittle-span
-      // precedent (the give-way routes through pitPolicyFor) says that
-      // linger door should descend too; the fix is a world.ts seam, filed
-      // separately.
+      // must still clear the far mouth after the warning. BOTH DOORS hear
+      // the same word: stepping into the closed deck rides the boundary
+      // arrest, and a body that stood DEAD-STILL through fade + grace rides
+      // beginSkyfall's PIT-WORD OVERRIDE (world.ts — the brittle-span
+      // precedent, closed 2026-07-31) — either way one stratum down, never
+      // a neighbor-zone sky teleport. probe_mountain §11 pins both doors.
       spans: [
         { region: 'span_sun', when: { radiance: { from: 0.55 } }, voidRegion: 'gorge', fade: 4.5 },
       ],
