@@ -31839,7 +31839,7 @@ export class World {
     c.fillResources();
 
     // BREAKABLE OBJECTS + DEATH BURSTS: the delivery's own specs, or the
-    // Load-Bearing Flaw graft where the delivery brings none — any totem
+    // Structural Flaw graft where the delivery brings none — any totem
     // skill becomes the conjured-ordnance game, one socket deep.
     {
       const flaw = socketSpec(sourceInst, 'breakableGraft');
