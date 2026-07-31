@@ -838,7 +838,8 @@ export interface PourSpec {
   /** Keep one full-size disc under the lattice at the pour's heart, so
    *  body-aware depth (groundAt penetration past LIQUID_CFG.deepInset)
    *  survives the pour — the pond keeps its deep middle (default false;
-   *  meaningful for water, whose region distinguishes wade/swim). */
+   *  meaningful for any liquid row whose region distinguishes wade/swim —
+   *  standStatusDeep: water's own lane and THE DEPTH LEDGER's alike). */
   depthCore?: boolean;
   /** Fuse reach in grid cells: same-kind bodies within ~2×this many cells
    *  of each other merge at the zone-level close pass (fuseGroundBodies);

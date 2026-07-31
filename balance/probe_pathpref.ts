@@ -415,18 +415,28 @@ function pitRig(monsterId: string, descend = false):
     }
   }
   const base = w.doodads.length;
+  // The grounds list is World-private plumbing (the terrain sweep's early-out
+  // gate + nav pricing read it) — the rig seats terrain the way loadZone and
+  // addTempGround do, so it reaches the list structurally.
+  const wGrounds = (w as unknown as { grounds: Doodad[] }).grounds;
+  const gbase = wGrounds.length;
   const stamp = (kind: string, o: { at?: Vec2; r?: number; wild?: boolean; tier?: number; shallow?: boolean } = {}): void => {
     const at = o.at ?? spot;
-    w.doodads.push({ pos: vec(at.x, at.y), radius: o.r ?? 60, kind,
+    const d: Doodad = { pos: vec(at.x, at.y), radius: o.r ?? 60, kind,
       ...(o.wild ? { wild: true } : {}), ...(o.shallow ? { shallow: true } : {}),
-      ...(o.tier !== undefined ? { tier: o.tier } : {}) });
+      ...(o.tier !== undefined ? { tier: o.tier } : {}) };
+    w.doodads.push(d);
+    // The SAME object joins the grounds list, exactly as addTempGround/loadZone
+    // seat real terrain — the terrain-effects sweep early-outs on an empty
+    // grounds list, so a doodads-only stamp would label right but never BITE.
+    wGrounds.push(d);
     // Raw pushes bypass the mutation chokepoints — bump the doodad rev or the
     // spatial index serves the PREVIOUS stamp set at equal list length (the
     // stale-shared-index trap; groundAt reads through doodadsAt).
     w.markDoodadsChanged();
   };
   const report = (at = spot, tier = 0): string | null => w.groundAt(at, tier)?.kind ?? null;
-  const clear = (): void => { w.doodads.length = base; w.markDoodadsChanged(); };
+  const clear = (): void => { w.doodads.length = base; wGrounds.length = gbase; w.markDoodadsChanged(); };
 
   // Rig guards: the spot is bare, senses a stamped disc, and carries no bridge.
   check('causeway rig: a clean spot', report() === null);
@@ -511,6 +521,99 @@ function pitRig(monsterId: string, descend = false):
   // water here; the severity law moves exactly this and the soft-mute bug).
   stamp('water'); stamp('lava');
   check('wet seat: the melt outranks the puddle (steam, not refuge)', report() === 'lava');
+  clear();
+
+  // THE LITTORAL RANKING (2026-07-31 — the causeway pass's reserved authoring
+  // room, spent): both pool kinds resolve through the registry band (the
+  // water accumulator senses only kind 'water'), so severity is their WHOLE
+  // precedence. brine_sink takes the mire band (30 — its sting is the bog's
+  // row, figure for figure) and tide_pool the wet seat (20 — the water row's
+  // own number, tie to the water).
+  stamp('brine_sink'); stamp('mud');
+  check('littoral: brine under a mud splash reports brine (the wound\'s ground speaks)',
+    report() === 'brine_sink');
+  clear();
+  stamp('sand'); stamp('brine_sink');
+  check('littoral: …and over sand, stamped in either order', report() === 'brine_sink');
+  clear();
+  stamp('water'); stamp('brine_sink');
+  check('littoral: the sink speaks over standing water at the tidal seam (soup, not refuge)',
+    report() === 'brine_sink');
+  clear();
+  stamp('brine_sink'); stamp('lava');
+  check('littoral: the lethal class still outranks the brine', report() === 'lava');
+  clear();
+  stamp('tide_pool'); stamp('mud');
+  check('littoral: a mud disc lapping a tide pool reads the pool (you are wading)',
+    report() === 'tide_pool');
+  clear();
+  stamp('water'); stamp('tide_pool');
+  check('littoral: true water wins the wet-seat tie (ties go to the water, unchanged)',
+    report() === 'water');
+  clear();
+  stamp('tide_pool'); stamp('bog');
+  check('littoral: the mire class speaks over the pool', report() === 'bog');
+  clear();
+
+  // THE DEPTH LEDGER (the depth law generalized off the water literal): a
+  // NATURAL row declaring standStatusDeep resolves body-aware depth exactly
+  // as the water lane does, read only when that kind WINS the report — the
+  // fused sink's promised "true deep heart" finally speaks its own swim.
+  stamp('brine_sink', { r: 60 });
+  const bCore = w.groundAt(spot), bShore = w.groundAt(vec(spot.x + 55, spot.y));
+  check('depth ledger: the brine core swims (deep past the inset)',
+    bCore?.kind === 'brine_sink' && bCore.deep === true);
+  check('depth ledger: the brine shore ring wades',
+    bShore?.kind === 'brine_sink' && bShore.deep === false);
+  clear();
+  stamp('brine_sink', { shallow: true });
+  check('depth ledger: a shallow sink disc fords the depth', w.groundAt(spot)?.deep === false);
+  clear();
+  // The welded-body law, pinned through the ACCUMULATE branch: at the probe
+  // point the leadership disc alone is too shallow (pen 20 < the 22 inset) —
+  // only the second disc's ledger feed makes the seam deep.
+  stamp('brine_sink', { r: 60 });
+  stamp('brine_sink', { at: vec(spot.x + 50, spot.y), r: 60 });
+  const weld = w.groundAt(vec(spot.x + 40, spot.y));
+  check('depth ledger: welded sinks read one deep body (the seam is as deep as both say)',
+    weld?.kind === 'brine_sink' && weld.deep === true);
+  clear();
+  stamp('water'); stamp('brine_sink');
+  const seam = w.groundAt(spot);
+  check('depth ledger: the winning sink carries ITS OWN depth over the tidal seam',
+    seam?.kind === 'brine_sink' && seam.deep === true);
+  clear();
+  stamp('tide_pool');
+  check('depth ledger: the pool never swims (no deep row — a wadeable jewel)',
+    w.groundAt(spot)?.deep === false);
+  clear();
+  // THE BITE, verified through the report (the label pins prove the fold;
+  // these prove the fold DRIVES the effects): a body in the brine under a
+  // mud splash takes the burn and wades — never mired — and a scorched body
+  // in a mud-lapped pool is doused at the muddy fringe (the healed refuge:
+  // under the old texture grade the mud spoke here and no douse ever ran).
+  const pStatus = (id: string): boolean => w.player.statuses.some(s => s.id === id);
+  stamp('mud'); stamp('brine_sink');
+  // Stand at WADING depth (pen 15 < the 22 inset) — the deep-core swim is
+  // the depth ledger's own bite below; this one teaches the splash law.
+  w.player.pos = vec(spot.x + 45, spot.y);
+  step(w, 0.3);
+  check('littoral bite: the brine burns under the mud splash', pStatus('brine_burn'));
+  check('littoral bite: …wading, never mired', pStatus('wading') && !pStatus('mired'));
+  clear();
+  stamp('mud'); stamp('tide_pool');
+  w.player.applyStatus('sunscorched', 0, 30, 'probe');
+  step(w, 1.0);
+  check('littoral bite: the mud-lapped pool wades and douses the scorch',
+    pStatus('wading') && !pStatus('mired') && !pStatus('sunscorched'));
+  clear();
+  // The 1.2s step outlives the prior rig's stale wading (duration 1, never
+  // refreshed here), so the absence half of the check reads clean.
+  stamp('brine_sink', { r: 60 });
+  w.player.pos = vec(spot.x, spot.y); // the deep heart (pen 60 > the inset)
+  step(w, 1.2);
+  check('littoral bite: the deep heart SWIMS (the burn\'s pool is a true swim)',
+    pStatus('swimming') && !pStatus('wading'));
   clear();
 
   // THE VALIDATE NET — harm never rides pavement, unrepresentable: the row

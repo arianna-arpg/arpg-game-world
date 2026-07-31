@@ -254,8 +254,9 @@ export interface RegionKind {
    *    10 deposits — mud/sand (the overruns pair);
    *    20 the wet seat — the `water` row's own number, read by groundAt's
    *      water return: a resolved ground winner outranks standing water
-   *      only STRICTLY above this;
-   *    30 the mire class — bog/swamp/ice/tentacle_field;
+   *      only STRICTLY above this (tide_pool sits here too — a pool ties
+   *      the water, and the tie goes to the water);
+   *    30 the mire class — bog/swamp/ice/tentacle_field/brine_sink;
    *    40 the lethal class — lava, chyme.
    *  Ties keep the FIRST-sensed disc (stability — document, don't reorder). */
   severity?: number;
@@ -565,19 +566,38 @@ registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', sta
   // dot without the combat-poison screen vignette — crossing a bog line
   // must sting, never read as the renderer breaking (see status.ts).
   enterStatus: { id: 'bog_rot', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
-// The littoral country's wet kit. The TIDE POOL is a wadeable jewel (mirror-
-// bright, harmless); the BRINE SINK is the exposed seabed's caustic heart —
-// a salt-burn on entry (the bog's level-scaled idiom, poison = the caustic
-// lane), a true swim where fused sinks pool deep, and the Coilborn wade
-// both without noticing (MonsterDef.immuneGround).
+// The littoral country's wet kit, RANKED 2026-07-31 (the causeway pass left
+// both rows at texture grade for parity — mud outranked them, as it always
+// had — and reserved the ranking as a considered change; this is that
+// change). Both kinds resolve through the registry band — groundAt's water
+// accumulator senses only kind 'water' — so the severity number is their
+// WHOLE precedence, not a double count.
+// The TIDE POOL is a wadeable jewel (mirror-bright, harmless) at THE WET
+// SEAT (20, the water row's own number): a mud disc lapping a pool reads
+// the pool — you are wading, and the douse works at the muddy fringe —
+// while true standing water wins the tie (the wet seat's strict compare)
+// and the mire class speaks over the pool as it does over the water.
 registerRegion({ id: 'tide_pool', walkable: true, blocks: false, label: 'the tide pool',
-  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 1.4,
+  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true, pathCost: 1.4, severity: 20,
   douses: { statuses: ['sunscorched', 'heatstroke'], text: 'the water quenches…' } });
+// The BRINE SINK is the exposed seabed's caustic heart — a salt-burn on
+// entry (the bog's level-scaled idiom, poison = the caustic lane) — at THE
+// MIRE BAND (30, the bog's own seat, placed by measurement: its sting IS
+// the bog's row, figure for figure). The wound's ground speaks: a mud/sand
+// splash over the pan reads BRINE and the burn fires at the drawn brine
+// rim, and the sink speaks over standing water at the tidal seam — caustic
+// soup, not refuge, so the no-mercy commitment extends to the overlap.
+// (And the sink's own deep finally SPEAKS: THE DEPTH LEDGER — groundAt's
+// depth law generalized off the water literal, same day — resolves
+// body-aware depth for any natural row declaring standStatusDeep, so
+// fused sinks swim at their true deep hearts, burning all the way; the
+// depthCore pour serves its purpose at last.) The Coilborn wade both
+// without noticing (MonsterDef.immuneGround).
 // (NO douse row here, deliberately: the brine is hot caustic soup, not
 // refuge — and the saltflat's design commitment is a pan with no mercy.
 // The probe pins this absence; add one only as a considered design change.)
 registerRegion({ id: 'brine_sink', walkable: true, blocks: false, label: 'the brine',
-  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 2.6,
+  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 2.6, severity: 30,
   // brine_burn, NOT combat 'poison' — same caustic dot, no combat-poison
   // screen vignette: the Coast playtest's "shaders break past a line" was
   // this exact borrow snapping the wash at every sink shoreline.

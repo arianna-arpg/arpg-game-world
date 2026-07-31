@@ -49878,6 +49878,18 @@ export class World {
     let built: string | null = null;   // first-sensed covering BUILT disc
     let nat: RegionKind | null = null; // worst-severity covering GROUND disc
     let natSev = -Infinity;
+    // THE DEPTH LEDGER (2026-07-31 — the depth law, generalized off the kind
+    // literal): any NATURAL row declaring standStatusDeep resolves body-aware
+    // depth exactly as the water lane does — ford/pen accumulated across the
+    // band LEADER's own discs (a welded body of sinks is ONE pool: the seam
+    // between two discs is as deep as both say it is) — and the report
+    // carries it only when that kind WINS. Scalars, not a map, losslessly: a
+    // kind takes the ledger with the leadership (its own first disc is what
+    // promoted it), same-kind discs feed it from either side of the take,
+    // and a dethroned kind can never win the report anyway. Water keeps its
+    // own accumulator lane, byte-for-byte.
+    let deepKind: string | null = null;
+    let deepFord = false, deepPen = 0;
     for (const d of this.doodadsAt(p.x, p.y)) {
       if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
       const dd = dist(p, d.pos);
@@ -49894,7 +49906,17 @@ export class World {
         if (!built) built = d.kind;
       } else {
         const sev = (rk.laid ?? 'ground') === 'built' ? 0 : rk.severity ?? 0;
-        if (sev > natSev) { natSev = sev; nat = rk; }
+        if (sev > natSev) {
+          natSev = sev; nat = rk;
+          if (rk.standStatusDeep) {
+            deepKind = d.kind;
+            deepFord = !!d.shallow;
+            deepPen = d.shallow ? 0 : d.radius - dd;
+          } else deepKind = null;
+        } else if (deepKind !== null && d.kind === deepKind) {
+          if (d.shallow) deepFord = true;
+          else deepPen = Math.max(deepPen, d.radius - dd);
+        }
       }
     }
     // The standing winner: nature beats construction only through its own
@@ -49911,7 +49933,13 @@ export class World {
     if (inWater && !(winner && winner.sev > (regionKind('water')?.severity ?? 0))) {
       return { kind: 'water', deep: !ford && pen > LIQUID_CFG.deepInset };
     }
-    return winner ? { kind: winner.kind, deep: false } : null;
+    // A winning non-water liquid reads THE DEPTH LEDGER: deep toward its own
+    // core unless a shallow disc fords it — the fused sink's promised "true
+    // deep heart" finally speaks (swimming in the water that burns is on
+    // you). Every other winner reads flat, as it always did.
+    return winner
+      ? { kind: winner.kind, deep: winner.kind === deepKind && !deepFord && deepPen > LIQUID_CFG.deepInset }
+      : null;
   }
 
   /** CLIENT terrain rebuild: `bridges`/`grounds` aren't shipped as their own arrays,
