@@ -36968,6 +36968,12 @@ export class World {
           const owner = bearer.owner ?? bearer; // pylons credit their deployer
           const minion = this.createMonster(spawn.monsterId, owner.level, owner.team, owner);
           minion.sourceSkillId = skillId;
+          // BORROWED UNLIFE: the risen binds to the mint's resolved keeper
+          // (the deployer the credit already names), so a nested bearer's
+          // dead rise and fall with the mind that holds it — the proc
+          // minter's law, aura form. Seat and enemy/wild keepers stamp
+          // undefined by conjurationLifeline's own gate.
+          minion.lifelineId = this.conjurationLifeline(owner);
           if (spawn.duration) minion.lifespan = spawn.duration;
           minion.pos = this.clampPos(vec(actor.pos.x, actor.pos.y), minion.radius);
           this.actors.push(minion);
@@ -38898,6 +38904,12 @@ export class World {
           && m.sourceSkillId === key).length >= s.brood.max) continue;
         const hatch = this.createMonster(s.brood.monsterId, owner.level, owner.team, owner);
         hatch.sourceSkillId = key;
+        // BORROWED UNLIFE: the hatch binds to its APPLIER — casterId names
+        // the keeper directly (no owner hop: the per-applier cap's own
+        // grain), so a crew minion's broodlings unmake when it falls (the
+        // actor-doc's raised-broodmother promise, status form). Seat and
+        // enemy appliers stamp undefined by conjurationLifeline's own gate.
+        hatch.lifelineId = this.conjurationLifeline(owner);
         hatch.lifespan = s.brood.duration;
         hatch.pos = this.clampPos(
           vec(a.pos.x + rand(-24, 24), a.pos.y + rand(-24, 24)), hatch.radius);

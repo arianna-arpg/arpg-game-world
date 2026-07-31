@@ -41,7 +41,7 @@ import {
   instanceUseCharges, makeSkillInstance,
   minionSeatBoundFields, skillContextTags, supportFitsInst,
   supportFitsInstOrCrew, supportGlobalMods, supportRidesMinions, hostSockets,
-  type SkillInstance,
+  type AuraDelivery, type SkillInstance,
 } from '../src/engine/skills';
 import { CORPSE_CFG } from '../src/engine/world';
 import { setSimTap } from '../src/engine/tap';
@@ -1466,6 +1466,243 @@ withSeededRandom(H_SEED, () => {
   const sbServed = crewSkillsServed(septic, sbInst, sbCrew);
   check('R12 an apply_bleed rider re-opens the crew door (self-lift — and bonusChance makes the wound real)',
     Array.isArray(sbServed) && sbServed.some(d => d.id === 'talon_rake'));
+}
+
+// === RIG S — THE PROC LIFELINE (2026-07-31) ================================
+// The lifeline law reaches the proc minter: a '__proc:*' conscript binds to
+// its RESOLVED keeper — the `caster.owner ?? caster` the court-credit laws
+// already ride — so borrowed unlife can no longer outlive the lender through
+// the proc door, while seat and enemy/wild keepers stamp undefined by
+// conjurationLifeline's own law (first-hand play byte-identical).
+//   S1 THE NESTED CHAIN: a second-hand court body's OWN blows (wraith_piper's
+//      innate Phantasm) conscript bodies owned by its NON-SEAT keeper — the
+//      conscript wears that keeper's lifeline, and the keeper's death UNMAKES
+//      it on the minion-meta beat (the cascade the sweep doc promises,
+//      generation by generation, no loose link).
+//   S2 THE SEAT CONTROL: the seat's court conscripts FOR the seat — no
+//      lifeline (seats conjure freely), and the striking minion's own death
+//      leaves the seat's conscript standing.
+//   S3 THE WILD CONTROL: an enemy piper's conscripts wear no lifeline — its
+//      phantasms serve out their tune when the piper falls (enemy risen
+//      outlive the caller).
+
+{
+  const piperDef = MONSTERS.wraith_piper;
+  const boltId = piperDef?.skills[0];
+  check('S0 the tutor stands: wraith_piper wears the innate Phantasm grant and its kit opens with a flight',
+    !!piperDef && (piperDef.mods ?? []).some(m => m.stat === 'proc_summon_phantasm')
+    && !!boltId && SKILLS[boltId]?.delivery.type === 'projectile',
+    `kit ${piperDef?.skills.join('/')}`);
+
+  /** Stand a tank the bolt cannot miss, press the piper's OWN flight until
+   *  the innate Phantasm conscripts (ppm 10 → 0.95 on the rested clock, 0.2
+   *  per 1.2s press after — every roll seeded-deterministic), and hand the
+   *  conscript back the frame it rises. */
+  const pressForConscript = (w: ReturnType<typeof makeSimWorld>, piper: Actor,
+    victimTeam: 'player' | 'enemy'): { body: Actor | undefined; presses: number } => {
+    const tank = w.createMonster('zombie', 8, victimTeam);
+    tank.pos = vec(piper.pos.x + 140, piper.pos.y);
+    tank.sheet.setSource('probe', [mod('life', 'more', 400), mod('evasion', 'flat', -1e6)]);
+    tank.life = tank.maxLife();
+    w.actors.push(tank);
+    const bolt = piper.skills.find(s => s?.def.id === boltId);
+    let body: Actor | undefined;
+    let presses = 0;
+    while (bolt && presses < 24 && !body) {
+      presses++;
+      w.useSkill(piper, bolt, vec(tank.pos.x, tank.pos.y));
+      for (let i = 0; i < 72 && !body; i++) {
+        w.update(1 / 60);
+        body = w.actors.find(a => !a.dead && a.sourceSkillId === '__proc:summon_phantasm');
+      }
+    }
+    return { body, presses };
+  };
+
+  // S1 — the nested chain: seat → shaman (owned minion) → piper (owned by
+  // the shaman, lifelined exactly as mintSummon stamps its risen) → conscript.
+  {
+    const w = makeSimWorld('summoner', 0x51fe);
+    const p = w.player;
+    const shaman = w.createMonster('zombie', 8, 'player', p);
+    shaman.pos = vec(p.pos.x - 80, p.pos.y - 80);
+    w.actors.push(shaman);
+    const piper = w.createMonster('wraith_piper', 8, 'player', shaman);
+    piper.lifelineId = w.conjurationLifeline(shaman);
+    piper.pos = vec(p.pos.x + 40, p.pos.y - 160);
+    w.actors.push(piper);
+    const { body, presses } = pressForConscript(w, piper, 'enemy');
+    check('S1a the piper\'s blow conscripts a body OWNED by its non-seat keeper (the credit chain, mint form)',
+      !!body && body.owner === shaman, `presses=${presses}`);
+    check('S1b the conscript wears the keeper\'s LIFELINE (the proc minter stamps the law)',
+      !!body && body.lifelineId === shaman.id,
+      `lifeline=${body?.lifelineId} want ${shaman.id}`);
+    w.kill(shaman);
+    for (let i = 0; i < 36; i++) w.update(1 / 60);
+    check('S1c the keeper\'s death UNMAKES the conscript on the meta beat — borrowed unlife dies with the lender',
+      !!body && body.dead);
+  }
+
+  // S2 — the seat control: a first-hand court piper conscripts FOR the seat.
+  {
+    const w = makeSimWorld('summoner', 0x52fe);
+    const p = w.player;
+    const piper = w.createMonster('wraith_piper', 8, 'player', p);
+    piper.lifelineId = w.conjurationLifeline(p); // undefined — seats conjure freely
+    piper.pos = vec(p.pos.x + 40, p.pos.y - 160);
+    w.actors.push(piper);
+    const { body, presses } = pressForConscript(w, piper, 'enemy');
+    check('S2a the seat\'s court conscripts for the SEAT, wearing NO lifeline (first-hand play untouched)',
+      !!body && body.owner === p && body.lifelineId === undefined, `presses=${presses}`);
+    w.kill(piper);
+    for (let i = 0; i < 36; i++) w.update(1 / 60);
+    check('S2b the striking minion\'s death leaves the seat\'s conscript STANDING (it was never the keeper)',
+      !!body && !body.dead);
+  }
+
+  // S3 — the wild control: enemy conjurers never stamp.
+  {
+    const w = makeSimWorld('summoner', 0x53fe);
+    const piper = w.createMonster('wraith_piper', 8, 'enemy');
+    piper.pos = vec(w.player.pos.x + 320, w.player.pos.y);
+    w.actors.push(piper);
+    const { body, presses } = pressForConscript(w, piper, 'player');
+    check('S3a the wild piper\'s conscript is its own (no lifeline — enemy conjurers never stamp)',
+      !!body && body.owner === piper && body.lifelineId === undefined, `presses=${presses}`);
+    w.kill(piper);
+    for (let i = 0; i < 36; i++) w.update(1 / 60);
+    check('S3b the dead piper\'s phantasms serve out their tune (enemy risen outlive the caller)',
+      !!body && !body.dead);
+  }
+}
+
+// === RIG T — THE SIBLING MINTS WEAR THE LIFELINE (2026-07-31) ==============
+// The proc lifeline's two siblings close: the aura DEATHSPAWN mint (kill()'s
+// "pylons credit their deployer" pass) and the BROOD hatch (the per-frame
+// status sweep) now stamp conjurationLifeline(resolved keeper) beside their
+// sourceSkillId, so borrowed unlife unmakes with its lender through EVERY
+// summon door — seat and enemy/wild keepers resolve undefined by the
+// function's own law (first-hand seat play and wild play byte-identical).
+//   T1 BROOD: the keeper is the APPLIER ITSELF (casterId — no owner hop,
+//      the per-applier cap's own grain): a minion-applied brood hatches
+//      bodies owned by THAT MINION wearing its lifeline, unmade on the
+//      meta beat when it falls; a seat-applied brood hatches free (control).
+//   T2 DEATHSPAWN: the keeper is `bearer.owner ?? bearer` (the deployer):
+//      a NESTED bearer's miasma-risen wear the bearer's own keeper's
+//      lifeline (the shipped lane in kit form: a spectre'd Pale Shepherd
+//      raising a Bloom-Tender corpse — both kit unholy_aura); the SEAT's
+//      own toggle spawns free through the real cast path (control).
+
+{
+  // --- T1: the brood hatch -------------------------------------------------
+  const broodSpec = SUPPORTS.broodclutch.brood!;
+  /** Apply a brood-bearing DoT (the world's own applyStatus opts shape) from
+   *  the chosen applier and step until a broodling rises — the per-frame
+   *  roll rides tick damage, so a fat DoT hatches within a few beats. */
+  const hatchArm = (applierOwned: boolean, seed: number): {
+    applier: Actor; hatch: Actor | undefined; w: ReturnType<typeof makeSimWorld>;
+  } => {
+    const w = makeSimWorld('summoner', seed);
+    const p = w.player;
+    let applier = p;
+    if (applierOwned) {
+      applier = w.createMonster('zombie', 8, 'player', p);
+      applier.pos = vec(p.pos.x - 80, p.pos.y);
+      w.actors.push(applier);
+    }
+    const tank = w.createMonster('zombie', 8, 'enemy');
+    tank.pos = vec(p.pos.x + 160, p.pos.y);
+    tank.sheet.setSource('probe', [mod('life', 'more', 2000)]);
+    tank.life = tank.maxLife();
+    w.actors.push(tank);
+    tank.applyStatus('poison', 150, 1, 'probe', {
+      casterId: applier.id, brood: broodSpec });
+    let hatch: Actor | undefined;
+    for (let i = 0; i < 5 * 60 && !hatch; i++) {
+      w.update(1 / 60);
+      hatch = w.actors.find(a => !a.dead
+        && a.sourceSkillId === '__brood:' + broodSpec.monsterId);
+    }
+    return { applier, hatch, w };
+  };
+
+  const nested = hatchArm(true, 0x71fe);
+  check('T1a a minion-applied brood HATCHES a body owned by that minion (casterId is the keeper — no owner hop)',
+    !!nested.hatch && nested.hatch.owner === nested.applier);
+  check('T1b the hatch wears the applier\'s LIFELINE (the brood mint stamps the law)',
+    !!nested.hatch && nested.hatch.lifelineId === nested.applier.id,
+    `lifeline=${nested.hatch?.lifelineId} want ${nested.applier.id}`);
+  nested.w.kill(nested.applier);
+  for (let i = 0; i < 36; i++) nested.w.update(1 / 60);
+  check('T1c the applier\'s death UNMAKES its broodlings on the meta beat — borrowed unlife dies with the lender',
+    !!nested.hatch && nested.hatch.dead);
+
+  const seatArm = hatchArm(false, 0x72fe);
+  check('T1d a seat-applied brood hatches for the SEAT, wearing NO lifeline (first-hand play untouched)',
+    !!seatArm.hatch && seatArm.hatch.owner === seatArm.applier
+    && seatArm.hatch.lifelineId === undefined);
+
+  // --- T2: the aura deathSpawn --------------------------------------------
+  const ud = SKILLS.unholy_aura.delivery as AuraDelivery;
+  // T2 nested: a bearer OWNED BY A MINION wears the aura entry the engine
+  // itself seats on minted bodies (the :legion idiom), deathSpawn chance
+  // forced to 1 so ONE kill mints deterministically (the roll is not under
+  // test — the mint's stamp is).
+  {
+    const w = makeSimWorld('summoner', 0x73fe);
+    const p = w.player;
+    const shaman = w.createMonster('zombie', 8, 'player', p);
+    shaman.pos = vec(p.pos.x - 80, p.pos.y - 80);
+    w.actors.push(shaman);
+    const bearer = w.createMonster('zombie', 8, 'player', shaman);
+    bearer.lifelineId = w.conjurationLifeline(shaman);
+    bearer.pos = vec(p.pos.x + 120, p.pos.y);
+    w.actors.push(bearer);
+    const inst = makeSkillInstance(SKILLS.unholy_aura, 1, 3);
+    bearer.activeAuras.set('unholy_aura', {
+      inst, spec: { ...ud.aura, deathSpawn: { ...ud.aura.deathSpawn!, chance: 1 } },
+      radius: ud.aura.radius, shape: 0,
+      remaining: Infinity, reserved: 0, pulseTimer: 0, affected: new Set(),
+    });
+    const victim = w.createMonster('zombie', 8, 'enemy');
+    victim.pos = vec(bearer.pos.x + 40, bearer.pos.y);
+    w.actors.push(victim);
+    w.kill(victim);
+    const risen = w.actors.find(a => !a.dead && a.sourceSkillId === 'unholy_aura');
+    check('T2a the nested bearer\'s miasma RISES a body for the bearer\'s own keeper (the one-hop deployer credit)',
+      !!risen && risen.owner === shaman);
+    check('T2b the risen wears that keeper\'s LIFELINE (the deathSpawn mint stamps the law)',
+      !!risen && risen.lifelineId === shaman.id,
+      `lifeline=${risen?.lifelineId} want ${shaman.id}`);
+    w.kill(shaman);
+    for (let i = 0; i < 36; i++) w.update(1 / 60);
+    check('T2c the keeper\'s death UNMAKES the risen on the meta beat (and the lifelined bearer with it — the cascade whole)',
+      !!risen && risen.dead && bearer.dead);
+  }
+  // T2 control: the SEAT toggles the real aura on its own bar — the full
+  // cast path, authored 0.5 chance rolled under the seed until one rises.
+  {
+    const w = makeSimWorld('summoner', 0x74fe);
+    const p = w.player;
+    const inst = makeSkillInstance(SKILLS.unholy_aura, 1, 3);
+    p.skills[0] = inst;
+    p.sheet.setSource('probe', [mod('mana', 'flat', 400)]);
+    p.mana = p.maxMana();
+    const on = w.useSkill(p, inst, vec(p.pos.x, p.pos.y));
+    for (let i = 0; i < 30; i++) w.update(1 / 60); // out past the toggle's bar
+    let risen: Actor | undefined;
+    let kills = 0;
+    for (; kills < 12 && !risen; kills++) {
+      const victim = w.createMonster('zombie', 8, 'enemy');
+      victim.pos = vec(p.pos.x + 50, p.pos.y);
+      w.actors.push(victim);
+      w.kill(victim);
+      risen = w.actors.find(a => !a.dead && a.owner === p
+        && a.sourceSkillId === 'unholy_aura');
+    }
+    check('T2d THE SEAT CONTROL: the real toggle\'s risen serve the seat with NO lifeline (seats conjure freely)',
+      on && !!risen && risen.lifelineId === undefined, `kills=${kills}`);
+  }
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
