@@ -1009,7 +1009,7 @@ export class UI {
     const c = this.panelSeat(this.charSheet).meta.classDef;
     return {
       title: c.name, description: c.description,
-      meta: `${c.innateText ? `Innate: ${c.innateText} — ` : ''}A class is only a starting point; you can allocate any attributes and bind any skill you qualify for.`,
+      meta: `${c.innateText ? `Innate: ${c.innateText}. ` : ''}A class is only a starting point; you can allocate any attributes and bind any skill you qualify for.`,
     };
   }
 
@@ -1272,7 +1272,7 @@ export class UI {
     const lockNote = (t: { def: ClassDef; reason: 'slots' | 'class' }): string => {
       if (t.reason === 'slots') return '🔒 Unlock more Class Slots in the Vault';
       const u = classUnlockFor(t.def.id);
-      return u ? `🔒 Locked — “${u.label}” in the Vault (${u.cost} ${META_CURRENCY_LABEL})`
+      return u ? `🔒 Locked: “${u.label}” in the Vault (${u.cost} ${META_CURRENCY_LABEL})`
         : '🔒 Unlocked in the Vault';
     };
     // A RUMOR card: an undiscovered class, shrouded. The hint is a compass
@@ -1283,7 +1283,7 @@ export class UI {
       <div class="class-card locked" data-locked="true" style="opacity:.45">
         <div class="cname" style="color:#8a8494;letter-spacing:3px">? ? ?</div>
         <div class="cdesc" style="font-style:italic">“${hint}”</div>
-        <div class="class-lock">🔒 Undiscovered — the world teaches what the Vault cannot sell.</div>
+        <div class="class-lock">🔒 Undiscovered: the world teaches what the Vault cannot sell.</div>
       </div>`;
     const classCard = (c: ClassDef, note?: string): string => `
       <div class="class-card ${note ? 'locked' : ''}" data-id="${c.id}" data-locked="${!!note}"
@@ -1317,7 +1317,7 @@ export class UI {
           <div style="font-weight:bold;color:${md.color}">${sel ? '◈ ' : ''}${md.name}
             ${roster ? `<span style="float:right;font-size:10px;color:#a8a494">${used}/${cap} vessel${cap === 1 ? '' : 's'}</span>` : ''}</div>
           <div style="font-size:10px;color:#a8a494;margin-top:2px">${md.blurb}</div>
-          ${full ? '<div style="font-size:10px;color:#d08a4b;margin-top:3px">🔒 No free vessel — unlock more in the Vault, or release one from the start menu.</div>' : ''}
+          ${full ? '<div style="font-size:10px;color:#d08a4b;margin-top:3px">🔒 No free vessel: unlock more in the Vault, or release one from the start menu.</div>' : ''}
         </div>`;
     };
     const modeRow = modes.length > 1
@@ -1336,7 +1336,7 @@ export class UI {
           placeholder="named for its class" value="${esc(nameValue)}"
           style="width:220px;padding:5px 9px;font-size:13px;background:#16121c;color:#e8dcc8;
             border:1px solid #6a5a38;border-radius:8px;outline:none;text-align:center">
-        <button id="name-clear" title="Forget the name — characters go back to being named for their class"
+        <button id="name-clear" title="Forget the name; characters go back to being named for their class"
           style="font-size:11px;padding:5px 10px">Nameless</button>
       </div>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
@@ -1346,7 +1346,7 @@ export class UI {
       <div class="subtitle">
         A random hand is dealt each run from the classes your account has unlocked.
         Class Slots widen the hand; Class unlocks (each bundling its thematic gems)
-        deepen the pool — and every class you realize opens its Vocation.
+        deepen the pool, and every class you realize opens its Vocation.
         Classes are only starting points; the tree and every skill stay open to any build.
         Pick a class to begin; tune the world mix under Event Weights first if you like.
       </div>
@@ -1489,7 +1489,7 @@ export class UI {
       // The SEALED rack — beneath the buyable stock, above the rumor wall:
       // the next links of walked chains, roads printed on hover.
       const sealedRack = (rows: Unlockable[]): string => rows.length
-        ? subHead('Sealed — earn the road, then buy') + grid(rows.map(sealedCardHtml).join('')) : '';
+        ? subHead('Sealed: earn the road, then buy') + grid(rows.map(sealedCardHtml).join('')) : '';
       // THE RUMOR FOLD (discovery web, meta/unlocks.ts): classes the account
       // has NOT yet discovered hang shrouded — the hint whispers at the
       // deed, the name and price stay the world's secret until it is done.
@@ -1503,7 +1503,7 @@ export class UI {
         if (!rows.length) return '';
         const open = this.vaultRumorsOpen;
         return `<h3 class="vault-sub vault-fold" data-fold="rumors" title="${open
-            ? 'Fold the rumor wall away' : 'Hang the rumor wall back up'}"><span class="arr">${open ? '▾' : '▸'}</span>Rumors — classes not yet discovered (${rows.length})</h3>`
+            ? 'Fold the rumor wall away' : 'Hang the rumor wall back up'}"><span class="arr">${open ? '▾' : '▸'}</span>Rumors: classes not yet discovered (${rows.length})</h3>`
           + (open ? grid(rows.map((_u, i) => `
             <div class="unlock-card" style="opacity:.55" data-tip="rumor" data-rumor-i="${i}">
               <div class="ukind">${VAULT_KIND_LABELS.class} · undiscovered</div>
@@ -1523,7 +1523,7 @@ export class UI {
         const stock = visible.flatMap(c => c.stock);
         const ownedAll = census.find(c => c.tab.owned)?.owned ?? [];
         body = stock.length ? grid(stock.map(cardHtml).join(''))
-          : `<div class="vault-empty">Nothing for sale right now — earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
+          : `<div class="vault-empty">Nothing for sale right now; earn ${META_CURRENCY_LABEL} and milestones by playing.</div>`;
         body += sealedRack(sealed.map(s => s.u));
         body += rumorSection(census.flatMap(c => c.rumors));
         if (ownedAll.length) body += subHead(`Owned (${ownedAll.length})`) + grid(ownedAll.map(ownedCardHtml).join(''));
@@ -1548,8 +1548,8 @@ export class UI {
           const canBuy = c.stock.filter(u => acc.credits >= u.cost).length;
           const shown = t.owned ? c.owned.length : stockN;
           const detail = t.owned
-            ? ` — ${c.owned.length} claimed`
-            : ` — ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} rumor${rumorN === 1 ? '' : 's'} shrouded` : ''}`;
+            ? `: ${c.owned.length} claimed`
+            : `: ${stockN} available${canBuy ? `, ${canBuy} affordable now` : ''}${sealedN ? `; ${sealedN} sealed` : ''}${rumorN ? `; ${rumorN} rumor${rumorN === 1 ? '' : 's'} shrouded` : ''}`;
           return `<button class="book-tab${t.id === this.vaultTab ? ' active' : ''}"
             data-vtab="${t.id}" title="${esc(t.blurb + detail)}">${t.label}${shown > 0
               ? `<span class="cnt${canBuy > 0 ? ' now' : ''}">${shown}</span>` : ''}</button>`;
@@ -1572,7 +1572,7 @@ export class UI {
           const sealedRows = sealedBy.get(tab.id) ?? [];
           if (rows.length === 0 && sealedRows.length === 0) {
             body = `<div class="vault-empty">${esc(tab.emptyNote
-              ?? `Nothing here right now — earn more ${META_CURRENCY_LABEL} and milestones by playing.`)}</div>`;
+              ?? `Nothing here right now; earn more ${META_CURRENCY_LABEL} and milestones by playing.`)}</div>`;
           } else if ((tab.kinds?.length ?? 0) > 1) {
             body = (tab.kinds ?? []).map(k => {
               const kr = rows.filter(u => u.kind === k);
@@ -1588,7 +1588,7 @@ export class UI {
 
       this.accountScreen.innerHTML = `
         <div class="vault-head">
-          <h1>The Vault — Account Unlocks</h1>
+          <h1>The Vault: Account Unlocks</h1>
           <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
             <b>${acc.credits}</b> ${META_CURRENCY_LABEL} &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime
             &nbsp;·&nbsp; <span style="color:var(--text-dim);font-size:11px">rest on a card for its full story</span></div>
@@ -1677,7 +1677,7 @@ export class UI {
     return {
       title: '? ? ?',
       description: `<i>“${u.payload.hint ?? 'The world has not introduced this one yet.'}”</i>`,
-      meta: `${VAULT_KIND_LABELS.class} · undiscovered — the world teaches what the Vault cannot sell`,
+      meta: `${VAULT_KIND_LABELS.class} · undiscovered: the world teaches what the Vault cannot sell`,
       wide: true,
     };
   }
@@ -1757,16 +1757,16 @@ export class UI {
     const tabStrip = `<div class="book-tabs stat-tabs">${tabModels.map(t =>
       `<button class="book-tab${t.cat === this.charTab ? ' active' : ''}${t.rows.length === 0 ? ' bare' : ''}"
         data-stattab="${t.cat}" title="${esc(t.def.blurb)}${t.invested > 0
-          ? ` — ${t.invested} invested stat${t.invested === 1 ? '' : 's'} live here` : ''}">${t.def.label}</button>`).join('')}</div>`;
+          ? `: ${t.invested} invested stat${t.invested === 1 ? '' : 's'} live here` : ''}">${t.def.label}</button>`).join('')}</div>`;
     const vitalRows = SHEET_VITALS.map(statRowHtml).join('');
     const statRows = active ? active.rows.map(statRowHtml).join('') : '';
     const tabNotes = !active ? ''
       : (active.rows.length === 0
-        ? `<div style="color:#8a8678;font-size:10px;padding:4px 0 2px">Nothing invested here yet —
+        ? `<div style="color:#8a8678;font-size:10px;padding:4px 0 2px">Nothing invested here yet;
             gear, passives and gems that touch these stats will appear as rows.</div>` : '')
       + (!this.charShowAll && active.hidden > 0
         ? `<div style="color:#6a6478;font-size:9px;margin-top:5px">${active.hidden} untouched
-            stat${active.hidden === 1 ? '' : 's'} not shown — “show unused” lists the whole shelf.</div>` : '');
+            stat${active.hidden === 1 ? '' : 's'} not shown; “show unused” lists the whole shelf.</div>` : '');
 
     // The vocation TITLE rides the class name once granted — "Warrior, Warbringer".
     const vocTitle = m.vocations
@@ -1800,11 +1800,11 @@ export class UI {
         <span style="color:#ffd700">${m.passivePoints} passive</span> ·
         <span style="color:#7ec8a0">${m.skillPoints} skill</span>${vocPts} points available
       </div>
-      <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree — P)</span></h3>
+      <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree: P)</span></h3>
       ${attrRows}
       <h3 style="display:flex;justify-content:space-between;align-items:baseline">Statistics
         <label style="font-weight:normal;font-size:10px;color:#8a8678;cursor:pointer"
-          title="List every stat this tab organizes, invested or not — generated families still surface only once touched">
+          title="List every stat this tab organizes, invested or not; generated families still surface only once touched">
           <input type="checkbox" data-statshowall${this.charShowAll ? ' checked' : ''}
             style="width:10px;height:10px;margin:0 3px 0 0;vertical-align:-1px;accent-color:var(--gold)">show unused</label></h3>
       <div style="border-bottom:1px solid var(--panel-border);margin-bottom:6px;padding-bottom:3px">${vitalRows}</div>
@@ -1812,7 +1812,7 @@ export class UI {
       <div style="font-size:10px;color:#8a8678;margin:2px 0 5px">${esc(active?.def.blurb ?? '')}</div>
       ${statRows}${tabNotes}
       <div style="margin-top:8px;color:#8a8678;font-size:10px">
-        Tag-scaled stats (damage, speed) shown without skill context — each skill
+        Tag-scaled stats (damage, speed) shown without skill context; each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
     // Unchanged since the last write? Keep the standing DOM (and its wiring).
@@ -1873,7 +1873,7 @@ export class UI {
             const doorNote = crewBoardingOpen(inst) ? ''
               : ' Dormant until Resonance rides this skill.';
             return `<button data-socket="${idx}:${inst.def.id}" ${swapWhy ? 'disabled' : ''}
-              title="${swapWhy ? `${swapWhy} — ` : ''}Boards the crew: forwarded to the minions' own skills (${boards}).${doorNote}">${inst.def.name} ⤳</button>`;
+              title="${swapWhy ? `${swapWhy}. ` : ''}Boards the crew: forwarded to the minions' own skills (${boards}).${doorNote}">${inst.def.name} ⤳</button>`;
           })
           .join('') || '<span style="color:#8a8678">no socketable skill</span>';
         const socketLabel = swapWhy
@@ -1891,7 +1891,7 @@ export class UI {
               ${socketLabel} ${targets}
             </div>
           </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems — walk over one to collect it.</div>';
+      }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems; walk over one to collect it.</div>';
     }
 
     const nearFont = world.nearFont();
@@ -1923,7 +1923,7 @@ export class UI {
           </div>
         </div>`;
     }).join('') || `<div style="color:#8a8678;font-size:11px">
-      No skill gems carried. Monsters drop them — rarity decides their sockets (1-4).
+      No skill gems carried. Monsters drop them; rarity decides their sockets (1-4).
       ${nearFont ? '' : 'Find a Sacrificial Font to trade unwanted gems for skill points.'}</div>`;
     return skillGems;
   }
@@ -2025,7 +2025,7 @@ export class UI {
     };
     const sections = targets.map(t => {
       const rows = compareItemMods(item, t.worn);
-      return `<div style="color:#9a94a8;font-size:10px;margin-top:4px">vs ${t.label} —
+      return `<div style="color:#9a94a8;font-size:10px;margin-top:4px">vs ${t.label}:
           <span style="color:${ITEM_RARITIES[t.worn.rarity].color}">${t.worn.name}</span></div>
         ${rows.map(row).join('') || '<div style="color:#7a7688;font-size:10px">grants exactly the same lines</div>'}`;
     }).join('');
@@ -2074,7 +2074,7 @@ export class UI {
       compareHint = ' · <span style="color:#c8a84b">hold to compare</span>';
     }
     return {
-      title: `<span style="color:${d.color}">${d.epitaph ? `${d.epitaph.name} — ` : ''}${d.title}</span>`,
+      title: `<span style="color:${d.color}">${d.epitaph ? `${d.epitaph.name}: ` : ''}${d.title}</span>`,
       description: lines.join(''),
       meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}${compareHint}`,
     };
@@ -2091,7 +2091,7 @@ export class UI {
     return {
       title: `<span style="color:${v.color}">${v.glyph} ${v.name}</span>`,
       description: rows,
-      meta: 'Drag onto a socket — consumed on inlay; overwriting destroys the old vestige. Exact sequences on WHITE gear awaken Epitaphs.',
+      meta: 'Drag onto a socket: consumed on inlay; overwriting destroys the old vestige. Exact sequences on WHITE gear awaken Epitaphs.',
     };
   }
 
@@ -2124,7 +2124,7 @@ export class UI {
       const small = Math.min(seat.w, seat.h) < 1.5;
       const pips = worn?.sockets?.length ? `<span style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:11px;line-height:12px">${worn.sockets.map((vid, si) => {
         const v = vid ? VESTIGES[vid] : null;
-        return `<span data-sock="${worn.uid}:${si}" data-drop="sock:${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
+        return `<span data-sock="${worn.uid}:${si}" data-drop="sock:${worn.uid}:${si}" title="${v ? v.name : 'Empty socket: drop a vestige here'}"
           style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
       const wornGlyph = worn ? CATEGORY_GLYPHS[ITEM_BASES[worn.baseId]?.category ?? slot.accepts[0]] ?? '?' : '';
@@ -2181,7 +2181,7 @@ export class UI {
       return `<div style="position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:12px;line-height:13px">
         ${i.sockets.map((vid, si) => {
           const v = vid ? VESTIGES[vid] : null;
-          return `<span data-sock="${i.uid}:${si}" data-drop="sock:${i.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
+          return `<span data-sock="${i.uid}:${si}" data-drop="sock:${i.uid}:${si}" title="${v ? v.name : 'Empty socket: drop a vestige here'}"
             style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
         }).join('')}
       </div>`;
@@ -2207,7 +2207,7 @@ export class UI {
     const satchel = `
       <button data-satchel style="position:absolute;top:10px;right:14px;font-size:11px;
         background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:pointer"
-        title="Essence satchel (salvage currency — dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
+        title="Essence satchel (salvage currency, dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
       ${this.satchelOpen ? `
         <div style="position:absolute;top:38px;right:14px;z-index:3;background:#1b1524;
           border:1px solid #4a3a5a;border-radius:6px 2px 6px 6px;padding:8px 12px;box-shadow:0 3px 14px rgba(0,0,0,0.6)">
@@ -2228,7 +2228,7 @@ export class UI {
                   style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab">${v.glyph} ${n}
                   <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
               }).join('')}
-              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag — or click to lift — a vestige,
+              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag (or click to lift) a vestige,
                 then a socket ◇ (a socketed item takes it in its first empty slot)</div>
             </div>`;
           })()}
@@ -2254,7 +2254,7 @@ export class UI {
     const flapGlow = lesson === 'bar' && !this.buildFlapOpen;
     const drawerHandle = `
       <button data-buildflap class="${flapGlow ? 'tut-glow' : ''}"
-        title="Your learned skills — the whole build, full management"
+        title="Your learned skills: the whole build, full management"
         style="position:absolute;left:-27px;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
         padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
         border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:pointer;z-index:4">
@@ -2284,7 +2284,7 @@ export class UI {
           <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
           <div style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
-            drag — or click to lift — any piece: bag ↔ doll ↔ the other slot,
+            drag (or click to lift) any piece: bag ↔ doll ↔ the other slot,
             onto another item to swap, onto the world to drop it ·
             double-click: equip / unequip · shift-click: drop to ground · ${pickupHint}
           </div>
@@ -2450,7 +2450,7 @@ export class UI {
         const y = salvageSkillYield(inst);
         return `<div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
           <div class="name">${inst.def.name} <span style="color:#ffd700">Lv ${inst.level}</span>${inst.granted ? ' <span style="color:#8a8678;font-size:10px">(granted)</span>' : ''}</div>
-          <div class="bind-btns"><button data-salv-skill="${idx}">${y ? `Break down (${this.essCostText(y)})` : 'Break down (nothing — granted)'}</button></div>
+          <div class="bind-btns"><button data-salv-skill="${idx}">${y ? `Break down (${this.essCostText(y)})` : 'Break down (nothing, granted)'}</button></div>
         </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">No skill gems carried.</div>';
       const supRows = m.inventory.map((gem, idx) => {
@@ -2462,7 +2462,7 @@ export class UI {
       }).join('') || '<div style="color:#8a8678;font-size:11px">No loose support gems.</div>';
       body = `<div style="margin-bottom:6px">${this.essWallet(seat)}</div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          Breaking gear pays Essence by its quality — and STUDIES each affix on it (expertise, on the account, survives death).
+          Breaking gear pays Essence by its quality, and STUDIES each affix on it (expertise, on the account, survives death).
         </div>
         <h3>Gear</h3>${gearRows}<h3>Skill Gems</h3>${skillRows}<h3>Support Gems</h3>${supRows}`;
     } else {
@@ -2501,7 +2501,7 @@ export class UI {
               <div class="bind-btns"><button data-craft="${target.uid}:${o.def.id}" ${afford ? '' : 'disabled'}>
                 Craft (${this.essCostText(cost)})${afford ? '' : ' — not enough'}</button></div>
             </div>`;
-          }).join('') || '<div style="color:#8a8678;font-size:11px">No studied affix fits this piece yet — salvage more of what you want to learn.</div>';
+          }).join('') || '<div style="color:#8a8678;font-size:11px">No studied affix fits this piece yet; salvage more of what you want to learn.</div>';
         }
       }
       const loreRows = Object.entries(acc.craftLore)
@@ -2514,7 +2514,7 @@ export class UI {
         }).join('') || '<div style="color:#8a8678;font-size:11px">Salvage affixed gear to begin studying.</div>';
       body = `<div style="margin-bottom:6px">${this.essWallet(seat)}</div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
-          One crafted line per piece${world.craftSlots() > 1 ? ` (yours: ${world.craftSlots()})` : ''}; expertise raises the roll CEILING — the roll itself stays wild.
+          One crafted line per piece${world.craftSlots() > 1 ? ` (yours: ${world.craftSlots()})` : ''}; expertise raises the roll CEILING; the roll itself stays wild.
         </div>
         <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
         <h3>Craft onto it</h3>${chisel}${affixRows}
@@ -2779,7 +2779,7 @@ export class UI {
     }).join('');
 
     // The open leaf's DETAIL: what the study tier has revealed so far.
-    let detail = '<div style="color:#8a8678;font-size:11px;margin-top:6px">Open an entry — knowledge fills in as your line hunts.</div>';
+    let detail = '<div style="color:#8a8678;font-size:11px;margin-top:6px">Open an entry; knowledge fills in as your line hunts.</div>';
     const def = list.find(d => d.id === this.bestiarySel);
     if (def) {
       const kills = bestiaryKills(acc, def.id);
@@ -2818,9 +2818,9 @@ export class UI {
         body += `<div style="margin-top:6px;color:${spectreAttunable(acc, def) ? '#a8d8a0' : '#8a8678'};font-size:10px">
           ${spectreAttunable(acc, def)
             ? (this.grimoireSkills().length
-              ? '★ Mastered — drag this page (or click to lift it) onto a Spectre slot above to attune.'
-              : '★ Mastered — a Spectre skill, once learned, binds this form here at the book.')
-            : '★ Mastered — too mighty a form for spectral binding.'}</div>`;
+              ? '★ Mastered: drag this page (or click to lift it) onto a Spectre slot above to attune.'
+              : '★ Mastered: a Spectre skill, once learned, binds this form here at the book.')
+            : '★ Mastered: too mighty a form for spectral binding.'}</div>`;
       }
       // The STUDY PORTRAIT: the creature itself, large and alive, beside its
       // revealed page — the intimate read the tiers were building toward.
@@ -2829,7 +2829,7 @@ export class UI {
           ${this.monsterPortraitHtml(def, false, BESTIARY_CFG.portrait.detail, true)}
           <div style="flex:1;min-width:0"><b style="font-size:14px">${def.name}</b>${
             def.boss ? ' <span style="color:#e64db4;font-size:10px">BOSS</span>' : ''}
-            <div style="color:#8a8678;font-size:10px;margin-top:2px">as it walks the world — drawn from the hunt itself</div>
+            <div style="color:#8a8678;font-size:10px;margin-top:2px">as it walks the world, drawn from the hunt itself</div>
           </div></div>
         ${body}</div>`;
     }
@@ -2859,7 +2859,7 @@ export class UI {
     const grim = grimSkills.length ? `
       <div style="border:1px solid #4a3a5a;border-radius:4px;padding:6px 8px;margin-bottom:6px;background:rgba(30,24,40,0.45)">
         <div style="color:#c8a8ff;font-size:10px;margin-bottom:3px">
-          SPECTRE GRIMOIRE — forms bind here, at the open book. In the field you fight with what you carried out.
+          SPECTRE GRIMOIRE: forms bind here, at the open book. In the field you fight with what you carried out.
         </div>
         ${grimSkills.map(inst => {
           const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
@@ -2876,7 +2876,7 @@ export class UI {
     this.bestiaryMenu.innerHTML = `
       <h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
       <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
-        ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered — knowledge is the account's, and outlives you.
+        ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered; knowledge is the account's, and outlives you.
       </div>
       ${grim}
       <div class="b-grid">${rows}</div>
@@ -2959,8 +2959,8 @@ export class UI {
           const roll = ln.sharedRoll ? a.rolls[0] : a.rolls[i];
           return formatModLine(ln, roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5)));
         }).join(' · ');
-        const state = a.crafted ? '<span style="color:#8a8678">bench-work — the stone will not touch it</span>'
-          : a.locked ? '<span style="color:#8a8678">🔒 sealed — the stone has spoken</span>'
+        const state = a.crafted ? '<span style="color:#8a8678">bench-work: the stone will not touch it</span>'
+          : a.locked ? '<span style="color:#8a8678">🔒 sealed: the stone has spoken</span>'
           : `<button data-commune="${target.uid}:${idx}" ${afford ? '' : 'disabled'}>
               Commune (${this.essCostText(cost)})${afford ? '' : ' — not enough'}</button>`;
         return `<div class="skill-entry">
@@ -2969,7 +2969,7 @@ export class UI {
         </div>`;
       }).join('');
       affixRows += `<div style="color:#8a8678;font-size:10px;margin-top:4px">
-        A communed line rerolls within what this item could legally carry — then SEALS forever. Trace well.</div>`;
+        A communed line rerolls within what this item could legally carry, then SEALS forever. Trace well.</div>`;
     }
     this.oracleMenu.innerHTML = `
       <h2>The Oracle Stone</h2>
@@ -3085,7 +3085,7 @@ export class UI {
     if (!v) { this.closeBorough(); return; } // the folk fell or the stand resolved — parley over
     const m = world.localSeat.meta;
     const stage = v.stage === 'muster'
-      ? `the horde comes — <b>${Math.ceil(v.timer)}s</b> to prepare`
+      ? `the horde comes: <b>${Math.ceil(v.timer)}s</b> to prepare`
       : v.stage === 'assault'
         ? `<b style="color:#d85a4a">UNDER ASSAULT</b> — ${Math.ceil(v.timer)}s of fury left`
         : '<b style="color:#d85a4a">drive off the stragglers!</b>';
@@ -3118,7 +3118,7 @@ export class UI {
         &nbsp;·&nbsp; ${v.folk.name}: ${lifePct}% &nbsp;·&nbsp; gifts ${v.gifts}/${v.maxGifts}
       </div>
       <div style="font-size:11px;color:#8a8678;margin-bottom:4px">
-        Gift a piece of gear (drag it onto this panel, or click below) — its lines become theirs, for good.</div>
+        Gift a piece of gear (drag it onto this panel, or click below); its lines become theirs, for good.</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:130px;overflow-y:auto">${gearRows}</div>
       <div style="margin-top:8px;font-size:11px;color:#8a8678">…or pour essence into their blood (coarse and above):</div>
       ${essRows}
@@ -3191,9 +3191,9 @@ export class UI {
           <button data-vcomm-close>Close</button>
         </div>
         <div style="max-height:180px;overflow-y:auto">
-          ${shown.map(line).join('') || `<div style="color:#8a8678;font-size:11px">The index knows nothing by that name — gems are indexed as they genuinely DROP (${need} finds name one).</div>`}
+          ${shown.map(line).join('') || `<div style="color:#8a8678;font-size:11px">The index knows nothing by that name; gems are indexed as they actually DROP (${need} finds name one).</div>`}
         </div>
-        ${rows.length > CAP ? `<div style="color:#8a8678;font-size:10px;margin-top:3px">…${rows.length - CAP} more — refine the search.</div>` : ''}
+        ${rows.length > CAP ? `<div style="color:#8a8678;font-size:10px;margin-top:3px">…${rows.length - CAP} more; refine the search.</div>` : ''}
       </div>`;
   }
 
@@ -3258,9 +3258,9 @@ export class UI {
       const lockTitleFor = (heldRow: VendorHoldRow | undefined, atCap: boolean): string => heldRow
         ? (heldRow.commission
           ? 'Release the standing order\'s find (the watch resumes; the slot re-rolls next restock)'
-          : 'Release this reserve — the slot re-rolls on the next restock')
-        : atCap ? `The reserve ledger holds ${lockCap} — release one first`
-        : 'Reserve this slot — it will not re-roll until bought or released';
+          : 'Release this reserve: the slot re-rolls on the next restock')
+        : atCap ? `The reserve ledger holds ${lockCap}; release one first`
+        : 'Reserve this slot: it will not re-roll until bought or released';
 
       // --- THE GEM CASE rows (skill/support entries, list rows as ever) -----
       const gemRows = stock.map((e, idx) => {
@@ -3295,7 +3295,7 @@ export class UI {
                 Buy (${priceHtml})${canBuy || buyTitle ? '' : ' — not enough'}</button>
             </div>
           </div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out — come back after the restock.</div>';
+      }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out; come back after the restock.</div>';
 
       // --- THE COUNTER GLASS (gear entries as a packed grid — the player
       // bag's own cell law: footprints, rarity borders, the full item
@@ -3348,7 +3348,7 @@ export class UI {
               ? `<div style="position:absolute;bottom:1px;left:0;right:0;text-align:center;font-size:8px;color:#8a8678">🔒${e.depthReq ? ` D${e.depthReq}` : ''}</div>`
               : '';
           tiles += `<div data-tip="item" data-item-uid="${i.uid}" ${canBuy ? `data-vbuy="${v.id}:${idx}"` : ''}
-            title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy — ${esc(i.name)}` : 'Not enough essence'}"
+            title="${entryLock ? esc(entryLock) : tradeRefusal ? esc(tradeRefusal) : afford ? `Buy: ${esc(i.name)}` : 'Not enough essence'}"
             style="position:absolute;left:${at.x * CELL}px;top:${at.y * CELL}px;
             width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
             border:2px solid ${heldRow ? v.accent : r.color};border-radius:3px;cursor:${canBuy ? 'pointer' : 'default'};box-sizing:border-box;
@@ -3356,7 +3356,7 @@ export class UI {
             ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}${canBuy ? '' : 'opacity:0.55;'}">${CATEGORY_GLYPHS[cat] ?? '?'}${lockPip}${badge}</div>`;
         });
         const empty = gearCount === 0
-          ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The glass stands empty — come back after the restock.</div>' : '';
+          ? '<div style="color:#8a8678;font-size:11px;margin-top:4px">The glass stands empty; come back after the restock.</div>' : '';
         return `
           <div style="position:relative;width:${b.w * CELL}px;height:${b.h * CELL}px;margin-top:2px">${cells}${tiles}</div>
           ${overflowRows}${empty}
@@ -3374,8 +3374,8 @@ export class UI {
         const cDef = c ? (c.kind === 'skill' ? SKILLS[c.id] : SUPPORTS[c.id]) : undefined;
         const cName = c ? (cDef?.name ?? c.id) : null;
         const status = !c ? '<span style="color:#8a8678">none placed</span>'
-          : found ? `<b style="color:${cDef?.color ?? '#7fe0d8'}">${esc(cName!)}</b> — <span style="color:#7fe0d8">found; it waits reserved on the shelf</span>`
-          : `<b style="color:${cDef?.color ?? '#d8d4c8'}">${esc(cName!)}</b> — the counter watches (${((): string => {
+          : found ? `<b style="color:${cDef?.color ?? '#7fe0d8'}">${esc(cName!)}</b>: <span style="color:#7fe0d8">found; it waits reserved on the shelf</span>`
+          : `<b style="color:${cDef?.color ?? '#d8d4c8'}">${esc(cName!)}</b>: the counter watches (${((): string => {
             const p = world.commissionOdds(c);
             return p < 0.01 ? '<1%' : `~${Math.round(p * 100)}%`;
           })()} each restock)`;
@@ -3394,7 +3394,7 @@ export class UI {
       const scrap = v.salvage?.(world) ? `
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px">
           <button data-scrapmode class="${this.scrapMode ? 'bound' : ''}">
-            ⚙ ${this.scrapMode ? 'Scrap wheel ON — click your things to SELL them for Coarse Essence' : 'Flip the scrap wheel (sell for Coarse Essence)'}</button>
+            ⚙ ${this.scrapMode ? 'Scrap wheel ON: click your things to SELL them for Coarse Essence' : 'Flip the scrap wheel (sell for Coarse Essence)'}</button>
           ${this.scrapMode ? `<div style="margin-top:6px">${this.scrapListHtml()}</div>` : ''}
         </div>` : (v.salvage && v.salvageLocked ? `
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;color:#8a8678;font-size:11px">
@@ -3434,7 +3434,7 @@ export class UI {
           ${tabStrip}
           ${body}
         </div>`;
-    }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand — find a vendor and linger.</div>';
+    }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand; find a vendor and linger.</div>';
 
     this.vendorMenu.innerHTML = `
       <h2>Vendors</h2>
@@ -3562,7 +3562,7 @@ export class UI {
       const lifted = this.liftedGraftKey === s.key;
       return `<span class="gem-chip graft-chip ${lifted ? 'lifted' : ''}" data-graft-lift="${s.key}"
         style="border-color:${sup.color ?? '#b8a2e8'}" title="${s.name}: ${sup.name} — ${sup.description}
-${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Click, then click a skill to graft it on — no socket spent.'}">
+${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Click, then click a skill to graft it on; no socket spent.'}">
         ✦ ${sup.name}${carrier ? ` → ${carrier.name}` : ' — unbound'}
         ${boundTo ? `<button data-graft-unbind="${s.key}">✕</button>` : ''}
       </span>`;
@@ -3576,17 +3576,17 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const wornChips = wornRows.map(r => {
       const live = r.state === 'live';
       const word = live ? 'live on the skill seated there'
-        : r.state === 'duplicate' ? 'DORMANT — that gem is already socketed there; the worn copy yields'
-          : r.state === 'unfit' ? 'DORMANT — it does not fit the skill seated there (a socketed gem granting the mechanism would wake it)'
-            : `EMPTY SEAT — bind a skill to Skill Slot ${r.slot + 1} and it rides`;
+        : r.state === 'duplicate' ? 'DORMANT: that gem is already socketed there; the worn copy yields'
+          : r.state === 'unfit' ? 'DORMANT: it does not fit the skill seated there (a socketed gem granting the mechanism would wake it)'
+            : `EMPTY SEAT: bind a skill to Skill Slot ${r.slot + 1} and it rides`;
       return `<span class="gem-chip graft-chip" style="border-color:${live ? (r.def.color ?? '#b8a2e8') : '#4a4458'}${live ? '' : ';opacity:0.62'}"
         title="${r.def.description}
-Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. ${word}.">
+Worn graft: your gear grants this to Skill Slot ${r.slot + 1}; no socket spent. ${word}.">
         ✦ ${r.def.name} <b>L${r.level}</b> → Slot ${r.slot + 1}${live ? '' : ' — dormant'}</span>`;
     }).join('');
     const graftBank = (graftSources.length || wornRows.length) ? `
       <div class="graft-bank">
-        ${graftSources.length ? `<span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' — click a skill to bind' : ''}:</span>
+        ${graftSources.length ? `<span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' (click a skill to bind)' : ''}:</span>
         ${bankChips}` : ''}
         ${wornRows.length ? `<span style="color:#b8a2e8;font-size:10px">Worn:</span> ${wornChips}` : ''}
       </div>` : '';
@@ -3652,9 +3652,9 @@ Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spen
       if (def.delivery.type === 'summon' && def.delivery.grimoire) {
         const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
         const chip = form
-          ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright — no corpse read. Rebind or release at the Tracker's book.">
+          ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright, no corpse read. Rebind or release at the Tracker's book.">
               ${this.monsterPortraitHtml(form, false, VIS_CFG.portrait.seats.spectreChip)} ${form.name}</span>`
-          : `<span style="color:#8a8678">unattuned — reads corpses</span>`;
+          : `<span style="color:#8a8678">unattuned: reads corpses</span>`;
         grimoire = `<div style="margin-top:3px;font-size:10px">
           <span style="color:#a8d8a0">Grimoire:</span> ${chip}
           <span style="color:#6a6478">— binds at the Tracker's book</span></div>`;
@@ -3672,12 +3672,12 @@ Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spen
           if (!art || !src) return '';
           return `<button class="gem-chip" data-mimicsel="${e.sid}"
             style="border-color:${e.sid === sel ? art.color : '#4a4458'}"
-            title="${art.name} — learned from the ${src.name}. Click to take this form (shift-press the slot cycles).">
+            title="${art.name}, learned from the ${src.name}. Click to take this form (shift-press the slot cycles).">
             ${this.monsterPortraitHtml(src, false, VIS_CFG.portrait.seats.spectreChip)} ${art.name}${e.sid === sel ? ' ◈' : ''}</button>`;
         }).join('');
         mimicRow = `<div style="margin-top:3px;font-size:10px">
           <span style="color:#c8a0e8">Repertoire:</span>
-          ${chips || `<span style="color:#8a8678">no arts captured — take a studied kind's blow</span>`}
+          ${chips || `<span style="color:#8a8678">no arts captured: take a studied kind's blow</span>`}
         </div>`;
       }
       // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
@@ -3697,9 +3697,9 @@ Worn graft — your gear grants this to Skill Slot ${r.slot + 1}; no socket spen
           }).join('')}
           ${wornHere.filter(r => r.state !== 'live').map(r => `<span class="gem-chip graft-chip" style="border-color:#4a4458;opacity:0.62"
             title="${r.def.description}
-Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
+Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
               ? 'this gem is already socketed here; the worn copy yields.'
-              : 'it does not fit this skill — a socketed gem granting the mechanism would wake it, or seat a fitting skill here.'}">
+              : 'it does not fit this skill; a socketed gem granting the mechanism would wake it, or seat a fitting skill here.'}">
             ✦ ${r.def.name} <b>L${r.level}</b> — dormant</span>`).join('')}
           ${this.liftedGraftKey ? `<button class="graft-land" data-graft-bind="${def.id}">⊕ graft here</button>` : ''}
         </div>` : '';
@@ -3728,7 +3728,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
           ${grimoire}
           ${mimicRow}
         </div>`;
-    }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Inventory (I) → Skill Gems tab.</div>';
+    }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters; learn them from the Inventory (I) → Skill Gems tab.</div>';
   }
 
   /** Wire the learned-list buttons in whichever container rendered it. */
@@ -4162,8 +4162,8 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     pop.innerHTML = `
       <div class="choice-head">${group.name}
         <span class="choice-count">${chosen.length}/${limit} chosen${group.unique === 'character' ? ' · once per character' : ''}${
-          group.deal === 'sole' ? ' · claims its whole cluster — sibling nodes lock'
-          : group.deal === 'first' ? ' · only the first node deals — siblings become plain paths' : ''}</span></div>
+          group.deal === 'sole' ? ' · claims its whole cluster, sibling nodes lock'
+          : group.deal === 'first' ? ' · only the first node deals, siblings become plain paths' : ''}</span></div>
       ${group.options.map(o => {
         const taken = chosen.includes(o.id);
         const why = taken ? null : choiceLockReason(node, o.id, m.choices, PASSIVE_NODES);
@@ -4247,7 +4247,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       const limit = choicePickLimit(node);
       const chosen = chosenOf(m.choices, node.id);
       choiceText = `<br><span style="color:#b8a2e8">${group.name}</span>`
-        + ` — pick ${limit} of ${group.options.length}`
+        + `: pick ${limit} of ${group.options.length}`
         + (group.unique === 'character' ? ' (each option once per character)' : '')
         + (group.deal === 'sole' ? ' — ONE node of this cluster, ever'
           : group.deal === 'first' ? ' — only the first node taken deals; the rest become plain paths'
@@ -4255,12 +4255,12 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       if (dealClaimant !== null) {
         const cName = PASSIVE_NODES[dealClaimant]?.name ?? dealClaimant;
         choiceText += group.deal === 'sole'
-          ? `<br><span style="color:#e88a8a">cluster claimed at ${cName} — this node can no longer be taken</span>`
-          : `<br><span style="color:#8a8678">deal spent at ${cName} — allocates as a plain path (no grant)</span>`;
+          ? `<br><span style="color:#e88a8a">cluster claimed at ${cName}; this node can no longer be taken</span>`
+          : `<br><span style="color:#8a8678">deal spent at ${cName}: allocates as a plain path (no grant)</span>`;
       }
       for (const oid of chosen) {
         const opt = choiceOptionOf(node, oid);
-        if (opt) choiceText += `<br><span style="color:#e6d8ff">✓ ${opt.name}</span> — ${opt.description}`;
+        if (opt) choiceText += `<br><span style="color:#e6d8ff">✓ ${opt.name}</span>: ${opt.description}`;
       }
     }
     const openPicks = node.choice && group && !dealSpent
@@ -4355,7 +4355,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-sail-port="${esc(p.id)}">Sail</button></div>
         </div>`;
       }).join('')
-      : `<div class="skill-entry"><div class="desc">No other harbors known on any water — set out and sight one.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">No other harbors known on any water; set out and sight one.</div></div>`;
     // THE HEARSAY (world.harborHearsay — the omen fabric's far rumors): each
     // row is sailor's talk about something seated out in unknown country,
     // with a CHART for sale that surveys the seat onto the map. Reading is
@@ -4370,7 +4370,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     const hereSea = world.seaNameOf(world.zone);
     const hereTier = world.zone.portTier === 'haven' ? 'the haven of ' : '';
     this.sailMenu.innerHTML = `<h2>The Harbor${hereSea ? ` — ${esc(hereTier + hereSea)}` : ''}</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Every water keeps its harbors, friend — and its harbors keep its secrets."</div>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Every water keeps its harbors, friend, and its harbors keep its secrets."</div>`
       + rows
       + `<div class="skill-entry"><div class="name">Chart a course</div>`
       + `<div class="desc">Sail blind for the far shore of this water.</div>`
@@ -4447,11 +4447,11 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
         </div>`
       : h.state === 'fallen'
         ? `<div class="skill-entry"><div class="name">Raise it from the ashes</div>
-            <div class="desc">Masons, pitch and pilings — paid now, the walls stand today (besieged still: the defense is yours to win).</div>
+            <div class="desc">Masons, pitch and pilings, paid now: the walls stand today (besieged still: the defense is yours to make).</div>
             <div class="bind-btns"><button data-hold-restore ${h.canRestore ? '' : 'disabled'}>Restore — ${h.restoreCost} ${META_CURRENCY_LABEL}</button>
               ${!h.canRestore ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
           </div>`
-        : `<div class="skill-entry"><div class="desc">The town keeps its own peace — walk in. Defended sieges raise its standing; a lost one burns it.</div></div>`;
+        : `<div class="skill-entry"><div class="desc">The town keeps its own peace: walk in. Defended sieges raise its standing; a lost one burns it.</div></div>`;
     this.holdMenu.innerHTML = `<h2>${esc(h.name)} <span class="tags">· ${esc(h.clsLabel)}</span></h2>`
       + `<div class="desc" style="margin:-4px 0 6px 0">${stateLine}</div>`
       + `<div class="desc" style="margin:0 0 8px 0">Standing: ${pips}`
@@ -4487,9 +4487,9 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
           <div class="bind-btns"><button data-band="${b.band}">Set out</button></div>
         </div>`;
       }).join('')
-      : `<div class="skill-entry"><div class="desc">The Caravanner has no roads for you yet — return when you've travelled farther.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">The Caravanner has no roads for you yet; return when you've travelled farther.</div></div>`;
     this.caravanMenu.innerHTML = `<h2>The Caravan</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"I know the safe roads, friend. Name where you're bound and my wagons will see you there — and back again."</div>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"I know the safe roads, friend. Name where you're bound and my wagons will see you there, and back again."</div>`
       + rows
       + `<div class="bind-btns" style="margin-top:10px"><button data-caravan-close>Close</button></div>`;
     this.caravanMenu.querySelectorAll<HTMLButtonElement>('button[data-band]').forEach(btn => {
@@ -4548,22 +4548,22 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
           <div class="name" style="display:flex;align-items:center;gap:8px">
             ${cls ? this.classPortraitHtml(cls, VIS_CFG.portrait.seats.merc) : ''}
             <span>${esc(o.name)}
-            ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN — retired at level ${o.retiredLevel}</span>` : ''}</span></div>
+            ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN, retired at level ${o.retiredLevel}</span>` : ''}</span></div>
           <div class="desc">${esc(o.blurb)}</div>
-          <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}) — a blade is fitted to its patron.</div>
+          <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}): a blade is fitted to its patron.</div>
           <div class="bind-btns"><button data-merc-hire="${i}" ${full || !afford || blocked ? 'disabled' : ''}>
             Hire — ${cost} ${META_CURRENCY_LABEL}</button>
             ${blocked ? `<span class="tags" style="color:#b8a0e0">${esc(blocked)}</span>`
               : !afford && !full ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
         </div>`;
       }).join('')
-      : `<div class="skill-entry"><div class="desc">The sign-board hangs empty — every blade this post will ever deal has been taken.</div></div>`;
+      : `<div class="skill-entry"><div class="desc">The sign-board hangs empty; every blade this post will ever deal has been taken.</div></div>`;
     // THE COMPANY: one line per contract (the retinue cap shows when >1 is
     // possible — the Harborwarden's ledger made this a roster, not a slot).
     const contract = company.length
       ? `<div class="skill-entry"><div class="name" style="color:#c8b048">Under contract${cap > 1 ? ` (${company.length}/${cap})` : ''}:
             ${esc(company.map(hm => hm.name).join(', '))}</div>
-          <div class="desc">Their hire ends when your run does — however it does.</div>
+          <div class="desc">Their hire ends when your run does, however it does.</div>
           <div class="bind-btns">${company.map((hm, i) =>
             `<button data-merc-dismiss="${i}">Dismiss ${esc(hm.name)}</button>`).join(' ')}</div></div>`
       : cap > 1
@@ -4573,7 +4573,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       ? `<div class="skill-entry" style="border-top:1px solid #3a3644;margin-top:10px;padding-top:10px">
           <div class="name" style="color:#b8a0e0">Retire from the wake</div>
           <div class="desc">End this run here, in good order: the run's ${META_CURRENCY_LABEL} banks as ever,
-            no corpse is left and no death is counted — and this character, exactly as built,
+            no corpse is left and no death is counted, and this character, exactly as built,
             joins the mercenary roster (${acc.mercRoster.length} retired) for future runs to hire.</div>
           <div class="bind-btns"><button data-merc-retire>Retire this character</button></div>
         </div>`
@@ -4582,8 +4582,8 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     // otherwise the muster/outpost defaults, derived from the port policy.
     const title = post.title ?? (post.port ? 'The Harbor Muster' : 'The Mercenary Outpost');
     const pitch = post.pitch ?? (post.port
-      ? '"Green blades, fair rates, no questions off the boat. The veterans keep to the wilds — so does the retiring."'
-      : '"Every blade here has a story. Buy one — or become one."');
+      ? '"Green blades, fair rates, no questions off the boat. The veterans keep to the wilds, and so does the retiring."'
+      : '"Every blade here has a story. Buy one, or become one."');
     this.mercMenu.innerHTML = `<h2>${esc(title)}</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(pitch)}</div>`
       + contract + rows + retire
@@ -4605,7 +4605,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     });
     this.mercMenu.querySelector<HTMLButtonElement>('button[data-merc-retire]')?.addEventListener('click', () => {
       if (!window.confirm('Retire this character? The run ends (essence banks as on death), and the character '
-        + 'joins the mercenary roster — met again wherever an outpost offers them.')) return;
+        + 'joins the mercenary roster, met again wherever an outpost offers them.')) return;
       this.closeMercMenu();
       world.retireCharacter(); // the run-end flow takes over (retire-flavored screen)
     });
@@ -4655,11 +4655,11 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     // A discovered SECRET calling speaks with its own voice; the quartermaster's
     // patter covers the ordinary chains.
     const flavor = offers.find(o => o.flavor)?.flavor
-      ?? '"Not work this time, traveller — a VOCATION. Finish its trials and the heart of the star opens to you. One calling per lifetime; choose it well."';
+      ?? '"Not work this time, traveller. A VOCATION. Finish its trials and the heart of the star opens to you. One calling per lifetime; choose it well."';
     this.vocationMenu.innerHTML = `<h2>A Calling</h2>`
       + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(flavor)}</div>`
       + rows
-      + `<div class="desc" style="margin-top:8px;color:#8a8678">Completing a vocation unlocks its trials for EVERY future hero, whatever their class. Vocation points spend only inside its tree${offers.length ? '' : ''} — press P to see the star.</div>`
+      + `<div class="desc" style="margin-top:8px;color:#8a8678">Completing a vocation unlocks its trials for EVERY future hero, whatever their class. Vocation points spend only inside its tree${offers.length ? '' : ''}; press P to see the star.</div>`
       + `<div class="bind-btns" style="margin-top:10px"><button data-vocation-close>Not yet</button></div>`;
     this.vocationMenu.querySelectorAll<HTMLButtonElement>('button[data-vocation-quest]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5122,7 +5122,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     const washUi = `<span style="margin-left:10px;white-space:nowrap">wash
       <input id="map-wash-mul" type="range" min="${MAP_CFG.wash.min}" max="${MAP_CFG.wash.max}"
         step="${MAP_CFG.wash.step}" value="${wash}" style="width:76px;vertical-align:middle"
-        title="Territory/weather wash intensity — crank it to read a warfront's exact reach and gradient; 1× is the authored look. Badges and markers never scale.">
+        title="Territory/weather wash intensity: crank it to read a warfront's exact reach and gradient; 1× is the authored look. Badges and markers never scale.">
       <span id="map-wash-val" style="color:${wash !== 1 ? '#b8d8a8' : '#6a6a78'}">${wash.toFixed(2)}×</span></span>`;
     return `<div style="font-size:9px;color:#6a6a78;margin:-2px 0 6px 0">layers: ${chips}${washUi}</div>`;
   }
@@ -5136,7 +5136,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     const activeHtml = log.active.length
       ? log.active.map(e => {
         const color = e.ready ? '#7ec46a' : '#8a6ad0';
-        const sub = e.ready ? '✓ objective done — return to the giver to claim' : (e.target ? `target: ${esc(e.target)}` : 'in progress');
+        const sub = e.ready ? '✓ objective done: return to the giver to claim' : (e.target ? `target: ${esc(e.target)}` : 'in progress');
         return `<div style="padding:7px 9px;margin:0 0 5px 0;background:#16161e;border-left:3px solid ${color};border-radius:4px">
           <div style="font-size:12px;color:#d8d4c8">${esc(e.label)}${badge(e.category)}</div>
           <div style="font-size:10px;color:${e.ready ? '#9ed88a' : '#8a8678'};margin-top:2px">${sub}</div></div>`;
@@ -5214,7 +5214,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       const or = objectiveRead(o);
       const done = world.completedObjectives.has(zoneId);
       const bossName = o.kind === 'boss' && charted ? MONSTERS[o.id]?.name : undefined;
-      const label = bossName ? `${or.read} — ${bossName}` : or.read;
+      const label = bossName ? `${or.read}: ${bossName}` : or.read;
       const tail = done ? ' ✓' : objectiveSeals(o) ? ' · exits seal' : '';
       chips.push(`<span class="zi-chip"${done ? ' style="color:#7ec46a;border-color:#3a5a3e"' : ''}>${esc(or.glyph)} ${esc(label)}${esc(tail)}</span>`);
     }
@@ -5242,14 +5242,14 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     const head = `<div class="zi-zone">${esc(name)}`
       + (pinned ? ` <span class="zi-pin" data-unpin="1">📌 unpin</span>` : '')
       + `</div>`
-      + `<div class="zi-hint">${zoneId === world.zone.id ? 'you are here' : pinned ? 'pinned' : scouted ? 'scouted from afar — unwalked' : 'hovering'}</div>`
+      + `<div class="zi-hint">${zoneId === world.zone.id ? 'you are here' : pinned ? 'pinned' : scouted ? 'scouted from afar, unwalked' : 'hovering'}</div>`
       + (chips.length ? `<div class="zi-chips">${chips.join('')}</div>` : '');
 
     const entries = zoneInfoFor(world, zoneId);
     if (entries.length === 0) {
       const msg = charted ? 'Nothing of note here.'
-        : scouted ? 'Scouted from afar — walk its ground to learn more.'
-          : 'Uncharted — explore to reveal.';
+        : scouted ? 'Scouted from afar; walk its ground to learn more.'
+          : 'Uncharted; explore to reveal.';
       return head + `<div class="zi-empty">${msg}</div>`;
     }
     const groups: { kind: ZoneInfoEntry['kind']; title: string }[] = [
@@ -5404,7 +5404,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
     const retired = world.runEndReason === 'retire';
     const title = retired ? 'RETIRED FROM THE WAKE' : 'YOU HAVE DIED';
     const deed = retired
-      ? `hangs up the blade at ${world.zone.name} — and joins the mercenary roster (${acc.mercRoster.length} retired)`
+      ? `hangs up the blade at ${world.zone.name}, and joins the mercenary roster (${acc.mercRoster.length} retired)`
       : `fell in ${world.zone.name}`;
     const who = world.meta.name !== world.meta.classDef.name ? `${world.meta.name} — ` : '';
     this.deathScreen.innerHTML = `
@@ -5498,10 +5498,10 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       const needPads = couchMinPads();
       const couchRow = !couchPossible ? ''
         : connectedPadIndices().length >= needPads
-          ? '<button id="esc-couch">Local Co-op — Player Joins</button>'
-          : `<button id="esc-couch" disabled>Local Co-op — press any button on ${needPads > 1 ? 'a 2nd controller' : 'a controller'}</button>`;
+          ? '<button id="esc-couch">Local Co-op: Player Joins</button>'
+          : `<button id="esc-couch" disabled>Local Co-op: press any button on ${needPads > 1 ? 'a 2nd controller' : 'a controller'}</button>`;
       const couchLeaveRow = this.onCouchLeave && couchSeated > 0
-        ? '<button id="esc-couch-leave">Local Co-op — Guest Leaves</button>' : '';
+        ? '<button id="esc-couch-leave">Local Co-op: Guest Leaves</button>' : '';
       root.innerHTML = `
         <h1>Paused</h1>
         <div class="esc-btns">
@@ -5606,11 +5606,11 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       <div class="rebind-list">${rows}</div>
       <div class="rebind-row">
         <span>Invert Movement</span>
-        <button id="opt-invertmove" title="Up walks down, left walks right — movement keys and the move stick alike (Swap Sticks trades WHICH stick moves; this flips WHICH WAY movement goes). Fair warning: the widdershins hex inverts controls too, so wearing it while this is ON plays standard for the duration — two turns make a true.">${s.invertMove ? 'ON' : 'OFF'}</button>
+        <button id="opt-invertmove" title="Up walks down, left walks right: movement keys and the move stick alike (Swap Sticks trades WHICH stick moves; this flips WHICH WAY movement goes). Fair warning: the widdershins hex inverts controls too, so wearing it while this is ON plays standard for the duration; two turns make a true.">${s.invertMove ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Improvised Strike (empty slots swing)</span>
-        <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike — the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${s.improvisedStrike ? 'ON' : 'OFF'}</button>
+        <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike, the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${s.improvisedStrike ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Gear Pickup</span>
@@ -5650,7 +5650,7 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
       </div>
       <div class="rebind-row">
         <span>Aim Assist Style</span>
-        <button id="opt-assistmode" title="${AIM_ASSIST_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}">${(AIM_ASSIST_MODES.find(m => m.id === s.pad.assistMode) ?? AIM_ASSIST_MODES[0]).name}</button>
+        <button id="opt-assistmode" title="${AIM_ASSIST_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${(AIM_ASSIST_MODES.find(m => m.id === s.pad.assistMode) ?? AIM_ASSIST_MODES[0]).name}</button>
       </div>
       <div class="rebind-row">
         <span>Swap Sticks (southpaw)</span>
@@ -5661,25 +5661,25 @@ Worn graft (Skill Slot ${r.slot + 1}) — DORMANT: ${r.state === 'duplicate'
         <span>UI Scale</span>
         <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
           value="${Math.round(s.uiScale * 100)}"
-          title="Grows the whole interface together — panels, tooltips, popups, and the on-screen HUD — so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
+          title="Grows the whole interface together (panels, tooltips, popups, and the on-screen HUD) so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
       </div>
       <div class="rebind-row">
         <span>Render Scale</span>
-        <button id="opt-renderscale" title="Internal rendering resolution (render/renderScale.ts). The world view is identical at any setting — only pixel density changes.
-AUTO — watches your live frame rate and steps down/up so the game holds smooth even on weak or degraded graphics paths (default)
-Fixed % — pins the buffer at that share of the window">${s.renderScale === 'auto' ? 'AUTO' : `${Math.round((s.renderScale as number) * 100)}%`}</button>
+        <button id="opt-renderscale" title="Internal rendering resolution (render/renderScale.ts). The world view is identical at any setting; only pixel density changes.
+AUTO: watches your live frame rate and steps down/up so the game holds smooth even on weak or degraded graphics paths (default)
+Fixed %: pins the buffer at that share of the window">${s.renderScale === 'auto' ? 'AUTO' : `${Math.round((s.renderScale as number) * 100)}%`}</button>
       </div>
       <div class="rebind-row">
         <span>Map Zone Names</span>
         <button id="opt-maplabels" title="How the world map wears its name cards:
-${MAP_LABEL_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}
+${MAP_LABEL_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}
 Towns keep their card in every mode, and cards never block a waypoint's click.">${(MAP_LABEL_MODES.find(m => m.id === s.mapLabels) ?? MAP_LABEL_MODES[0]).name}</button>
       </div>
       <div class="rebind-row">
         <span>Reawaken After Quit</span>
         <button id="opt-resume" title="Where a relaunched save wakes:
-WHERE YOU STOOD — the exact spot, situation, and wounds the save captured (quitting out of trouble hands the trouble back)
-IN LASTLIGHT — the sanctuary; the world stays explored, only you walk home
+WHERE YOU STOOD: the exact spot, situation, and wounds the save captured (quitting out of trouble hands the trouble back)
+IN LASTLIGHT: the sanctuary; the world stays explored, only you walk home
 (A character mode may pin this choice.)">${this.getSettings().resumeSpawn === 'town'
           ? 'IN LASTLIGHT' : 'WHERE YOU STOOD'}</button>
       </div>
@@ -5697,14 +5697,14 @@ IN LASTLIGHT — the sanctuary; the world stays explored, only you walk home
       <div class="rebind-row">
         <span>Poise/Insight Arcs</span>
         <button id="opt-poolbars" title="When the poise/insight pool arcs show on the life orb:
-SMART — around a recent change, or while dented on builds where the pool carries real weight (default)
-ON CHANGE — strictly around a recent change to the pool
-ALWAYS — pinned on (the min-maxer's steady readout)">${{
+SMART: around a recent change, or while dented on builds where the pool carries serious weight (default)
+ON CHANGE: strictly around a recent change to the pool
+ALWAYS: pinned on (the min-maxer's steady readout)">${{
           smart: 'SMART', recent: 'ON CHANGE', always: 'ALWAYS',
         }[s.poolBars]}</button>
       </div>
       <h1>Cursor</h1>
-      <div class="acct-head">One identity for the mouse cursor and the pad's aim reticle —
+      <div class="acct-head">One identity for the mouse cursor and the pad's aim reticle:
         a shape and a tint that stand out against any battlefield.</div>
       <div class="rebind-row">
         <span>Style</span>
@@ -5720,17 +5720,17 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
             border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
       </div>
       <h1>Information Stream</h1>
-      <div class="acct-head">Compose your own stream of information — what announces, where it stacks,
+      <div class="acct-head">Compose your own stream of information: what announces, where it stacks,
         and how long it stands. Gold = shown; dimmed = muted. Every switch takes effect on the next frame.</div>
       <div class="rebind-row">
         <span>World News Time</span>
         <span class="pad-opt"><input type="range" id="opt-noticesec" min="${NOTICE_CFG.secMin * 10}" max="${NOTICE_CFG.secMax * 10}" step="5"
           value="${Math.round(s.noticeSec * 10)}"
-          title="How long each world-news line stands in the screen feed — held legible, then fading out by this clock. Every line runs its own timer, and the stack keeps the newest on top so nothing overprints."> <b id="val-noticesec">${s.noticeSec.toFixed(1)}s</b></span>
+          title="How long each world-news line stands in the screen feed: held legible, then fading out by this clock. Every line runs its own timer, and the stack keeps the newest on top so nothing overprints."> <b id="val-noticesec">${s.noticeSec.toFixed(1)}s</b></span>
       </div>
       <div class="rebind-row">
         <span>World News Position</span>
-        <button id="opt-noticeanchor" title="${NOTICE_ANCHORS.map(a => `${a.label} — ${a.blurb}`).join('\n')}">${(NOTICE_ANCHORS.find(a => a.id === s.noticeAnchor) ?? NOTICE_ANCHORS[0]).label.toUpperCase()}</button>
+        <button id="opt-noticeanchor" title="${NOTICE_ANCHORS.map(a => `${a.label}: ${a.blurb}`).join('\n')}">${(NOTICE_ANCHORS.find(a => a.id === s.noticeAnchor) ?? NOTICE_ANCHORS[0]).label.toUpperCase()}</button>
       </div>
       <div class="rebind-row">
         <span>News Channels</span>
@@ -5746,7 +5746,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Pickup Feed (right flank)</span>
-        <button id="opt-pickupfeed" title="Lists exactly what entered your bags — 'Warcry (Common) x1' — stacked on the right where the inventory opens, coalescing repeat grabs into one row. Drawn beneath every panel: an open inventory always covers it, never the reverse.">${s.pickupFeed ? 'ON' : 'OFF'}</button>
+        <button id="opt-pickupfeed" title="Lists exactly what entered your bags ('Warcry (Common) x1') stacked on the right where the inventory opens, coalescing repeat grabs into one row. Drawn beneath every panel: an open inventory always covers it, never the reverse.">${s.pickupFeed ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Pickup Feed Time</span>
@@ -5759,11 +5759,11 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
         <span>Line-of-Sight Shade</span>
         <span class="pad-opt"><input type="range" id="opt-veildark" min="0" max="100" step="5"
           value="${Math.round(s.veilDarkness * 100)}"
-          title="How dark the sight veil paints what your hero cannot see — walls, trunks and roofs throw the same shadow shapes at any setting, and hidden nameplates dim with the pixels. 100% is the authored night; dim it to admire what the world builds atop its structures (spire gardens, canopy work). Purely visual: enemy eyes read the engine's own sightline, never this slider."> <b id="val-veildark">${s.veilDarkness <= 0 ? 'LIFTED' : `${Math.round(s.veilDarkness * 100)}%`}</b></span>
+          title="How dark the sight veil paints what your hero cannot see: walls, trunks and roofs throw the same shadow shapes at any setting, and hidden nameplates dim with the pixels. 100% is the authored night; dim it to admire what the world builds atop its structures (spire gardens, canopy work). Purely visual: enemy eyes read the engine's own sightline, never this slider."> <b id="val-veildark">${s.veilDarkness <= 0 ? 'LIFTED' : `${Math.round(s.veilDarkness * 100)}%`}</b></span>
       </div>
       <div class="rebind-row">
         <span>Camera</span>
-        <button id="opt-cameramode" title="${CAMERA_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}">${cameraModeOf(s.cameraMode).name}</button>
+        <button id="opt-cameramode" title="${CAMERA_MODES.map(m => `${m.name}: ${m.blurb}`).join('\n')}">${cameraModeOf(s.cameraMode).name}</button>
       </div>
       <div class="rebind-row">
         <span>Low-Life Screen Pulse</span>
@@ -5771,7 +5771,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>Faintness Frame-Falter</span>
-        <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips — brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${s.statusFalter ? 'ON' : 'OFF'}</button>
+        <button id="opt-falter" title="While light-headed (faintness / a swoon), the picture itself deliberately skips: brief, simulated lag spikes, on purpose: your hero's head is going light, so your frames seem to. The game underneath never stutters (movement, casts and co-op keep running at full rate). OFF for comfort or motion sensitivity; the grey pall still shows.">${s.statusFalter ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Foresight (enemy cast markers)</span>
@@ -5779,7 +5779,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       </div>
       <div class="rebind-row">
         <span>NPC Talk Typing</span>
-        <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once — same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
+        <button id="opt-speechtyping" title="Townsfolk tell their talk-bubble lines glyph by glyph, as if speaking. OFF shows each line whole at once: same words, no wait.">${s.speechTyping ? 'ON' : 'OFF'}</button>
       </div>`;
     root.innerHTML = `
       <h1>Options</h1>
@@ -6134,7 +6134,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
             <span style="font-size:10px;color:${mode.color};border:1px solid ${mode.color};
               border-radius:6px;padding:0 5px;margin-left:6px">${badge}</span></button>
           <button class="sm-roster-del" data-cid="${e.charId}" style="flex:0 0 auto"
-            title="Release this vessel — the character is permanently discarded">✕</button>
+            title="Release this vessel: the character is permanently discarded">✕</button>
         </div>`;
     }).join('');
     this.startMenu.innerHTML = `
@@ -6239,7 +6239,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     const mixHtml = (): string => {
       // pressureless packages (The Pit) hold no share of the world mix.
       const active = pkgs.filter(p => !p.alwaysOn && !p.pressureless && cfg[p.id].enabled && cfg[p.id].startLevel <= 100);
-      if (!active.length) return `<div class="mix-empty">No packages enabled — a calm world.</div>`;
+      if (!active.length) return `<div class="mix-empty">No packages enabled: a calm world.</div>`;
       const total = active.reduce((s, p) => s + Math.max(0, cfg[p.id].weight), 0) || 1;
       return active.map(p => {
         const pct = Math.round(100 * Math.max(0, cfg[p.id].weight) / total);
@@ -6265,7 +6265,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
           <label class="exped-head"><input type="checkbox" data-en="${p.id}" ${c.enabled ? 'checked' : ''} ${dis}>
             <span class="exped-name" style="color:${p.color ?? 'var(--gold)'}">${p.label}</span></label>
           <div class="exped-blurb">${p.blurb}</div>
-          <div class="exped-always">● A place, not an event — no frequency to tune</div>
+          <div class="exped-always">● A place, not an event: no frequency to tune</div>
         </div>`;
       }
       // Slider ranges WIDEN with owned investment tiers (Investigation/Exploration).
@@ -6293,9 +6293,9 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
 
     const body = tempoHtml() + (pkgs.length === 0
       ? `<div class="mix-empty" style="padding:22px;line-height:1.7">
-           No world packages unlocked yet. <b>Discover them in play</b> — e.g. reach <b>level 10</b> to find
+           No world packages unlocked yet. <b>Discover them in play</b>: e.g. reach <b>level 10</b> to find
            <b>Breaches</b>, slay a <b>Crowned</b> champion to command <b>Warbands</b>, or fell a <b>warlord</b>
-           for <b>Demon Invasions</b> — then unlock their configuration in the <b>Vault</b>, and they'll appear
+           for <b>Demon Invasions</b>. Then unlock their configuration in the <b>Vault</b>, and they'll appear
            here to tune. Until then the world runs on its sensible defaults.
          </div>`
       : `<div class="mix-label">World mix — relative frequency of your unlocked packages</div>

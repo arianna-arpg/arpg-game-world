@@ -48,8 +48,8 @@ export const DROVE_SURGE: DroveSurge = {
   omen: {
     whisper: 150, reveal: 55, widenPerMin: 12,
     lines: [
-      'a pen gave way {bearing} of here — a whole fold running loose, {dist}',
-      'scattered bleating on the wind, {bearing} — and a reeve cursing after it',
+      'a pen gave way {bearing} of here: a whole fold running loose, {dist}',
+      'scattered bleating on the wind, {bearing}, and a reeve cursing after it',
       'the drovers ask every passing hand: a fold is loose {bearing}, wanted back ALIVE',
     ],
   },

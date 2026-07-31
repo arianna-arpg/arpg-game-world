@@ -304,11 +304,11 @@ registerMarkerSource((world: World): MapMarker[] => {
   if (!h.revealed) return [{
     id: `hunt-trail-${h.id}`, zoneId: h.currentZoneId, coord,
     glyph: '🐾', fill: '#241c08', stroke: h.color, text: h.color, r: 9,
-    title: 'Fresh tracks lead here — follow the trail', fog: 'always', z: 17,
+    title: 'Fresh tracks lead here. Follow the trail', fog: 'always', z: 17,
   }];
   return [{
     id: `hunt-${h.id}`, zoneId: h.currentZoneId, coord,
     glyph: '🐗', fill: '#241c08', stroke: h.color, text: h.color, r: 10,
-    title: 'A great beast prowls here — the Hunt', fog: 'always', z: 18,
+    title: 'A great beast prowls here: the Hunt', fog: 'always', z: 18,
   }];
 });

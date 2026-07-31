@@ -198,7 +198,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     skillIds: ['heavy_strike', 'whirlwind', 'dash',
       'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'],
     discover: { ledger: classLevelLedgerKey('warrior', 15),
-      hint: 'Some come back from the Warrior\'s road changed — louder, redder, faster than the line can hold.' } },
+      hint: 'Some come back from the Warrior\'s road changed: louder, redder, faster than the line can hold.' } },
   // --- THE MIND LINE: the Magician is the Intelligence branch — played deep,
   // it opens its own INT kin first, then the doors into its constituent
   // Wisdom and Willpower schools; those chain onward by OWNERSHIP.
@@ -212,7 +212,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   // into the ranged and dueling crafts first, the darker and louder arts
   // after; the field disciplines chain by ownership.
   { classId: 'ranger', cost: 200,
-    blurb: 'Death from afar — and the field disciplines that perfect the shot.',
+    blurb: 'Death from afar, and the field disciplines that perfect the shot.',
     skillIds: ['piercing_arrow', 'fan_of_blades', 'quickstep'],
     supportIds: ['perfect_draw', 'wandering_mark'],
     discover: { ledger: classLevelLedgerKey('rogue', 10),
@@ -239,7 +239,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     discover: { ledger: classLevelLedgerKey('rogue', 10),
       hint: 'Past the tenth quiet job, some knives start wanting an audience.' } },
   { classId: 'juggernaut', cost: 320,
-    blurb: 'It hits, it takes hits, and it does not stop — and now it keeps the wake: votive flames, a lit vigil, and the last word.',
+    blurb: 'It hits, it takes hits, and it does not stop. Now it keeps the wake too: votive flames, a lit vigil, and the last word.',
     // Frenzy rides along: it left the Rogue's (starter) bar in the parity
     // pass, so this bundle is what keeps the fast fury-feeder droppable.
     skillIds: ['piledriver', 'reckoning', 'stone_skin', 'frenzy',
@@ -248,7 +248,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     discover: { classes: 'guardian',
       hint: 'The wall, taught to walk forward.' } },
   { classId: 'pyromancer', cost: 220,
-    blurb: 'Everything burns eventually — these are the words for "now".',
+    blurb: 'Everything burns eventually; these are the words for "now".',
     skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'],
     discover: { ledger: classLevelLedgerKey('magician', 10),
       hint: 'Deep in the Magician\'s studies there is a chapter singed at every corner.' } },
@@ -287,14 +287,14 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
 
   // --- The parity twelve (every star point now anchors three classes) -------
   { classId: 'breaker', cost: 260,
-    blurb: 'The executioner\'s grammar: break the stance, quake the rout, pass The Verdict — the whole slam-and-sentence school rides along.',
+    blurb: 'The executioner\'s grammar: break the stance, quake the rout, pass The Verdict. The whole slam-and-sentence school rides along.',
     skillIds: ['sunder_maul', 'earthquake', 'verdict',
       'tolling_ruin', 'groundswell', 'faultbreak'],
     supportIds: ['concussive_blows'],
     discover: { ledger: classLevelLedgerKey('warrior', 10),
-      hint: 'Warriors who keep to the road learn where a stance carries its weight — and how to take it out.' } },
+      hint: 'Warriors who keep to the road learn where a stance carries its weight, and how to take it out.' } },
   { classId: 'vanguard', cost: 240,
-    blurb: 'First through the gap, shield still moving — with the charges, thrusts, and leaps of the advancing line.',
+    blurb: 'First through the gap, shield still moving: the charges, thrusts, and leaps of the advancing line.',
     skillIds: ['charge', 'shockfront', 'marching_bulwark',
       'shield_charge', 'bastion_thrust', 'crushing_leap'],
     supportIds: ['phalanx'],
@@ -308,7 +308,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     discover: { classes: 'berserker',
       hint: 'Fury, worn long enough, starts dreaming of one perfect stroke.' } },
   { classId: 'brawler', cost: 240,
-    blurb: 'No blade, no apology — the pit\'s arithmetic, plus the carving rhythms that keep the fists warm.',
+    blurb: 'No blade, no apology: the pit\'s arithmetic, plus the carving rhythms that keep the fists warm.',
     skillIds: ['one_two', 'chain_pull', 'haymaker',
       'carve', 'deep_carve', 'bloodlust'],
     supportIds: ['echoing_might'],
@@ -343,9 +343,9 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     // the sunken ruins' toothed halls and the highland's boulder plates
     // are the world's own tutors.
     discover: { ledger: LEDGER_TRAP_SPRUNG,
-      hint: 'The floor clicks before it kills. Step wrong once — and live — and the workshop is yours.' } },
+      hint: 'The floor clicks before it kills. Step wrong once, and live, and the workshop is yours.' } },
   { classId: 'warlord', cost: 320,
-    blurb: 'Presence as mechanics — the first Charisma class, with the horns, standards, and blessings of command.',
+    blurb: 'Presence as mechanics: the first Charisma class, with the horns, standards, and blessings of command.',
     skillIds: ['battle_standard', 'single_out', 'challenging_shout',
       'war_horn', 'trumpet_peal', 'blessing_of_might'],
     supportIds: ['provocation', 'clamor'],
@@ -368,7 +368,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     discover: { ledger: classLevelLedgerKey('rogue', 15),
       hint: 'Far down the Rogue\'s road: the best hiding place is someone else\'s certainty.' } },
   { classId: 'chronomancer', cost: 380,
-    blurb: 'Time as a resource everyone else spends carelessly — up to and including stopping it outright.',
+    blurb: 'Time as a resource everyone else spends carelessly, up to and including stopping it outright.',
     skillIds: ['stasis_lock', 'torpor_field', 'time_dilation',
       'time_stop', 'warp', 'temporal_pad'],
     supportIds: ['lingering_moment', 'borrowed_haste'],
@@ -390,7 +390,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
   // (killHandlers.ts broodmothers_slain — broodmothers roam the wilds and
   // crown the chitin country) and the humming does not stop; it waits.
   { classId: 'hivecaller', cost: 300,
-    blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering — and one pointed word the whole chorus obeys.',
+    blurb: 'The swarm is the weapon; you are only its will. A hive that reknits itself, a veil of biting motes, the quiet dead gathered glimmering, and one pointed word the whole chorus obeys.',
     skillIds: ['summon_swarmlings', 'raise_gnatveil', 'command_assault',
       'beckon_palewisps', 'loose_marrowgrubs'],
     supportIds: ['broodclutch', 'vicious_brood', 'hiveborn',
@@ -435,7 +435,7 @@ export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
     discover: { classes: 'beguiler',
       hint: 'One whispered madness turns a mind. Somewhere there is a school for saying it to a square full of them.' } },
   { classId: 'runeweaver', cost: 320,
-    blurb: 'Spells are sentences, runes are the words, patience is the grammar — the invocation bank made a calling.',
+    blurb: 'Spells are sentences, runes are the words, patience is the grammar: the invocation bank made a calling.',
     skillIds: ['invocation', 'rune_of_power', 'warp'],
     discover: { ledger: classLevelLedgerKey('magician', 20),
       hint: 'At the twentieth circle the Magician\'s letters stop meaning and start DOING. Few study past the alphabet.' } },
@@ -471,9 +471,9 @@ function classBundleEntry(b: ClassBundleDef): Unlockable {
     ...(d?.ledger !== undefined ? { reqLedger: d.ledger } : {}),
     ...(d?.ledgerCounts !== undefined ? { reqLedgerCounts: d.ledgerCounts } : {}),
     ...(chain.length ? { requiresUnlock: chain } : {}),
-    label: `Class — ${name}`,
+    label: `Class: ${name}`,
     description: `${b.blurb} The ${name} joins the class roll at character select`
-      + ` — and once realized in a run, its Vocation chain opens.`
+      + `, and once realized in a run, its Vocation chain opens.`
       + ` Gems added to the drop pool: ${gemNames(b.skillIds, SKILLS)}`
       + (sups.length ? ` · supports: ${gemNames(sups, SUPPORTS)}` : '') + '.',
     payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups],
@@ -492,7 +492,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     id: t.id, kind: 'slot', cost: t.cost, reqClasses: t.slots,
     ...(i > 0 ? { requiresUnlock: SLOT_TIERS[i - 1].id } : {}),
     label: `Class Slot ${t.slots}`,
-    description: `Surface a ${t.slots}th selectable class at character select, dealt at random from your unlocked classes (Class unlocks below deepen that pool — a slot only surfaces once your pool can fill it).`,
+    description: `Surface a ${t.slots}th selectable class at character select, dealt at random from your unlocked classes (Class unlocks below deepen that pool; a slot only surfaces once your pool can fill it).`,
     payload: { slotCount: t.slots },
   })),
 
@@ -507,40 +507,40 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Infernal Ray, Summon Skeleton (+archer), Piercing Arrow, Fan of Blades may drop.',
     payload: { skillIds: ['infernal_ray', 'summon_skeleton', 'summon_skeleton_archer', 'piercing_arrow', 'fan_of_blades'] } },
 
-  { id: 'gem_skills_echoes', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — Echoes',
+  { id: 'gem_skills_echoes', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool: Echoes',
     description: 'Mirage Archer and Shadow Clone may drop.',
     payload: { skillIds: ['mirage_archer', 'shadow_clone'] } },
-  { id: 'gem_skills_covenants', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool — Covenants',
+  { id: 'gem_skills_covenants', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool: Covenants',
     description: 'Convocation, Overclock, Blood Mortgage may drop.',
     payload: { skillIds: ['convocation', 'overclock', 'blood_mortgage'] } },
-  { id: 'gem_skills_groundwork', kind: 'skill', cost: 200, reqLevel: 1, label: 'Skill Pool — Groundwork',
+  { id: 'gem_skills_groundwork', kind: 'skill', cost: 200, reqLevel: 1, label: 'Skill Pool: Groundwork',
     description: 'Volcanic Fissure, Eruption, Thunderstorm, Entangle, Rune of Power, Toxic Domain may drop.',
     payload: { skillIds: ['volcanic_fissure', 'eruption', 'thunderstorm', 'entangle', 'rune_of_power', 'toxic_domain'] } },
-  { id: 'gem_skills_purity', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — Purity',
+  { id: 'gem_skills_purity', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool: Purity',
     description: 'Purity of Elements / Fire / Cold / Lightning and Determination may drop.',
     payload: { skillIds: ['purity_of_elements', 'purity_of_fire', 'purity_of_cold', 'purity_of_lightning', 'determination'] } },
-  { id: 'gem_skills_arsenal', kind: 'skill', cost: 220, reqLevel: 1, label: 'Skill Pool — Arsenal',
+  { id: 'gem_skills_arsenal', kind: 'skill', cost: 220, reqLevel: 1, label: 'Skill Pool: Arsenal',
     description: 'Powderkeg Arrow, Orbital Blades, Pinning Spear, Groundswell, Mower\'s Arc, Summon Blade Wraith, Rolling Cannonade, Time Dilation may drop.',
     payload: { skillIds: ['powderkeg_arrow', 'orbital_blades', 'pinning_spear', 'groundswell', 'scythe_sweep', 'summon_blade_wraith', 'rolling_cannonade', 'time_dilation'] } },
   // THE WILDCRAFT — the jungle's arts, surfaced by walking INTO a sunken
   // ruin (the ruin_entered ledger the ruin_gate sidezone bumps: discovery
   // unlocks the discipline — the cellar→Pit pattern for skills).
-  { id: 'gem_skills_wildcraft', kind: 'skill', cost: 190, reqLedger: 'ruin_entered', label: 'Skill Pool — the Wildcraft',
+  { id: 'gem_skills_wildcraft', kind: 'skill', cost: 190, reqLedger: 'ruin_entered', label: 'Skill Pool: the Wildcraft',
     description: 'Machete Arc, Blowdart, Vine Lash, Spore Bloom, Panther Pounce may drop. Learned the way it was first learned: by going in.',
     payload: { skillIds: ['machete_arc', 'blowdart', 'vine_lash', 'spore_bloom', 'panther_pounce'] } },
   // The desert's discipline waits under the erg (the vault_entered ledger the
   // vault_gate sidezone bumps — found, not taught).
-  { id: 'gem_skills_sunsand', kind: 'skill', cost: 190, reqLedger: 'vault_entered', label: 'Skill Pool — Sun & Sand',
+  { id: 'gem_skills_sunsand', kind: 'skill', cost: 190, reqLedger: 'vault_entered', label: 'Skill Pool: Sun & Sand',
     description: 'Glass Lance, Dune Surge, Mirage Step, Sirocco Ring, Solar Brand may drop. The desert teaches whoever walks back out.',
     payload: { skillIds: ['glass_lance', 'dune_surge', 'mirage_step', 'sirocco_ring', 'solar_brand'] } },
   // The fear-craft waits at the TOP of the haunted house (the manor_entered
   // ledger the manor's grand stair bumps — climbed, not taught).
-  { id: 'gem_skills_harrowing', kind: 'skill', cost: 190, reqLedger: 'manor_entered', label: 'Skill Pool — the Harrowing',
+  { id: 'gem_skills_harrowing', kind: 'skill', cost: 190, reqLedger: 'manor_entered', label: 'Skill Pool: the Harrowing',
     description: 'Gourd Bomb, Harrowing Wail, Summon Scarecrow may drop. Whatever you met on the stairs taught you this.',
     payload: { skillIds: ['gourd_bomb', 'harrowing_wail', 'summon_scarecrow'] } },
   // Light-craft is learned in the dark (the gloaming_seen ledger the deep
   // gloom stamps — stood in, not taught).
-  { id: 'gem_skills_gloaming', kind: 'skill', cost: 170, reqLedger: 'gloaming_seen', label: 'Skill Pool — the Gloaming',
+  { id: 'gem_skills_gloaming', kind: 'skill', cost: 170, reqLedger: 'gloaming_seen', label: 'Skill Pool: the Gloaming',
     description: 'Kindle may drop. You stood in the risen dark and learned what a light is worth.',
     payload: { skillIds: ['kindle_wick'] } },
   // THE AUREOLE KATA — the Seraph City's circular judgement. The gateway
@@ -548,48 +548,48 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // lesson door (grand_cathedral, data/structures.ts) — the first dwell-open
   // stamps 'cathedral_door_opened', and the kata is learned by walking into
   // the See, like every country discipline.
-  { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLedger: 'cathedral_door_opened', label: 'Skill Pool — the Aureole',
+  { id: 'gem_skills_aureole', kind: 'skill', cost: 180, reqLedger: 'cathedral_door_opened', label: 'Skill Pool: the Aureole',
     description: 'Gloriole, Colonnade, Gloria may drop. The circular judgement of the Seraph City: courts that convene on the accused.',
     payload: { skillIds: ['gloriole', 'colonnade', 'gloria'] } },
   // THE LITURGY — the Cathedral's own art, taught by the same doors: call
   // and response (Versicle/Antiphon close the Responsory measure) and the
   // second player-allied angel (Invoke Lampad).
-  { id: 'gem_skills_liturgy', kind: 'skill', cost: 170, reqLedger: 'cathedral_door_opened', label: 'Skill Pool — the Liturgy',
+  { id: 'gem_skills_liturgy', kind: 'skill', cost: 170, reqLedger: 'cathedral_door_opened', label: 'Skill Pool: the Liturgy',
     description: 'Versicle, Antiphon, Invoke Lampad may drop. Call and response: the See\'s own measure, and the candle-borne warden who holds your line.',
     payload: { skillIds: ['versicle', 'antiphon', 'invoke_lampad'] } },
   // THE SCENTCRAFT — the Garden's pheromone-craft waits at the BOTTOM of
   // the formicary (the nest_entered ledger the mound-gate bumps — dwelled
   // into, not taught). The colony has been running the world's oldest
   // instinct-lever seminar; entry is the tuition.
-  { id: 'gem_skills_scentcraft', kind: 'skill', cost: 190, reqLedger: 'nest_entered', label: 'Skill Pool — Scentcraft',
+  { id: 'gem_skills_scentcraft', kind: 'skill', cost: 190, reqLedger: 'nest_entered', label: 'Skill Pool: Scentcraft',
     description: 'Prey Musk, Alarm Reek, Honeydew Lure, Moult may drop. The nest taught you what a smell can make a body do.',
     payload: { skillIds: ['prey_musk', 'alarm_reek', 'honeydew_lure', 'moult'] } },
   // THE GLIMMERCRAFT — the Grove's light-lure art waits under the hollow
   // bole (the 'gleam_entered' ledger the den's door bumps — dwelled into,
   // not taught). The False Sovereign has been running the wood's oldest
   // bait-and-lantern con; walking into her parlor is the tuition.
-  { id: 'gem_skills_glimmer', kind: 'skill', cost: 160, reqLedger: 'gleam_entered', label: 'Skill Pool — Glimmercraft',
+  { id: 'gem_skills_glimmer', kind: 'skill', cost: 160, reqLedger: 'gleam_entered', label: 'Skill Pool: Glimmercraft',
     description: 'Lure Lantern may drop. Something in the grove taught you what a light can make a body do.',
     payload: { skillIds: ['lure_lantern'] } },
   // THE SIEGECRAFT — the Warfront's ordnance art waits under the powder
   // magazine (the 'ordnance_yard_entered' ledger the den's door bumps —
   // dwelled into, not taught). You watched the Grind build its guns;
   // walking the proofing floor is the tuition.
-  { id: 'gem_skills_siegecraft', kind: 'skill', cost: 180, reqLedger: 'ordnance_yard_entered', label: 'Skill Pool — Siegecraft',
+  { id: 'gem_skills_siegecraft', kind: 'skill', cost: 180, reqLedger: 'ordnance_yard_entered', label: 'Skill Pool: Siegecraft',
     description: 'Hellbore Mortar may drop. The Ordnance Yard taught you what a gun needs: somewhere to stand, something to feed it, and someone it hates.',
     payload: { skillIds: ['hellbore_mortar'] } },
   // THE MIMIC'S LESSON (engine/mimic.ts — the blue-mage lane): surfaced the
   // way the idea itself arrives — by killing ONE chest that pretended to be
   // treasure. The bestiary ledger IS the gate (bestiaryKey contract), so
   // the knowledge discipline is unlocked by a first act of knowing.
-  { id: 'gem_skills_mimicry', kind: 'skill', cost: 200, reqLedgerCounts: { [bestiaryKey('mimic')]: 1 }, label: 'Skill Pool — Mimicry',
+  { id: 'gem_skills_mimicry', kind: 'skill', cost: 200, reqLedgerCounts: { [bestiaryKey('mimic')]: 1 }, label: 'Skill Pool: Mimicry',
     description: 'Mimicry may drop. The chest that bit you taught you something: a shape is only a habit, and habits can be stolen.',
     payload: { skillIds: ['mimicry'] } },
   // THE POSSESSION SEAM (engine/possess.ts): surfaced by putting down ONE
   // Vacant Shell — a body that walks with nobody home poses the question,
   // and the discipline is its answer (the mimicry counted-ledger idiom).
-  { id: 'gem_skills_possession', kind: 'skill', cost: 220, reqLedgerCounts: { [bestiaryKey('vacant_shell')]: 1 }, label: 'Skill Pool — Possession',
-    description: 'Possession may drop. The shell you broke was empty the whole time — and an empty seat is an invitation.',
+  { id: 'gem_skills_possession', kind: 'skill', cost: 220, reqLedgerCounts: { [bestiaryKey('vacant_shell')]: 1 }, label: 'Skill Pool: Possession',
+    description: 'Possession may drop. The shell you broke was empty the whole time, and an empty seat is an invitation.',
     payload: { skillIds: ['possession'] } },
   // THE FORM GEMS chain off the discipline AND the study of the beast
   // itself (the knowledge-gets-teeth law: the count sits near the ARTS
@@ -597,7 +597,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // understand). Future forms are one row each: a new bestiaryKey, a new
   // payload — the seam itself never changes.
   { id: 'gem_skills_wolfform', kind: 'skill', cost: 260, requiresUnlock: 'gem_skills_possession',
-    reqLedgerCounts: { [bestiaryKey('dire_wolf')]: 20 }, label: 'Skill Pool — the Wolf Form',
+    reqLedgerCounts: { [bestiaryKey('dire_wolf')]: 20 }, label: 'Skill Pool: the Wolf Form',
     description: 'Form of the Dire Wolf may drop. Twenty wolves taught you how the shoulders roll; the twenty-first lesson is from inside.',
     payload: { skillIds: ['form_of_the_dire_wolf'] } },
 
@@ -608,47 +608,47 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_t3', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool III',
     description: 'Powderkeg, Nova Release, Elemental Conduction, Capacitor may drop.',
     payload: { supportIds: ['powderkeg', 'nova_release', 'elemental_conduction', 'capacitor'] } },
-  { id: 'sup_wildcraft', kind: 'support', cost: 140, reqLedger: 'ruin_entered', label: 'Support Pool — the Wildcraft',
+  { id: 'sup_wildcraft', kind: 'support', cost: 140, reqLedger: 'ruin_entered', label: 'Support Pool: the Wildcraft',
     description: 'Serrated Edge, Envenomed Tips, Smothering Spores may drop.',
     payload: { supportIds: ['serrated_edge', 'envenomed_tips', 'smothering_spores'] } },
-  { id: 'sup_sunsand', kind: 'support', cost: 140, reqLedger: 'vault_entered', label: 'Support Pool — Sun & Sand',
+  { id: 'sup_sunsand', kind: 'support', cost: 140, reqLedger: 'vault_entered', label: 'Support Pool: Sun & Sand',
     description: 'Sunbaked Edge, Noonglass, Scouring Grit may drop.',
     payload: { supportIds: ['sunbaked_edge', 'noonglass', 'scouring_grit'] } },
-  { id: 'sup_harrowing', kind: 'support', cost: 140, reqLedger: 'manor_entered', label: 'Support Pool — the Harrowing',
+  { id: 'sup_harrowing', kind: 'support', cost: 140, reqLedger: 'manor_entered', label: 'Support Pool: the Harrowing',
     description: 'Unnerving and Haunted Service may drop.',
     payload: { supportIds: ['unnerving', 'haunted_service'] } },
-  { id: 'sup_scentcraft', kind: 'support', cost: 140, reqLedger: 'nest_entered', label: 'Support Pool — Scentcraft',
+  { id: 'sup_scentcraft', kind: 'support', cost: 140, reqLedger: 'nest_entered', label: 'Support Pool: Scentcraft',
     description: 'Heavy Musk, Candied Scent, Startling Reek may drop. What clings, what tempts, what routs.',
     payload: { supportIds: ['heavy_musk', 'candied_scent', 'startling_reek'] } },
-  { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool — Echoes',
+  { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool: Echoes',
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },
-  { id: 'sup_fragments', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool — Fragments',
+  { id: 'sup_fragments', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool: Fragments',
     description: 'Fragmentation, Bulwark Shards, Rage Remnant may drop.',
     payload: { supportIds: ['fragmentation', 'bulwark_shards', 'rage_remnants'] } },
-  { id: 'sup_overcharge', kind: 'support', cost: 140, reqLevel: 1, label: 'Support Pool — Overcharge',
+  { id: 'sup_overcharge', kind: 'support', cost: 140, reqLevel: 1, label: 'Support Pool: Overcharge',
     description: 'Overcharge and Mounting Frenzy may drop.',
     payload: { supportIds: ['overcharge', 'mounting_frenzy'] } },
-  { id: 'sup_covenants', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool — Covenants',
+  { id: 'sup_covenants', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool: Covenants',
     description: 'Vital Bond, Bloodletter\'s Rhythm, Remnant Conduit, Metronome, Colossus Stance, Transfusion Bond, Controlled Burn may drop.',
     payload: { supportIds: ['vital_bond', 'bloodletters_rhythm', 'remnant_conduit',
       'metronome', 'colossus_stance', 'transfusion_bond', 'controlled_burn'] } },
   // The Aureole kata's socketable verdicts (the same doors teach them —
   // see gem_skills_aureole).
-  { id: 'sup_aureole', kind: 'support', cost: 140, reqLedger: 'cathedral_door_opened', label: 'Support Pool — the Aureole',
+  { id: 'sup_aureole', kind: 'support', cost: 140, reqLedger: 'cathedral_door_opened', label: 'Support Pool: the Aureole',
     description: 'Aureate Writ and Sanctal Cautery may drop. The tribune\'s docket and the gilt fire that closes wounds shut.',
     payload: { supportIds: ['aureate_writ', 'sanctal_cautery'] } },
-  { id: 'sup_mimicry', kind: 'support', cost: 150, requiresUnlock: 'gem_skills_mimicry', label: 'Support Pool — Mimicry',
+  { id: 'sup_mimicry', kind: 'support', cost: 150, requiresUnlock: 'gem_skills_mimicry', label: 'Support Pool: Mimicry',
     description: 'Keen Study and Understudy may drop. The eye that steals without the bruise, and the wings that hold more faces.',
     payload: { supportIds: ['keen_study', 'understudy'] } },
-  { id: 'sup_possession', kind: 'support', cost: 160, requiresUnlock: 'gem_skills_possession', label: 'Support Pool — Possession',
+  { id: 'sup_possession', kind: 'support', cost: 160, requiresUnlock: 'gem_skills_possession', label: 'Support Pool: Possession',
     description: 'Iron Trance and Long Communion may drop. Armor for the body you leave, and patience for the one you take.',
     payload: { supportIds: ['iron_trance', 'long_communion'] } },
   // THE COUNTERPOINT (an orphan fix): Polyphony and Ostinato shipped with
   // the combo grammar fully defined but joined NO pool row — obtainable
   // only under the unlock-all dev feature. The validator's pool-orphan net
   // (data/validate.ts) now guards this class of gap; this row is theirs.
-  { id: 'sup_counterpoint', kind: 'support', cost: 160, reqLevel: 1, label: 'Support Pool — Counterpoint',
+  { id: 'sup_counterpoint', kind: 'support', cost: 160, reqLevel: 1, label: 'Support Pool: Counterpoint',
     description: 'Polyphony and Ostinato may drop. The grammar\'s payoffs: the varied hand, and the phrase insisted upon.',
     payload: { supportIds: ['polyphony', 'ostinato'] } },
 
@@ -669,7 +669,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_wares_${i}`,
     ...(rung.gate ? { reqAnyOf: rung.gate, tease: true } : {}),
     label: `Broader Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
-    description: `Every counter stocks wider: +${rung.gems} gem slot${rung.gems === 1 ? '' : 's'} behind the gem case and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the wares grid — one purchase, every market your line will ever trade in.`,
+    description: `Every counter stocks wider: +${rung.gems} gem slot${rung.gems === 1 ? '' : 's'} behind the gem case and +${rung.gear} rolled piece${rung.gear === 1 ? '' : 's'} in the wares grid. One purchase, every market your line will ever trade in.`,
     payload: { flag: rung.flag },
   })),
   // THE GEM COUNTER — the skill/support tab, sealed at every default-tabbed
@@ -678,7 +678,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'feat_vendor_gems', kind: 'feature', cost: 120, reqLevel: 0,
     requiresUnlock: 'feat_vendor_wares_1',
     label: 'The Gem Counter',
-    description: 'The counters\' shuttered gem case opens — every market stocks skill gems behind glass, account-wide. Support gems and the deeper counter services grow from here.',
+    description: 'The counters\' shuttered gem case opens: every market stocks skill gems behind glass, account-wide. Support gems and the deeper counter services grow from here.',
     payload: { flag: FEATURE.VENDOR_GEMS } },
   // (Chain-gated only, like every market rung — the stray account-level gate
   // it wore before the gatework re-parented it was pre-chain residue.)
@@ -698,7 +698,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       id: `feat_vendor_restock_${i + 1}`, kind: 'feature', cost: rung.cost, reqLevel: 0,
       requiresUnlock: i === 0 ? 'feat_salvage_station' : `feat_vendor_restock_${i}`,
       label: `Rush Order ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
-      description: `Every counter restocks in ${Math.round(after / 60 * 10) / 10} minutes instead of ${Math.round(before / 60 * 10) / 10} — one purchase, every market.`,
+      description: `Every counter restocks in ${Math.round(after / 60 * 10) / 10} minutes instead of ${Math.round(before / 60 * 10) / 10}. One purchase, every market.`,
       payload: { flag: rung.flag },
     };
   }),
@@ -712,11 +712,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // there by ownership alone — the world introduces, the Vault deepens.
   { id: 'feat_mireille_life',  kind: 'feature', cost: 40,  reqLevel: 0, reqLedger: LEDGER_FLASK_LESSON, label: 'Mireille: Field Care',     description: 'Mireille restores your LIFE when you linger near her.',  payload: { flag: FEATURE.MIREILLE_HEAL_LIFE } },
   { id: 'feat_mireille_mana',  kind: 'feature', cost: 60,  reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_LIFE, label: 'Mireille: Restorative Brew', description: 'She also replenishes your MANA.',                       payload: { flag: FEATURE.MIREILLE_HEAL_MANA } },
-  { id: 'feat_mireille_xp',    kind: 'feature', cost: 120, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Mireille: Traveller\'s Rest', description: 'Linger for a 5-minute +5% experience blessing — a worthwhile pitstop.', payload: { flag: FEATURE.MIREILLE_XP_BUFF } },
+  { id: 'feat_mireille_xp',    kind: 'feature', cost: 120, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Mireille: Traveller\'s Rest', description: 'Linger for a 5-minute +5% experience blessing: a worthwhile pitstop.', payload: { flag: FEATURE.MIREILLE_XP_BUFF } },
   // The TRACKER — the inn's word-of-mouth made flesh: once Mireille keeps you
   // fed and watered, her huntsman friend pitches camp. Unlocks the BESTIARY
   // (data/bestiary.ts): account-wide kill knowledge, studied into power.
-  { id: 'feat_tracker', kind: 'feature', cost: 90, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Weslan the Tracker', description: 'A huntsman camps at the town\'s west edge. Dwell by his fire to open the BESTIARY — every kind your line has slain, studied into knowledge that outlives every death.', payload: { flag: FEATURE.TRACKER } },
+  { id: 'feat_tracker', kind: 'feature', cost: 90, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Weslan the Tracker', description: 'A huntsman camps at the town\'s west edge. Dwell by his fire to open the BESTIARY: every kind your line has slain, studied into knowledge that outlives every death.', payload: { flag: FEATURE.TRACKER } },
 
   // --- THE PATRON'S HOLD (data/vendors.ts VENDOR_CFG): the reserve ladder,
   //     DERIVED from the config's own list — appending a rung there grows
@@ -738,7 +738,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
       : { requiresUnlock: `feat_vendor_lock_${i}` }),
     label: `Reserved Wares ${['I', 'II', 'III', 'IV', 'V'][i] ?? i + 1}`,
     description: i === 0
-      ? 'Every counter learns THE PATRON\'S HOLD: tick a ware to RESERVE its shelf slot — it rides every restock, every reload, untouched, until bought or released. One slot, shared law at every counter.'
+      ? 'Every counter learns THE PATRON\'S HOLD: tick a ware to RESERVE its shelf slot, and it rides every restock, every reload, untouched, until bought or released. One slot, shared law at every counter.'
       : `The counters hold ${i + 1} reserved slots for you.`,
     payload: { flag: rung.flag },
   })),
@@ -754,13 +754,13 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     requiresUnlock: 'feat_vendor_lock_1', tease: true,
     reqAnyOf: [{ ledgerPrefix: LEDGER_GEMDROP_PREFIX, n: VENDOR_CFG.commission.need,
                  label: `a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times` }],
-    label: 'The Standing Order — Commission',
-    description: `Name a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index — only true finds count) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's honest odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
+    label: 'The Standing Order: Commission',
+    description: `Name a gem your line has seen drop ${VENDOR_CFG.commission.need}+ times (the drop index counts only true finds) and the counter WATCHES for it: every restock that passes while you're away is resolved at the shelf's own odds, and a hit waits for you, reserved. One standing order per counter; fulfilled on purchase.`,
     payload: { flag: FEATURE.VENDOR_COMMISSION } },
 
   // --- Town-building: the Quest Package (surfaces once any character reaches L5)
   { id: 'feat_quest_giver', kind: 'feature', cost: 100, reqLevel: 0, reqLedger: 'reached_level_5',
-    label: 'Quest Package — Town Expansion',
+    label: 'Quest Package: Town Expansion',
     description: 'A quartermaster settles in Lastlight, posting hunts into the wilds (quest chains).',
     payload: { flag: FEATURE.QUEST_GIVER } },
 
@@ -769,7 +769,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     mint chokepoint): the moment you finally hold a skill worth
   //     practicing, the town offers somewhere to practice it. ---------------
   { id: 'feat_target_dummy', kind: 'feature', cost: 50, reqLevel: 0, reqLedger: LEDGER_LEGENDARY_SKILL_DROP,
-    label: 'Training Dummy — Town',
+    label: 'Training Dummy: Town',
     description: 'That legendary gem deserves better than guesswork. A practice dummy stands in Lastlight: an immortal target to pummel and test your skills, effects, ailments, and modifiers against.',
     payload: { flag: FEATURE.TARGET_DUMMY } },
 
@@ -779,8 +779,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     to offer. ----------------------------------------------------------
   { id: 'feat_campfire', kind: 'feature', cost: 70, reqLevel: 0,
     reqLedgerCounts: { [LEDGER_ZONES_EXPLORED]: 50 },
-    label: 'Campfire — Town',
-    description: 'Fifty zones charted — the wilds know your steps. A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command — every zone repopulates fresh (your cleared objectives stay claimed).',
+    label: 'Campfire: Town',
+    description: 'Fifty zones charted, and the wilds know your steps. A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command, and every zone repopulates fresh (your cleared objectives stay claimed).',
     payload: { flag: FEATURE.CAMPFIRE } },
 
   // --- The Salvage Station (the essence economy's front door). Surfaces the
@@ -789,11 +789,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     bench (break: rarity essence + craft lore) and Brandt's scrap counter
   //     (sell: coarse volume by quality). -------------------------------------
   { id: 'feat_salvage_station', kind: 'feature', cost: 60, reqLevel: 0, reqLedger: LEDGER_ESSENCE_TOUCHED,
-    label: 'Salvage Station — Town',
-    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight — dwell there to BREAK gear and carried gems into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality — sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
+    label: 'Salvage Station: Town',
+    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight; dwell there to BREAK gear and carried gems into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality: sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
     payload: { flag: FEATURE.SALVAGE_STATION } },
   { id: 'feat_craft_second', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_15', requiresFeature: FEATURE.SALVAGE_STATION,
-    label: 'Salvage Station — Twin Anvils',
+    label: 'Salvage Station: Twin Anvils',
     description: 'The bench learns to hold TWO crafted affixes on one item (the one-craft rule, bought apart).',
     payload: { flag: FEATURE.CRAFT_SECOND_AFFIX } },
   // THE DEED GATE: the stone answers those who already understand the
@@ -802,8 +802,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // each family up at World.salvageItem).
   { id: 'feat_oracle_stone', kind: 'feature', cost: 90, reqLevel: 0,
     reqLedgerCounts: { [LEDGER_CRAFTS_UNLOCKED]: 5 },
-    label: 'Oracle Stone — Town',
-    description: 'Five crafts studied deep enough to work — the runes will speak to you now. Standing stones rise in Lastlight. Commune over an item (trace the runes — precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
+    label: 'Oracle Stone: Town',
+    description: 'Five crafts studied deep enough to work, and the runes will speak to you now. Standing stones rise in Lastlight. Commune over an item (trace the runes; precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
     payload: { flag: FEATURE.ORACLE_STONE } },
 
   // --- The Mercenary Recruiter (meta/mercs.ts): surfaces once the account
@@ -813,8 +813,8 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     (hire-only, never retirement), and his single-serve sheet is dealt
   //     once per world and locked (THE MUSTER-ROLL LAW). ---------------------
   { id: 'feat_merc_recruiter', kind: 'feature', cost: 120, reqLevel: 0, reqLedger: LEDGER_MERC_MARKET_MET,
-    label: 'Mercenary Recruiter — Town',
-    description: 'A recruiting officer takes a table in Lastlight\'s east quarter. Hire a blade the moment a run begins — port rules: baseline sellswords fitted to your level, and NO retiring at his table. His sheet is dealt ONCE for each world and never refreshed: what he offers is all he will ever offer, until the world itself is made anew.',
+    label: 'Mercenary Recruiter: Town',
+    description: 'A recruiting officer takes a table in Lastlight\'s east quarter. Hire a blade the moment a run begins, under port rules: baseline sellswords fitted to your level, and NO retiring at his table. His sheet is dealt ONCE for each world and never refreshed: what he offers is all he will ever offer, until the world itself is made anew.',
     payload: { flag: FEATURE.MERC_RECRUITER } },
 
   // --- THE IMMORTAL COVENANT (meta/modes.ts): a character MODE, not a town
@@ -825,19 +825,19 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'The Immortal Covenant',
     description: `Death has seen you ${IMMORTAL_CFG.unlockDeaths} times, and blinked. `
       + 'Unlocks the IMMORTAL mode at character select: a sworn character plays the wake as any '
-      + 'other — until its first death, which pays a reduced essence tithe and seals it OUTSIDE '
+      + 'other, until its first death, which pays a reduced essence tithe and seals it OUTSIDE '
       + 'the mortal ledger. It wakes in town, build intact, carry lost; it persists across '
       + 'sessions in an account vessel; its later deaths feed the account nothing, and its '
       + 'corpses are visible only to itself. A life kept purely for the playing of it.',
     payload: { flag: FEATURE.IMMORTAL } },
   { id: 'feat_immortal_slot_2', kind: 'feature', cost: 200, reqLevel: 0,
     requiresUnlock: 'feat_immortal',
-    label: 'Immortal — Second Vessel',
+    label: 'Immortal: Second Vessel',
     description: 'The covenant holds a second sworn character (two Immortal save slots).',
     payload: { flag: FEATURE.IMMORTAL_SLOT_2 } },
   { id: 'feat_immortal_slot_3', kind: 'feature', cost: 350, reqLevel: 0,
     requiresUnlock: 'feat_immortal_slot_2',
-    label: 'Immortal — Third Vessel',
+    label: 'Immortal: Third Vessel',
     description: 'The covenant holds a third sworn character (three Immortal save slots).',
     payload: { flag: FEATURE.IMMORTAL_SLOT_3 } },
 
@@ -845,19 +845,19 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     Base tier (the Caravanner settles in town) at L10; far tiers ALSO need the
   //     Unmade slain. Each tier requires the previous (a growing route network). ----
   { id: 'feat_caravan', kind: 'feature', cost: 120, reqLevel: 0, reqLedger: 'reached_level_10',
-    label: 'Caravan — Outpost',
+    label: 'Caravan: Outpost',
     description: 'A travelling Caravanner makes camp in Lastlight and escorts you to the near wilds (lvl ≤20), minting a fixed route into each level band and ferrying you home.',
     payload: { flag: FEATURE.CARAVAN } },
   { id: 'feat_caravan_deep', kind: 'feature', cost: 200, reqLevel: 0, reqLedger: 'reached_level_30', requiresFeature: FEATURE.CARAVAN,
-    label: 'Caravan — Deep Frontier',
+    label: 'Caravan: Deep Frontier',
     description: 'The Caravanner braves routes into the lvl 21–30 band.',
     payload: { flag: FEATURE.CARAVAN_DEEP } },
   { id: 'feat_caravan_far', kind: 'feature', cost: 320, reqLevel: 0, reqLedger: ['reached_level_40', 'unmade_slain'], requiresFeature: FEATURE.CARAVAN_DEEP,
-    label: 'Caravan — Beyond the Veil',
+    label: 'Caravan: Beyond the Veil',
     description: 'With the Unmade slain, the Caravanner runs the lvl 31–50 bands. (Requires: reach level 40 AND defeat the Unmade.)',
     payload: { flag: FEATURE.CARAVAN_FAR } },
   { id: 'feat_caravan_world', kind: 'feature', cost: 480, reqLevel: 0, reqLedger: ['reached_level_60', 'unmade_slain'], requiresFeature: FEATURE.CARAVAN_FAR,
-    label: 'Caravan — The Far Reaches',
+    label: 'Caravan: The Far Reaches',
     description: 'The widest routes: the lvl 51–100 bands. (Requires: reach level 60 AND defeat the Unmade.)',
     payload: { flag: FEATURE.CARAVAN_WORLD } },
 
@@ -865,29 +865,29 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     naval meta-progression ladder (data/ships.ts maps flags → levers).
   //     Base tier surfaces once the account has ever CAST OFF (voyages_sailed). --
   { id: 'ship_sloop', kind: 'feature', cost: 90, reqLevel: 0, reqLedger: 'voyages_sailed',
-    label: 'Shipwright — Coastal Sloop',
+    label: 'Shipwright: Coastal Sloop',
     description: 'A proper hull replaces the dinghy: +15% sail speed, a longer spyglass (the sea streams and reveals further), and a practiced landing crew.',
     payload: { flag: FEATURE.SHIP_SLOOP } },
   { id: 'ship_brigantine', kind: 'feature', cost: 220, reqLevel: 1, reqLedger: 'islands_landed', requiresFeature: FEATURE.SHIP_SLOOP,
-    label: 'Shipwright — Brigantine',
+    label: 'Shipwright: Brigantine',
     description: 'Twin masts for the open crossings: +32% sail speed, a far spyglass, and swift beachings. (Requires: land on a Voyage island.)',
     payload: { flag: FEATURE.SHIP_BRIGANTINE } },
   { id: 'ship_galleon', kind: 'feature', cost: 450, reqLevel: 2, reqLedger: 'reached_level_40', requiresFeature: FEATURE.SHIP_BRIGANTINE,
-    label: 'Shipwright — Storm Galleon',
+    label: 'Shipwright: Storm Galleon',
     description: 'The flagship: +50% sail speed, a horizon-spanning spyglass, and landings measured in heartbeats.',
     payload: { flag: FEATURE.SHIP_GALLEON } },
 
   // --- META-META: the global event-frequency crank (surfaces once ANY character
   //     has reached the level cap of 100 — a true end-game mastery reward) -------
   { id: 'feat_global_frequency', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_100',
-    label: 'World Tempo — Global Event Frequency',
+    label: 'World Tempo: Global Event Frequency',
     description: 'End-game mastery: an Expedition-screen slider that scales how OFTEN world events occur AND how many run at once, across the whole run. Crank the world into a roaring festival of events, or dial it to a slow burn.',
     payload: { flag: FEATURE.GLOBAL_FREQUENCY } },
 
   // --- Master gem unlock: everything obtainable (a deliberate, expensive flip) -
   { id: 'feat_unlock_all_gems', kind: 'feature', cost: 500, reqLevel: 2,
-    label: 'Grand Codex — Unlock All Gems',
-    description: 'EVERY skill and support gem becomes obtainable (drops, chests, Brandt) — including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart — each Class bundle also widens the roll at character select.)',
+    label: 'Grand Codex: Unlock All Gems',
+    description: 'EVERY skill and support gem becomes obtainable (drops, chests, Brandt), including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart; each Class bundle also widens the roll at character select.)',
     payload: { flag: FEATURE.UNLOCK_ALL_GEMS } },
 ];
 
@@ -969,7 +969,7 @@ function packageUnlockables(): Unlockable[] {
       // A pressureless package is a PLACE the purchase itself opens — nothing
       // ran before buying it, so "Configurable" (tuning an already-live
       // feature) would mislabel it.
-      label: p.pressureless ? p.label : `${p.label} — Configurable`,
+      label: p.pressureless ? p.label : `${p.label}: Configurable`,
       description: p.blurb, cost: p.cost,
       payload: { packageId: p.id },
     });
@@ -1176,26 +1176,26 @@ export const VAULT_TABS: readonly VaultTabDef[] = [
   {
     id: 'classes', label: 'Classes', kinds: ['slot', 'class'], rumors: true,
     blurb: 'The hand and the pool: Class Slots widen how many classes each deal offers, Class bundles deepen the pool the hand is dealt from. Rumors whisper at classes the world has not introduced yet.',
-    emptyNote: 'No class purchases are open right now — classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
+    emptyNote: 'No class purchases are open right now; classes surface through deeds, levels, and hard lessons. The rumors below point at the deeds.',
   },
   {
     id: 'gems', label: 'Gems', kinds: ['skill', 'support'],
-    blurb: 'Skill and support pools — buy one and its gems join the drop tables (and the town counters) for every character after, forever.',
-    emptyNote: 'No gem pools on the shelf right now — some surface with account levels, others only once the world has taught them.',
+    blurb: 'Skill and support pools: buy one and its gems join the drop tables (and the town counters) for every character after, forever.',
+    emptyNote: 'No gem pools on the shelf right now; some surface with account levels, others only once the world has taught them.',
   },
   {
     id: 'town', label: 'Town', kinds: ['feature'], fallback: true,
     blurb: 'Lastlight grows by purchase: stations and services, counter privileges, hulls and routes, and account-wide features.',
-    emptyNote: 'Nothing to raise in town right now — milestones out in the world surface more.',
+    emptyNote: 'Nothing to raise in town right now; milestones out in the world surface more.',
   },
   {
     id: 'events', label: 'Events', kinds: ['package'],
-    blurb: 'World-event packages and their deeper tiers — owning one opens its dials on the Expedition screen.',
-    emptyNote: 'No event configurations are open — meet an event out in the world and its package surfaces here.',
+    blurb: 'World-event packages and their deeper tiers: owning one opens its dials on the Expedition screen.',
+    emptyNote: 'No event configurations are open; meet an event out in the world and its package surfaces here.',
   },
   {
     id: 'owned', label: 'Owned', owned: true,
-    blurb: 'Everything this account has already claimed, shelved by kind — the part of the store that is yours now.',
+    blurb: 'Everything this account has already claimed, shelved by kind: the part of the store that is yours now.',
   },
 ];
 

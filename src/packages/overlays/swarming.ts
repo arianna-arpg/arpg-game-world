@@ -332,7 +332,7 @@ export class SwarmingField implements WorldOverlay {
           this.takeWing(view, clamp(tally / this.cfg.wingThreshold, 0.35, 1));
         } else {
           this.bulletins.push({
-            text: 'The brood grounds fall silent — a Swarming stamped out before it rose.',
+            text: 'The brood grounds fall silent: a Swarming stamped out before it rose.',
             color: this.color(),
           });
           this.disperse(false);
@@ -480,7 +480,7 @@ export class SwarmingField implements WorldOverlay {
       f.broken = true;
       f.phase = 'home';
       this.bulletins.push({
-        text: 'The wing BREAKS — its alates cut down, the Swarming turns for home, spent.',
+        text: 'The wing BREAKS: its alates cut down, the Swarming turns for home, spent.',
         color: f.color,
       });
     }
@@ -503,7 +503,7 @@ export class SwarmingField implements WorldOverlay {
       f.gorged++;
       eaten.push(h.id);
       this.bulletins.push({
-        text: 'The Swarming falls upon a migrating herd — the plains go quiet under the wing.',
+        text: 'The Swarming falls upon a migrating herd, and the plains go quiet under the wing.',
         color: f.color,
       });
     }
@@ -753,7 +753,7 @@ export class SwarmingField implements WorldOverlay {
       this.rng.range(this.cfg.broodSeconds[0], this.cfg.broodSeconds[1]) * this.nextBroodMul);
     this.phase = 'brooding';
     this.bulletins.push({
-      text: 'The deep sand hums — the Seethe broods, and its throats are climbing.',
+      text: 'The deep sand hums: the Seethe broods, and its throats are climbing.',
       color: this.color(),
     });
   }
@@ -794,8 +794,8 @@ export class SwarmingField implements WorldOverlay {
     this.phase = 'winged';
     this.bulletins.push({
       text: strength >= 1
-        ? `The Swarming takes wing — a ${v.name} pours out of the brood grounds!`
-        : `A thinned Swarming takes wing — the stamped broods could only raise a ${v.name}.`,
+        ? `The Swarming takes wing, and a ${v.name} pours out of the brood grounds!`
+        : `A thinned Swarming takes wing; the stamped broods could only raise a ${v.name}.`,
       color: this.flight.color,
     });
   }
@@ -819,12 +819,12 @@ export class SwarmingField implements WorldOverlay {
           this.planted.push(roost);
           this.pendingWarps.push(roost);
           this.bulletins.push({
-            text: 'The Swarming settles — a NEW brood ground takes root where the wing gorged.',
+            text: 'The Swarming settles: a NEW brood ground takes root where the wing gorged.',
             color: f.color,
           });
         } else {
           this.bulletins.push({
-            text: 'The Swarming returns gorged — the roost quickens, and the next cycle will come sooner.',
+            text: 'The Swarming returns gorged; the roost quickens, and the next cycle will come sooner.',
             color: f.color,
           });
         }
@@ -860,7 +860,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `swarm-brood-${b.zoneId}`, zoneId: b.zoneId, coord: { x: node.map.x, y: node.map.y },
       glyph: '🐝', fill: '#241708', stroke: '#d89a3a', text: '#ffd890', r: 9,
-      title: `The Seethe broods — ${b.standing} hive throat${b.standing === 1 ? '' : 's'} stand (stamp them before the wing)`,
+      title: `The Seethe broods: ${b.standing} hive throat${b.standing === 1 ? '' : 's'} stand (stamp them before the wing)`,
       fog: 'always', z: 16,
     });
   }
@@ -871,7 +871,7 @@ registerMarkerSource((world: World): MapMarker[] => {
       glyph: '🐝', fill: '#241708', stroke: f.color, text: '#ffd890', r: 10,
       title: f.broken
         ? 'The broken Swarming flees for its roost'
-        : `The Swarming — a ${f.variant} is in the air`,
+        : `The Swarming: a ${f.variant} is in the air`,
       fog: 'always', z: 18,
     });
   }
@@ -881,7 +881,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `swarm-wake-${w.zoneId}`, zoneId: w.zoneId, coord: { x: node.map.x, y: node.map.y },
       glyph: '🍯', fill: '#241708', stroke: '#f0c060', text: '#ffe8b0', r: 8,
-      title: `Royal jelly settles in the swarm's wake — ${w.caches} cache${w.caches === 1 ? '' : 's'}`,
+      title: `Royal jelly settles in the swarm's wake: ${w.caches} cache${w.caches === 1 ? '' : 's'}`,
       fog: 'charted', z: 12,
     });
   }
@@ -897,7 +897,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (brood) {
     out.push({
       kind: 'event', icon: '🐝', color: brood.color, label: 'The Swarming · brooding',
-      detail: `${brood.standing} hive throat${brood.standing === 1 ? '' : 's'} stand here — ${brood.tally}/${brood.threshold} and the swarm takes wing`,
+      detail: `${brood.standing} hive throat${brood.standing === 1 ? '' : 's'} stand here; ${brood.tally}/${brood.threshold} and the swarm takes wing`,
       z: 15,
     });
   }
@@ -906,7 +906,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     out.push({
       kind: 'event', icon: '🐝', color: wing.color, label: `The Swarming · ${wing.variant}`,
       detail: zoneId === world.zone.id
-        ? 'the sky crawls — the wing pours through this ground'
+        ? 'the sky crawls; the wing pours through this ground'
         : 'the wing passes over this ground',
       z: 16,
     });

@@ -260,7 +260,7 @@ export const INCURSION_ARCHETYPES: Record<string, IncursionArchetype> = {
   eldritch: {
     id: 'eldritch',
     factions: ['eldritch'],
-    announce: 'An observer has landed — something vast turns its gaze upon this world.',
+    announce: 'An observer has landed; something vast turns its gaze upon this world.',
     color: '#7fce6a', // a sickly bioluminescent green over the eldritch violet
     weather: { kind: 'eldritch_pall', max: 0.85 },
     tileset: 'eldritch',

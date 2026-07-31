@@ -435,7 +435,7 @@ registerMarkerSource((world: World): MapMarker[] => {
       out.push({
         id: `migration-${h.id}-${pt.k}`, coord: { x: pt.x, y: pt.y },
         glyph: '🐾', fill: '#1c160c', stroke: h.color, text: '#f0e2c0', r: 8,
-        title: `Migration — a ${h.variant} crosses the plains`, fog: 'always', z: 17,
+        title: `Migration: a ${h.variant} crosses the plains`, fog: 'always', z: 17,
       });
     }
   }
@@ -449,7 +449,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const here = zoneId === world.zone.id;
   return [{
     kind: 'event', icon: '🐾', color: info.color, label: `Migration · ${info.variant}`,
-    detail: here ? 'a great herd ambles through — leave them be, or face the adults'
+    detail: here ? 'a great herd ambles through: leave them be, or face the adults'
       : 'a migrating herd crosses this ground',
     z: 15,
   }];

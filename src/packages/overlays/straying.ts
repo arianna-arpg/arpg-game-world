@@ -479,9 +479,9 @@ registerMarkerSource((world: World): MapMarker[] => {
   return sf.peek().filter(s => !s.latent).map(s => ({
     id: `straying-${s.id}`, coord: { x: s.x, y: s.y },
     glyph: '🔔', fill: '#1c180e', stroke: BELL_GOLD, text: '#f0e4c0', r: 7,
-    title: s.phase === 'overrun' ? 'A lost fold — the fields run feral here'
-      : s.phase === 'raid' ? 'THE BELL TURNS — the changed march on the steading'
-        : 'The fold strays here — a bell calls it away',
+    title: s.phase === 'overrun' ? 'A lost fold: the fields run feral here'
+      : s.phase === 'raid' ? 'THE BELL TURNS, and the changed march on the steading'
+        : 'The fold strays here; a bell calls it away',
     fog: 'always', z: 16,
   }));
 });
@@ -505,10 +505,10 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const info = sf?.strayingOn(zoneId);
   if (!sf || !info) return [];
   const detail = info.phase === 'overrun'
-    ? 'the fold is broken — the Chattel range this ground until it settles'
+    ? 'the fold is broken; the Chattel range this ground until it settles'
     : info.phase === 'raid'
-      ? `the changed march on the steading — break them (${info.converted} gone to the bell)`
-      : `walk the strays home before the bell takes them — ${info.straysLeft} loose · ${info.returned} home · ${info.converted} gone`;
+      ? `the changed march on the steading, so break them (${info.converted} gone to the bell)`
+      : `walk the strays home before the bell takes them · ${info.straysLeft} loose · ${info.returned} home · ${info.converted} gone`;
   return [{
     kind: 'event', icon: '🔔', color: info.color, label: 'The Straying',
     detail,

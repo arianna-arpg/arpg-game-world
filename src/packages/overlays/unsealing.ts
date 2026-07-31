@@ -177,10 +177,10 @@ registerMarkerSource((world: World): MapMarker[] => {
   if (!uf || !tomb) return [];
   const total = uf.surge().wards.length;
   const title = uf.regentSlain()
-    ? 'The Regent\'s Tomb — the throne stands empty'
+    ? 'The Regent\'s Tomb: the throne stands empty'
     : uf.allFlared()
-      ? 'The Regent\'s Tomb — the door stands OPEN'
-      : `The Regent's Tomb — ${uf.flaredCount()}/${total} talismans aflame`;
+      ? 'The Regent\'s Tomb: the door stands OPEN'
+      : `The Regent's Tomb: ${uf.flaredCount()}/${total} talismans aflame`;
   return [{
     id: 'unsealing_tomb', zoneId: tomb.parentZoneId,
     glyph: '⚱', fill: '#241c10', stroke: '#e8c060', text: '#f0dca0', r: 9,
@@ -198,7 +198,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     label: 'The Regent\'s Tomb',
     detail: uf.allFlared()
       ? 'below this ground, an open door waits'
-      : `below this ground — ${uf.flaredCount()}/${total} talismans aflame`,
+      : `below this ground, ${uf.flaredCount()}/${total} talismans aflame`,
     z: 13,
   }];
 });

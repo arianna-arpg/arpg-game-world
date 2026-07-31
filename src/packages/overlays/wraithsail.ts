@@ -627,9 +627,9 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: `wraithsail-${s.id}`, coord: { x: s.x, y: s.y },
     glyph: '⛵',
     fill: '#0a1a1e', stroke: GHOST_CYAN, text: '#bfe8ec', r: 8,
-    title: s.mode === 'docked' ? 'The WRAITHSAIL lies alongside — the Drowned Court walks ashore'
-      : s.mode === 'riding' ? 'The Wraithsail RIDES THE STORM — she arrives with the weather'
-        : 'The Wraithsail — the sea\'s lone wanderer (cross her under sail to board)',
+    title: s.mode === 'docked' ? 'The WRAITHSAIL lies alongside; the Drowned Court walks ashore'
+      : s.mode === 'riding' ? 'The Wraithsail RIDES THE STORM: she arrives with the weather'
+        : 'The Wraithsail: the sea\'s lone wanderer (cross her under sail to board)',
     fog: 'always', z: 19,
   }];
 });
@@ -640,7 +640,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [{
     kind: 'event', icon: '⛵', color: info.color,
     label: 'The Wraithsail Alongside',
-    detail: 'the ghost ship lies at this harbor — the Drowned Court is ashore until she slips her mooring',
+    detail: 'the ghost ship lies at this harbor; the Drowned Court is ashore until she slips her mooring',
     z: 15,
   }];
 });

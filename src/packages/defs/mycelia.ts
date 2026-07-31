@@ -142,6 +142,6 @@ registerKillHandler({
       for (let i = 0; i < myc.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'The Heartbloom bursts — the Bloom collapses back into itself!', myc?.color ?? '#8fd06f', 18);
+      'The Heartbloom bursts, and the Bloom collapses back into itself!', myc?.color ?? '#8fd06f', 18);
   },
 });

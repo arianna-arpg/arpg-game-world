@@ -111,7 +111,7 @@ registerLandmark({
       { id: 'hill_giant', weight: 1 },
     ],
     count: [1, 1], where: 'interior',
-    ambush: { radius: 170, visible: true, pack: 320, announce: 'the cairn stirs — the giant wakes!' },
+    ambush: { radius: 170, visible: true, pack: 320, announce: 'the cairn stirs; the giant wakes!' },
   },
 });
 

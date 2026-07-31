@@ -276,7 +276,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: `holdfast-${s.zoneId}`, zoneId: s.zoneId,
     glyph: s.def.marker?.glyph ?? '⚑', fill: '#241c10',
     stroke: s.def.marker?.color ?? '#c8a04a', text: '#f0dca0', r: 9,
-    title: `${s.def.name} — a sealed bonus path`, fog: 'charted', z: 16,
+    title: `${s.def.name}: a sealed bonus path`, fog: 'charted', z: 16,
   }));
 });
 
@@ -296,6 +296,6 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [{
     kind: 'event', icon: def?.marker?.glyph ?? '⚑', color: def?.marker?.color ?? '#c8a04a',
     label: def?.name ?? 'Holdfast',
-    detail: `${pitch ?? 'a sealed side-pocket'} — ${ask}`, z: 12,
+    detail: `${pitch ?? 'a sealed side-pocket'}; ${ask}`, z: 12,
   }];
 });

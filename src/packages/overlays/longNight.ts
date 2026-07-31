@@ -474,9 +474,9 @@ registerMarkerSource((world: World): MapMarker[] => {
       id: `long_night-${gr.id}`, coord: { x: gr.x, y: gr.y },
       glyph: gr.court ? '♕' : gr.converted ? '⚰' : '☾',
       fill: '#180a10', stroke: COURT_CRIMSON, text: '#e8c8d0', r: 7,
-      title: gr.court ? 'The COUNTESS holds court here — break it and the Long Night breaks'
-        : gr.converted ? 'A converted feeding ground — burn the gloom coach BY DAY to reclaim it'
-          : `The Court feeds here by night (${gr.fedNights} of ${gr.toConvert} nights) — burn the coach by day`,
+      title: gr.court ? 'The COUNTESS holds court here: break it and the Long Night breaks'
+        : gr.converted ? 'A converted feeding ground: burn the gloom coach BY DAY to reclaim it'
+          : `The Court feeds here by night (${gr.fedNights} of ${gr.toConvert} nights); burn the coach by day`,
       fog: 'always', z: 16,
     }));
 });
@@ -503,11 +503,11 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!info) return [];
   let detail: string;
   if (info.countessHere) {
-    detail = 'the Countess holds court — fell her here and every feeding ground breaks';
+    detail = 'the Countess holds court: fell her here and every feeding ground breaks';
   } else if (info.converted) {
-    detail = 'the Court holds this ground; its coach is gloom-warded at night — burn it by day to reclaim';
+    detail = 'the Court holds this ground; its coach is gloom-warded at night, so burn it by day to reclaim';
   } else {
-    detail = `the Court has fed here ${info.fedNights} of ${info.nightsToConvert} nights — burn the parked coach by day before the third`;
+    detail = `the Court has fed here ${info.fedNights} of ${info.nightsToConvert} nights; burn the parked coach by day before the third`;
   }
   return [{
     kind: 'event', icon: '☾', color: info.color,

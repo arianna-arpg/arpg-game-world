@@ -424,7 +424,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `amalgam-necro-${info.id}`, zoneId: info.zoneId, coord: { x: node.map.x, y: node.map.y },
       glyph: '⚰', fill: '#13241c', stroke: NECRO_GREEN, text: NECRO_GREEN, r: 9,
-      title: `The Bonewright — ${stageTxt}`, fog: 'charted', z: 16,
+      title: `The Bonewright: ${stageTxt}`, fog: 'charted', z: 16,
     });
   }
   const mbZone = af.minibossTarget();
@@ -433,7 +433,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `amalgam-miniboss-${info.id}`, zoneId: mbNode.id, coord: { x: mbNode.map.x, y: mbNode.map.y },
       glyph: '☠', fill: '#1c1a12', stroke: BONE_PALE, text: BONE_PALE, r: 9,
-      title: 'A rare undead stalks here — slay it for the Bonewright', fog: 'always', z: 18,
+      title: 'A rare undead stalks here; slay it for the Bonewright', fog: 'always', z: 18,
     });
   }
   return out;

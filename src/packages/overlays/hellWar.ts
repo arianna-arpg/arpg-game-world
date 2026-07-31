@@ -319,7 +319,7 @@ export class HellWarField implements WorldOverlay {
     this.pushBulletin(`The war below has ${this.seats.length} thrones: ${named}. It has always had them.`, '#d8b8a8');
     if (this.truce) {
       const a = lordDef(this.seats[this.truce.a].lord), b = lordDef(this.seats[this.truce.b].lord);
-      if (a && b) this.pushBulletin(`${a.short} and ${b.short} hold an uneasy pact — for now.`, '#b8b0c8');
+      if (a && b) this.pushBulletin(`${a.short} and ${b.short} hold an uneasy pact, for now.`, '#b8b0c8');
     }
   }
 
@@ -415,7 +415,7 @@ export class HellWarField implements WorldOverlay {
     const a = lordDef(this.seats[this.truce.a]?.lord), b = lordDef(this.seats[this.truce.b]?.lord);
     this.truce = null;
     this.applyStances();
-    if (a && b) this.pushBulletin(`The pact shatters — ${a.short} turns on ${b.short}!`, '#e8604a');
+    if (a && b) this.pushBulletin(`The pact shatters, and ${a.short} turns on ${b.short}!`, '#e8604a');
   }
 
   /** Rift-lord doors: a boost disc behind a rival's lines — opened where the
@@ -527,7 +527,7 @@ export class HellWarField implements WorldOverlay {
       mul: WAR_CFG.modifier.marshalMul, from: this.time, until: this.time + dur,
     });
     this.seats[i].power = Math.max(WAR_CFG.power.floor, this.seats[i].power - WAR_CFG.modifier.marshalPowerNick);
-    if (lord) this.pushBulletin(`${lord.short}'s marshal falls — the push collapses. For now.`, lord.color);
+    if (lord) this.pushBulletin(`${lord.short}'s marshal falls, and the push collapses. For now.`, lord.color);
   }
 
   /** A manifested LORD was cast down: its power collapses everywhere — the
@@ -541,7 +541,7 @@ export class HellWarField implements WorldOverlay {
     s.manifestAt = this.time + WAR_CFG.manifest.cooldown;
     const lord = lordDef(lordId);
     if (lord) {
-      this.pushBulletin(`${lord.name} is CAST DOWN — and the war does not even pause.`, lord.color);
+      this.pushBulletin(`${lord.name} is CAST DOWN, and the war does not even pause.`, lord.color);
     }
   }
 
@@ -578,11 +578,11 @@ export class HellWarField implements WorldOverlay {
     const lord = lordDef(lordId);
     if (outcome === 'repelled') {
       s.power = Math.max(WAR_CFG.power.floor, s.power * WAR_CFG.strike.repelledMul);
-      if (lord) this.pushBulletin(`${lord.short}'s strike is broken — the fronts below feel it.`, lord.color);
+      if (lord) this.pushBulletin(`${lord.short}'s strike is broken, and the fronts below feel it.`, lord.color);
     } else {
       s.power = Math.min(WAR_CFG.power.base * 1.3, s.power + WAR_CFG.strike.spoilsPower);
       s.spoilsUntil = this.time + WAR_CFG.strike.spoilsFor;
-      if (lord) this.pushBulletin(`${lord.short}'s strike feeds — the ${lord.epithet}'s banners swell.`, lord.color);
+      if (lord) this.pushBulletin(`${lord.short}'s strike feeds, and the ${lord.epithet}'s banners swell.`, lord.color);
     }
   }
 
@@ -637,7 +637,7 @@ export class HellWarField implements WorldOverlay {
       const op = gathering ? 0.4 : 0.9;
       const x = s.throne.x.toFixed(0), y = s.throne.y.toFixed(0);
       over += `<circle cx="${x}" cy="${y}" r="10" fill="none" stroke="${lord.color}" stroke-width="1.6" stroke-dasharray="3 2" opacity="${op}"/>` +
-        `<text x="${x}" y="${(s.throne.y + 4.5).toFixed(0)}" text-anchor="middle" font-size="12" fill="${lord.color}" font-weight="bold" opacity="${op}">${lord.sigil}<title>${lord.throne.name} — ${lord.name}. ${lord.creed}${gathering ? ' (cast down — regathering)' : ''}</title></text>`;
+        `<text x="${x}" y="${(s.throne.y + 4.5).toFixed(0)}" text-anchor="middle" font-size="12" fill="${lord.color}" font-weight="bold" opacity="${op}">${lord.sigil}<title>${lord.throne.name}: ${lord.name}. ${lord.creed}${gathering ? ' (cast down, regathering)' : ''}</title></text>`;
     }
     // Hot fronts over charted zones.
     for (const z of nodes) {
@@ -784,7 +784,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     kind: 'modifier',
     icon: st.throne ? st.lord.sigil : '⚑',
     color: st.lord.color,
-    label: st.throne ? `${st.lord.name} — the sanctum` : `Held by ${st.lord.short}, ${st.lord.epithet}`,
+    label: st.throne ? `${st.lord.name}: the sanctum` : `Held by ${st.lord.short}, ${st.lord.epithet}`,
     detail: st.throne ? st.lord.creed : (st.heartland ? `heartland · ${st.lord.creed}` : st.lord.creed),
     z: st.throne ? 18 : 8,
   }];

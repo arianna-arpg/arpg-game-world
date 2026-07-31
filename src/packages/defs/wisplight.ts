@@ -49,8 +49,8 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
   omen: {
     whisper: 160, reveal: 60, widenPerMin: 12,
     lines: [
-      'pale lights over the water, {bearing} of here — standing still, and {dist}',
-      'the fowlers speak of lamps in the reeds {bearing} — lamps nobody lit',
+      'pale lights over the water, {bearing} of here: standing still, and {dist}',
+      'the fowlers speak of lamps in the reeds {bearing}, lamps nobody lit',
       'something glimmers {bearing}, low over the fen, patient as a fisherman',
     ],
   },
@@ -64,7 +64,7 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
     {
       id: 'pale_light', weight: 3, monster: 'pale_light',
       rideStatus: 'wisp_ridden_pale', epithet: 'Palelit',
-      line: 'the pale light pours in — a shield of cold fire!',
+      line: 'the pale light pours in: a shield of cold fire!',
       // THE WARDEN'S GIFT: a real energy-shield bubble, computed at the
       // host's level (the defense-texture doctrine — an authored ES
       // identity on a body that never had one).
@@ -73,7 +73,7 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
     {
       id: 'fen_flame', weight: 2, presence: { from: 3, fadeIn: 2 }, monster: 'fen_flame',
       rideStatus: 'wisp_ridden_flame', epithet: 'Flamewreathed',
-      line: 'the fen-flame takes it — it burns to move!',
+      line: 'the fen-flame takes it, and it burns to move!',
       // THE ARSON'S GIFT: speed and fury (the ride status carries the MORE
       // damage), plus a real firing skill grafted onto the kit.
       grant: { armor: [4, 1] },
@@ -82,7 +82,7 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
     {
       id: 'grave_light', weight: 2, presence: { from: 6, fadeIn: 3 }, monster: 'grave_light',
       rideStatus: 'wisp_ridden_grave', epithet: 'Gravelit',
-      line: 'the grave-light settles in — it remembers older debts.',
+      line: 'the grave-light settles in; it remembers older debts.',
       // THE MOURNER'S GIFT: a thin cold shield and a real curse in the kit.
       grant: { es: [16, 5] },
       grantSkills: ['despair'],
@@ -90,7 +90,7 @@ export const WISPLIGHT_SURGE: WisplightSurge = {
     {
       id: 'gloam_light', weight: 2, presence: { from: 8, fadeIn: 4 }, monster: 'gloam_light',
       rideStatus: 'wisp_ridden_gloam', epithet: 'Gloamlit',
-      line: 'the gloam-light sinks in — it keeps the last lamp lit.',
+      line: 'the gloam-light sinks in; it keeps the last lamp lit.',
       // THE LAMPKEEPER'S GIFT: the deep country's own colour (the gloamwood
       // hollows, where light is a RESOURCE — the Gloaming's meter). The ride
       // status carries `survivalEase_light` (the Lampkeeper suffix's stat,

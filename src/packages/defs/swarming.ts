@@ -106,10 +106,10 @@ registerKillHandler({
     ctx.bumpLedger('swarm_nodes_broken');
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 50),
       r.standing > 0
-        ? `A hive throat is stamped — ${r.standing} still stand here`
+        ? `A hive throat is stamped; ${r.standing} still stand here`
         : r.tally > 0
-          ? 'This brood ground falls silent — others still hum'
-          : 'The brood grounds fall SILENT — the swarming is stamped out',
+          ? 'This brood ground falls silent; others still hum'
+          : 'The brood grounds fall SILENT: the swarming is stamped out',
       SEETHE_AMBER, 14);
   },
 });
@@ -129,7 +129,7 @@ registerKillHandler({
       ctx.bumpLedger('swarming_broken');
       ctx.flash(vec(ctx.actor.pos.x, ctx.actor.pos.y), 160, SEETHE_AMBER, 0.8);
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60),
-        'The wing BREAKS — the Swarming turns for home, spent!', '#ffd890', 17);
+        'The wing BREAKS, and the Swarming turns for home, spent!', '#ffd890', 17);
     }
   },
 });

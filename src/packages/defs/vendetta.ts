@@ -122,6 +122,6 @@ registerKillHandler({
     for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
     if (settled.rivalPaid) ctx.sim.reputation.add(settled.rivalPaid, r.rivalRep);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      `The warrant-holder falls — the writ is settled!`, '#ffd700', 18);
+      `The warrant-holder falls, and the writ is settled!`, '#ffd700', 18);
   },
 });

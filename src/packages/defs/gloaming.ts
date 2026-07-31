@@ -63,7 +63,7 @@ export const GLOAMING_SURGE: GloamingSurge = {
   // overlay id): a candle-war fought under the risen dark is the promised
   // three-way light war — the courts war OVER light while the dark EATS it.
   pairs: {
-    longcandle: { text: 'Candle-war under the gloaming — three sides now, and the dark eats what they fight for.', color: '#e8c060' },
+    longcandle: { text: 'Candle-war under the gloaming: three sides now, and the dark eats what they fight for.', color: '#e8c060' },
   },
   color: '#6a5a9c',
 };

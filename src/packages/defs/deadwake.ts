@@ -94,7 +94,7 @@ const DEADWAKE_SURGE: DeadwakeSurge = {
                              // generous for any honest rout, a wall for the farm; a
                              // spent tide recedes on its own, unrouted and unpaid
   falterFrac: 0.35,          // the last ~105s read "faltering" (marker + zone info)
-  ebbText: 'The Deadwake spends itself — the tide recedes unbroken.',
+  ebbText: 'The Deadwake spends itself; the tide recedes unbroken.',
   ambientAmp: 1.8,        // the tide swells the zone's native undead…
   ambientCountMul: 1.12,  // …and brings a few more packs with it
   consumeChance: 0.5,     // a coin-flip to CONSUME a zone's active event on collision…
@@ -208,7 +208,7 @@ registerKillHandler({
       for (let i = 0; i < rr.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      routed ? 'The Deadwake breaks — its tide recedes!' : 'The undead host-leader falls!',
+      routed ? 'The Deadwake breaks, and its tide recedes!' : 'The undead host-leader falls!',
       '#c8a8e8', 18);
   },
 });

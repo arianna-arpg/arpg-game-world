@@ -162,7 +162,7 @@ export class VendettaField implements WorldOverlay {
         w.escalateAcc = 0;
         w.tierIdx++;
         this.notices.push({
-          text: `${factionName(w.faction)} raise the bounty — ${this.cfg.tiers[w.tierIdx].label}!`,
+          text: `${factionName(w.faction)} raise the bounty: ${this.cfg.tiers[w.tierIdx].label}!`,
           color: this.colorOf(w.faction),
         });
       }
@@ -171,7 +171,7 @@ export class VendettaField implements WorldOverlay {
       if (w.age >= this.cfg.lifeSeconds * sev) {
         this.writs.splice(i, 1);
         this.notices.push({
-          text: `${factionName(w.faction)} abandon their writ — the hunters go home.`,
+          text: `${factionName(w.faction)} abandon their writ; the hunters go home.`,
           color: this.colorOf(w.faction),
         });
         this.expirePending.push(w.faction);
@@ -251,7 +251,7 @@ export class VendettaField implements WorldOverlay {
     this.writs.splice(i, 1);
     this.settledPending.push(w.faction);
     this.notices.push({
-      text: `The writ is settled — ${factionName(w.faction)} let the matter die.`,
+      text: `The writ is settled; ${factionName(w.faction)} let the matter die.`,
       color: this.colorOf(w.faction),
     });
     // The strongest HOSTILE rival of the poster pays tribute for the insult.
@@ -375,7 +375,7 @@ export class VendettaField implements WorldOverlay {
     });
     this.seenPending = true;
     this.notices.push({
-      text: `${factionName(faction)} post a WRIT OF REPRISAL — hunters take the road.`,
+      text: `${factionName(faction)} post a WRIT OF REPRISAL; hunters take the road.`,
       color: this.colorOf(faction),
     });
   }
@@ -417,7 +417,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!zone || !eventTargetable('vendetta', zone)) return [];
   return writs.map(w => ({
     kind: 'event' as const, icon: '✠', color: w.color,
-    label: `Writ of Reprisal — ${factionName(w.faction)}`,
+    label: `Writ of Reprisal: ${factionName(w.faction)}`,
     detail: `${w.tierLabel} · hunters on the road`, z: 14,
   }));
 });

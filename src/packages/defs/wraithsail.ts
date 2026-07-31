@@ -88,8 +88,8 @@ registerKillHandler({
     ctx.flash(ctx.actor.pos, 180, WRAITHSAIL_SURGE.color, 0.9);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
       sank
-        ? 'The Tidebound Regent falls — and the Wraithsail goes down with him!'
-        : 'The Tidebound Regent falls — the tide finally lets him go.',
+        ? 'The Tidebound Regent falls, and the Wraithsail goes down with him!'
+        : 'The Tidebound Regent falls; the tide finally lets him go.',
       '#bfe8ec', 19);
   },
 });

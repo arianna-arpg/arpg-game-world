@@ -245,7 +245,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         swarms: [{
           monsterId: 'glimmerling', pockets: [1, 3], size: [8, 16], chance: 0.7,
           when: { phases: ['dusk', 'night'] },
-          announce: 'the wood kindles — small lights rise from the bracken…',
+          announce: 'the wood kindles: small lights rise from the bracken…',
           announceColor: '#d8f078',
         }],
       },
@@ -2038,7 +2038,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // let the crawl press its burn. They rekindle if left to rest.
       lite: { swarms: [{
         monsterId: 'emberling', pockets: [1, 3], size: [12, 22], chance: 0.8,
-        announce: 'the ash stirs — embers on the move…', announceColor: '#ff8a3a',
+        announce: 'the ash stirs: embers on the move…', announceColor: '#ff8a3a',
       }] },
       floor: '#150e0a', grid: '#221510', border: '#5c3824',
       obstacle: '#47291c', obstacleEdge: '#7a452c', accent: '#ff9650',
@@ -4838,7 +4838,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // perfProbe row — the crawl rides the permanent gate like the sewers').
       lite: { swarms: [{
         monsterId: 'grave_mite', pockets: [2, 3], size: [16, 28], chance: 0.85,
-        announce: 'the niches shed their dust — it CRAWLS…', announceColor: '#c8bfa8',
+        announce: 'the niches shed their dust, and it CRAWLS…', announceColor: '#c8bfa8',
       }] },
       floor: '#171310', grid: '#201b16', border: '#5a5142',
       // Obstacle = BONE: the generic rock/cliff stamps reskin into pale
@@ -5185,7 +5185,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         swarms: [{
           monsterId: 'glimmerling', pockets: [2, 4], size: [12, 22], chance: 0.95,
           when: { phases: ['dusk', 'night'] },
-          announce: 'the vale kindles — the glimmerkin rise…',
+          announce: 'the vale kindles: the glimmerkin rise…',
           announceColor: '#d8f078',
         }],
       },

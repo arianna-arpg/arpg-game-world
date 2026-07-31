@@ -318,7 +318,7 @@ registerMarkerSource((world: World): MapMarker[] => {
   return bf.peek().map(b => ({
     id: `brigands-${b.id}`, coord: { x: b.x, y: b.y },
     glyph: '⚔', fill: '#1c140a', stroke: b.color, text: '#f0d8a0', r: 7,
-    title: b.present ? `Brigands — a ${b.variant} descends here` : `Brigands — a ${b.variant} marches`,
+    title: b.present ? `Brigands: a ${b.variant} descends here` : `Brigands: a ${b.variant} marches`,
     fog: 'always', z: 16,
   }));
 });
@@ -330,7 +330,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     return [{
       kind: 'event', icon: '⚔', color: t.color, label: `Brigands · ${t.variant}`,
       detail: t.present
-        ? (here ? 'a band of thieves prowls this ground — keep your distance or fight' : 'a band of thieves has fallen upon this ground')
+        ? (here ? 'a band of thieves prowls this ground; keep your distance or fight' : 'a band of thieves has fallen upon this ground')
         : 'a roving band of brigands marches on this ground',
       z: 15,
     }];
@@ -340,7 +340,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (zoneId === world.zone.id && world.actors.some(a => a.tag === 'brigand' && !a.dead)) {
     return [{
       kind: 'event', icon: '⚔', color: FACTION_COLORS['bandit'] ?? BRIGAND_RUST, label: 'Brigands',
-      detail: 'a band of thieves prowls this ground — keep your distance or fight', z: 15,
+      detail: 'a band of thieves prowls this ground; keep your distance or fight', z: 15,
     }];
   }
   return [];

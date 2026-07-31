@@ -148,7 +148,7 @@ registerKillHandler({
       for (let i = 0; i < dw.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      broken ? 'The Winter King falls — the frost begins its retreat!' : 'The Winter King falls!',
+      broken ? 'The Winter King falls, and the frost begins its retreat!' : 'The Winter King falls!',
       dw?.color ?? FROST_COLOR, 18);
   },
 });

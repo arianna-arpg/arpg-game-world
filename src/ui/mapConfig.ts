@@ -42,7 +42,7 @@ export interface MapLabelModeDef {
 export const MAP_LABEL_MODES: MapLabelModeDef[] = [
   {
     id: 'hover', name: 'ON HOVER',
-    blurb: 'a clean chart — a zone’s name card rises under the cursor (and stays for the pinned zone, the zone you stand in, and towns)',
+    blurb: 'a clean chart: a zone’s name card rises under the cursor (and stays for the pinned zone, the zone you stand in, and towns)',
   },
   {
     id: 'always', name: 'ALWAYS',

@@ -114,7 +114,7 @@ registerHollow({
  *  drawn from the zone's own pack table, so the dark matches its address. */
 registerHollow({
   id: 'ambush_hollow',
-  blurb: 'The wall was load-bearing in a way you didn’t expect.',
+  blurb: 'The wall was structural in a way you didn’t expect.',
   reveal(c) {
     c.addDoodad({ pos: spot(c), radius: c.rng.range(16, 26), kind: 'web' });
     c.addDoodad({ pos: spot(c), radius: c.rng.range(12, 18), kind: 'bone_pile' });

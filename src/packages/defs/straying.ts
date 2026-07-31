@@ -43,8 +43,8 @@ export const STRAYING_SURGE: StrayingSurge = {
   omen: {
     whisper: 150, reveal: 55, widenPerMin: 12,
     lines: [
-      'a bell tolls {bearing} of here — slow, and wrong, and {dist}',
-      'bleating on the wind, {bearing} — a whole fold, and no dogs barking',
+      'a bell tolls {bearing} of here: slow, and wrong, and {dist}',
+      'bleating on the wind, {bearing}: a whole fold, and no dogs barking',
       'the drovers mutter of strays walking {bearing}, all of them one way',
     ],
   },

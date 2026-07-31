@@ -91,7 +91,7 @@ export const VENDOR_CFG = {
    *  earned in-descent, outside this economy by construction). */
   trade: {
     gate: [{ feature: FEATURE.SALVAGE_STATION, label: 'own the Salvage Station' }] as readonly GateRow[],
-    hint: 'You have no way to pay — essence means nothing to you yet. The Vault\'s SALVAGE STATION teaches worth.',
+    hint: 'You have no way to pay. Essence means nothing to you yet; the Vault\'s SALVAGE STATION teaches worth.',
   },
   /** THE BROADER-WARES LADDER (see WaresRung): rung 1 wears the LEGACY flag
    *  (accounts that bought "Brandt: +2 Wares" own it outright — ownership
@@ -121,7 +121,7 @@ export const VENDOR_CFG = {
    *  (FEATURE.VENDOR_GEMS): visible, named, pointing at the Vault. */
   tabs: {
     default: [{ id: 'wares' }, { id: 'gems', unlock: FEATURE.VENDOR_GEMS }] as readonly VendorTabSpec[],
-    gemsSealedCopy: 'The gem case is shuttered — its glass dark. The Vault\'s GEM COUNTER unlock opens it at every market you\'ll ever trade in.',
+    gemsSealedCopy: 'The gem case is shuttered, its glass dark. The Vault\'s GEM COUNTER unlock opens it at every market you\'ll ever trade in.',
     /** The terse float the ENGINE refuses a sealed-case buy with (failNote —
      *  the panel face carries the long copy above; two surfaces, one config). */
     gemsSealedNote: 'the gem case is sealed',
@@ -239,7 +239,7 @@ export const VENDORS: VendorDef[] = [
     // The smith BUYS scrap (sell lane: coarse by quality) — but only once the
     // account owns the Salvage Station: one Vault purchase opens both doors.
     salvage: w => w.salvageUnlocked(),
-    salvageLocked: 'Brandt eyes your scrap, shrugs — the Vault\'s SALVAGE STATION would teach him its worth.',
+    salvageLocked: 'Brandt eyes your scrap and shrugs. The Vault\'s SALVAGE STATION would teach him its worth.',
     headline: w => `restock ${fmtRestock(w.vendorRestockAt - w.time)}`,
     holds: { locks: true, commission: true },
   },

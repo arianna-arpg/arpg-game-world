@@ -49,7 +49,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_surtash', marshal: 'marshal_surtash',
     strikes: [{ type: 'flame_tide', weight: 3 }, { type: 'hell_host', weight: 1 }],
     throne: { name: 'The Pyre Eternal' },
-    deeds: { take: "%z burns under Surtash's banner!", fall: 'The fires gutter — %z slips from Surtash.' },
+    deeds: { take: "%z burns under Surtash's banner!", fall: 'The fires gutter, and %z slips from Surtash.' },
     roster: [
       { id: 'imp', weight: 4, presence: { to: 22, fadeOut: 8 } },
       { id: 'ash_whelp', weight: 3, presence: { to: 12, fadeOut: 5 } },
@@ -69,7 +69,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_vormaul', marshal: 'marshal_vormaul',
     strikes: [{ type: 'hell_host', weight: 3 }, { type: 'balor_rite', weight: 1 }],
     throne: { name: 'The Chainworks' },
-    deeds: { take: "%z is dragged into Vormaul's chains!", fall: "The chains break — %z is out of Vormaul's grip." },
+    deeds: { take: "%z is dragged into Vormaul's chains!", fall: "The chains break, and %z is out of Vormaul's grip." },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
       { id: 'chained_tormentor', weight: 3, presence: { from: 5 } },
@@ -106,7 +106,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_vethriss', marshal: 'marshal_vethriss',
     strikes: [{ type: 'balor_rite', weight: 3 }, { type: 'imp_incursion', weight: 1 }],
     throne: { name: 'The Thousandth Door' },
-    deeds: { take: 'A thousand doors open — %z falls to Vethriss!', fall: 'The doors close on %z; Vethriss looks elsewhere.' },
+    deeds: { take: 'A thousand doors open, and %z falls to Vethriss!', fall: 'The doors close on %z; Vethriss looks elsewhere.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
       { id: 'demonkin_darter', weight: 3, presence: { from: 5 } },
@@ -124,7 +124,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_ozrimoth', marshal: 'marshal_ozrimoth',
     strikes: [{ type: 'balor_rite', weight: 2 }, { type: 'hell_host', weight: 1 }],
     throne: { name: 'The Last Sermon' },
-    deeds: { take: 'Ozrimoth pronounces the end of %z.', fall: 'The sentence lifts — %z outlives the Last Word, for now.' },
+    deeds: { take: 'Ozrimoth pronounces the end of %z.', fall: 'The sentence lifts, and %z outlives the Last Word, for now.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
       { id: 'brimstone_cantor', weight: 3, presence: { from: 6 } },
@@ -142,7 +142,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_nyxara', marshal: 'marshal_nyxara',
     strikes: [{ type: 'imp_incursion', weight: 3 }],
     throne: { name: 'The Hushed Court' },
-    deeds: { take: '%z goes quiet. Nyxara holds it now.', fall: 'Sound returns to %z — the Hush recedes.' },
+    deeds: { take: '%z goes quiet. Nyxara holds it now.', fall: 'Sound returns to %z; the Hush recedes.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
       { id: 'hellhound', weight: 2 },
@@ -160,7 +160,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_bhorog', marshal: 'marshal_bhorog',
     strikes: [{ type: 'hell_host', weight: 4 }],
     throne: { name: 'The Siegecamp Perpetual' },
-    deeds: { take: "Bhorog's engines grind %z flat!", fall: 'The engines stall — %z casts off the Siegewright.' },
+    deeds: { take: "Bhorog's engines grind %z flat!", fall: 'The engines stall, and %z casts off the Siegewright.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
       { id: 'hellhound', weight: 2 },
@@ -185,7 +185,7 @@ const LORDS: LordRow[] = [
     lord: 'lord_molochai', marshal: 'marshal_molochai',
     strikes: [{ type: 'imp_incursion', weight: 3 }, { type: 'flame_tide', weight: 1 }],
     throne: { name: 'The Counting Vault' },
-    deeds: { take: "%z is added to Molochai's ledger!", fall: 'A debt unpaid — %z escapes the Tithe-King.' },
+    deeds: { take: "%z is added to Molochai's ledger!", fall: 'A debt unpaid: %z escapes the Tithe-King.' },
     roster: [
       { id: 'imp', weight: 5, presence: { to: 24, fadeOut: 10 } },
       { id: 'fulgur_imp', weight: 2, presence: { from: 5 } },
@@ -307,6 +307,6 @@ registerKillHandler({
     ctx.bumpAccountLedger('hell_lords_slain', 1, true);
     ctx.grantXp(Math.round(340 + ctx.zone.level * 56));
     for (let i = 0; i < 4; i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60), 'CAST DOWN — and the war does not even pause.', '#ffd700', 19);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60), 'CAST DOWN, and the war does not even pause.', '#ffd700', 19);
   },
 });

@@ -43,7 +43,7 @@ const ACCENT = '#e8c87a'; // lamplight gold — the borough speaks in hearth ton
 /** Map-level knobs (the in-zone numbers ride the encounter's borough block). */
 const BOROUGH_SURGE: BoroughSurge = {
   resettleSec: 900, // spent ground resettles after fifteen world-minutes elsewhere
-  arrivalBulletin: '+{n} souls reach Lastlight — the town grows',
+  arrivalBulletin: '+{n} souls reach Lastlight; the town grows',
   arrivalColor: ACCENT,
 };
 
@@ -168,7 +168,7 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
     text: {
       found: 'a borough! its folk brace for the horde…',
       assault: 'the horde breaks upon the borough!',
-      held: 'the borough stands — its folk take the road to Lastlight',
+      held: 'the borough stands; its folk take the road to Lastlight',
       lost: 'the borough falls silent…',
     },
   },
@@ -296,7 +296,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: 'borough-lastlight-census',
     zoneId: START_ZONE,
     glyph: '⌂', fill: '#3a3020', stroke: ACCENT, text: String(POPULATION_CFG.base + pop),
-    title: `Lastlight — population ${POPULATION_CFG.base + pop} (${pop} sheltered)`,
+    title: `Lastlight: population ${POPULATION_CFG.base + pop} (${pop} sheltered)`,
     fog: 'always',
     z: 3,
   }];

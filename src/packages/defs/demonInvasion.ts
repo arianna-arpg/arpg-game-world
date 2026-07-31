@@ -75,8 +75,8 @@ const INVASION_TYPES: InvasionType[] = [
       wards: {
         count: [4, 5],
         guards: { count: [3, 5] },
-        announceBreak: 'A seal shatters — {n} of {total} still bind the Rite!',
-        announceAll: 'The last seal breaks — the Balor manifests!',
+        announceBreak: 'A seal shatters. {n} of {total} still bind the Rite!',
+        announceAll: 'The last seal breaks, and the Balor manifests!',
       },
     },
   },

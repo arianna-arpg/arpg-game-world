@@ -36,7 +36,7 @@ export const LONG_NIGHT_SURGE: LongNightSurge = {
   omen: {
     whisper: 160, reveal: 55, widenPerMin: 10,
     lines: [
-      'wheel-ruts of a heavy coach, rolling {bearing} — no drover runs at night',
+      'wheel-ruts of a heavy coach, rolling {bearing}; no drover runs at night',
       'the hamlets speak of pale callers {bearing} of here, {dist}',
       'a wine-dark hush lies over the {bearing} country',
     ],
@@ -95,13 +95,13 @@ registerKillHandler({
       ctx.flash(ctx.actor.pos, 140, cfg.color, 0.7);
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
         info.converted
-          ? 'The coach burns in the daylight — the Court\'s hold on this ground breaks!'
-          : 'The coach burns — the Court will not feed here again.',
+          ? 'The coach burns in the daylight, and the Court\'s hold on this ground breaks!'
+          : 'The coach burns; the Court will not feed here again.',
         '#e8c8d0', 17);
     } else {
       lnf.onCoachReknits(ctx.zone.id);
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-        'The gloom re-knits the carriage — break it by DAYLIGHT and it stays broken.',
+        'The gloom re-knits the carriage. Break it by DAYLIGHT and it stays broken.',
         cfg.color, 16);
     }
   },
@@ -125,7 +125,7 @@ registerKillHandler({
     }
     ctx.flash(ctx.actor.pos, 190, cfg.color, 0.9);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'The Countess falls — her court breaks, and every feeding ground with it!',
+      'The Countess falls, her court breaks, and every feeding ground with it!',
       '#f0d8e0', 19);
   },
 });

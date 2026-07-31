@@ -124,6 +124,6 @@ registerKillHandler({
       for (let i = 0; i < cgn.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'Patient Zero falls — the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
+      'Patient Zero falls, and the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
   },
 });

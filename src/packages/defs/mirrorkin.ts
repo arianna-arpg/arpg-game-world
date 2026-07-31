@@ -47,7 +47,7 @@ const MIRROR_RIFT: EncounterDef = {
   trigger: { glyph: '❖', color: MIRROR_COLOR, activateRadius: 30 },
   timePerKill: 0.22,
   radiusPerKill: 1.1,
-  waneText: 'The glass clouds — the rift forgets how to stay.',
+  waneText: 'The glass clouds; the rift forgets how to stay.',
   scales: [
     { id: 'sliver', label: 'Mirror Sliver', weight: 6,
       baseTime: 20, maxBonusTime: 25, startRadius: 90, maxRadius: 240, growthPerSec: 5,

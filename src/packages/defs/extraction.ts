@@ -124,9 +124,9 @@ const EXTRACTION_ENCOUNTER: EncounterDef = {
     ledgerLost: 'extractions_lost',
     text: {
       found: 'something wells up from below…',
-      armed: 'the seam is tapped — the ground remembers who it belongs to',
-      depleted: 'the seam runs dry — its marrow is yours',
-      shattered: 'the seam is torn apart — what little bled free is yours',
+      armed: 'the seam is tapped; the ground remembers who it belongs to',
+      depleted: 'the seam runs dry, and its marrow is yours',
+      shattered: 'the seam is torn apart; what little bled free is yours',
     },
   },
 };

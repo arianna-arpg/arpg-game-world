@@ -233,7 +233,7 @@ export const BANDIT_TOLLGATE: HoldfastDef = {
     ],
     bounty: 2.25,
   },
-  sealedHint: 'the toll-gate bars the way — pay the wardens, or find another road',
+  sealedHint: 'the toll-gate bars the way: pay the wardens, or find another road',
   weight: 2, minLevel: 1, slaughterOpensChance: 0.1, marker: BANDIT_MARKER,
 };
 
@@ -267,7 +267,7 @@ export const DURANCE_TITHEGATE: HoldfastDef = {
     ],
     bounty: 2.75,
   },
-  sealedHint: 'the tithe-gate stands sealed — the cantor weighs your essence, or your corpse',
+  sealedHint: 'the tithe-gate stands sealed: the cantor weighs your essence, or your corpse',
   weight: 1, minLevel: 8, slaughterOpensChance: 0.08,
   marker: { glyph: '⚑', color: '#7de84a' },
 };

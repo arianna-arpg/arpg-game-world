@@ -325,8 +325,8 @@ export const HARBORHOLD_CFG = {
      *  the quay (the city-gate read). */
     gateSeat: 'q',
     lockHint: {
-      besieged: 'the quay causeway is barred — break the siege at the hold',
-      fallen: 'the hold lies in ashes — the causeway waits for its rebuild',
+      besieged: 'the quay causeway is barred: break the siege at the hold',
+      fallen: 'the hold lies in ashes; the causeway waits for its rebuild',
     },
   },
 
@@ -368,8 +368,8 @@ export const HARBORHOLD_CFG = {
    *  ages louder — until found. The fabric's one findability channel. */
   omen: {
     lines: [
-      'smoke on the water {bearing} — a harbor fights for its walls',
-      'sailors speak of fires {bearing}, {dist} out — a port besieged',
+      'smoke on the water {bearing}: a harbor fights for its walls',
+      'sailors speak of fires {bearing}, {dist} out: a port besieged',
       'gulls wheel {bearing} over burning rigging, {dist} away',
     ],
     whisper: 700, reveal: 260, widenPerMin: 30,

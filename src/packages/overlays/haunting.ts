@@ -488,8 +488,8 @@ registerMarkerSource((world: World): MapMarker[] => {
   return hf.peek().filter(h => !h.latent).map(h => ({
     id: `haunting-${h.id}`, coord: { x: h.x, y: h.y },
     glyph: '☽', fill: '#12141c', stroke: HAUNT_PALE, text: '#d8e0f0', r: 7,
-    title: h.waneFrac > 0 ? 'A haunting thins in the coming light — it will not hold'
-      : h.broken ? 'A grief UNBOUND — the Wailing One walks here'
+    title: h.waneFrac > 0 ? 'A haunting thins in the coming light; it will not hold'
+      : h.broken ? 'A grief UNBOUND: the Wailing One walks here'
         : 'A haunting holds this ground',
     fog: 'always', z: 16,
   }));
@@ -514,9 +514,9 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const info = world.sim.hauntField?.hauntOn(zoneId);
   if (!info) return [];
   let detail = info.anchorBroken
-    ? 'the anchor is broken — the Wailing One walks until it is faced'
+    ? 'the anchor is broken; the Wailing One walks until it is faced'
     : 'a grief holds this ground: apparitions gather around its anchor';
-  if (info.waneFrac > 0) detail += ' — the light comes; it cannot hold much longer';
+  if (info.waneFrac > 0) detail += '; the light comes, and it cannot hold much longer';
   return [{
     kind: 'event', icon: '☽', color: info.color, label: 'Haunted',
     detail,

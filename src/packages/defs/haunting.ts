@@ -36,8 +36,8 @@ export const HAUNT_SURGE: HauntSurge = {
   omen: {
     whisper: 170, reveal: 60, widenPerMin: 14,
     lines: [
-      'a cold thread in the air — weeping, {bearing} of here, {dist}',
-      'the birds will not fly {bearing} — something grieves there',
+      'a cold thread in the air: weeping, {bearing} of here, {dist}',
+      'the birds will not fly {bearing}; something grieves there',
       'a mourner’s song carries from the {bearing}, faint and wrong',
     ],
   },
@@ -96,7 +96,7 @@ registerKillHandler({
     boss.tag = 'wailing_one';
     ctx.flash(ctx.actor.pos, 120, info.color, 0.6);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-      'The anchor shatters — the WAILING ONE manifests!', '#d8e0f0', 17);
+      'The anchor shatters, and the WAILING ONE manifests!', '#d8e0f0', 17);
     ctx.bumpLedger('haunt_anchors_broken');
   },
 });

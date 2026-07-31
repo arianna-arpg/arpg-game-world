@@ -538,7 +538,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     kind: 'event',
     icon: inv.isEpicenter ? '★' : '✸',
     color: inv.color,
-    label: inv.isEpicenter ? `${inv.type.label} — epicenter` : inv.type.label,
+    label: inv.isEpicenter ? `${inv.type.label}: epicenter` : inv.type.label,
     detail: [lord ? `sent by ${lord.short}` : '', inv.stage.label, inv.isEpicenter && inv.portalReady ? 'portal open' : '']
       .filter(Boolean).join(' · '),
     z: inv.isEpicenter ? 19 : 12,

@@ -169,11 +169,11 @@ export const CRUSADE_SURGE: CrusadeSurge = {
     arena: {
       crowd: {
         championCalls: [
-          { atLifeFrac: 0.55, count: [2, 3], announce: 'The Leader beckons — challengers vault the rail!' },
-          { atLifeFrac: 0.22, count: [3, 4], announce: 'A last cry to the stands — the faithful answer!' },
+          { atLifeFrac: 0.55, count: [2, 3], announce: 'The Leader beckons, and challengers vault the rail!' },
+          { atLifeFrac: 0.22, count: [3, 4], announce: 'A last cry to the stands, and the faithful answer!' },
         ],
         disperseOnBossDeathSec: 3.2,
-        disperseAnnounce: 'The stands fall silent — the crowd melts away from a fallen crown.',
+        disperseAnnounce: 'The stands fall silent; the crowd melts away from a fallen crown.',
       },
     },
   },

@@ -154,7 +154,7 @@ registerKillHandler({
     if (rf && chance(rf.bloodDemonChance)) {
       ctx.spawnHostileAt(rf.bloodDemonId, Math.max(1, ctx.actor.level), ctx.actor.pos);
       ctx.flash(ctx.actor.pos, 64, '#e8003a', 0.6);
-      ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40), 'Blood erupts — something crawls forth!', '#e85050', 16);
+      ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40), 'Blood erupts, and something crawls forth!', '#e85050', 16);
     }
   },
 });

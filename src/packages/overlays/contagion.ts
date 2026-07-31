@@ -558,7 +558,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!info) return [];
   return [{
     kind: 'event', icon: '☣', color: info.color, label: 'Contagion',
-    detail: info.isSource ? 'Patient Zero festers here' : `${info.label} — follow the strongest pulse to its source`,
+    detail: info.isSource ? 'Patient Zero festers here' : `${info.label}; follow the strongest pulse to its source`,
     z: 14,
   }];
 });

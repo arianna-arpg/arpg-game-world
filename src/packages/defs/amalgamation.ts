@@ -223,6 +223,6 @@ registerKillHandler({
       ctx.grantXp(Math.round(cfg.minibossReward.xpBase + ctx.zone.level * cfg.minibossReward.xpPerLevel));
       for (let i = 0; i < cfg.minibossReward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 52), 'Slain — return to the Bonewright to choose a part. (M)', '#9ad0b0', 16);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 52), 'Slain. Return to the Bonewright to choose a part. (M)', '#9ad0b0', 16);
   },
 });

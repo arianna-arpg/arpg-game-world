@@ -227,8 +227,8 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     rows.push({
       kind: 'event', icon: '🕯', color: info.waxColor, label: 'The Vigil',
       detail: info.convene
-        ? 'the Wax Court holds this ground — and the Parliament contests it'
-        : 'the Wax Court processes here — candle-shrines light the dark',
+        ? 'the Wax Court holds this ground, and the Parliament contests it'
+        : 'the Wax Court processes here; candle-shrines light the dark',
       z: 13,
     });
   }
@@ -237,7 +237,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
       kind: 'event', icon: '☾', color: info.umbralColor, label: 'The Parliament Convenes',
       detail: info.vigil
         ? 'living shadows war with the Court under the shrines'
-        : 'living shadows hold this ground — bring light, or be dark',
+        : 'living shadows hold this ground: bring light, or be dark',
       z: 12,
     });
   }
