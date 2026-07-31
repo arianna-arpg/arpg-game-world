@@ -555,7 +555,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   firebolt: {
     id: 'firebolt', name: 'Firebolt',
-    description: 'Loose an orb of flame: a projectile dealing fire damage, with a 35% chance to'
+    description: 'Loose an orb of flame: a projectile dealing fire damage, with a 12% chance to'
       + ' set the victim burning.',
     tags: ['spell', 'projectile', 'fire'], color: '#ff7a2a',
     manaCost: 6, cooldown: 0, useTime: 0.75,
@@ -573,7 +573,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   flame_wave: {
     id: 'flame_wave', name: 'Flame Wave',
-    description: 'Sweep a sheet of fire damage across a long cone in front of you: 45% chance'
+    description: 'Sweep a sheet of fire damage across a long cone in front of you: 16% chance'
       + ' to set victims burning.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff9a3a',
     manaCost: 9, cooldown: 1.5, useTime: 0.8,
@@ -686,7 +686,7 @@ export const SKILLS: Record<string, SkillDef> = {
   hellfire_lash: {
     id: 'hellfire_lash', name: 'Hellfire Lash',
     description: 'Cracks a burning whip in a long, shallow arc in front of you: 50% chance to'
-      + ' SEAR, halving the victim\'s healing while it lasts, and 25% chance to set them'
+      + ' SEAR, halving the victim\'s healing while it lasts, and 9% chance to set them'
       + ' burning.',
     tags: ['attack', 'melee', 'fire', 'aoe'], color: '#ff5a3a',
     manaCost: 5, cooldown: 1.2, useTime: 0.75,
@@ -706,7 +706,7 @@ export const SKILLS: Record<string, SkillDef> = {
   brimstone_volley: {
     id: 'brimstone_volley', name: 'Brimstone Volley',
     description: 'Lobs 3–4 brimstone mortars across the target area; each bursts on impact for'
-      + ' fire and physical damage, with a 35% chance to set victims alight.',
+      + ' fire and physical damage, with a 12% chance to set victims alight.',
     tags: ['spell', 'fire', 'aoe', 'storm', 'duration'], color: '#ff7a3a',
     manaCost: 13, cooldown: 5, useTime: 0.85,
     baseDamage: { fire: [11, 17], physical: [4, 7] },
@@ -723,7 +723,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'rain_of_ash', name: 'Rain of Ash',
     description: 'Smothers an area in slow ashfall for 4.5 seconds. The ash is a FUME: victims'
       + ' must stand inside a moment before it bites, then every tick has a 40% chance to SEAR,'
-      + ' halving their healing, and a 20% chance to burn.',
+      + ' halving their healing, and a 7% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#c88a5a',
     manaCost: 12, cooldown: 6, useTime: 0.85,
     baseDamage: { fire: [3, 5] },
@@ -751,7 +751,7 @@ export const SKILLS: Record<string, SkillDef> = {
   hellshot_volley: {
     id: 'hellshot_volley', name: 'Hellshot Volley',
     description: 'Heaves 2–3 burning shells high across the whole field; each rings its landing'
-      + ' before it falls, then bursts for fire and physical damage with a 25% chance to burn.'
+      + ' before it falls, then bursts for fire and physical damage with a 9% chance to burn.'
       + ' The blasts spare no banner, the engine\'s own included.',
     tags: ['attack', 'fire', 'aoe', 'storm'], color: '#ff6a2a',
     noDrop: true, // a trebuchet's arm, not a hand — never a gem
@@ -774,7 +774,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'hellbore_lob', name: 'Hellbore Lob',
     description: 'Coughs a pair of blazing shells onto whoever presses the engine\'s keeper;'
       + ' each marks its landing an instant before impact, bursting for fire and physical'
-      + ' damage with a 20% chance to burn.',
+      + ' damage with a 7% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'storm'], color: '#e8823a',
     noDrop: true, // the engine's own throw (hellbore_mortar plants it)
     manaCost: 0, cooldown: 2, useTime: 0.7,
@@ -1011,7 +1011,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // carries it as a sequel — the two-skills-in-sequence composition.
   pyre_nova: {
     id: 'pyre_nova', name: 'Pyre Nova',
-    description: 'Flame bursts in a nova around you with a 30% chance to set victims burning.'
+    description: 'Flame bursts in a nova around you with an 11% chance to set victims burning.'
       + ' Each enemy caught has a 35% chance to ERUPT in kind after a beat, and eruptions beget'
       + ' eruptions, each half as likely as the last.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff7a3a',
@@ -1037,7 +1037,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'pyroclast_bolt', name: 'Pyroclast Bolt',
     description: 'Looses a heavy ember; wherever its flight ends, on a struck body or at the'
       + ' limit of its reach, a Pyre Nova blooms there at 90% strength, contagion and all. The'
-      + ' hit itself has a 25% chance to burn.',
+      + ' hit itself has a 9% chance to burn.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff8a4a',
     manaCost: 13, cooldown: 0, useTime: 0.75,
     baseDamage: { fire: [11, 19] },
@@ -1060,7 +1060,7 @@ export const SKILLS: Record<string, SkillDef> = {
   meteor: {
     id: 'meteor', name: 'Meteor', noDrop: true,
     description: 'Marks the target ground; after a wind-up a blazing rock plummets through a'
-      + ' rift in the sky and erupts, dealing fire damage with a 50% chance to set victims'
+      + ' rift in the sky and erupts, dealing fire damage with an 18% chance to set victims'
       + ' burning. Walls are no shelter from above.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff6024',
     manaCost: 0, cooldown: 0, useTime: 0.6,
@@ -1887,7 +1887,7 @@ export const SKILLS: Record<string, SkillDef> = {
   meteor_storm: {
     id: 'meteor_storm', name: 'Meteor Storm',
     description: 'Rain 4–6 meteors one after another across a target area, each dealing fire'
-      + ' damage in its blast with a 40% chance to burn. The meteors fall without regard for'
+      + ' damage in its blast with a 14% chance to burn. The meteors fall without regard for'
       + ' walls or sight lines.',
     tags: ['spell', 'fire', 'aoe', 'storm', 'duration'], color: '#ff6a2a',
     manaCost: 17, cooldown: 7, useTime: 0.9,
@@ -2261,7 +2261,7 @@ export const SKILLS: Record<string, SkillDef> = {
   inferno: {
     id: 'inferno', name: 'Inferno',
     description: 'CHANNELED: gouts of rolling flame pour toward your aim one after another,'
-      + ' each a slow wave that travels and strikes on its own, with a 30% chance to burn'
+      + ' each a slow wave that travels and strikes on its own, with an 11% chance to burn'
       + ' whatever it touches. Release and the flow ends, but gouts already loosed keep'
       + ' rolling; while you channel, you move at less than half speed. The Pit Lord\'s breath.',
     tags: ['spell', 'fire', 'projectile', 'channel', 'duration'], color: '#ff7a30',
@@ -2291,7 +2291,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'infernal_ray', name: 'Infernal Ray',
     description: 'CHANNELED (immobile, ponderous turning): a thin ray of fire that compounds'
       + ' the longer it is held, feeble at first and climbing ever faster, up to +200% damage'
-      + ' and double area. Each pulse has a 25% chance to burn.',
+      + ' and double area. Each pulse has a 9% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'channel'], color: '#ff8a3a',
     manaCost: 4, cooldown: 0, useTime: 0,
     castMode: 'channel',
@@ -2317,7 +2317,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'sunpiercer', name: 'Sunpiercer',
     description: 'CHARGED: hold to converge light into a point before you, then release to'
       + ' loose the lance, a long piercing beam of fire. Damage scales from a quarter of base'
-      + ' at a tap to 3.2 times at a full gather, and every target caught has a 40% chance to'
+      + ' at a tap to 3.2 times at a full gather, and every target caught has a 14% chance to'
       + ' burn.',
     tags: ['spell', 'fire', 'aoe'], color: '#ffd23a',
     manaCost: 18, cooldown: 4, useTime: 0,
@@ -2455,7 +2455,7 @@ export const SKILLS: Record<string, SkillDef> = {
   unstable_barrage: {
     id: 'unstable_barrage', name: 'Unstable Barrage',
     description: 'CHANNELED: erratic fire detonations hammer the area around your cursor; every'
-      + ' blast rolls its own size, lands on its own beat, and has a 30% chance to burn. The'
+      + ' blast rolls its own size, lands on its own beat, and has an 11% chance to burn. The'
       + ' cooldown begins only when the channel ends. Nothing about the barrage is steady; the'
       + ' average is.',
     tags: ['spell', 'fire', 'aoe', 'storm', 'channel', 'duration'], color: '#ff9a3a',
@@ -2483,7 +2483,7 @@ export const SKILLS: Record<string, SkillDef> = {
   meteoric_bombardment: {
     id: 'meteoric_bombardment', name: 'Meteoric Bombardment',
     description: 'CHANNELED (immobile): meteors hammer the area around your cursor for as long'
-      + ' as you hold, falling 2–3 per volley, each with a 35% chance to burn what it strikes.'
+      + ' as you hold, falling 2–3 per volley, each with a 12% chance to burn what it strikes.'
       + ' The cooldown begins when the bombardment ends, early or not.',
     tags: ['spell', 'fire', 'aoe', 'storm', 'channel', 'duration'], color: '#ff5a2a',
     manaCost: 9, cooldown: 5, useTime: 0,
@@ -2747,7 +2747,7 @@ export const SKILLS: Record<string, SkillDef> = {
   corpse_explosion: {
     id: 'corpse_explosion', name: 'Corpse Explosion',
     description: 'Detonate a targeted corpse: fire damage in an area around it, plus 15% of the'
-      + ' corpse\'s maximum life added to the blast. 30% chance to burn whatever it catches.',
+      + ' corpse\'s maximum life added to the blast. 11% chance to burn whatever it catches.',
     tags: ['spell', 'corpse', 'fire', 'aoe'], color: '#d86a4a',
     manaCost: 9, cooldown: 0.5, useTime: 0.6,
     baseDamage: { fire: [8, 12] },
@@ -2999,7 +2999,7 @@ export const SKILLS: Record<string, SkillDef> = {
   volatile_cinders: {
     id: 'volatile_cinders', name: 'Volatile Cinders',
     description: 'Consume a corpse and its heat rises as a CINDER: a homing bolt that hunts'
-      + ' living flesh and bursts in a small area, 25% chance to burn. A fed pile looses a'
+      + ' living flesh and bursts in a small area, 9% chance to burn. A fed pile looses a'
       + ' flight, one cinder for every body eaten.',
     tags: ['spell', 'corpse', 'fire', 'projectile'], color: '#e07848',
     manaCost: 10, cooldown: 1.2, useTime: 0.55,
@@ -3259,7 +3259,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   immolation_blast: {
     id: 'immolation_blast', name: 'Immolation Blast',
-    description: 'A fiery burst in a wide ring around you: 40% chance to burn whatever it'
+    description: 'A fiery burst in a wide ring around you: 14% chance to burn whatever it'
       + ' catches. Also the payload of Fire Mine.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff7a3a',
     manaCost: 13, cooldown: 2, useTime: 0.8,
@@ -3933,7 +3933,7 @@ export const SKILLS: Record<string, SkillDef> = {
   fire_siege: {
     id: 'fire_siege', name: 'Fire Siege',
     description: 'Send a slow, wide wave of flame grinding forward through everything in its'
-      + ' path; nothing it meets stops it, and 45% of enemies touched catch fire and burn.',
+      + ' path; nothing it meets stops it, and 16% of enemies touched catch fire and burn.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff8438',
     manaCost: 15, cooldown: 3, useTime: 0.85,
     baseDamage: { fire: [14, 22] },
@@ -4696,7 +4696,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'fumarole', name: 'Fumarole',
     description: 'Open a hissing vent in the earth for 7 seconds: molten globs lob outward,'
       + ' arcing away and bursting in fire where they fall, furious at first and settling as'
-      + ' the chamber spends itself. The vent floor cooks whatever stands on it, with a 35%'
+      + ' the chamber spends itself. The vent floor cooks whatever stands on it, with a 12%'
       + ' chance to burn. Artillery you plant like a garden.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff6a3a',
     manaCost: 19, cooldown: 9, useTime: 0.8,
@@ -4722,7 +4722,7 @@ export const SKILLS: Record<string, SkillDef> = {
   lava_glob: {
     id: 'lava_glob', name: 'Lava Glob', noDrop: true,
     description: 'A gout of molten stone arcs away, shedding speed, and bursts in fire where it'
-      + ' falls, with a 40% chance to burn. Thrown by the mountain.',
+      + ' falls, with a 14% chance to burn. Thrown by the mountain.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff8a4a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [9, 15] },
@@ -4935,7 +4935,7 @@ export const SKILLS: Record<string, SkillDef> = {
   rolling_cannonade: {
     id: 'rolling_cannonade', name: 'Rolling Cannonade',
     description: 'Press repeatedly while the barrel cycles: every press loads another salvo,'
-      + ' and each salvo spits a pair of burning shells that burst on impact, with a 30% chance'
+      + ' and each salvo spits a pair of burning shells that burst on impact, with an 11% chance'
       + ' to set victims burning. Rewards the drummer\'s wrist.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff7a38',
     manaCost: 14, cooldown: 5, useTime: 1.3,
@@ -4964,7 +4964,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // alternate and a flanked hero never eats both in one swallow.
   ember_breath: {
     id: 'ember_breath', name: 'Ember Breath', noDrop: true,
-    description: 'A rolling cone of flame with a 50% chance to set victims burning. The ember'
+    description: 'A rolling cone of flame with an 18% chance to set victims burning. The ember'
       + ' head empties its furnace lungs.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff8a3a',
     manaCost: 9, cooldown: 3.2, useTime: 0.9,
@@ -5157,7 +5157,7 @@ export const SKILLS: Record<string, SkillDef> = {
   magma_ward: {
     id: 'magma_ward', name: 'Magma Ward',
     description: 'Every block, stance or shield-luck, banks a magma bead, up to 5. Press to'
-      + ' vent them all as a molten nova around you: 40% harder per bead spent, with a 40%'
+      + ' vent them all as a molten nova around you: 40% harder per bead spent, with a 14%'
       + ' chance to set victims burning; it refuses to fire below 2 beads. The wall saves its'
       + ' change and pays in fire.',
     tags: ['spell', 'fire', 'aoe', 'guard'], color: '#e06a30',
@@ -6062,7 +6062,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'volcanic_fissure', name: 'Volcanic Fissure',
     description: 'Split the earth and send the crack travelling: a grinding fissure of physical'
       + ' and fire damage that erupts in gouts of magma all along its length while the wound'
-      + ' stays open. Each bite has a 30% chance to set its victim burning.',
+      + ' stays open. Each bite has an 11% chance to set its victim burning.',
     tags: ['attack', 'melee', 'fire', 'physical', 'aoe', 'duration'], color: '#e0562a',
     manaCost: 15, cooldown: 5, useTime: 0.75,
     baseDamage: { physical: [6, 9], fire: [6, 9] },
@@ -6083,7 +6083,7 @@ export const SKILLS: Record<string, SkillDef> = {
   fissure_burst: {
     id: 'fissure_burst', name: 'Fissure Burst', noDrop: true,
     description: 'Magma bursts from the broken ground after a blink of delay: fire damage in a'
-      + ' small circle, with a 35% chance to set victims burning.',
+      + ' small circle, with a 12% chance to set victims burning.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff7a30',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [7, 11] },
@@ -6097,7 +6097,7 @@ export const SKILLS: Record<string, SkillDef> = {
   eruption: {
     id: 'eruption', name: 'Eruption',
     description: 'Detonate the target ground: one heavy blast after a breath of delay, then 3'
-      + ' seconds of churning fire, each hit carrying a 40% chance to burn. Every wound is'
+      + ' seconds of churning fire, each hit carrying a 14% chance to burn. Every wound is'
       + ' SEARED shut: healing is halved while it lasts, regen, leech and mending alike.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff6428',
     manaCost: 16, cooldown: 6, useTime: 0.8,
@@ -6210,7 +6210,7 @@ export const SKILLS: Record<string, SkillDef> = {
   },
   kindled_eruption: {
     id: 'kindled_eruption', name: 'Kindled Eruption', noDrop: true,
-    description: 'The stoked furnace vents: a slow ring of fire around the body, with a 50%'
+    description: 'The stoked furnace vents: a slow ring of fire around the body, with an 18%'
       + ' chance to set everything it catches burning. Every blow that fed the furnace paid for'
       + ' this one.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff8a3a',
@@ -7236,7 +7236,7 @@ export const SKILLS: Record<string, SkillDef> = {
   hellfire_missile: {
     id: 'hellfire_missile', name: 'Hellfire Missile', noDrop: true,
     description: 'A wandering gobbet of riftfire that weaves after its master\'s mark, bursting'
-      + ' where it lands with a 30% chance to BURN.',
+      + ' where it lands with an 11% chance to BURN.',
     tags: ['spell', 'fire', 'projectile'], color: '#ff7a3a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [6, 10] },
@@ -7831,7 +7831,7 @@ export const SKILLS: Record<string, SkillDef> = {
   fireball: {
     id: 'fireball', name: 'Fireball',
     description: 'Hurls a heavy orb of flame that explodes on impact, splashing 70% of its'
-      + ' damage across everything near the strike. 35% chance to ignite.',
+      + ' damage across everything near the strike. 12% chance to ignite.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff7a2a',
     manaCost: 12, cooldown: 0, useTime: 0.8,
     baseDamage: { fire: [14, 22] },
@@ -7872,7 +7872,7 @@ export const SKILLS: Record<string, SkillDef> = {
   flame_spear: {
     id: 'flame_spear', name: 'Flame Spear',
     description: 'Readies a spear of white flame, then hurls it through everything in its line;'
-      + ' press again inside the golden window for the PERFECT throw. 50% chance to ignite'
+      + ' press again inside the golden window for the PERFECT throw. 18% chance to ignite'
       + ' whatever it pierces.',
     tags: ['spell', 'fire', 'projectile'], color: '#ffb04a',
     manaCost: 14, cooldown: 2, useTime: 1.1,
@@ -7889,7 +7889,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   flame_arrow: {
     id: 'flame_arrow', name: 'Flame Arrow',
-    description: 'A quick dart of flame that pierces up to 2 enemies, with a 20% chance to'
+    description: 'A quick dart of flame that pierces up to 2 enemies, with a 7% chance to'
       + ' ignite each one it passes through.',
     tags: ['spell', 'fire', 'projectile'], color: '#ff9646',
     manaCost: 4, cooldown: 0, useTime: 0.4,
@@ -7908,7 +7908,7 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'CHANNELED: nothing fires while you gather; the cost ticks as the core swells.'
       + ' Release detonates it at your mark, damage compounding up to 4 times base and area up'
       + ' to 60% wider the longer you hold; a bare tap fizzles. You move at half speed while'
-      + ' gathering, and the blast has a 50% chance to ignite.',
+      + ' gathering, and the blast has an 18% chance to ignite.',
     tags: ['spell', 'fire', 'aoe', 'channel', 'duration'], color: '#ff7030',
     manaCost: 5, cooldown: 3, useTime: 0,
     castMode: 'channel',
@@ -7935,7 +7935,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'infernal_cannonade', name: 'Infernal Cannonade',
     description: 'MULTITUDE: hammer the button during the cast and every press looses another'
       + ' burning shell. Each shell explodes where it lands, splashing 60% of its damage, with'
-      + ' a 30% chance to ignite.',
+      + ' an 11% chance to ignite.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff6a30',
     manaCost: 16, cooldown: 5, useTime: 1.3,
     castMode: 'multitude',
@@ -7973,7 +7973,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   magma_glob: {
     id: 'magma_glob', name: 'Magma Glob', noDrop: true,
-    description: 'A gob of molten rock that bursts where it lands, splashing fire with a 35%'
+    description: 'A gob of molten rock that bursts where it lands, splashing fire with a 12%'
       + ' chance to ignite whatever it catches.',
     tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff7a2a',
     manaCost: 0, cooldown: 0, useTime: 0,
@@ -8075,7 +8075,7 @@ export const SKILLS: Record<string, SkillDef> = {
   pillar_of_flame: {
     id: 'pillar_of_flame', name: 'Pillar of Flame',
     description: 'Raises a burning ring at the mark that sears its rim at once, then closes'
-      + ' inward over 2.6 seconds, cooking everything still inside; each tick carries a 40%'
+      + ' inward over 2.6 seconds, cooking everything still inside; each tick carries a 14%'
       + ' chance to ignite. Sigils reshape the cage itself.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff6428',
     manaCost: 24, cooldown: 9, useTime: 0.8,
@@ -8138,7 +8138,7 @@ export const SKILLS: Record<string, SkillDef> = {
   cinder_swarm: {
     id: 'cinder_swarm', name: 'Cinder Swarm',
     description: 'Looses a spray of 4–6 fire projectiles that weave erratically as they fly,'
-      + ' each with a 30% chance to set what it hits burning.',
+      + ' each with an 11% chance to set what it hits burning.',
     tags: ['spell', 'fire', 'projectile'], color: '#ffae52',
     manaCost: 11, cooldown: 0, useTime: 0.6,
     baseDamage: { fire: [4, 7] },
@@ -8158,7 +8158,7 @@ export const SKILLS: Record<string, SkillDef> = {
   backdraft: {
     id: 'backdraft', name: 'Backdraft',
     description: 'Unleash a searing cone of fire damage that drags everything it catches toward'
-      + ' you instead of away, with a 35% chance to set victims burning.',
+      + ' you instead of away, with a 12% chance to set victims burning.',
     tags: ['spell', 'fire', 'aoe'], color: '#e8622c',
     manaCost: 13, cooldown: 4, useTime: 0.6,
     baseDamage: { fire: [11, 17] },
@@ -8175,7 +8175,7 @@ export const SKILLS: Record<string, SkillDef> = {
   trailblaze: {
     id: 'trailblaze', name: 'Trailblaze',
     description: 'Dash forward in a streak of flame, sowing burning ground along your path that'
-      + ' lasts 2.5 seconds and ticks fire damage at whatever stands in it, with a 50% chance'
+      + ' lasts 2.5 seconds and ticks fire damage at whatever stands in it, with an 18% chance'
       + ' to burn.',
     tags: ['spell', 'fire', 'movement', 'aoe', 'duration', 'instant'], color: '#ff9040',
     manaCost: 13, cooldown: 5, useTime: 0,
@@ -8967,7 +8967,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'gourd_bomb', name: 'Gourd Bomb',
     description: 'Sling a carved gourd at the target point; after a short fuse it bursts,'
       + ' dealing fire damage around the impact with a 50% chance to inflict HARROWING and a'
-      + ' 25% chance to ignite. Whatever the carving means, those caught reading it lose their'
+      + ' 9% chance to ignite. Whatever the carving means, those caught reading it lose their'
       + ' nerve.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#e8832a',
     manaCost: 12, cooldown: 4, useTime: 0.8,
@@ -9050,7 +9050,7 @@ export const SKILLS: Record<string, SkillDef> = {
   gourd_toss: {
     id: 'gourd_toss', name: 'Lit Gourd', noDrop: true,
     description: 'Hurls a lit carving: the projectile deals fire damage with a 40% chance to'
-      + ' inflict HARROWING and a 30% chance to ignite. The sower is still grinning.',
+      + ' inflict HARROWING and an 11% chance to ignite. The sower is still grinning.',
     tags: ['spell', 'fire', 'projectile'], color: '#d8722a',
     manaCost: 9, cooldown: 2.2, useTime: 0.9,
     baseDamage: { fire: [8, 13] },
@@ -9689,7 +9689,7 @@ export const SKILLS: Record<string, SkillDef> = {
   cindershell: {
     id: 'cindershell', name: 'Cindershell',
     description: 'Your armor detonates in a ring of fire and physical damage around you, with a'
-      + ' 25% chance to burn; the blast gains 3 added fire and 3 added physical damage per 50'
+      + ' 9% chance to burn; the blast gains 3 added fire and 3 added physical damage per 50'
       + ' armor worn. While slotted, 8% of your hits and 30% of your kills shake a Wakeflame'
       + ' orb loose, and each Wakeflame you pick up refunds 1 second of this skill\'s cooldown.',
     tags: ['spell', 'fire', 'physical', 'aoe'], color: '#ffb35a',
@@ -9749,7 +9749,7 @@ export const SKILLS: Record<string, SkillDef> = {
   requiem: {
     id: 'requiem', name: 'Requiem',
     description: 'Consumes every banked Wakeflame (at least 1) for a fire nova around you,'
-      + ' dealing 40% more damage per flame consumed, with a 35% chance to burn. Every'
+      + ' dealing 40% more damage per flame consumed, with a 12% chance to burn. Every'
       + ' Wakeflame orb you pick up refunds 1.5 seconds of its cooldown; while slotted, 7% of'
       + ' your hits shake one loose and the skill periodically sheds a stray flame nearby.',
     tags: ['spell', 'fire', 'aoe'], color: '#f0c060',
@@ -9850,7 +9850,7 @@ export const SKILLS: Record<string, SkillDef> = {
   immolation_rush: {
     id: 'immolation_rush', name: 'Immolation Rush',
     description: 'HOLD to gather, then release to hurtle along your aim as a burning comet,'
-      + ' blasting fire at launch and landing with a 40% chance to burn. Gathering up to 1.8'
+      + ' blasting fire at launch and landing with a 14% chance to burn. Gathering up to 1.8'
       + ' seconds scales the blasts from 0.8x to 2.4x damage and up to 1.8x width, but the'
       + ' fully laden comet travels at 45% speed.',
     tags: ['spell', 'fire', 'movement', 'aoe'], color: '#ff7838',
@@ -10286,7 +10286,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'wildfire_sweep', name: 'Wildfire Sweep',
     description: 'Sweep a cone of wildfire that catches at the RIM and cooks inward: the'
       + ' burning edge fills toward you over a breath while the caught ground ticks fire, each'
-      + ' hit carrying a 40% chance to Burn. Past the hollow heart there is a moment of grace;'
+      + ' hit carrying a 14% chance to Burn. Past the hollow heart there is a moment of grace;'
       + ' the fire is patient.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff7838',
     manaCost: 11, cooldown: 2.5, useTime: 0.65,
@@ -10575,7 +10575,7 @@ export const SKILLS: Record<string, SkillDef> = {
   netherfissure: {
     id: 'netherfissure', name: 'Netherfissure',
     description: 'Open one wound in the world: a fissure that holds for 6 seconds, cooking'
-      + ' whatever stands over it with a 25% chance to Burn, while SPIRITS rise from its length'
+      + ' whatever stands over it with a 9% chance to Burn, while SPIRITS rise from its length'
       + ' every 1.4 seconds to hunt the living and lay Torment. Casting again closes the old'
       + ' wound and opens a new one.',
     tags: ['spell', 'chaos', 'fire', 'aoe', 'duration', 'fissure'], color: '#9a5ac8',
@@ -11029,8 +11029,8 @@ export const SKILLS: Record<string, SkillDef> = {
   beacon_bolt: {
     id: 'beacon_bolt', name: 'Beacon Bolt', noDrop: true,
     description: 'A small burst of fire, lightning and cold strikes the marked ground after a'
-      + ' brief delay: 12% chance each to shock, chill, and burn. One tongue of the beacon\'s'
-      + ' storm.',
+      + ' brief delay: 12% chance each to shock and chill, and a 4% chance to burn. One tongue'
+      + ' of the beacon\'s storm.',
     tags: ['spell', 'fire', 'lightning', 'cold', 'aoe'], color: '#e8c86a',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [3, 6], lightning: [3, 6], cold: [3, 6] },
@@ -11118,7 +11118,7 @@ export const SKILLS: Record<string, SkillDef> = {
   cinderwhirl_trap: {
     id: 'cinderwhirl_trap', name: 'Cinderwhirl Trap',
     description: 'Set a trap that waits up to 20 seconds: when sprung, it spins up a revolving'
-      + ' tongue of flame that sweeps the ground around it over and over, with a 40% chance to'
+      + ' tongue of flame that sweeps the ground around it over and over, with a 14% chance to'
       + ' burn whatever it catches. Up to 3 can wait at once.',
     tags: ['spell', 'fire', 'trap', 'aoe', 'duration', 'totem'], color: '#ff8a3a',
     manaCost: 10, cooldown: 3, useTime: 0.45,
@@ -11138,7 +11138,7 @@ export const SKILLS: Record<string, SkillDef> = {
   cinder_whirl: {
     id: 'cinder_whirl', name: 'Cinderwhirl', noDrop: true,
     description: 'A burning crescent revolves around the sprung trap for 3.5 seconds, striking'
-      + ' whatever it sweeps across: 35% chance to burn.',
+      + ' whatever it sweeps across: 12% chance to burn.',
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff7030',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { fire: [7, 11] },
@@ -11157,7 +11157,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'voltaic_orb', name: 'Voltaic Orb',
     description: 'Conjure a searing sphere that orbits you for 6 seconds, dealing fire and'
       + ' lightning damage to whatever it touches again and again, while lightning arcs off it'
-      + ' into nearby enemies throughout its flight. Every hit has a 25% chance to burn. A moon'
+      + ' into nearby enemies throughout its flight. Every hit has a 9% chance to burn. A moon'
       + ' with opinions.',
     tags: ['spell', 'fire', 'lightning', 'projectile', 'duration'], color: '#f0a848',
     manaCost: 11, cooldown: 4, useTime: 0.5,
@@ -12230,7 +12230,7 @@ export const SKILLS: Record<string, SkillDef> = {
   invoke_conflagration: {
     id: 'invoke_conflagration', name: 'Conflagration', noDrop: true,
     description: 'The pure fire triad\'s working: a wide ground eruption that lingers for 2.5'
-      + ' seconds, ticking damage the whole while, with a 50% chance to set victims burning.',
+      + ' seconds, ticking damage the whole while, with an 18% chance to set victims burning.',
     tags: ['spell', 'aoe', 'duration'], color: '#ff7030',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { physical: [16, 24] },
@@ -12295,7 +12295,8 @@ export const SKILLS: Record<string, SkillDef> = {
   invoke_cataclysm: {
     id: 'invoke_cataclysm', name: 'Elemental Cataclysm', noDrop: true,
     description: 'All three schools woven at once: 10 strikes fall across a wide field, each'
-      + ' carrying a 20% chance to shock, to chill, and to burn. The sky stops picking sides.',
+      + ' carrying a 20% chance to shock and to chill, and a 7% chance to burn. The sky stops'
+      + ' picking sides.',
     tags: ['spell', 'aoe', 'storm'], color: '#e8b8f0',
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { physical: [13, 19] },
@@ -13082,7 +13083,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'kindled_ruin', name: 'Kindled Ruin',
     description: 'CHANNELED: gather fire for 4 rooted seconds, and nothing arrives until the'
       + ' gather completes; break the channel, or the caster, and the ruin never comes. At full'
-      + ' hold it erupts as a fire nova around you with a 50% chance to burn everything caught.'
+      + ' hold it erupts as a fire nova around you with an 18% chance to burn everything caught.'
       + ' The deliberate cast, weaponized.',
     tags: ['spell', 'fire', 'aoe', 'channel'], color: '#ff8a3a',
     manaCost: 6, cooldown: 8, useTime: 0.45,
@@ -13105,7 +13106,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // --- The melt & the deep: lurker/angler armaments ---------------------------
   ember_dart: {
     id: 'ember_dart', name: 'Ember Dart', noDrop: true,
-    description: 'A spat coal of fire damage, quick and small, with a 25% chance to burn what'
+    description: 'A spat coal of fire damage, quick and small, with a 9% chance to burn what'
       + ' it strikes. The wildfire kin\'s pelting shot.',
     tags: ['spell', 'projectile', 'fire'], color: '#ff9a3c',
     manaCost: 3, cooldown: 0, useTime: 0.55,
@@ -13122,7 +13123,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'magma_lob', name: 'Magma Lob',
     description: 'Heave a gout of living melt in a lazy arc: it bursts in fire damage where it'
       + ' lands and leaves a burning pool that shrinks closed over 3.2 seconds. Every hit'
-      + ' carries a 45% chance to burn.',
+      + ' carries a 16% chance to burn.',
     tags: ['spell', 'fire', 'projectile', 'aoe', 'duration'], color: '#ff7a2a',
     manaCost: 10, cooldown: 0.8, useTime: 0.7,
     baseDamage: { fire: [14, 22] },
@@ -13448,7 +13449,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cask_blast: {
     id: 'cask_blast', name: 'Cask Blast', noDrop: true,
-    description: 'The cask detonates: fire damage in a wide blast, a 50% chance to inflict'
+    description: 'The cask detonates: fire damage in a wide blast, an 18% chance to inflict'
       + ' burn, and everything nearby is knocked back.',
     tags: ['spell', 'fire', 'aoe'], color: '#ff8a3a',
     manaCost: 0, cooldown: 0, useTime: 0,
@@ -14254,7 +14255,7 @@ export const SKILLS: Record<string, SkillDef> = {
   judgement_pillar: {
     id: 'judgement_pillar', name: 'Judgement Pillar',
     description: 'Name the ground and a column of white fire stands there for 2.6 seconds,'
-      + ' striking everything it holds again and again with fire and lightning damage: 40%'
+      + ' striking everything it holds again and again with fire and lightning damage: 14%'
       + ' chance to burn, and partway through the pillar detonates a second buried strike. The'
       + ' Host\'s dominions bring these down unbidden.',
     tags: ['spell', 'fire', 'lightning', 'aoe', 'duration'], color: '#ffd27f',
@@ -14278,7 +14279,7 @@ export const SKILLS: Record<string, SkillDef> = {
   starcall: {
     id: 'starcall', name: 'Starcall',
     description: 'Ask the night for one of its own: 2 seconds after you mark the ground, a star'
-      + ' lands there in a burst of fire and physical damage, with a 35% chance to burn. The'
+      + ' lands there in a burst of fire and physical damage, with a 12% chance to burn. The'
       + ' Vesperlands\' keepers call them down like punctuation.',
     tags: ['spell', 'fire', 'physical', 'aoe', 'duration'], color: '#ffd9a0',
     manaCost: 24, cooldown: 5, useTime: 0.7,
@@ -14508,7 +14509,7 @@ export const SKILLS: Record<string, SkillDef> = {
     id: 'gloria', name: 'Gloria',
     description: 'Convene a crescent of dawnfire around the point you name, its open chord'
       + ' facing you: the crescent closes on its own center over a heartbeat, striking each'
-      + ' body it passes over exactly once with fire and lightning damage, 35% chance to burn,'
+      + ' body it passes over exactly once with fire and lightning damage, 12% chance to burn,'
       + ' and a final smaller burst at 55% damage lands where they were herded.',
     tags: ['spell', 'fire', 'lightning', 'aoe', 'duration'], color: '#ffe4a8',
     manaCost: 20, cooldown: 5.5, useTime: 0.65,
