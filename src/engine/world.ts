@@ -36283,6 +36283,13 @@ export class World {
           && m.sourceSkillId === key).length >= fx.max) break;
         const forged = this.createMonster(fx.monsterId, owner.level, owner.team, owner);
         forged.sourceSkillId = key;
+        // BORROWED UNLIFE: the conscript binds to its RESOLVED keeper (the
+        // same `caster.owner ?? caster` the court-credit laws ride), so a
+        // nested conjurer's proc-conscripts unmake when it falls — the
+        // lifeline cascade's one loose link closed. Seat and enemy/wild
+        // keepers stamp undefined by conjurationLifeline's own law, so
+        // first-hand play is untouched.
+        forged.lifelineId = this.conjurationLifeline(owner);
         // THE HYBRID SEAM: when the conscripting hit came from a real skill
         // instance, the conscripts are that instance's CREW — its gems
         // forward aboard (the lane router keeps each gem to the lanes it
