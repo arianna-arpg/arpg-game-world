@@ -233,6 +233,38 @@ export interface RegionKind {
    *  relishes the melt at 0.5). Non-walkable kinds never need this — the mask
    *  already refuses them. */
   pathCost?: number;
+  /** THE GROUND-CLASS AXIS (the causeway law — World.groundAt): what LAID this
+   *  surface. 'built' = construction — pavement, plank decking, worked floor:
+   *  at a doodad-ground overlap a built disc beats ANY natural disc covering
+   *  the same spot (a road spanning a hazard is SAFE — pavement is never
+   *  lethal), except deposits wearing `overruns`. Default 'ground' — the
+   *  land's own surfaces. Deliberately LEFT 'ground': hardpan/softsand (the
+   *  desert's own going — wind-made, never laid), ashfield/scree_wake (a
+   *  front's wake), ice (frozen water), and the tier-fabric ways
+   *  (tier_ramp/tor_mouth/culvert_well/sewer_duct/peak_ramp_*: carved
+   *  crossings the tier fabric owns — never doodad-sensed, and a cut stair
+   *  is worked land, not pavement over it). */
+  laid?: 'ground' | 'built';
+  /** THE SEVERITY LADDER (nature vs nature — World.groundAt): among covering
+   *  natural discs the WORST authored number speaks — the dark bog outranks
+   *  the mud at its fringe, the melt outranks them all. Documented bands
+   *  (author new rows onto them unless the design says otherwise):
+   *    0 (default) texture — brush/reeds/web and every unranked row: reports
+   *      only when nothing worse covers;
+   *    10 deposits — mud/sand (the overruns pair);
+   *    20 the wet seat — the `water` row's own number, read by groundAt's
+   *      water return: a resolved ground winner outranks standing water
+   *      only STRICTLY above this;
+   *    30 the mire class — bog/swamp/ice/tentacle_field;
+   *    40 the lethal class — lava, chyme.
+   *  Ties keep the FIRST-sensed disc (stability — document, don't reorder). */
+  severity?: number;
+  /** THE OVERRUNS EXCEPTION (deposits on construction — World.groundAt): this
+   *  natural kind may sit ON a built surface — mud splashed on a road still
+   *  reads as mud. The VALIDATE NET (registerRegion) refuses the flag on any
+   *  row carrying terrain damage, an enter sting, or a survival drain: harm
+   *  never rides pavement, by construction. */
+  overruns?: true;
   /** Pure-graphical region — no gameplay effect at all. */
   visualOnly?: boolean;
   visual?: RegionVisualSpec;
@@ -366,6 +398,14 @@ const REGION_KINDS: Record<string, RegionKind> = {};
 
 /** Register a region kind under an open-string id. */
 export function registerRegion(def: RegionKind): void {
+  // THE VALIDATE NET (the causeway law's guarantee): `overruns` lets a deposit
+  // sit ON pavement — so a row that HURTS (terrain damage, an enter sting, a
+  // survival drain) may never wear it. Refused BEFORE the row lands: harm
+  // never rides pavement — the dangerous combination is unrepresentable, not
+  // merely unused.
+  if (def.overruns && (def.standDamage || def.enterStatus || def.survival)) {
+    throw new Error(`region '${def.id}': overruns on a harmful row — harm never rides pavement`);
+  }
   REGION_KINDS[def.id] = def;
   pathCostMemo.delete(def.id); // a late/re-registered row re-prices (wayfaring memo)
 }
@@ -470,22 +510,29 @@ registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, bl
 // (same statuses, sources, durations, and zone-level-scaled bog poison).
 // TRAVEL PREFERENCE (pathCost): the slow grounds price their slog explicitly —
 // derivation deliberately refuses to guess from standStatus names (regionPathCost).
-registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired', pathCost: 2 });
-registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired', pathCost: 2 });
+// THE DEPOSIT BAND (severity 10 + overruns): mud and sand splash where they
+// like — a muddy road still reads as mud (the one sanctioned thing that may
+// sit on pavement; the validate net keeps the pair harmless forever).
+registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired', pathCost: 2, severity: 10, overruns: true });
+registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired', pathCost: 2, severity: 10, overruns: true });
 // ASHFIELD — the wildfire front's wake (the creep fabric's convert lane):
 // dead burnt ground, fully walkable, no hazard and no molten glow — the
 // danger PASSED here, that's the point. moveScale 1 is deliberate: a benign
 // effect keeps it in doodadGroundIds so groundAt senses it, clients rebuild
 // it, and affinity tables can name it.
 registerRegion({ id: 'ashfield', walkable: true, blocks: false, label: 'the ashfield', moveScale: 1 });
-registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden', pathCost: 2.2 });
+registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden', pathCost: 2.2, severity: 30 });
 // Water is REFUGE (the douse lane): wading strips the desert's sunscorch —
 // and the heatstroke it curdled into — a stack per beat, and suppresses the
 // bake while you stand in. This is why the mirage oasis is cruel: the water
 // that would save you is the one thing it only looks like.
-registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8,
+// severity 20 is THE WET SEAT: groundAt's water return reads THIS number as
+// its own precedence — the mire class (30) speaks over standing water, the
+// deposits (10), texture and every built surface defer to the wet (a flooded
+// road reads water; ties go to the water).
+registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple', pathCost: 1.8, severity: 20,
   douses: { statuses: ['sunscorched', 'heatstroke'], every: 0.25, text: 'the water quenches…' } });
-registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true, pathCost: 1.25 });
+registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true, pathCost: 1.25, severity: 30 });
 // SOUL-WATER — the River of Souls' whole GROUND (the inversion:
 // world/soulriver.ts pours it over the entire arena as a GRID region; land
 // is the exception). True water in every mechanical respect — wade, swim,
@@ -510,10 +557,10 @@ registerRegion({ id: 'soul_water', walkable: true, blocks: false, label: 'the pa
 // (bone_pier planks and the like) carries the drawn read, this row carries
 // the truth.
 registerRegion({ id: 'boardwalk', walkable: true, blocks: false, label: 'the boards',
-  pathCost: 1,
+  pathCost: 1, laid: 'built',
   visual: { fill: '#261f19', alpha: 0.88, edge: { color: '#3d3126', width: 3 } } });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
-registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5,
+registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged', pathCost: 3.5, severity: 30,
   // bog_rot, NOT combat 'poison': its own row carries the same level-scaled
   // dot without the combat-poison screen vignette — crossing a bog line
   // must sting, never read as the renderer breaking (see status.ts).
@@ -548,6 +595,11 @@ registerRegion({ id: 'lava', walkable: true, blocks: false, label: 'the lava',
   // the way around is longer than the pain. The insured (habitat / immuneGround
   // / fliers) price it neutral through the profile, never through this row.
   pathCost: 14,
+  // severity 40 — THE LETHAL CLASS: the melt speaks over every softer ground
+  // covering the same spot (the causeway ruling's original bug: mud at a lava
+  // rim used to mute the burn warning), standing water included — a puddle on
+  // the melt is steam, not refuge. Only pavement (laid: 'built') silences it.
+  severity: 40,
   standStatus: 'mired',
   standDamage: { dps: 14, dpsPerLevel: 2.2, type: 'fire' },
   enterStatus: { id: 'burn', amount: 1.2, amountPerLevel: 0.5, duration: 2 },
@@ -565,17 +617,25 @@ registerRegion({ id: 'blood_pool', walkable: true, blocks: false, label: 'the bl
 // capping chaos res is the build answer, wading anyway the desperate one.
 registerRegion({ id: 'chyme_pool', walkable: true, blocks: false, label: 'the bile',
   pathCost: 10,
+  severity: 40, // the lethal class (lava's row) — the bile is never texture
+
   standStatus: 'mired',
   standDamage: { dps: 9, dpsPerLevel: 1.8, type: 'chaos' },
   enterStatus: { id: 'queasy', duration: 5 },
   enterText: { text: 'stomach turns!', color: '#a8b86a' } });
-registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared', pathCost: 4.5,
+registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared', pathCost: 4.5, severity: 30,
   enterStatus: { id: 'stun', duration: 0.6 }, enterText: { text: 'ensnared!', color: '#7fce6a' } });
 // ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so
 // there's no status icon for so minor an effect). The first consumer of the moveScale seam.
 // pathCost 0.9: the road PULLS — flow-field minds drift onto live ways when
 // one runs their direction (composes with the coherence fabric's clearways).
-registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04, pathCost: 0.9 });
+// laid 'built' — THE CAUSEWAY LAW's founding member: a road disc tangent to a
+// lava rim (or any natural hazard laid over it at runtime) keeps the pavement
+// safe underfoot; only the overruns deposits (mud/sand) speak over it. An
+// OVERGROWN (wild) disc has lost its worn surface: groundAt strips its built
+// standing and it reports at texture grade like any reclaimed ground — a
+// swallowed stretch makes no causeway promise.
+registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04, pathCost: 0.9, laid: 'built' });
 // (fog_bank region RETIRED: volumetric fog is the LIVING fog fabric now —
 //  engine/fog.ts grants fogveiled from roaming banks; no ground region.)
 // WEBBING: sticky sheets slow like mire (spider country).
@@ -732,7 +792,7 @@ registerRegion({
 // paint serves any future celestial architecture). Never in any melts list:
 // what the Host BUILT does not fall.
 registerRegion({
-  id: 'aureate_court', walkable: true, blocks: false, label: 'the court',
+  id: 'aureate_court', walkable: true, blocks: false, laid: 'built', label: 'the court',
   visual: { fill: '#efe9d6', alpha: 0.5 },
 });
 // --- THE EPHEMERAL SPANS (engine/spans.ts — condition-held ground) -----------
@@ -742,34 +802,38 @@ registerRegion({
 // its condition swings, and the visuals here are the whole render story —
 // no fabric-specific drawing anywhere. All REAL fills (never window): a
 // standing bridge is present, honest paint over the sky beneath it.
+// The whole family is laid 'built' (the causeway law): a span IS a bridge —
+// bound light, worked decking — and pavement is never lethal. Inert to
+// groundAt today (spans paint GRID cells, never doodad discs) — the flag is
+// the class's honest record, live the day a span kind ever lands as a disc.
 // SUNBRIDGE: stands while the sky is bright (day, and not under a black
 // storm) — warm gold light laid across the gap.
 registerRegion({
-  id: 'span_sun', walkable: true, blocks: false, label: 'the sunbridge',
+  id: 'span_sun', walkable: true, blocks: false, laid: 'built', label: 'the sunbridge',
   visual: { fill: '#f4d98a', alpha: 0.5, animate: 'drift', edge: { color: '#ffedbb', width: 4 } },
 });
 registerRegion({
-  id: 'span_sun_fading', walkable: true, blocks: false, label: 'the failing sunbridge',
+  id: 'span_sun_fading', walkable: true, blocks: false, laid: 'built', label: 'the failing sunbridge',
   visual: { fill: '#e8c56a', alpha: 0.34, animate: 'shimmer' },
 });
 // STAR-SPAN: the inverse — a walk of starlight that only the dark reveals.
 // By day the gap is simply bare.
 registerRegion({
-  id: 'span_star', walkable: true, blocks: false, label: 'the star-span',
+  id: 'span_star', walkable: true, blocks: false, laid: 'built', label: 'the star-span',
   visual: { fill: '#bcd2ff', alpha: 0.44, animate: 'shimmer', edge: { color: '#e6eeff', width: 3 } },
 });
 registerRegion({
-  id: 'span_star_fading', walkable: true, blocks: false, label: 'the failing star-span',
+  id: 'span_star_fading', walkable: true, blocks: false, laid: 'built', label: 'the failing star-span',
   visual: { fill: '#93a8d8', alpha: 0.3, animate: 'shimmer' },
 });
 // PRISM-SPAN: stands only while rain or storm covers the zone — the rainbow
 // bridge, hue walking the spectrum (the 'prism' grammar above).
 registerRegion({
-  id: 'span_prism', walkable: true, blocks: false, label: 'the prism-span',
+  id: 'span_prism', walkable: true, blocks: false, laid: 'built', label: 'the prism-span',
   visual: { fill: '#b8e0c8', alpha: 0.5, animate: 'prism', edge: { color: '#f2fbff', width: 3 } },
 });
 registerRegion({
-  id: 'span_prism_fading', walkable: true, blocks: false, label: 'the failing prism-span',
+  id: 'span_prism_fading', walkable: true, blocks: false, laid: 'built', label: 'the failing prism-span',
   visual: { fill: '#b8e0c8', alpha: 0.3, animate: 'prism' },
 });
 // VEILED WAY: the leap of faith. ALWAYS walkable — no span row, no fabric,
@@ -778,7 +842,7 @@ registerRegion({
 // crossing the gap) betrays. The star-cairn doodads at its mouths are the
 // authored "tiniest inclination"; walking out anyway is the faith.
 registerRegion({
-  id: 'span_veiled', walkable: true, blocks: false, label: 'the veiled way',
+  id: 'span_veiled', walkable: true, blocks: false, laid: 'built', label: 'the veiled way',
   visual: { fill: '#cfd8ea', alpha: 0.06 },
 });
 // GLEAMWAY: the High Bastion's bridge — light made PERMANENT ROAD. Same
@@ -788,7 +852,7 @@ registerRegion({
 // on purpose — a promise that holds reads richer than one that comes and
 // goes, and the two must never be mistaken for each other mid-fight.
 registerRegion({
-  id: 'span_gleam', walkable: true, blocks: false, label: 'the gleamway',
+  id: 'span_gleam', walkable: true, blocks: false, laid: 'built', label: 'the gleamway',
   // Alpha rides HIGH: the live drift overlay is all the paint this ground
   // gets (animated fills never bake), and beneath it glows the sunlit
   // cloudsea — at half-alpha the blue muddied to tan over the warm deck.
@@ -1058,7 +1122,7 @@ registerRegion({ id: 'butte_top', walkable: false, blocks: true, label: 'the but
 // sight pass (open air both above and below the planks). The steps bake
 // reads its flat gradient as the long axis — the same flag that carves
 // stairs lays the deck's PLANKS.
-registerRegion({ id: 'butte_span', walkable: true, blocks: false, label: 'the span',
+registerRegion({ id: 'butte_span', walkable: true, blocks: false, laid: 'built', label: 'the span',
   tier: 1,
   visual: { fill: '#6a5638', alpha: 0.85, steps: { spacing: 12 }, edge: { color: '#8a744e', width: 3 } } });
 // TIER RAMP: the stepped way cut up a butte's rim — THE crossing (walkable
@@ -1184,6 +1248,6 @@ registerRegion({ id: 'cathedral_wall', walkable: false, blocks: true, label: 'th
 // frail fringe outside keeps that lesson); only the faint leading between
 // panes is painted, since the view below is the floor's whole art.
 registerRegion({
-  id: 'glass_floor', walkable: true, blocks: false, label: 'the crystal floor',
+  id: 'glass_floor', walkable: true, blocks: false, laid: 'built', label: 'the crystal floor',
   visual: { fill: '#141827', alpha: 1, window: true, edge: { color: '#d8e6f8', width: 3 } },
 });

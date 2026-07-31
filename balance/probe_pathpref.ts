@@ -33,7 +33,7 @@ import { MONSTERS } from '../src/data/monsters';
 import type { Doodad } from '../src/engine/levelgen';
 import type { RecoveryPolicy } from '../src/world/regions';
 import { GridWalkField } from '../src/world/gridWalk';
-import { regionPathCost, PATH_CFG } from '../src/world/regions';
+import { regionPathCost, PATH_CFG, registerRegion, regionIds, regionKind, type RegionKind } from '../src/world/regions';
 import type { PathProfile } from '../src/world/walk';
 import { vec, type Vec2 } from '../src/core/math';
 import type { World } from '../src/engine/world';
@@ -377,6 +377,159 @@ function pitRig(monsterId: string, descend = false):
   check('the shove still swallows (the veto never gates forced displacement)', m.dead);
   check('…with full credit to the shover', w.seats[0].meta.xp > xpBefore,
     `xp ${xpBefore} -> ${w.seats[0].meta.xp}`);
+}
+
+// ------------------- THE CAUSEWAY FOLD (groundAt `laid`/`severity`/`overruns`)
+// The 2026-07-30 ruling, pinned: the hand-priority chain is dead — a BUILT
+// surface beats any natural hazard (pavement is never lethal), the worst
+// natural severity speaks (lava finally outranks the soft ground that used
+// to mute it), the overruns deposits keep their seat on the pavement, the
+// validate net makes harm-on-pavement unrepresentable, and the registry
+// sweep holds solo-report parity for every kind at authored numbers.
+{
+  const w = makeSimWorld('warrior', 90210);
+  const aw = w.arena.w, ah = w.arena.h;
+  // A clean probe spot: bare of covering ground discs (guarded behaviorally
+  // below — a bridge or a stray ground overlay would fail the rig checks).
+  let spot = vec(aw * 0.5, ah * 0.5);
+  outer: for (let gy = 0.15; gy <= 0.85; gy += 0.07) {
+    for (let gx = 0.15; gx <= 0.85; gx += 0.07) {
+      const c = vec(aw * gx, ah * gy);
+      if (!w.doodads.some(d => Math.hypot(c.x - d.pos.x, c.y - d.pos.y) <= d.radius + 2)) {
+        spot = c; break outer;
+      }
+    }
+  }
+  const base = w.doodads.length;
+  const stamp = (kind: string, o: { at?: Vec2; r?: number; wild?: boolean; tier?: number; shallow?: boolean } = {}): void => {
+    const at = o.at ?? spot;
+    w.doodads.push({ pos: vec(at.x, at.y), radius: o.r ?? 60, kind,
+      ...(o.wild ? { wild: true } : {}), ...(o.shallow ? { shallow: true } : {}),
+      ...(o.tier !== undefined ? { tier: o.tier } : {}) });
+    // Raw pushes bypass the mutation chokepoints — bump the doodad rev or the
+    // spatial index serves the PREVIOUS stamp set at equal list length (the
+    // stale-shared-index trap; groundAt reads through doodadsAt).
+    w.markDoodadsChanged();
+  };
+  const report = (at = spot, tier = 0): string | null => w.groundAt(at, tier)?.kind ?? null;
+  const clear = (): void => { w.doodads.length = base; w.markDoodadsChanged(); };
+
+  // Rig guards: the spot is bare, senses a stamped disc, and carries no bridge.
+  check('causeway rig: a clean spot', report() === null);
+  stamp('mud');
+  check('causeway rig: the spot senses a stamped disc', report() === 'mud');
+  clear();
+
+  // SEVERITY WITHIN NATURE — the ruling's original bug, retired: a soft disc
+  // sensed first used to mute the melt outright.
+  stamp('mud'); stamp('lava');
+  check('severity: lava under mud reports lava (the bug, dead)', report() === 'lava');
+  clear();
+  stamp('sand'); stamp('chyme_pool');
+  check('severity: chyme under sand reports chyme', report() === 'chyme_pool');
+  clear();
+  // The good stack the ruling keeps: the dark bog speaks over its own fringe.
+  stamp('bog', { r: 40 });
+  stamp('mud', { at: vec(spot.x + 50, spot.y), r: 40 });
+  check('severity: bog-with-mud-fringe reports bog inside the bog disc', report() === 'bog');
+  check('…and mud alone on the fringe beyond it', report(vec(spot.x + 62, spot.y)) === 'mud');
+  clear();
+  // Ties keep the FIRST-sensed disc (the documented stability law; the old
+  // chain let a later mud/sand disc overwrite an earlier one — same statuses
+  // either way, the label now holds still).
+  stamp('sand'); stamp('mud');
+  check('severity: ties keep the first-sensed disc', report() === 'sand');
+  clear();
+
+  // THE CAUSEWAY LAW — pavement is never lethal.
+  stamp('lava'); stamp('road');
+  check('causeway: a road over a lava edge reports road', report() === 'road');
+  clear();
+  stamp('road'); stamp('bog');
+  check('causeway: a road through a bog reports road', report() === 'road');
+  clear();
+
+  // THE OVERRUNS EXCEPTION — deposits keep their seat on the pavement…
+  stamp('road'); stamp('mud');
+  check('overruns: a muddy road still reads mud', report() === 'mud');
+  clear();
+  // …and never open a smuggling lane: only the natural band's WINNER is
+  // consulted — a bog outranking the mud does not inherit its exception.
+  stamp('road'); stamp('mud'); stamp('bog');
+  check('overruns: bog+mud+road reports road (no smuggling lane)', report() === 'road');
+  clear();
+
+  // THE WILD STRIP: an overgrown way keeps its texture-grade solo read (the
+  // old registry-fallback truth, preserved byte-for-byte) but makes no
+  // causeway promise — the wood ate the pavement's word.
+  stamp('road', { wild: true });
+  check('wild: an overgrown road still reports itself solo', report() === 'road');
+  stamp('lava');
+  check('wild: an overgrown road makes no causeway promise (the melt speaks)', report() === 'lava');
+  clear();
+
+  // THE TIER GATE still isolates strata.
+  stamp('mud'); stamp('lava', { tier: 1 });
+  check('tier gate: the street reads its own layer', report(spot, 0) === 'mud');
+  check('tier gate: the gallery reads its own layer', report(spot, 1) === 'lava');
+  clear();
+
+  // THE WET SEAT — depth machinery and water precedence unchanged.
+  stamp('water', { r: 60 });
+  const core = w.groundAt(spot), shore = w.groundAt(vec(spot.x + 55, spot.y));
+  check('water: the deep core swims', core?.kind === 'water' && core.deep === true);
+  check('water: the shore ring wades', shore?.kind === 'water' && shore.deep === false);
+  clear();
+  stamp('water', { shallow: true });
+  check('water: a ford disc forces wading depth', w.groundAt(spot)?.deep === false);
+  clear();
+  stamp('water'); stamp('mud');
+  check('wet seat: deposits defer to standing water', report() === 'water');
+  clear();
+  stamp('water'); stamp('road');
+  check('wet seat: a flooded road reads water (pavement never outranks the wet)', report() === 'water');
+  clear();
+  stamp('water'); stamp('bog');
+  check('wet seat: the mire class keeps speaking over water', report() === 'bog');
+  clear();
+  // Deliberate, beside the mud bug: the lethal class sits ABOVE the wet seat
+  // — a puddle over the melt is steam, never refuge (the old chain read
+  // water here; the severity law moves exactly this and the soft-mute bug).
+  stamp('water'); stamp('lava');
+  check('wet seat: the melt outranks the puddle (steam, not refuge)', report() === 'lava');
+  clear();
+
+  // THE VALIDATE NET — harm never rides pavement, unrepresentable: the row
+  // is refused BEFORE it lands (register → boot error → nothing to unwind).
+  const harmful: [string, Partial<RegionKind>][] = [
+    ['standDamage', { standDamage: { dps: 5, type: 'fire' } }],
+    ['enterStatus', { enterStatus: { id: 'burn', duration: 1 } }],
+    ['survival', { survival: { resource: 'breath', drain: 1 } }],
+  ];
+  for (const [what, fields] of harmful) {
+    let threw = false;
+    try {
+      registerRegion({ id: `probe_overruns_${what}`, walkable: true, blocks: false, overruns: true, ...fields });
+    } catch { threw = true; }
+    check(`validate net: overruns + ${what} is a boot error (and the row never lands)`,
+      threw && !regionKind(`probe_overruns_${what}`));
+  }
+  registerRegion({ id: 'probe_overruns_ok', walkable: true, blocks: false, standStatus: 'mired', severity: 10, overruns: true });
+  check('validate net: a harmless deposit row registers (the lever stays usable)',
+    !!regionKind('probe_overruns_ok'));
+
+  // THE REGISTRY SWEEP — the parity instrument: every registered kind's SOLO
+  // report is unchanged at authored numbers (a solo disc has always reported
+  // itself; water answers through its own accumulator lane).
+  let sweepBad = '';
+  for (const id of regionIds()) {
+    if (id.startsWith('probe_')) continue;
+    stamp(id);
+    const rep = report();
+    clear();
+    if (rep !== id) { sweepBad = `${id} -> ${rep}`; break; }
+  }
+  check('registry sweep: every kind reports itself solo (parity at defaults)', sweepBad === '', sweepBad);
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

@@ -225,7 +225,7 @@ import { dimensionDef, dimensionBiomeAt, dimensionBiomeDepth, dimensionIds, dime
 import { radianceOf, radianceCondHeld, type RadianceCond } from '../world/radiance';
 import { delverMulAt } from '../world/strata';
 import { COURSE_FIELD_SALT, courseBiomeAt, courseMintHints, strewnInstancesNear, type CourseInstance, type CourseMintHints, type CourseSpec } from '../world/courses';
-import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
+import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec, RegionKind } from '../world/regions';
 import { registerGenPin } from './genPins';
 
 /** THE GENERATION PINS this file forces by hand (engine/genPins.ts): ground
@@ -49814,7 +49814,9 @@ export class World {
   /**
    * The terrain underfoot, depth-aware: bridges override everything (you
    * are ON the planks); water is 'deep' toward a circle's center unless the
-   * circle is a shallow ford. Priority favors the nastier ground.
+   * circle is a shallow ford. Priority is THE CAUSEWAY FOLD (see groundAt):
+   * built surfaces beat natural hazards, the worst natural severity speaks,
+   * and the overruns deposits keep their seat on the pavement.
    */
   /** THE CHASE MEMORY (the tier fabric): the freshest hostile crossing near
    *  where this hunter last saw its quarry — a pursuer who arrives late
@@ -49835,7 +49837,6 @@ export class World {
 
   groundAt(p: Vec2, tier = 0): { kind: string; deep: boolean } | null {
     if (this.bridges.some(b => dist(p, b.pos) <= b.radius)) return null;
-    let soft: { kind: string; deep: boolean } | null = null;
     // THE TIER FABRIC: ground belongs to its LAYER — a web laid on the
     // street cannot snare a body running the duct beneath it (and a duct's
     // own filth never wets the street). Untiered zones carry all-zero tiers,
@@ -49849,37 +49850,70 @@ export class World {
     // A ford disc covering the point forces wading depth outright: shallows
     // are shallow no matter how deep the channel they cross.
     let inWater = false, ford = false, pen = 0;
+    // THE CAUSEWAY FOLD (regions.ts `laid`/`severity`/`overruns` — the
+    // 2026-07-30 ruling): ONE data fold where a hand-priority chain used to
+    // rank kinds by name. Covering discs sort into two bands by their row's
+    // `laid` class, and three laws resolve the report:
+    //   1. THE CAUSEWAY LAW — a BUILT surface (pavement, decking) beats any
+    //      natural disc covering the same spot: pavement is never lethal.
+    //      Generation already routes ways around molten ground (the way
+    //      layer's yield); this read-time law covers disc-edge tangency and
+    //      dynamically-laid hazards, and its promise is the player's read.
+    //   2. SEVERITY WITHIN NATURE — among GROUND-laid discs the worst
+    //      authored `severity` speaks: the bog outranks its own mud fringe,
+    //      the melt outranks the bog (the old chain let any soft disc mute
+    //      a lethal one — the bug this fold retires). Ties keep the
+    //      FIRST-sensed disc (stability).
+    //   3. THE OVERRUNS EXCEPTION — a deposit row wearing `overruns` (mud,
+    //      sand) speaks over pavement when it WINS the natural band: a muddy
+    //      road still reads as mud. Only the band's WINNER is consulted — a
+    //      bog outranking the mud never inherits the mud's exception (no
+    //      smuggling lane) — and the registerRegion validate net keeps every
+    //      overruns row harmless by construction.
+    // A `wild` disc (the overgrowth pass) has lost its worn surface: its
+    // built standing is stripped and it reports at texture grade among the
+    // natural band — an overgrown stretch makes no causeway promise. (That
+    // demotion reproduces the old chain's registry fallback byte-for-byte:
+    // wild ways have always still reported themselves when nothing else
+    // covered — whether they SHOULD is an open design question, deliberately
+    // not answered by this fold.)
+    let built: string | null = null;   // first-sensed covering BUILT disc
+    let nat: RegionKind | null = null; // worst-severity covering GROUND disc
+    let natSev = -Infinity;
     for (const d of this.doodadsAt(p.x, p.y)) {
       if ((d.tier ?? 0) !== wantTier) continue; // its layer's ground, never the other's
       const dd = dist(p, d.pos);
       if (dd > d.radius) continue;
-      if (d.kind === 'bog' || d.kind === 'swamp' || d.kind === 'ice' || d.kind === 'tentacle_field') {
-        return { kind: d.kind, deep: false }; // the nastiest grounds win outright
-      }
       if (d.kind === 'water') {
         inWater = true;
         if (d.shallow) ford = true;
         else pen = Math.max(pen, d.radius - dd);
-      } else if (d.kind === 'mud' || d.kind === 'sand') {
-        soft = { kind: d.kind, deep: false };
-      } else if (d.kind === 'brush' && !soft) {
-        soft = { kind: 'brush', deep: false };
-      } else if (d.kind === 'road' && !d.wild && !soft) {
-        // Benign — only when no nastier ground covers the point. An OVERGROWN
-        // (wild) stretch has lost its worn surface: no pace boost there — the
-        // reclaiming flora on it reports instead, so a swallowed passage
-        // FEELS different underfoot, exactly as it looks.
-        soft = { kind: 'road', deep: false };
-      } else if (!soft && regionKind(d.kind)) {
-        // REGISTRY FALLBACK: any OTHER ground kind with a RegionKind row
-        // (webbing's mire, the reeds' concealment — and every future
-        // package kind) reports itself without joining this
-        // hand-priority chain. Registered = sensed.
-        soft = { kind: d.kind, deep: false };
+        continue;
+      }
+      const rk = regionKind(d.kind);
+      if (!rk) continue; // registered = sensed (the registry IS the ground vocabulary)
+      if ((rk.laid ?? 'ground') === 'built' && !d.wild) {
+        if (!built) built = d.kind;
+      } else {
+        const sev = (rk.laid ?? 'ground') === 'built' ? 0 : rk.severity ?? 0;
+        if (sev > natSev) { natSev = sev; nat = rk; }
       }
     }
-    if (inWater) return { kind: 'water', deep: !ford && pen > LIQUID_CFG.deepInset };
-    return soft;
+    // The standing winner: nature beats construction only through its own
+    // winner's `overruns`; construction otherwise silences the whole band.
+    const winner = nat && (!built || nat.overruns)
+      ? { kind: nat.id, sev: natSev }
+      : built ? { kind: built, sev: 0 } : null;
+    // THE WET SEAT: the water return keeps its precedence as the water row's
+    // own severity — only a STRICTLY worse ground winner (the mire class and
+    // up) speaks over standing water; deposits, texture and pavement all
+    // defer to the wet (a flooded road reads water, exactly as it always
+    // did). The lethal class sits above the seat by authored design: a
+    // puddle over the melt is steam, never refuge.
+    if (inWater && !(winner && winner.sev > (regionKind('water')?.severity ?? 0))) {
+      return { kind: 'water', deep: !ford && pen > LIQUID_CFG.deepInset };
+    }
+    return winner ? { kind: winner.kind, deep: false } : null;
   }
 
   /** CLIENT terrain rebuild: `bridges`/`grounds` aren't shipped as their own arrays,
