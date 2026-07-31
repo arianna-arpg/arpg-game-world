@@ -12,9 +12,9 @@
 //                   can run at once — without this, a higher rate just saturates
 //                   against maxConcurrent and you never SEE more).
 //   • severity    — multiplies event SEVERITY (storm radius, meteor rate, crusade
-//                   spread speed, …). Wired through the whole engine but kept at
-//                   1.0 by the shipped unlock; a future unlock/tier/dev-knob
-//                   turns it up with zero new plumbing.
+//                   spread speed, …). Player-set beside tempo on the Expedition
+//                   screen (the GLOBAL_FREQUENCY unlock's World Severity knob);
+//                   the dev Event tab overrides it live.
 //
 // The profile is RUN-LOCKED: frozen into the ExpeditionManifest at run start, so
 // a mid-run change only takes effect next run (the manifest invariant) and a
@@ -33,8 +33,9 @@ export interface FrequencyProfile {
 
 export const DEFAULT_FREQUENCY: FrequencyProfile = { rate: 1, concurrency: 1, severity: 1 };
 
-/** Framework bounds. Generous so the dev/testing crank can go hard; the Vault
- *  slider enforces its own (narrower) player-facing range on top. 0 = fully off. */
+/** Framework bounds. Generous so the dev/testing crank can go hard; the
+ *  Expedition-screen sliders enforce their own (narrower) player-facing range
+ *  on top. 0 = fully off. */
 export const FREQ_MIN = 0;
 export const FREQ_MAX = 10;
 

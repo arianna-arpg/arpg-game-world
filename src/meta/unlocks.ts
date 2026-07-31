@@ -881,7 +881,7 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   //     has reached the level cap of 100 — a true end-game mastery reward) -------
   { id: 'feat_global_frequency', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_100',
     label: 'World Tempo: Global Event Frequency',
-    description: 'End-game mastery: an Expedition-screen slider that scales how OFTEN world events occur AND how many run at once, across the whole run. Crank the world into a roaring festival of events, or dial it to a slow burn.',
+    description: 'End-game mastery: Expedition-screen sliders for the world event dials, across the whole run. Tempo scales how OFTEN events occur and how many run at once; Severity scales how HARD each one runs (invasion strength, meteor rate, spread speed, breach duration). Crank the world into a roaring festival, or dial it to a slow burn.',
     payload: { flag: FEATURE.GLOBAL_FREQUENCY } },
 
   // --- Master gem unlock: everything obtainable (a deliberate, expensive flip) -

@@ -6254,12 +6254,14 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       };
     }
 
-    // META-META: the global event-frequency crank (level-100 unlock). One slider
-    // drives RATE + CONCURRENCY together (the "festival" regime the player chose);
-    // SEVERITY is preserved untouched (a future lever / dev knob). Run-locked into
-    // the manifest on the next run, exactly like the package mix.
+    // META-META: the global event-frequency crank (level-100 unlock). TWO knobs:
+    // TEMPO drives RATE + CONCURRENCY together (one knob for how often and how
+    // many — the "festival" regime the player chose); SEVERITY is its own axis
+    // (how hard each live event runs — the overlays' severityMul). Run-locked
+    // into the manifest on the next run, exactly like the package mix.
     const tempoOwned = featureEnabled(acc, FEATURE.GLOBAL_FREQUENCY);
     let tempo = clampN(acc.frequencyProfile?.rate ?? 1, 0.25, 3);
+    let severity = clampN(acc.frequencyProfile?.severity ?? 1, 0.25, 3);
     const tempoHtml = (): string => {
       if (!tempoOwned) return '';
       return `<div class="exped-tempo">
@@ -6268,6 +6270,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
         <div class="slider-row"><span>Tempo</span>
           <input type="range" min="0.25" max="3" step="0.25" value="${tempo}" id="exped-tempo">
           <span class="sv" id="exped-tempo-v">${Math.round(tempo * 100)}%</span></div>
+        <div class="mix-label" style="margin-top:10px">World Severity
+          <span style="color:var(--text-dim);font-weight:normal">· how HARD each live event runs: invasion strength, meteor rate, how fast fronts and plagues spread, how long breaches stay open</span></div>
+        <div class="slider-row"><span>Severity</span>
+          <input type="range" min="0.25" max="3" step="0.25" value="${severity}" id="exped-severity">
+          <span class="sv" id="exped-severity-v">${Math.round(severity * 100)}%</span></div>
       </div>`;
     };
 
@@ -6373,6 +6380,12 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       const v = document.getElementById('exped-tempo-v');
       if (v) v.textContent = `${Math.round(tempo * 100)}%`;
     });
+    const sevEl = document.getElementById('exped-severity') as HTMLInputElement | null;
+    sevEl?.addEventListener('input', () => {
+      severity = +sevEl.value;
+      const v = document.getElementById('exped-severity-v');
+      if (v) v.textContent = `${Math.round(severity * 100)}%`;
+    });
     document.getElementById('exped-cancel')!.addEventListener('click', () => {
       this.expeditionSetup.classList.add('hidden'); onDone();
     });
@@ -6381,10 +6394,11 @@ ALWAYS: pinned on (the min-maxer's steady readout)">${{
       // Persist the choices as the player's default (the next run's manifest is
       // built from these). The run that begins then freezes them in (run-lock).
       for (const p of pkgs) acc.packageDefaults[p.id] = { ...cfg[p.id] };
-      // The World Tempo unlock drives rate + concurrency together; severity is
-      // left as-is (the future lever / dev knob preserves any value it set).
+      // The Tempo knob drives rate + concurrency together; severity is the
+      // player's own second knob, written exactly as set (clampFrequency at
+      // load + manifest build stays the one bounds law).
       if (tempoOwned) {
-        acc.frequencyProfile = { rate: tempo, concurrency: tempo, severity: acc.frequencyProfile?.severity ?? 1 };
+        acc.frequencyProfile = { rate: tempo, concurrency: tempo, severity };
       }
       this.saveAccount();
       this.expeditionSetup.classList.add('hidden');
