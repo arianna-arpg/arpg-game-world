@@ -77,14 +77,14 @@ registerCourtLord({
     packs: { count: [3, 5], size: [3, 5] },
     wards: {
       count: [3, 4], guards: { count: [3, 5] },
-      announceBreak: 'A seal cracks — {n} of {total} still hold the Furnace shut!',
-      announceAll: 'The last seal breaks — the Rose Pyre pours into its vessel!',
+      announceBreak: 'A seal cracks. {n} of {total} still hold the Furnace shut!',
+      announceAll: 'The last seal breaks, and the Rose Pyre pours into its vessel!',
     },
   },
   gatePrompt: 'the Rose Furnace gapes',
   deeds: {
-    deepen: 'The tear deepens — Ashkarra presses against the skin!',
-    stands: 'The breach refuses to seal — the Rose Pyre\'s door stands!',
+    deepen: 'The tear deepens, and Ashkarra presses against the skin!',
+    stands: 'The breach refuses to seal: the Rose Pyre\'s door stands!',
     manifest: '{name} burns through!',
   },
 });
@@ -106,8 +106,8 @@ registerCourtLord({
   },
   gatePrompt: 'the Stillness gapes',
   deeds: {
-    deepen: 'The tear deepens — the cold on the far side leans in!',
-    stands: 'The breach refuses to seal — the Stillness stands open!',
+    deepen: 'The tear deepens, and the cold on the far side leans in!',
+    stands: 'The breach refuses to seal: the Stillness stands open!',
     manifest: '{name} steps through, and the air stops!',
   },
 });
@@ -129,8 +129,8 @@ registerCourtLord({
   },
   gatePrompt: 'the Arclight Span gapes',
   deeds: {
-    deepen: 'The tear deepens — Vexira arcs across the gap!',
-    stands: 'The breach refuses to seal — the Arclight Span holds open!',
+    deepen: 'The tear deepens, and Vexira arcs across the gap!',
+    stands: 'The breach refuses to seal: the Arclight Span holds open!',
     manifest: '{name} completes the circuit!',
   },
 });
@@ -151,14 +151,14 @@ registerCourtLord({
     packs: { count: [3, 5], size: [3, 5] },
     wards: {
       count: [4, 5], guards: { count: [3, 4] },
-      announceBreak: 'A seal is chewed away — {n} of {total} remain!',
-      announceAll: 'The last seal parts — the Hunger uncoils into its vessel!',
+      announceBreak: 'A seal is chewed away. {n} of {total} remain!',
+      announceAll: 'The last seal parts, and the Hunger uncoils into its vessel!',
     },
   },
   gatePrompt: 'the Gnawing Dark gapes',
   deeds: {
-    deepen: 'The tear deepens — something behind the skin begins to chew!',
-    stands: 'The breach refuses to seal — the Gnawing Dark yawns wide!',
+    deepen: 'The tear deepens, and something behind the skin begins to chew!',
+    stands: 'The breach refuses to seal: the Gnawing Dark yawns wide!',
     manifest: '{name} uncoils, still hungry!',
   },
 });
@@ -179,7 +179,7 @@ const BREACH_ENCOUNTER: EncounterDef = {
   radiusPerKill: 1.2,
   // The waning law's tell: the snowball well is FINITE (scale.maxBonusTime) —
   // when it runs dry, the tear says so and nothing holds it open again.
-  waneText: 'The tear is spent — nothing holds it open now.',
+  waneText: 'The tear is spent; nothing holds it open now.',
   scales: [
     { id: 'fracture', label: 'Breach Fracture', weight: 6,
       baseTime: 18, maxBonusTime: 25, startRadius: 90, maxRadius: 260, growthPerSec: 6,
@@ -202,7 +202,7 @@ const BREACH_ENCOUNTER: EncounterDef = {
     rewardUncoverBonus: 0.6,
     collapseSec: 2.6,
     spareEngagedWithin: 150,
-    text: { collapse: 'The breach collapses — the veil comes back for its own!' },
+    text: { collapse: 'The breach collapses, and the veil comes back for its own!' },
   },
   // THE COURT: one of the four themes each zone's tear. The door threshold
   // sits past what passive growth alone reaches on the common scales — feed
@@ -230,7 +230,7 @@ registerKillHandler({
     ctx.grantXp(260 + ctx.zone.level * 46);
     for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'The vessel shatters — its lord recoils behind the veil!', '#d9a3ff', 18);
+      'The vessel shatters, and its lord recoils behind the veil!', '#d9a3ff', 18);
   },
 });
 
@@ -252,7 +252,7 @@ export const BREACH: ContentPackage = {
     { id: 'breach_invest', label: 'Breach Investigation', requirement: 'Seal 5 Breaches', cost: 120,
       test: (ctx) => (ctx.ledger.breaches_closed ?? 0) >= 5,
       grants: { weight: { min: 0, max: 80 } } },          // widen the frequency band
-    { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches — or fell a Vessel of the court', cost: 220,
+    { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches, or fell a Vessel of the court', cost: 220,
       // The deep seal-count — OR the court's pinnacle: felling a lord's vessel
       // (the collapse → door → domain chain) fast-tracks the exploration rung.
       // Its key lands here WITH its bump (the vessel kill handler above), the

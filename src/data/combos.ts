@@ -39,7 +39,7 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // Spellblade vocation grants it; see data/vocations.ts).
   spellblade_weave: {
     id: 'spellblade_weave', name: 'Blade-and-Vein', color: '#b8a8e8',
-    blurb: 'Weave the lanes: an attack and a spell back-to-back (either order) surge your attack and cast speed — keep alternating to stack the surge.',
+    blurb: 'Weave the lanes: an attack and a spell back-to-back (either order) surge your attack and cast speed. Keep alternating to stack the surge.',
     vary: { n: 2, by: 'lane' },
     gate: { anyTags: ['attack', 'spell'] },
     within: 4,
@@ -81,7 +81,7 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // monster-side (the payoff text over a duel names the earnable rule).
   grapplers_rhythm: {
     id: 'grapplers_rhythm', name: 'Takedown', color: '#d8a06a',
-    blurb: 'Seize, then THROW — a grab followed by a throw closes the measure: your blows land harder and your grip grows surer while the rhythm holds.',
+    blurb: 'Seize, then THROW. A grab followed by a throw closes the measure: your blows land harder and your grip grows surer while the rhythm holds.',
     seq: [{ anyTags: ['grab'] }, { anyTags: ['throw'] }],
     within: 6,
     effect: {
@@ -101,7 +101,7 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // any future song-tagged cast joins the liturgy with no edits here.
   liturgy: {
     id: 'liturgy', name: 'The Responsory', color: '#ffe9b8',
-    blurb: 'Call and response: sing two DIFFERENT songs back-to-back and the Responsory answers — a radiant burst that harms the court and heals the congregation in one circle.',
+    blurb: 'Call and response: sing two DIFFERENT songs back-to-back and the Responsory answers with a radiant burst that harms the court and heals the congregation in one circle.',
     vary: { n: 2, by: 'skill' },
     gate: { anyTags: ['song'] },
     within: 5,
@@ -155,7 +155,7 @@ export const COMBO_RULES: Record<string, ComboRuleDef> = {
   // stat joins the chorus — storm-callers keeping firefly time.
   glimmer_chorus: {
     id: 'glimmer_chorus', name: 'Glimmer Chorus', color: '#d8f078',
-    blurb: 'Cast the SAME spell three times running to close the sign: the chorus answers — lightning damage and cast speed surge while the light holds.',
+    blurb: 'Cast the SAME spell three times running to close the sign: the chorus answers, and lightning damage and cast speed surge while the light holds.',
     repeat: { n: 3 },
     gate: { anyTags: ['spell'] },
     within: 6, icd: 0.5,

@@ -582,7 +582,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `mycelia-core-${s.zoneId}`, zoneId: s.zoneId,
       glyph: '❀', fill: '#16220f', stroke: SPORE_COLORS.strong, text: SPORE_COLORS.accent, r: 9,
-      title: 'The Bloom — its spore-core festers here', fog: 'charted', z: 16,
+      title: 'The Bloom: its spore-core festers here', fog: 'charted', z: 16,
     });
   }
   return out;
@@ -593,7 +593,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!info) return [];
   return [{
     kind: 'event', icon: '❀', color: SPORE_COLORS.strong, label: 'Mycelia',
-    detail: info.isCore ? 'the spore-core — cull it or strike the Heartbloom' : `spores ${info.label}`,
+    detail: info.isCore ? 'the spore-core: cull it or strike the Heartbloom' : `spores ${info.label}`,
     z: 13,
   }];
 });

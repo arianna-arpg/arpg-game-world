@@ -523,9 +523,9 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: `wisplight-${s.id}`, coord: { x: s.x, y: s.y },
     glyph: '✨', fill: '#101c10', stroke: BOG_LIGHT, text: '#e8ffd8', r: 7,
     title: s.ridden > 0 && s.kindled === 0 && s.standing === 0
-      ? 'A ridden thing waits in the fen — the light found a body'
-      : s.kindled > 0 ? 'A light walks the fen — the mire flourishes around it'
-        : 'Lights wait in the reeds here — touch one and see',
+      ? 'A ridden thing waits in the fen: the light found a body'
+      : s.kindled > 0 ? 'A light walks the fen, and the mire flourishes around it'
+        : 'Lights wait in the reeds here. Touch one and see',
     fog: 'always', z: 16,
   }));
 });
@@ -550,10 +550,10 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!wf || !info) return [];
   const live = info.standing + info.kindled + info.ridden;
   const detail = info.ridden > 0 && info.kindled === 0 && info.standing === 0
-    ? `the light found a body — break the ridden thing (${info.ridden} waiting)`
+    ? `the light found a body: break the ridden thing (${info.ridden} waiting)`
     : info.kindled > 0
-      ? `a light walks the fen — follow it, or fight what flourishes (${info.standing} waiting · ${info.kindled} walking · ${info.ridden} ridden)`
-      : `lights wait in the reeds — ${live} of them, patient`;
+      ? `a light walks the fen: follow it, or fight what flourishes (${info.standing} waiting · ${info.kindled} walking · ${info.ridden} ridden)`
+      : `lights wait in the reeds, ${live} of them, patient`;
   return [{
     kind: 'event', icon: '✨', color: info.color, label: 'The Wisplight',
     detail,

@@ -227,7 +227,7 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
  *  compiler demands its row, exactly like OBJECTIVE_SEALS above. */
 export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; read: string }> = {
   safe: { glyph: '⌂', read: 'sanctuary' },
-  none: { glyph: '·', read: 'open ground — nothing asked' },
+  none: { glyph: '·', read: 'open ground, nothing asked' },
   clear: { glyph: '⚔', read: 'cull the population' },
   waves: { glyph: '≋', read: 'survive the assault' },
   escape: { glyph: '⇥', read: 'find the way out' },
@@ -238,7 +238,7 @@ export const OBJECTIVE_READS: Record<ObjectiveSpec['kind'], { glyph: string; rea
   bounty: { glyph: '✜', read: 'hunt the marked quarry' },
   offering: { glyph: '♨', read: 'feed the hungering altar' },
   puzzle: { glyph: '❖', read: 'answer the riddle' },
-  leyline: { glyph: '◈', read: 'the waypoint is besieged — fell the siphon' },
+  leyline: { glyph: '◈', read: 'the waypoint is besieged: fell the siphon' },
   rifts: { glyph: '⟁', read: 'seal the seeping rifts' },
   pyres: { glyph: '✶', read: 'kindle the cold pyres' },
   unearth: { glyph: '⛏', read: 'unearth the buried caches' },

@@ -36,7 +36,7 @@ export const LONG_NIGHT_SURGE: LongNightSurge = {
   omen: {
     whisper: 160, reveal: 55, widenPerMin: 10,
     lines: [
-      'wheel-ruts of a heavy coach, rolling {bearing} — no drover runs at night',
+      'wheel-ruts of a heavy coach, rolling {bearing}; no drover runs at night',
       'the hamlets speak of pale callers {bearing} of here, {dist}',
       'a wine-dark hush lies over the {bearing} country',
     ],
@@ -95,13 +95,13 @@ registerKillHandler({
       ctx.flash(ctx.actor.pos, 140, cfg.color, 0.7);
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
         info.converted
-          ? 'The coach burns in the daylight — the Court\'s hold on this ground breaks!'
-          : 'The coach burns — the Court will not feed here again.',
+          ? 'The coach burns in the daylight, and the Court\'s hold on this ground breaks!'
+          : 'The coach burns; the Court will not feed here again.',
         '#e8c8d0', 17);
     } else {
       lnf.onCoachReknits(ctx.zone.id);
       ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-        'The gloom re-knits the carriage — break it by DAYLIGHT and it stays broken.',
+        'The gloom re-knits the carriage. Break it by DAYLIGHT and it stays broken.',
         cfg.color, 16);
     }
   },
@@ -125,7 +125,7 @@ registerKillHandler({
     }
     ctx.flash(ctx.actor.pos, 190, cfg.color, 0.9);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'The Countess falls — her court breaks, and every feeding ground with it!',
+      'The Countess falls, her court breaks, and every feeding ground with it!',
       '#f0d8e0', 19);
   },
 });
@@ -134,7 +134,7 @@ export const LONG_NIGHT: ContentPackage = {
   id: 'long_night',
   label: 'The Long Night',
   color: '#b83a5a',
-  blurb: 'The Night Court does not conquer. It DINES. By night its coaches park on charted ground and the fed-on shuffle out — and every dawn the ledger turns: one night, two nights, and on the third the land simply belongs to them, its people walking to the stakes on their own. A blood moon feeds the ledger double. The counterplay is the same clock the Court lives on: at night the coach is gloom-warded and rolling, its knives unpinnable in the dark — but at NOON the ward is ash, the masters sleep, and only the pallbearers stand between you and the lacquer. Burn the coach by day and the ground is reclaimed. Let the estates multiply instead, and the Countess herself takes court at the richest one — crowned, seated, and mortal exactly once: break her court and the whole Long Night breaks with it.',
+  blurb: 'The Night Court does not conquer. It DINES. By night its coaches park on charted ground and the fed-on shuffle out, and every dawn the ledger turns: one night, two nights, and on the third the land simply belongs to them, its people walking to the stakes on their own. A blood moon feeds the ledger double. The counterplay is the same clock the Court lives on: at night the coach is gloom-warded and rolling, its knives unpinnable in the dark; but at NOON the ward is ash, the masters sleep, and only the pallbearers stand between you and the lacquer. Burn the coach by day and the ground is reclaimed. Let the estates multiply instead, and the Countess herself takes court at the richest one, crowned, seated, and mortal exactly once: break her court and the whole Long Night breaks with it.',
   cost: 140,
   unlock: {
     id: 'long_night_unlock',

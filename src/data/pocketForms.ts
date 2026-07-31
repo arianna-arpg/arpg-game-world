@@ -91,7 +91,7 @@ export function pocketFormOf(id: string | undefined): PocketFormDef {
 // run in a dead end — plays as authored.
 registerPocketForm({
   id: 'delve',
-  pitch: 'a whole hidden reach lies past the bar — rich ground, and one road home',
+  pitch: 'a whole hidden reach lies past the bar: rich ground, and one road home',
   objectivePool: ['clear', 'spawners', 'bounty', 'offering', 'beacon', 'circuit', 'procession'],
   packDensity: 1,
 });
@@ -108,7 +108,7 @@ registerPocketForm({
 // exceed what a walker can actually fell (probe_objectives RIG I).
 registerPocketForm({
   id: 'hoard',
-  pitch: 'the wardens camp over a hoard — a small hollow littered with plunder, lightly held',
+  pitch: 'the wardens camp over a hoard: a small hollow littered with plunder, lightly held',
   nameWord: 'Hoard',
   size: { w: [1020, 1260], h: [840, 1060] },
   objective: { kind: 'clear' },

@@ -236,8 +236,8 @@ export const PROLOGUE_SCENE: SceneDef = {
       kind: 'drill',
       label: 'The Last Mile',
       goals: [
-        { kind: 'move', amount: 480, prompt: 'Keep moving — {bind:moveUp}{bind:moveLeft}{bind:moveDown}{bind:moveRight}' },
-        { kind: 'cast', amount: 5, prompt: 'Something in the grass. Strike at it — {bind:skillSlot0}' },
+        { kind: 'move', amount: 480, prompt: 'Keep moving: {bind:moveUp}{bind:moveLeft}{bind:moveDown}{bind:moveRight}' },
+        { kind: 'cast', amount: 5, prompt: 'Something in the grass. Strike at it: {bind:skillSlot0}' },
       ],
     },
     {
@@ -252,9 +252,9 @@ export const PROLOGUE_SCENE: SceneDef = {
       kind: 'assault',
       label: 'Hold the road',
       rows: [
-        { at: 0, spawns: [{ def: 'goblin_skirmisher', count: 4 }], announce: 'more of them — hold the road!', announceColor: '#9fdc6a' },
+        { at: 0, spawns: [{ def: 'goblin_skirmisher', count: 4 }], announce: 'more of them, hold the road!', announceColor: '#9fdc6a' },
         { at: 13, spawns: [{ def: 'goblin_skirmisher', count: 4 }, { def: 'goblin_brute', count: 1 }] },
-        { at: 26, spawns: [{ def: 'goblin_skirmisher', count: 5 }, { def: 'goblin_shaman', count: 2 }], announce: 'the grass is moving everywhere—', announceColor: '#c8e070' },
+        { at: 26, spawns: [{ def: 'goblin_skirmisher', count: 5 }, { def: 'goblin_shaman', count: 2 }], announce: 'the grass is moving everywhere…', announceColor: '#c8e070' },
         { at: 40, spawns: [{ def: 'goblin_brute', count: 2 }, { def: 'goblin_skirmisher', count: 6 }] },
         { at: 54, spawns: [{ def: 'goblin_chief', count: 1 }, { def: 'goblin_skirmisher', count: 6 }, { def: 'goblin_shaman', count: 2 }], announce: 'they just keep coming.', announceColor: '#c8e070' },
       ],
@@ -276,7 +276,7 @@ export const PROLOGUE_SCENE: SceneDef = {
       card: {
         title: 'THE WAKE',
         lines: [
-          'The horn. The green tide. The world going white — then nothing at all.',
+          'The horn. The green tide. The world going white, then nothing at all.',
           'Strong hands lifting you out of the ruts of the road. A low voice keeping you talking while the miles went by.',
           'You wake beneath a low roof in Lastlight, aching in every bone, owing somebody your life.',
           'Find her. Thank her. Then decide what you mean to do about the road.',

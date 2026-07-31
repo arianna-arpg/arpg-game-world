@@ -94,7 +94,7 @@ const DEADWAKE_SURGE: DeadwakeSurge = {
                              // generous for any honest rout, a wall for the farm; a
                              // spent tide recedes on its own, unrouted and unpaid
   falterFrac: 0.35,          // the last ~105s read "faltering" (marker + zone info)
-  ebbText: 'The Deadwake spends itself — the tide recedes unbroken.',
+  ebbText: 'The Deadwake spends itself; the tide recedes unbroken.',
   ambientAmp: 1.8,        // the tide swells the zone's native undead…
   ambientCountMul: 1.12,  // …and brings a few more packs with it
   consumeChance: 0.5,     // a coin-flip to CONSUME a zone's active event on collision…
@@ -128,7 +128,7 @@ export const DEADWAKE: ContentPackage = {
   id: 'deadwake',
   label: 'Deadwake',
   color: '#7a5aa6',
-  blurb: 'Slaughter feeds a hidden tide of the dead. When it crests, a Deadwake breaks loose — a tight, travelling mass of undead that rolls zone to zone, consuming the events it collides with and pouring a relentless, swelling stream into any ground you are caught on, routed only by cutting down its host-leader. Let two tides collide and they fuse into a travelling NECROPOLIS that spawns its own — chase it down and purge it to break the cycle.',
+  blurb: 'Slaughter feeds a hidden tide of the dead. When it crests, a Deadwake breaks loose: a tight, travelling mass of undead that rolls zone to zone, consuming the events it collides with and pouring a relentless, swelling stream into any ground you are caught on, routed only by cutting down its host-leader. Let two tides collide and they fuse into a travelling NECROPOLIS that spawns its own. Chase it down and purge it to break the cycle.',
   cost: 130,
   // DISCOVERED in play (runs at defaults from level 14); the Vault unlock gates
   // TUNING, surfacing once a Deadwake has caught the player in the world.
@@ -208,7 +208,7 @@ registerKillHandler({
       for (let i = 0; i < rr.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      routed ? 'The Deadwake breaks — its tide recedes!' : 'The undead host-leader falls!',
+      routed ? 'The Deadwake breaks, and its tide recedes!' : 'The undead host-leader falls!',
       '#c8a8e8', 18);
   },
 });

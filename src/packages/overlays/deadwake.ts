@@ -787,7 +787,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: `deadwake-${w.id}`, coord: { x: w.coord.x, y: w.coord.y },
     glyph: '⚰', fill: '#160e1e', stroke: w.color, text: '#d8c2ec', r: 10,
     // A tide near its ebb reads FALTERING — the pre-ebb tell (no hidden timers).
-    title: `Deadwake — ${w.variant} (${Math.round(w.strength)} strong${w.pourFrac <= falterAt ? ', faltering' : ''})`,
+    title: `Deadwake: ${w.variant} (${Math.round(w.strength)} strong${w.pourFrac <= falterAt ? ', faltering' : ''})`,
     fog: 'always', z: 18,
   }));
   const n = df.necropolisInfo();
@@ -795,8 +795,8 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: `necropolis-${n.id}`, coord: { x: n.coord.x, y: n.coord.y },
     glyph: '☗', fill: '#1a1812', stroke: n.defeated ? '#6a6458' : NECRO_BONE, text: '#f0e8cc', r: 12,
     title: n.defeated
-      ? 'The Necropolis is broken — leave its halls and the cycle begins anew.'
-      : 'The Necropolis — the seat of the dead drifts near. Reach a zone it touches, take the gate, and purge it.',
+      ? 'The Necropolis is broken. Leave its halls and the cycle begins anew.'
+      : 'The Necropolis: the seat of the dead drifts near. Reach a zone it touches, take the gate, and purge it.',
     fog: 'always', z: 21,
   });
   return out;
@@ -813,7 +813,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [{
     kind: 'event', icon: '⚰', color: info.color, label: `Deadwake · ${info.variant}`,
     detail: streaming
-      ? `an undead tide pours through — ${info.streamCap} strong${faltering ? ', but the tide falters' : ''}`
+      ? `an undead tide pours through, ${info.streamCap} strong${faltering ? ', but the tide falters' : ''}`
       : 'an undead tide rolls over this ground',
     z: 16,
   }];

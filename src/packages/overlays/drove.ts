@@ -462,9 +462,9 @@ registerMarkerSource((world: World): MapMarker[] => {
   return df.peek().filter(d => !d.latent).map(d => ({
     id: `drove-${d.id}`, coord: { x: d.x, y: d.y },
     glyph: '🐑', fill: '#20180d', stroke: SADDLE_TAN, text: '#f0e0c2', r: 7,
-    title: d.phase === 'scattered' ? 'A fold lost to the teeth — scavengers range here'
-      : d.phase === 'gathered' ? 'The fold is gathered — the reeve settles up'
-        : 'A pen gave way here — the fold runs loose, wanted back alive',
+    title: d.phase === 'scattered' ? 'A fold lost to the teeth; scavengers range here'
+      : d.phase === 'gathered' ? 'The fold is gathered, and the reeve settles up'
+        : 'A pen gave way here: the fold runs loose, wanted back alive',
     fog: 'always', z: 16,
   }));
 });
@@ -488,10 +488,10 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const info = df?.droveOn(zoneId);
   if (!df || !info) return [];
   const detail = info.phase === 'scattered'
-    ? 'the fold is gone — scavengers range this ground until it settles'
+    ? 'the fold is gone; scavengers range this ground until it settles'
     : info.phase === 'gathered'
-      ? `the fold is gathered — ${info.penned} penned, ${info.lost} lost`
-      : `drive the loose heads back to the pen ALIVE — ${info.loose} loose · ${info.penned} penned · ${info.lost} lost`;
+      ? `the fold is gathered: ${info.penned} penned, ${info.lost} lost`
+      : `drive the loose heads back to the pen ALIVE · ${info.loose} loose · ${info.penned} penned · ${info.lost} lost`;
   return [{
     kind: 'event', icon: '🐑', color: info.color, label: 'The Drove',
     detail,

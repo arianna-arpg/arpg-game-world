@@ -64,7 +64,7 @@ const VENDETTA_SURGE: VendettaSurge = {
 export const VENDETTA: ContentPackage = {
   id: 'vendetta',
   label: 'Vendetta',
-  blurb: 'The world keeps a ledger of its dead. Cull one people hard enough and they post a WRIT OF REPRISAL — hunter squads spring from the roads you walk, the bounty rising the longer you dodge it, allied banners joining the hunt at its height. Fell the warrant-holder to settle the matter (their rivals pay tribute for the insult), or outlast their patience. Quitting is not an escape.',
+  blurb: 'The world keeps a ledger of its dead. Cull one people hard enough and they post a WRIT OF REPRISAL: hunter squads spring from the roads you walk, the bounty rising the longer you dodge it, allied banners joining the hunt at its height. Fell the warrant-holder to settle the matter (their rivals pay tribute for the insult), or outlast their patience. Quitting is not an escape.',
   cost: 120,
   // DISCOVERED in play (runs at defaults from level 6); the Vault unlock gates
   // TUNING, surfacing once the first writ has been posted against you.
@@ -122,6 +122,6 @@ registerKillHandler({
     for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
     if (settled.rivalPaid) ctx.sim.reputation.add(settled.rivalPaid, r.rivalRep);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      `The warrant-holder falls — the writ is settled!`, '#ffd700', 18);
+      `The warrant-holder falls, and the writ is settled!`, '#ffd700', 18);
   },
 });

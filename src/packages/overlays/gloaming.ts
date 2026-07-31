@@ -220,7 +220,7 @@ export class GloamingField implements WorldOverlay {
             this.pairsTold.clear();
             this.witnessed = false;
             this.seq++;
-            this.news.push({ text: 'A gloaming gathers over the wood — the dark is rising.', color: this.cfg.color });
+            this.news.push({ text: 'A gloaming gathers over the wood; the dark is rising.', color: this.cfg.color });
             break;
           }
         }
@@ -249,7 +249,7 @@ export class GloamingField implements WorldOverlay {
           this.phaseT = 0;
           this.cooldownLeft = this.cfg.cooldownSec[0]
             + this.rng.next() * (this.cfg.cooldownSec[1] - this.cfg.cooldownSec[0]);
-          this.news.push({ text: 'The gloaming recedes — the light holds.', color: '#d8cfa8' });
+          this.news.push({ text: 'The gloaming recedes; the light holds.', color: '#d8cfa8' });
         }
         break;
       }
@@ -440,8 +440,8 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [{
     kind: 'condition', icon: '🌑', color: gf.surge().color,
     label: 'The Gloaming',
-    detail: biting ? `${word} — carry light or stand near it`
-      : `${word}, held by daylight — dusk rewakes it, and the lamp remembers`, z: 6,
+    detail: biting ? `${word}: carry light or stand near it`
+      : `${word}, held by daylight; dusk rewakes it, and the lamp remembers`, z: 6,
   }];
 });
 

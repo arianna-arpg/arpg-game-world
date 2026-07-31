@@ -114,7 +114,7 @@ registerHollow({
  *  drawn from the zone's own pack table, so the dark matches its address. */
 registerHollow({
   id: 'ambush_hollow',
-  blurb: 'The wall was load-bearing in a way you didn’t expect.',
+  blurb: 'The wall was structural in a way you didn’t expect.',
   reveal(c) {
     c.addDoodad({ pos: spot(c), radius: c.rng.range(16, 26), kind: 'web' });
     c.addDoodad({ pos: spot(c), radius: c.rng.range(12, 18), kind: 'bone_pile' });
@@ -136,7 +136,7 @@ registerHollow({
  *  Strike the veins loose (they're brittle finds themselves). */
 registerHollow({
   id: 'vein_hollow',
-  blurb: 'The rock runs rich behind the face — a geode the cave kept quiet.',
+  blurb: 'The rock runs rich behind the face: a geode the cave kept quiet.',
   reveal(c) {
     const veins = c.rng.int(2, 3);
     for (let i = 0; i < veins; i++) {
@@ -151,7 +151,7 @@ registerHollow({
  *  purpose, and left the kit for whoever knocked politely enough. */
 registerHollow({
   id: 'hermit_hollow',
-  blurb: 'A cold camp behind the wall — the door was never on any map.',
+  blurb: 'A cold camp behind the wall; the door was never on any map.',
   reveal(c) {
     c.addDoodad({ pos: c.center, radius: 12, kind: 'campfire' });
     c.addDoodad({ pos: spot(c), radius: c.rng.range(10, 13), kind: 'spelunker_pack' });
@@ -194,7 +194,7 @@ registerHollow({
  *  cracking what it is made of. STRUCTURAL: revives always. */
 registerHollow({
   id: 'gallery_hollow',
-  blurb: 'Behind the marble, a stair — the building goes UP forever.',
+  blurb: 'Behind the marble, a stair. The building goes UP forever.',
   reveal(c) {
     c.addDoodad({ pos: c.center, radius: 13, kind: 'basilica_stair' });
     if (!c.revive) c.text(c.center, 'a gallery stair climbs into the marble…', '#e8d8a8');

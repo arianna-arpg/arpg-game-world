@@ -74,15 +74,15 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
   },
   firstDelay: { roamer: 420, apparition: 180, lair: 240 }, // the world never erupts at minute zero
   announce: {
-    wake: 'The ground splits near {zone} — {name} carves across the land!',
-    settle: '{name} coils to rest — its head looms at {zone}.',
+    wake: 'The ground splits near {zone}, and {name} carves across the land!',
+    settle: '{name} coils to rest; its head looms at {zone}.',
     roamerSlain: '{name} is slain! Every road it strangled falls open.',
-    herald: 'An ill omen over {zone} — {name} will breach in {mins}m.',
+    herald: 'An ill omen over {zone}: {name} will breach in {mins}m.',
     manifest: '{name} has risen at {zone}!',
     depart: '{name} sinks away unbeaten. The world exhales.',
     departWounded: '{name} slips away, wounded and unbowed.',
     apparitionSlain: '{name} is felled at {zone}!',
-    lairSlain: 'The throne stands empty — {name} is unmade.',
+    lairSlain: 'The throne stands empty; {name} is unmade.',
   },
   defs: [
     {
@@ -100,7 +100,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       // whole animal wears the rampage fabric (data/monsters.ts) and plows
       // the ground's standing timber flat — temporarily, always temporarily.
       roam: { passingMonster: 'primeval_wyrm_passing', wallKind: 'wyrm_coil', venue: 'ground' },
-      pitch: 'every scale of it is a target — tear the plates along its length and it bleeds the harder, but a torn coil spits venom',
+      pitch: 'every scale of it is a target: tear the plates along its length and it bleeds the harder, but a torn coil spits venom',
       reward: { xp: 1250, gems: 6, tables: ['sunderwyrm_hoard'] },
     },
     {
@@ -132,7 +132,7 @@ export const WORLDBOSS_SURGE: WorldBossSurge = {
       glyph: '🔔', color: '#8d8672',
       escort: { table: [{ id: 'bell_keeper', weight: 2 }, { id: 'toll_wretch', weight: 3 }], count: [3, 5] },
       reward: { xp: 850, gems: 5, tables: ['iron_bell_hoard'] },
-      pitch: 'the steps ARE the battle — no single blow cracks it; rot, burn and bleed do',
+      pitch: 'the steps ARE the battle: no single blow cracks it; rot, burn and bleed do',
     },
     {
       id: 'velketh', name: 'Velketh, the Enthroned Husk', archetype: 'lair',
@@ -169,7 +169,7 @@ const PRIMEVAL_FACTION: FactionSpec = {
 export const WORLDBOSS: ContentPackage = {
   id: 'worldboss',
   label: 'World Bosses',
-  blurb: 'The Primeval — rare, named forces of nature that belong to no faction and no war. A world-serpent slithers across the map and strangles the roads it crosses until its head is struck off; heralded colossi breach on a countdown and depart unbeaten; an enthroned horror waits in a lair minted onto the world, fused to the throne it erupts from. Watch the map: the world will warn you, once.',
+  blurb: 'The Primeval: rare, named forces of nature that belong to no faction and no war. A world-serpent slithers across the map and strangles the roads it crosses until its head is struck off; heralded colossi breach on a countdown and depart unbeaten; an enthroned horror waits in a lair minted onto the world, fused to the throne it erupts from. Watch the map: the world will warn you, once.',
   color: '#c8a03c',
   cost: 150,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
@@ -286,8 +286,8 @@ registerMarkerSource((world: World): MapMarker[] => {
           id: `wb-serpent-${s.id}`, coord: { x: s.head.x, y: s.head.y },
           glyph: s.def.glyph, fill: '#1a140c', stroke: s.def.color, text: '#f0e2c0', r: 10,
           title: s.phase === 'settled'
-            ? `${s.def.name} — settled; its head waits at the coil`
-            : `${s.def.name} — slithering; the roads behind it are sealed`,
+            ? `${s.def.name}: settled; its head waits at the coil`
+            : `${s.def.name}: slithering; the roads behind it are sealed`,
           fog: 'always', z: 22, dimension: dim,
         });
       }
@@ -299,7 +299,7 @@ registerMarkerSource((world: World): MapMarker[] => {
         out.push({
           id: `wb-arena-${s.id}`, zoneId: seat,
           glyph: '☠', fill: '#1a140c', stroke: s.def.color, text: '#f0e2c0', r: 9,
-          title: `${s.def.name} — the head. Strike it off and the roads open.`,
+          title: `${s.def.name}: the head. Strike it off and the roads open.`,
           fog: 'always', z: 21,
         });
       }
@@ -312,7 +312,7 @@ registerMarkerSource((world: World): MapMarker[] => {
         glyph: a.def.glyph, fill: '#1a140c', stroke: a.def.color, text: '#f0e2c0', r: 10,
         title: a.state === 'herald'
           ? `${a.def.name} breaches in ${clock}`
-          : `${a.def.name} — HERE, and gone in ${clock}`,
+          : `${a.def.name}: HERE, and gone in ${clock}`,
         fog: 'always', z: 22,
       });
     }
@@ -321,7 +321,7 @@ registerMarkerSource((world: World): MapMarker[] => {
       out.push({
         id: `wb-lair-${l.id}`, zoneId: l.lairZoneId,
         glyph: l.def.glyph, fill: '#1a140c', stroke: l.def.color, text: '#f0e2c0', r: 9,
-        title: `${l.def.name} — enthroned within`,
+        title: `${l.def.name}, enthroned within`,
         fog: 'charted', z: 20,
       });
     }
@@ -341,7 +341,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
         // A def's authored pitch is THE honest ask (it must never disagree
         // with the minted fight) — generic archetype copy is the fallback.
         detail: fight.def.pitch ?? (fight.archetype === 'apparition'
-          ? 'a sovereign stands here — and will not wait forever'
+          ? 'a sovereign stands here, and will not wait forever'
           : fight.archetype === 'lair' ? 'something colossal is fused to this place'
             : 'the head of the world-serpent rests here'),
         z: 24,

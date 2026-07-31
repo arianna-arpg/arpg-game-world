@@ -73,7 +73,7 @@ export const CONTAGION: ContentPackage = {
   id: 'contagion',
   label: 'Contagion',
   color: PLAGUE_COLOR,
-  blurb: 'A sickness moves through the world unseen. It begins at one cursed place — Patient Zero — and creeps zone by zone along the roads, each step a little weaker than the last, until one day you wander into a corrupted land and feel the rot in the air. Only then does the spread show itself on the map, glowing strongest nearest its heart. Clearing the infected ground does nothing; the disease holds until you trace the pulse back to its source and cut out Patient Zero — and even then it does not vanish at once, but recedes slowly outward from where it began, the world healing in its own time.',
+  blurb: 'A sickness moves through the world unseen. It begins at one cursed place, Patient Zero, and creeps zone by zone along the roads, each step a little weaker than the last, until one day you wander into a corrupted land and feel the rot in the air. Only then does the spread show itself on the map, glowing strongest nearest its heart. Clearing the infected ground does nothing; the disease holds until you trace the pulse back to its source and cut out Patient Zero. Even then it does not vanish at once, but recedes slowly outward from where it began, the world healing in its own time.',
   cost: 130,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING, surfacing
   // once the player has stumbled into an outbreak.
@@ -124,6 +124,6 @@ registerKillHandler({
       for (let i = 0; i < cgn.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
-      'Patient Zero falls — the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
+      'Patient Zero falls, and the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
   },
 });

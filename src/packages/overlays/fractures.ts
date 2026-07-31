@@ -449,7 +449,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `fracture-${f.id}`, coord: { x: f.travelPos.x, y: f.travelPos.y },
       glyph: '🕳', fill: '#140a22', stroke: f.color, text: f.color, r: 9,
-      title: 'The fracture tears across the land — toward where it will surface next…',
+      title: 'The fracture tears across the land, toward where it will surface next…',
       fog: 'always', z: 18,
     });
   } else if (f) {
@@ -458,7 +458,7 @@ registerMarkerSource((world: World): MapMarker[] => {
       id: `fracture-${f.id}`, zoneId: f.zoneId, coord: { x: node.map.x, y: node.map.y },
       glyph: '🕳', fill: '#140a22', stroke: f.color, text: f.color, r: 10,
       title: f.diverted
-        ? 'The fracture tears onward here — run it down!'
+        ? 'The fracture tears onward here. Run it down!'
         : 'A volatile fracture splits the earth here', fog: 'always', z: 18,
     });
   }
@@ -470,7 +470,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     if (node) out.push({
       id: `fracture-rift-${r.id}`, zoneId: r.zoneId, coord: { x: node.map.x, y: node.map.y },
       glyph: '✷', fill: '#0a0410', stroke: r.color, text: r.color, r: 11,
-      title: `A ${r.variant} RIFT awaits — a champion stirs within`, fog: 'always', z: 19,
+      title: `A ${r.variant} RIFT awaits; a champion stirs within`, fog: 'always', z: 19,
     });
   }
   return out;
@@ -492,10 +492,10 @@ registerAttentionSource((world: World): AttentionPoint[] => {
     } else if (run.phase === 'fissure') {
       out.push({
         id: `fracture-run-${run.id}`, pos: run.head, color: run.color, glyph: '🕳',
-        label: run.grace > 0 ? 'the fracture — run it down!' : 'the fissure — chase it!', z: 8,
+        label: run.grace > 0 ? 'the fracture: run it down!' : 'the fissure: chase it!', z: 8,
       });
     } else if (run.phase === 'chasm' && run.chasm) {
-      out.push({ id: `fracture-run-${run.id}`, pos: run.chasm, color: run.color, glyph: '🕳', label: 'the chasm — clear it!', z: 8 });
+      out.push({ id: `fracture-run-${run.id}`, pos: run.chasm, color: run.color, glyph: '🕳', label: 'the chasm: clear it!', z: 8 });
     }
   }
   // A pending rift's portal, in the zone you're standing in (too rare to lose

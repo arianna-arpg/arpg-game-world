@@ -415,7 +415,7 @@ registerMarkerSource((world: World): MapMarker[] => {
       out.push({
         id: `qk-${a.id}`, zoneId: a.zoneId,
         glyph: '✦', fill: '#1a140c', stroke: f.surge().color, text: '#f8ecc8', r: 9,
-        title: `Quickened — the ground runs at level ${a.level} for ${clock}`,
+        title: `Quickened: the ground runs at level ${a.level} for ${clock}`,
         fog: 'charted', z: 21, dimension: f.dimension,
       });
     }
@@ -429,13 +429,13 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     if (!info) continue;
     const secs = Math.max(0, Math.ceil(info.timeLeft));
     const clock = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-    let detail = `the surge holds ${clock} more — richer ground, thicker trouble`;
+    let detail = `the surge holds ${clock} more: richer ground, thicker trouble`;
     if (f.surge().echo && !info.echoDown) detail += info.echoStaged
       ? ' · its echo still walks' : ' · something is gathering';
     if (info.echoDown) detail += ' · its echo is broken';
     return [{
       kind: 'event', icon: '✦', color: f.surge().color,
-      label: `Quickened — level ${info.level}`,
+      label: `Quickened: level ${info.level}`,
       detail, z: 23,
     }];
   }

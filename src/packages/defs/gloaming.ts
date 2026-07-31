@@ -63,7 +63,7 @@ export const GLOAMING_SURGE: GloamingSurge = {
   // overlay id): a candle-war fought under the risen dark is the promised
   // three-way light war — the courts war OVER light while the dark EATS it.
   pairs: {
-    longcandle: { text: 'Candle-war under the gloaming — three sides now, and the dark eats what they fight for.', color: '#e8c060' },
+    longcandle: { text: 'Candle-war under the gloaming: three sides now, and the dark eats what they fight for.', color: '#e8c060' },
   },
   color: '#6a5a9c',
 };
@@ -98,7 +98,7 @@ export const GLOAMING: ContentPackage = {
   id: 'gloaming',
   label: 'The Gloaming',
   color: '#6a5a9c',
-  blurb: 'Some evenings the gloamwood does not keep its dark to itself. A gloaming gathers over the wood and walks outward zone by zone — not night, not weather you can wait out: a dark that EATS light. Under it your own light is a draining meter, and the only refuge is light with a body to it — the lamps of the roads, the hearths of camps, and the gloomwells that flare up through the murk. Every light holds a finite store: stand in it and you drink it dim, share it and it dims twice as fast, and the Gloamborn come drinking too. When a light gutters out, the dark closes over the spot like water. Carry the front, or outlast it — it recedes the way it came, wood-ward, rim first.',
+  blurb: 'Some evenings the gloamwood does not keep its dark to itself. A gloaming gathers over the wood and walks outward zone by zone. Not night, not weather you can wait out: a dark that EATS light. Under it your own light is a draining meter, and the only refuge is light with a body to it: the lamps of the roads, the hearths of camps, and the gloomwells that flare up through the murk. Every light holds a finite store: stand in it and you drink it dim, share it and it dims twice as fast, and the Gloamborn come drinking too. When a light gutters out, the dark closes over the spot like water. Carry the front, or outlast it; it recedes the way it came, wood-ward, rim first.',
   cost: 120,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once you have stood in the deep dark and felt it drink.

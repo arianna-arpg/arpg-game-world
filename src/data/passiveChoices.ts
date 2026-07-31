@@ -489,8 +489,8 @@ registerChoiceGroup({
     // allocation opt-in beside the gem economy. The pool adapters gate
     // them (a guard endpoint idles off-stance), and conduitRate /
     // conduitEfficiency investment scales them like every other pump.
-    { id: 'communion', name: 'Communion Doctrine', description: 'While any guard holds, your poise drains steadily into the wall — a worn conduit: no socket, no binding; it stops at a quarter of your bar', conduit: { from: 'poise', to: 'guard', drainPct: 0.06, ratio: 1.8, floor: 0.25 } },
-    { id: 'wellspring', name: 'Wellspring Doctrine', description: 'Spare mana seeps continuously into your poise — a worn conduit that keeps a 40% mana reserve and idles while the bar is whole', conduit: { from: 'mana', to: 'poise', drainPct: 0.03, ratio: 1.0, floor: 0.4 } },
+    { id: 'communion', name: 'Communion Doctrine', description: 'While any guard holds, your poise drains steadily into the wall. A worn conduit: no socket, no binding; it stops at a quarter of your bar', conduit: { from: 'poise', to: 'guard', drainPct: 0.06, ratio: 1.8, floor: 0.25 } },
+    { id: 'wellspring', name: 'Wellspring Doctrine', description: 'Spare mana seeps continuously into your poise. A worn conduit that keeps a 40% mana reserve and idles while the bar is whole', conduit: { from: 'mana', to: 'poise', drainPct: 0.03, ratio: 1.0, floor: 0.4 } },
   ],
 });
 
@@ -524,7 +524,7 @@ registerChoiceGroup({
 // data/passiveRealms.ts; the realm ships locked until content attunes it).
 registerChoiceGroup({
   id: 'devotion_hunt',
-  name: 'The Hunt — one aspect',
+  name: 'The Hunt: one aspect',
   options: [
     // Each aspect grants its stats AND a bindable GRAFT (the Grim Dawn
     // shape): the passive is the constellation's gift, the graft is where
@@ -539,7 +539,7 @@ registerChoiceGroup({
 // blessings. Free-standing shrines in a 'free'-adjacency realm.
 registerChoiceGroup({
   id: 'pantheon_major',
-  name: 'Commune — one Major voice',
+  name: 'Commune: one Major voice',
   options: [
     { id: 'dawnfather', name: 'Voice of the Dawnfather', description: '+15% fire resistance, +0.5 life regeneration per second', mods: [mod('fireRes', 'flat', 0.15), mod('lifeRegen', 'flat', 0.5)] },
     { id: 'tidemother', name: 'Voice of the Tidemother', description: '+15% cold resistance, +20 maximum mana', mods: [mod('coldRes', 'flat', 0.15), mod('mana', 'flat', 20)] },
@@ -549,7 +549,7 @@ registerChoiceGroup({
 });
 registerChoiceGroup({
   id: 'pantheon_minor',
-  name: 'Minor blessings — choose three',
+  name: 'Minor blessings: choose three',
   pick: 3,
   options: [
     { id: 'hearth', name: 'Blessing of Hearth', description: '+15 maximum life', mods: [mod('life', 'flat', 15)] },
@@ -565,7 +565,7 @@ registerChoiceGroup({
 // minor verses…
 registerChoiceGroup({
   id: 'wake_litany',
-  name: 'The Candle Litany — recite three verses',
+  name: 'The Candle Litany: recite three verses',
   pick: 3,
   options: [
     { id: 'verse_hold', name: 'Verse of Holding', description: '+1 maximum Wakeflame', mods: [mod('chargeCap_wakeflame', 'flat', 1)] },
@@ -583,7 +583,7 @@ registerChoiceGroup({
 // "3 of 12 minors, 1 of 4 majors" shape as pure data.
 registerChoiceGroup({
   id: 'wake_paean',
-  name: 'The Paean — one refrain',
+  name: 'The Paean: one refrain',
   options: [
     { id: 'refrain_blaze', name: 'Refrain of the Blaze', description: 'For each Wakeflame you hold: 3% increased damage', mods: [gaugeMod('damage', 'increased', 0.03, 'charge:wakeflame')] },
     { id: 'refrain_shroud', name: 'Refrain of the Shroud', description: 'For each Wakeflame you hold: 4% increased armor and 1% less damage taken', mods: [gaugeMod('armor', 'increased', 0.04, 'charge:wakeflame'), gaugeMod('damageTaken', 'more', -0.01, 'charge:wakeflame')] },

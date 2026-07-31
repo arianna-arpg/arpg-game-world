@@ -43,8 +43,8 @@ export const STRAYING_SURGE: StrayingSurge = {
   omen: {
     whisper: 150, reveal: 55, widenPerMin: 12,
     lines: [
-      'a bell tolls {bearing} of here — slow, and wrong, and {dist}',
-      'bleating on the wind, {bearing} — a whole fold, and no dogs barking',
+      'a bell tolls {bearing} of here: slow, and wrong, and {dist}',
+      'bleating on the wind, {bearing}: a whole fold, and no dogs barking',
       'the drovers mutter of strays walking {bearing}, all of them one way',
     ],
   },
@@ -113,7 +113,7 @@ export const STRAYING: ContentPackage = {
   id: 'straying',
   label: 'The Straying',
   color: BELL_GOLD,
-  blurb: 'The worked country keeps a fold, and the fold keeps a bell — and some evenings, out past the hedgerows, another bell answers. The stock walks. Not driven: CALLED, one head at a time, out toward a still circle of things that used to be livestock and stand there now facing the farm, waiting. Walk the strays home before the bell takes them — every head you touch remembers the fold and trots back on its own — or break the callers outright and the whole fold remembers itself at once. Dally, and the changed walk to the rally asleep, and when the bell has enough of them it TURNS: the court wakes as one and marches on the steading, and the drovers learn what their stock has been listening to. Lose that fight and the fields run feral for a while. The land always settles. The fold does not always come back.',
+  blurb: 'The worked country keeps a fold, and the fold keeps a bell, and some evenings, out past the hedgerows, another bell answers. The stock walks. Not driven: CALLED, one head at a time, out toward a still circle of things that used to be livestock and stand there now facing the farm, waiting. Walk the strays home before the bell takes them (every head you touch remembers the fold and trots back on its own), or break the callers outright and the whole fold remembers itself at once. Dally, and the changed walk to the rally asleep, and when the bell has enough of them it TURNS: the court wakes as one and marches on the steading, and the drovers learn what their stock has been listening to. Lose that fight and the fields run feral for a while. The land always settles. The fold does not always come back.',
   cost: 110,
   unlock: {
     id: 'straying_unlock',

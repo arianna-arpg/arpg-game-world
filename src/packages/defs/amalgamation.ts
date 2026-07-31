@@ -167,7 +167,7 @@ export const AMALGAMATION: ContentPackage = {
   id: 'amalgamation',
   label: 'Amalgamation',
   color: '#9ad0b0',
-  blurb: 'A roving Necromancer hunts you down work: slay the undead it marks, return to graft a body part, and BUILD the boss — and its drops — that you will then slaughter.',
+  blurb: 'A roving Necromancer hunts you down work: slay the undead it marks, return to graft a body part, and BUILD the boss (and its drops) that you will then slaughter.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING, surfacing
   // once you've found your first Bonewright.
@@ -223,6 +223,6 @@ registerKillHandler({
       ctx.grantXp(Math.round(cfg.minibossReward.xpBase + ctx.zone.level * cfg.minibossReward.xpPerLevel));
       for (let i = 0; i < cfg.minibossReward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
     }
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 52), 'Slain — return to the Bonewright to choose a part. (M)', '#9ad0b0', 16);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 52), 'Slain. Return to the Bonewright to choose a part. (M)', '#9ad0b0', 16);
   },
 });

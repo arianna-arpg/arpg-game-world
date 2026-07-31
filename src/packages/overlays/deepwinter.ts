@@ -542,7 +542,7 @@ export class DeepwinterField implements WorldOverlay {
     if (!here || !this.streamable(here)) return false;
     this.seed({ x: here.map.x, y: here.map.y }, view.terrain);
     this.sync(view);
-    this.news.push('A deep winter stirs — the frost is claiming this very ground.');
+    this.news.push('A deep winter stirs; the frost is claiming this very ground.');
     return true;
   }
 
@@ -660,7 +660,7 @@ export class DeepwinterField implements WorldOverlay {
     }
     if (!best) return; // no eligible cold country in reach → no winter (yet)
     this.seed(best, view.terrain);
-    this.news.push(`A deep winter stirs in the ${octantOf(best.x - tc.x, best.y - tc.y)} — the frost is on the march.`);
+    this.news.push(`A deep winter stirs in the ${octantOf(best.x - tc.x, best.y - tc.y)}; the frost is on the march.`);
   }
 
   /** The march: claim ONE more cell — the COLDEST unclaimed boundary cell
@@ -760,8 +760,8 @@ registerMarkerSource((world: World): MapMarker[] => {
       id: `deepwinter-heart-${s.zoneId}`, zoneId: s.zoneId,
       glyph: '❄', fill: '#101b26', stroke: DEEPWINTER_COLORS.strong, text: DEEPWINTER_COLORS.accent, r: 9,
       title: s.thawing
-        ? 'The glacial heart — the King has fallen; the winter is in retreat'
-        : 'The glacial heart — the Winter King holds his court on the frozen lake',
+        ? 'The glacial heart: the King has fallen, and the winter is in retreat'
+        : 'The glacial heart: the Winter King holds his court on the frozen lake',
       fog: 'charted', z: 16,
     });
   }
@@ -774,9 +774,9 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [{
     kind: 'event', icon: '❄', color: info.color, label: 'Deepwinter',
     detail: info.isHeart
-      ? 'the glacial heart — fell the Winter King and the winter breaks'
-      : info.thawing ? `${info.label} — the frost is in retreat`
-        : `${info.label} — the front holds this ground`,
+      ? 'the glacial heart: fell the Winter King and the winter breaks'
+      : info.thawing ? `${info.label}; the frost is in retreat`
+        : `${info.label}; the front holds this ground`,
     z: 14,
   }];
 });

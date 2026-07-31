@@ -85,7 +85,7 @@ registerSidezone({
 export const PIT: ContentPackage = {
   id: 'pit',
   label: 'The Pit',
-  blurb: 'Break open the cellar floor. Below it waits the old arena — endless waves that hunt as one pack, scaled to whoever dares them, the Pit Lord every fifth. Nothing of the world above follows you down; the only way out is the way in. The Pit keeps no spoils: it pays in experience alone, and the world above keeps the gear.',
+  blurb: 'Break open the cellar floor. Below it waits the old arena: endless waves that hunt as one pack, scaled to whoever dares them, the Pit Lord every fifth. Nothing of the world above follows you down; the only way out is the way in. The Pit keeps no spoils: it pays in experience alone, and the world above keeps the gear.',
   color: '#c8a84b',
   cost: 140,
   // DISCOVERY: finding the cellar surfaces the purchase (the delvers_seen

@@ -5340,3 +5340,26 @@ export function skillContextTags(def: SkillDef, extra?: SkillTag[]): Set<SkillTa
   if (extra) for (const t of extra) s.add(t);
   return s;
 }
+
+/**
+ * THE COOLDOWN THIS CAST WILL ACTUALLY WAIT: the addedCooldown levy joins
+ * the base, then tag-scoped cooldownRecovery is divided against the global
+ * rate (updateTimers already ticks at the global rate — this keeps scoped
+ * investment honest rather than counted twice).
+ *
+ * Lives here so the STAMPER and the TOOLTIP read one formula. A panel that
+ * printed `def.cooldown` instead would be quietly wrong for every build
+ * carrying recovery, which is exactly the drift the preview fabric exists
+ * to close (engine/skillPreview.ts; probe balance/probe_skillpreview.ts).
+ */
+export function skillCooldownSeconds(
+  caster: { sheet: { get(stat: string, tags?: Set<SkillTag>, extra?: Modifier[]): number } },
+  inst: SkillInstance, base = inst.def.cooldown,
+): number {
+  const tags = skillContextTags(inst.def);
+  const extra = instanceMods(inst);
+  const cdBase = base + caster.sheet.get('addedCooldown', tags, extra);
+  if (cdBase <= 0) return 0;
+  return cdBase / Math.max(0.1,
+    caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery'));
+}

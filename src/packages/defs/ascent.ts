@@ -184,7 +184,7 @@ export const ASCENT: ContentPackage = {
   id: 'ascent',
   label: 'Ascent',
   color: '#bfe0f8',
-  blurb: 'Somewhere in geyser country the deep water boils toward the sky. Ride it up through the cloud deck onto a dissolving shelf hung over the very land you left — outrun the collapse to the Ascendant Gate, breach the Aetherial, and answer to the Vigilant Host. Fall, and the world below catches you.',
+  blurb: 'Somewhere in geyser country the deep water boils toward the sky. Ride it up through the cloud deck onto a dissolving shelf hung over the very land you left. Outrun the collapse to the Ascendant Gate, breach the Aetherial, and answer to the Vigilant Host. Fall, and the world below catches you.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once you've found your first geyser.

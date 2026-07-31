@@ -36,8 +36,8 @@ export const HAUNT_SURGE: HauntSurge = {
   omen: {
     whisper: 170, reveal: 60, widenPerMin: 14,
     lines: [
-      'a cold thread in the air — weeping, {bearing} of here, {dist}',
-      'the birds will not fly {bearing} — something grieves there',
+      'a cold thread in the air: weeping, {bearing} of here, {dist}',
+      'the birds will not fly {bearing}; something grieves there',
       'a mourner’s song carries from the {bearing}, faint and wrong',
     ],
   },
@@ -96,7 +96,7 @@ registerKillHandler({
     boss.tag = 'wailing_one';
     ctx.flash(ctx.actor.pos, 120, info.color, 0.6);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 44),
-      'The anchor shatters — the WAILING ONE manifests!', '#d8e0f0', 17);
+      'The anchor shatters, and the WAILING ONE manifests!', '#d8e0f0', 17);
     ctx.bumpLedger('haunt_anchors_broken');
   },
 });
@@ -122,7 +122,7 @@ export const HAUNTING: ContentPackage = {
   id: 'haunting',
   label: 'The Haunting',
   color: '#b8c8e8',
-  blurb: 'Grief does not bury well. By night it settles on some stretch of charted ground and holds it — the air runs cold, grave-lights drift the field, and the restless stream in around a standing anchor of sorrow. Leave it be and the dawn unbinds it, giving nothing. Or break the anchor — and understand that breaking it does not end the grief. It gives the grief a THROAT. The Wailing One walks until someone faces it — and if the light takes it first, watch the spirits thin and gutter as day nears, then remember this: the light erases nothing. What you cracked stays cracked, what you wounded stays wounded, and the grief returns to some other ground the next nightfall, carrying every blow.',
+  blurb: 'Grief does not bury well. By night it settles on some stretch of charted ground and holds it: the air runs cold, grave-lights drift the field, and the restless stream in around a standing anchor of sorrow. Leave it be and the dawn unbinds it, giving nothing. Or break the anchor, and understand that breaking it does not end the grief. It gives the grief a THROAT. The Wailing One walks until someone faces it. If the light takes it first, watch the spirits thin and gutter as day nears, then remember this: the light erases nothing. What you cracked stays cracked, what you wounded stays wounded, and the grief returns to some other ground the next nightfall, carrying every blow.',
   cost: 120,
   unlock: {
     id: 'haunting_unlock',

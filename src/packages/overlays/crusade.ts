@@ -344,14 +344,14 @@ export class CrusadeField implements WorldOverlay {
       if (!c.anchored && c.power >= P.anchorAt) {
         c.anchored = true;
         if (c.discovered) {
-          this.pushBulletin(`${this.factionName(c)} crusade plants its THRONE — a seat of power rises!`, c.color);
+          this.pushBulletin(`${this.factionName(c)} crusade plants its THRONE: a seat of power rises!`, c.color);
         }
       }
       if (c.anchored) c.power = Math.max(P.anchoredFloor, c.power);
       else if (c.power < P.snuffBelow) {
         c.dead = true;
         if (c.discovered) {
-          this.pushBulletin(`The ${this.factionName(c)} crusade gutters out — its banner never took root.`, c.color);
+          this.pushBulletin(`The ${this.factionName(c)} crusade gutters out; its banner never took root.`, c.color);
         }
       }
     }
@@ -363,7 +363,7 @@ export class CrusadeField implements WorldOverlay {
       if (read && read.control >= this.cfg.control.discoverAt && !read.crusade.discovered) {
         read.crusade.discovered = true;
         this.pushBulletin(
-          `You have found ${this.factionName(read.crusade)} crusade — its warfront burns on your map!`,
+          `You have found ${this.factionName(read.crusade)} crusade, and its warfront burns on your map!`,
           read.crusade.color);
       }
       // THE THRONE IS FOUND BY WALKING IT: standing in gate-bearing heart
@@ -611,7 +611,7 @@ export class CrusadeField implements WorldOverlay {
     c.dead = true;
     const mul = this.cfg.sanctum.rewardMul
       * (1 + this.cfg.sanctum.rewardPerPower * (c.power / Math.max(1, this.cfg.power.anchorAt)));
-    this.pushBulletin(`The ${this.factionName(c)} crusade is BROKEN — its throne stands empty.`, c.color);
+    this.pushBulletin(`The ${this.factionName(c)} crusade is BROKEN; its throne stands empty.`, c.color);
     this.crusades = this.crusades.filter(x => x.id !== crusadeId);
     return mul;
   }
@@ -813,7 +813,7 @@ export class CrusadeField implements WorldOverlay {
       if (!read?.rival) continue;
       if (!this.devRevealAll && (!read.crusade.discovered || !read.rival.discovered)) continue;
       over += `<text x="${z.map.x.toFixed(0)}" y="${(z.map.y - 13).toFixed(0)}" text-anchor="middle" `
-        + `font-size="12" fill="#ff5a5a">⚔<title>${this.factionName(read.crusade)} vs ${this.factionName(read.rival)} — `
+        + `font-size="12" fill="#ff5a5a">⚔<title>${this.factionName(read.crusade)} vs ${this.factionName(read.rival)}: `
         + `${Math.round(read.contest * 100)}% pressure</title></text>`;
     }
     // Thrust arrows along the strongest live advances.
@@ -959,7 +959,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     out.push({
       id: `crusade-throne-${c.id}`, zoneId: c.throneZoneId,
       glyph: '☗', fill: '#2a1e08', stroke: c.color, text: c.color, r: 10,
-      title: `The ${fname} crusade's throne gate — cut down the Leader`, fog: 'charted', z: 19,
+      title: `The ${fname} crusade's throne gate: cut down the Leader`, fog: 'charted', z: 19,
     });
   }
   return out;
@@ -980,7 +980,7 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     kind: 'event', icon: info.sanctumReady ? '☗' : '♜', color: info.color,
     label: info.sanctumReady
       ? `The crusade's throne gate stands here`
-      : `Crusade ground — ${fname} (${info.label})`,
+      : `Crusade ground: ${fname} (${info.label})`,
     detail: info.sanctumReady
       ? 'Step through and cut down the Leader'
       : `${Math.round(info.control * 100)}% grip${info.isStronghold ? ' · heartland' : ''}`,

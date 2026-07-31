@@ -114,7 +114,7 @@ export const LONGCANDLE: ContentPackage = {
   id: 'longcandle',
   label: 'The Long Candle',
   color: WAX_COLOR,
-  blurb: 'After dark, two courts walk. The Wax Court processes out of nowhere — candleflesh nobility raising shrines whose light picks EVERYTHING out of the night: you, your stealth, and the things that were already standing in the dark beside you. Because the dark has a parliament, and it convenes: living shadows that own every unlit hour. Fight the Court and learn what a body of wax does with your fire — it RUNS, faster and drippier, and its dead pool and re-light. Bring cold instead and it sets brittle. Fight the Parliament and learn why the shrines matter — a lit shadow is just a target; an unlit one is mostly a rumor. And some nights, on some ground, both courts claim the same field — then it is their war, and you are merely standing in it.',
+  blurb: 'After dark, two courts walk. The Wax Court processes out of nowhere: candleflesh nobility raising shrines whose light picks EVERYTHING out of the night: you, your stealth, and the things that were already standing in the dark beside you. Because the dark has a parliament, and it convenes: living shadows that own every unlit hour. Fight the Court and learn what a body of wax does with your fire: it RUNS, faster and drippier, and its dead pool and re-light. Bring cold instead and it sets brittle. Fight the Parliament and learn why the shrines matter: a lit shadow is just a target; an unlit one is mostly a rumor. And some nights, on some ground, both courts claim the same field; then it is their war, and you are merely standing in it.',
   cost: 130,
   unlock: {
     id: 'longcandle_unlock',

@@ -111,7 +111,7 @@ registerGateLook('fracture', {
   pulseHz: 5, pulseAmp: 0.2, spin: 0.6,
   rays: { count: 8, r0: 5, r1: 20, alt: 8 },
   halo: { radius: 82, alpha: 0.2 },
-  prompt: 'a rift yawns — step in', promptColor: EVENT_COLOR,
+  prompt: 'a rift yawns: step in', promptColor: EVENT_COLOR,
 });
 
 // COURT DOOR — the fed breach that FAILED to seal, condensed into a standing

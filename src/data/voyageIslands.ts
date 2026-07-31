@@ -63,7 +63,7 @@ registerVoyageIsland({
   tileset: 'jungle',
   objective: { kind: 'boss', id: 'wilds_behemoth', promote: { rarity: 'rare' } },
   color: '#6fae3f',
-  blurb: 'An overgrown island ruled by an apex beast — fell it to earn the harbor.',
+  blurb: 'An overgrown island ruled by an apex beast. Fell it to earn the harbor.',
 });
 
 registerVoyageIsland({
@@ -83,7 +83,7 @@ registerVoyageIsland({
   },
   structures: [{ structure: 'watchtower', chance: 0.7 }],
   color: '#c9a86a',
-  blurb: 'A pirate den dug into the dunes — break the crew and the chief who holds it.',
+  blurb: 'A pirate den dug into the dunes. Break the crew and the chief who holds it.',
 });
 
 registerVoyageIsland({
@@ -94,7 +94,7 @@ registerVoyageIsland({
   objective: { kind: 'spawners', spawnerId: 'bone_altar', count: [2, 3] },
   landmarks: [{ landmark: 'sinkhole', chance: 0.5 }],
   color: '#6a5a8a',
-  blurb: 'The dead were buried at sea here — smash the altars that keep raising them.',
+  blurb: 'The dead were buried at sea here. Smash the altars that keep raising them.',
 });
 
 registerVoyageIsland({
@@ -109,7 +109,7 @@ registerVoyageIsland({
     { landmark: 'lava_coast', chance: 0.5 },
   ],
   color: '#d84a1e',
-  blurb: 'A volcanic crown steaming in the swell — pick it clean and sail on.',
+  blurb: 'A volcanic crown steaming in the swell. Pick it clean and sail on.',
 });
 
 registerVoyageIsland({
@@ -121,7 +121,7 @@ registerVoyageIsland({
   objective: { kind: 'waves', waves: 4 },
   levelDelta: 1,
   color: '#bcd0d8',
-  blurb: 'Something in the mist calls the drowned ashore in waves — hold the beach.',
+  blurb: 'Something in the mist calls the drowned ashore in waves. Hold the beach.',
 });
 
 registerVoyageIsland({
@@ -131,7 +131,7 @@ registerVoyageIsland({
   tileset: 'meadow',
   objective: { kind: 'safe' },
   color: '#8fd06f',
-  blurb: 'A rare quiet shore — nothing hunts here. Catch your breath before the next crossing.',
+  blurb: 'A rare quiet shore; nothing hunts here. Catch your breath before the next crossing.',
 });
 
 registerVoyageIsland({
@@ -143,5 +143,5 @@ registerVoyageIsland({
   objective: { kind: 'boss', id: 'deep_leviathan', promote: { rarity: 'crowned' } },
   levelDelta: 2,
   color: '#2f6aa8',
-  blurb: 'The sea itself buries its dead here — and one of them is not done dying.',
+  blurb: 'The sea itself buries its dead here, and one of them is not done dying.',
 });

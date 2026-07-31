@@ -153,7 +153,7 @@ for (const def of TERRAFORM_LIST) {
   // bearers invested in terraformFx_<id> (Bramble Ward and kin).
   if (def.effect) {
     STAT_DEFS[terraformFxStat(def.id)] = {
-      label: `Terraform: ${def.label} — growths fight`, base: 0, min: 0,
+      label: `Terraform: ${def.label} (growths fight)`, base: 0, min: 0,
     };
   }
 }

@@ -104,7 +104,7 @@ export const FRACTURES: ContentPackage = {
   id: 'fractures',
   label: 'Fractures',
   color: '#8a4ae0',
-  blurb: 'A volatile rift you trip by running over it — a fissure crawls as you chase it, tearing open foe-spewing chasms against a nested timer, then diverts zone to zone until it collapses.',
+  blurb: 'A volatile rift you trip by running over it: a fissure crawls as you chase it, tearing open foe-spewing chasms against a nested timer, then diverts zone to zone until it collapses.',
   cost: 120,
   // DISCOVERED in play (runs at defaults from level 10); the Vault unlock gates
   // TUNING, surfacing once you've tripped your first fracture.

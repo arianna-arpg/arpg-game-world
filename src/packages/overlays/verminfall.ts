@@ -350,8 +350,8 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   return [{
     kind: 'event', icon: '🐀', color: info.color, label: 'Infestation',
     detail: info.kingArmed
-      ? 'the warren is broken — the RAT KING walks'
-      : `${info.label} — ${info.nestsRemaining} warren nest${info.nestsRemaining === 1 ? '' : 's'} stand`,
+      ? 'the warren is broken; the RAT KING walks'
+      : `${info.label}; ${info.nestsRemaining} warren nest${info.nestsRemaining === 1 ? '' : 's'} stand`,
     z: 14,
   }];
 });

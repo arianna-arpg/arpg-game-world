@@ -43,7 +43,7 @@ const ACCENT = '#e8c87a'; // lamplight gold — the borough speaks in hearth ton
 /** Map-level knobs (the in-zone numbers ride the encounter's borough block). */
 const BOROUGH_SURGE: BoroughSurge = {
   resettleSec: 900, // spent ground resettles after fifteen world-minutes elsewhere
-  arrivalBulletin: '+{n} souls reach Lastlight — the town grows',
+  arrivalBulletin: '+{n} souls reach Lastlight; the town grows',
   arrivalColor: ACCENT,
 };
 
@@ -168,7 +168,7 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
     text: {
       found: 'a borough! its folk brace for the horde…',
       assault: 'the horde breaks upon the borough!',
-      held: 'the borough stands — its folk take the road to Lastlight',
+      held: 'the borough stands; its folk take the road to Lastlight',
       lost: 'the borough falls silent…',
     },
   },
@@ -177,7 +177,7 @@ const BOROUGH_ENCOUNTER: EncounterDef = {
 export const BOROUGH: ContentPackage = {
   id: 'borough',
   label: 'Borough',
-  blurb: 'Settlements of friendly folk raise their hearths in the wilds — and the wilds object. Arm the villagers with your gear and essence, hold the line when the horde breaks, and every survivor becomes a soul in Lastlight.',
+  blurb: 'Settlements of friendly folk raise their hearths in the wilds, and the wilds object. Arm the villagers with your gear and essence, hold the line when the horde breaks, and every survivor becomes a soul in Lastlight.',
   color: ACCENT,
   cost: 90,
   // DISCOVERY: the Vault surfaces the Borough's config once you've SIGHTED one
@@ -263,7 +263,7 @@ registerAttentionSource((world: World): AttentionPoint[] => {
       pos: e.pos,
       color: ACCENT,
       glyph: e.def.trigger.glyph,
-      label: e.phase === 'open' ? 'the borough — defend the folk!' : undefined,
+      label: e.phase === 'open' ? 'the borough: defend the folk!' : undefined,
       z: e.phase === 'open' ? 8 : 4,
     });
   }
@@ -296,7 +296,7 @@ registerMarkerSource((world: World): MapMarker[] => {
     id: 'borough-lastlight-census',
     zoneId: START_ZONE,
     glyph: '⌂', fill: '#3a3020', stroke: ACCENT, text: String(POPULATION_CFG.base + pop),
-    title: `Lastlight — population ${POPULATION_CFG.base + pop} (${pop} sheltered)`,
+    title: `Lastlight: population ${POPULATION_CFG.base + pop} (${pop} sheltered)`,
     fog: 'always',
     z: 3,
   }];
