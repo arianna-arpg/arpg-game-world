@@ -397,18 +397,33 @@ function saveSlotFor(world: World): number {
   return entry ? entry.slot : -1;
 }
 
-/** Stringify the save, splicing the world's memoized zones JSON in verbatim
- *  where the runtime offers JSON.rawJSON — the final walk then covers the
- *  ~5% of the tree that actually changes per beat instead of re-serializing
- *  663 zone defs (the 20s autosave hitch). The identity guard (`v === zs`)
- *  keeps the splice honest: it fires only for the exact array the memo's
- *  JSON describes; runtimes without rawJSON stringify plainly. */
-function characterBody(world: World, save: CharacterSave): string {
+/** Stringify the save, splicing the world's memoized zones JSON in verbatim —
+ *  the final walk then covers the ~5% of the tree that actually changes per
+ *  beat instead of re-serializing 663 zone defs (the 20s autosave hitch).
+ *
+ *  THE SPLICE RIDES A SENTINEL, NEVER JSON.rawJSON: rawJSON accepts only JSON
+ *  PRIMITIVES — handed the zones ARRAY it throws, and (07-23..07-31) that
+ *  throw, swallowed by the writers' quota catch, silently discarded every
+ *  character save on every rawJSON-capable runtime (the Immortal-vessel
+ *  loss). Instead the zones array serializes as a one-off entropy sentinel
+ *  and ONE indexOf/slice swap seats the memoized JSON in its place. The
+ *  identity guard (`v === zs`) fires only for the exact array the memo's
+ *  JSON describes; the sentinel is minted per call, so no save content can
+ *  spoof it; and any anomaly — sentinel absent, or present more than once —
+ *  falls back to the plain stringify. Correctness never rides the
+ *  optimization (probe_persistence pins byte parity between the two lanes,
+ *  and pins rawJSON's array refusal so the old idiom can't return). */
+export function characterBody(world: World, save: CharacterSave): string {
   const zonesJson = world.zonesSaveJson();
-  const raw = (JSON as unknown as { rawJSON?: (s: string) => unknown }).rawJSON;
-  if (zonesJson && typeof raw === 'function' && save.world) {
+  if (zonesJson && save.world) {
     const zs = save.world.zones;
-    return JSON.stringify(save, (k, v) => (k === 'zones' && v === zs ? raw(zonesJson) : v));
+    const sentinel = `__zsplice_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffffff).toString(36)}__`;
+    const body = JSON.stringify(save, (k, v) => (k === 'zones' && v === zs ? sentinel : v));
+    const token = JSON.stringify(sentinel); // quoted, exactly as it appears in the body
+    const at = body.indexOf(token);
+    if (at >= 0 && body.indexOf(token, at + token.length) < 0) {
+      return body.slice(0, at) + zonesJson + body.slice(at + token.length);
+    }
   }
   return JSON.stringify(save);
 }
@@ -418,8 +433,11 @@ export function saveCharacter(world: World): void {
   const slot = saveSlotFor(world);
   if (slot < 0) return;
   let body: string;
+  // Serialize failures never crash gameplay — but they must never be SILENT
+  // either: a quiet return here is how a broken save path loses runs for
+  // days (the rawJSON regression). Loud on the console, visible to probes.
   try { body = characterBody(world, serializeCharacter(world)); }
-  catch { return; } // quota / serialize errors never crash gameplay
+  catch (e) { console.error('[save] serializeCharacter threw — nothing written:', e); return; }
   try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
   diskPut(slot, body);
 }
@@ -437,7 +455,7 @@ export function saveCharacterDurable(world: World): void {
   world.invalidateZonesSaveMemo();
   let body: string;
   try { body = characterBody(world, serializeCharacter(world)); }
-  catch { return; }
+  catch (e) { console.error('[save] serializeCharacter threw — durable write refused:', e); return; }
   try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
   diskBeacon(slot, body);
 }
@@ -578,7 +596,7 @@ export function saveCouchGuest(
   if (slot < ROSTER_SLOT_BASE) return; // guests only ever write roster slots
   let body: string;
   try { body = JSON.stringify(serializeCouchGuest(world, seat, dormant)); }
-  catch { return; }
+  catch (e) { console.error('[save] serializeCouchGuest threw — nothing written:', e); return; }
   try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
   if (durable) diskBeacon(slot, body); else diskPut(slot, body);
   const entry = account.roster.find(r => r.charId === seat.meta.charId);
