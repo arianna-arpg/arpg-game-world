@@ -55,6 +55,12 @@ import { buildManifest, reconcileManifest } from '../src/packages/manifest';
 import { World } from '../src/engine/world';
 
 let failed = 0;
+/** XP through the seat lane. grantSeatXp is World-PRIVATE — the probe reaches
+ *  it structurally (the probe_pathpref wGrounds idiom): a rig never widens the
+ *  game's API for a test. The seat type is World's own, read off localSeat. */
+const grantXp = (w: World, amount: number): void =>
+  (w as unknown as { grantSeatXp(seat: World['localSeat'], amount: number): void })
+    .grantSeatXp(w.localSeat, amount);
 const check = (name: string, ok: boolean, detail = ''): void => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`);
   if (!ok) failed++;
@@ -107,7 +113,7 @@ check('A4: the baseline body parses and carries the covenant',
 
 // Live a little, then the 20s autosave beat (hostTail's persistRun).
 for (let i = 0; i < 120; i++) world.update(1 / 60);
-world.grantSeatXp(world.localSeat, 40);
+grantXp(world, 40);
 persistRun(account, world);
 const autosaveRaw = lsGet(slotKey);
 check('A5: the autosave beat overwrote the slot', !!autosaveRaw && autosaveRaw !== baselineRaw);
@@ -149,7 +155,7 @@ void (async (): Promise<void> => {
   // The resumed session must be able to SAVE again — saveSlotFor must still
   // resolve the card from the resumed meta (the round trip's last leg).
   for (let i = 0; i < 60; i++) world2.update(1 / 60);
-  world2.grantSeatXp(world2.localSeat, 25);
+  grantXp(world2, 25);
   const before = lsGet(slotKey);
   persistRun(account2, world2);
   const after = lsGet(slotKey);
@@ -223,7 +229,7 @@ void (async (): Promise<void> => {
   // Move the world first — an unchanged state re-serializes byte-identical
   // (the pure-serialize law), which would read as "no write" here.
   for (let i = 0; i < 30; i++) world2.update(1 / 60);
-  world2.grantSeatXp(world2.localSeat, 5);
+  grantXp(world2, 5);
   persistRun(account2, world2);
   check('D4: the save recovers once the poison is gone', lsGet(slotKey) !== beforePoison);
 
