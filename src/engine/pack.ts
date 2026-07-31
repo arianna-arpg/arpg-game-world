@@ -305,3 +305,22 @@ export function foldPack(
   for (const [k, v] of d) d.set(k, v / members.length);
   return agg;
 }
+
+/** THE PACK-DRIVE READ — the squad's mean of a named drive, read by the
+ *  `packDrive` AI condition (ai.ts) and the crest tell (tells.ts) through
+ *  THIS one function, so conduct and appearance cannot drift. A body with
+ *  no squad aggregate reads its OWN meter — a pack of one is still a pack,
+ *  and its mean is its own belly (the muster gate's doctrine: "a lone
+ *  survivor hunts alone"). The fallback matters: updatePack folds only
+ *  squadId-stamped bodies, so squadless spawns (probe/dev singles, summons)
+ *  carry no aggregate — and before this read existed both consumers coerced
+ *  that absence to 0, which held plains_wolf's fed-pack rule (packDrive
+ *  hunger below 0.35 → detectMul 0.4) TRUE forever: a lone wolf walked the
+ *  world 60% blind and its crest drew "fed" over a starving belly — the
+ *  probe_pathpref wolf-march red. */
+export function packDriveOf(
+  a: { packAgg?: PackAggregate; drives: Map<string, number> },
+  id: string,
+): number {
+  return a.packAgg?.drives.get(id) ?? a.drives.get(id) ?? 0;
+}

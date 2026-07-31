@@ -253,6 +253,19 @@ function calderaRig(): { w: World; gapY: number } {
 }
 
 // ------------------------------------- the self-preservation veto at the rim
+// THE STALWART SPECIMEN: the wolf's body with its pack-layer TEMPERAMENT
+// stripped (drives + rules — the hunger conduct that may walk an unprovoked
+// lone wolf AWAY toward prey-rich ground before its sense cone ever finds
+// the player; intended character since THE PACK LAYER). The veto sections
+// pin SELF-PRESERVATION AT THE RIM, not wolf temperament, so they need an
+// unconditional marcher — the caldera arc above keeps the REAL plains_wolf
+// as the packDrive regression pin (a squadless wolf reads its OWN belly via
+// packDriveOf and notices its prey; before that fallback the fed-pack rule
+// held permanently and no lone wolf marched anywhere).
+MONSTERS['probe_stalwart'] = {
+  ...MONSTERS['plains_wolf'], id: 'probe_stalwart', name: 'Probe Stalwart',
+  brain: { ...MONSTERS['plains_wolf'].brain!, drives: undefined, rules: undefined },
+};
 /** A fresh world with a full-height VOID band installed between west ground
  *  and the player's east ground (a real GridWalkField as world.walk). */
 function voidRig(monsterId: string): { w: World; m: import('../src/engine/actor').Actor; bandX: number } {
@@ -271,7 +284,7 @@ function voidRig(monsterId: string): { w: World; m: import('../src/engine/actor'
   return { w, m, bandX };
 }
 {
-  const { w, m, bandX } = voidRig('plains_wolf');
+  const { w, m, bandX } = voidRig('probe_stalwart');
   let maxX = -Infinity;
   for (let t = 0; t < 8; t += 1 / 60) { step(w, 1 / 60); if (m.dead) break; maxX = Math.max(maxX, m.pos.x); }
   check('the veto rig is live (the wolf actually marched on the band)', maxX > bandX - 300 + 60,
@@ -324,7 +337,7 @@ function pitRig(monsterId: string, descend = false):
   return { w, m, bandX };
 }
 {
-  const { w, m, bandX } = pitRig('plains_wolf');
+  const { w, m, bandX } = pitRig('probe_stalwart');
   let maxX = -Infinity;
   for (let t = 0; t < 8; t += 1 / 60) { step(w, 1 / 60); if (m.dead) break; maxX = Math.max(maxX, m.pos.x); }
   check('pit doodads: an avoid mind holds short of the lip — alive, unhurt, no falls',
@@ -344,6 +357,7 @@ function pitRig(monsterId: string, descend = false):
   check('…and stays silent for a body HOME in the pit (insurance, one predicate)',
     w.fallHazardAt(proof, bandX, w.arena.h * 0.5) === false);
   delete MONSTERS['probe_pitproof'];
+  delete MONSTERS['probe_stalwart']; // last stalwart section — tidy the registry
 }
 {
   // Classic-fall zones are where the grind KILLED: only the lemming still may.

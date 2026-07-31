@@ -37,6 +37,7 @@
 import { mixHex } from '../core/math';
 import type { PartSpec } from '../render/vis/parts';
 import type { ActorAdorn } from './actor';
+import { packDriveOf } from './pack';
 import { STATUS_DEFS } from './status';
 
 // --- config ----------------------------------------------------------------
@@ -360,8 +361,10 @@ export const TELL_SOURCES: Record<string, TellSource> = {
   /** THE PACK'S APPETITE: the squad's MEAN of a named drive — the group
    *  meter DriveSpec.share was already keeping and never showing. An
    *  individual wolf's hunger is 'drive:hunger'; what the PACK wants is
-   *  this. Already 0..1 (a mean of bounded meters). */
-  packDrive: (a, _w, arg) => (arg ? a.packAgg?.drives.get(arg) ?? 0 : 0),
+   *  this. Already 0..1 (a mean of bounded meters). Squadless bodies read
+   *  their OWN meter (packDriveOf — the ONE read the AI condition shares,
+   *  so the crest can never draw "fed" over a lone starving belly). */
+  packDrive: (a, _w, arg) => (arg ? packDriveOf(a, arg) : 0),
   /** COURSING: predation is OPEN — the resolved prey stamp the hostility
    *  gate itself reads (World.isPrey). A pack that has decided the meadow
    *  is food wears it, and you can tell at a glance whether you are being

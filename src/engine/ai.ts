@@ -29,7 +29,7 @@ import {
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { erraticTurn, weaveVel } from './flight';
-import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity } from './pack';
+import { PACK_CFG, nerveFromLife, nerveFromOdds, nerveFromProximity, packDriveOf } from './pack';
 import {
   feedWatch, SENSE_CFG, senseReach, WATCH_CFG, WATCH_RUNG, watchArcDeg,
   watchRiseAmount, watchRungOf, watchValueOf,
@@ -189,11 +189,13 @@ registerAICondition('wardsNear', (actor, _t, _ctx, arg) =>
 /** PACK DRIVE ABOVE: the SQUAD's mean of a named drive has passed a
  *  threshold — a GROUP decision rather than an individual one. "The pack is
  *  hungry enough to promote you to prey" is one row of data; the crest every
- *  member wears is the same number, so you are warned before it is made. */
+ *  member wears is the same number, so you are warned before it is made.
+ *  Squadless bodies read their OWN meter (packDriveOf — the pack of one),
+ *  never a phantom 0. */
 registerAICondition('packDrive', (actor, _t, _ctx, arg) => {
   const a = arg as { id?: string; above?: number; below?: number } | undefined;
   if (!a?.id) return false;
-  const v = actor.packAgg?.drives.get(a.id) ?? 0;
+  const v = packDriveOf(actor, a.id);
   if (a.above !== undefined && v <= a.above) return false;
   if (a.below !== undefined && v >= a.below) return false;
   return a.above !== undefined || a.below !== undefined;

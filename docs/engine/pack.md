@@ -154,7 +154,17 @@ on it and the tell that draws it read one number.
 |---|---|---|
 | `nerveBelow` | `number` | `Actor.aiNerve` |
 | `wardsNear` | `number` | `Actor.broodNear` |
-| `packDrive` | `{ id, above?, below? }` | `Actor.packAgg.drives` |
+| `packDrive` | `{ id, above?, below? }` | `packDriveOf` — squad mean, else OWN drive |
+
+**The pack of one** (`packDriveOf`, pack.ts): a body with no squad aggregate
+— squadless spawns; `updatePack` folds only `squadId`-stamped bodies — reads
+its **own** meter, never a phantom 0. The muster gate's doctrine ("a lone
+survivor hunts alone") applied to the drive read: before the fallback, the
+fed-pack rule (`packDrive` hunger `below: 0.35`) held TRUE forever on every
+squadless wolf, collapsing its detection to 40% and drawing a "fed" crest
+over a starving belly — the probe_pathpref wolf-march red. The condition and
+the crest tell share the one function, so conduct and appearance cannot
+drift.
 
 ## The tell sources
 
@@ -167,7 +177,7 @@ on it and the tell that draws it read one number.
 | `brood` | warded young huddled at this body | **band it** |
 | `juvenile` | rolled young at spawn | yes |
 | `kin` | living squadmates in earshot | **band it** |
-| `packDrive:<id>` | the squad's mean of a drive | yes |
+| `packDrive:<id>` | the squad's mean of a drive (own drive when squadless — `packDriveOf`) | yes |
 | `coursing` | predation is open (`Actor.aiPrey`) | yes |
 
 `kin` is the clearest illustration of the band's power: `[1, 8]` reads a
