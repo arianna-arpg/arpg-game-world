@@ -17,7 +17,14 @@
 //     wounded, flight over); a heavy mover PLOWS light bodies aside
 //     (struck share + momentum hand-off with authority already spent);
 //     phasing bodies are passed through untouched,
-//   - the impactDamage stat scales the wound; determinism holds seeded.
+//   - the impactDamage stat scales the wound; determinism holds seeded,
+//   - THE DIALS ship NEUTRAL (impact.poiseFrac 0 / impact.casterless false)
+//     and bite when armed: poiseFrac JARS the bar by the same momentum
+//     fraction (the life wound never moves) at BOTH impact sites;
+//     casterless opts AUTHORLESS arrests in at BOTH sites — a live
+//     friendly author still bruises nothing, and the casterless kill
+//     lands sane on the pitfall swallow's degrade (killer = undefined →
+//     kill()'s standing `!killer` watcher credit; no crash).
 // Run: npx tsx balance/probe_mass.ts
 // ---------------------------------------------------------------------------
 
@@ -277,6 +284,132 @@ const expectWeight = (id: string, radius: number): number =>
   check('bowling spare: a PHASING body is passed through untouched (substance, not stealth)',
     near(ghost.pos.x, gx0, 2) && near(ghost.life, gLife0, 0.01),
     `moved ${(ghost.pos.x - gx0).toFixed(1)}u, life Δ${(gLife0 - ghost.life).toFixed(2)}`);
+}
+
+// ------------------------------------------------- the dials (ship neutral)
+// impact.poiseFrac + impact.casterless. Both NEUTRAL at ship (0 / false):
+// stock behavior is the v1 law until a pass deliberately arms them. The
+// probe toggles them IN PLACE (cast through the as-const readonly) and
+// restores the defaults before the determinism rig.
+{
+  const dial = MASS_CFG.impact as unknown as { poiseFrac: number; casterless: boolean };
+  check('dials: both ship NEUTRAL — poiseFrac 0, casterless false (v1 behavior is the default)',
+    dial.poiseFrac === 0 && dial.casterless === false,
+    `poiseFrac ${dial.poiseFrac}, casterless ${dial.casterless}`);
+
+  // POISE DIAL at the wall site — identical lanes, dial 0 vs 1: the arrest
+  // JARS the bar; the life wound never moves (the drain rides AFTER
+  // mitigation by construction, so arming the dial is life-neutral).
+  seedGlobalRandom(60613);
+  const w = makeSimWorld('warrior', 60613);
+  w.doodads.push({ pos: vec(700, 300), radius: 42, kind: 'rock' });
+  w.doodads.push({ pos: vec(700, 500), radius: 42, kind: 'rock' });
+  (w as unknown as { markDoodadsChanged(): void }).markDoodadsChanged();
+  // POISE IS MASS fattens the twins' effective weight (perPoise over a 120
+  // bar ≈ ×2.4), so the launch is heaved harder than the bare-zombie rigs'.
+  const prep = (y: number): Actor => {
+    const v = spawn(w, 'zombie', 3, 610, y);
+    v.sheet.setBase('poise', 120);
+    v.poise = v.maxPoise();
+    return v;
+  };
+  const dOff = prep(300);
+  w.pushActor(dOff, 0, 700, w.player);
+  settle(w);
+  // Snapshot at the twin's OWN settle end — the later lane's settle would
+  // otherwise gift this one an extra regen window (~0.7 life of trickle).
+  const offLife = dOff.life, offPoise = dOff.poise;
+  dial.poiseFrac = 1;
+  const dOn = prep(500);
+  w.pushActor(dOn, 0, 700, w.player);
+  settle(w);
+  dial.poiseFrac = 0;
+  const onLife = dOn.life, onPoise = dOn.poise;
+  check('poise dial: the heaved launch still WOUNDS through the fattened bar (calibration holds)',
+    offLife < dOff.maxLife() - 1, `life ${offLife.toFixed(1)} of ${dOff.maxLife().toFixed(0)}`);
+  check('poise dial: the dial-on twin\'s bar lands measurably below the dial-off twin\'s',
+    onPoise < offPoise - 2.5,
+    `poise ${offPoise.toFixed(1)} (off) vs ${onPoise.toFixed(1)} (on) of ${dOn.maxPoise().toFixed(0)}`);
+  check('poise dial: the LIFE wound never moves with the dial (drain rides after mitigation)',
+    near(offLife, onLife, 0.6), `life ${offLife.toFixed(2)} vs ${onLife.toFixed(2)}`);
+
+  // CASTERLESS FLAG at the wall site — the environment wounds only when
+  // opted in; a live FRIENDLY author stays kind even then; the kill
+  // DEGRADES to the pitfall swallow's exact shape (routePitFall): killer =
+  // undefined, and kill()'s standing credit law takes it from there — a
+  // killerless death still PAYS THE WATCHER's side (`!killer` credits, the
+  // pit-parity law), there is simply no author for killer-side payouts.
+  seedGlobalRandom(60617);
+  const w2 = makeSimWorld('warrior', 60617);
+  w2.doodads.push({ pos: vec(700, 300), radius: 42, kind: 'rock' });
+  w2.doodads.push({ pos: vec(700, 500), radius: 42, kind: 'rock' });
+  w2.doodads.push({ pos: vec(700, 700), radius: 42, kind: 'rock' });
+  (w2 as unknown as { markDoodadsChanged(): void }).markDoodadsChanged();
+  dial.casterless = true;
+  const blown = spawn(w2, 'zombie', 3, 610, 300);
+  const blown0 = blown.life;
+  w2.pushActor(blown, 0, 260);
+  settle(w2);
+  check('casterless ON: the wind\'s wall arrest now WOUNDS (environmental impact opted in)',
+    blown.life < blown0 - 0.5, `life ${blown0.toFixed(0)} → ${blown.life.toFixed(1)}`);
+  const shover = spawn(w2, 'scree_shambler', 5, 560, 500);
+  const mate = spawn(w2, 'zombie', 3, 610, 500);
+  const mate0 = mate.life;
+  w2.pushActor(mate, 0, 260, shover);
+  settle(w2);
+  check('casterless ON: a live FRIENDLY author still bruises nothing (the hostile gate keeps)',
+    near(mate.life, mate0, 0.01), `life ${mate0.toFixed(0)} → ${mate.life.toFixed(1)}`);
+  const prey = spawn(w2, 'scree_skitter', 1, 610, 700);
+  prey.life = 2;
+  const xp0 = w2.seats[0].meta.xp;
+  w2.pushActor(prey, 0, 300);
+  settle(w2);
+  dial.casterless = false;
+  check('casterless ON: the wall kill lands SANE with the pitfall degrade (killerless → the standing watcher credit, no crash)',
+    prey.dead && w2.seats[0].meta.xp > xp0,
+    `dead ${prey.dead}, xp ${xp0} → ${w2.seats[0].meta.xp}`);
+
+  // THE STRUCK BRANCH (bowling lane) honors both dials — the sweep's twin
+  // gate, not just the wall's.
+  seedGlobalRandom(60619);
+  const w3 = makeSimWorld('warrior', 60619);
+  const mover0 = spawn(w3, 'scree_shambler', 5, 400, 300);
+  const pin0 = spawn(w3, 'scree_skitter', 5, 452, 300);
+  const pin0x = pin0.pos.x; const pin0life = pin0.life;
+  w3.pushActor(mover0, 0, 900);
+  settle(w3);
+  check('struck branch, defaults: an AUTHORLESS plow moves the pin (physics) but wounds NOTHING',
+    Math.hypot(pin0.pos.x - pin0x, pin0.pos.y - 300) > 30 && near(pin0.life, pin0life, 0.01),
+    `moved ${Math.hypot(pin0.pos.x - pin0x, pin0.pos.y - 300).toFixed(0)}u, life Δ${(pin0life - pin0.life).toFixed(2)}`);
+  dial.casterless = true;
+  const mover1 = spawn(w3, 'scree_shambler', 5, 400, 500);
+  const pin1 = spawn(w3, 'scree_skitter', 5, 452, 500);
+  const pin1life = pin1.life;
+  w3.pushActor(mover1, 0, 900);
+  settle(w3);
+  dial.casterless = false;
+  check('struck branch, casterless ON: the same authorless plow now takes the struck share',
+    pin1.life < pin1life - 0.2, `life ${pin1life.toFixed(1)} → ${pin1.life.toFixed(1)}`);
+  const prepPin = (y: number): Actor => {
+    const s = spawn(w3, 'scree_skitter', 5, 452, y);
+    s.sheet.setBase('poise', 60);
+    s.poise = s.maxPoise();
+    return s;
+  };
+  const movA = spawn(w3, 'scree_shambler', 5, 400, 700);
+  const pinA = prepPin(700);
+  w3.pushActor(movA, 0, 900, w3.player);
+  settle(w3);
+  const pinAPoise = pinA.poise;
+  dial.poiseFrac = 1;
+  const movB = spawn(w3, 'scree_shambler', 5, 400, 900);
+  const pinB = prepPin(900);
+  w3.pushActor(movB, 0, 900, w3.player);
+  settle(w3);
+  dial.poiseFrac = 0;
+  check('struck branch, poise dial: the plowed dial-on twin\'s bar lands below the dial-off twin\'s',
+    pinB.poise < pinAPoise - 2,
+    `poise ${pinAPoise.toFixed(1)} (off) vs ${pinB.poise.toFixed(1)} (on) of ${pinB.maxPoise().toFixed(0)}`);
 }
 
 // -------------------------------------------------------------- determinism

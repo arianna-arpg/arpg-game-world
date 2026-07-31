@@ -33038,19 +33038,29 @@ export class World {
    *  its own effective weight) as a fraction of ITS max life, dealt as
    *  PHYSICAL through the one mitigation ladder (armor and the defender
    *  stack apply; never evasion/block — you dodge a wall with your feet),
-   *  kill credited to the shover exactly like the pitfall lane. Hostile-
-   *  authored only: casterless weather and friendly repositioning bruise
-   *  nothing. Per-body ICD so a corner's double clamp is one wound. */
+   *  kill credited to the shover exactly like the pitfall lane. A live
+   *  author must be HOSTILE (friendly repositioning bruises nothing,
+   *  ever); the AUTHORLESS case (wind, geysers, a dead shover's leftover
+   *  momentum) wounds only behind MASS_CFG.impact.casterless — its kill
+   *  passes NO killer, the pitfall swallow's exact degrade (kill()'s
+   *  standing credit law decides the pay; never a crash).
+   *  impact.poiseFrac additionally JARS the poise bar by the
+   *  same momentum fraction, after mitigation, so the life wound never
+   *  moves with the dial. Per-body ICD so a corner's double clamp is one
+   *  wound. */
   private resolveImpactHit(a: Actor, speed: number, p: NonNullable<Actor['push']>): void {
     if (a.dead || a.invulnerable || a.untargetable) return;
-    if (!p.caster || p.caster.dead || !this.hostileTo(p.caster, a)) return;
+    const caster = p.caster && !p.caster.dead ? p.caster : undefined;
+    if (caster ? !this.hostileTo(caster, a) : !MASS_CFG.impact.casterless) return;
     if (this.time < a.slamIcdUntil) return;
-    const frac = impactFrac(speed, a.effectiveWeight()) * impactScale(p.caster, p.inst);
+    const frac = impactFrac(speed, a.effectiveWeight()) * (caster ? impactScale(caster, p.inst) : 1);
     if (frac <= 0) return;
     a.slamIcdUntil = this.time + MASS_CFG.impact.icdSec;
     const out: { clamped?: boolean } = {};
     const taken = mitigateTyped(a, { physical: frac * a.maxLife() }, { out });
     a.life -= taken;
+    const poiseFrac = MASS_CFG.impact.poiseFrac;
+    if (poiseFrac > 0) a.damagePoise(frac * poiseFrac * a.maxPoise(), caster);
     a.hitFlash = 0.15;
     this.flashes.push({
       pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
@@ -33058,7 +33068,7 @@ export class World {
     });
     this.text(a.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 14);
     if (out.clamped) this.text(vec(a.pos.x, a.pos.y - 20), 'capped', '#9ab0c8', 12);
-    if (a.life <= 0 && !a.dead) this.kill(a, false, p.caster);
+    if (a.life <= 0 && !a.dead) this.kill(a, false, caster);
   }
 
   /** THE BOWLING LANE (engine/mass.ts): one step of a fast-enough push swept
@@ -33091,14 +33101,19 @@ export class World {
       if (this.time >= b.slamIcdUntil) {
         b.slamIcdUntil = this.time + MASS_CFG.impact.icdSec;
         // The struck body's share of the mover's momentum — hostile-authored
-        // only, mitigated, credited (a chain kill pays the original shover).
+        // (or the impact.casterless dial for authorless movers), mitigated,
+        // credited where an author exists (a chain kill pays the original
+        // shover; an environmental plow names none and kill()'s standing
+        // credit law decides the pay — the pitfall degrade).
         const frac = impactFrac(speed, moverW)
           * (casterLive ? impactScale(casterLive, p.inst) : 1)
           * MASS_CFG.slam.struckFrac;
-        if (frac > 0 && casterLive && this.hostileTo(casterLive, b)) {
+        if (frac > 0 && (casterLive ? this.hostileTo(casterLive, b) : MASS_CFG.impact.casterless)) {
           const out: { clamped?: boolean } = {};
           const taken = mitigateTyped(b, { physical: frac * b.maxLife() }, { out });
           b.life -= taken;
+          const poiseFrac = MASS_CFG.impact.poiseFrac;
+          if (poiseFrac > 0) b.damagePoise(frac * poiseFrac * b.maxPoise(), casterLive);
           b.hitFlash = 0.15;
           this.text(b.pos, Math.round(taken).toString(), DAMAGE_COLOR.physical, 13);
           if (out.clamped) this.text(vec(b.pos.x, b.pos.y - 20), 'capped', '#9ab0c8', 12);
@@ -39382,8 +39397,9 @@ export class World {
           this.rollCollisionProcs(p.caster, p.inst, a);
         }
         // IMPACT (the mass fabric): the wall arrest itself wounds — momentum
-        // made damage, hostile-authored only. Void lips stay the pitfall
-        // fabric's own resolution (never double-punished).
+        // made damage, hostile-authored (or MASS_CFG.impact.casterless for
+        // authorless shoves). Void lips stay the pitfall fabric's own
+        // resolution (never double-punished).
         if (hit === 'wall') this.resolveImpactHit(a, speed, p);
         // Exponential ease-out: the shove bleeds off like momentum, not a timer.
         const decay = Math.exp(-PUSH_DAMPING * dt);

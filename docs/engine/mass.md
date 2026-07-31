@@ -68,12 +68,25 @@ with your feet). Impulse conservation makes `speed × weight` track the shove
 that launched it, authority included: damage follows the SHOVE, and heavy
 victims aren't safer against walls than light ones.
 
-- **Hostile-authored only.** No caster (wind, geysers) or a non-hostile
-  caster (friendly repositioning pulls) → zero damage. Weather is not an
-  attack.
+- **Authorship.** A live caster must be HOSTILE — friendly repositioning
+  (pulls, rescues) bruises nothing, ever. The AUTHORLESS case (wind,
+  geysers, a dead shover's leftover momentum) wounds only when
+  `MASS_CFG.impact.casterless` opts the environment in (ships `false`:
+  weather is not an attack until a pass deliberately arms it).
+- **The poise dial** (`impact.poiseFrac`, ships 0): each impact also JARS
+  the bar — poiseFrac × the same final momentum fraction of the victim's
+  max poise, through `damagePoise` AFTER mitigation, so the life wound
+  never moves with the dial. The central `poiseJustBroke` fanfare and the
+  shover's sunder credit ride free; the mitigation ladder's ordinary chip
+  still applies on top. Honored at BOTH impact sites (the wall arrest and
+  the bowling lane's struck share).
 - Kill credit goes to the shover (`kill(victim, false, caster)`) — the
-  pitfall lane's law extended to masonry. Void lips stay the pitfall
-  fabric's own resolution (never double-punished).
+  pitfall lane's law extended to masonry. A casterless kill (dial on)
+  degrades exactly like the pitfall swallow: `killer = undefined`, and
+  `kill()`'s standing credit law takes it from there (a killerless death
+  still pays the WATCHER's side — the `!killer` credit, pit parity — while
+  killer-side payouts have no author to pay). Sane, never a crash. Void
+  lips stay the pitfall fabric's own resolution (never double-punished).
 - Per-body ICD (`impact.icdSec`) — a corner's double clamp is one wound.
 - The `crushing_impact` support's collision proc is the separate,
   SKILL-damage lane riding the same detection seam (unchanged).
@@ -94,8 +107,10 @@ A pushed body at ≥ `slam.minSpeed` sweeps bodies in its path
   pack scatters; shove the goblin into the ogre and the goblin learns why not.
 - Spares: dormant (planted), phasing (no rim to strike), untargetable /
   invulnerable / downed, cross-altitude (aloft vs grounded pass by), and the
-  original caster. Struck-body damage is hostile-gated like wall impact;
-  the momentum hand-off itself is physics and applies to any legal body.
+  original caster. Struck-body damage shares wall impact's authorship gate
+  (hostile-authored, or the `impact.casterless` dial for authorless
+  movers) and its poise dial; the momentum hand-off itself is physics and
+  applies to any legal body.
 - Shared per-body ICD with wall impact — lingering overlaps can't slingshot.
 
 ## Player levers
@@ -130,6 +145,10 @@ A pushed body at ≥ `slam.minSpeed` sweeps bodies in its path
 - Baseline discipline: authority's identity at weight 1 + organic densities
   at 1 keep the sim smoke suite byte-stable; the asymmetry is real
   everywhere masses actually diverge.
-- Open dials deliberately NOT taken in v1: impact poise damage, casterless
-  environmental impact (a config flag away), grab/throw (the GRAB FABRIC
-  consumes this module's mass — land ordering honored).
+- v1's deliberately-open dials are all TAKEN: impact poise damage now ships
+  as `impact.poiseFrac` and casterless environmental impact as
+  `impact.casterless` — both NEUTRAL at their shipped values (0 / `false`),
+  so stock behavior is byte-identical until a pass deliberately arms them
+  (probe_mass pins the neutrality and both dials' bite) — and grab/throw
+  landed as its own fabric (the GRAB FABRIC consumes this module's mass;
+  docs/engine/grab.md).

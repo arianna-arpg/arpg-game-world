@@ -24,9 +24,13 @@
 //    shove that launched it, authority included). Fractions of max life keep
 //    the wound honest at every level band; armor mitigates like any other
 //    typed hit; the shover keeps kill credit exactly like the pitfall lane.
-//    Casterless displacement (wind, geysers) and friendly repositioning
-//    (pulls, rescues) deal NOTHING — physics without a hostile author is
-//    weather, not an attack.
+//    Friendly repositioning (pulls, rescues) deals NOTHING, ever; the
+//    AUTHORLESS case (wind, geysers, a dead shover's leftover momentum)
+//    wounds only where MASS_CFG.impact.casterless opts the environment
+//    in — killer-less on death (the pitfall swallow's credit degrade),
+//    OFF by default so weather stays weather until a pass deliberately
+//    arms it. impact.poiseFrac (also neutral by default) lets the
+//    arrest JAR the poise bar too.
 //
 //  · THE BOWLING LANE — body-vs-body slams. A flying body that meets one
 //    heavy enough (slam.arrestRatio) is ARRESTED: both take impact, the
@@ -83,13 +87,25 @@ export const MASS_CFG = {
    *  the whole defender stack apply; never evasion/block — you dodge a wall
    *  with your feet). Below minSpeed nothing happens: ordinary combat
    *  jostling never turns walls into damage sources. icdSec gates per BODY,
-   *  so one launch is one wound even against a corner's double clamp. */
+   *  so one launch is one wound even against a corner's double clamp.
+   *  poiseFrac JARS THE BAR: each impact also drains poiseFrac × the same
+   *  final momentum fraction of the victim's max POISE through damagePoise,
+   *  AFTER mitigation (the life wound never moves with this dial; the
+   *  central poiseJustBroke fanfare and the shover's sunder credit ride
+   *  free). 0 = the v1 law. casterless opts AUTHORLESS arrests (wind,
+   *  geysers, a dead shover's leftover momentum) into the wound at BOTH
+   *  impact sites — the kill passes NO killer, the pitfall swallow's exact
+   *  degrade (kill()'s standing credit law then decides the pay);
+   *  friendly-authored still bruises nothing. false = the v1 law: weather
+   *  is not an attack. */
   impact: {
     minSpeed: 340,
     refMomentum: 900,
     baseFrac: 0.08,
     maxFrac: 0.25,
     icdSec: 0.45,
+    poiseFrac: 0,
+    casterless: false,
   },
 
   /** BODY-VS-BODY slams (the bowling lane). A mover at ≥ minSpeed that
