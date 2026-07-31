@@ -538,5 +538,130 @@ const DT = 1 / 60;
   }
 }
 
+// --- 11) THE SUNBRIDGE OVER THE GORGE (conditional spans × the pitfall) -----
+// The overpass hangs light-held shortcuts over its gulf (karstSpanKinds →
+// theme.spans, engine/spans.ts): held by day, fading at dusk, and a closed
+// crossing IS the gorge (voidRegion) — so stepping into it rides the zone's
+// own pitfall word: 'descend', one stratum into the galleries, credit
+// intact. The shortcut turning one-way at dusk is the AUTHORED reading (the
+// tileset comment carries the decision); this rig pins the live door.
+{
+  const dial = (TILESETS.overpass.layoutParams?.karstSpanKinds as string[] | undefined) ?? [];
+  const row = (TILESETS.overpass.theme.spans ?? []).find(r => r.region === 'span_sun');
+  check('sunbridge: the overpass authors dial + schedule, and the void is the GORGE',
+    dial.includes('span_sun') && !!row && row.voidRegion === 'gorge',
+    JSON.stringify({ dial, row: row ?? null }));
+
+  const NOON = 48, MIDNIGHT = 168;
+  const world = makeSimWorld('warrior', 38001);
+  const wa = world as unknown as Record<string, any>;
+  const p = world.player;
+  const spanCells: { x: number; y: number }[] = [];
+  for (let i = 0; i < 6 && !spanCells.length; i++) {
+    const id = world.devMintTileset('overpass', i, 8, { seed: 0x5b1d + i * 131 });
+    if (!id) continue;
+    world.time = NOON;
+    if (!world.devTravelTo(id)) continue;
+    world.time = NOON;
+    const gw = world.walk;
+    if (!(gw instanceof GridWalkField)) continue;
+    for (let gy = 0; gy < gw.rows; gy++) {
+      for (let gx = 0; gx < gw.cols; gx++) {
+        const x = (gx + 0.5) * gw.cell, y = (gy + 0.5) * gw.cell;
+        if (gw.regionAt(x, y) === 'span_sun') spanCells.push({ x, y });
+      }
+    }
+  }
+  check('sunbridge: a crossing DELIVERED through the real mint path', spanCells.length > 0,
+    spanCells.length ? `${spanCells.length} cells in ${world.zone.id}` : 'none in 6 mints');
+  if (spanCells.length) {
+    const gw = world.walk as GridWalkField;
+    const states = (): Record<string, string> => (wa.spans ? wa.spans.states() : {});
+    const c0 = spanCells[0];
+    world.update(DT);
+    check('sunbridge: noon holds the crossing (fabric live, deck walkable)',
+      !!wa.spans && states().span_sun === 'held' && gw.isWalkable(c0.x, c0.y),
+      JSON.stringify(states()));
+
+    world.time = MIDNIGHT;
+    for (let t = 0; t < 0.8; t += DT) { p.life = p.maxLife(); world.update(DT); }
+    check('sunbridge: dusk warns first (fading — still standable, RUN)',
+      states().span_sun === 'fading' && gw.isWalkable(c0.x, c0.y), JSON.stringify(states()));
+    for (let t = 0; t < 5.5; t += DT) { p.life = p.maxLife(); world.update(DT); world.time = MIDNIGHT; }
+    check('sunbridge: night closes it INTO THE GORGE (drawn == tested — the deck is fall door now)',
+      states().span_sun === 'gone' && !gw.isWalkable(c0.x, c0.y)
+      && gw.regionAt(c0.x, c0.y) === 'gorge', `deck reads '${gw.regionAt(c0.x, c0.y)}'`);
+
+    // The permanent web never needed it: every exit still reachable at night.
+    const flood = (): Uint8Array => {
+      const idx = (gx: number, gy: number): number => gy * gw.cols + gx;
+      const seen = new Uint8Array(gw.cols * gw.rows);
+      const q: number[] = [];
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const gx = (wa.zoneEntry.x / gw.cell | 0) + dx, gy = (wa.zoneEntry.y / gw.cell | 0) + dy;
+          if (gx < 0 || gy < 0 || gx >= gw.cols || gy >= gw.rows) continue;
+          if (!gw.isWalkable((gx + 0.5) * gw.cell, (gy + 0.5) * gw.cell)) continue;
+          if (!seen[idx(gx, gy)]) { seen[idx(gx, gy)] = 1; q.push(idx(gx, gy)); }
+        }
+      }
+      while (q.length) {
+        const i = q.pop()!;
+        const gx = i % gw.cols, gy = (i / gw.cols) | 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const nx = gx + dx, ny = gy + dy;
+          if (nx < 0 || ny < 0 || nx >= gw.cols || ny >= gw.rows || seen[idx(nx, ny)]) continue;
+          if (!gw.isWalkable((nx + 0.5) * gw.cell, (ny + 0.5) * gw.cell)) continue;
+          seen[idx(nx, ny)] = 1; q.push(idx(nx, ny));
+        }
+      }
+      return seen;
+    };
+    const reached = (seen: Uint8Array, pt: { x: number; y: number }): boolean => {
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const gx = (pt.x / gw.cell | 0) + dx, gy = (pt.y / gw.cell | 0) + dy;
+          if (gx >= 0 && gy >= 0 && gx < gw.cols && gy < gw.rows && seen[gy * gw.cols + gx]) return true;
+        }
+      }
+      return false;
+    };
+    const night = flood();
+    const exits = wa.exits as { pos: { x: number; y: number } }[];
+    check('sunbridge: night keeps every exit (the crossing was never the road)',
+      exits.length > 0 && exits.every(e => reached(night, e.pos)),
+      `${exits.filter(e => reached(night, e.pos)).length}/${exits.length}`);
+
+    // THE LIVE DOOR: stand at the closed crossing's dock and press in — the
+    // gorge's own word answers (descend: the chasm_fall traversal, one
+    // stratum down, the way home banked at the rim).
+    let stand: { x: number; y: number } | null = null, into: { x: number; y: number } | null = null;
+    for (const c of spanCells) {
+      for (const [dx, dy] of [[gw.cell, 0], [-gw.cell, 0], [0, gw.cell], [0, -gw.cell]] as const) {
+        if (gw.isWalkable(c.x + dx, c.y + dy)) { stand = { x: c.x + dx, y: c.y + dy }; into = c; break; }
+      }
+      if (stand) break;
+    }
+    check('sunbridge: the closed crossing keeps its dock (a walkable mouth at the lip)', !!stand);
+    if (stand && into) {
+      const parentId = world.zone.id;
+      p.pos.x = stand.x; p.pos.y = stand.y;
+      for (let i = 0; i < 600 && !world.traversal; i++) {
+        p.life = p.maxLife(); // the door is the subject, not survival on a level-8 shelf
+        world.moveActor(p, into.x - p.pos.x, into.y - p.pos.y, DT);
+        world.update(DT);
+        world.time = MIDNIGHT;
+      }
+      const fell = !!world.traversal;
+      for (let i = 0; i < 900 && world.traversal; i++) world.update(DT);
+      check("sunbridge: stepping in DESCENDS (the zone's own pitfall word, not a new fall)",
+        fell && world.zone.id.startsWith(`cave_${parentId}_pit_`), `landed '${world.zone.id}'`);
+      check('sunbridge: one stratum down, way home banked at the rim',
+        (world.zone.caveDepth ?? 0) === 1 && wa.caveReturn?.zoneId === parentId,
+        `caveDepth ${world.zone.caveDepth}, return ${wa.caveReturn?.zoneId ?? 'none'}`);
+    }
+  }
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);

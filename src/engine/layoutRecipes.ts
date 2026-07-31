@@ -214,20 +214,77 @@ function karstLayout(ctx: GenCtx, def: ZoneDef): void {
     reserveArtery(ctx, pts, halfW);
   }
   for (const a of anchors) disc(ground, a.x, a.y, 104);
+
+  // 4b) THE CONDITIONAL CROSSINGS (engine/spans.ts): a tileset may hang
+  // span-held shortcuts over its own gulf — `karstSpanKinds` names the
+  // registered span regions to roll from, and the tileset's theme.spans rows
+  // give each kind its schedule. Default [] lays nothing AND draws nothing,
+  // so every span-less karst country keeps its exact stream. INTERIOR
+  // pockets only: portal pockets keep their permanent corridor web (the span
+  // fabric's layout contract — spans are shortcuts, never the road), and a
+  // spanned pair joins `joined` (never doubling a walked corridor) without
+  // touching `deg` (a dead-end pocket that gains a sky-held shortcut is
+  // still the permanent maze's prize corner). Painted BEFORE the ground
+  // carve so every mouth docks flush under its shelf (ground wins the
+  // overlap — the vesper law).
+  const spanKinds = layoutParam(def, 'karstSpanKinds', []) as string[];
+  const spanMask = ground.like();
+  if (spanKinds.length && n - anchors.length >= 2) {
+    const spanN = layoutParam(def, 'karstSpanLinks', [1, 2]) as [number, number];
+    const spanW = layoutParam(def, 'karstSpanW', [38, 50]) as [number, number];
+    for (let want = rng.int(spanN[0], spanN[1]), tries = 0; want > 0 && tries < 60; tries++) {
+      const i = rng.int(anchors.length, n - 1), j = rng.int(anchors.length, n - 1);
+      if (i === j) continue;
+      const key = i < j ? i * 4096 + j : j * 4096 + i;
+      if (joined.has(key)) continue;
+      const d = dAt(i, j);
+      if (d < step * 0.9 || d > step * 1.9) continue; // a true gap, but a bridgeable one
+      // THE EXPOSURE TEST (no rng): big shelf pockets can all but touch, and
+      // ground wins every overlap at paint time — a chord that mostly rides
+      // shelves would survive as a one-cell sliver of "bridge". Demand a
+      // real crossing: a contiguous open-gulf run under the deck, and a
+      // fair share of the chord exposed. Rejected darts just re-dart.
+      {
+        const steps = Math.max(8, Math.ceil(d / 24));
+        let exposed = 0, run = 0, bestRun = 0;
+        for (let s = 0; s <= steps; s++) {
+          const qx = nodes[i].pos.x + (nodes[j].pos.x - nodes[i].pos.x) * (s / steps);
+          const qy = nodes[i].pos.y + (nodes[j].pos.y - nodes[i].pos.y) * (s / steps);
+          if (!ground.has(qx, qy)) { exposed++; run++; if (run > bestRun) bestRun = run; }
+          else run = 0;
+        }
+        if (bestRun * (d / steps) < 90 || exposed < steps * 0.22) continue;
+      }
+      joined.add(key);
+      // Taut, near-straight: a bridge reads as a bridge, not a corridor.
+      const pts = wanderPath(rng, nodes[i].pos, nodes[j].pos, { step: 100, wobble: 8, bowFrac: 0.05 });
+      const halfW = rng.range(spanW[0], spanW[1]) / 2;
+      const m = Mask.forRect(0, 0, arena.w, arena.h);
+      band(m, pts, halfW);
+      band(spanMask, pts, halfW);
+      paintRegion(grid, m, rng.pick(spanKinds));
+      // Reserved like any corridor: furniture must never squat the deck of
+      // a bridge that will be the only thing under somebody's feet.
+      reserveArtery(ctx, pts, halfW);
+      want--;
+    }
+  }
   paintRegion(grid, ground, 'ground');
 
   // 5) Crag towers: wall islets standing in the gulf — the LOS breakers the
   // chasm itself deliberately isn't (shots sail every gap; a crag is cover).
   const groundGrown = ground.clone().grow(2);
+  const spanGrown = spanMask.clone().grow(2); // crags must not wall a crossing
   const cragMask = ground.like();
   let cragWant = rng.int(cragN[0], cragN[1]);
   for (let tries = 0; cragWant > 0 && tries < 30; tries++) {
     const cx = rng.range(inset, arena.w - inset), cy = rng.range(inset, arena.h - inset);
-    if (groundGrown.has(cx, cy)) continue;
+    if (groundGrown.has(cx, cy) || spanGrown.has(cx, cy)) continue;
     disc(cragMask, cx, cy, rng.range(56, 104));
     cragWant--;
   }
   cragMask.subtract(groundGrown);
+  cragMask.subtract(spanGrown);
   paintRegion(grid, cragMask, 'wall');
 
   // 6) A few dead-end pockets are marked as the maze's prize corners.
@@ -2669,13 +2726,19 @@ registerLayout('aether_vesper', aetherVesperLayout);
 // scale, seat-gated onto the cloud), GLEAMWAYS — permanent bridges of bound
 // blue light — arcing off the rim to satellite isles and prize vaults, and
 // reserved PROCESSIONALS (the metropolis boulevard read) the architecture
-// must leave clear. No collapse, no flux, no conditional spans: everything
-// here HOLDS — the country's thesis is permanence at altitude, and the
-// verticality is painted instead (theme.ambientFx 'overclouds' above,
-// understory 'cloudsea' below through every rim).
+// must leave clear. No collapse, no flux; the HOME WEB always holds —
+// continent, processionals and every satellite lane are permanent (the
+// country's thesis is permanence at altitude), and the verticality is
+// painted instead (theme.ambientFx 'overclouds' above, understory
+// 'cloudsea' below through every rim). ONE sanctioned exception: a face may
+// sky-gate its PRIZE VAULTS alone — `prizeSpans` rolls each prize spur a
+// conditional span kind (the face's own theme.spans rows give it the
+// schedule; engine/spans.ts drives it), so what the vault holds answers the
+// sky while the roads home never close. Default [] keeps the thesis whole,
+// byte-identical.
 // Knobs are layoutParams: continentFrac, satellites, prizeIsles,
-// gleamWidth, processionals + every massif dial (massifMasses/SizeR/
-// Coverage/LaneW/SeatGround…).
+// prizeSpans, gleamWidth, processionals + every massif dial (massifMasses/
+// SizeR/Coverage/LaneW/SeatGround…).
 function aetherBastionLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
   const grid = ensureGrid(ctx);
@@ -2764,22 +2827,40 @@ function aetherBastionLayout(ctx: GenCtx, def: ZoneDef): void {
   // every mouth ends flush under the cloud (ground wins the overlap).
   const gleamW = layoutParam(def, 'gleamWidth', [46, 58]) as [number, number];
   const lampPts: Vec2[] = [];
-  const layGleam = (from: Vec2, to: Vec2): void => {
+  const gleamMask = Mask.forRect(0, 0, arena.w, arena.h);
+  const layGleam = (from: Vec2, to: Vec2, kind = 'span_gleam'): void => {
     const pts = wanderPath(rng, from, to, { step: 90, wobble: 10, bowFrac: 0.06 });
     const m = Mask.forRect(0, 0, arena.w, arena.h);
-    band(m, pts, rng.range(gleamW[0], gleamW[1]) / 2);
-    paintRegion(grid, m, 'span_gleam');
-    // Bound lights pace the crossing (voidOk — they hang over the gap).
-    for (let i = 1; i < pts.length - 1; i += 2) lampPts.push(pts[i]);
+    const halfW = rng.range(gleamW[0], gleamW[1]) / 2;
+    band(m, pts, halfW);
+    // THE HOME-LANE LAW at paint grain: a conditional prize spur may CROSS a
+    // gleamway but never cut it — the permanent cells win the intersection,
+    // so no sky ever punches a hole in a road that must not close. (Gleam
+    // lays first — sats before prizes — and the mask math draws no rng.)
+    if (kind === 'span_gleam') band(gleamMask, pts, halfW);
+    else m.subtract(gleamMask);
+    paintRegion(grid, m, kind);
+    // Bound lights pace TRUE gleamways only (voidOk — they hang over the
+    // gap): a conditional spur must never borrow the permanent road's
+    // lamps — the two vocabularies are kept unmistakable on purpose.
+    if (kind === 'span_gleam') {
+      for (let i = 1; i < pts.length - 1; i += 2) lampPts.push(pts[i]);
+    }
   };
   for (const s of sats) layGleam(vec(cx, cy), s);
+  // THE GATED PRIZES (prizeSpans): each prize spur rolls a conditional span
+  // kind from the face's list — the vault is where the sky's schedule is
+  // FELT. Satellites above stay on the permanent gleam unconditionally (the
+  // home lanes never close). Empty list = no roll, no draw: the default
+  // country is byte-identical to the all-gleam thesis.
+  const prizeSpans = layoutParam(def, 'prizeSpans', []) as string[];
   for (const p of prizes) {
     let from = vec(cx, cy), best = Infinity;
     for (const c of [vec(cx, cy), ...sats, ...anchors.slice(1)]) {
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       if (d < best) { best = d; from = c; }
     }
-    layGleam(from, p);
+    layGleam(from, p, prizeSpans.length ? rng.pick(prizeSpans) : 'span_gleam');
   }
 
   paintRegion(grid, carve, 'ground');

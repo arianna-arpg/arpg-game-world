@@ -8090,6 +8090,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       karstPocketR: [150, 260], karstGap: [330, 420], karstCorridorW: [40, 58],
       karstLoops: 0.26, karstCrags: [2, 4], karstWobble: 40, karstRim: [90, 140],
       boulderChutes: { count: [2, 3], rest: 6.5, bounces: [0, 2] },
+      // THE SUNBRIDGES: one or two light-held shortcuts hung over the gorge
+      // between interior shelves (the karst recipe's conditional-crossing
+      // lace; theme.spans below carries the schedule and the fall's law).
+      karstSpanKinds: ['span_sun'], karstSpanLinks: [1, 2],
     },
     compositions: [
       { composition: 'drover_waystation', chance: 0.18 },
@@ -8102,6 +8106,29 @@ export const TILESETS: Record<string, TilesetDef> = {
       // THE GORGE IS A DOOR (the pitfall fabric): a lost footing drops one
       // stratum into the mountain's galleries — with full shove credit.
       pitfall: { kind: 'descend' },
+      // THE SUNBRIDGE SCHEDULE (engine/spans.ts): the crossing stands while
+      // the sky is bright (day, and not under a true storm) and dies past
+      // dusk through the fade telegraph. THE DELIBERATE ANSWER to spans ×
+      // pitfall: its void is the GORGE (voidRegion — never the aetherial
+      // default cloud_void), so a closed crossing IS more gorge, and every
+      // consequence is the zone's own standing word — stepping in (or being
+      // shoved) rides resolveBoundary → pitPolicyFor → 'descend', one
+      // stratum into the galleries, credit intact (probe_mountain pins the
+      // live door). A shortcut that closed at dusk is therefore a ONE-WAY
+      // TRIP DOWN, not a wall — the leap-of-faith reading, chosen on
+      // purpose: the galleries always keep their climb-out, so the toll is
+      // a detour, never a soft-lock. The fade runs longer than the default
+      // (4.5s vs 3.2) because this is windchill country — a chilled crosser
+      // must still clear the far mouth after the warning. KNOWN SEAM,
+      // deferred: a body standing DEAD-STILL through fade + grace rides the
+      // span fabric's generic sky door (routeSkyFalls → beginSkyfall),
+      // which on surface ground resolves a neighbor zone — the brittle-span
+      // precedent (the give-way routes through pitPolicyFor) says that
+      // linger door should descend too; the fix is a world.ts seam, filed
+      // separately.
+      spans: [
+        { region: 'span_sun', when: { radiance: { from: 0.55 } }, voidRegion: 'gorge', fade: 4.5 },
+      ],
       windchill: 0.55,
       ambientFx: [{ kind: 'motes', intensity: 0.3, color: '#c8d0da' }],
       ground: {
@@ -10813,7 +10840,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       },
       // SEA OF RAMPARTS: the curtain-wall face — long silver walls running
       // the cloud like breakwaters, more satellites, the gleam hour deep
-      // and blue (the bridges carry the night).
+      // and blue (the bridges carry the night). THE GATED VAULTS: this face
+      // alone sky-gates its prize spurs — each vault's crossing rolls
+      // sun-held or star-held (prizeSpans + the theme.spans schedule), so
+      // one vault tends to open while the other stands dark; the
+      // satellites' gleamways never close (the recipe's home-lane law).
       {
         name: 'sea of ramparts',
         layout: [
@@ -10834,9 +10865,18 @@ export const TILESETS: Record<string, TilesetDef> = {
           massifCoverage: [0.13, 0.19],
           satellites: [3, 4],
           gleamWidth: [50, 64],
+          prizeSpans: ['span_sun', 'span_star'],
+          prizeIsles: [2, 2], // both vaults stand — the sky decides which serves
         },
         theme: {
           accent: '#9fd4ff', dayLight: 1.15, nightDark: 0.62,
+          // The vault spurs' schedule (the vesper/cathedral thresholds —
+          // the country speaks one sky). Rows are harmless where a roll
+          // laid neither kind; the cloud_void default is this realm's own.
+          spans: [
+            { region: 'span_sun', when: { radiance: { from: 0.55 } } },
+            { region: 'span_star', when: { radiance: { to: 0.35 } } },
+          ],
           ground: {
             palette: ['#b6bed6', '#c6cde0', '#d6dbea', '#e5e8f2', '#f2f4fa'],
             bias: 0.58, alpha: 0.54, scale: 1.7, strength: 0.9, speckles: 0.34, evenness: 0.3,
