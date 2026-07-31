@@ -520,6 +520,19 @@
       ],
       "port": 5239,
       "autoPort": false
+    },
+    {
+      "name": "arpg-site",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "site",
+        "--port",
+        "8791",
+        "--strictPort"
+      ],
+      "port": 8791,
+      "autoPort": false
     }
   ]
 }
