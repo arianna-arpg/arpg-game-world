@@ -10,7 +10,7 @@
 // a negotiation. The D2 Act-1 / PoE-field read: you see the country, you walk
 // AROUND its bones.
 //
-// Everything is data, three open registries deep:
+// Everything is data, four open registries deep:
 //   · MASS SHAPES  (registerMassShape) — silhouette painters over genkit masks
 //     (blob / slab / ridge / chain / court ship built-in). Each declares its
 //     bounding REACH and clamps its paint inside it, so the spacing law below
@@ -22,6 +22,12 @@
 //     parapet you duel across), plus skirt/crest dressing rows and court
 //     mouth counts. Engine ships the reference vocabulary (tor/bluff/fold);
 //     content packs register richer kinds in src/data/massifs.ts.
+//   · TENANT KINDS (registerTenantKind) — who HOLDS a court: a kind (or a
+//     pool row) may author a weighted TENANT TABLE (MassKindDef.tenants) —
+//     ONE occupancy draw per ring on a per-mass fork stream, resolving to a
+//     registered occupant (garrison / stock / cache / vacant ship built-in,
+//     all standing machinery; content composes richer ones by delegation).
+//     A table REPLACES the kind's independent garrison/inner chances.
 //   · The 'massif' LAYOUT RECIPE — every dial a layoutParam (spec ▷ tileset ▷
 //     biome, the recipe discipline), so one recipe serves stone downs, hedge
 //     bocage, ruin fields, mesa country… without forking.
@@ -106,6 +112,10 @@ export const MASSIF_CFG = {
    *  MassKindDef, the skirt/crest discipline). */
   innerChance: 0.45,
   innerSpacing: 60,
+  /** CACHE-tenant defaults (the hoard knot — see TenantRow / the 'cache'
+   *  tenant kind): containers per court + the knot's spread radius (px). */
+  tenantCacheCount: [3, 6] as [number, number],
+  tenantCacheSpread: 52,
   /** healMassifWeave: sealed pockets AT/UNDER this many cells fuse into the
    *  mass that trapped them; larger ones get their pinch re-opened. ~26 cells
    *  at 30px ≈ a 150px-wide nook — too small to be a place, big enough to
@@ -315,6 +325,36 @@ export interface MassGarrisonSpec {
   faction?: string;
 }
 
+/** THE RING TENANTS — one weighted occupancy row (see MassKindDef.tenants):
+ *  `kind` names a registered TENANT KIND (registerTenantKind below) and the
+ *  rest is that kind's tailoring. The core four ship from standing machinery
+ *  only — 'garrison' (the MassGarrisonSpec lane), 'stock' (the inner dress
+ *  lane), 'cache' (a container knot through the same brittle/drop
+ *  chokepoints), 'vacant' (nothing — the weighted breather). Content
+ *  registers richer kinds and composes the core ones by delegation
+ *  (tenantKindOf — data/massifs.ts's held_stock is the reference). */
+export interface TenantRow {
+  /** Registered tenant kind (unknown ids warn once and seat nothing). */
+  kind: string;
+  weight: number;
+  /** GARRISON tailoring: pack-size band + posting faction (absent = the
+   *  mass kind's own garrison spec, then the patron/framework defaults).
+   *  No chance dial, on purpose — the table IS the occupancy roll. */
+  size?: [number, number];
+  faction?: string;
+  /** STOCK / CACHE dress rows (absent = the mass kind's `inner` rows). */
+  rows?: MassDressRow[];
+  /** STOCK cadence (absent = the kind's innerChance/innerSpacing ▷ cfg). */
+  chance?: number;
+  spacing?: number;
+  /** CACHE knot: containers per hoard (default MASSIF_CFG.tenantCacheCount). */
+  count?: [number, number];
+  /** The open door: future registrants (a shrine kind from the puzzle
+   *  fabric's pass, a lair mouth from the lair fabric's…) read their own
+   *  config here — this file never needs to learn their fields. */
+  params?: Record<string, unknown>;
+}
+
 /** What a mass IS — the open vocabulary content registers against. */
 export interface MassKindDef {
   id: string;
@@ -366,6 +406,16 @@ export interface MassKindDef {
   inner?: MassDressRow[];
   innerChance?: number;
   innerSpacing?: number;
+  /** THE RING TENANTS: a weighted occupancy table — ONE draw per court on a
+   *  per-mass fork stream (TENANT_SALT, the garrison fork law's sibling: the
+   *  layout stream never moves, so the carve is byte-identical with the
+   *  table present or absent), resolving to ONE registered tenant kind whose
+   *  handler seats the occupant. Authoring a non-empty table REPLACES the
+   *  kind's independent garrison/inner chances — the table IS the occupancy
+   *  law; the garrison spec and inner rows remain as the handlers' defaults.
+   *  Absent (or empty) = today's independent rolls, byte-identical. Courts
+   *  only (needs a reported interior — the garrison's own rule). */
+  tenants?: TenantRow[];
 }
 
 /** One weighted row of a zone's massifMasses pool. Beyond kind + weight, the
@@ -435,6 +485,9 @@ interface PlacedMass {
    *  one truth dressing reads, so per-row tailoring reaches skirts/crests/
    *  inner without a second registry lookup. */
   kd: MassKindDef;
+  /** The body's own shape seed — the identity the garrison/tenant fork
+   *  streams ride (never re-derivable from the layout stream later). */
+  seed: number;
 }
 
 function pickWeighted<T extends { weight: number }>(rng: Rng, rows: readonly T[]): T {
@@ -587,7 +640,7 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     covered += body.count() * GEN_CELL * GEN_CELL;
 
     const cm: CarvedMass = { kind: kd.id, shape: shapeId, at, r, bound, interior: res.interior };
-    placed.push({ cm, body, kd });
+    placed.push({ cm, body, kd, seed });
     // A court's interior is a PLACE: a POI joins the spawn/loot anchors AND
     // the universal reachability invariant's required points — the mouth (or
     // a rescue breach through the ring) is guaranteed from here on.
@@ -596,8 +649,10 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
     // own shape seed — the layout stream NEVER moves, so authoring a
     // garrison perturbs garrisons alone (probe-pinned). The row rides the
     // pre-inhabited-POI machinery: reachability guards it, the spawn side
-    // posts the pack from the faction's roster.
-    if (res.interior && kd.garrison) {
+    // posts the pack from the faction's roster. A kind with a TENANT TABLE
+    // hands occupancy to the table instead (seatTenants — the independent
+    // chance stands down; the table IS the occupancy law).
+    if (res.interior && kd.garrison && !kd.tenants?.length) {
       const g = kd.garrison;
       if (new Rng((seed ^ GARRISON_SALT) >>> 0).chance(g.chance)) {
         const faction = g.faction ?? patronFaction(def.biome) ?? undefined;
@@ -633,9 +688,178 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
   }
 
   healMassifWeave(ctx, grid, laneW, swallowCells);
+  // THE RING TENANTS (post-heal, so dress handlers read the healed floor).
+  // Never lite-gated: the DRAW and any garrison must agree between a lite
+  // and a full mint of the same seed; dress handlers stand down on their
+  // own (the dressMasses law), and every draw rides per-mass forks — the
+  // layout stream below is untouched either way.
+  seatTenants(ctx, def, grid, placed);
   if (!ctx.lite) dressMasses(ctx, grid, placed, laneW);
   return placed.map(p => p.cm);
 }
+
+// --- THE RING TENANTS --------------------------------------------------------
+// Occupancy as ONE weighted draw per court (MassKindDef.tenants) resolving to
+// a registered TENANT KIND — "this ring is EITHER garrisoned OR stocked OR a
+// hoard OR empty, weighted" becomes authorable data, where the standing
+// independent chances could only SUM. The registry is open (the mass
+// shape/kind pattern): the core four below ride standing machinery only, and
+// later fabrics seat their own occupants (a shrine kind from the puzzle
+// fabric's pass, a lair mouth from the lair fabric's…) without this file
+// learning their names. THE FORK LAW holds throughout: the draw rides a
+// per-mass fork of the body's own shape seed (TENANT_SALT) and the winning
+// handler continues on the SAME forked stream — the layout stream never
+// moves, so a table perturbs occupants alone and the carve (masses, weave,
+// every skirt/crest draw) is byte-identical with it on or off (probe rig K).
+
+/** One tenant handler: seat `row`'s occupant on `mass` (kind resolved with
+ *  any row `over` merged; the court's interior reported). `rng` is the
+ *  per-mass fork — draw freely, the layout stream is elsewhere. Handlers
+ *  that lay dress must stand down under ctx.lite (the dressMasses law);
+ *  occupancy rows (garrisons) seat regardless, so a lite mint and a full
+ *  mint agree on who holds the ring. */
+export type TenantHandler = (
+  ctx: GenCtx, def: ZoneDef, grid: GridWalkField,
+  mass: CarvedMass, rng: Rng, kd: MassKindDef, row: TenantRow,
+) => void;
+
+const TENANT_KINDS: Record<string, TenantHandler> = {};
+
+export function registerTenantKind(id: string, handler: TenantHandler): void {
+  if (TENANT_KINDS[id]) console.warn(`[massif] re-registering tenant kind '${id}' — overriding`);
+  TENANT_KINDS[id] = handler;
+}
+
+export function tenantKindIds(): string[] { return Object.keys(TENANT_KINDS); }
+
+/** Registry read — the composition seam: a content kind delegates to the
+ *  core ones (one draw, one occupant CONCEPT, several standing handlers —
+ *  data/massifs.ts's held_stock is the reference) instead of re-implementing
+ *  their machinery. */
+export function tenantKindOf(id: string): TenantHandler | undefined { return TENANT_KINDS[id]; }
+
+/** The tenant draw's fork salt (XORed with the body's own shape seed —
+ *  GARRISON_SALT's sibling): fork identity, ruled fixed — changing it
+ *  re-rolls every tenancy in the world for zero expressiveness. */
+const TENANT_SALT = 0x51e4d3;
+
+const warnedTenants = new Set<string>();
+
+/** ONE draw per court, post-heal (dress handlers read the healed live grid,
+ *  exactly as the inner lane always has): resolve the winning row off the
+ *  fork, hand its handler the same forked stream. Empty tables are no law
+ *  at all (the independent lanes stand — see MassKindDef.tenants). */
+function seatTenants(ctx: GenCtx, def: ZoneDef, grid: GridWalkField, placed: PlacedMass[]): void {
+  for (const { cm, kd, seed } of placed) {
+    if (!kd.tenants?.length || !cm.interior) continue;
+    const rng = new Rng((seed ^ TENANT_SALT) >>> 0);
+    const row = pickWeighted(rng, kd.tenants);
+    const handler = TENANT_KINDS[row.kind];
+    if (!handler) {
+      if (!warnedTenants.has(row.kind)) {
+        warnedTenants.add(row.kind);
+        console.warn(`[massif] unknown tenant kind '${row.kind}' — seating nothing`);
+      }
+      continue;
+    }
+    handler(ctx, def, grid, cm, rng, kd, row);
+  }
+}
+
+// VACANT — nothing, on purpose: the weighted breather that keeps a court
+// country from feeling stamped. Registered like any other kind so tables
+// name it and the draw stays registry-pure (no id special-cased anywhere).
+registerTenantKind('vacant', () => {});
+
+// GARRISON — the MassGarrisonSpec lane, table-decided: the pack posts at the
+// interior through the same ctx.garrisons row (reachability guards it, the
+// spawn side draws the faction's own roster), the kind's garrison spec and
+// the patron default supplying whatever the row doesn't. No chance roll —
+// the table already decided occupancy.
+registerTenantKind('garrison', (ctx, def, _grid, cm, _rng, kd, row) => {
+  if (!cm.interior) return;
+  const g = kd.garrison;
+  const faction = row.faction ?? g?.faction ?? patronFaction(def.biome) ?? undefined;
+  if (!faction) return;
+  ctx.garrisons.push({
+    pos: vec(cm.interior.x, cm.interior.y),
+    faction, size: row.size ?? g?.size ?? MASSIF_CFG.garrisonSize,
+  });
+});
+
+// STOCK — the inner dress lane, table-decided: the court's own floor dressed
+// through dressCourtFloor (the SAME lattice/standoff law dressMasses runs),
+// rows and cadence from the row ▷ the kind ▷ the framework — but every draw
+// on the tenant fork, so the layout stream never learns the ring was stocked.
+registerTenantKind('stock', (ctx, _def, grid, cm, rng, kd, row) => {
+  if (ctx.lite || !cm.interior) return;
+  const rows = row.rows ?? kd.inner;
+  if (!rows?.length) {
+    if (!warnedTenants.has(`stock:${kd.id}`)) {
+      warnedTenants.add(`stock:${kd.id}`);
+      console.warn(`[massif] stock tenant on '${kd.id}' has no rows (row.rows / kind inner) — seating nothing`);
+    }
+    return;
+  }
+  dressCourtFloor(ctx, grid, cm, kd, rng, rows,
+    row.chance ?? kd.innerChance ?? MASSIF_CFG.innerChance,
+    row.spacing ?? kd.innerSpacing ?? MASSIF_CFG.innerSpacing);
+});
+
+// CACHE — the hoard knot: a TIGHT cluster of containers on the court floor,
+// paying through the ordinary brittle/breakage/drop chokepoints exactly as
+// inner stock does (no chest doodad exists, on purpose — so the spoils law
+// and every drop lever hold by construction; a cache in a spoils-'none'
+// zone is scenery, same as any urn). Anchored past the POI seat's standoff,
+// walkable-checked piece by piece; a floor too small for the standoff
+// honestly seats nothing.
+registerTenantKind('cache', (ctx, _def, grid, cm, rng, kd, row) => {
+  if (ctx.lite || !cm.interior) return;
+  const rows = row.rows ?? kd.inner;
+  if (!rows?.length) {
+    if (!warnedTenants.has(`cache:${kd.id}`)) {
+      warnedTenants.add(`cache:${kd.id}`);
+      console.warn(`[massif] cache tenant on '${kd.id}' has no rows (row.rows / kind inner) — seating nothing`);
+    }
+    return;
+  }
+  const floorR = cm.r * (kd.ringInner ?? 0.6) * 0.9;
+  const seat = cm.interior;
+  if (floorR < 42 + 16) return;
+  const count = row.count ?? MASSIF_CFG.tenantCacheCount;
+  const want = rng.int(count[0], count[1]);
+  const spread = MASSIF_CFG.tenantCacheSpread;
+  // The knot's anchor: a seat-side spot past the standoff (a few bearings
+  // tried; the draws ride the fork, so tries cost the world nothing).
+  let ax = 0, ay = 0, seated = false;
+  for (let t = 0; t < 6 && !seated; t++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(42 + 16, Math.max(42 + 17, floorR - 16));
+    ax = seat.x + Math.cos(a) * d; ay = seat.y + Math.sin(a) * d;
+    seated = grid.isWalkable(ax, ay) && !resHits(ctx, ax, ay, 20);
+  }
+  if (!seated) return;
+  const done: Vec2[] = [];
+  for (let i = 0; i < want; i++) {
+    for (let t = 0; t < 4; t++) {
+      const a = rng.range(0, Math.PI * 2);
+      const gx = ax + Math.cos(a) * rng.range(0, spread);
+      const gy = ay + Math.sin(a) * rng.range(0, spread);
+      const dd = Math.hypot(gx - seat.x, gy - seat.y);
+      if (dd > floorR || dd < 42) continue; // the POI seat's standoff
+      if (!grid.isWalkable(gx, gy)) continue;
+      if (done.some(p => Math.hypot(p.x - gx, p.y - gy) < 24)) continue;
+      if (resHits(ctx, gx, gy, 20)) continue;
+      const dr = pickWeighted(rng, rows);
+      done.push(vec(gx, gy));
+      ctx.doodads.push({
+        pos: vec(gx, gy), radius: rng.range(dr.radius[0], dr.radius[1]),
+        kind: dr.kind, rot: rng.range(0, Math.PI * 2),
+      });
+      break;
+    }
+  }
+});
 
 // --- THE WEAVE HEAL ----------------------------------------------------------
 
@@ -823,36 +1047,52 @@ function dressMasses(ctx: GenCtx, grid: GridWalkField, placed: PlacedMass[], lan
         });
       });
     }
-    // INNER — the court's stocked floor: a GEN_CELL lattice over the ring's
-    // interior disc, walkable ground only (the mouth corridor and any healed
-    // breach stay clear by the live-grid read). Two standoffs keep the
-    // machinery honest: the POI seat stays open (the garrison's spawn
-    // scatter + the reachability promise land on floor, not on an urn), and
-    // reservations pass untouched. The universal doodad-navigability net
-    // rides behind as belt-and-suspenders, same as every scatter lane.
-    if (kd.inner?.length && cm.interior) {
-      const done: Vec2[] = [];
-      const spacing = kd.innerSpacing ?? MASSIF_CFG.innerSpacing;
-      const chance = kd.innerChance ?? MASSIF_CFG.innerChance;
-      const floorR = cm.r * (kd.ringInner ?? 0.6) * 0.9;
-      const seat = cm.interior;
-      for (let gy = seat.y - floorR; gy <= seat.y + floorR; gy += GEN_CELL) {
-        for (let gx = seat.x - floorR; gx <= seat.x + floorR; gx += GEN_CELL) {
-          const dd = Math.hypot(gx - seat.x, gy - seat.y);
-          if (dd > floorR || dd < 42) continue; // the POI seat's standoff
-          if (!grid.isWalkable(gx, gy)) continue;
-          if (!rng.chance(chance)) continue;
-          if (done.some(p => Math.hypot(p.x - gx, p.y - gy) < spacing)) continue;
-          if (resHits(ctx, gx, gy, 20)) continue;
-          const row = pickWeighted(rng, kd.inner!);
-          done.push(vec(gx, gy));
-          ctx.doodads.push({
-            pos: vec(gx + rng.range(-6, 6), gy + rng.range(-6, 6)),
-            radius: rng.range(row.radius[0], row.radius[1]),
-            kind: row.kind, rot: rng.range(0, Math.PI * 2),
-          });
-        }
-      }
+    // INNER — the court's stocked floor (dressCourtFloor carries the lattice
+    // law; the draw order is byte-for-byte the historical one). A kind that
+    // authors a TENANT TABLE hands this lane to the table — the stock tenant
+    // runs the same helper off its own fork stream instead.
+    if (kd.inner?.length && cm.interior && !kd.tenants?.length) {
+      dressCourtFloor(ctx, grid, cm, kd, rng, kd.inner,
+        kd.innerChance ?? MASSIF_CFG.innerChance,
+        kd.innerSpacing ?? MASSIF_CFG.innerSpacing);
+    }
+  }
+}
+
+/** The court-floor lattice (the INNER dress lane, shared with the stock
+ *  TENANT so both speak one law): a GEN_CELL lattice over the ring's
+ *  interior disc, walkable ground only (the mouth corridor and any healed
+ *  breach stay clear by the live-grid read). Two standoffs keep the
+ *  machinery honest: the POI seat stays open (the garrison's spawn scatter
+ *  + the reachability promise land on floor, not on an urn), and
+ *  reservations pass untouched. The universal doodad-navigability net rides
+ *  behind as belt-and-suspenders, same as every scatter lane. Draws come
+ *  from the CALLER's stream (dressMasses hands the layout stream, the stock
+ *  tenant its per-mass fork) in the exact historical order: chance →
+ *  spacing → row → pos jitter → radius → rot. */
+function dressCourtFloor(
+  ctx: GenCtx, grid: GridWalkField, cm: CarvedMass, kd: MassKindDef,
+  rng: Rng, rows: MassDressRow[], chance: number, spacing: number,
+): void {
+  if (!cm.interior) return;
+  const done: Vec2[] = [];
+  const floorR = cm.r * (kd.ringInner ?? 0.6) * 0.9;
+  const seat = cm.interior;
+  for (let gy = seat.y - floorR; gy <= seat.y + floorR; gy += GEN_CELL) {
+    for (let gx = seat.x - floorR; gx <= seat.x + floorR; gx += GEN_CELL) {
+      const dd = Math.hypot(gx - seat.x, gy - seat.y);
+      if (dd > floorR || dd < 42) continue; // the POI seat's standoff
+      if (!grid.isWalkable(gx, gy)) continue;
+      if (!rng.chance(chance)) continue;
+      if (done.some(p => Math.hypot(p.x - gx, p.y - gy) < spacing)) continue;
+      if (resHits(ctx, gx, gy, 20)) continue;
+      const row = pickWeighted(rng, rows);
+      done.push(vec(gx, gy));
+      ctx.doodads.push({
+        pos: vec(gx + rng.range(-6, 6), gy + rng.range(-6, 6)),
+        radius: rng.range(row.radius[0], row.radius[1]),
+        kind: row.kind, rot: rng.range(0, Math.PI * 2),
+      });
     }
   }
 }

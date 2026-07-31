@@ -16,7 +16,7 @@
 //   drystone          PARAPET        bodies stop — you duel ACROSS the wall
 // ---------------------------------------------------------------------------
 
-import { registerMassKind, registerMassShape } from '../engine/massif';
+import { registerMassKind, registerMassShape, registerTenantKind, tenantKindOf } from '../engine/massif';
 import { registerDoodadRule, registerStamp, stampSingle } from '../engine/levelgen';
 import { bearingNoise, disc, radial } from '../engine/genkit';
 
@@ -237,6 +237,16 @@ registerMassKind({
   skirtChance: 0.26,
 });
 
+// THE HELD STOCK — the first CONTENT tenant kind (the ring-tenant registry's
+// door, walked): a garrison keeping a STOCKED ring — one draw, one occupant
+// CONCEPT, both core handlers by delegation (tenantKindOf), so a manned well
+// never reads as a bare yard. Any table may name it; the row's garrison
+// tailoring (size/faction) passes straight through to the garrison handler.
+registerTenantKind('held_stock', (ctx, def, grid, cm, rng, kd, row) => {
+  tenantKindOf('garrison')?.(ctx, def, grid, cm, rng, kd, row);
+  tenantKindOf('stock')?.(ctx, def, grid, cm, rng, kd, row);
+});
+
 // --- THE COURTLANDS (the desert's rim of rings — biome 'courtland') -----------
 // The Sand Sarcophate's LIVING architecture: where the sepulcher country is
 // the dynasty gone under the erg, these are the rings it raised while it
@@ -256,7 +266,25 @@ registerMassKind({
   lobe: 0.1,
   ringInner: 0.68,
   mouths: [1, 2],
-  garrison: { chance: 0.2 },
+  // THE RING TENANTS debut (one fork-stream draw per ring — the table IS
+  // the occupancy law, replacing the old independent pair of garrison-0.2 +
+  // always-stocked). Authored to the measured standing rates: the dynasty
+  // still answers at ONE RING IN FIVE exactly (held_stock 14 + garrison 6 —
+  // and mostly it mans a ring that kept its stock), the watered stock stays
+  // the dominant read, a pot-hoard cache pays where the plumbing did, and
+  // the seldom DRY WELL (vacant 12) — the ring whose water failed, standing
+  // empty as the rim's quiet memento (the fallen_court is the ruin lane;
+  // vacancy here is a whisper, never the theme).
+  tenants: [
+    { kind: 'stock', weight: 56 },
+    { kind: 'held_stock', weight: 14 },
+    { kind: 'garrison', weight: 6 },
+    { kind: 'cache', weight: 12, rows: [
+      { kind: 'clay_pots', weight: 2, radius: [10, 14] },
+      { kind: 'burial_urn', weight: 1, radius: [11, 15] },
+    ] },
+    { kind: 'vacant', weight: 12 },
+  ],
   inner: [
     { kind: 'stone_cistern', weight: 2, radius: [13, 16] },
     { kind: 'palm', weight: 2, radius: [16, 24] },

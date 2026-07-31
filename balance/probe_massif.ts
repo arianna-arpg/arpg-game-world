@@ -40,8 +40,9 @@
 //      patron.
 //   I. THE COURT COUNTRY (the extreme regime) — the court-of-sands face:
 //      court kinds only, high coverage, the weave/exit/POI guarantees intact,
-//      shipped garrison chances seating guards, the great-court row's size
-//      band live, and a forced-chance run garrisoning every court exactly.
+//      the shipped RING-TENANT tables seating guards (and the great courts
+//      almost never vacant), the great-court row's size band live, and a
+//      forced garrison-only table garrisoning every court exactly.
 //   J. THE COURTLANDS (the court-country pass — the regime grown into a
 //      BIOME): the rim-claim law (the moisture band stands astride the
 //      desert's dry fade-out), ring-only pools on every face (court/crescent
@@ -50,6 +51,16 @@
 //      garrisons speaking the DYNASTY, and the threshold rhythm's testable
 //      half — the posted sweeping sentinel in the pack table, the dove's
 //      quiet-ring roost in the wildlife layer.
+//   K. THE RING TENANTS (the expansion-lane lever) — one weighted occupancy
+//      draw per court on a per-mass fork stream: THE FORK LAW both ways
+//      (a vacant table leaves the WHOLE layout byte-identical; any table
+//      leaves the carved masses byte-identical), THE REPLACEMENT LAW (a
+//      table silences the kind's independent garrison/inner chances; an
+//      EMPTY table is no law at all), one-occupant exclusivity + weights
+//      honored over a sweep, per-row grain via `over.tenants`, the cache
+//      knot's floor/standoff geometry, and registry resolution (the core
+//      four + the held_stock composition; a probe-registered kind runs
+//      deterministically; an unknown kind seats nothing and breaks nothing).
 //
 // Rigs carry pressure detection: a rig that never actually stressed its law
 // exits 1 rather than passing green.
@@ -73,6 +84,7 @@ import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import {
   carveMassifs, massKindIds, massKindOf, massShapeIds, MASSIF_CFG,
+  registerTenantKind, tenantKindIds, type TenantRow,
 } from '../src/engine/massif';
 import { TILESETS } from '../src/data/tilesets';
 import { BIOME_FIELD_BANDS, BIOMES, patronFaction } from '../src/world/biomes';
@@ -695,6 +707,21 @@ function bareCtx(seed: number): GenCtx {
         fail(`I: regime pool row '${row.kind}' rolls non-court shapes — the court country leaked`);
       }
     }
+    // THE RING-TENANT DEBUT (the ring-tenants pass): both shipped rows wear
+    // occupancy tables via the per-row grain, and the GREAT courts (the
+    // sizeR row) almost never stand vacant — what was worth building big is
+    // worth holding.
+    for (const row of pool) {
+      const table = row.over?.tenants as TenantRow[] | undefined;
+      if (!table?.length) { fail(`I: court-of-sands row '${row.kind}' lost its tenant table`); continue; }
+      if (row.sizeR) {
+        const tot = table.reduce((a, r) => a + r.weight, 0);
+        const vac = table.filter(r => r.kind === 'vacant').reduce((a, r) => a + r.weight, 0);
+        if (vac / tot > 0.1) {
+          fail(`I: the great-court row stands vacant at ${(vac / tot * 100).toFixed(0)}% — a GREAT court is almost never empty`);
+        }
+      }
+    }
     const W = 3400, H2 = 2500;
     const iEntry = vec(130, H2 / 2);
     const iExits = [vec(W - 130, H2 / 2), vec(W / 2, 130)];
@@ -742,13 +769,14 @@ function bareCtx(seed: number): GenCtx {
       note(`I seed ${seed}: ${masses.length} courts, ${ctx.garrisons.length} garrisoned, wallFrac ${st.wallFrac.toFixed(2)}`);
     }
     if (courts < 18) fail(`I: pressure — the regime aggregated only ${courts} courts over the sweep (dead regime)`);
-    if (!guards) fail('I: shipped garrison chances posted NO guard across the whole sweep (statistically impossible at 0.55)');
+    if (!guards) fail('I: the shipped tenant tables posted NO guard across the whole sweep (statistically impossible at their garrison shares)');
     if (!great) fail('I: the great-court row never landed (its sizeR band is dead in the shipped face)');
 
-    // Forced-chance control: every court garrisoned, exactly.
+    // Forced control — a garrison-only TABLE: every court garrisoned,
+    // exactly (the one-draw law with a one-row table).
     {
       const seed = seedAt(2) ^ 0xc1a7;
-      const forcedPool = pool.map(row => ({ ...row, over: { ...(row.over ?? {}), garrison: { chance: 1 } } }));
+      const forcedPool = pool.map(row => ({ ...row, over: { ...(row.over ?? {}), tenants: [{ kind: 'garrison', weight: 1 }] } }));
       const ctx: GenCtx = {
         rng: new Rng(seed), arena: { w: W, h: H2 }, entry: iEntry, exits: iExits, seed,
         doodads: [], pois: [], camps: [], breakables: [], npcs: [],
@@ -758,7 +786,7 @@ function bareCtx(seed: number): GenCtx {
       const interiors = masses.filter(m => m.interior).length;
       if (!interiors) fail('I: forced control minted no courts');
       else if (ctx.garrisons.length !== interiors) {
-        fail(`I: forced chance-1 garrisoned ${ctx.garrisons.length}/${interiors} courts — the roll leaks`);
+        fail(`I: forced garrison-only table garrisoned ${ctx.garrisons.length}/${interiors} courts — the draw leaks`);
       }
     }
   }
@@ -820,7 +848,21 @@ function bareCtx(seed: number): GenCtx {
     else {
       if (well.region !== 'sandstone') fail(`J: well_court region '${well.region}' — expected sandstone`);
       if (!well.inner?.some(r => r.kind === 'stone_cistern')) fail('J: well_court lost its cistern — the watered ring is dry');
-      if ((well.garrison?.chance ?? 0) > 0.3) fail('J: well_court garrison chance rose past the relief read');
+      // THE RING-TENANT DEBUT: occupancy is the kind's own table now — the
+      // relief read holds as the table's GARRISON SHARE (rows that post a
+      // pack: garrison + the held_stock composition) staying at the old
+      // one-in-five, never past 0.3; and the DRY WELL (vacant) stays a
+      // whisper, never the theme.
+      if (!well.tenants?.length) fail('J: well_court authors no tenant table — the ring-tenant debut is gone');
+      else {
+        const tot = well.tenants.reduce((a, r) => a + r.weight, 0);
+        const manned = well.tenants.filter(r => r.kind === 'garrison' || r.kind === 'held_stock')
+          .reduce((a, r) => a + r.weight, 0);
+        if (manned / tot > 0.3) fail(`J: well_court garrison share ${(manned / tot * 100).toFixed(0)}% rose past the relief read`);
+        const vac = well.tenants.filter(r => r.kind === 'vacant').reduce((a, r) => a + r.weight, 0);
+        if (!vac) fail('J: well_court table lost its dry well (the vacant breather)');
+        if (vac / tot > 0.25) fail(`J: well_court stands dry at ${(vac / tot * 100).toFixed(0)}% — vacancy is a whisper here, not the theme`);
+      }
     }
     const fallen = massKindOf('fallen_court');
     if (fallen.id !== 'fallen_court') fail('J: mass kind fallen_court missing');
@@ -950,6 +992,205 @@ function bareCtx(seed: number): GenCtx {
     if (!kept) fail('J: the kept-court row never landed (its sizeR band is dead in the shipped base face)');
     if (!fallenSeen) fail('J: no fallen ring ever landed (the crescent lane is dead)');
     if (!wellStock) fail('J: the watered face never landed a cistern (the relief is dry)');
+  }
+}
+
+// --- Rig K: THE RING TENANTS — one draw per court, fork-law pure --------------
+// The expansion-lane lever (the court-country pass's recorded want): a court
+// kind (or a pool row via `over.tenants`) authors a weighted OCCUPANCY TABLE —
+// one draw per ring on a per-mass fork of the body's own shape seed
+// (TENANT_SALT), resolving to ONE registered tenant kind whose handler seats
+// the occupant off the same forked stream. The laws pinned here are the
+// lever's whole contract; each pin was bite-verified by toggling its engine
+// clause when the rig landed.
+{
+  const K_PARAMS = { massifCoverage: [0.2, 0.26] as [number, number], massifSizeR: [200, 300] as [number, number] };
+
+  // K1 — THE FORK LAW, strongest form: a vacant-only table on a kind with no
+  // garrison and no inner rows must leave the WHOLE layout byte-identical —
+  // the draw, the registry resolve and the handler cost ZERO layout-stream
+  // draws (doodads, grid, POIs, garrisons all match the table-less mint).
+  for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+    const seed = seedAt(s) ^ 0x7e1;
+    const plainDef = defOf('massif_k1', [], { layoutParams: { ...K_PARAMS, massifMasses: [{ kind: 'fold', weight: 1 }] } });
+    const tableDef = defOf('massif_k1', [], { layoutParams: { ...K_PARAMS, massifMasses: [{ kind: 'fold', weight: 1, over: { tenants: [{ kind: 'vacant', weight: 1 }] } }] } });
+    const a = gen(plainDef, seed), b = gen(tableDef, seed);
+    if (JSON.stringify(a.doodads) !== JSON.stringify(b.doodads)) fail(`K1: seed ${seed} a vacant table moved the dress — the fork leaked into the layout stream`);
+    const ga = a.walk instanceof GridWalkField ? a.walk.pack().kbits : 'a';
+    const gb = b.walk instanceof GridWalkField ? b.walk.pack().kbits : 'b';
+    if (ga !== gb) fail(`K1: seed ${seed} a vacant table moved the grid`);
+    if (JSON.stringify(a.pois) !== JSON.stringify(b.pois)) fail(`K1: seed ${seed} a vacant table moved the POIs`);
+    if (a.garrisons.length || b.garrisons.length) fail(`K1: seed ${seed} a garrison posted from nowhere`);
+  }
+
+  // K2 — THE REPLACEMENT LAW + carve identity: a table on a kind that
+  // authors independent garrison + inner chances (ruincourt: 0.35 + urns)
+  // SILENCES both — while the carved masses stay byte-identical to the
+  // table-less carve on the same seed.
+  {
+    const mkRows = (tenants?: TenantRow[]): unknown[] => [{
+      kind: 'ruincourt', weight: 1,
+      over: { shapes: [{ shape: 'court', weight: 1 }], ...(tenants ? { tenants } : {}) },
+    }];
+    let plainGarr = 0, plainPots = 0;
+    for (let s = 0; s < Math.min(SEEDS, 8); s++) {
+      const seed = seedAt(s) ^ 0x7e2;
+      const mk = (rows: unknown[]): ZoneDef => defOf('massif_k2', [], { layoutParams: { ...K_PARAMS, massifMasses: rows }, biome: 'desert' });
+      const plainRows = mkRows();
+      const vacantRows = mkRows([{ kind: 'vacant', weight: 1 }]);
+      const cPlain = bareCtx(seed);
+      const plain = carveMassifs(cPlain, { ...mk(plainRows), seed });
+      const cVac = bareCtx(seed);
+      const vac = carveMassifs(cVac, { ...mk(vacantRows), seed });
+      if (JSON.stringify(plain) !== JSON.stringify(vac)) fail(`K2: seed ${seed} the table disturbed the carve — the fork law broke`);
+      plainGarr += cPlain.garrisons.length;
+      if (cVac.garrisons.length) fail(`K2: seed ${seed} a vacant table still posted ${cVac.garrisons.length} garrisons — the replacement law broke`);
+      // The dress lane: the table-less kind stocks its floors (urns/pots
+      // are inner-only kinds — the skirt speaks rubble/rock); the tabled
+      // kind must not.
+      const potKinds = new Set(['burial_urn', 'clay_pots']);
+      const dPlain = gen(mk(plainRows), seed).doodads.filter(d => potKinds.has(d.kind)).length;
+      const dVac = gen(mk(vacantRows), seed).doodads.filter(d => potKinds.has(d.kind)).length;
+      plainPots += dPlain;
+      if (dVac) fail(`K2: seed ${seed} a vacant table still stocked ${dVac} inner pieces — the replacement law broke`);
+    }
+    if (!plainGarr) fail('K2: pressure — the independent lane never posted a garrison (dead rig)');
+    if (!plainPots) fail('K2: pressure — the independent lane never stocked a floor (dead rig)');
+  }
+
+  // K3 — ONE OCCUPANT, EXCLUSIVELY + weights honored: a 3:1 garrison/stock
+  // table splits the courts — every court draws exactly one tenant (a posted
+  // pack XOR a stocked floor, never both, never neither), and the weighting
+  // shows up across the sweep.
+  {
+    const table: TenantRow[] = [
+      { kind: 'garrison', weight: 3, faction: 'gnoll' },
+      { kind: 'stock', weight: 1, rows: [{ kind: 'clay_pots', weight: 1, radius: [10, 14] }], chance: 1, spacing: 40 },
+    ];
+    const rows = [{ kind: 'fold', weight: 1, over: { tenants: table } }];
+    let courts = 0, garr = 0, stocked = 0;
+    for (let s = 0; s < Math.min(SEEDS, 10); s++) {
+      const seed = seedAt(s) ^ 0x7e3;
+      const def = defOf('massif_k3', [], { layoutParams: { ...K_PARAMS, massifMasses: rows } });
+      const ctx = bareCtx(seed);
+      const masses = carveMassifs(ctx, { ...def, seed });
+      const pots = gen(def, seed).doodads.filter(d => d.kind === 'clay_pots');
+      for (const m of masses) {
+        if (!m.interior) continue;
+        courts++;
+        const hasG = ctx.garrisons.some(g => g.pos.x === m.interior!.x && g.pos.y === m.interior!.y);
+        const floorR = m.r * 0.6 * 0.9 + 15;
+        const hasS = pots.some(d => Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= floorR);
+        if (hasG && hasS) fail(`K3: seed ${seed} a court drew TWO tenants (garrison + stock)`);
+        if (!hasG && !hasS) fail(`K3: seed ${seed} a court drew NO tenant (the garrison/stock table left it bare)`);
+        if (hasG) garr++; else stocked++;
+      }
+    }
+    if (courts < 20) fail(`K3: pressure — only ${courts} courts over the sweep (dead rig)`);
+    const gFrac = garr / Math.max(1, courts);
+    if (gFrac < 0.55 || gFrac > 0.92) fail(`K3: the 3:1 table drew ${garr} garrisons / ${stocked} stocks over ${courts} courts (${gFrac.toFixed(2)}) — weights not honored`);
+    note(`K3: ${garr} garrisons / ${stocked} stocks over ${courts} courts`);
+  }
+
+  // K4 — THE ROW GRAIN: `over.tenants` scopes to its row alone — the sibling
+  // row's independent lane stands untouched beside it.
+  {
+    const rows = [
+      { kind: 'fold', weight: 1, over: { garrison: { chance: 1, faction: 'gnoll' } } },
+      { kind: 'ruincourt', weight: 1, over: { shapes: [{ shape: 'court', weight: 1 }], tenants: [{ kind: 'vacant', weight: 1 }] } },
+    ];
+    let folds = 0, ruins = 0;
+    for (let s = 0; s < Math.min(SEEDS, 8); s++) {
+      const seed = seedAt(s) ^ 0x7e4;
+      const ctx = bareCtx(seed);
+      const masses = carveMassifs(ctx, { ...defOf('massif_k4', [], { layoutParams: { ...K_PARAMS, massifMasses: rows } }), seed });
+      for (const m of masses) {
+        if (!m.interior) continue;
+        const g = ctx.garrisons.some(x => x.pos.x === m.interior!.x && x.pos.y === m.interior!.y);
+        if (m.kind === 'fold') { folds++; if (!g) fail(`K4: seed ${seed} a chance-1 fold court went unposted beside a tabled row`); }
+        if (m.kind === 'ruincourt') { ruins++; if (g) fail(`K4: seed ${seed} a vacant-tabled ruincourt court posted a garrison`); }
+      }
+    }
+    if (!folds || !ruins) fail(`K4: pressure — sweep landed ${folds} fold / ${ruins} ruincourt courts (dead rig)`);
+  }
+
+  // K5 — THE CACHE KNOT: containers cluster on the court floor, past the POI
+  // seat's standoff, never past the floor, inside the count band — and the
+  // knot never leaks into the open field.
+  {
+    const rows = [{
+      kind: 'fold', weight: 1,
+      over: { tenants: [{ kind: 'cache', weight: 1, rows: [{ kind: 'clay_pots', weight: 1, radius: [10, 14] }], count: [3, 5] }] },
+    }];
+    let pieces = 0, courts = 0;
+    for (let s = 0; s < Math.min(SEEDS, 8); s++) {
+      const seed = seedAt(s) ^ 0x7e5;
+      const def = defOf('massif_k5', [], { layoutParams: { ...K_PARAMS, massifMasses: rows } });
+      const out = gen(def, seed);
+      const masses = carveMassifs(bareCtx(seed), { ...def, seed });
+      const pots = out.doodads.filter(d => d.kind === 'clay_pots');
+      for (const m of masses.filter(m => m.interior)) {
+        courts++;
+        const floorR = m.r * 0.6 * 0.9;
+        const mine = pots.filter(d => Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= floorR + 1e-6);
+        pieces += mine.length;
+        if (mine.length > 5) fail(`K5: seed ${seed} a cache knot holds ${mine.length} pieces — over the count band`);
+        for (const d of mine) {
+          if (Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) < 42 - 1e-6) {
+            fail(`K5: seed ${seed} a cache piece crowds the POI seat`);
+          }
+        }
+      }
+      for (const d of pots) {
+        if (!masses.some(m => m.interior && Math.hypot(d.pos.x - m.interior.x, d.pos.y - m.interior.y) <= m.r * 0.6 * 0.9 + 1e-6)) {
+          fail(`K5: seed ${seed} a cache piece at ${Math.round(d.pos.x)},${Math.round(d.pos.y)} leaked outside every floor`);
+        }
+      }
+    }
+    if (!courts) fail('K5: pressure — no court minted (dead rig)');
+    if (!pieces) fail('K5: pressure — the cache never landed a container (dead rig)');
+    note(`K5: ${pieces} cache pieces over ${courts} courts`);
+  }
+
+  // K6 — REGISTRY-RESOLVED handlers: the core four + the held_stock
+  // composition stand; a probe-registered kind runs once per court on a
+  // deterministic forked stream; an unknown kind seats nothing and breaks
+  // nothing; an EMPTY table is no law at all (the independent lanes stand).
+  {
+    for (const k of ['garrison', 'stock', 'cache', 'vacant']) {
+      if (!tenantKindIds().includes(k)) fail(`K6: core tenant kind '${k}' missing`);
+    }
+    if (!tenantKindIds().includes('held_stock')) fail('K6: content tenant kind held_stock missing (the composition debut)');
+    const calls: number[] = [];
+    registerTenantKind('probe_totem', (_ctx, _def, _grid, mass, rng) => {
+      if (!mass.interior) fail('K6: a handler received a court with no interior');
+      calls.push(rng.int(0, 1 << 30));
+    });
+    const rows = [{ kind: 'fold', weight: 1, over: { tenants: [{ kind: 'probe_totem', weight: 1 }] } }];
+    const seed = seedAt(4) ^ 0x7e6;
+    const def = defOf('massif_k6', [], { layoutParams: { ...K_PARAMS, massifMasses: rows } });
+    const m1 = carveMassifs(bareCtx(seed), { ...def, seed });
+    const first = [...calls];
+    calls.length = 0;
+    carveMassifs(bareCtx(seed), { ...def, seed });
+    if (!first.length) fail('K6: the probe-registered tenant kind never ran');
+    const interiors = m1.filter(m => m.interior).length;
+    if (first.length !== interiors) fail(`K6: the handler ran ${first.length}× over ${interiors} courts — not one draw per court`);
+    if (JSON.stringify(first) !== JSON.stringify(calls)) fail('K6: the forked handler stream is not deterministic across same-seed carves');
+    // Unknown kind: warns once, seats nothing, carve identical.
+    const unkRows = [{ kind: 'fold', weight: 1, over: { tenants: [{ kind: 'no_such_tenant', weight: 1 }] } }];
+    const cU = bareCtx(seed);
+    const mU = carveMassifs(cU, { ...defOf('massif_k6', [], { layoutParams: { ...K_PARAMS, massifMasses: unkRows } }), seed });
+    if (cU.garrisons.length) fail('K6: an unknown tenant kind posted a garrison');
+    if (JSON.stringify(mU) !== JSON.stringify(m1)) fail('K6: an unknown tenant kind disturbed the carve');
+    // The empty table: no law at all.
+    const emptyRows = [{ kind: 'fold', weight: 1, over: { tenants: [], garrison: { chance: 1, faction: 'gnoll' } } }];
+    const cE = bareCtx(seed);
+    const mE = carveMassifs(cE, { ...defOf('massif_k6', [], { layoutParams: { ...K_PARAMS, massifMasses: emptyRows } }), seed });
+    const eInteriors = mE.filter(m => m.interior).length;
+    if (eInteriors && cE.garrisons.length !== eInteriors) {
+      fail(`K6: an EMPTY tenant table silenced the independent garrison (${cE.garrisons.length}/${eInteriors}) — empty is no law`);
+    }
   }
 }
 

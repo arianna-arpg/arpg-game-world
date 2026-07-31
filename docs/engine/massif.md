@@ -12,7 +12,7 @@ LARGE impassable interior bodies, so the field plays open — long sightlines,
 wide floor — while the way across is a negotiation around the bones. The
 D2 Act-1 / PoE-field read: you see the country; you walk AROUND it.
 
-## The three registries (everything is data)
+## The four registries (everything is data)
 
 **Mass shapes** (`registerMassShape`) — silhouette painters over genkit masks.
 Built-ins: `blob` (noise-lobed disc), `slab` (the plopped rectangle, rotated,
@@ -54,6 +54,47 @@ truth), picks weighted shapes, and bands its dressing and its residents:
   byte-identical with it on or off (probe rig G pins this).
 - `sizeR` — a kind-default base-radius band (mesas run big in any pool).
 - `mouths`, `ringInner`, `mouthScale`, `lobe`, `poiInterior` — court anatomy.
+- `tenants` (`TenantRow[]`) — **THE RING TENANTS**: see the registry below.
+
+**Tenant kinds** (`registerTenantKind`) — who HOLDS a court. Where the
+standing garrison/inner chances are INDEPENDENT rolls (they can only sum —
+"either garrisoned or stocked or empty, weighted" was unwritable), a kind
+(or a pool row via `over.tenants`) may author a weighted TENANT TABLE: **ONE
+occupancy draw per ring** on a per-mass fork of the body's own shape seed
+(`TENANT_SALT` — the garrison fork law's sibling), resolving to ONE
+registered tenant kind whose handler seats the occupant off the same forked
+stream. The laws:
+
+- **THE FORK LAW** — the layout stream never moves: the carve, the weave,
+  every skirt/crest draw are byte-identical with a table present or absent
+  (a vacant table leaves the WHOLE layout byte-identical — probe rig K).
+- **THE REPLACEMENT LAW** — a non-empty table REPLACES the kind's
+  independent garrison/inner chances (the table IS the occupancy law); the
+  garrison spec and inner rows remain as the handlers' defaults. A kind
+  without a table (or with an empty one) keeps today's independent rolls
+  byte-identically.
+- Courts only (needs a reported interior — the garrison's own rule);
+  unknown tenant ids warn once and seat nothing.
+
+The core four ship from standing machinery only: `garrison` (the
+MassGarrisonSpec lane — patron default, ctx.garrisons row, reachability
+guarded; row tailoring `size`/`faction`), `stock` (the inner dress lane —
+`dressCourtFloor`, the SAME lattice/standoff law, rows/cadence from row ▷
+kind ▷ framework), `cache` (a container KNOT past the POI seat's standoff,
+paying through the ordinary brittle/drop chokepoints — no chest doodad
+exists, on purpose, so the spoils law holds by construction; `rows`/`count`
+per row, `tenantCacheCount`/`tenantCacheSpread` defaults), and `vacant`
+(nothing — the weighted breather that keeps a court country from feeling
+stamped). Content composes richer occupants by delegation (`tenantKindOf`):
+`held_stock` (data/massifs.ts — a garrison keeping a stocked ring) is the
+reference registrant. Dress handlers stand down under lite mints; occupancy
+(garrisons) seats regardless, so a lite and a full mint agree on who holds
+the ring.
+
+**Future registrants, recorded not built**: a shrine tenant belongs to the
+puzzle fabric's pass, a lair-mouth tenant to the lair fabric's, a
+watch-post tenant to the watch fabric's — the registry is the door; those
+passes walk through it without this fabric learning their names.
 
 Engine ships the reference stone country — `tor` (crag blobs/chains),
 `bluff` (crag slabs/ridges), `fold` (a drystone court; deliberately bare —
@@ -93,12 +134,13 @@ remap of the already-rolled size (row ▷ kind ▷ zone; the rescue ramp's
 shrink composes through as the bands' ratio), so it is **draw-free**: absent
 bands touch neither the stream nor the value. `over` is a partial
 `MassKindDef` (id excepted) merged over the registered kind at carve time —
-EVERY kind dial (mouths, ring, dressing, garrison, inner…) is reachable per
-row without minting a sibling kind, and the resolved def is carried to
-dressing so tailoring reaches skirts/crests/inner too. The court-of-sands
-face ships the demonstration: a second `sand_court` row with `sizeR:
-[260,380]` and `over: { mouths: [2,3], garrison: { chance: 0.75 } }` — the
-GREAT courts, one data row.
+EVERY kind dial (mouths, ring, dressing, garrison, inner, tenants…) is
+reachable per row without minting a sibling kind, and the resolved def is
+carried to dressing so tailoring reaches skirts/crests/inner too. The
+court-of-sands face ships the demonstration: a second `sand_court` row with
+`sizeR: [260,380]` and `over: { mouths: [2,3], tenants: [...] }` — the
+GREAT courts, one data row, wearing their own occupancy table (held_stock
+dominant, vacant 5% — what was worth building big is worth holding).
 
 ## The block TEXTURES
 
@@ -148,6 +190,17 @@ everything else." The walk covered `carveMassifs`, the dart, the shapes,
 | dart inset floor | `massifInsetMin` | was literal 90 |
 | heal swallow size | `massifSwallowCells` | optional arg on `healMassifWeave` for composition callers |
 
+**Opened by the ring-tenants pass** (2026-07-30, probe rig K):
+
+| lever | grain | mechanism |
+|---|---|---|
+| tenant tables | `MassKindDef.tenants` / `MassPoolRow.over.tenants` | ONE fork-stream draw per court (TENANT_SALT); replaces the independent garrison/inner chances |
+| tenant kinds | `registerTenantKind` / `tenantKindOf` | open occupant registry; core garrison/stock/cache/vacant from standing machinery, content composes (held_stock) |
+| garrison tailoring | `TenantRow.size` / `.faction` | passes through the MassGarrisonSpec lane (patron default intact) |
+| stock tailoring | `TenantRow.rows` / `.chance` / `.spacing` | row ▷ kind inner ▷ framework, through the ONE `dressCourtFloor` law |
+| cache knot | `TenantRow.rows` / `.count` + `tenantCacheCount` / `tenantCacheSpread` | container hoard past the POI-seat standoff, ordinary brittle/drop chokepoints |
+| future occupants | `TenantRow.params` | open config door for later fabrics' registrants |
+
 **Ruled fixed** (a structural guarantee is not a dial):
 
 | constant | why it stays fixed |
@@ -163,7 +216,8 @@ everything else." The walk covered `carveMassifs`, the dart, the shapes,
 | skirt lane standoff (`laneW × 0.8`), reservation pad (20) | the weave guarantee at dress grain |
 | inner POI-seat standoff (42) | the reachability seat + garrison scatter keep floor; ≈1.4 walk cells |
 | cosmetic jitters (±5/±8/±6, rot ±0.5) | cosmetic grain; radius bands are the authored lever |
-| `GARRISON_SALT` | fork identity — changing it re-rolls every garrison in the world, expressiveness zero |
+| `GARRISON_SALT` / `TENANT_SALT` | fork identity — changing either re-rolls every garrison/tenancy in the world, expressiveness zero |
+| cache knot geometry (anchor tries, 24px piece sep) | cosmetic grain of the hoard read; `count`/`spread`/`rows` are the authored levers |
 | shape `reach` values | per-shape structural declarations the spacing law trusts; new shapes declare their own |
 | coverage measured on painted cells | definition of coverage, not a lever |
 | `DEFAULT_MIX` | reference data; `massifMasses` replaces it wholesale |
@@ -201,8 +255,11 @@ here so nobody hunts a phantom.
   architecture, pinned: every pool row on every face rolls court/crescent
   silhouettes only — `sand_court` retuned per row (mostly-quiet 0.3, the
   KEPT courts 0.8 at [270,390]), the new `well_court` (thin ring, cistern +
-  palm stock, garrison 0.2 — the watered relief) and `fallen_court` (the
-  breached crescent — free cover, no tenant). A BORDERING country by
+  palm stock — the watered relief; THE RING-TENANT DEBUT: its occupancy is
+  a kind-level table now — stock 56 / held_stock 14 / garrison 6 / cache 12
+  / vacant 12, keeping the measured one-in-five dynasty answer exactly
+  while opening the rare DRY WELL) and `fallen_court` (the breached
+  crescent — free cover, no tenant). A BORDERING country by
   measurement, not intent: its climate row hugs the desert's wetter verge
   and the `desert_verge` field-band tilt coheres the family along that
   stratum (world/biomes.ts carries the measured numbers). Probe rig J
@@ -218,7 +275,9 @@ here so nobody hunts a phantom.
 - New mass kind = one `registerMassKind` in data (region + shapes + dressing
   + residents). New silhouette = one `registerMassShape` (declare honest
   `reach`, clamp inside it; honor `ringInner`/`mouthScale` if annular). New
-  block texture = one region row.
+  block texture = one region row. New OCCUPANT = one `registerTenantKind`
+  (compose the core handlers via `tenantKindOf` before writing machinery —
+  held_stock is the reference).
 - A zone re-tunes ANY kind per pool row (`over`) — mint a sibling kind only
   when the identity is genuinely new, not for a chance tweak.
 - `carveMassifs(ctx, def)` and `healMassifWeave(ctx, grid, laneW,
@@ -233,5 +292,9 @@ here so nobody hunts a phantom.
 B placement law, C courts reachable, D heal under starved-lane pressure,
 E block textures + registry, F the floor + rescue prefix law, G the garrison
 fork law + row grain + inner + ring dials, H the mesa/tableland census,
-I the court-country regime census. `npm run genqa` sweeps every tileland
-face beside the downs under the standard invariants.
+I the court-country regime census (incl. the shipped tenant tables),
+J the courtlands biome census, K the ring tenants (fork law both ways,
+replacement law, one-occupant exclusivity + weights, row grain, the cache
+knot, registry resolution — every pin bite-verified at landing). `npm run
+genqa` sweeps every tileland face beside the downs under the standard
+invariants.

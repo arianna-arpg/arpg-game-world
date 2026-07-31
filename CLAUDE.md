@@ -593,9 +593,14 @@ we verify changes.
   `balance/probe_mass.ts`.
   THE MASSIF FABRIC (`engine/massif.ts` — open country that also says NO):
   the MIXTURE layout archetype — wide-open zones studded with LARGE
-  impassable interior bodies, all data three registries deep (mass SHAPES
+  impassable interior bodies, all data four registries deep (mass SHAPES
   via `registerMassShape`, mass KINDS via `registerMassKind` → a
-  registered region row carries collision/shot/sight/price/look, the
+  registered region row carries collision/shot/sight/price/look, TENANT
+  KINDS via `registerTenantKind` — per-court weighted occupancy tables
+  (`MassKindDef.tenants` / per-row `over.tenants`) drawing ONE occupant
+  per ring on the forked `TENANT_SALT` stream under THE REPLACEMENT LAW
+  (a table gates off the independent garrison/inner lanes; core four =
+  garrison/stock/cache/vacant + the `held_stock` composition), the
   'massif' recipe with every dial a layoutParam); `carveMassifs` is
   exported for composition and `healMassifWeave` guarantees one walkable
   weave — dials in `MASSIF_CFG`, docs in `docs/engine/massif.md`, probe

@@ -2705,9 +2705,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     variants: [
       // THE COURT COUNTRY — the extreme regime, shipped: court kinds ONLY at
-      // high coverage (a ruined city of courts in the sand). The second pool
-      // row is the per-row grain live in data: the GREAT courts — wider
-      // rings, twin gates, a garrison that nearly always answers.
+      // high coverage (a ruined city of courts in the sand). Both rows wear
+      // RING-TENANT TABLES via the per-row grain (`over.tenants` — one
+      // fork-stream occupancy draw per ring): the standard rings split
+      // squatter garrisons / left stock / hoards / the dead city's EMPTY
+      // rooms, and the GREAT courts — wider rings, twin gates — almost
+      // never stand vacant: what was worth building big is worth holding
+      // (or looting — the manned-stock draw dominates, and its files run
+      // deep).
       { name: 'the court of sands', layout: [
         { kind: 'ruin', count: [1, 2] },
         { kind: 'sand', count: [3, 5] },
@@ -2717,9 +2722,21 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'cave', count: [0, 1] },
       ], layoutParams: {
         massifMasses: [
-          { kind: 'sand_court', weight: 3 },
+          { kind: 'sand_court', weight: 3, over: { tenants: [
+            { kind: 'stock', weight: 30 },
+            { kind: 'garrison', weight: 28 },
+            { kind: 'vacant', weight: 18 },
+            { kind: 'held_stock', weight: 12 },
+            { kind: 'cache', weight: 12 },
+          ] } },
           { kind: 'sand_court', weight: 1, sizeR: [260, 380],
-            over: { mouths: [2, 3], garrison: { chance: 0.75 } } },
+            over: { mouths: [2, 3], tenants: [
+              { kind: 'held_stock', weight: 50, size: [4, 6] },
+              { kind: 'stock', weight: 18 },
+              { kind: 'cache', weight: 15 },
+              { kind: 'garrison', weight: 12, size: [4, 6] },
+              { kind: 'vacant', weight: 5 },
+            ] } },
         ],
         massifCoverage: [0.24, 0.3],
         massifMaxMasses: 14,
