@@ -28,7 +28,7 @@ import { runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascadePlan, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceInnateMods, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulsePlan, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceThrongSources, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillGem, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, CLASS_KIT_RARITY, CONSTRUCT_FORWARD_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
-  skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
+  skillContextTags, skillCooldownSeconds, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   BAR_SLOTS, MAX_SUPPORT_LEVEL, parseSlotGraftStat, SLOTGRAFT_PREFIX, SWAP_DISCIPLINE_CFG,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GroundCascadeSpec, type GroundPulseSpec, type GuardBashSpec,
@@ -24276,12 +24276,10 @@ export class World {
    *  is divided against the global tick rate (updateTimers already ticks at
    *  the global rate — this keeps scoped investment honest, not doubled). */
   private stampSkillCooldown(caster: Actor, inst: SkillInstance, base: number): void {
-    const tags = skillContextTags(inst.def);
-    const extra = instanceMods(inst);
-    const cdBase = base + caster.sheet.get('addedCooldown', tags, extra);
-    if (cdBase <= 0) return;
-    const cdSet = cdBase / Math.max(0.1,
-      caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery'));
+    // The formula lives in skills.ts so the TOOLTIP waits on the same clock
+    // it prints (skillCooldownSeconds — one resolver, two readers).
+    const cdSet = skillCooldownSeconds(caster, inst, base);
+    if (cdSet <= 0) return;
     caster.cooldowns.set(inst.def.id, cdSet);
     caster.cooldownTotals.set(inst.def.id, cdSet); // the HUD sweep's denominator
   }

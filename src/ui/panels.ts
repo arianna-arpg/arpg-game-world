@@ -16,7 +16,7 @@ import {
 import { SHEET_VITALS, sheetTabs, statBlurbOf } from '../data/sheet';
 import { resistValue } from '../engine/damage';
 import {
-  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel,
+  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillCooldownSeconds, skillMaxLevel,
   supportFitsInst, supportFitsInstOrCrew, supportMaxLevel,
   type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
@@ -46,6 +46,7 @@ import { FACTIONS, MONSTERS, defDensity, type MonsterDef } from '../data/monster
 import { heftTierOf } from '../engine/mass';
 import { DEFENSE_CFG } from '../engine/defense';
 import type { Actor } from '../engine/actor';
+import { previewSkill, type PreviewRow } from '../engine/skillPreview';
 import {
   drawPortraitInto, paintPortrait, portraitSubjectOf,
   type PortraitDefLike, type PortraitSubject,
@@ -520,7 +521,7 @@ export class UI {
     // deeper form and simply re-serve themselves.
     bindTooltips(this.inventory, (el, ext) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.inventory))
-        : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!)
+        : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!, ext)
         : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
     { extend: true });
     bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext, this.panelSeat(this.salvageMenu)) : null, { extend: true });
@@ -1038,14 +1039,41 @@ export class UI {
   }
 
   /** Tooltip for a learned skill row (full description + key stats). */
-  private skillTooltip(id: string): TooltipContent | null {
-    const inst = this.panelSeat(this.inventory).meta.knownSkills.get(id);
+  /** THE COMPUTED BLOCK (engine/skillPreview.ts): what this skill does for
+   *  THIS build, read off the live sheet through the engine's own resolvers.
+   *  The authored line says what the skill IS; these rows say what it does
+   *  in your hands, so nobody has to reconcile a static tooltip against a
+   *  character sheet. Detail rows wait for the dwell — the same hover-intent
+   *  the Vault uses for its full story. */
+  private previewRowsHtml(rows: PreviewRow[], extended: boolean): string {
+    const shown = rows.filter(r => extended || r.group === 'headline');
+    if (!shown.length) return '';
+    const line = (r: PreviewRow): string => `
+      <div style="display:flex;gap:8px;align-items:baseline;line-height:1.5">
+        <span style="color:#8a8678;flex:1;min-width:0">${r.label}</span>
+        <span style="color:#e8dfc8;font-weight:600;white-space:nowrap">${r.value}</span>
+        ${r.note ? `<span style="color:#6a6478;font-size:10px;white-space:nowrap">${r.note}</span>` : ''}
+      </div>`;
+    const hasDetail = rows.some(r => r.group === 'detail');
+    return `<div style="margin-top:6px;padding-top:5px;border-top:1px solid #3a3448;font-size:11px">
+      ${shown.map(line).join('')}
+      ${!extended && hasDetail
+        ? '<div style="color:#6a6478;font-size:10px;margin-top:3px">keep resting for the full breakdown</div>'
+        : ''}
+    </div>`;
+  }
+
+  private skillTooltip(id: string, extended = false): TooltipContent | null {
+    const seat = this.panelSeat(this.inventory);
+    const inst = seat.meta.knownSkills.get(id);
     if (!inst) return null;
     const d = inst.def;
+    const preview = previewSkill(seat.actor, inst);
     return {
       title: `${d.name} — Lv ${inst.level}`,
-      description: d.description,
-      meta: `${d.tags.join(' · ')}${d.cooldown ? ` · ${d.cooldown}s cd` : ''}`,
+      description: d.description + this.previewRowsHtml(preview.rows, extended),
+      meta: d.tags.join(' · '),
+      wide: extended && preview.hasDetail,
     };
   }
 
@@ -3534,6 +3562,12 @@ export class UI {
 
   // -------------------------------------------------------------- skill book
 
+  /** A cooldown as the player will actually wait it (skillCooldownSeconds),
+   *  trimmed to the shortest honest precision. */
+  private cdText(sec: number): string {
+    return `${sec >= 10 ? Math.round(sec) : Math.round(sec * 100) / 100}s`;
+  }
+
   private costText(cost: { mana: number; life: number }): string {
     const parts: string[] = [];
     if (cost.mana > 0) parts.push(`${cost.mana} mana`);
@@ -3710,7 +3744,8 @@ Worn graft (Skill Slot ${r.slot + 1}), DORMANT: ${r.state === 'duplicate'
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
             ${this.rarityTagHtml(inst)}
             <span style="color:#8a8678;font-weight:normal;font-size:10px">
-              ${this.costText(p.skillCost(inst))}${def.cooldown ? `, ${def.cooldown}s cd` : ''}</span>
+              ${this.costText(p.skillCost(inst))}${def.cooldown
+                ? `, ${this.cdText(skillCooldownSeconds(p, inst))} cd` : ''}</span>
           </div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="bind-btns">

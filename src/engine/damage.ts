@@ -92,43 +92,46 @@ export function applyConversion(
 }
 
 /**
- * Roll a skill's outgoing damage from the caster's stats plus the skill
- * instance's local modifiers (skill level growth + socketed supports).
- * `flatBonus` injects situational base damage (corpse life fractions,
- * consumed bleed payloads) that still scales with damage modifiers.
+ * HOW A LIVE RANGE RESOLVES inside the damage pipeline. `rollSkillDamage`
+ * passes a dice-rolling picker; the tooltip's `skillDamageBands` passes
+ * "take the floor" and "take the ceiling". Everything downstream of the
+ * pick — added damage, the tag-scoped multiplier, thorns, dominion,
+ * conversion — is arithmetic both callers run IDENTICALLY, which is the
+ * whole point: a displayed number cannot drift from the dealt one without
+ * breaking the deal too. (Post-pick the pipeline is monotonic in the pick,
+ * so feeding it lo and hi yields exactly the band the roll lands inside.)
  */
-export function rollSkillDamage(
-  caster: Actor, inst: SkillInstance,
-  flatBonus?: Partial<Record<DamageType, number>>,
-): DamagePacket {
-  const def = inst.def;
-  const extra = instanceMods(inst);
-  const baseTags = skillContextTags(def);
-  const effectiveness = def.addedEffectiveness ?? 1;
-  const amounts: Partial<Record<DamageType, number>> = {};
+type RangePick = (lo: number, hi: number) => number;
 
-  // LUCKY / UNLUCKY rolls: a made lucky roll doubles the dice and keeps
-  // the HIGHER; unlucky (usually inflicted — the jinxed) keeps the LOWER.
-  // Both at once cancel out. Rolled once per use, applied to every range.
-  const lucky = chance(caster.sheet.get('luckyChance', baseTags, extra));
-  const unlucky = chance(caster.sheet.get('unluckyChance', baseTags, extra));
-  // ROLL FRACTION: track where each live range's roll landed. Weighted by
-  // the range's MIDPOINT (its expected contribution), never by the roll
-  // itself — weighting by the outcome would bias the fraction upward.
-  let rollAcc = 0, rollWeight = 0;
-  const rollRange = (lo: number, hi: number): number => {
-    let r = rand(lo, hi);
-    if (lucky !== unlucky) {
-      const second = rand(lo, hi);
-      r = lucky ? Math.max(r, second) : Math.min(r, second);
-    }
-    if (hi > lo) {
-      const mid = (lo + hi) / 2;
-      rollAcc += ((r - lo) / (hi - lo)) * mid;
-      rollWeight += mid;
-    }
-    return r;
+/** Everything a hit needs that is NOT the roll: the shared reads both the
+ *  roller and the preview fold over. */
+interface DamageContext {
+  extra: Modifier[];
+  baseTags: Set<SkillTag>;
+  effectiveness: number;
+}
+
+function damageContext(inst: SkillInstance): DamageContext {
+  return {
+    extra: instanceMods(inst),
+    baseTags: skillContextTags(inst.def),
+    effectiveness: inst.def.addedEffectiveness ?? 1,
   };
+}
+
+/**
+ * THE ONE DAMAGE FOLD: base ranges resolved by `pick`, then added damage,
+ * the tag-filtered multiplier, the thorns rider, dominion and conversion.
+ * Crit is NOT applied here — the roller rolls it, the preview reports its
+ * chance and multiplier as their own rows.
+ */
+function foldSkillDamage(
+  caster: Actor, inst: SkillInstance, ctx: DamageContext,
+  pick: RangePick, flatBonus?: Partial<Record<DamageType, number>>,
+): Partial<Record<DamageType, number>> {
+  const def = inst.def;
+  const { extra, baseTags, effectiveness } = ctx;
+  const amounts: Partial<Record<DamageType, number>> = {};
   for (const type of DAMAGE_TYPES) {
     // Context for this damage type = skill tags + the type itself,
     // so "increased fire damage" applies to the fire portion only.
@@ -153,7 +156,7 @@ export function rollSkillDamage(
         lo = Math.max(0, mid - half);
         hi = mid + half;
       }
-      base += rollRange(lo, hi);
+      base += pick(lo, hi);
     }
     const added = caster.sheet.get(addedDamageStat(type), tags, extra) * effectiveness;
     const total = (base + added) * caster.sheet.get('damage', tags, extra);
@@ -185,6 +188,47 @@ export function rollSkillDamage(
   }
 
   applyConversion(caster, amounts, baseTags, extra);
+  return amounts;
+}
+
+/**
+ * Roll a skill's outgoing damage from the caster's stats plus the skill
+ * instance's local modifiers (skill level growth + socketed supports).
+ * `flatBonus` injects situational base damage (corpse life fractions,
+ * consumed bleed payloads) that still scales with damage modifiers.
+ */
+export function rollSkillDamage(
+  caster: Actor, inst: SkillInstance,
+  flatBonus?: Partial<Record<DamageType, number>>,
+): DamagePacket {
+  const def = inst.def;
+  const ctx = damageContext(inst);
+  const { extra, baseTags } = ctx;
+
+  // LUCKY / UNLUCKY rolls: a made lucky roll doubles the dice and keeps
+  // the HIGHER; unlucky (usually inflicted — the jinxed) keeps the LOWER.
+  // Both at once cancel out. Rolled once per use, applied to every range.
+  const lucky = chance(caster.sheet.get('luckyChance', baseTags, extra));
+  const unlucky = chance(caster.sheet.get('unluckyChance', baseTags, extra));
+  // ROLL FRACTION: track where each live range's roll landed. Weighted by
+  // the range's MIDPOINT (its expected contribution), never by the roll
+  // itself — weighting by the outcome would bias the fraction upward.
+  let rollAcc = 0, rollWeight = 0;
+  const rollRange: RangePick = (lo, hi) => {
+    let r = rand(lo, hi);
+    if (lucky !== unlucky) {
+      const second = rand(lo, hi);
+      r = lucky ? Math.max(r, second) : Math.min(r, second);
+    }
+    if (hi > lo) {
+      const mid = (lo + hi) / 2;
+      rollAcc += ((r - lo) / (hi - lo)) * mid;
+      rollWeight += mid;
+    }
+    return r;
+  };
+
+  const amounts = foldSkillDamage(caster, inst, ctx, rollRange, flatBonus);
 
   let crit = false;
   if (Object.keys(amounts).length) {
@@ -197,6 +241,52 @@ export function rollSkillDamage(
   return {
     amounts, crit, tags: baseTags, sourceName: def.name, extra,
     rollT: rollWeight > 0 ? rollAcc / rollWeight : undefined,
+  };
+}
+
+/** One damage type's resolved spread, before any target-side defense. */
+export interface DamageBand { lo: number; hi: number }
+
+/** What a skill hits for RIGHT NOW, read off the live sheet: the same fold
+ *  the roller runs, resolved at each range's floor and ceiling instead of
+ *  at the dice. Crit rides alongside as its own odds rather than baked in,
+ *  because a tooltip that silently averages the crit in is the kind of
+ *  number a player cannot reconcile with what they see on screen. */
+export interface SkillDamagePreview {
+  /** Per damage type, post-conversion, pre-mitigation. */
+  bands: Partial<Record<DamageType, DamageBand>>;
+  total: DamageBand;
+  critChance: number;
+  critMulti: number;
+}
+
+/**
+ * THE PREVIEW READ (engine/skillPreview.ts's damage half; probe
+ * balance/probe_skillpreview.ts pins every rolled hit inside this band).
+ * Never rolls, never touches the rng — safe to call from a hover, a HUD
+ * sweep, or the sim, as often as a panel likes.
+ */
+export function skillDamageBands(
+  caster: Actor, inst: SkillInstance,
+  flatBonus?: Partial<Record<DamageType, number>>,
+): SkillDamagePreview {
+  const ctx = damageContext(inst);
+  const loAmounts = foldSkillDamage(caster, inst, ctx, (lo) => lo, flatBonus);
+  const hiAmounts = foldSkillDamage(caster, inst, ctx, (_lo, hi) => hi, flatBonus);
+  const bands: Partial<Record<DamageType, DamageBand>> = {};
+  const total: DamageBand = { lo: 0, hi: 0 };
+  for (const type of DAMAGE_TYPES) {
+    const lo = loAmounts[type] ?? 0;
+    const hi = hiAmounts[type] ?? 0;
+    if (lo <= 0 && hi <= 0) continue;
+    bands[type] = { lo, hi };
+    total.lo += lo;
+    total.hi += hi;
+  }
+  return {
+    bands, total,
+    critChance: caster.sheet.get('critChance', ctx.baseTags, ctx.extra),
+    critMulti: caster.sheet.get('critMulti', ctx.baseTags, ctx.extra),
   };
 }
 
