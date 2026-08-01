@@ -664,6 +664,19 @@ MONSTERS.probe_din_striker = {
     Object.values(WATCH_POST_DETAILS).every(d =>
       [...d.watchers, ...(d.aides?.pool ?? [])].every(r =>
         !!MONSTERS[r.id]?.watch && !!MONSTERS[r.id]?.post)));
+  // The farmland debut (batch 17): the croft watch preset stands, names the
+  // living warden, and the def wears the WHOLE posting kit — ladder, station,
+  // carried lamp, and a look whose re-dressed parts all resolve to painters.
+  check('post gen: the croft watch stands (croft_warden wears watch + post + the lamp, look resolves)',
+    WATCH_POST_DETAILS.croft_watch?.watchers.some(r => r.id === 'croft_warden') === true
+    && !!MONSTERS.croft_warden.watch && !!MONSTERS.croft_warden.post
+    && !!MONSTERS.croft_warden.light
+    && !!LOOKS.croft_warden && LOOKS.croft_warden.parts.every(p => !!PART_PAINTERS[p.kind]));
+  // The hound nudge (ratified with the debut): the nose now wears post too,
+  // qualifying it for aide duty at barrow postings (the body law's both-lanes
+  // rule — and the shipped barrow lair's patrol drifts home, knowingly).
+  check('post gen: the hound nudge — barrow_hound wears watch AND post (aide-duty qualified)',
+    !!MONSTERS.barrow_hound.watch && !!MONSTERS.barrow_hound.post);
 
   // 12a — the seat: one watcher per court, on the floor, deterministic, the
   // brazier under the dress law; the carve twin's fork stream lands the SAME
@@ -988,6 +1001,30 @@ MONSTERS.probe_din_striker = {
       && eye.aiTargetId === archer.id && !eye.dead,
       `hit at ${firstHitAt.toFixed(2)}s, aggro at ${aggroAt.toFixed(2)}s`);
   }
+}
+
+// --- 14) THE CROFT WARDEN — the living freehold watch stands its ladder ---------
+// The settled belt's awake watcher (data/watchposts.ts 'croft_watch'), proven
+// in the SAME conduct the dead wardens passed: the unprovoked fresh lock
+// CLIMBS the gate — through stirring and searching, never a pounce — and only
+// the topped meter falls through to the ordinary lock. The def premise
+// (watch + post + lamp + look) is pinned at the rig-12 census; this is the
+// live half: the first awake, armed freehold body speaks the ladder language.
+{
+  const w = world(0xcf07);
+  const eye = spawn(w, 'croft_warden', 6);
+  eye.pos = vec(500, 700);
+  eye.aiAnchor = vec(500, 700);
+  const prey = spawn(w, 'probe_watch_body', 6, 'player');
+  prey.pos = vec(640, 700); // dead ahead, inside the cone and the lamp's reach
+  const rungsSeen: number[] = [];
+  tick(w, 12, () => {
+    pin(eye, 0); // hold the gaze on the prey — geometry stays put (the rig-10 idiom)
+    if (!rungsSeen.includes(eye.watchRung)) rungsSeen.push(eye.watchRung);
+  });
+  check('croft: the warden climbed THROUGH the rungs to a lock (the gate held, the pounce never came)',
+    rungsSeen.join(',').startsWith('0,1,2') && eye.aggroed && eye.aiTargetId === prey.id,
+    `saw [${rungsSeen.join(',')}]`);
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

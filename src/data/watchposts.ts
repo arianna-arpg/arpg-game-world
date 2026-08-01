@@ -109,6 +109,16 @@ export const WATCH_POST_DETAILS: Record<string, WatchPostSpec> = {
     watchers: [{ id: 'barrow_watchman', weight: 1 }],
     aides: { count: [0, 1], pool: [{ id: 'gorged_ghoul', weight: 1 }] },
   },
+  /** THE CROFT WATCH — the settled belt's LIVING posting (the farmland
+   *  debut): a warm lantern at the yard fire and a warden AWAKE behind it,
+   *  where the village's own sentry sleeps until wounded. He ships ALONE,
+   *  measured: no other settled-belt body wears watch + post today (the
+   *  goose is loud but gateless, the village warden is armed but wears no
+   *  ladder), and his callout IS the reinforcement — the aide seat stays
+   *  open for the day a yard dog earns both lanes. */
+  croft_watch: {
+    watchers: [{ id: 'croft_warden', weight: 1 }],
+  },
 };
 
 // --- The registrant ----------------------------------------------------------

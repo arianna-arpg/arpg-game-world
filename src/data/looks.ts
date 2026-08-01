@@ -1571,6 +1571,20 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'helm' },
     ],
   },
+  /** THE CROFT WARDEN — the settled belt's living night-watch: the freehold
+   *  npc silhouette re-dressed for rounds. A weathered coat and beard, the
+   *  cudgel of his one club skill, and the warm yard-lantern whose swing IS
+   *  the drawn watch cone you skirt (the delver's lamp part, hearth-gold —
+   *  the carried-light read the barrow watchman wears in grave-green). */
+  croft_warden: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'cape', scale: 0.9, role: 'cloth' },
+      { kind: 'beard', x: 0.3, scale: 0.75 },
+      { kind: 'mace' },
+      { kind: 'lantern', color: '#ffd890', scale: 1.05 },
+    ],
+  },
 
   // ========================================================= PLAYER CLASSES
   class_warrior: {

@@ -187,6 +187,16 @@ registerMassKind({
   shapes: [{ shape: 'block', weight: 2 }, { shape: 'slab', weight: 0.8 }],
   lobe: 0.14,
   mouths: [1, 2],
+  // THE CROFT WATCH (batch 17): the croft authored NO garrison and NO inner
+  // rows — its measured marginals are pure vacancy — so the living watch post
+  // (data/watchposts.ts 'croft_watch': the croft_warden's lantern at a yard
+  // fire) is paid from vacancy alone and the worked plots keep ~94% of their
+  // emptiness. Interior-bearing paints only (the block's yard; slabs are
+  // solid and seat nothing — the handler's own refusal).
+  tenants: [
+    { kind: 'watch_post', weight: 6, params: { detail: 'croft_watch' } },
+    { kind: 'vacant', weight: 94 },
+  ],
   skirt: [
     { kind: 'wheat', weight: 2, radius: [24, 34] },
     { kind: 'hay_bale', weight: 1.5, radius: [11, 15] },

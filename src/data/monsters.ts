@@ -2527,6 +2527,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'undead', tags: ['beast'],
     detection: 0.55, // truly short-sighted: the trail is the hunt, the eyes only END it
     packSize: [2, 3],
+    post: true, // kennelled: the nose drifts home between hunts — and qualifies for aide duty (the watch_post body law)
     vision: { arcDeg: 80, rearMul: 0.6 },
     watch: { scent: { range: 130, maxAge: 16 }, riseSec: 1.3, decaySec: 5 },
     brain: { type: 'basic' },
@@ -10260,6 +10261,44 @@ export const MONSTERS: Record<string, MonsterDef> = {
     post: true, // the professional STANDS his watch
     noNemesis: true,
     brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+  // THE CROFT WARDEN — the settled belt's LIVING watch post (the watch_post
+  // ring tenant's farmland debut: data/watchposts.ts 'croft_watch', seated in
+  // croft-court yards by data/massifs.ts). Where the village_warden sleeps
+  // until wounded (the dormant sentry above), the croft warden stands his
+  // rounds AWAKE: a warm swung lantern whose swept cone is the drawn fan you
+  // skirt, the suspicion ladder gating his unprovoked lock (engine/watch.ts —
+  // he climbs, never pounces), and the duty post walking him back to the yard
+  // fire whenever anything displaces him. THE CALLOUT IS THE THREAT, not the
+  // club: the lock's shout turns every kin ladder in earshot toward you — the
+  // cudgel only buys the horn its breath. He pays a modest bounty, unlike the
+  // folk law above: an ARMED watcher met on watched ground is a fight chosen
+  // with open eyes, never the help slaughtered. (He is also the first awake,
+  // armed freehold body — THE BANDIT RULING at RELATIONS below names what
+  // that opens against sleeping toll-gates; see the coda's measurement.)
+  croft_warden: {
+    id: 'croft_warden', name: 'Croft Warden',
+    color: '#d8b060', shape: 'pentagon', radius: 12, look: 'croft_warden',
+    base: { life: 40, moveSpeed: 125, accuracy: 100, mana: 20, manaRegen: 2 },
+    skills: ['heavy_strike'], // the freehold kit's own club (village_warden's opener)
+    xp: 12,
+    faction: 'freehold',
+    detection: 1.2,
+    drops: 0,
+    post: true, // the yard is his station: displaced, he walks back and re-plants
+    noNemesis: true,
+    // THE CARRIED LAMP: hearth-gold where the barrow's wick burns cold — the
+    // cone you skirt is the light he swings.
+    light: { radius: -8, color: '#ffd890', intensity: 0.45, flicker: 2 },
+    watch: { sweep: { arcDeg: 140, sec: 6 }, riseSec: 1.6, searchSec: 7 },
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 80, rearMul: 0.25, alertShout: 400, memory: 5 },
+    },
+    tells: [
+      { source: 'watch', channel: { kind: 'glow', color: '#ffd890', max: 0.45 } },
+      { source: 'watch', band: [0.5, 1], channel: { kind: 'lean', amp: 0.6 } },
+    ],
   },
   // THE FOLD REEVE: the farmer who oversees the worked shires — the Drove's
   // paymaster (packages/defs/drove.ts). The scene posts one at the broken pen;
