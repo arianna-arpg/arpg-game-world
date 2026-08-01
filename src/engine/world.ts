@@ -49892,8 +49892,8 @@ export class World {
     // natural band — an overgrown stretch makes no causeway promise. (That
     // demotion reproduces the old chain's registry fallback byte-for-byte:
     // wild ways have always still reported themselves when nothing else
-    // covered — whether they SHOULD is an open design question, deliberately
-    // not answered by this fold.)
+    // covered — RULED 2026-07-31: they keep speaking. An overgrown way
+    // stays readable ground; only the causeway promise is forfeit.)
     let built: string | null = null;   // first-sensed covering BUILT disc
     let nat: RegionKind | null = null; // worst-severity covering GROUND disc
     let natSev = -Infinity;
