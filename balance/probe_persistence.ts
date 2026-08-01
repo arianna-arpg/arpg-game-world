@@ -63,6 +63,7 @@ import {
 import { buildManifest, reconcileManifest } from '../src/packages/manifest';
 import { resolveResumeSpawn } from '../src/meta/worldstate';
 import { World } from '../src/engine/world';
+import { zoneKindOf } from '../src/data/zoneKinds';
 
 let failed = 0;
 /** XP through the seat lane. grantSeatXp is World-PRIVATE — the probe reaches
@@ -399,6 +400,74 @@ void (async (): Promise<void> => {
     spotExotic?.zoneId === anchorId && spotExotic.cave === undefined
     && JSON.stringify(Object.keys(spotExotic)) === '["zoneId","x","y","vitals"]',
     spotExotic ? `keys=${Object.keys(spotExotic).join(',')}` : 'no spot');
+
+  // === RIG G — THE MEMO INVARIANCE (a grown chart never serializes stale) ====
+  // RIG B pins the SPLICE against a plain stringify of the SAME memo array —
+  // a fold serving stale bytes would green both sides. This rig pins the memo
+  // LANE against a FORCED full re-derive at grown-chart scale: same world
+  // state → same zones bytes through either path, always; and a moved fold
+  // signal both invalidates the memo and re-converges with a fresh rebuild.
+  console.log('--- RIG G: the memo invariance (grown chart, hot lane == full re-derive) ---');
+  const accountG = makeAccount();
+  for (const c of CLASSES) accountG.unlockedClasses.add(c.id);
+  const manifestG = buildManifest(accountG, 424242);
+  for (const p of manifestG.packages) p.enabled = false;
+  const worldG = new World(accountG, Object.freeze(manifestG));
+  worldG.createPlayer(CLASSES[0], { charId: mintCharId() });
+  // Grow the chart through the real frontier resolution (the webperf idiom).
+  const privG = worldG as unknown as { chartNeighborsOf(z: import('../src/data/zones').ZoneDef): void };
+  for (let r = 0; r < 8; r++) {
+    const batch = Object.values(worldG.zoneMap).filter(z =>
+      (z.dimension ?? 'surface') === 'surface' && z.caveDepth == null && !z.pocket
+      && z.objective.kind !== 'safe' && !z.floating && !zoneKindOf(z)?.staticExits
+      && z.exits.some(e => e.to === '?'));
+    for (const z of batch) privG.chartNeighborsOf(z);
+  }
+  // Lived-in zone memory: visit a handful of the minted ground.
+  const visitG = Object.values(worldG.zoneMap)
+    .filter(z => z.caveDepth == null && z.objective.kind !== 'safe' && !z.floating)
+    .slice(0, 6).map(z => z.id);
+  for (const id of visitG) {
+    worldG.loadZone(id);
+    for (let i = 0; i < 4; i++) worldG.update(1 / 60);
+  }
+  const zonesG = Object.keys(worldG.zoneMap).length;
+  // The floor guards the FIXTURE (a broken growth idiom would vacuous-green
+  // the byte pins below); this seed's geography saturates around ~81 zones.
+  check('G0: the chart grew past sixty zones (fixture sane)', zonesG > 60,
+    `${zonesG} zones, ${visitG.length} visited`);
+  worldG.serializeWorldState(); // prime the memo
+  const hot1 = worldG.zonesSaveJson();
+  worldG.serializeWorldState(); // a quiet second beat
+  const hot2 = worldG.zonesSaveJson();
+  check('G1: quiet beats serve one stable zones section', !!hot1 && hot1 === hot2,
+    `${((hot1?.length ?? 0) / 1024).toFixed(0)}KB`);
+  worldG.invalidateZonesSaveMemo();
+  worldG.serializeWorldState(); // the forced full re-derive
+  const freshG = worldG.zonesSaveJson();
+  check('G2: the memo lane is byte-identical to a forced full re-derive', hot2 === freshG,
+    hot2 === freshG ? '' : `memo=${hot2?.length}b fresh=${freshG?.length}b`);
+  // A moved fold signal (the ring-1 unveil's own write) must invalidate the
+  // memo — and the invalidated lane must re-converge with a fresh rebuild.
+  const veiledG = Object.values(worldG.zoneMap).find(z => z.veiled);
+  if (veiledG) {
+    veiledG.veiled = false;
+    worldG.serializeWorldState();
+    const moved = worldG.zonesSaveJson();
+    check('G3: a moved fold signal invalidates the memo', !!moved && moved !== freshG);
+    worldG.invalidateZonesSaveMemo();
+    worldG.serializeWorldState();
+    check('G4: the post-move memo re-converges with a full re-derive',
+      moved === worldG.zonesSaveJson());
+  } else {
+    check('G3: a moved fold signal invalidates the memo (no veiled zone rolled — vacuous)', true);
+    check('G4: the post-move memo re-converges with a full re-derive (vacuous)', true);
+  }
+  // The WRITER at grown scale: the splice+swap lane still equals the plain
+  // stringify byte-for-byte (RIG B's law, re-pinned where the bytes are big).
+  const saveG = serializeCharacter(worldG);
+  check('G5: characterBody == plain stringify at grown-chart scale',
+    characterBody(worldG, saveG) === JSON.stringify(saveG));
 
   finish();
 })();

@@ -1528,6 +1528,38 @@ function tick(now: number): void {
   pad.endFrame();
 }
 
+/** The 20s autosave beat, deferred into genuine idle slack when the runtime
+ *  offers it (requestIdleCallback — always, on the Chromium we ship). hostTail
+ *  runs AFTER perfPush, so work here lands in the NEXT frame's rAF gap,
+ *  invisible to the sim/render brackets — the beat's serialize+write block
+ *  (~7ms at a 415-zone chart, growing with the world) was a standing
+ *  once-per-20s hitch by position. The deferral changes WHEN the snapshot is
+ *  captured (a few idle ms later, timeout-capped), never what is written: the
+ *  callback serializes synchronously through the same persistRun writer, and
+ *  re-checks the beat's own preconditions plus run identity so a menu exit,
+ *  death, or fresh run between schedule and fire is never clobbered by a
+ *  stale capture (their own deliberate writes have landed by then — and a
+ *  post-wipe resurrection is exactly what the gameOver guard refuses).
+ *  Runtimes without rIC keep the synchronous beat byte-for-byte; probes and
+ *  the sim harness drive persistRun directly and never see this seam. */
+let idleSavePending = false;
+function idleAutosave(): void {
+  if (typeof window.requestIdleCallback !== 'function') {
+    persistRun(account, world);
+    persistCouchGuests();
+    return;
+  }
+  if (idleSavePending) return;
+  idleSavePending = true;
+  const w = world;
+  window.requestIdleCallback(() => {
+    idleSavePending = false;
+    if (!running || world !== w || world.gameOver || world.scene) return;
+    persistRun(account, world);
+    persistCouchGuests();
+  }, { timeout: 500 });
+}
+
 /** Host-only end-of-frame work: live panels, autosave, and the permadeath/death
  *  screen flow. NONE of this runs on a client (no character to save/wipe). */
 function hostTail(dt: number): void {
@@ -1548,7 +1580,7 @@ function hostTail(dt: number): void {
   // The run's first write lands at the scene's 'home' stage via charDirty.
   if (!world.gameOver && !world.scene) {
     autosaveTimer -= dt;
-    if (autosaveTimer <= 0) { autosaveTimer = 20; persistRun(account, world); persistCouchGuests(); }
+    if (autosaveTimer <= 0) { autosaveTimer = 20; idleAutosave(); }
   }
 
   // The sim mutated character save-state OUTSIDE the autosave cadence — a mode

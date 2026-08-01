@@ -418,7 +418,19 @@ export function characterBody(world: World, save: CharacterSave): string {
   if (zonesJson && save.world) {
     const zs = save.world.zones;
     const sentinel = `__zsplice_${Date.now().toString(36)}_${Math.floor(Math.random() * 0xffffffff).toString(36)}__`;
-    const body = JSON.stringify(save, (k, v) => (k === 'zones' && v === zs ? sentinel : v));
+    // The sentinel is SWAPPED into the save directly rather than minted by a
+    // replacer callback: a replacer de-optimizes the whole stringify (V8
+    // leaves the fast path — measured ~11ms extra on a 2MB body), and the
+    // swap stringifies byte-identically. The finally restores the array even
+    // when serialization throws, so the loud-failure lane (saveCharacter's
+    // catch) never sees a save left mutated.
+    let body: string;
+    try {
+      (save.world as { zones: unknown }).zones = sentinel;
+      body = JSON.stringify(save);
+    } finally {
+      save.world.zones = zs;
+    }
     const token = JSON.stringify(sentinel); // quoted, exactly as it appears in the body
     const at = body.indexOf(token);
     if (at >= 0 && body.indexOf(token, at + token.length) < 0) {

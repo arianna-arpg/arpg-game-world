@@ -72,8 +72,18 @@ export const WORLDSTATE_CFG = {
    *  claimed-event set). Deep def fields are mint-once by design; this age
    *  bound (world-clock seconds) re-derives regardless, so even a signal the
    *  fold misses can lag a HARD CRASH's save by at most this long — normal
-   *  quits ride the durable path, which bypasses the memo entirely. */
-  zonesMemoMaxAgeSec: 120,
+   *  quits ride the durable path, which bypasses the memo entirely.
+   *
+   *  600 (was 120): the rebuild is a real frame hitch that GROWS with the
+   *  chart (~35ms at 415 zones headless; the 80ms report above), and the
+   *  2026-08-01 writer audit found no unfolded post-mint def writer whose
+   *  staleness a resume doesn't already heal: the waypointless-dimension
+   *  strip re-fires at every zone load, and a quickened stamp's in-place
+   *  key/until refresh is re-married from the overlay snapshot (the clock
+   *  authority, serialized fresh outside the memo) by the reconcile sweep.
+   *  The bound therefore insures only FUTURE unfolded writers, and a hard
+   *  crash already loses up to a full 20s beat of everything else. */
+  zonesMemoMaxAgeSec: 600,
 } as const;
 
 /** Resolve the wake policy: the mode's pin wins (a sworn covenant is not
