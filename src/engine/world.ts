@@ -2327,14 +2327,18 @@ export class World {
    *  pattern); everyone else goes through openHollow. */
   zoneHollows: HollowSpec[] = [];
   openedHollows = new Set<string>();
-  /** Set while underground: where to drop the player when they climb back out. */
-  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string } | null = null;
+  /** Set while underground: where to drop the player when they climb back out.
+   *  `kind` + `seed` are the mouth's mint identity (recorded by enterSidezone —
+   *  the exact-resume ladder re-mints the pocket from them; writers that mint
+   *  outside the sidezone registry (pitfalls, the Descent, realm arenas) leave
+   *  them absent and their ladders simply never persist). */
+  caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
    *  pushes the current return here; climbing out pops it back — so a mid-
    *  ladder retreat stands in the outer cave WITH its way home intact (the
    *  single-slot field alone would null out and misread the outer cave as
    *  surface: sealed exits, no zone memory, wrong spawn point). */
-  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string }[] = [];
+  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string; seed?: number }[] = [];
   /** True just after climbing out of a cave: the player lands AT the mouth, so
    *  suppress re-entry until they step clear of it once (no bouncing back in). */
   private caveExitGrace = false;
@@ -15025,6 +15029,20 @@ export class World {
       : (outermost && this.zoneMap[outermost.zoneId] ? outermost.zoneId : null);
     const spotPos = this.zoneMap[this.zone.id] ? this.player.pos
       : (outermost && this.zoneMap[outermost.zoneId] ? outermost.pos : null);
+    // THE UNDERGROUND LADDER (resume policy 'exact'): when the save catches
+    // us inside a caveMap pocket whose WHOLE descent is re-mintable — every
+    // rung a registered sidezone mouth carrying its mint seed (pitfalls, the
+    // Descent, realm arenas and the Wraithsail's decks are not, and never
+    // persist) — the ladder rides beside the surface anchor. The anchor
+    // STAYS the written zoneId/x/y, so an old reader, the 'town' policy, or
+    // any wake that can't stand the ladder up degrades to today's mouth
+    // wake; with the ladder absent the player block is byte-identical to
+    // what it always was.
+    const ladderRungs = this.caveReturn ? [...this.caveStack, this.caveReturn] : [];
+    const laddered = spotZone !== null && !!this.caveMap[this.zone.id]
+      && ladderRungs.length > 0 && ladderRungs.length <= WORLDSTATE_CFG.caveRungCap
+      && ladderRungs.every(r => r.kind !== undefined && sidezoneOf(r.kind) !== undefined
+        && typeof r.seed === 'number' && Number.isFinite(r.seed));
     const p = this.player;
     const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
     return {
@@ -15048,6 +15066,16 @@ export class World {
             mana: vfrac(p.mana, p.maxMana()),
             es: vfrac(p.es, p.maxEs()),
           },
+          ...(laddered ? {
+            cave: {
+              zoneId: this.zone.id, x: p.pos.x, y: p.pos.y,
+              rungs: ladderRungs.map(r => ({
+                zoneId: r.zoneId, x: r.pos.x, y: r.pos.y,
+                ...(r.entryFrom !== null ? { entryFrom: r.entryFrom } : {}),
+                kind: r.kind!, seed: r.seed!,
+              })),
+            },
+          } : {}),
         },
       } : {}),
       overlays,
@@ -15226,19 +15254,27 @@ export class World {
   /** Wake a resumed character per the resolved policy (meta/worldstate.ts):
    *  'exact' re-enters the saved zone at the saved spot with the saved
    *  vitals (floored by WORLDSTATE_CFG.exactVitalsFloor) — Alt-F4 hands back
-   *  exactly the situation it tried to flee; 'town' (and every unresolvable
-   *  spot — a scrubbed zone, a corrupt coord) wakes in Lastlight. ALWAYS
-   *  loads a zone, so the post-adopt world is consistent either way. */
+   *  exactly the situation it tried to flee, an underground save included
+   *  (the spot's optional cave ladder re-descends after the anchor load);
+   *  'town' (and every unresolvable spot — a scrubbed zone, a corrupt coord)
+   *  wakes in Lastlight. ALWAYS loads a zone, so the post-adopt world is
+   *  consistent either way. */
   resumeSpawn(policy: ResumeSpawn, spot: SavedPlayerSpot | undefined | null): void {
     const exact = policy === 'exact' && spot && this.zoneMap[spot.zoneId]
       && Number.isFinite(spot.x) && Number.isFinite(spot.y) ? spot : null;
     if (!exact) { this.loadZone(START_ZONE); return; }
     this.loadZone(exact.zoneId);
+    // THE UNDERGROUND LADDER — descend strictly AFTER the anchor load: any
+    // surface load nulls caveReturn and empties caveStack by law, so the
+    // ladder must stand up on top of the loaded anchor, never before it.
+    // A wake whose ladder can't stand (absent, corrupt, no longer mintable)
+    // lands at the anchor — today's mouth wake.
+    const below = this.resumeCaveLadder(exact);
     // Stand the party at the saved spot (loadZone placed them at the entry
     // portal): the hero exactly there, allies + carried minions in a loose
     // ring (THE PARTY-LANDING LAW — this wake was its reference idiom).
     const p = this.player;
-    this.landPartyAt(vec(exact.x, exact.y), { spread: 80, band: [-80, 80] });
+    this.landPartyAt(below ?? vec(exact.x, exact.y), { spread: 80, band: [-80, 80] });
     // Vitals: proportional restore with a reaction floor — an exact wake is
     // honest about how hurt you were, not a free refill.
     const v = exact.vitals;
@@ -15248,6 +15284,82 @@ export class World {
       p.life = Math.max(1, p.maxLife() * frac(v.life));
       p.mana = p.maxMana() * frac(v.mana);
       p.es = p.maxEs() * frac(v.es);
+    }
+  }
+
+  /** Stand a saved underground ladder back up (SavedPlayerSpot.cave — the
+   *  exact-resume wake below ground). Validates the WHOLE chain first, with
+   *  no side effects: registered kinds, finite coords and seeds, the rung
+   *  count under WORLDSTATE_CFG.caveRungCap, rung 0 hanging off the loaded
+   *  anchor, and every rung's derived pocket id (sidezoneIdFor — the mint's
+   *  own derivation) matching the id the next rung claims. Only then walks
+   *  it rung by rung through the real sidezone mint path — mintSidezone +
+   *  furnish + the ladder push + loadZone, exactly the beats a live descent
+   *  runs minus the discovery ledger (a resume is the SAME entry, not a new
+   *  find) — so each pocket re-mints from its stable id and zone memory
+   *  finds its survivors. Returns the saved underground spot to land at, or
+   *  null with the ANCHOR standing loaded: a corrupt, stale, or
+   *  no-longer-mintable ladder degrades to the mouth wake, never a throw
+   *  and never a half-descended wake.
+   *  CONTRACT: call with the anchor zone (spot.zoneId) already loaded — the
+   *  surface load just cleared the live ladder; this rebuilds it. */
+  private resumeCaveLadder(spot: SavedPlayerSpot): Vec2 | null {
+    const cave = spot.cave;
+    if (!cave) return null;
+    const bad = (why: string): null => {
+      console.warn(`[world] resume: saved cave ladder unusable — waking at the mouth (${why})`);
+      return null;
+    };
+    const fin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    if (typeof cave !== 'object' || typeof cave.zoneId !== 'string'
+      || !cave.zoneId.startsWith('cave_') || !fin(cave.x) || !fin(cave.y)) {
+      return bad('malformed spot');
+    }
+    const rungs = cave.rungs;
+    if (!Array.isArray(rungs) || rungs.length < 1 || rungs.length > WORLDSTATE_CFG.caveRungCap) {
+      return bad('malformed rung list');
+    }
+    if (rungs[0]?.zoneId !== spot.zoneId) return bad('ladder does not hang off the anchor');
+    for (let i = 0; i < rungs.length; i++) {
+      const r = rungs[i];
+      if (!r || typeof r !== 'object' || typeof r.zoneId !== 'string'
+        || !fin(r.x) || !fin(r.y) || !fin(r.seed)
+        || typeof r.kind !== 'string' || sidezoneOf(r.kind) === undefined
+        || (r.entryFrom !== undefined && typeof r.entryFrom !== 'string')) {
+        return bad(`rung ${i} malformed or its kind unregistered`);
+      }
+      // THE CHAIN LAW: this rung's mouth must re-derive EXACTLY the pocket id
+      // the next rung (or the saved spot itself) claims — same mouth, same
+      // pocket, or the ladder no longer describes this world and stands down.
+      const derived = this.sidezoneIdFor(r.zoneId, r.kind, r.seed);
+      const expect = i + 1 < rungs.length ? rungs[i + 1].zoneId : cave.zoneId;
+      if (derived !== expect) return bad(`rung ${i} derives '${derived}', save claims '${expect}'`);
+    }
+    try {
+      for (const r of rungs) {
+        if (this.zone.id !== r.zoneId) {
+          throw new Error(`ladder desync: standing in '${this.zone.id}', rung expects '${r.zoneId}'`);
+        }
+        const sz = sidezoneOf(r.kind)!;
+        const dest = this.mintSidezone({ pos: vec(r.x, r.y), seed: r.seed, kind: r.kind });
+        if (!dest) throw new Error(`rung '${r.kind}' under '${r.zoneId}' would not mint`);
+        this.applySidezoneFurnish(dest, sz);
+        if (sz.levelWith === 'character') dest.level = Math.max(1, this.player.level);
+        if (this.caveReturn) this.caveStack.push(this.caveReturn);
+        this.caveReturn = {
+          zoneId: r.zoneId, pos: vec(r.x, r.y),
+          entryFrom: r.entryFrom ?? null, kind: r.kind, seed: r.seed,
+        };
+        this.loadZone(dest.id, r.zoneId); // off-graph — no onNodeCharted, same as the live descent
+      }
+      return vec(cave.x, cave.y);
+    } catch (err) {
+      // LOUD, then clean (the persistence doctrine — a broken resume path is
+      // never silent): reload the anchor, whose surface load unwinds whatever
+      // half-ladder stood up, so the fallback is exactly the mouth wake.
+      console.error('[world] resume: saved cave ladder failed to stand — waking at the mouth', err);
+      this.loadZone(spot.zoneId);
+      return null;
     }
   }
 
@@ -40518,15 +40630,23 @@ export class World {
    *  sim. Classic caves keep their historical id shape (`cave_<zone>_<seed>`);
    *  other kinds prefix theirs (`cave_<kind>_<zone>_<seed>`) — everything keeps
    *  the cave_ prefix so save-side filters treat all pockets alike. */
+  /** The pocket id behind a sidezone mouth — ONE derivation for the mint and
+   *  the exact-resume ladder restore (which re-derives per saved rung and
+   *  demands byte-agreement before it walks). Classic caves keep their
+   *  historical id shape; every other kind prefixes its kind. */
+  private sidezoneIdFor(parentId: string, kind: string, seed: number): string {
+    return kind === 'cave_entrance'
+      ? `cave_${parentId}_${seed}`
+      : `cave_${kind}_${parentId}_${seed}`;
+  }
+
   /** Mint (or fetch the cached) pocket behind a sidezone mouth — split from
    *  enterSidezone so a TRAVERSAL mouth can size its understory capture off
    *  the minted def BEFORE the crossing's veil hides the parent zone. */
   private mintSidezone(cm: { pos: Vec2; seed: number; kind: string }): ZoneDef | null {
     const sz = sidezoneOf(cm.kind);
     if (!sz) return null;
-    const id = cm.kind === 'cave_entrance'
-      ? `cave_${this.zone.id}_${cm.seed}`
-      : `cave_${cm.kind}_${this.zone.id}_${cm.seed}`;
+    const id = this.sidezoneIdFor(this.zone.id, cm.kind, cm.seed);
     if (!this.caveMap[id]) {
       this.caveMap[id] = sz.mint({
         parent: this.zone, seed: cm.seed, id,
@@ -40555,9 +40675,10 @@ export class World {
     // death — surfaces Vault unlocks, the delvers_seen pattern).
     if (sz.ledgerOnEnter) bumpLedger(this.ledger, sz.ledgerOnEnter);
     // Descending DEEPER (pocket-within-pocket): bank the current level's way
-    // home on the ladder stack; climbing out pops it back.
+    // home on the ladder stack; climbing out pops it back. kind + seed ride
+    // the rung so the exact-resume save can re-mint this exact descent.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind };
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind, seed: cm.seed };
     this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
   }
 

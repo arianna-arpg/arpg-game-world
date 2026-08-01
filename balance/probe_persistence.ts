@@ -36,6 +36,15 @@
 //           after the poison is removed works.
 //   RIG E — THE MORTAL CONTINUE: the shared run slot rides the same seam —
 //           persistRun lands it, loadCharacter round-trips it.
+//   RIG F — THE UNDERGROUND EXACT RESUME (recheck #319): a save written two
+//           sidezone rungs deep carries the surface anchor PLUS the cave
+//           ladder (SavedPlayerSpot.cave); a fresh world resumed with policy
+//           'exact' wakes UNDERGROUND at the saved spot with caveReturn +
+//           caveStack rebuilt and every parent re-minted (the climb out
+//           unwinds to the surface); a ladderless spot keeps today's mouth
+//           wake exactly; a corrupt/unmintable ladder degrades to the mouth
+//           wake, never a throw; and an exotic (kindless — pitfall/Descent/
+//           realm shaped) descent writes anchor-only in the old byte shape.
 //
 // Run: npx tsx balance/probe_persistence.ts
 // ---------------------------------------------------------------------------
@@ -52,6 +61,7 @@ import {
   type CharacterSave,
 } from '../src/meta/character';
 import { buildManifest, reconcileManifest } from '../src/packages/manifest';
+import { resolveResumeSpawn } from '../src/meta/worldstate';
 import { World } from '../src/engine/world';
 
 let failed = 0;
@@ -247,6 +257,148 @@ void (async (): Promise<void> => {
   const cont = loadCharacter();
   check('E2: loadCharacter round-trips it',
     !!cont && cont.schemaVersion === 1 && (cont.modeId ?? 'mortal') === 'mortal');
+
+  // === RIG F — THE UNDERGROUND EXACT RESUME (recheck #319) ===================
+  console.log('--- RIG F: the underground exact resume (the cave ladder) ---');
+
+  // The boot lane's policy resolution, honestly: no mode pins resume on a
+  // mortal, so the player's 'exact' choice rules — the lane main.ts walks.
+  check('F0: the boot lane resolves the exact policy honestly',
+    resolveResumeSpawn(modeById('mortal').resume, 'exact') === 'exact');
+
+  const accountF = makeAccount();
+  for (const c of CLASSES) accountF.unlockedClasses.add(c.id);
+  const manifestF = buildManifest(accountF, 616161);
+  for (const p of manifestF.packages) p.enabled = false;
+  const worldF = new World(accountF, Object.freeze(manifestF));
+  worldF.createPlayer(CLASSES[0], { charId: mintCharId() });
+  const townId = worldF.zone.id;
+  // The anchor must NOT be the town: town is also the last-resort wake, so
+  // an anchor there could green a broken fallback. Walk to a plain neighbor.
+  const anchorId = Object.keys(worldF.zoneMap).find(id => id !== townId && !worldF.zoneMap[id].kind);
+  check('F1: a plain surface neighbor exists to anchor on', !!anchorId, `anchor=${anchorId ?? 'NONE'}`);
+  if (!anchorId) { finish(); return; }
+  worldF.loadZone(anchorId);
+
+  // Descend TWO rungs through the REAL entry path — enterSidezone is the
+  // machinery, the dwell is merely its input (the grantSeatXp idiom: the
+  // probe reaches the private seam structurally, never widening the API).
+  type FCm = { pos: { x: number; y: number }; seed: number; kind: string };
+  type FRung = { zoneId: string; pos: { x: number; y: number }; entryFrom: string | null; kind?: string; seed?: number };
+  type FInnards = {
+    enterSidezone(cm: FCm): void;
+    travelThrough(e: { to: string; side: 'n' | 's' | 'e' | 'w' }): void;
+    caveStack: FRung[];
+  };
+  const innards = (w: World): FInnards => w as unknown as FInnards;
+  const inF = innards(worldF);
+  const mouth1 = { x: Math.round(worldF.zone.size.w / 2), y: Math.round(worldF.zone.size.h / 2) };
+  inF.enterSidezone({ pos: mouth1, seed: 4242, kind: 'cave_entrance' });
+  const rung1Id = worldF.zone.id;
+  check('F2: the first descent stands underground',
+    rung1Id === `cave_${anchorId}_4242` && !!worldF.caveMap[rung1Id], `zone=${rung1Id}`);
+  const mouth2 = { x: Math.round(worldF.zone.size.w / 2), y: Math.round(worldF.zone.size.h / 2) };
+  inF.enterSidezone({ pos: mouth2, seed: 777, kind: 'cave_entrance' });
+  const rung2Id = worldF.zone.id;
+  check('F3: the second descent nests and the stack carries the way home',
+    rung2Id === `cave_${rung1Id}_777` && worldF.caveReturn?.zoneId === rung1Id
+    && inF.caveStack.length === 1 && inF.caveStack[0].zoneId === anchorId, `zone=${rung2Id}`);
+
+  // The save the game actually WRITES, two rungs down (the real writer seam).
+  const posSaved = { x: worldF.player.pos.x, y: worldF.player.pos.y };
+  persistRun(accountF, worldF);
+  const bodyF = lsGet('arpg_character_v1');
+  let saveF: CharacterSave | null = null;
+  try { saveF = bodyF ? JSON.parse(bodyF) as CharacterSave : null; } catch { /* unparseable */ }
+  const spotF = saveF?.world?.player;
+  check('F4: the written spot anchors at the SURFACE mouth and carries the ladder',
+    spotF?.zoneId === anchorId && spotF.x === mouth1.x && spotF.y === mouth1.y
+    && spotF.cave?.zoneId === rung2Id
+    && Math.abs((spotF.cave?.x ?? NaN) - posSaved.x) < 0.01
+    && Math.abs((spotF.cave?.y ?? NaN) - posSaved.y) < 0.01
+    && spotF.cave?.rungs.length === 2
+    && spotF.cave.rungs[0].zoneId === anchorId && spotF.cave.rungs[0].kind === 'cave_entrance'
+    && spotF.cave.rungs[0].seed === 4242 && spotF.cave.rungs[0].x === mouth1.x
+    && spotF.cave.rungs[1].zoneId === rung1Id && spotF.cave.rungs[1].seed === 777,
+    spotF ? `anchor=${spotF.zoneId} cave=${spotF.cave?.zoneId ?? 'ABSENT'}` : 'no spot written');
+  if (!saveF?.world?.player?.cave) { finish(); return; }
+
+  // resumeGame's restoreWorldState dance, verbatim, on a FRESH world.
+  const standUp = (save: CharacterSave): { w: World; adopted: boolean } => {
+    const mf = reconcileManifest(save.expedition, accountF, 999);
+    const w = new World(accountF, Object.freeze(mf));
+    w.createPlayer(CLASSES.find(c => c.id === save.classId) ?? CLASSES[0], { charId: save.charId });
+    const applied = applySavedCharacter(w, save);
+    const adopted = !!save.world && w.adoptWorldState(save.world);
+    return { w, adopted: applied && adopted };
+  };
+  const { w: worldF2, adopted: adoptedF } = standUp(saveF);
+  check('F5: the underground save stands back up', adoptedF);
+  worldF2.resumeSpawn(
+    resolveResumeSpawn(modeById(worldF2.meta.modeId ?? 'mortal').resume, 'exact'),
+    saveF.world.player);
+  const inF2 = innards(worldF2);
+  const wokeDist = Math.hypot(worldF2.player.pos.x - posSaved.x, worldF2.player.pos.y - posSaved.y);
+  check('F6: the exact wake stands UNDERGROUND at the saved spot',
+    worldF2.zone.id === rung2Id && wokeDist < 0.5,
+    `zone=${worldF2.zone.id} d=${wokeDist.toFixed(2)}`);
+  check('F7: the ladder machinery rebuilt whole (return + stack + minted parents)',
+    worldF2.caveReturn?.zoneId === rung1Id && worldF2.caveReturn.kind === 'cave_entrance'
+    && worldF2.caveReturn.seed === 777
+    && inF2.caveStack.length === 1 && inF2.caveStack[0].zoneId === anchorId
+    && inF2.caveStack[0].seed === 4242
+    && !!worldF2.caveMap[rung1Id] && !!worldF2.caveMap[rung2Id]);
+
+  // Climb ALL the way out through the real exit pop: rung 2 → rung 1 → surface.
+  inF2.travelThrough({ to: rung1Id, side: 's' });
+  const outOne = worldF2.zone.id === rung1Id
+    && worldF2.caveReturn?.zoneId === anchorId && inF2.caveStack.length === 0;
+  inF2.travelThrough({ to: anchorId, side: 's' });
+  check('F8: the climb out unwinds the restored ladder to the surface',
+    outOne && worldF2.zone.id === anchorId && worldF2.caveReturn === null,
+    `zone=${worldF2.zone.id}`);
+
+  // FALLBACK 1 — the ladder ABSENT (every pre-ladder save): today's mouth
+  // wake exactly, ladder state empty.
+  const saveNoLadder = JSON.parse(bodyF!) as CharacterSave;
+  delete saveNoLadder.world!.player!.cave;
+  const { w: worldF3, adopted: a3 } = standUp(saveNoLadder);
+  worldF3.resumeSpawn('exact', saveNoLadder.world!.player);
+  check('F9: a ladderless spot keeps today\'s mouth wake byte-for-byte',
+    a3 && worldF3.zone.id === anchorId
+    && Math.hypot(worldF3.player.pos.x - mouth1.x, worldF3.player.pos.y - mouth1.y) < 0.5
+    && worldF3.caveReturn === null && innards(worldF3).caveStack.length === 0,
+    `zone=${worldF3.zone.id}`);
+
+  // FALLBACK 2 — a ladder THIS world can no longer stand up: an unregistered
+  // kind, and separately a broken id chain. Mouth wake, never a throw.
+  const saveBadKind = JSON.parse(bodyF!) as CharacterSave;
+  saveBadKind.world!.player!.cave!.rungs[1].kind = 'never_registered_kind';
+  const { w: worldF4 } = standUp(saveBadKind);
+  let threwKind = false;
+  try { worldF4.resumeSpawn('exact', saveBadKind.world!.player); } catch { threwKind = true; }
+  check('F10: an unmintable rung degrades to the mouth wake, never a throw',
+    !threwKind && worldF4.zone.id === anchorId && worldF4.caveReturn === null,
+    `zone=${worldF4.zone.id}`);
+  const saveBadChain = JSON.parse(bodyF!) as CharacterSave;
+  saveBadChain.world!.player!.cave!.zoneId = 'cave_bogus_9';
+  const { w: worldF5 } = standUp(saveBadChain);
+  let threwChain = false;
+  try { worldF5.resumeSpawn('exact', saveBadChain.world!.player); } catch { threwChain = true; }
+  check('F11: a chain-broken ladder degrades to the mouth wake, never a throw',
+    !threwChain && worldF5.zone.id === anchorId && worldF5.caveReturn === null,
+    `zone=${worldF5.zone.id}`);
+
+  // WRITE PARITY — an EXOTIC descent (kindless rung: the pitfall / Descent /
+  // realm-arena shape) writes anchor-only, and the player block keeps its
+  // exact old keys — the ladder never perturbs a save it can't serve.
+  inF2.enterSidezone({ pos: mouth1, seed: 31337, kind: 'cave_entrance' });
+  worldF2.caveReturn = { zoneId: anchorId, pos: { x: mouth1.x, y: mouth1.y }, entryFrom: null };
+  const spotExotic = serializeCharacter(worldF2).world?.player;
+  check('F12: an exotic (kindless) descent writes anchor-only in the old byte shape',
+    spotExotic?.zoneId === anchorId && spotExotic.cave === undefined
+    && JSON.stringify(Object.keys(spotExotic)) === '["zoneId","x","y","vitals"]',
+    spotExotic ? `keys=${Object.keys(spotExotic).join(',')}` : 'no spot');
 
   finish();
 })();

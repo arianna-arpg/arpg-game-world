@@ -58,6 +58,12 @@ export const WORLDSTATE_CFG = {
   /** Sanity cap on restorable zones — a save claiming more is treated as
    *  corrupt beyond the cap (kept zones still load; the rest are culled). */
   zoneCap: 2000,
+  /** Sanity cap on the saved UNDERGROUND LADDER's rungs (SavedPlayerSpot
+   *  .cave) — a save claiming a deeper descent is treated as corrupt and the
+   *  whole ladder is ignored (the wake degrades to the surface anchor at the
+   *  mouth). Real chains sit far below this: noDeeper seals every authored
+   *  ladder within a few rungs. */
+  caveRungCap: 8,
   /** THE ZONES SAVE MEMO (World.serializeWorldState): the zones section —
    *  ~95% of a lived-in save's bytes, rebuilt with a per-def JSON round-trip
    *  every 20s autosave (measured 80ms+ hitches by 663 zones) — is memoized
@@ -167,6 +173,27 @@ export function sanitizeProcessionMemo(raw: unknown): SavedProcessionMemo | unde
 
 export interface SavedQuestEntry { questId: string; zoneId: string; fieldDone: boolean; }
 
+/** One rung of the saved UNDERGROUND LADDER (mirrors the engine's caveReturn
+ *  shape): the zone this rung climbs OUT to, the mouth's spot in it, and the
+ *  registered sidezone kind + mint seed that re-mint the pocket below it —
+ *  the same (parent, kind, seed) triple the engine's own id derivation uses,
+ *  so a restored descent lands in the SAME pocket id and zone memory finds
+ *  its survivors. */
+export interface SavedCaveRung {
+  /** The zone this rung climbs out to (rung 0 = the spot's surface anchor). */
+  zoneId: string;
+  /** The mouth's position in that zone (the climb-out landing). */
+  x: number;
+  y: number;
+  /** That zone's own entryFrom at descent (restores exit orientation on the
+   *  way back up — absent when the zone was entered with none). */
+  entryFrom?: string;
+  /** The mouth's registered sidezone kind (data/sidezones.ts). */
+  kind: string;
+  /** The mouth's stable mint seed. */
+  seed: number;
+}
+
 /** Where the player stood at save, plus how hurt they were (fractions of each
  *  pool's max, so a post-save recalc — new gear rules, rebalanced passives —
  *  restores the same PROPORTIONAL state, never an over-cap absolute). */
@@ -175,6 +202,26 @@ export interface SavedPlayerSpot {
   x: number;
   y: number;
   vitals?: { life?: number; mana?: number; es?: number };
+  /** THE UNDERGROUND LADDER (optional — absent on every pre-ladder save and
+   *  whenever any live rung is not a re-mintable sidezone mouth: pitfalls,
+   *  the Descent, realm arenas, the Wraithsail's decks). When the save
+   *  caught us below ground, `zoneId`/`x`/`y` above STAY the surface anchor
+   *  at the outermost mouth — an old reader, the 'town' policy, or any wake
+   *  that can't stand this ladder up behaves exactly as before — and this
+   *  block adds the way back down: the pocket underfoot plus every rung of
+   *  the descent, outermost first. resumeSpawn('exact') loads the anchor
+   *  (the surface load clears the live ladder by law), then re-mints each
+   *  rung through the sidezone mint path and lands the party at (x, y). */
+  cave?: {
+    /** The off-graph pocket the save was standing in (a cave_ id). */
+    zoneId: string;
+    x: number;
+    y: number;
+    /** The descent, outermost first: rungs[0].zoneId is the surface anchor
+     *  (=== the spot's zoneId); each rung's mouth mints the next zone down,
+     *  the last minting `cave.zoneId` itself. */
+    rungs: SavedCaveRung[];
+  };
 }
 
 export interface WorldStateSave {
