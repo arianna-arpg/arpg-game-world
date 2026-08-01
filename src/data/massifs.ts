@@ -76,7 +76,8 @@ registerMassKind({
     { kind: 'stock', weight: 26 },
     { kind: 'shrine', weight: 8 },
     { kind: 'watch_post', weight: 6, params: { detail: 'barrow_watch' } },
-    { kind: 'vacant', weight: 25 },
+    { kind: 'occurrence', weight: 5, params: { id: 'abyssal_fracture' } },
+    { kind: 'vacant', weight: 20 },
   ],
   skirt: [
     { kind: 'rubble', weight: 3, radius: [14, 24] },
@@ -317,7 +318,8 @@ registerMassKind({
     ] },
     { kind: 'shrine', weight: 8 },
     { kind: 'lair_mouth', weight: 4 },
-    { kind: 'vacant', weight: 10 },
+    { kind: 'occurrence', weight: 4, params: { id: 'abyssal_fracture' } },
+    { kind: 'vacant', weight: 6 },
   ],
   inner: [
     { kind: 'stone_cistern', weight: 2, radius: [13, 16] },

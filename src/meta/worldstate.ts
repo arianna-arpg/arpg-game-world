@@ -136,6 +136,7 @@ export interface SavedZoneMemory {
   riftCharges?: number[];
   pyreCharges?: number[];
   digCharges?: number[];
+  occSprung?: number[];
   /** PROCESSION zones: the escort's stand at capture (see the engine's
    *  ZoneMemory.procession — lost flag, cart spot + life, march origin,
    *  pinned crossing). */

@@ -15036,6 +15036,7 @@ export class World {
       ...(m.riftCharges ? { riftCharges: [...m.riftCharges] } : {}),
       ...(m.pyreCharges ? { pyreCharges: [...m.pyreCharges] } : {}),
       ...(m.digCharges ? { digCharges: [...m.digCharges] } : {}),
+      ...(m.occSprung ? { occSprung: [...m.occSprung] } : {}),
       ...(m.procession ? { procession: { ...m.procession } } : {}),
       ...(m.altarOffered !== undefined ? { altarOffered: m.altarOffered } : {}),
       ...(m.cullKills !== undefined ? { cullKills: m.cullKills } : {}),
@@ -15216,6 +15217,8 @@ export class World {
           ? { pyreCharges: m.pyreCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) } : {}),
         ...(Array.isArray(m.digCharges)
           ? { digCharges: m.digCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) } : {}),
+        ...(Array.isArray(m.occSprung)
+          ? { occSprung: m.occSprung.map(c => typeof c === 'number' && c > 0 ? 1 : 0) } : {}),
         ...(procMemo ? { procession: procMemo } : {}),
         ...(typeof m.altarOffered === 'number' && Number.isFinite(m.altarOffered)
           ? { altarOffered: Math.max(0, Math.floor(m.altarOffered)) } : {}),
