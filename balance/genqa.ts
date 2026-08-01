@@ -60,6 +60,8 @@ import '../src/data/lairs';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
 import '../src/data/massifs';
+import '../src/data/puzzles'; // the 'shrine' ring-tenant kind (court tables name it)
+import '../src/data/watchposts'; // the 'watch_post' ring-tenant kind (court tables name it)
 import '../src/data/settled';
 import '../src/data/garden';
 import '../src/data/grove';

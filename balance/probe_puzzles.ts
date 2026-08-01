@@ -6,16 +6,36 @@
 // never mint an orphan voice), the placer lifecycle through World's REAL
 // bootPuzzles (objective birth, memory re-entry SOLVED), and THE HUM AT
 // BLOW GRAIN through the real knock queue + per-frame drain (a fan-out's
-// echo swallowed whole; the aim grain byte-identical to the old law).
+// echo swallowed whole; the aim grain byte-identical to the old law), and
+// THE COURT SHRINE (G) — the ring-tenant seam end-to-end: a gen-time
+// 'shrine' tenant mints its zone-keyed preset + appends its def row, the
+// REAL bootPuzzles stands the riddle ON the recorded court circle, knocks
+// animate it, and the discipline laws hold (same seed → same seat; THE
+// COEXISTENCE GATE — authored-riddle zones are never appended to, and an
+// authored riddle's salted rolls are byte-identical whatever tenant holds
+// the court; the REPLACEMENT law; the stand-down gates; one shrine per
+// zone).
 // Siblings: balance/probe_attunement.ts (tones, pulses, the original three
 // kinds, spill/knock dial routing). Run: npx tsx balance/probe_puzzles.ts
 // ---------------------------------------------------------------------------
+
+// Side-effect registries the shrine rigs generate against (the probe_massif
+// set's relevant pair; the sim arena below loads the rest).
+import '../src/engine/layoutRecipes';
+import '../src/data/massifs';
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { mulberry32 } from '../src/sim/rng';
 import type { Actor } from '../src/engine/actor';
 import type { Vec2 } from '../src/core/math';
-import { angleTo } from '../src/core/math';
+import { angleTo, vec } from '../src/core/math';
+import { Rng } from '../src/core/rng';
+import { generateLayout, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
+import { carveMassifs, type TenantRow } from '../src/engine/massif';
+import type { ZoneDef } from '../src/data/zones';
+import {
+  COURT_SHRINE_KIND, COURT_SHRINE_PRESET_PREFIX, type CourtShrineSpec,
+} from '../src/data/puzzles';
 import { attunedStatus, TUNE_CFG } from '../src/engine/tuning';
 import { ELEMENTAL_TYPES } from '../src/engine/stats';
 import {
@@ -394,6 +414,232 @@ const mkRun = (id: string, spec: PuzzleRun['spec'], nodes: Actor[], at: Vec2): P
   check('who gate: an enemy knock never plays the accord',
     (acRun.state.pending as unknown[])[1] === null
     && (acRun.state.bound as boolean[])[1] === false);
+}
+
+// --- G) THE COURT SHRINE — the ring-tenant seam, end-to-end -------------------
+{
+  type WorldGuts = {
+    puzzles: PuzzleRun[];
+    farPointDraws: number;
+    puzzleStruck(node: Actor, striker: Actor | null, wounding: boolean): void;
+    bootPuzzles(def: unknown, pois: Vec2[], memory?: { puzzlesDone?: string[] } | null): void;
+  };
+  const guts = world as unknown as WorldGuts;
+  // Every real bootPuzzles follows loadZone's seeded-fallback reset
+  // (world.farPointDraws = 0) — the direct-call rigs must replay it, or a
+  // dry poi pool draws its far points from a drifted counter.
+  const boot = (def: ZoneDef, pois: Vec2[]): void => {
+    guts.farPointDraws = 0;
+    guts.bootPuzzles(def, pois);
+  };
+  const A = { w: 3200, h: 2400 };
+  const gEntry = vec(140, A.h / 2);
+  const gExits = [vec(A.w - 140, A.h / 2)];
+  const THEME = { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' };
+  const defOf = (id: string, tenants: TenantRow[], extra?: Partial<ZoneDef>): ZoneDef => ({
+    id, name: `QA ${id}`, level: 8, size: { w: A.w, h: A.h },
+    theme: THEME, layout: [], objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    layoutType: 'massif',
+    layoutParams: {
+      massifMasses: [{ kind: 'well_court', weight: 1, sizeR: [200, 240], over: { tenants } }],
+      massifCoverage: [0.12, 0.16],
+    },
+    ...extra,
+  });
+  // BY REFERENCE, the real chain's shape (world.ts loadZone hands the zoneMap
+  // def itself down to the recipe): the handler's copy-on-write append must
+  // land on the SAME def bootPuzzles later reads — a spread here would test a
+  // different game (and did, in this rig's first draft).
+  const gen = (def: ZoneDef, seed: number): GeneratedLayout => {
+    def.seed = seed;
+    return generateLayout(def, A, new Rng(seed), gEntry, gExits.map(e => vec(e.x, e.y)));
+  };
+  // Single-court params for the parity rigs: with several courts, the
+  // non-shrine courts legitimately fall back to stock (dress of their own) —
+  // court-vs-court comparisons are only byte-clean one court at a time.
+  const ONE_COURT = {
+    massifCoverage: [0.04, 0.05] as [number, number],
+    massifMaxMasses: 1, massifMinMasses: 1,
+  };
+  const bareCtx = (seed: number): GenCtx => ({
+    rng: new Rng(seed), arena: A, entry: gEntry, exits: gExits.map(e => vec(e.x, e.y)),
+    doodads: [], pois: [], camps: [], breakables: [], npcs: [], garrisons: [],
+    caveSeeds: [], reserved: [], seed,
+  });
+  const SHRINE_TABLE: TenantRow[] = [{ kind: 'shrine', weight: 1, params: { kinds: ['ember'] } }];
+  const keyOf = (id: string): string => `${COURT_SHRINE_PRESET_PREFIX}${id}`;
+  const specOf = (id: string): CourtShrineSpec | undefined =>
+    PUZZLES[keyOf(id)] as CourtShrineSpec | undefined;
+  const seatFacts = (s: CourtShrineSpec | undefined): string => s
+    ? JSON.stringify({ x: s.shrine.x, y: s.shrine.y, r: s.shrine.ringR, a0: s.shrine.a0, k: s.shrine.kind, n: s.count })
+    : 'no spec';
+  const SEED = 424243;
+
+  // G1 — THE SEAM: gen mints the zone-keyed preset + appends the row; the
+  // REAL placer stands the riddle ON the recorded circle; knocks animate it.
+  {
+    const def = defOf('probe_shrine_g1', SHRINE_TABLE);
+    const layout = gen(def, SEED);
+    const spec = specOf('probe_shrine_g1');
+    check('shrine/seam: generation minted the zone-keyed preset', !!spec, seatFacts(spec));
+    check('shrine/seam: the def row appended (chance 1, prefix-keyed)',
+      (def.puzzles ?? []).some(r => r.id === keyOf('probe_shrine_g1') && r.chance === 1)
+      && (def.puzzles ?? []).length === 1);
+    if (spec) {
+      check("shrine/seam: params.kinds pinned the inner ('ember')",
+        spec.shrine.kind === 'ember' && spec.node === 'ember_crystal');
+      check('shrine/seam: the seat IS a court interior (a generation POI)',
+        layout.pois.some(p => Math.hypot(p.x - spec.shrine.x, p.y - spec.shrine.y) < 1));
+      check('shrine/seam: the count is pinned exact and in the ember band',
+        spec.count?.[0] === spec.count?.[1] && (spec.count?.[0] ?? 0) >= 5 && (spec.count?.[0] ?? 0) <= 6);
+      const altar = layout.doodads.find(d => d.kind === 'wayshrine');
+      const altarD = altar
+        ? Math.hypot(altar.pos.x - spec.shrine.x, altar.pos.y - spec.shrine.y) : NaN;
+      check('shrine/seam: the votive stone stands INSIDE the ring, off the court poi',
+        !!altar && altarD > 20 && altarD < spec.shrine.ringR, `d=${altarD.toFixed(1)}`);
+      check('shrine/seam: rim plinths dressed the yard',
+        layout.doodads.some(d => d.kind === 'ruin_plinth'));
+
+      boot(def, [...layout.pois]);
+      const run = guts.puzzles[0];
+      check('shrine/boot: the placer stood the shrine run up under its zone key',
+        guts.puzzles.length === 1 && !!run && run.id === `${keyOf('probe_shrine_g1')}#0`);
+      if (run) {
+        check('shrine/boot: run.at re-seated onto the recorded court seat',
+          Math.hypot(run.at.x - spec.shrine.x, run.at.y - spec.shrine.y) < 0.001);
+        check('shrine/boot: every crystal stands on the recorded circle',
+          run.nodes.length === spec.count?.[0]
+          && run.nodes.every(nd =>
+            Math.abs(Math.hypot(nd.pos.x - spec.shrine.x, nd.pos.y - spec.shrine.y) - spec.shrine.ringR) < 0.5));
+        check('shrine/boot: the run REBOUND to the inner riddle (ember)',
+          run.kind.id === 'ember' && run.nodes.every(nd => nd.defId === 'ember_crystal'));
+        // THE ANIMATION: knocks through the real queue + drain move the state.
+        guts.puzzleStruck(run.nodes[0], p, true);
+        world.update(1 / 60);
+        check('shrine/knock: a landed blow lights the courtyard coal',
+          ((run.state.litUntil as number[]) ?? [])[0] > world.time);
+        for (let i = 1; i < run.nodes.length; i++) {
+          guts.puzzleStruck(run.nodes[i], p, true);
+          world.update(1 / 60);
+        }
+        check('shrine/knock: the whole ring alight resolves the courtyard riddle',
+          run.done);
+      }
+    }
+  }
+
+  // G2 — DETERMINISM: same seed → same minted seat, same appended row, and
+  // byte-identical crystal positions through the real placer, twice over.
+  {
+    const d1 = defOf('probe_shrine_g2', SHRINE_TABLE);
+    const l1 = gen(d1, SEED);
+    const facts1 = seatFacts(specOf('probe_shrine_g2'));
+    const d2 = defOf('probe_shrine_g2', SHRINE_TABLE);
+    const l2 = gen(d2, SEED);
+    const facts2 = seatFacts(specOf('probe_shrine_g2'));
+    check('shrine/determinism: two generations mint the identical seat ledger',
+      facts1 !== 'no spec' && facts1 === facts2, facts1);
+    check('shrine/determinism: the appended rows agree',
+      JSON.stringify(d1.puzzles) === JSON.stringify(d2.puzzles));
+    boot(d1, [...l1.pois]);
+    const pos1 = guts.puzzles[0]?.nodes.map(nd => `${nd.pos.x.toFixed(3)},${nd.pos.y.toFixed(3)}`).join(' ');
+    boot(d2, [...l2.pois]);
+    const pos2 = guts.puzzles[0]?.nodes.map(nd => `${nd.pos.x.toFixed(3)},${nd.pos.y.toFixed(3)}`).join(' ');
+    check('shrine/determinism: two boots seat the crystals byte-identically',
+      !!pos1 && pos1 === pos2);
+  }
+
+  // G3 — THE COEXISTENCE GATE: a zone authoring its OWN puzzles rows is
+  // never appended to (the placer draws all selections before any placement,
+  // so a coexisting appended row would shift the authored riddle's seat —
+  // the shrine yields instead, structurally). The authored riddle's
+  // salted-stream rolls are then BYTE-IDENTICAL whatever tenant holds the
+  // court — pinned shrine-vs-vacant. (The song itself, state.seq, rides the
+  // host's GLOBAL die by standing design — a fresh refrain every re-entry —
+  // so the compare pins the salted truths: seat + crystal ring.)
+  {
+    const mkAuthored = (): Partial<ZoneDef> =>
+      ({ puzzles: [{ id: 'singing_refrain', chance: 1 }] });
+    const dA = defOf('probe_shrine_g3', SHRINE_TABLE, mkAuthored());
+    dA.layoutParams = { ...dA.layoutParams, ...ONE_COURT };
+    const lA = gen(dA, SEED);
+    const dB = defOf('probe_shrine_g3', [{ kind: 'vacant', weight: 1 }], mkAuthored());
+    dB.layoutParams = { ...dB.layoutParams, ...ONE_COURT };
+    const lB = gen(dB, SEED);
+    check('shrine/coexist: an authored-riddle zone is never appended to (no key, no row)',
+      (dA.puzzles ?? []).length === 1 && dA.puzzles?.[0]?.id === 'singing_refrain'
+      && !specOf('probe_shrine_g3'));
+    check('shrine/coexist: the yielded court fell back to STOCK (dress of its own, no votive)',
+      !lA.doodads.some(d => d.kind === 'wayshrine')
+      && lA.doodads.some(d => d.kind === 'stone_cistern' || d.kind === 'palm'
+        || d.kind === 'clay_pots' || d.kind === 'flowers'));
+    const streamFacts = (r: PuzzleRun | undefined): string => r ? JSON.stringify({
+      at: r.at, nodes: r.nodes.map(nd => [nd.pos.x, nd.pos.y]),
+    }) : 'missing';
+    boot(dA, [...lA.pois]);
+    const factsA = streamFacts(guts.puzzles.find(r => r.id.startsWith('singing_refrain')));
+    const runsA = guts.puzzles.length;
+    boot(dB, [...lB.pois]);
+    const factsB = streamFacts(guts.puzzles.find(r => r.id.startsWith('singing_refrain')));
+    check('shrine/coexist: the authored riddle stands ALONE, either tenant',
+      runsA === 1 && guts.puzzles.length === 1);
+    check('shrine/coexist: its salted-stream rolls are BYTE-IDENTICAL either way',
+      factsA !== 'missing' && factsA === factsB);
+  }
+
+  // G4 — THE REPLACEMENT LAW: a shrine table silences the kind's independent
+  // garrison/inner lanes (the tenant fork owns the court's whole occupancy).
+  {
+    const rows = [{
+      kind: 'well_court', weight: 1, sizeR: [200, 240] as [number, number],
+      over: {
+        garrison: { chance: 1, faction: 'gnoll' },
+        innerChance: 1,
+        tenants: SHRINE_TABLE,
+      },
+    }];
+    const def = defOf('probe_shrine_g4', SHRINE_TABLE);
+    def.layoutParams = { ...def.layoutParams, ...ONE_COURT, massifMasses: rows };
+    const ctx = bareCtx(SEED);
+    carveMassifs(ctx, def);
+    check('shrine/replacement: the chance-1 garrison lane stayed SILENT',
+      ctx.garrisons.length === 0);
+    check('shrine/replacement: the inner dress lane stayed silent (no cistern/palm)',
+      !ctx.doodads.some(d => d.kind === 'stone_cistern' || d.kind === 'palm'));
+    check('shrine/replacement: the shrine still minted its ledger',
+      !!specOf('probe_shrine_g4'));
+  }
+
+  // G5 — THE STAND-DOWN GATES: puzzle-objective zones and row-full zones are
+  // never appended to; many shrine-drawing courts mint ONE shrine.
+  {
+    const dObj = defOf('probe_shrine_g5a', SHRINE_TABLE,
+      { objective: { kind: 'puzzle', puzzle: 'ember_ring' } });
+    const lObj = gen(dObj, SEED);
+    check('shrine/gates: a puzzle-OBJECTIVE zone is never appended to',
+      !(dObj.puzzles ?? []).length && !specOf('probe_shrine_g5a')
+      && !lObj.doodads.some(d => d.kind === 'wayshrine'));
+    const dFull = defOf('probe_shrine_g5b', SHRINE_TABLE, {
+      puzzles: [{ id: 'ember_ring', chance: 0.5 }, { id: 'twin_accord', chance: 0.5 }],
+    });
+    gen(dFull, SEED);
+    check('shrine/gates: the coexistence gate holds at any authored row count',
+      (dFull.puzzles ?? []).length === 2 && !specOf('probe_shrine_g5b'));
+    const dMany = defOf('probe_shrine_g5c', SHRINE_TABLE);
+    (def => { (def.layoutParams as Record<string, unknown>).massifCoverage = [0.3, 0.35]; })(dMany);
+    const lMany = gen(dMany, SEED);
+    const shrineRows = (dMany.puzzles ?? []).filter(r => r.id.startsWith(COURT_SHRINE_PRESET_PREFIX));
+    check('shrine/gates: many shrine-drawing courts mint ONE shrine (rest fall back)',
+      shrineRows.length === 1 && lMany.doodads.filter(d => d.kind === 'wayshrine').length === 1,
+      `${shrineRows.length} rows, ${lMany.doodads.filter(d => d.kind === 'wayshrine').length} altars`);
+  }
+
+  // Hygiene: dynamic ledger entries out (the E-section idiom), the stage bare.
+  for (const k of Object.keys(PUZZLES)) {
+    if (k.startsWith(COURT_SHRINE_PRESET_PREFIX)) delete PUZZLES[k];
+  }
+  guts.puzzles.length = 0;
+  check('shrine/census: the wrapper kind is registered', !!PUZZLE_KINDS[COURT_SHRINE_KIND]);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
