@@ -31307,6 +31307,7 @@ export class World {
     const size = caster.sheet.get('minionSize', tags, extra);
     minion.radius = Math.max(5, minion.radius * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);
+    const regenRate = caster.sheet.get('minionRegenRate', tags, extra);
     const s = scale;
     // THE CALCIFIED TRADE (minionLifePlyTrade): every <threshold> of the
     // OWNER's minion-life increase converts into +1 ply instead,
@@ -31351,6 +31352,14 @@ export class World {
       // split freely by skill or type.
       mod('lifeRegen', 'flat', caster.sheet.get('minionRegen', tags, extra) * s),
       mod('lifeRegenPct', 'flat', caster.sheet.get('minionRegenPct', tags, extra) * s),
+      // THE REGEN RATE (minionRegenRate): the owner's rate investment rides
+      // BOTH lanes as 'increased' — the crew's own base regen and every
+      // forwarded flat/pct point quicken together. Deliberately UNSCALED by
+      // `s`: a rate is dimensionless, and the lanes it multiplies already
+      // paid the batch divisor once — scaling the multiplier too would tax
+      // a throng batch twice (s² on the investment product).
+      mod('lifeRegen', 'increased', regenRate - 1),
+      mod('lifeRegenPct', 'increased', regenRate - 1),
     ];
     // THE MALUS TOTALITY RULE (2026-07-22, the user's ruling): a socketed
     // more/less damage multiplier applies to ANYTHING descending from the

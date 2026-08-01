@@ -1244,6 +1244,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // "skeletons heal, Revive minions don't" is a tag filter, not code).
   minionRegen:    { label: 'Minion Life Regeneration', base: 0 },
   minionRegenPct: { label: 'Minion Life Regeneration %', base: 0, min: 0, percent: true },
+  /** THE REGEN RATE (the third minion-regen lane): a multiplier on the crew's
+   *  WHOLE regeneration — the bake forwards (value − 1) as an 'increased'
+   *  modifier on BOTH minion lanes (flat lifeRegen and lifeRegenPct), so base
+   *  regen and forwarded investment quicken together. Deliberately NOT
+   *  batch-scaled at the fold: a rate is dimensionless, and the lanes it
+   *  multiplies already paid the batch divisor once. */
+  minionRegenRate:{ label: 'Minion Regeneration Rate', base: 1, min: 0 },
   /** Chance to drop an elemental REMNANT on a real cast of that school. */
   remnantOnCast:  { label: 'Remnant on Cast Chance', base: 0, min: 0, percent: true },
   // Minion life-cycle rites (queried at SUMMON time with the skill's tags,

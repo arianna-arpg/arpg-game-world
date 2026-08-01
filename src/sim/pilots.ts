@@ -21,7 +21,7 @@
 import { dist } from '../core/math';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
-import { instanceCurseField, instanceTrigger, socketSpec, type SkillInstance } from '../engine/skills';
+import { instanceCurseField, instanceMods, instanceTrigger, skillContextTags, socketSpec, type SkillInstance } from '../engine/skills';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
 import type { PilotSpec } from './types';
 
@@ -293,10 +293,58 @@ class ComboPilot implements PlayerInputSource {
   }
 }
 
+/** THE COURT-KEEPER — see PilotSpec 'summoner'. Holds the caster band and
+ *  presses the summon slot only while its living court sits below the cap
+ *  spawnMinion itself folds (minionMaxCount over the delivery's base), so
+ *  the pilot can never trip the at-cap eviction and churn its own crew.
+ *  The court census is the engine's own predicate (world.minionsOfSkill). */
+class CourtKeeperPilot implements PlayerInputSource {
+  private heldLast = false;
+
+  constructor(private spec: Extract<PilotSpec, { kind: 'summoner' }>) {}
+
+  poll(actor: Actor, world: World, _dt: number): PlayerInput | null {
+    const n = actor.skills.length;
+    const held: boolean[] = new Array(n).fill(false);
+    const edge: boolean[] = new Array(n).fill(false);
+
+    const foe = nearestFoe(world, actor);
+    const aim = foe ? { x: foe.pos.x, y: foe.pos.y }
+      : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 };
+    let dx = 0, dy = 0;
+    if (foe) {
+      const gap = dist(actor.pos, foe.pos);
+      const range = this.spec.range ?? PILOT_CFG.casterRange;
+      if (gap > range * PILOT_CFG.bandHigh) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
+      else if (gap < range * PILOT_CFG.bandLow) { dx = actor.pos.x - foe.pos.x; dy = actor.pos.y - foe.pos.y; }
+    }
+
+    const slot = this.spec.slot ?? 0;
+    const inst = actor.skills[slot];
+    const dv = inst?.def.delivery;
+    let pressing = false;
+    if (inst && dv && dv.type === 'summon') {
+      const cap = Math.max(1, Math.round(actor.sheet.get(
+        'minionMaxCount', skillContextTags(inst.def), instanceMods(inst), dv.maxActive)));
+      const court = dv.poolGroup
+        ? world.minionsOfGroup(actor, dv.poolGroup).length
+        : world.minionsOfSkill(actor, inst.def.id).length;
+      if (court < cap && actor.canUse(inst)) {
+        pressing = true;
+        held[slot] = true;
+        if (!this.heldLast) edge[slot] = true;
+      }
+    }
+    this.heldLast = pressing;
+    return { dx, dy, aim, held, edge };
+  }
+}
+
 export function makePilot(spec: PilotSpec | undefined): PlayerInputSource {
   const s = spec ?? { kind: 'brawler' };
   if (s.kind === 'idle') return new IdlePilot();
   if (s.kind === 'pair') return new PairPilot(s);
   if (s.kind === 'combo') return new ComboPilot(s);
+  if (s.kind === 'summoner') return new CourtKeeperPilot(s);
   return new Pilot(s);
 }

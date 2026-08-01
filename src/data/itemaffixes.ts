@@ -520,6 +520,17 @@ const PREFIXES: AffixDef[] = [
     stat: 'minionHaste', modKind: 'increased', top: 0.2, floor: 0.25, count: 4,
     baseTags: ['helmet', 'amulet', 'gloves'], weight: 50,
   }),
+  // The summoner's UPKEEP lane — the regen-rate multiplier beside damage,
+  // life and tempo: one word quickening the crew's WHOLE regeneration
+  // (the bake forwards it as 'increased' on both minion lanes, so it
+  // multiplies flat and percent regen alike — worthless bare, compounding
+  // on an invested court).
+  fam({
+    id: 'minion_regen_rate', kind: 'prefix', themes: [SUMMONER],
+    names: ["Fleshwright's", "Boneknitter's", "Stitcher's"],
+    stat: 'minionRegenRate', modKind: 'increased', top: 0.3, floor: 0.25, count: 4,
+    baseTags: ['helmet', 'amulet'], weight: 45,
+  }),
   // THE COLONY PASS's wardrobe (engine/lite.ts): trample mass on the feet
   // that do the crushing; ply rend on the hands that do the cutting. Both
   // niche by design (swarm counterplay), weighted below the staples.
@@ -787,6 +798,18 @@ const SUFFIXES: AffixDef[] = [
     id: 'life_regen', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Mending', 'of Knitting', 'of Scabbing'],
     stat: 'lifeRegen', top: 6, floor: 0.15, weight: 90,
+  }),
+  // THE REGENERATION RATE (the dual-lane rate suffix): 'increased' on BOTH
+  // player regen lanes at once — the global form of the rate family; the
+  // single-lane granular grantors live on the tree (node_24 on the flat
+  // lane, cl_lreg_p4 on the percent lane). A rate multiplies what you
+  // built: inert on a bare sheet, compounding on an invested one.
+  fam({
+    id: 'regen_rate', kind: 'suffix', themes: [SUSTAIN],
+    names: ['of Springtide', 'of the Freshet', 'of Welling'],
+    lines: [{ stat: 'lifeRegen', kind: 'increased' }, { stat: 'lifeRegenPct', kind: 'increased' }],
+    top: [0.25, 0.25], floor: 0.2, count: 4,
+    baseTags: ['ring', 'amulet', 'belt'], weight: 40,
   }),
   fam({
     id: 'mana_regen', kind: 'suffix', themes: [CASTER, SUSTAIN],

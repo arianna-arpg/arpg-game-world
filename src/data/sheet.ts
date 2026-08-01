@@ -190,7 +190,7 @@ export const SHEET_CATS: Record<string, SheetCategoryDef> = {
     core: [],
     used: [
       'minionDamage', 'minionLife', 'minionMaxCount', 'minionDamageTaken',
-      'minionSize', 'minionMoveSpeed', 'minionHaste', 'minionRegen', 'minionRegenPct',
+      'minionSize', 'minionMoveSpeed', 'minionHaste', 'minionRegen', 'minionRegenPct', 'minionRegenRate',
       'minionPlies', 'minionLifePlyTrade', 'minionLifePlyEcho', 'throngPockets', 'throngYield',
       'minionDetectionRange', 'minionDecayRate', 'minionRespawnTime', 'minionUndying',
       'minionGuard', 'minionDeathHeal', 'minionDeathHealFlat', 'minionExpiryIsDeath',
@@ -676,6 +676,7 @@ const STAT_BLURBS: Record<string, string> = {
   throngYield: 'How many bodies every throng find yields (pockets, gauges, motes, raisings), rounded, never below one.',
   minionRegen: 'Flat life your minions regenerate each second.',
   minionRegenPct: 'A fraction of each minion\'s maximum life regenerated each second.',
+  minionRegenRate: 'Multiplies your minions\' whole life regeneration: an increased modifier on both their flat and percent lanes, from every source at once.',
   minionDetectionRange: 'How far your minions notice prey.',
   minionDecayRate: 'How fast your decaying minions rot: lower lets them linger.',
   minionRespawnTime: 'How long your persistent minions take to return.',

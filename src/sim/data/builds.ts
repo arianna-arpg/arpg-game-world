@@ -144,6 +144,50 @@ BUILDS['summoner_warriors_l10'] = warriorSummoner('summoner_warriors_l10');
 BUILDS['summoner_faultfinder_l10'] = warriorSummoner('summoner_faultfinder_l10',
   [{ id: 'resonance', level: 1 }, { id: 'faultfinder', level: 1 }, { id: 'tectonic_echoes', level: 1 }]);
 
+// MINION-SUSTAIN LADDER (the regen family's measuring sticks): one crew, the
+// regen lanes loaded one at a time — DELIBERATE HYPOTHESIS BUILDS in the
+// fulminator's bare-vs-loaded shape (explicit lane-isolating picks, not
+// honest average play; disconnected-pick warnings are the honest record of
+// that). The lanes: BONDS = the two committed regen gems at kit level
+// (vital_bond + transfusion_bond — flat+pct through the socket road), PCT =
+// the committed tree smalls alone (Green Pastures + Milk and Marrow, 1.5%/s),
+// RATE = those smalls with the rate chain behind them (Sweetgrass + The
+// Evergreen Fold, +45% increased on both lanes) — the pct↔rate delta IS the
+// new stat working through a real grantor. WRAITH legs re-ask each question
+// against the decay clock (summon_wraith's compounding rot): there the
+// answer is uptime, not safety — minion_samples is the read.
+const sustainSummoner = (
+  id: string, skillId: string,
+  o: { gems?: boolean; picks?: string[] } = {},
+): BuildSpec => ({
+  id,
+  label: `Minion-sustain ladder — ${skillId} (${o.gems ? 'bonds' : 'bare'}${o.picks?.length ? ` + ${o.picks.length} regen picks` : ''}) @ L10`,
+  classId: 'summoner', level: 10,
+  // The ATTRIBUTE PIN (identical on every leg, so it cancels in the A/B):
+  // enough mana pool + regen to stand the crew up to its cap and keep the
+  // resummon loop running, enough life to outlive the episode — a dead
+  // summoner stops resummoning and the sustain read truncates. The
+  // raw-hypothesis lever, used as documented.
+  attributes: { wisdom: 40, willpower: 100, vitality: 40 },
+  skills: [{
+    id: skillId, level: gemLevelAt(10),
+    supports: o.gems
+      ? [{ id: 'vital_bond', level: gemLevelAt(10) }, { id: 'transfusion_bond', level: gemLevelAt(10) }]
+      : undefined,
+  }],
+  passives: o.picks ?? [],
+});
+BUILDS['sustain_warriors_ctrl_l10'] = sustainSummoner('sustain_warriors_ctrl_l10', 'summon_skeleton');
+BUILDS['sustain_warriors_bonds_l10'] = sustainSummoner('sustain_warriors_bonds_l10', 'summon_skeleton', { gems: true });
+BUILDS['sustain_warriors_pct_l10'] = sustainSummoner('sustain_warriors_pct_l10', 'summon_skeleton',
+  { picks: ['cl_sky_regen', 'cl_sky_t3'] });
+BUILDS['sustain_warriors_rate_l10'] = sustainSummoner('sustain_warriors_rate_l10', 'summon_skeleton',
+  { picks: ['cl_sky_regen', 'cl_sky_t3', 'cl_sky_graze', 'cl_sky_evergreen'] });
+BUILDS['sustain_wraiths_ctrl_l10'] = sustainSummoner('sustain_wraiths_ctrl_l10', 'summon_wraith');
+BUILDS['sustain_wraiths_bonds_l10'] = sustainSummoner('sustain_wraiths_bonds_l10', 'summon_wraith', { gems: true });
+BUILDS['sustain_wraiths_rate_l10'] = sustainSummoner('sustain_wraiths_rate_l10', 'summon_wraith',
+  { gems: true, picks: ['cl_sky_regen', 'cl_sky_t3', 'cl_sky_graze', 'cl_sky_evergreen'] });
+
 // THE IRON BELL TEXTURE PAIR (hitCap): the same sovereign, two answers. The
 // ROT build stacks poison + decay — DoT ticks pass the per-hit ceiling by
 // construction, so it should CRACK the colossus inside the episode. The

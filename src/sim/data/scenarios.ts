@@ -150,6 +150,42 @@ for (const build of [
   });
 }
 
+// MINION-SUSTAIN PROBES (the minion-regen family end-to-end): a summoner
+// crew under a steady parity press hard enough that crew regeneration is
+// load-bearing — the pauses between kill cycles are where regen either
+// refills the court or doesn't. minion_samples (living crew-seconds) is the
+// headline sustain read, beside dps_minions/kill_rate (throughput kept
+// standing) and dps_in/life_floor_pct (what reached the summoner). The
+// ladder legs isolate one regen lane each (see the sustain builds); the two
+// reference summoners run the same waves so the ladder anchors to honest
+// average play. WRAITH legs ask the decay-clock question — how much crew
+// uptime each lane of regen investment buys against compounding rot.
+for (const build of [
+  'summoner_warriors_l10', 'summoner_archers_l10',
+  'sustain_warriors_ctrl_l10', 'sustain_warriors_bonds_l10',
+  'sustain_warriors_pct_l10', 'sustain_warriors_rate_l10',
+  'sustain_wraiths_ctrl_l10', 'sustain_wraiths_bonds_l10',
+  'sustain_wraiths_rate_l10',
+]) {
+  add({
+    id: `minion_sustain_${build}`,
+    label: `Minion-sustain probe — ${build}`,
+    build,
+    // The court-keeper: refill the crew whenever it dips below cap (the
+    // default layout would open the summon ONCE and never resummon — the
+    // whole upkeep loop this stick exists to measure).
+    pilot: { kind: 'summoner' },
+    parityLevel: 10,
+    waves: [{
+      monsters: [{ id: 'zombie', count: 2 }, { id: 'skeleton_warrior', count: 1 }],
+      repeatEvery: 8,
+    }],
+    duration: 60,
+    stop: 'duration',
+    notes: 'Sustain ladder: minion_samples = crew-seconds kept standing; compare legs pairwise — ctrl→bonds/pct (committed dials), pct→rate (the minionRegenRate forward working). Press tuned to WOUND the standing crew, not delete it.',
+  });
+}
+
 // FORTUNE-FABRIC PROBE PAIR (rollTop procs, the Static Shrapnel rider,
 // damageSpread) plus the variance channel: bare vs loaded Fulminate against
 // the dummy — the loaded build's jackpot payloads are the entire A/B
@@ -294,6 +330,8 @@ export const SUITES: Record<string, string[]> = {
   duels: Object.keys(SCENARIOS).filter(id => id.startsWith('duel_')),
   /** The minion-support forwarding A/B pairs (bare vs forwarded gems). */
   minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
+  /** The minion-regen sustain ladder (crew uptime per regen lane). */
+  sustain: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_sustain_')),
   /** THE GEAR VALUE CURVE: bare vs geared twins at the measurement bands —
    *  read as pairs (dps ratio, ttk ratio); the spread across bands is the
    *  found-gear power curve. */

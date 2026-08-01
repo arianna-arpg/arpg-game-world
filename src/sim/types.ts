@@ -125,6 +125,13 @@ export type PilotSpec =
    *  range's fire-into-the-canyon lever (ricochet's wall, the unspent-end
    *  shrapnel bloom). Movement still holds the band off the nearest foe. */
   | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[]; aimOffset?: { deg: number; dist: number } }
+  /** THE COURT-KEEPER (minion-sustain probes): hold the caster's range band
+   *  and press `slot` (default 0) ONLY while that summon's living court sits
+   *  below its folded cap — the resummon micro loop. A held summon would be
+   *  wrong twice: the default layout opens summons ONCE per episode, and a
+   *  recast at cap EVICTS the oldest body by design, so naive spam reads as
+   *  crew deaths. One sentence: keep the court full, stay out of reach. */
+  | { kind: 'summoner'; slot?: number; range?: number }
   /** THE ESCORT RIG (support-matrix probes): hold `refSlot` as the steady
    *  filler (constant hits — trigger events, curse exploitation, buff
    *  beneficiary) and TAP `hostSlot` once per `hostPeriod` seconds when
