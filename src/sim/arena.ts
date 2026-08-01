@@ -26,6 +26,7 @@ import '../engine/layoutRecipes';
 import '../engine/interiorGen';
 import '../data/massifs';
 import '../data/watchposts';
+import '../data/occurrences'; // the 'occurrence' ring tenant + occurrence defs
 import '../data/settled';
 import '../data/garden';
 import '../data/grove';

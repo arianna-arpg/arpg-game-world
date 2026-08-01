@@ -163,6 +163,7 @@ import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField, crestPoint, type FrontConsumeRow } from './creep';
 import { lintTrackSpec, placeTrack, riderSurface, TRACK_CFG, trackArcFrac, trackDone, trackPending, trackPose, type PlacedTrack, type TrackPayload, type TrackSpec } from './tracks';
 import { LEDGER_TRAP_SPRUNG, lintTrapworkSpec, trapAnchor, trapEffect, trapTriggerHit, TRAPWORK_CFG, type PlacedTrapwork, type TrapHost, type TrapworkSpec } from './trapworks';
+import { bootOccSites, driveOccSites, OCC_CFG, reviveOccSite, type OccHost, type OccKinSpec, type OccSite } from './occurrences';
 import { attunedStatus, rollStartTone, toneAccepted, toneOfAmounts, toneTint, TUNE_CFG } from './tuning';
 import { pickKnockNode, PUZZLE_CFG, PUZZLE_KINDS, puzzleHumOf, puzzleKnockOf, puzzleSpillOf, type PuzzleHost, type PuzzleRun } from './puzzles';
 import {
@@ -2067,6 +2068,11 @@ interface ZoneMemory {
   riftCharges?: number[];
   pyreCharges?: number[];
   digCharges?: number[];
+  /** THE OCCURRENCE FABRIC (engine/occurrences.ts): sprung flags per minted
+   *  site in mint order (1 = sprung — the one-shot stays shot; a sprung
+   *  fixture re-stands its wound + pour on return). Armed progress never
+   *  persists — the scent fades with the leaving. */
+  occSprung?: number[];
   /** PROCESSION zones: the escort's state at capture. `lost` marks a dead
    *  cart (the objective stays forfeit until the memory lapses); otherwise
    *  the cart re-waits dormant at (x,y) with `life`, keeping its original
@@ -3150,6 +3156,16 @@ export class World {
   private rifts: HoldFixture[] = [];
   private pyres: HoldFixture[] = [];
   private digs: HoldFixture[] = [];
+  /** THE OCCURRENCE FABRIC (engine/occurrences.ts): this zone's live sites —
+   *  armed spots invisible by construction, sprung spots wearing their
+   *  wound/fixture. Zone-local; sprung flags ride Zone Memory (occSprung). */
+  private occs: OccSite[] = [];
+  /** The frame's disturb pings ('disturb' triggers hear them) — popBrittle
+   *  feeds it, the occurrence sweep drains it. */
+  private occDisturbs: Vec2[] = [];
+  /** The narrow OccHost handed to the occurrence drivers (memoized — the
+   *  sweep runs per frame; the closures read live state). */
+  private occHostObj?: OccHost;
   /** The spire operation's reinforcement clock (BEACON_CFG.reinforce) —
    *  transient, re-armed per load. */
   private spireReinforceAt = 0;
@@ -4547,6 +4563,8 @@ export class World {
     this.rifts = [];        // …and the contest-law kin: rift seals,
     this.pyres = [];        // pyre kindlings,
     this.digs = [];         // dig sites — all charge-array riders
+    this.occs = [];         // occurrence sites re-boot below (sprung rides Zone Memory)
+    this.occDisturbs.length = 0;
     this.spireReinforceAt = 0;
     this.wpRefusedAt = -1e9;
     this.holdRead = { contested: false, draining: false };
@@ -5419,6 +5437,13 @@ export class World {
     // left (cleared stays cleared; survivors keep their wounds + positions).
     this.zoneGenTagging = false;
     if (memory) this.restoreZoneEnemies(memory);
+    // THE OCCURRENCE FABRIC (engine/occurrences.ts): adopt the mint's planted
+    // triggers — armed spots carry NO standing state (invisible by
+    // construction); a remembered SPRUNG spot re-stands its seeded wound +
+    // fixture. Outside the tagging window on purpose: poured kin are
+    // transient population, never memory-captured twice.
+    this.occs = bootOccSites(def.id, memory?.occSprung);
+    for (const s of this.occs) if (s.state === 'sprung') reviveOccSite(this.occHost(), s);
     // WAVES REMEMBERED: a left assault resumes where it stood — the counter and
     // the mid-wave survivors both ride Zone Memory (exits no longer seal on
     // waves, so an open road must never reset the gauntlet). A completed arena
@@ -14836,6 +14861,10 @@ export class World {
         ? { pyreCharges: this.pyres.map(s => s.charge) } : {}),
       ...(z.objective.kind === 'unearth' && this.digs.length
         ? { digCharges: this.digs.map(s => s.charge) } : {}),
+      // Occurrence sprung flags in mint order (objective-independent — the
+      // fabric seats on tenant tables, not on the zone's ask).
+      ...(this.occs.length
+        ? { occSprung: this.occs.map(s => s.state === 'sprung' ? 1 : 0) } : {}),
       ...(procession ? { procession } : {}),
       ...(z.objective.kind === 'offering' && this.offering
         ? { altarOffered: this.offering.offered } : {}),
@@ -38845,6 +38874,7 @@ export class World {
 
     this.updateObjective(dt);
     this.updatePuzzles(dt);
+    this.updateOccurrences(dt);
     this.updateEncounters(dt);
     this.updateHunt(dt);
     this.updateFractures(dt);
@@ -47683,6 +47713,10 @@ export class World {
     // SAME list length, and the spatial/veil indices key on (identity, length,
     // rev) — length alone would leave them stale for that window.
     this.markDoodadsChanged();
+    // THE OCCURRENCE FABRIC's disturb stimulus: a breaking body is a noise
+    // in the ground — armed 'disturb' triggers hear it next sweep
+    // (occurrences.ts; the ring drains there). Gated so quiet zones pay nothing.
+    if (this.occs.length) this.occDisturbs.push(vec(d.pos.x, d.pos.y));
     // SURFACE PROCS: the pop is a trigger of its own (procs.ts 'surface').
     // No skill instance exists at a pop, so the roll reads the striker's
     // SHEET alone (passives, affixes, sheet-granted proc stats) — a
@@ -48745,6 +48779,69 @@ export class World {
       }
       this.flashes.push({ pos: vec(r.pos.x, r.pos.y), radius: 60, color: RIFT_CFG.accent, life: 0.4, maxLife: 0.4 });
     }
+  }
+
+  /** THE OCCURRENCE SWEEP (engine/occurrences.ts): drive this zone's armed/
+   *  sprung sites one frame, then drain the disturb ring. A siteless zone
+   *  pays one length check. */
+  private updateOccurrences(dt: number): void {
+    if (this.occs.length) driveOccSites(this.occHost(), this.occs, dt);
+    if (this.occDisturbs.length) this.occDisturbs.length = 0;
+  }
+
+  /** The narrow OccHost (the TrapHost idiom) — memoized once, closures read
+   *  live state. THE QUICKENING ANCHOR lives here: every pour mints at the
+   *  LIVE this.zone.level, the exact field the surge writes. */
+  private occHost(): OccHost {
+    return this.occHostObj ??= {
+      timeOf: () => this.time,
+      zoneLevel: () => this.zone.level,
+      heroDist: (x, y) => this.player.dead
+        ? Infinity : Math.hypot(this.player.pos.x - x, this.player.pos.y - y),
+      disturbedNear: (x, y, r) =>
+        this.occDisturbs.some(p => Math.hypot(p.x - x, p.y - y) <= r),
+      dice: (a, b) => rand(a, b),
+      diceInt: (a, b) => randInt(a, b),
+      plant: (row) => {
+        this.doodads.push({
+          pos: vec(row.x, row.y), radius: row.r, kind: row.kind,
+          ...(row.rot !== undefined ? { rot: row.rot } : {}),
+          ...(row.fall ? { fall: true } : {}),
+        });
+        this.markDoodadsChanged();
+      },
+      pour: (spec: OccKinSpec, x, y, band, n) => {
+        let table = (spec.kin ?? []).filter(en => MONSTERS[en.id]);
+        if (!table.length && spec.faction) {
+          // The registry lane: a registered roster, mini-event-shaped (no
+          // bosses, no spawners, no scenery — the leyline's own filter).
+          table = (FACTIONS[spec.faction]?.table ?? []).filter(en => {
+            const d = MONSTERS[en.id];
+            return !!d && !d.boss && !d.passive && !d.spawner;
+          });
+        }
+        if (!table.length) return 0;
+        const tag = spec.tag ?? OCC_CFG.bornTag;
+        let spawned = 0;
+        for (let i = 0; i < n; i++) {
+          const type = this.weightedPick(table, this.zone.level);
+          const m = this.createMonster(type,
+            Math.max(1, this.zone.level + (spec.levelBonus ?? 0)), 'enemy');
+          const ang = rand(0, Math.PI * 2);
+          const rr = rand(band[0], band[1]);
+          m.pos = this.clampPos(vec(x + Math.cos(ang) * rr, y + Math.sin(ang) * rr), m.radius);
+          m.tag = tag;
+          this.actors.push(m);
+          spawned++;
+        }
+        return spawned;
+      },
+      tagCount: (tag) => this.actors.filter(a => !a.dead && a.tag === tag).length,
+      announce: (x, y, text, color) => this.text(vec(x, y - 40), text, color, 15),
+      rumble: (mag) => { this.shake = Math.max(this.shake, mag); },
+      flash: (x, y, radius, color) =>
+        this.flashes.push({ pos: vec(x, y), radius, color, life: 0.5, maxLife: 0.5 }),
+    };
   }
 
   private spawnWave(): void {

@@ -28,6 +28,7 @@ import './engine/layoutRecipes'; // side-effect: registers the composed layout r
 import './engine/interiorGen'; // side-effect: registers the interior layouts (dungeon/labyrinth/edifice) + room roles
 import './data/massifs'; // side-effect: registers the massif mass kinds (+ the 'massif' recipe via engine/massif)
 import './data/watchposts'; // side-effect: registers the 'watch_post' ring tenant (the posted-watcher court)
+import './data/occurrences'; // side-effect: registers the 'occurrence' ring tenant + the occurrence shelf (court tables name it)
 import './data/settled'; // side-effect: the settled-belt kit (+ the 'fields'/'district' recipes via engine/settled)
 import './data/garden'; // side-effect: the Garden country kit (kinds, formations, compositions, the nest role pool)
 import './data/grove'; // side-effect: the Grove country kit (lantern flora, the hollow way down)
