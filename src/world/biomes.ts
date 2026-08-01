@@ -142,6 +142,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // web (old roads under old boughs).
   forest: { patronFaction: 'sylvan', mapColor: '#2e7d32', label: 'Forest', spacing: 58,
     climate: { temperature: 'mild', moisture: 'damp' },
+    // The sealed roof announces itself: knit crowns and a sentinel elder on
+    // the neighbor's verge (data/melds.ts).
+    meld: 'forest_meld',
     allowedLayouts: { forest: 1 },
     // OVERGROWTH (the clearway fabric): how much of a trail the wood wins
     // back, [fringe, heart] lerped by biomeDepth — the deep forest's ways
@@ -159,6 +162,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // but they walk it as HER servants; the undead keep the graves proper).
   gloamwood: { patronFaction: 'nightkin', mapColor: '#3a4a40', label: 'Gloamwood', spacing: 62,
     climate: { temperature: { to: 0.55, fadeOut: 0.15 }, moisture: { from: 0.42, fadeIn: 0.12 } },
+    // The haunted wood's edge dressing: crooked grey crowns, snags, briar —
+    // and the witch-bell nobody rings (data/melds.ts).
+    meld: 'gloamwood_meld',
     // Three faces: the crooked roof (forest), riverlands keeping it
     // (plantRiverbankRoof reads forestTrees below), and 'winding' RETURNED
     // as the BRIAR MAZE — the thicket-lane treatment its retirement waited
@@ -258,6 +264,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // GRAVELANDS: plains, mausoleum-labyrinth bastions, and RUINED NECROPOLIS
   // metropolises — the sacked city of the dead (ruined 0.85).
   grave:  { patronFaction: 'undead', mapColor: '#6a5a8a', label: 'Graveland', spacing: 60,
+    // The unconditioned filler still announces itself where it borders:
+    // stray markers and old bones past the fence (data/melds.ts).
+    meld: 'grave_meld',
     // Interior families join the pool: CATACOMB dungeons and mausoleum
     // labyrinths under the open graves, the odd manor EDIFICE still standing.
     // massif = the SACKED ACRES face (the massif fabric): ruin courts and
@@ -276,6 +285,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // gives the tag a HOME (patron, wildlife gate, layout pick) so any future
   // field/palette row is one line.
   ossuary: { patronFaction: 'undead', mapColor: '#cfc4ac', label: 'Ossuary', spacing: 64,
+    // MELD SILENCE: realm-only — in no field or dimension palette (a '?'
+    // frontier can never predict it) and entered by realm mint, not charted
+    // exits, so no neighbor's edge ever reads this tag.
     allowedLayouts: { plains: 1 },
     landmarks: [{ landmark: 'sinkhole', chance: 0.12 }] },
   // THE GLOAM MANOR: the haunted house's rooms — realm/pocket-only (no
@@ -283,6 +295,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // (the ossuary pattern). The tag gives the house a HOME — patron for
   // rouse/garrison logic and the wildlife gate (no hares upstairs).
   manor: { patronFaction: 'undead', mapColor: '#4a3a2c', label: 'Gloam Manor', spacing: 64,
+    // MELD SILENCE: pocket-only (the grand stair mints its floors) — no
+    // charted edge ever faces this biome, so a meld could never fire.
     allowedLayouts: { rooms: 1 } },
   // THE SUNKEN RUIN: the swallowed civilization under the jungle — realm/
   // pocket-only (no field seat, no climate row): the ruin_gate sidezone mints
@@ -291,6 +305,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // — so any future surface/palette seat is one line. The old dead keep
   // these halls; what the green sends down keeps them company.
   ruin: { patronFaction: 'undead', mapColor: '#5c6a4e', label: 'Sunken Ruin', spacing: 64,
+    // MELD SILENCE: pocket-only (the ruin_gate sidezone mints it) — mouths
+    // are gateway doodads, never ZoneExitDefs, so no exit can face 'ruin'.
     allowedLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 } },
   // THE SEPULCHER: the tomb-dynasty's own country under the deep desert —
   // pocket-only (no field seat, no climate row): the sepulcher_gate sidezone
@@ -300,6 +316,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // surface seat is one line. Dune-country washing into bone-country is the
   // blend fabric's work, not a second tag.
   sepulcher: { patronFaction: 'sarcophate', mapColor: '#c9b078', label: 'Sepulcher', spacing: 64,
+    // MELD SILENCE: pocket-only (the sepulcher_gate sidezone mints it) — the
+    // ruin's structural shape: no charted edge ever reads this tag.
     allowedLayouts: { dungeon: 2, plains: 1.5, labyrinth: 1 } },
   // RIFT: the demon war's WOUND — war-scar fields under hate-green light,
   // siege castles, and GORE-veined riverland (the land bleeds where it was
@@ -309,6 +327,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     // DEEP-wilds only (from 0.45): the surface rift is a rare far-frontier
     // scar — near the settled lands the war never reached this far through.
     climate: { wildness: { from: 0.45, fadeIn: 0.15 } },
+    // The wound seeps at its border: hate-glass and the dead ground's litter
+    // (data/melds.ts) — hell's own rift regions (weight 4 there) wear it too.
+    meld: 'rift_meld',
     allowedLayouts: { plains: 5, bastion: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'gore', causeways: [2, 3] },
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
@@ -324,6 +345,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the artery reads as a winding vein of fire on the hell tab.
   flame: { patronFaction: 'demon', mapColor: '#f0641e', label: 'River of Flame', spacing: 62,
     washOpacity: 0.26,
+    // The artery is found by its banks: cinder and bank-lights on the
+    // neighboring hell zones' edges (data/melds.ts) — the course PAINTS the
+    // dimension field, so '?' frontiers predict it honestly.
+    meld: 'flame_meld',
     allowedLayouts: { riverland: 1 },
     layoutParams: { riverLiquid: 'lava', causeways: [2, 3], riverWidth: [110, 170], isles: [1, 3] },
     landmarks: [
@@ -339,6 +364,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the zone-info attribution and the map label ride the tag).
   soulway: { patronFaction: 'undead', mapColor: '#7fc4e8', label: 'River of Souls', spacing: 200,
     washOpacity: 0.22,
+    // One seat per realm, so only RESOLVED neighbors ever read this tag (no
+    // palette predicts it): the pale banks mark a river already found
+    // (data/melds.ts).
+    meld: 'soulway_meld',
     allowedLayouts: { soulriver: 1 } },
   // THE DURANCE: the hate-citadel — hell's first ENCLAVE biome. Its Voronoi
   // regions read as ONE structure spanning zones: every edge crossing its
@@ -352,6 +381,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   durance: { patronFaction: 'demon', mapColor: '#3f5a46', label: 'Durance', spacing: 56,
     washOpacity: 0.24,
     enclave: { gate: 'durance_gate' },
+    // Enclave gate AND meld compose (the metropolis precedent): the façade
+    // is the door, the cold-green braziers are the road to it (data/melds.ts).
+    meld: 'durance_meld',
     allowedLayouts: { dungeon: 3, edifice: 1 },
     layoutParams: {
       interiorWall: 'durance_wall', floorStyle: 'tile',
@@ -364,6 +396,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // underworld-palette-only until a surface field entry ever lists it.
   steppes: { patronFaction: 'demon', mapColor: '#8a4526', label: 'Steppes', spacing: 82,
     climate: { temperature: { to: 0.8, fadeOut: 0.14 } },
+    // Hell's marches announce the legions' border: fins, stakes, chains
+    // (data/melds.ts — meldFor runs per-dimension off the same prediction seam).
+    meld: 'steppes_meld',
     allowedLayouts: { steppes: 4, expanse: 1 },
     layoutParams: {
       ridges: [3, 5], ridgeGapChance: 0.55, gateTerrace: { chance: 0.75 },
@@ -392,6 +427,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // MARINE family — these lean to the 'islands' layout (land lobes + bridges + sea).
   beach:  { patronFaction: 'wild', mapColor: '#d8c890', label: 'Coast', spacing: 84,
     climate: { maritime: 'shorebound' },
+    // One shore vocabulary, shared with the isles (strand_meld is theirs
+    // too): salt air reads the same from either side (data/melds.ts).
+    meld: 'strand_meld',
     marine: 'coast', allowedLayouts: { plains: 2, islands: 1 },
     landmarks: [
       { landmark: 'cove', chance: 0.3 }, { landmark: 'fjord_coast', chance: 0.15 },
@@ -411,6 +449,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // serpentfolk the wet margins breed.
   littoral: { patronFaction: 'coilborn', mapColor: '#4a9a86', label: 'Littoral', spacing: 56,
     climate: { maritime: 'shorebound' },
+    // The tiered coast wades out to meet you — shore-honest kinds only:
+    // wrack, pools, rushes (the habitat law keeps live kelp home; data/melds.ts).
+    meld: 'littoral_meld',
     allowedLayouts: { islands: 3, plains: 1.5, riverland: 1.5 },
     layoutParams: { riverLiquid: 'water', causeways: [1, 2] },
     landmarks: [
@@ -420,6 +461,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     ] },
   isle:   { patronFaction: 'wild', mapColor: '#7ec8e8', label: 'Isle', spacing: 90,
     climate: { maritime: 'shorebound' },
+    // Shares the coast's strand_meld: the archipelago and the mainland shore
+    // announce with one salt vocabulary (data/melds.ts).
+    meld: 'strand_meld',
     marine: 'coast', allowedLayouts: { islands: 3, plains: 1 },
     landmarks: [
       { landmark: 'peninsula', chance: 0.2 }, { landmark: 'isthmus', chance: 0.15 },
@@ -427,6 +471,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     ] },
   deepsea: { patronFaction: 'wild', mapColor: '#2f6aa8', label: 'Deep Sea',
     climate: { maritime: { from: 0.3, fadeIn: 0.2 } },
+    // The deep announces itself in what it throws ashore — wrack, bleached
+    // coral, chewed stone: every kind honest wet or dry (data/melds.ts).
+    meld: 'deepsea_meld',
     marine: 'deep', allowedLayouts: { underwater: 1 },
     // No land warband braves the open ocean (the user's example). Eldritch is
     // event-driven (contexts gate) so it can still erupt here. Demo of the gate.
@@ -442,6 +489,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     // them; inbound rim accretion consolidates once the budget stands). The
     // uncapped hub used to collect 14-16 spokes off the forechart halo.
     maxRoads: 8,
+    // Open country's announce: longer grass, thicker flowers, one lone tree
+    // where the horizon gets serious (data/melds.ts).
+    meld: 'field_meld',
     allowedLayouts: { field: 1 }, eventDensityMul: 1.4,
     // Open country: a lone watchtower on the expanse (structures roll layout-
     // agnostically, so the Field's blob rasterizer gets them too).
@@ -459,6 +509,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // hunting here, it just answers to a crown now.
   tundra:   { patronFaction: 'rimebound', mapColor: '#bcd0d8', label: 'Tundra', spacing: 96,
     climate: { temperature: 'cold', moisture: { to: 0.55, fadeOut: 0.2 } },
+    // The OPEN cold (the taiga's is wooded): bare drifts and scoured stone,
+    // no treeline (data/melds.ts).
+    meld: 'tundra_meld',
     // massif = the SCOURED FELLS face (the massif fabric): wind-bared tors
     // and scarp bluffs standing out of the snow — the reference stone mix.
     allowedLayouts: { plains: 3, expanse: 1, riverland: 1, massif: 1 },
@@ -519,6 +572,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     // gentler floor: mesas stand on the ranges' warm shoulders.
     climate: { temperature: { from: 0.42, fadeIn: 0.12 }, moisture: 'dry', wildness: { from: 0.2, fadeIn: 0.15 },
       elevation: { from: 0.56, fadeIn: 0.15 } },
+    // The tables stand up before you arrive: needles and scree on the verge
+    // (data/melds.ts).
+    meld: 'butteland_meld',
     allowedLayouts: { needles: 1 },
     landmarks: [{ landmark: 'canyon', chance: 0.2 }, { landmark: 'lone_mountain', chance: 0.1 }] },
   // THE KARST COUNTRY: wind-cut limestone in the wild dry midlands — TWO
@@ -532,6 +588,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the stone — stone_sentinel's crowned family garrisons both faces.
   karst:    { patronFaction: 'elemental', mapColor: '#a8a290', label: 'Karst', spacing: 96,
     climate: { temperature: 'mild', moisture: 'dry', wildness: { from: 0.3, fadeIn: 0.25 } },
+    // Wind-cut litter and the odd petrified tree past the border — the
+    // gaze's warning shot (data/melds.ts).
+    meld: 'karst_meld',
     allowedLayouts: { karst: 3, parkland: 1 },
     landmarks: [{ landmark: 'sinkhole', chance: 0.18 }, { landmark: 'canyon', chance: 0.14 }] },
   // THE DOWNS: the settled world's open bones — rolling bracken heath studded
@@ -547,6 +606,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     // Temperature taste dropped (the farmland note): the dry settled half is
     // the identity, whatever the origin's weather rolled.
     climate: { moisture: { to: 0.52, fadeOut: 0.16 }, wildness: { to: 0.62, fadeOut: 0.2 } },
+    // Old walked land: cropped turf, grey stone, a raised stone, a watching
+    // barrow (data/melds.ts).
+    meld: 'downs_meld',
     allowedLayouts: { massif: 1 },
     structures: [{ structure: 'watchtower', chance: 0.28 }],
     landmarks: [
@@ -609,6 +671,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     // The wet HOLLOWS (the relief fabric): bogs pool where the land lies
     // low — never up a mountainside.
     climate: { moisture: 'wet', elevation: { to: 0.5, fadeOut: 0.14 } },
+    // The bog tests the ground ahead of itself: reeds and softening soil
+    // (data/melds.ts).
+    meld: 'marsh_meld',
     allowedLayouts: { islands: 2, plains: 1 },
     landmarks: [{ landmark: 'bog_shore', chance: 0.3 }, { landmark: 'swamp_hill', chance: 0.22 }, { landmark: 'tar_pool', chance: 0.25 }] },
   // Exotic hazard biomes (each is a distinct framework instance):
@@ -621,6 +686,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // sanguine middle, gutworks deep-mid, ocular heart) → a touch more room.
   flesh:    { patronFaction: 'flesh',   mapColor: '#7a2a38', label: 'Flesh', spacing: 76,
     climate: { wildness: 'deepwild' },
+    // The meat grows past its border: gore, rib struts, a scouting polyp
+    // (data/melds.ts) — hell's flesh regions wear it too.
+    meld: 'flesh_meld',
     allowedLayouts: { flesh: 1 } },
   // THE CAUL — hell-only (absent from BIOME_FIELD, present only in the
   // underworld dimension's palette): the invading organism's membrane
@@ -629,6 +697,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // them. Pools where hell runs least arid (the stone sweats there).
   caul:     { patronFaction: 'caulborn', mapColor: '#241a2e', label: 'The Caul', spacing: 76,
     climate: { moisture: { from: 0.22, fadeIn: 0.12 } },
+    // The organism grows toward its neighbors: chitin rows and nerve webbing
+    // (data/melds.ts).
+    meld: 'caul_meld',
     allowedLayouts: { winding: 2, plains: 1, steppes: 1 },
     layoutParams: { riverLiquid: 'gore', negativeLiquid: 'gore' } },
   // THE WARFRONT — hell-only (the caul pattern: absent from BIOME_FIELD,
@@ -639,14 +710,23 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // grind-columns on the ways. Open shelled ground — plains and marches,
   // pocked by the crater landmark family.
   warfront: { patronFaction: 'demon', mapColor: '#7a3a26', label: 'The Warfront', spacing: 72,
+    // The guns walk their pocks past their own line (data/melds.ts).
+    meld: 'warfront_meld',
     allowedLayouts: { plains: 2, steppes: 1 },
     landmarks: [{ landmark: 'crater', chance: 0.45 }, { landmark: 'sinkhole', chance: 0.12 }] },
   // CAVERN — the biome tag for the underground tilesets (they previously
   // carried none, so cave zones fell back to PLAINS wildlife: hares in the
   // dark). No patron marches from here; the dark keeps its own.
   cavern:   { patronFaction: 'wild', mapColor: '#5a5462', label: 'Cavern', spacing: 72,
+    // MELD SILENCE: cave-ladder zones live off the chart (caveMap; surface
+    // mouths are gateway doodads, never ZoneExitDefs) and intra-cave hops
+    // are same-biome — no charted edge can face 'cavern' from outside.
+    // (Caves still WEAR a surface parent's meld at their up-exit: standing law.)
     landmarks: [{ landmark: 'maggot_burrow', chance: 0.18 }] },
   crystal:  { patronFaction: 'elemental', mapColor: '#7fd0ff', label: 'Crystal', spacing: 84,
+    // The shard country glitters first — inert lattices only; the burning
+    // beams stay home (data/melds.ts).
+    meld: 'crystal_meld',
     climate: { wildness: 'deepwild' } },
   // VOLCANIC: one tileset, THREE generations (the recipe-tweak showcase) — a
   // spiral cauldron over a lava sea, a winding lava-tube gut, or open plains;
@@ -655,6 +735,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the Legion remains its invader, not its landlord.)
   volcanic: { patronFaction: 'emberkin', mapColor: '#d84a1e', label: 'Volcanic', spacing: 92,
     climate: { temperature: 'scorching', wildness: { from: 0.25, fadeIn: 0.2 } },
+    // Ash on the wind, burnt edition: cinder and glass drift out; the vents
+    // stay home (data/melds.ts) — hell's volcanic seats wear it too.
+    meld: 'volcanic_meld',
     allowedLayouts: { plains: 2, spiral: 1, winding: 1 },
     layoutParams: { negativeLiquid: 'lava', riverLiquid: 'lava' },
     landmarks: [{ landmark: 'caldera', chance: 0.25 }, { landmark: 'lava_coast', chance: 0.18 }, { landmark: 'crater', chance: 0.2 },
@@ -668,9 +751,17 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // it spreads — the tug-of-war; the overlay folds a live per-zone suppression on top).
   mycelia:  { patronFaction: 'fungal',   mapColor: '#8fd06f', label: 'Mycelia', spacing: 64,
     climate: { moisture: 'damp', wildness: { from: 0.35, fadeIn: 0.2 } },
+    // The bloom seeds ahead of its own body: caps and small lights
+    // (data/melds.ts).
+    meld: 'mycelia_meld',
     allowedLayouts: { mycelia: 1 }, eventDensityMul: 0.7 },
   // ELDRITCH — never seeded into BIOME_FIELD (no random eldritch regions in normal
   // gen); only an Incursion's biome-warp paints this ground, locking the landing.
+  // MELD SILENCE: in no palette (a '?' frontier can never predict it), real
+  // only around Incursion-minted ground — transient event country whose
+  // announce fabric is already the event stack (the pall's eventOnly weather,
+  // blightgrowth creep, the attributed map warp); a static border claim would
+  // outlive and misstate the invasion (the transience doctrine).
   eldritch: { patronFaction: 'eldritch', mapColor: '#587a52', label: 'Blight' },
   // THE OPEN SEA — the landmass layer's OWN biome. Never seeded into
   // BIOME_FIELD (the continent field IMPOSES it in biomeAt), never mints
@@ -679,6 +770,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // naval context's job. Painted heavy on the map so it reads as WATER, not
   // a tint over a land heat-map that isn't there.
   ocean: { patronFaction: 'wild', mapColor: '#142e47', label: 'Open Sea',
+    // MELD SILENCE: virtual (mints nothing) and every coast is another
+    // biome's country by the shorebound gates — the sea's announcement IS
+    // the shore; sea-facing frontiers resolve away under the dry-road law.
     virtual: true, washOpacity: 0.62 },
   // THE RIVER — the relief fabric's course identity (world/relief.ts): worn
   // by NO zone (SURFACE_RIVERS is a non-painting course — a river crosses
@@ -687,6 +781,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // water's color, and any future attribution names the artery. Virtual:
   // never rolled, never a faction's home ground.
   river: { patronFaction: 'wild', mapColor: '#5b9fd4', label: 'River',
+    // MELD SILENCE (structural): worn by NO zone and in no palette — the
+    // non-painting course repaints nothing, so meldFor can never name it.
     virtual: true },
   // THE AETHER — the Aetherial dimension's cloud shelves (dimension-palette-
   // only: no climate gate, no surface field entry — the realm above mints it
@@ -695,6 +791,16 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // (the tileset's theme carries the CollapseSpec); the Host keeps events
   // quiet up here — the realm is its own event.
   aether: { patronFaction: 'seraphic', mapColor: '#9fc0e8', label: 'Aether', spacing: 88,
+    // MELD SILENCE (the whole aether_* family — THIS is the family ruling):
+    // sealed from the surface by construction (geyser/gate/fall entry,
+    // entry.road false — no charted surface edge ever faces the realm),
+    // while INTRA-realm adjacency is live (palette: aether 1 / spires .9 /
+    // drift .9 / vesper .9 / bastion .9 / civitas .75; the sanctum
+    // gate-mints; the Galestream paints) and meldFor already samples the
+    // realm's own field — so realm melds are one data row each the day the
+    // sky wants them. Deferred as a realm-coherent pass: the realm's edge
+    // language is theme fabric (frail fringes, flux pads, comet lanes), and
+    // piecemeal scatter rows would understate it.
     allowedLayouts: { aether_lattice: 1 },
     eventDensityMul: 0.5,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
@@ -703,6 +809,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // no sky-holes, wide causeways, and the tileset that claims this biome
   // carries NO CollapseSpec. Never in the dimension's frontier palette.
   aether_sanctum: { patronFaction: 'seraphic', mapColor: '#c8d8f4', label: 'Firmament', spacing: 88,
+    // MELD SILENCE: the family ruling at 'aether' above (a gate-mint place).
     allowedLayouts: { aether_lattice: 1 },
     eventDensityMul: 0.3,
     layoutParams: { isles: [5, 7], isleRadius: [200, 300], causewayWidth: [70, 95], holes: [0, 0] } },
@@ -713,6 +820,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the biome's CollapseSpec melts. In the dimension's frontier palette
   // beside the shelves: the realm's two moods.
   aether_spires: { patronFaction: 'seraphic', mapColor: '#e0d8b8', label: 'High Spires', spacing: 90,
+    // MELD SILENCE: the family ruling at 'aether' above.
     allowedLayouts: { aether_spires: 1 },
     eventDensityMul: 0.4,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
@@ -723,6 +831,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // realm's WETTEST reaches — the storm shelves the climate axes were
   // waiting for (dimensions.ts foretold them).
   aether_drift: { patronFaction: 'seraphic', mapColor: '#a8dce8', label: 'Driftways', spacing: 92,
+    // MELD SILENCE: the family ruling at 'aether' above.
     climate: { moisture: { from: 0.26, fadeIn: 0.1 } },
     allowedLayouts: { aether_drift: 1 },
     eventDensityMul: 0.4,
@@ -735,6 +844,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // axes were waiting for. Patroned by the VESPERKIN, not the Host — the
   // cosmos keeps its own fauna.
   aether_vesper: { patronFaction: 'vesperkin', mapColor: '#b0a8e0', label: 'Vesperlands', spacing: 92,
+    // MELD SILENCE: the family ruling at 'aether' above.
     climate: { temperature: { to: 0.34, fadeOut: 0.1 } },
     allowedLayouts: { aether_vesper: 1 },
     eventDensityMul: 0.4,
@@ -752,6 +862,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the Civitas: walk the sunlit belt inward through bastion massif country
   // and the buildings become REAL.
   aether_bastion: { patronFaction: 'seraphic', mapColor: '#e8d9a0', label: 'High Bastion', spacing: 92,
+    // MELD SILENCE: the family ruling at 'aether' above.
     climate: { temperature: { from: 0.38, fadeIn: 0.1, to: 0.68, fadeOut: 0.1 } },
     allowedLayouts: { aether_bastion: 1 },
     eventDensityMul: 0.4,
@@ -763,6 +874,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // real naves, real doors, real rooms — where the bastion belt outside is
   // massif sculpture. Holds the realm's warm POLE; the bastion rings it.
   aether_civitas: { patronFaction: 'seraphic', mapColor: '#f4e2b0', label: 'The Civitas', spacing: 92,
+    // MELD SILENCE: the family ruling at 'aether' above.
     climate: { temperature: { from: 0.62, fadeIn: 0.08 } },
     allowedLayouts: { civitas: 1 },
     eventDensityMul: 0.4,
@@ -773,6 +885,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // in the frontier palette; the wind is a place, not patches. Patroned by
   // the GALEKIN: the stream is their highway.
   aether_stream: { patronFaction: 'galekin', mapColor: '#8fe0e8', label: 'The Galestream', spacing: 88,
+    // MELD SILENCE: the family ruling at 'aether' above (course-painted artery).
     allowedLayouts: { aether_drift: 1 },
     eventDensityMul: 0.3,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
@@ -809,6 +922,11 @@ export const BIOMES: Record<string, BiomeInfo> = {
     // starving the through-trade the desert's edge exists to carry.
     maxRoads: 4,
     climate: { temperature: 'warm', moisture: { from: 0.34, fadeIn: 0.04, to: 0.46, fadeOut: 0.05 } },
+    // THE COURTLANDS' MELD (the court-country pass's recorded want, closed):
+    // the belt announces RELIEF from either side of the crossing — palms,
+    // a well-ring, shade, cached amphorae on the neighbor's hem
+    // (data/melds.ts courtland_meld — the threshold rhythm, one band early).
+    meld: 'courtland_meld',
     allowedLayouts: { massif: 1 },
     // The court pools at biome grain (the tileset's faces re-mix them): the
     // law is NOTHING BUT RINGS — every row rolls ring architecture only
