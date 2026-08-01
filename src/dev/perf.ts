@@ -115,6 +115,33 @@ export interface PerfSweepReport {
 
 const PERF_SPREAD_BASE = 11; // staggers mint coordinates across the sweep
 
+/** Fake-pad turn rate, radians per SECOND of wall clock. 1.2 rad/s IS the
+ *  old per-frame `dir += 0.02` at the gate machine's 60Hz vsync (0.02 ×
+ *  60fps) — committed zones walk the same arcs their budgets were
+ *  calibrated on; only the framerate dependence is gone. */
+const WALK_TURN_RATE = 1.2;
+/** Turn-integration dt ceiling (ms) — mirrors the main loop's own sim
+ *  clamp (`Math.min(0.05, dt)`, main.ts): through a stall frame the hero
+ *  moves at most 50ms of ground, so the stick turns at most 50ms of arc —
+ *  curvature stays constant in SPACE, and one 7-second stall frame cannot
+ *  whip the heading a full lap between samples. */
+const WALK_DT_CLAMP_MS = 50;
+/** Window-pair restarts before a row gives up as skipped. Each retry
+ *  rotates the starting heading by RETRY_TURN (~137°), so the walker
+ *  sweeps a different arc instead of marching deterministically back into
+ *  the same sinkhole or span gap. */
+const HOLD_ATTEMPTS = 3;
+const RETRY_TURN = 2.4;
+/** THE HAZARD WHISKER's probe horizons (units ahead of the hero), longest
+ *  first — a fine chasm maze that rings every long ray still usually opens
+ *  a short one down a corridor — and the deflection fan: candidate
+ *  headings swing ±WHISKER_STEP × 1..WHISKER_FAN (≈±160°) alternating
+ *  sides, so the walker turns as little as needed and can turn around at
+ *  a dead end. */
+const WHISKER_REACH = [72, 36];
+const WHISKER_STEP = 0.35;
+const WHISKER_FAN = 8;
+
 /** ID-STABLE mint seed: fold the tileset id (FNV-1a) into mintSeed, so a
  *  row's mint can NEVER re-roll because the registry grew or reordered.
  *  The old index-derived seed re-rolled every later row each time a pass
@@ -190,50 +217,133 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   };
 
   /** Steer the left stick in a slow arc for `ms` — real input path, real
-   *  movement, real chunk faults at the camera edge. Returns the worst rAF
-   *  gap seen (the caller uses it for the entry-burst readout). */
-  const walkPhase = async (ms: number): Promise<number> => {
-    let dir = 0.6, worst = 0;
+   *  movement, real chunk faults at the camera edge. THE TIME-BASED ARC:
+   *  the heading advances by wall time (WALK_TURN_RATE × the frame gap,
+   *  sim-clamped), never per frame — the old `dir += 0.02` made the PATH a
+   *  function of framerate: a hitching zone turned the stick slower in wall
+   *  time while the hero kept full dt-driven speed, so exactly the zones
+   *  under load straightened their arcs, ranged wider, and were likeliest
+   *  to walk out of their own sample (karst_reach / aether_vesper /
+   *  galestream all skipped whole windows, 2026-08-01). THE ZONE GUARD:
+   *  every frame checks the zone id and the phase aborts the moment the
+   *  walker leaves, so no window ever mixes two zones' frames. Returns the
+   *  worst rAF gap seen (the entry-burst readout) + whether the walk
+   *  stayed home; the caller owns the travel back and the restart. */
+  const walkPhase = async (ms: number, dir0 = 0.6): Promise<{ worst: number; held: boolean }> => {
+    const homeZid = g.world().zone.id;
+    let dir = dir0, worst = 0;
     let prev = performance.now();
     const t0 = prev;
     while (performance.now() - t0 < ms) {
-      dir += 0.02;
+      // THE HAZARD WHISKER (karst_reach 2026-08-01: the blind arc found the
+      // chasm maze's gulfs on every heading — three restarts, zero clean
+      // windows): probe the ray ahead through World.fallHazardAt — THE
+      // self-preservation probe, the exact question the AI steering veto
+      // asks — so the walker refuses fall/skyfall/descend/eject/instakill
+      // region cells (chasms, the aether void) AND fall-able pit doodads
+      // precisely where a steered mind would, and deflects to the nearest
+      // safe heading before stepping. Honest traversal in gulf country IS
+      // walking around the gulfs; only the fake pad was suicidal. On
+      // hazard-free ground every probe reads safe at the first ray and the
+      // arc is untouched. Condition-TIMED drops (a span standing down
+      // UNDERFOOT, collapse, flux) stay the zone guard's to catch — no
+      // static probe can see ground that was held when stepped on.
+      const zw = g.world();
+      const at = zw.player.pos;
+      const rayFree = (a: number, reach: number): boolean =>
+        !zw.fallHazardAt(zw.player, at.x + Math.cos(a) * reach * 0.5, at.y + Math.sin(a) * reach * 0.5)
+        && !zw.fallHazardAt(zw.player, at.x + Math.cos(a) * reach, at.y + Math.sin(a) * reach);
+      for (const reach of WHISKER_REACH) {
+        if (rayFree(dir, reach)) break;
+        let turned = false;
+        for (let k = 1; k <= WHISKER_FAN && !turned; k++) {
+          const off = WHISKER_STEP * k;
+          if (rayFree(dir + off, reach)) { dir += off; turned = true; }
+          else if (rayFree(dir - off, reach)) { dir -= off; turned = true; }
+        }
+        if (turned) break;
+        // Every heading at this reach ends in a drop — fall through to the
+        // shorter horizon; ringed even there, hold course and let the
+        // guard own whatever follows.
+      }
       g.fakePad({ axes: [Math.cos(dir), Math.sin(dir), 0, 0], buttons: [] });
       const now = await raf();
-      worst = Math.max(worst, now - prev);
+      const gap = now - prev;
+      worst = Math.max(worst, gap);
       prev = now;
+      dir += WALK_TURN_RATE * Math.min(gap, WALK_DT_CLAMP_MS) / 1000;
+      if (g.world().zone.id !== homeZid) return { worst, held: false };
     }
-    return worst;
+    return { worst, held: true };
   };
 
-  const sampleCurrentZone = async (tilesetId: string): Promise<PerfZoneStats> => {
-    const zw = g.world();
-    zw.player.invulnerable = true; // unkillable but TARGETABLE: combat stays real
-    // THE LITE STRESS: the tide pours before the entry walk, so both the
-    // burst and the steady window carry the full crowd.
-    if (opts.lite) zw.devLitePour('vermin_tide', opts.lite);
-    const entryWorst = await walkPhase(settleMs);
-    // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
-    // hops zones at a rate no player ever will, and V8's collection storm
-    // otherwise lands mid-sample on whichever zone holds the window when
-    // the threshold trips — the breach wears an innocent zone's name
-    // (tundra 2026-07-12; gutworks 2026-07-16, clean twice solo). The
-    // launcher exposes gc for --perf-test only; normal play never has it.
-    (window as unknown as { gc?: () => void }).gc?.();
-    g.perfFrames(true); // discard the entry burst; the steady window begins
-    VIS_TELEMETRY.snowBakes = 0;
-    VIS_TELEMETRY.groundBakes = 0;
-    await walkPhase(sampleMs);
-    const zw2 = g.world();
-    return reduceFrames(g.perfFrames(false), entryWorst, {
-      tileset: tilesetId, zone: zw2.zone.name,
-      variant: zw2.zone.variantName ?? null,
-      layout: zw2.zone.layoutType ?? 'plains',
-      doodads: zw2.doodads.length, actors: zw2.actors.length,
-      lite: zw2.lite.liveCount,
-      snowBakes: VIS_TELEMETRY.snowBakes, groundBakes: VIS_TELEMETRY.groundBakes,
-      snowCover: +zw2.snowCover.toFixed(2),
-    });
+  // THE MID-WALK EXIT + THE RESTART LAW (aether_vesper 2026-07-28: a
+  // skyfall off a void-realm isle whose spans stood down landed the walker
+  // in a mournstead forest, which wore the vesper row's budget and gated
+  // the sweep — report perf_20260728052558; the post-hoc skip that replaced
+  // it then let karst_reach/aether_vesper/galestream silently SKIP whole
+  // windows, 2026-08-01): when the walk leaves its zone — a sinkhole
+  // DESCENDS the walker (pit fabric), a span stands down into skyfall, a
+  // portal step — the guard travels back and RESTARTS the interrupted
+  // window pair from scratch on a rotated heading, instead of either
+  // gating a foreign zone's frames or giving the row up unmeasured. THE
+  // PIT RULING: a descend is leave-and-return, never sample-continue — the
+  // row's meta and budget describe ONE zone, a pit cave is a different
+  // tileset at cave scale, and resuming a half window would mix the
+  // descend stitch + foreign frames into a steady state the gate
+  // calibrated on home ground alone. The travel back reproduces the mint's
+  // own landing (loadZone + landPartyAt arena center — world.ts
+  // devTravelTo), and the re-entry chunk burst lands in the DISCARDED
+  // settle window, exactly like the original entry burst. A row that
+  // cannot hold one clean window pair in HOLD_ATTEMPTS tries returns null
+  // and skips — measured never trumps honest.
+  const sampleCurrentZone = async (tilesetId: string): Promise<PerfZoneStats | null> => {
+    const homeZid = g.world().zone.id;
+    // Worst entry gap across ALL attempts: the first attempt carries the
+    // mint's true load burst — a retry's cheaper re-entry must not launder
+    // the row's entry-burst verdict.
+    let entryWorst = 0;
+    const returnHome = (): boolean => {
+      const ok = g.world().devTravelTo(homeZid); // false only off-graph — cannot happen for minted/START zones
+      if (ok) pinWeather(); // the pinned front re-parks on the home node
+      return ok;
+    };
+    for (let attempt = 0; attempt < HOLD_ATTEMPTS; attempt++) {
+      const zw = g.world();
+      zw.player.invulnerable = true; // unkillable but TARGETABLE: combat stays real
+      // THE LITE STRESS: the tide pours before the entry walk, so both the
+      // burst and the steady window carry the full crowd. Re-poured after a
+      // guard restart (the travel back reloads the zone); lite.spawn refuses
+      // past the pool cap, so a surviving tide tops up instead of doubling.
+      if (opts.lite) zw.devLitePour('vermin_tide', opts.lite);
+      const dir0 = 0.6 + attempt * RETRY_TURN;
+      const entry = await walkPhase(settleMs, dir0);
+      entryWorst = Math.max(entryWorst, entry.worst);
+      if (!entry.held) { if (!returnHome()) break; continue; }
+      // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
+      // hops zones at a rate no player ever will, and V8's collection storm
+      // otherwise lands mid-sample on whichever zone holds the window when
+      // the threshold trips — the breach wears an innocent zone's name
+      // (tundra 2026-07-12; gutworks 2026-07-16, clean twice solo). The
+      // launcher exposes gc for --perf-test only; normal play never has it.
+      (window as unknown as { gc?: () => void }).gc?.();
+      g.perfFrames(true); // discard the entry burst; the steady window begins
+      VIS_TELEMETRY.snowBakes = 0;
+      VIS_TELEMETRY.groundBakes = 0;
+      const steady = await walkPhase(sampleMs, dir0);
+      if (!steady.held) { if (!returnHome()) break; continue; }
+      const zw2 = g.world();
+      return reduceFrames(g.perfFrames(false), entryWorst, {
+        tileset: tilesetId, zone: zw2.zone.name,
+        variant: zw2.zone.variantName ?? null,
+        layout: zw2.zone.layoutType ?? 'plains',
+        doodads: zw2.doodads.length, actors: zw2.actors.length,
+        lite: zw2.lite.liveCount,
+        snowBakes: VIS_TELEMETRY.snowBakes, groundBakes: VIS_TELEMETRY.groundBakes,
+        snowCover: +zw2.snowCover.toFixed(2),
+      });
+    }
+    return null;
   };
 
   // CONTROL: the town — every relative budget compares against this, so the
@@ -243,6 +353,7 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   g.world().devTravelTo(START_ZONE);
   pinWeather();
   const control = await sampleCurrentZone('(town)');
+  if (!control) throw new Error('perfSweep: the town control could not hold its window — sweep aborted');
 
   // THE MATRIX: frontier-eligible tilesets first (registry order — their
   // mint-seed indices are calibration state and must not shift), then the
@@ -287,18 +398,12 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     }
     pinWeather(); // re-pin on the fresh zone's own node
     const stats = await sampleCurrentZone(id);
-    if (g.world().zone.id !== zid) {
-      // THE MID-WALK EXIT (aether_vesper 2026-07-28, the load-fallback
-      // guard's missing half): the walker LEFT the minted zone DURING the
-      // sample — a skyfall off a void-realm isle whose spans stood down
-      // (beginSkyfall → skyBelow → the nearest charted surface zone), or a
-      // portal step. The collected frames measure the zone-swap stitch plus
-      // a FOREIGN zone's steady state, and the meta reads the landing zone —
-      // a mournstead forest wore the vesper row's budget and gated the
-      // sweep (report perf_20260728052558: zone 'Mournstead Keep', variant
-      // 'the drowned garden', under tileset 'aether_vesper'). A row that
-      // did not stay home is not a measurement of its tileset.
-      skipped.push(`${id} (walk left the zone mid-sample → '${g.world().zone.name}')`);
+    if (!stats) {
+      // The walker could not hold one clean window pair in HOLD_ATTEMPTS
+      // tries (the restart law above) — a row that did not stay home is not
+      // a measurement of its tileset. Report-only skip, the same lane as an
+      // unmintable id.
+      skipped.push(`${id} (walker could not hold the zone in ${HOLD_ATTEMPTS} attempts)`);
       continue;
     }
     zones.push(stats);
