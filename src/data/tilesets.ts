@@ -2745,7 +2745,14 @@ export const TILESETS: Record<string, TilesetDef> = {
             { kind: 'garrison', weight: 28 },
             { kind: 'vacant', weight: 18 },
             { kind: 'held_stock', weight: 12 },
-            { kind: 'cache', weight: 12 },
+            { kind: 'cache', weight: 9 },
+            // THE VAULT UNDER THE COURTS (the lair fabric's den key,
+            // data/lairs.ts): one ring in the dead city keeps the desert's
+            // own asking — the sphinx's gate where a pot-hoard stood (the
+            // cache that asks first). Paid from cache's TAIL and appended
+            // LAST so every other band's draw is byte-identical (the
+            // surgical append — probe_lairs RIG M).
+            { kind: 'lair_mouth', weight: 3, params: { den: 'riddle_vault' } },
           ] } },
           { kind: 'sand_court', weight: 1, sizeR: [260, 380],
             over: { mouths: [2, 3], tenants: [
@@ -2848,7 +2855,28 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The standard ring — usually quiet, stocked (the kind's 0.55
         // squatter chance retuned to the rim's mostly-kept-empty truth).
         { kind: 'sand_court', weight: 3, over: { garrison: { chance: 0.3 } } },
-        { kind: 'well_court', weight: 1.6 },
+        // THE CRONE'S CLAIM (the lair fabric's den key, data/lairs.ts): the
+        // fen's hag come to the rim's only wet ground — one well ring in
+        // fifty is hers, its stakes and hung pots where the palms should be.
+        // over.tenants REPLACES the kind's table wholesale (probe_massif
+        // rig M), so this row carries well_court's OWN table (data/massifs.ts)
+        // verbatim, vacant paying the 2 and the hag appended LAST — every
+        // other band's draw stays byte-identical (probe_lairs RIG M pins the
+        // copy against the kind and the surgical grain).
+        { kind: 'well_court', weight: 1.6, over: { tenants: [
+          { kind: 'stock', weight: 46 },
+          { kind: 'held_stock', weight: 10 },
+          { kind: 'watch_post', weight: 6, params: { detail: 'rim_sentinel' } },
+          { kind: 'garrison', weight: 4 },
+          { kind: 'cache', weight: 12, rows: [
+            { kind: 'clay_pots', weight: 2, radius: [10, 14] },
+            { kind: 'burial_urn', weight: 1, radius: [11, 15] },
+          ] },
+          { kind: 'shrine', weight: 8 },
+          { kind: 'lair_mouth', weight: 4 },
+          { kind: 'vacant', weight: 8 },
+          { kind: 'lair_mouth', weight: 2, params: { den: 'hag_hovel' } },
+        ] } },
         { kind: 'fallen_court', weight: 1.4 },
         // THE KEPT COURT: the dynasty's standing seats — wide rings, twin
         // gates, a garrison that nearly always answers.

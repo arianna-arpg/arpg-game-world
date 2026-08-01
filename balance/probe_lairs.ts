@@ -30,7 +30,7 @@ import {
   doodadRuleOf, generateLayout, hasLandmark, isSidezoneEntranceKind, landmarkDefs,
   type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
-import { carveMassifs, tenantKindIds, type TenantRow } from '../src/engine/massif';
+import { carveMassifs, massKindOf, tenantKindIds, type MassPoolRow, type TenantRow } from '../src/engine/massif';
 import { GridWalkField } from '../src/world/gridWalk';
 import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lairs';
 import { reserveFrac } from '../src/engine/reserves';
@@ -1003,6 +1003,261 @@ const step = (secs: number): void => {
       JSON.stringify(a) === JSON.stringify(sz.mint(mctx))
       && a.noDeeper === true
       && Array.isArray(a.fauna) && a.fauna.some(f => f.id === 'sand_scorpion'));
+  }
+}
+
+// --- RIG M: THE BIOME DENS (batch 17) — the shipped per-face den mappings -----
+// The den key leaves the bench for the SHIPPED tables (data/tilesets.ts):
+// tableland's 'court of sands' standard ring may keep the desert's own asking
+// (den: 'riddle_vault' — the sphinx's gate where a pot-hoard stood) and
+// courtland's base-face well ring may be the crone's (den: 'hag_hovel').
+// Pinned here: the rows resolve WHOLE through the standing registries (lair
+// row → den_mouth landmark → registered sidezone); THE OVER-ROW LAW
+// (over.tenants REPLACES the kind's table wholesale — engine/massif.ts's
+// shallow row merge, probe_massif rig M — so the courtland row must carry
+// well_court's OWN table verbatim: the drift guard compares it row-by-row
+// against data/massifs.ts and SCREAMS when the kind table moves, because the
+// face copy must be re-derived by hand); THE SURGICAL APPEND (the den row
+// stands LAST and is paid from the TAIL row, so with-vs-without diverges only
+// in the flipped tail band: carve, grid, POIs and garrisons byte-equal, every
+// doodad delta confined to den kit — or the displaced cache knot — at a
+// doored ring); the ratio laws rig J pins on the kind table, held by the
+// copy; and the doors standing LIVE on the real faces — inside their rings,
+// den-spoored, on the walk net.
+{
+  const W2 = 2200, H2 = 1600;
+  const mEntry = vec(140, H2 / 2);
+  const mExits = [vec(W2 - 140, H2 / 2)];
+  const mGen = (def: ZoneDef, seed: number): GeneratedLayout =>
+    generateLayout({ ...def, seed }, { w: W2, h: H2 }, new Rng(seed), mEntry, mExits);
+  const mCtx = (seed: number): GenCtx => ({
+    rng: new Rng(seed), arena: { w: W2, h: H2 }, entry: mEntry, exits: mExits, seed,
+    doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+    garrisons: [], caveSeeds: [], reserved: [],
+  });
+  const faceDef = (id: string, biome: ZoneDef['biome'], params: Record<string, unknown>): ZoneDef =>
+    caveDef({
+      id, size: { w: W2, h: H2 }, layout: [], layoutType: 'massif',
+      caveDepth: undefined, anchor: undefined, biome,
+      layoutParams: params,
+    });
+  // Sorted position-keyed multiset (order-free: tenant seating and dressing
+  // interleave differently per body, the SET is the truth).
+  const keys = (ds: GeneratedLayout['doodads']): string[] =>
+    ds.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).sort();
+  const minus = (a: string[], b: string[]): string[] => {
+    const have = new Map<string, number>();
+    for (const k of b) have.set(k, (have.get(k) ?? 0) + 1);
+    return a.filter(k => {
+      const n = have.get(k) ?? 0;
+      if (n > 0) { have.set(k, n - 1); return false; }
+      return true;
+    });
+  };
+  const kindOfKey = (k: string): string => k.slice(0, k.indexOf(':'));
+  const posOfKey = (k: string): Vec2 => {
+    const [x, y] = k.slice(k.indexOf(':') + 1).split(',').map(Number);
+    return vec(x, y);
+  };
+
+  // M1/M2 — the tableland row: the census + the ratio laws.
+  const tlVar = TILESETS.tableland?.variants?.find(v => v.name === 'the court of sands');
+  const tlPool = ((tlVar?.layoutParams ?? {}) as Record<string, unknown>)
+    .massifMasses as MassPoolRow[] | undefined;
+  const tlRow = tlPool?.find(r => r.kind === 'sand_court'
+    && !!r.over?.tenants?.some(t => t.kind === 'lair_mouth'));
+  const tlTab = tlRow?.over?.tenants ?? [];
+  const tlDen = tlTab[tlTab.length - 1];
+  check('M1 tableland keeps the desert\'s own asking (den riddle_vault LAST, a find\'s weight, table at 100, vacancy kept)',
+    !!tlRow && !!tlDen && tlDen.kind === 'lair_mouth'
+    && (tlDen.params as { den?: string } | undefined)?.den === 'riddle_vault'
+    && tlDen.weight >= 2 && tlDen.weight <= 4
+    && tlTab.reduce((a, r) => a + r.weight, 0) === 100
+    && tlTab.some(r => r.kind === 'vacant' && r.weight > 0));
+  {
+    const manned = tlTab.filter(r => r.kind === 'garrison' || r.kind === 'held_stock')
+      .reduce((a, r) => a + r.weight, 0);
+    const stock = tlTab.find(r => r.kind === 'stock')?.weight ?? 0;
+    check('M2 the ratios hold through the weave (manned a minority, stock the dominant single row)',
+      tlTab.length > 0 && manned / 100 <= 0.45
+      && tlTab.every(r => r.kind === 'stock' || r.weight <= stock));
+  }
+
+  // M3 — both shipped den keys resolve WHOLE through the standing registries.
+  for (const [den, mouth] of [['riddle_vault', 'sphinx_gate'], ['hag_hovel', 'hovel_door']] as const) {
+    const lair = lairOf(den);
+    const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+    const mk = (lm?.params as { mouthKind?: string } | undefined)?.mouthKind;
+    check(`M3 den '${den}' resolves whole (lair → den_mouth landmark → registered sidezone '${mouth}')`,
+      !!lair && lm?.builder === 'den_mouth' && mk === mouth && !!sidezoneOf(mouth));
+  }
+
+  // M4/M5/M6 — the courtland row: the census, THE FACE-COPY DRIFT GUARD, and
+  // rig J's ratio laws held by the copy.
+  const clPool = ((TILESETS.courtland?.layoutParams ?? {}) as Record<string, unknown>)
+    .massifMasses as MassPoolRow[] | undefined;
+  const clRow = clPool?.find(r => r.kind === 'well_court' && !!r.over?.tenants);
+  const clTab = clRow?.over?.tenants ?? [];
+  const clDen = clTab[clTab.length - 1];
+  check('M4 the courtland well ring is the crone\'s at the tail (den hag_hovel LAST, a find\'s weight)',
+    !!clRow && !!clDen && clDen.kind === 'lair_mouth'
+    && (clDen.params as { den?: string } | undefined)?.den === 'hag_hovel'
+    && clDen.weight >= 2 && clDen.weight <= 4);
+  {
+    const kindTab = massKindOf('well_court').tenants ?? [];
+    let copyTrue = clTab.length === kindTab.length + 1 && !!clDen;
+    for (let i = 0; i < kindTab.length && copyTrue; i++) {
+      const a = clTab[i], b = kindTab[i];
+      copyTrue = b.kind === 'vacant'
+        ? a.kind === 'vacant' && a.weight === b.weight - (clDen?.weight ?? 0)
+        : JSON.stringify(a) === JSON.stringify(b);
+    }
+    check('M5 THE FACE COPY holds (well_court\'s own table verbatim, vacant paying the den — a moved kind table screams here)',
+      copyTrue
+      && clTab.reduce((a, r) => a + r.weight, 0) === kindTab.reduce((a, r) => a + r.weight, 0));
+    const manned = clTab.filter(r => r.kind === 'garrison' || r.kind === 'held_stock')
+      .reduce((a, r) => a + r.weight, 0);
+    const vac = clTab.filter(r => r.kind === 'vacant').reduce((a, r) => a + r.weight, 0);
+    const tot = clTab.reduce((a, r) => a + r.weight, 0);
+    check('M6 the copy honors rig J\'s laws (manned ≤ 0.3, vacancy a present whisper, stock dominant)',
+      tot > 0 && manned / tot <= 0.3 && vac > 0 && vac / tot <= 0.25
+      && clTab.every(r => r.kind === 'stock'
+        || r.weight <= (clTab.find(x => x.kind === 'stock')?.weight ?? 0)));
+  }
+
+  // M7/M8 — TABLELAND LIVE + PARITY on the real variant face: A = the shipped
+  // pool, B = the pre-change pool (the historical table, cache 12, no den).
+  // Bands [0,88) draw the same tenant; [88,97) is cache in both; only
+  // [97,100) flips cache → den. So: grid/POIs/garrisons byte-equal, extras
+  // are vault kit at a door, misses are the displaced cache knot at a ring
+  // whose cache truly left — the door then either STANDS there or honestly
+  // REFUSED a too-tight floor (the cache knot's own standoff law: small
+  // rings in the variant's [170,300] band may seat nothing, and the ring
+  // reads vacant — never a half-den).
+  const vaultKit = new Set(['sphinx_gate', 'broken_column', 'ruin_plinth', 'rubble']);
+  const cacheKit = new Set(['burial_urn', 'clay_pots', 'bone_pile']);
+  if (!tlRow || !tlVar || !tlPool) {
+    check('M7 tableland live doors (sweep ran)', false, 'shipped row missing — see M1');
+  } else {
+    const tlGreat = tlPool.find(r => r !== tlRow);
+    const tlBefore: MassPoolRow = { kind: 'sand_court', weight: 3, over: { tenants: [
+      { kind: 'stock', weight: 30 },
+      { kind: 'garrison', weight: 28 },
+      { kind: 'vacant', weight: 18 },
+      { kind: 'held_stock', weight: 12 },
+      { kind: 'cache', weight: 12 },
+    ] } };
+    const paramsA = { ...TILESETS.tableland.layoutParams, ...tlVar.layoutParams } as Record<string, unknown>;
+    const paramsB = { ...paramsA, massifMasses: tlGreat ? [tlBefore, tlGreat] : [tlBefore] };
+    let doors = 0, inRing = 0, spoored = 0, reach = 0, wells = 0;
+    let stateOk = 0, extrasBad = 0, missBad = 0, n = 0;
+    for (let s = 0; s < 16; s++) {
+      const seed = 917003 + s * 104729;
+      const dA = faceDef('probe_biome_den_tl', 'desert', paramsA);
+      const dB = faceDef('probe_biome_den_tl', 'desert', paramsB);
+      const a = mGen(dA, seed);
+      const b = mGen(dB, seed);
+      n++;
+      const rings = carveMassifs(mCtx(seed), { ...dA, seed }).filter(m => m.interior);
+      const gates = a.doodads.filter(d => d.kind === 'sphinx_gate');
+      doors += gates.length;
+      wells += a.doodads.filter(d => d.kind === 'scorpion_well').length;
+      for (const d of gates) {
+        const home = rings.find(m =>
+          Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= m.r * 0.6 * 0.9 + 0.5);
+        if (home) inRing++;
+        if (a.walk instanceof GridWalkField && a.walk.reachable(mEntry, vec(d.pos.x, d.pos.y))) reach++;
+        if (a.doodads.filter(o =>
+          (o.kind === 'broken_column' || o.kind === 'ruin_plinth' || o.kind === 'rubble')
+          && Math.hypot(o.pos.x - d.pos.x, o.pos.y - d.pos.y) < 110).length >= 2) spoored++;
+      }
+      const ka = a.walk instanceof GridWalkField ? a.walk.pack().kbits : 'a';
+      const kb = b.walk instanceof GridWalkField ? b.walk.pack().kbits : 'b';
+      if (ka === kb && JSON.stringify(a.pois) === JSON.stringify(b.pois)
+        && JSON.stringify(a.garrisons) === JSON.stringify(b.garrisons)) stateOk++;
+      const kA = keys(a.doodads), kB = keys(b.doodads);
+      const extras = minus(kA, kB).map(k => ({ kind: kindOfKey(k), pos: posOfKey(k) }));
+      for (const e of extras) {
+        if (!vaultKit.has(e.kind)
+          || !gates.some(g => Math.hypot(g.pos.x - e.pos.x, g.pos.y - e.pos.y) < 130)) extrasBad++;
+      }
+      for (const k of minus(kB, kA)) {
+        const p = posOfKey(k);
+        const home = rings.find(m =>
+          Math.hypot(p.x - m.interior!.x, p.y - m.interior!.y) <= m.r * 0.6 * 0.9 + 0.5);
+        // The displaced knot's home ring flipped to the den: it holds the
+        // GATE — or, on a refused floor, NOTHING new at all (ambient scatter
+        // that stands in both runs cancels out of the diff and never counts).
+        const fr = home ? home.r * 0.6 * 0.9 + 0.5 : 0;
+        const gateIn = !!home && gates.some(g =>
+          Math.hypot(g.pos.x - home.interior!.x, g.pos.y - home.interior!.y) <= fr);
+        const extraIn = !!home && extras.some(e =>
+          Math.hypot(e.pos.x - home.interior!.x, e.pos.y - home.interior!.y) <= fr);
+        if (!cacheKit.has(kindOfKey(k)) || !home || (!gateIn && extraIn)) missBad++;
+      }
+    }
+    check('M7 the vault stands in the court of sands (doors in rings, den-spoored, on the walk net, never the default well)',
+      doors >= 1 && inRing === doors && spoored === doors && reach === doors && wells === 0,
+      `${doors} gates over ${n} zones`);
+    check('M8 THE SURGICAL PARITY (tableland): grid/POIs/garrisons byte-equal; the diff is the flipped tail band alone',
+      stateOk === n && extrasBad === 0 && missBad === 0,
+      `${stateOk}/${n} state-equal`);
+  }
+
+  // M9/M10 — COURTLAND LIVE + PARITY on the shipped row (isolated for
+  // density: the row IS the authored unit; the base-face pool mix around it
+  // is standing carve law). B = the bare pre-change row — the kind's own
+  // table. Only [98,100) flips vacant → hag, so the diff is PURELY ADDITIVE:
+  // nothing missing, every extra hovel kit at a door.
+  const hovelKit = new Set(['hovel_door', 'feeding_stake', 'pot_cluster', 'web']);
+  if (!clRow) {
+    check('M9 courtland live doors (sweep ran)', false, 'shipped row missing — see M4');
+  } else {
+    const paramsA = {
+      massifCoverage: [0.3, 0.34] as [number, number],
+      massifSizeR: [200, 260] as [number, number],
+      massifMasses: [clRow],
+    };
+    const paramsB = { ...paramsA, massifMasses: [{ kind: 'well_court', weight: 1.6 }] };
+    let doors = 0, inRing = 0, spoored = 0, reach = 0;
+    let stateOk = 0, extrasBad = 0, missCount = 0, n = 0;
+    for (let s = 0; s < 16; s++) {
+      const seed = 881003 + s * 104729;
+      const dA = faceDef('probe_biome_den_cl', 'courtland', paramsA);
+      const dB = faceDef('probe_biome_den_cl', 'courtland', paramsB);
+      const a = mGen(dA, seed);
+      const b = mGen(dB, seed);
+      n++;
+      const rings = carveMassifs(mCtx(seed), { ...dA, seed }).filter(m => m.interior);
+      const hovels = a.doodads.filter(d => d.kind === 'hovel_door');
+      doors += hovels.length;
+      for (const d of hovels) {
+        const home = rings.find(m =>
+          Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= m.r * 0.68 * 0.9 + 0.5);
+        if (home) inRing++;
+        if (a.walk instanceof GridWalkField && a.walk.reachable(mEntry, vec(d.pos.x, d.pos.y))) reach++;
+        if (a.doodads.filter(o =>
+          (o.kind === 'feeding_stake' || o.kind === 'pot_cluster' || o.kind === 'web')
+          && Math.hypot(o.pos.x - d.pos.x, o.pos.y - d.pos.y) < 110).length >= 2) spoored++;
+      }
+      const ka = a.walk instanceof GridWalkField ? a.walk.pack().kbits : 'a';
+      const kb = b.walk instanceof GridWalkField ? b.walk.pack().kbits : 'b';
+      if (ka === kb && JSON.stringify(a.pois) === JSON.stringify(b.pois)
+        && JSON.stringify(a.garrisons) === JSON.stringify(b.garrisons)) stateOk++;
+      const kA = keys(a.doodads), kB = keys(b.doodads);
+      missCount += minus(kB, kA).length;
+      for (const k of minus(kA, kB)) {
+        const p = posOfKey(k);
+        if (!hovelKit.has(kindOfKey(k))
+          || !hovels.some(g => Math.hypot(g.pos.x - p.x, g.pos.y - p.y) < 130)) extrasBad++;
+      }
+    }
+    check('M9 the crone answers on the rim (hovel doors in well rings, den-spoored, on the walk net)',
+      doors >= 1 && inRing === doors && spoored === doors && reach === doors,
+      `${doors} hovels over ${n} zones`);
+    check('M10 THE SURGICAL PARITY (courtland): byte-equal state, the diff purely ADDITIVE hovel kit at doors',
+      stateOk === n && extrasBad === 0 && missCount === 0,
+      `${stateOk}/${n} state-equal, ${missCount} missing`);
   }
 }
 
