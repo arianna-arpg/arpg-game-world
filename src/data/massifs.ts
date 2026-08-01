@@ -64,6 +64,20 @@ registerMassKind({
     { kind: 'rubble', weight: 1, radius: [12, 20] },
   ],
   innerChance: 0.4,
+  // THE CONVERTED TABLE (batch 16): the independent garrison × inner rolls
+  // above become the handlers' defaults — this table carries their measured
+  // marginals (held 14 / garrison-only 21 / stock-only 26 / neither 39)
+  // with the two debuts paid from vacancy: a court shrine among the urns,
+  // and a BARROW WATCH posting (barrow_watchman + a gorged aide) on walls
+  // someone still minds.
+  tenants: [
+    { kind: 'held_stock', weight: 14 },
+    { kind: 'garrison', weight: 21 },
+    { kind: 'stock', weight: 26 },
+    { kind: 'shrine', weight: 8 },
+    { kind: 'watch_post', weight: 6, params: { detail: 'barrow_watch' } },
+    { kind: 'vacant', weight: 25 },
+  ],
   skirt: [
     { kind: 'rubble', weight: 3, radius: [14, 24] },
     { kind: 'rock', weight: 1, radius: [12, 20] },
@@ -275,15 +289,25 @@ registerMassKind({
   // the seldom DRY WELL (vacant 12) — the ring whose water failed, standing
   // empty as the rim's quiet memento (the fallen_court is the ruin lane;
   // vacancy here is a whisper, never the theme).
+  // THE DESTINATIONS (batch 16): a ring may instead hold a court SHRINE
+  // (data/puzzles.ts — a riddle seat the puzzle fabric animates), THE
+  // HOLLOWED WELL (data/lairs.ts 'lair_mouth' — the dry well's darker
+  // sibling: spoor on the floor, the Scorpion Well below), or a WATCH
+  // POST (data/watchposts.ts — one pair of eyes at a fire). The manned
+  // share stays exactly one ring in five (held 10 + watch 6 + garrison 4);
+  // the shrine is paid from stock + vacancy.
   tenants: [
-    { kind: 'stock', weight: 56 },
-    { kind: 'held_stock', weight: 14 },
-    { kind: 'garrison', weight: 6 },
+    { kind: 'stock', weight: 46 },
+    { kind: 'held_stock', weight: 10 },
+    { kind: 'watch_post', weight: 6, params: { detail: 'rim_sentinel' } },
+    { kind: 'garrison', weight: 4 },
     { kind: 'cache', weight: 12, rows: [
       { kind: 'clay_pots', weight: 2, radius: [10, 14] },
       { kind: 'burial_urn', weight: 1, radius: [11, 15] },
     ] },
-    { kind: 'vacant', weight: 12 },
+    { kind: 'shrine', weight: 8 },
+    { kind: 'lair_mouth', weight: 4 },
+    { kind: 'vacant', weight: 10 },
   ],
   inner: [
     { kind: 'stone_cistern', weight: 2, radius: [13, 16] },
