@@ -108,7 +108,10 @@ ruincourt, high_court, rotunda_court, gilt_ring.
 
 **The `massif` layout recipe** — `ensureGrid` + `carveMassifs` + the
 hollow-tor bores + registered post hooks + the per-exit belt +
-`scatterDecoration`. Every dial is a layoutParam (spec ▷ tileset ▷ biome):
+`scatterDecoration`. Every dial is a layoutParam (spec ▷ tileset ▷ biome) —
+and any numeric or band dial may be authored as a DEPTH-GRADED ramp
+(`{ byDepth: [atRim, atHeart] }` — see "Distinguishing environments by
+lever" below):
 
 | param | default (`MASSIF_CFG`) | meaning |
 |---|---|---|
@@ -141,6 +144,79 @@ court-of-sands face ships the demonstration: a second `sand_court` row with
 `sizeR: [260,380]` and `over: { mouths: [2,3], tenants: [...] }` — the
 GREAT courts, one data row, wearing their own occupancy table (held_stock
 dominant, vacant 5% — what was worth building big is worth holding).
+
+## Distinguishing environments by lever (2026-07-31)
+
+The commission behind this fabric's expressiveness: environments are
+distinguished by DIALS, never by forked recipes or sibling kinds — "that
+extremely robust generator that has a multitude of levers." Three levers
+compose, each proven end to end:
+
+**Per-biome pools** — `massifMasses` IS the country's vocabulary, and a
+RESTRICTED pool is as much an identity as a rich one: the needles tileset
+rolls `butte` alone (no court kinds, no tenants, no garrisons — the spire
+country holds no court society; probe rig N pins the restriction on every
+face), where the courtlands roll nothing but rings. What a biome REFUSES
+to mint is half its read.
+
+**Per-biome tenant tables** — the SAME registered kind holds court
+differently per country. The resolved-kind merge (`{...base, ...row.over}`)
+replaces the `tenants` array WHOLESALE, so a pool row's `over.tenants` is a
+per-biome RETABLE of a kind that authors its own society: the worked
+example is `well_court` (kind table: stocked cisterns, vacancy, the
+garrison a whisper) re-tabled by a hypothetical martial country to
+`over: { tenants: [{ kind: 'garrison', weight: 1, faction: '…' }] }` —
+every ring posted, no cistern ever stocked, and the CARVE byte-identical
+throughout (the fork law). A row without the override keeps the kind's own
+table. Probe rig M pins both directions.
+
+**THE DEPTH-GRADED DIAL** — any layoutParam VALUE may be authored as a ramp
+`{ byDepth: [atRim, atHeart] }`, resolved at the ONE dial seam (levelgen's
+`layoutParam`) by lerping over the zone's baked `geo.biomeDepth` (clamped
+0..1): scalars lerp, `[min,max]` band dials lerp END-WISE (two equal-length
+number arrays). One tileset thereby reads differently ACROSS its own
+country — the fringe one regime, the heart another, every zone between on
+the gradient. The laws (probe rig L):
+
+- **ABSENT == BYTE-IDENTICAL** — no ramp authored → the stored value
+  returns untouched; a ramp-less def cannot tell geo 0 from geo 1 (pinned
+  on full layout bytes, and corroborated by a full-matrix genqa diff at
+  the mechanism's landing).
+- **THE ABSENT-GEO LAW** — a def with no baked geo (headless QA, genqa's
+  own contract) reads the MIDPOINT (t = 0.5), the same neutral `?? 0.5`
+  every existing depth consumer speaks (overgrowthOf, the forest recipe).
+- **THE MARKER GUARD** — `byDepth` is a RESERVED key: arrays are
+  structurally exempt (`massifMasses`, `tierKit`, overgrowth's historical
+  bare `[fringe, heart]` dialect all pass through by reference), no
+  legitimate object dial carries the key, and a malformed ramp warns once
+  and resolves to the reference default.
+- Rim/heart ends resolve EXACTLY (`a·(1−t)+b·t`); count-like dials may
+  resolve fractional (their `<`/`>=` comparisons effectively ceil); the
+  read is pure and draw-free — deterministic across revisits and co-op.
+
+**The reference regime: THE NEEDLES PRESS** (data/tilesets.ts `needles`).
+The butte country crowds the deeper the player travels into butteland —
+"what's just behind THIS one?" — while the fringe keeps the open savannah
+read and the wind-gaps face keeps its flat sparse grandeur (per-key merge:
+a variant's flat value beats an inherited ramp):
+
+| dial | rim (geo 0) | heart (geo 1) | note |
+|---|---|---|---|
+| `massifCoverage` | [0.21, 0.29] | [0.26, 0.32] | heart top part-aspirational: the body budget + spacing law bind first |
+| `massifSizeR` | [200, 340] | [165, 250] | more, slimmer needles |
+| `massifLaneW` | 116 | 92 | far above the bocage face's proven 64 floor |
+| `massifMaxMasses` | 11 | 16 | the body budget the press runs to |
+| `massifPlaceTries` | 90 | 130 | crowding rejects more darts; the heart buys tries |
+| `massifPortalClear` | 260 | 260 | NEVER ramps — mouths always open onto country |
+
+Measured at landing (probe rig N, 6 seed pairs): ~7.8 → ~11.2 bodies per
+zone with the tightened lane engaged. THE COUNT IS THE CLAUSTROPHOBIA:
+paint ∝ r² and spacing ∝ bound cancel, so wall AREA stays roughly flat
+(0.158 → 0.128 here) while bodies-per-walk and gap-tightness press — the
+Thousand-Needles read is occlusion per walked meter, not wall fraction.
+Rig N gates on count + the engaged lane and walks the heart's densest
+roll against the weave/exit laws; laneW stays structural (never ramp it
+below production-proven ground).
 
 ## The block TEXTURES
 
@@ -295,6 +371,12 @@ fork law + row grain + inner + ring dials, H the mesa/tableland census,
 I the court-country regime census (incl. the shipped tenant tables),
 J the courtlands biome census, K the ring tenants (fork law both ways,
 replacement law, one-occupant exclusivity + weights, row grain, the cache
-knot, registry resolution — every pin bite-verified at landing). `npm run
-genqa` sweeps every tileland face beside the downs under the standard
-invariants.
+knot, registry resolution — every pin bite-verified at landing), L the
+depth-graded dial (exact ends, the midpoint absent-geo law, the marker
+guard's pass-throughs, malformed → default, absent == byte-identical on
+full layout bytes, the ramp's minted direction), M the per-biome table
+(`over.tenants` replaces a kind's OWN authored table; absent keeps it),
+N the needles press (butte-only pool on every face, ramp shapes + resolved
+ends on the shipped rows, count-press direction, the tightened lane
+engaged, weave/exits whole at the heart's densest roll). `npm run genqa`
+sweeps every tileland face beside the downs under the standard invariants.

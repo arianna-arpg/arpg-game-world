@@ -61,6 +61,27 @@
 //      knot's floor/standoff geometry, and registry resolution (the core
 //      four + the held_stock composition; a probe-registered kind runs
 //      deterministically; an unknown kind seats nothing and breaks nothing).
+//   L. THE DEPTH-GRADED DIAL (the environment-lever pass) — layoutParam's
+//      `{ byDepth: [atRim, atHeart] }` ramp: scalar + band-end lerps exact at
+//      forced rim/heart, THE ABSENT-GEO LAW (no baked geo → the midpoint),
+//      out-of-range depth clamped, plain object/array dials passed through BY
+//      REFERENCE (the marker guard — massifBores/tierKit/overgrowth's bare
+//      pair can never be misread), malformed ramps warning once and falling
+//      to the reference default, and ABSENT == BYTE-IDENTICAL: a ramp-less
+//      def mints the same layout bytes across the whole geo swing while a
+//      ramped dial moves the mint in the authored direction.
+//   M. THE PER-BIOME TABLE — `over.tenants` REPLACES a kind's OWN authored
+//      tenant table wholesale (same kind, different country, different court
+//      society — the biome retable), and a pool row WITHOUT the override
+//      keeps the kind's own table (the replacement law intact both ways).
+//   N. THE NEEDLES PRESS (the depth-graded debut, data/tilesets.ts) — the
+//      shipped rows: a cliff-kinds-only pool (butte alone — no court society
+//      in the spire country: zero tenants, zero garrisons on minted ground),
+//      the depth-graded dials crowding the heart (deep mints denser than rim
+//      mints, the tightened lane actually ENGAGED), rim ends reading the
+//      authored values exactly (edge zones stay recognizable), portalClear
+//      flat by law, and the weave/exit guarantees holding at the heart's
+//      densest roll (forced geo 1).
 //
 // Rigs carry pressure detection: a rig that never actually stressed its law
 // exits 1 rather than passing green.
@@ -74,12 +95,13 @@ import '../src/engine/landmarkBuilders';
 import '../src/data/landmarks';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
+import '../src/engine/tiers'; // registers the 'needles' recipe rig N mints
 import '../src/data/massifs';
 import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
-import { generateLayout, hasLayout, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
+import { generateLayout, hasLayout, layoutParam, type GenCtx, type GeneratedLayout } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import {
@@ -1190,6 +1212,280 @@ function bareCtx(seed: number): GenCtx {
     const eInteriors = mE.filter(m => m.interior).length;
     if (eInteriors && cE.garrisons.length !== eInteriors) {
       fail(`K6: an EMPTY tenant table silenced the independent garrison (${cE.garrisons.length}/${eInteriors}) — empty is no law`);
+    }
+  }
+}
+
+// --- Rig L: THE DEPTH-GRADED DIAL — the byDepth ramp through layoutParam ------
+// The environment-lever pass: one authored form (`{ byDepth: [atRim, atHeart] }`)
+// resolved at the ONE dial seam (levelgen's layoutParam), so ANY recipe knob
+// can grade itself over the zone's place in its biome. Pinned: exact ends,
+// the midpoint absent-geo law, the clamp, the marker guard (legitimate
+// object/array values pass through BY REFERENCE — including overgrowthOf's
+// historical bare-pair dialect), malformed → the reference default, and
+// ABSENT == BYTE-IDENTICAL (a ramp-less def cannot tell geo 0 from geo 1).
+{
+  const geoDef = (geo: number | undefined, params: Record<string, unknown>): ZoneDef =>
+    defOf('massif_l', [], {
+      layoutParams: params,
+      ...(geo !== undefined ? { geo: { biomeDepth: geo } } : {}),
+    });
+
+  // L1 — resolver semantics, directly.
+  const scalar = { byDepth: [90, 120] };
+  if (layoutParam<number>(geoDef(0, { d: scalar }), 'd', -1) !== 90) fail('L1: rim end not exact');
+  if (layoutParam<number>(geoDef(1, { d: scalar }), 'd', -1) !== 120) fail('L1: heart end not exact');
+  if (layoutParam<number>(geoDef(0.25, { d: scalar }), 'd', -1) !== 90 * 0.75 + 120 * 0.25) fail('L1: quarter-depth lerp wrong');
+  if (layoutParam<number>(geoDef(undefined, { d: scalar }), 'd', -1) !== 105) fail('L1: absent geo must read the midpoint');
+  if (layoutParam<number>(geoDef(1.7, { d: scalar }), 'd', -1) !== 120) fail('L1: depth past 1 must clamp to the heart end');
+  if (layoutParam<number>(geoDef(-0.3, { d: scalar }), 'd', -1) !== 90) fail('L1: depth below 0 must clamp to the rim end');
+  const band = { byDepth: [[0.2, 0.28], [0.3, 0.38]] };
+  const bandAt = (g: number | undefined): number[] =>
+    layoutParam<number[]>(geoDef(g, { b: band }), 'b', [-1, -1]);
+  const rimB = bandAt(0), heartB = bandAt(1), midB = bandAt(undefined);
+  if (rimB[0] !== 0.2 || rimB[1] !== 0.28) fail(`L1: band rim end [${rimB}] — expected the authored [0.2,0.28]`);
+  if (heartB[0] !== 0.3 || heartB[1] !== 0.38) fail(`L1: band heart end [${heartB}] — expected the authored [0.3,0.38]`);
+  if (Math.abs(midB[0] - 0.25) > 1e-12 || Math.abs(midB[1] - 0.33) > 1e-12) fail(`L1: band midpoint [${midB}] — the absent-geo law broke`);
+  // The marker guard: plain objects and arrays pass through BY REFERENCE.
+  const obj = { chance: 0.5, max: 2 };
+  if (layoutParam<unknown>(geoDef(1, { o: obj }), 'o', undefined) !== obj) fail('L1: a plain object dial no longer passes through by reference');
+  const arr = [{ kind: 'tor', weight: 1 }];
+  if (layoutParam<unknown>(geoDef(1, { a: arr }), 'a', undefined) !== arr) fail('L1: an array dial no longer passes through by reference');
+  const barePair = [0.2, 0.6];
+  if (layoutParam<unknown>(geoDef(1, { og: barePair }), 'og', 0) !== barePair) fail('L1: the bare-pair overgrowth dialect must pass through untouched');
+  // Malformed ramps: warn once per key, resolve to the reference default.
+  if (layoutParam(geoDef(1, { m1: { byDepth: [1, 'x'] } }), 'm1', 7) !== 7) fail('L1: a mixed-type ramp must fall to the default');
+  if (layoutParam(geoDef(1, { m2: { byDepth: [[1, 2], [3]] } }), 'm2', 7) !== 7) fail('L1: a length-mismatched band ramp must fall to the default');
+  if (layoutParam(geoDef(1, { m3: { byDepth: [1, 2, 3] } }), 'm3', 7) !== 7) fail('L1: a three-ended ramp must fall to the default');
+
+  // L2 — ABSENT == BYTE-IDENTICAL: a ramp-less massif def mints the same
+  // layout bytes at geo 0, geo 1, and no geo at all — the resolver reads
+  // geography ONLY through an authored ramp.
+  const FLAT = {
+    massifMasses: [{ kind: 'tor', weight: 1 }],
+    massifCoverage: [0.2, 0.26] as [number, number],
+    massifSizeR: [200, 300] as [number, number],
+  };
+  const fp = (out: GeneratedLayout): string =>
+    JSON.stringify(out.doodads) + '|' + (out.walk instanceof GridWalkField ? out.walk.pack().kbits : '?') + '|' + JSON.stringify(out.pois);
+  for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+    const seed = seedAt(s) ^ 0x1de9;
+    const at = (geo: number | undefined): string =>
+      fp(gen(defOf('massif_l2', [], { layoutParams: FLAT, ...(geo !== undefined ? { geo: { biomeDepth: geo } } : {}) }), seed));
+    const rim = at(0), heart = at(1), none = at(undefined);
+    if (rim !== heart || rim !== none) fail(`L2: seed ${seed} a ramp-less def minted different bytes across the geo swing — absent is no longer byte-identical`);
+  }
+
+  // L3 — the ramp moves the mint in the authored direction: coverage, body
+  // budget, lane and dart budget all ramped up-with-depth paint far more
+  // wall at the heart than at the rim (averaged over the sweep; the
+  // ramp-less twin's identity is L2). Barrow-only on rig D's reasoning —
+  // the densest packer, so the heart regime is D's own proven ground — and
+  // the lane's heart end is D's proven 24.
+  const RAMPED = {
+    massifMasses: [{ kind: 'barrow', weight: 1 }],
+    massifSizeR: [150, 220] as [number, number],
+    massifCoverage: { byDepth: [[0.12, 0.16], [0.3, 0.34]] },
+    massifMaxMasses: { byDepth: [6, 20] },
+    massifLaneW: { byDepth: [110, 24] },
+    massifPlaceTries: { byDepth: [90, 150] },
+  };
+  let rimFrac = 0, heartFrac = 0, l3n = 0;
+  for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+    const seed = seedAt(s) ^ 0x1dea;
+    const at = (geo: number): number => {
+      const st = gridStats(gen(defOf('massif_l3', [], { layoutParams: RAMPED, geo: { biomeDepth: geo } }), seed));
+      return st ? st.wallFrac : NaN;
+    };
+    const r = at(0), h = at(1);
+    if (Number.isNaN(r) || Number.isNaN(h)) { fail(`L3: seed ${seed} no grid`); continue; }
+    rimFrac += r; heartFrac += h; l3n++;
+  }
+  if (l3n && !(heartFrac / l3n > rimFrac / l3n + 0.05)) {
+    fail(`L3: ramped coverage painted rim ${(rimFrac / l3n).toFixed(3)} vs heart ${(heartFrac / l3n).toFixed(3)} — the ramp never pressed`);
+  }
+  note(`L: ramp direction rim ${(rimFrac / Math.max(1, l3n)).toFixed(3)} → heart ${(heartFrac / Math.max(1, l3n)).toFixed(3)}`);
+}
+
+// --- Rig M: THE PER-BIOME TABLE — over.tenants beats the kind's OWN table -----
+// The environment-lever headline: the SAME registered kind holds court
+// differently per country. A pool row's `over.tenants` REPLACES the kind's
+// own authored table wholesale (the resolved-kind merge is the whole law),
+// and a row WITHOUT the override keeps the kind's own. Pinned on well_court —
+// the shipped kind that AUTHORS a table (stocked cisterns + vacancy, the
+// garrison a whisper; rig J owns that shape, this rig rides it as substrate).
+{
+  const wc = massKindOf('well_court');
+  if (!wc.tenants?.length) fail('M: well_court no longer authors its own tenant table — this rig needs the substrate');
+  const M_PARAMS = { massifCoverage: [0.2, 0.26] as [number, number], massifSizeR: [200, 300] as [number, number] };
+  let ownCourts = 0, ownGarr = 0, ownCisterns = 0;
+  let reCourts = 0, reGarr = 0, reCisterns = 0;
+  for (let s = 0; s < Math.min(SEEDS, 10); s++) {
+    const seed = seedAt(s) ^ 0x3e7a;
+    const mk = (rows: unknown[]): ZoneDef =>
+      defOf('massif_m', [], { layoutParams: { ...M_PARAMS, massifMasses: rows }, biome: 'courtland' });
+    const ownDef = mk([{ kind: 'well_court', weight: 1 }]);
+    const reDef = mk([{
+      kind: 'well_court', weight: 1,
+      over: { tenants: [{ kind: 'garrison', weight: 1, faction: 'probe_dynasty' }] },
+    }]);
+    const cOwn = bareCtx(seed);
+    const own = carveMassifs(cOwn, { ...ownDef, seed });
+    const cRe = bareCtx(seed);
+    const re = carveMassifs(cRe, { ...reDef, seed });
+    if (JSON.stringify(own) !== JSON.stringify(re)) fail(`M: seed ${seed} the retable disturbed the carve — the fork law broke`);
+    ownCourts += own.filter(m => m.interior).length;
+    ownGarr += cOwn.garrisons.length;
+    for (const g of cOwn.garrisons) {
+      if (g.faction !== 'sarcophate') fail(`M: seed ${seed} the kind's own table posted '${g.faction}' — the dynasty default is gone`);
+    }
+    reCourts += re.filter(m => m.interior).length;
+    reGarr += cRe.garrisons.length;
+    for (const g of cRe.garrisons) {
+      if (g.faction !== 'probe_dynasty') fail(`M: seed ${seed} the retable posted '${g.faction}' — the override row's tailoring lost`);
+    }
+    ownCisterns += gen(ownDef, seed).doodads.filter(d => d.kind === 'stone_cistern').length;
+    reCisterns += gen(reDef, seed).doodads.filter(d => d.kind === 'stone_cistern').length;
+  }
+  if (!ownCourts) fail('M: pressure — no well court ever minted (dead rig)');
+  if (!ownCisterns) fail('M: pressure — the kind\'s own table never stocked a cistern across the sweep (dead control)');
+  if (ownGarr >= ownCourts) fail(`M: the kind's own table garrisoned every court (${ownGarr}/${ownCourts}) — the control reads like the override`);
+  if (reGarr !== reCourts) fail(`M: the garrison-only retable posted ${reGarr}/${reCourts} courts — over.tenants did not replace the kind's own table`);
+  if (reCisterns) fail(`M: the retable still stocked ${reCisterns} cisterns — the kind's own stock rows survived the replacement`);
+  note(`M: own table ${ownGarr}/${ownCourts} garrisoned + ${ownCisterns} cisterns; retable ${reGarr}/${reCourts} + ${reCisterns}`);
+}
+
+// --- Rig N: THE NEEDLES PRESS — the depth-graded debut on the shipped rows ----
+// The commissioned regime: butte country that CROWDS the deeper the zone
+// stands in its biome — more, slightly slimmer tables on tighter lanes —
+// while the fringe keeps today's open read and every structural law holds at
+// the heart's densest roll. Also the biome-restriction pin: the pool is
+// CLIFF KINDS ONLY (butte alone — no tenants, no garrison, no ring
+// silhouettes: no court society in the spire country).
+{
+  const ts = TILESETS.needles;
+  if (!ts) fail('N: needles tileset missing');
+  else if (ts.forceLayout !== 'needles') fail(`N: needles forceLayout '${ts.forceLayout}' — the butte coupling is gone`);
+  else {
+    // N1 — statics: the restricted pool + the authored ramps' shape.
+    const faces = [
+      { label: 'base', params: ts.layoutParams as Record<string, unknown> },
+      ...(ts.variants ?? []).map(v => ({
+        label: v.name ?? '?', params: { ...ts.layoutParams, ...v.layoutParams } as Record<string, unknown>,
+      })),
+    ];
+    for (const f of faces) {
+      const pool = f.params.massifMasses as { kind: string }[] | undefined;
+      if (!pool?.length) { fail(`N: face '${f.label}' carries no massif pool`); continue; }
+      for (const row of pool) {
+        if (row.kind !== 'butte') fail(`N: face '${f.label}' rolls '${row.kind}' — the needle country is butte-only`);
+        const kd = massKindOf(row.kind);
+        if (kd.tenants?.length) fail(`N: '${row.kind}' authors a tenant table — the spire country holds no court society`);
+        if (kd.garrison) fail(`N: '${row.kind}' authors a garrison — cliffs post nobody`);
+        if (kd.shapes.some(sh => sh.shape === 'court' || sh.shape === 'crescent')) {
+          fail(`N: '${row.kind}' rolls ring silhouettes — cliff kinds only`);
+        }
+      }
+    }
+    const P = ts.layoutParams as Record<string, unknown>;
+    for (const key of ['massifCoverage', 'massifSizeR', 'massifLaneW', 'massifMaxMasses', 'massifPlaceTries']) {
+      const v = P[key];
+      if (!v || typeof v !== 'object' || Array.isArray(v) || !('byDepth' in (v as object))) {
+        fail(`N: needles ${key} carries no byDepth ramp — the press is gone`);
+      }
+    }
+    if (typeof P.massifPortalClear !== 'number') fail('N: massifPortalClear must stay FLAT — portal clearance never ramps');
+
+    // Resolved ends: the rim reads its authored end exactly (edge zones stay
+    // recognizable), the heart tightens (lane down, bodies up, tables no
+    // grander), and the absent-geo read (genqa's regime) is the midpoint.
+    const W = Math.round((ts.sizeW[0] + ts.sizeW[1]) / 2), H2 = Math.round((ts.sizeH[0] + ts.sizeH[1]) / 2);
+    const nEntry = vec(140, H2 / 2);
+    const nExits = [vec(W - 140, H2 / 2), vec(W / 2, 140)];
+    const needleDef = (geo: number | undefined): ZoneDef => ({
+      id: 'massif_n', name: 'QA needles', level: 8, size: { w: W, h: H2 },
+      theme: ts.theme as ZoneDef['theme'],
+      layout: [...(ts.common ?? []), ...ts.layout],
+      layoutType: 'needles',
+      layoutParams: ts.layoutParams as Record<string, unknown>,
+      biome: ts.biome,
+      ...(geo !== undefined ? { geo: { biomeDepth: geo } } : {}),
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    });
+    const laneRim = layoutParam<number>(needleDef(0), 'massifLaneW', -1);
+    const laneHeart = layoutParam<number>(needleDef(1), 'massifLaneW', -1);
+    const laneMid = layoutParam<number>(needleDef(undefined), 'massifLaneW', -1);
+    if (!(laneHeart < laneRim)) fail(`N: laneW rim ${laneRim} → heart ${laneHeart} — the press must TIGHTEN with depth`);
+    if (laneHeart < 64) fail(`N: laneW heart end ${laneHeart} under the production-proven floor (64, the bocage face)`);
+    if (laneMid !== (laneRim + laneHeart) / 2) fail('N: absent-geo laneW is not the midpoint — genqa\'s regime drifted');
+    const maxRim = layoutParam<number>(needleDef(0), 'massifMaxMasses', -1);
+    const maxHeart = layoutParam<number>(needleDef(1), 'massifMaxMasses', -1);
+    if (!(maxHeart > maxRim)) fail(`N: maxMasses rim ${maxRim} → heart ${maxHeart} — the heart must afford MORE bodies`);
+    const covRim = layoutParam<[number, number]>(needleDef(0), 'massifCoverage', [-1, -1]);
+    const covHeart = layoutParam<[number, number]>(needleDef(1), 'massifCoverage', [-1, -1]);
+    if (!(covHeart[0] > covRim[0] && covHeart[1] > covRim[1])) {
+      fail(`N: coverage rim [${covRim}] → heart [${covHeart}] — both ends must press with depth`);
+    }
+    const szRim = layoutParam<[number, number]>(needleDef(0), 'massifSizeR', [-1, -1]);
+    const szHeart = layoutParam<[number, number]>(needleDef(1), 'massifSizeR', [-1, -1]);
+    if (!(szHeart[0] <= szRim[0] && szHeart[1] <= szRim[1])) {
+      fail(`N: sizeR rim [${szRim}] → heart [${szHeart}] — heart tables must run no grander (more, slimmer needles)`);
+    }
+    if (layoutParam<number>(needleDef(0), 'massifPortalClear', -1) !== layoutParam<number>(needleDef(1), 'massifPortalClear', -1)) {
+      fail('N: portalClear ramped — mouths must always open onto country');
+    }
+
+    // N2 — minted: the press direction on the real recipe. THE COUNT IS THE
+    // CLAUSTROPHOBIA: slimmer-but-more tables hold wall AREA roughly flat
+    // (paint ∝ r² and spacing ∝ bound cancel), so the commissioned signals
+    // are BODY COUNT up with depth and the LANE tightened — wallFrac rides
+    // the note as telemetry, never the gate. Also: the tightened lane
+    // ENGAGED (some heart pair sits inside the rim lane — a seat rim rules
+    // would have rejected), the weave/exit invariants whole at BOTH ends,
+    // and NO court society on minted ground (zero garrisons, butte-only).
+    let rimFrac = 0, heartFrac = 0, rimBodies = 0, heartBodies = 0, mints = 0, engaged = false;
+    for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+      const seed = seedAt(s) ^ 0x9ee1;
+      const mintAt = (geo: number): { frac: number; bodies: number } | null => {
+        const def = needleDef(geo);
+        const out = generateLayout({ ...def, seed }, { w: W, h: H2 }, new Rng(seed), nEntry, nExits);
+        const st = gridStats(out);
+        if (!st) { fail(`N: geo ${geo} seed ${seed} no grid`); return null; }
+        if (st.comps !== 1) fail(`N: geo ${geo} seed ${seed} split the weave (${st.comps} comps)`);
+        for (const e of nExits) if (!st.grid.reachable(nEntry, e)) fail(`N: geo ${geo} seed ${seed} exit unreachable`);
+        // Carve replay (rig D's stream-align law — carveMassifs is the
+        // needles recipe's first draw).
+        const ctx: GenCtx = {
+          rng: new Rng(seed), arena: { w: W, h: H2 }, entry: nEntry, exits: nExits, seed,
+          doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+          garrisons: [], caveSeeds: [], reserved: [],
+        };
+        const masses = carveMassifs(ctx, { ...def, seed });
+        if (ctx.garrisons.length) fail(`N: geo ${geo} seed ${seed} the spire country posted ${ctx.garrisons.length} garrisons`);
+        for (const m of masses) if (m.kind !== 'butte') fail(`N: geo ${geo} seed ${seed} minted a '${m.kind}' — the butte-only pool leaked`);
+        const lane = geo >= 1 ? laneHeart : laneRim;
+        for (let i = 0; i < masses.length; i++) {
+          for (let j = i + 1; j < masses.length; j++) {
+            const d = Math.hypot(masses[i].at.x - masses[j].at.x, masses[i].at.y - masses[j].at.y);
+            if (d < masses[i].bound + masses[j].bound + lane - 1e-6) {
+              fail(`N: geo ${geo} seed ${seed} masses ${i}/${j} broke the resolved lane (${Math.round(d)}px)`);
+            }
+            if (geo >= 1 && d < masses[i].bound + masses[j].bound + laneRim) engaged = true;
+          }
+        }
+        return { frac: st.wallFrac, bodies: masses.length };
+      };
+      const r = mintAt(0), h = mintAt(1);
+      if (!r || !h) continue;
+      rimFrac += r.frac; heartFrac += h.frac; rimBodies += r.bodies; heartBodies += h.bodies; mints++;
+    }
+    if (!mints) fail('N: no mint pair ever completed (dead rig)');
+    else {
+      if (!(heartBodies > rimBodies + mints)) {
+        fail(`N: press bodies — rim ${rimBodies} vs heart ${heartBodies} over ${mints} mint pairs: the heart must stand MORE tables (at least one more per zone on average)`);
+      }
+      if (!engaged) fail('N: pressure — no heart pair ever sat inside the rim lane (the tightened lane never engaged; the press is cosmetic)');
+      note(`N: rim ${rimBodies} bodies @ ${(rimFrac / mints).toFixed(3)} → heart ${heartBodies} bodies @ ${(heartFrac / mints).toFixed(3)}, lane ${laneRim}→${laneHeart}`);
     }
   }
 }

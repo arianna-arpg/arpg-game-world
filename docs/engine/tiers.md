@@ -100,7 +100,12 @@ stateless adapter, one per story, built at zone load from
   butteland): butte masses (kind `butte` → region `butte_top`), one ramp
   cut per rim, rope spans strung between neighboring summits
   (`butte_span` — the valley walks under, the deck walks over), open
-  exposure, rim duels. Thousand Needles / Devil's Tower.
+  exposure, rim duels. Thousand Needles / Devil's Tower. THE NEEDLES
+  PRESS: its massif dials are DEPTH-GRADED (`{ byDepth: [atRim, atHeart] }`
+  ramps on the tileset rows, resolved by levelgen's `layoutParam` —
+  docs/engine/massif.md, "Distinguishing environments by lever"), so the
+  spire country crowds closer the deeper the zone stands in its biome
+  (probe_massif rig N walks the heart's densest roll).
 - **'switchback'** (the multi-story debut; tileset `pinnacle`, biome
   highland above the crowns): the whole zone is ONE mountain — concentric
   terrace rings (`peak_terrace_1..k`, full cones mid-zone or half-cones

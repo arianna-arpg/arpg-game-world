@@ -1061,11 +1061,26 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [3200, 4200], sizeH: [2400, 3100], ellipseChance: 0.25, biome: 'butteland', sky: 'open',
     // THE HIGHLANDS' own face (lifted out of the mountain country — one
-    // biome climbs, this one stands in stories; no depth staging: the
-    // tables ARE the country, rim to heart).
+    // biome climbs, this one stands in stories; no depth STAGING: one
+    // tileset serves the country rim to heart). THE NEEDLES PRESS instead
+    // rides THE DEPTH-GRADED DIAL (levelgen layoutParam's byDepth ramp):
+    // the fringe keeps today's open butte savannah while the heart crowds
+    // toward the Thousand-Needles read — more, slightly slimmer tables on
+    // tighter lanes, every walk-around asking what stands just behind THIS
+    // one. The bounds are deliberate: rim ends sit within a hair of the old
+    // flat dials (edge zones stay recognizable), laneW's heart end (92)
+    // stays far above the bocage face's production-proven 64 floor, the
+    // heart's coverage top is part-aspirational (the body budget + spacing
+    // law bind first — the press runs to what the law seats), and
+    // massifPortalClear never ramps (mouths always open onto country).
+    // Probe rig N walks the heart's densest roll against the weave law.
     layoutParams: {
       massifMasses: [{ kind: 'butte', weight: 1 }],
-      massifCoverage: [0.2, 0.28], massifSizeR: [200, 340], massifLaneW: 120,
+      massifCoverage: { byDepth: [[0.21, 0.29], [0.26, 0.32]] },
+      massifSizeR: { byDepth: [[200, 340], [165, 250]] },
+      massifLaneW: { byDepth: [116, 92] },
+      massifMaxMasses: { byDepth: [11, 16] },
+      massifPlaceTries: { byDepth: [90, 130] },
       massifPortalClear: 260,
       tierPackSplit: 0.45,
     },
@@ -1080,6 +1095,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     variants: [
       // The wind gaps: fewer, grander tables — the spans carry the read.
+      // Its FLAT coverage/sizeR beat the base ramps per-key (the variant
+      // merge), so the face keeps its sparse grandeur at every depth; the
+      // lane/body-budget ramps still press through inheritance.
       { name: 'the wind gaps', layout: [
         { kind: 'rocks', count: [3, 5], radius: [16, 30] },
         { kind: 'scree', count: [2, 4] },

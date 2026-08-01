@@ -2798,10 +2798,57 @@ export function layoutIds(): string[] {
 
 /** A layout-generator KNOB, resolved from the zone's merged layoutParams
  *  (spec ▷ tileset ▷ biome, baked at mint) — how ONE recipe serves a spiral
- *  cauldron, a winding road, and an open expanse without forking. */
+ *  cauldron, a winding road, and an open expanse without forking.
+ *
+ *  THE DEPTH-GRADED DIAL: any dial's VALUE may be authored as a ramp
+ *  `{ byDepth: [atRim, atHeart] }`, resolved here by lerping over the zone's
+ *  baked geography (def.geo.biomeDepth, clamped 0..1) — scalars lerp
+ *  (`massifLaneW: { byDepth: [116, 92] }`), [min,max] band dials lerp
+ *  END-WISE (two equal-length number arrays:
+ *  `massifCoverage: { byDepth: [[0.21, 0.29], [0.28, 0.36]] }`), so ONE
+ *  tileset reads open at its biome's fringe and crowds toward the heart
+ *  (the needles press, data/tilesets.ts, is the debut regime). THE
+ *  ABSENT-GEO LAW: a def with no baked geo (headless QA / genqa mints —
+ *  "headless defs bake no geo" is genqa's own contract) reads the ramp's
+ *  MIDPOINT (t = 0.5), the neutral read every existing depth consumer
+ *  already speaks (`?? 0.5` — overgrowthOf below, the forest recipe).
+ *  `byDepth` is a RESERVED marker key: arrays are structurally exempt
+ *  (massifMasses, tierKit — and overgrowthOf's historical bare
+ *  [fringe, heart] dialect, which this seam passes through untouched), and
+ *  no plain-object dial may carry the key (massifBores et al. don't), so a
+ *  legitimate object value can never be misread as a ramp. A ramp with the
+ *  marker but malformed ends (not two numbers / two equal-length number
+ *  arrays) warns once per key and resolves to `dflt` — the reference dials,
+ *  never a half-read. Ends lerp as a·(1−t)+b·t, so a rim or heart zone
+ *  reads its authored end EXACTLY; count-like dials may resolve fractional
+ *  (their `<`/`>=` comparisons effectively ceil). Pure and draw-free: same
+ *  def + same geo → the same value, and with no ramp authored the stored
+ *  value returns untouched — absent == byte-identical by construction
+ *  (probe_massif rig L). */
+const warnedRamps = new Set<string>();
 export function layoutParam<T>(def: ZoneDef, key: string, dflt: T): T {
   const v = def.layoutParams?.[key];
-  return v === undefined ? dflt : (v as T);
+  if (v === undefined) return dflt;
+  if (typeof v === 'object' && v !== null && !Array.isArray(v) && 'byDepth' in v) {
+    const ends = (v as { byDepth: unknown }).byDepth;
+    const t = Math.max(0, Math.min(1, def.geo?.biomeDepth ?? 0.5));
+    if (Array.isArray(ends) && ends.length === 2) {
+      const [a, b] = ends as [unknown, unknown];
+      if (typeof a === 'number' && typeof b === 'number') {
+        return (a * (1 - t) + b * t) as unknown as T;
+      }
+      if (Array.isArray(a) && Array.isArray(b) && a.length === b.length
+        && a.every(n => typeof n === 'number') && b.every(n => typeof n === 'number')) {
+        return (a as number[]).map((n, i) => n * (1 - t) + (b as number[])[i] * t) as unknown as T;
+      }
+    }
+    if (!warnedRamps.has(key)) {
+      warnedRamps.add(key);
+      console.warn(`[levelgen] layoutParam '${key}' carries a malformed byDepth ramp — using the reference default`);
+    }
+    return dflt;
+  }
+  return v as T;
 }
 
 // --- GENERATION FIELDS -------------------------------------------------------
