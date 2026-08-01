@@ -2380,6 +2380,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#b8a8e8', intensity: 0.3, flicker: 1.8 },
   },
+  // Wave six — the ring-tenant lane's default den door (data/lairs.ts): a
+  // court's broken wellhead gone to the brood, breathing venom-light.
+  scorpion_well: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#4a3c24', edge: '#7a6844', material: 'stone',
+      glow: '#c8d060', throat: '#0c0a04', rubble: {}, tumble: 1,
+      label: 'the Scorpion Well',
+    },
+    light: { radius: -2, color: '#c8d060', intensity: 0.26, flicker: 2.4 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },

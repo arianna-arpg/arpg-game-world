@@ -20,6 +20,7 @@ import '../src/engine/landmarkBuilders';
 import '../src/data/landmarks';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
+import '../src/data/massifs';
 import '../src/data/compositions';
 import '../src/data/lairs';
 
@@ -27,8 +28,10 @@ import { Rng } from '../src/core/rng';
 import { vec, type Vec2 } from '../src/core/math';
 import {
   doodadRuleOf, generateLayout, hasLandmark, isSidezoneEntranceKind, landmarkDefs,
-  type GeneratedLayout,
+  type GenCtx, type GeneratedLayout,
 } from '../src/engine/levelgen';
+import { carveMassifs, tenantKindIds, type TenantRow } from '../src/engine/massif';
+import { GridWalkField } from '../src/world/gridWalk';
 import { LAIR_CFG, lairLandmarkRolls, lairOf, lairRows } from '../src/engine/lairs';
 import { reserveFrac } from '../src/engine/reserves';
 import { BIOMES } from '../src/world/biomes';
@@ -61,6 +64,8 @@ const LAIR_IDS = [
 const MOUTHS = [
   'frostmaw_maw', 'hovel_door', 'sphinx_gate',
   'maze_gate', 'wyrm_barrow_mouth', 'spinney_bole',
+  // Wave six — the ring-tenant lane's default den door (same kit contract).
+  'scorpion_well',
 ];
 const NATIVES = [
   'yeti', 'yeti_alpha', 'hill_giant', 'mire_hag', 'vault_sphinx',
@@ -791,6 +796,214 @@ const step = (secs: number): void => {
       !== Math.sign(parts.filter(p => p.defId === 'leviathan_claw')[1].pos.y - beast.pos.y));
   beast.dead = true;
   for (const p of parts) p.dead = true;
+}
+
+// --- RIG L: wave six — THE LAIR MOUTH TENANT (the ring that is somebody's door) --
+// The massif fabric's ring-tenant lane meets the lair fabric: a court's
+// occupancy table names 'lair_mouth' (data/lairs.ts registers the kind) and
+// the winning ring grows spoor + a REGISTERED-SIDEZONE mouth on its own
+// floor. Pinned: the door stands INSIDE its ring and joins the walk net,
+// same seed → same door, a noDeeper zone strips it (the tenant lane inherits
+// the chokepoint), THE FORK LAW as parity (a dress-less lair-mouth table
+// leaves the layout byte-identical beyond the door itself), THE REPLACEMENT
+// LAW (the table silences ruincourt's independent garrison/inner lanes), and
+// the LIVE round trip: loadZone ADOPTS the tenant-planted mouth into the
+// dwell registry with a position-hash seed stable across reloads, the dwell
+// mints the den country (authored name/fauna/noDeeper through mintCave's
+// face-rolled lane), and the gateway ledger stamps.
+{
+  const W2 = 2200, H2 = 1600;
+  const lEntry = vec(140, H2 / 2);
+  const lExits = [vec(W2 - 140, H2 / 2)];
+  const lGen = (def: ZoneDef, seed: number): GeneratedLayout =>
+    generateLayout({ ...def, seed }, { w: W2, h: H2 }, new Rng(seed), lEntry, lExits);
+  const bareCtx = (seed: number): GenCtx => ({
+    rng: new Rng(seed), arena: { w: W2, h: H2 }, entry: lEntry, exits: lExits, seed,
+    doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+    garrisons: [], caveSeeds: [], reserved: [],
+  });
+  const L_PARAMS = { massifCoverage: [0.3, 0.34] as [number, number], massifSizeR: [300, 380] as [number, number] };
+  const courtDef = (id: string, tenants: TenantRow[], over?: Partial<ZoneDef>): ZoneDef => caveDef({
+    id, size: { w: W2, h: H2 }, layout: [], layoutType: 'massif',
+    caveDepth: undefined, anchor: undefined, biome: 'desert',
+    layoutParams: {
+      ...L_PARAMS,
+      massifMasses: [{
+        kind: 'ruincourt', weight: 1,
+        over: { shapes: [{ shape: 'court', weight: 1 }], tenants },
+      }],
+    },
+    ...(over ?? {}),
+  });
+  const lairTable: TenantRow[] = [{ kind: 'lair_mouth', weight: 1 }];
+  const pr = (ds: GeneratedLayout['doodads']): string =>
+    ds.map(d => `${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`).join('|');
+
+  check('L1 the ring-tenant lane is registered (lair_mouth in the occupancy registry)',
+    tenantKindIds().includes('lair_mouth'));
+
+  // The seat sweep: doors stand, inside their rings, on the walk net, with
+  // the spoor confessing them — and the carve they stand on matches the
+  // bare-ctx carve (the K3 cross-read: same seed, same masses).
+  let mouths = 0, courts = 0, inRing = 0, reach = 0, spoored = 0;
+  let firstSeed = -1;
+  for (let s = 0; s < 6; s++) {
+    const seed = 553001 + s * 7919;
+    const def = courtDef('probe_lair_mouth_gen', lairTable);
+    const out = lGen(def, seed);
+    const masses = carveMassifs(bareCtx(seed), { ...def, seed });
+    const rings = masses.filter(m => m.interior);
+    courts += rings.length;
+    const wells = out.doodads.filter(d => d.kind === 'scorpion_well');
+    mouths += wells.length;
+    for (const d of wells) {
+      const home = rings.find(m =>
+        Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= m.r * 0.6 * 0.9 + 0.5);
+      if (home) inRing++;
+      if (out.walk instanceof GridWalkField && out.walk.reachable(lEntry, vec(d.pos.x, d.pos.y))) reach++;
+      const spoor = out.doodads.filter(o =>
+        (o.kind === 'bone_pile' || o.kind === 'bone' || o.kind === 'scree')
+        && Math.hypot(o.pos.x - d.pos.x, o.pos.y - d.pos.y) < 110);
+      if (spoor.length >= 2) spoored++;
+    }
+    if (wells.length && firstSeed < 0) firstSeed = seed;
+  }
+  check('L2 the table grows doors and every door stands INSIDE its ring',
+    mouths >= 6 && courts >= 8 && inRing === mouths, `${mouths} doors / ${courts} courts`);
+  check('L3 every door is on the walk net (mustReach joins the invariant)',
+    mouths > 0 && reach === mouths, `${reach}/${mouths} reachable`);
+  check('L4 the spoor confesses the door (the den reads before the dwell)',
+    mouths > 0 && spoored === mouths, `${spoored}/${mouths} spoored`);
+  {
+    const a = lGen(courtDef('probe_lair_mouth_gen', lairTable), firstSeed);
+    const b = lGen(courtDef('probe_lair_mouth_gen', lairTable), firstSeed);
+    check('L5 same seed, same door (the tenant fork is deterministic)',
+      pr(a.doodads) === pr(b.doodads));
+    const sealed = lGen(courtDef('probe_lair_mouth_gen', lairTable, { noDeeper: true }), firstSeed);
+    check('L6 a sealed zone strips the tenant door (the noDeeper chokepoint reaches the lane)',
+      sealed.doodads.every(d => d.kind !== 'scorpion_well'));
+  }
+  // THE FORK LAW as parity: a DRESS-LESS lair-mouth table vs a vacant table —
+  // strip the door itself and the layouts are byte-identical (the handler
+  // costs the layout stream nothing); THE REPLACEMENT LAW rides the same
+  // runs (ruincourt's independent garrison 0.35 + urn inner rows both stand
+  // silent under either table).
+  {
+    const seed = firstSeed ^ 0x5ca1e;
+    const bare: TenantRow[] = [{ kind: 'lair_mouth', weight: 1, params: { dress: [] } }];
+    const vac: TenantRow[] = [{ kind: 'vacant', weight: 1 }];
+    const a = lGen(courtDef('probe_lair_mouth_par', bare), seed);
+    const b = lGen(courtDef('probe_lair_mouth_par', vac), seed);
+    const ka = a.walk instanceof GridWalkField ? a.walk.pack().kbits : 'a';
+    const kb = b.walk instanceof GridWalkField ? b.walk.pack().kbits : 'b';
+    check('L7 absent == identical (strip the door: doodads, grid and POIs all match the vacant run)',
+      pr(a.doodads.filter(d => d.kind !== 'scorpion_well')) === pr(b.doodads)
+      && ka === kb && JSON.stringify(a.pois) === JSON.stringify(b.pois));
+    check('L8 THE REPLACEMENT LAW holds through the lane (no garrison, no inner urns, either table)',
+      a.garrisons.length === 0 && b.garrisons.length === 0
+      && a.doodads.every(d => d.kind !== 'burial_urn' && d.kind !== 'clay_pots'));
+  }
+
+  // THE OPEN DOOR: the mouth kind is the ROW's choice — any registered
+  // sidezone hangs under the ring (a graveland table's mausoleum, a city
+  // block's sewer grate) — and a row naming an UNREGISTERED kind seats
+  // nothing at all (a door that cannot open must not stand), leaving the
+  // layout exactly the vacant run.
+  {
+    const seed = firstSeed ^ 0xbad;
+    const alt: TenantRow[] = [{ kind: 'lair_mouth', weight: 1, params: { mouth: 'ruin_gate', dress: [] } }];
+    const out = lGen(courtDef('probe_lair_mouth_alt', alt), seed);
+    check('L15 the door is a row param (a standing sidezone kind hangs under the ring)',
+      out.doodads.some(d => d.kind === 'ruin_gate')
+      && out.doodads.every(d => d.kind !== 'scorpion_well'));
+    const bogus: TenantRow[] = [{ kind: 'lair_mouth', weight: 1, params: { mouth: 'no_such_door' } }];
+    const bo = lGen(courtDef('probe_lair_mouth_alt', bogus), seed);
+    const vo = lGen(courtDef('probe_lair_mouth_alt', [{ kind: 'vacant', weight: 1 }]), seed);
+    check('L16 a door that cannot open seats NOTHING (unregistered mouth = the vacant layout)',
+      pr(bo.doodads) === pr(vo.doodads));
+  }
+  // THE DEN KEY: `params.den` names a registered LAIR and the ring inherits
+  // that den's WHOLE identity from the standing registry — the barrow's
+  // actual door AND the barrow's own spoor (obsidian, cinder) — so per-biome
+  // tables seat per-biome residents with one field. A key that resolves to
+  // no den door (unknown id, or an in-zone lair like the cairn) DEGRADES to
+  // the vacant tenant; the seat geometry is a param, not a ring assumption.
+  {
+    const seed = firstSeed ^ 0xde11;
+    const denRows: TenantRow[] = [{ kind: 'lair_mouth', weight: 1, params: { den: 'wyrm_barrow' } }];
+    const out = lGen(courtDef('probe_lair_mouth_den', denRows), seed);
+    const barrowMouths = out.doodads.filter(d => d.kind === 'wyrm_barrow_mouth');
+    const denSpoored = barrowMouths.filter(d => out.doodads.some(o =>
+      (o.kind === 'obsidian' || o.kind === 'cinder')
+      && Math.hypot(o.pos.x - d.pos.x, o.pos.y - d.pos.y) < 110)).length;
+    check('L17 the den key seats the den\'s WHOLE identity (the barrow\'s door, the barrow\'s spoor)',
+      barrowMouths.length >= 1 && denSpoored === barrowMouths.length
+      && out.doodads.every(d => d.kind !== 'scorpion_well'),
+      `${barrowMouths.length} barrow doors, ${denSpoored} den-spoored`);
+    const vo2 = lGen(courtDef('probe_lair_mouth_den', [{ kind: 'vacant', weight: 1 }]), seed);
+    const unk = lGen(courtDef('probe_lair_mouth_den',
+      [{ kind: 'lair_mouth', weight: 1, params: { den: 'no_such_den' } }]), seed);
+    const cairn = lGen(courtDef('probe_lair_mouth_den',
+      [{ kind: 'lair_mouth', weight: 1, params: { den: 'giants_cairn' } }]), seed);
+    check('L18 a key with no den door degrades to VACANT (unknown id AND the doorless cairn)',
+      pr(unk.doodads) === pr(vo2.doodads) && pr(cairn.doodads) === pr(vo2.doodads));
+    const tight = lGen(courtDef('probe_lair_mouth_den',
+      [{ kind: 'lair_mouth', weight: 1, params: { floorFrac: 0.02 } }]), seed);
+    check('L19 seat geometry is a PARAM (a floor authored too tight honestly seats no door)',
+      tight.doodads.every(d => d.kind !== 'scorpion_well'));
+  }
+
+  // LIVE: the adopted door, the persistent seed, the minted den, the ledger.
+  let mouth: { pos: Vec2; seed: number; kind: string } | undefined;
+  let liveId = '';
+  for (let s = 0; s < 4 && !mouth; s++) {
+    const zid = `probe_undercourt_${s}`;
+    const zdef = courtDef(zid, lairTable, { exits: [{ to: homeId, side: 's' }] });
+    zdef.seed = 660001 + s * 104729;
+    w.caveMap[zid] = zdef;
+    w.loadZone(zid);
+    mouth = (w.caveEntrances as { pos: Vec2; seed: number; kind: string }[])
+      .find(c => c.kind === 'scorpion_well');
+    if (mouth) liveId = zid;
+  }
+  check('L9 loadZone ADOPTS the tenant-planted door into the dwell registry', !!mouth, liveId);
+  if (mouth) {
+    const seen = { seed: mouth.seed, x: mouth.pos.x, y: mouth.pos.y };
+    leaveToHome();
+    w.loadZone(liveId);
+    const again = (w.caveEntrances as { pos: Vec2; seed: number; kind: string }[])
+      .find(c => c.kind === 'scorpion_well');
+    check('L10 same ring, same door, same den seed (position-hash persistence across reloads)',
+      !!again && again.seed === seen.seed && again.pos.x === seen.x && again.pos.y === seen.y);
+    if (again) {
+      w.enterSidezone(again);
+      check('L11 the well mints the den (id + name + one sealed rung + the classic ask)',
+        w.zone.id === `cave_scorpion_well_${liveId}_${again.seed}`
+        && String(w.zone.name).includes('Scorpion Well')
+        && w.zone.caveDepth >= 1 && w.zone.noDeeper === true
+        && w.zone.objective.kind === 'clear',
+        `${w.zone.id} · ${w.zone.name}`);
+      const brood = (w.actors as Actor[]).filter(a => a.defId === 'sand_scorpion');
+      check('L12 the brood is home (authored fauna, chance 1)', brood.length >= 2,
+        `${brood.length} scorpions`);
+      check('L13 the gateway ledger stamps (scorpion_well_entered)',
+        ((w.ledger?.scorpion_well_entered as number | undefined) ?? 0) >= 1);
+    }
+    leaveToHome();
+  }
+  // Mint purity (the E1 idiom) on the den's own sidezone.
+  {
+    const sz = sidezoneOf('scorpion_well')!;
+    const mctx = {
+      parent: (w.caveMap[liveId] ?? w.zoneMap[homeId]) as ZoneDef, seed: 424243,
+      id: 'probe_well_det', pos: { x: 100, y: 100 }, playerLevel: 10, pkgActive: () => false,
+    };
+    const a = sz.mint(mctx);
+    check('L14 the mint is pure and sealed (byte-equal defs, noDeeper, the brood authored)',
+      JSON.stringify(a) === JSON.stringify(sz.mint(mctx))
+      && a.noDeeper === true
+      && Array.isArray(a.fauna) && a.fauna.some(f => f.id === 'sand_scorpion'));
+  }
 }
 
 console.log(fails ? `\nprobe_lairs: ${fails} FAILURE(S)` : '\nprobe_lairs: ALL PASS');

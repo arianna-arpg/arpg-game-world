@@ -14,7 +14,10 @@
 //   · registerSidezone    — the minted den country behind the mouth (forced
 //                           tileset, authored name/objective/fauna, noDeeper,
 //                           gateway ledger — the wane_arch pattern),
-//   · registerDormantTag  — wardens that stand as statuary until struck.
+//   · registerDormantTag  — wardens that stand as statuary until struck,
+//   · registerTenantKind  — the ring-tenant lane (engine/massif.ts): a court
+//                           ring whose OCCUPANT is the door (wave six, the
+//                           lair mouth tenant, at the file's foot).
 //
 // A lair's den is REPEATABLE geography: every mouth keeps its own den
 // forever (position-hash seed), the alpha respawns with the den's memory
@@ -22,11 +25,13 @@
 // Docs: docs/engine/lairs.md. Probe: balance/probe_lairs.ts.
 // ---------------------------------------------------------------------------
 
-import { registerLair } from '../engine/lairs';
-import { registerDoodadRule, registerLandmark } from '../engine/levelgen';
+import { LAIR_CFG, lairOf, registerLair } from '../engine/lairs';
+import { landmarkDefs, registerDoodadRule, registerLandmark, type DoodadKind } from '../engine/levelgen';
 import { registerDormantTag, registerRouseRule } from '../engine/ai';
-import { registerSidezone } from './sidezones';
+import { registerSidezone, sidezoneOf } from './sidezones';
 import { mintCave } from '../engine/worldgen';
+import { registerTenantKind, tenantKindOf } from '../engine/massif';
+import { vec } from '../core/math';
 
 // === THE FROSTMAW (the yeti den) =============================================
 // "Only in the deepest recesses of the mountains": the maw seats INSIDE the
@@ -785,4 +790,193 @@ registerLair({
     level: { from: 14, fadeIn: 3 },
     chance: 0.18,
   },
+});
+
+// ============================================================================
+// WAVE SIX — THE LAIR MOUTH TENANT: the ring that is somebody's door.
+// ============================================================================
+// Every lair above claims ZONES by predicate (the seat fold). This lane
+// claims RINGS by occupancy: the massif fabric's ring-tenant registry
+// (engine/massif.ts — one weighted draw per court on the TENANT_SALT fork)
+// may name 'lair_mouth' in any court kind's tenants table, and the winning
+// ring grows spoor and a den mouth on its own floor — walk in expecting
+// stock and find something's home; the real prize is below. No LairSeatRow,
+// deliberately: the TABLE is the claim.
+//
+// THE SEAM: the handler plants an ordinary REGISTERED-SIDEZONE doodad and
+// stops — everything after arrives from standing law, unforked:
+//   · the dwell, the mint, and the position-hash seed (same mouth, same den
+//     forever): loadZone's entrance sweep adopts ANY doodad wearing a
+//     registered sidezone kind, however it was placed;
+//   · noDeeper pockets refuse — generateLayout's finished-grid strip eats
+//     every entrance stray, tenant-planted ones included;
+//   · the door joins the universal reachability net (ctx.mustReach — the
+//     den_mouth landmark's own channel);
+//   · THE FORK LAW: every draw below rides the tenant fork, so the carve —
+//     masses, weave, every skirt draw — is byte-identical with the row
+//     present or absent (probe rig L).
+// WHICH den is ROW DATA, two grains: `params.den` names a registered LAIR
+// (the standing registry's key — 'wyrm_barrow', 'drake_roost'…) and the
+// ring inherits that den's whole identity (door kind, its own spoor, its
+// radius) from its den_mouth landmark row, so per-biome tables seat
+// per-biome residents with one field; `params.mouth` is the bare-door lane
+// (any registered sidezone kind — a graveland mausoleum_door, a city
+// sewer_grate) with row/default dress. Misauthored rows DEGRADE to the
+// vacant tenant (warn once, never throw). Seat geometry is parameterized
+// (`params.floorFrac` — the court ring's law is only the default), so
+// grander host bodies ride the same seam without inheriting ring
+// assumptions. The default den is the courtlands' own modest one below.
+
+// === THE SCORPION WELL (the courtlands' undercourt den) ======================
+// The well_court's vacant row is the DRY WELL — the ring whose water failed.
+// This is its darker sibling: the ring whose well didn't just fail —
+// something hollowed it. Bone spoor on the floor, the broken wellhead
+// breathing venom-light, and below, the brood in the dynasty's old plumbing:
+// standing kin only (the sand scorpion the courtland wildlife already
+// fields, ant files in the galleries). One rung deep by design (the
+// gleamhollow's law); NO forced tileset, deliberately (the crevice_shaft
+// lane): the face rolls from the strata pool under the parent's anchor, so
+// a burrow beneath this country looks like this country's caves. The
+// classic clear stands as the ask.
+
+registerDoodadRule('scorpion_well', { overlap: 'trigger', spacing: 60 });
+
+registerSidezone({
+  kind: 'scorpion_well',
+  dwell: 0.7,
+  ledgerOnEnter: 'scorpion_well_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, undefined, {
+      name: 'the Scorpion Well',
+      noDeeper: true,
+    });
+    // The brood is AUTHORED (the NEST_FAUNA lesson): without it a minted
+    // pocket falls back to plains wildlife and the well grows meadow hares.
+    def.fauna = [
+      { id: 'sand_scorpion', chance: 1, count: [4, 7] },
+      { id: 'ant_trail', chance: 0.35, count: [1, 2] },
+    ];
+    return def;
+  },
+});
+
+/** One spoor dress row (the den_mouth builder's own shape). */
+type SpoorRow = { kind: string; count: [number, number]; radius: [number, number] };
+
+/** The default spoor ring (rows may override via `params.dress`): the floor
+ *  confesses the door from across the ring, in standing kinds only. */
+const LAIR_MOUTH_SPOOR: SpoorRow[] = [
+  { kind: 'bone_pile', count: [2, 4], radius: [10, 16] },
+  { kind: 'bone', count: [1, 2], radius: [12, 18] },
+  { kind: 'scree', count: [1, 3], radius: [12, 20] },
+];
+
+const warnedMouths = new Set<string>();
+
+registerTenantKind('lair_mouth', (ctx, def, grid, cm, rng, kd, row) => {
+  // Dress-class under the aerial (the stock/cache idiom): a lite mint is
+  // never played, so no door needs to stand in it — and the landmark lane's
+  // own den mouths skip lite mints the same way.
+  if (ctx.lite || !cm.interior) return;
+  const p = (row.params ?? {}) as {
+    /** THE DEN KEY: a registered LAIR id whose landmark is a den_mouth —
+     *  the ring inherits that den's WHOLE identity (its door kind, its own
+     *  spoor, its mouth radius) from the standing registry, so per-biome
+     *  tables read `den: 'wyrm_barrow'` and a volcanic ring grows the
+     *  barrow's actual door into the barrow's actual country. */
+    den?: string;
+    /** Bare-door lane: any registered sidezone kind (no lair row needed). */
+    mouth?: string;
+    mouthRadius?: number;
+    /** Usable-floor fraction of the host body's r. Default = the court
+     *  ring's law ((ringInner ?? 0.6) × 0.9); hosts beyond the court pool
+     *  (grander bodies, other shapes) parameterize instead of inheriting a
+     *  ring assumption. */
+    floorFrac?: number;
+    dress?: SpoorRow[];
+  };
+  // A misauthored row degrades to the vacant tenant (warn once, seat
+  // nothing, never throw) — the registry language stays pure and genqa
+  // meets a quiet ring, not a crash.
+  const degrade = (why: string): void => {
+    if (!warnedMouths.has(why)) {
+      warnedMouths.add(why);
+      console.warn(`[lairs] lair_mouth tenant: ${why} — degrading to vacant`);
+    }
+    tenantKindOf('vacant')?.(ctx, def, grid, cm, rng, kd, row);
+  };
+  // Resolve the den key against the standing registries: lair row → its
+  // landmark → the den_mouth builder's own params. A lair with no den door
+  // (an in-zone lair like the giant's cairn) has nothing to hang on a ring.
+  let denMouth: string | undefined;
+  let denDress: SpoorRow[] | undefined;
+  let denMouthR: number | undefined;
+  if (p.den !== undefined) {
+    const lair = lairOf(p.den);
+    const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+    const lp = (lm?.params ?? {}) as { mouthKind?: string; mouthRadius?: number; dress?: SpoorRow[] };
+    if (!lair || lm?.builder !== 'den_mouth' || !lp.mouthKind) {
+      degrade(`den '${p.den}' is no registered den (no lair row, or no den_mouth door)`);
+      return;
+    }
+    denMouth = lp.mouthKind; denDress = lp.dress; denMouthR = lp.mouthRadius;
+  }
+  // Row grain outranks the den's own kit (the massif `over` doctrine).
+  const mouthKind = p.mouth ?? denMouth ?? 'scorpion_well';
+  // A door that cannot open must not stand: the mouth kind has to be a
+  // registered sidezone or the dwell sweep would never adopt it.
+  if (!sidezoneOf(mouthKind)) {
+    degrade(`mouth '${mouthKind}' is no registered sidezone`);
+    return;
+  }
+  // The cache knot's floor law (engine/massif.ts): the host's usable floor,
+  // and the 42px POI-seat standoff the knot honors — a floor too tight for
+  // standoff + door honestly seats nothing.
+  const floorR = cm.r * (p.floorFrac ?? (kd.ringInner ?? 0.6) * 0.9);
+  const seat = cm.interior;
+  const mouthR = p.mouthRadius ?? denMouthR ?? LAIR_CFG.mouth.radius;
+  if (floorR < 42 + mouthR * 2 + 8) return;
+  const clearOfReserved = (x: number, y: number, r: number): boolean => {
+    for (const res of ctx.reserved) {
+      if ('pos' in res) {
+        if (Math.hypot(x - res.pos.x, y - res.pos.y) < res.radius + r) return false;
+      } else {
+        const m = (res.margin ?? 0) + r;
+        if (x > res.rect.x - m && x < res.rect.x + res.rect.w + m
+          && y > res.rect.y - m && y < res.rect.y + res.rect.h + m) return false;
+      }
+    }
+    return true;
+  };
+  // Seat the door past the standoff, on walkable floor (a few bearings
+  // tried; every draw rides the fork, so tries cost the world nothing).
+  let mx = 0, my = 0, seated = false;
+  for (let t = 0; t < 8 && !seated; t++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(42 + mouthR, Math.max(42 + mouthR + 1, floorR - mouthR));
+    mx = seat.x + Math.cos(a) * d; my = seat.y + Math.sin(a) * d;
+    seated = grid.isWalkable(mx, my) && clearOfReserved(mx, my, mouthR);
+  }
+  if (!seated) return;
+  ctx.doodads.push({ pos: vec(mx, my), radius: mouthR, kind: mouthKind as DoodadKind, rot: 0 });
+  (ctx.mustReach ??= []).push(vec(mx, my));
+  // The spoor, mouth-anchored (the den_mouth builder's grammar on a court
+  // floor): never crowding the door, never the POI seat, never the wall.
+  for (const srow of p.dress ?? denDress ?? LAIR_MOUTH_SPOOR) {
+    for (let i = 0, k = rng.int(srow.count[0], srow.count[1]); i < k; i++) {
+      for (let t = 0; t < 4; t++) {
+        const a = rng.range(0, Math.PI * 2);
+        const d = rng.range(mouthR + 12, mouthR + 70);
+        const gx = mx + Math.cos(a) * d, gy = my + Math.sin(a) * d;
+        const dd = Math.hypot(gx - seat.x, gy - seat.y);
+        if (dd < 42 || dd > floorR - 8) continue;
+        if (!grid.isWalkable(gx, gy)) continue;
+        ctx.doodads.push({
+          pos: vec(gx, gy), radius: rng.range(srow.radius[0], srow.radius[1]),
+          kind: srow.kind as DoodadKind, rot: rng.range(0, Math.PI * 2),
+        });
+        break;
+      }
+    }
+  }
 });
