@@ -106,7 +106,7 @@ import { GridWalkField } from '../src/world/gridWalk';
 import { regionKind } from '../src/world/regions';
 import {
   carveMassifs, massKindIds, massKindOf, massShapeIds, MASSIF_CFG,
-  registerTenantKind, tenantKindIds, type TenantRow,
+  registerTenantKind, tenantKindIds, type MassAnchorRow, type TenantRow,
 } from '../src/engine/massif';
 import { TILESETS } from '../src/data/tilesets';
 import { BIOME_FIELD_BANDS, BIOMES, patronFaction } from '../src/world/biomes';
@@ -1487,6 +1487,192 @@ function bareCtx(seed: number): GenCtx {
       if (!engaged) fail('N: pressure — no heart pair ever sat inside the rim lane (the tightened lane never engaged; the press is cosmetic)');
       note(`N: rim ${rimBodies} bodies @ ${(rimFrac / mints).toFixed(3)} → heart ${heartBodies} bodies @ ${(heartFrac / mints).toFixed(3)}, lane ${laneRim}→${laneHeart}`);
     }
+  }
+}
+
+// --- Rig O: THE COLOSSAL ANCHOR LANE — landmark-grade bodies seated first ----
+// The batch-18 lane (engine/massif.ts massifAnchors): anchors place BEFORE
+// the coverage darts, over the coverage budget, under UNBENDING structural
+// law — the weave lane, the ground seat, and a portal clearance that GROWS
+// with the body (anchorPortalK). Pinned here: the shipped WYRMFIELDS regime
+// (the volcanic deep-heart face — one exclusive wyrm_caldera crowning almost
+// every mint, slag tors weaving around it), THE FIRST-SEAT ORDER (a seated
+// anchor is always masses[0]), THE TERRITORIAL LAW under a hostile pool
+// (same-kind rows can never stand two), the per-row MAX cap, THE GRACEFUL
+// REFUSAL (an unseatable band ships the zone without it, laws intact), and
+// the anchor-chance byDepth ramp's BOTH ends (the face's own rim may go
+// calderaless; its heart always crowns). NOTE: this probe's registry world
+// deliberately omits data/lairs (the tenant-door half lives in probe_lairs
+// rig N with the full import set), so lair_mouth draws degrade to a warn
+// here — the LANE is what this rig owns.
+{
+  const ts = TILESETS.wyrmfields;
+  if (!ts) fail('O: wyrmfields tileset missing');
+  else if (ts.forceLayout !== 'massif') fail(`O: wyrmfields forceLayout '${ts.forceLayout}' — the massif coupling is gone`);
+  else {
+    // O1 — statics: the deep-heart staging, the anchor row's shape, the
+    // caldera kind's ring dials, the slagcrag TRUE WALL.
+    if (!ts.depthAffinity || (ts.depthAffinity.from ?? 0) < 0.55) {
+      fail('O: wyrmfields must stage to the biome heart (depthAffinity.from ≥ 0.55)');
+    }
+    const P = ts.layoutParams as Record<string, unknown>;
+    const anchors = P.massifAnchors as MassAnchorRow[] | undefined;
+    if (!anchors || anchors.length !== 1) fail('O: wyrmfields must field exactly ONE anchor row');
+    const aRow = anchors?.[0];
+    if (aRow && (aRow.kind !== 'wyrm_caldera' || !aRow.exclusive || (aRow.max ?? 1) !== 1
+      || !aRow.sizeR || aRow.sizeR[0] < 380)) {
+      fail('O: the caldera row must be exclusive, max 1, at colossal scale (sizeR ≥ 380)');
+    }
+    const chance = P.massifAnchorChance;
+    if (!chance || typeof chance !== 'object' || !('byDepth' in (chance as object))) {
+      fail('O: massifAnchorChance carries no byDepth ramp — the staging doctrine is gone');
+    }
+    const kd = massKindOf('wyrm_caldera');
+    if (!kd.shapes.every(s => s.shape === 'court')) fail('O: the caldera must be court-shaped (the ring floor is the den seat)');
+    if (!kd.ringInner || !kd.mouths || kd.mouths[1] !== 1) fail('O: the caldera must author its ring (ringInner + ONE breach)');
+    if (!kd.tenants?.length || kd.tenants.reduce((a, r) => a + r.weight, 0) !== 100) {
+      fail('O: the caldera tenant table must stand at total 100 (the ambiguous grain)');
+    }
+    const doorRow = kd.tenants?.find(t => t.kind === 'lair_mouth');
+    if (!doorRow || (doorRow.params as { den?: string } | undefined)?.den !== 'kilnhoard') {
+      fail("O: the caldera's lair_mouth row must key den 'kilnhoard'");
+    }
+    if (!kd.tenants?.some(t => t.kind === 'vacant' && t.weight > 0)) {
+      fail('O: the caldera table must keep vacancy (a caldera that always pays is a promise, not a question)');
+    }
+    const slag = regionKind('slagcrag');
+    if (!slag || slag.walkable || !slag.blocks || !slag.blocksShot || !slag.blocksSight) {
+      fail('O: slagcrag must be a TRUE WALL (blocks + blocksShot + blocksSight)');
+    }
+
+    // The shipped-face def at a forced geo (the rig N idiom): the mint the
+    // wyrmfields actually run, heart and rim.
+    const W = Math.round((ts.sizeW[0] + ts.sizeW[1]) / 2), H2 = Math.round((ts.sizeH[0] + ts.sizeH[1]) / 2);
+    const oEntry = vec(140, H2 / 2);
+    const oExits = [vec(W - 140, H2 / 2), vec(W / 2, 140)];
+    const fieldDef = (geo: number | undefined): ZoneDef => ({
+      id: 'massif_o', name: 'QA wyrmfields', level: 10, size: { w: W, h: H2 },
+      theme: ts.theme as ZoneDef['theme'],
+      layout: [...(ts.common ?? []), ...ts.layout],
+      layoutType: 'massif',
+      layoutParams: ts.layoutParams as Record<string, unknown>,
+      biome: ts.biome,
+      ...(geo !== undefined ? { geo: { biomeDepth: geo } } : {}),
+      objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    });
+    const oCtx = (seed: number): GenCtx => ({
+      rng: new Rng(seed), arena: { w: W, h: H2 }, entry: oEntry, exits: oExits, seed,
+      doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+      garrisons: [], caveSeeds: [], reserved: [],
+    });
+    const portalClear = layoutParam<number>(fieldDef(1), 'massifPortalClear', MASSIF_CFG.portalClear);
+    const portalK = layoutParam<number>(fieldDef(1), 'massifAnchorPortalK', MASSIF_CFG.anchorPortalK);
+    const laneW = layoutParam<number>(fieldDef(1), 'massifLaneW', MASSIF_CFG.laneW);
+
+    // O2 — THE HEART REGIME live: chance resolves 1 at geo 1, so EVERY seed
+    // crowns exactly one caldera, seated FIRST, under every law, with the
+    // ordinary slag bones still weaving around it.
+    let crowned = 0, others = 0, firstBad = 0, lawBad = 0, interiorless = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      const seed = seedAt(s) ^ 0xc07a;
+      const masses = carveMassifs(oCtx(seed), { ...fieldDef(1), seed });
+      const cal = masses.filter(m => m.kind === 'wyrm_caldera');
+      if (cal.length > 1) fail(`O: seed ${seed} stood ${cal.length} calderas — the territorial law broke`);
+      if (cal.length === 1) {
+        crowned++;
+        const a = cal[0];
+        if (masses[0] !== a) firstBad++;
+        if (!a.interior) interiorless++;
+        for (const p of [oEntry, ...oExits]) {
+          if (Math.hypot(p.x - a.at.x, p.y - a.at.y) < portalClear + a.bound * portalK - 1e-6) lawBad++;
+        }
+        for (const m of masses) {
+          if (m === a) continue;
+          const d = Math.hypot(m.at.x - a.at.x, m.at.y - a.at.y);
+          if (d < m.bound + a.bound + laneW - 1e-6) lawBad++;
+        }
+      }
+      others += masses.filter(m => m.kind !== 'wyrm_caldera').length;
+    }
+    if (crowned !== SEEDS) fail(`O: heart regime crowned ${crowned}/${SEEDS} — the measured 40/40 seat rate regressed`);
+    if (firstBad) fail(`O: ${firstBad} calderas were not masses[0] — anchors must seat FIRST`);
+    if (interiorless) fail(`O: ${interiorless} calderas reported no interior — the ring floor is gone`);
+    if (lawBad) fail(`O: ${lawBad} structural-law breaches at colossal scale (portal-K / lane)`);
+    if (others < SEEDS * 2) fail(`O: only ${others} coverage bodies over ${SEEDS} heart mints — the anchor starved the field`);
+
+    // O3 — the ramp's RIM end: at geo 0 the chance reads its authored rim
+    // value (< 1), so across the sweep BOTH outcomes must appear — the
+    // face's own edge sometimes refuses to promise.
+    let rimCrowned = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      const seed = seedAt(s) ^ 0x0e1b;
+      const masses = carveMassifs(oCtx(seed), { ...fieldDef(0), seed });
+      if (masses.some(m => m.kind === 'wyrm_caldera')) rimCrowned++;
+    }
+    if (rimCrowned === 0 || rimCrowned === SEEDS) {
+      fail(`O: rim regime crowned ${rimCrowned}/${SEEDS} — the byDepth chance ramp never expressed both outcomes`);
+    }
+
+    // O4 — the full recipe end-to-end at the heart: the weave stays ONE
+    // component and every exit reachable with a colossal in the field.
+    for (let s = 0; s < Math.min(SEEDS, 6); s++) {
+      const seed = seedAt(s) ^ 0x04ea;
+      const out = gen(fieldDef(1), seed);
+      const st = gridStats(out);
+      if (!st) { fail(`O: seed ${seed} no grid`); continue; }
+      if (st.comps !== 1) fail(`O: seed ${seed} split the weave (${st.comps} comps) under the colossal`);
+      for (const e of exits) if (!st.grid.reachable(entry, e)) fail(`O: seed ${seed} exit unreachable under the colossal`);
+    }
+
+    // O5 — THE TERRITORIAL LAW under a hostile pool + the per-row MAX cap:
+    // two same-kind rows (both exclusive) asked for three seats can stand
+    // only ONE body; the same pool non-exclusive at max 2 must some-seed
+    // stand TWO and never three (the cap the law is measured against).
+    const twinPool = (excl: boolean): MassAnchorRow[] => [
+      { kind: 'wyrm_caldera', weight: 1, max: excl ? 3 : 2, exclusive: excl, sizeR: [340, 400] },
+      { kind: 'wyrm_caldera', weight: 1, max: excl ? 3 : 2, exclusive: excl, sizeR: [340, 400] },
+    ];
+    const hostileDef = (excl: boolean): ZoneDef => ({
+      ...fieldDef(undefined),
+      layoutParams: {
+        ...(ts.layoutParams as Record<string, unknown>),
+        massifAnchors: twinPool(excl),
+        massifAnchorChance: 1,
+        massifAnchorCount: [3, 3] as [number, number],
+      },
+    });
+    let everTwo = 0, everThree = 0, exclBroke = 0;
+    for (let s = 0; s < SEEDS; s++) {
+      const seed = seedAt(s) ^ 0x7e22;
+      const ex = carveMassifs(oCtx(seed), { ...hostileDef(true), seed })
+        .filter(m => m.kind === 'wyrm_caldera').length;
+      if (ex > 1) exclBroke++;
+      const open = carveMassifs(oCtx(seed ^ 0x11), { ...hostileDef(false), seed: seed ^ 0x11 })
+        .filter(m => m.kind === 'wyrm_caldera').length;
+      if (open >= 2) everTwo++;
+      if (open > 4) everThree++; // two rows × max 2 = the hard ceiling
+    }
+    if (exclBroke) fail(`O: exclusion broke on ${exclBroke} seeds — two wyrm homes shared a zone`);
+    if (!everTwo) fail('O: pressure — the non-exclusive control never stood two calderas (the exclusion rig proved nothing)');
+    if (everThree) fail(`O: the per-row max cap broke on ${everThree} seeds`);
+
+    // O6 — THE GRACEFUL REFUSAL: a band no arena can hold ships the zone
+    // anchorless with the ordinary field intact.
+    for (let s = 0; s < Math.min(SEEDS, 8); s++) {
+      const seed = seedAt(s) ^ 0x9ef0;
+      const def: ZoneDef = {
+        ...fieldDef(1),
+        layoutParams: {
+          ...(ts.layoutParams as Record<string, unknown>),
+          massifAnchors: [{ kind: 'wyrm_caldera', weight: 1, sizeR: [1500, 1600] }] as MassAnchorRow[],
+          massifAnchorChance: 1,
+        },
+      };
+      const masses = carveMassifs(oCtx(seed), { ...def, seed });
+      if (masses.some(m => m.kind === 'wyrm_caldera')) fail(`O: seed ${seed} seated an unseatable band — the refusal lied`);
+      if (!masses.length) fail(`O: seed ${seed} refused the anchor AND the field — the refusal starved coverage`);
+    }
+    note(`O: heart ${crowned}/${SEEDS} crowned (avg ${(others / SEEDS).toFixed(1)} coverage bodies), rim ${rimCrowned}/${SEEDS}`);
   }
 }
 

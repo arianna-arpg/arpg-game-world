@@ -43,7 +43,7 @@ import { PART_PAINTERS } from '../src/render/vis/parts';
 import { LOOT_TABLES } from '../src/data/loottables';
 import { DOODAD_VISUALS } from '../src/data/doodadVisuals';
 import { sidezoneOf } from '../src/data/sidezones';
-import { isDormant, updateAI } from '../src/engine/ai';
+import { DORMANT_TAGS, isDormant, ROUSE_RULES, updateAI } from '../src/engine/ai';
 import { mod } from '../src/engine/stats';
 import { skyOf, type ZoneDef } from '../src/data/zones';
 import type { Actor } from '../src/engine/actor';
@@ -1258,6 +1258,148 @@ const step = (secs: number): void => {
     check('M10 THE SURGICAL PARITY (courtland): byte-equal state, the diff purely ADDITIVE hovel kit at doors',
       stateOk === n && extrasBad === 0 && missCount === 0,
       `${stateOk}/${n} state-equal, ${missCount} missing`);
+  }
+}
+
+// --- RIG N: THE KILNHOARD (batch 18) — the colossal massif's resident --------
+// The first den whose ONLY door is a tenant's (data/lairs.ts wave seven):
+// the wyrm_caldera anchor (engine/massif.ts massifAnchors — probe_massif rig
+// O owns the lane mechanics) keys `den: 'kilnhoard'` from its ring table,
+// and the lair row is a TENANT-ONLY CLAIM — biomes [] + chance 0, so the
+// seat fold structurally never offers it and the caldera's floor is the one
+// door in the world. Pinned here (the full-registry world): the den resolves
+// WHOLE; the fold's silence; the Urnfather's whole contract (dormant
+// kiln_sleeper latch + rouse rule, colossal hittable worm, kit/looks/portrait
+// censuses by the standing rigs); the den tileset's urn floor on every face;
+// the pure sealed mint; and the doors standing LIVE on the shipped
+// wyrmfields regime — in-ring, kiln-spoored, on the walk net, never the
+// default well.
+{
+  // N1 — the den resolves whole (the M3 contract) + the A5 mouth contract.
+  const lair = lairOf('kilnhoard');
+  const lm = lair ? landmarkDefs().find(d => d.id === lair.landmark) : undefined;
+  const mk = (lm?.params as { mouthKind?: string } | undefined)?.mouthKind;
+  check("N1 den 'kilnhoard' resolves whole (lair → den_mouth landmark → sidezone 'kiln_maw')",
+    !!lair && lm?.builder === 'den_mouth' && mk === 'kiln_maw' && !!sidezoneOf('kiln_maw'));
+  check("N2 mouth 'kiln_maw' carries the full door contract (trigger rule + visual + entrance kind)",
+    doodadRuleOf('kiln_maw').overlap === 'trigger'
+    && !!DOODAD_VISUALS.kiln_maw && isSidezoneEntranceKind('kiln_maw'));
+
+  // N3 — THE TENANT-ONLY CLAIM: the fold never offers the door on any
+  // ground, including the den's own home face.
+  check('N3 the claim is tenant-only (biomes [], chance 0, the fold silent on volcanic ground)',
+    !!lair && lair.seat.biomes.length === 0 && lair.seat.chance === 0
+    && !lairLandmarkRolls({ place: 'surface', biome: 'volcanic', level: 30, tileset: 'wyrmfields' })
+      .some(r => r.landmark === 'kilnhoard_maw_site')
+    && !lairLandmarkRolls({ place: 'cave', biome: 'volcanic', caveDepth: 1, level: 30, tileset: 'wyrm_barrow' })
+      .some(r => r.landmark === 'kilnhoard_maw_site'));
+
+  // N4 — the resident's whole contract: boss-tier, colossal, dormant on the
+  // sphinx's latch (tag + rouse rule), a HITTABLE worm file (the surgeon's-
+  // robbery coupling: a clipped coil is a landed wound and the rouse rule
+  // answers it), and the segment looks painting.
+  const wy = MONSTERS.urnfather;
+  check('N4 the Urnfather is authored at colossal grade (boss, hittable worm file, the biggest body plan)',
+    !!wy && wy.boss === true && !!wy.worm?.hittable && (wy.worm?.length ?? 0) >= 14
+    && (wy.radius ?? 0) >= 30 && (wy.heft ?? 1) >= 2);
+  check("N5 the sleep is the sphinx's latch (dormant tag registered, rouse rule armed, planted post)",
+    wy?.tag === 'kiln_sleeper' && DORMANT_TAGS.has('kiln_sleeper')
+    && !!ROUSE_RULES.kiln_sleeper?.() && wy?.post === true);
+  const badKit = wy ? wy.skills.filter(s => !SKILLS[s]) : ['<none>'];
+  check('N6 the kit resolves', badKit.length === 0, badKit.join(','));
+  {
+    const segLooks = ['urnfather', 'urnfather_coil', 'urnfather_kilnridge', 'urnfather_flukes'];
+    const badLook = segLooks.filter(id => {
+      const lk = LOOKS[id];
+      return !lk || [...lk.parts, ...(lk.live ?? [])].some(p => !PART_PAINTERS[p.kind]);
+    });
+    check('N7 the whole file paints (head + coil + kilnridge + flukes)', badLook.length === 0, badLook.join(','));
+  }
+
+  // N8 — the den tileset: sealed off the frontier, and the TROVE law — the
+  // urn floor stands on EVERY face (common rows + each variant).
+  const kts = TILESETS.kilnhoard;
+  check('N8 the kilnhoard tileset is a den (frontier false, sheltered sky)',
+    !!kts && kts.frontier === false && kts.sky === 'sheltered');
+  check('N9 the urn floor is the terrain on every face (common + variants all carry kiln_urn)',
+    !!kts && (kts.common ?? []).some(r => r.kind === 'kiln_urn')
+    && (kts.variants ?? []).length >= 2
+    && (kts.variants ?? []).every(v => v.layout.some(r => r.kind === 'kiln_urn')));
+
+  // N10 — the mint is pure and sealed, and the trove's banked half is
+  // authored (gem caches on every mint; the boss ask names the resident).
+  const sz = sidezoneOf('kiln_maw');
+  if (!sz) check('N10 the kiln mints (sidezone present)', false);
+  else {
+    const mctx = {
+      parent: caveDef({ id: 'probe_kiln_parent', caveDepth: undefined, anchor: undefined, biome: 'volcanic' }),
+      seed: 424244, id: 'probe_kiln_det',
+      pos: { x: 100, y: 100 }, playerLevel: 12, pkgActive: () => false,
+    };
+    const a = sz.mint(mctx);
+    check('N10 the mint is pure and sealed (byte-equal, noDeeper, the boss ask, the banked caches)',
+      JSON.stringify(a) === JSON.stringify(sz.mint(mctx))
+      && a.noDeeper === true
+      && a.objective?.kind === 'boss' && (a.objective as { id?: string }).id === 'urnfather'
+      && Array.isArray(a.fauna) && a.fauna.some(f => f.id === 'gem_cache' && f.chance === 1)
+      && a.layout.some(r => r.kind === 'kiln_urn'));
+  }
+
+  // N11 — LIVE on the shipped wyrmfields regime (heart geo): calderas crown
+  // every mint (rig O's law), and where the tenant draw opened the door the
+  // maw stands IN the ring floor, kiln-spoored, on the walk net — and the
+  // default well never leaks through the den key.
+  const ts = TILESETS.wyrmfields;
+  if (!ts) check('N11 wyrmfields regime (tileset present)', false);
+  else {
+    const W2 = Math.round((ts.sizeW[0] + ts.sizeW[1]) / 2), H3 = Math.round((ts.sizeH[0] + ts.sizeH[1]) / 2);
+    const nEntry = vec(140, H3 / 2);
+    const nExits = [vec(W2 - 140, H3 / 2)];
+    const nDef = (): ZoneDef => caveDef({
+      id: 'probe_kilnhoard_field', size: { w: W2, h: H3 },
+      layout: [...(ts.common ?? []), ...ts.layout], layoutType: 'massif',
+      caveDepth: undefined, anchor: undefined, biome: 'volcanic',
+      theme: ts.theme as ZoneDef['theme'],
+      layoutParams: ts.layoutParams as Record<string, unknown>,
+      geo: { biomeDepth: 1 },
+    });
+    let crowned = 0, doors = 0, inRing = 0, spoored = 0, reach = 0, wells = 0, n = 0;
+    for (let s = 0; s < 16; s++) {
+      // Hash-mixed seeds, deliberately: an ARITHMETIC ladder here samples a
+      // correlated family (one caldera per zone, its tenant fork at a
+      // similar stream position every time) and measured 2/16 doors against
+      // the table's 40% — the spy-handler forensics (2026-08-01) showed the
+      // DRAWS themselves skewed on the ladder while every drawn door seated.
+      // Mixed seeds land the sweep near expectation, so the rig exercises a
+      // real door population instead of the ladder's accident.
+      const seed = (Math.imul(933103 + s, 2654435761) ^ 0x9e3779b9) >>> 0;
+      const def = nDef();
+      const out = generateLayout({ ...def, seed }, { w: W2, h: H3 }, new Rng(seed), nEntry, nExits);
+      n++;
+      const rings = carveMassifs({
+        rng: new Rng(seed), arena: { w: W2, h: H3 }, entry: nEntry, exits: nExits, seed,
+        doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+        garrisons: [], caveSeeds: [], reserved: [],
+      }, { ...def, seed }).filter(m => m.kind === 'wyrm_caldera' && m.interior);
+      if (rings.length === 1) crowned++;
+      const maws = out.doodads.filter(d => d.kind === 'kiln_maw');
+      doors += maws.length;
+      wells += out.doodads.filter(d => d.kind === 'scorpion_well').length;
+      for (const d of maws) {
+        const home = rings.find(m =>
+          Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= m.r * 0.52 * 0.9 + 0.5);
+        if (home) inRing++;
+        if (out.walk instanceof GridWalkField && out.walk.reachable(nEntry, vec(d.pos.x, d.pos.y))) reach++;
+        if (out.doodads.filter(o =>
+          (o.kind === 'kiln_urn' || o.kind === 'obsidian' || o.kind === 'bone_pile')
+          && Math.hypot(o.pos.x - d.pos.x, o.pos.y - d.pos.y) < 110).length >= 2) spoored++;
+      }
+    }
+    check('N11 the heart crowns every mint (the measured 40/40 law on the shipped regime)',
+      crowned === n, `${crowned}/${n}`);
+    check('N12 the doors stand honest (in the caldera floor, kiln-spoored, on the walk net, never the default well)',
+      doors >= 2 && inRing === doors && spoored === doors && reach === doors && wells === 0,
+      `${doors} maws over ${n} zones`);
   }
 }
 

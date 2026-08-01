@@ -709,3 +709,85 @@ registerMassKind({
   crestChance: 0.1,
   crestSpacing: 130,
 });
+
+// =============================================================================
+// THE WYRMFIELDS (the volcanic country's deep-heart face — data/tilesets.ts
+// 'wyrmfields'): cooled-melt massif country, and the debut ground of THE
+// COLOSSAL ANCHOR LANE (engine/massif.ts massifAnchors). Two kinds: the
+// ordinary slag bones the coverage darts scatter, and the caldera mound the
+// anchor lane seats FIRST at landmark scale — whose ring floor is the one
+// ambiguous grain the uncertainty doctrine asks for: a wyrm's front door,
+// a treasury knot, a held yard, or nothing at all, and no way to pre-read
+// which from the rim.
+// =============================================================================
+
+// THE SLAG TOR — the melt's cooled knuckles: black-glass blobs and fused
+// chains (region 'slagcrag', the TRUE-WALL policy in quenched melt). Cinder
+// banks the foot; spires and glass ride the odd crown.
+registerMassKind({
+  id: 'slag_tor',
+  region: 'slagcrag',
+  shapes: [{ shape: 'blob', weight: 3 }, { shape: 'chain', weight: 2 }],
+  lobe: 0.3,
+  // Cinder is POURED ground (the fuse guard's jurisdiction): radius ≤ 16 at
+  // spacing 76 keeps any same-kind skirt pair ≥ 44px of clear seam — the
+  // guard's 25px sliver is unreachable by arithmetic, not by luck.
+  skirt: [
+    { kind: 'cinder', weight: 3, radius: [12, 16] },
+    { kind: 'obsidian', weight: 2, radius: [14, 24] },
+    { kind: 'scree', weight: 2, radius: [14, 24] },
+  ],
+  skirtChance: 0.34,
+  skirtSpacing: 76,
+  crest: [
+    { kind: 'rock_spire', weight: 1.5, radius: [16, 26] },
+    { kind: 'obsidian', weight: 1, radius: [14, 22] },
+  ],
+  crestChance: 0.16,
+  crestSpacing: 100,
+});
+
+// THE WYRM CALDERA — the colossal itself: a landmark-grade slag ring (the
+// anchor lane's sizeR row hands it a band the ordinary dials were never
+// meant to hold) with ONE breach for a mouth and a banked-ash floor. The
+// mound reads as geology until you notice geology doesn't coil. Ring dials:
+// thick rim (ringInner 0.52 — a true crater wall), wide single breach
+// (mouthScale past the lane guarantee), high lobe for the ragged melt rim.
+// THE AMBIGUOUS GRAIN (tenants, one fork draw per caldera): the kilnhoard's
+// door at 40 — spoor and a maw on the floor, the den minted below (data/
+// lairs.ts); a treasury CACHE at 22 that pays without a landlord (the
+// hoard-that-isn't — exactly why the doctrine works); the emberkin holding
+// the bowl at 12 (patron default); and at 26 a caldera that is only a
+// caldera. Nothing outside the ring says which you got.
+registerMassKind({
+  id: 'wyrm_caldera',
+  region: 'slagcrag',
+  shapes: [{ shape: 'court', weight: 1 }],
+  lobe: 0.24,
+  ringInner: 0.52,
+  mouths: [1, 1],
+  mouthScale: 1.25,
+  tenants: [
+    { kind: 'lair_mouth', weight: 40, params: { den: 'kilnhoard' } },
+    { kind: 'cache', weight: 22, count: [4, 7], rows: [
+      { kind: 'kiln_urn', weight: 3, radius: [12, 16] },
+      { kind: 'clay_pots', weight: 1, radius: [10, 14] },
+    ] },
+    { kind: 'garrison', weight: 12 },
+    { kind: 'occurrence', weight: 8, params: { id: 'abyssal_fracture' } },
+    { kind: 'vacant', weight: 18 },
+  ],
+  skirt: [
+    { kind: 'cinder', weight: 3, radius: [12, 16] },
+    { kind: 'obsidian', weight: 2, radius: [14, 24] },
+    { kind: 'scree', weight: 1, radius: [14, 22] },
+  ],
+  skirtChance: 0.3,
+  skirtSpacing: 76, // the slag_tor's pour-sliver arithmetic (see above)
+  crest: [
+    { kind: 'rock_spire', weight: 1, radius: [16, 26] },
+    { kind: 'obsidian', weight: 1.5, radius: [14, 22] },
+  ],
+  crestChance: 0.14,
+  crestSpacing: 110,
+});

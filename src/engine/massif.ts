@@ -131,6 +131,20 @@ export const MASSIF_CFG = {
   skirtSpacing: 56,
   crestChance: 0.2,
   crestSpacing: 92,
+  /** THE COLOSSAL ANCHORS' reference dials (massifAnchor* layoutParams — see
+   *  MassAnchorRow): the dart budget each anchor SEAT spends before refusing
+   *  gracefully; the portal law's bound multiplier (an anchor keeps
+   *  portalClear + bound × K off every portal — the clear ground GROWS with
+   *  the body, because a colossal crowding a door is worse than a tor doing
+   *  it); how hard late darts pull toward the arena's centre (0 = uniform
+   *  throughout; portals live near edges, so the centre is where a
+   *  landmark-grade body finds room); and the border inset as a fraction of
+   *  the BOUND (anchors never bleed off the arena the way texture bodies
+   *  may — a landmark living half off-map is no landmark). */
+  anchorTries: 48,
+  anchorPortalK: 1.35,
+  anchorCenterPull: 0.6,
+  anchorInsetFrac: 0.85,
 } as const;
 
 // --- MASS SHAPES -------------------------------------------------------------
@@ -435,6 +449,39 @@ export interface MassPoolRow {
   over?: Partial<Omit<MassKindDef, 'id'>>;
 }
 
+/** THE COLOSSAL ANCHORS — one weighted row of a zone's `massifAnchors` pool:
+ *  landmark-grade bodies seated FIRST, before a single coverage dart flies,
+ *  so the zone's signature mass claims its ground and the ordinary texture
+ *  weaves around it (spacing law measures anchors like any standing body).
+ *  Anchors are LANDMARKS OVER the coverage budget, not of it: their painted
+ *  area never feeds targetCover, so a caldera the size of a hamlet doesn't
+ *  starve the field of its ordinary bones. Every structural law is UNBENDING
+ *  and none ever relaxes — the weave lane, the reservation ring, the ground
+ *  seat, and a portal law that scales UP with the body (MASSIF_CFG
+ *  .anchorPortalK); a seat the budget cannot place is refused gracefully
+ *  (the row stands down for the zone — no shrink ramp, on purpose: a
+ *  colossal that dieted to fit would betray the one thing it is for). */
+export interface MassAnchorRow {
+  /** Registered mass kind (the pool-row vocabulary — massKindOf). */
+  kind: string;
+  weight: number;
+  /** Seats this row may fill per zone (default 1 — an anchor is a landmark,
+   *  not texture; a row that wants a skyline of them says so). */
+  max?: number;
+  /** THE TERRITORIAL LAW: at most ONE standing body of this row's KIND per
+   *  zone, whatever row seated it — two wyrm homes never share a hunting
+   *  ground. Checked against every placed mass at pick time, so even a
+   *  same-kind sibling row (different tailoring) respects the claim. */
+  exclusive?: boolean;
+  /** Anchor-grade base-radius band, rolled directly (outranks the kind's
+   *  band and the zone's — the row IS the scale; this lane exists for
+   *  bodies the ordinary bands were never meant to hold). */
+  sizeR?: [number, number];
+  /** Row tailoring merged over the registered kind (the MassPoolRow `over`
+   *  doctrine — every kind dial reachable per row, no sibling kind minted). */
+  over?: Partial<Omit<MassKindDef, 'id'>>;
+}
+
 const MASS_KINDS: Record<string, MassKindDef> = {};
 
 export function registerMassKind(def: MassKindDef): void {
@@ -555,6 +602,11 @@ const DEFAULT_MIX: MassPoolRow[] = [
  *  moves — see MassGarrisonSpec. */
 const GARRISON_SALT = 0x6a7217;
 
+/** The anchor lane's absent-default (one shared frozen empty — zones with no
+ *  `massifAnchors` param take the earliest exit and draw NOTHING: the fork
+ *  law's cheapest possible proof). */
+const NO_ANCHORS: MassAnchorRow[] = [];
+
 /**
  * Carve the zone's mass bodies into the walk grid — THE fabric entry, callable
  * by any recipe (the 'massif' layout below is just ensureGrid + this +
@@ -595,6 +647,100 @@ export function carveMassifs(ctx: GenCtx, def: ZoneDef): CarvedMass[] {
 
   const placed: PlacedMass[] = [];
   let covered = 0;
+
+  // --- THE COLOSSAL ANCHORS (see MassAnchorRow) -----------------------------
+  // Landmark-grade bodies seated FIRST: every later coverage dart measures
+  // its lane against them, the heal reads them as ordinary walls, and the
+  // tenant/garrison forks ride their shape seeds exactly as they do any
+  // body's — one fabric, two grains. Param-gated to the byte: a def with no
+  // `massifAnchors` takes this branch's first exit and the lane draws
+  // NOTHING, so every standing zone is untouched by construction. Draw
+  // discipline inside the lane is the dart's own (fixed draws per try —
+  // r, shape, x, y — so a rejection changes which darts land, never how
+  // the stream advances past a landed one).
+  const anchorRows = layoutParam<MassAnchorRow[]>(def, 'massifAnchors', NO_ANCHORS);
+  if (anchorRows.length && rng.chance(layoutParam<number>(def, 'massifAnchorChance', 1))) {
+    const anchorCountBand = layoutParam<[number, number]>(def, 'massifAnchorCount', [1, 1]);
+    const anchorTries = layoutParam<number>(def, 'massifAnchorTries', MASSIF_CFG.anchorTries);
+    const anchorPortalK = layoutParam<number>(def, 'massifAnchorPortalK', MASSIF_CFG.anchorPortalK);
+    const anchorCenterPull = layoutParam<number>(def, 'massifAnchorCenterPull', MASSIF_CFG.anchorCenterPull);
+    const anchorInsetFrac = layoutParam<number>(def, 'massifAnchorInsetFrac', MASSIF_CFG.anchorInsetFrac);
+    const want = rng.int(anchorCountBand[0], anchorCountBand[1]);
+    const seatedPerRow = new Map<MassAnchorRow, number>();
+    // A row whose whole budget failed is DONE for the zone (geometry will
+    // not improve between seats) — the graceful refusal, never a spin.
+    const refusedRows = new Set<MassAnchorRow>();
+    for (let s = 0; s < want; s++) {
+      const pool = anchorRows.filter(row =>
+        !refusedRows.has(row)
+        && (seatedPerRow.get(row) ?? 0) < (row.max ?? 1)
+        && !(row.exclusive && placed.some(m => m.cm.kind === row.kind)));
+      if (!pool.length) break;
+      const row = pickWeighted(rng, pool);
+      const base = massKindOf(row.kind);
+      const kd: MassKindDef = row.over ? { ...base, ...row.over } : base;
+      const band = row.sizeR ?? kd.sizeR ?? sizeR;
+      let landed = false;
+      for (let t = 0; t < anchorTries && !landed; t++) {
+        const r = rng.range(band[0], band[1]);
+        const shapeId = pickWeighted(rng, kd.shapes).shape;
+        const shape = massShapeOf(shapeId);
+        const bound = r * shape.reach;
+        // THE ANCHOR INSET: the whole BOUND stays on the arena (no bleed —
+        // a landmark half off-map is no landmark), and late darts LERP
+        // toward the centre (draw-free arithmetic on the drawn point): the
+        // early budget roams for a natural seat, the back half converges
+        // where a colossal actually fits. Portals live near edges, so the
+        // pull and the portal law agree about where that is.
+        const inset = Math.max(insetMin, bound * anchorInsetFrac);
+        const pull = anchorCenterPull * (anchorTries <= 1 ? 1 : t / (anchorTries - 1));
+        const x0 = rng.range(inset, Math.max(inset + 1, arena.w - inset));
+        const y0 = rng.range(inset, Math.max(inset + 1, arena.h - inset));
+        const at = vec(x0 + (arena.w / 2 - x0) * pull, y0 + (arena.h / 2 - y0) * pull);
+        // THE STRUCTURAL LAWS, unbending — the coverage dart's own tests,
+        // with the portal clearance GROWN by the body (anchorPortalK): the
+        // ground a colossal leaves clear in front of a door scales with
+        // the colossal.
+        if (portals.some(p => Math.hypot(p.x - at.x, p.y - at.y) < portalClear + bound * anchorPortalK)) continue;
+        if (resHits(ctx, at.x, at.y, bound + laneW / 2)) continue;
+        if (placed.some(m => Math.hypot(m.cm.at.x - at.x, m.cm.at.y - at.y) < m.cm.bound + bound + laneW)) continue;
+        if (seatGround && !seatOnWalkable(grid, at, r)) continue;
+
+        const seed = rng.int(0, 0x7fffffff);
+        const body = Mask.forRect(0, 0, arena.w, arena.h);
+        const res = shape.paint(body, at, r, rng, {
+          lobe: kd.lobe ?? lobe, seed, laneW, mouths: kd.mouths ?? mouthsDflt,
+          ringInner: kd.ringInner, mouthScale: kd.mouthScale ?? 1,
+        }) || {};
+        paintRegion(grid, body, regionIdOf(kd));
+        // NOT counted toward `covered`, deliberately: the anchor is a
+        // landmark OVER the coverage budget — the field still earns its
+        // ordinary bones around it (the row's whole reason to exist).
+        const cm: CarvedMass = { kind: kd.id, shape: shapeId, at, r, bound, interior: res.interior };
+        placed.push({ cm, body, kd, seed });
+        if (res.interior && kd.poiInterior !== false) ctx.pois.push(vec(res.interior.x, res.interior.y));
+        // The garrison fork (the coverage dart's own law, verbatim): rolled
+        // on the body's seed-fork so the layout stream never learns of it;
+        // a kind with a tenant table hands occupancy to seatTenants instead.
+        if (res.interior && kd.garrison && !kd.tenants?.length) {
+          const g = kd.garrison;
+          if (new Rng((seed ^ GARRISON_SALT) >>> 0).chance(g.chance)) {
+            const faction = g.faction ?? patronFaction(def.biome) ?? undefined;
+            if (faction) {
+              ctx.garrisons.push({
+                pos: vec(res.interior.x, res.interior.y),
+                faction, size: g.size ?? MASSIF_CFG.garrisonSize,
+              });
+            }
+          }
+        }
+        seatedPerRow.set(row, (seatedPerRow.get(row) ?? 0) + 1);
+        landed = true;
+      }
+      if (!landed) refusedRows.add(row);
+    }
+  }
+
   // ONE DART, r rolled by the caller (rollLo/rollHi = the band it rolled
   // from): draw the rest of the fixed per-try shape (x, y, kind, shape),
   // test the structural laws, paint on a land. Rejections change which darts

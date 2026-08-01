@@ -1044,6 +1044,14 @@ registerRegion({ id: 'hedgewall', walkable: false, blocks: true, label: 'the hed
 registerRegion({ id: 'sandstone', walkable: false, blocks: true, label: 'the sandstone',
   blocksShot: true, blocksSight: true,
   visual: { fill: '#5e4526', alpha: 1, cliff: true, edge: { color: '#c9a05c', width: 5 } } });
+// SLAGCRAG: the fire country's standing rock — crag's TRUE-WALL policy in
+// cooled melt (bodies, shots and sight all stop). Basalt-dark mass under an
+// ember-warm rim (the flesh-wall lesson, quenched): the seam-glow announces
+// stone that was liquid once against the ashen floor. data/massifs.ts rides
+// it for the wyrmfields' slag tors and the colossal caldera ring.
+registerRegion({ id: 'slagcrag', walkable: false, blocks: true, label: 'the slagcrag',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#2b1c14', alpha: 1, cliff: true, edge: { color: '#a05a30', width: 5 } } });
 // BED WALL: the Tender's raised planter bed at bug height — timber boards
 // shoring a rampart of worked soil (data/garden.ts rides it for the
 // planter_bed masses). A TRUE WALL: at this scale the boards stand a

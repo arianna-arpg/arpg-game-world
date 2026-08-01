@@ -1527,6 +1527,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'potCluster', order: 52, shadow: 0.4,
     params: { clay: '#8a8074', lid: '#6a6258' },
   },
+  // The kilnhoard's fired urn: red-black hoard clay under a scorched lid —
+  // the great wyrm's treasury, vessel by vessel (the potCluster reskin rule).
+  // Unlit on purpose: the sleeping landlord is the room's one lamp.
+  kiln_urn: {
+    painter: 'potCluster', order: 52, shadow: 0.4,
+    params: { clay: '#7a4632', lid: '#3a2620' },
+  },
   // --- Munitions dressing (the powder-cache kit; rules in formations.ts) ---
   // Kegs: dark staved wood under iron lids (the potCluster reskin rule).
   powder_keg: {
@@ -2340,6 +2347,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       label: 'the Emberwyrm Barrow',
     },
     light: { radius: -2, color: '#ff8a2a', intensity: 0.42, flicker: 5 },
+  },
+  // The kilnhoard's maw (the wyrm caldera's ring-floor door — lairs wave
+  // seven): a fired throat down through the mound, urn-warm light breathing
+  // out of it. The banked glow runs SLOW — the wyrm below is asleep, and
+  // even his doorway takes long breaths.
+  kiln_maw: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#32200f', edge: '#64401f', material: 'stone',
+      glow: '#ff9a3a', throat: '#160b04', teeth: {},
+      label: "the Urnfather's Kiln",
+    },
+    light: { radius: -2, color: '#ff9a3a', intensity: 0.34, flicker: 1.2 },
   },
   spinney_bole: {
     painter: 'caveMouth', order: 55,

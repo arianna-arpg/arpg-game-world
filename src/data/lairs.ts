@@ -31,7 +31,9 @@ import { registerDormantTag, registerRouseRule } from '../engine/ai';
 import { registerSidezone, sidezoneOf } from './sidezones';
 import { mintCave } from '../engine/worldgen';
 import { registerTenantKind, tenantKindOf } from '../engine/massif';
+import { registerZoneInfoSource } from '../world/zoneInfo';
 import { vec } from '../core/math';
+import type { World } from '../engine/world';
 
 // === THE FROSTMAW (the yeti den) =============================================
 // "Only in the deepest recesses of the mountains": the maw seats INSIDE the
@@ -979,4 +981,112 @@ registerTenantKind('lair_mouth', (ctx, def, grid, cm, rng, kd, row) => {
       }
     }
   }
+});
+
+// ============================================================================
+// WAVE SEVEN — THE KILNHOARD (the colossal massif's resident): the first den
+// whose ONLY door is a tenant's. No landmark-lane seat, deliberately — the
+// claim below is TENANT-ONLY (biomes [], chance 0: the fold structurally
+// never offers it), because the den's whole identity is the body above it:
+// the wyrm_caldera anchor (data/massifs.ts) whose ring floor may grow this
+// maw when the tenant draw says so. Persistent geography arrives from the
+// standing seam (position-hash seeds — same caldera, same hoard forever);
+// the world map never marks it (the zone's own information may murmur).
+// ============================================================================
+
+// === THE URNFATHER'S KILN ====================================================
+// Under the caldera: a fired gallery stacked with the wyrm's treasury —
+// urn on urn of it, gem-caches banked between — and the Urnfather himself,
+// a colossal worm-file DEAD ASLEEP through the middle of everything he owns
+// (dormant, planted; the sphinx's latch, not the emberwyrm's drowse — this
+// sleep is centuries deep and no footfall reaches it). THE SURGEON'S
+// ROBBERY: his hittable coils thread the trove, so careful single blows
+// strip the floor bare while one greedy cleave that clips a coil wakes the
+// mountain — how you SWING is the stealth, not where you step. The spilled
+// coals (kiln_urn's brittle tenants) press the same question: fight the
+// embers beside the sleeping file, and mind every arc.
+
+registerDormantTag('kiln_sleeper'); // no reset row — a woken landlord stays woken
+// Any landed wound — a coil clipped by a careless sweep included — wakes
+// him alone (radius 0: there is only ever one of him).
+registerRouseRule('kiln_sleeper', () => ({
+  woundFrac: 1, radius: 0,
+  toast: 'The hoard shifts. The coils were never stone.', color: '#ff9a3a', size: 14,
+}));
+
+registerDoodadRule('kiln_maw', { overlap: 'trigger', spacing: 60 });
+
+registerLandmark({
+  id: 'kilnhoard_maw_site', builder: 'den_mouth', size: [200, 270],
+  clearSite: true, poi: true, mustReach: true,
+  params: {
+    mouthKind: 'kiln_maw',
+    // No cinder in the spoor: the spoor loop carries no spacing law, and
+    // cinder is poured ground the fuse guard measures — bone keeps the
+    // den-mouth grammar (the LAIR_MOUTH_SPOOR citizen) without the sliver.
+    dress: [
+      { kind: 'kiln_urn', count: [2, 4], radius: [12, 16] },
+      { kind: 'obsidian', count: [2, 4], radius: [12, 18] },
+      { kind: 'bone_pile', count: [1, 3], radius: [10, 15] },
+    ],
+  },
+});
+
+registerSidezone({
+  kind: 'kiln_maw',
+  dwell: 0.7,
+  ledgerOnEnter: 'kilnhoard_entered',
+  mint: ({ parent, seed, id }) => {
+    const def = mintCave(parent, seed, id, 'kilnhoard', {
+      rollVariant: true,
+      name: "the Urnfather's Kiln",
+      objective: { kind: 'boss', id: 'urnfather' },
+      noDeeper: true,
+    });
+    // THE TROVE'S BANKED HALF (the NEST_FAUNA lesson): gem-caches among the
+    // urn rows — the urn floor itself rides the tileset's layout, but the
+    // caches are AUTHORED TENANCY, so the hoard's richest seats exist on
+    // every mint. Richer than the emberwyrm's barrow, at the drake roost's
+    // crown scale: this is the biggest sleeper in the world's bestiary.
+    def.fauna = [
+      { id: 'gem_cache', chance: 1, count: [4, 6] },
+    ];
+    return def;
+  },
+});
+
+registerLair({
+  id: 'kilnhoard',
+  landmark: 'kilnhoard_maw_site',
+  // THE TENANT-ONLY CLAIM: an empty biome list matches no ground and chance
+  // 0 falls under minChance — the seat fold skips this row without burning
+  // a draw (both gates are pure). The row exists so the lair_mouth tenant's
+  // `den: 'kilnhoard'` key resolves the den's WHOLE identity (door kind,
+  // spoor, radius) from the standing registries — the caldera's ring is the
+  // one door there is.
+  seat: {
+    biomes: [],
+    place: 'both',
+    chance: 0,
+  },
+});
+
+// THE OMINOUS LINE — the zone pane's ONLY word about the colossal (no map
+// mark, no world-graph node: the ratified law). Ground whose baked mint
+// carries a colossal anchor pool (ZoneDef.layoutParams.massifAnchors — the
+// wyrmfields today, any future colossal country for free) murmurs one
+// mechanics-quiet condition row on CHARTED ground: it never says whether the
+// caldera seated, and never what the ring draw put in it — a den mouth, a
+// treasury, a garrison, or nothing is exactly what the walk is for.
+registerZoneInfoSource((world: World, zoneId: string) => {
+  if (!world.visited.has(zoneId)) return [];
+  const def = world.zoneMap[zoneId];
+  const anchors = (def?.layoutParams as { massifAnchors?: unknown[] } | undefined)?.massifAnchors;
+  if (!Array.isArray(anchors) || !anchors.length) return [];
+  return [{
+    kind: 'condition' as const, icon: '§', color: '#c96a2e',
+    label: 'something vast dens here',
+    detail: 'the ground is shaped around a sleeper older than the roads',
+    z: -1,
+  }];
 });

@@ -9085,6 +9085,44 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'tailFin', scale: 1.3 },
     ],
   },
+  /** THE URNFATHER: a kiln with a skull — the head carries the maw that
+   *  fired ten thousand urns, ridge and crack-glow banked low; the coils
+   *  behind it are the worm fabric's own segment looks (urnfather_coil /
+   *  _kilnridge / _flukes). */
+  urnfather: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.2 },
+      { kind: 'dorsalRidge', scale: 1.0, alpha: 0.9 },
+      { kind: 'lavaCracks', scale: 0.9, alpha: 0.9 },
+      { kind: 'mawRing', x: 0.42, scale: 0.7, alpha: 0.85 },
+      { kind: 'fangs', x: 0.46, scale: 0.9 },
+      { kind: 'eyes', color: '#ffb84a', params: { spread: 0.4, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.9 }],
+  },
+  /** One coil of him: quenched slag over old fire, seams still deciding. */
+  urnfather_coil: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.1, seed: 47 } },
+      { kind: 'scutes', scale: 0.9, alpha: 0.9 },
+      { kind: 'lavaCracks', scale: 0.8, alpha: 0.75 },
+    ],
+  },
+  /** The kiln-ridge rung: every fourth coil carries the fired crest. */
+  urnfather_kilnridge: {
+    parts: [
+      { kind: 'blob', scale: 0.92, params: { irr: 0.1, seed: 53 } },
+      { kind: 'dorsalRidge', scale: 1.1, alpha: 0.9 },
+      { kind: 'lavaCracks', scale: 0.8, alpha: 0.8 },
+    ],
+  },
+  /** The flukes: the tail-end of a body the mountain grew around. */
+  urnfather_flukes: {
+    parts: [
+      { kind: 'tailFin', scale: 1.25 },
+      { kind: 'lavaCracks', scale: 0.7, alpha: 0.7 },
+    ],
+  },
   /** The phylactery: a jar of refusal — gem-hearted, haloed, rune-bound. */
   kings_phylactery: {
     parts: [

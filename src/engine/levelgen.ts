@@ -249,6 +249,7 @@ export type KnownDoodadKind =
   | 'burst_sac'      // a fungal pressure sac: bursts into spore fume when neared
   | 'puffcap_cluster' // pale puffballs underfoot: a soft fume when trodden
   | 'burial_urn'     // grave clay: spills orbs — and sometimes wakes its tenants
+  | 'kiln_urn'       // fired hoard clay: pays in gems — and sometimes spills live embers
   | 'crystal_cluster' // a knee-high lattice: shatters to a strike, pays in gems
   | 'icicle_cluster'  // brittle ice fangs: shatter when brushed or struck
   // The crystal-country kit (the attunement pass — resonant identity)
@@ -1693,6 +1694,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   burial_urn: { overlap: 'inert', spacing: 22,
     brittle: { on: ['hit', 'touch'], orbChance: 0.55, gemChance: 0.12, text: 'the urn shatters!', color: '#b8a890',
       spawn: { monster: 'skeleton_warrior', count: [1, 2], chance: 0.22, text: 'the dead wake!' } } },
+  // The kilnhoard's treasury vessel (the colossal wyrm's floor): pays a
+  // little better than grave clay and its tenants are LIVE COALS — smash
+  // greedily and the spill fights back, right beside the sleeping coils.
+  kiln_urn: { overlap: 'inert', spacing: 22,
+    brittle: { on: ['hit', 'touch'], orbChance: 0.5, gemChance: 0.14, text: 'the urn cracks!', color: '#d88a4a',
+      spawn: { monster: 'ashling', count: [1, 2], chance: 0.15, text: 'embers spill out!' } } },
   crystal_cluster: { overlap: 'solid', blocksMove: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], gemChance: 0.3, orbChance: 0.35, text: 'the lattice shatters!', color: '#7fc0f0' } },
   // The crystal-country kit (the attunement pass): the SPIRE is glass all
@@ -6038,6 +6045,7 @@ registerStamp('gas_pod', stampSingle('gas_pod', [14, 20]));
 registerStamp('burst_sac', stampSingle('burst_sac', [12, 18]));
 registerStamp('puffcap_cluster', stampSingle('puffcap_cluster', [12, 17]));
 registerStamp('burial_urn', stampSingle('burial_urn', [12, 16]));
+registerStamp('kiln_urn', stampSingle('kiln_urn', [12, 16]));
 registerStamp('crystal_cluster', stampSingle('crystal_cluster', [14, 20]));
 registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
 // The crystal-country kit (the attunement pass): tall singing needles +

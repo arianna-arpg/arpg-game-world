@@ -9648,6 +9648,83 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rifts', weight: 2 }],    // the caldera's floor is still deciding to be liquid
   },
 
+  // THE WYRMFIELDS — the volcanic country's DEEPEST face (the fire ladder
+  // read whole: cinderlands hold the cooled rim, the erupting caldera the
+  // middle country, and past biomeDepth ~0.7 the land goes QUIET — a
+  // cooled-melt massif plain where the ground froze mid-argument). The
+  // colossal anchor lane's debut (engine/massif.ts massifAnchors): most
+  // mints seat ONE wyrm_caldera at landmark scale before a single coverage
+  // dart flies — and what its ring holds is the tenant draw's business
+  // (the uncertainty doctrine: a den mouth, a treasury, a held yard, or
+  // nothing). The anchor-chance ramp runs the depth-dial doctrine: the
+  // face's own rim occasionally mints calderaless — even the country's
+  // silhouette refuses to promise.
+  wyrmfields: {
+    id: 'wyrmfields', biome: 'volcanic',
+    depthAffinity: { from: 0.7, fadeIn: 0.15 },
+    forceLayout: 'massif',
+    nameFirst: ['Wyrmscoured', 'Coilgraven', 'Scalefall', 'Slagbound', 'Emberscale', 'Wyrmshadow', 'Greatcoil', 'Hoardash', 'Kilnwarm', 'Scorchscale', 'Undercoil', 'Moltbound'],
+    nameSecond: ['Wyrmfields', 'Coilings', 'Slagfields', 'Scalebeds', 'Kilnlands', 'Wyrmwake', 'Cinderbeds', 'Coilfields', 'Moltfields', 'Broodground'],
+    theme: {
+      dayLight: 1.05,
+      heat: 1,
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.35, color: '#ffc090' }],
+      // Quenched-melt floor: near-black basalt with ember seams — darker
+      // than the erupting heart on purpose (the fields COOLED; what warmth
+      // remains is under the slag, or breathing in the caldera).
+      ground: {
+        scale: 0.9, strength: 1.25, speckles: 0.6,
+        palette: ['#120b08', '#1c110c', '#261812', '#302016', '#3a281a'], bias: 0.48, alpha: 0.55,
+      },
+      floor: '#140d09', grid: '#20130b', border: '#6a3a1c',
+      obstacle: '#3a2416', obstacleEdge: '#8a4a26', accent: '#ff8a3a',
+      lava: '#7a1a08', chasm: '#1b0703', wall: '#3a2416',
+    },
+    sizeW: [3000, 4000], sizeH: [2200, 3000], ellipseChance: 0.15,
+    layout: [
+      { kind: 'lava', count: [1, 2] },
+      { kind: 'obsidian', count: [4, 7] },
+      // NO CINDER POURS AND NO cinder_vein on this face, deliberately: a
+      // pour's checker-lattice body clipped by a slag mass splits into
+      // near-pair fragments the fuse guard flags (measured at genqa's own
+      // seeds, from the plain row and the vein independently — the scatter
+      // faces keep theirs; walls are what this face HAS). The ash identity
+      // rides the tors' and caldera's cinder SKIRTS, whose radius × spacing
+      // arithmetic clears the guard's sliver by construction.
+      { kind: 'ember_vent', count: [1, 3] },
+      { kind: 'scree', count: [1, 3] },
+      { kind: 'rock_spire', count: [1, 2] },
+    ],
+    layoutParams: {
+      massifMasses: [{ kind: 'slag_tor', weight: 1 }],
+      massifAnchors: [{ kind: 'wyrm_caldera', weight: 1, max: 1, exclusive: true, sizeR: [420, 540] }],
+      // The staging ramp on the anchor's own dial (the byDepth doctrine):
+      // the face's rim mints sometimes go calderaless; its heart always
+      // crowns. Measured seat rate at these bands: 40/40 (2026-08-01).
+      massifAnchorChance: { byDepth: [0.65, 1] },
+      massifCoverage: [0.1, 0.16],
+    },
+    packs: {
+      count: [5, 8], size: [3, 5],
+      table: [
+        // Worm files everywhere — the fields teach the body plan the
+        // caldera perfects (and the ambush the trove's landlord is).
+        { id: 'magma_worm', weight: 3 },
+        { id: 'magma_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'ashling', weight: 3 },
+        { id: 'cinder_hound', weight: 2 },
+        { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vent_priest', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'cinderback', weight: 2 },
+        { id: 'fire_golem', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'ember_shepherd', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 },
+      { kind: 'rifts', weight: 1 }],
+  },
+
   // MYCELIA — a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
   // layout). Towering caps, puffing spore-pods, a glowing hyphal carpet; the slow 'fungal'
   // Bloom dwells here. The bloom's spore-density influence spreads OUT from these regions.
@@ -11770,6 +11847,66 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'obsidian', count: [5, 8] },
         { kind: 'ember_vent', count: [1, 3] },
         { kind: 'cinder', count: [2, 3] },
+      ] },
+    ],
+    packs: {
+      count: [1, 2], size: [1, 1],
+      table: [
+        { id: 'magma_worm', weight: 2 },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled — the den mint forces its objective
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
+  // THE KILNHOARD — under the wyrm caldera (the colossal anchor's den, keyed
+  // by the ring tenant — data/lairs.ts wave seven): a fired gallery stacked
+  // with the Urnfather's treasury. The URN FLOOR rides the layout rows (the
+  // trove is the terrain), the gem-caches ride the mint's fauna, and the
+  // landlord sleeps through the middle of all of it — dormant, hittable,
+  // colossal. Rob it like a surgeon or meet the mountain.
+  kilnhoard: {
+    id: 'kilnhoard', frontier: false, perfProbe: true,
+    sky: 'sheltered',
+    caveLayouts: { winding: 2, plains: 2 },
+    nameFirst: ['Urnfather', 'Kiln', 'Fired', 'Hoard', 'Coilwarm', 'Emberclay', 'Scalesunk', 'Wyrmkept'],
+    nameSecond: ['Kiln', 'Hoard', 'Gallery', 'Treasury', 'Keeping', 'Rest', 'Vault', 'Coiling'],
+    theme: {
+      ambientDark: 0.5,
+      ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#ff9a5a' }],
+      ground: {
+        palette: ['#140c08', '#1e120c', '#281810', '#321e14', '#3c2618'], bias: 0.5, alpha: 0.55,
+      },
+      floor: '#100a06', grid: '#180e08', border: '#6a3a20',
+      obstacle: '#32200f', obstacleEdge: '#64401f', accent: '#ffa04a',
+      wall: '#32200f', lava: '#e05a1a', mud: '#1e1410',
+    },
+    sizeW: [1500, 2050], sizeH: [1150, 1600], ellipseChance: 0,
+    // The trove is ALWAYS underfoot (common rows — the brittle-kit doctrine):
+    // whatever face rolls, the floor is urns before it is anything else.
+    common: [
+      { kind: 'kiln_urn', count: [6, 9] },
+      { kind: 'bone_pile', count: [1, 3] },
+    ],
+    layout: [
+      { kind: 'kiln_urn', count: [8, 13] },
+      { kind: 'obsidian', count: [2, 4] },
+      { kind: 'cinder', count: [2, 4] },
+      { kind: 'ember_vent', count: [1, 2] },
+      { kind: 'clay_pots', count: [2, 4] },
+    ],
+    variants: [
+      // The fired rows: the treasury proper — urns racked to the walls.
+      { name: 'the fired rows', layout: [
+        { kind: 'kiln_urn', count: [12, 18] },
+        { kind: 'clay_pots', count: [3, 5] },
+        { kind: 'cinder', count: [1, 3] },
+      ] },
+      // The slagged vault: the melt sealed half of it; the rest kept.
+      { name: 'the slagged vault', layout: [
+        { kind: 'kiln_urn', count: [6, 10] },
+        { kind: 'obsidian', count: [4, 7] },
+        { kind: 'ember_vent', count: [1, 3] },
       ] },
     ],
     packs: {

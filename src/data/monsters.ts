@@ -19942,6 +19942,68 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 30, faction: 'undead',
     passive: true, noNemesis: true, remains: false, drops: 0,
   },
+
+  // ==========================================================================
+  // THE COLOSSAL RESIDENT (the lair fabric, wave seven — the massif anchor
+  // lane's debut, data/lairs.ts + data/massifs.ts): the biggest sleeper the
+  // bestiary keeps. The doctrine is THE RESIDENT IS ALWAYS NEW — every
+  // colossal home gets its own body, and this is the first: the volcanic
+  // caldera's landlord, under the wyrmfields.
+  // ==========================================================================
+
+  // THE URNFATHER — the wyrm the mountain grew around. His treasury fired
+  // itself in his heat, urn by urn, dynasty by dynasty of it; he has slept
+  // so long the caldera is just the shape of him with weather on it. He is
+  // DORMANT (the sphinx's latch, not the emberwyrm's drowse — no footfall
+  // reaches a sleep this old), and his hittable coils thread the trove:
+  // THE SURGEON'S ROBBERY is the den's whole game. Strip the floor with
+  // careful single blows and he never stirs; let one greedy arc clip a
+  // coil and the rouse rule wakes the mountain. Awake he is the segment
+  // fabric at colossal grade — damage anywhere feeds one pool, a coil
+  // worried to nothing CRACKS permanent, and the breach is a body the size
+  // of a hamlet landing on your position.
+  urnfather: {
+    id: 'urnfather', name: 'the Urnfather',
+    color: '#c0542a', shape: 'circle', radius: 32, material: 'ember', look: 'urnfather',
+    heft: 2.4, boss: true,
+    tag: 'kiln_sleeper', post: true, // planted on the hoard; re-coils where authored
+    worm: {
+      length: 16, spacing: 24, taper: 0.93,
+      hittable: true,
+      looks: {
+        body: 'urnfather_coil',
+        tail: 'urnfather_flukes',
+        every: { n: 4, look: 'urnfather_kilnridge' },
+      },
+      wounds: {
+        frac: 0.05,
+        mods: [mod('moveSpeed', 'increased', -0.03)],
+        text: 'the coil CRACKS',
+        burst: { radius: 90, damageFrac: 0.04, type: 'fire', color: '#ff8a3a' },
+      },
+    },
+    base: { life: 1500, moveSpeed: 118, accuracy: 104, armor: 55, mana: 130, manaRegen: 8, poise: 150 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['ember_breath', 'crushing_leap', 'ground_slam', 'claw'],
+    xp: 650, loot: 'lair_hoard',
+    faction: 'wyrmkin',
+    // The banked furnace, breathing slow under the scales: the one lamp in
+    // the kiln, and the standing tell that the pile is ALIVE (asleep, the
+    // coils read by this glow; there is no drowse ladder to read — how you
+    // swing is the stealth, and the light is the warning).
+    light: { radius: -8, color: '#ff9a3a', intensity: 0.3, flicker: 2 },
+    vision: { arcDeg: 120, rearMul: 0.55 },
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.7, reaction: [0.25, 0.6] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.06 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.55 } },
+        announce: 'the kiln HEAVES: the Urnfather remembers he is owed!',
+        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.2 } },
+      }],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
