@@ -33,11 +33,13 @@
 // three sweeps — one pass is not evidence, so re-sweep before promoting any of
 // them. Times quoted are per-probe wall clock under that concurrent load.
 //
-// THE THIN TAIL: probe_objectives and probe_straying were each seen failing
-// ONCE across ~20 green-lane runs and stay GREEN deliberately — runprobes.ts's
-// retry absorbs a rate that low (and names it), and they are large rigs whose
-// coverage is worth more than the noise. If either starts showing up in the
-// runner's FLAKY report regularly, measure it and give it a row.
+// THE THIN TAIL, RETIRED (2026-08-01): probe_objectives and probe_straying
+// were each seen failing ONCE across ~20 green-lane runs (measured 07-26 at
+// 4be9694, BEFORE the governor pin). Both now wear withSeededRandom spans and
+// proved 20/20 strict byte-identical — the recorded tail was almost certainly
+// the governor's, and the residual stream-chaining is closed. Their rows'
+// why-texts carry the heal; the retry law still guards whatever tail remains
+// unmapped elsewhere.
 // ---------------------------------------------------------------------------
 
 /** Which lane a green probe runs in. */
@@ -114,7 +116,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_mountain.ts', status: 'green', tier: 'fast', why: 'THE MOUNTAIN COUNTRY — the geoAffinity fold (per-range snow lock) and the depthAffinity climb staging' },
   { probe: 'probe_murmuration.ts', status: 'green', tier: 'fast', why: 'THE FLOCKING FABRIC — THE ONE MATH: weaveOffset golden values and weaveVel as the analytic derivative shared with projectiles' },
   { probe: 'probe_nan_hunt.ts', status: 'green', tier: 'slow', why: '~60s (the whole content surface swept): NON-FINITE HUNT — catches the first bad number at the source, the shape of the createRadialGradient crash' },
-  { probe: 'probe_objectives.ts', status: 'green', tier: 'fast', why: 'THE OBJECTIVE FABRIC — the per-kind census, the contest law (build/stall/drain), the recon cap and the besieged-waypoint round trip' },
+  { probe: 'probe_objectives.ts', status: 'green', tier: 'fast', why: 'THE OBJECTIVE FABRIC — the per-kind census, the contest law (build/stall/drain), the recon cap and the besieged-waypoint round trip; the 07-26 thin tail healed 2026-08-01 (seeded span — 38 strict greens, check lines byte-identical)' },
   { probe: 'probe_pack.ts', status: 'green', tier: 'fast', why: 'THE PACK LAYER — what is DRAWN of the social machinery is exactly what is TESTED (bondFrom, aiNerve, wardTo)' },
   { probe: 'probe_partylanding.ts', status: 'green', tier: 'fast', why: 'THE PARTY-LANDING LAW — World.landPartyAt moves the whole party, not the seats alone (carried minions land with their keeper)' },
   { probe: 'probe_painterparams.ts', status: 'green', tier: 'fast', why: 'THE PARAM CONTRACT — painters declare their required params as data (registerPainterParams); every DOODAD_VISUALS row satisfies its painter, and a painter with required params cannot be forgotten into silence' },
@@ -145,7 +147,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_spoils.ts', status: 'green', tier: 'fast', why: 'THE SPOILS LAW — on sealed ground a credited kill mints NOTHING, while owed pay and owned movement always pass' },
   { probe: 'probe_squish.ts', status: 'green', tier: 'fast', why: 'THE SQUISH FABRIC — death underfoot: the tread, the mass gate + per-def ratio dial, the worm-file tenderness, the shoulder exemption, faction-blindness and the true-ant rescale' },
   { probe: 'probe_strata.ts', status: 'green', tier: 'fast', why: 'THE STRATA FABRIC — cave-face pools by depth × anchor provenance (cavern leads groves at plurality ≥45% — re-pinned for the garden\'s authored rootways share; magma/rime/marine claim their countries; the marine trench never floods landlocked ground); the old off-by-one red was a strict-majority pin predating the rootways dilution' },
-  { probe: 'probe_straying.ts', status: 'green', tier: 'fast', why: 'THE STRAYING — the belt law (ignition seats only the surge\'s biomes at/below levelMax) and the farmland scene block' },
+  { probe: 'probe_straying.ts', status: 'green', tier: 'fast', why: 'THE STRAYING — the belt law (ignition seats only the surge\'s biomes at/below levelMax) and the farmland scene block; the 07-26 thin tail healed 2026-08-01 (seeded spans — 38 strict greens, check lines byte-identical)' },
   { probe: 'probe_supportfabric.ts', status: 'green', tier: 'fast', why: 'THE SUPPORT-FABRIC LAWS — the self-lifting mechanism gate, the equip-global fold, the kindred/inheritance rules, the crew lane end to end (RIG O) and the melee tail (RIG P). HEALED 2026-07-27: the H4 flake was one-draw evidence under a true ×1.5 law, not a sick fabric — the rig now runs in ONE seeded span (withSeededRandom: no other rig\'s stream moves) and each arm reports a 12-sample MEAN, assertion untouched; byte-identical over 12 consecutive runs, ~6s' },
   { probe: 'probe_supportmatrix.ts', status: 'excluded', excuse: 'flaky', why: 'FLAKY (1 fail in 37 observed runs, ~25s): "I2 the ambient trickle: a carried Requiem banks wakeflame with no other source — banked=0 after 60s"; the rig comments that lane "(Seeded: deterministic per seed.)" and the stray red says it is not — rare, so a gate here would lie ~3% of pushes' },
   { probe: 'probe_swarm.ts', status: 'green', tier: 'fast', why: 'THE COLLECTIVE PASS — THE REGROWTH LAW: an unmolested pour pocket trickles back to its cap and every tear stamps the quiet clock' },

@@ -35,7 +35,7 @@
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
-import { seedGlobalRandom } from '../src/sim/rng';
+import { withSeededRandom } from '../src/core/rng';
 import type { World } from '../src/engine/world';
 import type { Actor } from '../src/engine/actor';
 import type { ZoneDef } from '../src/data/zones';
@@ -59,7 +59,6 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 };
 
 bootSimEngine();
-seedGlobalRandom(0xbe11);
 
 // ============================================================ the fake web
 // A hand-built OverlayView: enough zone shape for eventTargetable + the seat
@@ -280,7 +279,22 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
 }
 
 // ------------------------------------------------ G. LIVE — the real engine
-{
+// THE SEEDED SPANS (the flake-healing recipe — 2026-08-01; probe_radiance
+// carries the class autopsy): the LIVE halves run the REAL web — each
+// devMintTileset mint charts its halo (eagerChartNeighbors + chartWithin),
+// and that surrounding country rolls Math.random (rollSeed per halo mint,
+// AI draws every stepped tick). Sections A-F never touch the global die
+// (StrayField rolls only its own Rng(seed)), so each live half wears its
+// OWN span: a pure function of its seed, decoupled from every rig above
+// it, the true die handed back at the close (THE OFF-STREAM LAW,
+// core/rng.ts) — this replaces the old file-top seedGlobalRandom, which
+// pinned the die but chained every rig onto ONE stream (any upstream
+// draw-count change re-rolled every rig below it). The roster's 07-26
+// thin-tail sighting predates the governor pin (bd45bea); the 2026-08-01
+// pre-span census measured 18/18 strict greens with byte-identical check
+// lines — the spans close the residual STRUCTURAL exposure, not a live
+// rate. Every assertion inside is unchanged.
+withSeededRandom(0xbe1107, () => {
   const w: World = makeSimWorld('warrior', 0xbe1102);
   const zid = w.devMintTileset('farmland', 0, 5, { seed: 771177 });
   check('G1: a farmland mint stands', !!zid, zid ?? 'null');
@@ -385,7 +399,7 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
       && callers().length === restaged.callersLeft,
       restaged ? `${callers().length} court vs ${restaged.callersLeft} remembered (was ${courtBefore})` : 'gone');
   }
-}
+});
 
 // ------------------------------------------------ H. LIVE — THE CARRY LANE
 // The grab fabric meets the fold. THE LAW (the Drove's pen law, worn by both
@@ -395,7 +409,8 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
 // heldBy/gripping by hand; the only rig pokes are ISOLATION (the bell's clock
 // is G11's lane, the grip's patience is probe_grab's) so this rig tests the
 // straying's bookkeeping and nothing else.
-{
+// THE SEEDED SPAN — the carry lane's own die (section G's note carries the law).
+withSeededRandom(0xbe1108, () => {
   const w: World = makeSimWorld('warrior', 0xbe1104);
   const p = w.player;
   const zid = w.devMintTileset('farmland', 0, 5, { seed: 553355 });
@@ -551,7 +566,7 @@ const mkField = (surge: StrayingSurge, seed = 0x5eed): StrayField =>
       }
     }
   }
-}
+});
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL PASS');
 process.exit(failed ? 1 : 0);
