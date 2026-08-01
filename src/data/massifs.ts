@@ -406,6 +406,17 @@ registerMassKind({
     { kind: 'flowers', weight: 1, radius: [12, 18] },
   ],
   innerChance: 0.35,
+  // THE CONVERTED TABLE (batch 17): independent rolls → the handlers'
+  // defaults; measured marginals (.45 × .35) with a court SHRINE paid
+  // from vacancy — a riddle seat in the marble sky-country (the aether
+  // faces author no puzzle rows, so the coexistence gate never fires).
+  tenants: [
+    { kind: 'held_stock', weight: 16 },
+    { kind: 'garrison', weight: 29 },
+    { kind: 'stock', weight: 19 },
+    { kind: 'shrine', weight: 6 },
+    { kind: 'vacant', weight: 30 },
+  ],
   skirt: [
     { kind: 'gleam_lamp', weight: 2, radius: [8, 11] },
     { kind: 'flowers', weight: 1, radius: [12, 18] },
@@ -456,6 +467,15 @@ registerMassKind({
     { kind: 'aether_crystal', weight: 1.5, radius: [12, 16] },
   ],
   innerChance: 0.45,
+  // THE CONVERTED TABLE (batch 17): marginals .3 × .45, shrine from
+  // vacancy — the gilt ring keeps its flower-stocked character.
+  tenants: [
+    { kind: 'held_stock', weight: 14 },
+    { kind: 'garrison', weight: 16 },
+    { kind: 'stock', weight: 31 },
+    { kind: 'shrine', weight: 6 },
+    { kind: 'vacant', weight: 33 },
+  ],
   skirt: [
     { kind: 'flowers', weight: 2, radius: [12, 18] },
     { kind: 'aether_crystal', weight: 1, radius: [12, 16] },
@@ -626,6 +646,15 @@ registerMassKind({
   ],
   innerChance: 0.4,
   innerSpacing: 72,
+  // THE CONVERTED TABLE (batch 17): marginals .4 × .4; the temple ring
+  // is the shrine's thematic bullseye, so it carries the deepest weight.
+  tenants: [
+    { kind: 'held_stock', weight: 16 },
+    { kind: 'garrison', weight: 24 },
+    { kind: 'stock', weight: 24 },
+    { kind: 'shrine', weight: 10 },
+    { kind: 'vacant', weight: 26 },
+  ],
   skirt: [
     { kind: 'pantheon_column', weight: 2.5, radius: [10, 14] },
     { kind: 'laurel_topiary', weight: 1, radius: [13, 18] },
