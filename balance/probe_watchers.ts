@@ -31,13 +31,19 @@
 // Run: npx tsx balance/probe_watchers.ts
 // ---------------------------------------------------------------------------
 
-import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
+import { bootSimEngine, makeSimWorld, SIM_ARENA_ID } from '../src/sim/arena';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { MONSTERS } from '../src/data/monsters';
 import { LOOKS } from '../src/data/looks';
 import { SUPPORTS } from '../src/data/supports';
 import { PART_PAINTERS } from '../src/render/vis/parts';
-import { blocksSightOf } from '../src/engine/levelgen';
+import { blocksSightOf, generateLayout, type GenCtx } from '../src/engine/levelgen';
+import { carveMassifs } from '../src/engine/massif';
+import { GridWalkField } from '../src/world/gridWalk';
+import { Rng } from '../src/core/rng';
+import { POST_CFG } from '../src/engine/brain';
+import { WATCH_POST_DETAILS } from '../src/data/watchposts';
+import type { ZoneDef } from '../src/data/zones';
 import { updateAI } from '../src/engine/ai';
 import {
   feedWatch, layTrailPoint, SENSE_CFG, senseReach, trailNewest, trailNext,
@@ -47,7 +53,7 @@ import {
 } from '../src/engine/watch';
 import { WATCH_FAN_DEV, watchFanRadius } from '../src/render/vis/watchLayer';
 import { serializeSnapshot, applySnapshot } from '../src/net/snapshot';
-import { vec } from '../src/core/math';
+import { vec, type Vec2 } from '../src/core/math';
 import { mod } from '../src/engine/stats';
 import type { Actor } from '../src/engine/actor';
 
@@ -609,6 +615,379 @@ MONSTERS.probe_din_striker = {
   };
   check('determinism: two same-seed runs land byte-identical watch state',
     run(0xf00d) === run(0xf00d));
+}
+
+// --- 12) THE WATCH POST TENANT — generation laws (data/watchposts.ts) -----------
+// The ring-tenant composition: a court ring seats a POSTED WATCHER through the
+// massif fabric's occupancy draw (landmarkSpawns rows — the pit-dweller lane),
+// under the fork law (a table perturbs occupants alone), the replacement law
+// (the table silences the kind's independent garrison/inner chances), the
+// body law (only watch+post kin seat; strangers refused, nothing thrown), the
+// dress law (the brazier keeps the seat standoff and the floor), and the lite
+// agreement (a lite and a full mint agree on WHO holds the ring).
+{
+  const wpArena = { w: 2600, h: 2000 };
+  const wpEntry = vec(120, 1000);
+  const wpExits = [vec(2480, 1000)];
+  const WP_THEME = { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' };
+  const WP_PARAMS = { massifCoverage: [0.2, 0.26] as [number, number], massifSizeR: [210, 300] as [number, number] };
+  const wpDef = (id: string, rows: unknown[], extra?: Partial<ZoneDef>): ZoneDef => ({
+    id, name: `QA ${id}`, level: 8, size: { w: wpArena.w, h: wpArena.h },
+    theme: WP_THEME, layout: [], objective: { kind: 'clear' }, exits: [], map: { x: 0, y: 0 },
+    layoutType: 'massif', layoutParams: { ...WP_PARAMS, massifMasses: rows },
+    ...extra,
+  });
+  const wpGen = (def: ZoneDef, seed: number) =>
+    generateLayout({ ...def, seed }, wpArena, new Rng(seed), wpEntry, wpExits);
+  const wpCtx = (seed: number, lite?: boolean): GenCtx => ({
+    rng: new Rng(seed), arena: wpArena, entry: wpEntry, exits: wpExits, seed,
+    doodads: [], pois: [], camps: [], breakables: [], npcs: [],
+    garrisons: [], caveSeeds: [], reserved: [], ...(lite ? { lite: true } : {}),
+  });
+  const seedOf = (s: number): number => (1000003 * (s + 1) + 17) ^ 0x77a1;
+  // ruincourt forced to pure court silhouettes (the K2 pattern) — its authored
+  // independent lanes (garrison 0.35 + urn/pot inner) are the replacement
+  // law's live pressure.
+  const courtRows = (tenants?: unknown[]): unknown[] => [{
+    kind: 'ruincourt', weight: 1,
+    over: { shapes: [{ shape: 'court', weight: 1 }], ...(tenants ? { tenants } : {}) },
+  }];
+  const WP_TABLE = [{ kind: 'watch_post', weight: 1, params: { watchers: [{ id: 'ushabti_sentinel', weight: 1 }] } }];
+  const floorROf = (m: { r: number }): number => m.r * 0.6 * 0.9; // ruincourt has no ringInner → the handler's default floor law
+
+  // The def premise the whole seat rides (the def-lane post stamp).
+  check('post gen: the rim sentinel wears BOTH watch and post (the seat\'s def-lane premise)',
+    !!MONSTERS.ushabti_sentinel.watch && !!MONSTERS.ushabti_sentinel.post
+    && !!MONSTERS.barrow_watchman.watch && !!MONSTERS.barrow_watchman.post);
+  // The preset census: every WATCH_POST_DETAILS body qualifies (rot pin).
+  check('post gen: every preset detail fields only true watchers (watch + post, ids resolve)',
+    Object.values(WATCH_POST_DETAILS).every(d =>
+      [...d.watchers, ...(d.aides?.pool ?? [])].every(r =>
+        !!MONSTERS[r.id]?.watch && !!MONSTERS[r.id]?.post)));
+
+  // 12a — the seat: one watcher per court, on the floor, deterministic, the
+  // brazier under the dress law; the carve twin's fork stream lands the SAME
+  // spawn rows the full gen shipped.
+  {
+    let courts = 0, fires = 0, ok = true, detail = '';
+    for (let s = 0; s < 4 && ok; s++) {
+      const seed = seedOf(s);
+      const def = wpDef('wp_seat', courtRows(WP_TABLE));
+      const out = wpGen(def, seed);
+      const again = wpGen(def, seed);
+      if (JSON.stringify(out.landmarkSpawns ?? []) !== JSON.stringify(again.landmarkSpawns ?? [])) {
+        ok = false; detail = `seed ${seed}: two same-seed gens disagree on the seats`; break;
+      }
+      const ctx2 = wpCtx(seed);
+      const masses = carveMassifs(ctx2, { ...def, seed });
+      if (JSON.stringify(ctx2.landmarkSpawns ?? []) !== JSON.stringify(out.landmarkSpawns ?? [])) {
+        ok = false; detail = `seed ${seed}: the carve twin's fork stream diverged from the shipped gen`; break;
+      }
+      const spawns = out.landmarkSpawns ?? [];
+      const braziers = out.doodads.filter(d => d.kind === 'brazier');
+      for (const m of masses.filter(m => m.interior)) {
+        courts++;
+        const mine = spawns.filter(sp => Math.hypot(sp.pos.x - m.interior!.x, sp.pos.y - m.interior!.y) <= floorROf(m) + 1e-6);
+        if (mine.length !== 1 || mine[0].id !== 'ushabti_sentinel') {
+          ok = false; detail = `seed ${seed}: a court seats ${mine.length} watchers`; break;
+        }
+        const fire = braziers.filter(d => Math.hypot(d.pos.x - m.interior!.x, d.pos.y - m.interior!.y) <= floorROf(m) + 1e-6);
+        for (const f of fire) {
+          const dSeat = Math.hypot(f.pos.x - m.interior!.x, f.pos.y - m.interior!.y);
+          if (dSeat < 42 - 1e-6) { ok = false; detail = `seed ${seed}: a brazier crowds the POI seat (${dSeat.toFixed(0)}px)`; }
+        }
+        fires += fire.length;
+      }
+      for (const sp of spawns) {
+        if (!masses.some(m => m.interior && Math.hypot(sp.pos.x - m.interior.x, sp.pos.y - m.interior.y) <= floorROf(m) + 1e-6)) {
+          ok = false; detail = `seed ${seed}: a watcher leaked outside every court floor`;
+        }
+      }
+    }
+    check('post gen: every court seats exactly ONE watcher on its floor, deterministically (carve twin agrees)',
+      ok && courts >= 8, detail || `${courts} courts over the sweep`);
+    check('post gen: the lit stand lands (braziers on floors, never crowding the seat)',
+      fires > 0, `${fires} braziers over ${courts} courts`);
+  }
+
+  // 12b — THE REPLACEMENT LAW: the watch_post table silences ruincourt's
+  // independent garrison + inner-stock chances (both proven live table-less).
+  {
+    let plainGarr = 0, plainPots = 0, tabledGarr = 0, tabledPots = 0;
+    // Inner-only kinds (the K2 law): ruincourt's skirt/crest speak rubble and
+    // rock, so only urns/pots witness the inner-stock lane.
+    const potKinds = new Set(['burial_urn', 'clay_pots']);
+    for (let s = 0; s < 4; s++) {
+      const seed = seedOf(s) ^ 0x3;
+      const mkPots = (out: ReturnType<typeof wpGen>, masses: { r: number; interior?: Vec2 }[]): number =>
+        out.doodads.filter(d => potKinds.has(d.kind)
+          && masses.some(m => m.interior && Math.hypot(d.pos.x - m.interior.x, d.pos.y - m.interior.y) <= floorROf(m) + 1e-6)).length;
+      const plainDef = wpDef('wp_repl', courtRows(), { biome: 'desert' });
+      const cP = wpCtx(seed);
+      const mP = carveMassifs(cP, { ...plainDef, seed });
+      plainGarr += cP.garrisons.length;
+      plainPots += mkPots(wpGen(plainDef, seed), mP);
+      const tabledDef = wpDef('wp_repl', courtRows(WP_TABLE), { biome: 'desert' });
+      const cT = wpCtx(seed);
+      const mT = carveMassifs(cT, { ...tabledDef, seed });
+      tabledGarr += cT.garrisons.length;
+      tabledPots += mkPots(wpGen(tabledDef, seed), mT);
+    }
+    check('post gen: the replacement law — the table silences the independent garrison + stock lanes',
+      tabledGarr === 0 && tabledPots === 0, `tabled posted ${tabledGarr} garrisons, ${tabledPots} inner pieces`);
+    check('post gen: replacement pressure — the silenced lanes were LIVE table-less',
+      plainGarr > 0 && plainPots > 0, `plain: ${plainGarr} garrisons, ${plainPots} inner pieces`);
+  }
+
+  // 12c — THE FORK LAW: on a clean kind (fold court — no garrison, no inner)
+  // the watch_post table adds its seats + fires and moves NOTHING else — the
+  // grid, the POIs and every other doodad byte-match the table-less mint.
+  {
+    const mkRows = (tenants?: unknown[]): unknown[] => [{
+      kind: 'fold', weight: 1,
+      over: { shapes: [{ shape: 'court', weight: 1 }], ...(tenants ? { tenants } : {}) },
+    }];
+    let ok = true, detail = '', seats = 0;
+    for (let s = 0; s < 3 && ok; s++) {
+      const seed = seedOf(s) ^ 0x5;
+      const a = wpGen(wpDef('wp_fork', mkRows()), seed);
+      const b = wpGen(wpDef('wp_fork', mkRows(WP_TABLE)), seed);
+      if ((a.landmarkSpawns ?? []).length) { ok = false; detail = 'the table-less mint seated a watcher from nowhere'; }
+      seats += (b.landmarkSpawns ?? []).length;
+      if (JSON.stringify(a.doodads) !== JSON.stringify(b.doodads.filter(d => d.kind !== 'brazier'))) {
+        ok = false; detail = `seed ${seed}: the table moved dress beyond its own fires`;
+      }
+      const ga = a.walk instanceof GridWalkField ? a.walk.pack().kbits : 'a';
+      const gb = b.walk instanceof GridWalkField ? b.walk.pack().kbits : 'b';
+      if (ga !== gb) { ok = false; detail = `seed ${seed}: the table moved the grid`; }
+      if (JSON.stringify(a.pois) !== JSON.stringify(b.pois)) { ok = false; detail = `seed ${seed}: the table moved the POIs`; }
+    }
+    check('post gen: the fork law — the table adds seats + fires and disturbs nothing else',
+      ok && seats > 0, detail || `${seats} seats over the sweep`);
+  }
+
+  // 12d — THE LITE AGREEMENT: a lite carve seats the SAME watchers (occupancy
+  // draws untouched) and plants NO fire (dress stands down).
+  {
+    let ok = true, detail = '', fires = 0, seats = 0;
+    for (let s = 0; s < 3 && ok; s++) {
+      const seed = seedOf(s) ^ 0x9;
+      const def = wpDef('wp_lite', courtRows(WP_TABLE));
+      const full = wpCtx(seed);
+      carveMassifs(full, { ...def, seed });
+      const lite = wpCtx(seed, true);
+      carveMassifs(lite, { ...def, seed });
+      seats += (full.landmarkSpawns ?? []).length;
+      if (JSON.stringify(full.landmarkSpawns ?? []) !== JSON.stringify(lite.landmarkSpawns ?? [])) {
+        ok = false; detail = `seed ${seed}: lite and full mints disagree on who holds the ring`;
+      }
+      fires += full.doodads.filter(d => d.kind === 'brazier').length;
+      if (lite.doodads.some(d => d.kind === 'brazier')) { ok = false; detail = `seed ${seed}: a lite mint lit a fire`; }
+    }
+    check('post gen: the lite agreement — same seats either way, fires only on the full mint',
+      ok && seats > 0 && fires > 0, detail || `${seats} seats, ${fires} full-mint fires`);
+  }
+
+  // 12e — THE BODY LAW's refusals: a gateless body (watch, no post), a
+  // driftless body (post, no watch), a stranger and a bare row all seat
+  // nothing — warn-once, nothing thrown, the carve undisturbed.
+  {
+    MONSTERS.probe_wp_gateless = {
+      id: 'probe_wp_gateless', name: 'Gateless', color: '#888', shape: 'circle',
+      radius: 12, base: { life: 10, moveSpeed: 100, accuracy: 100, mana: 0 },
+      skills: [], xp: 1, faction: 'beast', watch: {}, brain: { type: 'basic' },
+    };
+    MONSTERS.probe_wp_driftless = {
+      id: 'probe_wp_driftless', name: 'Driftless', color: '#888', shape: 'circle',
+      radius: 12, base: { life: 10, moveSpeed: 100, accuracy: 100, mana: 0 },
+      skills: [], xp: 1, faction: 'beast', post: true, brain: { type: 'basic' },
+    };
+    const seed = seedOf(7) ^ 0xb;
+    const tables: [string, unknown][] = [
+      ['gateless', { watchers: [{ id: 'probe_wp_gateless', weight: 1 }] }],
+      ['driftless', { watchers: [{ id: 'probe_wp_driftless', weight: 1 }] }],
+      ['stranger', { watchers: [{ id: 'no_such_watcher', weight: 1 }] }],
+      ['bare row', undefined],
+      ['unknown detail', { detail: 'no_such_detail' }],
+    ];
+    let ok = true, detail = '';
+    for (const [label, params] of tables) {
+      const rows = courtRows([{ kind: 'watch_post', weight: 1, ...(params !== undefined ? { params } : {}) }]);
+      const ctx2 = wpCtx(seed);
+      carveMassifs(ctx2, { ...wpDef('wp_refuse', rows), seed });
+      if ((ctx2.landmarkSpawns ?? []).length || ctx2.doodads.some(d => d.kind === 'brazier')) {
+        ok = false; detail = `the ${label} table still seated a body or lit a fire`;
+      }
+    }
+    check('post gen: the body law refuses gateless/driftless/stranger/bare rows (seats nothing, throws nothing)',
+      ok, detail);
+  }
+}
+
+// --- 13) THE LIVE POST (caveMap mint → loadZone → the seated watcher's conduct) --
+// The end-to-end: the tenant's landmarkSpawns row materializes through the
+// REAL loadZone lane, arrives wearing the def's watch + the def-lane postSpec,
+// anchors its STATION at the authored stand (first-tick anchor), walks home
+// when displaced (the sentry fabric), climbs the ladder in place (stirring
+// turns the head, searching walks), stands down HOME, and pain bypasses the
+// gate (the wound jumps straight to a lock).
+{
+  const w = world(0xd140);
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  const wAny = w as any;
+  const LIVE_SEED = 771307;
+  const liveDef: ZoneDef = {
+    id: 'probe_watchpost_court', name: 'Probe Watch Court', level: 6,
+    size: { w: 2200, h: 1800 },
+    theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+    layout: [], layoutType: 'massif',
+    layoutParams: {
+      massifCoverage: [0.16, 0.2] as [number, number], massifSizeR: [230, 280] as [number, number],
+      massifMasses: [{
+        kind: 'ruincourt', weight: 1,
+        over: {
+          shapes: [{ shape: 'court', weight: 1 }],
+          tenants: [{ kind: 'watch_post', weight: 1, params: { watchers: [{ id: 'barrow_watchman', weight: 1 }] } }],
+        },
+      }],
+    },
+    objective: { kind: 'none' },
+    packs: { table: [], count: [0, 0], size: [0, 0] }, packDensity: 0,
+    exits: [{ to: SIM_ARENA_ID, side: 's' }],
+    map: { x: 0, y: 0 }, seed: LIVE_SEED,
+  };
+  wAny.caveMap[liveDef.id] = liveDef;
+  w.loadZone(liveDef.id);
+  // Re-park the hero (loadZone stood it at the entry) — undetectable, far out.
+  w.player.pos.x = 60;
+  w.player.pos.y = 60;
+  const watchers = w.actors.filter(a => a.defId === 'barrow_watchman');
+  check('live: the minted court seats its watchman (the landmarkSpawns lane materialized)',
+    watchers.length >= 1, `${watchers.length} seated`);
+  const eye = watchers[0];
+  const stand = vec(eye.pos.x, eye.pos.y);
+  check('live: the body arrives wearing the fabric (the def\'s own WatchSpec + the def-lane postSpec)',
+    eye.watch === MONSTERS.barrow_watchman.watch && !!eye.postSpec);
+  tick(w, 0.2);
+  check('live: the first tick anchors the STATION at the authored stand (post == the seat)',
+    !!eye.aiAnchor && Math.hypot(eye.aiAnchor.x - stand.x, eye.aiAnchor.y - stand.y) < 0.5
+    && Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y) < 2);
+
+  // THE WALK HOME: shove the watcher past the slack; the duty post walks it
+  // back and re-plants the posted facing. Candidates read the LIVE zone's
+  // own walk grid — the same truth the walk-back will path over.
+  {
+    const walk = wAny.walk as GridWalkField | undefined;
+    let displaced: Vec2 | undefined;
+    for (let k = 0; k < 16 && !displaced; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const x = stand.x + Math.cos(a) * 110, y = stand.y + Math.sin(a) * 110;
+      if (walk?.isWalkable(x, y)) displaced = vec(x, y);
+    }
+    check('live: displacement premise (the zone walks, and a walkable spot past the slack exists)',
+      !!walk && !!displaced && 110 > POST_CFG.slack);
+    if (displaced) {
+      eye.pos = vec(displaced.x, displaced.y);
+      tick(w, 12);
+      check('live: the strayed watchman WALKED HOME to its stand (the sentry fabric composed)',
+        Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y) < 24,
+        `ended ${Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y).toFixed(0)}px out`);
+      check('live: the posted facing re-planted on arrival',
+        eye.aiPostFacing !== undefined && Math.abs(eye.facing - eye.aiPostFacing) < 1e-6);
+    }
+  }
+
+  // Candidate seats on the LIVE court floor: walkable on the zone's own grid
+  // and SIGHT-CLEAR to the eye (the ring wall occludes — a blind spot would
+  // test nothing), banded by bearing off the post's base gaze.
+  const fcBase = eye.aiPostFacing ?? eye.facing;
+  const seatSpot = (loDeg: number, hiDeg: number, dists: number[]): Vec2 | undefined => {
+    const walk = wAny.walk as GridWalkField | undefined;
+    for (const d of dists) {
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        let off = a - fcBase;
+        while (off > Math.PI) off -= 2 * Math.PI;
+        while (off < -Math.PI) off += 2 * Math.PI;
+        const offDeg = Math.abs(off) * 180 / Math.PI;
+        if (offDeg < loDeg || offDeg > hiDeg) continue;
+        const x = eye.pos.x + Math.cos(a) * d, y = eye.pos.y + Math.sin(a) * d;
+        if (!walk?.isWalkable(x, y)) continue;
+        const ray = w.sightClipD(eye.pos, vec(x, y), eye.tier);
+        if (Number.isFinite(ray) && ray < d - 1) continue;
+        return vec(x, y);
+      }
+    }
+    return undefined;
+  };
+
+  // THE LADDER IN PLACE: prey inside the swept cone's coverage — the gaze
+  // crosses it, the ladder climbs THROUGH its rungs, stirring turns the head
+  // toward the stimulus, the search crossing plants the walk, the top locks.
+  {
+    const preyAt = seatSpot(0, 55, [120, 100, 140]);
+    check('live: ladder premise (a walkable, sight-clear spot inside the swept coverage)', !!preyAt);
+    const prey = spawn(w, 'probe_watch_body', 6, 'player');
+    prey.pos = preyAt ? vec(preyAt.x, preyAt.y) : vec(stand.x + 120, stand.y);
+    const rungsSeen: number[] = [];
+    let headTurned = false;
+    tick(w, 16, () => {
+      if (!rungsSeen.includes(eye.watchRung)) rungsSeen.push(eye.watchRung);
+      if (eye.watchRung === 1) {
+        const want = Math.atan2(prey.pos.y - eye.pos.y, prey.pos.x - eye.pos.x);
+        let d = eye.facing - want;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        if (Math.abs(d) < 0.35) headTurned = true;
+      }
+    });
+    check('live: the seated ladder climbed THROUGH its rungs to a lock (no teleport)',
+      rungsSeen.join(',').startsWith('0,1,2') && eye.aggroed && eye.aiTargetId === prey.id,
+      `saw [${rungsSeen.join(',')}]`);
+    check('live: stirring turned the head toward the stimulus', headTurned);
+    check('live: the search crossing planted the investigate walk',
+      eye.alertUntil > 0 && eye.watchAt !== undefined);
+    // Stand-down: prey gone → the lock breaks, the meter drains, and the
+    // POST walks the investigation's wander back to the stand.
+    prey.pos = vec(4000, 4000);
+    tick(w, 26);
+    check('live: the stand-down came home (aggro cleared, rung 0, back AT the stand)',
+      !eye.aggroed && eye.watchRung === WATCH_RUNG.unaware
+      && Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y) < 24,
+      `ended ${Math.hypot(eye.pos.x - stand.x, eye.pos.y - stand.y).toFixed(0)}px out, rung ${eye.watchRung}`);
+  }
+
+  // PAIN NEEDS NO LADDER, seated: an archer BEHIND the post's swept coverage
+  // (±110° = cone half 35 + sweep half 75) and beyond the rear ring, but
+  // sight-clear inside the court — the arrow fired through the REAL useSkill
+  // is the only stimulus, and the wound alone opens the gate.
+  {
+    const archAt = seatSpot(135, 180, [180, 160, 200]);
+    check('live: pain premise (a rear, sight-clear stand beyond every unprovoked sense)',
+      !!archAt && (!archAt || Math.hypot(archAt.x - eye.pos.x, archAt.y - eye.pos.y) > eye.senseDetect * eye.senseRearMul + 30));
+    const archer = spawn(w, 'probe_watch_archer', 6, 'player');
+    archer.pos = archAt ? vec(archAt.x, archAt.y) : vec(stand.x - 180, stand.y);
+    const bow = archer.skills.find(s => s?.def.id === 'bone_arrow');
+    check('live: pain premise (the archer carries its bow)', !!bow);
+    let aggroAt = -1;
+    let firstHitAt = -1;
+    let fedBeforeHit = false;
+    const t0 = w.time;
+    tick(w, 4, () => {
+      // One wound is the test: hold fire once the gate answered (a 46-life
+      // watchman under 4s of arrows would die mid-assertion).
+      if (aggroAt < 0 && bow && !archer.casting) w.useSkill(archer, bow, eye.pos);
+      // The DECAYED meter (watchValueOf) — the raw field legitimately holds a
+      // stale pre-stand-down number the lazy-decay law has already spent.
+      if (firstHitAt < 0 && eye.aiHitAt >= t0) firstHitAt = eye.aiHitAt;
+      if (firstHitAt < 0 && watchValueOf(eye, eye.watch!, w.time) > 1e-6) fedBeforeHit = true;
+      if (eye.aggroed && aggroAt < 0) aggroAt = w.time;
+    });
+    check('live: pain bypassed the seated gate (the wound alone locked, toward its author)',
+      !fedBeforeHit && firstHitAt >= t0 && aggroAt > 0 && aggroAt - firstHitAt < 0.6
+      && eye.aiTargetId === archer.id && !eye.dead,
+      `hit at ${firstHitAt.toFixed(2)}s, aggro at ${aggroAt.toFixed(2)}s`);
+  }
 }
 
 console.log(failed ? `\n${failed} FAILURE(S)` : '\nALL PASS');

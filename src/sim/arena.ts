@@ -25,6 +25,7 @@ import '../data/lairs';
 import '../engine/layoutRecipes';
 import '../engine/interiorGen';
 import '../data/massifs';
+import '../data/watchposts';
 import '../data/settled';
 import '../data/garden';
 import '../data/grove';
