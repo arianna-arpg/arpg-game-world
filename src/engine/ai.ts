@@ -1798,12 +1798,25 @@ function pickSkill(
     }
     return null;
   }
-  // WEIGHTED (the default): each skill's declared ai.weight.
+  // WEIGHTED (the default): each skill's declared ai.weight — read through
+  // CHARGE DISCIPLINE's near discount: inside an authored ai.minRange the
+  // weight collapses (× nearWeight ?? BEHAVIOR_CFG.nearDiscount) so a
+  // shove-dash stops being the standard point-blank tactic while never
+  // being refused — the floor above zero keeps the walk sound and lets a
+  // discounted skill that is the ONLY usable one still fire. The authored
+  // modes (priority / rotation / openers / reserves) stay sovereign: an
+  // ordered kit is a deliberate script, not a habit to temper.
+  const weightOf = (s: SkillInstance): number => {
+    const ai = s.def.ai!;
+    return ai.minRange !== undefined && best < ai.minRange
+      ? ai.weight * Math.max(0.01, ai.nearWeight ?? BEHAVIOR_CFG.nearDiscount)
+      : ai.weight;
+  };
   let totalWeight = 0;
-  for (const s of usable) totalWeight += s.def.ai!.weight;
+  for (const s of usable) totalWeight += weightOf(s);
   let roll = rand(0, totalWeight);
   for (const s of usable) {
-    roll -= s.def.ai!.weight;
+    roll -= weightOf(s);
     if (roll <= 0) return s;
   }
   return usable[usable.length - 1];
@@ -3099,8 +3112,29 @@ function chargeKernel(ctx: KernelCtx): void {
   if (chosen) return ctx.cast(chosen);
   const commit = spec.commitRange ?? 320;
   const { desired } = standoff(a);
+  // THE GORE FLOOR (charge discipline): stepped back out of the near band,
+  // the balk clock clears — a fresh approach earns a fresh roll window.
+  const near = BEHAVIOR_CFG.chargeNear;
+  const floor = spec.chargeFloor ?? near.floor;
+  if (a.aiPhase === 'charge_balk' && d > floor) a.aiPhase = '';
   // A tempo-paused beast doesn't LAUNCH (dt 0 = its feet are planted).
   if (dt > 0 && d <= commit && d > desired * 1.2) {
+    if (d <= floor) {
+      // Point-blank the rush is the EXCEPTION, never the standard tactic —
+      // a committed shove from melee range mostly just propels the prey
+      // away. The commit waits on a slow residual roll (the gorer keeps
+      // its moments) while the kit above keeps swinging on foot.
+      if (a.aiPhase !== 'charge_balk') { a.aiPhase = 'charge_balk'; a.aiTimer = near.rollSec; }
+      a.aiTimer -= dt;
+      const moment = a.aiTimer <= 0
+        && Math.random() < (spec.chargeNearChance ?? near.chance);
+      if (!moment) {
+        if (a.aiTimer <= 0) a.aiTimer = near.rollSec; // re-arm the next roll
+        a.facing = angleTo(a.pos, target.pos); // squared up, fighting on foot
+        if (d > desired) moveToward(a, world, ctx.goal, dt);
+        return;
+      }
+    }
     // LOCK AND GO: overshoot a touch past the prey's position.
     const speed = a.sheet.get('moveSpeed') * (spec.chargeSpeed ?? 2.4);
     a.dash = {

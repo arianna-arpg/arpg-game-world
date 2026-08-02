@@ -68,6 +68,7 @@ export const PROBE_ROSTER: readonly ProbeRow[] = [
   { probe: 'probe_biome_share.ts', status: 'green', tier: 'fast', why: 'SURFACE BIOME SHARE — the biome field sampled the way the overworld mints, each biome\'s share of land by distance band' },
   { probe: 'probe_bore.ts', status: 'green', tier: 'fast', why: 'THE VESSEL BORE — flow steering follows a winding tube, rebounds out of dead ends, and confine walls the current to its vessel' },
   { probe: 'probe_cathedral.ts', status: 'green', tier: 'fast', why: 'THE CATHEDRAL OF THE HIGHEST — the registry weave (tileset/recipe/generator/structure/clergy/ascension/gateway) and the cruciform generator\'s own laws' },
+  { probe: 'probe_chargegate.ts', status: 'green', tier: 'fast', why: 'CHARGE DISCIPLINE — the near-discount pick collapse at melee range (soft, residual alive, absent==identical) and the charge kernel\'s GORE FLOOR (balk clock, moments kept, chargeFloor 0 restore)' },
   { probe: 'probe_choices.ts', status: 'green', tier: 'fast', why: 'THE PASSIVE CHOICE FABRIC incl. THE DEAL LAW — an "each" group deals at every node sharing it' },
   { probe: 'probe_civics.ts', status: 'green', tier: 'fast', why: 'THE CAPITAL POLE — "existence guaranteed, address diced" pinned structurally over the capital field bands and the climate anchor/basin seam' },
   { probe: 'probe_cleanwake.ts', status: 'green', tier: 'fast', why: 'THE CLEAN WAKE — the stuck-stats bug: every status removal goes through the canonical splice + "status:*" source cleanup' },

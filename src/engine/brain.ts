@@ -133,6 +133,14 @@ export interface MoveSpec {
    *  before the next charge (default [2.5, 4.5]). */
   chargeSpeed?: number;
   chargeCooldown?: [number, number];
+  /** charge: THE GORE FLOOR — inside this distance (px) the locked rush
+   *  stops being the standard play: the commit waits on a residual roll
+   *  (chargeNearChance per BEHAVIOR_CFG.chargeNear.rollSec window) while
+   *  the kit keeps fighting on foot. Defaults BEHAVIOR_CFG.chargeNear
+   *  (floor 130, chance 0.15); chargeFloor: 0 restores the old
+   *  launch-from-anywhere. */
+  chargeFloor?: number;
+  chargeNearChance?: number;
   /** juke: seconds between random HOOKS (default [0.35, 0.8]), the hook's
    *  half-arc in radians (default 1.2), the chance a hook is instead a
    *  dead-stop FREEZE (default 0.18), and the freeze length (default
@@ -435,6 +443,17 @@ export const BEHAVIOR_CFG = {
    *  pauses, never winds") suppresses it; bone, stone, ember and
    *  ghost-stuff never tire unless their def opts in (breathes: true). */
   defaultKite: { kite: 3.2, windedFor: [0.9, 1.5] as [number, number] },
+  /** CHARGE DISCIPLINE (the gorer's manners): the soft levers that stop
+   *  point-blank charging being the STANDARD tactic while never banning it
+   *  — "not necessarily an absolute". `nearDiscount` is the default pick-
+   *  weight multiplier inside a skill hint's authored ai.minRange (per-
+   *  skill ai.nearWeight overrides). `chargeNear` tempers the charge move
+   *  KERNEL: inside `floor` px the locked rush waits on a residual roll
+   *  (`chance` per `rollSec` window — the gorer KEEPS its moments, it just
+   *  stops leading with them); MoveSpec.chargeFloor / chargeNearChance
+   *  override per def, chargeFloor: 0 restores the old point-blank launch. */
+  nearDiscount: 0.15,
+  chargeNear: { floor: 130, chance: 0.15, rollSec: 1.4 },
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at their read

@@ -492,7 +492,8 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { strength: 12, dexterity: 12 },
     minDropLevel: 9,
-    ai: { range: 220, weight: 2 },
+    // Shove-dash: point-blank picks collapse to the near discount.
+    ai: { range: 220, weight: 2, minRange: 120 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
@@ -1333,7 +1334,8 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'stun', chance: 0.35 },
     ],
     requirements: { strength: 12, fortitude: 8 },
-    ai: { range: 240, weight: 2 },
+    // Shove-dash: point-blank picks collapse to the near discount.
+    ai: { range: 240, weight: 2, minRange: 120 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1, ['melee'])] },
   },
 
@@ -2582,7 +2584,9 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'stun', chance: 0.25 },
     ],
     requirements: { strength: 12 },
-    ai: { range: 380, weight: 2 },
+    // The 430-px committed run wants its melee band kept clear: inside
+    // 140 the AI pick collapses to the near discount (charge discipline).
+    ai: { range: 380, weight: 2, minRange: 140 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 

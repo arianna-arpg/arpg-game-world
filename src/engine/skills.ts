@@ -3925,6 +3925,15 @@ export interface SkillDef {
     range: number;        // try to use within this distance
     weight: number;       // relative pick priority
     keepDistance?: number;// preferred standoff distance (casters kite)
+    /** CHARGE DISCIPLINE — a SOFT minimum (px): inside this distance the
+     *  pick weight collapses (× nearWeight, default
+     *  BEHAVIOR_CFG.nearDiscount) so a shove-dash stops being the STANDARD
+     *  point-blank tactic without ever being refused — a discounted skill
+     *  that is the only usable one still fires, and over enough beats the
+     *  residual still lands (the gorer keeps its moments). AI pick gate
+     *  only: player presses never read hints. */
+    minRange?: number;
+    nearWeight?: number;
   };
 
   /**
