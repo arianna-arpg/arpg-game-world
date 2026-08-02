@@ -19,7 +19,10 @@
 //   - RUNTIME SOURCES are the package/monster seam: World.creepEnsure()
 //     lazily builds an empty field anywhere, addSource() plants a patch
 //     (optionally BOUND to an actor — kill the heart, the skin recoils),
-//     cleanseAt() force-recedes hearts in a radius (payoff hooks).
+//     cleanseAt() force-recedes hearts in a radius (payoff hooks; a named
+//     kind scopes the purge) and growCreepAt() is its symmetric twin —
+//     the payoff that FEEDS the skin: revive recoiling kin, plant where
+//     none claims (the kill-handler grow verb the fabric long lacked).
 //
 // THE ADVANCING FRONT (CreepDef.front — every lever optional; a row with
 // none is byte-identical to yesterday's creep): a creep that MARCHES. The
@@ -93,6 +96,14 @@ export interface CreepGrant {
   factions?: readonly string[];
   /** Exclude these factions (the skin mires everyone ELSE). */
   notFactions?: readonly string[];
+  /** Seconds between applications PER OCCUPANT (default 0 = every apply
+   *  sweep, the classic refresh idiom). THE STACKING-GRANT LEVER — the fog
+   *  fabric's own dial, grounded (FogGrant.every): a skin granting a
+   *  stacking/buildup status (queasy, faintness) climbs its ladder on this
+   *  cadence instead of the apply sweep's. Same-kind patches share the
+   *  clock, so overlapping pockets never double-rate. Landed beside
+   *  growCreepAt for the poxrot debut (the grow verb's first ground). */
+  every?: number;
 }
 
 /** A creep KIND — pure data. Look fields feed the render bake (membrane
@@ -1459,22 +1470,83 @@ export class CreepField {
   }
 
   /** Force-recede every source whose heart lies within `r` (cleanse payoffs
-   *  — the incursion collapses, the skin everywhere near recoils). */
-  cleanseAt(x: number, y: number, r: number): number {
+   *  — the incursion collapses, the skin everywhere near recoils). `kind`
+   *  scopes the purge to ONE registered id (growCreepAt's twin dial, and
+   *  the borrowed-weather law's teeth: an event's cure purges the event's
+   *  OWN skin, never the land's own pockets). Absent = the classic
+   *  kind-blind sweep, byte-identical. */
+  cleanseAt(x: number, y: number, r: number, kind?: string): number {
     let hit = 0;
     for (const s of this.sources) {
+      if (kind && s.def.id !== kind) continue;
       const dd = (s.pos.x - x) * (s.pos.x - x) + (s.pos.y - y) * (s.pos.y - y);
       if (dd <= r * r && s.state !== 'recede') { s.state = 'recede'; hit++; }
     }
     return hit;
   }
 
+  /** THE GROW VERB — cleanseAt's symmetric twin (the payoff hook that FEEDS
+   *  the skin instead of purging it; until it landed, the fabric's payoff
+   *  API could only ever recede). Within `r` of (x,y), every source of THIS
+   *  kind that is recoiling turns back to growing — the un-cleanse — except
+   *  the irrevocable recoils: a dead heart (boundTo) and a spent finite run
+   *  (FrontSpec.travel) re-assert 'recede' every tick, so flipping them
+   *  would be a one-frame lie; they neither revive nor claim. If NO live
+   *  patch of the kind claims ground within `r`, a fresh one is planted at
+   *  (x,y) through addSource — the whole opts grammar rides along (boundTo
+   *  keeps the credit contract: kill the new heart, the skin recoils; the
+   *  source cap refuses politely; a front-carrying kind plants ANCHORED
+   *  here, since the grow grammar carries no bearing — marching waves stay
+   *  addFront's job). So `r` is BOTH reaches at once: the revive radius and
+   *  the claim test — small r grows dense ground kill by kill, big r lets
+   *  one patch own a yard. `announce` is the lane grammar's arrival dial
+   *  (FrontSpawnRow.announce): one floating line on every seat when this
+   *  call plants the kind's FIRST patch of the visit — quiet growth
+   *  thereafter. Returns how many patches began growing (revived +
+   *  planted); 0 is always a polite refusal. */
+  growCreepAt(
+    def: CreepDef, x: number, y: number, r: number,
+    opts?: {
+      reach?: number; bornFrac?: number; boundTo?: { dead: boolean } | null;
+      announce?: { text: string; color?: string };
+    },
+  ): number {
+    let grew = 0;
+    let claimed = false;
+    let first = true;
+    for (const s of this.sources) {
+      if (s.def.id !== def.id) continue;
+      first = false;
+      // The irrevocable recoils hold no claim either: the pox may jump to
+      // a fresh corpse right beside a dying heart's letting-go skin.
+      if (s.boundTo?.dead) continue;
+      if (s.front && s.front.traveled >= s.front.rangeMax) continue;
+      const dd = (s.pos.x - x) * (s.pos.x - x) + (s.pos.y - y) * (s.pos.y - y);
+      if (dd > r * r) continue;
+      claimed = true;
+      if (s.state === 'recede') { s.state = 'grow'; grew++; }
+    }
+    if (!claimed) {
+      const planted = this.addSource(def, x, y, {
+        ...(opts?.reach !== undefined ? { reach: opts.reach } : {}),
+        ...(opts?.bornFrac !== undefined ? { bornFrac: opts.bornFrac } : {}),
+        boundTo: opts?.boundTo ?? null,
+      });
+      if (planted) {
+        grew++;
+        if (first && opts?.announce) this.terrain?.announce?.(opts.announce.text, opts.announce.color);
+      }
+    }
+    return grew;
+  }
+
   /** The living tick: fronts advance/recoil, bound hearts are watched,
    *  marching sections read the land and eat it, then the occupants dress
    *  on the apply cadence. Classic sources draw no rng and take the exact
    *  legacy path — a row without front levers ticks byte-identically. */
-  update(dt: number, _time: number, actors: readonly CreepActorLike[]): void {
+  update(dt: number, time: number, actors: readonly CreepActorLike[]): void {
     const d = CREEP_CFG.def;
+    this.now = time; // the cadenced grants' clock (CreepGrant.every)
     // Ambient lanes: waves break in when their timers land — unless the
     // lane's radiance gate says the sky is wrong (a night lane by day
     // WAITS at the door, timer spent, and fields the wave the moment its
@@ -1802,6 +1874,13 @@ export class CreepField {
     }
   }
 
+  /** Sweep clock (set each update) — cadenced grants read it. */
+  private now = 0;
+  /** Per-occupant last-application times for cadenced grants
+   *  (CreepGrant.every), keyed `kind|status` so same-kind patches share one
+   *  clock — the fog fabric's grantAt idiom, grounded. WeakMap: gone when
+   *  the actor is. */
+  private grantAt = new WeakMap<CreepActorLike, Map<string, number>>();
   private dressOccupants(actors: readonly CreepActorLike[]): void {
     if (!this.sources.length) return;
     for (const a of actors) {
@@ -1815,6 +1894,13 @@ export class CreepField {
           if (g.teams && !g.teams.includes(a.team)) continue;
           if (g.factions && (!a.faction || !g.factions.includes(a.faction))) continue;
           if (g.notFactions && a.faction && g.notFactions.includes(a.faction)) continue;
+          if (g.every) {
+            let m = this.grantAt.get(a);
+            if (!m) { m = new Map(); this.grantAt.set(a, m); }
+            const key = `${s.def.id}|${g.status}`;
+            if (this.now - (m.get(key) ?? -Infinity) < g.every) continue;
+            m.set(key, this.now);
+          }
           a.applyStatus(g.status, 0, 1, CREEP_CFG.sourceLabel);
         }
       }

@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { vec } from '../../core/math';
+import { registerCreep } from '../../engine/creep';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { ContagionField, type ContagionSurge } from '../overlays/contagion';
 import type { ContentPackage, FactionSpec } from '../types';
@@ -107,6 +108,54 @@ export const CONTAGION: ContentPackage = {
   ],
 };
 
+// --- THE POXROT — the Contagion's own carried ground -------------------------
+//
+// The first world-event package to OWN a creep kind (until now every event
+// borrowed biome or monster creep). The plague claims the FLOOR through its
+// dead: no zone or theme ever grows this — it exists only where a Plaguebound
+// body fell in a still-infected zone (the growCreepAt kill payoff below), so
+// the skin maps where the fighting happened. Standing on it turns the stomach:
+// the gutworks' own sour ladder at the gut-miasma fog's exact cadence (queasy
+// climbs into RETCHING if you camp the rot; crossing is a light toll) — while
+// the Plaguebound wade their garden freely. The palette keys to PLAGUE_COLOR
+// (the one-hue law: the sickness reads as one thing on the map, the faction,
+// and now the ground).
+const POXROT_ID = 'poxrot';
+registerCreep({
+  id: POXROT_ID,
+  color: '#242e16', rim: '#6e8a3a', vein: '#4a6428', glow: PLAGUE_COLOR,
+  alpha: 0.72,
+  reach: [70, 120],  // corpse-pocket scale — a knot of dead claims a yard, never a country
+  lobing: 0.36,
+  spread: 26,        // visibly CRAWLS out of the body — the grow verb made watchable
+  recede: 85,        // and lets go fast when cleansed (the cure reads instantly)
+  pulse: 1.05,
+  veins: [4, 7],
+  nodes: 0.4,
+  grants: [{ status: 'queasy', notFactions: [CONTAGION_SURGE.faction], every: 1.8 }],
+});
+
+// THE POX UNDERFOOT — any Plaguebound body falling in a STILL-INFECTED zone
+// grows the poxrot at the corpse (ctx.growCreepAt — the cleanse verb's
+// symmetric twin, debuting here). The gate reads the outbreak LIVE off
+// contagionOn: the moment this zone's ring cures (or the outbreak dies), its
+// dead grow nothing more — the event borrows the ground, never owns it (THE
+// TRANSIENCE DOCTRINE; the fabric itself rebuilds clean every visit, so no
+// patch outlives the zone-visit it grew in). The claim radius is a pack's
+// dying ground: the first corpse of a knot PLANTS, its packmates' falls FEED
+// the same patch (re-growing it if a cleanse caught it), and a new fight
+// elsewhere plants fresh — the skin maps the battle. The arrival line prints
+// once per visit (the lane grammar's announce dial).
+registerKillHandler({
+  id: 'plague_pox_ground',
+  when: ctx => ctx.actor.faction === CONTAGION_SURGE.faction
+    && !!ctx.sim.contagionField?.contagionOn(ctx.zone.id),
+  run: ctx => {
+    ctx.growCreepAt(ctx.actor.pos, POXROT_ID, 100,
+      { announce: { text: 'The pox takes the ground!', color: PLAGUE_COLOR } });
+  },
+});
+
 // PATIENT ZERO — felling the source boss does NOT cure the infected zones at
 // once; it destroys the SOURCE, and the contagion then recedes OUTWARD from here
 // over time (the slow chain-reaction cleanse). Big, level-scaled spoils; the
@@ -118,6 +167,11 @@ registerKillHandler({
     const cured = ctx.sim.contagionField?.onPatientZeroSlain(ctx.zone.id) ?? false;
     if (cured) ctx.bumpLedger('contagion_cleansed');
     ctx.bumpLedger('patient_zero_slain');
+    // The source falls: the pox HERE lets go at once — kind-named, so the
+    // cure purges the plague's OWN skin and never the land's own pockets
+    // (the borrowed-weather law). The world-scale recession stays gradual,
+    // ring by ring; the grow gate above goes cold with it.
+    ctx.cleanseCreepAt(ctx.actor.pos, 1e9, POXROT_ID);
     const cgn = ctx.sim.contagionField?.surge();
     if (cgn?.reward) {
       ctx.grantXp(Math.round(cgn.reward.xpBase + ctx.zone.level * cgn.reward.xpPerLevel));

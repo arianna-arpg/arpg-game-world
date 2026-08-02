@@ -70,8 +70,23 @@ export interface KillCtx {
   spawnHostileAt(defId: string, level: number, at: Vec2): Actor;
   /** Force-recede every creep-fabric source heart within `r` of `at` (the
    *  cleanse payoff verb — an epicenter falls, the skin recoils). Returns
-   *  how many patches began recoiling; 0 where no field lives. */
-  cleanseCreepAt(at: Vec2, r: number): number;
+   *  how many patches began recoiling; 0 where no field lives. `kind`
+   *  scopes the purge to one registered creep id (growCreepAt's twin dial
+   *  — an event's cure purges its OWN skin, never the land's). */
+  cleanseCreepAt(at: Vec2, r: number, kind?: string): number;
+  /** THE GROW VERB — cleanseCreepAt's symmetric twin: feed the creep fabric
+   *  instead of purging it. Revives recoiling patches of the KIND within
+   *  `r` of `at`, and plants a fresh patch there when no live one claims
+   *  the ground (through World.creepEnsure — the field is built on demand,
+   *  so any zone can take the skin; `announce` prints the lane grammar's
+   *  arrival line once per visit, on the kind's first patch). Returns how
+   *  many patches began growing; 0 where the kind is unregistered, the
+   *  zone builds no field (boundless), or the field is saturated — the
+   *  refusal is always polite. Event rows: gate the call on the event's
+   *  LIVE state and tear down via cleanseCreepAt — grown skin is borrowed
+   *  weather, never a scar (the fabric itself rebuilds clean each visit). */
+  growCreepAt(at: Vec2, kindId: string, r: number,
+    opts?: { reach?: number; bornFrac?: number; announce?: { text: string; color?: string } }): number;
   /** The sim's overlay view (the warlord power-break feeds it). */
   simView(): OverlayView;
 }

@@ -9,13 +9,19 @@
 // and the cadence-less creep heart's ONE-SHOT latch (a shipped
 // creepSource without a cadence never arms the pump clock — and the
 // section-0 fingerprint re-proves the classic path byte-identical under
-// the pump-aware sweep). Run: npx tsx balance/probe_front.ts
+// the pump-aware sweep). Plus THE GROW VERB (growCreepAt — cleanseAt's
+// symmetric twin: revive/plant/claim, the irrevocable recoils, the
+// arrival line, the kind-scoped cleanse, the cadenced grant dial) and
+// the POXROT debut (the Contagion's own carried ground — the first
+// world-event package to own a creep kind).
+// Run: npx tsx balance/probe_front.ts
 // ---------------------------------------------------------------------------
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
 import { seedGlobalRandom } from '../src/sim/rng';
 import { buildZoneCreep, CreepField, CREEPS, CREEP_CFG, registerCreep } from '../src/engine/creep';
+import { killRules } from '../src/engine/killHandlers';
 import { TILESETS } from '../src/data/tilesets';
 import type { Doodad } from '../src/engine/levelgen';
 import { vec } from '../src/core/math';
@@ -606,6 +612,173 @@ const fnv = (text: string): string => {
       (bk.front.affinity?.ground?.['chyme_pool'] ?? 0) > 1
       && bk.front.convert?.ground === 'chyme_pool' && !!bk.front.convert?.fade,
       `chyme_pool affinity ${bk.front.affinity?.ground?.['chyme_pool'] ?? '-'}`);
+  }
+}
+
+// --- 16) THE GROW VERB: growCreepAt, cleanseAt's symmetric twin ------------
+// The payoff API could only ever recede until this landed. The contract:
+// within r, recoiling kin of THE KIND revive (the un-cleanse); the
+// irrevocable recoils (dead heart, spent run) neither revive nor claim;
+// where no live kin claims, a fresh patch plants through addSource's whole
+// grammar; the arrival line prints once per visit; refusals return 0.
+{
+  registerCreep({ id: 'probe_grow', reach: [80, 80], spread: 30, recede: 60 });
+  registerCreep({
+    id: 'probe_grow_bolt', reach: [40, 40], spread: 30, recede: 2,
+    front: { speed: 300, travel: { range: [10, 10] } },
+  });
+  const def = CREEPS['probe_grow'];
+  const f = new CreepField(new Rng(0x9e0d), 2000, 2000);
+  const dt = 1 / 60;
+  let t = 0;
+  const tick = (n: number): void => { for (let i = 0; i < n; i++) { t += dt; f.update(dt, t, []); } };
+
+  // PLANT where nothing claims — born small, the skin visibly crawls out.
+  check('grow: plants on empty ground (returns 1)',
+    f.growCreepAt(def, 600, 500, 90) === 1 && f.sources.length === 1);
+  check('grow: a planted patch is born growing', f.sources[0].state === 'grow');
+
+  // THE CLAIM: a live patch within r suppresses replanting.
+  check('grow: a live claim suppresses the plant (returns 0)',
+    f.growCreepAt(def, 620, 510, 90) === 0 && f.sources.length === 1);
+
+  // THE UN-CLEANSE: a recoiling patch turns back to growing, in place.
+  check('grow: cleanse recoils the patch first',
+    f.cleanseAt(600, 500, 1e9) === 1 && f.sources[0].state === 'recede');
+  check('grow: revives the recoiling patch in place (the un-cleanse)',
+    f.growCreepAt(def, 600, 500, 90) === 1 && f.sources[0].state === 'grow' && f.sources.length === 1);
+
+  // PAST the claim radius, fresh ground plants fresh skin.
+  check('grow: past r the ground is unclaimed (plants a second)',
+    f.growCreepAt(def, 1400, 500, 90) === 1 && f.sources.length === 2);
+
+  // A DEAD HEART neither revives nor claims: the pox jumps to the fresh
+  // corpse right beside the letting-go skin.
+  const heart = { dead: false };
+  check('grow: boundTo rides the opts through (the credit contract)',
+    f.growCreepAt(def, 600, 1500, 90, { bornFrac: 1, boundTo: heart }) === 1);
+  heart.dead = true;
+  tick(1); // the bound watcher flips the patch to recede
+  const bound = f.sources.find(s => s.boundTo === heart);
+  check('grow: a dead heart recoils', bound?.state === 'recede');
+  const before = f.sources.length;
+  check('grow: a dead heart neither revives nor claims (plants beside it)',
+    f.growCreepAt(def, 600, 1500, 90) === 1 && f.sources.length === before + 1 && bound?.state === 'recede');
+
+  // A SPENT FINITE RUN is the other irrevocable recoil.
+  const boltDef = CREEPS['probe_grow_bolt'];
+  const bolt = f.addFront(boltDef, 500, 900, 0, { bornFrac: 1 })!;
+  tick(10); // 300 u/s crosses the rolled 10-unit range inside a few frames
+  check('grow: a spent run recoils where it stands',
+    bolt.state === 'recede' && bolt.front!.traveled >= bolt.front!.rangeMax);
+  const n2 = f.sources.length;
+  check('grow: a spent run neither revives nor claims',
+    f.growCreepAt(boltDef, bolt.pos.x, bolt.pos.y, 90) === 1
+    && bolt.state === 'recede' && f.sources.length === n2 + 1);
+
+  // THE ARRIVAL LINE: once per visit, on the kind's first patch only.
+  registerCreep({ id: 'probe_grow_loud', reach: [60, 60], spread: 30 });
+  const loud = CREEPS['probe_grow_loud'];
+  let lines = 0;
+  const f2 = new CreepField(new Rng(0x51de), 2000, 2000);
+  f2.setTerrain({
+    groundKindAt: () => null, eachFuelNear: () => {}, consume: () => {},
+    stamp: () => {}, drag: () => {}, drown: () => {},
+    announce: () => { lines++; },
+  });
+  const say = { announce: { text: 'the rot arrives!' } };
+  f2.growCreepAt(loud, 300, 300, 80, say);
+  check('grow: the arrival line prints on the kind\'s first patch', lines === 1);
+  f2.growCreepAt(loud, 900, 300, 80, say);
+  check('grow: later plants are quiet growth (once per visit)', lines === 1);
+  f2.cleanseAt(300, 300, 40);
+  f2.growCreepAt(loud, 300, 300, 80, say);
+  check('grow: a revive never announces', lines === 1);
+
+  // THE KIND-SCOPED CLEANSE (the grow verb's twin dial): a named cure
+  // purges its own skin and leaves the land's alone.
+  const f3 = new CreepField(new Rng(0xc1ea), 2000, 2000);
+  f3.growCreepAt(def, 500, 500, 90);
+  f3.addSource(CREEPS['caulflesh'], 560, 500, { bornFrac: 1, ambient: true });
+  check('cleanse: a kind-named purge recoils only its own skin',
+    f3.cleanseAt(500, 500, 1e9, 'probe_grow') === 1
+    && f3.sources.every(s => (s.def.id === 'probe_grow') === (s.state === 'recede')));
+  check('cleanse: the kind-blind sweep still purges everything (the classic verb)',
+    f3.cleanseAt(500, 500, 1e9) === 1 && f3.sources.every(s => s.state === 'recede'));
+
+  // SATURATION: past the source cap the grow refuses politely, like addSource.
+  const f4 = new CreepField(new Rng(0x0ca9), 4000, 4000);
+  let planted = 0;
+  while (f4.addSource(def, 100 + (planted % 40) * 90, 100 + Math.floor(planted / 40) * 90, { bornFrac: 1 })) planted++;
+  check('grow: at the source cap the refusal is polite (returns 0)',
+    planted === CREEP_CFG.maxSources && f4.growCreepAt(def, 3500, 3500, 50) === 0
+    && f4.sources.length === CREEP_CFG.maxSources);
+
+  // THE ENSURE COMPOSITION (the KillCtx binding's shape): a bare world
+  // builds its field on demand and the grown skin is live ground.
+  const world = makeSimWorld('warrior', 77031);
+  const wf = world.creepEnsure()!;
+  check('grow: creepEnsure + grow composes on a bare world',
+    wf.growCreepAt(def, 700, 700, 90, { bornFrac: 1 }) === 1);
+  check('grow: the grown skin is the hit surface (drawn == tested)', wf.onCreep(700, 700));
+}
+
+// --- 17) THE POXROT: the Contagion's own carried ground --------------------
+// The first world-event package to OWN a creep kind. The def registers from
+// src/packages/defs/contagion.ts, which reaches this process through the sim
+// boot's own chain (arena → manifest → registry → package defs) — this
+// census breaks LOUD if that import set ever drops the package defs.
+{
+  const pox = CREEPS['poxrot'];
+  check('poxrot: registered by the Contagion package (the sim import chain holds)', !!pox);
+  if (pox) {
+    const g = pox.grants?.[0];
+    check('poxrot: one grant — the gutworks sour ladder vs everyone but the plague',
+      pox.grants?.length === 1 && g?.status === 'queasy'
+      && !!g?.notFactions?.includes('plague') && !g?.factions && !g?.teams);
+    check('poxrot: the stacking grant rides its own cadence, not the apply sweep',
+      (g?.every ?? 0) > CREEP_CFG.applyEvery, `every ${g?.every}, sweep ${CREEP_CFG.applyEvery}`);
+    check('poxrot: wears the plague hue (the one-hue law)', pox.glow === '#8fd24a');
+    check('poxrot: anchored membrane, no front levers (kill-grown pockets, never waves)', !pox.front);
+  }
+  // THE PACKAGE-ONLY LAW: no tileset theme (base or variant, kinds or
+  // fronts) grows the pox — the kind exists only where the plague's dead
+  // fell. The registry is pure data, so a stringify scan is total.
+  check('poxrot: no theme grows it (package-carried ground only)',
+    !JSON.stringify(TILESETS).includes('poxrot'));
+  // The kill rows stand: the grow payoff and the source's fall (whose
+  // teardown carries the kind-scoped cleanse — rig 16 proves the mechanism).
+  const ids = killRules().map(r => r.id);
+  check('poxrot: the pox-underfoot grow row is registered', ids.includes('plague_pox_ground'));
+  check('poxrot: patient zero\'s bounty row stands beside it', ids.includes('patient_zero'));
+
+  // LIVE FILTERING + THE CADENCE at the field grain: the intruder sickens
+  // on the grant's own clock; the Plaguebound wade their garden freely.
+  if (pox) {
+    const f = new CreepField(new Rng(0x90c5), 2000, 2000);
+    f.addSource(pox, 800, 800, { bornFrac: 1 });
+    const seen: Record<string, number> = {};
+    const mk = (team: string, faction?: string) => ({
+      pos: { x: 800, y: 800 }, radius: 12, dead: false, team,
+      ...(faction ? { faction } : {}),
+      applyStatus: (id: string) => { seen[`${team}:${id}`] = (seen[`${team}:${id}`] ?? 0) + 1; },
+    });
+    const intruder = mk('player');
+    const plagueborn = mk('enemy', 'plague');
+    let tq = 0;
+    for (let i = 0; i < 7; i++) { tq += 0.3; f.update(0.3, tq, [intruder, plagueborn]); }
+    check('poxrot: the intruder climbs the sour ladder on the grant\'s cadence',
+      seen['player:queasy'] === 2,
+      `${seen['player:queasy'] ?? 0} applications over 2.1s (want 2 at every 1.8, not 7 at the sweep)`);
+    check('poxrot: the plague wades its own garden untaxed', !seen['enemy:queasy']);
+    // THE TEARDOWN MECHANISM: the kind-named cure empties the field whole —
+    // borrowed ground un-writes, no scar (the patient-zero row's exact call).
+    f.cleanseAt(800, 800, 1e9, 'poxrot');
+    const dtq = 1 / 60;
+    let tr = tq;
+    for (let i = 0; i < 60 * 4; i++) { tr += dtq; f.update(dtq, tr, []); }
+    check('poxrot: cleansed skin recoils to nothing (borrowed weather, no scar)',
+      f.sources.length === 0);
   }
 }
 

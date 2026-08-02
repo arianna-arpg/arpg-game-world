@@ -36987,7 +36987,14 @@ export class World {
         this.actors.push(m);
         return m;
       },
-      cleanseCreepAt: (at, r) => this.creep?.cleanseAt(at.x, at.y, r) ?? 0,
+      // The creep payoff pair: cleanse reads the standing field (nothing to
+      // purge where none lives — never build one to empty it); growCreepAt
+      // ENSURES the field (growing skin anywhere is the verb's whole point).
+      cleanseCreepAt: (at, r, kind) => this.creep?.cleanseAt(at.x, at.y, r, kind) ?? 0,
+      growCreepAt: (at, kindId, r, opts) => {
+        const def = CREEPS[kindId];
+        return def ? (this.creepEnsure()?.growCreepAt(def, at.x, at.y, r, opts) ?? 0) : 0;
+      },
       simView: () => this.simView(),
     };
   }
