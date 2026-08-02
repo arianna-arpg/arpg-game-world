@@ -1399,6 +1399,9 @@ export function placeZoneAt(
     id, name, level,
     size,
     shape, biome,
+    // MINT PROVENANCE (the face-voice seam): the resolved face this ground
+    // wears — post-fallback, post-field-repick, so it is always the truth.
+    tileset: tilesetId,
     // AQUATIC (the coherence fabric): open-seabed biomes stamp the flag so
     // habitat-bearing flora places freely and the default gravel exit-road
     // stands down — durable on the def, one classifier (isAquaticBiome).
@@ -1776,6 +1779,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     level,
     size: { w, h },
     shape: 'rect',                          // caves stay rect — no ellipse rim math
+    tileset: ts.id,                         // mint provenance (the face-voice seam)
     ...(ts.boundless ? { boundless: true } : {}),
     theme,
     layout,

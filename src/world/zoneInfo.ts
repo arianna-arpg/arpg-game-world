@@ -29,6 +29,7 @@ import { collectMarkers } from './mapMarkers';
 import { BIOMES } from './biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { meldOf } from '../data/melds';
+import { TILESETS } from '../data/tilesets';
 import type { World } from '../engine/world';
 
 /** Where a row sits in the box: prominent events first, then modifiers, then the
@@ -118,7 +119,11 @@ export function zoneInfoFor(world: World, zoneId: string): ZoneInfoEntry[] {
         detail: 'an enclave — every crossing passes its gate', z: -1,
       });
     }
-    const meld = bi?.meld ? meldOf(bi.meld) : undefined;
+    // THE FACE VOICE (#50 Part B): a zone whose FACE declares its own edge
+    // dressing announces in those words (TilesetDef.meld ▷ the biome row) —
+    // this def is resolved ground by construction, exactly the lane the
+    // override speaks on, so the chart's breath and the stamped band agree.
+    const meld = meldOf((zone.tileset ? TILESETS[zone.tileset]?.meld : undefined) ?? bi?.meld);
     if (meld?.label) {
       out.push({
         kind: 'condition', icon: '❧', label: meld.label,

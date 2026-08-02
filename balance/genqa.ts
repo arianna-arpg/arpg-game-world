@@ -581,6 +581,10 @@ const registryErrors = [
   // A biome naming an edge dressing must name a REGISTERED one.
   ...Object.entries(BIOMES).flatMap(([id, b]) =>
     b.meld && !MELDS[b.meld] ? [`biome ${id}: unregistered meld '${b.meld}'`] : []),
+  // THE FACE VOICE (#50 Part B): a tileset's own edge-dressing override must
+  // name a registered meld too (tileset ▷ biome at resolved edges).
+  ...Object.entries(TILESETS).flatMap(([id, t]) =>
+    t.meld && !MELDS[t.meld] ? [`tileset ${id}: unregistered meld '${t.meld}'`] : []),
   // THE BLEND FABRIC: every declared partner/field must resolve (a bad ref
   // no-ops silently at mint — this is where it fails loudly instead).
   ...Object.values(TILESETS).flatMap(t =>

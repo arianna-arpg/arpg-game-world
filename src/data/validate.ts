@@ -590,6 +590,12 @@ export function validateContent(): void {
   for (const [id, b] of Object.entries(BIOMES)) {
     if (b.meld && !MELDS[b.meld]) warn(`biome ${id}: unregistered meld '${b.meld}'`);
   }
+  // THE FACE VOICE (#50 Part B): a tileset overriding its biome's edge
+  // dressing must name a REGISTERED meld too (same law as the biome row —
+  // an unregistered ref would no-op silently at the resolved-neighbor read).
+  for (const [id, t] of Object.entries(TILESETS)) {
+    if (t.meld && !MELDS[t.meld]) warn(`tileset ${id}: unregistered meld '${t.meld}'`);
+  }
   for (const m of Object.values(MELDS)) {
     if (m.band !== undefined && !(m.band > 0)) warn(`meld ${m.id}: band ${m.band} must be > 0`);
   }

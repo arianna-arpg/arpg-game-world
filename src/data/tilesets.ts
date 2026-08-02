@@ -99,6 +99,15 @@ export interface TilesetDef {
   ellipseChance?: number;
   /** Biome tag stamped on generated zones — faction-traits home matching. */
   biome?: string;
+  /** THE FACE VOICE (#50 Part B): override the biome's edge dressing with
+   *  THIS tileset's own meld (a data/melds.ts registry ref) — the Glasspan
+   *  announces salt pillars, not the waste's generic sand. PRECEDENCE LAW:
+   *  tileset ▷ biome, on RESOLVED NEIGHBORS ONLY (World.meldFor) — a '?'
+   *  frontier carries just the field's PREDICTED biome, no tileset is
+   *  knowable until the mint rolls a face, so the biome meld must speak
+   *  there; a resolved neighbor reads its minted def's own provenance
+   *  (ZoneDef.tileset). Absent = the biome's meld, byte-identical. */
+  meld?: string;
   /** SKY EXPOSURE baked onto minted zones (ZoneDef.sky → skyOf): 'sheltered'
    *  = an INTERIOR the world's weather must never reach — no fronts, wind,
    *  sky strikes, storm spawn-bias or particles inside. Cave-ladder mints are
@@ -2269,6 +2278,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // the trek IS the content, and the oasis roll is the mercy.
   sandsea: {
     id: 'sandsea',
+    // The erg's border speaks in scale, not the waste's litter (#50 Part B).
+    meld: 'sandsea_meld',
     depthAffinity: { from: 0.3, fadeIn: 0.3 },
     compositions: [
       { composition: 'oasis_haven', chance: 0.42 },
@@ -2409,6 +2420,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // here ever offers shade. Fast to cross, expensive to linger.
   saltflat: {
     id: 'saltflat',
+    // The pan announces its own minerals — salt and glass, never soft sand.
+    meld: 'saltflat_meld',
     depthAffinity: { from: 0.15, fadeIn: 0.25, mul: 0.7 },
     compositions: [
       { composition: 'caravan_graveyard', chance: 0.25 },
@@ -2522,6 +2535,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // the sources or wade the seethe forever.
   hivesands: {
     id: 'hivesands',
+    // The colony's border is a warning, not the desert's shrug (#50 Part B).
+    meld: 'hivesands_meld',
     depthAffinity: { from: 0.35, fadeIn: 0.3, mul: 0.85 },
     compositions: [
       { composition: 'hive_pocket', chance: 0.5 },

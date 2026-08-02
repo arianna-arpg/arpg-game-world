@@ -790,6 +790,14 @@ export interface ZoneDef {
    *  convex floor). A biome picks this at mint; stored on the def so Zone Memory
    *  replays the same topology on return. New layout families register their own. */
   layoutType?: string;
+  /** MINT PROVENANCE: the tileset id this zone generated from, stamped at both
+   *  mint chokepoints (worldgen's surface literal + mintCave; absent on
+   *  hand-authored defs and pre-provenance saves — every reader must degrade
+   *  to the biome's word). Mint-once, pure JSON like every def field, so it
+   *  rides the verbatim zones save: THE FACE VOICE (TilesetDef.meld ▷
+   *  BiomeInfo.meld, World.meldFor) reads it on resolved neighbors, and a
+   *  restored world keeps announcing in the same voice it minted with. */
+  tileset?: string;
   objective: ObjectiveSpec;
   /** ACTIVITY PUZZLES this zone may stand up at LOAD (engine/puzzles.ts):
    *  chance-rolled rows into the PUZZLES presets (data/puzzles.ts), capped

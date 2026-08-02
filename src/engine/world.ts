@@ -9660,14 +9660,24 @@ export class World {
     if (e.lock || e.crossDim) return undefined;
     const from = this.zone.biome;
     let to: string | undefined;
+    let toFace: string | undefined;
     if (e.to === '?') {
       const c = projectCoord(this.zone.map, e.side);
       to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
     } else {
-      to = (this.zoneMap[e.to] ?? this.caveMap[e.to])?.biome;
+      const n = this.zoneMap[e.to] ?? this.caveMap[e.to];
+      to = n?.biome;
+      toFace = n?.tileset;
     }
     if (!to || to === from) return undefined;
-    return BIOMES[to]?.meld;
+    // THE FACE VOICE (#50 Part B): a RESOLVED neighbor announces in its own
+    // face's words when its tileset declares them (TilesetDef.meld ▷
+    // BiomeInfo.meld, read off ZoneDef.tileset mint provenance). A '?'
+    // frontier carries just a predicted biome — no face exists until the
+    // mint rolls one — so the biome meld keeps the frontier's promise BY
+    // CONSTRUCTION (toFace is assigned only on the resolved branch).
+    const faceMeld = toFace ? TILESETS[toFace]?.meld : undefined;
+    return faceMeld ?? BIOMES[to]?.meld;
   }
 
   /** THE LIVE OVERLAP RESOLVE — the last line of defense behind the def-level

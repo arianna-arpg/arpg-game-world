@@ -528,3 +528,60 @@ registerMeld({
     { kind: 'sunken_statue', count: [0, 1] },
   ],
 });
+
+// --- THE PER-FACE VOICES (#50 Part B, 2026-08-01) ------------------------------
+// A tileset may override its biome's edge dressing (TilesetDef.meld — the
+// precedence read is World.meldFor's: tileset ▷ biome, RESOLVED NEIGHBORS
+// ONLY, because a '?' frontier carries just the field's predicted biome and
+// no face exists until the mint rolls one). These are the faces whose
+// vocabulary genuinely diverges from their biome's generic kit — the deep
+// desert's three countries first. Every kind below is a registered stamp
+// with an inert rule, the standing meld laws (no hazards, modest counts,
+// spacing that fits the band) held.
+
+// THE GLASSPAN'S REACH — the dead lake announces itself in its own minerals:
+// squat salt columns for a treeline, panes the lightning fused, a strike
+// fork still standing, and the bleach-bone the pan keeps forever. Not one
+// grain of the waste's soft sand — this border is hard country's word.
+registerMeld({
+  id: 'saltflat_meld',
+  label: 'salt and glass glitter ahead',
+  rows: [
+    { kind: 'salt_pillar', count: [2, 4] },
+    { kind: 'glass_shard', count: [1, 2] },
+    { kind: 'fulgurite', count: [0, 1] },
+    { kind: 'bone_pile', count: [0, 1] },
+  ],
+});
+
+// THE ERG'S REACH — the deep desert's warning is SCALE, not litter: sand
+// heaped higher than the waste ever piles it, the air already bending, and
+// the bones of whoever mistook the horizon for a destination. (No mirage on
+// the hem — mirage_oasis spaces at 520 and mostly refuses a 250 band; the
+// erg's lie waits inside, where it belongs.)
+registerMeld({
+  id: 'sandsea_meld',
+  label: 'the dunes swallow the horizon',
+  rows: [
+    { kind: 'sand', count: [3, 5] },
+    { kind: 'heat_shimmer', count: [1, 2] },
+    { kind: 'bone_pile', count: [0, 2] },
+    { kind: 'rocks', count: [0, 1], radius: [18, 34] },
+  ],
+});
+
+// THE SEETHE'S REACH — the colony molts where it marches: shed carapace in
+// drifts, a clutch set in resin past the warren's rim, an amber seep, one
+// young spire scouting the verge. The sand past here is already claimed —
+// the threshold rhythm as a WARNING this time, not the courts' relief.
+registerMeld({
+  id: 'hivesands_meld',
+  label: 'chitin litter on the sand',
+  rows: [
+    { kind: 'brood_husk', count: [1, 3] },
+    { kind: 'egg_clutch', count: [0, 2] },
+    { kind: 'resin_node', count: [0, 1] },
+    { kind: 'hive_spire', count: [0, 1] },
+    { kind: 'sand', count: [1, 2] },
+  ],
+});
