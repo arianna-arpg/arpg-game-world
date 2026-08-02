@@ -183,6 +183,18 @@ export class GroundRenderer {
    *  time — the queue is just "still stale next frame". */
   private scratch: HTMLCanvasElement | null = null;
   private snapAt = 0;
+  /** THE RATE-CONDITIONAL LANE (VIS_CFG.ground.snapLane — the gloamwood
+   *  off40 fix): wall-clock stamps of recent bake STARTS, one ledger per
+   *  CAUSE — missing (never-baked: walking faults + prefetch + entry) and
+   *  stale (repaint rebakes: the storm signal). Stamped only when a bake
+   *  actually starts (an async route that breaks on snapBusy stamps
+   *  nothing); pruned to the window on every routing decision, so each
+   *  ledger stays a handful of numbers under any regime. Deliberately NOT
+   *  reset on zone swap: the gate measures recent machine load, not zone
+   *  identity, and an entry burst should spill async (the shipped entry
+   *  behavior) whether or not the walker just crossed a portal. */
+  private missStamps: number[] = [];
+  private staleStamps: number[] = [];
   private zoneEpoch = 0;
   /** THE BLEND (engine/blend.ts), memoized per zone: the compiled weight
    *  field + the partner tileset's theme a blended zone's bakes mix toward.
@@ -246,9 +258,11 @@ export class GroundRenderer {
     const budgetLeft = (): boolean =>
       performance.now() - bakeT0 < VIS_CFG.ground.bakeBudgetMs;
 
-    // The async swap needs createImageBitmap and the config's word; the
-    // legacy sync path stays whole behind the same branch (ablate/rollback).
-    const async = VIS_CFG.ground.asyncUpload && typeof createImageBitmap === 'function';
+    // The async swap needs createImageBitmap and the config's word; with
+    // both, snapLaneAsync routes each bake by recent demand (steady = sync,
+    // storm = async). Without either, the legacy sync path stays whole
+    // behind the same branch (ablate/rollback).
+    const asyncCapable = VIS_CFG.ground.asyncUpload && typeof createImageBitmap === 'function';
     // A wedged snapshot (hidden tab, driver loss) must not dam the pipe
     // forever — past this age the next one may start over it. Checked LIVE
     // at each start site, so a snap begun this very frame never reads as
@@ -295,10 +309,12 @@ export class GroundRenderer {
     let bakedNew = false;
     for (const m of missing) {
       if (bakedNew && !budgetLeft()) break; // stand in flat this frame
-      if (async) {
+      if (this.snapLaneAsync('missing', asyncCapable)) {
         if (snapBusy()) break; // one snapshot at a time
+        this.stampLane('missing');
         this.startSnap(world, wf, m.cx, m.cy, m.key, null, ver);
       } else {
+        this.stampLane('missing');
         this.chunks.set(m.key,
           { img: this.bake(world, wf, m.cx, m.cy), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
       }
@@ -308,11 +324,20 @@ export class GroundRenderer {
     stale.sort((a, b) => a.entry.at - b.entry.at);
     for (const s of stale) {
       if (rebakes >= VIS_CFG.ground.rebakesPerFrame || !budgetLeft()) break;
-      if (async) {
+      if (this.snapLaneAsync('stale', asyncCapable)) {
         if (snapBusy()) break;
+        this.stampLane('stale');
         this.startSnap(world, wf, s.cx, s.cy, s.key, s.entry, ver);
       } else {
-        s.entry.img = this.bake(world, wf, s.cx, s.cy, s.entry.img as HTMLCanvasElement);
+        // LANE CROSSOVER: a chunk that last landed async holds an ImageBitmap
+        // — the sync lane can only re-raster INTO a canvas, so reuse applies
+        // to canvas images alone; a bitmap is replaced by a fresh canvas and
+        // closed (dropChunkImg), never cast at.
+        this.stampLane('stale');
+        const reuse = s.entry.img instanceof HTMLCanvasElement ? s.entry.img : undefined;
+        const img = this.bake(world, wf, s.cx, s.cy, reuse);
+        if (s.entry.img !== img) dropChunkImg(s.entry.img);
+        s.entry.img = img;
         s.entry.v = ver; s.entry.b = this.bedsRev; s.entry.at = ++this.bakeSeq;
       }
       rebakes++;
@@ -335,7 +360,7 @@ export class GroundRenderer {
     // PREFETCH: bake at most one not-yet-baked chunk in the ring just
     // outside the viewport, so walking streams floor in ahead of arrival
     // instead of hitching the frame a new column first appears on.
-    if (rebakes === 0 && budgetLeft() && (!async || !snapBusy())) {
+    if (rebakes === 0 && budgetLeft() && (!asyncCapable || !snapBusy())) {
       let bx0 = x0 - 1, bx1 = x1 + 1, by0 = y0 - 1, by1 = y1 + 1;
       if (!world.arena.boundless) {
         bx0 = Math.max(0, bx0); by0 = Math.max(0, by0);
@@ -347,9 +372,11 @@ export class GroundRenderer {
           if (cy >= y0 && cy <= y1 && cx >= x0 && cx <= x1) continue; // visible: handled above
           const key = `${cx},${cy}`;
           if (this.chunks.get(key)) continue;
-          if (async) {
+          if (this.snapLaneAsync('missing', asyncCapable)) {
+            this.stampLane('missing');
             this.startSnap(world, wf, cx, cy, key, null, ver);
           } else {
+            this.stampLane('missing');
             this.chunks.set(key,
               { img: this.bake(world, wf, cx, cy), pending: false, v: ver, b: this.bedsRev, at: ++this.bakeSeq });
           }
@@ -358,6 +385,40 @@ export class GroundRenderer {
         }
       }
     }
+  }
+
+  /** Route ONE bake by its cause: false = the SYNC lane (raster into the
+   *  chunk's own canvas; its single texture upload lands inside the next
+   *  drawImage, IN-frame), true = the ASYNC lane (scratch raster +
+   *  createImageBitmap swap). WHY A GATE (2026-08-02, the gloamwood
+   *  forensics): the async snapshot's createImageBitmap emits a ~25-36ms
+   *  main-thread task BETWEEN frames per bake — at walking's chunk-fault
+   *  rate those tasks are the >40ms rAF-gap stall class itself (stalls
+   *  tracked bake count run for run, vanished under ablate=ground, and the
+   *  sync path at the same bake count crossed 40 once in eight bakes vs
+   *  three-to-five async). WHY PER CAUSE: missing demand (walking's column
+   *  faults, prefetch, entry) is BOUNDED — only camera travel mints it — so
+   *  a generous allowance lets walking never snapshot while an entry-scale
+   *  screenful still spills its tail async; stale demand (repaint rebakes)
+   *  is the STORM signal — flood wakes, melting shelves and creep drying
+   *  sustain it every frame, and sustained mutate+blit re-uploads are the
+   *  hitch class the async swap exists for — so its sync allowance stays
+   *  small: an isolated door-break repaints in-frame, a storm spills async
+   *  after a bounded opening leak (staleSyncMax per window, the proven-
+   *  clean steady regime). The caller stamps via stampLane only when the
+   *  bake actually starts, so a snapBusy break never pollutes the ledger. */
+  private snapLaneAsync(kind: 'missing' | 'stale', asyncCapable: boolean): boolean {
+    const lane = VIS_CFG.ground.snapLane;
+    const stamps = kind === 'missing' ? this.missStamps : this.staleStamps;
+    const now = performance.now();
+    while (stamps.length && now - stamps[0] > lane.windowMs) stamps.shift();
+    if (!asyncCapable) return false;
+    return stamps.length >= (kind === 'missing' ? lane.missingSyncMax : lane.staleSyncMax);
+  }
+
+  /** Record a bake start on its cause's ledger (see snapLaneAsync). */
+  private stampLane(kind: 'missing' | 'stale'): void {
+    (kind === 'missing' ? this.missStamps : this.staleStamps).push(performance.now());
   }
 
   /** Raster a chunk into the shared scratch, then snapshot it into an
@@ -534,6 +595,7 @@ export class GroundRenderer {
   private bake(world: World, wf: GridWalkField | null, cx: number, cy: number,
     reuse?: HTMLCanvasElement): HTMLCanvasElement {
     VIS_TELEMETRY.groundBakes++;
+
     const CFG = VIS_CFG.ground;
     const C = CFG.chunk;
     const theme = world.zone.theme;

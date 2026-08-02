@@ -497,6 +497,37 @@ export const VIS_CFG = {
      *  temp-ground / brittle-carve hitch class: raster was ~2-4ms, the
      *  upload-in-drawImage was the 40ms). false = the legacy sync path. */
     asyncUpload: true,
+    /** THE RATE-CONDITIONAL LANE (snapLane — the gloamwood off40 fix,
+     *  2026-08-02). The async snapshot above pays its own toll: every
+     *  createImageBitmap emits a ~25-36ms MAIN-THREAD task BETWEEN frames
+     *  (the phase ledger's 'slab pre:' rows), and at walking's chunk-fault
+     *  rate those tasks ARE the >40ms rAF-gap stall class the sweep flags
+     *  on heavy-bake forests (gloamwood forensics 2026-08-02: stalls ∝
+     *  bake count, {0,0,0} under ablate=ground, and the SAME bake count on
+     *  the sync path crossed 40 once in eight bakes vs three-to-five
+     *  stalls async). So each bake picks its lane by recent demand ON ITS
+     *  OWN CAUSE — two ledgers, because the demand shapes differ:
+     *  MISSING bakes (never-baked chunks: walking's column faults +
+     *  prefetch, and zone-entry screenfuls) arrive as short bounded
+     *  bursts — a column event is ~4 visible chunks + the prefetch ring
+     *  inside one window — so the first `missingSyncMax` per `windowMs`
+     *  ride the SYNC lane (raster into the chunk's own canvas; its one
+     *  texture upload lands inside the next drawImage, IN-frame — the
+     *  regime the sync-path A/B measured clean) and walking NEVER
+     *  snapshots; only an entry-scale screenful spills its tail onto the
+     *  async lane (the shipped entry profile: serialized snapshots behind
+     *  flat stand-ins). Missing demand cannot sustain — only camera travel
+     *  mints it — so the generous allowance is storm-proof by nature.
+     *  STALE bakes (repaint rebakes: walk-grid changes, bed churn) are the
+     *  STORM signal — flood-front wakes, melting shelves, creep drying
+     *  sustain them every frame, and sustained mutate+blit re-uploads are
+     *  the exact hitch class the async swap was built for — so only
+     *  `staleSyncMax` per window ride sync (an isolated door-break still
+     *  repaints in-frame with no snapshot task and no old-face wait) and a
+     *  storm spills async after that bounded opening leak.
+     *  Both maxes 0 = pure-async (the pre-fix behavior, the A/B forensics
+     *  arm); asyncUpload false still = pure-sync everywhere. */
+    snapLane: { windowMs: 1500, missingSyncMax: 8, staleSyncMax: 2 },
     /** Max STALE-chunk rebakes per frame after a walk-grid repaint (door
      *  break, terraform, crawling fissure). Stale chunks keep drawing their
      *  old bake until their turn — a repaint must never rebake a whole
